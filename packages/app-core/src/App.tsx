@@ -238,6 +238,9 @@ export function App() {
 
   const [customActionsPanelOpen, setCustomActionsPanelOpen] = useState(false);
   const [customActionsEditorOpen, setCustomActionsEditorOpen] = useState(false);
+  const [settingsInitialSection, setSettingsInitialSection] = useState<
+    string | null
+  >(null);
   const [tasksEventsPanelOpen, setTasksEventsPanelOpen] = useState(false);
   const { events: activityEvents, clearEvents: clearActivityEvents } =
     useActivityEvents();
@@ -329,6 +332,15 @@ export function App() {
         setTab("voice");
         return;
       }
+      if (task === "google") {
+        setSettingsInitialSection("life-ops");
+      } else if (task === "permissions") {
+        setSettingsInitialSection("permissions");
+      } else if (task === "provider") {
+        setSettingsInitialSection("ai-model");
+      } else {
+        setSettingsInitialSection(null);
+      }
       setTab("settings");
     },
     [setTab],
@@ -357,6 +369,13 @@ export function App() {
       setTasksEventsPanelOpen(false);
     }
   }, [isChat]);
+
+  useEffect(() => {
+    if (isSettingsPage || settingsInitialSection === null) {
+      return;
+    }
+    setSettingsInitialSection(null);
+  }, [isSettingsPage, settingsInitialSection]);
 
   useEffect(() => {
     if (!isNative || !isIOS) {
@@ -597,7 +616,9 @@ export function App() {
       <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden">
         <SettingsView
           key={tab === "voice" ? "settings-media" : "settings-root"}
-          initialSection={tab === "voice" ? "media" : undefined}
+          initialSection={
+            tab === "voice" ? "media" : (settingsInitialSection ?? undefined)
+          }
         />
       </div>
     </div>

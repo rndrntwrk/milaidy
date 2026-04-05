@@ -5,15 +5,19 @@ import TestRenderer, { act } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
+  deferredChecklistRenderMock,
   subscribeDesktopBridgeEventMock,
   keyboardSetScrollMock,
+  settingsViewRenderMock,
   useAppMock,
   useBugReportStateMock,
   useContextMenuMock,
   useStreamPopoutNavigationMock,
 } = vi.hoisted(() => ({
+  deferredChecklistRenderMock: vi.fn(),
   subscribeDesktopBridgeEventMock: vi.fn(() => vi.fn()),
   keyboardSetScrollMock: vi.fn(() => Promise.resolve()),
+  settingsViewRenderMock: vi.fn(),
   useAppMock: vi.fn(),
   useBugReportStateMock: vi.fn(),
   useContextMenuMock: vi.fn(),
@@ -78,7 +82,22 @@ vi.mock("./app-shell-components", () => {
 
     PairingView: stub("PairingView"),
     SaveCommandModal: stub("SaveCommandModal"),
-    SettingsView: stub("SettingsView"),
+    SettingsView: ({
+      children,
+      initialSection,
+    }: {
+      children?: React.ReactNode;
+      initialSection?: string;
+    }) =>
+      React.createElement(
+        "div",
+        {
+          "data-testid": "SettingsView",
+          "data-initial-section": initialSection ?? "",
+          ref: settingsViewRenderMock,
+        },
+        children,
+      ),
     SharedCompanionScene: passthrough,
     ShellOverlays: stub("ShellOverlays"),
     StartupFailureView: ({ error }: { error: { message: string } }) =>
@@ -109,12 +128,30 @@ vi.mock("./app-shell-components", () => {
   };
 });
 
-vi.mock("./components/FlaminaGuide", () => ({
-  DeferredSetupChecklist: ({ children }: { children?: React.ReactNode }) =>
+vi.mock("./components/cloud/FlaminaGuide", () => ({
+  DeferredSetupChecklist: ({
+    children,
+    onOpenTask,
+  }: {
+    children?: React.ReactNode;
+    onOpenTask?: (task: "google") => void;
+  }) =>
     React.createElement(
       "div",
       { "data-testid": "DeferredSetupChecklist" },
       children,
+      React.createElement(
+        "button",
+        {
+          "data-testid": "DeferredSetupChecklist-open-google",
+          type: "button",
+          onClick: () => {
+            deferredChecklistRenderMock();
+            onOpenTask?.("google");
+          },
+        },
+        "open-google",
+      ),
     ),
 }));
 
@@ -130,8 +167,10 @@ import { App } from "./App";
 
 describe("App", () => {
   beforeEach(() => {
+    deferredChecklistRenderMock.mockReset();
     subscribeDesktopBridgeEventMock.mockReset().mockReturnValue(vi.fn());
     keyboardSetScrollMock.mockReset();
+    settingsViewRenderMock.mockReset();
     useAppMock.mockReset();
     useBugReportStateMock.mockReset().mockReturnValue({});
     useContextMenuMock.mockReset().mockReturnValue({
@@ -357,5 +396,57 @@ describe("App", () => {
     expect(
       renderer.root.findAll((node) => node.props.role === "status"),
     ).toHaveLength(1);
+  });
+
+  it("opens the Life Ops settings section from the Google deferred task", async () => {
+    const appState = {
+      onboardingLoading: false,
+      startupPhase: "ready",
+      startupError: null,
+      startupCoordinator: { phase: "ready" },
+      authRequired: false,
+      onboardingComplete: true,
+      retryStartup: vi.fn(),
+      tab: "chat",
+      setTab: vi.fn((nextTab: string) => {
+        appState.tab = nextTab;
+      }),
+      setState: vi.fn(),
+      actionNotice: null,
+      uiShellMode: "native",
+      switchShellView: vi.fn(),
+      uiLanguage: "en",
+      setUiLanguage: vi.fn(),
+      uiTheme: "dark",
+      setUiTheme: vi.fn(),
+      chatAgentVoiceMuted: false,
+      unreadConversations: new Set(),
+      activeGameViewerUrl: null,
+      gameOverlayEnabled: false,
+      t: (key: string, options?: { defaultValue?: string }) =>
+        options?.defaultValue ?? key,
+    };
+    useAppMock.mockImplementation(() => appState);
+
+    let renderer!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(React.createElement(App));
+    });
+
+    const openButton = renderer.root.findByProps({
+      "data-testid": "DeferredSetupChecklist-open-google",
+    });
+
+    await act(async () => {
+      openButton.props.onClick();
+      renderer.update(React.createElement(App));
+    });
+
+    const settingsView = renderer.root.findByProps({
+      "data-testid": "SettingsView",
+    });
+
+    expect(appState.setTab).toHaveBeenCalledWith("settings");
+    expect(settingsView.props["data-initial-section"]).toBe("life-ops");
   });
 });
