@@ -6,8 +6,7 @@
  * shapes consumed by the dashboard UI.
  */
 
-import { type AgentRuntime, logger, type Task } from "@elizaos/core";
-import { isFatalTodoDbError, TodoDbCircuitBreaker } from "./todo-db-circuit.js";
+import { type Task } from "@elizaos/core";
 import { readTriggerConfig } from "../triggers/runtime.js";
 
 // ---------------------------------------------------------------------------
@@ -39,23 +38,6 @@ export interface WorkbenchTodoView {
   isCompleted: boolean;
   type: string;
 }
-
-export interface TodoDataServiceLike {
-  createTodo: (input: Record<string, unknown>) => Promise<string>;
-  getTodos: (
-    filters?: Record<string, unknown>,
-  ) => Promise<Array<Record<string, unknown>>>;
-  getTodo: (todoId: string) => Promise<Record<string, unknown> | null>;
-  updateTodo: (
-    todoId: string,
-    updates: Record<string, unknown>,
-  ) => Promise<boolean>;
-  deleteTodo: (todoId: string) => Promise<boolean>;
-}
-
-// ---------------------------------------------------------------------------
-// Pure helpers
-// ---------------------------------------------------------------------------
 
 export function asObject(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -184,80 +166,4 @@ export function normalizeTags(
     ...required.map((tag) => tag.trim()).filter((tag) => tag.length > 0),
   ]);
   return [...next];
-}
-
-// ---------------------------------------------------------------------------
-// Todo data service (plugin-todo)
-// ---------------------------------------------------------------------------
-
-const todoDbCircuitBreaker = new TodoDbCircuitBreaker();
-
-export async function getTodoDataService(
-  runtime: AgentRuntime,
-): Promise<TodoDataServiceLike | null> {
-  const runtimeKey = String(runtime.agentId ?? "unknown");
-  if (todoDbCircuitBreaker.isOpen(runtimeKey)) {
-    return null;
-  }
-  try {
-    const todoModule = (await import("@elizaos/plugin-todo")) as Record<
-      string,
-      unknown
-    >;
-    const createTodoDataService = todoModule.createTodoDataService as
-      | ((rt: AgentRuntime) => TodoDataServiceLike)
-      | undefined;
-    if (!createTodoDataService) return null;
-    return createTodoDataService(runtime);
-  } catch {
-    return null;
-  }
-}
-
-export function recordTodoDbFailure(
-  runtime: AgentRuntime,
-  operation: string,
-  err: unknown,
-): void {
-  if (!isFatalTodoDbError(err)) return;
-  const runtimeKey = String(runtime.agentId ?? "unknown");
-  if (!todoDbCircuitBreaker.open(runtimeKey)) return;
-  runtime.logger?.warn(
-    {
-      src: "eliza-api",
-      operation,
-      err,
-      agentId: runtime.agentId,
-    },
-    "[eliza-api] Disabling plugin-todo DB integration after fatal todo query failure",
-  );
-}
-
-export function toWorkbenchTodoFromRecord(
-  todo: Record<string, unknown>,
-): WorkbenchTodoView | null {
-  const metadata = asObject(todo.metadata);
-  const lifeopsMirror = asObject(metadata?.lifeopsMirror);
-  if (lifeopsMirror?.hiddenFromWorkbench === true) {
-    return null;
-  }
-  const id =
-    typeof todo.id === "string" && todo.id.trim().length > 0 ? todo.id : null;
-  const name =
-    typeof todo.name === "string" && todo.name.trim().length > 0
-      ? todo.name
-      : null;
-  if (!id || !name) return null;
-  return {
-    id,
-    name,
-    description: typeof todo.description === "string" ? todo.description : "",
-    priority: parseNullableNumber(todo.priority),
-    isUrgent: todo.isUrgent === true,
-    isCompleted: todo.isCompleted === true,
-    type:
-      typeof todo.type === "string" && todo.type.trim().length > 0
-        ? todo.type
-        : "task",
-  };
 }

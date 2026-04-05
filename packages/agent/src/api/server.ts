@@ -276,7 +276,7 @@ import { resolveStreamingUpdate } from "./streaming-text.js";
 import { handleSubscriptionRoutes } from "./subscription-routes.js";
 import { resolveTerminalRunLimits } from "./terminal-run-limits.js";
 import { hasPersistedOnboardingState } from "./server-helpers.js";
-// isFatalTodoDbError, TodoDbCircuitBreaker moved to workbench-helpers.ts
+// Workbench task/todo helpers moved to workbench-helpers.ts
 import { handleTrainingRoutes } from "./training-routes.js";
 import type { TrainingServiceWithRuntime } from "./training-service-like.js";
 import { handleTrajectoryRoute } from "./trajectory-routes.js";
@@ -3670,9 +3670,6 @@ import {
   toWorkbenchTask,
   toWorkbenchTodo,
   normalizeTags,
-  getTodoDataService,
-  recordTodoDbFailure,
-  toWorkbenchTodoFromRecord,
 } from "./workbench-helpers.js";
 const _WORKBENCH_TASK_TAG = WORKBENCH_TASK_TAG;
 const _WORKBENCH_TODO_TAG = WORKBENCH_TODO_TAG;
@@ -5881,9 +5878,6 @@ async function handleRequest(
         readJsonBody,
         toWorkbenchTask: toWorkbenchTask as any,
         toWorkbenchTodo: toWorkbenchTodo as any,
-        toWorkbenchTodoFromRecord: toWorkbenchTodoFromRecord as any,
-        getTodoDataService: getTodoDataService as any,
-        recordTodoDbFailure,
         normalizeTags,
         readTaskMetadata,
         readTaskCompleted,
