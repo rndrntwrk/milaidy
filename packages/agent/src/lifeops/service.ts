@@ -28,21 +28,20 @@ import type {
   LifeOpsConnectorGrant,
   LifeOpsConnectorMode,
   LifeOpsContextPolicy,
-  LifeOpsDomain,
   LifeOpsDefinitionRecord,
+  LifeOpsDomain,
   LifeOpsGmailMessageSummary,
   LifeOpsGmailReplyDraft,
   LifeOpsGmailTriageFeed,
+  LifeOpsGoalDefinition,
   LifeOpsGoalRecord,
   LifeOpsGoalReview,
   LifeOpsGoalSupportSuggestion,
-  LifeOpsGoalDefinition,
-  LifeOpsGoalLink,
   LifeOpsGoogleCapability,
   LifeOpsGoogleConnectorStatus,
   LifeOpsNextCalendarEventContext,
-  LifeOpsOccurrenceExplanation,
   LifeOpsOccurrence,
+  LifeOpsOccurrenceExplanation,
   LifeOpsOccurrenceView,
   LifeOpsOverview,
   LifeOpsOverviewSection,
@@ -2696,16 +2695,21 @@ export class LifeOpsService {
   private async upsertManagedGoogleGrant(
     status: ManagedGoogleConnectorStatusResponse,
   ): Promise<LifeOpsConnectorGrant | null> {
-    const existingGrant = await this.repository.getConnectorGrant(
-      this.agentId(),
-      "google",
-      "cloud_managed",
-    );
+    const currentGoogleGrants = (
+      await this.repository.listConnectorGrants(this.agentId())
+    ).filter((grant) => grant.provider === "google");
+    const existingGrant =
+      currentGoogleGrants.find((grant) => grant.mode === "cloud_managed") ??
+      null;
     if (!existingGrant && !status.connected) {
       return null;
     }
 
     const nowIso = new Date().toISOString();
+    const preferredByAgent =
+      existingGrant?.preferredByAgent ??
+      (currentGoogleGrants.length === 0 ||
+        !currentGoogleGrants.some((grant) => grant.preferredByAgent));
     const clearedMetadata = clearGoogleGrantAuthFailureMetadata(
       existingGrant?.metadata ?? {},
     );
@@ -2726,6 +2730,7 @@ export class LifeOpsService {
           mode: "cloud_managed" as const,
           executionTarget: "cloud" as const,
           sourceOfTruth: "cloud_connection" as const,
+          preferredByAgent,
           cloudConnectionId: status.connectionId,
           metadata:
             status.reason === "needs_reauth"
@@ -2750,7 +2755,7 @@ export class LifeOpsService {
           mode: "cloud_managed",
           executionTarget: "cloud",
           sourceOfTruth: "cloud_connection",
-          preferredByAgent: true,
+          preferredByAgent,
           cloudConnectionId: status.connectionId,
           metadata: baseMetadata,
           lastRefreshAt: nowIso,
@@ -6622,6 +6627,65 @@ export class LifeOpsService {
       hasRefreshToken: refreshTokenValid,
       grant,
     };
+  }
+
+  async selectGoogleConnectorMode(
+    requestUrl: URL,
+    preferredModeInput: LifeOpsConnectorMode | undefined,
+  ): Promise<LifeOpsGoogleConnectorStatus> {
+    const preferredMode = normalizeOptionalConnectorMode(
+      preferredModeInput,
+      "mode",
+    );
+    if (!preferredMode) {
+      fail(400, "mode is required");
+    }
+
+    const grants = (
+      await this.repository.listConnectorGrants(this.agentId())
+    ).filter((grant) => grant.provider === "google");
+    const modeAvailability = resolveGoogleAvailableModes({
+      requestUrl,
+      cloudConfigured: resolveManagedGoogleCloudConfig().configured,
+      grants,
+    });
+    if (!modeAvailability.availableModes.includes(preferredMode)) {
+      fail(
+        400,
+        `mode must be one of: ${modeAvailability.availableModes.join(", ")}`,
+      );
+    }
+
+    const previousPreferredMode =
+      resolvePreferredGoogleGrant({
+        grants,
+        defaultMode: modeAvailability.defaultMode,
+      })?.mode ?? null;
+    const targetGrant =
+      grants.find((grant) => grant.mode === preferredMode) ?? null;
+
+    if (targetGrant) {
+      await this.setPreferredGoogleConnectorMode(preferredMode);
+      if (
+        previousPreferredMode !== preferredMode ||
+        !targetGrant.preferredByAgent
+      ) {
+        await this.recordConnectorAudit(
+          "google:preferred-mode",
+          "google connector preferred mode updated",
+          {
+            previousMode: previousPreferredMode,
+            nextMode: preferredMode,
+          },
+          {
+            persisted: true,
+            availableModes: modeAvailability.availableModes,
+          },
+        );
+      }
+    }
+
+    return this.getGoogleConnectorStatus(requestUrl, preferredMode);
   }
 
   async startGoogleConnector(

@@ -287,6 +287,9 @@ declare module "./client-base" {
     getGoogleLifeOpsConnectorStatus(
       mode?: LifeOpsConnectorMode,
     ): Promise<LifeOpsGoogleConnectorStatus>;
+    selectGoogleLifeOpsConnectorMode(data: {
+      mode: LifeOpsConnectorMode;
+    }): Promise<LifeOpsGoogleConnectorStatus>;
     startGoogleLifeOpsConnector(
       data?: StartLifeOpsGoogleConnectorRequest,
     ): Promise<StartLifeOpsGoogleConnectorResponse>;
@@ -1050,6 +1053,16 @@ MiladyClient.prototype.getGoogleLifeOpsConnectorStatus = async function (
 ) {
   const query = mode ? `?mode=${encodeURIComponent(mode)}` : "";
   return this.fetch(`/api/lifeops/connectors/google/status${query}`);
+};
+
+MiladyClient.prototype.selectGoogleLifeOpsConnectorMode = async function (
+  this: MiladyClient,
+  data,
+) {
+  return this.fetch("/api/lifeops/connectors/google/preference", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
 };
 
 MiladyClient.prototype.startGoogleLifeOpsConnector = async function (

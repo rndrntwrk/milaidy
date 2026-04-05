@@ -21,6 +21,7 @@ import type {
   DisconnectLifeOpsGoogleConnectorRequest,
   GetLifeOpsCalendarFeedRequest,
   GetLifeOpsGmailTriageRequest,
+  LifeOpsConnectorMode,
   ProcessLifeOpsRemindersRequest,
   RunLifeOpsWorkflowRequest,
   SendLifeOpsGmailReplyRequest,
@@ -413,6 +414,17 @@ export async function handleLifeOpsRoutes(
     if (!body) return true;
     return runRoute(ctx, async (service) => {
       json(res, await service.startGoogleConnector(body, url));
+    });
+  }
+
+  if (
+    method === "POST" &&
+    pathname === "/api/lifeops/connectors/google/preference"
+  ) {
+    const body = await readJsonBody<{ mode?: LifeOpsConnectorMode }>(req, res);
+    if (!body) return true;
+    return runRoute(ctx, async (service) => {
+      json(res, await service.selectGoogleConnectorMode(url, body.mode));
     });
   }
 

@@ -102,6 +102,12 @@ function jsonResponse(body: unknown, status = 200): Response {
   });
 }
 
+function buildIdToken(claims: Record<string, unknown>): string {
+  const encode = (value: object) =>
+    Buffer.from(JSON.stringify(value)).toString("base64url");
+  return `${encode({ alg: "none", typ: "JWT" })}.${encode(claims)}.signature`;
+}
+
 describe("life-ops managed Google connector", () => {
   let port = 0;
   let closeServer: (() => Promise<void>) | null = null;
@@ -191,6 +197,12 @@ describe("life-ops managed Google connector", () => {
       "lifeops-google-managed-agent",
       "google",
     );
+    await fs.rm(path.join(stateDir, "credentials"), {
+      recursive: true,
+      force: true,
+      maxRetries: 5,
+      retryDelay: 50,
+    });
   });
 
   it("prefers cloud-managed Google when Eliza Cloud is configured and mirrors the grant locally", async () => {
@@ -267,6 +279,201 @@ describe("life-ops managed Google connector", () => {
       "google.calendar.read",
       "google.gmail.triage",
     ]);
+  });
+
+  it("switches the preferred Google mode per agent when local and managed connectors both exist", async () => {
+    process.env.MILADY_GOOGLE_OAUTH_DESKTOP_CLIENT_ID = "desktop-client-id";
+
+    fetchMock.mockImplementation(async (input, init) => {
+      const url = typeof input === "string" ? input : input.toString();
+      const method = init?.method ?? "GET";
+
+      if (url === "https://oauth2.googleapis.com/token" && method === "POST") {
+        const params = new URLSearchParams(String(init?.body ?? ""));
+        expect(params.get("client_id")).toBe("desktop-client-id");
+        expect(params.get("grant_type")).toBe("authorization_code");
+        expect(params.get("code")).toBe("local-preference-code");
+        expect(params.get("redirect_uri")).toBe(
+          `http://127.0.0.1:${port}/api/lifeops/connectors/google/callback`,
+        );
+
+        return jsonResponse({
+          access_token: "local-preference-access-token",
+          refresh_token: "local-preference-refresh-token",
+          expires_in: 3600,
+          scope: [
+            "openid",
+            "email",
+            "profile",
+            "https://www.googleapis.com/auth/calendar.readonly",
+          ].join(" "),
+          token_type: "Bearer",
+          id_token: buildIdToken({
+            sub: "google-local-user",
+            email: "local@example.com",
+            email_verified: true,
+            name: "Local Example",
+          }),
+        });
+      }
+
+      if (url === "https://cloud.example/api/v1/milady/google/status") {
+        const headers = new Headers(init?.headers);
+        expect(headers.get("x-api-key")).toBe("ck-managed-google-test");
+        return jsonResponse({
+          provider: "google",
+          mode: "cloud_managed",
+          configured: true,
+          connected: true,
+          reason: "connected",
+          identity: {
+            id: "google-managed-user",
+            email: "managed@example.com",
+            name: "Managed Example",
+          },
+          grantedCapabilities: [
+            "google.basic_identity",
+            "google.calendar.read",
+          ],
+          grantedScopes: [
+            "openid",
+            "email",
+            "profile",
+            "https://www.googleapis.com/auth/calendar.readonly",
+          ],
+          expiresAt: "2026-04-05T00:00:00.000Z",
+          hasRefreshToken: true,
+          connectionId: "managed-google-connection",
+          linkedAt: "2026-04-04T15:00:00.000Z",
+          lastUsedAt: "2026-04-04T16:00:00.000Z",
+        });
+      }
+
+      throw new Error(`Unexpected fetch ${method} ${url}`);
+    });
+
+    const startRes = await req(
+      port,
+      "POST",
+      "/api/lifeops/connectors/google/start",
+      {
+        mode: "local",
+        capabilities: ["google.calendar.read"],
+      },
+    );
+    expect(startRes.status).toBe(200);
+    expect(startRes.data.mode).toBe("local");
+
+    const authUrl = new URL(String(startRes.data.authUrl));
+    const callbackRes = await req(
+      port,
+      "GET",
+      `/api/lifeops/connectors/google/callback?state=${encodeURIComponent(authUrl.searchParams.get("state") ?? "")}&code=local-preference-code`,
+    );
+    expect(callbackRes.status).toBe(200);
+
+    const defaultLocalStatus = await req(
+      port,
+      "GET",
+      "/api/lifeops/connectors/google/status",
+    );
+    expect(defaultLocalStatus.status).toBe(200);
+    expect(defaultLocalStatus.data.mode).toBe("local");
+    expect(defaultLocalStatus.data.preferredByAgent).toBe(true);
+    expect(defaultLocalStatus.data.connected).toBe(true);
+
+    const managedStatus = await req(
+      port,
+      "GET",
+      "/api/lifeops/connectors/google/status?mode=cloud_managed",
+    );
+    expect(managedStatus.status).toBe(200);
+    expect(managedStatus.data.mode).toBe("cloud_managed");
+    expect(managedStatus.data.connected).toBe(true);
+    expect(managedStatus.data.preferredByAgent).toBe(false);
+
+    const repository = new LifeOpsRepository(runtime);
+    expect(
+      (
+        await repository.getConnectorGrant(
+          "lifeops-google-managed-agent",
+          "google",
+          "local",
+        )
+      )?.preferredByAgent,
+    ).toBe(true);
+    expect(
+      (
+        await repository.getConnectorGrant(
+          "lifeops-google-managed-agent",
+          "google",
+          "cloud_managed",
+        )
+      )?.preferredByAgent,
+    ).toBe(false);
+
+    const preferManagedRes = await req(
+      port,
+      "POST",
+      "/api/lifeops/connectors/google/preference",
+      {
+        mode: "cloud_managed",
+      },
+    );
+    expect(preferManagedRes.status).toBe(200);
+    expect(preferManagedRes.data.mode).toBe("cloud_managed");
+    expect(preferManagedRes.data.preferredByAgent).toBe(true);
+    expect(preferManagedRes.data.connected).toBe(true);
+
+    const defaultManagedStatus = await req(
+      port,
+      "GET",
+      "/api/lifeops/connectors/google/status",
+    );
+    expect(defaultManagedStatus.status).toBe(200);
+    expect(defaultManagedStatus.data.mode).toBe("cloud_managed");
+    expect(defaultManagedStatus.data.preferredByAgent).toBe(true);
+
+    expect(
+      (
+        await repository.getConnectorGrant(
+          "lifeops-google-managed-agent",
+          "google",
+          "local",
+        )
+      )?.preferredByAgent,
+    ).toBe(false);
+    expect(
+      (
+        await repository.getConnectorGrant(
+          "lifeops-google-managed-agent",
+          "google",
+          "cloud_managed",
+        )
+      )?.preferredByAgent,
+    ).toBe(true);
+
+    const preferLocalRes = await req(
+      port,
+      "POST",
+      "/api/lifeops/connectors/google/preference",
+      {
+        mode: "local",
+      },
+    );
+    expect(preferLocalRes.status).toBe(200);
+    expect(preferLocalRes.data.mode).toBe("local");
+    expect(preferLocalRes.data.preferredByAgent).toBe(true);
+    expect(preferLocalRes.data.connected).toBe(true);
+
+    const defaultLocalAgain = await req(
+      port,
+      "GET",
+      "/api/lifeops/connectors/google/status",
+    );
+    expect(defaultLocalAgain.status).toBe(200);
+    expect(defaultLocalAgain.data.mode).toBe("local");
+    expect(defaultLocalAgain.data.preferredByAgent).toBe(true);
   });
 
   it("starts managed auth, syncs calendar and gmail, sends replies, creates events, and disconnects cleanly", async () => {

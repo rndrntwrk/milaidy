@@ -9,6 +9,7 @@ const { mockClient, mockOpenExternalUrl } = vi.hoisted(() => ({
     getGoogleLifeOpsConnectorStatus: vi.fn(),
     getLifeOpsCalendarFeed: vi.fn(),
     getLifeOpsGmailTriage: vi.fn(),
+    selectGoogleLifeOpsConnectorMode: vi.fn(),
     startGoogleLifeOpsConnector: vi.fn(),
     disconnectGoogleLifeOpsConnector: vi.fn(),
   },
@@ -54,6 +55,7 @@ describe("GoogleSidebarWidget", () => {
     mockClient.getGoogleLifeOpsConnectorStatus.mockReset();
     mockClient.getLifeOpsCalendarFeed.mockReset();
     mockClient.getLifeOpsGmailTriage.mockReset();
+    mockClient.selectGoogleLifeOpsConnectorMode.mockReset();
     mockClient.startGoogleLifeOpsConnector.mockReset();
     mockClient.disconnectGoogleLifeOpsConnector.mockReset();
     mockOpenExternalUrl.mockReset();
@@ -240,6 +242,95 @@ describe("GoogleSidebarWidget", () => {
     });
     expect(mockOpenExternalUrl).toHaveBeenCalledWith(
       "https://accounts.google.com/o/oauth2/v2/auth?client_id=managed-google",
+    );
+  });
+
+  it("lets the user switch to local mode before connecting", async () => {
+    mockClient.getGoogleLifeOpsConnectorStatus.mockResolvedValue({
+      provider: "google",
+      mode: "cloud_managed",
+      defaultMode: "cloud_managed",
+      availableModes: ["cloud_managed", "local"],
+      executionTarget: "cloud",
+      sourceOfTruth: "cloud_connection",
+      configured: true,
+      connected: false,
+      reason: "disconnected",
+      preferredByAgent: false,
+      cloudConnectionId: null,
+      identity: null,
+      grantedCapabilities: [],
+      grantedScopes: [],
+      expiresAt: null,
+      hasRefreshToken: false,
+      grant: null,
+    });
+    mockClient.selectGoogleLifeOpsConnectorMode.mockResolvedValue({
+      provider: "google",
+      mode: "local",
+      defaultMode: "cloud_managed",
+      availableModes: ["cloud_managed", "local"],
+      executionTarget: "local",
+      sourceOfTruth: "local_storage",
+      configured: true,
+      connected: false,
+      reason: "disconnected",
+      preferredByAgent: false,
+      cloudConnectionId: null,
+      identity: null,
+      grantedCapabilities: [],
+      grantedScopes: [],
+      expiresAt: null,
+      hasRefreshToken: false,
+      grant: null,
+    });
+    mockClient.startGoogleLifeOpsConnector.mockResolvedValue({
+      provider: "google",
+      mode: "local",
+      requestedCapabilities: ["google.basic_identity", "google.calendar.read"],
+      redirectUri:
+        "http://127.0.0.1:31337/api/lifeops/connectors/google/callback",
+      authUrl:
+        "https://accounts.google.com/o/oauth2/v2/auth?client_id=local-google",
+    });
+
+    let renderer: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(
+        React.createElement(GoogleSidebarWidget, {
+          events: [],
+          clearEvents: () => {},
+        }),
+      );
+    });
+
+    const localButton = renderer.root
+      .findAllByType("button")
+      .find((button) => flattenText(button) === "Local");
+    expect(localButton).toBeDefined();
+
+    await act(async () => {
+      localButton?.props.onClick();
+    });
+
+    expect(mockClient.selectGoogleLifeOpsConnectorMode).toHaveBeenCalledWith({
+      mode: "local",
+    });
+
+    const connectButton = renderer.root
+      .findAllByType("button")
+      .find((button) => flattenText(button) === "Connect");
+    expect(connectButton).toBeDefined();
+
+    await act(async () => {
+      connectButton?.props.onClick();
+    });
+
+    expect(mockClient.startGoogleLifeOpsConnector).toHaveBeenCalledWith({
+      mode: "local",
+    });
+    expect(mockOpenExternalUrl).toHaveBeenCalledWith(
+      "https://accounts.google.com/o/oauth2/v2/auth?client_id=local-google",
     );
   });
 });
