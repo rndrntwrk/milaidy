@@ -383,6 +383,25 @@ function nativeModuleStubPlugin(): Plugin {
         ].join("\n");
       }
 
+      // async_hooks — AsyncLocalStorage must be a real constructor because
+      // several @elizaos packages do `new AsyncLocalStorage()` at the top level.
+      // The generic Proxy-based stub isn't sufficient because the bundler may
+      // inline it as an empty object before the Proxy wrapper is applied.
+      if (
+        modName === "node:async_hooks" ||
+        modName === "async_hooks"
+      ) {
+        return [
+          "export class AsyncLocalStorage { constructor() {} getStore() { return undefined; } run(store, fn, ...args) { return fn(...args); } enterWith() {} disable() {} }",
+          "export function executionAsyncId() { return 0; }",
+          "export function triggerAsyncId() { return 0; }",
+          "export function executionAsyncResource() { return {}; }",
+          "export class AsyncResource { constructor() {} runInAsyncScope(fn, ...args) { return fn(...args); } emitDestroy() { return this; } asyncId() { return 0; } triggerAsyncId() { return 0; } }",
+          "export function createHook() { return { enable() {}, disable() {} }; }",
+          "export default { AsyncLocalStorage, AsyncResource, executionAsyncId, triggerAsyncId, executionAsyncResource, createHook };",
+        ].join("\n");
+      }
+
       // node:* builtins — return a Proxy-based module that provides any
       // named export as a no-op function.  This handles @elizaos/core's node
       // entry which uses createRequire, randomUUID, fs, etc. at the top level.
@@ -396,7 +415,7 @@ function nativeModuleStubPlugin(): Plugin {
       return "export default {};\n";
     },
     // Patch @elizaos/core browser entry at transform time to add missing
-    // exports that milady's agent plugins expect.
+    // exports and fix browser-incompatible patterns.
     transform(code, id) {
       if (
         !id.endsWith("index.browser.js") ||
@@ -404,6 +423,16 @@ function nativeModuleStubPlugin(): Plugin {
           !id.includes("packages/typescript/dist/browser"))
       )
         return null;
+
+      // Fix AsyncLocalStorage: the browser entry has a try/catch that does
+      //   let {AsyncLocalStorage:$} = (() => {throw new Error(...)})()
+      // Rollup/esbuild may optimize the throw into (()=>({})) which makes
+      // AsyncLocalStorage undefined, causing "xte is not a constructor".
+      // Replace the broken IIFE pattern with a working stub class.
+      let patched = code.replace(
+        /\(\(\)\s*=>\s*\{\s*throw\s+new\s+Error\(\s*"Cannot require module "\s*\+\s*"node:async_hooks"\s*\)\s*;\s*\}\)\(\)/g,
+        '({AsyncLocalStorage: class { constructor(){} getStore(){return undefined} run(s,fn,...a){return fn(...a)} enterWith(){} disable(){} }})',
+      );
       // Names that downstream plugins (plugin-secrets-manager, agent runtime)
       // import from @elizaos/core but that are missing from the browser entry.
       const missingExports: Record<string, string> = {
@@ -420,17 +449,19 @@ function nativeModuleStubPlugin(): Plugin {
         // Check if already exported (as named export or re-export alias)
         const exportedAs = new RegExp(`\\b${n}\\b`);
         // Search only in export{} blocks
-        const exportBlocks = code.match(/export\s*\{[^}]+\}/g) || [];
+        const exportBlocks = patched.match(/export\s*\{[^}]+\}/g) || [];
         return !exportBlocks.some((b) => exportedAs.test(b));
       });
-      if (needed.length === 0) return null;
+      if (needed.length === 0 && patched === code) return null;
       // Use unique prefixed names to avoid collisions with minified vars
       const prefix = "__milady_stub_";
       const stubs = needed
         .map((n) => `var ${prefix}${n} = ${missingExports[n]};`)
         .join("\n");
-      const exports = `export { ${needed.map((n) => `${prefix}${n} as ${n}`).join(", ")} };`;
-      return { code: `${code}\n${stubs}\n${exports}`, map: null };
+      const exports = needed.length > 0
+        ? `export { ${needed.map((n) => `${prefix}${n} as ${n}`).join(", ")} };`
+        : "";
+      return { code: `${patched}\n${stubs}\n${exports}`, map: null };
     },
   };
 }
@@ -449,6 +480,37 @@ const threeRootDir = path.resolve(miladyRoot, "node_modules/three");
  * `node_modules/three` path broke Rollup’s production path handling; a
  * pre-hook re-resolve from non-root importers keeps dev + `vite build` stable.
  */
+/**
+ * Patch the final bundle output to fix AsyncLocalStorage stubs.
+ *
+ * langsmith imports `{ AsyncLocalStorage } from "node:async_hooks"` at the
+ * top level. Vite's dep optimizer and Rollup inline the virtual-module stub
+ * as `(()=>({}))`, making AsyncLocalStorage `undefined` and causing
+ * `new undefined` → "xte is not a constructor" at runtime in mobile webviews.
+ *
+ * This plugin replaces the empty-object stub with a proper class in the
+ * final rendered chunks.
+ */
+function asyncLocalStoragePatchPlugin(): Plugin {
+  return {
+    name: "async-local-storage-patch",
+    enforce: "post",
+    renderChunk(code) {
+      // Match: var{AsyncLocalStorage:<id>}=(()=>({}))
+      const re =
+        /var\s*\{\s*AsyncLocalStorage\s*:\s*(\w+)\s*\}\s*=\s*\(\s*\(\s*\)\s*=>\s*\(\s*\{\s*\}\s*\)\s*\)/g;
+      if (!re.test(code)) return null;
+      re.lastIndex = 0;
+      const patched = code.replace(re, (_match, id) => {
+        // Use block-body arrow + named class — concise arrow with inline
+        // anonymous class fails in older WebViews (Chrome 124 and below).
+        return `var{AsyncLocalStorage:${id}}=(()=>{function A(){} A.prototype.getStore=function(){return undefined};A.prototype.run=function(s,fn){return fn.apply(void 0,[].slice.call(arguments,2))};A.prototype.enterWith=function(){};A.prototype.disable=function(){};return{AsyncLocalStorage:A}})()`;
+      });
+      return { code: patched, map: null };
+    },
+  };
+}
+
 function sparkPatchPlugin(): Plugin {
   return {
     name: "spark-patch",
@@ -556,6 +618,7 @@ export default defineConfig({
   plugins: [
     nativeModuleStubPlugin(),
     sparkPatchPlugin(),
+    asyncLocalStoragePatchPlugin(),
     watchWorkspacePackagesPlugin(),
     tailwindcss(),
     react(),

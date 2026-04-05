@@ -596,7 +596,7 @@ class TalkModePlugin : Plugin() {
         pcmStopRequested.set(false)
         setState("speaking", "Speaking")
 
-        val effectiveVoiceId = directive?.optString("voiceId", null)
+        val effectiveVoiceId = directive?.optString("voiceId", null as String?)
             ?.let { resolveVoiceAlias(it) }
             ?: voiceId
         val effectiveApiKey = apiKey
@@ -689,10 +689,10 @@ class TalkModePlugin : Plugin() {
      * applying all validation from the classic TalkModeRuntime.
      */
     private fun buildElevenLabsRequest(text: String, directive: JSObject?): ElevenLabsRequest {
-        val effectiveModelId = directive?.optString("modelId", null)?.takeIf { it.isNotEmpty() }
+        val effectiveModelId = directive?.optString("modelId", null as String?)?.takeIf { it.isNotEmpty() }
             ?: modelId ?: DEFAULT_MODEL_ID
         val effectiveFormat = validatedOutputFormat(
-            directive?.optString("outputFormat", null) ?: outputFormat
+            directive?.optString("outputFormat", null as String?) ?: outputFormat
         ) ?: DEFAULT_OUTPUT_FORMAT
 
         val rawSpeed = directive?.optDouble("speed", -1.0)?.takeIf { it > 0 }
@@ -715,10 +715,10 @@ class TalkModePlugin : Plugin() {
         val rawSeed = directive?.optLong("seed", -1)?.takeIf { it >= 0 }
         val seed = validatedSeed(rawSeed)
 
-        val rawNormalize = directive?.optString("normalize", null)
+        val rawNormalize = directive?.optString("normalize", null as String?)
         val normalize = validatedNormalize(rawNormalize)
 
-        val rawLanguage = directive?.optString("language", null)
+        val rawLanguage = directive?.optString("language", null as String?)
         val language = validatedLanguage(rawLanguage)
 
         val rawLatencyTier = directive?.optInt("latencyTier", -1)?.takeIf { it >= 0 }
