@@ -247,10 +247,12 @@ export function GoogleSidebarWidget(_props: ChatSidebarWidgetProps) {
     [],
   );
   const ownerConnector = useGoogleLifeOpsConnector({
+    pollWhileDisconnected: false,
     side: "owner",
     pollIntervalMs: GOOGLE_WIDGET_REFRESH_INTERVAL_MS,
   });
   const agentConnector = useGoogleLifeOpsConnector({
+    pollWhileDisconnected: false,
     side: "agent",
     pollIntervalMs: GOOGLE_WIDGET_REFRESH_INTERVAL_MS,
   });

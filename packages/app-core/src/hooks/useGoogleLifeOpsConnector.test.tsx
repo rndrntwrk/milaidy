@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { mockClient, mockOpenExternalUrl } = vi.hoisted(() => ({
   mockClient: {
@@ -62,6 +62,10 @@ describe("useGoogleLifeOpsConnector", () => {
     mockClient.selectGoogleLifeOpsConnectorMode.mockReset();
     mockClient.startGoogleLifeOpsConnector.mockReset();
     mockOpenExternalUrl.mockReset();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("keeps managed and local modes visible for setup", async () => {
@@ -177,5 +181,65 @@ describe("useGoogleLifeOpsConnector", () => {
     expect(mockOpenExternalUrl).toHaveBeenCalledWith(
       "https://accounts.google.com/o/oauth2/v2/auth?client_id=desktop-client",
     );
+  });
+
+  it("does not keep polling disconnected status when polling while disconnected is disabled", async () => {
+    vi.useFakeTimers();
+    mockClient.getGoogleLifeOpsConnectorStatus.mockResolvedValue(
+      buildStatus("owner", {
+        connected: false,
+        reason: "disconnected",
+      }),
+    );
+
+    const { unmount } = renderHook(() =>
+      useGoogleLifeOpsConnector({
+        pollIntervalMs: 10_000,
+        pollWhileDisconnected: false,
+      }),
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mockClient.getGoogleLifeOpsConnectorStatus).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(30_000);
+    });
+
+    expect(mockClient.getGoogleLifeOpsConnectorStatus).toHaveBeenCalledTimes(1);
+    unmount();
+  });
+
+  it("keeps polling connected status even when disconnected polling is disabled", async () => {
+    vi.useFakeTimers();
+    mockClient.getGoogleLifeOpsConnectorStatus.mockResolvedValue(
+      buildStatus("owner", {
+        connected: true,
+        reason: "connected",
+      }),
+    );
+
+    const { unmount } = renderHook(() =>
+      useGoogleLifeOpsConnector({
+        pollIntervalMs: 10_000,
+        pollWhileDisconnected: false,
+      }),
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mockClient.getGoogleLifeOpsConnectorStatus).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(10_000);
+    });
+
+    expect(mockClient.getGoogleLifeOpsConnectorStatus).toHaveBeenCalledTimes(2);
+    unmount();
   });
 });

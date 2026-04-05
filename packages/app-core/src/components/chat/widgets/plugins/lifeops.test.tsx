@@ -121,10 +121,12 @@ describe("GoogleSidebarWidget", () => {
     expect(mockClient.getLifeOpsCalendarFeed).not.toHaveBeenCalled();
     expect(mockClient.getLifeOpsGmailTriage).not.toHaveBeenCalled();
     expect(mockUseGoogleLifeOpsConnector).toHaveBeenCalledWith({
+      pollWhileDisconnected: false,
       side: "owner",
       pollIntervalMs: 15000,
     });
     expect(mockUseGoogleLifeOpsConnector).toHaveBeenCalledWith({
+      pollWhileDisconnected: false,
       side: "agent",
       pollIntervalMs: 15000,
     });

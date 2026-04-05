@@ -48,6 +48,7 @@ function resolveVisibleModes(
 
 export interface UseGoogleLifeOpsConnectorOptions {
   pollIntervalMs?: number;
+  pollWhileDisconnected?: boolean;
   side?: LifeOpsConnectorSide;
 }
 
@@ -56,6 +57,7 @@ export function useGoogleLifeOpsConnector(
 ) {
   const pollIntervalMs =
     options.pollIntervalMs ?? DEFAULT_GOOGLE_CONNECTOR_POLL_INTERVAL_MS;
+  const pollWhileDisconnected = options.pollWhileDisconnected ?? true;
   const side = options.side ?? "owner";
   const selectedModeRef = useRef<LifeOpsConnectorMode | null>(null);
   const [selectedMode, setSelectedMode] = useState<LifeOpsConnectorMode | null>(
@@ -106,20 +108,24 @@ export function useGoogleLifeOpsConnector(
   );
 
   useEffect(() => {
-    let active = true;
     void refresh();
+  }, [refresh]);
+
+  useEffect(() => {
+    if (pollIntervalMs <= 0) {
+      return;
+    }
+    if (!pollWhileDisconnected && status?.connected !== true) {
+      return;
+    }
     const intervalId = globalThis.setInterval(() => {
-      if (!active) {
-        return;
-      }
       void refresh({ silent: true });
     }, pollIntervalMs);
 
     return () => {
-      active = false;
       globalThis.clearInterval(intervalId);
     };
-  }, [pollIntervalMs, refresh]);
+  }, [pollIntervalMs, pollWhileDisconnected, refresh, status?.connected]);
 
   const selectMode = useCallback(
     async (mode: LifeOpsConnectorMode) => {
