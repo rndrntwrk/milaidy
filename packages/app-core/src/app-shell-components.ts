@@ -24,6 +24,7 @@ export {
   HeartbeatsDesktopShell,
   HeartbeatsView,
 } from "./components/pages/HeartbeatsView";
+export { InboxView } from "./components/pages/InboxView";
 export { InventoryView } from "./components/pages/InventoryView";
 export { KnowledgeView } from "./components/pages/KnowledgeView";
 export { OnboardingWizard } from "./components/onboarding/OnboardingWizard";

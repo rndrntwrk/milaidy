@@ -69,6 +69,7 @@ export * from "./apps/GameViewOverlay";
 export * from "./companion/GlobalEmoteOverlay";
 export * from "./shell/Header";
 export * from "./pages/HeartbeatsView";
+export * from "./pages/InboxView";
 export * from "./pages/InventoryView";
 export type { ChainIconProps, ChainIconSize } from "./inventory/ChainIcon";
 export { ChainIcon } from "./inventory/ChainIcon";

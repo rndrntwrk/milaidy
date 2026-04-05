@@ -72,6 +72,7 @@ vi.mock("./app-shell-components", () => {
     GameViewOverlay: stub("GameViewOverlay"),
     Header: stub("Header"),
     HeartbeatsView: stub("HeartbeatsView"),
+    InboxView: stub("InboxView"),
     InventoryView: stub("InventoryView"),
     KnowledgeView: stub("KnowledgeView"),
     OnboardingWizard: stub("OnboardingWizard"),
