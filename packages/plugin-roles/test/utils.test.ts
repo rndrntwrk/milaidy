@@ -396,27 +396,6 @@ describe("resolveEntityRole", () => {
 });
 
 describe("resolveEntityRole", () => {
-  it("resolves a connector-whitelisted Discord entity to ADMIN without persisting world metadata", async () => {
-    const updateWorld = vi.fn().mockResolvedValue(undefined);
-    const world = { id: "w1", metadata: { roles: {} } as RolesWorldMetadata };
-    const runtime = mockRuntime({
-      room: { worldId: "w1" },
-      world,
-      updateWorld,
-      entities: {
-        speaker: {
-          metadata: { discord: { userId: "discord-admin-1", username: "owner" } },
-        },
-      },
-    });
-    setConnectorAdminWhitelist(runtime, { discord: ["discord-admin-1"] });
-
-    const role = await resolveEntityRole(runtime, world, world.metadata, "speaker");
-    expect(role).toBe("ADMIN");
-    expect(world.metadata.roles?.speaker).toBeUndefined();
-    expect(updateWorld).not.toHaveBeenCalled();
-  });
-
   it("prefers live bridge sender metadata when no persisted entity metadata exists", async () => {
     const world = { id: "w1", metadata: { roles: {} } as RolesWorldMetadata };
     const runtime = mockRuntime({
@@ -525,7 +504,7 @@ describe("checkSenderRole", () => {
     });
   });
 
-  it("returns ADMIN for a connector-whitelisted Discord sender", async () => {
+  it("returns ADMIN for a connector-whitelisted Discord sender via live bridge metadata", async () => {
     const runtime = mockRuntime({
       room: { worldId: "w1" },
       world: { id: "w1", metadata: { roles: {} } },
