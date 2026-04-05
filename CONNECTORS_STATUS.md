@@ -6,7 +6,7 @@ Tracking doc for the end-to-end effort to give every user-facing plugin a **cons
 
 ## Scope covered
 
-- **44 plugins** (31 connectors + 9 AI providers + 4 streaming).
+- **43 plugins** (30 connectors + 9 AI providers + 4 streaming). BlueBubbles was removed from the Milady app entirely in a follow-up — see below.
 - **Source doc surface:** `apps/web/src/docs/content/**/*.mdx`, registered in `apps/web/src/docs/registry.ts`.
 - **Deployed at:** `https://milady.ai/docs/<tier>/<slug>`.
 - **MDX shortcodes used:** `<Steps>`, `<Callout kind="tip|note|warning|danger" title="…">`, `<Screenshot src alt caption />`, `<Diagram>` (new — lazy-loaded Mermaid).
@@ -29,13 +29,13 @@ Tracking doc for the end-to-end effort to give every user-facing plugin a **cons
 
 | Metric | Count |
 | --- | --- |
-| Total plugins tracked | **44** |
-| Consumer docs written + registered | **37 unique pages** (7 AI providers share `byok-api-keys`) |
-| `setupGuideUrl` pointing at `milady.ai/docs/**` | **44 / 44** |
-| `setupGuideUrl` pointing at dev docs | **0 / 44** |
+| Total plugins tracked | **43** |
+| Consumer docs written + registered | **36 unique pages** (7 AI providers share `byok-api-keys`) |
+| `setupGuideUrl` pointing at `milady.ai/docs/**` | **43 / 43** |
+| `setupGuideUrl` pointing at dev docs | **0 / 43** |
 | Typecheck at HEAD | ✅ `bun run typecheck` exit 0 |
-| Smoke-verified | **44** (routes resolve in registry, `setupGuideUrl` opens the right page) |
-| Live-tested | **0** — per user direction, live testing was waived for this pass. BlueBubbles blocked by user's server setup; remaining platforms need credentials to be supplied in a follow-up. |
+| Smoke-verified | **43** (routes resolve in registry, `setupGuideUrl` opens the right page) |
+| Live-tested | **0** — per user direction, live testing was waived for this pass. Remaining platforms need credentials to be supplied in a follow-up. |
 
 ## Plugin matrix
 
@@ -53,13 +53,14 @@ Tracking doc for the end-to-end effort to give every user-facing plugin a **cons
 | 8 | Ollama | `intermediate/local-ollama` | ✅ | 🟩 | 🟩 | ⬜ | Standalone page (local-install flow) |
 | 9 | Local AI | `intermediate/local-ai` | ✅ | 🟩 | 🟩 | ⬜ | Standalone page (local `.gguf` files) |
 
-### Connectors — intermediate tier (27)
+### Connectors — intermediate tier (26)
+
+> **BlueBubbles was removed from the Milady app.** Initially this tier was seeded with a BlueBubbles consumer doc (and an upstream webhook-ingest PR at [elizaos-plugins/plugin-bluebubbles#1](https://github.com/elizaos-plugins/plugin-bluebubbles/pull/1) to fix a silent send-only bug). The user then opted to remove BlueBubbles from Milady entirely. All references were stripped from `plugins.json`, `packages/agent/`, `packages/app-core/`, `apps/web`, dev docs in every supported language, and build scripts. The upstream PR stands on its own merits and is unaffected by this removal.
 
 | # | Plugin | Consumer doc | `setupGuideUrl` | Doc | Smoke | Live | Notes |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 10 | **BlueBubbles** | `intermediate/connect-bluebubbles` | ✅ | 🟩 | 🟩 | ⛔ | 🎯 Template. Live-test waived per user. Includes Mermaid sequence diagram. Inbound webhook ingest fixed in upstream PR [elizaos-plugins/plugin-bluebubbles#1](https://github.com/elizaos-plugins/plugin-bluebubbles/pull/1). |
-| 11 | Discord | `intermediate/connect-discord` | ✅ | 🟩 | 🟩 | ⬜ | Existing doc (PR #1682), URL repointed. |
-| 12 | Telegram | `intermediate/connect-telegram` | ✅ | 🟩 | 🟩 | ⬜ | Existing doc (PR #1682), URL repointed. |
+| 10 | Discord | `intermediate/connect-discord` | ✅ | 🟩 | 🟩 | ⬜ | Existing doc (PR #1682), URL repointed. |
+| 11 | Telegram | `intermediate/connect-telegram` | ✅ | 🟩 | 🟩 | ⬜ | Existing doc (PR #1682), URL repointed. |
 | 13 | Slack | `intermediate/connect-slack` | ✅ | 🟩 | 🟩 | ⬜ | Socket Mode — no public webhook required |
 | 14 | Bluesky | `intermediate/connect-bluesky` | ✅ | 🟩 | 🟩 | ⬜ | App password only |
 | 15 | Nostr | `intermediate/connect-nostr` | ✅ | 🟩 | 🟩 | ⬜ | Keypair + relays |
@@ -107,15 +108,14 @@ Tracking doc for the end-to-end effort to give every user-facing plugin a **cons
 
 1. **New `<Diagram>` MDX shortcode** at `apps/web/src/components/docs/Diagram.tsx` — lazy-loaded Mermaid, dark-theme tuned. Registered in `mdx-components.tsx`. Dep: `mermaid@^11.14.0` added to `apps/web/package.json`.
 2. **Pre-existing tsc fix:** `apps/web/src/lib/format.ts` was importing from `@miladyai/app-core/utils/format` (a subpath that wasn't in the package's exports map). Fixed to import from the barrel at `@miladyai/app-core/utils`.
-3. **Upstream bug filed and fixed:** [elizaos-plugins/plugin-bluebubbles#1](https://github.com/elizaos-plugins/plugin-bluebubbles/pull/1) — the BlueBubbles plugin had `handleWebhook(payload)` and `getWebhookPath()` but no HTTP routes registered, meaning inbound iMessage events had nowhere to land. Fixed with a new `src/routes.ts` exposing a `POST /webhooks/bluebubbles` route, full test coverage, typecheck + lint + build green.
+3. **BlueBubbles removal** (follow-up commit). Deleted the plugin entry from `plugins.json`, the schema + zod config + auto-enable + plugin-collector entries in `packages/agent/`, the icon map and tests in `packages/app-core/`, the consumer MDX page, the dev docs pages (English + Chinese + French + Spanish), and the script references. The upstream PR [elizaos-plugins/plugin-bluebubbles#1](https://github.com/elizaos-plugins/plugin-bluebubbles/pull/1) (which wired webhook ingest) was filed against the plugin repo itself and is not affected by Milady's removal — it still stands as a fix for anyone who wants to use that plugin elsewhere.
+4. **Corrected iMessage CLI guidance.** Initial `connect-imessage.mdx` recommended installing `imessage-reader`. Reading `@elizaos/plugin-imessage@alpha.9` source showed the plugin actually looks for a binary named `imsg` and, more importantly, falls back to AppleScript against Messages.app when no binary is found. Rewrote the page to reflect that users should leave both CLI path and DB path blank for the normal case.
 
 ## Follow-ups outside this PR
 
-1. **Live testing.** All 44 plugins are smoke-verified but none are live-verified in this pass (user direction). Each needs real credentials and a round-trip test at some point.
+1. **Live testing.** All 43 plugins are smoke-verified but none are live-verified in this pass (user direction). Each needs real credentials and a round-trip test at some point.
 2. **Screenshot placeholders.** Several docs reference concrete UI steps in third-party dashboards (Discord dev portal, Twitch Creator Dashboard, Azure portal, etc.) where real screenshots would dramatically improve clarity. `<Screenshot>` shortcode is ready; actual PNGs to be captured.
 3. **`streaming-base` decision.** Currently shares `stream-custom-rtmp` URL as a reasonable landing. Could get its own "Enable streaming" primer if the Stream tab needs more introductory material.
-4. **Upstream merge/publish.** Once [elizaos-plugins/plugin-bluebubbles#1](https://github.com/elizaos-plugins/plugin-bluebubbles/pull/1) merges and a new alpha ships, Milady's lockfile bump will unblock real inbound iMessage testing.
-5. **Dynamic webhook path.** The BlueBubbles upstream PR documents that `Plugin.routes` is static at module load, so `BLUEBUBBLES_WEBHOOK_PATH` config no longer influences the mounted path. A follow-up to add dynamic route registration in `@elizaos/core` would restore that.
 
 ---
 

@@ -117,8 +117,8 @@ describe("config schema", () => {
     const res = buildConfigSchema({
       connectors: [
         {
-          id: "bluebubbles",
-          label: "BlueBubbles",
+          id: "custom-platform",
+          label: "Custom Platform",
           configSchema: { type: "object" },
         },
       ],
@@ -126,8 +126,8 @@ describe("config schema", () => {
 
     const defaultsHint = res.uiHints["agents.defaults.heartbeat.target"];
     const listHint = res.uiHints["agents.list.*.heartbeat.target"];
-    expect(defaultsHint?.help).toContain("bluebubbles");
+    expect(defaultsHint?.help).toContain("custom-platform");
     expect(defaultsHint?.help).toContain("last");
-    expect(listHint?.help).toContain("bluebubbles");
+    expect(listHint?.help).toContain("custom-platform");
   });
 });

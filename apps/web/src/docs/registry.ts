@@ -146,18 +146,6 @@ export const docsRegistry: DocEntry[] = [
     ),
   },
   {
-    slug: "connect-bluebubbles",
-    title: "Connect to iMessage with BlueBubbles",
-    description:
-      "Bridge your agent into real iMessage using a BlueBubbles server on a Mac.",
-    tier: "intermediate",
-    order: 3,
-    path: "/docs/intermediate/connect-bluebubbles",
-    component: lazy(
-      () => import("./content/intermediate/connect-bluebubbles.mdx"),
-    ),
-  },
-  {
     slug: "character-tweaks",
     title: "Make it yours",
     description:

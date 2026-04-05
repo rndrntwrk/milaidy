@@ -142,19 +142,6 @@ describe("applyPluginAutoEnable — connectors", () => {
     expect(config.plugins?.allow ?? []).not.toContain("slack");
   });
 
-  it("enables bluebubbles when serverUrl and password are set", () => {
-    const params = makeParams({
-      config: {
-        connectors: {
-          bluebubbles: { serverUrl: "http://localhost:1234", password: "pass" },
-        },
-      },
-    });
-    const { config } = applyPluginAutoEnable(params);
-
-    expect(config.plugins?.allow).toContain("bluebubbles");
-  });
-
   it("enables imessage when cliPath is set", () => {
     const params = makeParams({
       config: {

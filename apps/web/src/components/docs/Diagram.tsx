@@ -19,10 +19,10 @@ export interface DiagramProps {
  *   <Diagram caption="How a message reaches your agent" alt="Message flow sequence">{`
  *     sequenceDiagram
  *       participant U as You
- *       participant B as BlueBubbles server
+ *       participant T as Telegram
  *       participant M as Milady
- *       U->>B: iMessage
- *       B->>M: webhook
+ *       U->>T: message
+ *       T->>M: webhook
  *       M-->>U: reply
  *   `}</Diagram>
  *
