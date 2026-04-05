@@ -1,0 +1,64 @@
+# Connect to Nextcloud Talk
+
+Nextcloud Talk is the chat product built into Nextcloud — the self-hosted file sync, calendar, and collaboration suite. If your team runs Nextcloud, Talk is probably already enabled, and this connector drops your Milady agent into it as a bot.
+
+**What you'll learn:** register a bot via Nextcloud Talk's bot API, configure the webhook endpoint, hand credentials to Milady.
+
+## What you need before you start
+
+- **A Nextcloud instance** running Nextcloud 27 or newer, with Nextcloud Talk enabled.
+- **Admin access** (or an admin willing to register a bot for you).
+- **A publicly reachable HTTPS URL** for Milady. Nextcloud Talk pushes messages via webhook.
+- **Milady running** with a working provider.
+
+## Step 1 — Enable the Nextcloud Talk bot API
+
+Bots in Nextcloud Talk are registered via the occ command-line tool on the server. If you're on managed Nextcloud, your provider may have a UI for this; otherwise, SSH into the server.
+
+<Steps>
+  <li>SSH to your Nextcloud server.</li>
+  <li>Navigate to the Nextcloud install directory.</li>
+  <li>Generate a random secret string for the bot (anything long and hard to guess works). Save it.</li>
+  <li>Run: <code>sudo -u www-data php occ talk:bot:install "Milady" "&lt;your-secret&gt;" "https://&lt;your-public-milady-url&gt;/webhooks/nextcloud-talk"</code></li>
+  <li>Nextcloud confirms the bot is registered and outputs a bot ID.</li>
+</Steps>
+
+## Step 2 — Install the bot into specific conversations
+
+The bot is registered globally, but it won't appear in any conversation until it's explicitly installed.
+
+<Steps>
+  <li>In Nextcloud Talk, open the conversation you want the bot in.</li>
+  <li>Click the conversation name / settings → <strong>Bots</strong> tab (if available in your UI) → enable Milady.</li>
+  <li>If the UI doesn't expose this: run <code>sudo -u www-data php occ talk:bot:setup &lt;bot-id&gt; &lt;conversation-token&gt;</code> on the server.</li>
+</Steps>
+
+## Step 3 — Hand credentials to Milady
+
+<Steps>
+  <li>Open Milady. Go to <strong>Settings → Plugins → Nextcloud Talk → Configure</strong>.</li>
+  <li>Set <strong>Nextcloud URL</strong> to your Nextcloud base URL (e.g. <code>https://cloud.yourserver.com</code>).</li>
+  <li>Set <strong>Bot secret</strong> to the secret you chose in Step 1.</li>
+  <li>Set <strong>Webhook public URL</strong> to the same URL you gave <code>occ talk:bot:install</code>.</li>
+  <li>(Optional) Restrict the bot to specific rooms by listing their tokens in <strong>Allowed rooms</strong>.</li>
+  <li>Click <strong>Save</strong>.</li>
+</Steps>
+
+## Step 4 — Test it
+
+In the conversation where you installed the bot, send a message mentioning it or containing whatever trigger you configured. Nextcloud Talk POSTs the event to Milady, and Milady replies back into the conversation.
+
+## Troubleshooting
+
+**"Bot not found" when running the setup command.**
+The install in Step 1 failed. Check Nextcloud's logs at `data/nextcloud.log` for the reason — usually the webhook URL was unreachable when Nextcloud tried to verify it.
+
+**Messages arrive at Milady but replies don't show up in the conversation.**
+Bot signature verification is failing — the secret Milady is using doesn't match the secret Nextcloud has on file. Re-run Step 1 with the exact same secret.
+
+**Bot is in the conversation but never reacts.**
+Step 2 didn't complete, or the bot was installed without a `read-message` event subscription. Re-run the setup command and include read-message events in the install call.
+
+## What's next
+
+- [Connect to Matrix](/docs/intermediate/connect-matrix) — another open-source, federated chat option if your team is considering alternatives.

@@ -1,0 +1,108 @@
+# Connect to Twitter / X
+
+Your Milady agent can post to X, reply to mentions, and run autonomous engagement behaviors. The setup requires a developer account, four OAuth keys, and realistic expectations about X's rate limits — especially on the free tier.
+
+**What you'll learn:** apply for an X developer account, create an app, generate four credentials, paste them into Milady.
+
+<Callout kind="warning" title="X's API is expensive now">
+As of 2023, X turned off the generous free API tier. The current Free tier gives you 500 posts per month and read access only for the authenticated user. The Basic tier is $100/month, Pro is $5,000/month. Budget accordingly, and consider whether <a href="/docs/intermediate/connect-bluesky">Bluesky</a> or <a href="/docs/intermediate/connect-nostr">Nostr</a> gets you more of what you want for zero.
+</Callout>
+
+## What you need before you start
+
+- **A Twitter/X account** you can afford to tie to a developer app. A dedicated bot account is ideal.
+- **A phone number** on that account — required for developer access.
+- **Milady running** with a working provider.
+
+## Step 1 — Apply for developer access
+
+<Steps>
+  <li>Open <a href="https://developer.twitter.com/en/portal/dashboard">developer.twitter.com/en/portal/dashboard</a> and sign in.</li>
+  <li>If you don't already have developer access, click the "Sign up for Free Account" button. X usually grants this instantly — if not, the verification involves answering what you plan to use it for.</li>
+</Steps>
+
+## Step 2 — Create a project and app
+
+<Steps>
+  <li>In the developer portal, create a <strong>Project</strong> (name it anything).</li>
+  <li>Inside the project, create an <strong>App</strong>. The app is what actually holds your credentials.</li>
+  <li>Give the app a name. X requires this to be unique across all of X.</li>
+</Steps>
+
+## Step 3 — Set app permissions to Read and Write
+
+<Steps>
+  <li>In the app settings, go to <strong>User authentication settings</strong>.</li>
+  <li>Click <strong>Set up</strong>.</li>
+  <li>App permissions: <strong>Read and write</strong>. If you need DMs too, use <strong>Read, write, and direct messages</strong>.</li>
+  <li>Type of app: <strong>Web App, Automated App or Bot</strong>.</li>
+  <li>Callback URI: enter any valid URL (X requires one, but Milady doesn't actually use it). <code>https://localhost</code> is fine.</li>
+  <li>Save.</li>
+</Steps>
+
+## Step 4 — Generate the four keys
+
+<Steps>
+  <li>Go to the app's <strong>Keys and tokens</strong> tab.</li>
+  <li>Under <strong>Consumer Keys</strong>, click <strong>Regenerate</strong> and copy the <strong>API Key</strong> and <strong>API Key Secret</strong>.</li>
+  <li>Under <strong>Authentication Tokens</strong>, click <strong>Generate</strong> next to <strong>Access Token and Secret</strong>. Copy both.</li>
+</Steps>
+
+<Callout kind="danger" title="Regenerate AFTER changing permissions">
+If you change permissions (Step 3) <em>after</em> generating the access token, the old token will only have the old permissions. Always generate fresh tokens after any permission change, or you'll get cryptic 403 errors.
+</Callout>
+
+## Step 5 — Hand the four keys to Milady
+
+<Steps>
+  <li>Open Milady. Go to <strong>Settings → Plugins → Twitter → Configure</strong>.</li>
+  <li>Paste the <strong>API Key</strong> → <strong>Twitter API Key</strong>.</li>
+  <li>Paste the <strong>API Key Secret</strong> → <strong>Twitter API Secret Key</strong>.</li>
+  <li>Paste the <strong>Access Token</strong> → <strong>Twitter Access Token</strong>.</li>
+  <li>Paste the <strong>Access Token Secret</strong> → <strong>Twitter Access Token Secret</strong>.</li>
+  <li>Set <strong>Dry run</strong> to <code>true</code> for your first test — this lets you verify everything connects without actually posting.</li>
+  <li>Click <strong>Save</strong>.</li>
+</Steps>
+
+## Step 6 — Test in dry-run mode
+
+Trigger a post from Milady. In dry-run mode, Milady logs what it would have posted without calling the X API. Confirm the log looks right, then go back to Step 5 and set Dry run to `false`.
+
+## Useful options
+
+| Option | What it does |
+| --- | --- |
+| **Post enable** | Turn on to let the agent make autonomous posts on an interval. |
+| **Post interval min / max** | Minutes between posts. Start at 90/180 minimum — posting faster will burn your free tier in days. |
+| **Auto-respond mentions** | Reply to `@` mentions automatically. Uses your read-access budget. |
+| **Poll interval** | Seconds between mention checks. Default 120. Don't go lower on free tier. |
+| **Dry run** | Log what would happen without calling the API. Use for testing. |
+
+## Rate limit reality
+
+Free tier, as of writing:
+
+| Action | Limit |
+| --- | --- |
+| Posts per month | 500 |
+| Read own user data | Yes |
+| Read other users / search | **No** |
+| DMs | No on Free |
+
+That 500/month cap is the ceiling. If Milady posts once every 90 minutes 24/7, that's ~480/month — basically at the limit. Autonomous posting combined with mention replies will burn through it fast.
+
+## Troubleshooting
+
+**"Could not authenticate you" (401).**
+One of the four keys is wrong, or you regenerated keys after pasting and forgot to update. Re-paste all four fresh from the Twitter dashboard.
+
+**"Forbidden" (403) when trying to post.**
+Usually means permissions are Read-only. Go back to Step 3 and set to Read and Write, then **regenerate access tokens** (Step 4) and paste fresh values.
+
+**"Rate limit exceeded."**
+You hit the free tier cap. Either wait for the monthly reset, upgrade to Basic, or slow down `TWITTER_POST_INTERVAL_MIN`.
+
+## What's next
+
+- [Connect to Bluesky](/docs/intermediate/connect-bluesky) — zero-cost alternative with similar vibes.
+- [Running multiple connectors](/docs/advanced/multi-connector-setup) — cross-post to Twitter, Bluesky, Farcaster, and Nostr from one agent.

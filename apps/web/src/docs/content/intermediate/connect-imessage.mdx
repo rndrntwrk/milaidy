@@ -1,0 +1,84 @@
+# Connect to iMessage (macOS native)
+
+This connector runs Milady on the same Mac that has iMessage configured, reads the local `chat.db` SQLite file directly, and uses AppleScript / CLI tools to send replies. No external server, no bridge, no third-party credentials.
+
+**Who this is for:** people running Milady on a Mac that's also their primary iMessage device, or on a dedicated "server Mac" in a closet. If Milady runs anywhere but macOS — or if you want to reach iMessage from a different device on your network — use [BlueBubbles](/docs/intermediate/connect-bluebubbles) instead.
+
+## What you need before you start
+
+- **A Mac running macOS 11 or newer** with iMessage signed in. Confirm iMessage works by sending a message in Messages.app and seeing it turn blue.
+- **Milady running on that same Mac.** This connector is the one exception to Milady's platform-agnostic posture — it literally will not work on Windows or Linux because iMessage doesn't exist there.
+- **Admin access** on the Mac to grant Full Disk Access.
+
+## Step 1 — Install the iMessage CLI helper
+
+Milady talks to iMessage through a small helper CLI that reads from `~/Library/Messages/chat.db` and writes via AppleScript. Pick one:
+
+- **imessage-reader** — a popular Python tool. Install via `brew install imessage-reader` or from its GitHub releases.
+- **BlueBubbles helper** — if you already have BlueBubbles installed and don't want a second tool.
+
+Note the absolute path to the installed binary.
+
+## Step 2 — Grant Full Disk Access
+
+macOS blocks reads from `~/Library/Messages/` by default — iMessage data is considered sensitive. You have to explicitly let Milady (and the helper CLI) read it.
+
+<Steps>
+  <li>Open <strong>System Settings → Privacy &amp; Security → Full Disk Access</strong>.</li>
+  <li>Click the <strong>+</strong> button and add <strong>Milady.app</strong>.</li>
+  <li>Also add the helper CLI binary from Step 1 (e.g. <code>imessage-reader</code>).</li>
+  <li>Toggle both on.</li>
+  <li>Quit Milady completely and restart it — Full Disk Access only takes effect for newly-launched processes.</li>
+</Steps>
+
+<Callout kind="warning">
+Full Disk Access lets an app read every file the user account can see. Only grant it to software you trust, and prefer specific binaries over "give it to every CLI tool."
+</Callout>
+
+## Step 3 — Configure the plugin
+
+<Steps>
+  <li>Open Milady. Go to <strong>Settings → Plugins → iMessage → Configure</strong>.</li>
+  <li>Set <strong>CLI path</strong> to the absolute path of the helper binary from Step 1.</li>
+  <li>Leave <strong>DB path</strong> as default (<code>~/Library/Messages/chat.db</code>) unless you're doing something unusual.</li>
+  <li>Set <strong>Poll interval (ms)</strong> — how often Milady checks for new messages. Default 5000ms is fine for most uses; lower for more responsive, higher to reduce system load.</li>
+  <li>Click <strong>Save</strong>.</li>
+</Steps>
+
+## Step 4 — Test it
+
+From your iPhone (or any other iMessage device on a different Apple ID), send a message to the Apple ID signed in on this Mac.
+
+Within a few seconds — bounded by your poll interval — Milady should see the message and reply in the same thread. The reply will be a real blue bubble sent through Messages.app.
+
+## Useful options
+
+| Option | What it does |
+| --- | --- |
+| **DM policy** | `allow-all` responds to everyone. `allow-from` restricts to a list. |
+| **Group policy** | `allow-all`, `allow-from`, or `deny-all`. |
+| **Allow from** | Comma-separated phone numbers / emails allowed when policy is `allow-from`. Use E.164 format for phone numbers. |
+
+## Troubleshooting
+
+**"Permission denied reading chat.db."**
+Full Disk Access wasn't granted, or it was granted before Milady was launched. Quit Milady, confirm FDA is on, relaunch.
+
+**Replies are green bubbles instead of blue.**
+Messages.app is signed out of iMessage or the account is offline. Open Messages.app, send a manual test — if the Apple ID shows as needing re-auth, fix it there and Milady will resume.
+
+**Milady sees messages but replies never send.**
+The helper CLI's AppleScript send path needs Accessibility permission. Same dance as Full Disk Access: System Settings → Privacy &amp; Security → Accessibility → add the helper CLI and Milady.app.
+
+**Polling feels laggy.**
+Reduce the poll interval. 1000ms is about as low as you want to go without creating measurable CPU load.
+
+## Why not run this on a remote Mac?
+
+You can — but then you need a way to reach that Mac from wherever Milady is running. At that point [BlueBubbles](/docs/intermediate/connect-bluebubbles) is a better-engineered solution because it was designed for exactly that remote-bridge use case.
+
+Use this connector only if Milady runs on the same Mac as iMessage.
+
+## What's next
+
+- [Connect to BlueBubbles](/docs/intermediate/connect-bluebubbles) — the cross-platform way to reach iMessage, for when "everything on one Mac" isn't viable.

@@ -1,0 +1,61 @@
+# Connect to Blooio
+
+Blooio is a service that bridges SMS and iMessage via an API — you get a phone number, a key, and the ability to send text messages programmatically from that number. Good for cases where you want to send SMS from a "real" number without running your own Mac (BlueBubbles) or paying Twilio rates.
+
+**What you'll learn:** sign up for Blooio, copy your API key and phone number, configure the webhook, hand everything to Milady.
+
+## What you need before you start
+
+- **A Blooio account** at <a href="https://bloo.io">bloo.io</a>.
+- **A publicly reachable HTTPS URL** for Milady (Blooio pushes incoming SMS via webhook).
+- **Milady running** with a working provider.
+
+## Step 1 — Sign up and get a number
+
+<Steps>
+  <li>Open <a href="https://bloo.io">bloo.io</a> and sign up.</li>
+  <li>Follow the onboarding to associate a phone number. Depending on your plan you may get a new number or bring your own.</li>
+  <li>In the dashboard, go to <strong>API → Keys</strong> and copy your <strong>API key</strong>.</li>
+  <li>Copy your <strong>phone number</strong> in the format Blooio shows (usually E.164 like <code>+15551234567</code>).</li>
+</Steps>
+
+## Step 2 — Configure the webhook
+
+<Steps>
+  <li>In the Blooio dashboard, find <strong>Webhooks</strong> or <strong>Incoming messages</strong>.</li>
+  <li>Set the webhook URL to <code>https://&lt;your-public-milady-url&gt;/webhooks/blooio</code>.</li>
+  <li>Generate or set a <strong>webhook secret</strong> — any long random string. Save it.</li>
+  <li>Save.</li>
+</Steps>
+
+## Step 3 — Hand credentials to Milady
+
+<Steps>
+  <li>Open Milady. Go to <strong>Settings → Plugins → Blooio → Configure</strong>.</li>
+  <li>Paste the <strong>API key</strong> from Step 1.</li>
+  <li>Paste the <strong>Phone number</strong> from Step 1.</li>
+  <li>Set <strong>Webhook URL</strong> to the public Milady URL you configured in Blooio.</li>
+  <li>Paste the <strong>Webhook secret</strong> from Step 2.</li>
+  <li>Leave <strong>Base URL</strong> as default unless Blooio told you otherwise.</li>
+  <li>Click <strong>Save</strong>.</li>
+</Steps>
+
+## Step 4 — Test it
+
+From your phone, send a text to the Blooio number. Within a few seconds Milady should reply.
+
+## Troubleshooting
+
+**Incoming texts don't reach Milady.**
+Milady's public URL isn't reachable, or the webhook secret doesn't match. Blooio's dashboard usually has a delivery log — check it for the last few attempts.
+
+**Outgoing texts fail with "insufficient credit" or similar.**
+Check your Blooio plan and add credit if needed.
+
+**International destinations fail.**
+Blooio, like most SMS services, restricts which country codes you can send to by default. Check your plan's allowed destinations.
+
+## What's next
+
+- [Connect to Twilio](/docs/intermediate/connect-twilio) — if you want fuller control, global reach, and voice calls in addition to SMS, Twilio is the bigger but more expensive option.
+- [Connect to iMessage with BlueBubbles](/docs/intermediate/connect-bluebubbles) — if blue bubbles matter to you and you have a Mac available.

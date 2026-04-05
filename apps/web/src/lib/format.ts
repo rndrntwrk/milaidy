@@ -1,1 +1,1 @@
-export { formatUptime } from "@miladyai/app-core/utils/format";
+export { formatUptime } from "@miladyai/app-core/utils";

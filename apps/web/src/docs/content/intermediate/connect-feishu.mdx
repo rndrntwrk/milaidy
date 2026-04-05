@@ -1,0 +1,105 @@
+# Connect to Feishu / Lark
+
+Feishu (inside China) and Lark (outside China) are the same product from ByteDance — think Slack plus Google Workspace plus Notion. If your team runs on it, this connector lets your Milady agent participate in chats, respond to mentions, and handle commands.
+
+**What you'll learn:** create a custom app in the Feishu/Lark developer console, grab the App ID and App Secret, and point Milady at it.
+
+## What you need before you start
+
+- **A Feishu or Lark account**, and ideally an admin in your organization who can approve custom apps for the tenant.
+- **Milady running** with a working provider.
+
+<Callout kind="note" title="Feishu vs Lark">
+The two are nearly identical but use different developer consoles: Feishu at <a href="https://open.feishu.cn">open.feishu.cn</a> for China-based tenants, Lark at <a href="https://open.larksuite.com">open.larksuite.com</a> for everywhere else. Pick the one that matches where your tenant is hosted — don't mix them.
+</Callout>
+
+## Step 1 — Create a custom app
+
+<Steps>
+  <li>Open the developer console for your domain:
+    <ul>
+      <li>Feishu: <a href="https://open.feishu.cn">open.feishu.cn</a></li>
+      <li>Lark: <a href="https://open.larksuite.com">open.larksuite.com</a></li>
+    </ul>
+  </li>
+  <li>Sign in. Click <strong>Create App → Custom App</strong>.</li>
+  <li>Name it (e.g. "Milady"), pick an icon, and write a short description. Submit.</li>
+</Steps>
+
+## Step 2 — Grab the credentials
+
+<Steps>
+  <li>In your new app, go to <strong>Credentials &amp; Basic Info</strong> (sometimes labeled "App Credentials").</li>
+  <li>Copy the <strong>App ID</strong>.</li>
+  <li>Copy the <strong>App Secret</strong>.</li>
+</Steps>
+
+## Step 3 — Enable bot capabilities
+
+<Steps>
+  <li>In the left sidebar, go to <strong>Add Features → Bot</strong>. Enable it.</li>
+  <li>Set a bot name and avatar.</li>
+  <li>Save.</li>
+</Steps>
+
+## Step 4 — Configure the event subscription URL
+
+<Steps>
+  <li>In the left sidebar, go to <strong>Event Subscriptions</strong>.</li>
+  <li>Request URL: <code>https://&lt;your-public-milady-url&gt;/webhooks/feishu</code></li>
+  <li>Feishu/Lark sends a challenge request to verify — Milady must be reachable for this to succeed.</li>
+  <li>Subscribe to the events: <strong>Message received</strong> (<code>im.message.receive_v1</code>), and any others you want the bot to react to.</li>
+</Steps>
+
+## Step 5 — Grant permission scopes
+
+<Steps>
+  <li>In the sidebar, go to <strong>Permissions &amp; Scopes</strong>.</li>
+  <li>Add: <code>im:message</code>, <code>im:message.group_at_msg</code>, <code>im:message.p2p_msg</code>, <code>im:chat</code>.</li>
+  <li>Save changes.</li>
+</Steps>
+
+## Step 6 — Publish and install
+
+<Steps>
+  <li>Go to <strong>Version Management &amp; Release</strong>.</li>
+  <li>Click <strong>Create Version</strong>, fill in the form, submit for admin approval.</li>
+  <li>Your tenant admin must approve before the bot is usable. If you're the admin, approve it in the Admin Console.</li>
+</Steps>
+
+## Step 7 — Hand credentials to Milady
+
+<Steps>
+  <li>Open Milady. Go to <strong>Settings → Plugins → Feishu → Configure</strong>.</li>
+  <li>Paste the <strong>App ID</strong>.</li>
+  <li>Paste the <strong>App Secret</strong>.</li>
+  <li>Set <strong>Domain</strong> to <code>feishu.cn</code> (for Feishu) or <code>larksuite.com</code> (for Lark).</li>
+  <li>Click <strong>Save</strong>.</li>
+</Steps>
+
+## Step 8 — Add the bot to a chat and test
+
+<Steps>
+  <li>In Feishu/Lark, open any chat or group → click the <strong>+</strong> button to add members/apps → search for your bot → add.</li>
+  <li>Send a message mentioning the bot (<code>@botname</code>).</li>
+  <li>Milady should reply within a few seconds.</li>
+</Steps>
+
+## Troubleshooting
+
+**"App not approved" when adding to a chat.**
+Step 6 is pending — ask your tenant admin to approve the app version.
+
+**Event subscription URL verification fails.**
+Milady isn't reachable at the URL you entered. Test in a browser.
+
+**Wrong domain error.**
+Check Step 7 — `feishu.cn` is for accounts registered in China, `larksuite.com` for international. Mixing them causes auth failures even with the right App ID/Secret.
+
+**Bot in chat but silent.**
+Check the permission scopes from Step 5 — missing `im:message` is the most common cause. Add, save, re-publish, wait for admin approval again.
+
+## What's next
+
+- [Connect to LINE](/docs/intermediate/connect-line) — the other major Asia-Pacific messenger.
+- [Connect to Slack](/docs/intermediate/connect-slack) — if you're comparing team chat options.

@@ -1,0 +1,88 @@
+# Connect to LINE
+
+LINE is the dominant messaging app across Japan, Taiwan, and Thailand. If you want your Milady agent talking to users there, this is the connector. LINE's Messaging API is official, stable, and well-documented — the only catch is that it requires an HTTPS webhook URL.
+
+**What you'll learn:** create a LINE Official Account and Messaging API channel, grab the two credentials, point LINE at Milady via webhook.
+
+## What you need before you start
+
+- **A LINE account** — any personal account works. You'll create a separate "Official Account" for the bot.
+- **A publicly reachable HTTPS URL** for Milady. LINE requires HTTPS, not HTTP. Local development works via a tunnel (Cloudflare Tunnel, ngrok) that gives you an `https://` URL.
+- **Milady running** with a working provider.
+
+## Step 1 — Create a LINE Official Account
+
+<Steps>
+  <li>Open <a href="https://developers.line.biz/console">developers.line.biz/console</a> and sign in with your LINE account.</li>
+  <li>Click <strong>Create a new provider</strong>. A provider is like an organization — pick any name.</li>
+  <li>Inside the provider, click <strong>Create a Messaging API channel</strong>.</li>
+  <li>Fill in channel name, description, category, subcategory, and agree to the terms. Submit.</li>
+</Steps>
+
+## Step 2 — Get the channel access token
+
+<Steps>
+  <li>In your new channel's page, click the <strong>Messaging API</strong> tab.</li>
+  <li>Scroll to <strong>Channel access token</strong>.</li>
+  <li>Click <strong>Issue</strong>. LINE generates a long-lived token — copy it.</li>
+</Steps>
+
+## Step 3 — Get the channel secret
+
+<Steps>
+  <li>In the same channel, click the <strong>Basic settings</strong> tab.</li>
+  <li>Copy the <strong>Channel secret</strong>.</li>
+</Steps>
+
+## Step 4 — Configure the webhook
+
+<Steps>
+  <li>Back in the <strong>Messaging API</strong> tab, find <strong>Webhook URL</strong>.</li>
+  <li>Enter <code>https://&lt;your-public-milady-url&gt;/webhooks/line</code>.</li>
+  <li>Click <strong>Verify</strong>. LINE pings the URL — Milady must be running and reachable for this to succeed.</li>
+  <li>Toggle <strong>Use webhook</strong> on.</li>
+  <li>Under <strong>LINE Official Account features</strong>, turn off <strong>Auto-reply messages</strong> and <strong>Greeting messages</strong> (unless you want LINE's default auto-replies competing with your agent).</li>
+</Steps>
+
+## Step 5 — Hand credentials to Milady
+
+<Steps>
+  <li>Open Milady. Go to <strong>Settings → Plugins → LINE → Configure</strong>.</li>
+  <li>Paste the <strong>Channel access token</strong> into the access token field.</li>
+  <li>Paste the <strong>Channel secret</strong> into the secret field.</li>
+  <li>Click <strong>Save</strong>.</li>
+</Steps>
+
+## Step 6 — Add the bot as a friend and test
+
+<Steps>
+  <li>In the LINE Developers console, go to your channel → <strong>Messaging API</strong> tab → <strong>Bot basic ID</strong> or <strong>QR code</strong>.</li>
+  <li>Open LINE on your phone, add the bot as a friend via the QR code or ID.</li>
+  <li>Send it a message.</li>
+  <li>Milady should reply within a couple of seconds.</li>
+</Steps>
+
+## Troubleshooting
+
+**"Webhook verification failed."**
+Milady isn't reachable at the URL you entered, or the tunnel is down. Test the URL in a browser — Milady should respond.
+
+**"Invalid signature."**
+Channel secret is wrong — LINE signs every webhook request with the secret, and Milady verifies it.
+
+**Bot receives messages but replies come back as empty.**
+Access token is wrong or expired. Re-issue in the Messaging API tab.
+
+**Bot auto-replies with LINE's default message in addition to Milady's reply.**
+Step 4's "Turn off Auto-reply messages" wasn't done. LINE runs its default responder alongside your webhook by default.
+
+## Useful options
+
+| Option | What it does |
+| --- | --- |
+| **DM policy / Group policy** | `allow-all` or `allow-from` with an allow list of user IDs. |
+| **Webhook path** | Defaults to `/webhooks/line`. Only change if you're running multiple LINE channels behind a shared proxy. |
+
+## What's next
+
+- [Connect to Feishu (Lark)](/docs/intermediate/connect-feishu) — another major Asia-Pacific work chat platform.
