@@ -339,7 +339,9 @@ export const docsRegistry: DocEntry[] = [
     tier: "intermediate",
     order: 20,
     path: "/docs/intermediate/connect-whatsapp",
-    component: lazy(() => import("./content/intermediate/connect-whatsapp.mdx")),
+    component: lazy(
+      () => import("./content/intermediate/connect-whatsapp.mdx"),
+    ),
   },
   {
     slug: "connect-line",
@@ -613,9 +615,7 @@ export const docsRegistry: DocEntry[] = [
     tier: "advanced",
     order: 12,
     path: "/docs/advanced/stream-custom-rtmp",
-    component: lazy(
-      () => import("./content/advanced/stream-custom-rtmp.mdx"),
-    ),
+    component: lazy(() => import("./content/advanced/stream-custom-rtmp.mdx")),
   },
 
   // ── Developer (lander — real content lives at docs.milady.ai) ───────
