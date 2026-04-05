@@ -1,4 +1,5 @@
 export * from "./admin-trust";
+export * from "./lifeops";
 export * from "./session-bridge";
 export * from "./session-utils";
 export * from "./simple-mode";

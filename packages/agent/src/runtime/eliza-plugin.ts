@@ -22,6 +22,7 @@ import {
   goOfflineAction,
 } from "../actions/stream-control";
 import { terminalAction } from "../actions/terminal";
+import { manageLifeOpsAction } from "../actions/lifeops";
 import {
   skillCommandAction,
   addRegisteredSkillSlug,
@@ -36,6 +37,7 @@ import {
 } from "../providers/session-utils";
 import { createChannelProfileProvider } from "../providers/simple-mode";
 import { createDynamicSkillProvider } from "../providers/skill-provider";
+import { lifeOpsProvider } from "../providers/lifeops";
 import { uiCatalogProvider } from "../providers/ui-catalog";
 import { createUserNameProvider } from "../providers/user-name";
 import { setUserNameAction } from "../actions/set-user-name";
@@ -69,6 +71,7 @@ export function createElizaPlugin(config?: ElizaPluginConfig): Plugin {
       maxCharsPerFile: config?.initMaxChars,
     }),
     adminTrustProvider,
+    lifeOpsProvider,
 
     createSessionKeyProvider({ defaultAgentId: agentId }),
     ...getSessionProviders({ storePath: sessionStorePath }),
@@ -233,6 +236,7 @@ export function createElizaPlugin(config?: ElizaPluginConfig): Plugin {
       terminalAction,
       createTriggerTaskAction,
       emoteAction,
+      manageLifeOpsAction,
       setUserNameAction,
       skillCommandAction,
     ],
