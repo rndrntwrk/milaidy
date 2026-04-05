@@ -4,16 +4,12 @@ import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockClient, mockOpenExternalUrl } = vi.hoisted(() => ({
+const { mockClient, mockUseGoogleLifeOpsConnector } = vi.hoisted(() => ({
   mockClient: {
-    getGoogleLifeOpsConnectorStatus: vi.fn(),
     getLifeOpsCalendarFeed: vi.fn(),
     getLifeOpsGmailTriage: vi.fn(),
-    selectGoogleLifeOpsConnectorMode: vi.fn(),
-    startGoogleLifeOpsConnector: vi.fn(),
-    disconnectGoogleLifeOpsConnector: vi.fn(),
   },
-  mockOpenExternalUrl: vi.fn(async () => {}),
+  mockUseGoogleLifeOpsConnector: vi.fn(),
 }));
 
 vi.mock("@miladyai/ui", () => ({
@@ -33,8 +29,8 @@ vi.mock("../../../../api", () => ({
   client: mockClient,
 }));
 
-vi.mock("../../../../utils", () => ({
-  openExternalUrl: (...args: unknown[]) => mockOpenExternalUrl(...args),
+vi.mock("../../../../hooks", () => ({
+  useGoogleLifeOpsConnector: () => mockUseGoogleLifeOpsConnector(),
 }));
 
 import { GoogleSidebarWidget } from "./lifeops";
@@ -52,41 +48,49 @@ function flattenText(node: TestRenderer.ReactTestInstance): string {
 
 describe("GoogleSidebarWidget", () => {
   beforeEach(() => {
-    mockClient.getGoogleLifeOpsConnectorStatus.mockReset();
     mockClient.getLifeOpsCalendarFeed.mockReset();
     mockClient.getLifeOpsGmailTriage.mockReset();
-    mockClient.selectGoogleLifeOpsConnectorMode.mockReset();
-    mockClient.startGoogleLifeOpsConnector.mockReset();
-    mockClient.disconnectGoogleLifeOpsConnector.mockReset();
-    mockOpenExternalUrl.mockReset();
+    mockUseGoogleLifeOpsConnector.mockReset();
   });
 
   it("renders connected managed Google status, calendar, and inbox data", async () => {
-    mockClient.getGoogleLifeOpsConnectorStatus.mockResolvedValue({
-      provider: "google",
-      mode: "cloud_managed",
-      defaultMode: "cloud_managed",
-      availableModes: ["cloud_managed"],
-      executionTarget: "cloud",
-      sourceOfTruth: "cloud_connection",
-      configured: true,
-      connected: true,
-      reason: "connected",
-      preferredByAgent: true,
-      cloudConnectionId: "managed-connection",
-      identity: {
-        name: "Founder Example",
-        email: "founder@example.com",
+    mockUseGoogleLifeOpsConnector.mockReturnValue({
+      activeMode: "cloud_managed",
+      actionPending: false,
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+      error: null,
+      loading: false,
+      modeOptions: ["cloud_managed", "local"],
+      refresh: vi.fn(),
+      selectMode: vi.fn(),
+      selectedMode: "cloud_managed",
+      status: {
+        provider: "google",
+        mode: "cloud_managed",
+        defaultMode: "cloud_managed",
+        availableModes: ["cloud_managed"],
+        executionTarget: "cloud",
+        sourceOfTruth: "cloud_connection",
+        configured: true,
+        connected: true,
+        reason: "connected",
+        preferredByAgent: true,
+        cloudConnectionId: "managed-connection",
+        identity: {
+          name: "Founder Example",
+          email: "founder@example.com",
+        },
+        grantedCapabilities: [
+          "google.basic_identity",
+          "google.calendar.read",
+          "google.gmail.triage",
+        ],
+        grantedScopes: [],
+        expiresAt: "2026-04-05T00:00:00.000Z",
+        hasRefreshToken: true,
+        grant: null,
       },
-      grantedCapabilities: [
-        "google.basic_identity",
-        "google.calendar.read",
-        "google.gmail.triage",
-      ],
-      grantedScopes: [],
-      expiresAt: "2026-04-05T00:00:00.000Z",
-      hasRefreshToken: true,
-      grant: null,
     });
     mockClient.getLifeOpsCalendarFeed.mockResolvedValue({
       calendarId: "primary",
@@ -175,7 +179,6 @@ describe("GoogleSidebarWidget", () => {
     expect(text).toContain("Project sync");
     expect(text).toContain("Reply");
 
-    expect(mockClient.getGoogleLifeOpsConnectorStatus).toHaveBeenCalledTimes(1);
     expect(mockClient.getLifeOpsCalendarFeed).toHaveBeenCalledWith({
       mode: "cloud_managed",
       timeZone: expect.any(String),
@@ -186,33 +189,41 @@ describe("GoogleSidebarWidget", () => {
     });
   });
 
-  it("starts managed Google auth by default and opens the auth URL", async () => {
-    mockClient.getGoogleLifeOpsConnectorStatus.mockResolvedValue({
-      provider: "google",
-      mode: "cloud_managed",
-      defaultMode: "cloud_managed",
-      availableModes: ["cloud_managed", "local"],
-      executionTarget: "cloud",
-      sourceOfTruth: "cloud_connection",
-      configured: true,
-      connected: false,
-      reason: "disconnected",
-      preferredByAgent: false,
-      cloudConnectionId: null,
-      identity: null,
-      grantedCapabilities: [],
-      grantedScopes: [],
-      expiresAt: null,
-      hasRefreshToken: false,
-      grant: null,
-    });
-    mockClient.startGoogleLifeOpsConnector.mockResolvedValue({
-      provider: "google",
-      mode: "cloud_managed",
-      requestedCapabilities: ["google.basic_identity", "google.calendar.read"],
-      redirectUri: "https://cloud.example/auth/success?platform=google",
-      authUrl:
-        "https://accounts.google.com/o/oauth2/v2/auth?client_id=managed-google",
+  it("wires refresh and connect through the shared connector hook", async () => {
+    const refresh = vi.fn();
+    const connect = vi.fn();
+    const selectMode = vi.fn();
+
+    mockUseGoogleLifeOpsConnector.mockReturnValue({
+      activeMode: "cloud_managed",
+      actionPending: false,
+      connect,
+      disconnect: vi.fn(),
+      error: null,
+      loading: false,
+      modeOptions: ["cloud_managed", "local"],
+      refresh,
+      selectMode,
+      selectedMode: "cloud_managed",
+      status: {
+        provider: "google",
+        mode: "cloud_managed",
+        defaultMode: "cloud_managed",
+        availableModes: ["cloud_managed", "local"],
+        executionTarget: "cloud",
+        sourceOfTruth: "cloud_connection",
+        configured: true,
+        connected: false,
+        reason: "disconnected",
+        preferredByAgent: false,
+        cloudConnectionId: null,
+        identity: null,
+        grantedCapabilities: [],
+        grantedScopes: [],
+        expiresAt: null,
+        hasRefreshToken: false,
+        grant: null,
+      },
     });
 
     let renderer: TestRenderer.ReactTestRenderer;
@@ -225,73 +236,54 @@ describe("GoogleSidebarWidget", () => {
       );
     });
 
-    expect(renderer).toBeDefined();
-    const connectButton = renderer.root
-      .findAllByType("button")
-      .find((button) => {
-        return flattenText(button) === "Connect";
-      });
-    expect(connectButton).toBeDefined();
+    const buttons = renderer.root.findAllByType("button");
+    const refreshButton = buttons[0];
+    const connectButton = buttons.find(
+      (button) => flattenText(button) === "Connect",
+    );
 
     await act(async () => {
+      refreshButton?.props.onClick();
       connectButton?.props.onClick();
     });
 
-    expect(mockClient.startGoogleLifeOpsConnector).toHaveBeenCalledWith({
-      mode: "cloud_managed",
-    });
-    expect(mockOpenExternalUrl).toHaveBeenCalledWith(
-      "https://accounts.google.com/o/oauth2/v2/auth?client_id=managed-google",
-    );
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(connect).toHaveBeenCalledTimes(1);
+    expect(selectMode).not.toHaveBeenCalled();
   });
 
-  it("lets the user switch to local mode before connecting", async () => {
-    mockClient.getGoogleLifeOpsConnectorStatus.mockResolvedValue({
-      provider: "google",
-      mode: "cloud_managed",
-      defaultMode: "cloud_managed",
-      availableModes: ["cloud_managed", "local"],
-      executionTarget: "cloud",
-      sourceOfTruth: "cloud_connection",
-      configured: true,
-      connected: false,
-      reason: "disconnected",
-      preferredByAgent: false,
-      cloudConnectionId: null,
-      identity: null,
-      grantedCapabilities: [],
-      grantedScopes: [],
-      expiresAt: null,
-      hasRefreshToken: false,
-      grant: null,
-    });
-    mockClient.selectGoogleLifeOpsConnectorMode.mockResolvedValue({
-      provider: "google",
-      mode: "local",
-      defaultMode: "cloud_managed",
-      availableModes: ["cloud_managed", "local"],
-      executionTarget: "local",
-      sourceOfTruth: "local_storage",
-      configured: true,
-      connected: false,
-      reason: "disconnected",
-      preferredByAgent: false,
-      cloudConnectionId: null,
-      identity: null,
-      grantedCapabilities: [],
-      grantedScopes: [],
-      expiresAt: null,
-      hasRefreshToken: false,
-      grant: null,
-    });
-    mockClient.startGoogleLifeOpsConnector.mockResolvedValue({
-      provider: "google",
-      mode: "local",
-      requestedCapabilities: ["google.basic_identity", "google.calendar.read"],
-      redirectUri:
-        "http://127.0.0.1:31337/api/lifeops/connectors/google/callback",
-      authUrl:
-        "https://accounts.google.com/o/oauth2/v2/auth?client_id=local-google",
+  it("wires mode selection through the shared connector hook", async () => {
+    const selectMode = vi.fn();
+    mockUseGoogleLifeOpsConnector.mockReturnValue({
+      activeMode: "cloud_managed",
+      actionPending: false,
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+      error: null,
+      loading: false,
+      modeOptions: ["cloud_managed", "local"],
+      refresh: vi.fn(),
+      selectMode,
+      selectedMode: "cloud_managed",
+      status: {
+        provider: "google",
+        mode: "cloud_managed",
+        defaultMode: "cloud_managed",
+        availableModes: ["cloud_managed", "local"],
+        executionTarget: "cloud",
+        sourceOfTruth: "cloud_connection",
+        configured: true,
+        connected: false,
+        reason: "disconnected",
+        preferredByAgent: false,
+        cloudConnectionId: null,
+        identity: null,
+        grantedCapabilities: [],
+        grantedScopes: [],
+        expiresAt: null,
+        hasRefreshToken: false,
+        grant: null,
+      },
     });
 
     let renderer: TestRenderer.ReactTestRenderer;
@@ -313,24 +305,6 @@ describe("GoogleSidebarWidget", () => {
       localButton?.props.onClick();
     });
 
-    expect(mockClient.selectGoogleLifeOpsConnectorMode).toHaveBeenCalledWith({
-      mode: "local",
-    });
-
-    const connectButton = renderer.root
-      .findAllByType("button")
-      .find((button) => flattenText(button) === "Connect");
-    expect(connectButton).toBeDefined();
-
-    await act(async () => {
-      connectButton?.props.onClick();
-    });
-
-    expect(mockClient.startGoogleLifeOpsConnector).toHaveBeenCalledWith({
-      mode: "local",
-    });
-    expect(mockOpenExternalUrl).toHaveBeenCalledWith(
-      "https://accounts.google.com/o/oauth2/v2/auth?client_id=local-google",
-    );
+    expect(selectMode).toHaveBeenCalledWith("local");
   });
 });

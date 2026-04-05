@@ -10,9 +10,9 @@ import type {
 import { Badge, Button } from "@miladyai/ui";
 import { CalendarDays, Mail, Plug2, RefreshCw } from "lucide-react";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { client } from "../../../../api";
-import { openExternalUrl } from "../../../../utils";
+import { useGoogleLifeOpsConnector } from "../../../../hooks";
 import { WidgetSection } from "../shared";
 import type {
   ChatSidebarWidgetDefinition,
@@ -187,163 +187,79 @@ export function GoogleSidebarWidget(_props: ChatSidebarWidgetProps) {
     () => Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
     [],
   );
-  const selectedModeRef = useRef<LifeOpsConnectorMode | null>(null);
-  const [selectedMode, setSelectedMode] = useState<LifeOpsConnectorMode | null>(
-    null,
-  );
-  const [status, setStatus] = useState<LifeOpsGoogleConnectorStatus | null>(
-    null,
-  );
+  const {
+    activeMode,
+    actionPending,
+    connect,
+    disconnect,
+    error: connectorError,
+    loading,
+    modeOptions,
+    refresh,
+    selectMode,
+    status,
+  } = useGoogleLifeOpsConnector({
+    pollIntervalMs: GOOGLE_WIDGET_REFRESH_INTERVAL_MS,
+  });
   const [calendarFeed, setCalendarFeed] = useState<LifeOpsCalendarFeed | null>(
     null,
   );
   const [gmailFeed, setGmailFeed] = useState<LifeOpsGmailTriageFeed | null>(
     null,
   );
-  const [loading, setLoading] = useState(true);
-  const [actionPending, setActionPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const syncFeedsForStatus = useCallback(
-    async (nextStatus: LifeOpsGoogleConnectorStatus) => {
-      const nextCapabilities = capabilitySet(nextStatus);
-      if (!nextStatus.connected) {
-        setCalendarFeed(null);
-        setGmailFeed(null);
-        return;
-      }
-
-      const [calendarResult, gmailResult] = await Promise.all([
-        nextCapabilities.has("google.calendar.read") ||
-        nextCapabilities.has("google.calendar.write")
-          ? client.getLifeOpsCalendarFeed({
-              mode: nextStatus.mode,
-              timeZone,
-            })
-          : Promise.resolve<LifeOpsCalendarFeed | null>(null),
-        nextCapabilities.has("google.gmail.triage")
-          ? client.getLifeOpsGmailTriage({
-              mode: nextStatus.mode,
-              maxResults: GOOGLE_WIDGET_MESSAGE_LIMIT,
-            })
-          : Promise.resolve<LifeOpsGmailTriageFeed | null>(null),
-      ]);
-
-      setCalendarFeed(calendarResult);
-      setGmailFeed(gmailResult);
-    },
-    [timeZone],
-  );
-
-  const loadWidget = useCallback(
-    async ({
-      silent = false,
-      mode,
-    }: {
-      silent?: boolean;
-      mode?: LifeOpsConnectorMode | null;
-    } = {}) => {
-      if (!silent) {
-        setLoading(true);
-      }
-      try {
-        const requestedMode =
-          mode === undefined ? selectedModeRef.current : mode;
-        const nextStatus = await client.getGoogleLifeOpsConnectorStatus(
-          requestedMode ?? undefined,
-        );
-        setStatus(nextStatus);
-        const nextSelectedMode = requestedMode ?? nextStatus.mode;
-        selectedModeRef.current = nextSelectedMode;
-        setSelectedMode(nextSelectedMode);
-        await syncFeedsForStatus(nextStatus);
-        setError(null);
-      } catch (cause) {
-        const message =
-          cause instanceof Error && cause.message.trim().length > 0
-            ? cause.message.trim()
-            : "Google widget failed to refresh.";
-        setError(message);
-      } finally {
-        setLoading(false);
-      }
-    },
-    [syncFeedsForStatus],
-  );
+  const [feedError, setFeedError] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
     void (async () => {
-      await loadWidget();
-    })();
-    const intervalId = window.setInterval(() => {
-      if (!active) {
+      if (!status?.connected) {
+        setCalendarFeed(null);
+        setGmailFeed(null);
+        setFeedError(null);
         return;
       }
-      void loadWidget({ silent: true });
-    }, GOOGLE_WIDGET_REFRESH_INTERVAL_MS);
-    return () => {
-      active = false;
-      window.clearInterval(intervalId);
-    };
-  }, [loadWidget]);
 
-  const onConnect = useCallback(async () => {
-    try {
-      setActionPending(true);
-      const result = await client.startGoogleLifeOpsConnector({
-        mode: selectedMode ?? status?.mode ?? status?.defaultMode,
-      });
-      await openExternalUrl(result.authUrl);
-    } finally {
-      setActionPending(false);
-    }
-  }, [selectedMode, status?.defaultMode, status?.mode]);
-
-  const onSelectMode = useCallback(
-    async (mode: LifeOpsConnectorMode) => {
       try {
-        setActionPending(true);
-        const nextStatus = await client.selectGoogleLifeOpsConnectorMode({
-          mode,
-        });
-        selectedModeRef.current = mode;
-        setSelectedMode(mode);
-        setStatus(nextStatus);
-        await syncFeedsForStatus(nextStatus);
-        setError(null);
+        const nextCapabilities = capabilitySet(status);
+        const [calendarResult, gmailResult] = await Promise.all([
+          nextCapabilities.has("google.calendar.read") ||
+          nextCapabilities.has("google.calendar.write")
+            ? client.getLifeOpsCalendarFeed({
+                mode: status.mode,
+                timeZone,
+              })
+            : Promise.resolve<LifeOpsCalendarFeed | null>(null),
+          nextCapabilities.has("google.gmail.triage")
+            ? client.getLifeOpsGmailTriage({
+                mode: status.mode,
+                maxResults: GOOGLE_WIDGET_MESSAGE_LIMIT,
+              })
+            : Promise.resolve<LifeOpsGmailTriageFeed | null>(null),
+        ]);
+        if (!active) {
+          return;
+        }
+        setCalendarFeed(calendarResult);
+        setGmailFeed(gmailResult);
+        setFeedError(null);
       } catch (cause) {
-        const message =
+        if (!active) {
+          return;
+        }
+        setFeedError(
           cause instanceof Error && cause.message.trim().length > 0
             ? cause.message.trim()
-            : "Google widget failed to change modes.";
-        setError(message);
-      } finally {
-        setActionPending(false);
+            : "Google widget feeds failed to refresh.",
+        );
       }
-    },
-    [syncFeedsForStatus],
-  );
+    })();
 
-  const onDisconnect = useCallback(async () => {
-    if (!status) {
-      return;
-    }
-    try {
-      setActionPending(true);
-      await client.disconnectGoogleLifeOpsConnector({
-        mode: selectedMode ?? status.mode,
-      });
-      selectedModeRef.current = null;
-      await loadWidget({ mode: null });
-    } finally {
-      setActionPending(false);
-    }
-  }, [loadWidget, selectedMode, status]);
+    return () => {
+      active = false;
+    };
+  }, [status, timeZone]);
 
   const capabilities = useMemo(() => capabilitySet(status), [status]);
-  const activeMode =
-    selectedMode ?? status?.mode ?? status?.defaultMode ?? null;
   const identityLabel = readIdentityLabel(status?.identity ?? null);
   const showCalendar =
     status?.connected === true &&
@@ -364,7 +280,7 @@ export function GoogleSidebarWidget(_props: ChatSidebarWidgetProps) {
             size="sm"
             variant="outline"
             disabled={loading || actionPending}
-            onClick={() => void loadWidget()}
+            onClick={() => void refresh()}
           >
             <RefreshCw className="h-3.5 w-3.5" />
           </Button>
@@ -372,9 +288,7 @@ export function GoogleSidebarWidget(_props: ChatSidebarWidgetProps) {
             size="sm"
             variant={status?.connected ? "outline" : "default"}
             disabled={loading || actionPending}
-            onClick={() =>
-              void (status?.connected ? onDisconnect() : onConnect())
-            }
+            onClick={() => void (status?.connected ? disconnect() : connect())}
           >
             {status?.connected
               ? "Disconnect"
@@ -432,9 +346,9 @@ export function GoogleSidebarWidget(_props: ChatSidebarWidgetProps) {
               {loading ? "Loading" : "Disconnected"}
             </div>
           )}
-          {status && status.availableModes.length > 1 ? (
+          {modeOptions.length > 1 ? (
             <div className="mt-3 flex flex-wrap gap-1.5">
-              {status.availableModes.map((mode) => {
+              {modeOptions.map((mode) => {
                 const isActive = activeMode === mode;
                 return (
                   <Button
@@ -442,7 +356,7 @@ export function GoogleSidebarWidget(_props: ChatSidebarWidgetProps) {
                     size="sm"
                     variant={isActive ? "default" : "outline"}
                     disabled={loading || actionPending}
-                    onClick={() => void onSelectMode(mode)}
+                    onClick={() => void selectMode(mode)}
                   >
                     {modeLabel(mode)}
                   </Button>
@@ -501,7 +415,11 @@ export function GoogleSidebarWidget(_props: ChatSidebarWidgetProps) {
           </div>
         ) : null}
 
-        {error ? <div className="text-[11px] text-danger">{error}</div> : null}
+        {connectorError || feedError ? (
+          <div className="text-[11px] text-danger">
+            {connectorError ?? feedError}
+          </div>
+        ) : null}
       </div>
     </WidgetSection>
   );

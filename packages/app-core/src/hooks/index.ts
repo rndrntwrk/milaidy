@@ -1,9 +1,11 @@
+export * from "./useActivityEvents";
 export * from "./useBugReport";
 export * from "./useCanvasWindow";
 export * from "./useChatAvatarVoice";
 export * from "./useClickOutside";
 export * from "./useContextMenu";
 export * from "./useDocumentVisibility";
+export * from "./useGoogleLifeOpsConnector";
 export * from "./useKeyboardShortcuts";
 export * from "./useMediaQuery";
 export * from "./useRenderGuard";
@@ -11,4 +13,3 @@ export * from "./useStreamPopoutNavigation";
 export * from "./useTimeout";
 export * from "./useVoiceChat";
 export * from "./useWhatsAppPairing";
-export * from "./useActivityEvents";
