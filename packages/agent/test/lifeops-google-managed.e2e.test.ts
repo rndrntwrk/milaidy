@@ -385,8 +385,8 @@ describe("life-ops managed Google connector", () => {
               description: "Discuss the product review",
               location: "HQ",
               status: "confirmed",
-              startAt: "2026-04-04T18:00:00.000Z",
-              endAt: "2026-04-04T18:30:00.000Z",
+              startAt: "2099-04-04T18:00:00.000Z",
+              endAt: "2099-04-04T18:30:00.000Z",
               isAllDay: false,
               timezone: "UTC",
               htmlLink: "https://calendar.google.com/event?eid=managed-event-1",
@@ -553,7 +553,7 @@ describe("life-ops managed Google connector", () => {
     const feedRes = await req(
       port,
       "GET",
-      "/api/lifeops/calendar/feed?mode=cloud_managed&timeZone=UTC&forceSync=true&timeMin=2026-04-04T00%3A00%3A00.000Z&timeMax=2026-04-05T00%3A00%3A00.000Z",
+      "/api/lifeops/calendar/feed?mode=cloud_managed&timeZone=UTC&forceSync=true&timeMin=2099-04-04T00%3A00%3A00.000Z&timeMax=2099-04-05T00%3A00%3A00.000Z",
     );
     expect(feedRes.status).toBe(200);
     expect(feedRes.data.source).toBe("synced");
@@ -563,8 +563,8 @@ describe("life-ops managed Google connector", () => {
     const createRes = await req(port, "POST", "/api/lifeops/calendar/events", {
       mode: "cloud_managed",
       title: "Launch review",
-      startAt: "2026-04-04T19:00:00.000Z",
-      endAt: "2026-04-04T19:30:00.000Z",
+      startAt: "2099-04-04T19:00:00.000Z",
+      endAt: "2099-04-04T19:30:00.000Z",
       timeZone: "UTC",
       description: "Review launch details",
     });
@@ -581,6 +581,38 @@ describe("life-ops managed Google connector", () => {
     expect(triageRes.data.source).toBe("synced");
     expect(triageRes.data.messages).toHaveLength(1);
     expect(triageRes.data.messages[0].subject).toBe("Project sync");
+
+    const nextContextRes = await req(
+      port,
+      "GET",
+      "/api/lifeops/calendar/next-context?mode=cloud_managed&timeZone=UTC&timeMin=2099-04-04T00%3A00%3A00.000Z&timeMax=2099-04-05T00%3A00%3A00.000Z",
+    );
+    expect(nextContextRes.status).toBe(200);
+    expect(nextContextRes.data.event.title).toBe("Founder sync");
+    expect(nextContextRes.data.linkedMailState).toBe("cache");
+    expect(nextContextRes.data.linkedMail).toHaveLength(1);
+    expect(nextContextRes.data.linkedMail[0].subject).toBe("Project sync");
+
+    const draftRes = await req(
+      port,
+      "POST",
+      "/api/lifeops/gmail/reply-drafts",
+      {
+        mode: "cloud_managed",
+        messageId: triageRes.data.messages[0].id,
+        tone: "warm",
+        includeQuotedOriginal: true,
+      },
+    );
+    expect(draftRes.status).toBe(201);
+    expect(draftRes.data.draft.to).toEqual(["founder@example.com"]);
+    expect(draftRes.data.draft.sendAllowed).toBe(true);
+    expect(draftRes.data.draft.bodyText).toContain(
+      "Thanks for reaching out about Project sync.",
+    );
+    expect(draftRes.data.draft.bodyText).toContain(
+      "Can we review the product plan today?",
+    );
 
     const sendRes = await req(port, "POST", "/api/lifeops/gmail/reply-send", {
       mode: "cloud_managed",
