@@ -41,7 +41,11 @@ type FixtureServer = {
 };
 
 function buildViewerUrl(req: http.IncomingMessage): string {
-  return new URL(VIEWER_PATH, `http://${req.headers.host}`).toString();
+  const url = new URL(VIEWER_PATH, `http://${req.headers.host}`);
+  url.searchParams.set("embedded", "true");
+  url.searchParams.set("mode", "spectator");
+  url.searchParams.set("surface", "agent-control");
+  return url.toString();
 }
 
 function buildViewerHtml(): string {
@@ -728,6 +732,12 @@ test("apps page launches a Hyperscape session with iframe auth and bidirectional
         message: "launch should target the Hyperscape app package",
       })
       .toBe("@elizaos/app-hyperscape");
+
+    await expect
+      .poll(async () =>
+        page.getByTestId("game-view-iframe").getAttribute("src"),
+      )
+      .toContain("surface=agent-control");
 
     const frame = page.frameLocator('[data-testid="game-view-iframe"]');
     await expect(frame.locator("#viewer-state")).toHaveText("auth-received");

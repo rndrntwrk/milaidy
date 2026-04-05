@@ -18,6 +18,7 @@ const root = resolve(__dirname, "..");
 const SUBMODULE_READINESS_MARKERS = {
   eliza: ["package.json", "packages/typescript/package.json"],
   "plugins/plugin-agent-orchestrator": ["package.json"],
+  "steward-fi": ["package.json", "packages/api/package.json"],
 };
 
 export function parseTrackedSubmodules(configOutput) {

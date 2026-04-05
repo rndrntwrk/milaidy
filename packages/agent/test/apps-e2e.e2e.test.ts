@@ -878,6 +878,14 @@ describe("Apps E2E", () => {
         ) {
           const viewer = body.viewer;
           expect(viewer.postMessageAuth).toBe(true);
+          if (
+            viewer.embedParams &&
+            typeof viewer.embedParams === "object" &&
+            !Array.isArray(viewer.embedParams)
+          ) {
+            expect(viewer.embedParams.mode).toBe("spectator");
+            expect(viewer.embedParams.surface).toBe("agent-control");
+          }
 
           if (
             viewer.authMessage &&
@@ -937,6 +945,8 @@ describe("Apps E2E", () => {
             typeof viewer.embedParams === "object" &&
             !Array.isArray(viewer.embedParams)
           ) {
+            expect(viewer.embedParams.mode).toBe("spectator");
+            expect(viewer.embedParams.surface).toBe("agent-control");
             expect(viewer.embedParams.followEntity).toBeUndefined();
           }
         }

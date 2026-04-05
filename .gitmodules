@@ -9,3 +9,7 @@
 	path = eliza
 	url = https://github.com/elizaos/eliza.git
 	branch = develop
+[submodule "steward-fi"]
+	path = steward-fi
+	url = https://github.com/Steward-Fi/steward.git
+	branch = develop

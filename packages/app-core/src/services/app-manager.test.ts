@@ -1147,6 +1147,7 @@ describe("App session launch metadata", () => {
         embedParams: {
           embedded: "true",
           mode: "spectator",
+          surface: "agent-control",
           followEntity: "{HYPERSCAPE_CHARACTER_ID}",
         },
         postMessageAuth: true,
@@ -1177,6 +1178,7 @@ describe("App session launch metadata", () => {
     expect(result.viewer?.embedParams).toEqual({
       embedded: "true",
       mode: "spectator",
+      surface: "agent-control",
     });
     expect(result.session).toBeNull();
     expect(result.diagnostics).toEqual(

@@ -62,6 +62,7 @@ const HYPERSCAPE_APP_INFO: RegistryPluginInfo = {
     embedParams: {
       embedded: "true",
       mode: "spectator",
+      surface: "agent-control",
       followEntity: "{HYPERSCAPE_CHARACTER_ID}",
     },
     postMessageAuth: true,
@@ -86,6 +87,7 @@ const HYPERSCAPE_APP_INFO: RegistryPluginInfo = {
       embedParams: {
         embedded: "true",
         mode: "spectator",
+        surface: "agent-control",
         followEntity: "{HYPERSCAPE_CHARACTER_ID}",
       },
       postMessageAuth: true,
@@ -550,7 +552,7 @@ describe("AppManager", () => {
 
       expect(runtime.registerPlugin).toHaveBeenCalledTimes(1);
       expect(result.viewer?.url).toBe(
-        "http://localhost:3333?embedded=true&mode=spectator&followEntity=char-runtime",
+        "http://localhost:3333?embedded=true&mode=spectator&surface=agent-control&followEntity=char-runtime",
       );
       expect(result.viewer?.postMessageAuth).toBe(true);
       expect(result.viewer?.authMessage).toEqual(
