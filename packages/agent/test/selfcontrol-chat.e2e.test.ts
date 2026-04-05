@@ -290,7 +290,10 @@ describe("selfcontrol chat flows (e2e)", () => {
         (event) => event.type === "done",
       );
       expect(String(doneEvent?.fullText ?? "")).toContain(
-        "Started a website block for x.com, twitter.com until",
+        "got it, blocking them now",
+      );
+      expect(String(doneEvent?.fullText ?? "")).not.toContain(
+        "Started a website block for",
       );
       expect(await fs.readFile(hostsFilePath, "utf8")).toContain(
         "0.0.0.0 x.com",
@@ -348,7 +351,10 @@ describe("selfcontrol chat flows (e2e)", () => {
 
       expect(secondTurn.status).toBe(200);
       expect(String(secondTurn.data.text ?? "")).toContain(
-        "Started a website block for x.com, twitter.com until",
+        "got it, blocking x.com and twitter.com for 1 minute.",
+      );
+      expect(String(secondTurn.data.text ?? "")).not.toContain(
+        "Started a website block for",
       );
       const hostsFile = await fs.readFile(hostsFilePath, "utf8");
       expect(hostsFile).toContain("0.0.0.0 x.com");

@@ -18,6 +18,10 @@ describe("parseShellRoute", () => {
   });
 
   it("detects detached surface shells for supported tabs", () => {
+    expect(parseShellRoute("?shell=surface&tab=browser")).toEqual({
+      mode: "surface",
+      tab: "browser",
+    });
     expect(parseShellRoute("?shell=surface&tab=chat")).toEqual({
       mode: "surface",
       tab: "chat",

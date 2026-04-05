@@ -1,13 +1,14 @@
 import {
   closeBrowserWorkspaceTab,
   evaluateBrowserWorkspaceTab,
+  getBrowserWorkspaceSnapshot,
+  getBrowserWorkspaceUnavailableMessage,
+  hideBrowserWorkspaceTab,
   listBrowserWorkspaceTabs,
   navigateBrowserWorkspaceTab,
   openBrowserWorkspaceTab,
-  snapshotBrowserWorkspaceTab,
-  getBrowserWorkspaceUnavailableMessage,
-  hideBrowserWorkspaceTab,
   showBrowserWorkspaceTab,
+  snapshotBrowserWorkspaceTab,
 } from "../services/browser-workspace";
 import type { RouteRequestContext } from "./route-helpers";
 
@@ -44,11 +45,12 @@ export async function handleBrowserWorkspaceRoutes(
   }
 
   try {
-    if (
-      (pathname === "/api/browser-workspace" ||
-        pathname === "/api/browser-workspace/tabs") &&
-      method === "GET"
-    ) {
+    if (pathname === "/api/browser-workspace" && method === "GET") {
+      json(res, await getBrowserWorkspaceSnapshot());
+      return true;
+    }
+
+    if (pathname === "/api/browser-workspace/tabs" && method === "GET") {
       json(res, { tabs: await listBrowserWorkspaceTabs() });
       return true;
     }
@@ -72,7 +74,11 @@ export async function handleBrowserWorkspaceRoutes(
 
     if (!action && method === "DELETE") {
       const closed = await closeBrowserWorkspaceTab(tabId);
-      json(res, closed ? { closed: true } : { closed: false }, closed ? 200 : 404);
+      json(
+        res,
+        closed ? { closed: true } : { closed: false },
+        closed ? 200 : 404,
+      );
       return true;
     }
 
@@ -97,15 +103,12 @@ export async function handleBrowserWorkspaceRoutes(
         json(res, { error: "url is required" }, 400);
         return true;
       }
-      json(
-        res,
-        {
-          tab: await navigateBrowserWorkspaceTab({
-            id: tabId,
-            url: body.url,
-          }),
-        },
-      );
+      json(res, {
+        tab: await navigateBrowserWorkspaceTab({
+          id: tabId,
+          url: body.url,
+        }),
+      });
       return true;
     }
 
@@ -115,15 +118,12 @@ export async function handleBrowserWorkspaceRoutes(
         json(res, { error: "script is required" }, 400);
         return true;
       }
-      json(
-        res,
-        {
-          result: await evaluateBrowserWorkspaceTab({
-            id: tabId,
-            script: body.script,
-          }),
-        },
-      );
+      json(res, {
+        result: await evaluateBrowserWorkspaceTab({
+          id: tabId,
+          script: body.script,
+        }),
+      });
       return true;
     }
 
@@ -132,11 +132,13 @@ export async function handleBrowserWorkspaceRoutes(
     const message = error instanceof Error ? error.message : String(error);
     const status = message.includes(getBrowserWorkspaceUnavailableMessage())
       ? 503
-      : message.includes("failed (404)")
-        ? 404
-        : message.includes("failed (409)")
-          ? 409
-          : 500;
+      : message.includes("only available in the desktop app")
+        ? 409
+        : message.includes("failed (404)")
+          ? 404
+          : message.includes("failed (409)")
+            ? 409
+            : 500;
     json(res, { error: message }, status);
     return true;
   }

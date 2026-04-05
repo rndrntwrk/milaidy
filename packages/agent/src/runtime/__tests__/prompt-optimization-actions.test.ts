@@ -539,6 +539,7 @@ describe("compactActionsForIntent", () => {
 // ---------------------------------------------------------------------------
 
 import { installPromptOptimizations } from "../prompt-optimization";
+import { withMiladyTrajectoryStep } from "../trajectory-step-context";
 
 describe("installPromptOptimizations", () => {
   beforeEach(() => {
@@ -554,6 +555,7 @@ describe("installPromptOptimizations", () => {
         patch: Record<string, unknown>,
       ) => Promise<void> | void;
     } | null;
+    trajectoryLoggersByType?: Array<Record<string, unknown>> | null;
     useModelImpl?: (payload: Record<string, unknown>) => Promise<string>;
   }) {
     const calls: Array<{ modelType: string; prompt: string }> = [];
@@ -564,6 +566,10 @@ describe("installPromptOptimizations", () => {
         serviceType === "trajectory_logger"
           ? (options?.trajectoryLogger ?? null)
           : null,
+      getServicesByType: (serviceType: string) =>
+        serviceType === "trajectory_logger"
+          ? (options?.trajectoryLoggersByType ?? [])
+          : [],
       useModel: async (modelType: string, payload: Record<string, unknown>) => {
         calls.push({
           modelType,
@@ -630,6 +636,85 @@ describe("installPromptOptimizations", () => {
       model: "TEXT_SMALL",
       systemPrompt: "small system",
       userPrompt: "small model trajectory",
+      response: "mock response",
+    });
+  });
+
+  it("falls back to the Milady-local trajectory step context when core context is unavailable", async () => {
+    const loggedCalls: Array<Record<string, unknown>> = [];
+    const richLogger = {
+      logLlmCall: (params: Record<string, unknown>) => {
+        loggedCalls.push(params);
+      },
+      listTrajectories: vi.fn(),
+      getTrajectoryDetail: vi.fn(),
+    };
+    const { runtime } = createMockRuntime({
+      trajectoryLogger: {
+        logLlmCall: vi.fn(),
+      },
+      trajectoryLoggersByType: [richLogger],
+    });
+
+    installPromptOptimizations(runtime);
+
+    await withMiladyTrajectoryStep("trajectory-step-local", () =>
+      runtime.useModel(
+        "TEXT_LARGE" as unknown as Parameters<typeof runtime.useModel>[0],
+        {
+          prompt: "local trajectory step fallback",
+          system: "local system",
+        } as unknown as Parameters<typeof runtime.useModel>[1],
+      ),
+    );
+
+    expect(loggedCalls).toHaveLength(1);
+    expect(loggedCalls[0]).toMatchObject({
+      stepId: "trajectory-step-local",
+      systemPrompt: "local system",
+      userPrompt: "local trajectory step fallback",
+      response: "mock response",
+    });
+  });
+
+  it("prefers the richer logger from getServicesByType over the core stub", async () => {
+    getTrajectoryContextMock.mockReturnValue({
+      trajectoryStepId: "trajectory-step-rich-logger",
+    });
+
+    const loggedCalls: Array<Record<string, unknown>> = [];
+    const stubLogger = {
+      logLlmCall: vi.fn(),
+      getLlmCallLogs: () => [],
+    };
+    const richLogger = {
+      logLlmCall: (params: Record<string, unknown>) => {
+        loggedCalls.push(params);
+      },
+      listTrajectories: vi.fn(),
+      getTrajectoryDetail: vi.fn(),
+      updateLatestLlmCall: vi.fn(),
+    };
+
+    const { runtime } = createMockRuntime({
+      trajectoryLogger: stubLogger,
+      trajectoryLoggersByType: [stubLogger, richLogger],
+    });
+
+    installPromptOptimizations(runtime);
+
+    await runtime.useModel(
+      "TEXT_LARGE" as unknown as Parameters<typeof runtime.useModel>[0],
+      {
+        prompt: "prefer the rich trajectory logger",
+      } as unknown as Parameters<typeof runtime.useModel>[1],
+    );
+
+    expect(stubLogger.logLlmCall).not.toHaveBeenCalled();
+    expect(loggedCalls).toHaveLength(1);
+    expect(loggedCalls[0]).toMatchObject({
+      stepId: "trajectory-step-rich-logger",
+      userPrompt: "prefer the rich trajectory logger",
       response: "mock response",
     });
   });

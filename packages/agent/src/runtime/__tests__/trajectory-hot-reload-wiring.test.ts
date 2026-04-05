@@ -8,6 +8,17 @@ const elizaSource = readFileSync(
 );
 
 describe("trajectory runtime wiring", () => {
+  it("bridges messageService handleMessage into the local trajectory step context", () => {
+    const prepareBlock =
+      elizaSource.match(
+        /async function prepareRuntimeForTrajectoryCapture\([\s\S]*?\n\}/m,
+      )?.[0] ?? "";
+
+    expect(prepareBlock).toContain(
+      "installMiladyMessageTrajectoryStepBridge(runtime);",
+    );
+  });
+
   it("prepares trajectory capture after the initial runtime initialize", () => {
     const initBlock =
       elizaSource.match(

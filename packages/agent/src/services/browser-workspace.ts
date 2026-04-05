@@ -1,4 +1,9 @@
 const DEFAULT_TIMEOUT_MS = 12_000;
+const DEFAULT_WEB_PARTITION = "persist:milady-browser";
+const DESKTOP_BRIDGE_UNAVAILABLE_MESSAGE =
+  "Milady browser workspace desktop bridge is unavailable.";
+
+export type BrowserWorkspaceMode = "desktop" | "web";
 
 export type BrowserWorkspaceOperation =
   | "list"
@@ -19,6 +24,11 @@ export interface BrowserWorkspaceTab {
   createdAt: string;
   updatedAt: string;
   lastFocusedAt: string | null;
+}
+
+export interface BrowserWorkspaceSnapshot {
+  mode: BrowserWorkspaceMode;
+  tabs: BrowserWorkspaceTab[];
 }
 
 export interface BrowserWorkspaceBridgeConfig {
@@ -45,37 +55,90 @@ export interface EvaluateBrowserWorkspaceTabRequest {
   script: string;
 }
 
+const webWorkspaceState: {
+  nextId: number;
+  tabs: BrowserWorkspaceTab[];
+} = {
+  nextId: 1,
+  tabs: [],
+};
+
 function normalizeEnvValue(value: string | undefined): string | null {
-  if (typeof value !== "string") return null;
+  if (typeof value !== "string") {
+    return null;
+  }
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
 }
 
-export function resolveBrowserWorkspaceBridgeConfig(
-  env: NodeJS.ProcessEnv = process.env,
-): BrowserWorkspaceBridgeConfig | null {
-  const baseUrl =
-    normalizeEnvValue(env.MILADY_BROWSER_WORKSPACE_URL) ??
-    normalizeEnvValue(env.ELIZA_BROWSER_WORKSPACE_URL);
-  if (!baseUrl) return null;
+function createBrowserWorkspaceDesktopOnlyMessage(
+  operation: BrowserWorkspaceOperation,
+): string {
+  return `Milady browser workspace ${operation} is only available in the desktop app.`;
+}
+
+function createBrowserWorkspaceNotFoundError(tabId: string): Error {
+  return new Error(
+    `Browser workspace request failed (404): Tab ${tabId} was not found.`,
+  );
+}
+
+function cloneBrowserWorkspaceTab(
+  tab: BrowserWorkspaceTab,
+): BrowserWorkspaceTab {
+  return { ...tab };
+}
+
+function cloneBrowserWorkspaceTabs(
+  tabs: BrowserWorkspaceTab[],
+): BrowserWorkspaceTab[] {
+  return tabs.map((tab) => cloneBrowserWorkspaceTab(tab));
+}
+
+function getBrowserWorkspaceTimestamp(): string {
+  return new Date().toISOString();
+}
+
+function inferBrowserWorkspaceTitle(url: string): string {
+  if (url === "about:blank") {
+    return "New Tab";
+  }
+
+  try {
+    return new URL(url).hostname.replace(/^www\./, "") || "Milady Browser";
+  } catch {
+    return "Milady Browser";
+  }
+}
+
+function createWebBrowserWorkspaceTab(
+  request: OpenBrowserWorkspaceTabRequest,
+): BrowserWorkspaceTab {
+  const now = getBrowserWorkspaceTimestamp();
+  const url = request.url?.trim() || "about:blank";
+  const visible = request.show === true;
   return {
-    baseUrl: baseUrl.replace(/\/+$/, ""),
-    token:
-      normalizeEnvValue(env.MILADY_BROWSER_WORKSPACE_TOKEN) ??
-      normalizeEnvValue(env.ELIZA_BROWSER_WORKSPACE_TOKEN),
+    id: `btab_${webWorkspaceState.nextId++}`,
+    title: request.title?.trim() || inferBrowserWorkspaceTitle(url),
+    url,
+    partition: request.partition?.trim() || DEFAULT_WEB_PARTITION,
+    visible,
+    createdAt: now,
+    updatedAt: now,
+    lastFocusedAt: visible ? now : null,
   };
 }
 
-export function isBrowserWorkspaceBridgeConfigured(
-  env: NodeJS.ProcessEnv = process.env,
-): boolean {
-  return resolveBrowserWorkspaceBridgeConfig(env) !== null;
+function getWebBrowserWorkspaceTabIndex(tabId: string): number {
+  return webWorkspaceState.tabs.findIndex((tab) => tab.id === tabId);
 }
 
-export function getBrowserWorkspaceUnavailableMessage(): string {
-  return (
-    "Milady browser workspace is unavailable. This bridge only exists inside the Milady desktop shell."
-  );
+function getWebBrowserWorkspaceTab(tabId: string): BrowserWorkspaceTab {
+  const tab = webWorkspaceState.tabs.find((entry) => entry.id === tabId);
+  if (!tab) {
+    throw createBrowserWorkspaceNotFoundError(tabId);
+  }
+  return tab;
 }
 
 async function readErrorBody(response: Response): Promise<string> {
@@ -121,14 +184,59 @@ async function requestBrowserWorkspace<T>(
   return (await response.json()) as T;
 }
 
+export function resolveBrowserWorkspaceBridgeConfig(
+  env: NodeJS.ProcessEnv = process.env,
+): BrowserWorkspaceBridgeConfig | null {
+  const baseUrl =
+    normalizeEnvValue(env.MILADY_BROWSER_WORKSPACE_URL) ??
+    normalizeEnvValue(env.ELIZA_BROWSER_WORKSPACE_URL);
+  if (!baseUrl) {
+    return null;
+  }
+
+  return {
+    baseUrl: baseUrl.replace(/\/+$/, ""),
+    token:
+      normalizeEnvValue(env.MILADY_BROWSER_WORKSPACE_TOKEN) ??
+      normalizeEnvValue(env.ELIZA_BROWSER_WORKSPACE_TOKEN),
+  };
+}
+
+export function isBrowserWorkspaceBridgeConfigured(
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  return resolveBrowserWorkspaceBridgeConfig(env) !== null;
+}
+
+export function getBrowserWorkspaceMode(
+  env: NodeJS.ProcessEnv = process.env,
+): BrowserWorkspaceMode {
+  return isBrowserWorkspaceBridgeConfigured(env) ? "desktop" : "web";
+}
+
+export function getBrowserWorkspaceUnavailableMessage(): string {
+  return DESKTOP_BRIDGE_UNAVAILABLE_MESSAGE;
+}
+
+export async function getBrowserWorkspaceSnapshot(
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<BrowserWorkspaceSnapshot> {
+  return {
+    mode: getBrowserWorkspaceMode(env),
+    tabs: await listBrowserWorkspaceTabs(env),
+  };
+}
+
 export async function listBrowserWorkspaceTabs(
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<BrowserWorkspaceTab[]> {
-  const payload = await requestBrowserWorkspace<{ tabs?: BrowserWorkspaceTab[] }>(
-    "/tabs",
-    undefined,
-    env,
-  );
+  if (!isBrowserWorkspaceBridgeConfigured(env)) {
+    return cloneBrowserWorkspaceTabs(webWorkspaceState.tabs);
+  }
+
+  const payload = await requestBrowserWorkspace<{
+    tabs?: BrowserWorkspaceTab[];
+  }>("/tabs", undefined, env);
   return Array.isArray(payload.tabs) ? payload.tabs : [];
 }
 
@@ -136,6 +244,18 @@ export async function openBrowserWorkspaceTab(
   request: OpenBrowserWorkspaceTabRequest,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<BrowserWorkspaceTab> {
+  if (!isBrowserWorkspaceBridgeConfigured(env)) {
+    const tab = createWebBrowserWorkspaceTab(request);
+    if (tab.visible) {
+      webWorkspaceState.tabs = webWorkspaceState.tabs.map((entry) => ({
+        ...entry,
+        visible: false,
+      }));
+    }
+    webWorkspaceState.tabs = [...webWorkspaceState.tabs, tab];
+    return cloneBrowserWorkspaceTab(tab);
+  }
+
   const payload = await requestBrowserWorkspace<{ tab: BrowserWorkspaceTab }>(
     "/tabs",
     {
@@ -151,6 +271,24 @@ export async function navigateBrowserWorkspaceTab(
   request: NavigateBrowserWorkspaceTabRequest,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<BrowserWorkspaceTab> {
+  if (!isBrowserWorkspaceBridgeConfigured(env)) {
+    const index = getWebBrowserWorkspaceTabIndex(request.id);
+    if (index < 0) {
+      throw createBrowserWorkspaceNotFoundError(request.id);
+    }
+
+    const existing = webWorkspaceState.tabs[index];
+    const updatedAt = getBrowserWorkspaceTimestamp();
+    const nextTab: BrowserWorkspaceTab = {
+      ...existing,
+      title: inferBrowserWorkspaceTitle(request.url),
+      url: request.url,
+      updatedAt,
+    };
+    webWorkspaceState.tabs[index] = nextTab;
+    return cloneBrowserWorkspaceTab(nextTab);
+  }
+
   const payload = await requestBrowserWorkspace<{ tab: BrowserWorkspaceTab }>(
     `/tabs/${encodeURIComponent(request.id)}/navigate`,
     {
@@ -166,6 +304,18 @@ export async function showBrowserWorkspaceTab(
   id: string,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<BrowserWorkspaceTab> {
+  if (!isBrowserWorkspaceBridgeConfigured(env)) {
+    getWebBrowserWorkspaceTab(id);
+    const lastFocusedAt = getBrowserWorkspaceTimestamp();
+    webWorkspaceState.tabs = webWorkspaceState.tabs.map((tab) => ({
+      ...tab,
+      visible: tab.id === id,
+      lastFocusedAt: tab.id === id ? lastFocusedAt : tab.lastFocusedAt,
+      updatedAt: tab.id === id ? lastFocusedAt : tab.updatedAt,
+    }));
+    return cloneBrowserWorkspaceTab(getWebBrowserWorkspaceTab(id));
+  }
+
   const payload = await requestBrowserWorkspace<{ tab: BrowserWorkspaceTab }>(
     `/tabs/${encodeURIComponent(id)}/show`,
     { method: "POST" },
@@ -178,6 +328,22 @@ export async function hideBrowserWorkspaceTab(
   id: string,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<BrowserWorkspaceTab> {
+  if (!isBrowserWorkspaceBridgeConfigured(env)) {
+    const index = getWebBrowserWorkspaceTabIndex(id);
+    if (index < 0) {
+      throw createBrowserWorkspaceNotFoundError(id);
+    }
+
+    const updatedAt = getBrowserWorkspaceTimestamp();
+    const nextTab: BrowserWorkspaceTab = {
+      ...webWorkspaceState.tabs[index],
+      visible: false,
+      updatedAt,
+    };
+    webWorkspaceState.tabs[index] = nextTab;
+    return cloneBrowserWorkspaceTab(nextTab);
+  }
+
   const payload = await requestBrowserWorkspace<{ tab: BrowserWorkspaceTab }>(
     `/tabs/${encodeURIComponent(id)}/hide`,
     { method: "POST" },
@@ -190,6 +356,14 @@ export async function closeBrowserWorkspaceTab(
   id: string,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<boolean> {
+  if (!isBrowserWorkspaceBridgeConfigured(env)) {
+    const initialLength = webWorkspaceState.tabs.length;
+    webWorkspaceState.tabs = webWorkspaceState.tabs.filter(
+      (tab) => tab.id !== id,
+    );
+    return webWorkspaceState.tabs.length !== initialLength;
+  }
+
   const payload = await requestBrowserWorkspace<{ closed?: boolean }>(
     `/tabs/${encodeURIComponent(id)}`,
     { method: "DELETE" },
@@ -202,6 +376,10 @@ export async function evaluateBrowserWorkspaceTab(
   request: EvaluateBrowserWorkspaceTabRequest,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<unknown> {
+  if (!isBrowserWorkspaceBridgeConfigured(env)) {
+    throw new Error(createBrowserWorkspaceDesktopOnlyMessage("eval"));
+  }
+
   const payload = await requestBrowserWorkspace<{ result: unknown }>(
     `/tabs/${encodeURIComponent(request.id)}/eval`,
     {
@@ -217,6 +395,10 @@ export async function snapshotBrowserWorkspaceTab(
   id: string,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<{ data: string }> {
+  if (!isBrowserWorkspaceBridgeConfigured(env)) {
+    throw new Error(createBrowserWorkspaceDesktopOnlyMessage("snapshot"));
+  }
+
   return await requestBrowserWorkspace<{ data: string }>(
     `/tabs/${encodeURIComponent(id)}/snapshot`,
     undefined,

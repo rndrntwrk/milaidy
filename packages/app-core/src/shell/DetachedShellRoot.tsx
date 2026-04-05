@@ -1,4 +1,5 @@
 import {
+  BrowserWorkspaceView,
   ChatView,
   CloudDashboard,
   CodingAgentSettingsSection,
@@ -93,6 +94,8 @@ function DetachedShellContent({ route }: DetachedShellRootProps): JSX.Element {
   const target = resolveDetachedShellTarget(route);
 
   switch (target.tab) {
+    case "browser":
+      return <BrowserWorkspaceView />;
     case "chat":
       return <DetachedChatView />;
     case "connectors":

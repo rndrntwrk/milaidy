@@ -8,6 +8,7 @@ import {
   Clock3,
   Gamepad2,
   MessageSquare,
+  Monitor,
   Radio,
   Settings,
   Share2,
@@ -29,6 +30,7 @@ export const COMPANION_ENABLED =
 
 export type Tab =
   | "chat"
+  | "browser"
   | "companion"
   | "stream"
   | "apps"
@@ -63,6 +65,12 @@ export const ALL_TAB_GROUPS: TabGroup[] = [
     tabs: ["chat"],
     icon: MessageSquare,
     description: "Conversations and messaging",
+  },
+  {
+    label: "Browser",
+    tabs: ["browser"],
+    icon: Monitor,
+    description: "Agent-controlled browser workspace",
   },
   {
     label: "Stream",
@@ -135,6 +143,7 @@ export function getTabGroups(streamEnabled = STREAM_ENABLED): TabGroup[] {
 
 const TAB_PATHS: Record<Tab, string> = {
   chat: "/chat",
+  browser: "/browser",
   companion: "/companion",
   stream: "/stream",
   apps: "/apps",
@@ -208,6 +217,7 @@ export function resolveInitialTabForPath(
 export function tabFromPath(pathname: string, basePath = ""): Tab | null {
   const normalized = normalizePathForLookup(pathname, basePath);
   if (normalized === "/") return "chat";
+  if (normalized === "/browser") return "browser";
   if (normalized === "/voice") return "settings";
   // Companion disabled unless explicitly feature-flagged
   if (
@@ -247,6 +257,8 @@ export function titleForTab(tab: Tab): string {
   switch (tab) {
     case "chat":
       return "Chat";
+    case "browser":
+      return "Browser";
     case "companion":
       return "Companion";
     case "apps":

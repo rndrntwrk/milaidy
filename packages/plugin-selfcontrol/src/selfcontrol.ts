@@ -574,8 +574,9 @@ export function parseSelfControlBlockRequest(
   if (websites.length === 0) {
     return {
       request: null,
-      error:
-        "Provide at least one public website hostname, such as `x.com` or `twitter.com`.",
+      error: message
+        ? "Could not determine which public website hostnames to block from the recent conversation. Name the sites explicitly, or pass them to the action as parameters."
+        : "Provide at least one public website hostname, such as `x.com` or `twitter.com`.",
     };
   }
 

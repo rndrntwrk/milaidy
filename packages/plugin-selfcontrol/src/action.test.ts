@@ -53,6 +53,35 @@ afterEach(() => {
 });
 
 describe("blockWebsitesAction", () => {
+  it("uses explicit action parameters when they are provided", async () => {
+    const result = await blockWebsitesAction.handler(
+      {} as never,
+      {
+        entityId: "user-1",
+        roomId: "room-1",
+        content: { text: "do it" },
+      } as never,
+      undefined,
+      {
+        parameters: {
+          websites: ["https://x.com", "twitter.com"],
+          durationMinutes: "180",
+        },
+      } as never,
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.text).toMatch(/Started a website block/i);
+    expect(result.data).toMatchObject({
+      websites: ["x.com", "twitter.com"],
+      durationMinutes: 180,
+    });
+
+    const hostsFile = fs.readFileSync(hostsFilePath, "utf8");
+    expect(hostsFile).toContain("0.0.0.0 x.com");
+    expect(hostsFile).toContain("0.0.0.0 twitter.com");
+  });
+
   it("extracts websites from recent conversation context without the model path", async () => {
     const getMemories = vi.fn().mockResolvedValue([
       {
@@ -89,6 +118,29 @@ describe("blockWebsitesAction", () => {
     const hostsFile = fs.readFileSync(hostsFilePath, "utf8");
     expect(hostsFile).toContain("0.0.0.0 x.com");
     expect(hostsFile).toContain("0.0.0.0 twitter.com");
+  });
+
+  it("fails with a conversation-aware error when the action has no parameters and no websites can be derived from recent messages", async () => {
+    const result = await blockWebsitesAction.handler(
+      {
+        getMemories: vi.fn().mockResolvedValue([]),
+      } as never,
+      {
+        entityId: "user-1",
+        roomId: "room-1",
+        content: { text: "nah use self control, block the website plz" },
+      } as never,
+      undefined,
+      undefined,
+    );
+
+    expect(result).toMatchObject({
+      success: false,
+      text: "Could not determine which public website hostnames to block from the recent conversation. Name the sites explicitly, or pass them to the action as parameters.",
+    });
+    expect(fs.readFileSync(hostsFilePath, "utf8")).toBe(
+      "127.0.0.1 localhost\n",
+    );
   });
 
   it("falls back to assistant-restated websites when the recent sender turn is shorthand", async () => {

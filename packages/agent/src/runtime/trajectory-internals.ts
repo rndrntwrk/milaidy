@@ -54,6 +54,8 @@ export type PersistedLlmCall = {
   maxTokens: number;
   purpose: string;
   actionType: string;
+  stepType?: string;
+  tags?: string[];
   latencyMs: number;
   promptTokens?: number;
   completionTokens?: number;
@@ -159,6 +161,134 @@ export function toOptionalBoolean(value: unknown): boolean | undefined {
   if (["0", "false", "no", "off", "disabled"].includes(normalized))
     return false;
   return undefined;
+}
+
+export function normalizeTrajectoryTag(value: unknown): string {
+  const raw = toText(value, "").trim();
+  if (!raw) return "";
+  return raw
+    .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .toLowerCase()
+    .replace(/[^a-z0-9:]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .replace(/_+/g, "_");
+}
+
+function normalizeTrajectoryTagList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const tags: string[] = [];
+  const seen = new Set<string>();
+  for (const entry of value) {
+    const normalized = normalizeTrajectoryTag(entry);
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    tags.push(normalized);
+  }
+  return tags;
+}
+
+const ORCHESTRATOR_STEP_TYPES = new Set([
+  "coordination",
+  "observation_extraction",
+  "orchestrator",
+  "turn_complete",
+]);
+
+export function inferTrajectoryLlmStepType(params: {
+  stepType?: unknown;
+  purpose?: unknown;
+  actionType?: unknown;
+  model?: unknown;
+}): string {
+  const existing = normalizeTrajectoryTag(params.stepType);
+  if (existing) return existing;
+
+  const purpose = normalizeTrajectoryTag(params.purpose);
+  const actionType = normalizeTrajectoryTag(params.actionType);
+  const model = normalizeTrajectoryTag(params.model);
+  const isSynthetic =
+    actionType === "trajectory_fallback" || model.includes("synthetic");
+
+  if (isSynthetic) return "synthetic";
+  if (purpose === "should_respond") return "should_respond";
+  if (
+    purpose === "compose_state" ||
+    purpose === "evaluation" ||
+    purpose === "reasoning" ||
+    purpose === "response" ||
+    purpose === "observation_extraction" ||
+    purpose === "turn_complete" ||
+    purpose === "coordination"
+  ) {
+    return purpose;
+  }
+  if (actionType.startsWith("orchestrator_")) {
+    return "orchestrator";
+  }
+  if (purpose === "action") return "action";
+  if (purpose && purpose !== "other") return purpose;
+  if (actionType) return actionType;
+  return purpose;
+}
+
+export function inferTrajectoryLlmTags(params: {
+  stepType?: unknown;
+  purpose?: unknown;
+  actionType?: unknown;
+  model?: unknown;
+  tags?: unknown;
+}): string[] {
+  const stepType = inferTrajectoryLlmStepType(params);
+  const purpose = normalizeTrajectoryTag(params.purpose);
+  const actionType = normalizeTrajectoryTag(params.actionType);
+  const tags = normalizeTrajectoryTagList(params.tags);
+  const seen = new Set<string>(tags);
+  const push = (value: string): void => {
+    const normalized = normalizeTrajectoryTag(value);
+    if (!normalized || seen.has(normalized)) return;
+    seen.add(normalized);
+    tags.push(normalized);
+  };
+
+  push("llm");
+  if (stepType) push(`step:${stepType}`);
+  if (purpose) push(`purpose:${purpose}`);
+  if (actionType) push(`action:${actionType}`);
+  if (stepType === "synthetic") push("synthetic");
+  if (stepType === "should_respond") push("routing");
+  if (stepType === "compose_state") push("context");
+  if (
+    ORCHESTRATOR_STEP_TYPES.has(stepType) ||
+    actionType.startsWith("orchestrator_")
+  ) {
+    push("orchestrator");
+  }
+
+  return tags;
+}
+
+export function enrichTrajectoryLlmCall<T extends Record<string, unknown>>(
+  call: T,
+): T & { stepType?: string; tags?: string[] } {
+  const stepType = inferTrajectoryLlmStepType({
+    stepType: call.stepType,
+    purpose: call.purpose,
+    actionType: call.actionType,
+    model: call.model,
+  });
+  const tags = inferTrajectoryLlmTags({
+    stepType,
+    purpose: call.purpose,
+    actionType: call.actionType,
+    model: call.model,
+    tags: call.tags,
+  });
+
+  return {
+    ...call,
+    ...(stepType ? { stepType } : {}),
+    ...(tags.length > 0 ? { tags } : {}),
+  };
 }
 
 export function hasEvaluatorNamed(runtime: IAgentRuntime, name: string): boolean {

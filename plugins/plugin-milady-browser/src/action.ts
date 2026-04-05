@@ -6,17 +6,15 @@ import type {
   Memory,
 } from "@elizaos/core";
 import {
+  type BrowserWorkspaceOperation,
   closeBrowserWorkspaceTab,
   evaluateBrowserWorkspaceTab,
-  getBrowserWorkspaceUnavailableMessage,
   hideBrowserWorkspaceTab,
-  isBrowserWorkspaceBridgeConfigured,
   listBrowserWorkspaceTabs,
   navigateBrowserWorkspaceTab,
   openBrowserWorkspaceTab,
   showBrowserWorkspaceTab,
   snapshotBrowserWorkspaceTab,
-  type BrowserWorkspaceOperation,
 } from "@miladyai/agent/services/browser-workspace";
 
 type BrowserWorkspaceActionRequest = {
@@ -36,7 +34,9 @@ function getMessageText(message: Memory): string {
   return typeof message.content?.text === "string" ? message.content.text : "";
 }
 
-function normalizeOperation(value: string | undefined): BrowserWorkspaceOperation | null {
+function normalizeOperation(
+  value: string | undefined,
+): BrowserWorkspaceOperation | null {
   if (!value) return null;
   switch (value.trim().toLowerCase()) {
     case "list":
@@ -70,14 +70,11 @@ function parseRequest(
     typeof params.id === "string"
       ? params.id
       : (text.match(TAB_ID_RE)?.[1] ?? undefined);
-  const title =
-    typeof params.title === "string" ? params.title : undefined;
-  const script =
-    typeof params.script === "string" ? params.script : undefined;
+  const title = typeof params.title === "string" ? params.title : undefined;
+  const script = typeof params.script === "string" ? params.script : undefined;
   const partition =
     typeof params.partition === "string" ? params.partition : undefined;
-  const show =
-    typeof params.show === "boolean" ? params.show : undefined;
+  const show = typeof params.show === "boolean" ? params.show : undefined;
 
   const lower = text.toLowerCase();
   const inferred =
@@ -196,7 +193,7 @@ async function runBrowserWorkspaceOperation(
 export const manageMiladyBrowserWorkspaceAction: Action = {
   name: "MANAGE_MILADY_BROWSER_WORKSPACE",
   description:
-    "Open, list, navigate, show, hide, close, snapshot, or evaluate background browser tabs inside the Milady desktop shell.",
+    "Open, list, navigate, show, hide, close, snapshot, or evaluate browser tabs inside the Milady browser workspace, whether it is backed by the desktop shell or the web iframe surface.",
   similes: [
     "open browser tab",
     "list browser tabs",
@@ -204,14 +201,17 @@ export const manageMiladyBrowserWorkspaceAction: Action = {
     "hide browser tab",
     "close browser tab",
   ],
-  validate: async (_runtime: IAgentRuntime, message: Memory, options?: HandlerOptions) => {
-    if (!isBrowserWorkspaceBridgeConfigured()) {
-      return false;
-    }
+  validate: async (
+    _runtime: IAgentRuntime,
+    message: Memory,
+    options?: HandlerOptions,
+  ) => {
     if (parseRequest(message, options)) {
       return true;
     }
-    return /\b(browser|tab|tabs|webpage|website)\b/i.test(getMessageText(message));
+    return /\b(browser|tab|tabs|webpage|website)\b/i.test(
+      getMessageText(message),
+    );
   },
   handler: async (
     _runtime: IAgentRuntime,
@@ -220,12 +220,6 @@ export const manageMiladyBrowserWorkspaceAction: Action = {
     options,
     callback,
   ) => {
-    if (!isBrowserWorkspaceBridgeConfigured()) {
-      const text = getBrowserWorkspaceUnavailableMessage();
-      await callback?.({ text });
-      return { success: false, text };
-    }
-
     const request = parseRequest(message, options);
     if (!request) {
       const text =
@@ -234,9 +228,15 @@ export const manageMiladyBrowserWorkspaceAction: Action = {
       return { success: false, text };
     }
 
-    const text = await runBrowserWorkspaceOperation(request);
-    await callback?.({ text });
-    return { success: true, text };
+    try {
+      const text = await runBrowserWorkspaceOperation(request);
+      await callback?.({ text });
+      return { success: true, text };
+    } catch (error) {
+      const text = error instanceof Error ? error.message : String(error);
+      await callback?.({ text });
+      return { success: false, text };
+    }
   },
   examples: [
     [

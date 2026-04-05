@@ -1,47 +1,75 @@
 import type { Provider } from "@elizaos/core";
 import {
-  getBrowserWorkspaceUnavailableMessage,
-  isBrowserWorkspaceBridgeConfigured,
+  getBrowserWorkspaceMode,
   listBrowserWorkspaceTabs,
 } from "@miladyai/agent/services/browser-workspace";
+import {
+  getStewardPendingApprovals,
+  getStewardWalletStatus,
+} from "@miladyai/agent/services/steward-wallet";
 
-function formatTabList(): Promise<string> {
-  return listBrowserWorkspaceTabs().then((tabs) => {
-    if (tabs.length === 0) {
-      return "Milady browser workspace: no tabs are open.";
-    }
+async function formatWorkspaceSummary(): Promise<{
+  text: string;
+  tabs: Awaited<ReturnType<typeof listBrowserWorkspaceTabs>>;
+  mode: ReturnType<typeof getBrowserWorkspaceMode>;
+  pendingCount: number;
+  steward: Awaited<ReturnType<typeof getStewardWalletStatus>>;
+}> {
+  const mode = getBrowserWorkspaceMode();
+  const tabs = await listBrowserWorkspaceTabs();
+  const steward = await getStewardWalletStatus();
+  const pendingApprovals = steward.connected
+    ? await getStewardPendingApprovals().catch(() => [])
+    : [];
 
-    const lines = [
-      `Milady browser workspace: ${tabs.length} tab${tabs.length === 1 ? "" : "s"} open.`,
-    ];
-    for (const tab of tabs.slice(0, 8)) {
-      lines.push(
-        `- ${tab.id} [${tab.visible ? "visible" : "background"}] ${tab.url}`,
-      );
-    }
-    return lines.join("\n");
-  });
+  const lines = [
+    `Milady browser workspace (${mode}): ${tabs.length} tab${tabs.length === 1 ? "" : "s"} open.`,
+  ];
+  if (tabs.length === 0) {
+    lines.push("- No tabs are open.");
+  }
+  for (const tab of tabs.slice(0, 8)) {
+    lines.push(
+      `- ${tab.id} [${tab.visible ? "visible" : "background"}] ${tab.url}`,
+    );
+  }
+
+  if (!steward.configured) {
+    lines.push("Milady wallet: Steward not configured.");
+  } else if (!steward.connected) {
+    lines.push(
+      `Milady wallet: Steward unavailable${steward.error ? ` (${steward.error})` : "."}`,
+    );
+  } else {
+    lines.push(
+      `Milady wallet: Steward connected${pendingApprovals.length > 0 ? ` with ${pendingApprovals.length} pending approval${pendingApprovals.length === 1 ? "" : "s"}` : " with no pending approvals"}.`,
+    );
+  }
+
+  return {
+    text: lines.join("\n"),
+    tabs,
+    mode,
+    pendingCount: pendingApprovals.length,
+    steward,
+  };
 }
 
 export const miladyBrowserWorkspaceProvider: Provider = {
   name: "milady_browser_workspace",
   description:
-    "Summarizes browser tabs currently running inside the Milady desktop shell.",
+    "Summarizes Milady browser workspace tabs plus Steward wallet signing state for the agent.",
   get: async () => {
-    if (!isBrowserWorkspaceBridgeConfigured()) {
-      return {
-        text: getBrowserWorkspaceUnavailableMessage(),
-        data: { available: false },
-      };
-    }
-
     try {
-      const text = await formatTabList();
+      const summary = await formatWorkspaceSummary();
       return {
-        text,
+        text: summary.text,
         data: {
           available: true,
-          tabs: await listBrowserWorkspaceTabs(),
+          mode: summary.mode,
+          tabs: summary.tabs,
+          steward: summary.steward,
+          pendingApprovals: summary.pendingCount,
         },
       };
     } catch (error) {

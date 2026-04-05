@@ -9,9 +9,23 @@ import {
 vi.mock("../../src/services/browser-workspace", () => ({
   closeBrowserWorkspaceTab: vi.fn(async () => true),
   evaluateBrowserWorkspaceTab: vi.fn(async () => ({ ok: true })),
+  getBrowserWorkspaceSnapshot: vi.fn(async () => ({
+    mode: "web",
+    tabs: [
+      {
+        id: "btab_1",
+        title: "Milady Browser",
+        url: "https://example.com",
+        partition: "persist:milady-browser",
+        visible: false,
+        createdAt: "2026-04-05T00:00:00.000Z",
+        updatedAt: "2026-04-05T00:00:00.000Z",
+        lastFocusedAt: null,
+      },
+    ],
+  })),
   getBrowserWorkspaceUnavailableMessage: vi.fn(
-    () =>
-      "Milady browser workspace is unavailable. This bridge only exists inside the Milady desktop shell.",
+    () => "Milady browser workspace desktop bridge is unavailable.",
   ),
   hideBrowserWorkspaceTab: vi.fn(async (id: string) => ({
     id,
@@ -35,16 +49,18 @@ vi.mock("../../src/services/browser-workspace", () => ({
       lastFocusedAt: null,
     },
   ]),
-  navigateBrowserWorkspaceTab: vi.fn(async ({ id, url }: { id: string; url: string }) => ({
-    id,
-    title: "Milady Browser",
-    url,
-    partition: "persist:milady-browser",
-    visible: false,
-    createdAt: "2026-04-05T00:00:00.000Z",
-    updatedAt: "2026-04-05T00:00:00.000Z",
-    lastFocusedAt: null,
-  })),
+  navigateBrowserWorkspaceTab: vi.fn(
+    async ({ id, url }: { id: string; url: string }) => ({
+      id,
+      title: "Milady Browser",
+      url,
+      partition: "persist:milady-browser",
+      visible: false,
+      createdAt: "2026-04-05T00:00:00.000Z",
+      updatedAt: "2026-04-05T00:00:00.000Z",
+      lastFocusedAt: null,
+    }),
+  ),
   openBrowserWorkspaceTab: vi.fn(async (body: Record<string, unknown>) => ({
     id: "btab_2",
     title: (body.title as string) ?? "Milady Browser",
@@ -98,6 +114,19 @@ afterEach(() => {
 });
 
 describe("browser-workspace-routes", () => {
+  it("returns a browser workspace snapshot from /api/browser-workspace", async () => {
+    const ctx = buildCtx("GET", "/api/browser-workspace");
+
+    const handled = await handleBrowserWorkspaceRoutes(ctx);
+
+    expect(handled).toBe(true);
+    const payload = (ctx.json as ReturnType<typeof vi.fn>).mock.calls[0][1];
+    expect(payload).toMatchObject({
+      mode: "web",
+      tabs: [{ id: "btab_1" }],
+    });
+  });
+
   it("lists tabs from /api/browser-workspace/tabs", async () => {
     const ctx = buildCtx("GET", "/api/browser-workspace/tabs");
 

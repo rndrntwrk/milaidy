@@ -226,8 +226,12 @@ async function extractWebsiteBlockRequest(
   const websites = collectConversationWebsites(conversation);
   const durationMinutes = resolveConversationDuration(conversation);
 
-  if (websites.length === 0 && durationMinutes === undefined) {
-    return parseSelfControlBlockRequest(undefined, message);
+  if (websites.length === 0) {
+    return {
+      request: null,
+      error:
+        "Could not determine which public website hostnames to block from the recent conversation. Name the sites explicitly, or pass them to the action as parameters.",
+    };
   }
 
   return parseSelfControlBlockRequest(
@@ -250,12 +254,7 @@ async function resolveWebsiteBlockRequest(
     return parseSelfControlBlockRequest(options, undefined);
   }
 
-  const extracted = await extractWebsiteBlockRequest(runtime, message);
-  if (extracted.request) {
-    return extracted;
-  }
-
-  return parseSelfControlBlockRequest(options, message);
+  return await extractWebsiteBlockRequest(runtime, message);
 }
 
 export const blockWebsitesAction: Action = {
@@ -336,8 +335,8 @@ export const blockWebsitesAction: Action = {
     {
       name: "websites",
       description:
-        "Website hostnames or URLs to block, for example ['x.com', 'twitter.com'].",
-      required: true,
+        "Website hostnames or URLs to block, for example ['x.com', 'twitter.com']. When omitted, Milady derives them from the recent conversation context.",
+      required: false,
       schema: {
         type: "array" as const,
         items: { type: "string" as const },

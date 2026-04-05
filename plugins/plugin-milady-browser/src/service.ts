@@ -4,7 +4,7 @@ export class MiladyBrowserWorkspaceService extends Service {
   static serviceType = "milady_browser_workspace";
 
   capabilityDescription =
-    "Controls hidden/showable browser tabs in the Milady desktop shell over a loopback bridge.";
+    "Controls Milady browser workspace tabs across the desktop bridge and web iframe workspace, alongside Steward wallet signing requests.";
 
   static override async start(
     runtime: IAgentRuntime,

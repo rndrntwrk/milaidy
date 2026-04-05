@@ -21,6 +21,7 @@ import {
 } from "./http-helpers";
 import { createZipArchive } from "./zip-utils";
 import {
+  enrichTrajectoryLlmCall,
   executeRawSql,
   extractRows,
   saveTrajectory,
@@ -110,6 +111,8 @@ interface UILlmCall {
   maxTokens: number;
   purpose: string;
   actionType: string;
+  stepType: string;
+  tags: string[];
   latencyMs: number;
   promptTokens?: number;
   completionTokens?: number;
@@ -304,27 +307,62 @@ function toPersistedTrajectory(traj: Trajectory): PersistedTrajectory {
       typeof step.timestamp === "number" && Number.isFinite(step.timestamp)
         ? step.timestamp
         : traj.startTime,
-    llmCalls: (step.llmCalls ?? []).map((call, callIndex) => ({
-      callId:
-        typeof call.callId === "string" && call.callId.trim().length > 0
-          ? call.callId.trim()
-          : `${traj.trajectoryId}-call-${index + 1}-${callIndex + 1}`,
-      timestamp:
-        typeof call.timestamp === "number" && Number.isFinite(call.timestamp)
-          ? call.timestamp
-          : step.timestamp,
-      model: typeof call.model === "string" ? call.model : "unknown",
-      systemPrompt: typeof call.systemPrompt === "string" ? call.systemPrompt : "",
-      userPrompt: typeof call.userPrompt === "string" ? call.userPrompt : "",
-      response: typeof call.response === "string" ? call.response : "",
-      temperature: toFiniteNumber(call.temperature) ?? 0,
-      maxTokens: toFiniteNumber(call.maxTokens) ?? 0,
-      purpose: typeof call.purpose === "string" ? call.purpose : "",
-      actionType: typeof call.actionType === "string" ? call.actionType : "",
-      latencyMs: toFiniteNumber(call.latencyMs) ?? 0,
-      promptTokens: toFiniteNumber(call.promptTokens) ?? undefined,
-      completionTokens: toFiniteNumber(call.completionTokens) ?? undefined,
-    })),
+    llmCalls: (step.llmCalls ?? []).map((call, callIndex) => {
+      const normalizedCall = enrichTrajectoryLlmCall(
+        call as Record<string, unknown>,
+      ) as TrajectoryLlmCall;
+      return {
+        callId:
+          typeof normalizedCall.callId === "string" &&
+          normalizedCall.callId.trim().length > 0
+            ? normalizedCall.callId.trim()
+            : `${traj.trajectoryId}-call-${index + 1}-${callIndex + 1}`,
+        timestamp:
+          typeof normalizedCall.timestamp === "number" &&
+          Number.isFinite(normalizedCall.timestamp)
+            ? normalizedCall.timestamp
+            : step.timestamp,
+        model:
+          typeof normalizedCall.model === "string"
+            ? normalizedCall.model
+            : "unknown",
+        systemPrompt:
+          typeof normalizedCall.systemPrompt === "string"
+            ? normalizedCall.systemPrompt
+            : "",
+        userPrompt:
+          typeof normalizedCall.userPrompt === "string"
+            ? normalizedCall.userPrompt
+            : "",
+        response:
+          typeof normalizedCall.response === "string"
+            ? normalizedCall.response
+            : "",
+        temperature: toFiniteNumber(normalizedCall.temperature) ?? 0,
+        maxTokens: toFiniteNumber(normalizedCall.maxTokens) ?? 0,
+        purpose:
+          typeof normalizedCall.purpose === "string"
+            ? normalizedCall.purpose
+            : "",
+        actionType:
+          typeof normalizedCall.actionType === "string"
+            ? normalizedCall.actionType
+            : "",
+        stepType:
+          typeof normalizedCall.stepType === "string"
+            ? normalizedCall.stepType
+            : undefined,
+        tags: Array.isArray(normalizedCall.tags)
+          ? normalizedCall.tags.filter(
+              (tag): tag is string => typeof tag === "string",
+            )
+          : undefined,
+        latencyMs: toFiniteNumber(normalizedCall.latencyMs) ?? 0,
+        promptTokens: toFiniteNumber(normalizedCall.promptTokens) ?? undefined,
+        completionTokens:
+          toFiniteNumber(normalizedCall.completionTokens) ?? undefined,
+      };
+    }),
     providerAccesses: (step.providerAccesses ?? []).map((access, accessIndex) => ({
       providerId:
         typeof access.providerId === "string" && access.providerId.trim().length > 0
@@ -415,7 +453,9 @@ function trajectoryToUIDetail(traj: Trajectory): UITrajectoryDetailResult {
     // Process LLM Calls
     const calls = step.llmCalls || [];
     for (let j = 0; j < calls.length; j++) {
-      const call = calls[j];
+      const call = enrichTrajectoryLlmCall(
+        calls[j] as Record<string, unknown>,
+      ) as TrajectoryLlmCall;
       llmCalls.push({
         id: call.callId || `${stepId}-call-${j}`,
         trajectoryId,
@@ -429,6 +469,10 @@ function trajectoryToUIDetail(traj: Trajectory): UITrajectoryDetailResult {
         maxTokens: typeof call.maxTokens === "number" ? call.maxTokens : 0,
         purpose: call.purpose || "",
         actionType: call.actionType || "",
+        stepType: call.stepType || "",
+        tags: Array.isArray(call.tags)
+          ? call.tags.filter((tag): tag is string => typeof tag === "string")
+          : [],
         latencyMs: call.latencyMs || 0,
         promptTokens: call.promptTokens,
         completionTokens: call.completionTokens,

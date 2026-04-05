@@ -2,6 +2,8 @@ import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  getSubmoduleReadinessMarkerPaths,
+  isSubmoduleCheckoutReady,
   parseTrackedSubmodules,
   runInitSubmodules,
 } from "../../../../scripts/init-submodules.mjs";
@@ -9,9 +11,15 @@ import {
 const ROOT = "/tmp/eliza-test-root";
 const GIT_DIR = resolve(ROOT, ".git");
 const GITMODULES = resolve(ROOT, ".gitmodules");
+const ELIZA_MARKERS = getSubmoduleReadinessMarkerPaths("eliza", {
+  rootDir: ROOT,
+});
 
-function createExistsStub() {
-  return (filePath: string) => filePath === GIT_DIR || filePath === GITMODULES;
+function createExistsStub(extraPaths: string[] = []) {
+  return (filePath: string) =>
+    filePath === GIT_DIR ||
+    filePath === GITMODULES ||
+    extraPaths.includes(filePath);
 }
 
 describe("init-submodules script", () => {
@@ -111,5 +119,63 @@ describe("init-submodules script", () => {
   it("parses empty .gitmodules output as no tracked submodules", () => {
     expect(parseTrackedSubmodules("")).toEqual([]);
     expect(parseTrackedSubmodules("   \n")).toEqual([]);
+  });
+
+  it("treats eliza as not ready when required checkout files are missing", () => {
+    expect(
+      isSubmoduleCheckoutReady("eliza", {
+        rootDir: ROOT,
+        exists: createExistsStub([ELIZA_MARKERS[0]]),
+      }),
+    ).toBe(false);
+
+    expect(
+      isSubmoduleCheckoutReady("eliza", {
+        rootDir: ROOT,
+        exists: createExistsStub(ELIZA_MARKERS),
+      }),
+    ).toBe(true);
+  });
+
+  it("reinitializes eliza when the checkout is incomplete even if git reports it present", () => {
+    const existingPaths = new Set<string>([GIT_DIR, GITMODULES]);
+    const exists = (filePath: string) => existingPaths.has(filePath);
+    const exec = vi.fn((command: string) => {
+      if (
+        command ===
+        'git config --file .gitmodules --get-regexp "^submodule\\..*\\.path$"'
+      ) {
+        return "submodule.eliza.path eliza";
+      }
+      if (command === 'git submodule status -- "eliza"') {
+        return " dc44c9f eliza";
+      }
+      if (command === 'git submodule update --init --recursive "eliza"') {
+        for (const marker of ELIZA_MARKERS) {
+          existingPaths.add(marker);
+        }
+        return "";
+      }
+      throw new Error(`Unexpected command: ${command}`);
+    });
+
+    const result = runInitSubmodules({
+      rootDir: ROOT,
+      exists,
+      exec,
+      log: () => {},
+      logError: () => {},
+    });
+
+    expect(result.initialized).toBe(1);
+    expect(result.alreadyInitialized).toBe(0);
+    expect(result.failed).toBe(0);
+    expect(exec).toHaveBeenCalledWith(
+      'git submodule update --init --recursive "eliza"',
+      expect.objectContaining({
+        cwd: ROOT,
+        stdio: "inherit",
+      }),
+    );
   });
 });

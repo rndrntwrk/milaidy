@@ -1,23 +1,22 @@
-export * from "./task-executor";
-export { CodingTaskExecutor } from "./coding-task-executor";
-export { ResearchTaskExecutor } from "./research-task-executor";
-
-export { createDefaultExecutorRegistry } from "./executor-registry";
-
 export * from "./agent-export";
 export * from "./app-manager";
 export * from "./browser-capture";
 export * from "./browser-workspace";
+export { CodingTaskExecutor } from "./coding-task-executor";
+export { createDefaultExecutorRegistry } from "./executor-registry";
 export * from "./privy-wallets";
 export * from "./registry-client";
 export * from "./remote-signing-service";
+export { ResearchTaskExecutor } from "./research-task-executor";
 export * from "./sandbox-engine";
 export * from "./sandbox-manager";
 export * from "./self-updater";
 export * from "./signing-policy";
 export * from "./skill-catalog-client";
 export * from "./skill-marketplace";
+export * from "./steward-wallet";
 export * from "./stream-manager";
+export * from "./task-executor";
 export * from "./tts-stream-bridge";
 export * from "./update-checker";
 export * from "./version-compat";

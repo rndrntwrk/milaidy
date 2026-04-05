@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  getBrowserWorkspaceUnavailableMessage,
+  evaluateBrowserWorkspaceTab,
+  getBrowserWorkspaceMode,
+  getBrowserWorkspaceSnapshot,
   isBrowserWorkspaceBridgeConfigured,
   listBrowserWorkspaceTabs,
   openBrowserWorkspaceTab,
@@ -26,12 +28,34 @@ describe("browser-workspace service", () => {
         MILADY_BROWSER_WORKSPACE_URL: "",
       } as NodeJS.ProcessEnv),
     ).toBe(false);
+    expect(getBrowserWorkspaceMode({} as NodeJS.ProcessEnv)).toBe("web");
   });
 
-  it("throws a clear error when no bridge config is present", async () => {
+  it("falls back to an in-process web workspace when no bridge config is present", async () => {
+    expect(await listBrowserWorkspaceTabs({} as NodeJS.ProcessEnv)).toEqual([]);
+
+    const tab = await openBrowserWorkspaceTab(
+      { show: true, url: "https://example.com" },
+      {} as NodeJS.ProcessEnv,
+    );
+
+    expect(tab.id).toBe("btab_1");
+
     await expect(
-      listBrowserWorkspaceTabs({} as NodeJS.ProcessEnv),
-    ).rejects.toThrow(getBrowserWorkspaceUnavailableMessage());
+      evaluateBrowserWorkspaceTab(
+        { id: tab.id, script: "document.title" },
+        {} as NodeJS.ProcessEnv,
+      ),
+    ).rejects.toThrow(
+      "Milady browser workspace eval is only available in the desktop app.",
+    );
+
+    await expect(
+      getBrowserWorkspaceSnapshot({} as NodeJS.ProcessEnv),
+    ).resolves.toMatchObject({
+      mode: "web",
+      tabs: [{ id: "btab_1", visible: true }],
+    });
   });
 
   it("sends bearer auth when opening a tab", async () => {
@@ -52,13 +76,10 @@ describe("browser-workspace service", () => {
     });
     globalThis.fetch = fetchMock as unknown as typeof globalThis.fetch;
 
-    const tab = await openBrowserWorkspaceTab(
-      { url: "https://example.com" },
-      {
-        MILADY_BROWSER_WORKSPACE_URL: "http://127.0.0.1:31340",
-        MILADY_BROWSER_WORKSPACE_TOKEN: "secret",
-      } as NodeJS.ProcessEnv,
-    );
+    const tab = await openBrowserWorkspaceTab({ url: "https://example.com" }, {
+      MILADY_BROWSER_WORKSPACE_URL: "http://127.0.0.1:31340",
+      MILADY_BROWSER_WORKSPACE_TOKEN: "secret",
+    } as NodeJS.ProcessEnv);
 
     expect(tab.id).toBe("btab_1");
     const init = fetchMock.mock.calls[0]?.[1] as RequestInit;

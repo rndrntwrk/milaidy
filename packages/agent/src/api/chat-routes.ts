@@ -29,10 +29,10 @@ import {
   getSelfControlStatus,
   hasWebsiteBlockDeferralIntent,
   hasWebsiteBlockIntent,
-  parseSelfControlBlockRequest,
 } from "@miladyai/plugin-selfcontrol/selfcontrol";
 import type { ElizaConfig } from "../config/config.js";
 import { normalizeCharacterLanguage } from "../onboarding-presets.js";
+import { withMiladyTrajectoryStep } from "../runtime/trajectory-step-context.js";
 import { detectRuntimeModel } from "./agent-model.js";
 import {
   isClientVisibleNoResponse,
@@ -219,7 +219,6 @@ function inferWebsiteBlockFallback(
   modelText: string,
 ): {
   name: "BLOCK_WEBSITES";
-  parameters?: Record<string, unknown>;
 } | null {
   if (hasWebsiteBlockDeferralIntent(userText)) {
     return null;
@@ -228,23 +227,10 @@ function inferWebsiteBlockFallback(
   const userHasBlockIntent = hasWebsiteBlockIntent(userText);
   const modelLooksLikeBlockConfirmation =
     /\b(blocking|block|self ?control)\b/i.test(modelText);
-  const parsed = parseSelfControlBlockRequest(undefined, {
-    content: { text: userText },
-  } as ReturnType<typeof createMessageMemory>);
   const userHasPermissionIntent = hasWebsiteBlockingPermissionIntent(userText);
 
   if (userHasPermissionIntent) {
     return null;
-  }
-
-  if (parsed.request && userHasBlockIntent) {
-    return {
-      name: "BLOCK_WEBSITES",
-      parameters: {
-        websites: [...parsed.request.websites],
-        durationMinutes: parsed.request.durationMinutes,
-      },
-    };
   }
 
   const userLooksLikeBlockIntent =
@@ -900,40 +886,45 @@ export async function generateChatResponse(
         runtime,
         walletAugmentedMessage,
       );
-      result = await runtime.messageService?.handleMessage(
-        runtime,
-        generationMessage,
-        async (content: Content) => {
-          if (opts?.isAborted?.()) {
-            throw new Error("client_disconnected");
-          }
+      const trajectoryStepId =
+        readMessageTrajectoryStepId(generationMessage) ??
+        readMessageTrajectoryStepId(message);
+      result = await withMiladyTrajectoryStep(trajectoryStepId, () =>
+        runtime.messageService?.handleMessage(
+          runtime,
+          generationMessage,
+          async (content: Content) => {
+            if (opts?.isAborted?.()) {
+              throw new Error("client_disconnected");
+            }
 
-          const actionTag = (content as Record<string, unknown>)?.action;
-          if (typeof actionTag === "string" && actionTag.length > 0) {
-            recordActionCallback(
-              actionTag,
-              Boolean(extractCompatTextContent(content)),
-            );
-          }
+            const actionTag = (content as Record<string, unknown>)?.action;
+            if (typeof actionTag === "string" && actionTag.length > 0) {
+              recordActionCallback(
+                actionTag,
+                Boolean(extractCompatTextContent(content)),
+              );
+            }
 
-          const chunk = extractCompatTextContent(content);
-          if (!chunk) return [];
-          if (!claimStreamSource("callback")) return [];
-          appendIncomingText(chunk);
-          return [];
-        },
-        {
-          onStreamChunk: opts?.onChunk
-            ? async (chunk: string) => {
-                if (opts?.isAborted?.()) {
-                  throw new Error("client_disconnected");
+            const chunk = extractCompatTextContent(content);
+            if (!chunk) return [];
+            if (!claimStreamSource("callback")) return [];
+            appendIncomingText(chunk);
+            return [];
+          },
+          {
+            onStreamChunk: opts?.onChunk
+              ? async (chunk: string) => {
+                  if (opts?.isAborted?.()) {
+                    throw new Error("client_disconnected");
+                  }
+                  if (!chunk) return;
+                  if (!claimStreamSource("onStreamChunk")) return;
+                  appendIncomingText(chunk);
                 }
-                if (!chunk) return;
-                if (!claimStreamSource("onStreamChunk")) return;
-                appendIncomingText(chunk);
-              }
-            : undefined,
-        },
+              : undefined,
+          },
+        ),
       );
     }
 
@@ -1068,7 +1059,6 @@ export async function generateChatResponse(
           {
             src: "eliza-api",
             action: inferredWebsiteBlockFallback.name,
-            parameters: inferredWebsiteBlockFallback.parameters,
           },
           "[eliza-api] Injecting website blocker fallback from prompt intent",
         );
@@ -1158,6 +1148,9 @@ export async function generateChatResponse(
         executableFallbackActions,
         appendIncomingText,
         recordActionCallback,
+        {
+          getCurrentText: () => responseText || modelText,
+        },
       );
     }
 
@@ -1172,7 +1165,6 @@ export async function generateChatResponse(
           {
             src: "eliza-api",
             action: inferredWebsiteBlockRecovery.name,
-            parameters: inferredWebsiteBlockRecovery.parameters,
           },
           "[eliza-api] Recovering missing website blocker side effect after model response",
         );
@@ -1183,6 +1175,9 @@ export async function generateChatResponse(
           [inferredWebsiteBlockRecovery],
           appendIncomingText,
           recordActionCallback,
+          {
+            getCurrentText: () => responseText || modelText,
+          },
         );
       }
     }

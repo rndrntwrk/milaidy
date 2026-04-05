@@ -15,6 +15,10 @@ import { fileURLToPath } from "node:url";
 const scriptFile = fileURLToPath(import.meta.url);
 const __dirname = dirname(scriptFile);
 const root = resolve(__dirname, "..");
+const SUBMODULE_READINESS_MARKERS = {
+  eliza: ["package.json", "packages/typescript/package.json"],
+  "plugins/plugin-agent-orchestrator": ["package.json"],
+};
 
 export function parseTrackedSubmodules(configOutput) {
   if (!configOutput.trim()) return [];
@@ -44,6 +48,29 @@ export function loadTrackedSubmodules({ exec = execSync, cwd = root } = {}) {
   } catch {
     return [];
   }
+}
+
+export function getSubmoduleReadinessMarkerPaths(
+  submodulePath,
+  { rootDir = root } = {},
+) {
+  const markers = SUBMODULE_READINESS_MARKERS[submodulePath] ?? [];
+  return markers.map((marker) => resolve(rootDir, submodulePath, marker));
+}
+
+export function isSubmoduleCheckoutReady(
+  submodulePath,
+  { rootDir = root, exists = existsSync } = {},
+) {
+  const markerPaths = getSubmoduleReadinessMarkerPaths(submodulePath, {
+    rootDir,
+  });
+
+  if (markerPaths.length === 0) {
+    return true;
+  }
+
+  return markerPaths.every((markerPath) => exists(markerPath));
 }
 
 export function runInitSubmodules({
@@ -77,7 +104,12 @@ export function runInitSubmodules({
   let failed = 0;
 
   for (const submodule of submodules) {
-    let needsInit = true;
+    const checkoutReady = isSubmoduleCheckoutReady(submodule.path, {
+      rootDir,
+      exists,
+    });
+    let needsInit = !checkoutReady;
+    let initReason = checkoutReady ? "" : "checkout is incomplete";
 
     try {
       const status = exec(`git submodule status -- "${submodule.path}"`, {
@@ -85,9 +117,16 @@ export function runInitSubmodules({
         encoding: "utf8",
         stdio: ["ignore", "pipe", "ignore"],
       }).trim();
-      needsInit = status.startsWith("-");
+      if (status.startsWith("-")) {
+        needsInit = true;
+        initReason = "submodule is not initialized";
+      }
     } catch {
       // If status lookup fails, attempt initialization directly.
+      needsInit = true;
+      if (!initReason) {
+        initReason = "status check failed";
+      }
     }
 
     if (!needsInit) {
@@ -96,13 +135,25 @@ export function runInitSubmodules({
     }
 
     log(
-      `[init-submodules] Initializing ${submodule.name} (${submodule.path})...`,
+      `[init-submodules] Initializing ${submodule.name} (${submodule.path})${
+        initReason ? ` because ${initReason}` : ""
+      }...`,
     );
     try {
       exec(`git submodule update --init --recursive "${submodule.path}"`, {
         cwd: rootDir,
         stdio: "inherit",
       });
+      if (
+        !isSubmoduleCheckoutReady(submodule.path, {
+          rootDir,
+          exists,
+        })
+      ) {
+        throw new Error(
+          `submodule checkout is still incomplete after update: ${submodule.path}`,
+        );
+      }
       initialized++;
       log(`[init-submodules] ${submodule.name} initialized successfully`);
     } catch (err) {

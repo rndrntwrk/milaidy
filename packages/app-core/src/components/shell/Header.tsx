@@ -23,6 +23,7 @@ import {
 
 const NAV_LABEL_I18N_KEY: Record<string, string> = {
   Chat: "nav.chat",
+  Browser: "nav.browser",
   Companion: "nav.companion",
   Stream: "nav.stream",
   Character: "nav.character",

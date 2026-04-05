@@ -28,11 +28,14 @@ Use a desktop-owned browser workspace instead:
   Shared agent-side client for the bridge.
 - `packages/agent/src/api/browser-workspace-routes.ts`
   Exposes the feature on Milady's API surface.
+- `packages/app-core/src/components/pages/BrowserWorkspaceView.tsx`
+  Web browser workspace UI with persistent iframe tabs.
+- `packages/app-core/src/components/browser/BrowserWorkspaceWalletPanel.tsx`
+  Steward signing rail beside the browser workspace.
 - `plugins/plugin-milady-browser`
-  Local elizaOS plugin for agent actions/providers.
+  Local elizaOS plugin for browser and Steward wallet actions/providers.
 
 ## Follow-up work
 
-- Add a dedicated Milady browser workspace page and tab strip
-- Add wallet-provider injection and signing approval UX
 - Add richer page introspection beyond raw JS eval/screenshot
+- Add true in-page wallet-provider injection for external dapps via desktop shell or extension bridge
