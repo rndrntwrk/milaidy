@@ -30,7 +30,7 @@ export function compactRegistryCatalog(prompt: string): string {
 
 export function compactCodingActionExamples(prompt: string): string {
   const next = prompt.replace(
-    /\n# Coding Agent Action Call Examples[\s\S]*?(?=\nPossible response actions:|\n# Available Actions|\n## Project Context \(Workspace\)|$)/g,
+    /\n# (?:Coding|Task) Agent Action Call Examples[\s\S]*?(?=\nPossible response actions:|\n# Available Actions|\n## Project Context \(Workspace\)|$)/g,
     "\n",
   );
   return next.replace(/\nPossible response actions:[^\n]*\n?/g, "\n");
@@ -95,7 +95,7 @@ export function compactInstalledSkills(prompt: string): string {
 // are excluded to avoid false positives ("fix the typo", "build me a haiku").
 // Includes translations for supported locales: ko, zh-CN, es, pt, vi, tl.
 const CODING_INTENT_RE =
-  /\b(code|coding|codebase|repo|repository|pull request|pr\b|branch|merge|commit|deploy|refactor|start_coding_task|spawn_coding_agent|send_to_coding_agent)\b|https?:\/\/(?:github\.com|gitlab\.com|bitbucket\.org)\/|코드|코딩|레포|저장소|브랜치|커밋|배포|리팩토링|풀\s?리퀘스트|代码|仓库|分支|提交|部署|合并|拉取请求|\b(código|repositorio|repositório|confirmación|implementar)\b|mã|kho|nhánh|triển khai/i;
+  /\b(code|coding|codebase|repo|repository|pull request|pr\b|branch|merge|commit|deploy|refactor|research|investigate|analy[sz]e|analysis|draft|document|orchestrate|delegate|subtask|parallel|background task|task agent|start_coding_task|spawn_coding_agent|send_to_coding_agent|create_task|spawn_agent|send_to_agent|list_agents|stop_agent)\b|https?:\/\/(?:github\.com|gitlab\.com|bitbucket\.org)\/|코드|코딩|레포|저장소|브랜치|커밋|배포|리팩토링|풀\s?리퀘스트|代码|仓库|分支|提交|部署|合并|拉取请求|\b(código|repositorio|repositório|confirmación|implementar|investigar|analizar|documentar)\b|mã|kho|nhánh|triển khai/i;
 const PLUGIN_UI_INTENT_RE =
   /\b(plugin|plugins|configure|configuration|setup|install|enable|disable|api key|credential|secret|dashboard|form|ui|interface|\[config:)\b|플러그인|설정|설치|插件|配置|安装|\b(complemento|configurar|instalar|configuração)\b/i;
 // Terminal intent requires specific CLI/tool terms, not generic verbs.
@@ -124,12 +124,13 @@ export const UNIVERSAL_ACTIONS = new Set(["REPLY", "NONE", "IGNORE"]);
  */
 export const INTENT_ACTION_MAP: Record<string, Set<string>> = {
   coding: new Set([
-    "START_CODING_TASK",
-    "SPAWN_CODING_AGENT",
+    "CREATE_TASK",
+    "SPAWN_AGENT",
     "PROVISION_WORKSPACE",
     "FINALIZE_WORKSPACE",
-    "LIST_CODING_AGENTS",
-    "SEND_TO_CODING_AGENT",
+    "LIST_AGENTS",
+    "SEND_TO_AGENT",
+    "STOP_AGENT",
   ]),
   terminal: new Set(["RUN_IN_TERMINAL", "RESTART_AGENT"]),
   issues: new Set(["MANAGE_ISSUES"]),
@@ -231,7 +232,7 @@ export function buildFullParamActionSet(
  *
  * Targets lines like:
  *   (Eliza's internal thought: User wants me to spawn...)
- *   (Eliza's actions: REPLY, START_CODING_TASK)
+ *   (Eliza's actions: REPLY, CREATE_TASK)
  *   12:53 (17 minutes ago) [b850bc30-45f8-0041-a00a-83df46d8555d]
  *                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ UUID
  */
@@ -267,10 +268,10 @@ export function compactConversationHistory(prompt: string): string {
 }
 
 /**
- * Strip the "Coding Agent Action Call Examples" provider section when
- * no coding intent is detected. These examples (~4k chars) teach the LLM
- * how to use START_CODING_TASK / SPAWN_CODING_AGENT / FINALIZE_WORKSPACE
- * — unnecessary for general chat, emote, or plugin-config messages.
+ * Strip the task-agent examples provider section when no task/coding intent
+ * is detected. These examples teach the LLM how to use CREATE_TASK /
+ * SPAWN_AGENT / FINALIZE_WORKSPACE and related aliases, which are unnecessary
+ * for general chat, emote, or plugin-config messages.
  */
 export function compactCodingExamplesForIntent(prompt: string): string {
   if (hasIntent(prompt, CODING_INTENT_RE)) return prompt;
@@ -282,7 +283,7 @@ export function compactCodingExamplesForIntent(prompt: string): string {
   // <actions> tags as part of the examples, so we can't use <actions> as a
   // boundary — we must match the markdown header specifically.
   return prompt.replace(
-    /# Coding Agent Action Call Examples[\s\S]*?(?=\n# Available Actions)/,
+    /# (?:Coding|Task) Agent Action Call Examples[\s\S]*?(?=\n# Available Actions)/,
     "",
   );
 }

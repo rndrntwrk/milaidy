@@ -129,6 +129,19 @@ const MANAGED_DISCORD_CALLBACK_QUERY_KEYS = [
   "message",
 ] as const;
 
+const QUERY_VALUE_CONTROL_CHAR_RE = /[\u0000-\u001F\u007F]/;
+
+function readQueryString(
+  value: string | null,
+  maxLength: number,
+): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > maxLength) return undefined;
+  if (QUERY_VALUE_CONTROL_CHAR_RE.test(trimmed)) return undefined;
+  return trimmed;
+}
+
 export function consumeManagedDiscordCallbackUrl(rawUrl: string): {
   callback: ManagedDiscordCallbackState | null;
   cleanedUrl: string | null;
@@ -149,10 +162,10 @@ export function consumeManagedDiscordCallbackUrl(rawUrl: string): {
   const callback: ManagedDiscordCallbackState = {
     status,
     managed,
-    agentId: readString(url.searchParams.get("agentId")) ?? null,
-    guildId: readString(url.searchParams.get("guildId")) ?? null,
-    guildName: readString(url.searchParams.get("guildName")) ?? null,
-    message: readString(url.searchParams.get("message")) ?? null,
+    agentId: readQueryString(url.searchParams.get("agentId"), 200) ?? null,
+    guildId: readQueryString(url.searchParams.get("guildId"), 200) ?? null,
+    guildName: readQueryString(url.searchParams.get("guildName"), 120) ?? null,
+    message: readQueryString(url.searchParams.get("message"), 300) ?? null,
     restarted: url.searchParams.get("restarted") === "1",
   };
 
@@ -164,6 +177,33 @@ export function consumeManagedDiscordCallbackUrl(rawUrl: string): {
     callback,
     cleanedUrl: url.toString(),
   };
+}
+
+export function buildManagedDiscordConnectedNotice(
+  callback: ManagedDiscordCallbackState,
+  t: (
+    key: string,
+    vars?: Record<string, string | number | boolean | undefined>,
+  ) => string,
+): string {
+  const statusNote = callback.restarted
+    ? t("elizaclouddashboard.ManagedDiscordRestartedSuffix", {
+        defaultValue: " The agent restarted and is ready.",
+      })
+    : "";
+
+  if (callback.guildName) {
+    return t("elizaclouddashboard.ManagedDiscordConnectedNotice", {
+      guild: callback.guildName,
+      statusNote,
+      defaultValue: "Managed Discord connected to {{guild}}.{{statusNote}}",
+    });
+  }
+
+  return t("elizaclouddashboard.ManagedDiscordConnectedNoticeFallback", {
+    statusNote,
+    defaultValue: "Managed Discord connected.{{statusNote}}",
+  });
 }
 
 export function normalizeBillingSummary(

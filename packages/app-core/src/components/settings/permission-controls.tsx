@@ -31,6 +31,14 @@ type DesktopMediaPermissionId = Extract<
   "camera" | "microphone"
 >;
 
+const RUNTIME_PERMISSION_IDS: readonly SystemPermissionId[] = [
+  "website-blocking",
+];
+
+function isRuntimePermissionId(id: SystemPermissionId): boolean {
+  return RUNTIME_PERMISSION_IDS.includes(id);
+}
+
 function mapRendererMediaPermissionState(
   state: "granted" | "denied" | "prompt" | undefined,
 ): PermissionStatus | null {
@@ -162,6 +170,37 @@ async function reconcileRendererMediaPermissions(
     : snapshot;
 }
 
+async function mergeRuntimePermissionsIntoSnapshot(
+  snapshot: DesktopPermissionsSnapshot,
+): Promise<DesktopPermissionsSnapshot> {
+  let nextPermissions = snapshot.permissions;
+  let changed = false;
+
+  await Promise.all(
+    RUNTIME_PERMISSION_IDS.map(async (id) => {
+      try {
+        const permission = await client.getPermission(id);
+        if (!changed) {
+          nextPermissions = { ...snapshot.permissions };
+          changed = true;
+        }
+        nextPermissions[id] = permission;
+      } catch {
+        // Keep the bridged snapshot when the runtime-side permission route is
+        // unavailable. This avoids breaking the whole panel on transient API
+        // startup delays.
+      }
+    }),
+  );
+
+  return changed
+    ? {
+        ...snapshot,
+        permissions: nextPermissions,
+      }
+    : snapshot;
+}
+
 // ---------------------------------------------------------------------------
 // PermissionRow
 // ---------------------------------------------------------------------------
@@ -169,6 +208,7 @@ async function reconcileRendererMediaPermissions(
 export function PermissionRow({
   def,
   status,
+  reason,
   platform,
   canRequest,
   onRequest,
@@ -179,6 +219,7 @@ export function PermissionRow({
 }: {
   def: PermissionDef;
   status: PermissionStatus;
+  reason?: string;
   platform: string;
   canRequest: boolean;
   onRequest: () => void;
@@ -223,6 +264,11 @@ export function PermissionRow({
           <div className="mt-1 text-[11px] leading-5 text-muted">
             {description}
           </div>
+          {reason && (
+            <div className="mt-1 text-[11px] leading-5 text-muted-strong">
+              {reason}
+            </div>
+          )}
         </div>
       </div>
       <div className="flex w-full items-center justify-end gap-2 sm:w-auto">
@@ -449,7 +495,9 @@ export function useDesktopPermissionsState() {
         platform: bridgedPlatform ?? "unknown",
         shellEnabled,
       };
-      return reconcileRendererMediaPermissions(snapshot);
+      const runtimeMergedSnapshot =
+        await mergeRuntimePermissionsIntoSnapshot(snapshot);
+      return reconcileRendererMediaPermissions(runtimeMergedSnapshot);
     },
     [],
   );
@@ -562,6 +610,16 @@ export function useDesktopPermissionsState() {
   const handleRequest = useCallback(
     async (id: SystemPermissionId) => {
       try {
+        if (isRuntimePermissionId(id)) {
+          await client.requestPermission(id);
+          const snapshot = await replaceSnapshot(true);
+          const status = snapshot.permissions[id]?.status;
+          if (status && status !== "granted" && status !== "not-applicable") {
+            scheduleSettingsRefreshes();
+          }
+          return;
+        }
+
         const bridged = await invokeDesktopBridgeRequest<PermissionState>({
           rpcMethod: "permissionsRequest",
           ipcChannel: "permissions:request",
@@ -585,6 +643,13 @@ export function useDesktopPermissionsState() {
   const handleOpenSettings = useCallback(
     async (id: SystemPermissionId) => {
       try {
+        if (isRuntimePermissionId(id)) {
+          await client.openPermissionSettings(id);
+          await replaceSnapshot(true);
+          scheduleSettingsRefreshes();
+          return;
+        }
+
         const opened = await invokeDesktopBridgeRequest({
           rpcMethod: "permissionsOpenSettings",
           ipcChannel: "permissions:openSettings",

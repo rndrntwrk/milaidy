@@ -1037,7 +1037,7 @@ describe("Workspace Provider — Coding Agent Summary", () => {
     });
 
     const summary = buildCodingAgentSummary(ctx);
-    expect(summary).toContain("## Coding Agent Session");
+    expect(summary).toContain("## Task Agent Session");
     expect(summary).toContain("Implement user authentication");
     expect(summary).toContain("/project");
     expect(summary).toContain("local-fs");

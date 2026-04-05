@@ -1,7 +1,7 @@
 {
   "$schema": "plugin-index-v1",
   "generatedAt": "2026-03-22T08:36:32.187Z",
-  "count": 106,
+  "count": 107,
   "plugins": [
     {
       "id": "acp",
@@ -144,7 +144,7 @@
       "dirName": "plugin-agent-orchestrator",
       "name": "Agent Orchestrator",
       "npmName": "@elizaos/plugin-agent-orchestrator",
-      "description": "Coding agent orchestration plugin - spawn and manage CLI coding agents via PTY",
+      "description": "Task-agent orchestration plugin - spawn and manage open-ended CLI task agents via PTY",
       "tags": ["agent-orchestrator", "agent", "orchestrator"],
       "category": "feature",
       "envKey": null,
@@ -1116,9 +1116,9 @@
     {
       "id": "coding-agent",
       "dirName": "plugin-coding-agent",
-      "name": "Coding Agent Swarms",
+      "name": "Task Agent Swarms",
       "npmName": "@elizaos/plugin-coding-agent",
-      "description": "Orchestrate CLI coding agents (Claude Code, Gemini CLI, Codex, Aider) via PTY sessions with workspace and issue management",
+      "description": "Orchestrate open-ended CLI task agents (Claude Code, Gemini CLI, Codex, Aider, Pi) via PTY sessions with workspace and issue management",
       "category": "feature",
       "envKey": null,
       "configKeys": [],
@@ -4914,6 +4914,27 @@
           "sensitive": false
         }
       }
+    },
+    {
+      "id": "selfcontrol",
+      "dirName": "plugin-selfcontrol",
+      "name": "SelfControl",
+      "npmName": "@miladyai/plugin-selfcontrol",
+      "description": "Cross-platform website blocking through the local system hosts file, with timed expiry and manual unblock support.",
+      "tags": [
+        "feature",
+        "focus",
+        "productivity",
+        "website-blocking",
+        "cross-platform",
+        "hosts-file",
+        "selfcontrol"
+      ],
+      "category": "feature",
+      "envKey": null,
+      "configKeys": [],
+      "version": "0.1.0",
+      "repository": "https://github.com/milady-ai/milady/tree/main/packages/plugin-selfcontrol"
     },
     {
       "id": "signal",

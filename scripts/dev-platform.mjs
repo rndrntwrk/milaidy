@@ -66,6 +66,7 @@ import {
 import { allocateFirstFreeLoopbackPort } from "./lib/allocate-loopback-port.mjs";
 import { signalSpawnedProcessTree } from "./lib/kill-process-tree.mjs";
 import { killUiListenPort } from "./lib/kill-ui-listen-port.mjs";
+import { extendNodePathEnv } from "./lib/node-path-env.mjs";
 import { viteRendererBuildNeeded } from "./lib/vite-renderer-dist-stale.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -205,7 +206,10 @@ function prefixStream(name, stream) {
 function pushChild(name, cmd, args, cwd, extraEnv = {}) {
   const child = spawn(cmd, args, {
     cwd,
-    env: { ...process.env, ...extraEnv, FORCE_COLOR: "1" },
+    env: extendNodePathEnv(
+      { ...process.env, ...extraEnv, FORCE_COLOR: "1" },
+      repoRoot,
+    ),
     stdio: ["ignore", "pipe", "pipe"],
     // Without this, macOS/Linux deliver Ctrl-C to the whole process group; Electrobun
     // then handles SIGINT ("press Ctrl+C again…") while Vite/API keep this parent alive.

@@ -26,8 +26,15 @@ function mockRuntime(opts: {
   } as unknown as IAgentRuntime;
 }
 
-function msg(entityId: string): Memory {
-  return { entityId: entityId as UUID, roomId: "room-1" as UUID, content: { text: "" } } as Memory;
+function msg(entityId: string, metadata?: Record<string, unknown>): Memory {
+  return {
+    entityId: entityId as UUID,
+    roomId: "room-1" as UUID,
+    content: {
+      text: "",
+      ...(metadata ? { metadata } : {}),
+    },
+  } as Memory;
 }
 
 const emptyState = {} as State;
@@ -97,12 +104,24 @@ describe("rolesProvider", () => {
     });
     setConnectorAdminWhitelist(runtime, { discord: ["123456789"] });
 
-    const result = await rolesProvider.get(runtime, msg("discordAdmin"), emptyState);
+    const result = await rolesProvider.get(
+      runtime,
+      msg("discordAdmin", {
+        bridgeSender: {
+          metadata: { discord: { userId: "123456789", username: "owner" } },
+        },
+      }),
+      emptyState,
+    );
     expect(result.values?.speakerRole).toBe("ADMIN");
     expect(result.values?.canManageRoles).toBe(true);
     expect(result.data?.admins).toContain("discordAdmin");
-    expect(worldMeta.roles?.discordAdmin).toBe("ADMIN");
-    expect(updateWorld).toHaveBeenCalledTimes(1);
+    expect(result.data?.roles).toEqual({
+      o1: "OWNER",
+      discordAdmin: "ADMIN",
+    });
+    expect(worldMeta.roles?.discordAdmin).toBeUndefined();
+    expect(updateWorld).not.toHaveBeenCalled();
   });
 
   it("returns empty when no room found", async () => {

@@ -173,6 +173,7 @@ describe("package.json postinstall hook", () => {
       "run-repo-setup.mjs",
     );
     const repoSetup = await fs.readFile(repoSetupPath, "utf-8");
+    expect(repoSetup).toContain("scripts/setup-upstreams.mjs");
     expect(repoSetup).toContain("scripts/link-browser-server.mjs");
   });
 });

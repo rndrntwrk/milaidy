@@ -47,13 +47,6 @@ const hasDiscordToken = Boolean(process.env.DISCORD_BOT_TOKEN);
 const liveTestsEnabled = process.env.ELIZA_LIVE_TEST === "1";
 const runLiveTests = hasDiscordToken && liveTestsEnabled;
 const DISCORD_PLUGIN_IMPORT = resolveDiscordPluginImportSpecifier();
-const hasDiscordPlugin = DISCORD_PLUGIN_IMPORT !== null;
-
-// Skip all tests if Discord token is not available
-const describeIfLive =
-  hasDiscordPlugin && runLiveTests ? describe : describe.skip;
-const describeIfPluginAvailable = hasDiscordPlugin ? describe : describe.skip;
-
 logger.info(
   `[discord-connector] Live tests ${runLiveTests ? "ENABLED" : "DISABLED"} (DISCORD_BOT_TOKEN=${hasDiscordToken}, ELIZA_LIVE_TEST=${liveTestsEnabled})`,
 );
@@ -122,11 +115,19 @@ const loadDiscordPlugin = async (): Promise<Plugin | null> => {
   return extractPlugin(mod) as Plugin | null;
 };
 
+const discordPluginProbe = await loadDiscordPlugin();
+const hasDiscordPlugin = discordPluginProbe?.name === "discord";
+
+// Skip all tests if Discord token is not available
+const describeIfLive =
+  hasDiscordPlugin && runLiveTests ? describe : describe.skip;
+const describeIfPluginAvailable = hasDiscordPlugin ? describe : describe.skip;
+
 describeIfPluginAvailable("Discord Connector - Setup & Authentication", () => {
   it(
     "can load the Discord plugin without errors",
     async () => {
-      const plugin = await loadDiscordPlugin();
+      const plugin = discordPluginProbe;
 
       expect(plugin).not.toBeNull();
       if (plugin) {
@@ -139,7 +140,7 @@ describeIfPluginAvailable("Discord Connector - Setup & Authentication", () => {
   it(
     "Discord plugin exports required structure",
     async () => {
-      const plugin = await loadDiscordPlugin();
+      const plugin = discordPluginProbe;
 
       expect(plugin).toBeDefined();
       if (plugin) {
@@ -156,7 +157,7 @@ describeIfPluginAvailable("Discord Connector - Setup & Authentication", () => {
 
     beforeAll(async () => {
       // Load Discord plugin
-      const plugin = await loadDiscordPlugin();
+      const plugin = discordPluginProbe;
       discordPlugin = plugin;
 
       if (!discordPlugin) {

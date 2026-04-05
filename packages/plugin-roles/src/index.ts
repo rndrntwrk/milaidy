@@ -47,6 +47,12 @@ export type {
 } from "./types";
 export { ROLE_RANK } from "./types";
 
+const BOOTSTRAP_RETRY_DELAYS_MS = [1_500, 5_000, 15_000] as const;
+
+function formatError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 async function updateWorldMetadata(
   runtime: IAgentRuntime,
   worldId: string,
@@ -66,16 +72,38 @@ async function updateWorldMetadata(
 function scheduleBootstrapRetry(
   label: string,
   task: () => Promise<boolean>,
+  attempt = 0,
 ): void {
+  const delayMs = BOOTSTRAP_RETRY_DELAYS_MS[attempt];
+  if (delayMs === undefined) {
+    logger.warn(
+      `[roles] ${label} exhausted bootstrap retries without a ready runtime state`,
+    );
+    return;
+  }
+
   setTimeout(() => {
-    void task().then((ok) => {
-      if (!ok) {
+    void task()
+      .then((ok) => {
+        if (ok) {
+          logger.info(
+            `[roles] ${label} retry ${attempt + 1}/${BOOTSTRAP_RETRY_DELAYS_MS.length} succeeded`,
+          );
+          return;
+        }
+
         logger.info(
-          `[roles] ${label} retry skipped because runtime state is still unavailable`,
+          `[roles] ${label} retry ${attempt + 1}/${BOOTSTRAP_RETRY_DELAYS_MS.length} deferred because runtime state is still unavailable`,
         );
-      }
-    });
-  }, 1500);
+        scheduleBootstrapRetry(label, task, attempt + 1);
+      })
+      .catch((error) => {
+        logger.warn(
+          `[roles] ${label} retry ${attempt + 1}/${BOOTSTRAP_RETRY_DELAYS_MS.length} failed: ${formatError(error)}`,
+        );
+        scheduleBootstrapRetry(label, task, attempt + 1);
+      });
+  }, delayMs);
 }
 
 /**

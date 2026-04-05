@@ -194,6 +194,47 @@ function stripIncludeDirectives(value: unknown): unknown {
   return result;
 }
 
+function isWalletOsStoreEnabledInConfig(config: ElizaConfig): boolean {
+  const envConfig = config.env;
+  if (!envConfig || typeof envConfig !== "object" || Array.isArray(envConfig)) {
+    return false;
+  }
+
+  const raw = envConfig.MILADY_WALLET_OS_STORE;
+  if (typeof raw !== "string") {
+    return false;
+  }
+
+  const normalized = raw.trim().toLowerCase();
+  return (
+    normalized === "1" ||
+    normalized === "true" ||
+    normalized === "on" ||
+    normalized === "yes"
+  );
+}
+
+function stripWalletPrivateKeysFromConfig(config: ElizaConfig): void {
+  const envConfig = config.env;
+  if (!envConfig || typeof envConfig !== "object" || Array.isArray(envConfig)) {
+    return;
+  }
+
+  delete envConfig.EVM_PRIVATE_KEY;
+  delete envConfig.SOLANA_PRIVATE_KEY;
+
+  const nestedVars =
+    envConfig.vars &&
+    typeof envConfig.vars === "object" &&
+    !Array.isArray(envConfig.vars)
+      ? envConfig.vars
+      : undefined;
+  if (nestedVars) {
+    delete nestedVars.EVM_PRIVATE_KEY;
+    delete nestedVars.SOLANA_PRIVATE_KEY;
+  }
+}
+
 export function saveElizaConfig(config: ElizaConfig): void {
   const configPath = resolveConfigWritePath();
   const dir = path.dirname(configPath);
@@ -203,6 +244,9 @@ export function saveElizaConfig(config: ElizaConfig): void {
   }
 
   migrateLegacyRuntimeConfig(config as Record<string, unknown>);
+  if (isWalletOsStoreEnabledInConfig(config)) {
+    stripWalletPrivateKeysFromConfig(config);
+  }
   const sanitized = stripIncludeDirectives(config);
   if (!sanitized || typeof sanitized !== "object") {
     throw new Error(
@@ -211,6 +255,9 @@ export function saveElizaConfig(config: ElizaConfig): void {
   }
 
   migrateLegacyRuntimeConfig(sanitized as Record<string, unknown>);
+  if (isWalletOsStoreEnabledInConfig(sanitized as ElizaConfig)) {
+    stripWalletPrivateKeysFromConfig(sanitized as ElizaConfig);
+  }
 
   const content = `${JSON.stringify(sanitized, null, 2)}\n`;
 

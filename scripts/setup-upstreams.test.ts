@@ -14,15 +14,15 @@ import {
   createPackageLink,
   getElizaPackageLinks,
   getElizaWorkspaceSkipReason,
+  getPluginPackageLinks,
   hasInstalledElizaDependencies,
   hasRequiredElizaWorkspaceFiles,
   isPackageLinkCurrent,
-} from "./setup-eliza-workspace.mjs";
+} from "./setup-upstreams.mjs";
 
 describe("getElizaWorkspaceSkipReason", () => {
   it("respects the local eliza skip env flag", () => {
-    // Accept both branded (MILADY_) and upstream (ELIZA_) env var names
-    const skipEnvKey = ["MILADY_SKIP_LOCAL_ELIZA", "ELIZA_SKIP_LOCAL_ELIZA"];
+    const skipEnvKey = ["MILADY_SKIP_LOCAL_UPSTREAMS", "ELIZA_SKIP_LOCAL_UPSTREAMS"];
     const results = skipEnvKey.map((key) =>
       getElizaWorkspaceSkipReason("/repo/milady", {
         env: { [key]: "1" },
@@ -31,27 +31,16 @@ describe("getElizaWorkspaceSkipReason", () => {
     );
     const matched = results.find((r) => r !== null);
     expect(matched).toBeDefined();
-    expect(matched).toMatch(/(?:MILADY|ELIZA)_SKIP_LOCAL_ELIZA=1/);
+    expect(matched).toMatch(/(?:MILADY|ELIZA)_SKIP_LOCAL_UPSTREAMS=1/);
   });
 
-  it("skips in CI unless explicitly forced", () => {
+  it("allows repo-local upstreams in CI development checkouts", () => {
     expect(
       getElizaWorkspaceSkipReason("/repo/milady", {
         env: { CI: "1" },
         pathExists: () => true,
       }),
-    ).toBe("CI environment");
-
-    // Accept both branded (MILADY_) and upstream (ELIZA_) force env var
-    const forceKeys = ["MILADY_FORCE_LOCAL_ELIZA", "ELIZA_FORCE_LOCAL_ELIZA"];
-    const forced = forceKeys.some(
-      (key) =>
-        getElizaWorkspaceSkipReason("/repo/milady", {
-          env: { CI: "1", [key]: "1" },
-          pathExists: () => true,
-        }) === null,
-    );
-    expect(forced).toBe(true);
+    ).toBeNull();
   });
 
   it("skips non-development installs", () => {
@@ -105,7 +94,7 @@ describe("hasInstalledElizaDependencies", () => {
 });
 
 describe("getElizaPackageLinks", () => {
-  it("links sibling Eliza package entries into Milady workspaces", () => {
+  it("links repo-local eliza package entries into Milady workspaces", () => {
     const tempRoot = mkdtempSync(
       path.join(os.tmpdir(), "milady-setup-eliza-links-"),
     );
@@ -196,10 +185,81 @@ describe("getElizaPackageLinks", () => {
   });
 });
 
+describe("getPluginPackageLinks", () => {
+  it("prefers plugin typescript package roots over wrapper package roots", () => {
+    const tempRoot = mkdtempSync(
+      path.join(os.tmpdir(), "milady-setup-plugin-links-"),
+    );
+
+    try {
+      const pluginsRoot = path.join(tempRoot, "plugins");
+      const miladyRoot = path.join(tempRoot, "milady");
+
+      const wrapperDir = path.join(pluginsRoot, "plugin-openai");
+      const tsDir = path.join(wrapperDir, "typescript");
+      mkdirSync(tsDir, { recursive: true });
+
+      writeFileSync(
+        path.join(wrapperDir, "package.json"),
+        JSON.stringify({ name: "@elizaos/plugin-openai-root" }),
+        "utf8",
+      );
+      writeFileSync(
+        path.join(tsDir, "package.json"),
+        JSON.stringify({ name: "@elizaos/plugin-openai" }),
+        "utf8",
+      );
+
+      const appDir = path.join(pluginsRoot, "app-hyperscape");
+      mkdirSync(appDir, { recursive: true });
+      writeFileSync(
+        path.join(appDir, "package.json"),
+        JSON.stringify({ name: "@elizaos/app-hyperscape" }),
+        "utf8",
+      );
+
+      expect(getPluginPackageLinks(miladyRoot, pluginsRoot)).toEqual(
+        expect.arrayContaining([
+          {
+            linkPath: path.join(
+              miladyRoot,
+              "node_modules/@elizaos/plugin-openai",
+            ),
+            targetPath: tsDir,
+          },
+          {
+            linkPath: path.join(
+              miladyRoot,
+              "apps/app/node_modules/@elizaos/plugin-openai",
+            ),
+            targetPath: tsDir,
+          },
+          {
+            linkPath: path.join(
+              miladyRoot,
+              "apps/home/node_modules/@elizaos/plugin-openai",
+            ),
+            targetPath: tsDir,
+          },
+          {
+            linkPath: path.join(
+              miladyRoot,
+              "node_modules/@elizaos/app-hyperscape",
+            ),
+            targetPath: appDir,
+          },
+        ]),
+      );
+    } finally {
+      rmSync(tempRoot, { force: true, recursive: true });
+    }
+  });
+});
+
 describe("createPackageLink", () => {
   it("creates and updates local package symlinks", () => {
     const tempRoot = mkdtempSync(
-      path.join(os.tmpdir(), "milady-setup-eliza-workspace-"),
+      path.join(os.tmpdir(), "milady-setup-upstreams-"),
     );
 
     try {

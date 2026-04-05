@@ -7,7 +7,8 @@ export type SystemPermissionId =
   | "screen-recording"
   | "microphone"
   | "camera"
-  | "shell";
+  | "shell"
+  | "website-blocking";
 
 export type PermissionStatus =
   | "granted"
@@ -32,11 +33,13 @@ export interface PermissionState {
   status: PermissionStatus;
   lastChecked: number;
   canRequest: boolean;
+  reason?: string;
 }
 
 export interface PermissionCheckResult {
   status: PermissionStatus;
   canRequest: boolean;
+  reason?: string;
 }
 
 export interface AllPermissionsState {
@@ -45,6 +48,7 @@ export interface AllPermissionsState {
   microphone: PermissionState;
   camera: PermissionState;
   shell: PermissionState;
+  "website-blocking": PermissionState;
 }
 
 export interface PermissionManagerConfig {

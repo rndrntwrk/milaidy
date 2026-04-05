@@ -27,8 +27,6 @@ vi.mock("../../config/config", () => ({
   }),
 }));
 
-import { persistCompatOnboardingDefaults } from "../server-onboarding-compat";
-
 vi.mock("@elizaos/plugin-agent-orchestrator", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-agent-skills", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-anthropic", () => ({ default: {} }));
@@ -63,6 +61,7 @@ vi.mock("@elizaos/plugin-twitch", () => ({ default: {} }));
 vi.mock("@miladyai/plugin-wechat", () => ({ default: {} }));
 
 import type { ElizaConfig } from "../../config/config";
+import { persistCompatOnboardingDefaults } from "../server-onboarding-compat";
 import { buildCharacterFromConfig } from "../../runtime/eliza";
 
 describe("Onboarding → Character round-trip", () => {

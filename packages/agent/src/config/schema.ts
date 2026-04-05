@@ -727,11 +727,11 @@ const FIELD_HELP: Record<string, string> = {
   "agents.defaults.memorySearch.cache.enabled":
     "Cache chunk embeddings in SQLite to speed up reindexing and frequent updates (default: true).",
   "embedding.model":
-    "GGUF model filename for local embeddings (default: nomic-embed-text-v1.5.Q5_K_M.gguf).",
+    "GGUF model filename for local embeddings (default: bge-small-en-v1.5.Q4_K_M.gguf).",
   "embedding.modelRepo":
-    "HuggingFace repo for auto-downloading the embedding model (default: nomic-ai/nomic-embed-text-v1.5-GGUF).",
+    "HuggingFace repo for auto-downloading the embedding model (default: ChristianAzinn/bge-small-en-v1.5-gguf).",
   "embedding.dimensions":
-    "Embedding vector dimensions (must match the model; default: 768).",
+    "Embedding vector dimensions (must match the model; default: 384).",
   "embedding.contextSize":
     "Embedding context window size (must match the model; default inferred from selected model).",
   "embedding.gpuLayers":

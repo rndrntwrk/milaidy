@@ -62,8 +62,8 @@ const SETTINGS_SECTIONS: SettingsSectionDef[] = [
   },
   {
     id: "life-ops",
-    label: "Life Ops",
-    description: "Google Calendar and Gmail connection for the active agent.",
+    label: "settings.sections.lifeops.label",
+    description: "settings.sections.lifeops.desc",
     keywords: [
       "life ops",
       "google",
@@ -755,10 +755,8 @@ export function SettingsView({
       {visibleSectionIds.has("life-ops") && (
         <SettingsSection
           id="life-ops"
-          title={t("Life Ops")}
-          description={t(
-            "Google Calendar and Gmail connection for the active agent.",
-          )}
+          title={t("settings.sections.lifeops.label")}
+          description={t("settings.sections.lifeops.desc")}
           ref={registerContentItem("life-ops")}
         >
           <LifeOpsSettingsSection />

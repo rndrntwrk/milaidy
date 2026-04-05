@@ -24,6 +24,7 @@ import type {
   InstalledAppInfo,
   InstalledPlugin,
   PluginInstallResult,
+  PluginMutationResult,
   RegistryAppInfo,
   RegistryPlugin,
   RegistryPluginItem,
@@ -87,16 +88,17 @@ declare module "./client-base" {
     installRegistryPlugin(
       name: string,
       autoRestart?: boolean,
+      options?: { stream?: "latest" | "alpha"; version?: string },
+    ): Promise<PluginInstallResult>;
+    updateRegistryPlugin(
+      name: string,
+      autoRestart?: boolean,
+      options?: { stream?: "latest" | "alpha"; version?: string },
     ): Promise<PluginInstallResult>;
     uninstallRegistryPlugin(
       name: string,
       autoRestart?: boolean,
-    ): Promise<{
-      ok: boolean;
-      pluginName: string;
-      message: string;
-      error?: string;
-    }>;
+    ): Promise<PluginMutationResult & { pluginName: string }>;
     searchSkillsMarketplace(
       query: string,
       installed: boolean,
@@ -343,12 +345,29 @@ MiladyClient.prototype.installRegistryPlugin = async function (
   this: MiladyClient,
   name,
   autoRestart = true,
+  options = {},
 ) {
   return this.fetch(
     "/api/plugins/install",
     {
       method: "POST",
-      body: JSON.stringify({ name, autoRestart }),
+      body: JSON.stringify({ name, autoRestart, ...options }),
+    },
+    { timeoutMs: 120_000 },
+  );
+};
+
+MiladyClient.prototype.updateRegistryPlugin = async function (
+  this: MiladyClient,
+  name,
+  autoRestart = true,
+  options = {},
+) {
+  return this.fetch(
+    "/api/plugins/update",
+    {
+      method: "POST",
+      body: JSON.stringify({ name, autoRestart, ...options }),
     },
     { timeoutMs: 120_000 },
   );

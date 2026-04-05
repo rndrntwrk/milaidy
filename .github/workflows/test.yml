@@ -118,6 +118,245 @@ jobs:
       - name: Run E2E tests
         run: bun run test:e2e
 
+  website-blocker-cross-platform:
+    name: Website Blocker Cross-Platform (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Cache Bun install
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Run repository postinstall patches
+        run: bun run postinstall
+        env:
+          SKIP_AVATAR_CLONE: "1"
+          MILADY_NO_VISION_DEPS: "1"
+
+      - name: Run website blocker unit suites
+        run: bun run test:selfcontrol:unit
+
+      - name: Run website blocker E2E suites
+        run: bun run test:selfcontrol:e2e
+
+  website-blocker-startup-smoke:
+    name: Website Blocker Startup Smoke (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Cache Bun install
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Run repository postinstall patches
+        run: bun run postinstall
+        env:
+          SKIP_AVATAR_CLONE: "1"
+          MILADY_NO_VISION_DEPS: "1"
+
+      - name: Run website blocker startup smokes
+        run: bun run test:selfcontrol:startup
+
+  website-blocker-desktop-smoke:
+    name: Website Blocker Desktop Smoke (macOS)
+    runs-on: macos-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Cache Bun install
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Run repository postinstall patches
+        run: bun run postinstall
+        env:
+          SKIP_AVATAR_CLONE: "1"
+          MILADY_NO_VISION_DEPS: "1"
+
+      - name: Run website blocker desktop smokes
+        run: bun run test:live:selfcontrol:desktop
+
+  website-blocker-mobile-android:
+    name: Website Blocker Android Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Cache Bun install
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('apps/app/android/**/*.gradle*', 'apps/app/android/**/gradle-wrapper.properties', 'apps/app/plugins/websiteblocker/android/**/*.kt') }}
+          restore-keys: gradle-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Run repository postinstall patches
+        run: bun run postinstall
+        env:
+          SKIP_AVATAR_CLONE: "1"
+          MILADY_NO_VISION_DEPS: "1"
+
+      - name: Build Android website blocker app
+        run: bun run test:selfcontrol:mobile:android
+
+  website-blocker-mobile-ios:
+    name: Website Blocker iOS Build
+    runs-on: macos-latest
+    timeout-minutes: 50
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Cache Bun install
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+
+      - name: Run repository postinstall patches
+        run: bun run postinstall
+        env:
+          SKIP_AVATAR_CLONE: "1"
+          MILADY_NO_VISION_DEPS: "1"
+
+      - name: Build iOS website blocker app
+        run: bun run test:selfcontrol:mobile:ios
+
   app-startup-e2e:
     name: App Startup E2E (Onboarding)
     runs-on: blacksmith-4vcpu-ubuntu-2404
@@ -264,7 +503,7 @@ jobs:
   test-status:
     name: All Tests Passed
     if: always()
-    needs: [regression-matrix, unit-tests, db-check, e2e-tests, app-startup-e2e, desktop-contract, cloud-live-e2e, validation-e2e]
+    needs: [regression-matrix, unit-tests, db-check, e2e-tests, website-blocker-cross-platform, website-blocker-startup-smoke, website-blocker-desktop-smoke, website-blocker-mobile-android, website-blocker-mobile-ios, app-startup-e2e, desktop-contract, cloud-live-e2e, validation-e2e]
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Check test results
@@ -277,6 +516,11 @@ jobs:
           echo "unit-tests:         ${{ needs.unit-tests.result }}"
           echo "db-check:           ${{ needs.db-check.result }}"
           echo "e2e-tests:          ${{ needs.e2e-tests.result }}"
+          echo "website-blocker-cross-platform: ${{ needs.website-blocker-cross-platform.result }}"
+          echo "website-blocker-startup-smoke:  ${{ needs.website-blocker-startup-smoke.result }}"
+          echo "website-blocker-desktop-smoke:  ${{ needs.website-blocker-desktop-smoke.result }}"
+          echo "website-blocker-mobile-android: ${{ needs.website-blocker-mobile-android.result }}"
+          echo "website-blocker-mobile-ios:     ${{ needs.website-blocker-mobile-ios.result }}"
           echo "app-startup-e2e:    ${{ needs.app-startup-e2e.result }}"
           echo "desktop-contract:   ${{ needs.desktop-contract.result }}"
           echo "cloud-live-e2e:     ${{ needs.cloud-live-e2e.result }}"
@@ -288,6 +532,11 @@ jobs:
             "unit-tests:${{ needs.unit-tests.result }}" \
             "db-check:${{ needs.db-check.result }}" \
             "e2e-tests:${{ needs.e2e-tests.result }}" \
+            "website-blocker-cross-platform:${{ needs.website-blocker-cross-platform.result }}" \
+            "website-blocker-startup-smoke:${{ needs.website-blocker-startup-smoke.result }}" \
+            "website-blocker-desktop-smoke:${{ needs.website-blocker-desktop-smoke.result }}" \
+            "website-blocker-mobile-android:${{ needs.website-blocker-mobile-android.result }}" \
+            "website-blocker-mobile-ios:${{ needs.website-blocker-mobile-ios.result }}" \
             "app-startup-e2e:${{ needs.app-startup-e2e.result }}" \
             "desktop-contract:${{ needs.desktop-contract.result }}" \
             "cloud-live-e2e:${{ needs.cloud-live-e2e.result }}" \

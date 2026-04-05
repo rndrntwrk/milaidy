@@ -36,6 +36,7 @@ import {
   autoTopUpFormReducer,
   BILLING_PRESET_AMOUNTS,
   buildAutoTopUpFormState,
+  buildManagedDiscordConnectedNotice,
   consumeManagedDiscordCallbackUrl,
   CLOUD_ACCENT_CONTROL_TEXT_CLASSNAME,
   CLOUD_INSET_PANEL_CLASSNAME,
@@ -778,18 +779,7 @@ export function CloudDashboard() {
 
     if (callback.status === "connected") {
       setActionNotice(
-        callback.guildName
-          ? t("elizaclouddashboard.ManagedDiscordConnectedNotice", {
-              defaultValue: callback.restarted
-                ? "Managed Discord connected to {{guild}}. The agent restarted and is ready."
-                : "Managed Discord connected to {{guild}}.",
-              guild: callback.guildName,
-            })
-          : t("elizaclouddashboard.ManagedDiscordConnectedNoticeFallback", {
-              defaultValue: callback.restarted
-                ? "Managed Discord connected. The agent restarted and is ready."
-                : "Managed Discord connected.",
-            }),
+        buildManagedDiscordConnectedNotice(callback, t),
         "success",
         5200,
       );

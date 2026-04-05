@@ -665,14 +665,10 @@ function createRuntimeForCreditNoResponseTests(): AgentRuntime {
     warn: () => {},
     error: () => {},
   } as AgentRuntime["logger"];
-
-  const runtimeSubset = {
-    agentId: "credit-no-response-agent",
-    character: { name: "CreditAgent" } as AgentRuntime["character"],
-    logger: runtimeLogger,
-    messageService: {
+  return {
+    ...createRuntimeForChatSseTests({
       handleMessage: async (_runtime: AgentRuntime) => {
-        _runtime.logger.error(
+        _runtime.logger?.error(
           "#Youmu Model call failed: AI_APICallError: Insufficient credits. Required: $0.2250",
         );
         return {
@@ -682,18 +678,11 @@ function createRuntimeForCreditNoResponseTests(): AgentRuntime {
           mode: "none",
         };
       },
-    } as AgentRuntime["messageService"],
-    ensureConnection: async () => {},
-    getWorld: async () => null,
-    updateWorld: async () => {},
-    getService: () => null,
-    getRoomsByWorld: async () => [],
-    getMemories: async () => [],
-    getCache: async () => null,
-    setCache: async () => {},
-  };
-
-  return runtimeSubset as unknown as AgentRuntime;
+    }),
+    agentId: "credit-no-response-agent",
+    character: { name: "CreditAgent" } as AgentRuntime["character"],
+    logger: runtimeLogger,
+  } as AgentRuntime;
 }
 
 function createRuntimeForCreditLiteralNoResponseTests(): AgentRuntime {
@@ -703,14 +692,10 @@ function createRuntimeForCreditLiteralNoResponseTests(): AgentRuntime {
     warn: () => {},
     error: () => {},
   } as AgentRuntime["logger"];
-
-  const runtimeSubset = {
-    agentId: "credit-literal-no-response-agent",
-    character: { name: "CreditAgent" } as AgentRuntime["character"],
-    logger: runtimeLogger,
-    messageService: {
+  return {
+    ...createRuntimeForChatSseTests({
       handleMessage: async (_runtime: AgentRuntime) => {
-        _runtime.logger.error(
+        _runtime.logger?.error(
           "#Youmu Model call failed: AI_APICallError: Insufficient credits. Required: $0.2250",
         );
         return {
@@ -720,64 +705,37 @@ function createRuntimeForCreditLiteralNoResponseTests(): AgentRuntime {
           mode: "none",
         };
       },
-    } as AgentRuntime["messageService"],
-    ensureConnection: async () => {},
-    getWorld: async () => null,
-    updateWorld: async () => {},
-    getService: () => null,
-    getRoomsByWorld: async () => [],
-    getMemories: async () => [],
-    getCache: async () => null,
-    setCache: async () => {},
-  };
-
-  return runtimeSubset as unknown as AgentRuntime;
+    }),
+    agentId: "credit-literal-no-response-agent",
+    character: { name: "CreditAgent" } as AgentRuntime["character"],
+    logger: runtimeLogger,
+  } as AgentRuntime;
 }
 
 function createRuntimeForCreditErrorTests(): AgentRuntime {
-  const runtimeSubset = {
-    agentId: "credit-error-agent",
-    character: { name: "CreditAgent" } as AgentRuntime["character"],
-    messageService: {
+  return {
+    ...createRuntimeForChatSseTests({
       handleMessage: async () => {
         throw new Error(
           "AI_APICallError: Insufficient credits. Required: $0.2250",
         );
       },
-    } as AgentRuntime["messageService"],
-    ensureConnection: async () => {},
-    getWorld: async () => null,
-    updateWorld: async () => {},
-    getService: () => null,
-    getRoomsByWorld: async () => [],
-    getMemories: async () => [],
-    getCache: async () => null,
-    setCache: async () => {},
-  };
-
-  return runtimeSubset as unknown as AgentRuntime;
+    }),
+    agentId: "credit-error-agent",
+    character: { name: "CreditAgent" } as AgentRuntime["character"],
+  } as AgentRuntime;
 }
 
 function createRuntimeForProviderErrorTests(): AgentRuntime {
-  const runtimeSubset = {
-    agentId: "provider-error-agent",
-    character: { name: "ProviderErrorAgent" } as AgentRuntime["character"],
-    messageService: {
+  return {
+    ...createRuntimeForChatSseTests({
       handleMessage: async () => {
         throw new Error("provider unavailable");
       },
-    } as AgentRuntime["messageService"],
-    ensureConnection: async () => {},
-    getWorld: async () => null,
-    updateWorld: async () => {},
-    getService: () => null,
-    getRoomsByWorld: async () => [],
-    getMemories: async () => [],
-    getCache: async () => null,
-    setCache: async () => {},
-  };
-
-  return runtimeSubset as unknown as AgentRuntime;
+    }),
+    agentId: "provider-error-agent",
+    character: { name: "ProviderErrorAgent" } as AgentRuntime["character"],
+  } as AgentRuntime;
 }
 
 // ---------------------------------------------------------------------------

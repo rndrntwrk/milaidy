@@ -3,7 +3,12 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { logger } from "@elizaos/core";
 import type { IAgentRuntime, Plugin } from "@elizaos/core";
-import type { AppLaunchResult, AppSessionState } from "../contracts/apps";
+import {
+  hasAppInterface,
+  packageNameToAppRouteSlug,
+  type AppLaunchResult,
+  type AppSessionState,
+} from "../contracts/apps";
 import { getPluginInfo } from "./registry-client.js";
 
 export interface AppLaunchSessionContext {
@@ -27,8 +32,6 @@ type AppPluginModule = {
   default?: Plugin;
   [key: string]: unknown;
 };
-
-const APP_PACKAGE_PREFIX = "@elizaos/app-";
 
 function uniquePaths(paths: string[]): string[] {
   const seen = new Set<string>();
@@ -136,19 +139,53 @@ async function importFirstExistingModule<T>(
 }
 
 export function packageNameToAppSlug(packageName: string): string | null {
-  if (!packageName.startsWith(APP_PACKAGE_PREFIX)) {
-    return null;
+  return packageNameToAppRouteSlug(packageName);
+}
+
+interface ResolvedAppModuleTarget {
+  packageName: string | null;
+  localPath: string | null;
+}
+
+async function resolveAppModuleTarget(
+  appIdentifier: string,
+): Promise<ResolvedAppModuleTarget | null> {
+  const trimmed = appIdentifier.trim();
+  if (!trimmed) return null;
+
+  const registryInfo = await getPluginInfo(trimmed);
+  if (registryInfo && (hasAppInterface(registryInfo) || registryInfo.localPath)) {
+    return {
+      packageName: registryInfo.name,
+      localPath: registryInfo.localPath ?? null,
+    };
   }
-  const slug = packageName.slice(APP_PACKAGE_PREFIX.length).trim();
-  return slug.length > 0 ? slug : null;
+
+  const packageCandidates = trimmed.startsWith("@")
+    ? [trimmed]
+    : [`@elizaos/app-${trimmed}`, `@elizaos/plugin-${trimmed}`];
+
+  for (const packageName of packageCandidates) {
+    const localPath = await resolveWorkspacePackageDir(packageName);
+    if (localPath) {
+      return {
+        packageName,
+        localPath,
+      };
+    }
+  }
+
+  return {
+    packageName: trimmed.startsWith("@") ? trimmed : null,
+    localPath: null,
+  };
 }
 
 async function importLocalAppRouteModule(
-  packageName: string,
+  appIdentifier: string,
 ): Promise<AppRouteModule | null> {
-  const localInfo = await getPluginInfo(packageName);
-  const localPath =
-    localInfo?.localPath ?? (await resolveWorkspacePackageDir(packageName));
+  const resolved = await resolveAppModuleTarget(appIdentifier);
+  const localPath = resolved?.localPath ?? null;
   if (!localPath) return null;
 
   const candidatePaths = [
@@ -162,9 +199,9 @@ async function importLocalAppRouteModule(
 async function importLocalAppPluginModule(
   packageName: string,
 ): Promise<AppPluginModule | null> {
-  const localInfo = await getPluginInfo(packageName);
+  const resolved = await resolveAppModuleTarget(packageName);
   const localPath =
-    localInfo?.localPath ?? (await resolveWorkspacePackageDir(packageName));
+    resolved?.localPath ?? (await resolveWorkspacePackageDir(packageName));
   if (!localPath) return null;
 
   const candidatePaths = [
@@ -202,21 +239,27 @@ function resolvePluginExport(
 }
 
 export async function importAppRouteModule(
-  slug: string,
+  appIdentifier: string,
 ): Promise<AppRouteModule | null> {
-  const packageName = `${APP_PACKAGE_PREFIX}${slug}`;
+  const resolved = await resolveAppModuleTarget(appIdentifier);
+  const packageName = resolved?.packageName ?? null;
+  const label = packageName ?? appIdentifier;
 
   try {
-    const localModule = await importLocalAppRouteModule(packageName);
+    const localModule = await importLocalAppRouteModule(appIdentifier);
     if (localModule) {
       return localModule;
     }
   } catch (err) {
     logger.warn(
-      `[app-package-modules] Failed to import local routes for ${packageName}: ${
+      `[app-package-modules] Failed to import local routes for ${label}: ${
         err instanceof Error ? err.message : String(err)
       }`,
     );
+  }
+
+  if (!packageName) {
+    return null;
   }
 
   try {

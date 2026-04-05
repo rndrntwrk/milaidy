@@ -18,13 +18,15 @@ import path from "node:path";
 const runs = [
   {
     name: "unit",
-    args: ["vitest", "run", "--config", "vitest.config.ts"],
+    cmd: "bun",
+    args: ["x", "vitest", "run", "--config", "vitest.config.ts"],
     vitest: true,
     reportFile: path.join(os.tmpdir(), "milady-vitest-unit-report.json"),
   },
   {
     name: "app-unit",
-    args: ["vitest", "run"],
+    cmd: "bun",
+    args: ["x", "vitest", "run"],
     vitest: true,
     cwd: "apps/app",
     reportFile: path.join(os.tmpdir(), "milady-vitest-app-unit-report.json"),
@@ -77,12 +79,12 @@ const resolvedOverride =
   Number.isFinite(overrideWorkers) && overrideWorkers > 0
     ? overrideWorkers
     : null;
-const defaultParallelRuns = runs.filter((entry) => !entry.forceSerial);
-const defaultSerialRuns = runs.filter((entry) => entry.forceSerial);
+const defaultParallelRuns = [];
+const defaultSerialRuns = runs;
 const parallelRuns = isWindowsCi ? [] : defaultParallelRuns;
 const serialRuns = isWindowsCi ? runs : defaultSerialRuns;
 const localWorkers = 2;
-const parallelCount = Math.max(1, parallelRuns.length);
+const parallelCount = Math.max(1, parallelRuns.length || 1);
 const perRunWorkers = Math.max(1, Math.floor(localWorkers / parallelCount));
 const macCiWorkers = isCI && isMacOS ? 1 : perRunWorkers;
 // Use Vitest defaults for local unit runs. Forcing low local worker counts can leave the
@@ -131,7 +133,7 @@ const runOnce = (entry, extraArgs = []) =>
       (acc, flag) => (acc.includes(flag) ? acc : `${acc} ${flag}`.trim()),
       nodeOptions,
     );
-    const cmd = entry.cmd ?? "bunx";
+    const cmd = entry.cmd ?? "bun";
     const child = spawn(cmd, args, {
       stdio: "inherit",
       ...(entry.cwd ? { cwd: entry.cwd } : {}),

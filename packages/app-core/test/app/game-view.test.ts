@@ -478,7 +478,14 @@ describe("GameView", () => {
     });
     await flush();
 
-    const input = tree.root.findByType("input");
+    await act(async () => {
+      await findButtonByText(tree.root, "game.showLogs").props.onClick();
+    });
+
+    const input = tree.root.findAll(
+      (node) => node.props?.placeholder === "game.chatPlaceholder",
+    )[0];
+    expect(input).toBeDefined();
     await act(async () => {
       input.props.onChange({ target: { value: "go chop some wood" } });
     });

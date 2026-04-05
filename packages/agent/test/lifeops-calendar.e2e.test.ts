@@ -253,103 +253,109 @@ describe("life-ops calendar sync", () => {
 
   it("syncs today's calendar feed, orders events, and reuses the cache until forced", async () => {
     await connectGoogleCalendar();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-04T16:00:00.000Z"));
 
-    fetchMock.mockImplementation(async (input, init) => {
-      const url = typeof input === "string" ? input : input.toString();
-      expect(url).toContain(
-        "https://www.googleapis.com/calendar/v3/calendars/primary/events?",
-      );
-      expect(init?.headers).toMatchObject({
-        Authorization: "Bearer calendar-access-token",
+    try {
+      fetchMock.mockImplementation(async (input, init) => {
+        const url = typeof input === "string" ? input : input.toString();
+        expect(url).toContain(
+          "https://www.googleapis.com/calendar/v3/calendars/primary/events?",
+        );
+        expect(init?.headers).toMatchObject({
+          Authorization: "Bearer calendar-access-token",
+        });
+
+        const requestUrl = new URL(url);
+        expect(requestUrl.searchParams.get("timeZone")).toBe(
+          "America/Los_Angeles",
+        );
+        return new Response(
+          JSON.stringify({
+            items: [
+              {
+                id: "event-later",
+                status: "confirmed",
+                summary: "Design review",
+                description: "Discuss implementation details.",
+                location: "Studio",
+                htmlLink: "https://calendar.google.com/event?eid=design",
+                start: {
+                  dateTime: "2026-04-04T15:00:00-07:00",
+                  timeZone: "America/Los_Angeles",
+                },
+                end: {
+                  dateTime: "2026-04-04T16:00:00-07:00",
+                  timeZone: "America/Los_Angeles",
+                },
+                attendees: [
+                  {
+                    email: "friend@example.com",
+                    displayName: "Friend",
+                    responseStatus: "accepted",
+                  },
+                ],
+              },
+              {
+                id: "event-earlier",
+                status: "confirmed",
+                summary: "Morning standup",
+                location: "Discord",
+                htmlLink: "https://calendar.google.com/event?eid=standup",
+                start: {
+                  dateTime: "2026-04-04T09:00:00-07:00",
+                  timeZone: "America/Los_Angeles",
+                },
+                end: {
+                  dateTime: "2026-04-04T09:30:00-07:00",
+                  timeZone: "America/Los_Angeles",
+                },
+              },
+            ],
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
       });
 
-      const requestUrl = new URL(url);
-      expect(requestUrl.searchParams.get("timeZone")).toBe(
-        "America/Los_Angeles",
+      const feedRes = await req(
+        port,
+        "GET",
+        "/api/lifeops/calendar/feed?timeZone=America%2FLos_Angeles",
       );
-      return new Response(
-        JSON.stringify({
-          items: [
-            {
-              id: "event-later",
-              status: "confirmed",
-              summary: "Design review",
-              description: "Discuss implementation details.",
-              location: "Studio",
-              htmlLink: "https://calendar.google.com/event?eid=design",
-              start: {
-                dateTime: "2026-04-04T15:00:00-07:00",
-                timeZone: "America/Los_Angeles",
-              },
-              end: {
-                dateTime: "2026-04-04T16:00:00-07:00",
-                timeZone: "America/Los_Angeles",
-              },
-              attendees: [
-                {
-                  email: "friend@example.com",
-                  displayName: "Friend",
-                  responseStatus: "accepted",
-                },
-              ],
-            },
-            {
-              id: "event-earlier",
-              status: "confirmed",
-              summary: "Morning standup",
-              location: "Discord",
-              htmlLink: "https://calendar.google.com/event?eid=standup",
-              start: {
-                dateTime: "2026-04-04T09:00:00-07:00",
-                timeZone: "America/Los_Angeles",
-              },
-              end: {
-                dateTime: "2026-04-04T09:30:00-07:00",
-                timeZone: "America/Los_Angeles",
-              },
-            },
-          ],
-        }),
-        {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        },
+      expect(feedRes.status).toBe(200);
+      expect(feedRes.data.source).toBe("synced");
+      expect(feedRes.data.calendarId).toBe("primary");
+      expect(feedRes.data.events).toHaveLength(2);
+      expect(
+        feedRes.data.events.map((event: { title: string }) => event.title),
+      ).toEqual(["Morning standup", "Design review"]);
+      expect(feedRes.data.events[1].htmlLink).toBe(
+        "https://calendar.google.com/event?eid=design",
       );
-    });
 
-    const feedRes = await req(
-      port,
-      "GET",
-      "/api/lifeops/calendar/feed?timeZone=America%2FLos_Angeles",
-    );
-    expect(feedRes.status).toBe(200);
-    expect(feedRes.data.source).toBe("synced");
-    expect(feedRes.data.calendarId).toBe("primary");
-    expect(feedRes.data.events).toHaveLength(2);
-    expect(
-      feedRes.data.events.map((event: { title: string }) => event.title),
-    ).toEqual(["Morning standup", "Design review"]);
-    expect(feedRes.data.events[1].htmlLink).toBe(
-      "https://calendar.google.com/event?eid=design",
-    );
+      const cachedRes = await req(
+        port,
+        "GET",
+        "/api/lifeops/calendar/feed?timeZone=America%2FLos_Angeles",
+      );
+      expect(cachedRes.status).toBe(200);
+      expect(cachedRes.data.source).toBe("cache");
+      expect(fetchMock).toHaveBeenCalledTimes(2);
 
-    const cachedRes = await req(
-      port,
-      "GET",
-      "/api/lifeops/calendar/feed?timeZone=America%2FLos_Angeles",
-    );
-    expect(cachedRes.status).toBe(200);
-    expect(cachedRes.data.source).toBe("cache");
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-
-    const forcedRes = await req(
-      port,
-      "GET",
-      "/api/lifeops/calendar/feed?timeZone=America%2FLos_Angeles&forceSync=true",
-    );
-    expect(forcedRes.status).toBe(200);
-    expect(forcedRes.data.source).toBe("synced");
-    expect(fetchMock).toHaveBeenCalledTimes(3);
+      const forcedRes = await req(
+        port,
+        "GET",
+        "/api/lifeops/calendar/feed?timeZone=America%2FLos_Angeles&forceSync=true",
+      );
+      expect(forcedRes.status).toBe(200);
+      expect(forcedRes.data.source).toBe("synced");
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("builds next-event context from the earliest upcoming calendar event", async () => {

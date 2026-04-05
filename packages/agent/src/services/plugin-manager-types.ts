@@ -95,6 +95,15 @@ export interface InstalledPluginInfo {
   name: string;
   version?: string;
   installedAt?: string;
+  releaseStream?: "latest" | "alpha";
+  requestedVersion?: string;
+  latestVersion?: string | null;
+  alphaVersion?: string | null;
+}
+
+export interface PluginInstallOptionsLike {
+  version?: string;
+  releaseStream?: "latest" | "alpha";
 }
 
 export interface InstallProgressLike {
@@ -109,6 +118,10 @@ export interface PluginInstallResult {
   version: string;
   installPath: string;
   requiresRestart: boolean;
+  requestedVersion?: string;
+  releaseStream?: "latest" | "alpha";
+  latestVersion?: string | null;
+  alphaVersion?: string | null;
   error?: string;
 }
 
@@ -154,6 +167,12 @@ export interface PluginManagerLike {
   installPlugin(
     pluginName: string,
     onProgress?: (progress: InstallProgressLike) => void,
+    options?: PluginInstallOptionsLike,
+  ): Promise<PluginInstallResult>;
+  updatePlugin?(
+    pluginName: string,
+    onProgress?: (progress: InstallProgressLike) => void,
+    options?: PluginInstallOptionsLike,
   ): Promise<PluginInstallResult>;
   uninstallPlugin(pluginName: string): Promise<PluginUninstallResult>;
   listEjectedPlugins(): Promise<InstalledPluginInfo[]>;

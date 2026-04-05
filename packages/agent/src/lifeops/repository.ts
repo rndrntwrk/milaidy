@@ -643,7 +643,7 @@ export async function ensureLifeOpsTables(
       mode TEXT NOT NULL,
       execution_target TEXT NOT NULL DEFAULT 'local',
       source_of_truth TEXT NOT NULL DEFAULT 'local_storage',
-      preferred_by_agent BOOLEAN NOT NULL DEFAULT 0,
+      preferred_by_agent BOOLEAN NOT NULL DEFAULT FALSE,
       cloud_connection_id TEXT,
       metadata_json TEXT NOT NULL DEFAULT '{}',
       last_refresh_at TEXT,
@@ -848,7 +848,7 @@ export async function ensureLifeOpsTables(
     },
     {
       name: "preferred_by_agent",
-      definition: "BOOLEAN NOT NULL DEFAULT 0",
+      definition: "BOOLEAN NOT NULL DEFAULT FALSE",
     },
     {
       name: "cloud_connection_id",

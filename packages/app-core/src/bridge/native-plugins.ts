@@ -68,6 +68,91 @@ export interface TalkModePermissionStatus {
   speechRecognition?: "granted" | "denied" | "prompt" | "not_supported";
 }
 
+export interface WebsiteBlockerPermissionResult {
+  status: "granted" | "denied" | "not-determined" | "not-applicable";
+  canRequest: boolean;
+  reason?: string;
+}
+
+export interface WebsiteBlockerStatusResult {
+  available: boolean;
+  active: boolean;
+  hostsFilePath: string | null;
+  endsAt: string | null;
+  websites: string[];
+  canUnblockEarly: boolean;
+  requiresElevation: boolean;
+  engine: "hosts-file" | "vpn-dns" | "network-extension";
+  platform: string;
+  supportsElevationPrompt: boolean;
+  elevationPromptMethod:
+    | "osascript"
+    | "pkexec"
+    | "powershell-runas"
+    | "vpn-consent"
+    | "system-settings"
+    | null;
+  permissionStatus?: "granted" | "denied" | "not-determined" | "not-applicable";
+  canRequestPermission?: boolean;
+  canOpenSystemSettings?: boolean;
+  reason?: string;
+}
+
+export interface WebsiteBlockerPluginLike extends NativePlugin {
+  getStatus(): Promise<WebsiteBlockerStatusResult>;
+  startBlock(options: {
+    websites?: string[] | string;
+    durationMinutes?: number | string | null;
+    text?: string;
+  }): Promise<
+    | {
+        success: true;
+        endsAt: string | null;
+        request: {
+          websites: string[];
+          durationMinutes: number | null;
+        };
+      }
+    | {
+        success: false;
+        error: string;
+        status?: {
+          active: boolean;
+          endsAt: string | null;
+          websites: string[];
+          requiresElevation: boolean;
+        };
+      }
+  >;
+  stopBlock(): Promise<
+    | {
+        success: true;
+        removed: boolean;
+        status: {
+          active: boolean;
+          endsAt: string | null;
+          websites: string[];
+          canUnblockEarly: boolean;
+          requiresElevation: boolean;
+        };
+      }
+    | {
+        success: false;
+        error: string;
+        status?: {
+          active: boolean;
+          endsAt: string | null;
+          websites: string[];
+          canUnblockEarly: boolean;
+          requiresElevation: boolean;
+        };
+      }
+  >;
+  checkPermissions(): Promise<WebsiteBlockerPermissionResult>;
+  requestPermissions(): Promise<WebsiteBlockerPermissionResult>;
+  openSettings(): Promise<{ opened: boolean }>;
+}
+
 export interface TalkModePluginLike extends NativePlugin {
   addListener(
     eventName: "transcript",
@@ -131,4 +216,11 @@ export function getCanvasPlugin(): GenericNativePlugin {
 
 export function getDesktopPlugin(): GenericNativePlugin {
   return getNativePlugin<GenericNativePlugin>("Desktop");
+}
+
+export function getWebsiteBlockerPlugin(): WebsiteBlockerPluginLike {
+  const plugins = getCapacitorPlugins();
+  return (plugins.MiladyWebsiteBlocker ??
+    plugins.WebsiteBlocker ??
+    {}) as WebsiteBlockerPluginLike;
 }

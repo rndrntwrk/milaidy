@@ -736,7 +736,7 @@ describe("Environment Propagation", () => {
     expect(process.env.DISCORD_BOT_TOKEN).toBe("test-discord-token-123");
   });
 
-  it("applyConnectorSecretsToEnv does not overwrite existing env vars", () => {
+  it("applyConnectorSecretsToEnv overwrites stale env vars from config", () => {
     process.env.DISCORD_BOT_TOKEN = "existing-token";
     const config: ElizaConfig = {
       connectors: {
@@ -744,7 +744,7 @@ describe("Environment Propagation", () => {
       },
     };
     applyConnectorSecretsToEnv(config);
-    expect(process.env.DISCORD_BOT_TOKEN).toBe("existing-token");
+    expect(process.env.DISCORD_BOT_TOKEN).toBe("new-token");
   });
 
   it("applyCloudConfigToEnv sets cloud env vars", () => {

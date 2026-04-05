@@ -3,30 +3,45 @@ import { createRequire } from "node:module";
 import path from "node:path";
 
 /**
- * Return the sibling eliza workspace root (../eliza) if it exists and has the
- * requested package.  This avoids relying on node_modules symlinks which bun
+ * Return the repo-local eliza workspace root (./eliza) if it exists and has
+ * the requested package. This avoids relying on node_modules symlinks which bun
  * may revert during execution.
  */
-function getSiblingElizaPackageRoot(
+function getRepoLocalElizaPackageRoot(
   packageName: string,
   repoRoot: string,
 ): string | undefined {
-  const elizaRoot = path.resolve(repoRoot, "..", "eliza");
-  if (!existsSync(path.join(elizaRoot, "package.json"))) return undefined;
-
   const packageMap: Record<string, string> = {
-    "@elizaos/core": path.join(elizaRoot, "packages", "typescript"),
+    "@elizaos/core": path.join("packages", "typescript"),
   };
 
-  const candidate = packageMap[packageName];
-  if (candidate && existsSync(path.join(candidate, "package.json"))) {
-    // Only use sibling if it's actually built — otherwise the alias
-    // points to a missing file and all tests that import this package fail.
-    const hasDistOutput = existsSync(
-      path.join(candidate, "dist", "node", "index.node.js"),
-    );
-    if (hasDistOutput) return candidate;
+  const packageRelativePath = packageMap[packageName];
+  if (!packageRelativePath) {
+    return undefined;
   }
+
+  const elizaRoots = [
+    path.resolve(repoRoot, "eliza"),
+    path.resolve(repoRoot, "..", "eliza"),
+  ];
+
+  for (const elizaRoot of elizaRoots) {
+    if (!existsSync(path.join(elizaRoot, "package.json"))) {
+      continue;
+    }
+
+    const candidate = path.join(elizaRoot, packageRelativePath);
+    if (!existsSync(path.join(candidate, "package.json"))) {
+      continue;
+    }
+
+    // Only use a workspace checkout when it is actually built — otherwise the
+    // alias points at a missing dist file and every test import fails.
+    if (existsSync(path.join(candidate, "dist", "node", "index.node.js"))) {
+      return candidate;
+    }
+  }
+
   return undefined;
 }
 
@@ -74,10 +89,10 @@ export function getInstalledPackageRoot(
   packageName: string,
   fromDir?: string,
 ): string | undefined {
-  // Prefer sibling eliza workspace to avoid bun reverting symlinks
+  // Prefer repo-local eliza workspace to avoid bun reverting symlinks
   if (fromDir) {
-    const sibling = getSiblingElizaPackageRoot(packageName, fromDir);
-    if (sibling) return sibling;
+    const localPackage = getRepoLocalElizaPackageRoot(packageName, fromDir);
+    if (localPackage) return localPackage;
   }
 
   const scopedRequire = getRequireFor(fromDir);
@@ -92,6 +107,40 @@ export function getInstalledPackageRoot(
       return undefined;
     }
   }
+}
+
+export function getInstalledPackageEntry(
+  packageName: string,
+  repoRoot: string,
+  subpath?: "node",
+): string | undefined {
+  const packageRoot = getInstalledPackageRoot(packageName, repoRoot);
+  if (!packageRoot) {
+    return undefined;
+  }
+
+  const candidates =
+    subpath === "node"
+      ? [
+          path.join(packageRoot, "dist", "node", "index.node"),
+          path.join(packageRoot, "index.node"),
+          path.join(packageRoot, "src", "index.node"),
+          path.join(packageRoot, "src", "index"),
+          path.join(packageRoot, "index"),
+        ]
+      : [
+          path.join(packageRoot, "dist", "node", "index.node"),
+          path.join(packageRoot, "dist", "index"),
+          path.join(packageRoot, "src", "index"),
+          path.join(packageRoot, "index.node"),
+          path.join(packageRoot, "index"),
+        ];
+
+  const resolvedCandidate = candidates
+    .map((candidate) => resolveModuleEntry(candidate))
+    .find((candidate) => existsSync(candidate));
+
+  return resolvedCandidate ?? resolveModuleEntry(candidates[0]);
 }
 
 export function getElizaCoreEntry(repoRoot: string): string | undefined {

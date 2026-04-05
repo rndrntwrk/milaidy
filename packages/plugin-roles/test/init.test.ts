@@ -11,6 +11,12 @@ type MockEntity = {
   metadata: Record<string, Record<string, string>>;
 };
 
+async function advanceTimersAndFlush(ms: number): Promise<void> {
+  vi.advanceTimersByTime(ms);
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
 function createInitRuntime(opts: {
   worlds: MockWorld[];
   worldRooms?: Record<string, MockRoom[]>;
@@ -113,6 +119,58 @@ describe("ensureOwnerRole via init()", () => {
       updateWorld: vi.fn(),
     } as unknown as IAgentRuntime;
     await rolesPlugin.init!({}, runtime);
+  });
+
+  it("retries owner bootstrap until worlds become available", async () => {
+    vi.useFakeTimers();
+    try {
+      const world: MockWorld = {
+        id: "w1",
+        metadata: { ownership: { ownerId: "user-1" }, roles: {} },
+      };
+      const getAllWorlds = vi
+        .fn()
+        .mockRejectedValueOnce(new Error("not ready"))
+        .mockResolvedValue([world]);
+      const runtime = {
+        getAllWorlds,
+        getWorld: vi.fn().mockResolvedValue(world),
+        updateWorld: vi.fn().mockResolvedValue(undefined),
+      } as unknown as IAgentRuntime;
+
+      await rolesPlugin.init!({}, runtime);
+      expect(runtime.updateWorld).not.toHaveBeenCalled();
+
+      await advanceTimersAndFlush(1_500);
+
+      expect(getAllWorlds).toHaveBeenCalledTimes(2);
+      expect(runtime.updateWorld).toHaveBeenCalledTimes(1);
+      expect(world.metadata.roles?.["user-1"]).toBe("OWNER");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("stops retrying owner bootstrap after the bounded retry budget", async () => {
+    vi.useFakeTimers();
+    try {
+      const getAllWorlds = vi.fn().mockRejectedValue(new Error("still not ready"));
+      const runtime = {
+        getAllWorlds,
+        updateWorld: vi.fn().mockResolvedValue(undefined),
+      } as unknown as IAgentRuntime;
+
+      await rolesPlugin.init!({}, runtime);
+      await advanceTimersAndFlush(1_500);
+      await advanceTimersAndFlush(5_000);
+      await advanceTimersAndFlush(15_000);
+      await advanceTimersAndFlush(60_000);
+
+      expect(getAllWorlds).toHaveBeenCalledTimes(4);
+      expect(runtime.updateWorld).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

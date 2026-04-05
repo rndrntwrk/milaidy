@@ -1,0 +1,509 @@
+#!/usr/bin/env node
+
+import { spawn, spawnSync } from "node:child_process";
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  symlinkSync,
+} from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const DEFAULT_REPO_ROOT = path.resolve(__dirname, "..");
+
+export const LOCAL_UPSTREAM_SKIP_ENVS = [
+  "MILADY_SKIP_LOCAL_UPSTREAMS",
+  "ELIZA_SKIP_LOCAL_UPSTREAMS",
+];
+export const LOCAL_UPSTREAM_FORCE_ENVS = [
+  "MILADY_FORCE_LOCAL_UPSTREAMS",
+  "ELIZA_FORCE_LOCAL_UPSTREAMS",
+];
+export const ELIZA_GIT_URL = "https://github.com/elizaos/eliza.git";
+export const ELIZA_BRANCH = "develop";
+export const ELIZA_REQUIRED_FILES = ["package.json"];
+export const ELIZA_BUILD_STEPS = [
+  {
+    check: path.join("packages", "prompts", "dist", "typescript", "index.ts"),
+    cwd: path.join("packages", "prompts"),
+    args: ["run", "build:typescript"],
+    label: "@elizaos/prompts",
+  },
+  {
+    check: path.join("packages", "skills", "dist", "index.js"),
+    cwd: path.join("packages", "skills"),
+    args: ["run", "build"],
+    label: "@elizaos/skills",
+  },
+];
+
+const PACKAGE_LINK_ROOTS = [
+  ["node_modules", "@elizaos"],
+  ["apps", "app", "node_modules", "@elizaos"],
+  ["apps", "home", "node_modules", "@elizaos"],
+];
+
+function toDisplayPath(targetPath) {
+  return path.normalize(targetPath);
+}
+
+function runCommand(command, args, { cwd, env = process.env, label } = {}) {
+  const printable = label ?? `${command} ${args.join(" ")}`;
+
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      cwd,
+      env,
+      stdio: "inherit",
+    });
+
+    child.on("error", (error) => {
+      reject(
+        new Error(
+          `${printable} failed: ${error instanceof Error ? error.message : String(error)}`,
+        ),
+      );
+    });
+
+    child.on("exit", (code, signal) => {
+      if (signal) {
+        reject(new Error(`${printable} exited due to signal ${signal}`));
+        return;
+      }
+
+      if ((code ?? 1) !== 0) {
+        reject(new Error(`${printable} exited with code ${code ?? 1}`));
+        return;
+      }
+
+      resolve();
+    });
+  });
+}
+
+function commandExists(command) {
+  const result = spawnSync(command, ["--version"], {
+    stdio: "ignore",
+  });
+  return result.status === 0;
+}
+
+function readPackageJson(packageDir) {
+  try {
+    return JSON.parse(
+      readFileSync(path.join(packageDir, "package.json"), "utf8"),
+    );
+  } catch {
+    return null;
+  }
+}
+
+function uniqueLinks(links) {
+  const deduped = new Map();
+  for (const link of links) {
+    deduped.set(link.linkPath, link);
+  }
+  return [...deduped.values()];
+}
+
+function getForceEnvKey(env = process.env) {
+  return LOCAL_UPSTREAM_FORCE_ENVS.find((key) => env[key] === "1") ?? null;
+}
+
+export function getRepoElizaRoot(repoRoot = DEFAULT_REPO_ROOT) {
+  return path.resolve(repoRoot, "eliza");
+}
+
+export function getRepoPluginsRoot(repoRoot = DEFAULT_REPO_ROOT) {
+  return path.resolve(repoRoot, "plugins");
+}
+
+export function getElizaWorkspaceSkipReason(
+  repoRoot = DEFAULT_REPO_ROOT,
+  { env = process.env, pathExists = existsSync } = {},
+) {
+  const matchedSkipEnv =
+    LOCAL_UPSTREAM_SKIP_ENVS.find((key) => env[key] === "1") ?? null;
+  if (matchedSkipEnv) {
+    return `${matchedSkipEnv}=1`;
+  }
+
+  const devWorkspaceMarkers = [
+    path.join(repoRoot, ".git"),
+    path.join(repoRoot, "tsconfig.json"),
+    path.join(repoRoot, "apps", "app", "vite.config.ts"),
+  ];
+
+  const isDevCheckout = devWorkspaceMarkers.every((marker) =>
+    pathExists(marker),
+  );
+  if (!isDevCheckout && !getForceEnvKey(env)) {
+    return "non-development install";
+  }
+
+  return null;
+}
+
+export function shouldSetupElizaWorkspace(
+  repoRoot = DEFAULT_REPO_ROOT,
+  options,
+) {
+  return getElizaWorkspaceSkipReason(repoRoot, options) === null;
+}
+
+export function hasRequiredElizaWorkspaceFiles(
+  elizaRoot,
+  { pathExists = existsSync } = {},
+) {
+  return ELIZA_REQUIRED_FILES.every((relativePath) =>
+    pathExists(path.join(elizaRoot, relativePath)),
+  );
+}
+
+export function hasInstalledElizaDependencies(
+  elizaRoot,
+  { pathExists = existsSync } = {},
+) {
+  return (
+    pathExists(path.join(elizaRoot, "node_modules", ".bun")) &&
+    pathExists(path.join(elizaRoot, "node_modules", ".bin"))
+  );
+}
+
+function getPackageLinkEntries(repoRoot, packageName, targetPath) {
+  if (!packageName?.startsWith("@elizaos/")) {
+    return [];
+  }
+
+  const basename = packageName.slice("@elizaos/".length);
+  if (!basename) {
+    return [];
+  }
+
+  return PACKAGE_LINK_ROOTS.map((segments) => ({
+    linkPath: path.join(repoRoot, ...segments, basename),
+    targetPath,
+  }));
+}
+
+function discoverElizaPackageDirs(elizaRoot) {
+  const packageDirs = [];
+  for (const parentDir of ["packages", "plugins"]) {
+    const searchRoot = path.join(elizaRoot, parentDir);
+    if (!existsSync(searchRoot)) {
+      continue;
+    }
+
+    let entries = [];
+    try {
+      entries = readdirSync(searchRoot, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+
+    for (const entry of entries) {
+      if (!entry.isDirectory() && !entry.isSymbolicLink()) {
+        continue;
+      }
+      const packageDir = path.join(searchRoot, entry.name);
+      const packageJson = readPackageJson(packageDir);
+      if (packageJson?.name?.startsWith("@elizaos/")) {
+        packageDirs.push(packageDir);
+      }
+    }
+  }
+
+  return packageDirs;
+}
+
+function discoverPluginPackageDirs(pluginsRoot) {
+  if (!existsSync(pluginsRoot)) {
+    return [];
+  }
+
+  const packageDirs = [];
+  let entries = [];
+  try {
+    entries = readdirSync(pluginsRoot, { withFileTypes: true });
+  } catch {
+    return packageDirs;
+  }
+
+  for (const entry of entries) {
+    if (!entry.isDirectory() && !entry.isSymbolicLink()) {
+      continue;
+    }
+
+    const repoDir = path.join(pluginsRoot, entry.name);
+    const tsDir = path.join(repoDir, "typescript");
+    const tsPackage = readPackageJson(tsDir);
+    if (tsPackage?.name?.startsWith("@elizaos/")) {
+      packageDirs.push(tsDir);
+      continue;
+    }
+
+    const rootPackage = readPackageJson(repoDir);
+    const rootName = rootPackage?.name;
+    const shouldLinkRoot =
+      rootName?.startsWith("@elizaos/app-") ||
+      (rootName?.startsWith("@elizaos/plugin-") && !rootName.endsWith("-root"));
+
+    if (shouldLinkRoot) {
+      packageDirs.push(repoDir);
+    }
+  }
+
+  return packageDirs;
+}
+
+export function getElizaPackageLinks(
+  repoRoot = DEFAULT_REPO_ROOT,
+  elizaRoot = getRepoElizaRoot(repoRoot),
+) {
+  const links = [];
+  for (const packageDir of discoverElizaPackageDirs(elizaRoot)) {
+    const packageJson = readPackageJson(packageDir);
+    links.push(
+      ...getPackageLinkEntries(repoRoot, packageJson?.name, packageDir),
+    );
+  }
+  return uniqueLinks(links);
+}
+
+export function getPluginPackageLinks(
+  repoRoot = DEFAULT_REPO_ROOT,
+  pluginsRoot = getRepoPluginsRoot(repoRoot),
+) {
+  const links = [];
+  for (const packageDir of discoverPluginPackageDirs(pluginsRoot)) {
+    const packageJson = readPackageJson(packageDir);
+    links.push(
+      ...getPackageLinkEntries(repoRoot, packageJson?.name, packageDir),
+    );
+  }
+  return uniqueLinks(links);
+}
+
+export function getUpstreamPackageLinks(
+  repoRoot = DEFAULT_REPO_ROOT,
+  {
+    elizaRoot = getRepoElizaRoot(repoRoot),
+    pluginsRoot = getRepoPluginsRoot(repoRoot),
+  } = {},
+) {
+  const combinedByTarget = new Map();
+
+  for (const link of getElizaPackageLinks(repoRoot, elizaRoot)) {
+    combinedByTarget.set(link.linkPath, link);
+  }
+
+  for (const link of getPluginPackageLinks(repoRoot, pluginsRoot)) {
+    combinedByTarget.set(link.linkPath, link);
+  }
+
+  return [...combinedByTarget.values()];
+}
+
+export function isPackageLinkCurrent(linkPath, targetPath) {
+  if (!existsSync(linkPath) || !existsSync(targetPath)) {
+    return false;
+  }
+
+  try {
+    return realpathSync(linkPath) === realpathSync(targetPath);
+  } catch {
+    return false;
+  }
+}
+
+export function createPackageLink(linkPath, targetPath) {
+  if (isPackageLinkCurrent(linkPath, targetPath)) {
+    return false;
+  }
+
+  rmSync(linkPath, {
+    force: true,
+    recursive: true,
+  });
+
+  mkdirSync(path.dirname(linkPath), { recursive: true });
+
+  const linkTarget =
+    process.platform === "win32"
+      ? targetPath
+      : path.relative(path.dirname(linkPath), targetPath) || ".";
+  const linkType = process.platform === "win32" ? "junction" : "dir";
+
+  symlinkSync(linkTarget, linkPath, linkType);
+  return true;
+}
+
+async function ensureRepoLocalEliza(repoRoot) {
+  const elizaRoot = getRepoElizaRoot(repoRoot);
+  if (hasRequiredElizaWorkspaceFiles(elizaRoot)) {
+    return elizaRoot;
+  }
+
+  if (existsSync(path.join(repoRoot, ".git"))) {
+    console.log("[setup-upstreams] Initializing tracked submodules");
+    try {
+      await runCommand(
+        "git",
+        ["submodule", "update", "--init", "--recursive", "--", "eliza"],
+        {
+          cwd: repoRoot,
+          label: "git submodule update eliza",
+        },
+      );
+    } catch (error) {
+      if (existsSync(elizaRoot)) {
+        throw error;
+      }
+
+      console.warn(
+        `[setup-upstreams] Could not initialize eliza as a tracked submodule. Falling back to a direct clone (${error instanceof Error ? error.message : String(error)}).`,
+      );
+    }
+  }
+
+  if (!hasRequiredElizaWorkspaceFiles(elizaRoot) && !existsSync(elizaRoot)) {
+    console.log(
+      `[setup-upstreams] Cloning ${ELIZA_GIT_URL} (${ELIZA_BRANCH}) into ${toDisplayPath(elizaRoot)}`,
+    );
+    await runCommand(
+      "git",
+      [
+        "clone",
+        "--branch",
+        ELIZA_BRANCH,
+        "--single-branch",
+        ELIZA_GIT_URL,
+        elizaRoot,
+      ],
+      {
+        cwd: repoRoot,
+        label: "git clone eliza",
+      },
+    );
+  }
+
+  if (!hasRequiredElizaWorkspaceFiles(elizaRoot)) {
+    throw new Error(
+      `Repo-local eliza workspace at ${toDisplayPath(elizaRoot)} is missing required files after setup.`,
+    );
+  }
+
+  return elizaRoot;
+}
+
+async function ensureElizaDependencies(elizaRoot) {
+  if (hasInstalledElizaDependencies(elizaRoot)) {
+    return;
+  }
+
+  console.log(
+    `[setup-upstreams] Installing eliza workspace dependencies in ${toDisplayPath(elizaRoot)}`,
+  );
+  await runCommand("bun", ["install"], {
+    cwd: elizaRoot,
+    label: "bun install (eliza)",
+  });
+}
+
+async function ensureElizaBuildOutputs(elizaRoot) {
+  for (const step of ELIZA_BUILD_STEPS) {
+    if (existsSync(path.join(elizaRoot, step.check))) {
+      continue;
+    }
+
+    console.log(`[setup-upstreams] Building ${step.label}`);
+    await runCommand("bun", step.args, {
+      cwd: path.join(elizaRoot, step.cwd),
+      label: `bun ${step.args.join(" ")} (${step.label})`,
+    });
+  }
+}
+
+export function linkUpstreamPackages(
+  repoRoot = DEFAULT_REPO_ROOT,
+  {
+    elizaRoot = getRepoElizaRoot(repoRoot),
+    pluginsRoot = getRepoPluginsRoot(repoRoot),
+  } = {},
+) {
+  let updatedLinks = 0;
+  for (const { linkPath, targetPath } of getUpstreamPackageLinks(repoRoot, {
+    elizaRoot,
+    pluginsRoot,
+  })) {
+    if (createPackageLink(linkPath, targetPath)) {
+      updatedLinks += 1;
+    }
+  }
+  return updatedLinks;
+}
+
+export async function setupUpstreams(repoRoot = DEFAULT_REPO_ROOT) {
+  const skipReason = getElizaWorkspaceSkipReason(repoRoot);
+  if (skipReason) {
+    console.log(`[setup-upstreams] Skipping: ${skipReason}`);
+    return { skipped: true, reason: skipReason };
+  }
+
+  if (!commandExists("git")) {
+    throw new Error(
+      "git is required to initialize repo-local upstream sources",
+    );
+  }
+
+  if (!commandExists("bun")) {
+    throw new Error(
+      "bun is required to install and link repo-local upstream sources",
+    );
+  }
+
+  const elizaRoot = await ensureRepoLocalEliza(repoRoot);
+  await ensureElizaDependencies(elizaRoot);
+  await ensureElizaBuildOutputs(elizaRoot);
+
+  const pluginsRoot = getRepoPluginsRoot(repoRoot);
+  const updatedLinks = linkUpstreamPackages(repoRoot, {
+    elizaRoot,
+    pluginsRoot,
+  });
+
+  if (updatedLinks === 0) {
+    console.log(
+      "[setup-upstreams] Repo-local @elizaos package links already up to date",
+    );
+  } else {
+    console.log(
+      `[setup-upstreams] Linked ${updatedLinks} repo-local @elizaos package ${updatedLinks === 1 ? "entry" : "entries"}`,
+    );
+  }
+
+  return {
+    skipped: false,
+    elizaRoot,
+    pluginsRoot: existsSync(pluginsRoot) ? pluginsRoot : null,
+    linkedEntries: updatedLinks,
+  };
+}
+
+const isMain =
+  process.argv[1] && path.resolve(process.argv[1]) === path.resolve(__filename);
+
+if (isMain) {
+  setupUpstreams().catch((error) => {
+    console.error(
+      `[setup-upstreams] ${error instanceof Error ? error.message : String(error)}`,
+    );
+    process.exit(1);
+  });
+}

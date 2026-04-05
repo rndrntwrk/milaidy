@@ -194,6 +194,10 @@ export default defineConfig({
         here,
         "plugins/agent/src/index.ts",
       ),
+      "@miladyai/capacitor-websiteblocker": path.join(
+        here,
+        "plugins/websiteblocker/src/index.ts",
+      ),
     },
     testTimeout: 30000,
     globals: true,

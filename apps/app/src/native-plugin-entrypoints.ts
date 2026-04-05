@@ -5,3 +5,4 @@ import "@miladyai/capacitor-location";
 import "@miladyai/capacitor-screencapture";
 import "@miladyai/capacitor-swabble";
 import "@miladyai/capacitor-talkmode";
+import "@miladyai/capacitor-websiteblocker";

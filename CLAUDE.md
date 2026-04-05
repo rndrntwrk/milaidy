@@ -23,7 +23,7 @@ Desktop dev rationale (signals, Quit, `detached` children): `docs/apps/desktop-l
 
 Optional — link a local elizaOS source checkout for live package development:
 ```bash
-bun run setup:eliza-workspace   # clones ../eliza if missing, symlinks all @elizaos/* packages
+bun run setup:upstreams   # initializes repo-local ./eliza and links local @elizaos/* packages
 ```
 
 ## Build & Test
@@ -64,7 +64,7 @@ scripts/
   dev-ui.mjs            Dev orchestrator (API + Vite)
   run-node.mjs          CLI runner (spawns entry.js with NODE_PATH)
   run-repo-setup.mjs    Postinstall sequencer
-  setup-eliza-workspace.mjs   Clone + link ../eliza packages
+  setup-upstreams.mjs   Initialize repo-local upstreams and link @elizaos packages
   patch-deps.mjs        Post-install patches for broken upstream exports
 ```
 
@@ -102,7 +102,9 @@ The try/catch blocks in `apps/app/electrobun/src/native/agent.ts` keep the deskt
 
 ## Dependencies on elizaOS
 
-All `@elizaos/*` packages use the `alpha` dist-tag. When developing locally, `bun run setup:eliza-workspace` symlinks packages from `../eliza` so changes are picked up immediately. Set `ELIZA_SKIP_LOCAL_ELIZA=1` to use only npm-published versions.
+All `@elizaos/*` packages use the `alpha` dist-tag. When developing locally, `bun run setup:upstreams` links packages from repo-local `./eliza` and `./plugins` so changes are picked up immediately. Set `MILADY_SKIP_LOCAL_UPSTREAMS=1` to use only npm-published versions.
+
+All official elizaOS plugin repos live under [https://github.com/elizaOS-plugins](https://github.com/elizaOS-plugins). For plugin work, prefer adding the relevant plugin repo as a git submodule under `plugins/` and depend on it via `workspace:*` so Milady resolves the local package directly during development. Publish new versions to npm when ready.
 
 ## Ports
 
@@ -136,7 +138,7 @@ All `@elizaos/*` packages use the `alpha` dist-tag. When developing locally, `bu
 |----------|---------|---------|
 | `MILADY_NO_VISION_DEPS` | Skip vision dep install (camera/fswebcam) | `0` |
 | `SKIP_AVATAR_CLONE` | Skip VRM avatar download during install | `0` |
-| `ELIZA_SKIP_LOCAL_ELIZA` | Use npm packages instead of `../eliza` workspace | `0` |
+| `MILADY_SKIP_LOCAL_UPSTREAMS` | Use npm packages instead of repo-local `./eliza` and `./plugins` sources | `0` |
 | `MILADY_PROMPT_TRACE` | Log prompt compaction stats to console | `0` |
 | `MILADY_TTS_DEBUG` | Log TTS pipeline traces (`[milady][tts]`): queue/proxy plus **playback** (`play:web-audio:*`, `play:browser:*`, `play:talkmode:*`) with a short `preview` of spoken text. When `/api/tts/cloud` is used, debug also adds `x-milady-tts-*` request headers for clip/full-line correlation, and those headers may include spoken-text previews. UI picks this up via Vite `define` in dev/build; for client-only, `VITE_MILADY_TTS_DEBUG` also works | `0` |
 | `MILADY_CAPTURE_PROMPTS` | Dump raw prompts to `.tmp/prompt-captures/` (dev-only, contains user messages) | `0` |

@@ -97,7 +97,16 @@ function resolveApiBaseUrl(): URL {
   if (baseUrl) {
     return new URL(baseUrl);
   }
-  return new URL(window.location.origin);
+  const locationOrigin =
+    typeof globalThis.location?.origin === "string" &&
+    globalThis.location.origin.trim().length > 0
+      ? globalThis.location.origin.trim()
+      : typeof window !== "undefined" &&
+          typeof window.location?.origin === "string" &&
+          window.location.origin.trim().length > 0
+        ? window.location.origin.trim()
+        : null;
+  return new URL(locationOrigin ?? "http://127.0.0.1:3000");
 }
 
 function localRedirectUri(apiBaseUrl: URL): string {
@@ -205,13 +214,11 @@ export function LifeOpsSettingsSection() {
               <div className="flex items-center gap-2">
                 <Plug2 className="h-4 w-4 text-muted" />
                 <CardTitle className="text-base font-semibold">
-                  {t("Life Ops")}
+                  {t("settings.sections.lifeops.label")}
                 </CardTitle>
               </div>
               <p className="max-w-3xl text-sm text-muted">
-                {t(
-                  "Google Calendar and Gmail connection for the current agent.",
-                )}
+                {t("settings.sections.lifeops.desc")}
               </p>
             </div>
             <div className="flex items-center gap-2">

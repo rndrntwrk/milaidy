@@ -1,4 +1,4 @@
-import { CORE_PLUGINS } from "./core-plugins";
+import { CORE_PLUGINS, OPTIONAL_CORE_PLUGINS } from "./core-plugins";
 
 const BASELINE_RUNTIME_SUPPORT_PACKAGES = [
   "@elizaos/core",
@@ -37,6 +37,7 @@ export interface RegistryPluginReleaseCompatibility {
 export const BASELINE_BUNDLED_RUNTIME_PACKAGES: readonly string[] = [
   ...BASELINE_RUNTIME_SUPPORT_PACKAGES,
   ...CORE_PLUGINS,
+  ...OPTIONAL_CORE_PLUGINS,
   ...BASELINE_PROVIDER_PLUGINS,
 ];
 

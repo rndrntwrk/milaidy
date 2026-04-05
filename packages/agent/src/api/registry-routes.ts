@@ -8,6 +8,9 @@ import type { RouteHelpers, RouteRequestMeta } from "./route-helpers";
 interface InstalledRegistryPluginLike {
   name: string;
   version?: string | null;
+  releaseStream?: "latest" | "alpha";
+  latestVersion?: string | null;
+  alphaVersion?: string | null;
 }
 
 interface RegistryPluginManagerLike {
@@ -70,6 +73,17 @@ export async function handleRegistryRoutes(
           installed: installedNames.has(plugin.name),
           installedVersion:
             installed.find((entry) => entry.name === plugin.name)?.version ??
+            null,
+          releaseStream:
+            installed.find((entry) => entry.name === plugin.name)
+              ?.releaseStream ?? null,
+          alphaVersion:
+            installed.find((entry) => entry.name === plugin.name)
+              ?.alphaVersion ?? null,
+          latestVersion:
+            installed.find((entry) => entry.name === plugin.name)
+              ?.latestVersion ??
+            plugin.npm?.v2Version ??
             null,
           loaded:
             loadedNames.has(plugin.name) ||

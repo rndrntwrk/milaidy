@@ -314,7 +314,7 @@ export async function handleSwarmSynthesis(
     .join("\n\n");
 
   const prompt =
-    `You are summarizing the results of a coding agent swarm for the user. ` +
+    `You are summarizing the results of a task-agent swarm for the user. ` +
     `${payload.total} agents were dispatched. ${payload.completed} completed, ` +
     `${payload.stopped} stopped, ${payload.errored} errored.\n\n` +
     `Here are the individual task results:\n\n${taskLines}\n\n` +
@@ -343,7 +343,7 @@ export async function handleSwarmSynthesis(
     if (payload.stopped > 0) parts.push(`${payload.stopped} stopped`);
     if (payload.errored > 0) parts.push(`${payload.errored} errored`);
     await routeMessage(
-      `All ${payload.total} coding agents finished (${parts.join(", ")}). Review their work when you're ready.`,
+      `All ${payload.total} task agents finished (${parts.join(", ")}). Review their work when you're ready.`,
       "coding-agent",
     );
   }

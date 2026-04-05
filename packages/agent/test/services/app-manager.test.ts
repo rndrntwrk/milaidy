@@ -19,6 +19,11 @@ const appPackageModuleMocks = vi.hoisted(() => {
   };
 });
 
+const registryClientMocks = vi.hoisted(() => ({
+  getPluginInfo: vi.fn(async () => null),
+  getRegistryPlugins: vi.fn(async () => new Map()),
+}));
+
 vi.mock("../../src/services/app-package-modules", async () => {
   const actual = await vi.importActual<
     typeof import("../../src/services/app-package-modules")
@@ -28,6 +33,11 @@ vi.mock("../../src/services/app-package-modules", async () => {
     importAppPlugin: appPackageModuleMocks.importAppPlugin,
   };
 });
+
+vi.mock("../../src/services/registry-client", () => ({
+  getPluginInfo: registryClientMocks.getPluginInfo,
+  getRegistryPlugins: registryClientMocks.getRegistryPlugins,
+}));
 
 import { AppManager } from "../../src/services/app-manager";
 
@@ -60,6 +70,31 @@ const HYPERSCAPE_APP_INFO: RegistryPluginInfo = {
   session: {
     mode: "spectate-and-steer",
     features: ["commands", "telemetry", "pause", "resume", "suggestions"],
+  },
+  appMeta: {
+    displayName: "Hyperscape",
+    category: "game",
+    launchType: "connect",
+    launchUrl: "http://localhost:3333",
+    icon: null,
+    capabilities: ["combat"],
+    minPlayers: null,
+    maxPlayers: null,
+    runtimePlugin: "@hyperscape/plugin-hyperscape",
+    viewer: {
+      url: "http://localhost:3333",
+      embedParams: {
+        embedded: "true",
+        mode: "spectator",
+        followEntity: "{HYPERSCAPE_CHARACTER_ID}",
+      },
+      postMessageAuth: true,
+      sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
+    },
+    session: {
+      mode: "spectate-and-steer",
+      features: ["commands", "telemetry", "pause", "resume", "suggestions"],
+    },
   },
   npm: {
     package: "@elizaos/app-hyperscape",
@@ -351,6 +386,17 @@ describe("AppManager", () => {
     } else {
       delete process.env.SOLANA_PRIVATE_KEY;
     }
+    appPackageModuleMocks.importAppPlugin.mockReset();
+    appPackageModuleMocks.importAppPlugin.mockImplementation(
+      async (packageName: string) => ({
+        name: packageName,
+        services: [{ serviceType: "hyperscapeService" }],
+      }),
+    );
+    registryClientMocks.getPluginInfo.mockReset();
+    registryClientMocks.getPluginInfo.mockResolvedValue(null);
+    registryClientMocks.getRegistryPlugins.mockReset();
+    registryClientMocks.getRegistryPlugins.mockResolvedValue(new Map());
   });
 
   it("preserves the recorded install timestamp when plugin manager provides one", async () => {
@@ -386,6 +432,49 @@ describe("AppManager", () => {
     );
 
     expect(installed[0]?.installedAt).toBe("");
+  });
+
+  it("merges local app metadata into existing registry entries for the apps catalog", async () => {
+    const remoteInfo: RegistryPluginInfo = {
+      ...HYPERSCAPE_APP_INFO,
+      kind: undefined,
+      launchType: undefined,
+      launchUrl: undefined,
+      viewer: undefined,
+      session: undefined,
+      appMeta: undefined,
+      localPath: undefined,
+      description: "Remote registry description",
+    };
+    registryClientMocks.getRegistryPlugins.mockResolvedValue(
+      new Map<string, RegistryPluginInfo>([
+        [HYPERSCAPE_APP_INFO.name, { ...HYPERSCAPE_APP_INFO, localPath: "/tmp/hyperscape" }],
+      ]),
+    );
+
+    const manager = new AppManager();
+    const pluginManager = buildPluginManager([], remoteInfo);
+    (pluginManager.refreshRegistry as ReturnType<typeof vi.fn>).mockResolvedValue(
+      new Map<string, RegistryPluginInfo>([[HYPERSCAPE_APP_INFO.name, remoteInfo]]),
+    );
+
+    const apps = await manager.listAvailable(pluginManager);
+
+    expect(apps).toEqual([
+      expect.objectContaining({
+        name: "@elizaos/app-hyperscape",
+        launchType: "connect",
+        launchUrl: "http://localhost:3333",
+        localPath: "/tmp/hyperscape",
+        viewer: expect.objectContaining({
+          url: "http://localhost:3333",
+          postMessageAuth: true,
+        }),
+        session: expect.objectContaining({
+          mode: "spectate-and-steer",
+        }),
+      }),
+    ]);
   });
 
   it("resolves a live Hyperscape session at launch instead of returning a synthetic pending session", async () => {
@@ -432,6 +521,98 @@ describe("AppManager", () => {
           suggestedPrompts: ["scan nearby ruins"],
           characterId: "char-runtime",
           followEntity: "char-runtime",
+        }),
+      );
+    } finally {
+      await fixtureServer.close();
+    }
+  });
+
+  it("launches Hyperscape from the bare slug when local registry lookup resolves the app package", async () => {
+    const fixtureServer = await startHyperscapeFixtureServer();
+    process.env.HYPERSCAPE_API_URL = fixtureServer.url;
+    registryClientMocks.getPluginInfo.mockImplementation(async (name: string) =>
+      name === "hyperscape" ? HYPERSCAPE_APP_INFO : null,
+    );
+
+    try {
+      const manager = new AppManager();
+      const runtime = createRuntimeStub({
+        characterName: "Scout",
+        agentRecord: {
+          walletAddresses: {
+            evm: "0x1234567890123456789012345678901234567890",
+          },
+        },
+      });
+      const pluginManager = buildPluginManager([], null);
+
+      const result = await manager.launch(
+        pluginManager,
+        "hyperscape",
+        undefined,
+        runtime,
+      );
+
+      expect(pluginManager.getRegistryPlugin).toHaveBeenCalledWith("hyperscape");
+      expect(result.displayName).toBe("Hyperscape");
+      expect(result.viewer?.url).toContain("http://localhost:3333");
+      expect(result.session).toEqual(
+        expect.objectContaining({
+          status: "running",
+          characterId: "char-runtime",
+        }),
+      );
+    } finally {
+      await fixtureServer.close();
+    }
+  });
+
+  it("loads the Hyperscape runtime plugin when the wrapper plugin is present without the runtime service", async () => {
+    const fixtureServer = await startHyperscapeFixtureServer();
+    process.env.HYPERSCAPE_API_URL = fixtureServer.url;
+    appPackageModuleMocks.importAppPlugin.mockImplementation(
+      async (packageName: string) => {
+        if (packageName === "@hyperscape/plugin-hyperscape") {
+          return {
+            name: packageName,
+            services: [{ serviceType: "hyperscapeService" }],
+          };
+        }
+        if (packageName === "@elizaos/app-hyperscape") {
+          return { name: packageName };
+        }
+        return null;
+      },
+    );
+
+    try {
+      const manager = new AppManager();
+      const runtime = createRuntimeStub({
+        characterName: "Scout",
+        agentRecord: {
+          walletAddresses: {
+            evm: "0x1234567890123456789012345678901234567890",
+          },
+        },
+      });
+
+      await runtime.registerPlugin?.({ name: "@elizaos/app-hyperscape" } as never);
+
+      const result = await manager.launch(
+        buildPluginManager([]),
+        "@elizaos/app-hyperscape",
+        undefined,
+        runtime,
+      );
+
+      expect(appPackageModuleMocks.importAppPlugin).toHaveBeenCalledWith(
+        "@hyperscape/plugin-hyperscape",
+      );
+      expect(result.session).toEqual(
+        expect.objectContaining({
+          status: "running",
+          characterId: "char-runtime",
         }),
       );
     } finally {

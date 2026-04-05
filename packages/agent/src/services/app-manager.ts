@@ -163,6 +163,23 @@ function mergeAppMeta(
   appInfo.session = meta.session ?? appInfo.session;
 }
 
+function mergeLocalRegistryInfo<T extends RegistryPluginInfo>(
+  appInfo: T,
+  localInfo: RegistryPluginInfo,
+): T {
+  appInfo.localPath = localInfo.localPath ?? appInfo.localPath;
+  appInfo.kind = localInfo.kind ?? appInfo.kind;
+  appInfo.appMeta = localInfo.appMeta ?? appInfo.appMeta;
+  if (!appInfo.description && localInfo.description) {
+    appInfo.description = localInfo.description;
+  }
+  if (!appInfo.homepage && localInfo.homepage) {
+    appInfo.homepage = localInfo.homepage;
+  }
+  mergeAppMeta(appInfo, localInfo.appMeta);
+  return appInfo;
+}
+
 function isAutoInstallable(appInfo: RegistryPluginInfo): boolean {
   const supportsRuntime =
     appInfo.supports.v0 || appInfo.supports.v1 || appInfo.supports.v2;
@@ -822,6 +839,45 @@ function isRuntimePluginActive(
   );
 }
 
+function hasRuntimeService(
+  runtime: IAgentRuntime | null,
+  serviceType: string,
+): boolean {
+  const runtimeLike = runtime as IAgentRuntime & {
+    hasService?: (candidate: string) => boolean;
+  };
+  return (
+    typeof runtimeLike?.hasService === "function" &&
+    runtimeLike.hasService(serviceType)
+  );
+}
+
+function isRuntimePluginReady(
+  appInfo: RegistryAppPlugin,
+  runtime: IAgentRuntime | null,
+): boolean {
+  if (appInfo.name === HYPERSCAPE_APP_NAME) {
+    return hasRuntimeService(runtime, "hyperscapeService");
+  }
+  return isRuntimePluginActive(appInfo, runtime);
+}
+
+function getRuntimePluginCandidates(appInfo: RegistryAppPlugin): string[] {
+  const candidates = [
+    appInfo.runtimePlugin,
+    appInfo.name,
+    resolvePluginPackageName(appInfo),
+  ];
+  return Array.from(
+    new Set(
+      candidates.filter(
+        (candidate): candidate is string =>
+          typeof candidate === "string" && candidate.trim().length > 0,
+      ),
+    ),
+  );
+}
+
 function collectHyperscapeLaunchDiagnostics(
   appInfo: RegistryAppPlugin,
   viewer: AppViewerConfig | null,
@@ -851,7 +907,7 @@ function collectHyperscapeLaunchDiagnostics(
     });
   }
 
-  if (runtime && !session && !isRuntimePluginActive(appInfo, runtime)) {
+  if (runtime && !session && !isRuntimePluginReady(appInfo, runtime)) {
     diagnostics.push({
       code: "hyperscape-runtime-bridge-inactive",
       severity: "warning",
@@ -893,21 +949,11 @@ async function ensureRuntimePluginRegistered(
     return false;
   }
 
-  const pluginNames = new Set<string>([
-    appInfo.name,
-    appInfo.runtimePlugin ?? resolvePluginPackageName(appInfo),
-  ]);
-
-  if (
-    Array.isArray(runtime.plugins) &&
-    runtime.plugins.some(
-      (plugin) =>
-        typeof plugin?.name === "string" && pluginNames.has(plugin.name),
-    )
-  ) {
+  if (isRuntimePluginReady(appInfo, runtime)) {
     return true;
   }
 
+  const pluginNames = getRuntimePluginCandidates(appInfo);
   for (const pluginPackageName of pluginNames) {
     const plugin = await importAppPlugin(pluginPackageName);
     if (!plugin) {
@@ -915,7 +961,9 @@ async function ensureRuntimePluginRegistered(
     }
 
     await runtime.registerPlugin(plugin);
-    return true;
+    if (isRuntimePluginReady(appInfo, runtime)) {
+      return true;
+    }
   }
 
   if (!isLocal) {
@@ -967,9 +1015,18 @@ export class AppManager {
     try {
       const localRegistry = await getRegistryPlugins();
       for (const [name, info] of localRegistry) {
-        if (!registry.has(name) && info.kind === "app") {
-          registry.set(name, info);
+        if (info.kind !== "app" && !info.appMeta) {
+          continue;
         }
+
+        const existing = registry.get(name) as RegistryAppPlugin | undefined;
+        if (!existing) {
+          registry.set(name, info);
+          continue;
+        }
+
+        mergeLocalRegistryInfo(existing, info);
+        registry.set(name, existing);
       }
     } catch {
       // local discovery is best-effort
@@ -1006,14 +1063,13 @@ export class AppManager {
     const localPluginInfo = await getPluginInfo(name);
 
     if (localPluginInfo) {
-      const meta = localPluginInfo.appMeta;
       if (!appInfo) {
-        appInfo = { ...localPluginInfo };
-        appInfo.appMeta = meta;
-        mergeAppMeta(appInfo, meta);
+        appInfo = mergeLocalRegistryInfo(
+          { ...localPluginInfo },
+          localPluginInfo,
+        );
       } else {
-        appInfo.appMeta = meta ?? appInfo.appMeta;
-        mergeAppMeta(appInfo, meta);
+        mergeLocalRegistryInfo(appInfo, localPluginInfo);
       }
     }
 
@@ -1044,15 +1100,13 @@ export class AppManager {
     try {
       localPluginInfo = await getPluginInfo(name);
       if (localPluginInfo) {
-        const meta = localPluginInfo.appMeta;
         if (!appInfo) {
-          appInfo = { ...localPluginInfo } as RegistryAppPlugin;
-          appInfo.appMeta = meta;
-          mergeAppMeta(appInfo, meta);
+          appInfo = mergeLocalRegistryInfo(
+            { ...localPluginInfo } as RegistryAppPlugin,
+            localPluginInfo,
+          );
         } else {
-          appInfo.appMeta = meta ?? appInfo.appMeta;
-          mergeAppMeta(appInfo, meta);
-          appInfo.kind = localPluginInfo.kind ?? appInfo.kind;
+          mergeLocalRegistryInfo(appInfo, localPluginInfo);
         }
       }
     } catch {

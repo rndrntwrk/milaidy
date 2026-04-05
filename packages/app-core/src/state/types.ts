@@ -137,6 +137,7 @@ export const ONBOARDING_PERMISSION_LABELS: Record<SystemPermissionId, string> =
     microphone: "Microphone",
     camera: "Camera",
     shell: "Shell Access",
+    "website-blocking": "Website Blocking",
   };
 
 export interface ActionNotice {

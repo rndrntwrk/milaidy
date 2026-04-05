@@ -1,10 +1,10 @@
 /**
  * Reads workspace init files and injects them into agent context.
  *
- * Also provides coding agent context enrichment: when coding-agent metadata
+ * Also provides task-agent context enrichment: when task-agent metadata
  * is present on the inbound message, the provider appends a summary of the
- * current coding session state (active iteration, recent errors, pending
- * feedback) so the LLM has full awareness during the autonomous coding loop.
+ * current task-agent session state (active iteration, recent errors, pending
+ * feedback) so the LLM has full awareness during autonomous background work.
  */
 
 import {
@@ -92,11 +92,11 @@ export function buildContext(
   return `## Project Context (Workspace)\n\n${sections.join("\n\n---\n\n")}`;
 }
 
-/** @internal Exported for testing. Builds a summary of the coding agent session. */
+/** @internal Exported for testing. Builds a summary of the task-agent session. */
 export function buildCodingAgentSummary(ctx: CodingAgentContext): string {
   const lines: string[] = [];
 
-  lines.push("## Coding Agent Session");
+  lines.push("## Task Agent Session");
   lines.push("");
   lines.push(`**Task:** ${ctx.taskDescription}`);
   lines.push(`**Working Directory:** ${ctx.workingDirectory}`);
@@ -164,7 +164,7 @@ export function createWorkspaceProvider(options?: {
   return {
     name: "workspaceContext",
     description:
-      "Workspace init files (AGENTS.md, TOOLS.md, IDENTITY.md, etc.) and coding agent context",
+      "Workspace init files (AGENTS.md, TOOLS.md, IDENTITY.md, etc.) and task-agent context",
     position: 10,
 
     async get(

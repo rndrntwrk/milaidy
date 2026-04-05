@@ -110,6 +110,13 @@ describe("registry-client-queries", () => {
       expect(getPluginInfoFromRegistry(registry, "discord")).toBe(pluginA);
     });
 
+    it("finds bare app slugs with the @elizaos/app- prefix", () => {
+      const app = makePlugin({ name: "@elizaos/app-hyperscape" });
+      registry.set("@elizaos/app-hyperscape", app);
+
+      expect(getPluginInfoFromRegistry(registry, "hyperscape")).toBe(app);
+    });
+
     it("finds by suffix match across scopes", () => {
       expect(getPluginInfoFromRegistry(registry, "@other/my-plugin")).toBe(
         pluginC,

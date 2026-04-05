@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { logger } from "@elizaos/core";
+import { packageNameToAppDisplayName } from "../contracts/apps.js";
 import {
   mergeAppMeta,
   resolveAppOverride,
@@ -183,12 +184,61 @@ function toLocalAppMeta(
 }
 
 function toDisplayNameFromDirName(dirName: string): string {
-  return dirName
-    .replace(/^app-/, "")
-    .split("-")
-    .filter((part) => part.length > 0)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
+  return packageNameToAppDisplayName(dirName);
+}
+
+function isDiscoverableAppPackage(
+  packageJson: LocalPackageJson,
+  manifest: LocalPluginManifest | null,
+): boolean {
+  if (!packageJson.name) return false;
+
+  return Boolean(
+    packageJson.elizaos?.kind === "app" ||
+      manifest?.kind === "app" ||
+      packageJson.elizaos?.app ||
+      packageJson.elizaos?.viewer ||
+      packageJson.elizaos?.session ||
+      manifest?.app ||
+      manifest?.viewer ||
+      manifest?.session ||
+      resolveAppOverride(packageJson.name, undefined),
+  );
+}
+
+async function collectWorkspacePackageCandidates(
+  searchRoot: string,
+  includeTypescriptChild = false,
+): Promise<Array<{ packageDir: string; dirName: string }>> {
+  const candidates = new Map<string, { packageDir: string; dirName: string }>();
+
+  let entries: Array<import("node:fs").Dirent>;
+  try {
+    entries = await fs.readdir(searchRoot, { withFileTypes: true });
+  } catch (err) {
+    logger.debug(`[registry] could not read workspace dir ${searchRoot}: ${err}`);
+    return [];
+  }
+
+  for (const entry of entries) {
+    if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
+
+    const repoDir = path.join(searchRoot, entry.name);
+    candidates.set(repoDir, {
+      packageDir: repoDir,
+      dirName: entry.name,
+    });
+
+    if (!includeTypescriptChild) continue;
+
+    const typescriptDir = path.join(repoDir, "typescript");
+    candidates.set(typescriptDir, {
+      packageDir: typescriptDir,
+      dirName: entry.name,
+    });
+  }
+
+  return [...candidates.values()];
 }
 
 function parseRepositoryMetadata(
@@ -285,39 +335,55 @@ async function discoverLocalWorkspaceApps(): Promise<
   Map<string, RegistryPluginInfo>
 > {
   const discovered = new Map<string, RegistryPluginInfo>();
+  const packageCandidates = new Map<
+    string,
+    { packageDir: string; dirName: string }
+  >();
 
   for (const workspaceRoot of resolveWorkspaceRoots()) {
-    const pluginsDir = path.join(workspaceRoot, "plugins");
-    let entries: Array<import("node:fs").Dirent>;
-    try {
-      entries = await fs.readdir(pluginsDir, { withFileTypes: true });
-    } catch (err) {
-      logger.debug(`[registry] could not read plugins dir ${pluginsDir}: ${err}`);
-      continue;
+    const discoveredRoots = [
+      { root: path.join(workspaceRoot, "plugins"), includeTypescriptChild: true },
+      { root: path.join(workspaceRoot, "packages"), includeTypescriptChild: false },
+      {
+        root: path.join(workspaceRoot, "eliza", "packages"),
+        includeTypescriptChild: false,
+      },
+      {
+        root: path.join(workspaceRoot, "eliza", "plugins"),
+        includeTypescriptChild: true,
+      },
+    ];
+
+    for (const candidateRoot of discoveredRoots) {
+      const candidates = await collectWorkspacePackageCandidates(
+        candidateRoot.root,
+        candidateRoot.includeTypescriptChild,
+      );
+      for (const candidate of candidates) {
+        packageCandidates.set(candidate.packageDir, candidate);
+      }
     }
+  }
 
-    for (const entry of entries) {
-      if (
-        (!entry.isDirectory() && !entry.isSymbolicLink()) ||
-        !entry.name.startsWith("app-")
-      )
-        continue;
-      const packageDir = path.join(pluginsDir, entry.name);
-      const packageJson = await readJsonFile<LocalPackageJson>(
-        path.join(packageDir, "package.json"),
-      );
-      if (!packageJson) continue;
+  for (const { packageDir, dirName } of packageCandidates.values()) {
+    const packageJson = await readJsonFile<LocalPackageJson>(
+      path.join(packageDir, "package.json"),
+    );
+    if (!packageJson) continue;
 
-      const manifest = await readJsonFile<LocalPluginManifest>(
-        path.join(packageDir, "elizaos.plugin.json"),
-      );
-      const info = buildDiscoveredEntry(
-        packageDir,
-        entry.name,
-        packageJson,
-        manifest,
-      );
-      if (info) discovered.set(info.name, info);
+    const manifest = await readJsonFile<LocalPluginManifest>(
+      path.join(packageDir, "elizaos.plugin.json"),
+    );
+    if (!isDiscoverableAppPackage(packageJson, manifest)) continue;
+
+    const info = buildDiscoveredEntry(
+      packageDir,
+      dirName,
+      packageJson,
+      manifest,
+    );
+    if (info) {
+      discovered.set(info.name, info);
     }
   }
 
@@ -362,12 +428,12 @@ async function discoverLocalWorkspaceApps(): Promise<
           path.join(pkgDir, "package.json"),
         );
         if (!pkgJson?.name) continue;
-        if (pkgJson.elizaos?.kind !== "app") continue;
-        if (discovered.has(pkgJson.name)) continue;
-
         const manifest = await readJsonFile<LocalPluginManifest>(
           path.join(pkgDir, "elizaos.plugin.json"),
         );
+        if (!isDiscoverableAppPackage(pkgJson, manifest)) continue;
+        if (discovered.has(pkgJson.name)) continue;
+
         const dirName = pkgJson.name
           .replace(/^@[^/]+\//, "")
           .replace(/^plugin-/, "app-");

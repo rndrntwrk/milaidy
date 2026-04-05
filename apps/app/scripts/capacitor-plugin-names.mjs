@@ -9,4 +9,5 @@ export const CAPACITOR_PLUGIN_NAMES = [
   "location",
   "talkmode",
   "agent",
+  "websiteblocker",
 ];

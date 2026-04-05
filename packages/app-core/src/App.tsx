@@ -536,7 +536,7 @@ export function App() {
                   <DrawerSheetHeader className="sr-only">
                     <DrawerSheetTitle>
                       {t("taskseventspanel.Title", {
-                        defaultValue: "Tasks & Events",
+                        defaultValue: "Chat widgets",
                       })}
                     </DrawerSheetTitle>
                   </DrawerSheetHeader>

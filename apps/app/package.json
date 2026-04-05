@@ -41,6 +41,7 @@
     "@miladyai/capacitor-screencapture": "workspace:*",
     "@miladyai/capacitor-swabble": "workspace:*",
     "@miladyai/capacitor-talkmode": "workspace:*",
+    "@miladyai/capacitor-websiteblocker": "workspace:*",
     "@miladyai/ui": "workspace:*",
     "@pixiv/three-vrm": "^3.4.5",
     "@sparkjsdev/spark": "^0.1.10",

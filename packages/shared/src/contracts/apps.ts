@@ -102,3 +102,36 @@ export interface AppStopResult {
   stopScope: "plugin-uninstalled" | "viewer-session" | "no-op";
   message: string;
 }
+
+function packageNameToBasename(packageName: string): string {
+  return packageName.trim().replace(/^@[^/]+\//, "").trim();
+}
+
+export function packageNameToAppRouteSlug(
+  packageName: string,
+): string | null {
+  const basename = packageNameToBasename(packageName);
+  if (!basename) return null;
+
+  const withoutPrefix = basename.replace(/^(app|plugin)-/, "").trim();
+  return withoutPrefix || basename;
+}
+
+export function packageNameToAppDisplayName(packageName: string): string {
+  const slug =
+    packageNameToAppRouteSlug(packageName) ??
+    packageNameToBasename(packageName) ??
+    packageName.trim();
+
+  return slug
+    .split(/[^a-zA-Z0-9]+/)
+    .filter((part) => part.length > 0)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+export function hasAppInterface(
+  value: { kind?: string | null; appMeta?: unknown } | null | undefined,
+): boolean {
+  return Boolean(value && (value.kind === "app" || value.appMeta));
+}

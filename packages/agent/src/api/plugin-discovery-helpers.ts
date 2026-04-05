@@ -71,6 +71,10 @@ export interface PluginEntry {
   validationWarnings: Array<{ field: string; message: string }>;
   npmName?: string;
   version?: string;
+  releaseStream?: "latest" | "alpha";
+  requestedVersion?: string;
+  latestVersion?: string | null;
+  alphaVersion?: string | null;
   pluginDeps?: string[];
   /** Whether this plugin is currently active in the runtime. */
   isActive?: boolean;
@@ -563,6 +567,10 @@ export function discoverInstalledPlugins(
     let pluginIcon: string | null = null;
     let pluginHomepage: string | undefined;
     let pluginRepository: string | undefined;
+    let installedVersion =
+      typeof (record as Record<string, string>).version === "string"
+        ? (record as Record<string, string>).version
+        : undefined;
 
     if (installPath) {
       // Check npm layout first, then direct layout
@@ -595,9 +603,13 @@ export function discoverInstalledPlugins(
               };
               logoUrl?: string;
               icon?: string;
+              version?: string;
             };
             if (pkg.name) name = pkg.name;
             if (pkg.description) description = pkg.description;
+            if (typeof pkg.version === "string" && pkg.version.length > 0) {
+              installedVersion = pkg.version;
+            }
             pluginTags = normalizePluginMetadataTags(pkg.keywords);
             if (pkg.elizaos?.displayName) name = pkg.elizaos.displayName;
             if (pkg.elizaos?.configKeys) {
@@ -650,6 +662,11 @@ export function discoverInstalledPlugins(
       id,
       name,
       npmName: packageName,
+      version: installedVersion,
+      releaseStream:
+        (record as { releaseStream?: "latest" | "alpha" }).releaseStream,
+      requestedVersion:
+        (record as { requestedVersion?: string }).requestedVersion,
       description: resolvedDescription,
       tags: resolvedTags,
       enabled: false, // Will be updated against the runtime below

@@ -2750,8 +2750,12 @@ const PLUGIN_CONFIG_RE =
 const PLUGIN_PARAMS: Record<string, Array<{ key: string; label: string; secret: boolean }>> = {
   telegram: [{ key: "TELEGRAM_BOT_TOKEN", label: "Bot Token (from @BotFather)", secret: true }],
   discord: [
-    { key: "DISCORD_APPLICATION_ID", label: "Application ID", secret: false },
     { key: "DISCORD_API_TOKEN", label: "Bot Token", secret: true },
+    {
+      key: "DISCORD_APPLICATION_ID",
+      label: "Application ID (optional, auto-resolved when omitted)",
+      secret: false,
+    },
   ],
   twitter: [
     { key: "TWITTER_USERNAME", label: "Username", secret: false },

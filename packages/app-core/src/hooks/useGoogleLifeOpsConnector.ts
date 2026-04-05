@@ -104,7 +104,7 @@ export function useGoogleLifeOpsConnector(
   useEffect(() => {
     let active = true;
     void refresh();
-    const intervalId = window.setInterval(() => {
+    const intervalId = globalThis.setInterval(() => {
       if (!active) {
         return;
       }
@@ -113,7 +113,7 @@ export function useGoogleLifeOpsConnector(
 
     return () => {
       active = false;
-      window.clearInterval(intervalId);
+      globalThis.clearInterval(intervalId);
     };
   }, [pollIntervalMs, refresh]);
 

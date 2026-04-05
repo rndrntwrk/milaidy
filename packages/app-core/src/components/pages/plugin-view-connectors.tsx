@@ -164,7 +164,9 @@ function ConnectorPluginCard({
   const isSaving = pluginSaving.has(plugin.id);
   const saveSuccess = pluginSaveSuccess.has(plugin.id);
   const testResult = testResults.get(plugin.id);
-  const pluginLinks = getPluginResourceLinks(plugin);
+  const pluginLinks = getPluginResourceLinks(plugin, {
+    draftConfig: pluginConfigs[plugin.id],
+  });
 
   const connectorHeaderMedia = (
     <span
@@ -233,7 +235,7 @@ function ConnectorPluginCard({
               : "border-border bg-transparent text-muted hover:border-accent/40 hover:text-txt"
           } ${toggleDisabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
           onClick={(event) => {
-            event.stopPropagation();
+            event?.stopPropagation();
             void handleTogglePlugin(plugin.id, !plugin.enabled);
           }}
           disabled={toggleDisabled}
@@ -253,7 +255,7 @@ function ConnectorPluginCard({
               : "text-muted hover:border-accent/40 hover:text-txt"
           }`}
           onClick={(event) => {
-            event.stopPropagation();
+            event?.stopPropagation();
             handleConnectorSectionToggle(plugin.id);
           }}
           aria-expanded={isExpanded}

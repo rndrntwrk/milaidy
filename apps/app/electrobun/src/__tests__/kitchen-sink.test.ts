@@ -606,26 +606,30 @@ vi.mock("../native/desktop", async () => {
   };
 });
 
-vi.stubGlobal("Bun", {
-  spawn: vi.fn(() => ({
-    exited: Promise.resolve(0),
-    stdout: new ReadableStream({
-      start(c) {
-        c.close();
-      },
-    }),
-    stderr: new ReadableStream({
-      start(c) {
-        c.close();
-      },
-    }),
-    exitCode: null,
-    pid: 12345,
-    kill: vi.fn(),
-  })),
-  version: "1.2.3",
-  sleep: vi.fn(() => Promise.resolve()),
-});
+function stubBunGlobal(): void {
+  vi.stubGlobal("Bun", {
+    spawn: vi.fn(() => ({
+      exited: Promise.resolve(0),
+      stdout: new ReadableStream({
+        start(c) {
+          c.close();
+        },
+      }),
+      stderr: new ReadableStream({
+        start(c) {
+          c.close();
+        },
+      }),
+      exitCode: null,
+      pid: 12345,
+      kill: vi.fn(),
+    })),
+    version: "1.2.3",
+    sleep: vi.fn(() => Promise.resolve()),
+  });
+}
+
+stubBunGlobal();
 
 // ---------------------------------------------------------------------------
 // Imports (after all mocks above)
@@ -3500,12 +3504,119 @@ describe("Screen capture (automated)", () => {
 });
 
 describe("System permissions (automated)", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    stubBunGlobal();
+  });
+
   it("permissionsCheck returns a PermissionState via RPC", async () => {
     const { handlers } = await captureHandlers();
     const state = (await handlers.permissionsCheck({
       id: "accessibility",
     })) as { id: string; status: string };
     expect(state).toHaveProperty("status");
+  });
+
+  it("permissionsCheck uses the runtime-owned website-blocking permission state", async () => {
+    const { getAgentManager } = await import("../native/agent");
+    const { getPermissionManager } = await import("../native/permissions");
+    const nativeCheckPermission = vi.fn(async () => ({
+      id: "website-blocking",
+      status: "denied",
+      lastChecked: 0,
+      canRequest: false,
+    }));
+
+    vi.mocked(getAgentManager).mockImplementationOnce(
+      () =>
+        ({
+          getPort: vi.fn(() => 4311),
+        }) as never,
+    );
+    vi.mocked(getPermissionManager).mockImplementationOnce(() => ({
+      checkPermission: nativeCheckPermission,
+      checkFeaturePermissions: vi.fn(),
+      requestPermission: vi.fn(),
+      checkAllPermissions: vi.fn(async () => ({})),
+      isShellEnabled: vi.fn(() => true),
+      setShellEnabled: vi.fn(),
+      clearCache: vi.fn(),
+      openSettings: vi.fn(),
+      setSendToWebview: vi.fn(),
+    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          id: "website-blocking",
+          status: "not-determined",
+          lastChecked: 1,
+          canRequest: true,
+          reason:
+            "Milady can ask the OS for administrator/root approval whenever it needs to edit the system hosts file.",
+        }),
+      })),
+    );
+
+    const { handlers } = await captureHandlers();
+    const state = (await handlers.permissionsCheck({
+      id: "website-blocking",
+    })) as { id: string; status: string; canRequest: boolean };
+
+    expect(state).toMatchObject({
+      id: "website-blocking",
+      status: "not-determined",
+      canRequest: true,
+    });
+    expect(nativeCheckPermission).not.toHaveBeenCalled();
+  });
+
+  it("permissionsCheck returns an explicit unavailable state for website-blocking when runtime is down", async () => {
+    const { getAgentManager } = await import("../native/agent");
+    const { getPermissionManager } = await import("../native/permissions");
+    const nativeCheckPermission = vi.fn(async () => ({
+      id: "website-blocking",
+      status: "not-applicable",
+      lastChecked: 0,
+      canRequest: false,
+    }));
+
+    vi.mocked(getAgentManager).mockImplementationOnce(
+      () =>
+        ({
+          getPort: vi.fn(() => null),
+        }) as never,
+    );
+    vi.mocked(getPermissionManager).mockImplementationOnce(() => ({
+      checkPermission: nativeCheckPermission,
+      checkFeaturePermissions: vi.fn(),
+      requestPermission: vi.fn(),
+      checkAllPermissions: vi.fn(async () => ({})),
+      isShellEnabled: vi.fn(() => true),
+      setShellEnabled: vi.fn(),
+      clearCache: vi.fn(),
+      openSettings: vi.fn(),
+      setSendToWebview: vi.fn(),
+    }));
+
+    const { handlers } = await captureHandlers();
+    const state = (await handlers.permissionsCheck({
+      id: "website-blocking",
+    })) as {
+      id: string;
+      status: string;
+      canRequest: boolean;
+      reason?: string;
+    };
+
+    expect(state).toMatchObject({
+      id: "website-blocking",
+      status: "denied",
+      canRequest: false,
+      reason: expect.stringContaining("runtime is unavailable"),
+    });
+    expect(nativeCheckPermission).not.toHaveBeenCalled();
   });
 
   it("permissionsRequest returns updated PermissionState via RPC", async () => {
@@ -3517,10 +3628,396 @@ describe("System permissions (automated)", () => {
     expect(state).toHaveProperty("status");
   });
 
+  it("permissionsRequest routes website-blocking through the runtime API", async () => {
+    const { getAgentManager } = await import("../native/agent");
+    const { getPermissionManager } = await import("../native/permissions");
+    const nativeRequestPermission = vi.fn(async () => ({
+      id: "website-blocking",
+      status: "denied",
+      lastChecked: 0,
+      canRequest: false,
+    }));
+    const nativeCheckAllPermissions = vi.fn(async () => ({
+      accessibility: {
+        id: "accessibility",
+        status: "granted",
+        lastChecked: 0,
+        canRequest: false,
+      },
+    }));
+    const fetchMock = vi.fn(async (input: string, init?: RequestInit) => {
+      if (input.endsWith("/api/permissions/website-blocking/request")) {
+        return {
+          ok: true,
+          json: async () => ({
+            id: "website-blocking",
+            status: "not-determined",
+            lastChecked: 1,
+            canRequest: true,
+            promptAttempted: true,
+            promptSucceeded: true,
+          }),
+        };
+      }
+
+      if (input.endsWith("/api/permissions/website-blocking")) {
+        return {
+          ok: true,
+          json: async () => ({
+            id: "website-blocking",
+            status: "not-determined",
+            lastChecked: 2,
+            canRequest: true,
+          }),
+        };
+      }
+
+      if (input.endsWith("/api/permissions/state")) {
+        expect(init?.method).toBe("PUT");
+        return {
+          ok: true,
+          json: async () => ({ updated: true }),
+        };
+      }
+
+      throw new Error(`Unexpected fetch call: ${input}`);
+    });
+
+    vi.mocked(getAgentManager).mockImplementationOnce(
+      () =>
+        ({
+          getPort: vi.fn(() => 4312),
+        }) as never,
+    );
+    vi.mocked(getPermissionManager).mockImplementationOnce(() => ({
+      checkPermission: vi.fn(),
+      checkFeaturePermissions: vi.fn(),
+      requestPermission: nativeRequestPermission,
+      checkAllPermissions: nativeCheckAllPermissions,
+      isShellEnabled: vi.fn(() => true),
+      setShellEnabled: vi.fn(),
+      clearCache: vi.fn(),
+      openSettings: vi.fn(),
+      setSendToWebview: vi.fn(),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { handlers } = await captureHandlers();
+    const state = (await handlers.permissionsRequest({
+      id: "website-blocking",
+    })) as {
+      id: string;
+      status: string;
+      canRequest: boolean;
+      promptSucceeded?: boolean;
+    };
+
+    expect(state).toMatchObject({
+      id: "website-blocking",
+      status: "not-determined",
+      canRequest: true,
+      promptSucceeded: true,
+    });
+    expect(nativeRequestPermission).not.toHaveBeenCalled();
+    expect(nativeCheckAllPermissions).toHaveBeenCalledTimes(1);
+  });
+
+  it("permissionsRequest returns an unavailable state for website-blocking when runtime is down", async () => {
+    const { getAgentManager } = await import("../native/agent");
+    const { getPermissionManager } = await import("../native/permissions");
+    const nativeRequestPermission = vi.fn(async () => ({
+      id: "website-blocking",
+      status: "not-applicable",
+      lastChecked: 0,
+      canRequest: false,
+    }));
+    const nativeCheckAllPermissions = vi.fn(async () => ({}));
+
+    vi.mocked(getAgentManager).mockImplementationOnce(
+      () =>
+        ({
+          getPort: vi.fn(() => null),
+        }) as never,
+    );
+    vi.mocked(getPermissionManager).mockImplementationOnce(() => ({
+      checkPermission: vi.fn(),
+      checkFeaturePermissions: vi.fn(),
+      requestPermission: nativeRequestPermission,
+      checkAllPermissions: nativeCheckAllPermissions,
+      isShellEnabled: vi.fn(() => true),
+      setShellEnabled: vi.fn(),
+      clearCache: vi.fn(),
+      openSettings: vi.fn(),
+      setSendToWebview: vi.fn(),
+    }));
+
+    const { handlers } = await captureHandlers();
+    const state = (await handlers.permissionsRequest({
+      id: "website-blocking",
+    })) as {
+      id: string;
+      status: string;
+      canRequest: boolean;
+      reason?: string;
+    };
+
+    expect(state).toMatchObject({
+      id: "website-blocking",
+      status: "denied",
+      canRequest: false,
+      reason: expect.stringContaining("runtime is unavailable"),
+    });
+    expect(nativeRequestPermission).not.toHaveBeenCalled();
+    expect(nativeCheckAllPermissions).toHaveBeenCalledTimes(1);
+  });
+
   it("permissionsGetAll returns all permission states", async () => {
     const { handlers } = await captureHandlers();
     const result = await handlers.permissionsGetAll({});
     expect(result).toBeDefined();
+  });
+
+  it("permissionsGetAll merges the runtime-owned website-blocking permission", async () => {
+    const { getAgentManager } = await import("../native/agent");
+    const { getPermissionManager } = await import("../native/permissions");
+    const nativeCheckAllPermissions = vi.fn(async () => ({
+      accessibility: {
+        id: "accessibility",
+        status: "granted",
+        lastChecked: 0,
+        canRequest: false,
+      },
+    }));
+    const fetchMock = vi.fn(async (input: string, init?: RequestInit) => {
+      if (input.endsWith("/api/permissions/website-blocking")) {
+        return {
+          ok: true,
+          json: async () => ({
+            id: "website-blocking",
+            status: "granted",
+            lastChecked: 3,
+            canRequest: false,
+          }),
+        };
+      }
+
+      if (input.endsWith("/api/permissions/state")) {
+        expect(init?.method).toBe("PUT");
+        return {
+          ok: true,
+          json: async () => ({ updated: true }),
+        };
+      }
+
+      throw new Error(`Unexpected fetch call: ${input}`);
+    });
+
+    vi.mocked(getAgentManager).mockImplementationOnce(
+      () =>
+        ({
+          getPort: vi.fn(() => 4313),
+        }) as never,
+    );
+    vi.mocked(getPermissionManager).mockImplementationOnce(() => ({
+      checkPermission: vi.fn(),
+      checkFeaturePermissions: vi.fn(),
+      requestPermission: vi.fn(),
+      checkAllPermissions: nativeCheckAllPermissions,
+      isShellEnabled: vi.fn(() => true),
+      setShellEnabled: vi.fn(),
+      clearCache: vi.fn(),
+      openSettings: vi.fn(),
+      setSendToWebview: vi.fn(),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { handlers } = await captureHandlers();
+    const result = (await handlers.permissionsGetAll({})) as Record<
+      string,
+      { id: string; status: string }
+    >;
+
+    expect(result).toMatchObject({
+      accessibility: {
+        id: "accessibility",
+        status: "granted",
+      },
+      "website-blocking": {
+        id: "website-blocking",
+        status: "granted",
+      },
+    });
+    expect(nativeCheckAllPermissions).toHaveBeenCalledTimes(1);
+  });
+
+  it("permissionsCheckFeature uses the runtime-owned website-blocker permission state", async () => {
+    const { getAgentManager } = await import("../native/agent");
+    const { getPermissionManager } = await import("../native/permissions");
+    const nativeCheckFeaturePermissions = vi.fn(async () => ({
+      granted: false,
+      missing: ["website-blocking"],
+    }));
+
+    vi.mocked(getAgentManager).mockImplementationOnce(
+      () =>
+        ({
+          getPort: vi.fn(() => 4314),
+        }) as never,
+    );
+    vi.mocked(getPermissionManager).mockImplementationOnce(() => ({
+      checkPermission: vi.fn(),
+      checkFeaturePermissions: nativeCheckFeaturePermissions,
+      requestPermission: vi.fn(),
+      checkAllPermissions: vi.fn(async () => ({})),
+      isShellEnabled: vi.fn(() => true),
+      setShellEnabled: vi.fn(),
+      clearCache: vi.fn(),
+      openSettings: vi.fn(),
+      setSendToWebview: vi.fn(),
+    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          id: "website-blocking",
+          status: "granted",
+          lastChecked: 4,
+          canRequest: false,
+        }),
+      })),
+    );
+
+    const { handlers } = await captureHandlers();
+    const result = (await handlers.permissionsCheckFeature({
+      featureId: "website-blocker",
+    })) as {
+      granted: boolean;
+      missing: string[];
+    };
+
+    expect(result).toEqual({ granted: true, missing: [] });
+    expect(nativeCheckFeaturePermissions).not.toHaveBeenCalled();
+  });
+
+  it("permissionsCheckFeature keeps website-blocker locked when runtime is down", async () => {
+    const { getAgentManager } = await import("../native/agent");
+    const { getPermissionManager } = await import("../native/permissions");
+    const nativeCheckFeaturePermissions = vi.fn(async () => ({
+      granted: true,
+      missing: [],
+    }));
+
+    vi.mocked(getAgentManager).mockImplementationOnce(
+      () =>
+        ({
+          getPort: vi.fn(() => null),
+        }) as never,
+    );
+    vi.mocked(getPermissionManager).mockImplementationOnce(() => ({
+      checkPermission: vi.fn(),
+      checkFeaturePermissions: nativeCheckFeaturePermissions,
+      requestPermission: vi.fn(),
+      checkAllPermissions: vi.fn(async () => ({})),
+      isShellEnabled: vi.fn(() => true),
+      setShellEnabled: vi.fn(),
+      clearCache: vi.fn(),
+      openSettings: vi.fn(),
+      setSendToWebview: vi.fn(),
+    }));
+
+    const { handlers } = await captureHandlers();
+    const result = (await handlers.permissionsCheckFeature({
+      featureId: "website-blocker",
+    })) as {
+      granted: boolean;
+      missing: string[];
+    };
+
+    expect(result).toEqual({
+      granted: false,
+      missing: ["website-blocking"],
+    });
+    expect(nativeCheckFeaturePermissions).not.toHaveBeenCalled();
+  });
+
+  it("permissionsOpenSettings routes website-blocking to the runtime API", async () => {
+    const { getAgentManager } = await import("../native/agent");
+    const { getPermissionManager } = await import("../native/permissions");
+    const nativeOpenSettings = vi.fn(async () => undefined);
+    const fetchMock = vi.fn(async (input: string) => {
+      if (input.endsWith("/api/permissions/website-blocking/open-settings")) {
+        return {
+          ok: true,
+          json: async () => ({
+            opened: true,
+            permission: {
+              id: "website-blocking",
+              status: "not-determined",
+              lastChecked: 5,
+              canRequest: true,
+            },
+          }),
+        };
+      }
+
+      throw new Error(`Unexpected fetch call: ${input}`);
+    });
+
+    vi.mocked(getAgentManager).mockImplementationOnce(
+      () =>
+        ({
+          getPort: vi.fn(() => 4315),
+        }) as never,
+    );
+    vi.mocked(getPermissionManager).mockImplementationOnce(() => ({
+      checkPermission: vi.fn(),
+      checkFeaturePermissions: vi.fn(),
+      requestPermission: vi.fn(),
+      checkAllPermissions: vi.fn(async () => ({})),
+      isShellEnabled: vi.fn(() => true),
+      setShellEnabled: vi.fn(),
+      clearCache: vi.fn(),
+      openSettings: nativeOpenSettings,
+      setSendToWebview: vi.fn(),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { handlers } = await captureHandlers();
+    await expect(
+      handlers.permissionsOpenSettings({ id: "website-blocking" }),
+    ).resolves.toBeUndefined();
+    expect(nativeOpenSettings).not.toHaveBeenCalled();
+  });
+
+  it("permissionsOpenSettings rejects website-blocking when runtime is down", async () => {
+    const { getAgentManager } = await import("../native/agent");
+    const { getPermissionManager } = await import("../native/permissions");
+    const nativeOpenSettings = vi.fn(async () => undefined);
+
+    vi.mocked(getAgentManager).mockImplementationOnce(
+      () =>
+        ({
+          getPort: vi.fn(() => null),
+        }) as never,
+    );
+    vi.mocked(getPermissionManager).mockImplementationOnce(() => ({
+      checkPermission: vi.fn(),
+      checkFeaturePermissions: vi.fn(),
+      requestPermission: vi.fn(),
+      checkAllPermissions: vi.fn(async () => ({})),
+      isShellEnabled: vi.fn(() => true),
+      setShellEnabled: vi.fn(),
+      clearCache: vi.fn(),
+      openSettings: nativeOpenSettings,
+      setSendToWebview: vi.fn(),
+    }));
+
+    const { handlers } = await captureHandlers();
+    await expect(
+      handlers.permissionsOpenSettings({ id: "website-blocking" }),
+    ).rejects.toThrow(/runtime is unavailable/i);
+    expect(nativeOpenSettings).not.toHaveBeenCalled();
   });
 
   it("permissionsIsShellEnabled returns boolean", async () => {

@@ -7,12 +7,14 @@ const { execCalls } = vi.hoisted(() => ({
   execCalls: [] as Array<{ cmd: string; args: string[] }>,
 }));
 
-vi.mock("node:child_process", () => {
+vi.mock("node:child_process", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:child_process")>();
   const fsPromises =
     require("node:fs/promises") as typeof import("node:fs/promises");
   const pathMod = require("node:path") as typeof import("node:path");
 
   return {
+    ...actual,
     execFile: (
       cmd: string,
       args: string[],

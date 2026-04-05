@@ -61,6 +61,15 @@ export const SYSTEM_PERMISSIONS: SystemPermissionDefinition[] = [
     platforms: ["darwin", "win32", "linux"],
     requiredForFeatures: ["shell"],
   },
+  {
+    id: "website-blocking",
+    name: "Website Blocking",
+    description:
+      "Edit the system hosts file to block distracting websites. This may require admin/root approval each time.",
+    icon: "shield-ban",
+    platforms: ["darwin", "win32", "linux"],
+    requiredForFeatures: ["website-blocker"],
+  },
 ];
 
 const PERMISSION_MAP = new Map<SystemPermissionId, SystemPermissionDefinition>(

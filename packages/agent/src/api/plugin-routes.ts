@@ -8,6 +8,7 @@ import {
 } from "@miladyai/shared";
 import type { ElizaConfig } from "../config/config.js";
 import { loadElizaConfig, saveElizaConfig } from "../config/config.js";
+import { applyPluginRuntimeMutation } from "./plugin-runtime-apply.js";
 import {
   CORE_PLUGINS,
   OPTIONAL_CORE_PLUGINS,
@@ -18,8 +19,12 @@ import type {
   InstallProgressLike,
   PluginManagerLike,
 } from "../services/plugin-manager-types.js";
-import { type PluginParamInfo, validatePluginConfig } from "./plugin-validation.js";
+import {
+  type PluginParamInfo,
+  validatePluginConfig,
+} from "./plugin-validation.js";
 import type { ReadJsonBodyOptions } from "./http-helpers.js";
+import type { ResolvedPlugin } from "../runtime/eliza.js";
 
 // ---------------------------------------------------------------------------
 // Types — kept lean to avoid circular deps with server.ts
@@ -59,6 +64,10 @@ interface PluginEntry {
   validationWarnings: Array<{ field: string; message: string }>;
   npmName?: string;
   version?: string;
+  releaseStream?: "latest" | "alpha";
+  requestedVersion?: string;
+  latestVersion?: string | null;
+  alphaVersion?: string | null;
   pluginDeps?: string[];
   isActive?: boolean;
   loadError?: string;
@@ -111,16 +120,28 @@ export interface PluginRouteContext {
     options?: ReadJsonBodyOptions,
   ) => Promise<T | null>;
   scheduleRuntimeRestart: (reason: string) => void;
+  restartRuntime?: (reason: string) => Promise<boolean>;
   // Server.ts internal helpers
   BLOCKED_ENV_KEYS: Set<string>;
-  discoverInstalledPlugins: (config: ElizaConfig, bundledIds: Set<string>) => PluginEntry[];
+  discoverInstalledPlugins: (
+    config: ElizaConfig,
+    bundledIds: Set<string>,
+  ) => PluginEntry[];
   maskValue: (value: string) => string;
   aggregateSecrets: (plugins: PluginEntry[]) => SecretEntry[];
-  readProviderCache: (providerId: string) => { models: Array<{ id: string; name: string; category: string }> } | null;
+  readProviderCache: (
+    providerId: string,
+  ) => { models: Array<{ id: string; name: string; category: string }> } | null;
   paramKeyToCategory: (paramKey: string) => string;
-  buildPluginEvmDiagnosticEntry: (opts: { config: ElizaConfig; runtime: AgentRuntime | null }) => PluginEntry;
+  buildPluginEvmDiagnosticEntry: (opts: {
+    config: ElizaConfig;
+    runtime: AgentRuntime | null;
+  }) => PluginEntry;
   EVM_PLUGIN_PACKAGE: string;
-  applyWhatsAppQrOverride: (plugins: PluginEntry[], workspaceDir: string) => void;
+  applyWhatsAppQrOverride: (
+    plugins: PluginEntry[],
+    workspaceDir: string,
+  ) => void;
   applySignalQrOverride: (
     plugins: PluginEntry[],
     workspaceDir: string,
@@ -156,6 +177,7 @@ export async function handlePluginRoutes(
     error,
     readJsonBody,
     scheduleRuntimeRestart,
+    restartRuntime,
     BLOCKED_ENV_KEYS,
     discoverInstalledPlugins,
     maskValue,
@@ -172,6 +194,43 @@ export async function handlePluginRoutes(
     requireCoreManager,
   } = ctx;
 
+  const resolvePluginsSnapshot = async (
+    config: ElizaConfig,
+  ): Promise<ResolvedPlugin[]> => {
+    const { resolvePlugins } = await import("../runtime/plugin-resolver.js");
+    return await resolvePlugins(config, { quiet: true });
+  };
+
+  const resolvePluginsSnapshotSafe = async (
+    config: ElizaConfig,
+    reason: string,
+  ): Promise<ResolvedPlugin[] | undefined> => {
+    try {
+      return await resolvePluginsSnapshot(config);
+    } catch (err) {
+      logger.warn(
+        `[plugin-routes] Failed to resolve plugin snapshot for ${reason}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return undefined;
+    }
+  };
+
+  const npmNamePattern =
+    /^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/;
+
+  const validateRegistryPluginPackageName = (
+    pluginName: string,
+  ): string | null => {
+    const trimmedName = pluginName.trim();
+    if (!trimmedName) {
+      return "Request body must include 'name' (plugin package name)";
+    }
+    if (!npmNamePattern.test(trimmedName)) {
+      return "Invalid plugin name format";
+    }
+    return null;
+  };
+
   // ── GET /api/plugins ────────────────────────────────────────────────────
   if (method === "GET" && pathname === "/api/plugins") {
     // Re-read config from disk so we pick up plugins installed since server start.
@@ -186,6 +245,34 @@ export async function handlePluginRoutes(
     const bundledIds = new Set(state.plugins.map((p) => p.id));
     const installedEntries = discoverInstalledPlugins(freshConfig, bundledIds);
     const allPlugins: PluginEntry[] = [...state.plugins, ...installedEntries];
+    let installedMetadataByName = new Map<
+      string,
+      {
+        version?: string;
+        releaseStream?: "latest" | "alpha";
+        requestedVersion?: string;
+        latestVersion?: string | null;
+        alphaVersion?: string | null;
+      }
+    >();
+    try {
+      const pluginManager = requirePluginManager(state.runtime);
+      const installed = await pluginManager.listInstalledPlugins();
+      installedMetadataByName = new Map(
+        installed.map((plugin) => [
+          plugin.name,
+          {
+            version: plugin.version,
+            releaseStream: plugin.releaseStream,
+            requestedVersion: plugin.requestedVersion,
+            latestVersion: plugin.latestVersion,
+            alphaVersion: plugin.alphaVersion,
+          },
+        ]),
+      );
+    } catch {
+      // Keep the plugin list working even when the plugin-manager service is unavailable.
+    }
     const evmDiagnostic = buildPluginEvmDiagnosticEntry({
       config: state.config,
       runtime: state.runtime,
@@ -217,6 +304,21 @@ export async function handlePluginRoutes(
       ? state.runtime.plugins.map((p) => p.name)
       : [];
     for (const plugin of allPlugins) {
+      const installedMetadata =
+        (plugin.npmName ? installedMetadataByName.get(plugin.npmName) : null) ??
+        installedMetadataByName.get(plugin.name);
+      if (installedMetadata) {
+        plugin.version = installedMetadata.version ?? plugin.version;
+        plugin.releaseStream =
+          installedMetadata.releaseStream ?? plugin.releaseStream;
+        plugin.requestedVersion =
+          installedMetadata.requestedVersion ?? plugin.requestedVersion;
+        plugin.latestVersion =
+          installedMetadata.latestVersion ?? plugin.latestVersion ?? null;
+        plugin.alphaVersion =
+          installedMetadata.alphaVersion ?? plugin.alphaVersion ?? null;
+      }
+
       const suffix = `plugin-${plugin.id}`;
       const packageName = `@elizaos/plugin-${plugin.id}`;
       const npmPkgName = plugin.npmName;
@@ -380,6 +482,11 @@ export async function handlePluginRoutes(
       return true;
     }
 
+    const previousConfig = structuredClone(state.config);
+    const previousResolvedPlugins = state.runtime
+      ? await resolvePluginsSnapshotSafe(previousConfig, "plugin update")
+      : undefined;
+
     if (body.enabled !== undefined) {
       plugin.enabled = body.enabled;
     }
@@ -523,8 +630,26 @@ export async function handlePluginRoutes(
           `[eliza-api] Failed to save config: ${err instanceof Error ? err.message : err}`,
         );
       }
+    }
 
-      scheduleRuntimeRestart(`Plugin toggle: ${pluginId}`);
+    const runtimeApply = await applyPluginRuntimeMutation({
+      runtime: state.runtime,
+      previousConfig,
+      nextConfig: state.config,
+      previousResolvedPlugins,
+      changedPluginId: pluginId,
+      changedPluginPackage: plugin.npmName,
+      config: body.config,
+      expectRuntimeGraphChange: body.enabled !== undefined,
+      reason:
+        body.enabled !== undefined
+          ? `Plugin toggle: ${pluginId}`
+          : `Plugin config updated: ${pluginId}`,
+      restartRuntime,
+    });
+
+    if (runtimeApply.requiresRestart) {
+      scheduleRuntimeRestart(runtimeApply.reason);
     }
 
     if (isMiladySettingsDebugEnabled()) {
@@ -536,7 +661,16 @@ export async function handlePluginRoutes(
       );
     }
 
-    json(res, { ok: true, plugin });
+    json(res, {
+      ok: true,
+      plugin,
+      applied: runtimeApply.mode,
+      requiresRestart: runtimeApply.requiresRestart,
+      restartedRuntime: runtimeApply.restartedRuntime,
+      loadedPackages: runtimeApply.loadedPackages,
+      unloadedPackages: runtimeApply.unloadedPackages,
+      reloadedPackages: runtimeApply.reloadedPackages,
+    });
     return true;
   }
 
@@ -700,10 +834,12 @@ export async function handlePluginRoutes(
   // ── POST /api/plugins/install ───────────────────────────────────────────
   // Install a plugin from the registry and restart the agent.
   if (method === "POST" && pathname === "/api/plugins/install") {
-    const body = await readJsonBody<{ name: string; autoRestart?: boolean }>(
-      req,
-      res,
-    );
+    const body = await readJsonBody<{
+      name: string;
+      autoRestart?: boolean;
+      stream?: "latest" | "alpha";
+      version?: string;
+    }>(req, res);
     if (!body) return true;
     const pluginName = body.name?.trim();
 
@@ -712,14 +848,18 @@ export async function handlePluginRoutes(
       return true;
     }
 
-    const npmNamePattern =
-      /^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/;
-    if (!npmNamePattern.test(pluginName)) {
-      error(res, "Invalid plugin name format", 400);
+    const installValidationError =
+      validateRegistryPluginPackageName(pluginName);
+    if (installValidationError) {
+      error(res, installValidationError, 400);
       return true;
     }
 
     try {
+      const previousConfig = structuredClone(state.config);
+      const previousResolvedPlugins = state.runtime
+        ? await resolvePluginsSnapshotSafe(previousConfig, "plugin install")
+        : undefined;
       const pluginManager = requirePluginManager(state.runtime);
       const result = await pluginManager.installPlugin(
         pluginName,
@@ -731,6 +871,10 @@ export async function handlePluginRoutes(
             phase: progress.phase,
             message: progress.message,
           });
+        },
+        {
+          releaseStream: body.stream,
+          version: body.version,
         },
       );
 
@@ -769,6 +913,8 @@ export async function handlePluginRoutes(
           .installs as Record<string, Record<string, unknown>>;
         installs[result.pluginName ?? pluginName] = {
           source: "npm",
+          requestedVersion: result.requestedVersion,
+          releaseStream: result.releaseStream,
           installPath: result.installPath,
           version: result.version ?? "unknown",
           installedAt: new Date().toISOString(),
@@ -783,27 +929,177 @@ export async function handlePluginRoutes(
         );
       }
 
-      // If autoRestart is not explicitly false, restart the agent
-      if (body.autoRestart !== false && result.requiresRestart) {
-        scheduleRuntimeRestart(`Plugin ${result.pluginName} installed`);
+      const runtimeApply = await applyPluginRuntimeMutation({
+        runtime: state.runtime,
+        previousConfig,
+        nextConfig: state.config,
+        previousResolvedPlugins,
+        changedPluginId: installedId,
+        changedPluginPackage: result.pluginName,
+        expectRuntimeGraphChange: true,
+        reason: `Plugin ${result.pluginName} installed`,
+        restartRuntime,
+      });
+
+      if (runtimeApply.requiresRestart && body.autoRestart !== false) {
+        scheduleRuntimeRestart(runtimeApply.reason);
       }
 
       json(res, {
         ok: true,
+        pluginName: result.pluginName,
         plugin: {
           name: result.pluginName,
           version: result.version,
           installPath: result.installPath,
         },
-        requiresRestart: result.requiresRestart,
-        message: result.requiresRestart
-          ? `${result.pluginName} installed. Agent will restart to load it.`
+        applied: runtimeApply.mode,
+        requiresRestart: runtimeApply.requiresRestart,
+        restartedRuntime: runtimeApply.restartedRuntime,
+        loadedPackages: runtimeApply.loadedPackages,
+        unloadedPackages: runtimeApply.unloadedPackages,
+        reloadedPackages: runtimeApply.reloadedPackages,
+        releaseStream: result.releaseStream,
+        requestedVersion: result.requestedVersion,
+        latestVersion: result.latestVersion,
+        alphaVersion: result.alphaVersion,
+        message: runtimeApply.requiresRestart
+          ? `${result.pluginName} installed. Restart required to activate.`
           : `${result.pluginName} installed.`,
       });
     } catch (err) {
       error(
         res,
         `Install failed: ${err instanceof Error ? err.message : String(err)}`,
+        500,
+      );
+    }
+    return true;
+  }
+
+  // ── POST /api/plugins/update ────────────────────────────────────────────
+  if (method === "POST" && pathname === "/api/plugins/update") {
+    const body = await readJsonBody<{
+      name: string;
+      autoRestart?: boolean;
+      stream?: "latest" | "alpha";
+      version?: string;
+    }>(req, res);
+    if (!body) return true;
+    const pluginName = body.name?.trim();
+
+    const updateValidationError = validateRegistryPluginPackageName(
+      pluginName ?? "",
+    );
+    if (updateValidationError) {
+      error(res, updateValidationError, 400);
+      return true;
+    }
+
+    try {
+      const previousConfig = structuredClone(state.config);
+      const previousResolvedPlugins = state.runtime
+        ? await resolvePluginsSnapshotSafe(previousConfig, "plugin update")
+        : undefined;
+      const pluginManager = requirePluginManager(state.runtime);
+      const updatePlugin =
+        typeof pluginManager.updatePlugin === "function"
+          ? pluginManager.updatePlugin.bind(pluginManager)
+          : pluginManager.installPlugin.bind(pluginManager);
+      const result = await updatePlugin(
+        pluginName,
+        (progress: InstallProgressLike) => {
+          logger.info(`[update] ${progress.phase}: ${progress.message}`);
+          state.broadcastWs?.({
+            type: "install-progress",
+            pluginName: progress.pluginName,
+            phase: progress.phase,
+            message: progress.message,
+          });
+        },
+        {
+          releaseStream: body.stream,
+          version: body.version,
+        },
+      );
+
+      if (!result.success) {
+        json(res, { ok: false, error: result.error }, 422);
+        return true;
+      }
+
+      if (!state.config.plugins) {
+        state.config.plugins = {};
+      }
+      if (!state.config.plugins.entries) {
+        state.config.plugins.entries = {};
+      }
+      const updatedId = (result.pluginName ?? pluginName)
+        .replace(/^@[^/]+\/plugin-/, "")
+        .replace(/^@[^/]+\//, "")
+        .replace(/^plugin-/, "");
+      state.config.plugins.entries[updatedId] = { enabled: true };
+      state.config.plugins.installs = state.config.plugins.installs ?? {};
+      state.config.plugins.installs[result.pluginName ?? pluginName] = {
+        source: "npm",
+        requestedVersion: result.requestedVersion,
+        releaseStream: result.releaseStream,
+        installPath: result.installPath,
+        version: result.version ?? "unknown",
+        installedAt: new Date().toISOString(),
+      };
+
+      try {
+        saveElizaConfig(state.config);
+      } catch (err) {
+        logger.warn(
+          `[eliza-api] Failed to save config after update: ${err instanceof Error ? err.message : err}`,
+        );
+      }
+
+      const runtimeApply = await applyPluginRuntimeMutation({
+        runtime: state.runtime,
+        previousConfig,
+        nextConfig: state.config,
+        previousResolvedPlugins,
+        changedPluginId: updatedId,
+        changedPluginPackage: result.pluginName,
+        forceReloadPackages: [result.pluginName],
+        expectRuntimeGraphChange: true,
+        reason: `Plugin ${result.pluginName} updated`,
+        restartRuntime,
+      });
+
+      if (runtimeApply.requiresRestart && body.autoRestart !== false) {
+        scheduleRuntimeRestart(runtimeApply.reason);
+      }
+
+      json(res, {
+        ok: true,
+        pluginName: result.pluginName,
+        plugin: {
+          name: result.pluginName,
+          version: result.version,
+          installPath: result.installPath,
+        },
+        applied: runtimeApply.mode,
+        requiresRestart: runtimeApply.requiresRestart,
+        restartedRuntime: runtimeApply.restartedRuntime,
+        loadedPackages: runtimeApply.loadedPackages,
+        unloadedPackages: runtimeApply.unloadedPackages,
+        reloadedPackages: runtimeApply.reloadedPackages,
+        releaseStream: result.releaseStream,
+        requestedVersion: result.requestedVersion,
+        latestVersion: result.latestVersion,
+        alphaVersion: result.alphaVersion,
+        message: runtimeApply.requiresRestart
+          ? `${result.pluginName} updated. Restart required to activate.`
+          : `${result.pluginName} updated.`,
+      });
+    } catch (err) {
+      error(
+        res,
+        `Update failed: ${err instanceof Error ? err.message : String(err)}`,
         500,
       );
     }
@@ -819,12 +1115,19 @@ export async function handlePluginRoutes(
     if (!body) return true;
     const pluginName = body.name?.trim();
 
-    if (!pluginName) {
-      error(res, "Request body must include 'name' (plugin package name)", 400);
+    const uninstallValidationError = validateRegistryPluginPackageName(
+      pluginName ?? "",
+    );
+    if (uninstallValidationError) {
+      error(res, uninstallValidationError, 400);
       return true;
     }
 
     try {
+      const previousConfig = structuredClone(state.config);
+      const previousResolvedPlugins = state.runtime
+        ? await resolvePluginsSnapshotSafe(previousConfig, "plugin uninstall")
+        : undefined;
       const pluginManager = requirePluginManager(state.runtime);
       const result = await pluginManager.uninstallPlugin(pluginName);
 
@@ -833,16 +1136,54 @@ export async function handlePluginRoutes(
         return true;
       }
 
-      if (body.autoRestart !== false && result.requiresRestart) {
-        scheduleRuntimeRestart(`Plugin ${pluginName} uninstalled`);
+      const removedId = (result.pluginName ?? pluginName)
+        .replace(/^@[^/]+\/plugin-/, "")
+        .replace(/^@[^/]+\//, "")
+        .replace(/^plugin-/, "");
+      const installs = state.config.plugins?.installs;
+      if (installs && typeof installs === "object") {
+        delete installs[result.pluginName ?? pluginName];
+      }
+      const entries = state.config.plugins?.entries;
+      if (entries && typeof entries === "object") {
+        delete entries[removedId];
+      }
+
+      try {
+        saveElizaConfig(state.config);
+      } catch (err) {
+        logger.warn(
+          `[eliza-api] Failed to save config after uninstall: ${err instanceof Error ? err.message : err}`,
+        );
+      }
+
+      const runtimeApply = await applyPluginRuntimeMutation({
+        runtime: state.runtime,
+        previousConfig,
+        nextConfig: state.config,
+        previousResolvedPlugins,
+        changedPluginId: removedId,
+        changedPluginPackage: result.pluginName,
+        expectRuntimeGraphChange: true,
+        reason: `Plugin ${pluginName} uninstalled`,
+        restartRuntime,
+      });
+
+      if (runtimeApply.requiresRestart && body.autoRestart !== false) {
+        scheduleRuntimeRestart(runtimeApply.reason);
       }
 
       json(res, {
         ok: true,
         pluginName: result.pluginName,
-        requiresRestart: result.requiresRestart,
-        message: result.requiresRestart
-          ? `${pluginName} uninstalled. Agent will restart.`
+        applied: runtimeApply.mode,
+        requiresRestart: runtimeApply.requiresRestart,
+        restartedRuntime: runtimeApply.restartedRuntime,
+        loadedPackages: runtimeApply.loadedPackages,
+        unloadedPackages: runtimeApply.unloadedPackages,
+        reloadedPackages: runtimeApply.reloadedPackages,
+        message: runtimeApply.requiresRestart
+          ? `${pluginName} uninstalled. Restart required.`
           : `${pluginName} uninstalled.`,
       });
     } catch (err) {
@@ -861,6 +1202,10 @@ export async function handlePluginRoutes(
       pathname.slice("/api/plugins/".length, pathname.length - "/eject".length),
     );
     try {
+      const previousConfig = structuredClone(state.config);
+      const previousResolvedPlugins = state.runtime
+        ? await resolvePluginsSnapshotSafe(previousConfig, "plugin eject")
+        : undefined;
       const pluginManager = requirePluginManager(state.runtime);
       // Ensure the method exists on the service (it should)
       if (typeof pluginManager.ejectPlugin !== "function") {
@@ -871,13 +1216,30 @@ export async function handlePluginRoutes(
         json(res, { ok: false, error: result.error }, 422);
         return true;
       }
-      if (result.requiresRestart) {
-        scheduleRuntimeRestart(`Plugin ${pluginName} ejected`);
+      const runtimeApply = await applyPluginRuntimeMutation({
+        runtime: state.runtime,
+        previousConfig,
+        nextConfig: state.config,
+        previousResolvedPlugins,
+        changedPluginId: pluginName,
+        changedPluginPackage: result.pluginName,
+        forceReloadPackages: [result.pluginName],
+        expectRuntimeGraphChange: true,
+        reason: `Plugin ${pluginName} ejected`,
+        restartRuntime,
+      });
+      if (runtimeApply.requiresRestart) {
+        scheduleRuntimeRestart(runtimeApply.reason);
       }
       json(res, {
         ok: true,
         pluginName: result.pluginName,
-        requiresRestart: result.requiresRestart,
+        applied: runtimeApply.mode,
+        requiresRestart: runtimeApply.requiresRestart,
+        restartedRuntime: runtimeApply.restartedRuntime,
+        loadedPackages: runtimeApply.loadedPackages,
+        unloadedPackages: runtimeApply.unloadedPackages,
+        reloadedPackages: runtimeApply.reloadedPackages,
         message: `${pluginName} ejected to local source.`,
       });
     } catch (err) {
@@ -896,6 +1258,10 @@ export async function handlePluginRoutes(
       pathname.slice("/api/plugins/".length, pathname.length - "/sync".length),
     );
     try {
+      const previousConfig = structuredClone(state.config);
+      const previousResolvedPlugins = state.runtime
+        ? await resolvePluginsSnapshotSafe(previousConfig, "plugin sync")
+        : undefined;
       const pluginManager = requirePluginManager(state.runtime);
       if (typeof pluginManager.syncPlugin !== "function") {
         throw new Error("Plugin manager does not support syncing plugins");
@@ -905,13 +1271,30 @@ export async function handlePluginRoutes(
         json(res, { ok: false, error: result.error }, 422);
         return true;
       }
-      if (result.requiresRestart) {
-        scheduleRuntimeRestart(`Plugin ${pluginName} synced`);
+      const runtimeApply = await applyPluginRuntimeMutation({
+        runtime: state.runtime,
+        previousConfig,
+        nextConfig: state.config,
+        previousResolvedPlugins,
+        changedPluginId: pluginName,
+        changedPluginPackage: result.pluginName,
+        forceReloadPackages: result.requiresRestart ? [result.pluginName] : [],
+        expectRuntimeGraphChange: true,
+        reason: `Plugin ${pluginName} synced`,
+        restartRuntime,
+      });
+      if (runtimeApply.requiresRestart) {
+        scheduleRuntimeRestart(runtimeApply.reason);
       }
       json(res, {
         ok: true,
         pluginName: result.pluginName,
-        requiresRestart: result.requiresRestart,
+        applied: runtimeApply.mode,
+        requiresRestart: runtimeApply.requiresRestart,
+        restartedRuntime: runtimeApply.restartedRuntime,
+        loadedPackages: runtimeApply.loadedPackages,
+        unloadedPackages: runtimeApply.unloadedPackages,
+        reloadedPackages: runtimeApply.reloadedPackages,
         message: `${pluginName} synced with upstream.`,
       });
     } catch (err) {
@@ -936,6 +1319,10 @@ export async function handlePluginRoutes(
       ),
     );
     try {
+      const previousConfig = structuredClone(state.config);
+      const previousResolvedPlugins = state.runtime
+        ? await resolvePluginsSnapshotSafe(previousConfig, "plugin reinject")
+        : undefined;
       const pluginManager = requirePluginManager(state.runtime);
       if (typeof pluginManager.reinjectPlugin !== "function") {
         throw new Error("Plugin manager does not support reinjecting plugins");
@@ -945,13 +1332,30 @@ export async function handlePluginRoutes(
         json(res, { ok: false, error: result.error }, 422);
         return true;
       }
-      if (result.requiresRestart) {
-        scheduleRuntimeRestart(`Plugin ${pluginName} reinjected`);
+      const runtimeApply = await applyPluginRuntimeMutation({
+        runtime: state.runtime,
+        previousConfig,
+        nextConfig: state.config,
+        previousResolvedPlugins,
+        changedPluginId: pluginName,
+        changedPluginPackage: result.pluginName,
+        forceReloadPackages: [result.pluginName],
+        expectRuntimeGraphChange: true,
+        reason: `Plugin ${pluginName} reinjected`,
+        restartRuntime,
+      });
+      if (runtimeApply.requiresRestart) {
+        scheduleRuntimeRestart(runtimeApply.reason);
       }
       json(res, {
         ok: true,
         pluginName: result.pluginName,
-        requiresRestart: result.requiresRestart,
+        applied: runtimeApply.mode,
+        requiresRestart: runtimeApply.requiresRestart,
+        restartedRuntime: runtimeApply.restartedRuntime,
+        loadedPackages: runtimeApply.loadedPackages,
+        unloadedPackages: runtimeApply.unloadedPackages,
+        reloadedPackages: runtimeApply.reloadedPackages,
         message: `${pluginName} restored to registry version.`,
       });
     } catch (err) {
@@ -1098,6 +1502,11 @@ export async function handlePluginRoutes(
       return true;
     }
 
+    const previousConfig = structuredClone(state.config);
+    const previousResolvedPlugins = state.runtime
+      ? await resolvePluginsSnapshotSafe(previousConfig, "core plugin toggle")
+      : undefined;
+
     // Update the allow list in config
     state.config.plugins = state.config.plugins ?? {};
     state.config.plugins.allow = state.config.plugins.allow ?? [];
@@ -1122,15 +1531,33 @@ export async function handlePluginRoutes(
       );
     }
 
-    // Auto-restart so the change takes effect
-    scheduleRuntimeRestart(
-      `Plugin ${shortId} ${body.enabled ? "enabled" : "disabled"}`,
-    );
+    const runtimeApply = await applyPluginRuntimeMutation({
+      runtime: state.runtime,
+      previousConfig,
+      nextConfig: state.config,
+      previousResolvedPlugins,
+      changedPluginId: shortId,
+      changedPluginPackage: body.npmName,
+      expectRuntimeGraphChange: true,
+      reason: `Plugin ${shortId} ${body.enabled ? "enabled" : "disabled"}`,
+      restartRuntime,
+    });
+
+    if (runtimeApply.requiresRestart) {
+      scheduleRuntimeRestart(runtimeApply.reason);
+    }
 
     json(res, {
       ok: true,
-      restarting: true,
-      message: `${shortId} ${body.enabled ? "enabled" : "disabled"}. Restarting...`,
+      applied: runtimeApply.mode,
+      requiresRestart: runtimeApply.requiresRestart,
+      restartedRuntime: runtimeApply.restartedRuntime,
+      loadedPackages: runtimeApply.loadedPackages,
+      unloadedPackages: runtimeApply.unloadedPackages,
+      reloadedPackages: runtimeApply.reloadedPackages,
+      message: runtimeApply.requiresRestart
+        ? `${shortId} ${body.enabled ? "enabled" : "disabled"}. Restart required.`
+        : `${shortId} ${body.enabled ? "enabled" : "disabled"}.`,
     });
     return true;
   }

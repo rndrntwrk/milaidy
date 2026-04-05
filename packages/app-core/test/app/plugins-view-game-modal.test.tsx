@@ -765,7 +765,11 @@ describe("PluginsView game modal", () => {
       collapseButton.props.onClick();
     });
 
-    expect(text(tree.root)).toContain("Expand");
+    expect(
+      tree.root.findAllByProps({
+        "aria-label": "Expand Discord",
+      }).length,
+    ).toBeGreaterThan(0);
     expect(text(tree.root)).not.toContain("Save Settings");
     expect(
       tree.root
@@ -860,7 +864,11 @@ describe("PluginsView game modal", () => {
 
     expect(text(tree?.root)).toContain("Save Settings");
     expect(text(tree?.root)).toContain("Test Connection");
-    expect(text(tree?.root)).toContain("Collapse");
+    expect(
+      tree?.root.findAllByProps({
+        "aria-label": "Collapse Discord",
+      }).length,
+    ).toBeGreaterThan(0);
   });
 
   it("re-selects the first visible plugin when the selected one is filtered out", async () => {
@@ -1033,7 +1041,11 @@ describe("PluginsView game modal", () => {
     });
 
     expect(text(tree?.root)).toContain("GitHub");
-    expect(text(tree?.root)).toContain("Collapse");
+    expect(
+      tree?.root.findAllByProps({
+        "aria-label": "Collapse GitHub",
+      }).length,
+    ).toBeGreaterThan(0);
 
     const addButtons = tree?.root.findAll(
       (node) =>

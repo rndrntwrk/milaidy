@@ -213,10 +213,10 @@ where to get the credentials, minimum required fields, and tips for optional fie
 
 ### Discord
 **Get credentials:** https://discord.com/developers/applications → New Application → Bot → Reset Token
-**Minimum required:** `DISCORD_API_TOKEN` + `DISCORD_APPLICATION_ID`
+**Minimum required:** `DISCORD_API_TOKEN`
 **Variables:**
 - `DISCORD_API_TOKEN` — Bot token (from Bot section, click Reset Token)
-- `DISCORD_APPLICATION_ID` — Application ID (from General Information)
+- `DISCORD_APPLICATION_ID` — Application ID (from General Information, optional if runtime auto-resolve succeeds)
 - `CHANNEL_IDS` — Comma-separated channel IDs to listen in
 - `DISCORD_VOICE_CHANNEL_ID` — For voice channel support
 - `DISCORD_SHOULD_IGNORE_BOT_MESSAGES` — `true` to prevent bot-to-bot loops

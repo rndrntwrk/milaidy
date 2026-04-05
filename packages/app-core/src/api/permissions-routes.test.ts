@@ -1,4 +1,12 @@
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import {
+  cancelSelfControlExpiryTimer,
+  resetSelfControlStatusCache,
+  setSelfControlPluginConfig,
+} from "@miladyai/plugin-selfcontrol/selfcontrol";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import type { ElizaConfig } from "../config/config";
 import { createRouteInvoker } from "../test-support/route-test-helpers";
 import {
@@ -10,6 +18,8 @@ describe("permission routes", () => {
   let state: PermissionRouteState;
   let saveConfig: ReturnType<typeof vi.fn>;
   let scheduleRuntimeRestart: ReturnType<typeof vi.fn>;
+  let tempDir = "";
+  let hostsFilePath = "";
 
   beforeEach(() => {
     state = {
@@ -18,6 +28,21 @@ describe("permission routes", () => {
     };
     saveConfig = vi.fn();
     scheduleRuntimeRestart = vi.fn();
+    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "milady-permissions-"));
+    hostsFilePath = path.join(tempDir, "hosts");
+    fs.writeFileSync(hostsFilePath, "127.0.0.1 localhost\n", "utf8");
+    setSelfControlPluginConfig({ hostsFilePath, statusCacheTtlMs: 0 });
+  });
+
+  afterEach(() => {
+    cancelSelfControlExpiryTimer();
+    resetSelfControlStatusCache();
+    setSelfControlPluginConfig(undefined);
+    if (tempDir) {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+      tempDir = "";
+      hostsFilePath = "";
+    }
   });
 
   const invoke = createRouteInvoker<
@@ -60,6 +85,12 @@ describe("permission routes", () => {
     expect(result.payload).toMatchObject({
       _shellEnabled: true,
       _platform: process.platform,
+      "website-blocking": {
+        id: "website-blocking",
+        status: "granted",
+        canRequest: false,
+        hostsFilePath,
+      },
     });
   });
 
@@ -183,6 +214,21 @@ describe("permission routes", () => {
     });
   });
 
+  test("returns the live website blocker permission state by id", async () => {
+    const result = await invoke({
+      method: "GET",
+      pathname: "/api/permissions/website-blocking",
+    });
+
+    expect(result.status).toBe(200);
+    expect(result.payload).toMatchObject({
+      id: "website-blocking",
+      status: "granted",
+      canRequest: false,
+      hostsFilePath,
+    });
+  });
+
   // ── GET /api/permissions/:id — unknown permission ───────────────────
   test("returns not-applicable for unknown permission", async () => {
     const result = await invoke({
@@ -224,6 +270,21 @@ describe("permission routes", () => {
     });
   });
 
+  test("requests website blocking permission through the runtime", async () => {
+    const result = await invoke({
+      method: "POST",
+      pathname: "/api/permissions/website-blocking/request",
+    });
+
+    expect(result.status).toBe(200);
+    expect(result.payload).toMatchObject({
+      id: "website-blocking",
+      status: "granted",
+      canRequest: false,
+      hostsFilePath,
+    });
+  });
+
   // ── POST /api/permissions/:id/open-settings ─────────────────────────
   test("opens settings for a specific permission", async () => {
     const result = await invoke({
@@ -234,6 +295,28 @@ describe("permission routes", () => {
     expect(result.status).toBe(200);
     expect(result.payload).toMatchObject({
       action: "ipc:permissions:openSettings:accessibility",
+    });
+  });
+
+  test("website blocking open-settings reports when no hosts file location exists", async () => {
+    setSelfControlPluginConfig({
+      hostsFilePath: path.join(tempDir, "missing-hosts"),
+      statusCacheTtlMs: 0,
+    });
+
+    const result = await invoke({
+      method: "POST",
+      pathname: "/api/permissions/website-blocking/open-settings",
+    });
+
+    expect(result.status).toBe(200);
+    expect(result.payload).toMatchObject({
+      opened: false,
+      id: "website-blocking",
+      permission: {
+        id: "website-blocking",
+        status: "denied",
+      },
     });
   });
 

@@ -62,6 +62,13 @@ declare module "@miladyai/capacitor-talkmode" {
   export const TalkMode: TalkModePluginType;
 }
 
+declare module "@miladyai/capacitor-websiteblocker" {
+  export * from "../plugins/websiteblocker/src/definitions";
+  import type { WebsiteBlockerPlugin as WebsiteBlockerPluginType } from "../plugins/websiteblocker/src/definitions";
+  export type { WebsiteBlockerPlugin } from "../plugins/websiteblocker/src/definitions";
+  export const WebsiteBlocker: WebsiteBlockerPluginType;
+}
+
 declare module "@elizaos/plugin-coding-agent";
 declare module "@elizaos/signal-native";
 declare module "qrcode";

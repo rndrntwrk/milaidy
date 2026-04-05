@@ -67,6 +67,7 @@ export * from "./wallet-evm-balance";
 export * from "./wallet-routes";
 export * from "./wallet-rpc";
 export * from "./wallet-trading-profile";
+export * from "./website-blocker-routes";
 export {
   applyWhatsAppQrOverride,
   handleWhatsAppRoute,

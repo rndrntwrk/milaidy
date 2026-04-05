@@ -41,6 +41,17 @@ export type NormalizedBridgeMessage = {
   metadata?: Record<string, unknown>;
 };
 
+type BridgeSenderContext = {
+  id?: string;
+  username?: string;
+  displayName?: string;
+  metadata?: Record<string, unknown>;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 export function normalizeBridgeMessage(
   params?: BridgeRpcParams,
 ): NormalizedBridgeMessage {
@@ -87,6 +98,36 @@ export function normalizeBridgeMessage(
       ? { metadata: params.metadata }
       : {}),
   };
+}
+
+export function buildBridgeMessageMetadata(
+  normalized: NormalizedBridgeMessage,
+): Record<string, unknown> | undefined {
+  const metadata = isRecord(normalized.metadata) ? { ...normalized.metadata } : {};
+  const bridgeSender = normalized.sender;
+  if (bridgeSender && isRecord(bridgeSender)) {
+    const senderContext: BridgeSenderContext = {
+      ...(typeof bridgeSender.id === "string" && bridgeSender.id.trim()
+        ? { id: bridgeSender.id }
+        : {}),
+      ...(typeof bridgeSender.username === "string" &&
+      bridgeSender.username.trim()
+        ? { username: bridgeSender.username }
+        : {}),
+      ...(typeof bridgeSender.displayName === "string" &&
+      bridgeSender.displayName.trim()
+        ? { displayName: bridgeSender.displayName }
+        : {}),
+      ...(isRecord(bridgeSender.metadata)
+        ? { metadata: bridgeSender.metadata }
+        : {}),
+    };
+    if (Object.keys(senderContext).length > 0) {
+      metadata.bridgeSender = senderContext;
+    }
+  }
+
+  return Object.keys(metadata).length > 0 ? metadata : undefined;
 }
 
 export interface CloudAgentConfig {
@@ -295,12 +336,6 @@ export function startCloudAgent(userConfig: CloudAgentConfig = {}): void {
           });
         }
 
-        const entityMetadata =
-          normalized.sender?.metadata &&
-          typeof normalized.sender.metadata === "object" &&
-          !Array.isArray(normalized.sender.metadata)
-            ? normalized.sender.metadata
-            : undefined;
         const entityPayload = {
           id: entityId,
           agentId: runtime.agentId,
@@ -311,7 +346,6 @@ export function startCloudAgent(userConfig: CloudAgentConfig = {}): void {
               ),
             ),
           ),
-          ...(entityMetadata ? { metadata: entityMetadata } : {}),
         };
 
         try {
@@ -337,8 +371,11 @@ export function startCloudAgent(userConfig: CloudAgentConfig = {}): void {
           } else if (typeof runtimeWithBridge.createEntity === "function") {
             await runtimeWithBridge.createEntity(entityPayload);
           }
-        } catch {
-          // Best-effort entity sync. The room flow still works if the entity already exists.
+        } catch (error) {
+          console.warn(
+            "[cloud-agent] Failed to sync bridge entity:",
+            error,
+          );
         }
 
         if (typeof runtimeWithBridge.ensureParticipantInRoom === "function") {
@@ -355,6 +392,7 @@ export function startCloudAgent(userConfig: CloudAgentConfig = {}): void {
         processMessage: async (params: BridgeRpcParams): Promise<string> => {
           const { normalized, entityId, roomId, channelType } =
             await ensureBridgeContext(params);
+          const messageMetadata = buildBridgeMessageMetadata(normalized);
           const message = createMessageMemory({
             id: crypto.randomUUID() as ReturnType<typeof stringToUuid>,
             entityId,
@@ -369,7 +407,7 @@ export function startCloudAgent(userConfig: CloudAgentConfig = {}): void {
                 : {}),
               source: normalized.source,
               channelType,
-              ...(normalized.metadata ? { metadata: normalized.metadata } : {}),
+              ...(messageMetadata ? { metadata: messageMetadata } : {}),
             },
           });
 
@@ -406,6 +444,7 @@ export function startCloudAgent(userConfig: CloudAgentConfig = {}): void {
         ): Promise<string> => {
           const { normalized, entityId, roomId, channelType } =
             await ensureBridgeContext(params);
+          const messageMetadata = buildBridgeMessageMetadata(normalized);
           const message = createMessageMemory({
             id: crypto.randomUUID() as ReturnType<typeof stringToUuid>,
             entityId,
@@ -420,7 +459,7 @@ export function startCloudAgent(userConfig: CloudAgentConfig = {}): void {
                 : {}),
               source: normalized.source,
               channelType,
-              ...(normalized.metadata ? { metadata: normalized.metadata } : {}),
+              ...(messageMetadata ? { metadata: messageMetadata } : {}),
             },
           });
 

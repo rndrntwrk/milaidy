@@ -81,7 +81,7 @@ describe("usePluginsSkillsState.handlePluginConfigSave", () => {
     expect(mockSwitchProvider).toHaveBeenCalledWith("openai", "sk-openai-test");
   });
 
-  it("marks plugin toggles as pending restart immediately", async () => {
+  it("does not force a restart when the server reloads a plugin in place", async () => {
     const setActionNotice = vi.fn();
     const setPendingRestart = vi.fn();
     const setPendingRestartReasons = vi.fn();
@@ -108,6 +108,12 @@ describe("usePluginsSkillsState.handlePluginConfigSave", () => {
       result.current.setPlugins([discordPlugin]);
     });
 
+    mockUpdatePlugin.mockResolvedValueOnce({
+      ok: true,
+      applied: "plugin_reload",
+      requiresRestart: false,
+    });
+
     await act(async () => {
       await result.current.handlePluginToggle("discord", true);
     });
@@ -115,6 +121,49 @@ describe("usePluginsSkillsState.handlePluginConfigSave", () => {
     expect(mockUpdatePlugin).toHaveBeenCalledWith("discord", {
       enabled: true,
     });
+    expect(setPendingRestart).not.toHaveBeenCalled();
+    expect(setPendingRestartReasons).not.toHaveBeenCalled();
+    expect(showRestartBanner).not.toHaveBeenCalled();
+    expect(mockTriggerRestart).not.toHaveBeenCalled();
+  });
+
+  it("still triggers restart flow when the server explicitly requires it", async () => {
+    const setActionNotice = vi.fn();
+    const setPendingRestart = vi.fn();
+    const setPendingRestartReasons = vi.fn();
+    const showRestartBanner = vi.fn();
+    const discordPlugin: PluginInfo = {
+      id: "discord",
+      name: "Discord",
+      category: "connector",
+      enabled: false,
+      configured: true,
+      parameters: [],
+    };
+    const { result } = renderHook(() =>
+      usePluginsSkillsState({
+        setActionNotice,
+        setPendingRestart,
+        setPendingRestartReasons,
+        showRestartBanner,
+        triggerRestart: (...args: unknown[]) => mockTriggerRestart(...args),
+      }),
+    );
+
+    act(() => {
+      result.current.setPlugins([discordPlugin]);
+    });
+
+    mockUpdatePlugin.mockResolvedValueOnce({
+      ok: true,
+      applied: "restart_required",
+      requiresRestart: true,
+    });
+
+    await act(async () => {
+      await result.current.handlePluginToggle("discord", true);
+    });
+
     expect(setPendingRestart).toHaveBeenCalledWith(true);
     expect(setPendingRestartReasons).toHaveBeenCalledTimes(1);
     expect(

@@ -1,107 +1,93 @@
 import { execFile } from "node:child_process";
-import { access, mkdtemp, rm, writeFile } from "node:fs/promises";
+import fs from "node:fs";
 import { isIP } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { domainToASCII } from "node:url";
 import { promisify } from "node:util";
-import type { HandlerOptions, Memory } from "@elizaos/core";
+import { type HandlerOptions, logger, type Memory } from "@elizaos/core";
+import type {
+  PermissionState,
+  PermissionStatus,
+} from "@miladyai/shared/contracts/permissions";
 
-const execFileAsync = promisify(execFile);
-
-const DEFAULT_SELFCONTROL_CLI_PATH =
-  "/Applications/SelfControl.app/Contents/MacOS/selfcontrol-cli";
-const LEGACY_SELFCONTROL_CLI_PATH =
-  "/Applications/SelfControl.app/Contents/MacOS/org.eyebeam.SelfControl";
+const BLOCK_START_MARKER = "# >>> milady-selfcontrol >>>";
+const BLOCK_END_MARKER = "# <<< milady-selfcontrol <<<";
+const BLOCK_METADATA_PREFIX = "# milady-selfcontrol ";
 const DEFAULT_STATUS_CACHE_TTL_MS = 5_000;
 const DEFAULT_DURATION_MINUTES = 60;
 const MAX_BLOCK_MINUTES = 7 * 24 * 60;
+const PRIVILEGED_WRITE_TMP_PREFIX = "milady-selfcontrol-write-";
+const WINDOWS_WORKER_SCRIPT_NAME = "write-hosts.ps1";
+
+const execFileAsync = promisify(execFile);
+
+export type SelfControlElevationMethod =
+  | "osascript"
+  | "pkexec"
+  | "powershell-runas";
 
 export interface SelfControlPluginConfig {
-  cliPath?: string;
+  hostsFilePath?: string;
   statusCacheTtlMs?: number;
 }
 
 export interface SelfControlStatus {
   available: boolean;
   active: boolean;
-  cliPath: string | null;
+  hostsFilePath: string | null;
   endsAt: string | null;
   websites: string[];
+  canUnblockEarly: boolean;
+  requiresElevation: boolean;
+  engine: "hosts-file";
+  platform: NodeJS.Platform;
+  supportsElevationPrompt: boolean;
+  elevationPromptMethod: SelfControlElevationMethod | null;
   reason?: string;
+}
+
+export interface SelfControlPermissionState extends PermissionState {
+  id: "website-blocking";
+  hostsFilePath?: string | null;
+  supportsElevationPrompt?: boolean;
+  elevationPromptMethod?: SelfControlElevationMethod | null;
+  promptAttempted?: boolean;
+  promptSucceeded?: boolean;
 }
 
 export interface SelfControlBlockRequest {
   websites: string[];
-  durationMinutes: number;
+  durationMinutes: number | null;
 }
 
-type CommandResult = {
-  ok: boolean;
-  stdout: string;
-  stderr: string;
-  code: number | null;
+export interface SelfControlBlockMetadata {
+  version: 1;
+  startedAt: string;
+  endsAt: string | null;
+  websites: string[];
+}
+
+type StatusCacheEntry = {
+  expiresAt: number;
+  promise: Promise<SelfControlStatus>;
 };
 
-export type SelfControlCommandRunner = (
-  cliPath: string,
-  args: string[],
-) => Promise<CommandResult>;
-
-type PathExists = (targetPath: string) => Promise<boolean>;
+type PrivilegedHostsWriteInvocation = {
+  command: string;
+  args: string[];
+  workerScriptContent?: string;
+};
 
 let currentConfig: SelfControlPluginConfig = {};
-
-let commandRunner: SelfControlCommandRunner = async (
-  cliPath: string,
-  args: string[],
-) => {
-  try {
-    const result = await execFileAsync(cliPath, args, {
-      encoding: "utf8",
-      timeout: 15_000,
-    });
-    return {
-      ok: true,
-      stdout: result.stdout ?? "",
-      stderr: result.stderr ?? "",
-      code: 0,
-    };
-  } catch (error) {
-    const err = error as NodeJS.ErrnoException & {
-      stdout?: string;
-      stderr?: string;
-      code?: number | null;
-    };
-    return {
-      ok: false,
-      stdout: err.stdout ?? "",
-      stderr: err.stderr ?? "",
-      code: typeof err.code === "number" ? err.code : null,
-    };
-  }
-};
-
-let pathExists: PathExists = async (targetPath: string) => {
-  try {
-    await access(targetPath);
-    return true;
-  } catch {
-    return false;
-  }
-};
-
-let statusCache:
-  | {
-      expiresAt: number;
-      promise: Promise<SelfControlStatus>;
-    }
-  | undefined;
+let statusCache: StatusCacheEntry | undefined;
+let scheduledExpiryTimer: NodeJS.Timeout | undefined;
 
 export function setSelfControlPluginConfig(
   nextConfig: SelfControlPluginConfig | undefined,
 ): void {
   currentConfig = { ...(nextConfig ?? {}) };
+  cancelSelfControlExpiryTimer();
   resetSelfControlStatusCache();
 }
 
@@ -109,141 +95,165 @@ export function getSelfControlPluginConfig(): SelfControlPluginConfig {
   return { ...currentConfig };
 }
 
-export function setSelfControlCommandRunnerForTests(
-  runner: SelfControlCommandRunner | null,
-): void {
-  commandRunner =
-    runner ??
-    (async (cliPath: string, args: string[]) => {
-      try {
-        const result = await execFileAsync(cliPath, args, {
-          encoding: "utf8",
-          timeout: 15_000,
-        });
-        return {
-          ok: true,
-          stdout: result.stdout ?? "",
-          stderr: result.stderr ?? "",
-          code: 0,
-        };
-      } catch (error) {
-        const err = error as NodeJS.ErrnoException & {
-          stdout?: string;
-          stderr?: string;
-          code?: number | null;
-        };
-        return {
-          ok: false,
-          stdout: err.stdout ?? "",
-          stderr: err.stderr ?? "",
-          code: typeof err.code === "number" ? err.code : null,
-        };
-      }
-    });
-  resetSelfControlStatusCache();
-}
-
-export function setSelfControlPathExistsForTests(
-  nextPathExists: PathExists | null,
-): void {
-  pathExists =
-    nextPathExists ??
-    (async (targetPath: string) => {
-      try {
-        await access(targetPath);
-        return true;
-      } catch {
-        return false;
-      }
-    });
-  resetSelfControlStatusCache();
-}
-
 export function resetSelfControlStatusCache(): void {
   statusCache = undefined;
 }
 
-export async function resolveSelfControlCliPath(
+export function cancelSelfControlExpiryTimer(): void {
+  if (scheduledExpiryTimer) {
+    clearTimeout(scheduledExpiryTimer);
+    scheduledExpiryTimer = undefined;
+  }
+}
+
+export async function resolveSelfControlHostsFilePath(
   config: SelfControlPluginConfig = currentConfig,
 ): Promise<string | null> {
-  const candidates = [
-    config.cliPath,
-    process.env.SELFCONTROL_CLI_PATH,
-    DEFAULT_SELFCONTROL_CLI_PATH,
-    LEGACY_SELFCONTROL_CLI_PATH,
-  ].filter((candidate): candidate is string => typeof candidate === "string");
+  const override =
+    config.hostsFilePath?.trim() ||
+    process.env.WEBSITE_BLOCKER_HOSTS_FILE_PATH ||
+    process.env.SELFCONTROL_HOSTS_FILE_PATH;
+  const candidate = override
+    ? resolveUserPath(override)
+    : defaultHostsFilePath();
+  return fs.existsSync(candidate) ? candidate : null;
+}
 
-  for (const candidate of candidates) {
-    if (await pathExists(candidate)) {
-      return candidate;
-    }
+export async function reconcileSelfControlBlockState(
+  config: SelfControlPluginConfig = currentConfig,
+): Promise<SelfControlStatus> {
+  cancelSelfControlExpiryTimer();
+  const elevationPromptMethod = resolveSelfControlElevationPromptMethod();
+  const supportsElevationPrompt = elevationPromptMethod !== null;
+
+  const hostsFilePath = await resolveSelfControlHostsFilePath(config);
+  if (!hostsFilePath) {
+    return {
+      available: false,
+      active: false,
+      hostsFilePath: null,
+      endsAt: null,
+      websites: [],
+      canUnblockEarly: false,
+      requiresElevation: false,
+      engine: "hosts-file",
+      platform: process.platform,
+      supportsElevationPrompt,
+      elevationPromptMethod,
+      reason: "Could not find the system hosts file on this machine.",
+    };
   }
 
-  return null;
+  let hostsContent: string;
+  try {
+    hostsContent = fs.readFileSync(hostsFilePath, "utf8");
+  } catch (error) {
+    return {
+      available: false,
+      active: false,
+      hostsFilePath,
+      endsAt: null,
+      websites: [],
+      canUnblockEarly: false,
+      requiresElevation: false,
+      engine: "hosts-file",
+      platform: process.platform,
+      supportsElevationPrompt,
+      elevationPromptMethod,
+      reason: formatFileError(
+        error,
+        "Milady could not read the system hosts file.",
+      ),
+    };
+  }
+
+  const block = extractManagedSelfControlBlock(hostsContent);
+  const writable = canWriteHostsFile(hostsFilePath);
+  const requiresElevation = !writable;
+  const permissionWarning = writable
+    ? undefined
+    : buildElevationReason(supportsElevationPrompt);
+
+  if (!block) {
+    return {
+      available: true,
+      active: false,
+      hostsFilePath,
+      endsAt: null,
+      websites: [],
+      canUnblockEarly: writable,
+      requiresElevation,
+      engine: "hosts-file",
+      platform: process.platform,
+      supportsElevationPrompt,
+      elevationPromptMethod,
+      reason: permissionWarning,
+    };
+  }
+
+  if (block.endsAt) {
+    const endsAtMs = Date.parse(block.endsAt);
+    if (Number.isFinite(endsAtMs) && endsAtMs <= Date.now()) {
+      if (writable) {
+        await clearManagedSelfControlBlock(hostsFilePath, hostsContent, {
+          allowElevationPrompt: false,
+        });
+        return {
+          available: true,
+          active: false,
+          hostsFilePath,
+          endsAt: null,
+          websites: [],
+          canUnblockEarly: true,
+          requiresElevation: false,
+          engine: "hosts-file",
+          platform: process.platform,
+          supportsElevationPrompt,
+          elevationPromptMethod,
+        };
+      }
+
+      return {
+        available: true,
+        active: true,
+        hostsFilePath,
+        endsAt: block.endsAt,
+        websites: block.websites,
+        canUnblockEarly: false,
+        requiresElevation: true,
+        engine: "hosts-file",
+        platform: process.platform,
+        supportsElevationPrompt,
+        elevationPromptMethod,
+        reason: supportsElevationPrompt
+          ? "The website block has expired, but Milady still needs administrator/root approval to remove it."
+          : "The website block has expired, but Milady cannot remove it without administrator/root access.",
+      };
+    }
+
+    scheduleSelfControlExpiry(block.endsAt, config);
+  }
+
+  return {
+    available: true,
+    active: true,
+    hostsFilePath,
+    endsAt: block.endsAt,
+    websites: block.websites,
+    canUnblockEarly: writable,
+    requiresElevation,
+    engine: "hosts-file",
+    platform: process.platform,
+    supportsElevationPrompt,
+    elevationPromptMethod,
+    reason: permissionWarning,
+  };
 }
 
 export async function getSelfControlStatus(
   config: SelfControlPluginConfig = currentConfig,
 ): Promise<SelfControlStatus> {
-  const cliPath = await resolveSelfControlCliPath(config);
-  if (!cliPath) {
-    return {
-      available: false,
-      active: false,
-      cliPath: null,
-      endsAt: null,
-      websites: [],
-      reason: "SelfControl CLI was not found on this machine.",
-    };
-  }
-
-  const isRunningResult = await commandRunner(cliPath, ["is-running"]);
-  const isRunningOutput = `${isRunningResult.stdout}\n${isRunningResult.stderr}`;
-  if (!isRunningResult.ok) {
-    return {
-      available: true,
-      active: false,
-      cliPath,
-      endsAt: null,
-      websites: [],
-      reason: isRunningOutput.trim() || "Failed to query SelfControl status.",
-    };
-  }
-
-  const active = parseSelfControlIsRunningOutput(isRunningOutput);
-  if (!active) {
-    return {
-      available: true,
-      active: false,
-      cliPath,
-      endsAt: null,
-      websites: [],
-    };
-  }
-
-  const settingsResult = await commandRunner(cliPath, ["print-settings"]);
-  const settingsOutput = `${settingsResult.stdout}\n${settingsResult.stderr}`;
-  if (!settingsResult.ok) {
-    return {
-      available: true,
-      active: true,
-      cliPath,
-      endsAt: null,
-      websites: [],
-      reason:
-        settingsOutput.trim() || "Failed to read the active SelfControl block.",
-    };
-  }
-
-  const parsedSettings = parseSelfControlSettingsOutput(settingsOutput);
-
-  return {
-    available: true,
-    active: true,
-    cliPath,
-    endsAt: parsedSettings.endsAt,
-    websites: parsedSettings.websites,
-  };
+  return await reconcileSelfControlBlockState(config);
 }
 
 export async function getCachedSelfControlStatus(
@@ -262,13 +272,107 @@ export async function getCachedSelfControlStatus(
   return await promise;
 }
 
+export async function getSelfControlPermissionState(
+  config: SelfControlPluginConfig = currentConfig,
+): Promise<SelfControlPermissionState> {
+  const status = await getSelfControlStatus(config);
+  const permissionStatus = mapSelfControlStatusToPermissionStatus(status);
+  const canRequest =
+    permissionStatus === "not-determined" && status.supportsElevationPrompt;
+
+  return {
+    id: "website-blocking",
+    status: permissionStatus,
+    lastChecked: Date.now(),
+    canRequest,
+    reason: buildSelfControlPermissionReason(status, {
+      prompted: false,
+      promptSucceeded: false,
+    }),
+    hostsFilePath: status.hostsFilePath,
+    supportsElevationPrompt: status.supportsElevationPrompt,
+    elevationPromptMethod: status.elevationPromptMethod,
+    promptAttempted: false,
+    promptSucceeded: false,
+  };
+}
+
+export async function requestSelfControlPermission(
+  config: SelfControlPluginConfig = currentConfig,
+): Promise<SelfControlPermissionState> {
+  const status = await getSelfControlStatus(config);
+  if (!status.hostsFilePath) {
+    return await getSelfControlPermissionState(config);
+  }
+
+  if (!status.requiresElevation) {
+    return await getSelfControlPermissionState(config);
+  }
+
+  if (!status.supportsElevationPrompt) {
+    return await getSelfControlPermissionState(config);
+  }
+
+  try {
+    const hostsContent = fs.readFileSync(status.hostsFilePath, "utf8");
+    await writeHostsFileContent(status.hostsFilePath, hostsContent, {
+      allowElevationPrompt: true,
+    });
+    resetSelfControlStatusCache();
+    const nextStatus = await getSelfControlStatus(config);
+    return {
+      ...(await getSelfControlPermissionState(config)),
+      reason: buildSelfControlPermissionReason(nextStatus, {
+        prompted: true,
+        promptSucceeded: true,
+      }),
+      promptAttempted: true,
+      promptSucceeded: true,
+    };
+  } catch (error) {
+    return {
+      ...(await getSelfControlPermissionState(config)),
+      reason: formatFileError(
+        error,
+        "Milady could not get administrator/root approval for website blocking.",
+      ),
+      promptAttempted: true,
+      promptSucceeded: false,
+    };
+  }
+}
+
+export async function openSelfControlPermissionLocation(
+  config: SelfControlPluginConfig = currentConfig,
+): Promise<boolean> {
+  const hostsFilePath = await resolveSelfControlHostsFilePath(config);
+  if (!hostsFilePath) {
+    return false;
+  }
+
+  const parentPath = path.dirname(hostsFilePath);
+  switch (process.platform) {
+    case "darwin":
+      await execFileAsync("open", ["-R", hostsFilePath]);
+      return true;
+    case "win32":
+      await execFileAsync("explorer.exe", [`/select,${hostsFilePath}`]);
+      return true;
+    case "linux":
+      await execFileAsync("xdg-open", [parentPath]);
+      return true;
+    default:
+      return false;
+  }
+}
+
 export async function startSelfControlBlock(
   request: SelfControlBlockRequest,
   config: SelfControlPluginConfig = currentConfig,
 ): Promise<
   | {
       success: true;
-      endsAt: string;
+      endsAt: string | null;
     }
   | {
       success: false;
@@ -276,11 +380,20 @@ export async function startSelfControlBlock(
       status?: SelfControlStatus;
     }
 > {
-  const status = await getSelfControlStatus(config);
-  if (!status.available || !status.cliPath) {
+  const normalizedRequest = normalizeSelfControlBlockRequest(request);
+  if (!normalizedRequest.success) {
     return {
       success: false,
-      error: status.reason ?? "SelfControl is unavailable on this machine.",
+      error: normalizedRequest.error,
+    };
+  }
+
+  const status = await reconcileSelfControlBlockState(config);
+  if (!status.available || !status.hostsFilePath) {
+    return {
+      success: false,
+      error: status.reason ?? "Local website blocking is unavailable.",
+      status,
     };
   }
 
@@ -289,100 +402,157 @@ export async function startSelfControlBlock(
       success: false,
       error:
         status.endsAt === null
-          ? "A SelfControl block is already running."
-          : `A SelfControl block is already running until ${status.endsAt}.`,
+          ? "A website block is already running until you remove it."
+          : `A website block is already running until ${status.endsAt}.`,
       status,
     };
   }
 
-  const endsAt = new Date(
-    Date.now() + request.durationMinutes * 60_000,
-  ).toISOString();
-  const tempDir = await mkdtemp(path.join(os.tmpdir(), "milady-selfcontrol-"));
-  const blocklistPath = path.join(tempDir, "block.selfcontrol");
+  if (!status.canUnblockEarly && !status.supportsElevationPrompt) {
+    return {
+      success: false,
+      error:
+        status.reason ??
+        "Milady needs administrator/root access to edit the system hosts file.",
+      status,
+    };
+  }
+
+  const metadata: SelfControlBlockMetadata = {
+    version: 1,
+    startedAt: new Date().toISOString(),
+    endsAt:
+      normalizedRequest.request.durationMinutes === null
+        ? null
+        : new Date(
+            Date.now() + normalizedRequest.request.durationMinutes * 60_000,
+          ).toISOString(),
+    websites: normalizedRequest.request.websites,
+  };
 
   try {
-    await writeFile(
-      blocklistPath,
-      buildSelfControlBlocklistPlist(request.websites),
-      "utf8",
-    );
+    const hostsContent = fs.readFileSync(status.hostsFilePath, "utf8");
+    const lineEnding = detectLineEnding(hostsContent);
+    const cleanedContent = stripManagedSelfControlBlock(hostsContent).trimEnd();
+    const nextContent = [
+      cleanedContent,
+      cleanedContent ? "" : null,
+      buildSelfControlManagedHostsBlock(metadata, lineEnding).trimEnd(),
+      "",
+    ]
+      .filter((part): part is string => part !== null)
+      .join(lineEnding);
 
-    const result = await commandRunner(status.cliPath, [
-      "start",
-      "--blocklist",
-      blocklistPath,
-      "--enddate",
-      endsAt,
-    ]);
-    const output = `${result.stdout}\n${result.stderr}`;
-    if (!result.ok) {
-      return {
-        success: false,
-        error:
-          output.match(/already running/i) !== null
-            ? "A SelfControl block is already running."
-            : output.trim() || "SelfControl failed to start the block.",
-      };
+    await writeHostsFileContent(status.hostsFilePath, nextContent, {
+      allowElevationPrompt: true,
+    });
+  } catch (error) {
+    return {
+      success: false,
+      error: formatFileError(
+        error,
+        "Milady failed to update the system hosts file.",
+      ),
+      status,
+    };
+  }
+
+  if (metadata.endsAt) {
+    scheduleSelfControlExpiry(metadata.endsAt, config);
+  }
+  resetSelfControlStatusCache();
+  return {
+    success: true,
+    endsAt: metadata.endsAt,
+  };
+}
+
+export async function stopSelfControlBlock(
+  config: SelfControlPluginConfig = currentConfig,
+): Promise<
+  | {
+      success: true;
+      removed: boolean;
+      status: SelfControlStatus;
     }
+  | {
+      success: false;
+      error: string;
+      status?: SelfControlStatus;
+    }
+> {
+  const status = await reconcileSelfControlBlockState(config);
+  if (!status.available || !status.hostsFilePath) {
+    return {
+      success: false,
+      error: status.reason ?? "Local website blocking is unavailable.",
+      status,
+    };
+  }
 
-    resetSelfControlStatusCache();
+  if (!status.active) {
     return {
       success: true,
-      endsAt,
+      removed: false,
+      status,
     };
-  } finally {
-    await rm(tempDir, { recursive: true, force: true });
   }
+
+  if (!status.canUnblockEarly && !status.supportsElevationPrompt) {
+    return {
+      success: false,
+      error:
+        status.reason ??
+        "Milady needs administrator/root access to edit the system hosts file.",
+      status,
+    };
+  }
+
+  try {
+    const hostsContent = fs.readFileSync(status.hostsFilePath, "utf8");
+    await clearManagedSelfControlBlock(status.hostsFilePath, hostsContent, {
+      allowElevationPrompt: true,
+    });
+  } catch (error) {
+    return {
+      success: false,
+      error: formatFileError(
+        error,
+        "Milady failed to remove the website block from the system hosts file.",
+      ),
+      status,
+    };
+  }
+
+  resetSelfControlStatusCache();
+  return {
+    success: true,
+    removed: true,
+    status: {
+      ...status,
+      active: false,
+      endsAt: null,
+      websites: [],
+    },
+  };
 }
 
-export function buildSelfControlBlocklistPlist(
-  websites: readonly string[],
-  blockAsWhitelist = false,
+export function buildSelfControlManagedHostsBlock(
+  metadata: SelfControlBlockMetadata,
+  lineEnding = "\n",
 ): string {
-  const domainsXml = websites
-    .map((website) => `    <string>${escapeXml(website)}</string>`)
-    .join("\n");
+  const entries = metadata.websites.flatMap((website) => [
+    `0.0.0.0 ${website}`,
+    `::1 ${website}`,
+  ]);
 
   return [
-    `<?xml version="1.0" encoding="UTF-8"?>`,
-    `<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">`,
-    `<plist version="1.0">`,
-    `<dict>`,
-    `  <key>HostBlacklist</key>`,
-    `  <array>`,
-    domainsXml,
-    `  </array>`,
-    `  <key>BlockAsWhitelist</key>`,
-    blockAsWhitelist ? `  <true/>` : `  <false/>`,
-    `</dict>`,
-    `</plist>`,
-    ``,
-  ].join("\n");
-}
-
-export function parseSelfControlIsRunningOutput(output: string): boolean {
-  return /\bYES\b/.test(output);
-}
-
-export function parseSelfControlSettingsOutput(output: string): {
-  endsAt: string | null;
-  websites: string[];
-} {
-  const endDateMatch = output.match(/BlockEndDate = "([^"]+)";/);
-  const blocklistMatch = output.match(/ActiveBlocklist =\s+\(([\s\S]*?)\);\s*/);
-  const websites = Array.from(
-    blocklistMatch?.[1].matchAll(/"([^"]+)"/g) ?? [],
-    (match) => match[1],
-  );
-
-  return {
-    endsAt:
-      typeof endDateMatch?.[1] === "string"
-        ? normalizeSelfControlDate(endDateMatch[1])
-        : null,
-    websites,
-  };
+    BLOCK_START_MARKER,
+    `${BLOCK_METADATA_PREFIX}${JSON.stringify(metadata)}`,
+    ...entries,
+    BLOCK_END_MARKER,
+    "",
+  ].join(lineEnding);
 }
 
 export function parseSelfControlBlockRequest(
@@ -392,7 +562,7 @@ export function parseSelfControlBlockRequest(
   const params = options?.parameters as
     | {
         websites?: string[] | string;
-        durationMinutes?: number | string;
+        durationMinutes?: number | string | null;
       }
     | undefined;
 
@@ -412,9 +582,14 @@ export function parseSelfControlBlockRequest(
   const durationMinutes =
     parseDurationMinutes(params?.durationMinutes) ??
     extractDurationMinutesFromText(getMessageText(message)) ??
-    DEFAULT_DURATION_MINUTES;
+    (hasIndefiniteBlockIntent(getMessageText(message))
+      ? null
+      : DEFAULT_DURATION_MINUTES);
 
-  if (durationMinutes < 1 || durationMinutes > MAX_BLOCK_MINUTES) {
+  if (
+    durationMinutes !== null &&
+    (durationMinutes < 1 || durationMinutes > MAX_BLOCK_MINUTES)
+  ) {
     return {
       request: null,
       error: `Duration must be between 1 and ${MAX_BLOCK_MINUTES} minutes.`,
@@ -451,6 +626,445 @@ export function formatWebsiteList(websites: readonly string[]): string {
 
   const preview = websites.slice(0, 3).join(", ");
   return `${preview}, and ${websites.length - 3} more`;
+}
+
+function mapSelfControlStatusToPermissionStatus(
+  status: SelfControlStatus,
+): PermissionStatus {
+  if (!["darwin", "linux", "win32"].includes(process.platform)) {
+    return "not-applicable";
+  }
+
+  if (!status.available) {
+    return "denied";
+  }
+
+  if (status.available && !status.requiresElevation) {
+    return "granted";
+  }
+
+  if (status.supportsElevationPrompt) {
+    return "not-determined";
+  }
+
+  return "denied";
+}
+
+function buildSelfControlPermissionReason(
+  status: SelfControlStatus,
+  options: { prompted: boolean; promptSucceeded: boolean },
+): string | undefined {
+  if (status.available && !status.requiresElevation) {
+    return (
+      status.reason ??
+      "Milady can edit the system hosts file directly on this machine."
+    );
+  }
+
+  if (status.supportsElevationPrompt) {
+    if (options.prompted && options.promptSucceeded) {
+      return (
+        "The approval prompt completed successfully. " +
+        "Milady can ask the OS for administrator/root approval whenever it needs to edit the system hosts file. " +
+        "That approval is per operation, so you may see the prompt again when starting or stopping a block."
+      );
+    }
+
+    return "Milady can ask the OS for administrator/root approval whenever it needs to edit the system hosts file.";
+  }
+
+  return "Milady cannot raise an administrator/root prompt for website blocking on this machine. Open the hosts file location and change ownership or run Milady with elevated access.";
+}
+
+function scheduleSelfControlExpiry(
+  endsAt: string,
+  config: SelfControlPluginConfig = currentConfig,
+): void {
+  cancelSelfControlExpiryTimer();
+  const endsAtMs = Date.parse(endsAt);
+  if (!Number.isFinite(endsAtMs)) return;
+
+  const delayMs = Math.max(endsAtMs - Date.now(), 0);
+  scheduledExpiryTimer = setTimeout(() => {
+    void reconcileSelfControlBlockState(config).catch((error) => {
+      logger.warn(
+        `[selfcontrol] Failed to reconcile scheduled expiry: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    });
+  }, delayMs);
+  scheduledExpiryTimer.unref?.();
+}
+
+function normalizeSelfControlBlockRequest(
+  request: SelfControlBlockRequest,
+):
+  | { success: true; request: SelfControlBlockRequest }
+  | { success: false; error: string } {
+  const websites = normalizeWebsiteTargets(request.websites);
+  if (websites.length === 0) {
+    return {
+      success: false,
+      error:
+        "Provide at least one public website hostname, such as `x.com` or `twitter.com`.",
+    };
+  }
+
+  const durationMinutes = request.durationMinutes;
+  if (
+    durationMinutes !== null &&
+    (!Number.isFinite(durationMinutes) ||
+      durationMinutes < 1 ||
+      durationMinutes > MAX_BLOCK_MINUTES)
+  ) {
+    return {
+      success: false,
+      error: `Duration must be between 1 and ${MAX_BLOCK_MINUTES} minutes.`,
+    };
+  }
+
+  return {
+    success: true,
+    request: {
+      websites,
+      durationMinutes,
+    },
+  };
+}
+
+async function clearManagedSelfControlBlock(
+  hostsFilePath: string,
+  hostsContent: string,
+  options: { allowElevationPrompt: boolean },
+): Promise<void> {
+  cancelSelfControlExpiryTimer();
+  const nextContent = stripManagedSelfControlBlock(hostsContent);
+  await writeHostsFileContent(hostsFilePath, nextContent, options);
+}
+
+function extractManagedSelfControlBlock(content: string): {
+  endsAt: string | null;
+  websites: string[];
+} | null {
+  const pattern = new RegExp(
+    `${escapeRegExp(BLOCK_START_MARKER)}[\\s\\S]*?${escapeRegExp(BLOCK_END_MARKER)}`,
+  );
+  const match = content.match(pattern);
+  if (!match) return null;
+
+  const block = match[0];
+  const metadata = parseManagedBlockMetadata(block);
+  const websites =
+    metadata?.websites.length &&
+    normalizeWebsiteTargets(metadata.websites).length
+      ? normalizeWebsiteTargets(metadata.websites)
+      : extractManagedBlockWebsiteTargets(block);
+
+  return {
+    endsAt: metadata?.endsAt ?? null,
+    websites,
+  };
+}
+
+function parseManagedBlockMetadata(
+  block: string,
+): SelfControlBlockMetadata | null {
+  const metadataLine = block.match(/^# milady-selfcontrol (.+)$/m);
+  if (!metadataLine?.[1]) return null;
+
+  try {
+    const parsed = JSON.parse(
+      metadataLine[1],
+    ) as Partial<SelfControlBlockMetadata>;
+    const websites = Array.isArray(parsed.websites)
+      ? normalizeWebsiteTargets(
+          parsed.websites.filter(
+            (website): website is string => typeof website === "string",
+          ),
+        )
+      : [];
+
+    return {
+      version: 1,
+      startedAt:
+        typeof parsed.startedAt === "string"
+          ? parsed.startedAt
+          : new Date().toISOString(),
+      endsAt:
+        typeof parsed.endsAt === "string"
+          ? normalizeIsoDate(parsed.endsAt)
+          : null,
+      websites,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function extractManagedBlockWebsiteTargets(block: string): string[] {
+  const websites = Array.from(
+    block.matchAll(/^(?:0\.0\.0\.0|::1)\s+([^\s#]+)$/gm),
+    (match) => match[1],
+  );
+  return normalizeWebsiteTargets(websites);
+}
+
+function stripManagedSelfControlBlock(content: string): string {
+  const pattern = new RegExp(
+    `(?:\\r?\\n)?${escapeRegExp(BLOCK_START_MARKER)}[\\s\\S]*?${escapeRegExp(BLOCK_END_MARKER)}(?:\\r?\\n)?`,
+    "g",
+  );
+  const stripped = content.replace(pattern, "\n");
+  const lineEnding = detectLineEnding(content);
+  const normalized = stripped
+    .replace(/\r\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trimEnd();
+
+  return normalized ? `${normalized}${lineEnding}` : "";
+}
+
+function canWriteHostsFile(hostsFilePath: string): boolean {
+  try {
+    fs.accessSync(hostsFilePath, fs.constants.R_OK | fs.constants.W_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function resolveSelfControlElevationPromptMethod(
+  platform: NodeJS.Platform = process.platform,
+): SelfControlElevationMethod | null {
+  switch (platform) {
+    case "darwin":
+      return hasCommandOnPath("osascript", platform) ? "osascript" : null;
+    case "linux":
+      return hasCommandOnPath("pkexec", platform) ? "pkexec" : null;
+    case "win32":
+      return hasCommandOnPath("powershell", platform) ||
+        hasCommandOnPath("powershell.exe", platform)
+        ? "powershell-runas"
+        : null;
+    default:
+      return null;
+  }
+}
+
+export function buildPrivilegedHostsWriteInvocation(
+  sourcePath: string,
+  targetPath: string,
+  platform: NodeJS.Platform = process.platform,
+  workerScriptPath?: string,
+): PrivilegedHostsWriteInvocation | null {
+  switch (platform) {
+    case "darwin":
+      return {
+        command: "osascript",
+        args: [
+          "-e",
+          "on run argv",
+          "-e",
+          "set src to quoted form of item 1 of argv",
+          "-e",
+          "set dst to quoted form of item 2 of argv",
+          "-e",
+          'do shell script "/usr/bin/install -m 644 -- " & src & " " & dst with administrator privileges',
+          "-e",
+          "end run",
+          "--",
+          sourcePath,
+          targetPath,
+        ],
+      };
+    case "linux":
+      return {
+        command: "pkexec",
+        args: ["/usr/bin/install", "-m", "644", "--", sourcePath, targetPath],
+      };
+    case "win32":
+      if (!workerScriptPath) {
+        return null;
+      }
+      return {
+        command: "powershell",
+        args: [
+          "-NoProfile",
+          "-Command",
+          [
+            `$process = Start-Process -FilePath ${quotePowerShell("powershell")}`,
+            "-Verb RunAs",
+            "-WindowStyle Hidden",
+            "-Wait",
+            "-PassThru",
+            `-ArgumentList @(${[
+              "-NoProfile",
+              "-ExecutionPolicy",
+              "Bypass",
+              "-File",
+              workerScriptPath,
+              "-Source",
+              sourcePath,
+              "-Target",
+              targetPath,
+            ]
+              .map(quotePowerShell)
+              .join(", ")})`,
+            ";",
+            "exit $process.ExitCode",
+          ].join(" "),
+        ],
+        workerScriptContent: [
+          "param(",
+          "  [Parameter(Mandatory = $true)][string]$Source,",
+          "  [Parameter(Mandatory = $true)][string]$Target",
+          ")",
+          "$ErrorActionPreference = 'Stop'",
+          "Copy-Item -LiteralPath $Source -Destination $Target -Force",
+          "",
+        ].join("\n"),
+      };
+    default:
+      return null;
+  }
+}
+
+function defaultHostsFilePath(): string {
+  if (process.platform === "win32") {
+    const root =
+      process.env.SystemRoot?.trim() ||
+      process.env.WINDIR?.trim() ||
+      "C:\\Windows";
+    return path.join(root, "System32", "drivers", "etc", "hosts");
+  }
+
+  return "/etc/hosts";
+}
+
+function resolveUserPath(input: string): string {
+  const trimmed = input.trim();
+  if (!trimmed) {
+    return trimmed;
+  }
+
+  if (trimmed.startsWith("~")) {
+    return path.resolve(trimmed.replace(/^~(?=$|[\\/])/, os.homedir()));
+  }
+
+  return path.resolve(trimmed);
+}
+
+function detectLineEnding(content: string): string {
+  return content.includes("\r\n") ? "\r\n" : "\n";
+}
+
+function buildElevationReason(supportsElevationPrompt: boolean): string {
+  return supportsElevationPrompt
+    ? "Milady needs administrator/root access to edit the system hosts file, and can ask the OS for approval when you start or stop a block."
+    : "Milady needs administrator/root access to edit the system hosts file.";
+}
+
+function hasCommandOnPath(
+  command: string,
+  platform: NodeJS.Platform = process.platform,
+): boolean {
+  const isWindows = platform === "win32";
+  if (path.isAbsolute(command)) {
+    return fs.existsSync(command);
+  }
+
+  const pathValue = process.env.PATH ?? "";
+  const pathDelimiter = isWindows ? ";" : ":";
+  const directories = pathValue
+    .split(pathDelimiter)
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+  const candidates = isWindows
+    ? [command, `${command}.exe`, `${command}.cmd`, `${command}.bat`]
+    : [command];
+
+  return directories.some((directory) =>
+    candidates.some((candidate) =>
+      fs.existsSync(path.join(directory, candidate)),
+    ),
+  );
+}
+
+function quotePowerShell(value: string): string {
+  return `'${value.replace(/'/g, "''")}'`;
+}
+
+function isPermissionError(error: unknown): error is NodeJS.ErrnoException {
+  return Boolean(
+    error &&
+      typeof error === "object" &&
+      "code" in error &&
+      ((error as NodeJS.ErrnoException).code === "EACCES" ||
+        (error as NodeJS.ErrnoException).code === "EPERM"),
+  );
+}
+
+async function writeHostsFileContent(
+  hostsFilePath: string,
+  nextContent: string,
+  options: { allowElevationPrompt: boolean },
+): Promise<void> {
+  try {
+    fs.writeFileSync(hostsFilePath, nextContent, "utf8");
+    return;
+  } catch (error) {
+    if (!options.allowElevationPrompt || !isPermissionError(error)) {
+      throw error;
+    }
+  }
+
+  await writeHostsFileContentWithElevation(hostsFilePath, nextContent);
+}
+
+async function writeHostsFileContentWithElevation(
+  hostsFilePath: string,
+  nextContent: string,
+): Promise<void> {
+  const tempRoot = fs.mkdtempSync(
+    path.join(os.tmpdir(), PRIVILEGED_WRITE_TMP_PREFIX),
+  );
+  const tempHostsPath = path.join(tempRoot, "hosts");
+  const workerScriptPath = path.join(tempRoot, WINDOWS_WORKER_SCRIPT_NAME);
+
+  try {
+    fs.writeFileSync(tempHostsPath, nextContent, "utf8");
+    const invocation = buildPrivilegedHostsWriteInvocation(
+      tempHostsPath,
+      hostsFilePath,
+      process.platform,
+      workerScriptPath,
+    );
+    if (!invocation) {
+      throw new Error(buildElevationReason(false));
+    }
+
+    if (invocation.workerScriptContent) {
+      fs.writeFileSync(
+        workerScriptPath,
+        invocation.workerScriptContent,
+        "utf8",
+      );
+    }
+
+    await execFileAsync(invocation.command, invocation.args);
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      /^Milady needs administrator\/root access/i.test(error.message)
+    ) {
+      throw error;
+    }
+
+    throw new Error(
+      `${buildElevationReason(true)} ${extractCommandFailureMessage(error)}`,
+    );
+  } finally {
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
 }
 
 function normalizeWebsiteTarget(rawTarget: string): string | null {
@@ -512,23 +1126,35 @@ function normalizeStringList(
 }
 
 function parseDurationMinutes(
-  value: number | string | undefined,
-): number | null {
+  value: number | string | null | undefined,
+): number | null | undefined {
+  if (value === null) return null;
+
   if (typeof value === "number" && Number.isFinite(value)) {
     return Math.round(value);
   }
 
   if (typeof value === "string") {
-    const parsed = Number.parseFloat(value);
+    const trimmed = value.trim().toLowerCase();
+    if (!trimmed) return undefined;
+    if (
+      trimmed === "indefinite" ||
+      trimmed === "manual" ||
+      trimmed === "until-unblocked"
+    ) {
+      return null;
+    }
+
+    const parsed = Number.parseFloat(trimmed);
     if (Number.isFinite(parsed)) {
       return Math.round(parsed);
     }
   }
 
-  return null;
+  return undefined;
 }
 
-function extractDurationMinutesFromText(text: string): number | null {
+export function extractDurationMinutesFromText(text: string): number | null {
   const match = text.match(
     /\bfor\s+(\d+(?:\.\d+)?)\s*(minutes?|mins?|hours?|hrs?|days?)\b/i,
   );
@@ -547,11 +1173,35 @@ function extractDurationMinutesFromText(text: string): number | null {
   return Math.round(amount);
 }
 
-function extractWebsiteTargetsFromText(text: string): string[] {
+export function hasIndefiniteBlockIntent(text: string): boolean {
+  return (
+    /\b(indefinitely|until i unblock|until i remove|until i say so|until further notice)\b/i.test(
+      text,
+    ) || /\bblock\b.*\bforever\b/i.test(text)
+  );
+}
+
+export function hasWebsiteBlockDeferralIntent(text: string): boolean {
+  return (
+    /\bdo not block\b/i.test(text) ||
+    /\bdon'?t block\b/i.test(text) ||
+    /\bnot yet\b/i.test(text) ||
+    /\bhold off\b/i.test(text) ||
+    /\bwait(?: for me)?(?: to)?\s+(?:confirm|say|tell|be ready)\b/i.test(
+      text,
+    ) ||
+    /\bblock\b.*\blater\b/i.test(text) ||
+    /\bself ?control\b.*\blater\b/i.test(text)
+  );
+}
+
+export function hasWebsiteBlockIntent(text: string): boolean {
+  return /\b(block|unblock|self control|selfcontrol|focus)\b/i.test(text);
+}
+
+export function extractWebsiteTargetsFromText(text: string): string[] {
   return Array.from(
-    text.matchAll(
-      /\b(?:https?:\/\/[^\s]+|(?:[a-z0-9-]+\.)+[a-z]{2,})(?=[^\w.-]|$)/gi,
-    ),
+    text.matchAll(/https?:\/\/[^\s]+|(?<![@/])(?:[a-z0-9-]+\.)+[a-z]{2,}\b/gi),
     (match) => match[0],
   );
 }
@@ -560,20 +1210,53 @@ function getMessageText(message?: Memory): string {
   return typeof message?.content?.text === "string" ? message.content.text : "";
 }
 
-function normalizeSelfControlDate(rawDate: string): string | null {
-  const normalized = rawDate.replace(
-    /^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2}) ([+-]\d{2})(\d{2})$/,
-    "$1T$2$3:$4",
-  );
-  const parsed = new Date(normalized);
+function normalizeIsoDate(rawDate: string): string | null {
+  const parsed = new Date(rawDate);
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
 }
 
-function escapeXml(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&apos;");
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function formatFileError(error: unknown, fallback: string): string {
+  if (isPermissionError(error)) {
+    return "Milady needs administrator/root access to edit the system hosts file.";
+  }
+
+  if (
+    error instanceof Error &&
+    /^Milady needs administrator\/root access/i.test(error.message)
+  ) {
+    return error.message;
+  }
+
+  return error instanceof Error && error.message
+    ? `${fallback} ${error.message}`
+    : fallback;
+}
+
+function extractCommandFailureMessage(error: unknown): string {
+  if (!error || typeof error !== "object") {
+    return "The OS denied or canceled the elevation request.";
+  }
+
+  const stderr =
+    "stderr" in error
+      ? typeof error.stderr === "string"
+        ? error.stderr.trim()
+        : Buffer.isBuffer(error.stderr)
+          ? error.stderr.toString("utf8").trim()
+          : ""
+      : "";
+  if (stderr) {
+    return stderr;
+  }
+
+  const message = error instanceof Error ? error.message.trim() : "";
+  if (message) {
+    return message;
+  }
+
+  return "The OS denied or canceled the elevation request.";
 }

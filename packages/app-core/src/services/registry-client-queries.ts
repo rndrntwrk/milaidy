@@ -30,6 +30,9 @@ export function getPluginInfoFromRegistry(
 
     p = registry.get(`@elizaos/plugin-${name}`);
     if (p) return p;
+
+    p = registry.get(`@elizaos/app-${name}`);
+    if (p) return p;
   }
 
   const bare = name.replace(/^@[^/]+\//, "");

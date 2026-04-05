@@ -82,16 +82,24 @@ function buildTimeoutSignal(timeoutMs: number): AbortSignal {
 async function readJsonResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     let detail = `${response.status} ${response.statusText}`.trim();
-    try {
-      const parsed = (await response.json()) as {
-        error?: string;
-        message?: string;
-      };
-      detail = parsed.message ?? parsed.error ?? detail;
-    } catch {
-      const text = await response.text();
-      if (text.trim().length > 0) {
-        detail = text.trim();
+    const text = await response.text();
+    const trimmed = text.trim();
+    const contentType =
+      response.headers.get("content-type")?.toLowerCase() ?? "";
+    if (trimmed.length > 0) {
+      try {
+        if (contentType.includes("text/html") && !/^[{[]/.test(trimmed)) {
+          throw new Error("html response");
+        }
+        const parsed = JSON.parse(trimmed) as {
+          error?: string;
+          message?: string;
+        };
+        detail = parsed.message ?? parsed.error ?? trimmed;
+      } catch {
+        if (!contentType.includes("text/html")) {
+          detail = trimmed.slice(0, 200);
+        }
       }
     }
     throw new ManagedGoogleClientError(response.status, detail);

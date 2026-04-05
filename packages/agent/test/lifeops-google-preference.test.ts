@@ -3,8 +3,9 @@ import os from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import type { IAgentRuntime } from "@elizaos/core";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { saveEnv } from "../../../test/helpers/test-utils";
+import { ManagedGoogleClientError } from "../src/lifeops/google-managed-client";
 import {
   createLifeOpsConnectorGrant,
   LifeOpsRepository,
@@ -214,5 +215,45 @@ describe("life-ops Google mode preference", () => {
       agentBGrants.find((grant) => grant.mode === "cloud_managed")
         ?.preferredByAgent,
     ).toBe(true);
+  });
+
+  it("treats missing managed Google status endpoints as unavailable instead of crashing", async () => {
+    process.env.ELIZAOS_CLOUD_API_KEY = "test-cloud-key";
+    process.env.ELIZAOS_CLOUD_BASE_URL = "https://www.elizacloud.ai";
+
+    const runtime = createRuntime("lifeops-google-status-agent", databasePath);
+    const service = new LifeOpsService(runtime);
+
+    (
+      service as unknown as {
+        googleManagedClient: { getStatus: () => Promise<never> };
+      }
+    ).googleManagedClient = {
+      getStatus: vi
+        .fn()
+        .mockRejectedValue(new Error("should not be called through network")),
+    };
+
+    vi.spyOn(
+      (
+        service as unknown as {
+          googleManagedClient: { getStatus: () => Promise<never> };
+        }
+      ).googleManagedClient,
+      "getStatus",
+    ).mockRejectedValueOnce(new ManagedGoogleClientError(404, "404 Not Found"));
+
+    const status = await service.getGoogleConnectorStatus(
+      new URL("http://127.0.0.1:3000/api/lifeops/connectors/google/status"),
+    );
+
+    expect(status.connected).toBe(false);
+    expect(status.configured).toBe(false);
+    expect(status.reason).toBe("config_missing");
+    expect(status.availableModes).toEqual([]);
+    expect(status.mode).toBe("local");
+
+    delete process.env.ELIZAOS_CLOUD_API_KEY;
+    delete process.env.ELIZAOS_CLOUD_BASE_URL;
   });
 });

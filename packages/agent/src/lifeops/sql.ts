@@ -107,6 +107,31 @@ export async function listTableColumns(
   runtime: IAgentRuntime,
   tableName: string,
 ): Promise<string[]> {
+  try {
+    const rows = await executeRawSql(
+      runtime,
+      `SELECT column_name
+         FROM information_schema.columns
+        WHERE table_schema = current_schema()
+          AND table_name = ${sqlQuote(tableName)}
+        ORDER BY ordinal_position`,
+    );
+    if (rows.length > 0) {
+      return rows
+        .map((row) => toText(row.column_name))
+        .filter((name) => name.length > 0);
+    }
+  } catch (error) {
+    const message = String(error).toLowerCase();
+    const infoSchemaUnavailable =
+      message.includes("information_schema") ||
+      message.includes("no such table") ||
+      message.includes("does not exist");
+    if (!infoSchemaUnavailable) {
+      throw error;
+    }
+  }
+
   const rows = await executeRawSql(runtime, `PRAGMA table_info(${tableName})`);
   return rows.map((row) => toText(row.name)).filter((name) => name.length > 0);
 }

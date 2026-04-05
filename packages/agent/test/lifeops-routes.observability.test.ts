@@ -24,6 +24,7 @@ vi.mock("@elizaos/core", () => ({
     error: loggerErrorMock,
     debug: vi.fn(),
   },
+  stringToUuid: (value: string) => value,
 }));
 
 vi.mock("../src/diagnostics/integration-observability", () => ({

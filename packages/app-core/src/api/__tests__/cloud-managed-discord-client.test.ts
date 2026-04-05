@@ -1,42 +1,74 @@
-/**
- * Verifies the managed Discord client helpers target the cloud v1 agent routes.
- */
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { MiladyClient } from "../client-base";
+import "../client-cloud";
 
-import { readFileSync } from "node:fs";
-import path from "node:path";
-import { describe, expect, it } from "vitest";
-
-const source = readFileSync(
-  path.resolve(import.meta.dirname, "..", "client-cloud.ts"),
-  "utf-8",
-);
+function jsonResponse(body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+}
 
 describe("managed cloud Discord client helpers", () => {
-  it("defines a getter for managed Discord agent status", () => {
-    const idx = source.indexOf("prototype.getCloudCompatAgentManagedDiscord");
-    const nearby = source.slice(idx, idx + 260);
-    expect(nearby).toContain("/api/cloud/v1/milady/agents/");
-    expect(nearby).toContain("/discord");
-    expect(nearby).toContain("encodeURIComponent(agentId)");
+  let fetchMock: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    fetchMock = vi.fn().mockResolvedValue(jsonResponse({ success: true }));
+    vi.stubGlobal("fetch", fetchMock);
   });
 
-  it("defines a POST helper for starting managed Discord OAuth", () => {
-    const idx = source.indexOf(
-      "prototype.createCloudCompatAgentManagedDiscordOauth",
-    );
-    const nearby = source.slice(idx, idx + 360);
-    expect(nearby).toContain('method: "POST"');
-    expect(nearby).toContain("/api/cloud/v1/milady/agents/");
-    expect(nearby).toContain("/discord/oauth");
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
-  it("defines a DELETE helper for disconnecting managed Discord", () => {
-    const idx = source.indexOf(
-      "prototype.disconnectCloudCompatAgentManagedDiscord",
+  it("requests managed Discord agent status from the cloud v1 route", async () => {
+    const client = new MiladyClient("http://127.0.0.1:31337");
+
+    await client.getCloudCompatAgentManagedDiscord("agent/with spaces");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://127.0.0.1:31337/api/cloud/v1/milady/agents/agent%2Fwith%20spaces/discord",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          "Content-Type": "application/json",
+          "X-Milady-Client-Id": expect.stringMatching(/^ui-/),
+        }),
+      }),
     );
-    const nearby = source.slice(idx, idx + 320);
-    expect(nearby).toContain('method: "DELETE"');
-    expect(nearby).toContain("/api/cloud/v1/milady/agents/");
-    expect(nearby).toContain("/discord");
+  });
+
+  it("starts managed Discord OAuth with the expected POST body", async () => {
+    const client = new MiladyClient("http://127.0.0.1:31337");
+
+    await client.createCloudCompatAgentManagedDiscordOauth("agent-1", {
+      returnUrl: "http://localhost:4173/dashboard/settings?tab=agents",
+      botNickname: "Milady Bot",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://127.0.0.1:31337/api/cloud/v1/milady/agents/agent-1/discord/oauth",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          returnUrl: "http://localhost:4173/dashboard/settings?tab=agents",
+          botNickname: "Milady Bot",
+        }),
+      }),
+    );
+  });
+
+  it("disconnects managed Discord with DELETE", async () => {
+    const client = new MiladyClient("http://127.0.0.1:31337");
+
+    await client.disconnectCloudCompatAgentManagedDiscord("agent-1");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://127.0.0.1:31337/api/cloud/v1/milady/agents/agent-1/discord",
+      expect.objectContaining({
+        method: "DELETE",
+      }),
+    );
   });
 });

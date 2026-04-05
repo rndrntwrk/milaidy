@@ -1,8 +1,7 @@
-import fs from "node:fs";
-import path from "node:path";
-import { pathToFileURL } from "node:url";
-import { logger } from "@elizaos/core";
-import { getPluginInfo } from "../services/registry-client.js";
+import {
+  type AppRouteModule,
+  importAppRouteModule,
+} from "../services/app-package-modules";
 import type { RouteHelpers, RouteRequestMeta } from "./route-helpers";
 
 export interface AppPackageRouteContext
@@ -11,11 +10,6 @@ export interface AppPackageRouteContext
   url: URL;
   runtime: unknown | null;
 }
-
-type AppRouteModule = {
-  handleAppRoutes?: (ctx: AppPackageRouteContext) => Promise<boolean>;
-  [key: string]: unknown;
-};
 
 const RESERVED_APP_ROUTE_SLUGS = new Set([
   "",
@@ -45,52 +39,6 @@ function toLegacyHandlerName(slug: string): string {
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join("");
   return `handleApps${normalized}Routes`;
-}
-
-async function importLocalAppRouteModule(
-  packageName: string,
-): Promise<AppRouteModule | null> {
-  const localInfo = await getPluginInfo(packageName);
-  const localPath = localInfo?.localPath;
-  if (!localPath) return null;
-
-  const candidatePaths = [
-    path.join(localPath, "src", "routes.ts"),
-    path.join(localPath, "src", "routes.js"),
-    path.join(localPath, "dist", "routes.js"),
-  ];
-
-  for (const candidatePath of candidatePaths) {
-    if (!fs.existsSync(candidatePath)) continue;
-    return (await import(pathToFileURL(candidatePath).href)) as AppRouteModule;
-  }
-
-  return null;
-}
-
-async function importAppRouteModule(slug: string): Promise<AppRouteModule | null> {
-  const packageName = `@elizaos/app-${slug}`;
-
-  try {
-    const localModule = await importLocalAppRouteModule(packageName);
-    if (localModule) {
-      return localModule;
-    }
-  } catch (err) {
-    logger.warn(
-      `[app-package-routes] Failed to import local routes for ${packageName}: ${
-        err instanceof Error ? err.message : String(err)
-      }`,
-    );
-  }
-
-  try {
-    return (await import(
-      /* webpackIgnore: true */ `${packageName}/routes`
-    )) as AppRouteModule;
-  } catch {
-    return null;
-  }
 }
 
 function resolveAppRouteHandler(

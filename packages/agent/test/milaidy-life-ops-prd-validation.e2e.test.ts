@@ -1474,22 +1474,28 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
                 ),
               );
 
-              const feedRes = await req(
-                port,
-                "GET",
-                "/api/lifeops/calendar/feed?timeZone=America%2FLos_Angeles",
-              );
-              expect(feedRes.status).toBe(200);
-              expect(feedRes.data.source).toBe("synced");
-              expect(
-                feedRes.data.events.map(
-                  (event: { title: string }) => event.title,
-                ),
-              ).toEqual(["Morning standup", "Design review"]);
-              expect(feedRes.data.events[1]).toMatchObject({
-                title: "Design review",
-                htmlLink: "https://calendar.google.com/event?eid=design",
-              });
+              vi.useFakeTimers();
+              vi.setSystemTime(new Date("2026-04-04T16:00:00.000Z"));
+              try {
+                const feedRes = await req(
+                  port,
+                  "GET",
+                  "/api/lifeops/calendar/feed?timeZone=America%2FLos_Angeles",
+                );
+                expect(feedRes.status).toBe(200);
+                expect(feedRes.data.source).toBe("synced");
+                expect(
+                  feedRes.data.events.map(
+                    (event: { title: string }) => event.title,
+                  ),
+                ).toEqual(["Morning standup", "Design review"]);
+                expect(feedRes.data.events[1]).toMatchObject({
+                  title: "Design review",
+                  htmlLink: "https://calendar.google.com/event?eid=design",
+                });
+              } finally {
+                vi.useRealTimers();
+              }
             },
           );
         });

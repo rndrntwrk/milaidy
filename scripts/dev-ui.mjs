@@ -40,6 +40,7 @@ import {
 } from "./lib/dev-ui-onchain.mjs";
 import { buildVisionDepsFailureMessage } from "./lib/dev-ui-vision.mjs";
 import { signalSpawnedProcessTree } from "./lib/kill-process-tree.mjs";
+import { extendNodePathEnv } from "./lib/node-path-env.mjs";
 
 const API_PORT = resolveDesktopApiPort(process.env);
 const JSON5 = JSON5Module.default ?? JSON5Module;
@@ -1341,19 +1342,22 @@ if (uiOnly) {
       ];
   apiProcess = spawn(apiCmd[0], apiCmd.slice(1), {
     cwd,
-    env: {
-      ...process.env,
-      NODE_ENV: "development",
-      ...chainEnv,
-      ELIZA_NAMESPACE: cliName,
-      MILADY_API_PORT: String(API_PORT),
-      ELIZA_API_PORT: String(API_PORT),
-      ELIZA_PORT: String(API_PORT),
-      MILADY_PORT: String(UI_PORT),
-      ELIZA_HEADLESS: "1",
-      MILADY_DEV_AUTH_BYPASS: "1",
-      LOG_LEVEL: devLogLevel,
-    },
+    env: extendNodePathEnv(
+      {
+        ...process.env,
+        NODE_ENV: "development",
+        ...chainEnv,
+        ELIZA_NAMESPACE: cliName,
+        MILADY_API_PORT: String(API_PORT),
+        ELIZA_API_PORT: String(API_PORT),
+        ELIZA_PORT: String(API_PORT),
+        MILADY_PORT: String(UI_PORT),
+        ELIZA_HEADLESS: "1",
+        MILADY_DEV_AUTH_BYPASS: "1",
+        LOG_LEVEL: devLogLevel,
+      },
+      cwd,
+    ),
     stdio: ["inherit", "pipe", "pipe"],
   });
 

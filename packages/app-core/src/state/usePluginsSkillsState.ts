@@ -175,26 +175,30 @@ export function usePluginsSkillsState({
           "info",
           4200,
         );
-        await client.updatePlugin(pluginId, { enabled });
-        const restartReason = `Plugin toggle: ${pluginId}`;
-        setPendingRestart(true);
-        setPendingRestartReasons((prev) =>
-          prev.includes(restartReason) ? prev : [...prev, restartReason],
-        );
-        showRestartBanner();
+        const result = await client.updatePlugin(pluginId, { enabled });
         const hasBlockingValidationErrors =
           enabled &&
           Boolean(
             plugin?.validationErrors && plugin.validationErrors.length > 0,
           );
-        if (!hasBlockingValidationErrors) {
+        if (result.requiresRestart) {
+          const restartReason = `Plugin toggle: ${pluginId}`;
+          setPendingRestart(true);
+          setPendingRestartReasons((prev) =>
+            prev.includes(restartReason) ? prev : [...prev, restartReason],
+          );
+          showRestartBanner();
+        }
+        if (result.requiresRestart && !hasBlockingValidationErrors) {
           await triggerRestart();
         }
         await loadPlugins();
         setActionNotice(
-          hasBlockingValidationErrors
-            ? `${pluginName} ${enabled ? "enabled" : "disabled"}. Restart required to apply.`
-            : `${pluginName} ${enabled ? "enabled" : "disabled"}.`,
+          result.requiresRestart
+            ? hasBlockingValidationErrors
+              ? `${pluginName} ${enabled ? "enabled" : "disabled"}. Restart required to apply.`
+              : `${pluginName} ${enabled ? "enabled" : "disabled"}.`
+            : `${pluginName} ${enabled ? "enabled" : "disabled"} without a full agent restart.`,
           "success",
           2800,
         );
@@ -227,7 +231,7 @@ export function usePluginsSkillsState({
       if (Object.keys(config).length === 0) return;
       setPluginSaving((prev) => new Set([...prev, pluginId]));
       try {
-        await client.updatePlugin(pluginId, { config });
+        const result = await client.updatePlugin(pluginId, { config });
 
         // Check if this is an AI provider plugin
         const plugin = plugins.find((p) => p.id === pluginId);
@@ -251,13 +255,24 @@ export function usePluginsSkillsState({
           }
         }
 
+        if (result.requiresRestart && !isAiProvider) {
+          const restartReason = `Plugin config updated: ${pluginId}`;
+          setPendingRestart(true);
+          setPendingRestartReasons((prev) =>
+            prev.includes(restartReason) ? prev : [...prev, restartReason],
+          );
+          showRestartBanner();
+        }
+
         await loadPlugins();
         setActionNotice(
           isAiProvider
             ? providerSwitchError
               ? `Provider settings saved, but activating ${plugin?.name ?? pluginId} failed: ${providerSwitchError.message}`
               : "Provider settings saved. Restarting agent..."
-            : "Plugin settings saved.",
+            : result.requiresRestart
+              ? "Plugin settings saved. Restart required to apply."
+              : "Plugin settings saved without a full agent restart.",
           isAiProvider && providerSwitchError ? "error" : "success",
         );
         setPluginSaveSuccess((prev) => new Set([...prev, pluginId]));

@@ -30,6 +30,7 @@ import {
   buildFullParamActionSet,
   compactActionsForIntent,
   detectIntentCategories,
+  validateIntentActionMap,
 } from "../prompt-compaction";
 
 // ---------------------------------------------------------------------------
@@ -50,7 +51,7 @@ const SAMPLE_ACTIONS_BLOCK = `<actions>
     <description>Ignore the message.</description>
   </action>
   <action>
-    <name>START_CODING_TASK</name>
+    <name>CREATE_TASK</name>
     <description>Launch a coding agent.</description>
     <params>
       <param>
@@ -310,8 +311,8 @@ describe("buildFullParamActionSet", () => {
 
   it("includes coding actions for coding intent", () => {
     const actions = buildFullParamActionSet(["coding"]);
-    expect(actions.has("START_CODING_TASK")).toBe(true);
-    expect(actions.has("SPAWN_CODING_AGENT")).toBe(true);
+    expect(actions.has("CREATE_TASK")).toBe(true);
+    expect(actions.has("SPAWN_AGENT")).toBe(true);
     expect(actions.has("PROVISION_WORKSPACE")).toBe(true);
     expect(actions.has("FINALIZE_WORKSPACE")).toBe(true);
   });
@@ -327,20 +328,48 @@ describe("buildFullParamActionSet", () => {
     const actions = buildFullParamActionSet(["terminal"]);
     expect(actions.has("RUN_IN_TERMINAL")).toBe(true);
     expect(actions.has("RESTART_AGENT")).toBe(true);
-    expect(actions.has("START_CODING_TASK")).toBe(false);
+    expect(actions.has("CREATE_TASK")).toBe(false);
     expect(actions.has("PLAY_EMOTE")).toBe(false);
   });
 
   it("emote intent includes PLAY_EMOTE", () => {
     const actions = buildFullParamActionSet(["emote"]);
     expect(actions.has("PLAY_EMOTE")).toBe(true);
-    expect(actions.has("START_CODING_TASK")).toBe(false);
+    expect(actions.has("CREATE_TASK")).toBe(false);
   });
 
   it("multiple intents combine their action sets", () => {
     const actions = buildFullParamActionSet(["terminal", "emote"]);
     expect(actions.has("RUN_IN_TERMINAL")).toBe(true);
     expect(actions.has("PLAY_EMOTE")).toBe(true);
+  });
+});
+
+describe("validateIntentActionMap", () => {
+  it("does not warn when registered actions include the canonical task-agent actions", () => {
+    const warn = vi.fn();
+
+    validateIntentActionMap(
+      [
+        "REPLY",
+        "NONE",
+        "IGNORE",
+        "CREATE_TASK",
+        "SPAWN_AGENT",
+        "PROVISION_WORKSPACE",
+        "FINALIZE_WORKSPACE",
+        "LIST_AGENTS",
+        "SEND_TO_AGENT",
+        "STOP_AGENT",
+        "RUN_IN_TERMINAL",
+        "RESTART_AGENT",
+        "MANAGE_ISSUES",
+        "PLAY_EMOTE",
+      ],
+      { warn },
+    );
+
+    expect(warn).not.toHaveBeenCalled();
   });
 });
 
@@ -361,9 +390,9 @@ describe("compactActionsForIntent", () => {
       /RUN_IN_TERMINAL[\s\S]*?<params>[\s\S]*?command[\s\S]*?<\/params>/,
     );
 
-    // START_CODING_TASK should NOT have <params> (not terminal intent)
+    // CREATE_TASK should NOT have <params> (not terminal intent)
     // Extract just the action block between its <action> and next </action>
-    const startCodingIdx = result.indexOf("<name>START_CODING_TASK</name>");
+    const startCodingIdx = result.indexOf("<name>CREATE_TASK</name>");
     const startCodingBlockEnd = result.indexOf("</action>", startCodingIdx);
     const startCodingBlock = result.slice(startCodingIdx, startCodingBlockEnd);
     expect(startCodingBlock).not.toContain("<params>");
@@ -379,9 +408,9 @@ describe("compactActionsForIntent", () => {
     const prompt = buildPrompt("Fix the bug in the repository");
     const result = compactActionsForIntent(prompt);
 
-    // START_CODING_TASK should keep <params>
+    // CREATE_TASK should keep <params>
     expect(result).toMatch(
-      /START_CODING_TASK[\s\S]*?<params>[\s\S]*?repo[\s\S]*?<\/params>/,
+      /CREATE_TASK[\s\S]*?<params>[\s\S]*?repo[\s\S]*?<\/params>/,
     );
 
     // FINALIZE_WORKSPACE should keep <params> (coding intent)
@@ -424,7 +453,7 @@ describe("compactActionsForIntent", () => {
       "REPLY",
       "NONE",
       "IGNORE",
-      "START_CODING_TASK",
+      "CREATE_TASK",
       "MANAGE_ISSUES",
       "RUN_IN_TERMINAL",
       "PLAY_EMOTE",
@@ -438,7 +467,7 @@ describe("compactActionsForIntent", () => {
     const prompt = buildPrompt("Run npm install");
     const result = compactActionsForIntent(prompt);
 
-    // START_CODING_TASK description should still be present
+    // CREATE_TASK description should still be present
     expect(result).toContain("Launch a coding agent.");
     // PLAY_EMOTE description should still be present
     expect(result).toContain("Play an avatar animation.");
@@ -467,7 +496,7 @@ describe("compactActionsForIntent", () => {
     expect(result).toContain("<name>NONE</name>");
 
     // Non-universal actions should have params stripped
-    const startCodingIdx = result.indexOf("<name>START_CODING_TASK</name>");
+    const startCodingIdx = result.indexOf("<name>CREATE_TASK</name>");
     const startCodingBlockEnd = result.indexOf("</action>", startCodingIdx);
     const startCodingBlock = result.slice(startCodingIdx, startCodingBlockEnd);
     expect(startCodingBlock).not.toContain("<params>");
@@ -498,7 +527,7 @@ describe("compactActionsForIntent", () => {
     );
 
     // Coding actions should NOT have <params>
-    const startCodingIdx = result.indexOf("<name>START_CODING_TASK</name>");
+    const startCodingIdx = result.indexOf("<name>CREATE_TASK</name>");
     const startCodingBlockEnd = result.indexOf("</action>", startCodingIdx);
     const startCodingBlock = result.slice(startCodingIdx, startCodingBlockEnd);
     expect(startCodingBlock).not.toContain("<params>");
@@ -529,7 +558,7 @@ describe("installPromptOptimizations", () => {
   }) {
     const calls: Array<{ modelType: string; prompt: string }> = [];
     const runtime = {
-      actions: [{ name: "REPLY" }, { name: "START_CODING_TASK" }],
+      actions: [{ name: "REPLY" }, { name: "CREATE_TASK" }],
       logger: { info: () => {}, warn: () => {} },
       getService: (serviceType: string) =>
         serviceType === "trajectory_logger"
@@ -610,7 +639,7 @@ describe("installPromptOptimizations", () => {
     installPromptOptimizations(runtime);
     const prompt = `<actions>
   <action><name>REPLY</name><description>Reply.</description></action>
-  <action><name>START_CODING_TASK</name><description>Code.</description><params><param><name>repo</name></param></params></action>
+  <action><name>CREATE_TASK</name><description>Code.</description><params><param><name>repo</name></param></params></action>
 </actions>
 # Received Message
 user: tell me a joke`;
@@ -619,10 +648,10 @@ user: tell me a joke`;
       { prompt } as unknown as Parameters<typeof runtime.useModel>[1],
     );
     expect(calls).toHaveLength(1);
-    // START_CODING_TASK params should be stripped (no coding intent in "tell me a joke")
+    // CREATE_TASK params should be stripped (no coding intent in "tell me a joke")
     expect(calls[0].prompt).not.toContain("<param>");
     // But action names preserved
-    expect(calls[0].prompt).toContain("<name>START_CODING_TASK</name>");
+    expect(calls[0].prompt).toContain("<name>CREATE_TASK</name>");
     expect(calls[0].prompt).toContain("<name>REPLY</name>");
   });
 
@@ -635,7 +664,7 @@ user: tell me a joke`;
     installPromptOptimizations(runtime);
     const prompt = `<actions>
   <action><name>REPLY</name><description>Reply.</description></action>
-  <action><name>START_CODING_TASK</name><description>Code.</description><params><param><name>repo</name></param></params></action>
+  <action><name>CREATE_TASK</name><description>Code.</description><params><param><name>repo</name></param></params></action>
 </actions>
 # Conversation Messages
 assistant: hi
@@ -801,13 +830,13 @@ When the user asks you to work on code, you MUST select actions.
 ## Single Agent Examples
 User: Fix the login bug
 Assistant:
-<actions><action>REPLY</action><action>START_CODING_TASK</action></actions>
+<actions><action>REPLY</action><action>CREATE_TASK</action></actions>
 
 ## Multi-Agent Example
 User: Spin up 3 agents
 Assistant:
-<actions><action>REPLY</action><action>START_CODING_TASK</action></actions>
-Possible response actions: REPLY, START_CODING_TASK
+<actions><action>REPLY</action><action>CREATE_TASK</action></actions>
+Possible response actions: REPLY, CREATE_TASK
 `;
 
   function buildWithExamples(userMsg: string): string {

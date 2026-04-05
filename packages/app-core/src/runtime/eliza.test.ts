@@ -976,13 +976,13 @@ describe("applyConnectorSecretsToEnv", () => {
     expect(process.env.SLACK_USER_TOKEN).toBe("xoxp-1");
   });
 
-  it("does not overwrite existing env values", () => {
+  it("overwrites stale env values with saved connector config", () => {
     process.env.TELEGRAM_BOT_TOKEN = "already-set";
     const config = {
       connectors: { telegram: { botToken: "new-tok" } },
     } as ElizaConfig;
     applyConnectorSecretsToEnv(config);
-    expect(process.env.TELEGRAM_BOT_TOKEN).toBe("already-set");
+    expect(process.env.TELEGRAM_BOT_TOKEN).toBe("new-tok");
   });
 
   it("skips empty or whitespace-only values", () => {

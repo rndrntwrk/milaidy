@@ -19,6 +19,11 @@ import type {
   OnboardingOptions,
   SubscriptionStatusResponse,
 } from "@miladyai/shared/contracts/onboarding";
+import {
+  getWebsiteBlockerPlugin,
+  type WebsiteBlockerPermissionResult,
+  type WebsiteBlockerStatusResult,
+} from "../bridge/native-plugins";
 import { MiladyClient } from "./client-base";
 import type {
   AgentAutomationMode,
@@ -36,6 +41,7 @@ import type {
   LogsFilter,
   LogsResponse,
   PluginInfo,
+  PluginMutationResult,
   RawPtySession,
   RuntimeDebugSnapshot,
   SecretInfo,
@@ -75,6 +81,46 @@ function miladyClientSettingsDebug(): boolean {
     importMetaEnv: viteEnv,
     env: typeof process !== "undefined" ? process.env : undefined,
   });
+}
+
+const WEBSITE_BLOCKING_PERMISSION_ID = "website-blocking" as const;
+
+function getNativeWebsiteBlockerPluginIfAvailable() {
+  const plugin = getWebsiteBlockerPlugin();
+  return typeof plugin.getStatus === "function" &&
+    typeof plugin.startBlock === "function" &&
+    typeof plugin.stopBlock === "function" &&
+    typeof plugin.checkPermissions === "function" &&
+    typeof plugin.requestPermissions === "function" &&
+    typeof plugin.openSettings === "function"
+    ? plugin
+    : null;
+}
+
+function mapWebsiteBlockerPermissionResult(
+  permission: WebsiteBlockerPermissionResult,
+): PermissionState {
+  return {
+    id: WEBSITE_BLOCKING_PERMISSION_ID,
+    status: permission.status,
+    canRequest: permission.canRequest,
+    reason: permission.reason,
+    lastChecked: Date.now(),
+  };
+}
+
+function mapWebsiteBlockerStatusToPermission(
+  status: WebsiteBlockerStatusResult,
+): PermissionState {
+  return {
+    id: WEBSITE_BLOCKING_PERMISSION_ID,
+    status:
+      status.permissionStatus ??
+      (status.available ? "granted" : "not-determined"),
+    canRequest: status.canRequestPermission ?? status.supportsElevationPrompt,
+    reason: status.reason,
+    lastChecked: Date.now(),
+  };
 }
 
 function logSettingsClient(
@@ -261,11 +307,11 @@ declare module "./client-base" {
     toggleCorePlugin(
       npmName: string,
       enabled: boolean,
-    ): Promise<{ ok: boolean; restarting?: boolean; message?: string }>;
+    ): Promise<PluginMutationResult>;
     updatePlugin(
       id: string,
       config: Record<string, unknown>,
-    ): Promise<{ ok: boolean; restarting?: boolean }>;
+    ): Promise<PluginMutationResult>;
     getSecrets(): Promise<{ secrets: SecretInfo[] }>;
     updateSecrets(
       secrets: Record<string, string>,
@@ -332,6 +378,77 @@ declare module "./client-base" {
     refreshPermissions(): Promise<AllPermissionsState>;
     setShellEnabled(enabled: boolean): Promise<PermissionState>;
     isShellEnabled(): Promise<boolean>;
+    getWebsiteBlockerStatus(): Promise<{
+      available: boolean;
+      active: boolean;
+      hostsFilePath: string | null;
+      endsAt: string | null;
+      websites: string[];
+      canUnblockEarly: boolean;
+      requiresElevation: boolean;
+      engine: "hosts-file" | "vpn-dns" | "network-extension";
+      platform: string;
+      supportsElevationPrompt: boolean;
+      elevationPromptMethod:
+        | "osascript"
+        | "pkexec"
+        | "powershell-runas"
+        | "vpn-consent"
+        | "system-settings"
+        | null;
+      permissionStatus?: PermissionState["status"];
+      canRequestPermission?: boolean;
+      canOpenSystemSettings?: boolean;
+      reason?: string;
+    }>;
+    startWebsiteBlock(options: {
+      websites?: string[] | string;
+      durationMinutes?: number | string | null;
+      text?: string;
+    }): Promise<
+      | {
+          success: true;
+          endsAt: string | null;
+          request: {
+            websites: string[];
+            durationMinutes: number | null;
+          };
+        }
+      | {
+          success: false;
+          error: string;
+          status?: {
+            active: boolean;
+            endsAt: string | null;
+            websites: string[];
+            requiresElevation: boolean;
+          };
+        }
+    >;
+    stopWebsiteBlock(): Promise<
+      | {
+          success: true;
+          removed: boolean;
+          status: {
+            active: boolean;
+            endsAt: string | null;
+            websites: string[];
+            canUnblockEarly: boolean;
+            requiresElevation: boolean;
+          };
+        }
+      | {
+          success: false;
+          error: string;
+          status?: {
+            active: boolean;
+            endsAt: string | null;
+            websites: string[];
+            canUnblockEarly: boolean;
+            requiresElevation: boolean;
+          };
+        }
+    >;
     getCodingAgentStatus(): Promise<CodingAgentStatus | null>;
     stopCodingAgent(sessionId: string): Promise<boolean>;
     listCodingAgentScratchWorkspaces(): Promise<CodingAgentScratchWorkspace[]>;
@@ -1108,7 +1225,7 @@ MiladyClient.prototype.updatePlugin = async function (
     {
       timeoutMs: SETTINGS_MUTATION_TIMEOUT_MS,
     },
-  )) as { ok: boolean; restarting?: boolean };
+  )) as PluginMutationResult;
   logSettingsClient(`PUT /api/plugins/${id} ← ok`, {
     baseUrl: this.getBaseUrl(),
     result,
@@ -1385,10 +1502,28 @@ MiladyClient.prototype.setTradePermissionMode = async function (
 };
 
 MiladyClient.prototype.getPermissions = async function (this: MiladyClient) {
-  return this.fetch("/api/permissions");
+  const permissions = await this.fetch<AllPermissionsState>("/api/permissions");
+  const plugin = getNativeWebsiteBlockerPluginIfAvailable();
+  if (!plugin) {
+    return permissions;
+  }
+
+  const permission = mapWebsiteBlockerStatusToPermission(
+    await plugin.getStatus(),
+  );
+  return {
+    ...permissions,
+    [WEBSITE_BLOCKING_PERMISSION_ID]: permission,
+  };
 };
 
 MiladyClient.prototype.getPermission = async function (this: MiladyClient, id) {
+  if (id === WEBSITE_BLOCKING_PERMISSION_ID) {
+    const plugin = getNativeWebsiteBlockerPluginIfAvailable();
+    if (plugin) {
+      return mapWebsiteBlockerStatusToPermission(await plugin.getStatus());
+    }
+  }
   return this.fetch(`/api/permissions/${id}`);
 };
 
@@ -1396,6 +1531,14 @@ MiladyClient.prototype.requestPermission = async function (
   this: MiladyClient,
   id,
 ) {
+  if (id === WEBSITE_BLOCKING_PERMISSION_ID) {
+    const plugin = getNativeWebsiteBlockerPluginIfAvailable();
+    if (plugin) {
+      return mapWebsiteBlockerPermissionResult(
+        await plugin.requestPermissions(),
+      );
+    }
+  }
   return this.fetch(`/api/permissions/${id}/request`, { method: "POST" });
 };
 
@@ -1403,6 +1546,13 @@ MiladyClient.prototype.openPermissionSettings = async function (
   this: MiladyClient,
   id,
 ) {
+  if (id === WEBSITE_BLOCKING_PERMISSION_ID) {
+    const plugin = getNativeWebsiteBlockerPluginIfAvailable();
+    if (plugin) {
+      await plugin.openSettings();
+      return;
+    }
+  }
   await this.fetch(`/api/permissions/${id}/open-settings`, {
     method: "POST",
   });
@@ -1411,7 +1561,24 @@ MiladyClient.prototype.openPermissionSettings = async function (
 MiladyClient.prototype.refreshPermissions = async function (
   this: MiladyClient,
 ) {
-  return this.fetch("/api/permissions/refresh", { method: "POST" });
+  const permissions = await this.fetch<AllPermissionsState>(
+    "/api/permissions/refresh",
+    {
+      method: "POST",
+    },
+  );
+  const plugin = getNativeWebsiteBlockerPluginIfAvailable();
+  if (!plugin) {
+    return permissions;
+  }
+
+  const permission = mapWebsiteBlockerStatusToPermission(
+    await plugin.getStatus(),
+  );
+  return {
+    ...permissions,
+    [WEBSITE_BLOCKING_PERMISSION_ID]: permission,
+  };
 };
 
 MiladyClient.prototype.setShellEnabled = async function (
@@ -1429,6 +1596,40 @@ MiladyClient.prototype.isShellEnabled = async function (this: MiladyClient) {
     "/api/permissions/shell",
   );
   return result.enabled;
+};
+
+MiladyClient.prototype.getWebsiteBlockerStatus = async function (
+  this: MiladyClient,
+) {
+  const plugin = getNativeWebsiteBlockerPluginIfAvailable();
+  if (plugin) {
+    return await plugin.getStatus();
+  }
+  return this.fetch("/api/website-blocker");
+};
+
+MiladyClient.prototype.startWebsiteBlock = async function (
+  this: MiladyClient,
+  options,
+) {
+  const plugin = getNativeWebsiteBlockerPluginIfAvailable();
+  if (plugin) {
+    return await plugin.startBlock(options);
+  }
+  return this.fetch("/api/website-blocker", {
+    method: "PUT",
+    body: JSON.stringify(options),
+  });
+};
+
+MiladyClient.prototype.stopWebsiteBlock = async function (this: MiladyClient) {
+  const plugin = getNativeWebsiteBlockerPluginIfAvailable();
+  if (plugin) {
+    return await plugin.stopBlock();
+  }
+  return this.fetch("/api/website-blocker", {
+    method: "DELETE",
+  });
 };
 
 MiladyClient.prototype.getCodingAgentStatus = async function (

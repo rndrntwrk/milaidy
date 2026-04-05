@@ -3,6 +3,7 @@ import {
   canModifyRole,
   checkSenderRole,
   getEntityRole,
+  getLiveEntityMetadataFromMessage,
   matchEntityToConnectorAdminWhitelist,
   normalizeRole,
   resolveEntityRole,
@@ -40,11 +41,18 @@ function mockRuntime(opts: {
   } as unknown as IAgentRuntime;
 }
 
-function msg(entityId: string, roomId = "room-1"): Memory {
+function msg(
+  entityId: string,
+  roomId = "room-1",
+  metadata?: Record<string, unknown>,
+): Memory {
   return {
     entityId: entityId as UUID,
     roomId: roomId as UUID,
-    content: { text: "" },
+    content: {
+      text: "",
+      ...(metadata ? { metadata } : {}),
+    },
   } as Memory;
 }
 
@@ -303,7 +311,7 @@ describe("resolveWorldForMessage", () => {
 });
 
 describe("resolveEntityRole", () => {
-  it("promotes a connector-whitelisted Discord entity to ADMIN", async () => {
+  it("resolves a connector-whitelisted Discord entity to ADMIN without persisting world metadata", async () => {
     const updateWorld = vi.fn().mockResolvedValue(undefined);
     const world = { id: "w1", metadata: { roles: {} } as RolesWorldMetadata };
     const runtime = mockRuntime({
@@ -320,8 +328,54 @@ describe("resolveEntityRole", () => {
 
     const role = await resolveEntityRole(runtime, world, world.metadata, "speaker");
     expect(role).toBe("ADMIN");
-    expect(world.metadata.roles?.speaker).toBe("ADMIN");
-    expect(updateWorld).toHaveBeenCalledTimes(1);
+    expect(world.metadata.roles?.speaker).toBeUndefined();
+    expect(updateWorld).not.toHaveBeenCalled();
+  });
+
+  it("prefers live bridge sender metadata when no persisted entity metadata exists", async () => {
+    const world = { id: "w1", metadata: { roles: {} } as RolesWorldMetadata };
+    const runtime = mockRuntime({
+      room: { worldId: "w1" },
+      world,
+      entities: {
+        speaker: {
+          metadata: {},
+        },
+      },
+    });
+    setConnectorAdminWhitelist(runtime, { discord: ["discord-admin-2"] });
+
+    const role = await resolveEntityRole(runtime, world, world.metadata, "speaker", {
+      liveEntityMetadata: {
+        discord: { userId: "discord-admin-2", username: "owner" },
+      },
+    });
+
+    expect(role).toBe("ADMIN");
+    expect(world.metadata.roles?.speaker).toBeUndefined();
+  });
+});
+
+describe("getLiveEntityMetadataFromMessage", () => {
+  it("extracts bridge sender metadata from message metadata", () => {
+    expect(
+      getLiveEntityMetadataFromMessage(
+        msg("speaker", "room-1", {
+          bridgeSender: {
+            id: "discord-user-1",
+            metadata: {
+              discord: { userId: "discord-user-1", username: "owner" },
+            },
+          },
+        }),
+      ),
+    ).toEqual({
+      discord: { userId: "discord-user-1", username: "owner" },
+    });
+  });
+
+  it("returns undefined when bridge sender metadata is absent", () => {
+    expect(getLiveEntityMetadataFromMessage(msg("speaker"))).toBeUndefined();
   });
 });
 
@@ -374,15 +428,21 @@ describe("checkSenderRole", () => {
     const runtime = mockRuntime({
       room: { worldId: "w1" },
       world: { id: "w1", metadata: { roles: {} } },
-      entities: {
-        unknown: {
-          metadata: { discord: { userId: "discord-admin-2", username: "owner" } },
-        },
-      },
     });
     setConnectorAdminWhitelist(runtime, { discord: ["discord-admin-2"] });
 
-    expect(await checkSenderRole(runtime, msg("unknown"))).toEqual({
+    expect(
+      await checkSenderRole(
+        runtime,
+        msg("unknown", "room-1", {
+          bridgeSender: {
+            metadata: {
+              discord: { userId: "discord-admin-2", username: "owner" },
+            },
+          },
+        }),
+      ),
+    ).toEqual({
       entityId: "unknown",
       role: "ADMIN",
       isOwner: false,

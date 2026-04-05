@@ -92,8 +92,8 @@ import {
   LIFEOPS_DEFINITION_STATUSES,
   LIFEOPS_DOMAINS,
   LIFEOPS_GMAIL_DRAFT_TONES,
-  LIFEOPS_GOAL_SUGGESTION_KINDS,
   LIFEOPS_GOAL_STATUSES,
+  LIFEOPS_GOAL_SUGGESTION_KINDS,
   LIFEOPS_GOOGLE_CAPABILITIES,
   LIFEOPS_PRIVACY_CLASSES,
   LIFEOPS_REMINDER_CHANNELS,
@@ -4280,7 +4280,8 @@ export class LifeOpsService {
     }
     views.sort(
       (left, right) =>
-        new Date(left.updatedAt).getTime() - new Date(right.updatedAt).getTime(),
+        new Date(left.updatedAt).getTime() -
+        new Date(right.updatedAt).getTime(),
     );
     return views;
   }
@@ -4477,7 +4478,8 @@ export class LifeOpsService {
     goalRecord: LifeOpsGoalRecord,
     now: Date,
   ): Promise<LifeOpsGoalReview> {
-    const linkedDefinitions = await this.collectLinkedDefinitionsForGoal(goalRecord);
+    const linkedDefinitions =
+      await this.collectLinkedDefinitionsForGoal(goalRecord);
     const allOccurrenceViews =
       await this.collectOccurrenceViewsForDefinitions(linkedDefinitions);
     const lookbackStart = new Date(
@@ -4559,7 +4561,11 @@ export class LifeOpsService {
         overdueOccurrences,
         recentCompletions,
       }),
-      audits: await this.repository.listAuditEvents(this.agentId(), "goal", goal.id),
+      audits: await this.repository.listAuditEvents(
+        this.agentId(),
+        "goal",
+        goal.id,
+      ),
       summary: {
         ...summary,
         reviewState: goal.reviewState,
@@ -4567,7 +4573,10 @@ export class LifeOpsService {
     };
   }
 
-  async reviewGoal(goalId: string, now = new Date()): Promise<LifeOpsGoalReview> {
+  async reviewGoal(
+    goalId: string,
+    now = new Date(),
+  ): Promise<LifeOpsGoalReview> {
     const goalRecord = await this.getGoalRecord(goalId);
     return this.buildGoalReview(goalRecord, now);
   }
@@ -4582,11 +4591,16 @@ export class LifeOpsService {
     if (!occurrence) {
       fail(404, "life-ops occurrence not found");
     }
-    const definitionRecord = await this.getDefinitionRecord(occurrence.definitionId);
+    const definitionRecord = await this.getDefinitionRecord(
+      occurrence.definitionId,
+    );
     const linkedGoal = definitionRecord.definition.goalId
       ? await this.getGoalRecord(definitionRecord.definition.goalId)
       : null;
-    const reminderInspection = await this.inspectReminder("occurrence", occurrence.id);
+    const reminderInspection = await this.inspectReminder(
+      "occurrence",
+      occurrence.id,
+    );
     const definitionAudits = await this.repository.listAuditEvents(
       this.agentId(),
       "definition",
@@ -4621,7 +4635,9 @@ export class LifeOpsService {
     };
   }
 
-  private async refreshGoalReviewStates(now: Date): Promise<LifeOpsGoalDefinition[]> {
+  private async refreshGoalReviewStates(
+    now: Date,
+  ): Promise<LifeOpsGoalDefinition[]> {
     const goals = (await this.repository.listGoals(this.agentId())).filter(
       (goal) => goal.status === "active",
     );
@@ -4630,7 +4646,10 @@ export class LifeOpsService {
       const review = await this.buildGoalReview(
         {
           goal,
-          links: await this.repository.listGoalLinksForGoal(this.agentId(), goal.id),
+          links: await this.repository.listGoalLinksForGoal(
+            this.agentId(),
+            goal.id,
+          ),
         },
         now,
       );
@@ -6500,6 +6519,38 @@ export class LifeOpsService {
         managedStatus = await this.googleManagedClient.getStatus();
       } catch (error) {
         if (error instanceof ManagedGoogleClientError) {
+          if (error.status === 404) {
+            const fallbackMode = [
+              explicitMode,
+              resolvedGrant?.mode,
+              ...modeAvailability.availableModes,
+            ].find(
+              (candidate): candidate is LifeOpsConnectorMode =>
+                Boolean(candidate) && candidate !== "cloud_managed",
+            );
+            if (fallbackMode) {
+              return this.getGoogleConnectorStatus(requestUrl, fallbackMode);
+            }
+            return {
+              provider: "google",
+              mode: "local",
+              defaultMode: "local",
+              availableModes: [],
+              executionTarget: "local",
+              sourceOfTruth: "local_storage",
+              configured: false,
+              connected: false,
+              reason: "config_missing",
+              preferredByAgent: false,
+              cloudConnectionId: null,
+              identity: null,
+              grantedCapabilities: [],
+              grantedScopes: [],
+              expiresAt: null,
+              hasRefreshToken: false,
+              grant: null,
+            };
+          }
           this.logLifeOpsWarn("google_connector_status", error.message, {
             provider: "google",
             mode: "cloud_managed",

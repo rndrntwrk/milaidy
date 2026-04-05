@@ -25,10 +25,20 @@ import {
   stringToUuid,
   type UUID,
 } from "@elizaos/core";
+import {
+  getSelfControlStatus,
+  hasWebsiteBlockDeferralIntent,
+  hasWebsiteBlockIntent,
+  parseSelfControlBlockRequest,
+} from "@miladyai/plugin-selfcontrol/selfcontrol";
 import type { ElizaConfig } from "../config/config.js";
-import type { ReadJsonBodyOptions } from "./http-helpers.js";
-import type { RouteRequestContext } from "./route-helpers.js";
-import { resolveStreamingUpdate } from "./streaming-text.js";
+import { normalizeCharacterLanguage } from "../onboarding-presets.js";
+import { detectRuntimeModel } from "./agent-model.js";
+import {
+  isClientVisibleNoResponse,
+  isNoResponsePlaceholder,
+  stripAssistantStageDirections,
+} from "./chat-text-helpers.js";
 import {
   extractAnthropicSystemAndLastUser,
   extractCompatTextContent,
@@ -39,46 +49,38 @@ import {
   isInsufficientCreditsError,
   isInsufficientCreditsMessage,
 } from "./credit-detection.js";
-import { detectRuntimeModel } from "./agent-model.js";
-import { normalizeCharacterLanguage } from "../onboarding-presets.js";
+import type { ReadJsonBodyOptions } from "./http-helpers.js";
+import type { RouteRequestContext } from "./route-helpers.js";
 import {
-  isClientVisibleNoResponse,
-  isNoResponsePlaceholder,
-  stripAssistantStageDirections,
-} from "./chat-text-helpers.js";
-import {
-  resolveAppUserName,
-  type ConversationMeta,
-  // Deep dependencies of generateChatResponse that stay in server.ts
-  maybeHandleDirectBinanceSkillRequest,
-  maybeAugmentChatMessageWithWalletContext,
+  buildWalletActionNotExecutedReply,
+  cloneWithoutBlockedObjectKeys,
+  decodePathComponent,
+  executeFallbackParsedActions,
+  getErrorMessage,
+  hasBlockedObjectKeyDeep,
+  hasUsableWalletFallbackParams,
+  inferBalanceChainFromText,
+  inferWalletExecutionFallback,
+  isBalanceIntent,
+  isUuidLike,
+  isWalletActionRequiredIntent,
   maybeAugmentChatMessageWithKnowledge,
   maybeAugmentChatMessageWithLanguage,
-  executeFallbackParsedActions,
+  maybeAugmentChatMessageWithWalletContext,
+  // Deep dependencies of generateChatResponse that stay in server.ts
+  maybeHandleDirectBinanceSkillRequest,
+  normalizeIncomingChatPrompt,
   parseFallbackActionBlocks,
+  resolveAppUserName,
+  resolvePluginConfigReply,
+  resolveWalletModeGuidanceReply,
   shouldForceCheckBalanceFallback,
-  isBalanceIntent,
-  inferBalanceChainFromText,
+  trimWalletProgressPrefix,
+  validateChatImages,
   WALLET_EXECUTION_INTENT_RE,
   WALLET_PROGRESS_ONLY_RE,
-  inferWalletExecutionFallback,
-  hasUsableWalletFallbackParams,
-  isWalletActionRequiredIntent,
-  buildWalletActionNotExecutedReply,
-  trimWalletProgressPrefix,
-  getErrorMessage,
-  isUuidLike,
-  hasBlockedObjectKeyDeep,
-  cloneWithoutBlockedObjectKeys,
-  resolveWalletModeGuidanceReply,
-  resolvePluginConfigReply,
-  buildUserMessages,
-  validateChatImages,
-  buildChatAttachments,
-  normalizeIncomingChatPrompt,
-  IMAGE_ONLY_CHAT_FALLBACK_PROMPT,
-  decodePathComponent,
 } from "./server.js";
+import { resolveStreamingUpdate } from "./streaming-text.js";
 
 const MAX_BODY_BYTES = 1024 * 1024; // 1 MB
 const CHAT_MAX_BODY_BYTES = 20 * 1024 * 1024; // 20 MB (image-capable)
@@ -129,6 +131,21 @@ const PROVIDER_ISSUE_CHAT_REPLY = "Sorry, I'm having a provider issue";
 const INSUFFICIENT_CREDITS_CHAT_REPLY =
   "Eliza Cloud credits are depleted. Top up the cloud balance and try again.";
 const GENERIC_NO_RESPONSE_CHAT_REPLY = PROVIDER_ISSUE_CHAT_REPLY;
+const WEBSITE_BLOCK_SUBJECT_RE =
+  /\b(websites?|sites?|domains?|x\.com|twitter\.com)\b/i;
+const WEBSITE_BLOCK_FOLLOW_UP_RE =
+  /\b(do it|do that|block it|block them|go ahead|use self ?control|self ?control now|block the websites?|please do|now)\b/i;
+const WEBSITE_BLOCK_PERMISSION_RE =
+  /\b(permission|permissions|approval|approve|access|admin|administrator|root|sudo|allow|grant|enable)\b/i;
+const WEBSITE_BLOCK_PERMISSION_MODEL_RE =
+  /\b(permission|approval|approve|access|admin|administrator|root|sudo)\b/i;
+
+function hasWebsiteBlockingPermissionIntent(text: string): boolean {
+  return (
+    WEBSITE_BLOCK_PERMISSION_RE.test(text) &&
+    /\b(block(?:ing)?|self ?control|hosts? file|websites?)\b/i.test(text)
+  );
+}
 
 function pickInsufficientCreditsChatReply(): string {
   return INSUFFICIENT_CREDITS_CHAT_REPLY;
@@ -164,7 +181,10 @@ function getProviderIssueChatReply(): string {
   return PROVIDER_ISSUE_CHAT_REPLY;
 }
 
-export function getChatFailureReply(err: unknown, logBuffer: LogEntry[]): string {
+export function getChatFailureReply(
+  err: unknown,
+  logBuffer: LogEntry[],
+): string {
   if (
     isInsufficientCreditsError(err) ||
     findRecentInsufficientCreditsLog(logBuffer)
@@ -187,6 +207,78 @@ export function normalizeChatResponseText(
   }
   if (!isClientVisibleNoResponse(text)) return text;
   return resolveNoResponseFallback(logBuffer, runtime);
+}
+
+function inferWebsiteBlockFallback(
+  userText: string,
+  modelText: string,
+): {
+  name: "BLOCK_WEBSITES";
+  parameters?: Record<string, unknown>;
+} | null {
+  if (hasWebsiteBlockDeferralIntent(userText)) {
+    return null;
+  }
+
+  const userHasBlockIntent = hasWebsiteBlockIntent(userText);
+  const modelLooksLikeBlockConfirmation =
+    /\b(blocking|block|self ?control)\b/i.test(modelText);
+  const parsed = parseSelfControlBlockRequest(undefined, {
+    content: { text: userText },
+  } as ReturnType<typeof createMessageMemory>);
+  const userHasPermissionIntent = hasWebsiteBlockingPermissionIntent(userText);
+
+  if (userHasPermissionIntent) {
+    return null;
+  }
+
+  if (parsed.request && userHasBlockIntent) {
+    return {
+      name: "BLOCK_WEBSITES",
+      parameters: parsed.request,
+    };
+  }
+
+  const userLooksLikeBlockIntent =
+    userHasBlockIntent &&
+    (WEBSITE_BLOCK_SUBJECT_RE.test(userText) ||
+      /\b(it|them)\b/i.test(userText));
+  if (userLooksLikeBlockIntent) {
+    return { name: "BLOCK_WEBSITES" };
+  }
+
+  if (
+    modelLooksLikeBlockConfirmation &&
+    WEBSITE_BLOCK_FOLLOW_UP_RE.test(userText)
+  ) {
+    return { name: "BLOCK_WEBSITES" };
+  }
+
+  return null;
+}
+
+function inferWebsiteBlockingPermissionFallback(
+  userText: string,
+  modelText: string,
+): {
+  name: "REQUEST_WEBSITE_BLOCKING_PERMISSION";
+} | null {
+  const userHasPermissionIntent = hasWebsiteBlockingPermissionIntent(userText);
+  if (userHasPermissionIntent) {
+    return { name: "REQUEST_WEBSITE_BLOCKING_PERMISSION" };
+  }
+
+  const modelLooksLikePermissionConfirmation =
+    WEBSITE_BLOCK_PERMISSION_MODEL_RE.test(modelText) &&
+    /\b(ask|request|grant|enable|allow|approve|get)\b/i.test(modelText);
+  if (
+    modelLooksLikePermissionConfirmation &&
+    WEBSITE_BLOCK_FOLLOW_UP_RE.test(userText)
+  ) {
+    return { name: "REQUEST_WEBSITE_BLOCKING_PERMISSION" };
+  }
+
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -474,7 +566,10 @@ type ChatTrajectoryLogger = {
       metadata?: Record<string, unknown>;
     },
   ) => Promise<string>;
-  startStep?: (trajectoryId: string, envState?: Record<string, unknown>) => string;
+  startStep?: (
+    trajectoryId: string,
+    envState?: Record<string, unknown>,
+  ) => string;
 };
 
 function getMessageMetadata(
@@ -507,7 +602,10 @@ async function ensureChatTrajectoryStep(
   const trajectoryLogger = runtime.getService?.(
     "trajectory_logger",
   ) as ChatTrajectoryLogger | null;
-  if (!trajectoryLogger || typeof trajectoryLogger.startTrajectory !== "function") {
+  if (
+    !trajectoryLogger ||
+    typeof trajectoryLogger.startTrajectory !== "function"
+  ) {
     return;
   }
 
@@ -524,16 +622,19 @@ async function ensureChatTrajectoryStep(
     const content = message.content as Content & {
       channelType?: unknown;
     };
-    const trajectoryId = await trajectoryLogger.startTrajectory(runtime.agentId, {
-      source,
-      metadata: {
-        roomId: message.roomId,
-        entityId: message.entityId,
-        messageId: message.id,
-        channelType: metadata.channelType ?? content.channelType,
-        conversationId: metadata.sessionKey,
+    const trajectoryId = await trajectoryLogger.startTrajectory(
+      runtime.agentId,
+      {
+        source,
+        metadata: {
+          roomId: message.roomId,
+          entityId: message.entityId,
+          messageId: message.id,
+          channelType: metadata.channelType ?? content.channelType,
+          conversationId: metadata.sessionKey,
+        },
       },
-    });
+    );
 
     const stepId =
       typeof trajectoryLogger.startStep === "function"
@@ -651,7 +752,20 @@ export async function generateChatResponse(
       >
     | undefined;
   let actionCallbacksSeen = 0;
+  const seenActionTags = new Set<string>();
   let _handlerError: unknown = null;
+  const recordActionCallback = (actionTag: string, hasText: boolean): void => {
+    actionCallbacksSeen += 1;
+    seenActionTags.add(actionTag.toUpperCase());
+    runtime.logger?.info(
+      {
+        src: "eliza-api",
+        action: actionTag,
+        hasText,
+      },
+      `[eliza-api] Action callback fired: ${actionTag}`,
+    );
+  };
   const directWalletExecutionFallback = WALLET_EXECUTION_INTENT_RE.test(
     originalUserText,
   )
@@ -758,17 +872,7 @@ export async function generateChatResponse(
         message,
         [directWalletExecutionFallback.action],
         appendIncomingText,
-        (actionTag, hasText) => {
-          actionCallbacksSeen += 1;
-          runtime.logger?.info(
-            {
-              src: "eliza-api",
-              action: actionTag,
-              hasText,
-            },
-            `[eliza-api] Action callback fired: ${actionTag}`,
-          );
-        },
+        recordActionCallback,
       );
       result = {
         didRespond: true,
@@ -798,14 +902,9 @@ export async function generateChatResponse(
 
           const actionTag = (content as Record<string, unknown>)?.action;
           if (actionTag) {
-            actionCallbacksSeen += 1;
-            runtime.logger?.info(
-              {
-                src: "eliza-api",
-                action: actionTag,
-                hasText: Boolean(extractCompatTextContent(content)),
-              },
-              `[eliza-api] Action callback fired: ${actionTag}`,
+            recordActionCallback(
+              actionTag,
+              Boolean(extractCompatTextContent(content)),
             );
           }
 
@@ -949,6 +1048,47 @@ export async function generateChatResponse(
 
     if (
       actionCallbacksSeen === 0 &&
+      !fallbackActionsToRun.some((action) => action.name === "BLOCK_WEBSITES")
+    ) {
+      const inferredWebsiteBlockFallback = inferWebsiteBlockFallback(
+        userText,
+        modelText,
+      );
+      if (inferredWebsiteBlockFallback) {
+        fallbackActionsToRun.push(inferredWebsiteBlockFallback);
+        runtime.logger?.warn(
+          {
+            src: "eliza-api",
+            action: inferredWebsiteBlockFallback.name,
+            parameters: inferredWebsiteBlockFallback.parameters,
+          },
+          "[eliza-api] Injecting website blocker fallback from prompt intent",
+        );
+      }
+    }
+
+    if (
+      actionCallbacksSeen === 0 &&
+      !fallbackActionsToRun.some(
+        (action) => action.name === "REQUEST_WEBSITE_BLOCKING_PERMISSION",
+      )
+    ) {
+      const inferredWebsiteBlockingPermissionFallback =
+        inferWebsiteBlockingPermissionFallback(userText, modelText);
+      if (inferredWebsiteBlockingPermissionFallback) {
+        fallbackActionsToRun.push(inferredWebsiteBlockingPermissionFallback);
+        runtime.logger?.warn(
+          {
+            src: "eliza-api",
+            action: inferredWebsiteBlockingPermissionFallback.name,
+          },
+          "[eliza-api] Injecting website blocker permission fallback from prompt intent",
+        );
+      }
+    }
+
+    if (
+      actionCallbacksSeen === 0 &&
       WALLET_EXECUTION_INTENT_RE.test(userText)
     ) {
       const inferredWalletFallback = inferWalletExecutionFallback(userText);
@@ -956,9 +1096,11 @@ export async function generateChatResponse(
         const existingIndex = fallbackActionsToRun.findIndex(
           (action) => action.name === inferredWalletFallback.action.name,
         );
+        const existingAction =
+          existingIndex >= 0 ? fallbackActionsToRun[existingIndex] : undefined;
         if (
           existingIndex === -1 ||
-          !hasUsableWalletFallbackParams(fallbackActionsToRun[existingIndex]!)
+          !hasUsableWalletFallbackParams(existingAction)
         ) {
           if (existingIndex >= 0) {
             fallbackActionsToRun.splice(existingIndex, 1);
@@ -1003,18 +1145,34 @@ export async function generateChatResponse(
         message,
         fallbackActionsToRun,
         appendIncomingText,
-        (actionTag, hasText) => {
-          actionCallbacksSeen += 1;
-          runtime.logger?.info(
-            {
-              src: "eliza-api",
-              action: actionTag,
-              hasText,
-            },
-            `[eliza-api] Action callback fired: ${actionTag}`,
-          );
-        },
+        recordActionCallback,
       );
+    }
+
+    const inferredWebsiteBlockRecovery = inferWebsiteBlockFallback(
+      userText,
+      modelText,
+    );
+    if (inferredWebsiteBlockRecovery && !seenActionTags.has("BLOCK_WEBSITES")) {
+      const websiteBlockStatus = await getSelfControlStatus();
+      if (!websiteBlockStatus.active) {
+        runtime.logger?.warn(
+          {
+            src: "eliza-api",
+            action: inferredWebsiteBlockRecovery.name,
+            parameters: inferredWebsiteBlockRecovery.parameters,
+          },
+          "[eliza-api] Recovering missing website blocker side effect after model response",
+        );
+
+        await executeFallbackParsedActions(
+          runtime,
+          message,
+          [inferredWebsiteBlockRecovery],
+          appendIncomingText,
+          recordActionCallback,
+        );
+      }
     }
   }
 
@@ -1325,7 +1483,7 @@ function ensureAdminEntityIdForChat(state: ChatRouteState): UUID {
   if (state.adminEntityId) {
     return state.adminEntityId;
   }
-  const configured = (state.config as any).agents?.defaults?.adminEntityId?.trim();
+  const configured = state.config.agents?.defaults?.adminEntityId?.trim();
   const nextAdminEntityId =
     configured && isUuidLike(configured)
       ? configured
@@ -1941,6 +2099,8 @@ export async function handleChatRoutes(
     }
 
     let streamedText = "";
+    const turnStartedAt = Date.now();
+    let activeLegacyChatRoomId: UUID | null = null;
 
     try {
       const walletModeGuidance = resolveWalletModeGuidanceReply(state, prompt);
@@ -1964,6 +2124,7 @@ export async function handleChatRoutes(
       if (!chatUserId || !chatRoomId) {
         throw new Error("Legacy chat connection was not initialized");
       }
+      activeLegacyChatRoomId = chatRoomId;
 
       const message = createMessageMemory({
         id: crypto.randomUUID() as UUID,
@@ -1977,6 +2138,17 @@ export async function handleChatRoutes(
           ...(conversationMode ? { conversationMode } : {}),
         },
       });
+      try {
+        await persistConversationMemory(runtime, message);
+      } catch (err) {
+        if (!aborted) {
+          writeSse(res, {
+            type: "error",
+            message: `Failed to store user message: ${getErrorMessage(err)}`,
+          });
+        }
+        return true;
+      }
 
       const result = await generateChatResponse(
         runtime,
@@ -2006,20 +2178,51 @@ export async function handleChatRoutes(
           state.logBuffer,
           runtime,
         );
-        writeSseJson(res, {
-          type: "done",
-          fullText: resolvedText,
-          agentName: result.agentName,
-          ...(result.usage ? { estimatedUsage: result.usage } : {}),
-        });
+        try {
+          await persistAssistantConversationMemory(
+            runtime,
+            chatRoomId,
+            resolvedText,
+            channelType,
+            turnStartedAt,
+          );
+          writeSseJson(res, {
+            type: "done",
+            fullText: resolvedText,
+            agentName: result.agentName,
+            ...(result.usage ? { estimatedUsage: result.usage } : {}),
+          });
+        } catch (persistErr) {
+          writeSse(res, {
+            type: "error",
+            message: getErrorMessage(persistErr),
+          });
+        }
       }
     } catch (err) {
       if (!aborted) {
-        writeSse(res, {
-          type: "done",
-          fullText: getChatFailureReply(err, state.logBuffer),
-          agentName: state.agentName,
-        });
+        const providerIssueReply = getChatFailureReply(err, state.logBuffer);
+        try {
+          const chatRoomId = state.chatRoomId;
+          if (state.runtime && (chatRoomId ?? activeLegacyChatRoomId)) {
+            await persistAssistantConversationMemory(
+              state.runtime,
+              (chatRoomId ?? activeLegacyChatRoomId) as UUID,
+              providerIssueReply,
+              channelType,
+            );
+          }
+          writeSse(res, {
+            type: "done",
+            fullText: providerIssueReply,
+            agentName: state.agentName,
+          });
+        } catch (persistErr) {
+          writeSse(res, {
+            type: "error",
+            message: getErrorMessage(persistErr),
+          });
+        }
       }
     } finally {
       // Resume coordinator after user message processed
@@ -2085,6 +2288,7 @@ export async function handleChatRoutes(
       if (!chatUserId || !chatRoomId) {
         throw new Error("Legacy chat connection was not initialized");
       }
+      const turnStartedAt = Date.now();
 
       const message = createMessageMemory({
         id: crypto.randomUUID() as UUID,
@@ -2098,6 +2302,7 @@ export async function handleChatRoutes(
           ...(conversationMode ? { conversationMode } : {}),
         },
       });
+      await persistConversationMemory(runtime, message);
 
       const result = await generateChatResponse(
         runtime,
@@ -2109,14 +2314,39 @@ export async function handleChatRoutes(
           preferredLanguage,
         },
       );
+      const resolvedText = normalizeChatResponseText(
+        result.text,
+        state.logBuffer,
+        runtime,
+      );
+      await persistAssistantConversationMemory(
+        runtime,
+        chatRoomId,
+        resolvedText,
+        channelType,
+        turnStartedAt,
+      );
 
       json(res, {
-        text: normalizeChatResponseText(result.text, state.logBuffer, runtime),
+        text: resolvedText,
         agentName: result.agentName,
       });
     } catch (err) {
+      const providerIssueReply = getChatFailureReply(err, state.logBuffer);
+      try {
+        if (state.runtime && state.chatRoomId) {
+          await persistAssistantConversationMemory(
+            state.runtime,
+            state.chatRoomId,
+            providerIssueReply,
+            channelType,
+          );
+        }
+      } catch {
+        // Best-effort persistence for legacy chat failures.
+      }
       json(res, {
-        text: getChatFailureReply(err, state.logBuffer),
+        text: providerIssueReply,
         agentName: state.agentName,
       });
     } finally {

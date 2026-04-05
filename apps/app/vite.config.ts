@@ -629,6 +629,10 @@ export default defineConfig({
         replacement: path.resolve(here, "plugins/talkmode/src/index.ts"),
       },
       {
+        find: /^@miladyai\/capacitor-websiteblocker$/,
+        replacement: path.resolve(here, "plugins/websiteblocker/src/index.ts"),
+      },
+      {
         find: /^@miladyai\/plugin-selfcontrol\/(.*)/,
         replacement: path.resolve(
           miladyRoot,

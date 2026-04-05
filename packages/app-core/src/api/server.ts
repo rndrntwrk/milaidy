@@ -192,6 +192,26 @@ const _PACKAGE_ROOT_NAMES = new Set(["eliza", "elizaai", "elizaos"]);
 // getProvidedApiToken, ensureCompatApiAuthorized, isDevEnvironment,
 // ensureCompatSensitiveRouteAuthorized — now imported from ./auth
 
+function hydrateWalletOsStoreFlagFromConfig(): void {
+  if (process.env.MILADY_WALLET_OS_STORE?.trim()) {
+    return;
+  }
+
+  try {
+    const config = loadElizaConfig();
+    const persistedEnv =
+      config.env && typeof config.env === "object" && !Array.isArray(config.env)
+        ? (config.env as Record<string, unknown>)
+        : undefined;
+    const raw = persistedEnv?.MILADY_WALLET_OS_STORE;
+    if (typeof raw === "string" && raw.trim()) {
+      process.env.MILADY_WALLET_OS_STORE = raw.trim();
+    }
+  } catch {
+    // Best effort only; upstream startup will still load config normally.
+  }
+}
+
 function resolveCompatConfigPaths(): {
   elizaConfigPath?: string;
   miladyConfigPath?: string;
@@ -1068,6 +1088,7 @@ export async function startApiServer(
   // the upstream Eliza TTS handler can use it (the `/api/tts/elevenlabs` route
   // passes through to upstream which checks this env var).
   ensureCloudTtsApiKeyAlias();
+  hydrateWalletOsStoreFlagFromConfig();
   await hydrateWalletKeysFromNodePlatformSecureStore();
 
   // Pre-load steward wallet addresses so getWalletAddresses() has them

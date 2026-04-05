@@ -64,6 +64,7 @@ import {
   readResolvedPreloadScript,
   resolveRendererAssetDir,
 } from "./runtime-layout";
+import { mergeRuntimePermissionStates } from "./runtime-permissions";
 import { startScreenshotDevServer } from "./screenshot-dev-server";
 import { recordStartupPhase, resolveStartupBundlePath } from "./startup-trace";
 import {
@@ -1182,7 +1183,10 @@ async function syncPermissionsToRestApi(
   startup = false,
 ): Promise<void> {
   try {
-    const permissions = await getPermissionManager().checkAllPermissions();
+    const permissions = await mergeRuntimePermissionStates(
+      port,
+      await getPermissionManager().checkAllPermissions(),
+    );
     await fetch(`http://127.0.0.1:${port}/api/permissions/state`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },

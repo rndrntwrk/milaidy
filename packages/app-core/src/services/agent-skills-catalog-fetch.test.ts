@@ -52,14 +52,16 @@ describe("plugin-agent-skills catalog fetch patch", () => {
     expect(first).toEqual([]);
     // Verify the fetch was called
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    // @2.0.0-alpha.11 silently handles 429 without logger.info —
-    // the rate-limit logging was removed upstream
-    expect(logger.warn).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining("Catalog fetch failed"),
+    );
 
     // Second call within cooldown should not trigger another fetch
     await expect(service.getCatalog({ forceRefresh: true })).resolves.toEqual(
       [],
     );
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(logger.warn).toHaveBeenCalledTimes(1);
   });
 });

@@ -5,13 +5,13 @@ import { saveElizaConfig } from "@miladyai/agent/config/config";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ElizaConfig } from "../config/types";
 import {
-  buildPluginListResponse,
-  handlePluginsCompatRoutes,
-} from "./plugins-compat-routes";
-import {
   createMockHttpResponse,
   createMockJsonRequest,
 } from "../test-support/test-helpers";
+import {
+  buildPluginListResponse,
+  handlePluginsCompatRoutes,
+} from "./plugins-compat-routes";
 
 let tmpDir: string;
 let tmpConfigPath: string;
@@ -38,17 +38,27 @@ vi.mock("@miladyai/agent/config/paths", () => ({
 type CompatPluginRecord = {
   configured: boolean;
   validationErrors: Array<{ field: string; message: string }>;
-  parameters: Array<{ key: string; isSet: boolean }>;
+  parameters: Array<{
+    key: string;
+    isSet: boolean;
+    currentValue?: string | null;
+  }>;
 };
 
-function getDiscordPlugin(): CompatPluginRecord {
+function getPlugin(
+  pluginId: string,
+): CompatPluginRecord & Record<string, unknown> {
   const plugin = (
     buildPluginListResponse(null).plugins as Array<Record<string, unknown>>
-  ).find((candidate) => candidate.id === "discord");
+  ).find((candidate) => candidate.id === pluginId);
   if (!plugin) {
-    throw new Error('Expected bundled "discord" plugin to exist');
+    throw new Error(`Expected bundled "${pluginId}" plugin to exist`);
   }
-  return plugin as unknown as CompatPluginRecord;
+  return plugin as CompatPluginRecord & Record<string, unknown>;
+}
+
+function getDiscordPlugin(): CompatPluginRecord {
+  return getPlugin("discord");
 }
 
 function createAsyncJsonRequest(
@@ -232,5 +242,21 @@ describe("buildPluginListResponse", () => {
 
     expect(discord.enabled).toBe(true);
     expect(discord.configured).toBe(true);
+  });
+
+  it("lists the bundled SelfControl plugin without setup fields", () => {
+    const selfControl = getPlugin("selfcontrol") as CompatPluginRecord & {
+      category: string;
+      configured: boolean;
+      enabled: boolean;
+      source: string;
+    };
+
+    expect(selfControl.enabled).toBe(false);
+    expect(selfControl.configured).toBe(true);
+    expect(selfControl.category).toBe("feature");
+    expect(selfControl.source).toBe("bundled");
+    expect(selfControl.parameters).toEqual([]);
+    expect(selfControl.validationErrors).toEqual([]);
   });
 });

@@ -14,6 +14,7 @@ const PLUGIN_DIRS = [
   "screencapture",
   "swabble",
   "talkmode",
+  "websiteblocker",
 ];
 
 describe("capacitor plugin package metadata", () => {

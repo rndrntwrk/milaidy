@@ -1,0 +1,53 @@
+import { describe, expect, it } from "vitest";
+import {
+  getPluginInfoFromRegistry,
+  normalizePluginLookupAlias,
+} from "../../src/services/registry-client-queries";
+import type { RegistryPluginInfo } from "../../src/services/plugin-manager-types";
+
+const HYPERSCAPE_APP_INFO: RegistryPluginInfo = {
+  name: "@elizaos/app-hyperscape",
+  gitRepo: "elizaos/app-hyperscape",
+  gitUrl: "https://github.com/elizaos/app-hyperscape",
+  description: "Hyperscape live session bridge",
+  homepage: "https://hyperscape.ai",
+  topics: ["game"],
+  stars: 0,
+  language: "TypeScript",
+  kind: "app",
+  npm: {
+    package: "@elizaos/app-hyperscape",
+    v0Version: null,
+    v1Version: null,
+    v2Version: "1.0.0",
+  },
+  git: {
+    v0Branch: null,
+    v1Branch: null,
+    v2Branch: "main",
+  },
+  supports: {
+    v0: false,
+    v1: false,
+    v2: true,
+  },
+};
+
+describe("registry-client app lookup aliases", () => {
+  it("keeps existing plugin alias normalization intact", () => {
+    expect(normalizePluginLookupAlias("obsidan")).toBe("obsidian");
+    expect(normalizePluginLookupAlias("plugin-obsidan")).toBe(
+      "plugin-obsidian",
+    );
+  });
+
+  it("resolves bare app slugs to @elizaos/app-* packages", () => {
+    const registry = new Map<string, RegistryPluginInfo>([
+      [HYPERSCAPE_APP_INFO.name, HYPERSCAPE_APP_INFO],
+    ]);
+
+    expect(getPluginInfoFromRegistry(registry, "hyperscape")).toEqual(
+      HYPERSCAPE_APP_INFO,
+    );
+  });
+});

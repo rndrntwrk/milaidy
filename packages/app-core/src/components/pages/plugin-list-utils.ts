@@ -86,6 +86,10 @@ import { resolveAppAssetUrl } from "../../utils";
 import { autoLabel } from "../../utils/labels";
 import { SHOWCASE_PLUGIN } from "../plugins/showcase-data";
 
+const DISCORD_DEVELOPER_PORTAL_URL = "https://discord.com/developers/applications";
+const DISCORD_INVITE_PERMISSIONS = "67193856";
+const DISCORD_INVITE_SCOPES = "bot applications.commands";
+
 /* ── Always-on plugins (hidden from all views) ────────────────────────── */
 
 /**
@@ -619,15 +623,71 @@ export function iconImageSource(icon: string): string | null {
 
 export type TranslateFn = ReturnType<typeof useApp>["t"];
 
+function resolvePluginParamValue(
+  plugin: Pick<PluginInfo, "parameters">,
+  key: string,
+  draftConfig?: Record<string, string>,
+): string | null {
+  const draftValue = draftConfig?.[key]?.trim();
+  if (draftValue) {
+    return draftValue;
+  }
+
+  const param = plugin.parameters?.find((candidate) => candidate.key === key);
+  if (!param || param.sensitive || !param.isSet) {
+    return null;
+  }
+
+  const persistedValue = param.currentValue?.trim();
+  return persistedValue ? persistedValue : null;
+}
+
+export function buildDiscordInviteUrl(applicationId: string): string {
+  const params = new URLSearchParams({
+    client_id: applicationId,
+    permissions: DISCORD_INVITE_PERMISSIONS,
+    scope: DISCORD_INVITE_SCOPES,
+  });
+  return `https://discord.com/oauth2/authorize?${params.toString()}`;
+}
+
 export function getPluginResourceLinks(
-  plugin: Pick<PluginInfo, "setupGuideUrl" | "homepage" | "repository">,
+  plugin: Pick<
+    PluginInfo,
+    "id" | "homepage" | "parameters" | "repository" | "setupGuideUrl"
+  >,
+  options?: {
+    draftConfig?: Record<string, string>;
+  },
 ): Array<{ key: string; url: string }> {
   const seen = new Set<string>();
-  const ordered = [
+  const ordered: Array<{ key: string; url?: string | null }> = [];
+
+  if (plugin.id === "discord") {
+    ordered.push({
+      key: "discord-developer-portal",
+      url: DISCORD_DEVELOPER_PORTAL_URL,
+    });
+
+    const applicationId = resolvePluginParamValue(
+      plugin,
+      "DISCORD_APPLICATION_ID",
+      options?.draftConfig,
+    );
+    if (applicationId && /^\d+$/.test(applicationId)) {
+      ordered.push({
+        key: "discord-invite",
+        url: buildDiscordInviteUrl(applicationId),
+      });
+    }
+  }
+
+  ordered.push(
     { key: "guide", url: plugin.setupGuideUrl },
     { key: "official", url: plugin.homepage },
     { key: "source", url: plugin.repository },
-  ];
+  );
+
   return ordered.flatMap((item) => {
     const url = item.url?.trim();
     if (!url || seen.has(url)) return [];
@@ -637,6 +697,16 @@ export function getPluginResourceLinks(
 }
 
 export function pluginResourceLinkLabel(t: TranslateFn, key: string): string {
+  if (key === "discord-developer-portal") {
+    return t("pluginsview.DiscordDeveloperPortal", {
+      defaultValue: "Get your API token here",
+    });
+  }
+  if (key === "discord-invite") {
+    return t("pluginsview.DiscordInviteBot", {
+      defaultValue: "Invite your agent",
+    });
+  }
   if (key === "guide") {
     return t("pluginsview.SetupGuide", { defaultValue: "Setup guide" });
   }

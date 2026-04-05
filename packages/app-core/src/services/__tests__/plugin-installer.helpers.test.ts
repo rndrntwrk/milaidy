@@ -3,9 +3,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const execFileMock = vi.fn();
 
-vi.mock("node:child_process", () => ({
-  execFile: execFileMock,
-}));
+vi.mock("node:child_process", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:child_process")>();
+  return {
+    ...actual,
+    execFile: execFileMock,
+  };
+});
 
 function setupExecFileHandler(
   responses: Array<{ stdout: string; branch?: string; list?: boolean }> = [],

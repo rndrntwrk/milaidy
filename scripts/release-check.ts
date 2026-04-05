@@ -14,7 +14,7 @@ const requiredPaths = [
   "dist/entry.js",
   "dist/build-info.json",
   "scripts/run-repo-setup.mjs",
-  "scripts/setup-eliza-workspace.mjs",
+  "scripts/setup-upstreams.mjs",
   "scripts/ensure-vision-deps.mjs",
 ];
 const forbiddenPrefixes = ["dist/Milady.app/"];
