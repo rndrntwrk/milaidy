@@ -6951,6 +6951,11 @@ export class LifeOpsService {
         return await this.googleManagedClient.startConnector({
           side: requestedSide,
           capabilities: requestedCapabilities,
+          redirectUrl:
+            typeof request.redirectUrl === "string" &&
+            request.redirectUrl.trim().length > 0
+              ? request.redirectUrl.trim()
+              : undefined,
         });
       } catch (error) {
         if (error instanceof ManagedGoogleClientError) {

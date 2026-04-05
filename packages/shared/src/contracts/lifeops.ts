@@ -873,6 +873,7 @@ export interface StartLifeOpsGoogleConnectorRequest {
   side?: LifeOpsConnectorSide;
   mode?: LifeOpsConnectorMode;
   capabilities?: LifeOpsGoogleCapability[];
+  redirectUrl?: string;
 }
 
 export interface StartLifeOpsGoogleConnectorResponse {

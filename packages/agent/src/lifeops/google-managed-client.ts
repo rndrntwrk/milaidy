@@ -181,11 +181,14 @@ export class GoogleManagedClient {
   async startConnector(args: {
     side: LifeOpsConnectorSide;
     capabilities?: LifeOpsGoogleCapability[];
+    redirectUrl?: string;
   }): Promise<StartLifeOpsGoogleConnectorResponse> {
-    const redirectUri = new URL(
-      "/auth/success?platform=google",
-      `${this.requireConfig().siteUrl.replace(/\/+$/, "")}/`,
-    ).toString();
+    const redirectUri =
+      args.redirectUrl ??
+      new URL(
+        "/auth/success?platform=google",
+        `${this.requireConfig().siteUrl.replace(/\/+$/, "")}/`,
+      ).toString();
     return this.request<StartLifeOpsGoogleConnectorResponse>(
       "milady/google/connect/initiate",
       {

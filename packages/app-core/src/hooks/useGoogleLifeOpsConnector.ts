@@ -5,6 +5,12 @@ import type {
 } from "@miladyai/shared/contracts/lifeops";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { client } from "../api";
+import {
+  APP_RESUME_EVENT,
+  dispatchLifeOpsGoogleConnectorRefresh,
+  LIFEOPS_GOOGLE_CONNECTOR_REFRESH_EVENT,
+  type LifeOpsGoogleConnectorRefreshDetail,
+} from "../events";
 import { openExternalUrl } from "../utils";
 
 const DEFAULT_GOOGLE_CONNECTOR_POLL_INTERVAL_MS = 15_000;
@@ -12,6 +18,10 @@ const DEFAULT_VISIBLE_GOOGLE_MODES: readonly LifeOpsConnectorMode[] = [
   "cloud_managed",
   "local",
 ] as const;
+const GOOGLE_CONNECTOR_STORAGE_KEY = "milady:lifeops:google-connector-refresh";
+const GOOGLE_CONNECTOR_BROADCAST_CHANNEL = "milady:lifeops:google-connector";
+const GOOGLE_CONNECTOR_MESSAGE_TYPE = "lifeops-google-connector-refresh";
+let googleConnectorHookInstanceSeed = 0;
 
 function formatConnectorError(cause: unknown, fallback: string): string {
   if (cause instanceof Error && cause.message.trim().length > 0) {
@@ -46,6 +56,85 @@ function resolveVisibleModes(
   ]);
 }
 
+function resolveSuccessRedirectUrl(
+  side: LifeOpsConnectorSide,
+): string | undefined {
+  const baseUrl =
+    typeof client.getBaseUrl === "function" ? client.getBaseUrl().trim() : "";
+  const origin =
+    baseUrl ||
+    (typeof window !== "undefined" &&
+    typeof window.location?.origin === "string" &&
+    window.location.origin.trim().length > 0
+      ? window.location.origin.trim()
+      : "");
+  if (!origin) {
+    return undefined;
+  }
+  const url = new URL("/api/lifeops/connectors/google/success", origin);
+  url.searchParams.set("side", side);
+  url.searchParams.set("mode", "cloud_managed");
+  return url.toString();
+}
+
+function normalizeRefreshDetail(
+  value: unknown,
+): LifeOpsGoogleConnectorRefreshDetail | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const candidate = value as {
+    origin?: unknown;
+    side?: unknown;
+    mode?: unknown;
+    source?: unknown;
+  };
+  const side =
+    candidate.side === "owner" || candidate.side === "agent"
+      ? candidate.side
+      : undefined;
+  const mode =
+    candidate.mode === "local" ||
+    candidate.mode === "remote" ||
+    candidate.mode === "cloud_managed"
+      ? candidate.mode
+      : undefined;
+  const source =
+    candidate.source === "callback" ||
+    candidate.source === "connect" ||
+    candidate.source === "disconnect" ||
+    candidate.source === "mode_change" ||
+    candidate.source === "refresh" ||
+    candidate.source === "focus" ||
+    candidate.source === "visibility" ||
+    candidate.source === "resume"
+      ? candidate.source
+      : undefined;
+  return {
+    origin:
+      typeof candidate.origin === "string" && candidate.origin.trim().length > 0
+        ? candidate.origin.trim()
+        : undefined,
+    side,
+    mode,
+    source,
+  };
+}
+
+function parseRefreshEnvelope(rawValue: string): {
+  type?: unknown;
+  detail?: unknown;
+} | null {
+  try {
+    return JSON.parse(rawValue) as {
+      type?: unknown;
+      detail?: unknown;
+    };
+  } catch {
+    return null;
+  }
+}
+
 export interface UseGoogleLifeOpsConnectorOptions {
   pollIntervalMs?: number;
   pollWhileDisconnected?: boolean;
@@ -59,6 +148,9 @@ export function useGoogleLifeOpsConnector(
     options.pollIntervalMs ?? DEFAULT_GOOGLE_CONNECTOR_POLL_INTERVAL_MS;
   const pollWhileDisconnected = options.pollWhileDisconnected ?? true;
   const side = options.side ?? "owner";
+  const instanceIdRef = useRef(
+    `google-connector-hook-${googleConnectorHookInstanceSeed++}`,
+  );
   const selectedModeRef = useRef<LifeOpsConnectorMode | null>(null);
   const [selectedMode, setSelectedMode] = useState<LifeOpsConnectorMode | null>(
     null,
@@ -127,6 +219,116 @@ export function useGoogleLifeOpsConnector(
     };
   }, [pollIntervalMs, pollWhileDisconnected, refresh, status?.connected]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const refreshSilently = (
+      detail?: LifeOpsGoogleConnectorRefreshDetail | null,
+    ) => {
+      if (detail?.origin === instanceIdRef.current) {
+        return;
+      }
+      if (detail?.side && detail.side !== side) {
+        return;
+      }
+      void refresh({
+        silent: true,
+        mode: detail?.mode ?? undefined,
+      });
+    };
+
+    const handleConnectorRefresh = (event: Event) => {
+      refreshSilently(
+        normalizeRefreshDetail(
+          (event as CustomEvent<LifeOpsGoogleConnectorRefreshDetail>).detail,
+        ),
+      );
+    };
+
+    const handleWindowMessage = (event: MessageEvent<unknown>) => {
+      const message = event.data as {
+        type?: unknown;
+        detail?: unknown;
+      };
+      if (message?.type !== GOOGLE_CONNECTOR_MESSAGE_TYPE) {
+        return;
+      }
+      refreshSilently(normalizeRefreshDetail(message.detail));
+    };
+
+    const handleStorage = (event: StorageEvent) => {
+      if (
+        event.key !== GOOGLE_CONNECTOR_STORAGE_KEY ||
+        !event.newValue ||
+        event.newValue.trim().length === 0
+      ) {
+        return;
+      }
+      const parsed = parseRefreshEnvelope(event.newValue);
+      if (parsed?.type !== GOOGLE_CONNECTOR_MESSAGE_TYPE) {
+        return;
+      }
+      refreshSilently(normalizeRefreshDetail(parsed.detail));
+    };
+
+    const handleFocus = () => {
+      refreshSilently({ side, source: "focus" });
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState !== "visible") {
+        return;
+      }
+      refreshSilently({ side, source: "visibility" });
+    };
+
+    const handleResume = () => {
+      refreshSilently({ side, source: "resume" });
+    };
+
+    const broadcastChannel =
+      typeof BroadcastChannel === "function"
+        ? new BroadcastChannel(GOOGLE_CONNECTOR_BROADCAST_CHANNEL)
+        : null;
+    const handleBroadcastMessage = (event: MessageEvent<unknown>) => {
+      const message = event.data as {
+        type?: unknown;
+        detail?: unknown;
+      };
+      if (message?.type !== GOOGLE_CONNECTOR_MESSAGE_TYPE) {
+        return;
+      }
+      refreshSilently(normalizeRefreshDetail(message.detail));
+    };
+
+    window.addEventListener(
+      LIFEOPS_GOOGLE_CONNECTOR_REFRESH_EVENT,
+      handleConnectorRefresh,
+    );
+    window.addEventListener("message", handleWindowMessage);
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibility);
+    document.addEventListener(APP_RESUME_EVENT, handleResume);
+    broadcastChannel?.addEventListener("message", handleBroadcastMessage);
+
+    return () => {
+      window.removeEventListener(
+        LIFEOPS_GOOGLE_CONNECTOR_REFRESH_EVENT,
+        handleConnectorRefresh,
+      );
+      window.removeEventListener("message", handleWindowMessage);
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibility);
+      document.removeEventListener(APP_RESUME_EVENT, handleResume);
+      broadcastChannel?.removeEventListener("message", handleBroadcastMessage);
+      broadcastChannel?.close();
+    };
+  }, [refresh, side]);
+
   const selectMode = useCallback(
     async (mode: LifeOpsConnectorMode) => {
       try {
@@ -138,6 +340,12 @@ export function useGoogleLifeOpsConnector(
         setSelectedMode(mode);
         setStatus(nextStatus);
         setError(null);
+        dispatchLifeOpsGoogleConnectorRefresh({
+          origin: instanceIdRef.current,
+          side,
+          mode,
+          source: "mode_change",
+        });
       } catch (cause) {
         setError(
           formatConnectorError(cause, "Google connector mode change failed."),
@@ -153,6 +361,11 @@ export function useGoogleLifeOpsConnector(
     try {
       setActionPending(true);
       const result = await client.startGoogleLifeOpsConnector({
+        redirectUrl:
+          (selectedModeRef.current ?? status?.mode ?? status?.defaultMode) ===
+          "cloud_managed"
+            ? resolveSuccessRedirectUrl(side)
+            : undefined,
         side,
         mode: selectedModeRef.current ?? status?.mode ?? status?.defaultMode,
       });
@@ -179,6 +392,11 @@ export function useGoogleLifeOpsConnector(
       });
       selectedModeRef.current = null;
       await refresh({ mode: null });
+      dispatchLifeOpsGoogleConnectorRefresh({
+        origin: instanceIdRef.current,
+        side,
+        source: "disconnect",
+      });
     } catch (cause) {
       setError(
         formatConnectorError(cause, "Google connector disconnect failed."),

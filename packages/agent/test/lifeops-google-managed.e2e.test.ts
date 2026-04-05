@@ -509,7 +509,7 @@ describe("life-ops managed Google connector", () => {
           "google.gmail.send",
         ]);
         expect(body.redirectUrl).toBe(
-          "https://cloud.example/auth/success?platform=google",
+          "http://127.0.0.1:3000/api/lifeops/connectors/google/success?side=owner&mode=cloud_managed",
         );
         connected = true;
         return jsonResponse({
@@ -522,7 +522,8 @@ describe("life-ops managed Google connector", () => {
             "google.gmail.triage",
             "google.gmail.send",
           ],
-          redirectUri: "https://cloud.example/auth/success?platform=google",
+          redirectUri:
+            "http://127.0.0.1:3000/api/lifeops/connectors/google/success?side=owner&mode=cloud_managed",
           authUrl:
             "https://accounts.google.com/o/oauth2/v2/auth?client_id=managed-google",
         });
@@ -749,6 +750,8 @@ describe("life-ops managed Google connector", () => {
       "POST",
       "/api/lifeops/connectors/google/start",
       {
+        redirectUrl:
+          "http://127.0.0.1:3000/api/lifeops/connectors/google/success?side=owner&mode=cloud_managed",
         capabilities: [
           "google.calendar.read",
           "google.gmail.triage",
@@ -758,6 +761,9 @@ describe("life-ops managed Google connector", () => {
     );
     expect(startRes.status).toBe(200);
     expect(startRes.data.mode).toBe("cloud_managed");
+    expect(startRes.data.redirectUri).toBe(
+      "http://127.0.0.1:3000/api/lifeops/connectors/google/success?side=owner&mode=cloud_managed",
+    );
     expect(startRes.data.authUrl).toContain("accounts.google.com");
 
     const statusRes = await req(

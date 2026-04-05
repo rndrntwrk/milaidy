@@ -21,6 +21,8 @@ import type {
   DisconnectLifeOpsGoogleConnectorRequest,
   GetLifeOpsCalendarFeedRequest,
   GetLifeOpsGmailTriageRequest,
+  LifeOpsConnectorMode,
+  LifeOpsConnectorSide,
   ProcessLifeOpsRemindersRequest,
   RunLifeOpsWorkflowRequest,
   SelectLifeOpsGoogleConnectorPreferenceRequest,
@@ -154,12 +156,52 @@ function escapeHtml(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
+function serializeInlineScriptValue(value: unknown): string {
+  return JSON.stringify(value).replace(/</g, "\\u003c");
+}
+
 function writeHtml(
   res: http.ServerResponse,
   status: number,
   title: string,
   message: string,
+  refreshDetail?: {
+    side?: LifeOpsConnectorSide;
+    mode?: LifeOpsConnectorMode;
+  },
 ): void {
+  const refreshScript = refreshDetail
+    ? `
+    <script>
+      (() => {
+        const payload = ${serializeInlineScriptValue({
+          type: "lifeops-google-connector-refresh",
+          detail: {
+            ...refreshDetail,
+            source: "callback",
+          },
+        })};
+        if (window.opener && typeof window.opener.postMessage === "function") {
+          window.opener.postMessage(payload, "*");
+        }
+        if (typeof BroadcastChannel === "function") {
+          const channel = new BroadcastChannel("milady:lifeops:google-connector");
+          channel.postMessage(payload);
+          channel.close();
+        }
+        if (typeof localStorage !== "undefined") {
+          localStorage.setItem(
+            "milady:lifeops:google-connector-refresh",
+            JSON.stringify({
+              ...payload,
+              at: Date.now(),
+            }),
+          );
+          localStorage.removeItem("milady:lifeops:google-connector-refresh");
+        }
+      })();
+    </script>`
+    : "";
   res.statusCode = status;
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   res.end(`<!doctype html>
@@ -202,6 +244,7 @@ function writeHtml(
       <h1>${escapeHtml(title)}</h1>
       <p>${escapeHtml(message)}</p>
     </main>
+    ${refreshScript}
     <script>
       window.setTimeout(() => {
         try {
@@ -462,12 +505,17 @@ export async function handleLifeOpsRoutes(
     const service = getService(ctx);
     if (!service) return true;
     try {
-      await service.completeGoogleConnectorCallback(url);
+      const connectorStatus =
+        await service.completeGoogleConnectorCallback(url);
       writeHtml(
         res,
         200,
         "Google Connected",
         "Google access is now available in Milady. You can close this window.",
+        {
+          side: connectorStatus.side,
+          mode: connectorStatus.mode,
+        },
       );
       return true;
     } catch (error) {
@@ -477,6 +525,38 @@ export async function handleLifeOpsRoutes(
       }
       throw error;
     }
+  }
+
+  if (
+    method === "GET" &&
+    pathname === "/api/lifeops/connectors/google/success"
+  ) {
+    const rawSide = url.searchParams.get("side");
+    const rawMode = url.searchParams.get("mode");
+    if (rawSide !== null && rawSide !== "owner" && rawSide !== "agent") {
+      ctx.error(res, "side must be one of: owner, agent", 400);
+      return true;
+    }
+    if (
+      rawMode !== null &&
+      rawMode !== "local" &&
+      rawMode !== "remote" &&
+      rawMode !== "cloud_managed"
+    ) {
+      ctx.error(res, "mode must be one of: local, remote, cloud_managed", 400);
+      return true;
+    }
+    writeHtml(
+      res,
+      200,
+      "Google Connected",
+      "Google access is now available in Milady. You can close this window.",
+      {
+        side: (rawSide ?? "owner") as LifeOpsConnectorSide,
+        mode: (rawMode ?? "cloud_managed") as LifeOpsConnectorMode,
+      },
+    );
+    return true;
   }
 
   if (

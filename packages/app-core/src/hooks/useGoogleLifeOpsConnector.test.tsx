@@ -2,10 +2,15 @@
 
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  APP_RESUME_EVENT,
+  LIFEOPS_GOOGLE_CONNECTOR_REFRESH_EVENT,
+} from "../events";
 
 const { mockClient, mockOpenExternalUrl } = vi.hoisted(() => ({
   mockClient: {
     disconnectGoogleLifeOpsConnector: vi.fn(),
+    getBaseUrl: vi.fn(),
     getGoogleLifeOpsConnectorStatus: vi.fn(),
     selectGoogleLifeOpsConnectorMode: vi.fn(),
     startGoogleLifeOpsConnector: vi.fn(),
@@ -58,10 +63,12 @@ function buildStatus(
 describe("useGoogleLifeOpsConnector", () => {
   beforeEach(() => {
     mockClient.disconnectGoogleLifeOpsConnector.mockReset();
+    mockClient.getBaseUrl.mockReset();
     mockClient.getGoogleLifeOpsConnectorStatus.mockReset();
     mockClient.selectGoogleLifeOpsConnectorMode.mockReset();
     mockClient.startGoogleLifeOpsConnector.mockReset();
     mockOpenExternalUrl.mockReset();
+    mockClient.getBaseUrl.mockReturnValue("http://127.0.0.1:3000");
   });
 
   afterEach(() => {
@@ -121,13 +128,14 @@ describe("useGoogleLifeOpsConnector", () => {
     });
 
     expect(mockClient.selectGoogleLifeOpsConnectorMode).not.toHaveBeenCalled();
-    expect(mockClient.getGoogleLifeOpsConnectorStatus).toHaveBeenNthCalledWith(
-      2,
+    expect(mockClient.getGoogleLifeOpsConnectorStatus).toHaveBeenCalledWith(
       "local",
       "agent",
     );
     expect(result.current.activeMode).toBe("local");
-    expect(result.current.status?.reason).toBe("config_missing");
+    await waitFor(() =>
+      expect(result.current.status?.reason).toBe("config_missing"),
+    );
   });
 
   it("persists an available mode change and starts auth for the selected mode", async () => {
@@ -180,6 +188,51 @@ describe("useGoogleLifeOpsConnector", () => {
     });
     expect(mockOpenExternalUrl).toHaveBeenCalledWith(
       "https://accounts.google.com/o/oauth2/v2/auth?client_id=desktop-client",
+    );
+  });
+
+  it("passes a Milady success redirect when starting managed auth", async () => {
+    mockClient.getGoogleLifeOpsConnectorStatus.mockResolvedValue(
+      buildStatus("agent", {
+        mode: "cloud_managed",
+        defaultMode: "cloud_managed",
+        availableModes: ["cloud_managed", "local"],
+      }),
+    );
+    mockClient.startGoogleLifeOpsConnector.mockResolvedValue({
+      provider: "google",
+      side: "agent",
+      mode: "cloud_managed" as LifeOpsConnectorMode,
+      requestedCapabilities: ["google.basic_identity"],
+      redirectUri:
+        "http://127.0.0.1:3000/api/lifeops/connectors/google/success?side=agent&mode=cloud_managed",
+      authUrl:
+        "https://accounts.google.com/o/oauth2/v2/auth?client_id=managed-client",
+    });
+
+    const { result } = renderHook(() =>
+      useGoogleLifeOpsConnector({
+        pollIntervalMs: 60_000,
+        side: "agent",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(result.current.status?.mode).toBe("cloud_managed"),
+    );
+
+    await act(async () => {
+      await result.current.connect();
+    });
+
+    expect(mockClient.startGoogleLifeOpsConnector).toHaveBeenCalledWith({
+      mode: "cloud_managed",
+      redirectUrl:
+        "http://127.0.0.1:3000/api/lifeops/connectors/google/success?side=agent&mode=cloud_managed",
+      side: "agent",
+    });
+    expect(mockOpenExternalUrl).toHaveBeenCalledWith(
+      "https://accounts.google.com/o/oauth2/v2/auth?client_id=managed-client",
     );
   });
 
@@ -240,6 +293,89 @@ describe("useGoogleLifeOpsConnector", () => {
     });
 
     expect(mockClient.getGoogleLifeOpsConnectorStatus).toHaveBeenCalledTimes(2);
+    unmount();
+  });
+
+  it("refreshes when a Google connector refresh event targets the same side", async () => {
+    vi.useFakeTimers();
+    mockClient.getGoogleLifeOpsConnectorStatus.mockResolvedValue(
+      buildStatus("owner", {
+        connected: false,
+        reason: "disconnected",
+      }),
+    );
+
+    const { unmount } = renderHook(() =>
+      useGoogleLifeOpsConnector({
+        pollIntervalMs: 60_000,
+        pollWhileDisconnected: false,
+        side: "owner",
+      }),
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const initialCalls =
+      mockClient.getGoogleLifeOpsConnectorStatus.mock.calls.length;
+
+    await act(async () => {
+      window.dispatchEvent(
+        new CustomEvent(LIFEOPS_GOOGLE_CONNECTOR_REFRESH_EVENT, {
+          detail: {
+            side: "owner",
+            mode: "cloud_managed",
+            source: "callback",
+          },
+        }),
+      );
+      await Promise.resolve();
+    });
+
+    expect(
+      mockClient.getGoogleLifeOpsConnectorStatus.mock.calls.length,
+    ).toBeGreaterThan(initialCalls);
+    expect(mockClient.getGoogleLifeOpsConnectorStatus).toHaveBeenLastCalledWith(
+      "cloud_managed",
+      "owner",
+    );
+    unmount();
+  });
+
+  it("refreshes on focus and app resume even when disconnected polling is disabled", async () => {
+    vi.useFakeTimers();
+    mockClient.getGoogleLifeOpsConnectorStatus.mockResolvedValue(
+      buildStatus("owner", {
+        connected: false,
+        reason: "disconnected",
+      }),
+    );
+
+    const { unmount } = renderHook(() =>
+      useGoogleLifeOpsConnector({
+        pollIntervalMs: 60_000,
+        pollWhileDisconnected: false,
+        side: "owner",
+      }),
+    );
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const initialCalls =
+      mockClient.getGoogleLifeOpsConnectorStatus.mock.calls.length;
+
+    await act(async () => {
+      window.dispatchEvent(new Event("focus"));
+      document.dispatchEvent(new Event(APP_RESUME_EVENT));
+      await Promise.resolve();
+    });
+
+    expect(
+      mockClient.getGoogleLifeOpsConnectorStatus.mock.calls.length,
+    ).toBeGreaterThanOrEqual(initialCalls + 2);
     unmount();
   });
 });
