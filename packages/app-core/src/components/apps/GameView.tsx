@@ -34,6 +34,24 @@ const READY_EVENT_BY_AUTH_TYPE: Record<string, string> = {
   RS_2004SCAPE_AUTH: "RS_2004SCAPE_READY",
 };
 
+export function buildDisconnectedSessionState(
+  session: AppSessionState | null,
+): AppSessionState | null {
+  if (!session) return null;
+  return {
+    ...session,
+    status: "disconnected",
+    canSendCommands: false,
+    controls: [],
+    goalLabel: null,
+    suggestedPrompts: [],
+    telemetry: null,
+    summary: session.displayName
+      ? `Session unavailable: ${session.displayName}`
+      : "Session unavailable.",
+  };
+}
+
 function resolvePostMessageTargetOrigin(viewerUrl: string): string {
   if (viewerUrl.startsWith("/")) return window.location.origin;
   const match = viewerUrl.match(/^https?:\/\/[^/?#]+/i);
@@ -455,6 +473,7 @@ export function GameView() {
     activeGameSession,
     gameOverlayEnabled,
     logs,
+    logLoadError,
     loadLogs,
     setState,
     setActionNotice,
@@ -500,10 +519,19 @@ export function GameView() {
       return nextSession;
     } catch (err) {
       console.warn("[GameView] Failed to refresh app session state:", err);
+      applySessionState(
+        buildDisconnectedSessionState(sessionState ?? activeGameSession),
+      );
       setConnectionStatus("disconnected");
       return null;
     }
-  }, [activeGameApp, activeGameSession?.sessionId, applySessionState]);
+  }, [
+    activeGameApp,
+    activeGameSession,
+    activeGameSession?.sessionId,
+    applySessionState,
+    sessionState,
+  ]);
 
   useEffect(() => {
     applySessionState(activeGameSession);
@@ -897,6 +925,14 @@ export function GameView() {
               <span className="truncate">{prompt}</span>
             </Button>
           ))}
+        </div>
+      ) : null}
+      {logLoadError ? (
+        <div className="border-b border-danger/25 bg-danger/8 px-2 py-1.5 text-[10px] text-danger">
+          {t("gameview.LogLoadFailed", {
+            defaultValue: "Failed to load logs: {{message}}",
+            message: logLoadError,
+          })}
         </div>
       ) : null}
       {/* Chat input for sending commands to agent */}

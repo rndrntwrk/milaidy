@@ -640,7 +640,7 @@ export class AppManager {
         .replace(/\b\w/g, (c: string) => c.toUpperCase()),
       pluginName: p.name,
       version: p.version ?? "unknown",
-      installedAt: new Date().toISOString(), // Ejected plugins don't track install time yet
+      installedAt: p.installedAt ?? "",
     }));
   }
 }

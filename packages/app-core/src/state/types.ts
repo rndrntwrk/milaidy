@@ -358,6 +358,7 @@ export interface AppState {
   logTagFilter: string;
   logLevelFilter: string;
   logSourceFilter: string;
+  logLoadError: string | null;
 
   // Wallet / Inventory
   walletAddresses: WalletAddresses | null;
