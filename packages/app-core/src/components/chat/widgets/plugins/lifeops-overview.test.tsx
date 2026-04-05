@@ -1,0 +1,339 @@
+// @vitest-environment jsdom
+
+import React from "react";
+import TestRenderer, { act } from "react-test-renderer";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const { mockUseApp, mockClient } = vi.hoisted(() => ({
+  mockUseApp: vi.fn(),
+  mockClient: {
+    getLifeOpsOverview: vi.fn(),
+    completeLifeOpsOccurrence: vi.fn(),
+    snoozeLifeOpsOccurrence: vi.fn(),
+    skipLifeOpsOccurrence: vi.fn(),
+  },
+}));
+
+vi.mock("@miladyai/ui", () => ({
+  Badge: ({
+    children,
+    ...props
+  }: React.PropsWithChildren<Record<string, unknown>>) =>
+    React.createElement("span", props, children),
+  Button: ({
+    children,
+    ...props
+  }: React.PropsWithChildren<Record<string, unknown>>) =>
+    React.createElement("button", { type: "button", ...props }, children),
+}));
+
+vi.mock("../../../../api", () => ({
+  client: mockClient,
+}));
+
+vi.mock("../../../../state", () => ({
+  useApp: () => mockUseApp(),
+}));
+
+import { LifeOpsOverviewSidebarWidget } from "./lifeops-overview";
+
+function flattenText(node: TestRenderer.ReactTestInstance): string {
+  return node.children
+    .map((child) => {
+      if (typeof child === "string") {
+        return child;
+      }
+      return flattenText(child);
+    })
+    .join(" ");
+}
+
+function createOverview() {
+  return {
+    occurrences: [
+      {
+        id: "owner-occurrence",
+        agentId: "agent-1",
+        domain: "user_lifeops",
+        subjectType: "owner",
+        subjectId: "owner-1",
+        visibilityScope: "owner_agent_admin",
+        contextPolicy: "explicit_only",
+        definitionId: "definition-1",
+        occurrenceKey: "definition-1:today",
+        scheduledAt: "2026-04-04T16:00:00.000Z",
+        dueAt: "2026-04-04T16:00:00.000Z",
+        relevanceStartAt: "2026-04-04T15:30:00.000Z",
+        relevanceEndAt: "2026-04-04T18:00:00.000Z",
+        windowName: "afternoon",
+        state: "visible",
+        snoozedUntil: null,
+        completionPayload: null,
+        derivedTarget: null,
+        metadata: {},
+        createdAt: "2026-04-04T14:00:00.000Z",
+        updatedAt: "2026-04-04T14:00:00.000Z",
+        definitionKind: "habit",
+        definitionStatus: "active",
+        cadence: {
+          kind: "times_per_day",
+          slots: [
+            {
+              key: "morning",
+              label: "Morning",
+              minuteOfDay: 480,
+              durationMinutes: 30,
+            },
+            {
+              key: "evening",
+              label: "Evening",
+              minuteOfDay: 1080,
+              durationMinutes: 30,
+            },
+          ],
+        },
+        title: "Take medication",
+        description: "Morning and evening support task",
+        priority: 1,
+        timezone: "America/Los_Angeles",
+        source: "manual",
+        goalId: null,
+      },
+    ],
+    goals: [],
+    reminders: [
+      {
+        domain: "user_lifeops",
+        subjectType: "owner",
+        subjectId: "owner-1",
+        ownerType: "occurrence",
+        ownerId: "owner-occurrence",
+        occurrenceId: "owner-occurrence",
+        definitionId: "definition-1",
+        eventId: null,
+        title: "Take medication",
+        channel: "in_app",
+        stepIndex: 0,
+        stepLabel: "Check in now",
+        scheduledFor: "2026-04-04T15:55:00.000Z",
+        dueAt: "2026-04-04T16:00:00.000Z",
+        state: "visible",
+        htmlLink: null,
+        eventStartAt: null,
+      },
+    ],
+    summary: {
+      activeOccurrenceCount: 1,
+      overdueOccurrenceCount: 0,
+      snoozedOccurrenceCount: 0,
+      activeReminderCount: 1,
+      activeGoalCount: 0,
+    },
+    owner: {
+      occurrences: [
+        {
+          id: "owner-occurrence",
+          agentId: "agent-1",
+          domain: "user_lifeops",
+          subjectType: "owner",
+          subjectId: "owner-1",
+          visibilityScope: "owner_agent_admin",
+          contextPolicy: "explicit_only",
+          definitionId: "definition-1",
+          occurrenceKey: "definition-1:today",
+          scheduledAt: "2026-04-04T16:00:00.000Z",
+          dueAt: "2026-04-04T16:00:00.000Z",
+          relevanceStartAt: "2026-04-04T15:30:00.000Z",
+          relevanceEndAt: "2026-04-04T18:00:00.000Z",
+          windowName: "afternoon",
+          state: "visible",
+          snoozedUntil: null,
+          completionPayload: null,
+          derivedTarget: null,
+          metadata: {},
+          createdAt: "2026-04-04T14:00:00.000Z",
+          updatedAt: "2026-04-04T14:00:00.000Z",
+          definitionKind: "habit",
+          definitionStatus: "active",
+          cadence: {
+            kind: "times_per_day",
+            slots: [
+              {
+                key: "morning",
+                label: "Morning",
+                minuteOfDay: 480,
+                durationMinutes: 30,
+              },
+              {
+                key: "evening",
+                label: "Evening",
+                minuteOfDay: 1080,
+                durationMinutes: 30,
+              },
+            ],
+          },
+          title: "Take medication",
+          description: "Morning and evening support task",
+          priority: 1,
+          timezone: "America/Los_Angeles",
+          source: "manual",
+          goalId: null,
+        },
+      ],
+      goals: [],
+      reminders: [
+        {
+          domain: "user_lifeops",
+          subjectType: "owner",
+          subjectId: "owner-1",
+          ownerType: "occurrence",
+          ownerId: "owner-occurrence",
+          occurrenceId: "owner-occurrence",
+          definitionId: "definition-1",
+          eventId: null,
+          title: "Take medication",
+          channel: "in_app",
+          stepIndex: 0,
+          stepLabel: "Check in now",
+          scheduledFor: "2026-04-04T15:55:00.000Z",
+          dueAt: "2026-04-04T16:00:00.000Z",
+          state: "visible",
+          htmlLink: null,
+          eventStartAt: null,
+        },
+      ],
+      summary: {
+        activeOccurrenceCount: 1,
+        overdueOccurrenceCount: 0,
+        snoozedOccurrenceCount: 0,
+        activeReminderCount: 1,
+        activeGoalCount: 0,
+      },
+    },
+    agentOps: {
+      occurrences: [],
+      goals: [
+        {
+          id: "agent-goal",
+          agentId: "agent-1",
+          domain: "agent_ops",
+          subjectType: "agent",
+          subjectId: "agent-1",
+          visibilityScope: "agent_and_admin",
+          contextPolicy: "never",
+          title: "Keep plugin mirrors healthy",
+          description: "Track agent-private operational goals",
+          cadence: null,
+          supportStrategy: {},
+          successCriteria: {},
+          status: "active",
+          reviewState: "needs_attention",
+          metadata: {},
+          createdAt: "2026-04-04T14:00:00.000Z",
+          updatedAt: "2026-04-04T14:00:00.000Z",
+        },
+      ],
+      reminders: [],
+      summary: {
+        activeOccurrenceCount: 0,
+        overdueOccurrenceCount: 0,
+        snoozedOccurrenceCount: 0,
+        activeReminderCount: 0,
+        activeGoalCount: 1,
+      },
+    },
+  };
+}
+
+describe("LifeOpsOverviewSidebarWidget", () => {
+  beforeEach(() => {
+    const overview = createOverview();
+    mockUseApp.mockReset();
+    mockClient.getLifeOpsOverview.mockReset();
+    mockClient.completeLifeOpsOccurrence.mockReset();
+    mockClient.snoozeLifeOpsOccurrence.mockReset();
+    mockClient.skipLifeOpsOccurrence.mockReset();
+
+    mockUseApp.mockReturnValue({
+      workbench: {
+        lifeops: overview,
+      },
+    });
+    mockClient.getLifeOpsOverview.mockResolvedValue(overview);
+  });
+
+  it("renders owner and agent lifeops sections", async () => {
+    let renderer!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(
+        React.createElement(LifeOpsOverviewSidebarWidget, {
+          events: [],
+          clearEvents: () => {},
+        }),
+      );
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const text = flattenText(renderer.root).toLowerCase();
+    expect(text).toContain("life ops");
+    expect(text).toContain("my life ops");
+    expect(text).toContain("take medication");
+    expect(text).toContain("twice daily");
+    expect(text).toContain("agent ops");
+    expect(text).toContain("keep plugin mirrors healthy");
+    expect(text).toContain("reminders are driven from lifeops");
+  });
+
+  it("runs occurrence completion and refreshes the overview", async () => {
+    const updatedOverview = createOverview();
+    updatedOverview.owner.occurrences = [];
+    updatedOverview.owner.reminders = [];
+    updatedOverview.owner.summary.activeOccurrenceCount = 0;
+    updatedOverview.owner.summary.activeReminderCount = 0;
+
+    mockClient.getLifeOpsOverview
+      .mockResolvedValueOnce(createOverview())
+      .mockResolvedValueOnce(updatedOverview);
+    mockClient.completeLifeOpsOccurrence.mockResolvedValue({
+      occurrence: {
+        ...createOverview().owner.occurrences[0],
+        state: "completed",
+      },
+    });
+
+    let renderer!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(
+        React.createElement(LifeOpsOverviewSidebarWidget, {
+          events: [],
+          clearEvents: () => {},
+        }),
+      );
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const doneButton = renderer.root
+      .findAllByType("button")
+      .find((button) => flattenText(button).includes("Done"));
+    expect(doneButton).toBeDefined();
+
+    await act(async () => {
+      doneButton?.props.onClick();
+      await Promise.resolve();
+    });
+
+    expect(mockClient.completeLifeOpsOccurrence).toHaveBeenCalledWith(
+      "owner-occurrence",
+      {},
+    );
+    expect(mockClient.getLifeOpsOverview.mock.calls.length).toBeGreaterThanOrEqual(
+      2,
+    );
+  });
+});

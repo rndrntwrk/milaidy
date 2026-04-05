@@ -4,6 +4,7 @@ import { resolveChatSidebarWidgets } from "./registry";
 describe("resolveChatSidebarWidgets", () => {
   it("falls back to default-enabled plugin widgets before plugin state loads", () => {
     expect(resolveChatSidebarWidgets([]).map((widget) => widget.id)).toEqual([
+      "lifeops.overview",
       "todo.items",
       "lifeops.google",
       "agent-orchestrator.tasks",

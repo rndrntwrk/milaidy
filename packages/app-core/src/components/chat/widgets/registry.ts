@@ -1,11 +1,15 @@
 import { AGENT_ORCHESTRATOR_PLUGIN_WIDGETS } from "./plugins/agent-orchestrator";
+import { LIFEOPS_OVERVIEW_WIDGETS } from "./plugins/lifeops-overview";
 import { LIFEOPS_WIDGETS } from "./plugins/lifeops";
+import { TODO_PLUGIN_WIDGETS } from "./plugins/todo";
 import type {
   ChatSidebarPluginState,
   ChatSidebarWidgetDefinition,
 } from "./types";
 
 const CHAT_SIDEBAR_WIDGETS: ChatSidebarWidgetDefinition[] = [
+  ...LIFEOPS_OVERVIEW_WIDGETS,
+  ...TODO_PLUGIN_WIDGETS,
   ...LIFEOPS_WIDGETS,
   ...AGENT_ORCHESTRATOR_PLUGIN_WIDGETS,
 ];
