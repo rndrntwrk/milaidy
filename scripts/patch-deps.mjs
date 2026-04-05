@@ -36,7 +36,6 @@ import {
   patchCodexFolderApprovalPromptCompat,
   patchElectrobunWindowsTar,
   patchExtensionlessJsExports,
-  patchMissingLifecycleScript,
   patchNobleHashesCompat,
   patchProperLockfileSignalExitCompat,
   patchPtyManagerCursorPositionCompat,
@@ -63,16 +62,6 @@ try {
   patchBunExports(root, "@elizaos/plugin-coding-agent");
 } catch {
   // May fail if the bun patch already modified package.json.
-}
-try {
-  patchMissingLifecycleScript(
-    root,
-    "@elizaos/plugin-agent-orchestrator",
-    "postinstall",
-    "./scripts/ensure-node-pty.mjs",
-  );
-} catch {
-  // May fail if the version already has the script or JSON is already patched.
 }
 
 // @noble/curves and @noble/hashes publish ".js" subpath exports, while ethers

@@ -20,6 +20,11 @@ const requiredPaths = [
 const forbiddenPrefixes = ["dist/Milady.app/"];
 const orchestratorPackageName = "@elizaos/plugin-agent-orchestrator";
 const orchestratorBrokenLifecycleTarget = "./scripts/ensure-node-pty.mjs";
+const orchestratorWorkspaceDir = resolve("plugins", "plugin-agent-orchestrator");
+const orchestratorWorkspacePackageJsonPath = resolve(
+  orchestratorWorkspaceDir,
+  "package.json",
+);
 const autonomousServerPathCandidates = [
   "node_modules/@miladyai/agent/packages/agent/src/api/server.js",
   "packages/agent/src/api/server.ts",
@@ -257,6 +262,10 @@ export function isExactVersion(specifier: string): boolean {
   return /^\d+\.\d+\.\d+/.test(specifier);
 }
 
+export function isWorkspaceSpecifier(specifier: string | undefined): boolean {
+  return typeof specifier === "string" && specifier.startsWith("workspace:");
+}
+
 type DependencyPackageJson = {
   scripts?: Record<string, string>;
 };
@@ -476,29 +485,35 @@ function assertBundledAgentOrchestratorInstallFix() {
   ) as RootPackageJson;
   if (!bundlesDependency(rootPackage, orchestratorPackageName)) {
     console.error(
-      "release-check: package.json must bundle @elizaos/plugin-agent-orchestrator until the upstream tarball stops shipping a broken postinstall hook.",
+      "release-check: package.json must bundle @elizaos/plugin-agent-orchestrator so packaged Milady includes the orchestrator implementation.",
     );
     process.exit(1);
   }
 
   const orchestratorVersion =
     rootPackage.dependencies?.[orchestratorPackageName];
-  if (!isExactVersionSpecifier(orchestratorVersion)) {
+  const usingWorkspace = isWorkspaceSpecifier(orchestratorVersion);
+
+  if (!usingWorkspace && !isExactVersionSpecifier(orchestratorVersion)) {
     console.error(
-      "release-check: package.json must pin @elizaos/plugin-agent-orchestrator to an exact version until the upstream tarball stops shipping a broken postinstall hook.",
+      "release-check: package.json must either use workspace:* for the local plugin-agent-orchestrator submodule or pin @elizaos/plugin-agent-orchestrator to an exact published version.",
     );
     process.exit(1);
   }
 
-  const orchestratorPackageJsonPath = resolve(
-    "node_modules",
-    "@elizaos",
-    "plugin-agent-orchestrator",
-    "package.json",
-  );
+  const orchestratorPackageJsonPath = usingWorkspace
+    ? orchestratorWorkspacePackageJsonPath
+    : resolve(
+        "node_modules",
+        "@elizaos",
+        "plugin-agent-orchestrator",
+        "package.json",
+      );
   if (!existsSync(orchestratorPackageJsonPath)) {
     console.error(
-      "release-check: node_modules/@elizaos/plugin-agent-orchestrator/package.json is missing. Run bun install before publishing.",
+      usingWorkspace
+        ? "release-check: plugins/plugin-agent-orchestrator/package.json is missing. Initialize the orchestrator submodule before publishing."
+        : "release-check: node_modules/@elizaos/plugin-agent-orchestrator/package.json is missing. Run bun install before publishing.",
     );
     process.exit(1);
   }
@@ -515,7 +530,9 @@ function assertBundledAgentOrchestratorInstallFix() {
     )
   ) {
     console.error(
-      "release-check: @elizaos/plugin-agent-orchestrator still references missing scripts/ensure-node-pty.mjs. The pnpm patch should remove this postinstall script.",
+      usingWorkspace
+        ? "release-check: the local plugin-agent-orchestrator workspace references scripts/ensure-node-pty.mjs, but that file is missing."
+        : "release-check: @elizaos/plugin-agent-orchestrator still references missing scripts/ensure-node-pty.mjs. The pnpm patch should remove this postinstall script.",
     );
     process.exit(1);
   }
@@ -531,9 +548,18 @@ function assertOrchestratorVersionPinned() {
     );
     process.exit(1);
   }
+  if (isWorkspaceSpecifier(version)) {
+    if (!existsSync(orchestratorWorkspacePackageJsonPath)) {
+      console.error(
+        `release-check: ${orchestratorPackageName} is configured as workspace:*, but plugins/plugin-agent-orchestrator/package.json is missing.`,
+      );
+      process.exit(1);
+    }
+    return;
+  }
   if (!isExactVersion(version)) {
     console.error(
-      `release-check: ${orchestratorPackageName} must be pinned to an exact version (e.g. "0.3.14"), but found "${version}". Floating tags like "next" or ranges like "^0.3.14" are not allowed for release builds.`,
+      `release-check: ${orchestratorPackageName} must either use workspace:* for the local submodule or be pinned to an exact version (for example "0.3.14"), but found "${version}".`,
     );
     process.exit(1);
   }

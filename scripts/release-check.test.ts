@@ -10,6 +10,7 @@ import {
   hasLifecycleScriptReferencingMissingFile,
   isExactVersion,
   isExactVersionSpecifier,
+  isWorkspaceSpecifier,
   isNpmOverrideConflictError,
   isPackPathCoveredByFilesList,
   parseBunPackDryRunOutput,
@@ -134,6 +135,13 @@ describe("release-check package guards", () => {
     expect(isExactVersionSpecifier("^0.3.14")).toBe(false);
     expect(isExactVersionSpecifier("~0.3.14")).toBe(false);
     expect(isExactVersionSpecifier("workspace:*")).toBe(false);
+  });
+
+  it("detects workspace protocol specifiers for local plugin submodules", () => {
+    expect(isWorkspaceSpecifier("workspace:*")).toBe(true);
+    expect(isWorkspaceSpecifier("workspace:^")).toBe(true);
+    expect(isWorkspaceSpecifier("0.5.0")).toBe(false);
+    expect(isWorkspaceSpecifier(undefined)).toBe(false);
   });
 
   it("rejects floating tags and range specifiers", () => {
