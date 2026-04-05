@@ -819,6 +819,9 @@ MiladyClient.prototype.getLifeOpsCalendarFeed = async function (
   if (options.mode) {
     params.set("mode", options.mode);
   }
+  if (options.side) {
+    params.set("side", options.side);
+  }
   if (options.calendarId) {
     params.set("calendarId", options.calendarId);
   }
@@ -846,6 +849,9 @@ MiladyClient.prototype.getLifeOpsGmailTriage = async function (
   if (options.mode) {
     params.set("mode", options.mode);
   }
+  if (options.side) {
+    params.set("side", options.side);
+  }
   if (options.forceSync !== undefined) {
     params.set("forceSync", String(options.forceSync));
   }
@@ -863,6 +869,9 @@ MiladyClient.prototype.getLifeOpsNextCalendarEventContext = async function (
   const params = new URLSearchParams();
   if (options.mode) {
     params.set("mode", options.mode);
+  }
+  if (options.side) {
+    params.set("side", options.side);
   }
   if (options.calendarId) {
     params.set("calendarId", options.calendarId);

@@ -82,33 +82,14 @@ describe("FlaminaGuideCard", () => {
     expect(renderedText).toContain("flaminaguide.voice.description");
     expect(renderedText).toContain("flaminaguide.voice.whenToUse");
   });
-
-  it("explains Google connector impact on Life Ops context", () => {
-    let tree: TestRenderer.ReactTestRenderer;
-    act(() => {
-      tree = TestRenderer.create(
-        React.createElement(FlaminaGuideCard, { topic: "google" }),
-      );
-    });
-
-    const renderedText = textOf(tree?.root);
-
-    expect(renderedText).toContain("Connect Google");
-    expect(renderedText).toContain(
-      "Google Calendar and Gmail so this agent can see upcoming events",
-    );
-    expect(renderedText).toContain(
-      "Life Ops will not have Google Calendar or Gmail context",
-    );
-  });
 });
 
 describe("DeferredSetupChecklist", () => {
-  it("renders the Google deferred task copy with defaults", () => {
+  it("renders provider deferred task copy", () => {
     mockUseApp.mockReturnValue({
       t: (k: string, vars?: { defaultValue?: string }) =>
         vars?.defaultValue ?? k,
-      onboardingDeferredTasks: ["google"],
+      onboardingDeferredTasks: ["provider"],
       postOnboardingChecklistDismissed: false,
       setState: vi.fn(),
     });
@@ -121,18 +102,16 @@ describe("DeferredSetupChecklist", () => {
     });
 
     const renderedText = textOf(tree?.root);
-    expect(renderedText).toContain("Google connection");
-    expect(renderedText).toContain(
-      "Connect Google Calendar and Gmail for this agent.",
-    );
+    expect(renderedText).toContain("flaminaguide.tasks.provider.label");
+    expect(renderedText).toContain("flaminaguide.tasks.provider.description");
   });
 
-  it("opens the Google deferred task through the provided callback", () => {
+  it("opens the deferred task through the provided callback", () => {
     const onOpenTask = vi.fn();
     mockUseApp.mockReturnValue({
       t: (k: string, vars?: { defaultValue?: string }) =>
         vars?.defaultValue ?? k,
-      onboardingDeferredTasks: ["google"],
+      onboardingDeferredTasks: ["provider"],
       postOnboardingChecklistDismissed: false,
       setState: vi.fn(),
     });
@@ -153,6 +132,6 @@ describe("DeferredSetupChecklist", () => {
       openButton.props.onClick();
     });
 
-    expect(onOpenTask).toHaveBeenCalledWith("google");
+    expect(onOpenTask).toHaveBeenCalledWith("provider");
   });
 });

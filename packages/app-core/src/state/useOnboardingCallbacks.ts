@@ -41,8 +41,6 @@ import {
 import type { AppState, OnboardingStep } from "./types";
 import type { OnboardingStateHook } from "./useOnboardingState";
 
-const GOOGLE_DEFERRED_TASK = "google";
-
 // ── Helpers copied from AppContext (module-level, no React deps) ──────────
 
 function isPrivateNetworkHost(host: string): boolean {
@@ -163,27 +161,6 @@ async function persistOnboardingStyleVoice(args: {
   });
 }
 
-async function shouldDeferGoogleConnectorSetup(args: {
-  client: MiladyClient;
-  onboardingServerTarget: "" | "local" | "remote" | "elizacloud";
-}): Promise<boolean> {
-  if (args.onboardingServerTarget !== "elizacloud") {
-    return false;
-  }
-
-  try {
-    const status =
-      await args.client.getGoogleLifeOpsConnectorStatus("cloud_managed");
-    return !status.connected;
-  } catch (error) {
-    console.warn(
-      "[onboarding] Failed to verify Google connector status after cloud onboarding",
-      error,
-    );
-    return true;
-  }
-}
-
 // ── Hook deps ─────────────────────────────────────────────────────────────
 
 export interface OnboardingCallbacksDeps {
@@ -244,7 +221,6 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
     setOnboardingStep,
     setOnboardingMode: _setOnboardingMode,
     setOnboardingActiveGuide,
-    addDeferredOnboardingTask,
     setOnboardingDetectedProviders,
     setOnboardingServerTarget,
     setOnboardingCloudApiKey,
@@ -504,15 +480,6 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
         );
       }
 
-      if (
-        await shouldDeferGoogleConnectorSetup({
-          client,
-          onboardingServerTarget,
-        })
-      ) {
-        addDeferredOnboardingTask(GOOGLE_DEFERRED_TASK);
-      }
-
       if (runtimeConfig.needsProviderSetup) {
         setActionNotice(
           "Choose a chat provider in Settings to start chatting.",
@@ -549,7 +516,6 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
     onboardingRpcSelections,
     onboardingRpcKeys,
     walletConfig,
-    addDeferredOnboardingTask,
     completeOnboarding,
     client,
     setActionNotice,

@@ -1,15 +1,14 @@
 import type {
   LifeOpsCalendarEvent,
   LifeOpsCalendarFeed,
-  LifeOpsConnectorMode,
   LifeOpsConnectorSide,
   LifeOpsGmailMessageSummary,
   LifeOpsGmailTriageFeed,
   LifeOpsGoogleCapability,
   LifeOpsGoogleConnectorStatus,
 } from "@miladyai/shared/contracts/lifeops";
-import { Badge, Button } from "@miladyai/ui";
-import { CalendarDays, Mail, Plug2, RefreshCw } from "lucide-react";
+import { Badge } from "@miladyai/ui";
+import { CalendarDays, Mail, Plug2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { client } from "../../../../api";
@@ -30,7 +29,7 @@ function capabilitySet(
   return new Set(status?.grantedCapabilities ?? []);
 }
 
-function modeLabel(mode: LifeOpsConnectorMode): string {
+function modeLabel(mode: LifeOpsGoogleConnectorStatus["mode"]): string {
   switch (mode) {
     case "cloud_managed":
       return "Cloud";
@@ -61,8 +60,6 @@ function readIdentityLabel(identity: Record<string, unknown> | null): {
     secondary: name && email ? email : null,
   };
 }
-
-type GoogleConnectorController = ReturnType<typeof useGoogleLifeOpsConnector>;
 
 function sideLabel(side: LifeOpsConnectorSide): string {
   return side === "owner" ? "Owner" : "Agent";
@@ -190,23 +187,12 @@ function GmailRow({ message }: { message: LifeOpsGmailMessageSummary }) {
 }
 
 function GoogleAccountCard({
-  connector,
   side,
+  status,
 }: {
-  connector: GoogleConnectorController;
   side: LifeOpsConnectorSide;
+  status: LifeOpsGoogleConnectorStatus;
 }) {
-  const {
-    activeMode,
-    actionPending,
-    connect,
-    disconnect,
-    loading,
-    modeOptions,
-    refresh,
-    selectMode,
-    status,
-  } = connector;
   const capabilities = capabilitySet(status);
   const identityLabel = readIdentityLabel(status?.identity ?? null);
 
@@ -225,7 +211,7 @@ function GoogleAccountCard({
           {identityLabel.primary}
         </span>
         <Badge variant="secondary" className="text-[9px]">
-          {modeLabel(activeMode)}
+          {modeLabel(status.mode)}
         </Badge>
       </div>
       {identityLabel.secondary ? (
@@ -234,77 +220,22 @@ function GoogleAccountCard({
         </div>
       ) : null}
       <div className="mt-2 flex flex-wrap gap-1.5">
-        {status?.connected ? (
-          <>
-            {(capabilities.has("google.calendar.read") ||
-              capabilities.has("google.calendar.write")) && (
-              <Badge variant="secondary" className="text-[9px]">
-                Calendar
-              </Badge>
-            )}
-            {capabilities.has("google.gmail.triage") ? (
-              <Badge variant="secondary" className="text-[9px]">
-                Gmail
-              </Badge>
-            ) : null}
-            {!status.preferredByAgent ? (
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={loading || actionPending}
-                onClick={() => void selectMode(activeMode)}
-                aria-label={`Use ${sideLabel(side)} Google connector by default`}
-              >
-                Use by default
-              </Button>
-            ) : null}
-          </>
-        ) : (
-          <div className="text-[11px] text-muted">
-            {loading ? "Loading" : "Disconnected"}
-          </div>
+        {(capabilities.has("google.calendar.read") ||
+          capabilities.has("google.calendar.write")) && (
+          <Badge variant="secondary" className="text-[9px]">
+            Calendar
+          </Badge>
         )}
-      </div>
-      <div className="mt-3 flex flex-wrap gap-1.5">
-        {modeOptions.map((mode) => {
-          const isActive = activeMode === mode;
-          return (
-            <Button
-              key={mode}
-              size="sm"
-              variant={isActive ? "default" : "outline"}
-              disabled={loading || actionPending}
-              onClick={() => void selectMode(mode)}
-              aria-label={`${sideLabel(side)} ${modeLabel(mode)} mode`}
-            >
-              {modeLabel(mode)}
-            </Button>
-          );
-        })}
-      </div>
-      <div className="mt-3 flex items-center gap-1.5">
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={loading || actionPending}
-          onClick={() => void refresh()}
-          aria-label={`Refresh ${sideLabel(side)} Google connector`}
-        >
-          <RefreshCw className="h-3.5 w-3.5" />
-        </Button>
-        <Button
-          size="sm"
-          variant={status?.connected ? "outline" : "default"}
-          disabled={loading || actionPending}
-          onClick={() => void (status?.connected ? disconnect() : connect())}
-          aria-label={`${status?.connected ? "Disconnect" : status?.reason === "needs_reauth" ? "Reconnect" : "Connect"} ${sideLabel(side)} Google connector`}
-        >
-          {status?.connected
-            ? "Disconnect"
-            : status?.reason === "needs_reauth"
-              ? "Reconnect"
-              : "Connect"}
-        </Button>
+        {capabilities.has("google.gmail.triage") ? (
+          <Badge variant="secondary" className="text-[9px]">
+            Gmail
+          </Badge>
+        ) : null}
+        {status.reason === "needs_reauth" ? (
+          <Badge variant="outline" className="text-[9px]">
+            Reauth needed
+          </Badge>
+        ) : null}
       </div>
     </div>
   );
@@ -330,8 +261,15 @@ export function GoogleSidebarWidget(_props: ChatSidebarWidgetProps) {
     null,
   );
   const [feedError, setFeedError] = useState<string | null>(null);
+  const connectedConnectors = useMemo(
+    () =>
+      [ownerConnector, agentConnector].filter(
+        (connector) => connector.status?.connected === true,
+      ),
+    [agentConnector, ownerConnector],
+  );
   const dataConnector = useMemo(() => {
-    const connectors = [ownerConnector, agentConnector];
+    const connectors = connectedConnectors;
     return (
       connectors.find(
         (connector) =>
@@ -341,7 +279,7 @@ export function GoogleSidebarWidget(_props: ChatSidebarWidgetProps) {
       connectors.find((connector) => connector.status?.connected === true) ??
       null
     );
-  }, [agentConnector, ownerConnector]);
+  }, [connectedConnectors]);
   const dataStatus = dataConnector?.status ?? null;
 
   useEffect(() => {
@@ -361,12 +299,14 @@ export function GoogleSidebarWidget(_props: ChatSidebarWidgetProps) {
           nextCapabilities.has("google.calendar.write")
             ? client.getLifeOpsCalendarFeed({
                 mode: dataStatus.mode,
+                side: dataStatus.side,
                 timeZone,
               })
             : Promise.resolve<LifeOpsCalendarFeed | null>(null),
           nextCapabilities.has("google.gmail.triage")
             ? client.getLifeOpsGmailTriage({
                 mode: dataStatus.mode,
+                side: dataStatus.side,
                 maxResults: GOOGLE_WIDGET_MESSAGE_LIMIT,
               })
             : Promise.resolve<LifeOpsGmailTriageFeed | null>(null),
@@ -406,6 +346,10 @@ export function GoogleSidebarWidget(_props: ChatSidebarWidgetProps) {
   const connectorError =
     ownerConnector.error ?? agentConnector.error ?? feedError ?? null;
 
+  if (connectedConnectors.length === 0) {
+    return null;
+  }
+
   return (
     <WidgetSection
       title="Google"
@@ -413,8 +357,15 @@ export function GoogleSidebarWidget(_props: ChatSidebarWidgetProps) {
       testId="chat-widget-google"
     >
       <div className="flex flex-col gap-4">
-        <GoogleAccountCard connector={ownerConnector} side="owner" />
-        <GoogleAccountCard connector={agentConnector} side="agent" />
+        {connectedConnectors.map((connector) =>
+          connector.status ? (
+            <GoogleAccountCard
+              key={connector.status.side}
+              side={connector.status.side}
+              status={connector.status}
+            />
+          ) : null,
+        )}
 
         {showCalendar ? (
           <div className="flex flex-col gap-2">

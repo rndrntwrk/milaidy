@@ -372,28 +372,9 @@ describe("useOnboardingCallbacks", () => {
     expect(setTab).toHaveBeenCalledWith("chat");
   });
 
-  it("adds a deferred Google task after Eliza Cloud onboarding when Google is not connected", async () => {
+  it("completes Eliza Cloud onboarding without queuing Google setup work", async () => {
     const submitOnboarding = vi.fn().mockResolvedValue(undefined);
     const provisionCloudSandbox = vi.fn().mockResolvedValue(undefined);
-    const getGoogleLifeOpsConnectorStatus = vi.fn().mockResolvedValue({
-      provider: "google",
-      mode: "cloud_managed",
-      defaultMode: "cloud_managed",
-      availableModes: ["cloud_managed", "local"],
-      executionTarget: "cloud",
-      sourceOfTruth: "cloud",
-      configured: true,
-      connected: false,
-      reason: "disconnected",
-      preferredByAgent: false,
-      cloudConnectionId: null,
-      identity: null,
-      grantedCapabilities: [],
-      grantedScopes: [],
-      expiresAt: null,
-      hasRefreshToken: false,
-      grant: null,
-    });
     const addDeferredOnboardingTask = vi.fn();
     const setOnboardingComplete = vi.fn();
     const setTab = vi.fn();
@@ -442,7 +423,6 @@ describe("useOnboardingCallbacks", () => {
             updateConfig: vi.fn().mockResolvedValue({}),
             setBaseUrl: vi.fn(),
             setToken: vi.fn(),
-            getGoogleLifeOpsConnectorStatus,
           } as unknown as MiladyClient,
         }),
       };
@@ -468,110 +448,8 @@ describe("useOnboardingCallbacks", () => {
     });
 
     expect(provisionCloudSandbox).toHaveBeenCalledTimes(1);
-    expect(getGoogleLifeOpsConnectorStatus).toHaveBeenCalledWith(
-      "cloud_managed",
-    );
-    expect(addDeferredOnboardingTask).toHaveBeenCalledWith("google");
+    expect(addDeferredOnboardingTask).not.toHaveBeenCalled();
     expect(setOnboardingComplete).toHaveBeenCalledWith(true);
     expect(setTab).toHaveBeenCalledWith("chat");
-  });
-
-  it("skips the deferred Google task when the managed connector is already connected", async () => {
-    const submitOnboarding = vi.fn().mockResolvedValue(undefined);
-    const provisionCloudSandbox = vi.fn().mockResolvedValue(undefined);
-    const getGoogleLifeOpsConnectorStatus = vi.fn().mockResolvedValue({
-      provider: "google",
-      mode: "cloud_managed",
-      defaultMode: "cloud_managed",
-      availableModes: ["cloud_managed", "local"],
-      executionTarget: "cloud",
-      sourceOfTruth: "cloud",
-      configured: true,
-      connected: true,
-      reason: "connected",
-      preferredByAgent: true,
-      cloudConnectionId: "conn_google_123",
-      identity: { email: "mila@example.com" },
-      grantedCapabilities: ["google.calendar.read", "google.gmail.triage"],
-      grantedScopes: ["calendar.readonly", "gmail.metadata"],
-      expiresAt: null,
-      hasRefreshToken: true,
-      grant: null,
-    });
-    const addDeferredOnboardingTask = vi.fn();
-
-    (window as unknown as Record<string, unknown>).__ELIZA_CLOUD_AUTH_TOKEN__ =
-      "cloud-auth-token";
-
-    const { result } = renderHook(() => {
-      const onboarding = useOnboardingState();
-      return {
-        onboarding,
-        callbacks: useOnboardingCallbacks({
-          onboarding,
-          setOnboardingStep: vi.fn(),
-          setOnboardingMode: vi.fn(),
-          setOnboardingActiveGuide: vi.fn(),
-          addDeferredOnboardingTask,
-          setOnboardingDetectedProviders: vi.fn(),
-          setOnboardingServerTarget: vi.fn(),
-          setOnboardingCloudApiKey: vi.fn(),
-          setOnboardingProvider: vi.fn(),
-          setOnboardingApiKey: vi.fn(),
-          setOnboardingPrimaryModel: vi.fn(),
-          setOnboardingRemoteApiBase: vi.fn(),
-          setOnboardingRemoteToken: vi.fn(),
-          setOnboardingRemoteConnecting: vi.fn(),
-          setOnboardingRemoteError: vi.fn(),
-          setOnboardingRemoteConnected: vi.fn(),
-          setPostOnboardingChecklistDismissed: vi.fn(),
-          setOnboardingComplete: vi.fn(),
-          coordinatorOnboardingCompleteRef: { current: null },
-          initialTabSetRef: { current: false },
-          setTab: vi.fn(),
-          defaultLandingTab: "chat",
-          loadCharacter: async () => {},
-          uiLanguage: "en",
-          selectedVrmIndex: 1,
-          walletConfig: {},
-          elizaCloudConnected: true,
-          setActionNotice: vi.fn(),
-          retryStartup: vi.fn(),
-          forceLocalBootstrapRef: { current: false },
-          client: {
-            provisionCloudSandbox,
-            submitOnboarding,
-            updateConfig: vi.fn().mockResolvedValue({}),
-            setBaseUrl: vi.fn(),
-            setToken: vi.fn(),
-            getGoogleLifeOpsConnectorStatus,
-          } as unknown as MiladyClient,
-        }),
-      };
-    });
-
-    act(() => {
-      result.current.onboarding.setOptions({
-        names: [],
-        styles: [getDefaultStylePreset("en")],
-        providers: [],
-        cloudProviders: [],
-        models: { small: [], large: [] },
-        inventoryProviders: [],
-        sharedStyleRules: "Keep responses brief.",
-      });
-      result.current.onboarding.setField("name", "Chen");
-      result.current.onboarding.setField("serverTarget", "elizacloud");
-      result.current.onboarding.setField("provider", "elizacloud");
-    });
-
-    await act(async () => {
-      await result.current.callbacks.handleOnboardingFinish();
-    });
-
-    expect(getGoogleLifeOpsConnectorStatus).toHaveBeenCalledWith(
-      "cloud_managed",
-    );
-    expect(addDeferredOnboardingTask).not.toHaveBeenCalled();
   });
 });

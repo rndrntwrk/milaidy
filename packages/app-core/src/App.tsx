@@ -17,6 +17,7 @@ import { type ReactNode, useCallback, useEffect, useState } from "react";
 import {
   AdvancedPageView,
   AppsPageView,
+  BrowserWorkspaceView,
   BugReportModal,
   CharacterEditor,
   ChatView,
@@ -111,6 +112,12 @@ function ViewRouter({
     switch (tab) {
       case "chat":
         return <ChatView />;
+      case "browser":
+        return (
+          <TabContentView>
+            <BrowserWorkspaceView />
+          </TabContentView>
+        );
       case "companion":
         return COMPANION_ENABLED ? <CompanionView /> : <ChatView />;
       case "stream":
@@ -332,9 +339,7 @@ export function App() {
         setTab("voice");
         return;
       }
-      if (task === "google") {
-        setSettingsInitialSection("life-ops");
-      } else if (task === "permissions") {
+      if (task === "permissions") {
         setSettingsInitialSection("permissions");
       } else if (task === "provider") {
         setSettingsInitialSection("ai-model");

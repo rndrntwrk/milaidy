@@ -134,7 +134,7 @@ vi.mock("./components/cloud/FlaminaGuide", () => ({
     onOpenTask,
   }: {
     children?: React.ReactNode;
-    onOpenTask?: (task: "google") => void;
+    onOpenTask?: (task: "provider") => void;
   }) =>
     React.createElement(
       "div",
@@ -143,14 +143,14 @@ vi.mock("./components/cloud/FlaminaGuide", () => ({
       React.createElement(
         "button",
         {
-          "data-testid": "DeferredSetupChecklist-open-google",
+          "data-testid": "DeferredSetupChecklist-open-provider",
           type: "button",
           onClick: () => {
             deferredChecklistRenderMock();
-            onOpenTask?.("google");
+            onOpenTask?.("provider");
           },
         },
-        "open-google",
+        "open-provider",
       ),
     ),
 }));
@@ -396,57 +396,5 @@ describe("App", () => {
     expect(
       renderer.root.findAll((node) => node.props.role === "status"),
     ).toHaveLength(1);
-  });
-
-  it("opens the Life Ops settings section from the Google deferred task", async () => {
-    const appState = {
-      onboardingLoading: false,
-      startupPhase: "ready",
-      startupError: null,
-      startupCoordinator: { phase: "ready" },
-      authRequired: false,
-      onboardingComplete: true,
-      retryStartup: vi.fn(),
-      tab: "chat",
-      setTab: vi.fn((nextTab: string) => {
-        appState.tab = nextTab;
-      }),
-      setState: vi.fn(),
-      actionNotice: null,
-      uiShellMode: "native",
-      switchShellView: vi.fn(),
-      uiLanguage: "en",
-      setUiLanguage: vi.fn(),
-      uiTheme: "dark",
-      setUiTheme: vi.fn(),
-      chatAgentVoiceMuted: false,
-      unreadConversations: new Set(),
-      activeGameViewerUrl: null,
-      gameOverlayEnabled: false,
-      t: (key: string, options?: { defaultValue?: string }) =>
-        options?.defaultValue ?? key,
-    };
-    useAppMock.mockImplementation(() => appState);
-
-    let renderer!: TestRenderer.ReactTestRenderer;
-    await act(async () => {
-      renderer = TestRenderer.create(React.createElement(App));
-    });
-
-    const openButton = renderer.root.findByProps({
-      "data-testid": "DeferredSetupChecklist-open-google",
-    });
-
-    await act(async () => {
-      openButton.props.onClick();
-      renderer.update(React.createElement(App));
-    });
-
-    const settingsView = renderer.root.findByProps({
-      "data-testid": "SettingsView",
-    });
-
-    expect(appState.setTab).toHaveBeenCalledWith("settings");
-    expect(settingsView.props["data-initial-section"]).toBe("life-ops");
   });
 });

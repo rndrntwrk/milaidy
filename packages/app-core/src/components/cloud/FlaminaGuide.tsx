@@ -50,25 +50,6 @@ const GUIDE_CONTENT: Record<FlaminaGuideTopic, GuideContent> = {
     characterImpactKey: "flaminaguide.voice.characterImpact",
     recommendedKey: "flaminaguide.voice.recommended",
   },
-  google: {
-    titleKey: "flaminaguide.google.title",
-    descriptionKey: "flaminaguide.google.description",
-    whenToUseKey: "flaminaguide.google.whenToUse",
-    skipEffectKey: "flaminaguide.google.skipEffect",
-    characterImpactKey: "flaminaguide.google.characterImpact",
-    recommendedKey: "flaminaguide.google.recommended",
-    titleDefault: "Connect Google",
-    descriptionDefault:
-      "Link Google Calendar and Gmail so this agent can see upcoming events, triage inbox activity, and take action with your approval.",
-    whenToUseDefault:
-      "Use this after Eliza Cloud onboarding when you want the agent to work with your calendar or inbox.",
-    skipEffectDefault:
-      "Chat still works, but Life Ops will not have Google Calendar or Gmail context for this agent.",
-    characterImpactDefault:
-      "The active agent can ground planning, reminders, and follow-up work in your upcoming events and Gmail triage feed.",
-    recommendedDefault:
-      "Recommended for Eliza Cloud setups. Use Cloud in Settings for managed tokens, or switch to Local there if you want tokens kept on this machine.",
-  },
 };
 
 type GuideLabel = {
@@ -81,10 +62,6 @@ const TASK_LABELS: Record<FlaminaGuideTopic, GuideLabel> = {
   rpc: { key: "flaminaguide.tasks.rpc.label" },
   permissions: { key: "flaminaguide.tasks.permissions.label" },
   voice: { key: "flaminaguide.tasks.voice.label" },
-  google: {
-    key: "flaminaguide.tasks.google.label",
-    defaultValue: "Google connection",
-  },
 };
 
 const TASK_DESCRIPTIONS: Record<FlaminaGuideTopic, GuideLabel> = {
@@ -92,10 +69,6 @@ const TASK_DESCRIPTIONS: Record<FlaminaGuideTopic, GuideLabel> = {
   rpc: { key: "flaminaguide.tasks.rpc.description" },
   permissions: { key: "flaminaguide.tasks.permissions.description" },
   voice: { key: "flaminaguide.tasks.voice.description" },
-  google: {
-    key: "flaminaguide.tasks.google.description",
-    defaultValue: "Connect Google Calendar and Gmail for this agent.",
-  },
 };
 
 export function FlaminaGuideCard({
@@ -174,6 +147,14 @@ export function DeferredSetupChecklist({
     return null;
   }
 
+  const tasks = onboardingDeferredTasks.filter(
+    (task): task is FlaminaGuideTopic =>
+      typeof task === "string" && task in TASK_LABELS,
+  );
+  if (tasks.length === 0) {
+    return null;
+  }
+
   const markDone = (task: FlaminaGuideTopic) => {
     setState(
       "onboardingDeferredTasks",
@@ -208,7 +189,7 @@ export function DeferredSetupChecklist({
       </div>
 
       <div className="space-y-2">
-        {(onboardingDeferredTasks as FlaminaGuideTopic[]).map((task) => (
+        {tasks.map((task) => (
           <div
             key={task}
             className="flex flex-col gap-2 rounded-xl border border-border/50 bg-bg/50 px-3 py-3 md:flex-row md:items-center md:justify-between"
@@ -238,7 +219,7 @@ export function DeferredSetupChecklist({
                 variant="ghost"
                 size="sm"
                 className="rounded-full text-[11px] font-semibold uppercase tracking-[0.12em] text-muted"
-                onClick={() => markDone(task as FlaminaGuideTopic)}
+                onClick={() => markDone(task)}
               >
                 {t("flaminaguide.Done")}
               </Button>
