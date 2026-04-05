@@ -14,26 +14,27 @@
  *   }
  */
 
-import {
-  logger,
-  type IAgentRuntime,
-  type Plugin,
-} from "@elizaos/core";
-import { rolesProvider } from "./provider";
+import { type IAgentRuntime, logger, type Plugin } from "@elizaos/core";
 import { updateRoleAction } from "./action";
+import { rolesProvider } from "./provider";
 import type { RolesPluginConfig, RolesWorldMetadata } from "./types";
-import { normalizeRole } from "./utils";
-
-export { rolesProvider } from "./provider";
-export { updateRoleAction } from "./action";
-export {
-  canModifyRole,
-  checkSenderRole,
-  getEntityRole,
+import {
+  matchEntityToConnectorAdminWhitelist,
   normalizeRole,
-  resolveWorldForMessage,
-  setEntityRole,
+  setConnectorAdminWhitelist,
 } from "./utils";
+
+const BOOTSTRAP_RETRY_TIMERS_KEY = Symbol.for(
+  "@miladyai/plugin-roles.bootstrapRetries",
+);
+const BOOTSTRAP_RETRY_LIMIT = 3;
+
+type RuntimeWithBootstrapRetries = IAgentRuntime & {
+  [BOOTSTRAP_RETRY_TIMERS_KEY]?: Map<string, ReturnType<typeof setTimeout>>;
+};
+
+export { updateRoleAction } from "./action";
+export { rolesProvider } from "./provider";
 export type {
   ConnectorAdminWhitelist,
   RoleCheckResult,
@@ -42,6 +43,14 @@ export type {
   RolesWorldMetadata,
 } from "./types";
 export { ROLE_RANK } from "./types";
+export {
+  canModifyRole,
+  checkSenderRole,
+  getEntityRole,
+  normalizeRole,
+  resolveWorldForMessage,
+  setEntityRole,
+} from "./utils";
 
 async function updateWorldMetadata(
   runtime: IAgentRuntime,
@@ -56,14 +65,60 @@ async function updateWorldMetadata(
   if (!changed) return;
 
   (world as { metadata: RolesWorldMetadata }).metadata = metadata;
-  await runtime.updateWorld(world as Parameters<IAgentRuntime["updateWorld"]>[0]);
+  await runtime.updateWorld(
+    world as Parameters<IAgentRuntime["updateWorld"]>[0],
+  );
+}
+
+function getBootstrapRetryTimers(
+  runtime: IAgentRuntime,
+): Map<string, ReturnType<typeof setTimeout>> {
+  const runtimeWithBootstrapRetries = runtime as RuntimeWithBootstrapRetries;
+  runtimeWithBootstrapRetries[BOOTSTRAP_RETRY_TIMERS_KEY] ??= new Map();
+  return runtimeWithBootstrapRetries[BOOTSTRAP_RETRY_TIMERS_KEY];
+}
+
+function scheduleBootstrapRetry(
+  runtime: IAgentRuntime,
+  label: string,
+  task: () => Promise<boolean>,
+  attempt = 1,
+): void {
+  const timers = getBootstrapRetryTimers(runtime);
+  const existingTimer = timers.get(label);
+  if (existingTimer) {
+    clearTimeout(existingTimer);
+  }
+
+  const delayMs = Math.min(1500 * attempt, 5000);
+  const timer = setTimeout(() => {
+    timers.delete(label);
+    void task().then((ok) => {
+      if (ok) {
+        return;
+      }
+
+      if (attempt >= BOOTSTRAP_RETRY_LIMIT) {
+        logger.warn(
+          `[roles] ${label} retries exhausted because runtime state is still unavailable`,
+        );
+        return;
+      }
+
+      logger.info(
+        `[roles] ${label} retry ${attempt} skipped because runtime state is still unavailable`,
+      );
+      scheduleBootstrapRetry(runtime, label, task, attempt + 1);
+    });
+  }, delayMs);
+  timers.set(label, timer);
 }
 
 /**
  * Ensure the world owner has OWNER role in metadata.
  * Called on plugin init — guarantees the app-local user is always OWNER.
  */
-async function ensureOwnerRole(runtime: IAgentRuntime): Promise<void> {
+async function ensureOwnerRole(runtime: IAgentRuntime): Promise<boolean> {
   try {
     const worlds = await runtime.getAllWorlds();
 
@@ -85,8 +140,12 @@ async function ensureOwnerRole(runtime: IAgentRuntime): Promise<void> {
         return true;
       });
     }
+    return true;
   } catch (err) {
-    logger.warn(`[roles] Failed to bootstrap owner roles: ${err}`);
+    logger.info(
+      `[roles] Deferring owner role bootstrap until worlds are available: ${err}`,
+    );
+    return false;
   }
 }
 
@@ -97,9 +156,9 @@ async function ensureOwnerRole(runtime: IAgentRuntime): Promise<void> {
 async function applyConnectorAdminWhitelists(
   runtime: IAgentRuntime,
   whitelist: Record<string, string[]>,
-): Promise<void> {
+): Promise<boolean> {
   const hasWhitelist = Object.values(whitelist).some((ids) => ids.length > 0);
-  if (!hasWhitelist) return;
+  if (!hasWhitelist) return true;
 
   try {
     const worlds = await runtime.getAllWorlds();
@@ -122,28 +181,11 @@ async function applyConnectorAdminWhitelists(
 
             if (metadata.roles[entityId]) continue;
 
-            if (!entity.metadata) continue;
-
-            const platformMetadata = entity.metadata as Record<
-              string,
-              Record<string, unknown> | undefined
-            >;
-            let matched = false;
-
-            for (const [connector, platformIds] of Object.entries(whitelist)) {
-              const connectorMeta = platformMetadata[connector];
-              if (!connectorMeta || typeof connectorMeta !== "object") continue;
-
-              for (const field of ["userId", "id", "username", "userName"]) {
-                const value = connectorMeta[field];
-                if (typeof value === "string" && platformIds.includes(value)) {
-                  matched = true;
-                  break;
-                }
-              }
-
-              if (matched) break;
-            }
+            const matched = matchEntityToConnectorAdminWhitelist(
+              (entity.metadata as Record<string, unknown> | undefined) ??
+                undefined,
+              whitelist,
+            );
 
             if (matched) {
               metadata.roles[entityId] = "ADMIN";
@@ -158,10 +200,12 @@ async function applyConnectorAdminWhitelists(
         return updated;
       });
     }
+    return true;
   } catch (err) {
-    logger.warn(
-      `[roles] Failed to apply connector admin whitelists: ${String(err)}`,
+    logger.info(
+      `[roles] Deferring connector admin bootstrap until worlds are available: ${String(err)}`,
     );
+    return false;
   }
 }
 
@@ -176,14 +220,31 @@ const rolesPlugin: Plugin = {
 
   async init(pluginConfig: Record<string, unknown>, runtime: IAgentRuntime) {
     logger.info("[roles] Initializing plugin-roles");
+    const config = pluginConfig as RolesPluginConfig | undefined;
 
     // Step 1: Ensure world owners have OWNER role
-    await ensureOwnerRole(runtime);
+    const ownerBootstrapOk = await ensureOwnerRole(runtime);
+    if (!ownerBootstrapOk) {
+      scheduleBootstrapRetry(runtime, "Owner role bootstrap", () =>
+        ensureOwnerRole(runtime),
+      );
+    }
 
     // Step 2: Apply connector admin whitelists if configured
-    const config = pluginConfig as RolesPluginConfig | undefined;
-    if (config?.connectorAdmins) {
-      await applyConnectorAdminWhitelists(runtime, config.connectorAdmins);
+    const connectorAdmins = config?.connectorAdmins;
+    if (connectorAdmins) {
+      setConnectorAdminWhitelist(runtime, connectorAdmins);
+      const adminBootstrapOk = await applyConnectorAdminWhitelists(
+        runtime,
+        connectorAdmins,
+      );
+      if (!adminBootstrapOk) {
+        scheduleBootstrapRetry(runtime, "Connector admin bootstrap", () =>
+          applyConnectorAdminWhitelists(runtime, connectorAdmins),
+        );
+      }
+    } else {
+      setConnectorAdminWhitelist(runtime, undefined);
     }
 
     logger.info("[roles] Plugin-roles initialized");
