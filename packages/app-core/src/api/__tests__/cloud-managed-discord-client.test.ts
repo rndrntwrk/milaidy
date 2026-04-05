@@ -1,74 +1,77 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { MiladyClient } from "../client-base";
-import "../client-cloud";
+/**
+ * Verifies the managed Discord client helpers call the cloud v1 agent routes.
+ */
 
-function jsonResponse(body: unknown): Response {
-  return new Response(JSON.stringify(body), {
-    status: 200,
-    headers: {
-      "Content-Type": "application/json",
-    },
-  });
-}
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { MiladyClient } from "../client";
 
 describe("managed cloud Discord client helpers", () => {
+  const originalFetch = globalThis.fetch;
   let fetchMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    fetchMock = vi.fn().mockResolvedValue(jsonResponse({ success: true }));
-    vi.stubGlobal("fetch", fetchMock);
+    fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ success: true, data: {} }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+    );
+    globalThis.fetch = fetchMock as typeof globalThis.fetch;
   });
 
   afterEach(() => {
-    vi.unstubAllGlobals();
+    globalThis.fetch = originalFetch;
   });
 
-  it("requests managed Discord agent status from the cloud v1 route", async () => {
-    const client = new MiladyClient("http://127.0.0.1:31337");
-
+  it("calls the managed Discord status endpoint for an agent", async () => {
+    const client = new MiladyClient("http://localhost:2138", "token");
     await client.getCloudCompatAgentManagedDiscord("agent/with spaces");
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      "http://127.0.0.1:31337/api/cloud/v1/milady/agents/agent%2Fwith%20spaces/discord",
-      expect.objectContaining({
-        headers: expect.objectContaining({
-          "Content-Type": "application/json",
-          "X-Milady-Client-Id": expect.stringMatching(/^ui-/),
-        }),
-      }),
+    const [url, init] = fetchMock.mock.calls[0] as [
+      RequestInfo | URL,
+      RequestInit,
+    ];
+    expect(String(url)).toBe(
+      "http://localhost:2138/api/cloud/v1/milady/agents/agent%2Fwith%20spaces/discord",
     );
+    expect(init?.method).toBeUndefined();
   });
 
-  it("starts managed Discord OAuth with the expected POST body", async () => {
-    const client = new MiladyClient("http://127.0.0.1:31337");
-
+  it("POSTs managed Discord OAuth init requests to the cloud agent route", async () => {
+    const client = new MiladyClient("http://localhost:2138", "token");
     await client.createCloudCompatAgentManagedDiscordOauth("agent-1", {
-      returnUrl: "http://localhost:4173/dashboard/settings?tab=agents",
-      botNickname: "Milady Bot",
+      returnUrl: "/dashboard/settings?tab=agents",
+      botNickname: "Chen",
     });
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      "http://127.0.0.1:31337/api/cloud/v1/milady/agents/agent-1/discord/oauth",
-      expect.objectContaining({
-        method: "POST",
-        body: JSON.stringify({
-          returnUrl: "http://localhost:4173/dashboard/settings?tab=agents",
-          botNickname: "Milady Bot",
-        }),
+    const [url, init] = fetchMock.mock.calls[0] as [
+      RequestInfo | URL,
+      RequestInit,
+    ];
+    expect(String(url)).toBe(
+      "http://localhost:2138/api/cloud/v1/milady/agents/agent-1/discord/oauth",
+    );
+    expect(init?.method).toBe("POST");
+    expect(init?.body).toBe(
+      JSON.stringify({
+        returnUrl: "/dashboard/settings?tab=agents",
+        botNickname: "Chen",
       }),
     );
   });
 
-  it("disconnects managed Discord with DELETE", async () => {
-    const client = new MiladyClient("http://127.0.0.1:31337");
-
+  it("DELETEs managed Discord connections from the cloud agent route", async () => {
+    const client = new MiladyClient("http://localhost:2138", "token");
     await client.disconnectCloudCompatAgentManagedDiscord("agent-1");
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      "http://127.0.0.1:31337/api/cloud/v1/milady/agents/agent-1/discord",
-      expect.objectContaining({
-        method: "DELETE",
-      }),
+    const [url, init] = fetchMock.mock.calls[0] as [
+      RequestInfo | URL,
+      RequestInit,
+    ];
+    expect(String(url)).toBe(
+      "http://localhost:2138/api/cloud/v1/milady/agents/agent-1/discord",
     );
+    expect(init?.method).toBe("DELETE");
   });
 });

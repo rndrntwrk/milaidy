@@ -20,7 +20,6 @@ import {
 import type { RoleName, RolesWorldMetadata } from "./types";
 import {
   canModifyRole,
-  getLiveEntityMetadataFromMessage,
   normalizeRole,
   resolveEntityRole,
   resolveWorldForMessage,
@@ -212,9 +211,6 @@ export const updateRoleAction: Action = {
       world,
       metadata,
       message.entityId,
-      {
-        liveEntityMetadata: getLiveEntityMetadataFromMessage(message),
-      },
     );
     if (requesterRole !== "OWNER" && requesterRole !== "ADMIN") {
       await callback?.({

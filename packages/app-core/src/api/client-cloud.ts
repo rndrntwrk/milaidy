@@ -3,6 +3,7 @@
  * export/import, direct cloud auth, bug reports.
  */
 
+import { MiladyClient } from "./client-base";
 import type {
   CloudBillingCheckoutRequest,
   CloudBillingCheckoutResponse,
@@ -18,6 +19,7 @@ import type {
   CloudCompatAgentStatus,
   CloudCompatJob,
   CloudCompatLaunchResult,
+  CloudCompatManagedDiscordStatus,
   CloudCredits,
   CloudLoginPollResponse,
   CloudLoginResponse,
@@ -29,7 +31,6 @@ import type {
   SandboxStartResponse,
   SandboxWindowInfo,
 } from "./client-types";
-import { MiladyClient } from "./client-base";
 
 // ---------------------------------------------------------------------------
 // Module-level constants

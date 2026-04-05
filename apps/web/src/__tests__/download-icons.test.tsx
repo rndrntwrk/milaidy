@@ -66,6 +66,7 @@ describe("DownloadIcons", () => {
       json: async () => [
         {
           draft: false,
+          prerelease: false,
           html_url: freshReleaseUrl,
           assets: [
             {
@@ -87,5 +88,51 @@ describe("DownloadIcons", () => {
     // GitHub link should also update to fresh release page
     const ghLink = container.querySelector(".download.github");
     expect(ghLink?.getAttribute("href")).toBe(freshReleaseUrl);
+  });
+
+  it("runtime fetch prefers stable over canary prerelease", async () => {
+    const stableUrl =
+      "https://github.com/milady-ai/milady/releases/download/v2.0.0/stable-macos-arm64-Milady.dmg";
+    const stableReleaseUrl =
+      "https://github.com/milady-ai/milady/releases/tag/v2.0.0";
+
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => [
+        {
+          draft: false,
+          prerelease: true,
+          html_url: "https://github.com/milady-ai/milady/releases/tag/v3.0.0-canary.1",
+          assets: [
+            {
+              name: "canary-macos-arm64-Milady-canary.dmg",
+              browser_download_url:
+                "https://github.com/milady-ai/milady/releases/download/v3.0.0-canary.1/canary-macos-arm64-Milady-canary.dmg",
+            },
+          ],
+        },
+        {
+          draft: false,
+          prerelease: false,
+          html_url: stableReleaseUrl,
+          assets: [
+            {
+              name: "stable-macos-arm64-Milady.dmg",
+              browser_download_url: stableUrl,
+            },
+          ],
+        },
+      ],
+    } as Response);
+
+    const { container } = render(<DownloadIcons />);
+
+    await waitFor(() => {
+      const appleLink = container.querySelector(".download.apple");
+      expect(appleLink?.getAttribute("href")).toBe(stableUrl);
+    });
+
+    const ghLink = container.querySelector(".download.github");
+    expect(ghLink?.getAttribute("href")).toBe(stableReleaseUrl);
   });
 });

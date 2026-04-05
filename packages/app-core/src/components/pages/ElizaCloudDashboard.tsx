@@ -36,7 +36,6 @@ import {
   autoTopUpFormReducer,
   BILLING_PRESET_AMOUNTS,
   buildAutoTopUpFormState,
-  buildManagedDiscordConnectedNotice,
   consumeManagedDiscordCallbackUrl,
   CLOUD_ACCENT_CONTROL_TEXT_CLASSNAME,
   CLOUD_INSET_PANEL_CLASSNAME,
@@ -757,7 +756,10 @@ export function CloudDashboard() {
   }, [fetchBillingData, fetchCloudAgents, loadDropStatus, elizaCloudConnected]);
 
   useEffect(() => {
-    if (handledManagedDiscordCallbackRef.current || typeof window === "undefined") {
+    if (
+      handledManagedDiscordCallbackRef.current ||
+      typeof window === "undefined"
+    ) {
       return;
     }
 
@@ -779,7 +781,18 @@ export function CloudDashboard() {
 
     if (callback.status === "connected") {
       setActionNotice(
-        buildManagedDiscordConnectedNotice(callback, t),
+        callback.guildName
+          ? t("elizaclouddashboard.ManagedDiscordConnectedNotice", {
+              defaultValue: callback.restarted
+                ? "Managed Discord connected to {{guild}}. The agent restarted and is ready."
+                : "Managed Discord connected to {{guild}}.",
+              guild: callback.guildName,
+            })
+          : t("elizaclouddashboard.ManagedDiscordConnectedNoticeFallback", {
+              defaultValue: callback.restarted
+                ? "Managed Discord connected. The agent restarted and is ready."
+                : "Managed Discord connected.",
+            }),
         "success",
         5200,
       );

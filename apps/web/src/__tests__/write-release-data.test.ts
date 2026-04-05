@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   type GithubRelease,
   matchAsset,
+  pickCanaryRelease,
   pickRelease,
+  pickStableRelease,
 } from "../lib/release-helpers";
 
 function makeRelease(overrides: Partial<GithubRelease> = {}): GithubRelease {
@@ -81,6 +83,110 @@ describe("pickRelease", () => {
 
   it("returns null for empty array", () => {
     expect(pickRelease([])).toBeNull();
+  });
+});
+
+describe("pickStableRelease", () => {
+  it("skips prereleases and returns the most recent stable release", () => {
+    const releases = [
+      makeRelease({
+        tag_name: "v3.0.0-canary.1",
+        prerelease: true,
+        published_at: "2026-04-01T00:00:00Z",
+      }),
+      makeRelease({
+        tag_name: "v2.0.0",
+        prerelease: false,
+        published_at: "2026-03-01T00:00:00Z",
+      }),
+      makeRelease({
+        tag_name: "v1.0.0",
+        prerelease: false,
+        published_at: "2026-02-01T00:00:00Z",
+      }),
+    ];
+
+    const result = pickStableRelease(releases);
+    expect(result?.tag_name).toBe("v2.0.0");
+  });
+
+  it("returns null when only prereleases exist", () => {
+    const releases = [
+      makeRelease({
+        tag_name: "v3.0.0-canary.1",
+        prerelease: true,
+        published_at: "2026-04-01T00:00:00Z",
+      }),
+    ];
+
+    expect(pickStableRelease(releases)).toBeNull();
+  });
+
+  it("skips drafts", () => {
+    const releases = [
+      makeRelease({
+        tag_name: "v2.0.0",
+        draft: true,
+        published_at: "2026-03-01T00:00:00Z",
+      }),
+      makeRelease({
+        tag_name: "v1.0.0",
+        published_at: "2026-02-01T00:00:00Z",
+      }),
+    ];
+
+    const result = pickStableRelease(releases);
+    expect(result?.tag_name).toBe("v1.0.0");
+  });
+});
+
+describe("pickCanaryRelease", () => {
+  it("returns the most recent prerelease", () => {
+    const releases = [
+      makeRelease({
+        tag_name: "v3.0.0-canary.2",
+        prerelease: true,
+        published_at: "2026-04-02T00:00:00Z",
+      }),
+      makeRelease({
+        tag_name: "v3.0.0-canary.1",
+        prerelease: true,
+        published_at: "2026-04-01T00:00:00Z",
+      }),
+      makeRelease({
+        tag_name: "v2.0.0",
+        prerelease: false,
+        published_at: "2026-03-01T00:00:00Z",
+      }),
+    ];
+
+    const result = pickCanaryRelease(releases);
+    expect(result?.tag_name).toBe("v3.0.0-canary.2");
+  });
+
+  it("returns null when no prereleases exist", () => {
+    const releases = [
+      makeRelease({
+        tag_name: "v2.0.0",
+        prerelease: false,
+        published_at: "2026-03-01T00:00:00Z",
+      }),
+    ];
+
+    expect(pickCanaryRelease(releases)).toBeNull();
+  });
+
+  it("skips drafts", () => {
+    const releases = [
+      makeRelease({
+        tag_name: "v3.0.0-canary.1",
+        prerelease: true,
+        draft: true,
+        published_at: "2026-04-01T00:00:00Z",
+      }),
+    ];
+
+    expect(pickCanaryRelease(releases)).toBeNull();
   });
 });
 
