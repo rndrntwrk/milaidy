@@ -100,6 +100,18 @@ function ensureCloudContainerCharacterDefaults(ctx: OnboardingRouteContext): voi
   // The client-side voice resolver reads config.ui.presetId and maps it to the
   // character's voicePresetId, so having presetId set is sufficient.
 
+  // Ensure serviceRouting is set for cloud inference so the cloud topology
+  // resolver recognises this as a cloud-inference container and keeps the
+  // ELIZAOS_CLOUD_* env vars alive (applyCloudConfigToEnv deletes them when
+  // shouldLoadPlugin is false).
+  const configRecord = config as Record<string, unknown>;
+  if (!configRecord.serviceRouting) {
+    configRecord.serviceRouting = {
+      llmText: { backend: "elizacloud", transport: "cloud-proxy" },
+      tts: { backend: "elizacloud", transport: "cloud-proxy" },
+    };
+  }
+
   // Ensure agent list has the default character's personality
   if (!config.agents || typeof config.agents !== "object") {
     (config as Record<string, unknown>).agents = {};

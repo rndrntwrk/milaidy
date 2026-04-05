@@ -1428,13 +1428,23 @@ export function applyCloudConfigToEnv(config: ElizaConfig): void {
   migrateLegacyRuntimeConfig(config as Record<string, unknown>);
   const cloud = config.cloud;
   if (!cloud) return;
+
+  // Cloud-provisioned containers (Docker env: MILADY_CLOUD_PROVISIONED=1) set
+  // ELIZAOS_CLOUD_API_KEY / ELIZAOS_CLOUD_ENABLED via Docker env vars.  The
+  // config-based topology resolver may not find serviceRouting yet (the config
+  // gets patched on first frontend connect).  Preserve the Docker-provided env
+  // vars so the cloud plugin auto-enables on first boot.
+  const isCloudContainer =
+    process.env.MILADY_CLOUD_PROVISIONED === "1" ||
+    process.env.ELIZA_CLOUD_PROVISIONED === "1";
+
   const topology = resolveElizaCloudTopology(config as Record<string, unknown>);
 
   // Cloud inference is selected from the canonical onboarding connection, not
   // just from raw cloud flags. This keeps linked cloud auth from re-enabling
   // Eliza Cloud after the user has switched to a local or remote provider.
-  const effectivelyEnabled = topology.services.inference;
-  const shouldLoadCloudPlugin = topology.shouldLoadPlugin;
+  const effectivelyEnabled = topology.services.inference || isCloudContainer;
+  const shouldLoadCloudPlugin = topology.shouldLoadPlugin || isCloudContainer;
 
   const setCloudUsageEnv = (key: string, enabled: boolean): void => {
     if (enabled) {
@@ -1451,8 +1461,8 @@ export function applyCloudConfigToEnv(config: ElizaConfig): void {
     );
   }
 
-  setCloudUsageEnv("ELIZAOS_CLOUD_USE_INFERENCE", topology.services.inference);
-  setCloudUsageEnv("ELIZAOS_CLOUD_USE_TTS", topology.services.tts);
+  setCloudUsageEnv("ELIZAOS_CLOUD_USE_INFERENCE", effectivelyEnabled);
+  setCloudUsageEnv("ELIZAOS_CLOUD_USE_TTS", topology.services.tts || isCloudContainer);
   setCloudUsageEnv("ELIZAOS_CLOUD_USE_MEDIA", topology.services.media);
   setCloudUsageEnv(
     "ELIZAOS_CLOUD_USE_EMBEDDINGS",
