@@ -1066,12 +1066,13 @@ function buildGmailReplyDraft(args: {
 function createCalendarEventId(
   agentId: string,
   provider: LifeOpsConnectorGrant["provider"],
+  side: LifeOpsConnectorGrant["side"],
   calendarId: string,
   externalId: string,
 ): string {
   const digest = crypto
     .createHash("sha256")
-    .update(`${agentId}:${provider}:${calendarId}:${externalId}`)
+    .update(`${agentId}:${provider}:${side}:${calendarId}:${externalId}`)
     .digest("hex");
   return `life-calendar-${digest.slice(0, 32)}`;
 }
@@ -1079,11 +1080,12 @@ function createCalendarEventId(
 function createGmailMessageId(
   agentId: string,
   provider: LifeOpsConnectorGrant["provider"],
+  side: LifeOpsConnectorGrant["side"],
   externalMessageId: string,
 ): string {
   const digest = crypto
     .createHash("sha256")
-    .update(`${agentId}:${provider}:gmail:${externalMessageId}`)
+    .update(`${agentId}:${provider}:${side}:gmail:${externalMessageId}`)
     .digest("hex");
   return `life-gmail-${digest.slice(0, 32)}`;
 }
@@ -2857,10 +2859,12 @@ export class LifeOpsService {
   private async requireGoogleCalendarGrant(
     requestUrl: URL,
     requestedMode?: LifeOpsConnectorMode,
+    requestedSide?: LifeOpsConnectorSide,
   ): Promise<LifeOpsConnectorGrant> {
     const status = await this.getGoogleConnectorStatus(
       requestUrl,
       requestedMode,
+      requestedSide,
     );
     const grant = status.grant;
     if (!status.connected || !grant) {
@@ -2875,10 +2879,12 @@ export class LifeOpsService {
   private async requireGoogleCalendarWriteGrant(
     requestUrl: URL,
     requestedMode?: LifeOpsConnectorMode,
+    requestedSide?: LifeOpsConnectorSide,
   ): Promise<LifeOpsConnectorGrant> {
     const grant = await this.requireGoogleCalendarGrant(
       requestUrl,
       requestedMode,
+      requestedSide,
     );
     if (!hasGoogleCalendarWriteCapability(grant)) {
       fail(403, "Google Calendar write access has not been granted.");
@@ -2889,10 +2895,12 @@ export class LifeOpsService {
   private async requireGoogleGmailGrant(
     requestUrl: URL,
     requestedMode?: LifeOpsConnectorMode,
+    requestedSide?: LifeOpsConnectorSide,
   ): Promise<LifeOpsConnectorGrant> {
     const status = await this.getGoogleConnectorStatus(
       requestUrl,
       requestedMode,
+      requestedSide,
     );
     const grant = status.grant;
     if (!status.connected || !grant) {
@@ -2907,8 +2915,13 @@ export class LifeOpsService {
   private async requireGoogleGmailSendGrant(
     requestUrl: URL,
     requestedMode?: LifeOpsConnectorMode,
+    requestedSide?: LifeOpsConnectorSide,
   ): Promise<LifeOpsConnectorGrant> {
-    const grant = await this.requireGoogleGmailGrant(requestUrl, requestedMode);
+    const grant = await this.requireGoogleGmailGrant(
+      requestUrl,
+      requestedMode,
+      requestedSide,
+    );
     if (!hasGoogleGmailSendCapability(grant)) {
       fail(403, "Google Gmail send access has not been granted.");
     }
@@ -3214,11 +3227,13 @@ export class LifeOpsService {
   private async syncGoogleGmailTriage(args: {
     requestUrl: URL;
     requestedMode?: LifeOpsConnectorMode;
+    requestedSide?: LifeOpsConnectorSide;
     maxResults: number;
   }): Promise<LifeOpsGmailTriageFeed> {
     const grant = await this.requireGoogleGmailGrant(
       args.requestUrl,
       args.requestedMode,
+      args.requestedSide,
     );
     const syncTriage = async (): Promise<LifeOpsGmailTriageFeed> => {
       const syncedAt = new Date().toISOString();
@@ -3244,9 +3259,15 @@ export class LifeOpsService {
               maxResults: args.maxResults,
             });
       const persistedMessages = messages.map((message) => ({
-        id: createGmailMessageId(this.agentId(), "google", message.externalId),
+        id: createGmailMessageId(
+          this.agentId(),
+          "google",
+          grant.side,
+          message.externalId,
+        ),
         agentId: this.agentId(),
         provider: "google" as const,
+        side: grant.side,
         ...message,
         syncedAt,
         updatedAt: syncedAt,
@@ -3256,14 +3277,16 @@ export class LifeOpsService {
         this.agentId(),
         "google",
         messages.map((message) => message.externalId),
+        grant.side,
       );
       for (const message of persistedMessages) {
-        await this.repository.upsertGmailMessage(message);
+        await this.repository.upsertGmailMessage(message, grant.side);
       }
       await this.repository.upsertGmailSyncState(
         createLifeOpsGmailSyncState({
           agentId: this.agentId(),
           provider: "google",
+          side: grant.side,
           mailbox: GOOGLE_GMAIL_MAILBOX,
           maxResults: args.maxResults,
           syncedAt,
@@ -3376,6 +3399,7 @@ export class LifeOpsService {
   private async syncGoogleCalendarFeed(args: {
     requestUrl: URL;
     requestedMode?: LifeOpsConnectorMode;
+    requestedSide?: LifeOpsConnectorSide;
     calendarId: string;
     timeMin: string;
     timeMax: string;
@@ -3384,6 +3408,7 @@ export class LifeOpsService {
     const grant = await this.requireGoogleCalendarGrant(
       args.requestUrl,
       args.requestedMode,
+      args.requestedSide,
     );
     const syncCalendar = async (): Promise<LifeOpsCalendarFeed> => {
       const syncedAt = new Date().toISOString();
@@ -3392,6 +3417,7 @@ export class LifeOpsService {
         "google",
         args.timeMin,
         args.timeMax,
+        grant.side,
       );
       const events =
         resolveGoogleExecutionTarget(grant) === "cloud"
@@ -3420,11 +3446,13 @@ export class LifeOpsService {
         id: createCalendarEventId(
           this.agentId(),
           "google",
+          grant.side,
           event.calendarId,
           event.externalId,
         ),
         agentId: this.agentId(),
         provider: "google" as const,
+        side: grant.side,
         ...event,
         syncedAt,
         updatedAt: syncedAt,
@@ -3441,11 +3469,12 @@ export class LifeOpsService {
         args.timeMin,
         args.timeMax,
         events.map((event) => event.externalId),
+        grant.side,
       );
       await this.deleteCalendarReminderPlansForEvents(removedEventIds);
 
       for (const event of nextEvents) {
-        await this.repository.upsertCalendarEvent(event);
+        await this.repository.upsertCalendarEvent(event, grant.side);
       }
       await this.syncCalendarReminderPlans(nextEvents);
 
@@ -3453,6 +3482,7 @@ export class LifeOpsService {
         createLifeOpsCalendarSyncState({
           agentId: this.agentId(),
           provider: "google",
+          side: grant.side,
           calendarId: args.calendarId,
           windowStartAt: args.timeMin,
           windowEndAt: args.timeMax,
@@ -3468,6 +3498,7 @@ export class LifeOpsService {
           "google",
           args.timeMin,
           args.timeMax,
+          grant.side,
         ),
         source: "synced",
         timeMin: args.timeMin,
@@ -5902,6 +5933,7 @@ export class LifeOpsService {
     now = new Date(),
   ): Promise<LifeOpsCalendarFeed> {
     const mode = normalizeOptionalConnectorMode(request.mode, "mode");
+    const side = normalizeOptionalConnectorSide(request.side, "side");
     const calendarId = normalizeCalendarId(request.calendarId);
     const timeZone = normalizeCalendarTimeZone(request.timeZone);
     const { timeMin, timeMax } = resolveCalendarWindow({
@@ -5912,12 +5944,14 @@ export class LifeOpsService {
     });
     const forceSync =
       normalizeOptionalBoolean(request.forceSync, "forceSync") ?? false;
-    await this.requireGoogleCalendarGrant(requestUrl, mode);
+    const grant = await this.requireGoogleCalendarGrant(requestUrl, mode, side);
+    const effectiveSide = grant.side;
 
     const syncState = await this.repository.getCalendarSyncState(
       this.agentId(),
       "google",
       calendarId,
+      effectiveSide,
     );
     if (
       !forceSync &&
@@ -5938,6 +5972,7 @@ export class LifeOpsService {
           "google",
           timeMin,
           timeMax,
+          effectiveSide,
         ),
         source: "cache",
         timeMin,
@@ -5949,6 +5984,7 @@ export class LifeOpsService {
     return this.syncGoogleCalendarFeed({
       requestUrl,
       requestedMode: mode,
+      requestedSide: effectiveSide,
       calendarId,
       timeMin,
       timeMax,
@@ -5962,15 +5998,18 @@ export class LifeOpsService {
     now = new Date(),
   ): Promise<LifeOpsGmailTriageFeed> {
     const mode = normalizeOptionalConnectorMode(request.mode, "mode");
+    const side = normalizeOptionalConnectorSide(request.side, "side");
     const maxResults = normalizeGmailTriageMaxResults(request.maxResults);
     const forceSync =
       normalizeOptionalBoolean(request.forceSync, "forceSync") ?? false;
-    await this.requireGoogleGmailGrant(requestUrl, mode);
+    const grant = await this.requireGoogleGmailGrant(requestUrl, mode, side);
+    const effectiveSide = grant.side;
 
     const syncState = await this.repository.getGmailSyncState(
       this.agentId(),
       "google",
       GOOGLE_GMAIL_MAILBOX,
+      effectiveSide,
     );
     if (
       !forceSync &&
@@ -5988,6 +6027,7 @@ export class LifeOpsService {
         {
           maxResults,
         },
+        effectiveSide,
       );
       return {
         messages,
@@ -6000,6 +6040,7 @@ export class LifeOpsService {
     return this.syncGoogleGmailTriage({
       requestUrl,
       requestedMode: mode,
+      requestedSide: effectiveSide,
       maxResults,
     });
   }
@@ -6010,6 +6051,7 @@ export class LifeOpsService {
     now = new Date(),
   ): Promise<LifeOpsCalendarEvent> {
     const mode = normalizeOptionalConnectorMode(request.mode, "mode");
+    const side = normalizeOptionalConnectorSide(request.side, "side");
     const calendarId = normalizeCalendarId(request.calendarId);
     const title = requireNonEmptyString(request.title, "title");
     const description = normalizeOptionalString(request.description) ?? "";
@@ -6020,7 +6062,11 @@ export class LifeOpsService {
       now,
     );
 
-    const grant = await this.requireGoogleCalendarWriteGrant(requestUrl, mode);
+    const grant = await this.requireGoogleCalendarWriteGrant(
+      requestUrl,
+      mode,
+      side,
+    );
     const createEvent = async () => {
       const created =
         resolveGoogleExecutionTarget(grant) === "cloud"
@@ -6058,16 +6104,18 @@ export class LifeOpsService {
         id: createCalendarEventId(
           this.agentId(),
           "google",
+          grant.side,
           created.calendarId,
           created.externalId,
         ),
         agentId: this.agentId(),
         provider: "google",
+        side: grant.side,
         ...created,
         syncedAt,
         updatedAt: syncedAt,
       };
-      await this.repository.upsertCalendarEvent(event);
+      await this.repository.upsertCalendarEvent(event, grant.side);
       await this.syncCalendarReminderPlans([event]);
       await this.clearGoogleGrantAuthFailure(grant);
       await this.recordCalendarEventAudit(
@@ -6111,7 +6159,11 @@ export class LifeOpsService {
     let linkedMailState: "unavailable" | "cache" | "synced" | "error" =
       "unavailable";
     let linkedMailError: string | null = null;
-    const status = await this.getGoogleConnectorStatus(requestUrl, mode);
+    const status = await this.getGoogleConnectorStatus(
+      requestUrl,
+      mode,
+      nextEvent.side,
+    );
     if (
       status.connected &&
       status.grant &&
@@ -6123,6 +6175,7 @@ export class LifeOpsService {
         {
           maxResults: DEFAULT_GMAIL_TRIAGE_MAX_RESULTS,
         },
+        status.grant.side,
       );
       linkedMail = findLinkedMailForCalendarEvent(nextEvent, cachedMessages);
       linkedMailState = "cache";
@@ -6132,6 +6185,7 @@ export class LifeOpsService {
             requestUrl,
             {
               mode,
+              side: status.grant.side,
               maxResults: DEFAULT_GMAIL_TRIAGE_MAX_RESULTS,
             },
             now,
@@ -6174,6 +6228,7 @@ export class LifeOpsService {
     request: CreateLifeOpsGmailReplyDraftRequest,
   ): Promise<LifeOpsGmailReplyDraft> {
     const mode = normalizeOptionalConnectorMode(request.mode, "mode");
+    const side = normalizeOptionalConnectorSide(request.side, "side");
     const messageId = requireNonEmptyString(request.messageId, "messageId");
     const tone = normalizeGmailDraftTone(request.tone);
     const intent = normalizeOptionalString(request.intent);
@@ -6182,19 +6237,25 @@ export class LifeOpsService {
         request.includeQuotedOriginal,
         "includeQuotedOriginal",
       ) ?? false;
-    const grant = await this.requireGoogleGmailGrant(requestUrl, mode);
+    const grant = await this.requireGoogleGmailGrant(requestUrl, mode, side);
 
     let message = await this.repository.getGmailMessage(
       this.agentId(),
       "google",
       messageId,
+      grant.side,
     );
     if (!message) {
-      await this.getGmailTriage(requestUrl, { mode }, new Date());
+      await this.getGmailTriage(
+        requestUrl,
+        { mode, side: grant.side },
+        new Date(),
+      );
       message = await this.repository.getGmailMessage(
         this.agentId(),
         "google",
         messageId,
+        grant.side,
       );
     }
     if (!message) {
@@ -6234,6 +6295,7 @@ export class LifeOpsService {
     request: SendLifeOpsGmailReplyRequest,
   ): Promise<{ ok: true }> {
     const mode = normalizeOptionalConnectorMode(request.mode, "mode");
+    const side = normalizeOptionalConnectorSide(request.side, "side");
     const messageId = requireNonEmptyString(request.messageId, "messageId");
     const confirmSend =
       normalizeOptionalBoolean(request.confirmSend, "confirmSend") ?? false;
@@ -6241,18 +6303,28 @@ export class LifeOpsService {
       fail(409, "Gmail send requires explicit confirmation.");
     }
 
-    const grant = await this.requireGoogleGmailSendGrant(requestUrl, mode);
+    const grant = await this.requireGoogleGmailSendGrant(
+      requestUrl,
+      mode,
+      side,
+    );
     let message = await this.repository.getGmailMessage(
       this.agentId(),
       "google",
       messageId,
+      grant.side,
     );
     if (!message) {
-      await this.getGmailTriage(requestUrl, { mode }, new Date());
+      await this.getGmailTriage(
+        requestUrl,
+        { mode, side: grant.side },
+        new Date(),
+      );
       message = await this.repository.getGmailMessage(
         this.agentId(),
         "google",
         messageId,
+        grant.side,
       );
     }
     if (!message) {

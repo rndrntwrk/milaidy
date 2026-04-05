@@ -659,6 +659,7 @@ export interface LifeOpsCalendarEvent {
   externalId: string;
   agentId: string;
   provider: "google";
+  side: LifeOpsConnectorSide;
   calendarId: string;
   title: string;
   description: string;
@@ -701,6 +702,7 @@ export interface LifeOpsGmailMessageSummary {
   externalId: string;
   agentId: string;
   provider: "google";
+  side: LifeOpsConnectorSide;
   threadId: string;
   subject: string;
   from: string;

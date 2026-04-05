@@ -99,6 +99,41 @@ async function seedGoogleGrants(
   );
 }
 
+async function seedManagedGoogleGrant(args: {
+  repository: LifeOpsRepository;
+  agentId: string;
+  side: "owner" | "agent";
+  preferredByAgent?: boolean;
+  capabilities?: string[];
+}): Promise<void> {
+  await args.repository.upsertConnectorGrant(
+    createLifeOpsConnectorGrant({
+      agentId: args.agentId,
+      side: args.side,
+      provider: "google",
+      identity: {
+        email: `${args.side}@example.com`,
+        name: args.side === "owner" ? "Owner Example" : "Agent Example",
+      },
+      grantedScopes: ["calendar.readonly", "gmail.metadata"],
+      capabilities: args.capabilities ?? [
+        "google.calendar.read",
+        "google.gmail.triage",
+      ],
+      tokenRef: null,
+      mode: "cloud_managed",
+      executionTarget: "cloud",
+      sourceOfTruth: "cloud_connection",
+      preferredByAgent: args.preferredByAgent ?? false,
+      cloudConnectionId: `cloud-${args.agentId}-${args.side}`,
+      metadata: {
+        hasRefreshToken: true,
+      },
+      lastRefreshAt: null,
+    }),
+  );
+}
+
 describe("life-ops Google mode preference", () => {
   let databasePath = "";
   let envBackup: { restore: () => void };
@@ -397,5 +432,222 @@ describe("life-ops Google mode preference", () => {
         (grant) => grant.side === "agent" && grant.mode === "cloud_managed",
       )?.preferredByAgent,
     ).toBe(false);
+  });
+
+  it("keeps owner and agent managed Google calendar and Gmail caches isolated", async () => {
+    process.env.ELIZAOS_CLOUD_API_KEY = "cloud-api-key";
+    process.env.ELIZAOS_CLOUD_BASE_URL = "https://elizacloud.example";
+
+    const agentId = "lifeops-google-side-cache-agent";
+    const runtime = createRuntime(agentId, databasePath);
+    const repository = new LifeOpsRepository(runtime);
+    await seedManagedGoogleGrant({
+      repository,
+      agentId,
+      side: "owner",
+      preferredByAgent: true,
+    });
+    await seedManagedGoogleGrant({
+      repository,
+      agentId,
+      side: "agent",
+    });
+
+    const service = new LifeOpsService(runtime);
+    const requestUrl = new URL(
+      "http://127.0.0.1:3000/api/lifeops/calendar/feed",
+    );
+    const managedClient = (
+      service as unknown as {
+        googleManagedClient: {
+          getStatus: (side: "owner" | "agent") => Promise<unknown>;
+          getCalendarFeed: (args: {
+            side: "owner" | "agent";
+            calendarId: string;
+            timeMin: string;
+            timeMax: string;
+            timeZone: string;
+          }) => Promise<unknown>;
+          getGmailTriage: (args: {
+            side: "owner" | "agent";
+            maxResults: number;
+          }) => Promise<unknown>;
+        };
+      }
+    ).googleManagedClient;
+
+    vi.spyOn(managedClient, "getStatus").mockImplementation(async (side) => ({
+      provider: "google",
+      side,
+      mode: "cloud_managed",
+      configured: true,
+      connected: true,
+      reason: "connected",
+      identity: {
+        email: `${side}@example.com`,
+        name: side === "owner" ? "Owner Example" : "Agent Example",
+      },
+      grantedCapabilities: ["google.calendar.read", "google.gmail.triage"],
+      grantedScopes: ["calendar.readonly", "gmail.metadata"],
+      expiresAt: null,
+      hasRefreshToken: true,
+      connectionId: `conn-${side}`,
+      linkedAt: "2026-04-05T00:00:00.000Z",
+      lastUsedAt: "2026-04-05T00:00:00.000Z",
+    }));
+    vi.spyOn(managedClient, "getCalendarFeed").mockImplementation(
+      async ({ side }) => ({
+        calendarId: "primary",
+        syncedAt: "2026-04-05T01:00:00.000Z",
+        events: [
+          {
+            externalId: "shared-external-event",
+            calendarId: "primary",
+            title:
+              side === "owner"
+                ? "Owner calendar event"
+                : "Agent calendar event",
+            description: "",
+            location: side === "owner" ? "Owner HQ" : "Agent Lab",
+            status: "confirmed",
+            startAt: "2026-04-05T02:00:00.000Z",
+            endAt: "2026-04-05T02:30:00.000Z",
+            isAllDay: false,
+            timezone: "UTC",
+            htmlLink: null,
+            conferenceLink: null,
+            organizer: null,
+            attendees: [],
+            metadata: {},
+          },
+        ],
+      }),
+    );
+    vi.spyOn(managedClient, "getGmailTriage").mockImplementation(
+      async ({ side }) => ({
+        syncedAt: "2026-04-05T01:05:00.000Z",
+        messages: [
+          {
+            externalId: "shared-external-message",
+            threadId: "shared-thread",
+            subject:
+              side === "owner" ? "Owner inbox thread" : "Agent inbox thread",
+            from:
+              side === "owner"
+                ? "Owner Sender <owner.sender@example.com>"
+                : "Agent Sender <agent.sender@example.com>",
+            fromEmail:
+              side === "owner"
+                ? "owner.sender@example.com"
+                : "agent.sender@example.com",
+            replyTo:
+              side === "owner"
+                ? "owner.sender@example.com"
+                : "agent.sender@example.com",
+            to: [`${side}@example.com`],
+            cc: [],
+            snippet: side === "owner" ? "Owner snippet" : "Agent snippet",
+            receivedAt: "2026-04-05T01:04:00.000Z",
+            isUnread: true,
+            isImportant: true,
+            likelyReplyNeeded: true,
+            triageScore: 90,
+            triageReason: "needs reply",
+            labels: ["INBOX"],
+            htmlLink: null,
+            metadata: {},
+          },
+        ],
+      }),
+    );
+
+    const ownerFeed = await service.getCalendarFeed(requestUrl, {
+      mode: "cloud_managed",
+      side: "owner",
+      forceSync: true,
+    });
+    const agentFeed = await service.getCalendarFeed(requestUrl, {
+      mode: "cloud_managed",
+      side: "agent",
+      forceSync: true,
+    });
+    const ownerFeedCached = await service.getCalendarFeed(requestUrl, {
+      mode: "cloud_managed",
+      side: "owner",
+    });
+    const agentFeedCached = await service.getCalendarFeed(requestUrl, {
+      mode: "cloud_managed",
+      side: "agent",
+    });
+
+    expect(ownerFeed.events).toHaveLength(1);
+    expect(agentFeed.events).toHaveLength(1);
+    expect(ownerFeed.events[0]?.side).toBe("owner");
+    expect(agentFeed.events[0]?.side).toBe("agent");
+    expect(ownerFeed.events[0]?.title).toBe("Owner calendar event");
+    expect(agentFeed.events[0]?.title).toBe("Agent calendar event");
+    expect(ownerFeed.events[0]?.externalId).toBe("shared-external-event");
+    expect(agentFeed.events[0]?.externalId).toBe("shared-external-event");
+    expect(ownerFeed.events[0]?.id).not.toBe(agentFeed.events[0]?.id);
+    expect(ownerFeedCached.source).toBe("cache");
+    expect(agentFeedCached.source).toBe("cache");
+    expect(ownerFeedCached.events[0]?.title).toBe("Owner calendar event");
+    expect(agentFeedCached.events[0]?.title).toBe("Agent calendar event");
+
+    const ownerTriage = await service.getGmailTriage(requestUrl, {
+      mode: "cloud_managed",
+      side: "owner",
+      forceSync: true,
+    });
+    const agentTriage = await service.getGmailTriage(requestUrl, {
+      mode: "cloud_managed",
+      side: "agent",
+      forceSync: true,
+    });
+    const ownerMessageId = ownerTriage.messages[0]?.id;
+    const agentMessageId = agentTriage.messages[0]?.id;
+
+    expect(ownerMessageId).toBeTypeOf("string");
+    expect(agentMessageId).toBeTypeOf("string");
+
+    const ownerDraft = await service.createGmailReplyDraft(requestUrl, {
+      mode: "cloud_managed",
+      side: "owner",
+      messageId: String(ownerMessageId),
+    });
+    const agentDraft = await service.createGmailReplyDraft(requestUrl, {
+      mode: "cloud_managed",
+      side: "agent",
+      messageId: String(agentMessageId),
+    });
+
+    expect(ownerTriage.messages).toHaveLength(1);
+    expect(agentTriage.messages).toHaveLength(1);
+    expect(ownerTriage.messages[0]?.side).toBe("owner");
+    expect(agentTriage.messages[0]?.side).toBe("agent");
+    expect(ownerTriage.messages[0]?.subject).toBe("Owner inbox thread");
+    expect(agentTriage.messages[0]?.subject).toBe("Agent inbox thread");
+    expect(ownerTriage.messages[0]?.externalId).toBe("shared-external-message");
+    expect(agentTriage.messages[0]?.externalId).toBe("shared-external-message");
+    expect(ownerTriage.messages[0]?.id).not.toBe(agentTriage.messages[0]?.id);
+    expect(ownerDraft.messageId).toBe(ownerTriage.messages[0]?.id);
+    expect(agentDraft.messageId).toBe(agentTriage.messages[0]?.id);
+
+    const ownerCachedMessages = await repository.listGmailMessages(
+      agentId,
+      "google",
+      { maxResults: 5 },
+      "owner",
+    );
+    const agentCachedMessages = await repository.listGmailMessages(
+      agentId,
+      "google",
+      { maxResults: 5 },
+      "agent",
+    );
+    expect(ownerCachedMessages).toHaveLength(1);
+    expect(agentCachedMessages).toHaveLength(1);
+    expect(ownerCachedMessages[0]?.subject).toBe("Owner inbox thread");
+    expect(agentCachedMessages[0]?.subject).toBe("Agent inbox thread");
   });
 });

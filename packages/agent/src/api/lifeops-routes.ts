@@ -266,6 +266,7 @@ export async function handleLifeOpsRoutes(
   if (method === "GET" && pathname === "/api/lifeops/calendar/feed") {
     return runRoute(ctx, async (service) => {
       const rawMode = url.searchParams.get("mode");
+      const rawSide = url.searchParams.get("side");
       const rawForceSync = url.searchParams.get("forceSync");
       if (
         rawMode !== null &&
@@ -277,6 +278,9 @@ export async function handleLifeOpsRoutes(
           400,
           "mode must be one of: local, remote, cloud_managed",
         );
+      }
+      if (rawSide !== null && rawSide !== "owner" && rawSide !== "agent") {
+        throw new LifeOpsServiceError(400, "side must be one of: owner, agent");
       }
       if (
         rawForceSync !== null &&
@@ -293,6 +297,7 @@ export async function handleLifeOpsRoutes(
           | "remote"
           | "cloud_managed"
           | undefined,
+        side: (rawSide ?? undefined) as "owner" | "agent" | undefined,
         calendarId: url.searchParams.get("calendarId") ?? undefined,
         timeMin: url.searchParams.get("timeMin") ?? undefined,
         timeMax: url.searchParams.get("timeMax") ?? undefined,
@@ -309,6 +314,7 @@ export async function handleLifeOpsRoutes(
   if (method === "GET" && pathname === "/api/lifeops/calendar/next-context") {
     return runRoute(ctx, async (service) => {
       const rawMode = url.searchParams.get("mode");
+      const rawSide = url.searchParams.get("side");
       if (
         rawMode !== null &&
         rawMode !== "local" &&
@@ -320,12 +326,16 @@ export async function handleLifeOpsRoutes(
           "mode must be one of: local, remote, cloud_managed",
         );
       }
+      if (rawSide !== null && rawSide !== "owner" && rawSide !== "agent") {
+        throw new LifeOpsServiceError(400, "side must be one of: owner, agent");
+      }
       const request: GetLifeOpsCalendarFeedRequest = {
         mode: (rawMode ?? undefined) as
           | "local"
           | "remote"
           | "cloud_managed"
           | undefined,
+        side: (rawSide ?? undefined) as "owner" | "agent" | undefined,
         calendarId: url.searchParams.get("calendarId") ?? undefined,
         timeMin: url.searchParams.get("timeMin") ?? undefined,
         timeMax: url.searchParams.get("timeMax") ?? undefined,
@@ -338,6 +348,7 @@ export async function handleLifeOpsRoutes(
   if (method === "GET" && pathname === "/api/lifeops/gmail/triage") {
     return runRoute(ctx, async (service) => {
       const rawMode = url.searchParams.get("mode");
+      const rawSide = url.searchParams.get("side");
       const rawForceSync = url.searchParams.get("forceSync");
       if (
         rawMode !== null &&
@@ -349,6 +360,9 @@ export async function handleLifeOpsRoutes(
           400,
           "mode must be one of: local, remote, cloud_managed",
         );
+      }
+      if (rawSide !== null && rawSide !== "owner" && rawSide !== "agent") {
+        throw new LifeOpsServiceError(400, "side must be one of: owner, agent");
       }
       if (
         rawForceSync !== null &&
@@ -365,6 +379,7 @@ export async function handleLifeOpsRoutes(
           | "remote"
           | "cloud_managed"
           | undefined,
+        side: (rawSide ?? undefined) as "owner" | "agent" | undefined,
         forceSync:
           rawForceSync === null
             ? undefined

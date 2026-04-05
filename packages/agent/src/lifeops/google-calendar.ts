@@ -68,7 +68,7 @@ interface GoogleCalendarCreateRequestBody {
 export interface SyncedGoogleCalendarEvent
   extends Omit<
     LifeOpsCalendarEvent,
-    "id" | "agentId" | "provider" | "syncedAt" | "updatedAt"
+    "id" | "agentId" | "provider" | "side" | "syncedAt" | "updatedAt"
   > {}
 
 function readGoogleEventInstant(
@@ -99,7 +99,8 @@ function readConferenceLink(event: GoogleCalendarApiEvent): string | null {
     return event.hangoutLink.trim();
   }
   const entryPoint = event.conferenceData?.entryPoints?.find(
-    (candidate) => typeof candidate.uri === "string" && candidate.uri.trim().length > 0,
+    (candidate) =>
+      typeof candidate.uri === "string" && candidate.uri.trim().length > 0,
   );
   return entryPoint?.uri?.trim() || null;
 }
@@ -204,7 +205,9 @@ export async function fetchGoogleCalendarEvents(args: {
     );
   }
 
-  const parsed = (await response.json()) as { items?: GoogleCalendarApiEvent[] };
+  const parsed = (await response.json()) as {
+    items?: GoogleCalendarApiEvent[];
+  };
   const events: SyncedGoogleCalendarEvent[] = [];
   for (const item of parsed.items ?? []) {
     const normalized = normalizeGoogleCalendarEvent(calendarId, item);
@@ -280,7 +283,9 @@ export async function createGoogleCalendarEvent(args: {
   const parsed = (await response.json()) as GoogleCalendarApiEvent;
   const normalized = normalizeGoogleCalendarEvent(calendarId, parsed);
   if (!normalized) {
-    throw new Error("Google Calendar create event returned an invalid payload.");
+    throw new Error(
+      "Google Calendar create event returned an invalid payload.",
+    );
   }
   return normalized;
 }

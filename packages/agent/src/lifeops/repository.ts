@@ -288,6 +288,7 @@ function parseCalendarEvent(
     externalId: toText(row.external_event_id),
     agentId: toText(row.agent_id),
     provider: "google",
+    side: toText(row.side, "owner") as LifeOpsCalendarEvent["side"],
     calendarId: toText(row.calendar_id),
     title: toText(row.title),
     description: toText(row.description),
@@ -317,6 +318,7 @@ function parseGmailMessageSummary(
     externalId: toText(row.external_message_id),
     agentId: toText(row.agent_id),
     provider: "google",
+    side: toText(row.side, "owner") as LifeOpsGmailMessageSummary["side"],
     threadId: toText(row.thread_id),
     subject: toText(row.subject),
     from: toText(row.from_display),
@@ -429,6 +431,7 @@ interface LifeOpsCalendarSyncState {
   id: string;
   agentId: string;
   provider: LifeOpsConnectorGrant["provider"];
+  side: LifeOpsConnectorSide;
   calendarId: string;
   windowStartAt: string;
   windowEndAt: string;
@@ -443,6 +446,7 @@ function parseCalendarSyncState(
     id: toText(row.id),
     agentId: toText(row.agent_id),
     provider: toText(row.provider) as LifeOpsConnectorGrant["provider"],
+    side: toText(row.side, "owner") as LifeOpsConnectorSide,
     calendarId: toText(row.calendar_id),
     windowStartAt: toText(row.window_start_at),
     windowEndAt: toText(row.window_end_at),
@@ -455,6 +459,7 @@ interface LifeOpsGmailSyncState {
   id: string;
   agentId: string;
   provider: LifeOpsConnectorGrant["provider"];
+  side: LifeOpsConnectorSide;
   mailbox: string;
   maxResults: number;
   syncedAt: string;
@@ -468,6 +473,7 @@ function parseGmailSyncState(
     id: toText(row.id),
     agentId: toText(row.agent_id),
     provider: toText(row.provider) as LifeOpsConnectorGrant["provider"],
+    side: toText(row.side, "owner") as LifeOpsConnectorSide,
     mailbox: toText(row.mailbox),
     maxResults: toNumber(row.max_results, 0),
     syncedAt: toText(row.synced_at),
@@ -658,6 +664,7 @@ export async function ensureLifeOpsTables(
       id TEXT PRIMARY KEY,
       agent_id TEXT NOT NULL,
       provider TEXT NOT NULL,
+      side TEXT NOT NULL DEFAULT 'owner',
       calendar_id TEXT NOT NULL,
       external_event_id TEXT NOT NULL,
       title TEXT NOT NULL,
@@ -675,23 +682,25 @@ export async function ensureLifeOpsTables(
       metadata_json TEXT NOT NULL DEFAULT '{}',
       synced_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
-      UNIQUE(agent_id, provider, calendar_id, external_event_id)
+      UNIQUE(agent_id, provider, side, calendar_id, external_event_id)
     )`,
     `CREATE TABLE IF NOT EXISTS life_calendar_sync_states (
       id TEXT PRIMARY KEY,
       agent_id TEXT NOT NULL,
       provider TEXT NOT NULL,
+      side TEXT NOT NULL DEFAULT 'owner',
       calendar_id TEXT NOT NULL,
       window_start_at TEXT NOT NULL,
       window_end_at TEXT NOT NULL,
       synced_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
-      UNIQUE(agent_id, provider, calendar_id)
+      UNIQUE(agent_id, provider, side, calendar_id)
     )`,
     `CREATE TABLE IF NOT EXISTS life_gmail_messages (
       id TEXT PRIMARY KEY,
       agent_id TEXT NOT NULL,
       provider TEXT NOT NULL,
+      side TEXT NOT NULL DEFAULT 'owner',
       external_message_id TEXT NOT NULL,
       thread_id TEXT NOT NULL,
       subject TEXT NOT NULL DEFAULT '',
@@ -712,17 +721,18 @@ export async function ensureLifeOpsTables(
       metadata_json TEXT NOT NULL DEFAULT '{}',
       synced_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
-      UNIQUE(agent_id, provider, external_message_id)
+      UNIQUE(agent_id, provider, side, external_message_id)
     )`,
     `CREATE TABLE IF NOT EXISTS life_gmail_sync_states (
       id TEXT PRIMARY KEY,
       agent_id TEXT NOT NULL,
       provider TEXT NOT NULL,
+      side TEXT NOT NULL DEFAULT 'owner',
       mailbox TEXT NOT NULL,
       max_results INTEGER NOT NULL DEFAULT 0,
       synced_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
-      UNIQUE(agent_id, provider, mailbox)
+      UNIQUE(agent_id, provider, side, mailbox)
     )`,
     `CREATE TABLE IF NOT EXISTS life_channel_policies (
       id TEXT PRIMARY KEY,
@@ -776,13 +786,13 @@ export async function ensureLifeOpsTables(
     `CREATE INDEX IF NOT EXISTS idx_life_workflow_runs_workflow
       ON life_workflow_runs(agent_id, workflow_id, started_at)`,
     `CREATE INDEX IF NOT EXISTS idx_life_calendar_events_window
-      ON life_calendar_events(agent_id, provider, start_at, end_at)`,
+      ON life_calendar_events(agent_id, provider, side, start_at, end_at)`,
     `CREATE INDEX IF NOT EXISTS idx_life_calendar_sync_states_agent
-      ON life_calendar_sync_states(agent_id, provider, calendar_id)`,
+      ON life_calendar_sync_states(agent_id, provider, side, calendar_id)`,
     `CREATE INDEX IF NOT EXISTS idx_life_gmail_messages_priority
-      ON life_gmail_messages(agent_id, provider, triage_score, received_at)`,
+      ON life_gmail_messages(agent_id, provider, side, triage_score, received_at)`,
     `CREATE INDEX IF NOT EXISTS idx_life_gmail_sync_states_agent
-      ON life_gmail_sync_states(agent_id, provider, mailbox)`,
+      ON life_gmail_sync_states(agent_id, provider, side, mailbox)`,
     `CREATE INDEX IF NOT EXISTS idx_life_browser_sessions_agent
       ON life_browser_sessions(agent_id, status, updated_at)`,
     `CREATE INDEX IF NOT EXISTS idx_life_browser_sessions_subject
@@ -847,7 +857,10 @@ export async function ensureLifeOpsTables(
     existingConnectorGrantColumns.size > 0 &&
     !existingConnectorGrantColumns.has("side")
   ) {
-    await executeRawSql(runtime, `DROP TABLE IF EXISTS life_connector_grants_next`);
+    await executeRawSql(
+      runtime,
+      `DROP TABLE IF EXISTS life_connector_grants_next`,
+    );
     await executeRawSql(
       runtime,
       `CREATE TABLE life_connector_grants_next (
@@ -938,6 +951,232 @@ export async function ensureLifeOpsTables(
       runtime,
       `ALTER TABLE life_connector_grants ADD COLUMN ${column.name} ${column.definition}`,
     );
+  }
+
+  const existingCalendarEventColumns = new Set(
+    await listTableColumns(runtime, "life_calendar_events"),
+  );
+  if (
+    existingCalendarEventColumns.size > 0 &&
+    !existingCalendarEventColumns.has("side")
+  ) {
+    await executeRawSql(
+      runtime,
+      `DROP TABLE IF EXISTS life_calendar_events_next`,
+    );
+    await executeRawSql(
+      runtime,
+      `CREATE TABLE life_calendar_events_next (
+        id TEXT PRIMARY KEY,
+        agent_id TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        side TEXT NOT NULL DEFAULT 'owner',
+        calendar_id TEXT NOT NULL,
+        external_event_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        description TEXT NOT NULL DEFAULT '',
+        location TEXT NOT NULL DEFAULT '',
+        status TEXT NOT NULL,
+        start_at TEXT NOT NULL,
+        end_at TEXT NOT NULL,
+        is_all_day BOOLEAN NOT NULL,
+        timezone TEXT,
+        html_link TEXT,
+        conference_link TEXT,
+        organizer_json TEXT,
+        attendees_json TEXT NOT NULL DEFAULT '[]',
+        metadata_json TEXT NOT NULL DEFAULT '{}',
+        synced_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(agent_id, provider, side, calendar_id, external_event_id)
+      )`,
+    );
+    await executeRawSql(
+      runtime,
+      `INSERT INTO life_calendar_events_next (
+        id, agent_id, provider, side, calendar_id, external_event_id, title,
+        description, location, status, start_at, end_at, is_all_day, timezone,
+        html_link, conference_link, organizer_json, attendees_json,
+        metadata_json, synced_at, updated_at
+      )
+      SELECT
+        id, agent_id, provider, 'owner', calendar_id, external_event_id, title,
+        description, location, status, start_at, end_at, is_all_day, timezone,
+        html_link, conference_link, organizer_json, attendees_json,
+        COALESCE(metadata_json, '{}'), synced_at, updated_at
+      FROM life_calendar_events`,
+    );
+    await executeRawSql(runtime, `DROP TABLE life_calendar_events`);
+    await executeRawSql(
+      runtime,
+      `ALTER TABLE life_calendar_events_next RENAME TO life_calendar_events`,
+    );
+  }
+
+  const existingCalendarSyncStateColumns = new Set(
+    await listTableColumns(runtime, "life_calendar_sync_states"),
+  );
+  if (
+    existingCalendarSyncStateColumns.size > 0 &&
+    !existingCalendarSyncStateColumns.has("side")
+  ) {
+    await executeRawSql(
+      runtime,
+      `DROP TABLE IF EXISTS life_calendar_sync_states_next`,
+    );
+    await executeRawSql(
+      runtime,
+      `CREATE TABLE life_calendar_sync_states_next (
+        id TEXT PRIMARY KEY,
+        agent_id TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        side TEXT NOT NULL DEFAULT 'owner',
+        calendar_id TEXT NOT NULL,
+        window_start_at TEXT NOT NULL,
+        window_end_at TEXT NOT NULL,
+        synced_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(agent_id, provider, side, calendar_id)
+      )`,
+    );
+    await executeRawSql(
+      runtime,
+      `INSERT INTO life_calendar_sync_states_next (
+        id, agent_id, provider, side, calendar_id, window_start_at,
+        window_end_at, synced_at, updated_at
+      )
+      SELECT
+        id, agent_id, provider, 'owner', calendar_id, window_start_at,
+        window_end_at, synced_at, updated_at
+      FROM life_calendar_sync_states`,
+    );
+    await executeRawSql(runtime, `DROP TABLE life_calendar_sync_states`);
+    await executeRawSql(
+      runtime,
+      `ALTER TABLE life_calendar_sync_states_next RENAME TO life_calendar_sync_states`,
+    );
+  }
+
+  const existingGmailMessageColumns = new Set(
+    await listTableColumns(runtime, "life_gmail_messages"),
+  );
+  if (
+    existingGmailMessageColumns.size > 0 &&
+    !existingGmailMessageColumns.has("side")
+  ) {
+    await executeRawSql(
+      runtime,
+      `DROP TABLE IF EXISTS life_gmail_messages_next`,
+    );
+    await executeRawSql(
+      runtime,
+      `CREATE TABLE life_gmail_messages_next (
+        id TEXT PRIMARY KEY,
+        agent_id TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        side TEXT NOT NULL DEFAULT 'owner',
+        external_message_id TEXT NOT NULL,
+        thread_id TEXT NOT NULL,
+        subject TEXT NOT NULL DEFAULT '',
+        from_display TEXT NOT NULL DEFAULT '',
+        from_email TEXT,
+        reply_to TEXT,
+        to_json TEXT NOT NULL DEFAULT '[]',
+        cc_json TEXT NOT NULL DEFAULT '[]',
+        snippet TEXT NOT NULL DEFAULT '',
+        received_at TEXT NOT NULL,
+        is_unread BOOLEAN NOT NULL DEFAULT FALSE,
+        is_important BOOLEAN NOT NULL DEFAULT FALSE,
+        likely_reply_needed BOOLEAN NOT NULL DEFAULT FALSE,
+        triage_score INTEGER NOT NULL DEFAULT 0,
+        triage_reason TEXT NOT NULL DEFAULT '',
+        label_ids_json TEXT NOT NULL DEFAULT '[]',
+        html_link TEXT,
+        metadata_json TEXT NOT NULL DEFAULT '{}',
+        synced_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(agent_id, provider, side, external_message_id)
+      )`,
+    );
+    await executeRawSql(
+      runtime,
+      `INSERT INTO life_gmail_messages_next (
+        id, agent_id, provider, side, external_message_id, thread_id, subject,
+        from_display, from_email, reply_to, to_json, cc_json, snippet,
+        received_at, is_unread, is_important, likely_reply_needed,
+        triage_score, triage_reason, label_ids_json, html_link, metadata_json,
+        synced_at, updated_at
+      )
+      SELECT
+        id, agent_id, provider, 'owner', external_message_id, thread_id,
+        subject, from_display, from_email, reply_to, to_json, cc_json,
+        snippet, received_at, is_unread, is_important, likely_reply_needed,
+        triage_score, triage_reason, label_ids_json, html_link,
+        COALESCE(metadata_json, '{}'), synced_at, updated_at
+      FROM life_gmail_messages`,
+    );
+    await executeRawSql(runtime, `DROP TABLE life_gmail_messages`);
+    await executeRawSql(
+      runtime,
+      `ALTER TABLE life_gmail_messages_next RENAME TO life_gmail_messages`,
+    );
+  }
+
+  const existingGmailSyncStateColumns = new Set(
+    await listTableColumns(runtime, "life_gmail_sync_states"),
+  );
+  if (
+    existingGmailSyncStateColumns.size > 0 &&
+    !existingGmailSyncStateColumns.has("side")
+  ) {
+    await executeRawSql(
+      runtime,
+      `DROP TABLE IF EXISTS life_gmail_sync_states_next`,
+    );
+    await executeRawSql(
+      runtime,
+      `CREATE TABLE life_gmail_sync_states_next (
+        id TEXT PRIMARY KEY,
+        agent_id TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        side TEXT NOT NULL DEFAULT 'owner',
+        mailbox TEXT NOT NULL,
+        max_results INTEGER NOT NULL DEFAULT 0,
+        synced_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE(agent_id, provider, side, mailbox)
+      )`,
+    );
+    await executeRawSql(
+      runtime,
+      `INSERT INTO life_gmail_sync_states_next (
+        id, agent_id, provider, side, mailbox, max_results, synced_at, updated_at
+      )
+      SELECT
+        id, agent_id, provider, 'owner', mailbox, max_results, synced_at,
+        updated_at
+      FROM life_gmail_sync_states`,
+    );
+    await executeRawSql(runtime, `DROP TABLE life_gmail_sync_states`);
+    await executeRawSql(
+      runtime,
+      `ALTER TABLE life_gmail_sync_states_next RENAME TO life_gmail_sync_states`,
+    );
+  }
+
+  const postMigrationIndexStatements = [
+    `CREATE INDEX IF NOT EXISTS idx_life_calendar_events_window
+      ON life_calendar_events(agent_id, provider, side, start_at, end_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_life_calendar_sync_states_agent
+      ON life_calendar_sync_states(agent_id, provider, side, calendar_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_life_gmail_messages_priority
+      ON life_gmail_messages(agent_id, provider, side, triage_score, received_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_life_gmail_sync_states_agent
+      ON life_gmail_sync_states(agent_id, provider, side, mailbox)`,
+  ] as const;
+
+  for (const statement of postMigrationIndexStatements) {
+    await executeRawSql(runtime, statement);
   }
 
   schemaReady.add(key);
@@ -1688,12 +1927,15 @@ export class LifeOpsRepository {
     );
   }
 
-  async upsertCalendarEvent(event: LifeOpsCalendarEvent): Promise<void> {
+  async upsertCalendarEvent(
+    event: LifeOpsCalendarEvent,
+    side: LifeOpsConnectorSide = event.side,
+  ): Promise<void> {
     await this.ensureReady();
     await executeRawSql(
       this.runtime,
       `INSERT INTO life_calendar_events (
-        id, agent_id, provider, calendar_id, external_event_id, title,
+        id, agent_id, provider, side, calendar_id, external_event_id, title,
         description, location, status, start_at, end_at, is_all_day,
         timezone, html_link, conference_link, organizer_json,
         attendees_json, metadata_json, synced_at, updated_at
@@ -1701,6 +1943,7 @@ export class LifeOpsRepository {
         ${sqlQuote(event.id)},
         ${sqlQuote(event.agentId)},
         ${sqlQuote(event.provider)},
+        ${sqlQuote(side)},
         ${sqlQuote(event.calendarId)},
         ${sqlQuote(event.externalId)},
         ${sqlQuote(event.title)},
@@ -1719,7 +1962,7 @@ export class LifeOpsRepository {
         ${sqlQuote(event.syncedAt)},
         ${sqlQuote(event.updatedAt)}
       )
-      ON CONFLICT(agent_id, provider, calendar_id, external_event_id) DO UPDATE SET
+      ON CONFLICT(agent_id, provider, side, calendar_id, external_event_id) DO UPDATE SET
         title = excluded.title,
         description = excluded.description,
         location = excluded.location,
@@ -1742,17 +1985,20 @@ export class LifeOpsRepository {
     agentId: string,
     provider: LifeOpsConnectorGrant["provider"],
     calendarId?: string,
+    side?: LifeOpsConnectorSide,
   ): Promise<void> {
     await this.ensureReady();
     const calendarClause = calendarId
       ? `AND calendar_id = ${sqlQuote(calendarId)}`
       : "";
+    const sideClause = side ? `AND side = ${sqlQuote(side)}` : "";
     await executeRawSql(
       this.runtime,
       `DELETE FROM life_calendar_events
         WHERE agent_id = ${sqlQuote(agentId)}
           AND provider = ${sqlQuote(provider)}
-          ${calendarClause}`,
+          ${calendarClause}
+          ${sideClause}`,
     );
   }
 
@@ -1763,6 +2009,7 @@ export class LifeOpsRepository {
     timeMin: string,
     timeMax: string,
     keepExternalIds: readonly string[],
+    side?: LifeOpsConnectorSide,
   ): Promise<void> {
     await this.ensureReady();
     const keepClause =
@@ -1771,11 +2018,13 @@ export class LifeOpsRepository {
             .map((externalId) => sqlQuote(externalId))
             .join(", ")})`
         : "";
+    const sideClause = side ? `AND side = ${sqlQuote(side)}` : "";
     await executeRawSql(
       this.runtime,
       `DELETE FROM life_calendar_events
         WHERE agent_id = ${sqlQuote(agentId)}
           AND provider = ${sqlQuote(provider)}
+          ${sideClause}
           AND calendar_id = ${sqlQuote(calendarId)}
           AND end_at >= ${sqlQuote(timeMin)}
           AND start_at < ${sqlQuote(timeMax)}
@@ -1788,16 +2037,19 @@ export class LifeOpsRepository {
     provider: LifeOpsConnectorGrant["provider"],
     timeMin?: string,
     timeMax?: string,
+    side?: LifeOpsConnectorSide,
   ): Promise<LifeOpsCalendarEvent[]> {
     await this.ensureReady();
     const timeMinClause = timeMin ? `AND end_at >= ${sqlQuote(timeMin)}` : "";
     const timeMaxClause = timeMax ? `AND start_at < ${sqlQuote(timeMax)}` : "";
+    const sideClause = side ? `AND side = ${sqlQuote(side)}` : "";
     const rows = await executeRawSql(
       this.runtime,
       `SELECT *
          FROM life_calendar_events
         WHERE agent_id = ${sqlQuote(agentId)}
           AND provider = ${sqlQuote(provider)}
+          ${sideClause}
           ${timeMinClause}
           ${timeMaxClause}
         ORDER BY start_at ASC`,
@@ -1812,19 +2064,20 @@ export class LifeOpsRepository {
     await executeRawSql(
       this.runtime,
       `INSERT INTO life_calendar_sync_states (
-        id, agent_id, provider, calendar_id, window_start_at,
+        id, agent_id, provider, side, calendar_id, window_start_at,
         window_end_at, synced_at, updated_at
       ) VALUES (
         ${sqlQuote(state.id)},
         ${sqlQuote(state.agentId)},
         ${sqlQuote(state.provider)},
+        ${sqlQuote(state.side)},
         ${sqlQuote(state.calendarId)},
         ${sqlQuote(state.windowStartAt)},
         ${sqlQuote(state.windowEndAt)},
         ${sqlQuote(state.syncedAt)},
         ${sqlQuote(state.updatedAt)}
       )
-      ON CONFLICT(agent_id, provider, calendar_id) DO UPDATE SET
+      ON CONFLICT(agent_id, provider, side, calendar_id) DO UPDATE SET
         window_start_at = excluded.window_start_at,
         window_end_at = excluded.window_end_at,
         synced_at = excluded.synced_at,
@@ -1836,8 +2089,10 @@ export class LifeOpsRepository {
     agentId: string,
     provider: LifeOpsConnectorGrant["provider"],
     calendarId: string,
+    side?: LifeOpsConnectorSide,
   ): Promise<LifeOpsCalendarSyncState | null> {
     await this.ensureReady();
+    const sideClause = side ? `AND side = ${sqlQuote(side)}` : "";
     const rows = await executeRawSql(
       this.runtime,
       `SELECT *
@@ -1845,6 +2100,7 @@ export class LifeOpsRepository {
         WHERE agent_id = ${sqlQuote(agentId)}
           AND provider = ${sqlQuote(provider)}
           AND calendar_id = ${sqlQuote(calendarId)}
+          ${sideClause}
         LIMIT 1`,
     );
     const row = rows[0];
@@ -1855,26 +2111,32 @@ export class LifeOpsRepository {
     agentId: string,
     provider: LifeOpsConnectorGrant["provider"],
     calendarId?: string,
+    side?: LifeOpsConnectorSide,
   ): Promise<void> {
     await this.ensureReady();
     const calendarClause = calendarId
       ? `AND calendar_id = ${sqlQuote(calendarId)}`
       : "";
+    const sideClause = side ? `AND side = ${sqlQuote(side)}` : "";
     await executeRawSql(
       this.runtime,
       `DELETE FROM life_calendar_sync_states
         WHERE agent_id = ${sqlQuote(agentId)}
           AND provider = ${sqlQuote(provider)}
-          ${calendarClause}`,
+          ${calendarClause}
+          ${sideClause}`,
     );
   }
 
-  async upsertGmailMessage(message: LifeOpsGmailMessageSummary): Promise<void> {
+  async upsertGmailMessage(
+    message: LifeOpsGmailMessageSummary,
+    side: LifeOpsConnectorSide = message.side,
+  ): Promise<void> {
     await this.ensureReady();
     await executeRawSql(
       this.runtime,
       `INSERT INTO life_gmail_messages (
-        id, agent_id, provider, external_message_id, thread_id, subject,
+        id, agent_id, provider, side, external_message_id, thread_id, subject,
         from_display, from_email, reply_to, to_json, cc_json, snippet,
         received_at, is_unread, is_important, likely_reply_needed,
         triage_score, triage_reason, label_ids_json, html_link, metadata_json,
@@ -1883,6 +2145,7 @@ export class LifeOpsRepository {
         ${sqlQuote(message.id)},
         ${sqlQuote(message.agentId)},
         ${sqlQuote(message.provider)},
+        ${sqlQuote(side)},
         ${sqlQuote(message.externalId)},
         ${sqlQuote(message.threadId)},
         ${sqlQuote(message.subject)},
@@ -1904,7 +2167,7 @@ export class LifeOpsRepository {
         ${sqlQuote(message.syncedAt)},
         ${sqlQuote(message.updatedAt)}
       )
-      ON CONFLICT(agent_id, provider, external_message_id) DO UPDATE SET
+      ON CONFLICT(agent_id, provider, side, external_message_id) DO UPDATE SET
         thread_id = excluded.thread_id,
         subject = excluded.subject,
         from_display = excluded.from_display,
@@ -1931,6 +2194,7 @@ export class LifeOpsRepository {
     agentId: string,
     provider: LifeOpsConnectorGrant["provider"],
     keepExternalIds: readonly string[],
+    side?: LifeOpsConnectorSide,
   ): Promise<void> {
     await this.ensureReady();
     const keepClause =
@@ -1939,11 +2203,13 @@ export class LifeOpsRepository {
             .map((externalId) => sqlQuote(externalId))
             .join(", ")})`
         : "";
+    const sideClause = side ? `AND side = ${sqlQuote(side)}` : "";
     await executeRawSql(
       this.runtime,
       `DELETE FROM life_gmail_messages
         WHERE agent_id = ${sqlQuote(agentId)}
           AND provider = ${sqlQuote(provider)}
+          ${sideClause}
           ${keepClause}`,
     );
   }
@@ -1956,6 +2222,7 @@ export class LifeOpsRepository {
       threadId?: string;
       since?: string;
     },
+    side?: LifeOpsConnectorSide,
   ): Promise<LifeOpsGmailMessageSummary[]> {
     await this.ensureReady();
     const maxResultsClause =
@@ -1968,12 +2235,14 @@ export class LifeOpsRepository {
     const sinceClause = options?.since
       ? `AND received_at >= ${sqlQuote(options.since)}`
       : "";
+    const sideClause = side ? `AND side = ${sqlQuote(side)}` : "";
     const rows = await executeRawSql(
       this.runtime,
       `SELECT *
          FROM life_gmail_messages
         WHERE agent_id = ${sqlQuote(agentId)}
           AND provider = ${sqlQuote(provider)}
+          ${sideClause}
           ${threadClause}
           ${sinceClause}
         ORDER BY triage_score DESC, received_at DESC
@@ -1986,14 +2255,17 @@ export class LifeOpsRepository {
     agentId: string,
     provider: LifeOpsConnectorGrant["provider"],
     messageId: string,
+    side?: LifeOpsConnectorSide,
   ): Promise<LifeOpsGmailMessageSummary | null> {
     await this.ensureReady();
+    const sideClause = side ? `AND side = ${sqlQuote(side)}` : "";
     const rows = await executeRawSql(
       this.runtime,
       `SELECT *
          FROM life_gmail_messages
         WHERE agent_id = ${sqlQuote(agentId)}
           AND provider = ${sqlQuote(provider)}
+          ${sideClause}
           AND id = ${sqlQuote(messageId)}
         LIMIT 1`,
     );
@@ -2004,13 +2276,16 @@ export class LifeOpsRepository {
   async deleteGmailMessagesForProvider(
     agentId: string,
     provider: LifeOpsConnectorGrant["provider"],
+    side?: LifeOpsConnectorSide,
   ): Promise<void> {
     await this.ensureReady();
+    const sideClause = side ? `AND side = ${sqlQuote(side)}` : "";
     await executeRawSql(
       this.runtime,
       `DELETE FROM life_gmail_messages
         WHERE agent_id = ${sqlQuote(agentId)}
-          AND provider = ${sqlQuote(provider)}`,
+          AND provider = ${sqlQuote(provider)}
+          ${sideClause}`,
     );
   }
 
@@ -2019,17 +2294,18 @@ export class LifeOpsRepository {
     await executeRawSql(
       this.runtime,
       `INSERT INTO life_gmail_sync_states (
-        id, agent_id, provider, mailbox, max_results, synced_at, updated_at
+        id, agent_id, provider, side, mailbox, max_results, synced_at, updated_at
       ) VALUES (
         ${sqlQuote(state.id)},
         ${sqlQuote(state.agentId)},
         ${sqlQuote(state.provider)},
+        ${sqlQuote(state.side)},
         ${sqlQuote(state.mailbox)},
         ${sqlInteger(state.maxResults)},
         ${sqlQuote(state.syncedAt)},
         ${sqlQuote(state.updatedAt)}
       )
-      ON CONFLICT(agent_id, provider, mailbox) DO UPDATE SET
+      ON CONFLICT(agent_id, provider, side, mailbox) DO UPDATE SET
         max_results = excluded.max_results,
         synced_at = excluded.synced_at,
         updated_at = excluded.updated_at`,
@@ -2040,8 +2316,10 @@ export class LifeOpsRepository {
     agentId: string,
     provider: LifeOpsConnectorGrant["provider"],
     mailbox: string,
+    side?: LifeOpsConnectorSide,
   ): Promise<LifeOpsGmailSyncState | null> {
     await this.ensureReady();
+    const sideClause = side ? `AND side = ${sqlQuote(side)}` : "";
     const rows = await executeRawSql(
       this.runtime,
       `SELECT *
@@ -2049,6 +2327,7 @@ export class LifeOpsRepository {
         WHERE agent_id = ${sqlQuote(agentId)}
           AND provider = ${sqlQuote(provider)}
           AND mailbox = ${sqlQuote(mailbox)}
+          ${sideClause}
         LIMIT 1`,
     );
     const row = rows[0];
@@ -2059,15 +2338,18 @@ export class LifeOpsRepository {
     agentId: string,
     provider: LifeOpsConnectorGrant["provider"],
     mailbox?: string,
+    side?: LifeOpsConnectorSide,
   ): Promise<void> {
     await this.ensureReady();
     const mailboxClause = mailbox ? `AND mailbox = ${sqlQuote(mailbox)}` : "";
+    const sideClause = side ? `AND side = ${sqlQuote(side)}` : "";
     await executeRawSql(
       this.runtime,
       `DELETE FROM life_gmail_sync_states
         WHERE agent_id = ${sqlQuote(agentId)}
           AND provider = ${sqlQuote(provider)}
-          ${mailboxClause}`,
+          ${mailboxClause}
+          ${sideClause}`,
     );
   }
 

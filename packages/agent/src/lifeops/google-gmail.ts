@@ -46,7 +46,7 @@ interface GoogleGmailMetadataResponse {
 export interface SyncedGoogleGmailMessageSummary
   extends Omit<
     LifeOpsGmailMessageSummary,
-    "id" | "agentId" | "provider" | "syncedAt" | "updatedAt"
+    "id" | "agentId" | "provider" | "side" | "syncedAt" | "updatedAt"
   > {}
 
 function readGoogleGmailErrorPrefix(status: number): string {
@@ -118,7 +118,10 @@ function stripQuotedDisplayName(value: string): string {
   return trimmed;
 }
 
-function parseMailbox(value: string): { display: string; email: string | null } {
+function parseMailbox(value: string): {
+  display: string;
+  email: string | null;
+} {
   const trimmed = value.trim();
   const match = trimmed.match(/^(.*?)(?:<([^>]+)>)$/);
   if (match) {
@@ -142,7 +145,9 @@ function parseMailbox(value: string): { display: string; email: string | null } 
   };
 }
 
-function parseMailboxList(value: string | undefined): Array<{ display: string; email: string | null }> {
+function parseMailboxList(
+  value: string | undefined,
+): Array<{ display: string; email: string | null }> {
   if (!value) {
     return [];
   }
@@ -188,19 +193,35 @@ function classifyReplyNeed(args: {
   precedence: string | undefined;
   listId: string | undefined;
   autoSubmitted: string | undefined;
-}): { likelyReplyNeeded: boolean; isImportant: boolean; triageScore: number; triageReason: string } {
-  const labels = new Set(args.labels.map((label) => label.trim().toUpperCase()));
+}): {
+  likelyReplyNeeded: boolean;
+  isImportant: boolean;
+  triageScore: number;
+  triageReason: string;
+} {
+  const labels = new Set(
+    args.labels.map((label) => label.trim().toUpperCase()),
+  );
   const isUnread = labels.has("UNREAD");
   const explicitlyImportant = labels.has("IMPORTANT");
   const selfEmail = args.selfEmail?.trim().toLowerCase() || null;
   const fromEmail = args.fromEmail?.trim().toLowerCase() || null;
-  const directRecipients = [...args.to, ...args.cc].map((entry) => entry.trim().toLowerCase());
-  const directlyAddressed = selfEmail ? directRecipients.includes(selfEmail) : false;
+  const directRecipients = [...args.to, ...args.cc].map((entry) =>
+    entry.trim().toLowerCase(),
+  );
+  const directlyAddressed = selfEmail
+    ? directRecipients.includes(selfEmail)
+    : false;
   const fromSelf = Boolean(selfEmail && fromEmail && selfEmail === fromEmail);
   const precedence = args.precedence?.trim().toLowerCase();
   const autoSubmitted = args.autoSubmitted?.trim().toLowerCase();
   const automated =
-    Boolean(fromEmail && /(?:^|\b)(?:no-?reply|donotreply|notifications?|mailer-daemon)(?:\b|@)/i.test(fromEmail)) ||
+    Boolean(
+      fromEmail &&
+        /(?:^|\b)(?:no-?reply|donotreply|notifications?|mailer-daemon)(?:\b|@)/i.test(
+          fromEmail,
+        ),
+    ) ||
     Boolean(args.listId) ||
     precedence === "bulk" ||
     precedence === "list" ||
@@ -270,7 +291,9 @@ function normalizeGoogleGmailMessage(
   const cc = parseMailboxList(readHeaderValue(headers, "Cc")).map(
     (entry) => entry.email || entry.display,
   );
-  const labels = (message.labelIds ?? []).map((label) => label.trim()).filter(Boolean);
+  const labels = (message.labelIds ?? [])
+    .map((label) => label.trim())
+    .filter(Boolean);
   const receivedAtMs = Number(message.internalDate);
   const receivedAt = Number.isFinite(receivedAtMs)
     ? new Date(receivedAtMs).toISOString()
@@ -309,7 +332,8 @@ function normalizeGoogleGmailMessage(
     htmlLink: deriveHtmlLink(threadId),
     metadata: {
       historyId: message.historyId?.trim() || null,
-      sizeEstimate: typeof message.sizeEstimate === "number" ? message.sizeEstimate : null,
+      sizeEstimate:
+        typeof message.sizeEstimate === "number" ? message.sizeEstimate : null,
       dateHeader: readHeaderValue(headers, "Date") || null,
       messageIdHeader: readHeaderValue(headers, "Message-Id") || null,
       referencesHeader: readHeaderValue(headers, "References") || null,
@@ -325,7 +349,8 @@ export async function fetchGoogleGmailTriageMessages(args: {
   selfEmail?: string | null;
   maxResults?: number;
 }): Promise<SyncedGoogleGmailMessageSummary[]> {
-  const maxResults = args.maxResults && args.maxResults > 0 ? Math.min(args.maxResults, 50) : 20;
+  const maxResults =
+    args.maxResults && args.maxResults > 0 ? Math.min(args.maxResults, 50) : 20;
   const listParams = new URLSearchParams({
     maxResults: String(maxResults),
     includeSpamTrash: "false",
@@ -371,7 +396,10 @@ export async function fetchGoogleGmailTriageMessages(args: {
         },
       );
       if (!response.ok) {
-        throw new GoogleApiError(response.status, await readGoogleGmailError(response));
+        throw new GoogleApiError(
+          response.status,
+          await readGoogleGmailError(response),
+        );
       }
       const parsed = (await response.json()) as GoogleGmailMetadataResponse;
       return normalizeGoogleGmailMessage(parsed, args.selfEmail ?? null);
@@ -379,7 +407,9 @@ export async function fetchGoogleGmailTriageMessages(args: {
   );
 
   return messages
-    .filter((message): message is SyncedGoogleGmailMessageSummary => message !== null)
+    .filter(
+      (message): message is SyncedGoogleGmailMessageSummary => message !== null,
+    )
     .sort((left, right) => {
       const scoreDelta = right.triageScore - left.triageScore;
       if (scoreDelta !== 0) {
@@ -421,6 +451,9 @@ export async function sendGoogleGmailReply(args: {
   });
 
   if (!response.ok) {
-    throw new GoogleApiError(response.status, await readGoogleGmailError(response));
+    throw new GoogleApiError(
+      response.status,
+      await readGoogleGmailError(response),
+    );
   }
 }
