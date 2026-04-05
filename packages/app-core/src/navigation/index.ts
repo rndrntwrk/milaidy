@@ -7,7 +7,6 @@ import {
   Brain,
   Clock3,
   Gamepad2,
-  Inbox,
   MessageSquare,
   Radio,
   Settings,
@@ -29,7 +28,6 @@ export const COMPANION_ENABLED =
 
 export type Tab =
   | "chat"
-  | "inbox"
   | "companion"
   | "stream"
   | "apps"
@@ -63,13 +61,8 @@ export const ALL_TAB_GROUPS: TabGroup[] = [
     label: "Chat",
     tabs: ["chat"],
     icon: MessageSquare,
-    description: "Conversations and messaging",
-  },
-  {
-    label: "Inbox",
-    tabs: ["inbox"],
-    icon: Inbox,
-    description: "Unified feed from every connector (iMessage, Telegram, etc.)",
+    description:
+      "Conversations with your agent and inbound messages from every connector",
   },
   {
     label: "Stream",
@@ -142,7 +135,6 @@ export function getTabGroups(streamEnabled = STREAM_ENABLED): TabGroup[] {
 
 const TAB_PATHS: Record<Tab, string> = {
   chat: "/chat",
-  inbox: "/inbox",
   companion: "/companion",
   stream: "/stream",
   apps: "/apps",
@@ -255,8 +247,6 @@ export function titleForTab(tab: Tab): string {
   switch (tab) {
     case "chat":
       return "Chat";
-    case "inbox":
-      return "Inbox";
     case "companion":
       return "Companion";
     case "apps":

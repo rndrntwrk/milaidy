@@ -35,7 +35,7 @@
  */
 
 import type http from "node:http";
-import type { AgentRuntime, Memory, UUID } from "@elizaos/core";
+import type { AgentRuntime, Memory, Room, UUID } from "@elizaos/core";
 import type { RouteHelpers } from "./route-helpers";
 
 /**
@@ -195,17 +195,46 @@ async function collectAgentRoomIds(runtime: AgentRuntime): Promise<UUID[]> {
 }
 
 /**
- * Fetch messages from every agent room, filter by source tag, sort
- * newest first, truncate to `limit`. Returns an empty list when the
- * runtime isn't ready or has no matching rooms — never throws.
+ * Collect every room owned by the agent (bounded by MAX_ROOMS_SCANNED)
+ * as full Room objects rather than just ids. Used by the chats
+ * aggregator which needs each room's name + world for display.
+ */
+async function collectAgentRooms(runtime: AgentRuntime): Promise<Room[]> {
+  const worlds = await runtime.getAllWorlds();
+  if (worlds.length === 0) return [];
+  const worldIds = worlds
+    .map((w) => w.id)
+    .filter((id): id is UUID => typeof id === "string");
+  if (worldIds.length === 0) return [];
+  return runtime.getRoomsByWorlds(worldIds, MAX_ROOMS_SCANNED, 0);
+}
+
+/**
+ * Fetch messages, optionally scoped to a single room. When `roomId`
+ * is set the function skips world enumeration entirely and targets
+ * that specific room — used by the unified-chat read path where the
+ * sidebar already knows which room the user clicked. When `roomId`
+ * is null it walks every agent room and merges across them, which is
+ * the cross-channel "everything" feed.
+ *
+ * Either way the source filter applies: rows whose content.source
+ * isn't in the allowed set are dropped before ordering, so callers
+ * can never accidentally surface an internal trajectory/system memory
+ * via this endpoint.
  */
 async function loadInboxMessages(
   runtime: AgentRuntime,
   limit: number,
   sourceFilter: Set<string>,
+  roomId: UUID | null,
 ): Promise<InboxMessage[]> {
-  const roomIds = await collectAgentRoomIds(runtime);
-  if (roomIds.length === 0) return [];
+  let roomIds: UUID[];
+  if (roomId) {
+    roomIds = [roomId];
+  } else {
+    roomIds = await collectAgentRoomIds(runtime);
+    if (roomIds.length === 0) return [];
+  }
 
   const memories = await runtime.getMemoriesByRoomIds({
     tableName: "messages",
@@ -238,6 +267,133 @@ async function loadInboxMessages(
   // we do the merge sort client-side.
   out.sort((a, b) => b.timestamp - a.timestamp);
   return out.slice(0, limit);
+}
+
+/**
+ * A single entry in the unified chats list. Mirrors the shape the
+ * ConversationsSidebar needs (id, title, updatedAt preview) so the
+ * frontend can render dashboard conversations and connector chats in
+ * the same list without a type dance.
+ */
+interface InboxChat {
+  /** Room id — stable across polls, used as the selection key. */
+  id: string;
+  /** Connector tag (imessage, telegram, …) for source badging. */
+  source: string;
+  /** Display title — contact name for 1:1 chats, group name otherwise. */
+  title: string;
+  /** Last message text preview (truncated) so the list row can render it. */
+  lastMessageText: string;
+  /** Epoch ms of the most recent message in this room. */
+  lastMessageAt: number;
+  /** Total messages in this room at scan time (for an optional counter). */
+  messageCount: number;
+}
+
+/** Cap on how many characters of last-message text we return per chat. */
+const INBOX_CHAT_PREVIEW_LENGTH = 140;
+
+/**
+ * Walk every agent room, collect the subset that contain connector
+ * messages, and reduce each to a single InboxChat row with the room's
+ * latest activity as the ordering key. This is the sidebar feed for
+ * the unified messages view — one row per external chat thread.
+ *
+ * We over-fetch memories across all rooms in one bulk call (same
+ * pattern loadInboxMessages uses) then group client-side. For the
+ * single-agent single-process topology Milady runs under, this is
+ * cheap enough to call on a 5-second poll without special-casing.
+ */
+async function loadInboxChats(
+  runtime: AgentRuntime,
+  sourceFilter: Set<string>,
+): Promise<InboxChat[]> {
+  const rooms = await collectAgentRooms(runtime);
+  if (rooms.length === 0) return [];
+
+  // Build an id → Room lookup so the memory reducer can fill in the
+  // chat title from the room's own name field (plugins stamp this when
+  // they create the room from ENTITY_JOINED / WORLD_JOINED).
+  const roomById = new Map<UUID, Room>();
+  for (const room of rooms) {
+    if (room.id) roomById.set(room.id, room);
+  }
+
+  const roomIds = Array.from(roomById.keys());
+  if (roomIds.length === 0) return [];
+
+  // Fetch a wide slice of recent memories in one call and group by
+  // room client-side. 2000 messages is enough to catch the latest turn
+  // in every active connector chat — the bulk query is the expensive
+  // part, so we fetch once and reduce.
+  const memories = await runtime.getMemoriesByRoomIds({
+    tableName: "messages",
+    roomIds,
+    limit: 2000,
+  });
+
+  // Reduce: per room, keep the most recent source-tagged message.
+  const accumulator = new Map<
+    string,
+    {
+      source: string;
+      lastMessageText: string;
+      lastMessageAt: number;
+      messageCount: number;
+    }
+  >();
+
+  for (const memory of memories) {
+    const source = extractSource(memory);
+    if (!source || !sourceFilter.has(source.toLowerCase())) continue;
+
+    const text = extractText(memory);
+    if (!text) continue;
+
+    const key = memory.roomId;
+    if (!key) continue;
+    const ts = memory.createdAt ?? 0;
+
+    const existing = accumulator.get(key);
+    if (!existing) {
+      accumulator.set(key, {
+        source,
+        lastMessageText: text.slice(0, INBOX_CHAT_PREVIEW_LENGTH),
+        lastMessageAt: ts,
+        messageCount: 1,
+      });
+    } else {
+      existing.messageCount += 1;
+      if (ts > existing.lastMessageAt) {
+        existing.lastMessageAt = ts;
+        existing.lastMessageText = text.slice(0, INBOX_CHAT_PREVIEW_LENGTH);
+      }
+    }
+  }
+
+  const chats: InboxChat[] = [];
+  for (const [roomIdKey, entry] of accumulator) {
+    const room = roomById.get(roomIdKey as UUID);
+    // Prefer the room's stored display name (plugins stamp this when
+    // they create the room for a connector thread). Fall back to the
+    // text-derived "source-roomId" form so the list still renders
+    // something rather than an empty row.
+    const title =
+      (typeof room?.name === "string" && room.name.length > 0
+        ? room.name
+        : null) ?? `${entry.source} chat`;
+    chats.push({
+      id: roomIdKey,
+      source: entry.source,
+      title,
+      lastMessageText: entry.lastMessageText,
+      lastMessageAt: entry.lastMessageAt,
+      messageCount: entry.messageCount,
+    });
+  }
+
+  chats.sort((a, b) => b.lastMessageAt - a.lastMessageAt);
+  return chats;
 }
 
 /**
@@ -295,14 +451,58 @@ export async function handleInboxRoute(
     const limit = parseLimit(url.searchParams.get("limit"));
     const explicitFilter = parseSourceFilter(url.searchParams.get("sources"));
     const sourceFilter = explicitFilter ?? DEFAULT_INBOX_SOURCES;
+    // Optional roomId scope. When the unified messages view has a
+    // specific connector chat selected, it passes the roomId so the
+    // aggregator can skip cross-room enumeration and return just that
+    // room's messages. Validated as non-empty; the runtime accepts
+    // UUIDs but won't error on arbitrary strings, so we keep parsing
+    // forgiving here and let runtime.getMemoriesByRoomIds return empty
+    // for bad ids.
+    const roomIdParam = url.searchParams.get("roomId")?.trim() ?? "";
+    const roomId = roomIdParam.length > 0 ? (roomIdParam as UUID) : null;
 
     try {
-      const messages = await loadInboxMessages(runtime, limit, sourceFilter);
+      const messages = await loadInboxMessages(
+        runtime,
+        limit,
+        sourceFilter,
+        roomId,
+      );
       helpers.json(res, { messages, count: messages.length });
     } catch (err) {
       helpers.error(
         res,
         `failed to load inbox: ${err instanceof Error ? err.message : String(err)}`,
+        500,
+      );
+    }
+    return true;
+  }
+
+  // ── GET /api/inbox/chats ──────────────────────────────────────────
+  // List of connector chat threads (one row per external chat room)
+  // used by the unified messages sidebar. Each row carries the source
+  // tag, a display title, last-message preview + timestamp, and a
+  // message count. Dashboard conversations aren't included here — the
+  // frontend merges this list with /api/conversations on its own.
+  if (method === "GET" && pathname === "/api/inbox/chats") {
+    const runtime = state.runtime;
+    if (!runtime) {
+      helpers.json(res, { chats: [], count: 0 });
+      return true;
+    }
+
+    const url = new URL(req.url ?? pathname, "http://localhost");
+    const explicitFilter = parseSourceFilter(url.searchParams.get("sources"));
+    const sourceFilter = explicitFilter ?? DEFAULT_INBOX_SOURCES;
+
+    try {
+      const chats = await loadInboxChats(runtime, sourceFilter);
+      helpers.json(res, { chats, count: chats.length });
+    } catch (err) {
+      helpers.error(
+        res,
+        `failed to load inbox chats: ${err instanceof Error ? err.message : String(err)}`,
         500,
       );
     }

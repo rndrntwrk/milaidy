@@ -31,7 +31,6 @@ import {
   Header,
   HeartbeatsDesktopShell,
   HeartbeatsView,
-  InboxView,
   InventoryView,
   KnowledgeView,
   SaveCommandModal,
@@ -111,12 +110,6 @@ function ViewRouter({
     switch (tab) {
       case "chat":
         return <ChatView />;
-      case "inbox":
-        return (
-          <TabContentView>
-            <InboxView />
-          </TabContentView>
-        );
       case "companion":
         return COMPANION_ENABLED ? <CompanionView /> : <ChatView />;
       case "stream":

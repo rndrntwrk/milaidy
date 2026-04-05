@@ -37,11 +37,15 @@ const SOURCE_STYLES: Record<
   string,
   { label: string; borderClass: string }
 > = {
+  milady: { label: "Milady", borderClass: "border-[#f0b90b]/70" },
   imessage: { label: "iMessage", borderClass: "border-[#34c759]/60" },
   telegram: { label: "Telegram", borderClass: "border-[#229ED9]/60" },
   discord: { label: "Discord", borderClass: "border-[#5865F2]/60" },
   whatsapp: { label: "WhatsApp", borderClass: "border-[#25D366]/60" },
   wechat: { label: "WeChat", borderClass: "border-[#07C160]/60" },
+  slack: { label: "Slack", borderClass: "border-[#4A154B]/60" },
+  signal: { label: "Signal", borderClass: "border-[#3A76F0]/60" },
+  sms: { label: "SMS", borderClass: "border-[#8E8E93]/60" },
 };
 
 /**

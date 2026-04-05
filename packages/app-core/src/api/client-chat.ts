@@ -88,9 +88,14 @@ declare module "./client-base" {
      * time-ordered newest first. Each message carries its `source`
      * tag (imessage / telegram / discord / etc.) so the UI can render
      * per-source styling without a second lookup.
+     *
+     * When `roomId` is provided the server scopes the query to that
+     * single connector room — use this when the unified messages view
+     * has a specific chat selected. When `roomId` is omitted the feed
+     * merges every room's recent messages.
      */
     getInboxMessages(
-      options?: { limit?: number; sources?: string[] },
+      options?: { limit?: number; sources?: string[]; roomId?: string },
     ): Promise<{
       messages: Array<
         ConversationMessage & { roomId: string; source: string }
@@ -103,6 +108,25 @@ declare module "./client-base" {
      * source filter chip list dynamically.
      */
     getInboxSources(): Promise<{ sources: string[] }>;
+    /**
+     * List every connector chat thread the agent participates in as
+     * one sidebar-friendly row per external chat room. Each row carries
+     * the room id (for selection), source tag, display title,
+     * last-message preview, last-message timestamp, and a total message
+     * count. Used by the unified messages sidebar to render connector
+     * chats alongside dashboard conversations.
+     */
+    getInboxChats(options?: { sources?: string[] }): Promise<{
+      chats: Array<{
+        id: string;
+        source: string;
+        title: string;
+        lastMessageText: string;
+        lastMessageAt: number;
+        messageCount: number;
+      }>;
+      count: number;
+    }>;
     truncateConversationMessages(
       id: string,
       messageId: string,
@@ -439,6 +463,9 @@ MiladyClient.prototype.getInboxMessages = async function (
   if (options?.sources && options.sources.length > 0) {
     params.set("sources", options.sources.join(","));
   }
+  if (typeof options?.roomId === "string" && options.roomId.length > 0) {
+    params.set("roomId", options.roomId);
+  }
   const query = params.toString();
   const path = query ? `/api/inbox/messages?${query}` : "/api/inbox/messages";
   return this.fetch<{
@@ -451,6 +478,29 @@ MiladyClient.prototype.getInboxMessages = async function (
 
 MiladyClient.prototype.getInboxSources = async function (this: MiladyClient) {
   return this.fetch<{ sources: string[] }>("/api/inbox/sources");
+};
+
+MiladyClient.prototype.getInboxChats = async function (
+  this: MiladyClient,
+  options,
+) {
+  const params = new URLSearchParams();
+  if (options?.sources && options.sources.length > 0) {
+    params.set("sources", options.sources.join(","));
+  }
+  const query = params.toString();
+  const path = query ? `/api/inbox/chats?${query}` : "/api/inbox/chats";
+  return this.fetch<{
+    chats: Array<{
+      id: string;
+      source: string;
+      title: string;
+      lastMessageText: string;
+      lastMessageAt: number;
+      messageCount: number;
+    }>;
+    count: number;
+  }>(path);
 };
 
 MiladyClient.prototype.truncateConversationMessages = async function (

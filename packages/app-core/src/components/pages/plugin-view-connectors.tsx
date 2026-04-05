@@ -153,11 +153,12 @@ function ConnectorPluginCard({
     ? plugin.parameters.filter((param) => param.isSet).length
     : 0;
   const totalCount = hasParams ? plugin.parameters.length : 0;
+  // A connector is considered "Ready" when every **required** param is set.
+  // Plugins that only expose optional knobs (e.g. plugin-imessage, whose
+  // parameters are all advanced overrides) should flip to Ready as soon as
+  // they're enabled, not force the user to fill in every optional field.
   const allParamsSet =
-    !hasParams ||
-    (requiredParams.length > 0
-      ? requiredSetCount === requiredParams.length
-      : setCount === totalCount);
+    !hasParams || requiredSetCount === requiredParams.length;
   const isToggleBusy = togglingPlugins.has(plugin.id);
   const toggleDisabled =
     isToggleBusy || (hasPluginToggleInFlight && !isToggleBusy);

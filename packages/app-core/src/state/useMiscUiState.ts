@@ -18,6 +18,19 @@ import type {
 } from "../api";
 import type { GamePostMessageAuthPayload } from "./internal";
 
+/**
+ * Currently-selected connector chat in the unified messages sidebar.
+ * When non-null, ChatView swaps its main panel out for a read-only
+ * view of that room's inbox messages (rendered via `/api/inbox/
+ * messages?roomId=…`). Mutually exclusive with a live dashboard
+ * conversation — the sidebar clears one when selecting the other.
+ */
+export interface ActiveInboxChat {
+  id: string;
+  source: string;
+  title: string;
+}
+
 export function useMiscUiState() {
   // ── Command palette ────────────────────────────────────────────────
   const [commandPaletteOpen, _setCommandPaletteOpen] = useState(false);
@@ -66,6 +79,10 @@ export function useMiscUiState() {
     useState<GamePostMessageAuthPayload | null>(null);
   const [gameOverlayEnabled, setGameOverlayEnabled] = useState(false);
 
+  // ── Unified messages sidebar ───────────────────────────────────────
+  const [activeInboxChat, setActiveInboxChat] =
+    useState<ActiveInboxChat | null>(null);
+
   // ── Callbacks ──────────────────────────────────────────────────────
 
   const closeCommandPalette = useCallback(() => {
@@ -107,7 +124,9 @@ export function useMiscUiState() {
       activeGamePostMessageAuth,
       activeGamePostMessagePayload,
       gameOverlayEnabled,
+      activeInboxChat,
     },
+    setActiveInboxChat,
     setCommandQuery,
     setCommandActiveIndex,
     setEmotePickerOpen,
