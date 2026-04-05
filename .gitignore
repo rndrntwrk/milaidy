@@ -133,6 +133,7 @@ data/
 # Debug PTY captures from plugin-agent-orchestrator (PARALLAX_DEBUG_CAPTURE=1)
 .parallax/
 .worktrees/
+.claude/worktrees/
 
 # Generated raw avatar/animation assets from local setup hooks (non-source)
 apps/app/public/animations/**/*.fbx
