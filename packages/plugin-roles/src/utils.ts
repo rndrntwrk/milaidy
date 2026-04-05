@@ -2,21 +2,30 @@
  * Role utility functions — hierarchy checks, permission gates, world helpers.
  */
 
-import { logger, type IAgentRuntime, type Memory, type UUID } from "@elizaos/core";
+import {
+  logger,
+  type IAgentRuntime,
+  type Memory,
+  type UUID,
+} from "@elizaos/core";
 import {
   type ConnectorAdminWhitelist,
+  ROLE_RANK,
   type RoleName,
   type RolesWorldMetadata,
-  ROLE_RANK,
 } from "./types";
 
 const CONNECTOR_ADMIN_WHITELIST_KEY = Symbol.for(
   "@miladyai/plugin-roles.connectorAdmins",
 );
+const CONNECTOR_ADMIN_CACHE_KEY = Symbol.for(
+  "@miladyai/plugin-roles.connectorAdmins.cache",
+);
 const CONNECTOR_ID_FIELDS = ["userId", "id", "username", "userName"] as const;
 
 type RuntimeWithConnectorAdmins = IAgentRuntime & {
   [CONNECTOR_ADMIN_WHITELIST_KEY]?: ConnectorAdminWhitelist;
+  [CONNECTOR_ADMIN_CACHE_KEY]?: Set<string>;
 };
 
 type ResolveEntityRoleOptions = {
@@ -58,8 +67,10 @@ export function setConnectorAdminWhitelist(
   runtime: IAgentRuntime,
   whitelist: ConnectorAdminWhitelist | Record<string, unknown> | undefined,
 ): void {
-  (runtime as RuntimeWithConnectorAdmins)[CONNECTOR_ADMIN_WHITELIST_KEY] =
+  const runtimeWithConnectorAdmins = runtime as RuntimeWithConnectorAdmins;
+  runtimeWithConnectorAdmins[CONNECTOR_ADMIN_WHITELIST_KEY] =
     normalizeConnectorAdminWhitelist(whitelist);
+  runtimeWithConnectorAdmins[CONNECTOR_ADMIN_CACHE_KEY]?.clear();
 }
 
 export function getConnectorAdminWhitelist(
@@ -68,6 +79,12 @@ export function getConnectorAdminWhitelist(
   return (
     (runtime as RuntimeWithConnectorAdmins)[CONNECTOR_ADMIN_WHITELIST_KEY] ?? {}
   );
+}
+
+function getConnectorAdminCache(runtime: IAgentRuntime): Set<string> {
+  const runtimeWithConnectorAdmins = runtime as RuntimeWithConnectorAdmins;
+  runtimeWithConnectorAdmins[CONNECTOR_ADMIN_CACHE_KEY] ??= new Set<string>();
+  return runtimeWithConnectorAdmins[CONNECTOR_ADMIN_CACHE_KEY];
 }
 
 export function matchEntityToConnectorAdminWhitelist(
@@ -143,11 +160,17 @@ export async function resolveEntityRole(
     return explicitRole;
   }
 
+  const connectorAdminCache = getConnectorAdminCache(runtime);
   const liveMatched = matchEntityToConnectorAdminWhitelist(
     options?.liveEntityMetadata ?? undefined,
     whitelist,
   );
   if (liveMatched) {
+    connectorAdminCache.add(entityId);
+    return "ADMIN";
+  }
+
+  if (connectorAdminCache.has(entityId)) {
     return "ADMIN";
   }
 
@@ -173,6 +196,7 @@ export async function resolveEntityRole(
     return explicitRole;
   }
 
+  connectorAdminCache.add(entityId);
   return "ADMIN";
 }
 
@@ -267,6 +291,8 @@ export async function setEntityRole(
   if (!metadata.roles) metadata.roles = {};
   metadata.roles[targetEntityId] = newRole;
   (world as { metadata: RolesWorldMetadata }).metadata = metadata;
-  await runtime.updateWorld(world as Parameters<IAgentRuntime["updateWorld"]>[0]);
+  await runtime.updateWorld(
+    world as Parameters<IAgentRuntime["updateWorld"]>[0],
+  );
   return { ...metadata.roles };
 }

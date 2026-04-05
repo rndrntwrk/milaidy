@@ -14,13 +14,9 @@
  *   }
  */
 
-import {
-  logger,
-  type IAgentRuntime,
-  type Plugin,
-} from "@elizaos/core";
-import { rolesProvider } from "./provider";
+import { type IAgentRuntime, logger, type Plugin } from "@elizaos/core";
 import { updateRoleAction } from "./action";
+import { rolesProvider } from "./provider";
 import type { RolesPluginConfig, RolesWorldMetadata } from "./types";
 import {
   matchEntityToConnectorAdminWhitelist,
@@ -28,16 +24,8 @@ import {
   setConnectorAdminWhitelist,
 } from "./utils";
 
-export { rolesProvider } from "./provider";
 export { updateRoleAction } from "./action";
-export {
-  canModifyRole,
-  checkSenderRole,
-  getEntityRole,
-  normalizeRole,
-  resolveWorldForMessage,
-  setEntityRole,
-} from "./utils";
+export { rolesProvider } from "./provider";
 export type {
   ConnectorAdminWhitelist,
   RoleCheckResult,
@@ -46,8 +34,23 @@ export type {
   RolesWorldMetadata,
 } from "./types";
 export { ROLE_RANK } from "./types";
+export {
+  canModifyRole,
+  checkSenderRole,
+  getEntityRole,
+  normalizeRole,
+  resolveWorldForMessage,
+  setEntityRole,
+} from "./utils";
 
+const BOOTSTRAP_RETRY_TIMERS_KEY = Symbol.for(
+  "@miladyai/plugin-roles.bootstrapRetries",
+);
 const BOOTSTRAP_RETRY_DELAYS_MS = [1_500, 5_000, 15_000] as const;
+
+type RuntimeWithBootstrapRetries = IAgentRuntime & {
+  [BOOTSTRAP_RETRY_TIMERS_KEY]?: Map<string, ReturnType<typeof setTimeout>>;
+};
 
 function formatError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -66,14 +69,31 @@ async function updateWorldMetadata(
   if (!changed) return;
 
   (world as { metadata: RolesWorldMetadata }).metadata = metadata;
-  await runtime.updateWorld(world as Parameters<IAgentRuntime["updateWorld"]>[0]);
+  await runtime.updateWorld(
+    world as Parameters<IAgentRuntime["updateWorld"]>[0],
+  );
+}
+
+function getBootstrapRetryTimers(
+  runtime: IAgentRuntime,
+): Map<string, ReturnType<typeof setTimeout>> {
+  const runtimeWithBootstrapRetries = runtime as RuntimeWithBootstrapRetries;
+  runtimeWithBootstrapRetries[BOOTSTRAP_RETRY_TIMERS_KEY] ??= new Map();
+  return runtimeWithBootstrapRetries[BOOTSTRAP_RETRY_TIMERS_KEY];
 }
 
 function scheduleBootstrapRetry(
+  runtime: IAgentRuntime,
   label: string,
   task: () => Promise<boolean>,
   attempt = 0,
 ): void {
+  const timers = getBootstrapRetryTimers(runtime);
+  const existingTimer = timers.get(label);
+  if (existingTimer) {
+    clearTimeout(existingTimer);
+  }
+
   const delayMs = BOOTSTRAP_RETRY_DELAYS_MS[attempt];
   if (delayMs === undefined) {
     logger.warn(
@@ -82,7 +102,9 @@ function scheduleBootstrapRetry(
     return;
   }
 
-  setTimeout(() => {
+  const timer = setTimeout(() => {
+    timers.delete(label);
+
     void task()
       .then((ok) => {
         if (ok) {
@@ -95,15 +117,17 @@ function scheduleBootstrapRetry(
         logger.info(
           `[roles] ${label} retry ${attempt + 1}/${BOOTSTRAP_RETRY_DELAYS_MS.length} deferred because runtime state is still unavailable`,
         );
-        scheduleBootstrapRetry(label, task, attempt + 1);
+        scheduleBootstrapRetry(runtime, label, task, attempt + 1);
       })
       .catch((error) => {
         logger.warn(
           `[roles] ${label} retry ${attempt + 1}/${BOOTSTRAP_RETRY_DELAYS_MS.length} failed: ${formatError(error)}`,
         );
-        scheduleBootstrapRetry(label, task, attempt + 1);
+        scheduleBootstrapRetry(runtime, label, task, attempt + 1);
       });
   }, delayMs);
+
+  timers.set(label, timer);
 }
 
 /**
@@ -218,7 +242,7 @@ const rolesPlugin: Plugin = {
     // Step 1: Ensure world owners have OWNER role
     const ownerBootstrapOk = await ensureOwnerRole(runtime);
     if (!ownerBootstrapOk) {
-      scheduleBootstrapRetry("Owner role bootstrap", () =>
+      scheduleBootstrapRetry(runtime, "Owner role bootstrap", () =>
         ensureOwnerRole(runtime),
       );
     }
@@ -231,7 +255,7 @@ const rolesPlugin: Plugin = {
         connectorAdmins,
       );
       if (!adminBootstrapOk) {
-        scheduleBootstrapRetry("Connector admin bootstrap", () =>
+        scheduleBootstrapRetry(runtime, "Connector admin bootstrap", () =>
           applyConnectorAdminWhitelists(runtime, connectorAdmins),
         );
       }
