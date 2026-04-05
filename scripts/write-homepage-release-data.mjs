@@ -99,9 +99,7 @@ function pickRelease(releases) {
 }
 
 function pickStableRelease(releases) {
-  const stable = sortReleasesByRecency(releases).filter(
-    (r) => !r.prerelease,
-  );
+  const stable = sortReleasesByRecency(releases).filter((r) => !r.prerelease);
   return (
     stable.find((r) => Array.isArray(r.assets) && r.assets.length > 0) ??
     stable[0] ??
@@ -110,9 +108,7 @@ function pickStableRelease(releases) {
 }
 
 function pickCanaryRelease(releases) {
-  const canary = sortReleasesByRecency(releases).filter(
-    (r) => r.prerelease,
-  );
+  const canary = sortReleasesByRecency(releases).filter((r) => r.prerelease);
   return (
     canary.find((r) => Array.isArray(r.assets) && r.assets.length > 0) ??
     canary[0] ??
@@ -265,7 +261,9 @@ function buildPayload(release, allReleases = [], canaryRelease = null) {
     },
     release: buildRelease(release, allReleases),
     stableRelease: buildRelease(release, allReleases),
-    canaryRelease: canaryRelease ? buildRelease(canaryRelease, allReleases) : null,
+    canaryRelease: canaryRelease
+      ? buildRelease(canaryRelease, allReleases)
+      : null,
   };
 }
 

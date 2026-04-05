@@ -2,6 +2,10 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import type {
   AgentRuntime,
   Plugin,
+  PluginEventRegistration,
+  PluginModelRegistration,
+  PluginOwnership,
+  PluginServiceRegistration,
   Service,
   ServiceTypeName,
   UUID,
@@ -12,25 +16,10 @@ type RuntimeProvider = NonNullable<Plugin["providers"]>[number];
 type RuntimeEvaluator = NonNullable<Plugin["evaluators"]>[number];
 type RuntimeRoute = NonNullable<Plugin["routes"]>[number];
 type RuntimeServiceClass = NonNullable<Plugin["services"]>[number];
-type RuntimeEventHandler = (
-  params: Record<string, unknown>,
-) => Promise<void> | void;
-type RuntimeEventRegistration = {
-  eventName: string;
-  handler: RuntimeEventHandler;
-};
-type RuntimeModelRegistration = {
-  modelType: string;
-  handler: (
-    runtime: unknown,
-    params: Record<string, unknown>,
-  ) => Promise<unknown>;
-  provider: string;
-};
-type RuntimeServiceRegistration = {
-  serviceType: string;
-  serviceClass: RuntimeServiceClass;
-};
+type RuntimeEventHandler = PluginEventRegistration["handler"];
+type RuntimeEventRegistration = PluginEventRegistration;
+type RuntimeModelRegistration = PluginModelRegistration;
+type RuntimeServiceRegistration = PluginServiceRegistration;
 
 type RuntimeSendHandler = (
   runtime: unknown,
@@ -64,10 +53,7 @@ type RuntimeServicePromiseHandler = {
 };
 
 type RuntimeModelHandlerRecord = {
-  handler: (
-    runtime: unknown,
-    params: Record<string, unknown>,
-  ) => Promise<unknown>;
+  handler: RuntimeModelRegistration["handler"];
   provider: string;
   priority?: number;
   registrationOrder?: number;
@@ -82,21 +68,7 @@ type RuntimePluginServiceStartCapture = {
   pluginName: string;
 };
 
-export type RuntimePluginOwnership = {
-  pluginName: string;
-  plugin: Plugin;
-  registeredPlugin: Plugin | null;
-  actions: RuntimeAction[];
-  providers: RuntimeProvider[];
-  evaluators: RuntimeEvaluator[];
-  routes: RuntimeRoute[];
-  events: RuntimeEventRegistration[];
-  models: RuntimeModelRegistration[];
-  services: RuntimeServiceRegistration[];
-  sendHandlerSources: string[];
-  hasAdapter: boolean;
-  registeredAt: number;
-};
+export type RuntimePluginOwnership = PluginOwnership;
 
 type RuntimeWithPluginLifecycle = AgentRuntime & {
   __elizaPluginLifecycleInstalled?: boolean;

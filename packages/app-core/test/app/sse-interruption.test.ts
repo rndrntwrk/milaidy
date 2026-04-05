@@ -41,6 +41,21 @@ function buildErroringSseResponse(chunks: string[]): Response {
   });
 }
 
+function buildJsonResponse(payload: unknown, status = 200): Response {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+function queueCompatConversation(fetchMock: ReturnType<typeof vi.fn>): void {
+  fetchMock.mockResolvedValueOnce(
+    buildJsonResponse({
+      conversation: { id: "conv-compat", title: "Quick Chat" },
+    }),
+  );
+}
+
 describe("SSE stream interruption detection", () => {
   const originalFetch = globalThis.fetch;
   let fetchMock: ReturnType<typeof vi.fn>;
@@ -50,6 +65,9 @@ describe("SSE stream interruption detection", () => {
     fetchMock = vi.fn();
     globalThis.fetch = fetchMock as typeof globalThis.fetch;
     client = new MiladyClient("http://localhost:2138", "token");
+    if (typeof window !== "undefined") {
+      window.sessionStorage.clear();
+    }
   });
 
   afterEach(() => {
@@ -57,7 +75,8 @@ describe("SSE stream interruption detection", () => {
   });
 
   test('completed: true when "done" event received', async () => {
-    fetchMock.mockResolvedValue(
+    queueCompatConversation(fetchMock);
+    fetchMock.mockResolvedValueOnce(
       buildSseResponse([
         'data: {"type":"token","text":"Hello "}\n\n',
         'data: {"type":"token","text":"world"}\n\n',
@@ -75,7 +94,8 @@ describe("SSE stream interruption detection", () => {
   });
 
   test("completed: false when reader throws mid-stream", async () => {
-    fetchMock.mockResolvedValue(
+    queueCompatConversation(fetchMock);
+    fetchMock.mockResolvedValueOnce(
       buildErroringSseResponse([
         'data: {"type":"token","text":"Partial "}\n\n',
         'data: {"type":"token","text":"response"}\n\n',
@@ -91,7 +111,8 @@ describe("SSE stream interruption detection", () => {
   });
 
   test('completed: false when stream ends without "done" event', async () => {
-    fetchMock.mockResolvedValue(
+    queueCompatConversation(fetchMock);
+    fetchMock.mockResolvedValueOnce(
       buildSseResponse([
         'data: {"type":"token","text":"Truncated "}\n\n',
         'data: {"type":"token","text":"text"}\n\n',
@@ -108,7 +129,8 @@ describe("SSE stream interruption detection", () => {
   });
 
   test("partial text preserved in return value when stream errors", async () => {
-    fetchMock.mockResolvedValue(
+    queueCompatConversation(fetchMock);
+    fetchMock.mockResolvedValueOnce(
       buildErroringSseResponse([
         'data: {"type":"token","text":"Some "}\n\n',
         'data: {"type":"token","text":"partial "}\n\n',

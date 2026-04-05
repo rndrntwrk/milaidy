@@ -15,7 +15,11 @@
  */
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { req } from "../../../test/helpers/http";
+import {
+  createConversation,
+  postConversationMessage,
+  req,
+} from "../../../test/helpers/http";
 
 // Load .env from the eliza workspace root
 const envPath = path.resolve(import.meta.dirname, "..", "..", "..", ".env");
@@ -207,17 +211,26 @@ describe.skipIf(!canRun)(
     // is enforced (no 401) and accept 200 or 503 depending on runtime.
 
     it("step 8: chat with auth (auth enforced, LLM optional)", async () => {
+      const { conversationId } = await createConversation(
+        port,
+        { title: "Auth chat" },
+        authHeaders,
+      );
+
       // Without auth → 401
-      const { status: noAuth } = await req(port, "POST", "/api/chat", {
-        text: "hello",
-      });
+      const { status: noAuth } = await postConversationMessage(
+        port,
+        conversationId,
+        {
+          text: "hello",
+        },
+      );
       expect(noAuth).toBe(401);
 
       // With auth → 200 (runtime loaded) or 503 (no runtime)
-      const { status, data } = await req(
+      const { status, data } = await postConversationMessage(
         port,
-        "POST",
-        "/api/chat",
+        conversationId,
         { text: "Say 'auth-ok' and nothing else." },
         authHeaders,
       );
@@ -338,17 +351,26 @@ describe.skipIf(!canRun)("Live: Token header variants with LLM", () => {
       Authorization: `Bearer ${API_TOKEN}`,
     });
 
+    const { conversationId } = await createConversation(
+      port,
+      { title: "Header variants" },
+      {
+        Authorization: `Bearer ${API_TOKEN}`,
+      },
+    );
+
     // Without auth → 401
-    const { status: noAuth } = await req(port, "POST", "/api/chat", {
-      text: "hello",
-    });
+    const { status: noAuth } = await postConversationMessage(
+      port,
+      conversationId,
+      { text: "hello" },
+    );
     expect(noAuth).toBe(401);
 
     // With auth → 200 or 503 (no runtime in lightweight server mode)
-    const { status, data } = await req(
+    const { status, data } = await postConversationMessage(
       port,
-      "POST",
-      "/api/chat",
+      conversationId,
       { text: "Say hello" },
       { Authorization: `Bearer ${API_TOKEN}` },
     );

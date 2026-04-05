@@ -4,6 +4,7 @@
  * Fetches apps from the registry API and shows them as cards.
  */
 
+import { PagePanel } from "@miladyai/ui";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { client, type RegistryAppInfo } from "../../api";
 import { useApp } from "../../state";
@@ -12,9 +13,10 @@ import { AppDetailPane } from "../apps/AppDetailPane";
 import { AppsCatalogGrid } from "../apps/AppsCatalogGrid";
 import {
   DEFAULT_VIEWER_SANDBOX,
+  filterAppsForCatalog,
+  getDefaultAppsCatalogSelection,
   shouldShowAppInAppsView,
 } from "../apps/helpers";
-import { PagePanel } from "@miladyai/ui";
 
 export { shouldShowAppInAppsView } from "../apps/helpers";
 
@@ -74,10 +76,12 @@ export function AppsView() {
       setApps(list);
       setActiveAppNames(new Set(installed.map((app) => app.name)));
       setSelectedAppName((current) => {
-        if (!current) return list[0]?.name ?? null;
-        return list.some((app) => app.name === current)
+        if (!current) return getDefaultAppsCatalogSelection(list);
+        return list.some(
+          (app) => app.name === current && shouldShowAppInAppsView(app),
+        )
           ? current
-          : (list[0]?.name ?? null);
+          : getDefaultAppsCatalogSelection(list);
       });
     } catch (err) {
       setError(
@@ -89,7 +93,7 @@ export function AppsView() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   const clearActiveGameState = useCallback(() => {
     setState("activeGameApp", "");
@@ -111,8 +115,9 @@ export function AppsView() {
       try {
         const result = await client.launchApp(app.name);
         const primaryLaunchDiagnostic =
-          result.diagnostics?.find((diagnostic) => diagnostic.severity === "error") ??
-          result.diagnostics?.[0];
+          result.diagnostics?.find(
+            (diagnostic) => diagnostic.severity === "error",
+          ) ?? result.diagnostics?.[0];
         setActiveAppNames((previous) => {
           const next = new Set(previous);
           next.add(app.name);
@@ -205,7 +210,7 @@ export function AppsView() {
         setBusyApp(null);
       }
     },
-    [clearActiveGameState, setActionNotice, setState],
+    [clearActiveGameState, setActionNotice, setState, t],
   );
 
   const handleOpenCurrentGame = useCallback(() => {
@@ -225,23 +230,10 @@ export function AppsView() {
   }, [currentGameViewerUrl, hasCurrentGame, setActionNotice, t]);
 
   const visibleApps = useMemo(() => {
-    const normalizedSearch = searchQuery.trim().toLowerCase();
-    return apps.filter((app) => {
-      if (!shouldShowAppInAppsView(app)) {
-        return false;
-      }
-      if (
-        normalizedSearch &&
-        !app.name.toLowerCase().includes(normalizedSearch) &&
-        !(app.displayName ?? "").toLowerCase().includes(normalizedSearch) &&
-        !(app.description ?? "").toLowerCase().includes(normalizedSearch)
-      ) {
-        return false;
-      }
-      if (showActiveOnly && !activeAppNames.has(app.name)) {
-        return false;
-      }
-      return true;
+    return filterAppsForCatalog(apps, {
+      activeAppNames,
+      searchQuery,
+      showActiveOnly,
     });
   }, [activeAppNames, apps, searchQuery, showActiveOnly]);
 
@@ -259,9 +251,9 @@ export function AppsView() {
                 Watch your agent live and steer it in real time.
               </h1>
               <p className="mt-3 max-w-2xl text-[13px] leading-6 text-muted-strong">
-                Launch an app, lock onto the running agent immediately, and
-                keep commands, pause, and telemetry docked beside the world
-                instead of buried in another tool.
+                Launch an app, lock onto the running agent immediately, and keep
+                commands, pause, and telemetry docked beside the world instead
+                of buried in another tool.
               </p>
             </div>
 

@@ -23,7 +23,8 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "bun run dev --host 127.0.0.1 --port 2138",
+    command:
+      "bun run build:web && bun run preview -- --host 127.0.0.1 --port 2138",
     cwd: ".",
     port: 2138,
     reuseExistingServer: !process.env.CI,

@@ -1,6 +1,14 @@
+import crypto from "node:crypto";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
+import { deriveSolanaAddress } from "@miladyai/agent/api/wallet";
 import { expect, type Page, type Route, test } from "@playwright/test";
+import { ethers } from "ethers";
+import {
+  BROWSER_WALLET_READY_TYPE,
+  BROWSER_WALLET_REQUEST_TYPE,
+  BROWSER_WALLET_RESPONSE_TYPE,
+} from "../../../../packages/app-core/src/browser-workspace-wallet";
 import { installDefaultAppMocks, openAppPath, seedAppStorage } from "./helpers";
 
 type BrowserWorkspaceTab = {
@@ -16,19 +24,33 @@ type BrowserWorkspaceTab = {
 
 type BrowserWorkspaceState = {
   nextId: number;
+  solanaWalletMessages: string[];
+  walletMessages: string[];
   tabs: BrowserWorkspaceTab[];
-  transferRequests: Array<Record<string, unknown>>;
+  walletRequests: Array<Record<string, unknown>>;
 };
 
 type BrowserWorkspaceFixture = {
   counterUrl: string;
   tasksUrl: string;
+  walletBridgeUrl: string;
   close: () => Promise<void>;
 };
 
 const DEFAULT_PARTITION = "persist:milady-browser";
-const LOCAL_WALLET_ADDRESS = "0x1234567890abcdef1234567890abcdef12345678";
-const LOCAL_TRANSFER_HASH = "0xplaywrighttransfer";
+const LOCAL_EVM_PRIVATE_KEY =
+  "0x59c6995e998f97a5a0044966f094538f2d7d7d5d2a4f9cce6f6d8d3c5b5a8e7f";
+const LOCAL_WALLET_ADDRESS = new ethers.Wallet(LOCAL_EVM_PRIVATE_KEY).address;
+const LOCAL_SOLANA_SEED = Buffer.from(
+  Array.from({ length: 32 }, (_, index) => index + 1),
+);
+const LOCAL_SOLANA_PRIVATE_KEY = JSON.stringify(Array.from(LOCAL_SOLANA_SEED));
+const LOCAL_SOLANA_ADDRESS = deriveSolanaAddress(LOCAL_SOLANA_PRIVATE_KEY);
+const SOLANA_PKCS8_DER_PREFIX = Buffer.from(
+  "302e020100300506032b657004220420",
+  "hex",
+);
+const BROWSER_WALLET_TX_HASH = "0xbrowserwallettx";
 
 function now(): string {
   return new Date().toISOString();
@@ -72,6 +94,21 @@ async function fulfillJson(
 function readRequestJson<T>(route: Route): T {
   const raw = route.request().postData() ?? "{}";
   return JSON.parse(raw) as T;
+}
+
+async function signEvmMessage(message: string): Promise<string> {
+  return new ethers.Wallet(LOCAL_EVM_PRIVATE_KEY).signMessage(message);
+}
+
+function signSolanaMessageBase64(message: string): string {
+  const privateKey = crypto.createPrivateKey({
+    key: Buffer.concat([SOLANA_PKCS8_DER_PREFIX, LOCAL_SOLANA_SEED]),
+    format: "der",
+    type: "pkcs8",
+  });
+  return crypto
+    .sign(null, Buffer.from(message, "utf8"), privateKey)
+    .toString("base64");
 }
 
 async function installBrowserWorkspaceMocks(
@@ -217,7 +254,7 @@ async function installBrowserWorkspaceMocks(
 async function installWalletMocks(
   page: Page,
   state: BrowserWorkspaceState,
-  options: { localReady: boolean },
+  options: { localReady: boolean; stewardConnected: boolean },
 ): Promise<void> {
   const walletConfig = options.localReady
     ? {
@@ -243,13 +280,14 @@ async function installWalletMocks(
           "Avalanche",
         ],
         evmAddress: LOCAL_WALLET_ADDRESS,
-        solanaAddress: null,
+        solanaAddress: LOCAL_SOLANA_ADDRESS,
         walletSource: "local",
         automationMode: "full",
         pluginEvmLoaded: true,
         pluginEvmRequired: true,
         executionReady: true,
         executionBlockedReason: null,
+        solanaSigningAvailable: true,
       }
     : {
         selectedRpcProviders: {
@@ -265,20 +303,26 @@ async function installWalletMocks(
         heliusKeySet: false,
         birdeyeKeySet: false,
         evmChains: [],
-        evmAddress: null,
-        solanaAddress: null,
-        walletSource: "none",
+        evmAddress: options.stewardConnected ? LOCAL_WALLET_ADDRESS : null,
+        solanaAddress: options.localReady ? LOCAL_SOLANA_ADDRESS : null,
+        walletSource: options.stewardConnected ? "steward" : "none",
         automationMode: "full",
-        pluginEvmLoaded: false,
-        pluginEvmRequired: false,
-        executionReady: false,
-        executionBlockedReason: "No EVM wallet is active yet.",
+        pluginEvmLoaded: options.stewardConnected,
+        pluginEvmRequired: options.stewardConnected,
+        executionReady: options.localReady,
+        executionBlockedReason: options.localReady
+          ? null
+          : "No EVM wallet is active yet.",
+        solanaSigningAvailable: options.localReady,
       };
 
   await page.route("**/api/wallet/addresses", async (route) => {
     await fulfillJson(route, {
-      evmAddress: options.localReady ? LOCAL_WALLET_ADDRESS : null,
-      solanaAddress: null,
+      evmAddress:
+        options.localReady || options.stewardConnected
+          ? LOCAL_WALLET_ADDRESS
+          : null,
+      solanaAddress: options.localReady ? LOCAL_SOLANA_ADDRESS : null,
     });
   });
 
@@ -292,11 +336,12 @@ async function installWalletMocks(
 
   await page.route("**/api/wallet/steward-status", async (route) => {
     await fulfillJson(route, {
-      configured: false,
-      available: false,
-      connected: false,
+      configured: options.stewardConnected,
+      available: options.stewardConnected,
+      connected: options.stewardConnected,
+      agentId: options.stewardConnected ? "agent-browser" : undefined,
       walletAddresses: {
-        evm: options.localReady ? LOCAL_WALLET_ADDRESS : null,
+        evm: options.stewardConnected ? LOCAL_WALLET_ADDRESS : null,
         solana: null,
       },
       error: null,
@@ -307,48 +352,264 @@ async function installWalletMocks(
     await fulfillJson(route, []);
   });
 
-  await page.route("**/api/wallet/transfer/execute", async (route) => {
+  await page.route("**/api/wallet/browser-transaction", async (route) => {
     const request = route.request();
     if (request.method() !== "POST") {
       await route.fallback();
       return;
     }
     const payload = readRequestJson<Record<string, unknown>>(route);
-    state.transferRequests.push(payload);
+    state.walletRequests.push(payload);
     await fulfillJson(route, {
-      ok: true,
-      mode: "local-key",
-      executed: true,
-      requiresUserSignature: false,
-      toAddress: payload.toAddress,
-      amount: payload.amount,
-      assetSymbol: payload.assetSymbol,
-      unsignedTx: {
-        chainId: 56,
-        from: LOCAL_WALLET_ADDRESS,
-        to: payload.toAddress,
-        data: "0x",
-        valueWei: "0",
-        explorerUrl: "https://bscscan.com",
-        assetSymbol: payload.assetSymbol,
-        amount: payload.amount,
-      },
-      execution: {
-        hash: LOCAL_TRANSFER_HASH,
-        nonce: 12,
-        gasLimit: "21000",
-        valueWei: "0",
-        explorerUrl: `https://bscscan.com/tx/${LOCAL_TRANSFER_HASH}`,
-        blockNumber: null,
-        status: "pending",
-      },
+      approved: true,
+      mode: options.stewardConnected ? "steward" : "local-key",
+      pending: false,
+      txHash: BROWSER_WALLET_TX_HASH,
     });
   });
+
+  await page.route("**/api/wallet/browser-sign-message", async (route) => {
+    const request = route.request();
+    if (request.method() !== "POST") {
+      await route.fallback();
+      return;
+    }
+    const payload = readRequestJson<{ message?: string }>(route);
+    state.walletMessages.push(payload.message ?? "");
+    await fulfillJson(route, {
+      mode: "local-key",
+      signature: await signEvmMessage(payload.message ?? ""),
+    });
+  });
+
+  await page.route(
+    "**/api/wallet/browser-solana-sign-message",
+    async (route) => {
+      const request = route.request();
+      if (request.method() !== "POST") {
+        await route.fallback();
+        return;
+      }
+      const payload = readRequestJson<{
+        message?: string;
+        messageBase64?: string;
+      }>(route);
+      const message = payload.message
+        ? payload.message
+        : payload.messageBase64
+          ? Buffer.from(payload.messageBase64, "base64").toString("utf8")
+          : "";
+      state.solanaWalletMessages.push(message);
+      await fulfillJson(route, {
+        address: LOCAL_SOLANA_ADDRESS,
+        mode: "local-key",
+        signatureBase64: signSolanaMessageBase64(message),
+      });
+    },
+  );
+}
+
+function browserWalletFixtureHtml(): string {
+  return `<!doctype html>
+    <html lang="en">
+      <head><meta charset="utf-8" /><title>Wallet Sign-In Fixture</title></head>
+      <body>
+        <h1>Wallet Sign-In Fixture</h1>
+        <p id="wallet-ready">waiting</p>
+        <p id="evm-signin-result">idle</p>
+        <p id="evm-sign-message-result">idle</p>
+        <p id="solana-signin-result">idle</p>
+        <p id="solana-sign-message-result">idle</p>
+        <button id="evm-sign-in" type="button">EVM sign in</button>
+        <button id="evm-sign-message" type="button">EVM sign message</button>
+        <button id="solana-sign-in" type="button">Solana sign in</button>
+        <button id="solana-sign-message" type="button">Solana sign message</button>
+        <script>
+          const pending = new Map();
+          let sequence = 0;
+          const encoder = new TextEncoder();
+
+          function parentOrigin() {
+            try {
+              return new URL(document.referrer).origin;
+            } catch {
+              return "*";
+            }
+          }
+
+          function sendRequest(method, params) {
+            return new Promise((resolve, reject) => {
+              const requestId = "wallet-" + (++sequence);
+              pending.set(requestId, { resolve, reject });
+              window.parent.postMessage(
+                {
+                  type: "${BROWSER_WALLET_REQUEST_TYPE}",
+                  requestId,
+                  method,
+                  params
+                },
+                parentOrigin()
+              );
+            });
+          }
+
+          function bytesToBase64(bytes) {
+            let value = "";
+            for (const byte of bytes) {
+              value += String.fromCharCode(byte);
+            }
+            return btoa(value);
+          }
+
+          function base64ToBytes(value) {
+            const binary = atob(value);
+            return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+          }
+
+          function publicKey(address) {
+            return {
+              toBase58() {
+                return address;
+              },
+              toString() {
+                return address;
+              }
+            };
+          }
+
+          window.ethereum = {
+            async request({ method, params }) {
+              return sendRequest(method, params);
+            }
+          };
+
+          window.solana = {
+            isMilady: true,
+            isConnected: false,
+            publicKey: null,
+            async connect() {
+              const result = await sendRequest("solana_connect");
+              this.isConnected = true;
+              this.publicKey = publicKey(result.address);
+              return { publicKey: this.publicKey };
+            },
+            async signMessage(message) {
+              const payload =
+                message instanceof Uint8Array ? message : encoder.encode(String(message));
+              const result = await sendRequest("solana_signMessage", {
+                messageBase64: bytesToBase64(payload)
+              });
+              if (!this.publicKey) {
+                this.publicKey = publicKey(result.address);
+              }
+              this.isConnected = true;
+              return {
+                publicKey: this.publicKey,
+                signature: base64ToBytes(result.signatureBase64)
+              };
+            }
+          };
+
+          window.addEventListener("message", (event) => {
+            if (event.data?.type === "${BROWSER_WALLET_READY_TYPE}") {
+              const state = event.data.state;
+              const networks = [];
+              if (state?.evmConnected) networks.push("evm");
+              if (state?.solanaConnected) networks.push("solana");
+              document.getElementById("wallet-ready").textContent =
+                networks.length > 0 ? "ready:" + networks.join(",") : "unavailable";
+              return;
+            }
+
+            if (event.data?.type !== "${BROWSER_WALLET_RESPONSE_TYPE}") {
+              return;
+            }
+
+            const entry = pending.get(event.data.requestId);
+            if (!entry) {
+              return;
+            }
+
+            pending.delete(event.data.requestId);
+            if (event.data.ok) {
+              entry.resolve(event.data.result);
+              return;
+            }
+
+            entry.reject(new Error(event.data.error || "Browser wallet request failed."));
+          });
+
+          document.getElementById("evm-sign-in").addEventListener("click", async () => {
+            try {
+              const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+              const signature = await window.ethereum.request({
+                method: "personal_sign",
+                params: ["Sign in to the Milady browser wallet fixture", accounts[0]]
+              });
+              document.getElementById("evm-signin-result").textContent =
+                accounts[0] + ":" + signature;
+            } catch (error) {
+              document.getElementById("evm-signin-result").textContent = "error:" + error.message;
+            }
+          });
+
+          document.getElementById("evm-sign-message").addEventListener("click", async () => {
+            try {
+              const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+              const signature = await window.ethereum.request({
+                method: "personal_sign",
+                params: ["Browser says hi", accounts[0]]
+              });
+              document.getElementById("evm-sign-message-result").textContent = signature;
+            } catch (error) {
+              document.getElementById("evm-sign-message-result").textContent = "error:" + error.message;
+            }
+          });
+
+          document.getElementById("solana-sign-in").addEventListener("click", async () => {
+            try {
+              const { publicKey } = await window.solana.connect();
+              const signed = await window.solana.signMessage(
+                encoder.encode("Sign in to the Milady browser wallet fixture")
+              );
+              document.getElementById("solana-signin-result").textContent =
+                publicKey.toBase58() + ":" + bytesToBase64(signed.signature);
+            } catch (error) {
+              document.getElementById("solana-signin-result").textContent = "error:" + error.message;
+            }
+          });
+
+          document.getElementById("solana-sign-message").addEventListener("click", async () => {
+            try {
+              const signed = await window.solana.signMessage(
+                encoder.encode("Solana says hi")
+              );
+              document.getElementById("solana-sign-message-result").textContent =
+                bytesToBase64(signed.signature);
+            } catch (error) {
+              document.getElementById("solana-sign-message-result").textContent = "error:" + error.message;
+            }
+          });
+
+          window.addEventListener("load", () => {
+            window.setTimeout(() => {
+              document.getElementById("evm-sign-in").click();
+            }, 50);
+          });
+        </script>
+      </body>
+    </html>`;
 }
 
 async function startBrowserWorkspaceFixture(): Promise<BrowserWorkspaceFixture> {
   const server = http.createServer((req, res) => {
     const url = new URL(req.url ?? "/", "http://127.0.0.1");
+    if (url.pathname === "/wallet-bridge") {
+      res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      res.end(browserWalletFixtureHtml());
+      return;
+    }
+
     if (url.pathname === "/tasks") {
       res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
       res.end(`<!doctype html>
@@ -400,6 +661,7 @@ async function startBrowserWorkspaceFixture(): Promise<BrowserWorkspaceFixture> 
   return {
     counterUrl: `${primaryBase}/counter`,
     tasksUrl: `${secondaryBase}/tasks`,
+    walletBridgeUrl: `${secondaryBase}/wallet-bridge`,
     close: () =>
       new Promise<void>((resolve, reject) => {
         server.close((error) => {
@@ -424,13 +686,18 @@ test("browser workspace keeps live website tabs mounted while switching between 
   const fixture = await startBrowserWorkspaceFixture();
   const state: BrowserWorkspaceState = {
     nextId: 1,
+    solanaWalletMessages: [],
+    walletMessages: [],
     tabs: [],
-    transferRequests: [],
+    walletRequests: [],
   };
 
   try {
     await installBrowserWorkspaceMocks(page, state);
-    await installWalletMocks(page, state, { localReady: false });
+    await installWalletMocks(page, state, {
+      localReady: false,
+      stewardConnected: false,
+    });
 
     await openAppPath(page, "/browser");
     await expect(page.getByText("No browser tabs yet")).toBeVisible();
@@ -465,39 +732,76 @@ test("browser workspace keeps live website tabs mounted while switching between 
   }
 });
 
-test("browser workspace can submit local wallet transfers when Steward is unavailable", async ({
+test("browser workspace exposes a wallet bridge to embedded pages without rendering a wallet sidebar", async ({
   page,
 }) => {
+  const fixture = await startBrowserWorkspaceFixture();
   const state: BrowserWorkspaceState = {
     nextId: 1,
+    solanaWalletMessages: [],
+    walletMessages: [],
     tabs: [],
-    transferRequests: [],
+    walletRequests: [],
   };
 
-  await installBrowserWorkspaceMocks(page, state);
-  await installWalletMocks(page, state, { localReady: true });
+  try {
+    await installBrowserWorkspaceMocks(page, state);
+    await installWalletMocks(page, state, {
+      localReady: true,
+      stewardConnected: false,
+    });
 
-  await openAppPath(page, "/browser");
+    await openAppPath(page, "/browser");
+    await expect(page.getByText("Agent wallet")).toHaveCount(0);
 
-  await expect(page.getByText("Local wallet ready")).toBeVisible();
-  await page
-    .locator("#browser-workspace-wallet-to")
-    .fill("0xabc0000000000000000000000000000000000000");
-  await page.locator("#browser-workspace-wallet-amount").fill("0.25");
-  await page.locator("#browser-workspace-wallet-asset").fill("BNB");
-  await page.getByTestId("browser-workspace-sign-submit").click();
+    await page.getByPlaceholder("Enter a URL").fill(fixture.walletBridgeUrl);
+    await page.getByRole("button", { name: "Open", exact: true }).click();
 
-  await expect(
-    page
-      .getByTestId("browser-workspace-wallet-panel")
-      .getByText(`Submitted BNB transfer on BSC: ${LOCAL_TRANSFER_HASH}.`),
-  ).toBeVisible();
-  expect(state.transferRequests).toEqual([
-    {
-      amount: "0.25",
-      assetSymbol: "BNB",
-      confirm: true,
-      toAddress: "0xabc0000000000000000000000000000000000000",
-    },
-  ]);
+    const walletFrame = page.frameLocator('iframe[title="localhost"]');
+    const expectedEvmSignInSignature = await signEvmMessage(
+      "Sign in to the Milady browser wallet fixture",
+    );
+    const expectedEvmMessageSignature = await signEvmMessage("Browser says hi");
+    const expectedSolanaSignInSignature = signSolanaMessageBase64(
+      "Sign in to the Milady browser wallet fixture",
+    );
+    const expectedSolanaMessageSignature =
+      signSolanaMessageBase64("Solana says hi");
+    await expect(
+      walletFrame.getByRole("heading", { name: "Wallet Sign-In Fixture" }),
+    ).toBeVisible();
+    await expect(walletFrame.locator("#wallet-ready")).toHaveText(
+      "ready:evm,solana",
+    );
+
+    await expect(page.getByText("Wallet connected")).toBeVisible();
+    await walletFrame.getByRole("button", { name: "EVM sign message" }).click();
+    await walletFrame.getByRole("button", { name: "Solana sign in" }).click();
+    await walletFrame
+      .getByRole("button", { name: "Solana sign message" })
+      .click();
+
+    await expect(walletFrame.locator("#evm-signin-result")).toHaveText(
+      `${LOCAL_WALLET_ADDRESS}:${expectedEvmSignInSignature}`,
+    );
+    await expect(walletFrame.locator("#evm-sign-message-result")).toHaveText(
+      expectedEvmMessageSignature,
+    );
+    await expect(walletFrame.locator("#solana-signin-result")).toHaveText(
+      `${LOCAL_SOLANA_ADDRESS}:${expectedSolanaSignInSignature}`,
+    );
+    await expect(walletFrame.locator("#solana-sign-message-result")).toHaveText(
+      expectedSolanaMessageSignature,
+    );
+    expect(state.walletMessages).toEqual([
+      "Sign in to the Milady browser wallet fixture",
+      "Browser says hi",
+    ]);
+    expect(state.solanaWalletMessages).toEqual([
+      "Sign in to the Milady browser wallet fixture",
+      "Solana says hi",
+    ]);
+  } finally {
+    await fixture.close();
+  }
 });

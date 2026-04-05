@@ -52,22 +52,22 @@ curl http://localhost:2138/api/character \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
-### Send a chat message
+### Send a conversation message
 
 ```bash
-curl -X POST http://localhost:2138/api/chat \
+curl -X POST http://localhost:2138/api/conversations/YOUR_CONVERSATION_ID/messages \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"message": "Hello, what can you do?"}'
+  -d '{"text": "Hello, what can you do?"}'
 ```
 
-### Stream a chat response
+### Stream a conversation response
 
 ```bash
-curl -N -X POST http://localhost:2138/api/chat/stream \
+curl -N -X POST http://localhost:2138/api/conversations/YOUR_CONVERSATION_ID/messages/stream \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"message": "Tell me about yourself"}'
+  -d '{"text": "Tell me about yourself"}'
 ```
 
 The response is a Server-Sent Events stream. Each event contains a `data` field with a JSON payload.
@@ -232,8 +232,6 @@ curl -X POST http://localhost:2138/api/agent/autonomy \
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/api/chat` | Send a message and get a response (legacy, routes to default conversation) |
-| `POST` | `/api/chat/stream` | Send a message and stream the response (SSE) |
 | `GET` | `/api/conversations` | List all conversations |
 | `POST` | `/api/conversations` | Create a new conversation |
 | `GET` | `/api/conversations/:id/messages` | Get messages for a conversation |

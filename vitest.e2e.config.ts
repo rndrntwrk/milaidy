@@ -148,6 +148,14 @@ export default defineConfig({
         find: "@elizaos/plugin-pi-ai",
         replacement: path.join(repoRoot, "test", "stubs", "pi-ai-module.ts"),
       },
+      {
+        find: "@elizaos/plugin-edge-tts",
+        replacement: path.join(repoRoot, "test", "stubs", "empty-module.mjs"),
+      },
+      {
+        find: "@elizaos/plugin-edge-tts/node",
+        replacement: path.join(repoRoot, "test", "stubs", "empty-module.mjs"),
+      },
       ...(!liveTest
         ? [
             {

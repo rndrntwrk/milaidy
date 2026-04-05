@@ -102,7 +102,8 @@ describe("DownloadIcons", () => {
         {
           draft: false,
           prerelease: true,
-          html_url: "https://github.com/milady-ai/milady/releases/tag/v3.0.0-canary.1",
+          html_url:
+            "https://github.com/milady-ai/milady/releases/tag/v3.0.0-canary.1",
           assets: [
             {
               name: "canary-macos-arm64-Milady-canary.dmg",

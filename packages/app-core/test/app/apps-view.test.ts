@@ -19,12 +19,7 @@ import * as electrobunRpc from "@miladyai/app-core/bridge/electrobun-rpc";
 interface AppsContextStub {
   setState: (
     key: string,
-    value:
-      | string
-      | boolean
-      | AppViewerAuthMessage
-      | AppSessionState
-      | null,
+    value: string | boolean | AppViewerAuthMessage | AppSessionState | null,
   ) => void;
   setActionNotice: (
     text: string,
@@ -165,7 +160,8 @@ async function _waitFor(
 describe("AppsView", () => {
   beforeEach(() => {
     // Prevent jsdom mock leakages between files
-    delete (window as Window & { __MILADY_ELECTROBUN_RPC__?: unknown }).__MILADY_ELECTROBUN_RPC__;
+    delete (window as Window & { __MILADY_ELECTROBUN_RPC__?: unknown })
+      .__MILADY_ELECTROBUN_RPC__;
     vi.spyOn(electrobunRpc, "getElectrobunRendererRpc").mockReturnValue(
       undefined,
     );
@@ -280,32 +276,43 @@ describe("AppsView", () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
-    delete (window as Window & { __MILADY_ELECTROBUN_RPC__?: unknown }).__MILADY_ELECTROBUN_RPC__;
+    delete (window as Window & { __MILADY_ELECTROBUN_RPC__?: unknown })
+      .__MILADY_ELECTROBUN_RPC__;
     vi.restoreAllMocks();
   });
 
-  it("uses an exact clawbal allowlist in production", () => {
+  it("uses an exact curated app allowlist in production", () => {
     expect(
       shouldShowAppInAppsView(
-        createApp("@iqlabs-official/plugin-clawbal", "Clawbal", "Game"),
+        createApp("@elizaos/app-hyperscape", "Hyperscape", "Game"),
         true,
       ),
     ).toBe(true);
     expect(
       shouldShowAppInAppsView(
-        createApp("evil-clawbal", "Spoof", "Spoofed package"),
+        createApp("@elizaos/app-2004scape", "2004scape", "Game"),
         true,
       ),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       shouldShowAppInAppsView(
-        createApp("@elizaos/app-hyperscape", "Hyperscape", "Arena"),
+        createApp(
+          "@elizaos/app-defense-of-the-agents",
+          "Defense of the Agents",
+          "Game",
+        ),
+        true,
+      ),
+    ).toBe(true);
+    expect(
+      shouldShowAppInAppsView(
+        createApp("@elizaos/app-dungeons", "Dungeons", "Game"),
         true,
       ),
     ).toBe(false);
   });
 
-  it("does not restrict the apps list by clawbal in development", () => {
+  it("does not restrict the apps list by production allowlist in development", () => {
     expect(
       shouldShowAppInAppsView(
         createApp("@elizaos/app-hyperscape", "Hyperscape", "Arena"),
@@ -552,7 +559,9 @@ describe("AppsView", () => {
         viewer: null,
       }),
     );
-    (window as Window & { __MILADY_ELECTROBUN_RPC__?: unknown }).__MILADY_ELECTROBUN_RPC__ = {
+    (
+      window as Window & { __MILADY_ELECTROBUN_RPC__?: unknown }
+    ).__MILADY_ELECTROBUN_RPC__ = {
       request: { desktopOpenExternal: request },
       onMessage: vi.fn(),
       offMessage: vi.fn(),

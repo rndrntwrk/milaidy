@@ -2,7 +2,12 @@
  * Role utility functions — hierarchy checks, permission gates, world helpers.
  */
 
-import type { IAgentRuntime, Memory, UUID } from "@elizaos/core";
+import {
+  logger,
+  type IAgentRuntime,
+  type Memory,
+  type UUID,
+} from "@elizaos/core";
 import {
   type ConnectorAdminWhitelist,
   ROLE_RANK,
@@ -23,6 +28,10 @@ type RuntimeWithConnectorAdmins = IAgentRuntime & {
   [CONNECTOR_ADMIN_CACHE_KEY]?: Set<string>;
 };
 
+type ResolveEntityRoleOptions = {
+  liveEntityMetadata?: Record<string, unknown> | null;
+};
+
 function asStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value
@@ -41,6 +50,17 @@ function normalizeConnectorAdminWhitelist(
       .map(([connector, values]) => [connector, asStringArray(values)])
       .filter(([, values]) => values.length > 0),
   );
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+  return value as Record<string, unknown>;
+}
+
+function formatError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 export function setConnectorAdminWhitelist(
@@ -75,18 +95,13 @@ export function matchEntityToConnectorAdminWhitelist(
 
   const normalizedWhitelist = normalizeConnectorAdminWhitelist(whitelist);
   for (const [connector, platformIds] of Object.entries(normalizedWhitelist)) {
-    const connectorMeta = entityMetadata[connector];
-    if (
-      !connectorMeta ||
-      typeof connectorMeta !== "object" ||
-      Array.isArray(connectorMeta)
-    ) {
+    const connectorMeta = asRecord(entityMetadata[connector]);
+    if (!connectorMeta) {
       continue;
     }
 
-    const connectorMetaRecord = connectorMeta as Record<string, unknown>;
     for (const field of CONNECTOR_ID_FIELDS) {
-      const value = connectorMetaRecord[field];
+      const value = connectorMeta[field];
       if (typeof value === "string" && platformIds.includes(value)) {
         return { connector, matchedValue: value };
       }
@@ -186,54 +201,6 @@ export async function resolveEntityRole(
 }
 
 /**
- * Resolve an entity's effective role, including connector-admin whitelist
- * matches for users that first appear after plugin bootstrap.
- */
-export async function resolveEntityRole(
-  runtime: IAgentRuntime,
-  _world: Awaited<ReturnType<IAgentRuntime["getWorld"]>>,
-  metadata: RolesWorldMetadata | undefined,
-  entityId: string,
-): Promise<RoleName> {
-  const explicitRole = getEntityRole(metadata, entityId);
-  if (explicitRole !== "GUEST") {
-    return explicitRole;
-  }
-
-  const whitelist = getConnectorAdminWhitelist(runtime);
-  if (Object.keys(whitelist).length === 0) {
-    return explicitRole;
-  }
-
-  const connectorAdminCache = getConnectorAdminCache(runtime);
-  if (connectorAdminCache.has(entityId)) {
-    return "ADMIN";
-  }
-
-  if (typeof runtime.getEntityById !== "function") {
-    return explicitRole;
-  }
-
-  let entity: Awaited<ReturnType<IAgentRuntime["getEntityById"]>> | null = null;
-  try {
-    entity = await runtime.getEntityById(entityId as UUID);
-  } catch {
-    return explicitRole;
-  }
-
-  const matched = matchEntityToConnectorAdminWhitelist(
-    (entity?.metadata as Record<string, unknown> | undefined) ?? undefined,
-    whitelist,
-  );
-  if (!matched) {
-    return explicitRole;
-  }
-
-  connectorAdminCache.add(entityId);
-  return "ADMIN";
-}
-
-/**
  * Whether `actor` can set `target`'s role to `newRole`.
  *
  * Rules:
@@ -296,7 +263,9 @@ export async function checkSenderRole(
   if (!resolved) return null;
   const { world, metadata } = resolved;
   const entityId = message.entityId as UUID;
-  const role = await resolveEntityRole(runtime, world, metadata, entityId);
+  const role = await resolveEntityRole(runtime, world, metadata, entityId, {
+    liveEntityMetadata: getLiveEntityMetadataFromMessage(message),
+  });
   return {
     entityId,
     role,

@@ -5,12 +5,6 @@
  * Skipped when `MILADY_DISABLE_PLUGIN_MANAGER_AUTO_ENABLE=1` is set.
  */
 
-import { logger } from "@elizaos/core";
-import {
-  loadElizaConfig,
-  saveElizaConfig,
-} from "@miladyai/agent/config/config";
-
 let _checked = false;
 let _lastResult: PluginManagerGuardResult = "error";
 
@@ -36,14 +30,25 @@ export function getPluginManagerBlockReason(
   return null;
 }
 
-export function ensurePluginManagerAllowed(): PluginManagerGuardResult {
+export async function ensurePluginManagerAllowed(): Promise<PluginManagerGuardResult> {
   if (_checked) return _lastResult;
   if (process.env.MILADY_DISABLE_PLUGIN_MANAGER_AUTO_ENABLE === "1") {
     _checked = true;
     _lastResult = "disabled-by-env";
     return _lastResult;
   }
+  // Renderer/browser bundles cannot safely load the local config helpers from
+  // the agent runtime. In that environment we surface a non-fatal error state
+  // and let the server-side action path handle plugin-manager recovery.
+  if (typeof window !== "undefined") {
+    _checked = true;
+    _lastResult = "error";
+    return _lastResult;
+  }
   try {
+    const { loadElizaConfig, saveElizaConfig } = await import(
+      "@miladyai/agent/config/config"
+    );
     const config = loadElizaConfig();
     const entries =
       config.plugins?.entries ?? ({} as Record<string, { enabled?: boolean }>);
@@ -67,7 +72,7 @@ export function ensurePluginManagerAllowed(): PluginManagerGuardResult {
       [id]: { enabled: true },
     };
     saveElizaConfig(config);
-    logger.info(
+    console.info(
       "[milady] Auto-enabled plugin-manager for dashboard plugin installs. " +
         "Set MILADY_DISABLE_PLUGIN_MANAGER_AUTO_ENABLE=1 to prevent this.",
     );

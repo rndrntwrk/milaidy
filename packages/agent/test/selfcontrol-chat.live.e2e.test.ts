@@ -5,7 +5,11 @@ import os from "node:os";
 import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { req } from "../../../test/helpers/http";
+import {
+  createConversation,
+  postConversationMessage,
+  req,
+} from "../../../test/helpers/http";
 
 const LIVE_TESTS_ENABLED =
   process.env.MILADY_LIVE_TEST === "1" || process.env.ELIZA_LIVE_TEST === "1";
@@ -447,9 +451,17 @@ describe.skipIf(
     const pluginsResponse = await req(runtime.port, "GET", "/api/plugins");
     expect(pluginsResponse.status).toBe(200);
 
-    const firstTurn = await req(runtime.port, "POST", "/api/chat", {
-      text: "The websites distracting me are x.com and twitter.com. Do not block them yet.",
+    const { conversationId } = await createConversation(runtime.port, {
+      title: "Live SelfControl",
     });
+
+    const firstTurn = await postConversationMessage(
+      runtime.port,
+      conversationId,
+      {
+        text: "The websites distracting me are x.com and twitter.com. Do not block them yet.",
+      },
+    );
     expect(firstTurn.status).toBe(200);
     assertNoProviderIssue(
       "first turn",
@@ -470,9 +482,13 @@ describe.skipIf(
       websites: [],
     });
 
-    const secondTurn = await req(runtime.port, "POST", "/api/chat", {
-      text: "Use self control now. Actually block the websites for 1 minute instead of giving advice.",
-    });
+    const secondTurn = await postConversationMessage(
+      runtime.port,
+      conversationId,
+      {
+        text: "Use self control now. Actually block the websites for 1 minute instead of giving advice.",
+      },
+    );
     expect(secondTurn.status).toBe(200);
 
     const secondText = String(secondTurn.data.text ?? "");

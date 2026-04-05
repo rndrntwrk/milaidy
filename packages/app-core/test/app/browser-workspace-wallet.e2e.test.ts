@@ -11,31 +11,29 @@ import {
 } from "@testing-library/react";
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  BROWSER_WALLET_REQUEST_TYPE,
+  BROWSER_WALLET_RESPONSE_TYPE,
+} from "../../src/browser-workspace-wallet";
 import { createInlineUiMock } from "./mockInlineUi";
 
-const {
-  mockClient,
-  mockCopyToClipboard,
-  mockExecuteBscTransfer,
-  mockOpenExternalUrl,
-  mockSetActionNotice,
-  mockUseApp,
-} = vi.hoisted(() => ({
-  mockClient: {
-    closeBrowserWorkspaceTab: vi.fn(),
-    getBrowserWorkspace: vi.fn(),
-    getWalletConfig: vi.fn(),
-    navigateBrowserWorkspaceTab: vi.fn(),
-    openBrowserWorkspaceTab: vi.fn(),
-    showBrowserWorkspaceTab: vi.fn(),
-    signViaSteward: vi.fn(),
-  },
-  mockCopyToClipboard: vi.fn(async () => {}),
-  mockExecuteBscTransfer: vi.fn(),
-  mockOpenExternalUrl: vi.fn(async () => {}),
-  mockSetActionNotice: vi.fn(),
-  mockUseApp: vi.fn(),
-}));
+const { mockClient, mockOpenExternalUrl, mockSetActionNotice, mockUseApp } =
+  vi.hoisted(() => ({
+    mockClient: {
+      closeBrowserWorkspaceTab: vi.fn(),
+      getBrowserWorkspace: vi.fn(),
+      getWalletConfig: vi.fn(),
+      navigateBrowserWorkspaceTab: vi.fn(),
+      openBrowserWorkspaceTab: vi.fn(),
+      signBrowserSolanaMessage: vi.fn(),
+      signBrowserWalletMessage: vi.fn(),
+      sendBrowserWalletTransaction: vi.fn(),
+      showBrowserWorkspaceTab: vi.fn(),
+    },
+    mockOpenExternalUrl: vi.fn(async () => {}),
+    mockSetActionNotice: vi.fn(),
+    mockUseApp: vi.fn(),
+  }));
 
 vi.mock("@miladyai/ui", async () => {
   const actual =
@@ -91,15 +89,6 @@ vi.mock("../../src/utils", async () => {
   };
 });
 
-vi.mock("../../src/components/steward/StewardLogo", () => ({
-  StewardLogo: () =>
-    React.createElement(
-      "div",
-      { "data-testid": "steward-logo" },
-      "StewardLogo",
-    ),
-}));
-
 import { BrowserWorkspaceView } from "../../src/components/pages/BrowserWorkspaceView";
 
 interface BrowserTabState {
@@ -120,7 +109,7 @@ interface WorkspaceState {
 
 const FIXED_TIMESTAMP = "2026-04-05T18:45:00.000Z";
 const FIXED_WALLET_ADDRESS = "0x1234567890abcdef1234567890abcdef12345678";
-const FIXED_LOCAL_TX_HASH = "0xlocaltransfer1";
+const FIXED_SOLANA_ADDRESS = "9xQeWvG816bUx9EPjHmaT23yvVMiD58o2fgxMZ4Y7K2N";
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -171,11 +160,8 @@ describe("Browser workspace wallet integration", () => {
   let pendingApprovals: StewardPendingApproval[];
   let tabCounter: number;
   let signatureCounter: number;
-  let approveStewardTx: ReturnType<typeof vi.fn>;
-  let executeBscTransfer: ReturnType<typeof vi.fn>;
   let getStewardPending: ReturnType<typeof vi.fn>;
   let getStewardStatus: ReturnType<typeof vi.fn>;
-  let rejectStewardTx: ReturnType<typeof vi.fn>;
   let walletAddresses: {
     evmAddress: string | null;
     solanaAddress: string | null;
@@ -184,6 +170,8 @@ describe("Browser workspace wallet integration", () => {
     evmAddress?: string | null;
     executionReady?: boolean;
     executionBlockedReason?: string | null;
+    solanaAddress?: string | null;
+    solanaSigningAvailable?: boolean;
   } | null;
 
   beforeEach(() => {
@@ -272,7 +260,7 @@ describe("Browser workspace wallet integration", () => {
         return { closed: true };
       },
     );
-    mockClient.signViaSteward.mockImplementation(
+    mockClient.sendBrowserWalletTransaction.mockImplementation(
       async ({
         chainId,
         to,
@@ -290,11 +278,21 @@ describe("Browser workspace wallet integration", () => {
         ];
         return {
           approved: false,
+          mode: "steward" as const,
           pending: true,
           txId,
         };
       },
     );
+    mockClient.signBrowserWalletMessage.mockResolvedValue({
+      mode: "local-key",
+      signature: "0xlocalsignedmessage",
+    });
+    mockClient.signBrowserSolanaMessage.mockResolvedValue({
+      address: FIXED_SOLANA_ADDRESS,
+      mode: "local-key",
+      signatureBase64: "c29sYW5hLXNpZw==",
+    });
 
     getStewardStatus = vi.fn(async () => ({
       agentId: "agent-browser",
@@ -308,80 +306,22 @@ describe("Browser workspace wallet integration", () => {
       },
     }));
     getStewardPending = vi.fn(async () => clone(pendingApprovals));
-    approveStewardTx = vi.fn(async (txId: string) => {
-      pendingApprovals = pendingApprovals.filter(
-        (item) => item.transaction.id !== txId,
-      );
-      return {
-        ok: true,
-        txHash: `0xapproved${txId}`,
-      };
-    });
-    rejectStewardTx = vi.fn(async (txId: string) => {
-      pendingApprovals = pendingApprovals.filter(
-        (item) => item.transaction.id !== txId,
-      );
-      return {
-        ok: true,
-        txHash: `0xrejected${txId}`,
-      };
-    });
-    executeBscTransfer = mockExecuteBscTransfer.mockImplementation(
-      async ({
-        amount,
-        assetSymbol,
-        toAddress,
-      }: {
-        amount: string;
-        assetSymbol: string;
-        toAddress: string;
-      }) => ({
-        ok: true,
-        mode: "local-key",
-        executed: true,
-        requiresUserSignature: false,
-        toAddress,
-        amount,
-        assetSymbol,
-        unsignedTx: {
-          chainId: 56,
-          from: FIXED_WALLET_ADDRESS,
-          to: toAddress,
-          data: "0x",
-          valueWei: "0",
-          explorerUrl: "https://bscscan.com",
-          assetSymbol,
-          amount,
-        },
-        execution: {
-          hash: FIXED_LOCAL_TX_HASH,
-          nonce: 7,
-          gasLimit: "21000",
-          valueWei: "0",
-          explorerUrl: `https://bscscan.com/tx/${FIXED_LOCAL_TX_HASH}`,
-          blockNumber: null,
-          status: "pending",
-        },
-      }),
-    );
     walletAddresses = {
       evmAddress: FIXED_WALLET_ADDRESS,
-      solanaAddress: null,
+      solanaAddress: FIXED_SOLANA_ADDRESS,
     };
     walletConfig = {
       evmAddress: FIXED_WALLET_ADDRESS,
       executionReady: true,
       executionBlockedReason: null,
+      solanaAddress: FIXED_SOLANA_ADDRESS,
+      solanaSigningAvailable: true,
     };
     mockClient.getWalletConfig.mockResolvedValue(walletConfig);
 
     mockUseApp.mockImplementation(() => ({
-      approveStewardTx,
-      copyToClipboard: mockCopyToClipboard,
-      executeBscTransfer,
       getStewardPending,
       getStewardStatus,
-      rejectStewardTx,
       setActionNotice: mockSetActionNotice,
       t: (
         key: string,
@@ -400,14 +340,12 @@ describe("Browser workspace wallet integration", () => {
     vi.clearAllMocks();
   });
 
-  it("opens and switches logical browser tabs in the web workspace", async () => {
+  it("opens and switches logical browser tabs in the web workspace without rendering a wallet rail", async () => {
     render(React.createElement(BrowserWorkspaceView));
 
     await waitFor(() => {
       expect(mockClient.getBrowserWorkspace).toHaveBeenCalled();
     });
-
-    expect(screen.queryByText(/iframe mounted/i)).toBeNull();
 
     fireEvent.change(screen.getByPlaceholderText("Enter a URL"), {
       target: { value: "example.com" },
@@ -443,7 +381,8 @@ describe("Browser workspace wallet integration", () => {
     });
 
     expect(screen.getByTitle("example.com")).toBeTruthy();
-    expect(screen.getByTestId("browser-workspace-wallet-panel")).toBeTruthy();
+    expect(screen.queryByTestId("browser-workspace-wallet-panel")).toBeNull();
+    expect(await screen.findByText("Wallet connected")).toBeTruthy();
   });
 
   it("renders a real collapsed rail instead of squeezing the sidebar body", async () => {
@@ -471,7 +410,7 @@ describe("Browser workspace wallet integration", () => {
     expect(within(sidebar).queryByText("Mode notes")).toBeNull();
   });
 
-  it("queues and approves Steward signing requests beside the browser workspace", async () => {
+  it("bridges wallet state and transaction requests to embedded browser pages", async () => {
     workspace = {
       mode: "web",
       tabs: [createTab("tab-1", "https://swap.example/", true)],
@@ -479,117 +418,339 @@ describe("Browser workspace wallet integration", () => {
 
     render(React.createElement(BrowserWorkspaceView));
 
-    expect(await screen.findByText("Steward connected")).toBeTruthy();
-    expect(screen.getAllByText("swap.example").length).toBeGreaterThan(0);
+    const iframe = (await screen.findByTitle(
+      "swap.example",
+    )) as HTMLIFrameElement;
+    const iframeWindow = iframe.contentWindow;
+    expect(iframeWindow).toBeTruthy();
+    if (!iframeWindow) {
+      throw new Error("Missing iframe window");
+    }
+    const postMessageSpy = vi.spyOn(iframeWindow, "postMessage");
 
-    fireEvent.change(screen.getByLabelText("To"), {
-      target: { value: "0xabc0000000000000000000000000000000000000" },
-    });
-    fireEvent.change(screen.getByLabelText("Value (wei)"), {
-      target: { value: "1000000000000000" },
-    });
-    fireEvent.change(screen.getByLabelText("Chain ID"), {
-      target: { value: "8453" },
-    });
-    fireEvent.change(screen.getByLabelText("Description"), {
-      target: { value: "Bridge the browser action to Steward" },
-    });
-    fireEvent.change(screen.getByLabelText("Calldata (optional)"), {
-      target: { value: "0xdeadbeef" },
-    });
-    fireEvent.click(screen.getByTestId("browser-workspace-sign-submit"));
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: {
+          type: BROWSER_WALLET_REQUEST_TYPE,
+          requestId: "wallet-state-1",
+          method: "getState",
+        },
+        origin: "https://swap.example",
+        source: iframeWindow,
+      }),
+    );
 
     await waitFor(() => {
-      expect(mockClient.signViaSteward).toHaveBeenCalledWith(
+      expect(
+        postMessageSpy.mock.calls.some(
+          ([payload, origin]) =>
+            origin === "https://swap.example" &&
+            (payload as { type?: string; requestId?: string }).type ===
+              BROWSER_WALLET_RESPONSE_TYPE &&
+            (payload as { requestId?: string }).requestId === "wallet-state-1",
+        ),
+      ).toBe(true);
+    });
+
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: {
+          type: BROWSER_WALLET_REQUEST_TYPE,
+          requestId: "wallet-send-1",
+          method: "sendTransaction",
+          params: {
+            broadcast: true,
+            chainId: 8453,
+            data: "0xdeadbeef",
+            description: "Browser fixture request",
+            to: "0xabc0000000000000000000000000000000000000",
+            value: "1000000000000000",
+          },
+        },
+        origin: "https://swap.example",
+        source: iframeWindow,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(mockClient.sendBrowserWalletTransaction).toHaveBeenCalledWith(
         expect.objectContaining({
           broadcast: true,
           chainId: 8453,
           data: "0xdeadbeef",
-          description: "Bridge the browser action to Steward",
+          description: "Browser fixture request",
           to: "0xabc0000000000000000000000000000000000000",
           value: "1000000000000000",
         }),
       );
     });
 
-    expect(
-      await screen.findByText(/Queued for approval on Base\. Request ID: tx-1/),
-    ).toBeTruthy();
-
-    const approveButton = await screen.findByRole("button", {
-      name: "Approve",
-    });
-    fireEvent.click(approveButton);
-
     await waitFor(() => {
-      expect(approveStewardTx).toHaveBeenCalledWith("tx-1");
+      expect(
+        postMessageSpy.mock.calls.some(
+          ([payload, origin]) =>
+            origin === "https://swap.example" &&
+            (payload as { type?: string; requestId?: string }).type ===
+              BROWSER_WALLET_RESPONSE_TYPE &&
+            (payload as { requestId?: string }).requestId === "wallet-send-1",
+        ),
+      ).toBe(true);
     });
 
-    await waitFor(() => {
-      expect(screen.queryByRole("button", { name: "Approve" })).toBeNull();
-    });
-
-    expect(mockSetActionNotice).toHaveBeenCalledWith(
-      "Signature request queued for approval.",
-      "info",
-      4000,
-    );
+    expect(await screen.findByText("1 pending")).toBeTruthy();
   });
 
-  it("falls back to the Wallets-tab transfer flow when Steward is unavailable", async () => {
+  it("supports provider-style browser wallet requests without rendering the wallet UI", async () => {
     workspace = {
       mode: "web",
-      tabs: [createTab("tab-1", "https://bscscan.com/", true)],
+      tabs: [createTab("tab-1", "https://app.example/", true)],
     };
-    walletConfig = null;
-    mockClient.getWalletConfig.mockResolvedValue({
-      evmAddress: FIXED_WALLET_ADDRESS,
-      executionReady: true,
-      executionBlockedReason: null,
-    });
-    getStewardStatus.mockResolvedValue({
-      agentId: "agent-browser",
+    pendingApprovals = [];
+    getStewardStatus = vi.fn(async () => ({
       available: false,
       configured: false,
       connected: false,
       error: null,
+    }));
+    walletAddresses = {
+      evmAddress: FIXED_WALLET_ADDRESS,
+      solanaAddress: FIXED_SOLANA_ADDRESS,
+    };
+    walletConfig = {
+      evmAddress: FIXED_WALLET_ADDRESS,
+      executionReady: true,
+      executionBlockedReason: null,
+      solanaAddress: FIXED_SOLANA_ADDRESS,
+      solanaSigningAvailable: true,
+    };
+    mockClient.getWalletConfig.mockResolvedValue(walletConfig);
+    mockClient.signBrowserWalletMessage.mockResolvedValue({
+      mode: "local-key",
+      signature: "0xproviderlocalsignature",
     });
+    mockClient.signBrowserSolanaMessage.mockResolvedValue({
+      address: FIXED_SOLANA_ADDRESS,
+      mode: "local-key",
+      signatureBase64: "cHJvdmlkZXItc29sLXNpZw==",
+    });
+    mockClient.sendBrowserWalletTransaction.mockResolvedValue({
+      approved: true,
+      mode: "local-key",
+      pending: false,
+      txHash: "0xproviderlocaltx",
+    });
+    mockUseApp.mockImplementation(() => ({
+      getStewardPending,
+      getStewardStatus,
+      setActionNotice: mockSetActionNotice,
+      t: (
+        key: string,
+        options?: {
+          defaultValue?: string;
+          [name: string]: unknown;
+        },
+      ) => options?.defaultValue ?? key,
+      walletAddresses,
+      walletConfig,
+    }));
 
     render(React.createElement(BrowserWorkspaceView));
 
-    expect(await screen.findByText("Local wallet ready")).toBeTruthy();
-    expect(screen.queryByText("Approval queue")).toBeNull();
+    const iframe = (await screen.findByTitle(
+      "app.example",
+    )) as HTMLIFrameElement;
+    const iframeWindow = iframe.contentWindow;
+    expect(iframeWindow).toBeTruthy();
+    if (!iframeWindow) {
+      throw new Error("Missing iframe window");
+    }
 
-    fireEvent.change(screen.getByLabelText("To"), {
-      target: { value: "0xabc0000000000000000000000000000000000000" },
-    });
-    fireEvent.change(screen.getByLabelText("Amount"), {
-      target: { value: "0.125" },
-    });
-    fireEvent.change(screen.getByLabelText("Asset"), {
-      target: { value: "BNB" },
-    });
-    fireEvent.click(screen.getByTestId("browser-workspace-sign-submit"));
+    const postMessageSpy = vi.spyOn(iframeWindow, "postMessage");
+
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: {
+          type: BROWSER_WALLET_REQUEST_TYPE,
+          requestId: "provider-accounts",
+          method: "eth_requestAccounts",
+        },
+        origin: "https://app.example",
+        source: iframeWindow,
+      }),
+    );
+
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: {
+          type: BROWSER_WALLET_REQUEST_TYPE,
+          requestId: "provider-solana-connect",
+          method: "solana_connect",
+        },
+        origin: "https://app.example",
+        source: iframeWindow,
+      }),
+    );
+
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: {
+          type: BROWSER_WALLET_REQUEST_TYPE,
+          requestId: "provider-solana-sign",
+          method: "solana_signMessage",
+          params: {
+            messageBase64: "U29sYW5hIHNheXMgaGk=",
+          },
+        },
+        origin: "https://app.example",
+        source: iframeWindow,
+      }),
+    );
+
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: {
+          type: BROWSER_WALLET_REQUEST_TYPE,
+          requestId: "provider-switch",
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: "0x2105" }],
+        },
+        origin: "https://app.example",
+        source: iframeWindow,
+      }),
+    );
+
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: {
+          type: BROWSER_WALLET_REQUEST_TYPE,
+          requestId: "provider-chain",
+          method: "eth_chainId",
+        },
+        origin: "https://app.example",
+        source: iframeWindow,
+      }),
+    );
+
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: {
+          type: BROWSER_WALLET_REQUEST_TYPE,
+          requestId: "provider-sign",
+          method: "personal_sign",
+          params: ["Browser says hi", FIXED_WALLET_ADDRESS],
+        },
+        origin: "https://app.example",
+        source: iframeWindow,
+      }),
+    );
+
+    window.dispatchEvent(
+      new MessageEvent("message", {
+        data: {
+          type: BROWSER_WALLET_REQUEST_TYPE,
+          requestId: "provider-send",
+          method: "eth_sendTransaction",
+          params: [
+            {
+              data: "0xdeadbeef",
+              to: "0xabc0000000000000000000000000000000000000",
+              value: "1000000000000000",
+            },
+          ],
+        },
+        origin: "https://app.example",
+        source: iframeWindow,
+      }),
+    );
 
     await waitFor(() => {
-      expect(executeBscTransfer).toHaveBeenCalledWith({
-        toAddress: "0xabc0000000000000000000000000000000000000",
-        amount: "0.125",
-        assetSymbol: "BNB",
-        tokenAddress: undefined,
-        confirm: true,
+      expect(mockClient.signBrowserWalletMessage).toHaveBeenCalledWith(
+        "Browser says hi",
+      );
+      expect(mockClient.signBrowserSolanaMessage).toHaveBeenCalledWith({
+        messageBase64: "U29sYW5hIHNheXMgaGk=",
       });
+      expect(mockClient.sendBrowserWalletTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          chainId: 8453,
+          data: "0xdeadbeef",
+          to: "0xabc0000000000000000000000000000000000000",
+          value: "1000000000000000",
+        }),
+      );
     });
 
-    expect(
-      await screen.findByText(
-        `Submitted BNB transfer on BSC: ${FIXED_LOCAL_TX_HASH}.`,
-      ),
-    ).toBeTruthy();
-    expect(mockSetActionNotice).toHaveBeenCalledWith(
-      `Submitted BNB transfer on BSC: ${FIXED_LOCAL_TX_HASH}.`,
-      "success",
-      4000,
-    );
+    await waitFor(() => {
+      const responses = postMessageSpy.mock.calls
+        .map(([payload, origin]) => ({ origin, payload }))
+        .filter(
+          (entry) =>
+            entry.origin === "https://app.example" &&
+            typeof entry.payload === "object" &&
+            entry.payload !== null &&
+            (entry.payload as { type?: string }).type ===
+              BROWSER_WALLET_RESPONSE_TYPE,
+        );
+
+      expect(
+        responses.some(
+          (entry) =>
+            (entry.payload as { requestId?: string; result?: unknown })
+              .requestId === "provider-solana-connect" &&
+            JSON.stringify((entry.payload as { result?: unknown }).result) ===
+              JSON.stringify({ address: FIXED_SOLANA_ADDRESS }),
+        ),
+      ).toBe(true);
+      expect(
+        responses.some(
+          (entry) =>
+            (entry.payload as { requestId?: string; result?: unknown })
+              .requestId === "provider-solana-sign" &&
+            JSON.stringify((entry.payload as { result?: unknown }).result) ===
+              JSON.stringify({
+                address: FIXED_SOLANA_ADDRESS,
+                mode: "local-key",
+                signatureBase64: "cHJvdmlkZXItc29sLXNpZw==",
+              }),
+        ),
+      ).toBe(true);
+      expect(
+        responses.some(
+          (entry) =>
+            (entry.payload as { requestId?: string; result?: unknown })
+              .requestId === "provider-accounts" &&
+            JSON.stringify((entry.payload as { result?: unknown }).result) ===
+              JSON.stringify([FIXED_WALLET_ADDRESS]),
+        ),
+      ).toBe(true);
+      expect(
+        responses.some(
+          (entry) =>
+            (entry.payload as { requestId?: string; result?: unknown })
+              .requestId === "provider-chain" &&
+            (entry.payload as { result?: unknown }).result === "0x2105",
+        ),
+      ).toBe(true);
+      expect(
+        responses.some(
+          (entry) =>
+            (entry.payload as { requestId?: string; result?: unknown })
+              .requestId === "provider-sign" &&
+            (entry.payload as { result?: unknown }).result ===
+              "0xproviderlocalsignature",
+        ),
+      ).toBe(true);
+      expect(
+        responses.some(
+          (entry) =>
+            (entry.payload as { requestId?: string; result?: unknown })
+              .requestId === "provider-send" &&
+            (entry.payload as { result?: unknown }).result ===
+              "0xproviderlocaltx",
+        ),
+      ).toBe(true);
+    });
+
+    expect(screen.queryByTestId("browser-workspace-wallet-panel")).toBeNull();
   });
 });

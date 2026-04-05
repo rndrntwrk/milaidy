@@ -6,6 +6,7 @@ import {
   canModifyRole,
   checkSenderRole,
   getEntityRole,
+  getLiveEntityMetadataFromMessage,
   matchEntityToConnectorAdminWhitelist,
   normalizeRole,
   resolveEntityRole,

@@ -61,25 +61,25 @@ curl http://localhost:2138/api/character \
 ```
 
 <div id="send-a-chat-message">
-### Enviar un mensaje de chat
+### Enviar un mensaje en una conversación
 </div>
 
 ```bash
-curl -X POST http://localhost:2138/api/chat \
+curl -X POST http://localhost:2138/api/conversations/YOUR_CONVERSATION_ID/messages \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"message": "Hello, what can you do?"}'
+  -d '{"text": "Hello, what can you do?"}'
 ```
 
 <div id="stream-a-chat-response">
-### Transmitir una respuesta de chat en streaming
+### Transmitir una respuesta de conversación en streaming
 </div>
 
 ```bash
-curl -N -X POST http://localhost:2138/api/chat/stream \
+curl -N -X POST http://localhost:2138/api/conversations/YOUR_CONVERSATION_ID/messages/stream \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"message": "Tell me about yourself"}'
+  -d '{"text": "Tell me about yourself"}'
 ```
 
 La respuesta es un flujo de Server-Sent Events. Cada evento contiene un campo `data` con un payload JSON.
@@ -278,8 +278,6 @@ curl -X POST http://localhost:2138/api/agent/autonomy \
 
 | Método | Ruta | Descripción |
 |--------|------|-------------|
-| `POST` | `/api/chat` | Enviar un mensaje y obtener una respuesta (legacy, redirige a la conversación por defecto) |
-| `POST` | `/api/chat/stream` | Enviar un mensaje y transmitir la respuesta en streaming (SSE) |
 | `GET` | `/api/conversations` | Listar todas las conversaciones |
 | `POST` | `/api/conversations` | Crear una nueva conversación |
 | `GET` | `/api/conversations/:id/messages` | Obtener mensajes de una conversación |

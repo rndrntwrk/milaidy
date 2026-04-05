@@ -33,11 +33,20 @@ import {
   type BrowserWorkspaceTab,
   client,
 } from "../../api";
+import {
+  BROWSER_WALLET_READY_TYPE,
+  BROWSER_WALLET_RESPONSE_TYPE,
+  type BrowserWorkspaceWalletResponse,
+  type BrowserWorkspaceWalletState,
+  buildBrowserWorkspaceWalletState,
+  EMPTY_BROWSER_WORKSPACE_WALLET_STATE,
+  isBrowserWorkspaceWalletRequest,
+} from "../../browser-workspace-wallet";
 import { useApp } from "../../state";
 import { openExternalUrl } from "../../utils";
-import { BrowserWorkspaceWalletPanel } from "../browser/BrowserWorkspaceWalletPanel";
 
 const POLL_INTERVAL_MS = 2_500;
+const DEFAULT_BROWSER_WALLET_CHAIN_ID = 1;
 const ADDRESS_INPUT_CLASSNAME =
   "h-10 rounded-full border-border/35 bg-card/70 px-4 text-sm text-txt shadow-sm transition-colors focus-visible:border-accent/40";
 const TAB_BUTTON_BASE =
@@ -121,6 +130,22 @@ function formatBrowserWorkspaceTimestamp(value: string | null): string {
   }
 }
 
+function formatBrowserWorkspaceWalletAddress(address: string): string {
+  return `${address.slice(0, 6)}…${address.slice(-4)}`;
+}
+
+function resolveBrowserWorkspaceTargetOrigin(url: string): string {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return "*";
+  }
+}
+
+function resolveBrowserWorkspaceMessageOrigin(origin: string): string {
+  return origin && origin !== "null" ? origin : "*";
+}
+
 function resolveBrowserWorkspaceSelection(
   tabs: BrowserWorkspaceTab[],
   selectedId: string | null,
@@ -132,12 +157,112 @@ function resolveBrowserWorkspaceSelection(
   return visibleTab?.id ?? tabs[0]?.id ?? null;
 }
 
+function formatBrowserWorkspaceChainId(chainId: number): string {
+  return `0x${chainId.toString(16)}`;
+}
+
+function parseBrowserWorkspaceChainId(value: unknown): number | null {
+  if (typeof value === "number" && Number.isInteger(value) && value > 0) {
+    return value;
+  }
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const parsed = trimmed.startsWith("0x")
+    ? Number.parseInt(trimmed.slice(2), 16)
+    : Number(trimmed);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function resolveBrowserWorkspaceWalletAccounts(
+  state: BrowserWorkspaceWalletState,
+): string[] {
+  return state.evmAddress ? [state.evmAddress] : [];
+}
+
+function normalizeBrowserWorkspaceTxRequest(
+  params: unknown,
+  fallbackChainId: number,
+): {
+  broadcast: boolean;
+  chainId: number;
+  data?: string;
+  description?: string;
+  to: string;
+  value: string;
+} | null {
+  const raw = Array.isArray(params) && params.length > 0 ? params[0] : params;
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+  const value = raw as Record<string, unknown>;
+  const chainId =
+    parseBrowserWorkspaceChainId(value.chainId) ?? fallbackChainId;
+  const to = typeof value.to === "string" ? value.to.trim() : "";
+  const amount =
+    typeof value.value === "string"
+      ? value.value.trim()
+      : typeof value.value === "number"
+        ? String(value.value)
+        : "";
+  if (!to || !amount || !chainId) {
+    return null;
+  }
+  return {
+    broadcast: value.broadcast !== false,
+    chainId,
+    data: typeof value.data === "string" ? value.data : undefined,
+    description:
+      typeof value.description === "string" ? value.description : undefined,
+    to,
+    value: amount,
+  };
+}
+
+function resolveBrowserWorkspaceMessageToSign(
+  params: unknown,
+  address: string | null,
+): string | null {
+  if (typeof params === "string") {
+    return params;
+  }
+  if (!Array.isArray(params) || params.length === 0) {
+    return null;
+  }
+
+  const first = params[0];
+  const second = params[1];
+  if (typeof first === "string" && typeof second === "string" && address) {
+    if (first.toLowerCase() === address.toLowerCase()) {
+      return second;
+    }
+    if (second.toLowerCase() === address.toLowerCase()) {
+      return first;
+    }
+  }
+
+  return typeof first === "string" ? first : null;
+}
+
 export function BrowserWorkspaceView(): JSX.Element {
-  const { setActionNotice, t } = useApp();
+  const {
+    getStewardPending,
+    getStewardStatus,
+    setActionNotice,
+    t,
+    walletAddresses,
+    walletConfig,
+  } = useApp();
   const [workspace, setWorkspace] = useState<BrowserWorkspaceSnapshot>({
     mode: "web",
     tabs: [],
   });
+  const [browserWalletState, setBrowserWalletState] =
+    useState<BrowserWorkspaceWalletState>(EMPTY_BROWSER_WORKSPACE_WALLET_STATE);
   const [selectedTabId, setSelectedTabId] = useState<string | null>(null);
   const [locationInput, setLocationInput] = useState("");
   const [locationDirty, setLocationDirty] = useState(false);
@@ -146,6 +271,11 @@ export function BrowserWorkspaceView(): JSX.Element {
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const initialBrowseUrlRef = useRef<string | null | undefined>(undefined);
   const initialBrowseHandledRef = useRef(false);
+  const iframeRefs = useRef(new Map<string, HTMLIFrameElement | null>());
+  const walletAddressesRef = useRef(walletAddresses);
+  const walletConfigRef = useRef(walletConfig);
+  const browserWalletStateRef = useRef(browserWalletState);
+  const browserWalletChainIdByTabRef = useRef(new Map<string, number>());
   const previousSelectedTabIdRef = useRef<string | null>(null);
 
   if (typeof initialBrowseUrlRef.current === "undefined") {
@@ -163,6 +293,51 @@ export function BrowserWorkspaceView(): JSX.Element {
     () => workspace.tabs.find((tab) => tab.id === selectedTabId) ?? null,
     [selectedTabId, workspace.tabs],
   );
+
+  useEffect(() => {
+    browserWalletStateRef.current = browserWalletState;
+  }, [browserWalletState]);
+
+  useEffect(() => {
+    walletAddressesRef.current = walletAddresses;
+    walletConfigRef.current = walletConfig;
+  }, [walletAddresses, walletConfig]);
+
+  const loadBrowserWalletState = useCallback(async () => {
+    try {
+      const stewardStatus = await getStewardStatus().catch(() => null);
+      const resolvedWalletConfig =
+        walletConfigRef.current ??
+        (await client.getWalletConfig().catch(() => null));
+      const pendingApprovals =
+        stewardStatus?.connected === true
+          ? (await getStewardPending().catch(() => [])).length
+          : 0;
+      const nextState = buildBrowserWorkspaceWalletState({
+        pendingApprovals,
+        stewardStatus,
+        walletAddresses: walletAddressesRef.current,
+        walletConfig: resolvedWalletConfig,
+      });
+      setBrowserWalletState(nextState);
+      return nextState;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const nextState = buildBrowserWorkspaceWalletState({
+        pendingApprovals: 0,
+        stewardStatus: {
+          available: false,
+          configured: false,
+          connected: false,
+          error: message,
+        },
+        walletAddresses: walletAddressesRef.current,
+        walletConfig: walletConfigRef.current,
+      });
+      setBrowserWalletState(nextState);
+      return nextState;
+    }
+  }, [getStewardPending, getStewardStatus]);
 
   const loadWorkspace = useCallback(
     async (options?: { preferTabId?: string | null; silent?: boolean }) => {
@@ -286,9 +461,41 @@ export function BrowserWorkspaceView(): JSX.Element {
     await loadWorkspace({ preferTabId: nextTabId, silent: true });
   }, [loadWorkspace, selectedTabId, workspace.tabs]);
 
+  const registerBrowserWorkspaceIframe = useCallback(
+    (tabId: string, iframe: HTMLIFrameElement | null) => {
+      if (!iframe) {
+        iframeRefs.current.delete(tabId);
+        return;
+      }
+      iframeRefs.current.set(tabId, iframe);
+    },
+    [],
+  );
+
+  const postBrowserWalletReady = useCallback(
+    (tab: BrowserWorkspaceTab, state: BrowserWorkspaceWalletState) => {
+      const iframeWindow = iframeRefs.current.get(tab.id)?.contentWindow;
+      if (!iframeWindow) {
+        return;
+      }
+      iframeWindow.postMessage(
+        {
+          type: BROWSER_WALLET_READY_TYPE,
+          state,
+        },
+        resolveBrowserWorkspaceTargetOrigin(tab.url),
+      );
+    },
+    [],
+  );
+
   useEffect(() => {
     void loadWorkspace();
   }, [loadWorkspace]);
+
+  useEffect(() => {
+    void loadBrowserWalletState();
+  }, [loadBrowserWalletState]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -296,6 +503,13 @@ export function BrowserWorkspaceView(): JSX.Element {
     }, POLL_INTERVAL_MS);
     return () => window.clearInterval(timer);
   }, [loadWorkspace, selectedTabId]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      void loadBrowserWalletState();
+    }, 5_000);
+    return () => window.clearInterval(timer);
+  }, [loadBrowserWalletState]);
 
   useEffect(() => {
     const currentSelectedId = selectedTab?.id ?? null;
@@ -353,6 +567,352 @@ export function BrowserWorkspaceView(): JSX.Element {
     t,
     workspace.tabs,
   ]);
+
+  useEffect(() => {
+    for (const tab of workspace.tabs) {
+      postBrowserWalletReady(tab, browserWalletState);
+    }
+  }, [browserWalletState, postBrowserWalletReady, workspace.tabs]);
+
+  useEffect(() => {
+    const knownTabIds = new Set(workspace.tabs.map((tab) => tab.id));
+    for (const tabId of browserWalletChainIdByTabRef.current.keys()) {
+      if (!knownTabIds.has(tabId)) {
+        browserWalletChainIdByTabRef.current.delete(tabId);
+      }
+    }
+  }, [workspace.tabs]);
+
+  useEffect(() => {
+    const onMessage = (event: MessageEvent<unknown>) => {
+      if (!isBrowserWorkspaceWalletRequest(event.data)) {
+        return;
+      }
+      const request = event.data;
+
+      const sourceTab = workspace.tabs.find(
+        (tab) => iframeRefs.current.get(tab.id)?.contentWindow === event.source,
+      );
+      const sourceWindow = sourceTab
+        ? iframeRefs.current.get(sourceTab.id)?.contentWindow
+        : null;
+      if (!sourceTab || !sourceWindow) {
+        return;
+      }
+
+      const respond = (response: BrowserWorkspaceWalletResponse) => {
+        sourceWindow.postMessage(
+          response,
+          resolveBrowserWorkspaceMessageOrigin(event.origin),
+        );
+      };
+      const currentWalletState = browserWalletStateRef.current;
+      const currentTabChainId =
+        browserWalletChainIdByTabRef.current.get(sourceTab.id) ??
+        DEFAULT_BROWSER_WALLET_CHAIN_ID;
+
+      if (request.method === "getState") {
+        respond({
+          type: BROWSER_WALLET_RESPONSE_TYPE,
+          requestId: request.requestId,
+          ok: true,
+          result: browserWalletStateRef.current,
+        });
+        return;
+      }
+
+      if (request.method === "requestAccounts") {
+        respond({
+          type: BROWSER_WALLET_RESPONSE_TYPE,
+          requestId: request.requestId,
+          ok: true,
+          result: {
+            accounts: resolveBrowserWorkspaceWalletAccounts(currentWalletState),
+          },
+        });
+        return;
+      }
+
+      void (async () => {
+        if (
+          request.method === "eth_accounts" ||
+          request.method === "eth_requestAccounts"
+        ) {
+          respond({
+            type: BROWSER_WALLET_RESPONSE_TYPE,
+            requestId: request.requestId,
+            ok: true,
+            result: resolveBrowserWorkspaceWalletAccounts(currentWalletState),
+          });
+          return;
+        }
+
+        if (request.method === "solana_connect") {
+          if (
+            !currentWalletState.solanaConnected ||
+            !currentWalletState.solanaAddress
+          ) {
+            respond({
+              type: BROWSER_WALLET_RESPONSE_TYPE,
+              requestId: request.requestId,
+              ok: false,
+              error: "Solana wallet is unavailable.",
+            });
+            return;
+          }
+
+          respond({
+            type: BROWSER_WALLET_RESPONSE_TYPE,
+            requestId: request.requestId,
+            ok: true,
+            result: {
+              address: currentWalletState.solanaAddress,
+            },
+          });
+          return;
+        }
+
+        if (request.method === "eth_chainId") {
+          respond({
+            type: BROWSER_WALLET_RESPONSE_TYPE,
+            requestId: request.requestId,
+            ok: true,
+            result: formatBrowserWorkspaceChainId(currentTabChainId),
+          });
+          return;
+        }
+
+        if (request.method === "solana_signMessage") {
+          if (!currentWalletState.solanaMessageSigningAvailable) {
+            respond({
+              type: BROWSER_WALLET_RESPONSE_TYPE,
+              requestId: request.requestId,
+              ok: false,
+              error:
+                currentWalletState.reason ||
+                "Solana browser wallet signing is unavailable.",
+            });
+            return;
+          }
+
+          const params =
+            request.params && typeof request.params === "object"
+              ? (request.params as {
+                  message?: unknown;
+                  messageBase64?: unknown;
+                })
+              : null;
+          const message =
+            typeof params?.message === "string" ? params.message : undefined;
+          const messageBase64 =
+            typeof params?.messageBase64 === "string"
+              ? params.messageBase64
+              : undefined;
+
+          if (!message && !messageBase64) {
+            respond({
+              type: BROWSER_WALLET_RESPONSE_TYPE,
+              requestId: request.requestId,
+              ok: false,
+              error:
+                "Solana browser wallet signing requires message or messageBase64.",
+            });
+            return;
+          }
+
+          try {
+            const result = await client.signBrowserSolanaMessage({
+              ...(message ? { message } : {}),
+              ...(messageBase64 ? { messageBase64 } : {}),
+            });
+            respond({
+              type: BROWSER_WALLET_RESPONSE_TYPE,
+              requestId: request.requestId,
+              ok: true,
+              result,
+            });
+          } catch (error) {
+            const message =
+              error instanceof Error ? error.message : String(error);
+            respond({
+              type: BROWSER_WALLET_RESPONSE_TYPE,
+              requestId: request.requestId,
+              ok: false,
+              error: message,
+            });
+          }
+          return;
+        }
+
+        if (request.method === "wallet_switchEthereumChain") {
+          if (!currentWalletState.chainSwitchingAvailable) {
+            respond({
+              type: BROWSER_WALLET_RESPONSE_TYPE,
+              requestId: request.requestId,
+              ok: false,
+              error:
+                currentWalletState.reason ||
+                "Browser wallet chain switching is unavailable.",
+            });
+            return;
+          }
+
+          const nextChainId = parseBrowserWorkspaceChainId(
+            Array.isArray(request.params)
+              ? (request.params[0] as { chainId?: unknown } | undefined)
+                  ?.chainId
+              : (request.params as { chainId?: unknown } | undefined)?.chainId,
+          );
+
+          if (!nextChainId) {
+            respond({
+              type: BROWSER_WALLET_RESPONSE_TYPE,
+              requestId: request.requestId,
+              ok: false,
+              error: "wallet_switchEthereumChain requires a valid chainId.",
+            });
+            return;
+          }
+
+          browserWalletChainIdByTabRef.current.set(sourceTab.id, nextChainId);
+          postBrowserWalletReady(sourceTab, currentWalletState);
+          respond({
+            type: BROWSER_WALLET_RESPONSE_TYPE,
+            requestId: request.requestId,
+            ok: true,
+            result: null,
+          });
+          return;
+        }
+
+        if (
+          request.method === "personal_sign" ||
+          request.method === "eth_sign"
+        ) {
+          if (!currentWalletState.messageSigningAvailable) {
+            respond({
+              type: BROWSER_WALLET_RESPONSE_TYPE,
+              requestId: request.requestId,
+              ok: false,
+              error:
+                currentWalletState.mode === "steward"
+                  ? "Browser message signing requires a local wallet key."
+                  : currentWalletState.reason ||
+                    "Browser wallet message signing is unavailable.",
+            });
+            return;
+          }
+
+          const message = resolveBrowserWorkspaceMessageToSign(
+            request.params,
+            currentWalletState.address,
+          );
+          if (!message) {
+            respond({
+              type: BROWSER_WALLET_RESPONSE_TYPE,
+              requestId: request.requestId,
+              ok: false,
+              error: "Browser wallet signing requires a message payload.",
+            });
+            return;
+          }
+
+          try {
+            const result = await client.signBrowserWalletMessage(message);
+            respond({
+              type: BROWSER_WALLET_RESPONSE_TYPE,
+              requestId: request.requestId,
+              ok: true,
+              result:
+                request.method === "eth_sign" ||
+                request.method === "personal_sign"
+                  ? result.signature
+                  : result,
+            });
+          } catch (error) {
+            const message =
+              error instanceof Error ? error.message : String(error);
+            respond({
+              type: BROWSER_WALLET_RESPONSE_TYPE,
+              requestId: request.requestId,
+              ok: false,
+              error: message,
+            });
+          }
+          return;
+        }
+
+        if (
+          request.method !== "sendTransaction" &&
+          request.method !== "eth_sendTransaction"
+        ) {
+          respond({
+            type: BROWSER_WALLET_RESPONSE_TYPE,
+            requestId: request.requestId,
+            ok: false,
+            error: "Unsupported browser wallet request.",
+          });
+          return;
+        }
+
+        if (!currentWalletState.transactionSigningAvailable) {
+          respond({
+            type: BROWSER_WALLET_RESPONSE_TYPE,
+            requestId: request.requestId,
+            ok: false,
+            error:
+              currentWalletState.reason ||
+              "Browser wallet transaction signing is unavailable.",
+          });
+          return;
+        }
+
+        const transaction = normalizeBrowserWorkspaceTxRequest(
+          request.params,
+          currentTabChainId,
+        );
+        if (!transaction) {
+          respond({
+            type: BROWSER_WALLET_RESPONSE_TYPE,
+            requestId: request.requestId,
+            ok: false,
+            error:
+              "Browser wallet sendTransaction requires to, value, and chainId.",
+          });
+          return;
+        }
+
+        try {
+          const result = await client.sendBrowserWalletTransaction(transaction);
+          const nextState = await loadBrowserWalletState();
+          postBrowserWalletReady(sourceTab, nextState);
+          respond({
+            type: BROWSER_WALLET_RESPONSE_TYPE,
+            requestId: request.requestId,
+            ok: true,
+            result:
+              request.method === "eth_sendTransaction"
+                ? (result.txHash ?? result.txId ?? null)
+                : result,
+          });
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          respond({
+            type: BROWSER_WALLET_RESPONSE_TYPE,
+            requestId: request.requestId,
+            ok: false,
+            error: message,
+          });
+        }
+      })();
+    };
+
+    window.addEventListener("message", onMessage);
+    return () => {
+      window.removeEventListener("message", onMessage);
+    };
+  }, [loadBrowserWalletState, postBrowserWalletReady, workspace.tabs]);
 
   const browserSidebar = (
     <Sidebar
@@ -652,6 +1212,27 @@ export function BrowserWorkspaceView(): JSX.Element {
             defaultValue: "Close",
           })}
         </Button>
+        {browserWalletState.connected ? (
+          <>
+            <MetaPill compact>
+              {browserWalletState.mode === "blocked"
+                ? "Wallet blocked"
+                : "Wallet connected"}
+            </MetaPill>
+            {browserWalletState.pendingApprovals > 0 ? (
+              <MetaPill compact>
+                {browserWalletState.pendingApprovals} pending
+              </MetaPill>
+            ) : null}
+            {browserWalletState.address ? (
+              <span className="inline-flex h-10 items-center rounded-full border border-border/35 bg-card/70 px-4 font-mono text-xs text-muted">
+                {formatBrowserWorkspaceWalletAddress(
+                  browserWalletState.address,
+                )}
+              </span>
+            ) : null}
+          </>
+        ) : null}
       </div>
     </div>
   );
@@ -664,95 +1245,95 @@ export function BrowserWorkspaceView(): JSX.Element {
         contentInnerClassName="mx-auto flex h-full w-full max-w-[110rem] flex-1"
         data-testid="browser-workspace-view"
       >
-        <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-[minmax(0,1fr)_24rem]">
-          <div className="flex min-h-0 flex-1 flex-col gap-3">
-            {loadError ? (
-              <PagePanel.Notice tone="danger">{loadError}</PagePanel.Notice>
-            ) : null}
+        <div className="flex min-h-0 flex-1 flex-col gap-3">
+          {loadError ? (
+            <PagePanel.Notice tone="danger">{loadError}</PagePanel.Notice>
+          ) : null}
 
-            {loading && workspace.tabs.length === 0 ? (
-              <PagePanel.Loading
-                variant="workspace"
-                heading={t("browserworkspace.Loading", {
-                  defaultValue: "Loading browser workspace",
+          {loading && workspace.tabs.length === 0 ? (
+            <PagePanel.Loading
+              variant="workspace"
+              heading={t("browserworkspace.Loading", {
+                defaultValue: "Loading browser workspace",
+              })}
+            />
+          ) : workspace.tabs.length === 0 ? (
+            <PagePanel.Empty
+              variant="panel"
+              title={t("browserworkspace.EmptyTitle", {
+                defaultValue: "No browser tabs yet",
+              })}
+              description={t("browserworkspace.EmptyDescription", {
+                defaultValue:
+                  "Open a page here, or let the agent create tabs through the Milady browser workspace plugin.",
+              })}
+              className="min-h-[28rem]"
+            />
+          ) : (
+            <PagePanel
+              variant="workspace"
+              className="flex min-h-[34rem] flex-1 overflow-hidden p-0"
+            >
+              <div className="relative flex-1 overflow-hidden rounded-[calc(var(--radius-xl,1.5rem)-0.25rem)] bg-black/5">
+                {workspace.tabs.map((tab) => {
+                  const active = tab.id === selectedTabId;
+                  return (
+                    <iframe
+                      key={tab.id}
+                      ref={(iframe) =>
+                        registerBrowserWorkspaceIframe(tab.id, iframe)
+                      }
+                      title={getBrowserWorkspaceTabLabel(tab)}
+                      src={tab.url}
+                      loading="eager"
+                      sandbox="allow-downloads allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts"
+                      allow="clipboard-read; clipboard-write"
+                      referrerPolicy="strict-origin-when-cross-origin"
+                      className={`absolute inset-0 h-full w-full border-0 bg-white transition-opacity ${
+                        active
+                          ? "pointer-events-auto opacity-100"
+                          : "pointer-events-none opacity-0"
+                      }`}
+                      onLoad={() => {
+                        postBrowserWalletReady(
+                          tab,
+                          browserWalletStateRef.current,
+                        );
+                      }}
+                    />
+                  );
                 })}
-              />
-            ) : workspace.tabs.length === 0 ? (
-              <PagePanel.Empty
-                variant="panel"
-                title={t("browserworkspace.EmptyTitle", {
-                  defaultValue: "No browser tabs yet",
-                })}
-                description={t("browserworkspace.EmptyDescription", {
-                  defaultValue:
-                    "Open a page here, or let the agent create tabs through the Milady browser workspace plugin.",
-                })}
-                className="min-h-[28rem]"
-              />
-            ) : (
-              <PagePanel
-                variant="workspace"
-                className="flex min-h-[34rem] flex-1 overflow-hidden p-0"
-              >
-                <div className="relative flex-1 overflow-hidden rounded-[calc(var(--radius-xl,1.5rem)-0.25rem)] bg-black/5">
-                  {workspace.tabs.map((tab) => {
-                    const active = tab.id === selectedTabId;
-                    return (
-                      <iframe
-                        key={tab.id}
-                        title={getBrowserWorkspaceTabLabel(tab)}
-                        src={tab.url}
-                        loading="eager"
-                        sandbox="allow-downloads allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts"
-                        allow="clipboard-read; clipboard-write"
-                        referrerPolicy="strict-origin-when-cross-origin"
-                        className={`absolute inset-0 h-full w-full border-0 bg-white transition-opacity ${
-                          active
-                            ? "pointer-events-auto opacity-100"
-                            : "pointer-events-none opacity-0"
-                        }`}
-                      />
-                    );
-                  })}
-                </div>
-              </PagePanel>
-            )}
-
-            {selectedTab ? (
-              <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
-                <MetaPill compact>
-                  {getBrowserWorkspaceTabLabel(selectedTab)}
-                </MetaPill>
-                <span>{selectedTab.url}</span>
-                <span>•</span>
-                <span>
-                  {t("browserworkspace.LastSeen", {
-                    defaultValue: "Last seen {{time}}",
-                    time: formatBrowserWorkspaceTimestamp(
-                      selectedTab.lastFocusedAt ?? selectedTab.updatedAt,
-                    ),
-                  })}
-                </span>
-                <span>•</span>
-                <span>
-                  {selectedTab.visible
-                    ? t("browserworkspace.Visible", {
-                        defaultValue: "Visible",
-                      })
-                    : t("browserworkspace.Background", {
-                        defaultValue: "Background",
-                      })}
-                </span>
               </div>
-            ) : null}
-          </div>
+            </PagePanel>
+          )}
 
-          <BrowserWorkspaceWalletPanel
-            selectedTabLabel={
-              selectedTab ? getBrowserWorkspaceTabLabel(selectedTab) : null
-            }
-            selectedTabUrl={selectedTab?.url ?? null}
-          />
+          {selectedTab ? (
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
+              <MetaPill compact>
+                {getBrowserWorkspaceTabLabel(selectedTab)}
+              </MetaPill>
+              <span>{selectedTab.url}</span>
+              <span>•</span>
+              <span>
+                {t("browserworkspace.LastSeen", {
+                  defaultValue: "Last seen {{time}}",
+                  time: formatBrowserWorkspaceTimestamp(
+                    selectedTab.lastFocusedAt ?? selectedTab.updatedAt,
+                  ),
+                })}
+              </span>
+              <span>•</span>
+              <span>
+                {selectedTab.visible
+                  ? t("browserworkspace.Visible", {
+                      defaultValue: "Visible",
+                    })
+                  : t("browserworkspace.Background", {
+                      defaultValue: "Background",
+                    })}
+              </span>
+            </div>
+          ) : null}
         </div>
       </PageLayout>
     </div>

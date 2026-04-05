@@ -146,6 +146,7 @@ import { handleDatabaseRowsCompatRoute } from "./database-rows-compat-routes";
 import { handleDevCompatRoutes } from "./dev-compat-routes";
 import { handleOnboardingCompatRoute } from "./onboarding-compat-routes";
 import { handlePluginsCompatRoutes } from "./plugins-compat-routes";
+import { handleWalletBrowserCompatRoutes } from "./wallet-browser-compat-routes";
 import { handleWalletTradeCompatRoutes } from "./wallet-trade-compat-routes";
 import { handleStewardCompatRoutes } from "./steward-compat-routes";
 import { handleWorkbenchCompatRoutes } from "./workbench-compat-routes";
@@ -888,6 +889,9 @@ async function handleMiladyCompatRoute(
 
   // Wallet OS-store, keys, NFTs — extracted to wallet-compat-routes.ts
   if (await handleWalletCompatRoutes(req, res, state)) return true;
+
+  // Browser wallet bridge transactions.
+  if (await handleWalletBrowserCompatRoutes(req, res, state)) return true;
 
   // Steward wallet routes — extracted to steward-compat-routes.ts
   if (await handleStewardCompatRoutes(req, res, state)) return true;

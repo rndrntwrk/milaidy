@@ -135,6 +135,27 @@ function http$(
   });
 }
 
+async function createConversationId(
+  port: number,
+  title: string,
+): Promise<string> {
+  const response = await http$(port, "POST", "/api/conversations", { title });
+  if (response.status !== 200) {
+    throw new Error(`Failed to create conversation: status=${response.status}`);
+  }
+  const conversation =
+    response.data.conversation &&
+    typeof response.data.conversation === "object" &&
+    !Array.isArray(response.data.conversation)
+      ? (response.data.conversation as Record<string, unknown>)
+      : null;
+  const id = typeof conversation?.id === "string" ? conversation.id : "";
+  if (!id) {
+    throw new Error("Conversation response missing id");
+  }
+  return id;
+}
+
 
 const modelProviderUnavailablePattern =
   /exceeded your current quota|insufficient[_\s-]?quota|billing details|credit balance|rate limit|status code: 429|too many requests|invalid api key|unauthorized|authentication/i;
@@ -231,10 +252,14 @@ async function postChatWithRetries(
   const errors: string[] = [];
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
+      const conversationId = await createConversationId(
+        port,
+        `REST API retry ${attempt}`,
+      );
       const response = await http$(
         port,
         "POST",
-        "/api/chat",
+        `/api/conversations/${encodeURIComponent(conversationId)}/messages`,
         { text: "What is 1+1? Number only.", mode: "simple" },
         { timeoutMs: 45_000 },
       );
@@ -261,7 +286,7 @@ async function postChatWithRetries(
     }
   }
   throw new Error(
-    `POST /api/chat failed after ${attempts} attempts: ${errors.join(" | ")}`,
+    `POST /api/conversations/:id/messages failed after ${attempts} attempts: ${errors.join(" | ")}`,
   );
 }
 
@@ -274,10 +299,14 @@ async function postChatPromptWithRetries(
   const errors: string[] = [];
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
+      const conversationId = await createConversationId(
+        port,
+        `Prompt retry ${attempt}`,
+      );
       const response = await http$(
         port,
         "POST",
-        "/api/chat",
+        `/api/conversations/${encodeURIComponent(conversationId)}/messages`,
         { text: prompt, mode: "simple" },
         { timeoutMs },
       );
@@ -304,7 +333,7 @@ async function postChatPromptWithRetries(
     }
   }
   throw new Error(
-    `POST /api/chat(prompt) failed after ${attempts} attempts: ${errors.join(" | ")}`,
+    `POST /api/conversations/:id/messages(prompt) failed after ${attempts} attempts: ${errors.join(" | ")}`,
   );
 }
 
@@ -891,7 +920,7 @@ describe("Agent Runtime E2E", () => {
     });
 
     it.skipIf(!hasModelProvider)(
-      "POST /api/chat returns real response",
+      "POST /api/conversations/:id/messages returns real response",
       async () => {
         let chat: { status: number; data: Record<string, unknown> };
         try {
@@ -900,7 +929,7 @@ describe("Agent Runtime E2E", () => {
           if (
             await shouldSkipDueModelProviderUnavailable(
               runtime,
-              "POST /api/chat returns real response",
+              "POST /api/conversations/:id/messages returns real response",
             )
           ) {
             return;
@@ -913,7 +942,7 @@ describe("Agent Runtime E2E", () => {
           if (
             await shouldSkipDueModelProviderUnavailable(
               runtime,
-              "POST /api/chat returns real response",
+              "POST /api/conversations/:id/messages returns real response",
             )
           ) {
             return;
@@ -993,10 +1022,21 @@ describe("Agent Runtime E2E", () => {
     );
 
     it.skipIf(!hasModelProvider)(
-      "POST /api/chat rejects empty text",
+      "POST /api/conversations/:id/messages rejects empty text",
       async () => {
+        const conversationId = await createConversationId(
+          server?.port,
+          "Empty text validation",
+        );
         expect(
-          (await http$(server?.port, "POST", "/api/chat", { text: "" })).status,
+          (
+            await http$(
+              server?.port,
+              "POST",
+              `/api/conversations/${encodeURIComponent(conversationId)}/messages`,
+              { text: "" },
+            )
+          ).status,
         ).toBe(400);
       },
     );
@@ -1093,13 +1133,17 @@ describe("Agent Runtime E2E", () => {
 
   describe("error paths", () => {
     it.skipIf(!hasModelProvider)("non-JSON body → 400", async () => {
+      const conversationId = await createConversationId(
+        server?.port,
+        "Invalid JSON",
+      );
       const { status } = await new Promise<{ status: number }>(
         (resolve, reject) => {
           const req = http.request(
             {
               hostname: "127.0.0.1",
               port: server?.port,
-              path: "/api/chat",
+              path: `/api/conversations/${encodeURIComponent(conversationId)}/messages`,
               method: "POST",
               headers: {
                 "Content-Type": "application/json",

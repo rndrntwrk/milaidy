@@ -141,6 +141,12 @@ export default defineConfig({
     // Live/real QA browser checks are opt-in and should not run as part of the
     // default app suite, even if the developer shell exports live-test env.
     exclude: [
+      "../../packages/app-core/test/**/*.e2e.test.ts",
+      "../../packages/app-core/test/**/*.e2e.test.tsx",
+      "../../packages/app-core/test/**/*.live.e2e.test.ts",
+      "../../packages/app-core/test/**/*.live.e2e.test.tsx",
+      "../../packages/app-core/test/**/*.real.e2e.test.ts",
+      "../../packages/app-core/test/**/*.real.e2e.test.tsx",
       "test/**/*.live.test.ts",
       "test/**/*.live.test.tsx",
       "test/**/*.live.e2e.test.ts",

@@ -19,7 +19,6 @@ import type {
   CloudCompatAgentStatus,
   CloudCompatJob,
   CloudCompatLaunchResult,
-  CloudCompatManagedDiscordStatus,
   CloudCredits,
   CloudLoginPollResponse,
   CloudLoginResponse,

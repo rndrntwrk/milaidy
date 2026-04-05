@@ -36,6 +36,7 @@ import {
   importAppRouteModule,
 } from "./app-package-modules";
 import { generateWalletKeys, getWalletAddressesWithSteward } from "../api/wallet";
+import { generateBotUsername, generateBotPassword } from "./credential-words";
 import { getPluginInfo, getRegistryPlugins } from "./registry-client";
 import { scoreEntries, toSearchResults } from "./registry-client-queries.js";
 
@@ -609,6 +610,52 @@ async function prepareHyperscapeLaunch(
   }
 }
 
+/**
+ * Auto-generate and persist 2004scape bot credentials if not already set.
+ *
+ * Creates a unique username from the agent's name + cute animal suffix,
+ * and a cryptographically random password. Credentials are stored as
+ * runtime secrets so they persist across restarts.
+ */
+async function prepare2004scapeLaunch(
+  runtime: IAgentRuntime | null,
+): Promise<AppLaunchDiagnostic[]> {
+  if (!runtime) return [];
+
+  // Check if credentials are already configured
+  const existingBotName = resolveSettingLike(runtime, "RS_SDK_BOT_NAME");
+  const existingPassword = resolveSettingLike(runtime, "RS_SDK_BOT_PASSWORD");
+
+  if (existingBotName && existingPassword) {
+    logger.info(
+      `[app-manager] 2004scape credentials already configured for bot: ${existingBotName}`,
+    );
+    return [];
+  }
+
+  // Generate new credentials from the agent's name
+  const agentName = runtime.character?.name || "Agent";
+  const botName = existingBotName || generateBotUsername(agentName);
+  const botPassword = existingPassword || generateBotPassword();
+
+  // Persist credentials in runtime settings and character secrets
+  if (!existingBotName) {
+    persistRuntimeSecret(runtime, "RS_SDK_BOT_NAME", botName);
+    // Also set BOT_NAME for compatibility with the 2004scape SDK
+    persistRuntimeSecret(runtime, "BOT_NAME", botName);
+  }
+  if (!existingPassword) {
+    persistRuntimeSecret(runtime, "RS_SDK_BOT_PASSWORD", botPassword);
+    persistRuntimeSecret(runtime, "BOT_PASSWORD", botPassword);
+  }
+
+  logger.info(
+    `[app-manager] Auto-generated 2004scape credentials for agent "${agentName}": bot name "${botName}"`,
+  );
+
+  return [];
+}
+
 function substituteTemplateVars(raw: string): string {
   return raw.replace(/\{([A-Z0-9_]+)\}/g, (_full, key: string) => {
     if (!ALLOWED_APP_URL_TEMPLATE_KEYS.has(key)) {
@@ -958,6 +1005,41 @@ function collectHyperscapeLaunchDiagnostics(
   return diagnostics;
 }
 
+function collect2004scapeLaunchDiagnostics(
+  appInfo: RegistryAppPlugin,
+  viewer: AppViewerConfig | null,
+  _session: AppSessionState | null,
+  runtime: IAgentRuntime | null,
+): AppLaunchDiagnostic[] {
+  if (!is2004scapeAppName(appInfo.name)) {
+    return [];
+  }
+
+  const diagnostics: AppLaunchDiagnostic[] = [];
+  const botName = resolveSettingLike(runtime, "RS_SDK_BOT_NAME");
+  const botPassword = resolveSettingLike(runtime, "RS_SDK_BOT_PASSWORD");
+
+  if (!botName || !botPassword) {
+    diagnostics.push({
+      code: "2004scape-credentials-missing",
+      severity: "warning",
+      message:
+        "2004scape bot credentials could not be generated. The viewer will load without auto-login.",
+    });
+  }
+
+  if (viewer?.postMessageAuth && !viewer.authMessage) {
+    diagnostics.push({
+      code: "2004scape-auth-unavailable",
+      severity: "error",
+      message:
+        "2004scape auto-sign-in requires RS_SDK_BOT_NAME and RS_SDK_BOT_PASSWORD to be configured.",
+    });
+  }
+
+  return diagnostics;
+}
+
 function collectLaunchDiagnostics(
   appInfo: RegistryAppPlugin,
   viewer: AppViewerConfig | null,
@@ -966,6 +1048,9 @@ function collectLaunchDiagnostics(
 ): AppLaunchDiagnostic[] {
   if (isHyperscapeAppName(appInfo.name)) {
     return collectHyperscapeLaunchDiagnostics(appInfo, viewer, session, runtime);
+  }
+  if (is2004scapeAppName(appInfo.name)) {
+    return collect2004scapeLaunchDiagnostics(appInfo, viewer, session, runtime);
   }
   return [];
 }
@@ -1195,10 +1280,17 @@ export class AppManager {
       logger.info(`[app-manager] Plugin already installed: ${pluginName}`);
     }
 
-    const launchPreparationDiagnostics =
-      isHyperscapeAppName(appInfo.name)
-        ? await prepareHyperscapeLaunch(_runtime ?? null)
-        : [];
+    const launchPreparationDiagnostics: AppLaunchDiagnostic[] = [];
+    if (isHyperscapeAppName(appInfo.name)) {
+      launchPreparationDiagnostics.push(
+        ...await prepareHyperscapeLaunch(_runtime ?? null),
+      );
+    }
+    if (is2004scapeAppName(appInfo.name)) {
+      launchPreparationDiagnostics.push(
+        ...await prepare2004scapeLaunch(_runtime ?? null),
+      );
+    }
 
     const runtimePluginRegistered = await ensureRuntimePluginRegistered(
       appInfo,

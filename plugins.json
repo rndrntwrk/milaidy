@@ -5073,6 +5073,29 @@
       }
     },
     {
+      "id": "selfcontrol",
+      "dirName": "plugin-selfcontrol",
+      "name": "SelfControl",
+      "npmName": "@miladyai/plugin-selfcontrol",
+      "description": "Website blocking plugin for Milady.",
+      "tags": [
+        "feature",
+        "focus",
+        "productivity",
+        "website-blocking",
+        "cross-platform",
+        "hosts-file",
+        "selfcontrol"
+      ],
+      "category": "feature",
+      "envKey": null,
+      "configKeys": [],
+      "version": "2.0.0-alpha.83",
+      "pluginParameters": {},
+      "versionSource": "local-workspace",
+      "repository": "https://github.com/milady-ai/milady/tree/main/packages/plugin-selfcontrol"
+    },
+    {
       "id": "shell",
       "dirName": "plugin-shell",
       "name": "Shell",

@@ -32,7 +32,6 @@ export * from "./apps/GameView";
 export * from "./apps/GameViewOverlay";
 export * from "./avatar/VrmEngine";
 export * from "./avatar/VrmViewer";
-export * from "./browser/BrowserWorkspaceWalletPanel";
 export * from "./character/AvatarLoader";
 export * from "./character/AvatarSelector";
 export * from "./character/CharacterEditor";

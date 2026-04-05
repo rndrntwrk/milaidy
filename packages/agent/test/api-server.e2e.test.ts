@@ -172,6 +172,45 @@ function reqSse(
   });
 }
 
+async function createConversationIdForTest(
+  port: number,
+  title = "Test conversation",
+): Promise<string> {
+  const create = await req(port, "POST", "/api/conversations", { title });
+  expect(create.status).toBe(200);
+  const conversation = create.data.conversation as { id?: string };
+  const conversationId = conversation.id ?? "";
+  expect(conversationId.length).toBeGreaterThan(0);
+  return conversationId;
+}
+
+async function postConversationMessageForTest(
+  port: number,
+  body: Record<string, unknown>,
+  title?: string,
+) {
+  const conversationId = await createConversationIdForTest(port, title);
+  return req(
+    port,
+    "POST",
+    `/api/conversations/${conversationId}/messages`,
+    body,
+  );
+}
+
+async function postConversationStreamForTest(
+  port: number,
+  body: Record<string, unknown>,
+  title?: string,
+) {
+  const conversationId = await createConversationIdForTest(port, title);
+  return reqSse(
+    port,
+    `/api/conversations/${conversationId}/messages/stream`,
+    body,
+  );
+}
+
 function waitForWsMessage(
   ws: WebSocket,
   predicate: (message: Record<string, unknown>) => boolean,
@@ -961,39 +1000,64 @@ describe("API Server E2E (no runtime)", () => {
 
   // -- Chat rejection without runtime --
 
-  describe("POST /api/chat (no runtime)", () => {
-    it("rejects with 503 when no runtime", async () => {
-      const { status, data } = await req(port, "POST", "/api/chat", {
-        text: "hello",
-      });
-      expect(status).toBe(503);
-      expect(data.error).toContain("not running");
+  describe("POST /api/conversations/:id/messages (no runtime)", () => {
+    it("returns 404 when conversation does not exist", async () => {
+      const { status } = await req(
+        port,
+        "POST",
+        "/api/conversations/missing/messages",
+        {
+          text: "hello",
+        },
+      );
+      expect(status).toBe(404);
     });
 
-    it("rejects empty text with 400", async () => {
-      const { status } = await req(port, "POST", "/api/chat", { text: "" });
-      expect(status).toBe(400);
-    });
+    it("returns 503 when conversation exists but runtime is absent", async () => {
+      const conversationId = await createConversationIdForTest(
+        port,
+        "No-runtime message test",
+      );
 
-    it("rejects missing text with 400", async () => {
-      const { status } = await req(port, "POST", "/api/chat", {});
-      expect(status).toBe(400);
-    });
-  });
-
-  describe("POST /api/chat/stream (no runtime)", () => {
-    it("rejects with 503 when no runtime", async () => {
-      const { status, data } = await req(port, "POST", "/api/chat/stream", {
-        text: "hello",
-      });
+      const { status, data } = await req(
+        port,
+        "POST",
+        `/api/conversations/${conversationId}/messages`,
+        {
+          text: "hello",
+        },
+      );
       expect(status).toBe(503);
       expect(String(data.error)).toContain("not running");
     });
 
     it("rejects empty text with 400", async () => {
-      const { status } = await req(port, "POST", "/api/chat/stream", {
-        text: "",
-      });
+      const conversationId = await createConversationIdForTest(
+        port,
+        "Empty message validation",
+      );
+      const { status } = await req(
+        port,
+        "POST",
+        `/api/conversations/${conversationId}/messages`,
+        {
+          text: "",
+        },
+      );
+      expect(status).toBe(400);
+    });
+
+    it("rejects missing text with 400", async () => {
+      const conversationId = await createConversationIdForTest(
+        port,
+        "Missing message validation",
+      );
+      const { status } = await req(
+        port,
+        "POST",
+        `/api/conversations/${conversationId}/messages`,
+        {},
+      );
       expect(status).toBe(400);
     });
   });
@@ -1034,7 +1098,7 @@ describe("API Server E2E (no runtime)", () => {
   });
 
   describe("streaming chat endpoints (runtime stub)", () => {
-    it("POST /api/chat emits MESSAGE_RECEIVED before handling", async () => {
+    it("POST /api/conversations/:id/messages emits MESSAGE_RECEIVED before handling", async () => {
       const emitted: Array<{
         event: string;
         source: string | null;
@@ -1063,14 +1127,13 @@ describe("API Server E2E (no runtime)", () => {
       });
       const streamServer = await startApiServer({ port: 0, runtime });
       try {
-        const { status, data } = await req(
+        const { status, data } = await postConversationMessageForTest(
           streamServer.port,
-          "POST",
-          "/api/chat",
           {
             text: "hello",
             mode: "simple",
           },
+          "MESSAGE_RECEIVED test",
         );
 
         expect(status).toBe(200);
@@ -1087,7 +1150,7 @@ describe("API Server E2E (no runtime)", () => {
       }
     });
 
-    it("POST /api/chat injects uploaded knowledge snippets into generation", async () => {
+    it("POST /api/conversations/:id/messages injects uploaded knowledge snippets into generation", async () => {
       let handledMessageText = "";
       const knowledgeService = {
         getKnowledge: async () => [
@@ -1123,14 +1186,13 @@ describe("API Server E2E (no runtime)", () => {
 
       const streamServer = await startApiServer({ port: 0, runtime });
       try {
-        const { status, data } = await req(
+        const { status, data } = await postConversationMessageForTest(
           streamServer.port,
-          "POST",
-          "/api/chat",
           {
             text: "what is the qa codeword from the uploaded file?",
             mode: "simple",
           },
+          "Knowledge snippets test",
         );
 
         expect(status).toBe(200);
@@ -1147,7 +1209,7 @@ describe("API Server E2E (no runtime)", () => {
       }
     });
 
-    it("POST /api/chat skips knowledge lookup for ordinary prompts", async () => {
+    it("POST /api/conversations/:id/messages skips knowledge lookup for ordinary prompts", async () => {
       let knowledgeLookups = 0;
       const runtime = createRuntimeForChatSseTests({
         getService: (serviceType) =>
@@ -1171,14 +1233,13 @@ describe("API Server E2E (no runtime)", () => {
 
       const streamServer = await startApiServer({ port: 0, runtime });
       try {
-        const { status, data } = await req(
+        const { status, data } = await postConversationMessageForTest(
           streamServer.port,
-          "POST",
-          "/api/chat",
           {
             text: "what is 2+2? answer with only the number 4",
             mode: "simple",
           },
+          "Ordinary prompt test",
         );
 
         expect(status).toBe(200);
@@ -1189,7 +1250,7 @@ describe("API Server E2E (no runtime)", () => {
       }
     });
 
-    it("POST /api/chat falls back when knowledge lookup hangs", async () => {
+    it("POST /api/conversations/:id/messages falls back when knowledge lookup hangs", async () => {
       let handledMessageText = "";
       const previousTimeout = process.env.CHAT_KNOWLEDGE_TIMEOUT_MS;
       process.env.CHAT_KNOWLEDGE_TIMEOUT_MS = "1";
@@ -1223,14 +1284,13 @@ describe("API Server E2E (no runtime)", () => {
 
       const streamServer = await startApiServer({ port: 0, runtime });
       try {
-        const { status, data } = await req(
+        const { status, data } = await postConversationMessageForTest(
           streamServer.port,
-          "POST",
-          "/api/chat",
           {
             text: "what is the qa codeword from the uploaded file?",
             mode: "simple",
           },
+          "Knowledge timeout test",
         );
 
         expect(status).toBe(200);
@@ -1248,7 +1308,7 @@ describe("API Server E2E (no runtime)", () => {
       }
     });
 
-    it("POST /api/chat recovers malformed XML action payload and executes fallback action", async () => {
+    it("POST /api/conversations/:id/messages recovers malformed XML action payload and executes fallback action", async () => {
       const runtime = createRuntimeForChatSseTests({
         actions: [
           {
@@ -1284,14 +1344,13 @@ describe("API Server E2E (no runtime)", () => {
 
       const streamServer = await startApiServer({ port: 0, runtime });
       try {
-        const { status, data } = await req(
+        const { status, data } = await postConversationMessageForTest(
           streamServer.port,
-          "POST",
-          "/api/chat",
           {
             text: "how much SOL do you have?",
             mode: "simple",
           },
+          "Malformed XML fallback",
         );
 
         expect(status).toBe(200);
@@ -1302,7 +1361,7 @@ describe("API Server E2E (no runtime)", () => {
       }
     });
 
-    it("POST /api/chat does not force fallback actions for normal non-XML action payloads", async () => {
+    it("POST /api/conversations/:id/messages does not force fallback actions for normal non-XML action payloads", async () => {
       const runtime = createRuntimeForChatSseTests({
         handleMessage: async () => {
           return {
@@ -1316,14 +1375,13 @@ describe("API Server E2E (no runtime)", () => {
 
       const streamServer = await startApiServer({ port: 0, runtime });
       try {
-        const { status, data } = await req(
+        const { status, data } = await postConversationMessageForTest(
           streamServer.port,
-          "POST",
-          "/api/chat",
           {
             text: "are you there?",
             mode: "simple",
           },
+          "Non-XML fallback",
         );
 
         expect(status).toBe(200);
@@ -1333,7 +1391,7 @@ describe("API Server E2E (no runtime)", () => {
       }
     });
 
-    it("POST /api/chat starts a fallback trajectory when hooks do not set a step id", async () => {
+    it("POST /api/conversations/:id/messages starts a fallback trajectory when hooks do not set a step id", async () => {
       const starts: Array<{ stepId: string; source?: string }> = [];
       const ends: Array<{ stepId: string; status?: string }> = [];
       const trajectoryLogger = {
@@ -1355,14 +1413,13 @@ describe("API Server E2E (no runtime)", () => {
       });
       const streamServer = await startApiServer({ port: 0, runtime });
       try {
-        const { status, data } = await req(
+        const { status, data } = await postConversationMessageForTest(
           streamServer.port,
-          "POST",
-          "/api/chat",
           {
             text: "fallback trajectory path",
             mode: "simple",
           },
+          "Fallback trajectory start",
         );
 
         expect(status).toBe(200);
@@ -1376,7 +1433,7 @@ describe("API Server E2E (no runtime)", () => {
       }
     });
 
-    it("POST /api/chat does not call deprecated direct trajectory fallback even when logger is only in getServicesByType", async () => {
+    it("POST /api/conversations/:id/messages does not call deprecated direct trajectory fallback even when logger is only in getServicesByType", async () => {
       const starts: Array<{ stepId: string; source?: string }> = [];
       const ends: Array<{ stepId: string; status?: string }> = [];
       const trajectoryLogger = {
@@ -1399,14 +1456,13 @@ describe("API Server E2E (no runtime)", () => {
       });
       const streamServer = await startApiServer({ port: 0, runtime });
       try {
-        const { status, data } = await req(
+        const { status, data } = await postConversationMessageForTest(
           streamServer.port,
-          "POST",
-          "/api/chat",
           {
             text: "trajectory logger by type",
             mode: "simple",
           },
+          "Trajectory logger by type",
         );
 
         expect(status).toBe(200);
@@ -1418,7 +1474,7 @@ describe("API Server E2E (no runtime)", () => {
       }
     });
 
-    it("POST /api/chat does not end trajectories directly when hook metadata provides a step id", async () => {
+    it("POST /api/conversations/:id/messages does not end trajectories directly when hook metadata provides a step id", async () => {
       const starts: Array<{ stepId: string }> = [];
       const ends: Array<{ stepId: string; status?: string }> = [];
       const trajectoryLogger = {
@@ -1454,14 +1510,13 @@ describe("API Server E2E (no runtime)", () => {
 
       const streamServer = await startApiServer({ port: 0, runtime });
       try {
-        const { status, data } = await req(
+        const { status, data } = await postConversationMessageForTest(
           streamServer.port,
-          "POST",
-          "/api/chat",
           {
             text: "trajectory end by hook",
             mode: "simple",
           },
+          "Hook trajectory metadata",
         );
 
         expect(status).toBe(200);
@@ -1473,7 +1528,7 @@ describe("API Server E2E (no runtime)", () => {
       }
     });
 
-    it("POST /api/chat falls back to starting and ending a trajectory when MESSAGE_RECEIVED misses the step id", async () => {
+    it("POST /api/conversations/:id/messages falls back to starting and ending a trajectory when MESSAGE_RECEIVED misses the step id", async () => {
       const starts: Array<{
         agentId: string;
         source?: string;
@@ -1551,10 +1606,14 @@ describe("API Server E2E (no runtime)", () => {
 
       const streamServer = await startApiServer({ port: 0, runtime });
       try {
-        const { status, data } = await req(streamServer.port, "POST", "/api/chat", {
-          text: "fallback trajectory please",
-          mode: "simple",
-        });
+        const { status, data } = await postConversationMessageForTest(
+          streamServer.port,
+          {
+            text: "fallback trajectory please",
+            mode: "simple",
+          },
+          "Fallback trajectory completion",
+        );
 
         expect(status).toBe(200);
         expect(String(data.text ?? "")).toBe("Hello world");
@@ -1571,7 +1630,7 @@ describe("API Server E2E (no runtime)", () => {
       }
     });
 
-    it("POST /api/chat no longer proxies trajectory logger routing through deprecated fallback", async () => {
+    it("POST /api/conversations/:id/messages no longer proxies trajectory logger routing through deprecated fallback", async () => {
       const starts: Array<{ stepId: string }> = [];
       const ends: Array<{ stepId: string; status?: string }> = [];
       const persistentLlmCalls: Array<{ stepId: string; model?: string }> = [];
@@ -1634,14 +1693,13 @@ describe("API Server E2E (no runtime)", () => {
 
       const streamServer = await startApiServer({ port: 0, runtime });
       try {
-        const { status, data } = await req(
+        const { status, data } = await postConversationMessageForTest(
           streamServer.port,
-          "POST",
-          "/api/chat",
           {
             text: "trajectory logger routing",
             mode: "simple",
           },
+          "Trajectory logger routing",
         );
 
         expect(status).toBe(200);
@@ -1655,14 +1713,14 @@ describe("API Server E2E (no runtime)", () => {
       }
     });
 
-    it("POST /api/chat/stream emits token and done events", async () => {
+    it("POST /api/conversations/:id/messages/stream emits token and done events", async () => {
       const runtime = createRuntimeForChatSseTests();
       const streamServer = await startApiServer({ port: 0, runtime });
       try {
-        const { status, headers, events } = await reqSse(
+        const { status, headers, events } = await postConversationStreamForTest(
           streamServer.port,
-          "/api/chat/stream",
           { text: "hello", mode: "power" },
+          "Legacy SSE replacement",
         );
 
         expect(status).toBe(200);
@@ -1684,7 +1742,7 @@ describe("API Server E2E (no runtime)", () => {
       }
     });
 
-    it("POST /api/chat/stream emits token events from runtime onStreamChunk", async () => {
+    it("POST /api/conversations/:id/messages/stream emits token events from runtime onStreamChunk", async () => {
       const runtime = createRuntimeForChatSseTests({
         handleMessage: async (
           _runtime,
@@ -1704,10 +1762,10 @@ describe("API Server E2E (no runtime)", () => {
       });
       const streamServer = await startApiServer({ port: 0, runtime });
       try {
-        const { status, events } = await reqSse(
+        const { status, events } = await postConversationStreamForTest(
           streamServer.port,
-          "/api/chat/stream",
           { text: "hello", mode: "power" },
+          "onStreamChunk legacy replacement",
         );
 
         expect(status).toBe(200);
@@ -1729,7 +1787,7 @@ describe("API Server E2E (no runtime)", () => {
       }
     });
 
-    it("POST /api/chat/stream avoids mixed-source duplication when callback text arrives before onStreamChunk", async () => {
+    it("POST /api/conversations/:id/messages/stream avoids mixed-source duplication when callback text arrives before onStreamChunk", async () => {
       const runtime = createRuntimeForChatSseTests({
         handleMessage: async (
           _runtime,
@@ -1749,10 +1807,10 @@ describe("API Server E2E (no runtime)", () => {
       });
       const streamServer = await startApiServer({ port: 0, runtime });
       try {
-        const { status, events } = await reqSse(
+        const { status, events } = await postConversationStreamForTest(
           streamServer.port,
-          "/api/chat/stream",
           { text: "hello", mode: "power" },
+          "Mixed source duplication",
         );
 
         expect(status).toBe(200);
@@ -1767,7 +1825,7 @@ describe("API Server E2E (no runtime)", () => {
       }
     });
 
-    it("POST /api/chat/stream de-duplicates cumulative callback text updates", async () => {
+    it("POST /api/conversations/:id/messages/stream de-duplicates cumulative callback text updates", async () => {
       const runtime = createRuntimeForChatSseTests({
         handleMessage: async (_runtime, _message, onResponse) => {
           await onResponse({ text: "Hello " } as Content);
@@ -1781,10 +1839,10 @@ describe("API Server E2E (no runtime)", () => {
       });
       const streamServer = await startApiServer({ port: 0, runtime });
       try {
-        const { status, events } = await reqSse(
+        const { status, events } = await postConversationStreamForTest(
           streamServer.port,
-          "/api/chat/stream",
           { text: "hello", mode: "power" },
+          "Cumulative callback dedupe",
         );
 
         expect(status).toBe(200);
@@ -1802,7 +1860,7 @@ describe("API Server E2E (no runtime)", () => {
       }
     });
 
-    it("POST /api/chat/stream emits replacement snapshots for corrected callback text", async () => {
+    it("POST /api/conversations/:id/messages/stream emits replacement snapshots for corrected callback text", async () => {
       const runtime = createRuntimeForChatSseTests({
         handleMessage: async (_runtime, _message, onResponse) => {
           await onResponse({ text: "Hello wrld" } as Content);
@@ -1817,10 +1875,10 @@ describe("API Server E2E (no runtime)", () => {
       });
       const streamServer = await startApiServer({ port: 0, runtime });
       try {
-        const { status, events } = await reqSse(
+        const { status, events } = await postConversationStreamForTest(
           streamServer.port,
-          "/api/chat/stream",
           { text: "hello", mode: "power" },
+          "Corrected callback snapshot",
         );
 
         expect(status).toBe(200);
@@ -1844,7 +1902,7 @@ describe("API Server E2E (no runtime)", () => {
       }
     });
 
-    it("POST /api/chat/stream preserves repeated characters in incremental callback tokens", async () => {
+    it("POST /api/conversations/:id/messages/stream preserves repeated characters in incremental callback tokens", async () => {
       const runtime = createRuntimeForChatSseTests({
         handleMessage: async (_runtime, _message, onResponse) => {
           for (const token of [
@@ -1871,10 +1929,10 @@ describe("API Server E2E (no runtime)", () => {
       });
       const streamServer = await startApiServer({ port: 0, runtime });
       try {
-        const { status, events } = await reqSse(
+        const { status, events } = await postConversationStreamForTest(
           streamServer.port,
-          "/api/chat/stream",
           { text: "hello", mode: "power" },
+          "Repeated character tokens",
         );
 
         expect(status).toBe(200);
@@ -3271,7 +3329,7 @@ describe("API Server E2E (no runtime)", () => {
       }
     });
 
-    it("POST /api/chat includes the active EVM address when wallet key is configured", async () => {
+    it("POST /api/conversations/:id/messages includes the active EVM address when wallet key is configured", async () => {
       const prevKey = process.env.EVM_PRIVATE_KEY;
       const testKey =
         "0x59c6995e998f97a5a0044976f4b8c0fcbf2d34f95f0f70f7f6f6e3d54d3f5f31";
@@ -3289,10 +3347,14 @@ describe("API Server E2E (no runtime)", () => {
       const runtime = createRuntimeForChatSseTests({ handleMessage });
       const server = await startApiServer({ port: 0, runtime });
       try {
-        const { status, data } = await req(server.port, "POST", "/api/chat", {
-          text: "what is your wallet address?",
-          mode: "power",
-        });
+        const { status, data } = await postConversationMessageForTest(
+          server.port,
+          {
+            text: "what is your wallet address?",
+            mode: "power",
+          },
+          "Wallet address key configured",
+        );
         expect(status).toBe(200);
         expect(String(data.text)).toContain(`EVM: ${expectedAddress}`);
         expect(String(data.text)).toContain("Automation mode:");
@@ -3307,7 +3369,7 @@ describe("API Server E2E (no runtime)", () => {
       }
     });
 
-    it("POST /api/chat returns deterministic wallet status for wallet address prompts", async () => {
+    it("POST /api/conversations/:id/messages returns deterministic wallet status for wallet address prompts", async () => {
       const handleMessage = vi.fn<
         Parameters<
           NonNullable<AgentRuntime["messageService"]>["handleMessage"]
@@ -3319,10 +3381,14 @@ describe("API Server E2E (no runtime)", () => {
       const runtime = createRuntimeForChatSseTests({ handleMessage });
       const server = await startApiServer({ port: 0, runtime });
       try {
-        const { status, data } = await req(server.port, "POST", "/api/chat", {
-          text: "what is your wallet address?",
-          mode: "power",
-        });
+        const { status, data } = await postConversationMessageForTest(
+          server.port,
+          {
+            text: "what is your wallet address?",
+            mode: "power",
+          },
+          "Wallet deterministic status",
+        );
         expect(status).toBe(200);
         expect(String(data.text)).toContain("Detected wallets:");
         expect(String(data.text)).toContain("Automation mode:");
@@ -3332,7 +3398,7 @@ describe("API Server E2E (no runtime)", () => {
       }
     });
 
-    it("POST /api/chat does not intercept wallet balance prompts in full mode", async () => {
+    it("POST /api/conversations/:id/messages does not intercept wallet balance prompts in full mode", async () => {
       const handleMessage = vi.fn<
         Parameters<
           NonNullable<AgentRuntime["messageService"]>["handleMessage"]
@@ -3350,10 +3416,14 @@ describe("API Server E2E (no runtime)", () => {
       const runtime = createRuntimeForChatSseTests({ handleMessage });
       const server = await startApiServer({ port: 0, runtime });
       try {
-        const { status, data } = await req(server.port, "POST", "/api/chat", {
-          text: "what is your wallet balance?",
-          mode: "power",
-        });
+        const { status, data } = await postConversationMessageForTest(
+          server.port,
+          {
+            text: "what is your wallet balance?",
+            mode: "power",
+          },
+          "Wallet balance full mode",
+        );
         expect(status).toBe(200);
         expect(String(data.text)).toContain("Balance from plugin path");
         expect(handleMessage).toHaveBeenCalledTimes(1);
@@ -3374,7 +3444,7 @@ describe("API Server E2E (no runtime)", () => {
       }
     });
 
-    it("POST /api/chat trims wallet progress filler when CHECK_BALANCE returns a real result", async () => {
+    it("POST /api/conversations/:id/messages trims wallet progress filler when CHECK_BALANCE returns a real result", async () => {
       const handleMessage = vi.fn<
         Parameters<
           NonNullable<AgentRuntime["messageService"]>["handleMessage"]
@@ -3397,10 +3467,14 @@ describe("API Server E2E (no runtime)", () => {
       const runtime = createRuntimeForChatSseTests({ handleMessage });
       const server = await startApiServer({ port: 0, runtime });
       try {
-        const { status, data } = await req(server.port, "POST", "/api/chat", {
-          text: "what is your wallet balance?",
-          mode: "power",
-        });
+        const { status, data } = await postConversationMessageForTest(
+          server.port,
+          {
+            text: "what is your wallet balance?",
+            mode: "power",
+          },
+          "Wallet progress filler trim",
+        );
         expect(status).toBe(200);
         expect(String(data.text)).toContain("Wallet Balances:");
         expect(String(data.text)).not.toContain(
@@ -3411,7 +3485,7 @@ describe("API Server E2E (no runtime)", () => {
       }
     });
 
-    it("POST /api/chat turns wallet progress filler into an explicit execution failure when no action runs", async () => {
+    it("POST /api/conversations/:id/messages turns wallet progress filler into an explicit execution failure when no action runs", async () => {
       const handleMessage = vi.fn<
         Parameters<
           NonNullable<AgentRuntime["messageService"]>["handleMessage"]
@@ -3423,10 +3497,14 @@ describe("API Server E2E (no runtime)", () => {
       const runtime = createRuntimeForChatSseTests({ handleMessage });
       const server = await startApiServer({ port: 0, runtime });
       try {
-        const { status, data } = await req(server.port, "POST", "/api/chat", {
-          text: "what is your wallet balance?",
-          mode: "power",
-        });
+        const { status, data } = await postConversationMessageForTest(
+          server.port,
+          {
+            text: "what is your wallet balance?",
+            mode: "power",
+          },
+          "Wallet no-action failure",
+        );
         expect(status).toBe(200);
         expect(String(data.text)).toContain("no wallet action actually ran");
         expect(String(data.text)).toContain("plugin-evm:");
@@ -3436,7 +3514,7 @@ describe("API Server E2E (no runtime)", () => {
       }
     });
 
-    it("POST /api/chat executes CHECK_BALANCE fallback when the model emits prose with no action payload", async () => {
+    it("POST /api/conversations/:id/messages executes CHECK_BALANCE fallback when the model emits prose with no action payload", async () => {
       const handleMessage = vi.fn<
         Parameters<
           NonNullable<AgentRuntime["messageService"]>["handleMessage"]
@@ -3470,10 +3548,14 @@ describe("API Server E2E (no runtime)", () => {
       ];
       const server = await startApiServer({ port: 0, runtime });
       try {
-        const { status, data } = await req(server.port, "POST", "/api/chat", {
-          text: "what is your wallet balance?",
-          mode: "power",
-        });
+        const { status, data } = await postConversationMessageForTest(
+          server.port,
+          {
+            text: "what is your wallet balance?",
+            mode: "power",
+          },
+          "Wallet CHECK_BALANCE fallback",
+        );
         expect(status).toBe(200);
         expect(String(data.text)).toContain("Wallet Balances:");
         expect(String(data.text)).toContain("BNB: 0.1000");
@@ -3485,7 +3567,7 @@ describe("API Server E2E (no runtime)", () => {
       }
     });
 
-    it("POST /api/chat executes TRANSFER_TOKEN fallback from a prose-only send prompt and returns the tx hash", async () => {
+    it("POST /api/conversations/:id/messages executes TRANSFER_TOKEN fallback from a prose-only send prompt and returns the tx hash", async () => {
       const previousKey = process.env.EVM_PRIVATE_KEY;
       const previousRpc = process.env.BSC_TESTNET_RPC_URL;
       process.env.EVM_PRIVATE_KEY =
@@ -3532,10 +3614,14 @@ describe("API Server E2E (no runtime)", () => {
       ];
       const server = await startApiServer({ port: 0, runtime });
       try {
-        const { status, data } = await req(server.port, "POST", "/api/chat", {
-          text: "send 0.001 tBNB on BSC testnet to 0x8DFBdEEC8c5d4970BB5F481C6ec7f73fa1C65be5",
-          mode: "power",
-        });
+        const { status, data } = await postConversationMessageForTest(
+          server.port,
+          {
+            text: "send 0.001 tBNB on BSC testnet to 0x8DFBdEEC8c5d4970BB5F481C6ec7f73fa1C65be5",
+            mode: "power",
+          },
+          "Wallet TRANSFER_TOKEN fallback",
+        );
         expect(status).toBe(200);
         expect(String(data.text)).toContain("Action: TRANSFER_TOKEN");
         expect(String(data.text)).toContain("Tx hash: 0xsendhash");
@@ -3551,7 +3637,7 @@ describe("API Server E2E (no runtime)", () => {
       }
     });
 
-    it("POST /api/chat executes EXECUTE_TRADE fallback from a prose-only swap prompt and returns the tx hash", async () => {
+    it("POST /api/conversations/:id/messages executes EXECUTE_TRADE fallback from a prose-only swap prompt and returns the tx hash", async () => {
       const previousKey = process.env.EVM_PRIVATE_KEY;
       const previousRpc = process.env.BSC_TESTNET_RPC_URL;
       const previousToken = process.env.WALLET_DRILL_TOKEN_ADDRESS;
@@ -3602,10 +3688,14 @@ describe("API Server E2E (no runtime)", () => {
       ];
       const server = await startApiServer({ port: 0, runtime });
       try {
-        const { status, data } = await req(server.port, "POST", "/api/chat", {
-          text: "swap 0.001 tBNB to the configured token on BSC testnet using pancakeswap-v2",
-          mode: "power",
-        });
+        const { status, data } = await postConversationMessageForTest(
+          server.port,
+          {
+            text: "swap 0.001 tBNB to the configured token on BSC testnet using pancakeswap-v2",
+            mode: "power",
+          },
+          "Wallet EXECUTE_TRADE fallback",
+        );
         expect(status).toBe(200);
         expect(String(data.text)).toContain("Action: EXECUTE_TRADE");
         expect(String(data.text)).toContain("Route provider: pancakeswap-v2");
@@ -3630,7 +3720,7 @@ describe("API Server E2E (no runtime)", () => {
       }
     });
 
-    it("POST /api/chat returns an explicit swap parameter failure when no token address is available", async () => {
+    it("POST /api/conversations/:id/messages returns an explicit swap parameter failure when no token address is available", async () => {
       const previousKey = process.env.EVM_PRIVATE_KEY;
       const previousRpc = process.env.BSC_TESTNET_RPC_URL;
       const previousToken = process.env.WALLET_DRILL_TOKEN_ADDRESS;
@@ -3652,10 +3742,14 @@ describe("API Server E2E (no runtime)", () => {
       ];
       const server = await startApiServer({ port: 0, runtime });
       try {
-        const { status, data } = await req(server.port, "POST", "/api/chat", {
-          text: "swap 0.001 tBNB on BSC testnet using pancakeswap-v2",
-          mode: "power",
-        });
+        const { status, data } = await postConversationMessageForTest(
+          server.port,
+          {
+            text: "swap 0.001 tBNB on BSC testnet using pancakeswap-v2",
+            mode: "power",
+          },
+          "Wallet missing token address",
+        );
         expect(status).toBe(200);
         expect(String(data.text)).toContain("Action: EXECUTE_TRADE");
         expect(String(data.text)).toContain("Executed: false");
@@ -3732,7 +3826,7 @@ describe("API Server E2E (no runtime)", () => {
       }
     });
 
-    it("POST /api/chat returns connectors-only guidance for wallet intent without invoking runtime", async () => {
+    it("POST /api/conversations/:id/messages returns connectors-only guidance for wallet intent without invoking runtime", async () => {
       const handleMessage = vi.fn<
         Parameters<
           NonNullable<AgentRuntime["messageService"]>["handleMessage"]
@@ -3752,10 +3846,14 @@ describe("API Server E2E (no runtime)", () => {
         );
         expect(mode.status).toBe(200);
 
-        const { status, data } = await req(server.port, "POST", "/api/chat", {
-          text: "swap 0.001 bnb on bsc testnet",
-          mode: "power",
-        });
+        const { status, data } = await postConversationMessageForTest(
+          server.port,
+          {
+            text: "swap 0.001 bnb on bsc testnet",
+            mode: "power",
+          },
+          "Wallet connectors-only guidance",
+        );
         expect(status).toBe(200);
         expect(String(data.text)).toContain("connectors-only mode");
         expect(String(data.text)).toContain("/api/permissions/automation-mode");
@@ -3818,18 +3916,17 @@ describe("API Server E2E (no runtime)", () => {
     const CLOUD_CREDITS_DEPLETED_REPLY =
       "Eliza Cloud credits are depleted. Top up the cloud balance and try again.";
 
-    it("POST /api/chat replaces '(no response)' with the provider issue message", async () => {
+    it("POST /api/conversations/:id/messages replaces '(no response)' with the provider issue message", async () => {
       const runtime = createRuntimeForCreditNoResponseTests();
       const streamServer = await startApiServer({ port: 0, runtime });
       try {
-        const { status, data } = await req(
+        const { status, data } = await postConversationMessageForTest(
           streamServer.port,
-          "POST",
-          "/api/chat",
           {
             text: "hello",
             mode: "power",
           },
+          "Provider no-response fallback",
         );
         expect(status).toBe(200);
         expect(String(data.text)).toBe(CLOUD_CREDITS_DEPLETED_REPLY);
@@ -3839,14 +3936,14 @@ describe("API Server E2E (no runtime)", () => {
       }
     });
 
-    it("POST /api/chat/stream emits a done event with the provider issue message", async () => {
+    it("POST /api/conversations/:id/messages/stream emits a done event with the provider issue message", async () => {
       const runtime = createRuntimeForCreditNoResponseTests();
       const streamServer = await startApiServer({ port: 0, runtime });
       try {
-        const { status, events } = await reqSse(
+        const { status, events } = await postConversationStreamForTest(
           streamServer.port,
-          "/api/chat/stream",
           { text: "hello", mode: "power" },
+          "Provider no-response stream fallback",
         );
         expect(status).toBe(200);
         const doneEvent = events.find((event) => event.type === "done");
@@ -3859,18 +3956,17 @@ describe("API Server E2E (no runtime)", () => {
       }
     });
 
-    it("POST /api/chat returns the provider issue message when generation throws", async () => {
+    it("POST /api/conversations/:id/messages returns the provider issue message when generation throws", async () => {
       const runtime = createRuntimeForProviderErrorTests();
       const streamServer = await startApiServer({ port: 0, runtime });
       try {
-        const { status, data } = await req(
+        const { status, data } = await postConversationMessageForTest(
           streamServer.port,
-          "POST",
-          "/api/chat",
           {
             text: "hello",
             mode: "power",
           },
+          "Provider error fallback",
         );
         expect(status).toBe(200);
         expect(String(data.text)).toBe("Sorry, I'm having a provider issue");
@@ -3879,18 +3975,17 @@ describe("API Server E2E (no runtime)", () => {
       }
     });
 
-    it("POST /api/chat returns the provider issue message when the provider throws insufficient credits", async () => {
+    it("POST /api/conversations/:id/messages returns the provider issue message when the provider throws insufficient credits", async () => {
       const runtime = createRuntimeForCreditErrorTests();
       const streamServer = await startApiServer({ port: 0, runtime });
       try {
-        const { status, data } = await req(
+        const { status, data } = await postConversationMessageForTest(
           streamServer.port,
-          "POST",
-          "/api/chat",
           {
             text: "hello",
             mode: "power",
           },
+          "Provider insufficient credits",
         );
         expect(status).toBe(200);
         expect(String(data.text)).toBe(CLOUD_CREDITS_DEPLETED_REPLY);
@@ -3899,18 +3994,17 @@ describe("API Server E2E (no runtime)", () => {
       }
     });
 
-    it("POST /api/chat replaces literal '(no response)' payloads with the provider issue message", async () => {
+    it("POST /api/conversations/:id/messages replaces literal '(no response)' payloads with the provider issue message", async () => {
       const runtime = createRuntimeForCreditLiteralNoResponseTests();
       const streamServer = await startApiServer({ port: 0, runtime });
       try {
-        const { status, data } = await req(
+        const { status, data } = await postConversationMessageForTest(
           streamServer.port,
-          "POST",
-          "/api/chat",
           {
             text: "hello",
             mode: "power",
           },
+          "Provider literal no-response",
         );
         expect(status).toBe(200);
         expect(String(data.text)).toBe(CLOUD_CREDITS_DEPLETED_REPLY);
@@ -5206,13 +5300,17 @@ describe("API Server E2E (no runtime)", () => {
 
   describe("error handling", () => {
     it("non-JSON POST body → 400", async () => {
+      const conversationId = await createConversationIdForTest(
+        port,
+        "Error handling invalid JSON",
+      );
       const { status } = await new Promise<{ status: number }>(
         (resolve, reject) => {
           const r = http.request(
             {
               hostname: "127.0.0.1",
               port,
-              path: "/api/chat",
+              path: `/api/conversations/${conversationId}/messages`,
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
@@ -5947,37 +6045,6 @@ describe("API Server E2E (chat SSE)", () => {
 
   afterAll(async () => {
     await close();
-  });
-
-  it("POST /api/chat/stream emits token and done events", async () => {
-    const { status, headers, events } = await reqSse(port, "/api/chat/stream", {
-      text: "hello",
-      mode: "simple",
-    });
-
-    expect(status).toBe(200);
-    expect(String(headers["content-type"])).toContain("text/event-stream");
-    expect(events).toContainEqual(
-      expect.objectContaining({
-        type: "token",
-        text: "Hello ",
-        fullText: "Hello ",
-      }),
-    );
-    expect(events).toContainEqual(
-      expect.objectContaining({
-        type: "token",
-        text: "world",
-        fullText: "Hello world",
-      }),
-    );
-    expect(events).toContainEqual(
-      expect.objectContaining({
-        type: "done",
-        fullText: "Hello world",
-        agentName: "ChatStreamAgent",
-      }),
-    );
   });
 
   it("POST /api/conversations/:id/messages/stream emits token and done events", async () => {

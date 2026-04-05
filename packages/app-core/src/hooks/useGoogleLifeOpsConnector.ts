@@ -223,6 +223,13 @@ export function useGoogleLifeOpsConnector(
     if (typeof window === "undefined") {
       return;
     }
+    const canUseWindowEvents =
+      typeof window.addEventListener === "function" &&
+      typeof window.removeEventListener === "function";
+    const canUseDocumentEvents =
+      typeof document !== "undefined" &&
+      typeof document.addEventListener === "function" &&
+      typeof document.removeEventListener === "function";
 
     const refreshSilently = (
       detail?: LifeOpsGoogleConnectorRefreshDetail | null,
@@ -303,27 +310,35 @@ export function useGoogleLifeOpsConnector(
       refreshSilently(normalizeRefreshDetail(message.detail));
     };
 
-    window.addEventListener(
-      LIFEOPS_GOOGLE_CONNECTOR_REFRESH_EVENT,
-      handleConnectorRefresh,
-    );
-    window.addEventListener("message", handleWindowMessage);
-    window.addEventListener("storage", handleStorage);
-    window.addEventListener("focus", handleFocus);
-    document.addEventListener("visibilitychange", handleVisibility);
-    document.addEventListener(APP_RESUME_EVENT, handleResume);
-    broadcastChannel?.addEventListener("message", handleBroadcastMessage);
-
-    return () => {
-      window.removeEventListener(
+    if (canUseWindowEvents) {
+      window.addEventListener(
         LIFEOPS_GOOGLE_CONNECTOR_REFRESH_EVENT,
         handleConnectorRefresh,
       );
-      window.removeEventListener("message", handleWindowMessage);
-      window.removeEventListener("storage", handleStorage);
-      window.removeEventListener("focus", handleFocus);
-      document.removeEventListener("visibilitychange", handleVisibility);
-      document.removeEventListener(APP_RESUME_EVENT, handleResume);
+      window.addEventListener("message", handleWindowMessage);
+      window.addEventListener("storage", handleStorage);
+      window.addEventListener("focus", handleFocus);
+    }
+    if (canUseDocumentEvents) {
+      document.addEventListener("visibilitychange", handleVisibility);
+      document.addEventListener(APP_RESUME_EVENT, handleResume);
+    }
+    broadcastChannel?.addEventListener("message", handleBroadcastMessage);
+
+    return () => {
+      if (canUseWindowEvents) {
+        window.removeEventListener(
+          LIFEOPS_GOOGLE_CONNECTOR_REFRESH_EVENT,
+          handleConnectorRefresh,
+        );
+        window.removeEventListener("message", handleWindowMessage);
+        window.removeEventListener("storage", handleStorage);
+        window.removeEventListener("focus", handleFocus);
+      }
+      if (canUseDocumentEvents) {
+        document.removeEventListener("visibilitychange", handleVisibility);
+        document.removeEventListener(APP_RESUME_EVENT, handleResume);
+      }
       broadcastChannel?.removeEventListener("message", handleBroadcastMessage);
       broadcastChannel?.close();
     };

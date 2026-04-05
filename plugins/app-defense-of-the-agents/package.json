@@ -1,0 +1,54 @@
+{
+  "name": "@elizaos/app-defense-of-the-agents",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Milady app integration for Defense of the Agents.",
+  "main": "./src/index.ts",
+  "exports": {
+    "./package.json": "./package.json",
+    ".": "./src/index.ts",
+    "./routes": "./src/routes.ts"
+  },
+  "homepage": "https://www.defenseoftheagents.com/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/milady-ai/milady.git"
+  },
+  "keywords": [
+    "game",
+    "moba",
+    "agents",
+    "strategy"
+  ],
+  "dependencies": {
+    "@elizaos/core": "workspace:*"
+  },
+  "elizaos": {
+    "kind": "app",
+    "app": {
+      "displayName": "Defense of the Agents",
+      "category": "game",
+      "launchType": "connect",
+      "launchUrl": "https://www.defenseoftheagents.com/",
+      "capabilities": [
+        "strategy",
+        "telemetry",
+        "lane-control"
+      ],
+      "runtimePlugin": "@elizaos/app-defense-of-the-agents",
+      "viewer": {
+        "url": "https://www.defenseoftheagents.com/",
+        "sandbox": "allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-forms allow-storage-access-by-user-activation"
+      },
+      "session": {
+        "mode": "spectate-and-steer",
+        "features": [
+          "commands",
+          "telemetry",
+          "suggestions"
+        ]
+      }
+    }
+  }
+}

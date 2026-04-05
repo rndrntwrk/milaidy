@@ -1389,8 +1389,6 @@ export function buildChatAttachments(
     url: `attachment:img-${i}`,
     title: img.name,
     source: "client_chat",
-    description: "User-attached image",
-    text: "",
     contentType: ContentType.IMAGE,
     _data: img.data,
     _mimeType: img.mimeType,
@@ -5628,14 +5626,10 @@ async function handleRequest(
   }
 
   // ═══════════════════════════════════════════════════════════════════════
-  // Chat + compat routes — delegated to chat-routes.ts
+  // OpenAI-compatible routes (/v1/*) — delegated to chat-routes.ts
   // ═══════════════════════════════════════════════════════════════════════
 
-  if (
-    pathname === "/api/chat" ||
-    pathname === "/api/chat/stream" ||
-    pathname.startsWith("/v1/")
-  ) {
+  if (pathname.startsWith("/v1/")) {
     // Cast state — ChatRouteState is a compatible subset of ServerState
     const handled = await handleChatRoutes({
       req,

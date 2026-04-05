@@ -13,7 +13,12 @@ import {
   type UUID,
 } from "@elizaos/core";
 import type { RoleName, RolesWorldMetadata } from "./types";
-import { normalizeRole, resolveEntityRole } from "./utils";
+import {
+  getEntityRole,
+  getLiveEntityMetadataFromMessage,
+  normalizeRole,
+  resolveEntityRole,
+} from "./utils";
 
 export const rolesProvider: Provider = {
   name: "roles",
@@ -48,11 +53,18 @@ export const rolesProvider: Provider = {
       world,
       metadata,
       message.entityId,
+      {
+        liveEntityMetadata: getLiveEntityMetadataFromMessage(message),
+      },
     );
-    const roles = { ...(metadata.roles ?? {}) };
-    if (!roles[message.entityId] && speakerRole !== "GUEST") {
-      roles[message.entityId] = speakerRole;
-    }
+    const storedSpeakerRole = getEntityRole(metadata, message.entityId);
+    const roles =
+      speakerRole !== storedSpeakerRole
+        ? {
+            ...(metadata.roles ?? {}),
+            [message.entityId]: speakerRole,
+          }
+        : (metadata.roles ?? {});
 
     // Build a compact role summary for the agent context.
     const owners: string[] = [];

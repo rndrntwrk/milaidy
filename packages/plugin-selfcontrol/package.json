@@ -18,7 +18,8 @@
     "selfcontrol"
   ],
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./selfcontrol": "./src/selfcontrol.ts"
   },
   "dependencies": {
     "@elizaos/core": "alpha",

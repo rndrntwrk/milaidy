@@ -34,6 +34,7 @@ function createChatTestServer(): Promise<{
   close: () => Promise<void>;
   getMessages: () => Array<{ role: string; content: string }>;
   getConversations: () => Array<{ id: string; title: string }>;
+  getActiveConversationId: () => string;
 }> {
   const conversations: Array<{
     id: string;
@@ -82,35 +83,6 @@ function createChatTestServer(): Promise<{
       json(res, {
         conversations: conversations.map((c) => ({ id: c.id, title: c.title })),
       }),
-    "GET /api/messages": (_r, res) => {
-      const conv = conversations.find((c) => c.id === activeConversation);
-      json(res, { messages: conv?.messages || [] });
-    },
-    "POST /api/chat": async (r, res) => {
-      const body = JSON.parse(await readBody(r)) as Record<string, unknown>;
-      const text = body.text as string;
-
-      if (!text?.trim()) {
-        return json(res, { error: "text is required" }, 400);
-      }
-
-      const conv = conversations.find((c) => c.id === activeConversation);
-      if (conv) {
-        conv.messages.push({
-          role: "user",
-          content: text,
-          timestamp: new Date().toISOString(),
-        });
-        // Simulate assistant response
-        conv.messages.push({
-          role: "assistant",
-          content: `Response to: ${text}`,
-          timestamp: new Date().toISOString(),
-        });
-      }
-
-      json(res, { text: `Response to: ${text}`, agentName: "TestAgent" });
-    },
     "POST /api/conversations": async (r, res) => {
       const body = JSON.parse(await readBody(r)) as Record<string, unknown>;
       const newConv = {
@@ -147,7 +119,7 @@ function createChatTestServer(): Promise<{
         json(res, { error: "Conversation not found" }, 404);
       }
     },
-    "POST /api/chat/upload": async (_r, res) => {
+    "POST /api/uploads/chat-attachment": async (_r, res) => {
       // Simulate file upload handling
       json(res, { ok: true, fileId: `file-${Date.now()}` });
     },
@@ -164,6 +136,46 @@ function createChatTestServer(): Promise<{
       return;
     }
     const pathname = new URL(rq.url ?? "/", "http://localhost").pathname;
+    if (
+      rq.method === "GET" &&
+      /^\/api\/conversations\/[^/]+\/messages$/.test(pathname)
+    ) {
+      const conversationId = decodeURIComponent(pathname.split("/")[3] ?? "");
+      const conv = conversations.find((c) => c.id === conversationId);
+      json(rs, { messages: conv?.messages || [] });
+      return;
+    }
+    if (
+      rq.method === "POST" &&
+      /^\/api\/conversations\/[^/]+\/messages$/.test(pathname)
+    ) {
+      const conversationId = decodeURIComponent(pathname.split("/")[3] ?? "");
+      const conv = conversations.find((c) => c.id === conversationId);
+      if (!conv) {
+        json(rs, { error: "Conversation not found" }, 404);
+        return;
+      }
+      const body = JSON.parse(await readBody(rq)) as Record<string, unknown>;
+      const text = body.text as string;
+      if (!text?.trim()) {
+        json(rs, { error: "text is required" }, 400);
+        return;
+      }
+
+      activeConversation = conversationId;
+      conv.messages.push({
+        role: "user",
+        content: text,
+        timestamp: new Date().toISOString(),
+      });
+      conv.messages.push({
+        role: "assistant",
+        content: `Response to: ${text}`,
+        timestamp: new Date().toISOString(),
+      });
+      json(rs, { text: `Response to: ${text}`, agentName: "TestAgent" });
+      return;
+    }
     const key = `${rq.method} ${pathname}`;
     const handler = routes[key];
     if (handler) {
@@ -188,6 +200,7 @@ function createChatTestServer(): Promise<{
         },
         getConversations: () =>
           conversations.map((c) => ({ id: c.id, title: c.title })),
+        getActiveConversationId: () => activeConversation,
       });
     });
   });
@@ -198,9 +211,10 @@ describe("Chat API", () => {
   let close: () => Promise<void>;
   let getMessages: () => Array<{ role: string; content: string }>;
   let getConversations: () => Array<{ id: string; title: string }>;
+  let getActiveConversationId: () => string;
 
   beforeAll(async () => {
-    ({ port, close, getMessages, getConversations } =
+    ({ port, close, getMessages, getConversations, getActiveConversationId } =
       await createChatTestServer());
   });
 
@@ -214,24 +228,38 @@ describe("Chat API", () => {
     expect(Array.isArray(data.conversations)).toBe(true);
   });
 
-  it("GET /api/messages returns message history", async () => {
-    const { status, data } = await req(port, "GET", "/api/messages");
+  it("GET /api/conversations/:id/messages returns message history", async () => {
+    const { status, data } = await req(
+      port,
+      "GET",
+      `/api/conversations/${getActiveConversationId()}/messages`,
+    );
     expect(status).toBe(200);
     expect(Array.isArray(data.messages)).toBe(true);
   });
 
-  it("POST /api/chat sends message and gets response", async () => {
+  it("POST /api/conversations/:id/messages sends message and gets response", async () => {
     const initialCount = getMessages().length;
-    const { status, data } = await req(port, "POST", "/api/chat", {
-      text: "Hello world",
-    });
+    const { status, data } = await req(
+      port,
+      "POST",
+      `/api/conversations/${getActiveConversationId()}/messages`,
+      {
+        text: "Hello world",
+      },
+    );
     expect(status).toBe(200);
     expect(data.text).toBeDefined();
     expect(getMessages().length).toBe(initialCount + 2); // user + assistant
   });
 
-  it("POST /api/chat rejects empty message", async () => {
-    const { status } = await req(port, "POST", "/api/chat", { text: "" });
+  it("POST /api/conversations/:id/messages rejects empty message", async () => {
+    const { status } = await req(
+      port,
+      "POST",
+      `/api/conversations/${getActiveConversationId()}/messages`,
+      { text: "" },
+    );
     expect(status).toBe(400);
   });
 
@@ -267,8 +295,12 @@ describe("Chat API", () => {
     expect(status).toBe(200);
   });
 
-  it("POST /api/chat/upload handles file upload", async () => {
-    const { status, data } = await req(port, "POST", "/api/chat/upload");
+  it("POST /api/uploads/chat-attachment handles file upload", async () => {
+    const { status, data } = await req(
+      port,
+      "POST",
+      "/api/uploads/chat-attachment",
+    );
     expect(status).toBe(200);
     expect(data.ok).toBe(true);
     expect(data.fileId).toBeDefined();

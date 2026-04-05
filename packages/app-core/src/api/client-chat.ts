@@ -10,6 +10,7 @@ import type {
 } from "@miladyai/shared/contracts/lifeops";
 import { MiladyClient } from "./client-base";
 import type {
+  ApiError,
   ChatTokenUsage,
   CompleteLifeOpsOccurrenceRequest,
   ConnectionTestResult,
@@ -417,27 +418,86 @@ declare module "./client-base" {
 // Prototype augmentation
 // ---------------------------------------------------------------------------
 
+const LEGACY_CHAT_COMPAT_TITLE = "Quick Chat";
+const LEGACY_CHAT_CONVERSATION_STORAGE_PREFIX =
+  "milady_legacy_chat_conversation";
+
+function getLegacyChatConversationStorageKey(client: MiladyClient): string {
+  const base =
+    client.getBaseUrl() ||
+    (typeof window !== "undefined" ? window.location.origin : "same-origin");
+  return `${LEGACY_CHAT_CONVERSATION_STORAGE_PREFIX}:${encodeURIComponent(base)}`;
+}
+
+function readLegacyChatConversationId(client: MiladyClient): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  const stored = window.sessionStorage.getItem(
+    getLegacyChatConversationStorageKey(client),
+  );
+  return stored?.trim() ? stored.trim() : null;
+}
+
+function writeLegacyChatConversationId(
+  client: MiladyClient,
+  conversationId: string | null,
+): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  const key = getLegacyChatConversationStorageKey(client);
+  if (conversationId?.trim()) {
+    window.sessionStorage.setItem(key, conversationId.trim());
+    return;
+  }
+  window.sessionStorage.removeItem(key);
+}
+
+async function ensureLegacyChatConversationId(
+  client: MiladyClient,
+): Promise<string> {
+  const cached = readLegacyChatConversationId(client);
+  if (cached) {
+    return cached;
+  }
+
+  const { conversation } = await client.createConversation(
+    LEGACY_CHAT_COMPAT_TITLE,
+  );
+  writeLegacyChatConversationId(client, conversation.id);
+  return conversation.id;
+}
+
 MiladyClient.prototype.sendChatRest = async function (
   this: MiladyClient,
   text,
   channelType = "DM",
   conversationMode?,
 ) {
-  const response = await this.fetch<{ text: string; agentName: string }>(
-    "/api/chat",
-    {
-      method: "POST",
-      body: JSON.stringify({
-        text,
-        channelType,
-        ...(conversationMode ? { conversationMode } : {}),
-      }),
-    },
-  );
-  return {
-    ...response,
-    text: this.normalizeAssistantText(response.text),
-  };
+  const sendToConversation = async (conversationId: string) =>
+    this.sendConversationMessage(
+      conversationId,
+      text,
+      channelType,
+      undefined,
+      conversationMode,
+    );
+
+  const conversationId = await ensureLegacyChatConversationId(this);
+  try {
+    return await sendToConversation(conversationId);
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.name === "ApiError" &&
+      (error as ApiError).status === 404
+    ) {
+      writeLegacyChatConversationId(this, null);
+      return sendToConversation(await ensureLegacyChatConversationId(this));
+    }
+    throw error;
+  }
 };
 
 MiladyClient.prototype.sendChatStream = async function (
@@ -448,15 +508,31 @@ MiladyClient.prototype.sendChatStream = async function (
   signal?,
   conversationMode?,
 ) {
-  return this.streamChatEndpoint(
-    "/api/chat/stream",
-    text,
-    onToken,
-    channelType,
-    signal,
-    undefined,
-    conversationMode,
-  );
+  const streamConversation = async (conversationId: string) =>
+    this.sendConversationMessageStream(
+      conversationId,
+      text,
+      onToken,
+      channelType,
+      signal,
+      undefined,
+      conversationMode,
+    );
+
+  const conversationId = await ensureLegacyChatConversationId(this);
+  try {
+    return await streamConversation(conversationId);
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.name === "ApiError" &&
+      (error as ApiError).status === 404
+    ) {
+      writeLegacyChatConversationId(this, null);
+      return streamConversation(await ensureLegacyChatConversationId(this));
+    }
+    throw error;
+  }
 };
 
 MiladyClient.prototype.listConversations = async function (this: MiladyClient) {

@@ -465,12 +465,12 @@ function PluginListView({
 
   const runWithPluginManager = useCallback(
     async (
-      pluginName: string,
+      _pluginName: string,
       notices: { prepare: string; recover: string },
       task: () => Promise<unknown>,
     ) => {
       const restartForPluginManager = async (message: string) => {
-        const pluginManagerGuard = ensurePluginManagerAllowed();
+        const pluginManagerGuard = await ensurePluginManagerAllowed();
         const pluginManagerBlockReason =
           getPluginManagerBlockReason(pluginManagerGuard);
         if (pluginManagerBlockReason) {
@@ -481,7 +481,7 @@ function PluginListView({
       };
 
       let restartedForPluginManager = false;
-      const pluginManagerGuard = ensurePluginManagerAllowed();
+      const pluginManagerGuard = await ensurePluginManagerAllowed();
       const pluginManagerBlockReason =
         getPluginManagerBlockReason(pluginManagerGuard);
       if (pluginManagerBlockReason) {
@@ -550,10 +550,7 @@ function PluginListView({
       setActionNotice(
         t("pluginsview.PluginInstallFailed", {
           plugin: npmName,
-          message:
-            err instanceof Error
-              ? err.message
-              : "unknown error",
+          message: err instanceof Error ? err.message : "unknown error",
           defaultValue: "Failed to install {{plugin}}: {{message}}",
         }),
         "error",
@@ -606,8 +603,7 @@ function PluginListView({
             })
           : t("pluginsview.PluginUpdatedActivated", {
               plugin: npmName,
-              defaultValue:
-                "{{plugin}} updated without a full agent restart.",
+              defaultValue: "{{plugin}} updated without a full agent restart.",
             }),
         "success",
       );

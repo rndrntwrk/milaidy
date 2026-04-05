@@ -100,7 +100,7 @@ export const installPluginAction: Action = {
       const npmName = pluginId.startsWith("@")
         ? pluginId
         : `@elizaos/plugin-${pluginId}`;
-      const pluginManagerGuard = ensurePluginManagerAllowed();
+      const pluginManagerGuard = await ensurePluginManagerAllowed();
       const pluginManagerBlockReason =
         getPluginManagerBlockReason(pluginManagerGuard);
       if (pluginManagerBlockReason) {
@@ -122,7 +122,7 @@ export const installPluginAction: Action = {
           await response.json().catch(() => null),
         );
         if ((body.error ?? "").includes(PLUGIN_MANAGER_UNAVAILABLE_ERROR)) {
-          const recoveryGuard = ensurePluginManagerAllowed();
+          const recoveryGuard = await ensurePluginManagerAllowed();
           const recoveryBlockReason =
             getPluginManagerBlockReason(recoveryGuard);
           if (recoveryBlockReason) {

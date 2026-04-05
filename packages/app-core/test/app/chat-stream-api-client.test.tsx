@@ -56,6 +56,14 @@ function buildJsonResponse(payload: unknown, status = 200): Response {
   });
 }
 
+function queueCompatConversation(fetchMock: ReturnType<typeof vi.fn>): void {
+  fetchMock.mockResolvedValueOnce(
+    buildJsonResponse({
+      conversation: { id: "conv-compat", title: "Quick Chat" },
+    }),
+  );
+}
+
 describe("MiladyClient streaming chat endpoints", () => {
   const originalFetch = globalThis.fetch;
   let fetchMock: ReturnType<typeof vi.fn>;
@@ -63,6 +71,9 @@ describe("MiladyClient streaming chat endpoints", () => {
   beforeEach(() => {
     fetchMock = vi.fn();
     globalThis.fetch = fetchMock as typeof globalThis.fetch;
+    if (typeof window !== "undefined") {
+      window.sessionStorage.clear();
+    }
   });
 
   afterEach(() => {
@@ -123,7 +134,8 @@ describe("MiladyClient streaming chat endpoints", () => {
   });
 
   test("supports legacy SSE payloads containing only text", async () => {
-    fetchMock.mockResolvedValue(
+    queueCompatConversation(fetchMock);
+    fetchMock.mockResolvedValueOnce(
       buildSseResponse(['data: {"text":"A"}\n\n', 'data: {"text":"B"}\n\n']),
     );
 
@@ -151,7 +163,8 @@ describe("MiladyClient streaming chat endpoints", () => {
   });
 
   test("keeps the latest full snapshot when the stream ends without done", async () => {
-    fetchMock.mockResolvedValue(
+    queueCompatConversation(fetchMock);
+    fetchMock.mockResolvedValueOnce(
       buildSseResponse([
         'data: {"type":"token","text":"world"}\n\n',
         'data: {"type":"token","text":"Hello world"}\n\n',
@@ -173,7 +186,8 @@ describe("MiladyClient streaming chat endpoints", () => {
   });
 
   test("provides accumulated text to the callback for corrected snapshots", async () => {
-    fetchMock.mockResolvedValue(
+    queueCompatConversation(fetchMock);
+    fetchMock.mockResolvedValueOnce(
       buildSseResponse([
         'data: {"type":"token","text":"world"}\n\n',
         'data: {"type":"token","text":"Hello world"}\n\n',
@@ -198,7 +212,8 @@ describe("MiladyClient streaming chat endpoints", () => {
   });
 
   test("handles corrected full snapshots followed by more streamed suffix text", async () => {
-    fetchMock.mockResolvedValue(
+    queueCompatConversation(fetchMock);
+    fetchMock.mockResolvedValueOnce(
       buildSseResponse([
         'data: {"type":"token","text":"Hello wrld"}\n\n',
         'data: {"type":"token","text":"Hello world"}\n\n',
@@ -221,7 +236,8 @@ describe("MiladyClient streaming chat endpoints", () => {
   });
 
   test("provides accumulated text to the callback for corrected snapshots followed by suffix text", async () => {
-    fetchMock.mockResolvedValue(
+    queueCompatConversation(fetchMock);
+    fetchMock.mockResolvedValueOnce(
       buildSseResponse([
         'data: {"type":"token","text":"Hello wrld"}\n\n',
         'data: {"type":"token","text":"Hello world"}\n\n',
@@ -247,7 +263,8 @@ describe("MiladyClient streaming chat endpoints", () => {
   });
 
   test("prefers authoritative token fullText over garbled raw token text", async () => {
-    fetchMock.mockResolvedValue(
+    queueCompatConversation(fetchMock);
+    fetchMock.mockResolvedValueOnce(
       buildSseResponse([
         'data: {"type":"token","text":"Hey! Yes, I\\u0027m working perfectly!  p\\ud83d\\udc4der Everythingfectly! \\ud83d\\udc4d ","fullText":"Hey! Yes, I\\u0027m working perfectly! \\ud83d\\udc4d Everything\\u0027s up and running smoothly. "}\n\n',
         'data: {"type":"token","text":"What can I help you w Iit canh to assist with","fullText":"Hey! Yes, I\\u0027m working perfectly! \\ud83d\\udc4d Everything\\u0027s up and running smoothly. What can I help you with today? I can assist with"}\n\n',
@@ -338,7 +355,8 @@ describe("MiladyClient streaming chat endpoints", () => {
   });
 
   test("throws when SSE emits an error payload", async () => {
-    fetchMock.mockResolvedValue(
+    queueCompatConversation(fetchMock);
+    fetchMock.mockResolvedValueOnce(
       buildSseResponse([
         'data: {"type":"error","message":"stream failed"}\n\n',
       ]),
@@ -351,7 +369,8 @@ describe("MiladyClient streaming chat endpoints", () => {
   });
 
   test("throws typed ApiError when stream endpoint responds with HTTP error", async () => {
-    fetchMock.mockResolvedValue(
+    queueCompatConversation(fetchMock);
+    fetchMock.mockResolvedValueOnce(
       new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
         headers: { "Content-Type": "application/json" },
@@ -370,7 +389,7 @@ describe("MiladyClient streaming chat endpoints", () => {
     await expect(request).rejects.toMatchObject({
       kind: "http",
       status: 401,
-      path: "/api/chat/stream",
+      path: "/api/conversations/conv-compat/messages/stream",
     });
   });
 

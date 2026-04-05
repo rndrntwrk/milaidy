@@ -220,6 +220,27 @@ function http$(
   });
 }
 
+async function createConversationId(
+  port: number,
+  title: string,
+): Promise<string> {
+  const response = await http$(port, "POST", "/api/conversations", { title });
+  if (response.status !== 200) {
+    throw new Error(`Failed to create conversation: status=${response.status}`);
+  }
+  const conversation =
+    response.data.conversation &&
+    typeof response.data.conversation === "object" &&
+    !Array.isArray(response.data.conversation)
+      ? (response.data.conversation as Record<string, unknown>)
+      : null;
+  const id = typeof conversation?.id === "string" ? conversation.id : "";
+  if (!id) {
+    throw new Error("Conversation response missing id");
+  }
+  return id;
+}
+
 
 interface AutonomyServiceLike {
   setLoopInterval(ms: number): void;
@@ -1448,9 +1469,19 @@ describe("Runtime Integration (with model provider)", () => {
       ];
 
       const results = await Promise.all(
-        prompts.map((text) =>
-          http$(server?.port, "POST", "/api/chat", { text }, 60_000),
-        ),
+        prompts.map(async (text, index) => {
+          const conversationId = await createConversationId(
+            server?.port,
+            `Parallel ${index + 1}`,
+          );
+          return http$(
+            server?.port,
+            "POST",
+            `/api/conversations/${encodeURIComponent(conversationId)}/messages`,
+            { text },
+            60_000,
+          );
+        }),
       );
 
       for (const r of results) {

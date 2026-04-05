@@ -114,7 +114,8 @@ function DownloadDropdown() {
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // stableRelease is always set by the build script; fall back to release for
   // backward compatibility with older generated data.
-  const stableDownloads = releaseData.stableRelease?.downloads ?? releaseData.release.downloads;
+  const stableDownloads =
+    releaseData.stableRelease?.downloads ?? releaseData.release.downloads;
   const canaryRelease = releaseData.canaryRelease;
   const canaryDownloads = canaryRelease?.downloads ?? [];
 

@@ -61,25 +61,25 @@ curl http://localhost:2138/api/character \
 ```
 
 <div id="send-a-chat-message">
-### 发送聊天消息
+### 在对话中发送消息
 </div>
 
 ```bash
-curl -X POST http://localhost:2138/api/chat \
+curl -X POST http://localhost:2138/api/conversations/YOUR_CONVERSATION_ID/messages \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"message": "Hello, what can you do?"}'
+  -d '{"text": "Hello, what can you do?"}'
 ```
 
 <div id="stream-a-chat-response">
-### 流式获取聊天响应
+### 流式获取对话响应
 </div>
 
 ```bash
-curl -N -X POST http://localhost:2138/api/chat/stream \
+curl -N -X POST http://localhost:2138/api/conversations/YOUR_CONVERSATION_ID/messages/stream \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"message": "Tell me about yourself"}'
+  -d '{"text": "Tell me about yourself"}'
 ```
 
 响应是一个 Server-Sent Events 流。每个事件包含一个带有 JSON 载荷的 `data` 字段。
@@ -278,8 +278,6 @@ curl -X POST http://localhost:2138/api/agent/autonomy \
 
 | 方法 | 路径 | 描述 |
 |--------|------|-------------|
-| `POST` | `/api/chat` | 发送消息并获取响应（旧版，路由到默认对话） |
-| `POST` | `/api/chat/stream` | 发送消息并流式获取响应（SSE） |
 | `GET` | `/api/conversations` | 列出所有对话 |
 | `POST` | `/api/conversations` | 创建新对话 |
 | `GET` | `/api/conversations/:id/messages` | 获取对话中的消息 |

@@ -176,7 +176,7 @@ describe("parseSelfControlBlockRequest", () => {
     } as never);
 
     expect(parsed.request).toBeNull();
-    expect(parsed.error).toMatch(/at least one public website hostname/i);
+    expect(parsed.error).toMatch(/could not determine which public website hostnames/i);
   });
 
   it("captures hostnames at the end of a sentence", () => {

@@ -205,7 +205,6 @@ export async function handleWalletRoutes(
     pathname,
     config,
     saveConfig,
-    ensureWalletKeysInEnvAndConfig,
     resolveWalletExportRejection,
     readJsonBody,
     json,
@@ -376,7 +375,11 @@ export async function handleWalletRoutes(
           null;
 
         if (!agentId) {
-          error(res, "Steward is configured but no agent ID is set (STEWARD_AGENT_ID).", 500);
+          error(
+            res,
+            "Steward is configured but no agent ID is set (STEWARD_AGENT_ID).",
+            500,
+          );
           return true;
         }
 
@@ -415,8 +418,12 @@ export async function handleWalletRoutes(
                 walletAddresses?: { evm?: string; solana?: string };
               };
             };
-            const agent = agentBody.data ?? (agentBody as unknown as typeof agentBody.data);
-            agentEvm = agent?.walletAddresses?.evm?.trim() || agent?.walletAddress?.trim() || null;
+            const agent =
+              agentBody.data ?? (agentBody as unknown as typeof agentBody.data);
+            agentEvm =
+              agent?.walletAddresses?.evm?.trim() ||
+              agent?.walletAddress?.trim() ||
+              null;
             agentSolana = agent?.walletAddresses?.solana?.trim() || null;
           }
         } catch {
@@ -445,11 +452,18 @@ export async function handleWalletRoutes(
               walletAddresses?: { evm?: string; solana?: string };
             };
           };
-          const created = createBody.data ?? (createBody as unknown as typeof createBody.data);
-          agentEvm = created?.walletAddresses?.evm?.trim() || created?.walletAddress?.trim() || null;
+          const created =
+            createBody.data ??
+            (createBody as unknown as typeof createBody.data);
+          agentEvm =
+            created?.walletAddresses?.evm?.trim() ||
+            created?.walletAddress?.trim() ||
+            null;
           agentSolana = created?.walletAddresses?.solana?.trim() || null;
 
-          logger.info(`[wallet] Created steward agent "${agentId}" with wallets`);
+          logger.info(
+            `[wallet] Created steward agent "${agentId}" with wallets`,
+          );
         }
 
         // Cache steward addresses in env for synchronous access
@@ -459,7 +473,10 @@ export async function handleWalletRoutes(
           generated.push({ chain: "evm", address: agentEvm });
           logger.info(`[wallet] Steward EVM wallet: ${agentEvm}`);
         }
-        if (agentSolana && (targetChain === "both" || targetChain === "solana")) {
+        if (
+          agentSolana &&
+          (targetChain === "both" || targetChain === "solana")
+        ) {
           process.env.STEWARD_SOLANA_ADDRESS = agentSolana;
           generated.push({ chain: "solana", address: agentSolana });
           logger.info(`[wallet] Steward Solana wallet: ${agentSolana}`);
@@ -472,7 +489,9 @@ export async function handleWalletRoutes(
         });
         return true;
       } catch (err) {
-        logger.warn(`[wallet] Steward wallet generation failed, falling back to local: ${err}`);
+        logger.warn(
+          `[wallet] Steward wallet generation failed, falling back to local: ${err}`,
+        );
         // Fall through to local generation
       }
     }
@@ -523,8 +542,13 @@ export async function handleWalletRoutes(
     const rpcReadiness = resolveWalletRpcReadiness(config);
     const automationMode = resolveWalletAutomationMode(config);
     const localSignerAvailable = Boolean(process.env.EVM_PRIVATE_KEY?.trim());
-    const pluginEvmLoaded = localSignerAvailable || Boolean(addresses.evmAddress);
-    const pluginEvmRequired = localSignerAvailable || Boolean(addresses.evmAddress);
+    const localSolanaSignerAvailable = Boolean(
+      process.env.SOLANA_PRIVATE_KEY?.trim(),
+    );
+    const pluginEvmLoaded =
+      localSignerAvailable || Boolean(addresses.evmAddress);
+    const pluginEvmRequired =
+      localSignerAvailable || Boolean(addresses.evmAddress);
     const walletSource = localSignerAvailable
       ? "local"
       : addresses.evmAddress || addresses.solanaAddress
@@ -588,6 +612,8 @@ export async function handleWalletRoutes(
         pluginEvmLoaded &&
         automationMode === "full",
       executionBlockedReason,
+      solanaSigningAvailable:
+        localSolanaSignerAvailable && Boolean(addresses.solanaAddress),
     };
     json(res, configStatus);
     return true;

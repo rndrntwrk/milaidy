@@ -13,7 +13,11 @@ import {
   setSelfControlPluginConfig,
 } from "@miladyai/plugin-selfcontrol/selfcontrol";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { req } from "../../../test/helpers/http";
+import {
+  createConversation,
+  postConversationMessage,
+  req,
+} from "../../../test/helpers/http";
 import { startApiServer } from "../src/api/server";
 
 type SseEventPayload = {
@@ -303,7 +307,7 @@ describe("selfcontrol chat flows (e2e)", () => {
     }
   });
 
-  it("POST /api/chat executes the website blocker fallback when the model answers in prose only", async () => {
+  it("POST /api/conversations/:id/messages executes the website blocker fallback when the model answers in prose only", async () => {
     tempDir = await fs.mkdtemp(
       path.join(os.tmpdir(), "milady-selfcontrol-e2e-"),
     );
@@ -335,19 +339,31 @@ describe("selfcontrol chat flows (e2e)", () => {
 
     const server = await startApiServer({ port: 0, runtime });
     try {
-      const firstTurn = await req(server.port, "POST", "/api/chat", {
-        text: "The websites distracting me are x.com and twitter.com. Do not block them yet.",
-        mode: "power",
+      const { conversationId } = await createConversation(server.port, {
+        title: "SelfControl fallback",
       });
+
+      const firstTurn = await postConversationMessage(
+        server.port,
+        conversationId,
+        {
+          text: "The websites distracting me are x.com and twitter.com. Do not block them yet.",
+          mode: "power",
+        },
+      );
       expect(firstTurn.status).toBe(200);
       expect(await fs.readFile(hostsFilePath, "utf8")).toBe(
         "127.0.0.1 localhost\n",
       );
 
-      const secondTurn = await req(server.port, "POST", "/api/chat", {
-        text: "Use self control now. Actually block the websites for 1 minute instead of giving advice.",
-        mode: "power",
-      });
+      const secondTurn = await postConversationMessage(
+        server.port,
+        conversationId,
+        {
+          text: "Use self control now. Actually block the websites for 1 minute instead of giving advice.",
+          mode: "power",
+        },
+      );
 
       expect(secondTurn.status).toBe(200);
       expect(String(secondTurn.data.text ?? "")).toContain(
@@ -364,7 +380,7 @@ describe("selfcontrol chat flows (e2e)", () => {
     }
   });
 
-  it("POST /api/chat executes the website blocking permission fallback from prose-only replies", async () => {
+  it("POST /api/conversations/:id/messages executes the website blocking permission fallback from prose-only replies", async () => {
     tempDir = await fs.mkdtemp(
       path.join(os.tmpdir(), "milady-selfcontrol-e2e-"),
     );
@@ -383,10 +399,17 @@ describe("selfcontrol chat flows (e2e)", () => {
 
     const server = await startApiServer({ port: 0, runtime });
     try {
-      const response = await req(server.port, "POST", "/api/chat", {
-        text: "please give yourself permission to block websites on this machine",
-        mode: "power",
+      const { conversationId } = await createConversation(server.port, {
+        title: "SelfControl permission",
       });
+      const response = await postConversationMessage(
+        server.port,
+        conversationId,
+        {
+          text: "please give yourself permission to block websites on this machine",
+          mode: "power",
+        },
+      );
 
       expect(response.status).toBe(200);
       expect(String(response.data.text ?? "")).toContain(
@@ -416,10 +439,17 @@ describe("selfcontrol chat flows (e2e)", () => {
 
     const server = await startApiServer({ port: 0, runtime });
     try {
-      const response = await req(server.port, "POST", "/api/chat", {
-        text: "please give yourself permission to block x.com on this machine",
-        mode: "power",
+      const { conversationId } = await createConversation(server.port, {
+        title: "SelfControl hostname permission",
       });
+      const response = await postConversationMessage(
+        server.port,
+        conversationId,
+        {
+          text: "please give yourself permission to block x.com on this machine",
+          mode: "power",
+        },
+      );
 
       expect(response.status).toBe(200);
       expect(String(response.data.text ?? "")).toContain(
