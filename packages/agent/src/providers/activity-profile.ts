@@ -16,6 +16,7 @@ import type {
 import { checkSenderRole } from "@miladyai/plugin-roles";
 import { resolveDefaultTimeZone } from "../lifeops/defaults.js";
 import { resolveCurrentBucket } from "../activity-profile/analyzer.js";
+import { getLocalDateKey, getZonedDateParts } from "../lifeops/time.js";
 import { readProfileFromMetadata } from "../activity-profile/service.js";
 import { PROACTIVE_TASK_TAGS } from "../activity-profile/proactive-worker.js";
 
@@ -82,6 +83,7 @@ export const activityProfileProvider: Provider = {
 
       if (profile) {
         const parts: string[] = [];
+        const localDateKey = getLocalDateKey(getZonedDateParts(now, timezone));
 
         // Platform + recency
         if (profile.lastSeenPlatform && profile.lastSeenAt > 0) {
@@ -95,6 +97,9 @@ export const activityProfileProvider: Provider = {
 
         // Time bucket
         parts.push(bucket);
+        if (profile.effectiveDayKey !== localDateKey) {
+          parts.push("previous day still open");
+        }
 
         profileText = parts.length > 0 ? `User: ${parts.join(" | ")}` : "";
 
@@ -104,6 +109,10 @@ export const activityProfileProvider: Provider = {
             userIsActive: profile.isCurrentlyActive,
             userPrimaryPlatform: profile.primaryPlatform,
             userTimeBucket: bucket,
+            userEffectiveDayKey: profile.effectiveDayKey,
+            userHasOpenActivityCycle: profile.hasOpenActivityCycle,
+            userTypicalWakeHour: profile.typicalWakeHour,
+            userTypicalSleepHour: profile.typicalSleepHour,
           },
           data: {},
         };

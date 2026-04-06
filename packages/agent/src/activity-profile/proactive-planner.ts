@@ -6,7 +6,11 @@
  * ProactiveAction[] describing what to send, when, and where.
  */
 
-import { getZonedDateParts } from "../lifeops/time.js";
+import { getLocalDateKey, getZonedDateParts } from "../lifeops/time.js";
+import {
+  resolveEffectiveDayKey,
+  wasActiveToday,
+} from "./analyzer.js";
 import type {
   ActivityProfile,
   FiredActionsLog,
@@ -69,6 +73,11 @@ export function planGm(
   // User inactive for 48h+ — don't be annoying
   if (profile.lastSeenAt > 0 && currentTime.getTime() - profile.lastSeenAt > INACTIVITY_SKIP_MS) {
     return makeSkipped("gm", currentTime, profile, "user inactive for 48h+");
+  }
+
+  const localDateKey = getLocalDateKey(getZonedDateParts(currentTime, timezone));
+  if (resolveEffectiveDayKey(profile, timezone, currentTime) !== localDateKey) {
+    return null;
   }
 
   // Determine GM target hour
@@ -135,7 +144,7 @@ export function planGn(
     return null;
   }
 
-  // User wasn't active at all today — skip GN
+  // User wasn't active at all in the current effective day — skip GN
   if (!wasActiveToday(profile, timezone, currentTime)) {
     return null;
   }
@@ -248,12 +257,18 @@ function resolveGmHour(
   }
 
   // Priority 2: message histogram — 30 min before typical first active hour
+  if (profile.typicalWakeHour !== null) {
+    const leadHour = profile.typicalWakeHour - GM_LEAD_MINUTES / 60;
+    if (leadHour >= 5) return Math.floor(leadHour);
+  }
+
+  // Priority 3: message histogram — 30 min before typical first active hour
   if (profile.typicalFirstActiveHour !== null) {
     const leadHour = profile.typicalFirstActiveHour - (GM_LEAD_MINUTES / 60);
     if (leadHour >= 5) return Math.floor(leadHour);
   }
 
-  // Priority 3: calendar-derived first event hour
+  // Priority 4: calendar-derived first event hour
   if (profile.typicalFirstEventHour !== null) {
     const leadHour = profile.typicalFirstEventHour - (GM_LEAD_MINUTES / 60);
     if (leadHour >= 5) return Math.floor(leadHour);
@@ -306,27 +321,14 @@ function findNearbyCalendarEvent(
   return null;
 }
 
-function wasActiveToday(
-  profile: ActivityProfile,
-  timezone: string,
-  now: Date,
-): boolean {
-  if (profile.lastSeenAt === 0) return false;
-  const todayParts = getZonedDateParts(now, timezone);
-  const lastSeenParts = getZonedDateParts(new Date(profile.lastSeenAt), timezone);
-  return (
-    lastSeenParts.year === todayParts.year &&
-    lastSeenParts.month === todayParts.month &&
-    lastSeenParts.day === todayParts.day
-  );
-}
-
 function localHourToEpoch(hour: number, timezone: string, referenceDate: Date): number {
   // Build an ISO string for today at the target hour in the given timezone,
   // then convert to epoch ms. We approximate by getting today's date parts
   // and computing offset from midnight.
   const parts = getZonedDateParts(referenceDate, timezone);
-  const diffHours = hour - parts.hour;
+  const dayOffset = Math.floor(hour / 24);
+  const normalizedHour = ((hour % 24) + 24) % 24;
+  const diffHours = normalizedHour + dayOffset * 24 - parts.hour;
   const diffMinutes = -parts.minute;
   return referenceDate.getTime() + (diffHours * 60 + diffMinutes) * 60 * 1000;
 }

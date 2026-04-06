@@ -58,6 +58,7 @@ export interface ActivityProfile {
   analysisWindowDays: number;
   timezone: string;
   totalMessages: number;
+  sustainedInactivityThresholdMinutes: number;
 
   platforms: PlatformActivity[];
   primaryPlatform: string | null;
@@ -72,10 +73,16 @@ export interface ActivityProfile {
 
   typicalFirstActiveHour: number | null;
   typicalLastActiveHour: number | null;
+  typicalWakeHour: number | null;
+  typicalSleepHour: number | null;
 
   lastSeenAt: number;
   lastSeenPlatform: string | null;
   isCurrentlyActive: boolean;
+  hasOpenActivityCycle: boolean;
+  currentActivityCycleStartedAt: number | null;
+  currentActivityCycleLocalDate: string | null;
+  effectiveDayKey: string;
 }
 
 export interface ProactiveAction {

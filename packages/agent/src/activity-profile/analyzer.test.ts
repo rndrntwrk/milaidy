@@ -3,6 +3,7 @@ import {
   analyzeMessages,
   classifyTimeBucket,
   enrichWithCalendar,
+  resolveEffectiveDayKey,
   resolveCurrentBucket,
   type CalendarEventRecord,
   type MessageRecord,
@@ -171,6 +172,123 @@ describe("analyzeMessages", () => {
     expect(profile.typicalLastActiveHour).toBe(19); // EVENING midpoint
   });
 
+  it("derives wake/sleep hours for a night-owl schedule", () => {
+    const roomSourceMap = new Map([["room-tg", "telegram"]]);
+    const messages: MessageRecord[] = [
+      {
+        entityId: "owner-1",
+        roomId: "room-tg",
+        createdAt: Date.parse("2026-04-03T11:00:00Z"),
+      },
+      {
+        entityId: "owner-1",
+        roomId: "room-tg",
+        createdAt: Date.parse("2026-04-03T14:00:00Z"),
+      },
+      {
+        entityId: "owner-1",
+        roomId: "room-tg",
+        createdAt: Date.parse("2026-04-03T17:00:00Z"),
+      },
+      {
+        entityId: "owner-1",
+        roomId: "room-tg",
+        createdAt: Date.parse("2026-04-03T20:00:00Z"),
+      },
+      {
+        entityId: "owner-1",
+        roomId: "room-tg",
+        createdAt: Date.parse("2026-04-03T23:00:00Z"),
+      },
+      {
+        entityId: "owner-1",
+        roomId: "room-tg",
+        createdAt: Date.parse("2026-04-04T02:00:00Z"),
+      },
+      {
+        entityId: "owner-1",
+        roomId: "room-tg",
+        createdAt: Date.parse("2026-04-04T12:00:00Z"),
+      },
+      {
+        entityId: "owner-1",
+        roomId: "room-tg",
+        createdAt: Date.parse("2026-04-04T15:00:00Z"),
+      },
+      {
+        entityId: "owner-1",
+        roomId: "room-tg",
+        createdAt: Date.parse("2026-04-04T18:00:00Z"),
+      },
+      {
+        entityId: "owner-1",
+        roomId: "room-tg",
+        createdAt: Date.parse("2026-04-04T21:00:00Z"),
+      },
+      {
+        entityId: "owner-1",
+        roomId: "room-tg",
+        createdAt: Date.parse("2026-04-05T00:00:00Z"),
+      },
+      {
+        entityId: "owner-1",
+        roomId: "room-tg",
+        createdAt: Date.parse("2026-04-05T02:00:00Z"),
+      },
+    ];
+
+    const profile = analyzeMessages(messages, roomSourceMap, "owner-1", "UTC", 7, NOW);
+
+    expect(profile.typicalWakeHour).toBe(12);
+    expect(profile.typicalSleepHour).toBe(26);
+  });
+
+  it("keeps the prior day open until inactivity exceeds three hours", () => {
+    const roomSourceMap = new Map([["room-tg", "telegram"]]);
+    const allNighterMessages: MessageRecord[] = [
+      {
+        entityId: "owner-1",
+        roomId: "room-tg",
+        createdAt: Date.parse("2026-04-05T23:30:00Z"),
+      },
+      {
+        entityId: "owner-1",
+        roomId: "room-tg",
+        createdAt: Date.parse("2026-04-06T01:30:00Z"),
+      },
+    ];
+
+    const duringAllNighter = analyzeMessages(
+      allNighterMessages,
+      roomSourceMap,
+      "owner-1",
+      "UTC",
+      7,
+      new Date("2026-04-06T02:00:00Z"),
+    );
+    expect(duringAllNighter.hasOpenActivityCycle).toBe(true);
+    expect(duringAllNighter.currentActivityCycleLocalDate).toBe("2026-04-05");
+    expect(duringAllNighter.effectiveDayKey).toBe("2026-04-05");
+    expect(
+      resolveEffectiveDayKey(
+        duringAllNighter,
+        "UTC",
+        new Date("2026-04-06T02:00:00Z"),
+      ),
+    ).toBe("2026-04-05");
+
+    const afterInactivity = analyzeMessages(
+      allNighterMessages,
+      roomSourceMap,
+      "owner-1",
+      "UTC",
+      7,
+      new Date("2026-04-06T05:10:00Z"),
+    );
+    expect(afterInactivity.hasOpenActivityCycle).toBe(false);
+    expect(afterInactivity.effectiveDayKey).toBe("2026-04-06");
+  });
+
   it("handles empty messages gracefully", () => {
     const profile = analyzeMessages([], new Map(), "owner-1", "UTC", 7, NOW);
 
@@ -178,6 +296,7 @@ describe("analyzeMessages", () => {
     expect(profile.primaryPlatform).toBeNull();
     expect(profile.secondaryPlatform).toBeNull();
     expect(profile.typicalFirstActiveHour).toBeNull();
+    expect(profile.typicalWakeHour).toBeNull();
     expect(profile.isCurrentlyActive).toBe(false);
     expect(profile.platforms).toHaveLength(0);
   });

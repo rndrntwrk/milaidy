@@ -6,9 +6,12 @@
 import type { IAgentRuntime, UUID } from "@elizaos/core";
 import { LifeOpsService } from "../lifeops/service.js";
 import { resolveDefaultTimeZone } from "../lifeops/defaults.js";
+import { getLocalDateKey, getZonedDateParts } from "../lifeops/time.js";
 import {
   analyzeMessages,
   enrichWithCalendar,
+  resolveEffectiveDayKey,
+  SUSTAINED_INACTIVITY_GAP_MS,
   type CalendarEventRecord,
   type MessageRecord,
 } from "./analyzer.js";
@@ -143,7 +146,14 @@ export async function refreshCurrentState(
   const limitedRoomIds = roomIds.slice(0, MAX_ROOMS);
 
   if (limitedRoomIds.length === 0) {
-    return { ...profile, isCurrentlyActive: false };
+    return {
+      ...profile,
+      isCurrentlyActive: false,
+      hasOpenActivityCycle:
+        currentTime.getTime() - profile.lastSeenAt <
+        profile.sustainedInactivityThresholdMinutes * 60 * 1000,
+      effectiveDayKey: resolveEffectiveDayKey(profile, profile.timezone, currentTime),
+    };
   }
 
   const memories = await runtime.getMemoriesByRoomIds({
@@ -157,7 +167,14 @@ export async function refreshCurrentState(
     .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
 
   if (ownerMessages.length === 0) {
-    return { ...profile, isCurrentlyActive: false };
+    return {
+      ...profile,
+      isCurrentlyActive: false,
+      hasOpenActivityCycle:
+        currentTime.getTime() - profile.lastSeenAt <
+        profile.sustainedInactivityThresholdMinutes * 60 * 1000,
+      effectiveDayKey: resolveEffectiveDayKey(profile, profile.timezone, currentTime),
+    };
   }
 
   const latest = ownerMessages[0];
@@ -171,11 +188,33 @@ export async function refreshCurrentState(
     // Keep existing
   }
 
+  const thresholdMs =
+    profile.sustainedInactivityThresholdMinutes * 60 * 1000;
+  const startsNewCycle =
+    profile.lastSeenAt <= 0 || lastSeenAt - profile.lastSeenAt > thresholdMs;
+  const currentActivityCycleStartedAt = startsNewCycle
+    ? lastSeenAt
+    : (profile.currentActivityCycleStartedAt ?? lastSeenAt);
+  const currentActivityCycleLocalDate = getLocalDateKey(
+    getZonedDateParts(new Date(currentActivityCycleStartedAt), profile.timezone),
+  );
+  const hasOpenActivityCycle =
+    currentTime.getTime() - lastSeenAt < thresholdMs;
+
   return {
     ...profile,
     lastSeenAt,
     lastSeenPlatform,
     isCurrentlyActive: currentTime.getTime() - lastSeenAt < 15 * 60 * 1000,
+    sustainedInactivityThresholdMinutes:
+      profile.sustainedInactivityThresholdMinutes ||
+      SUSTAINED_INACTIVITY_GAP_MS / 60_000,
+    hasOpenActivityCycle,
+    currentActivityCycleStartedAt,
+    currentActivityCycleLocalDate,
+    effectiveDayKey: hasOpenActivityCycle
+      ? currentActivityCycleLocalDate
+      : getLocalDateKey(getZonedDateParts(currentTime, profile.timezone)),
   };
 }
 

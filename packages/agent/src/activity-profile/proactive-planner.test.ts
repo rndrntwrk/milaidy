@@ -19,6 +19,7 @@ function makeProfile(overrides: Partial<ActivityProfile> = {}): ActivityProfile 
     analysisWindowDays: 7,
     timezone: "UTC",
     totalMessages: 100,
+    sustainedInactivityThresholdMinutes: 180,
     platforms: [
       {
         source: "telegram",
@@ -44,9 +45,15 @@ function makeProfile(overrides: Partial<ActivityProfile> = {}): ActivityProfile 
     avgWeekdayMeetings: null,
     typicalFirstActiveHour: 8,
     typicalLastActiveHour: 19,
+    typicalWakeHour: 8,
+    typicalSleepHour: 23,
     lastSeenAt: Date.now() - 5 * 60 * 1000,
     lastSeenPlatform: "telegram",
     isCurrentlyActive: true,
+    hasOpenActivityCycle: true,
+    currentActivityCycleStartedAt: Date.parse("2026-04-06T06:00:00Z"),
+    currentActivityCycleLocalDate: "2026-04-06",
+    effectiveDayKey: "2026-04-06",
     ...overrides,
   };
 }
@@ -176,6 +183,7 @@ describe("planGm", () => {
     const profile = makeProfile({
       lastSeenAt: NOW_MS - 60_000,
       typicalFirstActiveHour: 9,
+      typicalWakeHour: 9,
       hasCalendarData: false,
     });
     const action = planGm(profile, [], [], null, TZ, NOW);
@@ -190,6 +198,7 @@ describe("planGm", () => {
     const profile = makeProfile({
       lastSeenAt: NOW_MS - 60_000,
       typicalFirstActiveHour: null,
+      typicalWakeHour: null,
       typicalFirstEventHour: null,
     });
     const action = planGm(profile, [], [], null, TZ, NOW);
@@ -197,6 +206,20 @@ describe("planGm", () => {
     expect(action).not.toBeNull();
     const scheduledDate = new Date(action!.scheduledFor);
     expect(scheduledDate.getUTCHours()).toBe(8);
+  });
+
+  it("skips GM while an all-nighter keeps the previous day open", () => {
+    const now = new Date("2026-04-07T02:15:00Z");
+    const profile = makeProfile({
+      lastSeenAt: now.getTime() - 10 * 60 * 1000,
+      currentActivityCycleStartedAt: Date.parse("2026-04-06T20:00:00Z"),
+      currentActivityCycleLocalDate: "2026-04-06",
+      effectiveDayKey: "2026-04-06",
+      hasOpenActivityCycle: true,
+    });
+
+    const action = planGm(profile, [], [], null, TZ, now);
+    expect(action).toBeNull();
   });
 });
 

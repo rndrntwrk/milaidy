@@ -3,7 +3,7 @@
  * history and calendar data. No runtime dependencies — fully unit-testable.
  */
 
-import { getZonedDateParts } from "../lifeops/time.js";
+import { getLocalDateKey, getZonedDateParts } from "../lifeops/time.js";
 import {
   type ActivityProfile,
   type PlatformActivity,
@@ -53,8 +53,127 @@ export interface CalendarEventRecord {
   isAllDay: boolean;
 }
 
+export const SUSTAINED_INACTIVITY_GAP_MS = 3 * 60 * 60 * 1000; // 3 hours
 const ACTIVE_THRESHOLD_MS = 15 * 60 * 1000; // 15 minutes
 const SIGNIFICANT_BUCKET_SHARE = 0.10; // 10% of total messages
+
+type ActivitySession = {
+  startAt: number;
+  endAt: number;
+  startHour: number;
+  normalizedEndHour: number;
+  startDayKey: string;
+};
+
+function localDateKeyForTimestamp(timestamp: number, timezone: string): string {
+  return getLocalDateKey(getZonedDateParts(new Date(timestamp), timezone));
+}
+
+function buildActivitySession(
+  startAt: number,
+  endAt: number,
+  timezone: string,
+): ActivitySession {
+  const startParts = getZonedDateParts(new Date(startAt), timezone);
+  const endParts = getZonedDateParts(new Date(endAt), timezone);
+  const startDayKey = getLocalDateKey(startParts);
+  const startDayOrdinal = Math.floor(
+    Date.UTC(startParts.year, startParts.month - 1, startParts.day) /
+      86_400_000,
+  );
+  const endDayOrdinal = Math.floor(
+    Date.UTC(endParts.year, endParts.month - 1, endParts.day) / 86_400_000,
+  );
+
+  return {
+    startAt,
+    endAt,
+    startHour: startParts.hour,
+    normalizedEndHour: endParts.hour + (endDayOrdinal - startDayOrdinal) * 24,
+    startDayKey,
+  };
+}
+
+function buildActivitySessions(
+  messages: MessageRecord[],
+  timezone: string,
+): ActivitySession[] {
+  if (messages.length === 0) {
+    return [];
+  }
+
+  const sorted = [...messages].sort((left, right) => left.createdAt - right.createdAt);
+  const sessions: ActivitySession[] = [];
+  let sessionStartAt = sorted[0].createdAt;
+  let sessionEndAt = sorted[0].createdAt;
+
+  for (let index = 1; index < sorted.length; index += 1) {
+    const current = sorted[index];
+    if (current.createdAt - sessionEndAt > SUSTAINED_INACTIVITY_GAP_MS) {
+      sessions.push(buildActivitySession(sessionStartAt, sessionEndAt, timezone));
+      sessionStartAt = current.createdAt;
+    }
+    sessionEndAt = current.createdAt;
+  }
+
+  sessions.push(buildActivitySession(sessionStartAt, sessionEndAt, timezone));
+  return sessions;
+}
+
+export function resolveEffectiveDayKey(
+  profile: Pick<
+    ActivityProfile,
+    | "currentActivityCycleStartedAt"
+    | "currentActivityCycleLocalDate"
+    | "lastSeenAt"
+    | "sustainedInactivityThresholdMinutes"
+  >,
+  timezone: string,
+  now: Date,
+): string {
+  const todayKey = localDateKeyForTimestamp(now.getTime(), timezone);
+  const thresholdMs =
+    profile.sustainedInactivityThresholdMinutes * 60 * 1000;
+  if (
+    !profile.currentActivityCycleStartedAt ||
+    profile.lastSeenAt <= 0 ||
+    now.getTime() - profile.lastSeenAt >= thresholdMs
+  ) {
+    return todayKey;
+  }
+  return (
+    profile.currentActivityCycleLocalDate ??
+    localDateKeyForTimestamp(profile.currentActivityCycleStartedAt, timezone)
+  );
+}
+
+function resolveLatestActivityDayKey(
+  profile: Pick<
+    ActivityProfile,
+    | "currentActivityCycleStartedAt"
+    | "currentActivityCycleLocalDate"
+    | "lastSeenAt"
+    | "sustainedInactivityThresholdMinutes"
+  >,
+  timezone: string,
+  now: Date,
+): string | null {
+  if (profile.lastSeenAt <= 0) {
+    return null;
+  }
+  const thresholdMs =
+    profile.sustainedInactivityThresholdMinutes * 60 * 1000;
+  if (
+    profile.currentActivityCycleStartedAt &&
+    now.getTime() - profile.lastSeenAt < thresholdMs
+  ) {
+    return (
+      profile.currentActivityCycleLocalDate ??
+      localDateKeyForTimestamp(profile.currentActivityCycleStartedAt, timezone)
+    );
+  }
+  return localDateKeyForTimestamp(profile.lastSeenAt, timezone);
+}
 
 export function analyzeMessages(
   messages: MessageRecord[],
@@ -125,6 +244,18 @@ export function analyzeMessages(
     }
   }
 
+  const sessions = buildActivitySessions(ownerMessages, timezone);
+  const wakeHours = sessions
+    .map((session) => session.startHour)
+    .sort((left, right) => left - right);
+  const sleepHours = sessions
+    .map((session) => session.normalizedEndHour)
+    .sort((left, right) => left - right);
+  const typicalWakeHour =
+    wakeHours.length > 0 ? median(wakeHours) : null;
+  const typicalSleepHour =
+    sleepHours.length > 0 ? median(sleepHours) : null;
+
   // Current state
   let lastSeenAt = 0;
   let lastSeenPlatform: string | null = null;
@@ -134,6 +265,11 @@ export function analyzeMessages(
       lastSeenPlatform = p.source;
     }
   }
+  const hasOpenActivityCycle =
+    lastSeenAt > 0 &&
+    currentTime.getTime() - lastSeenAt < SUSTAINED_INACTIVITY_GAP_MS;
+  const currentActivityCycle =
+    sessions.length > 0 ? sessions[sessions.length - 1] : null;
 
   return {
     ownerEntityId,
@@ -141,15 +277,26 @@ export function analyzeMessages(
     analysisWindowDays: windowDays,
     timezone,
     totalMessages,
+    sustainedInactivityThresholdMinutes:
+      SUSTAINED_INACTIVITY_GAP_MS / 60_000,
     platforms,
     primaryPlatform: platforms[0]?.source ?? null,
     secondaryPlatform: platforms[1]?.source ?? null,
     bucketCounts: aggregateBuckets,
     typicalFirstActiveHour,
     typicalLastActiveHour,
+    typicalWakeHour,
+    typicalSleepHour,
     lastSeenAt,
     lastSeenPlatform,
     isCurrentlyActive: currentTime.getTime() - lastSeenAt < ACTIVE_THRESHOLD_MS,
+    hasOpenActivityCycle,
+    currentActivityCycleStartedAt: currentActivityCycle?.startAt ?? null,
+    currentActivityCycleLocalDate: currentActivityCycle?.startDayKey ?? null,
+    effectiveDayKey: hasOpenActivityCycle
+      ? (currentActivityCycle?.startDayKey ??
+        localDateKeyForTimestamp(currentTime.getTime(), timezone))
+      : localDateKeyForTimestamp(currentTime.getTime(), timezone),
   };
 }
 
@@ -241,4 +388,21 @@ function median(sorted: number[]): number {
   return sorted.length % 2 === 0
     ? Math.round((sorted[mid - 1] + sorted[mid]) / 2)
     : sorted[mid];
+}
+
+export function wasActiveToday(
+  profile: Pick<
+    ActivityProfile,
+    | "currentActivityCycleStartedAt"
+    | "currentActivityCycleLocalDate"
+    | "lastSeenAt"
+    | "sustainedInactivityThresholdMinutes"
+  >,
+  timezone: string,
+  now: Date,
+): boolean {
+  return (
+    resolveLatestActivityDayKey(profile, timezone, now) ===
+    resolveEffectiveDayKey(profile, timezone, now)
+  );
 }

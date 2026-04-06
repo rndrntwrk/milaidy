@@ -7,7 +7,6 @@
 
 import type { IAgentRuntime, Task, TaskMetadata, UUID } from "@elizaos/core";
 import { logger, stringToUuid } from "@elizaos/core";
-import { getZonedDateParts } from "../lifeops/time.js";
 import { resolveDefaultTimeZone } from "../lifeops/defaults.js";
 import { loadElizaConfig } from "../config/config.js";
 import type { OwnerContactsConfig } from "../config/types.agent-defaults.js";
@@ -27,6 +26,7 @@ import {
   readFiredLogFromMetadata,
   profileNeedsRebuild,
 } from "./service.js";
+import { resolveEffectiveDayKey } from "./analyzer.js";
 import type { ActivityProfile, FiredActionsLog, ProactiveAction } from "./types.js";
 
 // ── Constants ─────────────────────────────────────────
@@ -77,11 +77,6 @@ function loadOwnerContacts(): OwnerContactsConfig {
   }
 }
 
-function getTodayDateStr(timezone: string, now: Date): string {
-  const parts = getZonedDateParts(now, timezone);
-  return `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}`;
-}
-
 // ── Main execution ────────────────────────────────────
 
 export async function executeProactiveTask(
@@ -110,8 +105,6 @@ export async function executeProactiveTask(
 
     const metadata = isRecord(task.metadata) ? task.metadata : {};
     let profile = readProfileFromMetadata(metadata);
-    const todayStr = getTodayDateStr(timezone, now);
-    let firedLog = readFiredLogFromMetadata(metadata, todayStr);
 
     // 3. Rebuild or refresh profile
     if (profileNeedsRebuild(profile, now)) {
@@ -124,6 +117,9 @@ export async function executeProactiveTask(
     if (!profile) {
       return { nextInterval: PROACTIVE_TASK_INTERVAL_MS };
     }
+
+    const todayStr = resolveEffectiveDayKey(profile, timezone, now);
+    let firedLog = readFiredLogFromMetadata(metadata, todayStr);
 
     // 4. Fetch occurrences and calendar for planning
     const { occurrences, calendarEvents } = await fetchPlannerContext(runtime, timezone, now);
