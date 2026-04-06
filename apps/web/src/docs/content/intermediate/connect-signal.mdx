@@ -20,7 +20,8 @@ We'll use the [bbernhard/signal-cli-rest-api](https://github.com/bbernhard/signa
 
 <Steps>
   <li>Create a directory for persistent session data, e.g. <code>~/signal-cli-data</code>.</li>
-  <li>Run:
+  <li>
+    <p>Run:</p>
     <pre><code>docker run -d --name signal-cli-rest-api \
   -p 8080:8080 \
   -v ~/signal-cli-data:/home/.local/share/signal-cli \
