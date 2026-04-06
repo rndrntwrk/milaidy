@@ -339,7 +339,7 @@ export function isPackageLinkCurrent(linkPath, targetPath) {
   }
 }
 
-export function createPackageLink(linkPath, targetPath) {
+function createLink(linkPath, targetPath, kind = "dir") {
   if (isPackageLinkCurrent(linkPath, targetPath)) {
     return false;
   }
@@ -355,10 +355,80 @@ export function createPackageLink(linkPath, targetPath) {
     process.platform === "win32"
       ? targetPath
       : path.relative(path.dirname(linkPath), targetPath) || ".";
-  const linkType = process.platform === "win32" ? "junction" : "dir";
+  const linkType =
+    process.platform === "win32"
+      ? kind === "dir"
+        ? "junction"
+        : "file"
+      : kind;
 
   symlinkSync(linkTarget, linkPath, linkType);
   return true;
+}
+
+export function createPackageLink(linkPath, targetPath) {
+  return createLink(linkPath, targetPath, "dir");
+}
+
+function createBinLink(linkPath, targetPath) {
+  return createLink(linkPath, targetPath, "file");
+}
+
+function getPackageBinEntries(packageJson) {
+  if (!packageJson) {
+    return [];
+  }
+
+  if (typeof packageJson.bin === "string") {
+    const packageBasename = packageJson.name?.split("/").pop();
+    if (!packageBasename) {
+      return [];
+    }
+    return [[packageBasename, packageJson.bin]];
+  }
+
+  if (!packageJson.bin || typeof packageJson.bin !== "object") {
+    return [];
+  }
+
+  return Object.entries(packageJson.bin).filter(
+    ([binName, binPath]) =>
+      typeof binName === "string" &&
+      binName.length > 0 &&
+      typeof binPath === "string" &&
+      binPath.length > 0,
+  );
+}
+
+function ensurePackageBinLinks(
+  packageDir,
+  dependencyLinkPath,
+  dependencyPackageDir,
+) {
+  let linkedBins = 0;
+  const dependencyPackageJson = readPackageJson(dependencyPackageDir);
+  const binEntries = getPackageBinEntries(dependencyPackageJson);
+  if (binEntries.length === 0) {
+    return linkedBins;
+  }
+
+  const packageBinDir = path.join(packageDir, "node_modules", ".bin");
+  mkdirSync(packageBinDir, { recursive: true });
+
+  for (const [binName, binRelativePath] of binEntries) {
+    const targetFile = path.join(dependencyPackageDir, binRelativePath);
+    if (!existsSync(targetFile)) {
+      continue;
+    }
+
+    const binLinkPath = path.join(packageBinDir, binName);
+    const binTargetPath = path.join(dependencyLinkPath, binRelativePath);
+    if (createBinLink(binLinkPath, binTargetPath)) {
+      linkedBins += 1;
+    }
+  }
+
+  return linkedBins;
 }
 
 function findInstalledPackageDir(
@@ -428,7 +498,6 @@ export function ensurePluginDependencyLinks(
   pluginsRoot = getRepoPluginsRoot(repoRoot),
 ) {
   let linkedDependencies = 0;
-  const rootBinDir = path.join(repoRoot, "node_modules", ".bin");
 
   for (const packageDir of discoverPluginPackageDirs(pluginsRoot)) {
     const packageJson = readPackageJson(packageDir);
@@ -437,12 +506,10 @@ export function ensurePluginDependencyLinks(
       continue;
     }
 
-    if (existsSync(rootBinDir)) {
-      const binLinkPath = path.join(packageDir, "node_modules", ".bin");
-      if (createPackageLink(binLinkPath, rootBinDir)) {
-        linkedDependencies += 1;
-      }
-    }
+    rmSync(path.join(packageDir, "node_modules", ".bin"), {
+      force: true,
+      recursive: true,
+    });
 
     const packageDependencies = {
       ...(packageJson.peerDependencies ?? {}),
@@ -472,6 +539,11 @@ export function ensurePluginDependencyLinks(
       if (createPackageLink(dependencyLinkPath, installedDependencyDir)) {
         linkedDependencies += 1;
       }
+      linkedDependencies += ensurePackageBinLinks(
+        packageDir,
+        dependencyLinkPath,
+        installedDependencyDir,
+      );
     }
   }
 

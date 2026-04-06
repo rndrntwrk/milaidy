@@ -261,7 +261,7 @@ describe("getPluginPackageLinks", () => {
 });
 
 describe("ensurePluginDependencyLinks", () => {
-  it("links the root .bin directory into linked plugin packages", () => {
+  it("links dependency packages and generates bin shims for linked plugin packages", () => {
     const tempRoot = mkdtempSync(
       path.join(os.tmpdir(), "milady-setup-plugin-deps-"),
     );
@@ -274,18 +274,32 @@ describe("ensurePluginDependencyLinks", () => {
         "plugin-agent-skills",
         "typescript",
       );
-      const rootBinDir = path.join(repoRoot, "node_modules", ".bin");
       const installedDependencyDir = path.join(repoRoot, "node_modules", "zod");
       const installedDevDependencyDir = path.join(
         repoRoot,
         "node_modules",
         "tsup",
       );
+      const installedDevDependencyBin = path.join(
+        installedDevDependencyDir,
+        "dist",
+        "cli.js",
+      );
 
       mkdirSync(packageDir, { recursive: true });
-      mkdirSync(rootBinDir, { recursive: true });
       mkdirSync(installedDependencyDir, { recursive: true });
-      mkdirSync(installedDevDependencyDir, { recursive: true });
+      mkdirSync(path.dirname(installedDevDependencyBin), { recursive: true });
+      writeFileSync(
+        path.join(installedDevDependencyDir, "package.json"),
+        JSON.stringify({
+          name: "tsup",
+          bin: {
+            tsup: "dist/cli.js",
+          },
+        }),
+        "utf8",
+      );
+      writeFileSync(installedDevDependencyBin, "#!/usr/bin/env node\n", "utf8");
 
       writeFileSync(
         path.join(packageDir, "package.json"),
@@ -305,9 +319,9 @@ describe("ensurePluginDependencyLinks", () => {
       );
 
       expect(ensurePluginDependencyLinks(repoRoot, pluginsRoot)).toBe(3);
-      expect(realpathSync(path.join(packageDir, "node_modules", ".bin"))).toBe(
-        realpathSync(rootBinDir),
-      );
+      expect(
+        realpathSync(path.join(packageDir, "node_modules", ".bin", "tsup")),
+      ).toBe(realpathSync(installedDevDependencyBin));
       expect(realpathSync(path.join(packageDir, "node_modules", "zod"))).toBe(
         realpathSync(installedDependencyDir),
       );
