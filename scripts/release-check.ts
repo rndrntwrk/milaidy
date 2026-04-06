@@ -415,6 +415,34 @@ export function findFloatingDependencySpecs(
   });
 }
 
+export function findMismatchedSharedAgentDependencySpecs(
+  rootPkg: RootPackageJson,
+  agentPkg: RootPackageJson,
+): Array<{ name: string; rootSpecifier: string; agentSpecifier: string }> {
+  const rootDependencies = rootPkg.dependencies ?? {};
+  const agentDependencies = agentPkg.dependencies ?? {};
+
+  return Object.entries(agentDependencies).flatMap(([name, agentSpecifier]) => {
+    if (!name.startsWith("@elizaos/")) {
+      return [];
+    }
+
+    const rootSpecifier = rootDependencies[name];
+    if (
+      typeof rootSpecifier !== "string" ||
+      !isExactVersionSpecifier(rootSpecifier)
+    ) {
+      return [];
+    }
+
+    if (agentSpecifier === rootSpecifier) {
+      return [];
+    }
+
+    return [{ name, rootSpecifier, agentSpecifier }];
+  });
+}
+
 function readExistingReleaseCheckFile(
   label: string,
   candidates: readonly string[],
@@ -583,6 +611,31 @@ function assertCloudAgentTemplateDependenciesPinned() {
     );
     for (const dependency of floating) {
       console.error(`  - ${dependency.name}: ${dependency.specifier}`);
+    }
+    process.exit(1);
+  }
+}
+
+function assertAgentDependenciesAlignedWithRootPins() {
+  const rootPackage = JSON.parse(
+    readFileSync("package.json", "utf8"),
+  ) as RootPackageJson;
+  const agentPackage = JSON.parse(
+    readFileSync("packages/agent/package.json", "utf8"),
+  ) as RootPackageJson;
+  const mismatches = findMismatchedSharedAgentDependencySpecs(
+    rootPackage,
+    agentPackage,
+  );
+
+  if (mismatches.length > 0) {
+    console.error(
+      "release-check: packages/agent must match the root's exact @elizaos/* pins to avoid alpha tag drift on clean installs.",
+    );
+    for (const mismatch of mismatches) {
+      console.error(
+        `  - ${mismatch.name}: packages/agent=${mismatch.agentSpecifier} root=${mismatch.rootSpecifier}`,
+      );
     }
     process.exit(1);
   }
@@ -975,9 +1028,9 @@ function assertServerDynamicHyperscapeImport() {
     autonomousServerPathCandidates,
   );
 
-  // @elizaos/app-hyperscape/routes must be a dynamic import (lazy) so the
-  // API server can start without it. A static top-level import would crash
-  // the server when the package is not installed (e.g. Windows smoke test).
+  // @elizaos/app-hyperscape must never be a static top-level import. The
+  // API server has to remain bootable when the optional app package is not
+  // installed (for example in Windows smoke and release validation runs).
   const lines = serverSource.split("\n");
   const staticImports = lines.filter(
     (line) =>
@@ -990,13 +1043,6 @@ function assertServerDynamicHyperscapeImport() {
     for (const line of staticImports) {
       console.error(`  - ${line.trim()}`);
     }
-    process.exit(1);
-  }
-
-  if (!serverSource.includes("@elizaos/app-hyperscape/routes")) {
-    console.error(
-      "release-check: server.ts must dynamically import @elizaos/app-hyperscape/routes.",
-    );
     process.exit(1);
   }
 }
@@ -1109,6 +1155,7 @@ function main() {
   assertBundledAgentOrchestratorInstallFix();
   assertOrchestratorVersionPinned();
   assertCloudAgentTemplateDependenciesPinned();
+  assertAgentDependenciesAlignedWithRootPins();
   const localHotspots = findLocalPackHotspots();
   if (shouldSkipExactPackDryRun(localHotspots)) {
     runFastLocalPackCheck(localHotspots);

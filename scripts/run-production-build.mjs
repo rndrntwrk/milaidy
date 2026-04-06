@@ -2,7 +2,8 @@
 /**
  * Full production build with maximal safe parallelism:
  * 1. tsdown (root dist) ∥ Capacitor plugin-build
- * 2. write-build-info (dist metadata) ∥ vite build (apps/app)
+ * 2. vite build (apps/app)
+ * 3. write-build-info (dist metadata)
  *
  * Requires prior `bun install` / postinstall (see apps/app/scripts/build.mjs).
  */
@@ -129,7 +130,8 @@ async function runWriteBuildInfo() {
   await run(node, ["--import", "tsx", writeBuildInfoScript], rootDir);
 }
 
-await Promise.all([runWriteBuildInfo(), run(node, [viteCli, "build"], appDir)]);
+await run(node, [viteCli, "build"], appDir);
+await runWriteBuildInfo();
 if (appAssetBaseUrl) {
   await run(node, [pruneCdnAssetsScript], rootDir);
 }
