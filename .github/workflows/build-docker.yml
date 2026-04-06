@@ -96,6 +96,7 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ inputs.source_sha || github.event.release.tag_name || github.sha }}
+          submodules: recursive
 
       # ── 2. Set up Node 22 ───────────────────────────────────────────────────
       - name: Setup Node.js 22

@@ -10,6 +10,18 @@ const SETUP_ACTION_PATH = path.join(
 const CI_WORKFLOW_PATH = path.join(ROOT, ".github/workflows/ci.yml");
 const CI_FORK_WORKFLOW_PATH = path.join(ROOT, ".github/workflows/ci-fork.yml");
 const TEST_WORKFLOW_PATH = path.join(ROOT, ".github/workflows/test.yml");
+const BUILD_DOCKER_WORKFLOW_PATH = path.join(
+  ROOT,
+  ".github/workflows/build-docker.yml",
+);
+const BUILD_CLOUD_IMAGE_WORKFLOW_PATH = path.join(
+  ROOT,
+  ".github/workflows/build-cloud-image.yml",
+);
+const DOCKER_SMOKE_WORKFLOW_PATH = path.join(
+  ROOT,
+  ".github/workflows/docker-ci-smoke.yml",
+);
 
 function read(filePath: string): string {
   return fs.readFileSync(filePath, "utf8");
@@ -72,5 +84,19 @@ describe("CI workflow drift", () => {
     expect(workflow).toContain(
       "install-command: bun install --frozen-lockfile --ignore-scripts",
     );
+  });
+
+  it("checks out recursive submodules before root workspace installs", () => {
+    expect(
+      countOccurrences(read(CI_WORKFLOW_PATH), "submodules: recursive"),
+    ).toBe(5);
+    expect(
+      countOccurrences(read(TEST_WORKFLOW_PATH), "submodules: recursive"),
+    ).toBe(12);
+    expect(read(BUILD_DOCKER_WORKFLOW_PATH)).toContain("submodules: recursive");
+    expect(read(BUILD_CLOUD_IMAGE_WORKFLOW_PATH)).toContain(
+      "submodules: recursive",
+    );
+    expect(read(DOCKER_SMOKE_WORKFLOW_PATH)).toContain("submodules: recursive");
   });
 });
