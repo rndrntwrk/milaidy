@@ -836,6 +836,30 @@ describe("Defense of the Agents strategy functions", async () => {
     expect(strategy.metrics.ticksAlive).toBe(0);
   });
 
+  test("updateMetrics increments abilitiesLearned for combined ability+recall action", () => {
+    const strategy = {
+      ...DEFAULT_STRATEGY,
+      metrics: { ...DEFAULT_STRATEGY.metrics, abilitiesLearned: 0 },
+    };
+    const hero = {
+      name: "Scout", faction: "human", class: "mage" as const, lane: "mid" as const,
+      hp: 30, maxHp: 200, alive: true, level: 3, xp: 50, xpToNext: 400,
+      abilities: [], abilityChoices: [],
+    };
+    const state = {
+      tick: 100, agents: { human: [], orc: [] },
+      lanes: {
+        top: { human: 3, orc: 5, frontline: -10 },
+        mid: { human: 4, orc: 4, frontline: 0 },
+        bot: { human: 5, orc: 3, frontline: 10 },
+      },
+      towers: [], bases: { human: { hp: 1500, maxHp: 1500 }, orc: { hp: 1500, maxHp: 1500 } },
+      heroes: [hero], winner: null,
+    };
+    updateMetrics(strategy, hero, state, "ability+recall");
+    expect(strategy.metrics.abilitiesLearned).toBe(1);
+  });
+
   test("updateMetrics increments abilitiesLearned when action is ability pick", () => {
     const strategy = {
       ...DEFAULT_STRATEGY,

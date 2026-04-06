@@ -294,16 +294,17 @@ describe("resolveOnchainPreference — interactive (TTY)", () => {
   it("anvil missing + accepts install + install fails → disabled", async () => {
     // answer[0] = "Install Foundry?" → true
     const promptFn = makePrompt([true]);
+    const localInstallFailure = vi.fn(async () => false);
     const result = await resolveOnchainPreference({
       env: {},
       isTTY: true,
       whichFn: whichMissingAnvil,
       promptFn,
-      installFn: installFailure,
+      installFn: localInstallFailure,
     });
     expect(result.onchainEnabled).toBe(false);
     expect(result.anchorRequested).toBe(false);
-    expect(installFailure).toHaveBeenCalledTimes(1);
+    expect(localInstallFailure).toHaveBeenCalledTimes(1);
     expect(promptFn).toHaveBeenCalledTimes(1);
   });
 

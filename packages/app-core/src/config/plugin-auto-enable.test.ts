@@ -112,7 +112,7 @@ describe("applyPluginAutoEnable — connectors", () => {
     });
     const { config, changes } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("telegram");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-telegram");
     expect(changes.some((c) => c.includes("telegram"))).toBe(true);
   });
 
@@ -126,7 +126,7 @@ describe("applyPluginAutoEnable — connectors", () => {
     });
     const { config } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow ?? []).not.toContain("discord");
+    expect(config.plugins?.allow ?? []).not.toContain("@elizaos/plugin-discord");
   });
 
   it("skips connector without authentication credentials", () => {
@@ -139,7 +139,7 @@ describe("applyPluginAutoEnable — connectors", () => {
     });
     const { config } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow ?? []).not.toContain("slack");
+    expect(config.plugins?.allow ?? []).not.toContain("@elizaos/plugin-slack");
   });
 
   it("enables imessage when cliPath is set", () => {
@@ -152,7 +152,7 @@ describe("applyPluginAutoEnable — connectors", () => {
     });
     const { config } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("imessage");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-imessage");
   });
 
   it("enables signal when account is set", () => {
@@ -165,7 +165,7 @@ describe("applyPluginAutoEnable — connectors", () => {
     });
     const { config } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("signal");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-signal");
   });
 
   it("enables signal when any enabled account entry is configured", () => {
@@ -183,7 +183,7 @@ describe("applyPluginAutoEnable — connectors", () => {
     });
     const { config } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("signal");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-signal");
   });
 
   it("supports legacy channels key for backward compat", () => {
@@ -196,7 +196,7 @@ describe("applyPluginAutoEnable — connectors", () => {
     });
     const { config } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("telegram");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-telegram");
   });
 
   it("enables wechat plugin when apiKey is configured", () => {
@@ -208,7 +208,7 @@ describe("applyPluginAutoEnable — connectors", () => {
       },
     });
     const { config } = applyPluginAutoEnable(params);
-    expect(config.plugins?.allow).toContain("wechat");
+    expect(config.plugins?.allow).toContain("@miladyai/plugin-wechat");
   });
 
   it("does not enable wechat when disabled", () => {
@@ -220,7 +220,7 @@ describe("applyPluginAutoEnable — connectors", () => {
       },
     });
     const { config } = applyPluginAutoEnable(params);
-    expect(config.plugins?.allow ?? []).not.toContain("wechat");
+    expect(config.plugins?.allow ?? []).not.toContain("@miladyai/plugin-wechat");
   });
 });
 
@@ -241,7 +241,7 @@ describe("applyPluginAutoEnable — auth profiles", () => {
     });
     const { config, changes } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("openai");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-openai");
     expect(changes.some((c) => c.includes("auth profile"))).toBe(true);
   });
 
@@ -272,7 +272,7 @@ describe("applyPluginAutoEnable — env vars", () => {
     });
     const { config, changes } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("anthropic");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-anthropic");
     expect(changes.some((c) => c.includes("ANTHROPIC_API_KEY"))).toBe(true);
   });
 
@@ -282,7 +282,7 @@ describe("applyPluginAutoEnable — env vars", () => {
     });
     const { config, changes } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("repoprompt");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-repoprompt");
     expect(changes.some((c) => c.includes("REPOPROMPT_CLI_PATH"))).toBe(true);
   });
 
@@ -321,7 +321,7 @@ describe("applyPluginAutoEnable — env vars", () => {
     });
     const { config } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow ?? []).not.toContain("anthropic");
+    expect(config.plugins?.allow ?? []).not.toContain("@elizaos/plugin-anthropic");
   });
 
   it("handles multiple env vars enabling different plugins", () => {
@@ -335,9 +335,9 @@ describe("applyPluginAutoEnable — env vars", () => {
     const { config } = applyPluginAutoEnable(params);
     const allow = config.plugins?.allow ?? [];
 
-    expect(allow).toContain("openai");
-    expect(allow).toContain("groq");
-    expect(allow).toContain("xai");
+    expect(allow).toContain("@elizaos/plugin-openai");
+    expect(allow).toContain("@elizaos/plugin-groq");
+    expect(allow).toContain("@elizaos/plugin-xai");
   });
 
   it("auto-enables obsidian plugin when OBSIDIAN_VAULT_PATH is set", () => {
@@ -450,7 +450,7 @@ describe("applyPluginAutoEnable — features", () => {
     });
     const { config, changes } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("repoprompt");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-repoprompt");
     expect(changes.some((c) => c.includes("feature: repoprompt"))).toBe(true);
   });
 
@@ -600,7 +600,7 @@ describe("applyPluginAutoEnable — subscription provider", () => {
     });
     const { config, changes } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("anthropic");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-anthropic");
     expect(changes.some((c) => c.includes("subscription"))).toBe(true);
   });
 
@@ -612,7 +612,7 @@ describe("applyPluginAutoEnable — subscription provider", () => {
     });
     const { config, changes } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("openai");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-openai");
     expect(changes.some((c) => c.includes("subscription"))).toBe(true);
   });
 
@@ -627,7 +627,7 @@ describe("applyPluginAutoEnable — subscription provider", () => {
     });
     const { config } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("anthropic");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-anthropic");
     expect(config.plugins?.entries?.anthropic?.enabled).toBe(true);
   });
 
@@ -722,7 +722,7 @@ describe("WhatsApp connector auto-enable", () => {
         config: { connectors: { whatsapp: { authState: "./auth" } } },
       }),
     );
-    expect(config.plugins?.allow).toContain("whatsapp");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-whatsapp");
   });
 
   it("auto-enables via legacy sessionPath field", () => {
@@ -731,7 +731,7 @@ describe("WhatsApp connector auto-enable", () => {
         config: { connectors: { whatsapp: { sessionPath: "./auth" } } },
       }),
     );
-    expect(config.plugins?.allow).toContain("whatsapp");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-whatsapp");
   });
 
   it("auto-enables via authDir (Baileys WhatsAppAccountSchema field)", () => {
@@ -740,7 +740,7 @@ describe("WhatsApp connector auto-enable", () => {
         config: { connectors: { whatsapp: { authDir: "./auth/whatsapp" } } },
       }),
     );
-    expect(config.plugins?.allow).toContain("whatsapp");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-whatsapp");
   });
 
   it("auto-enables when accounts object is configured", () => {
@@ -755,14 +755,14 @@ describe("WhatsApp connector auto-enable", () => {
         },
       }),
     );
-    expect(config.plugins?.allow).toContain("whatsapp");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-whatsapp");
   });
 
   it("does not auto-enable when whatsapp config is empty", () => {
     const { config } = applyPluginAutoEnable(
       makeParams({ config: { connectors: { whatsapp: {} } } }),
     );
-    expect(config.plugins?.allow ?? []).not.toContain("whatsapp");
+    expect(config.plugins?.allow ?? []).not.toContain("@elizaos/plugin-whatsapp");
   });
 
   it("does not auto-enable when accounts object has no valid authDir", () => {
@@ -775,7 +775,7 @@ describe("WhatsApp connector auto-enable", () => {
         },
       }),
     );
-    expect(config.plugins?.allow ?? []).not.toContain("whatsapp");
+    expect(config.plugins?.allow ?? []).not.toContain("@elizaos/plugin-whatsapp");
   });
 
   it("does not auto-enable when all accounts are explicitly disabled", () => {
@@ -790,7 +790,7 @@ describe("WhatsApp connector auto-enable", () => {
         },
       }),
     );
-    expect(config.plugins?.allow ?? []).not.toContain("whatsapp");
+    expect(config.plugins?.allow ?? []).not.toContain("@elizaos/plugin-whatsapp");
   });
 
   it("does not auto-enable when enabled is explicitly false", () => {
@@ -803,7 +803,7 @@ describe("WhatsApp connector auto-enable", () => {
         },
       }),
     );
-    expect(config.plugins?.allow ?? []).not.toContain("whatsapp");
+    expect(config.plugins?.allow ?? []).not.toContain("@elizaos/plugin-whatsapp");
   });
 });
 
@@ -814,7 +814,7 @@ describe("Blooio connector auto-enable", () => {
         config: { connectors: { blooio: { apiKey: "blk-test-key" } } },
       }),
     );
-    expect(config.plugins?.allow).toContain("blooio");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-blooio");
   });
 
   it("does not auto-enable when config is empty", () => {
@@ -823,7 +823,7 @@ describe("Blooio connector auto-enable", () => {
         config: { connectors: { blooio: {} } },
       }),
     );
-    expect(config.plugins?.allow ?? []).not.toContain("blooio");
+    expect(config.plugins?.allow ?? []).not.toContain("@elizaos/plugin-blooio");
   });
 
   it("does not auto-enable when enabled is explicitly false", () => {
@@ -836,7 +836,7 @@ describe("Blooio connector auto-enable", () => {
         },
       }),
     );
-    expect(config.plugins?.allow ?? []).not.toContain("blooio");
+    expect(config.plugins?.allow ?? []).not.toContain("@elizaos/plugin-blooio");
   });
 });
 

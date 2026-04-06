@@ -403,44 +403,59 @@ function findHero(
 async function locateHeroState(
   ctx: Pick<SessionContext, "apiBaseUrl" | "agentName" | "preferredGameId">,
 ): Promise<LocatedHeroState> {
-  const candidates = [
-    ctx.preferredGameId,
-    ...Array.from({ length: GAME_SEARCH_LIMIT }, (_, index) => index + 1),
-  ].filter((value, index, values): value is number => {
-    return typeof value === "number" && values.indexOf(value) === index;
-  });
-
-  let fallbackState: LocatedHeroState | null = null;
-
-  for (const gameId of candidates) {
-    const state = await fetchGameState(ctx.apiBaseUrl, gameId);
+  // Fast path: if we have a preferred game ID, try only that one.
+  // This avoids scanning all games and hitting rate limits.
+  if (ctx.preferredGameId) {
+    const state = await fetchGameState(ctx.apiBaseUrl, ctx.preferredGameId);
     const hero = findHero(state, ctx.agentName);
-    if (!fallbackState) {
-      fallbackState = {
-        gameId,
-        state,
-        hero,
-      };
-    }
     if (hero) {
-      return {
-        gameId,
-        state,
-        hero,
-      };
+      return { gameId: ctx.preferredGameId, state, hero };
+    }
+    // Hero not found in preferred game — scan others (hero may have been
+    // assigned to a different game by the server after a restart)
+    const others = Array.from(
+      { length: GAME_SEARCH_LIMIT },
+      (_, i) => i + 1,
+    ).filter((id) => id !== ctx.preferredGameId);
+
+    for (const gameId of others) {
+      try {
+        const otherState = await fetchGameState(ctx.apiBaseUrl, gameId);
+        const otherHero = findHero(otherState, ctx.agentName);
+        if (otherHero) {
+          return { gameId, state: otherState, hero: otherHero };
+        }
+      } catch {
+        // Skip games that error (404, rate limit)
+        continue;
+      }
+    }
+    // Hero nowhere — return preferred game state as fallback
+    return { gameId: ctx.preferredGameId, state, hero: null };
+  }
+
+  // No preferred game — scan sequentially
+  let fallbackState: LocatedHeroState | null = null;
+  for (let gameId = 1; gameId <= GAME_SEARCH_LIMIT; gameId++) {
+    try {
+      const state = await fetchGameState(ctx.apiBaseUrl, gameId);
+      const hero = findHero(state, ctx.agentName);
+      if (!fallbackState) {
+        fallbackState = { gameId, state, hero };
+      }
+      if (hero) {
+        return { gameId, state, hero };
+      }
+    } catch {
+      continue;
     }
   }
 
-  return (
-    fallbackState ?? {
-      gameId: ctx.preferredGameId ?? DEFAULT_GAME_ID,
-      state: await fetchGameState(
-        ctx.apiBaseUrl,
-        ctx.preferredGameId ?? DEFAULT_GAME_ID,
-      ),
-      hero: null,
-    }
-  );
+  if (fallbackState) return fallbackState;
+
+  // Last resort — fetch game 1
+  const state = await fetchGameState(ctx.apiBaseUrl, DEFAULT_GAME_ID);
+  return { gameId: DEFAULT_GAME_ID, state, hero: null };
 }
 
 async function registerAgent(ctx: SessionContext): Promise<string> {
@@ -697,12 +712,14 @@ async function executeStrategyTick(
     heroLane: hero.lane,
   };
   let action = "hold";
+  let pickedAbility = false;
 
-  // Priority 1: Pick ability if available
+  // Priority 1: Pick ability if available (can combine with recall/move)
   if (hero.abilityChoices?.length) {
     const pick = pickAbility(hero.abilityChoices, strategy.abilityPriority);
     if (pick) {
       deployment.abilityChoice = pick;
+      pickedAbility = true;
       action = `ability:${pick}`;
     }
   }
@@ -711,7 +728,7 @@ async function executeStrategyTick(
   const hpRatio = hero.maxHp > 0 ? hero.hp / hero.maxHp : 1;
   if (hpRatio <= strategy.recallThreshold && hpRatio > 0) {
     deployment.action = "recall";
-    action = "recall";
+    action = pickedAbility ? `ability+recall` : "recall";
   } else {
     // Priority 3: Reinforce weakest lane if differential exceeds threshold
     const weakest = findWeakestAlliedLane(state, hero.faction);
@@ -865,7 +882,7 @@ function updateMetrics(
       strategy.metrics.laneControlSum += control;
     }
   }
-  if (action?.startsWith("ability:")) {
+  if (action?.startsWith("ability:") || action?.startsWith("ability+")) {
     strategy.metrics.abilitiesLearned += 1;
   }
 }
@@ -889,7 +906,9 @@ function startGameLoop(
     void (async () => {
       const strategy = resolveStrategy(runtime);
       try {
-        const result = await executeStrategyTick(ctx, strategy);
+        // Re-resolve context each tick so preferredGameId stays current
+        const tickCtx = resolveSessionContext(runtime, ctx.agentName);
+        const result = await executeStrategyTick(tickCtx, strategy);
         updateMetrics(strategy, result.hero, result.state, result.action);
         persistStrategy(runtime, strategy);
 
@@ -1425,13 +1444,28 @@ export async function handleAppRoutes(ctx: {
         current.hero,
       );
       const response = await deployHero(sessionCtx, deployment);
-      const refreshed = await readSessionState(runtime, sessionId);
+
+      // Persist the game ID so subsequent calls use the fast path
+      if (typeof response.gameId === "number") {
+        sessionCtx.preferredGameId = response.gameId;
+      }
+
+      // Re-fetch game state once (not a full locate scan) to get updated hero
+      const refreshedGameId = sessionCtx.preferredGameId ?? current.gameId;
+      const refreshedState = await fetchGameState(sessionCtx.apiBaseUrl, refreshedGameId);
+      const refreshedHero = findHero(refreshedState, sessionCtx.agentName);
+      const refreshedSession = buildSessionState(sessionCtx, {
+        gameId: refreshedGameId,
+        state: refreshedState,
+        hero: refreshedHero,
+      });
+
       ctx.json(
         ctx.res,
         okResponse(
           true,
           response.message?.trim() || "Deployment received.",
-          refreshed,
+          refreshedSession,
         ),
       );
       return true;

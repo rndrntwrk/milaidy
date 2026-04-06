@@ -22,6 +22,7 @@
     "milady"
   ],
   "dependencies": {
-    "@elizaos/core": "workspace:*"
+    "@elizaos/core": "workspace:*",
+    "@miladyai/shared": "workspace:*"
   }
 }

@@ -17,6 +17,8 @@ export const CONNECTOR_IDS = [
   "nostr",
   "blooio",
   "twitch",
+  "mattermost",
+  "googlechat",
 ] as const;
 
 import { ElizaSchema } from "./zod-schema";

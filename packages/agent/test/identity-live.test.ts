@@ -288,8 +288,8 @@ class ConversationTranscript {
 // Extraction prompt (same as the evaluator uses)
 // ---------------------------------------------------------------------------
 
-/** Full platform enum from the canonical registry */
-const PLATFORM_ENUM = [...KNOWN_PLATFORMS].filter((p) => !["mail", "etc", "e-mail"].includes(p)).sort().join("|");
+/** Full platform enum — explicit list matching the canonical platforms.ts registry */
+const PLATFORM_ENUM = "bluesky|discord|email|facebook|farcaster|github|instagram|lens|linkedin|mastodon|nostr|phone|reddit|telegram|tiktok|twitch|twitter|warpcast|website|youtube";
 
 const EXTRACTION_PROMPT = `You are analyzing a conversation to extract social and identity information.
 

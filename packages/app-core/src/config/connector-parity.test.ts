@@ -170,7 +170,8 @@ describe("connector runtime parity", () => {
     });
     const allow = config.plugins?.allow ?? [];
     for (const id of CONNECTOR_IDS) {
-      expect(allow).toContain(id);
+      const expectedPkg = CONNECTOR_PLUGINS[id];
+      expect(allow).toContain(expectedPkg);
     }
     const expectedChangeCount =
       CONNECTOR_IDS.length - MILADY_LOCAL_CONNECTORS.size;
