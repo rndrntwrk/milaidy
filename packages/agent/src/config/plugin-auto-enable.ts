@@ -29,6 +29,8 @@ export const CONNECTOR_PLUGINS: Record<string, string> = {
   nostr: "@elizaos/plugin-nostr",
   blooio: "@elizaos/plugin-blooio",
   twitch: "@elizaos/plugin-twitch",
+  mattermost: "@elizaos/plugin-mattermost",
+  googlechat: "@elizaos/plugin-google-chat",
 };
 
 export const STREAMING_PLUGINS: Record<string, string> = {

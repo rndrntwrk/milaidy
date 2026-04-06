@@ -46,7 +46,7 @@ export function Diagram({ children, caption, alt }: DiagramProps) {
         mermaid.initialize({
           startOnLoad: false,
           theme: "dark",
-          securityLevel: "loose",
+          securityLevel: "strict",
           themeVariables: {
             // Match Milady's dark surface palette so diagrams don't look
             // pasted in from a different site.

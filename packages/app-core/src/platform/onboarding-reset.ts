@@ -98,6 +98,7 @@ export function applyForceFreshOnboardingReset(args?: {
 
   if (typeof window !== "undefined") {
     try {
+      window.localStorage.removeItem("milady_api_base");
       window.sessionStorage.removeItem("milady_api_base");
     } catch {
       // Ignore storage failures during startup.

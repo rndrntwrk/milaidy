@@ -228,6 +228,19 @@ export const manageMiladyBrowserWorkspaceAction: Action = {
       return { success: false, text };
     }
 
+    // Guard: eval must come from explicit parameters, not inferred from
+    // natural language alone — mitigates prompt-injection risk where a
+    // malicious page title or message tricks the agent into running JS.
+    if (
+      request.operation === "eval" &&
+      !(options?.parameters as Record<string, unknown> | undefined)?.operation
+    ) {
+      const text =
+        "For safety, JavaScript evaluation must be requested with explicit parameters (operation: 'eval', id, script). Natural-language eval inference is disabled.";
+      await callback?.({ text });
+      return { success: false, text };
+    }
+
     try {
       const text = await runBrowserWorkspaceOperation(request);
       await callback?.({ text });

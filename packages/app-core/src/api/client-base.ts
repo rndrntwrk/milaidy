@@ -27,6 +27,8 @@ import { ApiError } from "./client-types";
 const GENERIC_NO_RESPONSE_TEXT =
   "Sorry, I couldn't generate a response right now. Please try again.";
 const DEFAULT_FETCH_TIMEOUT_MS = 10_000;
+const LOCAL_STORAGE_API_BASE_KEY = "milady_api_base";
+/** @deprecated Read-only fallback — older sessions wrote to sessionStorage. */
 const SESSION_STORAGE_API_BASE_KEY = "milady_api_base";
 
 // ---------------------------------------------------------------------------
@@ -80,7 +82,8 @@ export class MiladyClient {
     const injectedBase = getElizaApiBase();
     const storedBase =
       typeof window !== "undefined"
-        ? window.sessionStorage.getItem(SESSION_STORAGE_API_BASE_KEY)
+        ? (window.localStorage.getItem(LOCAL_STORAGE_API_BASE_KEY) ??
+          window.sessionStorage.getItem(SESSION_STORAGE_API_BASE_KEY))
         : null;
 
     this._explicitBase =
@@ -156,10 +159,12 @@ export class MiladyClient {
     setBootConfig({ ...config, apiBase: normalized || undefined });
     if (typeof window !== "undefined") {
       if (normalized) {
-        window.sessionStorage.setItem(SESSION_STORAGE_API_BASE_KEY, normalized);
+        window.localStorage.setItem(LOCAL_STORAGE_API_BASE_KEY, normalized);
       } else {
-        window.sessionStorage.removeItem(SESSION_STORAGE_API_BASE_KEY);
+        window.localStorage.removeItem(LOCAL_STORAGE_API_BASE_KEY);
       }
+      // Clean up legacy sessionStorage entry
+      window.sessionStorage.removeItem(SESSION_STORAGE_API_BASE_KEY);
     }
   }
 
@@ -336,6 +341,17 @@ export class MiladyClient {
     }
 
     if (!host) return;
+
+    // On Capacitor native (iosScheme/androidScheme = "https"), the origin host
+    // is a dummy bundle host (e.g. "localhost" with no server behind it).
+    // Skip WS if we have no explicit baseUrl and the host doesn't look like a
+    // real backend (no port, not an IP, not a known API domain).
+    if (!this.baseUrl && typeof host === "string") {
+      const hasPort = host.includes(":");
+      const isLoopback =
+        host.startsWith("127.") || host.startsWith("localhost:");
+      if (!hasPort && !isLoopback) return;
+    }
 
     let url = `${wsProtocol}//${host}/ws`;
     const params = new URLSearchParams({ clientId: this.clientId });

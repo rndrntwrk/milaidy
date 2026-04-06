@@ -139,6 +139,58 @@ describe("classifyIntent", () => {
   });
 });
 
+describe("classifyIntent edge cases", () => {
+  it.each([
+    // ── Ambiguous / overlapping keywords ──────────────
+    ["can you schedule a workout for me", "update_definition"],  // "schedule" + no calendar query context → update (has "reschedule" neighbor)
+    ["I completed the goal review", "complete_occurrence"],       // "completed" wins over "goal"/"review"
+    ["delete everything", "delete_definition"],                   // generic delete → definition
+    ["remind me to call mom", "create_definition"],               // "remind me" without "later"/"again" = create, not snooze
+    ["stop the workout reminder", "delete_definition"],           // "stop" maps to delete
+
+    // ── Typos and informal language ──────────────────
+    ["im done with pushups", "complete_occurrence"],              // "done" triggers complete
+    ["nah skip it", "skip_occurrence"],                           // "skip" triggers skip
+    ["lemme snooze that", "snooze_occurrence"],                   // "snooze" triggers snooze
+    ["whats on the calendar", "query_calendar_today"],            // missing apostrophe
+    ["any emails i need to look at", "query_email"],              // casual phrasing
+
+    // ── Short/terse inputs ───────────────────────────
+    ["done", "complete_occurrence"],
+    ["skip", "skip_occurrence"],
+    ["snooze", "snooze_occurrence"],
+    ["calendar", "query_calendar_today"],
+    ["email", "query_email"],
+    ["overview", "query_overview"],
+    ["delete it", "delete_definition"],
+
+    // ── Longer conversational inputs ─────────────────
+    ["hey can you help me set up a daily routine where I brush my teeth every morning and every night", "create_definition"],
+    ["I've been meaning to work out more regularly, maybe three times a week", "create_definition"],
+    ["I really want to make it a goal to read more books this year", "create_goal"],
+    ["actually I already did that one can you mark it complete", "complete_occurrence"],
+    ["could you push that back about an hour, I'm in the middle of something", "snooze_occurrence"],
+    ["what meetings do I have coming up soon", "query_calendar_next"],
+    ["is there anything urgent in my inbox I should know about", "query_email"],
+
+    // ── Mixed signals (action param should resolve these, but classifier does best-effort) ──
+    ["update the schedule for tomorrow", "update_definition"],    // "update" wins over "schedule"
+    ["change my email preferences", "update_definition"],         // "change" wins over "email"
+    ["review the calendar event", "review_goal"],                 // "review" wins (checked before calendar)
+    ["edit my goal to call mom", "update_goal"],                  // "edit" + "goal"
+
+    // ── BRD acceptance criteria phrases ──────────────
+    ["I need help brushing my teeth twice a day", "create_definition"],
+    ["Add one push-up and sit-up every day", "create_definition"],
+    ["I want to call my mom every week. Help me actually do it.", "create_goal"],
+    ["What's on my calendar today?", "query_calendar_today"],
+    ["Do I have anything important I need to respond to?", "query_email"],
+    ["Text me if I ignore this, and call me if it's right before the event", "configure_escalation"],
+  ] as const)('edge: "%s" → %s', (input, expected) => {
+    expect(classifyIntent(input)).toBe(expected);
+  });
+});
+
 // ── Action handler tests ──────────────────────────────
 
 describe("lifeAction", () => {

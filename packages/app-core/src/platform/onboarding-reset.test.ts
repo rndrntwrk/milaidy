@@ -15,6 +15,7 @@ describe("applyForceFreshOnboardingReset", () => {
       }),
     );
     localStorage.setItem("eliza:onboarding:step", "providers");
+    localStorage.setItem("milady_api_base", "https://stale.local.example");
     sessionStorage.setItem("milady_api_base", "https://stale.remote.example");
 
     const url = new URL("https://app.milady.ai/?reset=1");
@@ -30,6 +31,7 @@ describe("applyForceFreshOnboardingReset", () => {
 
     expect(localStorage.getItem("milady:active-server")).toBeNull();
     expect(localStorage.getItem("eliza:onboarding:step")).toBeNull();
+    expect(localStorage.getItem("milady_api_base")).toBeNull();
     expect(sessionStorage.getItem("milady_api_base")).toBeNull();
     expect(localStorage.getItem("milady:onboarding:force-fresh")).toBe("1");
     expect(url.searchParams.has("reset")).toBe(false);

@@ -57,6 +57,8 @@ export const CHANNEL_PLUGIN_MAP: Readonly<Record<string, string>> = {
   nostr: "@elizaos/plugin-nostr",
   blooio: "@elizaos/plugin-blooio",
   twitch: "@elizaos/plugin-twitch",
+  mattermost: "@elizaos/plugin-mattermost",
+  googlechat: "@elizaos/plugin-google-chat",
 };
 
 /** Maps environment variable names to model-provider plugin packages. */

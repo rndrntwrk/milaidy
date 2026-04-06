@@ -19,6 +19,7 @@ import { loadPersistedOnboardingComplete } from "./persistence";
 import {
   INITIAL_STARTUP_STATE,
   createDesktopPolicy,
+  createMobilePolicy,
   createWebPolicy,
   isStartupLoading,
   isStartupTerminal,
@@ -30,6 +31,7 @@ import {
   type StartupState,
 } from "./startup-coordinator";
 import { isElectrobunRuntime } from "../bridge";
+import { isNative } from "../platform";
 import {
   runRestoringSession,
   type RestoringSessionCtx,
@@ -84,6 +86,7 @@ export interface StartupCoordinatorHandle {
 
 function detectPlatformPolicy(): PlatformPolicy {
   if (isElectrobunRuntime()) return createDesktopPolicy();
+  if (isNative) return createMobilePolicy();
   return createWebPolicy();
 }
 
