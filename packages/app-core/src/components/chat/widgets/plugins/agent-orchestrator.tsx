@@ -1,7 +1,12 @@
-import type { CodingAgentSession } from "@miladyai/app-core/api";
+import type {
+  CodingAgentSession,
+  CodingAgentTaskThread,
+  CodingAgentTaskThreadDetail,
+} from "@miladyai/app-core/api";
 import { Badge, Button } from "@miladyai/ui";
 import { Activity } from "lucide-react";
-import { useMemo } from "react";
+import { type ReactNode, useDeferredValue, useEffect, useMemo, useState } from "react";
+import { client } from "../../../../api";
 import { TERMINAL_STATUSES } from "../../../../coding";
 import type { ActivityEvent } from "../../../../hooks/useActivityEvents";
 import { useApp } from "../../../../state";
@@ -97,6 +102,267 @@ function TaskItemsContent({ sessions }: { sessions: CodingAgentSession[] }) {
   );
 }
 
+function formatIsoTime(value?: string | null): string {
+  if (!value) return "unknown";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "unknown";
+  return relativeTime(date.getTime());
+}
+
+function formatThreadStatus(status: string): string {
+  return status.replace(/_/g, " ");
+}
+
+const THREAD_STATUS_BADGE: Record<string, string> = {
+  open: "bg-muted/20 text-muted",
+  active: "bg-ok/20 text-ok",
+  waiting_on_user: "bg-warn/20 text-warn",
+  blocked: "bg-warn/20 text-warn",
+  validating: "bg-accent/20 text-accent",
+  done: "bg-ok/20 text-ok",
+  failed: "bg-danger/20 text-danger",
+  archived: "bg-muted/20 text-muted",
+  interrupted: "bg-warn/20 text-warn",
+};
+
+function TaskThreadCard({
+  thread,
+  selected,
+  onSelect,
+}: {
+  thread: CodingAgentTaskThread;
+  selected: boolean;
+  onSelect: (threadId: string) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(thread.id)}
+      className={`flex w-full flex-col gap-1 rounded-lg border p-3 text-left transition-colors ${
+        selected
+          ? "border-accent/50 bg-bg-hover/70"
+          : "border-border/50 bg-bg-accent/30 hover:bg-bg-hover/40"
+      }`}
+    >
+      <div className="flex items-start gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-xs font-semibold text-txt">
+            {thread.title}
+          </div>
+          <div className="mt-0.5 truncate text-[11px] text-muted">
+            {thread.originalRequest}
+          </div>
+        </div>
+        <Badge
+          variant="secondary"
+          className={`shrink-0 text-[9px] ${
+            THREAD_STATUS_BADGE[thread.status] ?? "bg-muted/20 text-muted"
+          }`}
+        >
+          {formatThreadStatus(thread.status)}
+        </Badge>
+      </div>
+      <div className="flex items-center gap-3 text-[10px] text-muted">
+        <span>{thread.kind}</span>
+        <span>{thread.sessionCount} sessions</span>
+        <span>{thread.decisionCount} decisions</span>
+        <span>{formatIsoTime(thread.updatedAt)}</span>
+      </div>
+      {thread.summary ? (
+        <div className="line-clamp-2 text-[11px] text-txt">{thread.summary}</div>
+      ) : null}
+    </button>
+  );
+}
+
+function DetailList({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="rounded-lg border border-border/50 bg-bg-accent/20 p-2.5">
+      <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
+        {title}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function TaskThreadDetailPanel({
+  detail,
+  onArchive,
+  onReopen,
+  busy,
+}: {
+  detail: CodingAgentTaskThreadDetail;
+  onArchive: () => void;
+  onReopen: () => void;
+  busy: boolean;
+}) {
+  const latestTranscripts = detail.transcripts.slice(-8).reverse();
+  const latestEvents = detail.events.slice(-6).reverse();
+  const latestDecisions = detail.decisions.slice(-6).reverse();
+  const latestArtifacts = detail.artifacts.slice(-6).reverse();
+
+  return (
+    <div className="flex flex-col gap-2.5">
+      <div className="rounded-lg border border-border/50 bg-bg-accent/20 p-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-semibold text-txt">{detail.title}</div>
+            <div className="mt-1 text-[11px] text-muted">
+              {detail.originalRequest}
+            </div>
+          </div>
+          <Badge
+            variant="secondary"
+            className={`shrink-0 text-[9px] ${
+              THREAD_STATUS_BADGE[detail.status] ?? "bg-muted/20 text-muted"
+            }`}
+          >
+            {formatThreadStatus(detail.status)}
+          </Badge>
+        </div>
+        <div className="mt-2 flex flex-wrap gap-3 text-[10px] text-muted">
+          <span>{detail.kind}</span>
+          <span>{detail.sessions.length} sessions</span>
+          <span>{detail.artifacts.length} artifacts</span>
+          <span>{detail.transcripts.length} transcript entries</span>
+        </div>
+        {detail.acceptanceCriteria && detail.acceptanceCriteria.length > 0 ? (
+          <div className="mt-3">
+            <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
+              Acceptance
+            </div>
+            <div className="space-y-1">
+              {detail.acceptanceCriteria.map((criterion, index) => (
+                <div key={`${detail.id}-criterion-${index}`} className="text-[11px] text-txt">
+                  {criterion}
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+        <div className="mt-3 flex gap-2">
+          {detail.status === "archived" ? (
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={busy}
+              onClick={onReopen}
+              className="h-7 px-2 text-[11px]"
+            >
+              Reopen
+            </Button>
+          ) : (
+            <Button
+              variant="secondary"
+              size="sm"
+              disabled={busy}
+              onClick={onArchive}
+              className="h-7 px-2 text-[11px]"
+            >
+              Archive
+            </Button>
+          )}
+        </div>
+      </div>
+
+      <DetailList title="Sessions">
+        {detail.sessions.length === 0 ? (
+          <div className="text-[11px] text-muted">No sessions recorded.</div>
+        ) : (
+          <div className="space-y-1.5">
+            {detail.sessions.slice(-4).reverse().map((session) => (
+              <div key={session.id} className="text-[11px] text-txt">
+                <div className="font-medium">{session.label}</div>
+                <div className="text-muted">
+                  {session.framework} · {session.status} ·{" "}
+                  {session.workdir || session.repo || "no workspace"}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </DetailList>
+
+      <DetailList title="Artifacts">
+        {latestArtifacts.length === 0 ? (
+          <div className="text-[11px] text-muted">No artifacts recorded yet.</div>
+        ) : (
+          <div className="space-y-1.5">
+            {latestArtifacts.map((artifact) => (
+              <div key={artifact.id} className="text-[11px] text-txt">
+                <div className="font-medium">{artifact.title}</div>
+                <div className="break-all text-muted">
+                  {artifact.artifactType} · {artifact.path ?? artifact.uri ?? "inline"}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </DetailList>
+
+      <DetailList title="Coordinator Decisions">
+        {latestDecisions.length === 0 ? (
+          <div className="text-[11px] text-muted">No decisions recorded yet.</div>
+        ) : (
+          <div className="space-y-1.5">
+            {latestDecisions.map((decision) => (
+              <div key={decision.id} className="text-[11px] text-txt">
+                <div className="font-medium">
+                  {decision.decision} · {relativeTime(decision.timestamp)}
+                </div>
+                <div className="line-clamp-3 text-muted">{decision.reasoning}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </DetailList>
+
+      <DetailList title="Events">
+        {latestEvents.length === 0 ? (
+          <div className="text-[11px] text-muted">No events recorded yet.</div>
+        ) : (
+          <div className="space-y-1.5">
+            {latestEvents.map((event) => (
+              <div key={event.id} className="text-[11px] text-txt">
+                <div className="font-medium">
+                  {event.eventType.replace(/_/g, " ")} · {relativeTime(event.timestamp)}
+                </div>
+                <div className="line-clamp-2 text-muted">{event.summary}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </DetailList>
+
+      <DetailList title="Transcript">
+        {latestTranscripts.length === 0 ? (
+          <div className="text-[11px] text-muted">No transcript captured yet.</div>
+        ) : (
+          <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
+            {latestTranscripts.map((entry) => (
+              <div key={entry.id} className="rounded border border-border/40 bg-bg-hover/40 p-2">
+                <div className="mb-1 text-[10px] uppercase tracking-[0.08em] text-muted">
+                  {entry.direction} · {relativeTime(entry.timestamp)}
+                </div>
+                <pre className="whitespace-pre-wrap break-words font-mono text-[10px] text-txt">
+                  {entry.content}
+                </pre>
+              </div>
+            ))}
+          </div>
+        )}
+      </DetailList>
+    </div>
+  );
+}
+
 function ActivityItemsContent({ events }: { events: ActivityEvent[] }) {
   if (events.length === 0) {
     return (
@@ -143,15 +409,156 @@ function OrchestratorTasksWidget(_props: ChatSidebarWidgetProps) {
       ),
     [ptySessions],
   );
+  const [threads, setThreads] = useState<CodingAgentTaskThread[]>([]);
+  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
+  const [selectedThread, setSelectedThread] =
+    useState<CodingAgentTaskThreadDetail | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
+  const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [mutating, setMutating] = useState(false);
+  const deferredSearch = useDeferredValue(search.trim());
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const refreshThreads = async () => {
+      setLoading(true);
+      const nextThreads =
+        typeof client.listCodingAgentTaskThreads === "function"
+          ? await client.listCodingAgentTaskThreads({
+              includeArchived: showArchived,
+              search: deferredSearch || undefined,
+              limit: 30,
+            })
+          : [];
+      if (cancelled) return;
+      setThreads(nextThreads);
+      setSelectedThreadId((current) => {
+        if (current && nextThreads.some((thread) => thread.id === current)) {
+          return current;
+        }
+        return nextThreads[0]?.id ?? null;
+      });
+      setLoading(false);
+    };
+
+    void refreshThreads();
+    const timer = setInterval(() => {
+      void refreshThreads();
+    }, 5_000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [deferredSearch, showArchived, ptySessions.length]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!selectedThreadId) {
+      setSelectedThread(null);
+      return;
+    }
+
+    const loadDetail =
+      typeof client.getCodingAgentTaskThread === "function"
+        ? client.getCodingAgentTaskThread(selectedThreadId)
+        : Promise.resolve(null);
+    void loadDetail.then((detail) => {
+      if (cancelled) return;
+      setSelectedThread(detail);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedThreadId, threads]);
+
+  const handleArchiveToggle = async () => {
+    if (!selectedThread) return;
+    setMutating(true);
+    if (selectedThread.status === "archived") {
+      if (typeof client.reopenCodingAgentTaskThread === "function") {
+        await client.reopenCodingAgentTaskThread(selectedThread.id);
+      }
+      setShowArchived(false);
+    } else {
+      if (typeof client.archiveCodingAgentTaskThread === "function") {
+        await client.archiveCodingAgentTaskThread(selectedThread.id);
+      }
+      setShowArchived(true);
+    }
+    const nextThreads =
+      typeof client.listCodingAgentTaskThreads === "function"
+        ? await client.listCodingAgentTaskThreads({
+            includeArchived: selectedThread.status !== "archived",
+            search: deferredSearch || undefined,
+            limit: 30,
+          })
+        : [];
+    setThreads(nextThreads);
+    setSelectedThreadId(nextThreads[0]?.id ?? null);
+    setMutating(false);
+  };
+
+  const count = threads.length > 0 ? threads.length : activeSessions.length;
 
   return (
     <WidgetSection
       title={t("taskseventspanel.Tasks", { defaultValue: "Tasks" })}
       icon={<Activity className="h-4 w-4" />}
-      count={activeSessions.length}
+      count={count}
+      action={
+        <div className="flex items-center gap-1.5">
+          <Button
+            variant={showArchived ? "secondary" : "ghost"}
+            size="sm"
+            className="h-6 px-2 text-[10px]"
+            onClick={() => setShowArchived((value) => !value)}
+          >
+            {showArchived ? "Show Open" : "Show Archive"}
+          </Button>
+        </div>
+      }
       testId="chat-widget-orchestrator"
     >
-      <TaskItemsContent sessions={activeSessions} />
+      <div className="mb-2">
+        <input
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          placeholder="Search tasks"
+          className="h-8 w-full rounded-md border border-border/50 bg-bg px-2 text-[11px] text-txt outline-none transition-colors placeholder:text-muted focus:border-accent/50"
+        />
+      </div>
+      {threads.length > 0 ? (
+        <div className="flex flex-col gap-2.5">
+          <div className="flex max-h-56 flex-col gap-2 overflow-y-auto pr-1">
+            {threads.map((thread) => (
+              <TaskThreadCard
+                key={thread.id}
+                thread={thread}
+                selected={thread.id === selectedThreadId}
+                onSelect={setSelectedThreadId}
+              />
+            ))}
+          </div>
+          {selectedThread ? (
+            <TaskThreadDetailPanel
+              detail={selectedThread}
+              busy={mutating}
+              onArchive={handleArchiveToggle}
+              onReopen={handleArchiveToggle}
+            />
+          ) : loading ? (
+            <div className="text-[11px] text-muted">Loading task detail...</div>
+          ) : null}
+        </div>
+      ) : loading ? (
+        <div className="text-[11px] text-muted">Loading tasks...</div>
+      ) : (
+        <TaskItemsContent sessions={activeSessions} />
+      )}
     </WidgetSection>
   );
 }

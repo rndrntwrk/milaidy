@@ -33,6 +33,7 @@ describe("ResearchTaskExecutor", () => {
   it("decomposes questions, answers each part, and synthesizes a final report", async () => {
     const useModel = vi
       .fn()
+      .mockRejectedValueOnce(new Error("research unsupported"))
       .mockResolvedValueOnce(
         '```json\n["What changed?","What are the risks?"]\n```',
       )
@@ -53,8 +54,9 @@ describe("ResearchTaskExecutor", () => {
       runtime,
     );
 
-    expect(useModel).toHaveBeenCalledTimes(4);
-    for (const [modelType] of useModel.mock.calls) {
+    expect(useModel).toHaveBeenCalledTimes(5);
+    expect(useModel.mock.calls[0]?.[0]).toBe(ModelType.RESEARCH);
+    for (const [modelType] of useModel.mock.calls.slice(1)) {
       expect(modelType).toBe(ModelType.TEXT_LARGE);
     }
     expect(result).toMatchObject({
@@ -64,9 +66,49 @@ describe("ResearchTaskExecutor", () => {
     });
   });
 
+  it("prefers the deep research model when available", async () => {
+    const useModel = vi.fn().mockImplementation((modelType: string) => {
+      if (modelType === ModelType.RESEARCH) {
+        return Promise.resolve({
+          text: "Deep research report",
+          annotations: [{ url: "https://example.com" }],
+        });
+      }
+      throw new Error("should not fall back");
+    });
+    const runtime = {
+      useModel,
+    } as unknown as IAgentRuntime;
+
+    const executor = new ResearchTaskExecutor();
+    const result = await executor.execute(
+      {
+        id: "task-3b",
+        type: "research",
+        description: "Investigate provider failover strategies",
+      },
+      runtime,
+    );
+
+    expect(useModel).toHaveBeenCalledTimes(1);
+    expect(useModel).toHaveBeenCalledWith(
+      ModelType.RESEARCH,
+      expect.objectContaining({
+        input: "Investigate provider failover strategies",
+        tools: [{ type: "web_search_preview" }],
+      }),
+    );
+    expect(result).toMatchObject({
+      taskId: "task-3b",
+      success: true,
+      output: "Deep research report",
+    });
+  });
+
   it("falls back to the original question when decomposition is not valid JSON", async () => {
-    const useModel = vi
-      .fn()
+    const useModel = vi.fn();
+    useModel
+      .mockRejectedValueOnce(new Error("research unsupported"))
       .mockResolvedValueOnce("not json")
       .mockResolvedValueOnce("Single answer")
       .mockResolvedValueOnce("Fallback report");
@@ -84,7 +126,7 @@ describe("ResearchTaskExecutor", () => {
       runtime,
     );
 
-    expect(useModel).toHaveBeenCalledTimes(3);
+    expect(useModel).toHaveBeenCalledTimes(4);
     expect(result).toMatchObject({
       taskId: "task-4",
       success: true,

@@ -1,4 +1,11 @@
-import type { IAgentRuntime, Service } from "@elizaos/core";
+import crypto from "node:crypto";
+import type {
+  Content,
+  IAgentRuntime,
+  Memory,
+  Service,
+  UUID,
+} from "@elizaos/core";
 import type { TaskExecutor, TaskResult, TaskSpec } from "./task-executor";
 
 const CODING_PATTERNS =
@@ -20,6 +27,57 @@ interface CodeTaskServiceSubset extends Service {
   cancelTask(taskId: string): boolean;
 }
 
+type CreateTaskActionLike = {
+  name: string;
+  validate?: (
+    runtime: IAgentRuntime,
+    memory: Memory,
+    state?: unknown,
+  ) => Promise<boolean>;
+  handler: (
+    runtime: IAgentRuntime,
+    memory: Memory,
+    state?: unknown,
+    options?: { parameters?: Record<string, unknown> },
+    callback?: (content: Content) => Promise<Memory[]>,
+  ) => Promise<unknown>;
+};
+
+function findCreateTaskAction(
+  runtime: IAgentRuntime,
+): CreateTaskActionLike | null {
+  const actions = Array.isArray(runtime.actions)
+    ? (runtime.actions as CreateTaskActionLike[])
+    : [];
+  return (
+    actions.find((action) => action.name === "CREATE_TASK") ??
+    actions.find((action) => action.name === "START_CODING_TASK") ??
+    null
+  );
+}
+
+function buildSyntheticTaskMemory(
+  runtime: IAgentRuntime,
+  spec: TaskSpec,
+): Memory {
+  if (spec.message) {
+    return spec.message;
+  }
+
+  const roomId = (runtime.agentId || "room-default") as UUID;
+  return {
+    id: crypto.randomUUID() as UUID,
+    entityId: runtime.agentId,
+    agentId: runtime.agentId,
+    roomId,
+    content: {
+      text: spec.description,
+      agentType: spec.agentType,
+    } as Content,
+    createdAt: Date.now(),
+  };
+}
+
 /**
  * Wraps the existing CODE_TASK service (AgentOrchestratorService) as a
  * TaskExecutor. Delegates entirely to the orchestrator — does not
@@ -33,12 +91,12 @@ interface CodeTaskServiceSubset extends Service {
 export class CodingTaskExecutor implements TaskExecutor {
   readonly type = "coding";
   readonly description =
-    "Executes coding tasks using the CODE_TASK orchestrator service";
+    "Executes coding tasks using the orchestrator task contract";
 
   canHandle(spec: TaskSpec, runtime: IAgentRuntime): boolean {
-    // CODE_TASK service must be available
     const codeTaskService = runtime.getService("CODE_TASK");
-    if (!codeTaskService) return false;
+    const createTaskAction = findCreateTaskAction(runtime);
+    if (!codeTaskService && !createTaskAction) return false;
 
     // Explicit type match
     if (spec.type === "coding") return true;
@@ -49,16 +107,89 @@ export class CodingTaskExecutor implements TaskExecutor {
 
   async execute(spec: TaskSpec, runtime: IAgentRuntime): Promise<TaskResult> {
     const service = runtime.getService<CodeTaskServiceSubset>("CODE_TASK");
+    const startTime = Date.now();
 
     if (!service) {
-      return {
-        taskId: spec.id,
-        success: false,
-        error: "CODE_TASK service not available",
+      const action = findCreateTaskAction(runtime);
+      if (!action) {
+        return {
+          taskId: spec.id,
+          success: false,
+          error: "Task orchestrator is not available",
+        };
+      }
+
+      const memory = buildSyntheticTaskMemory(runtime, spec);
+      const callbackLines: string[] = [];
+      const callback = async (content: Content): Promise<Memory[]> => {
+        if (typeof content.text === "string" && content.text.trim().length > 0) {
+          callbackLines.push(content.text);
+        }
+        return [];
       };
+
+      try {
+        if (action.validate) {
+          const valid = await action.validate(runtime, memory, undefined);
+          if (!valid) {
+            return {
+              taskId: spec.id,
+              success: false,
+              error: "Task orchestrator rejected the coding task request",
+              durationMs: Date.now() - startTime,
+            };
+          }
+        }
+
+        const result = (await action.handler(
+          runtime,
+          memory,
+          undefined,
+          {
+            parameters: {
+              task: spec.description,
+              ...(spec.agentType ? { agentType: spec.agentType } : {}),
+            },
+          },
+          callback,
+        )) as
+          | {
+              success?: boolean;
+              text?: string;
+              data?: {
+                agents?: Array<{ sessionId?: string }>;
+              };
+              error?: string;
+            }
+          | undefined;
+
+        const sessionId = result?.data?.agents?.[0]?.sessionId;
+        const output = sessionId || result?.text || callbackLines.join("\n");
+        if (result?.success === false) {
+          return {
+            taskId: spec.id,
+            success: false,
+            error: result.error || result.text || "Task creation failed",
+            durationMs: Date.now() - startTime,
+          };
+        }
+
+        return {
+          taskId: spec.id,
+          success: true,
+          output,
+          durationMs: Date.now() - startTime,
+        };
+      } catch (error) {
+        return {
+          taskId: spec.id,
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+          durationMs: Date.now() - startTime,
+        };
+      }
     }
 
-    const startTime = Date.now();
     try {
       // Delegate to the existing orchestrator task creation flow.
       // createTask(name, description, roomId?, providerId?, capabilities?)

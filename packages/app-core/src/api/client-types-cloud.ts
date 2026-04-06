@@ -744,6 +744,97 @@ export interface CodingAgentTaskThread {
   archivedAt?: string | null;
 }
 
+export interface CodingAgentTaskSessionRecord {
+  id: string;
+  threadId: string;
+  sessionId: string;
+  framework: string;
+  providerSource?: string | null;
+  label: string;
+  originalTask: string;
+  workdir: string;
+  repo?: string | null;
+  status: string;
+  decisionCount: number;
+  autoResolvedCount: number;
+  registeredAt: number;
+  lastActivityAt: number;
+  idleCheckCount: number;
+  taskDelivered: boolean;
+  completionSummary?: string | null;
+  lastSeenDecisionIndex: number;
+  lastInputSentAt?: number | null;
+  stoppedAt?: number | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CodingAgentTaskDecisionRecord {
+  id: string;
+  threadId: string;
+  sessionId: string;
+  event: string;
+  promptText: string;
+  decision: string;
+  response?: string | null;
+  reasoning: string;
+  timestamp: number;
+  createdAt: string;
+}
+
+export interface CodingAgentTaskEventRecord {
+  id: string;
+  threadId: string;
+  sessionId?: string | null;
+  eventType: string;
+  timestamp: number;
+  summary: string;
+  data: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface CodingAgentTaskArtifactRecord {
+  id: string;
+  threadId: string;
+  sessionId?: string | null;
+  artifactType: string;
+  title: string;
+  path?: string | null;
+  uri?: string | null;
+  mimeType?: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface CodingAgentTaskTranscriptRecord {
+  id: string;
+  threadId: string;
+  sessionId: string;
+  timestamp: number;
+  direction: "stdout" | "stderr" | "stdin" | "keys" | "system";
+  content: string;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface CodingAgentTaskThreadDetail extends CodingAgentTaskThread {
+  roomId?: string | null;
+  worldId?: string | null;
+  ownerUserId?: string | null;
+  summary?: string;
+  acceptanceCriteria?: string[];
+  currentPlan?: Record<string, unknown>;
+  lastUserTurnAt?: string | null;
+  lastCoordinatorTurnAt?: string | null;
+  metadata?: Record<string, unknown>;
+  sessions: CodingAgentTaskSessionRecord[];
+  decisions: CodingAgentTaskDecisionRecord[];
+  events: CodingAgentTaskEventRecord[];
+  artifacts: CodingAgentTaskArtifactRecord[];
+  transcripts: CodingAgentTaskTranscriptRecord[];
+}
+
 export interface CodingAgentStatus {
   supervisionLevel: string;
   taskCount: number;
