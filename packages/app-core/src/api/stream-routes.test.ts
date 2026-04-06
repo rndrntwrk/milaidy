@@ -1002,155 +1002,164 @@ async function loadCustomRtmpPlugin(): Promise<{
 // createTwitchDestination() — destination adapter unit tests
 // ---------------------------------------------------------------------------
 
-describe.skipIf(!hasTwitchDestinationModule)("createTwitchDestination()", () => {
-  it("returns a StreamingDestination with id and name", async () => {
-    const { createTwitchDestination } = await loadTwitchDestinationModule();
-    const dest = createTwitchDestination({ streamKey: "test-key" });
-    expect(dest.id).toBe("twitch");
-    expect(dest.name).toBe("Twitch");
-  });
-
-  it("getCredentials throws when no stream key is configured", async () => {
-    const origKey = process.env.TWITCH_STREAM_KEY;
-    delete process.env.TWITCH_STREAM_KEY;
-
-    try {
+describe.skipIf(!hasTwitchDestinationModule)(
+  "createTwitchDestination()",
+  () => {
+    it("returns a StreamingDestination with id and name", async () => {
       const { createTwitchDestination } = await loadTwitchDestinationModule();
-      const dest = createTwitchDestination();
-      await expect(dest.getCredentials()).rejects.toThrow("not configured");
-    } finally {
-      if (origKey !== undefined) process.env.TWITCH_STREAM_KEY = origKey;
-    }
-  });
+      const dest = createTwitchDestination({ streamKey: "test-key" });
+      expect(dest.id).toBe("twitch");
+      expect(dest.name).toBe("Twitch");
+    });
 
-  it("getCredentials returns Twitch RTMP URL with config stream key", async () => {
-    const { createTwitchDestination } = await loadTwitchDestinationModule();
-    const dest = createTwitchDestination({ streamKey: "my-stream-key" });
-    const creds = await dest.getCredentials();
+    it("getCredentials throws when no stream key is configured", async () => {
+      const origKey = process.env.TWITCH_STREAM_KEY;
+      delete process.env.TWITCH_STREAM_KEY;
 
-    expect(creds.rtmpUrl).toBe("rtmp://live.twitch.tv/app");
-    expect(creds.rtmpKey).toBe("my-stream-key");
-  });
-
-  it("prefers config.streamKey over TWITCH_STREAM_KEY env var", async () => {
-    const origKey = process.env.TWITCH_STREAM_KEY;
-    process.env.TWITCH_STREAM_KEY = "env-key";
-
-    try {
-      const { createTwitchDestination } = await loadTwitchDestinationModule();
-      const dest = createTwitchDestination({ streamKey: "config-key" });
-      const creds = await dest.getCredentials();
-      expect(creds.rtmpKey).toBe("config-key");
-    } finally {
-      if (origKey !== undefined) {
-        process.env.TWITCH_STREAM_KEY = origKey;
-      } else {
-        delete process.env.TWITCH_STREAM_KEY;
+      try {
+        const { createTwitchDestination } = await loadTwitchDestinationModule();
+        const dest = createTwitchDestination();
+        await expect(dest.getCredentials()).rejects.toThrow("not configured");
+      } finally {
+        if (origKey !== undefined) process.env.TWITCH_STREAM_KEY = origKey;
       }
-    }
-  });
+    });
 
-  it("falls back to TWITCH_STREAM_KEY env var when no config", async () => {
-    const origKey = process.env.TWITCH_STREAM_KEY;
-    process.env.TWITCH_STREAM_KEY = "env-key";
-
-    try {
+    it("getCredentials returns Twitch RTMP URL with config stream key", async () => {
       const { createTwitchDestination } = await loadTwitchDestinationModule();
-      const dest = createTwitchDestination();
+      const dest = createTwitchDestination({ streamKey: "my-stream-key" });
       const creds = await dest.getCredentials();
-      expect(creds.rtmpKey).toBe("env-key");
-    } finally {
-      if (origKey !== undefined) {
-        process.env.TWITCH_STREAM_KEY = origKey;
-      } else {
-        delete process.env.TWITCH_STREAM_KEY;
+
+      expect(creds.rtmpUrl).toBe("rtmp://live.twitch.tv/app");
+      expect(creds.rtmpKey).toBe("my-stream-key");
+    });
+
+    it("prefers config.streamKey over TWITCH_STREAM_KEY env var", async () => {
+      const origKey = process.env.TWITCH_STREAM_KEY;
+      process.env.TWITCH_STREAM_KEY = "env-key";
+
+      try {
+        const { createTwitchDestination } = await loadTwitchDestinationModule();
+        const dest = createTwitchDestination({ streamKey: "config-key" });
+        const creds = await dest.getCredentials();
+        expect(creds.rtmpKey).toBe("config-key");
+      } finally {
+        if (origKey !== undefined) {
+          process.env.TWITCH_STREAM_KEY = origKey;
+        } else {
+          delete process.env.TWITCH_STREAM_KEY;
+        }
       }
-    }
-  });
-});
+    });
+
+    it("falls back to TWITCH_STREAM_KEY env var when no config", async () => {
+      const origKey = process.env.TWITCH_STREAM_KEY;
+      process.env.TWITCH_STREAM_KEY = "env-key";
+
+      try {
+        const { createTwitchDestination } = await loadTwitchDestinationModule();
+        const dest = createTwitchDestination();
+        const creds = await dest.getCredentials();
+        expect(creds.rtmpKey).toBe("env-key");
+      } finally {
+        if (origKey !== undefined) {
+          process.env.TWITCH_STREAM_KEY = origKey;
+        } else {
+          delete process.env.TWITCH_STREAM_KEY;
+        }
+      }
+    });
+  },
+);
 
 // ---------------------------------------------------------------------------
 // createYoutubeDestination() — destination adapter unit tests
 // ---------------------------------------------------------------------------
 
-describe.skipIf(!hasYoutubeDestinationModule)("createYoutubeDestination()", () => {
-  it("returns a StreamingDestination with id and name", async () => {
-    const { createYoutubeDestination } = await loadYoutubeDestinationModule();
-    const dest = createYoutubeDestination({ streamKey: "test-key" });
-    expect(dest.id).toBe("youtube");
-    expect(dest.name).toBe("YouTube");
-  });
-
-  it("getCredentials throws when no stream key is configured", async () => {
-    const origKey = process.env.YOUTUBE_STREAM_KEY;
-    delete process.env.YOUTUBE_STREAM_KEY;
-
-    try {
+describe.skipIf(!hasYoutubeDestinationModule)(
+  "createYoutubeDestination()",
+  () => {
+    it("returns a StreamingDestination with id and name", async () => {
       const { createYoutubeDestination } = await loadYoutubeDestinationModule();
-      const dest = createYoutubeDestination();
-      await expect(dest.getCredentials()).rejects.toThrow("not configured");
-    } finally {
-      if (origKey !== undefined) process.env.YOUTUBE_STREAM_KEY = origKey;
-    }
-  });
-
-  it("getCredentials returns default YouTube RTMP URL with config stream key", async () => {
-    const { createYoutubeDestination } = await loadYoutubeDestinationModule();
-    const dest = createYoutubeDestination({ streamKey: "yt-key" });
-    const creds = await dest.getCredentials();
-
-    expect(creds.rtmpUrl).toBe("rtmp://a.rtmp.youtube.com/live2");
-    expect(creds.rtmpKey).toBe("yt-key");
-  });
-
-  it("uses custom RTMP URL when provided in config", async () => {
-    const { createYoutubeDestination } = await loadYoutubeDestinationModule();
-    const dest = createYoutubeDestination({
-      streamKey: "yt-key",
-      rtmpUrl: "rtmp://custom.youtube.com/live",
+      const dest = createYoutubeDestination({ streamKey: "test-key" });
+      expect(dest.id).toBe("youtube");
+      expect(dest.name).toBe("YouTube");
     });
-    const creds = await dest.getCredentials();
 
-    expect(creds.rtmpUrl).toBe("rtmp://custom.youtube.com/live");
-    expect(creds.rtmpKey).toBe("yt-key");
-  });
+    it("getCredentials throws when no stream key is configured", async () => {
+      const origKey = process.env.YOUTUBE_STREAM_KEY;
+      delete process.env.YOUTUBE_STREAM_KEY;
 
-  it("prefers config.streamKey over YOUTUBE_STREAM_KEY env var", async () => {
-    const origKey = process.env.YOUTUBE_STREAM_KEY;
-    process.env.YOUTUBE_STREAM_KEY = "env-key";
-
-    try {
-      const { createYoutubeDestination } = await loadYoutubeDestinationModule();
-      const dest = createYoutubeDestination({ streamKey: "config-key" });
-      const creds = await dest.getCredentials();
-      expect(creds.rtmpKey).toBe("config-key");
-    } finally {
-      if (origKey !== undefined) {
-        process.env.YOUTUBE_STREAM_KEY = origKey;
-      } else {
-        delete process.env.YOUTUBE_STREAM_KEY;
+      try {
+        const { createYoutubeDestination } =
+          await loadYoutubeDestinationModule();
+        const dest = createYoutubeDestination();
+        await expect(dest.getCredentials()).rejects.toThrow("not configured");
+      } finally {
+        if (origKey !== undefined) process.env.YOUTUBE_STREAM_KEY = origKey;
       }
-    }
-  });
+    });
 
-  it("falls back to YOUTUBE_STREAM_KEY env var when no config", async () => {
-    const origKey = process.env.YOUTUBE_STREAM_KEY;
-    process.env.YOUTUBE_STREAM_KEY = "env-key";
-
-    try {
+    it("getCredentials returns default YouTube RTMP URL with config stream key", async () => {
       const { createYoutubeDestination } = await loadYoutubeDestinationModule();
-      const dest = createYoutubeDestination();
+      const dest = createYoutubeDestination({ streamKey: "yt-key" });
       const creds = await dest.getCredentials();
-      expect(creds.rtmpKey).toBe("env-key");
-    } finally {
-      if (origKey !== undefined) {
-        process.env.YOUTUBE_STREAM_KEY = origKey;
-      } else {
-        delete process.env.YOUTUBE_STREAM_KEY;
+
+      expect(creds.rtmpUrl).toBe("rtmp://a.rtmp.youtube.com/live2");
+      expect(creds.rtmpKey).toBe("yt-key");
+    });
+
+    it("uses custom RTMP URL when provided in config", async () => {
+      const { createYoutubeDestination } = await loadYoutubeDestinationModule();
+      const dest = createYoutubeDestination({
+        streamKey: "yt-key",
+        rtmpUrl: "rtmp://custom.youtube.com/live",
+      });
+      const creds = await dest.getCredentials();
+
+      expect(creds.rtmpUrl).toBe("rtmp://custom.youtube.com/live");
+      expect(creds.rtmpKey).toBe("yt-key");
+    });
+
+    it("prefers config.streamKey over YOUTUBE_STREAM_KEY env var", async () => {
+      const origKey = process.env.YOUTUBE_STREAM_KEY;
+      process.env.YOUTUBE_STREAM_KEY = "env-key";
+
+      try {
+        const { createYoutubeDestination } =
+          await loadYoutubeDestinationModule();
+        const dest = createYoutubeDestination({ streamKey: "config-key" });
+        const creds = await dest.getCredentials();
+        expect(creds.rtmpKey).toBe("config-key");
+      } finally {
+        if (origKey !== undefined) {
+          process.env.YOUTUBE_STREAM_KEY = origKey;
+        } else {
+          delete process.env.YOUTUBE_STREAM_KEY;
+        }
       }
-    }
-  });
-});
+    });
+
+    it("falls back to YOUTUBE_STREAM_KEY env var when no config", async () => {
+      const origKey = process.env.YOUTUBE_STREAM_KEY;
+      process.env.YOUTUBE_STREAM_KEY = "env-key";
+
+      try {
+        const { createYoutubeDestination } =
+          await loadYoutubeDestinationModule();
+        const dest = createYoutubeDestination();
+        const creds = await dest.getCredentials();
+        expect(creds.rtmpKey).toBe("env-key");
+      } finally {
+        if (origKey !== undefined) {
+          process.env.YOUTUBE_STREAM_KEY = origKey;
+        } else {
+          delete process.env.YOUTUBE_STREAM_KEY;
+        }
+      }
+    });
+  },
+);
 
 // ---------------------------------------------------------------------------
 // createCustomRtmpDestination() — destination adapter unit tests

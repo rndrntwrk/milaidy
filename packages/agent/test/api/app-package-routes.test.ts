@@ -1,4 +1,6 @@
 import http from "node:http";
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { handleAppPackageRoutes } from "../../src/api/app-package-routes";
 import {
@@ -6,13 +8,19 @@ import {
   createMockIncomingMessage,
 } from "../../src/test-support/test-helpers";
 
-const HYPERSCAPE_LOCAL_PATH =
-  "/Users/shawwalters/eliza-workspace/plugins/app-hyperscape";
+const hyperscapeLocalPathUrl = new URL(
+  "../../../../../plugins/app-hyperscape/",
+  import.meta.url,
+);
+const HYPERSCAPE_LOCAL_PATH = fileURLToPath(hyperscapeLocalPathUrl);
+const hasLocalHyperscapeRoutes = existsSync(
+  new URL("src/routes.ts", hyperscapeLocalPathUrl),
+);
 
 vi.mock("../../src/services/registry-client.js", () => ({
   getPluginInfo: vi.fn(async () => ({
     name: "@elizaos/app-hyperscape",
-    localPath: HYPERSCAPE_LOCAL_PATH,
+    localPath: hasLocalHyperscapeRoutes ? HYPERSCAPE_LOCAL_PATH : null,
   })),
 }));
 
@@ -261,7 +269,7 @@ async function startHyperscapeFixtureServer(): Promise<HyperscapeFixtureServer> 
   };
 }
 
-describe("handleAppPackageRoutes", () => {
+describe.skipIf(!hasLocalHyperscapeRoutes)("handleAppPackageRoutes", () => {
   let fixtureServer: HyperscapeFixtureServer | null = null;
   const originalApiUrl = process.env.HYPERSCAPE_API_URL;
 

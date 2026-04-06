@@ -23,9 +23,7 @@ type SignalPluginModule = {
     init?: unknown;
   };
   SignalService: {
-    new (
-      runtime?: unknown,
-    ): SignalServiceInstance;
+    new (runtime?: unknown): SignalServiceInstance;
     start: (runtime: unknown) => Promise<SignalServiceInstance>;
   };
 };

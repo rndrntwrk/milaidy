@@ -108,13 +108,13 @@ describe("CI workflow drift", () => {
     ).toBe(5);
     expect(
       countOccurrences(read(TEST_WORKFLOW_PATH), "submodules: recursive"),
-    ).toBe(10);
+    ).toBe(8);
     expect(
       countOccurrences(
         read(TEST_WORKFLOW_PATH),
         WINDOWS_OPTIONAL_SUBMODULE_EXPR,
       ),
-    ).toBe(2);
+    ).toBe(4);
     expect(read(BUILD_DOCKER_WORKFLOW_PATH)).toContain("submodules: recursive");
     expect(read(BUILD_CLOUD_IMAGE_WORKFLOW_PATH)).toContain(
       "submodules: recursive",

@@ -26,7 +26,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          # Windows cannot checkout the optional plugin-openrouter submodule
+          # because that repo currently contains POSIX-only path names.
+          # These website blocker lanes do not need that optional checkout.
+          submodules: ${{ matrix.os == 'windows-latest' && 'false' || 'recursive' }}
           fetch-depth: 0
 
       - name: Setup Bun
@@ -45,7 +48,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          # Windows cannot checkout the optional plugin-openrouter submodule
+          # because that repo currently contains POSIX-only path names.
+          # These website blocker lanes do not need that optional checkout.
+          submodules: ${{ matrix.os == 'windows-latest' && 'false' || 'recursive' }}
 
       # WHY setup-node before bun install: optional deps like @discordjs/opus fall back to node-gyp; Node 22 + colocated cache avoids nodejs.org header download. Engines require >=22.
       - name: Setup Node.js
