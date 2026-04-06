@@ -90,6 +90,7 @@ export function runInitSubmodules({
   exec = execSync,
   log = console.log,
   logError = console.error,
+  shouldSkipSubmodule = shouldSkipSubmoduleInit,
 } = {}) {
   // Check if we're in a git repository
   const gitDir = resolve(rootDir, ".git");
@@ -115,7 +116,7 @@ export function runInitSubmodules({
   let failed = 0;
 
   for (const submodule of submodules) {
-    if (shouldSkipSubmoduleInit(submodule.path)) {
+    if (shouldSkipSubmodule(submodule.path)) {
       log(
         `[init-submodules] Skipping ${submodule.name} (${submodule.path}) because local upstreams are disabled`,
       );

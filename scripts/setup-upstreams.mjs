@@ -556,6 +556,77 @@ export function ensurePluginDependencyLinks(
   return linkedDependencies;
 }
 
+export function getPublishedElizaPackageSpecs(repoRoot = DEFAULT_REPO_ROOT) {
+  const rootPackageJson = readPackageJson(repoRoot);
+  if (!rootPackageJson) {
+    return [];
+  }
+
+  const collectedSpecs = new Map();
+  for (const dependencyGroup of [
+    rootPackageJson.dependencies,
+    rootPackageJson.devDependencies,
+    rootPackageJson.optionalDependencies,
+    rootPackageJson.peerDependencies,
+  ]) {
+    if (!dependencyGroup || typeof dependencyGroup !== "object") {
+      continue;
+    }
+
+    for (const [packageName, version] of Object.entries(dependencyGroup)) {
+      if (
+        !packageName.startsWith("@elizaos/") ||
+        typeof version !== "string" ||
+        version.startsWith("workspace:")
+      ) {
+        continue;
+      }
+      collectedSpecs.set(packageName, version);
+    }
+  }
+
+  return [...collectedSpecs.entries()];
+}
+
+export function ensurePublishedElizaPackageLinks(repoRoot = DEFAULT_REPO_ROOT) {
+  let linkedEntries = 0;
+
+  for (const [packageName, preferredVersion] of getPublishedElizaPackageSpecs(
+    repoRoot,
+  )) {
+    const installedPackageDir = findInstalledPackageDir(
+      repoRoot,
+      packageName,
+      preferredVersion,
+    );
+    if (!installedPackageDir) {
+      continue;
+    }
+
+    for (const { linkPath, targetPath } of getPackageLinkEntries(
+      repoRoot,
+      packageName,
+      installedPackageDir,
+    )) {
+      if (path.resolve(linkPath) === path.resolve(targetPath)) {
+        continue;
+      }
+
+      if (createPackageLink(linkPath, targetPath)) {
+        linkedEntries += 1;
+      }
+    }
+  }
+
+  if (linkedEntries > 0) {
+    console.log(
+      `[setup-upstreams] Linked ${linkedEntries} published @elizaos package ${linkedEntries === 1 ? "entry" : "entries"}`,
+    );
+  }
+
+  return linkedEntries;
+}
+
 async function ensureRepoLocalEliza(repoRoot) {
   const elizaRoot = getRepoElizaRoot(repoRoot);
   if (hasRequiredElizaWorkspaceFiles(elizaRoot)) {
@@ -689,6 +760,9 @@ export function linkUpstreamPackages(
 export async function setupUpstreams(repoRoot = DEFAULT_REPO_ROOT) {
   const skipReason = getElizaWorkspaceSkipReason(repoRoot);
   if (skipReason) {
+    if (skipReason.endsWith("=1")) {
+      ensurePublishedElizaPackageLinks(repoRoot);
+    }
     console.log(`[setup-upstreams] Skipping: ${skipReason}`);
     return { skipped: true, reason: skipReason };
   }
