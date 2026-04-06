@@ -682,6 +682,10 @@ export default defineConfig({
         replacement: path.resolve(here, "plugins/location/src/index.ts"),
       },
       {
+        find: /^@miladyai\/capacitor-mobile-signals$/,
+        replacement: path.resolve(here, "plugins/mobile-signals/src/index.ts"),
+      },
+      {
         find: /^@miladyai\/capacitor-screencapture$/,
         replacement: path.resolve(here, "plugins/screencapture/src/index.ts"),
       },
