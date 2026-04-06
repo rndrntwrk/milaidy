@@ -148,6 +148,40 @@ describe("MiladyClient.listCodingAgentScratchWorkspaces", () => {
   });
 });
 
+describe("MiladyClient task thread APIs", () => {
+  it("propagates persisted task thread list failures instead of masking them", async () => {
+    const client = new MiladyClient("http://127.0.0.1:31337");
+    const fetchSpy = vi.spyOn(
+      client as unknown as {
+        fetch: (path: string, init?: RequestInit) => Promise<unknown>;
+      },
+      "fetch",
+    );
+    fetchSpy.mockRejectedValueOnce(new Error("threads down"));
+
+    await expect(client.listCodingAgentTaskThreads()).rejects.toMatchObject({
+      message: "threads down",
+    });
+  });
+
+  it("propagates archive failures instead of pretending the task was archived", async () => {
+    const client = new MiladyClient("http://127.0.0.1:31337");
+    const fetchSpy = vi.spyOn(
+      client as unknown as {
+        fetch: (path: string, init?: RequestInit) => Promise<unknown>;
+      },
+      "fetch",
+    );
+    fetchSpy.mockRejectedValueOnce(new Error("archive down"));
+
+    await expect(
+      client.archiveCodingAgentTaskThread("thread-1"),
+    ).rejects.toMatchObject({
+      message: "archive down",
+    });
+  });
+});
+
 describe("mapTaskThreadsToCodingAgentSessions", () => {
   it("projects persisted task threads into visible coordinator sessions", () => {
     const result = mapTaskThreadsToCodingAgentSessions([

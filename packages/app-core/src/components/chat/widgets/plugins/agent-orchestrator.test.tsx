@@ -5,22 +5,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
 
-const { mockClient, mockUseApp } = vi.hoisted(() => ({
-  mockClient: {
+vi.mock("../../../../api", () => ({
+  client: {
     listCodingAgentTaskThreads: vi.fn(),
     getCodingAgentTaskThread: vi.fn(),
     archiveCodingAgentTaskThread: vi.fn(),
     reopenCodingAgentTaskThread: vi.fn(),
   },
-  mockUseApp: vi.fn(),
-}));
-
-vi.mock("../../../../api", () => ({
-  client: mockClient,
 }));
 
 vi.mock("../../../../state", () => ({
-  useApp: () => mockUseApp(),
+  useApp: vi.fn(),
 }));
 
 vi.mock("@miladyai/ui", () => ({
@@ -44,7 +39,18 @@ vi.mock("lucide-react", () => ({
   ),
 }));
 
+import { client } from "../../../../api";
+import { useApp } from "../../../../state";
 import { AGENT_ORCHESTRATOR_PLUGIN_WIDGETS } from "./agent-orchestrator";
+
+const mockClient = client as unknown as {
+  listCodingAgentTaskThreads: ReturnType<typeof vi.fn>;
+  getCodingAgentTaskThread: ReturnType<typeof vi.fn>;
+  archiveCodingAgentTaskThread: ReturnType<typeof vi.fn>;
+  reopenCodingAgentTaskThread: ReturnType<typeof vi.fn>;
+};
+
+const mockUseApp = useApp as unknown as ReturnType<typeof vi.fn>;
 
 const TasksWidget = AGENT_ORCHESTRATOR_PLUGIN_WIDGETS.find(
   (widget) => widget.id === "agent-orchestrator.tasks",
@@ -303,5 +309,48 @@ describe("agent orchestrator tasks widget", () => {
     );
 
     expect(textOf(tree!.root)).toContain("Run the end-to-end verification");
+  });
+
+  it("surfaces persisted task thread load failures instead of showing an empty state", async () => {
+    mockClient.listCodingAgentTaskThreads.mockRejectedValue(
+      new Error("backend unavailable"),
+    );
+
+    await act(async () => {
+      tree = TestRenderer.create(
+        <TasksWidget events={[]} clearEvents={vi.fn()} />,
+      );
+    });
+
+    await waitFor(
+      () => textOf(tree!.root).includes("Failed to load task threads"),
+      "expected task thread load error to render",
+    );
+
+    expect(textOf(tree!.root)).toContain(
+      "Failed to load task threads: backend unavailable",
+    );
+  });
+
+  it("surfaces task detail load failures for a selected persisted thread", async () => {
+    mockClient.listCodingAgentTaskThreads.mockResolvedValue([createThread()]);
+    mockClient.getCodingAgentTaskThread.mockRejectedValue(
+      new Error("detail unavailable"),
+    );
+
+    await act(async () => {
+      tree = TestRenderer.create(
+        <TasksWidget events={[]} clearEvents={vi.fn()} />,
+      );
+    });
+
+    await waitFor(
+      () => textOf(tree!.root).includes("Failed to load task detail"),
+      "expected task detail error to render",
+    );
+
+    expect(textOf(tree!.root)).toContain(
+      "Failed to load task detail: detail unavailable",
+    );
   });
 });
