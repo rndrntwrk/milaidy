@@ -35,6 +35,24 @@ import {
 
 const schemaReady = new WeakSet<object>();
 
+export interface LifeOpsWebsiteAccessGrant {
+  id: string;
+  agentId: string;
+  groupKey: string;
+  definitionId: string;
+  occurrenceId: string | null;
+  websites: string[];
+  unlockMode: "fixed_duration" | "until_manual_lock" | "until_callback";
+  unlockDurationMinutes: number | null;
+  callbackKey: string | null;
+  unlockedAt: string;
+  expiresAt: string | null;
+  revokedAt: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
 async function runMigrationWithSavepoint(
   runtime: IAgentRuntime,
   name: string,
@@ -252,6 +270,32 @@ function parseChannelPolicy(
     requireConfirmationForActions: toBoolean(
       row.require_confirmation_for_actions,
     ),
+    metadata: parseJsonRecord(row.metadata_json),
+    createdAt: toText(row.created_at),
+    updatedAt: toText(row.updated_at),
+  };
+}
+
+function parseWebsiteAccessGrant(
+  row: Record<string, unknown>,
+): LifeOpsWebsiteAccessGrant {
+  return {
+    id: toText(row.id),
+    agentId: toText(row.agent_id),
+    groupKey: toText(row.group_key),
+    definitionId: toText(row.definition_id),
+    occurrenceId: row.occurrence_id ? toText(row.occurrence_id) : null,
+    websites: parseJsonArray(row.websites_json),
+    unlockMode: toText(
+      row.unlock_mode,
+    ) as LifeOpsWebsiteAccessGrant["unlockMode"],
+    unlockDurationMinutes: row.unlock_duration_minutes
+      ? toNumber(row.unlock_duration_minutes, 0)
+      : null,
+    callbackKey: row.callback_key ? toText(row.callback_key) : null,
+    unlockedAt: toText(row.unlocked_at),
+    expiresAt: row.expires_at ? toText(row.expires_at) : null,
+    revokedAt: row.revoked_at ? toText(row.revoked_at) : null,
     metadata: parseJsonRecord(row.metadata_json),
     createdAt: toText(row.created_at),
     updatedAt: toText(row.updated_at),
@@ -773,6 +817,23 @@ export async function ensureLifeOpsTables(
       updated_at TEXT NOT NULL,
       UNIQUE(agent_id, channel_type, channel_ref)
     )`,
+    `CREATE TABLE IF NOT EXISTS life_website_access_grants (
+      id TEXT PRIMARY KEY,
+      agent_id TEXT NOT NULL,
+      group_key TEXT NOT NULL,
+      definition_id TEXT NOT NULL,
+      occurrence_id TEXT,
+      websites_json TEXT NOT NULL DEFAULT '[]',
+      unlock_mode TEXT NOT NULL,
+      unlock_duration_minutes INTEGER,
+      callback_key TEXT,
+      unlocked_at TEXT NOT NULL,
+      expires_at TEXT,
+      revoked_at TEXT,
+      metadata_json TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )`,
     `CREATE TABLE IF NOT EXISTS life_audit_events (
       id TEXT PRIMARY KEY,
       agent_id TEXT NOT NULL,
@@ -821,6 +882,8 @@ export async function ensureLifeOpsTables(
       ON life_reminder_attempts(plan_id, owner_type, owner_id)`,
     `CREATE INDEX IF NOT EXISTS idx_life_channel_policies_agent
       ON life_channel_policies(agent_id, channel_type)`,
+    `CREATE INDEX IF NOT EXISTS idx_life_website_access_grants_group
+      ON life_website_access_grants(agent_id, group_key, revoked_at, expires_at)`,
   ];
 
   for (const statement of statements) {
@@ -891,14 +954,17 @@ export async function ensureLifeOpsTables(
     existingConnectorGrantColumns.size > 0 &&
     !existingConnectorGrantColumns.has("side")
   ) {
-    await runMigrationWithSavepoint(runtime, "migrate_connector_grants", async () => {
-    await executeRawSql(
+    await runMigrationWithSavepoint(
       runtime,
-      `DROP TABLE IF EXISTS life_connector_grants_next`,
-    );
-    await executeRawSql(
-      runtime,
-      `CREATE TABLE life_connector_grants_next (
+      "migrate_connector_grants",
+      async () => {
+        await executeRawSql(
+          runtime,
+          `DROP TABLE IF EXISTS life_connector_grants_next`,
+        );
+        await executeRawSql(
+          runtime,
+          `CREATE TABLE life_connector_grants_next (
         id TEXT PRIMARY KEY,
         agent_id TEXT NOT NULL,
         provider TEXT NOT NULL,
@@ -918,10 +984,10 @@ export async function ensureLifeOpsTables(
         updated_at TEXT NOT NULL,
         UNIQUE(agent_id, provider, side, mode)
       )`,
-    );
-    await executeRawSql(
-      runtime,
-      `INSERT INTO life_connector_grants_next (
+        );
+        await executeRawSql(
+          runtime,
+          `INSERT INTO life_connector_grants_next (
         id, agent_id, provider, side, identity_json, granted_scopes_json,
         capabilities_json, token_ref, mode, execution_target, source_of_truth,
         preferred_by_agent, cloud_connection_id, metadata_json,
@@ -946,13 +1012,14 @@ export async function ensureLifeOpsTables(
         created_at,
         updated_at
       FROM life_connector_grants`,
+        );
+        await executeRawSql(runtime, `DROP TABLE life_connector_grants`);
+        await executeRawSql(
+          runtime,
+          `ALTER TABLE life_connector_grants_next RENAME TO life_connector_grants`,
+        );
+      },
     );
-    await executeRawSql(runtime, `DROP TABLE life_connector_grants`);
-    await executeRawSql(
-      runtime,
-      `ALTER TABLE life_connector_grants_next RENAME TO life_connector_grants`,
-    );
-    });
   }
 
   const connectorGrantColumns = [
@@ -996,14 +1063,17 @@ export async function ensureLifeOpsTables(
     existingCalendarEventColumns.size > 0 &&
     !existingCalendarEventColumns.has("side")
   ) {
-    await runMigrationWithSavepoint(runtime, "migrate_calendar_events", async () => {
-    await executeRawSql(
+    await runMigrationWithSavepoint(
       runtime,
-      `DROP TABLE IF EXISTS life_calendar_events_next`,
-    );
-    await executeRawSql(
-      runtime,
-      `CREATE TABLE life_calendar_events_next (
+      "migrate_calendar_events",
+      async () => {
+        await executeRawSql(
+          runtime,
+          `DROP TABLE IF EXISTS life_calendar_events_next`,
+        );
+        await executeRawSql(
+          runtime,
+          `CREATE TABLE life_calendar_events_next (
         id TEXT PRIMARY KEY,
         agent_id TEXT NOT NULL,
         provider TEXT NOT NULL,
@@ -1027,10 +1097,10 @@ export async function ensureLifeOpsTables(
         updated_at TEXT NOT NULL,
         UNIQUE(agent_id, provider, side, calendar_id, external_event_id)
       )`,
-    );
-    await executeRawSql(
-      runtime,
-      `INSERT INTO life_calendar_events_next (
+        );
+        await executeRawSql(
+          runtime,
+          `INSERT INTO life_calendar_events_next (
         id, agent_id, provider, side, calendar_id, external_event_id, title,
         description, location, status, start_at, end_at, is_all_day, timezone,
         html_link, conference_link, organizer_json, attendees_json,
@@ -1042,13 +1112,14 @@ export async function ensureLifeOpsTables(
         html_link, conference_link, organizer_json, attendees_json,
         COALESCE(metadata_json, '{}'), synced_at, updated_at
       FROM life_calendar_events`,
+        );
+        await executeRawSql(runtime, `DROP TABLE life_calendar_events`);
+        await executeRawSql(
+          runtime,
+          `ALTER TABLE life_calendar_events_next RENAME TO life_calendar_events`,
+        );
+      },
     );
-    await executeRawSql(runtime, `DROP TABLE life_calendar_events`);
-    await executeRawSql(
-      runtime,
-      `ALTER TABLE life_calendar_events_next RENAME TO life_calendar_events`,
-    );
-    });
   }
 
   const existingCalendarSyncStateColumns = new Set(
@@ -1058,14 +1129,17 @@ export async function ensureLifeOpsTables(
     existingCalendarSyncStateColumns.size > 0 &&
     !existingCalendarSyncStateColumns.has("side")
   ) {
-    await runMigrationWithSavepoint(runtime, "migrate_calendar_sync_states", async () => {
-    await executeRawSql(
+    await runMigrationWithSavepoint(
       runtime,
-      `DROP TABLE IF EXISTS life_calendar_sync_states_next`,
-    );
-    await executeRawSql(
-      runtime,
-      `CREATE TABLE life_calendar_sync_states_next (
+      "migrate_calendar_sync_states",
+      async () => {
+        await executeRawSql(
+          runtime,
+          `DROP TABLE IF EXISTS life_calendar_sync_states_next`,
+        );
+        await executeRawSql(
+          runtime,
+          `CREATE TABLE life_calendar_sync_states_next (
         id TEXT PRIMARY KEY,
         agent_id TEXT NOT NULL,
         provider TEXT NOT NULL,
@@ -1077,10 +1151,10 @@ export async function ensureLifeOpsTables(
         updated_at TEXT NOT NULL,
         UNIQUE(agent_id, provider, side, calendar_id)
       )`,
-    );
-    await executeRawSql(
-      runtime,
-      `INSERT INTO life_calendar_sync_states_next (
+        );
+        await executeRawSql(
+          runtime,
+          `INSERT INTO life_calendar_sync_states_next (
         id, agent_id, provider, side, calendar_id, window_start_at,
         window_end_at, synced_at, updated_at
       )
@@ -1088,13 +1162,14 @@ export async function ensureLifeOpsTables(
         id, agent_id, provider, 'owner', calendar_id, window_start_at,
         window_end_at, synced_at, updated_at
       FROM life_calendar_sync_states`,
+        );
+        await executeRawSql(runtime, `DROP TABLE life_calendar_sync_states`);
+        await executeRawSql(
+          runtime,
+          `ALTER TABLE life_calendar_sync_states_next RENAME TO life_calendar_sync_states`,
+        );
+      },
     );
-    await executeRawSql(runtime, `DROP TABLE life_calendar_sync_states`);
-    await executeRawSql(
-      runtime,
-      `ALTER TABLE life_calendar_sync_states_next RENAME TO life_calendar_sync_states`,
-    );
-    });
   }
 
   const existingGmailMessageColumns = new Set(
@@ -1104,14 +1179,17 @@ export async function ensureLifeOpsTables(
     existingGmailMessageColumns.size > 0 &&
     !existingGmailMessageColumns.has("side")
   ) {
-    await runMigrationWithSavepoint(runtime, "migrate_gmail_messages", async () => {
-    await executeRawSql(
+    await runMigrationWithSavepoint(
       runtime,
-      `DROP TABLE IF EXISTS life_gmail_messages_next`,
-    );
-    await executeRawSql(
-      runtime,
-      `CREATE TABLE life_gmail_messages_next (
+      "migrate_gmail_messages",
+      async () => {
+        await executeRawSql(
+          runtime,
+          `DROP TABLE IF EXISTS life_gmail_messages_next`,
+        );
+        await executeRawSql(
+          runtime,
+          `CREATE TABLE life_gmail_messages_next (
         id TEXT PRIMARY KEY,
         agent_id TEXT NOT NULL,
         provider TEXT NOT NULL,
@@ -1138,10 +1216,10 @@ export async function ensureLifeOpsTables(
         updated_at TEXT NOT NULL,
         UNIQUE(agent_id, provider, side, external_message_id)
       )`,
-    );
-    await executeRawSql(
-      runtime,
-      `INSERT INTO life_gmail_messages_next (
+        );
+        await executeRawSql(
+          runtime,
+          `INSERT INTO life_gmail_messages_next (
         id, agent_id, provider, side, external_message_id, thread_id, subject,
         from_display, from_email, reply_to, to_json, cc_json, snippet,
         received_at, is_unread, is_important, likely_reply_needed,
@@ -1155,13 +1233,14 @@ export async function ensureLifeOpsTables(
         triage_score, triage_reason, label_ids_json, html_link,
         COALESCE(metadata_json, '{}'), synced_at, updated_at
       FROM life_gmail_messages`,
+        );
+        await executeRawSql(runtime, `DROP TABLE life_gmail_messages`);
+        await executeRawSql(
+          runtime,
+          `ALTER TABLE life_gmail_messages_next RENAME TO life_gmail_messages`,
+        );
+      },
     );
-    await executeRawSql(runtime, `DROP TABLE life_gmail_messages`);
-    await executeRawSql(
-      runtime,
-      `ALTER TABLE life_gmail_messages_next RENAME TO life_gmail_messages`,
-    );
-    });
   }
 
   const existingGmailSyncStateColumns = new Set(
@@ -1171,14 +1250,17 @@ export async function ensureLifeOpsTables(
     existingGmailSyncStateColumns.size > 0 &&
     !existingGmailSyncStateColumns.has("side")
   ) {
-    await runMigrationWithSavepoint(runtime, "migrate_gmail_sync_states", async () => {
-    await executeRawSql(
+    await runMigrationWithSavepoint(
       runtime,
-      `DROP TABLE IF EXISTS life_gmail_sync_states_next`,
-    );
-    await executeRawSql(
-      runtime,
-      `CREATE TABLE life_gmail_sync_states_next (
+      "migrate_gmail_sync_states",
+      async () => {
+        await executeRawSql(
+          runtime,
+          `DROP TABLE IF EXISTS life_gmail_sync_states_next`,
+        );
+        await executeRawSql(
+          runtime,
+          `CREATE TABLE life_gmail_sync_states_next (
         id TEXT PRIMARY KEY,
         agent_id TEXT NOT NULL,
         provider TEXT NOT NULL,
@@ -1189,23 +1271,24 @@ export async function ensureLifeOpsTables(
         updated_at TEXT NOT NULL,
         UNIQUE(agent_id, provider, side, mailbox)
       )`,
-    );
-    await executeRawSql(
-      runtime,
-      `INSERT INTO life_gmail_sync_states_next (
+        );
+        await executeRawSql(
+          runtime,
+          `INSERT INTO life_gmail_sync_states_next (
         id, agent_id, provider, side, mailbox, max_results, synced_at, updated_at
       )
       SELECT
         id, agent_id, provider, 'owner', mailbox, max_results, synced_at,
         updated_at
       FROM life_gmail_sync_states`,
+        );
+        await executeRawSql(runtime, `DROP TABLE life_gmail_sync_states`);
+        await executeRawSql(
+          runtime,
+          `ALTER TABLE life_gmail_sync_states_next RENAME TO life_gmail_sync_states`,
+        );
+      },
     );
-    await executeRawSql(runtime, `DROP TABLE life_gmail_sync_states`);
-    await executeRawSql(
-      runtime,
-      `ALTER TABLE life_gmail_sync_states_next RENAME TO life_gmail_sync_states`,
-    );
-    });
   }
 
   const postMigrationIndexStatements = [
@@ -1925,6 +2008,75 @@ export class LifeOpsRepository {
     );
     const row = rows[0];
     return row ? parseChannelPolicy(row) : null;
+  }
+
+  async upsertWebsiteAccessGrant(
+    grant: LifeOpsWebsiteAccessGrant,
+  ): Promise<void> {
+    await this.ensureReady();
+    await executeRawSql(
+      this.runtime,
+      `INSERT INTO life_website_access_grants (
+        id, agent_id, group_key, definition_id, occurrence_id, websites_json,
+        unlock_mode, unlock_duration_minutes, callback_key, unlocked_at,
+        expires_at, revoked_at, metadata_json, created_at, updated_at
+      ) VALUES (
+        ${sqlQuote(grant.id)},
+        ${sqlQuote(grant.agentId)},
+        ${sqlQuote(grant.groupKey)},
+        ${sqlQuote(grant.definitionId)},
+        ${sqlText(grant.occurrenceId)},
+        ${sqlJson(grant.websites)},
+        ${sqlQuote(grant.unlockMode)},
+        ${sqlInteger(grant.unlockDurationMinutes)},
+        ${sqlText(grant.callbackKey)},
+        ${sqlQuote(grant.unlockedAt)},
+        ${sqlText(grant.expiresAt)},
+        ${sqlText(grant.revokedAt)},
+        ${sqlJson(grant.metadata)},
+        ${sqlQuote(grant.createdAt)},
+        ${sqlQuote(grant.updatedAt)}
+      )`,
+    );
+  }
+
+  async listWebsiteAccessGrants(
+    agentId: string,
+  ): Promise<LifeOpsWebsiteAccessGrant[]> {
+    await this.ensureReady();
+    const rows = await executeRawSql(
+      this.runtime,
+      `SELECT *
+         FROM life_website_access_grants
+        WHERE agent_id = ${sqlQuote(agentId)}
+        ORDER BY updated_at DESC, created_at DESC`,
+    );
+    return rows.map(parseWebsiteAccessGrant);
+  }
+
+  async revokeWebsiteAccessGrants(
+    agentId: string,
+    args: {
+      groupKey?: string;
+      callbackKey?: string;
+      revokedAt: string;
+    },
+  ): Promise<void> {
+    await this.ensureReady();
+    const clauses = [`agent_id = ${sqlQuote(agentId)}`, "revoked_at IS NULL"];
+    if (args.groupKey) {
+      clauses.push(`group_key = ${sqlQuote(args.groupKey)}`);
+    }
+    if (args.callbackKey) {
+      clauses.push(`callback_key = ${sqlQuote(args.callbackKey)}`);
+    }
+    await executeRawSql(
+      this.runtime,
+      `UPDATE life_website_access_grants
+          SET revoked_at = ${sqlQuote(args.revokedAt)},
+              updated_at = ${sqlQuote(args.revokedAt)}
+        WHERE ${clauses.join("\n          AND ")}`,
+    );
   }
 
   async upsertConnectorGrant(grant: LifeOpsConnectorGrant): Promise<void> {
@@ -2787,6 +2939,18 @@ export function createLifeOpsReminderPlan(
 export function createLifeOpsChannelPolicy(
   params: Omit<LifeOpsChannelPolicy, "id" | "createdAt" | "updatedAt">,
 ): LifeOpsChannelPolicy {
+  const timestamp = isoNow();
+  return {
+    ...params,
+    id: crypto.randomUUID(),
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+}
+
+export function createLifeOpsWebsiteAccessGrant(
+  params: Omit<LifeOpsWebsiteAccessGrant, "id" | "createdAt" | "updatedAt">,
+): LifeOpsWebsiteAccessGrant {
   const timestamp = isoNow();
   return {
     ...params,

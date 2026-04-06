@@ -252,6 +252,8 @@ export type AppSessionFeature =
   | "suggestions";
 
 export type AppSessionControlAction = "pause" | "resume";
+export type AppRunViewerAttachment = "attached" | "detached" | "unavailable";
+export type AppRunHealthState = "healthy" | "degraded" | "offline";
 
 export type AppSessionJsonValue =
   | string
@@ -310,6 +312,36 @@ export interface AppSessionActionResult {
   session?: AppSessionState | null;
 }
 
+export interface AppRunHealth {
+  state: AppRunHealthState;
+  message: string | null;
+}
+
+export interface AppRunSummary {
+  runId: string;
+  appName: string;
+  displayName: string;
+  pluginName: string;
+  launchType: string;
+  launchUrl: string | null;
+  viewer: AppViewerConfig | null;
+  session: AppSessionState | null;
+  status: string;
+  summary: string | null;
+  startedAt: string;
+  updatedAt: string;
+  lastHeartbeatAt: string | null;
+  supportsBackground: boolean;
+  viewerAttachment: AppRunViewerAttachment;
+  health: AppRunHealth;
+}
+
+export interface AppRunActionResult {
+  success: boolean;
+  message: string;
+  run?: AppRunSummary | null;
+}
+
 export type AppLaunchDiagnosticSeverity = "info" | "warning" | "error";
 
 export interface AppLaunchDiagnostic {
@@ -359,12 +391,14 @@ export interface AppLaunchResult {
   launchUrl: string | null;
   viewer: AppViewerConfig | null;
   session: AppSessionState | null;
+  run: AppRunSummary | null;
   diagnostics?: AppLaunchDiagnostic[];
 }
 
 export interface AppStopResult {
   success: boolean;
   appName: string;
+  runId: string | null;
   stoppedAt: string;
   pluginUninstalled: boolean;
   needsRestart: boolean;
@@ -680,11 +714,43 @@ export interface AgentPreflightResult {
   docsUrl?: string;
 }
 
+export interface CodingAgentTaskThread {
+  id: string;
+  title: string;
+  kind: string;
+  status:
+    | "open"
+    | "active"
+    | "waiting_on_user"
+    | "blocked"
+    | "validating"
+    | "done"
+    | "failed"
+    | "archived"
+    | "interrupted";
+  originalRequest: string;
+  summary?: string;
+  sessionCount: number;
+  activeSessionCount: number;
+  latestSessionId?: string | null;
+  latestSessionLabel?: string | null;
+  latestWorkdir?: string | null;
+  latestRepo?: string | null;
+  latestActivityAt?: number | null;
+  decisionCount: number;
+  createdAt: string;
+  updatedAt: string;
+  closedAt?: string | null;
+  archivedAt?: string | null;
+}
+
 export interface CodingAgentStatus {
   supervisionLevel: string;
   taskCount: number;
   tasks: CodingAgentSession[];
   pendingConfirmations: number;
+  taskThreadCount?: number;
+  taskThreads?: CodingAgentTaskThread[];
 }
 
 /** Raw PTY session shape returned by /api/coding-agents. */
@@ -724,5 +790,36 @@ export function mapPtySessionsToCodingAgentSessions(
             : ("active" as const),
     decisionCount: 0,
     autoResolvedCount: 0,
+  }));
+}
+
+/** Maps persisted coordinator task threads into the existing CodingAgentSession UI shape. */
+export function mapTaskThreadsToCodingAgentSessions(
+  taskThreads: CodingAgentTaskThread[],
+): CodingAgentSession[] {
+  return taskThreads.map((thread) => ({
+    sessionId: thread.latestSessionId ?? thread.id,
+    agentType: "task-thread",
+    label: thread.title || thread.latestSessionLabel || "Task",
+    originalTask: thread.originalRequest,
+    workdir: thread.latestWorkdir ?? thread.latestRepo ?? "",
+    status:
+      thread.status === "failed"
+        ? ("error" as const)
+        : thread.status === "done"
+          ? ("completed" as const)
+          : thread.status === "validating"
+            ? ("tool_running" as const)
+            : thread.status === "blocked" ||
+                thread.status === "waiting_on_user" ||
+                thread.status === "interrupted"
+              ? ("blocked" as const)
+              : ("active" as const),
+    decisionCount: thread.decisionCount,
+    autoResolvedCount: 0,
+    lastActivity:
+      thread.status === "interrupted"
+        ? "Interrupted - reopen or resume this task"
+        : thread.summary || thread.latestSessionLabel || thread.status,
   }));
 }

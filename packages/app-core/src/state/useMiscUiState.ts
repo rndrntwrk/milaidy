@@ -9,8 +9,9 @@
  *  - UI chrome: command palette, emote picker, dropped files
  */
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type {
+  AppRunSummary,
   AppSessionState,
   McpMarketplaceResult,
   McpRegistryServerDetail,
@@ -68,19 +69,33 @@ export function useMiscUiState() {
   const [shareIngestNotice, setShareIngestNotice] = useState("");
 
   // ── Game ───────────────────────────────────────────────────────────
-  const [activeGameApp, setActiveGameApp] = useState("");
-  const [activeGameDisplayName, setActiveGameDisplayName] = useState("");
-  const [activeGameViewerUrl, setActiveGameViewerUrl] = useState("");
-  const [activeGameSandbox, setActiveGameSandbox] = useState(
-    "allow-scripts allow-same-origin allow-popups",
-  );
-  const [activeGamePostMessageAuth, setActiveGamePostMessageAuth] =
-    useState(false);
-  const [activeGamePostMessagePayload, setActiveGamePostMessagePayload] =
-    useState<GamePostMessageAuthPayload | null>(null);
-  const [activeGameSession, setActiveGameSession] =
-    useState<AppSessionState | null>(null);
+  const [appRuns, setAppRuns] = useState<AppRunSummary[]>([]);
+  const [activeGameRunId, setActiveGameRunId] = useState("");
   const [gameOverlayEnabled, setGameOverlayEnabled] = useState(false);
+
+  const activeGameRun = useMemo(
+    () => appRuns.find((run) => run.runId === activeGameRunId) ?? null,
+    [activeGameRunId, appRuns],
+  );
+  const activeGameApp = activeGameRun?.appName ?? "";
+  const activeGameDisplayName = activeGameRun?.displayName ?? "";
+  const activeGameViewerUrl = activeGameRun?.viewer?.url ?? "";
+  const activeGameSandbox =
+    activeGameRun?.viewer?.sandbox ??
+    "allow-scripts allow-same-origin allow-popups";
+  const activeGamePostMessageAuth = Boolean(
+    activeGameRun?.viewer?.postMessageAuth,
+  );
+  const activeGamePostMessagePayload =
+    activeGameRun?.viewer?.authMessage ?? null;
+  const activeGameSession =
+    (activeGameRun?.session as AppSessionState | null) ?? null;
+
+  useEffect(() => {
+    if (!activeGameRunId) return;
+    if (appRuns.some((run) => run.runId === activeGameRunId)) return;
+    setActiveGameRunId("");
+  }, [activeGameRunId, appRuns]);
 
   // ── Unified messages sidebar ───────────────────────────────────────
   const [activeInboxChat, setActiveInboxChat] =
@@ -120,6 +135,8 @@ export function useMiscUiState() {
       mcpHeaderInputs,
       droppedFiles,
       shareIngestNotice,
+      appRuns,
+      activeGameRunId,
       activeGameApp,
       activeGameDisplayName,
       activeGameViewerUrl,
@@ -146,13 +163,8 @@ export function useMiscUiState() {
     setMcpHeaderInputs,
     setDroppedFiles,
     setShareIngestNotice,
-    setActiveGameApp,
-    setActiveGameDisplayName,
-    setActiveGameViewerUrl,
-    setActiveGameSandbox,
-    setActiveGamePostMessageAuth,
-    setActiveGamePostMessagePayload,
-    setActiveGameSession,
+    setAppRuns,
+    setActiveGameRunId,
     setGameOverlayEnabled,
     closeCommandPalette,
     openEmotePicker,

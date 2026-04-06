@@ -24,7 +24,9 @@ import type {
   LifeOpsConnectorMode,
   LifeOpsConnectorSide,
   ProcessLifeOpsRemindersRequest,
+  RelockLifeOpsWebsiteAccessRequest,
   RunLifeOpsWorkflowRequest,
+  ResolveLifeOpsWebsiteAccessCallbackRequest,
   SelectLifeOpsGoogleConnectorPreferenceRequest,
   SendLifeOpsGmailReplyRequest,
   SnoozeLifeOpsOccurrenceRequest,
@@ -651,6 +653,41 @@ export async function handleLifeOpsRoutes(
     if (!body) return true;
     return runRoute(ctx, async (service) => {
       json(res, await service.acknowledgeReminder(body));
+    });
+  }
+
+  if (method === "POST" && pathname === "/api/lifeops/website-access/relock") {
+    const body =
+      await readJsonBody<RelockLifeOpsWebsiteAccessRequest>(req, res);
+    if (!body) return true;
+    return runRoute(ctx, async (service) => {
+      json(res, await service.relockWebsiteAccessGroup(body.groupKey));
+    });
+  }
+
+  const websiteAccessCallbackMatch = pathname.match(
+    /^\/api\/lifeops\/website-access\/callbacks\/([^/]+)\/resolve$/,
+  );
+  if (method === "POST" && websiteAccessCallbackMatch) {
+    const callbackKey = decodePathComponent(
+      websiteAccessCallbackMatch[1],
+      res,
+      "website access callback key",
+    );
+    if (!callbackKey) return true;
+    const body =
+      await readJsonBody<ResolveLifeOpsWebsiteAccessCallbackRequest>(
+        req,
+        res,
+      );
+    if (body === null) return true;
+    return runRoute(ctx, async (service) => {
+      json(
+        res,
+        await service.resolveWebsiteAccessCallback(
+          body.callbackKey || callbackKey,
+        ),
+      );
     });
   }
 

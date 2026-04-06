@@ -866,6 +866,8 @@ function AppProviderInner({
       mcpHeaderInputs,
       droppedFiles,
       shareIngestNotice,
+      appRuns,
+      activeGameRunId,
       activeGameApp,
       activeGameDisplayName,
       activeGameViewerUrl,
@@ -892,13 +894,8 @@ function AppProviderInner({
     setMcpHeaderInputs,
     setDroppedFiles,
     setShareIngestNotice,
-    setActiveGameApp,
-    setActiveGameDisplayName,
-    setActiveGameViewerUrl,
-    setActiveGameSandbox,
-    setActiveGamePostMessageAuth,
-    setActiveGamePostMessagePayload,
-    setActiveGameSession,
+    setAppRuns,
+    setActiveGameRunId,
     setGameOverlayEnabled,
     closeCommandPalette,
     openEmotePicker,
@@ -908,7 +905,9 @@ function AppProviderInner({
   // chatPendingImages now comes from useChatState
 
   // --- Admin ---
-  const [appsSubTab, setAppsSubTab] = useState<"browse" | "games">("browse");
+  const [appsSubTab, setAppsSubTab] = useState<"browse" | "running" | "games">(
+    "browse",
+  );
   const [agentSubTab, setAgentSubTab] = useState<
     "character" | "inventory" | "knowledge"
   >("character");
@@ -1437,13 +1436,8 @@ function AppProviderInner({
         catalogPage: setCatalogPage,
         skillReviewId: setSkillReviewId,
         skillReviewReport: setSkillReviewReport,
-        activeGameApp: setActiveGameApp,
-        activeGameDisplayName: setActiveGameDisplayName,
-        activeGameViewerUrl: setActiveGameViewerUrl,
-        activeGameSandbox: setActiveGameSandbox,
-        activeGamePostMessageAuth: setActiveGamePostMessageAuth,
-        activeGamePostMessagePayload: setActiveGamePostMessagePayload,
-        activeGameSession: setActiveGameSession,
+        appRuns: setAppRuns,
+        activeGameRunId: setActiveGameRunId,
         gameOverlayEnabled: setGameOverlayEnabled,
         activeInboxChat: setActiveInboxChat,
         storePlugins: setStorePlugins,
@@ -1978,6 +1972,8 @@ function AppProviderInner({
     droppedFiles,
     shareIngestNotice,
     chatPendingImages,
+    appRuns,
+    activeGameRunId,
     activeGameApp,
     activeGameDisplayName,
     activeGameViewerUrl,

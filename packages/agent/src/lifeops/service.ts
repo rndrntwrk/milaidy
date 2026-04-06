@@ -1,5 +1,10 @@
 import crypto from "node:crypto";
 import { type IAgentRuntime, logger, stringToUuid } from "@elizaos/core";
+import {
+  getSelfControlStatus,
+  startSelfControlBlock,
+  stopSelfControlBlock,
+} from "@miladyai/plugin-selfcontrol/selfcontrol";
 import type {
   AcknowledgeLifeOpsReminderRequest,
   CaptureLifeOpsPhoneConsentRequest,
@@ -61,8 +66,8 @@ import type {
   LifeOpsSubjectType,
   LifeOpsTaskDefinition,
   LifeOpsTimeWindowDefinition,
-  LifeOpsWebsiteAccessPolicy,
   LifeOpsVisibilityScope,
+  LifeOpsWebsiteAccessPolicy,
   LifeOpsWindowPolicy,
   LifeOpsWorkflowAction,
   LifeOpsWorkflowActionPlan,
@@ -109,6 +114,8 @@ import {
   LIFEOPS_WORKFLOW_TRIGGER_TYPES,
   LIFEOPS_X_CAPABILITIES,
 } from "@miladyai/shared/contracts/lifeops";
+import { loadElizaConfig } from "../config/config.js";
+import type { OwnerContactsConfig } from "../config/types.agent-defaults.js";
 import { getAgentEventService } from "../runtime/agent-event-service.js";
 import {
   computeNextCronRunAtMs,
@@ -168,9 +175,11 @@ import {
   createLifeOpsReminderAttempt,
   createLifeOpsReminderPlan,
   createLifeOpsTaskDefinition,
+  createLifeOpsWebsiteAccessGrant,
   createLifeOpsWorkflowDefinition,
   createLifeOpsWorkflowRun,
   LifeOpsRepository,
+  type LifeOpsWebsiteAccessGrant,
 } from "./repository.js";
 import {
   addDaysToLocalDate,
@@ -228,6 +237,8 @@ type ExecuteWorkflowResult = {
   run: LifeOpsWorkflowRun;
   error: unknown | null;
 };
+
+type RuntimeMessageTarget = Parameters<IAgentRuntime["sendMessageToTarget"]>[0];
 
 type LifeOpsServiceOptions = {
   ownerEntityId?: string | null;
@@ -1492,6 +1503,8 @@ function normalizeWorkflowActionPlan(
       `actionPlan.steps[${index}].kind`,
       [
         "create_task",
+        "relock_website_access",
+        "resolve_website_access_callback",
         "get_calendar_feed",
         "get_gmail_triage",
         "summarize",
@@ -1509,6 +1522,38 @@ function normalizeWorkflowActionPlan(
           step.request,
           `actionPlan.steps[${index}].request`,
         ) as unknown as CreateLifeOpsDefinitionRequest,
+      };
+    }
+    if (kind === "relock_website_access") {
+      return {
+        kind,
+        id,
+        resultKey,
+        request: {
+          groupKey: requireNonEmptyString(
+            requireRecord(
+              step.request,
+              `actionPlan.steps[${index}].request`,
+            ).groupKey,
+            `actionPlan.steps[${index}].request.groupKey`,
+          ),
+        },
+      };
+    }
+    if (kind === "resolve_website_access_callback") {
+      return {
+        kind,
+        id,
+        resultKey,
+        request: {
+          callbackKey: requireNonEmptyString(
+            requireRecord(
+              step.request,
+              `actionPlan.steps[${index}].request`,
+            ).callbackKey,
+            `actionPlan.steps[${index}].request.callbackKey`,
+          ),
+        },
       };
     }
     if (kind === "get_calendar_feed") {
@@ -1805,17 +1850,37 @@ function normalizeWebsiteAccessPolicy(
       websites.push(website);
     }
   }
-  const unlockDurationMinutes = normalizePositiveInteger(
-    record.unlockDurationMinutes,
-    `${field}.unlockDurationMinutes`,
-  );
+  const rawUnlockMode =
+    normalizeOptionalString(record.unlockMode) ?? "fixed_duration";
+  const unlockMode =
+    rawUnlockMode === "until_manual_lock" || rawUnlockMode === "until_callback"
+      ? rawUnlockMode
+      : rawUnlockMode === "fixed_duration"
+        ? rawUnlockMode
+        : fail(
+            400,
+            `${field}.unlockMode must be fixed_duration, until_manual_lock, or until_callback`,
+          );
+  const unlockDurationMinutes =
+    unlockMode === "fixed_duration"
+      ? normalizePositiveInteger(
+          record.unlockDurationMinutes,
+          `${field}.unlockDurationMinutes`,
+        )
+      : undefined;
+  const callbackKey =
+    unlockMode === "until_callback"
+      ? requireNonEmptyString(record.callbackKey, `${field}.callbackKey`)
+      : (normalizeOptionalString(record.callbackKey) ?? null);
   const reason =
     normalizeOptionalString(record.reason) ??
     "Access is locked until this routine earns another unlock.";
   return {
     groupKey,
     websites,
-    unlockDurationMinutes,
+    unlockMode,
+    ...(unlockDurationMinutes !== undefined ? { unlockDurationMinutes } : {}),
+    ...(callbackKey ? { callbackKey } : {}),
     reason,
   };
 }
@@ -2350,6 +2415,45 @@ function parseWorkflowSchedulerState(
         ? value.updatedAt
         : new Date().toISOString(),
   };
+}
+
+function loadOwnerContactsConfig(): OwnerContactsConfig {
+  try {
+    const config = loadElizaConfig();
+    return config.agents?.defaults?.ownerContacts ?? {};
+  } catch {
+    return {};
+  }
+}
+
+function normalizeWebsiteListForComparison(
+  websites: readonly string[],
+): string[] {
+  return [...new Set(websites.map((website) => website.toLowerCase().trim()))]
+    .filter((website) => website.length > 0)
+    .sort((left, right) => left.localeCompare(right));
+}
+
+function haveSameWebsiteSet(
+  left: readonly string[],
+  right: readonly string[],
+): boolean {
+  const normalizedLeft = normalizeWebsiteListForComparison(left);
+  const normalizedRight = normalizeWebsiteListForComparison(right);
+  return (
+    normalizedLeft.length === normalizedRight.length &&
+    normalizedLeft.every((website, index) => website === normalizedRight[index])
+  );
+}
+
+function isWebsiteAccessGrantActive(
+  grant: LifeOpsWebsiteAccessGrant,
+  now: Date,
+): boolean {
+  if (grant.revokedAt) {
+    return false;
+  }
+  return !grant.expiresAt || Date.parse(grant.expiresAt) > now.getTime();
 }
 
 export class LifeOpsService {
@@ -3827,6 +3931,211 @@ export class LifeOpsService {
     );
   }
 
+  private resolveRuntimeReminderTarget(
+    channel: Exclude<
+      LifeOpsReminderStep["channel"],
+      "in_app" | "sms" | "voice"
+    >,
+    policy: LifeOpsChannelPolicy | null,
+  ): {
+    source: string;
+    connectorRef: string;
+    target: RuntimeMessageTarget;
+  } | null {
+    const metadata = policy ? policy.metadata : null;
+    const configuredSource =
+      (metadata && normalizeOptionalString(metadata.source)) ??
+      (metadata && normalizeOptionalString(metadata.platform)) ??
+      channel;
+    const ownerContacts = loadOwnerContactsConfig();
+    const contact = ownerContacts[configuredSource] ?? ownerContacts[channel];
+    const entityId =
+      (metadata && normalizeOptionalString(metadata.entityId)) ??
+      normalizeOptionalString(contact?.entityId) ??
+      null;
+    const channelId =
+      (metadata && normalizeOptionalString(metadata.channelId)) ??
+      normalizeOptionalString(contact?.channelId) ??
+      null;
+    const roomId =
+      (metadata && normalizeOptionalString(metadata.roomId)) ??
+      normalizeOptionalString(contact?.roomId) ??
+      null;
+    if (!entityId && !channelId && !roomId) {
+      return null;
+    }
+    const targetRef = policy?.channelRef ?? channelId ?? roomId ?? entityId;
+    return {
+      source: configuredSource,
+      connectorRef: `runtime:${configuredSource}:${targetRef}`,
+      target: {
+        source: configuredSource,
+        entityId: entityId as RuntimeMessageTarget["entityId"],
+        channelId,
+        roomId: roomId as RuntimeMessageTarget["roomId"],
+      } as RuntimeMessageTarget,
+    };
+  }
+
+  private async awardWebsiteAccessGrant(
+    definition: LifeOpsTaskDefinition,
+    occurrenceId: string,
+    now = new Date(),
+  ): Promise<void> {
+    const policy = definition.websiteAccess;
+    if (!policy) {
+      return;
+    }
+    const unlockedAt = now.toISOString();
+    await this.repository.revokeWebsiteAccessGrants(definition.agentId, {
+      groupKey: policy.groupKey,
+      revokedAt: unlockedAt,
+    });
+    const expiresAt =
+      policy.unlockMode === "fixed_duration" &&
+      typeof policy.unlockDurationMinutes === "number"
+        ? addMinutes(now, policy.unlockDurationMinutes).toISOString()
+        : null;
+    const grant = createLifeOpsWebsiteAccessGrant({
+      agentId: definition.agentId,
+      groupKey: policy.groupKey,
+      definitionId: definition.id,
+      occurrenceId,
+      websites: [...policy.websites],
+      unlockMode: policy.unlockMode,
+      unlockDurationMinutes:
+        policy.unlockMode === "fixed_duration"
+          ? (policy.unlockDurationMinutes ?? null)
+          : null,
+      callbackKey: policy.callbackKey ?? null,
+      unlockedAt,
+      expiresAt,
+      revokedAt: null,
+      metadata: {
+        definitionTitle: definition.title,
+        reason: policy.reason,
+      },
+    });
+    await this.repository.upsertWebsiteAccessGrant(grant);
+  }
+
+  private async syncWebsiteAccessState(now = new Date()): Promise<void> {
+    const definitions = (
+      await this.repository.listDefinitions(this.agentId())
+    ).filter(
+      (definition) =>
+        definition.status === "active" && definition.websiteAccess,
+    );
+    const groups = new Map<string, Set<string>>();
+    for (const definition of definitions) {
+      const policy = definition.websiteAccess;
+      if (!policy) {
+        continue;
+      }
+      const websites = groups.get(policy.groupKey) ?? new Set<string>();
+      for (const website of policy.websites) {
+        websites.add(website.toLowerCase());
+      }
+      groups.set(policy.groupKey, websites);
+    }
+    const activeGrants = (
+      await this.repository.listWebsiteAccessGrants(this.agentId())
+    ).filter((grant) => isWebsiteAccessGrantActive(grant, now));
+    const unlockedGroups = new Set(activeGrants.map((grant) => grant.groupKey));
+    const blockedGroups = [...groups.keys()].filter(
+      (groupKey) => !unlockedGroups.has(groupKey),
+    );
+    const blockedWebsites = normalizeWebsiteListForComparison(
+      blockedGroups.flatMap((groupKey) => [...(groups.get(groupKey) ?? [])]),
+    );
+
+    let status: Awaited<ReturnType<typeof getSelfControlStatus>>;
+    try {
+      status = await getSelfControlStatus();
+    } catch (error) {
+      this.logLifeOpsError("website_access_status", error, {
+        blockedGroups,
+      });
+      return;
+    }
+
+    const activeLifeOpsBlock = status.active && status.managedBy === "lifeops";
+    if (status.active && !activeLifeOpsBlock) {
+      if (blockedWebsites.length > 0) {
+        this.logLifeOpsWarn(
+          "website_access_sync",
+          "[lifeops] Website blocker is already active outside LifeOps; skipping blocker sync.",
+          {
+            managedBy: status.managedBy,
+            currentWebsites: status.websites,
+            blockedWebsites,
+          },
+        );
+      }
+      return;
+    }
+
+    if (blockedWebsites.length === 0) {
+      if (!activeLifeOpsBlock) {
+        return;
+      }
+      const stopResult = await stopSelfControlBlock();
+      if (stopResult.success === false) {
+        this.logLifeOpsWarn(
+          "website_access_sync",
+          "[lifeops] Failed to clear the LifeOps-managed website blocker state.",
+          {
+            error: stopResult.error,
+          },
+        );
+      }
+      return;
+    }
+
+    if (
+      activeLifeOpsBlock &&
+      haveSameWebsiteSet(status.websites, blockedWebsites)
+    ) {
+      return;
+    }
+
+    if (activeLifeOpsBlock) {
+      const stopResult = await stopSelfControlBlock();
+      if (stopResult.success === false) {
+        this.logLifeOpsWarn(
+          "website_access_sync",
+          "[lifeops] Failed to update the existing LifeOps website block.",
+          {
+            error: stopResult.error,
+            blockedWebsites,
+          },
+        );
+        return;
+      }
+    }
+
+    const startResult = await startSelfControlBlock({
+      websites: blockedWebsites,
+      durationMinutes: null,
+      metadata: {
+        managedBy: "lifeops",
+        blockedGroups,
+        reason: "lifeops_earned_access",
+      },
+    });
+    if (startResult.success === false) {
+      this.logLifeOpsWarn(
+        "website_access_sync",
+        "[lifeops] Failed to apply the LifeOps website block.",
+        {
+          error: startResult.error,
+          blockedWebsites,
+          blockedGroups,
+        },
+      );
+    }
+  }
+
   private async dispatchReminderAttempt(args: {
     plan: LifeOpsReminderPlan;
     ownerType: "occurrence" | "calendar_event";
@@ -3896,20 +4205,34 @@ export class LifeOpsService {
       deliveryMetadata.message = reminderBody;
     } else {
       const policy = await this.resolvePrimaryChannelPolicy(args.channel);
-      if (!policy?.allowReminders || !policy.allowEscalation) {
+      const runtimeTarget =
+        args.channel === "sms" || args.channel === "voice"
+          ? null
+          : this.resolveRuntimeReminderTarget(args.channel, policy);
+      if (policy && (!policy.allowReminders || !policy.allowEscalation)) {
+        outcome = "blocked_policy";
+        deliveryMetadata.reason = "channel_policy";
+      } else if (
+        (args.channel === "sms" || args.channel === "voice") &&
+        !policy
+      ) {
         outcome = "blocked_policy";
         deliveryMetadata.reason = "channel_policy";
       } else if (args.channel === "sms" || args.channel === "voice") {
         const credentials = readTwilioCredentialsFromEnv();
+        const twilioPolicy = policy;
         if (!credentials) {
           outcome = "blocked_connector";
           deliveryMetadata.reason = "twilio_missing";
+        } else if (!twilioPolicy) {
+          outcome = "blocked_policy";
+          deliveryMetadata.reason = "channel_policy";
         } else {
-          connectorRef = `twilio:${policy.channelRef}`;
+          connectorRef = `twilio:${twilioPolicy.channelRef}`;
           if (args.channel === "sms") {
             const result = await sendTwilioSms({
               credentials,
-              to: policy.channelRef,
+              to: twilioPolicy.channelRef,
               body: reminderBody,
             });
             if (!result.ok) {
@@ -3923,7 +4246,7 @@ export class LifeOpsService {
           } else {
             const result = await sendTwilioVoiceCall({
               credentials,
-              to: policy.channelRef,
+              to: twilioPolicy.channelRef,
               message: reminderBody,
             });
             if (!result.ok) {
@@ -3936,9 +4259,31 @@ export class LifeOpsService {
             }
           }
         }
+      } else if (runtimeTarget) {
+        connectorRef = runtimeTarget.connectorRef;
+        try {
+          await this.runtime.sendMessageToTarget(runtimeTarget.target, {
+            text: reminderBody,
+            source: runtimeTarget.source,
+            metadata: {
+              channelType: args.channel,
+              lifeopsReminder: true,
+              ownerType: args.ownerType,
+              ownerId: args.ownerId,
+              urgency: args.urgency,
+              scheduledFor: args.scheduledFor,
+            },
+          });
+        } catch (error) {
+          outcome = "blocked_connector";
+          deliveryMetadata.error = lifeOpsErrorMessage(error);
+          deliveryMetadata.reason = "runtime_send_failed";
+        }
       } else {
         outcome = "blocked_connector";
-        deliveryMetadata.reason = "unsupported_channel";
+        deliveryMetadata.reason = policy
+          ? "target_missing"
+          : "unconfigured_channel";
       }
     }
 
@@ -4108,7 +4453,7 @@ export class LifeOpsService {
       request.goalId ?? null,
       ownership,
     );
-    let definition = createLifeOpsTaskDefinition({
+    const definition = createLifeOpsTaskDefinition({
       agentId,
       ...ownership,
       kind,
@@ -4122,10 +4467,8 @@ export class LifeOpsService {
       windowPolicy,
       progressionRule,
       websiteAccess:
-        normalizeWebsiteAccessPolicy(
-          request.websiteAccess,
-          "websiteAccess",
-        ) ?? null,
+        normalizeWebsiteAccessPolicy(request.websiteAccess, "websiteAccess") ??
+        null,
       reminderPlanId: null,
       goalId,
       source: normalizeOptionalString(request.source) ?? "manual",
@@ -4159,6 +4502,7 @@ export class LifeOpsService {
         reminderPlanId: definition.reminderPlanId,
       },
     );
+    await this.syncWebsiteAccessState();
     return {
       definition,
       reminderPlan,
@@ -4196,7 +4540,7 @@ export class LifeOpsService {
             "status",
             LIFEOPS_DEFINITION_STATUSES,
           );
-    let nextDefinition: LifeOpsTaskDefinition = {
+    const nextDefinition: LifeOpsTaskDefinition = {
       ...current.definition,
       ...ownership,
       title:
@@ -4274,6 +4618,7 @@ export class LifeOpsService {
         reminderPlanId: nextDefinition.reminderPlanId,
       },
     );
+    await this.syncWebsiteAccessState();
     return {
       definition: nextDefinition,
       reminderPlan,
@@ -4297,6 +4642,7 @@ export class LifeOpsService {
       { title: definition.title },
       {},
     );
+    await this.syncWebsiteAccessState();
   }
 
   async deleteGoal(goalId: string): Promise<void> {
@@ -4349,14 +4695,18 @@ export class LifeOpsService {
         return cadence ?? null;
       })(),
       supportStrategy: (() => {
-        const strategy = normalizeOptionalRecord(request.supportStrategy, "supportStrategy") ?? {};
+        const strategy =
+          normalizeOptionalRecord(request.supportStrategy, "supportStrategy") ??
+          {};
         if (Array.isArray(strategy)) {
           fail(400, "supportStrategy must be an object, not an array");
         }
         return strategy;
       })(),
       successCriteria: (() => {
-        const criteria = normalizeOptionalRecord(request.successCriteria, "successCriteria") ?? {};
+        const criteria =
+          normalizeOptionalRecord(request.successCriteria, "successCriteria") ??
+          {};
         if (Array.isArray(criteria)) {
           fail(400, "successCriteria must be an object, not an array");
         }
@@ -5349,6 +5699,7 @@ export class LifeOpsService {
       request.workflowLimit === undefined
         ? DEFAULT_WORKFLOW_PROCESS_LIMIT
         : normalizePositiveInteger(request.workflowLimit, "workflowLimit");
+    await this.syncWebsiteAccessState(now);
     const reminderResult = await this.processReminders({
       now: now.toISOString(),
       limit: reminderLimit,
@@ -5362,6 +5713,30 @@ export class LifeOpsService {
       reminderAttempts: reminderResult.attempts,
       workflowRuns,
     };
+  }
+
+  async relockWebsiteAccessGroup(
+    groupKey: string,
+    now = new Date(),
+  ): Promise<{ ok: true }> {
+    await this.repository.revokeWebsiteAccessGrants(this.agentId(), {
+      groupKey: requireNonEmptyString(groupKey, "groupKey"),
+      revokedAt: now.toISOString(),
+    });
+    await this.syncWebsiteAccessState(now);
+    return { ok: true };
+  }
+
+  async resolveWebsiteAccessCallback(
+    callbackKey: string,
+    now = new Date(),
+  ): Promise<{ ok: true }> {
+    await this.repository.revokeWebsiteAccessGrants(this.agentId(), {
+      callbackKey: requireNonEmptyString(callbackKey, "callbackKey"),
+      revokedAt: now.toISOString(),
+    });
+    await this.syncWebsiteAccessState(now);
+    return { ok: true };
   }
 
   async inspectReminder(
@@ -5638,6 +6013,16 @@ export class LifeOpsService {
             title: created.definition.title,
             reminderPlanId: created.reminderPlan?.id ?? null,
           };
+        } else if (step.kind === "relock_website_access") {
+          value = await this.relockWebsiteAccessGroup(
+            step.request.groupKey,
+            new Date(args.startedAt),
+          );
+        } else if (step.kind === "resolve_website_access_callback") {
+          value = await this.resolveWebsiteAccessCallback(
+            step.request.callbackKey,
+            new Date(args.startedAt),
+          );
         } else if (step.kind === "get_calendar_feed") {
           value = await this.getCalendarFeed(
             internalUrl,
@@ -6601,7 +6986,9 @@ export class LifeOpsService {
         occurrenceKey: updatedOccurrence.occurrenceKey,
       },
     );
+    await this.awardWebsiteAccessGrant(definition, updatedOccurrence.id, now);
     await this.refreshDefinitionOccurrences(definition, now);
+    await this.syncWebsiteAccessState(now);
     const view = await this.repository.getOccurrenceView(
       this.agentId(),
       updatedOccurrence.id,

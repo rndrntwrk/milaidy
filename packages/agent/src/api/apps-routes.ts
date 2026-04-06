@@ -19,13 +19,21 @@ export interface AppManagerLike {
     limit?: number,
   ) => Promise<unknown>;
   listInstalled: (pluginManager: PluginManagerLike) => Promise<unknown>;
+  listRuns: () => Promise<unknown>;
+  getRun: (runId: string) => Promise<unknown>;
+  attachRun: (runId: string) => Promise<unknown>;
+  detachRun: (runId: string) => Promise<unknown>;
   launch: (
     pluginManager: PluginManagerLike,
     name: string,
     onProgress?: (progress: InstallProgressLike) => void,
     runtime?: unknown | null,
   ) => Promise<unknown>;
-  stop: (pluginManager: PluginManagerLike, name: string) => Promise<unknown>;
+  stop: (
+    pluginManager: PluginManagerLike,
+    name: string,
+    runId?: string,
+  ) => Promise<unknown>;
   getInfo: (pluginManager: PluginManagerLike, name: string) => Promise<unknown>;
 }
 
@@ -88,6 +96,75 @@ export async function handleAppsRoutes(
     return true;
   }
 
+  if (method === "GET" && pathname === "/api/apps/runs") {
+    const runs = await appManager.listRuns();
+    json(res, runs as object);
+    return true;
+  }
+
+  if (method === "GET" && pathname.startsWith("/api/apps/runs/")) {
+    const parts = pathname.split("/").filter(Boolean);
+    const runId = parts[3] ? decodeURIComponent(parts[3]) : "";
+    const subroute = parts[4] ?? "";
+    if (!runId) {
+      error(res, "runId is required");
+      return true;
+    }
+
+    if (!subroute) {
+      const run = await appManager.getRun(runId);
+      if (!run) {
+        error(res, `App run "${runId}" not found`, 404);
+        return true;
+      }
+      json(res, run as object);
+      return true;
+    }
+
+    if (subroute === "health") {
+      const run = await appManager.getRun(runId);
+      if (!run || typeof run !== "object" || run === null) {
+        error(res, `App run "${runId}" not found`, 404);
+        return true;
+      }
+      const health =
+        "health" in (run as Record<string, unknown>)
+          ? (run as Record<string, unknown>).health
+          : null;
+      json(res, health as object);
+      return true;
+    }
+  }
+
+  if (method === "POST" && pathname.startsWith("/api/apps/runs/")) {
+    const parts = pathname.split("/").filter(Boolean);
+    const runId = parts[3] ? decodeURIComponent(parts[3]) : "";
+    const subroute = parts[4] ?? "";
+    if (!runId || !subroute) {
+      error(res, "runId is required");
+      return true;
+    }
+
+    if (subroute === "attach") {
+      const result = await appManager.attachRun(runId);
+      json(res, result as object, result && typeof result === "object" && "success" in (result as Record<string, unknown>) && (result as Record<string, unknown>).success === false ? 404 : 200);
+      return true;
+    }
+
+    if (subroute === "detach") {
+      const result = await appManager.detachRun(runId);
+      json(res, result as object, result && typeof result === "object" && "success" in (result as Record<string, unknown>) && (result as Record<string, unknown>).success === false ? 404 : 200);
+      return true;
+    }
+
+    if (subroute === "stop") {
+      const pluginManager = getPluginManager();
+      const result = await appManager.stop(pluginManager, "", runId);
+      json(res, result as object);
+      return true;
+    }
+  }
+
   if (method === "POST" && pathname === "/api/apps/launch") {
     try {
       const body = await readJsonBody<{ name?: string }>(req, res);
@@ -111,15 +188,16 @@ export async function handleAppsRoutes(
   }
 
   if (method === "POST" && pathname === "/api/apps/stop") {
-    const body = await readJsonBody<{ name?: string }>(req, res);
+    const body = await readJsonBody<{ name?: string; runId?: string }>(req, res);
     if (!body) return true;
-    if (!body.name?.trim()) {
-      error(res, "name is required");
+    if (!body.name?.trim() && !body.runId?.trim()) {
+      error(res, "name or runId is required");
       return true;
     }
-    const appName = body.name.trim();
+    const appName = body.name?.trim() ?? "";
+    const runId = body.runId?.trim();
     const pluginManager = getPluginManager();
-    const result = await appManager.stop(pluginManager, appName);
+    const result = await appManager.stop(pluginManager, appName, runId);
     json(res, result as object);
     return true;
   }

@@ -18,6 +18,7 @@ const RESERVED_APP_ROUTE_SLUGS = new Set([
   "launch",
   "plugins",
   "refresh",
+  "runs",
   "search",
   "stop",
 ]);

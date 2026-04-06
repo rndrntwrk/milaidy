@@ -6,11 +6,16 @@
 
 import { PagePanel } from "@miladyai/ui";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { client, type RegistryAppInfo } from "../../api";
+import {
+  client,
+  type AppRunSummary,
+  type RegistryAppInfo,
+} from "../../api";
 import { useApp } from "../../state";
 import { openExternalUrl } from "../../utils";
 import { AppDetailPane } from "../apps/AppDetailPane";
 import { AppsCatalogGrid } from "../apps/AppsCatalogGrid";
+import { RunningAppsPanel } from "../apps/RunningAppsPanel";
 import {
   DEFAULT_VIEWER_SANDBOX,
   filterAppsForCatalog,
@@ -33,9 +38,12 @@ function AppsEmptyState() {
 
 export function AppsView() {
   const {
+    appRuns,
+    activeGameRunId,
     activeGameApp,
     activeGameDisplayName,
     activeGameViewerUrl,
+    appsSubTab,
     setState,
     setActionNotice,
     t,
@@ -47,6 +55,7 @@ export function AppsView() {
   const [showActiveOnly, setShowActiveOnly] = useState(false);
   const [activeAppNames, setActiveAppNames] = useState<Set<string>>(new Set());
   const [selectedAppName, setSelectedAppName] = useState<string | null>(null);
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [busyApp, setBusyApp] = useState<string | null>(null);
   const currentGameViewerUrl =
     typeof activeGameViewerUrl === "string" ? activeGameViewerUrl : "";
@@ -61,20 +70,46 @@ export function AppsView() {
     !!selectedApp && hasCurrentGame && activeGameApp === selectedApp.name;
   const selectedAppIsActive =
     !!selectedApp && activeAppNames.has(selectedApp.name);
+  const sortedRuns = useMemo(
+    () => [...appRuns].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+    [appRuns],
+  );
+
+  const mergeRun = useCallback(
+    (run: AppRunSummary) => {
+      const nextRuns = [run, ...appRuns.filter((item) => item.runId !== run.runId)]
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+      setState("appRuns", nextRuns);
+      setActiveAppNames(new Set(nextRuns.map((item) => item.appName)));
+      return nextRuns;
+    },
+    [appRuns, setState],
+  );
+
+  const removeRun = useCallback(
+    (runId: string) => {
+      const nextRuns = appRuns.filter((run) => run.runId !== runId);
+      setState("appRuns", nextRuns);
+      setActiveAppNames(new Set(nextRuns.map((item) => item.appName)));
+      return nextRuns;
+    },
+    [appRuns, setState],
+  );
 
   const loadApps = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [list, installed] = await Promise.all([
+      const [list, runs] = await Promise.all([
         client.listApps(),
-        client.listInstalledApps().catch((err: unknown) => {
-          console.warn("[AppsView] Failed to list installed apps:", err);
+        client.listAppRuns().catch((err: unknown) => {
+          console.warn("[AppsView] Failed to list app runs:", err);
           return [];
         }),
       ]);
       setApps(list);
-      setActiveAppNames(new Set(installed.map((app) => app.name)));
+      setState("appRuns", runs);
+      setActiveAppNames(new Set(runs.map((run) => run.appName)));
       setSelectedAppName((current) => {
         if (!current) return getDefaultAppsCatalogSelection(list);
         return list.some(
@@ -93,21 +128,30 @@ export function AppsView() {
     } finally {
       setLoading(false);
     }
-  }, [t]);
-
-  const clearActiveGameState = useCallback(() => {
-    setState("activeGameApp", "");
-    setState("activeGameDisplayName", "");
-    setState("activeGameViewerUrl", "");
-    setState("activeGameSandbox", DEFAULT_VIEWER_SANDBOX);
-    setState("activeGamePostMessageAuth", false);
-    setState("activeGamePostMessagePayload", null);
-    setState("activeGameSession", null);
-  }, [setState]);
+  }, [setState, t]);
 
   useEffect(() => {
     void loadApps();
   }, [loadApps]);
+
+  useEffect(() => {
+    if (appsSubTab !== "running") return;
+    if (sortedRuns.length === 0) {
+      if (selectedRunId !== null) setSelectedRunId(null);
+      return;
+    }
+    if (
+      selectedRunId &&
+      sortedRuns.some((run) => run.runId === selectedRunId)
+    ) {
+      return;
+    }
+    const preferredRunId =
+      activeGameRunId && sortedRuns.some((run) => run.runId === activeGameRunId)
+        ? activeGameRunId
+        : sortedRuns[0].runId;
+    setSelectedRunId(preferredRunId);
+  }, [activeGameRunId, appsSubTab, selectedRunId, sortedRuns]);
 
   const handleLaunch = useCallback(
     async (app: RegistryAppInfo) => {

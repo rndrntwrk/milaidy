@@ -273,6 +273,32 @@ describe("hosts-file blocking", () => {
     );
   });
 
+  it("preserves managed metadata for LifeOps-owned blocks", async () => {
+    await expect(
+      startSelfControlBlock({
+        websites: ["x.com"],
+        durationMinutes: null,
+        metadata: {
+          managedBy: "lifeops",
+          blockedGroups: ["social-media"],
+        },
+      }),
+    ).resolves.toMatchObject({
+      success: true,
+      endsAt: null,
+    });
+
+    await expect(getSelfControlStatus()).resolves.toMatchObject({
+      active: true,
+      websites: ["x.com"],
+      managedBy: "lifeops",
+      metadata: {
+        managedBy: "lifeops",
+        blockedGroups: ["social-media"],
+      },
+    });
+  });
+
   it("falls back to an elevation prompt when direct hosts writes are denied", async () => {
     installElevationPromptOnPath();
 

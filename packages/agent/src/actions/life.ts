@@ -89,6 +89,15 @@ type LifeParams = {
   details?: Record<string, unknown>;
 };
 
+type LifeDefinitionSeed = {
+  title: string;
+  kind: CreateLifeOpsDefinitionRequest["kind"];
+  cadence: LifeOpsCadence;
+  description?: string;
+  reminderPlan?: CreateLifeOpsDefinitionRequest["reminderPlan"];
+  websiteAccess?: CreateLifeOpsDefinitionRequest["websiteAccess"];
+};
+
 const INTERNAL_URL = new URL("http://127.0.0.1/");
 
 // ── Intent classifier ─────────────────────────────────
@@ -400,6 +409,152 @@ function detailArray(details: Record<string, unknown> | undefined, key: string):
   return Array.isArray(v) ? v : undefined;
 }
 
+function extractIntentWindows(
+  intent: string,
+): Array<"morning" | "afternoon" | "evening" | "night"> {
+  const lower = intent.toLowerCase();
+  const windows: Array<"morning" | "afternoon" | "evening" | "night"> = [];
+  if (/\bmorning\b/.test(lower)) windows.push("morning");
+  if (/\bafternoon\b/.test(lower)) windows.push("afternoon");
+  if (/\bevening\b/.test(lower)) windows.push("evening");
+  if (/\bnight\b/.test(lower)) windows.push("night");
+  return windows;
+}
+
+function buildDefaultReminderPlan(
+  label: string,
+): NonNullable<CreateLifeOpsDefinitionRequest["reminderPlan"]> {
+  return {
+    steps: [{ channel: "in_app", offsetMinutes: 0, label }],
+  };
+}
+
+function inferSeedCadenceFromIntent(
+  intent: string,
+  fallbackWindows: Array<"morning" | "afternoon" | "evening" | "night">,
+): LifeOpsCadence | null {
+  const lower = intent.toLowerCase();
+  const windows = extractIntentWindows(intent);
+  const effectiveWindows =
+    windows.length > 0 ? windows : fallbackWindows;
+
+  const intervalMatch = lower.match(/\bevery\s+(\d+)\s*hours?\b/);
+  if (intervalMatch) {
+    const hours = Number(intervalMatch[1]);
+    if (Number.isFinite(hours) && hours > 0) {
+      return {
+        kind: "interval",
+        everyMinutes: hours * 60,
+        windows: effectiveWindows,
+      };
+    }
+  }
+
+  if (
+    /\b(morning and night|night and morning|twice a day|two times a day|2x (a|per) day)\b/.test(
+      lower,
+    ) ||
+    windows.length >= 2
+  ) {
+    return {
+      kind: "daily",
+      windows: effectiveWindows.length > 0 ? effectiveWindows : ["morning", "night"],
+    };
+  }
+
+  if (
+    /\b(daily|every day|each day|every morning|every afternoon|every evening|every night)\b/.test(
+      lower,
+    )
+  ) {
+    return {
+      kind: "daily",
+      windows: effectiveWindows,
+    };
+  }
+
+  return null;
+}
+
+function inferLifeDefinitionSeed(intent: string): LifeDefinitionSeed | null {
+  const lower = intent.toLowerCase();
+
+  if (/\bbrush(?:ing|ed)?\b/.test(lower) && /\bteeth\b/.test(lower)) {
+    return {
+      title: "Brush teeth",
+      kind: "habit",
+      cadence:
+        inferSeedCadenceFromIntent(intent, ["morning", "night"]) ?? {
+          kind: "daily",
+          windows: ["morning", "night"],
+          visibilityLeadMinutes: 90,
+          visibilityLagMinutes: 240,
+        },
+      description: "Brush your teeth in the morning and again at night.",
+      reminderPlan: buildDefaultReminderPlan("Tooth brushing reminder"),
+    };
+  }
+
+  if (/\binvisalign\b/.test(lower)) {
+    return {
+      title: "Keep Invisalign in",
+      kind: "habit",
+      cadence:
+        inferSeedCadenceFromIntent(intent, ["morning", "afternoon", "evening"]) ?? {
+          kind: "interval",
+          everyMinutes: 240,
+          windows: ["morning", "afternoon", "evening"],
+          startMinuteOfDay: 9 * 60,
+          maxOccurrencesPerDay: 4,
+          visibilityLeadMinutes: 15,
+          visibilityLagMinutes: 60,
+        },
+      description: "Check throughout the day that your Invisalign is back in.",
+      reminderPlan: buildDefaultReminderPlan("Invisalign reminder"),
+    };
+  }
+
+  if (/\b(drink|drank|hydrat(?:e|ing|ed))\b/.test(lower) && /\bwater\b/.test(lower)) {
+    return {
+      title: "Drink water",
+      kind: "habit",
+      cadence:
+        inferSeedCadenceFromIntent(intent, ["morning", "afternoon", "evening"]) ?? {
+          kind: "interval",
+          everyMinutes: 180,
+          windows: ["morning", "afternoon", "evening"],
+          startMinuteOfDay: 9 * 60,
+          maxOccurrencesPerDay: 4,
+          visibilityLeadMinutes: 15,
+          visibilityLagMinutes: 90,
+        },
+      description: "Hydrate regularly across the day.",
+      reminderPlan: buildDefaultReminderPlan("Water reminder"),
+    };
+  }
+
+  if (/\bstretch(?:ing|ed)?\b/.test(lower)) {
+    return {
+      title: "Stretch",
+      kind: "habit",
+      cadence:
+        inferSeedCadenceFromIntent(intent, ["afternoon", "evening"]) ?? {
+          kind: "interval",
+          everyMinutes: 360,
+          windows: ["afternoon", "evening"],
+          startMinuteOfDay: 12 * 60,
+          maxOccurrencesPerDay: 2,
+          visibilityLeadMinutes: 15,
+          visibilityLagMinutes: 120,
+        },
+      description: "Take one or two stretch breaks during the day.",
+      reminderPlan: buildDefaultReminderPlan("Stretch reminder"),
+    };
+  }
+
+  return null;
+}
+
 // ── Main action ───────────────────────────────────────
 
 export const lifeAction: Action = {
@@ -444,7 +599,8 @@ export const lifeAction: Action = {
     const domain = detailString(details, "domain") as LifeOpsDomain | undefined;
     const ownership = requestedOwnership(domain);
     const chatText = messageText(message).trim();
-    const targetName = params.target ?? params.title;
+    const inferredSeed = inferLifeDefinitionSeed(intent);
+    const targetName = params.target ?? params.title ?? inferredSeed?.title;
 
     try {
 
@@ -488,23 +644,31 @@ export const lifeAction: Action = {
     // ── Mutations ───────────────────────────────────
 
     if (operation === "create_definition") {
-      const title = params.title;
-      const cadence = detailObject(details, "cadence") as LifeOpsCadence | undefined;
+      const seed = inferredSeed;
+      const title = params.title ?? seed?.title;
+      const cadence =
+        (detailObject(details, "cadence") as LifeOpsCadence | undefined) ??
+        seed?.cadence;
       if (!title) return { success: false, text: "I need a name for this item. What should I call it?" };
       if (!cadence) return { success: false, text: "I need to know the schedule. How often should this happen?" };
-      const kind = detailString(details, "kind") as CreateLifeOpsDefinitionRequest["kind"] | undefined ?? "habit";
+      const kind = detailString(details, "kind") as CreateLifeOpsDefinitionRequest["kind"] | undefined ?? seed?.kind ?? "habit";
       const goalRef = detailString(details, "goalId") ?? detailString(details, "goalTitle");
       const resolvedGoal = goalRef ? await resolveGoal(service, goalRef, domain) : null;
       const created = await service.createDefinition({
         ownership,
         kind,
         title,
-        description: detailString(details, "description"),
+        description: detailString(details, "description") ?? seed?.description,
         originalIntent: chatText || title,
         cadence,
         priority: detailNumber(details, "priority"),
         progressionRule: detailObject(details, "progressionRule") as CreateLifeOpsDefinitionRequest["progressionRule"],
-        reminderPlan: detailObject(details, "reminderPlan") as CreateLifeOpsDefinitionRequest["reminderPlan"],
+        reminderPlan:
+          (detailObject(details, "reminderPlan") as CreateLifeOpsDefinitionRequest["reminderPlan"]) ??
+          seed?.reminderPlan,
+        websiteAccess:
+          (detailObject(details, "websiteAccess") as unknown as CreateLifeOpsDefinitionRequest["websiteAccess"]) ??
+          seed?.websiteAccess,
         goalId: resolvedGoal?.goal.id ?? null,
         source: "chat",
       });

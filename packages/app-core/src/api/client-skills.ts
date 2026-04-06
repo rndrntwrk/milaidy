@@ -8,6 +8,8 @@ import type { CustomActionDef } from "@miladyai/agent/contracts/config";
 import { MiladyClient } from "./client-base";
 import type {
   AppLaunchResult,
+  AppRunActionResult,
+  AppRunSummary,
   AppSessionActionResult,
   AppSessionControlAction,
   AppSessionState,
@@ -191,7 +193,12 @@ declare module "./client-base" {
     listApps(): Promise<RegistryAppInfo[]>;
     searchApps(query: string): Promise<RegistryAppInfo[]>;
     listInstalledApps(): Promise<InstalledAppInfo[]>;
+    listAppRuns(): Promise<AppRunSummary[]>;
+    getAppRun(runId: string): Promise<AppRunSummary>;
+    attachAppRun(runId: string): Promise<AppRunActionResult>;
+    detachAppRun(runId: string): Promise<AppRunActionResult>;
     stopApp(name: string): Promise<AppStopResult>;
+    stopAppRun(runId: string): Promise<AppStopResult>;
     getAppInfo(name: string): Promise<RegistryAppInfo>;
     launchApp(name: string): Promise<AppLaunchResult>;
     getAppSessionState(
@@ -645,10 +652,45 @@ MiladyClient.prototype.listInstalledApps = async function (this: MiladyClient) {
   return this.fetch("/api/apps/installed");
 };
 
+MiladyClient.prototype.listAppRuns = async function (this: MiladyClient) {
+  return this.fetch("/api/apps/runs");
+};
+
+MiladyClient.prototype.getAppRun = async function (this: MiladyClient, runId) {
+  return this.fetch(`/api/apps/runs/${encodeURIComponent(runId)}`);
+};
+
+MiladyClient.prototype.attachAppRun = async function (
+  this: MiladyClient,
+  runId,
+) {
+  return this.fetch(`/api/apps/runs/${encodeURIComponent(runId)}/attach`, {
+    method: "POST",
+  });
+};
+
+MiladyClient.prototype.detachAppRun = async function (
+  this: MiladyClient,
+  runId,
+) {
+  return this.fetch(`/api/apps/runs/${encodeURIComponent(runId)}/detach`, {
+    method: "POST",
+  });
+};
+
 MiladyClient.prototype.stopApp = async function (this: MiladyClient, name) {
   return this.fetch("/api/apps/stop", {
     method: "POST",
     body: JSON.stringify({ name }),
+  });
+};
+
+MiladyClient.prototype.stopAppRun = async function (
+  this: MiladyClient,
+  runId,
+) {
+  return this.fetch(`/api/apps/runs/${encodeURIComponent(runId)}/stop`, {
+    method: "POST",
   });
 };
 

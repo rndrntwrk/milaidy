@@ -12,6 +12,8 @@ export type AppSessionFeature =
   | "suggestions";
 
 export type AppSessionControlAction = "pause" | "resume";
+export type AppRunViewerAttachment = "attached" | "detached" | "unavailable";
+export type AppRunHealthState = "healthy" | "degraded" | "offline";
 
 export type AppSessionJsonValue =
   | string
@@ -66,6 +68,36 @@ export interface AppSessionActionResult {
   session?: AppSessionState | null;
 }
 
+export interface AppRunHealth {
+  state: AppRunHealthState;
+  message: string | null;
+}
+
+export interface AppRunSummary {
+  runId: string;
+  appName: string;
+  displayName: string;
+  pluginName: string;
+  launchType: string;
+  launchUrl: string | null;
+  viewer: AppViewerConfig | null;
+  session: AppSessionState | null;
+  status: string;
+  summary: string | null;
+  startedAt: string;
+  updatedAt: string;
+  lastHeartbeatAt: string | null;
+  supportsBackground: boolean;
+  viewerAttachment: AppRunViewerAttachment;
+  health: AppRunHealth;
+}
+
+export interface AppRunActionResult {
+  success: boolean;
+  message: string;
+  run?: AppRunSummary | null;
+}
+
 export type AppLaunchDiagnosticSeverity = "info" | "warning" | "error";
 
 export interface AppLaunchDiagnostic {
@@ -82,6 +114,7 @@ export interface AppLaunchResult {
   launchUrl: string | null;
   viewer: AppViewerConfig | null;
   session: AppSessionState | null;
+  run: AppRunSummary | null;
   diagnostics?: AppLaunchDiagnostic[];
 }
 
@@ -96,6 +129,7 @@ export interface InstalledAppInfo {
 export interface AppStopResult {
   success: boolean;
   appName: string;
+  runId: string | null;
   stoppedAt: string;
   pluginUninstalled: boolean;
   needsRestart: boolean;

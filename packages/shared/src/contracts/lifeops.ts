@@ -270,10 +270,20 @@ export interface LifeOpsIntervalCadence {
   visibilityLagMinutes?: number;
 }
 
+export const LIFEOPS_WEBSITE_ACCESS_UNLOCK_MODES = [
+  "fixed_duration",
+  "until_manual_lock",
+  "until_callback",
+] as const;
+export type LifeOpsWebsiteAccessUnlockMode =
+  (typeof LIFEOPS_WEBSITE_ACCESS_UNLOCK_MODES)[number];
+
 export interface LifeOpsWebsiteAccessPolicy {
   groupKey: string;
   websites: string[];
-  unlockDurationMinutes: number;
+  unlockMode: LifeOpsWebsiteAccessUnlockMode;
+  unlockDurationMinutes?: number;
+  callbackKey?: string | null;
   reason: string;
 }
 
@@ -523,6 +533,18 @@ export type LifeOpsWorkflowAction =
   | (LifeOpsWorkflowActionBase & {
       kind: "create_task";
       request: CreateLifeOpsDefinitionRequest;
+    })
+  | (LifeOpsWorkflowActionBase & {
+      kind: "relock_website_access";
+      request: {
+        groupKey: string;
+      };
+    })
+  | (LifeOpsWorkflowActionBase & {
+      kind: "resolve_website_access_callback";
+      request: {
+        callbackKey: string;
+      };
     })
   | (LifeOpsWorkflowActionBase & {
       kind: "get_calendar_feed";
@@ -1125,6 +1147,14 @@ export interface AcknowledgeLifeOpsReminderRequest {
   ownerId: string;
   acknowledgedAt?: string;
   note?: string;
+}
+
+export interface RelockLifeOpsWebsiteAccessRequest {
+  groupKey: string;
+}
+
+export interface ResolveLifeOpsWebsiteAccessCallbackRequest {
+  callbackKey: string;
 }
 
 export interface CreateLifeOpsWorkflowRequest {

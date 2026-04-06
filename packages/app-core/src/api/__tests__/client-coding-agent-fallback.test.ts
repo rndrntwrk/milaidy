@@ -9,6 +9,7 @@ import {
   MiladyClient,
   type RawPtySession,
   mapPtySessionsToCodingAgentSessions,
+  mapTaskThreadsToCodingAgentSessions,
 } from "../client";
 
 describe("mapPtySessionsToCodingAgentSessions", () => {
@@ -143,6 +144,67 @@ describe("MiladyClient.listCodingAgentScratchWorkspaces", () => {
     expect(warnSpy).toHaveBeenCalledWith(
       "[api-client] Failed to list coding agent scratch workspaces:",
       expect.objectContaining({ message: "network down" }),
+    );
+  });
+});
+
+describe("mapTaskThreadsToCodingAgentSessions", () => {
+  it("projects persisted task threads into visible coordinator sessions", () => {
+    const result = mapTaskThreadsToCodingAgentSessions([
+      {
+        id: "thread-1",
+        title: "Fix coordinator persistence",
+        kind: "coding",
+        status: "interrupted",
+        originalRequest: "Persist task state across restarts",
+        summary: "Agent was interrupted during restart",
+        sessionCount: 1,
+        activeSessionCount: 0,
+        latestSessionId: "session-1",
+        latestSessionLabel: "claude-worker",
+        latestWorkdir: "/tmp/work",
+        latestRepo: "https://github.com/example/repo",
+        latestActivityAt: Date.now(),
+        decisionCount: 4,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+      {
+        id: "thread-2",
+        title: "Verify screenshots",
+        kind: "research",
+        status: "validating",
+        originalRequest: "Validate screenshot evidence",
+        summary: "",
+        sessionCount: 1,
+        activeSessionCount: 1,
+        latestSessionId: null,
+        latestSessionLabel: null,
+        latestWorkdir: null,
+        latestRepo: "/repo",
+        latestActivityAt: Date.now(),
+        decisionCount: 2,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    ]);
+
+    expect(result).toHaveLength(2);
+    expect(result[0]).toEqual(
+      expect.objectContaining({
+        sessionId: "session-1",
+        label: "Fix coordinator persistence",
+        status: "blocked",
+        lastActivity: "Interrupted - reopen or resume this task",
+        workdir: "/tmp/work",
+      }),
+    );
+    expect(result[1]).toEqual(
+      expect.objectContaining({
+        sessionId: "thread-2",
+        status: "tool_running",
+        workdir: "/repo",
+      }),
     );
   });
 });

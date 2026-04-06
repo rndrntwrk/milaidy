@@ -86,41 +86,53 @@ export async function handleWebsiteBlockerRoutes(
     }
 
     const result = await startSelfControlBlock(parsed.request);
-    json(
-      res,
-      result.success
-        ? {
-            success: true,
-            endsAt: result.endsAt,
-            request: parsed.request,
-          }
-        : {
-            success: false,
-            error: result.error,
-            status: result.status,
-          },
-      result.success ? 200 : 409,
-    );
+    if (result.success === true) {
+      json(
+        res,
+        {
+          success: true,
+          endsAt: result.endsAt,
+          request: parsed.request,
+        },
+        200,
+      );
+    } else {
+      json(
+        res,
+        {
+          success: false,
+          error: result.error,
+          status: result.status,
+        },
+        409,
+      );
+    }
     return true;
   }
 
   if (method === "DELETE") {
     const result = await stopSelfControlBlock();
-    json(
-      res,
-      result.success
-        ? {
-            success: true,
-            removed: result.removed,
-            status: result.status,
-          }
-        : {
-            success: false,
-            error: result.error,
-            status: result.status,
-          },
-      result.success ? 200 : 409,
-    );
+    if (result.success === true) {
+      json(
+        res,
+        {
+          success: true,
+          removed: result.removed,
+          status: result.status,
+        },
+        200,
+      );
+    } else {
+      json(
+        res,
+        {
+          success: false,
+          error: result.error,
+          status: result.status,
+        },
+        409,
+      );
+    }
     return true;
   }
 

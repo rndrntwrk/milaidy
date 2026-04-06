@@ -2,6 +2,7 @@ import type { Dispatch, SetStateAction } from "react";
 import type {
   AgentStatus,
   AppSessionState,
+  AppRunSummary,
   AppViewerAuthMessage,
   BscTradeExecuteRequest,
   BscTradeExecuteResponse,
@@ -565,6 +566,8 @@ export interface AppState {
   chatPendingImages: ImageAttachment[];
 
   // Game
+  appRuns: AppRunSummary[];
+  activeGameRunId: string;
   activeGameApp: string;
   activeGameDisplayName: string;
   activeGameViewerUrl: string;
@@ -589,7 +592,7 @@ export interface AppState {
   } | null;
 
   // Sub-tabs
-  appsSubTab: "browse" | "games";
+  appsSubTab: "browse" | "running" | "games";
   agentSubTab: "character" | "inventory" | "knowledge";
   pluginsSubTab: "features" | "connectors" | "plugins";
   databaseSubTab: "tables" | "media" | "vectors";

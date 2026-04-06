@@ -303,7 +303,7 @@ export const blockWebsitesAction: Action = {
     }
 
     const result = await startSelfControlBlock(parsed.request);
-    if (!result.success) {
+    if (result.success === false) {
       return {
         success: false,
         text: result.error,
@@ -532,7 +532,7 @@ export const unblockWebsitesAction: Action = {
     }
 
     const result = await stopSelfControlBlock();
-    if (!result.success) {
+    if (result.success === false) {
       return {
         success: false,
         text: result.error,

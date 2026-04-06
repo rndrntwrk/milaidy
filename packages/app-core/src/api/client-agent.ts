@@ -64,7 +64,10 @@ import type {
   UpdateStatus,
   UpdateTriggerRequest,
 } from "./client-types";
-import { mapPtySessionsToCodingAgentSessions } from "./client-types";
+import {
+  mapPtySessionsToCodingAgentSessions,
+  mapTaskThreadsToCodingAgentSessions,
+} from "./client-types";
 
 // ---------------------------------------------------------------------------
 // Module-level helpers
@@ -1643,6 +1646,17 @@ MiladyClient.prototype.getCodingAgentStatus = async function (
     const status = await this.fetch<CodingAgentStatus>(
       "/api/coding-agents/coordinator/status",
     );
+    if (
+      status &&
+      (!status.tasks || status.tasks.length === 0) &&
+      Array.isArray(status.taskThreads) &&
+      status.taskThreads.length > 0
+    ) {
+      status.tasks = mapTaskThreadsToCodingAgentSessions(
+        status.taskThreads,
+      ).filter((task) => task.status !== "completed" && task.status !== "error");
+      status.taskCount = status.tasks.length;
+    }
     if (status && (!status.tasks || status.tasks.length === 0)) {
       try {
         const ptySessions =

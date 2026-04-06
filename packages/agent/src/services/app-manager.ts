@@ -15,6 +15,8 @@ import * as path from "node:path";
 import { logger } from "@elizaos/core";
 import type { IAgentRuntime } from "@elizaos/core";
 import {
+  AppRunActionResult,
+  AppRunSummary,
   hasAppInterface,
   packageNameToAppDisplayName,
   packageNameToAppRouteSlug,
@@ -36,6 +38,10 @@ import {
   importAppPlugin,
   importAppRouteModule,
 } from "./app-package-modules";
+import {
+  readAppRunStore,
+  writeAppRunStore,
+} from "./app-run-store";
 import { generateWalletKeys, getWalletAddressesWithSteward } from "../api/wallet";
 import { getPluginInfo, getRegistryPlugins } from "./registry-client";
 import { resolveAppOverride } from "./registry-client-app-meta";
@@ -44,6 +50,8 @@ import { scoreEntries, toSearchResults } from "./registry-client-queries.js";
 const LOCAL_PLUGINS_DIR = "plugins";
 
 export type {
+  AppRunActionResult,
+  AppRunSummary,
   AppLaunchResult,
   AppStopResult,
   AppViewerAuthMessage,
@@ -100,12 +108,17 @@ interface RegistryAppPlugin extends RegistryPluginInfo {
 }
 
 interface ActiveAppSession {
+  runId: string;
   appName: string;
   pluginName: string;
   launchType: string;
   launchUrl: string | null;
   viewerUrl: string | null;
   startedAt: string;
+}
+
+interface AppManagerOptions {
+  stateDir?: string;
 }
 
 interface HyperscapeWalletCandidate {
@@ -1447,8 +1460,165 @@ async function ensureHyperscapeServiceLoaded(
   }
 }
 
+function deriveRunHealth(
+  status: string,
+  summary: string | null,
+): AppRunSummary["health"] {
+  const normalized = status.trim().toLowerCase();
+
+  if (
+    normalized === "running" ||
+    normalized === "connected" ||
+    normalized === "active"
+  ) {
+    return {
+      state: "healthy",
+      message: summary,
+    };
+  }
+
+  if (
+    normalized === "stopped" ||
+    normalized === "offline" ||
+    normalized === "error" ||
+    normalized === "failed"
+  ) {
+    return {
+      state: "offline",
+      message: summary,
+    };
+  }
+
+  return {
+    state: "degraded",
+    message: summary,
+  };
+}
+
+function buildRunSummary(input: {
+  runId: string;
+  appName: string;
+  displayName: string;
+  pluginName: string;
+  launchType: string;
+  launchUrl: string | null;
+  viewer: AppViewerConfig | null;
+  session: AppSessionState | null;
+  startedAt?: string;
+  viewerAttachment?: AppRunSummary["viewerAttachment"];
+}): AppRunSummary {
+  const now = new Date().toISOString();
+  const status = input.session?.status ?? (input.viewer ? "running" : "launching");
+  const summary = input.session?.summary ?? null;
+
+  return {
+    runId: input.runId,
+    appName: input.appName,
+    displayName: input.displayName,
+    pluginName: input.pluginName,
+    launchType: input.launchType,
+    launchUrl: input.launchUrl,
+    viewer: input.viewer,
+    session: input.session,
+    status,
+    summary,
+    startedAt: input.startedAt ?? now,
+    updatedAt: now,
+    lastHeartbeatAt: input.session ? now : null,
+    supportsBackground: true,
+    viewerAttachment:
+      input.viewerAttachment ?? (input.viewer ? "attached" : "unavailable"),
+    health: deriveRunHealth(status, summary),
+  };
+}
+
+function updateRunSummary(
+  run: AppRunSummary,
+  patch: Partial<AppRunSummary>,
+): AppRunSummary {
+  const updatedAt = new Date().toISOString();
+  const next = {
+    ...run,
+    ...patch,
+    updatedAt,
+  } satisfies AppRunSummary;
+  const status = next.session?.status ?? next.status;
+  const summary = next.session?.summary ?? next.summary;
+  return {
+    ...next,
+    status,
+    summary,
+    lastHeartbeatAt: next.session ? updatedAt : next.lastHeartbeatAt,
+    health: deriveRunHealth(status, summary),
+  };
+}
+
+function sameRunIdentity(
+  run: AppRunSummary,
+  appName: string,
+  session: AppSessionState | null,
+  viewer: AppViewerConfig | null,
+): boolean {
+  if (run.appName !== appName) return false;
+  if (session?.sessionId && run.session?.sessionId === session.sessionId) {
+    return true;
+  }
+  return Boolean(viewer?.url && run.viewer?.url === viewer.url);
+}
+
 export class AppManager {
   private readonly activeSessions = new Map<string, ActiveAppSession>();
+  private readonly stateDir?: string;
+  private appRuns = new Map<string, AppRunSummary>();
+
+  constructor(options: AppManagerOptions = {}) {
+    this.stateDir = options.stateDir;
+    for (const run of readAppRunStore(this.stateDir)) {
+      this.appRuns.set(run.runId, run);
+    }
+  }
+
+  private persistRuns(): void {
+    writeAppRunStore(Array.from(this.appRuns.values()), this.stateDir);
+  }
+
+  private listRunsSorted(): AppRunSummary[] {
+    return [...this.appRuns.values()].sort((a, b) =>
+      b.updatedAt.localeCompare(a.updatedAt),
+    );
+  }
+
+  private storeRun(run: AppRunSummary): AppRunSummary {
+    this.appRuns.set(run.runId, run);
+    this.persistRuns();
+    return run;
+  }
+
+  private removeRun(runId: string): AppRunSummary | null {
+    const run = this.appRuns.get(runId) ?? null;
+    if (!run) return null;
+    this.appRuns.delete(runId);
+    this.activeSessions.delete(runId);
+    this.persistRuns();
+    return run;
+  }
+
+  private findRun(runId: string): AppRunSummary | null {
+    return this.appRuns.get(runId) ?? null;
+  }
+
+  private findMatchingRun(
+    appName: string,
+    session: AppSessionState | null,
+    viewer: AppViewerConfig | null,
+  ): AppRunSummary | null {
+    for (const run of this.listRunsSorted()) {
+      if (sameRunIdentity(run, appName, session, viewer)) {
+        return run;
+      }
+    }
+    return null;
+  }
 
   async listAvailable(
     pluginManager: PluginManagerLike,
@@ -1518,6 +1688,58 @@ export class AppManager {
     }
 
     return appInfo ? flattenAppInfo(appInfo) : null;
+  }
+
+  async listRuns(): Promise<AppRunSummary[]> {
+    return this.listRunsSorted();
+  }
+
+  async getRun(runId: string): Promise<AppRunSummary | null> {
+    return this.findRun(runId);
+  }
+
+  async attachRun(runId: string): Promise<AppRunActionResult> {
+    const run = this.findRun(runId);
+    if (!run) {
+      return {
+        success: false,
+        message: `App run "${runId}" was not found.`,
+      };
+    }
+
+    const updated = this.storeRun(
+      updateRunSummary(run, {
+        viewerAttachment: run.viewer ? "attached" : "unavailable",
+      }),
+    );
+
+    return {
+      success: true,
+      message: `${updated.displayName} attached.`,
+      run: updated,
+    };
+  }
+
+  async detachRun(runId: string): Promise<AppRunActionResult> {
+    const run = this.findRun(runId);
+    if (!run) {
+      return {
+        success: false,
+        message: `App run "${runId}" was not found.`,
+      };
+    }
+
+    const updated = this.storeRun(
+      updateRunSummary(run, {
+        viewerAttachment: run.viewer ? "detached" : "unavailable",
+      }),
+    );
+
+    return {
+      success: true,
+      message: `${updated.displayName} detached.`,
+      run: updated,
+    };
   }
 
   /**
@@ -1693,13 +1915,38 @@ export class AppManager {
       ...launchPreparationDiagnostics,
       ...collectLaunchDiagnostics(appInfo, viewer, session, _runtime ?? null),
     ];
-    this.activeSessions.set(name, {
+    const existingRun = this.findMatchingRun(name, session, viewer);
+    const run = this.storeRun(
+      existingRun
+        ? updateRunSummary(existingRun, {
+            displayName: appInfo.displayName ?? appInfo.name,
+            pluginName,
+            launchType: appInfo.launchType ?? "connect",
+            launchUrl,
+            viewer,
+            session,
+            viewerAttachment: viewer ? "attached" : "unavailable",
+          })
+        : buildRunSummary({
+            runId: crypto.randomUUID(),
+            appName: name,
+            displayName: appInfo.displayName ?? appInfo.name,
+            pluginName,
+            launchType: appInfo.launchType ?? "connect",
+            launchUrl,
+            viewer,
+            session,
+          }),
+    );
+
+    this.activeSessions.set(run.runId, {
+      runId: run.runId,
       appName: name,
       pluginName,
       launchType: appInfo.launchType ?? "connect",
       launchUrl,
       viewerUrl: viewer?.url ?? null,
-      startedAt: new Date().toISOString(),
+      startedAt: run.startedAt,
     });
 
     return {
@@ -1710,6 +1957,7 @@ export class AppManager {
       launchUrl,
       viewer,
       session,
+      run,
       diagnostics,
     };
   }
@@ -1717,60 +1965,74 @@ export class AppManager {
   async stop(
     pluginManager: PluginManagerLike,
     name: string,
+    runId?: string,
   ): Promise<AppStopResult> {
-    const appInfo = (await pluginManager.getRegistryPlugin(
-      name,
-    )) as RegistryAppPlugin | null;
-    if (!appInfo) {
-      throw new Error(`App "${name}" not found in the registry.`);
+    const stoppedAt = new Date().toISOString();
+
+    if (runId) {
+      const removedRun = this.removeRun(runId);
+      if (!removedRun) {
+        return {
+          success: false,
+          appName: name,
+          runId,
+          stoppedAt,
+          pluginUninstalled: false,
+          needsRestart: false,
+          stopScope: "no-op",
+          message: `App run "${runId}" was not found.`,
+        };
+      }
+
+      return {
+        success: true,
+        appName: removedRun.appName,
+        runId: removedRun.runId,
+        stoppedAt,
+        pluginUninstalled: false,
+        needsRestart: false,
+        stopScope: "viewer-session",
+        message: `${removedRun.displayName} stopped.`,
+      };
     }
 
-    const hadSession = this.activeSessions.delete(name);
-    const pluginName = appInfo.runtimePlugin ?? resolvePluginPackageName(appInfo);
-    const installed = await pluginManager.listInstalledPlugins();
-    const isPluginInstalled = installed.some(
-      (plugin) => plugin.name === pluginName,
-    );
-    if (!hadSession && !isPluginInstalled) {
+    const runsForApp = this.listRunsSorted().filter((run) => run.appName === name);
+    if (runsForApp.length === 0) {
+      const appInfo = (await pluginManager.getRegistryPlugin(
+        name,
+      )) as RegistryAppPlugin | null;
+      if (!appInfo) {
+        throw new Error(`App "${name}" not found in the registry.`);
+      }
+
       return {
         success: false,
         appName: name,
-        stoppedAt: new Date().toISOString(),
+        runId: null,
+        stoppedAt,
         pluginUninstalled: false,
         needsRestart: false,
         stopScope: "no-op",
-        message: `No active session or installed plugin found for "${name}".`,
+        message: `No active app run found for "${name}".`,
       };
     }
 
-    if (isPluginInstalled) {
-      const uninstallResult = await pluginManager.uninstallPlugin(pluginName);
-      if (!uninstallResult.success) {
-        throw new Error(
-          `Failed to stop "${name}": ${uninstallResult.error ?? "plugin uninstall failed"}`,
-        );
-      }
-      return {
-        success: true,
-        appName: name,
-        stoppedAt: new Date().toISOString(),
-        pluginUninstalled: true,
-        needsRestart: uninstallResult.requiresRestart,
-        stopScope: "plugin-uninstalled",
-        message: uninstallResult.requiresRestart
-          ? `${name} disconnected and plugin uninstalled. Agent restart required.`
-          : `${name} disconnected and plugin uninstalled.`,
-      };
+    for (const run of runsForApp) {
+      this.removeRun(run.runId);
     }
 
     return {
       success: true,
       appName: name,
-      stoppedAt: new Date().toISOString(),
+      runId: null,
+      stoppedAt,
       pluginUninstalled: false,
       needsRestart: false,
       stopScope: "viewer-session",
-      message: `${name} viewer session stopped.`,
+      message:
+        runsForApp.length === 1
+          ? `${runsForApp[0]!.displayName} stopped.`
+          : `${runsForApp.length} app runs stopped for "${name}".`,
     };
   }
 

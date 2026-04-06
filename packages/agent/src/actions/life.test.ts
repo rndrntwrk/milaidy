@@ -245,6 +245,57 @@ describe("lifeAction", () => {
     expect(result).toMatchObject({ success: true, text: expect.stringContaining("Brush teeth") });
   });
 
+  it("seeds brushing when the user only gives the intent", async () => {
+    mockListGoals.mockResolvedValue([]);
+    mockCreateDefinition.mockResolvedValue({
+      definition: { id: "d-seed", title: "Brush teeth", cadence: { kind: "daily", windows: ["morning", "night"] } },
+      reminderPlan: { id: "rp-1" },
+    });
+
+    const result = await invoke("help me brush my teeth twice a day, morning and night", {
+      action: "create",
+    });
+
+    expect(mockCreateDefinition).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Brush teeth",
+        kind: "habit",
+        cadence: expect.objectContaining({
+          kind: "daily",
+          windows: ["morning", "night"],
+        }),
+        reminderPlan: expect.objectContaining({
+          steps: [expect.objectContaining({ channel: "in_app" })],
+        }),
+      }),
+    );
+    expect(result).toMatchObject({ success: true, text: expect.stringContaining("Brush teeth") });
+  });
+
+  it("seeds water reminders as interval cadence", async () => {
+    mockListGoals.mockResolvedValue([]);
+    mockCreateDefinition.mockResolvedValue({
+      definition: { id: "d-water", title: "Drink water", cadence: { kind: "interval", everyMinutes: 180, windows: ["morning", "afternoon", "evening"] } },
+      reminderPlan: { id: "rp-water" },
+    });
+
+    const result = await invoke("remind me to drink water throughout the day", {
+      action: "create",
+    });
+
+    expect(mockCreateDefinition).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Drink water",
+        cadence: expect.objectContaining({
+          kind: "interval",
+          everyMinutes: 180,
+          maxOccurrencesPerDay: 4,
+        }),
+      }),
+    );
+    expect(result).toMatchObject({ success: true, text: expect.stringContaining("Drink water") });
+  });
+
   it("requires title for create", async () => {
     const result = await invoke("create a new habit", { action: "create", details: { cadence: { kind: "daily", windows: ["morning"] } } });
     expect(result).toMatchObject({ success: false, text: expect.stringContaining("name") });
@@ -321,6 +372,29 @@ describe("lifeAction", () => {
     const result = await invoke("I brushed my teeth", { action: "complete", target: "Brush teeth" });
     expect(mockCompleteOccurrence).toHaveBeenCalledWith("o1", { note: undefined });
     expect(result).toMatchObject({ success: true, text: expect.stringContaining("done") });
+  });
+
+  it("completes a seeded routine when the model only sends the intent", async () => {
+    mockGetOverview.mockResolvedValue({
+      owner: {
+        occurrences: [
+          { id: "o-seed", title: "Brush teeth", state: "visible", domain: "user_lifeops" },
+        ],
+      },
+      agentOps: { occurrences: [] },
+    });
+    mockCompleteOccurrence.mockResolvedValue({
+      id: "o-seed",
+      title: "Brush teeth",
+      state: "completed",
+    });
+
+    const result = await invoke("I brushed my teeth", { action: "complete" });
+
+    expect(mockCompleteOccurrence).toHaveBeenCalledWith("o-seed", {
+      note: undefined,
+    });
+    expect(result).toMatchObject({ success: true });
   });
 
   it("completes with a note", async () => {

@@ -38,6 +38,8 @@ export interface SelfControlStatus {
   hostsFilePath: string | null;
   endsAt: string | null;
   websites: string[];
+  managedBy: string | null;
+  metadata: Record<string, unknown> | null;
   canUnblockEarly: boolean;
   requiresElevation: boolean;
   engine: "hosts-file";
@@ -59,6 +61,7 @@ export interface SelfControlPermissionState extends PermissionState {
 export interface SelfControlBlockRequest {
   websites: string[];
   durationMinutes: number | null;
+  metadata?: Record<string, unknown> | null;
 }
 
 export interface SelfControlBlockMetadata {
@@ -66,6 +69,8 @@ export interface SelfControlBlockMetadata {
   startedAt: string;
   endsAt: string | null;
   websites: string[];
+  managedBy: string | null;
+  metadata: Record<string, unknown> | null;
 }
 
 type StatusCacheEntry = {
@@ -134,6 +139,8 @@ export async function reconcileSelfControlBlockState(
       hostsFilePath: null,
       endsAt: null,
       websites: [],
+      managedBy: null,
+      metadata: null,
       canUnblockEarly: false,
       requiresElevation: false,
       engine: "hosts-file",
@@ -154,6 +161,8 @@ export async function reconcileSelfControlBlockState(
       hostsFilePath,
       endsAt: null,
       websites: [],
+      managedBy: null,
+      metadata: null,
       canUnblockEarly: false,
       requiresElevation: false,
       engine: "hosts-file",
@@ -181,6 +190,8 @@ export async function reconcileSelfControlBlockState(
       hostsFilePath,
       endsAt: null,
       websites: [],
+      managedBy: null,
+      metadata: null,
       canUnblockEarly: writable,
       requiresElevation,
       engine: "hosts-file",
@@ -204,6 +215,8 @@ export async function reconcileSelfControlBlockState(
           hostsFilePath,
           endsAt: null,
           websites: [],
+          managedBy: null,
+          metadata: null,
           canUnblockEarly: true,
           requiresElevation: false,
           engine: "hosts-file",
@@ -219,6 +232,8 @@ export async function reconcileSelfControlBlockState(
         hostsFilePath,
         endsAt: block.endsAt,
         websites: block.websites,
+        managedBy: block.managedBy,
+        metadata: block.metadata,
         canUnblockEarly: false,
         requiresElevation: true,
         engine: "hosts-file",
@@ -240,6 +255,8 @@ export async function reconcileSelfControlBlockState(
     hostsFilePath,
     endsAt: block.endsAt,
     websites: block.websites,
+    managedBy: block.managedBy,
+    metadata: block.metadata,
     canUnblockEarly: writable,
     requiresElevation,
     engine: "hosts-file",
@@ -381,7 +398,7 @@ export async function startSelfControlBlock(
     }
 > {
   const normalizedRequest = normalizeSelfControlBlockRequest(request);
-  if (!normalizedRequest.success) {
+  if (normalizedRequest.success === false) {
     return {
       success: false,
       error: normalizedRequest.error,
@@ -428,6 +445,17 @@ export async function startSelfControlBlock(
             Date.now() + normalizedRequest.request.durationMinutes * 60_000,
           ).toISOString(),
     websites: normalizedRequest.request.websites,
+    managedBy:
+      typeof normalizedRequest.request.metadata?.managedBy === "string" &&
+      normalizedRequest.request.metadata.managedBy.trim().length > 0
+        ? normalizedRequest.request.metadata.managedBy.trim()
+        : null,
+    metadata:
+      normalizedRequest.request.metadata &&
+      typeof normalizedRequest.request.metadata === "object" &&
+      !Array.isArray(normalizedRequest.request.metadata)
+        ? { ...normalizedRequest.request.metadata }
+        : null,
   };
 
   try {
@@ -533,6 +561,8 @@ export async function stopSelfControlBlock(
       active: false,
       endsAt: null,
       websites: [],
+      managedBy: null,
+      metadata: null,
     },
   };
 }
@@ -728,6 +758,12 @@ function normalizeSelfControlBlockRequest(
     request: {
       websites,
       durationMinutes,
+      metadata:
+        request.metadata &&
+        typeof request.metadata === "object" &&
+        !Array.isArray(request.metadata)
+          ? { ...request.metadata }
+          : null,
     },
   };
 }
@@ -745,6 +781,8 @@ async function clearManagedSelfControlBlock(
 function extractManagedSelfControlBlock(content: string): {
   endsAt: string | null;
   websites: string[];
+  managedBy: string | null;
+  metadata: Record<string, unknown> | null;
 } | null {
   const pattern = new RegExp(
     `${escapeRegExp(BLOCK_START_MARKER)}[\\s\\S]*?${escapeRegExp(BLOCK_END_MARKER)}`,
@@ -763,6 +801,16 @@ function extractManagedSelfControlBlock(content: string): {
   return {
     endsAt: metadata?.endsAt ?? null,
     websites,
+    managedBy:
+      metadata?.managedBy && typeof metadata.managedBy === "string"
+        ? metadata.managedBy
+        : null,
+    metadata:
+      metadata?.metadata &&
+      typeof metadata.metadata === "object" &&
+      !Array.isArray(metadata.metadata)
+        ? metadata.metadata
+        : null,
   };
 }
 
@@ -795,6 +843,16 @@ function parseManagedBlockMetadata(
           ? normalizeIsoDate(parsed.endsAt)
           : null,
       websites,
+      managedBy:
+        typeof parsed.managedBy === "string" && parsed.managedBy.trim().length > 0
+          ? parsed.managedBy.trim()
+          : null,
+      metadata:
+        parsed.metadata &&
+        typeof parsed.metadata === "object" &&
+        !Array.isArray(parsed.metadata)
+          ? (parsed.metadata as Record<string, unknown>)
+          : null,
     };
   } catch {
     return null;
