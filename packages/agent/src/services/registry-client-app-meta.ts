@@ -79,22 +79,6 @@ const LOCAL_APP_OVERRIDES: Readonly<Record<string, LocalAppOverride>> = {
       sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
     },
   },
-  "@elizaos/app-agent-town": {
-    launchType: "url",
-    launchUrl: "http://localhost:5173/ai-town/index.html",
-    viewer: {
-      url: "http://localhost:5173/ai-town/index.html",
-      sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
-    },
-  },
-  "@elizaos/app-dungeons": {
-    launchType: "local",
-    launchUrl: "http://localhost:3345",
-    viewer: {
-      url: "http://localhost:3345",
-      sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
-    },
-  },
 };
 
 export function sanitizeSandbox(rawSandbox?: string): string {
