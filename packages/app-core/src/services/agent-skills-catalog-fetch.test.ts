@@ -51,20 +51,20 @@ describe("plugin-agent-skills catalog fetch patch", () => {
 
     expect(first).toEqual([]);
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(logger.info).toHaveBeenCalledTimes(1);
-    expect(logger.info).toHaveBeenCalledWith(
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+    expect(logger.warn).toHaveBeenCalledWith(
       expect.stringContaining(
-        "AgentSkills: Catalog rate limited (429); backing off for 120s",
+        "AgentSkills: Catalog fetch failed (will retry after cooldown): Error: Catalog fetch failed: 429",
       ),
     );
-    expect(logger.warn).not.toHaveBeenCalled();
+    expect(logger.info).not.toHaveBeenCalled();
 
     // Second call within cooldown should not trigger another fetch
     await expect(service.getCatalog({ forceRefresh: true })).resolves.toEqual(
       [],
     );
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(logger.info).toHaveBeenCalledTimes(1);
-    expect(logger.warn).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+    expect(logger.info).not.toHaveBeenCalled();
   });
 });

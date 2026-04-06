@@ -30,6 +30,23 @@ export const ELIZA_BRANCH = "develop";
 export const ELIZA_REQUIRED_FILES = ["package.json"];
 export const ELIZA_BUILD_STEPS = [
   {
+    // Fresh CI checkouts do not track generated protobuf types for @elizaos/core.
+    // Build the package once so src/types/generated exists before root typecheck/tests.
+    check: path.join(
+      "packages",
+      "typescript",
+      "src",
+      "types",
+      "generated",
+      "eliza",
+      "v1",
+      "agent_pb.ts",
+    ),
+    cwd: path.join("packages", "typescript"),
+    args: ["run", "build"],
+    label: "@elizaos/core",
+  },
+  {
     check: path.join("packages", "prompts", "dist", "typescript", "index.ts"),
     cwd: path.join("packages", "prompts"),
     args: ["run", "build:typescript"],

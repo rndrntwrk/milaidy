@@ -79,7 +79,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          # Windows cannot checkout the optional plugin-openrouter submodule
+          # because that repo currently contains POSIX-only path names.
+          # Postinstall only needs the local eliza submodule here.
+          submodules: ${{ matrix.os == 'windows-latest' && 'false' || 'recursive' }}
 
       - name: Setup Node.js
         uses: useblacksmith/setup-node@v5
@@ -105,7 +108,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          # Windows cannot checkout the optional plugin-openrouter submodule
+          # because that repo currently contains POSIX-only path names.
+          # Postinstall only needs the local eliza submodule here.
+          submodules: ${{ matrix.os == 'windows-latest' && 'false' || 'recursive' }}
 
       - name: Setup Node.js
         uses: useblacksmith/setup-node@v5

@@ -1125,6 +1125,20 @@ describe("App session launch metadata", () => {
     process.env.HYPERSCAPE_CLIENT_URL = "http://localhost:3333";
     global.fetch = vi.fn().mockImplementation((input: string | URL) => {
       const url = String(input);
+      if (
+        url.includes(
+          "raw.githubusercontent.com/elizaos-plugins/registry/next/generated-registry.json",
+        )
+      ) {
+        return Promise.resolve(jsonResponse({ registry: {} }));
+      }
+      if (
+        url.includes(
+          "raw.githubusercontent.com/elizaos-plugins/registry/next/index.json",
+        )
+      ) {
+        return Promise.resolve(jsonResponse({}));
+      }
       if (url.endsWith("/api/embedded-agents")) {
         return Promise.resolve(
           jsonResponse({
@@ -1181,11 +1195,14 @@ describe("App session launch metadata", () => {
     );
 
     expect(result.viewer?.postMessageAuth).toBe(false);
-    expect(result.viewer?.embedParams).toEqual({
-      embedded: "true",
-      mode: "spectator",
-      surface: "agent-control",
-    });
+    expect(result.viewer?.embedParams).toEqual(
+      expect.objectContaining({
+        embedded: "true",
+        mode: "spectator",
+        surface: "agent-control",
+      }),
+    );
+    expect(result.viewer?.embedParams?.followEntity).toBeUndefined();
     expect(result.session).toBeNull();
     expect(result.diagnostics).toEqual(
       expect.arrayContaining([

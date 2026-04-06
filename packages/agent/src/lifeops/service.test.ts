@@ -197,6 +197,63 @@ describe("LifeOpsService", () => {
     });
   });
 
+  it("blocks follow-up reminder steps when escalation is disabled by policy", async () => {
+    const runtime = createRuntime();
+    const service = new LifeOpsService(runtime);
+    (service as unknown as { repository: Record<string, unknown> }).repository = {
+      listChannelPolicies: vi.fn().mockResolvedValue([
+        {
+          id: "policy-1",
+          agentId: "agent-lifeops",
+          channelType: "discord",
+          channelRef: "dm-1",
+          privacyClass: "private",
+          allowReminders: true,
+          allowEscalation: false,
+          allowPosts: false,
+          requireConfirmationForActions: true,
+          metadata: {
+            source: "discord",
+            entityId: "owner-1",
+            channelId: "dm-1",
+          },
+          createdAt: "2026-04-06T00:00:00.000Z",
+          updatedAt: "2026-04-06T00:00:00.000Z",
+        },
+      ]),
+      createReminderAttempt: vi.fn().mockResolvedValue(undefined),
+    };
+    (service as unknown as { recordReminderAudit: ReturnType<typeof vi.fn> })
+      .recordReminderAudit = vi.fn().mockResolvedValue(undefined);
+
+    const attempt = await (
+      service as unknown as {
+        dispatchReminderAttempt: (args: Record<string, unknown>) => Promise<Record<string, unknown>>;
+      }
+    ).dispatchReminderAttempt({
+      plan: { id: "plan-1" },
+      ownerType: "occurrence",
+      ownerId: "occ-1",
+      occurrenceId: "occ-1",
+      subjectType: "owner",
+      title: "Stretch",
+      channel: "discord",
+      stepIndex: 1,
+      scheduledFor: "2026-04-06T12:05:00.000Z",
+      dueAt: null,
+      urgency: "high",
+      quietHours: {},
+      acknowledged: false,
+      attemptedAt: "2026-04-06T12:05:00.000Z",
+    });
+
+    expect(runtime.sendMessageToTarget).not.toHaveBeenCalled();
+    expect(attempt).toMatchObject({
+      outcome: "blocked_policy",
+      channel: "discord",
+    });
+  });
+
   it("selects the currently active platform for reminder escalation", async () => {
     configMocks.loadElizaConfig.mockReturnValue({
       agents: {

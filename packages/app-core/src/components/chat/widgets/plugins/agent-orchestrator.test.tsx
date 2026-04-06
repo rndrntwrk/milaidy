@@ -312,7 +312,7 @@ describe("agent orchestrator tasks widget", () => {
     );
 
     await act(async () => {
-      findButtonByText(tree!.root, "Archive").props.onClick();
+      await findButtonByText(tree!.root, "Archive").props.onClick();
     });
 
     await waitFor(

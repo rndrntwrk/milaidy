@@ -124,9 +124,7 @@ function formatPnL(value: number): string {
   return `${sign}$${value.toFixed(2)}`;
 }
 
-function asRecord(
-  value: unknown,
-): Record<string, unknown> | null {
+function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object"
     ? (value as Record<string, unknown>)
     : null;
@@ -155,9 +153,7 @@ function summarizeActivity(item: BabylonActivityItem): string {
   }
 }
 
-function extractTeamDashboard(
-  value: unknown,
-): BabylonTeamDashboard {
+function extractTeamDashboard(value: unknown): BabylonTeamDashboard {
   const data = asRecord(value);
   return {
     agents: Array.isArray(data?.agents)
@@ -180,18 +176,15 @@ function extractTeamConversations(
   };
 }
 
-function extractAgentSummary(
-  value: unknown,
-): BabylonAgentSummaryEnvelope {
+function extractAgentSummary(value: unknown): BabylonAgentSummaryEnvelope {
   const data = asRecord(value);
   return {
-    agent: (asRecord(data?.agent) ?? null) as unknown as BabylonAgentSummaryEnvelope["agent"],
-    portfolio: (asRecord(
-      data?.portfolio,
-    ) ?? null) as unknown as BabylonAgentSummaryEnvelope["portfolio"],
-    positions: (asRecord(
-      data?.positions,
-    ) ?? null) as unknown as BabylonAgentSummaryEnvelope["positions"],
+    agent: (asRecord(data?.agent) ??
+      null) as unknown as BabylonAgentSummaryEnvelope["agent"],
+    portfolio: (asRecord(data?.portfolio) ??
+      null) as unknown as BabylonAgentSummaryEnvelope["portfolio"],
+    positions: (asRecord(data?.positions) ??
+      null) as unknown as BabylonAgentSummaryEnvelope["positions"],
   };
 }
 
@@ -340,7 +333,9 @@ function AgentStatusHeader({
   if (!agent) {
     return (
       <div className="border-b border-border px-3 py-3">
-        <div className="text-xs italic text-muted">Connecting to Babylon...</div>
+        <div className="text-xs italic text-muted">
+          Connecting to Babylon...
+        </div>
       </div>
     );
   }
@@ -518,9 +513,7 @@ function TeamAgentsPanel({
 
       <Section title="Agents">
         {agents.length === 0 ? (
-          <div className="text-xs italic text-muted">
-            No team agents found.
-          </div>
+          <div className="text-xs italic text-muted">No team agents found.</div>
         ) : (
           <div className="space-y-2">
             {agents.map((agent) => (
@@ -596,10 +589,7 @@ function WalletPanel({
             label="Wallet"
             value={formatCurrency(wallet?.balance ?? 0)}
           />
-          <StatTile
-            label="Trading"
-            value={formatCurrency(tradingBalance)}
-          />
+          <StatTile label="Trading" value={formatCurrency(tradingBalance)} />
           <StatTile
             label="Deposited"
             value={formatCurrency(summary?.agent?.totalDeposited ?? 0)}
@@ -749,7 +739,8 @@ function OverviewPanel({
   loading: boolean;
 }) {
   const portfolio = summary?.portfolio;
-  const currentGoal = goals.find((goal) => goal.status === "active") ?? goals[0];
+  const currentGoal =
+    goals.find((goal) => goal.status === "active") ?? goals[0];
   const totals = dashboard.summary?.totals;
 
   if (loading && !summary && goals.length === 0 && markets.length === 0) {
@@ -865,9 +856,7 @@ function OverviewPanel({
 
       <Section title="Recent Trades">
         {recentTrades.length === 0 ? (
-          <div className="text-xs italic text-muted">
-            No recent trades yet.
-          </div>
+          <div className="text-xs italic text-muted">No recent trades yet.</div>
         ) : (
           <div className="space-y-2">
             {recentTrades.slice(0, 6).map((trade) => (
@@ -949,8 +938,9 @@ export function BabylonTerminal({ appName: _appName }: BabylonTerminalProps) {
     agents: [],
     summary: null,
   });
-  const [teamConversations, setTeamConversations] =
-    useState<BabylonTeamConversation[]>([]);
+  const [teamConversations, setTeamConversations] = useState<
+    BabylonTeamConversation[]
+  >([]);
   const [agentSummary, setAgentSummary] =
     useState<BabylonAgentSummaryEnvelope | null>(null);
   const [agentGoals, setAgentGoals] = useState<BabylonAgentGoal[]>([]);
@@ -1034,7 +1024,9 @@ export function BabylonTerminal({ appName: _appName }: BabylonTerminalProps) {
       const nextDashboard = extractTeamDashboard(dashboardRaw);
       setTeamDashboard(nextDashboard);
       setTeamAgents(nextDashboard.agents);
-      setTeamConversations(extractTeamConversations(conversationsRaw).conversations);
+      setTeamConversations(
+        extractTeamConversations(conversationsRaw).conversations,
+      );
       setAgentChatMessages(extractChatMessages(chatRaw));
     } catch (error) {
       setStatusMessage(
@@ -1077,9 +1069,13 @@ export function BabylonTerminal({ appName: _appName }: BabylonTerminalProps) {
       ]);
 
       const nextDashboard = extractTeamDashboard(dashboardRaw);
-      setTeamAgents(Array.isArray(team.agents) ? team.agents : nextDashboard.agents);
+      setTeamAgents(
+        Array.isArray(team.agents) ? team.agents : nextDashboard.agents,
+      );
       setTeamDashboard(nextDashboard);
-      setTeamConversations(extractTeamConversations(conversationsRaw).conversations);
+      setTeamConversations(
+        extractTeamConversations(conversationsRaw).conversations,
+      );
     } catch (error) {
       setStatusMessage(
         error instanceof Error

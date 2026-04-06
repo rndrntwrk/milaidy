@@ -45,6 +45,8 @@ function countOccurrences(text: string, needle: string): number {
   return text.split(needle).length - 1;
 }
 
+const WINDOWS_OPTIONAL_SUBMODULE_EXPR = `submodules: \${{ matrix.os == 'windows-latest' && 'false' || 'recursive' }}`;
+
 describe("CI workflow drift", () => {
   it("defines a shared workspace setup action for Bun-based jobs", () => {
     const action = read(SETUP_ACTION_PATH);
@@ -106,7 +108,13 @@ describe("CI workflow drift", () => {
     ).toBe(5);
     expect(
       countOccurrences(read(TEST_WORKFLOW_PATH), "submodules: recursive"),
-    ).toBe(12);
+    ).toBe(10);
+    expect(
+      countOccurrences(
+        read(TEST_WORKFLOW_PATH),
+        WINDOWS_OPTIONAL_SUBMODULE_EXPR,
+      ),
+    ).toBe(2);
     expect(read(BUILD_DOCKER_WORKFLOW_PATH)).toContain("submodules: recursive");
     expect(read(BUILD_CLOUD_IMAGE_WORKFLOW_PATH)).toContain(
       "submodules: recursive",

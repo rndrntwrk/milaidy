@@ -238,10 +238,15 @@ describe("Hyperscape E2E Integration", () => {
         pluginManager,
         "@elizaos/app-hyperscape",
       );
+      const viewerUrl = new URL(result.viewer?.url ?? "http://localhost");
 
       expect(result.viewer).toBeDefined();
-      expect(result.viewer?.url).toBe(
-        "http://localhost:3333?embedded=true&mode=spectator&surface=agent-control&followEntity=test-character-id",
+      expect(viewerUrl.origin).toBe("http://localhost:3333");
+      expect(viewerUrl.searchParams.get("embedded")).toBe("true");
+      expect(viewerUrl.searchParams.get("mode")).toBe("spectator");
+      expect(viewerUrl.searchParams.get("surface")).toBe("agent-control");
+      expect(viewerUrl.searchParams.get("followEntity")).toBe(
+        "test-character-id",
       );
       expect(result.viewer?.authMessage).toEqual(
         expect.objectContaining({
@@ -323,8 +328,13 @@ describe("Hyperscape E2E Integration", () => {
         pluginManager,
         "@elizaos/app-hyperscape",
       );
-      expect(launchResult.viewer?.url).toBe(
-        "http://localhost:3333?embedded=true&mode=spectator&surface=agent-control&followEntity=test-character-id",
+      const viewerUrl = new URL(launchResult.viewer?.url ?? "http://localhost");
+      expect(viewerUrl.origin).toBe("http://localhost:3333");
+      expect(viewerUrl.searchParams.get("embedded")).toBe("true");
+      expect(viewerUrl.searchParams.get("mode")).toBe("spectator");
+      expect(viewerUrl.searchParams.get("surface")).toBe("agent-control");
+      expect(viewerUrl.searchParams.get("followEntity")).toBe(
+        "test-character-id",
       );
       expect(launchResult.session?.mode).toBe("spectate-and-steer");
 

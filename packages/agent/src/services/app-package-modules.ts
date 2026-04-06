@@ -153,14 +153,6 @@ async function resolveAppModuleTarget(
   const trimmed = appIdentifier.trim();
   if (!trimmed) return null;
 
-  const registryInfo = await getPluginInfo(trimmed);
-  if (registryInfo && (hasAppInterface(registryInfo) || registryInfo.localPath)) {
-    return {
-      packageName: registryInfo.name,
-      localPath: registryInfo.localPath ?? null,
-    };
-  }
-
   const packageCandidates = trimmed.startsWith("@")
     ? [trimmed]
     : [`@elizaos/app-${trimmed}`, `@elizaos/plugin-${trimmed}`];
@@ -173,6 +165,14 @@ async function resolveAppModuleTarget(
         localPath,
       };
     }
+  }
+
+  const registryInfo = await getPluginInfo(trimmed);
+  if (registryInfo && (hasAppInterface(registryInfo) || registryInfo.localPath)) {
+    return {
+      packageName: registryInfo.name,
+      localPath: registryInfo.localPath ?? null,
+    };
   }
 
   return {
