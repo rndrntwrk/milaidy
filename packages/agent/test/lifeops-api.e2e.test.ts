@@ -432,6 +432,117 @@ describe("Life-ops API E2E", () => {
       expect(reminderTitles).toEqual(["first"]);
     });
 
+    it("normalizes channel policies and updates them in place across consent and manual policy writes", async () => {
+      const consent = await req(
+        port,
+        "POST",
+        "/api/lifeops/channels/phone-consent",
+        {
+          phoneNumber: "415-555-0123",
+          consentGiven: true,
+          allowSms: true,
+          allowVoice: true,
+          metadata: {
+            source: "settings",
+            capturePhase: "initial",
+          },
+        },
+      );
+      expect(consent.status).toBe(201);
+      expect(consent.data.phoneNumber).toBe("+14155550123");
+      expect(consent.data.policies).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            channelType: "sms",
+            channelRef: "+14155550123",
+            allowReminders: true,
+            allowEscalation: true,
+            metadata: expect.objectContaining({
+              source: "settings",
+              capturePhase: "initial",
+              phoneNumber: "+14155550123",
+              smsAllowed: true,
+              voiceAllowed: true,
+            }),
+          }),
+          expect.objectContaining({
+            channelType: "voice",
+            channelRef: "+14155550123",
+            allowReminders: true,
+            allowEscalation: true,
+            metadata: expect.objectContaining({
+              source: "settings",
+              capturePhase: "initial",
+              phoneNumber: "+14155550123",
+              smsAllowed: true,
+              voiceAllowed: true,
+            }),
+          }),
+        ]),
+      );
+
+      const update = await req(port, "POST", "/api/lifeops/channel-policies", {
+        channelType: "sms",
+        channelRef: "415-555-0123",
+        privacyClass: "private",
+        allowReminders: false,
+        allowEscalation: false,
+        requireConfirmationForActions: false,
+        metadata: {
+          updatedBy: "api-test",
+          reminderMode: "paused",
+        },
+      });
+      expect(update.status).toBe(201);
+      expect(update.data.policy).toMatchObject({
+        channelType: "sms",
+        channelRef: "+14155550123",
+        allowReminders: false,
+        allowEscalation: false,
+        requireConfirmationForActions: false,
+        metadata: expect.objectContaining({
+          source: "settings",
+          capturePhase: "initial",
+          phoneNumber: "+14155550123",
+          updatedBy: "api-test",
+          reminderMode: "paused",
+        }),
+      });
+
+      const listed = await req(port, "GET", "/api/lifeops/channel-policies");
+      expect(listed.status).toBe(200);
+      const matchingPolicies = (
+        listed.data.policies as Array<Record<string, unknown>>
+      ).filter((policy) => policy.channelRef === "+14155550123");
+      expect(matchingPolicies).toHaveLength(2);
+      expect(matchingPolicies).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            channelType: "sms",
+            allowReminders: false,
+            allowEscalation: false,
+            metadata: expect.objectContaining({
+              source: "settings",
+              capturePhase: "initial",
+              updatedBy: "api-test",
+              reminderMode: "paused",
+            }),
+          }),
+          expect.objectContaining({
+            channelType: "voice",
+            allowReminders: true,
+            allowEscalation: true,
+            metadata: expect.objectContaining({
+              source: "settings",
+              capturePhase: "initial",
+              smsAllowed: true,
+              voiceAllowed: true,
+            }),
+          }),
+        ]),
+      );
+    });
+
     it("separates owner lifeops from agent ops", async () => {
       const now = new Date();
       const minuteOfDay = now.getUTCHours() * 60 + now.getUTCMinutes();
@@ -541,6 +652,119 @@ describe("Life-ops API E2E", () => {
           (todo) => todo.name === "Review bridge health",
         ),
       ).toBe(false);
+    });
+
+    it("rejects invalid reminder-processing, phone-consent, channel-policy, and gmail needs-response inputs", async () => {
+      const missingConsent = await req(
+        port,
+        "POST",
+        "/api/lifeops/channels/phone-consent",
+        {
+          phoneNumber: "415-555-0999",
+          consentGiven: false,
+          allowSms: true,
+          allowVoice: false,
+        },
+      );
+      expect(missingConsent.status).toBe(400);
+      expect(String(missingConsent.data.error)).toContain("Explicit consent");
+
+      const invalidConsentPhone = await req(
+        port,
+        "POST",
+        "/api/lifeops/channels/phone-consent",
+        {
+          phoneNumber: "not a phone number",
+          consentGiven: true,
+          allowSms: true,
+          allowVoice: false,
+        },
+      );
+      expect(invalidConsentPhone.status).toBe(400);
+      expect(String(invalidConsentPhone.data.error)).toContain(
+        "phoneNumber must be a valid phone number",
+      );
+
+      const invalidPolicyPhone = await req(
+        port,
+        "POST",
+        "/api/lifeops/channel-policies",
+        {
+          channelType: "sms",
+          channelRef: "still not a phone number",
+          allowReminders: true,
+        },
+      );
+      expect(invalidPolicyPhone.status).toBe(400);
+      expect(String(invalidPolicyPhone.data.error)).toContain(
+        "channelRef must be a valid phone number",
+      );
+
+      const invalidNeedsResponseMode = await req(
+        port,
+        "GET",
+        "/api/lifeops/gmail/needs-response?mode=desktop",
+      );
+      expect(invalidNeedsResponseMode.status).toBe(400);
+      expect(String(invalidNeedsResponseMode.data.error)).toContain(
+        "mode must be one of: local, remote, cloud_managed",
+      );
+
+      const invalidNeedsResponseSide = await req(
+        port,
+        "GET",
+        "/api/lifeops/gmail/needs-response?side=team",
+      );
+      expect(invalidNeedsResponseSide.status).toBe(400);
+      expect(String(invalidNeedsResponseSide.data.error)).toContain(
+        "side must be one of: owner, agent",
+      );
+
+      const invalidNeedsResponseForceSync = await req(
+        port,
+        "GET",
+        "/api/lifeops/gmail/needs-response?forceSync=maybe",
+      );
+      expect(invalidNeedsResponseForceSync.status).toBe(400);
+      expect(String(invalidNeedsResponseForceSync.data.error)).toContain(
+        "forceSync must be a boolean",
+      );
+
+      const invalidNeedsResponseMaxResults = await req(
+        port,
+        "GET",
+        "/api/lifeops/gmail/needs-response?maxResults=0",
+      );
+      expect(invalidNeedsResponseMaxResults.status).toBe(400);
+      expect(String(invalidNeedsResponseMaxResults.data.error)).toContain(
+        "maxResults must be between 1 and 50",
+      );
+
+      const invalidReminderNow = await req(
+        port,
+        "POST",
+        "/api/lifeops/reminders/process",
+        {
+          now: "not-a-date",
+        },
+      );
+      expect(invalidReminderNow.status).toBe(400);
+      expect(String(invalidReminderNow.data.error)).toContain(
+        "now must be a valid ISO datetime",
+      );
+
+      const invalidReminderLimit = await req(
+        port,
+        "POST",
+        "/api/lifeops/reminders/process",
+        {
+          limit: 0,
+        },
+      );
+      expect(invalidReminderLimit.status).toBe(400);
+      expect(String(invalidReminderLimit.data.error)).toContain(
+        "limit must be greater than zero",
+      );
     });
 
     it("rejects invalid query parameters, calendar ranges, and malformed path ids", async () => {

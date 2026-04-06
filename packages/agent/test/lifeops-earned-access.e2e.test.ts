@@ -314,4 +314,53 @@ describe("LifeOps earned access E2E", () => {
       "0.0.0.0 twitter.com",
     );
   });
+
+  it("resolves callback-gated earned access through the direct callback route", async () => {
+    const server = await createServer();
+
+    await createVisibleEarnedAccessDefinition(server.port, {
+      unlockMode: "until_callback",
+      callbackKey: "after workout",
+    });
+
+    const overview = await req(server.port, "GET", "/api/lifeops/overview");
+    expect(overview.status).toBe(200);
+    const occurrence = (
+      overview.data.occurrences as Array<Record<string, unknown>>
+    ).find((candidate) => candidate.title === "Brush teeth");
+    expect(occurrence).toBeDefined();
+
+    const complete = await req(
+      server.port,
+      "POST",
+      `/api/lifeops/occurrences/${encodeURIComponent(String(occurrence?.id ?? ""))}/complete`,
+      {},
+    );
+    expect(complete.status).toBe(200);
+
+    const unlockedStatus = await readWebsiteBlockStatus(server.port);
+    expect(unlockedStatus).toMatchObject({
+      active: false,
+      websites: [],
+    });
+
+    const resolve = await req(
+      server.port,
+      "POST",
+      "/api/lifeops/website-access/callbacks/after%20workout/resolve",
+      {},
+    );
+    expect(resolve.status).toBe(200);
+    expect(resolve.data).toMatchObject({ ok: true });
+
+    const relockedStatus = await readWebsiteBlockStatus(server.port);
+    expect(relockedStatus).toMatchObject({
+      active: true,
+      websites: ["twitter.com", "x.com"],
+      managedBy: "lifeops",
+    });
+    expect(await fs.readFile(hostsFilePath, "utf8")).toContain(
+      "0.0.0.0 x.com",
+    );
+  });
 });
