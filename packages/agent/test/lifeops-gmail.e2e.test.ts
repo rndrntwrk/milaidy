@@ -355,6 +355,24 @@ describe("life-ops gmail triage", () => {
       isImportant: true,
     });
 
+    const needsResponseRes = await req(
+      port,
+      "GET",
+      "/api/lifeops/gmail/needs-response?maxResults=5",
+    );
+    expect(needsResponseRes.status).toBe(200);
+    expect(needsResponseRes.data.summary).toMatchObject({
+      totalCount: 1,
+      unreadCount: 1,
+      importantCount: 1,
+    });
+    expect(needsResponseRes.data.messages).toEqual([
+      expect.objectContaining({
+        subject: "Design review agenda",
+        likelyReplyNeeded: true,
+      }),
+    ]);
+
     const contextRes = await req(
       port,
       "GET",

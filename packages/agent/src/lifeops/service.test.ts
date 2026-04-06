@@ -29,6 +29,7 @@ function createRuntime() {
     agentId: "agent-lifeops" as UUID,
     sendMessageToTarget: vi.fn().mockResolvedValue(undefined),
     getService: vi.fn(() => null),
+    getTasks: vi.fn().mockResolvedValue([]),
   } as unknown as IAgentRuntime & {
     sendMessageToTarget: ReturnType<typeof vi.fn>;
   };
@@ -129,6 +130,207 @@ describe("LifeOpsService", () => {
     });
   });
 
+  it("allows normal runtime reminders when only escalation is disabled by policy", async () => {
+    const runtime = createRuntime();
+    const service = new LifeOpsService(runtime);
+    (service as unknown as { repository: Record<string, unknown> }).repository = {
+      listChannelPolicies: vi.fn().mockResolvedValue([
+        {
+          id: "policy-1",
+          agentId: "agent-lifeops",
+          channelType: "discord",
+          channelRef: "dm-1",
+          privacyClass: "private",
+          allowReminders: true,
+          allowEscalation: false,
+          allowPosts: false,
+          requireConfirmationForActions: true,
+          metadata: {
+            source: "discord",
+            entityId: "owner-1",
+            channelId: "dm-1",
+          },
+          createdAt: "2026-04-06T00:00:00.000Z",
+          updatedAt: "2026-04-06T00:00:00.000Z",
+        },
+      ]),
+      createReminderAttempt: vi.fn().mockResolvedValue(undefined),
+    };
+    (service as unknown as { recordReminderAudit: ReturnType<typeof vi.fn> })
+      .recordReminderAudit = vi.fn().mockResolvedValue(undefined);
+
+    const attempt = await (
+      service as unknown as {
+        dispatchReminderAttempt: (args: Record<string, unknown>) => Promise<Record<string, unknown>>;
+      }
+    ).dispatchReminderAttempt({
+      plan: { id: "plan-1" },
+      ownerType: "occurrence",
+      ownerId: "occ-1",
+      occurrenceId: "occ-1",
+      subjectType: "owner",
+      title: "Stretch",
+      channel: "discord",
+      stepIndex: 0,
+      scheduledFor: "2026-04-06T12:00:00.000Z",
+      dueAt: null,
+      urgency: "high",
+      quietHours: {},
+      acknowledged: false,
+      attemptedAt: "2026-04-06T12:00:00.000Z",
+    });
+
+    expect(runtime.sendMessageToTarget).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: "discord",
+        entityId: "owner-1",
+        channelId: "dm-1",
+      }),
+      expect.objectContaining({
+        source: "discord",
+        text: expect.stringContaining("Stretch"),
+      }),
+    );
+    expect(attempt).toMatchObject({
+      outcome: "delivered",
+      channel: "discord",
+    });
+  });
+
+  it("selects the currently active platform for reminder escalation", async () => {
+    configMocks.loadElizaConfig.mockReturnValue({
+      agents: {
+        defaults: {
+          ownerContacts: {
+            discord: { entityId: "owner-1", channelId: "dm-1" },
+            telegram: { entityId: "owner-1", channelId: "tg-1" },
+          },
+        },
+      },
+    });
+    const runtime = createRuntime();
+    runtime.getTasks = vi.fn().mockResolvedValue([
+      {
+        id: "task-1",
+        name: "PROACTIVE_AGENT",
+        metadata: {
+          proactiveAgent: { kind: "runtime_runner", version: 1 },
+          activityProfile: {
+            primaryPlatform: "telegram",
+            secondaryPlatform: "discord",
+            lastSeenPlatform: "discord",
+            isCurrentlyActive: true,
+          },
+        },
+      },
+    ]);
+    const service = new LifeOpsService(runtime);
+    (service as unknown as { repository: Record<string, unknown> }).repository = {
+      createReminderAttempt: vi.fn().mockResolvedValue(undefined),
+      listChannelPolicies: vi.fn().mockResolvedValue([]),
+      getOccurrence: vi.fn().mockResolvedValue({
+        id: "occ-1",
+        agentId: "agent-lifeops",
+        domain: "user_lifeops",
+        subjectType: "owner",
+        subjectId: "owner-1",
+        visibilityScope: "owner_agent_admin",
+        contextPolicy: "explicit_only",
+        definitionId: "def-1",
+        occurrenceKey: "2026-04-06",
+        scheduledAt: "2026-04-06T12:00:00.000Z",
+        dueAt: "2026-04-06T12:00:00.000Z",
+        relevanceStartAt: "2026-04-06T12:00:00.000Z",
+        relevanceEndAt: "2026-04-06T16:00:00.000Z",
+        windowName: "afternoon",
+        state: "visible",
+        snoozedUntil: null,
+        completionPayload: null,
+        derivedTarget: null,
+        metadata: {},
+        createdAt: "2026-04-06T12:00:00.000Z",
+        updatedAt: "2026-04-06T12:00:00.000Z",
+      }),
+      updateOccurrence: vi.fn().mockResolvedValue(undefined),
+    };
+    (service as unknown as { recordReminderAudit: ReturnType<typeof vi.fn> })
+      .recordReminderAudit = vi.fn().mockResolvedValue(undefined);
+
+    const attempt = await (
+      service as unknown as {
+        dispatchDueReminderEscalation: (args: Record<string, unknown>) => Promise<Record<string, unknown> | null>;
+      }
+    ).dispatchDueReminderEscalation({
+      plan: {
+        id: "plan-1",
+        steps: [{ channel: "in_app", offsetMinutes: 0, label: "now" }],
+        quietHours: {},
+      },
+      ownerType: "occurrence",
+      ownerId: "occ-1",
+      occurrenceId: "occ-1",
+      subjectType: "owner",
+      title: "Brush teeth",
+      dueAt: "2026-04-06T12:00:00.000Z",
+      urgency: "critical",
+      quietHours: {},
+      attemptedAt: "2026-04-06T12:06:00.000Z",
+      now: new Date("2026-04-06T12:06:00.000Z"),
+      attempts: [
+        {
+          id: "attempt-1",
+          agentId: "agent-lifeops",
+          planId: "plan-1",
+          ownerType: "occurrence",
+          ownerId: "occ-1",
+          occurrenceId: "occ-1",
+          channel: "in_app",
+          stepIndex: 0,
+          scheduledFor: "2026-04-06T12:00:00.000Z",
+          attemptedAt: "2026-04-06T12:00:00.000Z",
+          outcome: "delivered",
+          connectorRef: "system:in_app",
+          deliveryMetadata: {
+            lifecycle: "plan",
+          },
+        },
+      ],
+      policies: [],
+      activityProfile: {
+        primaryPlatform: "telegram",
+        secondaryPlatform: "discord",
+        lastSeenPlatform: "discord",
+        isCurrentlyActive: true,
+      },
+      occurrence: {
+        relevanceStartAt: "2026-04-06T12:00:00.000Z",
+        snoozedUntil: null,
+        metadata: {},
+        state: "visible",
+      },
+      acknowledged: false,
+    });
+
+    expect(runtime.sendMessageToTarget).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: "discord",
+        entityId: "owner-1",
+        channelId: "dm-1",
+      }),
+      expect.objectContaining({
+        source: "discord",
+      }),
+    );
+    expect(attempt).toMatchObject({
+      outcome: "delivered",
+      channel: "discord",
+      deliveryMetadata: expect.objectContaining({
+        lifecycle: "escalation",
+        activityPlatform: "discord",
+      }),
+    });
+  });
+
   it("syncs earned-access blocker state into the LifeOps-managed hosts block", async () => {
     const runtime = createRuntime();
     const service = new LifeOpsService(runtime);
@@ -221,6 +423,7 @@ describe("LifeOpsService", () => {
         title: "Brush teeth",
         state: "completed",
       }),
+      listReminderAttempts: vi.fn().mockResolvedValue([]),
     };
     (
       service as unknown as {

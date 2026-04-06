@@ -439,6 +439,54 @@ export async function handleLifeOpsRoutes(
     });
   }
 
+  if (method === "GET" && pathname === "/api/lifeops/gmail/needs-response") {
+    return runRoute(ctx, async (service) => {
+      const rawMode = url.searchParams.get("mode");
+      const rawSide = url.searchParams.get("side");
+      const rawForceSync = url.searchParams.get("forceSync");
+      if (
+        rawMode !== null &&
+        rawMode !== "local" &&
+        rawMode !== "remote" &&
+        rawMode !== "cloud_managed"
+      ) {
+        throw new LifeOpsServiceError(
+          400,
+          "mode must be one of: local, remote, cloud_managed",
+        );
+      }
+      if (rawSide !== null && rawSide !== "owner" && rawSide !== "agent") {
+        throw new LifeOpsServiceError(400, "side must be one of: owner, agent");
+      }
+      if (
+        rawForceSync !== null &&
+        rawForceSync !== "true" &&
+        rawForceSync !== "false" &&
+        rawForceSync !== "1" &&
+        rawForceSync !== "0"
+      ) {
+        throw new LifeOpsServiceError(400, "forceSync must be a boolean");
+      }
+      const request: GetLifeOpsGmailTriageRequest = {
+        mode: (rawMode ?? undefined) as
+          | "local"
+          | "remote"
+          | "cloud_managed"
+          | undefined,
+        side: (rawSide ?? undefined) as "owner" | "agent" | undefined,
+        forceSync:
+          rawForceSync === null
+            ? undefined
+            : rawForceSync === "true" || rawForceSync === "1",
+        maxResults:
+          url.searchParams.get("maxResults") === null
+            ? undefined
+            : Number(url.searchParams.get("maxResults")),
+      };
+      json(res, await service.getGmailNeedsResponse(url, request));
+    });
+  }
+
   if (method === "POST" && pathname === "/api/lifeops/calendar/events") {
     const body = await readJsonBody<CreateLifeOpsCalendarEventRequest>(
       req,

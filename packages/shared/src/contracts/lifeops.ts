@@ -222,6 +222,8 @@ export const LIFEOPS_AUDIT_EVENT_TYPES = [
   "reminder_due",
   "reminder_delivered",
   "reminder_blocked",
+  "reminder_escalation_started",
+  "reminder_escalation_resolved",
   "workflow_created",
   "workflow_updated",
   "workflow_run",
@@ -811,6 +813,19 @@ export interface LifeOpsGmailTriageFeed {
   source: "cache" | "synced";
   syncedAt: string | null;
   summary: LifeOpsGmailTriageSummary;
+}
+
+export interface LifeOpsGmailNeedsResponseSummary {
+  totalCount: number;
+  unreadCount: number;
+  importantCount: number;
+}
+
+export interface LifeOpsGmailNeedsResponseFeed {
+  messages: LifeOpsGmailMessageSummary[];
+  source: "cache" | "synced";
+  syncedAt: string | null;
+  summary: LifeOpsGmailNeedsResponseSummary;
 }
 
 export interface GetLifeOpsGmailTriageRequest {
