@@ -387,6 +387,10 @@ async function fetchJson<T>(url: URL, init?: RequestInit): Promise<T> {
 const gameStateCache = new Map<string, { state: DefenseGameState; ts: number }>();
 const GAME_STATE_CACHE_TTL_MS = 5_000;
 
+/** Last-known-good session state cache — returned when remote API is temporarily unavailable. */
+const sessionStateCache = new Map<string, { session: AppSessionState; ts: number }>();
+const SESSION_STATE_CACHE_TTL_MS = 15_000;
+
 async function fetchGameState(
   apiBaseUrl: string,
   gameId: number,
@@ -1361,19 +1365,37 @@ async function readSessionState(
   autoJoin = false,
 ): Promise<AppSessionState> {
   const ctx = resolveSessionContext(runtime, sessionId);
-  const located = autoJoin
-    ? await ensureJoinedGame(ctx)
-    : await locateHeroState(ctx);
+  const cacheKey = ctx.agentName;
 
-  if (typeof located.gameId === "number" && Number.isFinite(located.gameId)) {
-    persistSetting(
-      runtime,
-      "DEFENSE_OF_THE_AGENTS_GAME_ID",
-      String(located.gameId),
-    );
+  // Return fresh cache if within TTL (prevents hammering remote API on UI polls)
+  const cached = sessionStateCache.get(cacheKey);
+  if (cached && Date.now() - cached.ts < SESSION_STATE_CACHE_TTL_MS && !autoJoin) {
+    return cached.session;
   }
 
-  return buildSessionState(ctx, located);
+  try {
+    const located = autoJoin
+      ? await ensureJoinedGame(ctx)
+      : await locateHeroState(ctx);
+
+    if (typeof located.gameId === "number" && Number.isFinite(located.gameId)) {
+      persistSetting(
+        runtime,
+        "DEFENSE_OF_THE_AGENTS_GAME_ID",
+        String(located.gameId),
+      );
+    }
+
+    const session = buildSessionState(ctx, located);
+    sessionStateCache.set(cacheKey, { session, ts: Date.now() });
+    return session;
+  } catch (err) {
+    // If remote API is temporarily unavailable, return last-known-good state
+    if (cached) {
+      return cached.session;
+    }
+    throw err;
+  }
 }
 
 function okResponse(

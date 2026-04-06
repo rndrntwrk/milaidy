@@ -308,79 +308,44 @@ class ConversationTranscript {
 // Extraction prompt (same as the evaluator uses)
 // ---------------------------------------------------------------------------
 
-/** Full platform enum — explicit list matching the canonical platforms.ts registry */
-const PLATFORM_ENUM = "bluesky|discord|email|facebook|farcaster|github|instagram|lens|linkedin|mastodon|nostr|phone|reddit|telegram|tiktok|twitch|twitter|warpcast|website|youtube";
+const EXTRACTION_PROMPT = `Extract platform identities from this conversation.
 
-const EXTRACTION_PROMPT = `You are analyzing a conversation to extract social and identity information.
-
-## Participants in this room:
+## Participants
 {{participants}}
 
-## Recent conversation:
+## Conversation
 {{recentMessages}}
 
-## Your task:
-Analyze the FULL conversation above (not just the last message) and extract ALL of the following. Be precise and conservative — only extract what is clearly stated or strongly implied. Do not hallucinate.
-
-CRITICAL: A short message like "yes", "sure", "yeah", "that's me", "correct" is NOT an identity claim — it is a conversational confirmation of something said earlier. Only extract platform identities that are explicitly stated with a platform name and handle.
-
-Return a JSON object with these fields:
+Return JSON with only the identities clearly stated or strongly implied. Use "twitter" for X/Twitter. Only current, active identities — not sarcastic, hypothetical, deleted, or former ones.
 
 {
   "platformIdentities": [
     {
-      "platform": "${PLATFORM_ENUM}",
-      "handle": "the handle/username/address (for email use the full address, for phone use the number)",
-      "belongsTo": "name of the person this handle belongs to",
+      "platform": "twitter|discord|telegram|github|email|phone|youtube|twitch|linkedin|reddit|instagram|facebook|bluesky|farcaster|mastodon|tiktok|website|etc",
+      "handle": "username or address",
+      "belongsTo": "person's name",
       "confidence": 0.0-1.0,
       "reportedBy": "self|other"
     }
-  ],
-  "relationships": [],
-  "mentionedPeople": [],
-  "disputes": [],
-  "privacyBoundaries": [],
-  "trustSignals": []
-}
-
-IMPORTANT RULES:
-- "platform" MUST be one of: ${PLATFORM_ENUM}. Use "email" for email addresses, "phone" for phone numbers. Use "twitter" (not "x") for Twitter/X.
-- If a person says "my Twitter is @X", that's self-reported with confidence 0.8+
-- If person A says "person B's Twitter is @X", that's hearsay with confidence 0.5
-- Do NOT extract identities from sarcasm, jokes, or obvious exaggeration (e.g. "I'm totally @elonmusk lol")
-- Do NOT extract deleted or former accounts (e.g. "I used to be @old_handle but I deleted it")
-- Do NOT extract hypothetical handles (e.g. "if I had a twitter it would be @foo")
-- Only extract what is clearly stated as a CURRENT, ACTIVE identity
-- Return empty arrays for categories with no findings`;
+  ]
+}`;
 
 // ---------------------------------------------------------------------------
 // Action selection prompt
 // ---------------------------------------------------------------------------
 
-const ACTION_SELECTION_PROMPT = `You are an AI assistant deciding which action to take based on a user's message in the context of the recent conversation.
+const ACTION_SELECTION_PROMPT = `Given the conversation, pick the right action.
 
-Available actions:
-- MANAGE_IDENTITY: The user is claiming, confirming, unlinking, or listing platform identities (e.g., "my twitter is @foo", "confirm that alice is @alice_codes on twitter", "yes that's really her twitter", "remove my github link", "show my linked accounts"). Also use when the user says "yes", "sure", "yeah" etc. in response to an identity verification question.
-- SEND_MESSAGE: The user is explicitly asking to send/relay a message to a specific person by name (e.g., "send Alice a message", "DM bob"). NOT for messaging admin/owner, and NOT for discussing messaging features or UI.
-- SEND_ADMIN_MESSAGE: The user is explicitly asking to contact, notify, or alert the admin/owner (e.g., "message the admin", "notify the owner", "tell Shaw about this"). Use for any admin/owner-directed communication.
-- NONE: No action needed. Use for general conversation, questions, discussions about features, bug reports, or anything that is not a direct identity operation or message-sending request.
+Actions:
+- MANAGE_IDENTITY — claiming, confirming, unlinking, or listing platform identities
+- SEND_MESSAGE — sending a message to a specific person by name (not admin/owner)
+- SEND_ADMIN_MESSAGE — contacting or alerting the admin/owner
+- NONE — general conversation, questions, or no action needed
 
-IMPORTANT: If the user is DISCUSSING or COMPLAINING about a feature (e.g., "the send button is broken", "identity linking is cool"), that is NONE — they are not requesting an action.
-IMPORTANT: Consider the FULL conversation context. A short reply like "yes" or "sure" after an identity question IS a confirmation action.
+{{conversationContext}}User message (on {{platform}}): "{{message}}"
 
-{{conversationContext}}User message: "{{message}}"
-Context: The user is speaking on {{platform}}.
-
-Respond with a JSON object:
-{
-  "action": "MANAGE_IDENTITY" | "SEND_MESSAGE" | "SEND_ADMIN_MESSAGE" | "NONE",
-  "intent": "claim" | "confirm" | "unlink" | "list" | null,
-  "parameters": {
-    "platform": "extracted platform name or null",
-    "handle": "extracted handle or null"
-  },
-  "reasoning": "brief explanation"
-}`;
+Return JSON:
+{ "action": "...", "intent": "claim|confirm|unlink|list" or null, "parameters": { "platform": "...", "handle": "..." }, "reasoning": "..." }`;
 
 // ---------------------------------------------------------------------------
 // Live test runner
