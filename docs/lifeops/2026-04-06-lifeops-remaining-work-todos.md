@@ -99,6 +99,11 @@ Goal: Add optional mobile wake/sleep and health-adjacent signals after desktop-f
 - activity-profile inference can incorporate wake/sleep hints when present
 - desktop-only users still function normally
 
+### Current blocker detail
+- `apps/app/src/main.tsx` exposes only coarse Capacitor app foreground/background state through `appStateChange`; it does not expose sleep, wake, screen-time, or health data.
+- I did not find existing HealthKit, Health Connect, DeviceActivity, ScreenTime, or biometric bridge modules in `apps/app/plugins`, `apps/app/src`, or `packages/app-core`.
+- This means the next real implementation step is native plugin work, not TypeScript-only wiring.
+
 ### QA / Setup
 - needs real Android and iOS devices or emulators
 - requires platform permissions and any store-entitlement work
@@ -126,6 +131,11 @@ Goal: Support a Telegram user-account route instead of relying only on BotFather
 - LifeOps can target Telegram through a non-bot path when configured
 - bot-based Telegram continues to work as fallback
 - routing surfaces which transport is active
+
+### Current blocker detail
+- The current Telegram path is bot-only end to end: config, runtime loading, plugin auto-enable, and setup docs are all keyed on `TELEGRAM_BOT_TOKEN` / BotFather.
+- I did not find `tg-cli`, MTProto, TDLib, GramJS, Telethon, or any other user-account Telegram transport in this repo.
+- The narrowest real implementation path is a new local transport layer plus session/secret storage, then routing that transport through LifeOps channel policies. This is a distinct connector project, not a small LifeOps patch.
 
 ### QA / Setup
 - needs Telegram credentials/session setup on a real machine
