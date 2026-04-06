@@ -21,10 +21,12 @@ function DetailCard({
 
 function formatTimestamp(value: string | number | null | undefined): string {
   if (typeof value === "number") {
-    return new Date(value).toLocaleString();
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? "Not yet verified" : date.toLocaleString();
   }
   if (typeof value === "string" && value.trim().length > 0) {
-    return new Date(value).toLocaleString();
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? "Not yet verified" : date.toLocaleString();
   }
   return "Not yet verified";
 }

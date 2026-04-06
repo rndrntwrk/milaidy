@@ -473,7 +473,6 @@ function AppRunsWidget(_props: ChatSidebarWidgetProps) {
   const [error, setError] = useState<string | null>(null);
   const currentRun =
     runs.find((run) => run.viewerAttachment === "attached" && run.viewer) ??
-    runs.find((run) => run.viewerAttachment === "attached") ??
     null;
   const attachedCount = runs.filter(
     (run) => run.viewerAttachment === "attached",

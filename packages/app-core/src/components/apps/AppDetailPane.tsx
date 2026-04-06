@@ -178,6 +178,12 @@ export function AppDetailPane({
             }
           />
         </div>
+
+        {DetailExtension ? (
+          <div className="border-t border-border/35 pt-4">
+            <DetailExtension app={app} />
+          </div>
+        ) : null}
       </div>
     );
   }
