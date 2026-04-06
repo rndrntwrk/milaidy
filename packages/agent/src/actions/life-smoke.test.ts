@@ -323,6 +323,22 @@ describe("LIFE action — robustness scenarios", () => {
     expect(result).toMatchObject({ success: false, text: expect.stringContaining("name") });
   });
 
+  it("catches LifeOpsServiceError and returns user-friendly message instead of provider issue", async () => {
+    mocks.listGoals.mockResolvedValue([]);
+    mocks.createDefinition.mockRejectedValue(
+      Object.assign(new Error("cadence.kind must be one of: daily, weekly, times_per_day"), { name: "LifeOpsServiceError", status: 400 }),
+    );
+
+    const result = await send({
+      action: "create",
+      intent: "create a habit",
+      title: "Test habit",
+      details: { kind: "habit", cadence: { kind: "invalid" } },
+    });
+
+    expect(result).toMatchObject({ success: false, text: expect.stringContaining("cadence.kind must be") });
+  });
+
   it("succeeds when action param is provided but classifier would disagree", async () => {
     // "review the calendar" would classify as review_goal, but action says "calendar"
     mocks.getGoogleConnectorStatus.mockResolvedValue({ connected: true, grantedCapabilities: ["google.calendar.read"] });

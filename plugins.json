@@ -1,7 +1,7 @@
 {
   "$schema": "plugin-index-v1",
   "generatedAt": "2026-03-22T08:36:32.187Z",
-  "count": 106,
+  "count": 107,
   "plugins": [
     {
       "id": "acp",
@@ -5071,6 +5071,24 @@
           "example": "true"
         }
       }
+    },
+    {
+      "id": "selfcontrol",
+      "dirName": "plugin-selfcontrol",
+      "name": "SelfControl",
+      "npmName": "@miladyai/plugin-selfcontrol",
+      "description": "Cross-platform website blocker with hosts-file engine for agent self-regulation.",
+      "tags": [
+        "selfcontrol",
+        "blocker",
+        "focus",
+        "productivity"
+      ],
+      "category": "feature",
+      "envKey": null,
+      "configKeys": [],
+      "version": "0.1.0",
+      "pluginParameters": {}
     },
     {
       "id": "shell",

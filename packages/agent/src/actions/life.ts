@@ -446,16 +446,6 @@ export const lifeAction: Action = {
     const targetName = params.target ?? params.title;
 
     try {
-    return await executeLifeOperation({
-      operation, service, params, details, ownership, chatText, targetName, domain, intent,
-    });
-    } catch (err) {
-      if (err instanceof LifeOpsServiceError) {
-        return { success: false, text: err.message };
-      }
-      throw err;
-    }
-  },
 
     // ── Queries ─────────────────────────────────────
 
@@ -634,6 +624,7 @@ export const lifeAction: Action = {
           }))
         : [{ channel: "in_app", offsetMinutes: 0, label: "In-app reminder" }];
       const updated = await service.updateDefinition(target.definition.id, {
+        ownership,
         reminderPlan: { steps },
       });
       const summary = steps.map((s) => `${s.channel} at +${s.offsetMinutes}m`).join(", ");
@@ -641,6 +632,13 @@ export const lifeAction: Action = {
     }
 
     return { success: false, text: "I didn't understand that life management request." };
+
+    } catch (err) {
+      if (err instanceof LifeOpsServiceError) {
+        return { success: false, text: err.message };
+      }
+      throw err;
+    }
   },
   parameters: [
     {

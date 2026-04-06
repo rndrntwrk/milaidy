@@ -3342,8 +3342,8 @@ describe("Window state persistence (automated)", () => {
     );
     // Verify default window state constants are defined
     expect(source).toContain("DEFAULT_WINDOW_STATE");
-    expect(source).toContain("width: 1200");
-    expect(source).toContain("height: 800");
+    expect(source).toContain("width: 1440");
+    expect(source).toContain("height: 900");
   });
 
   it("window-state.json path is under Utils.paths.userData", async () => {
