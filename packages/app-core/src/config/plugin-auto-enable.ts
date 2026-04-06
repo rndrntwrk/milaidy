@@ -39,8 +39,8 @@ export function applyPluginAutoEnable(
     const plugins = config.plugins as Record<string, unknown>;
     if (plugins.allow == null) plugins.allow = [];
     const allow = plugins.allow as string[];
-    if (!allow.includes("wechat")) {
-      allow.push("wechat");
+    if (!allow.includes("@miladyai/plugin-wechat") && !allow.includes("wechat")) {
+      allow.push("@miladyai/plugin-wechat");
     }
   }
 

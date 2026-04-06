@@ -797,7 +797,9 @@ describe("AppManager", () => {
     });
 
     it("skips plugin registration and returns a warning diagnostic when 2004scape server is unreachable", async () => {
-      // No 2004scape server running on localhost:8880
+      // Mock fetch to simulate unreachable server
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = vi.fn().mockRejectedValue(new Error("ECONNREFUSED"));
       const manager = new AppManager();
       const pluginManager = buildPluginManager([], RS_2004SCAPE_APP_INFO);
       const runtime = createRuntimeStub({ characterName: "TestAgent" });
@@ -819,6 +821,7 @@ describe("AppManager", () => {
       expect(unreachableDiag).toBeDefined();
       expect(unreachableDiag?.severity).toBe("warning");
       expect(unreachableDiag?.message).toContain("not running");
+      globalThis.fetch = originalFetch;
     });
 
     it("registers the plugin when 2004scape server IS reachable", async () => {

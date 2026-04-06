@@ -292,7 +292,7 @@ describe("applyPluginAutoEnable — env vars", () => {
     });
     const { config, changes } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("claude-code-workbench");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-claude-code-workbench");
     expect(
       changes.some((c) => c.includes("CLAUDE_CODE_WORKBENCH_ENABLED")),
     ).toBe(true);
@@ -346,7 +346,7 @@ describe("applyPluginAutoEnable — env vars", () => {
     });
     const { config, changes } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("obsidian");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-obsidian");
     expect(changes.some((c) => c.includes("OBSIDIAN_VAULT_PATH"))).toBe(true);
   });
 
@@ -360,7 +360,7 @@ describe("applyPluginAutoEnable — env vars", () => {
     const { config } = applyPluginAutoEnable(params);
     const allow = config.plugins?.allow ?? [];
 
-    const anthropicEntries = allow.filter((p) => p === "anthropic");
+    const anthropicEntries = allow.filter((p) => p === "@elizaos/plugin-anthropic");
     expect(anthropicEntries).toHaveLength(1);
   });
 
@@ -370,7 +370,7 @@ describe("applyPluginAutoEnable — env vars", () => {
     });
     const { config, changes } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("cua");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-cua");
     expect(changes.some((c) => c.includes("CUA_API_KEY"))).toBe(true);
   });
 
@@ -380,7 +380,7 @@ describe("applyPluginAutoEnable — env vars", () => {
     });
     const { config, changes } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("cua");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-cua");
     expect(changes.some((c) => c.includes("CUA_HOST"))).toBe(true);
   });
 
@@ -393,7 +393,7 @@ describe("applyPluginAutoEnable — env vars", () => {
     });
     const { config } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow ?? []).not.toContain("cua");
+    expect(config.plugins?.allow ?? []).not.toContain("@elizaos/plugin-cua");
   });
 
   it("respects x402 enabled=false override for env auto-enable", () => {
@@ -405,7 +405,7 @@ describe("applyPluginAutoEnable — env vars", () => {
     });
     const { config } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow ?? []).not.toContain("x402");
+    expect(config.plugins?.allow ?? []).not.toContain("@elizaos/plugin-x402");
   });
 
   it("does not duplicate cua when both CUA_API_KEY and CUA_HOST are set", () => {
@@ -415,7 +415,7 @@ describe("applyPluginAutoEnable — env vars", () => {
     const { config } = applyPluginAutoEnable(params);
     const allow = config.plugins?.allow ?? [];
 
-    const cuaEntries = allow.filter((p) => p === "cua");
+    const cuaEntries = allow.filter((p) => p === "@elizaos/plugin-cua");
     expect(cuaEntries).toHaveLength(1);
   });
 
@@ -440,7 +440,7 @@ describe("applyPluginAutoEnable — features", () => {
     });
     const { config, changes } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("browser");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-browser");
     expect(changes.some((c) => c.includes("feature: browser"))).toBe(true);
   });
 
@@ -460,7 +460,7 @@ describe("applyPluginAutoEnable — features", () => {
     });
     const { config, changes } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("claude-code-workbench");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-claude-code-workbench");
     expect(
       changes.some((c) => c.includes("feature: claudeCodeWorkbench")),
     ).toBe(true);
@@ -472,7 +472,7 @@ describe("applyPluginAutoEnable — features", () => {
     });
     const { config } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("cron");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-cron");
   });
 
   it("skips feature when enabled is explicitly false", () => {
@@ -499,7 +499,7 @@ describe("applyPluginAutoEnable — features", () => {
     });
     const { config } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("obsidian");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-obsidian");
   });
 
   it("enables x402 plugin when features.x402 = true", () => {
@@ -508,7 +508,7 @@ describe("applyPluginAutoEnable — features", () => {
     });
     const { config, changes } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("x402");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-x402");
     expect(changes.some((c) => c.includes("feature: x402"))).toBe(true);
   });
 
@@ -518,7 +518,7 @@ describe("applyPluginAutoEnable — features", () => {
     });
     const { config, changes } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("cua");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-cua");
     expect(changes.some((c) => c.includes("feature: cua"))).toBe(true);
   });
 
@@ -528,7 +528,7 @@ describe("applyPluginAutoEnable — features", () => {
     });
     const { config } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow ?? []).not.toContain("x402");
+    expect(config.plugins?.allow ?? []).not.toContain("@elizaos/plugin-x402");
   });
 
   it("enables computeruse plugin when features.computeruse = true", () => {
@@ -537,7 +537,7 @@ describe("applyPluginAutoEnable — features", () => {
     });
     const { config, changes } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("computeruse");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-computeruse");
     expect(changes.some((c) => c.includes("feature: computeruse"))).toBe(true);
   });
 });
@@ -553,7 +553,7 @@ describe("applyPluginAutoEnable — hooks", () => {
     });
     const { config } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("webhooks");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-webhooks");
   });
 
   it("skips webhooks when hooks.enabled is false", () => {
@@ -567,7 +567,7 @@ describe("applyPluginAutoEnable — hooks", () => {
     });
     const { config } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow ?? []).not.toContain("webhooks");
+    expect(config.plugins?.allow ?? []).not.toContain("@elizaos/plugin-webhooks");
   });
 
   it("enables gmail-watch plugin when hooks.gmail.account is set", () => {
@@ -581,7 +581,7 @@ describe("applyPluginAutoEnable — hooks", () => {
     });
     const { config } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("gmail-watch");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-gmail-watch");
   });
 });
 
@@ -923,7 +923,7 @@ describe("applyPluginAutoEnable — streaming destinations", () => {
         } as never,
       }),
     );
-    expect(config.plugins?.allow).toContain("twitch-streaming");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-twitch-streaming");
     expect(changes.some((c) => c.includes("streaming: twitch"))).toBe(true);
   });
 
@@ -935,7 +935,7 @@ describe("applyPluginAutoEnable — streaming destinations", () => {
         } as never,
       }),
     );
-    expect(config.plugins?.allow).toContain("youtube-streaming");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-youtube-streaming");
     expect(changes.some((c) => c.includes("streaming: youtube"))).toBe(true);
   });
 
@@ -952,7 +952,7 @@ describe("applyPluginAutoEnable — streaming destinations", () => {
         } as never,
       }),
     );
-    expect(config.plugins?.allow).toContain("custom-rtmp");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-custom-rtmp");
     expect(changes.some((c) => c.includes("streaming: customRtmp"))).toBe(true);
   });
 
@@ -969,7 +969,7 @@ describe("applyPluginAutoEnable — streaming destinations", () => {
     );
     // activeDestination should not result in any plugin — only twitch should be added
     const allow = config.plugins?.allow ?? [];
-    expect(allow).toContain("twitch-streaming");
+    expect(allow).toContain("@elizaos/plugin-twitch-streaming");
     expect(allow).not.toContain("activeDestination");
   });
 
@@ -981,7 +981,7 @@ describe("applyPluginAutoEnable — streaming destinations", () => {
         } as never,
       }),
     );
-    expect(config.plugins?.allow ?? []).not.toContain("twitch-streaming");
+    expect(config.plugins?.allow ?? []).not.toContain("@elizaos/plugin-twitch-streaming");
   });
 
   it("does not auto-enable streaming plugin when shortId is disabled in plugins.entries", () => {
@@ -993,7 +993,7 @@ describe("applyPluginAutoEnable — streaming destinations", () => {
         } as never,
       }),
     );
-    expect(config.plugins?.allow ?? []).not.toContain("twitch-streaming");
+    expect(config.plugins?.allow ?? []).not.toContain("@elizaos/plugin-twitch-streaming");
   });
 
   it("does not auto-enable when streaming config is empty", () => {
@@ -1017,8 +1017,8 @@ describe("applyPluginAutoEnable — streaming destinations", () => {
       }),
     );
     const allow = config.plugins?.allow ?? [];
-    expect(allow).toContain("twitch-streaming");
-    expect(allow).toContain("youtube-streaming");
+    expect(allow).toContain("@elizaos/plugin-twitch-streaming");
+    expect(allow).toContain("@elizaos/plugin-youtube-streaming");
     expect(changes.length).toBeGreaterThanOrEqual(2);
   });
 });
