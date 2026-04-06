@@ -66,6 +66,10 @@ const LOCAL_APP_OVERRIDES: Readonly<Record<string, LocalAppOverride>> = {
       postMessageAuth: true,
       sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
     },
+    session: {
+      mode: "spectate-and-steer",
+      features: ["commands", "telemetry", "pause", "resume", "suggestions"],
+    },
   },
 };
 

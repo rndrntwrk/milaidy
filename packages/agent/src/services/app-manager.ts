@@ -157,9 +157,12 @@ function isBabylonAppName(appName: string): boolean {
  * Quick TCP-level probe to check if the 2004scape game server is reachable.
  * Returns true if a connection can be established within the timeout.
  */
-async function is2004scapeServerReachable(timeoutMs = 2000): Promise<boolean> {
+async function is2004scapeServerReachable(
+  serverUrl: string,
+  timeoutMs = 2000,
+): Promise<boolean> {
   try {
-    const url = new URL(DEFAULT_RS_SDK_SERVER_URL);
+    const url = new URL(serverUrl);
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     const res = await fetch(url.href, {
@@ -363,6 +366,14 @@ function resolveHyperscapeApiBaseUrl(runtime?: IAgentRuntime | null): string {
   return isProductionRuntime()
     ? PRODUCTION_HYPERSCAPE_API_BASE_URL
     : LOCAL_DEV_HYPERSCAPE_API_BASE_URL;
+}
+
+function resolve2004scapeServerUrl(runtime?: IAgentRuntime | null): string {
+  const runtimeUrl = resolveSettingLike(runtime, "RS_SDK_SERVER_URL");
+  if (runtimeUrl) {
+    return runtimeUrl.replace(/\/+$/, "");
+  }
+  return DEFAULT_RS_SDK_SERVER_URL;
 }
 
 function extractWalletCandidateFromRecord(
@@ -1931,15 +1942,16 @@ export class AppManager {
       );
     }
     if (is2004scapeAppName(appInfo.name)) {
-      const serverUp = await is2004scapeServerReachable();
+      const rsSdkServerUrl = resolve2004scapeServerUrl(_runtime ?? null);
+      const serverUp = await is2004scapeServerReachable(rsSdkServerUrl);
       if (!serverUp) {
         logger.info(
-          `[app-manager] 2004scape server is not reachable at ${DEFAULT_RS_SDK_SERVER_URL} — skipping plugin registration to avoid noisy SDK errors`,
+          `[app-manager] 2004scape server is not reachable at ${rsSdkServerUrl} — skipping plugin registration to avoid noisy SDK errors`,
         );
         launchPreparationDiagnostics.push({
           code: "2004scape-server-unreachable",
           severity: "warning",
-          message: `2004scape game server is not running at ${DEFAULT_RS_SDK_SERVER_URL}. Start the server and re-launch the app.`,
+          message: `2004scape game server is not running at ${rsSdkServerUrl}. Start the server and re-launch the app.`,
         });
       } else {
         launchPreparationDiagnostics.push(
