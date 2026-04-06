@@ -28,7 +28,6 @@ function deriveSessionActivity(session: CodingAgentSession): string {
     return `Running ${session.toolDescription}`.slice(0, 60);
   }
   if (session.status === "blocked") return "Waiting for input";
-  if (session.status === "error") return "Error";
   return "Running";
 }
 
@@ -76,11 +75,7 @@ function TaskCard({ session }: { session: CodingAgentSession }) {
       ) : null}
       <p
         className={`truncate text-[11px] ${
-          session.status === "error"
-            ? "text-danger"
-            : session.status === "blocked"
-              ? "text-warn"
-              : "text-muted"
+          session.status === "blocked" ? "text-warn" : "text-muted"
         }`}
       >
         {activity}
@@ -450,6 +445,7 @@ function OrchestratorTasksWidget(_props: ChatSidebarWidgetProps) {
   const [mutating, setMutating] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
+  const [mutationError, setMutationError] = useState<string | null>(null);
   const deferredSearch = useDeferredValue(search.trim());
   const selectedThreadSummary = useMemo(
     () => threads.find((thread) => thread.id === selectedThreadId) ?? null,
@@ -469,6 +465,7 @@ function OrchestratorTasksWidget(_props: ChatSidebarWidgetProps) {
         });
         if (cancelled) return;
         setLoadError(null);
+        setMutationError(null);
         setThreads(nextThreads);
         setSelectedThreadId((current) => {
           if (current && nextThreads.some((thread) => thread.id === current)) {
@@ -530,6 +527,7 @@ function OrchestratorTasksWidget(_props: ChatSidebarWidgetProps) {
   const handleArchiveToggle = async () => {
     if (!selectedThread) return;
     setMutating(true);
+    setMutationError(null);
     try {
       if (selectedThread.status === "archived") {
         await client.reopenCodingAgentTaskThread(selectedThread.id);
@@ -545,10 +543,15 @@ function OrchestratorTasksWidget(_props: ChatSidebarWidgetProps) {
       });
       setLoadError(null);
       setDetailError(null);
+      setMutationError(null);
       setThreads(nextThreads);
       setSelectedThreadId(nextThreads[0]?.id ?? null);
     } catch (error) {
-      setLoadError(getClientErrorMessage(error, "Failed to update task thread."));
+      setMutationError(
+        error instanceof Error
+          ? `Failed to update task thread: ${error.message}`
+          : "Failed to update task thread.",
+      );
     } finally {
       setMutating(false);
     }
@@ -586,6 +589,11 @@ function OrchestratorTasksWidget(_props: ChatSidebarWidgetProps) {
       {loadError ? (
         <div className="mb-2 rounded-md border border-danger/30 bg-danger/10 px-2 py-1.5 text-[11px] text-danger">
           Failed to load task threads: {loadError}
+        </div>
+      ) : null}
+      {mutationError ? (
+        <div className="mb-2 rounded-md border border-danger/30 bg-danger/10 px-2 py-1.5 text-[11px] text-danger">
+          {mutationError}
         </div>
       ) : null}
       {threads.length > 0 ? (

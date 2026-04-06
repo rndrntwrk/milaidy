@@ -276,7 +276,7 @@ describe("agent orchestrator tasks widget", () => {
     expect(textOf(tree!.root)).toContain("Persist task state to the database");
 
     await act(async () => {
-      findButtonByText(tree!.root, "Archive").props.onClick();
+      await findButtonByText(tree!.root, "Archive").props.onClick();
     });
 
     await waitFor(
@@ -291,6 +291,39 @@ describe("agent orchestrator tasks widget", () => {
       search: undefined,
       limit: 30,
     });
+  });
+
+  it("surfaces archive mutation failures instead of silently switching state", async () => {
+    mockClient.listCodingAgentTaskThreads.mockResolvedValue([createThread()]);
+    mockClient.getCodingAgentTaskThread.mockResolvedValue(createThreadDetail());
+    mockClient.archiveCodingAgentTaskThread.mockRejectedValue(
+      new Error("archive failed"),
+    );
+
+    await act(async () => {
+      tree = TestRenderer.create(
+        <TasksWidget events={[]} clearEvents={vi.fn()} />,
+      );
+    });
+
+    await waitFor(
+      () => textOf(tree!.root).includes("Validation report"),
+      "expected task detail before archive mutation",
+    );
+
+    await act(async () => {
+      findButtonByText(tree!.root, "Archive").props.onClick();
+    });
+
+    await waitFor(
+      () => textOf(tree!.root).includes("Failed to update task thread"),
+      "expected archive mutation error to render",
+    );
+
+    expect(textOf(tree!.root)).toContain(
+      "Failed to update task thread: archive failed",
+    );
+    expect(mockClient.listCodingAgentTaskThreads).toHaveBeenCalledTimes(1);
   });
 
   it("shows archived threads and reopens the selected archived task", async () => {
@@ -502,6 +535,16 @@ describe("agent orchestrator tasks widget", () => {
           autoResolvedCount: 0,
         },
         {
+          sessionId: "active",
+          agentType: "codex",
+          label: "Background Agent",
+          originalTask: "Watch progress",
+          workdir: "/workspace/active",
+          status: "active",
+          decisionCount: 0,
+          autoResolvedCount: 0,
+        },
+        {
           sessionId: "errored",
           agentType: "claude",
           label: "Errored Agent",
@@ -555,6 +598,7 @@ describe("agent orchestrator tasks widget", () => {
 
     expect(textOf(tree!.root)).toContain("Running npm test");
     expect(textOf(tree!.root)).toContain("Waiting for input");
+    expect(textOf(tree!.root)).toContain("Background Agent");
     expect(textOf(tree!.root)).not.toContain("Errored Agent");
   });
 });
