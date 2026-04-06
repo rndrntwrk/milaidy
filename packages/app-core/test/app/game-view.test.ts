@@ -92,6 +92,17 @@ function createRunSummary(
 
 function createContext(overrides?: Partial<GameContextStub>): GameContextStub {
   const run = createRunSummary({
+    viewer:
+      overrides?.activeGameViewerUrl === ""
+        ? null
+        : {
+            url:
+              overrides?.activeGameViewerUrl ?? "http://localhost:5175/viewer",
+            sandbox:
+              overrides?.activeGameSandbox ?? "allow-scripts allow-same-origin",
+            postMessageAuth: overrides?.activeGamePostMessageAuth ?? false,
+            authMessage: overrides?.activeGamePostMessagePayload ?? undefined,
+          },
     session: overrides?.activeGameSession ?? null,
   });
   return {
@@ -247,6 +258,67 @@ describe("GameView", () => {
       url: ctx.activeGameViewerUrl,
     });
     expect(openSpy).not.toHaveBeenCalled();
+  });
+
+  it("keeps auth-backed embedded viewers inside the app shell on Electrobun", async () => {
+    const payload: AppViewerAuthMessage = {
+      type: "HYPERSCAPE_AUTH",
+      authToken: "token-embedded",
+      agentId: "agent-1",
+      characterId: "char-1",
+      followEntity: "char-1",
+    };
+    const ctx = createContext({
+      activeGameApp: "@elizaos/app-hyperscape",
+      activeGameDisplayName: "Hyperscape",
+      activeGameViewerUrl:
+        "http://localhost:3333?embedded=true&mode=spectator&surface=agent-control",
+      activeGamePostMessageAuth: true,
+      activeGamePostMessagePayload: payload,
+      appRuns: [
+        createRunSummary({
+          appName: "@elizaos/app-hyperscape",
+          displayName: "Hyperscape",
+          viewer: {
+            url: "http://localhost:3333?embedded=true&mode=spectator&surface=agent-control",
+            embedParams: {
+              embedded: "true",
+              mode: "spectator",
+              surface: "agent-control",
+            },
+            sandbox: "allow-scripts allow-same-origin",
+            postMessageAuth: true,
+            authMessage: payload,
+          },
+        }),
+      ],
+    });
+    const gameOpenWindow = vi.fn(async () => ({ id: "game-window-1" }));
+    mockUseApp.mockReturnValue(ctx);
+    (window as TestWindow).__electrobunWindowId = 1;
+
+    (
+      window as TestWindow & { __MILADY_ELECTROBUN_RPC__?: unknown }
+    ).__MILADY_ELECTROBUN_RPC__ = {
+      request: {
+        gameOpenWindow,
+      },
+      onMessage: vi.fn(),
+      offMessage: vi.fn(),
+    };
+
+    let tree: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(GameView));
+    });
+    await flush();
+
+    expect(gameOpenWindow).not.toHaveBeenCalled();
+    expect(
+      tree.root.find(
+        (node) => node.props?.["data-testid"] === "game-view-iframe",
+      ),
+    ).toBeDefined();
   });
 
   it("stops app, resets state, and navigates back on success", async () => {

@@ -30,12 +30,12 @@ import { openExternalUrl } from "../../utils";
 import type { DesktopClickAuditItem } from "../../utils/desktop-workspace";
 import { formatTime } from "../../utils/format";
 import { BabylonTerminal } from "./BabylonTerminal";
-
-const READY_EVENT_BY_AUTH_TYPE: Record<string, string> = {
-  HYPERSCAPE_AUTH: "HYPERSCAPE_READY",
-  RS_2004SCAPE_AUTH: "RS_2004SCAPE_READY",
-  BABYLON_AUTH: "BABYLON_READY",
-};
+import {
+  buildViewerSessionKey,
+  resolvePostMessageTargetOrigin,
+  resolveViewerReadyEventType,
+  shouldUseEmbeddedAppViewer,
+} from "./viewer-auth";
 
 export function buildDisconnectedSessionState(
   session: AppSessionState | null,
@@ -53,12 +53,6 @@ export function buildDisconnectedSessionState(
       ? `Session unavailable: ${session.displayName}`
       : "Session unavailable.",
   };
-}
-
-function resolvePostMessageTargetOrigin(viewerUrl: string): string {
-  if (viewerUrl.startsWith("/")) return window.location.origin;
-  const match = viewerUrl.match(/^https?:\/\/[^/?#]+/i);
-  return match?.[0] ?? "*";
 }
 
 /** Tag badge colors for logs panel. */
@@ -503,6 +497,17 @@ export function GameView() {
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const authSentRef = useRef(false);
   const viewerSessionRef = useRef<string>("");
+  const activeGameRun = useMemo(
+    () => appRuns.find((run) => run.runId === activeGameRunId) ?? null,
+    [activeGameRunId, appRuns],
+  );
+  const useEmbeddedViewer = useMemo(
+    () => shouldUseEmbeddedAppViewer(activeGameRun),
+    [activeGameRun],
+  );
+  const useNativeGameWindow = Boolean(
+    isElectrobun && activeGameViewerUrl && !useEmbeddedViewer,
+  );
 
   const applySessionState = useCallback(
     (nextSession: AppSessionState | null) => {
@@ -720,7 +725,7 @@ export function GameView() {
   );
   const viewerSessionKey = useMemo(
     () =>
-      `${activeGameViewerUrl}::${JSON.stringify(activeGamePostMessagePayload ?? null)}`,
+      buildViewerSessionKey(activeGameViewerUrl, activeGamePostMessagePayload),
     [activeGamePostMessagePayload, activeGameViewerUrl],
   );
 
@@ -762,7 +767,7 @@ export function GameView() {
   // Open the game URL in an isolated Electrobun BrowserWindow.
   // Runs whenever the viewer URL or game title changes and we're inside the desktop app.
   useEffect(() => {
-    if (!isElectrobun || !activeGameViewerUrl) return;
+    if (!useNativeGameWindow || !activeGameViewerUrl) return;
 
     let cancelled = false;
 
@@ -807,8 +812,8 @@ export function GameView() {
     activeGameViewerUrl,
     activeGameApp,
     activeGameDisplayName,
-    isElectrobun,
     t,
+    useNativeGameWindow,
   ]);
 
   // Reset auth handshake state when the active viewer session changes.
@@ -817,13 +822,21 @@ export function GameView() {
       viewerSessionRef.current = viewerSessionKey;
       authSentRef.current = false;
     }
-    if (activeGamePostMessageAuth) {
+    if (activeGamePostMessageAuth && useEmbeddedViewer) {
       setConnectionStatus("connecting");
       return;
     }
-    // No auth required, assume connected once iframe loads.
+    if (useNativeGameWindow) {
+      setConnectionStatus("connecting");
+      return;
+    }
     setConnectionStatus("connected");
-  }, [activeGamePostMessageAuth, viewerSessionKey]);
+  }, [
+    activeGamePostMessageAuth,
+    useEmbeddedViewer,
+    useNativeGameWindow,
+    viewerSessionKey,
+  ]);
 
   const resetActiveGameState = useCallback(() => {
     setSessionState(null);
@@ -831,10 +844,16 @@ export function GameView() {
   }, [setState]);
 
   useEffect(() => {
-    if (!activeGamePostMessageAuth || !activeGamePostMessagePayload) return;
+    if (
+      !useEmbeddedViewer ||
+      !activeGamePostMessageAuth ||
+      !activeGamePostMessagePayload
+    )
+      return;
     if (authSentRef.current) return;
-    const expectedReadyType =
-      READY_EVENT_BY_AUTH_TYPE[activeGamePostMessagePayload.type];
+    const expectedReadyType = resolveViewerReadyEventType(
+      activeGamePostMessagePayload,
+    );
     if (!expectedReadyType) return;
 
     const onMessage = (event: MessageEvent<{ type?: string }>) => {
@@ -871,6 +890,7 @@ export function GameView() {
     postMessageTargetOrigin,
     setActionNotice,
     t,
+    useEmbeddedViewer,
   ]);
 
   const handleOpenInNewTab = useCallback(async () => {
@@ -1342,7 +1362,7 @@ export function GameView() {
               ? t("game.hideLogs")
               : t("game.showLogs")}
         </Button>
-        {isElectrobun && (
+        {useNativeGameWindow && (
           <DesktopGameWindowControls gameWindowId={gameWindowId} />
         )}
         <Button
@@ -1389,7 +1409,7 @@ export function GameView() {
       </div>
       <div className="flex-1 min-h-0 flex">
         <div className="flex-1 min-h-0 relative">
-          {isElectrobun ? (
+          {useNativeGameWindow ? (
             /* Electrobun mode: game runs in an isolated BrowserWindow opened
                via game:openWindow RPC. The div below is a placeholder that
                fills the same space in the layout while the native window is

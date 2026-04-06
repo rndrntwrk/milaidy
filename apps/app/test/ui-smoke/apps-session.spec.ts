@@ -229,6 +229,43 @@ async function startAppsSessionFixture(): Promise<FixtureServer> {
     },
   };
 
+  const buildRunSummary = (req: http.IncomingMessage) => {
+    const viewer = {
+      url: buildViewerUrl(req),
+      postMessageAuth: true,
+      sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
+      authMessage: {
+        type: "HYPERSCAPE_AUTH",
+        authToken: "test-auth-token",
+        agentId: state.sessionState.agentId,
+        characterId: state.sessionState.characterId,
+        followEntity: state.sessionState.followEntity,
+      },
+    };
+
+    return {
+      runId: "run-hyperscape-1",
+      appName: "@elizaos/app-hyperscape",
+      displayName: "Hyperscape",
+      pluginName: "@elizaos/app-hyperscape",
+      launchType: "connect",
+      launchUrl: null,
+      viewer,
+      session: state.sessionState,
+      status: state.sessionState.status,
+      summary: state.sessionState.summary,
+      startedAt: "2026-04-06T07:00:00.000Z",
+      updatedAt: "2026-04-06T07:00:00.000Z",
+      lastHeartbeatAt: "2026-04-06T07:00:00.000Z",
+      supportsBackground: true,
+      viewerAttachment: "attached",
+      health: {
+        state: "healthy",
+        message: null,
+      },
+    };
+  };
+
   const sockets = new Set<Socket>();
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://127.0.0.1");
@@ -518,10 +555,21 @@ async function startAppsSessionFixture(): Promise<FixtureServer> {
       return;
     }
 
+    if (req.method === "GET" && url.pathname === "/api/apps/runs") {
+      sendJson(
+        req,
+        res,
+        200,
+        state.launchRequestName ? [buildRunSummary(req)] : [],
+      );
+      return;
+    }
+
     if (req.method === "POST" && url.pathname === "/api/apps/launch") {
       const body = await readJsonBody(req);
       state.launchRequestName =
         typeof body?.name === "string" ? body.name : null;
+      const run = buildRunSummary(req);
 
       sendJson(req, res, 200, {
         pluginInstalled: true,
@@ -529,19 +577,9 @@ async function startAppsSessionFixture(): Promise<FixtureServer> {
         displayName: "Hyperscape",
         launchType: "connect",
         launchUrl: null,
-        viewer: {
-          url: buildViewerUrl(req),
-          postMessageAuth: true,
-          sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
-          authMessage: {
-            type: "HYPERSCAPE_AUTH",
-            authToken: "test-auth-token",
-            agentId: state.sessionState.agentId,
-            characterId: state.sessionState.characterId,
-            followEntity: state.sessionState.followEntity,
-          },
-        },
+        viewer: run.viewer,
         session: state.sessionState,
+        run,
       });
       return;
     }
