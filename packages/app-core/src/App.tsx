@@ -44,6 +44,7 @@ import {
 } from "./app-shell-components";
 import { TasksEventsPanel } from "./components/chat/TasksEventsPanel";
 import { DeferredSetupChecklist } from "./components/cloud/FlaminaGuide";
+import { MusicPlayerGlobal } from "./components/music/MusicPlayerGlobal";
 import { CompanionHeader } from "./components/companion/CompanionHeader";
 import {
   BugReportProvider,
@@ -701,6 +702,7 @@ export function App() {
         If we are in the crossfade phase, mount the shell but cover it with the fading onboarding layer.
       */}
       {appShell}
+      <MusicPlayerGlobal />
 
       {/* Persistent game overlay — stays visible across all tabs */}
       {activeGameViewerUrl && gameOverlayEnabled && tab !== "apps" && (
