@@ -4,7 +4,7 @@
     {
       "name": "dev",
       "runtimeExecutable": "/bin/zsh",
-      "runtimeArgs": ["-l", "-c", "export PATH=\"/Users/shawwalters/.bun/bin:$PATH\" && bun run dev"],
+      "runtimeArgs": ["-l", "-c", "export PATH=\"/Users/shawwalters/.bun/bin:$PATH\" && ELIZA_DEV_ONCHAIN=0 bun run dev"],
       "port": 2138,
       "autoPort": true
     },
