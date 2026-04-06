@@ -235,9 +235,7 @@ let pushSystemEventFn:
 async function loadPushSystemEvent(): Promise<void> {
   if (pushSystemEventFn) return;
   try {
-    const mod = await import(
-      /* webpackIgnore: true */ "@elizaos/plugin-cron"
-    );
+    const mod = await import(/* webpackIgnore: true */ "@elizaos/plugin-cron");
     if (typeof mod.pushSystemEvent === "function") {
       pushSystemEventFn = mod.pushSystemEvent;
     }
@@ -665,11 +663,17 @@ async function fetchJson<T>(url: URL, init?: RequestInit): Promise<T> {
 }
 
 /** Short-lived cache for game state (avoids duplicate fetches within one request flow). */
-const gameStateCache = new Map<string, { state: DefenseGameState; ts: number }>();
+const gameStateCache = new Map<
+  string,
+  { state: DefenseGameState; ts: number }
+>();
 const GAME_STATE_CACHE_TTL_MS = 5_000;
 
 /** Last-known-good session state cache — returned when remote API is temporarily unavailable. */
-const sessionStateCache = new Map<string, { session: AppSessionState; ts: number }>();
+const sessionStateCache = new Map<
+  string,
+  { session: AppSessionState; ts: number }
+>();
 const SESSION_STATE_CACHE_TTL_MS = 15_000;
 
 async function fetchGameState(
@@ -727,10 +731,7 @@ async function locateHeroState(
           if (otherHero) {
             return { gameId, state: otherState, hero: otherHero };
           }
-        } catch {
-          // Skip games that error (404, rate limit)
-          continue;
-        }
+        } catch {}
       }
       // Hero nowhere — return preferred game state as fallback
       return { gameId: ctx.preferredGameId, state, hero: null };
@@ -755,9 +756,7 @@ async function locateHeroState(
       if (hero) {
         return { gameId, state, hero };
       }
-    } catch {
-      continue;
-    }
+    } catch {}
   }
 
   if (fallbackState) return fallbackState;
@@ -792,8 +791,17 @@ async function registerAgent(ctx: SessionContext): Promise<string> {
       });
       if (retryResponse.apiKey?.trim()) {
         ctx.agentName = suffixed;
-        persistSetting(ctx.runtime, "DEFENSE_OF_THE_AGENTS_AGENT_NAME", suffixed);
-        persistSetting(ctx.runtime, "DEFENSE_OF_THE_AGENTS_API_KEY", retryResponse.apiKey.trim(), true);
+        persistSetting(
+          ctx.runtime,
+          "DEFENSE_OF_THE_AGENTS_AGENT_NAME",
+          suffixed,
+        );
+        persistSetting(
+          ctx.runtime,
+          "DEFENSE_OF_THE_AGENTS_API_KEY",
+          retryResponse.apiKey.trim(),
+          true,
+        );
         return retryResponse.apiKey.trim();
       }
     }
@@ -883,7 +891,9 @@ function resolveStrategy(runtime: IAgentRuntime | null): GameStrategy {
   return { ...DEFAULT_STRATEGY, metrics: { ...DEFAULT_STRATEGY.metrics } };
 }
 
-function resolveBestStrategy(runtime: IAgentRuntime | null): GameStrategy | null {
+function resolveBestStrategy(
+  runtime: IAgentRuntime | null,
+): GameStrategy | null {
   const raw = resolveSettingLike(runtime, STRATEGY_SETTING_BEST);
   if (!raw) return null;
   try {
@@ -895,15 +905,24 @@ function resolveBestStrategy(runtime: IAgentRuntime | null): GameStrategy | null
   return null;
 }
 
-function persistStrategy(runtime: IAgentRuntime | null, strategy: GameStrategy): void {
+function persistStrategy(
+  runtime: IAgentRuntime | null,
+  strategy: GameStrategy,
+): void {
   persistSetting(runtime, STRATEGY_SETTING_CURRENT, JSON.stringify(strategy));
 }
 
-function persistBestStrategy(runtime: IAgentRuntime | null, strategy: GameStrategy): void {
+function persistBestStrategy(
+  runtime: IAgentRuntime | null,
+  strategy: GameStrategy,
+): void {
   persistSetting(runtime, STRATEGY_SETTING_BEST, JSON.stringify(strategy));
 }
 
-function appendStrategyHistory(runtime: IAgentRuntime | null, strategy: GameStrategy): void {
+function appendStrategyHistory(
+  runtime: IAgentRuntime | null,
+  strategy: GameStrategy,
+): void {
   let history: GameStrategy[] = [];
   const raw = resolveSettingLike(runtime, STRATEGY_SETTING_HISTORY);
   if (raw) {
@@ -933,7 +952,11 @@ function scoreStrategy(metrics: StrategyMetrics): number {
       ? metrics.laneControlSum / metrics.ticksTracked
       : 0;
   // Weighted: 40% survival, 30% level gain (normalized), 30% lane control (normalized)
-  return survivalRate * 0.4 + Math.min(levelGain / 5, 1) * 0.3 + Math.min(Math.max(avgLaneControl + 50, 0) / 100, 1) * 0.3;
+  return (
+    survivalRate * 0.4 +
+    Math.min(levelGain / 5, 1) * 0.3 +
+    Math.min(Math.max(avgLaneControl + 50, 0) / 100, 1) * 0.3
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -959,8 +982,7 @@ function findWeakestAlliedLane(
   let worstDiff = Number.POSITIVE_INFINITY;
   for (const lane of laneOrder) {
     const ls = state.lanes[lane];
-    const diff =
-      faction === "orc" ? ls.orc - ls.human : ls.human - ls.orc;
+    const diff = faction === "orc" ? ls.orc - ls.human : ls.human - ls.orc;
     if (diff < worstDiff) {
       worstDiff = diff;
       weakest = lane;
@@ -975,13 +997,10 @@ function buildCompactSummary(
   gameId: number,
   strategy: GameStrategy,
 ): string {
-  const hpPct =
-    hero.maxHp > 0 ? Math.round((hero.hp / hero.maxHp) * 100) : 0;
+  const hpPct = hero.maxHp > 0 ? Math.round((hero.hp / hero.maxHp) * 100) : 0;
   const lane = state.lanes[hero.lane];
-  const alliedUnits =
-    hero.faction === "orc" ? lane.orc : lane.human;
-  const enemyUnits =
-    hero.faction === "orc" ? lane.human : lane.orc;
+  const alliedUnits = hero.faction === "orc" ? lane.orc : lane.human;
+  const enemyUnits = hero.faction === "orc" ? lane.human : lane.orc;
   const abilityPart = hero.abilityChoices?.length
     ? ` Choices: ${hero.abilityChoices.join(", ")}.`
     : "";
@@ -997,7 +1016,8 @@ function describeAction(
   hero: DefenseHero | null,
   state: DefenseGameState,
 ): string {
-  if (action === "game-over") return `Game over — ${state.winner ?? "unknown"} wins`;
+  if (action === "game-over")
+    return `Game over — ${state.winner ?? "unknown"} wins`;
   if (action === "initial-deploy") return "Deployed hero into the arena";
   if (action === "respawning") return "Waiting to respawn...";
   if (action === "hold") {
@@ -1023,7 +1043,13 @@ function describeAction(
 async function executeStrategyTick(
   ctx: SessionContext,
   strategy: GameStrategy,
-): Promise<{ deployed: boolean; action: string; hero: DefenseHero | null; state: DefenseGameState; gameId: number }> {
+): Promise<{
+  deployed: boolean;
+  action: string;
+  hero: DefenseHero | null;
+  state: DefenseGameState;
+  gameId: number;
+}> {
   const located = await locateHeroState(ctx);
   const { hero, state, gameId } = located;
 
@@ -1037,7 +1063,13 @@ async function executeStrategyTick(
       heroClass: strategy.heroClass,
       heroLane: strategy.preferredLane,
     });
-    return { deployed: true, action: "initial-deploy", hero: null, state, gameId };
+    return {
+      deployed: true,
+      action: "initial-deploy",
+      hero: null,
+      state,
+      gameId,
+    };
   }
 
   if (!hero.alive) {
@@ -1109,13 +1141,9 @@ function buildReviewSummary(
 ): string {
   const m = current.metrics;
   const survPct =
-    m.ticksTracked > 0
-      ? Math.round((m.ticksAlive / m.ticksTracked) * 100)
-      : 0;
+    m.ticksTracked > 0 ? Math.round((m.ticksAlive / m.ticksTracked) * 100) : 0;
   const avgLane =
-    m.ticksTracked > 0
-      ? (m.laneControlSum / m.ticksTracked).toFixed(1)
-      : "0";
+    m.ticksTracked > 0 ? (m.laneControlSum / m.ticksTracked).toFixed(1) : "0";
   const currentScore = scoreStrategy(m).toFixed(3);
 
   let review =
@@ -1206,16 +1234,11 @@ function updateMetrics(
     strategy.metrics.ticksAlive += 1;
   }
   if (hero) {
-    strategy.metrics.levelEnd = Math.max(
-      strategy.metrics.levelEnd,
-      hero.level,
-    );
+    strategy.metrics.levelEnd = Math.max(strategy.metrics.levelEnd, hero.level);
     if (hero.lane) {
       const lane = state.lanes[hero.lane];
       const control =
-        hero.faction === "orc"
-          ? lane.orc - lane.human
-          : lane.human - lane.orc;
+        hero.faction === "orc" ? lane.orc - lane.human : lane.human - lane.orc;
       strategy.metrics.laneControlSum += control;
     }
   }
@@ -1250,13 +1273,22 @@ function startGameLoop(
         persistStrategy(runtime, strategy);
 
         // Build a human-readable description of what happened
-        const actionLabel = describeAction(result.action, result.hero, result.state);
+        const actionLabel = describeAction(
+          result.action,
+          result.hero,
+          result.state,
+        );
         pushActivity(agentId, result.action, actionLabel);
 
         if (result.hero) {
           pushEvent(
             agentId,
-            buildCompactSummary(result.hero, result.state, result.gameId, strategy),
+            buildCompactSummary(
+              result.hero,
+              result.state,
+              result.gameId,
+              strategy,
+            ),
           );
         }
       } catch (err) {
@@ -1323,7 +1355,9 @@ function parseStrategyUpdate(
   // Handle JSON strategy object: {"strategy": {...}}
   if (trimmed.startsWith("{")) {
     try {
-      const parsed = JSON.parse(trimmed) as { strategy?: Partial<GameStrategy> };
+      const parsed = JSON.parse(trimmed) as {
+        strategy?: Partial<GameStrategy>;
+      };
       // Only match if the JSON explicitly contains a "strategy" key
       if (!parsed.strategy || typeof parsed.strategy !== "object") return null;
       const update = parsed.strategy;
@@ -1503,7 +1537,6 @@ function buildTelemetry(
   };
 }
 
-
 function buildSessionState(
   ctx: SessionContext,
   located: LocatedHeroState,
@@ -1530,7 +1563,12 @@ function buildSessionState(
     controls: [],
     summary: buildSummary(hero, state, gameId),
     goalLabel: buildGoalLabel(hero),
-    suggestedPrompts: buildSuggestedPromptsWithAutoPlay(state, hero, ctx, ctx.runtime),
+    suggestedPrompts: buildSuggestedPromptsWithAutoPlay(
+      state,
+      hero,
+      ctx,
+      ctx.runtime,
+    ),
     telemetry: buildTelemetry(state, hero, gameId, ctx.runtime),
   };
 }
@@ -1708,7 +1746,11 @@ async function readSessionState(
 
   // Return fresh cache if within TTL (prevents hammering remote API on UI polls)
   const cached = sessionStateCache.get(cacheKey);
-  if (cached && Date.now() - cached.ts < SESSION_STATE_CACHE_TTL_MS && !autoJoin) {
+  if (
+    cached &&
+    Date.now() - cached.ts < SESSION_STATE_CACHE_TTL_MS &&
+    !autoJoin
+  ) {
     return cached.session;
   }
 
@@ -1760,7 +1802,11 @@ export async function resolveLaunchSession(
     startGameLoop(ctx.runtime, sessionCtx);
     const launchAgentId = asRuntimeLike(ctx.runtime)?.agentId;
     if (launchAgentId) {
-      pushActivity(launchAgentId, "launch", "Game session launched — auto-play started");
+      pushActivity(
+        launchAgentId,
+        "launch",
+        "Game session launched — auto-play started",
+      );
     }
   }
 
@@ -1829,7 +1875,10 @@ export async function handleAppRoutes(ctx: {
         return true;
       }
 
-      const normalizedCmd = content.toLowerCase().replace(/[^a-z0-9 ]/g, "").trim();
+      const normalizedCmd = content
+        .toLowerCase()
+        .replace(/[^a-z0-9 ]/g, "")
+        .trim();
 
       const cmdAgentId = asRuntimeLike(runtime)?.agentId;
 
@@ -1837,37 +1886,80 @@ export async function handleAppRoutes(ctx: {
       if (normalizedCmd === "autoplay on" || normalizedCmd === "auto play on") {
         const sessionCtx = resolveSessionContext(runtime, sessionId);
         startGameLoop(runtime, sessionCtx);
-        if (cmdAgentId) pushActivity(cmdAgentId, "auto-play-on", "Auto-play enabled");
+        if (cmdAgentId)
+          pushActivity(cmdAgentId, "auto-play-on", "Auto-play enabled");
         const refreshed = await readSessionState(runtime, sessionId);
-        ctx.json(ctx.res, okResponse(true, "Auto-play enabled. Agent is now playing autonomously.", refreshed));
+        ctx.json(
+          ctx.res,
+          okResponse(
+            true,
+            "Auto-play enabled. Agent is now playing autonomously.",
+            refreshed,
+          ),
+        );
         return true;
       }
-      if (normalizedCmd === "autoplay off" || normalizedCmd === "auto play off") {
+      if (
+        normalizedCmd === "autoplay off" ||
+        normalizedCmd === "auto play off"
+      ) {
         stopGameLoop(runtime);
-        if (cmdAgentId) pushActivity(cmdAgentId, "auto-play-off", "Auto-play disabled");
+        if (cmdAgentId)
+          pushActivity(cmdAgentId, "auto-play-off", "Auto-play disabled");
         const refreshed = await readSessionState(runtime, sessionId);
-        ctx.json(ctx.res, okResponse(true, "Auto-play disabled. Send commands manually.", refreshed));
+        ctx.json(
+          ctx.res,
+          okResponse(
+            true,
+            "Auto-play disabled. Send commands manually.",
+            refreshed,
+          ),
+        );
         return true;
       }
 
       // Handle strategy review trigger
-      if (normalizedCmd === "review strategy" || normalizedCmd === "strategy review") {
+      if (
+        normalizedCmd === "review strategy" ||
+        normalizedCmd === "strategy review"
+      ) {
         runStrategyReview(runtime);
-        if (cmdAgentId) pushActivity(cmdAgentId, "strategy-review", "Manual strategy review triggered");
+        if (cmdAgentId)
+          pushActivity(
+            cmdAgentId,
+            "strategy-review",
+            "Manual strategy review triggered",
+          );
         const refreshed = await readSessionState(runtime, sessionId);
-        ctx.json(ctx.res, okResponse(true, "Strategy review completed.", refreshed));
+        ctx.json(
+          ctx.res,
+          okResponse(true, "Strategy review completed.", refreshed),
+        );
         return true;
       }
 
       // Handle strategy update (JSON)
-      const strategyUpdate = parseStrategyUpdate(content, resolveStrategy(runtime));
+      const strategyUpdate = parseStrategyUpdate(
+        content,
+        resolveStrategy(runtime),
+      );
       if (strategyUpdate) {
         persistStrategy(runtime, {
           ...strategyUpdate,
-          metrics: { ...resolveStrategy(runtime).metrics, lastReviewedAt: Date.now() },
+          metrics: {
+            ...resolveStrategy(runtime).metrics,
+            lastReviewedAt: Date.now(),
+          },
         });
         const refreshed = await readSessionState(runtime, sessionId);
-        ctx.json(ctx.res, okResponse(true, `Strategy updated to v${strategyUpdate.version}.`, refreshed));
+        ctx.json(
+          ctx.res,
+          okResponse(
+            true,
+            `Strategy updated to v${strategyUpdate.version}.`,
+            refreshed,
+          ),
+        );
         return true;
       }
 
@@ -1880,7 +1972,10 @@ export async function handleAppRoutes(ctx: {
       let currentGameId: number | undefined;
       if (sessionCtx.preferredGameId) {
         try {
-          const state = await fetchGameState(sessionCtx.apiBaseUrl, sessionCtx.preferredGameId);
+          const state = await fetchGameState(
+            sessionCtx.apiBaseUrl,
+            sessionCtx.preferredGameId,
+          );
           currentHero = findHero(state, sessionCtx.agentName);
           currentGameId = sessionCtx.preferredGameId;
         } catch {
@@ -1888,14 +1983,23 @@ export async function handleAppRoutes(ctx: {
         }
       }
 
-      const deployment = parseDeploymentCommand(content, sessionCtx, currentHero);
+      const deployment = parseDeploymentCommand(
+        content,
+        sessionCtx,
+        currentHero,
+      );
       const response = await deployHero(sessionCtx, deployment);
 
       // Persist the game ID so subsequent calls use the fast path
-      const assignedGameId = response.gameId ?? currentGameId ?? sessionCtx.preferredGameId;
+      const assignedGameId =
+        response.gameId ?? currentGameId ?? sessionCtx.preferredGameId;
       if (typeof assignedGameId === "number") {
         sessionCtx.preferredGameId = assignedGameId;
-        persistSetting(runtime, "DEFENSE_OF_THE_AGENTS_GAME_ID", String(assignedGameId));
+        persistSetting(
+          runtime,
+          "DEFENSE_OF_THE_AGENTS_GAME_ID",
+          String(assignedGameId),
+        );
       }
 
       // Clear cache for the assigned game so we get fresh state after deploy
@@ -1905,7 +2009,10 @@ export async function handleAppRoutes(ctx: {
 
       // Re-fetch game state once (not a full locate scan) to get updated hero
       const refreshedGameId = assignedGameId ?? DEFAULT_GAME_ID;
-      const refreshedState = await fetchGameState(sessionCtx.apiBaseUrl, refreshedGameId);
+      const refreshedState = await fetchGameState(
+        sessionCtx.apiBaseUrl,
+        refreshedGameId,
+      );
       const refreshedHero = findHero(refreshedState, sessionCtx.agentName);
       const refreshedSession = buildSessionState(sessionCtx, {
         gameId: refreshedGameId,
@@ -1955,23 +2062,23 @@ export async function handleAppRoutes(ctx: {
 // ---------------------------------------------------------------------------
 
 export {
-  type GameStrategy,
-  type StrategyMetrics,
-  DEFAULT_STRATEGY,
-  resetInMemoryStateForTests,
-  resolveStrategy,
-  resolveBestStrategy,
-  persistStrategy,
-  persistBestStrategy,
-  scoreStrategy,
-  pickAbility,
-  findWeakestAlliedLane,
-  executeStrategyTick,
-  updateMetrics,
   buildReviewSummary,
-  runStrategyReview,
-  startGameLoop,
-  stopGameLoop,
+  DEFAULT_STRATEGY,
+  executeStrategyTick,
+  findWeakestAlliedLane,
+  type GameStrategy,
   isAutoPlayActive,
   parseStrategyUpdate,
+  persistBestStrategy,
+  persistStrategy,
+  pickAbility,
+  resetInMemoryStateForTests,
+  resolveBestStrategy,
+  resolveStrategy,
+  runStrategyReview,
+  type StrategyMetrics,
+  scoreStrategy,
+  startGameLoop,
+  stopGameLoop,
+  updateMetrics,
 };

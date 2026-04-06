@@ -2,13 +2,7 @@ import { useMemo } from "react";
 import { useApp } from "../../../state";
 import type { AppDetailExtensionProps } from "./types";
 
-function DetailCard({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
+function DetailCard({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-2xl border border-border/35 bg-bg/55 px-4 py-3">
       <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted">
@@ -22,11 +16,15 @@ function DetailCard({
 function formatTimestamp(value: string | number | null | undefined): string {
   if (typeof value === "number") {
     const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? "Not yet verified" : date.toLocaleString();
+    return Number.isNaN(date.getTime())
+      ? "Not yet verified"
+      : date.toLocaleString();
   }
   if (typeof value === "string" && value.trim().length > 0) {
     const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? "Not yet verified" : date.toLocaleString();
+    return Number.isNaN(date.getTime())
+      ? "Not yet verified"
+      : date.toLocaleString();
   }
   return "Not yet verified";
 }
@@ -41,17 +39,16 @@ function statusTone(status: string): string {
   return "border-warn/30 bg-warn/10 text-warn";
 }
 
-export function DefenseAgentsDetailExtension({
-  app,
-}: AppDetailExtensionProps) {
+export function DefenseAgentsDetailExtension({ app }: AppDetailExtensionProps) {
   const { appRuns } = useApp();
   const availableRuns = Array.isArray(appRuns) ? appRuns : [];
   const run = useMemo(
     () =>
       [...availableRuns]
         .filter((candidate) => candidate.appName === app.name)
-        .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0] ??
-      null,
+        .sort((left, right) =>
+          right.updatedAt.localeCompare(left.updatedAt),
+        )[0] ?? null,
     [app.name, availableRuns],
   );
   const telemetry =
@@ -59,7 +56,9 @@ export function DefenseAgentsDetailExtension({
       ? (run.session.telemetry as Record<string, unknown>)
       : null;
   const recentActivity = Array.isArray(telemetry?.recentActivity)
-    ? (telemetry.recentActivity as Array<Record<string, unknown>>).slice(-4).reverse()
+    ? (telemetry.recentActivity as Array<Record<string, unknown>>)
+        .slice(-4)
+        .reverse()
     : [];
   const heroClass =
     typeof telemetry?.heroClass === "string" ? telemetry.heroClass : "Unknown";
@@ -89,15 +88,27 @@ export function DefenseAgentsDetailExtension({
         </div>
         <div className="rounded-[1.4rem] border border-border/35 bg-card/74 p-4 shadow-sm">
           <p className="text-[12px] leading-6 text-muted-strong">
-            Defense of the Agents uses a Milady-hosted spectator shell. Launch it
-            to monitor the agent, keep the autoplay script running, and steer the
-            hero with live chat guidance.
+            Defense of the Agents uses a Milady-hosted spectator shell. Launch
+            it to monitor the agent, keep the autoplay script running, and steer
+            the hero with live chat guidance.
           </p>
           <div className="mt-3 grid gap-2 md:grid-cols-2">
-            <DetailCard label="Autoplay Loop" value="Deploys, levels, recalls, and reinforces lanes." />
-            <DetailCard label="Strategy Review" value="Scores current tactics and promotes better versions over time." />
-            <DetailCard label="Operator Chat" value="Suggestions flow into the live session while the bot keeps playing." />
-            <DetailCard label="Viewer Shell" value="The app opens a stable local shell instead of the broken remote overlay stack." />
+            <DetailCard
+              label="Autoplay Loop"
+              value="Deploys, levels, recalls, and reinforces lanes."
+            />
+            <DetailCard
+              label="Strategy Review"
+              value="Scores current tactics and promotes better versions over time."
+            />
+            <DetailCard
+              label="Operator Chat"
+              value="Suggestions flow into the live session while the bot keeps playing."
+            />
+            <DetailCard
+              label="Viewer Shell"
+              value="The app opens a stable local shell instead of the broken remote overlay stack."
+            />
           </div>
         </div>
       </section>
@@ -121,7 +132,10 @@ export function DefenseAgentsDetailExtension({
       </div>
 
       <div className="grid gap-2 md:grid-cols-2">
-        <DetailCard label="Agent Status" value={`${heroClass} ${heroLevel} in ${heroLane} lane`} />
+        <DetailCard
+          label="Agent Status"
+          value={`${heroClass} ${heroLevel} in ${heroLane} lane`}
+        />
         <DetailCard label="Hero Health" value={heroHp} />
         <DetailCard label="Autoplay Script" value={autoPlayLabel} />
         <DetailCard label="Strategy Script" value={strategyLabel} />
@@ -196,21 +210,25 @@ export function DefenseAgentsDetailExtension({
             Recent Behavior
           </div>
           <div className="mt-3 space-y-2">
-            {recentActivity.map((entry, index) => {
+            {recentActivity.map((entry) => {
               const action =
                 typeof entry.action === "string" ? entry.action : "activity";
               const detail =
-                typeof entry.detail === "string" ? entry.detail : "No detail captured.";
+                typeof entry.detail === "string"
+                  ? entry.detail
+                  : "No detail captured.";
               const ts =
                 typeof entry.ts === "number" || typeof entry.ts === "string"
                   ? formatTimestamp(entry.ts)
                   : "Unknown time";
               return (
                 <div
-                  key={`${action}-${ts}-${index}`}
+                  key={`${action}-${detail}-${ts}`}
                   className="rounded-xl border border-border/30 bg-bg/60 px-3 py-2"
                 >
-                  <div className="text-[11px] font-medium text-txt">{action}</div>
+                  <div className="text-[11px] font-medium text-txt">
+                    {action}
+                  </div>
                   <div className="mt-1 text-[11px] leading-5 text-muted-strong">
                     {detail}
                   </div>

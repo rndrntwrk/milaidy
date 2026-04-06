@@ -1,13 +1,13 @@
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { logger } from "@elizaos/core";
 import type { IAgentRuntime, Plugin } from "@elizaos/core";
+import { logger } from "@elizaos/core";
 import {
-  hasAppInterface,
-  packageNameToAppRouteSlug,
   type AppLaunchResult,
   type AppSessionState,
+  hasAppInterface,
+  packageNameToAppRouteSlug,
 } from "../contracts/apps";
 import { getPluginInfo } from "./registry-client.js";
 
@@ -69,9 +69,7 @@ function packageNameToDirName(packageName: string): string {
   return packageName.replace(/^@[^/]+\//, "");
 }
 
-async function readPackageName(
-  packageDir: string,
-): Promise<string | null> {
+async function readPackageName(packageDir: string): Promise<string | null> {
   try {
     const packageJson = JSON.parse(
       await fs.promises.readFile(path.join(packageDir, "package.json"), "utf8"),
@@ -178,7 +176,10 @@ async function resolveAppModuleTarget(
   }
 
   const registryInfo = await getPluginInfo(trimmed);
-  if (registryInfo && (hasAppInterface(registryInfo) || registryInfo.localPath)) {
+  if (
+    registryInfo &&
+    (hasAppInterface(registryInfo) || registryInfo.localPath)
+  ) {
     return {
       packageName: registryInfo.name,
       localPath: registryInfo.localPath ?? null,
@@ -281,7 +282,9 @@ export async function importAppRouteModule(
   }
 }
 
-export async function importAppPlugin(packageName: string): Promise<Plugin | null> {
+export async function importAppPlugin(
+  packageName: string,
+): Promise<Plugin | null> {
   try {
     const localModule = await importLocalAppPluginModule(packageName);
     if (localModule) {

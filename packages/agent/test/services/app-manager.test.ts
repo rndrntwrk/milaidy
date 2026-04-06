@@ -799,7 +799,8 @@ describe("AppManager", () => {
       delete process.env.BABYLON_AGENT_SECRET;
     }
     if (originalBabylonAgentSessionToken !== undefined) {
-      process.env.BABYLON_AGENT_SESSION_TOKEN = originalBabylonAgentSessionToken;
+      process.env.BABYLON_AGENT_SESSION_TOKEN =
+        originalBabylonAgentSessionToken;
     } else {
       delete process.env.BABYLON_AGENT_SESSION_TOKEN;
     }
@@ -1553,12 +1554,14 @@ describe("AppManager", () => {
         undefined,
         runtime,
       );
-      const result = await manager.attachRun(launched.run!.runId, runtime);
+      const launchedRunId = launched.run?.runId ?? "";
+      expect(launchedRunId).not.toBe("");
+      const result = await manager.attachRun(launchedRunId, runtime);
 
       expect(result.success).toBe(true);
       expect(result.run).toEqual(
         expect.objectContaining({
-          runId: launched.run!.runId,
+          runId: launchedRunId,
           viewerAttachment: "attached",
           status: "disconnected",
           summary: "Run verification failed: viewer bridge is offline",

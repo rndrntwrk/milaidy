@@ -1,5 +1,5 @@
-import { describe, expect, test, vi } from "vitest";
 import type { IAgentRuntime } from "@elizaos/core";
+import { describe, expect, test, vi } from "vitest";
 import type {
   AppManagerLike,
   AppsRouteContext,
@@ -62,7 +62,9 @@ function buildAppManager(
     search: vi.fn(async () => []),
     listInstalled: vi.fn(async () => []),
     listRuns: vi.fn(async (_runtime?: IAgentRuntime | null) => []),
-    getRun: vi.fn(async (_runId: string, _runtime?: IAgentRuntime | null) => null),
+    getRun: vi.fn(
+      async (_runId: string, _runtime?: IAgentRuntime | null) => null,
+    ),
     attachRun: vi.fn(
       async (_runId: string, _runtime?: IAgentRuntime | null) => ({
         success: true,

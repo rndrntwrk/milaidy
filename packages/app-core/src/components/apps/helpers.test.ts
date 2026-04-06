@@ -78,14 +78,20 @@ describe("apps catalog helpers", () => {
       ),
     ).toBe(true);
     expect(
-      shouldShowAppInAppsView(makeApp({ name: "@elizaos/app-unlisted-game" }), true),
+      shouldShowAppInAppsView(
+        makeApp({ name: "@elizaos/app-unlisted-game" }),
+        true,
+      ),
     ).toBe(false);
   });
 
   it("keeps curated games and non-game apps in the catalog", () => {
     const visibleApps = filterAppsForCatalog(
       [
-        makeApp({ name: "@elizaos/app-unlisted-game", displayName: "Unlisted Game" }),
+        makeApp({
+          name: "@elizaos/app-unlisted-game",
+          displayName: "Unlisted Game",
+        }),
         makeApp({
           name: "@elizaos/app-hyperscape",
           displayName: "Hyperscape",
@@ -114,7 +120,10 @@ describe("apps catalog helpers", () => {
     expect(
       getDefaultAppsCatalogSelection(
         [
-          makeApp({ name: "@elizaos/app-unlisted-game", displayName: "Unlisted Game" }),
+          makeApp({
+            name: "@elizaos/app-unlisted-game",
+            displayName: "Unlisted Game",
+          }),
           makeApp({
             name: "@elizaos/app-hyperscape",
             displayName: "Hyperscape",

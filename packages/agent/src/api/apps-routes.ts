@@ -1,5 +1,5 @@
-import { hasAppInterface } from "../contracts/apps.js";
 import type { IAgentRuntime } from "@elizaos/core";
+import { hasAppInterface } from "../contracts/apps.js";
 import type {
   InstallProgressLike,
   PluginManagerLike,
@@ -22,7 +22,10 @@ export interface AppManagerLike {
   listInstalled: (pluginManager: PluginManagerLike) => Promise<unknown>;
   listRuns: (runtime?: IAgentRuntime | null) => Promise<unknown>;
   getRun: (runId: string, runtime?: IAgentRuntime | null) => Promise<unknown>;
-  attachRun: (runId: string, runtime?: IAgentRuntime | null) => Promise<unknown>;
+  attachRun: (
+    runId: string,
+    runtime?: IAgentRuntime | null,
+  ) => Promise<unknown>;
   detachRun: (runId: string) => Promise<unknown>;
   launch: (
     pluginManager: PluginManagerLike,
@@ -125,7 +128,10 @@ export async function handleAppsRoutes(
     }
 
     if (!subroute) {
-      const run = await appManager.getRun(runId, runtime as IAgentRuntime | null);
+      const run = await appManager.getRun(
+        runId,
+        runtime as IAgentRuntime | null,
+      );
       if (!run) {
         error(res, `App run "${runId}" not found`, 404);
         return true;
@@ -135,7 +141,10 @@ export async function handleAppsRoutes(
     }
 
     if (subroute === "health") {
-      const run = await appManager.getRun(runId, runtime as IAgentRuntime | null);
+      const run = await appManager.getRun(
+        runId,
+        runtime as IAgentRuntime | null,
+      );
       if (!run || typeof run !== "object" || run === null) {
         error(res, `App run "${runId}" not found`, 404);
         return true;

@@ -79,7 +79,7 @@ const LOCAL_APP_OVERRIDES: Readonly<Record<string, LocalAppOverride>> = {
 };
 
 export function sanitizeSandbox(rawSandbox?: string): string {
-  if (!rawSandbox || !rawSandbox.trim()) {
+  if (!rawSandbox?.trim()) {
     return LOCAL_APP_DEFAULT_SANDBOX;
   }
 

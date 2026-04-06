@@ -1,4 +1,4 @@
-import React from "react";
+import type React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -54,15 +54,28 @@ const mockClient = client as unknown as {
 
 const mockUseApp = useApp as unknown as ReturnType<typeof vi.fn>;
 
-const TasksWidget = AGENT_ORCHESTRATOR_PLUGIN_WIDGETS.find(
-  (widget) => widget.id === "agent-orchestrator.tasks",
-)!.Component;
-const AppsWidget = AGENT_ORCHESTRATOR_PLUGIN_WIDGETS.find(
-  (widget) => widget.id === "agent-orchestrator.apps",
-)!.Component;
-const ActivityWidget = AGENT_ORCHESTRATOR_PLUGIN_WIDGETS.find(
-  (widget) => widget.id === "agent-orchestrator.activity",
-)!.Component;
+function requireWidget(id: string) {
+  const widget = AGENT_ORCHESTRATOR_PLUGIN_WIDGETS.find(
+    (candidate) => candidate.id === id,
+  );
+  if (!widget) {
+    throw new Error(`Widget "${id}" not found`);
+  }
+  return widget.Component;
+}
+
+function requireTree(
+  tree: TestRenderer.ReactTestRenderer | null,
+): TestRenderer.ReactTestRenderer {
+  if (!tree) {
+    throw new Error("Expected a rendered test tree.");
+  }
+  return tree;
+}
+
+const TasksWidget = requireWidget("agent-orchestrator.tasks");
+const AppsWidget = requireWidget("agent-orchestrator.apps");
+const ActivityWidget = requireWidget("agent-orchestrator.activity");
 
 function createThread() {
   return {

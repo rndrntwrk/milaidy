@@ -74,7 +74,10 @@ const LOCAL_APP_OVERRIDES: Readonly<Record<string, LocalAppOverride>> = {
     launchUrl: "{RS_SDK_SERVER_URL}",
     viewer: {
       url: "{RS_SDK_SERVER_URL}/bot",
-      embedParams: { bot: "{RS_SDK_BOT_NAME}", password: "{RS_SDK_BOT_PASSWORD}" },
+      embedParams: {
+        bot: "{RS_SDK_BOT_NAME}",
+        password: "{RS_SDK_BOT_PASSWORD}",
+      },
       postMessageAuth: true,
       sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
     },
@@ -91,7 +94,7 @@ const LOCAL_APP_OVERRIDES: Readonly<Record<string, LocalAppOverride>> = {
 };
 
 export function sanitizeSandbox(rawSandbox?: string): string {
-  if (!rawSandbox || !rawSandbox.trim()) {
+  if (!rawSandbox?.trim()) {
     return LOCAL_APP_DEFAULT_SANDBOX;
   }
 
@@ -186,7 +189,8 @@ export function resolveAppOverride(
   const override = LOCAL_APP_OVERRIDES[packageName];
   if (!override) return appMeta;
   const base: RegistryAppMeta = appMeta ?? {
-    displayName: override.displayName ?? packageNameToAppDisplayName(packageName),
+    displayName:
+      override.displayName ?? packageNameToAppDisplayName(packageName),
     category: override.category ?? "game",
     launchType: override.launchType ?? "url",
     launchUrl: override.launchUrl ?? null,

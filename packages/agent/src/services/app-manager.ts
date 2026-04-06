@@ -12,21 +12,27 @@
 import crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { logger } from "@elizaos/core";
 import type { IAgentRuntime } from "@elizaos/core";
+import { logger } from "@elizaos/core";
 import {
-  AppRunActionResult,
-  AppRunSummary,
+  generateWalletKeys,
+  getWalletAddressesWithSteward,
+} from "../api/wallet";
+import {
+  type AppLaunchDiagnostic,
+  type AppLaunchResult,
+  type AppRunActionResult,
+  type AppRunSummary,
+  type AppSessionState,
+  type AppStopResult,
+  type AppViewerAuthMessage,
   hasAppInterface,
+  type InstalledAppInfo,
   packageNameToAppDisplayName,
   packageNameToAppRouteSlug,
-  AppLaunchDiagnostic,
-  AppLaunchResult,
-  AppSessionState,
-  AppStopResult,
-  AppViewerAuthMessage,
-  InstalledAppInfo,
 } from "../contracts/apps";
+import { importAppPlugin, importAppRouteModule } from "./app-package-modules";
+import { readAppRunStore, writeAppRunStore } from "./app-run-store";
 import type {
   InstalledPluginInfo,
   InstallProgressLike,
@@ -34,15 +40,6 @@ import type {
   RegistryPluginInfo,
   RegistrySearchResult,
 } from "./plugin-manager-types";
-import {
-  importAppPlugin,
-  importAppRouteModule,
-} from "./app-package-modules";
-import {
-  readAppRunStore,
-  writeAppRunStore,
-} from "./app-run-store";
-import { generateWalletKeys, getWalletAddressesWithSteward } from "../api/wallet";
 import { getPluginInfo, getRegistryPlugins } from "./registry-client";
 import { resolveAppOverride } from "./registry-client-app-meta";
 import { scoreEntries, toSearchResults } from "./registry-client-queries.js";
@@ -50,9 +47,9 @@ import { scoreEntries, toSearchResults } from "./registry-client-queries.js";
 const LOCAL_PLUGINS_DIR = "plugins";
 
 export type {
+  AppLaunchResult,
   AppRunActionResult,
   AppRunSummary,
-  AppLaunchResult,
   AppStopResult,
   AppViewerAuthMessage,
   InstalledAppInfo,
@@ -138,7 +135,9 @@ interface HyperscapeWalletAuthResponse {
   error?: string;
 }
 
-function isAppRegistryPlugin(plugin: RegistryPluginInfo): plugin is RegistryAppPlugin {
+function isAppRegistryPlugin(
+  plugin: RegistryPluginInfo,
+): plugin is RegistryAppPlugin {
   return hasAppInterface(plugin);
 }
 
@@ -204,9 +203,8 @@ function flattenAppInfo<T extends RegistryPluginInfo>(appInfo: T): T {
     ...appInfo,
     displayName: meta.displayName ?? appInfo.displayName,
     launchType: meta.launchType ?? appInfo.launchType,
-    launchUrl: substituteTemplateVars(
-      meta.launchUrl ?? appInfo.launchUrl ?? "",
-    ) || null,
+    launchUrl:
+      substituteTemplateVars(meta.launchUrl ?? appInfo.launchUrl ?? "") || null,
     icon: meta.icon ?? appInfo.icon,
     category: meta.category ?? appInfo.category,
     capabilities: meta.capabilities ?? appInfo.capabilities,
@@ -300,9 +298,10 @@ function getTemplateFallbackValue(key: string): string | undefined {
       : LOCAL_DEV_HYPERSCAPE_CLIENT_URL;
   }
   if (key === "BABYLON_CLIENT_URL") {
-    const runtimeClientUrl = process.env.BABYLON_CLIENT_URL?.trim()
-      ?? process.env.BABYLON_APP_URL?.trim()
-      ?? process.env.BABYLON_API_URL?.trim();
+    const runtimeClientUrl =
+      process.env.BABYLON_CLIENT_URL?.trim() ??
+      process.env.BABYLON_APP_URL?.trim() ??
+      process.env.BABYLON_API_URL?.trim();
     if (runtimeClientUrl && runtimeClientUrl.length > 0) {
       return runtimeClientUrl;
     }
@@ -351,9 +350,7 @@ function isLikelySolanaAddress(
   );
 }
 
-function readObject(
-  value: unknown,
-): Record<string, unknown> | null {
+function readObject(value: unknown): Record<string, unknown> | null {
   return typeof value === "object" && value !== null
     ? (value as Record<string, unknown>)
     : null;
@@ -453,7 +450,10 @@ async function resolveRuntimeWalletCandidate(
     };
   }
 
-  const managedEvmAddress = resolveSettingLike(runtime, "ELIZA_MANAGED_EVM_ADDRESS");
+  const managedEvmAddress = resolveSettingLike(
+    runtime,
+    "ELIZA_MANAGED_EVM_ADDRESS",
+  );
   if (isEvmAddress(managedEvmAddress)) {
     return {
       address: managedEvmAddress.trim(),
@@ -551,7 +551,10 @@ function provisionRuntimeWalletCandidate(
 
 function persistHyperscapeCredential(
   runtime: IAgentRuntime | null,
-  key: "HYPERSCAPE_AUTH_TOKEN" | "HYPERSCAPE_CHARACTER_ID" | "HYPERSCAPE_ACCOUNT_ID",
+  key:
+    | "HYPERSCAPE_AUTH_TOKEN"
+    | "HYPERSCAPE_CHARACTER_ID"
+    | "HYPERSCAPE_ACCOUNT_ID",
   value: string,
   secret = false,
 ): void {
@@ -585,7 +588,10 @@ async function authenticateHyperscapeWallet(
   characterId: string;
   accountId?: string;
 }> {
-  const url = new URL("/api/agents/wallet-auth", resolveHyperscapeApiBaseUrl(runtime));
+  const url = new URL(
+    "/api/agents/wallet-auth",
+    resolveHyperscapeApiBaseUrl(runtime),
+  );
   const response = await fetch(url, {
     method: "POST",
     headers: {
@@ -830,7 +836,11 @@ async function probeBabylonDevCredentials(
   baseUrl: string,
 ): Promise<{ agentId: string; agentSecret: string } | null> {
   // Try well-known dev agent IDs with common dev secrets
-  const devAgentIds = ["babylon-agent-alice", "babylon-test-agent", "dev-admin-local"];
+  const devAgentIds = [
+    "babylon-agent-alice",
+    "babylon-test-agent",
+    "dev-admin-local",
+  ];
   // Dev secrets are deterministic from hostname — try multiple hostname sources
   const nodeCrypto = await import("node:crypto");
   const os = await import("node:os");
@@ -841,7 +851,9 @@ async function probeBabylonDevCredentials(
   if (process.env.HOSTNAME) hostnames.add(process.env.HOSTNAME);
   try {
     hostnames.add(os.hostname());
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   const devSecrets: string[] = [];
   for (const hostname of hostnames) {
     if (!hostname) continue;
@@ -1162,7 +1174,10 @@ function buildViewerAuthMessage(
   // Babylon auth — passes agent credentials to the viewer iframe
   if (isBabylonAppName(appName)) {
     const agentId = resolveSettingLike(runtime, "BABYLON_AGENT_ID");
-    const sessionToken = resolveSettingLike(runtime, BABYLON_AGENT_SESSION_TOKEN_KEY);
+    const sessionToken = resolveSettingLike(
+      runtime,
+      BABYLON_AGENT_SESSION_TOKEN_KEY,
+    );
     if (!agentId || !sessionToken) {
       return undefined;
     }
@@ -1297,7 +1312,8 @@ function buildAppSession(
     displayName: appInfo.displayName ?? appInfo.name,
     agentId: authMessage?.agentId ?? runtimeAgentId,
     characterId:
-      authMessage?.characterId ?? resolveSettingLike(runtime, "HYPERSCAPE_CHARACTER_ID"),
+      authMessage?.characterId ??
+      resolveSettingLike(runtime, "HYPERSCAPE_CHARACTER_ID"),
     followEntity:
       authMessage?.followEntity ?? authMessage?.characterId ?? undefined,
     canSendCommands: false,
@@ -1492,7 +1508,12 @@ function collectLaunchDiagnostics(
   runtime: IAgentRuntime | null,
 ): AppLaunchDiagnostic[] {
   if (isHyperscapeAppName(appInfo.name)) {
-    return collectHyperscapeLaunchDiagnostics(appInfo, viewer, session, runtime);
+    return collectHyperscapeLaunchDiagnostics(
+      appInfo,
+      viewer,
+      session,
+      runtime,
+    );
   }
   if (is2004scapeAppName(appInfo.name)) {
     return collect2004scapeLaunchDiagnostics(appInfo, viewer, session, runtime);
@@ -1610,7 +1631,8 @@ function buildRunSummary(input: {
   viewerAttachment?: AppRunSummary["viewerAttachment"];
 }): AppRunSummary {
   const now = new Date().toISOString();
-  const status = input.session?.status ?? (input.viewer ? "running" : "launching");
+  const status =
+    input.session?.status ?? (input.viewer ? "running" : "launching");
   const summary = input.session?.summary ?? null;
 
   return {
@@ -1671,7 +1693,10 @@ function sameRunIdentity(
 export class AppManager {
   private readonly activeSessions = new Map<string, ActiveAppSession>();
   private readonly runRefreshAt = new Map<string, number>();
-  private readonly runRefreshInFlight = new Map<string, Promise<AppRunSummary>>();
+  private readonly runRefreshInFlight = new Map<
+    string,
+    Promise<AppRunSummary>
+  >();
   private readonly stateDir?: string;
   private appRuns = new Map<string, AppRunSummary>();
 
@@ -1726,10 +1751,7 @@ export class AppManager {
     return null;
   }
 
-  private shouldSkipRunRefresh(
-    run: AppRunSummary,
-    force: boolean,
-  ): boolean {
+  private shouldSkipRunRefresh(run: AppRunSummary, force: boolean): boolean {
     if (force) return false;
     const lastRefreshAt = this.runRefreshAt.get(run.runId) ?? 0;
     return Date.now() - lastRefreshAt < RUN_REFRESH_MIN_INTERVAL_MS;
@@ -1855,7 +1877,11 @@ export class AppManager {
       appEntries,
       query,
       limit,
-      (p) => [p.appMeta?.displayName?.toLowerCase() ?? p.displayName?.toLowerCase() ?? ""],
+      (p) => [
+        p.appMeta?.displayName?.toLowerCase() ??
+          p.displayName?.toLowerCase() ??
+          "",
+      ],
       (p) => p.appMeta?.capabilities ?? p.capabilities ?? [],
     );
     return toSearchResults(results);
@@ -1882,7 +1908,9 @@ export class AppManager {
     return appInfo ? flattenAppInfo(appInfo) : null;
   }
 
-  async listRuns(runtime: IAgentRuntime | null = null): Promise<AppRunSummary[]> {
+  async listRuns(
+    runtime: IAgentRuntime | null = null,
+  ): Promise<AppRunSummary[]> {
     const runs = this.listRunsSorted();
     if (runs.length === 0) {
       return runs;
@@ -1973,7 +2001,8 @@ export class AppManager {
     let appInfo = (await pluginManager.getRegistryPlugin(
       name,
     )) as RegistryAppPlugin | null;
-    let localPluginInfo: Awaited<ReturnType<typeof getPluginInfo>> | null = null;
+    let localPluginInfo: Awaited<ReturnType<typeof getPluginInfo>> | null =
+      null;
     // Supplement with local registry metadata since the elizaos plugin-manager
     // service doesn't include our local workspace app discovery.
     try {
@@ -1999,7 +2028,8 @@ export class AppManager {
     // and flatten appMeta onto the top-level fields so launchUrl / viewer
     // are populated even when the npm registry has no metadata for this app.
     if (appInfo.appMeta) {
-      appInfo.appMeta = resolveAppOverride(name, appInfo.appMeta) ?? appInfo.appMeta;
+      appInfo.appMeta =
+        resolveAppOverride(name, appInfo.appMeta) ?? appInfo.appMeta;
     } else {
       appInfo.appMeta = resolveAppOverride(name, undefined);
     }
@@ -2007,10 +2037,12 @@ export class AppManager {
 
     // The app's plugin is what the agent needs to play the game.
     // It's the same npm package name as the app, or a separate plugin ref.
-    const pluginName = appInfo.runtimePlugin ?? resolvePluginPackageName(appInfo);
+    const pluginName =
+      appInfo.runtimePlugin ?? resolvePluginPackageName(appInfo);
 
     // Check if this is a local plugin (already present in plugins/ directory)
-    const isLocal = Boolean(localPluginInfo?.localPath) || isLocalPlugin(appInfo);
+    const isLocal =
+      Boolean(localPluginInfo?.localPath) || isLocalPlugin(appInfo);
 
     // Check if the plugin is already installed
     const installed = await pluginManager.listInstalledPlugins();
@@ -2058,12 +2090,12 @@ export class AppManager {
     const launchPreparationDiagnostics: AppLaunchDiagnostic[] = [];
     if (isHyperscapeAppName(appInfo.name)) {
       launchPreparationDiagnostics.push(
-        ...await prepareHyperscapeLaunch(_runtime ?? null),
+        ...(await prepareHyperscapeLaunch(_runtime ?? null)),
       );
     }
     if (isBabylonAppName(appInfo.name)) {
       launchPreparationDiagnostics.push(
-        ...await prepareBabylonLaunch(_runtime ?? null),
+        ...(await prepareBabylonLaunch(_runtime ?? null)),
       );
       const babylonUrl = resolveBabylonApiBaseUrl(_runtime ?? null);
       const agentId = resolveSettingLike(_runtime, "BABYLON_AGENT_ID");
@@ -2085,7 +2117,7 @@ export class AppManager {
         });
       } else {
         launchPreparationDiagnostics.push(
-          ...await prepare2004scapeLaunch(_runtime ?? null),
+          ...(await prepare2004scapeLaunch(_runtime ?? null)),
         );
       }
     }
@@ -2094,7 +2126,9 @@ export class AppManager {
     // (e.g. 2004scape server down) to avoid error-level logs from the SDK init.
     const skipPluginRegistration =
       is2004scapeAppName(appInfo.name) &&
-      launchPreparationDiagnostics.some((d) => d.code === "2004scape-server-unreachable");
+      launchPreparationDiagnostics.some(
+        (d) => d.code === "2004scape-server-unreachable",
+      );
 
     let runtimePluginRegistered = false;
     if (!skipPluginRegistration) {
@@ -2210,7 +2244,9 @@ export class AppManager {
       };
     }
 
-    const runsForApp = this.listRunsSorted().filter((run) => run.appName === name);
+    const runsForApp = this.listRunsSorted().filter(
+      (run) => run.appName === name,
+    );
     if (runsForApp.length === 0) {
       const appInfo = (await pluginManager.getRegistryPlugin(
         name,
@@ -2266,7 +2302,8 @@ export class AppManager {
 
     return appEntries
       .map((appInfo): InstalledAppInfo | null => {
-        const pluginName = appInfo.runtimePlugin ?? resolvePluginPackageName(appInfo);
+        const pluginName =
+          appInfo.runtimePlugin ?? resolvePluginPackageName(appInfo);
         const installedPlugin =
           installedByName.get(pluginName) ?? installedByName.get(appInfo.name);
         if (!installedPlugin) return null;
@@ -2274,8 +2311,7 @@ export class AppManager {
         return {
           name: appInfo.name,
           displayName:
-            appInfo.displayName ??
-            packageNameToAppDisplayName(appInfo.name),
+            appInfo.displayName ?? packageNameToAppDisplayName(appInfo.name),
           pluginName,
           version: installedPlugin.version ?? "unknown",
           installedAt: installedPlugin.installedAt ?? "",

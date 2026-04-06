@@ -428,11 +428,7 @@ function getClientErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
 }
 
-function AppRunCard({
-  run,
-}: {
-  run: AppRunSummary;
-}) {
+function AppRunCard({ run }: { run: AppRunSummary }) {
   const healthTone =
     run.health.state === "healthy"
       ? "bg-ok/20 text-ok"
@@ -499,7 +495,9 @@ function AppRunsWidget(_props: ChatSidebarWidgetProps) {
         });
       } catch (refreshError) {
         if (cancelled) return;
-        setError(getClientErrorMessage(refreshError, "Failed to load app runs."));
+        setError(
+          getClientErrorMessage(refreshError, "Failed to load app runs."),
+        );
       } finally {
         if (!cancelled) {
           setLoading(false);

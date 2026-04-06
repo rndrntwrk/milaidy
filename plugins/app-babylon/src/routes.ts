@@ -5,10 +5,10 @@ import type {
 } from "@miladyai/shared/contracts/apps";
 import {
   asRuntimeLike,
+  type BabylonConfig,
   proxyBabylonRequest,
   resolveBabylonConfig,
   resolveSettingLike,
-  type BabylonConfig,
 } from "./babylon-auth";
 
 const APP_NAME = "@elizaos/app-babylon";
@@ -112,9 +112,7 @@ async function handleSSEProxy(
   ctx: RouteContext,
 ): Promise<boolean> {
   const agentId = getAgentId(config);
-  const channels = agentId
-    ? `agent:${agentId},feed,markets`
-    : "feed,markets";
+  const channels = agentId ? `agent:${agentId},feed,markets` : "feed,markets";
 
   const sseUrl = new URL("/api/sse/events", config.apiBaseUrl);
   sseUrl.searchParams.set("channels", channels);
@@ -271,6 +269,11 @@ function parseSessionSubroute(pathname: string): "message" | "control" | null {
   return null;
 }
 
+function readPathSegment(pathValue: string, index: number): string | null {
+  const segment = pathValue.split("/")[index];
+  return typeof segment === "string" && segment.length > 0 ? segment : null;
+}
+
 // ---------------------------------------------------------------------------
 // Launch session resolver
 // ---------------------------------------------------------------------------
@@ -304,11 +307,7 @@ export async function handleAppRoutes(ctx: RouteContext): Promise<boolean> {
       ctx.json(ctx.res, { error: "No BABYLON_AGENT_ID configured" }, 400);
       return true;
     }
-    return proxyGet(
-      config,
-      `/api/agents/${encodeURIComponent(agentId)}`,
-      ctx,
-    );
+    return proxyGet(config, `/api/agents/${encodeURIComponent(agentId)}`, ctx);
   }
 
   // --- Agent activity feed ---
@@ -438,7 +437,11 @@ export async function handleAppRoutes(ctx: RouteContext): Promise<boolean> {
       }
     }
     const qs = params.toString();
-    return proxyGet(config, `/api/markets/predictions${qs ? `?${qs}` : ""}`, ctx);
+    return proxyGet(
+      config,
+      `/api/markets/predictions${qs ? `?${qs}` : ""}`,
+      ctx,
+    );
   }
 
   if (ctx.method === "GET" && path.startsWith("/markets/predictions/")) {
@@ -446,28 +449,58 @@ export async function handleAppRoutes(ctx: RouteContext): Promise<boolean> {
     if (!marketId) return false;
     const sub = path.replace(`/markets/predictions/${marketId}`, "");
     if (!sub || sub === "/") {
-      return proxyGet(config, `/api/markets/predictions/${encodeURIComponent(marketId)}`, ctx);
+      return proxyGet(
+        config,
+        `/api/markets/predictions/${encodeURIComponent(marketId)}`,
+        ctx,
+      );
     }
     if (sub === "/history") {
-      return proxyGet(config, `/api/markets/predictions/${encodeURIComponent(marketId)}/history`, ctx);
+      return proxyGet(
+        config,
+        `/api/markets/predictions/${encodeURIComponent(marketId)}/history`,
+        ctx,
+      );
     }
     if (sub === "/trades") {
-      return proxyGet(config, `/api/markets/predictions/${encodeURIComponent(marketId)}/trades`, ctx);
+      return proxyGet(
+        config,
+        `/api/markets/predictions/${encodeURIComponent(marketId)}/trades`,
+        ctx,
+      );
     }
   }
 
   // Buy prediction shares
-  if (ctx.method === "POST" && path.match(/^\/markets\/predictions\/[^/]+\/buy$/)) {
-    const marketId = path.split("/")[3];
+  if (
+    ctx.method === "POST" &&
+    path.match(/^\/markets\/predictions\/[^/]+\/buy$/)
+  ) {
+    const marketId = readPathSegment(path, 3);
+    if (!marketId) return false;
     const body = await ctx.readJsonBody();
-    return proxyPost(config, `/api/markets/predictions/${encodeURIComponent(marketId!)}/buy`, body, ctx);
+    return proxyPost(
+      config,
+      `/api/markets/predictions/${encodeURIComponent(marketId)}/buy`,
+      body,
+      ctx,
+    );
   }
 
   // Sell prediction shares
-  if (ctx.method === "POST" && path.match(/^\/markets\/predictions\/[^/]+\/sell$/)) {
-    const marketId = path.split("/")[3];
+  if (
+    ctx.method === "POST" &&
+    path.match(/^\/markets\/predictions\/[^/]+\/sell$/)
+  ) {
+    const marketId = readPathSegment(path, 3);
+    if (!marketId) return false;
     const body = await ctx.readJsonBody();
-    return proxyPost(config, `/api/markets/predictions/${encodeURIComponent(marketId!)}/sell`, body, ctx);
+    return proxyPost(
+      config,
+      `/api/markets/predictions/${encodeURIComponent(marketId)}/sell`,
+      body,
+      ctx,
+    );
   }
 
   // =========================================================================
@@ -489,10 +522,19 @@ export async function handleAppRoutes(ctx: RouteContext): Promise<boolean> {
   }
 
   // Close perp position
-  if (ctx.method === "POST" && path.match(/^\/markets\/perps\/position\/[^/]+\/close$/)) {
-    const positionId = path.split("/")[4];
+  if (
+    ctx.method === "POST" &&
+    path.match(/^\/markets\/perps\/position\/[^/]+\/close$/)
+  ) {
+    const positionId = readPathSegment(path, 4);
+    if (!positionId) return false;
     const body = await ctx.readJsonBody();
-    return proxyPost(config, `/api/markets/perps/position/${encodeURIComponent(positionId!)}/close`, body, ctx);
+    return proxyPost(
+      config,
+      `/api/markets/perps/position/${encodeURIComponent(positionId)}/close`,
+      body,
+      ctx,
+    );
   }
 
   // =========================================================================
@@ -517,27 +559,45 @@ export async function handleAppRoutes(ctx: RouteContext): Promise<boolean> {
 
   // Single post + interactions
   if (ctx.method === "GET" && path.match(/^\/posts\/[^/]+$/)) {
-    const postId = path.split("/")[2];
-    return proxyGet(config, `/api/posts/${encodeURIComponent(postId!)}`, ctx);
+    const postId = readPathSegment(path, 2);
+    if (!postId) return false;
+    return proxyGet(config, `/api/posts/${encodeURIComponent(postId)}`, ctx);
   }
 
   // Post comments
   if (ctx.method === "GET" && path.match(/^\/posts\/[^/]+\/comments$/)) {
-    const postId = path.split("/")[2];
-    return proxyGet(config, `/api/posts/${encodeURIComponent(postId!)}/comments`, ctx);
+    const postId = readPathSegment(path, 2);
+    if (!postId) return false;
+    return proxyGet(
+      config,
+      `/api/posts/${encodeURIComponent(postId)}/comments`,
+      ctx,
+    );
   }
 
   // Comment on post
   if (ctx.method === "POST" && path.match(/^\/posts\/[^/]+\/comments$/)) {
-    const postId = path.split("/")[2];
+    const postId = readPathSegment(path, 2);
+    if (!postId) return false;
     const body = await ctx.readJsonBody();
-    return proxyPost(config, `/api/posts/${encodeURIComponent(postId!)}/comments`, body, ctx);
+    return proxyPost(
+      config,
+      `/api/posts/${encodeURIComponent(postId)}/comments`,
+      body,
+      ctx,
+    );
   }
 
   // Like post
   if (ctx.method === "POST" && path.match(/^\/posts\/[^/]+\/like$/)) {
-    const postId = path.split("/")[2];
-    return proxyPost(config, `/api/posts/${encodeURIComponent(postId!)}/like`, {}, ctx);
+    const postId = readPathSegment(path, 2);
+    if (!postId) return false;
+    return proxyPost(
+      config,
+      `/api/posts/${encodeURIComponent(postId)}/like`,
+      {},
+      ctx,
+    );
   }
 
   // =========================================================================
@@ -558,20 +618,35 @@ export async function handleAppRoutes(ctx: RouteContext): Promise<boolean> {
   // Get DM with specific user
   if (ctx.method === "GET" && path === "/chats/dm") {
     const userId = ctx.url.searchParams.get("userId");
-    return proxyGet(config, `/api/chats/dm${userId ? `?userId=${encodeURIComponent(userId)}` : ""}`, ctx);
+    return proxyGet(
+      config,
+      `/api/chats/dm${userId ? `?userId=${encodeURIComponent(userId)}` : ""}`,
+      ctx,
+    );
   }
 
   // Chat messages
   if (ctx.method === "GET" && path.match(/^\/chats\/[^/]+\/messages$/)) {
-    const chatId = path.split("/")[2];
-    return proxyGet(config, `/api/chats/${encodeURIComponent(chatId!)}/messages`, ctx);
+    const chatId = readPathSegment(path, 2);
+    if (!chatId) return false;
+    return proxyGet(
+      config,
+      `/api/chats/${encodeURIComponent(chatId)}/messages`,
+      ctx,
+    );
   }
 
   // Send message to chat
   if (ctx.method === "POST" && path.match(/^\/chats\/[^/]+\/message$/)) {
-    const chatId = path.split("/")[2];
+    const chatId = readPathSegment(path, 2);
+    if (!chatId) return false;
     const body = await ctx.readJsonBody();
-    return proxyPost(config, `/api/chats/${encodeURIComponent(chatId!)}/message`, body, ctx);
+    return proxyPost(
+      config,
+      `/api/chats/${encodeURIComponent(chatId)}/message`,
+      body,
+      ctx,
+    );
   }
 
   // =========================================================================
@@ -588,13 +663,19 @@ export async function handleAppRoutes(ctx: RouteContext): Promise<boolean> {
   }
 
   if (ctx.method === "GET" && path.match(/^\/groups\/[^/]+$/)) {
-    const groupId = path.split("/")[2];
-    return proxyGet(config, `/api/groups/${encodeURIComponent(groupId!)}`, ctx);
+    const groupId = readPathSegment(path, 2);
+    if (!groupId) return false;
+    return proxyGet(config, `/api/groups/${encodeURIComponent(groupId)}`, ctx);
   }
 
   if (ctx.method === "GET" && path.match(/^\/groups\/[^/]+\/members$/)) {
-    const groupId = path.split("/")[2];
-    return proxyGet(config, `/api/groups/${encodeURIComponent(groupId!)}/members`, ctx);
+    const groupId = readPathSegment(path, 2);
+    if (!groupId) return false;
+    return proxyGet(
+      config,
+      `/api/groups/${encodeURIComponent(groupId)}/members`,
+      ctx,
+    );
   }
 
   // =========================================================================
@@ -607,7 +688,11 @@ export async function handleAppRoutes(ctx: RouteContext): Promise<boolean> {
       ctx.json(ctx.res, [], 200);
       return true;
     }
-    return proxyGet(config, `/api/agents/${encodeURIComponent(agentId)}/goals`, ctx);
+    return proxyGet(
+      config,
+      `/api/agents/${encodeURIComponent(agentId)}/goals`,
+      ctx,
+    );
   }
 
   // Agent stats
@@ -616,7 +701,11 @@ export async function handleAppRoutes(ctx: RouteContext): Promise<boolean> {
       ctx.json(ctx.res, {}, 200);
       return true;
     }
-    return proxyGet(config, `/api/agents/${encodeURIComponent(agentId)}/stats`, ctx);
+    return proxyGet(
+      config,
+      `/api/agents/${encodeURIComponent(agentId)}/stats`,
+      ctx,
+    );
   }
 
   // Agent summary
@@ -625,7 +714,11 @@ export async function handleAppRoutes(ctx: RouteContext): Promise<boolean> {
       ctx.json(ctx.res, {}, 200);
       return true;
     }
-    return proxyGet(config, `/api/agents/${encodeURIComponent(agentId)}/summary`, ctx);
+    return proxyGet(
+      config,
+      `/api/agents/${encodeURIComponent(agentId)}/summary`,
+      ctx,
+    );
   }
 
   // Agent recent trades
@@ -634,7 +727,11 @@ export async function handleAppRoutes(ctx: RouteContext): Promise<boolean> {
       ctx.json(ctx.res, [], 200);
       return true;
     }
-    return proxyGet(config, `/api/agents/${encodeURIComponent(agentId)}/recent-trades`, ctx);
+    return proxyGet(
+      config,
+      `/api/agents/${encodeURIComponent(agentId)}/recent-trades`,
+      ctx,
+    );
   }
 
   // Agent chat (direct messages with agent)
@@ -643,7 +740,11 @@ export async function handleAppRoutes(ctx: RouteContext): Promise<boolean> {
       ctx.json(ctx.res, { messages: [] }, 200);
       return true;
     }
-    return proxyGet(config, `/api/agents/${encodeURIComponent(agentId)}/chat`, ctx);
+    return proxyGet(
+      config,
+      `/api/agents/${encodeURIComponent(agentId)}/chat`,
+      ctx,
+    );
   }
 
   if (ctx.method === "POST" && path === "/agent/chat") {
@@ -652,7 +753,12 @@ export async function handleAppRoutes(ctx: RouteContext): Promise<boolean> {
       return true;
     }
     const body = await ctx.readJsonBody();
-    return proxyPost(config, `/api/agents/${encodeURIComponent(agentId)}/chat`, body, ctx);
+    return proxyPost(
+      config,
+      `/api/agents/${encodeURIComponent(agentId)}/chat`,
+      body,
+      ctx,
+    );
   }
 
   // Agent card
@@ -661,7 +767,11 @@ export async function handleAppRoutes(ctx: RouteContext): Promise<boolean> {
       ctx.json(ctx.res, {}, 200);
       return true;
     }
-    return proxyGet(config, `/api/agents/${encodeURIComponent(agentId)}/card`, ctx);
+    return proxyGet(
+      config,
+      `/api/agents/${encodeURIComponent(agentId)}/card`,
+      ctx,
+    );
   }
 
   // Agent trading balance
@@ -670,7 +780,11 @@ export async function handleAppRoutes(ctx: RouteContext): Promise<boolean> {
       ctx.json(ctx.res, { balance: 0 }, 200);
       return true;
     }
-    return proxyGet(config, `/api/agents/${encodeURIComponent(agentId)}/trading-balance`, ctx);
+    return proxyGet(
+      config,
+      `/api/agents/${encodeURIComponent(agentId)}/trading-balance`,
+      ctx,
+    );
   }
 
   // Agent benchmark
@@ -679,7 +793,11 @@ export async function handleAppRoutes(ctx: RouteContext): Promise<boolean> {
       ctx.json(ctx.res, {}, 200);
       return true;
     }
-    return proxyGet(config, `/api/agents/${encodeURIComponent(agentId)}/benchmark`, ctx);
+    return proxyGet(
+      config,
+      `/api/agents/${encodeURIComponent(agentId)}/benchmark`,
+      ctx,
+    );
   }
 
   // =========================================================================
