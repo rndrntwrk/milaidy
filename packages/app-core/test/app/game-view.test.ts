@@ -42,7 +42,9 @@ const { mockClientFns, mockUseApp } = vi.hoisted(() => ({
   mockClientFns: {
     getCodingAgentStatus: vi.fn(async () => null),
     getAppSessionState: vi.fn(async () => null),
+    sendAppRunMessage: vi.fn(),
     sendAppSessionMessage: vi.fn(),
+    controlAppRun: vi.fn(),
     controlAppSession: vi.fn(),
     sendChatRest: vi.fn(),
     stopAppRun: vi.fn(),
@@ -145,7 +147,9 @@ describe("GameView", () => {
     );
     mockClientFns.stopAppRun.mockReset();
     mockClientFns.getAppSessionState.mockReset();
+    mockClientFns.sendAppRunMessage.mockReset();
     mockClientFns.sendAppSessionMessage.mockReset();
+    mockClientFns.controlAppRun.mockReset();
     mockClientFns.controlAppSession.mockReset();
     mockClientFns.sendChatRest.mockReset();
     mockUseApp.mockReset();
@@ -554,7 +558,7 @@ describe("GameView", () => {
     expect(ctx.setState).toHaveBeenCalledWith("tab", "apps");
   });
 
-  it("uses app session messaging when a live session is active", async () => {
+  it("uses run-scoped messaging when a live run is active and shows queued acknowledgements", async () => {
     const ctx = createContext({
       activeGameApp: "@elizaos/app-hyperscape",
       activeGameSession: {
@@ -569,9 +573,15 @@ describe("GameView", () => {
     });
     mockUseApp.mockReturnValue(ctx);
     mockClientFns.getAppSessionState.mockResolvedValue(ctx.activeGameSession);
-    mockClientFns.sendAppSessionMessage.mockResolvedValue({
+    mockClientFns.sendAppRunMessage.mockResolvedValue({
       success: true,
-      message: "Message sent to Hyperscape session.",
+      message: "Queued guidance for Hyperscape.",
+      disposition: "queued",
+      status: 202,
+      run: {
+        ...ctx.appRuns[0],
+        session: ctx.activeGameSession,
+      },
     });
 
     let tree: TestRenderer.ReactTestRenderer;
@@ -596,15 +606,18 @@ describe("GameView", () => {
       await findButtonByText(tree.root, "common.send").props.onClick();
     });
 
-    expect(mockClientFns.sendAppSessionMessage).toHaveBeenCalledWith(
-      "@elizaos/app-hyperscape",
-      "agent-1",
+    expect(mockClientFns.sendAppRunMessage).toHaveBeenCalledWith(
+      ctx.activeGameRunId,
       "go chop some wood",
     );
-    expect(mockClientFns.sendChatRest).not.toHaveBeenCalled();
+    expect(ctx.setActionNotice).toHaveBeenCalledWith(
+      "Queued guidance for Hyperscape.",
+      "info",
+      2600,
+    );
   });
 
-  it("shows pause or resume controls for session-backed apps", async () => {
+  it("shows run control acknowledgements for session-backed apps", async () => {
     const ctx = createContext({
       activeGameApp: "@elizaos/app-hyperscape",
       activeGameSession: {
@@ -619,13 +632,18 @@ describe("GameView", () => {
     });
     mockUseApp.mockReturnValue(ctx);
     mockClientFns.getAppSessionState.mockResolvedValue(ctx.activeGameSession);
-    mockClientFns.controlAppSession.mockResolvedValue({
+    mockClientFns.controlAppRun.mockResolvedValue({
       success: true,
-      message: "Hyperscape session paused.",
-      session: {
-        ...ctx.activeGameSession,
-        status: "paused",
-        controls: ["resume"],
+      message: "Hyperscape run paused.",
+      disposition: "accepted",
+      status: 200,
+      run: {
+        ...ctx.appRuns[0],
+        session: {
+          ...ctx.activeGameSession,
+          status: "paused",
+          controls: ["resume"],
+        },
       },
     });
 
@@ -639,10 +657,92 @@ describe("GameView", () => {
       await findButtonByText(tree.root, "Pause").props.onClick();
     });
 
-    expect(mockClientFns.controlAppSession).toHaveBeenCalledWith(
-      "@elizaos/app-hyperscape",
-      "agent-2",
+    expect(mockClientFns.controlAppRun).toHaveBeenCalledWith(
+      ctx.activeGameRunId,
       "pause",
+    );
+    expect(ctx.setActionNotice).toHaveBeenCalledWith(
+      "Hyperscape run paused.",
+      "success",
+      2400,
+    );
+  });
+
+  it("shows rejected notices when run steering is rejected", async () => {
+    const ctx = createContext();
+    mockUseApp.mockReturnValue(ctx);
+    mockClientFns.sendAppRunMessage.mockResolvedValue({
+      success: false,
+      message: "The run rejected that instruction.",
+      disposition: "rejected",
+      status: 409,
+      run: ctx.appRuns[0],
+    });
+
+    let tree: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(GameView));
+    });
+    await flush();
+
+    await act(async () => {
+      await findButtonByText(tree.root, "game.showLogs").props.onClick();
+    });
+
+    const input = tree.root.findAll(
+      (node) => node.props?.placeholder === "game.chatPlaceholder",
+    )[0];
+    await act(async () => {
+      input.props.onChange({ target: { value: "do the wrong thing" } });
+    });
+
+    await act(async () => {
+      await findButtonByText(tree.root, "common.send").props.onClick();
+    });
+
+    expect(ctx.setActionNotice).toHaveBeenCalledWith(
+      "The run rejected that instruction.",
+      "error",
+      3200,
+    );
+  });
+
+  it("shows unsupported notices when run steering is unavailable", async () => {
+    const ctx = createContext();
+    mockUseApp.mockReturnValue(ctx);
+    mockClientFns.sendAppRunMessage.mockResolvedValue({
+      success: false,
+      message: "This run does not expose a steering channel yet.",
+      disposition: "unsupported",
+      status: 501,
+      run: ctx.appRuns[0],
+    });
+
+    let tree: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(GameView));
+    });
+    await flush();
+
+    await act(async () => {
+      await findButtonByText(tree.root, "game.showLogs").props.onClick();
+    });
+
+    const input = tree.root.findAll(
+      (node) => node.props?.placeholder === "game.chatPlaceholder",
+    )[0];
+    await act(async () => {
+      input.props.onChange({ target: { value: "please steer" } });
+    });
+
+    await act(async () => {
+      await findButtonByText(tree.root, "common.send").props.onClick();
+    });
+
+    expect(ctx.setActionNotice).toHaveBeenCalledWith(
+      "This run does not expose a steering channel yet.",
+      "error",
+      3200,
     );
   });
 });

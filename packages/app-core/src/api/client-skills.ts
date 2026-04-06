@@ -3,8 +3,8 @@
  * Babylon, custom actions, WhatsApp, agent events.
  */
 
-import { packageNameToAppRouteSlug } from "@miladyai/shared/contracts/apps";
 import type { CustomActionDef } from "@miladyai/agent/contracts/config";
+import { packageNameToAppRouteSlug } from "@miladyai/shared/contracts/apps";
 import { MiladyClient } from "./client-base";
 import type {
   AppLaunchResult,
@@ -14,6 +14,30 @@ import type {
   AppSessionControlAction,
   AppSessionState,
   AppStopResult,
+  BabylonActivityFeed,
+  BabylonAgentGoal,
+  BabylonAgentStats,
+  BabylonAgentStatus,
+  BabylonAgentSummary,
+  BabylonChat,
+  BabylonChatMessage,
+  BabylonChatMessagesResponse,
+  BabylonChatResponse,
+  BabylonChatsResponse,
+  BabylonLogEntry,
+  BabylonPerpMarket,
+  BabylonPerpPosition,
+  BabylonPerpTradeResult,
+  BabylonPostResult,
+  BabylonPostsResponse,
+  BabylonPredictionMarket,
+  BabylonPredictionMarketsResponse,
+  BabylonSendMessageResult,
+  BabylonTeamChatInfo,
+  BabylonTeamResponse,
+  BabylonToggleResponse,
+  BabylonTradeResult,
+  BabylonWallet,
   CatalogSearchResult,
   CatalogSkill,
   HyperscapeActionResponse,
@@ -34,33 +58,22 @@ import type {
   SkillInfo,
   SkillMarketplaceResult,
   SkillScanReportSummary,
-  BabylonActivityFeed,
-  BabylonAgentGoal,
-  BabylonAgentStats,
-  BabylonAgentStatus,
-  BabylonAgentSummary,
-  BabylonChat,
-  BabylonChatMessage,
-  BabylonChatMessagesResponse,
-  BabylonChatResponse,
-  BabylonChatsResponse,
-  BabylonComment,
-  BabylonLogEntry,
-  BabylonPerpMarket,
-  BabylonPerpPosition,
-  BabylonPerpTradeResult,
-  BabylonPost,
-  BabylonPostResult,
-  BabylonPostsResponse,
-  BabylonPredictionMarket,
-  BabylonPredictionMarketsResponse,
-  BabylonSendMessageResult,
-  BabylonTeamChatInfo,
-  BabylonTeamResponse,
-  BabylonToggleResponse,
-  BabylonTradeResult,
-  BabylonWallet,
 } from "./client-types";
+
+export type AppRunSteeringDisposition =
+  | "accepted"
+  | "queued"
+  | "rejected"
+  | "unsupported";
+
+export interface AppRunSteeringResult {
+  success: boolean;
+  message: string;
+  disposition: AppRunSteeringDisposition;
+  status: number;
+  run?: AppRunSummary | null;
+  session?: AppSessionState | null;
+}
 
 // ---------------------------------------------------------------------------
 // Declaration merging
@@ -201,6 +214,14 @@ declare module "./client-base" {
     stopAppRun(runId: string): Promise<AppStopResult>;
     getAppInfo(name: string): Promise<RegistryAppInfo>;
     launchApp(name: string): Promise<AppLaunchResult>;
+    sendAppRunMessage(
+      runId: string,
+      content: string,
+    ): Promise<AppRunSteeringResult>;
+    controlAppRun(
+      runId: string,
+      action: AppSessionControlAction,
+    ): Promise<AppRunSteeringResult>;
     getAppSessionState(
       appName: string,
       sessionId: string,
@@ -700,6 +721,110 @@ MiladyClient.prototype.launchApp = async function (this: MiladyClient, name) {
     method: "POST",
     body: JSON.stringify({ name }),
   });
+};
+
+MiladyClient.prototype.sendAppRunMessage = async function (
+  this: MiladyClient,
+  runId,
+  content,
+) {
+  const response = await this.rawRequest(
+    `/api/apps/runs/${encodeURIComponent(runId)}/message`,
+    {
+      method: "POST",
+      body: JSON.stringify({ content }),
+    },
+    { allowNonOk: true },
+  );
+  const data = (await response.json().catch(() => ({}))) as Record<
+    string,
+    unknown
+  >;
+  return {
+    success: Boolean(data.success),
+    message:
+      typeof data.message === "string" && data.message.trim().length > 0
+        ? data.message.trim()
+        : response.status === 202
+          ? "Command queued."
+          : response.status >= 500
+            ? "Command unavailable."
+            : "Command rejected.",
+    disposition:
+      data.disposition === "accepted" ||
+      data.disposition === "queued" ||
+      data.disposition === "rejected" ||
+      data.disposition === "unsupported"
+        ? data.disposition
+        : response.status === 202
+          ? "queued"
+          : response.status >= 500
+            ? "unsupported"
+            : response.status >= 400
+              ? "rejected"
+              : "accepted",
+    status: response.status,
+    run:
+      data.run && typeof data.run === "object"
+        ? (data.run as AppRunSummary)
+        : null,
+    session:
+      data.session && typeof data.session === "object"
+        ? (data.session as AppSessionState)
+        : null,
+  };
+};
+
+MiladyClient.prototype.controlAppRun = async function (
+  this: MiladyClient,
+  runId,
+  action,
+) {
+  const response = await this.rawRequest(
+    `/api/apps/runs/${encodeURIComponent(runId)}/control`,
+    {
+      method: "POST",
+      body: JSON.stringify({ action }),
+    },
+    { allowNonOk: true },
+  );
+  const data = (await response.json().catch(() => ({}))) as Record<
+    string,
+    unknown
+  >;
+  return {
+    success: Boolean(data.success),
+    message:
+      typeof data.message === "string" && data.message.trim().length > 0
+        ? data.message.trim()
+        : response.status === 202
+          ? "Command queued."
+          : response.status >= 500
+            ? "Command unavailable."
+            : "Command rejected.",
+    disposition:
+      data.disposition === "accepted" ||
+      data.disposition === "queued" ||
+      data.disposition === "rejected" ||
+      data.disposition === "unsupported"
+        ? data.disposition
+        : response.status === 202
+          ? "queued"
+          : response.status >= 500
+            ? "unsupported"
+            : response.status >= 400
+              ? "rejected"
+              : "accepted",
+    status: response.status,
+    run:
+      data.run && typeof data.run === "object"
+        ? (data.run as AppRunSummary)
+        : null,
+    session:
+      data.session && typeof data.session === "object"
+        ? (data.session as AppSessionState)
+        : null,
+  };
 };
 
 MiladyClient.prototype.getAppSessionState = async function (

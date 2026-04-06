@@ -1,5 +1,5 @@
 import type { IAgentRuntime } from "@elizaos/core";
-import { describe, expect, test, vi } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
 import type {
   AppManagerLike,
   AppsRouteContext,
@@ -10,6 +10,14 @@ import {
   createMockHttpResponse,
   createMockIncomingMessage,
 } from "../../src/test-support/test-helpers";
+
+const { mockImportAppRouteModule } = vi.hoisted(() => ({
+  mockImportAppRouteModule: vi.fn(),
+}));
+
+vi.mock("../../src/services/app-package-modules.js", () => ({
+  importAppRouteModule: mockImportAppRouteModule,
+}));
 
 function buildPluginManager(
   overrides: Partial<PluginManagerLike> = {},
@@ -107,6 +115,10 @@ function buildCtx(overrides: Partial<AppsRouteContext> = {}): AppsRouteContext {
 }
 
 describe("handleAppsRoutes", () => {
+  beforeEach(() => {
+    mockImportAppRouteModule.mockReset();
+  });
+
   test("returns false for unrelated path", async () => {
     const ctx = buildCtx({ pathname: "/api/other" });
     const handled = await handleAppsRoutes(ctx);
@@ -227,6 +239,139 @@ describe("handleAppsRoutes", () => {
     expect(getJson()).toEqual({
       state: "healthy",
       message: null,
+    });
+  });
+
+  test("POST /api/apps/runs/:runId/message proxies to the app route module", async () => {
+    const { res, getStatus, getJson } = createMockHttpResponse();
+    const run = {
+      runId: "run-1",
+      appName: "@elizaos/app-hyperscape",
+      displayName: "Hyperscape",
+      session: {
+        sessionId: "agent-1",
+      },
+      health: {
+        state: "healthy",
+        message: null,
+      },
+    };
+    type RouteCtx = {
+      pathname: string;
+      readJsonBody: <T extends object>() => Promise<T | null>;
+      json: (res: unknown, data: object, status?: number) => void;
+      res: unknown;
+    };
+    const handleAppRoutes = vi.fn(async (routeCtx: RouteCtx) => {
+      expect(routeCtx.pathname).toBe(
+        "/api/apps/hyperscape/session/agent-1/message",
+      );
+      const body = await routeCtx.readJsonBody();
+      expect(body).toEqual({
+        content: "Go explore the mine.",
+      });
+      routeCtx.json(
+        routeCtx.res,
+        {
+          success: true,
+          message: "Queued guidance for Hyperscape.",
+          session: {
+            sessionId: "agent-1",
+            appName: "@elizaos/app-hyperscape",
+            mode: "spectate-and-steer",
+            status: "running",
+          },
+        },
+        202,
+      );
+      return true;
+    });
+    mockImportAppRouteModule.mockResolvedValue({ handleAppRoutes });
+    const getRun = vi.fn(async () => run);
+    const ctx = buildCtx({
+      method: "POST",
+      pathname: "/api/apps/runs/run-1/message",
+      res,
+      readJsonBody: vi.fn(async () => ({ content: "Go explore the mine." })),
+      appManager: buildAppManager({
+        getRun,
+      }),
+    });
+
+    const handled = await handleAppsRoutes(ctx);
+
+    expect(handled).toBe(true);
+    expect(getRun).toHaveBeenCalledWith("run-1", null);
+    expect(getStatus()).toBe(202);
+    expect(getJson()).toEqual({
+      success: true,
+      message: "Queued guidance for Hyperscape.",
+      disposition: "queued",
+      status: 202,
+      run: {
+        runId: "run-1",
+        appName: "@elizaos/app-hyperscape",
+        displayName: "Hyperscape",
+        session: {
+          sessionId: "agent-1",
+        },
+        health: {
+          state: "healthy",
+          message: null,
+        },
+      },
+      session: {
+        sessionId: "agent-1",
+        appName: "@elizaos/app-hyperscape",
+        mode: "spectate-and-steer",
+        status: "running",
+      },
+    });
+  });
+
+  test("POST /api/apps/runs/:runId/control returns unsupported when no steering handler exists", async () => {
+    const { res, getStatus, getJson } = createMockHttpResponse();
+    mockImportAppRouteModule.mockResolvedValue({ handleAppRoutes: undefined });
+    const ctx = buildCtx({
+      method: "POST",
+      pathname: "/api/apps/runs/run-1/control",
+      res,
+      readJsonBody: vi.fn(async () => ({ action: "pause" })),
+      appManager: buildAppManager({
+        getRun: vi.fn(async () => ({
+          runId: "run-1",
+          appName: "@elizaos/app-babylon",
+          displayName: "Babylon",
+          session: null,
+          health: {
+            state: "healthy",
+            message: null,
+          },
+        })),
+      }),
+    });
+
+    const handled = await handleAppsRoutes(ctx);
+
+    expect(handled).toBe(true);
+    expect(getStatus()).toBe(501);
+    expect(getJson()).toEqual({
+      success: false,
+      message:
+        'Run-scoped controls are unavailable for "Babylon" because its route module does not expose a steering handler.',
+      disposition: "unsupported",
+      status: 501,
+      run: {
+        runId: "run-1",
+        appName: "@elizaos/app-babylon",
+        displayName: "Babylon",
+        session: null,
+        health: {
+          state: "healthy",
+          message: null,
+        },
+      },
+      session: null,
     });
   });
 

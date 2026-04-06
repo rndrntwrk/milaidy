@@ -667,6 +667,7 @@ export const LIFEOPS_ACTIVITY_SIGNAL_SOURCES = [
   "app_lifecycle",
   "page_visibility",
   "desktop_power",
+  "mobile_device",
 ] as const;
 export type LifeOpsActivitySignalSource =
   (typeof LIFEOPS_ACTIVITY_SIGNAL_SOURCES)[number];

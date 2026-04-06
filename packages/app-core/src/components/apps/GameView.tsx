@@ -55,6 +55,74 @@ export function buildDisconnectedSessionState(
   };
 }
 
+type RunSteeringDisposition =
+  | "accepted"
+  | "queued"
+  | "rejected"
+  | "unsupported";
+
+interface RunSteeringResult {
+  success: boolean;
+  message: string;
+  disposition: RunSteeringDisposition;
+  status: number;
+  run?: AppRunSummary | null;
+  session?: AppSessionState | null;
+}
+
+function getSteeringNotice(
+  disposition: RunSteeringDisposition,
+  message: string,
+): {
+  tone: "info" | "success" | "error";
+  ttlMs: number;
+  text: string;
+} {
+  if (disposition === "queued") {
+    return {
+      tone: "info",
+      ttlMs: 2600,
+      text: message,
+    };
+  }
+  if (disposition === "accepted") {
+    return {
+      tone: "success",
+      ttlMs: 2400,
+      text: message,
+    };
+  }
+  return {
+    tone: "error",
+    ttlMs: 3200,
+    text: message,
+  };
+}
+
+function getSteeringFallbackMessage(
+  disposition: RunSteeringDisposition,
+  defaultValue: string,
+): string {
+  if (disposition === "queued") return "Command queued.";
+  if (disposition === "accepted") return "Command accepted.";
+  if (disposition === "unsupported") {
+    return "This run does not support that steering channel.";
+  }
+  return defaultValue;
+}
+
+function getApiStatus(err: unknown): number | null {
+  if (
+    err &&
+    typeof err === "object" &&
+    "status" in err &&
+    typeof (err as { status?: unknown }).status === "number"
+  ) {
+    return (err as { status: number }).status;
+  }
+  return null;
+}
+
 /** Tag badge colors for logs panel. */
 const TAG_COLORS: Record<string, { bg: string; fg: string }> = {
   agent: { bg: "rgba(99, 102, 241, 0.15)", fg: "rgb(99, 102, 241)" },
@@ -548,6 +616,47 @@ export function GameView() {
     [activeGameRunId, appRuns, setState],
   );
 
+  const applyRunState = useCallback(
+    (nextRun: AppRunSummary | null) => {
+      if (!nextRun) return;
+      const nextUpdatedAt = new Date().toISOString();
+      setSessionState(nextRun.session ?? null);
+      if (nextRun.runId !== activeGameRunId) return;
+      setState(
+        "appRuns",
+        appRuns.map((run) => {
+          if (run.runId !== nextRun.runId) return run;
+          const nextHealth =
+            nextRun.health ??
+            (nextRun.session?.status === "disconnected"
+              ? {
+                  state: "degraded" as const,
+                  message:
+                    nextRun.session.summary ??
+                    nextRun.summary ??
+                    "Session unavailable.",
+                }
+              : nextRun.session
+                ? {
+                    state: "healthy" as const,
+                    message: nextRun.session.summary ?? null,
+                  }
+                : run.health);
+          return {
+            ...run,
+            ...nextRun,
+            updatedAt: nextUpdatedAt,
+            lastHeartbeatAt: nextRun.session
+              ? nextUpdatedAt
+              : run.lastHeartbeatAt,
+            health: nextHealth,
+          } satisfies AppRunSummary;
+        }),
+      );
+    },
+    [activeGameRunId, appRuns, setState],
+  );
+
   const refreshSessionState = useCallback(async () => {
     if (!activeGameApp || !activeGameSession?.sessionId) return null;
     try {
@@ -596,9 +705,44 @@ export function GameView() {
       const content = rawContent.trim();
       if (!content) return;
       const currentSession = sessionState ?? activeGameSession;
+      const currentRun = activeGameRun ?? null;
       setSendingChat(true);
       try {
-        if (currentSession?.sessionId && currentSession.canSendCommands) {
+        if (currentRun?.runId) {
+          const response = (await client.sendAppRunMessage(
+            currentRun.runId,
+            content,
+          )) as RunSteeringResult;
+          if (response.run) {
+            applyRunState(response.run);
+          } else if (response.session) {
+            applySessionState(response.session);
+          }
+          const notice = getSteeringNotice(
+            response.disposition,
+            response.message ||
+              getSteeringFallbackMessage(
+                response.disposition,
+                t("gameview.CommandSentToAppRun", {
+                  defaultValue: "Command sent to app run.",
+                }),
+              ),
+          );
+          setActionNotice(notice.text, notice.tone, notice.ttlMs);
+          if (
+            response.disposition === "accepted" ||
+            response.disposition === "queued"
+          ) {
+            if (!response.run && !response.session) {
+              await refreshSessionState();
+            }
+            setChatInput("");
+            setTimeout(() => void loadLogs(), 1500);
+          }
+        } else if (
+          currentSession?.sessionId &&
+          currentSession.canSendCommands
+        ) {
           const response = await client.sendAppSessionMessage(
             activeGameApp,
             currentSession.sessionId,
@@ -617,36 +761,29 @@ export function GameView() {
             "success",
             2400,
           );
+          setChatInput("");
+          setTimeout(() => void loadLogs(), 1500);
         } else {
-          // Fallback to the generic DM path for apps without a session command channel.
-          const response = await client.sendChatRest(content, "DM");
-          if (response.text) {
-            setActionNotice(
-              t("gameview.AgentResponseNotice", {
-                defaultValue: "Agent: {{response}}",
-                response: `${response.text.slice(0, 100)}${response.text.length > 100 ? "..." : ""}`,
-              }),
-              "success",
-              4000,
-            );
-          } else {
-            setActionNotice(
-              t("gameview.CommandSentToAgent", {
-                defaultValue: "Command sent to agent.",
-              }),
-              "success",
-              2000,
-            );
-          }
+          setActionNotice(
+            t("gameview.RunSteeringUnsupported", {
+              defaultValue: "This run does not expose a steering channel yet.",
+            }),
+            "error",
+            3200,
+          );
         }
-        setChatInput("");
-        setTimeout(() => void loadLogs(), 1500);
       } catch (err) {
+        const status = getApiStatus(err);
         setActionNotice(
-          t("gameview.FailedToSend", {
-            defaultValue: "Failed to send: {{message}}",
-            message: err instanceof Error ? err.message : "error",
-          }),
+          status === 501 || status === 503
+            ? t("gameview.RunSteeringUnsupported", {
+                defaultValue:
+                  "This run does not expose a steering channel yet.",
+              })
+            : t("gameview.FailedToSend", {
+                defaultValue: "Failed to send: {{message}}",
+                message: err instanceof Error ? err.message : "error",
+              }),
           "error",
           3000,
         );
@@ -664,6 +801,8 @@ export function GameView() {
       setTimeout,
       sessionState,
       t,
+      activeGameRun,
+      applyRunState,
     ],
   );
 
@@ -680,6 +819,7 @@ export function GameView() {
 
   const handleSessionControl = useCallback(async () => {
     if (
+      !activeGameRunId ||
       !activeGameApp ||
       !activeGameSession?.sessionId ||
       !sessionControlAction
@@ -687,22 +827,45 @@ export function GameView() {
       return;
     setSessionBusyAction(sessionControlAction);
     try {
-      const response = await client.controlAppSession(
-        activeGameApp,
-        activeGameSession.sessionId,
+      const response = (await client.controlAppRun(
+        activeGameRunId,
         sessionControlAction,
+      )) as RunSteeringResult;
+      if (response.run) {
+        applyRunState(response.run);
+      } else if (response.session) {
+        applySessionState(response.session);
+      }
+      const notice = getSteeringNotice(
+        response.disposition,
+        response.message ||
+          getSteeringFallbackMessage(
+            response.disposition,
+            t("gameview.SessionControlSent", {
+              defaultValue: "Session control updated.",
+            }),
+          ),
       );
-      applySessionState(response.session ?? activeSessionState ?? null);
-      setActionNotice(response.message, "success", 2600);
-      if (!response.session) {
+      setActionNotice(notice.text, notice.tone, notice.ttlMs);
+      if (
+        (response.disposition === "accepted" ||
+          response.disposition === "queued") &&
+        !response.run &&
+        !response.session
+      ) {
         await refreshSessionState();
       }
     } catch (err) {
+      const status = getApiStatus(err);
       setActionNotice(
-        t("gameview.SessionControlFailed", {
-          defaultValue: "Failed to update session: {{message}}",
-          message: err instanceof Error ? err.message : "error",
-        }),
+        status === 501 || status === 503
+          ? t("gameview.SessionControlUnsupported", {
+              defaultValue: "This run does not expose session controls.",
+            })
+          : t("gameview.SessionControlFailed", {
+              defaultValue: "Failed to update session: {{message}}",
+              message: err instanceof Error ? err.message : "error",
+            }),
         "error",
         3200,
       );
@@ -712,12 +875,13 @@ export function GameView() {
   }, [
     activeGameApp,
     activeGameSession?.sessionId,
-    activeSessionState,
     applySessionState,
     refreshSessionState,
     sessionControlAction,
     setActionNotice,
     t,
+    activeGameRunId,
+    applyRunState,
   ]);
   const postMessageTargetOrigin = useMemo(
     () => resolvePostMessageTargetOrigin(activeGameViewerUrl),
