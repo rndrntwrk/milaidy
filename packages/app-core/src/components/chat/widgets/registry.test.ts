@@ -7,6 +7,7 @@ describe("resolveChatSidebarWidgets", () => {
       "lifeops.overview",
       "todo.items",
       "lifeops.google",
+      "agent-orchestrator.apps",
       "agent-orchestrator.tasks",
       "agent-orchestrator.activity",
     ]);
@@ -19,6 +20,10 @@ describe("resolveChatSidebarWidgets", () => {
         { id: "todo", enabled: false, isActive: false },
         { id: "agent-orchestrator", enabled: true, isActive: true },
       ]).map((widget) => widget.id),
-    ).toEqual(["agent-orchestrator.tasks", "agent-orchestrator.activity"]);
+    ).toEqual([
+      "agent-orchestrator.apps",
+      "agent-orchestrator.tasks",
+      "agent-orchestrator.activity",
+    ]);
   });
 });
