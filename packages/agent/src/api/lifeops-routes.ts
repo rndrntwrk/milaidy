@@ -13,6 +13,7 @@ import type {
   ConfirmLifeOpsBrowserSessionRequest,
   CreateLifeOpsBrowserSessionRequest,
   CreateLifeOpsCalendarEventRequest,
+  CreateLifeOpsGmailBatchReplyDraftsRequest,
   CreateLifeOpsDefinitionRequest,
   CreateLifeOpsGmailReplyDraftRequest,
   CreateLifeOpsGoalRequest,
@@ -21,6 +22,7 @@ import type {
   DisconnectLifeOpsGoogleConnectorRequest,
   GetLifeOpsCalendarFeedRequest,
   GetLifeOpsGmailTriageRequest,
+  GetLifeOpsGmailSearchRequest,
   LifeOpsConnectorMode,
   LifeOpsConnectorSide,
   ProcessLifeOpsRemindersRequest,
@@ -29,6 +31,7 @@ import type {
   ResolveLifeOpsWebsiteAccessCallbackRequest,
   SelectLifeOpsGoogleConnectorPreferenceRequest,
   SendLifeOpsGmailReplyRequest,
+  SendLifeOpsGmailBatchReplyRequest,
   SetLifeOpsReminderPreferenceRequest,
   SnoozeLifeOpsOccurrenceRequest,
   StartLifeOpsGoogleConnectorRequest,
@@ -439,6 +442,73 @@ export async function handleLifeOpsRoutes(
     });
   }
 
+  if (method === "GET" && pathname === "/api/lifeops/gmail/search") {
+    return runRoute(ctx, async (service) => {
+      const rawMode = url.searchParams.get("mode");
+      const rawSide = url.searchParams.get("side");
+      const rawForceSync = url.searchParams.get("forceSync");
+      const query = url.searchParams.get("query");
+      const rawReplyNeededOnly = url.searchParams.get("replyNeededOnly");
+      if (
+        rawMode !== null &&
+        rawMode !== "local" &&
+        rawMode !== "remote" &&
+        rawMode !== "cloud_managed"
+      ) {
+        throw new LifeOpsServiceError(
+          400,
+          "mode must be one of: local, remote, cloud_managed",
+        );
+      }
+      if (rawSide !== null && rawSide !== "owner" && rawSide !== "agent") {
+        throw new LifeOpsServiceError(400, "side must be one of: owner, agent");
+      }
+      if (
+        rawForceSync !== null &&
+        rawForceSync !== "true" &&
+        rawForceSync !== "false" &&
+        rawForceSync !== "1" &&
+        rawForceSync !== "0"
+      ) {
+        throw new LifeOpsServiceError(400, "forceSync must be a boolean");
+      }
+      if (
+        rawReplyNeededOnly !== null &&
+        rawReplyNeededOnly !== "true" &&
+        rawReplyNeededOnly !== "false" &&
+        rawReplyNeededOnly !== "1" &&
+        rawReplyNeededOnly !== "0"
+      ) {
+        throw new LifeOpsServiceError(
+          400,
+          "replyNeededOnly must be a boolean",
+        );
+      }
+      const request: GetLifeOpsGmailSearchRequest = {
+        mode: (rawMode ?? undefined) as
+          | "local"
+          | "remote"
+          | "cloud_managed"
+          | undefined,
+        side: (rawSide ?? undefined) as "owner" | "agent" | undefined,
+        forceSync:
+          rawForceSync === null
+            ? undefined
+            : rawForceSync === "true" || rawForceSync === "1",
+        maxResults:
+          url.searchParams.get("maxResults") === null
+            ? undefined
+            : Number(url.searchParams.get("maxResults")),
+        query: query ?? "",
+        replyNeededOnly:
+          rawReplyNeededOnly === null
+            ? undefined
+            : rawReplyNeededOnly === "true" || rawReplyNeededOnly === "1",
+      };
+      json(res, await service.getGmailSearch(url, request));
+    });
+  }
+
   if (method === "GET" && pathname === "/api/lifeops/gmail/needs-response") {
     return runRoute(ctx, async (service) => {
       const rawMode = url.searchParams.get("mode");
@@ -509,11 +579,37 @@ export async function handleLifeOpsRoutes(
     });
   }
 
+  if (method === "POST" && pathname === "/api/lifeops/gmail/batch-reply-drafts") {
+    const body = await readJsonBody<CreateLifeOpsGmailBatchReplyDraftsRequest>(
+      req,
+      res,
+    );
+    if (!body) return true;
+    return runRoute(ctx, async (service) => {
+      json(
+        res,
+        { batch: await service.createGmailBatchReplyDrafts(url, body) },
+        201,
+      );
+    });
+  }
+
   if (method === "POST" && pathname === "/api/lifeops/gmail/reply-send") {
     const body = await readJsonBody<SendLifeOpsGmailReplyRequest>(req, res);
     if (!body) return true;
     return runRoute(ctx, async (service) => {
       json(res, await service.sendGmailReply(url, body));
+    });
+  }
+
+  if (method === "POST" && pathname === "/api/lifeops/gmail/batch-reply-send") {
+    const body = await readJsonBody<SendLifeOpsGmailBatchReplyRequest>(
+      req,
+      res,
+    );
+    if (!body) return true;
+    return runRoute(ctx, async (service) => {
+      json(res, await service.sendGmailReplies(url, body));
     });
   }
 

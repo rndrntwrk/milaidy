@@ -1,6 +1,8 @@
 import type {
   AppRunSummary,
+  CodingAgentFrameworkAvailability,
   CodingAgentSession,
+  CodingAgentStatus,
   CodingAgentTaskThread,
   CodingAgentTaskThreadDetail,
 } from "@miladyai/app-core/api";
@@ -84,6 +86,15 @@ function TaskCard({ session }: { session: CodingAgentSession }) {
       </p>
     </div>
   );
+}
+
+function formatFrameworkState(
+  framework: CodingAgentFrameworkAvailability,
+): string {
+  if (framework.available) return "ready";
+  if (!framework.installed) return "install required";
+  if (!framework.authReady) return "login required";
+  return "unavailable";
 }
 
 function TaskItemsContent({ sessions }: { sessions: CodingAgentSession[] }) {
@@ -197,6 +208,81 @@ function DetailList({
   );
 }
 
+function ProviderRoutingPanel({
+  status,
+}: {
+  status: CodingAgentStatus;
+}) {
+  const frameworks = Array.isArray(status.frameworks) ? status.frameworks : [];
+
+  if (
+    frameworks.length === 0 &&
+    !status.preferredAgentType &&
+    status.pendingConfirmations === 0
+  ) {
+    return null;
+  }
+
+  return (
+    <div className="rounded-lg border border-border/50 bg-bg-accent/20 p-3">
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
+          Provider Routing
+        </div>
+        {status.preferredAgentType ? (
+          <Badge
+            variant="secondary"
+            className="bg-ok/15 text-[9px] text-ok"
+          >
+            Preferred: {status.preferredAgentType}
+          </Badge>
+        ) : null}
+        <Badge
+          variant="secondary"
+          className={
+            status.pendingConfirmations > 0
+              ? "bg-warn/15 text-[9px] text-warn"
+              : "bg-bg-hover/70 text-[9px] text-muted"
+          }
+        >
+          Pending approvals: {status.pendingConfirmations}
+        </Badge>
+      </div>
+      {status.preferredAgentReason ? (
+        <div className="mb-2 text-[11px] text-muted">
+          {status.preferredAgentReason}
+        </div>
+      ) : null}
+      {frameworks.length > 0 ? (
+        <div className="space-y-1.5">
+          {frameworks.slice(0, 5).map((framework) => (
+            <div
+              key={framework.id}
+              className="rounded border border-border/40 bg-bg-hover/30 px-2 py-1.5 text-[11px] text-txt"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="font-medium">{framework.label}</div>
+                <div
+                  className={
+                    framework.available
+                      ? "text-ok"
+                      : framework.installed && framework.authReady
+                        ? "text-warn"
+                        : "text-muted"
+                  }
+                >
+                  {formatFrameworkState(framework)}
+                </div>
+              </div>
+              <div className="text-muted">{framework.reason}</div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function TaskThreadDetailPanel({
   detail,
   onArchive,
@@ -212,6 +298,7 @@ function TaskThreadDetailPanel({
   const latestEvents = detail.events.slice(-6).reverse();
   const latestDecisions = detail.decisions.slice(-6).reverse();
   const latestArtifacts = detail.artifacts.slice(-6).reverse();
+  const pendingDecisions = detail.pendingDecisions.slice(-4).reverse();
 
   return (
     <div className="flex flex-col gap-2.5">
@@ -292,11 +379,35 @@ function TaskThreadDetailPanel({
                 <div key={session.id} className="text-[11px] text-txt">
                   <div className="font-medium">{session.label}</div>
                   <div className="text-muted">
-                    {session.framework} · {session.status} ·{" "}
+                    {session.framework}
+                    {session.providerSource ? ` (${session.providerSource})` : ""}
+                    {" · "}
+                    {session.status} ·{" "}
                     {session.workdir || session.repo || "no workspace"}
                   </div>
                 </div>
               ))}
+          </div>
+        )}
+      </DetailList>
+
+      <DetailList title="Pending User Input">
+        {pendingDecisions.length === 0 ? (
+          <div className="text-[11px] text-muted">
+            No pending user input.
+          </div>
+        ) : (
+          <div className="space-y-1.5">
+            {pendingDecisions.map((decision) => (
+              <div key={`${decision.threadId}-${decision.sessionId}`} className="text-[11px] text-txt">
+                <div className="font-medium">{decision.promptText}</div>
+                <div className="line-clamp-2 text-muted">
+                  {typeof decision.llmDecision.reasoning === "string"
+                    ? decision.llmDecision.reasoning
+                    : decision.recentOutput || "Coordinator is waiting for the next user response."}
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </DetailList>
@@ -610,6 +721,7 @@ function OrchestratorTasksWidget(_props: ChatSidebarWidgetProps) {
     [ptySessions],
   );
   const [threads, setThreads] = useState<CodingAgentTaskThread[]>([]);
+  const [status, setStatus] = useState<CodingAgentStatus | null>(null);
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [selectedThread, setSelectedThread] =
     useState<CodingAgentTaskThreadDetail | null>(null);
@@ -632,15 +744,19 @@ function OrchestratorTasksWidget(_props: ChatSidebarWidgetProps) {
     const refreshThreads = async () => {
       setLoading(true);
       try {
-        const nextThreads = await client.listCodingAgentTaskThreads({
-          includeArchived: showArchived,
-          search: deferredSearch || undefined,
-          limit: 30,
-        });
+        const [nextThreads, nextStatus] = await Promise.all([
+          client.listCodingAgentTaskThreads({
+            includeArchived: showArchived,
+            search: deferredSearch || undefined,
+            limit: 30,
+          }),
+          client.getCodingAgentStatus(),
+        ]);
         if (cancelled) return;
         setLoadError(null);
         setMutationError(null);
         setThreads(nextThreads);
+        setStatus(nextStatus);
         setSelectedThreadId((current) => {
           if (current && nextThreads.some((thread) => thread.id === current)) {
             return current;
@@ -653,6 +769,7 @@ function OrchestratorTasksWidget(_props: ChatSidebarWidgetProps) {
           getClientErrorMessage(error, "Failed to load task threads."),
         );
         setThreads([]);
+        setStatus(null);
         setSelectedThreadId(null);
         setSelectedThread(null);
       } finally {
@@ -788,6 +905,7 @@ function OrchestratorTasksWidget(_props: ChatSidebarWidgetProps) {
       ) : null}
       {threads.length > 0 ? (
         <div className="flex flex-col gap-2.5">
+          {status ? <ProviderRoutingPanel status={status} /> : null}
           <div className="flex max-h-56 flex-col gap-2 overflow-y-auto pr-1">
             {threads.map((thread) => (
               <TaskThreadCard
@@ -816,7 +934,10 @@ function OrchestratorTasksWidget(_props: ChatSidebarWidgetProps) {
       ) : loading ? (
         <div className="text-[11px] text-muted">Loading tasks...</div>
       ) : (
-        <TaskItemsContent sessions={activeSessions} />
+        <div className="flex flex-col gap-2.5">
+          {status ? <ProviderRoutingPanel status={status} /> : null}
+          <TaskItemsContent sessions={activeSessions} />
+        </div>
       )}
     </WidgetSection>
   );

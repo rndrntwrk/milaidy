@@ -130,6 +130,115 @@ describe("LifeOpsService", () => {
     });
   });
 
+  it("uses rolodex routing hints to resolve the selected reminder endpoint and history", async () => {
+    configMocks.loadElizaConfig.mockReturnValue({
+      agents: {
+        defaults: {
+          ownerContacts: {
+            discord: { entityId: "owner-1" },
+          },
+        },
+      },
+    });
+    const runtime = createRuntime();
+    const rolodexContact = {
+      preferences: { preferredCommunicationChannel: "discord" },
+      customFields: {
+        discordChannelId: "dm-rolodex",
+      },
+    };
+    (runtime as unknown as { getService: ReturnType<typeof vi.fn> }).getService =
+      vi.fn((name: string) =>
+        name === "rolodex"
+          ? {
+              getContact: vi.fn().mockResolvedValue(rolodexContact),
+            }
+          : null,
+      );
+    (runtime as unknown as { getEntityById: ReturnType<typeof vi.fn> }).getEntityById =
+      vi.fn().mockResolvedValue({
+        metadata: {
+          platformIdentities: [
+            { platform: "discord", handle: "@shaw", status: "active" },
+          ],
+        },
+      });
+    (runtime as unknown as { getRoomsForParticipant: ReturnType<typeof vi.fn> }).getRoomsForParticipant =
+      vi.fn().mockResolvedValue(["room-1"]);
+    (runtime as unknown as { getMemoriesByRoomIds: ReturnType<typeof vi.fn> }).getMemoriesByRoomIds =
+      vi.fn().mockResolvedValue([
+        {
+          entityId: "owner-1",
+          createdAt: "2026-04-06T11:59:00.000Z",
+          content: { text: "Seen in discord" },
+        },
+      ]);
+    const service = new LifeOpsService(runtime);
+    (service as unknown as { repository: Record<string, unknown> }).repository = {
+      listChannelPolicies: vi.fn().mockResolvedValue([]),
+      createReminderAttempt: vi.fn().mockResolvedValue(undefined),
+    };
+    (service as unknown as { recordReminderAudit: ReturnType<typeof vi.fn> })
+      .recordReminderAudit = vi.fn().mockResolvedValue(undefined);
+
+    const attempt = await (
+      service as unknown as {
+        dispatchReminderAttempt: (args: Record<string, unknown>) => Promise<Record<string, unknown>>;
+      }
+    ).dispatchReminderAttempt({
+      plan: { id: "plan-rolodex" },
+      ownerType: "occurrence",
+      ownerId: "occ-rolodex",
+      occurrenceId: "occ-rolodex",
+      subjectType: "owner",
+      title: "Brush teeth",
+      channel: "discord",
+      stepIndex: 0,
+      scheduledFor: "2026-04-06T12:00:00.000Z",
+      dueAt: null,
+      urgency: "medium",
+      quietHours: {},
+      acknowledged: false,
+      attemptedAt: "2026-04-06T12:00:00.000Z",
+    });
+
+    expect(runtime.sendMessageToTarget).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: "discord",
+        entityId: "owner-1",
+        channelId: "dm-rolodex",
+      }),
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          routeResolution: expect.objectContaining({
+            sourceOfTruth: "config+rolodex",
+            preferredCommunicationChannel: "discord",
+            platformIdentities: [
+              {
+                platform: "discord",
+                handle: "@shaw",
+                status: "active",
+              },
+            ],
+            lastResponseAt: "2026-04-06T11:59:00.000Z",
+            lastResponseChannel: "discord",
+          }),
+          routeEndpoint: "dm-rolodex",
+          routeSource: "discord",
+        }),
+      }),
+    );
+    expect(attempt).toMatchObject({
+      outcome: "delivered",
+      connectorRef: "runtime:discord:dm-rolodex",
+      deliveryMetadata: expect.objectContaining({
+        routeResolution: expect.objectContaining({
+          sourceOfTruth: "config+rolodex",
+        }),
+      }),
+    });
+  });
+
   it("allows normal runtime reminders when only escalation is disabled by policy", async () => {
     const runtime = createRuntime();
     const service = new LifeOpsService(runtime);
@@ -812,12 +921,12 @@ describe("LifeOpsService", () => {
     ).recordChannelPolicyAudit = vi.fn().mockResolvedValue(undefined);
 
     const preference = await service.setReminderPreference({
-      intensity: "low",
+      intensity: "minimal",
       note: "send me less reminders",
     });
 
     expect(preference.effective).toMatchObject({
-      intensity: "low",
+      intensity: "minimal",
       source: "global_policy",
       note: "send me less reminders",
     });
@@ -826,10 +935,62 @@ describe("LifeOpsService", () => {
       channelType: "in_app",
       channelRef: "lifeops://owner/reminder-preferences",
       metadata: expect.objectContaining({
-        reminderIntensity: "low",
+        reminderIntensity: "minimal",
         reminderPreferenceScope: "global",
       }),
     });
+  });
+
+  it("normalizes legacy reminder intensity metadata when reading preferences", async () => {
+    const runtime = createRuntime();
+    const service = new LifeOpsService(runtime);
+    const definition = {
+      id: "def-compat",
+      agentId: "agent-lifeops",
+      domain: "user_lifeops",
+      subjectType: "owner",
+      subjectId: "owner-1",
+      visibilityScope: "owner_agent_admin",
+      contextPolicy: "explicit_only",
+      kind: "habit",
+      title: "Drink water",
+      description: "",
+      originalIntent: "drink water",
+      timezone: "UTC",
+      status: "active",
+      priority: 3,
+      cadence: { kind: "daily", windows: ["morning"] },
+      windowPolicy: { timezone: "UTC", windows: [] },
+      progressionRule: { kind: "none" },
+      websiteAccess: null,
+      reminderPlanId: "plan-compat",
+      goalId: null,
+      source: "manual",
+      metadata: {
+        reminderIntensity: "paused",
+        reminderIntensityUpdatedAt: "2026-04-06T07:00:00.000Z",
+        reminderIntensityNote: "legacy stored setting",
+        reminderPreferenceScope: "definition",
+      },
+      createdAt: "2026-04-06T00:00:00.000Z",
+      updatedAt: "2026-04-06T00:00:00.000Z",
+    };
+    (service as unknown as {
+      repository: Record<string, unknown>;
+    }).repository = {
+      getDefinition: vi.fn(async () => definition),
+      listChannelPolicies: vi.fn(async () => []),
+    };
+
+    const preference = await service.getReminderPreference("def-compat");
+
+    expect(preference.definition).toMatchObject({
+      intensity: "high_priority_only",
+      source: "definition_metadata",
+      updatedAt: "2026-04-06T07:00:00.000Z",
+      note: "legacy stored setting",
+    });
+    expect(preference.effective.intensity).toBe("high_priority_only");
   });
 
   it("persists a definition-level reminder preference override", async () => {
@@ -889,24 +1050,24 @@ describe("LifeOpsService", () => {
 
     expect(preference.definitionId).toBe("def-1");
     expect(preference.effective).toMatchObject({
-      intensity: "paused",
+      intensity: "high_priority_only",
       source: "definition_metadata",
       note: "stop reminding me about water",
     });
     expect(updatedDefinitions[0]).toMatchObject({
       id: "def-1",
       metadata: expect.objectContaining({
-        reminderIntensity: "paused",
+        reminderIntensity: "high_priority_only",
         reminderPreferenceScope: "definition",
       }),
     });
   });
 
   it.each([
-    ["low", 1],
+    ["minimal", 1],
     ["normal", 2],
-    ["high", 3],
-    ["paused", 0],
+    ["persistent", 3],
+    ["high_priority_only", 0],
   ] as const)(
     "processReminders applies %s reminder intensity",
     async (intensity, expectedCount) => {

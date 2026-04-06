@@ -83,6 +83,13 @@ export interface ActivityProfile {
   currentActivityCycleStartedAt: number | null;
   currentActivityCycleLocalDate: string | null;
   effectiveDayKey: string;
+  screenContextFocus: "work" | "leisure" | "transition" | "idle" | "unknown" | null;
+  screenContextSource: "disabled" | "browser-capture" | "vision" | null;
+  screenContextSampledAt: number | null;
+  screenContextConfidence: number | null;
+  screenContextBusy: boolean;
+  screenContextAvailable: boolean;
+  screenContextStale: boolean;
 }
 
 export interface ProactiveAction {

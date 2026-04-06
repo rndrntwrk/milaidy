@@ -350,13 +350,76 @@ export async function fetchGoogleGmailTriageMessages(args: {
   selfEmail?: string | null;
   maxResults?: number;
 }): Promise<SyncedGoogleGmailMessageSummary[]> {
+  return fetchGoogleGmailMessages({
+    accessToken: args.accessToken,
+    selfEmail: args.selfEmail ?? null,
+    maxResults: args.maxResults,
+    labelIds: ["INBOX"],
+  });
+}
+
+export async function fetchGoogleGmailSearchMessages(args: {
+  accessToken: string;
+  selfEmail?: string | null;
+  maxResults?: number;
+  query: string;
+}): Promise<SyncedGoogleGmailMessageSummary[]> {
+  return fetchGoogleGmailMessages({
+    accessToken: args.accessToken,
+    selfEmail: args.selfEmail ?? null,
+    maxResults: args.maxResults,
+    query: args.query,
+  });
+}
+
+export async function fetchGoogleGmailMessage(args: {
+  accessToken: string;
+  selfEmail?: string | null;
+  messageId: string;
+}): Promise<SyncedGoogleGmailMessageSummary | null> {
+  const params = new URLSearchParams({
+    format: "metadata",
+  });
+  for (const header of GMAIL_METADATA_HEADERS) {
+    params.append("metadataHeaders", header);
+  }
+  const response = await fetch(
+    `${GOOGLE_GMAIL_MESSAGES_ENDPOINT}/${encodeURIComponent(args.messageId)}?${params.toString()}`,
+    {
+      headers: {
+        Authorization: `Bearer ${args.accessToken}`,
+      },
+    },
+  );
+  if (!response.ok) {
+    throw new GoogleApiError(
+      response.status,
+      await readGoogleGmailError(response),
+    );
+  }
+  const parsed = (await response.json()) as GoogleGmailMetadataResponse;
+  return normalizeGoogleGmailMessage(parsed, args.selfEmail ?? null);
+}
+
+async function fetchGoogleGmailMessages(args: {
+  accessToken: string;
+  selfEmail?: string | null;
+  maxResults?: number;
+  query?: string;
+  labelIds?: string[];
+}): Promise<SyncedGoogleGmailMessageSummary[]> {
   const maxResults =
     args.maxResults && args.maxResults > 0 ? Math.min(args.maxResults, 50) : 20;
   const listParams = new URLSearchParams({
     maxResults: String(maxResults),
     includeSpamTrash: "false",
   });
-  listParams.append("labelIds", "INBOX");
+  for (const labelId of args.labelIds ?? []) {
+    listParams.append("labelIds", labelId);
+  }
+  if (args.query?.trim()) {
+    listParams.set("q", args.query.trim());
+  }
 
   const listResponse = await fetch(
     `${GOOGLE_GMAIL_MESSAGES_ENDPOINT}?${listParams.toString()}`,

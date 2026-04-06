@@ -99,7 +99,14 @@ describe("EscalationService", () => {
     expect(target.source).toBe("client_chat");
     expect(target.entityId).toBe("owner-1");
     expect(content.text).toBe("Something needs attention");
-    expect(content.metadata).toEqual({ urgency: "urgent", escalation: true });
+    expect(content.metadata).toEqual(
+      expect.objectContaining({
+        urgency: "urgent",
+        escalation: true,
+        routeSource: "client_chat",
+        routeResolution: "config",
+      }),
+    );
   });
 
   // -----------------------------------------------------------------------
@@ -172,6 +179,59 @@ describe("EscalationService", () => {
     expect(state.resolvedAt).toBeTypeOf("number");
     // Should NOT have sent to next channel.
     expect(mockSendMessageToTarget).not.toHaveBeenCalled();
+  });
+
+  it("uses rolodex hints to resolve the selected escalation endpoint", async () => {
+    setConfig(
+      { channels: ["discord"], waitMinutes: 1, maxRetries: 3 },
+      { discord: { entityId: "owner-1" } },
+    );
+
+    const runtime = makeRuntime({
+      getService: vi.fn((name: string) =>
+        name === "rolodex"
+          ? {
+              getContact: vi.fn().mockResolvedValue({
+                preferences: { preferredCommunicationChannel: "discord" },
+                customFields: {
+                  discordChannelId: "dm-rolodex",
+                },
+              }),
+            }
+          : null,
+      ),
+      getRoomsForParticipant: vi.fn().mockResolvedValue(["room-1"]),
+      getMemoriesByRoomIds: vi.fn().mockResolvedValue([
+        {
+          entityId: "owner-1",
+          createdAt: Date.now() + 1000,
+          content: { text: "responded" },
+        },
+      ]),
+    });
+
+    const state = await EscalationService.startEscalation(
+      runtime,
+      "test",
+      "hello",
+    );
+
+    expect(state.channelsSent).toEqual(["discord"]);
+    expect(mockSendMessageToTarget).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: "discord",
+        entityId: "owner-1",
+        channelId: "dm-rolodex",
+      }),
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          routeSource: "discord",
+          routeResolution: "config+rolodex",
+          routeEndpoint: "dm-rolodex",
+          routeLastResponseChannel: "discord",
+        }),
+      }),
+    );
   });
 
   // -----------------------------------------------------------------------

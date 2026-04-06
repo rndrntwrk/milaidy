@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   planGm,
   planGn,
+  planDowntimeNudges,
   planNudges,
   selectTargetPlatform,
   type CalendarEventSlim,
@@ -54,6 +55,13 @@ function makeProfile(overrides: Partial<ActivityProfile> = {}): ActivityProfile 
     currentActivityCycleStartedAt: Date.parse("2026-04-06T06:00:00Z"),
     currentActivityCycleLocalDate: "2026-04-06",
     effectiveDayKey: "2026-04-06",
+    screenContextFocus: null,
+    screenContextSource: null,
+    screenContextSampledAt: null,
+    screenContextConfidence: null,
+    screenContextBusy: false,
+    screenContextAvailable: false,
+    screenContextStale: false,
     ...overrides,
   };
 }
@@ -84,6 +92,20 @@ function makeOccurrences(
     dueAt: `2026-04-06T${String(e.dueHour).padStart(2, "0")}:00:00Z`,
     state: e.state ?? "upcoming",
   }));
+}
+
+function makeOneOffOccurrence(
+  overrides: Partial<OccurrenceSlim> & { title: string; dueAt: string },
+): OccurrenceSlim {
+  return {
+    id: overrides.id ?? "occ-one-off",
+    title: overrides.title,
+    dueAt: overrides.dueAt,
+    state: overrides.state ?? "pending",
+    definitionKind: overrides.definitionKind ?? "task",
+    cadence: overrides.cadence ?? { kind: "once" },
+    priority: overrides.priority ?? 0,
+  };
 }
 
 // ── selectTargetPlatform ──────────────────────────────
@@ -373,6 +395,95 @@ describe("planNudges", () => {
   it("returns empty array when no upcoming items", () => {
     const profile = makeProfile();
     const actions = planNudges(profile, [], [], null, TZ, NOW);
+    expect(actions).toHaveLength(0);
+  });
+});
+
+// ── planDowntimeNudges ────────────────────────────────
+
+describe("planDowntimeNudges", () => {
+  it("selects the most urgent one-off task during downtime", () => {
+    const profile = makeProfile({ lastSeenAt: NOW_MS - 60_000 });
+    const tasks = [
+      makeOneOffOccurrence({
+        id: "low",
+        title: "Buy razor blades",
+        dueAt: "2026-04-06T17:00:00Z",
+        priority: 1,
+      }),
+      makeOneOffOccurrence({
+        id: "high",
+        title: "Book cavity appointment",
+        dueAt: "2026-04-05T23:00:00Z",
+        priority: 10,
+      }),
+    ];
+
+    const actions = planDowntimeNudges(profile, tasks, [], null, TZ, NOW);
+
+    expect(actions).toHaveLength(1);
+    expect(actions[0].occurrenceId).toBe("high");
+    expect(actions[0].contextSummary).toContain("Book cavity appointment");
+    expect(actions[0].contextSummary).toContain("overdue");
+    expect(actions[0].scheduledFor).toBe(NOW_MS);
+  });
+
+  it("suppresses downtime nudges on a busy day", () => {
+    const profile = makeProfile({
+      lastSeenAt: NOW_MS - 60_000,
+      avgWeekdayMeetings: 4.5,
+    });
+    const tasks = [
+      makeOneOffOccurrence({
+        id: "low",
+        title: "Buy razor blades",
+        dueAt: "2026-04-06T17:00:00Z",
+      }),
+    ];
+    const events = makeCalendarEvents([
+      { hourStart: 8, hourEnd: 9 },
+      { hourStart: 10, hourEnd: 11 },
+      { hourStart: 13, hourEnd: 14 },
+      { hourStart: 16, hourEnd: 17 },
+    ]);
+
+    const actions = planDowntimeNudges(profile, tasks, events, null, TZ, NOW);
+    expect(actions).toHaveLength(0);
+  });
+
+  it("suppresses downtime nudges when the screen is busy", () => {
+    const profile = makeProfile({
+      lastSeenAt: NOW_MS - 60_000,
+      screenContextAvailable: true,
+      screenContextBusy: true,
+      screenContextFocus: "work",
+      screenContextSource: "browser-capture",
+      screenContextSampledAt: NOW_MS - 2 * 60_000,
+      screenContextConfidence: 0.88,
+    });
+    const tasks = [
+      makeOneOffOccurrence({
+        id: "low",
+        title: "Buy razor blades",
+        dueAt: "2026-04-06T17:00:00Z",
+      }),
+    ];
+
+    const actions = planDowntimeNudges(profile, tasks, [], null, TZ, NOW);
+    expect(actions).toHaveLength(0);
+  });
+
+  it("suppresses downtime nudges when an urgent item is due soon", () => {
+    const profile = makeProfile({ lastSeenAt: NOW_MS - 60_000 });
+    const tasks = [
+      makeOneOffOccurrence({
+        id: "urgent",
+        title: "Respond to email",
+        dueAt: "2026-04-06T08:30:00Z",
+      }),
+    ];
+
+    const actions = planDowntimeNudges(profile, tasks, [], null, TZ, NOW);
     expect(actions).toHaveLength(0);
   });
 });

@@ -6,15 +6,18 @@
 import type { IAgentRuntime, UUID } from "@elizaos/core";
 import { LifeOpsService } from "../lifeops/service.js";
 import { resolveDefaultTimeZone } from "../lifeops/defaults.js";
-import { getLocalDateKey, getZonedDateParts } from "../lifeops/time.js";
 import {
   analyzeMessages,
   enrichWithCalendar,
-  resolveEffectiveDayKey,
+  resolveCurrentActivityState,
   SUSTAINED_INACTIVITY_GAP_MS,
   type CalendarEventRecord,
   type MessageRecord,
 } from "./analyzer.js";
+import {
+  LifeOpsScreenContextSampler,
+  type LifeOpsScreenContextSummary,
+} from "../lifeops/screen-context.js";
 import type { ActivityProfile, FiredActionsLog } from "./types.js";
 
 // ── Constants ─────────────────────────────────────────
@@ -23,6 +26,8 @@ const PROFILE_MAX_AGE_MS = 60 * 60 * 1000; // 60 min full rebuild threshold
 const MESSAGES_WINDOW_DAYS = 7;
 const MESSAGES_LIMIT = 500;
 const MAX_ROOMS = 50;
+
+let screenContextSampler: LifeOpsScreenContextSampler | null = null;
 
 // ── Owner resolution ──────────────────────────────────
 
@@ -53,6 +58,51 @@ export async function resolveOwnerEntityId(
     // Fall through
   }
   return null;
+}
+
+export function setScreenContextSamplerForTesting(
+  sampler: LifeOpsScreenContextSampler | null,
+): void {
+  screenContextSampler = sampler;
+}
+
+function getScreenContextSampler(): LifeOpsScreenContextSampler {
+  if (!screenContextSampler) {
+    screenContextSampler = new LifeOpsScreenContextSampler();
+  }
+  return screenContextSampler;
+}
+
+async function sampleScreenContext(
+  currentTime: Date,
+): Promise<LifeOpsScreenContextSummary> {
+  return await getScreenContextSampler().sample(currentTime.getTime());
+}
+
+function mergeScreenContext(
+  profile: ActivityProfile,
+  screenContext: LifeOpsScreenContextSummary | null,
+  now: Date,
+): ActivityProfile {
+  const updatedProfile: ActivityProfile = {
+    ...profile,
+    screenContextFocus: screenContext?.focus ?? null,
+    screenContextSource: screenContext?.source ?? null,
+    screenContextSampledAt: screenContext?.sampledAtMs ?? null,
+    screenContextConfidence: screenContext?.confidence ?? null,
+    screenContextBusy: screenContext?.busy ?? false,
+    screenContextAvailable: screenContext?.available ?? false,
+    screenContextStale: screenContext?.stale ?? false,
+  };
+  const activityState = resolveCurrentActivityState(
+    updatedProfile,
+    now,
+  );
+  return {
+    ...updatedProfile,
+    ...activityState,
+    effectiveDayKey: activityState.effectiveDayKey,
+  };
 }
 
 // ── Profile building ──────────────────────────────────
@@ -130,7 +180,9 @@ export async function buildActivityProfile(
     // Calendar not connected — that's fine
   }
 
-  return enrichWithCalendar(baseProfile, calendarEvents, tz);
+  const withCalendar = enrichWithCalendar(baseProfile, calendarEvents, tz);
+  const screenContext = await sampleScreenContext(currentTime);
+  return mergeScreenContext(withCalendar, screenContext, currentTime);
 }
 
 // ── Lightweight current-state refresh ─────────────────
@@ -144,78 +196,65 @@ export async function refreshCurrentState(
   const currentTime = now ?? new Date();
   const roomIds = await runtime.getRoomsForParticipant(ownerEntityId as UUID);
   const limitedRoomIds = roomIds.slice(0, MAX_ROOMS);
+  const screenContext = await sampleScreenContext(currentTime);
 
-  if (limitedRoomIds.length === 0) {
-    return {
-      ...profile,
-      isCurrentlyActive: false,
-      hasOpenActivityCycle:
-        currentTime.getTime() - profile.lastSeenAt <
-        profile.sustainedInactivityThresholdMinutes * 60 * 1000,
-      effectiveDayKey: resolveEffectiveDayKey(profile, profile.timezone, currentTime),
-    };
+  const roomSourceMap = new Map<string, string>();
+  if (limitedRoomIds.length > 0) {
+    await Promise.all(
+      limitedRoomIds.map(async (roomId) => {
+        try {
+          const room = await runtime.getRoom(roomId);
+          if (room?.source) {
+            roomSourceMap.set(roomId, room.source);
+          }
+        } catch {
+          // Skip rooms we cannot inspect during refresh.
+        }
+      }),
+    );
   }
 
-  const memories = await runtime.getMemoriesByRoomIds({
-    tableName: "messages",
-    roomIds: limitedRoomIds,
-    limit: 10,
-  });
-
-  const ownerMessages = memories
-    .filter((m) => m.entityId === ownerEntityId)
-    .sort((a, b) => (b.createdAt ?? 0) - (a.createdAt ?? 0));
-
-  if (ownerMessages.length === 0) {
-    return {
-      ...profile,
-      isCurrentlyActive: false,
-      hasOpenActivityCycle:
-        currentTime.getTime() - profile.lastSeenAt <
-        profile.sustainedInactivityThresholdMinutes * 60 * 1000,
-      effectiveDayKey: resolveEffectiveDayKey(profile, profile.timezone, currentTime),
-    };
-  }
-
-  const latest = ownerMessages[0];
-  const lastSeenAt = latest.createdAt ?? 0;
-
+  let lastSeenAt = profile.lastSeenAt;
   let lastSeenPlatform = profile.lastSeenPlatform;
-  try {
-    const room = await runtime.getRoom(latest.roomId);
-    if (room?.source) lastSeenPlatform = room.source;
-  } catch {
-    // Keep existing
+  if (limitedRoomIds.length > 0) {
+    const memories = await runtime.getMemoriesByRoomIds({
+      tableName: "messages",
+      roomIds: limitedRoomIds,
+      limit: 10,
+    });
+
+    for (const memory of memories) {
+      const createdAt = memory.createdAt ?? 0;
+      if (createdAt > currentTime.getTime()) {
+        continue;
+      }
+
+      const source = roomSourceMap.get(memory.roomId) ?? "unknown";
+      const isOwnerMessage = memory.entityId === ownerEntityId;
+      const isClientChatSignal = source === "client_chat";
+      if (!isOwnerMessage && !isClientChatSignal) {
+        continue;
+      }
+
+      if (createdAt >= lastSeenAt) {
+        lastSeenAt = createdAt;
+        lastSeenPlatform = isClientChatSignal ? "client_chat" : source;
+      }
+    }
   }
 
-  const thresholdMs =
-    profile.sustainedInactivityThresholdMinutes * 60 * 1000;
-  const startsNewCycle =
-    profile.lastSeenAt <= 0 || lastSeenAt - profile.lastSeenAt > thresholdMs;
-  const currentActivityCycleStartedAt = startsNewCycle
-    ? lastSeenAt
-    : (profile.currentActivityCycleStartedAt ?? lastSeenAt);
-  const currentActivityCycleLocalDate = getLocalDateKey(
-    getZonedDateParts(new Date(currentActivityCycleStartedAt), profile.timezone),
+  return mergeScreenContext(
+    {
+      ...profile,
+      lastSeenAt,
+      lastSeenPlatform,
+      sustainedInactivityThresholdMinutes:
+        profile.sustainedInactivityThresholdMinutes ||
+        SUSTAINED_INACTIVITY_GAP_MS / 60_000,
+    },
+    screenContext,
+    currentTime,
   );
-  const hasOpenActivityCycle =
-    currentTime.getTime() - lastSeenAt < thresholdMs;
-
-  return {
-    ...profile,
-    lastSeenAt,
-    lastSeenPlatform,
-    isCurrentlyActive: currentTime.getTime() - lastSeenAt < 15 * 60 * 1000,
-    sustainedInactivityThresholdMinutes:
-      profile.sustainedInactivityThresholdMinutes ||
-      SUSTAINED_INACTIVITY_GAP_MS / 60_000,
-    hasOpenActivityCycle,
-    currentActivityCycleStartedAt,
-    currentActivityCycleLocalDate,
-    effectiveDayKey: hasOpenActivityCycle
-      ? currentActivityCycleLocalDate
-      : getLocalDateKey(getZonedDateParts(currentTime, profile.timezone)),
-  };
 }
 
 // ── Metadata persistence helpers ──────────────────────

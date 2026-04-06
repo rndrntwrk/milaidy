@@ -6,7 +6,12 @@ const ROOT = path.resolve(import.meta.dirname, "..");
 const PACKAGE_JSON_PATH = path.join(ROOT, "package.json");
 const E2E_CONFIG_PATH = path.join(ROOT, "vitest.e2e.config.ts");
 const STARTUP_E2E_CONFIG_PATH = path.join(ROOT, "vitest.startup-e2e.config.ts");
-const TEST_PARALLEL_PATH = path.join(ROOT, "test", "scripts", "test-parallel.mjs");
+const TEST_PARALLEL_PATH = path.join(
+  ROOT,
+  "test",
+  "scripts",
+  "test-parallel.mjs",
+);
 
 describe("startup E2E script contract", () => {
   it("runs the explicit startup specs under the dedicated startup E2E config without passWithNoTests", () => {

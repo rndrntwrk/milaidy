@@ -180,11 +180,11 @@ function inferReminderIntensityFromIntent(
 ): LifeOpsReminderIntensity | null {
   const lower = intent.toLowerCase();
   if (
-    /\b(stop reminding me|don't remind me|pause reminders?|mute reminders?)\b/.test(
+    /\b(stop reminding me|don't remind me|pause reminders?|mute reminders?|high priority only|only high priority)\b/.test(
       lower,
     )
   ) {
-    return "paused";
+    return "high_priority_only";
   }
   if (
     /\b(resume reminders?|start reminding me again|turn reminders? back on|normal reminders?)\b/.test(
@@ -194,16 +194,18 @@ function inferReminderIntensityFromIntent(
     return "normal";
   }
   if (
-    /\b(less|fewer)\s+reminders?\b/.test(lower) ||
-    /\b(remind|ping|message|nudge)\b.*\b(less|fewer)\b/.test(lower)
+    /\b(less|fewer|lower)\s+reminders?\b/.test(lower) ||
+    /\b(remind|ping|message|nudge)\b.*\b(less|fewer|lower)\b/.test(lower)
   ) {
-    return "low";
+    return "minimal";
   }
   if (
     /\bmore reminders?\b/.test(lower) ||
-    /\b(remind|ping|message|nudge)\b.*\bmore\b/.test(lower)
+    /\b(remind|ping|message|nudge)\b.*\bmore\b/.test(lower) ||
+    /\bbe more persistent\b/.test(lower) ||
+    /\bmore persistent\b/.test(lower)
   ) {
-    return "high";
+    return "persistent";
   }
   return null;
 }
@@ -1070,15 +1072,16 @@ function describeReminderIntensity(
   intensity: LifeOpsReminderIntensity,
 ): string {
   switch (intensity) {
-    case "paused":
-      return "paused";
-    case "low":
-      return "lower";
+    case "minimal":
+      return "minimal";
     case "normal":
       return "normal";
-    case "high":
-      return "higher";
+    case "persistent":
+      return "persistent";
+    case "high_priority_only":
+      return "high priority only";
   }
+  return "normal";
 }
 
 // ── Main action ───────────────────────────────────────
@@ -1295,7 +1298,8 @@ export const lifeAction: Action = {
       if (!intensity) {
         return {
           success: false,
-          text: "I need to know whether you want reminders paused, lower, normal, or higher.",
+          text:
+            "I need to know whether you want reminders minimal, normal, persistent, or high priority only.",
         };
       }
       const target = await resolveDefinitionFromIntent(
@@ -1314,8 +1318,8 @@ export const lifeAction: Action = {
         return {
           success: true,
           text:
-            intensity === "paused"
-              ? `Paused reminders for "${target.definition.title}".`
+            intensity === "high_priority_only"
+              ? `Reminder intensity for "${target.definition.title}" is now high priority only.`
               : `Reminder intensity for "${target.definition.title}" is now ${describeReminderIntensity(preference.effective.intensity)}.`,
           data: toActionData(preference),
         };
@@ -1323,8 +1327,8 @@ export const lifeAction: Action = {
       return {
         success: true,
         text:
-          intensity === "paused"
-            ? "Paused global LifeOps reminders."
+          intensity === "high_priority_only"
+            ? "Global LifeOps reminders are now high priority only."
             : `Global LifeOps reminders are now ${describeReminderIntensity(preference.effective.intensity)}.`,
         data: toActionData(preference),
       };

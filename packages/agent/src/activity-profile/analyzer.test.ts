@@ -156,6 +156,31 @@ describe("analyzeMessages", () => {
     expect(profile.isCurrentlyActive).toBe(false);
   });
 
+  it("treats recent client_chat traffic as an in-app activity signal", () => {
+    const roomSourceMap = new Map([
+      ["room-tg", "telegram"],
+      ["room-app", "client_chat"],
+    ]);
+    const messages: MessageRecord[] = [
+      {
+        entityId: "owner-1",
+        roomId: "room-tg",
+        createdAt: NOW.getTime() - 2 * 60 * 60 * 1000,
+      },
+      {
+        entityId: "agent-1",
+        roomId: "room-app",
+        createdAt: NOW.getTime() - 2 * 60 * 1000,
+      },
+    ];
+
+    const profile = analyzeMessages(messages, roomSourceMap, "owner-1", "UTC", 7, NOW);
+    expect(profile.lastSeenPlatform).toBe("client_chat");
+    expect(profile.lastSeenAt).toBe(NOW.getTime() - 2 * 60 * 1000);
+    expect(profile.isCurrentlyActive).toBe(true);
+    expect(profile.hasOpenActivityCycle).toBe(true);
+  });
+
   it("derives typical active hours from histogram", () => {
     // Create messages concentrated in MORNING and EVENING buckets
     const entries: Array<{ hour: number; day?: number }> = [];
@@ -287,6 +312,29 @@ describe("analyzeMessages", () => {
     );
     expect(afterInactivity.hasOpenActivityCycle).toBe(false);
     expect(afterInactivity.effectiveDayKey).toBe("2026-04-06");
+  });
+
+  it("keeps the prior day open at exactly three hours of inactivity", () => {
+    const roomSourceMap = new Map([["room-tg", "telegram"]]);
+    const boundaryMessages: MessageRecord[] = [
+      {
+        entityId: "owner-1",
+        roomId: "room-tg",
+        createdAt: Date.parse("2026-04-05T23:00:00Z"),
+      },
+    ];
+
+    const boundary = analyzeMessages(
+      boundaryMessages,
+      roomSourceMap,
+      "owner-1",
+      "UTC",
+      7,
+      new Date("2026-04-06T02:00:00Z"),
+    );
+
+    expect(boundary.hasOpenActivityCycle).toBe(true);
+    expect(boundary.effectiveDayKey).toBe("2026-04-05");
   });
 
   it("handles empty messages gracefully", () => {

@@ -17,6 +17,7 @@ import {
   shouldShowAppInAppsView,
 } from "../apps/helpers";
 import { RunningAppsPanel } from "../apps/RunningAppsPanel";
+import { LifeOpsWorkspaceView } from "./LifeOpsWorkspaceView";
 
 export { shouldShowAppInAppsView } from "../apps/helpers";
 
@@ -529,6 +530,14 @@ export function AppsView() {
             </div>
           </div>
         </div>
+
+        {appsSubTab === "browse" ? (
+          <div className="p-4 lg:p-5">
+            <PagePanel variant="inset" className="p-4 lg:p-5">
+              <LifeOpsWorkspaceView />
+            </PagePanel>
+          </div>
+        ) : null}
 
         {appsSubTab === "running" ? (
           <div className="p-4 lg:p-5">

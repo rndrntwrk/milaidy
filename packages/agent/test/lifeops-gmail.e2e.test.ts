@@ -522,6 +522,309 @@ describe("life-ops gmail triage", () => {
     );
   });
 
+  it("searches Gmail by query, respects reply-needed filtering, and returns empty results cleanly", async () => {
+    await connectGoogle(
+      ["google.gmail.triage"],
+      [
+        "openid",
+        "email",
+        "profile",
+        "https://www.googleapis.com/auth/gmail.metadata",
+      ],
+    );
+
+    fetchMock.mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.includes("q=venue")) {
+        return new Response(
+          JSON.stringify({
+            messages: [
+              { id: "msg-venue", threadId: "thread-venue" },
+              { id: "msg-auto", threadId: "thread-auto" },
+            ],
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      if (url.includes("q=missing-term")) {
+        return new Response(JSON.stringify({ messages: [] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("/gmail/v1/users/me/messages/msg-venue?")) {
+        return new Response(
+          JSON.stringify({
+            id: "msg-venue",
+            threadId: "thread-venue",
+            labelIds: ["INBOX", "UNREAD", "IMPORTANT"],
+            snippet: "Can you confirm the venue tonight?",
+            internalDate: String(Date.now() - 12 * 60_000),
+            payload: {
+              headers: [
+                { name: "Subject", value: "Venue tonight" },
+                { name: "From", value: "Alex <alex@example.com>" },
+                { name: "To", value: "agent@example.com" },
+                { name: "Message-Id", value: "<venue@example.com>" },
+              ],
+            },
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      if (url.includes("/gmail/v1/users/me/messages/msg-auto?")) {
+        return new Response(
+          JSON.stringify({
+            id: "msg-auto",
+            threadId: "thread-auto",
+            labelIds: ["INBOX", "UNREAD"],
+            snippet: "Weekly digest",
+            internalDate: String(Date.now() - 5 * 60_000),
+            payload: {
+              headers: [
+                { name: "Subject", value: "Venue notes digest" },
+                { name: "From", value: "Updates <noreply@example.com>" },
+                { name: "To", value: "agent@example.com" },
+                { name: "Auto-Submitted", value: "auto-generated" },
+                { name: "Message-Id", value: "<auto@example.com>" },
+              ],
+            },
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    const searchRes = await req(
+      port,
+      "GET",
+      "/api/lifeops/gmail/search?query=venue&replyNeededOnly=true&maxResults=5",
+    );
+    expect(searchRes.status).toBe(200);
+    expect(searchRes.data.query).toBe("venue");
+    expect(searchRes.data.summary).toMatchObject({
+      totalCount: 1,
+      unreadCount: 1,
+      importantCount: 1,
+      replyNeededCount: 1,
+    });
+    expect(searchRes.data.messages).toEqual([
+      expect.objectContaining({
+        subject: "Venue tonight",
+        likelyReplyNeeded: true,
+      }),
+    ]);
+
+    const emptyRes = await req(
+      port,
+      "GET",
+      "/api/lifeops/gmail/search?query=missing-term&maxResults=5",
+    );
+    expect(emptyRes.status).toBe(200);
+    expect(emptyRes.data.summary).toMatchObject({
+      totalCount: 0,
+      unreadCount: 0,
+      importantCount: 0,
+      replyNeededCount: 0,
+    });
+    expect(emptyRes.data.messages).toEqual([]);
+  });
+
+  it("creates batch Gmail reply drafts and sends confirmed batch follow-ups", async () => {
+    await connectGoogle(
+      ["google.gmail.triage", "google.gmail.send"],
+      [
+        "openid",
+        "email",
+        "profile",
+        "https://www.googleapis.com/auth/gmail.metadata",
+        "https://www.googleapis.com/auth/gmail.send",
+      ],
+    );
+
+    const nowMs = Date.now();
+    let sendCount = 0;
+    fetchMock.mockImplementation(async (input, init) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (
+        url.startsWith(
+          "https://gmail.googleapis.com/gmail/v1/users/me/messages?",
+        )
+      ) {
+        return new Response(
+          JSON.stringify({
+            messages: [
+              { id: "msg-batch-1", threadId: "thread-batch-1" },
+              { id: "msg-batch-2", threadId: "thread-batch-2" },
+            ],
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      if (url.includes("/gmail/v1/users/me/messages/msg-batch-1?")) {
+        return new Response(
+          JSON.stringify({
+            id: "msg-batch-1",
+            threadId: "thread-batch-1",
+            labelIds: ["INBOX", "UNREAD"],
+            snippet: "Can you send the agenda update?",
+            internalDate: String(nowMs - 15 * 60_000),
+            payload: {
+              headers: [
+                { name: "Subject", value: "Agenda update" },
+                { name: "From", value: "Mira <mira@example.com>" },
+                { name: "To", value: "agent@example.com" },
+                { name: "Message-Id", value: "<batch-1@example.com>" },
+              ],
+            },
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      if (url.includes("/gmail/v1/users/me/messages/msg-batch-2?")) {
+        return new Response(
+          JSON.stringify({
+            id: "msg-batch-2",
+            threadId: "thread-batch-2",
+            labelIds: ["INBOX", "UNREAD", "IMPORTANT"],
+            snippet: "Please confirm the final plan.",
+            internalDate: String(nowMs - 10 * 60_000),
+            payload: {
+              headers: [
+                { name: "Subject", value: "Final plan" },
+                { name: "From", value: "Alex <alex@example.com>" },
+                { name: "To", value: "agent@example.com" },
+                { name: "Message-Id", value: "<batch-2@example.com>" },
+              ],
+            },
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      if (url.endsWith("/gmail/v1/users/me/messages/send")) {
+        const parsedBody = JSON.parse(String(init?.body ?? "{}")) as {
+          raw?: string;
+        };
+        const raw = Buffer.from(
+          String(parsedBody.raw ?? ""),
+          "base64url",
+        ).toString("utf-8");
+        expect(raw).toContain("Subject: Re:");
+        expect(raw).toContain("Best,");
+        sendCount += 1;
+        return new Response(JSON.stringify({ id: `sent-${sendCount}` }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    const batchDraftRes = await req(
+      port,
+      "POST",
+      "/api/lifeops/gmail/batch-reply-drafts",
+      {
+        replyNeededOnly: true,
+        tone: "brief",
+        intent: "Thanks. I will follow up shortly.",
+        includeQuotedOriginal: false,
+      },
+    );
+    expect(batchDraftRes.status).toBe(201);
+    expect(batchDraftRes.data.batch.summary).toMatchObject({
+      totalCount: 2,
+      sendAllowedCount: 2,
+      requiresConfirmationCount: 2,
+    });
+    expect(batchDraftRes.data.batch.drafts).toHaveLength(2);
+
+    const sendRes = await req(
+      port,
+      "POST",
+      "/api/lifeops/gmail/batch-reply-send",
+      {
+        confirmSend: true,
+        items: (batchDraftRes.data.batch.drafts as Array<
+          Record<string, unknown>
+        >).map((draft) => ({
+          messageId: String(draft.messageId),
+          bodyText: String(draft.bodyText),
+          subject: String(draft.subject),
+          to: draft.to,
+          cc: draft.cc,
+        })),
+      },
+    );
+    expect(sendRes.status).toBe(200);
+    expect(sendRes.data).toEqual({ ok: true, sentCount: 2 });
+  });
+
+  it("rejects invalid Gmail search and batch send inputs", async () => {
+    await connectGoogle(
+      ["google.gmail.triage", "google.gmail.send"],
+      [
+        "openid",
+        "email",
+        "profile",
+        "https://www.googleapis.com/auth/gmail.metadata",
+        "https://www.googleapis.com/auth/gmail.send",
+      ],
+    );
+
+    const invalidSearchRes = await req(
+      port,
+      "GET",
+      "/api/lifeops/gmail/search?query=venue&replyNeededOnly=maybe",
+    );
+    expect(invalidSearchRes.status).toBe(400);
+    expect(String(invalidSearchRes.data.error)).toContain("replyNeededOnly");
+
+    const invalidDraftRes = await req(
+      port,
+      "POST",
+      "/api/lifeops/gmail/batch-reply-drafts",
+      {},
+    );
+    expect(invalidDraftRes.status).toBe(400);
+    expect(String(invalidDraftRes.data.error)).toContain(
+      "Either query, messageIds, or replyNeededOnly must be provided",
+    );
+
+    const invalidSendRes = await req(
+      port,
+      "POST",
+      "/api/lifeops/gmail/batch-reply-send",
+      {
+        confirmSend: false,
+        items: [],
+      },
+    );
+    expect(invalidSendRes.status).toBe(409);
+    expect(String(invalidSendRes.data.error)).toContain(
+      "explicit confirmation",
+    );
+  });
+
   it("surfaces linked-mail errors in next-event context instead of silently hiding them", async () => {
     await connectGoogle(
       ["google.calendar.read", "google.gmail.triage"],

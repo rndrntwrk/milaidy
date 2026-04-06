@@ -532,10 +532,15 @@ describe("life-ops reminder processing", () => {
     expect(escalated.data.attempts[0]).toMatchObject({
       channel: "discord",
       outcome: "delivered",
-      connectorRef: "runtime:discord:owner-discord",
+      connectorRef: "runtime:discord:dm-1",
       deliveryMetadata: expect.objectContaining({
         lifecycle: "escalation",
         activityPlatform: "discord",
+        routeSource: "discord",
+        routeEndpoint: "dm-1",
+        routeResolution: expect.objectContaining({
+          sourceOfTruth: "config",
+        }),
       }),
     });
     expect(runtimeWithMessaging.sendMessageToTarget).toHaveBeenCalledWith(

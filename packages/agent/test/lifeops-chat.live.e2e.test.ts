@@ -106,6 +106,27 @@ function resolveSelectedProviderPlugin(): string | null {
 
 const selectedLiveProviderPlugin = resolveSelectedProviderPlugin();
 
+const liveSetupWarnings = [
+  !LIVE_TESTS_ENABLED
+    ? "set MILADY_LIVE_TEST=1 or ELIZA_LIVE_TEST=1"
+    : null,
+  !LIVE_CHAT_TESTS_ENABLED
+    ? "set MILADY_LIVE_CHAT_TEST=1"
+    : null,
+  !selectedLiveProvider
+    ? "provide a live provider key such as OPENAI_API_KEY, GROQ_API_KEY, OPENROUTER_API_KEY, GOOGLE_API_KEY, GOOGLE_GENERATIVE_AI_API_KEY, or ANTHROPIC_API_KEY"
+    : null,
+  !selectedLiveProviderPlugin
+    ? "the selected provider did not map to a known plugin package"
+    : null,
+].filter((entry): entry is string => Boolean(entry));
+
+if (liveSetupWarnings.length > 0) {
+  console.info(
+    `[lifeops-live] chat suite skipped until setup is complete: ${liveSetupWarnings.join(" | ")}`,
+  );
+}
+
 type StartedRuntime = {
   close: () => Promise<void>;
   getLogTail: () => string;

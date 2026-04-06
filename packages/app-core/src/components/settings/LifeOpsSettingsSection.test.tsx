@@ -28,6 +28,7 @@ vi.mock("../../api", () => ({
 
 vi.mock("../../state", () => ({
   useApp: () => ({
+    setState: vi.fn(),
     t: (key: string, vars?: Record<string, unknown>) =>
       typeof vars?.defaultValue === "string" ? vars.defaultValue : key,
   }),
@@ -179,6 +180,7 @@ describe("LifeOpsSettingsSection", () => {
     expect(text).toContain(
       "http://127.0.0.1:3000/api/lifeops/connectors/google/callback",
     );
+    expect(text).toContain("Open workspace");
     expect(text).toContain("Agent Example");
     expect(text).toContain("agent@example.com");
   });

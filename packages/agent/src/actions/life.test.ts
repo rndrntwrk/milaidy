@@ -268,14 +268,14 @@ describe("lifeAction", () => {
       definitionId: null,
       definitionTitle: null,
       global: {
-        intensity: "low",
+        intensity: "minimal",
         source: "global_policy",
         updatedAt: "2026-04-06T12:00:00.000Z",
         note: "remind me less",
       },
       definition: null,
       effective: {
-        intensity: "low",
+        intensity: "minimal",
         source: "global_policy",
         updatedAt: "2026-04-06T12:00:00.000Z",
         note: "remind me less",
@@ -288,7 +288,7 @@ describe("lifeAction", () => {
 
     expect(mockSetReminderPreference).toHaveBeenCalledWith(
       expect.objectContaining({
-        intensity: "low",
+        intensity: "minimal",
         definitionId: null,
       }),
     );
@@ -313,13 +313,13 @@ describe("lifeAction", () => {
       definitionTitle: "Drink water",
       global: { intensity: "normal", source: "default", updatedAt: null, note: null },
       definition: {
-        intensity: "paused",
+        intensity: "high_priority_only",
         source: "definition_metadata",
         updatedAt: "2026-04-06T12:00:00.000Z",
         note: "stop reminding me about water",
       },
       effective: {
-        intensity: "paused",
+        intensity: "high_priority_only",
         source: "definition_metadata",
         updatedAt: "2026-04-06T12:00:00.000Z",
         note: "stop reminding me about water",
@@ -332,13 +332,13 @@ describe("lifeAction", () => {
 
     expect(mockSetReminderPreference).toHaveBeenCalledWith(
       expect.objectContaining({
-        intensity: "paused",
+        intensity: "high_priority_only",
         definitionId: "def-water",
       }),
     );
     expect(result).toMatchObject({
       success: true,
-      text: 'Paused reminders for "Drink water".',
+      text: 'Reminder intensity for "Drink water" is now high priority only.',
     });
   });
 

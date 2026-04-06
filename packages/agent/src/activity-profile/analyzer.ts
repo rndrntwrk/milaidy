@@ -1,6 +1,7 @@
 /**
  * Pure analysis functions for building user activity profiles from message
- * history and calendar data. No runtime dependencies — fully unit-testable.
+ * history, in-app interaction signals, desktop screen hints, and calendar data. No runtime
+ * dependencies — fully unit-testable.
  */
 
 import { getLocalDateKey, getZonedDateParts } from "../lifeops/time.js";
@@ -56,6 +57,8 @@ export interface CalendarEventRecord {
 export const SUSTAINED_INACTIVITY_GAP_MS = 3 * 60 * 60 * 1000; // 3 hours
 const ACTIVE_THRESHOLD_MS = 15 * 60 * 1000; // 15 minutes
 const SIGNIFICANT_BUCKET_SHARE = 0.10; // 10% of total messages
+const SCREEN_ACTIVE_FOCUS = new Set(["work", "leisure", "transition"]);
+const SCREEN_ACTIVITY_CONFIDENCE_FLOOR = 0.35;
 
 type ActivitySession = {
   startAt: number;
@@ -63,6 +66,11 @@ type ActivitySession = {
   startHour: number;
   normalizedEndHour: number;
   startDayKey: string;
+};
+
+type InteractionSnapshot = {
+  lastSeenAt: number;
+  lastSeenPlatform: string | null;
 };
 
 function localDateKeyForTimestamp(timestamp: number, timezone: string): string {
@@ -120,59 +128,199 @@ function buildActivitySessions(
   return sessions;
 }
 
+function resolveLatestInteractionSnapshot(
+  messages: MessageRecord[],
+  ownerEntityId: string,
+  roomSourceMap: Map<string, string>,
+  currentTime: Date,
+): InteractionSnapshot {
+  let latestOwnerSeenAt = 0;
+  let latestOwnerPlatform: string | null = null;
+  let latestClientChatSeenAt = 0;
+
+  for (const msg of messages) {
+    if (msg.createdAt > currentTime.getTime()) {
+      continue;
+    }
+
+    const source = roomSourceMap.get(msg.roomId) ?? "unknown";
+    if (source === "client_chat" && msg.createdAt > latestClientChatSeenAt) {
+      latestClientChatSeenAt = msg.createdAt;
+    }
+    if (msg.entityId === ownerEntityId && msg.createdAt > latestOwnerSeenAt) {
+      latestOwnerSeenAt = msg.createdAt;
+      latestOwnerPlatform = source;
+    }
+  }
+
+  if (latestClientChatSeenAt > latestOwnerSeenAt) {
+    return {
+      lastSeenAt: latestClientChatSeenAt,
+      lastSeenPlatform: "client_chat",
+    };
+  }
+
+  return {
+    lastSeenAt: latestOwnerSeenAt,
+    lastSeenPlatform: latestOwnerPlatform,
+  };
+}
+
+function resolveScreenHeartbeatAt(
+  profile: Pick<
+    ActivityProfile,
+    | "screenContextAvailable"
+    | "screenContextStale"
+    | "screenContextFocus"
+    | "screenContextSampledAt"
+    | "screenContextConfidence"
+  >,
+): number {
+  if (!profile.screenContextAvailable || profile.screenContextStale) {
+    return 0;
+  }
+  if (!profile.screenContextSampledAt || profile.screenContextSampledAt <= 0) {
+    return 0;
+  }
+  if (!SCREEN_ACTIVE_FOCUS.has(profile.screenContextFocus ?? "unknown")) {
+    return 0;
+  }
+  if (
+    profile.screenContextConfidence !== null &&
+    profile.screenContextConfidence < SCREEN_ACTIVITY_CONFIDENCE_FLOOR
+  ) {
+    return 0;
+  }
+  return profile.screenContextSampledAt;
+}
+
+export type CurrentActivityState = Pick<
+  ActivityProfile,
+  | "lastSeenAt"
+  | "lastSeenPlatform"
+  | "isCurrentlyActive"
+  | "hasOpenActivityCycle"
+  | "currentActivityCycleStartedAt"
+  | "currentActivityCycleLocalDate"
+  | "effectiveDayKey"
+>;
+
+export function resolveCurrentActivityState(
+  profile: Pick<
+    ActivityProfile,
+    | "timezone"
+    | "lastSeenAt"
+    | "lastSeenPlatform"
+    | "hasOpenActivityCycle"
+    | "sustainedInactivityThresholdMinutes"
+    | "currentActivityCycleStartedAt"
+    | "currentActivityCycleLocalDate"
+    | "screenContextAvailable"
+    | "screenContextStale"
+    | "screenContextFocus"
+    | "screenContextSampledAt"
+    | "screenContextConfidence"
+  >,
+  now: Date,
+): CurrentActivityState {
+  const currentTime = now.getTime();
+  const thresholdMs = profile.sustainedInactivityThresholdMinutes * 60 * 1000;
+  const screenHeartbeatAt = resolveScreenHeartbeatAt(profile);
+  const mostRecentActivityAt = Math.max(profile.lastSeenAt, screenHeartbeatAt);
+  const hasOpenActivityCycle =
+    mostRecentActivityAt > 0 && currentTime - mostRecentActivityAt <= thresholdMs;
+  const cycleStart =
+    profile.currentActivityCycleStartedAt &&
+    (profile.hasOpenActivityCycle ||
+      mostRecentActivityAt - profile.currentActivityCycleStartedAt <= thresholdMs)
+      ? profile.currentActivityCycleStartedAt
+      : hasOpenActivityCycle
+        ? mostRecentActivityAt
+        : profile.currentActivityCycleStartedAt;
+  const currentActivityCycleLocalDate = cycleStart
+    ? localDateKeyForTimestamp(cycleStart, profile.timezone)
+    : profile.currentActivityCycleLocalDate;
+  const effectiveDayKey = hasOpenActivityCycle
+    ? currentActivityCycleLocalDate ??
+      localDateKeyForTimestamp(currentTime, profile.timezone)
+    : localDateKeyForTimestamp(currentTime, profile.timezone);
+
+  return {
+    lastSeenAt: mostRecentActivityAt,
+    lastSeenPlatform: profile.lastSeenPlatform,
+    isCurrentlyActive:
+      mostRecentActivityAt > 0 &&
+      currentTime - mostRecentActivityAt < ACTIVE_THRESHOLD_MS,
+    hasOpenActivityCycle,
+    currentActivityCycleStartedAt: cycleStart ?? null,
+    currentActivityCycleLocalDate,
+    effectiveDayKey,
+  };
+}
+
 export function resolveEffectiveDayKey(
   profile: Pick<
     ActivityProfile,
+    | "hasOpenActivityCycle"
     | "currentActivityCycleStartedAt"
     | "currentActivityCycleLocalDate"
     | "lastSeenAt"
+    | "lastSeenPlatform"
     | "sustainedInactivityThresholdMinutes"
+    | "screenContextAvailable"
+    | "screenContextStale"
+    | "screenContextFocus"
+    | "screenContextSampledAt"
+    | "screenContextConfidence"
   >,
   timezone: string,
   now: Date,
 ): string {
-  const todayKey = localDateKeyForTimestamp(now.getTime(), timezone);
-  const thresholdMs =
-    profile.sustainedInactivityThresholdMinutes * 60 * 1000;
-  if (
-    !profile.currentActivityCycleStartedAt ||
-    profile.lastSeenAt <= 0 ||
-    now.getTime() - profile.lastSeenAt >= thresholdMs
-  ) {
-    return todayKey;
-  }
-  return (
-    profile.currentActivityCycleLocalDate ??
-    localDateKeyForTimestamp(profile.currentActivityCycleStartedAt, timezone)
-  );
+  return resolveCurrentActivityState(
+    {
+      ...profile,
+      timezone,
+    },
+    now,
+  ).effectiveDayKey;
 }
 
 function resolveLatestActivityDayKey(
   profile: Pick<
     ActivityProfile,
+    | "hasOpenActivityCycle"
     | "currentActivityCycleStartedAt"
     | "currentActivityCycleLocalDate"
     | "lastSeenAt"
+    | "lastSeenPlatform"
     | "sustainedInactivityThresholdMinutes"
+    | "screenContextAvailable"
+    | "screenContextStale"
+    | "screenContextFocus"
+    | "screenContextSampledAt"
+    | "screenContextConfidence"
   >,
   timezone: string,
   now: Date,
 ): string | null {
-  if (profile.lastSeenAt <= 0) {
+  const heartbeatAt = Math.max(
+    profile.lastSeenAt,
+    resolveScreenHeartbeatAt(profile),
+  );
+  if (heartbeatAt <= 0) {
     return null;
   }
-  const thresholdMs =
-    profile.sustainedInactivityThresholdMinutes * 60 * 1000;
-  if (
-    profile.currentActivityCycleStartedAt &&
-    now.getTime() - profile.lastSeenAt < thresholdMs
-  ) {
-    return (
-      profile.currentActivityCycleLocalDate ??
-      localDateKeyForTimestamp(profile.currentActivityCycleStartedAt, timezone)
-    );
+  const thresholdMs = profile.sustainedInactivityThresholdMinutes * 60 * 1000;
+  if (now.getTime() - heartbeatAt <= thresholdMs) {
+    if (profile.hasOpenActivityCycle && profile.currentActivityCycleStartedAt) {
+      return (
+        profile.currentActivityCycleLocalDate ??
+        localDateKeyForTimestamp(profile.currentActivityCycleStartedAt, timezone)
+      );
+    }
+    return localDateKeyForTimestamp(heartbeatAt, timezone);
   }
-  return localDateKeyForTimestamp(profile.lastSeenAt, timezone);
+  return localDateKeyForTimestamp(heartbeatAt, timezone);
 }
 
 export function analyzeMessages(
@@ -257,19 +405,28 @@ export function analyzeMessages(
     sleepHours.length > 0 ? median(sleepHours) : null;
 
   // Current state
-  let lastSeenAt = 0;
-  let lastSeenPlatform: string | null = null;
-  for (const p of platforms) {
-    if (p.lastMessageAt > lastSeenAt) {
-      lastSeenAt = p.lastMessageAt;
-      lastSeenPlatform = p.source;
-    }
-  }
+  const latestInteraction = resolveLatestInteractionSnapshot(
+    messages,
+    ownerEntityId,
+    roomSourceMap,
+    currentTime,
+  );
+  let lastSeenAt = latestInteraction.lastSeenAt;
+  let lastSeenPlatform = latestInteraction.lastSeenPlatform;
   const hasOpenActivityCycle =
     lastSeenAt > 0 &&
-    currentTime.getTime() - lastSeenAt < SUSTAINED_INACTIVITY_GAP_MS;
+    currentTime.getTime() - lastSeenAt <= SUSTAINED_INACTIVITY_GAP_MS;
   const currentActivityCycle =
     sessions.length > 0 ? sessions[sessions.length - 1] : null;
+  const latestInteractionStartsNewCycle =
+    lastSeenAt > 0 &&
+    (!currentActivityCycle || lastSeenAt > currentActivityCycle.endAt);
+  const currentActivityCycleStartedAt = latestInteractionStartsNewCycle
+    ? lastSeenAt
+    : currentActivityCycle?.startAt ?? lastSeenAt;
+  const currentActivityCycleLocalDate = latestInteractionStartsNewCycle
+    ? localDateKeyForTimestamp(lastSeenAt, timezone)
+    : currentActivityCycle?.startDayKey ?? localDateKeyForTimestamp(lastSeenAt, timezone);
 
   return {
     ownerEntityId,
@@ -291,12 +448,19 @@ export function analyzeMessages(
     lastSeenPlatform,
     isCurrentlyActive: currentTime.getTime() - lastSeenAt < ACTIVE_THRESHOLD_MS,
     hasOpenActivityCycle,
-    currentActivityCycleStartedAt: currentActivityCycle?.startAt ?? null,
-    currentActivityCycleLocalDate: currentActivityCycle?.startDayKey ?? null,
+    currentActivityCycleStartedAt,
+    currentActivityCycleLocalDate,
     effectiveDayKey: hasOpenActivityCycle
-      ? (currentActivityCycle?.startDayKey ??
+      ? (currentActivityCycleLocalDate ??
         localDateKeyForTimestamp(currentTime.getTime(), timezone))
       : localDateKeyForTimestamp(currentTime.getTime(), timezone),
+    screenContextFocus: null,
+    screenContextSource: null,
+    screenContextSampledAt: null,
+    screenContextConfidence: null,
+    screenContextBusy: false,
+    screenContextAvailable: false,
+    screenContextStale: false,
   };
 }
 
@@ -393,10 +557,17 @@ function median(sorted: number[]): number {
 export function wasActiveToday(
   profile: Pick<
     ActivityProfile,
+    | "hasOpenActivityCycle"
     | "currentActivityCycleStartedAt"
     | "currentActivityCycleLocalDate"
     | "lastSeenAt"
+    | "lastSeenPlatform"
     | "sustainedInactivityThresholdMinutes"
+    | "screenContextAvailable"
+    | "screenContextStale"
+    | "screenContextFocus"
+    | "screenContextSampledAt"
+    | "screenContextConfidence"
   >,
   timezone: string,
   now: Date,

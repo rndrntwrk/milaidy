@@ -14,6 +14,7 @@ import type {
   CreateLifeOpsBrowserSessionRequest,
   CreateLifeOpsCalendarEventRequest,
   CreateLifeOpsDefinitionRequest,
+  CreateLifeOpsGmailBatchReplyDraftsRequest,
   CreateLifeOpsGmailReplyDraftRequest,
   CreateLifeOpsGoalRequest,
   CreateLifeOpsWorkflowRequest,
@@ -21,6 +22,7 @@ import type {
   DisconnectLifeOpsGoogleConnectorRequest,
   GetLifeOpsCalendarFeedRequest,
   GetLifeOpsGmailTriageRequest,
+  GetLifeOpsGmailSearchRequest,
   LifeOpsActiveReminderView,
   LifeOpsAuditEvent,
   LifeOpsAuditEventType,
@@ -39,6 +41,9 @@ import type {
   LifeOpsDefinitionPerformanceWindow,
   LifeOpsDomain,
   LifeOpsGmailMessageSummary,
+  LifeOpsGmailBatchReplyDraftsFeed,
+  LifeOpsGmailBatchReplySendResult,
+  LifeOpsGmailSearchFeed,
   LifeOpsGmailNeedsResponseFeed,
   LifeOpsGmailReplyDraft,
   LifeOpsGmailTriageFeed,
@@ -86,6 +91,7 @@ import type {
   LifeOpsWorkflowTriggerType,
   LifeOpsXConnectorStatus,
   LifeOpsXPostResponse,
+  SendLifeOpsGmailBatchReplyRequest,
   SendLifeOpsGmailReplyRequest,
   SetLifeOpsReminderPreferenceRequest,
   SnoozeLifeOpsOccurrenceRequest,
@@ -124,7 +130,11 @@ import {
   LIFEOPS_WORKFLOW_TRIGGER_TYPES,
   LIFEOPS_X_CAPABILITIES,
 } from "@miladyai/shared/contracts/lifeops";
-import { loadOwnerContactsConfig } from "../config/owner-contacts.js";
+import {
+  loadOwnerContactRoutingHints,
+  loadOwnerContactsConfig,
+  type OwnerContactRoutingHint,
+} from "../config/owner-contacts.js";
 import { getAgentEventService } from "../runtime/agent-event-service.js";
 import {
   computeNextCronRunAtMs,
@@ -153,7 +163,10 @@ import {
   resolvePreferredGoogleGrant,
 } from "./google-connector-gateway.js";
 import {
+  type SyncedGoogleGmailMessageSummary,
+  fetchGoogleGmailMessage,
   fetchGoogleGmailTriageMessages,
+  fetchGoogleGmailSearchMessages,
   sendGoogleGmailReply,
 } from "./google-gmail.js";
 import {
@@ -274,6 +287,18 @@ const DEFAULT_WORKFLOW_PERMISSION_POLICY: LifeOpsWorkflowPermissionPolicy = {
   requireConfirmationForBrowserActions: true,
   requireConfirmationForXPosts: true,
 };
+const REMINDER_INTENSITY_CANONICAL_ALIASES: Record<
+  string,
+  LifeOpsReminderIntensity
+> = {
+  minimal: "minimal",
+  normal: "normal",
+  persistent: "persistent",
+  high_priority_only: "high_priority_only",
+  paused: "high_priority_only",
+  low: "minimal",
+  high: "persistent",
+};
 
 type LifeOpsWorkflowSchedulerState = {
   managedBy: "task_worker";
@@ -296,6 +321,18 @@ type ReminderActivityProfileSnapshot = {
   secondaryPlatform: string | null;
   lastSeenPlatform: string | null;
   isCurrentlyActive: boolean;
+};
+
+type RuntimeOwnerContactResolution = {
+  sourceOfTruth: "config" | "rolodex" | "config+rolodex";
+  preferredCommunicationChannel: string | null;
+  platformIdentities: Array<{
+    platform: string;
+    handle: string;
+    status?: string;
+  }>;
+  lastResponseAt: string | null;
+  lastResponseChannel: string | null;
 };
 
 type LifeOpsServiceOptions = {
@@ -732,6 +769,26 @@ function isReminderIntensity(
   );
 }
 
+function normalizeReminderIntensityInput(
+  value: unknown,
+  field: string,
+): LifeOpsReminderIntensity {
+  const intensity = requireNonEmptyString(value, field);
+  const canonical = REMINDER_INTENSITY_CANONICAL_ALIASES[intensity];
+  if (!canonical) {
+    fail(400, `${field} must be one of: ${LIFEOPS_REMINDER_INTENSITIES.join(", ")}`);
+  }
+  return canonical;
+}
+
+function coerceReminderIntensity(
+  value: unknown,
+  field: string,
+): LifeOpsReminderIntensity | null {
+  const intensity = normalizeOptionalString(value);
+  return intensity ? normalizeReminderIntensityInput(intensity, field) : null;
+}
+
 function isReminderChannel(
   value: unknown,
 ): value is LifeOpsReminderChannel {
@@ -772,6 +829,16 @@ function shouldEscalateImmediately(
   );
 }
 
+function shouldDeliverReminderForIntensity(
+  intensity: LifeOpsReminderIntensity,
+  urgency: LifeOpsReminderUrgency,
+): boolean {
+  if (intensity === "high_priority_only") {
+    return urgency === "high" || urgency === "critical";
+  }
+  return true;
+}
+
 function resolveReminderEscalationDelayMinutes(
   urgency: LifeOpsReminderUrgency,
   previousOutcome: LifeOpsReminderAttemptOutcome,
@@ -794,8 +861,11 @@ function readReminderPreferenceSettingFromMetadata(
   if (!metadata) {
     return null;
   }
-  const intensity = metadata[REMINDER_INTENSITY_METADATA_KEY];
-  if (!isReminderIntensity(intensity)) {
+  const intensity = coerceReminderIntensity(
+    metadata[REMINDER_INTENSITY_METADATA_KEY],
+    REMINDER_INTENSITY_METADATA_KEY,
+  );
+  if (!intensity) {
     return null;
   }
   return {
@@ -831,17 +901,14 @@ function applyReminderIntensityToPlan(
   plan: LifeOpsReminderPlan,
   intensity: LifeOpsReminderIntensity,
 ): LifeOpsReminderPlan | null {
-  if (intensity === "paused") {
-    return null;
-  }
   const steps = plan.steps.map((step) => ({ ...step }));
-  if (intensity === "low") {
+  if (intensity === "minimal") {
     return {
       ...plan,
       steps: steps.slice(0, 1),
     };
   }
-  if (intensity === "high") {
+  if (intensity === "persistent") {
     const lastStep = steps[steps.length - 1] ?? {
       channel: "in_app" as const,
       offsetMinutes: 0,
@@ -1326,6 +1393,86 @@ function normalizeGmailTriageMaxResults(value: unknown): number {
   return maxResults;
 }
 
+function normalizeGmailSearchQuery(value: unknown): string {
+  const query = requireNonEmptyString(value, "query");
+  if (query.length > 500) {
+    fail(400, "query must be 500 characters or fewer");
+  }
+  return query;
+}
+
+function normalizeOptionalMessageIdArray(
+  value: unknown,
+  field: string,
+): string[] | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!Array.isArray(value)) {
+    fail(400, `${field} must be an array`);
+  }
+  const items: string[] = [];
+  const seen = new Set<string>();
+  for (const [index, candidate] of value.entries()) {
+    const item = requireNonEmptyString(candidate, `${field}[${index}]`);
+    if (seen.has(item)) {
+      continue;
+    }
+    seen.add(item);
+    items.push(item);
+  }
+  if (items.length > 50) {
+    fail(400, `${field} must contain 50 items or fewer`);
+  }
+  return items;
+}
+
+function normalizeGmailSearchQueryMatches(
+  query: string,
+  message: LifeOpsGmailMessageSummary,
+): boolean {
+  const haystack = [
+    message.subject,
+    message.from,
+    message.fromEmail ?? "",
+    message.replyTo ?? "",
+    message.snippet,
+    ...message.to,
+    ...message.cc,
+    ...message.labels,
+  ]
+    .join(" ")
+    .toLowerCase();
+  const terms = query
+    .toLowerCase()
+    .match(/"[^"]+"|\S+/g)
+    ?.map((term) => term.replace(/^"|"$/g, "").trim())
+    .filter((term) => term.length > 0) ?? [];
+  if (terms.length === 0) {
+    return false;
+  }
+  return terms.every((term) => haystack.includes(term));
+}
+
+function filterGmailMessagesBySearch(args: {
+  messages: LifeOpsGmailMessageSummary[];
+  query: string;
+  replyNeededOnly?: boolean;
+}): LifeOpsGmailMessageSummary[] {
+  const filtered = args.messages.filter((message) =>
+    normalizeGmailSearchQueryMatches(args.query, message),
+  );
+  const replyNeededOnly = args.replyNeededOnly === true;
+  return filtered
+    .filter((message) => !replyNeededOnly || message.likelyReplyNeeded)
+    .sort((left, right) => {
+      if (right.triageScore !== left.triageScore) {
+        return right.triageScore - left.triageScore;
+      }
+      return Date.parse(right.receivedAt) - Date.parse(left.receivedAt);
+    });
+}
+
 function normalizeGmailDraftTone(value: unknown): "brief" | "neutral" | "warm" {
   return normalizeEnumValue(
     value ?? "neutral",
@@ -1369,6 +1516,30 @@ function normalizeGmailReplyBody(value: unknown): string {
     fail(400, "bodyText must be 8000 characters or fewer");
   }
   return body;
+}
+
+function summarizeGmailSearch(
+  messages: LifeOpsGmailMessageSummary[],
+): LifeOpsGmailSearchFeed["summary"] {
+  return {
+    totalCount: messages.length,
+    unreadCount: messages.filter((message) => message.isUnread).length,
+    importantCount: messages.filter((message) => message.isImportant).length,
+    replyNeededCount: messages.filter((message) => message.likelyReplyNeeded)
+      .length,
+  };
+}
+
+function summarizeGmailBatchReplyDrafts(
+  drafts: LifeOpsGmailReplyDraft[],
+): LifeOpsGmailBatchReplyDraftsFeed["summary"] {
+  return {
+    totalCount: drafts.length,
+    sendAllowedCount: drafts.filter((draft) => draft.sendAllowed).length,
+    requiresConfirmationCount: drafts.filter(
+      (draft) => draft.requiresConfirmation,
+    ).length,
+  };
 }
 
 function collectCalendarEventContactEmails(
@@ -1526,6 +1697,26 @@ function buildGmailReplyDraft(args: {
   };
 }
 
+function buildGmailReplyDrafts(args: {
+  messages: LifeOpsGmailMessageSummary[];
+  tone: "brief" | "neutral" | "warm";
+  intent?: string;
+  includeQuotedOriginal: boolean;
+  senderName: string;
+  sendAllowed: boolean;
+}): LifeOpsGmailReplyDraft[] {
+  return args.messages.map((message) =>
+    buildGmailReplyDraft({
+      message,
+      tone: args.tone,
+      intent: args.intent,
+      includeQuotedOriginal: args.includeQuotedOriginal,
+      senderName: args.senderName,
+      sendAllowed: args.sendAllowed,
+    }),
+  );
+}
+
 function createCalendarEventId(
   agentId: string,
   provider: LifeOpsConnectorGrant["provider"],
@@ -1551,6 +1742,28 @@ function createGmailMessageId(
     .update(`${agentId}:${provider}:${side}:gmail:${externalMessageId}`)
     .digest("hex");
   return `life-gmail-${digest.slice(0, 32)}`;
+}
+
+function materializeGmailMessageSummary(args: {
+  agentId: string;
+  side: LifeOpsConnectorGrant["side"];
+  message: SyncedGoogleGmailMessageSummary;
+  syncedAt: string;
+}): LifeOpsGmailMessageSummary {
+  return {
+    id: createGmailMessageId(
+      args.agentId,
+      "google",
+      args.side,
+      args.message.externalId,
+    ),
+    agentId: args.agentId,
+    provider: "google",
+    side: args.side,
+    ...args.message,
+    syncedAt: args.syncedAt,
+    updatedAt: args.syncedAt,
+  };
 }
 
 function isCalendarSyncStateFresh(args: {
@@ -4401,49 +4614,78 @@ export class LifeOpsService {
     );
   }
 
-  private resolveRuntimeReminderTarget(
+  private async resolveRuntimeReminderTarget(
     channel: Exclude<
       LifeOpsReminderStep["channel"],
       "in_app" | "sms" | "voice"
     >,
     policy: LifeOpsChannelPolicy | null,
     ownerContacts = loadOwnerContactsConfig(LIFEOPS_OWNER_CONTACTS_LOAD_CONTEXT),
-  ): {
+    ownerContactHints?: Record<string, OwnerContactRoutingHint>,
+  ): Promise<{
     source: string;
     connectorRef: string;
     target: RuntimeMessageTarget;
-  } | null {
+    resolution: RuntimeOwnerContactResolution;
+  } | null> {
     const metadata = policy ? policy.metadata : null;
     const configuredSource =
       (metadata && normalizeOptionalString(metadata.source)) ??
       (metadata && normalizeOptionalString(metadata.platform)) ??
       channel;
-    const contact = ownerContacts[configuredSource] ?? ownerContacts[channel];
+    const hints =
+      ownerContactHints ??
+      (await loadOwnerContactRoutingHints(this.runtime, ownerContacts));
+    const hint =
+      hints[configuredSource] ??
+      hints[channel] ??
+      ({
+        source: configuredSource,
+        entityId: null,
+        channelId: null,
+        roomId: null,
+        preferredCommunicationChannel: null,
+        platformIdentities: [],
+        lastResponseAt: null,
+        lastResponseChannel: null,
+        resolvedFrom: "config",
+      } satisfies OwnerContactRoutingHint);
+    const contact = ownerContacts[hint.source] ?? ownerContacts[channel];
     const entityId =
       (metadata && normalizeOptionalString(metadata.entityId)) ??
+      normalizeOptionalString(hint.entityId) ??
       normalizeOptionalString(contact?.entityId) ??
       null;
     const channelId =
       (metadata && normalizeOptionalString(metadata.channelId)) ??
+      normalizeOptionalString(hint.channelId) ??
       normalizeOptionalString(contact?.channelId) ??
       null;
     const roomId =
       (metadata && normalizeOptionalString(metadata.roomId)) ??
+      normalizeOptionalString(hint.roomId) ??
       normalizeOptionalString(contact?.roomId) ??
       null;
     if (!entityId && !channelId && !roomId) {
       return null;
     }
-    const targetRef = policy?.channelRef ?? channelId ?? roomId ?? entityId;
+    const targetRef = channelId ?? roomId ?? entityId ?? policy?.channelRef ?? null;
     return {
-      source: configuredSource,
-      connectorRef: `runtime:${configuredSource}:${targetRef}`,
+      source: hint.source,
+      connectorRef: `runtime:${hint.source}:${targetRef}`,
       target: {
-        source: configuredSource,
+        source: hint.source,
         entityId: entityId as RuntimeMessageTarget["entityId"],
         channelId,
         roomId: roomId as RuntimeMessageTarget["roomId"],
       } as RuntimeMessageTarget,
+      resolution: {
+        sourceOfTruth: hint.resolvedFrom,
+        preferredCommunicationChannel: hint.preferredCommunicationChannel,
+        platformIdentities: hint.platformIdentities,
+        lastResponseAt: hint.lastResponseAt,
+        lastResponseChannel: hint.lastResponseChannel,
+      },
     };
   }
 
@@ -4562,6 +4804,25 @@ export class LifeOpsService {
     const ownerContacts = loadOwnerContactsConfig(
       LIFEOPS_OWNER_CONTACTS_LOAD_CONTEXT,
     );
+    const ownerContactHints = await loadOwnerContactRoutingHints(
+      this.runtime,
+      ownerContacts,
+    );
+    const preferredChannels = new Set<LifeOpsReminderChannel>();
+    for (const hint of Object.values(ownerContactHints)) {
+      const preferredChannel = mapPlatformToReminderChannel(
+        hint.preferredCommunicationChannel,
+      );
+      const recentChannel = mapPlatformToReminderChannel(
+        hint.lastResponseChannel,
+      );
+      if (preferredChannel) {
+        preferredChannels.add(preferredChannel);
+      }
+      if (recentChannel) {
+        preferredChannels.add(recentChannel);
+      }
+    }
     const pushChannel = async (
       channel: LifeOpsReminderChannel | null,
     ): Promise<void> => {
@@ -4590,10 +4851,13 @@ export class LifeOpsService {
       if (typeof this.runtime.sendMessageToTarget !== "function") {
         return;
       }
-      if (
-        this.resolveRuntimeReminderTarget(channel, policy, ownerContacts) !==
-        null
-      ) {
+      const runtimeTarget = await this.resolveRuntimeReminderTarget(
+        channel,
+        policy,
+        ownerContacts,
+        ownerContactHints,
+      );
+      if (runtimeTarget !== null) {
         ordered.push(channel);
       }
     };
@@ -4609,6 +4873,9 @@ export class LifeOpsService {
     await pushChannel(
       mapPlatformToReminderChannel(args.activityProfile?.secondaryPlatform),
     );
+    for (const preferredChannel of preferredChannels) {
+      await pushChannel(preferredChannel);
+    }
 
     for (const source of Object.keys(ownerContacts)) {
       const mappedChannel = mapPlatformToReminderChannel(source);
@@ -4808,6 +5075,7 @@ export class LifeOpsService {
     title: string;
     dueAt: string | null;
     urgency: LifeOpsReminderUrgency;
+    intensity: LifeOpsReminderIntensity;
     quietHours: LifeOpsReminderPlan["quietHours"];
     attemptedAt: string;
     now: Date;
@@ -4821,6 +5089,9 @@ export class LifeOpsService {
     eventStartAt?: string | null;
     acknowledged: boolean;
   }): Promise<LifeOpsReminderAttempt | null> {
+    if (!shouldDeliverReminderForIntensity(args.intensity, args.urgency)) {
+      return null;
+    }
     if (args.acknowledged || args.urgency === "low") {
       return null;
     }
@@ -5216,12 +5487,12 @@ export class LifeOpsService {
     } else if (args.channel === "in_app") {
       connectorRef = "system:in_app";
       deliveryMetadata.message = reminderBody;
-    } else {
-      const policy = await this.resolvePrimaryChannelPolicy(args.channel);
-      const runtimeTarget =
-        args.channel === "sms" || args.channel === "voice"
-          ? null
-          : this.resolveRuntimeReminderTarget(args.channel, policy);
+      } else {
+        const policy = await this.resolvePrimaryChannelPolicy(args.channel);
+        const runtimeTarget =
+          args.channel === "sms" || args.channel === "voice"
+            ? null
+            : await this.resolveRuntimeReminderTarget(args.channel, policy);
       const requiresEscalationPermission = args.stepIndex > 0;
       if (policy && !policy.allowReminders) {
         outcome = "blocked_policy";
@@ -5288,6 +5559,13 @@ export class LifeOpsService {
         }
       } else if (runtimeTarget) {
         connectorRef = runtimeTarget.connectorRef;
+        deliveryMetadata.routeSource = runtimeTarget.source;
+        deliveryMetadata.routeResolution = runtimeTarget.resolution;
+        deliveryMetadata.routeEndpoint =
+          runtimeTarget.target.channelId ??
+          runtimeTarget.target.roomId ??
+          runtimeTarget.target.entityId ??
+          null;
         try {
           await this.runtime.sendMessageToTarget(runtimeTarget.target, {
             text: reminderBody,
@@ -5299,6 +5577,13 @@ export class LifeOpsService {
               ownerId: args.ownerId,
               urgency: args.urgency,
               scheduledFor: args.scheduledFor,
+              routeSource: runtimeTarget.source,
+              routeEndpoint:
+                runtimeTarget.target.channelId ??
+                runtimeTarget.target.roomId ??
+                runtimeTarget.target.entityId ??
+                null,
+              routeResolution: runtimeTarget.resolution,
             },
           });
         } catch (error) {
@@ -6326,13 +6611,19 @@ export class LifeOpsService {
       overviewOccurrences.map((occurrence) => occurrence.definitionId),
     );
     const policies = await this.repository.listChannelPolicies(this.agentId());
+    const definitionPreferencesById = new Map<
+      string,
+      LifeOpsReminderPreference
+    >();
     const plansByDefinitionId = new Map<string, LifeOpsReminderPlan>();
     for (const plan of reminderPlans) {
       const definition = definitionsById.get(plan.ownerId) ?? null;
-      const effectivePlan = this.resolveEffectiveReminderPlan(
-        plan,
-        this.buildReminderPreferenceResponse(definition, policies),
+      const preference = this.buildReminderPreferenceResponse(
+        definition,
+        policies,
       );
+      definitionPreferencesById.set(plan.ownerId, preference);
+      const effectivePlan = this.resolveEffectiveReminderPlan(plan, preference);
       if (effectivePlan) {
         plansByDefinitionId.set(plan.ownerId, effectivePlan);
       }
@@ -6353,6 +6644,24 @@ export class LifeOpsService {
       null,
       policies,
     );
+    const occurrenceUrgencies = new Map<string, LifeOpsReminderUrgency>();
+    for (const occurrence of overviewOccurrences) {
+      occurrenceUrgencies.set(
+        occurrence.id,
+        typeof occurrence.metadata.urgency === "string"
+          ? normalizeReminderUrgency(occurrence.metadata.urgency)
+          : priorityToUrgency(occurrence.priority),
+      );
+    }
+    const eventUrgencies = new Map<string, LifeOpsReminderUrgency>();
+    for (const event of calendarEvents) {
+      eventUrgencies.set(
+        event.id,
+        typeof event.metadata.urgency === "string"
+          ? normalizeReminderUrgency(event.metadata.urgency)
+          : "medium",
+      );
+    }
     const plansByEventId = new Map<string, LifeOpsReminderPlan>();
     for (const plan of calendarReminderPlans) {
       const effectivePlan = this.resolveEffectiveReminderPlan(
@@ -6365,12 +6674,24 @@ export class LifeOpsService {
     }
     const goals = await this.refreshGoalReviewStates(now);
     const allReminders = [
-      ...buildActiveReminders(overviewOccurrences, plansByDefinitionId, now),
+      ...buildActiveReminders(overviewOccurrences, plansByDefinitionId, now).filter(
+        (reminder) =>
+          shouldDeliverReminderForIntensity(
+            definitionPreferencesById.get(reminder.definitionId ?? "")?.effective
+              ?.intensity ?? globalReminderPreference.effective.intensity,
+            occurrenceUrgencies.get(reminder.ownerId) ?? "medium",
+          ),
+      ),
       ...buildActiveCalendarEventReminders(
         calendarEvents,
         plansByEventId,
         this.ownerEntityId(),
         now,
+      ).filter((reminder) =>
+        shouldDeliverReminderForIntensity(
+          globalReminderPreference.effective.intensity,
+          eventUrgencies.get(reminder.ownerId) ?? "medium",
+        ),
       ),
     ].sort(
       (left, right) =>
@@ -6496,10 +6817,9 @@ export class LifeOpsService {
   async setReminderPreference(
     request: SetLifeOpsReminderPreferenceRequest,
   ): Promise<LifeOpsReminderPreference> {
-    const intensity = normalizeEnumValue(
+    const intensity = normalizeReminderIntensityInput(
       request.intensity,
       "intensity",
-      LIFEOPS_REMINDER_INTENSITIES,
     );
     const note = normalizeOptionalString(request.note) ?? null;
     const updatedAt = new Date().toISOString();
@@ -6751,13 +7071,19 @@ export class LifeOpsService {
         occurrenceViews.map((occurrence) => occurrence.definitionId),
       );
       const policies = await this.repository.listChannelPolicies(this.agentId());
+      const definitionPreferencesById = new Map<
+        string,
+        LifeOpsReminderPreference
+      >();
       const plansByDefinitionId = new Map<string, LifeOpsReminderPlan>();
       for (const plan of occurrencePlans) {
         const definition = definitionsById.get(plan.ownerId) ?? null;
-        const effectivePlan = this.resolveEffectiveReminderPlan(
-          plan,
-          this.buildReminderPreferenceResponse(definition, policies),
+        const preference = this.buildReminderPreferenceResponse(
+          definition,
+          policies,
         );
+        definitionPreferencesById.set(plan.ownerId, preference);
+        const effectivePlan = this.resolveEffectiveReminderPlan(plan, preference);
         if (effectivePlan) {
           plansByDefinitionId.set(plan.ownerId, effectivePlan);
         }
@@ -6781,6 +7107,15 @@ export class LifeOpsService {
         null,
         policies,
       );
+      const occurrenceUrgencies = new Map<string, LifeOpsReminderUrgency>();
+      for (const occurrence of occurrenceViews) {
+        occurrenceUrgencies.set(
+          occurrence.id,
+          typeof occurrence.metadata.urgency === "string"
+            ? normalizeReminderUrgency(occurrence.metadata.urgency)
+            : priorityToUrgency(occurrence.priority),
+        );
+      }
       const plansByEventId = new Map<string, LifeOpsReminderPlan>();
       for (const plan of eventPlans) {
         const effectivePlan = this.resolveEffectiveReminderPlan(
@@ -6790,6 +7125,15 @@ export class LifeOpsService {
         if (effectivePlan) {
           plansByEventId.set(plan.ownerId, effectivePlan);
         }
+      }
+      const eventUrgencies = new Map<string, LifeOpsReminderUrgency>();
+      for (const event of calendarEvents) {
+        eventUrgencies.set(
+          event.id,
+          typeof event.metadata.urgency === "string"
+            ? normalizeReminderUrgency(event.metadata.urgency)
+            : "medium",
+        );
       }
       const existingAttempts = await this.repository.listReminderAttempts(
         this.agentId(),
@@ -6829,6 +7173,18 @@ export class LifeOpsService {
           (candidate) => candidate.id === reminder.ownerId,
         );
         if (!occurrence) continue;
+        const preference =
+          definitionPreferencesById.get(reminder.definitionId ?? "") ??
+          globalReminderPreference;
+        const urgency = occurrenceUrgencies.get(reminder.ownerId) ?? "medium";
+        if (
+          !shouldDeliverReminderForIntensity(
+            preference.effective.intensity,
+            urgency,
+          )
+        ) {
+          continue;
+        }
         const key = attemptKey(
           plan.id,
           reminder.stepIndex,
@@ -6884,6 +7240,14 @@ export class LifeOpsService {
           (candidate) => candidate.id === reminder.ownerId,
         );
         if (!event) continue;
+        if (
+          !shouldDeliverReminderForIntensity(
+            globalReminderPreference.effective.intensity,
+            eventUrgencies.get(reminder.ownerId) ?? "medium",
+          )
+        ) {
+          continue;
+        }
         const key = attemptKey(
           plan.id,
           reminder.stepIndex,
@@ -6944,6 +7308,9 @@ export class LifeOpsService {
             typeof occurrence.metadata.urgency === "string"
               ? normalizeReminderUrgency(occurrence.metadata.urgency)
               : priorityToUrgency(occurrence.priority),
+          intensity:
+            definitionPreferencesById.get(occurrence.definitionId)?.effective
+              ?.intensity ?? globalReminderPreference.effective.intensity,
           quietHours: plan.quietHours,
           attemptedAt: now.toISOString(),
           now,
@@ -6974,6 +7341,7 @@ export class LifeOpsService {
             typeof event.metadata.urgency === "string"
               ? normalizeReminderUrgency(event.metadata.urgency)
               : "medium",
+          intensity: globalReminderPreference.effective.intensity,
           quietHours: plan.quietHours,
           attemptedAt: now.toISOString(),
           now,
@@ -7902,6 +8270,99 @@ export class LifeOpsService {
     });
   }
 
+  async getGmailSearch(
+    requestUrl: URL,
+    request: GetLifeOpsGmailSearchRequest,
+    now = new Date(),
+  ): Promise<LifeOpsGmailSearchFeed> {
+    const mode = normalizeOptionalConnectorMode(request.mode, "mode");
+    const side = normalizeOptionalConnectorSide(request.side, "side");
+    const maxResults = normalizeGmailTriageMaxResults(request.maxResults);
+    const forceSync =
+      normalizeOptionalBoolean(request.forceSync, "forceSync") ?? false;
+    const query = normalizeGmailSearchQuery(request.query);
+    const replyNeededOnly =
+      normalizeOptionalBoolean(request.replyNeededOnly, "replyNeededOnly") ??
+      false;
+    const grant = await this.requireGoogleGmailGrant(requestUrl, mode, side);
+    const effectiveSide = grant.side;
+    const selfEmail =
+      typeof grant.identity.email === "string"
+        ? grant.identity.email.trim().toLowerCase()
+        : null;
+
+    if (resolveGoogleExecutionTarget(grant) === "cloud") {
+      const triage = await this.getGmailTriage(
+        requestUrl,
+        {
+          mode,
+          side: effectiveSide,
+          forceSync,
+          maxResults,
+        },
+        now,
+      );
+      const messages = filterGmailMessagesBySearch({
+        messages: triage.messages,
+        query,
+        replyNeededOnly,
+      });
+      return {
+        query,
+        messages,
+        source: triage.source,
+        syncedAt: triage.syncedAt,
+        summary: summarizeGmailSearch(messages),
+      };
+    }
+
+    const accessToken = (
+      await ensureFreshGoogleAccessToken(
+        grant.tokenRef ?? fail(409, "Google Gmail token reference is missing."),
+      )
+    ).accessToken;
+    const syncedAt = new Date().toISOString();
+    const syncedMessages = await fetchGoogleGmailSearchMessages({
+      accessToken,
+      selfEmail,
+      maxResults,
+      query,
+    });
+    const messages = filterGmailMessagesBySearch({
+      messages: syncedMessages.map((message) =>
+        materializeGmailMessageSummary({
+          agentId: this.agentId(),
+          side: effectiveSide,
+          message,
+          syncedAt,
+        }),
+      ),
+      query,
+      replyNeededOnly,
+    });
+    for (const message of messages) {
+      await this.repository.upsertGmailMessage(message, effectiveSide);
+    }
+    await this.repository.upsertGmailSyncState(
+      createLifeOpsGmailSyncState({
+        agentId: this.agentId(),
+        provider: "google",
+        side: effectiveSide,
+        mailbox: GOOGLE_GMAIL_MAILBOX,
+        maxResults,
+        syncedAt,
+      }),
+    );
+    const persistedMessages = messages;
+    return {
+      query,
+      messages: persistedMessages,
+      source: "synced",
+      syncedAt,
+      summary: summarizeGmailSearch(persistedMessages),
+    };
+  }
+
   async getGmailNeedsResponse(
     requestUrl: URL,
     request: GetLifeOpsGmailTriageRequest = {},
@@ -7921,6 +8382,207 @@ export class LifeOpsService {
       source: triage.source,
       syncedAt: triage.syncedAt,
       summary: summarizeGmailNeedsResponse(messages),
+    };
+  }
+
+  private async resolveGmailMessagesForBatchDrafts(args: {
+    requestUrl: URL;
+    request: CreateLifeOpsGmailBatchReplyDraftsRequest;
+    now?: Date;
+  }): Promise<
+    | {
+        grant: LifeOpsConnectorGrant;
+        query: string | null;
+        source: "cache" | "synced";
+        syncedAt: string | null;
+        messages: LifeOpsGmailMessageSummary[];
+      }
+    | never
+  > {
+    const mode = normalizeOptionalConnectorMode(args.request.mode, "mode");
+    const side = normalizeOptionalConnectorSide(args.request.side, "side");
+    const forceSync =
+      normalizeOptionalBoolean(args.request.forceSync, "forceSync") ?? false;
+    const maxResults = normalizeGmailTriageMaxResults(args.request.maxResults);
+    const query = normalizeOptionalString(args.request.query);
+    const replyNeededOnly =
+      normalizeOptionalBoolean(
+        args.request.replyNeededOnly,
+        "replyNeededOnly",
+      ) ?? false;
+    const messageIds = normalizeOptionalMessageIdArray(
+      args.request.messageIds,
+      "messageIds",
+    );
+    if (!query && !messageIds && !replyNeededOnly) {
+      fail(
+        400,
+        "Either query, messageIds, or replyNeededOnly must be provided.",
+      );
+    }
+    const grant = await this.requireGoogleGmailGrant(
+      args.requestUrl,
+      mode,
+      side,
+    );
+    const effectiveSide = grant.side;
+    if (messageIds && messageIds.length > 0) {
+      let messages: LifeOpsGmailMessageSummary[] = [];
+      if (resolveGoogleExecutionTarget(grant) === "cloud") {
+        const triage = await this.getGmailTriage(
+          args.requestUrl,
+          {
+            mode,
+            side: effectiveSide,
+            forceSync: true,
+            maxResults: Math.max(maxResults, messageIds.length),
+          },
+          args.now ?? new Date(),
+        );
+        const wanted = new Set(messageIds);
+        messages = triage.messages.filter((message) => wanted.has(message.id));
+        return {
+          grant,
+          query: null,
+          source: triage.source,
+          syncedAt: triage.syncedAt,
+          messages,
+        };
+      }
+      const accessToken = (
+        await ensureFreshGoogleAccessToken(
+          grant.tokenRef ?? fail(409, "Google Gmail token reference is missing."),
+        )
+      ).accessToken;
+      for (const messageId of messageIds) {
+        const fetched = await fetchGoogleGmailMessage({
+          accessToken,
+          selfEmail:
+            typeof grant.identity.email === "string"
+              ? grant.identity.email.trim().toLowerCase()
+              : null,
+          messageId,
+        });
+        const message = fetched
+          ? materializeGmailMessageSummary({
+              agentId: this.agentId(),
+              side: grant.side,
+              message: fetched,
+              syncedAt: new Date().toISOString(),
+            })
+          : null;
+        if (message) {
+          messages.push(message);
+          await this.repository.upsertGmailMessage(message, grant.side);
+        }
+      }
+      messages = messages
+        .filter((message) => messageIds.includes(message.id))
+        .sort((left, right) => {
+          if (right.triageScore !== left.triageScore) {
+            return right.triageScore - left.triageScore;
+          }
+          return Date.parse(right.receivedAt) - Date.parse(left.receivedAt);
+        });
+      return {
+        grant,
+        query: null,
+        source: "synced",
+        syncedAt: new Date().toISOString(),
+        messages,
+      };
+    }
+    if (query) {
+      const search = await this.getGmailSearch(
+        args.requestUrl,
+        {
+          mode,
+          side: effectiveSide,
+          forceSync,
+          maxResults,
+          query,
+          replyNeededOnly,
+        },
+        args.now ?? new Date(),
+      );
+      return {
+        grant,
+        query,
+        source: search.source,
+        syncedAt: search.syncedAt,
+        messages: search.messages,
+      };
+    }
+    const triage = await this.getGmailNeedsResponse(
+      args.requestUrl,
+      {
+        mode,
+        side: effectiveSide,
+        forceSync,
+        maxResults,
+      },
+      args.now ?? new Date(),
+    );
+    return {
+      grant,
+      query: null,
+      source: triage.source,
+      syncedAt: triage.syncedAt,
+      messages: triage.messages,
+    };
+  }
+
+  async createGmailBatchReplyDrafts(
+    requestUrl: URL,
+    request: CreateLifeOpsGmailBatchReplyDraftsRequest,
+    now = new Date(),
+  ): Promise<LifeOpsGmailBatchReplyDraftsFeed> {
+    const selection = await this.resolveGmailMessagesForBatchDrafts({
+      requestUrl,
+      request,
+      now,
+    });
+    const senderName =
+      normalizeOptionalString(selection.grant.identity.name) ??
+      normalizeOptionalString(selection.grant.identity.email)?.split("@")[0] ??
+      "Milady";
+    const tone = normalizeGmailDraftTone(request.tone);
+    const intent = normalizeOptionalString(request.intent);
+    const includeQuotedOriginal =
+      normalizeOptionalBoolean(
+        request.includeQuotedOriginal,
+        "includeQuotedOriginal",
+      ) ?? false;
+    const drafts = buildGmailReplyDrafts({
+      messages: selection.messages,
+      tone,
+      intent,
+      includeQuotedOriginal,
+      senderName,
+      sendAllowed: hasGoogleGmailSendCapability(selection.grant),
+    });
+    await this.recordGmailAudit(
+      "gmail_reply_drafted",
+      `google:${selection.grant.mode}:gmail`,
+      "gmail batch reply drafted",
+      {
+        query: selection.query,
+        messageCount: selection.messages.length,
+        tone,
+        includeQuotedOriginal,
+      },
+      {
+        draftCount: drafts.length,
+        sendAllowedCount: drafts.filter((draft) => draft.sendAllowed).length,
+      },
+    );
+    return {
+      query: selection.query,
+      messages: selection.messages,
+      drafts,
+      source: selection.source,
+      syncedAt: selection.syncedAt,
+      summary: summarizeGmailBatchReplyDrafts(drafts),
     };
   }
 
@@ -8125,17 +8787,44 @@ export class LifeOpsService {
       grant.side,
     );
     if (!message) {
-      await this.getGmailTriage(
-        requestUrl,
-        { mode, side: grant.side },
-        new Date(),
-      );
-      message = await this.repository.getGmailMessage(
-        this.agentId(),
-        "google",
-        messageId,
-        grant.side,
-      );
+      const accessToken =
+        resolveGoogleExecutionTarget(grant) === "cloud"
+          ? null
+          : (
+              await ensureFreshGoogleAccessToken(
+                grant.tokenRef ??
+                  fail(409, "Google Gmail token reference is missing."),
+              )
+            ).accessToken;
+      if (resolveGoogleExecutionTarget(grant) === "cloud") {
+        const triage = await this.getGmailTriage(
+          requestUrl,
+          { mode, side: grant.side, maxResults: DEFAULT_GMAIL_TRIAGE_MAX_RESULTS },
+          new Date(),
+        );
+        message = triage.messages.find((candidate) => candidate.id === messageId) ?? null;
+      } else {
+        const fetched = await fetchGoogleGmailMessage({
+          accessToken:
+            accessToken ?? fail(409, "Google Gmail token reference is missing."),
+          selfEmail:
+            typeof grant.identity.email === "string"
+              ? grant.identity.email.trim().toLowerCase()
+              : null,
+          messageId,
+        });
+        message = fetched
+          ? materializeGmailMessageSummary({
+              agentId: this.agentId(),
+              side: grant.side,
+              message: fetched,
+              syncedAt: new Date().toISOString(),
+            })
+          : null;
+        if (message) {
+          await this.repository.upsertGmailMessage(message, grant.side);
+        }
+      }
     }
     if (!message) {
       fail(404, "life-ops Gmail message not found");
@@ -8169,6 +8858,71 @@ export class LifeOpsService {
     return draft;
   }
 
+  private async sendGmailReplyWithGrant(args: {
+    grant: LifeOpsConnectorGrant;
+    message: LifeOpsGmailMessageSummary;
+    to?: string[];
+    cc?: string[];
+    subject?: string;
+    bodyText: string;
+  }): Promise<void> {
+    const to =
+      normalizeOptionalStringArray(args.to, "to") ??
+      [args.message.replyTo ?? args.message.fromEmail ?? ""].filter(
+        (value) => value.length > 0,
+      );
+    if (to.length === 0) {
+      fail(409, "The selected Gmail message has no replyable recipient.");
+    }
+    const cc = normalizeOptionalStringArray(args.cc, "cc") ?? [];
+    const subject = normalizeOptionalString(args.subject) ?? args.message.subject;
+    const bodyText = normalizeGmailReplyBody(args.bodyText);
+    const messageIdHeader =
+      typeof args.message.metadata.messageIdHeader === "string"
+        ? args.message.metadata.messageIdHeader.trim()
+        : null;
+    const referencesHeader =
+      typeof args.message.metadata.referencesHeader === "string"
+        ? args.message.metadata.referencesHeader.trim()
+        : null;
+    const references = [referencesHeader, messageIdHeader]
+      .filter((value): value is string => Boolean(value && value.length > 0))
+      .join(" ")
+      .trim();
+
+    const sendReply = async () => {
+      if (resolveGoogleExecutionTarget(args.grant) === "cloud") {
+        await this.googleManagedClient.sendGmailReply({
+          side: args.grant.side,
+          to,
+          cc,
+          subject,
+          bodyText,
+          inReplyTo: messageIdHeader,
+          references: references.length > 0 ? references : null,
+        });
+        return;
+      }
+      await sendGoogleGmailReply({
+        accessToken: (
+          await ensureFreshGoogleAccessToken(
+            args.grant.tokenRef ??
+              fail(409, "Google Gmail token reference is missing."),
+          )
+        ).accessToken,
+        to,
+        cc,
+        subject,
+        bodyText,
+        inReplyTo: messageIdHeader,
+        references: references.length > 0 ? references : null,
+      });
+    };
+    await (resolveGoogleExecutionTarget(args.grant) === "cloud"
+      ? this.runManagedGoogleOperation(args.grant, sendReply)
+      : this.withGoogleGrantOperation(args.grant, sendReply));
+  }
+
   async sendGmailReply(
     requestUrl: URL,
     request: SendLifeOpsGmailReplyRequest,
@@ -8194,93 +8948,181 @@ export class LifeOpsService {
       grant.side,
     );
     if (!message) {
-      await this.getGmailTriage(
-        requestUrl,
-        { mode, side: grant.side },
-        new Date(),
-      );
-      message = await this.repository.getGmailMessage(
-        this.agentId(),
-        "google",
-        messageId,
-        grant.side,
-      );
+      if (resolveGoogleExecutionTarget(grant) === "cloud") {
+        const triage = await this.getGmailTriage(
+          requestUrl,
+          {
+            mode,
+            side: grant.side,
+            maxResults: DEFAULT_GMAIL_TRIAGE_MAX_RESULTS,
+          },
+          new Date(),
+        );
+        message =
+          triage.messages.find((candidate) => candidate.id === messageId) ??
+          null;
+      } else {
+        const fetched = await fetchGoogleGmailMessage({
+          accessToken: (
+            await ensureFreshGoogleAccessToken(
+              grant.tokenRef ??
+                fail(409, "Google Gmail token reference is missing."),
+            )
+          ).accessToken,
+          selfEmail:
+            typeof grant.identity.email === "string"
+              ? grant.identity.email.trim().toLowerCase()
+              : null,
+          messageId,
+        });
+        message = fetched
+          ? materializeGmailMessageSummary({
+              agentId: this.agentId(),
+              side: grant.side,
+              message: fetched,
+              syncedAt: new Date().toISOString(),
+            })
+          : null;
+        if (message) {
+          await this.repository.upsertGmailMessage(message, grant.side);
+        }
+      }
     }
     if (!message) {
       fail(404, "life-ops Gmail message not found");
     }
-
-    const to =
-      normalizeOptionalStringArray(request.to, "to") ??
-      [message.replyTo ?? message.fromEmail ?? ""].filter(
-        (value) => value.length > 0,
-      );
-    if (to.length === 0) {
-      fail(409, "The selected Gmail message has no replyable recipient.");
-    }
-    const cc = normalizeOptionalStringArray(request.cc, "cc") ?? [];
-    const subject = normalizeOptionalString(request.subject) ?? message.subject;
-    const bodyText = normalizeGmailReplyBody(request.bodyText);
-    const messageIdHeader =
-      typeof message.metadata.messageIdHeader === "string"
-        ? message.metadata.messageIdHeader.trim()
-        : null;
-    const referencesHeader =
-      typeof message.metadata.referencesHeader === "string"
-        ? message.metadata.referencesHeader.trim()
-        : null;
-    const references = [referencesHeader, messageIdHeader]
-      .filter((value): value is string => Boolean(value && value.length > 0))
-      .join(" ")
-      .trim();
-
-    const sendReply = async () => {
-      if (resolveGoogleExecutionTarget(grant) === "cloud") {
-        await this.googleManagedClient.sendGmailReply({
-          side: grant.side,
-          to,
-          cc,
-          subject,
-          bodyText,
-          inReplyTo: messageIdHeader,
-          references: references.length > 0 ? references : null,
-        });
-        return;
-      }
-      await sendGoogleGmailReply({
-        accessToken: (
-          await ensureFreshGoogleAccessToken(
-            grant.tokenRef ??
-              fail(409, "Google Gmail token reference is missing."),
-          )
-        ).accessToken,
-        to,
-        cc,
-        subject,
-        bodyText,
-        inReplyTo: messageIdHeader,
-        references: references.length > 0 ? references : null,
-      });
-    };
-    await (resolveGoogleExecutionTarget(grant) === "cloud"
-      ? this.runManagedGoogleOperation(grant, sendReply)
-      : this.withGoogleGrantOperation(grant, sendReply));
+    await this.sendGmailReplyWithGrant({
+      grant,
+      message,
+      to: request.to,
+      cc: request.cc,
+      subject: request.subject,
+      bodyText: request.bodyText,
+    });
     await this.recordGmailAudit(
       "gmail_reply_sent",
       message.id,
       "gmail reply sent",
       {
         messageId: message.id,
-        to,
-        cc,
+        to: request.to ?? null,
+        cc: request.cc ?? null,
         confirmSend,
       },
       {
-        subject,
+        subject: request.subject ?? message.subject,
         sent: true,
       },
     );
     return { ok: true };
+  }
+
+  async sendGmailReplies(
+    requestUrl: URL,
+    request: SendLifeOpsGmailBatchReplyRequest,
+  ): Promise<LifeOpsGmailBatchReplySendResult> {
+    const mode = normalizeOptionalConnectorMode(request.mode, "mode");
+    const side = normalizeOptionalConnectorSide(request.side, "side");
+    const confirmSend =
+      normalizeOptionalBoolean(request.confirmSend, "confirmSend") ?? false;
+    if (!confirmSend) {
+      fail(409, "Gmail send requires explicit confirmation.");
+    }
+    const items = Array.isArray(request.items) ? request.items : [];
+    if (items.length === 0) {
+      fail(400, "items must contain at least one Gmail reply draft.");
+    }
+    if (items.length > 50) {
+      fail(400, "items must contain 50 Gmail reply drafts or fewer.");
+    }
+    const grant = await this.requireGoogleGmailSendGrant(
+      requestUrl,
+      mode,
+      side,
+    );
+    let sentCount = 0;
+    for (const [index, item] of items.entries()) {
+      const messageId = requireNonEmptyString(
+        item.messageId,
+        `items[${index}].messageId`,
+      );
+      const bodyText = normalizeGmailReplyBody(item.bodyText);
+      let message = await this.repository.getGmailMessage(
+        this.agentId(),
+        "google",
+        messageId,
+        grant.side,
+      );
+      if (!message) {
+        if (resolveGoogleExecutionTarget(grant) === "cloud") {
+          const triage = await this.getGmailTriage(
+            requestUrl,
+            {
+              mode,
+              side: grant.side,
+              maxResults: DEFAULT_GMAIL_TRIAGE_MAX_RESULTS,
+            },
+            new Date(),
+          );
+          message =
+            triage.messages.find((candidate) => candidate.id === messageId) ??
+            null;
+        } else {
+          const fetched = await fetchGoogleGmailMessage({
+            accessToken: (
+              await ensureFreshGoogleAccessToken(
+                grant.tokenRef ??
+                  fail(409, "Google Gmail token reference is missing."),
+              )
+            ).accessToken,
+            selfEmail:
+              typeof grant.identity.email === "string"
+                ? grant.identity.email.trim().toLowerCase()
+                : null,
+            messageId,
+          });
+          message = fetched
+            ? materializeGmailMessageSummary({
+                agentId: this.agentId(),
+                side: grant.side,
+                message: fetched,
+                syncedAt: new Date().toISOString(),
+              })
+            : null;
+          if (message) {
+            await this.repository.upsertGmailMessage(message, grant.side);
+          }
+        }
+      }
+      if (!message) {
+        fail(404, `life-ops Gmail message not found: ${messageId}`);
+      }
+      await this.sendGmailReplyWithGrant({
+        grant,
+        message,
+        to: item.to,
+        cc: item.cc,
+        subject: item.subject,
+        bodyText,
+      });
+      await this.recordGmailAudit(
+        "gmail_reply_sent",
+        message.id,
+        "gmail batch reply sent",
+        {
+          messageId: message.id,
+          bodyTextLength: bodyText.length,
+          hasExplicitRecipients:
+            Array.isArray(item.to) || Array.isArray(item.cc),
+        },
+        {
+          sent: true,
+          batch: true,
+        },
+      );
+      sentCount += 1;
+    }
+    return { ok: true, sentCount };
   }
 
   async completeOccurrence(

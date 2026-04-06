@@ -1,7 +1,11 @@
 import type { IAgentRuntime, UUID } from "@elizaos/core";
 import { logger } from "@elizaos/core";
 import { loadElizaConfig } from "../config/config.js";
-import { loadOwnerContactsConfig } from "../config/owner-contacts.js";
+import {
+  loadOwnerContactRoutingHints,
+  loadOwnerContactsConfig,
+  type OwnerContactRoutingHint,
+} from "../config/owner-contacts.js";
 import type {
   EscalationConfig,
   OwnerContactEntry,
@@ -71,8 +75,18 @@ async function sendToChannel(
   channel: string,
   text: string,
   ownerContacts: OwnerContactsConfig,
+  routingHints: Record<string, OwnerContactRoutingHint>,
 ): Promise<boolean> {
-  const contact: OwnerContactEntry | undefined = ownerContacts[channel];
+  const hint = routingHints[channel] ?? null;
+  const contact: OwnerContactEntry | undefined =
+    ownerContacts[channel] ??
+    (hint
+      ? {
+          entityId: hint.entityId ?? undefined,
+          channelId: hint.channelId ?? undefined,
+          roomId: hint.roomId ?? undefined,
+        }
+      : undefined);
   if (!contact) {
     logger.warn(`[escalation] No owner contact configured for channel "${channel}"`);
     return false;
@@ -89,7 +103,16 @@ async function sendToChannel(
       {
         text,
         source: channel,
-        metadata: { urgency: "urgent", escalation: true },
+        metadata: {
+          urgency: "urgent",
+          escalation: true,
+          routeSource: channel,
+          routeResolution: hint?.resolvedFrom ?? "config",
+          routeEndpoint:
+            contact.channelId ?? contact.roomId ?? contact.entityId ?? null,
+          routeLastResponseAt: hint?.lastResponseAt ?? null,
+          routeLastResponseChannel: hint?.lastResponseChannel ?? null,
+        },
       },
     );
     return true;
@@ -102,11 +125,15 @@ async function sendToChannel(
 async function ownerRespondedSince(
   runtime: IAgentRuntime,
   ownerContacts: OwnerContactsConfig,
+  routingHints: Record<string, OwnerContactRoutingHint>,
   sinceTimestamp: number,
 ): Promise<boolean> {
   const entityIds = new Set<string>();
   for (const contact of Object.values(ownerContacts)) {
     if (contact.entityId) entityIds.add(contact.entityId);
+  }
+  for (const hint of Object.values(routingHints)) {
+    if (hint.entityId) entityIds.add(hint.entityId);
   }
 
   for (const entityId of entityIds) {
@@ -176,6 +203,7 @@ export class EscalationService {
     const config = loadEscalationConfig();
     const channels = resolveChannels(config);
     const ownerContacts = loadOwnerContacts();
+    const routingHints = await loadOwnerContactRoutingHints(runtime, ownerContacts);
     const waitMs = resolveWaitMs(config);
 
     idCounter += 1;
@@ -197,7 +225,13 @@ export class EscalationService {
 
     const firstChannel = channels[0];
     if (firstChannel) {
-      const sent = await sendToChannel(runtime, firstChannel, text, ownerContacts);
+      const sent = await sendToChannel(
+        runtime,
+        firstChannel,
+        text,
+        ownerContacts,
+        routingHints,
+      );
       if (sent) {
         state.channelsSent.push(firstChannel);
       }
@@ -225,12 +259,17 @@ export class EscalationService {
     const config = loadEscalationConfig();
     const channels = resolveChannels(config);
     const ownerContacts = loadOwnerContacts();
+    const routingHints = await loadOwnerContactRoutingHints(
+      runtime,
+      ownerContacts,
+    );
     const maxRetries = resolveMaxRetries(config);
     const waitMs = resolveWaitMs(config);
 
     const responded = await ownerRespondedSince(
       runtime,
       ownerContacts,
+      routingHints,
       state.lastSentAt,
     );
 
@@ -258,6 +297,7 @@ export class EscalationService {
         nextChannel,
         state.text,
         ownerContacts,
+        routingHints,
       );
       if (sent) {
         state.channelsSent.push(nextChannel);

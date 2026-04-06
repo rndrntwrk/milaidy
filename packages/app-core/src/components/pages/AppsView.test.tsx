@@ -51,8 +51,45 @@ const { mockClientFns, mockUseApp } = vi.hoisted(() => ({
   mockUseApp: vi.fn(),
 }));
 
+const mockGoogleConnector = {
+  activeMode: "cloud_managed",
+  actionPending: false,
+  connect: vi.fn(),
+  disconnect: vi.fn(),
+  error: null,
+  loading: false,
+  modeOptions: ["cloud_managed", "local"],
+  refresh: vi.fn(),
+  selectMode: vi.fn(),
+  selectedMode: "cloud_managed",
+  side: "owner",
+  status: {
+    provider: "google",
+    side: "owner",
+    mode: "cloud_managed",
+    defaultMode: "cloud_managed",
+    availableModes: ["cloud_managed", "local"],
+    executionTarget: "cloud",
+    sourceOfTruth: "cloud_connection",
+    configured: false,
+    connected: false,
+    reason: "disconnected",
+    preferredByAgent: false,
+    cloudConnectionId: null,
+    identity: null,
+    grantedCapabilities: [],
+    grantedScopes: [],
+    expiresAt: null,
+    hasRefreshToken: false,
+    grant: null,
+  },
+};
+
 vi.mock("@miladyai/app-core/api", () => ({
   client: mockClientFns,
+}));
+vi.mock("../../hooks", () => ({
+  useGoogleLifeOpsConnector: vi.fn(() => mockGoogleConnector),
 }));
 vi.mock("@miladyai/app-core/state", () => ({
   useApp: () => mockUseApp(),

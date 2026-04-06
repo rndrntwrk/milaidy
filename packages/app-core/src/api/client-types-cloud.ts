@@ -818,6 +818,17 @@ export interface CodingAgentTaskTranscriptRecord {
   createdAt: string;
 }
 
+export interface CodingAgentPendingDecisionRecord {
+  sessionId: string;
+  threadId: string;
+  promptText: string;
+  recentOutput: string;
+  llmDecision: Record<string, unknown>;
+  taskContext: Record<string, unknown>;
+  createdAt: number;
+  updatedAt: string;
+}
+
 export interface CodingAgentTaskThreadDetail extends CodingAgentTaskThread {
   roomId?: string | null;
   worldId?: string | null;
@@ -833,6 +844,21 @@ export interface CodingAgentTaskThreadDetail extends CodingAgentTaskThread {
   events: CodingAgentTaskEventRecord[];
   artifacts: CodingAgentTaskArtifactRecord[];
   transcripts: CodingAgentTaskTranscriptRecord[];
+  pendingDecisions: CodingAgentPendingDecisionRecord[];
+}
+
+export interface CodingAgentFrameworkAvailability {
+  id: string;
+  label: string;
+  adapter: string;
+  installed: boolean;
+  installCommand: string;
+  docsUrl: string;
+  authReady: boolean;
+  available: boolean;
+  score: number;
+  reason: string;
+  warnings: string[];
 }
 
 export interface CodingAgentStatus {
@@ -842,6 +868,9 @@ export interface CodingAgentStatus {
   pendingConfirmations: number;
   taskThreadCount?: number;
   taskThreads?: CodingAgentTaskThread[];
+  preferredAgentType?: string;
+  preferredAgentReason?: string;
+  frameworks?: CodingAgentFrameworkAvailability[];
 }
 
 /** Raw PTY session shape returned by /api/coding-agents. */

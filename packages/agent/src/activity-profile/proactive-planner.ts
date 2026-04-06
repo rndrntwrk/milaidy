@@ -43,6 +43,11 @@ export interface OccurrenceSlim {
   title: string;
   dueAt: string | null; // ISO datetime
   state: string;
+  definitionKind?: "task" | "habit" | "routine";
+  cadence?: {
+    kind: "once" | "daily" | "times_per_day" | "interval" | "weekly";
+  };
+  priority?: number;
 }
 
 export interface CalendarEventSlim {
@@ -228,6 +233,71 @@ export function planNudges(
   return actions;
 }
 
+// ── Downtime planning ─────────────────────────────────
+
+export function planDowntimeNudges(
+  profile: ActivityProfile,
+  occurrences: OccurrenceSlim[],
+  calendarEvents: CalendarEventSlim[],
+  firedToday: FiredActionsLog | null,
+  timezone: string,
+  now?: Date,
+): ProactiveAction[] {
+  const currentTime = now ?? new Date();
+  if (isBusyDay(profile, calendarEvents, timezone, currentTime)) {
+    return [];
+  }
+
+  const nudgedIds = new Set(firedToday?.nudgedOccurrenceIds ?? []);
+  const urgentCutoffMs = currentTime.getTime() + 2 * 60 * 60 * 1000;
+
+  if (
+    occurrences.some((occ) => {
+      if (occ.state === "completed" || occ.state === "skipped") return false;
+      if (!occ.dueAt) return false;
+      const dueMs = new Date(occ.dueAt).getTime();
+      return dueMs >= currentTime.getTime() && dueMs <= urgentCutoffMs;
+    })
+  ) {
+    return [];
+  }
+
+  const candidates = occurrences
+    .filter((occ) => isOneOffOccurrence(occ))
+    .filter((occ) => occ.state !== "completed" && occ.state !== "skipped")
+    .filter((occ) => occ.dueAt !== null)
+    .filter((occ) => !nudgedIds.has(occ.id))
+    .map((occ) => {
+      const dueMs = new Date(occ.dueAt as string).getTime();
+      const overdueMs = Math.max(currentTime.getTime() - dueMs, 0);
+      const dueSoonMinutes = Math.max(dueMs - currentTime.getTime(), 0) / 60_000;
+      return {
+        occ,
+        score:
+          overdueMs > 0
+            ? 1_000_000 + overdueMs - occurrencePriorityScore(occ)
+            : 100_000 - dueSoonMinutes - occurrencePriorityScore(occ),
+      };
+    })
+    .sort((left, right) => right.score - left.score);
+
+  const selected = candidates[0];
+  if (!selected) {
+    return [];
+  }
+
+  return [
+    {
+      kind: "pre_activity_nudge",
+      scheduledFor: currentTime.getTime(),
+      targetPlatform: selectTargetPlatform(profile, true),
+      contextSummary: buildDowntimeContext(selected.occ, currentTime),
+      occurrenceId: selected.occ.id,
+      status: "pending",
+    },
+  ];
+}
+
 // ── Platform selection ────────────────────────────────
 
 export function selectTargetPlatform(
@@ -283,6 +353,90 @@ function resolveGnHour(profile: ActivityProfile): number {
     return Math.min(Math.ceil(lagHour), 23);
   }
   return DEFAULT_GN_HOUR;
+}
+
+function isOneOffOccurrence(occurrence: OccurrenceSlim): boolean {
+  if (occurrence.cadence?.kind) {
+    return occurrence.cadence.kind === "once";
+  }
+  return occurrence.definitionKind === "task";
+}
+
+function occurrencePriorityScore(occurrence: OccurrenceSlim): number {
+  const priority = occurrence.priority ?? 0;
+  if (!Number.isFinite(priority) || priority <= 0) {
+    return 0;
+  }
+  return Math.min(priority, 10) * 5;
+}
+
+function buildDowntimeContext(
+  occurrence: OccurrenceSlim,
+  now: Date,
+): string {
+  if (!occurrence.dueAt) {
+    return `Downtime suggestion: ${occurrence.title}`;
+  }
+
+  const dueMs = new Date(occurrence.dueAt).getTime();
+  if (dueMs <= now.getTime()) {
+    return `Downtime suggestion: ${occurrence.title} (overdue)`;
+  }
+
+  const minutesUntilDue = Math.max(
+    Math.round((dueMs - now.getTime()) / 60_000),
+    0,
+  );
+  return `Downtime suggestion: ${occurrence.title} (due in ${minutesUntilDue}m)`;
+}
+
+function isBusyDay(
+  profile: ActivityProfile,
+  calendarEvents: CalendarEventSlim[],
+  timezone: string,
+  now: Date,
+): boolean {
+  if (isScreenBusy(profile, now)) {
+    return true;
+  }
+
+  const todayEvents = getTodayNonAllDayEvents(calendarEvents, timezone, now);
+  if (todayEvents.length >= 4) {
+    return true;
+  }
+
+  if (
+    profile.avgWeekdayMeetings !== null &&
+    profile.avgWeekdayMeetings >= 4
+  ) {
+    return true;
+  }
+
+  const nextEvent = todayEvents.find((event) => {
+    const startMs = new Date(event.startAt).getTime();
+    return startMs >= now.getTime();
+  });
+  if (!nextEvent) {
+    return false;
+  }
+
+  const minutesUntilNextEvent =
+    (new Date(nextEvent.startAt).getTime() - now.getTime()) / 60_000;
+  return minutesUntilNextEvent <= 45;
+}
+
+function isScreenBusy(profile: ActivityProfile, now: Date): boolean {
+  if (
+    !profile.screenContextAvailable ||
+    profile.screenContextStale ||
+    !profile.screenContextBusy ||
+    !profile.screenContextSampledAt
+  ) {
+    return false;
+  }
+
+  const ageMs = now.getTime() - profile.screenContextSampledAt;
+  return ageMs >= 0 && ageMs < 15 * 60 * 1000;
 }
 
 function getTodayNonAllDayEvents(

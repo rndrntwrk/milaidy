@@ -174,13 +174,25 @@ export type LifeOpsReminderUrgency =
   (typeof LIFEOPS_REMINDER_URGENCY_LEVELS)[number];
 
 export const LIFEOPS_REMINDER_INTENSITIES = [
-  "paused",
-  "low",
+  "minimal",
   "normal",
-  "high",
+  "persistent",
+  "high_priority_only",
 ] as const;
 export type LifeOpsReminderIntensity =
   (typeof LIFEOPS_REMINDER_INTENSITIES)[number];
+
+export const LIFEOPS_REMINDER_INTENSITY_COMPATIBILITY_VALUES = [
+  "paused",
+  "low",
+  "high",
+] as const;
+export type LifeOpsReminderIntensityCompatibility =
+  (typeof LIFEOPS_REMINDER_INTENSITY_COMPATIBILITY_VALUES)[number];
+
+export type LifeOpsReminderIntensityInput =
+  | LifeOpsReminderIntensity
+  | LifeOpsReminderIntensityCompatibility;
 
 export const LIFEOPS_REMINDER_PREFERENCE_SOURCES = [
   "default",
@@ -835,6 +847,30 @@ export interface GetLifeOpsGmailTriageRequest {
   maxResults?: number;
 }
 
+export interface GetLifeOpsGmailSearchRequest {
+  side?: LifeOpsConnectorSide;
+  mode?: LifeOpsConnectorMode;
+  forceSync?: boolean;
+  maxResults?: number;
+  query: string;
+  replyNeededOnly?: boolean;
+}
+
+export interface LifeOpsGmailSearchSummary {
+  totalCount: number;
+  unreadCount: number;
+  importantCount: number;
+  replyNeededCount: number;
+}
+
+export interface LifeOpsGmailSearchFeed {
+  query: string;
+  messages: LifeOpsGmailMessageSummary[];
+  source: "cache" | "synced";
+  syncedAt: string | null;
+  summary: LifeOpsGmailSearchSummary;
+}
+
 export const LIFEOPS_GMAIL_DRAFT_TONES = ["brief", "neutral", "warm"] as const;
 export type LifeOpsGmailDraftTone = (typeof LIFEOPS_GMAIL_DRAFT_TONES)[number];
 
@@ -859,6 +895,34 @@ export interface LifeOpsGmailReplyDraft {
   requiresConfirmation: boolean;
 }
 
+export interface CreateLifeOpsGmailBatchReplyDraftsRequest {
+  side?: LifeOpsConnectorSide;
+  mode?: LifeOpsConnectorMode;
+  forceSync?: boolean;
+  maxResults?: number;
+  query?: string;
+  messageIds?: string[];
+  tone?: LifeOpsGmailDraftTone;
+  intent?: string;
+  includeQuotedOriginal?: boolean;
+  replyNeededOnly?: boolean;
+}
+
+export interface LifeOpsGmailBatchReplyDraftsSummary {
+  totalCount: number;
+  sendAllowedCount: number;
+  requiresConfirmationCount: number;
+}
+
+export interface LifeOpsGmailBatchReplyDraftsFeed {
+  query: string | null;
+  messages: LifeOpsGmailMessageSummary[];
+  drafts: LifeOpsGmailReplyDraft[];
+  source: "cache" | "synced";
+  syncedAt: string | null;
+  summary: LifeOpsGmailBatchReplyDraftsSummary;
+}
+
 export interface SendLifeOpsGmailReplyRequest {
   side?: LifeOpsConnectorSide;
   mode?: LifeOpsConnectorMode;
@@ -868,6 +932,26 @@ export interface SendLifeOpsGmailReplyRequest {
   to?: string[];
   cc?: string[];
   confirmSend?: boolean;
+}
+
+export interface LifeOpsGmailBatchReplySendItem {
+  messageId: string;
+  bodyText: string;
+  subject?: string;
+  to?: string[];
+  cc?: string[];
+}
+
+export interface SendLifeOpsGmailBatchReplyRequest {
+  side?: LifeOpsConnectorSide;
+  mode?: LifeOpsConnectorMode;
+  confirmSend?: boolean;
+  items: LifeOpsGmailBatchReplySendItem[];
+}
+
+export interface LifeOpsGmailBatchReplySendResult {
+  ok: true;
+  sentCount: number;
 }
 
 export const LIFEOPS_CALENDAR_WINDOW_PRESETS = [
@@ -1190,7 +1274,7 @@ export interface UpsertLifeOpsChannelPolicyRequest {
 }
 
 export interface SetLifeOpsReminderPreferenceRequest {
-  intensity: LifeOpsReminderIntensity;
+  intensity: LifeOpsReminderIntensityInput;
   definitionId?: string | null;
   note?: string;
 }

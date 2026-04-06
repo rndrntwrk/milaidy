@@ -391,6 +391,25 @@ To keep live tests affordable:
 - use smaller scenario sets for PR gating
 - store seed snapshots so reruns are reproducible
 
+## 9.4 Operator checklist
+
+Before running live LifeOps suites, confirm:
+
+- `MILADY_LIVE_TEST=1` or `ELIZA_LIVE_TEST=1`
+- `MILADY_LIVE_CHAT_TEST=1` for chat-trajectory scenarios
+- `MILADY_LIVE_SCREEN_TEST=1` for browser-capture scenarios
+- at least one real provider key from `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`, `GOOGLE_API_KEY`, or `GOOGLE_GENERATIVE_AI_API_KEY`
+- Chrome is installed at the browser-capture path reported by `packages/agent/src/services/browser-capture.ts`
+- Google account credentials are present for calendar/mail scenarios
+- SMS or voice credentials are present for transport-backed escalation scenarios
+
+Expected skips should be explicit:
+
+- no live provider key means the LLM suite skips
+- no Chrome means the screen-capture suite skips
+- no Google account means calendar and Gmail suites skip
+- no transport credentials means SMS and voice coverage skips
+
 ## 10. Privacy and safety tests
 
 Required negative tests:
@@ -408,7 +427,8 @@ Because screen capture is a known weak point, test it in layers.
 
 ### Layer 1: plugin-local
 
-- verify `plugin-vision` screen capture and OCR
+- verify `plugin-vision` screen capture and OCR when the built plugin is available
+- if the plugin is not built, verify the browser-capture frame path and LifeOps screen-context heuristics instead
 
 ### Layer 2: Milady desktop runtime
 

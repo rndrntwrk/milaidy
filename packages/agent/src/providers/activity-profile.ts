@@ -74,13 +74,33 @@ export const activityProfileProvider: Provider = {
         const parts: string[] = [];
         const localDateKey = getLocalDateKey(getZonedDateParts(now, timezone));
 
-        if (profile.lastSeenPlatform && profile.lastSeenAt > 0) {
+        const hasActiveScreen =
+          profile.screenContextAvailable &&
+          profile.screenContextFocus !== null &&
+          profile.screenContextFocus !== "idle" &&
+          profile.screenContextFocus !== "unknown";
+
+        if (!hasActiveScreen && profile.lastSeenPlatform && profile.lastSeenAt > 0) {
           const ago = formatAgo(now.getTime() - profile.lastSeenAt);
           parts.push(
             profile.isCurrentlyActive
               ? `active on ${profile.lastSeenPlatform} ${ago}`
               : `last seen on ${profile.lastSeenPlatform} ${ago}`,
           );
+        }
+        if (hasActiveScreen && profile.screenContextFocus) {
+          const screenAgo = profile.screenContextSampledAt
+            ? formatAgo(now.getTime() - profile.screenContextSampledAt)
+            : "recently";
+          const screenParts = [`screen ${profile.screenContextFocus}`];
+          if (
+            profile.screenContextSource &&
+            profile.screenContextSource !== "disabled"
+          ) {
+            screenParts.push(`via ${profile.screenContextSource}`);
+          }
+          screenParts.push(screenAgo);
+          parts.push(screenParts.join(" "));
         }
         parts.push(bucket);
         if (profile.effectiveDayKey !== localDateKey) {
@@ -92,11 +112,20 @@ export const activityProfileProvider: Provider = {
           values: {
             userIsActive: profile.isCurrentlyActive,
             userPrimaryPlatform: profile.primaryPlatform,
+            userLastSeenPlatform: profile.lastSeenPlatform,
+            userLastSeenAt: profile.lastSeenAt,
             userTimeBucket: bucket,
             userEffectiveDayKey: profile.effectiveDayKey,
             userHasOpenActivityCycle: profile.hasOpenActivityCycle,
             userTypicalWakeHour: profile.typicalWakeHour,
             userTypicalSleepHour: profile.typicalSleepHour,
+            userScreenContextFocus: profile.screenContextFocus,
+            userScreenContextSource: profile.screenContextSource,
+            userScreenContextSampledAt: profile.screenContextSampledAt,
+            userScreenContextConfidence: profile.screenContextConfidence,
+            userScreenContextBusy: profile.screenContextBusy,
+            userScreenContextAvailable: profile.screenContextAvailable,
+            userScreenContextStale: profile.screenContextStale,
           },
           data: {},
         };
@@ -117,7 +146,16 @@ export const activityProfileProvider: Provider = {
       values: {
         userIsActive: false,
         userPrimaryPlatform: null,
+        userLastSeenPlatform: null,
+        userLastSeenAt: 0,
         userTimeBucket: bucket,
+        userScreenContextFocus: null,
+        userScreenContextSource: null,
+        userScreenContextSampledAt: null,
+        userScreenContextConfidence: null,
+        userScreenContextBusy: false,
+        userScreenContextAvailable: false,
+        userScreenContextStale: false,
       },
       data: {},
     };

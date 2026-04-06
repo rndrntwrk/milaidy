@@ -6,6 +6,7 @@ import { LifeOpsService, LifeOpsServiceError } from "../lifeops/service.js";
 import {
   planGm,
   planGn,
+  planDowntimeNudges,
   planNudges,
   type OccurrenceSlim,
   type CalendarEventSlim,
@@ -120,8 +121,21 @@ export async function executeProactiveTask(
       timezone,
       now,
     );
+    const downtimeActions = planDowntimeNudges(
+      profile,
+      occurrences,
+      calendarEvents,
+      firedLog,
+      timezone,
+      now,
+    );
 
-    const allActions = [gmAction, gnAction, ...nudgeActions].filter(
+    const allActions = [
+      gmAction,
+      gnAction,
+      ...nudgeActions,
+      ...downtimeActions,
+    ].filter(
       (action): action is ProactiveAction =>
         action !== null && action.status === "pending",
     );
@@ -191,6 +205,9 @@ async function fetchPlannerContext(
         title: occ.title ?? occ.definitionId ?? "untitled",
         dueAt: occ.dueAt,
         state: occ.state,
+        definitionKind: occ.definitionKind,
+        cadence: occ.cadence ? { kind: occ.cadence.kind } : undefined,
+        priority: occ.priority,
       });
     }
   } catch (error) {
