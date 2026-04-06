@@ -9,6 +9,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { getTrajectoryContext, type AgentRuntime } from "@elizaos/core";
 import { detectRuntimeModel } from "../api/agent-model";
+import { getMiladyTrajectoryStepId } from "./trajectory-step-context";
 
 import {
   compactActionsForIntent,
@@ -18,7 +19,9 @@ import {
   validateIntentActionMap,
 } from "./prompt-compaction";
 import {
+  enrichTrajectoryLlmCall,
   ensureTrajectoriesTable,
+  isLegacyTrajectoryLogger,
   loadTrajectoryByStepId,
   saveTrajectory,
   toOptionalNumber,
@@ -67,6 +70,9 @@ const trajectoryLlmLogCounts = new WeakMap<AgentRuntime, Map<string, number>>();
 
 type TrajectoryLoggerLike = {
   logLlmCall?: (...args: unknown[]) => unknown;
+  logProviderAccess?: (...args: unknown[]) => unknown;
+  getLlmCallLogs?: () => readonly unknown[];
+  getProviderAccessLogs?: () => readonly unknown[];
   updateLatestLlmCall?: (
     stepId: string,
     patch: Record<string, unknown>,
@@ -75,11 +81,20 @@ type TrajectoryLoggerLike = {
 
 type RuntimeWithTrajectoryService = AgentRuntime & {
   getService?: (serviceType: string) => unknown;
+  getServicesByType?: (serviceType: string) => unknown;
 };
 
 export function shouldPreserveFullPromptForTrajectoryCapture(): boolean {
-  const stepId = getTrajectoryContext()?.trajectoryStepId;
-  return typeof stepId === "string" && stepId.trim().length > 0;
+  return getActiveTrajectoryStepId() !== null;
+}
+
+function getActiveTrajectoryStepId(): string | null {
+  const coreStepId = getTrajectoryContext()?.trajectoryStepId;
+  if (typeof coreStepId === "string" && coreStepId.trim().length > 0) {
+    return coreStepId.trim();
+  }
+
+  return getMiladyTrajectoryStepId();
 }
 
 function extractTrajectoryStepIdFromLoggerArgs(args: unknown[]): string | null {
@@ -111,11 +126,49 @@ function incrementTrajectoryLlmLogCount(
 
 function resolveTrajectoryLogger(runtime: AgentRuntime): TrajectoryLoggerLike | null {
   const runtimeWithService = runtime as RuntimeWithTrajectoryService;
-  if (typeof runtimeWithService.getService !== "function") return null;
-  const logger = runtimeWithService.getService("trajectory_logger");
-  return logger && typeof logger === "object"
-    ? (logger as TrajectoryLoggerLike)
-    : null;
+  const candidates: TrajectoryLoggerLike[] = [];
+  const seen = new Set<unknown>();
+  const push = (candidate: unknown): void => {
+    if (!candidate || typeof candidate !== "object" || seen.has(candidate)) {
+      return;
+    }
+    seen.add(candidate);
+    candidates.push(candidate as TrajectoryLoggerLike);
+  };
+
+  if (typeof runtimeWithService.getServicesByType === "function") {
+    const byType = runtimeWithService.getServicesByType("trajectory_logger");
+    if (Array.isArray(byType)) {
+      for (const candidate of byType) {
+        push(candidate);
+      }
+    } else {
+      push(byType);
+    }
+  }
+
+  if (typeof runtimeWithService.getService === "function") {
+    push(runtimeWithService.getService("trajectory_logger"));
+  }
+
+  if (candidates.length === 0) return null;
+
+  let best: TrajectoryLoggerLike | null = null;
+  let bestScore = -1;
+  for (const candidate of candidates) {
+    let score = 0;
+    if (isLegacyTrajectoryLogger(candidate)) score += 100;
+    if (typeof candidate.logLlmCall === "function") score += 10;
+    if (typeof candidate.logProviderAccess === "function") score += 10;
+    if (typeof candidate.getLlmCallLogs === "function") score += 2;
+    if (typeof candidate.getProviderAccessLogs === "function") score += 2;
+    if (score > bestScore) {
+      best = candidate;
+      bestScore = score;
+    }
+  }
+
+  return best;
 }
 
 function ensureTrajectoryLoggerTracking(
@@ -198,6 +251,31 @@ function ensureTrajectoryLoggerTracking(
       applyMissingNumber("latencyMs");
       applyMissingNumber("promptTokens");
       applyMissingNumber("completionTokens");
+
+      const enriched = enrichTrajectoryLlmCall(latestCall);
+      const nextStepType = toText(enriched.stepType, "");
+      if (nextStepType && toText(latestCall.stepType, "") !== nextStepType) {
+        latestCall.stepType = nextStepType;
+        updated = true;
+      }
+
+      const nextTags = Array.isArray(enriched.tags)
+        ? enriched.tags.filter(
+            (tag): tag is string => typeof tag === "string" && tag.length > 0,
+          )
+        : [];
+      const currentTags = Array.isArray(latestCall.tags)
+        ? latestCall.tags.filter(
+            (tag): tag is string => typeof tag === "string" && tag.length > 0,
+          )
+        : [];
+      if (
+        nextTags.length > 0 &&
+        JSON.stringify(currentTags) !== JSON.stringify(nextTags)
+      ) {
+        latestCall.tags = nextTags;
+        updated = true;
+      }
 
       if (!updated) return;
 
@@ -306,11 +384,7 @@ export function installPromptOptimizations(runtime: AgentRuntime): void {
 
   runtime.useModel = (async (...args: Parameters<typeof originalUseModel>) => {
     const modelType = String(args[0] ?? "").toUpperCase();
-    const trajectoryStepId = getTrajectoryContext()?.trajectoryStepId;
-    const normalizedTrajectoryStepId =
-      typeof trajectoryStepId === "string" && trajectoryStepId.trim().length > 0
-        ? trajectoryStepId.trim()
-        : null;
+    const normalizedTrajectoryStepId = getActiveTrajectoryStepId();
     const trajectoryLogger = normalizedTrajectoryStepId
       ? ensureTrajectoryLoggerTracking(runtime)
       : null;

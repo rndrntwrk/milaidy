@@ -23,7 +23,7 @@ platform :ios do
       export_method: "app-store",
       export_options: {
         provisioningProfiles: {
-          "ai.milady.app" => "match AppStore ai.milady.app"
+          "com.miladyai.milady" => "match AppStore com.miladyai.milady"
         }
       },
       output_directory: "build",

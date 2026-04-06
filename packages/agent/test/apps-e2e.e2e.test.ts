@@ -8,9 +8,10 @@
  * - POST /api/apps/launch (install plugin + return viewer)
  * - GET /api/apps/info/:name (app detail)
  *
- * When the 2004scape engine is running locally (port 80), also tests:
- * - Full launch -> plugin install -> viewer URL points to running server
- * - Webclient is accessible at the viewer URL
+ * 2004scape tests hit the always-live remote server (rs-sdk-demo.fly.dev):
+ * - Launch returns viewer URL pointing to remote server
+ * - PostMessage auth with auto-provisioned credentials
+ * - RS_SDK_SERVER_URL override support
  */
 import net from "node:net";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -102,19 +103,6 @@ function toAppList(data: JsonValue): AppEntry[] {
 }
 
 const KNOWN_LOCAL_APP_NAME = "@elizaos/app-hyperscape";
-const PLUGIN_MANAGER_UNAVAILABLE_ERROR = "Plugin manager service not found";
-
-function isPluginManagerUnavailable(response: ApiResponse): boolean {
-  return (
-    response.status === 500 &&
-    asObject(response.data).error === PLUGIN_MANAGER_UNAVAILABLE_ERROR
-  );
-}
-
-function expectPluginManagerUnavailable(response: ApiResponse): void {
-  expect(response.status).toBe(500);
-  expect(asObject(response.data).error).toBe(PLUGIN_MANAGER_UNAVAILABLE_ERROR);
-}
 
 /** Check if a TCP port is listening. */
 function isPortOpen(port: number, host = "127.0.0.1"): Promise<boolean> {
@@ -170,12 +158,9 @@ function parseHttpTarget(rawUrl: string): HttpTarget | null {
 
 describe("Apps E2E", () => {
   let server: { port: number; close: () => Promise<void> };
-  let pluginManagerAvailable = true;
 
   beforeAll(async () => {
     server = await startApiServer({ port: 0 });
-    const probe = await api(server.port, "GET", "/api/apps");
-    pluginManagerAvailable = !isPluginManagerUnavailable(probe);
   }, 30_000);
 
   afterAll(async () => {
@@ -189,20 +174,12 @@ describe("Apps E2E", () => {
   describe("GET /api/apps", () => {
     it("returns 200 with an array", async () => {
       const response = await api(server.port, "GET", "/api/apps");
-      if (!pluginManagerAvailable) {
-        expectPluginManagerUnavailable(response);
-        return;
-      }
       expect(response.status).toBe(200);
       expect(Array.isArray(response.data)).toBe(true);
     });
 
     it("app entries have required fields and valid launch metadata", async () => {
       const response = await api(server.port, "GET", "/api/apps");
-      if (!pluginManagerAvailable) {
-        expectPluginManagerUnavailable(response);
-        return;
-      }
       const apps = toAppList(response.data);
       // Registry may or may not have network data, but local app wrappers should exist.
       expect(apps.length).toBeGreaterThan(0);
@@ -247,10 +224,6 @@ describe("Apps E2E", () => {
 
     it("returns array for a query", async () => {
       const response = await api(server.port, "GET", "/api/apps/search?q=game");
-      if (!pluginManagerAvailable) {
-        expectPluginManagerUnavailable(response);
-        return;
-      }
       expect(response.status).toBe(200);
       expect(Array.isArray(response.data)).toBe(true);
     });
@@ -276,18 +249,6 @@ describe("Apps E2E", () => {
         "GET",
         "/api/apps/search?q=app&limit=500",
       );
-
-      if (!pluginManagerAvailable) {
-        for (const response of [
-          maxLimit,
-          invalidLimit,
-          underLimit,
-          overLimit,
-        ]) {
-          expectPluginManagerUnavailable(response);
-        }
-        return;
-      }
 
       expect(maxLimit.status).toBe(200);
       expect(invalidLimit.status).toBe(200);
@@ -333,10 +294,6 @@ describe("Apps E2E", () => {
         "GET",
         "/api/apps/info/%40elizaos%2Fapp-nonexistent",
       );
-      if (!pluginManagerAvailable) {
-        expectPluginManagerUnavailable(response);
-        return;
-      }
       expect(response.status).toBe(404);
     });
 
@@ -347,10 +304,6 @@ describe("Apps E2E", () => {
         "GET",
         `/api/apps/info/${encoded}`,
       );
-      if (!pluginManagerAvailable) {
-        expectPluginManagerUnavailable(response);
-        return;
-      }
       const body = asObject(response.data);
       expect(response.status).toBe(200);
       expect(body.name).toBe(KNOWN_LOCAL_APP_NAME);
@@ -366,20 +319,12 @@ describe("Apps E2E", () => {
   describe("GET /api/apps/installed", () => {
     it("returns 200 with an array", async () => {
       const response = await api(server.port, "GET", "/api/apps/installed");
-      if (!pluginManagerAvailable) {
-        expectPluginManagerUnavailable(response);
-        return;
-      }
       expect(response.status).toBe(200);
       expect(Array.isArray(response.data)).toBe(true);
     });
 
     it("installed entries have stable shape", async () => {
       const response = await api(server.port, "GET", "/api/apps/installed");
-      if (!pluginManagerAvailable) {
-        expectPluginManagerUnavailable(response);
-        return;
-      }
       if (!Array.isArray(response.data)) {
         expect(Array.isArray(response.data)).toBe(true);
         return;
@@ -471,10 +416,6 @@ describe("Apps E2E", () => {
       const launch = await api(server.port, "POST", "/api/apps/launch", {
         name: KNOWN_LOCAL_APP_NAME,
       });
-      if (!pluginManagerAvailable) {
-        expectPluginManagerUnavailable(launch);
-        return;
-      }
       expect(launch.status).toBe(200);
 
       const body = asObject(launch.data);
@@ -556,19 +497,11 @@ describe("Apps E2E", () => {
       const launch = await api(server.port, "POST", "/api/apps/launch", {
         name: KNOWN_LOCAL_APP_NAME,
       });
-      if (!pluginManagerAvailable) {
-        expectPluginManagerUnavailable(launch);
-        return;
-      }
       expect(launch.status).toBe(200);
 
       const response = await api(server.port, "POST", "/api/apps/stop", {
         name: KNOWN_LOCAL_APP_NAME,
       });
-      if (!pluginManagerAvailable) {
-        expectPluginManagerUnavailable(response);
-        return;
-      }
       const body = asObject(response.data);
       expect(response.status).toBe(200);
       expect(body.success).toBe(true);
@@ -585,10 +518,6 @@ describe("Apps E2E", () => {
       const response = await api(server.port, "POST", "/api/apps/stop", {
         name: KNOWN_LOCAL_APP_NAME,
       });
-      if (!pluginManagerAvailable) {
-        expectPluginManagerUnavailable(response);
-        return;
-      }
       const body = asObject(response.data);
       expect(response.status).toBe(200);
       expect(body.success).toBe(false);
@@ -722,14 +651,6 @@ describe("Apps E2E", () => {
         api(server.port, "GET", "/api/apps/plugins"),
       ]);
 
-      if (!pluginManagerAvailable) {
-        expectPluginManagerUnavailable(responses[0]);
-        expectPluginManagerUnavailable(responses[1]);
-        expectPluginManagerUnavailable(responses[2]);
-        expect([200, 502]).toContain(responses[3].status);
-        return;
-      }
-
       expect(responses[0].status).toBe(200);
       expect(responses[1].status).toBe(200);
       expect(responses[2].status).toBe(200);
@@ -741,196 +662,152 @@ describe("Apps E2E", () => {
   });
 
   // ===================================================================
-  //  10. 2004scape integration (requires local services running)
+  //  10. 2004scape integration (remote server is always live)
   // ===================================================================
 
+  const RS_SDK_REMOTE_URL = "https://rs-sdk-demo.fly.dev";
+
   describe("2004scape integration", () => {
-    let engineRunning = false;
-    let gatewayRunning = false;
-    let engineTarget: HttpTarget = {
-      baseUrl: "http://127.0.0.1:8880",
-      host: "127.0.0.1",
-      port: 8880,
-    };
-
-    beforeAll(async () => {
-      const info = await api(
-        server.port,
-        "GET",
-        `/api/apps/info/${encodeURIComponent("@elizaos/app-2004scape")}`,
-      );
-      if (info.status === 200) {
-        const body = asObject(info.data);
-        const viewer = asObject(body.viewer as JsonValue);
-        const fromViewer =
-          typeof viewer.url === "string" ? parseHttpTarget(viewer.url) : null;
-        const fromLaunch =
-          typeof body.launchUrl === "string"
-            ? parseHttpTarget(body.launchUrl)
-            : null;
-        engineTarget = fromViewer ?? fromLaunch ?? engineTarget;
-      }
-
-      if (await isPortOpen(engineTarget.port, engineTarget.host)) {
-        try {
-          const body = await new Promise<string>((resolve, reject) => {
-            http
-              .get(engineTarget.baseUrl, (res) => {
-                const chunks: Buffer[] = [];
-                res.on("data", (c: Buffer) => chunks.push(c));
-                res.on("end", () =>
-                  resolve(Buffer.concat(chunks).toString("utf-8")),
-                );
-              })
-              .on("error", reject);
-          });
-          engineRunning = body.includes("<");
-        } catch {
-          engineRunning = false;
-        }
-      }
-      gatewayRunning = await isPortOpen(7780);
-      if (!engineRunning) {
-        console.log(
-          `[E2E] 2004scape engine not running at ${engineTarget.baseUrl} — skipping integration tests`,
-        );
-        console.log(
-          "[E2E] Start it with: cd eliza-2004scape && bun run engine",
-        );
-      }
-      if (!gatewayRunning) {
-        console.log(
-          "[E2E] 2004scape gateway not running on port 7780 — skipping integration tests",
-        );
-        console.log(
-          "[E2E] Start it with: cd eliza-2004scape && bun run gateway",
-        );
-      }
+    it("remote server is reachable", async () => {
+      const res = await fetch(RS_SDK_REMOTE_URL, {
+        signal: AbortSignal.timeout(10_000),
+      });
+      expect(res.status).toBe(200);
     });
 
-    it("webclient is accessible when engine is running", async () => {
-      if (!engineRunning) return;
-
-      const response = await new Promise<{ status: number; body: string }>(
-        (resolve, reject) => {
-          http
-            .get(engineTarget.baseUrl, (res) => {
-              const chunks: Buffer[] = [];
-              res.on("data", (c: Buffer) => chunks.push(c));
-              res.on("end", () => {
-                resolve({
-                  status: res.statusCode ?? 0,
-                  body: Buffer.concat(chunks).toString("utf-8"),
-                });
-              });
-            })
-            .on("error", reject);
-        },
-      );
-
-      expect(response.status).toBe(200);
-      expect(response.body).toContain("<");
+    it("remote /bot endpoint returns the game client HTML", async () => {
+      const res = await fetch(`${RS_SDK_REMOTE_URL}/bot?bot=e2etest`, {
+        signal: AbortSignal.timeout(10_000),
+      });
+      expect(res.status).toBe(200);
+      const html = await res.text();
+      expect(html).toContain("<canvas");
     });
 
-    it("gateway WebSocket is reachable when running", async () => {
-      if (!gatewayRunning) {
-        console.log("[E2E] Skipping gateway test — not running");
-        return;
-      }
-
-      const reachable = await isPortOpen(7780);
-      expect(reachable).toBe(true);
-    });
-
-    it("gateway responds to HTTP requests", async () => {
-      if (!gatewayRunning) return;
-
-      // The gateway serves a REST API alongside WebSocket
-      const response = await new Promise<{ status: number; body: string }>(
-        (resolve, reject) => {
-          http
-            .get("http://127.0.0.1:7780/status", (res) => {
-              const chunks: Buffer[] = [];
-              res.on("data", (c: Buffer) => chunks.push(c));
-              res.on("end", () => {
-                resolve({
-                  status: res.statusCode ?? 0,
-                  body: Buffer.concat(chunks).toString("utf-8"),
-                });
-              });
-            })
-            .on("error", reject);
-        },
-      );
-
-      // Gateway should respond (200 or 404 depending on route, but NOT connection refused)
-      expect(response.status).toBeGreaterThan(0);
-    });
-
-    it("full launch flow returns viewer config pointing to local engine", async () => {
-      if (!engineRunning) return;
-
-      // This test exercises the full flow:
-      // 1. POST /api/apps/launch with @elizaos/app-2004scape
-      // 2. AppManager looks up registry, installs plugin, returns viewer URL
-      // Note: This may fail if the registry is unreachable (network dependency)
+    it("launch returns viewer URL pointing to remote server", async () => {
       const { status, data } = await api(
         server.port,
         "POST",
         "/api/apps/launch",
-        {
-          name: "@elizaos/app-2004scape",
-        },
+        { name: "@elizaos/app-2004scape" },
       );
       expect(status).toBe(200);
       const body = asObject(data);
       expect(body.displayName).toBe("2004scape");
-      if (
-        body.viewer &&
-        typeof body.viewer === "object" &&
-        !Array.isArray(body.viewer)
-      ) {
-        const viewer = body.viewer;
-        expect(typeof viewer.url).toBe("string");
-        if (typeof viewer.url === "string") {
-          expect(viewer.url).toContain("localhost");
+
+      const viewer = asObject(body.viewer as JsonValue);
+      expect(typeof viewer.url).toBe("string");
+      expect(viewer.url as string).toContain("rs-sdk-demo.fly.dev");
+    });
+
+    it("launch includes postMessageAuth and credentials", async () => {
+      const { status, data } = await api(
+        server.port,
+        "POST",
+        "/api/apps/launch",
+        { name: "@elizaos/app-2004scape" },
+      );
+      expect(status).toBe(200);
+      const body = asObject(data);
+      const viewer = asObject(body.viewer as JsonValue);
+
+      expect(viewer.postMessageAuth).toBe(true);
+
+      const authMsg = asObject(viewer.authMessage as JsonValue);
+      expect(authMsg.type).toBe("RS_2004SCAPE_AUTH");
+      expect(typeof authMsg.authToken).toBe("string");
+      expect((authMsg.authToken as string).length).toBeGreaterThan(0);
+      expect(typeof authMsg.sessionToken).toBe("string");
+    });
+
+    it("viewer URL includes bot query parameter", async () => {
+      const { data } = await api(
+        server.port,
+        "POST",
+        "/api/apps/launch",
+        { name: "@elizaos/app-2004scape" },
+      );
+      const viewer = asObject(asObject(data).viewer as JsonValue);
+      const url = viewer.url as string;
+      expect(url).toMatch(/[?&]bot=/);
+    });
+
+    it("viewer URL includes password param when credentials are set", async () => {
+      const origName = process.env.RS_SDK_BOT_NAME;
+      const origPassword = process.env.RS_SDK_BOT_PASSWORD;
+      try {
+        process.env.RS_SDK_BOT_NAME = "testuser";
+        process.env.RS_SDK_BOT_PASSWORD = "testpass123";
+        const { data } = await api(
+          server.port,
+          "POST",
+          "/api/apps/launch",
+          { name: "@elizaos/app-2004scape" },
+        );
+        const viewer = asObject(asObject(data).viewer as JsonValue);
+        const url = viewer.url as string;
+        expect(url).toContain("password=testpass123");
+        expect(url).toContain("bot=testuser");
+      } finally {
+        if (origName !== undefined) {
+          process.env.RS_SDK_BOT_NAME = origName;
+        } else {
+          delete process.env.RS_SDK_BOT_NAME;
+        }
+        if (origPassword !== undefined) {
+          process.env.RS_SDK_BOT_PASSWORD = origPassword;
+        } else {
+          delete process.env.RS_SDK_BOT_PASSWORD;
         }
       }
     });
 
-    it("launch includes postMessageAuth config for 2004scape", async () => {
-      // This test verifies the postMessage auth configuration is included
-      // in the launch response for 2004scape, enabling autologin when embedded
-      const response = await api(server.port, "POST", "/api/apps/launch", {
-        name: "@elizaos/app-2004scape",
-      });
-      if (!pluginManagerAvailable) {
-        expectPluginManagerUnavailable(response);
-        return;
+    it("RS_SDK_SERVER_URL env override is respected", async () => {
+      const original = process.env.RS_SDK_SERVER_URL;
+      try {
+        process.env.RS_SDK_SERVER_URL = "https://custom-server.example.com";
+        const { data } = await api(
+          server.port,
+          "POST",
+          "/api/apps/launch",
+          { name: "@elizaos/app-2004scape" },
+        );
+        const viewer = asObject(asObject(data).viewer as JsonValue);
+        expect(viewer.url as string).toContain("custom-server.example.com");
+      } finally {
+        if (original !== undefined) {
+          process.env.RS_SDK_SERVER_URL = original;
+        } else {
+          delete process.env.RS_SDK_SERVER_URL;
+        }
       }
-      expect(response.status).toBe(200);
-      const body = asObject(response.data);
+    });
 
-      if (
-        body.viewer &&
-        typeof body.viewer === "object" &&
-        !Array.isArray(body.viewer)
-      ) {
-        const viewer = body.viewer;
-        // postMessageAuth should be true for 2004scape
-        expect(viewer.postMessageAuth).toBe(true);
-
-        // authMessage should contain RS_2004SCAPE_AUTH type
-        if (
-          viewer.authMessage &&
-          typeof viewer.authMessage === "object" &&
-          !Array.isArray(viewer.authMessage)
-        ) {
-          const authMsg = viewer.authMessage;
-          expect(authMsg.type).toBe("RS_2004SCAPE_AUTH");
-          // authToken contains username (defaults to testbot if not configured)
-          expect(typeof authMsg.authToken).toBe("string");
-          expect((authMsg.authToken as string).length).toBeGreaterThan(0);
+    it("partial credentials: user-set name is preserved when password is auto-generated", async () => {
+      const origName = process.env.RS_SDK_BOT_NAME;
+      const origPassword = process.env.RS_SDK_BOT_PASSWORD;
+      try {
+        process.env.RS_SDK_BOT_NAME = "custombot";
+        delete process.env.RS_SDK_BOT_PASSWORD;
+        const { data } = await api(
+          server.port,
+          "POST",
+          "/api/apps/launch",
+          { name: "@elizaos/app-2004scape" },
+        );
+        const viewer = asObject(asObject(data).viewer as JsonValue);
+        const authMsg = asObject(viewer.authMessage as JsonValue);
+        expect(authMsg.authToken).toBe("custombot");
+      } finally {
+        if (origName !== undefined) {
+          process.env.RS_SDK_BOT_NAME = origName;
+        } else {
+          delete process.env.RS_SDK_BOT_NAME;
+        }
+        if (origPassword !== undefined) {
+          process.env.RS_SDK_BOT_PASSWORD = origPassword;
+        } else {
+          delete process.env.RS_SDK_BOT_PASSWORD;
         }
       }
     });
@@ -952,10 +829,6 @@ describe("Apps E2E", () => {
         const response = await api(server.port, "POST", "/api/apps/launch", {
           name: "@elizaos/app-hyperscape",
         });
-        if (!pluginManagerAvailable) {
-          expectPluginManagerUnavailable(response);
-          return;
-        }
         expect(response.status).toBe(200);
         const body = asObject(response.data);
 
@@ -966,6 +839,14 @@ describe("Apps E2E", () => {
         ) {
           const viewer = body.viewer;
           expect(viewer.postMessageAuth).toBe(true);
+          if (
+            viewer.embedParams &&
+            typeof viewer.embedParams === "object" &&
+            !Array.isArray(viewer.embedParams)
+          ) {
+            expect(viewer.embedParams.mode).toBe("spectator");
+            expect(viewer.embedParams.surface).toBe("agent-control");
+          }
 
           if (
             viewer.authMessage &&
@@ -975,7 +856,18 @@ describe("Apps E2E", () => {
             const authMsg = viewer.authMessage;
             expect(authMsg.type).toBe("HYPERSCAPE_AUTH");
             expect(authMsg.authToken).toBe("test-auth-token-e2e");
+            if (typeof authMsg.agentId === "string") {
+              expect(authMsg.agentId.length).toBeGreaterThan(0);
+            }
           }
+        }
+        if (
+          body.session &&
+          typeof body.session === "object" &&
+          !Array.isArray(body.session)
+        ) {
+          expect(body.session.mode).toBe("spectate-and-steer");
+          expect(typeof body.session.sessionId).toBe("string");
         }
       } finally {
         // Restore original env
@@ -996,10 +888,6 @@ describe("Apps E2E", () => {
         const response = await api(server.port, "POST", "/api/apps/launch", {
           name: "@elizaos/app-hyperscape",
         });
-        if (!pluginManagerAvailable) {
-          expectPluginManagerUnavailable(response);
-          return;
-        }
         expect(response.status).toBe(200);
         const body = asObject(response.data);
 
@@ -1013,6 +901,33 @@ describe("Apps E2E", () => {
           expect(viewer.postMessageAuth).toBe(false);
           // authMessage should not be present
           expect(viewer.authMessage).toBeUndefined();
+          if (
+            viewer.embedParams &&
+            typeof viewer.embedParams === "object" &&
+            !Array.isArray(viewer.embedParams)
+          ) {
+            expect(viewer.embedParams.mode).toBe("spectator");
+            expect(viewer.embedParams.surface).toBe("agent-control");
+            expect(viewer.embedParams.followEntity).toBeUndefined();
+          }
+        }
+        if (Array.isArray(body.diagnostics)) {
+          expect(body.diagnostics).toEqual(
+            expect.arrayContaining([
+              expect.objectContaining({
+                code: "hyperscape-auth-unavailable",
+                severity: "error",
+              }),
+            ]),
+          );
+        }
+        if (
+          body.session &&
+          typeof body.session === "object" &&
+          !Array.isArray(body.session)
+        ) {
+          expect(body.session.mode).toBe("spectate-and-steer");
+          expect(typeof body.session.sessionId).toBe("string");
         }
       } finally {
         // Restore original env

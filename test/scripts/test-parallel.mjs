@@ -12,19 +12,21 @@ import path from "node:path";
  * - `forceSerial: true` entries always run after parallel groups.
  * - `maxWorkers` lets a suite pin worker concurrency.
  *
- * Opt-in UI browser E2E (TestCafe): set MILADY_TEST_UI_TESTCAFE=1. Spawns dev if needed
- * and requires a supported browser on the runner (Chrome, Opera, Firefox, Edge, Safari).
+ * Opt-in UI browser E2E (Playwright): set MILADY_TEST_UI_PLAYWRIGHT=1.
+ * MILADY_TEST_UI_TESTCAFE remains as a legacy alias for the same suite.
  */
 const runs = [
   {
     name: "unit",
-    args: ["vitest", "run", "--config", "vitest.config.ts"],
+    cmd: "bun",
+    args: ["x", "vitest", "run", "--config", "vitest.config.ts"],
     vitest: true,
     reportFile: path.join(os.tmpdir(), "milady-vitest-unit-report.json"),
   },
   {
     name: "app-unit",
-    args: ["vitest", "run"],
+    cmd: "bun",
+    args: ["x", "vitest", "run"],
     vitest: true,
     cwd: "apps/app",
     reportFile: path.join(os.tmpdir(), "milady-vitest-app-unit-report.json"),
@@ -35,13 +37,28 @@ const runs = [
     args: ["run", "test:e2e"],
     forceSerial: true,
   },
+  {
+    name: "startup-e2e",
+    cmd: "bun",
+    args: ["run", "test:startup:e2e"],
+    forceSerial: true,
+  },
+  {
+    name: "orchestrator-integration",
+    cmd: "bun",
+    args: ["run", "test:orchestrator:integration"],
+    forceSerial: true,
+  },
 ];
 
-if (process.env.MILADY_TEST_UI_TESTCAFE === "1") {
+if (
+  process.env.MILADY_TEST_UI_PLAYWRIGHT === "1" ||
+  process.env.MILADY_TEST_UI_TESTCAFE === "1"
+) {
   runs.push({
-    name: "ui-testcafe",
+    name: "ui-playwright",
     cmd: "bun",
-    args: ["scripts/run-testcafe.mjs", "--spawn-dev"],
+    args: ["run", "test:ui:playwright"],
     forceSerial: true,
   });
 }
@@ -74,12 +91,12 @@ const resolvedOverride =
   Number.isFinite(overrideWorkers) && overrideWorkers > 0
     ? overrideWorkers
     : null;
-const defaultParallelRuns = runs.filter((entry) => !entry.forceSerial);
-const defaultSerialRuns = runs.filter((entry) => entry.forceSerial);
+const defaultParallelRuns = [];
+const defaultSerialRuns = runs;
 const parallelRuns = isWindowsCi ? [] : defaultParallelRuns;
 const serialRuns = isWindowsCi ? runs : defaultSerialRuns;
 const localWorkers = 2;
-const parallelCount = Math.max(1, parallelRuns.length);
+const parallelCount = Math.max(1, parallelRuns.length || 1);
 const perRunWorkers = Math.max(1, Math.floor(localWorkers / parallelCount));
 const macCiWorkers = isCI && isMacOS ? 1 : perRunWorkers;
 // Use Vitest defaults for local unit runs. Forcing low local worker counts can leave the
@@ -128,7 +145,7 @@ const runOnce = (entry, extraArgs = []) =>
       (acc, flag) => (acc.includes(flag) ? acc : `${acc} ${flag}`.trim()),
       nodeOptions,
     );
-    const cmd = entry.cmd ?? "bunx";
+    const cmd = entry.cmd ?? "bun";
     const child = spawn(cmd, args, {
       stdio: "inherit",
       ...(entry.cwd ? { cwd: entry.cwd } : {}),
@@ -141,33 +158,9 @@ const runOnce = (entry, extraArgs = []) =>
       shell: process.platform === "win32",
     });
     children.add(child);
-    let forcedCode = null;
-    let reportPoll = null;
-    let forceKillTimer = null;
-    if (entry.reportFile) {
-      reportPoll = setInterval(() => {
-        if (forcedCode !== null) return;
-        let report = null;
-        try {
-          report = JSON.parse(fs.readFileSync(entry.reportFile, "utf8"));
-        } catch {
-          return;
-        }
-        if (typeof report?.success !== "boolean") return;
-        forcedCode = report.success ? 0 : 1;
-        child.kill("SIGTERM");
-        forceKillTimer = setTimeout(() => {
-          child.kill("SIGKILL");
-        }, 2_000);
-        forceKillTimer.unref?.();
-      }, 2_000);
-      reportPoll.unref?.();
-    }
     child.on("exit", (code, signal) => {
       children.delete(child);
-      if (reportPoll) clearInterval(reportPoll);
-      if (forceKillTimer) clearTimeout(forceKillTimer);
-      resolve(forcedCode ?? code ?? (signal ? 1 : 0));
+      resolve(code ?? (signal ? 1 : 0));
     });
   });
 

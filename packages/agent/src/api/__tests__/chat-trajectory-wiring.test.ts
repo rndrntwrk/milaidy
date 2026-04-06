@@ -1,5 +1,5 @@
 /**
- * Verifies that the /api/chat handler delegates trajectory creation to
+ * Verifies that the shared chat generation path delegates trajectory creation to
  * @elizaos/plugin-trajectory-logger's MESSAGE_RECEIVED event handler,
  * which sets trajectoryStepId on the message metadata before handleMessage.
  *

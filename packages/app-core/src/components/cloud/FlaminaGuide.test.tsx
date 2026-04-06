@@ -3,7 +3,7 @@ import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { textOf } from "../../../../../test/helpers/react-test";
-import { FlaminaGuideCard } from "./FlaminaGuide";
+import { DeferredSetupChecklist, FlaminaGuideCard } from "./FlaminaGuide";
 
 const { mockUseApp } = vi.hoisted(() => ({
   mockUseApp: vi.fn(),
@@ -14,7 +14,12 @@ vi.mock("../../state", () => ({
 }));
 
 beforeEach(() => {
-  mockUseApp.mockReturnValue({ t: (k: string) => k });
+  mockUseApp.mockReturnValue({
+    t: (k: string, vars?: { defaultValue?: string }) => vars?.defaultValue ?? k,
+    onboardingDeferredTasks: [],
+    postOnboardingChecklistDismissed: false,
+    setState: vi.fn(),
+  });
 });
 
 describe("FlaminaGuideCard", () => {
@@ -76,5 +81,57 @@ describe("FlaminaGuideCard", () => {
     expect(renderedText).toContain("flaminaguide.voice.characterImpact");
     expect(renderedText).toContain("flaminaguide.voice.description");
     expect(renderedText).toContain("flaminaguide.voice.whenToUse");
+  });
+});
+
+describe("DeferredSetupChecklist", () => {
+  it("renders provider deferred task copy", () => {
+    mockUseApp.mockReturnValue({
+      t: (k: string, vars?: { defaultValue?: string }) =>
+        vars?.defaultValue ?? k,
+      onboardingDeferredTasks: ["provider"],
+      postOnboardingChecklistDismissed: false,
+      setState: vi.fn(),
+    });
+
+    let tree: TestRenderer.ReactTestRenderer;
+    act(() => {
+      tree = TestRenderer.create(
+        React.createElement(DeferredSetupChecklist, null),
+      );
+    });
+
+    const renderedText = textOf(tree?.root);
+    expect(renderedText).toContain("flaminaguide.tasks.provider.label");
+    expect(renderedText).toContain("flaminaguide.tasks.provider.description");
+  });
+
+  it("opens the deferred task through the provided callback", () => {
+    const onOpenTask = vi.fn();
+    mockUseApp.mockReturnValue({
+      t: (k: string, vars?: { defaultValue?: string }) =>
+        vars?.defaultValue ?? k,
+      onboardingDeferredTasks: ["provider"],
+      postOnboardingChecklistDismissed: false,
+      setState: vi.fn(),
+    });
+
+    let tree: TestRenderer.ReactTestRenderer;
+    act(() => {
+      tree = TestRenderer.create(
+        React.createElement(DeferredSetupChecklist, { onOpenTask }),
+      );
+    });
+
+    const openButton = tree.root.findAll(
+      (node) =>
+        node.type === "button" && textOf(node).includes("flaminaguide.Open"),
+    )[0];
+
+    act(() => {
+      openButton.props.onClick();
+    });
+
+    expect(onOpenTask).toHaveBeenCalledWith("provider");
   });
 });

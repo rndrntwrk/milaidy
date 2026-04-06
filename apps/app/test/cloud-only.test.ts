@@ -31,4 +31,24 @@ describe("shouldUseCloudOnlyBranding", () => {
       }),
     ).toBe(true);
   });
+
+  it("returns true for native platforms even without an injected backend", () => {
+    expect(
+      shouldUseCloudOnlyBranding({
+        isDev: false,
+        injectedApiBase: undefined,
+        isNativePlatform: true,
+      }),
+    ).toBe(true);
+  });
+
+  it("returns true for native platforms in production", () => {
+    expect(
+      shouldUseCloudOnlyBranding({
+        isDev: false,
+        injectedApiBase: "   ",
+        isNativePlatform: true,
+      }),
+    ).toBe(true);
+  });
 });

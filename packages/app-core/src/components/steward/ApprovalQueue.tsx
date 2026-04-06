@@ -28,6 +28,7 @@ interface ApprovalQueueProps {
   ) => void;
   onPendingCountChange?: (count: number) => void;
   embedded?: boolean;
+  refreshKey?: number | string;
 }
 
 const POLL_INTERVAL_MS = 10_000;
@@ -40,6 +41,7 @@ export function ApprovalQueue({
   setActionNotice,
   onPendingCountChange,
   embedded = false,
+  refreshKey,
 }: ApprovalQueueProps) {
   const [items, setItems] = useState<StewardPendingApproval[]>([]);
   const [loading, setLoading] = useState(true);
@@ -84,6 +86,14 @@ export function ApprovalQueue({
     const interval = setInterval(() => void loadData(), POLL_INTERVAL_MS);
     return () => clearInterval(interval);
   }, [loadData]);
+
+  useEffect(() => {
+    if (typeof refreshKey === "undefined") {
+      return;
+    }
+    setLoading(true);
+    void loadData();
+  }, [loadData, refreshKey]);
 
   const handleApprove = useCallback(
     async (txId: string) => {

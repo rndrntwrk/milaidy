@@ -2,6 +2,7 @@ import { pathForTab } from "@miladyai/app-core/navigation";
 import type { HistoryLike } from "./types";
 
 export type DetachedSurfaceTab =
+  | "browser"
   | "chat"
   | "release"
   | "triggers"
@@ -16,7 +17,7 @@ export type WindowShellRoute =
 
 export interface DetachedShellTarget {
   settingsSection?: string;
-  tab: "chat" | "connectors" | "plugins" | "settings" | "triggers";
+  tab: "browser" | "chat" | "connectors" | "plugins" | "settings" | "triggers";
 }
 
 export function parseWindowShellRoute(search: string): WindowShellRoute {
@@ -31,6 +32,7 @@ export function parseWindowShellRoute(search: string): WindowShellRoute {
   if (shell === "surface") {
     const tab = params.get("tab");
     if (
+      tab === "browser" ||
       tab === "chat" ||
       tab === "release" ||
       tab === "triggers" ||
@@ -75,6 +77,8 @@ export function resolveDetachedShellTarget(
   }
 
   switch (route.tab) {
+    case "browser":
+      return { tab: "browser" };
     case "chat":
       return { tab: "chat" };
     case "release":

@@ -7,8 +7,16 @@ const config: CapacitorConfig = {
   server: {
     androidScheme: "https",
     iosScheme: "https",
-    // Allow the webview to connect to the embedded API server on localhost/loopback
-    allowNavigation: ["localhost", "127.0.0.1"],
+    // Allow the webview to connect to the embedded API server and game servers
+    allowNavigation: [
+      "localhost",
+      "127.0.0.1",
+      "*.elizacloud.ai",
+      "rs-sdk-demo.fly.dev",
+      "*.fly.dev",
+      "hyperscape.gg",
+      "*.hyperscape.gg",
+    ],
   },
   plugins: {
     Keyboard: {

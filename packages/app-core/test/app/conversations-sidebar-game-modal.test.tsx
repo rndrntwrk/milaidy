@@ -14,6 +14,7 @@ type ConversationStub = {
 type SidebarContextStub = {
   conversations: ConversationStub[];
   activeConversationId: string | null;
+  activeInboxChat: { id: string; source: string; title: string } | null;
   unreadConversations: Set<string>;
   handleStartDraftConversation: () => Promise<void>;
   handleNewConversation: () => Promise<void>;
@@ -21,6 +22,7 @@ type SidebarContextStub = {
   handleDeleteConversation: (id: string) => Promise<void>;
   handleRenameConversation: (id: string, title: string) => Promise<void>;
   suggestConversationTitle: (id: string) => Promise<string | null>;
+  setState: (key: string, value: unknown) => void;
   uiLanguage: "en" | "zh-CN";
   t: (k: string, vars?: { defaultValue?: string }) => string;
 };
@@ -180,6 +182,7 @@ vi.mock("@miladyai/ui", async () => {
 
 vi.mock("@miladyai/app-core/api", () => ({
   client: {
+    getInboxChats: vi.fn(async () => ({ chats: [] })),
     getAgentSelfStatus: vi.fn(async () => null),
     onWsEvent: vi.fn(() => () => {}),
   },
@@ -211,6 +214,7 @@ function createContext(
       },
     ],
     activeConversationId: "conv-2",
+    activeInboxChat: null,
     unreadConversations: new Set(["conv-1"]),
     handleStartDraftConversation: vi.fn(async () => {}),
     handleNewConversation: vi.fn(async () => {}),
@@ -218,6 +222,7 @@ function createContext(
     handleDeleteConversation: vi.fn(async () => {}),
     handleRenameConversation: vi.fn(async () => {}),
     suggestConversationTitle: vi.fn(async () => null),
+    setState: vi.fn(),
     uiLanguage: "en",
     ...overrides,
   };
@@ -227,6 +232,10 @@ describe("ConversationsSidebar game-modal variant", () => {
   beforeEach(() => {
     mockUseApp.mockReset();
     vi.clearAllMocks();
+    window.setInterval = globalThis.setInterval.bind(globalThis);
+    window.clearInterval = globalThis.clearInterval.bind(globalThis);
+    window.setTimeout = globalThis.setTimeout.bind(globalThis);
+    window.clearTimeout = globalThis.clearTimeout.bind(globalThis);
   });
 
   it("renders game-modal list and keeps new/select/delete actions working", async () => {

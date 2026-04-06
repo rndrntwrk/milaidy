@@ -36,7 +36,7 @@ export interface NavigationStateDeps {
   setTabRaw: (t: Tab) => void;
   uiShellMode: UiShellMode;
   activeGameViewerUrl: string;
-  setAppsSubTab: Dispatch<SetStateAction<"browse" | "games">>;
+  setAppsSubTab: Dispatch<SetStateAction<"browse" | "running" | "games">>;
 }
 
 // ── Hook ──────────────────────────────────────────────────────────────────

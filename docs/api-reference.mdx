@@ -52,22 +52,22 @@ curl http://localhost:2138/api/character \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
-### Send a chat message
+### Send a conversation message
 
 ```bash
-curl -X POST http://localhost:2138/api/chat \
+curl -X POST http://localhost:2138/api/conversations/YOUR_CONVERSATION_ID/messages \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"message": "Hello, what can you do?"}'
+  -d '{"text": "Hello, what can you do?"}'
 ```
 
-### Stream a chat response
+### Stream a conversation response
 
 ```bash
-curl -N -X POST http://localhost:2138/api/chat/stream \
+curl -N -X POST http://localhost:2138/api/conversations/YOUR_CONVERSATION_ID/messages/stream \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"message": "Tell me about yourself"}'
+  -d '{"text": "Tell me about yourself"}'
 ```
 
 The response is a Server-Sent Events stream. Each event contains a `data` field with a JSON payload.
@@ -232,8 +232,6 @@ curl -X POST http://localhost:2138/api/agent/autonomy \
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/api/chat` | Send a message and get a response (legacy, routes to default conversation) |
-| `POST` | `/api/chat/stream` | Send a message and stream the response (SSE) |
 | `GET` | `/api/conversations` | List all conversations |
 | `POST` | `/api/conversations` | Create a new conversation |
 | `GET` | `/api/conversations/:id/messages` | Get messages for a conversation |
@@ -570,11 +568,37 @@ Routes under `/api/cloud/v1/` are forwarded as `/api/v1/` on the cloud backend, 
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/api/workbench/overview` | Get workbench overview (tasks, triggers, todos, autonomy state) |
+| `GET` | `/api/workbench/overview` | Get workbench overview (tasks, triggers, todos, life-ops, autonomy state) |
 | `GET` | `/api/workbench/tasks` | List workbench tasks |
-| `POST` | `/api/workbench/tasks` | Create or update a workbench task |
-| `GET` | `/api/workbench/todos` | List workbench to-do items |
-| `POST` | `/api/workbench/todos` | Create or update a workbench to-do item |
+| `POST` | `/api/workbench/tasks` | Create a workbench task |
+| `GET` | `/api/workbench/tasks/:id` | Get a single task |
+| `PUT` | `/api/workbench/tasks/:id` | Update a task |
+| `DELETE` | `/api/workbench/tasks/:id` | Delete a task |
+| `GET` | `/api/workbench/todos` | List workbench todos (auto-creates a bootstrap todo when empty) |
+| `POST` | `/api/workbench/todos` | Create a workbench todo |
+| `GET` | `/api/workbench/todos/:id` | Get a single todo |
+| `PUT` | `/api/workbench/todos/:id` | Update a todo |
+| `DELETE` | `/api/workbench/todos/:id` | Delete a todo |
+| `POST` | `/api/workbench/todos/:id/complete` | Toggle todo completion |
+
+---
+
+## LifeOps
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/lifeops/overview` | Aggregated overview of occurrences, goals, and reminders |
+| `GET` | `/api/lifeops/definitions` | List all definitions |
+| `POST` | `/api/lifeops/definitions` | Create a new definition |
+| `GET` | `/api/lifeops/definitions/:id` | Get a single definition |
+| `PUT` | `/api/lifeops/definitions/:id` | Update a definition |
+| `GET` | `/api/lifeops/goals` | List all goals |
+| `POST` | `/api/lifeops/goals` | Create a new goal |
+| `GET` | `/api/lifeops/goals/:id` | Get a single goal |
+| `PUT` | `/api/lifeops/goals/:id` | Update a goal |
+| `POST` | `/api/lifeops/occurrences/:id/complete` | Mark an occurrence as completed |
+| `POST` | `/api/lifeops/occurrences/:id/skip` | Skip an occurrence |
+| `POST` | `/api/lifeops/occurrences/:id/snooze` | Snooze an occurrence |
 
 ---
 

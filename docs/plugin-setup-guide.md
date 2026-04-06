@@ -213,10 +213,10 @@ where to get the credentials, minimum required fields, and tips for optional fie
 
 ### Discord
 **Get credentials:** https://discord.com/developers/applications → New Application → Bot → Reset Token
-**Minimum required:** `DISCORD_API_TOKEN` + `DISCORD_APPLICATION_ID`
+**Minimum required:** `DISCORD_API_TOKEN`
 **Variables:**
 - `DISCORD_API_TOKEN` — Bot token (from Bot section, click Reset Token)
-- `DISCORD_APPLICATION_ID` — Application ID (from General Information)
+- `DISCORD_APPLICATION_ID` — Application ID (from General Information, optional if runtime auto-resolve succeeds)
 - `CHANNEL_IDS` — Comma-separated channel IDs to listen in
 - `DISCORD_VOICE_CHANNEL_ID` — For voice channel support
 - `DISCORD_SHOULD_IGNORE_BOT_MESSAGES` — `true` to prevent bot-to-bot loops
@@ -480,18 +480,6 @@ where to get the credentials, minimum required fields, and tips for optional fie
 - `IMESSAGE_ALLOW_FROM` — Comma-separated allowed senders
 - `IMESSAGE_ENABLED` — `true` to enable
 **Tips:** macOS only. Requires Full Disk Access permission for the app to read the Messages database. Only works on the machine that has iMessage configured.
-
-### BlueBubbles (iMessage from any platform)
-**Get credentials:** Install BlueBubbles server on a Mac: https://bluebubbles.app
-**Minimum required:** `BLUEBUBBLES_SERVER_URL` + `BLUEBUBBLES_PASSWORD`
-**Variables:**
-- `BLUEBUBBLES_SERVER_URL` — Your BlueBubbles server URL (e.g. `http://your-mac:1234`)
-- `BLUEBUBBLES_PASSWORD` — Password set in BlueBubbles server settings
-- `BLUEBUBBLES_WEBHOOK_PATH` — Path for incoming webhooks
-- `BLUEBUBBLES_DM_POLICY` / `BLUEBUBBLES_GROUP_POLICY` — `allow-all` or `allow-from`
-- `BLUEBUBBLES_ALLOW_FROM` / `BLUEBUBBLES_GROUP_ALLOW_FROM` — Allowed contacts (comma-separated)
-- `BLUEBUBBLES_SEND_READ_RECEIPTS` — Whether to mark messages as read
-**Tips:** BlueBubbles requires a Mac with iMessage set up acting as the server. You access it from any device. Install the server app from bluebubbles.app.
 
 ### Blooio (SMS via API)
 **Get credentials:** https://bloo.io

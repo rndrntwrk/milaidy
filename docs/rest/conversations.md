@@ -1,7 +1,7 @@
 ---
 title: "Conversations API"
 sidebarTitle: "Conversations"
-description: "REST API endpoints for managing web-chat conversations — CRUD, messaging, streaming, and legacy chat."
+description: "REST API endpoints for managing web-chat conversations — CRUD, messaging, and streaming."
 ---
 
 The conversations API manages the agent's web-chat interface. Each conversation has its own room in the runtime's memory system, allowing independent message histories. The API supports both streaming (SSE) and synchronous message delivery.
@@ -18,8 +18,6 @@ The conversations API manages the agent's web-chat interface. Each conversation 
 | POST | `/api/conversations/:id/greeting` | Generate a greeting message |
 | PATCH | `/api/conversations/:id` | Update conversation metadata |
 | DELETE | `/api/conversations/:id` | Delete a conversation |
-| POST | `/api/chat/stream` | Legacy streaming chat (single room) |
-| POST | `/api/chat` | Legacy synchronous chat (single room) |
 
 ---
 
@@ -233,45 +231,6 @@ Delete a conversation. Messages remain in the runtime memory but the conversatio
 }
 ```
 
----
-
-## Legacy Chat Endpoints
-
-These endpoints use a single shared room for all messages. They are retained for backward compatibility with older clients and the cloud proxy path.
-
-### POST /api/chat/stream
-
-Send a message and receive a streaming SSE response in the legacy single-room context.
-
-**Request Body**
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `message` | string | Yes | User message text |
-| `channelType` | string | No | Channel type override |
-
-**SSE Events**
-
-Same format as `/api/conversations/:id/messages/stream`.
-
----
-
-### POST /api/chat
-
-Send a message and receive a synchronous response in the legacy single-room context.
-
-**Request Body**
-
-Same as `POST /api/chat/stream`.
-
-**Response**
-
-```json
-{
-  "text": "Response text here...",
-  "agentName": "Milady"
-}
-```
 
 ## Common Error Codes
 

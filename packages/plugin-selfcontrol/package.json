@@ -1,0 +1,33 @@
+{
+  "name": "@miladyai/plugin-selfcontrol",
+  "version": "2.0.0-alpha.83",
+  "description": "Website blocking plugin for Milady.",
+  "type": "module",
+  "main": "src/index.ts",
+  "license": "MIT",
+  "homepage": "https://github.com/milady-ai/milady",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/milady-ai/milady.git",
+    "directory": "packages/plugin-selfcontrol"
+  },
+  "keywords": [
+    "milady",
+    "plugin",
+    "website-blocking",
+    "selfcontrol"
+  ],
+  "exports": {
+    ".": "./src/index.ts",
+    "./selfcontrol": "./src/selfcontrol.ts"
+  },
+  "dependencies": {
+    "@elizaos/core": "alpha",
+    "@miladyai/plugin-roles": "github:milady-ai/plugin-roles#5b00c49",
+    "@miladyai/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  }
+}

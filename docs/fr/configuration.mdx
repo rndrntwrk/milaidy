@@ -1,10 +1,12 @@
 ---
 title: "Configuration"
 sidebarTitle: "Configuration"
-description: "Référence complète du fichier de configuration Milady, des variables d'environnement, des commandes CLI et de toutes les sections de configuration."
+description: "Référence complète du fichier de configuration principal du runtime Milady, des variables d'environnement, des commandes CLI et de toutes les sections de configuration."
 ---
 
-Milady utilise un seul fichier de configuration JSON5 pour tous les paramètres. Cette page documente chaque section de configuration, chaque variable d'environnement de substitution et chaque commande CLI disponible.
+Milady utilise un fichier de configuration JSON5 principal pour les paramètres de runtime et d'amorçage.
+Cette page documente le fichier de configuration, les variables d'environnement de substitution et
+les champs canoniques de routage du runtime qui pilotent désormais la sélection de l'hébergement et du fournisseur.
 
 <div id="config-file-location">
 
@@ -58,6 +60,52 @@ Le répertoire d'état contient également :
 | `~/.milady/models/` | Listes de fournisseurs de modèles en cache (fichiers JSON par fournisseur) |
 | `~/.milady/credentials/` | Identifiants OAuth (remplaçables via `MILADY_OAUTH_DIR`) |
 | `~/.milady/credentials/oauth.json` | Stockage des jetons OAuth |
+
+<div id="canonical-runtime-routing">
+
+## Routage canonique du runtime
+
+</div>
+
+La topologie de runtime enregistrée par Milady n'est plus déduite d'un unique
+blob `connection`, et le champ racine `connection` ne fait plus partie du
+schéma de configuration persisté. Les champs canoniques persistés sont :
+
+| Champ | Objectif |
+|------|---------|
+| `deploymentTarget` | Où le serveur actif s'exécute : `local`, `cloud` ou `remote` |
+| `linkedAccounts` | Quels comptes fournisseur ou cloud sont disponibles pour ce serveur |
+| `serviceRouting` | Quel backend gère chaque capacité (`llmText`, `tts`, `media`, `embeddings`, `rpc`) |
+
+```json5
+{
+  deploymentTarget: {
+    runtime: "cloud",
+    provider: "elizacloud",
+  },
+  linkedAccounts: {
+    elizacloud: {
+      status: "linked",
+      source: "oauth",
+    },
+  },
+  serviceRouting: {
+    llmText: {
+      backend: "anthropic",
+      transport: "direct",
+      primaryModel: "anthropic/claude-sonnet-4-5",
+    },
+    tts: {
+      backend: "elizacloud",
+      transport: "cloud-proxy",
+      accountId: "elizacloud",
+    },
+  },
+}
+```
+
+Cela signifie qu'un serveur peut être hébergé sur Eliza Cloud tout en utilisant
+Anthropic, OpenAI, OpenRouter ou un modèle local pour l'inférence de chat.
 
 <div id="file-format">
 
@@ -184,6 +232,9 @@ Voici chaque clé de niveau supérieur dans `MiladyConfig` :
   models: {},         // Custom model providers, Bedrock discovery
   nodeHost: {},       // Node host browser proxy settings
   agents: {},         // Agent definitions, defaults, personality
+  deploymentTarget: {}, // Canonical hosting target (local/cloud/remote)
+  linkedAccounts: {}, // Canonical linked account inventory
+  serviceRouting: {}, // Canonical per-capability routing
   tools: {},          // Tool profiles, web search/fetch, exec, media
   bindings: [],       // Agent-to-channel routing rules
   broadcast: {},      // Multi-agent broadcast configuration
@@ -475,7 +526,6 @@ Milady active automatiquement les plugins en fonction de votre configuration. Vo
 | `nostr` | `@elizaos/plugin-nostr` | `connectors.nostr.token` |
 | `msteams` | `@elizaos/plugin-msteams` | `connectors.msteams.token` |
 | `googlechat` | `@elizaos/plugin-google-chat` | `connectors.googlechat.token` |
-| `bluebubbles` | `@elizaos/plugin-bluebubbles` | `connectors.bluebubbles.serverUrl` + `password` |
 | `imessage` | `@elizaos/plugin-imessage` | `connectors.imessage.cliPath` |
 | `lens` | `@elizaos/plugin-lens` | `connectors.lens.token` |
 | `mattermost` | `@elizaos/plugin-mattermost` | `connectors.mattermost.token` |
@@ -1462,7 +1512,9 @@ milady config show --json   # Raw JSON output
 Pour modifier les valeurs, éditez directement `~/.milady/milady.json` (qui prend en charge JSON5 avec commentaires).
 
 <Tip>
-Utilisez `milady configure` pour une référence rapide des options de configuration courantes et des variables d'environnement. Pour la configuration initiale complète, exécutez `milady setup` pour passer par l'assistant d'intégration, ou éditez directement `~/.milady/milady.json`.
+Utilisez `milady configure` pour une référence rapide des options de configuration
+courantes et des variables d'environnement. Pour l'amorçage local, exécutez `milady setup`,
+ou éditez directement `~/.milady/milady.json`.
 </Tip>
 
 <div id="full-example">

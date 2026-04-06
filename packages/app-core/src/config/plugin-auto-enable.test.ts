@@ -37,6 +37,7 @@ vi.mock("@elizaos/plugin-rolodex", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-secrets-manager", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-shell", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-telegram", () => ({ default: {} }));
+vi.mock("@elizaos-plugins/client-telegram-account", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-trajectory-logger", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-trust", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-twitch", () => ({ default: {} }));
@@ -112,7 +113,7 @@ describe("applyPluginAutoEnable — connectors", () => {
     });
     const { config, changes } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("telegram");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-telegram");
     expect(changes.some((c) => c.includes("telegram"))).toBe(true);
   });
 
@@ -126,7 +127,9 @@ describe("applyPluginAutoEnable — connectors", () => {
     });
     const { config } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow ?? []).not.toContain("discord");
+    expect(config.plugins?.allow ?? []).not.toContain(
+      "@elizaos/plugin-discord",
+    );
   });
 
   it("skips connector without authentication credentials", () => {
@@ -139,20 +142,7 @@ describe("applyPluginAutoEnable — connectors", () => {
     });
     const { config } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow ?? []).not.toContain("slack");
-  });
-
-  it("enables bluebubbles when serverUrl and password are set", () => {
-    const params = makeParams({
-      config: {
-        connectors: {
-          bluebubbles: { serverUrl: "http://localhost:1234", password: "pass" },
-        },
-      },
-    });
-    const { config } = applyPluginAutoEnable(params);
-
-    expect(config.plugins?.allow).toContain("bluebubbles");
+    expect(config.plugins?.allow ?? []).not.toContain("@elizaos/plugin-slack");
   });
 
   it("enables imessage when cliPath is set", () => {
@@ -165,7 +155,7 @@ describe("applyPluginAutoEnable — connectors", () => {
     });
     const { config } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("imessage");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-imessage");
   });
 
   it("enables signal when account is set", () => {
@@ -178,7 +168,7 @@ describe("applyPluginAutoEnable — connectors", () => {
     });
     const { config } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("signal");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-signal");
   });
 
   it("enables signal when any enabled account entry is configured", () => {
@@ -196,7 +186,7 @@ describe("applyPluginAutoEnable — connectors", () => {
     });
     const { config } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("signal");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-signal");
   });
 
   it("supports legacy channels key for backward compat", () => {
@@ -209,7 +199,7 @@ describe("applyPluginAutoEnable — connectors", () => {
     });
     const { config } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("telegram");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-telegram");
   });
 
   it("enables wechat plugin when apiKey is configured", () => {
@@ -221,7 +211,7 @@ describe("applyPluginAutoEnable — connectors", () => {
       },
     });
     const { config } = applyPluginAutoEnable(params);
-    expect(config.plugins?.allow).toContain("wechat");
+    expect(config.plugins?.allow).toContain("@miladyai/plugin-wechat");
   });
 
   it("does not enable wechat when disabled", () => {
@@ -233,7 +223,9 @@ describe("applyPluginAutoEnable — connectors", () => {
       },
     });
     const { config } = applyPluginAutoEnable(params);
-    expect(config.plugins?.allow ?? []).not.toContain("wechat");
+    expect(config.plugins?.allow ?? []).not.toContain(
+      "@miladyai/plugin-wechat",
+    );
   });
 });
 
@@ -254,7 +246,7 @@ describe("applyPluginAutoEnable — auth profiles", () => {
     });
     const { config, changes } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("openai");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-openai");
     expect(changes.some((c) => c.includes("auth profile"))).toBe(true);
   });
 
@@ -285,7 +277,7 @@ describe("applyPluginAutoEnable — env vars", () => {
     });
     const { config, changes } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("anthropic");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-anthropic");
     expect(changes.some((c) => c.includes("ANTHROPIC_API_KEY"))).toBe(true);
   });
 
@@ -295,8 +287,26 @@ describe("applyPluginAutoEnable — env vars", () => {
     });
     const { config, changes } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("repoprompt");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-repoprompt");
     expect(changes.some((c) => c.includes("REPOPROMPT_CLI_PATH"))).toBe(true);
+  });
+
+  it("enables telegramAccount client plugin when Telegram account env vars are set", () => {
+    const params = makeParams({
+      env: {
+        TELEGRAM_ACCOUNT_PHONE: "+15551234567",
+        TELEGRAM_ACCOUNT_APP_ID: "12345",
+        TELEGRAM_ACCOUNT_APP_HASH: "hash",
+        TELEGRAM_ACCOUNT_DEVICE_MODEL: "Desktop",
+        TELEGRAM_ACCOUNT_SYSTEM_VERSION: "1.0",
+      },
+    });
+    const { config, changes } = applyPluginAutoEnable(params);
+
+    expect(config.plugins?.allow).toContain(
+      "@elizaos-plugins/client-telegram-account",
+    );
+    expect(changes.some((c) => c.includes("TELEGRAM_ACCOUNT_*"))).toBe(true);
   });
 
   it("enables claude code workbench plugin when CLAUDE_CODE_WORKBENCH_ENABLED is set", () => {
@@ -305,7 +315,9 @@ describe("applyPluginAutoEnable — env vars", () => {
     });
     const { config, changes } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("claude-code-workbench");
+    expect(config.plugins?.allow).toContain(
+      "@elizaos/plugin-claude-code-workbench",
+    );
     expect(
       changes.some((c) => c.includes("CLAUDE_CODE_WORKBENCH_ENABLED")),
     ).toBe(true);
@@ -325,6 +337,30 @@ describe("applyPluginAutoEnable — env vars", () => {
     expect(changes).toHaveLength(0);
   });
 
+  it("does not enable telegramAccount when the config entry is disabled", () => {
+    const params = makeParams({
+      config: {
+        plugins: {
+          entries: {
+            telegramAccount: { enabled: false },
+          },
+        },
+      },
+      env: {
+        TELEGRAM_ACCOUNT_PHONE: "+15551234567",
+        TELEGRAM_ACCOUNT_APP_ID: "12345",
+        TELEGRAM_ACCOUNT_APP_HASH: "hash",
+        TELEGRAM_ACCOUNT_DEVICE_MODEL: "Desktop",
+        TELEGRAM_ACCOUNT_SYSTEM_VERSION: "1.0",
+      },
+    });
+    const { config } = applyPluginAutoEnable(params);
+
+    expect(config.plugins?.allow ?? []).not.toContain(
+      "@elizaos-plugins/client-telegram-account",
+    );
+  });
+
   it("respects plugin entry enabled=false override", () => {
     const params = makeParams({
       config: {
@@ -334,7 +370,9 @@ describe("applyPluginAutoEnable — env vars", () => {
     });
     const { config } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow ?? []).not.toContain("anthropic");
+    expect(config.plugins?.allow ?? []).not.toContain(
+      "@elizaos/plugin-anthropic",
+    );
   });
 
   it("handles multiple env vars enabling different plugins", () => {
@@ -348,9 +386,9 @@ describe("applyPluginAutoEnable — env vars", () => {
     const { config } = applyPluginAutoEnable(params);
     const allow = config.plugins?.allow ?? [];
 
-    expect(allow).toContain("openai");
-    expect(allow).toContain("groq");
-    expect(allow).toContain("xai");
+    expect(allow).toContain("@elizaos/plugin-openai");
+    expect(allow).toContain("@elizaos/plugin-groq");
+    expect(allow).toContain("@elizaos/plugin-xai");
   });
 
   it("auto-enables obsidian plugin when OBSIDIAN_VAULT_PATH is set", () => {
@@ -359,7 +397,7 @@ describe("applyPluginAutoEnable — env vars", () => {
     });
     const { config, changes } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("obsidian");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-obsidian");
     expect(changes.some((c) => c.includes("OBSIDIAN_VAULT_PATH"))).toBe(true);
   });
 
@@ -373,7 +411,9 @@ describe("applyPluginAutoEnable — env vars", () => {
     const { config } = applyPluginAutoEnable(params);
     const allow = config.plugins?.allow ?? [];
 
-    const anthropicEntries = allow.filter((p) => p === "anthropic");
+    const anthropicEntries = allow.filter(
+      (p) => p === "@elizaos/plugin-anthropic",
+    );
     expect(anthropicEntries).toHaveLength(1);
   });
 
@@ -383,7 +423,7 @@ describe("applyPluginAutoEnable — env vars", () => {
     });
     const { config, changes } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("cua");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-cua");
     expect(changes.some((c) => c.includes("CUA_API_KEY"))).toBe(true);
   });
 
@@ -393,7 +433,7 @@ describe("applyPluginAutoEnable — env vars", () => {
     });
     const { config, changes } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("cua");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-cua");
     expect(changes.some((c) => c.includes("CUA_HOST"))).toBe(true);
   });
 
@@ -406,7 +446,7 @@ describe("applyPluginAutoEnable — env vars", () => {
     });
     const { config } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow ?? []).not.toContain("cua");
+    expect(config.plugins?.allow ?? []).not.toContain("@elizaos/plugin-cua");
   });
 
   it("respects x402 enabled=false override for env auto-enable", () => {
@@ -418,7 +458,7 @@ describe("applyPluginAutoEnable — env vars", () => {
     });
     const { config } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow ?? []).not.toContain("x402");
+    expect(config.plugins?.allow ?? []).not.toContain("@elizaos/plugin-x402");
   });
 
   it("does not duplicate cua when both CUA_API_KEY and CUA_HOST are set", () => {
@@ -428,7 +468,7 @@ describe("applyPluginAutoEnable — env vars", () => {
     const { config } = applyPluginAutoEnable(params);
     const allow = config.plugins?.allow ?? [];
 
-    const cuaEntries = allow.filter((p) => p === "cua");
+    const cuaEntries = allow.filter((p) => p === "@elizaos/plugin-cua");
     expect(cuaEntries).toHaveLength(1);
   });
 
@@ -453,7 +493,7 @@ describe("applyPluginAutoEnable — features", () => {
     });
     const { config, changes } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("browser");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-browser");
     expect(changes.some((c) => c.includes("feature: browser"))).toBe(true);
   });
 
@@ -463,7 +503,7 @@ describe("applyPluginAutoEnable — features", () => {
     });
     const { config, changes } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("repoprompt");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-repoprompt");
     expect(changes.some((c) => c.includes("feature: repoprompt"))).toBe(true);
   });
 
@@ -473,7 +513,9 @@ describe("applyPluginAutoEnable — features", () => {
     });
     const { config, changes } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("claude-code-workbench");
+    expect(config.plugins?.allow).toContain(
+      "@elizaos/plugin-claude-code-workbench",
+    );
     expect(
       changes.some((c) => c.includes("feature: claudeCodeWorkbench")),
     ).toBe(true);
@@ -485,7 +527,7 @@ describe("applyPluginAutoEnable — features", () => {
     });
     const { config } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("cron");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-cron");
   });
 
   it("skips feature when enabled is explicitly false", () => {
@@ -512,7 +554,7 @@ describe("applyPluginAutoEnable — features", () => {
     });
     const { config } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("obsidian");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-obsidian");
   });
 
   it("enables x402 plugin when features.x402 = true", () => {
@@ -521,7 +563,7 @@ describe("applyPluginAutoEnable — features", () => {
     });
     const { config, changes } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("x402");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-x402");
     expect(changes.some((c) => c.includes("feature: x402"))).toBe(true);
   });
 
@@ -531,7 +573,7 @@ describe("applyPluginAutoEnable — features", () => {
     });
     const { config, changes } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("cua");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-cua");
     expect(changes.some((c) => c.includes("feature: cua"))).toBe(true);
   });
 
@@ -541,7 +583,7 @@ describe("applyPluginAutoEnable — features", () => {
     });
     const { config } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow ?? []).not.toContain("x402");
+    expect(config.plugins?.allow ?? []).not.toContain("@elizaos/plugin-x402");
   });
 
   it("enables computeruse plugin when features.computeruse = true", () => {
@@ -550,7 +592,7 @@ describe("applyPluginAutoEnable — features", () => {
     });
     const { config, changes } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("computeruse");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-computeruse");
     expect(changes.some((c) => c.includes("feature: computeruse"))).toBe(true);
   });
 });
@@ -566,7 +608,7 @@ describe("applyPluginAutoEnable — hooks", () => {
     });
     const { config } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("webhooks");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-webhooks");
   });
 
   it("skips webhooks when hooks.enabled is false", () => {
@@ -580,7 +622,9 @@ describe("applyPluginAutoEnable — hooks", () => {
     });
     const { config } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow ?? []).not.toContain("webhooks");
+    expect(config.plugins?.allow ?? []).not.toContain(
+      "@elizaos/plugin-webhooks",
+    );
   });
 
   it("enables gmail-watch plugin when hooks.gmail.account is set", () => {
@@ -594,7 +638,7 @@ describe("applyPluginAutoEnable — hooks", () => {
     });
     const { config } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("gmail-watch");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-gmail-watch");
   });
 });
 
@@ -613,7 +657,7 @@ describe("applyPluginAutoEnable — subscription provider", () => {
     });
     const { config, changes } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("anthropic");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-anthropic");
     expect(changes.some((c) => c.includes("subscription"))).toBe(true);
   });
 
@@ -625,7 +669,7 @@ describe("applyPluginAutoEnable — subscription provider", () => {
     });
     const { config, changes } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("openai");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-openai");
     expect(changes.some((c) => c.includes("subscription"))).toBe(true);
   });
 
@@ -640,7 +684,7 @@ describe("applyPluginAutoEnable — subscription provider", () => {
     });
     const { config } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("anthropic");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-anthropic");
     expect(config.plugins?.entries?.anthropic?.enabled).toBe(true);
   });
 
@@ -735,7 +779,7 @@ describe("WhatsApp connector auto-enable", () => {
         config: { connectors: { whatsapp: { authState: "./auth" } } },
       }),
     );
-    expect(config.plugins?.allow).toContain("whatsapp");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-whatsapp");
   });
 
   it("auto-enables via legacy sessionPath field", () => {
@@ -744,7 +788,7 @@ describe("WhatsApp connector auto-enable", () => {
         config: { connectors: { whatsapp: { sessionPath: "./auth" } } },
       }),
     );
-    expect(config.plugins?.allow).toContain("whatsapp");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-whatsapp");
   });
 
   it("auto-enables via authDir (Baileys WhatsAppAccountSchema field)", () => {
@@ -753,7 +797,7 @@ describe("WhatsApp connector auto-enable", () => {
         config: { connectors: { whatsapp: { authDir: "./auth/whatsapp" } } },
       }),
     );
-    expect(config.plugins?.allow).toContain("whatsapp");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-whatsapp");
   });
 
   it("auto-enables when accounts object is configured", () => {
@@ -768,14 +812,16 @@ describe("WhatsApp connector auto-enable", () => {
         },
       }),
     );
-    expect(config.plugins?.allow).toContain("whatsapp");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-whatsapp");
   });
 
   it("does not auto-enable when whatsapp config is empty", () => {
     const { config } = applyPluginAutoEnable(
       makeParams({ config: { connectors: { whatsapp: {} } } }),
     );
-    expect(config.plugins?.allow ?? []).not.toContain("whatsapp");
+    expect(config.plugins?.allow ?? []).not.toContain(
+      "@elizaos/plugin-whatsapp",
+    );
   });
 
   it("does not auto-enable when accounts object has no valid authDir", () => {
@@ -788,7 +834,9 @@ describe("WhatsApp connector auto-enable", () => {
         },
       }),
     );
-    expect(config.plugins?.allow ?? []).not.toContain("whatsapp");
+    expect(config.plugins?.allow ?? []).not.toContain(
+      "@elizaos/plugin-whatsapp",
+    );
   });
 
   it("does not auto-enable when all accounts are explicitly disabled", () => {
@@ -803,7 +851,9 @@ describe("WhatsApp connector auto-enable", () => {
         },
       }),
     );
-    expect(config.plugins?.allow ?? []).not.toContain("whatsapp");
+    expect(config.plugins?.allow ?? []).not.toContain(
+      "@elizaos/plugin-whatsapp",
+    );
   });
 
   it("does not auto-enable when enabled is explicitly false", () => {
@@ -816,7 +866,9 @@ describe("WhatsApp connector auto-enable", () => {
         },
       }),
     );
-    expect(config.plugins?.allow ?? []).not.toContain("whatsapp");
+    expect(config.plugins?.allow ?? []).not.toContain(
+      "@elizaos/plugin-whatsapp",
+    );
   });
 });
 
@@ -827,7 +879,7 @@ describe("Blooio connector auto-enable", () => {
         config: { connectors: { blooio: { apiKey: "blk-test-key" } } },
       }),
     );
-    expect(config.plugins?.allow).toContain("blooio");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-blooio");
   });
 
   it("does not auto-enable when config is empty", () => {
@@ -836,7 +888,7 @@ describe("Blooio connector auto-enable", () => {
         config: { connectors: { blooio: {} } },
       }),
     );
-    expect(config.plugins?.allow ?? []).not.toContain("blooio");
+    expect(config.plugins?.allow ?? []).not.toContain("@elizaos/plugin-blooio");
   });
 
   it("does not auto-enable when enabled is explicitly false", () => {
@@ -849,7 +901,7 @@ describe("Blooio connector auto-enable", () => {
         },
       }),
     );
-    expect(config.plugins?.allow ?? []).not.toContain("blooio");
+    expect(config.plugins?.allow ?? []).not.toContain("@elizaos/plugin-blooio");
   });
 });
 
@@ -936,7 +988,7 @@ describe("applyPluginAutoEnable — streaming destinations", () => {
         } as never,
       }),
     );
-    expect(config.plugins?.allow).toContain("twitch-streaming");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-twitch-streaming");
     expect(changes.some((c) => c.includes("streaming: twitch"))).toBe(true);
   });
 
@@ -948,7 +1000,9 @@ describe("applyPluginAutoEnable — streaming destinations", () => {
         } as never,
       }),
     );
-    expect(config.plugins?.allow).toContain("youtube-streaming");
+    expect(config.plugins?.allow).toContain(
+      "@elizaos/plugin-youtube-streaming",
+    );
     expect(changes.some((c) => c.includes("streaming: youtube"))).toBe(true);
   });
 
@@ -965,7 +1019,7 @@ describe("applyPluginAutoEnable — streaming destinations", () => {
         } as never,
       }),
     );
-    expect(config.plugins?.allow).toContain("custom-rtmp");
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-custom-rtmp");
     expect(changes.some((c) => c.includes("streaming: customRtmp"))).toBe(true);
   });
 
@@ -982,7 +1036,7 @@ describe("applyPluginAutoEnable — streaming destinations", () => {
     );
     // activeDestination should not result in any plugin — only twitch should be added
     const allow = config.plugins?.allow ?? [];
-    expect(allow).toContain("twitch-streaming");
+    expect(allow).toContain("@elizaos/plugin-twitch-streaming");
     expect(allow).not.toContain("activeDestination");
   });
 
@@ -994,7 +1048,9 @@ describe("applyPluginAutoEnable — streaming destinations", () => {
         } as never,
       }),
     );
-    expect(config.plugins?.allow ?? []).not.toContain("twitch-streaming");
+    expect(config.plugins?.allow ?? []).not.toContain(
+      "@elizaos/plugin-twitch-streaming",
+    );
   });
 
   it("does not auto-enable streaming plugin when shortId is disabled in plugins.entries", () => {
@@ -1006,7 +1062,9 @@ describe("applyPluginAutoEnable — streaming destinations", () => {
         } as never,
       }),
     );
-    expect(config.plugins?.allow ?? []).not.toContain("twitch-streaming");
+    expect(config.plugins?.allow ?? []).not.toContain(
+      "@elizaos/plugin-twitch-streaming",
+    );
   });
 
   it("does not auto-enable when streaming config is empty", () => {
@@ -1030,8 +1088,8 @@ describe("applyPluginAutoEnable — streaming destinations", () => {
       }),
     );
     const allow = config.plugins?.allow ?? [];
-    expect(allow).toContain("twitch-streaming");
-    expect(allow).toContain("youtube-streaming");
+    expect(allow).toContain("@elizaos/plugin-twitch-streaming");
+    expect(allow).toContain("@elizaos/plugin-youtube-streaming");
     expect(changes.length).toBeGreaterThanOrEqual(2);
   });
 });

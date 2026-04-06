@@ -42,6 +42,7 @@ function isTruthyCloudEnvValue(raw: string | undefined): boolean {
 export const CHANNEL_PLUGIN_MAP: Readonly<Record<string, string>> = {
   discord: "@elizaos/plugin-discord",
   telegram: "@elizaos/plugin-telegram",
+  telegramAccount: "@elizaos-plugins/client-telegram-account",
   slack: "@elizaos/plugin-slack",
   twitter: "@elizaos/plugin-twitter",
   // Internal connector built from src/plugins/whatsapp (not an npm package).
@@ -49,17 +50,16 @@ export const CHANNEL_PLUGIN_MAP: Readonly<Record<string, string>> = {
   // Internal connector built from src/plugins/signal (not an npm package).
   signal: "@elizaos/plugin-signal",
   imessage: "@elizaos/plugin-imessage",
-  bluebubbles: "@elizaos/plugin-bluebubbles",
   farcaster: "@elizaos/plugin-farcaster",
   lens: "@elizaos/plugin-lens",
   msteams: "@elizaos/plugin-msteams",
-  mattermost: "@elizaos/plugin-mattermost",
-  googlechat: "@elizaos/plugin-google-chat",
   feishu: "@elizaos/plugin-feishu",
   matrix: "@elizaos/plugin-matrix",
   nostr: "@elizaos/plugin-nostr",
   blooio: "@elizaos/plugin-blooio",
   twitch: "@elizaos/plugin-twitch",
+  mattermost: "@elizaos/plugin-mattermost",
+  googlechat: "@elizaos/plugin-google-chat",
 };
 
 /** Maps environment variable names to model-provider plugin packages. */
@@ -93,18 +93,31 @@ export const PROVIDER_PLUGIN_MAP: Readonly<Record<string, string>> = {
  * Keep this map in sync with optional plugin registration and tests.
  */
 export const OPTIONAL_PLUGIN_MAP: Readonly<Record<string, string>> = {
+  // ── Wallet plugins ─────────────────────────────────────────────────
+  // These short ids are what plugin-auto-enable.ts writes into
+  // `plugins.allow` when EVM_PRIVATE_KEY / SOLANA_PRIVATE_KEY are
+  // present in process.env. Without entries here, collectPluginNames()
+  // would fall through to loading the short id as a literal package
+  // name (`import("evm")`), which silently fails inside the loader's
+  // error boundary — plugin-evm / plugin-solana never load even when
+  // the keys are set and the wallet page shows addresses. This was a
+  // multi-hour landmine. Keep these in sync with AUTH_PROVIDER_PLUGINS
+  // in packages/agent/src/config/plugin-auto-enable.ts.
+  evm: "@elizaos/plugin-evm",
+  solana: "@elizaos/plugin-solana",
   browser: "@elizaos/plugin-browser",
+  "milady-browser": "@miladyai/plugin-milady-browser",
+  miladyBrowser: "@miladyai/plugin-milady-browser",
   vision: "@elizaos/plugin-vision",
   elizacloud: "@elizaos/plugin-elizacloud",
   selfcontrol: "@miladyai/plugin-selfcontrol",
-  "website-blocker": "@miladyai/plugin-selfcontrol",
-  websiteBlocker: "@miladyai/plugin-selfcontrol",
   cron: "@elizaos/plugin-cron",
   cua: "@elizaos/plugin-cua",
   computeruse: "@elizaos/plugin-computeruse",
   obsidian: "@elizaos/plugin-obsidian",
   repoprompt: "@elizaos/plugin-repoprompt",
   repoPrompt: "@elizaos/plugin-repoprompt",
+  telegramAccount: "@elizaos-plugins/client-telegram-account",
   "pi-ai": PI_AI_PLUGIN_PACKAGE,
   piAi: PI_AI_PLUGIN_PACKAGE,
   x402: "@elizaos/plugin-x402",

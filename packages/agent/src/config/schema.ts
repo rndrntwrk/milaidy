@@ -3,23 +3,23 @@ import { VERSION } from "../runtime/version";
 /** Known connector IDs for config schema generation. Keep in sync with runtime/plugin maps. */
 export const CONNECTOR_IDS = [
   "telegram",
+  "telegramAccount",
   "discord",
   "slack",
   "twitter",
   "whatsapp",
   "signal",
-  "bluebubbles",
   "imessage",
   "farcaster",
   "lens",
   "msteams",
-  "mattermost",
-  "googlechat",
   "feishu",
   "matrix",
   "nostr",
   "blooio",
   "twitch",
+  "mattermost",
+  "googlechat",
 ] as const;
 
 import { ElizaSchema } from "./zod-schema";
@@ -436,7 +436,6 @@ const FIELD_LABELS: Record<string, string> = {
   "connectors.mattermost": "Mattermost",
   "connectors.signal": "Signal",
   "connectors.imessage": "iMessage",
-  "connectors.bluebubbles": "BlueBubbles",
   "connectors.msteams": "MS Teams",
   "connectors.telegram.botToken": "Telegram Bot Token",
   "connectors.telegram.dmPolicy": "Telegram DM Policy",
@@ -457,7 +456,6 @@ const FIELD_LABELS: Record<string, string> = {
   "connectors.whatsapp.debounceMs": "WhatsApp Message Debounce (ms)",
   "connectors.signal.dmPolicy": "Signal DM Policy",
   "connectors.imessage.dmPolicy": "iMessage DM Policy",
-  "connectors.bluebubbles.dmPolicy": "BlueBubbles DM Policy",
   "connectors.discord.dm.policy": "Discord DM Policy",
   "connectors.discord.retry.attempts": "Discord Retry Attempts",
   "connectors.discord.retry.minDelayMs": "Discord Retry Min Delay (ms)",
@@ -727,11 +725,11 @@ const FIELD_HELP: Record<string, string> = {
   "agents.defaults.memorySearch.cache.enabled":
     "Cache chunk embeddings in SQLite to speed up reindexing and frequent updates (default: true).",
   "embedding.model":
-    "GGUF model filename for local embeddings (default: nomic-embed-text-v1.5.Q5_K_M.gguf).",
+    "GGUF model filename for local embeddings (default: bge-small-en-v1.5.Q4_K_M.gguf).",
   "embedding.modelRepo":
-    "HuggingFace repo for auto-downloading the embedding model (default: nomic-ai/nomic-embed-text-v1.5-GGUF).",
+    "HuggingFace repo for auto-downloading the embedding model (default: ChristianAzinn/bge-small-en-v1.5-gguf).",
   "embedding.dimensions":
-    "Embedding vector dimensions (must match the model; default: 768).",
+    "Embedding vector dimensions (must match the model; default: 384).",
   "embedding.contextSize":
     "Embedding context window size (must match the model; default inferred from selected model).",
   "embedding.gpuLayers":
@@ -920,8 +918,6 @@ const FIELD_HELP: Record<string, string> = {
     'Direct message access control ("pairing" recommended). "open" requires connectors.signal.allowFrom=["*"].',
   "connectors.imessage.dmPolicy":
     'Direct message access control ("pairing" recommended). "open" requires connectors.imessage.allowFrom=["*"].',
-  "connectors.bluebubbles.dmPolicy":
-    'Direct message access control ("pairing" recommended). "open" requires connectors.bluebubbles.allowFrom=["*"].',
   "connectors.discord.dm.policy":
     'Direct message access control ("pairing" recommended). "open" requires connectors.discord.dm.allowFrom=["*"].',
   "connectors.discord.retry.attempts":

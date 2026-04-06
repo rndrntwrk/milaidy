@@ -103,9 +103,17 @@ trap cleanup EXIT
 log "Installing dependencies"
 bun install --frozen-lockfile --ignore-scripts
 
+log "Running repository postinstall"
+SKIP_AVATAR_CLONE=1 MILADY_NO_VISION_DEPS=1 bun run postinstall
+
 log "Building Capacitor plugins"
 pushd apps/app >/dev/null
 bun scripts/plugin-build.mjs
+popd >/dev/null
+
+log "Building bundled orchestrator workspace"
+pushd plugins/plugin-agent-orchestrator >/dev/null
+bun run build
 popd >/dev/null
 
 log "Building runtime dist"

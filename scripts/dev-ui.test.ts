@@ -174,7 +174,7 @@ describe("resolveOnchainPreference — explicit env var", () => {
 // ---------------------------------------------------------------------------
 
 describe("resolveOnchainPreference — non-TTY defaults", () => {
-  it("defaults to enabled when no env var and not a TTY", async () => {
+  it("defaults to enabled when anvil is already available", async () => {
     const result = await resolveOnchainPreference({
       env: {},
       isTTY: false,
@@ -185,7 +185,43 @@ describe("resolveOnchainPreference — non-TTY defaults", () => {
     expect(result.anchorRequested).toBe(true);
   });
 
-  it("defaults to enabled when no env var and no promptFn", async () => {
+  it("auto-installs Foundry when anvil missing in non-TTY mode", async () => {
+    const install = vi.fn(async () => true);
+    const result = await resolveOnchainPreference({
+      env: {},
+      isTTY: false,
+      whichFn: whichMissingAnvil,
+      promptFn: vi.fn(),
+      installFn: install,
+    });
+    expect(result.onchainEnabled).toBe(true);
+    expect(install).toHaveBeenCalledTimes(1);
+  });
+
+  it("disables on-chain when anvil missing and auto-install fails", async () => {
+    const result = await resolveOnchainPreference({
+      env: {},
+      isTTY: false,
+      whichFn: whichMissingAnvil,
+      promptFn: vi.fn(),
+      installFn: installFailure,
+    });
+    expect(result.onchainEnabled).toBe(false);
+    expect(result.anchorRequested).toBe(false);
+  });
+
+  it("disables on-chain when anvil missing and no installFn", async () => {
+    const result = await resolveOnchainPreference({
+      env: {},
+      isTTY: false,
+      whichFn: whichMissingAnvil,
+      promptFn: vi.fn(),
+    });
+    expect(result.onchainEnabled).toBe(false);
+    expect(result.anchorRequested).toBe(false);
+  });
+
+  it("defaults to enabled when no promptFn and anvil available", async () => {
     const result = await resolveOnchainPreference({
       env: {},
       isTTY: true,
@@ -258,16 +294,17 @@ describe("resolveOnchainPreference — interactive (TTY)", () => {
   it("anvil missing + accepts install + install fails → disabled", async () => {
     // answer[0] = "Install Foundry?" → true
     const promptFn = makePrompt([true]);
+    const localInstallFailure = vi.fn(async () => false);
     const result = await resolveOnchainPreference({
       env: {},
       isTTY: true,
       whichFn: whichMissingAnvil,
       promptFn,
-      installFn: installFailure,
+      installFn: localInstallFailure,
     });
     expect(result.onchainEnabled).toBe(false);
     expect(result.anchorRequested).toBe(false);
-    expect(installFailure).toHaveBeenCalledTimes(1);
+    expect(localInstallFailure).toHaveBeenCalledTimes(1);
     expect(promptFn).toHaveBeenCalledTimes(1);
   });
 

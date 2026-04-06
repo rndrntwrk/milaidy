@@ -10,6 +10,32 @@ const SETUP_ACTION_PATH = path.join(
 const CI_WORKFLOW_PATH = path.join(ROOT, ".github/workflows/ci.yml");
 const CI_FORK_WORKFLOW_PATH = path.join(ROOT, ".github/workflows/ci-fork.yml");
 const TEST_WORKFLOW_PATH = path.join(ROOT, ".github/workflows/test.yml");
+const BUILD_DOCKER_WORKFLOW_PATH = path.join(
+  ROOT,
+  ".github/workflows/build-docker.yml",
+);
+const BUILD_CLOUD_IMAGE_WORKFLOW_PATH = path.join(
+  ROOT,
+  ".github/workflows/build-cloud-image.yml",
+);
+const DOCKER_SMOKE_WORKFLOW_PATH = path.join(
+  ROOT,
+  ".github/workflows/docker-ci-smoke.yml",
+);
+const ADDITIONAL_SUBMODULE_WORKFLOW_PATHS = [
+  ".github/workflows/agent-fix-ci.yml",
+  ".github/workflows/agent-implement.yml",
+  ".github/workflows/agent-release.yml",
+  ".github/workflows/apple-store-release.yml",
+  ".github/workflows/deploy-web.yml",
+  ".github/workflows/nightly.yml",
+  ".github/workflows/release-electrobun-build-linux-x64-testbox.yml",
+  ".github/workflows/release-electrobun-build-windows-x64-testbox.yml",
+  ".github/workflows/release-electrobun.yml",
+  ".github/workflows/reusable-npm-publish.yml",
+  ".github/workflows/test-electrobun-release.yml",
+  ".github/workflows/windows-desktop-preload-smoke.yml",
+].map((workflowPath) => path.join(ROOT, workflowPath));
 
 function read(filePath: string): string {
   return fs.readFileSync(filePath, "utf8");
@@ -18,6 +44,8 @@ function read(filePath: string): string {
 function countOccurrences(text: string, needle: string): number {
   return text.split(needle).length - 1;
 }
+
+const WINDOWS_OPTIONAL_SUBMODULE_EXPR = `submodules: \${{ matrix.os == 'windows-latest' && 'false' || 'recursive' }}`;
 
 describe("CI workflow drift", () => {
   it("defines a shared workspace setup action for Bun-based jobs", () => {
@@ -72,5 +100,41 @@ describe("CI workflow drift", () => {
     expect(workflow).toContain(
       "install-command: bun install --frozen-lockfile --ignore-scripts",
     );
+  });
+
+  it("checks out recursive submodules before root workspace installs", () => {
+    expect(
+      countOccurrences(read(CI_WORKFLOW_PATH), "submodules: recursive"),
+    ).toBe(5);
+    expect(
+      countOccurrences(read(TEST_WORKFLOW_PATH), "submodules: recursive"),
+    ).toBe(7);
+    expect(
+      countOccurrences(
+        read(TEST_WORKFLOW_PATH),
+        WINDOWS_OPTIONAL_SUBMODULE_EXPR,
+      ),
+    ).toBe(6);
+    expect(read(BUILD_DOCKER_WORKFLOW_PATH)).toContain("submodules: recursive");
+    expect(read(BUILD_CLOUD_IMAGE_WORKFLOW_PATH)).toContain(
+      "submodules: recursive",
+    );
+    expect(read(DOCKER_SMOKE_WORKFLOW_PATH)).toContain("submodules: recursive");
+    for (const workflowPath of ADDITIONAL_SUBMODULE_WORKFLOW_PATHS) {
+      expect(read(workflowPath)).toContain("submodules: recursive");
+    }
+  });
+
+  it("builds the bundled orchestrator workspace before Docker image packaging", () => {
+    const dockerWorkflow = read(BUILD_DOCKER_WORKFLOW_PATH);
+    const cloudWorkflow = read(BUILD_CLOUD_IMAGE_WORKFLOW_PATH);
+
+    expect(dockerWorkflow).toContain("Build bundled orchestrator workspace");
+    expect(dockerWorkflow).toContain("cd plugins/plugin-agent-orchestrator");
+    expect(dockerWorkflow).toContain("bun run build");
+
+    expect(cloudWorkflow).toContain("Build bundled orchestrator workspace");
+    expect(cloudWorkflow).toContain("cd plugins/plugin-agent-orchestrator");
+    expect(cloudWorkflow).toContain("bun run build");
   });
 });

@@ -156,7 +156,7 @@ bun install
 Or use the setup script:
 
 ```bash
-node scripts/setup-eliza-workspace.mjs
+bun run setup:upstreams
 ```
 
 ## Self-Modification Workflow

@@ -9,8 +9,75 @@ import type {
   TriggerWakeMode,
 } from "./client-types-core";
 import type { ReleaseChannel } from "@miladyai/agent/contracts/config";
+import type {
+  CompleteLifeOpsOccurrenceRequest,
+  CreateLifeOpsCalendarEventRequest,
+  CreateLifeOpsGmailReplyDraftRequest,
+  DisconnectLifeOpsGoogleConnectorRequest,
+  CreateLifeOpsDefinitionRequest,
+  CreateLifeOpsGoalRequest,
+  GetLifeOpsCalendarFeedRequest,
+  GetLifeOpsGmailTriageRequest,
+  LifeOpsCalendarEvent,
+  LifeOpsCalendarFeed,
+  LifeOpsDefinitionRecord,
+  LifeOpsGmailMessageSummary,
+  LifeOpsGmailReplyDraft,
+  LifeOpsGmailTriageFeed,
+  LifeOpsGoalRecord,
+  LifeOpsGoalReview,
+  LifeOpsNextCalendarEventContext,
+  LifeOpsGoogleConnectorStatus,
+  LifeOpsOccurrenceExplanation,
+  SelectLifeOpsGoogleConnectorPreferenceRequest,
+  SendLifeOpsGmailReplyRequest,
+  StartLifeOpsGoogleConnectorRequest,
+  StartLifeOpsGoogleConnectorResponse,
+  LifeOpsOccurrenceView,
+  LifeOpsOverview,
+  LifeOpsReminderPlan,
+  LifeOpsTaskDefinition,
+  LifeOpsReminderInspection,
+  SnoozeLifeOpsOccurrenceRequest,
+  UpdateLifeOpsDefinitionRequest,
+  UpdateLifeOpsGoalRequest,
+} from "@miladyai/shared/contracts/lifeops";
 import type { ConfigUiHint } from "../types";
 import type { MessageExampleContent } from "@miladyai/shared/contracts/onboarding";
+
+export type {
+  CompleteLifeOpsOccurrenceRequest,
+  CreateLifeOpsCalendarEventRequest,
+  CreateLifeOpsGmailReplyDraftRequest,
+  DisconnectLifeOpsGoogleConnectorRequest,
+  CreateLifeOpsDefinitionRequest,
+  CreateLifeOpsGoalRequest,
+  GetLifeOpsCalendarFeedRequest,
+  GetLifeOpsGmailTriageRequest,
+  LifeOpsCalendarEvent,
+  LifeOpsCalendarFeed,
+  LifeOpsDefinitionRecord,
+  LifeOpsGmailMessageSummary,
+  LifeOpsGmailReplyDraft,
+  LifeOpsGmailTriageFeed,
+  LifeOpsGoalRecord,
+  LifeOpsGoalReview,
+  LifeOpsNextCalendarEventContext,
+  LifeOpsGoogleConnectorStatus,
+  LifeOpsOccurrenceExplanation,
+  SelectLifeOpsGoogleConnectorPreferenceRequest,
+  SendLifeOpsGmailReplyRequest,
+  StartLifeOpsGoogleConnectorRequest,
+  StartLifeOpsGoogleConnectorResponse,
+  LifeOpsOccurrenceView,
+  LifeOpsOverview,
+  LifeOpsReminderPlan,
+  LifeOpsTaskDefinition,
+  LifeOpsReminderInspection,
+  SnoozeLifeOpsOccurrenceRequest,
+  UpdateLifeOpsDefinitionRequest,
+  UpdateLifeOpsGoalRequest,
+} from "@miladyai/shared/contracts/lifeops";
 
 export interface SecretInfo {
   key: string;
@@ -57,6 +124,10 @@ export interface PluginInfo {
   validationWarnings: Array<{ field: string; message: string }>;
   npmName?: string;
   version?: string;
+  releaseStream?: "latest" | "alpha";
+  requestedVersion?: string;
+  latestVersion?: string | null;
+  alphaVersion?: string | null;
   pluginDeps?: string[];
   /** Whether this plugin is actually loaded and running in the runtime. */
   isActive?: boolean;
@@ -355,12 +426,46 @@ export interface InstalledPlugin {
   version: string;
   installPath: string;
   installedAt: string;
+  releaseStream?: "latest" | "alpha";
+  requestedVersion?: string;
+  latestVersion?: string | null;
+  alphaVersion?: string | null;
+}
+
+export type PluginMutationApplyMode =
+  | "none"
+  | "config_apply"
+  | "plugin_reload"
+  | "runtime_reload"
+  | "restart_required";
+
+export interface PluginMutationResult {
+  ok: boolean;
+  pluginName?: string;
+  applied?: PluginMutationApplyMode;
+  requiresRestart?: boolean;
+  restartedRuntime?: boolean;
+  loadedPackages?: string[];
+  unloadedPackages?: string[];
+  reloadedPackages?: string[];
+  message?: string;
+  error?: string;
 }
 
 export interface PluginInstallResult {
   ok: boolean;
+  pluginName?: string;
   plugin?: { name: string; version: string; installPath: string };
+  applied?: PluginMutationApplyMode;
   requiresRestart?: boolean;
+  restartedRuntime?: boolean;
+  loadedPackages?: string[];
+  unloadedPackages?: string[];
+  reloadedPackages?: string[];
+  releaseStream?: "latest" | "alpha";
+  requestedVersion?: string;
+  latestVersion?: string | null;
+  alphaVersion?: string | null;
   message?: string;
   error?: string;
 }
@@ -406,11 +511,16 @@ export interface WorkbenchOverview {
   tasks: WorkbenchTask[];
   triggers: TriggerSummary[];
   todos: WorkbenchTodo[];
+  lifeops?: LifeOpsOverview;
   autonomy?: {
     enabled: boolean;
     thinking: boolean;
     lastEventAt?: number | null;
   };
+}
+
+export interface LifeOpsOccurrenceActionResult {
+  occurrence: LifeOpsOccurrenceView;
 }
 
 // Voice / TTS config

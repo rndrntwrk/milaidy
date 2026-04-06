@@ -40,8 +40,19 @@ class MockWebSocket {
   }
 }
 
+const mockStorage = {
+  getItem: () => null,
+  setItem: () => {},
+  removeItem: () => {},
+  clear: () => {},
+  key: () => null,
+  length: 0,
+};
+
 // Install global mocks before importing the client module
 vi.stubGlobal("WebSocket", MockWebSocket);
+vi.stubGlobal("localStorage", mockStorage);
+vi.stubGlobal("sessionStorage", mockStorage);
 vi.stubGlobal(
   "fetch",
   vi.fn().mockResolvedValue({
@@ -61,7 +72,8 @@ vi.mock("@miladyai/agent/contracts/permissions", () => ({}));
 // Provide window.location so connectWs() can build a WS URL
 vi.stubGlobal("window", {
   location: { protocol: "http:", host: "localhost:2138" },
-  sessionStorage: { getItem: () => null, setItem: () => {} },
+  localStorage: mockStorage,
+  sessionStorage: mockStorage,
   navigator: { userAgent: "" },
   __ELIZA_API_BASE__: undefined,
 });

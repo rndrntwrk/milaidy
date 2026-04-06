@@ -11,6 +11,7 @@ export interface PermissionState {
   status: string;
   lastChecked: number;
   canRequest: boolean;
+  reason?: string;
 }
 
 export interface PermissionRouteState {

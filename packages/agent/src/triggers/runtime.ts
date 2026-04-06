@@ -423,38 +423,115 @@ export async function listTriggerTasks(
   runtime: IAgentRuntime,
 ): Promise<Task[]> {
   if (!triggersFeatureEnabled(runtime)) return [];
+  // Query by the "repeat" tag alone rather than the full TRIGGER_TASK_TAGS
+  // set. The core SQL adapter uses ARRAY-contains semantics (AND), so the
+  // tighter query would miss connector-owned heartbeat tasks that tag with
+  // ["queue","repeat","<connector>"] instead of ["queue","repeat","trigger"].
+  // Milady surfaces both — user-created triggers and plugin-owned system
+  // heartbeats — in the Heartbeats view, so we enumerate the wider set here
+  // and let taskToTriggerSummary classify each one.
   return runtime.getTasks({
-    tags: [...TRIGGER_TASK_TAGS],
+    tags: ["repeat"],
     agentIds: [runtime.agentId],
   });
 }
 
+/**
+ * Derive a friendly display name for a plugin-owned repeat task that
+ * doesn't carry explicit trigger metadata. Prefers the task's own
+ * `name` (e.g. "IMESSAGE_HEARTBEAT") humanized, then falls back to the
+ * first non-generic tag ("imessage", "telegram", etc.), then to a
+ * generic "System Heartbeat" label.
+ */
+function deriveSystemHeartbeatName(task: Task): string {
+  if (task.name && task.name.length > 0) {
+    return task.name
+      .replace(/_/g, " ")
+      .toLowerCase()
+      .replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+  const tag = (task.tags ?? []).find(
+    (t) => t !== "queue" && t !== "repeat" && t !== "trigger",
+  );
+  if (tag) {
+    return `${tag.charAt(0).toUpperCase()}${tag.slice(1)} Heartbeat`;
+  }
+  return "System Heartbeat";
+}
+
+/**
+ * Synthesize a read-only TriggerSummary for a plugin-owned repeat task
+ * that Milady's trigger schema doesn't fully own. Connector plugins
+ * (plugin-imessage, plugin-telegram, etc.) register health-probe tasks
+ * through the core task system with tags like ["queue","repeat",
+ * "imessage"] — they're legitimate recurring tasks the user should be
+ * able to see and inspect, but they don't carry the user-authored
+ * `metadata.trigger` payload that taskToTriggerSummary normally keys
+ * on. We fabricate a minimal summary from the task's own fields so
+ * they appear in the Heartbeats UI as "system" entries.
+ */
+function synthesizeSystemHeartbeatSummary(task: Task): TriggerSummary | null {
+  if (!task.id) return null;
+  const metadata = taskMetadata(task);
+  const intervalMs =
+    typeof metadata.updateInterval === "number"
+      ? metadata.updateInterval
+      : undefined;
+  const tags = task.tags ?? [];
+  // Identify the owning plugin from the third tag (first two are "queue"
+  // and "repeat"). This becomes createdBy so the UI can group by source.
+  const createdBy =
+    tags.find((t) => t !== "queue" && t !== "repeat" && t !== "trigger") ??
+    "system";
+  return {
+    id: task.id,
+    taskId: task.id,
+    displayName: deriveSystemHeartbeatName(task),
+    instructions: task.description ?? "",
+    triggerType: "interval",
+    enabled: true,
+    wakeMode: "next_autonomy_cycle",
+    createdBy,
+    intervalMs,
+    runCount: 0,
+    updatedAt:
+      typeof metadata.updatedAt === "number" ? metadata.updatedAt : undefined,
+    updateInterval: intervalMs,
+  };
+}
+
 export function taskToTriggerSummary(task: Task): TriggerSummary | null {
   const trigger = readTriggerConfig(task);
-  if (!trigger || !task.id) return null;
-  const metadata = taskMetadata(task);
-  return {
-    id: trigger.triggerId,
-    taskId: task.id,
-    displayName: trigger.displayName,
-    instructions: trigger.instructions,
-    triggerType: trigger.triggerType,
-    enabled: trigger.enabled,
-    wakeMode: trigger.wakeMode,
-    createdBy: trigger.createdBy,
-    timezone: trigger.timezone,
-    intervalMs: trigger.intervalMs,
-    scheduledAtIso: trigger.scheduledAtIso,
-    cronExpression: trigger.cronExpression,
-    maxRuns: trigger.maxRuns,
-    runCount: trigger.runCount,
-    nextRunAtMs: trigger.nextRunAtMs,
-    lastRunAtIso: trigger.lastRunAtIso,
-    lastStatus: trigger.lastStatus,
-    lastError: trigger.lastError,
-    updatedAt: metadata.updatedAt,
-    updateInterval: metadata.updateInterval,
-  };
+  if (trigger && task.id) {
+    const metadata = taskMetadata(task);
+    return {
+      id: trigger.triggerId,
+      taskId: task.id,
+      displayName: trigger.displayName,
+      instructions: trigger.instructions,
+      triggerType: trigger.triggerType,
+      enabled: trigger.enabled,
+      wakeMode: trigger.wakeMode,
+      createdBy: trigger.createdBy,
+      timezone: trigger.timezone,
+      intervalMs: trigger.intervalMs,
+      scheduledAtIso: trigger.scheduledAtIso,
+      cronExpression: trigger.cronExpression,
+      maxRuns: trigger.maxRuns,
+      runCount: trigger.runCount,
+      nextRunAtMs: trigger.nextRunAtMs,
+      lastRunAtIso: trigger.lastRunAtIso,
+      lastStatus: trigger.lastStatus,
+      lastError: trigger.lastError,
+      updatedAt: metadata.updatedAt,
+      updateInterval: metadata.updateInterval,
+    };
+  }
+
+  // Plugin-owned repeat task without user-authored trigger metadata —
+  // surface it as a read-only system heartbeat so it shows up in the
+  // Heartbeats list instead of silently disappearing.
+  return synthesizeSystemHeartbeatSummary(task);
 }
 
 export async function getTriggerHealthSnapshot(

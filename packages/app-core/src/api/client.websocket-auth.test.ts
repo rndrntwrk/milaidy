@@ -40,6 +40,11 @@ describe("MiladyClient WebSocket auth", () => {
           protocol: "http:",
           host: "127.0.0.1:31337",
         },
+        localStorage: {
+          getItem: () => null,
+          setItem: () => {},
+          removeItem: () => {},
+        },
         sessionStorage: {
           getItem: () => null,
           setItem: () => {},

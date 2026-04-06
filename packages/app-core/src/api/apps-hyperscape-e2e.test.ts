@@ -8,6 +8,7 @@
  * 4. Verify viewer config - Should have correct URLs
  */
 
+import { existsSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { AppManager } from "../services/app-manager";
 import type {
@@ -23,10 +24,11 @@ const HYPERSCAPE_LOCAL_PLUGIN: RegistryPluginInfo = {
   displayName: "Hyperscape",
   description:
     "AI-powered 3D multiplayer RPG — explore, fight, gather, craft, and socialize with AI agents",
-  homepage: "https://hyperscape.ai",
+  homepage: "https://hyperscape.gg",
   topics: ["rpg", "3d", "multiplayer", "mmo", "game"],
   stars: 0,
   language: "TypeScript",
+  kind: "app",
   npm: {
     package: "@elizaos/app-hyperscape",
     v0Version: null,
@@ -51,10 +53,27 @@ const HYPERSCAPE_LOCAL_PLUGIN: RegistryPluginInfo = {
   launchUrl: "http://localhost:3333",
   viewer: {
     url: "http://localhost:3333",
+    embedParams: {
+      embedded: "true",
+      mode: "spectator",
+      surface: "agent-control",
+      followEntity: "{HYPERSCAPE_CHARACTER_ID}",
+    },
     postMessageAuth: true,
     sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
   },
+  session: {
+    mode: "spectate-and-steer",
+    features: ["commands", "telemetry", "pause", "resume", "suggestions"],
+  },
 };
+
+const hasLocalHyperscapePlugin = existsSync(
+  new URL(
+    "../../../../../plugins/app-hyperscape/elizaos.plugin.json",
+    import.meta.url,
+  ),
+);
 
 function createMockPluginManager(
   plugins: RegistryPluginInfo[] = [HYPERSCAPE_LOCAL_PLUGIN],
@@ -106,7 +125,7 @@ function createMockPluginManager(
   };
 }
 
-describe("Hyperscape E2E Integration", () => {
+describe.skipIf(!hasLocalHyperscapePlugin)("Hyperscape E2E Integration", () => {
   let appManager: AppManager;
   let pluginManager: PluginManagerLike;
   let originalEnv: Record<string, string | undefined>;
@@ -228,9 +247,32 @@ describe("Hyperscape E2E Integration", () => {
         pluginManager,
         "@elizaos/app-hyperscape",
       );
+      const viewerUrl = new URL(result.viewer?.url ?? "http://localhost");
 
       expect(result.viewer).toBeDefined();
-      expect(result.viewer?.url).toBe("http://localhost:3333");
+      expect(viewerUrl.origin).toBe("http://localhost:3333");
+      expect(viewerUrl.searchParams.get("embedded")).toBe("true");
+      expect(viewerUrl.searchParams.get("mode")).toBe("spectator");
+      expect(viewerUrl.searchParams.get("surface")).toBe("agent-control");
+      expect(viewerUrl.searchParams.get("followEntity")).toBe(
+        "test-character-id",
+      );
+      expect(result.viewer?.authMessage).toEqual(
+        expect.objectContaining({
+          type: "HYPERSCAPE_AUTH",
+          authToken: "test-auth-token",
+          characterId: "test-character-id",
+          followEntity: "test-character-id",
+        }),
+      );
+      expect(result.session).toEqual(
+        expect.objectContaining({
+          mode: "spectate-and-steer",
+          status: "connecting",
+          characterId: "test-character-id",
+          followEntity: "test-character-id",
+        }),
+      );
     });
 
     test("returns viewer sandbox policy", async () => {
@@ -295,7 +337,15 @@ describe("Hyperscape E2E Integration", () => {
         pluginManager,
         "@elizaos/app-hyperscape",
       );
-      expect(launchResult.viewer?.url).toBe("http://localhost:3333");
+      const viewerUrl = new URL(launchResult.viewer?.url ?? "http://localhost");
+      expect(viewerUrl.origin).toBe("http://localhost:3333");
+      expect(viewerUrl.searchParams.get("embedded")).toBe("true");
+      expect(viewerUrl.searchParams.get("mode")).toBe("spectator");
+      expect(viewerUrl.searchParams.get("surface")).toBe("agent-control");
+      expect(viewerUrl.searchParams.get("followEntity")).toBe(
+        "test-character-id",
+      );
+      expect(launchResult.session?.mode).toBe("spectate-and-steer");
 
       // Step 4: Verify can stop
       const stopResult = await appManager.stop(

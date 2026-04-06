@@ -41,6 +41,7 @@ import {
 } from "./response";
 import {
   DATABASE_UNAVAILABLE_MESSAGE,
+  clearCompatRuntimeRestart,
   getConfiguredCompatAgentName,
   hasCompatPersistedOnboardingState,
   isLoopbackRemoteAddress,
@@ -146,6 +147,7 @@ import { handleDatabaseRowsCompatRoute } from "./database-rows-compat-routes";
 import { handleDevCompatRoutes } from "./dev-compat-routes";
 import { handleOnboardingCompatRoute } from "./onboarding-compat-routes";
 import { handlePluginsCompatRoutes } from "./plugins-compat-routes";
+import { handleWalletBrowserCompatRoutes } from "./wallet-browser-compat-routes";
 import { handleWalletTradeCompatRoutes } from "./wallet-trade-compat-routes";
 import { handleStewardCompatRoutes } from "./steward-compat-routes";
 import { handleWorkbenchCompatRoutes } from "./workbench-compat-routes";
@@ -191,6 +193,26 @@ const _PACKAGE_ROOT_NAMES = new Set(["eliza", "elizaai", "elizaos"]);
 // Pairing infrastructure — now in ./auth-pairing-compat-routes
 // getProvidedApiToken, ensureCompatApiAuthorized, isDevEnvironment,
 // ensureCompatSensitiveRouteAuthorized — now imported from ./auth
+
+function hydrateWalletOsStoreFlagFromConfig(): void {
+  if (process.env.MILADY_WALLET_OS_STORE?.trim()) {
+    return;
+  }
+
+  try {
+    const config = loadElizaConfig();
+    const persistedEnv =
+      config.env && typeof config.env === "object" && !Array.isArray(config.env)
+        ? (config.env as Record<string, unknown>)
+        : undefined;
+    const raw = persistedEnv?.MILADY_WALLET_OS_STORE;
+    if (typeof raw === "string" && raw.trim()) {
+      process.env.MILADY_WALLET_OS_STORE = raw.trim();
+    }
+  } catch {
+    // Best effort only; upstream startup will still load config normally.
+  }
+}
 
 function resolveCompatConfigPaths(): {
   elizaConfigPath?: string;
@@ -469,6 +491,27 @@ function rewriteCompatStatusBody(
 
     const payload = parsed as Record<string, unknown>;
     mergeMiladyEmbeddingIntoStatusPayload(payload);
+
+    const upstreamPendingRestartReasons = Array.isArray(
+      payload.pendingRestartReasons,
+    )
+      ? payload.pendingRestartReasons.filter(
+          (value): value is string => typeof value === "string",
+        )
+      : [];
+    const pendingRestartReasons = Array.from(
+      new Set([
+        ...upstreamPendingRestartReasons,
+        ...state.pendingRestartReasons,
+      ]),
+    );
+    if (
+      pendingRestartReasons.length > 0 ||
+      typeof payload.pendingRestart === "boolean"
+    ) {
+      payload.pendingRestart = pendingRestartReasons.length > 0;
+      payload.pendingRestartReasons = pendingRestartReasons;
+    }
 
     if (!agentName) {
       return JSON.stringify(payload);
@@ -790,8 +833,20 @@ async function handleMiladyCompatRoute(
   }
 
   // ── Vincent OAuth routes ────────────────────────────────────────
-  if (url.pathname.startsWith("/api/vincent/")) {
-    if (!ensureCompatApiAuthorized(req, res)) return true;
+  // /callback/vincent is the OAuth redirect target and is hit by the user's
+  // external system browser — it has no compat API token, so it must bypass
+  // ensureCompatApiAuthorized. The PKCE code_verifier stored server-side
+  // (keyed by the OAuth state param) is what actually authorizes the
+  // token exchange.
+  if (
+    url.pathname.startsWith("/api/vincent/") ||
+    url.pathname === "/callback/vincent"
+  ) {
+    if (
+      url.pathname !== "/callback/vincent" &&
+      !ensureCompatApiAuthorized(req, res)
+    )
+      return true;
     const vincentConfig = loadElizaConfig();
     const handled = await handleVincentRoute(req, res, url.pathname, method, {
       config: vincentConfig,
@@ -842,6 +897,9 @@ async function handleMiladyCompatRoute(
 
   // Wallet OS-store, keys, NFTs — extracted to wallet-compat-routes.ts
   if (await handleWalletCompatRoutes(req, res, state)) return true;
+
+  // Browser wallet bridge transactions.
+  if (await handleWalletBrowserCompatRoutes(req, res, state)) return true;
 
   // Steward wallet routes — extracted to steward-compat-routes.ts
   if (await handleStewardCompatRoutes(req, res, state)) return true;
@@ -1054,6 +1112,7 @@ export async function startApiServer(
   // the upstream Eliza TTS handler can use it (the `/api/tts/elevenlabs` route
   // passes through to upstream which checks this env var).
   ensureCloudTtsApiKeyAlias();
+  hydrateWalletOsStoreFlagFromConfig();
   await hydrateWalletKeysFromNodePlatformSecureStore();
 
   // Pre-load steward wallet addresses so getWalletAddresses() has them
@@ -1062,6 +1121,7 @@ export async function startApiServer(
   const compatState: CompatRuntimeState = {
     current: (args[0]?.runtime as AgentRuntime | null) ?? null,
     pendingAgentName: null,
+    pendingRestartReasons: [],
   };
   const restoreCreateServer = patchHttpCreateServerForMiladyCompat(compatState);
 
@@ -1086,6 +1146,7 @@ export async function startApiServer(
 
     server.updateRuntime = (runtime: AgentRuntime) => {
       compatState.current = runtime;
+      clearCompatRuntimeRestart(compatState);
       // Make the runtime immediately visible to upstream routes so hot swaps do
       // not briefly return 503s while compat setup finishes in the background.
       originalUpdateRuntime(runtime);

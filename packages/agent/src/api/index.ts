@@ -5,6 +5,7 @@ export * from "./agent-transfer-routes";
 export * from "./apps-routes";
 export * from "./auth-routes";
 export * from "./bug-report-routes";
+export * from "./browser-workspace-routes";
 export * from "./character-routes";
 export * from "./cloud-billing-routes";
 export * from "./cloud-compat-routes";
@@ -32,6 +33,7 @@ export * from "./memory-routes";
 export * from "./merkle-tree";
 export * from "./models-routes";
 export * from "./nfa-routes";
+export * from "./nft-verify";
 export * from "./og-tracker";
 export * from "./parse-action-block";
 export * from "./permissions-routes";
@@ -67,6 +69,7 @@ export * from "./wallet-evm-balance";
 export * from "./wallet-routes";
 export * from "./wallet-rpc";
 export * from "./wallet-trading-profile";
+export * from "./website-blocker-routes";
 export {
   applyWhatsAppQrOverride,
   handleWhatsAppRoute,

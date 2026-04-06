@@ -6,7 +6,6 @@ import {
   embeddingGgufFilePresent,
   findExistingEmbeddingModelForWarmupReuse,
 } from "./embedding-manager-support.js";
-import { EMBEDDING_PRESETS } from "./embedding-presets.js";
 
 describe("embedding warmup reuse (MODELS_DIR)", () => {
   const dirs: string[] = [];
@@ -33,14 +32,12 @@ describe("embedding warmup reuse (MODELS_DIR)", () => {
     expect(findExistingEmbeddingModelForWarmupReuse(dir)).toBeNull();
   });
 
-  it("prefers smaller known presets over bge when both exist", () => {
+  it("reuses the compact bge file when it exists", () => {
     const dir = tempModelsDir();
-    const nomic = EMBEDDING_PRESETS.fallback.model;
     const bge = "bge-small-en-v1.5.Q4_K_M.gguf";
     fs.writeFileSync(path.join(dir, bge), "x");
-    fs.writeFileSync(path.join(dir, nomic), "x");
     const found = findExistingEmbeddingModelForWarmupReuse(dir);
-    expect(found?.model).toBe(nomic);
+    expect(found?.model).toBe(bge);
   });
 
   it("selects bge when it is the only known file", () => {
@@ -50,6 +47,16 @@ describe("embedding warmup reuse (MODELS_DIR)", () => {
     const found = findExistingEmbeddingModelForWarmupReuse(dir);
     expect(found?.model).toBe(bge);
     expect(found?.dimensions).toBe(384);
+  });
+
+  it("ignores legacy larger embedding files when compact bge is absent", () => {
+    const dir = tempModelsDir();
+    fs.writeFileSync(
+      path.join(dir, "ggml-e5-mistral-7b-instruct-q4_k_m.gguf"),
+      "x",
+    );
+    fs.writeFileSync(path.join(dir, "nomic-embed-text-v1.5.Q5_K_M.gguf"), "x");
+    expect(findExistingEmbeddingModelForWarmupReuse(dir)).toBeNull();
   });
 
   it("embeddingGgufFilePresent rejects traversal names", () => {

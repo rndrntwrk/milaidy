@@ -8,6 +8,7 @@ import {
   Clock3,
   Gamepad2,
   MessageSquare,
+  Monitor,
   Radio,
   Settings,
   Share2,
@@ -16,8 +17,9 @@ import {
 } from "lucide-react";
 import { DEFAULT_BRANDING } from "../config/branding";
 
-/** Apps are only enabled in dev mode; production builds hide this feature. */
-export const APPS_ENABLED = false; // import.meta.env.DEV;
+/** Apps are enabled by default; opt-out via VITE_ENABLE_APPS=false. */
+export const APPS_ENABLED =
+  String(import.meta.env.VITE_ENABLE_APPS ?? "true").toLowerCase() !== "false";
 
 /** Stream routes stay addressable; the nav hides the tab unless streaming is enabled. */
 export const STREAM_ENABLED = true;
@@ -28,6 +30,7 @@ export const COMPANION_ENABLED =
 
 export type Tab =
   | "chat"
+  | "browser"
   | "companion"
   | "stream"
   | "apps"
@@ -61,7 +64,14 @@ export const ALL_TAB_GROUPS: TabGroup[] = [
     label: "Chat",
     tabs: ["chat"],
     icon: MessageSquare,
-    description: "Conversations and messaging",
+    description:
+      "Conversations with your agent and inbound messages from every connector",
+  },
+  {
+    label: "Browser",
+    tabs: ["browser"],
+    icon: Monitor,
+    description: "Agent-controlled browser workspace",
   },
   {
     label: "Stream",
@@ -134,6 +144,7 @@ export function getTabGroups(streamEnabled = STREAM_ENABLED): TabGroup[] {
 
 const TAB_PATHS: Record<Tab, string> = {
   chat: "/chat",
+  browser: "/browser",
   companion: "/companion",
   stream: "/stream",
   apps: "/apps",
@@ -207,6 +218,7 @@ export function resolveInitialTabForPath(
 export function tabFromPath(pathname: string, basePath = ""): Tab | null {
   const normalized = normalizePathForLookup(pathname, basePath);
   if (normalized === "/") return "chat";
+  if (normalized === "/browser") return "browser";
   if (normalized === "/voice") return "settings";
   // Companion disabled unless explicitly feature-flagged
   if (
@@ -246,6 +258,8 @@ export function titleForTab(tab: Tab): string {
   switch (tab) {
     case "chat":
       return "Chat";
+    case "browser":
+      return "Browser";
     case "companion":
       return "Companion";
     case "apps":

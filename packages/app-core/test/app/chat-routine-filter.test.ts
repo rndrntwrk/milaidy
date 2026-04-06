@@ -60,7 +60,7 @@ describe("isRoutineCodingAgentMessage", () => {
     expect(
       isRoutineCodingAgentMessage(
         routine(
-          "All 3 coding agents finished (2 completed, 1 errored). Review their work when you're ready.",
+          "All 3 task agents finished (2 completed, 1 errored). Review their work when you're ready.",
         ),
       ),
     ).toBe(false);

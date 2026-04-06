@@ -59,17 +59,6 @@ import {
   type TargetInfo,
   type UUID,
 } from "@elizaos/core";
-import {
-  isMiladySettingsDebugEnabled,
-  settingsDebugCloudSummary,
-} from "@miladyai/shared";
-let pluginAgentOrchestrator: any;
-try {
-  pluginAgentOrchestrator = require("@elizaos/plugin-agent-orchestrator");
-} catch {
-  // Stripped from cloud image — gracefully degrade
-  pluginAgentOrchestrator = null;
-}
 import * as pluginAgentSkills from "@elizaos/plugin-agent-skills";
 import * as pluginAnthropic from "@elizaos/plugin-anthropic";
 import * as pluginCommands from "@elizaos/plugin-commands";
@@ -88,11 +77,14 @@ import * as pluginRolodex from "@elizaos/plugin-rolodex";
 import * as pluginSecretsManager from "@elizaos/plugin-secrets-manager";
 import * as pluginShell from "@elizaos/plugin-shell";
 import * as pluginSql from "@elizaos/plugin-sql";
-import * as pluginTodo from "@elizaos/plugin-todo";
 import * as pluginTrajectoryLogger from "@elizaos/plugin-trajectory-logger";
 import * as pluginTrust from "@elizaos/plugin-trust";
 import * as pluginRoles from "@miladyai/plugin-roles";
 import * as pluginSelfControl from "@miladyai/plugin-selfcontrol";
+import {
+  isMiladySettingsDebugEnabled,
+  settingsDebugCloudSummary,
+} from "@miladyai/shared";
 import { resolveElizaCloudTopology } from "@miladyai/shared/contracts";
 import {
   getOnboardingProviderOption,
@@ -110,7 +102,7 @@ import {
   type ElizaConfig,
   loadElizaConfig,
 } from "../config/config";
-import { collectConfigEnvVars } from "../config/env-vars";
+import { CONNECTOR_ENV_MAP, collectConfigEnvVars } from "../config/env-vars";
 import { resolveStateDir, resolveUserPath } from "../config/paths";
 import { resolveServerOnlyPort } from "../config/runtime-env";
 import type { PluginInstallRecord } from "../config/types.eliza";
@@ -137,7 +129,17 @@ import { CORE_PLUGINS, OPTIONAL_CORE_PLUGINS } from "./core-plugins";
 import { seedBundledKnowledge } from "./default-knowledge";
 import { createElizaPlugin } from "./eliza-plugin";
 import { detectEmbeddingPreset } from "./embedding-presets";
+import { installRuntimePluginLifecycle } from "./plugin-lifecycle";
 import { shouldEnableTrajectoryLoggingByDefault } from "./trajectory-persistence";
+import { installMiladyMessageTrajectoryStepBridge } from "./trajectory-step-context";
+
+const require = createRequire(import.meta.url);
+let pluginAgentOrchestrator: unknown = null;
+try {
+  pluginAgentOrchestrator = require("./agent-orchestrator-compat");
+} catch {
+  pluginAgentOrchestrator = null;
+}
 
 type SignalShutdownContext = {
   getRuntime: () => AgentRuntime;
@@ -225,7 +227,9 @@ export const STATIC_ELIZA_PLUGINS: Record<string, unknown> = {
   "@elizaos/plugin-knowledge": pluginKnowledge,
   "@elizaos/plugin-rolodex": pluginRolodex,
   "@elizaos/plugin-trajectory-logger": pluginTrajectoryLogger,
-  ...(pluginAgentOrchestrator ? { "@elizaos/plugin-agent-orchestrator": pluginAgentOrchestrator } : {}),
+  ...(pluginAgentOrchestrator
+    ? { "@elizaos/plugin-agent-orchestrator": pluginAgentOrchestrator }
+    : {}),
   "@elizaos/plugin-cron": pluginCron,
   "@elizaos/plugin-shell": pluginShell,
   "@elizaos/plugin-plugin-manager": pluginPluginManager,
@@ -239,7 +243,6 @@ export const STATIC_ELIZA_PLUGINS: Record<string, unknown> = {
   "@elizaos/plugin-trust": pluginTrust,
   "@miladyai/plugin-selfcontrol": pluginSelfControl,
   "@miladyai/plugin-roles": pluginRoles,
-  "@elizaos/plugin-todo": pluginTodo,
   "@elizaos/plugin-personality": pluginPersonality,
   "@elizaos/plugin-experience": pluginExperience,
 };
@@ -426,6 +429,28 @@ export function configureLocalEmbeddingPlugin(
   // defaults so the plugin always has valid model names.
   setEnvIfMissing("GOOGLE_SMALL_MODEL", "gemini-3-flash-preview");
   setEnvIfMissing("GOOGLE_LARGE_MODEL", "gemini-3.1-pro-preview");
+
+  // Default Groq model names — plugin-groq still ships a deprecated large-model
+  // fallback. Seed runtime defaults before plugin init so direct Groq provider
+  // sessions do not inherit the retired qwen-qwq-32b default.
+  const currentSharedSmallModel =
+    process.env.OPENAI_SMALL_MODEL ?? process.env.SMALL_MODEL;
+  const currentSharedLargeModel =
+    process.env.OPENAI_LARGE_MODEL ?? process.env.LARGE_MODEL;
+  setEnvIfMissing(
+    "GROQ_SMALL_MODEL",
+    currentSharedSmallModel &&
+      !isLikelyOpenAiTextModel(currentSharedSmallModel)
+      ? currentSharedSmallModel
+      : "llama-3.1-8b-instant",
+  );
+  setEnvIfMissing(
+    "GROQ_LARGE_MODEL",
+    currentSharedLargeModel &&
+      !isLikelyOpenAiTextModel(currentSharedLargeModel)
+      ? currentSharedLargeModel
+      : "qwen/qwen3-32b",
+  );
 
   logger.info(
     `[eliza] Configured local embedding env: ${process.env.LOCAL_EMBEDDING_MODEL} (repo: ${process.env.LOCAL_EMBEDDING_MODEL_REPO ?? "auto"}, dims: ${process.env.LOCAL_EMBEDDING_DIMENSIONS ?? "auto"}, ctx: ${process.env.LOCAL_EMBEDDING_CONTEXT_SIZE ?? "auto"}, GPU: ${process.env.LOCAL_EMBEDDING_GPU_LAYERS}, mmap: ${process.env.LOCAL_EMBEDDING_USE_MMAP})`,
@@ -622,7 +647,7 @@ export function normalizeOpenAiCompatibleProviderConfig(
     (currentSharedLargeModel &&
     !isLikelyOpenAiTextModel(currentSharedLargeModel)
       ? currentSharedLargeModel
-      : "qwen-qwq-32b");
+      : "qwen/qwen3-32b");
 
   env.GROQ_API_KEY = inheritedGroqApiKey;
   env.GROQ_SMALL_MODEL = normalizedGroqSmallModel;
@@ -849,6 +874,32 @@ function ensureTrajectoryLoggerEnabled(
   }
 }
 
+async function installPromptOptimizationLayer(
+  runtime: AgentRuntime,
+  context: string,
+): Promise<void> {
+  try {
+    const { installPromptOptimizations } = await import(
+      "./prompt-optimization.js"
+    );
+    installPromptOptimizations(runtime);
+  } catch (err) {
+    logger.warn(
+      `[eliza] Failed to install prompt optimizations (${context}): ${err instanceof Error ? err.message : err}`,
+    );
+  }
+}
+
+async function prepareRuntimeForTrajectoryCapture(
+  runtime: AgentRuntime,
+  context: string,
+): Promise<void> {
+  await waitForTrajectoryLoggerService(runtime, context);
+  ensureTrajectoryLoggerEnabled(runtime, context);
+  await installPromptOptimizationLayer(runtime, context);
+  installMiladyMessageTrajectoryStepBridge(runtime);
+}
+
 // ---------------------------------------------------------------------------
 // Channel secret mapping
 // ---------------------------------------------------------------------------
@@ -860,47 +911,7 @@ function ensureTrajectoryLoggerEnabled(
  * Eliza stores channel credentials under `config.channels.<name>.<field>`,
  * while elizaOS plugins read them from process.env.
  */
-const CHANNEL_ENV_MAP: Readonly<
-  Record<string, Readonly<Record<string, string>>>
-> = {
-  discord: {
-    token: "DISCORD_API_TOKEN",
-    botToken: "DISCORD_API_TOKEN",
-    applicationId: "DISCORD_APPLICATION_ID",
-  },
-  telegram: {
-    botToken: "TELEGRAM_BOT_TOKEN",
-  },
-  slack: {
-    botToken: "SLACK_BOT_TOKEN",
-    appToken: "SLACK_APP_TOKEN",
-    userToken: "SLACK_USER_TOKEN",
-  },
-  signal: {
-    authDir: "SIGNAL_AUTH_DIR",
-    account: "SIGNAL_ACCOUNT_NUMBER",
-    httpUrl: "SIGNAL_HTTP_URL",
-    cliPath: "SIGNAL_CLI_PATH",
-  },
-  msteams: {
-    appId: "MSTEAMS_APP_ID",
-    appPassword: "MSTEAMS_APP_PASSWORD",
-  },
-  mattermost: {
-    botToken: "MATTERMOST_BOT_TOKEN",
-    baseUrl: "MATTERMOST_BASE_URL",
-  },
-  googlechat: {
-    serviceAccountKey: "GOOGLE_CHAT_SERVICE_ACCOUNT_KEY",
-  },
-  blooio: {
-    apiKey: "BLOOIO_API_KEY",
-    fromNumber: "BLOOIO_PHONE_NUMBER",
-    webhookSecret: "BLOOIO_WEBHOOK_SECRET",
-    webhookUrl: "BLOOIO_WEBHOOK_URL",
-    webhookPort: "BLOOIO_WEBHOOK_PORT",
-  },
-};
+const CHANNEL_ENV_MAP = CONNECTOR_ENV_MAP;
 
 // ---------------------------------------------------------------------------
 // Plugin resolution
@@ -1357,12 +1368,8 @@ export function applyConnectorSecretsToEnv(config: ElizaConfig): void {
         (typeof configObj.botToken === "string" && configObj.botToken.trim()) ||
         "";
       if (tokenValue) {
-        if (!process.env.DISCORD_API_TOKEN) {
-          process.env.DISCORD_API_TOKEN = tokenValue;
-        }
-        if (!process.env.DISCORD_BOT_TOKEN) {
-          process.env.DISCORD_BOT_TOKEN = tokenValue;
-        }
+        process.env.DISCORD_API_TOKEN = tokenValue;
+        process.env.DISCORD_BOT_TOKEN = tokenValue;
       }
     }
 
@@ -1372,11 +1379,7 @@ export function applyConnectorSecretsToEnv(config: ElizaConfig): void {
     for (const [configField, envKey] of Object.entries(envMap)) {
       const value = configObj[configField];
       if (typeof value === "string" && value.trim()) {
-        // Set if unset, or overwrite stale [REDACTED] placeholders
-        const existing = process.env[envKey];
-        if (!existing || existing.startsWith("[REDACT")) {
-          process.env[envKey] = value;
-        }
+        process.env[envKey] = value;
       }
     }
   }
@@ -1420,6 +1423,63 @@ export async function autoResolveDiscordAppId(): Promise<void> {
 }
 
 /**
+ * Fetch GitHub OAuth token from cloud if available and no local token is set.
+ * Called during async runtime init after cloud config is applied.
+ *
+ * Flow: If the agent has a managed GitHub connection in the cloud, and no
+ * local GITHUB_TOKEN is set, fetch the OAuth token from the cloud API and
+ * inject it into process.env so plugins (plugin-github, git-workspace-service)
+ * can use it for API calls and git credential helpers.
+ */
+/** @internal Exported for testing. */
+export async function autoFetchCloudGithubToken(
+  agentId?: string,
+): Promise<void> {
+  // Skip if a local token is already configured
+  if (process.env.GITHUB_TOKEN || process.env.GITHUB_PAT) return;
+
+  // Need cloud credentials and an agent ID
+  const cloudApiKey = process.env.ELIZAOS_CLOUD_API_KEY?.trim();
+  const cloudBaseUrl =
+    process.env.ELIZAOS_CLOUD_BASE_URL?.trim() || "https://api.elizacloud.ai";
+  if (!cloudApiKey || !agentId) return;
+
+  try {
+    const url = `${cloudBaseUrl}/api/v1/milady/agents/${encodeURIComponent(agentId)}/github/token`;
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${cloudApiKey}`,
+        Accept: "application/json",
+      },
+      signal: AbortSignal.timeout(10_000),
+    });
+
+    if (!res.ok) {
+      // 404 = no GitHub connection for this agent, which is fine
+      if (res.status !== 404) {
+        logger.warn(
+          `[eliza] Failed to fetch cloud GitHub token: ${res.status}`,
+        );
+      }
+      return;
+    }
+
+    const body = (await res.json()) as {
+      success?: boolean;
+      data?: { accessToken?: string; githubUsername?: string };
+    };
+    if (!body.success || !body.data?.accessToken) return;
+
+    process.env.GITHUB_TOKEN = body.data.accessToken;
+    logger.info(
+      `[eliza] Fetched GitHub token from cloud for @${body.data.githubUsername || "unknown"}`,
+    );
+  } catch (err) {
+    logger.warn(`[eliza] Could not fetch cloud GitHub token: ${err}`);
+  }
+}
+
+/**
  * Propagate cloud config from Eliza config into process.env so the
  * ElizaCloud plugin can discover settings at startup.
  */
@@ -1428,19 +1488,10 @@ export function applyCloudConfigToEnv(config: ElizaConfig): void {
   migrateLegacyRuntimeConfig(config as Record<string, unknown>);
   const cloud = config.cloud;
 
-  // Cloud-provisioned containers (Docker env: MILADY_CLOUD_PROVISIONED=1) set
-  // ELIZAOS_CLOUD_API_KEY / ELIZAOS_CLOUD_ENABLED via Docker env vars.  The
-  // config-based topology resolver may not find serviceRouting yet (the config
-  // gets patched on first frontend connect).  Preserve the Docker-provided env
-  // vars so the cloud plugin auto-enables on first boot.
   const isCloudContainer =
     process.env.MILADY_CLOUD_PROVISIONED === "1" ||
     process.env.ELIZA_CLOUD_PROVISIONED === "1";
-
-  // When there is no cloud config AND this is not a cloud container, nothing
-  // to do — Docker env vars (if any) are already correct.
   if (!cloud && !isCloudContainer) return;
-
   const topology = resolveElizaCloudTopology(config as Record<string, unknown>);
 
   // Cloud inference is selected from the canonical onboarding connection, not
@@ -1465,7 +1516,10 @@ export function applyCloudConfigToEnv(config: ElizaConfig): void {
   }
 
   setCloudUsageEnv("ELIZAOS_CLOUD_USE_INFERENCE", effectivelyEnabled);
-  setCloudUsageEnv("ELIZAOS_CLOUD_USE_TTS", topology.services.tts || isCloudContainer);
+  setCloudUsageEnv(
+    "ELIZAOS_CLOUD_USE_TTS",
+    topology.services.tts || isCloudContainer,
+  );
   setCloudUsageEnv("ELIZAOS_CLOUD_USE_MEDIA", topology.services.media);
   setCloudUsageEnv(
     "ELIZAOS_CLOUD_USE_EMBEDDINGS",
@@ -1494,10 +1548,6 @@ export function applyCloudConfigToEnv(config: ElizaConfig): void {
     if (isRealApiKey) {
       process.env.ELIZAOS_CLOUD_API_KEY = cloud.apiKey;
     } else if (!isCloudContainer) {
-      // Only delete the API key when NOT inside a cloud container.
-      // Cloud containers get ELIZAOS_CLOUD_API_KEY via Docker env vars;
-      // a [REDACTED] value in the config is from a UI round-trip and
-      // must not wipe the real key already in process.env.
       delete process.env.ELIZAOS_CLOUD_API_KEY;
     }
     if (cloud?.baseUrl) {
@@ -1672,7 +1722,7 @@ function reconcilePglitePidFile(dataDir: string): PglitePidFileStatus {
     if (Number.isNaN(pid) || pid <= 0) {
       // Malformed pid file — remove it
       unlinkSync(pidPath);
-      logger.warn(`[eliza] Removed malformed PGlite postmaster.pid`);
+      logger.info(`[eliza] Removed malformed PGlite postmaster.pid`);
       return "cleared-malformed";
     }
 
@@ -1689,7 +1739,7 @@ function reconcilePglitePidFile(dataDir: string): PglitePidFileStatus {
       if (code === "ESRCH") {
         // Process doesn't exist — stale pid file, safe to remove
         unlinkSync(pidPath);
-        logger.warn(
+        logger.info(
           `[eliza] Removed stale PGlite postmaster.pid (process ${pid} not running)`,
         );
         return "cleared-stale";
@@ -2072,6 +2122,8 @@ export function installRuntimeMethodBindings(runtime: AgentRuntime): void {
   if (runtimeWithBindings.__elizaMethodBindingsInstalled) {
     return;
   }
+
+  installRuntimePluginLifecycle(runtime);
 
   // Some plugin builds store this method and invoke it later without the
   // runtime receiver, which breaks private-field access in AgentRuntime.
@@ -2465,6 +2517,11 @@ export function buildCharacterFromConfig(config: ElizaConfig): Character {
     "DISCORD_APPLICATION_ID",
     "DISCORD_BOT_TOKEN",
     "TELEGRAM_BOT_TOKEN",
+    "TELEGRAM_ACCOUNT_PHONE",
+    "TELEGRAM_ACCOUNT_APP_ID",
+    "TELEGRAM_ACCOUNT_APP_HASH",
+    "TELEGRAM_ACCOUNT_DEVICE_MODEL",
+    "TELEGRAM_ACCOUNT_SYSTEM_VERSION",
     "SLACK_BOT_TOKEN",
     "SLACK_APP_TOKEN",
     "SLACK_USER_TOKEN",
@@ -2944,6 +3001,10 @@ export async function startEliza(
 
   // 5. Create the Eliza bridge plugin (workspace context + session keys + compaction)
   const agentId = character.name?.toLowerCase().replace(/\s+/g, "-") ?? "main";
+
+  // 5a. If cloud is configured and no local GitHub token, try fetching from cloud
+  await autoFetchCloudGithubToken(config.cloud?.agentId?.trim() || agentId);
+
   const elizaPlugin = createElizaPlugin({
     workspaceDir,
 
@@ -3439,7 +3500,6 @@ export async function startEliza(
   };
 
   const initializeRuntimeServices = async (): Promise<void> => {
-    // 7z. Steward EVM bridge pre-boot (cloud-provisioned containers)
     try {
       const { stewardEvmPreBoot } = await import(
         "../services/steward-evm-bridge.js"
@@ -3447,16 +3507,14 @@ export async function startEliza(
       await stewardEvmPreBoot(runtime);
     } catch (err) {
       logger.debug(
-        `[eliza] Steward EVM pre-boot skipped: ${err instanceof Error ? err.message : err}`,
+        `[eliza] Steward EVM pre-boot skipped: ${formatError(err)}`,
       );
     }
 
     // 8. Initialize the runtime (registers remaining plugins, starts services)
     await runtime.initialize();
-    await waitForTrajectoryLoggerService(runtime, "runtime.initialize()");
-    ensureTrajectoryLoggerEnabled(runtime, "runtime.initialize()");
+    await prepareRuntimeForTrajectoryCapture(runtime, "runtime.initialize()");
 
-    // 8.0a. Steward EVM bridge post-boot (swap EVM account to Steward-backed)
     try {
       const { stewardEvmPostBoot } = await import(
         "../services/steward-evm-bridge.js"
@@ -3464,23 +3522,10 @@ export async function startEliza(
       await stewardEvmPostBoot(runtime);
     } catch (err) {
       logger.debug(
-        `[eliza] Steward EVM post-boot skipped: ${err instanceof Error ? err.message : err}`,
+        `[eliza] Steward EVM post-boot skipped: ${formatError(err)}`,
       );
     }
 
-    // 8a. Install prompt optimization / capture layer (wraps runtime.useModel)
-    try {
-      const { installPromptOptimizations } = await import(
-        "./prompt-optimization.js"
-      );
-      installPromptOptimizations(runtime);
-    } catch (err) {
-      logger.warn(
-        `[eliza] Failed to install prompt optimizations: ${err instanceof Error ? err.message : err}`,
-      );
-    }
-
-    // 8a2. Install Anthropic server-side web search (zero-cost, no key needed)
     try {
       const { installAnthropicWebSearch } = await import(
         "./web-search-tools.js"
@@ -3488,7 +3533,7 @@ export async function startEliza(
       installAnthropicWebSearch(runtime);
     } catch (err) {
       logger.debug(
-        `[eliza] Anthropic web search setup skipped: ${err instanceof Error ? err.message : err}`,
+        `[eliza] Anthropic web search setup skipped: ${formatError(err)}`,
       );
     }
 
@@ -3674,6 +3719,9 @@ export async function startEliza(
           applyCloudConfigToEnv(freshConfig);
           applyX402ConfigToEnv(freshConfig);
           applyDatabaseConfigToEnv(freshConfig);
+          await autoFetchCloudGithubToken(
+            freshConfig.cloud?.agentId?.trim() || agentId,
+          );
 
           // Apply subscription-based credentials (Claude Max, Codex Max)
           // that may have been set up during onboarding.
@@ -3790,7 +3838,6 @@ export async function startEliza(
             }
           }
 
-          // Steward EVM bridge pre-boot (hot-reload)
           try {
             const { stewardEvmPreBoot: preBootHR } = await import(
               "../services/steward-evm-bridge.js"
@@ -3801,16 +3848,11 @@ export async function startEliza(
           }
 
           await newRuntime.initialize();
-          await waitForTrajectoryLoggerService(
-            newRuntime,
-            "hot-reload runtime.initialize()",
-          );
-          ensureTrajectoryLoggerEnabled(
+          await prepareRuntimeForTrajectoryCapture(
             newRuntime,
             "hot-reload runtime.initialize()",
           );
 
-          // Steward EVM bridge post-boot (hot-reload)
           try {
             const { stewardEvmPostBoot: postBootHR } = await import(
               "../services/steward-evm-bridge.js"

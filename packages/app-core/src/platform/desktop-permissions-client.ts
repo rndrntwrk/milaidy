@@ -11,6 +11,32 @@ type SystemPermissionId = Parameters<typeof appClient.getPermission>[0];
 type PermissionState = Awaited<ReturnType<typeof appClient.getPermission>>;
 type AllPermissionsState = Awaited<ReturnType<typeof appClient.getPermissions>>;
 
+const RUNTIME_PERMISSION_IDS = ["website-blocking"] as const;
+
+function isRuntimePermissionId(id: SystemPermissionId): boolean {
+  return (RUNTIME_PERMISSION_IDS as readonly string[]).includes(id);
+}
+
+async function mergeRuntimePermissions(
+  permissions: AllPermissionsState,
+  getPermission: (id: SystemPermissionId) => Promise<PermissionState>,
+): Promise<AllPermissionsState> {
+  const nextPermissions = { ...permissions } as AllPermissionsState;
+
+  await Promise.all(
+    RUNTIME_PERMISSION_IDS.map(async (id) => {
+      try {
+        nextPermissions[id] = await getPermission(id);
+      } catch {
+        // Leave the bridged snapshot untouched when the runtime-side permission
+        // route is temporarily unavailable.
+      }
+    }),
+  );
+
+  return nextPermissions;
+}
+
 export function installDesktopPermissionsClientPatch(
   client: ClientLike,
 ): () => void {
@@ -43,10 +69,16 @@ export function installDesktopPermissionsClientPatch(
       rpcMethod: "permissionsGetAll",
       ipcChannel: "permissions:getAll",
     });
-    return bridged ?? originalGetPermissions();
+    if (bridged === null) {
+      return originalGetPermissions();
+    }
+    return mergeRuntimePermissions(bridged, originalGetPermission);
   };
 
   client.getPermission = async (id: SystemPermissionId) => {
+    if (isRuntimePermissionId(id)) {
+      return originalGetPermission(id);
+    }
     const bridged = await invokeDesktopBridgeRequest<PermissionState>({
       rpcMethod: "permissionsCheck",
       ipcChannel: "permissions:check",
@@ -56,6 +88,9 @@ export function installDesktopPermissionsClientPatch(
   };
 
   client.requestPermission = async (id: SystemPermissionId) => {
+    if (isRuntimePermissionId(id)) {
+      return originalRequestPermission(id);
+    }
     const bridged = await invokeDesktopBridgeRequest<PermissionState>({
       rpcMethod: "permissionsRequest",
       ipcChannel: "permissions:request",
@@ -65,6 +100,9 @@ export function installDesktopPermissionsClientPatch(
   };
 
   client.openPermissionSettings = async (id: SystemPermissionId) => {
+    if (isRuntimePermissionId(id)) {
+      return originalOpenPermissionSettings(id);
+    }
     const bridged = await invokeDesktopBridgeRequest<void>({
       rpcMethod: "permissionsOpenSettings",
       ipcChannel: "permissions:openSettings",
@@ -82,7 +120,10 @@ export function installDesktopPermissionsClientPatch(
       ipcChannel: "permissions:getAll",
       params: { forceRefresh: true },
     });
-    return bridged ?? originalRefreshPermissions();
+    if (bridged === null) {
+      return originalRefreshPermissions();
+    }
+    return mergeRuntimePermissions(bridged, originalGetPermission);
   };
 
   client.setShellEnabled = async (enabled: boolean) => {

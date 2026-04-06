@@ -1,0 +1,90 @@
+# Connect to Mattermost
+
+Mattermost is the open-source, self-hosted alternative to Slack. If your team runs Mattermost — either on their own servers or via the Mattermost Cloud plan — this plugin drops your Milady agent into it as a bot account.
+
+**What you'll learn:** create a bot account in Mattermost, copy its token, paste it into Milady. About five minutes if you're a Mattermost admin.
+
+## What you need before you start
+
+- **A Mattermost instance** you can admin, or an admin who will create a bot account for you.
+- **The base URL of your instance** (e.g. `https://mattermost.yourcompany.com`).
+- **Milady running** with a working provider.
+
+## Step 1 — Enable bot accounts (admin only, once per instance)
+
+This step only needs to happen once per Mattermost instance. If bot accounts are already enabled, skip to Step 2.
+
+<Steps>
+  <li>Open Mattermost as a System Admin.</li>
+  <li>Go to <strong>System Console → Authentication → Bot Accounts</strong>.</li>
+  <li>Set <strong>Enable Bot Account Creation</strong> to <code>true</code>.</li>
+  <li>Save.</li>
+</Steps>
+
+## Step 2 — Create a bot account
+
+<Steps>
+  <li>Still in the System Console, go to <strong>Integrations → Bot Accounts</strong>.</li>
+  <li>Click <strong>Add Bot Account</strong>.</li>
+  <li>Pick a username (e.g. <code>milady</code>), display name, and description.</li>
+  <li>Click <strong>Create Bot Account</strong>.</li>
+  <li>Mattermost shows you an <strong>access token</strong> exactly once. Copy it immediately — if you navigate away, you'll have to regenerate.</li>
+</Steps>
+
+<Callout kind="warning">
+The bot token is a credential with the permissions of the bot account. Treat it like a password. You can revoke and regenerate from the same Bot Accounts page if it ever leaks.
+</Callout>
+
+## Step 3 — Find your team ID
+
+The team ID scopes which team the bot operates in.
+
+<Steps>
+  <li>In Mattermost, go to the team you want the bot in.</li>
+  <li>Click the team name → <strong>View Info</strong>.</li>
+  <li>Copy the team ID shown in the info panel. It's a 26-character string.</li>
+</Steps>
+
+Alternatively, if your Mattermost URL while inside a team looks like `https://mattermost.yourcompany.com/teamname/channels/...`, you can also hit `https://mattermost.yourcompany.com/api/v4/teams/name/teamname` (signed in) to see the team ID in the JSON response.
+
+## Step 4 — Hand the details to Milady
+
+<Steps>
+  <li>Open Milady. Go to <strong>Settings → Plugins → Mattermost → Configure</strong>.</li>
+  <li>Paste the <strong>Base URL</strong> (e.g. <code>https://mattermost.yourcompany.com</code>).</li>
+  <li>Paste the <strong>Bot token</strong> from Step 2.</li>
+  <li>Paste the <strong>Team ID</strong> from Step 3.</li>
+  <li>Click <strong>Save</strong>.</li>
+</Steps>
+
+## Step 5 — Add the bot to a channel and test
+
+<Steps>
+  <li>In Mattermost, open the channel you want the bot in. Click the channel name → <strong>Add Members</strong> → search for the bot by its username.</li>
+  <li>Post a message mentioning the bot: <code>@milady hey</code>.</li>
+  <li>Within a second or two you should see a typing indicator, then a reply.</li>
+</Steps>
+
+## Useful options
+
+| Option | What it does |
+| --- | --- |
+| **Allowed users** | Restrict the bot to replying only to specific user IDs. Empty = anyone. |
+| **Allowed channels** | Restrict to specific channels. Empty = all channels the bot is in. |
+| **DM policy / Group policy** | `allow-all` or `allow-from` — same pattern as other connectors. |
+| **Require mention** | Only responds when `@mention`ed. Useful for busy channels. |
+
+## Troubleshooting
+
+**"Bot account creation is disabled."**
+Step 1 wasn't done — a System Admin needs to enable bot accounts. This is a server-wide setting, not per-team.
+
+**Bot is in the channel but silent.**
+Most common cause: the bot account was created but never added to the team. Go to the team's main channel and @mention the bot's username — Mattermost will prompt you to invite it to the team.
+
+**"Invalid team_id" when saving Milady config.**
+Team IDs are 26 characters long and look like `abc123def456ghi789jkl012mn`. If you pasted the team name instead, it won't work.
+
+## What's next
+
+[Running multiple connectors](/docs/advanced/multi-connector-setup) — Mattermost alongside Slack or Discord gives you coverage across work (internal) and community (external) chat.

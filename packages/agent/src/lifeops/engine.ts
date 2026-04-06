@@ -34,7 +34,7 @@ function resolveLeadMinutes(cadence: LifeOpsCadence): number {
   if (cadence.kind === "once") {
     return cadence.visibilityLeadMinutes ?? 15;
   }
-  if (cadence.kind === "times_per_day") {
+  if (cadence.kind === "times_per_day" || cadence.kind === "interval") {
     return cadence.visibilityLeadMinutes ?? 15;
   }
   return cadence.visibilityLeadMinutes ?? 0;
@@ -46,6 +46,9 @@ function resolveLagMinutes(cadence: LifeOpsCadence): number {
   }
   if (cadence.kind === "times_per_day") {
     return cadence.visibilityLagMinutes ?? 4 * 60;
+  }
+  if (cadence.kind === "interval") {
+    return cadence.visibilityLagMinutes ?? Math.min(cadence.everyMinutes, 4 * 60);
   }
   return cadence.visibilityLagMinutes ?? 0;
 }
@@ -137,6 +140,11 @@ function buildWindowOccurrence(
   return {
     id: existing?.id ?? crypto.randomUUID(),
     agentId: definition.agentId,
+    domain: definition.domain,
+    subjectType: definition.subjectType,
+    subjectId: definition.subjectId,
+    visibilityScope: definition.visibilityScope,
+    contextPolicy: definition.contextPolicy,
     definitionId: definition.id,
     occurrenceKey,
     scheduledAt: scheduledAt.toISOString(),
@@ -190,6 +198,11 @@ function buildSlotOccurrence(
   return {
     id: existing?.id ?? crypto.randomUUID(),
     agentId: definition.agentId,
+    domain: definition.domain,
+    subjectType: definition.subjectType,
+    subjectId: definition.subjectId,
+    visibilityScope: definition.visibilityScope,
+    contextPolicy: definition.contextPolicy,
     definitionId: definition.id,
     occurrenceKey,
     scheduledAt: scheduledAt.toISOString(),
@@ -218,6 +231,79 @@ function buildSlotOccurrence(
   };
 }
 
+function buildIntervalOccurrence(
+  definition: LifeOpsTaskDefinition,
+  existing: LifeOpsOccurrence | undefined,
+  args: {
+    localDateKey: string;
+    intervalKey: string;
+    scheduledLocalMinute: number;
+    label: string;
+    completedCountBefore: number;
+  },
+  localDate: Pick<ZonedDateParts, "year" | "month" | "day">,
+  now: Date,
+): LifeOpsOccurrence {
+  const cadence = definition.cadence;
+  if (cadence.kind !== "interval") {
+    throw new Error("buildIntervalOccurrence requires interval cadence");
+  }
+  const scheduledDayOffset = Math.floor(args.scheduledLocalMinute / (24 * 60));
+  const scheduledMinuteOfDay = args.scheduledLocalMinute % (24 * 60);
+  const scheduledDate = addDaysToLocalDate(localDate, scheduledDayOffset);
+  const scheduledLocal = {
+    ...scheduledDate,
+    hour: Math.floor(scheduledMinuteOfDay / 60),
+    minute: scheduledMinuteOfDay % 60,
+    second: 0,
+  } satisfies ZonedDateParts;
+  const scheduledAt = buildUtcDateFromLocalParts(definition.timezone, scheduledLocal);
+  const dueAt = scheduledAt;
+  const leadMinutes = resolveLeadMinutes(cadence);
+  const durationMinutes = Math.max(
+    1,
+    cadence.durationMinutes ?? Math.min(cadence.everyMinutes, 60),
+  );
+  const lagMinutes = Math.max(resolveLagMinutes(cadence), durationMinutes);
+  const relevanceStartAt = addMinutes(scheduledAt, -leadMinutes);
+  const relevanceEndAt = addMinutes(scheduledAt, lagMinutes);
+  const occurrenceKey = buildOccurrenceKey("interval", args.localDateKey, args.intervalKey);
+  return {
+    id: existing?.id ?? crypto.randomUUID(),
+    agentId: definition.agentId,
+    domain: definition.domain,
+    subjectType: definition.subjectType,
+    subjectId: definition.subjectId,
+    visibilityScope: definition.visibilityScope,
+    contextPolicy: definition.contextPolicy,
+    definitionId: definition.id,
+    occurrenceKey,
+    scheduledAt: scheduledAt.toISOString(),
+    dueAt: dueAt.toISOString(),
+    relevanceStartAt: relevanceStartAt.toISOString(),
+    relevanceEndAt: relevanceEndAt.toISOString(),
+    windowName: args.label,
+    state: resolveOccurrenceState(
+      existing?.state,
+      relevanceStartAt,
+      relevanceEndAt,
+      now,
+      existing?.snoozedUntil ?? null,
+    ),
+    snoozedUntil: existing?.snoozedUntil ?? null,
+    completionPayload: existing?.completionPayload ?? null,
+    derivedTarget: deriveTarget(definition.progressionRule, args.completedCountBefore),
+    metadata: {
+      ...(existing?.metadata ?? {}),
+      localDateKey: args.localDateKey,
+      cadenceKind: definition.cadence.kind,
+      intervalKey: args.intervalKey,
+    },
+    createdAt: existing?.createdAt ?? now.toISOString(),
+    updatedAt: now.toISOString(),
+  };
+}
+
 function buildOnceOccurrence(
   definition: LifeOpsTaskDefinition,
   existing: LifeOpsOccurrence | undefined,
@@ -236,6 +322,11 @@ function buildOnceOccurrence(
   return {
     id: existing?.id ?? crypto.randomUUID(),
     agentId: definition.agentId,
+    domain: definition.domain,
+    subjectType: definition.subjectType,
+    subjectId: definition.subjectId,
+    visibilityScope: definition.visibilityScope,
+    contextPolicy: definition.contextPolicy,
     definitionId: definition.id,
     occurrenceKey: `once:${dueAt.toISOString()}`,
     scheduledAt: dueAt.toISOString(),
@@ -366,6 +457,80 @@ export function materializeDefinitionOccurrences(
             now,
           ),
         );
+      }
+      continue;
+    }
+
+    if (definition.cadence.kind === "interval") {
+      const windows = definition.cadence.windows
+        .map((windowName) => windowMap.get(windowName))
+        .filter((window): window is LifeOpsTimeWindowDefinition => Boolean(window))
+        .sort((left, right) => left.startMinute - right.startMinute);
+      let occurrencesGenerated = 0;
+      for (const window of windows) {
+        const anchorMinute =
+          definition.cadence.startMinuteOfDay ?? window.startMinute;
+        const everyMinutes = definition.cadence.everyMinutes;
+        const intervalStart =
+          anchorMinute >= window.startMinute
+            ? anchorMinute
+            : anchorMinute +
+              Math.ceil((window.startMinute - anchorMinute) / everyMinutes) *
+                everyMinutes;
+        for (
+          let minuteCursor = intervalStart;
+          minuteCursor < window.endMinute;
+          minuteCursor += everyMinutes
+        ) {
+          if (
+            typeof definition.cadence.maxOccurrencesPerDay === "number" &&
+            occurrencesGenerated >= definition.cadence.maxOccurrencesPerDay
+          ) {
+            break;
+          }
+          const scheduledDayOffset = Math.floor(minuteCursor / (24 * 60));
+          const scheduledMinuteOfDay = minuteCursor % (24 * 60);
+          const scheduledDate = addDaysToLocalDate(localDate, scheduledDayOffset);
+          const scheduledLocal = {
+            ...scheduledDate,
+            hour: Math.floor(scheduledMinuteOfDay / 60),
+            minute: scheduledMinuteOfDay % 60,
+            second: 0,
+          } satisfies ZonedDateParts;
+          const scheduledAt = buildUtcDateFromLocalParts(
+            definition.timezone,
+            scheduledLocal,
+          );
+          const completedCountBefore = countCompletedBefore(
+            existingOccurrences,
+            scheduledAt,
+          );
+          const intervalKey = `${window.name}:${minuteCursor}`;
+          materialized.push(
+            buildIntervalOccurrence(
+              definition,
+              existingByKey.get(
+                buildOccurrenceKey("interval", localDateKey, intervalKey),
+              ),
+              {
+                localDateKey,
+                intervalKey,
+                scheduledLocalMinute: minuteCursor,
+                label: window.label,
+                completedCountBefore,
+              },
+              localDate,
+              now,
+            ),
+          );
+          occurrencesGenerated += 1;
+        }
+        if (
+          typeof definition.cadence.maxOccurrencesPerDay === "number" &&
+          occurrencesGenerated >= definition.cadence.maxOccurrencesPerDay
+        ) {
+          break;
+        }
       }
       continue;
     }

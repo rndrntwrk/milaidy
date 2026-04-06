@@ -25,6 +25,7 @@ import { getGatewayDiscovery } from "./native/gateway";
 import { getGpuWindowManager } from "./native/gpu-window";
 import { getLocationManager } from "./native/location";
 import { getPermissionManager } from "./native/permissions";
+import type { AllPermissionsState } from "./native/permissions-shared";
 import { getScreenCaptureManager } from "./native/screencapture";
 import {
   getStewardStatus,
@@ -35,22 +36,36 @@ import {
 } from "./native/steward";
 import { getSwabbleManager } from "./native/swabble";
 import { getTalkModeManager } from "./native/talkmode";
+import {
+  buildRuntimePermissionUnavailableState,
+  fetchRuntimePermissionState,
+  isRuntimePermissionId,
+  mergeRuntimePermissionStates,
+} from "./runtime-permissions";
 import { isDetachedSurface } from "./surface-windows";
 import type { SendToWebview } from "./types.js";
 
 /** Push current OS permission states to the agent REST API in-process. */
-async function syncPermissionsToRestApi(): Promise<void> {
-  const port = getAgentManager().getPort();
+async function syncPermissionsToRestApi(
+  portOverride?: number | null,
+  nativePermissions?: AllPermissionsState,
+): Promise<void> {
+  const port = portOverride ?? getAgentManager().getPort();
   if (!port) return;
   try {
-    const permissions = await getPermissionManager().checkAllPermissions();
+    const permissions = await mergeRuntimePermissionStates(
+      port,
+      nativePermissions ?? (await getPermissionManager().checkAllPermissions()),
+    );
     await fetch(`http://127.0.0.1:${port}/api/permissions/state`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ permissions }),
     });
-  } catch {
-    // non-fatal — renderer will still get data via IPC response
+  } catch (error) {
+    console.warn(
+      `[Permissions] Failed to sync permission state to runtime: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
 }
 
@@ -373,24 +388,74 @@ export function registerRpcHandlers(
     permissionsCheck: async (params: {
       id: Parameters<typeof permissions.checkPermission>[0];
       forceRefresh?: boolean;
-    }) => permissions.checkPermission(params.id, params.forceRefresh),
+    }) => {
+      if (isRuntimePermissionId(params.id)) {
+        const runtimePermission = await fetchRuntimePermissionState(
+          agent.getPort(),
+          params.id,
+        );
+        return (
+          runtimePermission ??
+          buildRuntimePermissionUnavailableState(
+            params.id,
+            "Milady runtime is unavailable, so website blocking permission cannot be checked from desktop right now.",
+          )
+        );
+      }
+      return permissions.checkPermission(params.id, params.forceRefresh);
+    },
     permissionsCheckFeature: async (params: {
       featureId: Parameters<typeof permissions.checkFeaturePermissions>[0];
-    }) => permissions.checkFeaturePermissions(params.featureId),
+    }) => {
+      if (params.featureId === "website-blocker") {
+        const runtimePermission = await fetchRuntimePermissionState(
+          agent.getPort(),
+          "website-blocking",
+        );
+        const granted =
+          runtimePermission?.status === "granted" ||
+          runtimePermission?.status === "not-applicable";
+        return {
+          granted,
+          missing: granted ? [] : ["website-blocking"],
+        };
+      }
+      return permissions.checkFeaturePermissions(params.featureId);
+    },
     permissionsRequest: async (params: {
       id: Parameters<typeof permissions.requestPermission>[0];
     }) => {
+      if (isRuntimePermissionId(params.id)) {
+        const runtimePermission = await fetchRuntimePermissionState(
+          agent.getPort(),
+          params.id,
+          "request",
+        );
+        const nextPermissions = await permissions.checkAllPermissions();
+        await syncPermissionsToRestApi(agent.getPort(), nextPermissions);
+        return (
+          runtimePermission ??
+          buildRuntimePermissionUnavailableState(
+            params.id,
+            "Milady runtime is unavailable, so website blocking permission cannot be requested from desktop right now.",
+          )
+        );
+      }
       const result = await permissions.requestPermission(params.id);
-      syncPermissionsToRestApi();
+      await syncPermissionsToRestApi(
+        agent.getPort(),
+        await permissions.checkAllPermissions(),
+      );
       return result;
     },
     permissionsGetAll: async (
       params: { forceRefresh?: boolean } | undefined,
     ) => {
-      const result = await permissions.checkAllPermissions(
-        params?.forceRefresh,
+      const result = await mergeRuntimePermissionStates(
+        agent.getPort(),
+        await permissions.checkAllPermissions(params?.forceRefresh),
       );
-      syncPermissionsToRestApi();
+      await syncPermissionsToRestApi(agent.getPort(), result);
       return result;
     },
     permissionsGetPlatform: async () => process.platform,
@@ -402,7 +467,22 @@ export function registerRpcHandlers(
     permissionsClearCache: async () => permissions.clearCache(),
     permissionsOpenSettings: async (params: {
       id: Parameters<typeof permissions.openSettings>[0];
-    }) => permissions.openSettings(params.id),
+    }) => {
+      if (isRuntimePermissionId(params.id)) {
+        const runtimePermission = await fetchRuntimePermissionState(
+          agent.getPort(),
+          params.id,
+          "open-settings",
+        );
+        if (runtimePermission) {
+          return;
+        }
+        throw new Error(
+          "Milady runtime is unavailable, so website blocking permission help could not be opened from desktop.",
+        );
+      }
+      return permissions.openSettings(params.id);
+    },
 
     // ---- Location ----
     locationGetCurrentPosition: async () => location.getCurrentPosition(),

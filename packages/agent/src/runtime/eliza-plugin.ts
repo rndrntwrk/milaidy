@@ -23,11 +23,14 @@ import {
   goOfflineAction,
 } from "../actions/stream-control";
 import { terminalAction } from "../actions/terminal";
+import { lifeAction } from "../actions/life";
+import { sendAdminMessageAction } from "../actions/send-admin-message";
 import {
   skillCommandAction,
   addRegisteredSkillSlug,
   clearRegisteredSkillSlugs,
 } from "../actions/skill-command";
+import { adminPanelProvider } from "../providers/admin-panel";
 import { adminTrustProvider } from "../providers/admin-trust";
 
 import { createSessionKeyProvider } from "../providers/session-bridge";
@@ -37,13 +40,26 @@ import {
 } from "../providers/session-utils";
 import { createChannelProfileProvider } from "../providers/simple-mode";
 import { createDynamicSkillProvider } from "../providers/skill-provider";
+import { lifeOpsProvider } from "../providers/lifeops";
+import { activityProfileProvider } from "../providers/activity-profile";
 import { uiCatalogProvider } from "../providers/ui-catalog";
 import { createUserNameProvider } from "../providers/user-name";
+import { roleBackfillProvider } from "../providers/role-backfill";
+import { escalationTriggerProvider } from "../providers/escalation-trigger";
+import { lateJoinWhitelistEvaluator } from "../evaluators/late-join-whitelist";
 import { setUserNameAction } from "../actions/set-user-name";
 import { DEFAULT_AGENT_WORKSPACE_DIR } from "../providers/workspace";
 import { createWorkspaceProvider } from "../providers/workspace-provider";
 import { createTriggerTaskAction } from "../triggers/action";
 import { registerTriggerTaskWorker } from "../triggers/runtime";
+import {
+  ensureLifeOpsSchedulerTask,
+  registerLifeOpsTaskWorker,
+} from "../lifeops/runtime";
+import {
+  ensureProactiveAgentTask,
+  registerProactiveTaskWorker,
+} from "../activity-profile/proactive-worker";
 import { loadCustomActions, setCustomActionsRuntime } from "./custom-actions";
 
 export type ElizaPluginConfig = {
@@ -66,6 +82,9 @@ export function createElizaPlugin(config?: ElizaPluginConfig): Plugin {
       maxCharsPerFile: config?.initMaxChars,
     }),
     adminTrustProvider,
+    adminPanelProvider,
+    lifeOpsProvider,
+    activityProfileProvider,
 
     createSessionKeyProvider({ defaultAgentId: agentId }),
     ...getSessionProviders({ storePath: sessionStorePath }),
@@ -120,7 +139,19 @@ export function createElizaPlugin(config?: ElizaPluginConfig): Plugin {
 
     init: async (_pluginConfig, runtime: IAgentRuntime) => {
       registerTriggerTaskWorker(runtime);
+      registerLifeOpsTaskWorker(runtime);
+      registerProactiveTaskWorker(runtime);
       setCustomActionsRuntime(runtime);
+      void ensureLifeOpsSchedulerTask(runtime).catch((error) => {
+        runtime.logger?.warn?.(
+          `[lifeops] Failed to ensure scheduler task: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      });
+      void ensureProactiveAgentTask(runtime).catch((error) => {
+        runtime.logger?.warn?.(
+          `[proactive] Failed to ensure proactive task: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      });
 
       // Honour DISABLE_EMOTES: remove PLAY_EMOTE so it never appears in prompts.
       if (runtime.character?.settings?.DISABLE_EMOTES) {
@@ -215,15 +246,21 @@ export function createElizaPlugin(config?: ElizaPluginConfig): Plugin {
       ...baseProviders,
 
       uiCatalogProvider,
+      roleBackfillProvider,
+      escalationTriggerProvider,
       // customActionsProvider,
     ],
+
+    evaluators: [lateJoinWhitelistEvaluator],
 
     actions: [
       restartAction,
       // sendMessageAction,
+      sendAdminMessageAction,
       terminalAction,
       createTriggerTaskAction,
       emoteAction,
+      lifeAction,
       setUserNameAction,
       skillCommandAction,
       webSearchAction,

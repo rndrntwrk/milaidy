@@ -149,5 +149,9 @@ describe("Docker contract", () => {
       // biome-ignore lint/suspicious/noTemplateCurlyInString: shell variable assertion
       '-p "${SMOKE_PORT}:${CONTAINER_PORT}"',
     );
+    expect(smokeScript).toContain(
+      "pushd plugins/plugin-agent-orchestrator >/dev/null",
+    );
+    expect(smokeScript).toContain("bun run build");
   });
 });

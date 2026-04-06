@@ -6,12 +6,22 @@
  */
 
 import { Button } from "@miladyai/ui";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../../state";
+import {
+  buildViewerSessionKey,
+  resolvePostMessageTargetOrigin,
+  resolveViewerReadyEventType,
+  shouldUseEmbeddedAppViewer,
+} from "./viewer-auth";
 
 export function GameViewOverlay() {
   const {
+    appRuns,
+    activeGameRunId,
     activeGameDisplayName,
+    activeGamePostMessageAuth,
+    activeGamePostMessagePayload,
     activeGameViewerUrl,
     activeGameSandbox,
     setState,
@@ -23,6 +33,26 @@ export function GameViewOverlay() {
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
   const dragOffset = useRef({ x: 0, y: 0 });
   const [dragging, setDragging] = useState(false);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  const authSentRef = useRef(false);
+  const viewerSessionRef = useRef("");
+  const activeGameRun = useMemo(
+    () => appRuns.find((run) => run.runId === activeGameRunId) ?? null,
+    [activeGameRunId, appRuns],
+  );
+  const useEmbeddedViewer = useMemo(
+    () => shouldUseEmbeddedAppViewer(activeGameRun),
+    [activeGameRun],
+  );
+  const postMessageTargetOrigin = useMemo(
+    () => resolvePostMessageTargetOrigin(activeGameViewerUrl),
+    [activeGameViewerUrl],
+  );
+  const viewerSessionKey = useMemo(
+    () =>
+      buildViewerSessionKey(activeGameViewerUrl, activeGamePostMessagePayload),
+    [activeGamePostMessagePayload, activeGameViewerUrl],
+  );
 
   const handleDragStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -55,6 +85,62 @@ export function GameViewOverlay() {
     setState("tab", "apps");
     setState("appsSubTab", "games");
   }, [setState]);
+
+  useEffect(() => {
+    if (viewerSessionRef.current !== viewerSessionKey) {
+      viewerSessionRef.current = viewerSessionKey;
+      authSentRef.current = false;
+    }
+  }, [viewerSessionKey]);
+
+  useEffect(() => {
+    if (
+      !useEmbeddedViewer ||
+      !activeGamePostMessageAuth ||
+      !activeGamePostMessagePayload
+    ) {
+      return;
+    }
+    if (authSentRef.current) {
+      return;
+    }
+
+    const expectedReadyType = resolveViewerReadyEventType(
+      activeGamePostMessagePayload,
+    );
+    if (!expectedReadyType) {
+      return;
+    }
+
+    const onMessage = (event: MessageEvent<{ type?: string }>) => {
+      if (authSentRef.current) return;
+      const iframeWindow = iframeRef.current?.contentWindow;
+      if (!iframeWindow || event.source !== iframeWindow) return;
+      if (event.data?.type !== expectedReadyType) return;
+      if (
+        postMessageTargetOrigin !== "*" &&
+        event.origin !== postMessageTargetOrigin
+      ) {
+        return;
+      }
+
+      iframeWindow.postMessage(
+        activeGamePostMessagePayload,
+        postMessageTargetOrigin,
+      );
+      authSentRef.current = true;
+    };
+
+    window.addEventListener("message", onMessage);
+    return () => {
+      window.removeEventListener("message", onMessage);
+    };
+  }, [
+    activeGamePostMessageAuth,
+    activeGamePostMessagePayload,
+    postMessageTargetOrigin,
+    useEmbeddedViewer,
+  ]);
 
   if (!activeGameViewerUrl) return null;
 
@@ -125,8 +211,10 @@ export function GameViewOverlay() {
         </div>
         {/* Iframe */}
         <iframe
+          ref={iframeRef}
           src={activeGameViewerUrl}
           sandbox={activeGameSandbox}
+          data-testid="game-view-overlay-iframe"
           className="flex-1 w-full border-none"
           title={activeGameDisplayName || "Game Overlay"}
         />

@@ -1,0 +1,309 @@
+import fs from "node:fs";
+import path from "node:path";
+import { pathToFileURL } from "node:url";
+import type { IAgentRuntime, Plugin } from "@elizaos/core";
+import { logger } from "@elizaos/core";
+import {
+  type AppLaunchResult,
+  type AppSessionState,
+  hasAppInterface,
+  packageNameToAppRouteSlug,
+} from "../contracts/apps";
+import { getPluginInfo } from "./registry-client.js";
+
+export interface AppLaunchSessionContext {
+  appName: string;
+  launchUrl: string | null;
+  runtime: IAgentRuntime | null;
+  viewer: AppLaunchResult["viewer"] | null;
+}
+
+export type AppLaunchSessionResolver = (
+  ctx: AppLaunchSessionContext,
+) => Promise<AppSessionState | null>;
+
+export interface AppRunSessionContext extends AppLaunchSessionContext {
+  runId: string;
+  session: AppSessionState | null;
+}
+
+export type AppRunSessionRefresher = (
+  ctx: AppRunSessionContext,
+) => Promise<AppSessionState | null>;
+
+export type AppRouteModule = {
+  handleAppRoutes?: (ctx: unknown) => Promise<boolean>;
+  resolveLaunchSession?: AppLaunchSessionResolver;
+  refreshRunSession?: AppRunSessionRefresher;
+  [key: string]: unknown;
+};
+
+type AppPluginModule = {
+  default?: Plugin;
+  [key: string]: unknown;
+};
+
+function uniquePaths(paths: string[]): string[] {
+  const seen = new Set<string>();
+  const ordered: string[] = [];
+  for (const candidate of paths) {
+    const resolved = path.resolve(candidate);
+    if (!seen.has(resolved)) {
+      seen.add(resolved);
+      ordered.push(resolved);
+    }
+  }
+  return ordered;
+}
+
+function resolveWorkspaceRoots(): string[] {
+  const cwd = process.cwd();
+  return uniquePaths([
+    cwd,
+    path.resolve(cwd, ".."),
+    path.resolve(cwd, "..", ".."),
+  ]);
+}
+
+function packageNameToDirName(packageName: string): string {
+  return packageName.replace(/^@[^/]+\//, "");
+}
+
+async function readPackageName(packageDir: string): Promise<string | null> {
+  try {
+    const packageJson = JSON.parse(
+      await fs.promises.readFile(path.join(packageDir, "package.json"), "utf8"),
+    ) as { name?: unknown };
+    return typeof packageJson.name === "string" ? packageJson.name : null;
+  } catch {
+    return null;
+  }
+}
+
+async function resolveWorkspacePackageDir(
+  packageName: string,
+): Promise<string | null> {
+  const dirName = packageNameToDirName(packageName);
+  const candidateDirs: string[] = [];
+
+  for (const workspaceRoot of resolveWorkspaceRoots()) {
+    candidateDirs.push(
+      path.join(workspaceRoot, "plugins", dirName),
+      path.join(workspaceRoot, "packages", dirName),
+    );
+
+    let rootEntries: fs.Dirent[] = [];
+    try {
+      rootEntries = await fs.promises.readdir(workspaceRoot, {
+        withFileTypes: true,
+      });
+    } catch {
+      continue;
+    }
+
+    for (const entry of rootEntries) {
+      if (!entry.isDirectory() || entry.name.startsWith(".")) {
+        continue;
+      }
+      candidateDirs.push(
+        path.join(workspaceRoot, entry.name, "plugins", dirName),
+        path.join(workspaceRoot, entry.name, "packages", dirName),
+      );
+    }
+  }
+
+  for (const candidateDir of uniquePaths(candidateDirs)) {
+    if (!fs.existsSync(path.join(candidateDir, "package.json"))) {
+      continue;
+    }
+    const discoveredName = await readPackageName(candidateDir);
+    if (discoveredName === packageName) {
+      return candidateDir;
+    }
+  }
+
+  return null;
+}
+
+async function importFirstExistingModule<T>(
+  candidatePaths: string[],
+): Promise<T | null> {
+  let lastError: unknown = null;
+
+  for (const candidatePath of candidatePaths) {
+    if (!fs.existsSync(candidatePath)) continue;
+    try {
+      return (await import(pathToFileURL(candidatePath).href)) as T;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  if (lastError) {
+    throw lastError;
+  }
+
+  return null;
+}
+
+export function packageNameToAppSlug(packageName: string): string | null {
+  return packageNameToAppRouteSlug(packageName);
+}
+
+interface ResolvedAppModuleTarget {
+  packageName: string | null;
+  localPath: string | null;
+}
+
+async function resolveAppModuleTarget(
+  appIdentifier: string,
+): Promise<ResolvedAppModuleTarget | null> {
+  const trimmed = appIdentifier.trim();
+  if (!trimmed) return null;
+
+  const packageCandidates = trimmed.startsWith("@")
+    ? [trimmed]
+    : [`@elizaos/app-${trimmed}`, `@elizaos/plugin-${trimmed}`];
+
+  for (const packageName of packageCandidates) {
+    const localPath = await resolveWorkspacePackageDir(packageName);
+    if (localPath) {
+      return {
+        packageName,
+        localPath,
+      };
+    }
+  }
+
+  const registryInfo = await getPluginInfo(trimmed);
+  if (
+    registryInfo &&
+    (hasAppInterface(registryInfo) || registryInfo.localPath)
+  ) {
+    return {
+      packageName: registryInfo.name,
+      localPath: registryInfo.localPath ?? null,
+    };
+  }
+
+  return {
+    packageName: trimmed.startsWith("@") ? trimmed : null,
+    localPath: null,
+  };
+}
+
+async function importLocalAppRouteModule(
+  appIdentifier: string,
+): Promise<AppRouteModule | null> {
+  const resolved = await resolveAppModuleTarget(appIdentifier);
+  const localPath = resolved?.localPath ?? null;
+  if (!localPath) return null;
+
+  const candidatePaths = [
+    path.join(localPath, "src", "routes.ts"),
+    path.join(localPath, "src", "routes.js"),
+    path.join(localPath, "dist", "routes.js"),
+  ];
+  return importFirstExistingModule<AppRouteModule>(candidatePaths);
+}
+
+async function importLocalAppPluginModule(
+  packageName: string,
+): Promise<AppPluginModule | null> {
+  const resolved = await resolveAppModuleTarget(packageName);
+  const localPath =
+    resolved?.localPath ?? (await resolveWorkspacePackageDir(packageName));
+  if (!localPath) return null;
+
+  const candidatePaths = [
+    path.join(localPath, "src", "index.ts"),
+    path.join(localPath, "src", "index.js"),
+    path.join(localPath, "dist", "index.js"),
+  ];
+  return importFirstExistingModule<AppPluginModule>(candidatePaths);
+}
+
+function isPluginLike(value: unknown): value is Plugin {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "name" in value &&
+    typeof (value as { name?: unknown }).name === "string"
+  );
+}
+
+function resolvePluginExport(
+  module: AppPluginModule,
+  packageName: string,
+): Plugin | null {
+  if (isPluginLike(module.default)) {
+    return module.default;
+  }
+
+  for (const value of Object.values(module)) {
+    if (isPluginLike(value) && value.name === packageName) {
+      return value;
+    }
+  }
+
+  return null;
+}
+
+export async function importAppRouteModule(
+  appIdentifier: string,
+): Promise<AppRouteModule | null> {
+  const resolved = await resolveAppModuleTarget(appIdentifier);
+  const packageName = resolved?.packageName ?? null;
+  const label = packageName ?? appIdentifier;
+
+  try {
+    const localModule = await importLocalAppRouteModule(appIdentifier);
+    if (localModule) {
+      return localModule;
+    }
+  } catch (err) {
+    logger.warn(
+      `[app-package-modules] Failed to import local routes for ${label}: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+  }
+
+  if (!packageName) {
+    return null;
+  }
+
+  try {
+    return (await import(
+      /* webpackIgnore: true */ `${packageName}/routes`
+    )) as AppRouteModule;
+  } catch {
+    return null;
+  }
+}
+
+export async function importAppPlugin(
+  packageName: string,
+): Promise<Plugin | null> {
+  try {
+    const localModule = await importLocalAppPluginModule(packageName);
+    if (localModule) {
+      return resolvePluginExport(localModule, packageName);
+    }
+  } catch (err) {
+    logger.warn(
+      `[app-package-modules] Failed to import local plugin for ${packageName}: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
+  }
+
+  try {
+    const packageModule = (await import(
+      /* webpackIgnore: true */ packageName
+    )) as AppPluginModule;
+    return resolvePluginExport(packageModule, packageName);
+  } catch {
+    return null;
+  }
+}

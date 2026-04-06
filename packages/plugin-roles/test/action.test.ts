@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { updateRoleAction } from "../src/action";
+import { setConnectorAdminWhitelist } from "../src/utils";
 import type { RoleName, RolesWorldMetadata } from "../src/types";
 import type { IAgentRuntime, Memory, UUID } from "@elizaos/core";
 
@@ -52,11 +53,15 @@ function createMessage(
   entityId: string,
   text: string,
   roomId = "room-1" as UUID,
+  metadata?: Record<string, unknown>,
 ): Memory {
   return {
     entityId: entityId as UUID,
     roomId,
-    content: { text },
+    content: {
+      text,
+      ...(metadata ? { metadata } : {}),
+    },
   } as Memory;
 }
 
@@ -262,6 +267,39 @@ describe("updateRoleAction.handler", () => {
     );
     expect(result).toEqual(expect.objectContaining({ success: true }));
     expect(world.metadata.roles?.[targetId]).toBe("USER");
+  });
+
+  it("connector-whitelisted requester can manage roles from live bridge metadata without persisting themselves", async () => {
+    const discordAdminId = "discord-admin-uuid";
+    runtime = createMockRuntime(world, {
+      [ownerId]: { names: ["Shaw"] },
+      [discordAdminId]: { names: ["owner"] },
+      [targetId]: { names: ["alice"] },
+    });
+    setConnectorAdminWhitelist(runtime, { discord: ["discord-admin-1"] });
+
+    const result = await updateRoleAction.handler(
+      runtime,
+      createMessage(
+        discordAdminId,
+        "/role @alice USER",
+        "room-1" as UUID,
+        {
+          bridgeSender: {
+            metadata: {
+              discord: { userId: "discord-admin-1", username: "owner" },
+            },
+          },
+        },
+      ),
+      {} as any,
+      undefined,
+      callback,
+    );
+
+    expect(result).toEqual(expect.objectContaining({ success: true }));
+    expect(world.metadata.roles?.[targetId]).toBe("USER");
+    expect(world.metadata.roles?.[discordAdminId]).toBeUndefined();
   });
 
   it("ADMIN promotes GUEST to ADMIN", async () => {

@@ -1,6 +1,11 @@
 import { logger } from "@elizaos/core";
 
-export type IntegrationBoundary = "cloud" | "wallet" | "marketplace" | "mcp";
+export type IntegrationBoundary =
+  | "cloud"
+  | "wallet"
+  | "marketplace"
+  | "mcp"
+  | "lifeops";
 export type IntegrationOutcome = "success" | "failure";
 
 export interface IntegrationObservabilityEvent {

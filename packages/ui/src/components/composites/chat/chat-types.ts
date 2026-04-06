@@ -65,6 +65,16 @@ export interface ChatConversationSummary {
   id: string;
   title: string;
   updatedAtLabel?: string;
+  /**
+   * Optional connector source tag (e.g. "imessage", "telegram",
+   * "discord", "whatsapp"). When set, the conversation item renders
+   * a brand-colored channel pill next to the title so cross-channel
+   * threads in a unified sidebar are visually distinct from the
+   * agent's own dashboard conversations. Unknown sources fall back
+   * to a neutral accent pill; dashboard conversations leave this
+   * unset and get no pill at all.
+   */
+  source?: string;
 }
 
 export interface ChatConversationLabels extends ChatLabelSet {}

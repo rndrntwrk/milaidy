@@ -299,32 +299,99 @@ describe("Global LocalModelManager Instance", () => {
 });
 
 // ============================================================================
-// INTEGRATION TESTS (require network)
+// INTEGRATION TESTS (local HTTP mocks)
 // ============================================================================
 
-describe.skip("LocalModelManager Integration (requires network)", () => {
+describe("LocalModelManager Integration", () => {
   let manager: LocalModelManager;
   let testCacheDir: string;
+  let originalFetch: typeof global.fetch;
 
   beforeEach(() => {
     testCacheDir = join(tmpdir(), `eliza-integration-${Date.now()}`);
     mkdirSync(testCacheDir, { recursive: true });
     manager = new LocalModelManager({ cacheDir: testCacheDir });
+    originalFetch = global.fetch;
+
+    global.fetch = vi.fn(async (input: string | URL | Request) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url;
+
+      if (
+        url ===
+        "https://huggingface.co/api/models/sentence-transformers/all-MiniLM-L6-v2"
+      ) {
+        return new Response(
+          JSON.stringify({
+            siblings: [
+              { rfilename: "config.json" },
+              { rfilename: "tokenizer.json" },
+              { rfilename: "model.onnx" },
+            ],
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      if (
+        url ===
+        "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/config.json"
+      ) {
+        return new Response(new TextEncoder().encode("{}"), { status: 200 });
+      }
+
+      if (
+        url ===
+        "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/tokenizer.json"
+      ) {
+        return new Response(new TextEncoder().encode("{}"), { status: 200 });
+      }
+
+      if (
+        url ===
+        "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/model.onnx"
+      ) {
+        return new Response(new Uint8Array([1, 2, 3, 4]), { status: 200 });
+      }
+
+      if (url === "http://localhost:11434/api/tags") {
+        return new Response(
+          JSON.stringify({
+            models: [{ name: "llama3.2:1b" }, { name: "qwen2.5:0.5b" }],
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      throw new Error(
+        `Unexpected fetch in LocalModelManager Integration: ${url}`,
+      );
+    }) as typeof global.fetch;
   });
 
   afterEach(() => {
+    global.fetch = originalFetch;
     if (existsSync(testCacheDir)) {
       rmSync(testCacheDir, { recursive: true, force: true });
     }
   });
 
   it("should download a small model from HuggingFace", async () => {
-    // Use a very small model for testing
     const modelId = "sentence-transformers/all-MiniLM-L6-v2";
 
-    let _progressCalled = false;
+    const progressCalls: number[] = [];
     const path = await manager.downloadModel(modelId, (progress) => {
-      _progressCalled = true;
+      progressCalls.push(progress.percent);
       expect(progress.percent).toBeGreaterThanOrEqual(0);
       expect(progress.percent).toBeLessThanOrEqual(100);
     });
@@ -332,20 +399,17 @@ describe.skip("LocalModelManager Integration (requires network)", () => {
     expect(path).toBeDefined();
     expect(existsSync(path)).toBe(true);
     expect(manager.isModelDownloaded(modelId)).toBe(true);
-  }, 120000);
+    expect(progressCalls.at(-1)).toBe(100);
+  });
 
   it("should check Ollama status", async () => {
     const isRunning = await manager.isOllamaRunning();
-    // Just verify it doesn't throw and returns a boolean
-    expect(typeof isRunning).toBe("boolean");
+    expect(isRunning).toBe(true);
   });
 
-  it("should list Ollama models if running", async () => {
-    const isRunning = await manager.isOllamaRunning();
-    if (isRunning) {
-      const models = await manager.listOllamaModels();
-      expect(Array.isArray(models)).toBe(true);
-    }
+  it("should list Ollama models", async () => {
+    const models = await manager.listOllamaModels();
+    expect(models).toEqual(["llama3.2:1b", "qwen2.5:0.5b"]);
   });
 });
 

@@ -651,15 +651,25 @@ export async function handleConversationRoutes(
         const contentSource = (m.content as Record<string, unknown>)?.source;
         const meta = m.metadata as Record<string, unknown> | undefined;
         const entityName = meta?.entityName;
+        // Surface a source tag for every message so the UI can render a
+        // consistent channel chip on the bubble. Native dashboard turns
+        // used to leave this field undefined (or store "client_chat"
+        // internally), which made them the only bubbles without a
+        // chip. We fold both into the "milady" brand tag so the gold
+        // Milady chip lights up on every native message symmetric with
+        // the connector channels.
+        const normalizedSource =
+          typeof contentSource === "string" &&
+          contentSource.length > 0 &&
+          contentSource !== "client_chat"
+            ? contentSource
+            : "milady";
         return {
           id: m.id ?? "",
           role: m.entityId === agentId ? "assistant" : "user",
           text: (m.content as { text?: string })?.text ?? "",
           timestamp: m.createdAt ?? 0,
-          source:
-            typeof contentSource === "string" && contentSource !== "client_chat"
-              ? contentSource
-              : undefined,
+          source: normalizedSource,
           from:
             typeof entityName === "string" && entityName.length > 0
               ? entityName

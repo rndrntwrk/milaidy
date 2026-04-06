@@ -3,7 +3,6 @@
  * training, plugins, streaming/PTY, logs, character, permissions, updates.
  */
 
-import type { ReleaseChannel } from "@miladyai/agent/contracts/config";
 import type {
   AllPermissionsState,
   PermissionState,
@@ -20,6 +19,11 @@ import type {
   OnboardingOptions,
   SubscriptionStatusResponse,
 } from "@miladyai/shared/contracts/onboarding";
+import {
+  getWebsiteBlockerPlugin,
+  type WebsiteBlockerPermissionResult,
+  type WebsiteBlockerStatusResult,
+} from "../bridge/native-plugins";
 import { MiladyClient } from "./client-base";
 import type {
   AgentAutomationMode,
@@ -30,22 +34,21 @@ import type {
   CharacterData,
   CodingAgentScratchWorkspace,
   CodingAgentStatus,
+  CodingAgentTaskThread,
+  CodingAgentTaskThreadDetail,
   ConfigSchemaResponse,
   CorePluginsResponse,
   CreateTriggerRequest,
   ExtensionStatus,
-  LogEntry,
   LogsFilter,
   LogsResponse,
   PluginInfo,
+  PluginMutationResult,
   RawPtySession,
   RuntimeDebugSnapshot,
   SecretInfo,
-  SecurityAuditEntry,
-  SecurityAuditEventType,
   SecurityAuditFilter,
   SecurityAuditResponse,
-  SecurityAuditSeverity,
   SecurityAuditStreamEvent,
   StartTrainingOptions,
   TradePermissionMode,
@@ -63,7 +66,10 @@ import type {
   UpdateStatus,
   UpdateTriggerRequest,
 } from "./client-types";
-import { ApiError, mapPtySessionsToCodingAgentSessions } from "./client-types";
+import {
+  mapPtySessionsToCodingAgentSessions,
+  mapTaskThreadsToCodingAgentSessions,
+} from "./client-types";
 
 // ---------------------------------------------------------------------------
 // Module-level helpers
@@ -82,6 +88,46 @@ function miladyClientSettingsDebug(): boolean {
   });
 }
 
+const WEBSITE_BLOCKING_PERMISSION_ID = "website-blocking" as const;
+
+function getNativeWebsiteBlockerPluginIfAvailable() {
+  const plugin = getWebsiteBlockerPlugin();
+  return typeof plugin.getStatus === "function" &&
+    typeof plugin.startBlock === "function" &&
+    typeof plugin.stopBlock === "function" &&
+    typeof plugin.checkPermissions === "function" &&
+    typeof plugin.requestPermissions === "function" &&
+    typeof plugin.openSettings === "function"
+    ? plugin
+    : null;
+}
+
+function mapWebsiteBlockerPermissionResult(
+  permission: WebsiteBlockerPermissionResult,
+): PermissionState {
+  return {
+    id: WEBSITE_BLOCKING_PERMISSION_ID,
+    status: permission.status,
+    canRequest: permission.canRequest,
+    reason: permission.reason,
+    lastChecked: Date.now(),
+  };
+}
+
+function mapWebsiteBlockerStatusToPermission(
+  status: WebsiteBlockerStatusResult,
+): PermissionState {
+  return {
+    id: WEBSITE_BLOCKING_PERMISSION_ID,
+    status:
+      status.permissionStatus ??
+      (status.available ? "granted" : "not-determined"),
+    canRequest: status.canRequestPermission ?? status.supportsElevationPrompt,
+    reason: status.reason,
+    lastChecked: Date.now(),
+  };
+}
+
 function logSettingsClient(
   phase: string,
   detail: Record<string, unknown>,
@@ -92,6 +138,8 @@ function logSettingsClient(
     sanitizeForSettingsDebug(detail),
   );
 }
+
+const SETTINGS_MUTATION_TIMEOUT_MS = 30_000;
 
 // ---------------------------------------------------------------------------
 // Declaration merging
@@ -264,11 +312,11 @@ declare module "./client-base" {
     toggleCorePlugin(
       npmName: string,
       enabled: boolean,
-    ): Promise<{ ok: boolean; restarting?: boolean; message?: string }>;
+    ): Promise<PluginMutationResult>;
     updatePlugin(
       id: string,
       config: Record<string, unknown>,
-    ): Promise<{ ok: boolean; restarting?: boolean }>;
+    ): Promise<PluginMutationResult>;
     getSecrets(): Promise<{ secrets: SecretInfo[] }>;
     updateSecrets(
       secrets: Record<string, string>,
@@ -335,7 +383,93 @@ declare module "./client-base" {
     refreshPermissions(): Promise<AllPermissionsState>;
     setShellEnabled(enabled: boolean): Promise<PermissionState>;
     isShellEnabled(): Promise<boolean>;
+    getWebsiteBlockerStatus(): Promise<{
+      available: boolean;
+      active: boolean;
+      hostsFilePath: string | null;
+      endsAt: string | null;
+      websites: string[];
+      canUnblockEarly: boolean;
+      requiresElevation: boolean;
+      engine:
+        | "hosts-file"
+        | "vpn-dns"
+        | "network-extension"
+        | "content-blocker";
+      platform: string;
+      supportsElevationPrompt: boolean;
+      elevationPromptMethod:
+        | "osascript"
+        | "pkexec"
+        | "powershell-runas"
+        | "vpn-consent"
+        | "system-settings"
+        | null;
+      permissionStatus?: PermissionState["status"];
+      canRequestPermission?: boolean;
+      canOpenSystemSettings?: boolean;
+      reason?: string;
+    }>;
+    startWebsiteBlock(options: {
+      websites?: string[] | string;
+      durationMinutes?: number | string | null;
+      text?: string;
+    }): Promise<
+      | {
+          success: true;
+          endsAt: string | null;
+          request: {
+            websites: string[];
+            durationMinutes: number | null;
+          };
+        }
+      | {
+          success: false;
+          error: string;
+          status?: {
+            active: boolean;
+            endsAt: string | null;
+            websites: string[];
+            requiresElevation: boolean;
+          };
+        }
+    >;
+    stopWebsiteBlock(): Promise<
+      | {
+          success: true;
+          removed: boolean;
+          status: {
+            active: boolean;
+            endsAt: string | null;
+            websites: string[];
+            canUnblockEarly: boolean;
+            requiresElevation: boolean;
+          };
+        }
+      | {
+          success: false;
+          error: string;
+          status?: {
+            active: boolean;
+            endsAt: string | null;
+            websites: string[];
+            canUnblockEarly: boolean;
+            requiresElevation: boolean;
+          };
+        }
+    >;
     getCodingAgentStatus(): Promise<CodingAgentStatus | null>;
+    listCodingAgentTaskThreads(options?: {
+      includeArchived?: boolean;
+      status?: string;
+      search?: string;
+      limit?: number;
+    }): Promise<CodingAgentTaskThread[]>;
+    getCodingAgentTaskThread(
+      threadId: string,
+    ): Promise<CodingAgentTaskThreadDetail | null>;
+    archiveCodingAgentTaskThread(threadId: string): Promise<boolean>;
+    reopenCodingAgentTaskThread(threadId: string): Promise<boolean>;
     stopCodingAgent(sessionId: string): Promise<boolean>;
     listCodingAgentScratchWorkspaces(): Promise<CodingAgentScratchWorkspace[]>;
     keepCodingAgentScratchWorkspace(sessionId: string): Promise<boolean>;
@@ -801,11 +935,17 @@ MiladyClient.prototype.updateConfig = async function (
     baseUrl: this.getBaseUrl(),
     patch,
   });
-  const out = (await this.fetch("/api/config", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(patch),
-  })) as Record<string, unknown>;
+  const out = (await this.fetch(
+    "/api/config",
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    },
+    {
+      timeoutMs: SETTINGS_MUTATION_TIMEOUT_MS,
+    },
+  )) as Record<string, unknown>;
   const cloud = out.cloud as Record<string, unknown> | undefined;
   logSettingsClient("PUT /api/config ← ok", {
     baseUrl: this.getBaseUrl(),
@@ -1096,10 +1236,16 @@ MiladyClient.prototype.updatePlugin = async function (
     baseUrl: this.getBaseUrl(),
     body: config,
   });
-  const result = (await this.fetch(`/api/plugins/${id}`, {
-    method: "PUT",
-    body: JSON.stringify(config),
-  })) as { ok: boolean; restarting?: boolean };
+  const result = (await this.fetch(
+    `/api/plugins/${id}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(config),
+    },
+    {
+      timeoutMs: SETTINGS_MUTATION_TIMEOUT_MS,
+    },
+  )) as PluginMutationResult;
   logSettingsClient(`PUT /api/plugins/${id} ← ok`, {
     baseUrl: this.getBaseUrl(),
     result,
@@ -1376,10 +1522,28 @@ MiladyClient.prototype.setTradePermissionMode = async function (
 };
 
 MiladyClient.prototype.getPermissions = async function (this: MiladyClient) {
-  return this.fetch("/api/permissions");
+  const permissions = await this.fetch<AllPermissionsState>("/api/permissions");
+  const plugin = getNativeWebsiteBlockerPluginIfAvailable();
+  if (!plugin) {
+    return permissions;
+  }
+
+  const permission = mapWebsiteBlockerStatusToPermission(
+    await plugin.getStatus(),
+  );
+  return {
+    ...permissions,
+    [WEBSITE_BLOCKING_PERMISSION_ID]: permission,
+  };
 };
 
 MiladyClient.prototype.getPermission = async function (this: MiladyClient, id) {
+  if (id === WEBSITE_BLOCKING_PERMISSION_ID) {
+    const plugin = getNativeWebsiteBlockerPluginIfAvailable();
+    if (plugin) {
+      return mapWebsiteBlockerStatusToPermission(await plugin.getStatus());
+    }
+  }
   return this.fetch(`/api/permissions/${id}`);
 };
 
@@ -1387,6 +1551,14 @@ MiladyClient.prototype.requestPermission = async function (
   this: MiladyClient,
   id,
 ) {
+  if (id === WEBSITE_BLOCKING_PERMISSION_ID) {
+    const plugin = getNativeWebsiteBlockerPluginIfAvailable();
+    if (plugin) {
+      return mapWebsiteBlockerPermissionResult(
+        await plugin.requestPermissions(),
+      );
+    }
+  }
   return this.fetch(`/api/permissions/${id}/request`, { method: "POST" });
 };
 
@@ -1394,6 +1566,13 @@ MiladyClient.prototype.openPermissionSettings = async function (
   this: MiladyClient,
   id,
 ) {
+  if (id === WEBSITE_BLOCKING_PERMISSION_ID) {
+    const plugin = getNativeWebsiteBlockerPluginIfAvailable();
+    if (plugin) {
+      await plugin.openSettings();
+      return;
+    }
+  }
   await this.fetch(`/api/permissions/${id}/open-settings`, {
     method: "POST",
   });
@@ -1402,7 +1581,24 @@ MiladyClient.prototype.openPermissionSettings = async function (
 MiladyClient.prototype.refreshPermissions = async function (
   this: MiladyClient,
 ) {
-  return this.fetch("/api/permissions/refresh", { method: "POST" });
+  const permissions = await this.fetch<AllPermissionsState>(
+    "/api/permissions/refresh",
+    {
+      method: "POST",
+    },
+  );
+  const plugin = getNativeWebsiteBlockerPluginIfAvailable();
+  if (!plugin) {
+    return permissions;
+  }
+
+  const permission = mapWebsiteBlockerStatusToPermission(
+    await plugin.getStatus(),
+  );
+  return {
+    ...permissions,
+    [WEBSITE_BLOCKING_PERMISSION_ID]: permission,
+  };
 };
 
 MiladyClient.prototype.setShellEnabled = async function (
@@ -1422,6 +1618,40 @@ MiladyClient.prototype.isShellEnabled = async function (this: MiladyClient) {
   return result.enabled;
 };
 
+MiladyClient.prototype.getWebsiteBlockerStatus = async function (
+  this: MiladyClient,
+) {
+  const plugin = getNativeWebsiteBlockerPluginIfAvailable();
+  if (plugin) {
+    return await plugin.getStatus();
+  }
+  return this.fetch("/api/website-blocker");
+};
+
+MiladyClient.prototype.startWebsiteBlock = async function (
+  this: MiladyClient,
+  options,
+) {
+  const plugin = getNativeWebsiteBlockerPluginIfAvailable();
+  if (plugin) {
+    return await plugin.startBlock(options);
+  }
+  return this.fetch("/api/website-blocker", {
+    method: "PUT",
+    body: JSON.stringify(options),
+  });
+};
+
+MiladyClient.prototype.stopWebsiteBlock = async function (this: MiladyClient) {
+  const plugin = getNativeWebsiteBlockerPluginIfAvailable();
+  if (plugin) {
+    return await plugin.stopBlock();
+  }
+  return this.fetch("/api/website-blocker", {
+    method: "DELETE",
+  });
+};
+
 MiladyClient.prototype.getCodingAgentStatus = async function (
   this: MiladyClient,
 ) {
@@ -1429,6 +1659,19 @@ MiladyClient.prototype.getCodingAgentStatus = async function (
     const status = await this.fetch<CodingAgentStatus>(
       "/api/coding-agents/coordinator/status",
     );
+    if (
+      status &&
+      (!status.tasks || status.tasks.length === 0) &&
+      Array.isArray(status.taskThreads) &&
+      status.taskThreads.length > 0
+    ) {
+      status.tasks = mapTaskThreadsToCodingAgentSessions(
+        status.taskThreads,
+      ).filter(
+        (task) => task.status !== "completed" && task.status !== "error",
+      );
+      status.taskCount = status.tasks.length;
+    }
     if (status && (!status.tasks || status.tasks.length === 0)) {
       try {
         const ptySessions =
@@ -1445,6 +1688,54 @@ MiladyClient.prototype.getCodingAgentStatus = async function (
   } catch {
     return null;
   }
+};
+
+MiladyClient.prototype.listCodingAgentTaskThreads = function (
+  this: MiladyClient,
+  options,
+) {
+  const params = new URLSearchParams();
+  if (options?.includeArchived) params.set("includeArchived", "true");
+  if (options?.status) params.set("status", options.status);
+  if (options?.search) params.set("search", options.search);
+  if (typeof options?.limit === "number" && options.limit > 0) {
+    params.set("limit", String(options.limit));
+  }
+  const query = params.toString();
+  return this.fetch<CodingAgentTaskThread[]>(
+    `/api/coding-agents/coordinator/threads${query ? `?${query}` : ""}`,
+  );
+};
+
+MiladyClient.prototype.getCodingAgentTaskThread = function (
+  this: MiladyClient,
+  threadId,
+) {
+  return this.fetch<CodingAgentTaskThreadDetail>(
+    `/api/coding-agents/coordinator/threads/${encodeURIComponent(threadId)}`,
+  );
+};
+
+MiladyClient.prototype.archiveCodingAgentTaskThread = async function (
+  this: MiladyClient,
+  threadId,
+) {
+  await this.fetch(
+    `/api/coding-agents/coordinator/threads/${encodeURIComponent(threadId)}/archive`,
+    { method: "POST" },
+  );
+  return true;
+};
+
+MiladyClient.prototype.reopenCodingAgentTaskThread = async function (
+  this: MiladyClient,
+  threadId,
+) {
+  await this.fetch(
+    `/api/coding-agents/coordinator/threads/${encodeURIComponent(threadId)}/reopen`,
+    { method: "POST" },
+  );
+  return true;
 };
 
 MiladyClient.prototype.stopCodingAgent = async function (

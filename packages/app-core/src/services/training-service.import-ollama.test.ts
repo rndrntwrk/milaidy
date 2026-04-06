@@ -1,13 +1,28 @@
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, test, vi } from "vitest";
 import type { ElizaConfig } from "../config/config";
 
-// Skip this test when the plugin-training submodule isn't available (CI)
-let TrainingService: new (
+type TrainingServiceLike = new (
   ctx: unknown,
 ) => {
   importModelToOllama: (id: string, opts: unknown) => Promise<void>;
   models: Map<string, TrainingModelRecord>;
 };
+
+const trainingServiceModuleUrl = new URL(
+  "../../../../plugins/plugin-training/dist/index.js",
+  import.meta.url,
+);
+const trainingPluginAvailable = existsSync(
+  fileURLToPath(trainingServiceModuleUrl),
+);
+const describeTraining = trainingPluginAvailable ? describe : describe.skip;
+
+let TrainingService: TrainingServiceLike;
+
+type TrainingServiceInstance = InstanceType<TrainingServiceLike>;
+
 type TrainingModelRecord = {
   id: string;
   createdAt: string;
@@ -22,18 +37,16 @@ type TrainingModelRecord = {
   benchmark: { status: string; lastRunAt: null; output: null };
 };
 
-let hasModule = false;
-try {
-  const mod = await import(
-    "../../plugins/plugin-training/src/services/trainingService"
-  );
-  TrainingService = mod.TrainingService;
-  hasModule = true;
-} catch {
-  hasModule = false;
-}
+describeTraining("training service importModelToOllama", () => {
+  test("loads the training plugin module", async () => {
+    const trainingServiceModule = (await import(
+      trainingServiceModuleUrl.href
+    )) as {
+      TrainingService: TrainingServiceLike;
+    };
+    TrainingService = trainingServiceModule.TrainingService;
+  });
 
-describe.skipIf(!hasModule)("training service importModelToOllama", () => {
   test("uses manual redirect mode to prevent redirect-based SSRF escapes", async () => {
     const config = {} as ElizaConfig;
     const service = new TrainingService({
@@ -43,11 +56,11 @@ describe.skipIf(!hasModule)("training service importModelToOllama", () => {
     });
 
     vi.spyOn(
-      service as object as { initialize: () => Promise<void> },
+      service as TrainingServiceInstance & { initialize: () => Promise<void> },
       "initialize",
     ).mockResolvedValue(undefined);
     vi.spyOn(
-      service as object as { saveState: () => Promise<void> },
+      service as TrainingServiceInstance & { saveState: () => Promise<void> },
       "saveState",
     ).mockResolvedValue(undefined);
 

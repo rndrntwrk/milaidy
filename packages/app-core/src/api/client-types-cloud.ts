@@ -180,6 +180,37 @@ export interface CloudCompatAgentStatus {
   databaseStatus: string;
 }
 
+export interface CloudCompatManagedDiscordStatus {
+  applicationId: string | null;
+  configured: boolean;
+  connected: boolean;
+  developerPortalUrl: string;
+  guildId: string | null;
+  guildName: string | null;
+  adminDiscordUserId: string | null;
+  adminDiscordUsername: string | null;
+  adminDiscordDisplayName: string | null;
+  adminElizaUserId: string | null;
+  botNickname: string | null;
+  connectedAt: string | null;
+  restarted?: boolean;
+}
+
+export interface CloudCompatManagedGithubStatus {
+  configured: boolean;
+  connected: boolean;
+  connectionId: string | null;
+  githubUserId: string | null;
+  githubUsername: string | null;
+  githubDisplayName: string | null;
+  githubAvatarUrl: string | null;
+  githubEmail: string | null;
+  scopes: string[];
+  adminElizaUserId: string | null;
+  connectedAt: string | null;
+  restarted?: boolean;
+}
+
 export interface CloudCompatJob {
   jobId: string;
   type: string;
@@ -211,11 +242,34 @@ export interface CloudCompatLaunchResult {
 }
 
 // App types
+export type AppSessionMode = "viewer" | "spectate-and-steer" | "external";
+
+export type AppSessionFeature =
+  | "commands"
+  | "telemetry"
+  | "pause"
+  | "resume"
+  | "suggestions";
+
+export type AppSessionControlAction = "pause" | "resume";
+export type AppRunViewerAttachment = "attached" | "detached" | "unavailable";
+export type AppRunHealthState = "healthy" | "degraded" | "offline";
+
+export type AppSessionJsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | AppSessionJsonValue[]
+  | { [key: string]: AppSessionJsonValue };
+
 export interface AppViewerAuthMessage {
   type: string;
   authToken?: string;
   sessionToken?: string;
   agentId?: string;
+  characterId?: string;
+  followEntity?: string;
 }
 
 export interface AppViewerConfig {
@@ -228,6 +282,72 @@ export interface AppViewerConfig {
 
 export interface AppUiExtensionConfig {
   detailPanelId: string;
+}
+
+export interface AppSessionConfig {
+  mode: AppSessionMode;
+  features?: AppSessionFeature[];
+}
+
+export interface AppSessionState {
+  sessionId: string;
+  appName: string;
+  mode: AppSessionMode;
+  status: string;
+  displayName?: string;
+  agentId?: string;
+  characterId?: string;
+  followEntity?: string;
+  canSendCommands?: boolean;
+  controls?: AppSessionControlAction[];
+  summary?: string | null;
+  goalLabel?: string | null;
+  suggestedPrompts?: string[];
+  telemetry?: Record<string, AppSessionJsonValue> | null;
+}
+
+export interface AppSessionActionResult {
+  success: boolean;
+  message: string;
+  session?: AppSessionState | null;
+}
+
+export interface AppRunHealth {
+  state: AppRunHealthState;
+  message: string | null;
+}
+
+export interface AppRunSummary {
+  runId: string;
+  appName: string;
+  displayName: string;
+  pluginName: string;
+  launchType: string;
+  launchUrl: string | null;
+  viewer: AppViewerConfig | null;
+  session: AppSessionState | null;
+  status: string;
+  summary: string | null;
+  startedAt: string;
+  updatedAt: string;
+  lastHeartbeatAt: string | null;
+  supportsBackground: boolean;
+  viewerAttachment: AppRunViewerAttachment;
+  health: AppRunHealth;
+}
+
+export interface AppRunActionResult {
+  success: boolean;
+  message: string;
+  run?: AppRunSummary | null;
+}
+
+export type AppLaunchDiagnosticSeverity = "info" | "warning" | "error";
+
+export interface AppLaunchDiagnostic {
+  code: string;
+  severity: AppLaunchDiagnosticSeverity;
+  message: string;
 }
 
 export interface RegistryAppInfo {
@@ -251,6 +371,7 @@ export interface RegistryAppInfo {
   };
   uiExtension?: AppUiExtensionConfig;
   viewer?: AppViewerConfig;
+  session?: AppSessionConfig;
 }
 
 export interface InstalledAppInfo {
@@ -269,11 +390,15 @@ export interface AppLaunchResult {
   launchType: string;
   launchUrl: string | null;
   viewer: AppViewerConfig | null;
+  session: AppSessionState | null;
+  run: AppRunSummary | null;
+  diagnostics?: AppLaunchDiagnostic[];
 }
 
 export interface AppStopResult {
   success: boolean;
   appName: string;
+  runId: string | null;
   stoppedAt: string;
   pluginUninstalled: boolean;
   needsRestart: boolean;
@@ -443,6 +568,8 @@ export interface TrajectoryLlmCall {
   maxTokens: number;
   purpose: string;
   actionType: string;
+  stepType?: string;
+  tags?: string[];
   latencyMs: number;
   promptTokens?: number;
   completionTokens?: number;
@@ -587,11 +714,163 @@ export interface AgentPreflightResult {
   docsUrl?: string;
 }
 
+export interface CodingAgentTaskThread {
+  id: string;
+  title: string;
+  kind: string;
+  status:
+    | "open"
+    | "active"
+    | "waiting_on_user"
+    | "blocked"
+    | "validating"
+    | "done"
+    | "failed"
+    | "archived"
+    | "interrupted";
+  originalRequest: string;
+  summary?: string;
+  sessionCount: number;
+  activeSessionCount: number;
+  latestSessionId?: string | null;
+  latestSessionLabel?: string | null;
+  latestWorkdir?: string | null;
+  latestRepo?: string | null;
+  latestActivityAt?: number | null;
+  decisionCount: number;
+  createdAt: string;
+  updatedAt: string;
+  closedAt?: string | null;
+  archivedAt?: string | null;
+}
+
+export interface CodingAgentTaskSessionRecord {
+  id: string;
+  threadId: string;
+  sessionId: string;
+  framework: string;
+  providerSource?: string | null;
+  label: string;
+  originalTask: string;
+  workdir: string;
+  repo?: string | null;
+  status: string;
+  decisionCount: number;
+  autoResolvedCount: number;
+  registeredAt: number;
+  lastActivityAt: number;
+  idleCheckCount: number;
+  taskDelivered: boolean;
+  completionSummary?: string | null;
+  lastSeenDecisionIndex: number;
+  lastInputSentAt?: number | null;
+  stoppedAt?: number | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CodingAgentTaskDecisionRecord {
+  id: string;
+  threadId: string;
+  sessionId: string;
+  event: string;
+  promptText: string;
+  decision: string;
+  response?: string | null;
+  reasoning: string;
+  timestamp: number;
+  createdAt: string;
+}
+
+export interface CodingAgentTaskEventRecord {
+  id: string;
+  threadId: string;
+  sessionId?: string | null;
+  eventType: string;
+  timestamp: number;
+  summary: string;
+  data: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface CodingAgentTaskArtifactRecord {
+  id: string;
+  threadId: string;
+  sessionId?: string | null;
+  artifactType: string;
+  title: string;
+  path?: string | null;
+  uri?: string | null;
+  mimeType?: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface CodingAgentTaskTranscriptRecord {
+  id: string;
+  threadId: string;
+  sessionId: string;
+  timestamp: number;
+  direction: "stdout" | "stderr" | "stdin" | "keys" | "system";
+  content: string;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface CodingAgentPendingDecisionRecord {
+  sessionId: string;
+  threadId: string;
+  promptText: string;
+  recentOutput: string;
+  llmDecision: Record<string, unknown>;
+  taskContext: Record<string, unknown>;
+  createdAt: number;
+  updatedAt: string;
+}
+
+export interface CodingAgentTaskThreadDetail extends CodingAgentTaskThread {
+  roomId?: string | null;
+  worldId?: string | null;
+  ownerUserId?: string | null;
+  summary?: string;
+  acceptanceCriteria?: string[];
+  currentPlan?: Record<string, unknown>;
+  lastUserTurnAt?: string | null;
+  lastCoordinatorTurnAt?: string | null;
+  metadata?: Record<string, unknown>;
+  sessions: CodingAgentTaskSessionRecord[];
+  decisions: CodingAgentTaskDecisionRecord[];
+  events: CodingAgentTaskEventRecord[];
+  artifacts: CodingAgentTaskArtifactRecord[];
+  transcripts: CodingAgentTaskTranscriptRecord[];
+  pendingDecisions: CodingAgentPendingDecisionRecord[];
+}
+
+export interface CodingAgentFrameworkAvailability {
+  id: string;
+  label: string;
+  adapter: string;
+  installed: boolean;
+  installCommand: string;
+  docsUrl: string;
+  authReady: boolean;
+  available: boolean;
+  score: number;
+  reason: string;
+  warnings: string[];
+}
+
 export interface CodingAgentStatus {
   supervisionLevel: string;
   taskCount: number;
   tasks: CodingAgentSession[];
   pendingConfirmations: number;
+  taskThreadCount?: number;
+  taskThreads?: CodingAgentTaskThread[];
+  preferredAgentType?: string;
+  preferredAgentReason?: string;
+  frameworks?: CodingAgentFrameworkAvailability[];
 }
 
 /** Raw PTY session shape returned by /api/coding-agents. */
@@ -631,5 +910,36 @@ export function mapPtySessionsToCodingAgentSessions(
             : ("active" as const),
     decisionCount: 0,
     autoResolvedCount: 0,
+  }));
+}
+
+/** Maps persisted coordinator task threads into the existing CodingAgentSession UI shape. */
+export function mapTaskThreadsToCodingAgentSessions(
+  taskThreads: CodingAgentTaskThread[],
+): CodingAgentSession[] {
+  return taskThreads.map((thread) => ({
+    sessionId: thread.latestSessionId ?? thread.id,
+    agentType: "task-thread",
+    label: thread.title || thread.latestSessionLabel || "Task",
+    originalTask: thread.originalRequest,
+    workdir: thread.latestWorkdir ?? thread.latestRepo ?? "",
+    status:
+      thread.status === "failed"
+        ? ("error" as const)
+        : thread.status === "done"
+          ? ("completed" as const)
+          : thread.status === "validating"
+            ? ("tool_running" as const)
+            : thread.status === "blocked" ||
+                thread.status === "waiting_on_user" ||
+                thread.status === "interrupted"
+              ? ("blocked" as const)
+              : ("active" as const),
+    decisionCount: thread.decisionCount,
+    autoResolvedCount: 0,
+    lastActivity:
+      thread.status === "interrupted"
+        ? "Interrupted - reopen or resume this task"
+        : thread.summary || thread.latestSessionLabel || thread.status,
   }));
 }

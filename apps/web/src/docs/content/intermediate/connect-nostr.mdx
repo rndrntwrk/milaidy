@@ -1,0 +1,84 @@
+# Connect to Nostr
+
+Nostr is a decentralized protocol where your identity is a cryptographic keypair, not an account on any server. Your Milady agent can post notes, reply to mentions, and respond to DMs across the Nostr relay network — no signup, no API key, no central service to revoke access.
+
+**What you'll learn:** generate a keypair (or reuse one you already have), pick relays, and point Milady at it. About ten minutes.
+
+## What you need before you start
+
+- **A Nostr keypair** — either one you already have from Damus, Primal, Amethyst, or another Nostr client, or a new one we'll generate below.
+- **Milady running** with a working provider.
+
+<Callout kind="warning" title="Your private key is your identity">
+On Nostr, the private key (<strong>nsec</strong>) <em>is</em> your account. Anyone who has it can post as you, forever — there's no password reset, no customer support, no central authority. Treat it like you'd treat a crypto wallet private key.
+</Callout>
+
+## Step 1 — Get a keypair
+
+### If you already use Nostr
+
+Export your private key from your existing client:
+
+- **Damus (iOS):** Settings → Keys → Copy private key (nsec)
+- **Primal:** Settings → Your account → Export → nsec
+- **Amethyst (Android):** Three-dot menu → Backup keys → Copy nsec
+
+The key starts with `nsec1...`. Copy it.
+
+### If you're new to Nostr
+
+Easiest path is to install any Nostr client (Damus, Primal, Amethyst, Iris, etc.), complete their onboarding to create an account, then export the private key as above. The client also sets up a display name, profile picture, etc., which saves you from configuring them through Milady.
+
+<Callout kind="tip">
+You can use the same nsec across every Nostr client and across Milady simultaneously. That's the whole point of the protocol — your identity is portable.
+</Callout>
+
+## Step 2 — Pick relays
+
+Nostr posts travel through **relays** — independent servers that forward events. Your agent connects to a list of relays and publishes/subscribes to each. For reliability, configure 3–5 popular ones:
+
+```
+wss://relay.damus.io
+wss://relay.nostr.band
+wss://nos.lol
+wss://relay.primal.net
+wss://nostr.wine
+```
+
+You can add or remove later. More relays = more reach but also more bandwidth.
+
+## Step 3 — Hand the keypair to Milady
+
+<Steps>
+  <li>Open Milady. Go to <strong>Settings → Plugins → Nostr → Configure</strong>.</li>
+  <li>Paste your <strong>nsec</strong> private key into the private key field.</li>
+  <li>Paste the comma-separated relay list from Step 2 into the <strong>Relays</strong> field.</li>
+  <li>Click <strong>Save</strong>.</li>
+</Steps>
+
+## Step 4 — Test it
+
+From any Nostr client, mention your public key (npub, which you can get from any client's profile page for your account) in a note. Within a minute, Milady's reply should appear on the same thread.
+
+## Useful options
+
+| Option | What it does |
+| --- | --- |
+| **DM policy** | `allow-all` responds to every direct message. `allow-from` restricts to a list of public keys. |
+| **Allow from** | Comma-separated list of npub public keys allowed to DM the agent. Only used when DM policy is `allow-from`. |
+| **Enabled** | Master on/off switch for the connector. |
+
+## Troubleshooting
+
+**The agent never sees mentions.**
+Either the relays you picked aren't receiving traffic for your npub, or the relays Milady is connected to don't overlap with the relays the mention was sent to. Add more relays on both sides — `wss://relay.damus.io` is a near-universal inclusion.
+
+**"Invalid nsec" when saving.**
+Make sure you pasted the nsec, not the hex private key. nsec starts with `nsec1...`. Some clients show both — use nsec for Milady.
+
+**Direct messages aren't getting through.**
+Nostr DMs are NIP-04 encrypted. Both sides need clients that support NIP-04 (all major clients do). If you're using a NIP-17 capable client on the sender side, DMs won't decrypt on Milady yet.
+
+## What's next
+
+[Running multiple connectors](/docs/advanced/multi-connector-setup) — pair Nostr with Bluesky and Farcaster for full "fediverse + decentralized socials" coverage from one agent.

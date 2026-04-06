@@ -20,13 +20,19 @@ export interface PluginCardProps {
   togglingPlugins: Set<string>;
   hasPluginToggleInFlight: boolean;
   installingPlugins: Set<string>;
+  updatingPlugins: Set<string>;
+  uninstallingPlugins: Set<string>;
   installProgress: Map<string, { phase: string; message: string }>;
+  releaseStreamSelections: Record<string, "latest" | "alpha">;
   draggingId: string | null;
   dragOverId: string | null;
   pluginDescriptionFallback: string;
   onToggle: (pluginId: string, enabled: boolean) => void;
   onToggleSettings: (pluginId: string) => void;
   onInstall: (pluginId: string, npmName: string) => void;
+  onUpdate: (pluginId: string, npmName: string) => void;
+  onUninstall: (pluginId: string, npmName: string) => void;
+  onReleaseStreamChange: (pluginId: string, stream: "latest" | "alpha") => void;
   onOpenExternalUrl: (url: string) => void;
   onDragStart?: (e: React.DragEvent, pluginId: string) => void;
   onDragOver?: (e: React.DragEvent, pluginId: string) => void;
@@ -45,13 +51,19 @@ export function PluginCard({
   togglingPlugins,
   hasPluginToggleInFlight,
   installingPlugins,
+  updatingPlugins,
+  uninstallingPlugins,
   installProgress,
+  releaseStreamSelections,
   draggingId,
   dragOverId,
   pluginDescriptionFallback,
   onToggle,
   onToggleSettings,
   onInstall,
+  onUpdate,
+  onUninstall,
+  onReleaseStreamChange,
   onOpenExternalUrl,
   onDragStart,
   onDragOver,
@@ -82,6 +94,19 @@ export function PluginCard({
       ? requiredSetCount === requiredParams.length
       : setCount === totalCount);
   const isShowcase = p.id === "__ui-showcase__";
+  const selectedReleaseStream =
+    releaseStreamSelections[p.id] ??
+    p.releaseStream ??
+    (p.alphaVersion ? "alpha" : "latest");
+  const remoteVersionForSelection =
+    selectedReleaseStream === "alpha" ? p.alphaVersion : p.latestVersion;
+  const showReleaseControls = !isShowcase && Boolean(p.npmName);
+  const canUpdate = showReleaseControls && Boolean(p.version);
+  const canUninstall =
+    !isShowcase && p.source === "store" && Boolean(p.npmName);
+  const isInstalling = installingPlugins.has(p.id);
+  const isUpdating = updatingPlugins.has(p.id);
+  const isUninstalling = uninstallingPlugins.has(p.id);
   const categoryLabel = isShowcase
     ? "showcase"
     : p.category === "ai-provider"
@@ -199,6 +224,11 @@ export function PluginCard({
             v{p.version}
           </span>
         )}
+        {showReleaseControls && (
+          <span className="text-[10px] px-1.5 py-px border border-border bg-surface text-muted lowercase tracking-wide whitespace-nowrap">
+            {selectedReleaseStream}
+          </span>
+        )}
         {p.enabled && !p.isActive && !isShowcase && (
           <span
             className={`text-[10px] px-1.5 py-px border lowercase tracking-wide whitespace-nowrap ${
@@ -286,6 +316,41 @@ export function PluginCard({
             {t("pluginsview.23FieldDemos")}
           </span>
         )}
+        {showReleaseControls && (
+          <div className="flex items-center gap-1">
+            <Button
+              variant={
+                selectedReleaseStream === "latest" ? "default" : "outline"
+              }
+              size="sm"
+              className="h-6 px-2 text-[10px] font-bold tracking-wide"
+              onClick={(e) => {
+                e.stopPropagation();
+                onReleaseStreamChange(p.id, "latest");
+              }}
+            >
+              main
+            </Button>
+            <Button
+              variant={
+                selectedReleaseStream === "alpha" ? "default" : "outline"
+              }
+              size="sm"
+              className="h-6 px-2 text-[10px] font-bold tracking-wide"
+              onClick={(e) => {
+                e.stopPropagation();
+                onReleaseStreamChange(p.id, "alpha");
+              }}
+            >
+              alpha
+            </Button>
+          </div>
+        )}
+        {showReleaseControls && remoteVersionForSelection && (
+          <span className="text-[10px] font-mono text-muted/70 whitespace-nowrap">
+            {selectedReleaseStream}:{remoteVersionForSelection}
+          </span>
+        )}
         <div className="flex-1" />
         {p.enabled &&
           !p.isActive &&
@@ -296,19 +361,55 @@ export function PluginCard({
               variant="default"
               size="sm"
               className="h-7 px-3 text-[10px] font-bold tracking-wide shadow-sm max-w-[140px] truncate"
-              disabled={installingPlugins.has(p.id)}
+              disabled={isInstalling || isUpdating || isUninstalling}
               onClick={(e) => {
                 e.stopPropagation();
                 onInstall(p.id, p.npmName ?? "");
               }}
             >
-              {installingPlugins.has(p.id)
+              {isInstalling
                 ? installProgressLabel(
                     installProgress.get(p.npmName ?? "")?.message,
                   )
                 : installLabel}
             </Button>
           )}
+        {canUpdate && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 px-3 text-[10px] font-bold tracking-wide"
+            disabled={isInstalling || isUpdating || isUninstalling}
+            onClick={(e) => {
+              e.stopPropagation();
+              onUpdate(p.id, p.npmName ?? "");
+            }}
+          >
+            {isUpdating
+              ? t("pluginsview.Updating", { defaultValue: "Updating..." })
+              : t("pluginsview.Update", { defaultValue: "Update" })}
+          </Button>
+        )}
+        {canUninstall && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 px-3 text-[10px] font-bold tracking-wide text-destructive border-destructive/40 hover:border-destructive"
+            disabled={isInstalling || isUpdating || isUninstalling}
+            onClick={(e) => {
+              e.stopPropagation();
+              onUninstall(p.id, p.npmName ?? "");
+            }}
+          >
+            {isUninstalling
+              ? t("pluginsview.Uninstalling", {
+                  defaultValue: "Uninstalling...",
+                })
+              : t("pluginsview.Uninstall", {
+                  defaultValue: "Uninstall",
+                })}
+          </Button>
+        )}
         {hasParams && (
           <Button
             variant="ghost"

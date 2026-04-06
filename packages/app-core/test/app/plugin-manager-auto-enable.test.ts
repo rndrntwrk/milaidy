@@ -9,18 +9,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // ── Mock config module before importing eliza.ts ────────────────────────
 
-const { loggerInfoMock, mockLoadElizaConfig, mockSaveElizaConfig } =
+const { consoleInfoMock, mockLoadElizaConfig, mockSaveElizaConfig } =
   vi.hoisted(() => ({
-    loggerInfoMock: vi.fn(),
+    consoleInfoMock: vi.fn(),
     mockLoadElizaConfig: vi.fn(),
     mockSaveElizaConfig: vi.fn(),
   }));
-
-vi.mock("@elizaos/core", () => ({
-  logger: {
-    info: (...args: unknown[]) => loggerInfoMock(...args),
-  },
-}));
 
 // Mock config module used by plugin-manager-guard.ts
 vi.mock("@miladyai/agent/config/config", () => ({
@@ -35,78 +29,91 @@ import {
 
 describe("ensurePluginManagerAllowed", () => {
   const prevEnv = process.env.MILADY_DISABLE_PLUGIN_MANAGER_AUTO_ENABLE;
+  const originalWindow = globalThis.window;
 
   beforeEach(() => {
     _resetPluginManagerChecked();
-    loggerInfoMock.mockReset();
+    consoleInfoMock.mockReset();
     mockLoadElizaConfig.mockReset();
     mockSaveElizaConfig.mockReset();
     delete process.env.MILADY_DISABLE_PLUGIN_MANAGER_AUTO_ENABLE;
+    vi.spyOn(console, "info").mockImplementation((...args: unknown[]) =>
+      consoleInfoMock(...args),
+    );
+    delete (globalThis as { window?: Window }).window;
   });
 
   afterEach(() => {
+    vi.restoreAllMocks();
     if (prevEnv !== undefined) {
       process.env.MILADY_DISABLE_PLUGIN_MANAGER_AUTO_ENABLE = prevEnv;
     } else {
       delete process.env.MILADY_DISABLE_PLUGIN_MANAGER_AUTO_ENABLE;
     }
+    if (originalWindow !== undefined) {
+      globalThis.window = originalWindow;
+    } else {
+      delete (globalThis as { window?: Window }).window;
+    }
   });
 
-  it("writes plugin-manager entry when absent", () => {
+  it("writes plugin-manager entry when absent", async () => {
     const config = { plugins: { entries: {} } };
     mockLoadElizaConfig.mockReturnValue(config);
 
-    const result = ensurePluginManagerAllowed();
-
-    expect(result).toBe("enabled");
+    await expect(ensurePluginManagerAllowed()).resolves.toBe("enabled");
     expect(mockSaveElizaConfig).toHaveBeenCalledTimes(1);
     const saved = mockSaveElizaConfig.mock.calls[0][0];
     expect(saved.plugins.entries["plugin-manager"]).toEqual({ enabled: true });
-    expect(loggerInfoMock).toHaveBeenCalledWith(
+    expect(consoleInfoMock).toHaveBeenCalledWith(
       "[milady] Auto-enabled plugin-manager for dashboard plugin installs. " +
         "Set MILADY_DISABLE_PLUGIN_MANAGER_AUTO_ENABLE=1 to prevent this.",
     );
   });
 
-  it("skips write when plugin-manager already present", () => {
+  it("skips write when plugin-manager already present", async () => {
     mockLoadElizaConfig.mockReturnValue({
       plugins: { entries: { "plugin-manager": { enabled: true } } },
     });
 
-    const result = ensurePluginManagerAllowed();
-
-    expect(result).toBe("already-enabled");
+    await expect(ensurePluginManagerAllowed()).resolves.toBe("already-enabled");
     expect(mockSaveElizaConfig).not.toHaveBeenCalled();
   });
 
-  it("respects user opt-out (enabled: false)", () => {
+  it("respects user opt-out (enabled: false)", async () => {
     mockLoadElizaConfig.mockReturnValue({
       plugins: { entries: { "plugin-manager": { enabled: false } } },
     });
 
-    const result = ensurePluginManagerAllowed();
-
-    expect(result).toBe("disabled-by-user");
+    await expect(ensurePluginManagerAllowed()).resolves.toBe(
+      "disabled-by-user",
+    );
     expect(mockSaveElizaConfig).not.toHaveBeenCalled();
   });
 
-  it("skips config read on second call (in-process guard)", () => {
+  it("skips config read on second call (in-process guard)", async () => {
     mockLoadElizaConfig.mockReturnValue({
       plugins: { entries: { "plugin-manager": { enabled: true } } },
     });
 
-    expect(ensurePluginManagerAllowed()).toBe("already-enabled");
-    expect(ensurePluginManagerAllowed()).toBe("already-enabled");
+    await expect(ensurePluginManagerAllowed()).resolves.toBe("already-enabled");
+    await expect(ensurePluginManagerAllowed()).resolves.toBe("already-enabled");
 
     expect(mockLoadElizaConfig).toHaveBeenCalledTimes(1);
   });
 
-  it("skips entirely when MILADY_DISABLE_PLUGIN_MANAGER_AUTO_ENABLE=1", () => {
+  it("skips entirely when MILADY_DISABLE_PLUGIN_MANAGER_AUTO_ENABLE=1", async () => {
     process.env.MILADY_DISABLE_PLUGIN_MANAGER_AUTO_ENABLE = "1";
 
-    const result = ensurePluginManagerAllowed();
+    await expect(ensurePluginManagerAllowed()).resolves.toBe("disabled-by-env");
+    expect(mockLoadElizaConfig).not.toHaveBeenCalled();
+    expect(mockSaveElizaConfig).not.toHaveBeenCalled();
+  });
 
-    expect(result).toBe("disabled-by-env");
+  it("returns a non-fatal error in renderer/browser environments", async () => {
+    (globalThis as { window?: object }).window = {};
+
+    await expect(ensurePluginManagerAllowed()).resolves.toBe("error");
     expect(mockLoadElizaConfig).not.toHaveBeenCalled();
     expect(mockSaveElizaConfig).not.toHaveBeenCalled();
   });

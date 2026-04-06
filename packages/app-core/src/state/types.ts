@@ -1,6 +1,8 @@
 import type { Dispatch, SetStateAction } from "react";
 import type {
   AgentStatus,
+  AppSessionState,
+  AppRunSummary,
   AppViewerAuthMessage,
   BscTradeExecuteRequest,
   BscTradeExecuteResponse,
@@ -131,6 +133,7 @@ export const ONBOARDING_PERMISSION_LABELS: Record<SystemPermissionId, string> =
     microphone: "Microphone",
     camera: "Camera",
     shell: "Shell Access",
+    "website-blocking": "Website Blocking",
   };
 
 export interface ActionNotice {
@@ -357,6 +360,7 @@ export interface AppState {
   logTagFilter: string;
   logLevelFilter: string;
   logSourceFilter: string;
+  logLoadError: string | null;
 
   // Wallet / Inventory
   walletAddresses: WalletAddresses | null;
@@ -562,18 +566,33 @@ export interface AppState {
   chatPendingImages: ImageAttachment[];
 
   // Game
+  appRuns: AppRunSummary[];
+  activeGameRunId: string;
   activeGameApp: string;
   activeGameDisplayName: string;
   activeGameViewerUrl: string;
   activeGameSandbox: string;
   activeGamePostMessageAuth: boolean;
   activeGamePostMessagePayload: GamePostMessageAuthPayload | null;
+  activeGameSession: AppSessionState | null;
 
   /** When true, the game iframe persists as a floating overlay across all tabs. */
   gameOverlayEnabled: boolean;
 
+  /**
+   * Currently-selected connector chat in the unified messages sidebar.
+   * When non-null, the Chat view swaps its main panel out for a
+   * read-only view of that room's inbox messages. Mutually exclusive
+   * with an active dashboard conversation.
+   */
+  activeInboxChat: {
+    id: string;
+    source: string;
+    title: string;
+  } | null;
+
   // Sub-tabs
-  appsSubTab: "browse" | "games";
+  appsSubTab: "browse" | "running" | "games";
   agentSubTab: "character" | "inventory" | "knowledge";
   pluginsSubTab: "features" | "connectors" | "plugins";
   databaseSubTab: "tables" | "media" | "vectors";

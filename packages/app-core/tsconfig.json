@@ -30,5 +30,5 @@
     "src/**/*.test.ts",
     "src/**/*.test.tsx"
   ],
-  "include": ["src"]
+  "include": ["src", "../agent/src/external-modules.d.ts"]
 }

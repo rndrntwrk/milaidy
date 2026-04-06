@@ -48,6 +48,7 @@ export function LogsView() {
     logTagFilter,
     logLevelFilter,
     logSourceFilter,
+    logLoadError,
     loadLogs,
     setState,
     t,
@@ -222,6 +223,17 @@ export function LogsView() {
             )}
           </div>
         </div>
+        {logLoadError ? (
+          <div
+            role="alert"
+            className="rounded-2xl border border-danger/35 bg-danger/8 px-3 py-2 text-xs text-danger"
+          >
+            {t("logsview.LoadFailed", {
+              defaultValue: "Failed to load logs: {{message}}",
+              message: logLoadError,
+            })}
+          </div>
+        ) : null}
       </PagePanel>
 
       {/* Log entries — full remaining height */}

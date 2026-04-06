@@ -42,25 +42,29 @@ import {
   SYSTEM_PERMISSIONS,
   translateWithFallback,
 } from "./permission-types";
+import { WebsiteBlockerSettingsCard } from "./WebsiteBlockerSettingsCard";
 
 /** Mobile (Capacitor) permission UI for streaming to cloud sandbox. */
 function MobilePermissionsView() {
   const { t } = useApp();
   return (
-    <StreamingPermissionsSettingsView
-      mode="mobile"
-      testId="mobile-permissions"
-      title={translateWithFallback(
-        t,
-        "permissionssection.StreamingPermissions",
-        "Streaming Permissions",
-      )}
-      description={translateWithFallback(
-        t,
-        "permissionssection.MobileStreamingDesc",
-        "Your device streams camera, microphone, and screen to your Eliza Cloud agent for processing.",
-      )}
-    />
+    <div className="space-y-6">
+      <StreamingPermissionsSettingsView
+        mode="mobile"
+        testId="mobile-permissions"
+        title={translateWithFallback(
+          t,
+          "permissionssection.StreamingPermissions",
+          "Streaming Permissions",
+        )}
+        description={translateWithFallback(
+          t,
+          "permissionssection.MobileStreamingDesc",
+          "Your device streams camera, microphone, and screen to your Eliza Cloud agent for processing.",
+        )}
+      />
+      <WebsiteBlockerSettingsCard mode="mobile" />
+    </div>
   );
 }
 
@@ -68,20 +72,23 @@ function MobilePermissionsView() {
 function WebPermissionsView() {
   const { t } = useApp();
   return (
-    <StreamingPermissionsSettingsView
-      mode="web"
-      testId="web-permissions-info"
-      title={translateWithFallback(
-        t,
-        "permissionssection.BrowserPermissions",
-        "Browser Permissions",
-      )}
-      description={translateWithFallback(
-        t,
-        "permissionssection.WebStreamingDesc",
-        "Grant browser access to your camera, microphone, and screen to stream to your agent.",
-      )}
-    />
+    <div className="space-y-6">
+      <StreamingPermissionsSettingsView
+        mode="web"
+        testId="web-permissions-info"
+        title={translateWithFallback(
+          t,
+          "permissionssection.BrowserPermissions",
+          "Browser Permissions",
+        )}
+        description={translateWithFallback(
+          t,
+          "permissionssection.WebStreamingDesc",
+          "Grant browser access to your camera, microphone, and screen to stream to your agent.",
+        )}
+      />
+      <WebsiteBlockerSettingsCard mode="web" />
+    </div>
   );
 }
 
@@ -206,6 +213,7 @@ function DesktopPermissionsView() {
               <Button
                 variant="outline"
                 size="sm"
+                data-testid="permissions-refresh-button"
                 className="min-h-10 rounded-xl px-3 text-[11px] font-semibold"
                 onClick={handleRefresh}
                 disabled={refreshing}
@@ -228,6 +236,7 @@ function DesktopPermissionsView() {
                   key={def.id}
                   def={def}
                   status={state?.status ?? "not-determined"}
+                  reason={state?.reason}
                   platform={platform}
                   canRequest={state?.canRequest ?? false}
                   onRequest={() => handleRequest(def.id)}
@@ -243,31 +252,33 @@ function DesktopPermissionsView() {
           </div>
         </div>
         <div className="mt-2 text-[11px] leading-5 text-muted">
-          {platform === "darwin" ? (
-            <>
-              {translateWithFallback(
+          {platform === "darwin"
+            ? translateWithFallback(
                 t,
                 "permissionssection.MacGrantAccessNote",
                 "macOS requires Accessibility permission for computer control. Open System Settings → Privacy & Security to grant access.",
-              )}
-            </>
-          ) : (
-            <>
-              {platform === "win32"
-                ? translateWithFallback(
-                    t,
-                    "permissionssection.WindowsGrantPermissionsNote",
-                    "Windows may not list Milady as a named app here. Use Privacy settings to enable microphone and camera access, then test them in Milady.",
-                  )
-                : translateWithFallback(
-                    t,
-                    "permissionssection.GrantPermissionsNote",
-                    "Grant permissions to enable features like voice input and computer control.",
-                  )}
-            </>
-          )}
+              )
+            : platform === "win32"
+              ? translateWithFallback(
+                  t,
+                  "permissionssection.WindowsGrantPermissionsNote",
+                  "Windows may not list Milady as a named app here. Use Privacy settings to enable microphone and camera access, then test them in Milady.",
+                )
+              : translateWithFallback(
+                  t,
+                  "permissionssection.GrantPermissionsNote",
+                  "Grant permissions to enable features like voice input and computer control.",
+                )}
         </div>
       </div>
+
+      <WebsiteBlockerSettingsCard
+        mode="desktop"
+        permission={permissions["website-blocking"]}
+        platform={platform}
+        onRequestPermission={() => handleRequest("website-blocking")}
+        onOpenPermissionSettings={() => handleOpenSettings("website-blocking")}
+      />
 
       {/* Capability Toggles */}
       <div>

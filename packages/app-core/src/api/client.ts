@@ -28,24 +28,6 @@ import type {
 } from "@miladyai/agent/contracts/config";
 import type { DropStatus, MintResult } from "@miladyai/agent/contracts/drop";
 import type {
-  CloudProviderOption,
-  InventoryProviderOption,
-  MessageExample,
-  MessageExampleContent,
-  ModelOption,
-  OnboardingConnection,
-  OnboardingConnectorConfig as ConnectorConfig,
-  OnboardingData,
-  OnboardingOptions,
-  OpenRouterModelOption,
-  PiAiModelOption,
-  ProviderOption,
-  RpcProviderOption,
-  StylePreset,
-  SubscriptionProviderStatus,
-  SubscriptionStatusResponse,
-} from "@miladyai/shared/contracts/onboarding";
-import type {
   AllPermissionsState,
   PermissionState,
   PermissionStatus,
@@ -81,11 +63,38 @@ import type {
   WalletRpcChain,
   WalletRpcCredentialKey,
   WalletRpcSelections,
-  TradePermissionMode as WalletTradePermissionMode,
   WalletTradingProfileResponse,
   WalletTradingProfileSourceFilter,
   WalletTradingProfileWindow,
 } from "@miladyai/agent/contracts/wallet";
+import {
+  DEFAULT_WALLET_RPC_SELECTIONS,
+  normalizeWalletRpcProviderId,
+  normalizeWalletRpcSelections,
+  WALLET_RPC_PROVIDER_OPTIONS,
+} from "@miladyai/agent/contracts/wallet";
+import type {
+  BrowserWorkspaceSnapshot,
+  BrowserWorkspaceTab,
+} from "@miladyai/agent/services/browser-workspace";
+import type {
+  CloudProviderOption,
+  OnboardingConnectorConfig as ConnectorConfig,
+  InventoryProviderOption,
+  MessageExample,
+  MessageExampleContent,
+  ModelOption,
+  OnboardingConnection,
+  OnboardingData,
+  OnboardingOptions,
+  OpenRouterModelOption,
+  PiAiModelOption,
+  ProviderOption,
+  RpcProviderOption,
+  StylePreset,
+  SubscriptionProviderStatus,
+  SubscriptionStatusResponse,
+} from "@miladyai/shared/contracts/onboarding";
 import type {
   StewardPendingApproval,
   StewardSignRequest,
@@ -93,17 +102,16 @@ import type {
   StewardTxRecord,
   StewardTxStatus,
 } from "@miladyai/shared/contracts/wallet";
-import {
-  DEFAULT_WALLET_RPC_SELECTIONS,
-  normalizeWalletRpcProviderId,
-  normalizeWalletRpcSelections,
-  WALLET_RPC_PROVIDER_OPTIONS,
-} from "@miladyai/agent/contracts/wallet";
 
+// Re-export the class from client-base (no circular dependency issues)
+export { MiladyClient } from "./client-base";
+export * from "./client-types";
 export type {
   AllPermissionsState,
   AudioGenConfig,
   AudioGenProvider,
+  BrowserWorkspaceSnapshot,
+  BrowserWorkspaceTab,
   BscTradeExecuteRequest,
   BscTradeExecuteResponse,
   BscTradePreflightResponse,
@@ -175,7 +183,6 @@ export type {
   WalletTradingProfileSourceFilter,
   WalletTradingProfileWindow,
 };
-
 export {
   DEFAULT_WALLET_RPC_SELECTIONS,
   normalizeWalletRpcProviderId,
@@ -183,17 +190,13 @@ export {
   WALLET_RPC_PROVIDER_OPTIONS,
 };
 
-export * from "./client-types";
-
-// Re-export the class from client-base (no circular dependency issues)
-export { MiladyClient } from "./client-base";
-
 // ---------------------------------------------------------------------------
 // Domain method augmentations (declaration merging + prototype assignment)
 // These import MiladyClient from client-base directly, avoiding circular deps.
 // ---------------------------------------------------------------------------
 
 import "./client-agent";
+import "./client-browser-workspace";
 import "./client-chat";
 import "./client-wallet";
 import "./client-cloud";

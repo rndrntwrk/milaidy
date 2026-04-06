@@ -5,7 +5,16 @@
 
 import type { DatabaseProviderType } from "@miladyai/agent/contracts/config";
 import type {
+  CaptureLifeOpsActivitySignalRequest,
+  LifeOpsConnectorMode,
+  LifeOpsConnectorSide,
+  LifeOpsActivitySignal,
+} from "@miladyai/shared/contracts/lifeops";
+import { MiladyClient } from "./client-base";
+import type {
+  ApiError,
   ChatTokenUsage,
+  CompleteLifeOpsOccurrenceRequest,
   ConnectionTestResult,
   ContentBlock,
   Conversation,
@@ -14,8 +23,15 @@ import type {
   ConversationMessage,
   ConversationMode,
   CreateConversationOptions,
+  CreateLifeOpsCalendarEventRequest,
+  CreateLifeOpsDefinitionRequest,
+  CreateLifeOpsGmailReplyDraftRequest,
+  CreateLifeOpsGoalRequest,
   DatabaseConfigResponse,
   DatabaseStatus,
+  DisconnectLifeOpsGoogleConnectorRequest,
+  GetLifeOpsCalendarFeedRequest,
+  GetLifeOpsGmailTriageRequest,
   ImageAttachment,
   KnowledgeBulkUploadResult,
   KnowledgeDocumentDetail,
@@ -24,6 +40,18 @@ import type {
   KnowledgeSearchResponse,
   KnowledgeStats,
   KnowledgeUploadResult,
+  LifeOpsCalendarFeed,
+  LifeOpsDefinitionRecord,
+  LifeOpsGmailReplyDraft,
+  LifeOpsGmailTriageFeed,
+  LifeOpsGoalRecord,
+  LifeOpsGoalReview,
+  LifeOpsGoogleConnectorStatus,
+  LifeOpsNextCalendarEventContext,
+  LifeOpsOccurrenceActionResult,
+  LifeOpsOccurrenceExplanation,
+  LifeOpsOverview,
+  LifeOpsReminderInspection,
   McpMarketplaceResult,
   McpRegistryServerDetail,
   McpServerConfig,
@@ -32,8 +60,13 @@ import type {
   MemorySearchResponse,
   QueryResult,
   QuickContextResponse,
+  SelectLifeOpsGoogleConnectorPreferenceRequest,
+  SendLifeOpsGmailReplyRequest,
   ShareIngestItem,
   ShareIngestPayload,
+  SnoozeLifeOpsOccurrenceRequest,
+  StartLifeOpsGoogleConnectorRequest,
+  StartLifeOpsGoogleConnectorResponse,
   TableInfo,
   TableRowsResponse,
   TrajectoryConfig,
@@ -42,11 +75,12 @@ import type {
   TrajectoryListOptions,
   TrajectoryListResult,
   TrajectoryStats,
+  UpdateLifeOpsDefinitionRequest,
+  UpdateLifeOpsGoalRequest,
   WorkbenchOverview,
   WorkbenchTask,
   WorkbenchTodo,
 } from "./client-types";
-import { MiladyClient } from "./client-base";
 
 // ---------------------------------------------------------------------------
 // Declaration merging
@@ -82,6 +116,51 @@ declare module "./client-base" {
     getConversationMessages(
       id: string,
     ): Promise<{ messages: ConversationMessage[] }>;
+    /**
+     * Fetch the unified cross-channel inbox. Returns the most recent
+     * messages across every connector room the agent participates in,
+     * time-ordered newest first. Each message carries its `source`
+     * tag (imessage / telegram / discord / etc.) so the UI can render
+     * per-source styling without a second lookup.
+     *
+     * When `roomId` is provided the server scopes the query to that
+     * single connector room — use this when the unified messages view
+     * has a specific chat selected. When `roomId` is omitted the feed
+     * merges every room's recent messages.
+     */
+    getInboxMessages(options?: {
+      limit?: number;
+      sources?: string[];
+      roomId?: string;
+    }): Promise<{
+      messages: Array<ConversationMessage & { roomId: string; source: string }>;
+      count: number;
+    }>;
+    /**
+     * List the distinct connector source tags the agent currently has
+     * inbox messages for. Used by the unified inbox UI to build the
+     * source filter chip list dynamically.
+     */
+    getInboxSources(): Promise<{ sources: string[] }>;
+    /**
+     * List every connector chat thread the agent participates in as
+     * one sidebar-friendly row per external chat room. Each row carries
+     * the room id (for selection), source tag, display title,
+     * last-message preview, last-message timestamp, and a total message
+     * count. Used by the unified messages sidebar to render connector
+     * chats alongside dashboard conversations.
+     */
+    getInboxChats(options?: { sources?: string[] }): Promise<{
+      chats: Array<{
+        id: string;
+        source: string;
+        title: string;
+        lastMessageText: string;
+        lastMessageAt: number;
+        messageCount: number;
+      }>;
+      count: number;
+    }>;
     truncateConversationMessages(
       id: string,
       messageId: string,
@@ -194,8 +273,85 @@ declare module "./client-base" {
         tasksAvailable?: boolean;
         triggersAvailable?: boolean;
         todosAvailable?: boolean;
+        lifeopsAvailable?: boolean;
       }
     >;
+    getLifeOpsOverview(): Promise<LifeOpsOverview>;
+    captureLifeOpsActivitySignal(
+      data: CaptureLifeOpsActivitySignalRequest,
+    ): Promise<{ signal: LifeOpsActivitySignal }>;
+    getLifeOpsCalendarFeed(
+      options?: GetLifeOpsCalendarFeedRequest,
+    ): Promise<LifeOpsCalendarFeed>;
+    getLifeOpsGmailTriage(
+      options?: GetLifeOpsGmailTriageRequest,
+    ): Promise<LifeOpsGmailTriageFeed>;
+    getLifeOpsNextCalendarEventContext(
+      options?: GetLifeOpsCalendarFeedRequest,
+    ): Promise<LifeOpsNextCalendarEventContext>;
+    createLifeOpsCalendarEvent(
+      data: CreateLifeOpsCalendarEventRequest,
+    ): Promise<{ event: LifeOpsCalendarFeed["events"][number] }>;
+    createLifeOpsGmailReplyDraft(
+      data: CreateLifeOpsGmailReplyDraftRequest,
+    ): Promise<{ draft: LifeOpsGmailReplyDraft }>;
+    sendLifeOpsGmailReply(
+      data: SendLifeOpsGmailReplyRequest,
+    ): Promise<{ ok: true }>;
+    listLifeOpsDefinitions(): Promise<{
+      definitions: LifeOpsDefinitionRecord[];
+    }>;
+    getLifeOpsDefinition(
+      definitionId: string,
+    ): Promise<LifeOpsDefinitionRecord>;
+    createLifeOpsDefinition(
+      data: CreateLifeOpsDefinitionRequest,
+    ): Promise<LifeOpsDefinitionRecord>;
+    updateLifeOpsDefinition(
+      definitionId: string,
+      data: UpdateLifeOpsDefinitionRequest,
+    ): Promise<LifeOpsDefinitionRecord>;
+    listLifeOpsGoals(): Promise<{ goals: LifeOpsGoalRecord[] }>;
+    getLifeOpsGoal(goalId: string): Promise<LifeOpsGoalRecord>;
+    reviewLifeOpsGoal(goalId: string): Promise<LifeOpsGoalReview>;
+    createLifeOpsGoal(
+      data: CreateLifeOpsGoalRequest,
+    ): Promise<LifeOpsGoalRecord>;
+    updateLifeOpsGoal(
+      goalId: string,
+      data: UpdateLifeOpsGoalRequest,
+    ): Promise<LifeOpsGoalRecord>;
+    completeLifeOpsOccurrence(
+      occurrenceId: string,
+      data?: CompleteLifeOpsOccurrenceRequest,
+    ): Promise<LifeOpsOccurrenceActionResult>;
+    skipLifeOpsOccurrence(
+      occurrenceId: string,
+    ): Promise<LifeOpsOccurrenceActionResult>;
+    snoozeLifeOpsOccurrence(
+      occurrenceId: string,
+      data: SnoozeLifeOpsOccurrenceRequest,
+    ): Promise<LifeOpsOccurrenceActionResult>;
+    getLifeOpsOccurrenceExplanation(
+      occurrenceId: string,
+    ): Promise<LifeOpsOccurrenceExplanation>;
+    inspectLifeOpsReminder(
+      ownerType: "occurrence" | "calendar_event",
+      ownerId: string,
+    ): Promise<LifeOpsReminderInspection>;
+    getGoogleLifeOpsConnectorStatus(
+      mode?: LifeOpsConnectorMode,
+      side?: LifeOpsConnectorSide,
+    ): Promise<LifeOpsGoogleConnectorStatus>;
+    selectGoogleLifeOpsConnectorMode(
+      data: SelectLifeOpsGoogleConnectorPreferenceRequest,
+    ): Promise<LifeOpsGoogleConnectorStatus>;
+    startGoogleLifeOpsConnector(
+      data?: StartLifeOpsGoogleConnectorRequest,
+    ): Promise<StartLifeOpsGoogleConnectorResponse>;
+    disconnectGoogleLifeOpsConnector(
+      data?: DisconnectLifeOpsGoogleConnectorRequest,
+    ): Promise<LifeOpsGoogleConnectorStatus>;
     listWorkbenchTasks(): Promise<{ tasks: WorkbenchTask[] }>;
     getWorkbenchTask(taskId: string): Promise<{ task: WorkbenchTask }>;
     createWorkbenchTask(data: {
@@ -312,27 +468,86 @@ declare module "./client-base" {
 // Prototype augmentation
 // ---------------------------------------------------------------------------
 
+const LEGACY_CHAT_COMPAT_TITLE = "Quick Chat";
+const LEGACY_CHAT_CONVERSATION_STORAGE_PREFIX =
+  "milady_legacy_chat_conversation";
+
+function getLegacyChatConversationStorageKey(client: MiladyClient): string {
+  const base =
+    client.getBaseUrl() ||
+    (typeof window !== "undefined" ? window.location.origin : "same-origin");
+  return `${LEGACY_CHAT_CONVERSATION_STORAGE_PREFIX}:${encodeURIComponent(base)}`;
+}
+
+function readLegacyChatConversationId(client: MiladyClient): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+  const stored = window.sessionStorage.getItem(
+    getLegacyChatConversationStorageKey(client),
+  );
+  return stored?.trim() ? stored.trim() : null;
+}
+
+function writeLegacyChatConversationId(
+  client: MiladyClient,
+  conversationId: string | null,
+): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  const key = getLegacyChatConversationStorageKey(client);
+  if (conversationId?.trim()) {
+    window.sessionStorage.setItem(key, conversationId.trim());
+    return;
+  }
+  window.sessionStorage.removeItem(key);
+}
+
+async function ensureLegacyChatConversationId(
+  client: MiladyClient,
+): Promise<string> {
+  const cached = readLegacyChatConversationId(client);
+  if (cached) {
+    return cached;
+  }
+
+  const { conversation } = await client.createConversation(
+    LEGACY_CHAT_COMPAT_TITLE,
+  );
+  writeLegacyChatConversationId(client, conversation.id);
+  return conversation.id;
+}
+
 MiladyClient.prototype.sendChatRest = async function (
   this: MiladyClient,
   text,
   channelType = "DM",
   conversationMode?,
 ) {
-  const response = await this.fetch<{ text: string; agentName: string }>(
-    "/api/chat",
-    {
-      method: "POST",
-      body: JSON.stringify({
-        text,
-        channelType,
-        ...(conversationMode ? { conversationMode } : {}),
-      }),
-    },
-  );
-  return {
-    ...response,
-    text: this.normalizeAssistantText(response.text),
-  };
+  const sendToConversation = async (conversationId: string) =>
+    this.sendConversationMessage(
+      conversationId,
+      text,
+      channelType,
+      undefined,
+      conversationMode,
+    );
+
+  const conversationId = await ensureLegacyChatConversationId(this);
+  try {
+    return await sendToConversation(conversationId);
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.name === "ApiError" &&
+      (error as ApiError).status === 404
+    ) {
+      writeLegacyChatConversationId(this, null);
+      return sendToConversation(await ensureLegacyChatConversationId(this));
+    }
+    throw error;
+  }
 };
 
 MiladyClient.prototype.sendChatStream = async function (
@@ -343,15 +558,31 @@ MiladyClient.prototype.sendChatStream = async function (
   signal?,
   conversationMode?,
 ) {
-  return this.streamChatEndpoint(
-    "/api/chat/stream",
-    text,
-    onToken,
-    channelType,
-    signal,
-    undefined,
-    conversationMode,
-  );
+  const streamConversation = async (conversationId: string) =>
+    this.sendConversationMessageStream(
+      conversationId,
+      text,
+      onToken,
+      channelType,
+      signal,
+      undefined,
+      conversationMode,
+    );
+
+  const conversationId = await ensureLegacyChatConversationId(this);
+  try {
+    return await streamConversation(conversationId);
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.name === "ApiError" &&
+      (error as ApiError).status === 404
+    ) {
+      writeLegacyChatConversationId(this, null);
+      return streamConversation(await ensureLegacyChatConversationId(this));
+    }
+    throw error;
+  }
 };
 
 MiladyClient.prototype.listConversations = async function (this: MiladyClient) {
@@ -405,6 +636,55 @@ MiladyClient.prototype.getConversationMessages = async function (
       return text === message.text ? message : { ...message, text };
     }),
   };
+};
+
+MiladyClient.prototype.getInboxMessages = async function (
+  this: MiladyClient,
+  options,
+) {
+  const params = new URLSearchParams();
+  if (typeof options?.limit === "number" && options.limit > 0) {
+    params.set("limit", String(options.limit));
+  }
+  if (options?.sources && options.sources.length > 0) {
+    params.set("sources", options.sources.join(","));
+  }
+  if (typeof options?.roomId === "string" && options.roomId.length > 0) {
+    params.set("roomId", options.roomId);
+  }
+  const query = params.toString();
+  const path = query ? `/api/inbox/messages?${query}` : "/api/inbox/messages";
+  return this.fetch<{
+    messages: Array<ConversationMessage & { roomId: string; source: string }>;
+    count: number;
+  }>(path);
+};
+
+MiladyClient.prototype.getInboxSources = async function (this: MiladyClient) {
+  return this.fetch<{ sources: string[] }>("/api/inbox/sources");
+};
+
+MiladyClient.prototype.getInboxChats = async function (
+  this: MiladyClient,
+  options,
+) {
+  const params = new URLSearchParams();
+  if (options?.sources && options.sources.length > 0) {
+    params.set("sources", options.sources.join(","));
+  }
+  const query = params.toString();
+  const path = query ? `/api/inbox/chats?${query}` : "/api/inbox/chats";
+  return this.fetch<{
+    chats: Array<{
+      id: string;
+      source: string;
+      title: string;
+      lastMessageText: string;
+      lastMessageAt: number;
+      messageCount: number;
+    }>;
+    count: number;
+  }>(path);
 };
 
 MiladyClient.prototype.truncateConversationMessages = async function (
@@ -698,6 +978,318 @@ MiladyClient.prototype.getWorkbenchOverview = async function (
   this: MiladyClient,
 ) {
   return this.fetch("/api/workbench/overview");
+};
+
+MiladyClient.prototype.getLifeOpsOverview = async function (
+  this: MiladyClient,
+) {
+  return this.fetch("/api/lifeops/overview");
+};
+
+MiladyClient.prototype.captureLifeOpsActivitySignal = async function (
+  this: MiladyClient,
+  data,
+) {
+  return this.fetch("/api/lifeops/activity-signals", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+};
+
+MiladyClient.prototype.getLifeOpsCalendarFeed = async function (
+  this: MiladyClient,
+  options = {},
+) {
+  const params = new URLSearchParams();
+  if (options.mode) {
+    params.set("mode", options.mode);
+  }
+  if (options.side) {
+    params.set("side", options.side);
+  }
+  if (options.calendarId) {
+    params.set("calendarId", options.calendarId);
+  }
+  if (options.timeMin) {
+    params.set("timeMin", options.timeMin);
+  }
+  if (options.timeMax) {
+    params.set("timeMax", options.timeMax);
+  }
+  if (options.timeZone) {
+    params.set("timeZone", options.timeZone);
+  }
+  if (options.forceSync !== undefined) {
+    params.set("forceSync", String(options.forceSync));
+  }
+  const query = params.toString();
+  return this.fetch(`/api/lifeops/calendar/feed${query ? `?${query}` : ""}`);
+};
+
+MiladyClient.prototype.getLifeOpsGmailTriage = async function (
+  this: MiladyClient,
+  options = {},
+) {
+  const params = new URLSearchParams();
+  if (options.mode) {
+    params.set("mode", options.mode);
+  }
+  if (options.side) {
+    params.set("side", options.side);
+  }
+  if (options.forceSync !== undefined) {
+    params.set("forceSync", String(options.forceSync));
+  }
+  if (options.maxResults !== undefined) {
+    params.set("maxResults", String(options.maxResults));
+  }
+  const query = params.toString();
+  return this.fetch(`/api/lifeops/gmail/triage${query ? `?${query}` : ""}`);
+};
+
+MiladyClient.prototype.getLifeOpsNextCalendarEventContext = async function (
+  this: MiladyClient,
+  options = {},
+) {
+  const params = new URLSearchParams();
+  if (options.mode) {
+    params.set("mode", options.mode);
+  }
+  if (options.side) {
+    params.set("side", options.side);
+  }
+  if (options.calendarId) {
+    params.set("calendarId", options.calendarId);
+  }
+  if (options.timeMin) {
+    params.set("timeMin", options.timeMin);
+  }
+  if (options.timeMax) {
+    params.set("timeMax", options.timeMax);
+  }
+  if (options.timeZone) {
+    params.set("timeZone", options.timeZone);
+  }
+  const query = params.toString();
+  return this.fetch(
+    `/api/lifeops/calendar/next-context${query ? `?${query}` : ""}`,
+  );
+};
+
+MiladyClient.prototype.createLifeOpsCalendarEvent = async function (
+  this: MiladyClient,
+  data,
+) {
+  return this.fetch("/api/lifeops/calendar/events", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+};
+
+MiladyClient.prototype.createLifeOpsGmailReplyDraft = async function (
+  this: MiladyClient,
+  data,
+) {
+  return this.fetch("/api/lifeops/gmail/reply-drafts", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+};
+
+MiladyClient.prototype.sendLifeOpsGmailReply = async function (
+  this: MiladyClient,
+  data,
+) {
+  return this.fetch("/api/lifeops/gmail/reply-send", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+};
+
+MiladyClient.prototype.listLifeOpsDefinitions = async function (
+  this: MiladyClient,
+) {
+  return this.fetch("/api/lifeops/definitions");
+};
+
+MiladyClient.prototype.getLifeOpsDefinition = async function (
+  this: MiladyClient,
+  definitionId,
+) {
+  return this.fetch(
+    `/api/lifeops/definitions/${encodeURIComponent(definitionId)}`,
+  );
+};
+
+MiladyClient.prototype.createLifeOpsDefinition = async function (
+  this: MiladyClient,
+  data,
+) {
+  return this.fetch("/api/lifeops/definitions", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+};
+
+MiladyClient.prototype.updateLifeOpsDefinition = async function (
+  this: MiladyClient,
+  definitionId,
+  data,
+) {
+  return this.fetch(
+    `/api/lifeops/definitions/${encodeURIComponent(definitionId)}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(data),
+    },
+  );
+};
+
+MiladyClient.prototype.listLifeOpsGoals = async function (this: MiladyClient) {
+  return this.fetch("/api/lifeops/goals");
+};
+
+MiladyClient.prototype.getLifeOpsGoal = async function (
+  this: MiladyClient,
+  goalId,
+) {
+  return this.fetch(`/api/lifeops/goals/${encodeURIComponent(goalId)}`);
+};
+
+MiladyClient.prototype.reviewLifeOpsGoal = async function (
+  this: MiladyClient,
+  goalId,
+) {
+  return this.fetch(`/api/lifeops/goals/${encodeURIComponent(goalId)}/review`);
+};
+
+MiladyClient.prototype.createLifeOpsGoal = async function (
+  this: MiladyClient,
+  data,
+) {
+  return this.fetch("/api/lifeops/goals", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+};
+
+MiladyClient.prototype.updateLifeOpsGoal = async function (
+  this: MiladyClient,
+  goalId,
+  data,
+) {
+  return this.fetch(`/api/lifeops/goals/${encodeURIComponent(goalId)}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+};
+
+MiladyClient.prototype.completeLifeOpsOccurrence = async function (
+  this: MiladyClient,
+  occurrenceId,
+  data = {},
+) {
+  return this.fetch(
+    `/api/lifeops/occurrences/${encodeURIComponent(occurrenceId)}/complete`,
+    {
+      method: "POST",
+      body: JSON.stringify(data),
+    },
+  );
+};
+
+MiladyClient.prototype.skipLifeOpsOccurrence = async function (
+  this: MiladyClient,
+  occurrenceId,
+) {
+  return this.fetch(
+    `/api/lifeops/occurrences/${encodeURIComponent(occurrenceId)}/skip`,
+    {
+      method: "POST",
+      body: JSON.stringify({}),
+    },
+  );
+};
+
+MiladyClient.prototype.snoozeLifeOpsOccurrence = async function (
+  this: MiladyClient,
+  occurrenceId,
+  data,
+) {
+  return this.fetch(
+    `/api/lifeops/occurrences/${encodeURIComponent(occurrenceId)}/snooze`,
+    {
+      method: "POST",
+      body: JSON.stringify(data),
+    },
+  );
+};
+
+MiladyClient.prototype.getLifeOpsOccurrenceExplanation = async function (
+  this: MiladyClient,
+  occurrenceId,
+) {
+  return this.fetch(
+    `/api/lifeops/occurrences/${encodeURIComponent(occurrenceId)}/explanation`,
+  );
+};
+
+MiladyClient.prototype.inspectLifeOpsReminder = async function (
+  this: MiladyClient,
+  ownerType,
+  ownerId,
+) {
+  const params = new URLSearchParams({
+    ownerType,
+    ownerId,
+  });
+  return this.fetch(`/api/lifeops/reminders/inspection?${params.toString()}`);
+};
+
+MiladyClient.prototype.getGoogleLifeOpsConnectorStatus = async function (
+  this: MiladyClient,
+  mode,
+  side,
+) {
+  const params = new URLSearchParams();
+  if (mode) {
+    params.set("mode", mode);
+  }
+  if (side) {
+    params.set("side", side);
+  }
+  const query = params.size > 0 ? `?${params.toString()}` : "";
+  return this.fetch(`/api/lifeops/connectors/google/status${query}`);
+};
+
+MiladyClient.prototype.selectGoogleLifeOpsConnectorMode = async function (
+  this: MiladyClient,
+  data,
+) {
+  return this.fetch("/api/lifeops/connectors/google/preference", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+};
+
+MiladyClient.prototype.startGoogleLifeOpsConnector = async function (
+  this: MiladyClient,
+  data = {},
+) {
+  return this.fetch("/api/lifeops/connectors/google/start", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+};
+
+MiladyClient.prototype.disconnectGoogleLifeOpsConnector = async function (
+  this: MiladyClient,
+  data = {},
+) {
+  return this.fetch("/api/lifeops/connectors/google/disconnect", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
 };
 
 MiladyClient.prototype.listWorkbenchTasks = async function (

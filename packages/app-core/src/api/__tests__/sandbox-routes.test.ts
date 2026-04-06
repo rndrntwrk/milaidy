@@ -83,9 +83,15 @@ describe("handleSandboxRoute", () => {
     it("should return false for non-sandbox routes", async () => {
       const req = createMockReq("GET");
       const res = createMockRes();
-      const handled = await handleSandboxRoute(req, res, "/api/chat", "GET", {
-        sandboxManager: mgr,
-      });
+      const handled = await handleSandboxRoute(
+        req,
+        res,
+        "/api/not-handled",
+        "GET",
+        {
+          sandboxManager: mgr,
+        },
+      );
       expect(handled).toBe(false);
     });
 

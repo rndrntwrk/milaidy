@@ -15,6 +15,7 @@ describe("tabFromPath", () => {
   it("maps core tabs", () => {
     expect(tabFromPath("/")).toBe("chat");
     expect(tabFromPath("/chat")).toBe("chat");
+    expect(tabFromPath("/browser")).toBe("browser");
     expect(tabFromPath("/companion")).toBe("companion");
     expect(tabFromPath("/stream")).toBe("stream");
     expect(tabFromPath("/character")).toBe("character");
@@ -84,6 +85,7 @@ describe("route roots", () => {
 describe("pathForTab", () => {
   const roundTripTabs: Tab[] = [
     "chat",
+    "browser",
     "companion",
     "stream",
     "character",
@@ -156,6 +158,7 @@ describe("tab groups", () => {
     const groupedTabs = new Set(ALL_TAB_GROUPS.flatMap((group) => group.tabs));
     const expectedTabs: Tab[] = [
       "chat",
+      "browser",
       "stream",
       "apps",
       "wallets",
@@ -195,6 +198,7 @@ describe("tab groups", () => {
 describe("titleForTab", () => {
   it("returns human-friendly titles for representative tabs", () => {
     expect(titleForTab("chat")).toBe("Chat");
+    expect(titleForTab("browser")).toBe("Browser");
     expect(titleForTab("advanced")).toBe("Advanced");
     expect(titleForTab("stream")).toBe("Stream");
     expect(titleForTab("database")).toBe("Databases");

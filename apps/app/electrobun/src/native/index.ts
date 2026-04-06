@@ -1,6 +1,7 @@
 import type { BrowserWindow } from "electrobun/bun";
 import type { SendToWebview } from "../types.js";
 import { getAgentManager } from "./agent";
+import { getBrowserWorkspaceManager } from "./browser-workspace";
 import { getCameraManager } from "./camera";
 import { getCanvasManager } from "./canvas";
 import { getDesktopManager } from "./desktop";
@@ -24,6 +25,7 @@ export function initializeNativeModules(
   desktop.setSendToWebview(sendToWebview);
 
   getAgentManager().setSendToWebview(sendToWebview);
+  getBrowserWorkspaceManager().setSendToWebview(sendToWebview);
   getCameraManager().setSendToWebview(sendToWebview);
   getCanvasManager().setSendToWebview(sendToWebview);
   getGatewayDiscovery().setSendToWebview(sendToWebview);
@@ -40,6 +42,7 @@ export function initializeNativeModules(
 export async function disposeNativeModules(): Promise<void> {
   const managers = [
     ["agent", getAgentManager()],
+    ["browser-workspace", getBrowserWorkspaceManager()],
     ["camera", getCameraManager()],
     ["canvas", getCanvasManager()],
     ["desktop", getDesktopManager()],

@@ -43,6 +43,7 @@ describe("CodingTaskExecutor", () => {
     const executor = new CodingTaskExecutor();
     const runtime = {
       getService: vi.fn().mockReturnValue(null),
+      actions: [],
     } as unknown as IAgentRuntime;
 
     expect(
@@ -55,6 +56,30 @@ describe("CodingTaskExecutor", () => {
         runtime,
       ),
     ).toBe(false);
+  });
+
+  it("uses CREATE_TASK as the convergence path when CODE_TASK is unavailable", () => {
+    const executor = new CodingTaskExecutor();
+    const runtime = {
+      getService: vi.fn().mockReturnValue(null),
+      actions: [
+        {
+          name: "CREATE_TASK",
+          handler: vi.fn(),
+        },
+      ],
+    } as unknown as IAgentRuntime;
+
+    expect(
+      executor.canHandle(
+        {
+          id: "task-3b",
+          type: "coding",
+          description: "build a dashboard",
+        },
+        runtime,
+      ),
+    ).toBe(true);
   });
 
   it("delegates task creation to the CODE_TASK service", async () => {
@@ -116,6 +141,60 @@ describe("CodingTaskExecutor", () => {
       taskId: "task-5",
       success: false,
       error: "orchestrator offline",
+    });
+  });
+
+  it("dispatches through CREATE_TASK when CODE_TASK is missing", async () => {
+    const executor = new CodingTaskExecutor();
+    const createTaskAction = {
+      name: "CREATE_TASK",
+      validate: vi.fn().mockResolvedValue(true),
+      handler: vi.fn().mockResolvedValue({
+        success: true,
+        text: "created task",
+        data: {
+          agents: [{ sessionId: "session-123" }],
+        },
+      }),
+    };
+    const runtime = {
+      agentId: "agent-1",
+      getService: vi.fn().mockReturnValue(null),
+      actions: [createTaskAction],
+    } as unknown as IAgentRuntime;
+
+    const result = await executor.execute(
+      {
+        id: "task-6",
+        type: "coding",
+        description: "implement the task drawer",
+        agentType: "codex",
+      },
+      runtime,
+    );
+
+    expect(createTaskAction.validate).toHaveBeenCalled();
+    expect(createTaskAction.handler).toHaveBeenCalledWith(
+      runtime,
+      expect.objectContaining({
+        content: expect.objectContaining({
+          text: "implement the task drawer",
+          agentType: "codex",
+        }),
+      }),
+      undefined,
+      {
+        parameters: {
+          task: "implement the task drawer",
+          agentType: "codex",
+        },
+      },
+      expect.any(Function),
+    );
+    expect(result).toMatchObject({
+      taskId: "task-6",
+      success: true,
+      output: "session-123",
     });
   });
 });

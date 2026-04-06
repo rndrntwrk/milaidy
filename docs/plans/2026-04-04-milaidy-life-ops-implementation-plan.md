@@ -4,6 +4,9 @@ Date: 2026-04-04
 Owner: Shaw / Milady
 Input PRD: `/Users/shawwalters/Downloads/milaidy_prd_v1.docx`
 
+Detailed architecture options and plugin integration research:
+`docs/plans/2026-04-04-lifeops-architecture-options.md`
+
 ## 1. Executive summary
 
 The clean implementation path is to build Milaidy's life-ops system in Milady core, not by stretching `@elizaos/plugin-todo` and `@elizaos/plugin-goals` until they become a second product.
@@ -636,6 +639,35 @@ Use this rollout order:
 
 This keeps product work moving without waiting on Google's full review cycle.
 
+### 7.10 Managed cloud connector mode
+
+Milady needs a third Google connector mode beyond local installed-app OAuth and remote web OAuth:
+
+- `cloud_managed`
+
+This is the default path for normal users.
+
+Rules:
+
+- Cloud-managed Google connections are user-scoped in v1, even if cloud storage later grows an org-shared option.
+- Agent preference is explicit and per-agent: one agent can prefer `local`, another can prefer `cloud_managed`, and Milady must not silently blend or fail over between them.
+- `ConnectorGrant` remains the Milady product record, but for `cloud_managed` it stores mirrored metadata only:
+  - `executionTarget = cloud`
+  - `sourceOfTruth = cloud_connection`
+  - `cloudConnectionId`
+  - granted scopes and capabilities
+- Cloud-held refresh tokens remain the default trust model for managed mode.
+- The Milady UI must stay capability-driven and execution-target agnostic: status, Calendar feed, Gmail triage, and send flows should use the same LifeOps DTOs regardless of whether execution happens locally or in cloud.
+
+For Gmail triage in v1, the approved product scope is:
+
+- headers
+- labels
+- snippet
+- thread metadata
+
+Full-body Gmail access is deferred to a later capability upgrade.
+
 ## 8. Product delivery plan by phase
 
 ### 8.1 P0: Core support loop
@@ -882,3 +914,632 @@ Purpose:
 3. Implement P0 data model and occurrence engine before touching Gmail.
 4. Implement Google Calendar read-only auth and widget before Gmail send or workflow escalation.
 5. Keep Gmail external-user rollout behind test users until the verification decision is explicit.
+
+## 13. Current code assessment (2026-04-04)
+
+The repo is no longer at the "greenfield plan" stage. A meaningful first cut of life-ops already exists in code, but it is backend-heavy and still misses several product-critical requirements from the PRD.
+
+### 13.1 What already exists
+
+- A real life-ops schema, repository, service layer, and API routes live under `packages/agent/src/lifeops/*` and `packages/agent/src/api/lifeops-routes.ts`.
+- Definitions, occurrences, goals, reminder plans, reminder attempts, workflows, browser sessions, channel policies, Google connector grants, calendar events, Gmail summaries, and audit events are already persisted.
+- The occurrence engine already supports `once`, `daily`, `times_per_day`, and `weekly` cadence types plus morning/afternoon/evening/night windows.
+- Reminder processing already exists, with idempotency protection and Twilio-backed SMS/voice delivery.
+- Google OAuth, Calendar sync, Calendar event creation, Gmail triage, and Gmail reply drafting/sending already have end-to-end API coverage.
+- Workbench overview already aggregates a `lifeops` payload on the backend.
+
+### 13.2 Critical gaps
+
+#### Gap 1: the ownership model is wrong for the product
+
+All life-ops tables are keyed only by `agent_id`, not by user/principal/subject. That means the current model cannot distinguish:
+
+- user todos versus agent todos
+- user goals versus agent goals
+- admin-visible internal agent tasks versus private end-user life-ops
+- one user's private items versus another user's private items on the same agent
+
+This is the single biggest architectural gap. The PRD requires role-gated privacy and a clear distinction between user life support and agent internal work. The current schema cannot express that yet.
+
+#### Gap 2: conversational capture is still missing
+
+The PRD is explicitly "conversational first", but the current implementation is mostly API-first. There is not yet a Milady chat action/provider flow that reliably:
+
+- classifies a user utterance into task versus habit versus goal versus workflow
+- asks clarification questions only when needed
+- creates the life-ops object directly from chat
+- stores the original intent while still generating structured records
+
+Today the backend supports creation, but the chat product surface does not.
+
+#### Gap 3: UI surfacing is far behind the backend
+
+The app currently exposes generic workbench todo widgets, but not a real life-ops UI.
+
+Missing or incomplete:
+
+- current occurrence widget
+- reminder history/explanation UI
+- goals view
+- workflow editor/list
+- browser session visibility UI
+- connector permission management UI for life-ops
+- calendar and Gmail life-ops widgets in the main chat workspace
+
+The backend already returns `lifeops` from workbench overview, but the client is not consuming it in the chat sidebar.
+
+#### Gap 4: reminders and workflows are not truly scheduled yet
+
+Current life-ops reminder and workflow behavior is still manual/HTTP-triggered in key places.
+
+- `processReminders` runs when `/api/lifeops/reminders/process` is called.
+- workflow CRUD exists, but scheduled workflow execution is not wired into the trigger runtime or `TaskService`.
+- there is no restart-safe background runner that continuously evaluates reminder chains and workflow schedules.
+
+This means the system does not yet proactively reach the user on its own in the way the PRD requires.
+
+#### Gap 5: proactive outreach is only partially implemented
+
+The current delivery ladder is incomplete.
+
+- `in_app` reminders are represented in read models and attempts/audits, but there is no full push/notification/chat delivery loop tied to them yet.
+- SMS and voice are implemented through Twilio if explicit phone consent exists.
+- Telegram, Discord DM, Signal, WhatsApp, and iMessage are not yet wired for life-ops reminder delivery even though channel types exist in the contracts.
+
+So the product can model escalation ladders, but it cannot yet execute most of them.
+
+#### Gap 6: `plugin-todo` is the wrong source of truth for user life-ops
+
+`plugin-todo` is useful as a compatibility layer and as an agent/workbench task surface, but it is not a sufficient model for the PRD.
+
+Reasons:
+
+- it is room/entity scoped and runtime-centric
+- it models simple todo records, not definition versus occurrence
+- it does not model time-of-day windows or progression rules
+- it does not distinguish user life support from agent internal operations
+- its reminder semantics are simplistic compared with reminder plans and escalation ladders
+
+The right approach is to keep life-ops as its own domain model and only project into todo-like shapes when necessary for compatibility.
+
+#### Gap 7: `plugin-goals` should not be the primary answer here
+
+The repo references `plugin-goals`, but it is not installed in this checkout. Even if we clone it from `https://github.com/elizaOS-plugins`, the current Milady life-ops goal model is already closer to the PRD than a shallow plugin-based workaround.
+
+Recommendation:
+
+- treat `plugin-goals` as optional reference material or future interoperability work
+- keep first-class goal support in Milady core
+
+#### Gap 8: privacy flags exist, but policy enforcement is incomplete
+
+The code already stores `privacyClass` and defaults life-ops metadata toward private handling, but the actual enforcement contract is not finished.
+
+Missing or incomplete:
+
+- principal-aware row filtering
+- public/shared room refusal rules for life-ops retrieval or mutation
+- context filtering so private life-ops data does not leak into unrelated conversations
+- separate admin-only surfaces for agent ops
+
+The PRD's privacy model is stricter than the current implementation.
+
+#### Gap 9: goals exist, but goal support behavior is still shallow
+
+Goals can be created, updated, and linked, but the PRD expects much more:
+
+- ongoing review cadence
+- support strategies
+- suggested next actions
+- soft periodic check-ins
+- "how am I doing on this goal?" user-facing review
+
+The current system stores goal objects, but it does not yet provide goal coaching behavior.
+
+#### Gap 10: there is no user-facing auditability surface yet
+
+Audit events are stored, which is good. The user still cannot easily inspect:
+
+- why a reminder fired
+- why escalation happened
+- what workflow created an item
+- why a suggested task was generated
+
+The backend groundwork exists, but the product contract is not fulfilled until the explanation UI exists.
+
+## 14. Product model decisions for todos, tasks, events, and goals
+
+### 14.0 Shipped scope for v1
+
+We should deliberately reduce scope for the first real product version.
+
+- V1 should support the owner/admin and the agent.
+- We should not build generalized multi-user LifeOps UX yet.
+- All LifeOps actions and providers should be gated to `OWNER` / `ADMIN`.
+- The schema and contracts should remain future-safe for per-user expansion later.
+
+### 14.1 Separate user life-ops from agent ops
+
+We should explicitly introduce two domains:
+
+- `user_lifeops`: in v1, this effectively means owner-private routines, habits, goals, reminders, events, follow-up tasks
+- `agent_ops`: internal agent work items, maintenance tasks, self-checks, long-running agent jobs
+
+This should be modeled directly in storage, not inferred later from tags.
+
+Recommended fields:
+
+- `subject_type`: `owner` or `agent` in v1
+- `subject_id`: stable principal identifier
+- `visibility_scope`: `owner_only`, `admin_and_agent`, `shared_with_owner_group`
+- `context_policy`: whether the object may appear in conversation context, workbench context only, or nowhere by default
+
+### 14.2 Access rules
+
+Recommended access policy:
+
+- owner life-ops are visible to the owner, the agent, and admins only
+- agent ops are visible to the agent and admins only
+- neither user life-ops nor agent ops should be injected into public/shared chat context by default
+- other users should never see another user's private life-ops items
+
+For the shipped v1 surface:
+
+- only `OWNER` / `ADMIN` should be able to invoke LifeOps actions and providers
+- regular users should not receive LifeOps context or CRUD capability yet
+- multi-user separation should be preserved as a future-safe storage concern, not a v1 UX requirement
+
+### 14.3 Object boundaries
+
+Use these product definitions consistently:
+
+- `TaskDefinition`: one logical thing the user wants done
+- `TaskOccurrence`: one current actionable instance of that task
+- `GoalDefinition`: an ongoing desired condition or recurring relationship/support objective
+- `WorkflowDefinition`: an inspectable automation or scheduled procedure
+- `ReminderPlan`: delivery ladder and policy
+- `CalendarEvent`: synced external event, not a todo
+- `AgentOp`: internal/admin-only work item for the agent runtime
+
+## 15. How the UI should display different kinds of work
+
+The PRD should not be implemented as a single flat todo list. We should display by decision horizon and object type.
+
+### 15.1 Main chat and right rail structure
+
+Use the following high-level layout:
+
+- `Now`: currently actionable occurrences and urgent event prep
+- `Next`: later-today occurrences and near-future event reminders
+- `Upcoming`: future dated items and scheduled events beyond the current window
+- `Goals`: ongoing outcomes, weekly attention items, and suggested support actions
+- `Agent ops`: separate admin-only section, never mixed into user life-ops
+
+### 15.2 Cadence-specific presentation rules
+
+#### Once
+
+- Show as a single dated occurrence card.
+- Surface in `Now`, `Next`, or `Upcoming` based on relevance window.
+
+#### Once daily
+
+- Show the current occurrence only, not the full repeating definition.
+- Display a cadence badge such as `Daily`.
+
+#### Twice daily
+
+- Represent as one definition with two slots, for example `Morning` and `Night`.
+- Show only the currently relevant slot in `Now`.
+- Show the next slot in `Next` when useful.
+- Never show both all day long unless both are actually actionable.
+
+#### Ongoing / habit support
+
+- Keep the habit definition in a dedicated detail view.
+- Surface only the active occurrence in the task area.
+- Show progression targets on the occurrence card when relevant.
+
+#### Occasional / soft goals
+
+- Do not force these into the immediate todo list by default.
+- Show them in a `Goals` or `Needs attention this week` surface.
+- Let the agent suggest concrete tasks from goals, but require confirmation unless the user asked for automatic support.
+
+### 15.3 Recommended card metadata
+
+Occurrence cards should show:
+
+- title
+- due window or exact due time
+- cadence badge (`Once`, `Daily`, `2x Daily`, `Weekly`, etc.)
+- source badge when relevant (`Goal`, `Calendar`, `Workflow`, `Email`)
+- quick actions (`Complete`, `Snooze`, `Skip`, `Reschedule`)
+- explanation affordance (`Why am I seeing this?`)
+
+## 16. How reminders should work and how the agent should reach the user
+
+### 16.1 Delivery ladder
+
+A reminder plan should define a ladder such as:
+
+1. in-app widget + inbox item
+2. private DM/push on an approved connector
+3. SMS
+4. voice call
+
+This ladder must be filtered by:
+
+- user consent
+- connector/channel policy
+- privacy class
+- urgency
+- quiet hours
+- acknowledgement state
+- event proximity
+
+### 16.2 What "proactive" must mean in implementation terms
+
+The agent is only truly proactive if it can fire without the user manually opening the app or calling an HTTP route. That requires:
+
+- a background reminder evaluator
+- durable scheduled execution
+- restart recovery
+- a connector-aware delivery dispatcher
+- a visible audit trail of every attempt
+
+Current recommendation:
+
+- use life-ops tables as source of truth
+- mirror the next due reminder/workflow execution into the trigger runtime or `TaskService`
+- on fire, write reminder attempts and schedule the next step
+- rebuild the execution queue from storage on startup
+
+### 16.3 In-app reminder behavior
+
+`in_app` should not mean "only visible if the user happens to poll overview data." It should mean:
+
+- visible right-rail reminder card
+- app notification/inbox item
+- optional chat nudge if allowed by the user's settings
+
+Without this, the first step of the escalation ladder is not real.
+
+## 17. How life-ops should integrate with queue, task, cron, and trigger systems
+
+### 17.1 Source of truth versus execution substrate
+
+Keep this boundary strict:
+
+- life-ops DB objects are the product source of truth
+- trigger tasks / cron jobs / runtime queues are execution plumbing
+
+We should never make trigger rows or `plugin-todo` rows the canonical record for user habits or goals.
+
+### 17.2 Required execution bridges
+
+We need explicit bridges for:
+
+- definition updates -> regenerate current/next occurrences
+- occurrence visibility changes -> schedule next reminder step
+- reminder delivery -> schedule escalation follow-up if still unacknowledged
+- workflow schedules -> create/update trigger-runtime jobs
+- calendar sync windows -> create/update event reminder jobs
+
+### 17.3 Recommended internal execution queues
+
+Whether implemented through `TaskService`, trigger tasks, or a small dedicated runner, we need durable workers for:
+
+- occurrence materialization
+- reminder dispatch
+- escalation dispatch
+- workflow execution
+- calendar sync
+- Gmail triage refresh
+
+### 17.4 Trigger and workflow mapping
+
+Scheduled workflows should be stored in life-ops tables and mirrored into trigger execution with a deterministic mapping table. That gives us:
+
+- inspectable user-facing workflow definitions
+- reliable schedule execution
+- replaceable execution plumbing
+- restart-safe dedupe
+
+### 17.5 Legacy todo compatibility
+
+If we need compatibility with existing workbench consumers, project current user-facing occurrences into a legacy todo view.
+
+Do not do the inverse.
+
+In other words:
+
+- life-ops -> compatibility projection is acceptable
+- plugin-todo -> life-ops source of truth is not acceptable
+
+## 18. Detailed implementation plan from the current codebase
+
+### 18.1 Phase A: ownership, privacy, and domain boundaries
+
+1. Add `subject_type`, `subject_id`, `visibility_scope`, and `context_policy` to every life-ops table that stores user/agent-owned objects.
+2. Migrate existing rows into a default owner model.
+3. Add API filtering and authorization checks around principal ownership.
+4. Add explicit `agent_ops` versus `user_lifeops` support in the contracts and services.
+5. Gate LifeOps providers and actions to `OWNER` / `ADMIN` using the existing roles plugin.
+
+Exit criteria:
+
+- user versus agent objects are distinct in storage
+- admin-only agent ops cannot leak into end-user surfaces
+- one user cannot list another user's life-ops items
+
+### 18.2 Phase B: conversational capture and editing
+
+1. Add a Milady action/provider flow that classifies user intent into task, habit, goal, workflow, or reminder-plan update.
+2. Store both structured data and original user intent.
+3. Add clarification prompts only when ambiguity changes behavior.
+4. Support conversational editing of cadence, due windows, reminder ladders, and goal support strategy.
+
+Exit criteria:
+
+- "remind me to brush my teeth twice a day" creates a correct definition
+- "make that nightly instead" edits the same definition
+- "I want to call Mom every week" creates a goal-first object, not just a bare todo
+
+### 18.3 Phase C: chat sidebar and dedicated UI surfaces
+
+1. Replace the generic todo-only chat widget with a life-ops-aware panel.
+2. Add `Now`, `Next`, `Upcoming`, and `Goals` sections.
+3. Add quick actions for complete, snooze, skip, and reschedule.
+4. Add explanation drawers for reminders and suggestions.
+5. Add an admin-only `Agent ops` section.
+
+Exit criteria:
+
+- current actionable occurrences are visible without entering a separate admin screen
+- goals do not clutter the immediate todo list
+- agent internal tasks are separated from user life-ops
+
+### 18.4 Phase D: background reminder and workflow execution
+
+1. Introduce a background life-ops runner that survives restarts.
+2. Wire reminder processing into durable scheduled execution instead of manual HTTP calls.
+3. Mirror scheduled workflows into the trigger runtime or `TaskService`.
+4. Add restart recovery that rebuilds due jobs from DB state.
+
+Exit criteria:
+
+- reminders fire without a manual API call
+- workflows run on schedule
+- restart does not lose pending reminder chains
+
+### 18.5 Phase E: proactive private outreach
+
+1. Keep `in_app` as the default first step.
+2. Add private-channel connectors in priority order based on what Milady already supports operationally.
+3. Preserve explicit consent and per-channel policy gating.
+4. Add acknowledgement and mute handling across the full ladder.
+
+Suggested rollout order:
+
+1. in-app/inbox
+2. SMS
+3. voice
+4. private chat connectors
+
+### 18.6 Phase F: goal support behavior
+
+1. Add goal review cadence and state transitions.
+2. Add suggested next steps derived from goals.
+3. Add weekly review and "needs attention" computation.
+4. Keep automatic task generation opt-in unless the user explicitly requests it.
+
+Exit criteria:
+
+- goals feel like ongoing support objects, not renamed todos
+
+## 19. Full E2E user-journey test plan
+
+The current backend tests are useful, but they are not yet a full PRD validation suite. We need explicit user-journey coverage that spans chat capture, UI, privacy, reminders, restarts, and connector behavior.
+
+### 19.1 Journey matrix
+
+#### Journey 1: one-off task capture and completion
+
+Flow:
+
+1. User says "remind me to pay rent tomorrow morning".
+2. Agent creates a one-off definition with a morning relevance window.
+3. The item appears in `Upcoming`, then moves to `Now`.
+4. User snoozes it.
+5. App restarts.
+6. Item reappears correctly.
+7. User completes it.
+
+Must assert:
+
+- definition/occurrence split is preserved
+- snooze persists across restart
+- completion only affects the current occurrence
+- audit trail shows capture, snooze, and completion
+
+#### Journey 2: twice-daily habit
+
+Flow:
+
+1. User says "remind me to brush my teeth twice a day".
+2. Agent creates one definition with morning and night slots.
+3. Morning occurrence appears only in the morning window.
+4. Morning completion does not remove the night slot.
+5. Night occurrence appears later without duplicating the definition.
+
+Must assert:
+
+- two slots exist under one definition
+- only the relevant slot is surfaced
+- completion is occurrence-scoped
+
+#### Journey 3: progressive daily routine
+
+Flow:
+
+1. User says "have me do pushups daily, starting at 10 and add one each day when I complete it".
+2. Agent stores a progression rule.
+3. User completes multiple days.
+4. Target increments deterministically.
+5. Skip does not increment unless policy explicitly says otherwise.
+
+Must assert:
+
+- the rule is stored, not just the latest number
+- derived targets are reproducible after restart
+
+#### Journey 4: weekly goal support
+
+Flow:
+
+1. User says "I want to call Mom every week".
+2. Agent creates a goal and proposes a support strategy.
+3. User approves suggested support.
+4. Goal appears in a goals view and optionally produces a weekly occurrence.
+5. End-of-week review marks it satisfied or at risk.
+
+Must assert:
+
+- goal and task are distinct objects
+- goal review state is updated correctly
+- goal-generated task suggestions are attributable
+
+#### Journey 5: Google Calendar onboarding and next-event context
+
+Flow:
+
+1. User connects Google.
+2. Calendar widget populates.
+3. User asks "what do I need to know for my next event?"
+4. Agent summarizes timing, attendees, location, and related email context.
+
+Must assert:
+
+- OAuth works in both local and remote modes
+- widget and chat answers match the same cached/synced data
+- revoked grant and reauth paths are clear
+
+#### Journey 6: Gmail triage and explicit reply send
+
+Flow:
+
+1. User connects Gmail triage scope.
+2. Agent surfaces reply-needed mail.
+3. User asks for a draft.
+4. Agent drafts a reply.
+5. User must explicitly confirm send.
+
+Must assert:
+
+- draft works without send scope
+- send is blocked without explicit confirmation
+- audit trail records draft and send separately
+
+#### Journey 7: escalation ladder
+
+Flow:
+
+1. User opts into private reminders and SMS.
+2. A high-priority task becomes due.
+3. In-app reminder fires first.
+4. User does not acknowledge.
+5. SMS fires next.
+6. Voice fires only if explicitly allowed and urgency policy permits it.
+
+Must assert:
+
+- quiet hours are respected
+- acknowledgement blocks later steps
+- policy denial blocks the channel with a visible reason
+
+#### Journey 8: scheduled workflow
+
+Flow:
+
+1. User creates "every weekday at 9am, check my calendar and tell me what matters today".
+2. Workflow is stored in life-ops.
+3. Execution job is created in the trigger/runtime substrate.
+4. Workflow fires on schedule.
+5. User pauses it, then resumes it.
+
+Must assert:
+
+- workflow definition survives restart
+- runtime job mapping is deterministic
+- pause/resume updates the execution plumbing correctly
+
+#### Journey 9: browser session visibility
+
+Flow:
+
+1. User approves a workflow that needs browser actions.
+2. Browser session appears in UI as `awaiting confirmation`, then `navigating`, then `done`.
+3. User can inspect what happened and why.
+
+Must assert:
+
+- browser session status is visible in the main product surface
+- account-affecting actions require confirmation
+
+#### Journey 10: privacy and role gating
+
+Flow:
+
+1. Admin creates an internal agent-op reminder.
+2. A normal user opens life-ops UI.
+3. The user cannot see the agent-op item.
+4. Two different users create private life-ops items.
+5. Each sees only their own items.
+
+Must assert:
+
+- user life-ops are owner-scoped
+- agent ops are admin/agent-scoped
+- nothing leaks into public/shared channels or unrelated contexts
+
+### 19.2 Test layers required
+
+We should add or expand coverage at these layers:
+
+- contract/unit tests for occurrence math, progression, escalation gating, and ownership filtering
+- API integration tests for CRUD, ownership checks, workflow scheduling, reminder attempts, and connector failures
+- UI tests for sidebar rendering, goals view, browser session visibility, and explanation surfaces
+- true end-to-end tests for chat capture, restart recovery, and connector-guided reminder ladders
+- live opt-in connector tests for Google and Twilio
+
+### 19.3 Recommended test files
+
+Add the following suites over time:
+
+- `packages/agent/test/milaidy-life-ops-prd-validation.e2e.test.ts`
+- `packages/agent/test/lifeops-ownership.e2e.test.ts`
+- `packages/agent/test/lifeops-workflow-scheduler.e2e.test.ts`
+- `packages/app-core/src/components/chat/LifeOpsSidebar.test.tsx`
+- `packages/app-core/test/app/lifeops-user-journeys.e2e.test.ts`
+
+## 20. Final recommendation
+
+Do not frame the remaining work as "finish plugin-todo" or "bolt on plugin-goals".
+
+The codebase already proves the right direction:
+
+- first-class life-ops storage
+- first-class occurrences
+- first-class reminders
+- first-class connector grants
+
+The next step is to finish the product boundary:
+
+- ownership and privacy
+- scheduled execution
+- proactive delivery
+- real UI surfaces
+- conversational capture
+
+That is the shortest path to fulfilling the PRD without painting Milady into the wrong abstraction.

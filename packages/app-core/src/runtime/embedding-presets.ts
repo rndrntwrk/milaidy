@@ -13,10 +13,10 @@ export const EMBEDDING_PRESETS = {
   ...upstreamEmbeddingPresets,
   performance: {
     ...upstreamEmbeddingPresets.performance,
-    label: "Maximum (7B text embedding)",
+    label: "Efficient (compact text embedding)",
     description:
-      "4096-dim text-embedding model (~4.2GB). Powers memory / knowledge vectors only — not chat. " +
-      'The GGUF filename contains "instruct" because the upstream E5-Mistral embedding release uses that name.',
+      "384-dim compact text-embedding model (~133MB). Powers memory / knowledge vectors only — not chat. " +
+      "Milady keeps the default SQL-safe and fast instead of auto-selecting a multi-GB embedding GGUF.",
   },
 } as typeof upstreamEmbeddingPresets;
 

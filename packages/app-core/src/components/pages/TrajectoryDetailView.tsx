@@ -19,6 +19,15 @@ interface TrajectoryDetailViewProps {
   onBack?: () => void;
 }
 
+function formatTrajectoryStepLabel(
+  value: string | undefined,
+  fallback: string,
+): string {
+  const normalized = typeof value === "string" ? value.trim() : "";
+  if (!normalized) return fallback;
+  return normalized.replace(/_/g, " ");
+}
+
 function estimateCost(
   promptTokens: number,
   completionTokens: number,
@@ -229,11 +238,10 @@ export function TrajectoryDetailView({
                 key={call.id}
                 callLabel={`#${index + 1}`}
                 model={call.model}
-                purposeLabel={
-                  call.purpose ||
-                  call.actionType ||
-                  t("trajectorydetailview.Response")
-                }
+                purposeLabel={formatTrajectoryStepLabel(
+                  call.stepType || call.purpose || call.actionType,
+                  t("trajectorydetailview.Response"),
+                )}
                 latencyLabel={formatTrajectoryDuration(call.latencyMs)}
                 tokensLabel={t("trajectorydetailview.Tokens")}
                 totalTokensValue={formatTrajectoryTokenCount(
@@ -276,6 +284,7 @@ export function TrajectoryDetailView({
                 outputLinesLabel={`${call.response.split("\n").length} ${t(
                   "trajectorydetailview.lines",
                 )}`}
+                tags={(call.tags ?? []).filter((tag) => tag !== "llm")}
                 userPrompt={call.userPrompt}
                 response={call.response}
                 copyLabel={t("trajectorydetailview.Copy")}

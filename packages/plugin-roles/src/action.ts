@@ -20,8 +20,9 @@ import {
 import type { RoleName, RolesWorldMetadata } from "./types";
 import {
   canModifyRole,
-  getEntityRole,
+  getLiveEntityMetadataFromMessage,
   normalizeRole,
+  resolveEntityRole,
   resolveWorldForMessage,
 } from "./utils";
 
@@ -206,7 +207,15 @@ export const updateRoleAction: Action = {
     const { world, metadata } = resolved;
 
     // Check requester's role
-    const requesterRole = getEntityRole(metadata, message.entityId);
+    const requesterRole = await resolveEntityRole(
+      runtime,
+      world,
+      metadata,
+      message.entityId,
+      {
+        liveEntityMetadata: getLiveEntityMetadataFromMessage(message),
+      },
+    );
     if (requesterRole !== "OWNER" && requesterRole !== "ADMIN") {
       await callback?.({
         text: "You don't have permission to manage roles. Only OWNERs and ADMINs can assign roles.",
@@ -236,7 +245,12 @@ export const updateRoleAction: Action = {
     }
 
     // Permission check
-    const targetCurrentRole = getEntityRole(metadata, targetEntityId);
+    const targetCurrentRole = await resolveEntityRole(
+      runtime,
+      world,
+      metadata,
+      targetEntityId,
+    );
 
     // Prevent the last OWNER from demoting themselves
     if (

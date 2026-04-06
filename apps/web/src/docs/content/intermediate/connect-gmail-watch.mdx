@@ -1,0 +1,103 @@
+# Connect to Gmail (Gmail Watch)
+
+The Gmail Watch connector lets your Milady agent react to incoming email — triage it, reply, file, summarize — by subscribing to Gmail's push notifications via Google Cloud Pub/Sub. This is the most powerful email integration Google offers, and it's also one of the fiddliest to set up because it touches three different Google Cloud services.
+
+**What you'll learn:** enable Gmail API + Pub/Sub in a Google Cloud project, create a service account, grant it access to your mailbox, hand the credentials to Milady.
+
+<Callout kind="warning" title="Expect Google Cloud complexity">
+If you've never used Google Cloud Console, this will take longer than any other connector in the intermediate tier — plan on 30–45 minutes the first time. None of the steps are <em>hard</em>, but there are a lot of them, and Google's UI moves around.
+</Callout>
+
+## What you need before you start
+
+- **A Google account** with Gmail enabled. A Workspace account works best — personal Gmail requires extra domain verification.
+- **A Google Cloud project** (or permission to create one).
+- **Milady running** with a working provider.
+- **About $0 in Google Cloud credit** — Gmail API and Pub/Sub both have free tiers that cover individual use.
+
+## Step 1 — Create a Google Cloud project
+
+<Steps>
+  <li>Open <a href="https://console.cloud.google.com">console.cloud.google.com</a> and sign in.</li>
+  <li>Click the project picker at the top → <strong>New Project</strong>.</li>
+  <li>Name it something like "Milady Gmail" and click <strong>Create</strong>.</li>
+  <li>Once created, select it from the project picker so everything below happens inside it.</li>
+</Steps>
+
+## Step 2 — Enable the APIs
+
+<Steps>
+  <li>In the Cloud Console sidebar, go to <strong>APIs &amp; Services → Library</strong>.</li>
+  <li>Search for <strong>Gmail API</strong>, click it, click <strong>Enable</strong>.</li>
+  <li>Go back to Library, search for <strong>Cloud Pub/Sub API</strong>, enable that too.</li>
+</Steps>
+
+## Step 3 — Create a Pub/Sub topic + subscription
+
+Gmail pushes notifications into a Pub/Sub topic; Milady reads from a subscription on that topic.
+
+<Steps>
+  <li>Go to <strong>Pub/Sub → Topics → Create topic</strong>.</li>
+  <li>Name it <code>gmail-notifications</code>. Leave other settings default. Click Create.</li>
+  <li>On the new topic's page, click <strong>Create subscription</strong>. Name it <code>milady-gmail</code>. Delivery type: <strong>Pull</strong>. Click Create.</li>
+</Steps>
+
+## Step 4 — Grant Gmail permission to publish to the topic
+
+<Steps>
+  <li>In the topic's page, click the <strong>Permissions</strong> tab → <strong>Add Principal</strong>.</li>
+  <li>Principal: <code>gmail-api-push@system.gserviceaccount.com</code> (this is Google's system account — copy exactly).</li>
+  <li>Role: <strong>Pub/Sub Publisher</strong>.</li>
+  <li>Save.</li>
+</Steps>
+
+## Step 5 — Create a service account for Milady
+
+<Steps>
+  <li>Go to <strong>IAM &amp; Admin → Service Accounts → Create service account</strong>.</li>
+  <li>Name it <code>milady-gmail-watch</code>.</li>
+  <li>Grant it the <strong>Pub/Sub Subscriber</strong> role for the project.</li>
+  <li>Click Done.</li>
+  <li>Back on the Service Accounts list, click the new account → <strong>Keys → Add Key → Create new key → JSON</strong>.</li>
+  <li>Google downloads a JSON file. This is your service account credential. Save it somewhere safe.</li>
+</Steps>
+
+## Step 6 — Grant the service account access to your mailbox
+
+Personal Gmail: go to <strong>Gmail settings → Forwarding and POP/IMAP → enable IMAP</strong>, then use OAuth delegation (complex — prefer a Workspace account).
+
+Workspace: <strong>Admin Console → Security → API controls → Domain-wide delegation</strong>, add the service account's Client ID with scope <code>https://www.googleapis.com/auth/gmail.readonly</code> (and <code>gmail.modify</code> if you want Milady to mark emails read).
+
+## Step 7 — Hand the credentials to Milady
+
+<Steps>
+  <li>Open Milady. Go to <strong>Settings → Plugins → Gmail Watch → Configure</strong>.</li>
+  <li>Paste the full contents of the service account JSON file into the <strong>Service account key</strong> field, or point <strong>Service account file</strong> at the file's absolute path on disk.</li>
+  <li>Set <strong>Pub/Sub subscription</strong> to <code>projects/&lt;your-project-id&gt;/subscriptions/milady-gmail</code>.</li>
+  <li>Set <strong>Watch address</strong> to the Gmail address you want to monitor.</li>
+  <li>Click <strong>Save</strong>.</li>
+</Steps>
+
+## Step 8 — Test it
+
+Send yourself an email from another account. Within a minute, Milady should see the new message and log it. If you have autonomous reply behaviors configured, the agent will act on it.
+
+## Troubleshooting
+
+**"Service account does not have access to mailbox."**
+Domain-wide delegation isn't set up or the scopes don't match. Go back to Step 6.
+
+**"Topic publisher permission denied" in Cloud logs.**
+Step 4 wasn't done — Gmail's system account needs Pub/Sub Publisher on your topic.
+
+**Nothing arrives at the Pub/Sub subscription.**
+Gmail Watch expires every 7 days and must be re-issued. The Milady plugin re-issues automatically once the config is correct, but if it fails, check that the subscription's ack deadline is reasonable and that the `gmail.users.watch` call was made (visible in Cloud Logging).
+
+## Privacy note
+
+Gmail Watch sees **metadata and content of every incoming email** once enabled. Milady's agent only processes what you tell it to, but the plugin architecture means the raw content is flowing through your machine. Don't use this on mailboxes with sensitive content unless you're comfortable with that.
+
+## What's next
+
+- [Connect to Google Chat](/docs/intermediate/connect-google-chat) — same Google Cloud project, easier setup.
+- [Memory and knowledge](/docs/intermediate/memory-and-knowledge) — point Milady at your recent email as searchable context.

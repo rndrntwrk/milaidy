@@ -175,6 +175,7 @@ jobs:
           ref: develop
           fetch-depth: 0
           token: ${{ secrets.GH_PAT || secrets.GITHUB_TOKEN }}
+          submodules: recursive
 
       - name: Create feature branch
         id: branch

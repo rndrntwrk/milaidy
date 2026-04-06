@@ -26,6 +26,7 @@ vi.mock("./scheduling", () => ({
   buildTriggerConfig: runtimeMocks.buildTriggerConfig,
   buildTriggerMetadata: runtimeMocks.buildTriggerMetadata,
   normalizeTriggerDraft: runtimeMocks.normalizeTriggerDraft,
+  normalizeText: (v: string) => v.trim().replace(/\s+/g, " "),
 }));
 
 import { createTriggerTaskAction } from "./action";

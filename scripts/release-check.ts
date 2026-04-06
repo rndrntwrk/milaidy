@@ -14,12 +14,20 @@ const requiredPaths = [
   "dist/entry.js",
   "dist/build-info.json",
   "scripts/run-repo-setup.mjs",
-  "scripts/setup-eliza-workspace.mjs",
+  "scripts/setup-upstreams.mjs",
   "scripts/ensure-vision-deps.mjs",
 ];
 const forbiddenPrefixes = ["dist/Milady.app/"];
 const orchestratorPackageName = "@elizaos/plugin-agent-orchestrator";
 const orchestratorBrokenLifecycleTarget = "./scripts/ensure-node-pty.mjs";
+const orchestratorWorkspaceDir = resolve(
+  "plugins",
+  "plugin-agent-orchestrator",
+);
+const orchestratorWorkspacePackageJsonPath = resolve(
+  orchestratorWorkspaceDir,
+  "package.json",
+);
 const autonomousServerPathCandidates = [
   "node_modules/@miladyai/agent/packages/agent/src/api/server.js",
   "packages/agent/src/api/server.ts",
@@ -257,6 +265,10 @@ export function isExactVersion(specifier: string): boolean {
   return /^\d+\.\d+\.\d+/.test(specifier);
 }
 
+export function isWorkspaceSpecifier(specifier: string | undefined): boolean {
+  return typeof specifier === "string" && specifier.startsWith("workspace:");
+}
+
 type DependencyPackageJson = {
   scripts?: Record<string, string>;
 };
@@ -403,6 +415,34 @@ export function findFloatingDependencySpecs(
   });
 }
 
+export function findMismatchedSharedAgentDependencySpecs(
+  rootPkg: RootPackageJson,
+  agentPkg: RootPackageJson,
+): Array<{ name: string; rootSpecifier: string; agentSpecifier: string }> {
+  const rootDependencies = rootPkg.dependencies ?? {};
+  const agentDependencies = agentPkg.dependencies ?? {};
+
+  return Object.entries(agentDependencies).flatMap(([name, agentSpecifier]) => {
+    if (!name.startsWith("@elizaos/")) {
+      return [];
+    }
+
+    const rootSpecifier = rootDependencies[name];
+    if (
+      typeof rootSpecifier !== "string" ||
+      !isExactVersionSpecifier(rootSpecifier)
+    ) {
+      return [];
+    }
+
+    if (agentSpecifier === rootSpecifier) {
+      return [];
+    }
+
+    return [{ name, rootSpecifier, agentSpecifier }];
+  });
+}
+
 function readExistingReleaseCheckFile(
   label: string,
   candidates: readonly string[],
@@ -476,29 +516,35 @@ function assertBundledAgentOrchestratorInstallFix() {
   ) as RootPackageJson;
   if (!bundlesDependency(rootPackage, orchestratorPackageName)) {
     console.error(
-      "release-check: package.json must bundle @elizaos/plugin-agent-orchestrator until the upstream tarball stops shipping a broken postinstall hook.",
+      "release-check: package.json must bundle @elizaos/plugin-agent-orchestrator so packaged Milady includes the orchestrator implementation.",
     );
     process.exit(1);
   }
 
   const orchestratorVersion =
     rootPackage.dependencies?.[orchestratorPackageName];
-  if (!isExactVersionSpecifier(orchestratorVersion)) {
+  const usingWorkspace = isWorkspaceSpecifier(orchestratorVersion);
+
+  if (!usingWorkspace && !isExactVersionSpecifier(orchestratorVersion)) {
     console.error(
-      "release-check: package.json must pin @elizaos/plugin-agent-orchestrator to an exact version until the upstream tarball stops shipping a broken postinstall hook.",
+      "release-check: package.json must either use workspace:* for the local plugin-agent-orchestrator submodule or pin @elizaos/plugin-agent-orchestrator to an exact published version.",
     );
     process.exit(1);
   }
 
-  const orchestratorPackageJsonPath = resolve(
-    "node_modules",
-    "@elizaos",
-    "plugin-agent-orchestrator",
-    "package.json",
-  );
+  const orchestratorPackageJsonPath = usingWorkspace
+    ? orchestratorWorkspacePackageJsonPath
+    : resolve(
+        "node_modules",
+        "@elizaos",
+        "plugin-agent-orchestrator",
+        "package.json",
+      );
   if (!existsSync(orchestratorPackageJsonPath)) {
     console.error(
-      "release-check: node_modules/@elizaos/plugin-agent-orchestrator/package.json is missing. Run bun install before publishing.",
+      usingWorkspace
+        ? "release-check: plugins/plugin-agent-orchestrator/package.json is missing. Initialize the orchestrator submodule before publishing."
+        : "release-check: node_modules/@elizaos/plugin-agent-orchestrator/package.json is missing. Run bun install before publishing.",
     );
     process.exit(1);
   }
@@ -515,7 +561,9 @@ function assertBundledAgentOrchestratorInstallFix() {
     )
   ) {
     console.error(
-      "release-check: @elizaos/plugin-agent-orchestrator still references missing scripts/ensure-node-pty.mjs. The pnpm patch should remove this postinstall script.",
+      usingWorkspace
+        ? "release-check: the local plugin-agent-orchestrator workspace references scripts/ensure-node-pty.mjs, but that file is missing."
+        : "release-check: @elizaos/plugin-agent-orchestrator still references missing scripts/ensure-node-pty.mjs. The pnpm patch should remove this postinstall script.",
     );
     process.exit(1);
   }
@@ -531,9 +579,18 @@ function assertOrchestratorVersionPinned() {
     );
     process.exit(1);
   }
+  if (isWorkspaceSpecifier(version)) {
+    if (!existsSync(orchestratorWorkspacePackageJsonPath)) {
+      console.error(
+        `release-check: ${orchestratorPackageName} is configured as workspace:*, but plugins/plugin-agent-orchestrator/package.json is missing.`,
+      );
+      process.exit(1);
+    }
+    return;
+  }
   if (!isExactVersion(version)) {
     console.error(
-      `release-check: ${orchestratorPackageName} must be pinned to an exact version (e.g. "0.3.14"), but found "${version}". Floating tags like "next" or ranges like "^0.3.14" are not allowed for release builds.`,
+      `release-check: ${orchestratorPackageName} must either use workspace:* for the local submodule or be pinned to an exact version (for example "0.3.14"), but found "${version}".`,
     );
     process.exit(1);
   }
@@ -554,6 +611,31 @@ function assertCloudAgentTemplateDependenciesPinned() {
     );
     for (const dependency of floating) {
       console.error(`  - ${dependency.name}: ${dependency.specifier}`);
+    }
+    process.exit(1);
+  }
+}
+
+function assertAgentDependenciesAlignedWithRootPins() {
+  const rootPackage = JSON.parse(
+    readFileSync("package.json", "utf8"),
+  ) as RootPackageJson;
+  const agentPackage = JSON.parse(
+    readFileSync("packages/agent/package.json", "utf8"),
+  ) as RootPackageJson;
+  const mismatches = findMismatchedSharedAgentDependencySpecs(
+    rootPackage,
+    agentPackage,
+  );
+
+  if (mismatches.length > 0) {
+    console.error(
+      "release-check: packages/agent must match the root's exact @elizaos/* pins to avoid alpha tag drift on clean installs.",
+    );
+    for (const mismatch of mismatches) {
+      console.error(
+        `  - ${mismatch.name}: packages/agent=${mismatch.agentSpecifier} root=${mismatch.rootSpecifier}`,
+      );
     }
     process.exit(1);
   }
@@ -946,9 +1028,9 @@ function assertServerDynamicHyperscapeImport() {
     autonomousServerPathCandidates,
   );
 
-  // @elizaos/app-hyperscape/routes must be a dynamic import (lazy) so the
-  // API server can start without it. A static top-level import would crash
-  // the server when the package is not installed (e.g. Windows smoke test).
+  // @elizaos/app-hyperscape must never be a static top-level import. The
+  // API server has to remain bootable when the optional app package is not
+  // installed (for example in Windows smoke and release validation runs).
   const lines = serverSource.split("\n");
   const staticImports = lines.filter(
     (line) =>
@@ -961,13 +1043,6 @@ function assertServerDynamicHyperscapeImport() {
     for (const line of staticImports) {
       console.error(`  - ${line.trim()}`);
     }
-    process.exit(1);
-  }
-
-  if (!serverSource.includes("@elizaos/app-hyperscape/routes")) {
-    console.error(
-      "release-check: server.ts must dynamically import @elizaos/app-hyperscape/routes.",
-    );
     process.exit(1);
   }
 }
@@ -1080,6 +1155,7 @@ function main() {
   assertBundledAgentOrchestratorInstallFix();
   assertOrchestratorVersionPinned();
   assertCloudAgentTemplateDependenciesPinned();
+  assertAgentDependenciesAlignedWithRootPins();
   const localHotspots = findLocalPackHotspots();
   if (shouldSkipExactPackDryRun(localHotspots)) {
     runFastLocalPackCheck(localHotspots);

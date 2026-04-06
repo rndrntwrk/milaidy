@@ -1,0 +1,203 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  ChannelType,
+  ModelType,
+  type Content,
+  type IAgentRuntime,
+  type Memory,
+  type UUID,
+} from "@elizaos/core";
+import {
+  cleanupTestRuntime,
+  createTestRuntime,
+} from "../../../../../eliza/packages/typescript/src/__tests__/test-utils";
+import { installPromptOptimizations } from "../prompt-optimization";
+import { installMiladyMessageTrajectoryStepBridge } from "../trajectory-step-context";
+
+describe("shouldRespond trajectory logging", () => {
+  let runtime: IAgentRuntime;
+
+  beforeEach(async () => {
+    runtime = await createTestRuntime();
+
+    vi.spyOn(runtime, "getSetting").mockImplementation((key: string) => {
+      const settings: Record<string, string> = {
+        ALWAYS_RESPOND_CHANNELS: "",
+        ALWAYS_RESPOND_SOURCES: "",
+        SHOULD_RESPOND_BYPASS_TYPES: "",
+        SHOULD_RESPOND_BYPASS_SOURCES: "",
+        VALIDATION_LEVEL: "fast",
+      };
+      return settings[key] ?? null;
+    });
+    vi.spyOn(runtime, "isCheckShouldRespondEnabled").mockReturnValue(true);
+    vi.spyOn(runtime, "isActionPlanningEnabled").mockReturnValue(true);
+    vi.spyOn(runtime, "createMemory").mockImplementation(
+      async (memory: Memory) => memory,
+    );
+    vi.spyOn(runtime, "getMemoryById").mockResolvedValue(null);
+    vi.spyOn(runtime, "getMemoriesByRoomIds").mockResolvedValue([]);
+    vi.spyOn(runtime, "composeState").mockResolvedValue({
+      data: {},
+      values: {},
+    } as Awaited<ReturnType<IAgentRuntime["composeState"]>>);
+    vi.spyOn(runtime, "processActions").mockResolvedValue(undefined);
+    vi.spyOn(runtime, "evaluate").mockResolvedValue(undefined);
+    vi.spyOn(runtime, "emitEvent").mockResolvedValue(undefined);
+    vi.spyOn(runtime, "getRoom").mockImplementation(async (roomId: UUID) => ({
+      id: roomId,
+      type: ChannelType.GROUP,
+      name: "Trajectory Group",
+      worldId: "trajectory-world" as UUID,
+      source: "discord",
+    }));
+    vi.spyOn(runtime, "getWorld").mockImplementation(async (worldId: UUID) => ({
+      id: worldId,
+      name: "Trajectory World",
+      agentId: runtime.agentId,
+    }));
+    vi.spyOn(runtime, "ensureRoomExists").mockResolvedValue(undefined);
+    vi.spyOn(runtime, "startRun").mockReturnValue("trajectory-run" as UUID);
+    vi.spyOn(runtime, "endRun").mockImplementation(() => {});
+    vi.spyOn(runtime, "queueEmbeddingGeneration").mockResolvedValue(undefined);
+    vi.spyOn(runtime, "log").mockResolvedValue(undefined);
+    vi.spyOn(runtime, "getParticipantUserState").mockResolvedValue({
+      roomId: "trajectory-room" as UUID,
+      userId: runtime.agentId,
+    });
+    vi.spyOn(runtime, "getRoomsByIds").mockImplementation(
+      async (roomIds: UUID[]) =>
+        roomIds.map((id) => ({
+          id,
+          name: "Trajectory Group",
+          type: ChannelType.GROUP,
+          worldId: "trajectory-world" as UUID,
+        })),
+    );
+    vi.spyOn(runtime, "getEntityById").mockImplementation(
+      async (entityId: UUID) => ({
+        id: entityId,
+        names: ["Trajectory User"],
+        agentId: runtime.agentId,
+      }),
+    );
+    vi.spyOn(runtime.logger, "debug").mockImplementation(() => {});
+    vi.spyOn(runtime.logger, "info").mockImplementation(() => {});
+    vi.spyOn(runtime.logger, "warn").mockImplementation(() => {});
+    vi.spyOn(runtime.logger, "error").mockImplementation(() => {});
+
+    runtime.actions = [];
+  });
+
+  afterEach(async () => {
+    vi.clearAllMocks();
+    await cleanupTestRuntime(runtime);
+  });
+
+  it("records shouldRespond and reply model calls under the same trajectory step", async () => {
+    const loggedCalls: Array<Record<string, unknown>> = [];
+    const stubLogger = {
+      logLlmCall: vi.fn(),
+      getLlmCallLogs: () => [],
+    };
+    const richLogger = {
+      logLlmCall: (params: Record<string, unknown>) => {
+        loggedCalls.push(params);
+      },
+      listTrajectories: vi.fn(),
+      getTrajectoryDetail: vi.fn(),
+    };
+
+    vi.spyOn(runtime, "getService").mockImplementation((serviceType: string) =>
+      serviceType === "trajectory_logger" ? (stubLogger as object) : null,
+    );
+    vi.spyOn(runtime, "getServicesByType").mockImplementation(
+      (serviceType: string) =>
+        serviceType === "trajectory_logger" ? [stubLogger, richLogger] : [],
+    );
+    vi.spyOn(runtime, "useModel").mockImplementation(
+      async (
+        modelType: (typeof ModelType)[keyof typeof ModelType],
+        params: unknown,
+      ) => {
+        if (modelType === ModelType.TEXT_SMALL) {
+          return "<response><name>TestAgent</name><reasoning>Ambiguous group chat needs a decision</reasoning><action>RESPOND</action></response>";
+        }
+
+        const responseText =
+          "<response><thought>Processing message</thought><actions>REPLY</actions><providers></providers><text>Hello! How can I help you?</text></response>";
+        const text = (params as { stream?: boolean } | null | undefined)?.stream;
+        if (text) {
+          return {
+            textStream: (async function* () {
+              yield "<response><thought>Processing message</thought>";
+              yield "<actions>REPLY</actions><providers></providers>";
+              yield "<text>Hello! How can I help you?</text></response>";
+            })(),
+            text: Promise.resolve(responseText),
+          };
+        }
+        return responseText;
+      },
+    );
+
+    installPromptOptimizations(runtime as never);
+    installMiladyMessageTrajectoryStepBridge(runtime as never);
+
+    const callback = vi.fn(async (content: Content) => [
+      {
+        id: "trajectory-response-memory" as UUID,
+        content,
+        entityId: "trajectory-entity" as UUID,
+        agentId: runtime.agentId,
+        roomId: "trajectory-room" as UUID,
+        createdAt: Date.now(),
+      },
+    ]);
+
+    const message: Memory = {
+      id: "trajectory-message" as UUID,
+      roomId: "trajectory-room" as UUID,
+      entityId: "trajectory-user" as UUID,
+      agentId: runtime.agentId,
+      createdAt: Date.now(),
+      content: {
+        text: "can anyone help with this?",
+        source: "discord",
+        channelType: ChannelType.GROUP,
+      },
+      metadata: {
+        type: "message",
+        trajectoryStepId: "should-respond-step",
+      },
+    };
+
+    const result = await runtime.messageService!.handleMessage(
+      runtime,
+      message,
+      callback,
+    );
+
+    expect(result.didRespond).toBe(true);
+    expect(stubLogger.logLlmCall).not.toHaveBeenCalled();
+    expect(loggedCalls).toHaveLength(2);
+    expect(
+      new Set(loggedCalls.map((call) => String(call.stepId ?? ""))),
+    ).toEqual(new Set(["should-respond-step"]));
+    expect(
+      new Set(loggedCalls.map((call) => String(call.model ?? ""))),
+    ).toEqual(new Set(["TEXT_SMALL", "TEXT_LARGE"]));
+    expect(
+      loggedCalls.some((call) =>
+        String(call.response ?? "").includes("<action>RESPOND</action>"),
+      ),
+    ).toBe(true);
+    expect(
+      loggedCalls.some((call) =>
+        String(call.response ?? "").includes(
+          "<text>Hello! How can I help you?</text>",
+        ),
+      ),
+    ).toBe(true);
+  });
+});

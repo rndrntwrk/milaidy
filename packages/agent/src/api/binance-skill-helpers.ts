@@ -8,8 +8,7 @@
 import {
   type AgentRuntime,
   type Content,
-  createMessageMemory,
-  logger,
+  type createMessageMemory,
   ModelType,
 } from "@elizaos/core";
 import { extractCompatTextContent } from "./compat-utils.js";
@@ -31,7 +30,7 @@ function shouldExposeBinanceSkillId(skillId: string): boolean {
 
 export type FallbackParsedAction = {
   name: string;
-  parameters: Record<string, string>;
+  parameters?: Record<string, unknown>;
 };
 
 export function inferBalanceChainFromText(
@@ -149,6 +148,9 @@ export async function executeFallbackParsedActions(
   parsedActions: FallbackParsedAction[],
   appendIncomingText: (incoming: string) => void,
   onActionCallback: (actionTag: string, hasText: boolean) => void,
+  options?: {
+    getCurrentText?: () => string;
+  },
 ): Promise<void> {
   const runtimeActions = Array.isArray(
     (runtime as { actions?: unknown[] }).actions,
@@ -195,7 +197,7 @@ export async function executeFallbackParsedActions(
         runtime,
         message,
         undefined,
-        { parameters: parsed.parameters },
+        { parameters: parsed.parameters ?? {} },
         async (content: unknown) => {
           const contentRecord =
             content && typeof content === "object"
@@ -218,13 +220,30 @@ export async function executeFallbackParsedActions(
       ),
     );
     if (!callbackSeen) {
+      const currentText = options?.getCurrentText?.() ?? "";
+      const actionSucceeded =
+        actionResult &&
+        typeof actionResult === "object" &&
+        "success" in actionResult
+          ? actionResult.success === true
+          : undefined;
       const fallbackText =
         actionResult && typeof actionResult === "object"
           ? extractCompatTextContent(actionResult as Content)
           : "";
+      const shouldSuppressSuccessFallbackText =
+        parsed.name === "BLOCK_WEBSITES" &&
+        actionSucceeded === true &&
+        /\b(block|blocking|self ?control)\b/i.test(currentText);
       if (fallbackText) {
-        onActionCallback(parsed.name, true);
-        appendIncomingText(fallbackText);
+        onActionCallback(parsed.name, !shouldSuppressSuccessFallbackText);
+        if (!shouldSuppressSuccessFallbackText) {
+          appendIncomingText(
+            currentText.trim().length > 0
+              ? `\n\n${fallbackText}`
+              : fallbackText,
+          );
+        }
       }
     }
   }

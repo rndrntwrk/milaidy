@@ -82,7 +82,7 @@ describe("handleWhatsAppRoute", () => {
       const handled = await handleWhatsAppRoute(
         req,
         res,
-        "/api/chat",
+        "/api/not-handled",
         "GET",
         createState(),
       );

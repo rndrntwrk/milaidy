@@ -12,6 +12,7 @@ vi.mock("@miladyai/app-core/state", () => ({
 }));
 
 vi.mock("@miladyai/app-core/components", () => ({
+  BrowserWorkspaceView: () => <div data-testid="browser-workspace-view" />,
   ChatView: () => <div data-testid="chat-view" />,
   CloudDashboard: () => <div data-testid="cloud-dashboard" />,
   CodingAgentSettingsSection: () => (
@@ -76,6 +77,20 @@ describe("DetachedShellRoot", () => {
     expect(
       tree?.root.findAllByProps({ "data-testid": "milady-bar" }).length,
     ).toBe(0);
+  });
+
+  it("renders the detached browser workspace surface", async () => {
+    let tree: TestRenderer.ReactTestRenderer | null = null;
+
+    await act(async () => {
+      tree = TestRenderer.create(
+        <DetachedShellRoot route={{ mode: "surface", tab: "browser" }} />,
+      );
+    });
+
+    expect(
+      tree?.root.findByProps({ "data-testid": "browser-workspace-view" }),
+    ).toBeTruthy();
   });
 
   it("renders focused cloud content instead of the full settings navigator", async () => {

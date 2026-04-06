@@ -29,7 +29,7 @@ milady doctor [options]
   ✓ Runtime              Node.js v22.12.0
   ✓ node_modules         /path/to/milady/node_modules
   ✓ Build artifacts      /path/to/milady/dist
-  ⚠ Eliza workspace      Not found at ../eliza (optional)
+  ⚠ Local upstreams      Not found at ./eliza or ./plugins (optional)
 
   Configuration
   ✓ Config file          /home/user/.milady/milady.json
@@ -57,7 +57,7 @@ milady doctor [options]
 | Runtime | Node.js >= 22 or Bun >= 1.0 |
 | node_modules | `node_modules` directory exists in the project root |
 | Build artifacts | `dist/entry.js` exists (warn if running from source) |
-| Eliza workspace | Optional `../eliza` checkout for local @elizaos development |
+| Local upstreams | Optional repo-local `./eliza` and `./plugins/*` sources for local @elizaos development |
 
 ### Configuration
 

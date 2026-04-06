@@ -75,6 +75,9 @@ import {
 } from "./mac-window-effects";
 import {
   linuxSysfsOnBattery,
+  parseMacOsHidIdleTimeOutput,
+  parseMacOsPowerSourceOutput,
+  parseMacOsSessionLockedOutput,
   parseWindowsPowerLineOutput,
 } from "./power-state";
 import { checkWebGpuSupport } from "./webgpu-browser-support";
@@ -131,6 +134,9 @@ const PATH_NAME_MAP: Record<string, string | (() => string)> = {
 
 const DEFAULT_RELEASE_NOTES_URL = "https://milady.ai/releases/";
 const RELEASE_NOTES_PARTITION = "persist:milady-release-notes";
+const MACOS_IDLE_THRESHOLD_SECONDS = 60;
+const MACOS_CGSESSION_PATH =
+  "/System/Library/CoreServices/Menu Extras/User.menu/Contents/Resources/CGSession";
 
 let activeDesktopManager: DesktopManager | null = null;
 let nativeContextMenuEventsInstalled = false;
@@ -138,6 +144,16 @@ let nativeContextMenuEventsInstalled = false;
 export function resetDesktopManagerForTesting(): void {
   activeDesktopManager = null;
   nativeContextMenuEventsInstalled = false;
+}
+
+async function readProcessStdout(argv: string[]): Promise<string> {
+  const proc = Bun.spawn(argv, {
+    stdout: "pipe",
+    stderr: "ignore",
+  });
+  const text = await new Response(proc.stdout).text();
+  await proc.exited;
+  return text;
 }
 
 // ============================================================================
@@ -1101,14 +1117,34 @@ X-GNOME-Autostart-enabled=true
   async getPowerState(): Promise<PowerState> {
     try {
       if (process.platform === "darwin") {
-        const proc = Bun.spawn(["pmset", "-g", "batt"], {
-          stdout: "pipe",
-          stderr: "ignore",
-        });
-        const text = await new Response(proc.stdout).text();
-        await proc.exited;
-        const onBattery = text.includes("Battery Power");
-        return { onBattery, idleState: "unknown", idleTime: 0 };
+        const powerSource = parseMacOsPowerSourceOutput(
+          await readProcessStdout(["pmset", "-g", "batt"]),
+        );
+        const idleTime =
+          parseMacOsHidIdleTimeOutput(
+            await readProcessStdout(["ioreg", "-c", "IOHIDSystem"]),
+          ) ?? 0;
+        const locked = fs.existsSync(MACOS_CGSESSION_PATH)
+          ? parseMacOsSessionLockedOutput(
+              await readProcessStdout([
+                MACOS_CGSESSION_PATH,
+                "-currentSession",
+              ]),
+            )
+          : null;
+        const idleState =
+          locked === true
+            ? "locked"
+            : idleTime >= MACOS_IDLE_THRESHOLD_SECONDS
+              ? "idle"
+              : locked === false
+                ? "active"
+                : "unknown";
+        return {
+          onBattery: powerSource.known ? powerSource.onBattery : false,
+          idleState,
+          idleTime,
+        };
       }
       if (process.platform === "linux") {
         return {

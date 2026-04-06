@@ -12,8 +12,12 @@
 
 import { getDefaultStylePreset } from "@miladyai/shared/onboarding-presets";
 import { type RefObject, useCallback } from "react";
+import type { StylePreset } from "../api";
 import { MiladyClient, type VoiceConfig } from "../api";
-import { invokeDesktopBridgeRequest, scanProviderCredentials } from "../bridge";
+import {
+  invokeDesktopBridgeRequest,
+  type scanProviderCredentials,
+} from "../bridge";
 import { getBootConfig } from "../config/boot-config";
 import type { UiLanguage } from "../i18n";
 import type { Tab } from "../navigation";
@@ -27,6 +31,8 @@ import {
   shouldUseCloudOnboardingFastTrack,
 } from "../onboarding/flow";
 import { buildOnboardingRuntimeConfig } from "../onboarding-config";
+import { PREMADE_VOICES } from "../voice/types";
+import { buildWalletRpcUpdateRequest } from "../wallet-rpc";
 import {
   clearPersistedActiveServer,
   clearPersistedOnboardingStep,
@@ -34,11 +40,8 @@ import {
   type OnboardingNextOptions,
   savePersistedActiveServer,
 } from "./internal";
-import type { OnboardingStateHook } from "./useOnboardingState";
 import type { AppState, OnboardingStep } from "./types";
-import { buildWalletRpcUpdateRequest } from "../wallet-rpc";
-import { PREMADE_VOICES } from "../voice/types";
-import type { StylePreset } from "../api";
+import type { OnboardingStateHook } from "./useOnboardingState";
 
 // ── Helpers copied from AppContext (module-level, no React deps) ──────────
 
@@ -220,7 +223,6 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
     setOnboardingStep,
     setOnboardingMode: _setOnboardingMode,
     setOnboardingActiveGuide,
-    addDeferredOnboardingTask,
     setOnboardingDetectedProviders,
     setOnboardingServerTarget,
     setOnboardingCloudApiKey,
@@ -242,11 +244,11 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
     uiLanguage,
     selectedVrmIndex,
     walletConfig,
+    elizaCloudConnected,
     setActionNotice,
     retryStartup,
     forceLocalBootstrapRef,
     client,
-    elizaCloudConnected,
   } = deps;
 
   // Destructure state fields we need from the onboarding hook
@@ -323,11 +325,16 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
     if (!onboardingOptions) return;
 
     try {
-      // Cloud fast-track: submit minimal config for cloud-managed agents.
+      const onboardingRunMode =
+        onboardingMode === "elizacloudonly"
+          ? "cloud"
+          : onboardingMode === "basic" || onboardingMode === "advanced"
+            ? "local"
+            : "";
       const useCloudFastTrack = shouldUseCloudOnboardingFastTrack({
         cloudProvisionedContainer,
         elizaCloudConnected,
-        onboardingRunMode: onboardingMode === "elizacloudonly" ? "cloud" : onboardingMode === "basic" || onboardingMode === "advanced" ? "local" : "",
+        onboardingRunMode,
         onboardingProvider,
       });
 
@@ -643,7 +650,6 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
 
   const advanceOnboarding = useCallback(
     async (options?: OnboardingNextOptions) => {
-      // Cloud-provisioned containers skip connection steps entirely
       if (
         shouldSkipConnectionStepsForCloudProvisionedContainer({
           currentStep: onboardingStep,
@@ -654,14 +660,11 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
         return;
       }
 
-      if (onboardingStep === "providers") {
-        if (options?.allowPermissionBypass) {
-          if (options.skipTask) addDeferredOnboardingTask(options.skipTask);
-          // Don't finish yet — advance to the next step
-        }
+      if (onboardingStep === "providers" && options?.allowPermissionBypass) {
+        if (options.skipTask) addDeferredOnboardingTask(options.skipTask);
       }
 
-      let nextStep = resolveOnboardingNextStep(onboardingStep);
+      const nextStep = resolveOnboardingNextStep(onboardingStep);
 
       if (!nextStep) {
         // Last step (providers) — finish onboarding and go to chat
@@ -679,15 +682,13 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
       }
     },
     [
-      addDeferredOnboardingTask,
       handleOnboardingFinish,
-      onboardingDetectedProviders,
       onboardingMode,
-      onboardingServerTarget,
       onboardingStep,
       setOnboardingStep,
       setOnboardingActiveGuide,
       cloudProvisionedContainer,
+      addDeferredOnboardingTask,
     ],
   );
 
@@ -711,7 +712,6 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
   }, [
     onboardingMode,
     onboardingStep,
-    onboardingServerTarget,
     setOnboardingActiveGuide,
     setOnboardingStep,
   ]);
@@ -768,7 +768,6 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
     setOnboardingRemoteToken,
     setOnboardingServerTarget,
     client,
-    clearPersistedActiveServer,
   ]);
 
   // ── handleOnboardingRemoteConnect ────────────────────────────────
@@ -831,7 +830,6 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
     setOnboardingRemoteError,
     setOnboardingRemoteToken,
     setOnboardingServerTarget,
-    savePersistedActiveServer,
   ]);
 
   // ── handleCloudOnboardingFinish ──────────────────────────────────

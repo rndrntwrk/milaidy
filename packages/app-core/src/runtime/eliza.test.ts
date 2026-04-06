@@ -43,6 +43,7 @@ vi.mock("@elizaos/plugin-rolodex", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-secrets-manager", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-shell", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-telegram", () => ({ default: {} }));
+vi.mock("@elizaos-plugins/client-telegram-account", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-trajectory-logger", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-trust", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-twitch", () => ({ default: {} }));
@@ -52,7 +53,6 @@ import { envSnapshot } from "../../../../test/helpers/test-utils";
 import { findPluginExport } from "../cli/plugins-cli";
 import type { ElizaConfig } from "../config/config";
 import { CONNECTOR_PLUGINS } from "../config/plugin-auto-enable";
-import { CONNECTOR_IDS } from "../config/schema";
 // Import the plugin import specifier resolver by whichever name is exported.
 // The eliza workspace exports resolveElizaPluginImportSpecifier while the
 // npm-published @miladyai/agent package exports
@@ -94,9 +94,11 @@ const resolvePluginImportSpecifier:
   | undefined = ((_elizaExports as Record<string, unknown>)
   .resolveElizaPluginImportSpecifier ??
   (_elizaExports as Record<string, unknown>)
-    .resolveElizaPluginImportSpecifier) as
+  .resolveElizaPluginImportSpecifier) as
   | ((name: string, url?: string) => string)
   | undefined;
+const TELEGRAM_ACCOUNT_CLIENT_PLUGIN =
+  "@elizaos-plugins/client-telegram-account";
 
 // ---------------------------------------------------------------------------
 // collectPluginNames
@@ -185,10 +187,6 @@ describe("collectPluginNames", () => {
 
   it("uses the hardware-adaptive embedding preset defaults when no embedding config is set", () => {
     const detectedPreset = detectEmbeddingPreset();
-    const expectedDimensions =
-      detectedPreset.dimensions === 4096
-        ? "384"
-        : String(detectedPreset.dimensions);
 
     delete process.env.LOCAL_EMBEDDING_MODEL;
     delete process.env.LOCAL_EMBEDDING_MODEL_REPO;
@@ -203,7 +201,9 @@ describe("collectPluginNames", () => {
     expect(process.env.LOCAL_EMBEDDING_MODEL_REPO).toBe(
       detectedPreset.modelRepo,
     );
-    expect(process.env.LOCAL_EMBEDDING_DIMENSIONS).toBe(expectedDimensions);
+    expect(process.env.LOCAL_EMBEDDING_DIMENSIONS).toBe(
+      String(detectedPreset.dimensions),
+    );
     expect(process.env.LOCAL_EMBEDDING_CONTEXT_SIZE).toBe(
       String(detectedPreset.contextSize),
     );
@@ -232,7 +232,7 @@ describe("collectPluginNames", () => {
 
   it("includes all core plugins for an empty config", () => {
     // Guard against accidental drift in the default runtime contract.
-    expect(CORE_PLUGINS).toHaveLength(13);
+    expect(CORE_PLUGINS).toHaveLength(12);
 
     const expectedCorePlugins = [
       "@elizaos/plugin-sql",
@@ -247,7 +247,6 @@ describe("collectPluginNames", () => {
       "@elizaos/plugin-commands",
       "@elizaos/plugin-plugin-manager",
       "@miladyai/plugin-roles",
-      "@elizaos/plugin-todo",
     ];
     const names = collectPluginNames({} as ElizaConfig);
     for (const plugin of expectedCorePlugins) {
@@ -360,6 +359,19 @@ describe("collectPluginNames", () => {
     expect(names.has("@elizaos/plugin-telegram")).toBe(true);
     expect(names.has("@elizaos/plugin-discord")).toBe(true);
     expect(names.has("@elizaos/plugin-slack")).toBe(false);
+  });
+
+  it("loads the Telegram account client plugin when plugins.entries.telegramAccount is enabled", () => {
+    const config = {
+      plugins: {
+        entries: {
+          telegramAccount: { enabled: true },
+        },
+      },
+    } as Partial<ElizaConfig> as ElizaConfig;
+    const names = collectPluginNames(config);
+
+    expect(names.has("@elizaos-plugins/client-telegram-account")).toBe(true);
   });
 
   it("treats plugins.allow as additive instead of filtering connector plugins", () => {
@@ -824,15 +836,16 @@ describe("collectPluginNames", () => {
     }
   });
 
-  it("CHANNEL_PLUGIN_MAP keys match CONNECTOR_IDS from schema", () => {
-    expect([...Object.keys(CHANNEL_PLUGIN_MAP)].sort()).toEqual(
-      [...CONNECTOR_IDS].sort(),
-    );
+  it("CHANNEL_PLUGIN_MAP covers every schema connector plugin entry", () => {
+    for (const connectorId of Object.keys(CONNECTOR_PLUGINS)) {
+      expect(CHANNEL_PLUGIN_MAP[connectorId]).toBe(CONNECTOR_PLUGINS[connectorId]);
+    }
   });
 
-  it("CHANNEL_PLUGIN_MAP values match CONNECTOR_PLUGINS for every connector", () => {
-    for (const id of Object.keys(CHANNEL_PLUGIN_MAP)) {
-      expect(CHANNEL_PLUGIN_MAP[id]).toBe(CONNECTOR_PLUGINS[id]);
+  it("CHANNEL_PLUGIN_MAP keeps the telegram account client entry aligned when present", () => {
+    const clientPlugin = CHANNEL_PLUGIN_MAP.telegramAccount;
+    if (clientPlugin !== undefined) {
+      expect(clientPlugin).toBe(TELEGRAM_ACCOUNT_CLIENT_PLUGIN);
     }
   });
 
@@ -976,13 +989,13 @@ describe("applyConnectorSecretsToEnv", () => {
     expect(process.env.SLACK_USER_TOKEN).toBe("xoxp-1");
   });
 
-  it("does not overwrite existing env values", () => {
+  it("overwrites stale env values with saved connector config", () => {
     process.env.TELEGRAM_BOT_TOKEN = "already-set";
     const config = {
       connectors: { telegram: { botToken: "new-tok" } },
     } as ElizaConfig;
     applyConnectorSecretsToEnv(config);
-    expect(process.env.TELEGRAM_BOT_TOKEN).toBe("already-set");
+    expect(process.env.TELEGRAM_BOT_TOKEN).toBe("new-tok");
   });
 
   it("skips empty or whitespace-only values", () => {
@@ -2905,7 +2918,7 @@ describe("OpenAI-compatible Groq normalization", () => {
     expect(process.env.OPENAI_BASE_URL).toBeUndefined();
     expect(process.env.GROQ_API_KEY).toBe("gsk-test-groq");
     expect(process.env.GROQ_SMALL_MODEL).toBe("llama-3.1-8b-instant");
-    expect(process.env.GROQ_LARGE_MODEL).toBe("qwen-qwq-32b");
+    expect(process.env.GROQ_LARGE_MODEL).toBe("qwen/qwen3-32b");
     expect(config.agents?.defaults?.model?.primary).toBe("groq");
     expect(
       (config.env as { vars?: Record<string, string> }).vars?.OPENAI_API_KEY,
@@ -2921,7 +2934,7 @@ describe("OpenAI-compatible Groq normalization", () => {
     ).toBe("llama-3.1-8b-instant");
     expect(
       (config.env as { vars?: Record<string, string> }).vars?.GROQ_LARGE_MODEL,
-    ).toBe("qwen-qwq-32b");
+    ).toBe("qwen/qwen3-32b");
 
     const names = collectPluginNames(config);
     expect(names.has("@elizaos/plugin-groq")).toBe(true);

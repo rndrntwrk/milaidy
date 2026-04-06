@@ -1,6 +1,6 @@
 /**
  * Hook that subscribes to WebSocket activity events and maintains a ring buffer
- * of recent entries for the Tasks & Events panel.
+ * of recent entries for the chat widget rail.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";

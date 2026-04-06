@@ -27,8 +27,6 @@ vi.mock("../../config/config", () => ({
   }),
 }));
 
-import { persistCompatOnboardingDefaults } from "../server-onboarding-compat";
-
 vi.mock("@elizaos/plugin-agent-orchestrator", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-agent-skills", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-anthropic", () => ({ default: {} }));
@@ -57,12 +55,14 @@ vi.mock("@elizaos/plugin-rolodex", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-secrets-manager", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-shell", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-telegram", () => ({ default: {} }));
+vi.mock("@elizaos-plugins/client-telegram-account", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-trajectory-logger", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-trust", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-twitch", () => ({ default: {} }));
 vi.mock("@miladyai/plugin-wechat", () => ({ default: {} }));
 
 import type { ElizaConfig } from "../../config/config";
+import { persistCompatOnboardingDefaults } from "../server-onboarding-compat";
 import { buildCharacterFromConfig } from "../../runtime/eliza";
 
 describe("Onboarding → Character round-trip", () => {

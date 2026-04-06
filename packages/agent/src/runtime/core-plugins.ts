@@ -5,9 +5,12 @@
  * `api/server.ts` and `runtime/eliza.ts`.
  */
 
-/** Plugins that require native PTY binaries — excluded from cloud images. */
+/**
+ * Plugins that depend on PTY/native workspace tooling.
+ * Keep them out of cloud images where those binaries are intentionally absent.
+ */
 export const DESKTOP_ONLY_PLUGINS: readonly string[] = [
-  "@elizaos/plugin-agent-orchestrator", // PTY, SwarmCoordinator, workspace provisioning
+  "@elizaos/plugin-agent-orchestrator",
 ];
 
 /** Core plugins that should always be loaded. collectPluginNames() seeds from this list only. */
@@ -17,7 +20,8 @@ export const CORE_PLUGINS: readonly string[] = [
   "@elizaos/plugin-form", // form handling for guided user journeys
   "@elizaos/plugin-knowledge", // RAG knowledge management — required for knowledge tab
   "@elizaos/plugin-trajectory-logger", // trajectory logging for debugging and RL training
-  // plugin-agent-orchestrator moved to DESKTOP_ONLY_PLUGINS (needs pty-manager, not in cloud image)
+  // plugin-agent-orchestrator stays desktop-only to avoid cloud image crashes
+  // when PTY/workspace-native dependencies are stripped from the container.
   "@elizaos/plugin-cron", // scheduled jobs and automation
   "@elizaos/plugin-shell", // shell command execution
   "@elizaos/plugin-agent-skills", // skill execution and marketplace runtime
@@ -27,7 +31,6 @@ export const CORE_PLUGINS: readonly string[] = [
   // "@elizaos/plugin-rolodex", // contact graph and relationship/social memory
   // "@elizaos/plugin-trust", // trust scoring and policy signals
   "@miladyai/plugin-roles", // role-based access control (OWNER/ADMIN/NONE)
-  "@elizaos/plugin-todo", // todo/task management
   // "@elizaos/plugin-personality", // personality coherence
   // "@elizaos/plugin-experience", // learning from interactions
 ];
@@ -37,7 +40,7 @@ export const CORE_PLUGINS: readonly string[] = [
  * Not loaded by default — require explicit configuration or have platform dependencies.
  */
 export const OPTIONAL_CORE_PLUGINS: readonly string[] = [
-  "@miladyai/plugin-selfcontrol", // macOS SelfControl website blocking
+  "@miladyai/plugin-selfcontrol", // cross-platform website blocker (hosts-file engine)
   "@elizaos/plugin-pdf", // PDF processing (published bundle broken in alpha.15)
   "@elizaos/plugin-cua", // CUA computer-use agent (cloud sandbox automation)
   "@elizaos/plugin-obsidian", // Obsidian vault CLI integration
@@ -50,6 +53,7 @@ export const OPTIONAL_CORE_PLUGINS: readonly string[] = [
   "@elizaos/plugin-cli", // CLI interface
   "@elizaos/plugin-discord", // Discord bot integration
   "@elizaos/plugin-telegram", // Telegram bot integration
+  "@elizaos-plugins/client-telegram-account", // Telegram user-account client integration
   "@elizaos/plugin-twitch", // Twitch integration
   "@elizaos/plugin-edge-tts", // text-to-speech (Microsoft Edge TTS)
   "@elizaos/plugin-elevenlabs", // ElevenLabs text-to-speech

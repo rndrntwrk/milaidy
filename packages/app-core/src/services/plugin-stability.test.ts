@@ -90,6 +90,8 @@ const OPTIONAL_PLUGIN_LOAD_MARKERS = [
   "Failed to resolve entry",
   "eventemitter3",
 ];
+const VALID_CONNECTOR_PLUGIN_PATTERN =
+  /^@(elizaos|elizaai|miladyai)\/plugin-|^@elizaos-plugins\/client-/;
 
 // ---------------------------------------------------------------------------
 // Env save/restore
@@ -155,7 +157,7 @@ describe("Plugin Enumeration", () => {
     expect(Object.keys(CONNECTOR_PLUGINS).length).toBeGreaterThanOrEqual(17);
     for (const [connector, pluginName] of Object.entries(CONNECTOR_PLUGINS)) {
       expect(typeof connector).toBe("string");
-      expect(pluginName).toMatch(/^@(elizaos|elizaai|miladyai)\/plugin-/);
+      expect(pluginName).toMatch(VALID_CONNECTOR_PLUGIN_PATTERN);
     }
   });
 
@@ -184,6 +186,7 @@ describe("Plugin Enumeration", () => {
     for (const name of ALL_KNOWN_PLUGINS) {
       expect(
         name.startsWith("@elizaos/plugin-") ||
+          name.startsWith("@elizaos-plugins/client-") ||
           name.startsWith("@elizaai/plugin-") ||
           name.startsWith("@miladyai/plugin-"),
       ).toBe(true);
@@ -736,7 +739,7 @@ describe("Environment Propagation", () => {
     expect(process.env.DISCORD_BOT_TOKEN).toBe("test-discord-token-123");
   });
 
-  it("applyConnectorSecretsToEnv does not overwrite existing env vars", () => {
+  it("applyConnectorSecretsToEnv overwrites stale env vars from config", () => {
     process.env.DISCORD_BOT_TOKEN = "existing-token";
     const config: ElizaConfig = {
       connectors: {
@@ -744,7 +747,7 @@ describe("Environment Propagation", () => {
       },
     };
     applyConnectorSecretsToEnv(config);
-    expect(process.env.DISCORD_BOT_TOKEN).toBe("existing-token");
+    expect(process.env.DISCORD_BOT_TOKEN).toBe("new-token");
   });
 
   it("applyCloudConfigToEnv sets cloud env vars", () => {

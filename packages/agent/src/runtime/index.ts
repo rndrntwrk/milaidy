@@ -1,5 +1,6 @@
 export * from "./eliza";
 export * from "./eliza-plugin";
+export * from "./plugin-lifecycle";
 export * from "./plugin-collector";
 export { resolvePlugins } from "./plugin-resolver";
 export * from "./embedding-presets";

@@ -37,7 +37,7 @@ export const CORE_PLUGINS: readonly string[] = [
 ];
 ```
 
-> **Note:** `@elizaos/plugin-secrets-manager`, `@elizaos/plugin-rolodex`, `@elizaos/plugin-trust`, `@elizaos/plugin-todo`, `@elizaos/plugin-personality`, and `@elizaos/plugin-experience` are statically imported for fast resolution but commented out of the core list. They may be re-enabled in a future release.
+> **Note:** `@elizaos/plugin-secrets-manager`, `@elizaos/plugin-rolodex`, `@elizaos/plugin-trust`, `@elizaos/plugin-personality`, and `@elizaos/plugin-experience` are statically imported for fast resolution but commented out of the core list. They may be re-enabled in a future release. `@elizaos/plugin-todo` and `@elizaos/plugin-goals` have been removed; their functionality is now handled by the LifeOps system via runtime tasks.
 
 ### Optional Core Plugins
 
@@ -168,7 +168,6 @@ const CONNECTOR_PLUGINS = {
   twitter:     "@elizaos/plugin-twitter",
   whatsapp:    "@elizaos/plugin-whatsapp",
   signal:      "@elizaos/plugin-signal",
-  bluebubbles: "@elizaos/plugin-bluebubbles",
   imessage:    "@elizaos/plugin-imessage",
   farcaster:   "@elizaos/plugin-farcaster",
   lens:        "@elizaos/plugin-lens",

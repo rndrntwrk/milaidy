@@ -109,6 +109,115 @@ export function readBoolean(value: unknown): boolean | undefined {
   return typeof value === "boolean" ? value : undefined;
 }
 
+export interface ManagedDiscordCallbackState {
+  status: "connected" | "error";
+  agentId: string | null;
+  guildId: string | null;
+  guildName: string | null;
+  managed: boolean;
+  message: string | null;
+  restarted: boolean;
+}
+
+const MANAGED_DISCORD_CALLBACK_QUERY_KEYS = [
+  "discord",
+  "managed",
+  "agentId",
+  "guildId",
+  "guildName",
+  "restarted",
+  "message",
+] as const;
+
+export function consumeManagedDiscordCallbackUrl(rawUrl: string): {
+  callback: ManagedDiscordCallbackState | null;
+  cleanedUrl: string | null;
+} {
+  let url: URL;
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    return { callback: null, cleanedUrl: null };
+  }
+
+  const status = url.searchParams.get("discord");
+  const managed = url.searchParams.get("managed") === "1";
+  if ((status !== "connected" && status !== "error") || !managed) {
+    return { callback: null, cleanedUrl: null };
+  }
+
+  const callback: ManagedDiscordCallbackState = {
+    status,
+    managed,
+    agentId: readString(url.searchParams.get("agentId")) ?? null,
+    guildId: readString(url.searchParams.get("guildId")) ?? null,
+    guildName: readString(url.searchParams.get("guildName")) ?? null,
+    message: readString(url.searchParams.get("message")) ?? null,
+    restarted: url.searchParams.get("restarted") === "1",
+  };
+
+  for (const key of MANAGED_DISCORD_CALLBACK_QUERY_KEYS) {
+    url.searchParams.delete(key);
+  }
+
+  return {
+    callback,
+    cleanedUrl: url.toString(),
+  };
+}
+
+export interface ManagedGithubCallbackState {
+  status: "connected" | "error";
+  connectionId: string | null;
+  agentId: string | null;
+  message: string | null;
+}
+
+const MANAGED_GITHUB_CALLBACK_QUERY_KEYS = [
+  "github_connected",
+  "connection_id",
+  "platform",
+  "managed_github_agent",
+  "github_error",
+] as const;
+
+export function consumeManagedGithubCallbackUrl(rawUrl: string): {
+  callback: ManagedGithubCallbackState | null;
+  cleanedUrl: string | null;
+} {
+  let url: URL;
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    return { callback: null, cleanedUrl: null };
+  }
+
+  const connected = url.searchParams.get("github_connected") === "true";
+  const error = url.searchParams.get("github_error");
+  const agentId =
+    readString(url.searchParams.get("managed_github_agent")) ?? null;
+
+  if (!connected && !error) {
+    return { callback: null, cleanedUrl: null };
+  }
+
+  const callback: ManagedGithubCallbackState = {
+    status: connected ? "connected" : "error",
+    connectionId: readString(url.searchParams.get("connection_id")) ?? null,
+    agentId,
+    message: error ? decodeURIComponent(error) : null,
+  };
+
+  for (const key of MANAGED_GITHUB_CALLBACK_QUERY_KEYS) {
+    url.searchParams.delete(key);
+  }
+
+  return {
+    callback,
+    cleanedUrl: url.toString(),
+  };
+}
+
 export function normalizeBillingSummary(
   raw: CloudBillingSummary,
 ): CloudBillingSummary {

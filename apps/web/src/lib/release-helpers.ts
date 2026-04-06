@@ -50,3 +50,41 @@ export function pickRelease(releases: GithubRelease[]): GithubRelease | null {
     null
   );
 }
+
+/**
+ * Pick the most recent stable (non-prerelease) release with assets.
+ */
+export function pickStableRelease(
+  releases: GithubRelease[],
+): GithubRelease | null {
+  const stable = releases.filter((r) => !r.draft && !r.prerelease);
+  stable.sort((a, b) => {
+    const aTime = Date.parse(a.published_at ?? a.created_at ?? "0");
+    const bTime = Date.parse(b.published_at ?? b.created_at ?? "0");
+    return bTime - aTime;
+  });
+  return (
+    stable.find((r) => Array.isArray(r.assets) && r.assets.length > 0) ??
+    stable[0] ??
+    null
+  );
+}
+
+/**
+ * Pick the most recent canary (prerelease) release with assets.
+ */
+export function pickCanaryRelease(
+  releases: GithubRelease[],
+): GithubRelease | null {
+  const canary = releases.filter((r) => !r.draft && r.prerelease);
+  canary.sort((a, b) => {
+    const aTime = Date.parse(a.published_at ?? a.created_at ?? "0");
+    const bTime = Date.parse(b.published_at ?? b.created_at ?? "0");
+    return bTime - aTime;
+  });
+  return (
+    canary.find((r) => Array.isArray(r.assets) && r.assets.length > 0) ??
+    canary[0] ??
+    null
+  );
+}

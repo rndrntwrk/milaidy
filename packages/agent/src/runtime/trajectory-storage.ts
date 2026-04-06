@@ -31,6 +31,7 @@ import {
   type TrajectoryLoggerLike,
   asRecord,
   createBaseTrajectory,
+  enrichTrajectoryLlmCall,
   ensureStep,
   ensureTrajectoriesTable,
   enqueueStepWrite,
@@ -98,7 +99,7 @@ async function appendLlmCall(
   const insights = extractInsightsFromResponse(fullResponse, purpose);
 
   const step = ensureStep(trajectory, stepId, now);
-  const call: PersistedLlmCall = {
+  const call = enrichTrajectoryLlmCall({
     callId: toText(params.callId, `${stepId}-call-${step.llmCalls.length + 1}`),
     timestamp: now,
     model: toText(params.model, "unknown"),
@@ -112,7 +113,7 @@ async function appendLlmCall(
       ? "orchestrator.useModel"
       : toText(params.actionType, "runtime.useModel"),
     latencyMs: toNumber(params.latencyMs, 0),
-  };
+  }) as PersistedLlmCall;
 
   const promptTokens = toOptionalNumber(params.promptTokens);
   const completionTokens = toOptionalNumber(params.completionTokens);
@@ -581,7 +582,7 @@ export async function installDatabaseTrajectoryLogger(
       steps: persisted.steps.map((step) => ({
         stepId: step.stepId,
         timestamp: step.timestamp,
-        llmCalls: step.llmCalls,
+        llmCalls: step.llmCalls.map((call) => enrichTrajectoryLlmCall(call)),
         providerAccesses: step.providerAccesses,
       })),
       metrics: { finalStatus: persisted.status },
@@ -1177,7 +1178,7 @@ export class DatabaseTrajectoryLogger extends Service {
       steps: persisted.steps.map((step) => ({
         stepId: step.stepId,
         timestamp: step.timestamp,
-        llmCalls: step.llmCalls,
+        llmCalls: step.llmCalls.map((call) => enrichTrajectoryLlmCall(call)),
         providerAccesses: step.providerAccesses,
       })),
       metrics: { finalStatus: persisted.status },

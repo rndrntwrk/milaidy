@@ -59,6 +59,7 @@ export async function fetchFromNetwork(params: {
               capabilities: string[];
               minPlayers: number | null;
               maxPlayers: number | null;
+              runtimePlugin?: string;
               uiExtension?: {
                 detailPanelId: string;
               };
@@ -67,6 +68,12 @@ export async function fetchFromNetwork(params: {
                 embedParams?: Record<string, string>;
                 postMessageAuth?: boolean;
                 sandbox?: string;
+              };
+              session?: {
+                mode: "viewer" | "spectate-and-steer" | "external";
+                features?: Array<
+                  "commands" | "telemetry" | "pause" | "resume" | "suggestions"
+                >;
               };
             };
           }
@@ -110,6 +117,7 @@ export async function fetchFromNetwork(params: {
             capabilities: e.app.capabilities || [],
             minPlayers: e.app.minPlayers ?? null,
             maxPlayers: e.app.maxPlayers ?? null,
+            runtimePlugin: e.app.runtimePlugin,
             uiExtension: e.app.uiExtension,
             viewer: e.app.viewer
               ? {
@@ -117,6 +125,7 @@ export async function fetchFromNetwork(params: {
                   sandbox: sanitizeSandbox(e.app.viewer.sandbox),
                 }
               : undefined,
+            session: e.app.session,
           };
         }
 

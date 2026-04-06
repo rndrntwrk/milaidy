@@ -14,43 +14,51 @@ export interface EmbeddingPreset {
   downloadSizeMB: number;
 }
 
+const COMPACT_BGE_EMBEDDING = {
+  model: "bge-small-en-v1.5.Q4_K_M.gguf",
+  modelRepo: "ChristianAzinn/bge-small-en-v1.5-gguf",
+  dimensions: 384,
+  contextSize: 512,
+  downloadSizeMB: 133,
+} as const;
+
 /** All available presets, indexed by tier. */
 export const EMBEDDING_PRESETS: Record<EmbeddingTier, EmbeddingPreset> = {
   fallback: {
     tier: "fallback",
     label: "Efficient (CPU)",
     description:
-      "768-dim, 74MB download — best for Intel Macs and low-RAM machines",
-    model: "nomic-embed-text-v1.5.Q4_K_S.gguf",
-    modelRepo: "nomic-ai/nomic-embed-text-v1.5-GGUF",
-    dimensions: 768,
+      "384-dim, 133MB download — compact BGE default for Intel Macs and low-RAM machines",
+    model: COMPACT_BGE_EMBEDDING.model,
+    modelRepo: COMPACT_BGE_EMBEDDING.modelRepo,
+    dimensions: COMPACT_BGE_EMBEDDING.dimensions,
     gpuLayers: 0,
-    contextSize: 8192,
-    downloadSizeMB: 74,
+    contextSize: COMPACT_BGE_EMBEDDING.contextSize,
+    downloadSizeMB: COMPACT_BGE_EMBEDDING.downloadSizeMB,
   },
   standard: {
     tier: "standard",
-    label: "Balanced (Metal GPU)",
+    label: "Efficient (Metal GPU)",
     description:
-      "768-dim, 95MB download — great quality with Metal acceleration",
-    model: "nomic-embed-text-v1.5.Q5_K_M.gguf",
-    modelRepo: "nomic-ai/nomic-embed-text-v1.5-GGUF",
-    dimensions: 768,
+      "384-dim, 133MB download — compact BGE default with Metal acceleration",
+    model: COMPACT_BGE_EMBEDDING.model,
+    modelRepo: COMPACT_BGE_EMBEDDING.modelRepo,
+    dimensions: COMPACT_BGE_EMBEDDING.dimensions,
     gpuLayers: "auto",
-    contextSize: 8192,
-    downloadSizeMB: 95,
+    contextSize: COMPACT_BGE_EMBEDDING.contextSize,
+    downloadSizeMB: COMPACT_BGE_EMBEDDING.downloadSizeMB,
   },
   performance: {
     tier: "performance",
-    label: "Maximum (7B model)",
+    label: "Efficient (High-memory GPU)",
     description:
-      "4096-dim, 4.2GB download — SOTA retrieval quality, 32K context",
-    model: "ggml-e5-mistral-7b-instruct-q4_k_m.gguf",
-    modelRepo: "dranger003/e5-mistral-7b-instruct-GGUF",
-    dimensions: 4096,
+      "384-dim, 133MB download — keep local embeddings compact, SQL-safe, and fast even on high-memory Macs",
+    model: COMPACT_BGE_EMBEDDING.model,
+    modelRepo: COMPACT_BGE_EMBEDDING.modelRepo,
+    dimensions: COMPACT_BGE_EMBEDDING.dimensions,
     gpuLayers: "auto",
-    contextSize: 32768,
-    downloadSizeMB: 4200,
+    contextSize: COMPACT_BGE_EMBEDDING.contextSize,
+    downloadSizeMB: COMPACT_BGE_EMBEDDING.downloadSizeMB,
   },
 };
 

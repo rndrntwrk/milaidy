@@ -25,6 +25,7 @@ import {
   checkConfigFile,
   checkDatabase,
   checkDiskSpace,
+  checkElizaWorkspace,
   checkModelKey,
   checkNodeModules,
   checkPort,
@@ -93,6 +94,33 @@ describe("checkBuildArtifacts", () => {
     mockExistsSync.mockReturnValue(true);
     const result = checkBuildArtifacts("/fake/project");
     expect(result.status).toBe("pass");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// checkElizaWorkspace
+// ---------------------------------------------------------------------------
+
+describe("checkElizaWorkspace", () => {
+  it("warns when no repo-local upstreams are present", () => {
+    mockExistsSync.mockReturnValue(false);
+    const result = checkElizaWorkspace("/fake/project");
+    expect(result.status).toBe("warn");
+    expect(result.label).toBe("Local upstreams");
+    expect(result.fix).toBe("bun run setup:upstreams");
+  });
+
+  it("passes when repo-local upstreams are present but not linked", () => {
+    mockExistsSync.mockImplementation(
+      (candidate) =>
+        candidate === "/fake/project/eliza/package.json" ||
+        candidate === "/fake/project/plugins",
+    );
+
+    const result = checkElizaWorkspace("/fake/project");
+    expect(result.status).toBe("pass");
+    expect(result.detail).toContain("./eliza");
+    expect(result.detail).toContain("./plugins");
   });
 });
 

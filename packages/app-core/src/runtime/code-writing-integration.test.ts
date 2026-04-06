@@ -47,6 +47,12 @@ describe("Code writing plugin classification", () => {
     expect(OPTIONAL_CORE_PLUGINS).toContain("@elizaos/plugin-code");
   });
 
+  it("@elizaos-plugins/client-telegram-account IS in OPTIONAL_CORE_PLUGINS", () => {
+    expect(OPTIONAL_CORE_PLUGINS).toContain(
+      "@elizaos-plugins/client-telegram-account",
+    );
+  });
+
   it("@elizaos/plugin-code is not loaded with empty config (optional)", () => {
     const names = collectPluginNames({} as ElizaConfig);
     expect(names.has("@elizaos/plugin-code")).toBe(false);

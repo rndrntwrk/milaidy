@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
@@ -9,6 +10,7 @@ import {
   getAppCoreSourceRoot,
   getAutonomousSourceRoot,
   getElizaCoreEntry,
+  getInstalledPackageEntry,
   resolveModuleEntry,
 } from "./test/eliza-package-paths";
 
@@ -16,6 +18,38 @@ const repoRoot = path.dirname(fileURLToPath(import.meta.url));
 const elizaCoreEntry = getElizaCoreEntry(repoRoot);
 const autonomousSourceRoot = getAutonomousSourceRoot(repoRoot);
 const appCoreSourceRoot = getAppCoreSourceRoot(repoRoot);
+const packageManifest = JSON.parse(
+  fs.readFileSync(path.join(repoRoot, "package.json"), "utf8"),
+) as {
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+};
+const workspacePluginPackageNames = Object.keys({
+  ...(packageManifest.dependencies ?? {}),
+  ...(packageManifest.devDependencies ?? {}),
+})
+  .filter((packageName) => packageName.startsWith("@elizaos/plugin-"))
+  .sort();
+const elizaPluginAliases = workspacePluginPackageNames.flatMap((packageName) => {
+  const aliases: Array<{ find: string; replacement: string }> = [];
+  const nodeEntry = getInstalledPackageEntry(packageName, repoRoot, "node");
+  if (nodeEntry) {
+    aliases.push({
+      find: `${packageName}/node`,
+      replacement: nodeEntry,
+    });
+  }
+
+  const defaultEntry = getInstalledPackageEntry(packageName, repoRoot);
+  if (defaultEntry) {
+    aliases.push({
+      find: packageName,
+      replacement: defaultEntry,
+    });
+  }
+
+  return aliases;
+});
 const isCI = process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
 const isWindows = process.platform === "win32";
 const localWorkers = 2;
@@ -52,6 +86,7 @@ export default defineConfig({
               find: "@elizaos/core",
               replacement: elizaCoreEntry,
             },
+            ...elizaPluginAliases,
           ]
         : []),
       ...(autonomousSourceRoot

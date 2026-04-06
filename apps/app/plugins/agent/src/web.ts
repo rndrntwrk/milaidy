@@ -19,6 +19,86 @@ interface MiladyWindow extends Window {
  * app shell HTML, so we bail early.
  */
 export class AgentWeb extends WebPlugin implements AgentPlugin {
+  private legacyConversationStorageKey(): string {
+    const base =
+      this.apiBase() ||
+      (typeof window !== "undefined" ? window.location.origin : "same-origin");
+    return `milady_agent_web_conversation:${encodeURIComponent(base)}`;
+  }
+
+  private readLegacyConversationId(): string | null {
+    if (typeof window === "undefined") return null;
+    const stored = window.sessionStorage.getItem(
+      this.legacyConversationStorageKey(),
+    );
+    return stored?.trim() ? stored.trim() : null;
+  }
+
+  private writeLegacyConversationId(conversationId: string | null): void {
+    if (typeof window === "undefined") return;
+    const key = this.legacyConversationStorageKey();
+    if (conversationId?.trim()) {
+      window.sessionStorage.setItem(key, conversationId.trim());
+      return;
+    }
+    window.sessionStorage.removeItem(key);
+  }
+
+  private async ensureLegacyConversationId(): Promise<string> {
+    const cached = this.readLegacyConversationId();
+    if (cached) return cached;
+
+    const res = await fetch(`${this.apiBase()}/api/conversations`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...this.authHeaders(),
+      },
+      body: JSON.stringify({ title: "Quick Chat" }),
+    });
+    if (!res.ok) {
+      throw new Error(`Failed to create conversation: ${res.status}`);
+    }
+    const data = (await res.json()) as {
+      conversation?: { id?: string };
+    };
+    const conversationId = data.conversation?.id?.trim();
+    if (!conversationId) {
+      throw new Error("Conversation create response missing id");
+    }
+    this.writeLegacyConversationId(conversationId);
+    return conversationId;
+  }
+
+  private async chatViaConversation(
+    text: string,
+    retryOnMissingConversation = true,
+  ): Promise<ChatResult> {
+    const conversationId = await this.ensureLegacyConversationId();
+    const res = await fetch(
+      `${this.apiBase()}/api/conversations/${encodeURIComponent(conversationId)}/messages`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...this.authHeaders(),
+        },
+        body: JSON.stringify({ text, channelType: "DM" }),
+      },
+    );
+
+    if (res.status === 404 && retryOnMissingConversation) {
+      this.writeLegacyConversationId(null);
+      return this.chatViaConversation(text, false);
+    }
+
+    if (!res.ok) {
+      throw new Error(`Chat request failed: ${res.status}`);
+    }
+
+    return res.json();
+  }
+
   private apiBase(): string {
     const global =
       typeof window !== "undefined"
@@ -107,11 +187,6 @@ export class AgentWeb extends WebPlugin implements AgentPlugin {
     if (!this.canReachApi()) {
       return { text: "Agent API not available", agentName: "System" };
     }
-    const res = await fetch(`${this.apiBase()}/api/chat`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...this.authHeaders() },
-      body: JSON.stringify({ text: options.text }),
-    });
-    return res.json();
+    return this.chatViaConversation(options.text);
   }
 }

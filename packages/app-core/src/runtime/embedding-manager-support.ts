@@ -247,35 +247,13 @@ export interface WarmupReuseEmbeddingCandidate {
 }
 
 function warmupReuseEmbeddingCandidates(): WarmupReuseEmbeddingCandidate[] {
-  const { fallback, standard, performance } = EMBEDDING_PRESETS;
   return [
     {
-      model: fallback.model,
-      modelRepo: fallback.modelRepo,
-      dimensions: fallback.dimensions,
-      contextSize: fallback.contextSize,
-      gpuLayers: String(fallback.gpuLayers),
-    },
-    {
-      model: standard.model,
-      modelRepo: standard.modelRepo,
-      dimensions: standard.dimensions,
-      contextSize: standard.contextSize,
-      gpuLayers: String(standard.gpuLayers),
-    },
-    {
-      model: "bge-small-en-v1.5.Q4_K_M.gguf",
-      modelRepo: "CompendiumLabs/bge-small-en-v1.5-GGUF",
-      dimensions: 384,
-      contextSize: 512,
-      gpuLayers: "0",
-    },
-    {
-      model: performance.model,
-      modelRepo: performance.modelRepo,
-      dimensions: performance.dimensions,
-      contextSize: performance.contextSize,
-      gpuLayers: String(performance.gpuLayers),
+      model: EMBEDDING_PRESETS.performance.model,
+      modelRepo: EMBEDDING_PRESETS.performance.modelRepo,
+      dimensions: EMBEDDING_PRESETS.performance.dimensions,
+      contextSize: EMBEDDING_PRESETS.performance.contextSize,
+      gpuLayers: String(EMBEDDING_PRESETS.performance.gpuLayers),
     },
   ];
 }
@@ -294,10 +272,10 @@ export function embeddingGgufFilePresent(
 }
 
 /**
- * When the configured embedding file is missing, pick the first **known**
- * embedding GGUF already on disk (smaller presets first, then Milady’s legacy
- * bge-small default, then the 7B E5) so we do not re-download multi‑GB models
- * after reset or when `eliza.json` points at a different tier than `MODELS_DIR`.
+ * When the configured embedding file is missing, reuse only the compact,
+ * SQL-safe embedding GGUF already on disk. Milady intentionally avoids
+ * reviving legacy larger defaults from MODELS_DIR because they would reintroduce
+ * dimension mismatches and unnecessary RAM/download cost.
  */
 export function findExistingEmbeddingModelForWarmupReuse(
   modelsDir: string,

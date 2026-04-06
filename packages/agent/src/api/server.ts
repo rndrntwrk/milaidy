@@ -75,6 +75,7 @@ import {
   ONBOARDING_PROVIDER_CATALOG,
 } from "../contracts/onboarding.js";
 import { createIntegrationTelemetrySpan } from "../diagnostics/integration-observability.js";
+import { registerClientChatSendHandler } from "../services/client-chat-sender.js";
 import { EMOTE_BY_ID, EMOTE_CATALOG } from "../emotes/catalog.js";
 import { resolveDefaultAgentWorkspaceDir } from "../providers/workspace.js";
 import {
@@ -86,6 +87,7 @@ import {
   CORE_PLUGINS,
   OPTIONAL_CORE_PLUGINS,
 } from "../runtime/core-plugins.js";
+import * as agentOrchestratorCompat from "../runtime/agent-orchestrator-compat.js";
 import {
   buildTestHandler,
   registerCustomActionLive,
@@ -113,6 +115,7 @@ import {
   importAgent,
 } from "../services/agent-export.js";
 import { AppManager } from "../services/app-manager.js";
+import { createConfigPluginManager } from "../services/config-plugin-manager.js";
 import {
   getMcpServerDetails,
   searchMcpMarketplace,
@@ -183,9 +186,11 @@ import { handlePermissionsExtraRoutes } from "./permissions-routes-extra.js";
 import { handleProviderSwitchRoutes } from "./provider-switch-routes.js";
 import { handleTtsRoutes } from "./tts-routes.js";
 import { handleUpdateRoutes } from "./update-routes.js";
+import { handleWebsiteBlockerRoutes } from "./website-blocker-routes.js";
 import { handleWorkbenchRoutes } from "./workbench-routes.js";
 import { detectRuntimeModel, resolveProviderFromModel } from "./agent-model.js";
 import { handleAgentTransferRoutes } from "./agent-transfer-routes.js";
+import { handleAppPackageRoutes } from "./app-package-routes.js";
 import { handleAppsRoutes } from "./apps-routes.js";
 import { handleAuthRoutes } from "./auth-routes.js";
 import {
@@ -198,6 +203,7 @@ import {
   resolvePrimaryBscRpcUrl,
 } from "./bsc-trade.js";
 import { handleBugReportRoutes } from "./bug-report-routes.js";
+import { handleBrowserWorkspaceRoutes } from "./browser-workspace-routes.js";
 import { handleCharacterRoutes } from "./character-routes.js";
 import { handleCloudBillingRoute } from "./cloud-billing-routes.js";
 import { handleCloudCompatRoute } from "./cloud-compat-routes.js";
@@ -271,7 +277,7 @@ import { resolveStreamingUpdate } from "./streaming-text.js";
 import { handleSubscriptionRoutes } from "./subscription-routes.js";
 import { resolveTerminalRunLimits } from "./terminal-run-limits.js";
 import { hasPersistedOnboardingState } from "./server-helpers.js";
-// isFatalTodoDbError, TodoDbCircuitBreaker moved to workbench-helpers.ts
+// Workbench task/todo helpers moved to workbench-helpers.ts
 import { handleTrainingRoutes } from "./training-routes.js";
 import type { TrainingServiceWithRuntime } from "./training-service-like.js";
 import { handleTrajectoryRoute } from "./trajectory-routes.js";
@@ -314,6 +320,8 @@ import {
   applyWhatsAppQrOverride,
   handleWhatsAppRoute,
 } from "./whatsapp-routes.js";
+import { handleIMessageRoute } from "./imessage-routes.js";
+import { handleInboxRoute } from "./inbox-routes.js";
 import {
   generateChatResponse as generateChatResponseFromChatRoutes,
   initSse as initSseFromChatRoutes,
@@ -372,12 +380,10 @@ export {
   AGENT_EVENT_ALLOWED_STREAMS,
 } from "./plugin-discovery-helpers.js";
 
-// @ts-expect-error plugin package does not ship declarations
 type PiAiPluginModule = typeof import("@elizaos/plugin-pi-ai");
 let _piAiPluginModule: PiAiPluginModule | null = null;
 async function loadPiAiPluginModule(): Promise<PiAiPluginModule> {
   if (!_piAiPluginModule) {
-    // @ts-expect-error plugin package does not ship declarations
     _piAiPluginModule = await import("@elizaos/plugin-pi-ai");
   }
   return _piAiPluginModule;
@@ -399,6 +405,7 @@ type OrchestratorFallbackRouteHandler = (
   req: http.IncomingMessage,
   res: http.ServerResponse,
   pathname: string,
+  method?: string,
 ) => Promise<boolean>;
 
 interface OrchestratorPluginFallbackModule {
@@ -421,6 +428,14 @@ function requirePluginManager(runtime: AgentRuntime | null): PluginManagerLike {
     throw new Error("Plugin manager service not found");
   }
   return service;
+}
+
+function getPluginManagerForState(state: ServerState): PluginManagerLike {
+  const service = state.runtime?.getService("plugin_manager");
+  if (isPluginManagerLike(service)) {
+    return service;
+  }
+  return createConfigPluginManager(() => state.config);
 }
 
 function requireCoreManager(runtime: AgentRuntime | null): CoreManagerLike {
@@ -1384,8 +1399,6 @@ export function buildChatAttachments(
     url: `attachment:img-${i}`,
     title: img.name,
     source: "client_chat",
-    description: "User-attached image",
-    text: "",
     contentType: ContentType.IMAGE,
     _data: img.data,
     _mimeType: img.mimeType,
@@ -2562,24 +2575,25 @@ export function inferWalletExecutionFallback(
 }
 
 export function hasUsableWalletFallbackParams(action: FallbackParsedAction): boolean {
+  const parameters = action.parameters ?? {};
   if (action.name === "TRANSFER_TOKEN") {
     return (
-      typeof action.parameters.toAddress === "string" &&
-      /^0x[a-fA-F0-9]{40}$/.test(action.parameters.toAddress) &&
-      typeof action.parameters.amount === "string" &&
-      action.parameters.amount.trim().length > 0 &&
-      typeof action.parameters.assetSymbol === "string" &&
-      action.parameters.assetSymbol.trim().length > 0
+      typeof parameters.toAddress === "string" &&
+      /^0x[a-fA-F0-9]{40}$/.test(parameters.toAddress) &&
+      typeof parameters.amount === "string" &&
+      parameters.amount.trim().length > 0 &&
+      typeof parameters.assetSymbol === "string" &&
+      parameters.assetSymbol.trim().length > 0
     );
   }
 
   if (action.name === "EXECUTE_TRADE") {
     return (
-      (action.parameters.side === "buy" || action.parameters.side === "sell") &&
-      typeof action.parameters.amount === "string" &&
-      action.parameters.amount.trim().length > 0 &&
-      typeof action.parameters.tokenAddress === "string" &&
-      /^0x[a-fA-F0-9]{40}$/.test(action.parameters.tokenAddress)
+      (parameters.side === "buy" || parameters.side === "sell") &&
+      typeof parameters.amount === "string" &&
+      parameters.amount.trim().length > 0 &&
+      typeof parameters.tokenAddress === "string" &&
+      /^0x[a-fA-F0-9]{40}$/.test(parameters.tokenAddress)
     );
   }
 
@@ -2657,8 +2671,12 @@ const PLUGIN_CONFIG_RE =
 const PLUGIN_PARAMS: Record<string, Array<{ key: string; label: string; secret: boolean }>> = {
   telegram: [{ key: "TELEGRAM_BOT_TOKEN", label: "Bot Token (from @BotFather)", secret: true }],
   discord: [
-    { key: "DISCORD_APPLICATION_ID", label: "Application ID", secret: false },
     { key: "DISCORD_API_TOKEN", label: "Bot Token", secret: true },
+    {
+      key: "DISCORD_APPLICATION_ID",
+      label: "Application ID (optional, auto-resolved when omitted)",
+      secret: false,
+    },
   ],
   twitter: [
     { key: "TWITTER_USERNAME", label: "Username", secret: false },
@@ -3578,9 +3596,6 @@ import {
   toWorkbenchTask,
   toWorkbenchTodo,
   normalizeTags,
-  getTodoDataService,
-  recordTodoDbFailure,
-  toWorkbenchTodoFromRecord,
 } from "./workbench-helpers.js";
 const _WORKBENCH_TASK_TAG = WORKBENCH_TASK_TAG;
 const _WORKBENCH_TODO_TAG = WORKBENCH_TODO_TAG;
@@ -3802,7 +3817,7 @@ export async function handleSwarmSynthesis(
     .join("\n\n");
 
   const prompt =
-    `You are summarizing the results of a coding agent swarm for the user. ` +
+    `You are summarizing the results of a task-agent swarm for the user. ` +
     `${payload.total} agents were dispatched. ${payload.completed} completed, ` +
     `${payload.stopped} stopped, ${payload.errored} errored.\n\n` +
     `Here are the individual task results:\n\n${taskLines}\n\n` +
@@ -3831,7 +3846,7 @@ export async function handleSwarmSynthesis(
     if (payload.stopped > 0) parts.push(`${payload.stopped} stopped`);
     if (payload.errored > 0) parts.push(`${payload.errored} errored`);
     await routeMessage(
-      `All ${payload.total} coding agents finished (${parts.join(", ")}). Review their work when you're ready.`,
+      `All ${payload.total} task agents finished (${parts.join(", ")}). Review their work when you're ready.`,
       "coding-agent",
     );
   }
@@ -4479,92 +4494,48 @@ async function handleRequest(
     });
   };
 
-  const resolveHyperscapeApiBaseUrl = async (): Promise<string> => {
-    const fromEnv = process.env.HYPERSCAPE_API_URL?.trim();
-    if (fromEnv) {
-      return fromEnv.replace(/\/+$/, "");
+  const restartRuntime = async (reason: string): Promise<boolean> => {
+    if (!ctx?.onRestart) {
+      return false;
     }
-    // Default to the local Hyperscape API server. Viewer URLs can point at a
-    // client dev server (for example :3333) which does not expose API routes.
-    return "http://localhost:5555";
-  };
+    if (state.agentState === "restarting") {
+      return false;
+    }
 
-  const relayHyperscapeApi = async (
-    outboundMethod: "GET" | "POST",
-    outboundPath: string,
-    options?: {
-      rawBodyOverride?: string;
-      contentTypeOverride?: string | null;
-    },
-  ): Promise<void> => {
-    const baseUrl = await resolveHyperscapeApiBaseUrl();
+    const previousState = state.agentState;
+    logger.info(`[eliza-api] Applying runtime reload: ${reason}`);
+    state.agentState = "restarting";
+    state.startup = { ...state.startup, phase: "restarting" };
+    state.broadcastStatus?.();
 
-    let upstreamUrl: URL;
     try {
-      upstreamUrl = new URL(outboundPath, baseUrl);
-      upstreamUrl.search = url.search;
-    } catch {
-      error(res, `Invalid Hyperscape API URL: ${baseUrl}`, 500);
-      return;
-    }
-
-    let rawBody: string | undefined;
-    if (options?.rawBodyOverride !== undefined) {
-      rawBody = options.rawBodyOverride;
-    } else if (outboundMethod === "POST") {
-      try {
-        rawBody = await readBody(req);
-        if (rawBody.trim().length === 0) {
-          rawBody = undefined;
-        }
-      } catch (err) {
-        error(
-          res,
-          `Failed to read request body: ${err instanceof Error ? err.message : String(err)}`,
-          400,
-        );
-        return;
+      const newRuntime = await ctx.onRestart();
+      if (!newRuntime) {
+        state.agentState = previousState;
+        state.broadcastStatus?.();
+        return false;
       }
-    }
 
-    const outboundHeaders: Record<string, string> = {};
-    const contentType =
-      options?.contentTypeOverride !== undefined
-        ? options.contentTypeOverride
-        : typeof req.headers["content-type"] === "string"
-          ? req.headers["content-type"]
-          : null;
-    if (contentType && rawBody !== undefined) {
-      outboundHeaders["Content-Type"] = contentType;
-    }
-    const authorization = resolveHyperscapeAuthorizationHeader(req);
-    if (authorization) {
-      outboundHeaders.Authorization = authorization;
-    }
-
-    let upstreamResponse: Response;
-    try {
-      upstreamResponse = await fetch(upstreamUrl.toString(), {
-        method: outboundMethod,
-        headers: outboundHeaders,
-        body: rawBody !== undefined ? rawBody : undefined,
-      });
+      state.runtime = newRuntime;
+      state.chatConnectionReady = null;
+      state.chatConnectionPromise = null;
+      state.agentState = "running";
+      state.agentName =
+        newRuntime.character.name ?? resolveDefaultAgentName(state.config);
+      state.model = detectRuntimeModel(newRuntime, state.config);
+      state.startedAt = Date.now();
+      state.pendingRestartReasons = [];
+      ctx.onRuntimeSwapped?.();
+      state.broadcastStatus?.();
+      return true;
     } catch (err) {
-      error(
-        res,
-        `Failed to reach Hyperscape API: ${err instanceof Error ? err.message : String(err)}`,
-        502,
+      logger.warn(
+        `[eliza-api] Runtime reload failed: ${err instanceof Error ? err.message : String(err)}`,
       );
-      return;
+      state.agentState = previousState;
+      state.broadcastStatus?.();
+      return false;
     }
-
-    const responseText = await upstreamResponse.text();
-    const responseType = upstreamResponse.headers.get("content-type");
-    if (responseType) {
-      res.setHeader("Content-Type", responseType);
-    }
-    res.statusCode = upstreamResponse.status;
-    res.end(responseText);
   };
 
   // ── DNS rebinding protection ──────────────────────────────────────────
@@ -4964,7 +4935,7 @@ async function handleRequest(
       url,
       json,
       error,
-      getPluginManager: () => requirePluginManager(state.runtime) as never,
+      getPluginManager: () => getPluginManagerForState(state) as never,
       getLoadedPluginNames: () =>
         state.runtime?.plugins.map((plugin) => plugin.name) ?? [],
       getBundledPluginIds: () => getReleaseBundledPluginIds(),
@@ -4995,6 +4966,7 @@ async function handleRequest(
         error,
         readJsonBody,
         scheduleRuntimeRestart,
+        restartRuntime,
         BLOCKED_ENV_KEYS,
         discoverInstalledPlugins,
         maskValue,
@@ -5244,6 +5216,44 @@ async function handleRequest(
     if (handled) return;
   }
 
+  // ── Unified inbox routes (/api/inbox/*) ───────────────────────────────
+  // Cross-channel read-only feed that merges connector messages
+  // (imessage, telegram, discord, whatsapp, etc.) into a single
+  // time-ordered view. See api/inbox-routes.ts for details.
+  if (pathname.startsWith("/api/inbox")) {
+    const handled = await handleInboxRoute(
+      req,
+      res,
+      pathname,
+      method,
+      { runtime: state.runtime ?? null },
+      { json, error, readJsonBody },
+    );
+    if (handled) return;
+  }
+
+  // ── iMessage routes (/api/imessage/*) ─────────────────────────────────
+  // Read + CRUD endpoints exposed by @elizaos/plugin-imessage's
+  // IMessageService. See api/imessage-routes.ts for the handler.
+  if (pathname.startsWith("/api/imessage")) {
+    const handled = await handleIMessageRoute(
+      req,
+      res,
+      pathname,
+      method,
+      {
+        runtime: state.runtime
+          ? {
+              getService: (type: string) =>
+                (state.runtime as { getService: (t: string) => unknown }).getService(type),
+            }
+          : undefined,
+      },
+      { json, error, readJsonBody },
+    );
+    if (handled) return;
+  }
+
   // ── Signal routes (/api/signal/*) ─────────────────────────────────────
   if (pathname.startsWith("/api/signal")) {
     if (!state.signalPairingSessions) {
@@ -5407,6 +5417,34 @@ async function handleRequest(
     return;
   }
 
+  if (
+    await handleWebsiteBlockerRoutes({
+      req,
+      res,
+      method,
+      pathname,
+      readJsonBody,
+      json,
+      error,
+    })
+  ) {
+    return;
+  }
+
+  if (
+    await handleBrowserWorkspaceRoutes({
+      req,
+      res,
+      method,
+      pathname,
+      readJsonBody,
+      json,
+      error,
+    })
+  ) {
+    return;
+  }
+
   // Agent self-status, Privy, and ERC-8004 registry routes are now handled
   // by handleAgentStatusRoutes above.
 
@@ -5556,14 +5594,10 @@ async function handleRequest(
   }
 
   // ═══════════════════════════════════════════════════════════════════════
-  // Chat + compat routes — delegated to chat-routes.ts
+  // OpenAI-compatible routes (/v1/*) — delegated to chat-routes.ts
   // ═══════════════════════════════════════════════════════════════════════
 
-  if (
-    pathname === "/api/chat" ||
-    pathname === "/api/chat/stream" ||
-    pathname.startsWith("/v1/")
-  ) {
+  if (pathname.startsWith("/v1/")) {
     // Cast state — ChatRouteState is a compatible subset of ServerState
     const handled = await handleChatRoutes({
       req,
@@ -5708,9 +5742,7 @@ async function handleRequest(
     if (!handled) {
       try {
         const orchestratorPlugin =
-          (await import(
-            "@elizaos/plugin-agent-orchestrator"
-          )) as OrchestratorPluginFallbackModule;
+          agentOrchestratorCompat as OrchestratorPluginFallbackModule;
         if (orchestratorPlugin.createCodingAgentRouteHandler) {
           const coordinator = orchestratorPlugin.getCoordinator?.(
             state.runtime,
@@ -5763,7 +5795,7 @@ async function handleRequest(
       pathname,
       url,
       appManager: state.appManager as never,
-      getPluginManager: () => requirePluginManager(state.runtime) as never,
+      getPluginManager: () => getPluginManagerForState(state) as never,
       parseBoundedLimit,
       readJsonBody,
       json,
@@ -5774,27 +5806,20 @@ async function handleRequest(
     return;
   }
 
-  // ── Hyperscape control proxy routes (optional — package may not be installed) ──
-  try {
-    const hyperscapePkg = "@elizaos/app-hyperscape/routes";
-    const { handleAppsHyperscapeRoutes } = await import(
-      /* webpackIgnore: true */ hyperscapePkg
-    );
-    if (
-      await handleAppsHyperscapeRoutes({
-        req,
-        res,
-        method,
-        pathname,
-        relayHyperscapeApi,
-        readJsonBody,
-        error,
-      })
-    ) {
-      return;
-    }
-  } catch {
-    // @elizaos/app-hyperscape not available — skip hyperscape routes
+  if (
+    await handleAppPackageRoutes({
+      req,
+      res,
+      method,
+      pathname,
+      url,
+      readJsonBody,
+      json,
+      error,
+      runtime: state.runtime,
+    })
+  ) {
+    return;
   }
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -5815,9 +5840,6 @@ async function handleRequest(
         readJsonBody,
         toWorkbenchTask: toWorkbenchTask as any,
         toWorkbenchTodo: toWorkbenchTodo as any,
-        toWorkbenchTodoFromRecord: toWorkbenchTodoFromRecord as any,
-        getTodoDataService: getTodoDataService as any,
-        recordTodoDbFailure,
         normalizeTags,
         readTaskMetadata,
         readTaskCompleted,
@@ -5842,6 +5864,7 @@ async function handleRequest(
         res,
         method,
         pathname,
+        url,
         state: state as any,
         json,
         error,
@@ -5980,6 +6003,7 @@ export async function startApiServer(opts?: {
   // Hydrate persisted config.env values so addresses remain visible after restarts.
   const persistedEnv = config.env as Record<string, string> | undefined;
   const envKeysToHydrate = [
+    "MILADY_WALLET_OS_STORE",
     "EVM_PRIVATE_KEY",
     "SOLANA_PRIVATE_KEY",
     "ALCHEMY_API_KEY",
@@ -6110,7 +6134,6 @@ export async function startApiServer(opts?: {
     connectorRouteHandlers: [],
     connectorHealthMonitor: null,
   };
-
   const trainingServiceCtor = await resolveTrainingServiceCtor();
   const trainingServiceOptions = {
     getRuntime: () => state.runtime,
@@ -6123,7 +6146,7 @@ export async function startApiServer(opts?: {
   if (trainingServiceCtor) {
     state.trainingService = new trainingServiceCtor(trainingServiceOptions);
   } else {
-    logger.warn(
+    logger.info(
       "[eliza-api] Training service package unavailable; training routes will be disabled",
     );
   }
@@ -7199,6 +7222,7 @@ export async function startApiServer(opts?: {
     void overlayDbCharacter(opts.runtime, state).catch((err) => {
       logger.warn("[api] Character overlay restore failed:", err);
     });
+    registerClientChatSendHandler(opts.runtime, state);
   }
 
   /** Hot-swap the runtime reference (used after an in-process restart). */
@@ -7234,6 +7258,9 @@ export async function startApiServer(opts?: {
 
     // Broadcast status update immediately after restart
     broadcastStatus();
+
+    // Re-register client_chat send handler on the new runtime
+    registerClientChatSendHandler(rt, state);
 
     // Wire coding-agent bridges (event-driven via getServiceLoadPromise)
     void wireCoordinatorBridgesWhenReady(state, {

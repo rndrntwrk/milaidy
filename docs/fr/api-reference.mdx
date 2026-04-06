@@ -61,25 +61,25 @@ curl http://localhost:2138/api/character \
 ```
 
 <div id="send-a-chat-message">
-### Envoyer un message de chat
+### Envoyer un message dans une conversation
 </div>
 
 ```bash
-curl -X POST http://localhost:2138/api/chat \
+curl -X POST http://localhost:2138/api/conversations/YOUR_CONVERSATION_ID/messages \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"message": "Hello, what can you do?"}'
+  -d '{"text": "Hello, what can you do?"}'
 ```
 
 <div id="stream-a-chat-response">
-### Diffuser une réponse de chat en streaming
+### Diffuser une réponse de conversation en streaming
 </div>
 
 ```bash
-curl -N -X POST http://localhost:2138/api/chat/stream \
+curl -N -X POST http://localhost:2138/api/conversations/YOUR_CONVERSATION_ID/messages/stream \
   -H "Authorization: Bearer YOUR_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"message": "Tell me about yourself"}'
+  -d '{"text": "Tell me about yourself"}'
 ```
 
 La réponse est un flux Server-Sent Events. Chaque événement contient un champ `data` avec un payload JSON.
@@ -278,8 +278,6 @@ curl -X POST http://localhost:2138/api/agent/autonomy \
 
 | Méthode | Chemin | Description |
 |---------|--------|-------------|
-| `POST` | `/api/chat` | Envoyer un message et obtenir une réponse (ancien, redirige vers la conversation par défaut) |
-| `POST` | `/api/chat/stream` | Envoyer un message et diffuser la réponse en streaming (SSE) |
 | `GET` | `/api/conversations` | Lister toutes les conversations |
 | `POST` | `/api/conversations` | Créer une nouvelle conversation |
 | `GET` | `/api/conversations/:id/messages` | Obtenir les messages d'une conversation |
@@ -663,9 +661,16 @@ Les routes sous `/api/cloud/v1/` sont transmises en tant que `/api/v1/` vers le 
 |---------|--------|-------------|
 | `GET` | `/api/workbench/overview` | Obtenir la vue d'ensemble de l'atelier (tâches, déclencheurs, à faire, état d'autonomie) |
 | `GET` | `/api/workbench/tasks` | Lister les tâches de l'atelier |
-| `POST` | `/api/workbench/tasks` | Créer ou mettre à jour une tâche de l'atelier |
-| `GET` | `/api/workbench/todos` | Lister les éléments à faire de l'atelier |
-| `POST` | `/api/workbench/todos` | Créer ou mettre à jour un élément à faire de l'atelier |
+| `POST` | `/api/workbench/tasks` | Créer une tâche de l'atelier |
+| `GET` | `/api/workbench/tasks/:id` | Obtenir une tâche individuelle |
+| `PUT` | `/api/workbench/tasks/:id` | Mettre à jour une tâche |
+| `DELETE` | `/api/workbench/tasks/:id` | Supprimer une tâche |
+| `GET` | `/api/workbench/todos` | Lister les éléments à faire (crée automatiquement un todo de démarrage si vide) |
+| `POST` | `/api/workbench/todos` | Créer un élément à faire |
+| `GET` | `/api/workbench/todos/:id` | Obtenir un élément à faire |
+| `PUT` | `/api/workbench/todos/:id` | Mettre à jour un élément à faire |
+| `DELETE` | `/api/workbench/todos/:id` | Supprimer un élément à faire |
+| `POST` | `/api/workbench/todos/:id/complete` | Basculer l'état de complétion d'un à faire |
 
 ---
 

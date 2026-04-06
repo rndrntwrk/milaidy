@@ -17,6 +17,7 @@ import {
   sendJson as sendJsonResponse,
 } from "./response";
 import {
+  scheduleCompatRuntimeRestart,
   readCompatJsonBody,
   type CompatRuntimeState,
 } from "./compat-route-shared";
@@ -702,6 +703,9 @@ export async function handlePluginsCompatRoutes(
     }
 
     const result = persistCompatPluginMutation(pluginId, body, plugin);
+    if (result.status === 200 && typeof body.enabled === "boolean") {
+      scheduleCompatRuntimeRestart(state, `Plugin toggle: ${pluginId}`);
+    }
     sendJsonResponse(res, result.status, result.payload);
     return true;
   }

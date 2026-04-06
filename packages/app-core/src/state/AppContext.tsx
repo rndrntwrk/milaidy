@@ -411,6 +411,10 @@ function AppProviderInner({
     },
     [lifecycle.state.systemWarnings, lifecycle.setSystemWarnings],
   );
+  const triggerRestartRef = useRef<() => Promise<void>>(async () => {});
+  const triggerRestartProxy = useCallback(async () => {
+    await triggerRestartRef.current();
+  }, []);
   // retryStartup resets lifecycle state AND dispatches RETRY to the coordinator.
   // The coordinator's phase effects will re-run from restoring-session.
   // We store a ref to the coordinator's retry since it's created after this line.
@@ -543,7 +547,13 @@ function AppProviderInner({
   } = triggersHook;
 
   // --- Plugins / Skills / Store / Catalog (extracted to usePluginsSkillsState) ---
-  const pluginsSkillsHook = usePluginsSkillsState({ setActionNotice });
+  const pluginsSkillsHook = usePluginsSkillsState({
+    setActionNotice,
+    setPendingRestart,
+    setPendingRestartReasons,
+    showRestartBanner,
+    triggerRestart: triggerRestartProxy,
+  });
   const {
     plugins,
     setPlugins,
@@ -661,6 +671,7 @@ function AppProviderInner({
       logTagFilter,
       logLevelFilter,
       logSourceFilter,
+      logLoadError,
     },
     setLogs,
     setLogTagFilter,
@@ -856,14 +867,19 @@ function AppProviderInner({
       mcpHeaderInputs,
       droppedFiles,
       shareIngestNotice,
+      appRuns,
+      activeGameRunId,
       activeGameApp,
       activeGameDisplayName,
       activeGameViewerUrl,
       activeGameSandbox,
       activeGamePostMessageAuth,
       activeGamePostMessagePayload,
+      activeGameSession,
       gameOverlayEnabled,
+      activeInboxChat,
     },
+    setActiveInboxChat,
     setCommandQuery,
     setCommandActiveIndex,
     setEmotePickerOpen,
@@ -879,12 +895,8 @@ function AppProviderInner({
     setMcpHeaderInputs,
     setDroppedFiles,
     setShareIngestNotice,
-    setActiveGameApp,
-    setActiveGameDisplayName,
-    setActiveGameViewerUrl,
-    setActiveGameSandbox,
-    setActiveGamePostMessageAuth,
-    setActiveGamePostMessagePayload,
+    setAppRuns,
+    setActiveGameRunId,
     setGameOverlayEnabled,
     closeCommandPalette,
     openEmotePicker,
@@ -894,7 +906,9 @@ function AppProviderInner({
   // chatPendingImages now comes from useChatState
 
   // --- Admin ---
-  const [appsSubTab, setAppsSubTab] = useState<"browse" | "games">("browse");
+  const [appsSubTab, setAppsSubTab] = useState<"browse" | "running" | "games">(
+    "browse",
+  );
   const [agentSubTab, setAgentSubTab] = useState<
     "character" | "inventory" | "knowledge"
   >("character");
@@ -1263,6 +1277,10 @@ function AppProviderInner({
     suggestConversationTitle,
   } = chatCallbacks;
 
+  useEffect(() => {
+    triggerRestartRef.current = triggerRestart;
+  }, [triggerRestart]);
+
   // ── Pairing ────────────────────────────────────────────────────────
 
   // ── Plugin / Skill / Store / Catalog actions are provided by usePluginsSkillsState (pluginsSkillsHook) ──
@@ -1419,13 +1437,10 @@ function AppProviderInner({
         catalogPage: setCatalogPage,
         skillReviewId: setSkillReviewId,
         skillReviewReport: setSkillReviewReport,
-        activeGameApp: setActiveGameApp,
-        activeGameDisplayName: setActiveGameDisplayName,
-        activeGameViewerUrl: setActiveGameViewerUrl,
-        activeGameSandbox: setActiveGameSandbox,
-        activeGamePostMessageAuth: setActiveGamePostMessageAuth,
-        activeGamePostMessagePayload: setActiveGamePostMessagePayload,
+        appRuns: setAppRuns,
+        activeGameRunId: setActiveGameRunId,
         gameOverlayEnabled: setGameOverlayEnabled,
+        activeInboxChat: setActiveInboxChat,
         storePlugins: setStorePlugins,
         storeLoading: setStoreLoading,
         storeInstalling: setStoreInstalling,
@@ -1807,6 +1822,7 @@ function AppProviderInner({
     logTagFilter,
     logLevelFilter,
     logSourceFilter,
+    logLoadError,
     walletAddresses,
     walletConfig,
     walletBalances,
@@ -1960,12 +1976,16 @@ function AppProviderInner({
     droppedFiles,
     shareIngestNotice,
     chatPendingImages,
+    appRuns,
+    activeGameRunId,
     activeGameApp,
     activeGameDisplayName,
     activeGameViewerUrl,
     activeGameSandbox,
     activeGamePostMessageAuth,
+    activeGameSession,
     gameOverlayEnabled,
+    activeInboxChat,
     appsSubTab,
     agentSubTab,
     pluginsSubTab,

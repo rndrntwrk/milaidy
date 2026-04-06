@@ -167,6 +167,28 @@ describe("registry-client-app-meta", () => {
         quality: "high",
       });
     });
+
+    it("merges session metadata and prefers patch features", () => {
+      const base: RegistryAppMeta = {
+        ...baseMeta,
+        session: {
+          mode: "spectate-and-steer",
+          features: ["commands", "pause"],
+        },
+      };
+      const patch: RegistryAppMeta = {
+        ...baseMeta,
+        session: {
+          mode: "spectate-and-steer",
+          features: ["resume", "telemetry"],
+        },
+      };
+      const result = mergeAppMeta(base, patch);
+      expect(result?.session).toEqual({
+        mode: "spectate-and-steer",
+        features: ["resume", "telemetry"],
+      });
+    });
   });
 
   // ── resolveAppOverride ───────────────────────────────────────────
@@ -194,16 +216,6 @@ describe("registry-client-app-meta", () => {
       expect(result).toBeDefined();
       expect(result?.launchType).toBe("url");
       expect(result?.launchUrl).toBe("http://localhost:3000");
-    });
-
-    it("applies override for @elizaos/app-hyperscape (connect type)", () => {
-      const result = resolveAppOverride("@elizaos/app-hyperscape", undefined);
-      expect(result).toBeDefined();
-      expect(result?.launchType).toBe("connect");
-      expect(result?.uiExtension?.detailPanelId).toBe(
-        "hyperscape-embedded-agents",
-      );
-      expect(result?.viewer?.postMessageAuth).toBe(true);
     });
 
     it("merges override with existing metadata", () => {

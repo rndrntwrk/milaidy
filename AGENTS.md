@@ -1,9 +1,19 @@
 # Repository Guidelines
 
 > **This is an agents-only codebase.** All PRs are reviewed and merged by agents. Humans contribute as QA testers. See [CONTRIBUTING.md](./CONTRIBUTING.md).
+>
+> This file should carry the same repo-level engineering guidance as `CLAUDE.md` for agent tooling that only reads `AGENTS.md`. Keep the two files in sync.
 
 - Monorepo: `milady-ai/milady` — core logic in `packages/app-core`, upstream agent in `packages/agent`
 - Runtime baseline: Node **22+** (keep Node + Bun paths working)
+
+## What This Is
+
+Milady is a local-first AI assistant built on [elizaOS](https://github.com/elizaOS). It wraps the elizaOS runtime with a CLI, desktop app (Electrobun), web dashboard, and platform connectors (Telegram, Discord, etc.).
+
+### elizaOS naming (agents & editors)
+
+Write the framework name as **elizaOS** in prose, comments, user-facing strings, and documentation — not `ElizaOS`. The npm scope remains **`@elizaos/*`** (lowercase). Say **Eliza agents** when you mean agents in plain language (not **elizaOS agents**). The **Eliza Classic** plugin name is an exception (**Eliza** = the 1966 chatbot), not “elizaOS Classic”. Cursor picks this up via `.cursor/rules/elizaos-branding.mdc`.
 
 ## Contribution Scope
 
@@ -45,6 +55,12 @@
 - Tests: `bun run test` (parallel unit + playwright), `bun run test:e2e`, `bun run test:live`
 - Coverage: `bun run test:coverage`
 
+Optional — link a local elizaOS source checkout for live package development:
+
+```bash
+bun run setup:upstreams   # initializes repo-local ./eliza and links local @elizaos/* packages
+```
+
 ## Coding Style & Naming Conventions
 
 - Language: TypeScript (ESM). Prefer strict typing; avoid `any` and `unknown` unless absolutely necessary.
@@ -56,11 +72,53 @@
 - **Do not remove the Bun exports patch** in `scripts/patch-deps.mjs` (patchBunExports). It fixes "Cannot find module" for plugins whose published package.json points `exports["."].bun` at missing `./src/index.ts`. See "Bun and published package exports" in `docs/plugin-resolution-and-node-path.md`.
 - Naming: use **Milady** for product/app/docs headings; use `milady` for CLI command, package/binary, paths, and config keys.
 
+## Key Architecture Decisions
+
+### NODE_PATH (do not remove)
+
+Dynamic plugin imports (`import("@elizaos/plugin-foo")`) need `NODE_PATH` set to the repo root's `node_modules`. This is set in three places — all three are required:
+
+1. `packages/agent/src/runtime/eliza.ts` — module-level, before dynamic imports
+2. `scripts/run-node.mjs` — child process env
+3. `apps/app/electrobun/src/native/agent.ts` — Electrobun main process
+
+See `docs/plugin-resolution-and-node-path.md`.
+
+### Bun exports patch (do not remove)
+
+`scripts/patch-deps.mjs` removes dead `exports["."].bun` entries from `@elizaos` packages that point to missing `src/` paths. Without this, Bun fails to resolve plugins at runtime.
+
+### Electrobun startup guards (do not remove)
+
+The try/catch blocks in `apps/app/electrobun/src/native/agent.ts` keep the desktop window usable when the runtime fails.
+
 ## Dependencies
 
 - Direct imports in `src/`: `@elizaos/core`, `@clack/prompts`, `chalk`, `commander`, `dotenv`, `json5`, `zod`
 - Workspace plugins (`@elizaos/plugin-*`): loaded at runtime, each with their own `package.json`
 - Do not add dependencies unless `src/` code directly imports them
+
+## Config
+
+- **Runtime config**: `~/.milady/milady.json` (override with `MILADY_CONFIG_PATH` or `MILADY_STATE_DIR`; falls back to `ELIZA_CONFIG_PATH` / `ELIZA_STATE_DIR`)
+- **Env secrets**: `~/.milady/.env` or project `.env`
+- **Namespace**: The CLI sets `ELIZA_NAMESPACE=milady` (via `run-node.mjs` and `dev-ui.mjs`), so the state dir is `~/.milady/` and the config file is `milady.json`
+
+## Dependencies on elizaOS
+
+All `@elizaos/*` packages use the `alpha` dist-tag. When developing locally, `bun run setup:upstreams` links packages from repo-local `./eliza` and `./plugins` so changes are picked up immediately. Set `MILADY_SKIP_LOCAL_UPSTREAMS=1` to use only npm-published versions.
+
+All official elizaOS plugin repos live under [https://github.com/elizaOS-plugins](https://github.com/elizaOS-plugins). For plugin work, prefer adding the relevant plugin repo as a git submodule under `plugins/` so we keep a local checkout we can patch when needed, and depend on it via `workspace:*` so Milady resolves the local package directly during development. Publish new versions to npm when ready.
+
+## Ports
+
+| Service | Dev Port | Env Override |
+|---------|----------|--------------|
+| API + WebSocket | 31337 | `MILADY_API_PORT` |
+| Dashboard UI | 2138 | `MILADY_PORT` |
+| Gateway | 18789 | `MILADY_GATEWAY_PORT` |
+| Home Dashboard | 2142 | `MILADY_HOME_PORT` |
+| WeChat Webhook | 18790 | `MILADY_WECHAT_WEBHOOK_PORT` |
 
 ## Testing Guidelines
 
@@ -74,8 +132,74 @@
 - Group related changes; avoid bundling unrelated refactors
 - PRs should summarize scope, note testing performed, and mention any user-facing changes
 
+## Git Workflow
+
+- **Never stash, switch branches, or create worktrees** unless the user explicitly asks for it.
+- When asked to merge, merge **onto the current branch** (e.g., `git merge <source>` while staying on the current branch).
+- Do not create worktrees unless the user specifically requests one.
+
+## Worktree / Multi-Instance Development
+
+Each worktree (or parallel dev session) needs **isolated ports and state** to avoid conflicts.
+
+### Quick setup
+
+```bash
+# In your worktree, generate isolated env (slot 1 = +100 port offset):
+bash scripts/worktree-env.sh 1    # .env.worktree: API=31437, UI=2238, state=~/.milady-wt-1
+bash scripts/worktree-env.sh 2    # second worktree: API=31537, UI=2338, state=~/.milady-wt-2
+
+# All dev entry points auto-load .env.worktree when present:
+bun run dev                       # dev-ui.mjs
+bun run dev:desktop               # dev-platform.mjs
+bun run milady start              # run-node.mjs
+```
+
+### What gets isolated
+
+| Resource | Default (shared) | Worktree override |
+|----------|------------------|-------------------|
+| API port | 31337 | `MILADY_API_PORT` |
+| UI port | 2138 | `MILADY_PORT` |
+| Home port | 2142 | `MILADY_HOME_PORT` |
+| Gateway port | 18789 | `MILADY_GATEWAY_PORT` |
+| State dir (DB, config, creds) | `~/.milady/` | `MILADY_STATE_DIR` |
+| PGlite database | `~/.milady/workspace/.eliza/.elizadb` | Follows `MILADY_STATE_DIR` |
+| Config file | `~/.milady/milady.json` | Follows `MILADY_STATE_DIR` |
+
+### Key rules
+
+- **Always isolate `MILADY_STATE_DIR`** — the PGlite database uses a process lock (`postmaster.pid`). Two instances hitting the same DB will fail.
+- **Port auto-allocation still works** — even without `.env.worktree`, the orchestrator probes for free ports. But explicit offsets are more predictable.
+- **`bun install`** — run in the main worktree first. Git worktrees share `node_modules` via the repo root. The `.eliza-repo-setup.lock` prevents concurrent postinstall runs.
+- **`.env.worktree` is gitignored** — each worktree generates its own.
+- **Scripts that load `.env.worktree`**: `dev-ui.mjs`, `dev-platform.mjs`, `run-node.mjs`. Values never override already-set env vars.
+
 ## Security & Configuration
 
 - Never commit real secrets, phone numbers, or live configuration values
 - Use obviously fake placeholders in docs, tests, and examples
 - Configuration lives at `~/.milady/milady.json`; workspace at `~/.milady/workspace/`
+
+## Common Pitfalls
+
+- **`bun install` fails on native deps**: TensorFlow, canvas, whisper-node require native build tools. On macOS install Xcode CLI tools (`xcode-select --install`). On Linux install `build-essential libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev`. Set `MILADY_NO_VISION_DEPS=1` to skip optional vision deps (camera, etc.).
+- **Avatar assets missing**: `bun install` clones VRM models from GitHub. On restricted networks set `SKIP_AVATAR_CLONE=1` and manually copy avatars to `apps/app/public/vrms/`.
+- **Plugin not found at runtime**: Ensure `NODE_PATH` is set. Run `bun run repair` to re-run postinstall.
+- **Stale Vite cache after patching deps**: run `MILADY_VITE_FORCE=1 bun run dev` (or delete `apps/app/.vite/`). Dev no longer passes `--force` by default so dependency pre-bundling can cache between runs.
+- **Cold rebuild / stuck artifacts**: `bun run clean` removes root `dist`, UI + Capacitor plugin `dist`, `apps/app/.vite`, Turbo, Foundry test `out/`/`cache`, Playwright output, and `node_modules/.cache` under main workspaces. `bun run clean:deep` also removes Electrobun `build/`/`artifacts/` and generated `preload.js`, plus Electron pack dirs. For a global Bun store wipe (affects all projects): `MILADY_CLEAN_GLOBAL_TOOL_CACHE=1 bun run clean`.
+- **Config file not found**: The actual path is `~/.milady/milady.json` (because `ELIZA_NAMESPACE=milady`). The generic eliza default `~/.eliza/eliza.json` does not apply when running as Milady.
+- **Lock file blocking install**: If postinstall times out with a lock error, delete `.eliza-repo-setup.lock` in the repo root.
+
+## Setup Environment Variables
+
+| Variable | Purpose | Default |
+|----------|---------|---------|
+| `MILADY_NO_VISION_DEPS` | Skip vision dep install (camera/fswebcam) | `0` |
+| `SKIP_AVATAR_CLONE` | Skip VRM avatar download during install | `0` |
+| `MILADY_SKIP_LOCAL_UPSTREAMS` | Use npm packages instead of repo-local `./eliza` and `./plugins` sources | `0` |
+| `MILADY_PROMPT_TRACE` | Log prompt compaction stats to console | `0` |
+| `MILADY_TTS_DEBUG` | Log TTS pipeline traces (`[milady][tts]`): queue/proxy plus **playback** (`play:web-audio:*`, `play:browser:*`, `play:talkmode:*`) with a short `preview` of spoken text. When `/api/tts/cloud` is used, debug also adds `x-milady-tts-*` request headers for clip/full-line correlation, and those headers may include spoken-text previews. UI picks this up via Vite `define` in dev/build; for client-only, `VITE_MILADY_TTS_DEBUG` also works | `0` |
+| `MILADY_CAPTURE_PROMPTS` | Dump raw prompts to `.tmp/prompt-captures/` (dev-only, contains user messages) | `0` |
+| `MILADY_ACTION_COMPACTION` | Context-aware action param stripping | `1` (enabled) |
+| `MILADY_PROMPT_OPT_MODE` | Prompt optimization mode (`baseline` or `compact`) | `baseline` |

@@ -20,7 +20,11 @@
 
 import http from "node:http";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { req } from "../../../../test/helpers/http";
+import {
+  createConversation,
+  postConversationMessage,
+  req,
+} from "../../../../test/helpers/http";
 
 // ---------------------------------------------------------------------------
 // Test server (mirrors real API server endpoints without heavy deps)
@@ -36,6 +40,7 @@ function createTestServer(): Promise<{
     model: undefined as string | undefined,
     startedAt: undefined as number | undefined,
     runtime: null as object | null, // mirrors real server's runtime check
+    conversations: new Set<string>(),
   };
 
   const json = (res: http.ServerResponse, data: unknown, status = 200) => {
@@ -102,13 +107,19 @@ function createTestServer(): Promise<{
         status: { state: "running", agentName: state.agentName },
       });
     },
-    "POST /api/chat": async (r, res) => {
+    "POST /api/conversations": async (r, res) => {
       const body = JSON.parse(await readBody(r)) as Record<string, unknown>;
-      if (!body.text || !(body.text as string).trim())
-        return json(res, { error: "text is required" }, 400);
-      if (!state.runtime)
-        return json(res, { error: "Agent is not running" }, 503);
-      json(res, { text: `Echo: ${body.text}`, agentName: state.agentName });
+      const id = `conv-${Date.now()}`;
+      state.conversations.add(id);
+      json(res, {
+        conversation: {
+          id,
+          title:
+            typeof body.title === "string" && body.title.trim().length > 0
+              ? body.title
+              : "New Chat",
+        },
+      });
     },
     "GET /api/plugins": (_r, res) => json(res, { plugins: [] }),
     "GET /api/skills": (_r, res) => json(res, { skills: [] }),
@@ -132,7 +143,33 @@ function createTestServer(): Promise<{
       rs.end();
       return;
     }
-    const key = `${rq.method} ${new URL(rq.url ?? "/", "http://localhost").pathname}`;
+    const pathname = new URL(rq.url ?? "/", "http://localhost").pathname;
+    if (
+      rq.method === "POST" &&
+      /^\/api\/conversations\/[^/]+\/messages$/.test(pathname)
+    ) {
+      const conversationId = decodeURIComponent(pathname.split("/")[3] ?? "");
+      if (!state.conversations.has(conversationId)) {
+        json(rs, { error: "Conversation not found" }, 404);
+        return;
+      }
+      const body = JSON.parse(await readBody(rq)) as Record<string, unknown>;
+      if (!body.text || !(body.text as string).trim()) {
+        json(rs, { error: "text is required" }, 400);
+        return;
+      }
+      if (!state.runtime) {
+        json(rs, { error: "Agent is not running" }, 503);
+        return;
+      }
+      json(rs, {
+        text: `Echo: ${body.text}`,
+        agentName: state.agentName,
+      });
+      return;
+    }
+
+    const key = `${rq.method} ${pathname}`;
     const handler = routes[key];
     if (handler) {
       await handler(rq, rs);
@@ -167,6 +204,13 @@ describe("Agent Lifecycle API", () => {
     await close();
   });
 
+  const sendMessage = async (body: Record<string, unknown>) => {
+    const { conversationId } = await createConversation(port, {
+      title: "Lifecycle chat",
+    });
+    return postConversationMessage(port, conversationId, body);
+  };
+
   // -- Status --
 
   it("initial status is not_started", async () => {
@@ -192,7 +236,7 @@ describe("Agent Lifecycle API", () => {
 
   describe("chat", () => {
     it("responds when running", async () => {
-      const { status, data } = await req(port, "POST", "/api/chat", {
+      const { status, data } = await sendMessage({
         text: "Hello",
       });
       expect(status).toBe(200);
@@ -201,13 +245,11 @@ describe("Agent Lifecycle API", () => {
     });
 
     it("rejects empty text", async () => {
-      expect((await req(port, "POST", "/api/chat", { text: "" })).status).toBe(
-        400,
-      );
+      expect((await sendMessage({ text: "" })).status).toBe(400);
     });
 
     it("rejects missing text", async () => {
-      expect((await req(port, "POST", "/api/chat", {})).status).toBe(400);
+      expect((await sendMessage({})).status).toBe(400);
     });
   });
 
@@ -218,9 +260,7 @@ describe("Agent Lifecycle API", () => {
   it("pause transitions to paused, chat still works (runtime exists)", async () => {
     expect((await req(port, "POST", "/api/agent/pause")).data.ok).toBe(true);
     expect((await req(port, "GET", "/api/status")).data.state).toBe("paused");
-    expect((await req(port, "POST", "/api/chat", { text: "hi" })).status).toBe(
-      200,
-    );
+    expect((await sendMessage({ text: "hi" })).status).toBe(200);
   });
 
   // -- Resume --
@@ -228,9 +268,7 @@ describe("Agent Lifecycle API", () => {
   it("resume transitions back to running, chat works", async () => {
     expect((await req(port, "POST", "/api/agent/resume")).data.ok).toBe(true);
     expect((await req(port, "GET", "/api/status")).data.state).toBe("running");
-    expect((await req(port, "POST", "/api/chat", { text: "hi" })).status).toBe(
-      200,
-    );
+    expect((await sendMessage({ text: "hi" })).status).toBe(200);
   });
 
   // -- Stop --
@@ -241,9 +279,7 @@ describe("Agent Lifecycle API", () => {
     expect(data.state).toBe("stopped");
     expect(data.model).toBeUndefined();
     expect(data.startedAt).toBeUndefined();
-    expect((await req(port, "POST", "/api/chat", { text: "hi" })).status).toBe(
-      503,
-    );
+    expect((await sendMessage({ text: "hi" })).status).toBe(503);
   });
 
   // -- Full lifecycle --

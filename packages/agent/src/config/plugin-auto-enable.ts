@@ -13,6 +13,7 @@ export interface ApplyPluginAutoEnableParams {
 
 export const CONNECTOR_PLUGINS: Record<string, string> = {
   telegram: "@elizaos/plugin-telegram",
+  telegramAccount: "@elizaos-plugins/client-telegram-account",
   discord: "@elizaos/plugin-discord",
   slack: "@elizaos/plugin-slack",
   twitter: "@elizaos/plugin-twitter",
@@ -20,18 +21,21 @@ export const CONNECTOR_PLUGINS: Record<string, string> = {
   whatsapp: "@elizaos/plugin-whatsapp",
   // Internal connector built from src/plugins/signal (not an npm package).
   signal: "@elizaos/plugin-signal",
-  bluebubbles: "@elizaos/plugin-bluebubbles",
   imessage: "@elizaos/plugin-imessage",
   farcaster: "@elizaos/plugin-farcaster",
   lens: "@elizaos/plugin-lens",
   msteams: "@elizaos/plugin-msteams",
-  mattermost: "@elizaos/plugin-mattermost",
-  googlechat: "@elizaos/plugin-google-chat",
   feishu: "@elizaos/plugin-feishu",
   matrix: "@elizaos/plugin-matrix",
   nostr: "@elizaos/plugin-nostr",
   blooio: "@elizaos/plugin-blooio",
   twitch: "@elizaos/plugin-twitch",
+  mattermost: "@elizaos/plugin-mattermost",
+  googlechat: "@elizaos/plugin-google-chat",
+};
+
+const CLIENT_PLUGINS: Record<string, string> = {
+  telegramAccount: "@elizaos-plugins/client-telegram-account",
 };
 
 export const STREAMING_PLUGINS: Record<string, string> = {
@@ -96,6 +100,16 @@ export const AUTH_PROVIDER_PLUGINS: Record<string, string> = {
   EVM_PRIVATE_KEY: "@elizaos/plugin-evm",
   SOLANA_PRIVATE_KEY: "@elizaos/plugin-solana",
 };
+
+function isTelegramAccountConfigured(env: NodeJS.ProcessEnv): boolean {
+  return Boolean(
+    env.TELEGRAM_ACCOUNT_PHONE?.trim() &&
+      env.TELEGRAM_ACCOUNT_APP_ID?.trim() &&
+      env.TELEGRAM_ACCOUNT_APP_HASH?.trim() &&
+      env.TELEGRAM_ACCOUNT_DEVICE_MODEL?.trim() &&
+      env.TELEGRAM_ACCOUNT_SYSTEM_VERSION?.trim(),
+  );
+}
 
 const FEATURE_PLUGINS: Record<string, string> = {
   browser: "@elizaos/plugin-browser",
@@ -189,8 +203,14 @@ export function isConnectorConfigured(
   }
 
   switch (connectorName) {
-    case "bluebubbles":
-      return Boolean(config.serverUrl && config.password);
+    case "telegramAccount":
+      return Boolean(
+        config.phone &&
+          config.appId &&
+          config.appHash &&
+          config.deviceModel &&
+          config.systemVersion,
+      );
     case "imessage":
       return Boolean(config.cliPath);
     case "signal":
@@ -262,7 +282,16 @@ function addToAllowlist(
   reason: string,
 ): void {
   if (!allow.includes(pluginName) && !allow.includes(shortId)) {
-    allow.push(shortId);
+    // Push the FULL package name (not the short id). `collectPluginNames`
+    // in plugin-collector.ts resolves allow-list entries through
+    // `CHANNEL_PLUGIN_MAP[item] ?? OPTIONAL_PLUGIN_MAP[item] ?? item` —
+    // when a short id isn't in either map (e.g. "anthropic",
+    // "elizacloud", wallet plugins before the OPTIONAL_PLUGIN_MAP fix)
+    // it falls through to `item` as-is and `import("anthropic")` fails.
+    // Storing the package name makes the fall-through a no-op and also
+    // lets `collectPluginNames` treat it as a direct package reference
+    // regardless of whether a short-id mapping exists.
+    allow.push(pluginName);
     changes.push(`Auto-enabled plugin: ${pluginName} (${reason})`);
   }
 }
@@ -294,9 +323,11 @@ export function applyPluginAutoEnable(
   pluginsConfig.allow = pluginsConfig.allow ?? [];
   pluginsConfig.entries = pluginsConfig.entries ?? {};
 
-  const connectors =
+  const connectors = (
     updatedConfig.connectors ??
-    (updatedConfig as Record<string, unknown>).channels;
+    (updatedConfig as Record<string, unknown>).channels ??
+    {}
+  ) as Record<string, unknown>;
   if (connectors) {
     for (const [connectorName, connectorConfig] of Object.entries(connectors)) {
       const pluginName = CONNECTOR_PLUGINS[connectorName];
@@ -506,6 +537,26 @@ export function applyPluginAutoEnable(
           "hooks.gmail.account",
         );
       }
+    }
+  }
+
+  // Client plugins
+  if (
+    isTelegramAccountConfigured(env) ||
+    isConnectorConfigured("telegramAccount", connectors.telegramAccount)
+  ) {
+    const clientPlugin = CLIENT_PLUGINS.telegramAccount;
+    if (
+      clientPlugin &&
+      pluginsConfig.entries.telegramAccount?.enabled !== false
+    ) {
+      addToAllowlist(
+        pluginsConfig.allow,
+        clientPlugin,
+        "telegramAccount",
+        changes,
+        "env: TELEGRAM_ACCOUNT_*",
+      );
     }
   }
 

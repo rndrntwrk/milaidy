@@ -5,7 +5,7 @@ import { PagePanel } from "./index";
 
 describe("PagePanel states", () => {
   it("renders panel headers with an eyebrow and actions", () => {
-    render(
+    const { container } = render(
       <PagePanel.Header
         eyebrow="Advanced"
         heading="Plugin Catalog"
@@ -16,6 +16,8 @@ describe("PagePanel states", () => {
     expect(screen.getByText("Advanced")).toBeInTheDocument();
     expect(screen.getByText("Plugin Catalog")).toBeInTheDocument();
     expect(screen.getByText("12 shown")).toBeInTheDocument();
+    expect(container.firstChild).toHaveClass("grid");
+    expect(container.firstChild).not.toHaveClass("flex-wrap");
   });
 
   it("renders the workspace empty state without a panel shell", () => {

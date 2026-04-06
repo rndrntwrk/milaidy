@@ -7,6 +7,7 @@ import type { PluginInfo } from "../api";
 const mockGetPlugins = vi.fn();
 const mockSwitchProvider = vi.fn();
 const mockUpdatePlugin = vi.fn();
+const mockTriggerRestart = vi.fn();
 
 vi.mock("../api", () => ({
   client: {
@@ -36,6 +37,7 @@ describe("usePluginsSkillsState.handlePluginConfigSave", () => {
     mockGetPlugins.mockReset();
     mockSwitchProvider.mockReset();
     mockUpdatePlugin.mockReset();
+    mockTriggerRestart.mockReset();
 
     mockGetPlugins.mockResolvedValue({
       plugins: [openAiPlugin],
@@ -50,8 +52,17 @@ describe("usePluginsSkillsState.handlePluginConfigSave", () => {
 
   it("normalizes ai provider plugin ids before requesting a provider switch", async () => {
     const setActionNotice = vi.fn();
+    const setPendingRestart = vi.fn();
+    const setPendingRestartReasons = vi.fn();
+    const showRestartBanner = vi.fn();
     const { result } = renderHook(() =>
-      usePluginsSkillsState({ setActionNotice }),
+      usePluginsSkillsState({
+        setActionNotice,
+        setPendingRestart,
+        setPendingRestartReasons,
+        showRestartBanner,
+        triggerRestart: (...args: unknown[]) => mockTriggerRestart(...args),
+      }),
     );
 
     act(() => {
@@ -68,5 +79,97 @@ describe("usePluginsSkillsState.handlePluginConfigSave", () => {
       config: { apiKey: "sk-openai-test" },
     });
     expect(mockSwitchProvider).toHaveBeenCalledWith("openai", "sk-openai-test");
+  });
+
+  it("does not force a restart when the server reloads a plugin in place", async () => {
+    const setActionNotice = vi.fn();
+    const setPendingRestart = vi.fn();
+    const setPendingRestartReasons = vi.fn();
+    const showRestartBanner = vi.fn();
+    const discordPlugin: PluginInfo = {
+      id: "discord",
+      name: "Discord",
+      category: "connector",
+      enabled: false,
+      configured: true,
+      parameters: [],
+    };
+    const { result } = renderHook(() =>
+      usePluginsSkillsState({
+        setActionNotice,
+        setPendingRestart,
+        setPendingRestartReasons,
+        showRestartBanner,
+        triggerRestart: (...args: unknown[]) => mockTriggerRestart(...args),
+      }),
+    );
+
+    act(() => {
+      result.current.setPlugins([discordPlugin]);
+    });
+
+    mockUpdatePlugin.mockResolvedValueOnce({
+      ok: true,
+      applied: "plugin_reload",
+      requiresRestart: false,
+    });
+
+    await act(async () => {
+      await result.current.handlePluginToggle("discord", true);
+    });
+
+    expect(mockUpdatePlugin).toHaveBeenCalledWith("discord", {
+      enabled: true,
+    });
+    expect(setPendingRestart).not.toHaveBeenCalled();
+    expect(setPendingRestartReasons).not.toHaveBeenCalled();
+    expect(showRestartBanner).not.toHaveBeenCalled();
+    expect(mockTriggerRestart).not.toHaveBeenCalled();
+  });
+
+  it("still triggers restart flow when the server explicitly requires it", async () => {
+    const setActionNotice = vi.fn();
+    const setPendingRestart = vi.fn();
+    const setPendingRestartReasons = vi.fn();
+    const showRestartBanner = vi.fn();
+    const discordPlugin: PluginInfo = {
+      id: "discord",
+      name: "Discord",
+      category: "connector",
+      enabled: false,
+      configured: true,
+      parameters: [],
+    };
+    const { result } = renderHook(() =>
+      usePluginsSkillsState({
+        setActionNotice,
+        setPendingRestart,
+        setPendingRestartReasons,
+        showRestartBanner,
+        triggerRestart: (...args: unknown[]) => mockTriggerRestart(...args),
+      }),
+    );
+
+    act(() => {
+      result.current.setPlugins([discordPlugin]);
+    });
+
+    mockUpdatePlugin.mockResolvedValueOnce({
+      ok: true,
+      applied: "restart_required",
+      requiresRestart: true,
+    });
+
+    await act(async () => {
+      await result.current.handlePluginToggle("discord", true);
+    });
+
+    expect(setPendingRestart).toHaveBeenCalledWith(true);
+    expect(setPendingRestartReasons).toHaveBeenCalledTimes(1);
+    expect(
+      setPendingRestartReasons.mock.calls[0]?.[0](["other change"]),
+    ).toEqual(["other change", "Plugin toggle: discord"]);
+    expect(showRestartBanner).toHaveBeenCalledTimes(1);
+    expect(mockTriggerRestart).toHaveBeenCalledTimes(1);
   });
 });

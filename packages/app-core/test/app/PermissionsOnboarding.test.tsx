@@ -105,6 +105,7 @@ vi.mock("lucide-react", () => ({
   Monitor: () => React.createElement("span", null, "🖥"),
   MousePointer2: () => React.createElement("span", null, "🖱"),
   Settings: () => React.createElement("span", null, "⚙"),
+  ShieldBan: () => React.createElement("span", null, "🚫"),
   Smartphone: () => React.createElement("span", null, "📱"),
   Terminal: () => React.createElement("span", null, "💻"),
 }));

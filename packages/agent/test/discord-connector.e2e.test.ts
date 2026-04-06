@@ -28,7 +28,7 @@ import {
   stringToUuid,
 } from "@elizaos/core";
 import dotenv from "dotenv";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   extractPlugin,
   resolveDiscordPluginImportSpecifier,
@@ -44,18 +44,12 @@ dotenv.config({ path: path.resolve(packageRoot, ".env") });
 dotenv.config({ path: path.resolve(packageRoot, "..", "..", ".env") });
 
 const hasDiscordToken = Boolean(process.env.DISCORD_BOT_TOKEN);
-const liveTestsEnabled = process.env.ELIZA_LIVE_TEST === "1";
+const liveTestsEnabled =
+  process.env.MILADY_LIVE_TEST === "1" || process.env.ELIZA_LIVE_TEST === "1";
 const runLiveTests = hasDiscordToken && liveTestsEnabled;
 const DISCORD_PLUGIN_IMPORT = resolveDiscordPluginImportSpecifier();
-const hasDiscordPlugin = DISCORD_PLUGIN_IMPORT !== null;
-
-// Skip all tests if Discord token is not available
-const describeIfLive =
-  hasDiscordPlugin && runLiveTests ? describe : describe.skip;
-const describeIfPluginAvailable = hasDiscordPlugin ? describe : describe.skip;
-
 logger.info(
-  `[discord-connector] Live tests ${runLiveTests ? "ENABLED" : "DISABLED"} (DISCORD_BOT_TOKEN=${hasDiscordToken}, ELIZA_LIVE_TEST=${liveTestsEnabled})`,
+  `[discord-connector] Live tests ${runLiveTests ? "ENABLED" : "DISABLED"} (DISCORD_BOT_TOKEN=${hasDiscordToken}, MILADY_LIVE_TEST=${liveTestsEnabled})`,
 );
 logger.info(
   `[discord-connector] Plugin import ${DISCORD_PLUGIN_IMPORT ?? "UNAVAILABLE"}`,
@@ -66,44 +60,10 @@ logger.info(
 // ---------------------------------------------------------------------------
 
 const TEST_TIMEOUT = 30_000; // 30 seconds for Discord API operations
-const messageHandlingTodos = [
-  "can receive text messages",
-  "can send text messages",
-  "handles DM functionality",
-  "handles long message chunking (2000 char limit)",
-  "renders markdown correctly",
-  "supports threading",
-] as const;
 
-const discordSpecificTodos = [
-  "implements slash commands",
-  "renders embeds",
-  "handles reactions",
-  "processes user mentions (@user)",
-  "processes role mentions (@role)",
-  "processes @everyone/@here mentions",
-] as const;
-
-const mediaAttachmentTodos = [
-  "receives images",
-  "receives files",
-  "sends images",
-  "sends files",
-  "sends images via embeds",
-] as const;
-
-const permissionsAndChannelsTodos = [
-  "enforces channel permissions",
-  "works in threads",
-  "supports voice channel text chat",
-  "handles multiple guilds",
-] as const;
-
-const errorHandlingTodos = [
-  "handles rate limiting with backoff",
-  "implements reconnection logic",
-  "provides helpful error messages for permission issues",
-] as const;
+type DiscordModuleExports = {
+  [key: string]: unknown;
+};
 
 // ---------------------------------------------------------------------------
 // 1. Setup & Authentication Tests
@@ -122,11 +82,36 @@ const loadDiscordPlugin = async (): Promise<Plugin | null> => {
   return extractPlugin(mod) as Plugin | null;
 };
 
+const loadDiscordModule = async (): Promise<DiscordModuleExports | null> => {
+  if (!DISCORD_PLUGIN_IMPORT) {
+    return null;
+  }
+
+  return (await import(DISCORD_PLUGIN_IMPORT)) as DiscordModuleExports;
+};
+
+function requireDiscordExport<T>(key: string): T {
+  const value = discordModuleProbe?.[key];
+  if (value === undefined) {
+    throw new Error(`Missing Discord export: ${key}`);
+  }
+  return value as T;
+}
+
+const discordPluginProbe = await loadDiscordPlugin();
+const discordModuleProbe = await loadDiscordModule();
+const hasDiscordPlugin = discordPluginProbe?.name === "discord";
+
+// Skip all tests if Discord token is not available
+const describeIfLive =
+  hasDiscordPlugin && runLiveTests ? describe : describe.skip;
+const describeIfPluginAvailable = hasDiscordPlugin ? describe : describe.skip;
+
 describeIfPluginAvailable("Discord Connector - Setup & Authentication", () => {
   it(
     "can load the Discord plugin without errors",
     async () => {
-      const plugin = await loadDiscordPlugin();
+      const plugin = discordPluginProbe;
 
       expect(plugin).not.toBeNull();
       if (plugin) {
@@ -139,7 +124,7 @@ describeIfPluginAvailable("Discord Connector - Setup & Authentication", () => {
   it(
     "Discord plugin exports required structure",
     async () => {
-      const plugin = await loadDiscordPlugin();
+      const plugin = discordPluginProbe;
 
       expect(plugin).toBeDefined();
       if (plugin) {
@@ -156,7 +141,7 @@ describeIfPluginAvailable("Discord Connector - Setup & Authentication", () => {
 
     beforeAll(async () => {
       // Load Discord plugin
-      const plugin = await loadDiscordPlugin();
+      const plugin = discordPluginProbe;
       discordPlugin = plugin;
 
       if (!discordPlugin) {
@@ -258,50 +243,440 @@ describeIfPluginAvailable("Discord Connector - Setup & Authentication", () => {
 // 2. Message Handling Tests
 // ---------------------------------------------------------------------------
 
-describeIfLive("Discord Connector - Message Handling", () => {
-  for (const title of messageHandlingTodos) {
-    it.todo(title);
-  }
+describeIfPluginAvailable("Discord Connector - Message Handling", () => {
+  it("registers text-channel and DM send actions", () => {
+    const actionNames = (discordPluginProbe?.actions ?? []).map((action) =>
+      String(action.name ?? ""),
+    );
+
+    expect(actionNames.some((name) => /SEND_MESSAGE/i.test(name))).toBe(true);
+    expect(actionNames.some((name) => /SEND_DM/i.test(name))).toBe(true);
+  });
+
+  it("chunks long outbound text to Discord's message limit", () => {
+    const chunkDiscordText = requireDiscordExport<
+      (
+        text: string,
+        opts?: {
+          maxChars?: number;
+          maxLines?: number;
+          chunkMode?: "length" | "newline";
+        },
+      ) => string[]
+    >("chunkDiscordText");
+
+    const chunks = chunkDiscordText(`Reasoning:\n_${"x".repeat(4500)}_`);
+
+    expect(chunks.length).toBeGreaterThan(2);
+    expect(chunks.every((chunk) => chunk.length <= 2000)).toBe(true);
+    expect(chunks.every((chunk) => chunk.includes("_"))).toBe(true);
+  });
+
+  it("normalizes markdown content for Discord-safe rendering", () => {
+    const escapeDiscordMarkdown = requireDiscordExport<
+      (text: string) => string
+    >("escapeDiscordMarkdown");
+    const stripDiscordFormatting = requireDiscordExport<
+      (text: string) => string
+    >("stripDiscordFormatting");
+
+    expect(escapeDiscordMarkdown("**bold** _under_ `code`")).toBe(
+      "\\*\\*bold\\*\\* \\_under\\_ \\`code\\`",
+    );
+    expect(stripDiscordFormatting("**bold** and `code`")).toBe(
+      "bold and code",
+    );
+  });
+
+  it("applies DM allowlists when authorizing commands", () => {
+    const resolveDiscordCommandAuthorized = requireDiscordExport<
+      (params: {
+        isDirectMessage: boolean;
+        allowFrom?: Array<string | number>;
+        author: { id: string; username: string; discriminator: string };
+      }) => boolean
+    >("resolveDiscordCommandAuthorized");
+
+    const author = {
+      id: "123",
+      username: "milady",
+      discriminator: "1234",
+    };
+
+    expect(
+      resolveDiscordCommandAuthorized({
+        isDirectMessage: true,
+        allowFrom: ["discord:123"],
+        author,
+      }),
+    ).toBe(true);
+    expect(
+      resolveDiscordCommandAuthorized({
+        isDirectMessage: true,
+        allowFrom: ["discord:999"],
+        author,
+      }),
+    ).toBe(false);
+    expect(
+      resolveDiscordCommandAuthorized({
+        isDirectMessage: false,
+        allowFrom: ["discord:999"],
+        author,
+      }),
+    ).toBe(true);
+  });
+
+  it("sanitizes reply thread names for Discord constraints", () => {
+    const sanitizeThreadName = requireDiscordExport<
+      (name: string) => string
+    >("sanitizeThreadName");
+
+    const threadName = sanitizeThreadName(
+      `  Release\nnotes    ${"x".repeat(140)}  `,
+    );
+
+    expect(threadName).toContain("Release notes");
+    expect(threadName).not.toContain("\n");
+    expect(threadName.length).toBeLessThanOrEqual(100);
+  });
 });
 
 // ---------------------------------------------------------------------------
 // 3. Discord-Specific Features Tests
 // ---------------------------------------------------------------------------
 
-describeIfLive("Discord Connector - Discord-Specific Features", () => {
-  for (const title of discordSpecificTodos) {
-    it.todo(title);
-  }
+describeIfPluginAvailable("Discord Connector - Discord-Specific Features", () => {
+  it("builds slash commands with typed options", () => {
+    const buildDiscordSlashCommand = requireDiscordExport<
+      (spec: {
+        name: string;
+        description: string;
+        args?: Array<{
+          name: string;
+          description: string;
+          type: "string" | "number" | "boolean";
+          required?: boolean;
+          choices?: Array<{ label: string; value: string }>;
+        }>;
+      }) => {
+        name: string;
+        description: string;
+        options?: Array<{
+          name: string;
+          description: string;
+          type: number;
+          required?: boolean;
+          choices?: Array<{ name: string; value: string | number }>;
+        }>;
+      }
+    >("buildDiscordSlashCommand");
+
+    const command = buildDiscordSlashCommand({
+      name: "poll",
+      description: "Create a poll",
+      args: [
+        {
+          name: "question",
+          description: "Poll question",
+          type: "string",
+          required: true,
+        },
+        {
+          name: "options",
+          description: "How many options",
+          type: "number",
+        },
+      ],
+    });
+
+    expect(command).toMatchObject({
+      name: "poll",
+      description: "Create a poll",
+    });
+    expect(command.options).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ name: "question", required: true }),
+        expect.objectContaining({ name: "options" }),
+      ]),
+    );
+  });
+
+  it("round-trips command argument custom ids", () => {
+    const buildCommandArgCustomId = requireDiscordExport<
+      (params: {
+        command: string;
+        arg: string;
+        value: string;
+        userId: string;
+      }) => string
+    >("buildCommandArgCustomId");
+    const parseCommandArgCustomId = requireDiscordExport<
+      (customId: string) => {
+        command: string;
+        arg: string;
+        value: string;
+        userId: string;
+      } | null
+    >("parseCommandArgCustomId");
+
+    const customId = buildCommandArgCustomId({
+      command: "poll",
+      arg: "choice",
+      value: "yes please",
+      userId: "42",
+    });
+
+    expect(parseCommandArgCustomId(customId)).toEqual({
+      command: "poll",
+      arg: "choice",
+      value: "yes please",
+      userId: "42",
+    });
+    expect(parseCommandArgCustomId("not-a-command")).toBeNull();
+  });
+
+  it("extracts Discord mentions and reaction metadata", () => {
+    const extractAllUserMentions = requireDiscordExport<
+      (text: string) => string[]
+    >("extractAllUserMentions");
+    const extractAllRoleMentions = requireDiscordExport<
+      (text: string) => string[]
+    >("extractAllRoleMentions");
+    const formatDiscordReactionEmoji = requireDiscordExport<
+      (emoji: { id?: string | null; name?: string | null }) => string
+    >("formatDiscordReactionEmoji");
+
+    const text = "hi <@123> team <@&456>";
+    expect(extractAllUserMentions(text)).toEqual(["123"]);
+    expect(extractAllRoleMentions(text)).toEqual(["456"]);
+    expect(formatDiscordReactionEmoji({ name: "party", id: "789" })).toBe(
+      "party:789",
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------
 // 4. Media & Attachments Tests
 // ---------------------------------------------------------------------------
 
-describeIfLive("Discord Connector - Media & Attachments", () => {
-  for (const title of mediaAttachmentTodos) {
-    it.todo(title);
-  }
+describeIfPluginAvailable("Discord Connector - Media & Attachments", () => {
+  it("registers media and attachment actions", () => {
+    const actionNames = (discordPluginProbe?.actions ?? []).map((action) =>
+      String(action.name ?? ""),
+    );
+
+    expect(
+      actionNames.some((name) => /CHAT_WITH_ATTACHMENTS/i.test(name)),
+    ).toBe(true);
+    expect(actionNames.some((name) => /DOWNLOAD_MEDIA/i.test(name))).toBe(
+      true,
+    );
+    expect(actionNames.some((name) => /TRANSCRIBE_MEDIA/i.test(name))).toBe(
+      true,
+    );
+  });
+
+  it("builds stable message and channel links for Discord resources", () => {
+    const buildMessageLink = requireDiscordExport<
+      (guildId: string, channelId: string, messageId: string) => string
+    >("buildMessageLink");
+    const buildChannelLink = requireDiscordExport<
+      (guildId: string, channelId: string) => string
+    >("buildChannelLink");
+
+    expect(buildChannelLink("guild-1", "channel-2")).toBe(
+      "https://discord.com/channels/guild-1/channel-2",
+    );
+    expect(buildMessageLink("guild-1", "channel-2", "message-3")).toBe(
+      "https://discord.com/channels/guild-1/channel-2/message-3",
+    );
+  });
+
+  it("extracts channel mentions from media-targeted messages", () => {
+    const extractAllChannelMentions = requireDiscordExport<
+      (text: string) => string[]
+    >("extractAllChannelMentions");
+
+    expect(extractAllChannelMentions("post it in <#123> and <#456>")).toEqual(
+      ["123", "456"],
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------
 // 5. Permissions & Channels Tests
 // ---------------------------------------------------------------------------
 
-describeIfLive("Discord Connector - Permissions & Channels", () => {
-  for (const title of permissionsAndChannelsTodos) {
-    it.todo(title);
-  }
+describeIfPluginAvailable("Discord Connector - Permissions & Channels", () => {
+  it("resolves parent channel policy for threads", () => {
+    const resolveDiscordChannelConfigWithFallback = requireDiscordExport<
+      (params: {
+        guildInfo?: {
+          channels?: Record<
+            string,
+            {
+              allow?: boolean;
+              requireMention?: boolean;
+              autoThread?: boolean;
+            }
+          >;
+        } | null;
+        channelId: string;
+        channelName?: string;
+        parentId?: string;
+        parentName?: string;
+        isThread?: boolean;
+      }) => {
+        allowed: boolean;
+        requireMention?: boolean;
+        autoThread?: boolean;
+        matchKey?: string;
+        matchSource?: string;
+      } | null
+    >("resolveDiscordChannelConfigWithFallback");
+
+    const resolved = resolveDiscordChannelConfigWithFallback({
+      guildInfo: {
+        channels: {
+          "parent-1": {
+            allow: true,
+            requireMention: false,
+            autoThread: true,
+          },
+        },
+      },
+      channelId: "thread-1",
+      channelName: "Daily Thread",
+      parentId: "parent-1",
+      parentName: "general",
+      isThread: true,
+    });
+
+    expect(resolved).toMatchObject({
+      allowed: true,
+      requireMention: false,
+      autoThread: true,
+      matchKey: "parent-1",
+      matchSource: "parent",
+    });
+  });
+
+  it("disables mention gating for bot-owned auto threads", () => {
+    const resolveDiscordShouldRequireMention = requireDiscordExport<
+      (params: {
+        isGuildMessage: boolean;
+        isThread: boolean;
+        botId?: string | null;
+        threadOwnerId?: string | null;
+        channelConfig?: { autoThread?: boolean } | null;
+      }) => boolean
+    >("resolveDiscordShouldRequireMention");
+
+    expect(
+      resolveDiscordShouldRequireMention({
+        isGuildMessage: true,
+        isThread: true,
+        botId: "bot-1",
+        threadOwnerId: "bot-1",
+        channelConfig: { autoThread: true },
+      }),
+    ).toBe(false);
+  });
+
+  it("emits reaction notifications according to ownership and allowlists", () => {
+    const shouldEmitDiscordReactionNotification = requireDiscordExport<
+      (params: {
+        mode?: "off" | "own" | "all" | "allowlist";
+        botId?: string;
+        messageAuthorId?: string;
+        userId: string;
+        userName?: string;
+        userTag?: string;
+        allowlist?: Array<string | number>;
+      }) => boolean
+    >("shouldEmitDiscordReactionNotification");
+
+    expect(
+      shouldEmitDiscordReactionNotification({
+        mode: "own",
+        botId: "bot-1",
+        messageAuthorId: "bot-1",
+        userId: "user-1",
+      }),
+    ).toBe(true);
+    expect(
+      shouldEmitDiscordReactionNotification({
+        mode: "allowlist",
+        userId: "user-1",
+        userName: "milady",
+        allowlist: ["milady"],
+      }),
+    ).toBe(true);
+    expect(
+      shouldEmitDiscordReactionNotification({
+        mode: "off",
+        userId: "user-1",
+      }),
+    ).toBe(false);
+  });
+
+  it("generates invite URLs for every permission tier", () => {
+    const generateAllInviteUrls = requireDiscordExport<
+      (applicationId: string) => Record<string, string>
+    >("generateAllInviteUrls");
+
+    const urls = generateAllInviteUrls("123456");
+
+    expect(Object.keys(urls)).toEqual(
+      expect.arrayContaining([
+        "basic",
+        "basicVoice",
+        "moderator",
+        "moderatorVoice",
+        "admin",
+        "adminVoice",
+      ]),
+    );
+    expect(Object.values(urls)).toSatisfy((values: string[]) =>
+      values.every((url) => url.includes("client_id=123456")),
+    );
+  });
 });
 
 // ---------------------------------------------------------------------------
 // 6. Error Handling Tests
 // ---------------------------------------------------------------------------
 
-describeIfLive("Discord Connector - Error Handling", () => {
-  for (const title of errorHandlingTodos) {
-    it.todo(title);
-  }
+describeIfPluginAvailable("Discord Connector - Error Handling", () => {
+  it("warns instead of throwing when the Discord token is missing", async () => {
+    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => {});
+
+    await discordPluginProbe?.init?.(
+      {},
+      {
+        getSetting: () => "",
+      } as unknown as AgentRuntime,
+    );
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("Discord API Token not provided"),
+    );
+    warnSpy.mockRestore();
+  });
+
+  it("rejects malformed command custom ids", () => {
+    const parseCommandArgCustomId = requireDiscordExport<
+      (customId: string) => {
+        command: string;
+        arg: string;
+        value: string;
+        userId: string;
+      } | null
+    >("parseCommandArgCustomId");
+
+    expect(parseCommandArgCustomId("cmdarg:command=poll;arg=choice")).toBeNull();
+    expect(parseCommandArgCustomId("plain-text")).toBeNull();
+  });
 });
 
 // ---------------------------------------------------------------------------

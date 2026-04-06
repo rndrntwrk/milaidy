@@ -37,6 +37,12 @@ vi.mock("@miladyai/ui", async () => {
   };
 });
 
+vi.mock("@miladyai/app-core/api", () => ({
+  client: {
+    getInboxChats: vi.fn(async () => ({ chats: [] })),
+  },
+}));
+
 import { ConversationsSidebar } from "../../src/components/conversations/ConversationsSidebar";
 
 type ConversationStub = {
@@ -56,6 +62,7 @@ function createContext(overrides: Record<string, unknown> = {}) {
       } satisfies ConversationStub,
     ],
     activeConversationId: "conv-1",
+    activeInboxChat: null,
     unreadConversations: new Set<string>(),
     handleStartDraftConversation: vi.fn(async () => {}),
     handleNewConversation: vi.fn(),
@@ -63,6 +70,7 @@ function createContext(overrides: Record<string, unknown> = {}) {
     handleDeleteConversation: vi.fn(async () => {}),
     handleRenameConversation: vi.fn(async () => {}),
     suggestConversationTitle: vi.fn(async () => null),
+    setState: vi.fn(),
     uiLanguage: "en",
     ...overrides,
   };
@@ -88,6 +96,10 @@ describe("ConversationsSidebar", () => {
       document.addEventListener ??= vi.fn();
       document.removeEventListener ??= vi.fn();
     }
+    window.setInterval = globalThis.setInterval.bind(globalThis);
+    window.clearInterval = globalThis.clearInterval.bind(globalThis);
+    window.setTimeout = globalThis.setTimeout.bind(globalThis);
+    window.clearTimeout = globalThis.clearTimeout.bind(globalThis);
   });
 
   it("requires explicit confirmation before deleting", async () => {

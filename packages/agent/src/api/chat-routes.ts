@@ -2,8 +2,6 @@
  * Chat route handlers extracted from server.ts.
  *
  * Handles:
- *   POST /api/chat              – legacy chat endpoint
- *   POST /api/chat/stream       – streaming chat
  *   POST /v1/chat/completions   – OpenAI-compatible
  *   POST /v1/messages           – Anthropic-compatible
  *   GET  /v1/models             – OpenAI model listing
@@ -25,10 +23,21 @@ import {
   stringToUuid,
   type UUID,
 } from "@elizaos/core";
+import {
+  getSelfControlStatus,
+  hasWebsiteBlockDeferralIntent,
+  hasWebsiteBlockIntent,
+} from "@miladyai/plugin-selfcontrol/selfcontrol";
 import type { ElizaConfig } from "../config/config.js";
-import type { ReadJsonBodyOptions } from "./http-helpers.js";
-import type { RouteRequestContext } from "./route-helpers.js";
-import { resolveStreamingUpdate } from "./streaming-text.js";
+import { normalizeCharacterLanguage } from "../onboarding-presets.js";
+import { withMiladyTrajectoryStep } from "../runtime/trajectory-step-context.js";
+import { detectRuntimeModel } from "./agent-model.js";
+import {
+  isClientVisibleNoResponse,
+  isNoResponsePlaceholder,
+  stripAssistantStageDirections,
+} from "./chat-text-helpers.js";
+import { maybeAugmentChatMessageWithAgentAwareness } from "./chat-augmentation.js";
 import {
   extractAnthropicSystemAndLastUser,
   extractCompatTextContent,
@@ -39,48 +48,37 @@ import {
   isInsufficientCreditsError,
   isInsufficientCreditsMessage,
 } from "./credit-detection.js";
-import { detectRuntimeModel } from "./agent-model.js";
-import { normalizeCharacterLanguage } from "../onboarding-presets.js";
+import type { ReadJsonBodyOptions } from "./http-helpers.js";
+import type { RouteRequestContext } from "./route-helpers.js";
 import {
-  isClientVisibleNoResponse,
-  isNoResponsePlaceholder,
-  stripAssistantStageDirections,
-} from "./chat-text-helpers.js";
-import {
-  maybeAugmentChatMessageWithAgentAwareness,
+  buildWalletActionNotExecutedReply,
+  cloneWithoutBlockedObjectKeys,
+  decodePathComponent,
+  executeFallbackParsedActions,
+  getErrorMessage,
+  hasBlockedObjectKeyDeep,
+  hasUsableWalletFallbackParams,
+  inferBalanceChainFromText,
+  inferWalletExecutionFallback,
+  isBalanceIntent,
+  isUuidLike,
+  isWalletActionRequiredIntent,
   maybeAugmentChatMessageWithKnowledge,
   maybeAugmentChatMessageWithLanguage,
-} from "./chat-augmentation.js";
-import {
-  resolveAppUserName,
-  type ConversationMeta,
   // Deep dependencies of generateChatResponse that stay in server.ts
   maybeHandleDirectBinanceSkillRequest,
-  executeFallbackParsedActions,
+  normalizeIncomingChatPrompt,
   parseFallbackActionBlocks,
+  resolveAppUserName,
+  resolvePluginConfigReply,
+  resolveWalletModeGuidanceReply,
   shouldForceCheckBalanceFallback,
-  isBalanceIntent,
-  inferBalanceChainFromText,
+  trimWalletProgressPrefix,
+  validateChatImages,
   WALLET_EXECUTION_INTENT_RE,
   WALLET_PROGRESS_ONLY_RE,
-  inferWalletExecutionFallback,
-  hasUsableWalletFallbackParams,
-  isWalletActionRequiredIntent,
-  buildWalletActionNotExecutedReply,
-  trimWalletProgressPrefix,
-  getErrorMessage,
-  isUuidLike,
-  hasBlockedObjectKeyDeep,
-  cloneWithoutBlockedObjectKeys,
-  resolveWalletModeGuidanceReply,
-  resolvePluginConfigReply,
-  buildUserMessages,
-  validateChatImages,
-  buildChatAttachments,
-  normalizeIncomingChatPrompt,
-  IMAGE_ONLY_CHAT_FALLBACK_PROMPT,
-  decodePathComponent,
 } from "./server.js";
+import { resolveStreamingUpdate } from "./streaming-text.js";
 
 const MAX_BODY_BYTES = 1024 * 1024; // 1 MB
 const CHAT_MAX_BODY_BYTES = 20 * 1024 * 1024; // 20 MB (image-capable)
@@ -131,6 +129,26 @@ const PROVIDER_ISSUE_CHAT_REPLY = "Sorry, I'm having a provider issue";
 const INSUFFICIENT_CREDITS_CHAT_REPLY =
   "Eliza Cloud credits are depleted. Top up the cloud balance and try again.";
 const GENERIC_NO_RESPONSE_CHAT_REPLY = PROVIDER_ISSUE_CHAT_REPLY;
+const WEBSITE_BLOCK_SUBJECT_RE =
+  /\b(websites?|sites?|domains?|x\.com|twitter\.com)\b/i;
+const WEBSITE_BLOCK_FOLLOW_UP_RE =
+  /\b(do it|do that|block it|block them|go ahead|use self ?control|self ?control now|block the websites?|please do|now)\b/i;
+const WEBSITE_BLOCK_PERMISSION_RE =
+  /\b(permission|permissions|approval|approve|access|admin|administrator|root|sudo|allow|grant|enable)\b/i;
+const WEBSITE_BLOCK_PERMISSION_MODEL_RE =
+  /\b(permission|approval|approve|access|admin|administrator|root|sudo)\b/i;
+const NON_EXECUTABLE_FALLBACK_ACTIONS = new Set(["REPLY", "NONE", "IGNORE"]);
+
+function isExecutableFallbackAction(action: { name: string }): boolean {
+  return !NON_EXECUTABLE_FALLBACK_ACTIONS.has(action.name);
+}
+
+function hasWebsiteBlockingPermissionIntent(text: string): boolean {
+  return (
+    WEBSITE_BLOCK_PERMISSION_RE.test(text) &&
+    /\b(block(?:ing)?|self ?control|hosts? file|websites?)\b/i.test(text)
+  );
+}
 
 function pickInsufficientCreditsChatReply(): string {
   return INSUFFICIENT_CREDITS_CHAT_REPLY;
@@ -166,7 +184,10 @@ function getProviderIssueChatReply(): string {
   return PROVIDER_ISSUE_CHAT_REPLY;
 }
 
-export function getChatFailureReply(err: unknown, logBuffer: LogEntry[]): string {
+export function getChatFailureReply(
+  err: unknown,
+  logBuffer: LogEntry[],
+): string {
   if (
     isInsufficientCreditsError(err) ||
     findRecentInsufficientCreditsLog(logBuffer)
@@ -189,6 +210,67 @@ export function normalizeChatResponseText(
   }
   if (!isClientVisibleNoResponse(text)) return text;
   return resolveNoResponseFallback(logBuffer, runtime);
+}
+
+function inferWebsiteBlockFallback(
+  userText: string,
+  modelText: string,
+): {
+  name: "BLOCK_WEBSITES";
+} | null {
+  if (hasWebsiteBlockDeferralIntent(userText)) {
+    return null;
+  }
+
+  const userHasBlockIntent = hasWebsiteBlockIntent(userText);
+  const modelLooksLikeBlockConfirmation =
+    /\b(blocking|block|self ?control)\b/i.test(modelText);
+  const userHasPermissionIntent = hasWebsiteBlockingPermissionIntent(userText);
+
+  if (userHasPermissionIntent) {
+    return null;
+  }
+
+  const userLooksLikeBlockIntent =
+    userHasBlockIntent &&
+    (WEBSITE_BLOCK_SUBJECT_RE.test(userText) ||
+      /\b(it|them)\b/i.test(userText));
+  if (userLooksLikeBlockIntent) {
+    return { name: "BLOCK_WEBSITES" };
+  }
+
+  if (
+    modelLooksLikeBlockConfirmation &&
+    WEBSITE_BLOCK_FOLLOW_UP_RE.test(userText)
+  ) {
+    return { name: "BLOCK_WEBSITES" };
+  }
+
+  return null;
+}
+
+function inferWebsiteBlockingPermissionFallback(
+  userText: string,
+  modelText: string,
+): {
+  name: "REQUEST_WEBSITE_BLOCKING_PERMISSION";
+} | null {
+  const userHasPermissionIntent = hasWebsiteBlockingPermissionIntent(userText);
+  if (userHasPermissionIntent) {
+    return { name: "REQUEST_WEBSITE_BLOCKING_PERMISSION" };
+  }
+
+  const modelLooksLikePermissionConfirmation =
+    WEBSITE_BLOCK_PERMISSION_MODEL_RE.test(modelText) &&
+    /\b(ask|request|grant|enable|allow|approve|get)\b/i.test(modelText);
+  if (
+    modelLooksLikePermissionConfirmation &&
+    WEBSITE_BLOCK_FOLLOW_UP_RE.test(userText)
+  ) {
+    return { name: "REQUEST_WEBSITE_BLOCKING_PERMISSION" };
+  }
+
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -476,7 +558,10 @@ type ChatTrajectoryLogger = {
       metadata?: Record<string, unknown>;
     },
   ) => Promise<string>;
-  startStep?: (trajectoryId: string, envState?: Record<string, unknown>) => string;
+  startStep?: (
+    trajectoryId: string,
+    envState?: Record<string, unknown>,
+  ) => string;
 };
 
 function getMessageMetadata(
@@ -509,7 +594,10 @@ async function ensureChatTrajectoryStep(
   const trajectoryLogger = runtime.getService?.(
     "trajectory_logger",
   ) as ChatTrajectoryLogger | null;
-  if (!trajectoryLogger || typeof trajectoryLogger.startTrajectory !== "function") {
+  if (
+    !trajectoryLogger ||
+    typeof trajectoryLogger.startTrajectory !== "function"
+  ) {
     return;
   }
 
@@ -526,16 +614,19 @@ async function ensureChatTrajectoryStep(
     const content = message.content as Content & {
       channelType?: unknown;
     };
-    const trajectoryId = await trajectoryLogger.startTrajectory(runtime.agentId, {
-      source,
-      metadata: {
-        roomId: message.roomId,
-        entityId: message.entityId,
-        messageId: message.id,
-        channelType: metadata.channelType ?? content.channelType,
-        conversationId: metadata.sessionKey,
+    const trajectoryId = await trajectoryLogger.startTrajectory(
+      runtime.agentId,
+      {
+        source,
+        metadata: {
+          roomId: message.roomId,
+          entityId: message.entityId,
+          messageId: message.id,
+          channelType: metadata.channelType ?? content.channelType,
+          conversationId: metadata.sessionKey,
+        },
       },
-    });
+    );
 
     const stepId =
       typeof trajectoryLogger.startStep === "function"
@@ -653,7 +744,20 @@ export async function generateChatResponse(
       >
     | undefined;
   let actionCallbacksSeen = 0;
+  const seenActionTags = new Set<string>();
   let _handlerError: unknown = null;
+  const recordActionCallback = (actionTag: string, hasText: boolean): void => {
+    actionCallbacksSeen += 1;
+    seenActionTags.add(actionTag.toUpperCase());
+    runtime.logger?.info(
+      {
+        src: "eliza-api",
+        action: actionTag,
+        hasText,
+      },
+      `[eliza-api] Action callback fired: ${actionTag}`,
+    );
+  };
   const directWalletExecutionFallback = WALLET_EXECUTION_INTENT_RE.test(
     originalUserText,
   )
@@ -760,17 +864,7 @@ export async function generateChatResponse(
         message,
         [directWalletExecutionFallback.action],
         appendIncomingText,
-        (actionTag, hasText) => {
-          actionCallbacksSeen += 1;
-          runtime.logger?.info(
-            {
-              src: "eliza-api",
-              action: actionTag,
-              hasText,
-            },
-            `[eliza-api] Action callback fired: ${actionTag}`,
-          );
-        },
+        recordActionCallback,
       );
       result = {
         didRespond: true,
@@ -791,45 +885,45 @@ export async function generateChatResponse(
         runtime,
         awarenessAugmentedMessage,
       );
-      result = await runtime.messageService?.handleMessage(
-        runtime,
-        generationMessage,
-        async (content: Content) => {
-          if (opts?.isAborted?.()) {
-            throw new Error("client_disconnected");
-          }
+      const trajectoryStepId =
+        readMessageTrajectoryStepId(generationMessage) ??
+        readMessageTrajectoryStepId(message);
+      result = await withMiladyTrajectoryStep(trajectoryStepId, () =>
+        runtime.messageService?.handleMessage(
+          runtime,
+          generationMessage,
+          async (content: Content) => {
+            if (opts?.isAborted?.()) {
+              throw new Error("client_disconnected");
+            }
 
-          const actionTag = (content as Record<string, unknown>)?.action;
-          if (actionTag) {
-            actionCallbacksSeen += 1;
-            runtime.logger?.info(
-              {
-                src: "eliza-api",
-                action: actionTag,
-                hasText: Boolean(extractCompatTextContent(content)),
-              },
-              `[eliza-api] Action callback fired: ${actionTag}`,
-            );
-          }
+            const actionTag = (content as Record<string, unknown>)?.action;
+            if (typeof actionTag === "string" && actionTag.length > 0) {
+              recordActionCallback(
+                actionTag,
+                Boolean(extractCompatTextContent(content)),
+              );
+            }
 
-          const chunk = extractCompatTextContent(content);
-          if (!chunk) return [];
-          if (!claimStreamSource("callback")) return [];
-          appendIncomingText(chunk);
-          return [];
-        },
-        {
-          onStreamChunk: opts?.onChunk
-            ? async (chunk: string) => {
-                if (opts?.isAborted?.()) {
-                  throw new Error("client_disconnected");
+            const chunk = extractCompatTextContent(content);
+            if (!chunk) return [];
+            if (!claimStreamSource("callback")) return [];
+            appendIncomingText(chunk);
+            return [];
+          },
+          {
+            onStreamChunk: opts?.onChunk
+              ? async (chunk: string) => {
+                  if (opts?.isAborted?.()) {
+                    throw new Error("client_disconnected");
+                  }
+                  if (!chunk) return;
+                  if (!claimStreamSource("onStreamChunk")) return;
+                  appendIncomingText(chunk);
                 }
-                if (!chunk) return;
-                if (!claimStreamSource("onStreamChunk")) return;
-                appendIncomingText(chunk);
-              }
-            : undefined,
-        },
+              : undefined,
+          },
+        ),
       );
     }
 
@@ -952,6 +1046,46 @@ export async function generateChatResponse(
 
     if (
       actionCallbacksSeen === 0 &&
+      !fallbackActionsToRun.some((action) => action.name === "BLOCK_WEBSITES")
+    ) {
+      const inferredWebsiteBlockFallback = inferWebsiteBlockFallback(
+        userText,
+        modelText,
+      );
+      if (inferredWebsiteBlockFallback) {
+        fallbackActionsToRun.push(inferredWebsiteBlockFallback);
+        runtime.logger?.warn(
+          {
+            src: "eliza-api",
+            action: inferredWebsiteBlockFallback.name,
+          },
+          "[eliza-api] Injecting website blocker fallback from prompt intent",
+        );
+      }
+    }
+
+    if (
+      actionCallbacksSeen === 0 &&
+      !fallbackActionsToRun.some(
+        (action) => action.name === "REQUEST_WEBSITE_BLOCKING_PERMISSION",
+      )
+    ) {
+      const inferredWebsiteBlockingPermissionFallback =
+        inferWebsiteBlockingPermissionFallback(userText, modelText);
+      if (inferredWebsiteBlockingPermissionFallback) {
+        fallbackActionsToRun.push(inferredWebsiteBlockingPermissionFallback);
+        runtime.logger?.warn(
+          {
+            src: "eliza-api",
+            action: inferredWebsiteBlockingPermissionFallback.name,
+          },
+          "[eliza-api] Injecting website blocker permission fallback from prompt intent",
+        );
+      }
+    }
+
+    if (
+      actionCallbacksSeen === 0 &&
       WALLET_EXECUTION_INTENT_RE.test(userText)
     ) {
       const inferredWalletFallback = inferWalletExecutionFallback(userText);
@@ -959,9 +1093,12 @@ export async function generateChatResponse(
         const existingIndex = fallbackActionsToRun.findIndex(
           (action) => action.name === inferredWalletFallback.action.name,
         );
+        const existingAction =
+          existingIndex >= 0 ? fallbackActionsToRun[existingIndex] : undefined;
         if (
           existingIndex === -1 ||
-          !hasUsableWalletFallbackParams(fallbackActionsToRun[existingIndex]!)
+          !existingAction ||
+          !hasUsableWalletFallbackParams(existingAction)
         ) {
           if (existingIndex >= 0) {
             fallbackActionsToRun.splice(existingIndex, 1);
@@ -988,15 +1125,18 @@ export async function generateChatResponse(
 
     // Only run fallback execution when the core did NOT dispatch actions itself.
     const coreHandledActions = resultRecord.mode === "actions";
+    const executableFallbackActions = fallbackActionsToRun.filter(
+      isExecutableFallbackAction,
+    );
     if (
       actionCallbacksSeen === 0 &&
       !coreHandledActions &&
-      fallbackActionsToRun.length > 0
+      executableFallbackActions.length > 0
     ) {
       runtime.logger?.warn(
         {
           src: "eliza-api",
-          parsedActions: fallbackActionsToRun.map((a) => a.name),
+          parsedActions: executableFallbackActions.map((a) => a.name),
         },
         "[eliza-api] Recovering from unexecuted action payload",
       );
@@ -1004,20 +1144,41 @@ export async function generateChatResponse(
       await executeFallbackParsedActions(
         runtime,
         message,
-        fallbackActionsToRun,
+        executableFallbackActions,
         appendIncomingText,
-        (actionTag, hasText) => {
-          actionCallbacksSeen += 1;
-          runtime.logger?.info(
-            {
-              src: "eliza-api",
-              action: actionTag,
-              hasText,
-            },
-            `[eliza-api] Action callback fired: ${actionTag}`,
-          );
+        recordActionCallback,
+        {
+          getCurrentText: () => responseText || modelText,
         },
       );
+    }
+
+    const inferredWebsiteBlockRecovery = inferWebsiteBlockFallback(
+      userText,
+      modelText,
+    );
+    if (inferredWebsiteBlockRecovery && !seenActionTags.has("BLOCK_WEBSITES")) {
+      const websiteBlockStatus = await getSelfControlStatus();
+      if (!websiteBlockStatus.active) {
+        runtime.logger?.warn(
+          {
+            src: "eliza-api",
+            action: inferredWebsiteBlockRecovery.name,
+          },
+          "[eliza-api] Recovering missing website blocker side effect after model response",
+        );
+
+        await executeFallbackParsedActions(
+          runtime,
+          message,
+          [inferredWebsiteBlockRecovery],
+          appendIncomingText,
+          recordActionCallback,
+          {
+            getCurrentText: () => responseText || modelText,
+          },
+        );
+      }
     }
   }
 
@@ -1166,105 +1327,6 @@ export interface ChatRouteContext extends RouteRequestContext {
   state: ChatRouteState;
 }
 
-// ---------------------------------------------------------------------------
-// ensureLegacyChatConnection
-// ---------------------------------------------------------------------------
-
-async function ensureLegacyChatConnection(
-  state: ChatRouteState,
-  runtime: AgentRuntime,
-  agentName: string,
-): Promise<void> {
-  const userId = ensureAdminEntityIdForChat(state);
-  if (!state.chatRoomId) {
-    state.chatRoomId = stringToUuid(`${agentName}-web-chat-room`);
-  }
-  state.chatUserId = userId;
-
-  const roomId = state.chatRoomId;
-  const worldId = stringToUuid(`${agentName}-web-chat-world`) as UUID;
-  const messageServerId = stringToUuid(`${agentName}-web-server`) as UUID;
-  const target = { userId, roomId, worldId };
-
-  while (true) {
-    const ready = state.chatConnectionReady;
-    if (
-      ready &&
-      ready.userId === target.userId &&
-      ready.roomId === target.roomId &&
-      ready.worldId === target.worldId
-    ) {
-      if (typeof runtime.getRoom !== "function") {
-        return;
-      }
-      try {
-        const existingRoom = await runtime.getRoom(target.roomId);
-        if (existingRoom) {
-          return;
-        }
-      } catch {
-        return;
-      }
-    }
-
-    if (state.chatConnectionPromise) {
-      await state.chatConnectionPromise;
-      continue;
-    }
-
-    const promise = (async () => {
-      await runtime.ensureConnection({
-        entityId: userId,
-        roomId,
-        worldId,
-        userName: resolveAppUserName(state.config),
-        source: "client_chat",
-        channelId: "web-chat",
-        type: ChannelType.DM,
-        messageServerId,
-        metadata: { ownership: { ownerId: userId } },
-      });
-      const world = await runtime.getWorld(worldId);
-      if (world) {
-        let needsUpdate = false;
-        if (!world.metadata) {
-          world.metadata = {};
-          needsUpdate = true;
-        }
-        if (
-          !world.metadata.ownership ||
-          typeof world.metadata.ownership !== "object" ||
-          (world.metadata.ownership as { ownerId?: string }).ownerId !== userId
-        ) {
-          world.metadata.ownership = { ownerId: userId };
-          needsUpdate = true;
-        }
-        const metadataWithRoles = world.metadata as {
-          roles?: Record<string, string>;
-        };
-        const roles = metadataWithRoles.roles ?? {};
-        if (roles[userId] !== "OWNER") {
-          roles[userId] = "OWNER";
-          metadataWithRoles.roles = roles;
-          needsUpdate = true;
-        }
-        if (needsUpdate) {
-          await runtime.updateWorld(world);
-        }
-      }
-      state.chatConnectionReady = target;
-    })();
-    state.chatConnectionPromise = promise;
-    try {
-      await promise;
-    } finally {
-      if (state.chatConnectionPromise === promise) {
-        state.chatConnectionPromise = null;
-      }
-    }
-  }
-}
-
 async function ensureCompatChatConnection(
   state: ChatRouteState,
   runtime: AgentRuntime,
@@ -1328,7 +1390,7 @@ function ensureAdminEntityIdForChat(state: ChatRouteState): UUID {
   if (state.adminEntityId) {
     return state.adminEntityId;
   }
-  const configured = (state.config as any).agents?.defaults?.adminEntityId?.trim();
+  const configured = state.config.agents?.defaults?.adminEntityId?.trim();
   const nextAdminEntityId =
     configured && isUuidLike(configured)
       ? configured
@@ -1907,226 +1969,6 @@ export async function handleChatRoutes(
         { error: { type: "server_error", message: getErrorMessage(err) } },
         500,
       );
-    }
-    return true;
-  }
-
-  // ── POST /api/chat/stream ────────────────────────────────────────────
-  if (method === "POST" && pathname === "/api/chat/stream") {
-    const chatPayload = await readChatRequestPayload(
-      req,
-      res,
-      { readJsonBody, error },
-      MAX_BODY_BYTES,
-    );
-    if (!chatPayload) return true;
-    const { prompt, channelType, conversationMode, preferredLanguage } =
-      chatPayload;
-
-    if (!state.runtime) {
-      error(res, "Agent is not running", 503);
-      return true;
-    }
-
-    initSse(res);
-    let aborted = false;
-    req.on("close", () => {
-      aborted = true;
-    });
-
-    // Pause coordinator LLM decisions while processing user message
-    const streamCoordinator = state.runtime.getService("SWARM_COORDINATOR") as
-      | { pause?: () => void; resume?: () => void; isPaused?: boolean }
-      | undefined;
-    const streamDidPause = streamCoordinator && !streamCoordinator.isPaused;
-    if (streamDidPause) {
-      streamCoordinator.pause?.();
-    }
-
-    let streamedText = "";
-
-    try {
-      const walletModeGuidance = resolveWalletModeGuidanceReply(state, prompt);
-      if (walletModeGuidance) {
-        if (!aborted) {
-          writeChatTokenSse(res, walletModeGuidance, walletModeGuidance);
-          writeSseJson(res, {
-            type: "done",
-            fullText: walletModeGuidance,
-            agentName: state.agentName,
-          });
-        }
-        return true;
-      }
-
-      const runtime = state.runtime;
-      const agentName = runtime.character.name ?? "Eliza";
-      await ensureLegacyChatConnection(state, runtime, agentName);
-      const chatUserId = state.chatUserId;
-      const chatRoomId = state.chatRoomId;
-      if (!chatUserId || !chatRoomId) {
-        throw new Error("Legacy chat connection was not initialized");
-      }
-
-      const message = createMessageMemory({
-        id: crypto.randomUUID() as UUID,
-        entityId: chatUserId,
-        agentId: runtime.agentId,
-        roomId: chatRoomId,
-        content: {
-          text: prompt,
-          source: "client_chat",
-          channelType,
-          ...(conversationMode ? { conversationMode } : {}),
-        },
-      });
-
-      const result = await generateChatResponse(
-        runtime,
-        message,
-        state.agentName,
-        {
-          isAborted: () => aborted,
-          onChunk: (chunk) => {
-            if (!chunk) return;
-            streamedText += chunk;
-            writeChatTokenSse(res, chunk, streamedText);
-          },
-          onSnapshot: (text) => {
-            if (!text) return;
-            streamedText = text;
-            writeChatTokenSse(res, text, streamedText);
-          },
-          resolveNoResponseText: () =>
-            resolveNoResponseFallback(state.logBuffer, runtime),
-          preferredLanguage,
-        },
-      );
-
-      if (!aborted) {
-        const resolvedText = normalizeChatResponseText(
-          result.text,
-          state.logBuffer,
-          runtime,
-        );
-        writeSseJson(res, {
-          type: "done",
-          fullText: resolvedText,
-          agentName: result.agentName,
-          ...(result.usage ? { estimatedUsage: result.usage } : {}),
-        });
-      }
-    } catch (err) {
-      if (!aborted) {
-        writeSse(res, {
-          type: "done",
-          fullText: getChatFailureReply(err, state.logBuffer),
-          agentName: state.agentName,
-        });
-      }
-    } finally {
-      // Resume coordinator after user message processed
-      if (streamDidPause) {
-        streamCoordinator.resume?.();
-      }
-      res.end();
-    }
-    return true;
-  }
-
-  // ── POST /api/chat (legacy — routes to default conversation) ───────
-  if (method === "POST" && pathname === "/api/chat") {
-    const chatPayload = await readChatRequestPayload(
-      req,
-      res,
-      { readJsonBody, error },
-      MAX_BODY_BYTES,
-    );
-    if (!chatPayload) return true;
-    const { prompt, channelType, conversationMode, preferredLanguage } =
-      chatPayload;
-
-    if (!state.runtime) {
-      error(res, "Agent is not running", 503);
-      return true;
-    }
-
-    // Pause coordinator LLM decisions while processing user message
-    const chatCoordinator = state.runtime.getService("SWARM_COORDINATOR") as
-      | { pause?: () => void; resume?: () => void; isPaused?: boolean }
-      | undefined;
-    const chatDidPause = chatCoordinator && !chatCoordinator.isPaused;
-    if (chatDidPause) {
-      chatCoordinator.pause?.();
-    }
-
-    try {
-      const walletModeGuidance = resolveWalletModeGuidanceReply(state, prompt);
-      if (walletModeGuidance) {
-        json(res, {
-          text: walletModeGuidance,
-          agentName: state.agentName,
-        });
-        return true;
-      }
-
-      // Plugin config intercept
-      const pluginConfigReply = await resolvePluginConfigReply(prompt, state);
-      if (pluginConfigReply) {
-        json(res, {
-          text: pluginConfigReply,
-          agentName: state.agentName,
-        });
-        return true;
-      }
-
-      const runtime = state.runtime;
-      const agentName = runtime.character.name ?? "Eliza";
-      await ensureLegacyChatConnection(state, runtime, agentName);
-      const chatUserId = state.chatUserId;
-      const chatRoomId = state.chatRoomId;
-      if (!chatUserId || !chatRoomId) {
-        throw new Error("Legacy chat connection was not initialized");
-      }
-
-      const message = createMessageMemory({
-        id: crypto.randomUUID() as UUID,
-        entityId: chatUserId,
-        agentId: runtime.agentId,
-        roomId: chatRoomId,
-        content: {
-          text: prompt,
-          source: "client_chat",
-          channelType,
-          ...(conversationMode ? { conversationMode } : {}),
-        },
-      });
-
-      const result = await generateChatResponse(
-        runtime,
-        message,
-        state.agentName,
-        {
-          resolveNoResponseText: () =>
-            resolveNoResponseFallback(state.logBuffer, runtime),
-          preferredLanguage,
-        },
-      );
-
-      json(res, {
-        text: normalizeChatResponseText(result.text, state.logBuffer, runtime),
-        agentName: result.agentName,
-      });
-    } catch (err) {
-      json(res, {
-        text: getChatFailureReply(err, state.logBuffer),
-        agentName: state.agentName,
-      });
-    } finally {
-      // Resume coordinator after user message processed
-      if (chatDidPause) {
-        chatCoordinator.resume?.();
-      }
     }
     return true;
   }

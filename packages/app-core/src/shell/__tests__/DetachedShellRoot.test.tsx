@@ -4,6 +4,7 @@ import React from "react";
 import type { ReactTestRenderer } from "react-test-renderer";
 import TestRenderer, { act } from "react-test-renderer";
 import { describe, expect, it, vi } from "vitest";
+import type { WindowShellRoute } from "../../platform/window-shell";
 
 const mockUseApp = vi.fn();
 
@@ -12,6 +13,8 @@ vi.mock("@miladyai/app-core/state", () => ({
 }));
 
 vi.mock("@miladyai/app-core/components", () => ({
+  BrowserWorkspaceView: () =>
+    React.createElement("div", null, "BrowserWorkspaceView"),
   ChatView: () => React.createElement("div", null, "ChatView"),
   CloudDashboard: () => React.createElement("div", null, "CloudDashboard"),
   CodingAgentSettingsSection: () =>
@@ -39,6 +42,8 @@ vi.mock("@miladyai/app-core/components", () => ({
 
 // Mock relative to the component under test (shell/DetachedShellRoot.tsx)
 vi.mock("../../components", () => ({
+  BrowserWorkspaceView: () =>
+    React.createElement("div", null, "BrowserWorkspaceView"),
   ConversationsSidebar: () =>
     React.createElement("div", null, "ConversationsSidebar"),
   ChatView: () => React.createElement("div", null, "ChatView"),
@@ -62,6 +67,11 @@ vi.mock("../../platform/window-shell", () => ({
 
 import { DetachedShellRoot } from "../DetachedShellRoot";
 
+const chatSurfaceRoute: Exclude<WindowShellRoute, { mode: "main" }> = {
+  mode: "surface",
+  tab: "chat",
+};
+
 function appState(overrides: Record<string, unknown> = {}) {
   return {
     authRequired: false,
@@ -80,7 +90,7 @@ describe("DetachedShellRoot", () => {
     let tree: ReactTestRenderer | undefined;
     await act(async () => {
       tree = TestRenderer.create(
-        <DetachedShellRoot route={{ mode: "surface", tab: "chat" } as any} />,
+        <DetachedShellRoot route={chatSurfaceRoute} />,
       );
     });
     const skipLink = tree?.root.findAll(
@@ -95,7 +105,7 @@ describe("DetachedShellRoot", () => {
     let tree: ReactTestRenderer | undefined;
     await act(async () => {
       tree = TestRenderer.create(
-        <DetachedShellRoot route={{ mode: "surface", tab: "chat" } as any} />,
+        <DetachedShellRoot route={chatSurfaceRoute} />,
       );
     });
     const main = tree?.root.findAll(
@@ -111,7 +121,7 @@ describe("DetachedShellRoot", () => {
     let tree: ReactTestRenderer | undefined;
     await act(async () => {
       tree = TestRenderer.create(
-        <DetachedShellRoot route={{ mode: "surface", tab: "chat" } as any} />,
+        <DetachedShellRoot route={chatSurfaceRoute} />,
       );
     });
     const navs = tree?.root.findAll(

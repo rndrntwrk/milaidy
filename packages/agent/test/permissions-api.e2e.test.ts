@@ -12,10 +12,26 @@
  *
  * NO MOCKS - all tests spin up a real HTTP server.
  */
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { startApiServer } from "../src/api/server";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import {
+  cancelSelfControlExpiryTimer,
+  resetSelfControlStatusCache,
+  setSelfControlPluginConfig,
+} from "@miladyai/plugin-selfcontrol/selfcontrol";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+} from "vitest";
 import { req as _req } from "../../../test/helpers/http";
 import { saveEnv } from "../../../test/helpers/test-utils";
+import { startApiServer } from "../src/api/server";
 
 // ---------------------------------------------------------------------------
 // Thin wrapper — adapts { headers } opts to the shared helper's flat headers
@@ -42,12 +58,34 @@ function req(
 describe("Permissions API E2E", () => {
   let port: number;
   let close: () => Promise<void>;
+  let tempDir = "";
+  let hostsFilePath = "";
 
   beforeAll(async () => {
     // Start server without auth token for simpler testing
     const result = await startApiServer({ port: 0 });
     port = result.port;
     close = result.close;
+  });
+
+  beforeEach(async () => {
+    tempDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "milady-permissions-api-"),
+    );
+    hostsFilePath = path.join(tempDir, "hosts");
+    await fs.writeFile(hostsFilePath, "127.0.0.1 localhost\n", "utf8");
+    setSelfControlPluginConfig({ hostsFilePath, statusCacheTtlMs: 0 });
+  });
+
+  afterEach(async () => {
+    cancelSelfControlExpiryTimer();
+    resetSelfControlStatusCache();
+    setSelfControlPluginConfig(undefined);
+    if (tempDir) {
+      await fs.rm(tempDir, { recursive: true, force: true });
+      tempDir = "";
+      hostsFilePath = "";
+    }
   });
 
   afterAll(async () => {
@@ -71,6 +109,18 @@ describe("Permissions API E2E", () => {
     it("returns permissions as an object", async () => {
       const { data } = await req(port, "GET", "/api/permissions");
       expect(typeof data).toBe("object");
+    });
+
+    it("includes website blocking permission state", async () => {
+      const { status, data } = await req(port, "GET", "/api/permissions");
+      expect(status).toBe(200);
+      expect(data).toHaveProperty("website-blocking");
+      expect(data["website-blocking"]).toMatchObject({
+        id: "website-blocking",
+        status: "granted",
+        canRequest: false,
+        hostsFilePath,
+      });
     });
   });
 
@@ -155,6 +205,21 @@ describe("Permissions API E2E", () => {
       expect(data).toHaveProperty("id", "screen-recording");
       expect(data).toHaveProperty("status");
     });
+
+    it("returns the website blocker permission state", async () => {
+      const { status, data } = await req(
+        port,
+        "GET",
+        "/api/permissions/website-blocking",
+      );
+      expect(status).toBe(200);
+      expect(data).toMatchObject({
+        id: "website-blocking",
+        status: "granted",
+        canRequest: false,
+        hostsFilePath,
+      });
+    });
   });
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -215,6 +280,21 @@ describe("Permissions API E2E", () => {
         "ipc:permissions:request:accessibility",
       );
     });
+
+    it("requests website blocking permission through the runtime", async () => {
+      const { status, data } = await req(
+        port,
+        "POST",
+        "/api/permissions/website-blocking/request",
+      );
+      expect(status).toBe(200);
+      expect(data).toMatchObject({
+        id: "website-blocking",
+        status: "granted",
+        canRequest: false,
+        hostsFilePath,
+      });
+    });
   });
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -260,6 +340,28 @@ describe("Permissions API E2E", () => {
         "action",
         "ipc:permissions:openSettings:accessibility",
       );
+    });
+
+    it("reports when website blocking cannot open a hosts file location", async () => {
+      setSelfControlPluginConfig({
+        hostsFilePath: path.join(tempDir, "missing-hosts"),
+        statusCacheTtlMs: 0,
+      });
+
+      const { status, data } = await req(
+        port,
+        "POST",
+        "/api/permissions/website-blocking/open-settings",
+      );
+      expect(status).toBe(200);
+      expect(data).toMatchObject({
+        opened: false,
+        id: "website-blocking",
+        permission: {
+          id: "website-blocking",
+          status: "denied",
+        },
+      });
     });
   });
 

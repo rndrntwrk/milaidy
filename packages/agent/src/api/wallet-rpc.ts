@@ -13,23 +13,50 @@ import {
 } from "../contracts/wallet";
 
 export const DEFAULT_CLOUD_API_BASE_URL = "https://elizacloud.ai/api/v1";
+// Multiple BSC public RPCs so we have working fallbacks when Eliza
+// Cloud's proxy returns 401 (plan/account issue) AND the primary
+// Binance dataseed endpoint is blocked/rate-limited. Order matters —
+// the wallet resolver tries them in sequence, so put the most reliable
+// community endpoints first.
 export const DEFAULT_PUBLIC_BSC_RPC_URLS = [
+  "https://bsc.publicnode.com/",
+  "https://bsc-rpc.publicnode.com/",
+  "https://binance.llamarpc.com/",
+  "https://rpc.ankr.com/bsc",
+  "https://bsc-dataseed.bnbchain.org/",
   "https://bsc-dataseed1.binance.org/",
+  "https://bsc-dataseed2.binance.org/",
+  "https://bsc-dataseed3.binance.org/",
 ] as const;
 export const DEFAULT_PUBLIC_BSC_TESTNET_RPC_URLS = [
+  "https://bsc-testnet.publicnode.com/",
+  "https://bsc-testnet-rpc.publicnode.com/",
   "https://data-seed-prebsc-1-s1.binance.org:8545/",
 ] as const;
+// Same reasoning for Ethereum / Base / Avalanche — give the resolver
+// multiple community endpoints so a single DNS/rate-limit failure
+// doesn't block wallet execution end-to-end.
 export const DEFAULT_PUBLIC_ETHEREUM_RPC_URLS = [
   "https://ethereum.publicnode.com/",
+  "https://ethereum-rpc.publicnode.com/",
+  "https://eth.llamarpc.com/",
+  "https://rpc.ankr.com/eth",
 ] as const;
 export const DEFAULT_PUBLIC_BASE_RPC_URLS = [
   "https://base.publicnode.com/",
+  "https://base-rpc.publicnode.com/",
+  "https://base.llamarpc.com/",
+  "https://mainnet.base.org/",
 ] as const;
 export const DEFAULT_PUBLIC_AVALANCHE_RPC_URLS = [
   "https://avalanche.publicnode.com/ext/bc/C/rpc",
+  "https://avalanche-c-chain-rpc.publicnode.com/",
+  "https://api.avax.network/ext/bc/C/rpc",
+  "https://rpc.ankr.com/avalanche",
 ] as const;
 export const DEFAULT_PUBLIC_SOLANA_RPC_URLS = [
   "https://api.mainnet-beta.solana.com",
+  "https://solana-rpc.publicnode.com",
 ] as const;
 export const DEFAULT_PUBLIC_SOLANA_TESTNET_RPC_URLS = [
   "https://api.devnet.solana.com",
