@@ -66,6 +66,10 @@ function formatDateTime(value: string | null): string | null {
   }).format(new Date(parsed));
 }
 
+function formatPercent(value: number): string {
+  return `${Math.round(value * 100)}%`;
+}
+
 function cadenceLabel(cadence: LifeOpsCadence): string {
   switch (cadence.kind) {
     case "once":
@@ -250,6 +254,35 @@ function OccurrenceExplanationPanel({
         <span className="font-semibold text-txt">Last reminder:</span>{" "}
         {lastReminder}
       </div>
+      {explanation.definitionPerformance.totalScheduledCount > 0 ? (
+        <>
+          <div>
+            <span className="font-semibold text-txt">Performance:</span>{" "}
+            {explanation.definitionPerformance.totalCompletedCount}/
+            {explanation.definitionPerformance.totalScheduledCount} completed
+            overall, current streak{" "}
+            {explanation.definitionPerformance.currentOccurrenceStreak}, best{" "}
+            {explanation.definitionPerformance.bestOccurrenceStreak}
+          </div>
+          <div>
+            <span className="font-semibold text-txt">Last 7 days:</span>{" "}
+            {formatPercent(
+              explanation.definitionPerformance.last7Days.completionRate,
+            )}{" "}
+            completion across{" "}
+            {explanation.definitionPerformance.last7Days.scheduledCount}{" "}
+            scheduled item
+            {explanation.definitionPerformance.last7Days.scheduledCount === 1
+              ? ""
+              : "s"}
+            , {explanation.definitionPerformance.last7Days.perfectDayCount}{" "}
+            perfect day
+            {explanation.definitionPerformance.last7Days.perfectDayCount === 1
+              ? ""
+              : "s"}
+          </div>
+        </>
+      ) : null}
       {explanation.summary.lastActionSummary ? (
         <div>
           <span className="font-semibold text-txt">Last action:</span>{" "}

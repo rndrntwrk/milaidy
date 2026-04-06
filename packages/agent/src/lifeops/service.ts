@@ -35,6 +35,8 @@ import type {
   LifeOpsConnectorSide,
   LifeOpsContextPolicy,
   LifeOpsDefinitionRecord,
+  LifeOpsDefinitionPerformance,
+  LifeOpsDefinitionPerformanceWindow,
   LifeOpsDomain,
   LifeOpsGmailMessageSummary,
   LifeOpsGmailReplyDraft,
@@ -207,6 +209,8 @@ const DEFAULT_GMAIL_TRIAGE_MAX_RESULTS = 12;
 const DEFAULT_REMINDER_PROCESS_LIMIT = 24;
 const DEFAULT_WORKFLOW_PROCESS_LIMIT = 12;
 const GOAL_REVIEW_LOOKBACK_DAYS = 7;
+const DEFINITION_PERFORMANCE_LAST7_DAYS = 7;
+const DEFINITION_PERFORMANCE_LAST30_DAYS = 30;
 const reminderProcessingQueues = new Map<string, Promise<void>>();
 const DEFAULT_CALENDAR_REMINDER_STEPS: LifeOpsReminderStep[] = [
   {
@@ -348,6 +352,247 @@ function summarizeOverviewSection(
     ).length,
     activeReminderCount: section.reminders.length,
     activeGoalCount: section.goals.length,
+  };
+}
+
+function occurrenceAnchorIso(occurrence: LifeOpsOccurrence): string | null {
+  return occurrence.dueAt ?? occurrence.scheduledAt ?? occurrence.relevanceStartAt ?? null;
+}
+
+function occurrenceAnchorMs(occurrence: LifeOpsOccurrence): number {
+  const anchor = occurrenceAnchorIso(occurrence);
+  if (!anchor) {
+    return Number.MAX_SAFE_INTEGER;
+  }
+  const parsed = Date.parse(anchor);
+  return Number.isFinite(parsed) ? parsed : Number.MAX_SAFE_INTEGER;
+}
+
+function occurrenceDayKey(
+  occurrence: LifeOpsOccurrence,
+  timeZone: string,
+): string | null {
+  const anchor = occurrenceAnchorIso(occurrence);
+  if (!anchor) {
+    return null;
+  }
+  const parts = getZonedDateParts(new Date(anchor), timeZone);
+  return `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}`;
+}
+
+function buildPerformanceWindow(
+  occurrences: LifeOpsOccurrence[],
+  timeZone: string,
+  windowStartMs: number,
+  nowMs: number,
+): LifeOpsDefinitionPerformanceWindow {
+  const scheduled = occurrences.filter((occurrence) => {
+    const anchorMs = occurrenceAnchorMs(occurrence);
+    return anchorMs !== Number.MAX_SAFE_INTEGER && anchorMs >= windowStartMs && anchorMs <= nowMs;
+  });
+  const completedCount = scheduled.filter(
+    (occurrence) => occurrence.state === "completed",
+  ).length;
+  const skippedCount = scheduled.filter(
+    (occurrence) => occurrence.state === "skipped",
+  ).length;
+  const pendingCount = scheduled.length - completedCount - skippedCount;
+  const perfectDays = new Map<
+    string,
+    { perfect: boolean; anchorMs: number }
+  >();
+  for (const occurrence of scheduled) {
+    const dayKey = occurrenceDayKey(occurrence, timeZone);
+    if (!dayKey) {
+      continue;
+    }
+    const anchorMs = occurrenceAnchorMs(occurrence);
+    const current = perfectDays.get(dayKey);
+    const nextPerfect = occurrence.state === "completed";
+    if (!current) {
+      perfectDays.set(dayKey, {
+        perfect: nextPerfect,
+        anchorMs,
+      });
+      continue;
+    }
+    perfectDays.set(dayKey, {
+      perfect: current.perfect && nextPerfect,
+      anchorMs: Math.min(current.anchorMs, anchorMs),
+    });
+  }
+  return {
+    scheduledCount: scheduled.length,
+    completedCount,
+    skippedCount,
+    pendingCount,
+    completionRate:
+      scheduled.length > 0 ? completedCount / scheduled.length : 0,
+    perfectDayCount: [...perfectDays.values()].filter((day) => day.perfect)
+      .length,
+  };
+}
+
+function computeOccurrenceStreaks(
+  dueOccurrences: LifeOpsOccurrence[],
+): { current: number; best: number } {
+  let currentRun = 0;
+  let bestRun = 0;
+  for (const occurrence of dueOccurrences) {
+    if (occurrence.state === "completed") {
+      currentRun += 1;
+      if (currentRun > bestRun) {
+        bestRun = currentRun;
+      }
+    } else {
+      currentRun = 0;
+    }
+  }
+
+  let current = 0;
+  for (let index = dueOccurrences.length - 1; index >= 0; index -= 1) {
+    if (dueOccurrences[index]?.state !== "completed") {
+      break;
+    }
+    current += 1;
+  }
+
+  return {
+    current,
+    best: bestRun,
+  };
+}
+
+function computePerfectDayStreaks(
+  dueOccurrences: LifeOpsOccurrence[],
+  timeZone: string,
+): { current: number; best: number } {
+  const grouped = new Map<
+    string,
+    { perfect: boolean; anchorMs: number }
+  >();
+  for (const occurrence of dueOccurrences) {
+    const dayKey = occurrenceDayKey(occurrence, timeZone);
+    if (!dayKey) {
+      continue;
+    }
+    const anchorMs = occurrenceAnchorMs(occurrence);
+    const current = grouped.get(dayKey);
+    const nextPerfect = occurrence.state === "completed";
+    if (!current) {
+      grouped.set(dayKey, {
+        perfect: nextPerfect,
+        anchorMs,
+      });
+      continue;
+    }
+    grouped.set(dayKey, {
+      perfect: current.perfect && nextPerfect,
+      anchorMs: Math.min(current.anchorMs, anchorMs),
+    });
+  }
+
+  const days = [...grouped.values()].sort((left, right) => left.anchorMs - right.anchorMs);
+  let bestRun = 0;
+  let activeRun = 0;
+  for (const day of days) {
+    if (day.perfect) {
+      activeRun += 1;
+      if (activeRun > bestRun) {
+        bestRun = activeRun;
+      }
+    } else {
+      activeRun = 0;
+    }
+  }
+
+  let current = 0;
+  for (let index = days.length - 1; index >= 0; index -= 1) {
+    if (!days[index]?.perfect) {
+      break;
+    }
+    current += 1;
+  }
+
+  return {
+    current,
+    best: bestRun,
+  };
+}
+
+function computeDefinitionPerformance(
+  definition: LifeOpsTaskDefinition,
+  occurrences: LifeOpsOccurrence[],
+  now: Date,
+): LifeOpsDefinitionPerformance {
+  const nowMs = now.getTime();
+  const dueOccurrences = occurrences
+    .filter((occurrence) => occurrenceAnchorMs(occurrence) <= nowMs)
+    .sort((left, right) => occurrenceAnchorMs(left) - occurrenceAnchorMs(right));
+  const lastCompletedAt =
+    dueOccurrences
+      .filter((occurrence) => occurrence.state === "completed")
+      .map((occurrence) => Date.parse(occurrence.updatedAt))
+      .filter((value) => Number.isFinite(value))
+      .sort((left, right) => right - left)[0] ?? null;
+  const lastSkippedAt =
+    dueOccurrences
+      .filter((occurrence) => occurrence.state === "skipped")
+      .map((occurrence) => Date.parse(occurrence.updatedAt))
+      .filter((value) => Number.isFinite(value))
+      .sort((left, right) => right - left)[0] ?? null;
+  const totalCompletedCount = dueOccurrences.filter(
+    (occurrence) => occurrence.state === "completed",
+  ).length;
+  const totalSkippedCount = dueOccurrences.filter(
+    (occurrence) => occurrence.state === "skipped",
+  ).length;
+  const totalPendingCount =
+    dueOccurrences.length - totalCompletedCount - totalSkippedCount;
+  const occurrenceStreaks = computeOccurrenceStreaks(dueOccurrences);
+  const perfectDayStreaks = computePerfectDayStreaks(
+    dueOccurrences,
+    definition.timezone,
+  );
+  const last7Days = buildPerformanceWindow(
+    dueOccurrences,
+    definition.timezone,
+    nowMs - DEFINITION_PERFORMANCE_LAST7_DAYS * 24 * 60 * 60 * 1000,
+    nowMs,
+  );
+  const last30Days = buildPerformanceWindow(
+    dueOccurrences,
+    definition.timezone,
+    nowMs - DEFINITION_PERFORMANCE_LAST30_DAYS * 24 * 60 * 60 * 1000,
+    nowMs,
+  );
+  const lastActivityAtMs = [lastCompletedAt, lastSkippedAt]
+    .filter((value): value is number => typeof value === "number")
+    .sort((left, right) => right - left)[0] ?? null;
+
+  return {
+    lastCompletedAt:
+      typeof lastCompletedAt === "number"
+        ? new Date(lastCompletedAt).toISOString()
+        : null,
+    lastSkippedAt:
+      typeof lastSkippedAt === "number"
+        ? new Date(lastSkippedAt).toISOString()
+        : null,
+    lastActivityAt:
+      typeof lastActivityAtMs === "number"
+        ? new Date(lastActivityAtMs).toISOString()
+        : null,
+    totalScheduledCount: dueOccurrences.length,
+    totalCompletedCount,
+    totalSkippedCount,
+    totalPendingCount,
+    currentOccurrenceStreak: occurrenceStreaks.current,
+    bestOccurrenceStreak: occurrenceStreaks.best,
+    currentPerfectDayStreak: perfectDayStreaks.current,
+    bestPerfectDayStreak: perfectDayStreaks.best,
+    last7Days,
+    last30Days,
   };
 }
 
@@ -3727,6 +3972,7 @@ export class LifeOpsService {
 
   private async getDefinitionRecord(
     definitionId: string,
+    now = new Date(),
   ): Promise<LifeOpsDefinitionRecord> {
     const definition = await this.repository.getDefinition(
       this.agentId(),
@@ -3741,7 +3987,15 @@ export class LifeOpsService {
           definition.reminderPlanId,
         )
       : null;
-    return { definition, reminderPlan };
+    const occurrences = await this.repository.listOccurrencesForDefinition(
+      this.agentId(),
+      definition.id,
+    );
+    return {
+      definition,
+      reminderPlan,
+      performance: computeDefinitionPerformance(definition, occurrences, now),
+    };
   }
 
   private async getGoalRecord(goalId: string): Promise<LifeOpsGoalRecord> {
@@ -4413,9 +4667,28 @@ export class LifeOpsService {
       definitions.map((definition) => definition.id),
     );
     const planMap = new Map(plans.map((plan) => [plan.ownerId, plan]));
+    const occurrences = await this.repository.listOccurrencesForDefinitions(
+      this.agentId(),
+      definitions.map((definition) => definition.id),
+    );
+    const occurrencesByDefinitionId = new Map<string, LifeOpsOccurrence[]>();
+    for (const occurrence of occurrences) {
+      const current = occurrencesByDefinitionId.get(occurrence.definitionId);
+      if (current) {
+        current.push(occurrence);
+      } else {
+        occurrencesByDefinitionId.set(occurrence.definitionId, [occurrence]);
+      }
+    }
+    const now = new Date();
     return definitions.map((definition) => ({
       definition,
       reminderPlan: planMap.get(definition.id) ?? null,
+      performance: computeDefinitionPerformance(
+        definition,
+        occurrencesByDefinitionId.get(definition.id) ?? [],
+        now,
+      ),
     }));
   }
 
@@ -4503,9 +4776,18 @@ export class LifeOpsService {
       },
     );
     await this.syncWebsiteAccessState();
+    const occurrences = await this.repository.listOccurrencesForDefinition(
+      this.agentId(),
+      definition.id,
+    );
     return {
       definition,
       reminderPlan,
+      performance: computeDefinitionPerformance(
+        definition,
+        occurrences,
+        new Date(),
+      ),
     };
   }
 
@@ -4619,9 +4901,18 @@ export class LifeOpsService {
       },
     );
     await this.syncWebsiteAccessState();
+    const occurrences = await this.repository.listOccurrencesForDefinition(
+      this.agentId(),
+      nextDefinition.id,
+    );
     return {
       definition: nextDefinition,
       reminderPlan,
+      performance: computeDefinitionPerformance(
+        nextDefinition,
+        occurrences,
+        new Date(),
+      ),
     };
   }
 
@@ -5198,6 +5489,7 @@ export class LifeOpsService {
     return {
       occurrence,
       definition: definitionRecord.definition,
+      definitionPerformance: definitionRecord.performance,
       reminderPlan: definitionRecord.reminderPlan,
       linkedGoal,
       reminderInspection,

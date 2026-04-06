@@ -296,6 +296,117 @@ describe("lifeAction", () => {
     expect(result).toMatchObject({ success: true, text: expect.stringContaining("Drink water") });
   });
 
+  it("seeds blocker-aware workout access with a fixed unlock duration", async () => {
+    mockListGoals.mockResolvedValue([]);
+    mockCreateDefinition.mockResolvedValue({
+      definition: { id: "d-workout", title: "Workout", cadence: { kind: "daily", windows: ["afternoon"] } },
+      reminderPlan: { id: "rp-workout" },
+    });
+
+    const result = await invoke(
+      "add a workout habit and block X, Hacker News, Instagram, and Google News until I work out, then unlock them for 90 minutes",
+      { action: "create" },
+    );
+
+    expect(mockCreateDefinition).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Workout",
+        websiteAccess: expect.objectContaining({
+          unlockMode: "fixed_duration",
+          unlockDurationMinutes: 90,
+          websites: expect.arrayContaining([
+            "x.com",
+            "twitter.com",
+            "news.ycombinator.com",
+            "instagram.com",
+            "news.google.com",
+          ]),
+        }),
+      }),
+    );
+    expect(result).toMatchObject({
+      success: true,
+      text: expect.stringContaining("Workout"),
+    });
+  });
+
+  it("seeds manual earned-access brushing when the user says unlock until I say done", async () => {
+    mockListGoals.mockResolvedValue([]);
+    mockCreateDefinition.mockResolvedValue({
+      definition: { id: "d-brush-manual", title: "Brush teeth", cadence: { kind: "daily", windows: ["morning", "night"] } },
+      reminderPlan: { id: "rp-brush-manual" },
+    });
+
+    const result = await invoke(
+      "help me brush my teeth morning and night and unlock X until I say done",
+      { action: "create" },
+    );
+
+    expect(mockCreateDefinition).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Brush teeth",
+        websiteAccess: expect.objectContaining({
+          unlockMode: "until_manual_lock",
+          websites: expect.arrayContaining(["x.com", "twitter.com"]),
+        }),
+      }),
+    );
+    expect(result).toMatchObject({ success: true });
+  });
+
+  it("seeds vitamins against the requested meal window", async () => {
+    mockListGoals.mockResolvedValue([]);
+    mockCreateDefinition.mockResolvedValue({
+      definition: { id: "d-vitamins", title: "Take vitamins", cadence: { kind: "daily", windows: ["afternoon"] } },
+      reminderPlan: { id: "rp-vitamins" },
+    });
+
+    const result = await invoke("remind me to take vitamins with lunch", {
+      action: "create",
+    });
+
+    expect(mockCreateDefinition).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Take vitamins",
+        cadence: expect.objectContaining({
+          kind: "daily",
+          windows: ["afternoon"],
+        }),
+      }),
+    );
+    expect(result).toMatchObject({
+      success: true,
+      text: expect.stringContaining("Take vitamins"),
+    });
+  });
+
+  it("seeds shave as a weekly cadence when the user asks for twice a week", async () => {
+    mockListGoals.mockResolvedValue([]);
+    mockCreateDefinition.mockResolvedValue({
+      definition: { id: "d-shave", title: "Shave", cadence: { kind: "weekly", weekdays: [1, 4], windows: ["morning"] } },
+      reminderPlan: { id: "rp-shave" },
+    });
+
+    const result = await invoke("remind me to shave twice a week", {
+      action: "create",
+    });
+
+    expect(mockCreateDefinition).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Shave",
+        cadence: expect.objectContaining({
+          kind: "weekly",
+          weekdays: [1, 4],
+          windows: ["morning"],
+        }),
+      }),
+    );
+    expect(result).toMatchObject({
+      success: true,
+      text: expect.stringContaining("Shave"),
+    });
+  });
+
   it("requires title for create", async () => {
     const result = await invoke("create a new habit", { action: "create", details: { cadence: { kind: "daily", windows: ["morning"] } } });
     expect(result).toMatchObject({ success: false, text: expect.stringContaining("name") });

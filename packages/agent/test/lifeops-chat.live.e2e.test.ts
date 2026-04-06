@@ -244,6 +244,41 @@ async function waitForTrajectoryCall(
   throw new Error("Timed out waiting for a live LifeOps trajectory");
 }
 
+async function waitForDefinitionByTitle(
+  port: number,
+  title: string,
+  predicate?: (entry: {
+    definition?: Record<string, unknown>;
+    reminderPlan?: Record<string, unknown> | null;
+  }) => boolean,
+): Promise<{
+  definition?: Record<string, unknown>;
+  reminderPlan?: Record<string, unknown> | null;
+}> {
+  const response = await waitForJsonPredicate<{
+    definitions?: Array<{
+      definition?: Record<string, unknown>;
+      reminderPlan?: Record<string, unknown> | null;
+    }>;
+  }>(
+    `http://127.0.0.1:${port}/api/lifeops/definitions`,
+    (value) =>
+      Array.isArray(value.definitions) &&
+      value.definitions.some(
+        (entry) =>
+          entry.definition?.title === title && (predicate?.(entry) ?? true),
+      ),
+  );
+
+  const match = response.definitions?.find(
+    (entry) => entry.definition?.title === title && (predicate?.(entry) ?? true),
+  );
+  if (!match) {
+    throw new Error(`Timed out waiting for ${title} definition`);
+  }
+  return match;
+}
+
 async function startLiveRuntime(): Promise<StartedRuntime> {
   const tempRoot = await mkdtemp(path.join(os.tmpdir(), "milady-lifeops-live-"));
   const stateDir = path.join(tempRoot, "state");
@@ -388,44 +423,115 @@ describe.skipIf(
     expect(trajectory.trajectoryId.length).toBeGreaterThan(0);
     expect(String(trajectory.llmCall.response ?? "").length).toBeGreaterThan(0);
 
-    const definitions = await waitForJsonPredicate<{
-      definitions?: Array<{
-        definition?: {
-          id?: string;
-          title?: string;
-          cadence?: { kind?: string; windows?: string[] };
-        };
-        reminderPlan?: { id?: string | null } | null;
-      }>;
-    }>(
-      `http://127.0.0.1:${liveRuntime.port}/api/lifeops/definitions`,
-      (value) =>
-        Array.isArray(value.definitions) &&
-        value.definitions.some(
-          (entry) =>
-            entry.definition?.title === "Brush teeth" &&
-            entry.definition?.cadence?.kind === "daily",
-        ),
-    );
-
-    const brushTeeth = definitions.definitions?.find(
-      (entry) => entry.definition?.title === "Brush teeth",
+    const brushTeeth = await waitForDefinitionByTitle(
+      liveRuntime.port,
+      "Brush teeth",
+      (entry) =>
+        (entry.definition?.cadence as { kind?: string } | undefined)?.kind ===
+        "daily",
     );
     expect(brushTeeth).toBeDefined();
-    expect(brushTeeth?.definition?.cadence).toMatchObject({
+    expect(brushTeeth.definition?.cadence).toMatchObject({
       kind: "daily",
       windows: expect.arrayContaining(["morning", "night"]),
     });
-    expect(brushTeeth?.reminderPlan?.id ?? null).not.toBeNull();
+    expect(brushTeeth.reminderPlan?.id ?? null).not.toBeNull();
 
     const overview = await req(liveRuntime.port, "GET", "/api/lifeops/overview");
     expect(overview.status).toBe(200);
-    const definitionId = String(brushTeeth?.definition?.id ?? "");
+    const definitionId = String(brushTeeth.definition?.id ?? "");
     const windows = (
       overview.data.occurrences as Array<Record<string, unknown>>
     )
       .filter((occurrence) => occurrence.definitionId === definitionId)
       .map((occurrence) => String(occurrence.windowName ?? ""));
     expect(windows).toEqual(expect.arrayContaining(["morning", "night"]));
+  }, 180_000);
+
+  it("creates a blocker-aware workout habit through chat and stores earned-access policy", async () => {
+    const liveRuntime = runtime!;
+    const { conversationId } = await createConversation(liveRuntime.port, {
+      title: "Live LifeOps Workout",
+    });
+
+    const prompt =
+      "Use LifeOps now. Actually create a habit named Workout that happens every afternoon, blocks X, Instagram, and Hacker News until I complete it, and then unlocks them for 60 minutes. Do not just give advice.";
+    const response = await postConversationMessage(
+      liveRuntime.port,
+      conversationId,
+      {
+        text: prompt,
+        mode: "power",
+      },
+    );
+    expect(response.status).toBe(200);
+
+    const responseText = String(response.data.text ?? "");
+    assertNoProviderIssue("workout creation", responseText, liveRuntime);
+    expect(responseText).toContain("Workout");
+
+    const trajectory = await waitForTrajectoryCall(liveRuntime.port, prompt);
+    expect(trajectory.trajectoryId.length).toBeGreaterThan(0);
+    expect(String(trajectory.llmCall.response ?? "").length).toBeGreaterThan(0);
+
+    const workout = await waitForDefinitionByTitle(
+      liveRuntime.port,
+      "Workout",
+      (entry) =>
+        (entry.definition?.websiteAccess as { unlockMode?: string } | undefined)
+          ?.unlockMode === "fixed_duration",
+    );
+    expect(workout.definition?.cadence).toMatchObject({
+      kind: "daily",
+      windows: expect.arrayContaining(["afternoon"]),
+    });
+    expect(workout.definition?.websiteAccess).toMatchObject({
+      unlockMode: "fixed_duration",
+      unlockDurationMinutes: 60,
+      websites: expect.arrayContaining([
+        "x.com",
+        "twitter.com",
+        "instagram.com",
+        "news.ycombinator.com",
+      ]),
+    });
+    expect(workout.reminderPlan?.id ?? null).not.toBeNull();
+  }, 180_000);
+
+  it("creates a meal-window vitamin routine through chat", async () => {
+    const liveRuntime = runtime!;
+    const { conversationId } = await createConversation(liveRuntime.port, {
+      title: "Live LifeOps Vitamins",
+    });
+
+    const prompt =
+      "Use LifeOps now. Actually create a routine named Take vitamins that reminds me to take them with lunch every day. Do not just give advice.";
+    const response = await postConversationMessage(
+      liveRuntime.port,
+      conversationId,
+      {
+        text: prompt,
+        mode: "power",
+      },
+    );
+    expect(response.status).toBe(200);
+
+    const responseText = String(response.data.text ?? "");
+    assertNoProviderIssue("vitamins creation", responseText, liveRuntime);
+    expect(responseText).toContain("Take vitamins");
+
+    const trajectory = await waitForTrajectoryCall(liveRuntime.port, prompt);
+    expect(trajectory.trajectoryId.length).toBeGreaterThan(0);
+    expect(String(trajectory.llmCall.response ?? "").length).toBeGreaterThan(0);
+
+    const vitamins = await waitForDefinitionByTitle(
+      liveRuntime.port,
+      "Take vitamins",
+    );
+    expect(vitamins.definition?.cadence).toMatchObject({
+      kind: "daily",
+      windows: expect.arrayContaining(["afternoon"]),
+    });
+    expect(vitamins.reminderPlan?.id ?? null).not.toBeNull();
   }, 180_000);
 });

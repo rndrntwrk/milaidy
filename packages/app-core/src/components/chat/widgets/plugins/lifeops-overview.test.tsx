@@ -271,6 +271,35 @@ describe("LifeOpsOverviewSidebarWidget", () => {
         originalIntent: "remind me to take medication morning and evening",
         source: "chat",
       },
+      definitionPerformance: {
+        lastCompletedAt: "2026-04-04T16:01:00.000Z",
+        lastSkippedAt: null,
+        lastActivityAt: "2026-04-04T16:01:00.000Z",
+        totalScheduledCount: 5,
+        totalCompletedCount: 4,
+        totalSkippedCount: 1,
+        totalPendingCount: 0,
+        currentOccurrenceStreak: 2,
+        bestOccurrenceStreak: 3,
+        currentPerfectDayStreak: 1,
+        bestPerfectDayStreak: 2,
+        last7Days: {
+          scheduledCount: 5,
+          completedCount: 4,
+          skippedCount: 1,
+          pendingCount: 0,
+          completionRate: 0.8,
+          perfectDayCount: 2,
+        },
+        last30Days: {
+          scheduledCount: 12,
+          completedCount: 10,
+          skippedCount: 2,
+          pendingCount: 0,
+          completionRate: 10 / 12,
+          perfectDayCount: 5,
+        },
+      },
       reminderPlan: {
         id: "plan-1",
         steps: [{ channel: "in_app", label: "Check in now", offsetMinutes: 5 }],
@@ -432,9 +461,13 @@ describe("LifeOpsOverviewSidebarWidget", () => {
     expect(mockClient.getLifeOpsOccurrenceExplanation).toHaveBeenCalledWith(
       "owner-occurrence",
     );
-    expect(flattenText(renderer.root).toLowerCase()).toContain(
-      "original intent",
-    );
+    const explanationText = flattenText(renderer.root)
+      .toLowerCase()
+      .replace(/\s+/g, " ");
+    expect(explanationText).toContain("original intent");
+    expect(explanationText).toContain("performance");
+    expect(explanationText).toContain("4 / 5 completed overall");
+    expect(explanationText).toContain("80% completion across 5 scheduled item");
 
     const reviewButton = renderer.root
       .findAllByType("button")

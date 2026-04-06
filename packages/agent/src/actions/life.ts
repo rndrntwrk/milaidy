@@ -4,6 +4,11 @@ import type {
   Memory,
   ProviderDataRecord,
 } from "@elizaos/core";
+import {
+  extractDurationMinutesFromText,
+  extractWebsiteTargetsFromText,
+  normalizeWebsiteTargets,
+} from "@miladyai/plugin-selfcontrol/selfcontrol";
 import { checkSenderRole } from "@miladyai/plugin-roles";
 import type {
   CreateLifeOpsDefinitionRequest,
@@ -409,6 +414,147 @@ function detailArray(details: Record<string, unknown> | undefined, key: string):
   return Array.isArray(v) ? v : undefined;
 }
 
+function slugifyValue(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48);
+}
+
+function parseNumberWord(token: string): number | null {
+  switch (token.trim().toLowerCase()) {
+    case "one":
+    case "once":
+      return 1;
+    case "two":
+    case "twice":
+      return 2;
+    case "three":
+      return 3;
+    case "four":
+      return 4;
+    case "five":
+      return 5;
+    case "six":
+      return 6;
+    case "seven":
+      return 7;
+    default: {
+      const parsed = Number.parseInt(token, 10);
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+    }
+  }
+}
+
+function weekdaysForFrequency(count: number): number[] {
+  if (count <= 1) return [1];
+  if (count === 2) return [1, 4];
+  if (count === 3) return [1, 3, 5];
+  if (count === 4) return [1, 2, 4, 6];
+  if (count === 5) return [1, 2, 3, 4, 5];
+  if (count === 6) return [0, 1, 2, 3, 4, 5];
+  return [0, 1, 2, 3, 4, 5, 6];
+}
+
+function inferWebsiteTargetsFromIntent(intent: string): string[] {
+  const lower = intent.toLowerCase();
+  const normalized = new Set(
+    normalizeWebsiteTargets(extractWebsiteTargetsFromText(intent)),
+  );
+  const blockContext =
+    /\b(block|blocked|blocking|unlock|unblock|locked|lock|focus|self ?control)\b/.test(
+      lower,
+    );
+  if (!blockContext) {
+    return [...normalized];
+  }
+  if (/\b(?:x|twitter)\b/.test(lower)) {
+    normalized.add("x.com");
+    normalized.add("twitter.com");
+  }
+  if (/\bfacebook\b/.test(lower)) {
+    normalized.add("facebook.com");
+  }
+  if (/\binstagram\b/.test(lower)) {
+    normalized.add("instagram.com");
+  }
+  if (/\bgoogle news\b/.test(lower)) {
+    normalized.add("news.google.com");
+  }
+  if (/\bhacker news\b/.test(lower)) {
+    normalized.add("news.ycombinator.com");
+  }
+  if (/\by combinator\b|\byc\b/.test(lower)) {
+    normalized.add("ycombinator.com");
+  }
+  return [...normalized].sort();
+}
+
+function inferWebsiteAccessPolicyFromIntent(
+  intent: string,
+  title: string,
+): CreateLifeOpsDefinitionRequest["websiteAccess"] | undefined {
+  const lower = intent.toLowerCase();
+  if (
+    !/\b(block|blocked|blocking|unlock|unblock|locked|lock|focus|self ?control)\b/.test(
+      lower,
+    )
+  ) {
+    return undefined;
+  }
+
+  const websites = inferWebsiteTargetsFromIntent(intent);
+  if (websites.length === 0) {
+    return undefined;
+  }
+
+  const manualUnlock =
+    /\b(?:unlock|unblock)\b.*\buntil i (?:say done|say so|relock|lock it again|block it again|turn it off)\b/.test(
+      lower,
+    ) || /\buntil i say done\b/.test(lower);
+  const callbackMatch = lower.match(
+    /\b(?:unlock|unblock)\b.*\buntil ([a-z0-9][a-z0-9\s_-]{1,40}?) (?:happens|is done|is over|completes|finishes|ends)\b/,
+  );
+  const explicitUnlockDuration =
+    /\b(?:unlock|unblock)\b/.test(lower) || /\bfor a while\b/.test(lower)
+      ? extractDurationMinutesFromText(intent)
+      : null;
+
+  const groupKey = `earned-access-${slugifyValue(websites.join("-")) || slugifyValue(title) || "web"}`;
+  if (manualUnlock) {
+    return {
+      groupKey,
+      websites,
+      unlockMode: "until_manual_lock",
+      reason: `Earn access to ${websites.join(", ")} after completing ${title}.`,
+    };
+  }
+  if (callbackMatch?.[1]) {
+    const callbackKey = slugifyValue(callbackMatch[1]);
+    if (callbackKey) {
+      return {
+        groupKey,
+        websites,
+        unlockMode: "until_callback",
+        callbackKey,
+        reason: `Earn access to ${websites.join(", ")} after completing ${title}.`,
+      };
+    }
+  }
+  return {
+    groupKey,
+    websites,
+    unlockMode: "fixed_duration",
+    unlockDurationMinutes:
+      explicitUnlockDuration && explicitUnlockDuration > 0
+        ? explicitUnlockDuration
+        : 60,
+    reason: `Earn access to ${websites.join(", ")} after completing ${title}.`,
+  };
+}
+
 function extractIntentWindows(
   intent: string,
 ): Array<"morning" | "afternoon" | "evening" | "night"> {
@@ -437,6 +583,28 @@ function inferSeedCadenceFromIntent(
   const windows = extractIntentWindows(intent);
   const effectiveWindows =
     windows.length > 0 ? windows : fallbackWindows;
+  const weeklyMatch =
+    lower.match(
+      /\b(one|two|three|four|five|six|seven|\d+)\s*(?:x|times?)\s*(?:a|per)\s*week\b/,
+    ) ??
+    lower.match(/\b(once|twice)\s+a\s+week\b/);
+  if (weeklyMatch?.[1]) {
+    const count = parseNumberWord(weeklyMatch[1]);
+    if (count) {
+      return {
+        kind: "weekly",
+        weekdays: weekdaysForFrequency(count),
+        windows: effectiveWindows.length > 0 ? effectiveWindows : ["morning"],
+      };
+    }
+  }
+  if (/\bweekly\b/.test(lower)) {
+    return {
+      kind: "weekly",
+      weekdays: [1],
+      windows: effectiveWindows.length > 0 ? effectiveWindows : ["morning"],
+    };
+  }
 
   const intervalMatch = lower.match(/\bevery\s+(\d+)\s*hours?\b/);
   if (intervalMatch) {
@@ -480,8 +648,9 @@ function inferLifeDefinitionSeed(intent: string): LifeDefinitionSeed | null {
   const lower = intent.toLowerCase();
 
   if (/\bbrush(?:ing|ed)?\b/.test(lower) && /\bteeth\b/.test(lower)) {
+    const title = "Brush teeth";
     return {
-      title: "Brush teeth",
+      title,
       kind: "habit",
       cadence:
         inferSeedCadenceFromIntent(intent, ["morning", "night"]) ?? {
@@ -492,12 +661,32 @@ function inferLifeDefinitionSeed(intent: string): LifeDefinitionSeed | null {
         },
       description: "Brush your teeth in the morning and again at night.",
       reminderPlan: buildDefaultReminderPlan("Tooth brushing reminder"),
+      websiteAccess: inferWebsiteAccessPolicyFromIntent(intent, title),
+    };
+  }
+
+  if (/\b(work ?out|exercise|gym|lifting|run|running)\b/.test(lower)) {
+    const title = "Workout";
+    return {
+      title,
+      kind: "habit",
+      cadence:
+        inferSeedCadenceFromIntent(intent, ["afternoon", "evening"]) ?? {
+          kind: "daily",
+          windows: ["afternoon"],
+          visibilityLeadMinutes: 120,
+          visibilityLagMinutes: 240,
+        },
+      description: "Exercise in the afternoon and keep your training streak alive.",
+      reminderPlan: buildDefaultReminderPlan("Workout reminder"),
+      websiteAccess: inferWebsiteAccessPolicyFromIntent(intent, title),
     };
   }
 
   if (/\binvisalign\b/.test(lower)) {
+    const title = "Keep Invisalign in";
     return {
-      title: "Keep Invisalign in",
+      title,
       kind: "habit",
       cadence:
         inferSeedCadenceFromIntent(intent, ["morning", "afternoon", "evening"]) ?? {
@@ -511,12 +700,14 @@ function inferLifeDefinitionSeed(intent: string): LifeDefinitionSeed | null {
         },
       description: "Check throughout the day that your Invisalign is back in.",
       reminderPlan: buildDefaultReminderPlan("Invisalign reminder"),
+      websiteAccess: inferWebsiteAccessPolicyFromIntent(intent, title),
     };
   }
 
   if (/\b(drink|drank|hydrat(?:e|ing|ed))\b/.test(lower) && /\bwater\b/.test(lower)) {
+    const title = "Drink water";
     return {
-      title: "Drink water",
+      title,
       kind: "habit",
       cadence:
         inferSeedCadenceFromIntent(intent, ["morning", "afternoon", "evening"]) ?? {
@@ -530,12 +721,14 @@ function inferLifeDefinitionSeed(intent: string): LifeDefinitionSeed | null {
         },
       description: "Hydrate regularly across the day.",
       reminderPlan: buildDefaultReminderPlan("Water reminder"),
+      websiteAccess: inferWebsiteAccessPolicyFromIntent(intent, title),
     };
   }
 
   if (/\bstretch(?:ing|ed)?\b/.test(lower)) {
+    const title = "Stretch";
     return {
-      title: "Stretch",
+      title,
       kind: "habit",
       cadence:
         inferSeedCadenceFromIntent(intent, ["afternoon", "evening"]) ?? {
@@ -549,6 +742,74 @@ function inferLifeDefinitionSeed(intent: string): LifeDefinitionSeed | null {
         },
       description: "Take one or two stretch breaks during the day.",
       reminderPlan: buildDefaultReminderPlan("Stretch reminder"),
+      websiteAccess: inferWebsiteAccessPolicyFromIntent(intent, title),
+    };
+  }
+
+  if (/\bvitamins?\b/.test(lower)) {
+    const title = "Take vitamins";
+    const mealWindows =
+      /\bbreakfast\b/.test(lower) || /\bmorning\b/.test(lower)
+        ? (["morning"] as const)
+        : /\blunch\b/.test(lower)
+          ? (["afternoon"] as const)
+          : /\bdinner\b/.test(lower) || /\bnight\b/.test(lower)
+            ? (["night"] as const)
+            : (["morning"] as const);
+    const normalizedMealWindows = [
+      ...mealWindows,
+    ] as Array<"morning" | "afternoon" | "evening" | "night">;
+    return {
+      title,
+      kind: "habit",
+      cadence:
+        inferSeedCadenceFromIntent(intent, normalizedMealWindows) ?? {
+          kind: "daily",
+          windows: normalizedMealWindows,
+          visibilityLeadMinutes: 60,
+          visibilityLagMinutes: 180,
+        },
+      description: "Take your vitamins with a meal at the right part of the day.",
+      reminderPlan: buildDefaultReminderPlan("Vitamin reminder"),
+      websiteAccess: inferWebsiteAccessPolicyFromIntent(intent, title),
+    };
+  }
+
+  if (/\bshower(?:ing)?\b/.test(lower)) {
+    const title = "Shower";
+    return {
+      title,
+      kind: "habit",
+      cadence:
+        inferSeedCadenceFromIntent(intent, ["morning", "night"]) ?? {
+          kind: "weekly",
+          weekdays: [1, 3, 6],
+          windows: ["morning", "night"],
+          visibilityLeadMinutes: 120,
+          visibilityLagMinutes: 360,
+        },
+      description: "Stay on top of your weekly shower cadence.",
+      reminderPlan: buildDefaultReminderPlan("Shower reminder"),
+      websiteAccess: inferWebsiteAccessPolicyFromIntent(intent, title),
+    };
+  }
+
+  if (/\bshav(?:e|ing|ed)\b/.test(lower)) {
+    const title = "Shave";
+    return {
+      title,
+      kind: "habit",
+      cadence:
+        inferSeedCadenceFromIntent(intent, ["morning"]) ?? {
+          kind: "weekly",
+          weekdays: [2, 5],
+          windows: ["morning"],
+          visibilityLeadMinutes: 120,
+          visibilityLagMinutes: 360,
+        },
+      description: "Keep your shaving cadence on track through the week.",
+      reminderPlan: buildDefaultReminderPlan("Shave reminder"),
+      websiteAccess: inferWebsiteAccessPolicyFromIntent(intent, title),
     };
   }
 

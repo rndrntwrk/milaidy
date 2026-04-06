@@ -1031,6 +1031,7 @@ export interface UpdateLifeOpsGoalRequest {
 export interface LifeOpsDefinitionRecord {
   definition: LifeOpsTaskDefinition;
   reminderPlan: LifeOpsReminderPlan | null;
+  performance: LifeOpsDefinitionPerformance;
 }
 
 export interface LifeOpsGoalRecord {
@@ -1076,6 +1077,31 @@ export interface LifeOpsGoalReview {
   };
 }
 
+export interface LifeOpsDefinitionPerformanceWindow {
+  scheduledCount: number;
+  completedCount: number;
+  skippedCount: number;
+  pendingCount: number;
+  completionRate: number;
+  perfectDayCount: number;
+}
+
+export interface LifeOpsDefinitionPerformance {
+  lastCompletedAt: string | null;
+  lastSkippedAt: string | null;
+  lastActivityAt: string | null;
+  totalScheduledCount: number;
+  totalCompletedCount: number;
+  totalSkippedCount: number;
+  totalPendingCount: number;
+  currentOccurrenceStreak: number;
+  bestOccurrenceStreak: number;
+  currentPerfectDayStreak: number;
+  bestPerfectDayStreak: number;
+  last7Days: LifeOpsDefinitionPerformanceWindow;
+  last30Days: LifeOpsDefinitionPerformanceWindow;
+}
+
 export interface SnoozeLifeOpsOccurrenceRequest {
   minutes?: number;
   preset?: "15m" | "30m" | "1h" | "tonight" | "tomorrow_morning";
@@ -1089,6 +1115,7 @@ export interface CompleteLifeOpsOccurrenceRequest {
 export interface LifeOpsOccurrenceExplanation {
   occurrence: LifeOpsOccurrenceView;
   definition: LifeOpsTaskDefinition;
+  definitionPerformance: LifeOpsDefinitionPerformance;
   reminderPlan: LifeOpsReminderPlan | null;
   linkedGoal: LifeOpsGoalRecord | null;
   reminderInspection: LifeOpsReminderInspection;

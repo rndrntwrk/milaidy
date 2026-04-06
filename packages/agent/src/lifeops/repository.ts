@@ -1540,6 +1540,26 @@ export class LifeOpsRepository {
     return rows.map(parseOccurrence);
   }
 
+  async listOccurrencesForDefinitions(
+    agentId: string,
+    definitionIds: string[],
+  ): Promise<LifeOpsOccurrence[]> {
+    await this.ensureReady();
+    if (definitionIds.length === 0) {
+      return [];
+    }
+    const definitionList = definitionIds.map((definitionId) => sqlQuote(definitionId)).join(", ");
+    const rows = await executeRawSql(
+      this.runtime,
+      `SELECT *
+         FROM life_task_occurrences
+        WHERE agent_id = ${sqlQuote(agentId)}
+          AND definition_id IN (${definitionList})
+        ORDER BY definition_id ASC, relevance_start_at ASC`,
+    );
+    return rows.map(parseOccurrence);
+  }
+
   async getOccurrence(
     agentId: string,
     occurrenceId: string,

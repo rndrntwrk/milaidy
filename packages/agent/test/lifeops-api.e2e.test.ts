@@ -250,6 +250,34 @@ describe("Life-ops API E2E", () => {
         "completed",
       );
 
+      const definitionRead = await req(
+        port,
+        "GET",
+        `/api/lifeops/definitions/${encodeURIComponent(definitionId)}`,
+      );
+      expect(definitionRead.status).toBe(200);
+      const performance = definitionRead.data.performance as Record<
+        string,
+        unknown
+      >;
+      expect(performance.totalCompletedCount).toBe(1);
+      expect(performance.currentOccurrenceStreak).toBe(1);
+      expect(performance.bestOccurrenceStreak).toBeGreaterThanOrEqual(1);
+      expect(performance.currentPerfectDayStreak).toBe(1);
+      expect(performance.bestPerfectDayStreak).toBeGreaterThanOrEqual(1);
+      expect(performance.lastCompletedAt).toEqual(expect.any(String));
+      const last7Days = performance.last7Days as Record<string, unknown>;
+      expect(last7Days.completedCount).toBeGreaterThanOrEqual(1);
+      expect(last7Days.perfectDayCount).toBeGreaterThanOrEqual(1);
+      expect(last7Days.scheduledCount).toBeGreaterThanOrEqual(
+        Number(last7Days.completedCount),
+      );
+      expect(
+        Number(last7Days.completedCount) +
+          Number(last7Days.skippedCount) +
+          Number(last7Days.pendingCount),
+      ).toBe(Number(last7Days.scheduledCount));
+
       const occurrenceExplanation = await req(
         port,
         "GET",
@@ -270,6 +298,13 @@ describe("Life-ops API E2E", () => {
             .lastActionSummary,
         ),
       ).toContain("occurrence completed");
+      const explanationPerformance = occurrenceExplanation.data
+        .definitionPerformance as Record<string, unknown>;
+      expect(explanationPerformance.totalCompletedCount).toBe(1);
+      expect(
+        (explanationPerformance.last7Days as Record<string, unknown>)
+          .completedCount,
+      ).toBeGreaterThanOrEqual(1);
 
       const goalReview = await req(
         port,
