@@ -55,6 +55,9 @@ const mockUseApp = useApp as unknown as ReturnType<typeof vi.fn>;
 const TasksWidget = AGENT_ORCHESTRATOR_PLUGIN_WIDGETS.find(
   (widget) => widget.id === "agent-orchestrator.tasks",
 )!.Component;
+const ActivityWidget = AGENT_ORCHESTRATOR_PLUGIN_WIDGETS.find(
+  (widget) => widget.id === "agent-orchestrator.activity",
+)!.Component;
 
 function createThread() {
   return {
@@ -76,6 +79,17 @@ function createThread() {
     updatedAt: "2026-04-06T00:00:10.000Z",
     closedAt: null,
     archivedAt: null,
+  };
+}
+
+function createArchivedThread() {
+  return {
+    ...createThread(),
+    id: "thread-archived",
+    title: "Archived Task",
+    status: "archived" as const,
+    archivedAt: "2026-04-06T00:01:00.000Z",
+    updatedAt: "2026-04-06T00:01:00.000Z",
   };
 }
 
@@ -168,6 +182,13 @@ function createThreadDetail() {
   };
 }
 
+function createArchivedThreadDetail() {
+  return {
+    ...createThreadDetail(),
+    ...createArchivedThread(),
+  };
+}
+
 function textOf(node: TestRenderer.ReactTestInstance): string {
   return node.children
     .map((child) => (typeof child === "string" ? child : textOf(child)))
@@ -232,11 +253,7 @@ describe("agent orchestrator tasks widget", () => {
 
   it("loads persisted task threads and archives the selected thread", async () => {
     const openThread = createThread();
-    const archivedThread = {
-      ...createThread(),
-      status: "archived" as const,
-      archivedAt: "2026-04-06T00:01:00.000Z",
-    };
+    const archivedThread = createArchivedThread();
     mockClient.listCodingAgentTaskThreads.mockImplementation(
       async (options?: { includeArchived?: boolean }) =>
         options?.includeArchived ? [archivedThread] : [openThread],
@@ -271,6 +288,58 @@ describe("agent orchestrator tasks widget", () => {
     );
     expect(mockClient.listCodingAgentTaskThreads).toHaveBeenLastCalledWith({
       includeArchived: true,
+      search: undefined,
+      limit: 30,
+    });
+  });
+
+  it("shows archived threads and reopens the selected archived task", async () => {
+    const archivedThread = createArchivedThread();
+    mockClient.listCodingAgentTaskThreads.mockImplementation(
+      async (options?: { includeArchived?: boolean }) =>
+        options?.includeArchived ? [archivedThread] : [createThread()],
+    );
+    mockClient.getCodingAgentTaskThread.mockImplementation(async (threadId: string) =>
+      threadId === "thread-archived"
+        ? createArchivedThreadDetail()
+        : createThreadDetail(),
+    );
+    mockClient.reopenCodingAgentTaskThread.mockResolvedValue(true);
+
+    await act(async () => {
+      tree = TestRenderer.create(
+        <TasksWidget events={[]} clearEvents={vi.fn()} />,
+      );
+    });
+
+    await waitFor(
+      () => textOf(tree!.root).includes("Archive"),
+      "expected open task detail to render",
+    );
+
+    await act(async () => {
+      findButtonByText(tree!.root, "Show Archive").props.onClick();
+    });
+
+    await waitFor(
+      () => textOf(tree!.root).includes("Reopen"),
+      "expected archived task detail to render",
+    );
+
+    await act(async () => {
+      findButtonByText(tree!.root, "Reopen").props.onClick();
+    });
+
+    await waitFor(
+      () => mockClient.reopenCodingAgentTaskThread.mock.calls.length === 1,
+      "expected reopen request to be sent",
+    );
+
+    expect(mockClient.reopenCodingAgentTaskThread).toHaveBeenCalledWith(
+      "thread-archived",
+    );
+    expect(mockClient.listCodingAgentTaskThreads).toHaveBeenLastCalledWith({
+      includeArchived: false,
       search: undefined,
       limit: 30,
     });
@@ -352,5 +421,204 @@ describe("agent orchestrator tasks widget", () => {
     expect(textOf(tree!.root)).toContain(
       "Failed to load task detail: detail unavailable",
     );
+  });
+
+  it("passes the search text through to persisted task thread queries", async () => {
+    mockClient.listCodingAgentTaskThreads.mockResolvedValue([createThread()]);
+    mockClient.getCodingAgentTaskThread.mockResolvedValue(createThreadDetail());
+
+    await act(async () => {
+      tree = TestRenderer.create(
+        <TasksWidget events={[]} clearEvents={vi.fn()} />,
+      );
+    });
+
+    await waitFor(
+      () => mockClient.listCodingAgentTaskThreads.mock.calls.length >= 1,
+      "expected initial task thread load",
+    );
+
+    const searchInput = tree!.root.findByType("input");
+    await act(async () => {
+      searchInput.props.onChange({ target: { value: "failover" } });
+    });
+
+    await waitFor(
+      () =>
+        mockClient.listCodingAgentTaskThreads.mock.calls.some(
+          ([options]) => options?.search === "failover",
+        ),
+      "expected search query to be forwarded",
+    );
+  });
+
+  it("polls for refreshed task threads on the interval", async () => {
+    vi.useFakeTimers();
+    mockClient.listCodingAgentTaskThreads.mockResolvedValue([createThread()]);
+    mockClient.getCodingAgentTaskThread.mockResolvedValue(createThreadDetail());
+
+    try {
+      await act(async () => {
+        tree = TestRenderer.create(
+          <TasksWidget events={[]} clearEvents={vi.fn()} />,
+        );
+      });
+
+      expect(mockClient.listCodingAgentTaskThreads).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        vi.advanceTimersByTime(5_000);
+        await Promise.resolve();
+      });
+
+      expect(mockClient.listCodingAgentTaskThreads).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("renders derived live-session activity states and empty detail sections", async () => {
+    mockUseApp.mockReturnValue({
+      ptySessions: [
+        {
+          sessionId: "tool-running",
+          agentType: "codex",
+          label: "Tool Runner",
+          originalTask: "Run tests",
+          workdir: "/workspace/tool",
+          status: "tool_running",
+          toolDescription: "npm test",
+          decisionCount: 0,
+          autoResolvedCount: 0,
+        },
+        {
+          sessionId: "blocked",
+          agentType: "claude",
+          label: "Blocked Agent",
+          originalTask: "Ask for approval",
+          workdir: "/workspace/blocked",
+          status: "blocked",
+          decisionCount: 0,
+          autoResolvedCount: 0,
+        },
+        {
+          sessionId: "errored",
+          agentType: "claude",
+          label: "Errored Agent",
+          originalTask: "Handle failure",
+          workdir: "/workspace/error",
+          status: "error",
+          decisionCount: 0,
+          autoResolvedCount: 0,
+        },
+      ],
+      t: (_key: string, options?: { defaultValue?: string }) =>
+        options?.defaultValue ?? _key,
+    });
+    mockClient.listCodingAgentTaskThreads.mockResolvedValue([
+      {
+        ...createThread(),
+        summary: "",
+      },
+    ]);
+    mockClient.getCodingAgentTaskThread.mockResolvedValue({
+      ...createThreadDetail(),
+      artifacts: [],
+      decisions: [],
+      transcripts: [],
+    });
+
+    await act(async () => {
+      tree = TestRenderer.create(
+        <TasksWidget events={[]} clearEvents={vi.fn()} />,
+      );
+    });
+
+    await waitFor(
+      () => textOf(tree!.root).includes("No artifacts recorded yet."),
+      "expected empty detail placeholders to render",
+    );
+
+    expect(textOf(tree!.root)).toContain("No artifacts recorded yet.");
+    expect(textOf(tree!.root)).toContain("No decisions recorded yet.");
+    expect(textOf(tree!.root)).toContain("No transcript captured yet.");
+
+    mockClient.listCodingAgentTaskThreads.mockResolvedValue([]);
+    await act(async () => {
+      findButtonByText(tree!.root, "Show Archive").props.onClick();
+    });
+
+    await waitFor(
+      () => textOf(tree!.root).includes("Tool Runner"),
+      "expected live-session fallback after switching to archive with no threads",
+    );
+
+    expect(textOf(tree!.root)).toContain("Running npm test");
+    expect(textOf(tree!.root)).toContain("Waiting for input");
+    expect(textOf(tree!.root)).not.toContain("Errored Agent");
+  });
+});
+
+describe("agent orchestrator activity widget", () => {
+  beforeEach(() => {
+    mockUseApp.mockReset();
+    mockUseApp.mockReturnValue({
+      ptySessions: [],
+      t: (_key: string, options?: { defaultValue?: string }) =>
+        options?.defaultValue ?? _key,
+    });
+  });
+
+  it("renders activity entries and clears them through the button", async () => {
+    const clearEvents = vi.fn();
+    let activityTree: TestRenderer.ReactTestRenderer | null = null;
+    try {
+      await act(async () => {
+        activityTree = TestRenderer.create(
+          <ActivityWidget
+            events={[
+              {
+                id: "event-1",
+                eventType: "task_registered",
+                summary: "Task started",
+                timestamp: Date.now(),
+              },
+            ]}
+            clearEvents={clearEvents}
+          />,
+        );
+      });
+
+      expect(textOf(activityTree!.root)).toContain("Task started");
+      await act(async () => {
+        findButtonByText(activityTree!.root, "Clear").props.onClick();
+      });
+      expect(clearEvents).toHaveBeenCalledTimes(1);
+    } finally {
+      if (activityTree) {
+        act(() => {
+          activityTree?.unmount();
+        });
+      }
+    }
+  });
+
+  it("shows the empty activity state when there are no events", async () => {
+    let activityTree: TestRenderer.ReactTestRenderer | null = null;
+    try {
+      await act(async () => {
+        activityTree = TestRenderer.create(
+          <ActivityWidget events={[]} clearEvents={vi.fn()} />,
+        );
+      });
+
+      expect(textOf(activityTree!.root)).toContain("No recent activity");
+    } finally {
+      if (activityTree) {
+        act(() => {
+          activityTree?.unmount();
+        });
+      }
+    }
   });
 });
