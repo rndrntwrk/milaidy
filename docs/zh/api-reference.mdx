@@ -661,9 +661,16 @@ curl -X POST http://localhost:2138/api/agent/autonomy \
 |--------|------|-------------|
 | `GET` | `/api/workbench/overview` | 获取工作台概览（任务、触发器、待办事项、自主状态） |
 | `GET` | `/api/workbench/tasks` | 列出工作台任务 |
-| `POST` | `/api/workbench/tasks` | 创建或更新工作台任务 |
-| `GET` | `/api/workbench/todos` | 列出工作台待办事项 |
-| `POST` | `/api/workbench/todos` | 创建或更新工作台待办事项 |
+| `POST` | `/api/workbench/tasks` | 创建工作台任务 |
+| `GET` | `/api/workbench/tasks/:id` | 获取单个任务 |
+| `PUT` | `/api/workbench/tasks/:id` | 更新任务 |
+| `DELETE` | `/api/workbench/tasks/:id` | 删除任务 |
+| `GET` | `/api/workbench/todos` | 列出工作台待办事项（为空时自动创建引导待办） |
+| `POST` | `/api/workbench/todos` | 创建工作台待办事项 |
+| `GET` | `/api/workbench/todos/:id` | 获取单个待办事项 |
+| `PUT` | `/api/workbench/todos/:id` | 更新待办事项 |
+| `DELETE` | `/api/workbench/todos/:id` | 删除待办事项 |
+| `POST` | `/api/workbench/todos/:id/complete` | 切换待办事项完成状态 |
 
 ---
 

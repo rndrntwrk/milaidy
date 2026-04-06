@@ -570,9 +570,16 @@ Routes under `/api/cloud/v1/` are forwarded as `/api/v1/` on the cloud backend, 
 |--------|------|-------------|
 | `GET` | `/api/workbench/overview` | Get workbench overview (tasks, triggers, todos, life-ops, autonomy state) |
 | `GET` | `/api/workbench/tasks` | List workbench tasks |
-| `POST` | `/api/workbench/tasks` | Create or update a workbench task |
-| `GET` | `/api/workbench/todos` | List workbench to-do items |
-| `POST` | `/api/workbench/todos` | Create or update a workbench to-do item |
+| `POST` | `/api/workbench/tasks` | Create a workbench task |
+| `GET` | `/api/workbench/tasks/:id` | Get a single task |
+| `PUT` | `/api/workbench/tasks/:id` | Update a task |
+| `DELETE` | `/api/workbench/tasks/:id` | Delete a task |
+| `GET` | `/api/workbench/todos` | List workbench todos (auto-creates a bootstrap todo when empty) |
+| `POST` | `/api/workbench/todos` | Create a workbench todo |
+| `GET` | `/api/workbench/todos/:id` | Get a single todo |
+| `PUT` | `/api/workbench/todos/:id` | Update a todo |
+| `DELETE` | `/api/workbench/todos/:id` | Delete a todo |
+| `POST` | `/api/workbench/todos/:id/complete` | Toggle todo completion |
 
 ---
 

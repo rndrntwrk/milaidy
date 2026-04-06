@@ -4,7 +4,9 @@ sidebarTitle: "Workbench"
 description: "REST API endpoints for the workbench — tasks, todos, life-ops, and the unified overview dashboard."
 ---
 
-The workbench API manages the agent's task board and todo list. Tasks represent higher-level objectives tracked by the runtime, while todos are lightweight checklist items. The overview endpoint aggregates both alongside trigger, autonomy, and life-ops state for the dashboard.
+The workbench API manages the agent's task board and todo list. Tasks represent higher-level objectives tracked by the runtime, while todos are lightweight checklist items stored as runtime tasks. The overview endpoint aggregates both alongside trigger, autonomy, and life-ops state for the dashboard.
+
+When no todos exist, the API automatically creates a bootstrap todo to guide the initial user interaction.
 
 ## Endpoints
 
@@ -207,7 +209,7 @@ Delete a task.
 
 ### GET /api/workbench/todos
 
-List all workbench todos. Combines runtime task-backed todos with database-backed todos (from the todo data service plugin), de-duplicated and sorted alphabetically.
+List all workbench todos, sorted alphabetically. All todos are stored as runtime tasks. When no todos exist, a bootstrap todo is automatically created to guide onboarding.
 
 **Response**
 
@@ -231,7 +233,7 @@ List all workbench todos. Combines runtime task-backed todos with database-backe
 
 ### POST /api/workbench/todos
 
-Create a new todo. If the todo data service plugin is available, the todo is stored in the database; otherwise it falls back to the runtime task system.
+Create a new todo. The todo is stored as a runtime task.
 
 **Request Body**
 

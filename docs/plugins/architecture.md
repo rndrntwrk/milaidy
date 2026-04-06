@@ -37,7 +37,7 @@ export const CORE_PLUGINS: readonly string[] = [
 ];
 ```
 
-> **Note:** `@elizaos/plugin-secrets-manager`, `@elizaos/plugin-rolodex`, `@elizaos/plugin-trust`, `@elizaos/plugin-todo`, `@elizaos/plugin-personality`, and `@elizaos/plugin-experience` are statically imported for fast resolution but commented out of the core list. They may be re-enabled in a future release.
+> **Note:** `@elizaos/plugin-secrets-manager`, `@elizaos/plugin-rolodex`, `@elizaos/plugin-trust`, `@elizaos/plugin-personality`, and `@elizaos/plugin-experience` are statically imported for fast resolution but commented out of the core list. They may be re-enabled in a future release. `@elizaos/plugin-todo` has been retired; todo functionality is now handled by the workbench API via runtime tasks.
 
 ### Optional Core Plugins
 
