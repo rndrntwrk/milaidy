@@ -379,7 +379,7 @@ function findInstalledPackageDir(
         ? realpathSync(localTargetPath)
         : null;
     if (existsSync(resolved) && resolved !== resolvedLocalTarget) {
-      return resolved;
+      return directPackagePath;
     }
   } catch {}
 
@@ -423,17 +423,25 @@ function findInstalledPackageDir(
   return matches[0]?.candidate ?? null;
 }
 
-function ensurePluginDependencyLinks(
+export function ensurePluginDependencyLinks(
   repoRoot,
   pluginsRoot = getRepoPluginsRoot(repoRoot),
 ) {
   let linkedDependencies = 0;
+  const rootBinDir = path.join(repoRoot, "node_modules", ".bin");
 
   for (const packageDir of discoverPluginPackageDirs(pluginsRoot)) {
     const packageJson = readPackageJson(packageDir);
     const packageName = packageJson?.name;
     if (!packageName?.startsWith("@elizaos/")) {
       continue;
+    }
+
+    if (existsSync(rootBinDir)) {
+      const binLinkPath = path.join(packageDir, "node_modules", ".bin");
+      if (createPackageLink(binLinkPath, rootBinDir)) {
+        linkedDependencies += 1;
+      }
     }
 
     const runtimeDependencies = {

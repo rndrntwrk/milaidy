@@ -12,6 +12,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   createPackageLink,
+  ensurePluginDependencyLinks,
   getElizaPackageLinks,
   getElizaWorkspaceSkipReason,
   getPluginPackageLinks,
@@ -252,6 +253,54 @@ describe("getPluginPackageLinks", () => {
             targetPath: appDir,
           },
         ]),
+      );
+    } finally {
+      rmSync(tempRoot, { force: true, recursive: true });
+    }
+  });
+});
+
+describe("ensurePluginDependencyLinks", () => {
+  it("links the root .bin directory into linked plugin packages", () => {
+    const tempRoot = mkdtempSync(
+      path.join(os.tmpdir(), "milady-setup-plugin-deps-"),
+    );
+
+    try {
+      const repoRoot = path.join(tempRoot, "milady");
+      const pluginsRoot = path.join(repoRoot, "plugins");
+      const packageDir = path.join(
+        pluginsRoot,
+        "plugin-agent-skills",
+        "typescript",
+      );
+      const rootBinDir = path.join(repoRoot, "node_modules", ".bin");
+      const installedDependencyDir = path.join(repoRoot, "node_modules", "zod");
+
+      mkdirSync(packageDir, { recursive: true });
+      mkdirSync(rootBinDir, { recursive: true });
+      mkdirSync(installedDependencyDir, { recursive: true });
+
+      writeFileSync(
+        path.join(packageDir, "package.json"),
+        JSON.stringify({
+          name: "@elizaos/plugin-agent-skills",
+          dependencies: {
+            zod: "^4.0.0",
+          },
+          scripts: {
+            build: "tsup",
+          },
+        }),
+        "utf8",
+      );
+
+      expect(ensurePluginDependencyLinks(repoRoot, pluginsRoot)).toBe(2);
+      expect(realpathSync(path.join(packageDir, "node_modules", ".bin"))).toBe(
+        realpathSync(rootBinDir),
+      );
+      expect(realpathSync(path.join(packageDir, "node_modules", "zod"))).toBe(
+        realpathSync(installedDependencyDir),
       );
     } finally {
       rmSync(tempRoot, { force: true, recursive: true });
