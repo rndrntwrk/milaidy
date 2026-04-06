@@ -444,11 +444,13 @@ export function ensurePluginDependencyLinks(
       }
     }
 
-    const runtimeDependencies = {
+    const packageDependencies = {
       ...(packageJson.peerDependencies ?? {}),
       ...(packageJson.dependencies ?? {}),
+      ...(packageJson.optionalDependencies ?? {}),
+      ...(packageJson.devDependencies ?? {}),
     };
-    const dependencyNames = Object.keys(runtimeDependencies);
+    const dependencyNames = Object.keys(packageDependencies);
     if (dependencyNames.length === 0) {
       continue;
     }

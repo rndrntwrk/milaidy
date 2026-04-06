@@ -276,10 +276,16 @@ describe("ensurePluginDependencyLinks", () => {
       );
       const rootBinDir = path.join(repoRoot, "node_modules", ".bin");
       const installedDependencyDir = path.join(repoRoot, "node_modules", "zod");
+      const installedDevDependencyDir = path.join(
+        repoRoot,
+        "node_modules",
+        "tsup",
+      );
 
       mkdirSync(packageDir, { recursive: true });
       mkdirSync(rootBinDir, { recursive: true });
       mkdirSync(installedDependencyDir, { recursive: true });
+      mkdirSync(installedDevDependencyDir, { recursive: true });
 
       writeFileSync(
         path.join(packageDir, "package.json"),
@@ -288,6 +294,9 @@ describe("ensurePluginDependencyLinks", () => {
           dependencies: {
             zod: "^4.0.0",
           },
+          devDependencies: {
+            tsup: "^8.0.0",
+          },
           scripts: {
             build: "tsup",
           },
@@ -295,12 +304,15 @@ describe("ensurePluginDependencyLinks", () => {
         "utf8",
       );
 
-      expect(ensurePluginDependencyLinks(repoRoot, pluginsRoot)).toBe(2);
+      expect(ensurePluginDependencyLinks(repoRoot, pluginsRoot)).toBe(3);
       expect(realpathSync(path.join(packageDir, "node_modules", ".bin"))).toBe(
         realpathSync(rootBinDir),
       );
       expect(realpathSync(path.join(packageDir, "node_modules", "zod"))).toBe(
         realpathSync(installedDependencyDir),
+      );
+      expect(realpathSync(path.join(packageDir, "node_modules", "tsup"))).toBe(
+        realpathSync(installedDevDependencyDir),
       );
     } finally {
       rmSync(tempRoot, { force: true, recursive: true });
