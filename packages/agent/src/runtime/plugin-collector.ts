@@ -157,8 +157,14 @@ export function collectPluginNames(config: ElizaConfig): Set<string> {
   const cloudEffectivelyEnabled =
     resolveCloudPluginRequirement(cloudTopology, cloudPluginRequestedByEnv) ||
     isCloudContainer;
+  // cloudHandlesInference gates whether the cloud plugin *replaces* direct
+  // provider plugins for model calls.  Cloud containers that go through the
+  // steward proxy (OPENAI_BASE_URL → host.docker.internal) need plugin-openai
+  // to stay loaded, so only claim inference when the topology explicitly says
+  // so OR the container has a direct cloud API key for elizacloud inference.
   const cloudHandlesInference =
-    cloudTopology.services.inference || isCloudContainer;
+    cloudTopology.services.inference ||
+    (isCloudContainer && Boolean(process.env.ELIZAOS_CLOUD_API_KEY?.trim()));
   const configEnv = config.env as
     | (Record<string, unknown> & { vars?: Record<string, unknown> })
     | undefined;
