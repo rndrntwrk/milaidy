@@ -14,6 +14,9 @@ const autonomousSourceRoot = getAutonomousSourceRoot(repoRoot);
 const appCoreSourceRoot = getAppCoreSourceRoot(repoRoot);
 
 const liveTest = process.env.MILADY_LIVE_TEST === "1";
+const isCI = process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
+const testPool = isCI ? "threads" : "forks";
+const testExecArgv = testPool === "forks" ? ["--max-old-space-size=4096"] : [];
 
 export default defineConfig({
   resolve: {
@@ -233,11 +236,11 @@ export default defineConfig({
     // small cost of per-file isolation.
     isolate: true,
     fileParallelism: false,
-    pool: "forks",
+    pool: testPool,
     maxWorkers: 1,
     // Match the unit test worker heap to avoid late jsdom OOM crashes during
     // serial E2E runs, where one fork accumulates dozens of suites.
-    execArgv: ["--max-old-space-size=4096"],
+    execArgv: testExecArgv,
     sequence: {
       concurrent: false,
       shuffle: false,

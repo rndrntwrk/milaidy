@@ -54,6 +54,12 @@ const isCI = process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
 const isWindows = process.platform === "win32";
 const localWorkers = 2;
 const ciWorkers = isWindows ? 2 : 3;
+// GitHub Actions currently runs Node 22.22 with Bun 1.3.10; jsdom/cssstyle
+// imports can fail there in Vitest fork workers with ERR_REQUIRE_ASYNC_MODULE.
+// Threads avoid the worker bootstrap path that triggers the crash in CI while
+// preserving the local forked-worker behavior that the repo already expects.
+const testPool = isCI ? "threads" : "forks";
+const testExecArgv = testPool === "forks" ? ["--max-old-space-size=4096"] : [];
 
 export default defineConfig({
   resolve: {
@@ -258,12 +264,12 @@ export default defineConfig({
   test: {
     testTimeout: 120_000,
     hookTimeout: isCI ? 300_000 : isWindows ? 180_000 : 120_000,
-    pool: "forks",
+    pool: testPool,
     maxWorkers: isCI ? ciWorkers : localWorkers,
     restoreMocks: true,
     // Increase V8 heap for worker forks to prevent OOM during GC
     // teardown, especially for jsdom-heavy test files.
-    execArgv: ["--max-old-space-size=4096"],
+    execArgv: testExecArgv,
     include: [
       "packages/agent/src/**/*.test.ts",
       "packages/agent/src/**/*.test.tsx",

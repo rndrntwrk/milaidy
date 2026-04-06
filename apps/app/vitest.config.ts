@@ -11,6 +11,8 @@ import {
 const here = path.dirname(fileURLToPath(import.meta.url));
 const appCorePackageRoot = getAppCoreSourceRoot(here);
 const agentSourceRoot = getAutonomousSourceRoot(here);
+const isCI = process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
+const testPool = isCI ? "threads" : "forks";
 
 const bridgeStubPath = path.join(
   here,
@@ -162,6 +164,7 @@ export default defineConfig({
     ],
     setupFiles: [path.join(here, "test/setup.ts")],
     environment: "node",
+    pool: testPool,
     alias: {
       "@elizaos/skills": path.join(here, "test/__mocks__/elizaos-skills.ts"),
       "@miladyai/capacitor-gateway": path.join(

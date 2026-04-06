@@ -149,7 +149,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          # plugin-openrouter contains Windows-invalid fixture paths; skip recursive
+          # submodule checkout there but still keep full submodules elsewhere.
+          submodules: ${{ matrix.os == 'windows-latest' && 'false' || 'recursive' }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -200,7 +202,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          # plugin-openrouter contains Windows-invalid fixture paths; skip recursive
+          # submodule checkout there but still keep full submodules elsewhere.
+          submodules: ${{ matrix.os == 'windows-latest' && 'false' || 'recursive' }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -421,6 +425,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Setup Node.js
         uses: useblacksmith/setup-node@v5

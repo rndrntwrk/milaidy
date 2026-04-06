@@ -367,8 +367,12 @@ describe.skipIf(!LIVE_DESKTOP_TESTS_ENABLED)(
       const stack = await startDesktopStack("dev:desktop:watch");
       startedStacks.push(stack);
 
-      const uiResponse = await fetch(`http://127.0.0.1:${stack.uiPort}`);
-      expect(uiResponse.ok).toBe(true);
+      const uiMarkup = await waitForTextPredicate(
+        `http://127.0.0.1:${stack.uiPort}`,
+        (text) =>
+          text.includes('<div id="root">') || text.includes("<!doctype html>"),
+      );
+      expect(uiMarkup.length).toBeGreaterThan(0);
 
       const stackResponse = await req(stack.apiPort, "GET", "/api/dev/stack");
       expect(stackResponse.status).toBe(200);

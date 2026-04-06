@@ -36,21 +36,30 @@ describe("startup E2E script contract", () => {
   it("uses an isolated startup E2E config to prevent cross-file mock bleed", () => {
     const config = fs.readFileSync(STARTUP_E2E_CONFIG_PATH, "utf8");
 
+    expect(config).toContain('const testPool = isCI ? "threads" : "forks";');
+    expect(config).toContain(
+      'const testExecArgv = testPool === "forks" ? ["--max-old-space-size=4096"] : [];',
+    );
     expect(config).toContain("isolate: true");
     expect(config).toContain("fileParallelism: false");
-    expect(config).toContain('pool: "forks"');
+    expect(config).toContain("pool: testPool");
     expect(config).not.toContain("poolOptions:");
     expect(config).toContain("maxWorkers: 1");
-    expect(config).toContain('execArgv: ["--max-old-space-size=4096"]');
+    expect(config).toContain("execArgv: testExecArgv");
   });
 
   it("uses Vitest 4 top-level worker options in the shared E2E config", () => {
     const config = fs.readFileSync(E2E_CONFIG_PATH, "utf8");
 
+    expect(config).toContain('const testPool = isCI ? "threads" : "forks";');
+    expect(config).toContain(
+      'const testExecArgv = testPool === "forks" ? ["--max-old-space-size=4096"] : [];',
+    );
     expect(config).toContain("isolate: true");
     expect(config).toContain("fileParallelism: false");
+    expect(config).toContain("pool: testPool");
     expect(config).not.toContain("poolOptions:");
     expect(config).toContain("maxWorkers: 1");
-    expect(config).toContain('execArgv: ["--max-old-space-size=4096"]');
+    expect(config).toContain("execArgv: testExecArgv");
   });
 });
