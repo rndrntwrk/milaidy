@@ -2880,7 +2880,15 @@ function loadOwnerContactsConfig(): OwnerContactsConfig {
   try {
     const config = loadElizaConfig();
     return config.agents?.defaults?.ownerContacts ?? {};
-  } catch {
+  } catch (error) {
+    logger.warn(
+      {
+        boundary: "lifeops",
+        operation: "owner_contacts_config",
+        err: error instanceof Error ? error : undefined,
+      },
+      "[lifeops] Failed to load owner contacts config; runtime reminder channels will fall back to channel-policy metadata only.",
+    );
     return {};
   }
 }
@@ -4451,46 +4459,60 @@ export class LifeOpsService {
   }
 
   private async readReminderActivityProfileSnapshot(): Promise<ReminderActivityProfileSnapshot | null> {
-    const tasks = await this.runtime.getTasks({
-      agentIds: [this.runtime.agentId],
-      tags: [...PROACTIVE_TASK_QUERY_TAGS],
-    });
-    const proactiveTask = tasks.find((task) => {
-      const metadata = isRecord(task.metadata) ? task.metadata : null;
-      return (
-        task.name === "PROACTIVE_AGENT" &&
-        isRecord(metadata?.proactiveAgent) &&
-        metadata.proactiveAgent.kind === "runtime_runner"
+    if (typeof this.runtime.getTasks !== "function") {
+      return null;
+    }
+    try {
+      const tasks = await this.runtime.getTasks({
+        agentIds: [this.runtime.agentId],
+        tags: [...PROACTIVE_TASK_QUERY_TAGS],
+      });
+      const proactiveTask = tasks.find((task) => {
+        const metadata = isRecord(task.metadata) ? task.metadata : null;
+        return (
+          task.name === "PROACTIVE_AGENT" &&
+          isRecord(metadata?.proactiveAgent) &&
+          metadata.proactiveAgent.kind === "runtime_runner"
+        );
+      });
+      if (!proactiveTask || !isRecord(proactiveTask.metadata)) {
+        return null;
+      }
+      const profile = proactiveTask.metadata.activityProfile;
+      if (!isRecord(profile)) {
+        return null;
+      }
+      const primaryPlatform =
+        typeof profile.primaryPlatform === "string" &&
+        profile.primaryPlatform.trim().length > 0
+          ? profile.primaryPlatform
+          : null;
+      const secondaryPlatform =
+        typeof profile.secondaryPlatform === "string" &&
+        profile.secondaryPlatform.trim().length > 0
+          ? profile.secondaryPlatform
+          : null;
+      const lastSeenPlatform =
+        typeof profile.lastSeenPlatform === "string" &&
+        profile.lastSeenPlatform.trim().length > 0
+          ? profile.lastSeenPlatform
+          : null;
+      return {
+        primaryPlatform,
+        secondaryPlatform,
+        lastSeenPlatform,
+        isCurrentlyActive: profile.isCurrentlyActive === true,
+      };
+    } catch (error) {
+      this.logLifeOpsWarn(
+        "reminder_activity_profile",
+        "[lifeops] Failed to read proactive activity profile; using connector order for reminder escalation.",
+        {
+          error: lifeOpsErrorMessage(error),
+        },
       );
-    });
-    if (!proactiveTask || !isRecord(proactiveTask.metadata)) {
       return null;
     }
-    const profile = proactiveTask.metadata.activityProfile;
-    if (!isRecord(profile)) {
-      return null;
-    }
-    const primaryPlatform =
-      typeof profile.primaryPlatform === "string" &&
-      profile.primaryPlatform.trim().length > 0
-        ? profile.primaryPlatform
-        : null;
-    const secondaryPlatform =
-      typeof profile.secondaryPlatform === "string" &&
-      profile.secondaryPlatform.trim().length > 0
-        ? profile.secondaryPlatform
-        : null;
-    const lastSeenPlatform =
-      typeof profile.lastSeenPlatform === "string" &&
-      profile.lastSeenPlatform.trim().length > 0
-        ? profile.lastSeenPlatform
-        : null;
-    return {
-      primaryPlatform,
-      secondaryPlatform,
-      lastSeenPlatform,
-      isCurrentlyActive: profile.isCurrentlyActive === true,
-    };
   }
 
   private buildReminderPlanSchedule(args: {
@@ -4562,15 +4584,13 @@ export class LifeOpsService {
   private async resolveReminderEscalationChannels(args: {
     activityProfile: ReminderActivityProfileSnapshot | null;
     policies: LifeOpsChannelPolicy[];
-    attempts: LifeOpsReminderAttempt[];
     urgency: LifeOpsReminderUrgency;
   }): Promise<LifeOpsReminderChannel[]> {
     const ordered: LifeOpsReminderChannel[] = [];
-    const attemptedChannels = new Set(args.attempts.map((attempt) => attempt.channel));
     const pushChannel = async (
       channel: LifeOpsReminderChannel | null,
     ): Promise<void> => {
-      if (!channel || attemptedChannels.has(channel) || ordered.includes(channel)) {
+      if (!channel || ordered.includes(channel)) {
         return;
       }
       if (!isReminderChannelAllowedForUrgency(channel, args.urgency)) {
@@ -4884,10 +4904,20 @@ export class LifeOpsService {
     const candidateChannels = await this.resolveReminderEscalationChannels({
       activityProfile: args.activityProfile,
       policies: args.policies,
-      attempts: ownerAttempts,
       urgency: args.urgency,
     });
-    const nextChannel = candidateChannels[0] ?? null;
+    const attemptedChannels = new Set(ownerAttempts.map((attempt) => attempt.channel));
+    const lastEscalationAttempt = escalationAttempts.at(-1) ?? null;
+    let nextChannel =
+      candidateChannels.find((channel) => !attemptedChannels.has(channel)) ??
+      null;
+    if (
+      !nextChannel &&
+      lastEscalationAttempt?.outcome === "delivered" &&
+      candidateChannels.includes(lastEscalationAttempt.channel)
+    ) {
+      nextChannel = lastEscalationAttempt.channel;
+    }
     if (!nextChannel) {
       return null;
     }

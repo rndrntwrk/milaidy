@@ -37,6 +37,7 @@ function createRuntimeForReminderTests(): AgentRuntime {
   const runtimeSubset = {
     agentId: "lifeops-reminders-agent",
     character: { name: "LifeOpsRemindersAgent" } as AgentRuntime["character"],
+    sendMessageToTarget: vi.fn().mockResolvedValue(undefined),
     getSetting: () => undefined,
     getService: () => null,
     getRoomsByWorld: async () => [],
@@ -338,5 +339,280 @@ describe("life-ops reminder processing", () => {
         }),
       ]),
     );
+  });
+
+  it("repeats the last delivered escalation channel after the escalation ladder is exhausted", async () => {
+    const consentRes = await req(
+      port,
+      "POST",
+      "/api/lifeops/channels/phone-consent",
+      {
+        phoneNumber: "415-555-0103",
+        consentGiven: true,
+        allowSms: true,
+        allowVoice: false,
+      },
+    );
+    expect(consentRes.status).toBe(201);
+
+    const definitionRes = await req(port, "POST", "/api/lifeops/definitions", {
+      kind: "habit",
+      title: "Take medicine",
+      timezone: "UTC",
+      priority: 1,
+      cadence: {
+        kind: "once",
+        dueAt: "2026-04-04T18:00:00.000Z",
+        visibilityLeadMinutes: 0,
+        visibilityLagMinutes: 240,
+      },
+      reminderPlan: {
+        steps: [
+          {
+            channel: "in_app",
+            offsetMinutes: 0,
+            label: "Start in app",
+          },
+        ],
+      },
+    });
+    expect(definitionRes.status).toBe(201);
+
+    let smsCallCount = 0;
+    fetchMock.mockImplementation(async () => {
+      smsCallCount += 1;
+      return new Response(JSON.stringify({ sid: `SM-REPEAT-${smsCallCount}` }), {
+        status: 201,
+        headers: { "content-type": "application/json" },
+      });
+    });
+
+    const initial = await req(port, "POST", "/api/lifeops/reminders/process", {
+      now: "2026-04-04T18:00:00.000Z",
+      limit: 10,
+    });
+    expect(initial.status).toBe(200);
+    expect(initial.data.attempts).toHaveLength(1);
+    expect(initial.data.attempts[0]).toMatchObject({
+      channel: "in_app",
+      outcome: "delivered",
+    });
+
+    const firstEscalation = await req(
+      port,
+      "POST",
+      "/api/lifeops/reminders/process",
+      {
+        now: "2026-04-04T18:05:00.000Z",
+        limit: 10,
+      },
+    );
+    expect(firstEscalation.status).toBe(200);
+    expect(firstEscalation.data.attempts).toHaveLength(1);
+    expect(firstEscalation.data.attempts[0]).toMatchObject({
+      channel: "sms",
+      outcome: "delivered",
+      scheduledFor: "2026-04-04T18:05:00.000Z",
+      stepIndex: 1,
+    });
+
+    const repeatedEscalation = await req(
+      port,
+      "POST",
+      "/api/lifeops/reminders/process",
+      {
+        now: "2026-04-04T18:20:00.000Z",
+        limit: 10,
+      },
+    );
+    expect(repeatedEscalation.status).toBe(200);
+    expect(repeatedEscalation.data.attempts).toHaveLength(1);
+    expect(repeatedEscalation.data.attempts[0]).toMatchObject({
+      channel: "sms",
+      outcome: "delivered",
+      scheduledFor: "2026-04-04T18:20:00.000Z",
+      stepIndex: 2,
+      deliveryMetadata: expect.objectContaining({
+        lifecycle: "escalation",
+        escalationReason: "previous_escalation_unacknowledged",
+      }),
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    const repository = new LifeOpsRepository(runtime);
+    const attempts = await repository.listReminderAttempts(
+      "lifeops-reminders-agent",
+    );
+    const smsAttempts = attempts.filter((attempt) => attempt.channel === "sms");
+    expect(smsAttempts).toHaveLength(2);
+    expect(smsAttempts.map((attempt) => attempt.scheduledFor)).toEqual([
+      "2026-04-04T18:05:00.000Z",
+      "2026-04-04T18:20:00.000Z",
+    ]);
+  });
+
+  it("uses runtime channel policy metadata for escalation without depending on static owner-contact config", async () => {
+    const runtimeWithMessaging = runtime as AgentRuntime & {
+      createTask: (task: Task) => Promise<UUID>;
+      sendMessageToTarget: ReturnType<typeof vi.fn>;
+    };
+    await runtimeWithMessaging.createTask({
+      name: "PROACTIVE_AGENT",
+      roomId: crypto.randomUUID() as UUID,
+      tags: ["queue", "repeat", "proactive"],
+      metadata: {
+        proactiveAgent: { kind: "runtime_runner", version: 1 },
+        activityProfile: {
+          primaryPlatform: "discord",
+          secondaryPlatform: null,
+          lastSeenPlatform: "discord",
+          isCurrentlyActive: true,
+        },
+      },
+      dueAt: Date.now(),
+    } as Task);
+
+    const policyRes = await req(port, "POST", "/api/lifeops/channel-policies", {
+      channelType: "discord",
+      channelRef: "owner-discord",
+      privacyClass: "private",
+      allowReminders: true,
+      allowEscalation: true,
+      allowPosts: false,
+      requireConfirmationForActions: false,
+      metadata: {
+        source: "discord",
+        entityId: "owner-1",
+        channelId: "dm-1",
+        isPrimary: true,
+      },
+    });
+    expect(policyRes.status).toBe(201);
+
+    const definitionRes = await req(port, "POST", "/api/lifeops/definitions", {
+      kind: "habit",
+      title: "Brush teeth",
+      timezone: "UTC",
+      priority: 1,
+      cadence: {
+        kind: "once",
+        dueAt: "2026-04-04T19:00:00.000Z",
+        visibilityLeadMinutes: 0,
+        visibilityLagMinutes: 240,
+      },
+      reminderPlan: {
+        steps: [
+          {
+            channel: "in_app",
+            offsetMinutes: 0,
+            label: "Start in app",
+          },
+        ],
+      },
+    });
+    expect(definitionRes.status).toBe(201);
+
+    const initial = await req(port, "POST", "/api/lifeops/reminders/process", {
+      now: "2026-04-04T19:00:00.000Z",
+      limit: 10,
+    });
+    expect(initial.status).toBe(200);
+    expect(initial.data.attempts).toHaveLength(1);
+    expect(initial.data.attempts[0]).toMatchObject({
+      channel: "in_app",
+      outcome: "delivered",
+    });
+
+    const escalated = await req(port, "POST", "/api/lifeops/reminders/process", {
+      now: "2026-04-04T19:05:00.000Z",
+      limit: 10,
+    });
+    expect(escalated.status).toBe(200);
+    expect(escalated.data.attempts).toHaveLength(1);
+    expect(escalated.data.attempts[0]).toMatchObject({
+      channel: "discord",
+      outcome: "delivered",
+      connectorRef: "runtime:discord:owner-discord",
+      deliveryMetadata: expect.objectContaining({
+        lifecycle: "escalation",
+        activityPlatform: "discord",
+      }),
+    });
+    expect(runtimeWithMessaging.sendMessageToTarget).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: "discord",
+        entityId: "owner-1",
+        channelId: "dm-1",
+      }),
+      expect.objectContaining({
+        source: "discord",
+        text: expect.stringContaining("Brush teeth"),
+      }),
+    );
+  });
+
+  it("keeps reminder processing working when activity-profile task reads fail", async () => {
+    const unstableRuntime = runtime as AgentRuntime & {
+      getTasks: () => Promise<Task[]>;
+    };
+    unstableRuntime.getTasks = async () => {
+      throw new Error("task store unavailable");
+    };
+
+    const consentRes = await req(
+      port,
+      "POST",
+      "/api/lifeops/channels/phone-consent",
+      {
+        phoneNumber: "415-555-0104",
+        consentGiven: true,
+        allowSms: true,
+        allowVoice: false,
+      },
+    );
+    expect(consentRes.status).toBe(201);
+
+    const definitionRes = await req(port, "POST", "/api/lifeops/definitions", {
+      kind: "task",
+      title: "Reply to Sam",
+      timezone: "UTC",
+      priority: 1,
+      cadence: {
+        kind: "once",
+        dueAt: "2026-04-04T20:00:00.000Z",
+        visibilityLeadMinutes: 0,
+        visibilityLagMinutes: 180,
+      },
+      reminderPlan: {
+        steps: [
+          {
+            channel: "sms",
+            offsetMinutes: 0,
+            label: "SMS now",
+          },
+        ],
+      },
+    });
+    expect(definitionRes.status).toBe(201);
+
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ sid: "SM-FALLBACK-1" }), {
+        status: 201,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+
+    const processRes = await req(port, "POST", "/api/lifeops/reminders/process", {
+      now: "2026-04-04T20:00:00.000Z",
+      limit: 10,
+    });
+    expect(processRes.status).toBe(200);
+    expect(processRes.data.attempts).toHaveLength(1);
+    expect(processRes.data.attempts[0]).toMatchObject({
+      channel: "sms",
+      outcome: "delivered",
+      connectorRef: "twilio:+14155550104",
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

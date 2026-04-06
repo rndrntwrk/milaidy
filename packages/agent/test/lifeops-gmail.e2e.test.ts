@@ -391,6 +391,137 @@ describe("life-ops gmail triage", () => {
     expect(contextRes.data.linkedMailError).toBeNull();
   });
 
+  it("ranks needs-response mail by triage score and excludes automated inbox noise", async () => {
+    await connectGoogle(
+      ["google.gmail.triage"],
+      [
+        "openid",
+        "email",
+        "profile",
+        "https://www.googleapis.com/auth/gmail.metadata",
+      ],
+    );
+
+    const nowMs = Date.now();
+    fetchMock.mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (
+        url.startsWith(
+          "https://gmail.googleapis.com/gmail/v1/users/me/messages?",
+        )
+      ) {
+        return new Response(
+          JSON.stringify({
+            messages: [
+              { id: "msg-person", threadId: "thread-person" },
+              { id: "msg-important", threadId: "thread-important" },
+              { id: "msg-auto", threadId: "thread-auto" },
+            ],
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      if (url.includes("/gmail/v1/users/me/messages/msg-person?")) {
+        return new Response(
+          JSON.stringify({
+            id: "msg-person",
+            threadId: "thread-person",
+            labelIds: ["INBOX", "UNREAD"],
+            snippet: "Can you confirm the venue tonight?",
+            internalDate: String(nowMs - 10 * 60_000),
+            payload: {
+              headers: [
+                { name: "Subject", value: "Venue tonight" },
+                { name: "From", value: "Alex <alex@example.com>" },
+                { name: "To", value: "agent@example.com" },
+                { name: "Message-Id", value: "<person@example.com>" },
+              ],
+            },
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      if (url.includes("/gmail/v1/users/me/messages/msg-important?")) {
+        return new Response(
+          JSON.stringify({
+            id: "msg-important",
+            threadId: "thread-important",
+            labelIds: ["INBOX", "UNREAD", "IMPORTANT"],
+            snippet: "Please send the final draft today.",
+            internalDate: String(nowMs - 60 * 60_000),
+            payload: {
+              headers: [
+                { name: "Subject", value: "Final draft today" },
+                { name: "From", value: "Mira <mira@example.com>" },
+                { name: "To", value: "agent@example.com" },
+                { name: "Message-Id", value: "<important@example.com>" },
+              ],
+            },
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      if (url.includes("/gmail/v1/users/me/messages/msg-auto?")) {
+        return new Response(
+          JSON.stringify({
+            id: "msg-auto",
+            threadId: "thread-auto",
+            labelIds: ["INBOX", "UNREAD"],
+            snippet: "Your weekly digest is ready.",
+            internalDate: String(nowMs - 5 * 60_000),
+            payload: {
+              headers: [
+                { name: "Subject", value: "Weekly digest" },
+                { name: "From", value: "Updates <noreply@example.com>" },
+                { name: "To", value: "agent@example.com" },
+                { name: "Auto-Submitted", value: "auto-generated" },
+                { name: "Message-Id", value: "<auto@example.com>" },
+              ],
+            },
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    const needsResponseRes = await req(
+      port,
+      "GET",
+      "/api/lifeops/gmail/needs-response?maxResults=10",
+    );
+    expect(needsResponseRes.status).toBe(200);
+    expect(needsResponseRes.data.summary).toMatchObject({
+      totalCount: 2,
+      unreadCount: 2,
+      importantCount: 2,
+    });
+    expect(
+      (needsResponseRes.data.messages as Array<Record<string, unknown>>).map(
+        (message) => message.subject,
+      ),
+    ).toEqual(["Final draft today", "Venue tonight"]);
+    expect(needsResponseRes.data.messages).toEqual(
+      expect.not.arrayContaining([
+        expect.objectContaining({
+          subject: "Weekly digest",
+        }),
+      ]),
+    );
+  });
+
   it("surfaces linked-mail errors in next-event context instead of silently hiding them", async () => {
     await connectGoogle(
       ["google.calendar.read", "google.gmail.triage"],

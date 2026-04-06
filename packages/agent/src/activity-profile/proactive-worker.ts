@@ -10,7 +10,7 @@ import { logger, stringToUuid } from "@elizaos/core";
 import { resolveDefaultTimeZone } from "../lifeops/defaults.js";
 import { loadElizaConfig } from "../config/config.js";
 import type { OwnerContactsConfig } from "../config/types.agent-defaults.js";
-import { LifeOpsService } from "../lifeops/service.js";
+import { LifeOpsService, LifeOpsServiceError } from "../lifeops/service.js";
 import {
   planGm,
   planGn,
@@ -72,7 +72,15 @@ function loadOwnerContacts(): OwnerContactsConfig {
   try {
     const cfg = loadElizaConfig();
     return cfg.agents?.defaults?.ownerContacts ?? {};
-  } catch {
+  } catch (error) {
+    logger.warn(
+      {
+        boundary: "activity_profile",
+        operation: "owner_contacts_config",
+        err: error instanceof Error ? error : undefined,
+      },
+      "[proactive] Failed to load owner contacts config; proactive messages cannot route to owner channels until config is available.",
+    );
     return {};
   }
 }
@@ -199,8 +207,15 @@ async function fetchPlannerContext(
         state: occ.state,
       });
     }
-  } catch {
-    // LifeOps not available
+  } catch (error) {
+    logger.warn(
+      {
+        boundary: "activity_profile",
+        operation: "planner_overview",
+        err: error instanceof Error ? error : undefined,
+      },
+      `[proactive] Failed to read LifeOps overview for planner context: ${String(error)}`,
+    );
   }
 
   try {
@@ -219,8 +234,18 @@ async function fetchPlannerContext(
         isAllDay: event.isAllDay,
       });
     }
-  } catch {
-    // Calendar not connected
+  } catch (error) {
+    if (error instanceof LifeOpsServiceError && error.status === 409) {
+      return { occurrences, calendarEvents };
+    }
+    logger.warn(
+      {
+        boundary: "activity_profile",
+        operation: "planner_calendar_feed",
+        err: error instanceof Error ? error : undefined,
+      },
+      `[proactive] Failed to read calendar context for proactive planning: ${String(error)}`,
+    );
   }
 
   return { occurrences, calendarEvents };

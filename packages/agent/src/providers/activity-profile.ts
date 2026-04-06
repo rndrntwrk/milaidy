@@ -13,6 +13,7 @@ import type {
   ProviderResult,
   State,
 } from "@elizaos/core";
+import { logger } from "@elizaos/core";
 import { checkSenderRole } from "@miladyai/plugin-roles";
 import { resolveDefaultTimeZone } from "../lifeops/defaults.js";
 import { resolveCurrentBucket } from "../activity-profile/analyzer.js";
@@ -117,8 +118,15 @@ export const activityProfileProvider: Provider = {
           data: {},
         };
       }
-    } catch {
-      // Profile not available yet
+    } catch (error) {
+      logger.warn(
+        {
+          boundary: "activity_profile",
+          operation: "provider_profile_read",
+          err: error instanceof Error ? error : undefined,
+        },
+        "[activity-profile] Failed to read proactive task metadata; falling back to time-bucket-only context.",
+      );
     }
 
     // Fallback: just time bucket
