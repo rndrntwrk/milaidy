@@ -981,26 +981,70 @@ export function GameView() {
           ) : null}
           {/* Strategy info */}
           {activeSessionState.telemetry.strategyVersion != null ? (
-            <div className="flex items-center gap-2 text-muted">
-              <span>
-                Strategy v{String(activeSessionState.telemetry.strategyVersion)}
-              </span>
-              {activeSessionState.telemetry.strategyScore != null ? (
+            <div className="space-y-0.5 text-muted">
+              <div className="flex items-center gap-2">
                 <span>
-                  score:{" "}
-                  {Number(activeSessionState.telemetry.strategyScore).toFixed(
-                    2,
+                  Strategy v
+                  {String(activeSessionState.telemetry.strategyVersion)}
+                </span>
+                {activeSessionState.telemetry.strategyScore != null ? (
+                  <span>
+                    score:{" "}
+                    {Number(
+                      activeSessionState.telemetry.strategyScore,
+                    ).toFixed(2)}
+                  </span>
+                ) : null}
+                {activeSessionState.telemetry.bestStrategyVersion != null ? (
+                  <span>
+                    best: v
+                    {String(
+                      activeSessionState.telemetry.bestStrategyVersion,
+                    )}{" "}
+                    (
+                    {Number(
+                      activeSessionState.telemetry.bestStrategyScore ?? 0,
+                    ).toFixed(2)}
+                    )
+                  </span>
+                ) : null}
+              </div>
+              {(activeSessionState.telemetry as Record<string, unknown>)
+                .abilityPriority ? (
+                <div className="text-[9px]">
+                  Priority:{" "}
+                  {(
+                    (activeSessionState.telemetry as Record<string, unknown>)
+                      .abilityPriority as string[]
+                  ).join(" > ")}
+                  {" · "}
+                  Recall @
+                  {Math.round(
+                    Number(
+                      (activeSessionState.telemetry as Record<string, unknown>)
+                        .recallThreshold ?? 0.25,
+                    ) * 100,
                   )}
-                </span>
+                  % HP
+                </div>
               ) : null}
-              {activeSessionState.telemetry.bestStrategyVersion != null ? (
-                <span>
-                  best: v{String(activeSessionState.telemetry.bestStrategyVersion)} (
-                  {Number(
-                    activeSessionState.telemetry.bestStrategyScore ?? 0,
-                  ).toFixed(2)}
-                  )
-                </span>
+              {(activeSessionState.telemetry as Record<string, unknown>)
+                .ticksTracked != null ? (
+                <div className="text-[9px]">
+                  {String(
+                    (activeSessionState.telemetry as Record<string, unknown>)
+                      .ticksTracked,
+                  )}{" "}
+                  ticks tracked ·{" "}
+                  {String(
+                    (activeSessionState.telemetry as Record<string, unknown>)
+                      .abilitiesLearned ?? 0,
+                  )}{" "}
+                  abilities learned
+                  {activeSessionState.telemetry.survivalRate != null
+                    ? ` · ${Math.round(Number(activeSessionState.telemetry.survivalRate) * 100)}% survival`
+                    : ""}
+                </div>
               ) : null}
             </div>
           ) : null}
@@ -1082,7 +1126,58 @@ export function GameView() {
         </Button>
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto p-2 text-[11px] font-mono">
-        {gameLogs.length === 0 ? (
+        {/* Prefer telemetry activity feed when available (Defense game loop pushes entries here) */}
+        {Array.isArray(
+          (activeSessionState?.telemetry as Record<string, unknown> | null)
+            ?.recentActivity,
+        ) &&
+        ((activeSessionState?.telemetry as Record<string, unknown>)
+          .recentActivity as { ts: number; action: string; detail: string }[]
+        ).length > 0 ? (
+          (
+            (activeSessionState?.telemetry as Record<string, unknown>)
+              .recentActivity as {
+              ts: number;
+              action: string;
+              detail: string;
+            }[]
+          )
+            .slice()
+            .reverse()
+            .slice(0, 30)
+            .map(
+              (
+                entry: { ts: number; action: string; detail: string },
+                idx: number,
+              ) => (
+                <div
+                  // biome-ignore lint/suspicious/noArrayIndexKey: composite key with index as tiebreaker
+                  key={`${entry.ts}-${idx}`}
+                  className="py-1 border-b border-border/50 flex flex-col gap-0.5"
+                >
+                  <div className="flex items-center gap-1">
+                    <span className="text-muted text-[10px]">
+                      {formatTime(entry.ts, { fallback: "—" })}
+                    </span>
+                    <span
+                      className={`font-semibold text-[10px] uppercase ${
+                        entry.action === "error"
+                          ? "text-danger"
+                          : entry.action.startsWith("ability")
+                            ? "text-ok"
+                            : entry.action.startsWith("move")
+                              ? "text-warn"
+                              : "text-muted"
+                      }`}
+                    >
+                      {entry.action.split(":")[0]}
+                    </span>
+                  </div>
+                  <div className="text-txt break-all">{entry.detail}</div>
+                </div>
+              ),
+            )
+        ) : gameLogs.length === 0 ? (
           <div className="text-center py-4 text-muted italic">
             {t("game.noAgentActivity")}
           </div>

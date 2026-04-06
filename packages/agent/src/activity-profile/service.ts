@@ -30,13 +30,20 @@ type WorldMetadataShape = {
 export async function resolveOwnerEntityId(
   runtime: IAgentRuntime,
 ): Promise<string | null> {
-  // Try all worlds the agent participates in
+  // Find owner via the agent's rooms → world → ownership metadata
   try {
-    const worlds = await runtime.getWorlds();
-    for (const world of worlds) {
-      const metadata = (world?.metadata ?? {}) as WorldMetadataShape;
-      if (metadata.ownership?.ownerId) {
-        return metadata.ownership.ownerId;
+    const roomIds = await runtime.getRoomsForParticipant(runtime.agentId);
+    for (const roomId of roomIds.slice(0, 10)) {
+      try {
+        const room = await runtime.getRoom(roomId);
+        if (!room?.worldId) continue;
+        const world = await runtime.getWorld(room.worldId);
+        const metadata = (world?.metadata ?? {}) as WorldMetadataShape;
+        if (metadata.ownership?.ownerId) {
+          return metadata.ownership.ownerId;
+        }
+      } catch {
+        continue;
       }
     }
   } catch {
@@ -112,9 +119,9 @@ export async function buildActivityProfile(
       currentTime,
     );
     calendarEvents = feed.events.map((e) => ({
-      startAt: e.startAt ?? e.start?.dateTime ?? "",
-      endAt: e.endAt ?? e.end?.dateTime ?? "",
-      isAllDay: e.isAllDay ?? (e.start?.date != null && !e.start?.dateTime),
+      startAt: e.startAt,
+      endAt: e.endAt,
+      isAllDay: e.isAllDay,
     }));
   } catch {
     // Calendar not connected — that's fine

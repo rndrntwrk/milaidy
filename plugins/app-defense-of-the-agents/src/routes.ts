@@ -193,6 +193,32 @@ interface GameLoopHandle {
 /** Active game loops keyed by agentId. */
 const activeLoops = new Map<string, GameLoopHandle>();
 
+/** Recent activity ring buffer keyed by agentId — shown in the UI telemetry panel. */
+interface ActivityEntry {
+  ts: number;
+  action: string;
+  detail: string;
+}
+const ACTIVITY_BUFFER_LIMIT = 20;
+const recentActivity = new Map<string, ActivityEntry[]>();
+
+function pushActivity(agentId: string, action: string, detail: string): void {
+  let buffer = recentActivity.get(agentId);
+  if (!buffer) {
+    buffer = [];
+    recentActivity.set(agentId, buffer);
+  }
+  buffer.push({ ts: Date.now(), action, detail });
+  if (buffer.length > ACTIVITY_BUFFER_LIMIT) {
+    buffer.splice(0, buffer.length - ACTIVITY_BUFFER_LIMIT);
+  }
+}
+
+function getRecentActivity(agentId: string | undefined): ActivityEntry[] {
+  if (!agentId) return [];
+  return recentActivity.get(agentId) ?? [];
+}
+
 /** Optional system event bridge — loaded lazily from plugin-cron. */
 let pushSystemEventFn:
   | ((agentId: string, text: string, source: string) => void)
@@ -711,6 +737,34 @@ function buildCompactSummary(
   );
 }
 
+function describeAction(
+  action: string,
+  hero: DefenseHero | null,
+  state: DefenseGameState,
+): string {
+  if (action === "game-over") return `Game over — ${state.winner ?? "unknown"} wins`;
+  if (action === "initial-deploy") return "Deployed hero into the arena";
+  if (action === "respawning") return "Waiting to respawn...";
+  if (action === "hold") {
+    if (!hero) return "Holding position";
+    const hpPct = hero.maxHp > 0 ? Math.round((hero.hp / hero.maxHp) * 100) : 0;
+    return `Holding ${hero.lane} lane (${hpPct}% HP, Lv${hero.level})`;
+  }
+  if (action.startsWith("ability:")) {
+    const ability = action.slice(8);
+    return `Learned ${toAbilityLabel(ability)}`;
+  }
+  if (action === "ability+recall" || action.startsWith("ability+")) {
+    return "Learned ability + recalling to base";
+  }
+  if (action === "recall") return "Recalling to base (low HP)";
+  if (action.startsWith("move:")) {
+    const lane = action.slice(5);
+    return `Moving to ${lane} lane to reinforce`;
+  }
+  return action;
+}
+
 async function executeStrategyTick(
   ctx: SessionContext,
   strategy: GameStrategy,
@@ -940,6 +994,10 @@ function startGameLoop(
         updateMetrics(strategy, result.hero, result.state, result.action);
         persistStrategy(runtime, strategy);
 
+        // Build a human-readable description of what happened
+        const actionLabel = describeAction(result.action, result.hero, result.state);
+        pushActivity(agentId, result.action, actionLabel);
+
         if (result.hero) {
           pushEvent(
             agentId,
@@ -949,6 +1007,7 @@ function startGameLoop(
       } catch (err) {
         // Swallow tick errors — don't crash the loop
         const msg = err instanceof Error ? err.message : String(err);
+        pushActivity(agentId, "error", msg);
         pushEvent(agentId, `[Game tick error] ${msg}`);
       } finally {
         tickRunning = false;
@@ -1136,6 +1195,7 @@ function buildTelemetry(
   const activeLane = hero ? state.lanes[hero.lane] : state.lanes.mid;
   const strategy = resolveStrategy(runtime);
   const best = resolveBestStrategy(runtime);
+  const agentId = asRuntimeLike(runtime)?.agentId;
   return {
     gameId,
     tick: state.tick,
@@ -1162,8 +1222,21 @@ function buildTelemetry(
       strategy.metrics.ticksTracked > 0
         ? strategy.metrics.ticksAlive / strategy.metrics.ticksTracked
         : null,
+    // Strategy details for display
+    recallThreshold: strategy.recallThreshold,
+    preferredLane: strategy.preferredLane,
+    abilityPriority: strategy.abilityPriority.slice(0, 3),
+    ticksTracked: strategy.metrics.ticksTracked,
+    abilitiesLearned: strategy.metrics.abilitiesLearned,
+    // Recent activity feed
+    recentActivity: getRecentActivity(agentId).map((e) => ({
+      ts: e.ts,
+      action: e.action,
+      detail: e.detail,
+    })),
   };
 }
+
 
 function buildSessionState(
   ctx: SessionContext,
@@ -1419,6 +1492,10 @@ export async function resolveLaunchSession(
   if (ctx.runtime && session) {
     const sessionCtx = resolveSessionContext(ctx.runtime, null);
     startGameLoop(ctx.runtime, sessionCtx);
+    const launchAgentId = asRuntimeLike(ctx.runtime)?.agentId;
+    if (launchAgentId) {
+      pushActivity(launchAgentId, "launch", "Game session launched — auto-play started");
+    }
   }
 
   return session;
@@ -1465,16 +1542,20 @@ export async function handleAppRoutes(ctx: {
 
       const normalizedCmd = content.toLowerCase().replace(/[^a-z0-9 ]/g, "").trim();
 
+      const cmdAgentId = asRuntimeLike(runtime)?.agentId;
+
       // Handle auto-play toggle
       if (normalizedCmd === "autoplay on" || normalizedCmd === "auto play on") {
         const sessionCtx = resolveSessionContext(runtime, sessionId);
         startGameLoop(runtime, sessionCtx);
+        if (cmdAgentId) pushActivity(cmdAgentId, "auto-play-on", "Auto-play enabled");
         const refreshed = await readSessionState(runtime, sessionId);
         ctx.json(ctx.res, okResponse(true, "Auto-play enabled. Agent is now playing autonomously.", refreshed));
         return true;
       }
       if (normalizedCmd === "autoplay off" || normalizedCmd === "auto play off") {
         stopGameLoop(runtime);
+        if (cmdAgentId) pushActivity(cmdAgentId, "auto-play-off", "Auto-play disabled");
         const refreshed = await readSessionState(runtime, sessionId);
         ctx.json(ctx.res, okResponse(true, "Auto-play disabled. Send commands manually.", refreshed));
         return true;
@@ -1483,6 +1564,7 @@ export async function handleAppRoutes(ctx: {
       // Handle strategy review trigger
       if (normalizedCmd === "review strategy" || normalizedCmd === "strategy review") {
         runStrategyReview(runtime);
+        if (cmdAgentId) pushActivity(cmdAgentId, "strategy-review", "Manual strategy review triggered");
         const refreshed = await readSessionState(runtime, sessionId);
         ctx.json(ctx.res, okResponse(true, "Strategy review completed.", refreshed));
         return true;
@@ -1541,6 +1623,10 @@ export async function handleAppRoutes(ctx: {
         state: refreshedState,
         hero: refreshedHero,
       });
+
+      if (cmdAgentId) {
+        pushActivity(cmdAgentId, "command", `Sent: ${content.slice(0, 60)}`);
+      }
 
       ctx.json(
         ctx.res,

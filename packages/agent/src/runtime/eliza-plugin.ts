@@ -40,6 +40,7 @@ import {
 import { createChannelProfileProvider } from "../providers/simple-mode";
 import { createDynamicSkillProvider } from "../providers/skill-provider";
 import { lifeOpsProvider } from "../providers/lifeops";
+import { activityProfileProvider } from "../providers/activity-profile";
 import { uiCatalogProvider } from "../providers/ui-catalog";
 import { createUserNameProvider } from "../providers/user-name";
 import { roleBackfillProvider } from "../providers/role-backfill";
@@ -54,6 +55,10 @@ import {
   ensureLifeOpsSchedulerTask,
   registerLifeOpsTaskWorker,
 } from "../lifeops/runtime";
+import {
+  ensureProactiveAgentTask,
+  registerProactiveTaskWorker,
+} from "../activity-profile/proactive-worker";
 import { loadCustomActions, setCustomActionsRuntime } from "./custom-actions";
 
 export type ElizaPluginConfig = {
@@ -78,6 +83,7 @@ export function createElizaPlugin(config?: ElizaPluginConfig): Plugin {
     adminTrustProvider,
     adminPanelProvider,
     lifeOpsProvider,
+    activityProfileProvider,
 
     createSessionKeyProvider({ defaultAgentId: agentId }),
     ...getSessionProviders({ storePath: sessionStorePath }),
@@ -133,10 +139,16 @@ export function createElizaPlugin(config?: ElizaPluginConfig): Plugin {
     init: async (_pluginConfig, runtime: IAgentRuntime) => {
       registerTriggerTaskWorker(runtime);
       registerLifeOpsTaskWorker(runtime);
+      registerProactiveTaskWorker(runtime);
       setCustomActionsRuntime(runtime);
       void ensureLifeOpsSchedulerTask(runtime).catch((error) => {
         runtime.logger?.warn?.(
           `[lifeops] Failed to ensure scheduler task: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      });
+      void ensureProactiveAgentTask(runtime).catch((error) => {
+        runtime.logger?.warn?.(
+          `[proactive] Failed to ensure proactive task: ${error instanceof Error ? error.message : String(error)}`,
         );
       });
 

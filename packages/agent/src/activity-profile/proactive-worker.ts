@@ -9,7 +9,7 @@ import type { IAgentRuntime, Task, TaskMetadata, UUID } from "@elizaos/core";
 import { logger, stringToUuid } from "@elizaos/core";
 import { getZonedDateParts } from "../lifeops/time.js";
 import { resolveDefaultTimeZone } from "../lifeops/defaults.js";
-import { loadElizaConfig } from "../config/eliza-config.js";
+import { loadElizaConfig } from "../config/config.js";
 import type { OwnerContactsConfig } from "../config/types.agent-defaults.js";
 import { LifeOpsService } from "../lifeops/service.js";
 import {
@@ -152,15 +152,10 @@ export async function executeProactiveTask(
 
       try {
         await runtime.sendMessageToTarget(
-          {
-            source: action.targetPlatform,
-            entityId: contact.entityId as UUID | undefined,
-            roomId: contact.roomId as UUID | undefined,
-          },
-          {
-            text: action.contextSummary,
-            source: action.targetPlatform,
-          },
+          { source: action.targetPlatform, entityId: contact.entityId } as Parameters<
+            typeof runtime.sendMessageToTarget
+          >[0],
+          { text: action.contextSummary, source: action.targetPlatform },
         );
 
         // Record in fired log
@@ -221,11 +216,11 @@ async function fetchPlannerContext(
     );
     for (const event of feed.events) {
       calendarEvents.push({
-        id: event.id ?? "",
-        summary: event.summary ?? "",
-        startAt: event.startAt ?? event.start?.dateTime ?? "",
-        endAt: event.endAt ?? event.end?.dateTime ?? "",
-        isAllDay: event.isAllDay ?? false,
+        id: event.id,
+        summary: event.title ?? "",
+        startAt: event.startAt,
+        endAt: event.endAt,
+        isAllDay: event.isAllDay,
       });
     }
   } catch {
