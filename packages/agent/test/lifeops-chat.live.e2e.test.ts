@@ -428,12 +428,15 @@ describe.skipIf(
       "Brush teeth",
       (entry) =>
         (entry.definition?.cadence as { kind?: string } | undefined)?.kind ===
-        "daily",
+        "times_per_day",
     );
     expect(brushTeeth).toBeDefined();
     expect(brushTeeth.definition?.cadence).toMatchObject({
-      kind: "daily",
-      windows: expect.arrayContaining(["morning", "night"]),
+      kind: "times_per_day",
+      slots: expect.arrayContaining([
+        expect.objectContaining({ minuteOfDay: 8 * 60, label: "Morning" }),
+        expect.objectContaining({ minuteOfDay: 21 * 60, label: "Night" }),
+      ]),
     });
     expect(brushTeeth.reminderPlan?.id ?? null).not.toBeNull();
 
@@ -533,5 +536,69 @@ describe.skipIf(
       windows: expect.arrayContaining(["afternoon"]),
     });
     expect(vitamins.reminderPlan?.id ?? null).not.toBeNull();
+  }, 180_000);
+
+  it("adjusts reminder intensity through chat and persists the preference", async () => {
+    const liveRuntime = runtime!;
+    const { conversationId } = await createConversation(liveRuntime.port, {
+      title: "Live LifeOps Reminder Preference",
+    });
+
+    const createPrompt =
+      "Use LifeOps now. Actually create a habit named Drink water that reminds me throughout the day. Do not just give advice.";
+    const createResponse = await postConversationMessage(
+      liveRuntime.port,
+      conversationId,
+      {
+        text: createPrompt,
+        mode: "power",
+      },
+    );
+    expect(createResponse.status).toBe(200);
+    assertNoProviderIssue(
+      "water creation",
+      String(createResponse.data.text ?? ""),
+      liveRuntime,
+    );
+
+    const drinkWater = await waitForDefinitionByTitle(
+      liveRuntime.port,
+      "Drink water",
+    );
+    const definitionId = String(drinkWater.definition?.id ?? "");
+    expect(definitionId.length).toBeGreaterThan(0);
+
+    const preferencePrompt =
+      "Use LifeOps now. Actually remind me less about Drink water. Do not just explain the setting.";
+    const preferenceResponse = await postConversationMessage(
+      liveRuntime.port,
+      conversationId,
+      {
+        text: preferencePrompt,
+        mode: "power",
+      },
+    );
+    expect(preferenceResponse.status).toBe(200);
+
+    const responseText = String(preferenceResponse.data.text ?? "");
+    assertNoProviderIssue("reminder preference update", responseText, liveRuntime);
+    expect(responseText.toLowerCase()).toContain("drink water");
+
+    const trajectory = await waitForTrajectoryCall(
+      liveRuntime.port,
+      preferencePrompt,
+    );
+    expect(trajectory.trajectoryId.length).toBeGreaterThan(0);
+    expect(String(trajectory.llmCall.response ?? "").length).toBeGreaterThan(0);
+
+    const preference = await req(
+      liveRuntime.port,
+      "GET",
+      `/api/lifeops/reminder-preferences?definitionId=${encodeURIComponent(definitionId)}`,
+    );
+    expect(preference.status).toBe(200);
+    expect(
+      (preference.data.effective as Record<string, unknown>).intensity,
+    ).toBe("low");
   }, 180_000);
 });

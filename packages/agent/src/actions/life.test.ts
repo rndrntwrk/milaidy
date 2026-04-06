@@ -17,6 +17,7 @@ const {
   mockSkipOccurrence,
   mockSnoozeOccurrence,
   mockCapturePhoneConsent,
+  mockSetReminderPreference,
   mockGetCalendarFeed,
   mockGetNextCalendarEventContext,
   mockGetGmailTriage,
@@ -37,6 +38,7 @@ const {
   mockSkipOccurrence: vi.fn(),
   mockSnoozeOccurrence: vi.fn(),
   mockCapturePhoneConsent: vi.fn(),
+  mockSetReminderPreference: vi.fn(),
   mockGetCalendarFeed: vi.fn(),
   mockGetNextCalendarEventContext: vi.fn(),
   mockGetGmailTriage: vi.fn(),
@@ -61,6 +63,7 @@ vi.mock("../lifeops/service.js", () => ({
     skipOccurrence = mockSkipOccurrence;
     snoozeOccurrence = mockSnoozeOccurrence;
     capturePhoneConsent = mockCapturePhoneConsent;
+    setReminderPreference = mockSetReminderPreference;
     getCalendarFeed = mockGetCalendarFeed;
     getNextCalendarEventContext = mockGetNextCalendarEventContext;
     getGmailTriage = mockGetGmailTriage;
@@ -116,6 +119,10 @@ describe("classifyIntent", () => {
     ["delete the stay healthy goal", "delete_goal"],
     ["remove my fitness goal", "delete_goal"],
     ["my phone number is 555-1234", "capture_phone"],
+    ["stop reminding me", "set_reminder_preference"],
+    ["remind me less about water", "set_reminder_preference"],
+    ["send me more reminders for workout", "set_reminder_preference"],
+    ["resume reminders", "set_reminder_preference"],
     ["text me if I miss it", "configure_escalation"],
     ["call me before the event", "capture_phone"],
     ["set up SMS escalation", "configure_escalation"],
@@ -186,6 +193,8 @@ describe("classifyIntent edge cases", () => {
     ["What's on my calendar today?", "query_calendar_today"],
     ["Do I have anything important I need to respond to?", "query_email"],
     ["Text me if I ignore this, and call me if it's right before the event", "configure_escalation"],
+    ["Please remind me less about brushing", "set_reminder_preference"],
+    ["Pause reminders for vitamins", "set_reminder_preference"],
   ] as const)('edge: "%s" → %s', (input, expected) => {
     expect(classifyIntent(input)).toBe(expected);
   });
@@ -198,6 +207,15 @@ describe("lifeAction", () => {
     vi.resetAllMocks();
     mockCheckSenderRole.mockResolvedValue({
       entityId: "owner-1", role: "OWNER", isOwner: true, isAdmin: true, canManageRoles: true,
+    });
+    mockListDefinitions.mockResolvedValue([]);
+    mockListGoals.mockResolvedValue([]);
+    mockSetReminderPreference.mockResolvedValue({
+      definitionId: null,
+      definitionTitle: null,
+      global: { intensity: "normal", source: "default", updatedAt: null, note: null },
+      definition: null,
+      effective: { intensity: "normal", source: "default", updatedAt: null, note: null },
     });
   });
 
@@ -245,10 +263,89 @@ describe("lifeAction", () => {
     expect(result).toMatchObject({ success: true, text: expect.stringContaining("Brush teeth") });
   });
 
+  it("updates the global reminder preference from natural language", async () => {
+    mockSetReminderPreference.mockResolvedValue({
+      definitionId: null,
+      definitionTitle: null,
+      global: {
+        intensity: "low",
+        source: "global_policy",
+        updatedAt: "2026-04-06T12:00:00.000Z",
+        note: "remind me less",
+      },
+      definition: null,
+      effective: {
+        intensity: "low",
+        source: "global_policy",
+        updatedAt: "2026-04-06T12:00:00.000Z",
+        note: "remind me less",
+      },
+    });
+
+    const result = await invoke("remind me less", {
+      action: "reminder_preference",
+    });
+
+    expect(mockSetReminderPreference).toHaveBeenCalledWith(
+      expect.objectContaining({
+        intensity: "low",
+        definitionId: null,
+      }),
+    );
+    expect(result).toMatchObject({
+      success: true,
+      text: expect.stringContaining("Global LifeOps reminders"),
+    });
+  });
+
+  it("updates a specific routine reminder preference from natural language", async () => {
+    mockListDefinitions.mockResolvedValue([
+      {
+        definition: {
+          id: "def-water",
+          title: "Drink water",
+          domain: "user_lifeops",
+        },
+      },
+    ]);
+    mockSetReminderPreference.mockResolvedValue({
+      definitionId: "def-water",
+      definitionTitle: "Drink water",
+      global: { intensity: "normal", source: "default", updatedAt: null, note: null },
+      definition: {
+        intensity: "paused",
+        source: "definition_metadata",
+        updatedAt: "2026-04-06T12:00:00.000Z",
+        note: "stop reminding me about water",
+      },
+      effective: {
+        intensity: "paused",
+        source: "definition_metadata",
+        updatedAt: "2026-04-06T12:00:00.000Z",
+        note: "stop reminding me about water",
+      },
+    });
+
+    const result = await invoke("stop reminding me about water", {
+      action: "reminder_preference",
+    });
+
+    expect(mockSetReminderPreference).toHaveBeenCalledWith(
+      expect.objectContaining({
+        intensity: "paused",
+        definitionId: "def-water",
+      }),
+    );
+    expect(result).toMatchObject({
+      success: true,
+      text: 'Paused reminders for "Drink water".',
+    });
+  });
+
   it("seeds brushing when the user only gives the intent", async () => {
     mockListGoals.mockResolvedValue([]);
     mockCreateDefinition.mockResolvedValue({
-      definition: { id: "d-seed", title: "Brush teeth", cadence: { kind: "daily", windows: ["morning", "night"] } },
+      definition: { id: "d-seed", title: "Brush teeth", cadence: { kind: "times_per_day", slots: [] } },
       reminderPlan: { id: "rp-1" },
     });
 
@@ -261,8 +358,17 @@ describe("lifeAction", () => {
         title: "Brush teeth",
         kind: "habit",
         cadence: expect.objectContaining({
-          kind: "daily",
-          windows: ["morning", "night"],
+          kind: "times_per_day",
+          slots: expect.arrayContaining([
+            expect.objectContaining({
+              minuteOfDay: 8 * 60,
+              label: "Morning",
+            }),
+            expect.objectContaining({
+              minuteOfDay: 21 * 60,
+              label: "Night",
+            }),
+          ]),
         }),
         reminderPlan: expect.objectContaining({
           steps: [expect.objectContaining({ channel: "in_app" })],
@@ -294,6 +400,41 @@ describe("lifeAction", () => {
       }),
     );
     expect(result).toMatchObject({ success: true, text: expect.stringContaining("Drink water") });
+  });
+
+  it("uses explicit clock times for multi-slot brushing seeds", async () => {
+    mockCreateDefinition.mockResolvedValue({
+      definition: {
+        id: "d-brush-clock",
+        title: "Brush teeth",
+        cadence: { kind: "times_per_day", slots: [] },
+      },
+      reminderPlan: { id: "rp-brush-clock" },
+    });
+
+    const result = await invoke("brush teeth at 8am and 10:30pm", {
+      action: "create",
+    });
+
+    expect(mockCreateDefinition).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Brush teeth",
+        cadence: expect.objectContaining({
+          kind: "times_per_day",
+          slots: expect.arrayContaining([
+            expect.objectContaining({ minuteOfDay: 8 * 60, label: "8am" }),
+            expect.objectContaining({
+              minuteOfDay: 22 * 60 + 30,
+              label: "10:30pm",
+            }),
+          ]),
+        }),
+      }),
+    );
+    expect(result).toMatchObject({
+      success: true,
+      text: expect.stringContaining("Brush teeth"),
+    });
   });
 
   it("seeds blocker-aware workout access with a fixed unlock duration", async () => {

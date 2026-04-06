@@ -173,6 +173,23 @@ export const LIFEOPS_REMINDER_URGENCY_LEVELS = [
 export type LifeOpsReminderUrgency =
   (typeof LIFEOPS_REMINDER_URGENCY_LEVELS)[number];
 
+export const LIFEOPS_REMINDER_INTENSITIES = [
+  "paused",
+  "low",
+  "normal",
+  "high",
+] as const;
+export type LifeOpsReminderIntensity =
+  (typeof LIFEOPS_REMINDER_INTENSITIES)[number];
+
+export const LIFEOPS_REMINDER_PREFERENCE_SOURCES = [
+  "default",
+  "global_policy",
+  "definition_metadata",
+] as const;
+export type LifeOpsReminderPreferenceSource =
+  (typeof LIFEOPS_REMINDER_PREFERENCE_SOURCES)[number];
+
 export const LIFEOPS_OWNER_TYPES = [
   "definition",
   "occurrence",
@@ -630,6 +647,21 @@ export interface LifeOpsChannelPolicy {
   metadata: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface LifeOpsReminderPreferenceSetting {
+  intensity: LifeOpsReminderIntensity;
+  source: LifeOpsReminderPreferenceSource;
+  updatedAt: string | null;
+  note: string | null;
+}
+
+export interface LifeOpsReminderPreference {
+  definitionId: string | null;
+  definitionTitle: string | null;
+  global: LifeOpsReminderPreferenceSetting;
+  definition: LifeOpsReminderPreferenceSetting | null;
+  effective: LifeOpsReminderPreferenceSetting;
 }
 
 export interface LifeOpsAuditEvent {
@@ -1140,6 +1172,12 @@ export interface UpsertLifeOpsChannelPolicyRequest {
   allowPosts?: boolean;
   requireConfirmationForActions?: boolean;
   metadata?: Record<string, unknown>;
+}
+
+export interface SetLifeOpsReminderPreferenceRequest {
+  intensity: LifeOpsReminderIntensity;
+  definitionId?: string | null;
+  note?: string;
 }
 
 export interface CaptureLifeOpsPhoneConsentRequest {

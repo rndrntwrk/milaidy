@@ -29,6 +29,7 @@ import type {
   ResolveLifeOpsWebsiteAccessCallbackRequest,
   SelectLifeOpsGoogleConnectorPreferenceRequest,
   SendLifeOpsGmailReplyRequest,
+  SetLifeOpsReminderPreferenceRequest,
   SnoozeLifeOpsOccurrenceRequest,
   StartLifeOpsGoogleConnectorRequest,
   UpdateLifeOpsDefinitionRequest,
@@ -642,6 +643,28 @@ export async function handleLifeOpsRoutes(
     if (!body) return true;
     return runRoute(ctx, async (service) => {
       json(res, await service.processReminders(body));
+    });
+  }
+
+  if (method === "GET" && pathname === "/api/lifeops/reminder-preferences") {
+    return runRoute(ctx, async (service) => {
+      json(
+        res,
+        await service.getReminderPreference(
+          url.searchParams.get("definitionId") ?? undefined,
+        ),
+      );
+    });
+  }
+
+  if (method === "POST" && pathname === "/api/lifeops/reminder-preferences") {
+    const body = await readJsonBody<SetLifeOpsReminderPreferenceRequest>(
+      req,
+      res,
+    );
+    if (!body) return true;
+    return runRoute(ctx, async (service) => {
+      json(res, await service.setReminderPreference(body), 201);
     });
   }
 

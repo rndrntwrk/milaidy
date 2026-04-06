@@ -340,6 +340,98 @@ describe("Life-ops API E2E", () => {
       ).toBe(definitionId);
     });
 
+    it("applies reminder preferences through the API and reminder processor", async () => {
+      const now = new Date();
+      const minuteOfDay = Math.max(
+        0,
+        now.getUTCHours() * 60 + now.getUTCMinutes() - 70,
+      );
+
+      const definitionCreate = await req(
+        port,
+        "POST",
+        "/api/lifeops/definitions",
+        {
+          kind: "habit",
+          title: "Drink water",
+          timezone: "UTC",
+          cadence: {
+            kind: "times_per_day",
+            slots: [
+              {
+                key: "soon",
+                label: "Soon",
+                minuteOfDay,
+                durationMinutes: 180,
+              },
+            ],
+          },
+          reminderPlan: {
+            steps: [
+              {
+                channel: "in_app",
+                offsetMinutes: 0,
+                label: "first",
+              },
+              {
+                channel: "in_app",
+                offsetMinutes: 30,
+                label: "second",
+              },
+            ],
+          },
+        },
+      );
+      expect(definitionCreate.status).toBe(201);
+      const definitionId = String(
+        (definitionCreate.data.definition as Record<string, unknown>).id,
+      );
+
+      const preferenceSet = await req(
+        port,
+        "POST",
+        "/api/lifeops/reminder-preferences",
+        {
+          definitionId,
+          intensity: "low",
+          note: "send fewer reminders for water",
+        },
+      );
+      expect(preferenceSet.status).toBe(201);
+      expect(
+        (preferenceSet.data.effective as Record<string, unknown>).intensity,
+      ).toBe("low");
+
+      const preferenceRead = await req(
+        port,
+        "GET",
+        `/api/lifeops/reminder-preferences?definitionId=${encodeURIComponent(definitionId)}`,
+      );
+      expect(preferenceRead.status).toBe(200);
+      expect(
+        (preferenceRead.data.effective as Record<string, unknown>).intensity,
+      ).toBe("low");
+      expect(
+        (preferenceRead.data.definition as Record<string, unknown>).source,
+      ).toBe("definition_metadata");
+
+      const process = await req(port, "POST", "/api/lifeops/reminders/process", {
+        now: now.toISOString(),
+      });
+      expect(process.status).toBe(200);
+      expect(
+        Array.isArray(process.data.attempts as unknown[]),
+      ).toBe(true);
+      expect((process.data.attempts as Array<unknown>).length).toBe(1);
+
+      const overview = await req(port, "GET", "/api/lifeops/overview");
+      expect(overview.status).toBe(200);
+      const reminderTitles = (overview.data.reminders as Array<Record<string, unknown>>)
+        .filter((reminder) => reminder.definitionId === definitionId)
+        .map((reminder) => reminder.stepLabel);
+      expect(reminderTitles).toEqual(["first"]);
+    });
+
     it("separates owner lifeops from agent ops", async () => {
       const now = new Date();
       const minuteOfDay = now.getUTCHours() * 60 + now.getUTCMinutes();

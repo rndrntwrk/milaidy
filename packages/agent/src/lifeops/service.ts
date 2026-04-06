@@ -61,6 +61,9 @@ import type {
   LifeOpsReminderAttempt,
   LifeOpsReminderAttemptOutcome,
   LifeOpsReminderInspection,
+  LifeOpsReminderIntensity,
+  LifeOpsReminderPreference,
+  LifeOpsReminderPreferenceSetting,
   LifeOpsReminderPlan,
   LifeOpsReminderProcessingResult,
   LifeOpsReminderStep,
@@ -82,6 +85,7 @@ import type {
   LifeOpsXConnectorStatus,
   LifeOpsXPostResponse,
   SendLifeOpsGmailReplyRequest,
+  SetLifeOpsReminderPreferenceRequest,
   SnoozeLifeOpsOccurrenceRequest,
   StartLifeOpsGoogleConnectorRequest,
   StartLifeOpsGoogleConnectorResponse,
@@ -107,6 +111,8 @@ import {
   LIFEOPS_GOOGLE_CAPABILITIES,
   LIFEOPS_PRIVACY_CLASSES,
   LIFEOPS_REMINDER_CHANNELS,
+  LIFEOPS_REMINDER_INTENSITIES,
+  LIFEOPS_REMINDER_PREFERENCE_SOURCES,
   LIFEOPS_REMINDER_URGENCY_LEVELS,
   LIFEOPS_REVIEW_STATES,
   LIFEOPS_SUBJECT_TYPES,
@@ -211,6 +217,14 @@ const DEFAULT_WORKFLOW_PROCESS_LIMIT = 12;
 const GOAL_REVIEW_LOOKBACK_DAYS = 7;
 const DEFINITION_PERFORMANCE_LAST7_DAYS = 7;
 const DEFINITION_PERFORMANCE_LAST30_DAYS = 30;
+const DEFAULT_REMINDER_INTENSITY: LifeOpsReminderIntensity = "normal";
+const GLOBAL_REMINDER_PREFERENCE_CHANNEL_REF =
+  "lifeops://owner/reminder-preferences";
+const REMINDER_INTENSITY_METADATA_KEY = "reminderIntensity";
+const REMINDER_INTENSITY_UPDATED_AT_METADATA_KEY =
+  "reminderIntensityUpdatedAt";
+const REMINDER_INTENSITY_NOTE_METADATA_KEY = "reminderIntensityNote";
+const REMINDER_PREFERENCE_SCOPE_METADATA_KEY = "reminderPreferenceScope";
 const reminderProcessingQueues = new Map<string, Promise<void>>();
 const DEFAULT_CALENDAR_REMINDER_STEPS: LifeOpsReminderStep[] = [
   {
@@ -667,6 +681,100 @@ function mergeMetadata(
     merged.publicContextBlocked = true;
   }
   return merged;
+}
+
+function isReminderIntensity(
+  value: unknown,
+): value is LifeOpsReminderIntensity {
+  return (
+    typeof value === "string" &&
+    LIFEOPS_REMINDER_INTENSITIES.includes(value as LifeOpsReminderIntensity)
+  );
+}
+
+function readReminderPreferenceSettingFromMetadata(
+  metadata: Record<string, unknown> | null | undefined,
+  source: Exclude<
+    (typeof LIFEOPS_REMINDER_PREFERENCE_SOURCES)[number],
+    "default"
+  >,
+): LifeOpsReminderPreferenceSetting | null {
+  if (!metadata) {
+    return null;
+  }
+  const intensity = metadata[REMINDER_INTENSITY_METADATA_KEY];
+  if (!isReminderIntensity(intensity)) {
+    return null;
+  }
+  return {
+    intensity,
+    source,
+    updatedAt:
+      normalizeOptionalIsoString(
+        metadata[REMINDER_INTENSITY_UPDATED_AT_METADATA_KEY],
+        REMINDER_INTENSITY_UPDATED_AT_METADATA_KEY,
+      ) ?? null,
+    note:
+      normalizeOptionalString(metadata[REMINDER_INTENSITY_NOTE_METADATA_KEY]) ??
+      null,
+  };
+}
+
+function withReminderPreferenceMetadata(
+  current: Record<string, unknown>,
+  intensity: LifeOpsReminderIntensity,
+  updatedAt: string,
+  note: string | null,
+  scope: "definition" | "global",
+): Record<string, unknown> {
+  return mergeMetadata(current, {
+    [REMINDER_INTENSITY_METADATA_KEY]: intensity,
+    [REMINDER_INTENSITY_UPDATED_AT_METADATA_KEY]: updatedAt,
+    [REMINDER_INTENSITY_NOTE_METADATA_KEY]: note,
+    [REMINDER_PREFERENCE_SCOPE_METADATA_KEY]: scope,
+  });
+}
+
+function applyReminderIntensityToPlan(
+  plan: LifeOpsReminderPlan,
+  intensity: LifeOpsReminderIntensity,
+): LifeOpsReminderPlan | null {
+  if (intensity === "paused") {
+    return null;
+  }
+  const steps = plan.steps.map((step) => ({ ...step }));
+  if (intensity === "low") {
+    return {
+      ...plan,
+      steps: steps.slice(0, 1),
+    };
+  }
+  if (intensity === "high") {
+    const lastStep = steps[steps.length - 1] ?? {
+      channel: "in_app" as const,
+      offsetMinutes: 0,
+      label: "Reminder",
+    };
+    const extraStepOffset = lastStep.offsetMinutes + 60;
+    if (
+      !steps.some(
+        (step) =>
+          step.channel === "in_app" &&
+          step.offsetMinutes === extraStepOffset,
+      )
+    ) {
+      steps.push({
+        channel: "in_app",
+        offsetMinutes: extraStepOffset,
+        label: `${lastStep.label} follow-up`,
+      });
+      steps.sort((left, right) => left.offsetMinutes - right.offsetMinutes);
+    }
+  }
+  return {
+    ...plan,
+    steps,
+  };
 }
 
 function requireAgentId(runtime: IAgentRuntime): string {
@@ -5538,6 +5646,9 @@ export class LifeOpsService {
     for (const definition of definitions) {
       await this.refreshDefinitionOccurrences(definition, now);
     }
+    const definitionsById = new Map(
+      definitions.map((definition) => [definition.id, definition]),
+    );
     const horizon = addMinutes(now, OVERVIEW_HORIZON_MINUTES).toISOString();
     const overviewOccurrences =
       await this.repository.listOccurrenceViewsForOverview(
@@ -5549,9 +5660,18 @@ export class LifeOpsService {
       "definition",
       overviewOccurrences.map((occurrence) => occurrence.definitionId),
     );
-    const plansByDefinitionId = new Map(
-      reminderPlans.map((plan) => [plan.ownerId, plan]),
-    );
+    const policies = await this.repository.listChannelPolicies(this.agentId());
+    const plansByDefinitionId = new Map<string, LifeOpsReminderPlan>();
+    for (const plan of reminderPlans) {
+      const definition = definitionsById.get(plan.ownerId) ?? null;
+      const effectivePlan = this.resolveEffectiveReminderPlan(
+        plan,
+        this.buildReminderPreferenceResponse(definition, policies),
+      );
+      if (effectivePlan) {
+        plansByDefinitionId.set(plan.ownerId, effectivePlan);
+      }
+    }
     const calendarEvents = await this.repository.listCalendarEvents(
       this.agentId(),
       "google",
@@ -5564,9 +5684,20 @@ export class LifeOpsService {
         "calendar_event",
         calendarEvents.map((event) => event.id),
       );
-    const plansByEventId = new Map(
-      calendarReminderPlans.map((plan) => [plan.ownerId, plan]),
+    const globalReminderPreference = this.buildReminderPreferenceResponse(
+      null,
+      policies,
     );
+    const plansByEventId = new Map<string, LifeOpsReminderPlan>();
+    for (const plan of calendarReminderPlans) {
+      const effectivePlan = this.resolveEffectiveReminderPlan(
+        plan,
+        globalReminderPreference,
+      );
+      if (effectivePlan) {
+        plansByEventId.set(plan.ownerId, effectivePlan);
+      }
+    }
     const goals = await this.refreshGoalReviewStates(now);
     const allReminders = [
       ...buildActiveReminders(overviewOccurrences, plansByDefinitionId, now),
@@ -5623,6 +5754,145 @@ export class LifeOpsService {
 
   async listChannelPolicies(): Promise<LifeOpsChannelPolicy[]> {
     return this.repository.listChannelPolicies(this.agentId());
+  }
+
+  private resolveGlobalReminderPreferencePolicy(
+    policies: LifeOpsChannelPolicy[],
+  ): LifeOpsChannelPolicy | null {
+    const candidates = policies.filter(
+      (policy) =>
+        policy.channelType === "in_app" &&
+        (policy.channelRef === GLOBAL_REMINDER_PREFERENCE_CHANNEL_REF ||
+          policy.metadata[REMINDER_PREFERENCE_SCOPE_METADATA_KEY] === "global"),
+    );
+    return (
+      candidates.find((policy) => policy.metadata.isPrimary === true) ??
+      candidates[0] ??
+      null
+    );
+  }
+
+  private buildReminderPreferenceResponse(
+    definition: LifeOpsTaskDefinition | null,
+    policies: LifeOpsChannelPolicy[],
+  ): LifeOpsReminderPreference {
+    const globalPolicy = this.resolveGlobalReminderPreferencePolicy(policies);
+    const globalSetting =
+      readReminderPreferenceSettingFromMetadata(
+        globalPolicy?.metadata,
+        "global_policy",
+      ) ?? {
+        intensity: DEFAULT_REMINDER_INTENSITY,
+        source: "default",
+        updatedAt: null,
+        note: null,
+      };
+    const definitionSetting = definition
+      ? readReminderPreferenceSettingFromMetadata(
+          definition.metadata,
+          "definition_metadata",
+        )
+      : null;
+    return {
+      definitionId: definition?.id ?? null,
+      definitionTitle: definition?.title ?? null,
+      global: globalSetting,
+      definition: definitionSetting,
+      effective: definitionSetting ?? globalSetting,
+    };
+  }
+
+  private resolveEffectiveReminderPlan(
+    plan: LifeOpsReminderPlan | null,
+    preference: LifeOpsReminderPreference,
+  ): LifeOpsReminderPlan | null {
+    if (!plan) {
+      return null;
+    }
+    return applyReminderIntensityToPlan(plan, preference.effective.intensity);
+  }
+
+  async getReminderPreference(
+    definitionId?: string | null,
+  ): Promise<LifeOpsReminderPreference> {
+    const definition = definitionId
+      ? await this.repository.getDefinition(
+          this.agentId(),
+          requireNonEmptyString(definitionId, "definitionId"),
+        )
+      : null;
+    if (definitionId && !definition) {
+      fail(404, "life-ops definition not found");
+    }
+    const policies = await this.repository.listChannelPolicies(this.agentId());
+    return this.buildReminderPreferenceResponse(definition, policies);
+  }
+
+  async setReminderPreference(
+    request: SetLifeOpsReminderPreferenceRequest,
+  ): Promise<LifeOpsReminderPreference> {
+    const intensity = normalizeEnumValue(
+      request.intensity,
+      "intensity",
+      LIFEOPS_REMINDER_INTENSITIES,
+    );
+    const note = normalizeOptionalString(request.note) ?? null;
+    const updatedAt = new Date().toISOString();
+    const definitionId = normalizeOptionalString(request.definitionId) ?? null;
+    if (definitionId) {
+      const definition = await this.repository.getDefinition(
+        this.agentId(),
+        definitionId,
+      );
+      if (!definition) {
+        fail(404, "life-ops definition not found");
+      }
+      const nextDefinition: LifeOpsTaskDefinition = {
+        ...definition,
+        metadata: withReminderPreferenceMetadata(
+          definition.metadata,
+          intensity,
+          updatedAt,
+          note,
+          "definition",
+        ),
+        updatedAt,
+      };
+      await this.repository.updateDefinition(nextDefinition);
+      await this.recordAudit(
+        "definition_updated",
+        "definition",
+        definition.id,
+        "reminder preference updated",
+        {
+          request,
+        },
+        {
+          reminderIntensity: intensity,
+          note,
+        },
+      );
+      const policies = await this.repository.listChannelPolicies(this.agentId());
+      return this.buildReminderPreferenceResponse(nextDefinition, policies);
+    }
+
+    await this.upsertChannelPolicy({
+      channelType: "in_app",
+      channelRef: GLOBAL_REMINDER_PREFERENCE_CHANNEL_REF,
+      privacyClass: "private",
+      allowReminders: true,
+      allowEscalation: false,
+      allowPosts: false,
+      requireConfirmationForActions: false,
+      metadata: {
+        isPrimary: true,
+        [REMINDER_PREFERENCE_SCOPE_METADATA_KEY]: "global",
+        [REMINDER_INTENSITY_METADATA_KEY]: intensity,
+        [REMINDER_INTENSITY_UPDATED_AT_METADATA_KEY]: updatedAt,
+        [REMINDER_INTENSITY_NOTE_METADATA_KEY]: note,
+      },
+    });
+    return this.getReminderPreference();
   }
 
   async upsertChannelPolicy(
@@ -5798,6 +6068,9 @@ export class LifeOpsService {
       for (const definition of definitions) {
         await this.refreshDefinitionOccurrences(definition, now);
       }
+      const definitionsById = new Map(
+        definitions.map((definition) => [definition.id, definition]),
+      );
 
       const horizon = addMinutes(now, OVERVIEW_HORIZON_MINUTES).toISOString();
       const occurrenceViews =
@@ -5810,9 +6083,18 @@ export class LifeOpsService {
         "definition",
         occurrenceViews.map((occurrence) => occurrence.definitionId),
       );
-      const plansByDefinitionId = new Map(
-        occurrencePlans.map((plan) => [plan.ownerId, plan]),
-      );
+      const policies = await this.repository.listChannelPolicies(this.agentId());
+      const plansByDefinitionId = new Map<string, LifeOpsReminderPlan>();
+      for (const plan of occurrencePlans) {
+        const definition = definitionsById.get(plan.ownerId) ?? null;
+        const effectivePlan = this.resolveEffectiveReminderPlan(
+          plan,
+          this.buildReminderPreferenceResponse(definition, policies),
+        );
+        if (effectivePlan) {
+          plansByDefinitionId.set(plan.ownerId, effectivePlan);
+        }
+      }
       const eventWindowEnd = addMinutes(
         now,
         OVERVIEW_HORIZON_MINUTES,
@@ -5828,9 +6110,20 @@ export class LifeOpsService {
         "calendar_event",
         calendarEvents.map((event) => event.id),
       );
-      const plansByEventId = new Map(
-        eventPlans.map((plan) => [plan.ownerId, plan]),
+      const globalReminderPreference = this.buildReminderPreferenceResponse(
+        null,
+        policies,
       );
+      const plansByEventId = new Map<string, LifeOpsReminderPlan>();
+      for (const plan of eventPlans) {
+        const effectivePlan = this.resolveEffectiveReminderPlan(
+          plan,
+          globalReminderPreference,
+        );
+        if (effectivePlan) {
+          plansByEventId.set(plan.ownerId, effectivePlan);
+        }
+      }
       const existingAttempts = await this.repository.listReminderAttempts(
         this.agentId(),
       );

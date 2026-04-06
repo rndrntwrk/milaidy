@@ -16,6 +16,7 @@ import type {
   LifeOpsCadence,
   LifeOpsCalendarEvent,
   LifeOpsCalendarFeed,
+  LifeOpsDailySlot,
   LifeOpsDefinitionRecord,
   LifeOpsDomain,
   LifeOpsGmailTriageFeed,
@@ -23,10 +24,13 @@ import type {
   LifeOpsGoogleConnectorStatus,
   LifeOpsNextCalendarEventContext,
   LifeOpsOverview,
+  LifeOpsReminderIntensity,
   LifeOpsReminderStep,
+  SetLifeOpsReminderPreferenceRequest,
   UpdateLifeOpsDefinitionRequest,
   UpdateLifeOpsGoalRequest,
 } from "@miladyai/shared/contracts/lifeops";
+import { LIFEOPS_REMINDER_INTENSITIES } from "@miladyai/shared/contracts/lifeops";
 import { LifeOpsService, LifeOpsServiceError } from "../lifeops/service.js";
 
 // ── Types ─────────────────────────────────────────────
@@ -44,6 +48,7 @@ type LifeOperation =
   | "review_goal"
   | "capture_phone"
   | "configure_escalation"
+  | "set_reminder_preference"
   | "query_calendar_today"
   | "query_calendar_next"
   | "query_email"
@@ -62,6 +67,7 @@ type LifeAction =
   | "review"
   | "phone"
   | "escalation"
+  | "reminder_preference"
   | "calendar"
   | "next_event"
   | "email"
@@ -80,6 +86,7 @@ const ACTION_TO_OPERATION: Record<LifeAction, LifeOperation> = {
   review: "review_goal",
   phone: "capture_phone",
   escalation: "configure_escalation",
+  reminder_preference: "set_reminder_preference",
   calendar: "query_calendar_today",
   next_event: "query_calendar_next",
   email: "query_email",
@@ -109,6 +116,17 @@ const INTERNAL_URL = new URL("http://127.0.0.1/");
 
 export function classifyIntent(intent: string): LifeOperation {
   const lower = intent.toLowerCase();
+
+  if (
+    /\b(remind|reminder|ping|message|nudge)\b.*\b(less|fewer|more|again|back on|resume|normal)\b/.test(
+      lower,
+    ) ||
+    /\b(stop reminding me|don't remind me|pause reminders?|resume reminders?|more reminders?|less reminders?|fewer reminders?|normal reminders?)\b/.test(
+      lower,
+    )
+  ) {
+    return "set_reminder_preference";
+  }
 
   // Update — check before calendar so "edit my workout schedule" doesn't hit calendar
   if (/\b(update|change|edit|modify|adjust|rename|reschedule)\b/.test(lower)) {
@@ -155,6 +173,39 @@ export function classifyIntent(intent: string): LifeOperation {
 
   // Default: create a task/habit/routine
   return "create_definition";
+}
+
+function inferReminderIntensityFromIntent(
+  intent: string,
+): LifeOpsReminderIntensity | null {
+  const lower = intent.toLowerCase();
+  if (
+    /\b(stop reminding me|don't remind me|pause reminders?|mute reminders?)\b/.test(
+      lower,
+    )
+  ) {
+    return "paused";
+  }
+  if (
+    /\b(resume reminders?|start reminding me again|turn reminders? back on|normal reminders?)\b/.test(
+      lower,
+    )
+  ) {
+    return "normal";
+  }
+  if (
+    /\b(less|fewer)\s+reminders?\b/.test(lower) ||
+    /\b(remind|ping|message|nudge)\b.*\b(less|fewer)\b/.test(lower)
+  ) {
+    return "low";
+  }
+  if (
+    /\bmore reminders?\b/.test(lower) ||
+    /\b(remind|ping|message|nudge)\b.*\bmore\b/.test(lower)
+  ) {
+    return "high";
+  }
+  return null;
 }
 
 // ── Helpers ───────────────────────────────────────────
@@ -223,6 +274,53 @@ async function resolveDefinition(
   if (!target) return null;
   const defs = (await service.listDefinitions()).filter((e) => (domain ? e.definition.domain === domain : true));
   return defs.find((e) => e.definition.id === target) ?? matchByTitle(defs, target);
+}
+
+function tokenizeTitle(value: string): string[] {
+  return normalizeTitle(value)
+    .split(" ")
+    .filter((token) => token.length >= 3);
+}
+
+async function resolveDefinitionFromIntent(
+  service: LifeOpsService,
+  target: string | undefined,
+  intent: string,
+  domain?: LifeOpsDomain,
+): Promise<LifeOpsDefinitionRecord | null> {
+  const direct = await resolveDefinition(service, target, domain);
+  if (direct) {
+    return direct;
+  }
+  const defs = (await service.listDefinitions()).filter((entry) =>
+    domain ? entry.definition.domain === domain : true,
+  );
+  const intentTokens = new Set(tokenizeTitle(intent));
+  let best: LifeOpsDefinitionRecord | null = null;
+  let bestScore = 0;
+  let tied = false;
+  for (const entry of defs) {
+    const title = normalizeTitle(entry.definition.title);
+    if (title.length > 0 && normalizeTitle(intent).includes(title)) {
+      return entry;
+    }
+    const overlap = tokenizeTitle(entry.definition.title).filter((token) =>
+      intentTokens.has(token),
+    ).length;
+    if (overlap === 0) {
+      continue;
+    }
+    if (overlap > bestScore) {
+      best = entry;
+      bestScore = overlap;
+      tied = false;
+      continue;
+    }
+    if (overlap === bestScore) {
+      tied = true;
+    }
+  }
+  return bestScore > 0 && !tied ? best : null;
 }
 
 async function resolveOccurrence(
@@ -567,6 +665,118 @@ function extractIntentWindows(
   return windows;
 }
 
+const DEFAULT_WINDOW_SLOT_TIMES: Record<
+  "morning" | "afternoon" | "evening" | "night",
+  { minuteOfDay: number; durationMinutes: number; label: string }
+> = {
+  morning: {
+    minuteOfDay: 8 * 60,
+    durationMinutes: 45,
+    label: "Morning",
+  },
+  afternoon: {
+    minuteOfDay: 13 * 60,
+    durationMinutes: 45,
+    label: "Afternoon",
+  },
+  evening: {
+    minuteOfDay: 18 * 60,
+    durationMinutes: 45,
+    label: "Evening",
+  },
+  night: {
+    minuteOfDay: 21 * 60,
+    durationMinutes: 45,
+    label: "Night",
+  },
+};
+
+function buildSlotsFromWindows(
+  windows: Array<"morning" | "afternoon" | "evening" | "night">,
+): LifeOpsDailySlot[] {
+  return windows.map((window, index) => {
+    const preset = DEFAULT_WINDOW_SLOT_TIMES[window];
+    return {
+      key:
+        windows.indexOf(window) === index ? window : `${window}-${index + 1}`,
+      label: preset.label,
+      minuteOfDay: preset.minuteOfDay,
+      durationMinutes: preset.durationMinutes,
+    };
+  });
+}
+
+function buildDistributedDailySlots(count: number): LifeOpsDailySlot[] {
+  const normalizedCount = Math.max(1, Math.min(6, count));
+  const presets: Record<number, number[]> = {
+    1: [9 * 60],
+    2: [8 * 60, 21 * 60],
+    3: [8 * 60, 13 * 60, 20 * 60],
+    4: [8 * 60, 12 * 60, 16 * 60, 20 * 60],
+    5: [8 * 60, 11 * 60, 14 * 60, 17 * 60, 20 * 60],
+    6: [8 * 60, 10 * 60, 12 * 60, 14 * 60, 17 * 60, 20 * 60],
+  };
+  const minutes = presets[normalizedCount] ?? presets[1];
+  return minutes.map((minuteOfDay, index) => ({
+    key: `slot-${index + 1}`,
+    label: `Time ${index + 1}`,
+    minuteOfDay,
+    durationMinutes: 45,
+  }));
+}
+
+function parseClockToken(token: string): number | null {
+  const normalized = token.trim().toLowerCase();
+  if (normalized === "noon") {
+    return 12 * 60;
+  }
+  if (normalized === "midnight") {
+    return 0;
+  }
+  const match = normalized.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)$/);
+  if (!match) {
+    return null;
+  }
+  const hour = Number(match[1]);
+  const minute = Number(match[2] ?? "0");
+  if (!Number.isFinite(hour) || !Number.isFinite(minute) || minute >= 60) {
+    return null;
+  }
+  if (hour < 1 || hour > 12) {
+    return null;
+  }
+  const meridiem = match[3];
+  const normalizedHour =
+    meridiem === "am"
+      ? hour % 12
+      : hour % 12 === 0
+        ? 12
+        : hour % 12 + 12;
+  return normalizedHour * 60 + minute;
+}
+
+function extractExplicitDailySlots(intent: string): LifeOpsDailySlot[] {
+  const tokens = [
+    ...intent.matchAll(/\b(\d{1,2}(?::\d{2})?\s*(?:am|pm)|noon|midnight)\b/gi),
+  ].map((match) => match[1]);
+  const seen = new Set<number>();
+  const slots: LifeOpsDailySlot[] = [];
+  for (const [index, token] of tokens.entries()) {
+    const minuteOfDay = parseClockToken(token);
+    if (minuteOfDay === null || seen.has(minuteOfDay)) {
+      continue;
+    }
+    seen.add(minuteOfDay);
+    slots.push({
+      key: `clock-${index + 1}`,
+      label: token.trim(),
+      minuteOfDay,
+      durationMinutes: 45,
+    });
+  }
+  return slots.sort((left, right) => left.minuteOfDay - right.minuteOfDay);
+}
+
 function buildDefaultReminderPlan(
   label: string,
 ): NonNullable<CreateLifeOpsDefinitionRequest["reminderPlan"]> {
@@ -606,14 +816,48 @@ function inferSeedCadenceFromIntent(
     };
   }
 
-  const intervalMatch = lower.match(/\bevery\s+(\d+)\s*hours?\b/);
+  const explicitSlots = extractExplicitDailySlots(intent);
+  if (explicitSlots.length > 0) {
+    return {
+      kind: "times_per_day",
+      slots: explicitSlots,
+      visibilityLeadMinutes: 90,
+      visibilityLagMinutes: 180,
+    };
+  }
+
+  const intervalMatch = lower.match(/\bevery\s+(\d+)\s*(hours?|minutes?)\b/);
   if (intervalMatch) {
-    const hours = Number(intervalMatch[1]);
-    if (Number.isFinite(hours) && hours > 0) {
+    const value = Number(intervalMatch[1]);
+    const unit = intervalMatch[2];
+    if (Number.isFinite(value) && value > 0) {
       return {
         kind: "interval",
-        everyMinutes: hours * 60,
-        windows: effectiveWindows,
+        everyMinutes: /minute/.test(unit) ? value : value * 60,
+        windows:
+          effectiveWindows.length > 0
+            ? effectiveWindows
+            : ["morning", "afternoon", "evening"],
+      };
+    }
+  }
+
+  const timesPerDayMatch =
+    lower.match(
+      /\b(one|two|three|four|five|six|\d+)\s*(?:x|times?)\s*(?:a|per)\s*day\b/,
+    ) ?? lower.match(/\b(once|twice)\s+a\s+day\b/);
+  if (timesPerDayMatch?.[1]) {
+    const count = parseNumberWord(timesPerDayMatch[1]);
+    if (count) {
+      const slots =
+        effectiveWindows.length >= count
+          ? buildSlotsFromWindows(effectiveWindows.slice(0, count))
+          : buildDistributedDailySlots(count);
+      return {
+        kind: "times_per_day",
+        slots,
+        visibilityLeadMinutes: 90,
+        visibilityLagMinutes: 180,
       };
     }
   }
@@ -625,8 +869,14 @@ function inferSeedCadenceFromIntent(
     windows.length >= 2
   ) {
     return {
-      kind: "daily",
-      windows: effectiveWindows.length > 0 ? effectiveWindows : ["morning", "night"],
+      kind: "times_per_day",
+      slots: buildSlotsFromWindows(
+        effectiveWindows.length > 0
+          ? effectiveWindows
+          : ["morning", "night"],
+      ),
+      visibilityLeadMinutes: 90,
+      visibilityLagMinutes: 180,
     };
   }
 
@@ -654,8 +904,8 @@ function inferLifeDefinitionSeed(intent: string): LifeDefinitionSeed | null {
       kind: "habit",
       cadence:
         inferSeedCadenceFromIntent(intent, ["morning", "night"]) ?? {
-          kind: "daily",
-          windows: ["morning", "night"],
+          kind: "times_per_day",
+          slots: buildSlotsFromWindows(["morning", "night"]),
           visibilityLeadMinutes: 90,
           visibilityLagMinutes: 240,
         },
@@ -816,6 +1066,21 @@ function inferLifeDefinitionSeed(intent: string): LifeDefinitionSeed | null {
   return null;
 }
 
+function describeReminderIntensity(
+  intensity: LifeOpsReminderIntensity,
+): string {
+  switch (intensity) {
+    case "paused":
+      return "paused";
+    case "low":
+      return "lower";
+    case "normal":
+      return "normal";
+    case "high":
+      return "higher";
+  }
+}
+
 // ── Main action ───────────────────────────────────────
 
 export const lifeAction: Action = {
@@ -831,9 +1096,10 @@ export const lifeAction: Action = {
     "TRACK_HABIT",
     "COMPLETE_TASK",
     "SNOOZE_REMINDER",
+    "SET_REMINDER_INTENSITY",
   ],
   description:
-    "Manage the user's personal routines, habits, goals, calendar, and email. Use this for: creating/editing/deleting tasks, habits, routines, and goals; completing, snoozing, or skipping items; checking calendar or email; reviewing goal progress; setting up phone/SMS escalation.",
+    "Manage the user's personal routines, habits, goals, calendar, and email. Use this for: creating/editing/deleting tasks, habits, routines, and goals; completing, snoozing, or skipping items; checking calendar or email; reviewing goal progress; setting up phone/SMS escalation; and adjusting reminder intensity.",
   validate: async (runtime, message) => {
     const source = messageSource(message);
     return (
@@ -1024,6 +1290,46 @@ export const lifeAction: Action = {
       return { success: true, text: review.summary.explanation, data: toActionData(review) };
     }
 
+    if (operation === "set_reminder_preference") {
+      const intensity = inferReminderIntensityFromIntent(intent);
+      if (!intensity) {
+        return {
+          success: false,
+          text: "I need to know whether you want reminders paused, lower, normal, or higher.",
+        };
+      }
+      const target = await resolveDefinitionFromIntent(
+        service,
+        targetName,
+        intent,
+        domain,
+      );
+      const request: SetLifeOpsReminderPreferenceRequest = {
+        intensity,
+        definitionId: target?.definition.id ?? null,
+        note: chatText || intent,
+      };
+      const preference = await service.setReminderPreference(request);
+      if (target) {
+        return {
+          success: true,
+          text:
+            intensity === "paused"
+              ? `Paused reminders for "${target.definition.title}".`
+              : `Reminder intensity for "${target.definition.title}" is now ${describeReminderIntensity(preference.effective.intensity)}.`,
+          data: toActionData(preference),
+        };
+      }
+      return {
+        success: true,
+        text:
+          intensity === "paused"
+            ? "Paused global LifeOps reminders."
+            : `Global LifeOps reminders are now ${describeReminderIntensity(preference.effective.intensity)}.`,
+        data: toActionData(preference),
+      };
+    }
+
     if (operation === "capture_phone") {
       const phoneNumber = detailString(details, "phoneNumber") ?? params.title;
       if (!phoneNumber) return { success: false, text: "I need a phone number to set up SMS or voice contact." };
@@ -1087,6 +1393,7 @@ export const lifeAction: Action = {
           "review",
           "phone",
           "escalation",
+          "reminder_preference",
           "calendar",
           "next_event",
           "email",
@@ -1116,7 +1423,7 @@ export const lifeAction: Action = {
     {
       name: "details",
       description:
-        "Structured data when needed. May include: cadence (schedule object), kind (task/habit/routine), description, priority, progressionRule, reminderPlan, preset (snooze preset like 15m/30m/1h/tonight/tomorrow_morning), minutes (snooze minutes), phoneNumber, allowSms, allowVoice, steps (escalation steps array), goalId, goalTitle, supportStrategy, successCriteria, note, limit, domain (user_lifeops/agent_ops).",
+        "Structured data when needed. May include: cadence (schedule object), kind (task/habit/routine), description, priority, progressionRule, reminderPlan, preset (snooze preset like 15m/30m/1h/tonight/tomorrow_morning), minutes (snooze minutes), phoneNumber, allowSms, allowVoice, steps (escalation steps array), goalId, goalTitle, supportStrategy, successCriteria, note, limit, domain (user_lifeops/agent_ops), or reminder preference targeting.",
       required: false,
       schema: { type: "object" as const },
     },

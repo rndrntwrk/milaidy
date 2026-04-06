@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import type { IAgentRuntime, UUID } from "@elizaos/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -517,4 +518,280 @@ describe("LifeOpsService", () => {
     });
     expect(definition.performance.last7Days.completionRate).toBeCloseTo(0.8);
   });
+
+  it("persists and reads the global reminder preference", async () => {
+    const runtime = createRuntime();
+    const service = new LifeOpsService(runtime);
+    const policies: Array<Record<string, unknown>> = [];
+    (service as unknown as {
+      repository: Record<string, unknown>;
+      recordChannelPolicyAudit: ReturnType<typeof vi.fn>;
+    }).repository = {
+      getChannelPolicy: vi.fn(
+        async (_agentId: string, channelType: string, channelRef: string) =>
+          policies.find(
+            (policy) =>
+              policy.channelType === channelType &&
+              policy.channelRef === channelRef,
+          ) ?? null,
+      ),
+      upsertChannelPolicy: vi.fn(async (policy: Record<string, unknown>) => {
+        const index = policies.findIndex((candidate) => candidate.id === policy.id);
+        if (index >= 0) {
+          policies[index] = policy;
+          return;
+        }
+        policies.push(policy);
+      }),
+      listChannelPolicies: vi.fn(async () => policies),
+    };
+    (
+      service as unknown as {
+        recordChannelPolicyAudit: ReturnType<typeof vi.fn>;
+      }
+    ).recordChannelPolicyAudit = vi.fn().mockResolvedValue(undefined);
+
+    const preference = await service.setReminderPreference({
+      intensity: "low",
+      note: "send me less reminders",
+    });
+
+    expect(preference.effective).toMatchObject({
+      intensity: "low",
+      source: "global_policy",
+      note: "send me less reminders",
+    });
+    expect(policies).toHaveLength(1);
+    expect(policies[0]).toMatchObject({
+      channelType: "in_app",
+      channelRef: "lifeops://owner/reminder-preferences",
+      metadata: expect.objectContaining({
+        reminderIntensity: "low",
+        reminderPreferenceScope: "global",
+      }),
+    });
+  });
+
+  it("persists a definition-level reminder preference override", async () => {
+    const runtime = createRuntime();
+    const service = new LifeOpsService(runtime);
+    const definition = {
+      id: "def-1",
+      agentId: "agent-lifeops",
+      domain: "user_lifeops",
+      subjectType: "owner",
+      subjectId: "owner-1",
+      visibilityScope: "owner_agent_admin",
+      contextPolicy: "explicit_only",
+      kind: "habit",
+      title: "Drink water",
+      description: "",
+      originalIntent: "drink water",
+      timezone: "UTC",
+      status: "active",
+      priority: 3,
+      cadence: { kind: "daily", windows: ["morning"] },
+      windowPolicy: {
+        timezone: "UTC",
+        windows: [],
+      },
+      progressionRule: { kind: "none" },
+      websiteAccess: null,
+      reminderPlanId: "plan-1",
+      goalId: null,
+      source: "manual",
+      metadata: {},
+      createdAt: "2026-04-06T00:00:00.000Z",
+      updatedAt: "2026-04-06T00:00:00.000Z",
+    };
+    const updatedDefinitions: Array<Record<string, unknown>> = [];
+    (service as unknown as {
+      repository: Record<string, unknown>;
+      recordAudit: ReturnType<typeof vi.fn>;
+    }).repository = {
+      getDefinition: vi.fn(async () => definition),
+      updateDefinition: vi.fn(async (nextDefinition: Record<string, unknown>) => {
+        updatedDefinitions.push(nextDefinition);
+      }),
+      listChannelPolicies: vi.fn(async () => []),
+    };
+    (
+      service as unknown as {
+        recordAudit: ReturnType<typeof vi.fn>;
+      }
+    ).recordAudit = vi.fn().mockResolvedValue(undefined);
+
+    const preference = await service.setReminderPreference({
+      intensity: "paused",
+      definitionId: "def-1",
+      note: "stop reminding me about water",
+    });
+
+    expect(preference.definitionId).toBe("def-1");
+    expect(preference.effective).toMatchObject({
+      intensity: "paused",
+      source: "definition_metadata",
+      note: "stop reminding me about water",
+    });
+    expect(updatedDefinitions[0]).toMatchObject({
+      id: "def-1",
+      metadata: expect.objectContaining({
+        reminderIntensity: "paused",
+        reminderPreferenceScope: "definition",
+      }),
+    });
+  });
+
+  it.each([
+    ["low", 1],
+    ["normal", 2],
+    ["high", 3],
+    ["paused", 0],
+  ] as const)(
+    "processReminders applies %s reminder intensity",
+    async (intensity, expectedCount) => {
+      const runtime = createRuntime();
+      const service = new LifeOpsService(runtime);
+      const definition = {
+        id: "def-1",
+        agentId: "agent-lifeops",
+        domain: "user_lifeops",
+        subjectType: "owner",
+        subjectId: "owner-1",
+        visibilityScope: "owner_agent_admin",
+        contextPolicy: "explicit_only",
+        kind: "habit",
+        title: "Brush teeth",
+        description: "",
+        originalIntent: "brush teeth",
+        timezone: "UTC",
+        status: "active",
+        priority: 3,
+        cadence: { kind: "daily", windows: ["morning", "night"] },
+        windowPolicy: {
+          timezone: "UTC",
+          windows: [],
+        },
+        progressionRule: { kind: "none" },
+        websiteAccess: null,
+        reminderPlanId: "plan-1",
+        goalId: null,
+        source: "manual",
+        metadata:
+          intensity === "normal"
+            ? {}
+            : {
+                reminderIntensity: intensity,
+                reminderIntensityUpdatedAt: "2026-04-06T07:00:00.000Z",
+              },
+        createdAt: "2026-04-06T00:00:00.000Z",
+        updatedAt: "2026-04-06T00:00:00.000Z",
+      };
+      const occurrence = {
+        id: "occ-1",
+        agentId: "agent-lifeops",
+        domain: "user_lifeops",
+        subjectType: "owner",
+        subjectId: "owner-1",
+        visibilityScope: "owner_agent_admin",
+        contextPolicy: "explicit_only",
+        definitionId: "def-1",
+        occurrenceKey: "2026-04-06:morning",
+        scheduledAt: "2026-04-06T08:00:00.000Z",
+        dueAt: "2026-04-06T08:00:00.000Z",
+        relevanceStartAt: "2026-04-06T07:00:00.000Z",
+        relevanceEndAt: "2026-04-06T12:00:00.000Z",
+        windowName: "morning",
+        state: "visible",
+        snoozedUntil: null,
+        completionPayload: null,
+        derivedTarget: null,
+        metadata: {},
+        createdAt: "2026-04-06T07:00:00.000Z",
+        updatedAt: "2026-04-06T07:00:00.000Z",
+        definitionKind: "habit",
+        definitionStatus: "active",
+        cadence: { kind: "daily", windows: ["morning", "night"] },
+        title: "Brush teeth",
+        description: "",
+        priority: 3,
+        timezone: "UTC",
+        source: "manual",
+        goalId: null,
+      };
+      (service as unknown as {
+        repository: Record<string, unknown>;
+        refreshDefinitionOccurrences: ReturnType<typeof vi.fn>;
+        dispatchReminderAttempt: ReturnType<typeof vi.fn>;
+      }).repository = {
+        listActiveDefinitions: vi.fn(async () => [definition]),
+        listOccurrenceViewsForOverview: vi.fn(async () => [occurrence]),
+        listReminderPlansForOwners: vi.fn(
+          async (_agentId: string, ownerType: string) =>
+            ownerType === "definition"
+              ? [
+                  {
+                    id: "plan-1",
+                    agentId: "agent-lifeops",
+                    ownerType: "definition",
+                    ownerId: "def-1",
+                    steps: [
+                      {
+                        channel: "in_app",
+                        offsetMinutes: 0,
+                        label: "first",
+                      },
+                      {
+                        channel: "in_app",
+                        offsetMinutes: 30,
+                        label: "second",
+                      },
+                    ],
+                    mutePolicy: {},
+                    quietHours: {},
+                    createdAt: "2026-04-06T00:00:00.000Z",
+                    updatedAt: "2026-04-06T00:00:00.000Z",
+                  },
+                ]
+              : [],
+        ),
+        listCalendarEvents: vi.fn(async () => []),
+        listReminderAttempts: vi.fn(async () => []),
+        listChannelPolicies: vi.fn(async () => []),
+      };
+      (
+        service as unknown as {
+          refreshDefinitionOccurrences: ReturnType<typeof vi.fn>;
+          dispatchReminderAttempt: ReturnType<typeof vi.fn>;
+        }
+      ).refreshDefinitionOccurrences = vi.fn().mockResolvedValue(undefined);
+      (
+        service as unknown as {
+          dispatchReminderAttempt: ReturnType<typeof vi.fn>;
+        }
+      ).dispatchReminderAttempt = vi
+        .fn()
+        .mockImplementation(async (args: Record<string, unknown>) => ({
+          id: crypto.randomUUID(),
+          agentId: "agent-lifeops",
+          planId: "plan-1",
+          ownerType: args.ownerType,
+          ownerId: args.ownerId,
+          occurrenceId: args.occurrenceId,
+          channel: args.channel,
+          stepIndex: args.stepIndex,
+          scheduledFor: args.scheduledFor,
+          attemptedAt: args.attemptedAt,
+          outcome: "delivered",
+          connectorRef: "system:in_app",
+          deliveryMetadata: {},
+        }));
+
+      const result = await service.processReminders({
+        now: "2026-04-06T09:00:00.000Z",
+      });
+
+      expect(result.attempts).toHaveLength(expectedCount);
+    },
+  );
 });
