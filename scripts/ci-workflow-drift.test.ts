@@ -18,6 +18,7 @@ const BUILD_CLOUD_IMAGE_WORKFLOW_PATH = path.join(
   ROOT,
   ".github/workflows/build-cloud-image.yml",
 );
+const DEPLOY_WEB_WORKFLOW_PATH = path.join(ROOT, ".github/workflows/deploy-web.yml");
 const DOCKER_SMOKE_WORKFLOW_PATH = path.join(
   ROOT,
   ".github/workflows/docker-ci-smoke.yml",
@@ -28,7 +29,6 @@ const ADDITIONAL_SUBMODULE_WORKFLOW_PATHS = [
   ".github/workflows/agent-implement.yml",
   ".github/workflows/agent-release.yml",
   ".github/workflows/apple-store-release.yml",
-  ".github/workflows/deploy-web.yml",
   ".github/workflows/nightly.yml",
   ".github/workflows/release-electrobun-build-linux-x64-testbox.yml",
   ".github/workflows/release-electrobun-build-windows-x64-testbox.yml",
@@ -116,6 +116,7 @@ describe("CI workflow drift", () => {
     expect(read(BUILD_CLOUD_IMAGE_WORKFLOW_PATH)).toContain(
       "submodules: recursive",
     );
+    expect(read(DEPLOY_WEB_WORKFLOW_PATH)).toContain("submodules: false");
     expect(read(DOCKER_SMOKE_WORKFLOW_PATH)).toContain("submodules: false");
     for (const workflowPath of ADDITIONAL_SUBMODULE_WORKFLOW_PATHS) {
       expect(read(workflowPath)).toContain("submodules:");
@@ -133,6 +134,9 @@ describe("CI workflow drift", () => {
       ),
     ).toBe(6);
     expect(read(BUILD_DOCKER_WORKFLOW_PATH)).toContain(
+      "run: node scripts/init-submodules.mjs",
+    );
+    expect(read(DEPLOY_WEB_WORKFLOW_PATH)).toContain(
       "run: node scripts/init-submodules.mjs",
     );
     expect(read(DOCKER_SMOKE_SCRIPT_PATH)).toContain(

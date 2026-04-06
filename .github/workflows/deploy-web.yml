@@ -40,7 +40,8 @@ jobs:
       - name: Checkout current ref
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          # Published-only CI restores required non-eliza submodules during setup.
+          submodules: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -58,6 +59,9 @@ jobs:
           path: ~/.bun/install/cache
           key: bun-homepage-${{ runner.os }}-${{ hashFiles('bun.lock') }}
           restore-keys: bun-homepage-${{ runner.os }}-
+
+      - name: Initialize tracked workspace submodules
+        run: node scripts/init-submodules.mjs
 
       - name: Disable repo-local eliza workspace
         run: node scripts/disable-local-eliza-workspace.mjs
