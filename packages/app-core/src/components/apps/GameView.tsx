@@ -932,10 +932,10 @@ export function GameView() {
                 .charAt(0)
                 .toUpperCase() +
                 String(activeSessionState.telemetry.heroClass).slice(1)}{" "}
-              Lv{activeSessionState.telemetry.heroLevel ?? "?"}
+              Lv{String(activeSessionState.telemetry.heroLevel ?? "?")}
             </span>
             <span className="text-muted">
-              {activeSessionState.telemetry.heroLane ?? "?"} lane
+              {String(activeSessionState.telemetry.heroLane ?? "?")} lane
             </span>
             {activeSessionState.telemetry.heroAlive === false ? (
               <span className="text-danger font-semibold">DEAD</span>
@@ -983,7 +983,7 @@ export function GameView() {
           {activeSessionState.telemetry.strategyVersion != null ? (
             <div className="flex items-center gap-2 text-muted">
               <span>
-                Strategy v{activeSessionState.telemetry.strategyVersion}
+                Strategy v{String(activeSessionState.telemetry.strategyVersion)}
               </span>
               {activeSessionState.telemetry.strategyScore != null ? (
                 <span>
@@ -995,7 +995,7 @@ export function GameView() {
               ) : null}
               {activeSessionState.telemetry.bestStrategyVersion != null ? (
                 <span>
-                  best: v{activeSessionState.telemetry.bestStrategyVersion} (
+                  best: v{String(activeSessionState.telemetry.bestStrategyVersion)} (
                   {Number(
                     activeSessionState.telemetry.bestStrategyScore ?? 0,
                   ).toFixed(2)}
@@ -1018,12 +1018,12 @@ export function GameView() {
                       : ""
                 }
               >
-                {activeSessionState.telemetry.laneHumanUnits}v
-                {activeSessionState.telemetry.laneOrcUnits} (
+                {String(activeSessionState.telemetry.laneHumanUnits)}v
+                {String(activeSessionState.telemetry.laneOrcUnits)} (
                 {Number(activeSessionState.telemetry.laneFrontline ?? 0) > 0
                   ? "+"
                   : ""}
-                {activeSessionState.telemetry.laneFrontline})
+                {String(activeSessionState.telemetry.laneFrontline)})
               </span>
             </div>
           ) : null}

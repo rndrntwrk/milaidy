@@ -71,7 +71,7 @@ function clamp(value: number, min: number, max: number): number {
   return value;
 }
 
-function normalizeText(value: string): string {
+export function normalizeText(value: string): string {
   return value.trim().replace(/\s+/g, " ");
 }
 

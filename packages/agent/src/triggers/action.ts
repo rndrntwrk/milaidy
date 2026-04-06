@@ -26,6 +26,7 @@ import {
   buildTriggerConfig,
   buildTriggerMetadata,
   normalizeTriggerDraft,
+  normalizeText,
 } from "./scheduling";
 
 const CREATE_TRIGGER_TASK_ACTION = "CREATE_TRIGGER_TASK";

@@ -845,6 +845,7 @@ function updateMetrics(
   strategy: GameStrategy,
   hero: DefenseHero | null,
   state: DefenseGameState,
+  action?: string,
 ): void {
   strategy.metrics.ticksTracked += 1;
   if (hero?.alive) {
@@ -863,6 +864,9 @@ function updateMetrics(
           : lane.human - lane.orc;
       strategy.metrics.laneControlSum += control;
     }
+  }
+  if (action?.startsWith("ability:")) {
+    strategy.metrics.abilitiesLearned += 1;
   }
 }
 
@@ -886,7 +890,7 @@ function startGameLoop(
       const strategy = resolveStrategy(runtime);
       try {
         const result = await executeStrategyTick(ctx, strategy);
-        updateMetrics(strategy, result.hero, result.state);
+        updateMetrics(strategy, result.hero, result.state, result.action);
         persistStrategy(runtime, strategy);
 
         if (result.hero) {
@@ -1471,6 +1475,7 @@ export {
   pickAbility,
   findWeakestAlliedLane,
   executeStrategyTick,
+  updateMetrics,
   buildReviewSummary,
   runStrategyReview,
   startGameLoop,

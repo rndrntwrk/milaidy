@@ -429,11 +429,12 @@ export const lifeAction: Action = {
       return { success: false, text: "Life management is restricted to the owner and the agent." };
     }
 
-    const params = (options as HandlerOptions | undefined)?.parameters as LifeParams | undefined;
-    const intent = params?.intent?.trim();
-    if (!intent) {
+    const rawParams = (options as HandlerOptions | undefined)?.parameters as LifeParams | undefined;
+    const intent = rawParams?.intent?.trim();
+    if (!intent || !rawParams) {
       return { success: false, text: "LIFE requires an intent describing what to do." };
     }
+    const params = rawParams;
 
     const explicitAction = params.action && ACTION_TO_OPERATION[params.action];
     const operation = explicitAction ?? classifyIntent(intent);

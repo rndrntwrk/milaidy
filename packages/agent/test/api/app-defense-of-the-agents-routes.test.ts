@@ -656,6 +656,7 @@ describe("Defense of the Agents strategy functions", async () => {
     findWeakestAlliedLane,
     parseStrategyUpdate,
     buildReviewSummary,
+    updateMetrics,
   } = await import("../../../../plugins/app-defense-of-the-agents/src/routes");
 
   test("scoreStrategy returns 0 for empty metrics", () => {
@@ -782,5 +783,109 @@ describe("Defense of the Agents strategy functions", async () => {
     };
     const review = buildReviewSummary(current, best);
     expect(review).toContain("BEATS best");
+  });
+
+  test("updateMetrics increments ticksTracked and ticksAlive when hero is alive", () => {
+    const strategy = {
+      ...DEFAULT_STRATEGY,
+      metrics: { ...DEFAULT_STRATEGY.metrics, ticksTracked: 0, ticksAlive: 0 },
+    };
+    const hero = {
+      name: "Scout", faction: "human", class: "mage" as const, lane: "mid" as const,
+      hp: 100, maxHp: 200, alive: true, level: 3, xp: 50, xpToNext: 400,
+      abilities: [], abilityChoices: [],
+    };
+    const state = {
+      tick: 100, agents: { human: [], orc: [] },
+      lanes: {
+        top: { human: 3, orc: 5, frontline: -10 },
+        mid: { human: 4, orc: 4, frontline: 0 },
+        bot: { human: 5, orc: 3, frontline: 10 },
+      },
+      towers: [], bases: { human: { hp: 1500, maxHp: 1500 }, orc: { hp: 1500, maxHp: 1500 } },
+      heroes: [hero], winner: null,
+    };
+    updateMetrics(strategy, hero, state);
+    expect(strategy.metrics.ticksTracked).toBe(1);
+    expect(strategy.metrics.ticksAlive).toBe(1);
+    expect(strategy.metrics.laneControlSum).toBe(0); // mid is even (4v4)
+  });
+
+  test("updateMetrics does not increment ticksAlive when hero is dead", () => {
+    const strategy = {
+      ...DEFAULT_STRATEGY,
+      metrics: { ...DEFAULT_STRATEGY.metrics, ticksTracked: 0, ticksAlive: 0 },
+    };
+    const hero = {
+      name: "Scout", faction: "human", class: "mage" as const, lane: "mid" as const,
+      hp: 0, maxHp: 200, alive: false, level: 3, xp: 50, xpToNext: 400,
+      abilities: [], abilityChoices: [],
+    };
+    const state = {
+      tick: 100, agents: { human: [], orc: [] },
+      lanes: {
+        top: { human: 3, orc: 5, frontline: -10 },
+        mid: { human: 4, orc: 4, frontline: 0 },
+        bot: { human: 5, orc: 3, frontline: 10 },
+      },
+      towers: [], bases: { human: { hp: 1500, maxHp: 1500 }, orc: { hp: 1500, maxHp: 1500 } },
+      heroes: [hero], winner: null,
+    };
+    updateMetrics(strategy, hero, state);
+    expect(strategy.metrics.ticksTracked).toBe(1);
+    expect(strategy.metrics.ticksAlive).toBe(0);
+  });
+
+  test("updateMetrics increments abilitiesLearned when action is ability pick", () => {
+    const strategy = {
+      ...DEFAULT_STRATEGY,
+      metrics: { ...DEFAULT_STRATEGY.metrics, abilitiesLearned: 0 },
+    };
+    const hero = {
+      name: "Scout", faction: "human", class: "mage" as const, lane: "mid" as const,
+      hp: 100, maxHp: 200, alive: true, level: 3, xp: 50, xpToNext: 400,
+      abilities: [], abilityChoices: [],
+    };
+    const state = {
+      tick: 100, agents: { human: [], orc: [] },
+      lanes: {
+        top: { human: 3, orc: 5, frontline: -10 },
+        mid: { human: 4, orc: 4, frontline: 0 },
+        bot: { human: 5, orc: 3, frontline: 10 },
+      },
+      towers: [], bases: { human: { hp: 1500, maxHp: 1500 }, orc: { hp: 1500, maxHp: 1500 } },
+      heroes: [hero], winner: null,
+    };
+    updateMetrics(strategy, hero, state, "ability:fireball");
+    expect(strategy.metrics.abilitiesLearned).toBe(1);
+    updateMetrics(strategy, hero, state, "hold");
+    expect(strategy.metrics.abilitiesLearned).toBe(1); // not incremented for hold
+    updateMetrics(strategy, hero, state, "ability:tornado");
+    expect(strategy.metrics.abilitiesLearned).toBe(2);
+  });
+
+  test("updateMetrics tracks levelEnd as max of current and hero level", () => {
+    const strategy = {
+      ...DEFAULT_STRATEGY,
+      metrics: { ...DEFAULT_STRATEGY.metrics, levelStart: 1, levelEnd: 3 },
+    };
+    const hero = {
+      name: "Scout", faction: "human", class: "mage" as const, lane: "mid" as const,
+      hp: 100, maxHp: 200, alive: true, level: 5, xp: 50, xpToNext: 400,
+      abilities: [], abilityChoices: [],
+    };
+    const state = {
+      tick: 100, agents: { human: [], orc: [] },
+      lanes: {
+        top: { human: 3, orc: 5, frontline: -10 },
+        mid: { human: 6, orc: 2, frontline: 15 },
+        bot: { human: 5, orc: 3, frontline: 10 },
+      },
+      towers: [], bases: { human: { hp: 1500, maxHp: 1500 }, orc: { hp: 1500, maxHp: 1500 } },
+      heroes: [hero], winner: null,
+    };
+    updateMetrics(strategy, hero, state);
+    expect(strategy.metrics.levelEnd).toBe(5);
+    expect(strategy.metrics.laneControlSum).toBe(4); // mid: 6-2 = 4
   });
 });

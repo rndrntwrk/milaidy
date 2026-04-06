@@ -130,7 +130,7 @@ async function sendToChannel(
     );
     return true;
   } catch (err) {
-    logger.warn(`[escalation] Failed to send to channel "${channel}"`, err);
+    logger.warn(`[escalation] Failed to send to channel "${channel}"`, err instanceof Error ? err.message : String(err));
     return false;
   }
 }
@@ -169,7 +169,7 @@ async function ownerRespondedSince(
       );
       if (ownerMessage) return true;
     } catch (err) {
-      logger.debug(`[escalation] Error checking owner response for entity ${entityId}`, err);
+      logger.debug(`[escalation] Error checking owner response for entity ${entityId}`, err instanceof Error ? err.message : String(err));
     }
   }
 
@@ -194,7 +194,7 @@ function scheduleCheck(
     try {
       await EscalationService.checkEscalation(runtime, escalationId);
     } catch (err) {
-      logger.error("[escalation] Scheduled check failed", err);
+      logger.error("[escalation] Scheduled check failed", err instanceof Error ? err.message : String(err));
     }
   }, delayMs);
 
