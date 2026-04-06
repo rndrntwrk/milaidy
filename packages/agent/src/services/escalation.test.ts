@@ -109,6 +109,36 @@ describe("EscalationService", () => {
     );
   });
 
+  it("routes telegram reminders through the telegramAccount owner contact when that is the configured endpoint", async () => {
+    setConfig(
+      { channels: ["telegram"], waitMinutes: 5, maxRetries: 3 },
+      {
+        telegramAccount: {
+          entityId: "owner-1",
+          channelId: "tg-account-123",
+        },
+      },
+    );
+
+    const state = await EscalationService.startEscalation(
+      makeRuntime(),
+      "test reason",
+      "Telegram account reminder",
+    );
+
+    expect(state.channelsSent).toEqual(["telegram"]);
+    expect(mockSendMessageToTarget).toHaveBeenCalledOnce();
+    const [target, content] = mockSendMessageToTarget.mock.calls[0];
+    expect(target.source).toBe("telegram-account");
+    expect(target.channelId).toBe("tg-account-123");
+    expect(content.source).toBe("telegram-account");
+    expect(content.metadata).toEqual(
+      expect.objectContaining({
+        routeSource: "telegram-account",
+      }),
+    );
+  });
+
   // -----------------------------------------------------------------------
   // checkEscalation — advance to next channel
   // -----------------------------------------------------------------------

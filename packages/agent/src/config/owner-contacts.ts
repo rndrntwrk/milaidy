@@ -1,7 +1,10 @@
 import type { IAgentRuntime, UUID } from "@elizaos/core";
 import { logger } from "@elizaos/core";
 import { loadElizaConfig } from "./config.js";
-import type { OwnerContactsConfig } from "./types.agent-defaults.js";
+import type {
+  OwnerContactEntry,
+  OwnerContactsConfig,
+} from "./types.agent-defaults.js";
 
 type OwnerContactsLoadContext = {
   boundary: string;
@@ -42,6 +45,47 @@ type RuntimeLike = Pick<
   IAgentRuntime,
   "getService" | "getEntityById" | "getRoomsForParticipant" | "getMemoriesByRoomIds"
 >;
+
+function ownerContactSourceCandidates(source: string): string[] {
+  const trimmed = source.trim();
+  if (!trimmed) {
+    return [];
+  }
+  if (trimmed === "telegram") {
+    return ["telegram", "telegram-account", "telegramAccount"];
+  }
+  if (trimmed === "telegram-account") {
+    return ["telegram-account", "telegramAccount", "telegram"];
+  }
+  if (trimmed === "telegramAccount") {
+    return ["telegramAccount", "telegram-account", "telegram"];
+  }
+  return [trimmed];
+}
+
+function canonicalOwnerContactSource(source: string): string {
+  if (source === "telegramAccount" || source === "telegram-account") {
+    return "telegram-account";
+  }
+  return source;
+}
+
+export function resolveOwnerContactSource(
+  ownerContacts: OwnerContactsConfig,
+  source: string | null | undefined,
+): { source: string; contact: OwnerContactEntry } | null {
+  const normalized = normalizeChatSource(source);
+  if (!normalized) {
+    return null;
+  }
+  for (const candidate of ownerContactSourceCandidates(normalized)) {
+    const contact = ownerContacts[candidate];
+    if (contact) {
+      return { source: canonicalOwnerContactSource(candidate), contact };
+    }
+  }
+  return null;
+}
 
 export function loadOwnerContactsConfig(
   context: OwnerContactsLoadContext,

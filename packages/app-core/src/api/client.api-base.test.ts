@@ -138,4 +138,39 @@ describe("MiladyClient runtime API base/token fallback", () => {
     );
     expect(removeItemSpy).not.toHaveBeenCalledWith("milady_api_token");
   });
+
+  it("resolves same-origin request paths to absolute URLs when no base is configured", async () => {
+    const { setBootConfig, DEFAULT_BOOT_CONFIG } = await import(
+      "../config/boot-config"
+    );
+    const { MiladyClient } = await import("./client-base");
+
+    class TestClient extends MiladyClient {
+      request(path: string): Promise<Response> {
+        return this.rawRequest(path);
+      }
+    }
+
+    const mockWindow = globalThis.window as MockWindow & {
+      __MILADY_API_BASE__?: string;
+      location: Window["location"] & { origin?: string };
+    };
+    delete mockWindow.__MILADY_API_BASE__;
+    mockWindow.location.origin = "http://127.0.0.1:2138";
+    setBootConfig(DEFAULT_BOOT_CONFIG);
+
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(
+        new Response(null, { status: 204 }),
+      );
+
+    const client = new TestClient();
+    await client.request("/api/lifeops/activity-signals");
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "http://127.0.0.1:2138/api/lifeops/activity-signals",
+      expect.any(Object),
+    );
+  });
 });

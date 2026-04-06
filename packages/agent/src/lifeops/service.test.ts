@@ -497,6 +497,59 @@ describe("LifeOpsService", () => {
     });
   });
 
+  it("dispatches telegram reminders through the telegram-account owner contact alias", async () => {
+    configMocks.loadElizaConfig.mockReturnValue({
+      agents: {
+        defaults: {
+          ownerContacts: {
+            telegramAccount: { entityId: "owner-1", channelId: "tg-account-1" },
+          },
+        },
+      },
+    });
+
+    const runtime = createRuntime();
+    const service = new LifeOpsService(runtime);
+    (service as unknown as { repository: Record<string, unknown> }).repository = {
+      listChannelPolicies: vi.fn().mockResolvedValue([]),
+      createReminderAttempt: vi.fn().mockResolvedValue(undefined),
+    };
+    (service as unknown as { recordReminderAudit: ReturnType<typeof vi.fn> })
+      .recordReminderAudit = vi.fn().mockResolvedValue(undefined);
+
+    await (
+      service as unknown as {
+        dispatchReminderAttempt: (args: Record<string, unknown>) => Promise<Record<string, unknown>>;
+      }
+    ).dispatchReminderAttempt({
+      plan: { id: "plan-2" },
+      ownerType: "occurrence",
+      ownerId: "occ-2",
+      occurrenceId: "occ-2",
+      subjectType: "owner",
+      title: "Brush teeth",
+      channel: "telegram",
+      stepIndex: 0,
+      scheduledFor: "2026-04-06T12:00:00.000Z",
+      dueAt: null,
+      urgency: "medium",
+      quietHours: {},
+      acknowledged: false,
+      attemptedAt: "2026-04-06T12:00:00.000Z",
+    });
+
+    expect(runtime.sendMessageToTarget).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: "telegram-account",
+        entityId: "owner-1",
+        channelId: "tg-account-1",
+      }),
+      expect.objectContaining({
+        source: "telegram-account",
+      }),
+    );
+  });
+
   it("syncs earned-access blocker state into the LifeOps-managed hosts block", async () => {
     const runtime = createRuntime();
     const service = new LifeOpsService(runtime);

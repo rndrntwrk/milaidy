@@ -192,6 +192,18 @@ export class MiladyClient {
         message: "API not available (no HTTP origin)",
       });
     }
+    const requestUrl = (() => {
+      if (this.baseUrl) {
+        return `${this.baseUrl}${path}`;
+      }
+      if (typeof window !== "undefined") {
+        const proto = window.location.protocol;
+        if (proto === "http:" || proto === "https:") {
+          return new URL(path, window.location.origin).toString();
+        }
+      }
+      return path;
+    })();
     const makeRequest = async (token: string | null): Promise<Response> => {
       let timeoutId: ReturnType<typeof setTimeout> | undefined;
       let abortListener: (() => void) | undefined;
@@ -207,7 +219,7 @@ export class MiladyClient {
         },
       };
 
-      const fetchPromise = fetch(`${this.baseUrl}${path}`, requestInit);
+      const fetchPromise = fetch(requestUrl, requestInit);
       const pending: Promise<Response>[] = [fetchPromise];
 
       pending.push(

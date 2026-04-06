@@ -421,6 +421,28 @@ export function configureLocalEmbeddingPlugin(
   setEnvIfMissing("GOOGLE_SMALL_MODEL", "gemini-3-flash-preview");
   setEnvIfMissing("GOOGLE_LARGE_MODEL", "gemini-3.1-pro-preview");
 
+  // Default Groq model names — plugin-groq still ships a deprecated large-model
+  // fallback. Seed runtime defaults before plugin init so direct Groq provider
+  // sessions do not inherit the retired qwen-qwq-32b default.
+  const currentSharedSmallModel =
+    process.env.OPENAI_SMALL_MODEL ?? process.env.SMALL_MODEL;
+  const currentSharedLargeModel =
+    process.env.OPENAI_LARGE_MODEL ?? process.env.LARGE_MODEL;
+  setEnvIfMissing(
+    "GROQ_SMALL_MODEL",
+    currentSharedSmallModel &&
+      !isLikelyOpenAiTextModel(currentSharedSmallModel)
+      ? currentSharedSmallModel
+      : "llama-3.1-8b-instant",
+  );
+  setEnvIfMissing(
+    "GROQ_LARGE_MODEL",
+    currentSharedLargeModel &&
+      !isLikelyOpenAiTextModel(currentSharedLargeModel)
+      ? currentSharedLargeModel
+      : "qwen/qwen3-32b",
+  );
+
   logger.info(
     `[eliza] Configured local embedding env: ${process.env.LOCAL_EMBEDDING_MODEL} (repo: ${process.env.LOCAL_EMBEDDING_MODEL_REPO ?? "auto"}, dims: ${process.env.LOCAL_EMBEDDING_DIMENSIONS ?? "auto"}, ctx: ${process.env.LOCAL_EMBEDDING_CONTEXT_SIZE ?? "auto"}, GPU: ${process.env.LOCAL_EMBEDDING_GPU_LAYERS}, mmap: ${process.env.LOCAL_EMBEDDING_USE_MMAP})`,
   );
@@ -616,7 +638,7 @@ export function normalizeOpenAiCompatibleProviderConfig(
     (currentSharedLargeModel &&
     !isLikelyOpenAiTextModel(currentSharedLargeModel)
       ? currentSharedLargeModel
-      : "qwen-qwq-32b");
+      : "qwen/qwen3-32b");
 
   env.GROQ_API_KEY = inheritedGroqApiKey;
   env.GROQ_SMALL_MODEL = normalizedGroqSmallModel;

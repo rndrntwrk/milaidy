@@ -4,6 +4,7 @@ import { loadElizaConfig } from "../config/config.js";
 import {
   loadOwnerContactRoutingHints,
   loadOwnerContactsConfig,
+  resolveOwnerContactSource,
   type OwnerContactRoutingHint,
 } from "../config/owner-contacts.js";
 import type {
@@ -78,8 +79,13 @@ async function sendToChannel(
   routingHints: Record<string, OwnerContactRoutingHint>,
 ): Promise<boolean> {
   const hint = routingHints[channel] ?? null;
+  const resolvedContact =
+    resolveOwnerContactSource(ownerContacts, channel) ??
+    (hint
+      ? resolveOwnerContactSource(ownerContacts, hint.source)
+      : null);
   const contact: OwnerContactEntry | undefined =
-    ownerContacts[channel] ??
+    resolvedContact?.contact ??
     (hint
       ? {
           entityId: hint.entityId ?? undefined,
@@ -95,18 +101,18 @@ async function sendToChannel(
   try {
     await runtime.sendMessageToTarget(
       {
-        source: channel,
+        source: resolvedContact?.source ?? channel,
         entityId: contact.entityId as UUID | undefined,
         channelId: contact.channelId,
         roomId: contact.roomId as UUID | undefined,
       } as Parameters<typeof runtime.sendMessageToTarget>[0],
       {
         text,
-        source: channel,
+        source: resolvedContact?.source ?? channel,
         metadata: {
           urgency: "urgent",
           escalation: true,
-          routeSource: channel,
+          routeSource: resolvedContact?.source ?? channel,
           routeResolution: hint?.resolvedFrom ?? "config",
           routeEndpoint:
             contact.channelId ?? contact.roomId ?? contact.entityId ?? null,
