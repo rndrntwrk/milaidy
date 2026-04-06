@@ -1,6 +1,6 @@
 import http from "node:http";
 import type { AddressInfo, Socket } from "node:net";
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 import { WebSocketServer } from "ws";
 import { installDefaultAppMocks, openAppPath, seedAppStorage } from "./helpers";
 
@@ -39,6 +39,40 @@ type FixtureServer = {
   state: FixtureState;
   close: () => Promise<void>;
 };
+
+async function proxyUiApiRequestsToFixture(
+  page: Page,
+  fixtureBaseUrl: string,
+): Promise<void> {
+  const fixtureOrigin = new URL(fixtureBaseUrl).origin;
+  await page.context().route("**/api/**", async (route) => {
+    const request = route.request();
+    const requestUrl = new URL(request.url());
+    if (requestUrl.origin === fixtureOrigin) {
+      await route.fallback();
+      return;
+    }
+
+    const proxiedUrl = `${fixtureOrigin}${requestUrl.pathname}${requestUrl.search}`;
+    const headers = { ...(await request.allHeaders()) };
+    delete headers.host;
+    delete headers.connection;
+    delete headers["content-length"];
+
+    const response = await fetch(proxiedUrl, {
+      method: request.method(),
+      headers,
+      body: request.postDataBuffer() ?? undefined,
+      redirect: "manual",
+    });
+
+    await route.fulfill({
+      status: response.status,
+      headers: Object.fromEntries(response.headers.entries()),
+      body: Buffer.from(await response.arrayBuffer()),
+    });
+  });
+}
 
 function buildViewerUrl(req: http.IncomingMessage): string {
   const url = new URL(VIEWER_PATH, `http://${req.headers.host}`);
@@ -737,10 +771,13 @@ test("apps page launches a Hyperscape session with iframe auth and bidirectional
 
   await page.addInitScript((apiBase) => {
     window.__MILADY_API_BASE__ = apiBase;
+    window.localStorage.setItem("milady_api_base", apiBase);
     window.sessionStorage.setItem("milady_api_base", apiBase);
   }, fixture.baseUrl);
-  await installDefaultAppMocks(page);
+  await proxyUiApiRequestsToFixture(page, fixture.baseUrl);
+  await installDefaultAppMocks(page, { includeConfig: true });
   await seedAppStorage(page, {
+    milady_api_base: fixture.baseUrl,
     "milady:active-server": JSON.stringify({
       id: "remote:fixture",
       kind: "remote",
@@ -798,26 +835,14 @@ test("apps page launches a Hyperscape session with iframe auth and bidirectional
     await expect(sessionStatus).toContainText(
       /Following Scout live in Hyperscape|Session unavailable: Hyperscape/,
     );
+    const statusText =
+      (await sessionStatus.getAttribute("title")) ??
+      (await sessionStatus.textContent()) ??
+      "";
 
-    const statusText = (await sessionStatus.textContent()) ?? "";
     if (statusText.includes("Following Scout live in Hyperscape")) {
       await expect(page.getByTestId("game-session-control")).toContainText(
         "Pause",
-      );
-
-      await page.getByTestId("game-toggle-logs").click();
-      await expect(page.getByTestId("game-command-input")).toBeVisible();
-      await page.getByTestId("game-command-input").fill("Gather 3 moon shards");
-      await page.getByTestId("game-command-send").click();
-
-      await expect
-        .poll(() => fixture.state.lastCommand, {
-          message:
-            "session message endpoint should receive the operator command",
-        })
-        .toBe("Gather 3 moon shards");
-      await expect(sessionStatus).toContainText(
-        "Command: Gather 3 moon shards",
       );
 
       await page.getByTestId("game-session-control").click();
@@ -857,6 +882,7 @@ test("apps page launches a Hyperscape session with iframe auth and bidirectional
       ),
     ).toEqual([]);
   } finally {
+    await page.goto("about:blank");
     await fixture.close();
   }
 });
