@@ -126,7 +126,9 @@ describe("applyPluginAutoEnable — connectors", () => {
     });
     const { config } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow ?? []).not.toContain("@elizaos/plugin-discord");
+    expect(config.plugins?.allow ?? []).not.toContain(
+      "@elizaos/plugin-discord",
+    );
   });
 
   it("skips connector without authentication credentials", () => {
@@ -220,7 +222,9 @@ describe("applyPluginAutoEnable — connectors", () => {
       },
     });
     const { config } = applyPluginAutoEnable(params);
-    expect(config.plugins?.allow ?? []).not.toContain("@miladyai/plugin-wechat");
+    expect(config.plugins?.allow ?? []).not.toContain(
+      "@miladyai/plugin-wechat",
+    );
   });
 });
 
@@ -292,7 +296,9 @@ describe("applyPluginAutoEnable — env vars", () => {
     });
     const { config, changes } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("@elizaos/plugin-claude-code-workbench");
+    expect(config.plugins?.allow).toContain(
+      "@elizaos/plugin-claude-code-workbench",
+    );
     expect(
       changes.some((c) => c.includes("CLAUDE_CODE_WORKBENCH_ENABLED")),
     ).toBe(true);
@@ -321,7 +327,9 @@ describe("applyPluginAutoEnable — env vars", () => {
     });
     const { config } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow ?? []).not.toContain("@elizaos/plugin-anthropic");
+    expect(config.plugins?.allow ?? []).not.toContain(
+      "@elizaos/plugin-anthropic",
+    );
   });
 
   it("handles multiple env vars enabling different plugins", () => {
@@ -360,7 +368,9 @@ describe("applyPluginAutoEnable — env vars", () => {
     const { config } = applyPluginAutoEnable(params);
     const allow = config.plugins?.allow ?? [];
 
-    const anthropicEntries = allow.filter((p) => p === "@elizaos/plugin-anthropic");
+    const anthropicEntries = allow.filter(
+      (p) => p === "@elizaos/plugin-anthropic",
+    );
     expect(anthropicEntries).toHaveLength(1);
   });
 
@@ -460,7 +470,9 @@ describe("applyPluginAutoEnable — features", () => {
     });
     const { config, changes } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("@elizaos/plugin-claude-code-workbench");
+    expect(config.plugins?.allow).toContain(
+      "@elizaos/plugin-claude-code-workbench",
+    );
     expect(
       changes.some((c) => c.includes("feature: claudeCodeWorkbench")),
     ).toBe(true);
@@ -567,7 +579,9 @@ describe("applyPluginAutoEnable — hooks", () => {
     });
     const { config } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow ?? []).not.toContain("@elizaos/plugin-webhooks");
+    expect(config.plugins?.allow ?? []).not.toContain(
+      "@elizaos/plugin-webhooks",
+    );
   });
 
   it("enables gmail-watch plugin when hooks.gmail.account is set", () => {
@@ -762,7 +776,9 @@ describe("WhatsApp connector auto-enable", () => {
     const { config } = applyPluginAutoEnable(
       makeParams({ config: { connectors: { whatsapp: {} } } }),
     );
-    expect(config.plugins?.allow ?? []).not.toContain("@elizaos/plugin-whatsapp");
+    expect(config.plugins?.allow ?? []).not.toContain(
+      "@elizaos/plugin-whatsapp",
+    );
   });
 
   it("does not auto-enable when accounts object has no valid authDir", () => {
@@ -775,7 +791,9 @@ describe("WhatsApp connector auto-enable", () => {
         },
       }),
     );
-    expect(config.plugins?.allow ?? []).not.toContain("@elizaos/plugin-whatsapp");
+    expect(config.plugins?.allow ?? []).not.toContain(
+      "@elizaos/plugin-whatsapp",
+    );
   });
 
   it("does not auto-enable when all accounts are explicitly disabled", () => {
@@ -790,7 +808,9 @@ describe("WhatsApp connector auto-enable", () => {
         },
       }),
     );
-    expect(config.plugins?.allow ?? []).not.toContain("@elizaos/plugin-whatsapp");
+    expect(config.plugins?.allow ?? []).not.toContain(
+      "@elizaos/plugin-whatsapp",
+    );
   });
 
   it("does not auto-enable when enabled is explicitly false", () => {
@@ -803,7 +823,9 @@ describe("WhatsApp connector auto-enable", () => {
         },
       }),
     );
-    expect(config.plugins?.allow ?? []).not.toContain("@elizaos/plugin-whatsapp");
+    expect(config.plugins?.allow ?? []).not.toContain(
+      "@elizaos/plugin-whatsapp",
+    );
   });
 });
 
@@ -935,7 +957,9 @@ describe("applyPluginAutoEnable — streaming destinations", () => {
         } as never,
       }),
     );
-    expect(config.plugins?.allow).toContain("@elizaos/plugin-youtube-streaming");
+    expect(config.plugins?.allow).toContain(
+      "@elizaos/plugin-youtube-streaming",
+    );
     expect(changes.some((c) => c.includes("streaming: youtube"))).toBe(true);
   });
 
@@ -981,7 +1005,9 @@ describe("applyPluginAutoEnable — streaming destinations", () => {
         } as never,
       }),
     );
-    expect(config.plugins?.allow ?? []).not.toContain("@elizaos/plugin-twitch-streaming");
+    expect(config.plugins?.allow ?? []).not.toContain(
+      "@elizaos/plugin-twitch-streaming",
+    );
   });
 
   it("does not auto-enable streaming plugin when shortId is disabled in plugins.entries", () => {
@@ -993,7 +1019,9 @@ describe("applyPluginAutoEnable — streaming destinations", () => {
         } as never,
       }),
     );
-    expect(config.plugins?.allow ?? []).not.toContain("@elizaos/plugin-twitch-streaming");
+    expect(config.plugins?.allow ?? []).not.toContain(
+      "@elizaos/plugin-twitch-streaming",
+    );
   });
 
   it("does not auto-enable when streaming config is empty", () => {

@@ -131,7 +131,15 @@ jobs:
           cd apps/app
           bun scripts/plugin-build.mjs
 
-      # ── 7. Build runtime (tsdown) ───────────────────────────────────────────
+      # ── 7. Build bundled orchestrator workspace ─────────────────────────────
+      # The Docker image imports the workspace package via its published
+      # dist/index.js export, so clean checkouts must build that package first.
+      - name: Build bundled orchestrator workspace
+        run: |
+          cd plugins/plugin-agent-orchestrator
+          bun run build
+
+      # ── 8. Build runtime (tsdown) ───────────────────────────────────────────
       - name: Build runtime (tsdown)
         run: |
           npx tsdown
@@ -139,7 +147,7 @@ jobs:
           # write-build-info.ts may not exist on all branches — soft fail
           node --import tsx scripts/write-build-info.ts 2>/dev/null || true
 
-      # ── 8. Build UI (vite) ──────────────────────────────────────────────────
+      # ── 9. Build UI (vite) ──────────────────────────────────────────────────
       - name: Build UI (vite)
         run: |
           cd apps/app

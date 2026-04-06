@@ -990,18 +990,15 @@ export function GameView() {
                 {activeSessionState.telemetry.strategyScore != null ? (
                   <span>
                     score:{" "}
-                    {Number(
-                      activeSessionState.telemetry.strategyScore,
-                    ).toFixed(2)}
+                    {Number(activeSessionState.telemetry.strategyScore).toFixed(
+                      2,
+                    )}
                   </span>
                 ) : null}
                 {activeSessionState.telemetry.bestStrategyVersion != null ? (
                   <span>
                     best: v
-                    {String(
-                      activeSessionState.telemetry.bestStrategyVersion,
-                    )}{" "}
-                    (
+                    {String(activeSessionState.telemetry.bestStrategyVersion)} (
                     {Number(
                       activeSessionState.telemetry.bestStrategyScore ?? 0,
                     ).toFixed(2)}
@@ -1131,8 +1128,9 @@ export function GameView() {
           (activeSessionState?.telemetry as Record<string, unknown> | null)
             ?.recentActivity,
         ) &&
-        ((activeSessionState?.telemetry as Record<string, unknown>)
-          .recentActivity as { ts: number; action: string; detail: string }[]
+        (
+          (activeSessionState?.telemetry as Record<string, unknown>)
+            .recentActivity as { ts: number; action: string; detail: string }[]
         ).length > 0 ? (
           (
             (activeSessionState?.telemetry as Record<string, unknown>)

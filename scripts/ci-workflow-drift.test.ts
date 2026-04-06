@@ -116,4 +116,17 @@ describe("CI workflow drift", () => {
       expect(read(workflowPath)).toContain("submodules: recursive");
     }
   });
+
+  it("builds the bundled orchestrator workspace before Docker image packaging", () => {
+    const dockerWorkflow = read(BUILD_DOCKER_WORKFLOW_PATH);
+    const cloudWorkflow = read(BUILD_CLOUD_IMAGE_WORKFLOW_PATH);
+
+    expect(dockerWorkflow).toContain("Build bundled orchestrator workspace");
+    expect(dockerWorkflow).toContain("cd plugins/plugin-agent-orchestrator");
+    expect(dockerWorkflow).toContain("bun run build");
+
+    expect(cloudWorkflow).toContain("Build bundled orchestrator workspace");
+    expect(cloudWorkflow).toContain("cd plugins/plugin-agent-orchestrator");
+    expect(cloudWorkflow).toContain("bun run build");
+  });
 });

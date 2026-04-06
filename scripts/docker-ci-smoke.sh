@@ -108,6 +108,11 @@ pushd apps/app >/dev/null
 bun scripts/plugin-build.mjs
 popd >/dev/null
 
+log "Building bundled orchestrator workspace"
+pushd plugins/plugin-agent-orchestrator >/dev/null
+bun run build
+popd >/dev/null
+
 log "Building runtime dist"
 npx tsdown
 echo '{"type":"module"}' > dist/package.json
