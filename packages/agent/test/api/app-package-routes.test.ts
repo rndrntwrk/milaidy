@@ -117,7 +117,9 @@ async function startHyperscapeFixtureServer(): Promise<HyperscapeFixtureServer> 
     ) {
       receivedCommands.push({ path: url.pathname, body });
       res.statusCode = 200;
-      res.end(JSON.stringify({ success: true, message: "Message sent to agent" }));
+      res.end(
+        JSON.stringify({ success: true, message: "Message sent to agent" }),
+      );
       return;
     }
 
@@ -187,9 +189,7 @@ async function startHyperscapeFixtureServer(): Promise<HyperscapeFixtureServer> 
           quickCommands: [
             {
               label: "Scout",
-              command: goalsPaused
-                ? "resume exploration"
-                : "scan nearby ruins",
+              command: goalsPaused ? "resume exploration" : "scan nearby ruins",
               available: true,
             },
           ],
@@ -222,7 +222,11 @@ async function startHyperscapeFixtureServer(): Promise<HyperscapeFixtureServer> 
     }
 
     res.statusCode = 404;
-    res.end(JSON.stringify({ error: `Unhandled route: ${req.method} ${url.pathname}` }));
+    res.end(
+      JSON.stringify({
+        error: `Unhandled route: ${req.method} ${url.pathname}`,
+      }),
+    );
   });
 
   await new Promise<void>((resolve, reject) => {
@@ -278,6 +282,32 @@ describe("handleAppPackageRoutes", () => {
     }
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+  });
+
+  test("does not route reserved app slugs like /api/apps/runs through package handlers", async () => {
+    const { res } = createMockHttpResponse();
+    const handled = await handleAppPackageRoutes({
+      req: createMockIncomingMessage({
+        method: "GET",
+        url: "/api/apps/runs/run-1",
+      }),
+      res,
+      method: "GET",
+      pathname: "/api/apps/runs/run-1",
+      url: new URL("http://localhost:2138/api/apps/runs/run-1"),
+      runtime: null,
+      readJsonBody: vi.fn(async () => null),
+      json: (response, data, status = 200) => {
+        response.writeHead(status);
+        response.end(JSON.stringify(data));
+      },
+      error: (response, message, status = 500) => {
+        response.writeHead(status);
+        response.end(JSON.stringify({ error: message }));
+      },
+    });
+
+    expect(handled).toBe(false);
   });
 
   test("loads local app package routes and returns live session state", async () => {

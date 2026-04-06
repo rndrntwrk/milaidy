@@ -1,14 +1,14 @@
 import { hasAppInterface } from "../contracts/apps.js";
-import {
-  scoreEntries,
-  toSearchResults,
-} from "../services/registry-client-queries.js";
 import type {
   InstallProgressLike,
   PluginManagerLike,
   RegistryPluginInfo,
   RegistrySearchResult,
 } from "../services/plugin-manager-types";
+import {
+  scoreEntries,
+  toSearchResults,
+} from "../services/registry-client-queries.js";
 import type { RouteHelpers, RouteRequestMeta } from "./route-helpers";
 
 export interface AppManagerLike {
@@ -49,6 +49,18 @@ export interface AppsRouteContext
 
 function isNonAppRegistryPlugin(plugin: RegistryPluginInfo): boolean {
   return !hasAppInterface(plugin);
+}
+
+function actionResultStatus(result: unknown): number {
+  if (
+    result &&
+    typeof result === "object" &&
+    "success" in (result as Record<string, unknown>) &&
+    (result as Record<string, unknown>).success === false
+  ) {
+    return 404;
+  }
+  return 200;
 }
 
 export async function handleAppsRoutes(
@@ -147,13 +159,13 @@ export async function handleAppsRoutes(
 
     if (subroute === "attach") {
       const result = await appManager.attachRun(runId);
-      json(res, result as object, result && typeof result === "object" && "success" in (result as Record<string, unknown>) && (result as Record<string, unknown>).success === false ? 404 : 200);
+      json(res, result as object, actionResultStatus(result));
       return true;
     }
 
     if (subroute === "detach") {
       const result = await appManager.detachRun(runId);
-      json(res, result as object, result && typeof result === "object" && "success" in (result as Record<string, unknown>) && (result as Record<string, unknown>).success === false ? 404 : 200);
+      json(res, result as object, actionResultStatus(result));
       return true;
     }
 
@@ -188,7 +200,10 @@ export async function handleAppsRoutes(
   }
 
   if (method === "POST" && pathname === "/api/apps/stop") {
-    const body = await readJsonBody<{ name?: string; runId?: string }>(req, res);
+    const body = await readJsonBody<{ name?: string; runId?: string }>(
+      req,
+      res,
+    );
     if (!body) return true;
     if (!body.name?.trim() && !body.runId?.trim()) {
       error(res, "name or runId is required");

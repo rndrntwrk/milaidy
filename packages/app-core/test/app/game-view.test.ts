@@ -1,17 +1,20 @@
 // @vitest-environment jsdom
 
 import type {
+  AppRunSummary,
   AppSessionState,
   AppViewerAuthMessage,
 } from "@miladyai/app-core/api";
+import * as electrobunRpc from "@miladyai/app-core/bridge/electrobun-rpc";
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { text, findButtonByText, flush } from "../../../../test/helpers/react-test";
-import * as electrobunRpc from "@miladyai/app-core/bridge/electrobun-rpc";
+import { findButtonByText, flush } from "../../../../test/helpers/react-test";
 
 interface GameContextStub {
   t: (key: string, opts?: Record<string, unknown>) => string;
+  appRuns: AppRunSummary[];
+  activeGameRunId: string;
   activeGameApp: string;
   activeGameDisplayName: string;
   activeGameViewerUrl: string;
@@ -23,15 +26,7 @@ interface GameContextStub {
   plugins: { id: string; enabled: boolean }[];
   logs: unknown[];
   loadLogs: () => Promise<void>;
-  setState: (
-    key: string,
-    value:
-      | string
-      | boolean
-      | AppViewerAuthMessage
-      | AppSessionState
-      | null,
-  ) => void;
+  setState: (key: string, value: unknown) => void;
   setActionNotice: (
     text: string,
     tone?: "info" | "success" | "error",
@@ -50,7 +45,7 @@ const { mockClientFns, mockUseApp } = vi.hoisted(() => ({
     sendAppSessionMessage: vi.fn(),
     controlAppSession: vi.fn(),
     sendChatRest: vi.fn(),
-    stopApp: vi.fn(),
+    stopAppRun: vi.fn(),
   },
   mockUseApp: vi.fn(),
 }));
@@ -64,18 +59,55 @@ vi.mock("@miladyai/app-core/state", () => ({
 
 import { GameView } from "../../src/components/apps/GameView";
 
+function createRunSummary(
+  overrides: Partial<AppRunSummary> = {},
+): AppRunSummary {
+  return {
+    runId: "run-1",
+    appName: "@elizaos/app-2004scape",
+    displayName: "2004scape",
+    pluginName: "@elizaos/app-2004scape",
+    launchType: "connect",
+    launchUrl: "http://localhost:5175/viewer",
+    viewer: {
+      url: "http://localhost:5175/viewer",
+      sandbox: "allow-scripts allow-same-origin",
+      postMessageAuth: false,
+    },
+    session: null,
+    status: "running",
+    summary: "Viewer ready.",
+    startedAt: "2026-04-06T00:00:00.000Z",
+    updatedAt: "2026-04-06T00:00:00.000Z",
+    lastHeartbeatAt: "2026-04-06T00:00:00.000Z",
+    supportsBackground: true,
+    viewerAttachment: "attached",
+    health: {
+      state: "healthy",
+      message: null,
+    },
+    ...overrides,
+  };
+}
+
 function createContext(overrides?: Partial<GameContextStub>): GameContextStub {
+  const run = createRunSummary({
+    session: overrides?.activeGameSession ?? null,
+  });
   return {
     t: (k: string, opts?: Record<string, unknown>) => {
       if (opts?.defaultValue && typeof opts.defaultValue === "string") {
         let str = opts.defaultValue;
         for (const [key, val] of Object.entries(opts)) {
-          if (key !== "defaultValue") str = str.replace(`{{${key}}}`, String(val));
+          if (key !== "defaultValue")
+            str = str.replace(`{{${key}}}`, String(val));
         }
         return str;
       }
       return k;
     },
+    appRuns: [run],
+    activeGameRunId: run.runId,
     activeGameApp: "@elizaos/app-2004scape",
     activeGameDisplayName: "2004scape",
     activeGameViewerUrl: "http://localhost:5175/viewer",
@@ -95,11 +127,12 @@ function createContext(overrides?: Partial<GameContextStub>): GameContextStub {
 
 describe("GameView", () => {
   beforeEach(() => {
-    delete (window as TestWindow & { __MILADY_ELECTROBUN_RPC__?: unknown }).__MILADY_ELECTROBUN_RPC__;
+    delete (window as TestWindow & { __MILADY_ELECTROBUN_RPC__?: unknown })
+      .__MILADY_ELECTROBUN_RPC__;
     vi.spyOn(electrobunRpc, "getElectrobunRendererRpc").mockReturnValue(
       undefined,
     );
-    mockClientFns.stopApp.mockReset();
+    mockClientFns.stopAppRun.mockReset();
     mockClientFns.getAppSessionState.mockReset();
     mockClientFns.sendAppSessionMessage.mockReset();
     mockClientFns.controlAppSession.mockReset();
@@ -110,12 +143,15 @@ describe("GameView", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     delete (window as TestWindow).__electrobunWindowId;
-    delete (window as TestWindow & { __MILADY_ELECTROBUN_RPC__?: unknown }).__MILADY_ELECTROBUN_RPC__;
+    delete (window as TestWindow & { __MILADY_ELECTROBUN_RPC__?: unknown })
+      .__MILADY_ELECTROBUN_RPC__;
     vi.restoreAllMocks();
   });
 
   it("renders empty state and Back to Apps returns to apps tab", async () => {
     const ctx = createContext({
+      appRuns: [],
+      activeGameRunId: "",
       activeGameApp: "",
       activeGameDisplayName: "",
       activeGameViewerUrl: "",
@@ -180,7 +216,9 @@ describe("GameView", () => {
     mockUseApp.mockReturnValue(ctx);
     (window as TestWindow).__electrobunWindowId = 1;
 
-    (window as TestWindow & { __MILADY_ELECTROBUN_RPC__?: unknown }).__MILADY_ELECTROBUN_RPC__ = {
+    (
+      window as TestWindow & { __MILADY_ELECTROBUN_RPC__?: unknown }
+    ).__MILADY_ELECTROBUN_RPC__ = {
       request: {
         desktopOpenExternal,
         gameOpenWindow,
@@ -214,15 +252,15 @@ describe("GameView", () => {
   it("stops app, resets state, and navigates back on success", async () => {
     const ctx = createContext();
     mockUseApp.mockReturnValue(ctx);
-    mockClientFns.stopApp.mockResolvedValue({
+    mockClientFns.stopAppRun.mockResolvedValue({
       success: true,
       appName: ctx.activeGameApp,
+      runId: ctx.activeGameRunId,
       stoppedAt: new Date().toISOString(),
-      pluginUninstalled: true,
-      needsRestart: true,
-      stopScope: "plugin-uninstalled",
-      message:
-        "App disconnected and plugin uninstalled. Agent restart required.",
+      pluginUninstalled: false,
+      needsRestart: false,
+      stopScope: "viewer-session",
+      message: "2004scape stopped.",
     });
 
     let tree: TestRenderer.ReactTestRenderer;
@@ -235,31 +273,22 @@ describe("GameView", () => {
       await findButtonByText(tree?.root, "game.stop").props.onClick();
     });
 
-    expect(mockClientFns.stopApp).toHaveBeenCalledWith(ctx.activeGameApp);
-    expect(ctx.setState).toHaveBeenCalledWith("activeGameApp", "");
-    expect(ctx.setState).toHaveBeenCalledWith("activeGameDisplayName", "");
-    expect(ctx.setState).toHaveBeenCalledWith("activeGameViewerUrl", "");
-    expect(ctx.setState).toHaveBeenCalledWith(
-      "activeGamePostMessageAuth",
-      false,
-    );
-    expect(ctx.setState).toHaveBeenCalledWith(
-      "activeGamePostMessagePayload",
-      null,
-    );
-    expect(ctx.setState).toHaveBeenCalledWith("activeGameSession", null);
+    expect(mockClientFns.stopAppRun).toHaveBeenCalledWith(ctx.activeGameRunId);
+    expect(ctx.setState).toHaveBeenCalledWith("appRuns", []);
+    expect(ctx.setState).toHaveBeenCalledWith("activeGameRunId", "");
     expect(ctx.setState).toHaveBeenCalledWith("tab", "apps");
+    expect(ctx.setState).toHaveBeenCalledWith("appsSubTab", "browse");
     expect(ctx.setActionNotice).toHaveBeenCalledWith(
-      "App disconnected and plugin uninstalled. Agent restart required.",
+      "2004scape stopped.",
       "success",
-      5000,
+      3200,
     );
   });
 
   it("shows stop errors when API call fails", async () => {
     const ctx = createContext();
     mockUseApp.mockReturnValue(ctx);
-    mockClientFns.stopApp.mockRejectedValue(new Error("stop failed"));
+    mockClientFns.stopAppRun.mockRejectedValue(new Error("stop failed"));
 
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
@@ -279,9 +308,10 @@ describe("GameView", () => {
   it("shows info notice when stop result is a no-op", async () => {
     const ctx = createContext();
     mockUseApp.mockReturnValue(ctx);
-    mockClientFns.stopApp.mockResolvedValue({
+    mockClientFns.stopAppRun.mockResolvedValue({
       success: false,
       appName: ctx.activeGameApp,
+      runId: ctx.activeGameRunId,
       stoppedAt: new Date().toISOString(),
       pluginUninstalled: false,
       needsRestart: false,

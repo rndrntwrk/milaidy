@@ -60,6 +60,10 @@ function buildAppManager(
     listAvailable: vi.fn(async () => []),
     search: vi.fn(async () => []),
     listInstalled: vi.fn(async () => []),
+    listRuns: vi.fn(async () => []),
+    getRun: vi.fn(async () => null),
+    attachRun: vi.fn(async () => ({ success: true, message: "attached" })),
+    detachRun: vi.fn(async () => ({ success: true, message: "detached" })),
     launch: vi.fn(async () => ({ success: true })),
     stop: vi.fn(async () => ({ success: true })),
     getInfo: vi.fn(async () => null),
@@ -134,5 +138,191 @@ describe("handleAppsRoutes", () => {
     expect(handled).toBe(true);
     expect(getStatus()).toBe(200);
     expect(getJson()).toEqual([]);
+  });
+
+  test("GET /api/apps/runs returns persisted runs", async () => {
+    const { res, getStatus, getJson } = createMockHttpResponse();
+    const runs = [
+      {
+        runId: "run-1",
+        appName: "@elizaos/app-hyperscape",
+        displayName: "Hyperscape",
+      },
+    ];
+    const ctx = buildCtx({
+      method: "GET",
+      pathname: "/api/apps/runs",
+      res,
+      appManager: buildAppManager({
+        listRuns: vi.fn(async () => runs),
+      }),
+    });
+
+    const handled = await handleAppsRoutes(ctx);
+
+    expect(handled).toBe(true);
+    expect(getStatus()).toBe(200);
+    expect(getJson()).toEqual(runs);
+  });
+
+  test("GET /api/apps/runs/:runId returns 404 when missing", async () => {
+    const { res, getStatus, getJson } = createMockHttpResponse();
+    const ctx = buildCtx({
+      method: "GET",
+      pathname: "/api/apps/runs/run-404",
+      res,
+      appManager: buildAppManager({
+        getRun: vi.fn(async () => null),
+      }),
+    });
+
+    const handled = await handleAppsRoutes(ctx);
+
+    expect(handled).toBe(true);
+    expect(getStatus()).toBe(404);
+    expect(getJson()).toEqual({
+      error: 'App run "run-404" not found',
+    });
+  });
+
+  test("GET /api/apps/runs/:runId/health returns the run health payload", async () => {
+    const { res, getStatus, getJson } = createMockHttpResponse();
+    const ctx = buildCtx({
+      method: "GET",
+      pathname: "/api/apps/runs/run-1/health",
+      res,
+      appManager: buildAppManager({
+        getRun: vi.fn(async () => ({
+          runId: "run-1",
+          health: {
+            state: "healthy",
+            message: null,
+          },
+        })),
+      }),
+    });
+
+    const handled = await handleAppsRoutes(ctx);
+
+    expect(handled).toBe(true);
+    expect(getStatus()).toBe(200);
+    expect(getJson()).toEqual({
+      state: "healthy",
+      message: null,
+    });
+  });
+
+  test("POST /api/apps/runs/:runId/attach returns 404 on missing run", async () => {
+    const { res, getStatus, getJson } = createMockHttpResponse();
+    const ctx = buildCtx({
+      method: "POST",
+      pathname: "/api/apps/runs/run-404/attach",
+      res,
+      appManager: buildAppManager({
+        attachRun: vi.fn(async () => ({
+          success: false,
+          message: 'App run "run-404" was not found.',
+        })),
+      }),
+    });
+
+    const handled = await handleAppsRoutes(ctx);
+
+    expect(handled).toBe(true);
+    expect(getStatus()).toBe(404);
+    expect(getJson()).toEqual({
+      success: false,
+      message: 'App run "run-404" was not found.',
+    });
+  });
+
+  test("POST /api/apps/runs/:runId/detach detaches an active run", async () => {
+    const { res, getStatus, getJson } = createMockHttpResponse();
+    const ctx = buildCtx({
+      method: "POST",
+      pathname: "/api/apps/runs/run-1/detach",
+      res,
+      appManager: buildAppManager({
+        detachRun: vi.fn(async () => ({
+          success: true,
+          message: "Hyperscape detached.",
+          run: {
+            runId: "run-1",
+            viewerAttachment: "detached",
+          },
+        })),
+      }),
+    });
+
+    const handled = await handleAppsRoutes(ctx);
+
+    expect(handled).toBe(true);
+    expect(getStatus()).toBe(200);
+    expect(getJson()).toEqual({
+      success: true,
+      message: "Hyperscape detached.",
+      run: {
+        runId: "run-1",
+        viewerAttachment: "detached",
+      },
+    });
+  });
+
+  test("POST /api/apps/runs/:runId/stop delegates to appManager.stop by run id", async () => {
+    const { res, getStatus, getJson } = createMockHttpResponse();
+    const pluginManager = buildPluginManager();
+    const stop = vi.fn(async () => ({
+      success: true,
+      appName: "@elizaos/app-hyperscape",
+      runId: "run-1",
+      stoppedAt: "2026-04-06T00:00:00.000Z",
+      pluginUninstalled: false,
+      needsRestart: false,
+      stopScope: "viewer-session",
+      message: "Hyperscape stopped.",
+    }));
+    const ctx = buildCtx({
+      method: "POST",
+      pathname: "/api/apps/runs/run-1/stop",
+      res,
+      getPluginManager: () => pluginManager,
+      appManager: buildAppManager({
+        stop,
+      }),
+    });
+
+    const handled = await handleAppsRoutes(ctx);
+
+    expect(handled).toBe(true);
+    expect(stop).toHaveBeenCalledWith(pluginManager, "", "run-1");
+    expect(getStatus()).toBe(200);
+    expect(getJson()).toEqual({
+      success: true,
+      appName: "@elizaos/app-hyperscape",
+      runId: "run-1",
+      stoppedAt: "2026-04-06T00:00:00.000Z",
+      pluginUninstalled: false,
+      needsRestart: false,
+      stopScope: "viewer-session",
+      message: "Hyperscape stopped.",
+    });
+  });
+
+  test("POST /api/apps/stop rejects requests without name or runId", async () => {
+    const { res, getStatus, getJson } = createMockHttpResponse();
+    const ctx = buildCtx({
+      method: "POST",
+      pathname: "/api/apps/stop",
+      res,
+      readJsonBody: vi.fn(async () => ({})),
+    });
+
+    const handled = await handleAppsRoutes(ctx);
+
+    expect(handled).toBe(true);
+    expect(getStatus()).toBe(500);
+    expect(getJson()).toEqual({
+      error: "name or runId is required",
+    });
   });
 });

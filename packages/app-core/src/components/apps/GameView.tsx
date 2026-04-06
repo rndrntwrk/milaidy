@@ -8,13 +8,14 @@
  * - Connection status indicator
  */
 
-import { Button, Input } from "@miladyai/ui";
 import { packageNameToAppRouteSlug } from "@miladyai/shared/contracts/apps";
+import { Button, Input } from "@miladyai/ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  client,
+  type AppRunSummary,
   type AppSessionControlAction,
   type AppSessionState,
+  client,
   type LogEntry,
 } from "../../api";
 import { invokeDesktopBridgeRequest, isElectrobunRuntime } from "../../bridge";
@@ -30,7 +31,6 @@ import type { DesktopClickAuditItem } from "../../utils/desktop-workspace";
 import { formatTime } from "../../utils/format";
 import { BabylonTerminal } from "./BabylonTerminal";
 
-const DEFAULT_VIEWER_SANDBOX = "allow-scripts allow-same-origin allow-popups";
 const READY_EVENT_BY_AUTH_TYPE: Record<string, string> = {
   HYPERSCAPE_AUTH: "HYPERSCAPE_READY",
   RS_2004SCAPE_AUTH: "RS_2004SCAPE_READY",
@@ -159,7 +159,7 @@ export function DesktopGameWindowControls({
       ipcChannel: "gpuWindow:list",
     });
     setGpuWindowId(gpuWindows?.windows[0]?.id ?? null);
-  }, [gameWindowId]);
+  }, [gameWindowId, t]);
 
   useEffect(() => {
     void refresh();
@@ -467,6 +467,8 @@ export function DesktopGameWindowControls({
 export function GameView() {
   const { setTimeout } = useTimeout();
   const {
+    appRuns,
+    activeGameRunId,
     activeGameApp,
     activeGameDisplayName,
     activeGameViewerUrl,
@@ -505,9 +507,40 @@ export function GameView() {
   const applySessionState = useCallback(
     (nextSession: AppSessionState | null) => {
       setSessionState(nextSession);
-      setState("activeGameSession", nextSession);
+      if (!activeGameRunId) return;
+      const nextUpdatedAt = new Date().toISOString();
+      setState(
+        "appRuns",
+        appRuns.map((run) => {
+          if (run.runId !== activeGameRunId) return run;
+          const nextHealth =
+            nextSession?.status === "disconnected"
+              ? {
+                  state: "degraded" as const,
+                  message:
+                    nextSession.summary ??
+                    run.summary ??
+                    "Session unavailable.",
+                }
+              : nextSession
+                ? {
+                    state: "healthy" as const,
+                    message: nextSession.summary ?? null,
+                  }
+                : run.health;
+          return {
+            ...run,
+            session: nextSession,
+            status: nextSession?.status ?? run.status,
+            summary: nextSession?.summary ?? run.summary,
+            updatedAt: nextUpdatedAt,
+            lastHeartbeatAt: nextSession ? nextUpdatedAt : run.lastHeartbeatAt,
+            health: nextHealth,
+          } satisfies AppRunSummary;
+        }),
+      );
     },
-    [setState],
+    [activeGameRunId, appRuns, setState],
   );
 
   const refreshSessionState = useCallback(async () => {
@@ -618,13 +651,13 @@ export function GameView() {
     },
     [
       activeGameApp,
-      activeGameSession?.sessionId,
+      activeGameSession,
       applySessionState,
       loadLogs,
       refreshSessionState,
       setActionNotice,
       setTimeout,
-      sessionState?.canSendCommands,
+      sessionState,
       t,
     ],
   );
@@ -770,7 +803,13 @@ export function GameView() {
         setGameWindowId(null);
       }
     };
-  }, [activeGameViewerUrl, activeGameApp, activeGameDisplayName, isElectrobun]);
+  }, [
+    activeGameViewerUrl,
+    activeGameApp,
+    activeGameDisplayName,
+    isElectrobun,
+    t,
+  ]);
 
   // Reset auth handshake state when the active viewer session changes.
   useEffect(() => {
@@ -787,13 +826,8 @@ export function GameView() {
   }, [activeGamePostMessageAuth, viewerSessionKey]);
 
   const resetActiveGameState = useCallback(() => {
-    setState("activeGameApp", "");
-    setState("activeGameDisplayName", "");
-    setState("activeGameViewerUrl", "");
-    setState("activeGameSandbox", DEFAULT_VIEWER_SANDBOX);
-    setState("activeGamePostMessageAuth", false);
-    setState("activeGamePostMessagePayload", null);
-    setState("activeGameSession", null);
+    setSessionState(null);
+    setState("activeGameRunId", "");
   }, [setState]);
 
   useEffect(() => {
@@ -836,6 +870,7 @@ export function GameView() {
     activeGamePostMessagePayload,
     postMessageTargetOrigin,
     setActionNotice,
+    t,
   ]);
 
   const handleOpenInNewTab = useCallback(async () => {
@@ -850,15 +885,18 @@ export function GameView() {
         3600,
       );
     }
-  }, [activeGameViewerUrl, setActionNotice]);
+  }, [activeGameViewerUrl, setActionNotice, t]);
 
   const handleStop = useCallback(async () => {
-    if (!activeGameApp) return;
+    if (!activeGameRunId) return;
     setStopping(true);
     try {
-      const stopResult = await client.stopApp(activeGameApp);
+      const stopResult = await client.stopAppRun(activeGameRunId);
+      const nextRuns = appRuns.filter((run) => run.runId !== activeGameRunId);
+      setState("appRuns", nextRuns);
       resetActiveGameState();
       setState("tab", "apps");
+      setState("appsSubTab", nextRuns.length > 0 ? "running" : "browse");
       setActionNotice(
         stopResult.message,
         stopResult.success ? "success" : "info",
@@ -875,7 +913,14 @@ export function GameView() {
     } finally {
       setStopping(false);
     }
-  }, [activeGameApp, resetActiveGameState, setState, setActionNotice]);
+  }, [
+    activeGameRunId,
+    appRuns,
+    resetActiveGameState,
+    setActionNotice,
+    setState,
+    t,
+  ]);
 
   if (!activeGameViewerUrl) {
     return (

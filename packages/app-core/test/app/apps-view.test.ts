@@ -2,10 +2,10 @@
 
 import type {
   AppLaunchResult,
-  AppSessionState,
-  AppViewerAuthMessage,
+  AppRunSummary,
   RegistryAppInfo,
 } from "@miladyai/app-core/api";
+import * as electrobunRpc from "@miladyai/app-core/bridge/electrobun-rpc";
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -14,13 +14,14 @@ import {
   flush,
   text,
 } from "../../../../test/helpers/react-test";
-import * as electrobunRpc from "@miladyai/app-core/bridge/electrobun-rpc";
 
 interface AppsContextStub {
-  setState: (
-    key: string,
-    value: string | boolean | AppViewerAuthMessage | AppSessionState | null,
-  ) => void;
+  appRuns: AppRunSummary[];
+  activeGameRunId: string;
+  activeGameDisplayName: string;
+  activeGameViewerUrl: string;
+  appsSubTab: "browse" | "running" | "games";
+  setState: (key: string, value: unknown) => void;
   setActionNotice: (
     text: string,
     tone?: "info" | "success" | "error",
@@ -33,7 +34,11 @@ const { mockClientFns, mockUseApp } = vi.hoisted(() => ({
     getCodingAgentStatus: vi.fn(async () => null),
     listApps: vi.fn(),
     listInstalledApps: vi.fn(),
+    listAppRuns: vi.fn(),
     launchApp: vi.fn(),
+    attachAppRun: vi.fn(),
+    detachAppRun: vi.fn(),
+    stopAppRun: vi.fn(),
     listHyperscapeEmbeddedAgents: vi.fn(),
     getHyperscapeAgentGoal: vi.fn(),
     getHyperscapeAgentQuickActions: vi.fn(),
@@ -89,10 +94,52 @@ function createApp(
 function createLaunchResult(
   overrides?: Partial<AppLaunchResult>,
 ): AppLaunchResult {
+  const viewer =
+    overrides?.viewer === undefined
+      ? {
+          url: "https://example.com/viewer",
+          postMessageAuth: false,
+          sandbox: "allow-scripts",
+        }
+      : overrides.viewer;
+  const session = overrides?.session ?? null;
+  const run =
+    overrides?.run ??
+    createRunSummary({
+      appName: "@elizaos/app-test",
+      displayName: overrides?.displayName ?? "Test App",
+      launchType: overrides?.launchType ?? "connect",
+      launchUrl:
+        overrides?.launchUrl === undefined
+          ? "https://example.com/launch"
+          : overrides.launchUrl,
+      viewer,
+      session,
+      viewerAttachment: viewer ? "attached" : "unavailable",
+      status: session?.status ?? (viewer ? "running" : "idle"),
+      summary: session?.summary ?? (viewer ? "Viewer ready." : "Run active."),
+    });
   return {
     pluginInstalled: true,
     needsRestart: false,
     displayName: "Test App",
+    launchType: "connect",
+    launchUrl: "https://example.com/launch",
+    viewer,
+    session,
+    run,
+    ...overrides,
+  };
+}
+
+function createRunSummary(
+  overrides: Partial<AppRunSummary> = {},
+): AppRunSummary {
+  return {
+    runId: "run-1",
+    appName: "@elizaos/app-test",
+    displayName: "Test App",
+    pluginName: "@elizaos/app-test",
     launchType: "connect",
     launchUrl: "https://example.com/launch",
     viewer: {
@@ -101,6 +148,32 @@ function createLaunchResult(
       sandbox: "allow-scripts",
     },
     session: null,
+    status: "running",
+    summary: "Viewer ready.",
+    startedAt: "2026-04-06T00:00:00.000Z",
+    updatedAt: "2026-04-06T00:00:00.000Z",
+    lastHeartbeatAt: "2026-04-06T00:00:00.000Z",
+    supportsBackground: true,
+    viewerAttachment: "attached",
+    health: {
+      state: "healthy",
+      message: null,
+    },
+    ...overrides,
+  };
+}
+
+function createAppsContext(
+  overrides: Partial<AppsContextStub> = {},
+): AppsContextStub {
+  return {
+    appRuns: [],
+    activeGameRunId: "",
+    activeGameDisplayName: "",
+    activeGameViewerUrl: "",
+    appsSubTab: "browse",
+    setState: vi.fn<AppsContextStub["setState"]>(),
+    setActionNotice: vi.fn<AppsContextStub["setActionNotice"]>(),
     ...overrides,
   };
 }
@@ -167,7 +240,11 @@ describe("AppsView", () => {
     );
     mockClientFns.listApps.mockReset();
     mockClientFns.listInstalledApps.mockReset();
+    mockClientFns.listAppRuns.mockReset();
     mockClientFns.launchApp.mockReset();
+    mockClientFns.attachAppRun.mockReset();
+    mockClientFns.detachAppRun.mockReset();
+    mockClientFns.stopAppRun.mockReset();
     mockClientFns.listHyperscapeEmbeddedAgents.mockReset();
     mockClientFns.getHyperscapeAgentGoal.mockReset();
     mockClientFns.getHyperscapeAgentQuickActions.mockReset();
@@ -212,6 +289,7 @@ describe("AppsView", () => {
       message: "command sent",
     });
     mockClientFns.listInstalledApps.mockResolvedValue([]);
+    mockClientFns.listAppRuns.mockResolvedValue([]);
   });
 
   const tStub = (
@@ -322,8 +400,7 @@ describe("AppsView", () => {
   });
 
   it("loads apps and launches iframe viewer flow", async () => {
-    const setState = vi.fn<AppsContextStub["setState"]>();
-    const setActionNotice = vi.fn<AppsContextStub["setActionNotice"]>();
+    const ctx = createAppsContext();
     const t = (k: string) => {
       if (k === "appsview.Active") return "Active";
       if (k === "appsview.Back") return "Back";
@@ -334,37 +411,46 @@ describe("AppsView", () => {
       return k;
     };
     mockUseApp.mockReturnValue({
+      ...ctx,
       uiLanguage: "en",
       t,
-      setState,
-      setActionNotice,
     });
     const app = createApp("@elizaos/app-hyperscape", "Hyperscape", "Arena", {
       uiExtension: { detailPanelId: "hyperscape-embedded-agents" },
+    });
+    const run = createRunSummary({
+      runId: "run-hyperscape",
+      appName: app.name,
+      displayName: app.displayName,
+      pluginName: app.name,
+      launchUrl: "http://localhost:5175",
+      viewer: {
+        url: "http://localhost:5175",
+        sandbox: "allow-scripts allow-same-origin",
+        postMessageAuth: true,
+        authMessage: { type: "HYPERSCAPE_AUTH", authToken: "token-1" },
+      },
+      session: {
+        sessionId: "agent-123",
+        appName: app.name,
+        mode: "spectate-and-steer",
+        status: "connecting",
+        canSendCommands: true,
+        controls: ["pause"],
+        summary: "Connecting session...",
+      },
     });
     mockClientFns.listApps.mockResolvedValue([app]);
     mockClientFns.launchApp.mockResolvedValue(
       createLaunchResult({
         displayName: app.displayName,
-        viewer: {
-          url: "http://localhost:5175",
-          sandbox: "allow-scripts allow-same-origin",
-          postMessageAuth: true,
-          authMessage: { type: "HYPERSCAPE_AUTH", authToken: "token-1" },
-        },
-        session: {
-          sessionId: "agent-123",
-          appName: app.name,
-          mode: "spectate-and-steer",
-          status: "connecting",
-          canSendCommands: true,
-          controls: ["pause"],
-          summary: "Connecting session...",
-        },
+        viewer: run.viewer,
+        session: run.session,
+        run,
       }),
     );
 
-    let tree: TestRenderer.ReactTestRenderer = null as any;
+    let tree!: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(AppsView));
     });
@@ -376,58 +462,61 @@ describe("AppsView", () => {
     });
 
     expect(mockClientFns.launchApp).toHaveBeenCalledWith(app.name);
-    expect(setState).toHaveBeenCalledWith("activeGameApp", app.name);
-    expect(setState).toHaveBeenCalledWith(
-      "activeGameDisplayName",
-      app.displayName,
+    expect(ctx.setState).toHaveBeenCalledWith(
+      "appRuns",
+      expect.arrayContaining([
+        expect.objectContaining({
+          runId: "run-hyperscape",
+          appName: app.name,
+          displayName: app.displayName,
+        }),
+      ]),
     );
-    expect(setState).toHaveBeenCalledWith(
-      "activeGameViewerUrl",
-      "http://localhost:5175",
+    expect(ctx.setState).toHaveBeenCalledWith(
+      "activeGameRunId",
+      "run-hyperscape",
     );
-    expect(setState).toHaveBeenCalledWith("activeGamePostMessageAuth", true);
-    expect(setState).toHaveBeenCalledWith(
-      "activeGameSession",
-      expect.objectContaining({
-        sessionId: "agent-123",
-        appName: app.name,
-        mode: "spectate-and-steer",
-      }),
-    );
-    expect(setState).toHaveBeenCalledWith("tab", "apps");
-    expect(setState).toHaveBeenCalledWith("appsSubTab", "games");
+    expect(ctx.setState).toHaveBeenCalledWith("tab", "apps");
+    expect(ctx.setState).toHaveBeenCalledWith("appsSubTab", "games");
     expect(
-      setActionNotice.mock.calls.some((call) =>
+      ctx.setActionNotice.mock.calls.some((call) =>
         String(call[0]).includes("requires iframe auth"),
       ),
     ).toBe(false);
   });
 
   it("shows auth warning when postMessage auth payload is missing", async () => {
-    const setState = vi.fn<AppsContextStub["setState"]>();
-    const setActionNotice = vi.fn<AppsContextStub["setActionNotice"]>();
+    const ctx = createAppsContext();
     mockUseApp.mockReturnValue({
+      ...ctx,
       uiLanguage: "en",
       t: tStub,
-      setState,
-      setActionNotice,
     });
     const app = createApp("@elizaos/app-hyperscape", "Hyperscape", "Arena", {
       uiExtension: { detailPanelId: "hyperscape-embedded-agents" },
+    });
+    const run = createRunSummary({
+      runId: "run-auth-missing",
+      appName: app.name,
+      displayName: app.displayName,
+      pluginName: app.name,
+      launchUrl: "http://localhost:5175",
+      viewer: {
+        url: "http://localhost:5175",
+        sandbox: "allow-scripts allow-same-origin",
+        postMessageAuth: true,
+      },
     });
     mockClientFns.listApps.mockResolvedValue([app]);
     mockClientFns.launchApp.mockResolvedValue(
       createLaunchResult({
         displayName: app.displayName,
-        viewer: {
-          url: "http://localhost:5175",
-          sandbox: "allow-scripts allow-same-origin",
-          postMessageAuth: true,
-        },
+        viewer: run.viewer,
+        run,
       }),
     );
 
-    let tree: TestRenderer.ReactTestRenderer = null as any;
+    let tree!: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(AppsView));
     });
@@ -437,37 +526,48 @@ describe("AppsView", () => {
       await findButtonByText(tree?.root, "appsview.Launch").props.onClick();
     });
 
-    expect(setActionNotice).toHaveBeenCalledWith(
+    expect(ctx.setActionNotice).toHaveBeenCalledWith(
       expect.stringContaining("requires iframe auth"),
       "error",
       4800,
     );
-    expect(setState).toHaveBeenCalledWith("tab", "apps");
-    expect(setState).toHaveBeenCalledWith("appsSubTab", "games");
+    expect(ctx.setState).toHaveBeenCalledWith("activeGameRunId", run.runId);
+    expect(ctx.setState).toHaveBeenCalledWith("tab", "apps");
+    expect(ctx.setState).toHaveBeenCalledWith("appsSubTab", "games");
   });
 
-  it("opens non-viewer launches in a new tab and resets active game state", async () => {
-    const setState = vi.fn<AppsContextStub["setState"]>();
-    const setActionNotice = vi.fn<AppsContextStub["setActionNotice"]>();
+  it("opens non-viewer launches in a new tab and keeps the run in the running list", async () => {
+    const ctx = createAppsContext();
     mockUseApp.mockReturnValue({
+      ...ctx,
       uiLanguage: "en",
       t: tStub,
-      setState,
-      setActionNotice,
     });
     const app = createApp("@elizaos/app-babylon", "Babylon", "Wallet app");
+    const run = createRunSummary({
+      runId: "run-babylon",
+      appName: app.name,
+      displayName: app.displayName,
+      pluginName: app.name,
+      launchUrl: "https://example.com/babylon",
+      viewer: null,
+      viewerAttachment: "unavailable",
+      status: "running",
+      summary: "Babylon run active.",
+    });
     mockClientFns.listApps.mockResolvedValue([app]);
     mockClientFns.launchApp.mockResolvedValue(
       createLaunchResult({
         displayName: app.displayName,
         launchUrl: "https://example.com/babylon",
         viewer: null,
+        run,
       }),
     );
 
     const popupSpy = vi.spyOn(window, "open").mockReturnValue({} as Window);
 
-    let tree: TestRenderer.ReactTestRenderer = null as any;
+    let tree!: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(AppsView));
     });
@@ -482,10 +582,17 @@ describe("AppsView", () => {
       "_blank",
       "noopener,noreferrer",
     );
-    expect(setState).toHaveBeenCalledWith("activeGameApp", "");
-    expect(setState).toHaveBeenCalledWith("activeGameViewerUrl", "");
-    expect(setState).toHaveBeenCalledWith("activeGameSession", null);
-    expect(setActionNotice).toHaveBeenCalledWith(
+    expect(ctx.setState).toHaveBeenCalledWith(
+      "appRuns",
+      expect.arrayContaining([
+        expect.objectContaining({
+          runId: "run-babylon",
+          appName: app.name,
+        }),
+      ]),
+    );
+    expect(ctx.setState).toHaveBeenCalledWith("appsSubTab", "running");
+    expect(ctx.setActionNotice).toHaveBeenCalledWith(
       "Babylon opened in a new tab.",
       "success",
       2600,
@@ -493,13 +600,11 @@ describe("AppsView", () => {
   });
 
   it("reports popup-blocked errors and launch failures", async () => {
-    const setState = vi.fn<AppsContextStub["setState"]>();
-    const setActionNotice = vi.fn<AppsContextStub["setActionNotice"]>();
+    const ctx = createAppsContext();
     mockUseApp.mockReturnValue({
+      ...ctx,
       uiLanguage: "en",
       t: tStub,
-      setState,
-      setActionNotice,
     });
     const app = createApp("@elizaos/app-babylon", "Babylon", "Wallet app");
     mockClientFns.listApps.mockResolvedValue([app]);
@@ -515,7 +620,7 @@ describe("AppsView", () => {
 
     vi.spyOn(window, "open").mockReturnValue(null);
 
-    let tree: TestRenderer.ReactTestRenderer = null as any;
+    let tree!: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(AppsView));
     });
@@ -524,7 +629,7 @@ describe("AppsView", () => {
     await act(async () => {
       await findButtonByText(tree?.root, "appsview.Launch").props.onClick();
     });
-    expect(setActionNotice).toHaveBeenCalledWith(
+    expect(ctx.setActionNotice).toHaveBeenCalledWith(
       "Babylon opened in a new tab.",
       "success",
       2600,
@@ -533,7 +638,7 @@ describe("AppsView", () => {
     await act(async () => {
       await findButtonByText(tree?.root, "appsview.Launch").props.onClick();
     });
-    expect(setActionNotice).toHaveBeenCalledWith(
+    expect(ctx.setActionNotice).toHaveBeenCalledWith(
       "Failed to launch Babylon: network down",
       "error",
       4000,
@@ -541,14 +646,12 @@ describe("AppsView", () => {
   });
 
   it("uses the Electrobun shell bridge for external app launches", async () => {
-    const setState = vi.fn<AppsContextStub["setState"]>();
-    const setActionNotice = vi.fn<AppsContextStub["setActionNotice"]>();
+    const ctx = createAppsContext();
     const request = vi.fn(async () => undefined);
     mockUseApp.mockReturnValue({
+      ...ctx,
       uiLanguage: "en",
       t: tStub,
-      setState,
-      setActionNotice,
     });
     const app = createApp("@elizaos/app-babylon", "Babylon", "Wallet app");
     mockClientFns.listApps.mockResolvedValue([app]);
@@ -568,7 +671,7 @@ describe("AppsView", () => {
     };
     const popupSpy = vi.spyOn(window, "open");
 
-    let tree: TestRenderer.ReactTestRenderer = null as any;
+    let tree!: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(AppsView));
     });
@@ -582,39 +685,38 @@ describe("AppsView", () => {
       url: "https://example.com/babylon",
     });
     expect(popupSpy).not.toHaveBeenCalled();
-    expect(setActionNotice).toHaveBeenCalledWith(
+    expect(ctx.setActionNotice).toHaveBeenCalledWith(
       "Babylon opened in a new tab.",
       "success",
       2600,
     );
-    delete (window as any).__MILADY_ELECTROBUN_RPC__;
-    delete (globalThis as any).__MILADY_ELECTROBUN_RPC__;
+    delete (window as Window & { __MILADY_ELECTROBUN_RPC__?: unknown })
+      .__MILADY_ELECTROBUN_RPC__;
+    delete (
+      globalThis as typeof globalThis & { __MILADY_ELECTROBUN_RPC__?: unknown }
+    ).__MILADY_ELECTROBUN_RPC__;
   });
 
   it("refreshes list and applies search filtering", async () => {
-    const setState = vi.fn<AppsContextStub["setState"]>();
-    const setActionNotice = vi.fn<AppsContextStub["setActionNotice"]>();
+    const ctx = createAppsContext();
     mockUseApp.mockReturnValue({
+      ...ctx,
       uiLanguage: "en",
       t: tStub,
-      setState,
-      setActionNotice,
     });
     const appOne = createApp("@elizaos/app-hyperscape", "Hyperscape", "Arena");
     const appTwo = createApp("@elizaos/app-babylon", "Babylon", "Wallet");
     mockClientFns.listApps.mockResolvedValue([appOne, appTwo]);
-    mockClientFns.listInstalledApps.mockResolvedValue([
-      {
-        name: appOne.name,
+    mockClientFns.listAppRuns.mockResolvedValue([
+      createRunSummary({
+        runId: "run-hyperscape",
+        appName: appOne.name,
         displayName: appOne.displayName,
-        version: "1.0.0",
-        installPath: "/tmp/app-one",
-        installedAt: "2026-01-01T00:00:00.000Z",
-        isRunning: true,
-      },
+        pluginName: appOne.name,
+      }),
     ]);
 
-    let tree: TestRenderer.ReactTestRenderer = null as any;
+    let tree!: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(AppsView));
     });
@@ -677,20 +779,18 @@ describe("AppsView", () => {
   });
 
   it("opens detail pane for app with unregistered uiExtension without crashing", async () => {
-    const setState = vi.fn<AppsContextStub["setState"]>();
-    const setActionNotice = vi.fn<AppsContextStub["setActionNotice"]>();
+    const ctx = createAppsContext();
     mockUseApp.mockReturnValue({
+      ...ctx,
       uiLanguage: "en",
       t: tStub,
-      setState,
-      setActionNotice,
     });
     const app = createApp("@elizaos/app-hyperscape", "Hyperscape", "Arena", {
       uiExtension: { detailPanelId: "hyperscape-embedded-agents" },
     });
     mockClientFns.listApps.mockResolvedValue([app]);
 
-    let tree: TestRenderer.ReactTestRenderer = null as any;
+    let tree!: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(AppsView));
     });
@@ -715,28 +815,24 @@ describe("AppsView", () => {
   });
 
   it("applies the selected launcher tile treatment after opening an app", async () => {
-    const setState = vi.fn<AppsContextStub["setState"]>();
-    const setActionNotice = vi.fn<AppsContextStub["setActionNotice"]>();
+    const ctx = createAppsContext();
     mockUseApp.mockReturnValue({
+      ...ctx,
       uiLanguage: "en",
       t: tStub,
-      setState,
-      setActionNotice,
     });
     const app = createApp("@elizaos/app-hyperscape", "Hyperscape", "Arena");
     mockClientFns.listApps.mockResolvedValue([app]);
-    mockClientFns.listInstalledApps.mockResolvedValue([
-      {
-        name: app.name,
+    mockClientFns.listAppRuns.mockResolvedValue([
+      createRunSummary({
+        runId: "run-hyperscape",
+        appName: app.name,
         displayName: app.displayName,
-        version: "1.0.0",
-        installPath: "/tmp/hyperscape",
-        installedAt: "2026-01-01T00:00:00.000Z",
-        isRunning: true,
-      },
+        pluginName: app.name,
+      }),
     ]);
 
-    let tree: TestRenderer.ReactTestRenderer = null as any;
+    let tree!: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(AppsView));
     });
@@ -753,19 +849,17 @@ describe("AppsView", () => {
   });
 
   it("opens app details and can return to the app list", async () => {
-    const setState = vi.fn<AppsContextStub["setState"]>();
-    const setActionNotice = vi.fn<AppsContextStub["setActionNotice"]>();
+    const ctx = createAppsContext();
     mockUseApp.mockReturnValue({
+      ...ctx,
       uiLanguage: "en",
       t: tStub,
-      setState,
-      setActionNotice,
     });
     const appOne = createApp("@elizaos/app-hyperscape", "Hyperscape", "Arena");
     const appTwo = createApp("@elizaos/app-babylon", "Babylon", "Wallet");
     mockClientFns.listApps.mockResolvedValue([appOne, appTwo]);
 
-    let tree: TestRenderer.ReactTestRenderer = null as any;
+    let tree!: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(React.createElement(AppsView));
     });

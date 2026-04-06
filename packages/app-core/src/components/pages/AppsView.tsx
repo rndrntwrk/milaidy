@@ -6,22 +6,17 @@
 
 import { PagePanel } from "@miladyai/ui";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  client,
-  type AppRunSummary,
-  type RegistryAppInfo,
-} from "../../api";
+import { type AppRunSummary, client, type RegistryAppInfo } from "../../api";
 import { useApp } from "../../state";
 import { openExternalUrl } from "../../utils";
 import { AppDetailPane } from "../apps/AppDetailPane";
 import { AppsCatalogGrid } from "../apps/AppsCatalogGrid";
-import { RunningAppsPanel } from "../apps/RunningAppsPanel";
 import {
-  DEFAULT_VIEWER_SANDBOX,
   filterAppsForCatalog,
   getDefaultAppsCatalogSelection,
   shouldShowAppInAppsView,
 } from "../apps/helpers";
+import { RunningAppsPanel } from "../apps/RunningAppsPanel";
 
 export { shouldShowAppInAppsView } from "../apps/helpers";
 
@@ -40,7 +35,6 @@ export function AppsView() {
   const {
     appRuns,
     activeGameRunId,
-    activeGameApp,
     activeGameDisplayName,
     activeGameViewerUrl,
     appsSubTab,
@@ -53,13 +47,23 @@ export function AppsView() {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [showActiveOnly, setShowActiveOnly] = useState(false);
-  const [activeAppNames, setActiveAppNames] = useState<Set<string>>(new Set());
   const [selectedAppName, setSelectedAppName] = useState<string | null>(null);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [busyApp, setBusyApp] = useState<string | null>(null);
+  const [busyRunId, setBusyRunId] = useState<string | null>(null);
+  const activeAppNames = useMemo(
+    () => new Set(appRuns.map((run) => run.appName)),
+    [appRuns],
+  );
+  const activeGameRun = useMemo(
+    () => appRuns.find((run) => run.runId === activeGameRunId) ?? null,
+    [activeGameRunId, appRuns],
+  );
   const currentGameViewerUrl =
-    typeof activeGameViewerUrl === "string" ? activeGameViewerUrl : "";
-  const hasCurrentGame = currentGameViewerUrl.trim().length > 0;
+    typeof activeGameViewerUrl === "string" ? activeGameViewerUrl.trim() : "";
+  const hasCurrentGame =
+    currentGameViewerUrl.length > 0 &&
+    activeGameRun?.viewerAttachment === "attached";
 
   const selectedApp = useMemo(
     () => apps.find((app) => app.name === selectedAppName) ?? null,
@@ -67,7 +71,9 @@ export function AppsView() {
   );
 
   const selectedAppHasActiveViewer =
-    !!selectedApp && hasCurrentGame && activeGameApp === selectedApp.name;
+    !!selectedApp &&
+    hasCurrentGame &&
+    activeGameRun?.appName === selectedApp.name;
   const selectedAppIsActive =
     !!selectedApp && activeAppNames.has(selectedApp.name);
   const sortedRuns = useMemo(
@@ -77,10 +83,11 @@ export function AppsView() {
 
   const mergeRun = useCallback(
     (run: AppRunSummary) => {
-      const nextRuns = [run, ...appRuns.filter((item) => item.runId !== run.runId)]
-        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+      const nextRuns = [
+        run,
+        ...appRuns.filter((item) => item.runId !== run.runId),
+      ].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
       setState("appRuns", nextRuns);
-      setActiveAppNames(new Set(nextRuns.map((item) => item.appName)));
       return nextRuns;
     },
     [appRuns, setState],
@@ -90,7 +97,6 @@ export function AppsView() {
     (runId: string) => {
       const nextRuns = appRuns.filter((run) => run.runId !== runId);
       setState("appRuns", nextRuns);
-      setActiveAppNames(new Set(nextRuns.map((item) => item.appName)));
       return nextRuns;
     },
     [appRuns, setState],
@@ -109,7 +115,6 @@ export function AppsView() {
       ]);
       setApps(list);
       setState("appRuns", runs);
-      setActiveAppNames(new Set(runs.map((run) => run.appName)));
       setSelectedAppName((current) => {
         if (!current) return getDefaultAppsCatalogSelection(list);
         return list.some(
@@ -162,29 +167,16 @@ export function AppsView() {
           result.diagnostics?.find(
             (diagnostic) => diagnostic.severity === "error",
           ) ?? result.diagnostics?.[0];
-        setActiveAppNames((previous) => {
-          const next = new Set(previous);
-          next.add(app.name);
-          return next;
-        });
-        if (result.viewer?.url) {
-          setState("activeGameApp", app.name);
-          setState("activeGameDisplayName", app.displayName ?? app.name);
-          setState("activeGameViewerUrl", result.viewer.url);
-          setState(
-            "activeGameSandbox",
-            result.viewer.sandbox ?? DEFAULT_VIEWER_SANDBOX,
-          );
-          setState(
-            "activeGamePostMessageAuth",
-            Boolean(result.viewer.postMessageAuth),
-          );
-          setState(
-            "activeGamePostMessagePayload",
-            result.viewer.authMessage ?? null,
-          );
-          setState("activeGameSession", result.session ?? null);
-          if (result.viewer.postMessageAuth && !result.viewer.authMessage) {
+        const launchedRun = result.run ? mergeRun(result.run) : null;
+        const primaryRun =
+          launchedRun?.find((run) => run.appName === app.name) ?? result.run;
+
+        if (primaryRun?.viewer?.url) {
+          setState("activeGameRunId", primaryRun.runId);
+          if (
+            primaryRun.viewer.postMessageAuth &&
+            !primaryRun.viewer.authMessage
+          ) {
             setActionNotice(
               t("appsview.IframeAuthMissing", {
                 name: app.displayName ?? app.name,
@@ -204,7 +196,12 @@ export function AppsView() {
           setState("appsSubTab", "games");
           return;
         }
-        clearActiveGameState();
+
+        if (primaryRun) {
+          setSelectedRunId(primaryRun.runId);
+          setState("appsSubTab", "running");
+        }
+
         if (primaryLaunchDiagnostic) {
           setActionNotice(
             primaryLaunchDiagnostic.message,
@@ -254,7 +251,7 @@ export function AppsView() {
         setBusyApp(null);
       }
     },
-    [clearActiveGameState, setActionNotice, setState, t],
+    [mergeRun, setActionNotice, setState, t],
   );
 
   const handleOpenCurrentGame = useCallback(() => {
@@ -272,6 +269,152 @@ export function AppsView() {
       setActionNotice(t("appsview.PopupBlocked"), "error", 4200);
     }
   }, [currentGameViewerUrl, hasCurrentGame, setActionNotice, t]);
+
+  const handleOpenRun = useCallback(
+    async (run: AppRunSummary) => {
+      if (!run.viewer?.url) {
+        if (run.launchUrl) {
+          try {
+            await openExternalUrl(run.launchUrl);
+            setActionNotice(
+              t("appsview.OpenedInNewTab", {
+                name: run.displayName,
+              }),
+              "success",
+              2600,
+            );
+          } catch {
+            setActionNotice(
+              t("appsview.PopupBlockedOpen", {
+                name: run.displayName,
+              }),
+              "error",
+              4200,
+            );
+          }
+          return;
+        }
+
+        setActionNotice(
+          t("appsview.LaunchedNoViewer", {
+            name: run.displayName,
+          }),
+          "info",
+          3200,
+        );
+        return;
+      }
+
+      setBusyRunId(run.runId);
+      try {
+        const result =
+          run.viewerAttachment === "attached"
+            ? {
+                success: true,
+                message: `${run.displayName} attached.`,
+                run,
+              }
+            : await client.attachAppRun(run.runId);
+        const nextRun =
+          result.run ??
+          ({
+            ...run,
+            viewerAttachment: "attached",
+          } satisfies AppRunSummary);
+        mergeRun(nextRun);
+        setState("activeGameRunId", nextRun.runId);
+        setState("tab", "apps");
+        setState("appsSubTab", "games");
+        if (nextRun.viewer?.postMessageAuth && !nextRun.viewer.authMessage) {
+          setActionNotice(
+            t("appsview.IframeAuthMissing", {
+              name: nextRun.displayName,
+            }),
+            "error",
+            4800,
+          );
+        } else if (result.message) {
+          setActionNotice(result.message, "success", 2200);
+        }
+      } catch (err) {
+        setActionNotice(
+          t("appsview.LaunchFailed", {
+            name: run.displayName,
+            message: err instanceof Error ? err.message : t("common.error"),
+          }),
+          "error",
+          4000,
+        );
+      } finally {
+        setBusyRunId(null);
+      }
+    },
+    [mergeRun, setActionNotice, setState, t],
+  );
+
+  const handleDetachRun = useCallback(
+    async (run: AppRunSummary) => {
+      setBusyRunId(run.runId);
+      try {
+        const result = await client.detachAppRun(run.runId);
+        const nextRun =
+          result.run ??
+          ({
+            ...run,
+            viewerAttachment: run.viewer ? "detached" : "unavailable",
+          } satisfies AppRunSummary);
+        mergeRun(nextRun);
+        if (activeGameRunId === run.runId) {
+          setState("activeGameRunId", "");
+          setState("appsSubTab", "running");
+        }
+        setActionNotice(result.message, "success", 2200);
+      } catch (err) {
+        setActionNotice(
+          t("appsview.LaunchFailed", {
+            name: run.displayName,
+            message: err instanceof Error ? err.message : t("common.error"),
+          }),
+          "error",
+          4000,
+        );
+      } finally {
+        setBusyRunId(null);
+      }
+    },
+    [activeGameRunId, mergeRun, setActionNotice, setState, t],
+  );
+
+  const handleStopRun = useCallback(
+    async (run: AppRunSummary) => {
+      setBusyRunId(run.runId);
+      try {
+        const result = await client.stopAppRun(run.runId);
+        const nextRuns = removeRun(run.runId);
+        if (activeGameRunId === run.runId) {
+          setState("activeGameRunId", "");
+          setState("appsSubTab", nextRuns.length > 0 ? "running" : "browse");
+        }
+        setActionNotice(
+          result.message,
+          result.success ? "success" : "info",
+          result.needsRestart ? 5000 : 3200,
+        );
+      } catch (err) {
+        setActionNotice(
+          t("appsview.LaunchFailed", {
+            name: run.displayName,
+            message: err instanceof Error ? err.message : t("common.error"),
+          }),
+          "error",
+          4000,
+        );
+      } finally {
+        setBusyRunId(null);
+      }
+    },
+    [activeGameRunId, removeRun, setActionNotice, setState, t],
+  );
 
   const visibleApps = useMemo(() => {
     return filterAppsForCatalog(apps, {
@@ -299,6 +442,39 @@ export function AppsView() {
                 commands, pause, and telemetry docked beside the world instead
                 of buried in another tool.
               </p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className={`rounded-full border px-3 py-1.5 text-[11px] font-medium transition-colors ${
+                    appsSubTab === "browse"
+                      ? "border-accent/35 bg-accent/10 text-accent"
+                      : "border-border/35 bg-card/72 text-muted-strong hover:border-accent/20 hover:text-txt"
+                  }`}
+                  onClick={() => setState("appsSubTab", "browse")}
+                >
+                  Browse
+                </button>
+                <button
+                  type="button"
+                  className={`rounded-full border px-3 py-1.5 text-[11px] font-medium transition-colors ${
+                    appsSubTab === "running"
+                      ? "border-accent/35 bg-accent/10 text-accent"
+                      : "border-border/35 bg-card/72 text-muted-strong hover:border-accent/20 hover:text-txt"
+                  }`}
+                  onClick={() => setState("appsSubTab", "running")}
+                >
+                  Running ({sortedRuns.length})
+                </button>
+                {hasCurrentGame ? (
+                  <button
+                    type="button"
+                    className="rounded-full border border-ok/35 bg-ok/10 px-3 py-1.5 text-[11px] font-medium text-ok transition-colors hover:bg-ok/15"
+                    onClick={handleOpenCurrentGame}
+                  >
+                    Live viewer
+                  </button>
+                ) : null}
+              </div>
             </div>
 
             <div
@@ -311,62 +487,82 @@ export function AppsView() {
               <div className="mt-2 text-sm font-semibold text-txt">
                 {hasCurrentGame
                   ? activeGameDisplayName || "Active app session"
-                  : "No app session running"}
+                  : sortedRuns.length > 0
+                    ? `${sortedRuns.length} run${sortedRuns.length === 1 ? "" : "s"} active`
+                    : "No app session running"}
               </div>
               <p className="mt-2 text-[12px] leading-6 text-muted-strong">
                 {hasCurrentGame
                   ? "Jump back into the running app or keep browsing for another world to connect."
-                  : "Pick an app to inspect launch details and start a live agent session."}
+                  : sortedRuns.length > 0
+                    ? "Detach, reattach, or stop background runs without losing the rest of your catalog context."
+                    : "Pick an app to inspect launch details and start a live agent session."}
               </p>
             </div>
           </div>
         </div>
 
-        <div className="grid gap-5 p-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(22rem,0.85fr)] lg:p-5">
-          <PagePanel variant="inset" className="p-4 lg:p-5">
-            <AppsCatalogGrid
-              activeAppNames={activeAppNames}
-              activeGameDisplayName={activeGameDisplayName}
-              error={error}
-              hasCurrentGame={hasCurrentGame}
-              loading={loading}
-              searchQuery={searchQuery}
-              selectedAppName={selectedAppName}
-              showActiveOnly={showActiveOnly}
-              visibleApps={visibleApps}
-              onOpenCurrentGame={handleOpenCurrentGame}
-              onRefresh={() => void loadApps()}
-              onSearchQueryChange={setSearchQuery}
-              onSelectApp={setSelectedAppName}
-              onToggleActiveOnly={() =>
-                setShowActiveOnly((current) => !current)
-              }
-            />
-          </PagePanel>
-
-          <PagePanel
-            variant="inset"
-            className="p-4 lg:p-5"
-            data-testid="apps-detail-panel"
-          >
-            {selectedApp ? (
-              <AppDetailPane
-                app={selectedApp}
-                busy={busyApp === selectedApp.name}
-                hasActiveViewer={selectedAppHasActiveViewer}
-                isActive={selectedAppIsActive}
-                onBack={() => setSelectedAppName(null)}
-                onLaunch={() => void handleLaunch(selectedApp)}
+        {appsSubTab === "running" ? (
+          <div className="p-4 lg:p-5">
+            <PagePanel variant="inset" className="p-4 lg:p-5">
+              <RunningAppsPanel
+                runs={sortedRuns}
+                selectedRunId={selectedRunId}
+                busyRunId={busyRunId}
+                onSelectRun={setSelectedRunId}
+                onOpenRun={(run) => void handleOpenRun(run)}
+                onDetachRun={(run) => void handleDetachRun(run)}
+                onStopRun={(run) => void handleStopRun(run)}
+              />
+            </PagePanel>
+          </div>
+        ) : (
+          <div className="grid gap-5 p-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(22rem,0.85fr)] lg:p-5">
+            <PagePanel variant="inset" className="p-4 lg:p-5">
+              <AppsCatalogGrid
+                activeAppNames={activeAppNames}
+                activeGameDisplayName={activeGameDisplayName}
+                error={error}
+                hasCurrentGame={hasCurrentGame}
+                loading={loading}
+                searchQuery={searchQuery}
+                selectedAppName={selectedAppName}
+                showActiveOnly={showActiveOnly}
+                visibleApps={visibleApps}
                 onOpenCurrentGame={handleOpenCurrentGame}
-                onOpenCurrentGameInNewTab={() =>
-                  void handleOpenCurrentGameInNewTab()
+                onRefresh={() => void loadApps()}
+                onSearchQueryChange={setSearchQuery}
+                onSelectApp={setSelectedAppName}
+                onToggleActiveOnly={() =>
+                  setShowActiveOnly((current) => !current)
                 }
               />
-            ) : (
-              <AppsEmptyState />
-            )}
-          </PagePanel>
-        </div>
+            </PagePanel>
+
+            <PagePanel
+              variant="inset"
+              className="p-4 lg:p-5"
+              data-testid="apps-detail-panel"
+            >
+              {selectedApp ? (
+                <AppDetailPane
+                  app={selectedApp}
+                  busy={busyApp === selectedApp.name}
+                  hasActiveViewer={selectedAppHasActiveViewer}
+                  isActive={selectedAppIsActive}
+                  onBack={() => setSelectedAppName(null)}
+                  onLaunch={() => void handleLaunch(selectedApp)}
+                  onOpenCurrentGame={handleOpenCurrentGame}
+                  onOpenCurrentGameInNewTab={() =>
+                    void handleOpenCurrentGameInNewTab()
+                  }
+                />
+              ) : (
+                <AppsEmptyState />
+              )}
+            </PagePanel>
+          </div>
+        )}
       </section>
     </div>
   );
