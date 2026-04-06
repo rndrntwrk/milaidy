@@ -323,6 +323,10 @@ describe("AppsView", () => {
         return "No apps match your search.";
       case "appsview.NoAppsAvailable":
         return "No apps available.";
+      case "appsview.NoRunningApps":
+        return "No app runs are active right now.";
+      case "appsview.NoRunningAppsHint":
+        return "Launch a game from the catalog and it will appear here.";
       case "appsview.EmptySearchHint":
         return "Try a different search.";
       case "appsview.EmptyCatalogHint":
@@ -337,6 +341,8 @@ describe("AppsView", () => {
         return "Network error";
       case "appsview.CurrentGameOpened":
         return "Current game opened in a new tab.";
+      case "appsview.RunningNow":
+        return "Running now";
       case "appsview.PopupBlocked":
         return "Popup blocked. Allow popups and try again.";
       case "appsview.LaunchedNoViewer":
@@ -734,10 +740,6 @@ describe("AppsView", () => {
         (node) => node.type === "button" && node.props.title === "Open Babylon",
       ).length,
     ).toBe(1);
-    expect(
-      root.findAll((node) => text(node) === "appsview.Active").length,
-    ).toBeGreaterThanOrEqual(1);
-
     const searchInput = root.findByType("input");
     await act(async () => {
       searchInput.props.onChange({ target: { value: "hyper" } });
@@ -758,24 +760,6 @@ describe("AppsView", () => {
       await findButtonByText(root, "common.refresh").props.onClick();
     });
     expect(mockClientFns.listApps).toHaveBeenCalledTimes(2);
-
-    await act(async () => {
-      searchInput.props.onChange({ target: { value: "" } });
-    });
-    await act(async () => {
-      await findButtonByText(root, "appsview.ActiveOnly").props.onClick();
-    });
-    expect(
-      root.findAll(
-        (node) =>
-          node.type === "button" && node.props.title === "Open Hyperscape",
-      ).length,
-    ).toBe(1);
-    expect(
-      root.findAll(
-        (node) => node.type === "button" && node.props.title === "Open Babylon",
-      ).length,
-    ).toBe(0);
   });
 
   it("opens detail pane for app with unregistered uiExtension without crashing", async () => {

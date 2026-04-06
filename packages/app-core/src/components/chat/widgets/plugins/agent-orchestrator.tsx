@@ -417,6 +417,8 @@ function OrchestratorTasksWidget(_props: ChatSidebarWidgetProps) {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [mutating, setMutating] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [detailError, setDetailError] = useState<string | null>(null);
   const deferredSearch = useDeferredValue(search.trim());
 
   useEffect(() => {
@@ -424,23 +426,37 @@ function OrchestratorTasksWidget(_props: ChatSidebarWidgetProps) {
 
     const refreshThreads = async () => {
       setLoading(true);
-      const nextThreads =
-        typeof client.listCodingAgentTaskThreads === "function"
-          ? await client.listCodingAgentTaskThreads({
-              includeArchived: showArchived,
-              search: deferredSearch || undefined,
-              limit: 30,
-            })
-          : [];
-      if (cancelled) return;
-      setThreads(nextThreads);
-      setSelectedThreadId((current) => {
-        if (current && nextThreads.some((thread) => thread.id === current)) {
-          return current;
+      try {
+        const nextThreads =
+          typeof client.listCodingAgentTaskThreads === "function"
+            ? await client.listCodingAgentTaskThreads({
+                includeArchived: showArchived,
+                search: deferredSearch || undefined,
+                limit: 30,
+              })
+            : [];
+        if (cancelled) return;
+        setLoadError(null);
+        setThreads(nextThreads);
+        setSelectedThreadId((current) => {
+          if (current && nextThreads.some((thread) => thread.id === current)) {
+            return current;
+          }
+          return nextThreads[0]?.id ?? null;
+        });
+      } catch (error) {
+        if (cancelled) return;
+        setLoadError(
+          error instanceof Error ? error.message : "Failed to load task threads.",
+        );
+        setThreads([]);
+        setSelectedThreadId(null);
+        setSelectedThread(null);
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
         }
-        return nextThreads[0]?.id ?? null;
-      });
-      setLoading(false);
+      }
     };
 
     void refreshThreads();
@@ -452,7 +468,7 @@ function OrchestratorTasksWidget(_props: ChatSidebarWidgetProps) {
       cancelled = true;
       clearInterval(timer);
     };
-  }, [deferredSearch, showArchived, ptySessions.length]);
+  }, [activeSessions.length, deferredSearch, showArchived]);
 
   useEffect(() => {
     let cancelled = false;
@@ -462,13 +478,24 @@ function OrchestratorTasksWidget(_props: ChatSidebarWidgetProps) {
     }
 
     const loadDetail =
-      typeof client.getCodingAgentTaskThread === "function"
-        ? client.getCodingAgentTaskThread(selectedThreadId)
-        : Promise.resolve(null);
-    void loadDetail.then((detail) => {
-      if (cancelled) return;
-      setSelectedThread(detail);
-    });
+      async () => {
+        try {
+          const detail =
+            typeof client.getCodingAgentTaskThread === "function"
+              ? await client.getCodingAgentTaskThread(selectedThreadId)
+              : null;
+          if (cancelled) return;
+          setDetailError(null);
+          setSelectedThread(detail);
+        } catch (error) {
+          if (cancelled) return;
+          setDetailError(
+            error instanceof Error ? error.message : "Failed to load task detail.",
+          );
+          setSelectedThread(null);
+        }
+      };
+    void loadDetail();
 
     return () => {
       cancelled = true;
@@ -478,28 +505,36 @@ function OrchestratorTasksWidget(_props: ChatSidebarWidgetProps) {
   const handleArchiveToggle = async () => {
     if (!selectedThread) return;
     setMutating(true);
-    if (selectedThread.status === "archived") {
-      if (typeof client.reopenCodingAgentTaskThread === "function") {
-        await client.reopenCodingAgentTaskThread(selectedThread.id);
+    try {
+      if (selectedThread.status === "archived") {
+        if (typeof client.reopenCodingAgentTaskThread === "function") {
+          await client.reopenCodingAgentTaskThread(selectedThread.id);
+        }
+        setShowArchived(false);
+      } else {
+        if (typeof client.archiveCodingAgentTaskThread === "function") {
+          await client.archiveCodingAgentTaskThread(selectedThread.id);
+        }
+        setShowArchived(true);
       }
-      setShowArchived(false);
-    } else {
-      if (typeof client.archiveCodingAgentTaskThread === "function") {
-        await client.archiveCodingAgentTaskThread(selectedThread.id);
-      }
-      setShowArchived(true);
+      const nextThreads =
+        typeof client.listCodingAgentTaskThreads === "function"
+          ? await client.listCodingAgentTaskThreads({
+              includeArchived: selectedThread.status !== "archived",
+              search: deferredSearch || undefined,
+              limit: 30,
+            })
+          : [];
+      setLoadError(null);
+      setThreads(nextThreads);
+      setSelectedThreadId(nextThreads[0]?.id ?? null);
+    } catch (error) {
+      setLoadError(
+        error instanceof Error ? error.message : "Failed to update task thread.",
+      );
+    } finally {
+      setMutating(false);
     }
-    const nextThreads =
-      typeof client.listCodingAgentTaskThreads === "function"
-        ? await client.listCodingAgentTaskThreads({
-            includeArchived: selectedThread.status !== "archived",
-            search: deferredSearch || undefined,
-            limit: 30,
-          })
-        : [];
-    setThreads(nextThreads);
-    setSelectedThreadId(nextThreads[0]?.id ?? null);
-    setMutating(false);
   };
 
   const count = threads.length > 0 ? threads.length : activeSessions.length;
@@ -531,6 +566,11 @@ function OrchestratorTasksWidget(_props: ChatSidebarWidgetProps) {
           className="h-8 w-full rounded-md border border-border/50 bg-bg px-2 text-[11px] text-txt outline-none transition-colors placeholder:text-muted focus:border-accent/50"
         />
       </div>
+      {loadError ? (
+        <div className="mb-2 rounded-md border border-danger/30 bg-danger/10 px-2 py-1.5 text-[11px] text-danger">
+          Failed to load task threads: {loadError}
+        </div>
+      ) : null}
       {threads.length > 0 ? (
         <div className="flex flex-col gap-2.5">
           <div className="flex max-h-56 flex-col gap-2 overflow-y-auto pr-1">
@@ -550,6 +590,10 @@ function OrchestratorTasksWidget(_props: ChatSidebarWidgetProps) {
               onArchive={handleArchiveToggle}
               onReopen={handleArchiveToggle}
             />
+          ) : detailError ? (
+            <div className="text-[11px] text-danger">
+              Failed to load task detail: {detailError}
+            </div>
           ) : loading ? (
             <div className="text-[11px] text-muted">Loading task detail...</div>
           ) : null}

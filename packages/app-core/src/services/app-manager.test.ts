@@ -433,24 +433,22 @@ describe("AppManager Integration", () => {
     expect(result.needsRestart).toBe(true);
   });
 
-  it("stops an app by uninstalling its plugin", async () => {
-    // Mock listInstalledPlugins to report the plugin as installed
+  it("stops an active app run without uninstalling its plugin", async () => {
     vi.spyOn(pluginManager, "listInstalledPlugins").mockResolvedValue([
       { name: APP_PLUGIN_NAME, version: "1.0.0" },
     ]);
-    // Mock uninstallPlugin to simulate successful uninstall
-    vi.spyOn(pluginManager, "uninstallPlugin").mockResolvedValue({
-      success: true,
-      pluginName: APP_PLUGIN_NAME,
-      requiresRestart: false,
-    });
+    const uninstallSpy = vi.spyOn(pluginManager, "uninstallPlugin");
 
-    // Act
+    const launch = await appManager.launch(pluginManager, APP_NAME);
+    expect(launch.run?.appName).toBe(APP_NAME);
+
     const result = await appManager.stop(pluginManager, APP_NAME);
 
-    // Assert
     expect(result.success).toBe(true);
-    expect(result.pluginUninstalled).toBe(true);
+    expect(result.pluginUninstalled).toBe(false);
+    expect(result.stopScope).toBe("viewer-session");
+    expect(uninstallSpy).not.toHaveBeenCalled();
+    await expect(appManager.listRuns()).resolves.toHaveLength(0);
   });
 });
 

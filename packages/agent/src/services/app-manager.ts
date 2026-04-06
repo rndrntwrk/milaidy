@@ -71,6 +71,8 @@ const DEFAULT_RS_SDK_SERVER_URL = "https://rs-sdk-demo.fly.dev";
 const BABYLON_APP_ROUTE_SLUG = "babylon";
 const LOCAL_DEV_BABYLON_CLIENT_URL = "http://localhost:3000";
 const PRODUCTION_BABYLON_CLIENT_URL = "https://staging.babylon.market";
+const BABYLON_AGENT_SESSION_TOKEN_KEY = "BABYLON_AGENT_SESSION_TOKEN";
+const BABYLON_AGENT_SESSION_EXPIRES_AT_KEY = "BABYLON_AGENT_SESSION_EXPIRES_AT";
 const SAFE_APP_URL_PROTOCOLS = new Set(["http:", "https:"]);
 const ALLOWED_APP_URL_TEMPLATE_KEYS = new Set([
   "BOT_NAME",
@@ -869,6 +871,43 @@ async function probeBabylonDevCredentials(
   return null;
 }
 
+async function authenticateBabylonAgentSession(
+  baseUrl: string,
+  agentId: string,
+  agentSecret: string,
+): Promise<{ sessionToken: string; expiresAt?: string } | null> {
+  const response = await fetch(new URL("/api/agents/auth", baseUrl), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      agentId,
+      agentSecret,
+    }),
+    signal: AbortSignal.timeout(3_000),
+  });
+
+  if (!response.ok) {
+    return null;
+  }
+
+  const data = (await response.json()) as {
+    success?: boolean;
+    sessionToken?: string;
+    expiresAt?: string;
+  };
+  if (!data.sessionToken) {
+    return null;
+  }
+
+  return {
+    sessionToken: data.sessionToken,
+    expiresAt:
+      typeof data.expiresAt === "string" && data.expiresAt.trim().length > 0
+        ? data.expiresAt
+        : undefined,
+  };
+}
+
 /**
  * Auto-provision Babylon credentials on app launch.
  *
@@ -890,16 +929,26 @@ async function prepareBabylonLaunch(
     // Verify the credentials work by attempting auth
     const baseUrl = resolveBabylonApiBaseUrl(runtime);
     try {
-      const response = await fetch(new URL("/api/agents/auth", baseUrl), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          agentId: existingId,
-          agentSecret: existingSecret,
-        }),
-        signal: AbortSignal.timeout(3_000),
-      });
-      if (response.ok) {
+      const session = await authenticateBabylonAgentSession(
+        baseUrl,
+        existingId,
+        existingSecret,
+      );
+      if (session) {
+        persistBabylonCredential(
+          runtime,
+          BABYLON_AGENT_SESSION_TOKEN_KEY,
+          session.sessionToken,
+          true,
+        );
+        if (session.expiresAt) {
+          persistBabylonCredential(
+            runtime,
+            BABYLON_AGENT_SESSION_EXPIRES_AT_KEY,
+            session.expiresAt,
+            true,
+          );
+        }
         logger.info(
           `[app-manager] Babylon credentials verified (agentId=${existingId})`,
         );
@@ -909,7 +958,8 @@ async function prepareBabylonLaunch(
         {
           code: "babylon-auth-failed",
           severity: "warning",
-          message: `Babylon credentials are set but authentication failed (${response.status}). Check BABYLON_AGENT_ID and BABYLON_AGENT_SECRET.`,
+          message:
+            "Babylon credentials are set but authentication failed. Check BABYLON_AGENT_ID and BABYLON_AGENT_SECRET.",
         },
       ];
     } catch {
@@ -952,6 +1002,27 @@ async function prepareBabylonLaunch(
         devCreds.agentSecret,
         true,
       );
+      const session = await authenticateBabylonAgentSession(
+        baseUrl,
+        devCreds.agentId,
+        devCreds.agentSecret,
+      );
+      if (session) {
+        persistBabylonCredential(
+          runtime,
+          BABYLON_AGENT_SESSION_TOKEN_KEY,
+          session.sessionToken,
+          true,
+        );
+        if (session.expiresAt) {
+          persistBabylonCredential(
+            runtime,
+            BABYLON_AGENT_SESSION_EXPIRES_AT_KEY,
+            session.expiresAt,
+            true,
+          );
+        }
+      }
       logger.info(
         `[app-manager] Auto-provisioned Babylon dev credentials (agentId=${devCreds.agentId})`,
       );
@@ -1079,13 +1150,14 @@ function buildViewerAuthMessage(
   // Babylon auth — passes agent credentials to the viewer iframe
   if (isBabylonAppName(appName)) {
     const agentId = resolveSettingLike(runtime, "BABYLON_AGENT_ID");
-    const agentSecret = resolveSettingLike(runtime, "BABYLON_AGENT_SECRET");
-    if (!agentId) {
+    const sessionToken = resolveSettingLike(runtime, BABYLON_AGENT_SESSION_TOKEN_KEY);
+    if (!agentId || !sessionToken) {
       return undefined;
     }
     return {
       type: "BABYLON_AUTH",
-      authToken: agentSecret ?? "",
+      authToken: sessionToken,
+      sessionToken,
       agentId,
       characterId: agentId,
     };

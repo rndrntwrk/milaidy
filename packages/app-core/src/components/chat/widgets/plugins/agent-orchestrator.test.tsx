@@ -5,14 +5,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
 
-const mockClient = {
-  listCodingAgentTaskThreads: vi.fn(),
-  getCodingAgentTaskThread: vi.fn(),
-  archiveCodingAgentTaskThread: vi.fn(),
-  reopenCodingAgentTaskThread: vi.fn(),
-};
-
-const mockUseApp = vi.fn();
+const { mockClient, mockUseApp } = vi.hoisted(() => ({
+  mockClient: {
+    listCodingAgentTaskThreads: vi.fn(),
+    getCodingAgentTaskThread: vi.fn(),
+    archiveCodingAgentTaskThread: vi.fn(),
+    reopenCodingAgentTaskThread: vi.fn(),
+  },
+  mockUseApp: vi.fn(),
+}));
 
 vi.mock("../../../../api", () => ({
   client: mockClient,

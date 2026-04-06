@@ -1692,64 +1692,48 @@ MiladyClient.prototype.listCodingAgentTaskThreads = async function (
   this: MiladyClient,
   options,
 ) {
-  try {
-    const params = new URLSearchParams();
-    if (options?.includeArchived) params.set("includeArchived", "true");
-    if (options?.status) params.set("status", options.status);
-    if (options?.search) params.set("search", options.search);
-    if (typeof options?.limit === "number" && options.limit > 0) {
-      params.set("limit", String(options.limit));
-    }
-    const query = params.toString();
-    return await this.fetch<CodingAgentTaskThread[]>(
-      `/api/coding-agents/coordinator/threads${query ? `?${query}` : ""}`,
-    );
-  } catch {
-    return [];
+  const params = new URLSearchParams();
+  if (options?.includeArchived) params.set("includeArchived", "true");
+  if (options?.status) params.set("status", options.status);
+  if (options?.search) params.set("search", options.search);
+  if (typeof options?.limit === "number" && options.limit > 0) {
+    params.set("limit", String(options.limit));
   }
+  const query = params.toString();
+  return await this.fetch<CodingAgentTaskThread[]>(
+    `/api/coding-agents/coordinator/threads${query ? `?${query}` : ""}`,
+  );
 };
 
 MiladyClient.prototype.getCodingAgentTaskThread = async function (
   this: MiladyClient,
   threadId,
 ) {
-  try {
-    return await this.fetch<CodingAgentTaskThreadDetail>(
-      `/api/coding-agents/coordinator/threads/${encodeURIComponent(threadId)}`,
-    );
-  } catch {
-    return null;
-  }
+  return await this.fetch<CodingAgentTaskThreadDetail>(
+    `/api/coding-agents/coordinator/threads/${encodeURIComponent(threadId)}`,
+  );
 };
 
 MiladyClient.prototype.archiveCodingAgentTaskThread = async function (
   this: MiladyClient,
   threadId,
 ) {
-  try {
-    await this.fetch(
-      `/api/coding-agents/coordinator/threads/${encodeURIComponent(threadId)}/archive`,
-      { method: "POST" },
-    );
-    return true;
-  } catch {
-    return false;
-  }
+  await this.fetch(
+    `/api/coding-agents/coordinator/threads/${encodeURIComponent(threadId)}/archive`,
+    { method: "POST" },
+  );
+  return true;
 };
 
 MiladyClient.prototype.reopenCodingAgentTaskThread = async function (
   this: MiladyClient,
   threadId,
 ) {
-  try {
-    await this.fetch(
-      `/api/coding-agents/coordinator/threads/${encodeURIComponent(threadId)}/reopen`,
-      { method: "POST" },
-    );
-    return true;
-  } catch {
-    return false;
-  }
+  await this.fetch(
+    `/api/coding-agents/coordinator/threads/${encodeURIComponent(threadId)}/reopen`,
+    { method: "POST" },
+  );
+  return true;
 };
 
 MiladyClient.prototype.stopCodingAgent = async function (
