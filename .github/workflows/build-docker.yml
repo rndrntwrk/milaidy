@@ -78,6 +78,7 @@ concurrency:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: milady-ai/agent
+  MILADY_SKIP_LOCAL_UPSTREAMS: "1"
 
 permissions:
   contents: read
@@ -96,7 +97,7 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ inputs.source_sha || github.event.release.tag_name || github.sha }}
-          submodules: recursive
+          submodules: false
 
       # ── 2. Set up Node 22 ───────────────────────────────────────────────────
       - name: Setup Node.js 22
@@ -118,6 +119,12 @@ jobs:
           key: bun-store-${{ runner.os }}-${{ hashFiles('bun.lock') }}
           restore-keys: |
             bun-store-${{ runner.os }}-
+
+      - name: Initialize tracked workspace submodules
+        run: node scripts/init-submodules.mjs
+
+      - name: Disable repo-local eliza workspace
+        run: node scripts/disable-local-eliza-workspace.mjs
 
       # ── 5. Install dependencies ─────────────────────────────────────────────
       - name: Install dependencies
