@@ -64,6 +64,7 @@
   "appsview.PopupBlockedOpen": "Popup blocked while opening {{name}}. Allow popups and try again.",
   "appsview.Repository": "Repository",
   "appsview.Results": "{{count}} results",
+  "appsview.Running": "Running",
   "appsview.RunningNow": "Running now",
   "appsview.Resume": "Resume",
   "appsview.ResumeSession": "Resume Session",

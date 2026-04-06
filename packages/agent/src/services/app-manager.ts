@@ -34,7 +34,6 @@ import {
 import { importAppPlugin, importAppRouteModule } from "./app-package-modules";
 import { readAppRunStore, writeAppRunStore } from "./app-run-store";
 import type {
-  InstalledPluginInfo,
   InstallProgressLike,
   PluginManagerLike,
   RegistryPluginInfo,
@@ -2281,7 +2280,7 @@ export class AppManager {
       stopScope: "viewer-session",
       message:
         runsForApp.length === 1
-          ? `${runsForApp[0]!.displayName} stopped.`
+          ? `${runsForApp[0]?.displayName ?? name} stopped.`
           : `${runsForApp.length} app runs stopped for "${name}".`,
     };
   }

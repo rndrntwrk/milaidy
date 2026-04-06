@@ -244,9 +244,9 @@ function TaskThreadDetailPanel({
               Acceptance
             </div>
             <div className="space-y-1">
-              {detail.acceptanceCriteria.map((criterion, index) => (
+              {detail.acceptanceCriteria.map((criterion) => (
                 <div
-                  key={`${detail.id}-criterion-${index}`}
+                  key={`${detail.id}-criterion-${criterion}`}
                   className="text-[11px] text-txt"
                 >
                   {criterion}
@@ -671,7 +671,7 @@ function OrchestratorTasksWidget(_props: ChatSidebarWidgetProps) {
       cancelled = true;
       clearInterval(timer);
     };
-  }, [activeSessions.length, deferredSearch, showArchived]);
+  }, [deferredSearch, showArchived]);
 
   useEffect(() => {
     let cancelled = false;
@@ -683,10 +683,22 @@ function OrchestratorTasksWidget(_props: ChatSidebarWidgetProps) {
 
     const loadDetail = async () => {
       try {
+        const expectedUpdatedAt = selectedThreadSummary?.updatedAt ?? null;
         const detail = await client.getCodingAgentTaskThread(selectedThreadId);
         if (cancelled) return;
         setDetailError(null);
-        setSelectedThread(detail);
+        setSelectedThread((current) => {
+          if (
+            current &&
+            detail &&
+            expectedUpdatedAt &&
+            current.updatedAt === expectedUpdatedAt &&
+            current.id === detail.id
+          ) {
+            return current;
+          }
+          return detail;
+        });
       } catch (error) {
         if (cancelled) return;
         setDetailError(

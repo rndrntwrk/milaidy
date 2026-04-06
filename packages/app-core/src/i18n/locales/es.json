@@ -64,6 +64,7 @@
   "appsview.PopupBlockedOpen": "El bloqueo de ventanas emergentes impidió abrir {{name}}. Permite las ventanas emergentes e inténtalo de nuevo.",
   "appsview.Repository": "Repositorio",
   "appsview.Results": "{{count}} resultados",
+  "appsview.Running": "En ejecución",
   "appsview.RunningNow": "Running now",
   "appsview.Resume": "Reanudar",
   "appsview.ResumeSession": "Reanudar sesión",

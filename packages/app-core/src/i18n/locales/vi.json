@@ -64,6 +64,7 @@
   "appsview.PopupBlockedOpen": "Trình chặn cửa sổ bật lên đã chặn việc mở {{name}}. Hãy cho phép cửa sổ bật lên rồi thử lại.",
   "appsview.Repository": "Kho lưu trữ",
   "appsview.Results": "{{count}} kết quả",
+  "appsview.Running": "Đang chạy",
   "appsview.RunningNow": "Running now",
   "appsview.Resume": "Tiếp tục",
   "appsview.ResumeSession": "Tiếp tục",

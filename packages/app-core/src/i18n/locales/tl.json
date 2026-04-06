@@ -64,6 +64,7 @@
   "appsview.PopupBlockedOpen": "Na-block ang popup habang binubuksan ang {{name}}. Payagan ang mga popup at subukan muli.",
   "appsview.Repository": "Imbakan",
   "appsview.Results": "{{count}} resulta",
+  "appsview.Running": "Tumatakbo",
   "appsview.RunningNow": "Running now",
   "appsview.Resume": "Ipagpatuloy",
   "appsview.ResumeSession": "Ipagpatuloy ang Session",

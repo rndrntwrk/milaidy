@@ -64,6 +64,7 @@
   "appsview.PopupBlockedOpen": "打开 {{name}} 时被弹窗拦截。请允许弹窗后重试。",
   "appsview.Repository": "仓库",
   "appsview.Results": "{{count}} 个结果",
+  "appsview.Running": "运行中",
   "appsview.RunningNow": "Running now",
   "appsview.Resume": "继续",
   "appsview.ResumeSession": "恢复会话",

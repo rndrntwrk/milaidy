@@ -289,15 +289,17 @@ describe("agent orchestrator tasks widget", () => {
     });
 
     await waitFor(
-      () => textOf(tree!.root).includes("Validation report"),
+      () => textOf(requireTree(tree).root).includes("Validation report"),
       "expected persisted task detail to render",
     );
 
-    expect(textOf(tree!.root)).toContain("Task Alpha");
-    expect(textOf(tree!.root)).toContain("Persist task state to the database");
+    expect(textOf(requireTree(tree).root)).toContain("Task Alpha");
+    expect(textOf(requireTree(tree).root)).toContain(
+      "Persist task state to the database",
+    );
 
     await act(async () => {
-      await findButtonByText(tree!.root, "Archive").props.onClick();
+      await findButtonByText(requireTree(tree).root, "Archive").props.onClick();
     });
 
     await waitFor(
@@ -328,20 +330,21 @@ describe("agent orchestrator tasks widget", () => {
     });
 
     await waitFor(
-      () => textOf(tree!.root).includes("Validation report"),
+      () => textOf(requireTree(tree).root).includes("Validation report"),
       "expected task detail before archive mutation",
     );
 
     await act(async () => {
-      await findButtonByText(tree!.root, "Archive").props.onClick();
+      await findButtonByText(requireTree(tree).root, "Archive").props.onClick();
     });
 
     await waitFor(
-      () => textOf(tree!.root).includes("Failed to update task thread"),
+      () =>
+        textOf(requireTree(tree).root).includes("Failed to update task thread"),
       "expected archive mutation error to render",
     );
 
-    expect(textOf(tree!.root)).toContain(
+    expect(textOf(requireTree(tree).root)).toContain(
       "Failed to update task thread: archive failed",
     );
     expect(mockClient.listCodingAgentTaskThreads).toHaveBeenCalledTimes(1);
@@ -368,21 +371,21 @@ describe("agent orchestrator tasks widget", () => {
     });
 
     await waitFor(
-      () => textOf(tree!.root).includes("Archive"),
+      () => textOf(requireTree(tree).root).includes("Archive"),
       "expected open task detail to render",
     );
 
     await act(async () => {
-      findButtonByText(tree!.root, "Show Archive").props.onClick();
+      findButtonByText(requireTree(tree).root, "Show Archive").props.onClick();
     });
 
     await waitFor(
-      () => textOf(tree!.root).includes("Reopen"),
+      () => textOf(requireTree(tree).root).includes("Reopen"),
       "expected archived task detail to render",
     );
 
     await act(async () => {
-      findButtonByText(tree!.root, "Reopen").props.onClick();
+      findButtonByText(requireTree(tree).root, "Reopen").props.onClick();
     });
 
     await waitFor(
@@ -428,11 +431,13 @@ describe("agent orchestrator tasks widget", () => {
     });
 
     await waitFor(
-      () => textOf(tree!.root).includes("Live Agent"),
+      () => textOf(requireTree(tree).root).includes("Live Agent"),
       "expected live session fallback to render",
     );
 
-    expect(textOf(tree!.root)).toContain("Run the end-to-end verification");
+    expect(textOf(requireTree(tree).root)).toContain(
+      "Run the end-to-end verification",
+    );
   });
 
   it("surfaces persisted task thread load failures instead of showing an empty state", async () => {
@@ -447,11 +452,12 @@ describe("agent orchestrator tasks widget", () => {
     });
 
     await waitFor(
-      () => textOf(tree!.root).includes("Failed to load task threads"),
+      () =>
+        textOf(requireTree(tree).root).includes("Failed to load task threads"),
       "expected task thread load error to render",
     );
 
-    expect(textOf(tree!.root)).toContain(
+    expect(textOf(requireTree(tree).root)).toContain(
       "Failed to load task threads: backend unavailable",
     );
   });
@@ -469,11 +475,12 @@ describe("agent orchestrator tasks widget", () => {
     });
 
     await waitFor(
-      () => textOf(tree!.root).includes("Failed to load task detail"),
+      () =>
+        textOf(requireTree(tree).root).includes("Failed to load task detail"),
       "expected task detail error to render",
     );
 
-    expect(textOf(tree!.root)).toContain(
+    expect(textOf(requireTree(tree).root)).toContain(
       "Failed to load task detail: detail unavailable",
     );
   });
@@ -493,7 +500,7 @@ describe("agent orchestrator tasks widget", () => {
       "expected initial task thread load",
     );
 
-    const searchInput = tree!.root.findByType("input");
+    const searchInput = requireTree(tree).root.findByType("input");
     await act(async () => {
       searchInput.props.onChange({ target: { value: "failover" } });
     });
@@ -600,28 +607,35 @@ describe("agent orchestrator tasks widget", () => {
     });
 
     await waitFor(
-      () => textOf(tree!.root).includes("No artifacts recorded yet."),
+      () =>
+        textOf(requireTree(tree).root).includes("No artifacts recorded yet."),
       "expected empty detail placeholders to render",
     );
 
-    expect(textOf(tree!.root)).toContain("No artifacts recorded yet.");
-    expect(textOf(tree!.root)).toContain("No decisions recorded yet.");
-    expect(textOf(tree!.root)).toContain("No transcript captured yet.");
+    expect(textOf(requireTree(tree).root)).toContain(
+      "No artifacts recorded yet.",
+    );
+    expect(textOf(requireTree(tree).root)).toContain(
+      "No decisions recorded yet.",
+    );
+    expect(textOf(requireTree(tree).root)).toContain(
+      "No transcript captured yet.",
+    );
 
     mockClient.listCodingAgentTaskThreads.mockResolvedValue([]);
     await act(async () => {
-      findButtonByText(tree!.root, "Show Archive").props.onClick();
+      findButtonByText(requireTree(tree).root, "Show Archive").props.onClick();
     });
 
     await waitFor(
-      () => textOf(tree!.root).includes("Tool Runner"),
+      () => textOf(requireTree(tree).root).includes("Tool Runner"),
       "expected live-session fallback after switching to archive with no threads",
     );
 
-    expect(textOf(tree!.root)).toContain("Running npm test");
-    expect(textOf(tree!.root)).toContain("Waiting for input");
-    expect(textOf(tree!.root)).toContain("Background Agent");
-    expect(textOf(tree!.root)).not.toContain("Errored Agent");
+    expect(textOf(requireTree(tree).root)).toContain("Running npm test");
+    expect(textOf(requireTree(tree).root)).toContain("Waiting for input");
+    expect(textOf(requireTree(tree).root)).toContain("Background Agent");
+    expect(textOf(requireTree(tree).root)).not.toContain("Errored Agent");
   });
 });
 
@@ -714,15 +728,17 @@ describe("agent orchestrator app runs widget", () => {
     });
 
     await waitFor(
-      () => textOf(tree!.root).includes("Defense of the Agents"),
+      () => textOf(requireTree(tree).root).includes("Defense of the Agents"),
       "expected app runs to render",
     );
 
-    expect(textOf(tree!.root)).toContain("Currently playing: 1");
-    expect(textOf(tree!.root)).toContain("Background: 1");
-    expect(textOf(tree!.root)).toContain("Needs attention: 1");
-    expect(textOf(tree!.root)).toContain("Babylon");
-    expect(textOf(tree!.root)).toContain("Run session is no longer available.");
+    expect(textOf(requireTree(tree).root)).toContain("Currently playing: 1");
+    expect(textOf(requireTree(tree).root)).toContain("Background: 1");
+    expect(textOf(requireTree(tree).root)).toContain("Needs attention: 1");
+    expect(textOf(requireTree(tree).root)).toContain("Babylon");
+    expect(textOf(requireTree(tree).root)).toContain(
+      "Run session is no longer available.",
+    );
   });
 
   it("tolerates missing app runs before the first refresh completes", async () => {
@@ -742,11 +758,11 @@ describe("agent orchestrator app runs widget", () => {
     });
 
     await waitFor(
-      () => textOf(tree!.root).includes("No games are running"),
+      () => textOf(requireTree(tree).root).includes("No games are running"),
       "expected empty app-runs state after refresh",
     );
 
-    expect(textOf(tree!.root)).toContain("No games are running");
+    expect(textOf(requireTree(tree).root)).toContain("No games are running");
   });
 });
 
@@ -780,9 +796,12 @@ describe("agent orchestrator activity widget", () => {
         );
       });
 
-      expect(textOf(activityTree!.root)).toContain("Task started");
+      expect(textOf(requireTree(activityTree).root)).toContain("Task started");
       await act(async () => {
-        findButtonByText(activityTree!.root, "Clear").props.onClick();
+        findButtonByText(
+          requireTree(activityTree).root,
+          "Clear",
+        ).props.onClick();
       });
       expect(clearEvents).toHaveBeenCalledTimes(1);
     } finally {
@@ -803,7 +822,9 @@ describe("agent orchestrator activity widget", () => {
         );
       });
 
-      expect(textOf(activityTree!.root)).toContain("No recent activity");
+      expect(textOf(requireTree(activityTree).root)).toContain(
+        "No recent activity",
+      );
     } finally {
       if (activityTree) {
         act(() => {
