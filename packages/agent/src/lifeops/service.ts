@@ -2875,6 +2875,13 @@ function parseWorkflowSchedulerState(
   };
 }
 
+const LIFEOPS_OWNER_CONTACTS_LOAD_CONTEXT = {
+  boundary: "lifeops",
+  operation: "owner_contacts_config",
+  message:
+    "[lifeops] Failed to load owner contacts config; runtime reminder channels will fall back to channel-policy metadata only.",
+} as const;
+
 function normalizeWebsiteListForComparison(
   websites: readonly string[],
 ): string[] {
@@ -4400,6 +4407,7 @@ export class LifeOpsService {
       "in_app" | "sms" | "voice"
     >,
     policy: LifeOpsChannelPolicy | null,
+    ownerContacts = loadOwnerContactsConfig(LIFEOPS_OWNER_CONTACTS_LOAD_CONTEXT),
   ): {
     source: string;
     connectorRef: string;
@@ -4410,12 +4418,6 @@ export class LifeOpsService {
       (metadata && normalizeOptionalString(metadata.source)) ??
       (metadata && normalizeOptionalString(metadata.platform)) ??
       channel;
-    const ownerContacts = loadOwnerContactsConfig({
-      boundary: "lifeops",
-      operation: "owner_contacts_config",
-      message:
-        "[lifeops] Failed to load owner contacts config; runtime reminder channels will fall back to channel-policy metadata only.",
-    });
     const contact = ownerContacts[configuredSource] ?? ownerContacts[channel];
     const entityId =
       (metadata && normalizeOptionalString(metadata.entityId)) ??
@@ -4557,6 +4559,9 @@ export class LifeOpsService {
     urgency: LifeOpsReminderUrgency;
   }): Promise<LifeOpsReminderChannel[]> {
     const ordered: LifeOpsReminderChannel[] = [];
+    const ownerContacts = loadOwnerContactsConfig(
+      LIFEOPS_OWNER_CONTACTS_LOAD_CONTEXT,
+    );
     const pushChannel = async (
       channel: LifeOpsReminderChannel | null,
     ): Promise<void> => {
@@ -4585,7 +4590,10 @@ export class LifeOpsService {
       if (typeof this.runtime.sendMessageToTarget !== "function") {
         return;
       }
-      if (this.resolveRuntimeReminderTarget(channel, policy) !== null) {
+      if (
+        this.resolveRuntimeReminderTarget(channel, policy, ownerContacts) !==
+        null
+      ) {
         ordered.push(channel);
       }
     };
@@ -4602,12 +4610,6 @@ export class LifeOpsService {
       mapPlatformToReminderChannel(args.activityProfile?.secondaryPlatform),
     );
 
-    const ownerContacts = loadOwnerContactsConfig({
-      boundary: "lifeops",
-      operation: "owner_contacts_config",
-      message:
-        "[lifeops] Failed to load owner contacts config; runtime reminder channels will fall back to channel-policy metadata only.",
-    });
     for (const source of Object.keys(ownerContacts)) {
       const mappedChannel = mapPlatformToReminderChannel(source);
       if (mappedChannel === "in_app") {
