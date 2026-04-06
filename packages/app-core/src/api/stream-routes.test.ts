@@ -7,6 +7,7 @@
  *   - handleStreamRoute() — individual API endpoint behaviour
  */
 
+import { existsSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createMockHttpResponse,
@@ -63,6 +64,17 @@ vi.mock("@elizaos/plugin-streaming-base", () => ({
     }),
   }),
 }));
+
+const twitchDestinationModuleUrl = new URL(
+  "../../../../../plugins/plugin-twitch-streaming/src/index.ts",
+  import.meta.url,
+);
+const youtubeDestinationModuleUrl = new URL(
+  "../../../../../plugins/plugin-youtube-streaming/src/index.ts",
+  import.meta.url,
+);
+const hasTwitchDestinationModule = existsSync(twitchDestinationModuleUrl);
+const hasYoutubeDestinationModule = existsSync(youtubeDestinationModuleUrl);
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -955,12 +967,7 @@ async function loadTwitchDestinationModule(): Promise<{
     getCredentials: () => Promise<{ rtmpUrl: string; rtmpKey: string }>;
   };
 }> {
-  return import(
-    new URL(
-      "../../../../../plugins/plugin-twitch-streaming/src/index.ts",
-      import.meta.url,
-    ).href
-  );
+  return import(twitchDestinationModuleUrl.href);
 }
 
 async function loadYoutubeDestinationModule(): Promise<{
@@ -973,12 +980,7 @@ async function loadYoutubeDestinationModule(): Promise<{
     getCredentials: () => Promise<{ rtmpUrl: string; rtmpKey: string }>;
   };
 }> {
-  return import(
-    new URL(
-      "../../../../../plugins/plugin-youtube-streaming/src/index.ts",
-      import.meta.url,
-    ).href
-  );
+  return import(youtubeDestinationModuleUrl.href);
 }
 
 async function loadCustomRtmpPlugin(): Promise<{
@@ -1000,7 +1002,7 @@ async function loadCustomRtmpPlugin(): Promise<{
 // createTwitchDestination() — destination adapter unit tests
 // ---------------------------------------------------------------------------
 
-describe("createTwitchDestination()", () => {
+describe.skipIf(!hasTwitchDestinationModule)("createTwitchDestination()", () => {
   it("returns a StreamingDestination with id and name", async () => {
     const { createTwitchDestination } = await loadTwitchDestinationModule();
     const dest = createTwitchDestination({ streamKey: "test-key" });
@@ -1071,7 +1073,7 @@ describe("createTwitchDestination()", () => {
 // createYoutubeDestination() — destination adapter unit tests
 // ---------------------------------------------------------------------------
 
-describe("createYoutubeDestination()", () => {
+describe.skipIf(!hasYoutubeDestinationModule)("createYoutubeDestination()", () => {
   it("returns a StreamingDestination with id and name", async () => {
     const { createYoutubeDestination } = await loadYoutubeDestinationModule();
     const dest = createYoutubeDestination({ streamKey: "test-key" });

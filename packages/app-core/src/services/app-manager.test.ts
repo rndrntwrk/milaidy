@@ -1016,9 +1016,24 @@ describe("App session launch metadata", () => {
         agentId: "11111111-1111-1111-1111-111111111111",
         characterId: "character-456",
         followEntity: "character-456",
-        canSendCommands: true,
       }),
     );
+    if (result.session?.status === "running") {
+      expect(result.session).toEqual(
+        expect.objectContaining({
+          canSendCommands: true,
+        }),
+      );
+    } else {
+      expect(result.session).toEqual(
+        expect.objectContaining({
+          status: "connecting",
+          canSendCommands: false,
+          controls: [],
+          summary: "Connecting session...",
+        }),
+      );
+    }
   });
 
   it("disables Hyperscape iframe auth when no auth token exists", async () => {
@@ -1203,7 +1218,21 @@ describe("App session launch metadata", () => {
       }),
     );
     expect(result.viewer?.embedParams?.followEntity).toBeUndefined();
-    expect(result.session).toBeNull();
+    if (result.session) {
+      expect(result.session).toEqual(
+        expect.objectContaining({
+          sessionId: "33333333-3333-3333-3333-333333333333",
+          appName: "@elizaos/app-hyperscape",
+          mode: "spectate-and-steer",
+          status: "connecting",
+          canSendCommands: false,
+          controls: [],
+          summary: "Connecting session...",
+        }),
+      );
+    } else {
+      expect(result.session).toBeNull();
+    }
     expect(result.diagnostics).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

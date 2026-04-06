@@ -8,6 +8,7 @@
  * 4. Verify viewer config - Should have correct URLs
  */
 
+import { existsSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { AppManager } from "../services/app-manager";
 import type {
@@ -27,6 +28,7 @@ const HYPERSCAPE_LOCAL_PLUGIN: RegistryPluginInfo = {
   topics: ["rpg", "3d", "multiplayer", "mmo", "game"],
   stars: 0,
   language: "TypeScript",
+  kind: "app",
   npm: {
     package: "@elizaos/app-hyperscape",
     v0Version: null,
@@ -65,6 +67,13 @@ const HYPERSCAPE_LOCAL_PLUGIN: RegistryPluginInfo = {
     features: ["commands", "telemetry", "pause", "resume", "suggestions"],
   },
 };
+
+const hasLocalHyperscapePlugin = existsSync(
+  new URL(
+    "../../../../../plugins/app-hyperscape/elizaos.plugin.json",
+    import.meta.url,
+  ),
+);
 
 function createMockPluginManager(
   plugins: RegistryPluginInfo[] = [HYPERSCAPE_LOCAL_PLUGIN],
@@ -116,7 +125,7 @@ function createMockPluginManager(
   };
 }
 
-describe("Hyperscape E2E Integration", () => {
+describe.skipIf(!hasLocalHyperscapePlugin)("Hyperscape E2E Integration", () => {
   let appManager: AppManager;
   let pluginManager: PluginManagerLike;
   let originalEnv: Record<string, string | undefined>;

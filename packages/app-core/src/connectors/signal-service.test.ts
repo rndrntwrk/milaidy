@@ -1,11 +1,20 @@
+import { existsSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const signalPluginModule = (await import(
-  new URL(
-    "../../../../../plugins/plugin-signal/typescript/src/index.ts",
-    import.meta.url,
-  ).href
-)) as {
+type SignalServiceInstance = {
+  stop: () => Promise<void>;
+  sendMessage: (
+    recipient: string,
+    text: string,
+  ) => Promise<{ timestamp: number }>;
+  sendGroupMessage: (
+    groupId: string,
+    text: string,
+  ) => Promise<{ timestamp: number }>;
+  isServiceConnected: () => boolean;
+};
+
+type SignalPluginModule = {
   default: {
     name?: string;
     description?: string;
@@ -16,28 +25,12 @@ const signalPluginModule = (await import(
   SignalService: {
     new (
       runtime?: unknown,
-    ): {
-      stop: () => Promise<void>;
-      sendMessage: (
-        recipient: string,
-        text: string,
-      ) => Promise<{ timestamp: number }>;
-      sendGroupMessage: (
-        groupId: string,
-        text: string,
-      ) => Promise<{ timestamp: number }>;
-      isServiceConnected: () => boolean;
-    };
+    ): SignalServiceInstance;
     start: (runtime: unknown) => Promise<SignalServiceInstance>;
   };
 };
 
-const signalTypesModule = (await import(
-  new URL(
-    "../../../../../plugins/plugin-signal/typescript/src/types.ts",
-    import.meta.url,
-  ).href
-)) as {
+type SignalTypesModule = {
   SIGNAL_SERVICE_NAME: string;
   SignalEventTypes: {
     MESSAGE_RECEIVED: string;
@@ -45,11 +38,38 @@ const signalTypesModule = (await import(
   };
 };
 
-const signalPlugin = signalPluginModule.default;
-const { SignalService } = signalPluginModule;
-const { SIGNAL_SERVICE_NAME, SignalEventTypes } = signalTypesModule;
+const signalPluginModuleUrl = new URL(
+  "../../../../../plugins/plugin-signal/typescript/src/index.ts",
+  import.meta.url,
+);
+const signalTypesModuleUrl = new URL(
+  "../../../../../plugins/plugin-signal/typescript/src/types.ts",
+  import.meta.url,
+);
+const hasSignalPluginSource =
+  existsSync(signalPluginModuleUrl) && existsSync(signalTypesModuleUrl);
+const signalPluginModule = hasSignalPluginSource
+  ? ((await import(signalPluginModuleUrl.href)) as SignalPluginModule)
+  : null;
+const signalTypesModule = hasSignalPluginSource
+  ? ((await import(signalTypesModuleUrl.href)) as SignalTypesModule)
+  : null;
 
-type SignalServiceInstance = InstanceType<typeof SignalService>;
+function requireSignalPluginModule(): SignalPluginModule {
+  if (!signalPluginModule) {
+    throw new Error("Signal plugin source is unavailable in this checkout.");
+  }
+
+  return signalPluginModule;
+}
+
+function requireSignalTypesModule(): SignalTypesModule {
+  if (!signalTypesModule) {
+    throw new Error("Signal plugin types are unavailable in this checkout.");
+  }
+
+  return signalTypesModule;
+}
 
 function createRuntime(overrides: Record<string, unknown> = {}) {
   return {
@@ -78,7 +98,7 @@ function jsonResponse(body: unknown): Response {
   });
 }
 
-describe("signalPlugin", () => {
+describe.skipIf(!hasSignalPluginSource)("signalPlugin", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -88,6 +108,8 @@ describe("signalPlugin", () => {
   });
 
   it("exports the expected plugin shape", () => {
+    const signalPlugin = requireSignalPluginModule().default;
+    const { SignalService } = requireSignalPluginModule();
     expect(signalPlugin.name).toBe("signal");
     expect(signalPlugin.description).toContain("Signal");
     expect(signalPlugin.actions?.map((action) => action.name)).toEqual([
@@ -102,6 +124,7 @@ describe("signalPlugin", () => {
   });
 
   it("does not start when SIGNAL_ACCOUNT_NUMBER is missing", async () => {
+    const { SignalService } = requireSignalPluginModule();
     const runtime = createRuntime();
 
     const service = await SignalService.start(runtime);
@@ -114,6 +137,7 @@ describe("signalPlugin", () => {
   });
 
   it("connects through the Signal HTTP API when account and URL are configured", async () => {
+    const { SignalService } = requireSignalPluginModule();
     const fetchSpy = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(jsonResponse({ contacts: [] }))
@@ -151,6 +175,7 @@ describe("signalPlugin", () => {
   });
 
   it("throws when sending a direct message before the client is initialized", async () => {
+    const { SignalService } = requireSignalPluginModule();
     const runtime = createRuntime();
     const service = new SignalService(runtime);
 
@@ -160,6 +185,7 @@ describe("signalPlugin", () => {
   });
 
   it("normalizes recipients and forwards direct messages through the API client", async () => {
+    const { SignalService } = requireSignalPluginModule();
     const runtime = createRuntime();
     const service = new SignalService(runtime);
     const client = {
@@ -180,6 +206,7 @@ describe("signalPlugin", () => {
   });
 
   it("forwards group messages through the API client", async () => {
+    const { SignalService } = requireSignalPluginModule();
     const runtime = createRuntime();
     const service = new SignalService(runtime);
     const client = {
@@ -200,6 +227,8 @@ describe("signalPlugin", () => {
   });
 
   it("stores inbound messages and routes replies through the message service callback", async () => {
+    const { SignalService } = requireSignalPluginModule();
+    const { SignalEventTypes } = requireSignalTypesModule();
     const runtime = createRuntime();
     const service = new SignalService(runtime);
     const client = {
@@ -289,6 +318,7 @@ describe("signalPlugin", () => {
   });
 
   it("ignores group messages when the runtime is configured to ignore them", async () => {
+    const { SignalService } = requireSignalPluginModule();
     const runtime = createRuntime({
       getSetting: vi.fn((key: string) => {
         if (key === "SIGNAL_SHOULD_IGNORE_GROUP_MESSAGES") return "true";
@@ -329,6 +359,7 @@ describe("signalPlugin", () => {
   });
 
   it("stops polling and clears connection state on shutdown", async () => {
+    const { SignalService } = requireSignalPluginModule();
     const runtime = createRuntime();
     const service = new SignalService(runtime);
     const pollInterval = setInterval(() => {}, 1_000);
@@ -372,6 +403,7 @@ describe("signalPlugin", () => {
   });
 
   it("exports the canonical signal service name", () => {
+    const { SIGNAL_SERVICE_NAME } = requireSignalTypesModule();
     expect(SIGNAL_SERVICE_NAME).toBe("signal");
   });
 });

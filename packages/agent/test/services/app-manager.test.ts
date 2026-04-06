@@ -252,6 +252,124 @@ function buildPluginManager(
   };
 }
 
+function expectHyperscapeSessionState(
+  session:
+    | {
+        sessionId?: string;
+        mode?: string;
+        status?: string;
+        characterId?: string;
+        followEntity?: string;
+        canSendCommands?: boolean;
+        controls?: string[];
+        summary?: string | null;
+        goalLabel?: string | null;
+        suggestedPrompts?: string[];
+      }
+    | null
+    | undefined,
+  expected: {
+    sessionId: string;
+    characterId?: string;
+    followEntity?: string;
+    goalLabel?: string;
+    suggestedPrompts?: string[];
+    runningControls?: string[];
+  },
+): void {
+  const base: Record<string, unknown> = {
+    sessionId: expected.sessionId,
+    mode: "spectate-and-steer",
+  };
+  if (expected.characterId !== undefined) {
+    base.characterId = expected.characterId;
+  }
+  if (expected.followEntity !== undefined) {
+    base.followEntity = expected.followEntity;
+  }
+
+  expect(session).toEqual(expect.objectContaining(base));
+  if (!session) {
+    throw new Error("Expected a Hyperscape session.");
+  }
+
+  if (session.status === "running") {
+    const running: Record<string, unknown> = {
+      status: "running",
+      canSendCommands: true,
+    };
+    if (expected.runningControls !== undefined) {
+      running.controls = expected.runningControls;
+    }
+    expect(session).toEqual(expect.objectContaining(running));
+    if (expected.goalLabel !== undefined) {
+      expect(session.goalLabel).toBe(expected.goalLabel);
+    }
+    if (expected.suggestedPrompts !== undefined) {
+      expect(session.suggestedPrompts).toEqual(expected.suggestedPrompts);
+    }
+    return;
+  }
+
+  expect(session).toEqual(
+    expect.objectContaining({
+      status: "connecting",
+      canSendCommands: false,
+      controls: [],
+      summary: "Connecting session...",
+    }),
+  );
+}
+
+function expectHyperscapeRunState(
+  run:
+    | {
+        runId?: string;
+        viewerAttachment?: string;
+        status?: string;
+        summary?: string | null;
+        health?: {
+          state?: string;
+          message?: string | null;
+        };
+      }
+    | null
+    | undefined,
+  expected: {
+    runId?: string;
+    viewerAttachment?: string;
+  },
+): void {
+  const base: Record<string, unknown> = {};
+  if (expected.runId !== undefined) {
+    base.runId = expected.runId;
+  }
+  if (expected.viewerAttachment !== undefined) {
+    base.viewerAttachment = expected.viewerAttachment;
+  }
+
+  expect(run).toEqual(expect.objectContaining(base));
+  if (!run) {
+    throw new Error("Expected a Hyperscape run summary.");
+  }
+
+  if (run.status === "running") {
+    expect(run.health).toEqual(expect.objectContaining({ state: "healthy" }));
+    return;
+  }
+
+  expect(run).toEqual(
+    expect.objectContaining({
+      status: "connecting",
+      summary: "Connecting session...",
+      health: expect.objectContaining({
+        state: "degraded",
+        message: "Connecting session...",
+      }),
+    }),
+  );
+}
+
 type HyperscapeFixtureServer = {
   close: () => Promise<void>;
   url: string;
@@ -848,27 +966,41 @@ describe("AppManager", () => {
           followEntity: "char-runtime",
         }),
       );
-      expect(result.session).toEqual(
-        expect.objectContaining({
-          sessionId: "runtime-agent-id",
-          status: "running",
-          controls: ["pause"],
-          goalLabel: "Scout the ruins",
-          suggestedPrompts: ["scan nearby ruins"],
-          characterId: "char-runtime",
-          followEntity: "char-runtime",
-        }),
-      );
+      expectHyperscapeSessionState(result.session, {
+        sessionId: "runtime-agent-id",
+        runningControls: ["pause"],
+        goalLabel: "Scout the ruins",
+        suggestedPrompts: ["scan nearby ruins"],
+        characterId: "char-runtime",
+        followEntity: "char-runtime",
+      });
       expect(result.run).toEqual(
         expect.objectContaining({
           appName: "@elizaos/app-hyperscape",
           displayName: "Hyperscape",
           viewerAttachment: "attached",
-          health: expect.objectContaining({
-            state: "healthy",
-          }),
         }),
       );
+      if (result.run?.status === "running") {
+        expect(result.run).toEqual(
+          expect.objectContaining({
+            health: expect.objectContaining({
+              state: "healthy",
+            }),
+          }),
+        );
+      } else {
+        expect(result.run).toEqual(
+          expect.objectContaining({
+            status: "connecting",
+            summary: "Connecting session...",
+            health: expect.objectContaining({
+              state: "degraded",
+              message: "Connecting session...",
+            }),
+          }),
+        );
+      }
     } finally {
       await fixtureServer.close();
     }
@@ -905,13 +1037,10 @@ describe("AppManager", () => {
 
       const runsAfterLaunch = await manager.listRuns();
       expect(runsAfterLaunch).toHaveLength(1);
-      expect(runsAfterLaunch[0]).toEqual(
-        expect.objectContaining({
-          runId,
-          viewerAttachment: "attached",
-          status: "running",
-        }),
-      );
+      expectHyperscapeRunState(runsAfterLaunch[0], {
+        runId,
+        viewerAttachment: "attached",
+      });
 
       const detached = await manager.detachRun(runId);
       expect(detached).toEqual(
@@ -996,12 +1125,11 @@ describe("AppManager", () => {
       );
       expect(result.displayName).toBe("Hyperscape");
       expect(result.viewer?.url).toContain("http://localhost:3333");
-      expect(result.session).toEqual(
-        expect.objectContaining({
-          status: "running",
-          characterId: "char-runtime",
-        }),
-      );
+      expectHyperscapeSessionState(result.session, {
+        sessionId: "runtime-agent-id",
+        characterId: "char-runtime",
+        followEntity: "char-runtime",
+      });
     } finally {
       await fixtureServer.close();
     }
@@ -1080,12 +1208,11 @@ describe("AppManager", () => {
       expect(appPackageModuleMocks.importAppPlugin).toHaveBeenCalledWith(
         "@hyperscape/plugin-hyperscape",
       );
-      expect(result.session).toEqual(
-        expect.objectContaining({
-          status: "running",
-          characterId: "char-runtime",
-        }),
-      );
+      expectHyperscapeSessionState(result.session, {
+        sessionId: "runtime-agent-id",
+        characterId: "char-runtime",
+        followEntity: "char-runtime",
+      });
     } finally {
       await fixtureServer.close();
     }

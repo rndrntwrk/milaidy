@@ -1,32 +1,43 @@
+import { existsSync } from "node:fs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const signalActionsModule = (await import(
-  new URL(
-    "../../../../../plugins/plugin-signal/typescript/src/actions/sendMessage.ts",
-    import.meta.url,
-  ).href
-)) as {
-  sendMessage: {
-    name: string;
-    similes?: string[];
-    examples?: unknown[];
-    validate: (
-      runtime: unknown,
-      message: unknown,
-      state?: unknown,
-      options?: unknown,
-    ) => Promise<boolean>;
-    handler: (
-      runtime: unknown,
-      message: unknown,
-      state: unknown,
-      options: unknown,
-      callback: (response: unknown) => Promise<unknown>,
-    ) => Promise<{ success: boolean; error?: string } | undefined>;
-  };
+type SignalSendMessageAction = {
+  name: string;
+  similes?: string[];
+  examples?: unknown[];
+  validate: (
+    runtime: unknown,
+    message: unknown,
+    state?: unknown,
+    options?: unknown,
+  ) => Promise<boolean>;
+  handler: (
+    runtime: unknown,
+    message: unknown,
+    state: unknown,
+    options: unknown,
+    callback: (response: unknown) => Promise<unknown>,
+  ) => Promise<{ success: boolean; error?: string } | undefined>;
 };
 
-const { sendMessage } = signalActionsModule;
+const signalActionsModuleUrl = new URL(
+  "../../../../../plugins/plugin-signal/typescript/src/actions/sendMessage.ts",
+  import.meta.url,
+);
+const hasSignalActionsModule = existsSync(signalActionsModuleUrl);
+const signalActionsModule = hasSignalActionsModule
+  ? ((await import(signalActionsModuleUrl.href)) as {
+      sendMessage: SignalSendMessageAction;
+    })
+  : null;
+
+function requireSignalSendMessage(): SignalSendMessageAction {
+  if (!signalActionsModule) {
+    throw new Error("Signal action source is unavailable in this checkout.");
+  }
+
+  return signalActionsModule.sendMessage;
+}
 
 type SignalServiceLike = {
   isServiceConnected: () => boolean;
@@ -72,12 +83,13 @@ function createMessage(overrides: Record<string, unknown> = {}) {
   };
 }
 
-describe("signal sendMessage action", () => {
+describe.skipIf(!hasSignalActionsModule)("signal sendMessage action", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   it("validates only signal-sourced send-message intents", async () => {
+    const sendMessage = requireSignalSendMessage();
     const runtime = createRuntime();
 
     await expect(sendMessage.validate(runtime, createMessage())).resolves.toBe(
@@ -98,6 +110,7 @@ describe("signal sendMessage action", () => {
   });
 
   it("returns an error when the signal service is unavailable", async () => {
+    const sendMessage = requireSignalSendMessage();
     const runtime = createRuntime({
       getService: vi.fn().mockReturnValue(null),
     });
@@ -122,6 +135,7 @@ describe("signal sendMessage action", () => {
   });
 
   it("returns an error when the model cannot extract message parameters", async () => {
+    const sendMessage = requireSignalSendMessage();
     const runtime = createRuntime({
       useModel: vi.fn().mockResolvedValue("{}"),
     });
@@ -146,6 +160,7 @@ describe("signal sendMessage action", () => {
   });
 
   it("sends a direct message via the signal service", async () => {
+    const sendMessage = requireSignalSendMessage();
     const runtime = createRuntime();
     const callback = vi.fn().mockResolvedValue([]);
 
@@ -185,6 +200,7 @@ describe("signal sendMessage action", () => {
   });
 
   it("sends a group message when the current room is a Signal group", async () => {
+    const sendMessage = requireSignalSendMessage();
     const runtime = createRuntime();
     const callback = vi.fn().mockResolvedValue([]);
 
