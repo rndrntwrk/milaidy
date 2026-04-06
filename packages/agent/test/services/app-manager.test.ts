@@ -1344,25 +1344,56 @@ describe("AppManager", () => {
         path.join(os.tmpdir(), "milady-app-manager-refresh-"),
       );
       const manager = new AppManager({ stateDir });
+      const defenseAppInfo: RegistryPluginInfo = {
+        name: "@elizaos/app-defense-of-the-agents",
+        gitRepo: "elizaos/app-defense-of-the-agents",
+        gitUrl: "https://github.com/elizaos/app-defense-of-the-agents",
+        displayName: "Defense of the Agents",
+        description: "Autonomous defense lane simulator",
+        homepage: "https://www.defenseoftheagents.com",
+        topics: ["game"],
+        stars: 0,
+        language: "TypeScript",
+        kind: "app",
+        category: "game",
+        launchType: "url",
+        launchUrl: "https://www.defenseoftheagents.com",
+        runtimePlugin: undefined,
+        capabilities: ["combat", "strategy"],
+        viewer: {
+          url: "http://localhost:31337/api/apps/defense-of-the-agents/viewer",
+          sandbox: "allow-scripts allow-same-origin allow-popups",
+        },
+        session: {
+          mode: "spectate-and-steer",
+          features: ["commands", "telemetry", "pause", "resume"],
+        },
+        npm: {
+          package: "@elizaos/app-defense-of-the-agents",
+          v0Version: null,
+          v1Version: "1.0.0",
+          v2Version: "1.0.0",
+        },
+        supports: { v0: false, v1: true, v2: true },
+      };
       const runtime = createRuntimeStub({
         settings: {
           HYPERSCAPE_CHARACTER_ID: "char-runtime",
-          BABYLON_AGENT_ID: "babylon-agent-alice",
         },
       });
       const resolveLaunchSession = vi.fn(
         async ({ appName }: { appName: string }) => {
-          if (appName === "@elizaos/app-babylon") {
+          if (appName === "@elizaos/app-defense-of-the-agents") {
             return {
-              sessionId: "babylon-agent-alice",
+              sessionId: "defense-session",
               appName,
               mode: "spectate-and-steer" as const,
               status: "connecting",
-              displayName: "Babylon",
-              agentId: "babylon-agent-alice",
+              displayName: "Defense of the Agents",
+              agentId: "runtime-agent-id",
               canSendCommands: true,
               controls: ["pause", "resume"] as const,
-              summary: "Connecting to Babylon...",
+              summary: "Connecting defense session...",
             };
           }
           return {
@@ -1382,19 +1413,19 @@ describe("AppManager", () => {
       );
       const refreshRunSession = vi.fn(
         async ({ appName }: { appName: string }) => {
-          if (appName === "@elizaos/app-babylon") {
+          if (appName === "@elizaos/app-defense-of-the-agents") {
             return {
-              sessionId: "babylon-agent-alice",
+              sessionId: "defense-session",
               appName,
               mode: "spectate-and-steer" as const,
-              status: "connected",
-              displayName: "Babylon",
-              agentId: "babylon-agent-alice",
+              status: "running",
+              displayName: "Defense of the Agents",
+              agentId: "runtime-agent-id",
               canSendCommands: true,
-              controls: ["pause", "resume"] as const,
-              summary: "Babylon desk is coordinated and trading live.",
+              controls: ["pause"] as const,
+              summary: "Defense loop is holding mid lane.",
               telemetry: {
-                balance: 1250,
+                heroLane: "mid",
               },
             };
           }
@@ -1430,8 +1461,8 @@ describe("AppManager", () => {
         runtime,
       );
       const launchedBabylon = await manager.launch(
-        buildPluginManager([], BABYLON_APP_INFO),
-        "@elizaos/app-babylon",
+        buildPluginManager([], defenseAppInfo),
+        "@elizaos/app-defense-of-the-agents",
         undefined,
         runtime,
       );
@@ -1449,7 +1480,7 @@ describe("AppManager", () => {
       );
       expect(refreshRunSession).toHaveBeenCalledWith(
         expect.objectContaining({
-          appName: "@elizaos/app-babylon",
+          appName: "@elizaos/app-defense-of-the-agents",
           runId: launchedBabylon.run?.runId,
         }),
       );
@@ -1469,16 +1500,18 @@ describe("AppManager", () => {
         }),
       );
       expect(
-        runs.find((run) => run.appName === "@elizaos/app-babylon"),
+        runs.find(
+          (run) => run.appName === "@elizaos/app-defense-of-the-agents",
+        ),
       ).toEqual(
         expect.objectContaining({
           runId: launchedBabylon.run?.runId,
-          status: "connected",
-          summary: "Babylon desk is coordinated and trading live.",
+          status: "running",
+          summary: "Defense loop is holding mid lane.",
           lastHeartbeatAt: expect.any(String),
           health: {
             state: "healthy",
-            message: "Babylon desk is coordinated and trading live.",
+            message: "Defense loop is holding mid lane.",
           },
         }),
       );
