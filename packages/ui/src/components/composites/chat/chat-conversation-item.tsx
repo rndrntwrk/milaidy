@@ -1,6 +1,7 @@
 import { PencilLine, X } from "lucide-react";
 import type React from "react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { cn } from "../../../lib/utils";
 import { Z_OVERLAY } from "../../../lib/floating-layers";
 import { Button } from "../../ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../ui/tooltip";
@@ -10,6 +11,107 @@ import type {
   ChatConversationSummary,
   ChatVariant,
 } from "./chat-types";
+
+/**
+ * Brand palette for connector source chips shown next to conversation
+ * titles in the unified messages sidebar. Each entry is a pair of
+ * Tailwind classes: `border` paints the pill's outline and dot, `text`
+ * paints the label. Both derive from the connector's brand color so
+ * the chip ties visually to the matching bubble border drawn by
+ * ChatBubble.
+ *
+ * Unknown sources fall back to the neutral accent at the bottom —
+ * adding a new connector here is optional but gives it a real color.
+ */
+const SOURCE_CHIP_STYLES: Record<
+  string,
+  { border: string; dot: string; label: string }
+> = {
+  milady: {
+    border: "border-[#f0b90b]/70",
+    dot: "bg-[#f0b90b]",
+    label: "Milady",
+  },
+  imessage: {
+    border: "border-[#34c759]/60",
+    dot: "bg-[#34c759]",
+    label: "iMessage",
+  },
+  telegram: {
+    border: "border-[#229ED9]/60",
+    dot: "bg-[#229ED9]",
+    label: "Telegram",
+  },
+  discord: {
+    border: "border-[#5865F2]/60",
+    dot: "bg-[#5865F2]",
+    label: "Discord",
+  },
+  whatsapp: {
+    border: "border-[#25D366]/60",
+    dot: "bg-[#25D366]",
+    label: "WhatsApp",
+  },
+  wechat: {
+    border: "border-[#07C160]/60",
+    dot: "bg-[#07C160]",
+    label: "WeChat",
+  },
+  slack: {
+    border: "border-[#4A154B]/60",
+    dot: "bg-[#4A154B]",
+    label: "Slack",
+  },
+  signal: {
+    border: "border-[#3A76F0]/60",
+    dot: "bg-[#3A76F0]",
+    label: "Signal",
+  },
+  sms: {
+    border: "border-[#8E8E93]/60",
+    dot: "bg-[#8E8E93]",
+    label: "SMS",
+  },
+};
+
+function resolveSourceChipStyle(source: string): {
+  border: string;
+  dot: string;
+  label: string;
+} {
+  const known = SOURCE_CHIP_STYLES[source.toLowerCase()];
+  if (known) return known;
+  return {
+    border: "border-accent/40",
+    dot: "bg-accent",
+    label: source.charAt(0).toUpperCase() + source.slice(1),
+  };
+}
+
+/**
+ * Tiny pill — colored border + dot + short connector label — shown on
+ * conversation items that came from a messaging platform. Rendered
+ * above the title so it doesn't eat into the truncation budget.
+ */
+function ConversationSourceChip({ source }: { source: string }) {
+  const style = resolveSourceChipStyle(source);
+  return (
+    <span
+      data-testid="conversation-source-chip"
+      data-source={source}
+      className={cn(
+        "mb-1 inline-flex items-center gap-1 rounded-full border px-1.5 py-[1px] text-[9px] font-semibold uppercase tracking-wider text-muted-strong",
+        style.border,
+      )}
+    >
+      <span
+        aria-hidden="true"
+        className={cn("inline-block h-1.5 w-1.5 rounded-full", style.dot)}
+      />
+      {style.label}
+    </span>
+  );
+}
 
 function TruncatingConversationTitle({
   displayTitle,
@@ -230,6 +332,9 @@ export function ChatConversationItem({
         ) : null}
 
         <div className="min-w-0 flex-1">
+          {conversation.source && !isGameModal ? (
+            <ConversationSourceChip source={conversation.source} />
+          ) : null}
           <TruncatingConversationTitle
             displayTitle={renderedTitle}
             isActive={isActive}

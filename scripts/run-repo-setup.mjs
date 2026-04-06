@@ -17,6 +17,7 @@ export const repoSetupSteps = [
   "scripts/ensure-skills.mjs",
   "scripts/ensure-avatars.mjs",
   "scripts/link-browser-server.mjs",
+  "scripts/link-external-plugins.mjs",
   "scripts/ensure-vision-deps.mjs",
 ];
 

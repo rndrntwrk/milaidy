@@ -313,6 +313,8 @@ import {
   applyWhatsAppQrOverride,
   handleWhatsAppRoute,
 } from "./whatsapp-routes.js";
+import { handleIMessageRoute } from "./imessage-routes.js";
+import { handleInboxRoute } from "./inbox-routes.js";
 import {
   generateChatResponse as generateChatResponseFromChatRoutes,
   initSse as initSseFromChatRoutes,
@@ -5283,6 +5285,44 @@ async function handleRequest(
         createWhatsAppPairingSession: (options) =>
           new WhatsAppPairingSession(options as never),
       },
+    );
+    if (handled) return;
+  }
+
+  // ── Unified inbox routes (/api/inbox/*) ───────────────────────────────
+  // Cross-channel read-only feed that merges connector messages
+  // (imessage, telegram, discord, whatsapp, etc.) into a single
+  // time-ordered view. See api/inbox-routes.ts for details.
+  if (pathname.startsWith("/api/inbox")) {
+    const handled = await handleInboxRoute(
+      req,
+      res,
+      pathname,
+      method,
+      { runtime: state.runtime ?? null },
+      { json, error, readJsonBody },
+    );
+    if (handled) return;
+  }
+
+  // ── iMessage routes (/api/imessage/*) ─────────────────────────────────
+  // Read + CRUD endpoints exposed by @elizaos/plugin-imessage's
+  // IMessageService. See api/imessage-routes.ts for the handler.
+  if (pathname.startsWith("/api/imessage")) {
+    const handled = await handleIMessageRoute(
+      req,
+      res,
+      pathname,
+      method,
+      {
+        runtime: state.runtime
+          ? {
+              getService: (type: string) =>
+                (state.runtime as { getService: (t: string) => unknown }).getService(type),
+            }
+          : undefined,
+      },
+      { json, error, readJsonBody },
     );
     if (handled) return;
   }

@@ -64,7 +64,8 @@ export const ALL_TAB_GROUPS: TabGroup[] = [
     label: "Chat",
     tabs: ["chat"],
     icon: MessageSquare,
-    description: "Conversations and messaging",
+    description:
+      "Conversations with your agent and inbound messages from every connector",
   },
   {
     label: "Browser",

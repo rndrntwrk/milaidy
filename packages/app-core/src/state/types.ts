@@ -576,6 +576,18 @@ export interface AppState {
   /** When true, the game iframe persists as a floating overlay across all tabs. */
   gameOverlayEnabled: boolean;
 
+  /**
+   * Currently-selected connector chat in the unified messages sidebar.
+   * When non-null, the Chat view swaps its main panel out for a
+   * read-only view of that room's inbox messages. Mutually exclusive
+   * with an active dashboard conversation.
+   */
+  activeInboxChat: {
+    id: string;
+    source: string;
+    title: string;
+  } | null;
+
   // Sub-tabs
   appsSubTab: "browse" | "games";
   agentSubTab: "character" | "inventory" | "knowledge";

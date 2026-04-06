@@ -12,8 +12,6 @@ export const CONNECTOR_IDS = [
   "farcaster",
   "lens",
   "msteams",
-  "mattermost",
-  "googlechat",
   "feishu",
   "matrix",
   "nostr",

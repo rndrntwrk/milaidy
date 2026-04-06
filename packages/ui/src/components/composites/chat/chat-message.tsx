@@ -12,7 +12,7 @@ import {
 
 import { Button } from "../../ui/button";
 import { Textarea } from "../../ui/textarea";
-import { ChatBubble } from "./chat-bubble";
+import { ChatBubble, ChatBubbleSourceLabel } from "./chat-bubble";
 import { ChatMessageActions } from "./chat-message-actions";
 import type { ChatMessageData, ChatMessageLabels } from "./chat-types";
 
@@ -222,8 +222,19 @@ export const ChatMessage = memo(function ChatMessage({
             {agentName}
           </div>
         ) : null}
+        {/*
+          Source label: only shown for cross-channel messages (iMessage,
+          Telegram, Discord, etc.). Regular dashboard/API messages leave
+          `source` unset or equal to "api"/"client_chat" and render with
+          no label. The server strips "client_chat" before returning so
+          it never reaches this component.
+        */}
+        {message.source ? (
+          <ChatBubbleSourceLabel source={message.source} />
+        ) : null}
         <ChatBubble
           tone={isUser ? "user" : "assistant"}
+          source={message.source}
           className={`relative group rounded-[18px] px-4 py-3 text-[15px] leading-[1.7] whitespace-pre-wrap break-words ${
             isUser ? "rounded-br-[6px]" : "rounded-bl-[6px]"
           }`}
