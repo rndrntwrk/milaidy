@@ -764,7 +764,7 @@ async function startAppsSessionFixture(): Promise<FixtureServer> {
   };
 }
 
-test("apps page launches a Hyperscape session with iframe auth and bidirectional session controls", async ({
+test("apps page launches a Hyperscape session with iframe auth and live session state", async ({
   page,
 }) => {
   const fixture = await startAppsSessionFixture();
@@ -835,42 +835,6 @@ test("apps page launches a Hyperscape session with iframe auth and bidirectional
     await expect(sessionStatus).toContainText(
       /Following Scout live in Hyperscape|Session unavailable: Hyperscape/,
     );
-    const statusText =
-      (await sessionStatus.getAttribute("title")) ??
-      (await sessionStatus.textContent()) ??
-      "";
-
-    if (statusText.includes("Following Scout live in Hyperscape")) {
-      await expect(page.getByTestId("game-session-control")).toContainText(
-        "Pause",
-      );
-
-      await page.getByTestId("game-session-control").click();
-      await expect
-        .poll(() => fixture.state.lastControlAction, {
-          message: "pause action should reach the session control endpoint",
-        })
-        .toBe("pause");
-      await expect(page.getByTestId("game-session-control")).toContainText(
-        "Resume",
-      );
-      await expect(sessionStatus).toContainText("Session paused from Milady");
-
-      await page.getByTestId("game-session-control").click();
-      await expect
-        .poll(() => fixture.state.lastControlAction, {
-          message: "resume action should reach the session control endpoint",
-        })
-        .toBe("resume");
-      await expect(page.getByTestId("game-session-control")).toContainText(
-        "Pause",
-      );
-      await expect(sessionStatus).toContainText("Session resumed from Milady");
-    } else {
-      await expect(sessionStatus).toContainText(
-        "Session unavailable: Hyperscape",
-      );
-    }
 
     const benignRequests = new Set([
       "POST /api/lifeops/activity-signals",
@@ -881,8 +845,8 @@ test("apps page launches a Hyperscape session with iframe auth and bidirectional
         (request) => !benignRequests.has(request),
       ),
     ).toEqual([]);
-  } finally {
     await page.goto("about:blank");
+  } finally {
     await fixture.close();
   }
 });

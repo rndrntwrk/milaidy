@@ -17,7 +17,7 @@
 import { randomUUID } from "crypto";
 import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
-import type { AgentContext } from "@elizaos/core";
+import type { AgentContext } from "./context-types.js";
 import {
   ALL_BLUEPRINTS,
   type ScenarioBlueprint,

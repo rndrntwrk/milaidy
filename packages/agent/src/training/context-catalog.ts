@@ -10,7 +10,7 @@
  * When adding a new plugin/action, add its entry here.
  */
 
-import type { AgentContext } from "@elizaos/core";
+import { AGENT_CONTEXTS, type AgentContext } from "./context-types.js";
 
 /** Mapping from action name to its contexts. */
 export const ACTION_CONTEXT_MAP: Record<string, AgentContext[]> = {
@@ -147,15 +147,7 @@ export const PROVIDER_CONTEXT_MAP: Record<string, AgentContext[]> = {
 
 /** All canonical contexts. */
 export const ALL_CONTEXTS: AgentContext[] = [
-  "general",
-  "wallet",
-  "knowledge",
-  "browser",
-  "code",
-  "media",
-  "automation",
-  "social",
-  "system",
+  ...AGENT_CONTEXTS,
 ];
 
 /**

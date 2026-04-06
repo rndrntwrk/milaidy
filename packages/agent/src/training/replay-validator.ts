@@ -14,12 +14,12 @@
  * - Turn count distribution
  */
 
-import type { AgentContext } from "@elizaos/core";
 import {
   ALL_CONTEXTS,
   ACTION_CONTEXT_MAP,
   PROVIDER_CONTEXT_MAP,
 } from "./context-catalog.js";
+import type { AgentContext } from "./context-types.js";
 import type {
   TrainingSample,
   GeminiTuningExample,

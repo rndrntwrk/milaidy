@@ -15,7 +15,7 @@
  * 3. Conversation pattern: group_chat, group_noise, multi_turn_intent, etc.
  */
 
-import type { AgentContext } from "@elizaos/core";
+import type { AgentContext } from "./context-types.js";
 
 export interface ScenarioBlueprint {
   /** Unique blueprint ID */

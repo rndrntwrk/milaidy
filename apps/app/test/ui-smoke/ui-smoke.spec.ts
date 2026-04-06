@@ -652,11 +652,7 @@ test("Apps view shows curated multi-run state for Babylon and 2004scape", async 
     page.getByText("Keep the desk aligned before buying.").last(),
   ).toBeVisible();
   await expect(
-    babylonDetails.getByRole("button", { name: "Open viewer" }),
-  ).toBeVisible();
-  await babylonDetails.getByRole("button", { name: "Open viewer" }).click();
-  await expect(
-    babylonDetails.getByRole("button", { name: "Detach viewer" }),
+    babylonDetails.getByRole("button", { name: "Reattach viewer" }),
   ).toBeVisible();
 
   await page.getByRole("button", { name: /2004scape/ }).click();
@@ -674,11 +670,7 @@ test("Apps view shows curated multi-run state for Babylon and 2004scape", async 
     page.getByText("Keep the bot grinding and bank before danger.").last(),
   ).toBeVisible();
   await expect(
-    scapeDetails.getByRole("button", { name: "Open viewer" }),
-  ).toBeVisible();
-  await scapeDetails.getByRole("button", { name: "Open viewer" }).click();
-  await expect(
-    scapeDetails.getByRole("button", { name: "Detach viewer" }),
+    scapeDetails.getByRole("button", { name: "Reattach viewer" }),
   ).toBeVisible();
 
   await page.getByRole("button", { name: /Defense of the Agents/ }).click();
@@ -689,7 +681,7 @@ test("Apps view shows curated multi-run state for Babylon and 2004scape", async 
     })
     .last();
   await expect(
-    defenseDetails.getByText("Viewer not available in the smoke fixture."),
+    defenseDetails.getByText("No viewer surface is available"),
   ).toBeVisible();
   await expect(
     defenseDetails.getByRole("button", { name: "Inspect run" }),
