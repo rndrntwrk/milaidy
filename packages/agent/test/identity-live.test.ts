@@ -320,7 +320,9 @@ const EXTRACTION_PROMPT = `You are analyzing a conversation to extract social an
 {{recentMessages}}
 
 ## Your task:
-Analyze the conversation and extract ALL of the following. Be precise and conservative — only extract what is clearly stated or strongly implied. Do not hallucinate.
+Analyze the FULL conversation above (not just the last message) and extract ALL of the following. Be precise and conservative — only extract what is clearly stated or strongly implied. Do not hallucinate.
+
+CRITICAL: A short message like "yes", "sure", "yeah", "that's me", "correct" is NOT an identity claim — it is a conversational confirmation of something said earlier. Only extract platform identities that are explicitly stated with a platform name and handle.
 
 Return a JSON object with these fields:
 
@@ -355,17 +357,18 @@ IMPORTANT RULES:
 // Action selection prompt
 // ---------------------------------------------------------------------------
 
-const ACTION_SELECTION_PROMPT = `You are an AI assistant deciding which action to take based on a user's message.
+const ACTION_SELECTION_PROMPT = `You are an AI assistant deciding which action to take based on a user's message in the context of the recent conversation.
 
 Available actions:
-- MANAGE_IDENTITY: The user is claiming, confirming, unlinking, or listing platform identities (e.g., "my twitter is @foo", "confirm that alice is @alice_codes on twitter", "yes that's really her twitter", "remove my github link", "show my linked accounts")
+- MANAGE_IDENTITY: The user is claiming, confirming, unlinking, or listing platform identities (e.g., "my twitter is @foo", "confirm that alice is @alice_codes on twitter", "yes that's really her twitter", "remove my github link", "show my linked accounts"). Also use when the user says "yes", "sure", "yeah" etc. in response to an identity verification question.
 - SEND_MESSAGE: The user is explicitly asking to send/relay a message to a specific person by name (e.g., "send Alice a message", "DM bob"). NOT for messaging admin/owner, and NOT for discussing messaging features or UI.
 - SEND_ADMIN_MESSAGE: The user is explicitly asking to contact, notify, or alert the admin/owner (e.g., "message the admin", "notify the owner", "tell Shaw about this"). Use for any admin/owner-directed communication.
 - NONE: No action needed. Use for general conversation, questions, discussions about features, bug reports, or anything that is not a direct identity operation or message-sending request.
 
 IMPORTANT: If the user is DISCUSSING or COMPLAINING about a feature (e.g., "the send button is broken", "identity linking is cool"), that is NONE — they are not requesting an action.
+IMPORTANT: Consider the FULL conversation context. A short reply like "yes" or "sure" after an identity question IS a confirmation action.
 
-User message: "{{message}}"
+{{conversationContext}}User message: "{{message}}"
 Context: The user is speaking on {{platform}}.
 
 Respond with a JSON object:
@@ -514,19 +517,27 @@ class LiveScenarioRunner {
   /**
    * Run identity extraction via the real LLM.
    * Returns the extracted identities.
+   *
+   * @param conversationHistory Optional array of prior messages for multi-turn context.
+   *   Each entry is { speaker, text }. The current messageText is always appended last.
    */
   async extractIdentities(
     speakerName: string,
     speakerEntityId: string,
     messageText: string,
     platform: string,
+    conversationHistory?: Array<{ speaker: string; text: string }>,
   ): Promise<{
     identities: Array<{ platform: string; handle: string; belongsTo: string; confidence: number; reportedBy: string }>;
     latencyMs: number;
     rawResponse: unknown;
   }> {
     const participants = `- ${speakerName} (ID: ${speakerEntityId})\n- ScenarioAgent (ID: ${this.agentId})`;
-    const recentMessages = `[${speakerName}]: ${messageText}`;
+
+    // Build recent messages: prior conversation history + current message
+    const historyLines = (conversationHistory ?? []).map((m) => `[${m.speaker}]: ${m.text}`);
+    historyLines.push(`[${speakerName}]: ${messageText}`);
+    const recentMessages = historyLines.join("\n");
 
     const prompt = EXTRACTION_PROMPT
       .replace("{{participants}}", participants)
@@ -555,10 +566,17 @@ class LiveScenarioRunner {
 
   /**
    * Run action selection via the real LLM.
+   *
+   * @param conversationHistory Optional array of prior messages for multi-turn context.
+   *   Each entry is { speaker, text }. The current messageText is always the final
+   *   user message shown to the LLM. When provided, the conversation context is
+   *   injected before the user message so the LLM can see what happened before
+   *   (e.g., an agent question followed by a "sure" / "yes" confirmation).
    */
   async selectAction(
     messageText: string,
     platform: string,
+    conversationHistory?: Array<{ speaker: string; text: string }>,
   ): Promise<{
     action: string;
     intent: string | null;
@@ -567,7 +585,15 @@ class LiveScenarioRunner {
     latencyMs: number;
     rawResponse: unknown;
   }> {
+    // Build conversation context block from history
+    let conversationContext = "";
+    if (conversationHistory && conversationHistory.length > 0) {
+      const historyLines = conversationHistory.map((m) => `[${m.speaker}]: ${m.text}`);
+      conversationContext = `Recent conversation:\n${historyLines.join("\n")}\n\n`;
+    }
+
     const prompt = ACTION_SELECTION_PROMPT
+      .replace("{{conversationContext}}", conversationContext)
       .replace("{{message}}", messageText)
       .replace("{{platform}}", platform);
 
@@ -594,6 +620,9 @@ class LiveScenarioRunner {
 
   /**
    * Full pipeline: extract identities + select action + apply state.
+   *
+   * @param conversationHistory Optional prior messages for multi-turn context.
+   *   Forwarded to both extractIdentities() and selectAction().
    */
   async processMessage(
     speakerName: string,
@@ -601,14 +630,15 @@ class LiveScenarioRunner {
     messageText: string,
     platform: string,
     role: string,
+    conversationHistory?: Array<{ speaker: string; text: string }>,
   ): Promise<{
     extraction: Awaited<ReturnType<LiveScenarioRunner["extractIdentities"]>>;
     actionSelection: Awaited<ReturnType<LiveScenarioRunner["selectAction"]>>;
     claimsStored: IdentityClaim[];
     totalLatencyMs: number;
   }> {
-    const extraction = await this.extractIdentities(speakerName, speakerEntityId, messageText, platform);
-    const actionSelection = await this.selectAction(messageText, platform);
+    const extraction = await this.extractIdentities(speakerName, speakerEntityId, messageText, platform, conversationHistory);
+    const actionSelection = await this.selectAction(messageText, platform, conversationHistory);
 
     // Apply extracted identities to entity state (simulating evaluator)
     const entity = this.entities.get(speakerEntityId);
@@ -2720,5 +2750,654 @@ describe.skipIf(!LIVE_TESTS_ENABLED)("Live LLM Identity Scenarios", () => {
 
       console.log(transcript.print());
     }, 30_000);
+  });
+
+  // =========================================================================
+  // Category 10: Multi-Turn Conversation Context (Short Confirmations)
+  //
+  // These test the CRITICAL requirement: "everything in rolodex happens from
+  // the recent conversation, not just the last message." Users often reply
+  // with just "sure", "yes", "yeah" after the agent asks a question.
+  // =========================================================================
+
+  describe("Multi-Turn Conversation Context", () => {
+
+    // ── Action selection with conversation history ──
+
+    const multiTurnActionCases: Array<{
+      name: string;
+      conversationHistory: Array<{ speaker: string; text: string }>;
+      userMessage: string;
+      platform: string;
+      expectedAction: string;
+      expectedIntent?: string;
+    }> = [
+      // --- Identity confirmation after agent asks ---
+      {
+        name: "simple 'yes' after identity verification question",
+        conversationHistory: [
+          { speaker: "Agent", text: "I see a pending identity link — are you @alice_codes on Twitter?" },
+        ],
+        userMessage: "yes",
+        platform: "discord",
+        expectedAction: "MANAGE_IDENTITY",
+        expectedIntent: "confirm",
+      },
+      {
+        name: "'sure' after agent asks about twitter handle",
+        conversationHistory: [
+          { speaker: "Agent", text: "Is your Twitter handle @dev_sarah? I noticed a match." },
+        ],
+        userMessage: "sure",
+        platform: "discord",
+        expectedAction: "MANAGE_IDENTITY",
+        expectedIntent: "confirm",
+      },
+      {
+        name: "'yeah that's me' after identity question",
+        conversationHistory: [
+          { speaker: "User", text: "my github is sarah-dev" },
+          { speaker: "Agent", text: "Got it! I also found a Twitter account @sarah_dev — is that you too?" },
+        ],
+        userMessage: "yeah that's me",
+        platform: "discord",
+        expectedAction: "MANAGE_IDENTITY",
+        expectedIntent: "confirm",
+      },
+      {
+        name: "'yep' after cross-platform identity question",
+        conversationHistory: [
+          { speaker: "Agent", text: "Someone on Telegram claimed to be you (@bob_the_builder on Discord). Can you confirm?" },
+        ],
+        userMessage: "yep",
+        platform: "discord",
+        expectedAction: "MANAGE_IDENTITY",
+        expectedIntent: "confirm",
+      },
+      {
+        name: "'correct' after agent asks about linked account",
+        conversationHistory: [
+          { speaker: "Agent", text: "I see you might be @carlos_builds on GitHub. Is that correct?" },
+        ],
+        userMessage: "correct",
+        platform: "telegram",
+        expectedAction: "MANAGE_IDENTITY",
+        expectedIntent: "confirm",
+      },
+      {
+        name: "kid-speak confirmation after identity question",
+        conversationHistory: [
+          { speaker: "Agent", text: "Are you tommyplays2016 on YouTube?" },
+        ],
+        userMessage: "ya thats me lol",
+        platform: "discord",
+        expectedAction: "MANAGE_IDENTITY",
+        expectedIntent: "confirm",
+      },
+      {
+        name: "ESL confirmation after identity question",
+        conversationHistory: [
+          { speaker: "Agent", text: "Is @miguel_codes on GitHub your account?" },
+        ],
+        userMessage: "yes is correct, that is me",
+        platform: "discord",
+        expectedAction: "MANAGE_IDENTITY",
+        expectedIntent: "confirm",
+      },
+
+      // --- Unlink confirmation after agent asks ---
+      {
+        name: "'yeah go ahead' after agent asks to remove link",
+        conversationHistory: [
+          { speaker: "User", text: "I changed my twitter handle" },
+          { speaker: "Agent", text: "I see you have @old_handle linked on Twitter. Want me to remove that?" },
+        ],
+        userMessage: "yeah go ahead",
+        platform: "discord",
+        expectedAction: "MANAGE_IDENTITY",
+        expectedIntent: "unlink",
+      },
+      {
+        name: "'yes remove it' after unlink suggestion",
+        conversationHistory: [
+          { speaker: "Agent", text: "Your GitHub link to @deprecated-user seems outdated. Should I unlink it?" },
+        ],
+        userMessage: "yes remove it",
+        platform: "client_chat",
+        expectedAction: "MANAGE_IDENTITY",
+        expectedIntent: "unlink",
+      },
+
+      // --- Non-identity 'yes' should be NONE ---
+      {
+        name: "'yes' after general question (NOT identity)",
+        conversationHistory: [
+          { speaker: "Agent", text: "Would you like me to explain how the bot works?" },
+        ],
+        userMessage: "yes",
+        platform: "discord",
+        expectedAction: "NONE",
+      },
+      {
+        name: "'sure' after agent offers help (NOT identity)",
+        conversationHistory: [
+          { speaker: "Agent", text: "I can help you set up notifications. Want me to walk you through it?" },
+        ],
+        userMessage: "sure",
+        platform: "discord",
+        expectedAction: "NONE",
+      },
+      {
+        name: "'yeah' after agent asks about weather preference",
+        conversationHistory: [
+          { speaker: "Agent", text: "Do you want me to include weather updates in your daily briefing?" },
+        ],
+        userMessage: "yeah",
+        platform: "client_chat",
+        expectedAction: "NONE",
+      },
+
+      // --- Denial after identity question ---
+      {
+        name: "'no' after identity verification question",
+        conversationHistory: [
+          { speaker: "Agent", text: "Are you @random_person on Twitter?" },
+        ],
+        userMessage: "no that's not me",
+        platform: "discord",
+        expectedAction: "NONE",
+      },
+      {
+        name: "'nah' after identity question — not a claim either",
+        conversationHistory: [
+          { speaker: "Agent", text: "I found a match — is @old_account on GitHub yours?" },
+        ],
+        userMessage: "nah, I deleted that account ages ago",
+        platform: "discord",
+        expectedAction: "NONE",
+      },
+
+      // --- Multi-turn with identity claim THEN confirmation ---
+      {
+        name: "user claims then agent asks, user confirms with 'yep'",
+        conversationHistory: [
+          { speaker: "User", text: "my twitter is @real_alice" },
+          { speaker: "Agent", text: "I noted your Twitter as @real_alice. I also see a GitHub account @real-alice — is that you too?" },
+        ],
+        userMessage: "yep!",
+        platform: "discord",
+        expectedAction: "MANAGE_IDENTITY",
+        expectedIntent: "confirm",
+      },
+
+      // --- Admin escalation after conversation ---
+      {
+        name: "'yes tell them' after agent suggests contacting admin",
+        conversationHistory: [
+          { speaker: "User", text: "the bot keeps crashing when I try to link my account" },
+          { speaker: "Agent", text: "That sounds like a bug. Want me to notify the admin about this?" },
+        ],
+        userMessage: "yes tell them",
+        platform: "discord",
+        expectedAction: "SEND_ADMIN_MESSAGE",
+      },
+    ];
+
+    for (const tc of multiTurnActionCases) {
+      it(`should handle multi-turn: ${tc.name}`, async () => {
+        if (!llmProvider) return;
+
+        const runner = new LiveScenarioRunner(llmProvider);
+        const result = await runner.selectAction(
+          tc.userMessage,
+          tc.platform,
+          tc.conversationHistory,
+        );
+
+        const actionMatch = tc.expectedAction.includes("|")
+          ? tc.expectedAction.split("|").includes(result.action)
+          : result.action === tc.expectedAction;
+
+        const intentMatch = !tc.expectedIntent || result.intent === tc.expectedIntent;
+        const passed = actionMatch && intentMatch;
+
+        tracker.record({
+          name: `multi-turn action: ${tc.name}`,
+          category: "multi_turn",
+          passed,
+          latencyMs: result.latencyMs,
+          details: `Action: ${result.action}${result.intent ? ` (${result.intent})` : ""} — ${result.reasoning}`,
+          expected: `${tc.expectedAction}${tc.expectedIntent ? `:${tc.expectedIntent}` : ""}`,
+          actual: `${result.action}${result.intent ? `:${result.intent}` : ""}`,
+        });
+
+        if (!passed) {
+          console.warn(
+            `[soft-fail] multi-turn "${tc.name}": expected ${tc.expectedAction}${tc.expectedIntent ? `:${tc.expectedIntent}` : ""}, ` +
+            `got ${result.action}${result.intent ? `:${result.intent}` : ""}\n` +
+            `  reasoning: ${result.reasoning}\n` +
+            `  history: ${tc.conversationHistory.map((h) => `[${h.speaker}]: ${h.text}`).join(" → ")}\n` +
+            `  message: "${tc.userMessage}"\n` +
+            `  raw: ${JSON.stringify(result.rawResponse)}`,
+          );
+        }
+
+        expect(actionMatch).toBe(true);
+      }, 30_000);
+    }
+
+    // ── Extraction with conversation history (should NOT extract from "sure") ──
+
+    const multiTurnExtractionCases: Array<{
+      name: string;
+      conversationHistory: Array<{ speaker: string; text: string }>;
+      speakerName: string;
+      userMessage: string;
+      platform: string;
+      expectedPlatforms: string[];
+      expectedHandles: string[];
+    }> = [
+      {
+        name: "'yes' after identity question should NOT extract new identity",
+        conversationHistory: [
+          { speaker: "Agent", text: "Is @alice_codes on Twitter really you?" },
+        ],
+        speakerName: "Alice",
+        userMessage: "yes",
+        platform: "discord",
+        expectedPlatforms: [],
+        expectedHandles: [],
+      },
+      {
+        name: "'sure' after verification should NOT create new claim",
+        conversationHistory: [
+          { speaker: "Agent", text: "I found a pending link — are you @bob_dev on GitHub?" },
+        ],
+        speakerName: "Bob",
+        userMessage: "sure, that's me",
+        platform: "discord",
+        expectedPlatforms: [],
+        expectedHandles: [],
+      },
+      {
+        name: "multi-turn claim: identity in first message, 'yes' confirms — extract from first only",
+        conversationHistory: [
+          { speaker: "Alice", text: "my github is alice-dev" },
+          { speaker: "Agent", text: "Got it! I also see a Twitter @alice_dev — is that you?" },
+        ],
+        speakerName: "Alice",
+        userMessage: "yeah that's me too",
+        platform: "discord",
+        // The evaluator should NOT create a new extraction from "yeah that's me too"
+        // The original claim was in a prior turn — the evaluator would have already processed it.
+        // The confirmation "yeah that's me too" is not a new identity claim.
+        expectedPlatforms: [],
+        expectedHandles: [],
+      },
+      {
+        name: "new claim in response to agent question should extract",
+        conversationHistory: [
+          { speaker: "Agent", text: "What's your Twitter handle? I'd like to link it." },
+        ],
+        speakerName: "Dave",
+        userMessage: "it's @dave_makes_stuff",
+        platform: "discord",
+        expectedPlatforms: ["twitter"],
+        expectedHandles: ["dave_makes_stuff"],
+      },
+      {
+        name: "correction in multi-turn should extract corrected handle",
+        conversationHistory: [
+          { speaker: "User", text: "my twitter is @alicee_codes" },
+          { speaker: "Agent", text: "I've noted your Twitter as @alicee_codes." },
+        ],
+        speakerName: "Alice",
+        userMessage: "wait actually it's @alice_codes with one e",
+        platform: "discord",
+        expectedPlatforms: ["twitter"],
+        expectedHandles: ["alice_codes"],
+      },
+    ];
+
+    for (const tc of multiTurnExtractionCases) {
+      it(`should extract correctly: ${tc.name}`, async () => {
+        if (!llmProvider) return;
+
+        const runner = new LiveScenarioRunner(llmProvider);
+        const entityId = stringToUuid("multi-turn-extraction-test");
+        runner.setupEntity(entityId, { name: tc.speakerName, platform: tc.platform });
+
+        const result = await runner.extractIdentities(
+          tc.speakerName,
+          entityId,
+          tc.userMessage,
+          tc.platform,
+          tc.conversationHistory,
+        );
+
+        const extractedPlatforms = result.identities.map((i) => i.platform);
+        const extractedHandles = result.identities.map((i) => i.handle.replace(/^@/, ""));
+
+        let passed: boolean;
+        if (tc.expectedPlatforms.length === 0) {
+          // Expect NO extractions
+          passed = result.identities.length === 0;
+        } else {
+          // Expect specific platforms and handles
+          const allPlatformsFound = tc.expectedPlatforms.every((p) => extractedPlatforms.includes(p));
+          const allHandlesFound = tc.expectedHandles.every((h) =>
+            extractedHandles.some((eh) => eh.toLowerCase().includes(h.toLowerCase())),
+          );
+          passed = allPlatformsFound && allHandlesFound;
+        }
+
+        tracker.record({
+          name: `multi-turn extract: ${tc.name}`,
+          category: "multi_turn",
+          passed,
+          latencyMs: result.latencyMs,
+          details: `Extracted: ${result.identities.map((i) => `${i.platform}:${i.handle}`).join(", ") || "none"}`,
+          expected: tc.expectedPlatforms.length === 0
+            ? "no extractions"
+            : tc.expectedPlatforms.map((p, i) => `${p}:${tc.expectedHandles[i]}`).join(", "),
+          actual: result.identities.map((i) => `${i.platform}:${i.handle}`).join(", ") || "none",
+        });
+
+        if (!passed) {
+          console.warn(
+            `[soft-fail] multi-turn extraction "${tc.name}": ` +
+            `expected ${tc.expectedPlatforms.length === 0 ? "none" : tc.expectedPlatforms.join(",")}, ` +
+            `got ${extractedPlatforms.join(",") || "none"}\n` +
+            `  history: ${tc.conversationHistory.map((h) => `[${h.speaker}]: ${h.text}`).join(" → ")}\n` +
+            `  message: "${tc.userMessage}"\n` +
+            `  raw: ${JSON.stringify(result.rawResponse)}`,
+          );
+        }
+      }, 30_000);
+    }
+
+    // ── Full E2E multi-turn flows ──
+
+    it("Flow 9: Agent asks identity question → user says 'sure' → confirm action fires", async () => {
+      if (!llmProvider) return;
+
+      const transcript = new ConversationTranscript("Agent Question → Sure → Confirm");
+      const runner = new LiveScenarioRunner(llmProvider);
+      const userId = stringToUuid("sure-confirm-alice");
+      runner.setupEntity(userId, { name: "Alice", platform: "discord" });
+
+      // Simulate: Alice claimed twitter earlier, agent now asks about a second match.
+      // The conversation history represents what the agent sees in recent messages.
+      const conversationHistory: Array<{ speaker: string; text: string }> = [
+        { speaker: "Alice", text: "my twitter is @alice_codes" },
+        { speaker: "Agent", text: "Got it! I also see a GitHub account @alice-codes — is that you too?" },
+      ];
+
+      // Turn 1: Alice's initial twitter claim (no history needed — first message)
+      const t1 = await runner.processMessage(
+        "Alice", userId,
+        "my twitter is @alice_codes",
+        "discord", "NONE",
+      );
+      transcript.add({
+        speaker: "Alice", platform: "discord",
+        message: "my twitter is @alice_codes",
+        extractedIdentities: t1.extraction.identities.map((i) => ({ platform: i.platform, handle: i.handle })),
+        selectedAction: t1.actionSelection.action,
+        stateChanges: t1.claimsStored.map((c) => `${c.platform}:${c.handle} [${c.status}]`),
+        latencyMs: t1.totalLatencyMs,
+      });
+
+      const twitterClaimed = t1.claimsStored.some((c) => c.platform === "twitter");
+      tracker.record({
+        name: "sure-flow: twitter claimed first",
+        category: "multi_turn",
+        passed: twitterClaimed,
+        latencyMs: t1.totalLatencyMs,
+        details: `Twitter claim: ${twitterClaimed}`,
+        expected: "twitter:alice_codes claimed",
+        actual: t1.claimsStored.map((c) => `${c.platform}:${c.handle}`).join(",") || "none",
+      });
+
+      // Turn 2: Alice says "sure" with conversation history
+      const t2Action = await runner.selectAction(
+        "sure",
+        "discord",
+        conversationHistory,
+      );
+
+      transcript.add({
+        speaker: "Alice", platform: "discord",
+        message: "sure",
+        selectedAction: t2Action.action,
+        latencyMs: t2Action.latencyMs,
+      });
+
+      const confirmAction = t2Action.action === "MANAGE_IDENTITY";
+      const confirmIntent = t2Action.intent === "confirm";
+
+      tracker.record({
+        name: "sure-flow: 'sure' triggers confirm action",
+        category: "multi_turn",
+        passed: confirmAction,
+        latencyMs: t2Action.latencyMs,
+        details: `Action: ${t2Action.action}, intent: ${t2Action.intent}, reasoning: ${t2Action.reasoning}`,
+        expected: "MANAGE_IDENTITY:confirm",
+        actual: `${t2Action.action}:${t2Action.intent}`,
+      });
+
+      tracker.record({
+        name: "sure-flow: 'sure' intent is confirm",
+        category: "multi_turn",
+        passed: confirmIntent,
+        latencyMs: 0,
+        details: `Intent: ${t2Action.intent}`,
+        expected: "confirm",
+        actual: t2Action.intent ?? "null",
+      });
+
+      // Turn 2 extraction: "sure" should NOT produce new identity claims
+      const t2Extract = await runner.extractIdentities(
+        "Alice", userId,
+        "sure",
+        "discord",
+        conversationHistory,
+      );
+
+      tracker.record({
+        name: "sure-flow: 'sure' does NOT extract new identity",
+        category: "multi_turn",
+        passed: t2Extract.identities.length === 0,
+        latencyMs: t2Extract.latencyMs,
+        details: `Extracted: ${t2Extract.identities.length} identities`,
+        expected: "0 extractions",
+        actual: `${t2Extract.identities.length} extractions`,
+      });
+
+      expect(confirmAction).toBe(true);
+      console.log(transcript.print());
+    }, 90_000);
+
+    it("Flow 10: Multi-step onboarding — claim, agent asks, 'yeah', then unlink old", async () => {
+      if (!llmProvider) return;
+
+      const transcript = new ConversationTranscript("Full Onboarding Flow");
+      const runner = new LiveScenarioRunner(llmProvider);
+      const userId = stringToUuid("onboarding-multi");
+      runner.setupOwner(userId, { name: "Jordan" });
+
+      // Step 1: Jordan claims two platforms
+      const t1 = await runner.processMessage(
+        "Jordan", userId,
+        "hey, my discord is jordan_dev and my twitter is @jordan_makes",
+        "client_chat", "OWNER",
+      );
+      transcript.add({
+        speaker: "Jordan", platform: "client_chat",
+        message: "hey, my discord is jordan_dev and my twitter is @jordan_makes",
+        extractedIdentities: t1.extraction.identities.map((i) => ({ platform: i.platform, handle: i.handle })),
+        selectedAction: t1.actionSelection.action,
+        stateChanges: t1.claimsStored.map((c) => `${c.platform}:${c.handle} [${c.status}]`),
+        latencyMs: t1.totalLatencyMs,
+      });
+
+      const bothClaimed = t1.claimsStored.length >= 2;
+      tracker.record({
+        name: "onboarding: both platforms claimed",
+        category: "multi_turn",
+        passed: bothClaimed,
+        latencyMs: t1.totalLatencyMs,
+        details: `Claims: ${t1.claimsStored.map((c) => `${c.platform}:${c.handle}`).join(", ")}`,
+        expected: "discord + twitter claimed",
+        actual: t1.claimsStored.map((c) => c.platform).join(", ") || "none",
+      });
+
+      // Step 2: Agent asks about a github match, Jordan says "yeah"
+      const history2 = [
+        { speaker: "Jordan", text: "hey, my discord is jordan_dev and my twitter is @jordan_makes" },
+        { speaker: "Agent", text: "Great! I've linked Discord and Twitter. I also found @jordan-dev on GitHub — is that you?" },
+      ];
+
+      const t2Action = await runner.selectAction("yeah", "client_chat", history2);
+
+      transcript.add({
+        speaker: "Jordan", platform: "client_chat",
+        message: "yeah",
+        selectedAction: t2Action.action,
+        latencyMs: t2Action.latencyMs,
+      });
+
+      tracker.record({
+        name: "onboarding: 'yeah' confirms github",
+        category: "multi_turn",
+        passed: t2Action.action === "MANAGE_IDENTITY" && t2Action.intent === "confirm",
+        latencyMs: t2Action.latencyMs,
+        details: `Action: ${t2Action.action}, intent: ${t2Action.intent}`,
+        expected: "MANAGE_IDENTITY:confirm",
+        actual: `${t2Action.action}:${t2Action.intent}`,
+      });
+
+      // Step 3: Jordan says to remove an old twitter link
+      const history3 = [
+        ...history2,
+        { speaker: "Jordan", text: "yeah" },
+        { speaker: "Agent", text: "Done! GitHub linked. By the way, I see an old Twitter link to @jordan_old — should I remove that?" },
+      ];
+
+      const t3Action = await runner.selectAction("yes please", "client_chat", history3);
+
+      transcript.add({
+        speaker: "Jordan", platform: "client_chat",
+        message: "yes please",
+        selectedAction: t3Action.action,
+        latencyMs: t3Action.latencyMs,
+      });
+
+      tracker.record({
+        name: "onboarding: 'yes please' unlinks old twitter",
+        category: "multi_turn",
+        passed: t3Action.action === "MANAGE_IDENTITY" && t3Action.intent === "unlink",
+        latencyMs: t3Action.latencyMs,
+        details: `Action: ${t3Action.action}, intent: ${t3Action.intent}`,
+        expected: "MANAGE_IDENTITY:unlink",
+        actual: `${t3Action.action}:${t3Action.intent}`,
+      });
+
+      expect(bothClaimed).toBe(true);
+      console.log(transcript.print());
+    }, 120_000);
+
+    it("Flow 11: Admin escalation via conversation — user reports bug, agent offers to escalate, user says 'yeah do it'", async () => {
+      if (!llmProvider) return;
+
+      const transcript = new ConversationTranscript("Bug Report → Escalation");
+      const runner = new LiveScenarioRunner(llmProvider);
+      const userId = stringToUuid("escalation-via-convo");
+      runner.setupEntity(userId, { name: "Maya", platform: "discord" });
+
+      const history = [
+        { speaker: "Maya", text: "the identity linking keeps failing with an error" },
+        { speaker: "Agent", text: "I'm sorry about that. I can see the error in the logs. Want me to alert the admin about this issue?" },
+      ];
+
+      const result = await runner.selectAction("yeah do it", "discord", history);
+
+      transcript.add({
+        speaker: "Maya", platform: "discord",
+        message: "yeah do it",
+        selectedAction: result.action,
+        latencyMs: result.latencyMs,
+      });
+
+      tracker.record({
+        name: "escalation-convo: 'yeah do it' triggers admin message",
+        category: "multi_turn",
+        passed: result.action === "SEND_ADMIN_MESSAGE",
+        latencyMs: result.latencyMs,
+        details: `Action: ${result.action}, reasoning: ${result.reasoning}`,
+        expected: "SEND_ADMIN_MESSAGE",
+        actual: result.action,
+      });
+
+      expect(result.action).toBe("SEND_ADMIN_MESSAGE");
+      console.log(transcript.print());
+    }, 30_000);
+
+    it("Flow 12: Long conversation with identity buried in middle — only extract from explicit claim", async () => {
+      if (!llmProvider) return;
+
+      const runner = new LiveScenarioRunner(llmProvider);
+      const entityId = stringToUuid("buried-claim-test");
+      runner.setupEntity(entityId, { name: "Kai", platform: "discord" });
+
+      // Long conversation where identity is mentioned early, then topic drifts
+      const history = [
+        { speaker: "Kai", text: "hey what's up everyone" },
+        { speaker: "Agent", text: "Welcome! What brings you here today?" },
+        { speaker: "Kai", text: "just checking out the project. I'm @kai_builds on twitter btw" },
+        { speaker: "Agent", text: "Nice! I've noted your Twitter. The project has a lot of cool features." },
+        { speaker: "Kai", text: "yeah I was looking at the docs. pretty impressive stuff" },
+        { speaker: "Agent", text: "Thanks! Let me know if you have any questions." },
+        { speaker: "Kai", text: "will do. so about the API rate limits..." },
+        { speaker: "Agent", text: "The default rate limit is 100 requests per minute." },
+      ];
+
+      // Current message is about rate limits — no identity claim
+      const result = await runner.extractIdentities(
+        "Kai", entityId,
+        "ok cool, and is there a higher tier available?",
+        "discord",
+        history,
+      );
+
+      // Should NOT extract anything from the latest message (it's about rate limits)
+      // The twitter claim was in a prior turn — evaluator would have processed it then.
+      tracker.record({
+        name: "buried-claim: no extraction from unrelated follow-up",
+        category: "multi_turn",
+        passed: result.identities.length === 0,
+        latencyMs: result.latencyMs,
+        details: `Extracted: ${result.identities.map((i) => `${i.platform}:${i.handle}`).join(", ") || "none"}`,
+        expected: "no extractions",
+        actual: `${result.identities.length} extractions`,
+      });
+
+      // Action should be NONE (it's a general question)
+      const actionResult = await runner.selectAction(
+        "ok cool, and is there a higher tier available?",
+        "discord",
+        history,
+      );
+
+      tracker.record({
+        name: "buried-claim: unrelated question gets NONE action",
+        category: "multi_turn",
+        passed: actionResult.action === "NONE",
+        latencyMs: actionResult.latencyMs,
+        details: `Action: ${actionResult.action}`,
+        expected: "NONE",
+        actual: actionResult.action,
+      });
+    }, 60_000);
   });
 });
