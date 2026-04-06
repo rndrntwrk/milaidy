@@ -22,6 +22,20 @@ const DOCKER_SMOKE_WORKFLOW_PATH = path.join(
   ROOT,
   ".github/workflows/docker-ci-smoke.yml",
 );
+const ADDITIONAL_SUBMODULE_WORKFLOW_PATHS = [
+  ".github/workflows/agent-fix-ci.yml",
+  ".github/workflows/agent-implement.yml",
+  ".github/workflows/agent-release.yml",
+  ".github/workflows/apple-store-release.yml",
+  ".github/workflows/deploy-web.yml",
+  ".github/workflows/nightly.yml",
+  ".github/workflows/release-electrobun-build-linux-x64-testbox.yml",
+  ".github/workflows/release-electrobun-build-windows-x64-testbox.yml",
+  ".github/workflows/release-electrobun.yml",
+  ".github/workflows/reusable-npm-publish.yml",
+  ".github/workflows/test-electrobun-release.yml",
+  ".github/workflows/windows-desktop-preload-smoke.yml",
+].map((workflowPath) => path.join(ROOT, workflowPath));
 
 function read(filePath: string): string {
   return fs.readFileSync(filePath, "utf8");
@@ -98,5 +112,8 @@ describe("CI workflow drift", () => {
       "submodules: recursive",
     );
     expect(read(DOCKER_SMOKE_WORKFLOW_PATH)).toContain("submodules: recursive");
+    for (const workflowPath of ADDITIONAL_SUBMODULE_WORKFLOW_PATHS) {
+      expect(read(workflowPath)).toContain("submodules: recursive");
+    }
   });
 });
