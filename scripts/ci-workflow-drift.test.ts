@@ -18,7 +18,10 @@ const BUILD_CLOUD_IMAGE_WORKFLOW_PATH = path.join(
   ROOT,
   ".github/workflows/build-cloud-image.yml",
 );
-const DEPLOY_WEB_WORKFLOW_PATH = path.join(ROOT, ".github/workflows/deploy-web.yml");
+const DEPLOY_WEB_WORKFLOW_PATH = path.join(
+  ROOT,
+  ".github/workflows/deploy-web.yml",
+);
 const DOCKER_SMOKE_WORKFLOW_PATH = path.join(
   ROOT,
   ".github/workflows/docker-ci-smoke.yml",
