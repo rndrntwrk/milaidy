@@ -1,8 +1,13 @@
 export function shouldUseCloudOnlyBranding(options: {
   isDev: boolean;
   injectedApiBase?: string | null;
+  isNativePlatform?: boolean;
 }): boolean {
   if (options.isDev) return false;
+
+  // Native mobile apps (iOS/Android via Capacitor) need both gateway discovery
+  // and cloud connection options — they are not cloud-only.
+  if (options.isNativePlatform) return false;
 
   // Desktop shells inject an explicit backend before React boots. When that
   // happens, the renderer should follow the host backend's capabilities rather

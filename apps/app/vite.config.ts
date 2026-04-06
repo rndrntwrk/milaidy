@@ -384,21 +384,25 @@ function nativeModuleStubPlugin(): Plugin {
       }
 
       // async_hooks — AsyncLocalStorage must be a real constructor because
-      // several @elizaos packages do `new AsyncLocalStorage()` at the top level.
-      // The generic Proxy-based stub isn't sufficient because the bundler may
-      // inline it as an empty object before the Proxy wrapper is applied.
+      // langsmith and @elizaos packages do `new AsyncLocalStorage()` at the
+      // top level. Uses function-constructor syntax (not class expressions)
+      // for maximum WebView compatibility. The renderChunk plugin
+      // (asyncLocalStoragePatchPlugin) also patches the final bundle output
+      // as a safety net for patterns inlined by Rollup.
       if (
         modName === "node:async_hooks" ||
         modName === "async_hooks"
       ) {
         return [
-          "export class AsyncLocalStorage { constructor() {} getStore() { return undefined; } run(store, fn, ...args) { return fn(...args); } enterWith() {} disable() {} }",
+          "function AsyncLocalStorage() {} AsyncLocalStorage.prototype.getStore = function() { return undefined; }; AsyncLocalStorage.prototype.run = function(store, fn) { return fn.apply(void 0, [].slice.call(arguments, 2)); }; AsyncLocalStorage.prototype.enterWith = function() {}; AsyncLocalStorage.prototype.disable = function() {};",
+          "export { AsyncLocalStorage };",
           "export function executionAsyncId() { return 0; }",
           "export function triggerAsyncId() { return 0; }",
           "export function executionAsyncResource() { return {}; }",
-          "export class AsyncResource { constructor() {} runInAsyncScope(fn, ...args) { return fn(...args); } emitDestroy() { return this; } asyncId() { return 0; } triggerAsyncId() { return 0; } }",
-          "export function createHook() { return { enable() {}, disable() {} }; }",
-          "export default { AsyncLocalStorage, AsyncResource, executionAsyncId, triggerAsyncId, executionAsyncResource, createHook };",
+          "function AsyncResource() {} AsyncResource.prototype.runInAsyncScope = function(fn) { return fn.apply(void 0, [].slice.call(arguments, 1)); }; AsyncResource.prototype.emitDestroy = function() { return this; }; AsyncResource.prototype.asyncId = function() { return 0; }; AsyncResource.prototype.triggerAsyncId = function() { return 0; };",
+          "export { AsyncResource };",
+          "export function createHook() { return { enable: function(){}, disable: function(){} }; }",
+          "export default { AsyncLocalStorage: AsyncLocalStorage, AsyncResource: AsyncResource, executionAsyncId: executionAsyncId, triggerAsyncId: triggerAsyncId, executionAsyncResource: executionAsyncResource, createHook: createHook };",
         ].join("\n");
       }
 
@@ -431,7 +435,7 @@ function nativeModuleStubPlugin(): Plugin {
       // Replace the broken IIFE pattern with a working stub class.
       let patched = code.replace(
         /\(\(\)\s*=>\s*\{\s*throw\s+new\s+Error\(\s*"Cannot require module "\s*\+\s*"node:async_hooks"\s*\)\s*;\s*\}\)\(\)/g,
-        '({AsyncLocalStorage: class { constructor(){} getStore(){return undefined} run(s,fn,...a){return fn(...a)} enterWith(){} disable(){} }})',
+        '(function(){function A(){} A.prototype.getStore=function(){return undefined};A.prototype.run=function(s,fn){return fn.apply(void 0,[].slice.call(arguments,2))};A.prototype.enterWith=function(){};A.prototype.disable=function(){};return{AsyncLocalStorage:A}})()',
       );
       // Names that downstream plugins (plugin-secrets-manager, agent runtime)
       // import from @elizaos/core but that are missing from the browser entry.
