@@ -37,6 +37,7 @@ vi.mock("@elizaos/plugin-rolodex", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-secrets-manager", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-shell", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-telegram", () => ({ default: {} }));
+vi.mock("@elizaos-plugins/client-telegram-account", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-trajectory-logger", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-trust", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-twitch", () => ({ default: {} }));
@@ -290,6 +291,24 @@ describe("applyPluginAutoEnable — env vars", () => {
     expect(changes.some((c) => c.includes("REPOPROMPT_CLI_PATH"))).toBe(true);
   });
 
+  it("enables telegramAccount client plugin when Telegram account env vars are set", () => {
+    const params = makeParams({
+      env: {
+        TELEGRAM_ACCOUNT_PHONE: "+15551234567",
+        TELEGRAM_ACCOUNT_APP_ID: "12345",
+        TELEGRAM_ACCOUNT_APP_HASH: "hash",
+        TELEGRAM_ACCOUNT_DEVICE_MODEL: "Desktop",
+        TELEGRAM_ACCOUNT_SYSTEM_VERSION: "1.0",
+      },
+    });
+    const { config, changes } = applyPluginAutoEnable(params);
+
+    expect(config.plugins?.allow).toContain(
+      "@elizaos-plugins/client-telegram-account",
+    );
+    expect(changes.some((c) => c.includes("TELEGRAM_ACCOUNT_*"))).toBe(true);
+  });
+
   it("enables claude code workbench plugin when CLAUDE_CODE_WORKBENCH_ENABLED is set", () => {
     const params = makeParams({
       env: { CLAUDE_CODE_WORKBENCH_ENABLED: "1" },
@@ -316,6 +335,30 @@ describe("applyPluginAutoEnable — env vars", () => {
     const { changes } = applyPluginAutoEnable(params);
 
     expect(changes).toHaveLength(0);
+  });
+
+  it("does not enable telegramAccount when the config entry is disabled", () => {
+    const params = makeParams({
+      config: {
+        plugins: {
+          entries: {
+            telegramAccount: { enabled: false },
+          },
+        },
+      },
+      env: {
+        TELEGRAM_ACCOUNT_PHONE: "+15551234567",
+        TELEGRAM_ACCOUNT_APP_ID: "12345",
+        TELEGRAM_ACCOUNT_APP_HASH: "hash",
+        TELEGRAM_ACCOUNT_DEVICE_MODEL: "Desktop",
+        TELEGRAM_ACCOUNT_SYSTEM_VERSION: "1.0",
+      },
+    });
+    const { config } = applyPluginAutoEnable(params);
+
+    expect(config.plugins?.allow ?? []).not.toContain(
+      "@elizaos-plugins/client-telegram-account",
+    );
   });
 
   it("respects plugin entry enabled=false override", () => {

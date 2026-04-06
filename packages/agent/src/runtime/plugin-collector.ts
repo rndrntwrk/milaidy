@@ -115,6 +115,7 @@ export const OPTIONAL_PLUGIN_MAP: Readonly<Record<string, string>> = {
   obsidian: "@elizaos/plugin-obsidian",
   repoprompt: "@elizaos/plugin-repoprompt",
   repoPrompt: "@elizaos/plugin-repoprompt",
+  telegramAccount: "@elizaos-plugins/client-telegram-account",
   "pi-ai": PI_AI_PLUGIN_PACKAGE,
   piAi: PI_AI_PLUGIN_PACKAGE,
   x402: "@elizaos/plugin-x402",

@@ -33,6 +33,10 @@ export const CONNECTOR_PLUGINS: Record<string, string> = {
   googlechat: "@elizaos/plugin-google-chat",
 };
 
+const CLIENT_PLUGINS: Record<string, string> = {
+  telegramAccount: "@elizaos-plugins/client-telegram-account",
+};
+
 export const STREAMING_PLUGINS: Record<string, string> = {
   twitch: "@elizaos/plugin-twitch-streaming",
   youtube: "@elizaos/plugin-youtube-streaming",
@@ -95,6 +99,16 @@ export const AUTH_PROVIDER_PLUGINS: Record<string, string> = {
   EVM_PRIVATE_KEY: "@elizaos/plugin-evm",
   SOLANA_PRIVATE_KEY: "@elizaos/plugin-solana",
 };
+
+function isTelegramAccountConfigured(env: NodeJS.ProcessEnv): boolean {
+  return Boolean(
+    env.TELEGRAM_ACCOUNT_PHONE?.trim() &&
+      env.TELEGRAM_ACCOUNT_APP_ID?.trim() &&
+      env.TELEGRAM_ACCOUNT_APP_HASH?.trim() &&
+      env.TELEGRAM_ACCOUNT_DEVICE_MODEL?.trim() &&
+      env.TELEGRAM_ACCOUNT_SYSTEM_VERSION?.trim(),
+  );
+}
 
 const FEATURE_PLUGINS: Record<string, string> = {
   browser: "@elizaos/plugin-browser",
@@ -445,6 +459,23 @@ export function applyPluginAutoEnable(
           "hooks.gmail.account",
         );
       }
+    }
+  }
+
+  // Client plugins
+  if (isTelegramAccountConfigured(env)) {
+    const clientPlugin = CLIENT_PLUGINS.telegramAccount;
+    if (
+      clientPlugin &&
+      pluginsConfig.entries.telegramAccount?.enabled !== false
+    ) {
+      addToAllowlist(
+        pluginsConfig.allow,
+        clientPlugin,
+        "telegramAccount",
+        changes,
+        "env: TELEGRAM_ACCOUNT_*",
+      );
     }
   }
 
