@@ -825,14 +825,9 @@ describe("AppManager", () => {
     });
 
     it("registers the plugin when 2004scape server IS reachable", async () => {
-      // Start a minimal fixture server on a dynamic port
-      const server = http.createServer((_req, res) => {
-        res.statusCode = 200;
-        res.end("ok");
-      });
-      await new Promise<void>((resolve) => {
-        server.listen(8880, "127.0.0.1", () => resolve());
-      });
+      // Mock fetch to simulate reachable remote server
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = vi.fn().mockResolvedValue(new Response("ok", { status: 200 }));
 
       try {
         const manager = new AppManager();
@@ -855,9 +850,7 @@ describe("AppManager", () => {
         );
         expect(unreachableDiag).toBeUndefined();
       } finally {
-        await new Promise<void>((resolve) =>
-          server.close(() => resolve()),
-        );
+        globalThis.fetch = originalFetch;
       }
     });
   });

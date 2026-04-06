@@ -17,29 +17,42 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { classifyIntent } from "./life";
 
-const mocks = vi.hoisted(() => ({
-  checkSenderRole: vi.fn(),
-  createDefinition: vi.fn(),
-  createGoal: vi.fn(),
-  updateDefinition: vi.fn(),
-  deleteDefinition: vi.fn(),
-  deleteGoal: vi.fn(),
-  completeOccurrence: vi.fn(),
-  skipOccurrence: vi.fn(),
-  snoozeOccurrence: vi.fn(),
-  reviewGoal: vi.fn(),
-  capturePhoneConsent: vi.fn(),
-  getOverview: vi.fn(),
-  listDefinitions: vi.fn(),
-  listGoals: vi.fn(),
-  getCalendarFeed: vi.fn(),
-  getNextCalendarEventContext: vi.fn(),
-  getGmailTriage: vi.fn(),
-  getGoogleConnectorStatus: vi.fn(),
-}));
+const mocks = vi.hoisted(() => {
+  class _LifeOpsServiceError extends Error {
+    status: number;
+    constructor(status: number, message: string) {
+      super(message);
+      this.status = status;
+      this.name = "LifeOpsServiceError";
+    }
+  }
+  return {
+    LifeOpsServiceError: _LifeOpsServiceError,
+    checkSenderRole: vi.fn(),
+    createDefinition: vi.fn(),
+    createGoal: vi.fn(),
+    updateDefinition: vi.fn(),
+    deleteDefinition: vi.fn(),
+    deleteGoal: vi.fn(),
+    completeOccurrence: vi.fn(),
+    skipOccurrence: vi.fn(),
+    snoozeOccurrence: vi.fn(),
+    reviewGoal: vi.fn(),
+    capturePhoneConsent: vi.fn(),
+    getOverview: vi.fn(),
+    listDefinitions: vi.fn(),
+    listGoals: vi.fn(),
+    getCalendarFeed: vi.fn(),
+    getNextCalendarEventContext: vi.fn(),
+    getGmailTriage: vi.fn(),
+    getGoogleConnectorStatus: vi.fn(),
+  };
+});
 
 vi.mock("@miladyai/plugin-roles", () => ({ checkSenderRole: mocks.checkSenderRole }));
+
 vi.mock("../lifeops/service.js", () => ({
+  LifeOpsServiceError: mocks.LifeOpsServiceError,
   LifeOpsService: class {
     createDefinition = mocks.createDefinition;
     createGoal = mocks.createGoal;
@@ -326,7 +339,7 @@ describe("LIFE action — robustness scenarios", () => {
   it("catches LifeOpsServiceError and returns user-friendly message instead of provider issue", async () => {
     mocks.listGoals.mockResolvedValue([]);
     mocks.createDefinition.mockRejectedValue(
-      Object.assign(new Error("cadence.kind must be one of: daily, weekly, times_per_day"), { name: "LifeOpsServiceError", status: 400 }),
+      new mocks.LifeOpsServiceError(400, "cadence.kind must be one of: daily, weekly, times_per_day"),
     );
 
     const result = await send({
