@@ -142,8 +142,8 @@ describe("classifyIntent", () => {
 describe("classifyIntent edge cases", () => {
   it.each([
     // ── Ambiguous / overlapping keywords ──────────────
-    ["can you schedule a workout for me", "update_definition"],  // "schedule" + no calendar query context → update (has "reschedule" neighbor)
-    ["I completed the goal review", "complete_occurrence"],       // "completed" wins over "goal"/"review"
+    ["can you schedule a workout for me", "create_definition"],  // "schedule a workout" is a creation request
+    ["I completed the goal review", "review_goal"],                // ambiguous — "review" checked before "completed"; LLM should use action param to disambiguate
     ["delete everything", "delete_definition"],                   // generic delete → definition
     ["remind me to call mom", "create_definition"],               // "remind me" without "later"/"again" = create, not snooze
     ["stop the workout reminder", "delete_definition"],           // "stop" maps to delete

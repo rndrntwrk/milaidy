@@ -142,8 +142,7 @@ function AgentStatusHeader({
     );
   }
 
-  const pnlColor =
-    agent.lifetimePnL >= 0 ? "text-green-400" : "text-red-400";
+  const pnlColor = agent.lifetimePnL >= 0 ? "text-green-400" : "text-red-400";
 
   return (
     <div className="px-3 py-2 border-b border-border space-y-1.5">
@@ -165,8 +164,12 @@ function AgentStatusHeader({
 
       {/* Stats row */}
       <div className="flex items-center gap-2 text-[10px]">
-        <span className="font-mono text-txt">{formatBalance(agent.balance)}</span>
-        <span className={`font-mono ${pnlColor}`}>{formatPnL(agent.lifetimePnL)}</span>
+        <span className="font-mono text-txt">
+          {formatBalance(agent.balance)}
+        </span>
+        <span className={`font-mono ${pnlColor}`}>
+          {formatPnL(agent.lifetimePnL)}
+        </span>
         <span className="text-muted">{(agent.winRate * 100).toFixed(0)}%W</span>
         <span className="text-muted">{agent.totalTrades}T</span>
         <span className="text-muted">R{agent.reputationScore}</span>

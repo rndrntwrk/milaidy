@@ -79,8 +79,18 @@ describe("TasksEventsPanel", () => {
           cadence: {
             kind: "times_per_day",
             slots: [
-              { key: "morning", label: "Morning", minuteOfDay: 480, durationMinutes: 30 },
-              { key: "evening", label: "Evening", minuteOfDay: 1080, durationMinutes: 30 },
+              {
+                key: "morning",
+                label: "Morning",
+                minuteOfDay: 480,
+                durationMinutes: 30,
+              },
+              {
+                key: "evening",
+                label: "Evening",
+                minuteOfDay: 1080,
+                durationMinutes: 30,
+              },
             ],
           },
           title: "Take medication",
@@ -169,8 +179,18 @@ describe("TasksEventsPanel", () => {
             cadence: {
               kind: "times_per_day",
               slots: [
-                { key: "morning", label: "Morning", minuteOfDay: 480, durationMinutes: 30 },
-                { key: "evening", label: "Evening", minuteOfDay: 1080, durationMinutes: 30 },
+                {
+                  key: "morning",
+                  label: "Morning",
+                  minuteOfDay: 480,
+                  durationMinutes: 30,
+                },
+                {
+                  key: "evening",
+                  label: "Evening",
+                  minuteOfDay: 1080,
+                  durationMinutes: 30,
+                },
               ],
             },
             title: "Take medication",

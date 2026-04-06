@@ -719,4 +719,3 @@ function InboxChatPanel({
     </div>
   );
 }
-

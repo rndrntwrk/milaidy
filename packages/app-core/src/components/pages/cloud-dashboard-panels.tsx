@@ -194,8 +194,12 @@ export function AgentDetailSidebar({
       const [statusRes, logsRes, discordRes, githubRes] = await Promise.all([
         client.getCloudCompatAgentStatus(agent.agent_id),
         client.getCloudCompatAgentLogs(agent.agent_id, 100),
-        client.getCloudCompatAgentManagedDiscord(agent.agent_id).catch(() => null),
-        client.getCloudCompatAgentManagedGithub(agent.agent_id).catch(() => null),
+        client
+          .getCloudCompatAgentManagedDiscord(agent.agent_id)
+          .catch(() => null),
+        client
+          .getCloudCompatAgentManagedGithub(agent.agent_id)
+          .catch(() => null),
       ]);
 
       if (!aliveRef.current) return;
@@ -203,7 +207,10 @@ export function AgentDetailSidebar({
       setLogs(typeof logsRes.data === "string" ? logsRes.data : "");
       setManagedDiscord(discordRes?.data ?? null);
       setManagedGithub(githubRes?.data ?? null);
-      if (!lastAgentIdRef.current || lastAgentIdRef.current !== agent.agent_id) {
+      if (
+        !lastAgentIdRef.current ||
+        lastAgentIdRef.current !== agent.agent_id
+      ) {
         lastAgentIdRef.current = agent.agent_id;
         setBotNickname(discordRes?.data?.botNickname ?? agent.agent_name ?? "");
       }
@@ -242,15 +249,20 @@ export function AgentDetailSidebar({
     if (!agent) return;
     setDiscordBusy(true);
     try {
-      const response = await client.createCloudCompatAgentManagedDiscordOauth(agent.agent_id, {
-        returnUrl: typeof window !== "undefined" ? window.location.href : undefined,
-        botNickname: botNickname.trim() || undefined,
-      });
+      const response = await client.createCloudCompatAgentManagedDiscordOauth(
+        agent.agent_id,
+        {
+          returnUrl:
+            typeof window !== "undefined" ? window.location.href : undefined,
+          botNickname: botNickname.trim() || undefined,
+        },
+      );
 
       await openExternalUrl(response.data.authorizeUrl);
       setActionNotice(
         t("elizaclouddashboard.DiscordSetupContinuesInBrowser", {
-          defaultValue: "Finish Discord setup in your browser, then return here.",
+          defaultValue:
+            "Finish Discord setup in your browser, then return here.",
         }),
         "info",
         5000,
@@ -276,7 +288,9 @@ export function AgentDetailSidebar({
     if (!agent) return;
     setDiscordBusy(true);
     try {
-      const response = await client.disconnectCloudCompatAgentManagedDiscord(agent.agent_id);
+      const response = await client.disconnectCloudCompatAgentManagedDiscord(
+        agent.agent_id,
+      );
       if (!aliveRef.current) return;
       setManagedDiscord(response.data);
       setActionNotice(
@@ -308,12 +322,15 @@ export function AgentDetailSidebar({
     if (!agent) return;
     setGithubBusy(true);
     try {
-      const response = await client.createCloudCompatAgentManagedGithubOauth(agent.agent_id);
+      const response = await client.createCloudCompatAgentManagedGithubOauth(
+        agent.agent_id,
+      );
 
       await openExternalUrl(response.data.authorizeUrl);
       setActionNotice(
         t("elizaclouddashboard.GitHubSetupContinuesInBrowser", {
-          defaultValue: "Finish GitHub authorization in your browser, then return here.",
+          defaultValue:
+            "Finish GitHub authorization in your browser, then return here.",
         }),
         "info",
         5000,
@@ -339,7 +356,9 @@ export function AgentDetailSidebar({
     if (!agent) return;
     setGithubBusy(true);
     try {
-      const response = await client.disconnectCloudCompatAgentManagedGithub(agent.agent_id);
+      const response = await client.disconnectCloudCompatAgentManagedGithub(
+        agent.agent_id,
+      );
       if (!aliveRef.current) return;
       setManagedGithub(response.data);
       setActionNotice(
@@ -553,7 +572,9 @@ export function AgentDetailSidebar({
                   <span>
                     {t("elizaclouddashboard.DiscordConnectedAt", {
                       defaultValue: "Linked {{time}}",
-                      time: new Date(managedDiscord.connectedAt).toLocaleString(),
+                      time: new Date(
+                        managedDiscord.connectedAt,
+                      ).toLocaleString(),
                     })}
                   </span>
                 </div>
@@ -671,7 +692,9 @@ export function AgentDetailSidebar({
                   <span>
                     {t("elizaclouddashboard.GitHubConnectedAt", {
                       defaultValue: "Linked {{time}}",
-                      time: new Date(managedGithub.connectedAt).toLocaleString(),
+                      time: new Date(
+                        managedGithub.connectedAt,
+                      ).toLocaleString(),
                     })}
                   </span>
                 </div>

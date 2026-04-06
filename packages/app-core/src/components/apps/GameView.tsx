@@ -553,78 +553,81 @@ export function GameView() {
     Boolean(activeGameSession?.sessionId),
   );
 
-  const sendChatCommand = useCallback(async (rawContent: string) => {
-    const content = rawContent.trim();
-    if (!content) return;
-    const currentSession = sessionState ?? activeGameSession;
-    setSendingChat(true);
-    try {
-      if (currentSession?.sessionId && currentSession.canSendCommands) {
-        const response = await client.sendAppSessionMessage(
-          activeGameApp,
-          currentSession.sessionId,
-          content,
-        );
-        if (response.session) {
-          applySessionState(response.session);
+  const sendChatCommand = useCallback(
+    async (rawContent: string) => {
+      const content = rawContent.trim();
+      if (!content) return;
+      const currentSession = sessionState ?? activeGameSession;
+      setSendingChat(true);
+      try {
+        if (currentSession?.sessionId && currentSession.canSendCommands) {
+          const response = await client.sendAppSessionMessage(
+            activeGameApp,
+            currentSession.sessionId,
+            content,
+          );
+          if (response.session) {
+            applySessionState(response.session);
+          } else {
+            await refreshSessionState();
+          }
+          setActionNotice(
+            response.message ||
+              t("gameview.CommandSentToAppSession", {
+                defaultValue: "Command sent to app session.",
+              }),
+            "success",
+            2400,
+          );
         } else {
-          await refreshSessionState();
+          // Fallback to the generic DM path for apps without a session command channel.
+          const response = await client.sendChatRest(content, "DM");
+          if (response.text) {
+            setActionNotice(
+              t("gameview.AgentResponseNotice", {
+                defaultValue: "Agent: {{response}}",
+                response: `${response.text.slice(0, 100)}${response.text.length > 100 ? "..." : ""}`,
+              }),
+              "success",
+              4000,
+            );
+          } else {
+            setActionNotice(
+              t("gameview.CommandSentToAgent", {
+                defaultValue: "Command sent to agent.",
+              }),
+              "success",
+              2000,
+            );
+          }
         }
+        setChatInput("");
+        setTimeout(() => void loadLogs(), 1500);
+      } catch (err) {
         setActionNotice(
-          response.message ||
-            t("gameview.CommandSentToAppSession", {
-              defaultValue: "Command sent to app session.",
-            }),
-          "success",
-          2400,
+          t("gameview.FailedToSend", {
+            defaultValue: "Failed to send: {{message}}",
+            message: err instanceof Error ? err.message : "error",
+          }),
+          "error",
+          3000,
         );
-      } else {
-        // Fallback to the generic DM path for apps without a session command channel.
-        const response = await client.sendChatRest(content, "DM");
-        if (response.text) {
-          setActionNotice(
-            t("gameview.AgentResponseNotice", {
-              defaultValue: "Agent: {{response}}",
-              response: `${response.text.slice(0, 100)}${response.text.length > 100 ? "..." : ""}`,
-            }),
-            "success",
-            4000,
-          );
-        } else {
-          setActionNotice(
-            t("gameview.CommandSentToAgent", {
-              defaultValue: "Command sent to agent.",
-            }),
-            "success",
-            2000,
-          );
-        }
+      } finally {
+        setSendingChat(false);
       }
-      setChatInput("");
-      setTimeout(() => void loadLogs(), 1500);
-    } catch (err) {
-      setActionNotice(
-        t("gameview.FailedToSend", {
-          defaultValue: "Failed to send: {{message}}",
-          message: err instanceof Error ? err.message : "error",
-        }),
-        "error",
-        3000,
-      );
-    } finally {
-      setSendingChat(false);
-    }
-  }, [
-    activeGameApp,
-    activeGameSession?.sessionId,
-    applySessionState,
-    loadLogs,
-    refreshSessionState,
-    setActionNotice,
-    setTimeout,
-    sessionState?.canSendCommands,
-    t,
-  ]);
+    },
+    [
+      activeGameApp,
+      activeGameSession?.sessionId,
+      applySessionState,
+      loadLogs,
+      refreshSessionState,
+      setActionNotice,
+      setTimeout,
+      sessionState?.canSendCommands,
+      t,
+    ],
+  );
 
   const handleSendChat = useCallback(() => {
     void sendChatCommand(chatInput);
@@ -638,7 +641,11 @@ export function GameView() {
   }, [activeSessionState]);
 
   const handleSessionControl = useCallback(async () => {
-    if (!activeGameApp || !activeGameSession?.sessionId || !sessionControlAction)
+    if (
+      !activeGameApp ||
+      !activeGameSession?.sessionId ||
+      !sessionControlAction
+    )
       return;
     setSessionBusyAction(sessionControlAction);
     try {
@@ -921,7 +928,9 @@ export function GameView() {
         <div className="border-b border-border px-2 py-2 text-[10px] space-y-1.5">
           <div className="flex items-center gap-2">
             <span className="font-semibold text-txt">
-              {String(activeSessionState.telemetry.heroClass).charAt(0).toUpperCase() +
+              {String(activeSessionState.telemetry.heroClass)
+                .charAt(0)
+                .toUpperCase() +
                 String(activeSessionState.telemetry.heroClass).slice(1)}{" "}
               Lv{activeSessionState.telemetry.heroLevel ?? "?"}
             </span>
@@ -965,7 +974,8 @@ export function GameView() {
                 />
               </div>
               <span className="text-muted whitespace-nowrap">
-                {activeSessionState.telemetry.heroHp}/{activeSessionState.telemetry.heroMaxHp}
+                {activeSessionState.telemetry.heroHp}/
+                {activeSessionState.telemetry.heroMaxHp}
               </span>
             </div>
           ) : null}
@@ -977,13 +987,19 @@ export function GameView() {
               </span>
               {activeSessionState.telemetry.strategyScore != null ? (
                 <span>
-                  score: {Number(activeSessionState.telemetry.strategyScore).toFixed(2)}
+                  score:{" "}
+                  {Number(activeSessionState.telemetry.strategyScore).toFixed(
+                    2,
+                  )}
                 </span>
               ) : null}
               {activeSessionState.telemetry.bestStrategyVersion != null ? (
                 <span>
                   best: v{activeSessionState.telemetry.bestStrategyVersion} (
-                  {Number(activeSessionState.telemetry.bestStrategyScore ?? 0).toFixed(2)})
+                  {Number(
+                    activeSessionState.telemetry.bestStrategyScore ?? 0,
+                  ).toFixed(2)}
+                  )
                 </span>
               ) : null}
             </div>
@@ -996,14 +1012,17 @@ export function GameView() {
                 className={
                   Number(activeSessionState.telemetry.laneFrontline ?? 0) > 0
                     ? "text-ok"
-                    : Number(activeSessionState.telemetry.laneFrontline ?? 0) < 0
+                    : Number(activeSessionState.telemetry.laneFrontline ?? 0) <
+                        0
                       ? "text-danger"
                       : ""
                 }
               >
                 {activeSessionState.telemetry.laneHumanUnits}v
                 {activeSessionState.telemetry.laneOrcUnits} (
-                {Number(activeSessionState.telemetry.laneFrontline ?? 0) > 0 ? "+" : ""}
+                {Number(activeSessionState.telemetry.laneFrontline ?? 0) > 0
+                  ? "+"
+                  : ""}
                 {activeSessionState.telemetry.laneFrontline})
               </span>
             </div>

@@ -62,7 +62,8 @@ export function useBabylonSSE(
           if (data.data && data.type) {
             const item: BabylonActivityItem = {
               ...data.data,
-              type: (data.data.type ?? data.type) as BabylonActivityItem["type"],
+              type: (data.data.type ??
+                data.type) as BabylonActivityItem["type"],
               timestamp: data.data.timestamp ?? new Date().toISOString(),
             };
             addItem(item);

@@ -157,8 +157,7 @@ function ConnectorPluginCard({
   // Plugins that only expose optional knobs (e.g. plugin-imessage, whose
   // parameters are all advanced overrides) should flip to Ready as soon as
   // they're enabled, not force the user to fill in every optional field.
-  const allParamsSet =
-    !hasParams || requiredSetCount === requiredParams.length;
+  const allParamsSet = !hasParams || requiredSetCount === requiredParams.length;
   const isToggleBusy = togglingPlugins.has(plugin.id);
   const toggleDisabled =
     isToggleBusy || (hasPluginToggleInFlight && !isToggleBusy);

@@ -399,9 +399,9 @@ describe("LifeOpsOverviewSidebarWidget", () => {
       "owner-occurrence",
       {},
     );
-    expect(mockClient.getLifeOpsOverview.mock.calls.length).toBeGreaterThanOrEqual(
-      2,
-    );
+    expect(
+      mockClient.getLifeOpsOverview.mock.calls.length,
+    ).toBeGreaterThanOrEqual(2);
   });
 
   it("loads occurrence explanations and goal reviews on demand", async () => {
@@ -432,7 +432,9 @@ describe("LifeOpsOverviewSidebarWidget", () => {
     expect(mockClient.getLifeOpsOccurrenceExplanation).toHaveBeenCalledWith(
       "owner-occurrence",
     );
-    expect(flattenText(renderer.root).toLowerCase()).toContain("original intent");
+    expect(flattenText(renderer.root).toLowerCase()).toContain(
+      "original intent",
+    );
 
     const reviewButton = renderer.root
       .findAllByType("button")

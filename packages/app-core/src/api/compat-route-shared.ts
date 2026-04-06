@@ -32,7 +32,10 @@ export function scheduleCompatRuntimeRestart(
   }
 
   if (state.pendingRestartReasons.length >= 50) {
-    state.pendingRestartReasons.splice(1, state.pendingRestartReasons.length - 1);
+    state.pendingRestartReasons.splice(
+      1,
+      state.pendingRestartReasons.length - 1,
+    );
   }
 
   state.pendingRestartReasons.push(reason);

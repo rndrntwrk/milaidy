@@ -30,9 +30,11 @@ describe("MiladyClient runtime API base/token fallback", () => {
 
   beforeEach(() => {
     vi.resetModules();
-    const storage = memoryStorage();
+    const sessionStore = memoryStorage();
+    const localStore = memoryStorage();
     const mockWindow = {
-      sessionStorage: storage,
+      sessionStorage: sessionStore,
+      localStorage: localStore,
       location: {
         protocol: "http:",
         hostname: "127.0.0.1",

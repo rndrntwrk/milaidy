@@ -487,9 +487,9 @@ export function useDesktopPermissionsState() {
       // Late async refreshes can race test teardown or transient bridge/API
       // startup gaps. Normalize missing payloads so the panel degrades to its
       // existing "unable to load permissions" state instead of throwing.
-      const permissions =
-        (bridgedPermissions ?? (await client.getPermissions()) ?? {}) as
-          AllPermissionsState;
+      const permissions = (bridgedPermissions ??
+        (await client.getPermissions()) ??
+        {}) as AllPermissionsState;
       const shellEnabled =
         bridgedShellEnabled === null
           ? await client.isShellEnabled()

@@ -184,7 +184,9 @@ export function AppsCatalogGrid({
                     </div>
                     <p
                       className={`mt-1 text-[12px] leading-5 text-muted-strong ${
-                        featuredSession ? "line-clamp-3 max-w-[44rem]" : "line-clamp-2"
+                        featuredSession
+                          ? "line-clamp-3 max-w-[44rem]"
+                          : "line-clamp-2"
                       }`}
                     >
                       {app.description ||
@@ -211,9 +213,7 @@ export function AppsCatalogGrid({
                     {sessionModeLabel ?? app.launchType ?? "inspect"}
                   </span>
                   <span className="shrink-0 font-medium text-accent">
-                    Inspect
-                    {" "}
-                    →
+                    Inspect →
                   </span>
                 </div>
               </Button>

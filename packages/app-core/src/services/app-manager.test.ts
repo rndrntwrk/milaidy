@@ -935,7 +935,9 @@ describe("App session launch metadata", () => {
           }),
         );
       }
-      if (url.includes("/api/agents/11111111-1111-1111-1111-111111111111/goal")) {
+      if (
+        url.includes("/api/agents/11111111-1111-1111-1111-111111111111/goal")
+      ) {
         return Promise.resolve(
           jsonResponse({
             success: true,
@@ -957,7 +959,9 @@ describe("App session launch metadata", () => {
               { label: "Check the gate", command: "Check the moon gate" },
             ],
             nearbyLocations: [{ name: "Moon Gate" }],
-            availableGoals: [{ description: "Scout the moon gate", type: "scout" }],
+            availableGoals: [
+              { description: "Scout the moon gate", type: "scout" },
+            ],
           }),
         );
       }
@@ -1039,7 +1043,9 @@ describe("App session launch metadata", () => {
           }),
         );
       }
-      if (url.includes("/api/agents/22222222-2222-2222-2222-222222222222/goal")) {
+      if (
+        url.includes("/api/agents/22222222-2222-2222-2222-222222222222/goal")
+      ) {
         return Promise.resolve(
           jsonResponse({
             success: true,
@@ -1057,7 +1063,9 @@ describe("App session launch metadata", () => {
         return Promise.resolve(
           jsonResponse({
             success: true,
-            quickCommands: [{ label: "Report status", command: "Report status" }],
+            quickCommands: [
+              { label: "Report status", command: "Report status" },
+            ],
             nearbyLocations: [],
             availableGoals: [],
           }),

@@ -321,7 +321,10 @@ describe("LocalModelManager Integration", () => {
             ? input.href
             : input.url;
 
-      if (url === "https://huggingface.co/api/models/sentence-transformers/all-MiniLM-L6-v2") {
+      if (
+        url ===
+        "https://huggingface.co/api/models/sentence-transformers/all-MiniLM-L6-v2"
+      ) {
         return new Response(
           JSON.stringify({
             siblings: [
@@ -370,7 +373,9 @@ describe("LocalModelManager Integration", () => {
         );
       }
 
-      throw new Error(`Unexpected fetch in LocalModelManager Integration: ${url}`);
+      throw new Error(
+        `Unexpected fetch in LocalModelManager Integration: ${url}`,
+      );
     }) as typeof global.fetch;
   });
 

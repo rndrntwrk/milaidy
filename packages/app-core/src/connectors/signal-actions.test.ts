@@ -45,9 +45,7 @@ function createRuntime(overrides: Record<string, unknown> = {}) {
     getService: vi.fn().mockReturnValue(signalService),
     useModel: vi
       .fn()
-      .mockResolvedValue(
-        '{"text":"hello from signal","recipient":"current"}',
-      ),
+      .mockResolvedValue('{"text":"hello from signal","recipient":"current"}'),
     getRoom: vi.fn().mockResolvedValue({
       id: "room-1",
       channelId: "+14155551234",
@@ -82,9 +80,9 @@ describe("signal sendMessage action", () => {
   it("validates only signal-sourced send-message intents", async () => {
     const runtime = createRuntime();
 
-    await expect(
-      sendMessage.validate(runtime, createMessage()),
-    ).resolves.toBe(true);
+    await expect(sendMessage.validate(runtime, createMessage())).resolves.toBe(
+      true,
+    );
 
     await expect(
       sendMessage.validate(

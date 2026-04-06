@@ -14,7 +14,9 @@ const signalPluginModule = (await import(
     init?: unknown;
   };
   SignalService: {
-    new (runtime?: unknown): {
+    new (
+      runtime?: unknown,
+    ): {
       stop: () => Promise<void>;
       sendMessage: (
         recipient: string,
@@ -127,9 +129,13 @@ describe("signalPlugin", () => {
     const service = await SignalService.start(runtime);
 
     expect(service.isServiceConnected()).toBe(true);
-    expect((service as SignalServiceInstance & { getAccountNumber: () => string | null }).getAccountNumber()).toBe(
-      "+14155551234",
-    );
+    expect(
+      (
+        service as SignalServiceInstance & {
+          getAccountNumber: () => string | null;
+        }
+      ).getAccountNumber(),
+    ).toBe("+14155551234");
     expect(fetchSpy).toHaveBeenNthCalledWith(
       1,
       "http://localhost:8080/v1/contacts/+14155551234",
@@ -148,9 +154,9 @@ describe("signalPlugin", () => {
     const runtime = createRuntime();
     const service = new SignalService(runtime);
 
-    await expect(
-      service.sendMessage("+14155551234", "hello"),
-    ).rejects.toThrow("Signal client not initialized");
+    await expect(service.sendMessage("+14155551234", "hello")).rejects.toThrow(
+      "Signal client not initialized",
+    );
   });
 
   it("normalizes recipients and forwards direct messages through the API client", async () => {

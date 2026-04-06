@@ -121,3 +121,174 @@ export interface BabylonTeamChatInfo {
     agentCount: number;
   };
 }
+
+// ---------------------------------------------------------------------------
+// Markets
+// ---------------------------------------------------------------------------
+
+export interface BabylonPredictionMarket {
+  id: string;
+  title: string;
+  description?: string;
+  category?: string;
+  status: string;
+  yesPrice: number;
+  noPrice: number;
+  volume: number;
+  liquidity: number;
+  endDate?: string;
+  createdAt: string;
+  resolvedAt?: string;
+  resolution?: string;
+}
+
+export interface BabylonPredictionMarketsResponse {
+  markets: BabylonPredictionMarket[];
+  total: number;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface BabylonTradeResult {
+  ok: boolean;
+  tradeId?: string;
+  marketId?: string;
+  side?: string;
+  amount?: number;
+  shares?: number;
+  price?: number;
+  message?: string;
+}
+
+export interface BabylonPerpMarket {
+  ticker: string;
+  name: string;
+  price: number;
+  change24h: number;
+  volume24h: number;
+  openInterest: number;
+  fundingRate: number;
+}
+
+export interface BabylonPerpPosition {
+  id: string;
+  ticker: string;
+  side: string;
+  size: number;
+  entryPrice: number;
+  markPrice: number;
+  pnl: number;
+  margin: number;
+  leverage: number;
+}
+
+export interface BabylonPerpTradeResult {
+  ok: boolean;
+  positionId?: string;
+  ticker?: string;
+  side?: string;
+  size?: number;
+  entryPrice?: number;
+  message?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Social
+// ---------------------------------------------------------------------------
+
+export interface BabylonPost {
+  id: string;
+  authorId: string;
+  authorName?: string;
+  content: string;
+  marketId?: string;
+  likes: number;
+  comments: number;
+  shares: number;
+  createdAt: string;
+}
+
+export interface BabylonPostsResponse {
+  posts: BabylonPost[];
+  total?: number;
+}
+
+export interface BabylonPostResult {
+  ok: boolean;
+  postId?: string;
+  message?: string;
+}
+
+export interface BabylonComment {
+  id: string;
+  authorId: string;
+  authorName?: string;
+  content: string;
+  postId: string;
+  likes: number;
+  createdAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// Messaging
+// ---------------------------------------------------------------------------
+
+export interface BabylonChat {
+  id: string;
+  type: string;
+  name?: string;
+  participants: Array<{ id: string; name: string }>;
+  lastMessage?: string;
+  lastMessageAt?: string;
+}
+
+export interface BabylonChatsResponse {
+  chats: BabylonChat[];
+}
+
+export interface BabylonChatMessage {
+  id: string;
+  senderId: string;
+  senderName?: string;
+  content: string;
+  createdAt: string;
+}
+
+export interface BabylonChatMessagesResponse {
+  messages: BabylonChatMessage[];
+}
+
+export interface BabylonSendMessageResult {
+  ok: boolean;
+  messageId?: string;
+  message?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Agent management
+// ---------------------------------------------------------------------------
+
+export interface BabylonAgentGoal {
+  id: string;
+  description: string;
+  status: string;
+  progress?: number;
+  createdAt: string;
+}
+
+export interface BabylonAgentStats {
+  totalTrades: number;
+  winRate: number;
+  lifetimePnL: number;
+  totalPosts: number;
+  totalComments: number;
+  reputationScore: number;
+  balance: number;
+}
+
+export interface BabylonAgentSummary {
+  id: string;
+  name: string;
+  summary: string;
+  recentActivity: BabylonActivityItem[];
+}

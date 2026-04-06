@@ -33,12 +33,30 @@ import type {
   SkillMarketplaceResult,
   SkillScanReportSummary,
   BabylonActivityFeed,
+  BabylonAgentGoal,
+  BabylonAgentStats,
   BabylonAgentStatus,
+  BabylonAgentSummary,
+  BabylonChat,
+  BabylonChatMessage,
+  BabylonChatMessagesResponse,
   BabylonChatResponse,
+  BabylonChatsResponse,
+  BabylonComment,
   BabylonLogEntry,
+  BabylonPerpMarket,
+  BabylonPerpPosition,
+  BabylonPerpTradeResult,
+  BabylonPost,
+  BabylonPostResult,
+  BabylonPostsResponse,
+  BabylonPredictionMarket,
+  BabylonPredictionMarketsResponse,
+  BabylonSendMessageResult,
   BabylonTeamChatInfo,
   BabylonTeamResponse,
   BabylonToggleResponse,
+  BabylonTradeResult,
   BabylonWallet,
 } from "./client-types";
 
@@ -287,6 +305,80 @@ declare module "./client-base" {
       commenting?: boolean;
       dms?: boolean;
     }): Promise<BabylonToggleResponse>;
+
+    // Babylon markets
+    getBabylonPredictionMarkets(opts?: {
+      page?: number;
+      pageSize?: number;
+      status?: string;
+      category?: string;
+    }): Promise<BabylonPredictionMarketsResponse>;
+    getBabylonPredictionMarket(
+      marketId: string,
+    ): Promise<BabylonPredictionMarket>;
+    buyBabylonPredictionShares(
+      marketId: string,
+      side: "yes" | "no",
+      amount: number,
+    ): Promise<BabylonTradeResult>;
+    sellBabylonPredictionShares(
+      marketId: string,
+      side: "yes" | "no",
+      amount: number,
+    ): Promise<BabylonTradeResult>;
+    getBabylonPerpMarkets(): Promise<BabylonPerpMarket[]>;
+    getBabylonOpenPerpPositions(): Promise<BabylonPerpPosition[]>;
+    closeBabylonPerpPosition(
+      positionId: string,
+    ): Promise<BabylonPerpTradeResult>;
+
+    // Babylon social
+    getBabylonPosts(opts?: {
+      page?: number;
+      limit?: number;
+      feed?: string;
+    }): Promise<BabylonPostsResponse>;
+    createBabylonPost(
+      content: string,
+      marketId?: string,
+    ): Promise<BabylonPostResult>;
+    commentOnBabylonPost(
+      postId: string,
+      content: string,
+    ): Promise<BabylonPostResult>;
+    likeBabylonPost(postId: string): Promise<{ ok: boolean }>;
+
+    // Babylon messaging
+    getBabylonChats(): Promise<BabylonChatsResponse>;
+    getBabylonChatMessages(
+      chatId: string,
+    ): Promise<BabylonChatMessagesResponse>;
+    sendBabylonChatMessage(
+      chatId: string,
+      content: string,
+    ): Promise<BabylonSendMessageResult>;
+    getBabylonDM(userId: string): Promise<BabylonChat>;
+
+    // Babylon agent management
+    getBabylonAgentGoals(): Promise<BabylonAgentGoal[]>;
+    getBabylonAgentStats(): Promise<BabylonAgentStats>;
+    getBabylonAgentSummary(): Promise<BabylonAgentSummary>;
+    getBabylonAgentRecentTrades(): Promise<BabylonActivityFeed>;
+    getBabylonAgentTradingBalance(): Promise<{ balance: number }>;
+    sendBabylonAgentChat(content: string): Promise<BabylonChatResponse>;
+    getBabylonAgentChat(): Promise<{ messages: BabylonChatMessage[] }>;
+
+    // Babylon feed
+    getBabylonFeedForYou(): Promise<BabylonPostsResponse>;
+    getBabylonFeedHot(): Promise<BabylonPostsResponse>;
+    getBabylonTrades(): Promise<BabylonActivityFeed>;
+
+    // Babylon discover & team
+    discoverBabylonAgents(): Promise<BabylonTeamResponse>;
+    getBabylonTeamDashboard(): Promise<Record<string, unknown>>;
+    getBabylonTeamConversations(): Promise<Record<string, unknown>>;
+    pauseAllBabylonAgents(): Promise<{ ok: boolean }>;
+    resumeAllBabylonAgents(): Promise<{ ok: boolean }>;
   }
 }
 
@@ -876,5 +968,270 @@ MiladyClient.prototype.toggleBabylonAgentAutonomy = async function (
   return this.fetch("/api/apps/babylon/agent/autonomy", {
     method: "POST",
     body: JSON.stringify(opts),
+  });
+};
+
+// ---------------------------------------------------------------------------
+// Babylon markets
+// ---------------------------------------------------------------------------
+
+MiladyClient.prototype.getBabylonPredictionMarkets = async function (
+  this: MiladyClient,
+  opts?,
+) {
+  const params = new URLSearchParams();
+  if (opts?.page) params.set("page", String(opts.page));
+  if (opts?.pageSize) params.set("pageSize", String(opts.pageSize));
+  if (opts?.status) params.set("status", opts.status);
+  if (opts?.category) params.set("category", opts.category);
+  const qs = params.toString();
+  return this.fetch(
+    `/api/apps/babylon/markets/predictions${qs ? `?${qs}` : ""}`,
+  );
+};
+
+MiladyClient.prototype.getBabylonPredictionMarket = async function (
+  this: MiladyClient,
+  marketId,
+) {
+  return this.fetch(
+    `/api/apps/babylon/markets/predictions/${encodeURIComponent(marketId)}`,
+  );
+};
+
+MiladyClient.prototype.buyBabylonPredictionShares = async function (
+  this: MiladyClient,
+  marketId,
+  side,
+  amount,
+) {
+  return this.fetch(
+    `/api/apps/babylon/markets/predictions/${encodeURIComponent(marketId)}/buy`,
+    { method: "POST", body: JSON.stringify({ side, amount }) },
+  );
+};
+
+MiladyClient.prototype.sellBabylonPredictionShares = async function (
+  this: MiladyClient,
+  marketId,
+  side,
+  amount,
+) {
+  return this.fetch(
+    `/api/apps/babylon/markets/predictions/${encodeURIComponent(marketId)}/sell`,
+    { method: "POST", body: JSON.stringify({ side, amount }) },
+  );
+};
+
+MiladyClient.prototype.getBabylonPerpMarkets = async function (
+  this: MiladyClient,
+) {
+  return this.fetch("/api/apps/babylon/markets/perps");
+};
+
+MiladyClient.prototype.getBabylonOpenPerpPositions = async function (
+  this: MiladyClient,
+) {
+  return this.fetch("/api/apps/babylon/markets/perps/open");
+};
+
+MiladyClient.prototype.closeBabylonPerpPosition = async function (
+  this: MiladyClient,
+  positionId,
+) {
+  return this.fetch(
+    `/api/apps/babylon/markets/perps/position/${encodeURIComponent(positionId)}/close`,
+    { method: "POST", body: JSON.stringify({}) },
+  );
+};
+
+// ---------------------------------------------------------------------------
+// Babylon social
+// ---------------------------------------------------------------------------
+
+MiladyClient.prototype.getBabylonPosts = async function (
+  this: MiladyClient,
+  opts?,
+) {
+  const params = new URLSearchParams();
+  if (opts?.page) params.set("page", String(opts.page));
+  if (opts?.limit) params.set("limit", String(opts.limit));
+  if (opts?.feed) params.set("feed", opts.feed);
+  const qs = params.toString();
+  return this.fetch(`/api/apps/babylon/posts${qs ? `?${qs}` : ""}`);
+};
+
+MiladyClient.prototype.createBabylonPost = async function (
+  this: MiladyClient,
+  content,
+  marketId?,
+) {
+  return this.fetch("/api/apps/babylon/posts", {
+    method: "POST",
+    body: JSON.stringify({ content, marketId }),
+  });
+};
+
+MiladyClient.prototype.commentOnBabylonPost = async function (
+  this: MiladyClient,
+  postId,
+  content,
+) {
+  return this.fetch(
+    `/api/apps/babylon/posts/${encodeURIComponent(postId)}/comments`,
+    { method: "POST", body: JSON.stringify({ content }) },
+  );
+};
+
+MiladyClient.prototype.likeBabylonPost = async function (
+  this: MiladyClient,
+  postId,
+) {
+  return this.fetch(
+    `/api/apps/babylon/posts/${encodeURIComponent(postId)}/like`,
+    { method: "POST" },
+  );
+};
+
+// ---------------------------------------------------------------------------
+// Babylon messaging
+// ---------------------------------------------------------------------------
+
+MiladyClient.prototype.getBabylonChats = async function (this: MiladyClient) {
+  return this.fetch("/api/apps/babylon/chats");
+};
+
+MiladyClient.prototype.getBabylonChatMessages = async function (
+  this: MiladyClient,
+  chatId,
+) {
+  return this.fetch(
+    `/api/apps/babylon/chats/${encodeURIComponent(chatId)}/messages`,
+  );
+};
+
+MiladyClient.prototype.sendBabylonChatMessage = async function (
+  this: MiladyClient,
+  chatId,
+  content,
+) {
+  return this.fetch(
+    `/api/apps/babylon/chats/${encodeURIComponent(chatId)}/message`,
+    { method: "POST", body: JSON.stringify({ content }) },
+  );
+};
+
+MiladyClient.prototype.getBabylonDM = async function (
+  this: MiladyClient,
+  userId,
+) {
+  return this.fetch(
+    `/api/apps/babylon/chats/dm?userId=${encodeURIComponent(userId)}`,
+  );
+};
+
+// ---------------------------------------------------------------------------
+// Babylon agent management
+// ---------------------------------------------------------------------------
+
+MiladyClient.prototype.getBabylonAgentGoals = async function (
+  this: MiladyClient,
+) {
+  return this.fetch("/api/apps/babylon/agent/goals");
+};
+
+MiladyClient.prototype.getBabylonAgentStats = async function (
+  this: MiladyClient,
+) {
+  return this.fetch("/api/apps/babylon/agent/stats");
+};
+
+MiladyClient.prototype.getBabylonAgentSummary = async function (
+  this: MiladyClient,
+) {
+  return this.fetch("/api/apps/babylon/agent/summary");
+};
+
+MiladyClient.prototype.getBabylonAgentRecentTrades = async function (
+  this: MiladyClient,
+) {
+  return this.fetch("/api/apps/babylon/agent/recent-trades");
+};
+
+MiladyClient.prototype.getBabylonAgentTradingBalance = async function (
+  this: MiladyClient,
+) {
+  return this.fetch("/api/apps/babylon/agent/trading-balance");
+};
+
+MiladyClient.prototype.sendBabylonAgentChat = async function (
+  this: MiladyClient,
+  content,
+) {
+  return this.fetch("/api/apps/babylon/agent/chat", {
+    method: "POST",
+    body: JSON.stringify({ content }),
+  });
+};
+
+MiladyClient.prototype.getBabylonAgentChat = async function (
+  this: MiladyClient,
+) {
+  return this.fetch("/api/apps/babylon/agent/chat");
+};
+
+// ---------------------------------------------------------------------------
+// Babylon feed
+// ---------------------------------------------------------------------------
+
+MiladyClient.prototype.getBabylonFeedForYou = async function (
+  this: MiladyClient,
+) {
+  return this.fetch("/api/apps/babylon/feed/for-you");
+};
+
+MiladyClient.prototype.getBabylonFeedHot = async function (this: MiladyClient) {
+  return this.fetch("/api/apps/babylon/feed/hot");
+};
+
+MiladyClient.prototype.getBabylonTrades = async function (this: MiladyClient) {
+  return this.fetch("/api/apps/babylon/trades");
+};
+
+// ---------------------------------------------------------------------------
+// Babylon discover & team management
+// ---------------------------------------------------------------------------
+
+MiladyClient.prototype.discoverBabylonAgents = async function (
+  this: MiladyClient,
+) {
+  return this.fetch("/api/apps/babylon/agents/discover");
+};
+
+MiladyClient.prototype.getBabylonTeamDashboard = async function (
+  this: MiladyClient,
+) {
+  return this.fetch("/api/apps/babylon/team/dashboard");
+};
+
+MiladyClient.prototype.getBabylonTeamConversations = async function (
+  this: MiladyClient,
+) {
+  return this.fetch("/api/apps/babylon/team/conversations");
+};
+
+MiladyClient.prototype.pauseAllBabylonAgents = async function (
+  this: MiladyClient,
+) {
+  return this.fetch("/api/apps/babylon/admin/agents/pause-all", {
+    method: "POST",
+  });
+};
+
+MiladyClient.prototype.resumeAllBabylonAgents = async function (
+  this: MiladyClient,
+) {
+  return this.fetch("/api/apps/babylon/admin/agents/resume-all", {
+    method: "POST",
   });
 };

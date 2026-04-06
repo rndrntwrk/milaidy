@@ -108,15 +108,14 @@ export function classifyIntent(intent: string): LifeOperation {
   // Phone capture — "text me", "call me", "my number"
   if (/\b(phone|text me|call me|sms|my number|voice call)\b/.test(lower)) return "capture_phone";
 
-  // Query operations — check before mutation keywords
-  if (/\b(calendar|schedule|events?|meetings?|what'?s on|agenda)\b/.test(lower)) {
-    if (/\b(next|upcoming|soon|about to)\b/.test(lower)) return "query_calendar_next";
-    if (/\b(tomorrow)\b/.test(lower)) return "query_calendar_today";
-    if (/\b(this week|week)\b/.test(lower)) return "query_calendar_today";
-    return "query_calendar_today";
+  // Review — check before calendar so "review the calendar event" doesn't hit calendar
+  if (/\b(review|how.*(doing|going)|progress|check.*(goal|on))\b/.test(lower)) return "review_goal";
+
+  // Delete — check before calendar so "stop the reminder" doesn't hit create
+  if (/\b(delete|remove|cancel|get rid of|drop|stop tracking|stop the|stop my)\b/.test(lower)) {
+    if (/\b(goal)\b/.test(lower)) return "delete_goal";
+    return "delete_definition";
   }
-  if (/\b(emails?|inbox|mail|messages?|gmail)\b/.test(lower)) return "query_email";
-  if (/\b(overview|summary|what'?s active|status|what do i have|show me everything)\b/.test(lower)) return "query_overview";
 
   // Completion — "I did it", "mark brushing done", "finished my workout", "I brushed my teeth"
   if (/\b(done|complete[d]?|finished|did (it|that|my|the)|mark.*(done|complete)|i (brushed|worked out|meditated|exercised|stretched|took|drank|ate|ran|walked|cleaned|called|read))\b/.test(lower)) return "complete_occurrence";
@@ -124,19 +123,18 @@ export function classifyIntent(intent: string): LifeOperation {
   // Skip — "skip brushing", "pass on workout", "not today"
   if (/\b(skip|pass\b|not today|skip.*(today|this))\b/.test(lower)) return "skip_occurrence";
 
-  // Snooze — "snooze", "remind me later", "postpone", "defer"
-  if (/\b(snooze|later|remind.*(later|again|in)|postpone|defer|push back)\b/.test(lower)) return "snooze_occurrence";
+  // Snooze — "snooze", "remind me later", "postpone", "defer", "push ... back"
+  if (/\b(snooze|later|remind.*(later|again|in)|postpone|defer|push\b.*\bback)\b/.test(lower)) return "snooze_occurrence";
 
-  // Delete — "delete", "remove", "cancel", "get rid of"
-  if (/\b(delete|remove|cancel|get rid of|drop|stop tracking)\b/.test(lower)) {
-    if (/\b(goal)\b/.test(lower)) return "delete_goal";
-    return "delete_definition";
+  // Query operations — check before create default
+  if (/\b(calendar|events?|meetings?|what'?s on|agenda|(?:my|today'?s|this week'?s|tomorrow'?s) schedule)\b/.test(lower)) {
+    if (/\b(next|upcoming|soon|about to)\b/.test(lower)) return "query_calendar_next";
+    if (/\b(tomorrow)\b/.test(lower)) return "query_calendar_today";
+    if (/\b(this week|week)\b/.test(lower)) return "query_calendar_today";
+    return "query_calendar_today";
   }
-
-  // (phone/escalation checked above, before calendar)
-
-  // Review — "how am I doing", "review my goal", "check progress"
-  if (/\b(review|how.*(doing|going)|progress|check.*(goal|on))\b/.test(lower)) return "review_goal";
+  if (/\b(emails?|inbox|mail|messages?|gmail|respond to|important.*(need|should|must))\b/.test(lower)) return "query_email";
+  if (/\b(overview|summary|what'?s active|status|what do i have|show me everything)\b/.test(lower)) return "query_overview";
 
   // Create goal — "I want to", "my goal is", "life goal"
   if (/\b(goal|life goal|want to .{5,}|aspir|aim to|commit to)\b/.test(lower)) return "create_goal";

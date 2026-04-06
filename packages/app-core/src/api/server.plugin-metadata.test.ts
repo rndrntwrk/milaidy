@@ -52,13 +52,11 @@ describe("plugin metadata discovery", () => {
     const plugins =
       discovered.length > 0
         ? discovered
-        : ((JSON.parse(
-            readFileSync(
-              manifestPath ?? manifestCandidates[0],
-              "utf8",
-            ),
-          ) as PluginManifest
-        ).plugins ?? []);
+        : ((
+            JSON.parse(
+              readFileSync(manifestPath ?? manifestCandidates[0], "utf8"),
+            ) as PluginManifest
+          ).plugins ?? []);
 
     const telegram = plugins.find((plugin) => plugin.id === "telegram");
     const github = plugins.find((plugin) => plugin.id === "github");

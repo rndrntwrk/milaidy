@@ -126,12 +126,12 @@ declare module "./client-base" {
      * has a specific chat selected. When `roomId` is omitted the feed
      * merges every room's recent messages.
      */
-    getInboxMessages(
-      options?: { limit?: number; sources?: string[]; roomId?: string },
-    ): Promise<{
-      messages: Array<
-        ConversationMessage & { roomId: string; source: string }
-      >;
+    getInboxMessages(options?: {
+      limit?: number;
+      sources?: string[];
+      roomId?: string;
+    }): Promise<{
+      messages: Array<ConversationMessage & { roomId: string; source: string }>;
       count: number;
     }>;
     /**
@@ -650,9 +650,7 @@ MiladyClient.prototype.getInboxMessages = async function (
   const query = params.toString();
   const path = query ? `/api/inbox/messages?${query}` : "/api/inbox/messages";
   return this.fetch<{
-    messages: Array<
-      ConversationMessage & { roomId: string; source: string }
-    >;
+    messages: Array<ConversationMessage & { roomId: string; source: string }>;
     count: number;
   }>(path);
 };

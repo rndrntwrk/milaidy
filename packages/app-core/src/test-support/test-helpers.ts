@@ -225,7 +225,7 @@ export function resolveLensPluginImportSpecifier(): string | null {
   for (const relativeEntryPath of LENS_PLUGIN_LOCAL_ENTRY_CANDIDATES) {
     const absoluteEntryPath = path.resolve(packageRoot, relativeEntryPath);
     if (existsSync(absoluteEntryPath)) {
-        return pathToFileURL(absoluteEntryPath).href;
+      return pathToFileURL(absoluteEntryPath).href;
     }
   }
 

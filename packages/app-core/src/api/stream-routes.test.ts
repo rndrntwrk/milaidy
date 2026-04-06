@@ -949,9 +949,7 @@ describe("handleStreamRoute", () => {
 // ---------------------------------------------------------------------------
 
 async function loadTwitchDestinationModule(): Promise<{
-  createTwitchDestination: (config?: {
-    streamKey?: string;
-  }) => {
+  createTwitchDestination: (config?: { streamKey?: string }) => {
     id: string;
     name: string;
     getCredentials: () => Promise<{ rtmpUrl: string; rtmpKey: string }>;

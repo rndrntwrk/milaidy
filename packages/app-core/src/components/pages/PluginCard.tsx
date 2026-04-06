@@ -32,10 +32,7 @@ export interface PluginCardProps {
   onInstall: (pluginId: string, npmName: string) => void;
   onUpdate: (pluginId: string, npmName: string) => void;
   onUninstall: (pluginId: string, npmName: string) => void;
-  onReleaseStreamChange: (
-    pluginId: string,
-    stream: "latest" | "alpha",
-  ) => void;
+  onReleaseStreamChange: (pluginId: string, stream: "latest" | "alpha") => void;
   onOpenExternalUrl: (url: string) => void;
   onDragStart?: (e: React.DragEvent, pluginId: string) => void;
   onDragOver?: (e: React.DragEvent, pluginId: string) => void;
@@ -105,7 +102,8 @@ export function PluginCard({
     selectedReleaseStream === "alpha" ? p.alphaVersion : p.latestVersion;
   const showReleaseControls = !isShowcase && Boolean(p.npmName);
   const canUpdate = showReleaseControls && Boolean(p.version);
-  const canUninstall = !isShowcase && p.source === "store" && Boolean(p.npmName);
+  const canUninstall =
+    !isShowcase && p.source === "store" && Boolean(p.npmName);
   const isInstalling = installingPlugins.has(p.id);
   const isUpdating = updatingPlugins.has(p.id);
   const isUninstalling = uninstallingPlugins.has(p.id);

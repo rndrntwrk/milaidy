@@ -414,6 +414,311 @@ export async function handleAppRoutes(ctx: RouteContext): Promise<boolean> {
     return handleSSEProxy(config, ctx);
   }
 
+  // =========================================================================
+  // Markets — predictions
+  // =========================================================================
+
+  if (ctx.method === "GET" && path === "/markets/predictions") {
+    const params = new URLSearchParams();
+    for (const [k, v] of ctx.url.searchParams) {
+      if (["page", "pageSize", "status", "category", "sort"].includes(k)) {
+        params.set(k, v);
+      }
+    }
+    const qs = params.toString();
+    return proxyGet(config, `/api/markets/predictions${qs ? `?${qs}` : ""}`, ctx);
+  }
+
+  if (ctx.method === "GET" && path.startsWith("/markets/predictions/")) {
+    const marketId = path.replace("/markets/predictions/", "").split("/")[0];
+    if (!marketId) return false;
+    const sub = path.replace(`/markets/predictions/${marketId}`, "");
+    if (!sub || sub === "/") {
+      return proxyGet(config, `/api/markets/predictions/${encodeURIComponent(marketId)}`, ctx);
+    }
+    if (sub === "/history") {
+      return proxyGet(config, `/api/markets/predictions/${encodeURIComponent(marketId)}/history`, ctx);
+    }
+    if (sub === "/trades") {
+      return proxyGet(config, `/api/markets/predictions/${encodeURIComponent(marketId)}/trades`, ctx);
+    }
+  }
+
+  // Buy prediction shares
+  if (ctx.method === "POST" && path.match(/^\/markets\/predictions\/[^/]+\/buy$/)) {
+    const marketId = path.split("/")[3];
+    const body = await ctx.readJsonBody();
+    return proxyPost(config, `/api/markets/predictions/${encodeURIComponent(marketId!)}/buy`, body, ctx);
+  }
+
+  // Sell prediction shares
+  if (ctx.method === "POST" && path.match(/^\/markets\/predictions\/[^/]+\/sell$/)) {
+    const marketId = path.split("/")[3];
+    const body = await ctx.readJsonBody();
+    return proxyPost(config, `/api/markets/predictions/${encodeURIComponent(marketId!)}/sell`, body, ctx);
+  }
+
+  // =========================================================================
+  // Markets — perps
+  // =========================================================================
+
+  if (ctx.method === "GET" && path === "/markets/perps") {
+    return proxyGet(config, "/api/markets/perps", ctx);
+  }
+
+  if (ctx.method === "GET" && path === "/markets/perps/open") {
+    return proxyGet(config, "/api/markets/perps/open", ctx);
+  }
+
+  // Preview perp trade
+  if (ctx.method === "POST" && path === "/markets/perps/preview") {
+    const body = await ctx.readJsonBody();
+    return proxyPost(config, "/api/markets/perps/preview", body, ctx);
+  }
+
+  // Close perp position
+  if (ctx.method === "POST" && path.match(/^\/markets\/perps\/position\/[^/]+\/close$/)) {
+    const positionId = path.split("/")[4];
+    const body = await ctx.readJsonBody();
+    return proxyPost(config, `/api/markets/perps/position/${encodeURIComponent(positionId!)}/close`, body, ctx);
+  }
+
+  // =========================================================================
+  // Social — posts
+  // =========================================================================
+
+  // List / feed
+  if (ctx.method === "GET" && path === "/posts") {
+    const params = new URLSearchParams();
+    for (const [k, v] of ctx.url.searchParams) {
+      if (["page", "limit", "feed", "sort"].includes(k)) params.set(k, v);
+    }
+    const qs = params.toString();
+    return proxyGet(config, `/api/posts${qs ? `?${qs}` : ""}`, ctx);
+  }
+
+  // Create post
+  if (ctx.method === "POST" && path === "/posts") {
+    const body = await ctx.readJsonBody();
+    return proxyPost(config, "/api/posts", body, ctx);
+  }
+
+  // Single post + interactions
+  if (ctx.method === "GET" && path.match(/^\/posts\/[^/]+$/)) {
+    const postId = path.split("/")[2];
+    return proxyGet(config, `/api/posts/${encodeURIComponent(postId!)}`, ctx);
+  }
+
+  // Post comments
+  if (ctx.method === "GET" && path.match(/^\/posts\/[^/]+\/comments$/)) {
+    const postId = path.split("/")[2];
+    return proxyGet(config, `/api/posts/${encodeURIComponent(postId!)}/comments`, ctx);
+  }
+
+  // Comment on post
+  if (ctx.method === "POST" && path.match(/^\/posts\/[^/]+\/comments$/)) {
+    const postId = path.split("/")[2];
+    const body = await ctx.readJsonBody();
+    return proxyPost(config, `/api/posts/${encodeURIComponent(postId!)}/comments`, body, ctx);
+  }
+
+  // Like post
+  if (ctx.method === "POST" && path.match(/^\/posts\/[^/]+\/like$/)) {
+    const postId = path.split("/")[2];
+    return proxyPost(config, `/api/posts/${encodeURIComponent(postId!)}/like`, {}, ctx);
+  }
+
+  // =========================================================================
+  // Messaging — chats & DMs
+  // =========================================================================
+
+  // List chats
+  if (ctx.method === "GET" && path === "/chats") {
+    return proxyGet(config, "/api/chats", ctx);
+  }
+
+  // Create chat / DM
+  if (ctx.method === "POST" && path === "/chats") {
+    const body = await ctx.readJsonBody();
+    return proxyPost(config, "/api/chats", body, ctx);
+  }
+
+  // Get DM with specific user
+  if (ctx.method === "GET" && path === "/chats/dm") {
+    const userId = ctx.url.searchParams.get("userId");
+    return proxyGet(config, `/api/chats/dm${userId ? `?userId=${encodeURIComponent(userId)}` : ""}`, ctx);
+  }
+
+  // Chat messages
+  if (ctx.method === "GET" && path.match(/^\/chats\/[^/]+\/messages$/)) {
+    const chatId = path.split("/")[2];
+    return proxyGet(config, `/api/chats/${encodeURIComponent(chatId!)}/messages`, ctx);
+  }
+
+  // Send message to chat
+  if (ctx.method === "POST" && path.match(/^\/chats\/[^/]+\/message$/)) {
+    const chatId = path.split("/")[2];
+    const body = await ctx.readJsonBody();
+    return proxyPost(config, `/api/chats/${encodeURIComponent(chatId!)}/message`, body, ctx);
+  }
+
+  // =========================================================================
+  // Groups
+  // =========================================================================
+
+  if (ctx.method === "GET" && path === "/groups") {
+    return proxyGet(config, "/api/groups", ctx);
+  }
+
+  if (ctx.method === "POST" && path === "/groups") {
+    const body = await ctx.readJsonBody();
+    return proxyPost(config, "/api/groups", body, ctx);
+  }
+
+  if (ctx.method === "GET" && path.match(/^\/groups\/[^/]+$/)) {
+    const groupId = path.split("/")[2];
+    return proxyGet(config, `/api/groups/${encodeURIComponent(groupId!)}`, ctx);
+  }
+
+  if (ctx.method === "GET" && path.match(/^\/groups\/[^/]+\/members$/)) {
+    const groupId = path.split("/")[2];
+    return proxyGet(config, `/api/groups/${encodeURIComponent(groupId!)}/members`, ctx);
+  }
+
+  // =========================================================================
+  // Agent management (beyond status)
+  // =========================================================================
+
+  // Agent goals
+  if (ctx.method === "GET" && path === "/agent/goals") {
+    if (!agentId) {
+      ctx.json(ctx.res, [], 200);
+      return true;
+    }
+    return proxyGet(config, `/api/agents/${encodeURIComponent(agentId)}/goals`, ctx);
+  }
+
+  // Agent stats
+  if (ctx.method === "GET" && path === "/agent/stats") {
+    if (!agentId) {
+      ctx.json(ctx.res, {}, 200);
+      return true;
+    }
+    return proxyGet(config, `/api/agents/${encodeURIComponent(agentId)}/stats`, ctx);
+  }
+
+  // Agent summary
+  if (ctx.method === "GET" && path === "/agent/summary") {
+    if (!agentId) {
+      ctx.json(ctx.res, {}, 200);
+      return true;
+    }
+    return proxyGet(config, `/api/agents/${encodeURIComponent(agentId)}/summary`, ctx);
+  }
+
+  // Agent recent trades
+  if (ctx.method === "GET" && path === "/agent/recent-trades") {
+    if (!agentId) {
+      ctx.json(ctx.res, [], 200);
+      return true;
+    }
+    return proxyGet(config, `/api/agents/${encodeURIComponent(agentId)}/recent-trades`, ctx);
+  }
+
+  // Agent chat (direct messages with agent)
+  if (ctx.method === "GET" && path === "/agent/chat") {
+    if (!agentId) {
+      ctx.json(ctx.res, { messages: [] }, 200);
+      return true;
+    }
+    return proxyGet(config, `/api/agents/${encodeURIComponent(agentId)}/chat`, ctx);
+  }
+
+  if (ctx.method === "POST" && path === "/agent/chat") {
+    if (!agentId) {
+      ctx.error(ctx.res, "No BABYLON_AGENT_ID configured.", 400);
+      return true;
+    }
+    const body = await ctx.readJsonBody();
+    return proxyPost(config, `/api/agents/${encodeURIComponent(agentId)}/chat`, body, ctx);
+  }
+
+  // Agent card
+  if (ctx.method === "GET" && path === "/agent/card") {
+    if (!agentId) {
+      ctx.json(ctx.res, {}, 200);
+      return true;
+    }
+    return proxyGet(config, `/api/agents/${encodeURIComponent(agentId)}/card`, ctx);
+  }
+
+  // Agent trading balance
+  if (ctx.method === "GET" && path === "/agent/trading-balance") {
+    if (!agentId) {
+      ctx.json(ctx.res, { balance: 0 }, 200);
+      return true;
+    }
+    return proxyGet(config, `/api/agents/${encodeURIComponent(agentId)}/trading-balance`, ctx);
+  }
+
+  // Agent benchmark
+  if (ctx.method === "GET" && path === "/agent/benchmark") {
+    if (!agentId) {
+      ctx.json(ctx.res, {}, 200);
+      return true;
+    }
+    return proxyGet(config, `/api/agents/${encodeURIComponent(agentId)}/benchmark`, ctx);
+  }
+
+  // =========================================================================
+  // Feed endpoints
+  // =========================================================================
+
+  if (ctx.method === "GET" && path === "/feed/for-you") {
+    return proxyGet(config, "/api/feed/for-you", ctx);
+  }
+
+  if (ctx.method === "GET" && path === "/feed/hot") {
+    return proxyGet(config, "/api/feed/hot", ctx);
+  }
+
+  if (ctx.method === "GET" && path === "/trades") {
+    return proxyGet(config, "/api/trades", ctx);
+  }
+
+  // =========================================================================
+  // Discover agents
+  // =========================================================================
+
+  if (ctx.method === "GET" && path === "/agents/discover") {
+    return proxyGet(config, "/api/agents/discover", ctx);
+  }
+
+  // =========================================================================
+  // Team dashboard
+  // =========================================================================
+
+  if (ctx.method === "GET" && path === "/team/dashboard") {
+    return proxyGet(config, "/api/agents/team-dashboard", ctx);
+  }
+
+  // Team chat conversations
+  if (ctx.method === "GET" && path === "/team/conversations") {
+    return proxyGet(config, "/api/agents/team-chat/conversations", ctx);
+  }
+
+  // =========================================================================
+  // Admin: pause/resume all agents
+  // =========================================================================
+
+  if (ctx.method === "POST" && path === "/admin/agents/pause-all") {
+    return proxyPost(config, "/api/admin/agents/pause-all", {}, ctx);
+  }
+
+  if (ctx.method === "POST" && path === "/admin/agents/resume-all") {
+    return proxyPost(config, "/api/admin/agents/resume-all", {}, ctx);
+  }
+
   // --- Session state (for GameView polling) ---
   const sessionId = parseSessionId(path);
   if (sessionId) {

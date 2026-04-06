@@ -98,7 +98,9 @@ function cadenceDetail(cadence: LifeOpsCadence): string | null {
   }
 }
 
-function reviewStateLabel(reviewState: LifeOpsGoalDefinition["reviewState"]): string {
+function reviewStateLabel(
+  reviewState: LifeOpsGoalDefinition["reviewState"],
+): string {
   switch (reviewState) {
     case "needs_attention":
       return "Needs attention";
@@ -119,7 +121,9 @@ function hasSectionContent(section: LifeOpsOverviewSection): boolean {
   );
 }
 
-function descriptionForOccurrence(occurrence: LifeOpsOccurrenceView): string | null {
+function descriptionForOccurrence(
+  occurrence: LifeOpsOccurrenceView,
+): string | null {
   const description = occurrence.description.trim();
   return description.length > 0 ? description : null;
 }
@@ -147,7 +151,9 @@ function sectionSummary(section: LifeOpsOverviewSection): string {
   return parts.join(" • ");
 }
 
-function reminderChannelLabel(channel: LifeOpsActiveReminderView["channel"]): string {
+function reminderChannelLabel(
+  channel: LifeOpsActiveReminderView["channel"],
+): string {
   return channel.replace(/_/g, " ");
 }
 
@@ -269,10 +275,14 @@ function GoalReviewPanel({ review }: { review: LifeOpsGoalReview }) {
       <div>
         <span className="font-semibold text-txt">Support structure:</span>{" "}
         {review.summary.linkedDefinitionCount} linked{" "}
-        {review.summary.linkedDefinitionCount === 1 ? "definition" : "definitions"},{" "}
-        {review.summary.activeOccurrenceCount} active{" "}
-        {review.summary.activeOccurrenceCount === 1 ? "occurrence" : "occurrences"},{" "}
-        and {review.summary.completedLast7Days} completion
+        {review.summary.linkedDefinitionCount === 1
+          ? "definition"
+          : "definitions"}
+        , {review.summary.activeOccurrenceCount} active{" "}
+        {review.summary.activeOccurrenceCount === 1
+          ? "occurrence"
+          : "occurrences"}
+        , and {review.summary.completedLast7Days} completion
         {review.summary.completedLast7Days === 1 ? "" : "s"} in the last 7 days.
       </div>
       {review.suggestions.length > 0 ? (
@@ -555,8 +565,14 @@ function OccurrenceBucketBlock({
   detailState: string | null;
   occurrenceExplanations: Record<string, LifeOpsOccurrenceExplanation>;
   expandedOccurrenceId: string | null;
-  onOccurrenceAction: (occurrenceId: string, action: OccurrenceAction) => Promise<void>;
-  onSnoozeOccurrence: (occurrenceId: string, preset: SnoozePreset) => Promise<void>;
+  onOccurrenceAction: (
+    occurrenceId: string,
+    action: OccurrenceAction,
+  ) => Promise<void>;
+  onSnoozeOccurrence: (
+    occurrenceId: string,
+    preset: SnoozePreset,
+  ) => Promise<void>;
   onExplainOccurrence: (occurrenceId: string) => Promise<void>;
 }) {
   if (occurrences.length === 0) {
@@ -687,8 +703,14 @@ function AgentOpsSection({
   goalReviews: Record<string, LifeOpsGoalReview>;
   expandedOccurrenceId: string | null;
   expandedGoalId: string | null;
-  onOccurrenceAction: (occurrenceId: string, action: OccurrenceAction) => Promise<void>;
-  onSnoozeOccurrence: (occurrenceId: string, preset: SnoozePreset) => Promise<void>;
+  onOccurrenceAction: (
+    occurrenceId: string,
+    action: OccurrenceAction,
+  ) => Promise<void>;
+  onSnoozeOccurrence: (
+    occurrenceId: string,
+    preset: SnoozePreset,
+  ) => Promise<void>;
   onExplainOccurrence: (occurrenceId: string) => Promise<void>;
   onReviewGoal: (goalId: string) => Promise<void>;
 }) {
@@ -712,19 +734,21 @@ function AgentOpsSection({
         </Badge>
       </div>
       <p className="px-0.5 text-[11px] text-muted">{sectionSummary(section)}</p>
-      {section.occurrences.slice(0, MAX_SECTION_OCCURRENCES).map((occurrence) => (
-        <OccurrenceRow
-          key={occurrence.id}
-          occurrence={occurrence}
-          actionPending={actionState?.endsWith(`:${occurrence.id}`) === true}
-          detailPending={detailState === `occurrence:${occurrence.id}`}
-          explanation={occurrenceExplanations[occurrence.id] ?? null}
-          isExpanded={expandedOccurrenceId === occurrence.id}
-          onAction={onOccurrenceAction}
-          onSnooze={onSnoozeOccurrence}
-          onExplain={onExplainOccurrence}
-        />
-      ))}
+      {section.occurrences
+        .slice(0, MAX_SECTION_OCCURRENCES)
+        .map((occurrence) => (
+          <OccurrenceRow
+            key={occurrence.id}
+            occurrence={occurrence}
+            actionPending={actionState?.endsWith(`:${occurrence.id}`) === true}
+            detailPending={detailState === `occurrence:${occurrence.id}`}
+            explanation={occurrenceExplanations[occurrence.id] ?? null}
+            isExpanded={expandedOccurrenceId === occurrence.id}
+            onAction={onOccurrenceAction}
+            onSnooze={onSnoozeOccurrence}
+            onExplain={onExplainOccurrence}
+          />
+        ))}
       {section.goals.slice(0, MAX_SECTION_GOALS).map((goal) => (
         <GoalRow
           key={goal.id}
@@ -754,9 +778,9 @@ export function LifeOpsOverviewSidebarWidget(_props: ChatSidebarWidgetProps) {
   const [error, setError] = useState<string | null>(null);
   const [actionState, setActionState] = useState<string | null>(null);
   const [detailState, setDetailState] = useState<string | null>(null);
-  const [expandedOccurrenceId, setExpandedOccurrenceId] = useState<string | null>(
-    null,
-  );
+  const [expandedOccurrenceId, setExpandedOccurrenceId] = useState<
+    string | null
+  >(null);
   const [expandedGoalId, setExpandedGoalId] = useState<string | null>(null);
   const [occurrenceExplanations, setOccurrenceExplanations] = useState<
     Record<string, LifeOpsOccurrenceExplanation>
@@ -771,18 +795,15 @@ export function LifeOpsOverviewSidebarWidget(_props: ChatSidebarWidgetProps) {
     }
   }, [workbench?.lifeops]);
 
-  const loadOverview = useCallback(
-    async (silent = false) => {
-      if (!silent) {
-        setLoading(true);
-      }
-      const nextOverview = await client.getLifeOpsOverview();
-      setOverview(nextOverview);
-      setError(null);
-      setLoading(false);
-    },
-    [],
-  );
+  const loadOverview = useCallback(async (silent = false) => {
+    if (!silent) {
+      setLoading(true);
+    }
+    const nextOverview = await client.getLifeOpsOverview();
+    setOverview(nextOverview);
+    setError(null);
+    setLoading(false);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -870,81 +891,91 @@ export function LifeOpsOverviewSidebarWidget(_props: ChatSidebarWidgetProps) {
     [loadOverview],
   );
 
-  const onExplainOccurrence = useCallback(async (occurrenceId: string) => {
-    if (expandedOccurrenceId === occurrenceId) {
-      setExpandedOccurrenceId(null);
-      return;
-    }
-    setExpandedGoalId(null);
-    setDetailState(`occurrence:${occurrenceId}`);
-    try {
-      const explanation =
-        occurrenceExplanations[occurrenceId] ??
-        (await client.getLifeOpsOccurrenceExplanation(occurrenceId));
-      setOccurrenceExplanations((current) => ({
-        ...current,
-        [occurrenceId]: explanation,
-      }));
-      setExpandedOccurrenceId(occurrenceId);
-      setError(null);
-    } catch (cause) {
-      setError(
-        cause instanceof Error && cause.message.trim().length > 0
-          ? cause.message.trim()
-          : "Life ops explanation failed.",
-      );
-    } finally {
-      setDetailState((current) =>
-        current === `occurrence:${occurrenceId}` ? null : current,
-      );
-    }
-  }, [expandedOccurrenceId, occurrenceExplanations]);
-
-  const onReviewGoal = useCallback(async (goalId: string) => {
-    if (expandedGoalId === goalId) {
+  const onExplainOccurrence = useCallback(
+    async (occurrenceId: string) => {
+      if (expandedOccurrenceId === occurrenceId) {
+        setExpandedOccurrenceId(null);
+        return;
+      }
       setExpandedGoalId(null);
-      return;
-    }
-    setExpandedOccurrenceId(null);
-    setDetailState(`goal:${goalId}`);
-    try {
-      const review =
-        goalReviews[goalId] ?? (await client.reviewLifeOpsGoal(goalId));
-      setGoalReviews((current) => ({
-        ...current,
-        [goalId]: review,
-      }));
-      setExpandedGoalId(goalId);
-      setError(null);
-      setOverview((current) => {
-        if (!current) {
-          return current;
-        }
-        const replaceGoal = (goals: LifeOpsGoalDefinition[]) =>
-          goals.map((goal) => (goal.id === review.goal.id ? review.goal : goal));
-        return {
+      setDetailState(`occurrence:${occurrenceId}`);
+      try {
+        const explanation =
+          occurrenceExplanations[occurrenceId] ??
+          (await client.getLifeOpsOccurrenceExplanation(occurrenceId));
+        setOccurrenceExplanations((current) => ({
           ...current,
-          goals: replaceGoal(current.goals),
-          owner: {
-            ...current.owner,
-            goals: replaceGoal(current.owner.goals),
-          },
-          agentOps: {
-            ...current.agentOps,
-            goals: replaceGoal(current.agentOps.goals),
-          },
-        };
-      });
-    } catch (cause) {
-      setError(
-        cause instanceof Error && cause.message.trim().length > 0
-          ? cause.message.trim()
-          : "Goal review failed.",
-      );
-    } finally {
-      setDetailState((current) => (current === `goal:${goalId}` ? null : current));
-    }
-  }, [expandedGoalId, goalReviews]);
+          [occurrenceId]: explanation,
+        }));
+        setExpandedOccurrenceId(occurrenceId);
+        setError(null);
+      } catch (cause) {
+        setError(
+          cause instanceof Error && cause.message.trim().length > 0
+            ? cause.message.trim()
+            : "Life ops explanation failed.",
+        );
+      } finally {
+        setDetailState((current) =>
+          current === `occurrence:${occurrenceId}` ? null : current,
+        );
+      }
+    },
+    [expandedOccurrenceId, occurrenceExplanations],
+  );
+
+  const onReviewGoal = useCallback(
+    async (goalId: string) => {
+      if (expandedGoalId === goalId) {
+        setExpandedGoalId(null);
+        return;
+      }
+      setExpandedOccurrenceId(null);
+      setDetailState(`goal:${goalId}`);
+      try {
+        const review =
+          goalReviews[goalId] ?? (await client.reviewLifeOpsGoal(goalId));
+        setGoalReviews((current) => ({
+          ...current,
+          [goalId]: review,
+        }));
+        setExpandedGoalId(goalId);
+        setError(null);
+        setOverview((current) => {
+          if (!current) {
+            return current;
+          }
+          const replaceGoal = (goals: LifeOpsGoalDefinition[]) =>
+            goals.map((goal) =>
+              goal.id === review.goal.id ? review.goal : goal,
+            );
+          return {
+            ...current,
+            goals: replaceGoal(current.goals),
+            owner: {
+              ...current.owner,
+              goals: replaceGoal(current.owner.goals),
+            },
+            agentOps: {
+              ...current.agentOps,
+              goals: replaceGoal(current.agentOps.goals),
+            },
+          };
+        });
+      } catch (cause) {
+        setError(
+          cause instanceof Error && cause.message.trim().length > 0
+            ? cause.message.trim()
+            : "Goal review failed.",
+        );
+      } finally {
+        setDetailState((current) =>
+          current === `goal:${goalId}` ? null : current,
+        );
+      }
+    },
+    [expandedGoalId, goalReviews],
+  );
 
   const count = useMemo(() => {
     if (!overview) {
@@ -1065,13 +1096,16 @@ export function LifeOpsOverviewSidebarWidget(_props: ChatSidebarWidgetProps) {
             <div className="flex items-center gap-2">
               <BellRing className="h-3.5 w-3.5" />
               <span>
-                Reminders are driven from LifeOps and scheduled by the queue worker.
+                Reminders are driven from LifeOps and scheduled by the queue
+                worker.
               </span>
             </div>
           </div>
         </div>
       )}
-      {error ? <div className="mt-3 text-[11px] text-danger">{error}</div> : null}
+      {error ? (
+        <div className="mt-3 text-[11px] text-danger">{error}</div>
+      ) : null}
     </WidgetSection>
   );
 }

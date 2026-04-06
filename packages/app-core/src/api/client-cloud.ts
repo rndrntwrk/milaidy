@@ -438,16 +438,19 @@ MiladyClient.prototype.createCloudCompatAgentManagedGithubOauth =
     );
   };
 
-MiladyClient.prototype.linkCloudCompatAgentManagedGithub =
-  async function (this: MiladyClient, agentId, connectionId) {
-    return this.fetch(
-      `/api/cloud/v1/milady/agents/${encodeURIComponent(agentId)}/github/link`,
-      {
-        method: "POST",
-        body: JSON.stringify({ connectionId }),
-      },
-    );
-  };
+MiladyClient.prototype.linkCloudCompatAgentManagedGithub = async function (
+  this: MiladyClient,
+  agentId,
+  connectionId,
+) {
+  return this.fetch(
+    `/api/cloud/v1/milady/agents/${encodeURIComponent(agentId)}/github/link`,
+    {
+      method: "POST",
+      body: JSON.stringify({ connectionId }),
+    },
+  );
+};
 
 MiladyClient.prototype.disconnectCloudCompatAgentManagedGithub =
   async function (this: MiladyClient, agentId) {

@@ -389,10 +389,7 @@ function nativeModuleStubPlugin(): Plugin {
       // for maximum WebView compatibility. The renderChunk plugin
       // (asyncLocalStoragePatchPlugin) also patches the final bundle output
       // as a safety net for patterns inlined by Rollup.
-      if (
-        modName === "node:async_hooks" ||
-        modName === "async_hooks"
-      ) {
+      if (modName === "node:async_hooks" || modName === "async_hooks") {
         return [
           "function AsyncLocalStorage() {} AsyncLocalStorage.prototype.getStore = function() { return undefined; }; AsyncLocalStorage.prototype.run = function(store, fn) { return fn.apply(void 0, [].slice.call(arguments, 2)); }; AsyncLocalStorage.prototype.enterWith = function() {}; AsyncLocalStorage.prototype.disable = function() {};",
           "export { AsyncLocalStorage };",
@@ -433,9 +430,9 @@ function nativeModuleStubPlugin(): Plugin {
       // Rollup/esbuild may optimize the throw into (()=>({})) which makes
       // AsyncLocalStorage undefined, causing "xte is not a constructor".
       // Replace the broken IIFE pattern with a working stub class.
-      let patched = code.replace(
+      const patched = code.replace(
         /\(\(\)\s*=>\s*\{\s*throw\s+new\s+Error\(\s*"Cannot require module "\s*\+\s*"node:async_hooks"\s*\)\s*;\s*\}\)\(\)/g,
-        '(function(){function A(){} A.prototype.getStore=function(){return undefined};A.prototype.run=function(s,fn){return fn.apply(void 0,[].slice.call(arguments,2))};A.prototype.enterWith=function(){};A.prototype.disable=function(){};return{AsyncLocalStorage:A}})()',
+        "(function(){function A(){} A.prototype.getStore=function(){return undefined};A.prototype.run=function(s,fn){return fn.apply(void 0,[].slice.call(arguments,2))};A.prototype.enterWith=function(){};A.prototype.disable=function(){};return{AsyncLocalStorage:A}})()",
       );
       // Names that downstream plugins (plugin-secrets-manager, agent runtime)
       // import from @elizaos/core but that are missing from the browser entry.
@@ -462,9 +459,10 @@ function nativeModuleStubPlugin(): Plugin {
       const stubs = needed
         .map((n) => `var ${prefix}${n} = ${missingExports[n]};`)
         .join("\n");
-      const exports = needed.length > 0
-        ? `export { ${needed.map((n) => `${prefix}${n} as ${n}`).join(", ")} };`
-        : "";
+      const exports =
+        needed.length > 0
+          ? `export { ${needed.map((n) => `${prefix}${n} as ${n}`).join(", ")} };`
+          : "";
       return { code: `${patched}\n${stubs}\n${exports}`, map: null };
     },
   };

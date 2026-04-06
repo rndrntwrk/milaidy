@@ -837,10 +837,17 @@ export function CloudDashboard() {
       window.history.replaceState({}, document.title, cleanedUrl);
     }
 
-    if (callback.status === "connected" && callback.connectionId && callback.agentId) {
+    if (
+      callback.status === "connected" &&
+      callback.connectionId &&
+      callback.agentId
+    ) {
       // Link the OAuth connection to the agent
       client
-        .linkCloudCompatAgentManagedGithub(callback.agentId, callback.connectionId)
+        .linkCloudCompatAgentManagedGithub(
+          callback.agentId,
+          callback.connectionId,
+        )
         .then(() => {
           setActionNotice(
             t("elizaclouddashboard.ManagedGithubConnectedNotice", {

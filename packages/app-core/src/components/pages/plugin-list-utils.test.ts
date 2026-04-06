@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { PluginInfo } from "../../api";
-import { buildDiscordInviteUrl, getPluginResourceLinks } from "./plugin-list-utils";
+import {
+  buildDiscordInviteUrl,
+  getPluginResourceLinks,
+} from "./plugin-list-utils";
 
 const baseDiscordPlugin = {
   id: "discord",

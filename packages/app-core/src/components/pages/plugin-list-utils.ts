@@ -85,7 +85,8 @@ import { resolveAppAssetUrl } from "../../utils";
 import { autoLabel } from "../../utils/labels";
 import { SHOWCASE_PLUGIN } from "../plugins/showcase-data";
 
-const DISCORD_DEVELOPER_PORTAL_URL = "https://discord.com/developers/applications";
+const DISCORD_DEVELOPER_PORTAL_URL =
+  "https://discord.com/developers/applications";
 const DISCORD_INVITE_PERMISSIONS = "67193856";
 const DISCORD_INVITE_SCOPES = "bot applications.commands";
 
