@@ -71,10 +71,10 @@ const LOCAL_APP_OVERRIDES: Readonly<Record<string, LocalAppOverride>> = {
   },
   "@elizaos/app-2004scape": {
     launchType: "connect",
-    launchUrl: "http://localhost:8880",
+    launchUrl: "{RS_SDK_SERVER_URL}",
     viewer: {
-      url: "http://localhost:8880",
-      embedParams: { bot: "{RS_SDK_BOT_NAME}" },
+      url: "{RS_SDK_SERVER_URL}/bot",
+      embedParams: { bot: "{RS_SDK_BOT_NAME}", password: "{RS_SDK_BOT_PASSWORD}" },
       postMessageAuth: true,
       sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
     },

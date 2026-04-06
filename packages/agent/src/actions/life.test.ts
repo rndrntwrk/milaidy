@@ -433,4 +433,35 @@ describe("lifeAction", () => {
     expect(mockDeleteDefinition).toHaveBeenCalledWith("d1");
     expect(result).toMatchObject({ success: true });
   });
+
+  // ── Fallback: intent-only (no action param) ───────
+
+  it("falls back to regex classifier when action param is omitted", async () => {
+    mockGetOverview.mockResolvedValue({
+      owner: {
+        summary: { activeOccurrenceCount: 1, overdueOccurrenceCount: 0, snoozedOccurrenceCount: 0, activeGoalCount: 0, activeReminderCount: 0 },
+        occurrences: [{ title: "Read", state: "visible" }], goals: [], reminders: [],
+      },
+      agentOps: { summary: { activeOccurrenceCount: 0, overdueOccurrenceCount: 0, snoozedOccurrenceCount: 0, activeGoalCount: 0, activeReminderCount: 0 }, occurrences: [], goals: [], reminders: [] },
+    });
+    // No action param — classifier should route "overview" to query_overview
+    const result = await invoke("show me my overview");
+    expect(result).toMatchObject({ success: true, text: expect.stringContaining("1 active items") });
+  });
+
+  it("action param takes precedence over intent keywords", async () => {
+    // Intent says "calendar" but action says "overview"
+    mockGetOverview.mockResolvedValue({
+      owner: {
+        summary: { activeOccurrenceCount: 0, overdueOccurrenceCount: 0, snoozedOccurrenceCount: 0, activeGoalCount: 0, activeReminderCount: 0 },
+        occurrences: [], goals: [], reminders: [],
+      },
+      agentOps: { summary: { activeOccurrenceCount: 0, overdueOccurrenceCount: 0, snoozedOccurrenceCount: 0, activeGoalCount: 0, activeReminderCount: 0 }, occurrences: [], goals: [], reminders: [] },
+    });
+    const result = await invoke("what's on my calendar", { action: "overview" });
+    // Should run overview (from action param), not calendar (from intent text)
+    expect(mockGetOverview).toHaveBeenCalled();
+    expect(mockGetGoogleConnectorStatus).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ success: true });
+  });
 });

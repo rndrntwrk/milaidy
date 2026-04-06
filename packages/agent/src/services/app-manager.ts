@@ -9,6 +9,7 @@
  * @module services/app-manager
  */
 
+import crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { logger } from "@elizaos/core";
@@ -36,8 +37,8 @@ import {
   importAppRouteModule,
 } from "./app-package-modules";
 import { generateWalletKeys, getWalletAddressesWithSteward } from "../api/wallet";
-import { generateBotUsername, generateBotPassword } from "./credential-words";
 import { getPluginInfo, getRegistryPlugins } from "./registry-client";
+import { resolveAppOverride } from "./registry-client-app-meta";
 import { scoreEntries, toSearchResults } from "./registry-client-queries.js";
 
 const LOCAL_PLUGINS_DIR = "plugins";
@@ -58,18 +59,19 @@ const LOCAL_DEV_HYPERSCAPE_API_BASE_URL = "http://localhost:5555";
 const PRODUCTION_HYPERSCAPE_API_BASE_URL = "https://hyperscape.gg";
 const RS_2004SCAPE_APP_ROUTE_SLUG = "2004scape";
 const RS_2004SCAPE_AUTH_MESSAGE_TYPE = "RS_2004SCAPE_AUTH";
-const RS_2004SCAPE_DEFAULT_URL = "http://localhost:8880";
+const DEFAULT_RS_SDK_SERVER_URL = "https://rs-sdk-demo.fly.dev";
 const BABYLON_APP_ROUTE_SLUG = "babylon";
 const LOCAL_DEV_BABYLON_CLIENT_URL = "http://localhost:3000";
 const PRODUCTION_BABYLON_CLIENT_URL = "https://staging.babylon.market";
 const SAFE_APP_URL_PROTOCOLS = new Set(["http:", "https:"]);
 const ALLOWED_APP_URL_TEMPLATE_KEYS = new Set([
-  // Public display identity only.
   "BOT_NAME",
   "HYPERSCAPE_CHARACTER_ID",
   "HYPERSCAPE_CLIENT_URL",
   "BABYLON_CLIENT_URL",
   "RS_SDK_BOT_NAME",
+  "RS_SDK_BOT_PASSWORD",
+  "RS_SDK_SERVER_URL",
 ]);
 
 function isProductionRuntime(): boolean {
@@ -142,7 +144,7 @@ function isBabylonAppName(appName: string): boolean {
  */
 async function is2004scapeServerReachable(timeoutMs = 2000): Promise<boolean> {
   try {
-    const url = new URL(RS_2004SCAPE_DEFAULT_URL);
+    const url = new URL(DEFAULT_RS_SDK_SERVER_URL);
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     const res = await fetch(url.href, {
@@ -295,6 +297,9 @@ function getTemplateFallbackValue(key: string): string | undefined {
       return runtimeBotName;
     }
     return "testbot";
+  }
+  if (key === "RS_SDK_SERVER_URL") {
+    return DEFAULT_RS_SDK_SERVER_URL;
   }
   return undefined;
 }
@@ -650,47 +655,91 @@ async function prepareHyperscapeLaunch(
   }
 }
 
+// ---------------------------------------------------------------------------
+// 2004scape credential auto-provisioning
+// ---------------------------------------------------------------------------
+
+function persist2004scapeCredential(
+  runtime: IAgentRuntime | null,
+  key: "RS_SDK_BOT_NAME" | "RS_SDK_BOT_PASSWORD",
+  value: string,
+  secret = false,
+): void {
+  process.env[key] = value;
+  if (!runtime) return;
+
+  try {
+    runtime.setSetting(key, value, secret);
+  } catch (err) {
+    logger.error(
+      `[app-manager] Failed to persist 2004scape credential "${key}": ${err}`,
+    );
+  }
+
+  const character = runtime.character as {
+    settings?: { secrets?: Record<string, string> };
+    secrets?: Record<string, string>;
+  };
+  if (!character.settings) {
+    character.settings = {};
+  }
+  if (!character.settings.secrets) {
+    character.settings.secrets = {};
+  }
+  character.settings.secrets[key] = value;
+  if (!character.secrets) {
+    character.secrets = {};
+  }
+  character.secrets[key] = value;
+}
+
 /**
- * Auto-generate and persist 2004scape bot credentials if not already set.
- *
- * Creates a unique username from the agent's name + cute animal suffix,
- * and a cryptographically random password. Credentials are stored as
- * runtime secrets so they persist across restarts.
+ * Derive a 2004scape-safe username from the agent's display name.
+ * Rules: lowercase alphanumeric only, max 12 chars.
  */
+function derive2004scapeUsername(agentName: string): string {
+  return (
+    agentName
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "")
+      .slice(0, 12) || "agent"
+  );
+}
+
+function generateRandomPassword(length = 16): string {
+  const chars =
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  const bytes = crypto.randomBytes(length);
+  return Array.from(bytes, (b) => chars[b % chars.length]).join("");
+}
 async function prepare2004scapeLaunch(
   runtime: IAgentRuntime | null,
 ): Promise<AppLaunchDiagnostic[]> {
   if (!runtime) return [];
 
-  // Check if credentials are already configured
-  const existingBotName = resolveSettingLike(runtime, "RS_SDK_BOT_NAME");
+  const existingName = resolveSettingLike(runtime, "RS_SDK_BOT_NAME");
   const existingPassword = resolveSettingLike(runtime, "RS_SDK_BOT_PASSWORD");
 
-  if (existingBotName && existingPassword) {
-    logger.info(
-      `[app-manager] 2004scape credentials already configured for bot: ${existingBotName}`,
-    );
+  // Both present — nothing to do.
+  if (existingName && existingPassword) {
     return [];
   }
 
-  // Generate new credentials from the agent's name
-  const agentName = runtime.character?.name || "Agent";
-  const botName = existingBotName || generateBotUsername(agentName);
-  const botPassword = existingPassword || generateBotPassword();
+  // One present but not the other — respect what the user set,
+  // only fill in the missing half.
+  const agentDisplayName = runtime.character?.name || "agent";
+  const username = existingName || derive2004scapeUsername(agentDisplayName);
+  const password = existingPassword || generateRandomPassword();
 
-  // Persist credentials in runtime settings and character secrets
-  if (!existingBotName) {
-    persistRuntimeSecret(runtime, "RS_SDK_BOT_NAME", botName);
-    // Also set BOT_NAME for compatibility with the 2004scape SDK
-    persistRuntimeSecret(runtime, "BOT_NAME", botName);
+  if (!existingName) {
+    persist2004scapeCredential(runtime, "RS_SDK_BOT_NAME", username);
   }
   if (!existingPassword) {
-    persistRuntimeSecret(runtime, "RS_SDK_BOT_PASSWORD", botPassword);
-    persistRuntimeSecret(runtime, "BOT_PASSWORD", botPassword);
+    persist2004scapeCredential(runtime, "RS_SDK_BOT_PASSWORD", password, true);
   }
 
   logger.info(
-    `[app-manager] Auto-generated 2004scape credentials for agent "${agentName}": bot name "${botName}"`,
+    `[app-manager] Auto-provisioned 2004scape credentials for "${username}"`,
   );
 
   return [];
@@ -808,23 +857,28 @@ function buildViewerAuthMessage(
     };
   }
 
-  // 2004scape auth - uses bot name and password from environment
+  // 2004scape auth - uses auto-provisioned or user-supplied credentials
   if (is2004scapeAppName(appName)) {
-    // Get username from RS_SDK_BOT_NAME or BOT_NAME, fallback to testbot
     const username =
-      process.env.RS_SDK_BOT_NAME?.trim() ||
+      resolveSettingLike(runtime, "RS_SDK_BOT_NAME") ||
       process.env.BOT_NAME?.trim() ||
       "testbot";
-    // Get password from RS_SDK_BOT_PASSWORD or BOT_PASSWORD
     const password =
-      process.env.RS_SDK_BOT_PASSWORD?.trim() ||
+      resolveSettingLike(runtime, "RS_SDK_BOT_PASSWORD") ||
       process.env.BOT_PASSWORD?.trim() ||
       "";
 
+    if (!password) {
+      logger.warn(
+        "[app-manager] 2004scape credentials incomplete — no password set. " +
+          "Launch the app to auto-provision credentials.",
+      );
+    }
+
     return {
       type: RS_2004SCAPE_AUTH_MESSAGE_TYPE,
-      authToken: username, // Using authToken field for username
-      sessionToken: password, // Using sessionToken field for password
+      authToken: username,
+      sessionToken: password,
     };
   }
 
@@ -1285,6 +1339,16 @@ export class AppManager {
       throw new Error(`App "${name}" not found in the registry.`);
     }
 
+    // Apply local app overrides (viewer URL, sandbox, embed params, etc.)
+    // and flatten appMeta onto the top-level fields so launchUrl / viewer
+    // are populated even when the npm registry has no metadata for this app.
+    if (appInfo.appMeta) {
+      appInfo.appMeta = resolveAppOverride(name, appInfo.appMeta) ?? appInfo.appMeta;
+    } else {
+      appInfo.appMeta = resolveAppOverride(name, undefined);
+    }
+    appInfo = flattenAppInfo(appInfo);
+
     // The app's plugin is what the agent needs to play the game.
     // It's the same npm package name as the app, or a separate plugin ref.
     const pluginName = appInfo.runtimePlugin ?? resolvePluginPackageName(appInfo);
@@ -1366,12 +1430,12 @@ export class AppManager {
       const serverUp = await is2004scapeServerReachable();
       if (!serverUp) {
         logger.info(
-          `[app-manager] 2004scape server is not reachable at ${RS_2004SCAPE_DEFAULT_URL} — skipping plugin registration to avoid noisy SDK errors`,
+          `[app-manager] 2004scape server is not reachable at ${DEFAULT_RS_SDK_SERVER_URL} — skipping plugin registration to avoid noisy SDK errors`,
         );
         launchPreparationDiagnostics.push({
           code: "2004scape-server-unreachable",
           severity: "warning",
-          message: `2004scape game server is not running at ${RS_2004SCAPE_DEFAULT_URL}. Start the server and re-launch the app.`,
+          message: `2004scape game server is not running at ${DEFAULT_RS_SDK_SERVER_URL}. Start the server and re-launch the app.`,
         });
       } else {
         launchPreparationDiagnostics.push(
