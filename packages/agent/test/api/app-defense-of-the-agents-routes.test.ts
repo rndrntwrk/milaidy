@@ -533,4 +533,254 @@ describe("Defense of the Agents app routes", () => {
     expect(typeof body.error).toBe("string");
     expect(body.error.length).toBeGreaterThan(0);
   });
+
+  test("auto-play ON command starts the game loop and returns updated session", async () => {
+    const { res, getJson, getStatus } = createMockHttpResponse();
+    const handled = await handleAppPackageRoutes({
+      req: createMockIncomingMessage({
+        method: "POST",
+        url: "/api/apps/defense-of-the-agents/session/Scout/message",
+      }),
+      res,
+      method: "POST",
+      pathname: "/api/apps/defense-of-the-agents/session/Scout/message",
+      url: new URL(
+        "http://localhost:2138/api/apps/defense-of-the-agents/session/Scout/message",
+      ),
+      runtime: null,
+      readJsonBody: vi.fn(async () => ({ content: "Auto-play ON" })),
+      json: (response, data, status = 200) => {
+        response.writeHead(status);
+        response.end(JSON.stringify(data));
+      },
+      error: (response, message, status = 500) => {
+        response.writeHead(status);
+        response.end(JSON.stringify({ error: message }));
+      },
+    });
+
+    expect(handled).toBe(true);
+    expect(getStatus()).toBe(200);
+    expect(getJson()).toEqual(
+      expect.objectContaining({
+        success: true,
+        message: expect.stringContaining("Auto-play enabled"),
+      }),
+    );
+  });
+
+  test("auto-play OFF command returns confirmation", async () => {
+    const { res, getJson, getStatus } = createMockHttpResponse();
+    const handled = await handleAppPackageRoutes({
+      req: createMockIncomingMessage({
+        method: "POST",
+        url: "/api/apps/defense-of-the-agents/session/Scout/message",
+      }),
+      res,
+      method: "POST",
+      pathname: "/api/apps/defense-of-the-agents/session/Scout/message",
+      url: new URL(
+        "http://localhost:2138/api/apps/defense-of-the-agents/session/Scout/message",
+      ),
+      runtime: null,
+      readJsonBody: vi.fn(async () => ({ content: "Auto-play OFF" })),
+      json: (response, data, status = 200) => {
+        response.writeHead(status);
+        response.end(JSON.stringify(data));
+      },
+      error: (response, message, status = 500) => {
+        response.writeHead(status);
+        response.end(JSON.stringify({ error: message }));
+      },
+    });
+
+    expect(handled).toBe(true);
+    expect(getStatus()).toBe(200);
+    expect(getJson()).toEqual(
+      expect.objectContaining({
+        success: true,
+        message: expect.stringContaining("Auto-play disabled"),
+      }),
+    );
+  });
+
+  test("strategy update via JSON is accepted and returns new version", async () => {
+    const { res, getJson, getStatus } = createMockHttpResponse();
+    const handled = await handleAppPackageRoutes({
+      req: createMockIncomingMessage({
+        method: "POST",
+        url: "/api/apps/defense-of-the-agents/session/Scout/message",
+      }),
+      res,
+      method: "POST",
+      pathname: "/api/apps/defense-of-the-agents/session/Scout/message",
+      url: new URL(
+        "http://localhost:2138/api/apps/defense-of-the-agents/session/Scout/message",
+      ),
+      runtime: null,
+      readJsonBody: vi.fn(async () => ({
+        content: JSON.stringify({
+          strategy: {
+            heroClass: "melee",
+            preferredLane: "top",
+            recallThreshold: 0.3,
+          },
+        }),
+      })),
+      json: (response, data, status = 200) => {
+        response.writeHead(status);
+        response.end(JSON.stringify(data));
+      },
+      error: (response, message, status = 500) => {
+        response.writeHead(status);
+        response.end(JSON.stringify({ error: message }));
+      },
+    });
+
+    expect(handled).toBe(true);
+    expect(getStatus()).toBe(200);
+    expect(getJson()).toEqual(
+      expect.objectContaining({
+        success: true,
+        message: expect.stringMatching(/Strategy updated to v\d+/),
+      }),
+    );
+  });
+});
+
+describe("Defense of the Agents strategy functions", async () => {
+  const {
+    DEFAULT_STRATEGY,
+    scoreStrategy,
+    pickAbility,
+    findWeakestAlliedLane,
+    parseStrategyUpdate,
+    buildReviewSummary,
+  } = await import("../../../../plugins/app-defense-of-the-agents/src/routes");
+
+  test("scoreStrategy returns 0 for empty metrics", () => {
+    expect(scoreStrategy({ ...DEFAULT_STRATEGY.metrics, ticksTracked: 0 })).toBe(0);
+  });
+
+  test("scoreStrategy rewards survival, level gain, and lane control", () => {
+    const good = scoreStrategy({
+      ticksTracked: 100,
+      ticksAlive: 90,
+      levelStart: 1,
+      levelEnd: 6,
+      abilitiesLearned: 3,
+      laneControlSum: 200,
+      lastReviewedAt: 0,
+    });
+    const bad = scoreStrategy({
+      ticksTracked: 100,
+      ticksAlive: 20,
+      levelStart: 1,
+      levelEnd: 2,
+      abilitiesLearned: 0,
+      laneControlSum: -300,
+      lastReviewedAt: 0,
+    });
+    expect(good).toBeGreaterThan(bad);
+    expect(good).toBeGreaterThan(0.5);
+    expect(bad).toBeLessThan(0.3);
+  });
+
+  test("pickAbility selects first matching priority", () => {
+    expect(pickAbility(["fortitude", "fireball"], ["fireball", "fortitude"])).toBe("fireball");
+    expect(pickAbility(["fortitude", "tornado"], ["fireball", "fortitude"])).toBe("fortitude");
+  });
+
+  test("pickAbility falls back to first choice when no priority matches", () => {
+    expect(pickAbility(["cleave", "thorns"], ["fireball", "tornado"])).toBe("cleave");
+  });
+
+  test("findWeakestAlliedLane returns lane with worst allied differential", () => {
+    const state = {
+      tick: 100,
+      agents: { human: [], orc: [] },
+      lanes: {
+        top: { human: 2, orc: 8, frontline: -20 },
+        mid: { human: 5, orc: 5, frontline: 0 },
+        bot: { human: 7, orc: 3, frontline: 15 },
+      },
+      towers: [],
+      bases: { human: { hp: 1500, maxHp: 1500 }, orc: { hp: 1500, maxHp: 1500 } },
+      heroes: [],
+      winner: null,
+    };
+    expect(findWeakestAlliedLane(state, "human")).toBe("top");
+    expect(findWeakestAlliedLane(state, "orc")).toBe("bot");
+  });
+
+  test("parseStrategyUpdate requires explicit strategy key", () => {
+    const current = { ...DEFAULT_STRATEGY };
+    // Regular deployment JSON should NOT be parsed as strategy
+    expect(parseStrategyUpdate('{"heroClass":"ranged","heroLane":"bot"}', current)).toBeNull();
+    // Strategy key required
+    const result = parseStrategyUpdate('{"strategy":{"heroClass":"melee","recallThreshold":0.4}}', current);
+    expect(result).not.toBeNull();
+    expect(result?.heroClass).toBe("melee");
+    expect(result?.recallThreshold).toBe(0.4);
+    expect(result?.version).toBe(current.version + 1);
+  });
+
+  test("parseStrategyUpdate clamps recallThreshold to [0, 1]", () => {
+    const current = { ...DEFAULT_STRATEGY };
+    const high = parseStrategyUpdate('{"strategy":{"recallThreshold":5}}', current);
+    expect(high?.recallThreshold).toBe(1);
+    const low = parseStrategyUpdate('{"strategy":{"recallThreshold":-1}}', current);
+    expect(low?.recallThreshold).toBe(0);
+  });
+
+  test("buildReviewSummary includes strategy version and metrics", () => {
+    const current = {
+      ...DEFAULT_STRATEGY,
+      version: 3,
+      metrics: {
+        ticksTracked: 60,
+        ticksAlive: 48,
+        levelStart: 1,
+        levelEnd: 4,
+        abilitiesLearned: 2,
+        laneControlSum: 120,
+        lastReviewedAt: 0,
+      },
+    };
+    const review = buildReviewSummary(current, null);
+    expect(review).toContain("v3");
+    expect(review).toContain("80%");
+    expect(review).toContain("score=");
+  });
+
+  test("buildReviewSummary compares against best strategy", () => {
+    const current = {
+      ...DEFAULT_STRATEGY,
+      version: 3,
+      metrics: {
+        ticksTracked: 60,
+        ticksAlive: 48,
+        levelStart: 1,
+        levelEnd: 4,
+        abilitiesLearned: 2,
+        laneControlSum: 120,
+        lastReviewedAt: 0,
+      },
+    };
+    const best = {
+      ...DEFAULT_STRATEGY,
+      version: 2,
+      metrics: {
+        ticksTracked: 60,
+        ticksAlive: 30,
+        levelStart: 1,
+        levelEnd: 2,
+        abilitiesLearned: 1,
+        laneControlSum: -60,
+        lastReviewedAt: 0,
+      },
+    };
+    const review = buildReviewSummary(current, best);
+    expect(review).toContain("BEATS best");
+  });
 });

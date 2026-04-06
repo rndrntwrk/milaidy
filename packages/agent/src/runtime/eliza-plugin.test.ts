@@ -9,7 +9,7 @@ describe("createElizaPlugin", () => {
       true,
     );
     expect(
-      plugin.actions?.some((action) => action.name === "MANAGE_LIFEOPS"),
+      plugin.actions?.some((action) => action.name === "LIFE"),
     ).toBe(true);
   });
 });

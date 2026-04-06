@@ -916,6 +916,100 @@ export function GameView() {
           {activeSessionState.goalLabel}
         </div>
       ) : null}
+      {/* Defense of the Agents telemetry dashboard */}
+      {activeSessionState?.telemetry?.heroClass != null ? (
+        <div className="border-b border-border px-2 py-2 text-[10px] space-y-1.5">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-txt">
+              {String(activeSessionState.telemetry.heroClass).charAt(0).toUpperCase() +
+                String(activeSessionState.telemetry.heroClass).slice(1)}{" "}
+              Lv{activeSessionState.telemetry.heroLevel ?? "?"}
+            </span>
+            <span className="text-muted">
+              {activeSessionState.telemetry.heroLane ?? "?"} lane
+            </span>
+            {activeSessionState.telemetry.heroAlive === false ? (
+              <span className="text-danger font-semibold">DEAD</span>
+            ) : null}
+            {activeSessionState.telemetry.autoPlay ? (
+              <span className="px-1 py-0.5 rounded bg-ok/15 text-ok font-semibold">
+                AUTO
+              </span>
+            ) : (
+              <span className="px-1 py-0.5 rounded bg-muted/15 text-muted">
+                MANUAL
+              </span>
+            )}
+          </div>
+          {/* HP bar */}
+          {typeof activeSessionState.telemetry.heroHp === "number" &&
+          typeof activeSessionState.telemetry.heroMaxHp === "number" &&
+          activeSessionState.telemetry.heroMaxHp > 0 ? (
+            <div className="flex items-center gap-2">
+              <div className="flex-1 h-1.5 bg-border rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all"
+                  style={{
+                    width: `${Math.min(100, Math.round((Number(activeSessionState.telemetry.heroHp) / Number(activeSessionState.telemetry.heroMaxHp)) * 100))}%`,
+                    background:
+                      Number(activeSessionState.telemetry.heroHp) /
+                        Number(activeSessionState.telemetry.heroMaxHp) >
+                      0.5
+                        ? "rgb(34, 197, 94)"
+                        : Number(activeSessionState.telemetry.heroHp) /
+                              Number(activeSessionState.telemetry.heroMaxHp) >
+                            0.25
+                          ? "rgb(245, 158, 11)"
+                          : "rgb(239, 68, 68)",
+                  }}
+                />
+              </div>
+              <span className="text-muted whitespace-nowrap">
+                {activeSessionState.telemetry.heroHp}/{activeSessionState.telemetry.heroMaxHp}
+              </span>
+            </div>
+          ) : null}
+          {/* Strategy info */}
+          {activeSessionState.telemetry.strategyVersion != null ? (
+            <div className="flex items-center gap-2 text-muted">
+              <span>
+                Strategy v{activeSessionState.telemetry.strategyVersion}
+              </span>
+              {activeSessionState.telemetry.strategyScore != null ? (
+                <span>
+                  score: {Number(activeSessionState.telemetry.strategyScore).toFixed(2)}
+                </span>
+              ) : null}
+              {activeSessionState.telemetry.bestStrategyVersion != null ? (
+                <span>
+                  best: v{activeSessionState.telemetry.bestStrategyVersion} (
+                  {Number(activeSessionState.telemetry.bestStrategyScore ?? 0).toFixed(2)})
+                </span>
+              ) : null}
+            </div>
+          ) : null}
+          {/* Lane pressure */}
+          {activeSessionState.telemetry.laneHumanUnits != null ? (
+            <div className="flex items-center gap-2 text-muted">
+              <span>Lane:</span>
+              <span
+                className={
+                  Number(activeSessionState.telemetry.laneFrontline ?? 0) > 0
+                    ? "text-ok"
+                    : Number(activeSessionState.telemetry.laneFrontline ?? 0) < 0
+                      ? "text-danger"
+                      : ""
+                }
+              >
+                {activeSessionState.telemetry.laneHumanUnits}v
+                {activeSessionState.telemetry.laneOrcUnits} (
+                {Number(activeSessionState.telemetry.laneFrontline ?? 0) > 0 ? "+" : ""}
+                {activeSessionState.telemetry.laneFrontline})
+              </span>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
       {activeSessionState?.suggestedPrompts?.length ? (
         <div className="flex flex-wrap gap-1 border-b border-border px-2 py-2">
           {activeSessionState.suggestedPrompts.slice(0, 4).map((prompt) => (

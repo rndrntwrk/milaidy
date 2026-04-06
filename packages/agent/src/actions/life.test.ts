@@ -77,9 +77,9 @@ function msg(text: string) {
 }
 
 function invoke(intent: string, extra: Record<string, unknown> = {}) {
-  const { title, target, details, ...rest } = extra;
+  const { action, title, target, details, ...rest } = extra;
   return lifeAction.handler?.(runtime, msg(intent), {} as never, {
-    parameters: { intent, title, target, details, ...rest },
+    parameters: { action, intent, title, target, details, ...rest },
   } as never);
 }
 
@@ -116,7 +116,7 @@ describe("classifyIntent", () => {
     ["delete the stay healthy goal", "delete_goal"],
     ["remove my fitness goal", "delete_goal"],
     ["my phone number is 555-1234", "capture_phone"],
-    ["text me if I miss it", "capture_phone"],
+    ["text me if I miss it", "configure_escalation"],
     ["call me before the event", "capture_phone"],
     ["set up SMS escalation", "configure_escalation"],
     ["text me if I ignore the reminder", "configure_escalation"],
@@ -178,6 +178,7 @@ describe("lifeAction", () => {
       reminderPlan: null,
     });
     const result = await invoke("brush teeth twice a day", {
+      action: "create",
       title: "Brush teeth",
       details: { cadence: { kind: "daily", windows: ["morning", "night"] }, kind: "habit" },
     });
@@ -186,12 +187,12 @@ describe("lifeAction", () => {
   });
 
   it("requires title for create", async () => {
-    const result = await invoke("create a new habit", { details: { cadence: { kind: "daily", windows: ["morning"] } } });
+    const result = await invoke("create a new habit", { action: "create", details: { cadence: { kind: "daily", windows: ["morning"] } } });
     expect(result).toMatchObject({ success: false, text: expect.stringContaining("name") });
   });
 
   it("requires cadence for create", async () => {
-    const result = await invoke("create a new habit", { title: "X" });
+    const result = await invoke("create a new habit", { action: "create", title: "X" });
     expect(result).toMatchObject({ success: false, text: expect.stringContaining("schedule") });
   });
 
@@ -200,6 +201,7 @@ describe("lifeAction", () => {
   it("creates a goal", async () => {
     mockCreateGoal.mockResolvedValue({ goal: { id: "g1", title: "Call Mom weekly" }, links: [] });
     const result = await invoke("I want to call my mom every week", {
+      action: "create_goal",
       title: "Call Mom weekly",
       details: { supportStrategy: { approach: "weekly_nudge" } },
     });
@@ -218,14 +220,14 @@ describe("lifeAction", () => {
     mockListDefinitions.mockResolvedValue([{ definition: { id: "d1", title: "Stretch", domain: "user_lifeops" } }]);
     mockListGoals.mockResolvedValue([]);
     mockUpdateDefinition.mockResolvedValue({ definition: { id: "d1", title: "Morning stretch" } });
-    const result = await invoke("change stretching to mornings only", { target: "Stretch", title: "Morning stretch" });
+    const result = await invoke("change stretching to mornings only", { action: "update", target: "Stretch", title: "Morning stretch" });
     expect(mockUpdateDefinition).toHaveBeenCalledWith("d1", expect.objectContaining({ title: "Morning stretch" }));
     expect(result).toMatchObject({ success: true });
   });
 
   it("returns error when update target not found", async () => {
     mockListDefinitions.mockResolvedValue([]);
-    const result = await invoke("update something", { target: "Ghost" });
+    const result = await invoke("update something", { action: "update", target: "Ghost" });
     expect(result).toMatchObject({ success: false, text: expect.stringContaining("could not find") });
   });
 
@@ -234,7 +236,7 @@ describe("lifeAction", () => {
   it("deletes a definition", async () => {
     mockListDefinitions.mockResolvedValue([{ definition: { id: "d1", title: "Workout", domain: "user_lifeops" } }]);
     mockDeleteDefinition.mockResolvedValue(undefined);
-    const result = await invoke("delete the workout routine", { target: "Workout" });
+    const result = await invoke("delete the workout routine", { action: "delete", target: "Workout" });
     expect(mockDeleteDefinition).toHaveBeenCalledWith("d1");
     expect(result).toMatchObject({ success: true, text: expect.stringContaining("Workout") });
   });
@@ -244,7 +246,7 @@ describe("lifeAction", () => {
   it("deletes a goal", async () => {
     mockListGoals.mockResolvedValue([{ goal: { id: "g1", title: "Stay fit", domain: "user_lifeops" }, links: [] }]);
     mockDeleteGoal.mockResolvedValue(undefined);
-    const result = await invoke("delete the stay fit goal", { target: "Stay fit" });
+    const result = await invoke("delete the stay fit goal", { action: "delete_goal", target: "Stay fit" });
     expect(mockDeleteGoal).toHaveBeenCalledWith("g1");
     expect(result).toMatchObject({ success: true });
   });
@@ -257,7 +259,7 @@ describe("lifeAction", () => {
       agentOps: { occurrences: [] },
     });
     mockCompleteOccurrence.mockResolvedValue({ id: "o1", title: "Brush teeth", state: "completed" });
-    const result = await invoke("I brushed my teeth", { target: "Brush teeth" });
+    const result = await invoke("I brushed my teeth", { action: "complete", target: "Brush teeth" });
     expect(mockCompleteOccurrence).toHaveBeenCalledWith("o1", { note: undefined });
     expect(result).toMatchObject({ success: true, text: expect.stringContaining("done") });
   });
@@ -268,7 +270,7 @@ describe("lifeAction", () => {
       agentOps: { occurrences: [] },
     });
     mockCompleteOccurrence.mockResolvedValue({ id: "o1", title: "Workout", state: "completed" });
-    const result = await invoke("finished my pushups", { target: "Workout", details: { note: "Did 20 reps" } });
+    const result = await invoke("finished my pushups", { action: "complete", target: "Workout", details: { note: "Did 20 reps" } });
     expect(mockCompleteOccurrence).toHaveBeenCalledWith("o1", { note: "Did 20 reps" });
     expect(result).toMatchObject({ success: true });
   });
@@ -281,7 +283,7 @@ describe("lifeAction", () => {
       agentOps: { occurrences: [] },
     });
     mockSkipOccurrence.mockResolvedValue({ id: "o2", title: "Meditate", state: "skipped" });
-    const result = await invoke("skip meditation today", { target: "Meditate" });
+    const result = await invoke("skip meditation today", { action: "skip", target: "Meditate" });
     expect(mockSkipOccurrence).toHaveBeenCalledWith("o2");
     expect(result).toMatchObject({ success: true });
   });
@@ -294,7 +296,7 @@ describe("lifeAction", () => {
       agentOps: { occurrences: [] },
     });
     mockSnoozeOccurrence.mockResolvedValue({ id: "o3", title: "Brush teeth", state: "snoozed" });
-    const result = await invoke("snooze brushing for 30 minutes", { target: "Brush teeth", details: { preset: "30m" } });
+    const result = await invoke("snooze brushing for 30 minutes", { action: "snooze", target: "Brush teeth", details: { preset: "30m" } });
     expect(mockSnoozeOccurrence).toHaveBeenCalledWith("o3", { preset: "30m", minutes: undefined });
     expect(result).toMatchObject({ success: true });
   });
@@ -305,7 +307,7 @@ describe("lifeAction", () => {
       agentOps: { occurrences: [] },
     });
     mockSnoozeOccurrence.mockResolvedValue({ id: "o3", title: "Workout", state: "snoozed" });
-    const result = await invoke("postpone workout", { target: "Workout", details: { minutes: 45 } });
+    const result = await invoke("postpone workout", { action: "snooze", target: "Workout", details: { minutes: 45 } });
     expect(mockSnoozeOccurrence).toHaveBeenCalledWith("o3", { preset: undefined, minutes: 45 });
     expect(result).toMatchObject({ success: true });
   });
@@ -318,7 +320,7 @@ describe("lifeAction", () => {
       goal: { id: "g1", title: "Stay healthy" },
       summary: { explanation: "On track — completed 3 items this week." },
     });
-    const result = await invoke("how am I doing on stay healthy", { target: "Stay healthy" });
+    const result = await invoke("how am I doing on stay healthy", { action: "review", target: "Stay healthy" });
     expect(mockReviewGoal).toHaveBeenCalledWith("g1");
     expect(result).toMatchObject({ success: true, text: expect.stringContaining("On track") });
   });

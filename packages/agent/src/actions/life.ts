@@ -44,7 +44,45 @@ type LifeOperation =
   | "query_email"
   | "query_overview";
 
+type LifeAction =
+  | "create"
+  | "create_goal"
+  | "update"
+  | "update_goal"
+  | "delete"
+  | "delete_goal"
+  | "complete"
+  | "skip"
+  | "snooze"
+  | "review"
+  | "phone"
+  | "escalation"
+  | "calendar"
+  | "next_event"
+  | "email"
+  | "overview";
+
+const ACTION_TO_OPERATION: Record<LifeAction, LifeOperation> = {
+  create: "create_definition",
+  create_goal: "create_goal",
+  update: "update_definition",
+  update_goal: "update_goal",
+  delete: "delete_definition",
+  delete_goal: "delete_goal",
+  complete: "complete_occurrence",
+  skip: "skip_occurrence",
+  snooze: "snooze_occurrence",
+  review: "review_goal",
+  phone: "capture_phone",
+  escalation: "configure_escalation",
+  calendar: "query_calendar_today",
+  next_event: "query_calendar_next",
+  email: "query_email",
+  overview: "query_overview",
+};
+
 type LifeParams = {
+  action?: LifeAction;
   intent?: string;
   title?: string;
   target?: string;
@@ -58,7 +96,19 @@ const INTERNAL_URL = new URL("http://127.0.0.1/");
 export function classifyIntent(intent: string): LifeOperation {
   const lower = intent.toLowerCase();
 
-  // Query operations — check first so "what's on my calendar" doesn't hit create
+  // Update — check before calendar so "edit my workout schedule" doesn't hit calendar
+  if (/\b(update|change|edit|modify|adjust|rename|reschedule)\b/.test(lower)) {
+    if (/\b(goal)\b/.test(lower)) return "update_goal";
+    return "update_definition";
+  }
+
+  // Escalation config — check before phone capture; more specific patterns
+  if (/\b(escalat|reminder plan|set up (sms|text|voice)|notify.*if|text.*if.*(ignore|miss)|call.*if.*(ignore|miss)|sms.*if)\b/.test(lower)) return "configure_escalation";
+
+  // Phone capture — "text me", "call me", "my number"
+  if (/\b(phone|text me|call me|sms|my number|voice call)\b/.test(lower)) return "capture_phone";
+
+  // Query operations — check before mutation keywords
   if (/\b(calendar|schedule|events?|meetings?|what'?s on|agenda)\b/.test(lower)) {
     if (/\b(next|upcoming|soon|about to)\b/.test(lower)) return "query_calendar_next";
     if (/\b(tomorrow)\b/.test(lower)) return "query_calendar_today";
@@ -68,8 +118,8 @@ export function classifyIntent(intent: string): LifeOperation {
   if (/\b(emails?|inbox|mail|messages?|gmail)\b/.test(lower)) return "query_email";
   if (/\b(overview|summary|what'?s active|status|what do i have|show me everything)\b/.test(lower)) return "query_overview";
 
-  // Completion — "I did it", "mark brushing done", "finished my workout"
-  if (/\b(done|complete[d]?|finished|did (it|that|my)|mark.*(done|complete))\b/.test(lower)) return "complete_occurrence";
+  // Completion — "I did it", "mark brushing done", "finished my workout", "I brushed my teeth"
+  if (/\b(done|complete[d]?|finished|did (it|that|my|the)|mark.*(done|complete)|i (brushed|worked out|meditated|exercised|stretched|took|drank|ate|ran|walked|cleaned|called|read))\b/.test(lower)) return "complete_occurrence";
 
   // Skip — "skip brushing", "pass on workout", "not today"
   if (/\b(skip|pass\b|not today|skip.*(today|this))\b/.test(lower)) return "skip_occurrence";
@@ -83,18 +133,10 @@ export function classifyIntent(intent: string): LifeOperation {
     return "delete_definition";
   }
 
-  // Phone/escalation — "text me", "call me", "set up SMS"
-  if (/\b(phone|text me|call me|sms|my number|voice call)\b/.test(lower)) return "capture_phone";
-  if (/\b(escalat|reminder plan|notify.*if|text.*if.*ignore|call.*if.*miss)\b/.test(lower)) return "configure_escalation";
+  // (phone/escalation checked above, before calendar)
 
   // Review — "how am I doing", "review my goal", "check progress"
   if (/\b(review|how.*(doing|going)|progress|check.*(goal|on))\b/.test(lower)) return "review_goal";
-
-  // Update — "change", "edit", "modify", "adjust"
-  if (/\b(update|change|edit|modify|adjust|rename|reschedule)\b/.test(lower)) {
-    if (/\b(goal)\b/.test(lower)) return "update_goal";
-    return "update_definition";
-  }
 
   // Create goal — "I want to", "my goal is", "life goal"
   if (/\b(goal|life goal|want to .{5,}|aspir|aim to|commit to)\b/.test(lower)) return "create_goal";
@@ -395,7 +437,8 @@ export const lifeAction: Action = {
       return { success: false, text: "LIFE requires an intent describing what to do." };
     }
 
-    const operation = classifyIntent(intent);
+    const explicitAction = params.action && ACTION_TO_OPERATION[params.action];
+    const operation = explicitAction ?? classifyIntent(intent);
     const service = new LifeOpsService(runtime);
     const details = params.details;
     const domain = detailString(details, "domain") as LifeOpsDomain | undefined;
@@ -590,9 +633,36 @@ export const lifeAction: Action = {
   },
   parameters: [
     {
+      name: "action",
+      description:
+        "What kind of life operation to perform.",
+      required: true,
+      schema: {
+        type: "string" as const,
+        enum: [
+          "create",
+          "create_goal",
+          "update",
+          "update_goal",
+          "delete",
+          "delete_goal",
+          "complete",
+          "skip",
+          "snooze",
+          "review",
+          "phone",
+          "escalation",
+          "calendar",
+          "next_event",
+          "email",
+          "overview",
+        ],
+      },
+    },
+    {
       name: "intent",
       description:
-        'What to do in natural language. Examples: "create a daily brushing habit for morning and night", "snooze brushing for 30 minutes", "what\'s on my calendar today", "delete the workout routine", "I\'m done with my pushups", "set up SMS escalation for brushing", "I want to call my mom every week".',
+        'Natural language description of what to do. Examples: "create a daily brushing habit for morning and night", "snooze brushing for 30 minutes", "what\'s on my calendar today".',
       required: true,
       schema: { type: "string" as const },
     },

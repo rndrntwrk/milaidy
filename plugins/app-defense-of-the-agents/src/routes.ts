@@ -201,7 +201,7 @@ async function loadPushSystemEvent(): Promise<void> {
   if (pushSystemEventFn) return;
   try {
     const mod = await import(
-      /* webpackIgnore: true */ "@elizaos/plugin-cron/heartbeat"
+      /* webpackIgnore: true */ "@elizaos/plugin-cron"
     );
     if (typeof mod.pushSystemEvent === "function") {
       pushSystemEventFn = mod.pushSystemEvent;
@@ -445,15 +445,36 @@ async function locateHeroState(
 
 async function registerAgent(ctx: SessionContext): Promise<string> {
   const url = new URL("/api/agents/register", ctx.apiBaseUrl);
-  const response = await fetchJson<DefenseRegistrationResponse>(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      agentName: ctx.agentName,
-    }),
-  });
+
+  let response: DefenseRegistrationResponse;
+  try {
+    response = await fetchJson<DefenseRegistrationResponse>(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        agentName: ctx.agentName,
+      }),
+    });
+  } catch (err) {
+    // 409 = agent name already taken. Try re-registering with a suffixed name.
+    if (err instanceof Error && err.message.includes("409")) {
+      const suffixed = `${ctx.agentName}${Math.random().toString(36).slice(2, 6)}`;
+      const retryResponse = await fetchJson<DefenseRegistrationResponse>(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ agentName: suffixed }),
+      });
+      if (retryResponse.apiKey?.trim()) {
+        ctx.agentName = suffixed;
+        persistSetting(ctx.runtime, "DEFENSE_OF_THE_AGENTS_AGENT_NAME", suffixed);
+        persistSetting(ctx.runtime, "DEFENSE_OF_THE_AGENTS_API_KEY", retryResponse.apiKey.trim(), true);
+        return retryResponse.apiKey.trim();
+      }
+    }
+    throw err;
+  }
 
   if (!response.apiKey?.trim()) {
     throw new Error(
@@ -857,7 +878,10 @@ function startGameLoop(
 
   void loadPushSystemEvent();
 
+  let tickRunning = false;
   const timer = setInterval(() => {
+    if (tickRunning) return; // skip if previous tick still in flight
+    tickRunning = true;
     void (async () => {
       const strategy = resolveStrategy(runtime);
       try {
@@ -875,6 +899,8 @@ function startGameLoop(
         // Swallow tick errors — don't crash the loop
         const msg = err instanceof Error ? err.message : String(err);
         pushEvent(agentId, `[Game tick error] ${msg}`);
+      } finally {
+        tickRunning = false;
       }
     })();
   }, GAME_LOOP_INTERVAL_MS);
@@ -916,8 +942,9 @@ function parseStrategyUpdate(
   if (trimmed.startsWith("{")) {
     try {
       const parsed = JSON.parse(trimmed) as { strategy?: Partial<GameStrategy> };
-      const update = parsed.strategy ?? (parsed as Partial<GameStrategy>);
-      if (!update || typeof update !== "object") return null;
+      // Only match if the JSON explicitly contains a "strategy" key
+      if (!parsed.strategy || typeof parsed.strategy !== "object") return null;
+      const update = parsed.strategy;
 
       const next = { ...current };
       if (typeof update.heroClass === "string") {
@@ -1309,7 +1336,15 @@ function okResponse(
 export async function resolveLaunchSession(
   ctx: AppLaunchSessionContext,
 ): Promise<AppLaunchResult["session"]> {
-  return readSessionState(ctx.runtime, null, true);
+  const session = await readSessionState(ctx.runtime, null, true);
+
+  // Start auto-play game loop on launch
+  if (ctx.runtime && session) {
+    const sessionCtx = resolveSessionContext(ctx.runtime, null);
+    startGameLoop(ctx.runtime, sessionCtx);
+  }
+
+  return session;
 }
 
 export async function handleAppRoutes(ctx: {
@@ -1338,6 +1373,43 @@ export async function handleAppRoutes(ctx: {
       const content = body?.content?.trim();
       if (!content) {
         ctx.error(ctx.res, "Command content is required.", 400);
+        return true;
+      }
+
+      const normalizedCmd = content.toLowerCase().replace(/[^a-z0-9 ]/g, "").trim();
+
+      // Handle auto-play toggle
+      if (normalizedCmd === "autoplay on" || normalizedCmd === "auto play on") {
+        const sessionCtx = resolveSessionContext(runtime, sessionId);
+        startGameLoop(runtime, sessionCtx);
+        const refreshed = await readSessionState(runtime, sessionId);
+        ctx.json(ctx.res, okResponse(true, "Auto-play enabled. Agent is now playing autonomously.", refreshed));
+        return true;
+      }
+      if (normalizedCmd === "autoplay off" || normalizedCmd === "auto play off") {
+        stopGameLoop(runtime);
+        const refreshed = await readSessionState(runtime, sessionId);
+        ctx.json(ctx.res, okResponse(true, "Auto-play disabled. Send commands manually.", refreshed));
+        return true;
+      }
+
+      // Handle strategy review trigger
+      if (normalizedCmd === "review strategy" || normalizedCmd === "strategy review") {
+        runStrategyReview(runtime);
+        const refreshed = await readSessionState(runtime, sessionId);
+        ctx.json(ctx.res, okResponse(true, "Strategy review completed.", refreshed));
+        return true;
+      }
+
+      // Handle strategy update (JSON)
+      const strategyUpdate = parseStrategyUpdate(content, resolveStrategy(runtime));
+      if (strategyUpdate) {
+        persistStrategy(runtime, {
+          ...strategyUpdate,
+          metrics: { ...resolveStrategy(runtime).metrics, lastReviewedAt: Date.now() },
+        });
+        const refreshed = await readSessionState(runtime, sessionId);
+        ctx.json(ctx.res, okResponse(true, `Strategy updated to v${strategyUpdate.version}.`, refreshed));
         return true;
       }
 
@@ -1382,3 +1454,27 @@ export async function handleAppRoutes(ctx: {
     return true;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Exports for testing
+// ---------------------------------------------------------------------------
+
+export {
+  type GameStrategy,
+  type StrategyMetrics,
+  DEFAULT_STRATEGY,
+  resolveStrategy,
+  resolveBestStrategy,
+  persistStrategy,
+  persistBestStrategy,
+  scoreStrategy,
+  pickAbility,
+  findWeakestAlliedLane,
+  executeStrategyTick,
+  buildReviewSummary,
+  runStrategyReview,
+  startGameLoop,
+  stopGameLoop,
+  isAutoPlayActive,
+  parseStrategyUpdate,
+};
