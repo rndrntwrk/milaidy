@@ -63,7 +63,7 @@ const VIEWS: ViewSpec[] = [
     id: "knowledge",
     path: "/knowledge",
     label: "Knowledge",
-    readyChecks: [{ selector: '[aria-label="Knowledge upload controls"]' }],
+    readyChecks: [{ selector: '[data-testid="knowledge-sidebar"]' }],
   },
   {
     id: "connectors",
@@ -680,9 +680,7 @@ test("Apps view shows curated multi-run state for Babylon and 2004scape", async 
       hasText: "Running now",
     })
     .last();
-  await expect(
-    defenseDetails.getByText("No viewer surface is available"),
-  ).toBeVisible();
+  await expect(defenseDetails).toContainText("No viewer surface is available");
   await expect(
     defenseDetails.getByRole("button", { name: "Inspect run" }),
   ).toBeVisible();
