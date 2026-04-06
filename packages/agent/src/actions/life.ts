@@ -22,7 +22,7 @@ import type {
   UpdateLifeOpsDefinitionRequest,
   UpdateLifeOpsGoalRequest,
 } from "@miladyai/shared/contracts/lifeops";
-import { LifeOpsService } from "../lifeops/service.js";
+import { LifeOpsService, LifeOpsServiceError } from "../lifeops/service.js";
 
 // ── Types ─────────────────────────────────────────────
 
@@ -444,6 +444,18 @@ export const lifeAction: Action = {
     const ownership = requestedOwnership(domain);
     const chatText = messageText(message).trim();
     const targetName = params.target ?? params.title;
+
+    try {
+    return await executeLifeOperation({
+      operation, service, params, details, ownership, chatText, targetName, domain, intent,
+    });
+    } catch (err) {
+      if (err instanceof LifeOpsServiceError) {
+        return { success: false, text: err.message };
+      }
+      throw err;
+    }
+  },
 
     // ── Queries ─────────────────────────────────────
 
