@@ -13,6 +13,11 @@ interface AppLaunchSessionContext {
   viewer: AppLaunchResult["viewer"] | null;
 }
 
+interface AppRunSessionContext extends AppLaunchSessionContext {
+  runId: string;
+  session: AppSessionState | null;
+}
+
 const APP_NAME = "@elizaos/app-defense-of-the-agents";
 const APP_DISPLAY_NAME = "Defense of the Agents";
 const DEFAULT_API_BASE_URL = "https://wc2-agentic-dev-3o6un.ondigitalocean.app";
@@ -1760,6 +1765,12 @@ export async function resolveLaunchSession(
   }
 
   return session;
+}
+
+export async function refreshRunSession(
+  ctx: AppRunSessionContext,
+): Promise<AppLaunchResult["session"]> {
+  return readSessionState(ctx.runtime, ctx.session?.sessionId ?? null, false);
 }
 
 export async function handleAppRoutes(ctx: {

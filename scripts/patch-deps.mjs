@@ -1420,6 +1420,57 @@ function patchAgentSkillsLocalFallback() {
 patchAgentSkillsLocalFallback();
 
 /**
+ * Patch cssstyle's CommonJS parser bundle to use a CJS-compatible css-color.
+ *
+ * cssstyle@6.2.0 still calls require("@asamuzakjp/css-color"), but the 5.x
+ * css-color line is ESM-only. Under some CI Node/Vitest fork-worker runs this
+ * trips ERR_REQUIRE_ASYNC_MODULE before jsdom-based tests even start.
+ *
+ * We install a root alias pinned to @asamuzakjp/css-color@4.1.2, whose exports
+ * still provide a require-compatible CJS entry point, then rewrite cssstyle's
+ * require() to target that alias.
+ *
+ * Remove once cssstyle ships a compatible CommonJS import path or the test
+ * stack stops loading it via require().
+ */
+function patchCssstyleColorCompat() {
+  const relPath = "lib/parsers.js";
+  const searchDirs = [resolve(root, "node_modules/cssstyle")];
+  const bunCacheDir = resolve(root, "node_modules/.bun");
+  if (existsSync(bunCacheDir)) {
+    try {
+      for (const entry of readdirSync(bunCacheDir)) {
+        if (entry.startsWith("cssstyle@")) {
+          searchDirs.push(resolve(bunCacheDir, entry, "node_modules/cssstyle"));
+        }
+      }
+    } catch {}
+  }
+
+  const needle = 'require("@asamuzakjp/css-color")';
+  const replacement = 'require("@miladyai/css-color-cjs")';
+
+  let patched = 0;
+  for (const dir of searchDirs) {
+    const target = resolve(dir, relPath);
+    if (!existsSync(target)) continue;
+    let src = readFileSync(target, "utf8");
+    if (!src.includes(needle)) continue;
+    src = src.replaceAll(needle, replacement);
+    writeFileSync(target, src, "utf8");
+    patched++;
+    console.log(`[patch-deps] Applied cssstyle color compat fix: ${target}`);
+  }
+
+  if (patched > 0) {
+    console.log(
+      `[patch-deps] cssstyle: fixed ${patched} parser require path(s).`,
+    );
+  }
+}
+patchCssstyleColorCompat();
+
+/**
  * 8) @elizaos/plugin-groq: The published plugin bundles @ai-sdk/groq@1.x which
  *    creates v1-spec models. Our root overrides ai@6.x (AI SDK 5) which requires
  *    spec v2+. Symlink the nested @ai-sdk/groq to the root's @ai-sdk/groq@3.x

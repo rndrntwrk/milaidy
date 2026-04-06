@@ -83,6 +83,7 @@ const ALLOWED_APP_URL_TEMPLATE_KEYS = new Set([
   "RS_SDK_BOT_PASSWORD",
   "RS_SDK_SERVER_URL",
 ]);
+const RUN_REFRESH_MIN_INTERVAL_MS = 5_000;
 
 function isProductionRuntime(): boolean {
   return process.env.NODE_ENV === "production";
@@ -1305,6 +1306,24 @@ function buildAppSession(
   };
 }
 
+function buildUnavailableSession(
+  run: AppRunSummary,
+  status: "disconnected" | "offline",
+  summary: string,
+): AppSessionState | null {
+  if (!run.session) return null;
+  return {
+    ...run.session,
+    status,
+    canSendCommands: false,
+    controls: [],
+    goalLabel: null,
+    suggestedPrompts: [],
+    telemetry: null,
+    summary,
+  };
+}
+
 async function resolveLaunchSession(
   appInfo: RegistryAppPlugin,
   viewer: AppLaunchResult["viewer"] | null,
@@ -1651,6 +1670,8 @@ function sameRunIdentity(
 
 export class AppManager {
   private readonly activeSessions = new Map<string, ActiveAppSession>();
+  private readonly runRefreshAt = new Map<string, number>();
+  private readonly runRefreshInFlight = new Map<string, Promise<AppRunSummary>>();
   private readonly stateDir?: string;
   private appRuns = new Map<string, AppRunSummary>();
 
@@ -1682,6 +1703,8 @@ export class AppManager {
     if (!run) return null;
     this.appRuns.delete(runId);
     this.activeSessions.delete(runId);
+    this.runRefreshAt.delete(runId);
+    this.runRefreshInFlight.delete(runId);
     this.persistRuns();
     return run;
   }
@@ -1701,6 +1724,92 @@ export class AppManager {
       }
     }
     return null;
+  }
+
+  private shouldSkipRunRefresh(
+    run: AppRunSummary,
+    force: boolean,
+  ): boolean {
+    if (force) return false;
+    const lastRefreshAt = this.runRefreshAt.get(run.runId) ?? 0;
+    return Date.now() - lastRefreshAt < RUN_REFRESH_MIN_INTERVAL_MS;
+  }
+
+  private async refreshRunSession(
+    run: AppRunSummary,
+    runtime: IAgentRuntime | null,
+  ): Promise<AppRunSummary> {
+    const routeModule = await importAppRouteModule(run.appName);
+    if (typeof routeModule?.refreshRunSession !== "function") {
+      return run;
+    }
+
+    try {
+      const nextSession = await routeModule.refreshRunSession({
+        appName: run.appName,
+        launchUrl: run.launchUrl,
+        runtime,
+        viewer: run.viewer,
+        runId: run.runId,
+        session: run.session,
+      });
+      if (!nextSession) {
+        const summary = "Run session is no longer available.";
+        const nextRun = this.storeRun(
+          updateRunSummary(run, {
+            session: buildUnavailableSession(run, "offline", summary),
+            status: "offline",
+            summary,
+          }),
+        );
+        return nextRun;
+      }
+      const nextRun = this.storeRun(
+        updateRunSummary(run, {
+          session: nextSession,
+          status: nextSession.status,
+          summary: nextSession.summary ?? run.summary,
+        }),
+      );
+      return nextRun;
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? `Run verification failed: ${error.message}`
+          : "Run verification failed.";
+      const nextStatus = run.session ? "disconnected" : "offline";
+      const nextRun = this.storeRun(
+        updateRunSummary(run, {
+          session: buildUnavailableSession(run, nextStatus, message),
+          status: nextStatus,
+          summary: message,
+        }),
+      );
+      return nextRun;
+    }
+  }
+
+  private async refreshRun(
+    run: AppRunSummary,
+    runtime: IAgentRuntime | null,
+    options: { force?: boolean } = {},
+  ): Promise<AppRunSummary> {
+    const force = options.force === true;
+    if (this.shouldSkipRunRefresh(run, force)) {
+      return this.findRun(run.runId) ?? run;
+    }
+
+    const inFlight = this.runRefreshInFlight.get(run.runId);
+    if (inFlight) {
+      return inFlight;
+    }
+
+    this.runRefreshAt.set(run.runId, Date.now());
+    const refreshPromise = this.refreshRunSession(run, runtime).finally(() => {
+      this.runRefreshInFlight.delete(run.runId);
+    });
+    this.runRefreshInFlight.set(run.runId, refreshPromise);
+    return refreshPromise;
   }
 
   async listAvailable(
@@ -1773,16 +1882,37 @@ export class AppManager {
     return appInfo ? flattenAppInfo(appInfo) : null;
   }
 
-  async listRuns(): Promise<AppRunSummary[]> {
-    return this.listRunsSorted();
+  async listRuns(runtime: IAgentRuntime | null = null): Promise<AppRunSummary[]> {
+    const runs = this.listRunsSorted();
+    if (runs.length === 0) {
+      return runs;
+    }
+
+    const refreshed = await Promise.all(
+      runs.map((run) => this.refreshRun(run, runtime)),
+    );
+    return refreshed.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   }
 
-  async getRun(runId: string): Promise<AppRunSummary | null> {
-    return this.findRun(runId);
-  }
-
-  async attachRun(runId: string): Promise<AppRunActionResult> {
+  async getRun(
+    runId: string,
+    runtime: IAgentRuntime | null = null,
+  ): Promise<AppRunSummary | null> {
     const run = this.findRun(runId);
+    if (!run) {
+      return null;
+    }
+    return this.refreshRun(run, runtime, { force: true });
+  }
+
+  async attachRun(
+    runId: string,
+    runtime: IAgentRuntime | null = null,
+  ): Promise<AppRunActionResult> {
+    const existingRun = this.findRun(runId);
+    const run = existingRun
+      ? await this.refreshRun(existingRun, runtime, { force: true })
+      : null;
     if (!run) {
       return {
         success: false,

@@ -22,6 +22,11 @@ interface AppLaunchSessionContext {
   viewer: AppLaunchResult["viewer"] | null;
 }
 
+interface AppRunSessionContext extends AppLaunchSessionContext {
+  runId: string;
+  session: AppSessionState | null;
+}
+
 // ---------------------------------------------------------------------------
 // Route context type (mirrors AppPackageRouteContext)
 // ---------------------------------------------------------------------------
@@ -272,6 +277,13 @@ function parseSessionSubroute(pathname: string): "message" | "control" | null {
 
 export async function resolveLaunchSession(
   ctx: AppLaunchSessionContext,
+): Promise<AppLaunchResult["session"]> {
+  const config = resolveBabylonConfig(ctx.runtime);
+  return readSessionState(config);
+}
+
+export async function refreshRunSession(
+  ctx: AppRunSessionContext,
 ): Promise<AppLaunchResult["session"]> {
   const config = resolveBabylonConfig(ctx.runtime);
   return readSessionState(config);

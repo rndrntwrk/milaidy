@@ -22,9 +22,19 @@ export type AppLaunchSessionResolver = (
   ctx: AppLaunchSessionContext,
 ) => Promise<AppSessionState | null>;
 
+export interface AppRunSessionContext extends AppLaunchSessionContext {
+  runId: string;
+  session: AppSessionState | null;
+}
+
+export type AppRunSessionRefresher = (
+  ctx: AppRunSessionContext,
+) => Promise<AppSessionState | null>;
+
 export type AppRouteModule = {
   handleAppRoutes?: (ctx: unknown) => Promise<boolean>;
   resolveLaunchSession?: AppLaunchSessionResolver;
+  refreshRunSession?: AppRunSessionRefresher;
   [key: string]: unknown;
 };
 

@@ -102,19 +102,24 @@ export function AppsView() {
     [appRuns, setState],
   );
 
+  const refreshRuns = useCallback(async () => {
+    const runs = await client.listAppRuns();
+    setState("appRuns", runs);
+    return runs;
+  }, [setState]);
+
   const loadApps = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [list, runs] = await Promise.all([
+      const [list] = await Promise.all([
         client.listApps(),
-        client.listAppRuns().catch((err: unknown) => {
+        refreshRuns().catch((err: unknown) => {
           console.warn("[AppsView] Failed to list app runs:", err);
           return [];
         }),
       ]);
       setApps(list);
-      setState("appRuns", runs);
       setSelectedAppName((current) => {
         if (!current) return getDefaultAppsCatalogSelection(list);
         return list.some(
@@ -133,11 +138,34 @@ export function AppsView() {
     } finally {
       setLoading(false);
     }
-  }, [setState, t]);
+  }, [refreshRuns, t]);
 
   useEffect(() => {
     void loadApps();
   }, [loadApps]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const refresh = async () => {
+      try {
+        await refreshRuns();
+      } catch (err) {
+        if (!cancelled) {
+          console.warn("[AppsView] Failed to refresh app runs:", err);
+        }
+      }
+    };
+
+    const timer = setInterval(() => {
+      void refresh();
+    }, 5_000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [refreshRuns]);
 
   useEffect(() => {
     if (appsSubTab !== "running") return;

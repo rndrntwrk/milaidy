@@ -1,4 +1,5 @@
 import type {
+  AppRunSummary,
   CodingAgentSession,
   CodingAgentTaskThread,
   CodingAgentTaskThreadDetail,
@@ -7,6 +8,7 @@ import { Badge, Button } from "@miladyai/ui";
 import { Activity } from "lucide-react";
 import {
   type ReactNode,
+  startTransition,
   useDeferredValue,
   useEffect,
   useMemo,
@@ -426,6 +428,181 @@ function getClientErrorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
 }
 
+function AppRunCard({
+  run,
+}: {
+  run: AppRunSummary;
+}) {
+  const healthTone =
+    run.health.state === "healthy"
+      ? "bg-ok/20 text-ok"
+      : run.health.state === "degraded"
+        ? "bg-warn/20 text-warn"
+        : "bg-danger/20 text-danger";
+
+  return (
+    <div className="rounded-lg border border-border/50 bg-bg-accent/30 p-3">
+      <div className="flex items-start gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-xs font-semibold text-txt">
+            {run.displayName}
+          </div>
+          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-muted">
+            <Badge variant="secondary" className={`px-1.5 py-0 ${healthTone}`}>
+              {run.health.state}
+            </Badge>
+            <span>{run.status}</span>
+            <span>{run.viewerAttachment}</span>
+            <span>{formatIsoTime(run.lastHeartbeatAt ?? run.updatedAt)}</span>
+          </div>
+        </div>
+      </div>
+      <div className="mt-2 line-clamp-2 text-[11px] text-muted">
+        {run.summary || run.health.message || "Run active."}
+      </div>
+    </div>
+  );
+}
+
+function AppRunsWidget(_props: ChatSidebarWidgetProps) {
+  const { appRuns, setState, t } = useApp();
+  const [runs, setRuns] = useState<AppRunSummary[]>(() =>
+    Array.isArray(appRuns) ? appRuns : [],
+  );
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const currentRun =
+    runs.find((run) => run.viewerAttachment === "attached" && run.viewer) ??
+    runs.find((run) => run.viewerAttachment === "attached") ??
+    null;
+  const attachedCount = runs.filter(
+    (run) => run.viewerAttachment === "attached",
+  ).length;
+  const backgroundCount = runs.filter(
+    (run) => run.viewerAttachment !== "attached",
+  ).length;
+  const needsAttentionCount = runs.filter(
+    (run) => run.health.state !== "healthy",
+  ).length;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const refreshRuns = async () => {
+      try {
+        const nextRuns = await client.listAppRuns();
+        const nextRunsSafe = Array.isArray(nextRuns) ? nextRuns : [];
+        if (cancelled) return;
+        setError(null);
+        startTransition(() => {
+          setRuns(nextRunsSafe);
+          setState("appRuns", nextRunsSafe);
+        });
+      } catch (refreshError) {
+        if (cancelled) return;
+        setError(getClientErrorMessage(refreshError, "Failed to load app runs."));
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void refreshRuns();
+    const timer = setInterval(() => {
+      void refreshRuns();
+    }, 5_000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [setState]);
+
+  return (
+    <WidgetSection
+      title={t("appsview.Running", { defaultValue: "Apps" })}
+      icon={<Activity className="h-4 w-4" />}
+      count={runs.length}
+      action={
+        <div className="flex items-center gap-1.5">
+          {currentRun ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 px-2 text-[10px]"
+              onClick={() => {
+                setState("appRuns", runs);
+                setState("activeGameRunId", currentRun.runId);
+                setState("tab", "apps");
+                setState("appsSubTab", "games");
+              }}
+            >
+              Resume Viewer
+            </Button>
+          ) : null}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 px-2 text-[10px]"
+            onClick={() => {
+              setState("appRuns", runs);
+              setState("tab", "apps");
+              setState("appsSubTab", "running");
+            }}
+          >
+            Open Running
+          </Button>
+        </div>
+      }
+      testId="chat-widget-app-runs"
+    >
+      {error ? (
+        <div className="mb-2 rounded-md border border-danger/30 bg-danger/10 px-2 py-1.5 text-[11px] text-danger">
+          {error}
+        </div>
+      ) : null}
+      {runs.length === 0 ? (
+        loading ? (
+          <div className="text-[11px] text-muted">Loading app runs...</div>
+        ) : (
+          <EmptyWidgetState
+            icon={<Activity className="h-8 w-8" />}
+            title="No games are running"
+            description="Launched agent apps will stay here even when their viewer is detached."
+          />
+        )
+      ) : (
+        <div className="flex flex-col gap-2.5">
+          <div className="flex flex-wrap gap-2 text-[10px] text-muted">
+            <Badge variant="secondary" className="bg-bg-hover/70 text-muted">
+              Currently playing: {attachedCount}
+            </Badge>
+            <Badge variant="secondary" className="bg-bg-hover/70 text-muted">
+              Background: {backgroundCount}
+            </Badge>
+            <Badge
+              variant="secondary"
+              className={
+                needsAttentionCount > 0
+                  ? "bg-warn/15 text-warn"
+                  : "bg-ok/15 text-ok"
+              }
+            >
+              Needs attention: {needsAttentionCount}
+            </Badge>
+          </div>
+          <div className="flex flex-col gap-2">
+            {runs.slice(0, 4).map((run) => (
+              <AppRunCard key={run.runId} run={run} />
+            ))}
+          </div>
+        </div>
+      )}
+    </WidgetSection>
+  );
+}
+
 function OrchestratorTasksWidget(_props: ChatSidebarWidgetProps) {
   const { ptySessions, t } = useApp();
   const activeSessions = useMemo(
@@ -668,6 +845,13 @@ function OrchestratorActivityWidget({
 
 export const AGENT_ORCHESTRATOR_PLUGIN_WIDGETS: ChatSidebarWidgetDefinition[] =
   [
+    {
+      id: "agent-orchestrator.apps",
+      pluginId: "agent-orchestrator",
+      order: 150,
+      defaultEnabled: true,
+      Component: AppRunsWidget,
+    },
     {
       id: "agent-orchestrator.tasks",
       pluginId: "agent-orchestrator",

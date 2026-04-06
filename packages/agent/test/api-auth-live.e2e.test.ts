@@ -11,7 +11,7 @@
  *   SOLANA_PRIVATE_KEY — for wallet operations (optional; uses SOLANA_API_KEY fallback)
  *
  * Run:
- *   ELIZA_LIVE_TEST=1 npx vitest run -c vitest.e2e.config.ts packages/agent/test/api-auth-live.e2e.test.ts
+ *   MILADY_LIVE_TEST=1 npx vitest run -c vitest.e2e.config.ts packages/agent/test/api-auth-live.e2e.test.ts
  */
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";

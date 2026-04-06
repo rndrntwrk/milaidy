@@ -1,4 +1,5 @@
 import { hasAppInterface } from "../contracts/apps.js";
+import type { IAgentRuntime } from "@elizaos/core";
 import type {
   InstallProgressLike,
   PluginManagerLike,
@@ -19,9 +20,9 @@ export interface AppManagerLike {
     limit?: number,
   ) => Promise<unknown>;
   listInstalled: (pluginManager: PluginManagerLike) => Promise<unknown>;
-  listRuns: () => Promise<unknown>;
-  getRun: (runId: string) => Promise<unknown>;
-  attachRun: (runId: string) => Promise<unknown>;
+  listRuns: (runtime?: IAgentRuntime | null) => Promise<unknown>;
+  getRun: (runId: string, runtime?: IAgentRuntime | null) => Promise<unknown>;
+  attachRun: (runId: string, runtime?: IAgentRuntime | null) => Promise<unknown>;
   detachRun: (runId: string) => Promise<unknown>;
   launch: (
     pluginManager: PluginManagerLike,
@@ -109,7 +110,7 @@ export async function handleAppsRoutes(
   }
 
   if (method === "GET" && pathname === "/api/apps/runs") {
-    const runs = await appManager.listRuns();
+    const runs = await appManager.listRuns(runtime as IAgentRuntime | null);
     json(res, runs as object);
     return true;
   }
@@ -124,7 +125,7 @@ export async function handleAppsRoutes(
     }
 
     if (!subroute) {
-      const run = await appManager.getRun(runId);
+      const run = await appManager.getRun(runId, runtime as IAgentRuntime | null);
       if (!run) {
         error(res, `App run "${runId}" not found`, 404);
         return true;
@@ -134,7 +135,7 @@ export async function handleAppsRoutes(
     }
 
     if (subroute === "health") {
-      const run = await appManager.getRun(runId);
+      const run = await appManager.getRun(runId, runtime as IAgentRuntime | null);
       if (!run || typeof run !== "object" || run === null) {
         error(res, `App run "${runId}" not found`, 404);
         return true;
@@ -158,7 +159,10 @@ export async function handleAppsRoutes(
     }
 
     if (subroute === "attach") {
-      const result = await appManager.attachRun(runId);
+      const result = await appManager.attachRun(
+        runId,
+        runtime as IAgentRuntime | null,
+      );
       json(res, result as object, actionResultStatus(result));
       return true;
     }

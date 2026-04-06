@@ -37,6 +37,12 @@ const runs = [
     args: ["run", "test:e2e"],
     forceSerial: true,
   },
+  {
+    name: "startup-e2e",
+    cmd: "bun",
+    args: ["run", "test:startup:e2e"],
+    forceSerial: true,
+  },
 ];
 
 if (

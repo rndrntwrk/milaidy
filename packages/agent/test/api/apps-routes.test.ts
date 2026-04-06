@@ -1,4 +1,5 @@
 import { describe, expect, test, vi } from "vitest";
+import type { IAgentRuntime } from "@elizaos/core";
 import type {
   AppManagerLike,
   AppsRouteContext,
@@ -60,9 +61,14 @@ function buildAppManager(
     listAvailable: vi.fn(async () => []),
     search: vi.fn(async () => []),
     listInstalled: vi.fn(async () => []),
-    listRuns: vi.fn(async () => []),
-    getRun: vi.fn(async () => null),
-    attachRun: vi.fn(async () => ({ success: true, message: "attached" })),
+    listRuns: vi.fn(async (_runtime?: IAgentRuntime | null) => []),
+    getRun: vi.fn(async (_runId: string, _runtime?: IAgentRuntime | null) => null),
+    attachRun: vi.fn(
+      async (_runId: string, _runtime?: IAgentRuntime | null) => ({
+        success: true,
+        message: "attached",
+      }),
+    ),
     detachRun: vi.fn(async () => ({ success: true, message: "detached" })),
     launch: vi.fn(async () => ({ success: true })),
     stop: vi.fn(async () => ({ success: true })),
@@ -142,6 +148,14 @@ describe("handleAppsRoutes", () => {
 
   test("GET /api/apps/runs returns persisted runs", async () => {
     const { res, getStatus, getJson } = createMockHttpResponse();
+    const runtime = { agentId: "runtime-agent-id" } as IAgentRuntime;
+    const listRuns = vi.fn(async (_runtime?: IAgentRuntime | null) => [
+      {
+        runId: "run-1",
+        appName: "@elizaos/app-hyperscape",
+        displayName: "Hyperscape",
+      },
+    ]);
     const runs = [
       {
         runId: "run-1",
@@ -153,14 +167,16 @@ describe("handleAppsRoutes", () => {
       method: "GET",
       pathname: "/api/apps/runs",
       res,
+      runtime,
       appManager: buildAppManager({
-        listRuns: vi.fn(async () => runs),
+        listRuns,
       }),
     });
 
     const handled = await handleAppsRoutes(ctx);
 
     expect(handled).toBe(true);
+    expect(listRuns).toHaveBeenCalledWith(runtime);
     expect(getStatus()).toBe(200);
     expect(getJson()).toEqual(runs);
   });
@@ -214,21 +230,27 @@ describe("handleAppsRoutes", () => {
 
   test("POST /api/apps/runs/:runId/attach returns 404 on missing run", async () => {
     const { res, getStatus, getJson } = createMockHttpResponse();
+    const runtime = { agentId: "runtime-agent-id" } as IAgentRuntime;
+    const attachRun = vi.fn(
+      async (_runId: string, _runtime?: IAgentRuntime | null) => ({
+        success: false,
+        message: 'App run "run-404" was not found.',
+      }),
+    );
     const ctx = buildCtx({
       method: "POST",
       pathname: "/api/apps/runs/run-404/attach",
       res,
+      runtime,
       appManager: buildAppManager({
-        attachRun: vi.fn(async () => ({
-          success: false,
-          message: 'App run "run-404" was not found.',
-        })),
+        attachRun,
       }),
     });
 
     const handled = await handleAppsRoutes(ctx);
 
     expect(handled).toBe(true);
+    expect(attachRun).toHaveBeenCalledWith("run-404", runtime);
     expect(getStatus()).toBe(404);
     expect(getJson()).toEqual({
       success: false,

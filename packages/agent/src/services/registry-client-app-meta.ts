@@ -83,6 +83,11 @@ const LOCAL_APP_OVERRIDES: Readonly<Record<string, LocalAppOverride>> = {
       features: ["commands", "telemetry", "pause", "resume", "suggestions"],
     },
   },
+  "@elizaos/app-defense-of-the-agents": {
+    uiExtension: {
+      detailPanelId: "defense-agent-control",
+    },
+  },
 };
 
 export function sanitizeSandbox(rawSandbox?: string): string {

@@ -3,7 +3,7 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import type { IAgentRuntime } from "@elizaos/core";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   PluginManagerLike,
   RegistryPluginInfo,
@@ -19,6 +19,7 @@ const appPackageModuleMocks = vi.hoisted(() => {
       name: packageName,
       services: [HyperscapeServiceStub],
     })),
+    importAppRouteModule: vi.fn(),
   };
 });
 
@@ -34,6 +35,10 @@ vi.mock("../../src/services/app-package-modules", async () => {
   return {
     ...actual,
     importAppPlugin: appPackageModuleMocks.importAppPlugin,
+    importAppRouteModule:
+      appPackageModuleMocks.importAppRouteModule.mockImplementation(
+        actual.importAppRouteModule,
+      ),
   };
 });
 
@@ -731,6 +736,17 @@ describe("AppManager", () => {
   const originalBabylonAgentSessionExpiresAt =
     process.env.BABYLON_AGENT_SESSION_EXPIRES_AT;
 
+  beforeEach(async () => {
+    appPackageModuleMocks.importAppPlugin.mockClear();
+    appPackageModuleMocks.importAppRouteModule.mockReset();
+    const actual = await vi.importActual<
+      typeof import("../../src/services/app-package-modules")
+    >("../../src/services/app-package-modules");
+    appPackageModuleMocks.importAppRouteModule.mockImplementation(
+      actual.importAppRouteModule,
+    );
+  });
+
   afterEach(() => {
     if (originalApiUrl !== undefined) {
       process.env.HYPERSCAPE_API_URL = originalApiUrl;
@@ -1320,6 +1336,211 @@ describe("AppManager", () => {
     } finally {
       await fixtureServer.close();
     }
+  });
+
+  describe("multi-app control plane", () => {
+    it("refreshes multiple persisted app runs through their route modules when listing runs", async () => {
+      const stateDir = fs.mkdtempSync(
+        path.join(os.tmpdir(), "milady-app-manager-refresh-"),
+      );
+      const manager = new AppManager({ stateDir });
+      const runtime = createRuntimeStub({
+        settings: {
+          HYPERSCAPE_CHARACTER_ID: "char-runtime",
+          BABYLON_AGENT_ID: "babylon-agent-alice",
+        },
+      });
+      const resolveLaunchSession = vi.fn(
+        async ({ appName }: { appName: string }) => {
+          if (appName === "@elizaos/app-babylon") {
+            return {
+              sessionId: "babylon-agent-alice",
+              appName,
+              mode: "spectate-and-steer" as const,
+              status: "connecting",
+              displayName: "Babylon",
+              agentId: "babylon-agent-alice",
+              canSendCommands: true,
+              controls: ["pause", "resume"] as const,
+              summary: "Connecting to Babylon...",
+            };
+          }
+          return {
+            sessionId: "char-runtime",
+            appName,
+            mode: "spectate-and-steer" as const,
+            status: "connecting",
+            displayName: "Hyperscape",
+            agentId: "runtime-agent-id",
+            characterId: "char-runtime",
+            followEntity: "char-runtime",
+            canSendCommands: false,
+            controls: [],
+            summary: "Connecting session...",
+          };
+        },
+      );
+      const refreshRunSession = vi.fn(
+        async ({ appName }: { appName: string }) => {
+          if (appName === "@elizaos/app-babylon") {
+            return {
+              sessionId: "babylon-agent-alice",
+              appName,
+              mode: "spectate-and-steer" as const,
+              status: "connected",
+              displayName: "Babylon",
+              agentId: "babylon-agent-alice",
+              canSendCommands: true,
+              controls: ["pause", "resume"] as const,
+              summary: "Babylon desk is coordinated and trading live.",
+              telemetry: {
+                balance: 1250,
+              },
+            };
+          }
+          return {
+            sessionId: "char-runtime",
+            appName,
+            mode: "spectate-and-steer" as const,
+            status: "running",
+            displayName: "Hyperscape",
+            agentId: "runtime-agent-id",
+            characterId: "char-runtime",
+            followEntity: "char-runtime",
+            canSendCommands: true,
+            controls: ["pause"] as const,
+            summary: "Running live in Hyperscape.",
+            goalLabel: "Scout the ruins",
+            suggestedPrompts: ["scan nearby ruins"],
+            telemetry: {
+              nearbyLocationCount: 1,
+            },
+          };
+        },
+      );
+      appPackageModuleMocks.importAppRouteModule.mockResolvedValue({
+        resolveLaunchSession,
+        refreshRunSession,
+      });
+
+      const launchedHyperscape = await manager.launch(
+        buildPluginManager([], HYPERSCAPE_APP_INFO),
+        "@elizaos/app-hyperscape",
+        undefined,
+        runtime,
+      );
+      const launchedBabylon = await manager.launch(
+        buildPluginManager([], BABYLON_APP_INFO),
+        "@elizaos/app-babylon",
+        undefined,
+        runtime,
+      );
+      expect(launchedHyperscape.run?.status).toBe("connecting");
+      expect(launchedBabylon.run?.status).toBe("connecting");
+
+      const runs = await manager.listRuns(runtime);
+
+      expect(refreshRunSession).toHaveBeenCalledTimes(2);
+      expect(refreshRunSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          appName: "@elizaos/app-hyperscape",
+          runId: launchedHyperscape.run?.runId,
+        }),
+      );
+      expect(refreshRunSession).toHaveBeenCalledWith(
+        expect.objectContaining({
+          appName: "@elizaos/app-babylon",
+          runId: launchedBabylon.run?.runId,
+        }),
+      );
+      expect(runs).toHaveLength(2);
+      expect(
+        runs.find((run) => run.appName === "@elizaos/app-hyperscape"),
+      ).toEqual(
+        expect.objectContaining({
+          runId: launchedHyperscape.run?.runId,
+          status: "running",
+          summary: "Running live in Hyperscape.",
+          lastHeartbeatAt: expect.any(String),
+          health: {
+            state: "healthy",
+            message: "Running live in Hyperscape.",
+          },
+        }),
+      );
+      expect(
+        runs.find((run) => run.appName === "@elizaos/app-babylon"),
+      ).toEqual(
+        expect.objectContaining({
+          runId: launchedBabylon.run?.runId,
+          status: "connected",
+          summary: "Babylon desk is coordinated and trading live.",
+          lastHeartbeatAt: expect.any(String),
+          health: {
+            state: "healthy",
+            message: "Babylon desk is coordinated and trading live.",
+          },
+        }),
+      );
+    });
+
+    it("marks runs degraded when verification fails during attach", async () => {
+      const stateDir = fs.mkdtempSync(
+        path.join(os.tmpdir(), "milady-app-manager-attach-"),
+      );
+      const manager = new AppManager({ stateDir });
+      const pluginManager = buildPluginManager([], HYPERSCAPE_APP_INFO);
+      const runtime = createRuntimeStub({
+        settings: {
+          HYPERSCAPE_CHARACTER_ID: "char-runtime",
+        },
+      });
+      appPackageModuleMocks.importAppRouteModule.mockResolvedValue({
+        resolveLaunchSession: vi.fn(async () => ({
+          sessionId: "char-runtime",
+          appName: "@elizaos/app-hyperscape",
+          mode: "spectate-and-steer" as const,
+          status: "connecting",
+          displayName: "Hyperscape",
+          agentId: "runtime-agent-id",
+          characterId: "char-runtime",
+          followEntity: "char-runtime",
+          canSendCommands: false,
+          controls: [],
+          summary: "Connecting session...",
+        })),
+        refreshRunSession: vi.fn(async () => {
+          throw new Error("viewer bridge is offline");
+        }),
+      });
+
+      const launched = await manager.launch(
+        pluginManager,
+        "@elizaos/app-hyperscape",
+        undefined,
+        runtime,
+      );
+      const result = await manager.attachRun(launched.run!.runId, runtime);
+
+      expect(result.success).toBe(true);
+      expect(result.run).toEqual(
+        expect.objectContaining({
+          runId: launched.run!.runId,
+          viewerAttachment: "attached",
+          status: "disconnected",
+          summary: "Run verification failed: viewer bridge is offline",
+          health: {
+            state: "degraded",
+            message: "Run verification failed: viewer bridge is offline",
+          },
+          session: expect.objectContaining({
+            status: "disconnected",
+            canSendCommands: false,
+            controls: [],
+          }),
+        }),
+      );
+    });
   });
 
   describe("2004scape server reachability", () => {

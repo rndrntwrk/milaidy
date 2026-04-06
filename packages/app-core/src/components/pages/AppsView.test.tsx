@@ -13,7 +13,8 @@ import {
   findButtonByText,
   flush,
   text,
-} from "../../../../test/helpers/react-test";
+  textOf,
+} from "../../../../../test/helpers/react-test";
 
 interface AppsContextStub {
   appRuns: AppRunSummary[];
@@ -60,7 +61,7 @@ vi.mock("@miladyai/app-core/state", () => ({
 import {
   AppsView,
   shouldShowAppInAppsView,
-} from "../../src/components/pages/AppsView";
+} from "./AppsView";
 
 function createApp(
   name: string,
@@ -368,13 +369,17 @@ describe("AppsView", () => {
   it("uses an exact curated app allowlist in production", () => {
     expect(
       shouldShowAppInAppsView(
-        createApp("@elizaos/app-hyperscape", "Hyperscape", "Game"),
+        createApp("@elizaos/app-hyperscape", "Hyperscape", "Game", {
+          category: "game",
+        }),
         true,
       ),
     ).toBe(true);
     expect(
       shouldShowAppInAppsView(
-        createApp("@elizaos/app-2004scape", "2004scape", "Game"),
+        createApp("@elizaos/app-2004scape", "2004scape", "Game", {
+          category: "game",
+        }),
         true,
       ),
     ).toBe(true);
@@ -384,13 +389,18 @@ describe("AppsView", () => {
           "@elizaos/app-defense-of-the-agents",
           "Defense of the Agents",
           "Game",
+          {
+            category: "game",
+          },
         ),
         true,
       ),
     ).toBe(true);
     expect(
       shouldShowAppInAppsView(
-        createApp("@elizaos/app-dungeons", "Dungeons", "Game"),
+        createApp("@elizaos/app-unlisted-game", "Unlisted Game", "Game", {
+          category: "game",
+        }),
         true,
       ),
     ).toBe(false);
@@ -399,10 +409,88 @@ describe("AppsView", () => {
   it("does not restrict the apps list by production allowlist in development", () => {
     expect(
       shouldShowAppInAppsView(
-        createApp("@elizaos/app-hyperscape", "Hyperscape", "Arena"),
+        createApp("@elizaos/app-hyperscape", "Hyperscape", "Arena", {
+          category: "game",
+        }),
         false,
       ),
     ).toBe(true);
+  });
+
+  it("renders the Defense detail extension with live status and scripts", async () => {
+    const run = createRunSummary({
+      runId: "run-defense",
+      appName: "@elizaos/app-defense-of-the-agents",
+      displayName: "Defense of the Agents",
+      pluginName: "@elizaos/app-defense-of-the-agents",
+      launchType: "url",
+      launchUrl: "https://www.defenseoftheagents.com",
+      session: {
+        sessionId: "defense-session",
+        appName: "@elizaos/app-defense-of-the-agents",
+        mode: "spectate-and-steer",
+        status: "running",
+        displayName: "Defense of the Agents",
+        canSendCommands: true,
+        controls: ["pause"],
+        summary: "Holding mid lane with autoplay enabled.",
+        suggestedPrompts: ["Hold top lane next push"],
+        telemetry: {
+          heroClass: "mage",
+          heroLane: "mid",
+          heroLevel: 7,
+          heroHp: 380,
+          heroMaxHp: 500,
+          autoPlay: true,
+          strategyVersion: 4,
+          bestStrategyVersion: 5,
+          recentActivity: [
+            {
+              ts: 1_712_345_678_000,
+              action: "reinforce",
+              detail: "Shifted pressure back to mid lane.",
+            },
+          ],
+        },
+      },
+      summary: "Holding mid lane with autoplay enabled.",
+    });
+    const ctx = createAppsContext({
+      appRuns: [run],
+    });
+    mockUseApp.mockReturnValue({
+      ...ctx,
+      uiLanguage: "en",
+      t: (_key: string, options?: { defaultValue?: string }) =>
+        options?.defaultValue ?? _key,
+    });
+    mockClientFns.listApps.mockResolvedValue([
+      createApp(
+        "@elizaos/app-defense-of-the-agents",
+        "Defense of the Agents",
+        "Autonomous lane defense",
+        {
+          category: "game",
+          uiExtension: {
+            detailPanelId: "defense-agent-control",
+          },
+        },
+      ),
+    ]);
+    mockClientFns.listAppRuns.mockResolvedValue([run]);
+
+    let tree!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(<AppsView />);
+    });
+    await flush();
+
+    expect(textOf(tree.root)).toContain("Live Operator Surface");
+    expect(textOf(tree.root)).toContain("Autoplay Script");
+    expect(textOf(tree.root)).toContain(
+      "Holding mid lane with autoplay enabled.",
+    );
+    expect(textOf(tree.root)).toContain("Shifted pressure back to mid lane.");
   });
 
   it("loads apps and launches iframe viewer flow", async () => {

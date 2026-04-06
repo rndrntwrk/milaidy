@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("../../../../api", () => ({
   client: {
+    listAppRuns: vi.fn(),
     listCodingAgentTaskThreads: vi.fn(),
     getCodingAgentTaskThread: vi.fn(),
     archiveCodingAgentTaskThread: vi.fn(),
@@ -44,6 +45,7 @@ import { useApp } from "../../../../state";
 import { AGENT_ORCHESTRATOR_PLUGIN_WIDGETS } from "./agent-orchestrator";
 
 const mockClient = client as unknown as {
+  listAppRuns: ReturnType<typeof vi.fn>;
   listCodingAgentTaskThreads: ReturnType<typeof vi.fn>;
   getCodingAgentTaskThread: ReturnType<typeof vi.fn>;
   archiveCodingAgentTaskThread: ReturnType<typeof vi.fn>;
@@ -54,6 +56,9 @@ const mockUseApp = useApp as unknown as ReturnType<typeof vi.fn>;
 
 const TasksWidget = AGENT_ORCHESTRATOR_PLUGIN_WIDGETS.find(
   (widget) => widget.id === "agent-orchestrator.tasks",
+)!.Component;
+const AppsWidget = AGENT_ORCHESTRATOR_PLUGIN_WIDGETS.find(
+  (widget) => widget.id === "agent-orchestrator.apps",
 )!.Component;
 const ActivityWidget = AGENT_ORCHESTRATOR_PLUGIN_WIDGETS.find(
   (widget) => widget.id === "agent-orchestrator.activity",
@@ -230,13 +235,16 @@ describe("agent orchestrator tasks widget", () => {
   let tree: TestRenderer.ReactTestRenderer | null = null;
 
   beforeEach(() => {
+    mockClient.listAppRuns.mockReset();
     mockClient.listCodingAgentTaskThreads.mockReset();
     mockClient.getCodingAgentTaskThread.mockReset();
     mockClient.archiveCodingAgentTaskThread.mockReset();
     mockClient.reopenCodingAgentTaskThread.mockReset();
     mockUseApp.mockReset();
     mockUseApp.mockReturnValue({
+      appRuns: [],
       ptySessions: [],
+      setState: vi.fn(),
       t: (_key: string, options?: { defaultValue?: string }) =>
         options?.defaultValue ?? _key,
     });
@@ -601,6 +609,131 @@ describe("agent orchestrator tasks widget", () => {
     expect(textOf(tree!.root)).toContain("Waiting for input");
     expect(textOf(tree!.root)).toContain("Background Agent");
     expect(textOf(tree!.root)).not.toContain("Errored Agent");
+  });
+});
+
+describe("agent orchestrator app runs widget", () => {
+  let tree: TestRenderer.ReactTestRenderer | null = null;
+
+  beforeEach(() => {
+    mockClient.listAppRuns.mockReset();
+    mockUseApp.mockReset();
+    mockUseApp.mockReturnValue({
+      appRuns: [],
+      ptySessions: [],
+      setState: vi.fn(),
+      t: (_key: string, options?: { defaultValue?: string }) =>
+        options?.defaultValue ?? _key,
+    });
+  });
+
+  afterEach(() => {
+    if (tree) {
+      act(() => {
+        tree?.unmount();
+      });
+    }
+    tree = null;
+  });
+
+  it("renders live app runs with control-plane counts", async () => {
+    mockClient.listAppRuns.mockResolvedValue([
+      {
+        runId: "run-1",
+        appName: "@elizaos/app-defense-of-the-agents",
+        displayName: "Defense of the Agents",
+        pluginName: "@elizaos/app-defense-of-the-agents",
+        launchType: "url",
+        launchUrl: "https://www.defenseoftheagents.com",
+        viewer: {
+          url: "http://localhost:31337/api/apps/defense-of-the-agents/viewer",
+          sandbox: "allow-scripts allow-same-origin allow-popups",
+        },
+        session: {
+          sessionId: "defense-session",
+          appName: "@elizaos/app-defense-of-the-agents",
+          mode: "spectate-and-steer",
+          status: "running",
+          displayName: "Defense of the Agents",
+          canSendCommands: true,
+          controls: ["pause"],
+          summary: "Holding mid lane with autoplay enabled.",
+        },
+        status: "running",
+        summary: "Holding mid lane with autoplay enabled.",
+        startedAt: "2026-04-06T00:00:00.000Z",
+        updatedAt: "2026-04-06T00:00:10.000Z",
+        lastHeartbeatAt: "2026-04-06T00:00:10.000Z",
+        supportsBackground: true,
+        viewerAttachment: "attached",
+        health: {
+          state: "healthy",
+          message: "Holding mid lane with autoplay enabled.",
+        },
+      },
+      {
+        runId: "run-2",
+        appName: "@elizaos/app-babylon",
+        displayName: "Babylon",
+        pluginName: "@elizaos/app-babylon",
+        launchType: "url",
+        launchUrl: "https://staging.babylon.market",
+        viewer: null,
+        session: null,
+        status: "offline",
+        summary: "Run session is no longer available.",
+        startedAt: "2026-04-06T00:00:00.000Z",
+        updatedAt: "2026-04-06T00:00:10.000Z",
+        lastHeartbeatAt: null,
+        supportsBackground: true,
+        viewerAttachment: "detached",
+        health: {
+          state: "offline",
+          message: "Run session is no longer available.",
+        },
+      },
+    ]);
+
+    await act(async () => {
+      tree = TestRenderer.create(
+        <AppsWidget events={[]} clearEvents={vi.fn()} />,
+      );
+    });
+
+    await waitFor(
+      () => textOf(tree!.root).includes("Defense of the Agents"),
+      "expected app runs to render",
+    );
+
+    expect(textOf(tree!.root)).toContain("Currently playing: 1");
+    expect(textOf(tree!.root)).toContain("Background: 1");
+    expect(textOf(tree!.root)).toContain("Needs attention: 1");
+    expect(textOf(tree!.root)).toContain("Babylon");
+    expect(textOf(tree!.root)).toContain("Run session is no longer available.");
+  });
+
+  it("tolerates missing app runs before the first refresh completes", async () => {
+    mockUseApp.mockReturnValue({
+      appRuns: undefined,
+      ptySessions: [],
+      setState: vi.fn(),
+      t: (_key: string, options?: { defaultValue?: string }) =>
+        options?.defaultValue ?? _key,
+    });
+    mockClient.listAppRuns.mockResolvedValue([]);
+
+    await act(async () => {
+      tree = TestRenderer.create(
+        <AppsWidget events={[]} clearEvents={vi.fn()} />,
+      );
+    });
+
+    await waitFor(
+      () => textOf(tree!.root).includes("No games are running"),
+      "expected empty app-runs state after refresh",
+    );
+
+    expect(textOf(tree!.root)).toContain("No games are running");
   });
 });
 
