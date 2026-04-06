@@ -843,15 +843,19 @@ function OrchestratorTasksWidget(_props: ChatSidebarWidgetProps) {
         await client.archiveCodingAgentTaskThread(selectedThread.id);
         setShowArchived(true);
       }
-      const nextThreads = await client.listCodingAgentTaskThreads({
-        includeArchived: selectedThread.status !== "archived",
-        search: deferredSearch || undefined,
-        limit: 30,
-      });
+      const [nextThreads, nextStatus] = await Promise.all([
+        client.listCodingAgentTaskThreads({
+          includeArchived: selectedThread.status !== "archived",
+          search: deferredSearch || undefined,
+          limit: 30,
+        }),
+        client.getCodingAgentStatus(),
+      ]);
       setLoadError(null);
       setDetailError(null);
       setMutationError(null);
       setThreads(nextThreads);
+      setStatus(nextStatus);
       setSelectedThreadId(nextThreads[0]?.id ?? null);
     } catch (error) {
       setMutationError(

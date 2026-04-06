@@ -48,9 +48,24 @@ dotenv.config({ path: path.resolve(packageRoot, ".env") });
 const hasOpenAI = Boolean(process.env.OPENAI_API_KEY);
 const hasAnthropic = Boolean(process.env.ANTHROPIC_API_KEY);
 const hasGroq = Boolean(process.env.GROQ_API_KEY);
-const liveModelTestsEnabled = process.env.ELIZA_LIVE_TEST === "1";
+const liveModelTestsEnabled =
+  process.env.MILADY_LIVE_TEST === "1" || process.env.ELIZA_LIVE_TEST === "1";
 const hasModelProvider =
   liveModelTestsEnabled && (hasOpenAI || hasAnthropic || hasGroq);
+
+function seedGroqModelDefaults(
+  secrets: Record<string, string>,
+): void {
+  if (!hasGroq) return;
+  if (!process.env.GROQ_SMALL_MODEL) {
+    process.env.GROQ_SMALL_MODEL = "llama-3.1-8b-instant";
+  }
+  if (!process.env.GROQ_LARGE_MODEL) {
+    process.env.GROQ_LARGE_MODEL = "qwen/qwen3-32b";
+  }
+  secrets.GROQ_SMALL_MODEL = process.env.GROQ_SMALL_MODEL;
+  secrets.GROQ_LARGE_MODEL = process.env.GROQ_LARGE_MODEL;
+}
 
 // ---------------------------------------------------------------------------
 // Plugin loader
@@ -1461,6 +1476,7 @@ describe.skipIf(!hasModelProvider)(
       if (hasAnthropic)
         secrets.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY!;
       if (hasGroq) secrets.GROQ_API_KEY = process.env.GROQ_API_KEY!;
+      seedGroqModelDefaults(secrets);
 
       const character = createCharacter({
         name: "OrchestratorTestAgent",

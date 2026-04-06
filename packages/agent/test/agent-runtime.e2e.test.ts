@@ -50,7 +50,8 @@ dotenv.config({ path: path.resolve(packageRoot, "..", "..", ".env") });
 const hasOpenAI = Boolean(process.env.OPENAI_API_KEY);
 const hasAnthropic = Boolean(process.env.ANTHROPIC_API_KEY);
 const hasGroq = Boolean(process.env.GROQ_API_KEY);
-const liveModelTestsEnabled = process.env.ELIZA_LIVE_TEST === "1";
+const liveModelTestsEnabled =
+  process.env.MILADY_LIVE_TEST === "1" || process.env.ELIZA_LIVE_TEST === "1";
 // This suite exercises the heaviest live-runtime init path and relies on
 // real provider availability. Keep it opt-in so default repo-wide E2E runs
 // remain deterministic; runtime integration coverage still exists elsewhere.
@@ -59,6 +60,20 @@ const hasModelProvider =
   liveModelTestsEnabled &&
   runAgentRuntimeE2E &&
   (hasOpenAI || hasAnthropic || hasGroq);
+
+function seedGroqModelDefaults(
+  secrets: Record<string, string>,
+): void {
+  if (!hasGroq) return;
+  if (!process.env.GROQ_SMALL_MODEL) {
+    process.env.GROQ_SMALL_MODEL = "llama-3.1-8b-instant";
+  }
+  if (!process.env.GROQ_LARGE_MODEL) {
+    process.env.GROQ_LARGE_MODEL = "qwen/qwen3-32b";
+  }
+  secrets.GROQ_SMALL_MODEL = process.env.GROQ_SMALL_MODEL;
+  secrets.GROQ_LARGE_MODEL = process.env.GROQ_LARGE_MODEL;
+}
 
 // ---------------------------------------------------------------------------
 // Plugin helpers — tracks failures
@@ -414,6 +429,7 @@ describe("Agent Runtime E2E", () => {
     if (hasAnthropic)
       secrets.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY as string;
     if (hasGroq) secrets.GROQ_API_KEY = process.env.GROQ_API_KEY as string;
+    seedGroqModelDefaults(secrets);
 
     const character = createCharacter({
       name: "TestAgent",

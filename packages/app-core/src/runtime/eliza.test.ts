@@ -2918,7 +2918,7 @@ describe("OpenAI-compatible Groq normalization", () => {
     expect(process.env.OPENAI_BASE_URL).toBeUndefined();
     expect(process.env.GROQ_API_KEY).toBe("gsk-test-groq");
     expect(process.env.GROQ_SMALL_MODEL).toBe("llama-3.1-8b-instant");
-    expect(process.env.GROQ_LARGE_MODEL).toBe("qwen-qwq-32b");
+    expect(process.env.GROQ_LARGE_MODEL).toBe("qwen/qwen3-32b");
     expect(config.agents?.defaults?.model?.primary).toBe("groq");
     expect(
       (config.env as { vars?: Record<string, string> }).vars?.OPENAI_API_KEY,
@@ -2934,7 +2934,7 @@ describe("OpenAI-compatible Groq normalization", () => {
     ).toBe("llama-3.1-8b-instant");
     expect(
       (config.env as { vars?: Record<string, string> }).vars?.GROQ_LARGE_MODEL,
-    ).toBe("qwen-qwq-32b");
+    ).toBe("qwen/qwen3-32b");
 
     const names = collectPluginNames(config);
     expect(names.has("@elizaos/plugin-groq")).toBe(true);

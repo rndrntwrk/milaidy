@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("../../../../api", () => ({
   client: {
     listAppRuns: vi.fn(),
+    getCodingAgentStatus: vi.fn(),
     listCodingAgentTaskThreads: vi.fn(),
     getCodingAgentTaskThread: vi.fn(),
     archiveCodingAgentTaskThread: vi.fn(),
@@ -46,6 +47,7 @@ import { AGENT_ORCHESTRATOR_PLUGIN_WIDGETS } from "./agent-orchestrator";
 
 const mockClient = client as unknown as {
   listAppRuns: ReturnType<typeof vi.fn>;
+  getCodingAgentStatus: ReturnType<typeof vi.fn>;
   listCodingAgentTaskThreads: ReturnType<typeof vi.fn>;
   getCodingAgentTaskThread: ReturnType<typeof vi.fn>;
   archiveCodingAgentTaskThread: ReturnType<typeof vi.fn>;
@@ -197,6 +199,25 @@ function createThreadDetail() {
         createdAt: "2026-04-06T00:00:10.000Z",
       },
     ],
+    pendingDecisions: [
+      {
+        sessionId: "session-1",
+        threadId: "thread-1",
+        promptText: "Approve the production deploy?",
+        recentOutput: "Waiting for operator confirmation",
+        llmDecision: {
+          action: "respond",
+          response: "yes",
+          reasoning: "Validation already passed and the deploy is the final step.",
+        },
+        taskContext: {
+          label: "alpha-agent",
+          agentType: "codex",
+        },
+        createdAt: Date.now(),
+        updatedAt: "2026-04-06T00:00:10.000Z",
+      },
+    ],
   };
 }
 
@@ -249,6 +270,7 @@ describe("agent orchestrator tasks widget", () => {
 
   beforeEach(() => {
     mockClient.listAppRuns.mockReset();
+    mockClient.getCodingAgentStatus.mockReset();
     mockClient.listCodingAgentTaskThreads.mockReset();
     mockClient.getCodingAgentTaskThread.mockReset();
     mockClient.archiveCodingAgentTaskThread.mockReset();
@@ -261,6 +283,7 @@ describe("agent orchestrator tasks widget", () => {
       t: (_key: string, options?: { defaultValue?: string }) =>
         options?.defaultValue ?? _key,
     });
+    mockClient.getCodingAgentStatus.mockResolvedValue(null);
   });
 
   afterEach(() => {
@@ -314,6 +337,67 @@ describe("agent orchestrator tasks widget", () => {
       search: undefined,
       limit: 30,
     });
+  });
+
+  it("renders provider routing state and pending user input from the thread detail", async () => {
+    mockClient.listCodingAgentTaskThreads.mockResolvedValue([createThread()]);
+    mockClient.getCodingAgentTaskThread.mockResolvedValue(createThreadDetail());
+    mockClient.getCodingAgentStatus.mockResolvedValue({
+      supervisionLevel: "autonomous",
+      taskCount: 1,
+      tasks: [],
+      pendingConfirmations: 1,
+      preferredAgentType: "codex",
+      preferredAgentReason: "Codex is authenticated and has the best readiness score.",
+      frameworks: [
+        {
+          id: "codex",
+          label: "Codex",
+          adapter: "codex",
+          installed: true,
+          installCommand: "brew install codex",
+          docsUrl: "https://example.com/codex",
+          authReady: true,
+          available: true,
+          score: 10,
+          reason: "Authenticated and healthy",
+          warnings: [],
+        },
+        {
+          id: "claude",
+          label: "Claude Code",
+          adapter: "claude",
+          installed: true,
+          installCommand: "brew install claude",
+          docsUrl: "https://example.com/claude",
+          authReady: false,
+          available: false,
+          score: 2,
+          reason: "Login required",
+          warnings: ["auth"],
+        },
+      ],
+    });
+
+    await act(async () => {
+      tree = TestRenderer.create(
+        <TasksWidget events={[]} clearEvents={vi.fn()} />,
+      );
+    });
+
+    await waitFor(
+      () => textOf(requireTree(tree).root).includes("Provider Routing"),
+      "expected provider routing panel to render",
+    );
+
+    expect(textOf(requireTree(tree).root)).toContain("Preferred: codex");
+    expect(textOf(requireTree(tree).root)).toContain("Pending approvals: 1");
+    expect(textOf(requireTree(tree).root)).toContain("Approve the production deploy?");
+    expect(textOf(requireTree(tree).root)).toContain(
+      "Validation already passed and the deploy is the final step.",
+    );
+    expect(textOf(requireTree(tree).root)).toContain("subscription");
+    expect(textOf(requireTree(tree).root)).toContain("Login required");
   });
 
   it("surfaces archive mutation failures instead of silently switching state", async () => {

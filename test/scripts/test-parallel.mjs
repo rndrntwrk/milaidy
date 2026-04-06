@@ -43,6 +43,12 @@ const runs = [
     args: ["run", "test:startup:e2e"],
     forceSerial: true,
   },
+  {
+    name: "orchestrator-integration",
+    cmd: "bun",
+    args: ["run", "test:orchestrator:integration"],
+    forceSerial: true,
+  },
 ];
 
 if (
@@ -152,33 +158,9 @@ const runOnce = (entry, extraArgs = []) =>
       shell: process.platform === "win32",
     });
     children.add(child);
-    let forcedCode = null;
-    let reportPoll = null;
-    let forceKillTimer = null;
-    if (entry.reportFile) {
-      reportPoll = setInterval(() => {
-        if (forcedCode !== null) return;
-        let report = null;
-        try {
-          report = JSON.parse(fs.readFileSync(entry.reportFile, "utf8"));
-        } catch {
-          return;
-        }
-        if (typeof report?.success !== "boolean") return;
-        forcedCode = report.success ? 0 : 1;
-        child.kill("SIGTERM");
-        forceKillTimer = setTimeout(() => {
-          child.kill("SIGKILL");
-        }, 2_000);
-        forceKillTimer.unref?.();
-      }, 2_000);
-      reportPoll.unref?.();
-    }
     child.on("exit", (code, signal) => {
       children.delete(child);
-      if (reportPoll) clearInterval(reportPoll);
-      if (forceKillTimer) clearTimeout(forceKillTimer);
-      resolve(forcedCode ?? code ?? (signal ? 1 : 0));
+      resolve(code ?? (signal ? 1 : 0));
     });
   });
 

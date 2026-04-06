@@ -17,9 +17,14 @@ export {
   STREAMING_PLUGINS,
 };
 
+const TELEGRAM_ACCOUNT_CLIENT_PLUGIN =
+  "@elizaos-plugins/client-telegram-account";
+
 // Extend upstream CONNECTOR_PLUGINS with Milady-local connectors.
 export const CONNECTOR_PLUGINS: Record<string, string> = {
   ..._upstreamConnectorPlugins,
+  telegramAccount:
+    _upstreamConnectorPlugins.telegramAccount ?? TELEGRAM_ACCOUNT_CLIENT_PLUGIN,
   wechat: "@miladyai/plugin-wechat",
 };
 

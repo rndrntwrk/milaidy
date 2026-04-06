@@ -55,6 +55,7 @@ const AUTONOMY_ENTITY_ID = stringToUuid("00000000-0000-0000-0000-000000000002");
 const AUTONOMY_MESSAGE_SERVER_ID = stringToUuid("autonomy-message-server");
 const INTERNAL_CHANNEL_PLUGIN_OVERRIDES = {
   signal: "@elizaos/plugin-signal",
+  telegramAccount: "@elizaos-plugins/client-telegram-account",
   whatsapp: "@elizaos/plugin-whatsapp",
   wechat: "@miladyai/plugin-wechat",
 } as const;
