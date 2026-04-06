@@ -53,7 +53,11 @@ export interface PlatformActivity {
 }
 
 export interface ActivitySignalRecord {
-  source: "app_lifecycle" | "page_visibility" | "desktop_power";
+  source:
+    | "app_lifecycle"
+    | "page_visibility"
+    | "desktop_power"
+    | "mobile_device";
   platform: string;
   state: "active" | "idle" | "background" | "locked";
   observedAt: number;

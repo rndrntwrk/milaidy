@@ -40,6 +40,13 @@ declare module "@miladyai/capacitor-location" {
   export const Location: LocationPluginType;
 }
 
+declare module "@miladyai/capacitor-mobile-signals" {
+  export * from "../plugins/mobile-signals/src/definitions";
+  import type { MobileSignalsPlugin as MobileSignalsPluginType } from "../plugins/mobile-signals/src/definitions";
+  export type { MobileSignalsPlugin } from "../plugins/mobile-signals/src/definitions";
+  export const MobileSignals: MobileSignalsPluginType;
+}
+
 declare module "@miladyai/capacitor-screencapture" {
   export * from "../plugins/screencapture/src/definitions";
   import type { ScreenCapturePlugin as ScreenCapturePluginType } from "../plugins/screencapture/src/definitions";

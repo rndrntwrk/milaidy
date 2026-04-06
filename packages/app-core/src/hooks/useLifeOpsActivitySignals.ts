@@ -9,6 +9,10 @@ import { isElectrobunRuntime } from "../bridge/electrobun-runtime";
 import { APP_PAUSE_EVENT, APP_RESUME_EVENT } from "../events";
 import { isNative } from "../platform";
 import { loadDesktopWorkspaceSnapshot } from "../utils/desktop-workspace";
+import {
+  getMobileSignalsPlugin,
+  type MobileSignalsSnapshot,
+} from "../bridge/native-plugins";
 
 const APP_SIGNAL_DEDUP_WINDOW_MS = 5_000;
 const PAGE_HEARTBEAT_MS = 60_000;
@@ -41,6 +45,21 @@ function fingerprintSignal(
     signal.onBattery ?? "",
     signal.metadata ?? {},
   ]);
+}
+
+function mapMobileSignal(
+  signal: MobileSignalsSnapshot,
+): CaptureLifeOpsActivitySignalRequest {
+  return {
+    source: signal.source,
+    platform: signal.platform,
+    state: signal.state,
+    observedAt: new Date(signal.observedAt).toISOString(),
+    idleState: signal.idleState,
+    idleTimeSeconds: signal.idleTimeSeconds ?? undefined,
+    onBattery: signal.onBattery ?? undefined,
+    metadata: signal.metadata,
+  };
 }
 
 export function useLifeOpsActivitySignals(): void {
@@ -175,9 +194,36 @@ export function useLifeOpsActivitySignals(): void {
       void emitDesktopSnapshot("pause");
     };
 
+    const mobileSignals =
+      isNative && !isElectrobunRuntime() ? getMobileSignalsPlugin() : null;
+    let mobileSignalsHandle: { remove: () => Promise<void> } | null = null;
+    let mobileSignalsStarted = false;
+    const startMobileSignals = async (): Promise<void> => {
+      if (
+        !mobileSignals ||
+        typeof mobileSignals.addListener !== "function" ||
+        typeof mobileSignals.startMonitoring !== "function" ||
+        typeof mobileSignals.stopMonitoring !== "function"
+      ) {
+        return;
+      }
+
+      mobileSignalsHandle = await mobileSignals.addListener(
+        "signal",
+        (signal) => {
+          void sendSignal(mapMobileSignal(signal)).catch(reportCaptureError);
+        },
+      );
+      const initial = await mobileSignals.startMonitoring({
+        emitInitial: true,
+      });
+      mobileSignalsStarted = initial.enabled;
+    };
+
     emitLifecycleState("active");
     emitPageState("mount");
     void emitDesktopSnapshot("mount");
+    void startMobileSignals().catch(reportCaptureError);
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
     document.addEventListener(APP_RESUME_EVENT, handleResume);
@@ -201,6 +247,12 @@ export function useLifeOpsActivitySignals(): void {
       document.removeEventListener(APP_PAUSE_EVENT, handlePause);
       window.removeEventListener("focus", handleFocus);
       window.removeEventListener("blur", handleBlur);
+      if (mobileSignalsHandle) {
+        void mobileSignalsHandle.remove();
+      }
+      if (mobileSignalsStarted) {
+        void mobileSignals?.stopMonitoring().catch(reportCaptureError);
+      }
       window.clearInterval(pageHeartbeat);
       window.clearInterval(desktopPoller);
     };

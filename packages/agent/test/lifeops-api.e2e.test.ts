@@ -546,6 +546,7 @@ describe("Life-ops API E2E", () => {
     it("captures and lists activity signals with filtering and validation", async () => {
       const activeAt = "2026-04-06T15:58:00.000Z";
       const backgroundAt = "2026-04-06T15:59:00.000Z";
+      const mobileAt = "2026-04-06T16:00:00.000Z";
 
       const active = await req(port, "POST", "/api/lifeops/activity-signals", {
         source: "app_lifecycle",
@@ -583,6 +584,28 @@ describe("Life-ops API E2E", () => {
       );
       expect(background.status).toBe(201);
 
+      const mobile = await req(port, "POST", "/api/lifeops/activity-signals", {
+        source: "mobile_device",
+        platform: "ios",
+        state: "locked",
+        observedAt: mobileAt,
+        idleState: "locked",
+        onBattery: true,
+        metadata: {
+          reason: "qa-mobile",
+        },
+      });
+      expect(mobile.status).toBe(201);
+      expect(mobile.data.signal).toMatchObject({
+        source: "mobile_device",
+        platform: "ios",
+        state: "locked",
+        observedAt: mobileAt,
+        metadata: {
+          reason: "qa-mobile",
+        },
+      });
+
       const listed = await req(
         port,
         "GET",
@@ -605,8 +628,8 @@ describe("Life-ops API E2E", () => {
       expect(limited.status).toBe(200);
       expect(limited.data.signals).toHaveLength(1);
       expect(limited.data.signals[0]).toMatchObject({
-        state: "background",
-        observedAt: backgroundAt,
+        state: "locked",
+        observedAt: mobileAt,
       });
 
       const invalidState = await req(

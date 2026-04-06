@@ -63,6 +63,37 @@ export interface TalkModeStateEvent {
   state?: string;
 }
 
+export interface MobileSignalsSnapshot {
+  source: "mobile_device";
+  platform: "ios" | "android" | "web";
+  state: "active" | "idle" | "background" | "locked";
+  observedAt: number;
+  idleState: "active" | "idle" | "locked" | "unknown" | null;
+  idleTimeSeconds: number | null;
+  onBattery: boolean | null;
+  metadata: Record<string, unknown>;
+}
+
+export interface MobileSignalsPluginLike extends NativePlugin {
+  startMonitoring(options?: {
+    emitInitial?: boolean;
+  }): Promise<{
+    enabled: boolean;
+    supported: boolean;
+    platform: "ios" | "android" | "web";
+    snapshot: MobileSignalsSnapshot | null;
+  }>;
+  stopMonitoring(): Promise<{ stopped: boolean }>;
+  getSnapshot(): Promise<{
+    supported: boolean;
+    snapshot: MobileSignalsSnapshot | null;
+  }>;
+  addListener(
+    eventName: "signal",
+    listenerFunc: (event: MobileSignalsSnapshot) => void,
+  ): Promise<PluginListenerHandle>;
+}
+
 export interface TalkModePermissionStatus {
   microphone?: "granted" | "denied" | "prompt";
   speechRecognition?: "granted" | "denied" | "prompt" | "not_supported";
@@ -195,6 +226,10 @@ export function getSwabblePlugin(): SwabblePluginLike {
 
 export function getTalkModePlugin(): TalkModePluginLike {
   return getNativePlugin<TalkModePluginLike>("TalkMode");
+}
+
+export function getMobileSignalsPlugin(): MobileSignalsPluginLike {
+  return getNativePlugin<MobileSignalsPluginLike>("MobileSignals");
 }
 
 export function getCameraPlugin(): GenericNativePlugin {

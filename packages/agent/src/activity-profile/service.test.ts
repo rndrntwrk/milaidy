@@ -192,4 +192,32 @@ describe("refreshCurrentState", () => {
     expect(refreshed.isCurrentlyActive).toBe(true);
     expect(refreshed.hasOpenActivityCycle).toBe(true);
   });
+
+  it("uses persisted mobile device activity signals when building and refreshing the profile", async () => {
+    const runtime = createRuntime({}, []);
+    const service = new LifeOpsService(runtime);
+    await service.captureActivitySignal({
+      source: "mobile_device",
+      platform: "ios",
+      state: "active",
+      observedAt: new Date(NOW.getTime() - 90 * 1000).toISOString(),
+      idleState: "active",
+      idleTimeSeconds: null,
+      onBattery: true,
+      metadata: {
+        reason: "unlock",
+      },
+    });
+
+    const built = await buildActivityProfile(runtime, OWNER_ID, "UTC", NOW);
+    expect(built.lastSeenPlatform).toBe("ios");
+    expect(built.isCurrentlyActive).toBe(true);
+    expect(built.hasOpenActivityCycle).toBe(true);
+
+    const staleBase = analyzeMessages([], new Map(), OWNER_ID, "UTC", 7, NOW);
+    const refreshed = await refreshCurrentState(runtime, OWNER_ID, staleBase, NOW);
+    expect(refreshed.lastSeenPlatform).toBe("ios");
+    expect(refreshed.isCurrentlyActive).toBe(true);
+    expect(refreshed.hasOpenActivityCycle).toBe(true);
+  });
 });

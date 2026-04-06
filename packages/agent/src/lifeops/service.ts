@@ -816,6 +816,9 @@ function normalizeActivitySignalSource(
   ) {
     return source as LifeOpsActivitySignal["source"];
   }
+  if (source === "mobileDevice" || source === "mobile-device") {
+    return "mobile_device";
+  }
   fail(
     400,
     `${field} must be one of: ${LIFEOPS_ACTIVITY_SIGNAL_SOURCES.join(", ")}`,

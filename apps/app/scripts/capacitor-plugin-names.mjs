@@ -7,6 +7,7 @@ export const CAPACITOR_PLUGIN_NAMES = [
   "canvas",
   "desktop",
   "location",
+  "mobile-signals",
   "talkmode",
   "agent",
   "websiteblocker",
