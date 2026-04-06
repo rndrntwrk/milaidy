@@ -1,7 +1,7 @@
 {
   "$schema": "plugin-index-v1",
   "generatedAt": "2026-03-22T08:36:32.187Z",
-  "count": 99,
+  "count": 106,
   "plugins": [
     {
       "id": "acp",
@@ -935,7 +935,7 @@
       "dirName": "app-clawbal",
       "name": "Clawbal Chat",
       "npmName": "@iqlabs-official/plugin-clawbal",
-      "description": "On-chain AI chatrooms on Solana \u2014 agents chat, trade, launch tokens, and compete on PnL leaderboards",
+      "description": "On-chain AI chatrooms on Solana — agents chat, trade, launch tokens, and compete on PnL leaderboards",
       "category": "app",
       "envKey": "SOLANA_PRIVATE_KEY",
       "configKeys": [
@@ -2245,9 +2245,9 @@
         "github"
       ],
       "category": "connector",
-      "envKey": "GITHUB_TOKEN",
+      "envKey": "GITHUB_API_TOKEN",
       "configKeys": [
-        "GITHUB_TOKEN",
+        "GITHUB_API_TOKEN",
         "GITHUB_OWNER",
         "GITHUB_REPO",
         "GITHUB_BRANCH",
@@ -2258,7 +2258,7 @@
       ],
       "version": "2.0.0-alpha.4",
       "pluginParameters": {
-        "GITHUB_TOKEN": {
+        "GITHUB_API_TOKEN": {
           "type": "string",
           "description": "GitHub personal access token for API authentication",
           "required": true,
@@ -2315,7 +2315,7 @@
       "dirName": "plugin-gmail-watch",
       "name": "Gmail Watch",
       "npmName": "@elizaos/plugin-gmail-watch",
-      "description": "Gmail Pub/Sub watcher \u2013 spawns gog gmail watch serve and auto-renews",
+      "description": "Gmail Pub/Sub watcher – spawns gog gmail watch serve and auto-renews",
       "tags": [
         "connector",
         "integration",
@@ -2389,6 +2389,101 @@
           "sensitive": false
         }
       }
+    },
+    {
+      "id": "google-chat",
+      "dirName": "plugin-google-chat",
+      "name": "Google Chat",
+      "npmName": "@elizaos/plugin-google-chat",
+      "description": "Google Chat connector for bots, spaces, and message-driven workflows.",
+      "tags": [
+        "connector",
+        "messaging",
+        "google-chat",
+        "productivity",
+        "social",
+        "social-chat",
+        "google",
+        "chat"
+      ],
+      "category": "connector",
+      "envKey": null,
+      "configKeys": [
+        "GOOGLE_CHAT_SERVICE_ACCOUNT",
+        "GOOGLE_CHAT_SERVICE_ACCOUNT_FILE",
+        "GOOGLE_APPLICATION_CREDENTIALS",
+        "GOOGLE_CHAT_AUDIENCE_TYPE",
+        "GOOGLE_CHAT_AUDIENCE",
+        "GOOGLE_CHAT_WEBHOOK_PATH",
+        "GOOGLE_CHAT_SPACES",
+        "GOOGLE_CHAT_REQUIRE_MENTION",
+        "GOOGLE_CHAT_ENABLED",
+        "GOOGLE_CHAT_BOT_USER"
+      ],
+      "version": "2.0.0-alpha.4",
+      "pluginParameters": {
+        "GOOGLE_CHAT_SERVICE_ACCOUNT": {
+          "type": "string",
+          "description": "Service account credentials",
+          "required": false,
+          "sensitive": false
+        },
+        "GOOGLE_CHAT_SERVICE_ACCOUNT_FILE": {
+          "type": "string",
+          "description": "Service account credentials",
+          "required": false,
+          "sensitive": false
+        },
+        "GOOGLE_APPLICATION_CREDENTIALS": {
+          "type": "string",
+          "description": "Credentials file path or JSON",
+          "required": false,
+          "sensitive": true
+        },
+        "GOOGLE_CHAT_AUDIENCE_TYPE": {
+          "type": "string",
+          "description": "Audience/auth scope",
+          "required": false,
+          "sensitive": false
+        },
+        "GOOGLE_CHAT_AUDIENCE": {
+          "type": "string",
+          "description": "Audience/auth scope",
+          "required": false,
+          "sensitive": false
+        },
+        "GOOGLE_CHAT_WEBHOOK_PATH": {
+          "type": "string",
+          "description": "Webhook path",
+          "required": false,
+          "sensitive": false
+        },
+        "GOOGLE_CHAT_SPACES": {
+          "type": "string",
+          "description": "Comma-separated space/room list",
+          "required": false,
+          "sensitive": false
+        },
+        "GOOGLE_CHAT_REQUIRE_MENTION": {
+          "type": "boolean",
+          "description": "Only respond when mentioned",
+          "required": false,
+          "sensitive": false
+        },
+        "GOOGLE_CHAT_ENABLED": {
+          "type": "boolean",
+          "description": "Enable or disable this feature",
+          "required": false,
+          "sensitive": false
+        },
+        "GOOGLE_CHAT_BOT_USER": {
+          "type": "string",
+          "description": "Bot user identifier",
+          "required": false,
+          "sensitive": false
+        }
+      },
+      "setupGuideUrl": "https://milady.ai/docs/intermediate/connect-google-chat"
     },
     {
       "id": "google-genai",
@@ -2999,6 +3094,77 @@
       }
     },
     {
+      "id": "line",
+      "dirName": "plugin-line",
+      "name": "Line",
+      "npmName": "@elizaos/plugin-line",
+      "description": "LINE connector for bot messaging and customer conversations.",
+      "tags": [
+        "connector",
+        "messaging",
+        "line",
+        "social",
+        "social-chat"
+      ],
+      "category": "connector",
+      "envKey": "LINE_CHANNEL_ACCESS_TOKEN",
+      "configKeys": [
+        "LINE_CHANNEL_ACCESS_TOKEN",
+        "LINE_CHANNEL_SECRET",
+        "LINE_WEBHOOK_PATH",
+        "LINE_DM_POLICY",
+        "LINE_GROUP_POLICY",
+        "LINE_ALLOW_FROM",
+        "LINE_ENABLED"
+      ],
+      "version": "2.0.0-alpha.4",
+      "pluginParameters": {
+        "LINE_CHANNEL_ACCESS_TOKEN": {
+          "type": "string",
+          "description": "Access token for Line Channel",
+          "required": true,
+          "sensitive": true
+        },
+        "LINE_CHANNEL_SECRET": {
+          "type": "string",
+          "description": "Secret for Line Channel",
+          "required": false,
+          "sensitive": true
+        },
+        "LINE_WEBHOOK_PATH": {
+          "type": "string",
+          "description": "Webhook path",
+          "required": false,
+          "sensitive": false
+        },
+        "LINE_DM_POLICY": {
+          "type": "string",
+          "description": "DM policy (e.g. allow, deny, allowlist)",
+          "required": false,
+          "sensitive": false
+        },
+        "LINE_GROUP_POLICY": {
+          "type": "string",
+          "description": "Group message policy (e.g. allow, deny)",
+          "required": false,
+          "sensitive": false
+        },
+        "LINE_ALLOW_FROM": {
+          "type": "string",
+          "description": "Comma-separated allowed user list",
+          "required": false,
+          "sensitive": false
+        },
+        "LINE_ENABLED": {
+          "type": "boolean",
+          "description": "Enable or disable this feature",
+          "required": false,
+          "sensitive": false
+        }
+      },
+      "setupGuideUrl": "https://milady.ai/docs/intermediate/connect-line"
+    },
+    {
       "id": "linear",
       "dirName": "plugin-linear",
       "name": "Linear",
@@ -3411,6 +3577,98 @@
       "setupGuideUrl": "https://milady.ai/docs/intermediate/connect-matrix"
     },
     {
+      "id": "mattermost",
+      "dirName": "plugin-mattermost",
+      "name": "Mattermost",
+      "npmName": "@elizaos/plugin-mattermost",
+      "description": "Mattermost integration plugin for Eliza agents - TypeScript implementation",
+      "tags": [
+        "connector",
+        "social",
+        "social-chat",
+        "messaging",
+        "mattermost"
+      ],
+      "category": "connector",
+      "envKey": "MATTERMOST_BOT_TOKEN",
+      "configKeys": [
+        "MATTERMOST_SERVER_URL",
+        "MATTERMOST_BOT_TOKEN",
+        "MATTERMOST_TEAM_ID",
+        "MATTERMOST_ENABLED",
+        "MATTERMOST_DM_POLICY",
+        "MATTERMOST_GROUP_POLICY",
+        "MATTERMOST_ALLOWED_USERS",
+        "MATTERMOST_ALLOWED_CHANNELS",
+        "MATTERMOST_REQUIRE_MENTION",
+        "MATTERMOST_IGNORE_BOT_MESSAGES"
+      ],
+      "version": "2.0.0-alpha.4",
+      "pluginParameters": {
+        "MATTERMOST_SERVER_URL": {
+          "type": "string",
+          "description": "Server URL",
+          "required": false,
+          "sensitive": false
+        },
+        "MATTERMOST_BOT_TOKEN": {
+          "type": "string",
+          "description": "Bot token for Mattermost",
+          "required": true,
+          "sensitive": true
+        },
+        "MATTERMOST_TEAM_ID": {
+          "type": "string",
+          "description": "Team/tenant ID",
+          "required": false,
+          "sensitive": false
+        },
+        "MATTERMOST_ENABLED": {
+          "type": "boolean",
+          "description": "Enable or disable this feature",
+          "required": false,
+          "sensitive": false
+        },
+        "MATTERMOST_DM_POLICY": {
+          "type": "string",
+          "description": "DM policy (e.g. allow, deny, allowlist)",
+          "required": false,
+          "sensitive": false
+        },
+        "MATTERMOST_GROUP_POLICY": {
+          "type": "string",
+          "description": "Group message policy (e.g. allow, deny)",
+          "required": false,
+          "sensitive": false
+        },
+        "MATTERMOST_ALLOWED_USERS": {
+          "type": "string",
+          "description": "Comma-separated allowed user list",
+          "required": false,
+          "sensitive": false
+        },
+        "MATTERMOST_ALLOWED_CHANNELS": {
+          "type": "string",
+          "description": "Comma-separated room/channel list",
+          "required": false,
+          "sensitive": false
+        },
+        "MATTERMOST_REQUIRE_MENTION": {
+          "type": "boolean",
+          "description": "Only respond when mentioned",
+          "required": false,
+          "sensitive": false
+        },
+        "MATTERMOST_IGNORE_BOT_MESSAGES": {
+          "type": "boolean",
+          "description": "Ignore messages from other bots",
+          "required": false,
+          "sensitive": false
+        }
+      },
+      "setupGuideUrl": "https://milady.ai/docs/intermediate/connect-mattermost"
+    },
+    {
       "id": "mcp",
       "dirName": "plugin-mcp",
       "name": "Mcp",
@@ -3683,7 +3941,7 @@
       "dirName": "plugin-mysticism",
       "name": "Mysticism",
       "npmName": "@elizaos/plugin-mysticism",
-      "description": "Mystical divination engines for elizaOS \u2014 Tarot, I Ching, and Astrology readings",
+      "description": "Mystical divination engines for elizaOS — Tarot, I Ching, and Astrology readings",
       "tags": [
         "mysticism",
         "tarot",
@@ -3777,6 +4035,86 @@
           "required": false
         }
       }
+    },
+    {
+      "id": "nextcloud-talk",
+      "dirName": "plugin-nextcloud-talk",
+      "name": "Nextcloud Talk",
+      "npmName": "@elizaos/plugin-nextcloud-talk",
+      "description": "Nextcloud Talk plugin for elizaOS - TypeScript implementation",
+      "tags": [
+        "connector",
+        "social",
+        "social-chat",
+        "messaging",
+        "nextcloud-talk",
+        "nextcloud",
+        "talk"
+      ],
+      "category": "connector",
+      "envKey": null,
+      "configKeys": [
+        "NEXTCLOUD_URL",
+        "NEXTCLOUD_BOT_SECRET",
+        "NEXTCLOUD_ENABLED",
+        "NEXTCLOUD_WEBHOOK_PORT",
+        "NEXTCLOUD_WEBHOOK_HOST",
+        "NEXTCLOUD_WEBHOOK_PATH",
+        "NEXTCLOUD_WEBHOOK_PUBLIC_URL",
+        "NEXTCLOUD_ALLOWED_ROOMS"
+      ],
+      "version": "2.0.0-alpha.4",
+      "pluginParameters": {
+        "NEXTCLOUD_URL": {
+          "type": "string",
+          "description": "URL for Nextcloud",
+          "required": false,
+          "sensitive": false
+        },
+        "NEXTCLOUD_BOT_SECRET": {
+          "type": "string",
+          "description": "Secret for Nextcloud Bot",
+          "required": false,
+          "sensitive": true
+        },
+        "NEXTCLOUD_ENABLED": {
+          "type": "boolean",
+          "description": "Enable or disable this feature",
+          "required": false,
+          "sensitive": false
+        },
+        "NEXTCLOUD_WEBHOOK_PORT": {
+          "type": "number",
+          "description": "Port number",
+          "required": false,
+          "sensitive": false
+        },
+        "NEXTCLOUD_WEBHOOK_HOST": {
+          "type": "string",
+          "description": "Host address",
+          "required": false,
+          "sensitive": false
+        },
+        "NEXTCLOUD_WEBHOOK_PATH": {
+          "type": "string",
+          "description": "Webhook path",
+          "required": false,
+          "sensitive": false
+        },
+        "NEXTCLOUD_WEBHOOK_PUBLIC_URL": {
+          "type": "string",
+          "description": "Public-facing webhook URL",
+          "required": false,
+          "sensitive": false
+        },
+        "NEXTCLOUD_ALLOWED_ROOMS": {
+          "type": "string",
+          "description": "Comma-separated room/channel list",
+          "required": false,
+          "sensitive": false
+        }
+      },
+      "setupGuideUrl": "https://milady.ai/docs/intermediate/connect-nextcloud-talk"
     },
     {
       "id": "nostr",
@@ -4735,29 +5073,6 @@
       }
     },
     {
-      "id": "selfcontrol",
-      "dirName": "plugin-selfcontrol",
-      "name": "SelfControl",
-      "npmName": "@miladyai/plugin-selfcontrol",
-      "description": "Website blocking plugin for Milady.",
-      "tags": [
-        "feature",
-        "focus",
-        "productivity",
-        "website-blocking",
-        "cross-platform",
-        "hosts-file",
-        "selfcontrol"
-      ],
-      "category": "feature",
-      "envKey": null,
-      "configKeys": [],
-      "version": "2.0.0-alpha.83",
-      "pluginParameters": {},
-      "versionSource": "local-workspace",
-      "repository": "https://github.com/milady-ai/milady/tree/main/packages/plugin-selfcontrol"
-    },
-    {
       "id": "shell",
       "dirName": "plugin-shell",
       "name": "Shell",
@@ -4980,7 +5295,7 @@
       "dirName": "plugin-social-alpha",
       "name": "Social Alpha",
       "npmName": "@elizaos/plugin-social-alpha",
-      "description": "Social Alpha Plugin \u2014 Tracks token recommendations (shills/FUD), builds trust scores based on P&L outcomes, and exposes a Social Alpha Provider with win rate, rank, and recommender analytics.",
+      "description": "Social Alpha Plugin — Tracks token recommendations (shills/FUD), builds trust scores based on P&L outcomes, and exposes a Social Alpha Provider with win rate, rank, and recommender analytics.",
       "tags": [
         "social-alpha",
         "trust-score",
@@ -5156,7 +5471,7 @@
       "dirName": "plugin-streaming-base",
       "name": "Streaming",
       "npmName": "@elizaos/plugin-streaming-base",
-      "description": "Enable live streaming controls \u2014 adds the Stream tab for managing RTMP destinations",
+      "description": "Enable live streaming controls — adds the Stream tab for managing RTMP destinations",
       "category": "streaming",
       "envKey": null,
       "configKeys": [],
@@ -5274,6 +5589,79 @@
         }
       },
       "setupGuideUrl": "https://milady.ai/docs/intermediate/connect-telegram"
+    },
+    {
+      "id": "tlon",
+      "dirName": "plugin-tlon",
+      "name": "Tlon",
+      "npmName": "@elizaos/plugin-tlon",
+      "description": "Tlon connector for Urbit chat and social interactions.",
+      "tags": [
+        "connector",
+        "social",
+        "urbit",
+        "chat",
+        "social-chat",
+        "messaging",
+        "tlon"
+      ],
+      "category": "connector",
+      "envKey": null,
+      "configKeys": [
+        "TLON_SHIP",
+        "TLON_URL",
+        "TLON_CODE",
+        "TLON_ENABLED",
+        "TLON_GROUP_CHANNELS",
+        "TLON_DM_ALLOWLIST",
+        "TLON_AUTO_DISCOVER_CHANNELS"
+      ],
+      "version": "2.0.0-alpha.4",
+      "pluginParameters": {
+        "TLON_SHIP": {
+          "type": "string",
+          "description": "Ship/node identifier",
+          "required": false,
+          "sensitive": false
+        },
+        "TLON_URL": {
+          "type": "string",
+          "description": "URL for Tlon",
+          "required": false,
+          "sensitive": false
+        },
+        "TLON_CODE": {
+          "type": "string",
+          "description": "Authentication/access code",
+          "required": false,
+          "sensitive": false
+        },
+        "TLON_ENABLED": {
+          "type": "boolean",
+          "description": "Enable or disable this feature",
+          "required": false,
+          "sensitive": false
+        },
+        "TLON_GROUP_CHANNELS": {
+          "type": "string",
+          "description": "Comma-separated room/channel list",
+          "required": false,
+          "sensitive": false
+        },
+        "TLON_DM_ALLOWLIST": {
+          "type": "string",
+          "description": "Comma-separated allowed user list",
+          "required": false,
+          "sensitive": false
+        },
+        "TLON_AUTO_DISCOVER_CHANNELS": {
+          "type": "boolean",
+          "description": "Comma-separated room/channel list",
+          "required": false,
+          "sensitive": false
+        }
+      },
+      "setupGuideUrl": "https://milady.ai/docs/advanced/connect-tlon"
     },
     {
       "id": "todo",
@@ -5987,42 +6375,6 @@
       "setupGuideUrl": "https://milady.ai/docs/intermediate/byok-api-keys"
     },
     {
-      "id": "vincent",
-      "dirName": "plugin-vincent",
-      "name": "Vincent Finance",
-      "npmName": "@milady-plugins/vincent-finance",
-      "description": "Vincent-powered delegated trading across Hyperliquid perpetual futures and Polymarket prediction markets via MCP.",
-      "tags": [
-        "feature",
-        "trading",
-        "defi",
-        "hyperliquid",
-        "polymarket",
-        "vincent",
-        "lit-protocol"
-      ],
-      "category": "feature",
-      "enabled": false,
-      "env": {
-        "VINCENT_APP_ID": {
-          "description": "Vincent App ID from the on-chain App Registry",
-          "required": true,
-          "sensitive": false
-        },
-        "VINCENT_MCP_TRANSPORT": {
-          "description": "MCP transport mode: 'stdio' or 'http'",
-          "required": false,
-          "default": "stdio"
-        },
-        "VINCENT_MCP_SERVER_URL": {
-          "description": "Vincent MCP server URL (required when transport is 'http')",
-          "required": false,
-          "sensitive": false
-        }
-      },
-      "repository": "https://github.com/milady-ai/plugin-vincent"
-    },
-    {
       "id": "vision",
       "dirName": "plugin-vision",
       "name": "Vision",
@@ -6064,36 +6416,6 @@
       "envKey": null,
       "configKeys": [],
       "version": "2.0.0-alpha.4"
-    },
-    {
-      "id": "wechat",
-      "dirName": "plugin-wechat",
-      "name": "WeChat",
-      "npmName": "@miladyai/plugin-wechat",
-      "description": "WeChat connector for messaging via proxy API with QR code login.",
-      "tags": [
-        "connector",
-        "messaging",
-        "wechat",
-        "social",
-        "social-chat"
-      ],
-      "category": "connector",
-      "envKey": "WECHAT_API_KEY",
-      "configKeys": [
-        "WECHAT_API_KEY"
-      ],
-      "version": "0.1.0",
-      "pluginParameters": {
-        "WECHAT_API_KEY": {
-          "type": "string",
-          "description": "API key for WeChat proxy service",
-          "required": true,
-          "sensitive": true
-        }
-      },
-      "repository": "https://github.com/milady-ai/milady/tree/main/packages/plugin-wechat",
-      "setupGuideUrl": "https://milady.ai/docs/intermediate/connect-wechat"
     },
     {
       "id": "whatsapp",
@@ -6509,6 +6831,99 @@
       ]
     },
     {
+      "id": "zalo",
+      "dirName": "plugin-zalo",
+      "name": "Zalo",
+      "npmName": "@elizaos/plugin-zalo",
+      "description": "Zalo connector for official account messaging and support workflows.",
+      "tags": [
+        "connector",
+        "messaging",
+        "zalo",
+        "chat",
+        "social",
+        "social-chat"
+      ],
+      "category": "connector",
+      "envKey": "ZALO_ACCESS_TOKEN",
+      "configKeys": [
+        "ZALO_APP_ID",
+        "ZALO_SECRET_KEY",
+        "ZALO_ACCESS_TOKEN",
+        "ZALO_REFRESH_TOKEN",
+        "ZALO_WEBHOOK_URL",
+        "ZALO_WEBHOOK_PATH",
+        "ZALO_WEBHOOK_PORT",
+        "ZALO_USE_POLLING",
+        "ZALO_ENABLED",
+        "ZALO_PROXY_URL"
+      ],
+      "version": "2.0.0-alpha.4",
+      "pluginParameters": {
+        "ZALO_APP_ID": {
+          "type": "string",
+          "description": "Application/client ID",
+          "required": false,
+          "sensitive": false
+        },
+        "ZALO_SECRET_KEY": {
+          "type": "string",
+          "description": "Secret for Zalo Secret Key",
+          "required": true,
+          "sensitive": true
+        },
+        "ZALO_ACCESS_TOKEN": {
+          "type": "string",
+          "description": "Access token for Zalo",
+          "required": true,
+          "sensitive": true
+        },
+        "ZALO_REFRESH_TOKEN": {
+          "type": "string",
+          "description": "Refresh token for Zalo",
+          "required": false,
+          "sensitive": true
+        },
+        "ZALO_WEBHOOK_URL": {
+          "type": "string",
+          "description": "Webhook URL",
+          "required": false,
+          "sensitive": false
+        },
+        "ZALO_WEBHOOK_PATH": {
+          "type": "string",
+          "description": "Webhook path",
+          "required": false,
+          "sensitive": false
+        },
+        "ZALO_WEBHOOK_PORT": {
+          "type": "number",
+          "description": "Port number",
+          "required": false,
+          "sensitive": false
+        },
+        "ZALO_USE_POLLING": {
+          "type": "boolean",
+          "description": "Use polling instead of webhooks",
+          "required": false,
+          "sensitive": false
+        },
+        "ZALO_ENABLED": {
+          "type": "boolean",
+          "description": "Enable or disable this feature",
+          "required": false,
+          "sensitive": false
+        },
+        "ZALO_PROXY_URL": {
+          "type": "string",
+          "description": "Proxy URL",
+          "required": false,
+          "sensitive": false
+        }
+      },
+      "setupGuideUrl": "https://milady.ai/docs/intermediate/connect-zalo"
+    },
+    {
       "id": "zalouser",
       "dirName": "plugin-zalouser",
       "name": "Zalouser",
@@ -6601,6 +7016,72 @@
         }
       },
       "setupGuideUrl": "https://milady.ai/docs/intermediate/connect-zalouser"
+    },
+    {
+      "id": "wechat",
+      "dirName": "plugin-wechat",
+      "name": "WeChat",
+      "npmName": "@miladyai/plugin-wechat",
+      "description": "WeChat connector for messaging via proxy API with QR code login.",
+      "tags": [
+        "connector",
+        "messaging",
+        "wechat",
+        "social",
+        "social-chat"
+      ],
+      "category": "connector",
+      "envKey": "WECHAT_API_KEY",
+      "configKeys": [
+        "WECHAT_API_KEY"
+      ],
+      "version": "0.1.0",
+      "pluginParameters": {
+        "WECHAT_API_KEY": {
+          "type": "string",
+          "description": "API key for WeChat proxy service",
+          "required": true,
+          "sensitive": true
+        }
+      },
+      "repository": "https://github.com/milady-ai/milady/tree/main/packages/plugin-wechat",
+      "setupGuideUrl": "https://milady.ai/docs/intermediate/connect-wechat"
+    },
+    {
+      "id": "vincent",
+      "dirName": "plugin-vincent",
+      "name": "Vincent Finance",
+      "npmName": "@milady-plugins/vincent-finance",
+      "description": "Vincent-powered delegated trading across Hyperliquid perpetual futures and Polymarket prediction markets via MCP.",
+      "tags": [
+        "feature",
+        "trading",
+        "defi",
+        "hyperliquid",
+        "polymarket",
+        "vincent",
+        "lit-protocol"
+      ],
+      "category": "feature",
+      "enabled": false,
+      "env": {
+        "VINCENT_APP_ID": {
+          "description": "Vincent App ID from the on-chain App Registry",
+          "required": true,
+          "sensitive": false
+        },
+        "VINCENT_MCP_TRANSPORT": {
+          "description": "MCP transport mode: 'stdio' or 'http'",
+          "required": false,
+          "default": "stdio"
+        },
+        "VINCENT_MCP_SERVER_URL": {
+          "description": "Vincent MCP server URL (required when transport is 'http')",
+          "required": false,
+          "sensitive": false
+        }
+      },
+      "repository": "https://github.com/milady-ai/plugin-vincent"
     }
   ]
 }

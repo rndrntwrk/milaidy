@@ -3,6 +3,27 @@ title: Changelog
 description: What's new in Milady — features, improvements, and fixes.
 ---
 
+<Update label="2026-04-06" description="Week of March 31 – April 6; managed Discord bots, download channels, Vincent OAuth fix" tags={["Feature", "Update", "Fix"]}>
+
+## Managed Discord for cloud agents
+
+Cloud-deployed agents can now run as managed Discord bots. When you connect a Discord server through the [Eliza Cloud dashboard](/guides/cloud), your agent automatically joins the server with the correct permissions and grants connector-admin access to the linked Discord account. No manual bot token or invite URL setup required — the cloud bridge handles identity, roles, and message routing for you.
+
+## Stable and canary download channels
+
+The homepage download dropdown now separates stable and canary releases into clearly labeled sections. Stable releases are recommended for most users, while canary builds give you early access to upcoming features. Both channels are shown with direct download links and file sizes, so you always know which version you're getting. See the [installation guide](/installation) for details on the differences between channels.
+
+## Updates
+
+- **Official plugins preferred at startup** — The runtime now loads verified official plugins before attempting dynamic resolution, which means faster startup and more predictable plugin behavior out of the box.
+- **Todo and goals plugins retired** — The standalone todo and goals plugins have been removed in favor of the [life-ops system](/rest/lifeops) introduced last week, which offers richer task management with recurring habits, reminders, and progress tracking.
+
+## Bug fixes
+
+- Fixed Vincent OAuth login failing silently when the redirect landed in an external browser instead of the desktop webview — the OAuth flow now completes correctly regardless of which browser handles the callback
+
+</Update>
+
 <Update label="2026-07-16" description="Week of July 10–16; life-ops system, onboarding voice previews, wallet setup, security hardening" tags={["Feature", "Update", "Fix"]}>
 
 ## Life-ops: tasks, habits, and routines

@@ -330,6 +330,7 @@ describe("lifeAction", () => {
   it("captures phone with consent", async () => {
     mockCapturePhoneConsent.mockResolvedValue({ phoneNumber: "+15551234567", policies: [] });
     const result = await invoke("my phone number is 555-123-4567, text me", {
+      action: "phone",
       details: { phoneNumber: "+15551234567", allowSms: true, allowVoice: false },
     });
     expect(mockCapturePhoneConsent).toHaveBeenCalledWith(expect.objectContaining({ phoneNumber: "+15551234567" }));
@@ -337,7 +338,7 @@ describe("lifeAction", () => {
   });
 
   it("rejects capture without phone number", async () => {
-    const result = await invoke("text me reminders");
+    const result = await invoke("text me reminders", { action: "phone" });
     expect(result).toMatchObject({ success: false, text: expect.stringContaining("phone number") });
   });
 
@@ -347,6 +348,7 @@ describe("lifeAction", () => {
     mockListDefinitions.mockResolvedValue([{ definition: { id: "d1", title: "Brush teeth", domain: "user_lifeops" } }]);
     mockUpdateDefinition.mockResolvedValue({ definition: { id: "d1", title: "Brush teeth" } });
     const result = await invoke("set up SMS escalation for brushing", {
+      action: "escalation",
       target: "Brush teeth",
       details: {
         steps: [
@@ -369,7 +371,7 @@ describe("lifeAction", () => {
       calendarId: "primary", events: [{ title: "Standup", startAt: new Date().toISOString(), endAt: new Date(Date.now() + 3_600_000).toISOString(), isAllDay: false, location: null, attendees: [], conferenceLink: null }],
       source: "cache", timeMin: "", timeMax: "", syncedAt: null,
     });
-    const result = await invoke("what's on my calendar today");
+    const result = await invoke("what's on my calendar today", { action: "calendar" });
     expect(result).toMatchObject({ success: true, text: expect.stringContaining("Standup") });
   });
 
@@ -380,13 +382,13 @@ describe("lifeAction", () => {
       startsAt: new Date().toISOString(), startsInMinutes: 30, attendeeCount: 0, attendeeNames: [],
       location: null, conferenceLink: null, preparationChecklist: [], linkedMailState: "unavailable", linkedMailError: null, linkedMail: [],
     });
-    const result = await invoke("what's my next meeting");
+    const result = await invoke("what's my next meeting", { action: "next_event" });
     expect(result).toMatchObject({ success: true, text: expect.stringContaining("Design review") });
   });
 
   it("rejects calendar when not connected", async () => {
     mockGetGoogleConnectorStatus.mockResolvedValue({ connected: false, grantedCapabilities: [] });
-    const result = await invoke("what's on my calendar");
+    const result = await invoke("what's on my calendar", { action: "calendar" });
     expect(result).toMatchObject({ success: false, text: expect.stringContaining("not connected") });
   });
 
