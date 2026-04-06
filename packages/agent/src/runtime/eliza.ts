@@ -1427,7 +1427,6 @@ export async function autoResolveDiscordAppId(): Promise<void> {
 export function applyCloudConfigToEnv(config: ElizaConfig): void {
   migrateLegacyRuntimeConfig(config as Record<string, unknown>);
   const cloud = config.cloud;
-  if (!cloud) return;
 
   // Cloud-provisioned containers (Docker env: MILADY_CLOUD_PROVISIONED=1) set
   // ELIZAOS_CLOUD_API_KEY / ELIZAOS_CLOUD_ENABLED via Docker env vars.  The
@@ -1437,6 +1436,10 @@ export function applyCloudConfigToEnv(config: ElizaConfig): void {
   const isCloudContainer =
     process.env.MILADY_CLOUD_PROVISIONED === "1" ||
     process.env.ELIZA_CLOUD_PROVISIONED === "1";
+
+  // When there is no cloud config AND this is not a cloud container, nothing
+  // to do — Docker env vars (if any) are already correct.
+  if (!cloud && !isCloudContainer) return;
 
   const topology = resolveElizaCloudTopology(config as Record<string, unknown>);
 
@@ -1455,9 +1458,9 @@ export function applyCloudConfigToEnv(config: ElizaConfig): void {
   };
 
   if (isMiladySettingsDebugEnabled()) {
-    const c = cloud as Record<string, unknown>;
+    const c = (cloud ?? {}) as Record<string, unknown>;
     logger.debug(
-      `[milady][settings][runtime] applyCloudConfigToEnv inference=${effectivelyEnabled} shouldLoadPlugin=${shouldLoadCloudPlugin} cloud=${JSON.stringify(settingsDebugCloudSummary(c))}`,
+      `[milady][settings][runtime] applyCloudConfigToEnv inference=${effectivelyEnabled} shouldLoadPlugin=${shouldLoadCloudPlugin} isCloudContainer=${isCloudContainer} cloud=${JSON.stringify(settingsDebugCloudSummary(c))}`,
     );
   }
 
@@ -1478,7 +1481,7 @@ export function applyCloudConfigToEnv(config: ElizaConfig): void {
 
   if (shouldLoadCloudPlugin) {
     logger.info(
-      `[eliza] Cloud config: inference=${topology.services.inference}, runtime=${topology.runtime}, hasApiKey=${Boolean(cloud.apiKey)}, baseUrl=${cloud.baseUrl ?? "(default)"}`,
+      `[eliza] Cloud config: inference=${topology.services.inference}, runtime=${topology.runtime}, hasApiKey=${Boolean(cloud?.apiKey || process.env.ELIZAOS_CLOUD_API_KEY)}, baseUrl=${cloud?.baseUrl ?? "(default)"}, isCloudContainer=${isCloudContainer}`,
     );
     // Only propagate the API key when cloud is enabled AND it is a real
     // credential — never set the literal "[REDACTED]" placeholder (which can
@@ -1487,15 +1490,19 @@ export function applyCloudConfigToEnv(config: ElizaConfig): void {
     // in process.env still auto-loads @elizaos/plugin-elizacloud and steals
     // TEXT_LARGE even if the JSON says cloud is off.
     const isRealApiKey =
-      cloud.apiKey && cloud.apiKey.trim().toUpperCase() !== "[REDACTED]";
+      cloud?.apiKey && cloud.apiKey.trim().toUpperCase() !== "[REDACTED]";
     if (isRealApiKey) {
       process.env.ELIZAOS_CLOUD_API_KEY = cloud.apiKey;
-    } else {
+    } else if (!isCloudContainer) {
+      // Only delete the API key when NOT inside a cloud container.
+      // Cloud containers get ELIZAOS_CLOUD_API_KEY via Docker env vars;
+      // a [REDACTED] value in the config is from a UI round-trip and
+      // must not wipe the real key already in process.env.
       delete process.env.ELIZAOS_CLOUD_API_KEY;
     }
-    if (cloud.baseUrl) {
+    if (cloud?.baseUrl) {
       process.env.ELIZAOS_CLOUD_BASE_URL = cloud.baseUrl;
-    } else {
+    } else if (!isCloudContainer) {
       delete process.env.ELIZAOS_CLOUD_BASE_URL;
     }
   } else {

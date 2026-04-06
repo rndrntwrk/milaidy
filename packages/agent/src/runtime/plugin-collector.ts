@@ -145,17 +145,20 @@ export function collectPluginNames(config: ElizaConfig): Set<string> {
   const hasCanonicalRuntimeConfig = hasExplicitCanonicalRuntimeConfig(
     config as Record<string, unknown>,
   );
+  const isCloudContainer =
+    process.env.MILADY_CLOUD_PROVISIONED === "1" ||
+    process.env.ELIZA_CLOUD_PROVISIONED === "1";
   const cloudExplicitlyDisabled = config.cloud?.enabled === false;
   const cloudPluginRequestedByEnv =
     !hasCanonicalRuntimeConfig &&
     !cloudExplicitlyDisabled &&
     (Boolean(process.env.ELIZAOS_CLOUD_API_KEY?.trim()) ||
       isTruthyCloudEnvValue(process.env.ELIZAOS_CLOUD_ENABLED));
-  const cloudEffectivelyEnabled = resolveCloudPluginRequirement(
-    cloudTopology,
-    cloudPluginRequestedByEnv,
-  );
-  const cloudHandlesInference = cloudTopology.services.inference;
+  const cloudEffectivelyEnabled =
+    resolveCloudPluginRequirement(cloudTopology, cloudPluginRequestedByEnv) ||
+    isCloudContainer;
+  const cloudHandlesInference =
+    cloudTopology.services.inference || isCloudContainer;
   const configEnv = config.env as
     | (Record<string, unknown> & { vars?: Record<string, unknown> })
     | undefined;

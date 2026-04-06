@@ -59,6 +59,16 @@ export const AI_PROVIDER_PLUGINS: readonly string[] = [
   "@elizaos/plugin-elizacloud",
 ];
 
+/**
+ * Self-declared plugin names (the `name` property on the plugin object) that
+ * correspond to AI provider plugins.  Some plugins use a short internal name
+ * (e.g. "elizaOSCloud") that differs from the npm package name.  The
+ * diagnostic must recognise both forms to avoid false-positive warnings.
+ */
+const AI_PROVIDER_PLUGIN_ALIASES: readonly string[] = [
+  "elizaOSCloud",
+];
+
 // ---------------------------------------------------------------------------
 // Semver comparison (simplified for alpha tags)
 // ---------------------------------------------------------------------------
@@ -224,9 +234,11 @@ export function diagnoseNoAIProvider(
   loadedPluginNames: string[],
   failedPlugins: Array<{ name: string; error: string }>,
 ): string | null {
-  const loadedProviders = loadedPluginNames.filter((n) =>
-    AI_PROVIDER_PLUGINS.includes(n),
-  );
+  const isAIProvider = (name: string): boolean =>
+    AI_PROVIDER_PLUGINS.includes(name) ||
+    AI_PROVIDER_PLUGIN_ALIASES.includes(name);
+
+  const loadedProviders = loadedPluginNames.filter(isAIProvider);
 
   // At least one AI provider loaded — no issue.
   if (loadedProviders.length > 0) return null;
