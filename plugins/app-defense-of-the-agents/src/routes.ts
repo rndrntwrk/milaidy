@@ -1044,6 +1044,17 @@ function isAutoPlayActive(runtime: IAgentRuntime | null): boolean {
   return resolveSettingLike(runtime, AUTOPLAY_SETTING) === "1";
 }
 
+function resetInMemoryStateForTests(): void {
+  for (const handle of activeLoops.values()) {
+    clearInterval(handle.timer);
+    clearInterval(handle.reviewTimer);
+  }
+  activeLoops.clear();
+  recentActivity.clear();
+  gameStateCache.clear();
+  sessionStateCache.clear();
+}
+
 // ---------------------------------------------------------------------------
 // Strategy update parsing (from LLM or user commands)
 // ---------------------------------------------------------------------------
@@ -1669,6 +1680,7 @@ export {
   type GameStrategy,
   type StrategyMetrics,
   DEFAULT_STRATEGY,
+  resetInMemoryStateForTests,
   resolveStrategy,
   resolveBestStrategy,
   persistStrategy,

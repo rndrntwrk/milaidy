@@ -199,7 +199,11 @@ describe("ChatView", () => {
 
     const root = tree?.root;
     const headerCount = root.findAll(
-      (node) => node.type === "div" && text(node) === "Milady",
+      (node) =>
+        node.type === "div" &&
+        typeof node.props.className === "string" &&
+        node.props.className.includes("font-semibold text-accent") &&
+        text(node) === "Milady",
     ).length;
     expect(headerCount).toBe(1);
   });

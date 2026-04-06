@@ -2293,5 +2293,10 @@
   "browserworkspace.EmptyDescription": "Open a page here, or let the agent create tabs through the Milady browser workspace plugin.",
   "browserworkspace.LastSeen": "Last seen {{time}}",
   "browserworkspace.Visible": "Visible",
-  "browserworkspace.Background": "Background"
+  "browserworkspace.Background": "Background",
+  "inboxview.Title": "Inbox",
+  "inboxview.TotalCountShort": "messages",
+  "inboxview.Loading": "Loading messages…",
+  "inboxview.EmptyRoom": "No messages in this chat yet.",
+  "inboxview.ReadOnlyReplyHint": "Read-only view. Reply from the {{source}} app — the connector plugin handles outbound messages."
 }

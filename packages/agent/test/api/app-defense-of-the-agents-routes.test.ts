@@ -6,6 +6,7 @@ import {
   createMockHttpResponse,
   createMockIncomingMessage,
 } from "../../src/test-support/test-helpers";
+import { resetInMemoryStateForTests } from "../../../../plugins/app-defense-of-the-agents/src/routes";
 
 const DEFENSE_APP_LOCAL_PATH = path.resolve(
   process.cwd(),
@@ -184,6 +185,8 @@ describe("Defense of the Agents app routes", () => {
   });
 
   afterEach(async () => {
+    resetInMemoryStateForTests();
+
     if (fixtureServer) {
       await fixtureServer.close();
       fixtureServer = null;

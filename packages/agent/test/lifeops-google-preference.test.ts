@@ -583,22 +583,28 @@ describe("life-ops Google mode preference", () => {
       }),
     );
 
+    const calendarFeedRequest = {
+      mode: "cloud_managed" as const,
+      timeMin: "2026-04-05T00:00:00.000Z",
+      timeMax: "2026-04-06T00:00:00.000Z",
+    };
+
     const ownerFeed = await service.getCalendarFeed(requestUrl, {
-      mode: "cloud_managed",
+      ...calendarFeedRequest,
       side: "owner",
       forceSync: true,
     });
     const agentFeed = await service.getCalendarFeed(requestUrl, {
-      mode: "cloud_managed",
+      ...calendarFeedRequest,
       side: "agent",
       forceSync: true,
     });
     const ownerFeedCached = await service.getCalendarFeed(requestUrl, {
-      mode: "cloud_managed",
+      ...calendarFeedRequest,
       side: "owner",
     });
     const agentFeedCached = await service.getCalendarFeed(requestUrl, {
-      mode: "cloud_managed",
+      ...calendarFeedRequest,
       side: "agent",
     });
 
