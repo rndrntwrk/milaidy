@@ -34,14 +34,20 @@ function getRepoLocalElizaCoreRoot(
       continue;
     }
 
-    if (
+    // Require both a source entry AND installed dependencies. CI checks out the
+    // submodule (submodules: recursive) but skips its dependency install
+    // (MILADY_SKIP_LOCAL_UPSTREAMS=1), so the source exists but imports of
+    // transitive deps like 'dedent' or 'adze' fail at runtime.
+    const hasSource =
       existsSync(path.join(candidate, "dist", "node", "index.node.js")) ||
       existsSync(path.join(candidate, "dist", "index.js")) ||
       existsSync(path.join(candidate, "src", "index.node.ts")) ||
       existsSync(path.join(candidate, "src", "index.ts")) ||
       existsSync(path.join(candidate, "index.node.ts")) ||
-      existsSync(path.join(candidate, "index.ts"))
-    ) {
+      existsSync(path.join(candidate, "index.ts"));
+    const hasDeps = existsSync(path.join(candidate, "node_modules"));
+
+    if (hasSource && hasDeps) {
       return candidate;
     }
   }
