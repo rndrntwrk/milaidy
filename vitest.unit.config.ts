@@ -1,9 +1,11 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig, mergeConfig } from "vitest/config";
+import { getElizaCoreEntry } from "./test/eliza-package-paths";
 import baseConfig from "./vitest.config";
 
 const repoRoot = path.dirname(fileURLToPath(import.meta.url));
+const elizaCoreEntry = getElizaCoreEntry(repoRoot);
 
 export default mergeConfig(
   baseConfig,
@@ -11,15 +13,19 @@ export default mergeConfig(
     resolve: {
       alias: [
         {
+          // Published-only CI disables the repo-local eliza checkout, so unit
+          // tests must fall back to the installed package entry in that mode.
           find: "@elizaos/core",
-          replacement: path.join(
-            repoRoot,
-            "eliza",
-            "packages",
-            "typescript",
-            "src",
-            "index.ts",
-          ),
+          replacement:
+            elizaCoreEntry ??
+            path.join(
+              repoRoot,
+              "eliza",
+              "packages",
+              "typescript",
+              "src",
+              "index.ts",
+            ),
         },
         {
           find: "@elizaos/plugin-cron",

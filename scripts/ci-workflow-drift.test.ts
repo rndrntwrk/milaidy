@@ -22,6 +22,7 @@ const DOCKER_SMOKE_WORKFLOW_PATH = path.join(
   ROOT,
   ".github/workflows/docker-ci-smoke.yml",
 );
+const DOCKER_SMOKE_SCRIPT_PATH = path.join(ROOT, "scripts/docker-ci-smoke.sh");
 const ADDITIONAL_SUBMODULE_WORKFLOW_PATHS = [
   ".github/workflows/agent-fix-ci.yml",
   ".github/workflows/agent-implement.yml",
@@ -44,8 +45,6 @@ function read(filePath: string): string {
 function countOccurrences(text: string, needle: string): number {
   return text.split(needle).length - 1;
 }
-
-const WINDOWS_OPTIONAL_SUBMODULE_EXPR = `submodules: \${{ matrix.os == 'windows-latest' && 'false' || 'recursive' }}`;
 
 describe("CI workflow drift", () => {
   it("defines a shared workspace setup action for Bun-based jobs", () => {
@@ -102,27 +101,39 @@ describe("CI workflow drift", () => {
     );
   });
 
-  it("checks out recursive submodules before root workspace installs", () => {
+  it("uses published-only checkouts for develop CI while preserving release recursion", () => {
+    expect(countOccurrences(read(CI_WORKFLOW_PATH), "submodules: false")).toBe(
+      5,
+    );
     expect(
-      countOccurrences(read(CI_WORKFLOW_PATH), "submodules: recursive"),
-    ).toBe(5);
-    expect(
-      countOccurrences(read(TEST_WORKFLOW_PATH), "submodules: recursive"),
-    ).toBe(7);
-    expect(
-      countOccurrences(
-        read(TEST_WORKFLOW_PATH),
-        WINDOWS_OPTIONAL_SUBMODULE_EXPR,
-      ),
-    ).toBe(6);
-    expect(read(BUILD_DOCKER_WORKFLOW_PATH)).toContain("submodules: recursive");
+      countOccurrences(read(TEST_WORKFLOW_PATH), "submodules: false"),
+    ).toBe(13);
+    expect(read(BUILD_DOCKER_WORKFLOW_PATH)).toContain("submodules: false");
+    expect(read(DOCKER_SMOKE_WORKFLOW_PATH)).toContain("submodules: false");
     expect(read(BUILD_CLOUD_IMAGE_WORKFLOW_PATH)).toContain(
       "submodules: recursive",
     );
-    expect(read(DOCKER_SMOKE_WORKFLOW_PATH)).toContain("submodules: recursive");
     for (const workflowPath of ADDITIONAL_SUBMODULE_WORKFLOW_PATHS) {
       expect(read(workflowPath)).toContain("submodules: recursive");
     }
+  });
+
+  it("re-initializes tracked non-eliza submodules after published-only checkout", () => {
+    expect(read(SETUP_ACTION_PATH)).toContain(
+      "run: node scripts/init-submodules.mjs",
+    );
+    expect(
+      countOccurrences(
+        read(TEST_WORKFLOW_PATH),
+        "run: node scripts/init-submodules.mjs",
+      ),
+    ).toBe(6);
+    expect(read(BUILD_DOCKER_WORKFLOW_PATH)).toContain(
+      "run: node scripts/init-submodules.mjs",
+    );
+    expect(read(DOCKER_SMOKE_SCRIPT_PATH)).toContain(
+      "node scripts/init-submodules.mjs",
+    );
   });
 
   it("builds the bundled orchestrator workspace before Docker image packaging", () => {
