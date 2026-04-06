@@ -589,6 +589,14 @@ export async function generateChatResponse(
   let responseText = "";
   let forcedWalletExecutionText = false;
   let activeStreamSource: StreamSource = "unset";
+  // Snapshot of `responseText` at the moment the first action callback runs.
+  // WHY: LLM streaming genuinely appends token deltas. Action handlers that
+  // call HandlerCallback multiple times (Discord "progressive message" pattern)
+  // send unrelated status strings — merging them with mergeStreamingText would
+  // concatenate ("🔍…" + "✨…" + "Now playing…"). We preserve the streamed
+  // prefix and replace only the callback suffix so the dashboard SSE client
+  // gets snapshot fullText updates (same UX as editing one chat bubble).
+  let preCallbackText: string | null = null;
   const messageSource =
     typeof message.content.source === "string" &&
     message.content.source.trim().length > 0
@@ -621,6 +629,15 @@ export async function generateChatResponse(
       return;
     }
     emitSnapshot(update.nextText);
+  };
+  /** Latest action callback wins: replaces prior callback text, keeps LLM prefix. */
+  const replaceCallbackText = (incoming: string): void => {
+    if (preCallbackText === null) {
+      preCallbackText = responseText;
+    }
+    const separator = preCallbackText.length > 0 ? "\n\n" : "";
+    const nextText = `${preCallbackText}${separator}${incoming}`;
+    emitSnapshot(nextText);
   };
 
   // Emit inbound events so trajectory/session hooks run for API chat.
@@ -662,7 +679,7 @@ export async function generateChatResponse(
     const directSkillText = await maybeHandleDirectBinanceSkillRequest(
       runtime,
       message,
-      appendIncomingText,
+      replaceCallbackText,
       emitSnapshot,
     );
     if (directSkillText) {
@@ -711,7 +728,7 @@ export async function generateChatResponse(
             async (content: Content) => {
               const chunk = extractCompatTextContent(content);
               if (chunk) {
-                appendIncomingText(chunk);
+                replaceCallbackText(chunk);
                 actionResponseText = responseText;
               }
               return [];
@@ -757,7 +774,7 @@ export async function generateChatResponse(
         runtime,
         message,
         [directWalletExecutionFallback.action],
-        appendIncomingText,
+        replaceCallbackText,
         (actionTag, hasText) => {
           actionCallbacksSeen += 1;
           runtime.logger?.info(
@@ -812,7 +829,7 @@ export async function generateChatResponse(
           const chunk = extractCompatTextContent(content);
           if (!chunk) return [];
           if (!claimStreamSource("callback")) return [];
-          appendIncomingText(chunk);
+          replaceCallbackText(chunk);
           return [];
         },
         {
@@ -1002,7 +1019,7 @@ export async function generateChatResponse(
         runtime,
         message,
         fallbackActionsToRun,
-        appendIncomingText,
+        replaceCallbackText,
         (actionTag, hasText) => {
           actionCallbacksSeen += 1;
           runtime.logger?.info(

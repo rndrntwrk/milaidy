@@ -19,6 +19,123 @@ const _require = createRequire(import.meta.url);
 const here = path.dirname(fileURLToPath(import.meta.url));
 const miladyRoot = path.resolve(here, "../..");
 
+/**
+ * Pinned @elizaos/core from the repo root (must match the agent/runtime lock).
+ */
+function getMiladyPinnedElizaCoreVersion(): string {
+  try {
+    const raw = JSON.parse(
+      fs.readFileSync(path.join(miladyRoot, "package.json"), "utf8"),
+    ) as {
+      dependencies?: Record<string, string>;
+      overrides?: Record<string, string>;
+    };
+    const spec =
+      raw.dependencies?.["@elizaos/core"] ??
+      raw.overrides?.["@elizaos/core"] ??
+      "";
+    const v = String(spec)
+      .trim()
+      .replace(/^[\^~]/, "");
+    if (v && v !== "workspace:*" && /^\d/.test(v)) {
+      const first = v.split(/\s+/)[0];
+      if (first) return first;
+    }
+  } catch {
+    /* fall through */
+  }
+  return "2.0.0-alpha.109";
+}
+
+/** Bun cache dir names look like `@elizaos+core@2.0.0-alpha.109+<hash>`. */
+function elizaCoreAlphaPrerelease(dir: string): number {
+  const m = dir.match(/@elizaos\+core@[\d.]+-alpha\.(\d+)/);
+  return m?.[1] ? parseInt(m[1], 10) : -1;
+}
+
+/**
+ * Bun stores a full npm tarball under node_modules/.bun even when the workspace
+ * symlink for @elizaos/core points at an unbuilt local eliza checkout.
+ *
+ * **WHY sort:** `readdir` order is arbitrary; picking `alpha.12` over `alpha.109`
+ * mismatches the API and tends to blank the Electrobun webview.
+ */
+function findElizaCoreBundleInBunStore(
+  kind: "browser" | "node",
+): string | null {
+  const bunDir = path.join(miladyRoot, "node_modules/.bun");
+  const rel =
+    kind === "browser"
+      ? "node_modules/@elizaos/core/dist/browser/index.browser.js"
+      : "node_modules/@elizaos/core/dist/node/index.node.js";
+  if (!fs.existsSync(bunDir)) return null;
+  let entries: string[];
+  try {
+    entries = fs.readdirSync(bunDir);
+  } catch {
+    return null;
+  }
+  const pinned = getMiladyPinnedElizaCoreVersion();
+  const pinnedPrefix = `@elizaos+core@${pinned}+`;
+
+  const withDist = entries.filter((dir) => {
+    if (!dir.startsWith("@elizaos+core@")) return false;
+    return fs.existsSync(path.join(bunDir, dir, rel));
+  });
+
+  const pinnedMatch = withDist.find((d) => d.startsWith(pinnedPrefix));
+  if (pinnedMatch) return path.join(bunDir, pinnedMatch, rel);
+
+  if (withDist.length === 0) return null;
+
+  withDist.sort(
+    (a, b) => elizaCoreAlphaPrerelease(b) - elizaCoreAlphaPrerelease(a),
+  );
+  const best = withDist[0];
+  return best ? path.join(bunDir, best, rel) : null;
+}
+
+/**
+ * Resolved file path for bundling `@elizaos/core` in the renderer.
+ * Linked eliza checkouts sometimes omit `dist/` until `bun run build`;
+ * fall back to `dist/node` (Vite stubs `node:` imports via nativeModuleStubPlugin),
+ * then to the bun install cache copy.
+ */
+function resolveElizaCoreBundlePath(): string {
+  const pkgDir = path.dirname(_require.resolve("@elizaos/core/package.json"));
+  const browserEntry = path.join(pkgDir, "dist/browser/index.browser.js");
+  const nodeEntry = path.join(pkgDir, "dist/node/index.node.js");
+  if (fs.existsSync(browserEntry)) return browserEntry;
+  if (fs.existsSync(nodeEntry)) {
+    console.warn(
+      "[milady][vite] @elizaos/core dist/browser is missing; using dist/node for the client bundle. " +
+        "For a linked eliza workspace, run `bun run build` in that checkout (e.g. packages/typescript). " +
+        "Or reinstall with ELIZA_SKIP_LOCAL_ELIZA=1 to use the published npm package.",
+    );
+    return nodeEntry;
+  }
+  const bunBrowser = findElizaCoreBundleInBunStore("browser");
+  if (bunBrowser) {
+    console.warn(
+      `[milady][vite] Linked @elizaos/core at ${pkgDir} has no dist/; using bun cache build at ${bunBrowser}. ` +
+        "Run `bun run build` in your eliza checkout or ELIZA_SKIP_LOCAL_ELIZA=1 bun install to align versions.",
+    );
+    return bunBrowser;
+  }
+  const bunNode = findElizaCoreBundleInBunStore("node");
+  if (bunNode) {
+    console.warn(
+      `[milady][vite] Linked @elizaos/core at ${pkgDir} has no dist/; using bun cache node bundle at ${bunNode}.`,
+    );
+    return bunNode;
+  }
+  throw new Error(
+    `[milady][vite] @elizaos/core has no built artifacts under ${pkgDir} and none in node_modules/.bun. ` +
+      "Expected dist/browser/index.browser.js or dist/node/index.node.js. " +
+      "Build your local eliza workspace or run `ELIZA_SKIP_LOCAL_ELIZA=1 bun install`.",
+  );
+}
+
 // The dev script sets MILADY_API_PORT; default to 31337 for standalone vite dev.
 const apiPort = resolveDesktopApiPort(process.env);
 const uiPort = resolveDesktopUiPort(process.env);
@@ -398,12 +515,13 @@ function nativeModuleStubPlugin(): Plugin {
     // Patch @elizaos/core browser entry at transform time to add missing
     // exports that milady's agent plugins expect.
     transform(code, id) {
-      if (
-        !id.endsWith("index.browser.js") ||
-        (!id.includes("@elizaos/core") &&
-          !id.includes("packages/typescript/dist/browser"))
-      )
-        return null;
+      const isCoreDistFile =
+        id.endsWith("index.browser.js") || id.endsWith("index.node.js");
+      const normId = id.split(path.sep).join("/");
+      const isCorePackagePath =
+        normId.includes("/node_modules/@elizaos/core/") ||
+        normId.includes("packages/typescript/dist/");
+      if (!isCoreDistFile || !isCorePackagePath) return null;
       // Names that downstream plugins (plugin-secrets-manager, agent runtime)
       // import from @elizaos/core but that are missing from the browser entry.
       const missingExports: Record<string, string> = {
@@ -727,9 +845,7 @@ export default defineConfig({
           // needed exports and avoids pulling in createRequire/node:fs/etc.
           {
             find: /^@elizaos\/core$/,
-            replacement: `${path.dirname(
-              _require.resolve("@elizaos/core/package.json"),
-            )}/dist/browser/index.browser.js`,
+            replacement: resolveElizaCoreBundlePath(),
           },
         ];
       })(),
@@ -894,6 +1010,19 @@ export default defineConfig({
       "/ws": {
         target: `ws://127.0.0.1:${apiPort}`,
         ws: true,
+      },
+      // elizaOS plugin-music-player HTTP routes live outside /api (e.g. /music-player/stream).
+      "/music-player": {
+        target: `http://127.0.0.1:${apiPort}`,
+        changeOrigin: true,
+        configure: (proxy) => {
+          proxy.on("error", (_err, _req, res) => {
+            if (!res.headersSent) {
+              res.writeHead(502, { "Content-Type": "application/json" });
+              res.end(JSON.stringify({ error: "API server unavailable" }));
+            }
+          });
+        },
       },
     },
     fs: {

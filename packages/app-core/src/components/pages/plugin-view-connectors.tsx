@@ -155,9 +155,8 @@ function ConnectorPluginCard({
   const totalCount = hasParams ? plugin.parameters.length : 0;
   const allParamsSet =
     !hasParams ||
-    (requiredParams.length > 0
-      ? requiredSetCount === requiredParams.length
-      : setCount === totalCount);
+    requiredParams.length === 0 ||
+    requiredSetCount === requiredParams.length;
   const isToggleBusy = togglingPlugins.has(plugin.id);
   const toggleDisabled =
     isToggleBusy || (hasPluginToggleInFlight && !isToggleBusy);

@@ -39,6 +39,8 @@
     "packages/vrm-utils",
     "packages/shared",
     "packages/agent",
+    "packages/plugin-music-library",
+    "packages/plugin-music-player",
     "deploy/cloud-agent-template"
   ],
   "type": "module",
@@ -181,6 +183,7 @@
     "@elizaos/plugin-form": "^2.0.0-alpha.10",
     "@elizaos/plugin-google-genai": "2.0.0-alpha.11",
     "@elizaos/plugin-knowledge": "^2.0.0-alpha.7",
+    "@elizaos/plugin-discord": "^2.0.0-alpha.10",
     "@elizaos/plugin-local-embedding": "^2.0.0-alpha.11",
     "@elizaos/plugin-ollama": "^2.0.0-alpha.70",
     "@elizaos/plugin-openai": "2.0.0-alpha.15",
@@ -198,6 +201,8 @@
     "@elizaos/plugin-trajectory-logger": "^2.0.0-alpha.20",
     "@elizaos/plugin-trust": "^1.2.2",
     "@elizaos/plugin-whatsapp": "^2.0.0-alpha.9",
+    "@elizaos/plugin-music-library": "workspace:*",
+    "@elizaos/plugin-music-player": "workspace:*",
     "@elizaos/prompts": "2.0.0-alpha.109",
     "@elizaos/skills": "2.0.0-alpha.109",
     "@hapi/boom": "^10.0.1",
@@ -232,6 +237,7 @@
     "tar": "^6.2.1",
     "telegraf": "^4.16.3",
     "uuid": "^13.0.0",
+    "whatwg-url": "7.1.0",
     "whisper-node": "^1.1.1",
     "ws": "^8.19.0",
     "zod": "^4.3.6"

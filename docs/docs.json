@@ -384,6 +384,7 @@
             "pages": [
               "runtime/core",
               "runtime/events",
+              "runtime/action-callback-streaming",
               "runtime/memory",
               "runtime/providers",
               "runtime/services",

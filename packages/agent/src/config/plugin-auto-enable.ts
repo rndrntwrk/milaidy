@@ -95,6 +95,11 @@ export const AUTH_PROVIDER_PLUGINS: Record<string, string> = {
   CLAUDE_CODE_WORKBENCH_ENABLED: "@elizaos/plugin-claude-code-workbench",
   EVM_PRIVATE_KEY: "@elizaos/plugin-evm",
   SOLANA_PRIVATE_KEY: "@elizaos/plugin-solana",
+  LASTFM_API_KEY: "@elizaos/plugin-music-library",
+  GENIUS_API_KEY: "@elizaos/plugin-music-library",
+  THEAUDIODB_API_KEY: "@elizaos/plugin-music-library",
+  SPOTIFY_CLIENT_ID: "@elizaos/plugin-music-library",
+  SPOTIFY_CLIENT_SECRET: "@elizaos/plugin-music-library",
 };
 
 const FEATURE_PLUGINS: Record<string, string> = {
@@ -119,6 +124,8 @@ const FEATURE_PLUGINS: Record<string, string> = {
   // Media generation plugins
   fal: "@elizaos/plugin-fal",
   suno: "@elizaos/plugin-suno",
+  musicLibrary: "@elizaos/plugin-music-library",
+  musicPlayer: "@elizaos/plugin-music-player",
   vision: "@elizaos/plugin-vision",
   computeruse: "@elizaos/plugin-computeruse",
   repoprompt: "@elizaos/plugin-repoprompt",
