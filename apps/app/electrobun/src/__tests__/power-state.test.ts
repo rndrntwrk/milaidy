@@ -4,6 +4,9 @@ import * as path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   linuxSysfsOnBattery,
+  parseMacOsHidIdleTimeOutput,
+  parseMacOsPowerSourceOutput,
+  parseMacOsSessionLockedOutput,
   parseWindowsPowerLineOutput,
 } from "../native/power-state";
 
@@ -98,5 +101,58 @@ describe("parseWindowsPowerLineOutput", () => {
       onBattery: false,
       known: false,
     });
+  });
+});
+
+describe("parseMacOsPowerSourceOutput", () => {
+  it("detects battery and AC power", () => {
+    expect(
+      parseMacOsPowerSourceOutput(
+        "Now drawing from 'Battery Power'\n -InternalBattery-0 (id=1234567)\t83%; discharging",
+      ),
+    ).toEqual({
+      onBattery: true,
+      known: true,
+    });
+    expect(
+      parseMacOsPowerSourceOutput(
+        "Now drawing from 'AC Power'\n -InternalBattery-0 (id=1234567)\t100%; charged",
+      ),
+    ).toEqual({
+      onBattery: false,
+      known: true,
+    });
+  });
+
+  it("returns unknown for unrelated output", () => {
+    expect(parseMacOsPowerSourceOutput("n/a")).toEqual({
+      onBattery: false,
+      known: false,
+    });
+  });
+});
+
+describe("parseMacOsHidIdleTimeOutput", () => {
+  it("parses nanoseconds into whole seconds", () => {
+    expect(
+      parseMacOsHidIdleTimeOutput('| |   "HIDIdleTime" = 7349658000'),
+    ).toBe(7);
+  });
+
+  it("returns null when idle time is unavailable", () => {
+    expect(parseMacOsHidIdleTimeOutput("")).toBeNull();
+  });
+});
+
+describe("parseMacOsSessionLockedOutput", () => {
+  it("detects locked and unlocked sessions", () => {
+    expect(parseMacOsSessionLockedOutput("CGSSessionScreenIsLocked = 1")).toBe(
+      true,
+    );
+    expect(parseMacOsSessionLockedOutput("screenIsLocked = 0")).toBe(false);
+  });
+
+  it("returns null when no lock flag is present", () => {
+    expect(parseMacOsSessionLockedOutput("userName = shaw")).toBeNull();
   });
 });

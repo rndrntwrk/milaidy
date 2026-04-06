@@ -13,6 +13,7 @@ export interface ApplyPluginAutoEnableParams {
 
 export const CONNECTOR_PLUGINS: Record<string, string> = {
   telegram: "@elizaos/plugin-telegram",
+  telegramAccount: "@elizaos-plugins/client-telegram-account",
   discord: "@elizaos/plugin-discord",
   slack: "@elizaos/plugin-slack",
   twitter: "@elizaos/plugin-twitter",
@@ -178,6 +179,14 @@ export function isConnectorConfigured(
   }
 
   switch (connectorName) {
+    case "telegramAccount":
+      return Boolean(
+        config.phone &&
+          config.appId &&
+          config.appHash &&
+          config.deviceModel &&
+          config.systemVersion,
+      );
     case "imessage":
       return Boolean(config.cliPath);
     case "signal":
@@ -290,9 +299,11 @@ export function applyPluginAutoEnable(
   pluginsConfig.allow = pluginsConfig.allow ?? [];
   pluginsConfig.entries = pluginsConfig.entries ?? {};
 
-  const connectors =
+  const connectors = (
     updatedConfig.connectors ??
-    (updatedConfig as Record<string, unknown>).channels;
+    (updatedConfig as Record<string, unknown>).channels ??
+    {}
+  ) as Record<string, unknown>;
   if (connectors) {
     for (const [connectorName, connectorConfig] of Object.entries(connectors)) {
       const pluginName = CONNECTOR_PLUGINS[connectorName];
@@ -463,7 +474,10 @@ export function applyPluginAutoEnable(
   }
 
   // Client plugins
-  if (isTelegramAccountConfigured(env)) {
+  if (
+    isTelegramAccountConfigured(env) ||
+    isConnectorConfigured("telegramAccount", connectors.telegramAccount)
+  ) {
     const clientPlugin = CLIENT_PLUGINS.telegramAccount;
     if (
       clientPlugin &&

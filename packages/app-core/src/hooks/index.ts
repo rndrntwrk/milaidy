@@ -7,6 +7,7 @@ export * from "./useContextMenu";
 export * from "./useDocumentVisibility";
 export * from "./useGoogleLifeOpsConnector";
 export * from "./useKeyboardShortcuts";
+export * from "./useLifeOpsActivitySignals";
 export * from "./useMediaQuery";
 export * from "./useRenderGuard";
 export * from "./useStreamPopoutNavigation";

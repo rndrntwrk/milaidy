@@ -12,6 +12,7 @@ const {
   useAppMock,
   useBugReportStateMock,
   useContextMenuMock,
+  useLifeOpsActivitySignalsMock,
   useStreamPopoutNavigationMock,
 } = vi.hoisted(() => ({
   deferredChecklistRenderMock: vi.fn(),
@@ -21,6 +22,7 @@ const {
   useAppMock: vi.fn(),
   useBugReportStateMock: vi.fn(),
   useContextMenuMock: vi.fn(),
+  useLifeOpsActivitySignalsMock: vi.fn(),
   useStreamPopoutNavigationMock: vi.fn(),
 }));
 
@@ -48,6 +50,7 @@ vi.mock("./hooks", () => ({
     React.createElement(React.Fragment, null, children),
   useBugReportState: useBugReportStateMock,
   useContextMenu: useContextMenuMock,
+  useLifeOpsActivitySignals: useLifeOpsActivitySignalsMock,
   useStreamPopoutNavigation: useStreamPopoutNavigationMock,
 }));
 
@@ -179,6 +182,7 @@ describe("App", () => {
       confirmSaveCommand: vi.fn(),
       closeSaveCommandModal: vi.fn(),
     });
+    useLifeOpsActivitySignalsMock.mockReset();
     useStreamPopoutNavigationMock.mockReset();
   });
 

@@ -6,6 +6,7 @@ import {
   stopSelfControlBlock,
 } from "@miladyai/plugin-selfcontrol/selfcontrol";
 import type {
+  CaptureLifeOpsActivitySignalRequest,
   AcknowledgeLifeOpsReminderRequest,
   CaptureLifeOpsPhoneConsentRequest,
   CompleteLifeOpsBrowserSessionRequest,
@@ -23,6 +24,7 @@ import type {
   GetLifeOpsCalendarFeedRequest,
   GetLifeOpsGmailTriageRequest,
   GetLifeOpsGmailSearchRequest,
+  LifeOpsActivitySignal,
   LifeOpsActiveReminderView,
   LifeOpsAuditEvent,
   LifeOpsAuditEventType,
@@ -104,6 +106,8 @@ import type {
   UpsertLifeOpsXConnectorRequest,
 } from "@miladyai/shared/contracts/lifeops";
 import {
+  LIFEOPS_ACTIVITY_SIGNAL_SOURCES,
+  LIFEOPS_ACTIVITY_SIGNAL_STATES,
   LIFEOPS_BROWSER_ACTION_KINDS,
   LIFEOPS_CALENDAR_WINDOW_PRESETS,
   LIFEOPS_CHANNEL_TYPES,
@@ -133,6 +137,7 @@ import {
 import {
   loadOwnerContactRoutingHints,
   loadOwnerContactsConfig,
+  resolveOwnerContactSource,
   type OwnerContactRoutingHint,
 } from "../config/owner-contacts.js";
 import { getAgentEventService } from "../runtime/agent-event-service.js";
@@ -187,6 +192,7 @@ import {
 } from "./google-oauth.js";
 import { normalizeGoogleCapabilities } from "./google-scopes.js";
 import {
+  createLifeOpsActivitySignal,
   createLifeOpsAuditEvent,
   createLifeOpsBrowserSession,
   createLifeOpsCalendarSyncState,
@@ -798,6 +804,61 @@ function isReminderChannel(
   );
 }
 
+function normalizeActivitySignalSource(
+  value: unknown,
+  field: string,
+): LifeOpsActivitySignal["source"] {
+  const source = requireNonEmptyString(value, field);
+  if (
+    LIFEOPS_ACTIVITY_SIGNAL_SOURCES.includes(
+      source as LifeOpsActivitySignal["source"],
+    )
+  ) {
+    return source as LifeOpsActivitySignal["source"];
+  }
+  fail(
+    400,
+    `${field} must be one of: ${LIFEOPS_ACTIVITY_SIGNAL_SOURCES.join(", ")}`,
+  );
+}
+
+function normalizeActivitySignalState(
+  value: unknown,
+  field: string,
+): LifeOpsActivitySignal["state"] {
+  const state = requireNonEmptyString(value, field);
+  if (
+    LIFEOPS_ACTIVITY_SIGNAL_STATES.includes(
+      state as LifeOpsActivitySignal["state"],
+    )
+  ) {
+    return state as LifeOpsActivitySignal["state"];
+  }
+  fail(
+    400,
+    `${field} must be one of: ${LIFEOPS_ACTIVITY_SIGNAL_STATES.join(", ")}`,
+  );
+}
+
+function normalizeOptionalIdleState(
+  value: unknown,
+  field: string,
+): LifeOpsActivitySignal["idleState"] {
+  const idleState = normalizeOptionalString(value);
+  if (!idleState) {
+    return null;
+  }
+  if (
+    idleState === "active" ||
+    idleState === "idle" ||
+    idleState === "locked" ||
+    idleState === "unknown"
+  ) {
+    return idleState;
+  }
+  fail(400, `${field} must be one of: active, idle, locked, unknown`);
+}
+
 function mapPlatformToReminderChannel(
   platform: string | null | undefined,
 ): LifeOpsReminderChannel | null {
@@ -806,6 +867,16 @@ function mapPlatformToReminderChannel(
   }
   if (platform === "client_chat") {
     return "in_app";
+  }
+  if (
+    platform === "desktop_app" ||
+    platform === "mobile_app" ||
+    platform === "web_app"
+  ) {
+    return "in_app";
+  }
+  if (platform === "telegram-account" || platform === "telegramAccount") {
+    return "telegram";
   }
   return isReminderChannel(platform) ? platform : null;
 }
@@ -1031,6 +1102,20 @@ function normalizePositiveInteger(value: unknown, field: string): number {
   const number = Math.trunc(normalizeFiniteNumber(value, field));
   if (number <= 0) {
     fail(400, `${field} must be greater than zero`);
+  }
+  return number;
+}
+
+function normalizeOptionalNonNegativeInteger(
+  value: unknown,
+  field: string,
+): number | null {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+  const number = Math.trunc(normalizeFiniteNumber(value, field));
+  if (number < 0) {
+    fail(400, `${field} must be zero or greater`);
   }
   return number;
 }
@@ -4650,7 +4735,14 @@ export class LifeOpsService {
         lastResponseChannel: null,
         resolvedFrom: "config",
       } satisfies OwnerContactRoutingHint);
-    const contact = ownerContacts[hint.source] ?? ownerContacts[channel];
+    const contactResolution =
+      resolveOwnerContactSource(ownerContacts, hint.source) ??
+      resolveOwnerContactSource(ownerContacts, channel) ??
+      null;
+    const contact =
+      contactResolution?.contact ??
+      ownerContacts[hint.source] ??
+      ownerContacts[channel];
     const entityId =
       (metadata && normalizeOptionalString(metadata.entityId)) ??
       normalizeOptionalString(hint.entityId) ??
@@ -4671,10 +4763,10 @@ export class LifeOpsService {
     }
     const targetRef = channelId ?? roomId ?? entityId ?? policy?.channelRef ?? null;
     return {
-      source: hint.source,
-      connectorRef: `runtime:${hint.source}:${targetRef}`,
+      source: contactResolution?.source ?? hint.source,
+      connectorRef: `runtime:${contactResolution?.source ?? hint.source}:${targetRef}`,
       target: {
-        source: hint.source,
+        source: contactResolution?.source ?? hint.source,
         entityId: entityId as RuntimeMessageTarget["entityId"],
         channelId,
         roomId: roomId as RuntimeMessageTarget["roomId"],
@@ -6878,6 +6970,41 @@ export class LifeOpsService {
       },
     });
     return this.getReminderPreference();
+  }
+
+  async captureActivitySignal(
+    request: CaptureLifeOpsActivitySignalRequest,
+  ): Promise<LifeOpsActivitySignal> {
+    const signal = createLifeOpsActivitySignal({
+      agentId: this.agentId(),
+      source: normalizeActivitySignalSource(request.source, "source"),
+      platform: normalizeOptionalString(request.platform) ?? "client_chat",
+      state: normalizeActivitySignalState(request.state, "state"),
+      observedAt:
+        normalizeOptionalIsoString(request.observedAt, "observedAt") ??
+        new Date().toISOString(),
+      idleState: normalizeOptionalIdleState(request.idleState, "idleState"),
+      idleTimeSeconds: normalizeOptionalNonNegativeInteger(
+        request.idleTimeSeconds,
+        "idleTimeSeconds",
+      ),
+      onBattery:
+        normalizeOptionalBoolean(request.onBattery, "onBattery") ?? null,
+      metadata:
+        request.metadata !== undefined
+          ? requireRecord(request.metadata, "metadata")
+          : {},
+    });
+    await this.repository.createActivitySignal(signal);
+    return signal;
+  }
+
+  async listActivitySignals(args: {
+    sinceAt?: string | null;
+    limit?: number | null;
+    states?: LifeOpsActivitySignal["state"][] | null;
+  } = {}): Promise<LifeOpsActivitySignal[]> {
+    return this.repository.listActivitySignals(this.agentId(), args);
   }
 
   async upsertChannelPolicy(

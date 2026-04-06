@@ -42,6 +42,7 @@ function isTruthyCloudEnvValue(raw: string | undefined): boolean {
 export const CHANNEL_PLUGIN_MAP: Readonly<Record<string, string>> = {
   discord: "@elizaos/plugin-discord",
   telegram: "@elizaos/plugin-telegram",
+  telegramAccount: "@elizaos-plugins/client-telegram-account",
   slack: "@elizaos/plugin-slack",
   twitter: "@elizaos/plugin-twitter",
   // Internal connector built from src/plugins/whatsapp (not an npm package).

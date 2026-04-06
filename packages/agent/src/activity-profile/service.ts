@@ -4,6 +4,7 @@
  */
 
 import type { IAgentRuntime, UUID } from "@elizaos/core";
+import type { LifeOpsActivitySignal } from "@miladyai/shared/contracts/lifeops";
 import { LifeOpsService } from "../lifeops/service.js";
 import { resolveDefaultTimeZone } from "../lifeops/defaults.js";
 import {
@@ -18,7 +19,11 @@ import {
   LifeOpsScreenContextSampler,
   type LifeOpsScreenContextSummary,
 } from "../lifeops/screen-context.js";
-import type { ActivityProfile, FiredActionsLog } from "./types.js";
+import type {
+  ActivityProfile,
+  ActivitySignalRecord,
+  FiredActionsLog,
+} from "./types.js";
 
 // ── Constants ─────────────────────────────────────────
 
@@ -26,6 +31,8 @@ const PROFILE_MAX_AGE_MS = 60 * 60 * 1000; // 60 min full rebuild threshold
 const MESSAGES_WINDOW_DAYS = 7;
 const MESSAGES_LIMIT = 500;
 const MAX_ROOMS = 50;
+const ACTIVITY_SIGNALS_WINDOW_LIMIT = 500;
+const CURRENT_ACTIVITY_SIGNAL_LIMIT = 32;
 
 let screenContextSampler: LifeOpsScreenContextSampler | null = null;
 
@@ -79,6 +86,50 @@ async function sampleScreenContext(
   return await getScreenContextSampler().sample(currentTime.getTime());
 }
 
+function mapActivitySignalRecord(
+  signal: LifeOpsActivitySignal,
+): ActivitySignalRecord {
+  return {
+    source: signal.source,
+    platform: signal.platform,
+    state: signal.state,
+    observedAt: Date.parse(signal.observedAt),
+    idleState: signal.idleState,
+    idleTimeSeconds: signal.idleTimeSeconds,
+    onBattery: signal.onBattery,
+    metadata: signal.metadata,
+  };
+}
+
+async function loadWindowActivitySignals(
+  runtime: IAgentRuntime,
+  currentTime: Date,
+): Promise<ActivitySignalRecord[]> {
+  const lifeOpsService = new LifeOpsService(runtime);
+  const sinceAt = new Date(
+    currentTime.getTime() - MESSAGES_WINDOW_DAYS * 24 * 60 * 60 * 1000,
+  ).toISOString();
+  const signals = await lifeOpsService.listActivitySignals({
+    sinceAt,
+    limit: ACTIVITY_SIGNALS_WINDOW_LIMIT,
+  });
+  return signals
+    .map(mapActivitySignalRecord)
+    .filter((signal) => Number.isFinite(signal.observedAt));
+}
+
+async function loadRecentActivitySignals(
+  runtime: IAgentRuntime,
+): Promise<ActivitySignalRecord[]> {
+  const lifeOpsService = new LifeOpsService(runtime);
+  const signals = await lifeOpsService.listActivitySignals({
+    limit: CURRENT_ACTIVITY_SIGNAL_LIMIT,
+  });
+  return signals
+    .map(mapActivitySignalRecord)
+    .filter((signal) => Number.isFinite(signal.observedAt));
+}
+
 function mergeScreenContext(
   profile: ActivityProfile,
   screenContext: LifeOpsScreenContextSummary | null,
@@ -115,6 +166,7 @@ export async function buildActivityProfile(
 ): Promise<ActivityProfile> {
   const tz = timezone ?? resolveDefaultTimeZone();
   const currentTime = now ?? new Date();
+  const activitySignals = await loadWindowActivitySignals(runtime, currentTime);
 
   // 1. Get all rooms the owner participates in
   const roomIds = await runtime.getRoomsForParticipant(ownerEntityId as UUID);
@@ -159,6 +211,7 @@ export async function buildActivityProfile(
     ownerEntityId,
     tz,
     MESSAGES_WINDOW_DAYS,
+    activitySignals,
     currentTime,
   );
 
@@ -197,6 +250,7 @@ export async function refreshCurrentState(
   const roomIds = await runtime.getRoomsForParticipant(ownerEntityId as UUID);
   const limitedRoomIds = roomIds.slice(0, MAX_ROOMS);
   const screenContext = await sampleScreenContext(currentTime);
+  const activitySignals = await loadRecentActivitySignals(runtime);
 
   const roomSourceMap = new Map<string, string>();
   if (limitedRoomIds.length > 0) {
@@ -240,6 +294,16 @@ export async function refreshCurrentState(
         lastSeenAt = createdAt;
         lastSeenPlatform = isClientChatSignal ? "client_chat" : source;
       }
+    }
+  }
+
+  for (const signal of activitySignals) {
+    if (signal.state !== "active" || signal.observedAt > currentTime.getTime()) {
+      continue;
+    }
+    if (signal.observedAt >= lastSeenAt) {
+      lastSeenAt = signal.observedAt;
+      lastSeenPlatform = signal.platform;
     }
   }
 

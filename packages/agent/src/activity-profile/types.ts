@@ -52,6 +52,17 @@ export interface PlatformActivity {
   averageMessagesPerDay: number;
 }
 
+export interface ActivitySignalRecord {
+  source: "app_lifecycle" | "page_visibility" | "desktop_power";
+  platform: string;
+  state: "active" | "idle" | "background" | "locked";
+  observedAt: number;
+  idleState: "active" | "idle" | "locked" | "unknown" | null;
+  idleTimeSeconds: number | null;
+  onBattery: boolean | null;
+  metadata: Record<string, unknown>;
+}
+
 export interface ActivityProfile {
   ownerEntityId: string;
   analyzedAt: number;

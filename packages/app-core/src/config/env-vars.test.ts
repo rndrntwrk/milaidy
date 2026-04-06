@@ -220,4 +220,26 @@ describe("collectConnectorEnvVars", () => {
       TELEGRAM_BOT_TOKEN: "123:ABC",
     });
   });
+
+  it("maps telegram account connector credentials to MTProto env keys", () => {
+    const result = collectConnectorEnvVars({
+      connectors: {
+        telegramAccount: {
+          phone: "+15551234567",
+          appId: "12345",
+          appHash: "hash-123",
+          deviceModel: "Milady Desktop",
+          systemVersion: "macOS 15",
+        },
+      },
+    } as ElizaConfig);
+
+    expect(result).toEqual({
+      TELEGRAM_ACCOUNT_PHONE: "+15551234567",
+      TELEGRAM_ACCOUNT_APP_ID: "12345",
+      TELEGRAM_ACCOUNT_APP_HASH: "hash-123",
+      TELEGRAM_ACCOUNT_DEVICE_MODEL: "Milady Desktop",
+      TELEGRAM_ACCOUNT_SYSTEM_VERSION: "macOS 15",
+    });
+  });
 });

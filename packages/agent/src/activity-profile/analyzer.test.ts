@@ -181,6 +181,35 @@ describe("analyzeMessages", () => {
     expect(profile.hasOpenActivityCycle).toBe(true);
   });
 
+  it("treats persisted desktop activity signals as live presence", () => {
+    const activitySignals = [
+      {
+        source: "desktop_power",
+        platform: "desktop_app",
+        state: "active",
+        observedAt: NOW.getTime() - 90 * 1000,
+        idleState: "active",
+        idleTimeSeconds: 0,
+        onBattery: false,
+        metadata: {},
+      },
+    ];
+
+    const profile = analyzeMessages(
+      [],
+      new Map(),
+      "owner-1",
+      "UTC",
+      7,
+      NOW,
+      activitySignals,
+    );
+    expect(profile.lastSeenPlatform).toBe("desktop_app");
+    expect(profile.lastSeenAt).toBe(NOW.getTime() - 90 * 1000);
+    expect(profile.isCurrentlyActive).toBe(true);
+    expect(profile.hasOpenActivityCycle).toBe(true);
+  });
+
   it("derives typical active hours from histogram", () => {
     // Create messages concentrated in MORNING and EVENING buckets
     const entries: Array<{ hour: number; day?: number }> = [];

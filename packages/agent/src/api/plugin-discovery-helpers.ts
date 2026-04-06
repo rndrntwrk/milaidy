@@ -902,6 +902,7 @@ const PLUGIN_METADATA_TAG_STOPWORDS = new Set([
 ]);
 const SOCIAL_CHAT_CONNECTOR_IDS = new Set([
   "telegram",
+  "telegramaccount",
   "discord",
   "slack",
   "whatsapp",

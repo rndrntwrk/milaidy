@@ -3,6 +3,7 @@ import { VERSION } from "../runtime/version";
 /** Known connector IDs for config schema generation. Keep in sync with runtime/plugin maps. */
 export const CONNECTOR_IDS = [
   "telegram",
+  "telegramAccount",
   "discord",
   "slack",
   "twitter",

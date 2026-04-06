@@ -64,6 +64,13 @@ export const CONNECTOR_ENV_MAP: Readonly<
   telegram: {
     botToken: "TELEGRAM_BOT_TOKEN",
   },
+  telegramAccount: {
+    phone: "TELEGRAM_ACCOUNT_PHONE",
+    appId: "TELEGRAM_ACCOUNT_APP_ID",
+    appHash: "TELEGRAM_ACCOUNT_APP_HASH",
+    deviceModel: "TELEGRAM_ACCOUNT_DEVICE_MODEL",
+    systemVersion: "TELEGRAM_ACCOUNT_SYSTEM_VERSION",
+  },
   slack: {
     botToken: "SLACK_BOT_TOKEN",
     appToken: "SLACK_APP_TOKEN",

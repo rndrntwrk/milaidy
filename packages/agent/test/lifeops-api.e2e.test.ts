@@ -400,7 +400,7 @@ describe("Life-ops API E2E", () => {
       expect(preferenceSet.status).toBe(201);
       expect(
         (preferenceSet.data.effective as Record<string, unknown>).intensity,
-      ).toBe("low");
+      ).toBe("minimal");
 
       const preferenceRead = await req(
         port,
@@ -410,7 +410,7 @@ describe("Life-ops API E2E", () => {
       expect(preferenceRead.status).toBe(200);
       expect(
         (preferenceRead.data.effective as Record<string, unknown>).intensity,
-      ).toBe("low");
+      ).toBe("minimal");
       expect(
         (preferenceRead.data.definition as Record<string, unknown>).source,
       ).toBe("definition_metadata");
@@ -541,6 +541,89 @@ describe("Life-ops API E2E", () => {
           }),
         ]),
       );
+    });
+
+    it("captures and lists activity signals with filtering and validation", async () => {
+      const activeAt = "2026-04-06T15:58:00.000Z";
+      const backgroundAt = "2026-04-06T15:59:00.000Z";
+
+      const active = await req(port, "POST", "/api/lifeops/activity-signals", {
+        source: "app_lifecycle",
+        platform: "web_app",
+        state: "active",
+        observedAt: activeAt,
+        metadata: {
+          reason: "qa-active",
+        },
+      });
+      expect(active.status).toBe(201);
+      expect(active.data.signal).toMatchObject({
+        source: "app_lifecycle",
+        platform: "web_app",
+        state: "active",
+        observedAt: activeAt,
+        metadata: {
+          reason: "qa-active",
+        },
+      });
+
+      const background = await req(
+        port,
+        "POST",
+        "/api/lifeops/activity-signals",
+        {
+          source: "page_visibility",
+          platform: "web_app",
+          state: "background",
+          observedAt: backgroundAt,
+          metadata: {
+            reason: "qa-background",
+          },
+        },
+      );
+      expect(background.status).toBe(201);
+
+      const listed = await req(
+        port,
+        "GET",
+        `/api/lifeops/activity-signals?state=active&sinceAt=${encodeURIComponent("2026-04-06T15:57:00.000Z")}`,
+      );
+      expect(listed.status).toBe(200);
+      expect(listed.data.signals).toEqual([
+        expect.objectContaining({
+          source: "app_lifecycle",
+          state: "active",
+          observedAt: activeAt,
+        }),
+      ]);
+
+      const limited = await req(
+        port,
+        "GET",
+        "/api/lifeops/activity-signals?limit=1",
+      );
+      expect(limited.status).toBe(200);
+      expect(limited.data.signals).toHaveLength(1);
+      expect(limited.data.signals[0]).toMatchObject({
+        state: "background",
+        observedAt: backgroundAt,
+      });
+
+      const invalidState = await req(
+        port,
+        "GET",
+        "/api/lifeops/activity-signals?state=awake",
+      );
+      expect(invalidState.status).toBe(400);
+      expect(invalidState.data.error).toContain("state must be one of");
+
+      const invalidLimit = await req(
+        port,
+        "GET",
+        "/api/lifeops/activity-signals?limit=0",
+      );
+      expect(invalidLimit.status).toBe(400);
+      expect(invalidLimit.data.error).toContain("limit must be a positive integer");
     });
 
     it("separates owner lifeops from agent ops", async () => {

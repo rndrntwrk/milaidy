@@ -5,8 +5,10 @@
 
 import type { DatabaseProviderType } from "@miladyai/agent/contracts/config";
 import type {
+  CaptureLifeOpsActivitySignalRequest,
   LifeOpsConnectorMode,
   LifeOpsConnectorSide,
+  LifeOpsActivitySignal,
 } from "@miladyai/shared/contracts/lifeops";
 import { MiladyClient } from "./client-base";
 import type {
@@ -275,6 +277,9 @@ declare module "./client-base" {
       }
     >;
     getLifeOpsOverview(): Promise<LifeOpsOverview>;
+    captureLifeOpsActivitySignal(
+      data: CaptureLifeOpsActivitySignalRequest,
+    ): Promise<{ signal: LifeOpsActivitySignal }>;
     getLifeOpsCalendarFeed(
       options?: GetLifeOpsCalendarFeedRequest,
     ): Promise<LifeOpsCalendarFeed>;
@@ -979,6 +984,16 @@ MiladyClient.prototype.getLifeOpsOverview = async function (
   this: MiladyClient,
 ) {
   return this.fetch("/api/lifeops/overview");
+};
+
+MiladyClient.prototype.captureLifeOpsActivitySignal = async function (
+  this: MiladyClient,
+  data,
+) {
+  return this.fetch("/api/lifeops/activity-signals", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
 };
 
 MiladyClient.prototype.getLifeOpsCalendarFeed = async function (

@@ -88,7 +88,7 @@ describe("connector map parity", () => {
   });
 
   it("uses valid package name prefixes for all plugin mappings", () => {
-    const validPrefix = /^@(elizaos|elizaai|miladyai)\//;
+    const validPrefix = /^@(elizaos|elizaos-plugins|elizaai|miladyai)\//;
     for (const pkg of Object.values(CONNECTOR_PLUGINS)) {
       expect(pkg).toMatch(validPrefix);
     }
@@ -109,6 +109,13 @@ describe("connector map parity", () => {
  */
 const CONNECTOR_CREDS: Record<string, Record<string, unknown>> = {
   telegram: { botToken: "123:ABC" },
+  telegramAccount: {
+    phone: "+15551234567",
+    appId: "12345",
+    appHash: "hash-123",
+    deviceModel: "Milady Desktop",
+    systemVersion: "macOS 15",
+  },
   discord: { botToken: "discord-token" },
   slack: { token: "xoxb-slack" },
   twitter: { apiKey: "tw-key" },

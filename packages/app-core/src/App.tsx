@@ -49,6 +49,7 @@ import {
   BugReportProvider,
   useBugReportState,
   useContextMenu,
+  useLifeOpsActivitySignals,
   useStreamPopoutNavigation,
 } from "./hooks";
 import { useActivityEvents } from "./hooks/useActivityEvents";
@@ -242,6 +243,7 @@ export function App() {
   const contextMenu = useContextMenu();
 
   useStreamPopoutNavigation(setTab);
+  useLifeOpsActivitySignals();
 
   const [customActionsPanelOpen, setCustomActionsPanelOpen] = useState(false);
   const [customActionsEditorOpen, setCustomActionsEditorOpen] = useState(false);

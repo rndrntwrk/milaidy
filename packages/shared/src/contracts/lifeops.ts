@@ -663,6 +663,37 @@ export interface LifeOpsChannelPolicy {
   updatedAt: string;
 }
 
+export const LIFEOPS_ACTIVITY_SIGNAL_SOURCES = [
+  "app_lifecycle",
+  "page_visibility",
+  "desktop_power",
+] as const;
+export type LifeOpsActivitySignalSource =
+  (typeof LIFEOPS_ACTIVITY_SIGNAL_SOURCES)[number];
+
+export const LIFEOPS_ACTIVITY_SIGNAL_STATES = [
+  "active",
+  "idle",
+  "background",
+  "locked",
+] as const;
+export type LifeOpsActivitySignalState =
+  (typeof LIFEOPS_ACTIVITY_SIGNAL_STATES)[number];
+
+export interface LifeOpsActivitySignal {
+  id: string;
+  agentId: string;
+  source: LifeOpsActivitySignalSource;
+  platform: string;
+  state: LifeOpsActivitySignalState;
+  observedAt: string;
+  idleState: "active" | "idle" | "locked" | "unknown" | null;
+  idleTimeSeconds: number | null;
+  onBattery: boolean | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
 export interface LifeOpsReminderPreferenceSetting {
   intensity: LifeOpsReminderIntensity;
   source: LifeOpsReminderPreferenceSource;
@@ -1285,6 +1316,17 @@ export interface CaptureLifeOpsPhoneConsentRequest {
   allowSms: boolean;
   allowVoice: boolean;
   privacyClass?: LifeOpsPrivacyClass;
+  metadata?: Record<string, unknown>;
+}
+
+export interface CaptureLifeOpsActivitySignalRequest {
+  source: LifeOpsActivitySignalSource;
+  platform?: string;
+  state: LifeOpsActivitySignalState;
+  observedAt?: string;
+  idleState?: "active" | "idle" | "locked" | "unknown" | null;
+  idleTimeSeconds?: number | null;
+  onBattery?: boolean | null;
   metadata?: Record<string, unknown>;
 }
 

@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import type { IAgentRuntime } from "@elizaos/core";
 import type {
+  LifeOpsActivitySignal,
   LifeOpsAuditEvent,
   LifeOpsBrowserSession,
   LifeOpsCalendarEvent,
@@ -343,6 +344,32 @@ function parseAuditEvent(row: Record<string, unknown>): LifeOpsAuditEvent {
     inputs: parseJsonRecord(row.inputs_json),
     decision: parseJsonRecord(row.decision_json),
     actor: toText(row.actor) as LifeOpsAuditEvent["actor"],
+    createdAt: toText(row.created_at),
+  };
+}
+
+function parseActivitySignal(
+  row: Record<string, unknown>,
+): LifeOpsActivitySignal {
+  return {
+    id: toText(row.id),
+    agentId: toText(row.agent_id),
+    source: toText(row.source) as LifeOpsActivitySignal["source"],
+    platform: toText(row.platform),
+    state: toText(row.state) as LifeOpsActivitySignal["state"],
+    observedAt: toText(row.observed_at),
+    idleState: row.idle_state
+      ? (toText(row.idle_state) as LifeOpsActivitySignal["idleState"])
+      : null,
+    idleTimeSeconds:
+      row.idle_time_seconds === null || row.idle_time_seconds === undefined
+        ? null
+        : toNumber(row.idle_time_seconds, 0),
+    onBattery:
+      row.on_battery === null || row.on_battery === undefined
+        ? null
+        : toBoolean(row.on_battery),
+    metadata: parseJsonRecord(row.metadata_json),
     createdAt: toText(row.created_at),
   };
 }
@@ -846,6 +873,19 @@ export async function ensureLifeOpsTables(
       actor TEXT NOT NULL,
       created_at TEXT NOT NULL
     )`,
+    `CREATE TABLE IF NOT EXISTS life_activity_signals (
+      id TEXT PRIMARY KEY,
+      agent_id TEXT NOT NULL,
+      source TEXT NOT NULL,
+      platform TEXT NOT NULL,
+      state TEXT NOT NULL,
+      observed_at TEXT NOT NULL,
+      idle_state TEXT,
+      idle_time_seconds INTEGER,
+      on_battery BOOLEAN,
+      metadata_json TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL
+    )`,
     `CREATE INDEX IF NOT EXISTS idx_life_task_definitions_agent_status
       ON life_task_definitions(agent_id, status)`,
     `CREATE INDEX IF NOT EXISTS idx_life_task_definitions_subject
@@ -864,6 +904,8 @@ export async function ensureLifeOpsTables(
       ON life_reminder_plans(agent_id, owner_type, owner_id)`,
     `CREATE INDEX IF NOT EXISTS idx_life_audit_events_owner
       ON life_audit_events(agent_id, owner_type, owner_id, created_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_life_activity_signals_agent
+      ON life_activity_signals(agent_id, observed_at DESC)`,
     `CREATE INDEX IF NOT EXISTS idx_life_workflow_definitions_agent
       ON life_workflow_definitions(agent_id, status, updated_at)`,
     `CREATE INDEX IF NOT EXISTS idx_life_workflow_definitions_subject
@@ -1966,6 +2008,61 @@ export class LifeOpsRepository {
     return rows.map(parseAuditEvent);
   }
 
+  async createActivitySignal(signal: LifeOpsActivitySignal): Promise<void> {
+    await this.ensureReady();
+    await executeRawSql(
+      this.runtime,
+      `INSERT INTO life_activity_signals (
+        id, agent_id, source, platform, state, observed_at, idle_state,
+        idle_time_seconds, on_battery, metadata_json, created_at
+      ) VALUES (
+        ${sqlQuote(signal.id)},
+        ${sqlQuote(signal.agentId)},
+        ${sqlQuote(signal.source)},
+        ${sqlQuote(signal.platform)},
+        ${sqlQuote(signal.state)},
+        ${sqlQuote(signal.observedAt)},
+        ${sqlText(signal.idleState)},
+        ${sqlInteger(signal.idleTimeSeconds)},
+        ${signal.onBattery === null ? "NULL" : sqlBoolean(signal.onBattery)},
+        ${sqlJson(signal.metadata)},
+        ${sqlQuote(signal.createdAt)}
+      )`,
+    );
+  }
+
+  async listActivitySignals(
+    agentId: string,
+    args: {
+      sinceAt?: string | null;
+      limit?: number | null;
+      states?: LifeOpsActivitySignal["state"][] | null;
+    } = {},
+  ): Promise<LifeOpsActivitySignal[]> {
+    await this.ensureReady();
+    const clauses = [`agent_id = ${sqlQuote(agentId)}`];
+    if (args.sinceAt) {
+      clauses.push(`observed_at >= ${sqlQuote(args.sinceAt)}`);
+    }
+    if (args.states && args.states.length > 0) {
+      const stateList = args.states.map((state) => sqlQuote(state)).join(", ");
+      clauses.push(`state IN (${stateList})`);
+    }
+    const limitClause =
+      typeof args.limit === "number" && args.limit > 0
+        ? `LIMIT ${Math.trunc(args.limit)}`
+        : "";
+    const rows = await executeRawSql(
+      this.runtime,
+      `SELECT *
+         FROM life_activity_signals
+        WHERE ${clauses.join("\n          AND ")}
+        ORDER BY observed_at DESC
+        ${limitClause}`,
+    );
+    return rows.map(parseActivitySignal);
+  }
+
   async upsertChannelPolicy(policy: LifeOpsChannelPolicy): Promise<void> {
     await this.ensureReady();
     await executeRawSql(
@@ -2983,6 +3080,16 @@ export function createLifeOpsWebsiteAccessGrant(
 export function createLifeOpsAuditEvent(
   params: Omit<LifeOpsAuditEvent, "id" | "createdAt">,
 ): LifeOpsAuditEvent {
+  return {
+    ...params,
+    id: crypto.randomUUID(),
+    createdAt: isoNow(),
+  };
+}
+
+export function createLifeOpsActivitySignal(
+  params: Omit<LifeOpsActivitySignal, "id" | "createdAt">,
+): LifeOpsActivitySignal {
   return {
     ...params,
     id: crypto.randomUUID(),

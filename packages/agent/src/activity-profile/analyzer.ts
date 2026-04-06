@@ -6,6 +6,7 @@
 
 import { getLocalDateKey, getZonedDateParts } from "../lifeops/time.js";
 import {
+  type ActivitySignalRecord,
   type ActivityProfile,
   type PlatformActivity,
   type TimeBucket,
@@ -106,26 +107,40 @@ function buildActivitySessions(
   messages: MessageRecord[],
   timezone: string,
 ): ActivitySession[] {
-  if (messages.length === 0) {
+  return buildActivitySessionsFromTimestamps(
+    messages.map((message) => message.createdAt),
+    timezone,
+  );
+}
+
+function buildActivitySessionsFromTimestamps(
+  timestamps: number[],
+  timezone: string,
+): ActivitySession[] {
+  if (timestamps.length === 0) {
     return [];
   }
 
-  const sorted = [...messages].sort((left, right) => left.createdAt - right.createdAt);
+  const sorted = [...timestamps].sort((left, right) => left - right);
   const sessions: ActivitySession[] = [];
-  let sessionStartAt = sorted[0].createdAt;
-  let sessionEndAt = sorted[0].createdAt;
+  let sessionStartAt = sorted[0] ?? 0;
+  let sessionEndAt = sorted[0] ?? 0;
 
   for (let index = 1; index < sorted.length; index += 1) {
-    const current = sorted[index];
-    if (current.createdAt - sessionEndAt > SUSTAINED_INACTIVITY_GAP_MS) {
+    const current = sorted[index] ?? 0;
+    if (current - sessionEndAt > SUSTAINED_INACTIVITY_GAP_MS) {
       sessions.push(buildActivitySession(sessionStartAt, sessionEndAt, timezone));
-      sessionStartAt = current.createdAt;
+      sessionStartAt = current;
     }
-    sessionEndAt = current.createdAt;
+    sessionEndAt = current;
   }
 
   sessions.push(buildActivitySession(sessionStartAt, sessionEndAt, timezone));
   return sessions;
+}
+
+function isActiveSignal(signal: ActivitySignalRecord, nowMs: number): boolean {
+  return signal.state === "active" && signal.observedAt <= nowMs;
 }
 
 function resolveLatestInteractionSnapshot(
@@ -133,10 +148,13 @@ function resolveLatestInteractionSnapshot(
   ownerEntityId: string,
   roomSourceMap: Map<string, string>,
   currentTime: Date,
+  activitySignals: ActivitySignalRecord[],
 ): InteractionSnapshot {
   let latestOwnerSeenAt = 0;
   let latestOwnerPlatform: string | null = null;
   let latestClientChatSeenAt = 0;
+  let latestSignalSeenAt = 0;
+  let latestSignalPlatform: string | null = null;
 
   for (const msg of messages) {
     if (msg.createdAt > currentTime.getTime()) {
@@ -154,9 +172,24 @@ function resolveLatestInteractionSnapshot(
   }
 
   if (latestClientChatSeenAt > latestOwnerSeenAt) {
+    latestOwnerSeenAt = latestClientChatSeenAt;
+    latestOwnerPlatform = "client_chat";
+  }
+
+  for (const signal of activitySignals) {
+    if (!isActiveSignal(signal, currentTime.getTime())) {
+      continue;
+    }
+    if (signal.observedAt > latestSignalSeenAt) {
+      latestSignalSeenAt = signal.observedAt;
+      latestSignalPlatform = signal.platform;
+    }
+  }
+
+  if (latestSignalSeenAt > latestOwnerSeenAt) {
     return {
-      lastSeenAt: latestClientChatSeenAt,
-      lastSeenPlatform: "client_chat",
+      lastSeenAt: latestSignalSeenAt,
+      lastSeenPlatform: latestSignalPlatform,
     };
   }
 
@@ -330,13 +363,55 @@ export function analyzeMessages(
   timezone: string,
   windowDays: number,
   now?: Date,
+): Omit<ActivityProfile, "hasCalendarData" | "typicalFirstEventHour" | "typicalLastEventHour" | "avgWeekdayMeetings">;
+export function analyzeMessages(
+  messages: MessageRecord[],
+  roomSourceMap: Map<string, string>,
+  ownerEntityId: string,
+  timezone: string,
+  windowDays: number,
+  now: Date,
+  activitySignals: ActivitySignalRecord[],
+): Omit<ActivityProfile, "hasCalendarData" | "typicalFirstEventHour" | "typicalLastEventHour" | "avgWeekdayMeetings">;
+export function analyzeMessages(
+  messages: MessageRecord[],
+  roomSourceMap: Map<string, string>,
+  ownerEntityId: string,
+  timezone: string,
+  windowDays: number,
+  activitySignals?: ActivitySignalRecord[],
+  now?: Date,
+): Omit<ActivityProfile, "hasCalendarData" | "typicalFirstEventHour" | "typicalLastEventHour" | "avgWeekdayMeetings">;
+export function analyzeMessages(
+  messages: MessageRecord[],
+  roomSourceMap: Map<string, string>,
+  ownerEntityId: string,
+  timezone: string,
+  windowDays: number,
+  firstOptionalArg?: Date | ActivitySignalRecord[],
+  secondOptionalArg?: Date | ActivitySignalRecord[],
 ): Omit<ActivityProfile, "hasCalendarData" | "typicalFirstEventHour" | "typicalLastEventHour" | "avgWeekdayMeetings"> {
-  const currentTime = now ?? new Date();
+  const currentTime =
+    firstOptionalArg instanceof Date
+      ? firstOptionalArg
+      : secondOptionalArg instanceof Date
+        ? secondOptionalArg
+        : new Date();
+  const activitySignals = Array.isArray(firstOptionalArg)
+    ? firstOptionalArg
+    : Array.isArray(secondOptionalArg)
+      ? secondOptionalArg
+      : [];
   const windowStart = currentTime.getTime() - windowDays * 24 * 60 * 60 * 1000;
 
   // Filter to owner messages within window
   const ownerMessages = messages.filter(
     (m) => m.entityId === ownerEntityId && m.createdAt >= windowStart && m.createdAt <= currentTime.getTime(),
+  );
+  const activeSignals = activitySignals.filter(
+    (signal) =>
+      signal.observedAt >= windowStart &&
+      isActiveSignal(signal, currentTime.getTime()),
   );
 
   // Group by platform
@@ -365,6 +440,23 @@ export function analyzeMessages(
     aggregateBuckets[bucket]++;
   }
 
+  for (const signal of activeSignals) {
+    const source = signal.platform.trim().length > 0 ? signal.platform : "client_chat";
+    let entry = platformMap.get(source);
+    if (!entry) {
+      entry = { count: 0, buckets: emptyBucketCounts(), lastAt: 0 };
+      platformMap.set(source, entry);
+    }
+
+    entry.count++;
+    if (signal.observedAt > entry.lastAt) entry.lastAt = signal.observedAt;
+
+    const parts = getZonedDateParts(new Date(signal.observedAt), timezone);
+    const bucket = classifyTimeBucket(parts.hour);
+    entry.buckets[bucket]++;
+    aggregateBuckets[bucket]++;
+  }
+
   // Build sorted platform list
   const platforms: PlatformActivity[] = Array.from(platformMap.entries())
     .map(([source, data]) => ({
@@ -378,7 +470,11 @@ export function analyzeMessages(
 
   // Derive typical active hours from aggregate histogram
   const totalMessages = ownerMessages.length;
-  const threshold = totalMessages > 0 ? Math.max(totalMessages * SIGNIFICANT_BUCKET_SHARE, 1) : Infinity;
+  const activityPointCount = totalMessages + activeSignals.length;
+  const threshold =
+    activityPointCount > 0
+      ? Math.max(activityPointCount * SIGNIFICANT_BUCKET_SHARE, 1)
+      : Infinity;
 
   let typicalFirstActiveHour: number | null = null;
   let typicalLastActiveHour: number | null = null;
@@ -392,7 +488,13 @@ export function analyzeMessages(
     }
   }
 
-  const sessions = buildActivitySessions(ownerMessages, timezone);
+  const sessions = buildActivitySessionsFromTimestamps(
+    [
+      ...ownerMessages.map((message) => message.createdAt),
+      ...activeSignals.map((signal) => signal.observedAt),
+    ],
+    timezone,
+  );
   const wakeHours = sessions
     .map((session) => session.startHour)
     .sort((left, right) => left - right);
@@ -410,6 +512,7 @@ export function analyzeMessages(
     ownerEntityId,
     roomSourceMap,
     currentTime,
+    activeSignals,
   );
   let lastSeenAt = latestInteraction.lastSeenAt;
   let lastSeenPlatform = latestInteraction.lastSeenPlatform;

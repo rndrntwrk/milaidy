@@ -7,6 +7,7 @@ import {
 } from "@elizaos/core";
 import type {
   AcknowledgeLifeOpsReminderRequest,
+  CaptureLifeOpsActivitySignalRequest,
   CaptureLifeOpsPhoneConsentRequest,
   CompleteLifeOpsBrowserSessionRequest,
   CompleteLifeOpsOccurrenceRequest,
@@ -41,6 +42,7 @@ import type {
   UpsertLifeOpsChannelPolicyRequest,
   UpsertLifeOpsXConnectorRequest,
 } from "../contracts/lifeops.js";
+import { LIFEOPS_ACTIVITY_SIGNAL_STATES } from "../contracts/lifeops.js";
 import { createIntegrationTelemetrySpan } from "../diagnostics/integration-observability.js";
 import { LifeOpsService, LifeOpsServiceError } from "../lifeops/service.js";
 import type { ReadJsonBodyOptions } from "./http-helpers.js";
@@ -87,6 +89,49 @@ function routeOperation(ctx: LifeOpsRouteContext): string {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function parsePositiveIntegerQuery(
+  value: string | null,
+  field: string,
+): number | null {
+  if (!value) {
+    return null;
+  }
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new LifeOpsServiceError(400, `${field} must be a positive integer`);
+  }
+  return parsed;
+}
+
+function parseActivitySignalStates(
+  url: URL,
+): Array<(typeof LIFEOPS_ACTIVITY_SIGNAL_STATES)[number]> | null {
+  const rawValues = [
+    ...url.searchParams.getAll("state"),
+    ...url.searchParams
+      .getAll("states")
+      .flatMap((value) => value.split(",")),
+  ]
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+  if (rawValues.length === 0) {
+    return null;
+  }
+  const invalid = rawValues.find(
+    (value) =>
+      !LIFEOPS_ACTIVITY_SIGNAL_STATES.includes(
+        value as (typeof LIFEOPS_ACTIVITY_SIGNAL_STATES)[number],
+      ),
+  );
+  if (invalid) {
+    throw new LifeOpsServiceError(
+      400,
+      `state must be one of: ${LIFEOPS_ACTIVITY_SIGNAL_STATES.join(", ")}`,
+    );
+  }
+  return rawValues as Array<(typeof LIFEOPS_ACTIVITY_SIGNAL_STATES)[number]>;
 }
 
 async function runRoute(
@@ -779,6 +824,29 @@ export async function handleLifeOpsRoutes(
     if (!body) return true;
     return runRoute(ctx, async (service) => {
       json(res, await service.capturePhoneConsent(body), 201);
+    });
+  }
+
+  if (method === "GET" && pathname === "/api/lifeops/activity-signals") {
+    return runRoute(ctx, async (service) => {
+      json(res, {
+        signals: await service.listActivitySignals({
+          sinceAt: url.searchParams.get("sinceAt"),
+          limit: parsePositiveIntegerQuery(url.searchParams.get("limit"), "limit"),
+          states: parseActivitySignalStates(url),
+        }),
+      });
+    });
+  }
+
+  if (method === "POST" && pathname === "/api/lifeops/activity-signals") {
+    const body = await readJsonBody<CaptureLifeOpsActivitySignalRequest>(
+      req,
+      res,
+    );
+    if (!body) return true;
+    return runRoute(ctx, async (service) => {
+      json(res, { signal: await service.captureActivitySignal(body) }, 201);
     });
   }
 
