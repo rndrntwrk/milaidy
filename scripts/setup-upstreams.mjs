@@ -129,6 +129,14 @@ function uniqueLinks(links) {
   return [...deduped.values()];
 }
 
+function hasInstalledPackageDependencies(packageRoot) {
+  return existsSync(path.join(packageRoot, "node_modules"));
+}
+
+function getPluginInstallRoot(packageDir) {
+  return packageDir;
+}
+
 function getForceEnvKey(env = process.env) {
   return LOCAL_UPSTREAM_FORCE_ENVS.find((key) => env[key] === "1") ?? null;
 }
@@ -361,6 +369,119 @@ export function createPackageLink(linkPath, targetPath) {
   return true;
 }
 
+function findInstalledPackageDir(
+  repoRoot,
+  packageName,
+  preferredVersion,
+  localTargetPath = null,
+) {
+  const directPackagePath = path.join(
+    repoRoot,
+    "node_modules",
+    ...packageName.split("/"),
+  );
+  try {
+    const resolved = realpathSync(directPackagePath);
+    const resolvedLocalTarget =
+      localTargetPath && existsSync(localTargetPath)
+        ? realpathSync(localTargetPath)
+        : null;
+    if (existsSync(resolved) && resolved !== resolvedLocalTarget) {
+      return resolved;
+    }
+  } catch {}
+
+  const bunCacheRoot = path.join(repoRoot, "node_modules", ".bun");
+  if (!existsSync(bunCacheRoot)) {
+    return null;
+  }
+
+  const packagePrefix = `${packageName.replace("/", "+")}@`;
+  const preferredPrefix =
+    preferredVersion === undefined
+      ? null
+      : `${packageName.replace("/", "+")}@${preferredVersion}+`;
+  const matches = [];
+
+  for (const entry of readdirSync(bunCacheRoot, { withFileTypes: true })) {
+    if (!entry.isDirectory() || !entry.name.startsWith(packagePrefix)) {
+      continue;
+    }
+
+    const candidate = path.join(
+      bunCacheRoot,
+      entry.name,
+      "node_modules",
+      ...packageName.split("/"),
+    );
+    if (!existsSync(candidate)) {
+      continue;
+    }
+
+    matches.push({
+      candidate,
+      preferred:
+        preferredPrefix !== null && entry.name.startsWith(preferredPrefix),
+    });
+  }
+
+  matches.sort(
+    (left, right) => Number(right.preferred) - Number(left.preferred),
+  );
+  return matches[0]?.candidate ?? null;
+}
+
+function ensurePluginDependencyLinks(
+  repoRoot,
+  pluginsRoot = getRepoPluginsRoot(repoRoot),
+) {
+  let linkedDependencies = 0;
+
+  for (const packageDir of discoverPluginPackageDirs(pluginsRoot)) {
+    const packageJson = readPackageJson(packageDir);
+    const packageName = packageJson?.name;
+    if (!packageName?.startsWith("@elizaos/")) {
+      continue;
+    }
+
+    const runtimeDependencies = {
+      ...(packageJson.peerDependencies ?? {}),
+      ...(packageJson.dependencies ?? {}),
+    };
+    const dependencyNames = Object.keys(runtimeDependencies);
+    if (dependencyNames.length === 0) {
+      continue;
+    }
+
+    for (const dependencyName of dependencyNames) {
+      const installedDependencyDir = findInstalledPackageDir(
+        repoRoot,
+        dependencyName,
+      );
+      if (!installedDependencyDir) {
+        continue;
+      }
+
+      const dependencyLinkPath = path.join(
+        packageDir,
+        "node_modules",
+        ...dependencyName.split("/"),
+      );
+      if (createPackageLink(dependencyLinkPath, installedDependencyDir)) {
+        linkedDependencies += 1;
+      }
+    }
+  }
+
+  if (linkedDependencies > 0) {
+    console.log(
+      `[setup-upstreams] Linked ${linkedDependencies} plugin dependency ${linkedDependencies === 1 ? "entry" : "entries"}`,
+    );
+  }
+
+  return linkedDependencies;
+}
+
 async function ensureRepoLocalEliza(repoRoot) {
   const elizaRoot = getRepoElizaRoot(repoRoot);
   if (hasRequiredElizaWorkspaceFiles(elizaRoot)) {
@@ -447,6 +568,42 @@ async function ensureElizaBuildOutputs(elizaRoot) {
   }
 }
 
+async function ensurePluginBuildOutputs(pluginsRoot) {
+  for (const packageDir of discoverPluginPackageDirs(pluginsRoot)) {
+    if (path.basename(packageDir) !== "typescript") {
+      continue;
+    }
+
+    const packageJson = readPackageJson(packageDir);
+    if (!packageJson?.name?.startsWith("@elizaos/")) {
+      continue;
+    }
+
+    const hasBuildScript =
+      packageJson.scripts && typeof packageJson.scripts.build === "string";
+    if (!hasBuildScript || existsSync(path.join(packageDir, "dist"))) {
+      continue;
+    }
+
+    const installRoot = getPluginInstallRoot(packageDir);
+    if (!hasInstalledPackageDependencies(installRoot)) {
+      console.log(
+        `[setup-upstreams] Installing ${packageJson.name} dependencies in ${toDisplayPath(installRoot)}`,
+      );
+      await runCommand("bun", ["install"], {
+        cwd: installRoot,
+        label: `bun install (${packageJson.name})`,
+      });
+    }
+
+    console.log(`[setup-upstreams] Building ${packageJson.name}`);
+    await runCommand("bun", ["run", "build"], {
+      cwd: packageDir,
+      label: `bun run build (${packageJson.name})`,
+    });
+  }
+}
+
 export function linkUpstreamPackages(
   repoRoot = DEFAULT_REPO_ROOT,
   {
@@ -490,6 +647,8 @@ export async function setupUpstreams(repoRoot = DEFAULT_REPO_ROOT) {
   await ensureElizaBuildOutputs(elizaRoot);
 
   const pluginsRoot = getRepoPluginsRoot(repoRoot);
+  await ensurePluginBuildOutputs(pluginsRoot);
+  ensurePluginDependencyLinks(repoRoot, pluginsRoot);
   const updatedLinks = linkUpstreamPackages(repoRoot, {
     elizaRoot,
     pluginsRoot,

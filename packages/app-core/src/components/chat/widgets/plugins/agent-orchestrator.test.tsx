@@ -332,10 +332,11 @@ describe("agent orchestrator tasks widget", () => {
       async (options?: { includeArchived?: boolean }) =>
         options?.includeArchived ? [archivedThread] : [createThread()],
     );
-    mockClient.getCodingAgentTaskThread.mockImplementation(async (threadId: string) =>
-      threadId === "thread-archived"
-        ? createArchivedThreadDetail()
-        : createThreadDetail(),
+    mockClient.getCodingAgentTaskThread.mockImplementation(
+      async (threadId: string) =>
+        threadId === "thread-archived"
+          ? createArchivedThreadDetail()
+          : createThreadDetail(),
     );
     mockClient.reopenCodingAgentTaskThread.mockResolvedValue(true);
 

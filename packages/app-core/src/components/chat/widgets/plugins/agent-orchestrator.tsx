@@ -475,7 +475,9 @@ function OrchestratorTasksWidget(_props: ChatSidebarWidgetProps) {
         });
       } catch (error) {
         if (cancelled) return;
-        setLoadError(getClientErrorMessage(error, "Failed to load task threads."));
+        setLoadError(
+          getClientErrorMessage(error, "Failed to load task threads."),
+        );
         setThreads([]);
         setSelectedThreadId(null);
         setSelectedThread(null);
@@ -513,7 +515,9 @@ function OrchestratorTasksWidget(_props: ChatSidebarWidgetProps) {
         setSelectedThread(detail);
       } catch (error) {
         if (cancelled) return;
-        setDetailError(getClientErrorMessage(error, "Failed to load task detail."));
+        setDetailError(
+          getClientErrorMessage(error, "Failed to load task detail."),
+        );
         setSelectedThread(null);
       }
     };
