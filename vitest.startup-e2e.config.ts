@@ -14,10 +14,6 @@ const autonomousSourceRoot = getAutonomousSourceRoot(repoRoot);
 const appCoreSourceRoot = getAppCoreSourceRoot(repoRoot);
 
 const liveTest = process.env.MILADY_LIVE_TEST === "1";
-const isCI = process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
-const testPool = isCI ? "threads" : "forks";
-const testExecArgv = testPool === "forks" ? ["--max-old-space-size=4096"] : [];
-
 // Startup e2e tests require module isolation so that vi.mock() registrations
 // from one test file do not bleed into another.  The shared e2e config uses
 // isolate:false for speed, but the startup tests mock the same modules
@@ -192,10 +188,10 @@ export default defineConfig({
     // This prevents vi.mock() factories from different files from interfering.
     isolate: true,
     fileParallelism: false,
-    pool: testPool,
+    pool: "forks",
     maxWorkers: 1,
     // Startup E2E also runs serial jsdom suites in a single fork.
-    execArgv: testExecArgv,
+    execArgv: ["--max-old-space-size=4096"],
     sequence: {
       concurrent: false,
       shuffle: false,
