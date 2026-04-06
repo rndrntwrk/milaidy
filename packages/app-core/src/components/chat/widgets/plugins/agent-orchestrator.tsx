@@ -454,14 +454,11 @@ function OrchestratorTasksWidget(_props: ChatSidebarWidgetProps) {
     const refreshThreads = async () => {
       setLoading(true);
       try {
-        const nextThreads =
-          typeof client.listCodingAgentTaskThreads === "function"
-            ? await client.listCodingAgentTaskThreads({
-                includeArchived: showArchived,
-                search: deferredSearch || undefined,
-                limit: 30,
-              })
-            : [];
+        const nextThreads = await client.listCodingAgentTaskThreads({
+          includeArchived: showArchived,
+          search: deferredSearch || undefined,
+          limit: 30,
+        });
         if (cancelled) return;
         setLoadError(null);
         setThreads(nextThreads);
@@ -502,16 +499,14 @@ function OrchestratorTasksWidget(_props: ChatSidebarWidgetProps) {
   useEffect(() => {
     let cancelled = false;
     if (!selectedThreadId) {
+      setDetailError(null);
       setSelectedThread(null);
       return;
     }
 
     const loadDetail = async () => {
       try {
-        const detail =
-          typeof client.getCodingAgentTaskThread === "function"
-            ? await client.getCodingAgentTaskThread(selectedThreadId)
-            : null;
+        const detail = await client.getCodingAgentTaskThread(selectedThreadId);
         if (cancelled) return;
         setDetailError(null);
         setSelectedThread(detail);
@@ -537,25 +532,19 @@ function OrchestratorTasksWidget(_props: ChatSidebarWidgetProps) {
     setMutating(true);
     try {
       if (selectedThread.status === "archived") {
-        if (typeof client.reopenCodingAgentTaskThread === "function") {
-          await client.reopenCodingAgentTaskThread(selectedThread.id);
-        }
+        await client.reopenCodingAgentTaskThread(selectedThread.id);
         setShowArchived(false);
       } else {
-        if (typeof client.archiveCodingAgentTaskThread === "function") {
-          await client.archiveCodingAgentTaskThread(selectedThread.id);
-        }
+        await client.archiveCodingAgentTaskThread(selectedThread.id);
         setShowArchived(true);
       }
-      const nextThreads =
-        typeof client.listCodingAgentTaskThreads === "function"
-          ? await client.listCodingAgentTaskThreads({
-              includeArchived: selectedThread.status !== "archived",
-              search: deferredSearch || undefined,
-              limit: 30,
-            })
-          : [];
+      const nextThreads = await client.listCodingAgentTaskThreads({
+        includeArchived: selectedThread.status !== "archived",
+        search: deferredSearch || undefined,
+        limit: 30,
+      });
       setLoadError(null);
+      setDetailError(null);
       setThreads(nextThreads);
       setSelectedThreadId(nextThreads[0]?.id ?? null);
     } catch (error) {

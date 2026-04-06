@@ -1690,7 +1690,7 @@ MiladyClient.prototype.getCodingAgentStatus = async function (
   }
 };
 
-MiladyClient.prototype.listCodingAgentTaskThreads = async function (
+MiladyClient.prototype.listCodingAgentTaskThreads = function (
   this: MiladyClient,
   options,
 ) {
@@ -1702,16 +1702,16 @@ MiladyClient.prototype.listCodingAgentTaskThreads = async function (
     params.set("limit", String(options.limit));
   }
   const query = params.toString();
-  return await this.fetch<CodingAgentTaskThread[]>(
+  return this.fetch<CodingAgentTaskThread[]>(
     `/api/coding-agents/coordinator/threads${query ? `?${query}` : ""}`,
   );
 };
 
-MiladyClient.prototype.getCodingAgentTaskThread = async function (
+MiladyClient.prototype.getCodingAgentTaskThread = function (
   this: MiladyClient,
   threadId,
 ) {
-  return await this.fetch<CodingAgentTaskThreadDetail>(
+  return this.fetch<CodingAgentTaskThreadDetail>(
     `/api/coding-agents/coordinator/threads/${encodeURIComponent(threadId)}`,
   );
 };
