@@ -201,6 +201,64 @@ export const manageMiladyBrowserWorkspaceAction: Action = {
     "hide browser tab",
     "close browser tab",
   ],
+  parameters: [
+    {
+      name: "operation",
+      description:
+        "Browser workspace operation to run: list, open, navigate, show, hide, close, eval, or snapshot.",
+      required: false,
+      schema: {
+        type: "string",
+        enum: [
+          "list",
+          "open",
+          "navigate",
+          "show",
+          "hide",
+          "close",
+          "eval",
+          "snapshot",
+        ],
+      },
+    },
+    {
+      name: "id",
+      description: "Existing browser workspace tab ID, such as btab_1.",
+      required: false,
+      schema: { type: "string" },
+    },
+    {
+      name: "url",
+      description: "Target URL to open or navigate to.",
+      required: false,
+      schema: { type: "string" },
+    },
+    {
+      name: "title",
+      description: "Optional browser tab title override when opening a tab.",
+      required: false,
+      schema: { type: "string" },
+    },
+    {
+      name: "script",
+      description: "JavaScript source to run for eval operations.",
+      required: false,
+      schema: { type: "string" },
+    },
+    {
+      name: "show",
+      description:
+        "Whether the tab should be visible immediately after opening it.",
+      required: false,
+      schema: { type: "boolean" },
+    },
+    {
+      name: "partition",
+      description: "Optional browser partition to use for the tab session.",
+      required: false,
+      schema: { type: "string" },
+    },
+  ],
   validate: async (
     _runtime: IAgentRuntime,
     message: Memory,

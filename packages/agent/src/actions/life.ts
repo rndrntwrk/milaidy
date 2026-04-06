@@ -430,11 +430,11 @@ export const lifeAction: Action = {
     }
 
     const rawParams = (options as HandlerOptions | undefined)?.parameters as LifeParams | undefined;
-    const intent = rawParams?.intent?.trim();
-    if (!intent || !rawParams) {
+    const params = rawParams ?? {} as LifeParams;
+    const intent = params.intent?.trim() || messageText(message).trim();
+    if (!intent) {
       return { success: false, text: "LIFE requires an intent describing what to do." };
     }
-    const params = rawParams;
 
     const explicitAction = params.action && ACTION_TO_OPERATION[params.action];
     const operation = explicitAction ?? classifyIntent(intent);

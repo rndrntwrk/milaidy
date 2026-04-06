@@ -243,7 +243,7 @@ describe("escalationTriggerProvider", () => {
     // Both triggers present
     expect(result.text).toContain("[HIGH]");
     expect(result.text).toContain("[MEDIUM]");
-    expect(result.text).toContain("SEND_MESSAGE");
+    expect(result.text).toContain("SEND_ADMIN_MESSAGE");
   });
 
   it("silently skips when getRelationships throws", async () => {

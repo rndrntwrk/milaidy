@@ -2330,67 +2330,6 @@
       "setupGuideUrl": "https://milady.ai/docs/intermediate/connect-gmail-watch"
     },
     {
-      "id": "goals",
-      "dirName": "plugin-goals",
-      "name": "Goals",
-      "npmName": "@elizaos/plugin-goals",
-      "description": "Goals for your agent",
-      "tags": [
-        "goals",
-        "objectives",
-        "task-management"
-      ],
-      "category": "feature",
-      "envKey": null,
-      "configKeys": [
-        "GOAL_CHECK_INTERVAL",
-        "GOAL_BATCH_SIZE",
-        "GOAL_MAX_CONCURRENT",
-        "GOAL_REMINDER_COOLDOWN",
-        "GOAL_ENABLE_SMART_REMINDERS",
-        "GOAL_ENABLE_MONITORING"
-      ],
-      "version": "2.0.0-alpha.6",
-      "pluginParameters": {
-        "GOAL_CHECK_INTERVAL": {
-          "type": "number",
-          "description": "Check interval",
-          "required": false,
-          "sensitive": false
-        },
-        "GOAL_BATCH_SIZE": {
-          "type": "number",
-          "description": "Batch processing size",
-          "required": false,
-          "sensitive": false
-        },
-        "GOAL_MAX_CONCURRENT": {
-          "type": "number",
-          "description": "Maximum concurrent operations",
-          "required": false,
-          "sensitive": false
-        },
-        "GOAL_REMINDER_COOLDOWN": {
-          "type": "number",
-          "description": "Cooldown period",
-          "required": false,
-          "sensitive": false
-        },
-        "GOAL_ENABLE_SMART_REMINDERS": {
-          "type": "boolean",
-          "description": "Enable smart reminder features",
-          "required": false,
-          "sensitive": false
-        },
-        "GOAL_ENABLE_MONITORING": {
-          "type": "boolean",
-          "description": "Enable monitoring",
-          "required": false,
-          "sensitive": false
-        }
-      }
-    },
-    {
       "id": "google-chat",
       "dirName": "plugin-google-chat",
       "name": "Google Chat",
@@ -5680,41 +5619,6 @@
         }
       },
       "setupGuideUrl": "https://milady.ai/docs/advanced/connect-tlon"
-    },
-    {
-      "id": "todo",
-      "dirName": "plugin-todo",
-      "name": "Todo",
-      "npmName": "@elizaos/plugin-todo",
-      "description": "A todo list. For humans and agents.",
-      "tags": [
-        "todo",
-        "task-management",
-        "multi-language"
-      ],
-      "category": "feature",
-      "envKey": null,
-      "configKeys": [
-        "ENABLE_REMINDERS",
-        "REMINDER_INTERVAL_MS"
-      ],
-      "version": "2.0.0-alpha.4",
-      "pluginParameters": {
-        "ENABLE_REMINDERS": {
-          "type": "boolean",
-          "description": "Enable reminder notifications for todos",
-          "required": false,
-          "default": true,
-          "sensitive": false
-        },
-        "REMINDER_INTERVAL_MS": {
-          "type": "number",
-          "description": "Interval in milliseconds between reminder checks",
-          "required": false,
-          "default": 30000,
-          "sensitive": false
-        }
-      }
     },
     {
       "id": "trajectory-logger",

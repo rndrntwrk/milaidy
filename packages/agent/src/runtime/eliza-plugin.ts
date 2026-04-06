@@ -23,6 +23,7 @@ import {
 } from "../actions/stream-control";
 import { terminalAction } from "../actions/terminal";
 import { lifeAction } from "../actions/life";
+import { sendAdminMessageAction } from "../actions/send-admin-message";
 import {
   skillCommandAction,
   addRegisteredSkillSlug,
@@ -242,6 +243,7 @@ export function createElizaPlugin(config?: ElizaPluginConfig): Plugin {
     actions: [
       restartAction,
       // sendMessageAction,
+      sendAdminMessageAction,
       terminalAction,
       createTriggerTaskAction,
       emoteAction,

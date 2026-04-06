@@ -216,9 +216,16 @@ describe("lifeAction", () => {
     expect(valid).toBe(true);
   });
 
-  it("requires intent parameter", async () => {
-    const result = await lifeAction.handler?.(runtime, msg("test"), {} as never, { parameters: {} } as never);
+  it("requires intent parameter when message text is also empty", async () => {
+    const result = await lifeAction.handler?.(runtime, msg(""), {} as never, { parameters: {} } as never);
     expect(result).toMatchObject({ success: false, text: expect.stringContaining("intent") });
+  });
+
+  it("falls back to message text when intent param is missing", async () => {
+    // With no intent param but message text "test", handler uses message text as intent
+    // "test" classifies as create_definition, fails because no title
+    const result = await lifeAction.handler?.(runtime, msg("test"), {} as never, { parameters: {} } as never);
+    expect(result).toMatchObject({ success: false, text: expect.stringContaining("name") });
   });
 
   // ── create_definition ─────────────────────────────

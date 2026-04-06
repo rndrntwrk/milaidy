@@ -29,6 +29,7 @@ const STRATEGY_HISTORY_LIMIT = 5;
 const STRATEGY_SETTING_CURRENT = "DEFENSE_STRATEGY_CURRENT";
 const STRATEGY_SETTING_BEST = "DEFENSE_STRATEGY_BEST";
 const STRATEGY_SETTING_HISTORY = "DEFENSE_STRATEGY_HISTORY";
+const AUTOPLAY_SETTING = "DEFENSE_AUTO_PLAY";
 
 type HeroClass = "melee" | "ranged" | "mage";
 type HeroLane = "top" | "mid" | "bot";
@@ -312,15 +313,18 @@ function resolveAgentName(
   runtime: IAgentRuntime | null,
   explicitSessionId?: string | null,
 ): string {
-  if (explicitSessionId?.trim()) {
-    return explicitSessionId.trim();
-  }
-
+  // Prefer the persisted agent name when we have one — it's the name
+  // registered with the remote server (may include a random suffix from
+  // 409 conflict retry). The session ID from the URL is for routing only.
   const configured =
     resolveSettingLike(runtime, "DEFENSE_OF_THE_AGENTS_AGENT_NAME") ??
     resolveSettingLike(runtime, "BOT_NAME");
   if (configured?.trim()) {
     return configured.trim();
+  }
+
+  if (explicitSessionId?.trim()) {
+    return explicitSessionId.trim();
   }
 
   const runtimeLike = asRuntimeLike(runtime);
@@ -379,13 +383,25 @@ async function fetchJson<T>(url: URL, init?: RequestInit): Promise<T> {
   return data;
 }
 
+/** Short-lived cache for game state (avoids duplicate fetches within one request flow). */
+const gameStateCache = new Map<string, { state: DefenseGameState; ts: number }>();
+const GAME_STATE_CACHE_TTL_MS = 5_000;
+
 async function fetchGameState(
   apiBaseUrl: string,
   gameId: number,
 ): Promise<DefenseGameState> {
+  const cacheKey = `${apiBaseUrl}:${gameId}`;
+  const cached = gameStateCache.get(cacheKey);
+  if (cached && Date.now() - cached.ts < GAME_STATE_CACHE_TTL_MS) {
+    return cached.state;
+  }
+
   const url = new URL("/api/game/state", apiBaseUrl);
   url.searchParams.set("game", String(gameId));
-  return fetchJson<DefenseGameState>(url);
+  const state = await fetchJson<DefenseGameState>(url);
+  gameStateCache.set(cacheKey, { state, ts: Date.now() });
+  return state;
 }
 
 function findHero(
@@ -406,32 +422,40 @@ async function locateHeroState(
   // Fast path: if we have a preferred game ID, try only that one.
   // This avoids scanning all games and hitting rate limits.
   if (ctx.preferredGameId) {
-    const state = await fetchGameState(ctx.apiBaseUrl, ctx.preferredGameId);
-    const hero = findHero(state, ctx.agentName);
-    if (hero) {
-      return { gameId: ctx.preferredGameId, state, hero };
-    }
-    // Hero not found in preferred game — scan others (hero may have been
-    // assigned to a different game by the server after a restart)
-    const others = Array.from(
-      { length: GAME_SEARCH_LIMIT },
-      (_, i) => i + 1,
-    ).filter((id) => id !== ctx.preferredGameId);
-
-    for (const gameId of others) {
-      try {
-        const otherState = await fetchGameState(ctx.apiBaseUrl, gameId);
-        const otherHero = findHero(otherState, ctx.agentName);
-        if (otherHero) {
-          return { gameId, state: otherState, hero: otherHero };
-        }
-      } catch {
-        // Skip games that error (404, rate limit)
-        continue;
+    try {
+      const state = await fetchGameState(ctx.apiBaseUrl, ctx.preferredGameId);
+      const hero = findHero(state, ctx.agentName);
+      if (hero) {
+        return { gameId: ctx.preferredGameId, state, hero };
       }
+      // Hero not found in preferred game — scan others (hero may have been
+      // assigned to a different game by the server after a restart)
+      const others = Array.from(
+        { length: GAME_SEARCH_LIMIT },
+        (_, i) => i + 1,
+      ).filter((id) => id !== ctx.preferredGameId);
+
+      for (const gameId of others) {
+        try {
+          const otherState = await fetchGameState(ctx.apiBaseUrl, gameId);
+          const otherHero = findHero(otherState, ctx.agentName);
+          if (otherHero) {
+            return { gameId, state: otherState, hero: otherHero };
+          }
+        } catch {
+          // Skip games that error (404, rate limit)
+          continue;
+        }
+      }
+      // Hero nowhere — return preferred game state as fallback
+      return { gameId: ctx.preferredGameId, state, hero: null };
+    } catch {
+      // Preferred game fetch failed (rate limit, network) — propagate so
+      // caller can surface the error rather than silently returning stale data
+      throw new Error(
+        `Failed to fetch game state for game ${ctx.preferredGameId}. The remote API may be rate-limiting requests.`,
+      );
     }
-    // Hero nowhere — return preferred game state as fallback
-    return { gameId: ctx.preferredGameId, state, hero: null };
   }
 
   // No preferred game — scan sequentially
@@ -933,22 +957,28 @@ function startGameLoop(
   }, STRATEGY_REVIEW_INTERVAL_MS);
 
   activeLoops.set(agentId, { timer, reviewTimer, autoPlay: true });
+  persistSetting(runtime, AUTOPLAY_SETTING, "1");
 }
 
 function stopGameLoop(runtime: IAgentRuntime | null): void {
   const agentId = asRuntimeLike(runtime)?.agentId;
   if (!agentId) return;
   const handle = activeLoops.get(agentId);
-  if (!handle) return;
-  clearInterval(handle.timer);
-  clearInterval(handle.reviewTimer);
-  activeLoops.delete(agentId);
+  if (handle) {
+    clearInterval(handle.timer);
+    clearInterval(handle.reviewTimer);
+    activeLoops.delete(agentId);
+  }
+  persistSetting(runtime, AUTOPLAY_SETTING, "0");
 }
 
 function isAutoPlayActive(runtime: IAgentRuntime | null): boolean {
   const agentId = asRuntimeLike(runtime)?.agentId;
   if (!agentId) return false;
-  return activeLoops.has(agentId);
+  // Check in-memory loop first, then fall back to persisted setting
+  // (setting survives module re-import; Map doesn't)
+  if (activeLoops.has(agentId)) return true;
+  return resolveSettingLike(runtime, AUTOPLAY_SETTING) === "1";
 }
 
 // ---------------------------------------------------------------------------
@@ -1303,6 +1333,8 @@ async function ensureJoinedGame(
   });
   const nextGameId =
     deployment.gameId ?? ctx.preferredGameId ?? DEFAULT_GAME_ID;
+  // Clear cached state so we get fresh data with the newly deployed hero
+  gameStateCache.delete(`${ctx.apiBaseUrl}:${nextGameId}`);
   const state = await fetchGameState(ctx.apiBaseUrl, nextGameId);
   return {
     gameId: nextGameId,
@@ -1386,6 +1418,16 @@ export async function handleAppRoutes(ctx: {
   const subroute = parseSessionSubroute(ctx.pathname);
 
   try {
+    // Auto-recover game loop if setting says ON but loop isn't running
+    // (happens after server restart or module re-import)
+    if (runtime && resolveSettingLike(runtime, AUTOPLAY_SETTING) === "1") {
+      const agentId = asRuntimeLike(runtime)?.agentId;
+      if (agentId && !activeLoops.has(agentId)) {
+        const sessionCtx = resolveSessionContext(runtime, sessionId);
+        startGameLoop(runtime, sessionCtx);
+      }
+    }
+
     if (ctx.method === "GET" && !subroute) {
       ctx.json(ctx.res, await readSessionState(runtime, sessionId));
       return true;
@@ -1437,21 +1479,39 @@ export async function handleAppRoutes(ctx: {
       }
 
       const sessionCtx = resolveSessionContext(runtime, sessionId);
-      const current = await locateHeroState(sessionCtx);
-      const deployment = parseDeploymentCommand(
-        content,
-        sessionCtx,
-        current.hero,
-      );
+
+      // If we have a preferred game, do a single fast fetch to get hero state.
+      // If not (first deploy), skip the scan to avoid rate limits — deploy
+      // directly and let the server assign a game.
+      let currentHero: DefenseHero | null = null;
+      let currentGameId: number | undefined;
+      if (sessionCtx.preferredGameId) {
+        try {
+          const state = await fetchGameState(sessionCtx.apiBaseUrl, sessionCtx.preferredGameId);
+          currentHero = findHero(state, sessionCtx.agentName);
+          currentGameId = sessionCtx.preferredGameId;
+        } catch {
+          // Rate limited — deploy with whatever we know
+        }
+      }
+
+      const deployment = parseDeploymentCommand(content, sessionCtx, currentHero);
       const response = await deployHero(sessionCtx, deployment);
 
       // Persist the game ID so subsequent calls use the fast path
-      if (typeof response.gameId === "number") {
-        sessionCtx.preferredGameId = response.gameId;
+      const assignedGameId = response.gameId ?? currentGameId ?? sessionCtx.preferredGameId;
+      if (typeof assignedGameId === "number") {
+        sessionCtx.preferredGameId = assignedGameId;
+        persistSetting(runtime, "DEFENSE_OF_THE_AGENTS_GAME_ID", String(assignedGameId));
+      }
+
+      // Clear cache for the assigned game so we get fresh state after deploy
+      if (assignedGameId) {
+        gameStateCache.delete(`${sessionCtx.apiBaseUrl}:${assignedGameId}`);
       }
 
       // Re-fetch game state once (not a full locate scan) to get updated hero
-      const refreshedGameId = sessionCtx.preferredGameId ?? current.gameId;
+      const refreshedGameId = assignedGameId ?? DEFAULT_GAME_ID;
       const refreshedState = await fetchGameState(sessionCtx.apiBaseUrl, refreshedGameId);
       const refreshedHero = findHero(refreshedState, sessionCtx.agentName);
       const refreshedSession = buildSessionState(sessionCtx, {

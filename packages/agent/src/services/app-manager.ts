@@ -803,15 +803,22 @@ async function probeBabylonDevCredentials(
   baseUrl: string,
 ): Promise<{ agentId: string; agentSecret: string } | null> {
   // Try well-known dev agent IDs with common dev secrets
-  const devAgentIds = ["babylon-test-agent", "dev-admin-local"];
-  // Dev secrets are deterministic from hostname — try 'localhost' derivation
-  // and a few other common patterns
-  const crypto = await import("node:crypto");
-  const hostnames = ["localhost", "0.0.0.0", process.env.HOSTNAME || ""];
+  const devAgentIds = ["babylon-agent-alice", "babylon-test-agent", "dev-admin-local"];
+  // Dev secrets are deterministic from hostname — try multiple hostname sources
+  const nodeCrypto = await import("node:crypto");
+  const os = await import("node:os");
+  const hostnames = new Set<string>();
+  // Add all likely hostname sources
+  hostnames.add("localhost");
+  hostnames.add("0.0.0.0");
+  if (process.env.HOSTNAME) hostnames.add(process.env.HOSTNAME);
+  try {
+    hostnames.add(os.hostname());
+  } catch { /* ignore */ }
   const devSecrets: string[] = [];
   for (const hostname of hostnames) {
     if (!hostname) continue;
-    const hash = crypto
+    const hash = nodeCrypto
       .createHash("sha256")
       .update(`babylon-dev:${hostname}:agent`)
       .digest("hex")

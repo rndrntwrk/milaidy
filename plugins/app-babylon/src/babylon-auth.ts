@@ -1,7 +1,8 @@
 import type { IAgentRuntime } from "@elizaos/core";
 
 const FETCH_TIMEOUT_MS = 8_000;
-const DEFAULT_API_BASE = "https://staging.babylon.market";
+const DEFAULT_API_BASE_PROD = "https://staging.babylon.market";
+const DEFAULT_API_BASE_DEV = "http://localhost:3000";
 
 interface BabylonAuthToken {
   token: string;
@@ -54,7 +55,10 @@ export function resolveBabylonConfig(
     apiBaseUrl: (
       resolveSettingLike(runtime, "BABYLON_API_URL") ??
       resolveSettingLike(runtime, "BABYLON_APP_URL") ??
-      DEFAULT_API_BASE
+      resolveSettingLike(runtime, "BABYLON_CLIENT_URL") ??
+      (process.env.NODE_ENV === "production"
+        ? DEFAULT_API_BASE_PROD
+        : DEFAULT_API_BASE_DEV)
     ).replace(/\/+$/, ""),
     agentId: resolveSettingLike(runtime, "BABYLON_AGENT_ID"),
     agentSecret: resolveSettingLike(runtime, "BABYLON_AGENT_SECRET"),

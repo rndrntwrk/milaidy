@@ -79,10 +79,10 @@ import { lifeAction } from "./life";
 const runtime = { agentId: "agent-1" } as never;
 const adminRole = { entityId: "owner-1", role: "OWNER", isOwner: true, isAdmin: true, canManageRoles: true };
 
-function send(params: Record<string, unknown>) {
+function send(params: Record<string, unknown>, messageText?: string) {
   return lifeAction.handler?.(
     runtime,
-    { entityId: "owner-1", content: { source: "client_chat", text: params.intent ?? "test" } } as never,
+    { entityId: "owner-1", content: { source: "client_chat", text: messageText ?? (params.intent as string) ?? "test" } } as never,
     {} as never,
     { parameters: params } as never,
   );
@@ -326,7 +326,7 @@ describe("LIFE action — robustness scenarios", () => {
   });
 
   it("handles empty intent gracefully", async () => {
-    const result = await send({ action: "overview", intent: "" });
+    const result = await send({ action: "overview", intent: "" }, "");
     expect(result).toMatchObject({ success: false, text: expect.stringContaining("intent") });
   });
 

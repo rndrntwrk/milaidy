@@ -116,7 +116,7 @@ export const sendAdminMessageAction: Action = {
           text.trim(),
         );
       } catch (escErr) {
-        logger.warn("[SEND_ADMIN_MESSAGE] Escalation start failed:", escErr);
+        logger.warn("[SEND_ADMIN_MESSAGE] Escalation start failed:", escErr instanceof Error ? escErr.message : String(escErr));
       }
     }
 
@@ -131,7 +131,7 @@ export const sendAdminMessageAction: Action = {
     } catch (err) {
       logger.error(
         `[SEND_ADMIN_MESSAGE] Failed to send to admin ${adminEntityId}:`,
-        err,
+        err instanceof Error ? err.message : String(err),
       );
       return {
         text: "Failed to send message to admin. The Milady app may not be connected.",
