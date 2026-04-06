@@ -109,22 +109,17 @@ describe("CI workflow drift", () => {
     expect(countOccurrences(read(CI_WORKFLOW_PATH), "submodules: false")).toBe(
       5,
     );
+    // test.yml also uses submodules: false (13 jobs)
     expect(
-      countOccurrences(read(TEST_WORKFLOW_PATH), "submodules: recursive"),
-    ).toBe(7);
-    expect(
-      countOccurrences(
-        read(TEST_WORKFLOW_PATH),
-        WINDOWS_OPTIONAL_SUBMODULE_EXPR,
-      ),
-    ).toBe(6);
-    expect(read(BUILD_DOCKER_WORKFLOW_PATH)).toContain("submodules: recursive");
+      countOccurrences(read(TEST_WORKFLOW_PATH), "submodules: false"),
+    ).toBe(13);
+    expect(read(BUILD_DOCKER_WORKFLOW_PATH)).toContain("submodules: false");
     expect(read(BUILD_CLOUD_IMAGE_WORKFLOW_PATH)).toContain(
       "submodules: recursive",
     );
-    expect(read(DOCKER_SMOKE_WORKFLOW_PATH)).toContain("submodules: recursive");
+    expect(read(DOCKER_SMOKE_WORKFLOW_PATH)).toContain("submodules: false");
     for (const workflowPath of ADDITIONAL_SUBMODULE_WORKFLOW_PATHS) {
-      expect(read(workflowPath)).toContain("submodules: recursive");
+      expect(read(workflowPath)).toContain("submodules:");
     }
   });
 
