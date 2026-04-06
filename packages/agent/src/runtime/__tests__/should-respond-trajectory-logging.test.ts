@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   ChannelType,
@@ -7,14 +9,29 @@ import {
   type Memory,
   type UUID,
 } from "@elizaos/core";
-import {
-  cleanupTestRuntime,
-  createTestRuntime,
-} from "../../../../../eliza/packages/typescript/src/__tests__/test-utils";
+
+// This test depends on createTestRuntime from the eliza submodule which is
+// only available when the submodule is checked out with deps installed.
+const testUtilsPath = path.resolve(
+  __dirname,
+  "../../../../../eliza/packages/typescript/src/__tests__/test-utils.ts",
+);
+const hasElizaTestUtils = existsSync(testUtilsPath);
+
+// Dynamic import so the module-not-found error is deferred, not top-level.
+const { cleanupTestRuntime, createTestRuntime } = hasElizaTestUtils
+  ? await import(
+      "../../../../../eliza/packages/typescript/src/__tests__/test-utils"
+    )
+  : { cleanupTestRuntime: undefined, createTestRuntime: undefined };
 import { installPromptOptimizations } from "../prompt-optimization";
 import { installMiladyMessageTrajectoryStepBridge } from "../trajectory-step-context";
 
-describe("shouldRespond trajectory logging", () => {
+// Skip the entire suite when the eliza submodule test utils aren't available
+// (CI runs with submodules: false).
+const describeIfEliza = hasElizaTestUtils ? describe : describe.skip;
+
+describeIfEliza("shouldRespond trajectory logging", () => {
   let runtime: IAgentRuntime;
 
   beforeEach(async () => {

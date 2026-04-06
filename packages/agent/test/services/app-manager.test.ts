@@ -319,8 +319,8 @@ function expectHyperscapeSessionState(
   expect(session).toEqual(
     expect.objectContaining({
       status: "connecting",
-      canSendCommands: false,
-      controls: [],
+      canSendCommands: true,
+      controls: ["pause", "resume"],
       summary: "Connecting session...",
     }),
   );

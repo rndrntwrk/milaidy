@@ -103,9 +103,12 @@ describe("CI workflow drift", () => {
   });
 
   it("checks out recursive submodules before root workspace installs", () => {
-    expect(
-      countOccurrences(read(CI_WORKFLOW_PATH), "submodules: recursive"),
-    ).toBe(5);
+    // CI uses submodules: false + MILADY_SKIP_LOCAL_UPSTREAMS=1 to avoid
+    // fetching the eliza submodule (which may have dangling refs). Non-eliza
+    // submodules are restored during postinstall.
+    expect(countOccurrences(read(CI_WORKFLOW_PATH), "submodules: false")).toBe(
+      5,
+    );
     expect(
       countOccurrences(read(TEST_WORKFLOW_PATH), "submodules: recursive"),
     ).toBe(7);
