@@ -5,7 +5,13 @@ import type {
 } from "@miladyai/app-core/api";
 import { Badge, Button } from "@miladyai/ui";
 import { Activity } from "lucide-react";
-import { type ReactNode, useDeferredValue, useEffect, useMemo, useState } from "react";
+import {
+  type ReactNode,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { client } from "../../../../api";
 import { TERMINAL_STATUSES } from "../../../../coding";
 import type { ActivityEvent } from "../../../../hooks/useActivityEvents";
@@ -169,7 +175,9 @@ function TaskThreadCard({
         <span>{formatIsoTime(thread.updatedAt)}</span>
       </div>
       {thread.summary ? (
-        <div className="line-clamp-2 text-[11px] text-txt">{thread.summary}</div>
+        <div className="line-clamp-2 text-[11px] text-txt">
+          {thread.summary}
+        </div>
       ) : null}
     </button>
   );
@@ -240,7 +248,10 @@ function TaskThreadDetailPanel({
             </div>
             <div className="space-y-1">
               {detail.acceptanceCriteria.map((criterion, index) => (
-                <div key={`${detail.id}-criterion-${index}`} className="text-[11px] text-txt">
+                <div
+                  key={`${detail.id}-criterion-${index}`}
+                  className="text-[11px] text-txt"
+                >
                   {criterion}
                 </div>
               ))}
@@ -277,29 +288,35 @@ function TaskThreadDetailPanel({
           <div className="text-[11px] text-muted">No sessions recorded.</div>
         ) : (
           <div className="space-y-1.5">
-            {detail.sessions.slice(-4).reverse().map((session) => (
-              <div key={session.id} className="text-[11px] text-txt">
-                <div className="font-medium">{session.label}</div>
-                <div className="text-muted">
-                  {session.framework} · {session.status} ·{" "}
-                  {session.workdir || session.repo || "no workspace"}
+            {detail.sessions
+              .slice(-4)
+              .reverse()
+              .map((session) => (
+                <div key={session.id} className="text-[11px] text-txt">
+                  <div className="font-medium">{session.label}</div>
+                  <div className="text-muted">
+                    {session.framework} · {session.status} ·{" "}
+                    {session.workdir || session.repo || "no workspace"}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
           </div>
         )}
       </DetailList>
 
       <DetailList title="Artifacts">
         {latestArtifacts.length === 0 ? (
-          <div className="text-[11px] text-muted">No artifacts recorded yet.</div>
+          <div className="text-[11px] text-muted">
+            No artifacts recorded yet.
+          </div>
         ) : (
           <div className="space-y-1.5">
             {latestArtifacts.map((artifact) => (
               <div key={artifact.id} className="text-[11px] text-txt">
                 <div className="font-medium">{artifact.title}</div>
                 <div className="break-all text-muted">
-                  {artifact.artifactType} · {artifact.path ?? artifact.uri ?? "inline"}
+                  {artifact.artifactType} ·{" "}
+                  {artifact.path ?? artifact.uri ?? "inline"}
                 </div>
               </div>
             ))}
@@ -309,7 +326,9 @@ function TaskThreadDetailPanel({
 
       <DetailList title="Coordinator Decisions">
         {latestDecisions.length === 0 ? (
-          <div className="text-[11px] text-muted">No decisions recorded yet.</div>
+          <div className="text-[11px] text-muted">
+            No decisions recorded yet.
+          </div>
         ) : (
           <div className="space-y-1.5">
             {latestDecisions.map((decision) => (
@@ -317,7 +336,9 @@ function TaskThreadDetailPanel({
                 <div className="font-medium">
                   {decision.decision} · {relativeTime(decision.timestamp)}
                 </div>
-                <div className="line-clamp-3 text-muted">{decision.reasoning}</div>
+                <div className="line-clamp-3 text-muted">
+                  {decision.reasoning}
+                </div>
               </div>
             ))}
           </div>
@@ -332,7 +353,8 @@ function TaskThreadDetailPanel({
             {latestEvents.map((event) => (
               <div key={event.id} className="text-[11px] text-txt">
                 <div className="font-medium">
-                  {event.eventType.replace(/_/g, " ")} · {relativeTime(event.timestamp)}
+                  {event.eventType.replace(/_/g, " ")} ·{" "}
+                  {relativeTime(event.timestamp)}
                 </div>
                 <div className="line-clamp-2 text-muted">{event.summary}</div>
               </div>
@@ -343,11 +365,16 @@ function TaskThreadDetailPanel({
 
       <DetailList title="Transcript">
         {latestTranscripts.length === 0 ? (
-          <div className="text-[11px] text-muted">No transcript captured yet.</div>
+          <div className="text-[11px] text-muted">
+            No transcript captured yet.
+          </div>
         ) : (
           <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
             {latestTranscripts.map((entry) => (
-              <div key={entry.id} className="rounded border border-border/40 bg-bg-hover/40 p-2">
+              <div
+                key={entry.id}
+                className="rounded border border-border/40 bg-bg-hover/40 p-2"
+              >
                 <div className="mb-1 text-[10px] uppercase tracking-[0.08em] text-muted">
                   {entry.direction} · {relativeTime(entry.timestamp)}
                 </div>
@@ -447,7 +474,9 @@ function OrchestratorTasksWidget(_props: ChatSidebarWidgetProps) {
       } catch (error) {
         if (cancelled) return;
         setLoadError(
-          error instanceof Error ? error.message : "Failed to load task threads.",
+          error instanceof Error
+            ? error.message
+            : "Failed to load task threads.",
         );
         setThreads([]);
         setSelectedThreadId(null);
@@ -477,24 +506,25 @@ function OrchestratorTasksWidget(_props: ChatSidebarWidgetProps) {
       return;
     }
 
-    const loadDetail =
-      async () => {
-        try {
-          const detail =
-            typeof client.getCodingAgentTaskThread === "function"
-              ? await client.getCodingAgentTaskThread(selectedThreadId)
-              : null;
-          if (cancelled) return;
-          setDetailError(null);
-          setSelectedThread(detail);
-        } catch (error) {
-          if (cancelled) return;
-          setDetailError(
-            error instanceof Error ? error.message : "Failed to load task detail.",
-          );
-          setSelectedThread(null);
-        }
-      };
+    const loadDetail = async () => {
+      try {
+        const detail =
+          typeof client.getCodingAgentTaskThread === "function"
+            ? await client.getCodingAgentTaskThread(selectedThreadId)
+            : null;
+        if (cancelled) return;
+        setDetailError(null);
+        setSelectedThread(detail);
+      } catch (error) {
+        if (cancelled) return;
+        setDetailError(
+          error instanceof Error
+            ? error.message
+            : "Failed to load task detail.",
+        );
+        setSelectedThread(null);
+      }
+    };
     void loadDetail();
 
     return () => {
@@ -530,7 +560,9 @@ function OrchestratorTasksWidget(_props: ChatSidebarWidgetProps) {
       setSelectedThreadId(nextThreads[0]?.id ?? null);
     } catch (error) {
       setLoadError(
-        error instanceof Error ? error.message : "Failed to update task thread.",
+        error instanceof Error
+          ? error.message
+          : "Failed to update task thread.",
       );
     } finally {
       setMutating(false);

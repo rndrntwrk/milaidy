@@ -2,8 +2,9 @@ import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-  true;
+(
+  globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 vi.mock("../../../../api", () => ({
   client: {
@@ -27,10 +28,9 @@ vi.mock("@miladyai/ui", () => ({
       {children}
     </button>
   ),
-  Badge: ({
-    children,
-    ...props
-  }: React.HTMLAttributes<HTMLSpanElement>) => <span {...props}>{children}</span>,
+  Badge: ({ children, ...props }: React.HTMLAttributes<HTMLSpanElement>) => (
+    <span {...props}>{children}</span>
+  ),
 }));
 
 vi.mock("lucide-react", () => ({

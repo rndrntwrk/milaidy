@@ -141,6 +141,66 @@ const HYPERSCAPE_APP_INFO: RegistryPluginInfo = {
   supports: { v0: false, v1: true, v2: true },
 };
 
+const BABYLON_APP_INFO: RegistryPluginInfo = {
+  name: "@elizaos/app-babylon",
+  gitRepo: "elizaos/app-babylon",
+  gitUrl: "https://github.com/elizaos/app-babylon",
+  displayName: "Babylon",
+  description: "Babylon agent market interface",
+  homepage: "https://staging.babylon.market",
+  topics: ["game"],
+  stars: 0,
+  language: "TypeScript",
+  kind: "app",
+  category: "game",
+  launchType: "url",
+  launchUrl: "{BABYLON_CLIENT_URL}",
+  runtimePlugin: undefined,
+  capabilities: ["trades", "prediction-markets", "social", "team-chat"],
+  viewer: {
+    url: "{BABYLON_CLIENT_URL}",
+    embedParams: {
+      embedded: "true",
+    },
+    postMessageAuth: true,
+    sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
+  },
+  session: {
+    mode: "spectate-and-steer",
+    features: ["commands", "telemetry", "pause", "resume"],
+  },
+  appMeta: {
+    displayName: "Babylon",
+    category: "game",
+    launchType: "url",
+    launchUrl: "{BABYLON_CLIENT_URL}",
+    icon: null,
+    capabilities: ["trades", "prediction-markets", "social", "team-chat"],
+    minPlayers: null,
+    maxPlayers: null,
+    runtimePlugin: undefined,
+    viewer: {
+      url: "{BABYLON_CLIENT_URL}",
+      embedParams: {
+        embedded: "true",
+      },
+      postMessageAuth: true,
+      sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
+    },
+    session: {
+      mode: "spectate-and-steer",
+      features: ["commands", "telemetry", "pause", "resume"],
+    },
+  },
+  npm: {
+    package: "@elizaos/app-babylon",
+    v0Version: null,
+    v1Version: "1.0.0",
+    v2Version: "1.0.0",
+  },
+  supports: { v0: false, v1: true, v2: true },
+};
+
 function buildPluginManager(
   installedPlugins: Array<{
     name: string;
@@ -160,14 +220,14 @@ function buildPluginManager(
     searchRegistry: vi.fn(async () => []),
     installPlugin: vi.fn(async () => ({
       success: true,
-      pluginName: "@elizaos/app-hyperscape",
+      pluginName: registryPlugin?.name ?? "@elizaos/app-hyperscape",
       version: "1.0.0",
       installPath: "/tmp/hyperscape",
       requiresRestart: false,
     })),
     uninstallPlugin: vi.fn(async () => ({
       success: true,
-      pluginName: "@elizaos/app-hyperscape",
+      pluginName: registryPlugin?.name ?? "@elizaos/app-hyperscape",
       requiresRestart: false,
     })),
     listEjectedPlugins: vi.fn(async () => []),
@@ -200,6 +260,15 @@ type HyperscapeFixtureServer = {
     walletType?: string;
     agentName?: string;
     agentId?: string;
+  }>;
+};
+
+type BabylonFixtureServer = {
+  close: () => Promise<void>;
+  url: string;
+  authRequests: Array<{
+    agentId?: string;
+    agentSecret?: string;
   }>;
 };
 
@@ -360,6 +429,136 @@ async function startHyperscapeFixtureServer(): Promise<HyperscapeFixtureServer> 
   };
 }
 
+async function startBabylonFixtureServer(): Promise<BabylonFixtureServer> {
+  const authRequests: Array<{
+    agentId?: string;
+    agentSecret?: string;
+  }> = [];
+  const server = http.createServer(async (req, res) => {
+    const url = new URL(req.url ?? "/", "http://127.0.0.1");
+    const body = await readJsonBody(req);
+    res.setHeader("Content-Type", "application/json");
+
+    if (req.method === "GET" && url.pathname === "/api/health") {
+      res.statusCode = 200;
+      res.end(JSON.stringify({ ok: true }));
+      return;
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/agents/auth") {
+      const requestBody =
+        body && typeof body === "object"
+          ? (body as {
+              agentId?: string;
+              agentSecret?: string;
+            })
+          : {};
+      authRequests.push(requestBody);
+      res.statusCode = 200;
+      res.end(
+        JSON.stringify({
+          success: true,
+          sessionToken: "fixture-babylon-session-token",
+          expiresAt: "2026-04-07T00:00:00.000Z",
+        }),
+      );
+      return;
+    }
+
+    if (
+      req.method === "GET" &&
+      url.pathname === "/api/agents/babylon-agent-alice/summary"
+    ) {
+      res.statusCode = 200;
+      res.end(
+        JSON.stringify({
+          success: true,
+          agent: {
+            id: "babylon-agent-alice",
+            name: "Babylon Alice",
+            username: "babylon_alice",
+            virtualBalance: 1250,
+            lifetimePnL: 45,
+            totalTrades: 9,
+            winRate: 0.66,
+            autonomousEnabled: true,
+            autonomousTrading: true,
+            autonomousPosting: true,
+            autonomousCommenting: false,
+            autonomousDMs: false,
+            status: "active",
+          },
+          portfolio: {
+            totalPnL: 45,
+            positions: 3,
+            totalAssets: 1295,
+            available: 980,
+            wallet: 1250,
+            agents: 1250,
+            totalPoints: 0,
+          },
+        }),
+      );
+      return;
+    }
+
+    if (
+      req.method === "GET" &&
+      url.pathname === "/api/agents/babylon-agent-alice/goals"
+    ) {
+      res.statusCode = 200;
+      res.end(
+        JSON.stringify({
+          success: true,
+          goals: [
+            {
+              id: "goal-1",
+              description: "Coordinate the desk around ETH momentum",
+              status: "active",
+              createdAt: "2026-04-06T00:00:00.000Z",
+            },
+          ],
+        }),
+      );
+      return;
+    }
+
+    res.statusCode = 404;
+    res.end(JSON.stringify({ error: "Not found" }));
+  });
+
+  await new Promise<void>((resolve, reject) => {
+    server.listen(0, "127.0.0.1", (err?: Error | null) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+      resolve();
+    });
+  });
+
+  const address = server.address();
+  if (!address || typeof address === "string") {
+    throw new Error("Failed to resolve Babylon fixture server address.");
+  }
+
+  return {
+    close: async () => {
+      await new Promise<void>((resolve, reject) => {
+        server.close((err) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          resolve();
+        });
+      });
+    },
+    url: `http://127.0.0.1:${address.port}`,
+    authRequests,
+  };
+}
+
 function createRuntimeStub(overrides?: {
   agentId?: string;
   characterName?: string;
@@ -405,6 +604,14 @@ describe("AppManager", () => {
   const originalNodeEnv = process.env.NODE_ENV;
   const originalEvmPrivateKey = process.env.EVM_PRIVATE_KEY;
   const originalSolanaPrivateKey = process.env.SOLANA_PRIVATE_KEY;
+  const originalBabylonApiUrl = process.env.BABYLON_API_URL;
+  const originalBabylonClientUrl = process.env.BABYLON_CLIENT_URL;
+  const originalBabylonAgentId = process.env.BABYLON_AGENT_ID;
+  const originalBabylonAgentSecret = process.env.BABYLON_AGENT_SECRET;
+  const originalBabylonAgentSessionToken =
+    process.env.BABYLON_AGENT_SESSION_TOKEN;
+  const originalBabylonAgentSessionExpiresAt =
+    process.env.BABYLON_AGENT_SESSION_EXPIRES_AT;
 
   afterEach(() => {
     if (originalApiUrl !== undefined) {
@@ -436,6 +643,37 @@ describe("AppManager", () => {
       process.env.SOLANA_PRIVATE_KEY = originalSolanaPrivateKey;
     } else {
       delete process.env.SOLANA_PRIVATE_KEY;
+    }
+    if (originalBabylonApiUrl !== undefined) {
+      process.env.BABYLON_API_URL = originalBabylonApiUrl;
+    } else {
+      delete process.env.BABYLON_API_URL;
+    }
+    if (originalBabylonClientUrl !== undefined) {
+      process.env.BABYLON_CLIENT_URL = originalBabylonClientUrl;
+    } else {
+      delete process.env.BABYLON_CLIENT_URL;
+    }
+    if (originalBabylonAgentId !== undefined) {
+      process.env.BABYLON_AGENT_ID = originalBabylonAgentId;
+    } else {
+      delete process.env.BABYLON_AGENT_ID;
+    }
+    if (originalBabylonAgentSecret !== undefined) {
+      process.env.BABYLON_AGENT_SECRET = originalBabylonAgentSecret;
+    } else {
+      delete process.env.BABYLON_AGENT_SECRET;
+    }
+    if (originalBabylonAgentSessionToken !== undefined) {
+      process.env.BABYLON_AGENT_SESSION_TOKEN = originalBabylonAgentSessionToken;
+    } else {
+      delete process.env.BABYLON_AGENT_SESSION_TOKEN;
+    }
+    if (originalBabylonAgentSessionExpiresAt !== undefined) {
+      process.env.BABYLON_AGENT_SESSION_EXPIRES_AT =
+        originalBabylonAgentSessionExpiresAt;
+    } else {
+      delete process.env.BABYLON_AGENT_SESSION_EXPIRES_AT;
     }
     appPackageModuleMocks.importAppPlugin.mockReset();
     appPackageModuleMocks.importAppPlugin.mockImplementation(
@@ -888,6 +1126,68 @@ describe("AppManager", () => {
           type: "HYPERSCAPE_AUTH",
           agentId: "runtime-agent-id",
           characterId: "char-runtime",
+        }),
+      );
+    } finally {
+      await fixtureServer.close();
+    }
+  });
+
+  it("launches Babylon with a real session token and resolved live operator session", async () => {
+    const fixtureServer = await startBabylonFixtureServer();
+    process.env.BABYLON_API_URL = fixtureServer.url;
+    process.env.BABYLON_CLIENT_URL = fixtureServer.url;
+
+    try {
+      const manager = new AppManager();
+      const runtime = createRuntimeStub({
+        settings: {
+          BABYLON_API_URL: fixtureServer.url,
+          BABYLON_CLIENT_URL: fixtureServer.url,
+          BABYLON_AGENT_ID: "babylon-agent-alice",
+          BABYLON_AGENT_SECRET: "fixture-babylon-secret",
+        },
+      });
+
+      const result = await manager.launch(
+        buildPluginManager([], BABYLON_APP_INFO),
+        "@elizaos/app-babylon",
+        undefined,
+        runtime,
+      );
+
+      expect(fixtureServer.authRequests).toEqual([
+        {
+          agentId: "babylon-agent-alice",
+          agentSecret: "fixture-babylon-secret",
+        },
+        {
+          agentId: "babylon-agent-alice",
+          agentSecret: "fixture-babylon-secret",
+        },
+      ]);
+      expect(result.viewer?.url).toBe(`${fixtureServer.url}?embedded=true`);
+      expect(result.viewer?.postMessageAuth).toBe(true);
+      expect(result.viewer?.authMessage).toEqual(
+        expect.objectContaining({
+          type: "BABYLON_AUTH",
+          authToken: "fixture-babylon-session-token",
+          sessionToken: "fixture-babylon-session-token",
+          agentId: "babylon-agent-alice",
+        }),
+      );
+      expect(result.session).toEqual(
+        expect.objectContaining({
+          sessionId: "babylon-agent-alice",
+          appName: "@elizaos/app-babylon",
+          mode: "spectate-and-steer",
+          status: "connecting",
+          displayName: "Babylon",
+          goalLabel: null,
+          canSendCommands: true,
+          controls: ["pause", "resume"],
+          telemetry: null,
+          summary: "Connecting to Babylon...",
         }),
       );
     } finally {

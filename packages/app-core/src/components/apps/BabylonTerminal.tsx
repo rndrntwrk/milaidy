@@ -1,9 +1,10 @@
 /**
- * Babylon Agent Terminal — custom right-side panel for the Babylon app.
+ * Babylon Agent Terminal — operator dashboard for the Babylon app.
  *
- * Shows real-time agent activity, team status, wallet, and logs in a
- * terminal-like interface. Replaces the generic logs panel when Babylon
- * is the active game.
+ * The user experience is spectator-plus-steering:
+ * - watch the agent and team activity in real time
+ * - inspect market state, wallet state, and recent trades
+ * - chat directly with the active agent while the loop keeps running
  */
 
 import { Button, Input } from "@miladyai/ui";
@@ -11,8 +12,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   client,
   type BabylonActivityItem,
+  type BabylonAgentGoal,
   type BabylonAgentStatus,
+  type BabylonChatMessage,
   type BabylonLogEntry,
+  type BabylonPredictionMarket,
   type BabylonTeamAgent,
   type BabylonWallet,
 } from "../../api";
@@ -20,11 +24,72 @@ import { useIntervalWhenDocumentVisible } from "../../hooks";
 import { useBabylonSSE } from "../../hooks/useBabylonSSE";
 import { formatTime } from "../../utils/format";
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
+type TabId = "overview" | "activity" | "team" | "wallet" | "logs";
 
-type TabId = "activity" | "team" | "wallet" | "logs";
+interface BabylonTeamSummaryTotals {
+  walletBalance: number;
+  lifetimePnL: number;
+  unrealizedPnL: number;
+  currentPnL: number;
+  openPositions: number;
+}
+
+interface BabylonTeamSummary {
+  ownerName?: string;
+  totals?: BabylonTeamSummaryTotals;
+  agentsOnlyTotals?: BabylonTeamSummaryTotals;
+  updatedAt?: string;
+}
+
+interface BabylonTeamDashboard {
+  agents: BabylonTeamAgent[];
+  summary: BabylonTeamSummary | null;
+}
+
+interface BabylonTeamConversation {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+  isActive: boolean;
+}
+
+interface BabylonTeamConversationsResponse {
+  conversations: BabylonTeamConversation[];
+  activeChatId?: string | null;
+}
+
+interface BabylonAgentPortfolio {
+  totalPnL: number;
+  positions: number;
+  totalAssets: number;
+  available: number;
+  wallet: number;
+  agents: number;
+  totalPoints: number;
+}
+
+interface BabylonAgentSummaryEnvelope {
+  agent?: BabylonAgentStatus & {
+    totalDeposited?: number | null;
+    totalWithdrawn?: number | null;
+  };
+  portfolio?: BabylonAgentPortfolio;
+  positions?: {
+    predictions?: { positions?: unknown[] };
+    perpetuals?: { positions?: unknown[] };
+  };
+}
+
+type ActivityRow = BabylonActivityItem;
+
+const TABS: Array<{ id: TabId; label: string }> = [
+  { id: "overview", label: "Overview" },
+  { id: "activity", label: "Activity" },
+  { id: "team", label: "Team" },
+  { id: "wallet", label: "Wallet" },
+  { id: "logs", label: "Logs" },
+];
 
 const ACTIVITY_ICON: Record<string, string> = {
   trade: "\u{1F4C8}",
@@ -50,30 +115,37 @@ const LOG_LEVEL_OPTIONS = [
   { value: "info", label: "Info" },
 ];
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+function formatCurrency(value: number): string {
+  return `$${value.toFixed(2)}`;
+}
 
 function formatPnL(value: number): string {
   const sign = value >= 0 ? "+" : "";
   return `${sign}$${value.toFixed(2)}`;
 }
 
-function formatBalance(value: number): string {
-  return `$${value.toFixed(2)}`;
+function asRecord(
+  value: unknown,
+): Record<string, unknown> | null {
+  return value && typeof value === "object"
+    ? (value as Record<string, unknown>)
+    : null;
 }
 
 function summarizeActivity(item: BabylonActivityItem): string {
   if (item.summary) return item.summary;
+
   switch (item.type) {
-    case "trade": {
-      const side = item.side ?? item.action ?? "trade";
-      const ticker = item.ticker ?? item.marketId ?? "unknown";
-      const amount = item.amount != null ? ` $${item.amount.toFixed(2)}` : "";
-      return `${side} ${ticker}${amount}`;
-    }
+    case "trade":
+      return [
+        item.action ?? item.side ?? "trade",
+        item.ticker ?? item.marketId ?? "market",
+        item.amount != null ? formatCurrency(item.amount) : "",
+      ]
+        .filter((part) => part.length > 0)
+        .join(" ");
     case "post":
-      return item.contentPreview ?? "Posted an update";
+      return item.contentPreview ?? "Published an update";
     case "comment":
       return item.contentPreview ?? "Left a comment";
     case "message":
@@ -83,116 +155,114 @@ function summarizeActivity(item: BabylonActivityItem): string {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Sub-components
-// ---------------------------------------------------------------------------
+function extractTeamDashboard(
+  value: unknown,
+): BabylonTeamDashboard {
+  const data = asRecord(value);
+  return {
+    agents: Array.isArray(data?.agents)
+      ? (data.agents as BabylonTeamAgent[])
+      : [],
+    summary: asRecord(data?.summary) as BabylonTeamSummary | null,
+  };
+}
 
-function AutonomyToggles({
-  agent,
-  onToggleAll,
+function extractTeamConversations(
+  value: unknown,
+): BabylonTeamConversationsResponse {
+  const data = asRecord(value);
+  return {
+    conversations: Array.isArray(data?.conversations)
+      ? (data.conversations as BabylonTeamConversation[])
+      : [],
+    activeChatId:
+      typeof data?.activeChatId === "string" ? data.activeChatId : null,
+  };
+}
+
+function extractAgentSummary(
+  value: unknown,
+): BabylonAgentSummaryEnvelope {
+  const data = asRecord(value);
+  return {
+    agent: (asRecord(data?.agent) ?? null) as unknown as BabylonAgentSummaryEnvelope["agent"],
+    portfolio: (asRecord(
+      data?.portfolio,
+    ) ?? null) as unknown as BabylonAgentSummaryEnvelope["portfolio"],
+    positions: (asRecord(
+      data?.positions,
+    ) ?? null) as unknown as BabylonAgentSummaryEnvelope["positions"],
+  };
+}
+
+function extractChatMessages(value: unknown): BabylonChatMessage[] {
+  const data = asRecord(value);
+  return Array.isArray(data?.messages)
+    ? (data.messages as BabylonChatMessage[])
+    : [];
+}
+
+function extractTradingBalance(value: unknown): number {
+  const data = asRecord(value);
+  const balance = data?.balance;
+  return typeof balance === "number" ? balance : 0;
+}
+
+function StatTile({
+  label,
+  value,
+  tone = "default",
 }: {
-  agent: BabylonAgentStatus;
-  onToggleAll: () => void;
+  label: string;
+  value: string;
+  tone?: "default" | "positive" | "negative";
 }) {
-  const flags = [
-    { key: "trading", on: agent.autonomousTrading ?? agent.autonomous },
-    { key: "posting", on: agent.autonomousPosting ?? agent.autonomous },
-    { key: "comments", on: agent.autonomousCommenting ?? agent.autonomous },
-    { key: "DMs", on: agent.autonomousDMs ?? agent.autonomous },
-  ];
+  const toneClass =
+    tone === "positive"
+      ? "text-green-400"
+      : tone === "negative"
+        ? "text-red-400"
+        : "text-txt";
 
   return (
-    <div className="flex items-center gap-1 flex-wrap">
-      {flags.map((f) => (
-        <span
-          key={f.key}
-          className={`text-[8px] px-1 py-px rounded ${f.on ? "bg-green-400/15 text-green-400" : "bg-gray-500/15 text-gray-500"}`}
-        >
-          {f.key}
-        </span>
-      ))}
-      <Button
-        variant="outline"
-        size="sm"
-        className="h-4 text-[8px] px-1 py-0 ml-auto"
-        onClick={onToggleAll}
-      >
-        {agent.autonomous ? "Pause All" : "Resume All"}
-      </Button>
+    <div className="rounded-md border border-border bg-card/70 px-2 py-2">
+      <div className="text-[9px] uppercase tracking-[0.18em] text-muted">
+        {label}
+      </div>
+      <div className={`mt-1 font-mono text-sm ${toneClass}`}>{value}</div>
     </div>
   );
 }
 
-function AgentStatusHeader({
-  agent,
-  sseConnected,
-  onToggle,
+function Section({
+  title,
+  children,
 }: {
-  agent: BabylonAgentStatus | null;
-  sseConnected: boolean;
-  onToggle: () => void;
+  title: string;
+  children: React.ReactNode;
 }) {
-  if (!agent) {
-    return (
-      <div className="px-3 py-3 border-b border-border">
-        <div className="text-xs text-muted italic">
-          Connecting to Babylon...
-        </div>
-      </div>
-    );
-  }
-
-  const pnlColor = agent.lifetimePnL >= 0 ? "text-green-400" : "text-red-400";
-
   return (
-    <div className="px-3 py-2 border-b border-border space-y-1.5">
-      {/* Agent name + connection */}
-      <div className="flex items-center gap-2">
-        <span
-          className={`w-2 h-2 rounded-full flex-shrink-0 ${sseConnected ? "bg-green-400" : "bg-yellow-400"}`}
-          title={sseConnected ? "Live" : "Polling"}
-        />
-        <span className="font-bold text-xs text-txt truncate">
-          {agent.displayName ?? agent.name}
-        </span>
-        {agent.agentStatus && agent.agentStatus !== "active" ? (
-          <span className="text-[9px] px-1 py-px rounded bg-red-400/15 text-red-400">
-            {agent.agentStatus}
-          </span>
-        ) : null}
+    <section className="rounded-md border border-border bg-card/60">
+      <div className="border-b border-border px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
+        {title}
       </div>
-
-      {/* Stats row */}
-      <div className="flex items-center gap-2 text-[10px]">
-        <span className="font-mono text-txt">
-          {formatBalance(agent.balance)}
-        </span>
-        <span className={`font-mono ${pnlColor}`}>
-          {formatPnL(agent.lifetimePnL)}
-        </span>
-        <span className="text-muted">{(agent.winRate * 100).toFixed(0)}%W</span>
-        <span className="text-muted">{agent.totalTrades}T</span>
-        <span className="text-muted">R{agent.reputationScore}</span>
-      </div>
-
-      {/* Autonomy controls */}
-      <AutonomyToggles agent={agent} onToggleAll={onToggle} />
-    </div>
+      <div className="p-3">{children}</div>
+    </section>
   );
 }
 
 function ActivityFeed({
   items,
   loading,
+  emptyLabel,
 }: {
-  items: BabylonActivityItem[];
+  items: ActivityRow[];
   loading: boolean;
+  emptyLabel: string;
 }) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-
   if (loading && items.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center text-xs text-muted italic">
+      <div className="flex h-full items-center justify-center text-xs italic text-muted">
         Loading activity...
       </div>
     );
@@ -200,60 +270,53 @@ function ActivityFeed({
 
   if (items.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center text-xs text-muted italic">
-        No agent activity yet
+      <div className="flex h-full items-center justify-center text-xs italic text-muted">
+        {emptyLabel}
       </div>
     );
   }
 
   return (
-    <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto">
-      {items.map((item, idx) => {
+    <div className="flex-1 overflow-y-auto">
+      {items.map((item, index) => {
         const icon = ACTIVITY_ICON[item.type] ?? "\u{2022}";
-        const pnlBadge =
-          item.type === "trade" && item.pnl != null ? (
-            <span
-              className={`text-[9px] font-mono ml-1 ${item.pnl >= 0 ? "text-green-400" : "text-red-400"}`}
-            >
-              {formatPnL(item.pnl)}
-            </span>
-          ) : null;
-
+        const key = item.id ?? `${item.timestamp}-${index}`;
         return (
           <div
-            key={item.id ?? `${item.timestamp}-${idx}`}
-            className="px-3 py-1.5 border-b border-border/50 hover:bg-card/50"
+            key={key}
+            className="border-b border-border/50 px-3 py-2 hover:bg-card/60"
           >
-            <div className="flex items-start gap-1.5">
-              <span className="text-[11px] flex-shrink-0">{icon}</span>
+            <div className="flex items-start gap-2">
+              <span className="text-[12px]">{icon}</span>
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1">
-                  <span className="text-[10px] text-muted flex-shrink-0">
-                    {formatTime(
-                      typeof item.timestamp === "string"
-                        ? new Date(item.timestamp).getTime()
-                        : item.timestamp,
-                      { fallback: "\u2014" },
-                    )}
+                <div className="flex flex-wrap items-center gap-1 text-[10px]">
+                  <span className="text-muted">
+                    {formatTime(new Date(item.timestamp).getTime(), {
+                      fallback: "\u2014",
+                    })}
                   </span>
-                  <span className="text-[9px] uppercase text-muted font-semibold flex-shrink-0">
-                    {item.type}
-                  </span>
-                  {pnlBadge}
+                  <span className="uppercase text-muted">{item.type}</span>
                   {item.agent?.name ? (
-                    <span className="text-[9px] text-blue-400 truncate">
+                    <span className="truncate text-blue-400">
                       @{item.agent.name}
                     </span>
                   ) : null}
+                  {item.pnl != null ? (
+                    <span
+                      className={`font-mono ${
+                        item.pnl >= 0 ? "text-green-400" : "text-red-400"
+                      }`}
+                    >
+                      {formatPnL(item.pnl)}
+                    </span>
+                  ) : null}
                 </div>
-                <div className="text-[11px] text-txt break-all leading-tight">
+                <div className="mt-0.5 break-words text-[11px] text-txt">
                   {summarizeActivity(item)}
                 </div>
                 {item.reasoning ? (
-                  <div className="text-[10px] text-muted italic mt-0.5 leading-tight">
-                    {item.reasoning.length > 80
-                      ? `${item.reasoning.slice(0, 80)}...`
-                      : item.reasoning}
+                  <div className="mt-1 text-[10px] italic text-muted">
+                    {item.reasoning}
                   </div>
                 ) : null}
               </div>
@@ -265,160 +328,331 @@ function ActivityFeed({
   );
 }
 
-function TeamView({
+function AgentStatusHeader({
+  agent,
+  liveConnected,
+  onToggle,
+}: {
+  agent: BabylonAgentStatus | null;
+  liveConnected: boolean;
+  onToggle: () => void;
+}) {
+  if (!agent) {
+    return (
+      <div className="border-b border-border px-3 py-3">
+        <div className="text-xs italic text-muted">Connecting to Babylon...</div>
+      </div>
+    );
+  }
+
+  const pnlTone =
+    agent.lifetimePnL > 0
+      ? "positive"
+      : agent.lifetimePnL < 0
+        ? "negative"
+        : "default";
+
+  return (
+    <div className="space-y-2 border-b border-border px-3 py-3">
+      <div className="flex items-center gap-2">
+        <span
+          className={`h-2 w-2 rounded-full ${
+            liveConnected ? "bg-green-400" : "bg-yellow-400"
+          }`}
+          title={liveConnected ? "Live" : "Polling"}
+        />
+        <span className="truncate text-sm font-semibold text-txt">
+          {agent.displayName ?? agent.name}
+        </span>
+        <span className="ml-auto text-[10px] uppercase tracking-[0.18em] text-muted">
+          {agent.agentStatus ?? "idle"}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-4 gap-2">
+        <StatTile label="Balance" value={formatCurrency(agent.balance)} />
+        <StatTile
+          label="PnL"
+          value={formatPnL(agent.lifetimePnL)}
+          tone={pnlTone}
+        />
+        <StatTile
+          label="Win Rate"
+          value={`${(agent.winRate * 100).toFixed(0)}%`}
+        />
+        <StatTile label="Trades" value={`${agent.totalTrades}`} />
+      </div>
+
+      <div className="flex flex-wrap items-center gap-1">
+        {[
+          { label: "Trading", on: agent.autonomousTrading ?? agent.autonomous },
+          { label: "Posting", on: agent.autonomousPosting ?? agent.autonomous },
+          {
+            label: "Comments",
+            on: agent.autonomousCommenting ?? agent.autonomous,
+          },
+          { label: "DMs", on: agent.autonomousDMs ?? agent.autonomous },
+        ].map((item) => (
+          <span
+            key={item.label}
+            className={`rounded px-1.5 py-0.5 text-[9px] ${
+              item.on
+                ? "bg-green-400/15 text-green-400"
+                : "bg-gray-500/15 text-gray-400"
+            }`}
+          >
+            {item.label}
+          </span>
+        ))}
+
+        <Button
+          variant="outline"
+          size="sm"
+          className="ml-auto h-6 px-2 text-[10px]"
+          onClick={onToggle}
+        >
+          {agent.autonomous ? "Pause Agent" : "Resume Agent"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function TeamAgentsPanel({
   agents,
+  summary,
+  conversations,
   loading,
-  onMention,
+  onInsertMention,
 }: {
   agents: BabylonTeamAgent[];
+  summary: BabylonTeamSummary | null;
+  conversations: BabylonTeamConversation[];
   loading: boolean;
-  onMention: (name: string) => void;
+  onInsertMention: (name: string) => void;
 }) {
   if (loading && agents.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center text-xs text-muted italic">
+      <div className="flex h-full items-center justify-center text-xs italic text-muted">
         Loading team...
       </div>
     );
   }
 
-  if (agents.length === 0) {
-    return (
-      <div className="flex-1 flex items-center justify-center text-xs text-muted italic p-4">
-        <div className="text-center">
-          <div>No team agents found</div>
-          <div className="text-[10px] mt-1">
-            Create agents in Babylon to build your team
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="flex-1 min-h-0 overflow-y-auto">
-      <div className="px-3 py-1 border-b border-border text-[9px] text-muted font-semibold uppercase tracking-wider">
-        {agents.length} Agent{agents.length !== 1 ? "s" : ""}
-      </div>
-      {agents.map((agent) => {
-        const pnlColor =
-          agent.lifetimePnL >= 0 ? "text-green-400" : "text-red-400";
-        const statusColor = agent.autonomous ? "bg-green-400" : "bg-gray-400";
-
-        return (
-          <div
-            key={agent.id}
-            className="px-3 py-2 border-b border-border/50 hover:bg-card/50 cursor-pointer"
-            onClick={() => onMention(agent.name)}
-            title={`Click to @mention ${agent.name}`}
-          >
-            <div className="flex items-center gap-2">
-              <span
-                className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${statusColor}`}
-              />
-              <span className="font-semibold text-[11px] text-txt truncate">
-                {agent.displayName ?? agent.name}
-              </span>
-              <span className="flex-1" />
-              <span
-                className={`text-[9px] px-1 py-px rounded ${agent.autonomous ? "bg-green-400/15 text-green-400" : "bg-gray-400/15 text-gray-400"}`}
-              >
-                {agent.autonomous ? "Auto" : "Paused"}
-              </span>
-            </div>
-            <div className="flex items-center gap-2 text-[10px] mt-0.5 pl-3.5">
-              <span className="font-mono text-muted">
-                {formatBalance(agent.balance)}
-              </span>
-              <span className={`font-mono ${pnlColor}`}>
-                {formatPnL(agent.lifetimePnL)}
-              </span>
-              <span className="text-muted">
-                {(agent.winRate * 100).toFixed(0)}%
-              </span>
-              <span className="text-muted">{agent.totalTrades}T</span>
-            </div>
-            {(agent.recentErrorsCount ?? 0) > 0 ? (
-              <div className="text-[9px] text-red-400 pl-3.5 mt-0.5">
-                {agent.recentErrorsCount} recent error
-                {agent.recentErrorsCount === 1 ? "" : "s"}
-              </div>
-            ) : null}
+    <div className="grid flex-1 min-h-0 gap-3 overflow-y-auto p-3">
+      <Section title="Team Totals">
+        {summary?.totals ? (
+          <div className="grid grid-cols-2 gap-2">
+            <StatTile
+              label="Wallet"
+              value={formatCurrency(summary.totals.walletBalance)}
+            />
+            <StatTile
+              label="Current PnL"
+              value={formatPnL(summary.totals.currentPnL)}
+              tone={
+                summary.totals.currentPnL > 0
+                  ? "positive"
+                  : summary.totals.currentPnL < 0
+                    ? "negative"
+                    : "default"
+              }
+            />
+            <StatTile
+              label="Lifetime PnL"
+              value={formatPnL(summary.totals.lifetimePnL)}
+              tone={
+                summary.totals.lifetimePnL > 0
+                  ? "positive"
+                  : summary.totals.lifetimePnL < 0
+                    ? "negative"
+                    : "default"
+              }
+            />
+            <StatTile
+              label="Open Positions"
+              value={`${summary.totals.openPositions}`}
+            />
           </div>
-        );
-      })}
+        ) : (
+          <div className="text-xs italic text-muted">
+            Team summary is not available yet.
+          </div>
+        )}
+      </Section>
+
+      <Section title="Team Coordination">
+        {conversations.length === 0 ? (
+          <div className="text-xs italic text-muted">
+            No team conversations yet.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {conversations.slice(0, 6).map((conversation) => (
+              <div
+                key={conversation.id}
+                className="rounded border border-border/60 px-2 py-2"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="truncate text-[11px] font-semibold text-txt">
+                    {conversation.name || "Untitled conversation"}
+                  </span>
+                  {conversation.isActive ? (
+                    <span className="rounded bg-blue-400/15 px-1.5 py-0.5 text-[9px] text-blue-400">
+                      Active
+                    </span>
+                  ) : null}
+                </div>
+                <div className="mt-1 text-[10px] text-muted">
+                  Updated{" "}
+                  {formatTime(new Date(conversation.updatedAt).getTime(), {
+                    fallback: "\u2014",
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Section>
+
+      <Section title="Agents">
+        {agents.length === 0 ? (
+          <div className="text-xs italic text-muted">
+            No team agents found.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {agents.map((agent) => (
+              <button
+                key={agent.id}
+                type="button"
+                className="w-full rounded border border-border/60 px-2 py-2 text-left hover:bg-card/60"
+                onClick={() => onInsertMention(agent.name)}
+                title={`Mention ${agent.name}`}
+              >
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`h-2 w-2 rounded-full ${
+                      agent.autonomous ? "bg-green-400" : "bg-gray-400"
+                    }`}
+                  />
+                  <span className="truncate text-[11px] font-semibold text-txt">
+                    {agent.displayName ?? agent.name}
+                  </span>
+                  <span className="ml-auto text-[10px] text-muted">
+                    {agent.totalTrades} trades
+                  </span>
+                </div>
+                <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px] text-muted">
+                  <span className="font-mono">
+                    {formatCurrency(agent.balance)}
+                  </span>
+                  <span
+                    className={
+                      agent.lifetimePnL >= 0
+                        ? "font-mono text-green-400"
+                        : "font-mono text-red-400"
+                    }
+                  >
+                    {formatPnL(agent.lifetimePnL)}
+                  </span>
+                  <span>{(agent.winRate * 100).toFixed(0)}% win</span>
+                  <span>{agent.agentStatus ?? "idle"}</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+      </Section>
     </div>
   );
 }
 
-function WalletView({
+function WalletPanel({
   wallet,
+  tradingBalance,
+  summary,
   loading,
 }: {
   wallet: BabylonWallet | null;
+  tradingBalance: number;
+  summary: BabylonAgentSummaryEnvelope | null;
   loading: boolean;
 }) {
   if (loading && !wallet) {
     return (
-      <div className="flex-1 flex items-center justify-center text-xs text-muted italic">
+      <div className="flex h-full items-center justify-center text-xs italic text-muted">
         Loading wallet...
       </div>
     );
   }
 
-  if (!wallet) {
-    return (
-      <div className="flex-1 flex items-center justify-center text-xs text-muted italic">
-        Wallet not available
-      </div>
-    );
-  }
-
   return (
-    <div className="flex-1 min-h-0 flex flex-col">
-      <div className="px-3 py-2 border-b border-border">
-        <div className="text-[10px] text-muted">Balance</div>
-        <div className="text-lg font-bold font-mono text-txt">
-          {formatBalance(wallet.balance)}
+    <div className="grid flex-1 min-h-0 gap-3 overflow-y-auto p-3">
+      <Section title="Balances">
+        <div className="grid grid-cols-2 gap-2">
+          <StatTile
+            label="Wallet"
+            value={formatCurrency(wallet?.balance ?? 0)}
+          />
+          <StatTile
+            label="Trading"
+            value={formatCurrency(tradingBalance)}
+          />
+          <StatTile
+            label="Deposited"
+            value={formatCurrency(summary?.agent?.totalDeposited ?? 0)}
+          />
+          <StatTile
+            label="Withdrawn"
+            value={formatCurrency(summary?.agent?.totalWithdrawn ?? 0)}
+          />
         </div>
-      </div>
-      <div className="px-3 py-1 border-b border-border text-[9px] text-muted font-semibold uppercase tracking-wider">
-        Recent Transactions
-      </div>
-      <div className="flex-1 min-h-0 overflow-y-auto">
-        {wallet.transactions.length === 0 ? (
-          <div className="text-center py-4 text-xs text-muted italic">
-            No transactions yet
+      </Section>
+
+      <Section title="Transactions">
+        {!wallet || wallet.transactions.length === 0 ? (
+          <div className="text-xs italic text-muted">
+            No transactions available.
           </div>
         ) : (
-          wallet.transactions.map((tx) => (
-            <div
-              key={tx.id}
-              className="px-3 py-1.5 border-b border-border/50 flex items-center gap-2"
-            >
-              <span
-                className={`font-mono text-[10px] ${tx.amount >= 0 ? "text-green-400" : "text-red-400"}`}
+          <div className="space-y-2">
+            {wallet.transactions.slice(0, 20).map((transaction) => (
+              <div
+                key={transaction.id}
+                className="rounded border border-border/60 px-2 py-2"
               >
-                {tx.amount >= 0 ? "+" : ""}
-                {tx.amount.toFixed(2)}
-              </span>
-              <span className="text-[10px] text-muted truncate flex-1">
-                {tx.type}
-              </span>
-              <span className="text-[9px] text-muted flex-shrink-0">
-                {formatTime(new Date(tx.timestamp).getTime(), {
-                  fallback: "\u2014",
-                })}
-              </span>
-            </div>
-          ))
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`font-mono text-[11px] ${
+                      transaction.amount >= 0
+                        ? "text-green-400"
+                        : "text-red-400"
+                    }`}
+                  >
+                    {transaction.amount >= 0 ? "+" : ""}
+                    {transaction.amount.toFixed(2)}
+                  </span>
+                  <span className="truncate text-[11px] text-txt">
+                    {transaction.type}
+                  </span>
+                  <span className="ml-auto text-[10px] text-muted">
+                    {formatTime(new Date(transaction.timestamp).getTime(), {
+                      fallback: "\u2014",
+                    })}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
         )}
-      </div>
+      </Section>
     </div>
   );
 }
 
-function LogsView({
+function LogsPanel({
   logs,
   loading,
   logType,
@@ -430,49 +664,46 @@ function LogsView({
   loading: boolean;
   logType: string;
   logLevel: string;
-  onTypeChange: (v: string) => void;
-  onLevelChange: (v: string) => void;
+  onTypeChange: (next: string) => void;
+  onLevelChange: (next: string) => void;
 }) {
   return (
-    <div className="flex-1 min-h-0 flex flex-col">
-      <div className="flex items-center gap-1 px-2 py-1 border-b border-border">
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex items-center gap-2 border-b border-border px-3 py-2">
         <select
           value={logType}
-          onChange={(e) => onTypeChange(e.target.value)}
-          className="h-5 text-[9px] bg-bg border border-border rounded px-1 text-txt"
+          onChange={(event) => onTypeChange(event.target.value)}
+          className="h-7 rounded border border-border bg-bg px-2 text-[11px] text-txt"
         >
-          {LOG_TYPE_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
+          {LOG_TYPE_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
             </option>
           ))}
         </select>
         <select
           value={logLevel}
-          onChange={(e) => onLevelChange(e.target.value)}
-          className="h-5 text-[9px] bg-bg border border-border rounded px-1 text-txt"
+          onChange={(event) => onLevelChange(event.target.value)}
+          className="h-7 rounded border border-border bg-bg px-2 text-[11px] text-txt"
         >
-          {LOG_LEVEL_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
+          {LOG_LEVEL_OPTIONS.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
             </option>
           ))}
         </select>
       </div>
-      <div className="flex-1 min-h-0 overflow-y-auto p-2 text-[10px] font-mono">
+
+      <div className="flex-1 overflow-y-auto p-3 font-mono text-[10px]">
         {loading && logs.length === 0 ? (
-          <div className="text-center py-4 text-muted italic">
-            Loading logs...
-          </div>
+          <div className="text-center italic text-muted">Loading logs...</div>
         ) : logs.length === 0 ? (
-          <div className="text-center py-4 text-muted italic">
-            No logs found
-          </div>
+          <div className="text-center italic text-muted">No logs found.</div>
         ) : (
-          logs.slice(0, 100).map((entry, idx) => (
+          logs.slice(0, 120).map((entry, index) => (
             <div
-              key={entry.id ?? `${entry.timestamp}-${idx}`}
-              className="py-0.5 border-b border-border/30"
+              key={entry.id ?? `${entry.timestamp}-${index}`}
+              className="border-b border-border/40 py-1"
             >
               <span className="text-muted">
                 {formatTime(new Date(entry.timestamp).getTime(), {
@@ -480,7 +711,7 @@ function LogsView({
                 })}
               </span>{" "}
               <span
-                className={`font-semibold uppercase ${
+                className={`uppercase ${
                   entry.level === "error"
                     ? "text-red-400"
                     : entry.level === "warn"
@@ -500,63 +731,335 @@ function LogsView({
   );
 }
 
-// ---------------------------------------------------------------------------
-// Main component
-// ---------------------------------------------------------------------------
+function OverviewPanel({
+  summary,
+  dashboard,
+  goals,
+  recentTrades,
+  markets,
+  chatMessages,
+  loading,
+}: {
+  summary: BabylonAgentSummaryEnvelope | null;
+  dashboard: BabylonTeamDashboard;
+  goals: BabylonAgentGoal[];
+  recentTrades: BabylonActivityItem[];
+  markets: BabylonPredictionMarket[];
+  chatMessages: BabylonChatMessage[];
+  loading: boolean;
+}) {
+  const portfolio = summary?.portfolio;
+  const currentGoal = goals.find((goal) => goal.status === "active") ?? goals[0];
+  const totals = dashboard.summary?.totals;
+
+  if (loading && !summary && goals.length === 0 && markets.length === 0) {
+    return (
+      <div className="flex h-full items-center justify-center text-xs italic text-muted">
+        Loading Babylon dashboard...
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid flex-1 min-h-0 gap-3 overflow-y-auto p-3">
+      <Section title="Current Focus">
+        <div className="space-y-3">
+          <div className="text-sm font-semibold text-txt">
+            {currentGoal?.description ?? "No active goal is set right now."}
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <StatTile
+              label="Available"
+              value={formatCurrency(portfolio?.available ?? 0)}
+            />
+            <StatTile
+              label="Total Assets"
+              value={formatCurrency(portfolio?.totalAssets ?? 0)}
+            />
+            <StatTile
+              label="Open Positions"
+              value={`${portfolio?.positions ?? 0}`}
+            />
+            <StatTile
+              label="Portfolio PnL"
+              value={formatPnL(portfolio?.totalPnL ?? 0)}
+              tone={
+                (portfolio?.totalPnL ?? 0) > 0
+                  ? "positive"
+                  : (portfolio?.totalPnL ?? 0) < 0
+                    ? "negative"
+                    : "default"
+              }
+            />
+          </div>
+        </div>
+      </Section>
+
+      <Section title="Team Snapshot">
+        {totals ? (
+          <div className="grid grid-cols-2 gap-2">
+            <StatTile
+              label="Wallet"
+              value={formatCurrency(totals.walletBalance)}
+            />
+            <StatTile
+              label="Live PnL"
+              value={formatPnL(totals.currentPnL)}
+              tone={
+                totals.currentPnL > 0
+                  ? "positive"
+                  : totals.currentPnL < 0
+                    ? "negative"
+                    : "default"
+              }
+            />
+            <StatTile
+              label="Unrealized"
+              value={formatPnL(totals.unrealizedPnL)}
+              tone={
+                totals.unrealizedPnL > 0
+                  ? "positive"
+                  : totals.unrealizedPnL < 0
+                    ? "negative"
+                    : "default"
+              }
+            />
+            <StatTile
+              label="Open Positions"
+              value={`${totals.openPositions}`}
+            />
+          </div>
+        ) : (
+          <div className="text-xs italic text-muted">
+            Team summary is not available yet.
+          </div>
+        )}
+      </Section>
+
+      <Section title="Current Market">
+        {markets.length === 0 ? (
+          <div className="text-xs italic text-muted">
+            Market data is not available.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {markets.slice(0, 5).map((market) => (
+              <div
+                key={market.id}
+                className="rounded border border-border/60 px-2 py-2"
+              >
+                <div className="line-clamp-2 text-[11px] font-semibold text-txt">
+                  {market.title}
+                </div>
+                <div className="mt-1 flex flex-wrap gap-2 text-[10px] text-muted">
+                  <span>YES {market.yesPrice.toFixed(2)}</span>
+                  <span>NO {market.noPrice.toFixed(2)}</span>
+                  <span>Vol {formatCurrency(market.volume)}</span>
+                  <span>{market.status}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Section>
+
+      <Section title="Recent Trades">
+        {recentTrades.length === 0 ? (
+          <div className="text-xs italic text-muted">
+            No recent trades yet.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {recentTrades.slice(0, 6).map((trade) => (
+              <div
+                key={trade.id}
+                className="rounded border border-border/60 px-2 py-2"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-semibold text-txt">
+                    {summarizeActivity(trade)}
+                  </span>
+                  {trade.pnl != null ? (
+                    <span
+                      className={`ml-auto font-mono text-[10px] ${
+                        trade.pnl >= 0 ? "text-green-400" : "text-red-400"
+                      }`}
+                    >
+                      {formatPnL(trade.pnl)}
+                    </span>
+                  ) : null}
+                </div>
+                <div className="mt-1 text-[10px] text-muted">
+                  {formatTime(new Date(trade.timestamp).getTime(), {
+                    fallback: "\u2014",
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Section>
+
+      <Section title="Operator Chat">
+        {chatMessages.length === 0 ? (
+          <div className="text-xs italic text-muted">
+            No agent chat history yet.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {chatMessages.slice(-6).map((message) => (
+              <div
+                key={message.id}
+                className="rounded border border-border/60 px-2 py-2"
+              >
+                <div className="flex items-center gap-2 text-[10px] text-muted">
+                  <span className="uppercase">
+                    {message.senderName ?? message.senderId}
+                  </span>
+                  <span className="ml-auto">
+                    {formatTime(new Date(message.createdAt).getTime(), {
+                      fallback: "\u2014",
+                    })}
+                  </span>
+                </div>
+                <div className="mt-1 whitespace-pre-wrap text-[11px] text-txt">
+                  {message.content}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Section>
+    </div>
+  );
+}
 
 export interface BabylonTerminalProps {
   appName: string;
 }
 
 export function BabylonTerminal({ appName: _appName }: BabylonTerminalProps) {
-  const [activeTab, setActiveTab] = useState<TabId>("activity");
+  const [activeTab, setActiveTab] = useState<TabId>("overview");
   const [agentStatus, setAgentStatus] = useState<BabylonAgentStatus | null>(
     null,
   );
-  const [activityItems, setActivityItems] = useState<BabylonActivityItem[]>([]);
+  const [teamActivity, setTeamActivity] = useState<BabylonActivityItem[]>([]);
   const [teamAgents, setTeamAgents] = useState<BabylonTeamAgent[]>([]);
+  const [teamDashboard, setTeamDashboard] = useState<BabylonTeamDashboard>({
+    agents: [],
+    summary: null,
+  });
+  const [teamConversations, setTeamConversations] =
+    useState<BabylonTeamConversation[]>([]);
+  const [agentSummary, setAgentSummary] =
+    useState<BabylonAgentSummaryEnvelope | null>(null);
+  const [agentGoals, setAgentGoals] = useState<BabylonAgentGoal[]>([]);
+  const [recentTrades, setRecentTrades] = useState<BabylonActivityItem[]>([]);
+  const [markets, setMarkets] = useState<BabylonPredictionMarket[]>([]);
+  const [agentChatMessages, setAgentChatMessages] = useState<
+    BabylonChatMessage[]
+  >([]);
   const [wallet, setWallet] = useState<BabylonWallet | null>(null);
+  const [tradingBalance, setTradingBalance] = useState(0);
   const [logs, setLogs] = useState<BabylonLogEntry[]>([]);
   const [logType, setLogType] = useState("");
   const [logLevel, setLogLevel] = useState("");
   const [chatInput, setChatInput] = useState("");
-  const [sending, setSending] = useState(false);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [loadingOverview, setLoadingOverview] = useState(false);
   const [loadingActivity, setLoadingActivity] = useState(false);
   const [loadingTeam, setLoadingTeam] = useState(false);
   const [loadingWallet, setLoadingWallet] = useState(false);
   const [loadingLogs, setLoadingLogs] = useState(false);
+  const [sending, setSending] = useState(false);
+  const composerRef = useRef<HTMLInputElement>(null);
 
-  // SSE for real-time updates
   const apiBase = useMemo(() => {
-    const loc = window.location;
-    return `${loc.protocol}//${loc.host}`;
+    const location = window.location;
+    return `${location.protocol}//${location.host}`;
   }, []);
   const sse = useBabylonSSE(apiBase, true);
 
-  // Merge SSE items with polled items
-  const mergedActivity = useMemo(() => {
-    if (sse.items.length === 0) return activityItems;
-    const sseIds = new Set(sse.items.map((i) => i.id).filter(Boolean));
-    const deduped = activityItems.filter((i) => !i.id || !sseIds.has(i.id));
-    return [...sse.items, ...deduped].slice(0, 100);
-  }, [sse.items, activityItems]);
+  const liveActivity = useMemo(() => {
+    if (sse.items.length === 0) {
+      return teamActivity;
+    }
 
-  const fetchStatus = useCallback(async () => {
+    const seenIds = new Set(
+      sse.items
+        .map((item) => item.id)
+        .filter((id): id is string => typeof id === "string"),
+    );
+    const remainder = teamActivity.filter(
+      (item) => !item.id || !seenIds.has(item.id),
+    );
+    return [...sse.items, ...remainder].slice(0, 100);
+  }, [sse.items, teamActivity]);
+
+  const fetchOverview = useCallback(async () => {
+    setLoadingOverview(true);
+    setStatusMessage(null);
+
     try {
-      const status = await client.getBabylonAgentStatus();
+      const [
+        status,
+        summary,
+        goals,
+        tradeFeed,
+        predictionMarkets,
+        dashboardRaw,
+        conversationsRaw,
+        chatRaw,
+      ] = await Promise.all([
+        client.getBabylonAgentStatus(),
+        client.getBabylonAgentSummary(),
+        client.getBabylonAgentGoals(),
+        client.getBabylonAgentRecentTrades(),
+        client.getBabylonPredictionMarkets({ pageSize: 5 }),
+        client.getBabylonTeamDashboard(),
+        client.getBabylonTeamConversations(),
+        client.getBabylonAgentChat(),
+      ]);
+
       setAgentStatus(status);
-    } catch {
-      /* keep stale */
+      setAgentSummary(extractAgentSummary(summary));
+      setAgentGoals(goals);
+      setRecentTrades(Array.isArray(tradeFeed.items) ? tradeFeed.items : []);
+      setMarkets(
+        Array.isArray(predictionMarkets.markets)
+          ? predictionMarkets.markets
+          : [],
+      );
+
+      const nextDashboard = extractTeamDashboard(dashboardRaw);
+      setTeamDashboard(nextDashboard);
+      setTeamAgents(nextDashboard.agents);
+      setTeamConversations(extractTeamConversations(conversationsRaw).conversations);
+      setAgentChatMessages(extractChatMessages(chatRaw));
+    } catch (error) {
+      setStatusMessage(
+        error instanceof Error
+          ? error.message
+          : "Failed to load Babylon overview.",
+      );
+    } finally {
+      setLoadingOverview(false);
     }
   }, []);
 
   const fetchActivity = useCallback(async () => {
     setLoadingActivity(true);
+    setStatusMessage(null);
+
     try {
-      const feed = await client.getBabylonAgentActivity({ limit: 50 });
-      setActivityItems(feed.items ?? []);
-    } catch {
-      /* keep stale */
+      const feed = await client.getBabylonTrades();
+      setTeamActivity(Array.isArray(feed.items) ? feed.items : []);
+    } catch (error) {
+      setStatusMessage(
+        error instanceof Error
+          ? error.message
+          : "Failed to load Babylon activity.",
+      );
     } finally {
       setLoadingActivity(false);
     }
@@ -564,11 +1067,25 @@ export function BabylonTerminal({ appName: _appName }: BabylonTerminalProps) {
 
   const fetchTeam = useCallback(async () => {
     setLoadingTeam(true);
+    setStatusMessage(null);
+
     try {
-      const response = await client.getBabylonTeam();
-      setTeamAgents(response.agents ?? []);
-    } catch {
-      /* keep stale */
+      const [team, dashboardRaw, conversationsRaw] = await Promise.all([
+        client.getBabylonTeam(),
+        client.getBabylonTeamDashboard(),
+        client.getBabylonTeamConversations(),
+      ]);
+
+      const nextDashboard = extractTeamDashboard(dashboardRaw);
+      setTeamAgents(Array.isArray(team.agents) ? team.agents : nextDashboard.agents);
+      setTeamDashboard(nextDashboard);
+      setTeamConversations(extractTeamConversations(conversationsRaw).conversations);
+    } catch (error) {
+      setStatusMessage(
+        error instanceof Error
+          ? error.message
+          : "Failed to load Babylon team data.",
+      );
     } finally {
       setLoadingTeam(false);
     }
@@ -576,11 +1093,22 @@ export function BabylonTerminal({ appName: _appName }: BabylonTerminalProps) {
 
   const fetchWallet = useCallback(async () => {
     setLoadingWallet(true);
+    setStatusMessage(null);
+
     try {
-      const w = await client.getBabylonAgentWallet();
-      setWallet(w);
-    } catch {
-      /* keep stale */
+      const [walletResponse, tradingBalanceResponse] = await Promise.all([
+        client.getBabylonAgentWallet(),
+        client.getBabylonAgentTradingBalance(),
+      ]);
+
+      setWallet(walletResponse);
+      setTradingBalance(extractTradingBalance(tradingBalanceResponse));
+    } catch (error) {
+      setStatusMessage(
+        error instanceof Error
+          ? error.message
+          : "Failed to load Babylon wallet data.",
+      );
     } finally {
       setLoadingWallet(false);
     }
@@ -588,174 +1116,230 @@ export function BabylonTerminal({ appName: _appName }: BabylonTerminalProps) {
 
   const fetchLogs = useCallback(async () => {
     setLoadingLogs(true);
+    setStatusMessage(null);
+
     try {
       const entries = await client.getBabylonAgentLogs({
         type: logType || undefined,
         level: logLevel || undefined,
       });
       setLogs(Array.isArray(entries) ? entries : []);
-    } catch {
-      /* keep stale */
+    } catch (error) {
+      setStatusMessage(
+        error instanceof Error ? error.message : "Failed to load Babylon logs.",
+      );
     } finally {
       setLoadingLogs(false);
     }
-  }, [logType, logLevel]);
+  }, [logLevel, logType]);
 
-  // Initial load
   useEffect(() => {
-    void fetchStatus();
-    void fetchActivity();
-  }, [fetchStatus, fetchActivity]);
+    void Promise.all([fetchOverview(), fetchActivity()]);
+  }, [fetchOverview, fetchActivity]);
 
-  // Load tab-specific data on switch
   useEffect(() => {
-    if (activeTab === "team") void fetchTeam();
-    if (activeTab === "wallet") void fetchWallet();
-    if (activeTab === "logs") void fetchLogs();
-  }, [activeTab, fetchTeam, fetchWallet, fetchLogs]);
+    if (activeTab === "team") {
+      void fetchTeam();
+    }
+    if (activeTab === "wallet") {
+      void fetchWallet();
+    }
+    if (activeTab === "logs") {
+      void fetchLogs();
+    }
+  }, [activeTab, fetchLogs, fetchTeam, fetchWallet]);
 
-  // Poll every 5s
   useIntervalWhenDocumentVisible(
     () => {
-      void fetchStatus();
-      if (activeTab === "activity") void fetchActivity();
-      if (activeTab === "team") void fetchTeam();
-      if (activeTab === "wallet") void fetchWallet();
-      if (activeTab === "logs") void fetchLogs();
+      void fetchOverview();
+      if (activeTab === "activity") {
+        void fetchActivity();
+      }
+      if (activeTab === "team") {
+        void fetchTeam();
+      }
+      if (activeTab === "wallet") {
+        void fetchWallet();
+      }
+      if (activeTab === "logs") {
+        void fetchLogs();
+      }
     },
-    5_000,
+    8_000,
     true,
   );
 
-  const handleToggle = useCallback(async () => {
-    try {
-      await client.toggleBabylonAgent("toggle");
-      void fetchStatus();
-    } catch {
-      /* silent */
+  useEffect(() => {
+    if (activeTab === "logs") {
+      void fetchLogs();
     }
-  }, [fetchStatus]);
+  }, [activeTab, fetchLogs]);
+
+  const handleToggleAgent = useCallback(async () => {
+    setStatusMessage(null);
+    try {
+      await client.toggleBabylonAgent(
+        agentStatus?.autonomous ? "pause" : "resume",
+      );
+      await fetchOverview();
+      await fetchActivity();
+    } catch (error) {
+      setStatusMessage(
+        error instanceof Error
+          ? error.message
+          : "Failed to update agent autonomy.",
+      );
+    }
+  }, [agentStatus?.autonomous, fetchActivity, fetchOverview]);
+
+  const handleInsertMention = useCallback((name: string) => {
+    setChatInput((current) =>
+      current.trim().length > 0 ? `${current} @${name}` : `@${name} `,
+    );
+    composerRef.current?.focus();
+  }, []);
 
   const handleSendChat = useCallback(async () => {
     const content = chatInput.trim();
-    if (!content || sending) return;
+    if (!content || sending) {
+      return;
+    }
+
     setSending(true);
+    setStatusMessage(null);
     try {
-      await client.sendBabylonTeamChat(content);
+      const result = await client.sendBabylonAgentChat(content);
       setChatInput("");
-      setTimeout(() => void fetchActivity(), 1_500);
-    } catch {
-      /* silent */
+      setStatusMessage(result.message ?? "Suggestion sent to the agent.");
+      await Promise.all([fetchOverview(), fetchActivity(), fetchLogs()]);
+    } catch (error) {
+      setStatusMessage(
+        error instanceof Error
+          ? error.message
+          : "Failed to send the operator message.",
+      );
     } finally {
       setSending(false);
     }
-  }, [chatInput, sending, fetchActivity]);
+  }, [chatInput, fetchActivity, fetchLogs, fetchOverview, sending]);
 
-  const handleMention = useCallback((name: string) => {
-    setChatInput((prev) => {
-      const mention = `@${name} `;
-      return prev.includes(mention) ? prev : `${mention}${prev}`;
-    });
-  }, []);
-
-  const tabClass = (tab: TabId) =>
-    `h-6 text-[10px] px-2 py-0 ${activeTab === tab ? "bg-accent text-accent-foreground" : "bg-card hover:border-accent"}`;
+  const content = (() => {
+    switch (activeTab) {
+      case "overview":
+        return (
+          <OverviewPanel
+            summary={agentSummary}
+            dashboard={teamDashboard}
+            goals={agentGoals}
+            recentTrades={recentTrades}
+            markets={markets}
+            chatMessages={agentChatMessages}
+            loading={loadingOverview}
+          />
+        );
+      case "activity":
+        return (
+          <ActivityFeed
+            items={liveActivity}
+            loading={loadingActivity}
+            emptyLabel="No team activity yet."
+          />
+        );
+      case "team":
+        return (
+          <TeamAgentsPanel
+            agents={teamAgents}
+            summary={teamDashboard.summary}
+            conversations={teamConversations}
+            loading={loadingTeam}
+            onInsertMention={handleInsertMention}
+          />
+        );
+      case "wallet":
+        return (
+          <WalletPanel
+            wallet={wallet}
+            tradingBalance={tradingBalance}
+            summary={agentSummary}
+            loading={loadingWallet}
+          />
+        );
+      case "logs":
+        return (
+          <LogsPanel
+            logs={logs}
+            loading={loadingLogs}
+            logType={logType}
+            logLevel={logLevel}
+            onTypeChange={setLogType}
+            onLevelChange={setLogLevel}
+          />
+        );
+      default:
+        return null;
+    }
+  })();
 
   return (
-    <div className="w-96 border-l border-border bg-card flex flex-col min-h-0">
-      {/* Agent status header */}
+    <div className="flex h-full min-h-0 flex-col border-l border-border bg-bg">
       <AgentStatusHeader
         agent={agentStatus}
-        sseConnected={sse.connected}
-        onToggle={handleToggle}
+        liveConnected={sse.connected}
+        onToggle={handleToggleAgent}
       />
 
-      {/* Tab bar */}
-      <div className="flex items-center gap-1 px-2 py-1 border-b border-border">
-        <Button
-          variant="outline"
-          size="sm"
-          className={tabClass("activity")}
-          onClick={() => setActiveTab("activity")}
-        >
-          Activity
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className={tabClass("team")}
-          onClick={() => setActiveTab("team")}
-        >
-          Team{teamAgents.length > 0 ? ` (${teamAgents.length})` : ""}
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className={tabClass("wallet")}
-          onClick={() => setActiveTab("wallet")}
-        >
-          Wallet
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          className={tabClass("logs")}
-          onClick={() => setActiveTab("logs")}
-        >
-          Logs
-        </Button>
+      <div className="flex items-center gap-1 border-b border-border px-2 py-2">
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            className={`rounded px-2 py-1 text-[10px] uppercase tracking-[0.18em] ${
+              activeTab === tab.id
+                ? "bg-card text-txt"
+                : "text-muted hover:bg-card/50"
+            }`}
+            onClick={() => setActiveTab(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
-      {/* Tab content */}
-      {activeTab === "activity" && (
-        <ActivityFeed items={mergedActivity} loading={loadingActivity} />
-      )}
-      {activeTab === "team" && (
-        <TeamView
-          agents={teamAgents}
-          loading={loadingTeam}
-          onMention={handleMention}
-        />
-      )}
-      {activeTab === "wallet" && (
-        <WalletView wallet={wallet} loading={loadingWallet} />
-      )}
-      {activeTab === "logs" && (
-        <LogsView
-          logs={logs}
-          loading={loadingLogs}
-          logType={logType}
-          logLevel={logLevel}
-          onTypeChange={setLogType}
-          onLevelChange={setLogLevel}
-        />
-      )}
+      {statusMessage ? (
+        <div className="border-b border-border bg-card/70 px-3 py-2 text-[11px] text-muted">
+          {statusMessage}
+        </div>
+      ) : null}
 
-      {/* Command input — always visible */}
-      <div className="flex items-center gap-2 px-2 py-2 border-t border-border">
-        <Input
-          type="text"
-          value={chatInput}
-          onChange={(e) => setChatInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey && !sending) {
-              e.preventDefault();
-              handleSendChat();
-            }
-          }}
-          placeholder="Command your team..."
-          className="flex-1 h-7 text-xs bg-bg focus-visible:ring-accent"
-          disabled={sending}
-        />
-        <Button
-          variant="default"
-          size="sm"
-          onClick={handleSendChat}
-          disabled={sending || !chatInput.trim()}
-          className="h-7 text-xs shadow-sm font-bold"
-        >
-          {sending ? "..." : "Send"}
-        </Button>
+      <div className="flex min-h-0 flex-1 flex-col">{content}</div>
+
+      <div className="border-t border-border px-3 py-3">
+        <div className="mb-2 text-[10px] uppercase tracking-[0.18em] text-muted">
+          Guide The Agent
+        </div>
+        <div className="flex items-center gap-2">
+          <Input
+            ref={composerRef}
+            value={chatInput}
+            onChange={(event) => setChatInput(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                void handleSendChat();
+              }
+            }}
+            placeholder="Tell the agent what to do, what to avoid, or what to explain."
+            className="h-9 flex-1 text-[12px]"
+          />
+          <Button
+            size="sm"
+            className="h-9 px-3 text-[11px]"
+            onClick={() => void handleSendChat()}
+            disabled={sending || chatInput.trim().length === 0}
+          >
+            {sending ? "Sending" : "Send"}
+          </Button>
+        </div>
       </div>
     </div>
   );

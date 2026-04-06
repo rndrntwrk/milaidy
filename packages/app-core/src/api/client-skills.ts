@@ -685,10 +685,7 @@ MiladyClient.prototype.stopApp = async function (this: MiladyClient, name) {
   });
 };
 
-MiladyClient.prototype.stopAppRun = async function (
-  this: MiladyClient,
-  runId,
-) {
+MiladyClient.prototype.stopAppRun = async function (this: MiladyClient, runId) {
   return this.fetch(`/api/apps/runs/${encodeURIComponent(runId)}/stop`, {
     method: "POST",
   });

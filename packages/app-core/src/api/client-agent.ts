@@ -1667,7 +1667,9 @@ MiladyClient.prototype.getCodingAgentStatus = async function (
     ) {
       status.tasks = mapTaskThreadsToCodingAgentSessions(
         status.taskThreads,
-      ).filter((task) => task.status !== "completed" && task.status !== "error");
+      ).filter(
+        (task) => task.status !== "completed" && task.status !== "error",
+      );
       status.taskCount = status.tasks.length;
     }
     if (status && (!status.tasks || status.tasks.length === 0)) {
