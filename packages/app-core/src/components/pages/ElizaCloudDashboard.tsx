@@ -837,38 +837,17 @@ export function CloudDashboard() {
       window.history.replaceState({}, document.title, cleanedUrl);
     }
 
-    if (
-      callback.status === "connected" &&
-      callback.connectionId &&
-      callback.agentId
-    ) {
-      // Link the OAuth connection to the agent
-      client
-        .linkCloudCompatAgentManagedGithub(
-          callback.agentId,
-          callback.connectionId,
-        )
-        .then(() => {
-          setActionNotice(
-            t("elizaclouddashboard.ManagedGithubConnectedNotice", {
-              defaultValue: "GitHub account connected to this agent.",
-            }),
-            "success",
-            5200,
-          );
-          void fetchCloudAgents();
-        })
-        .catch((error: unknown) => {
-          setActionNotice(
-            error instanceof Error
-              ? error.message
-              : t("elizaclouddashboard.ManagedGithubLinkFailed", {
-                  defaultValue: "Failed to link GitHub to agent.",
-                }),
-            "error",
-            5200,
-          );
-        });
+    if (callback.status === "connected") {
+      // Server-side completion endpoint already linked the connection;
+      // just show a success notice and refresh agent list.
+      setActionNotice(
+        t("elizaclouddashboard.ManagedGithubConnectedNotice", {
+          defaultValue: "GitHub account connected to this agent.",
+        }),
+        "success",
+        5200,
+      );
+      void fetchCloudAgents();
       return;
     }
 

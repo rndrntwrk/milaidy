@@ -7,6 +7,7 @@ interface SplashServerChooserProps {
   discoveryLoading: boolean;
   gateways: GatewayDiscoveryEndpoint[];
   showElizaCloudEntry: boolean;
+  showCreateLocal?: boolean;
   t: (key: string, values?: Record<string, unknown>) => string;
   onCreateLocal: () => void;
   onManualConnect: () => void;
@@ -28,6 +29,7 @@ export function SplashServerChooser({
   discoveryLoading,
   gateways,
   showElizaCloudEntry,
+  showCreateLocal = true,
   t,
   onCreateLocal,
   onManualConnect,
@@ -112,26 +114,28 @@ export function SplashServerChooser({
         </Button>
       ) : null}
 
-      <Button
-        type="button"
-        variant="default"
-        className="justify-start border-2 border-black bg-black px-3 py-5 text-left text-[#ffe600] font-semibold shadow-md hover:bg-[#ffe600] hover:text-black hover:border-black"
-        onClick={onCreateLocal}
-      >
-        <span className="flex flex-col items-start gap-1">
-          <span
-            style={{ fontFamily: MONO_FONT }}
-            className="text-[9px] uppercase text-[#ffe600]/80"
-          >
-            {t("startupshell.CreateAgentLabel", {
-              defaultValue: "New local agent",
-            })}
+      {showCreateLocal ? (
+        <Button
+          type="button"
+          variant="default"
+          className="justify-start border-2 border-black bg-black px-3 py-5 text-left text-[#ffe600] font-semibold shadow-md hover:bg-[#ffe600] hover:text-black hover:border-black"
+          onClick={onCreateLocal}
+        >
+          <span className="flex flex-col items-start gap-1">
+            <span
+              style={{ fontFamily: MONO_FONT }}
+              className="text-[9px] uppercase text-[#ffe600]/80"
+            >
+              {t("startupshell.CreateAgentLabel", {
+                defaultValue: "New local agent",
+              })}
+            </span>
+            <span className="text-sm font-bold">
+              {t("startupshell.CreateOne", { defaultValue: "Create one" })}
+            </span>
           </span>
-          <span className="text-sm font-bold">
-            {t("startupshell.CreateOne", { defaultValue: "Create one" })}
-          </span>
-        </span>
-      </Button>
+        </Button>
+      ) : null}
 
       <Button
         type="button"

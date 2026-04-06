@@ -13,6 +13,7 @@ def capacitor_pods
   pod 'CapacitorCordova', :path => '../../../../node_modules/.bun/@capacitor+ios@8.3.0+1a4bec108d739029/node_modules/@capacitor/ios'
   pod 'CapacitorApp', :path => '../../../../node_modules/.bun/@capacitor+app@8.1.0+1a4bec108d739029/node_modules/@capacitor/app'
   pod 'CapacitorKeyboard', :path => '../../../../node_modules/.bun/@capacitor+keyboard@8.0.0+1a4bec108d739029/node_modules/@capacitor/keyboard'
+  pod 'CapacitorPreferences', :path => '../../../../node_modules/.bun/@capacitor+preferences@8.0.1+1a4bec108d739029/node_modules/@capacitor/preferences'
   pod 'CapacitorStatusBar', :path => '../../../../node_modules/.bun/@capacitor+status-bar@8.0.2+1a4bec108d739029/node_modules/@capacitor/status-bar'
   pod 'MiladyaiCapacitorAgent', :path => '../../plugins/agent'
   pod 'MiladyaiCapacitorCamera', :path => '../../plugins/camera'

@@ -29,6 +29,7 @@
     "@capacitor/core": "^8.0.2",
     "@capacitor/ios": "^8.0.2",
     "@capacitor/keyboard": "8.0.0",
+    "@capacitor/preferences": "^8.0.1",
     "@capacitor/status-bar": "^8.0.1",
     "@miladyai/app-core": "workspace:*",
     "@miladyai/shared": "workspace:*",

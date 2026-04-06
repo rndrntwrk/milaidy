@@ -58,8 +58,15 @@ export async function resolveOnchainPreference({
     };
   }
 
-  // ── Non-interactive: default on ─────────────────────────────────────────
+  // ── Non-interactive: default on, auto-install Foundry if missing ────────
   if (!isTTY || !promptFn) {
+    let anvilAvailable = whichFn("anvil") !== null;
+    if (!anvilAvailable && installFn) {
+      anvilAvailable = await installFn();
+    }
+    if (!anvilAvailable) {
+      return { onchainEnabled: false, anchorRequested: false };
+    }
     return { onchainEnabled: true, anchorRequested: true };
   }
 
