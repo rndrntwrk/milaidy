@@ -39,8 +39,8 @@
       ],
       "runtimePlugin": "@elizaos/app-defense-of-the-agents",
       "viewer": {
-        "url": "https://www.defenseoftheagents.com/",
-        "sandbox": "allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-forms allow-storage-access-by-user-activation"
+        "url": "/api/apps/defense-of-the-agents/viewer",
+        "sandbox": "allow-scripts allow-same-origin allow-popups allow-forms"
       },
       "session": {
         "mode": "spectate-and-steer",

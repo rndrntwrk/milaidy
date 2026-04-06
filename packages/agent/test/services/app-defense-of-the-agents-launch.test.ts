@@ -42,9 +42,8 @@ const DEFENSE_APP_INFO: RegistryPluginInfo = {
   runtimePlugin: APP_NAME,
   capabilities: ["strategy", "telemetry", "lane-control"],
   viewer: {
-    url: "https://www.defenseoftheagents.com/",
-    sandbox:
-      "allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-forms allow-storage-access-by-user-activation",
+    url: "/api/apps/defense-of-the-agents/viewer",
+    sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
   },
   session: {
     mode: "spectate-and-steer",
@@ -61,9 +60,8 @@ const DEFENSE_APP_INFO: RegistryPluginInfo = {
     maxPlayers: null,
     runtimePlugin: APP_NAME,
     viewer: {
-      url: "https://www.defenseoftheagents.com/",
-      sandbox:
-        "allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-forms allow-storage-access-by-user-activation",
+      url: "/api/apps/defense-of-the-agents/viewer",
+      sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
     },
     session: {
       mode: "spectate-and-steer",
@@ -354,7 +352,7 @@ describe("Defense of the Agents launch integration", () => {
       expect(runtime.registerPlugin).toHaveBeenCalledTimes(1);
       expect(result.viewer).toEqual(
         expect.objectContaining({
-          url: "https://www.defenseoftheagents.com/",
+          url: "/api/apps/defense-of-the-agents/viewer",
           postMessageAuth: false,
         }),
       );

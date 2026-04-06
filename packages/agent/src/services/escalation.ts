@@ -1,29 +1,12 @@
-/**
- * Deterministic multi-channel escalation service.
- *
- * Sends an urgent message to the owner on the first configured channel,
- * waits N minutes, checks whether the owner responded anywhere, and
- * advances to the next channel if not — until all channels are exhausted
- * or the owner replies.
- *
- * This is a pure state-machine — no LLM calls, no prompt construction.
- * State is held in-memory (a module-scoped Map). Escalations are transient
- * and do not survive runtime restarts, which is acceptable: a restarting
- * runtime means the owner is likely already engaged.
- */
-
 import type { IAgentRuntime, UUID } from "@elizaos/core";
 import { logger } from "@elizaos/core";
 import { loadElizaConfig } from "../config/config.js";
+import { loadOwnerContactsConfig } from "../config/owner-contacts.js";
 import type {
   EscalationConfig,
   OwnerContactEntry,
   OwnerContactsConfig,
 } from "../config/types.agent-defaults.js";
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
 
 export interface EscalationState {
   id: string;
@@ -37,27 +20,12 @@ export interface EscalationState {
   resolvedAt?: number;
 }
 
-// ---------------------------------------------------------------------------
-// Defaults
-// ---------------------------------------------------------------------------
-
 const DEFAULT_CHANNELS: string[] = ["client_chat"];
 const DEFAULT_WAIT_MINUTES = 5;
 const DEFAULT_MAX_RETRIES = 3;
 
-// ---------------------------------------------------------------------------
-// Module-scoped state
-// ---------------------------------------------------------------------------
-
-/** Active escalations keyed by escalation id. */
 const activeEscalations = new Map<string, EscalationState>();
-
-/** Pending timers so they can be cleared during tests or shutdown. */
 const pendingTimers = new Map<string, ReturnType<typeof setTimeout>>();
-
-// ---------------------------------------------------------------------------
-// Config helpers
-// ---------------------------------------------------------------------------
 
 function loadEscalationConfig(): EscalationConfig {
   try {
@@ -69,12 +37,12 @@ function loadEscalationConfig(): EscalationConfig {
 }
 
 function loadOwnerContacts(): OwnerContactsConfig {
-  try {
-    const cfg = loadElizaConfig();
-    return cfg.agents?.defaults?.ownerContacts ?? {};
-  } catch {
-    return {};
-  }
+  return loadOwnerContactsConfig({
+    boundary: "escalation",
+    operation: "owner_contacts_config",
+    message:
+      "[escalation] Failed to load owner contacts config; escalation delivery has no configured owner channels.",
+  });
 }
 
 function resolveChannels(config: EscalationConfig): string[] {
@@ -97,10 +65,6 @@ function resolveMaxRetries(config: EscalationConfig): number {
     ? config.maxRetries
     : DEFAULT_MAX_RETRIES;
 }
-
-// ---------------------------------------------------------------------------
-// Channel send
-// ---------------------------------------------------------------------------
 
 async function sendToChannel(
   runtime: IAgentRuntime,
@@ -135,16 +99,11 @@ async function sendToChannel(
   }
 }
 
-// ---------------------------------------------------------------------------
-// Owner response detection
-// ---------------------------------------------------------------------------
-
 async function ownerRespondedSince(
   runtime: IAgentRuntime,
   ownerContacts: OwnerContactsConfig,
   sinceTimestamp: number,
 ): Promise<boolean> {
-  // Collect unique owner entity IDs across all configured contacts.
   const entityIds = new Set<string>();
   for (const contact of Object.values(ownerContacts)) {
     if (contact.entityId) entityIds.add(contact.entityId);
@@ -176,16 +135,11 @@ async function ownerRespondedSince(
   return false;
 }
 
-// ---------------------------------------------------------------------------
-// Timer scheduling
-// ---------------------------------------------------------------------------
-
 function scheduleCheck(
   runtime: IAgentRuntime,
   escalationId: string,
   delayMs: number,
 ): void {
-  // Clear any existing timer for this escalation (idempotent).
   const existing = pendingTimers.get(escalationId);
   if (existing) clearTimeout(existing);
 
@@ -201,28 +155,14 @@ function scheduleCheck(
   pendingTimers.set(escalationId, timer);
 }
 
-// ---------------------------------------------------------------------------
-// Service
-// ---------------------------------------------------------------------------
-
 let idCounter = 0;
 
 export class EscalationService {
-  /**
-   * Start an escalation to reach the owner.
-   *
-   * Sends to the first configured channel immediately and schedules a
-   * follow-up check after `waitMinutes`.
-   *
-   * If an escalation is already active, appends the new reason/text to
-   * the existing one (cooldown behavior) rather than starting a second.
-   */
   static async startEscalation(
     runtime: IAgentRuntime,
     reason: string,
     text: string,
   ): Promise<EscalationState> {
-    // Cooldown: coalesce into an active escalation if one exists.
     const existing = EscalationService.getActiveEscalationSync();
     if (existing) {
       existing.reason = `${existing.reason}; ${reason}`;
@@ -255,7 +195,6 @@ export class EscalationService {
 
     activeEscalations.set(escalationId, state);
 
-    // Send to the first channel.
     const firstChannel = channels[0];
     if (firstChannel) {
       const sent = await sendToChannel(runtime, firstChannel, text, ownerContacts);
@@ -264,7 +203,6 @@ export class EscalationService {
       }
     }
 
-    // Schedule follow-up if there are more channels or retries remaining.
     const maxRetries = resolveMaxRetries(config);
     if (channels.length > 1 || maxRetries > 1) {
       scheduleCheck(runtime, escalationId, waitMs);
@@ -277,10 +215,6 @@ export class EscalationService {
     return state;
   }
 
-  /**
-   * Check whether the owner responded since the last escalation step.
-   * If not, advance to the next channel. Called by the timer, not the LLM.
-   */
   static async checkEscalation(
     runtime: IAgentRuntime,
     escalationId: string,
@@ -294,7 +228,6 @@ export class EscalationService {
     const maxRetries = resolveMaxRetries(config);
     const waitMs = resolveWaitMs(config);
 
-    // Check if owner has responded since the last send.
     const responded = await ownerRespondedSince(
       runtime,
       ownerContacts,
@@ -306,7 +239,6 @@ export class EscalationService {
       return;
     }
 
-    // Advance to the next channel.
     state.currentStep += 1;
 
     if (state.currentStep >= maxRetries) {
@@ -333,16 +265,11 @@ export class EscalationService {
       state.lastSentAt = Date.now();
     }
 
-    // Schedule another check if retries remain.
     if (state.currentStep + 1 < maxRetries) {
       scheduleCheck(runtime, escalationId, waitMs);
     }
   }
 
-  /**
-   * Mark an escalation as resolved. Called when the owner responds or
-   * manually by external code.
-   */
   static resolveEscalation(escalationId: string): void {
     const state = activeEscalations.get(escalationId);
     if (!state || state.resolved) return;
@@ -359,9 +286,6 @@ export class EscalationService {
     logger.info(`[escalation] Resolved ${escalationId}`);
   }
 
-  /**
-   * Return the currently active (unresolved) escalation, if any.
-   */
   static getActiveEscalationSync(): EscalationState | null {
     for (const state of activeEscalations.values()) {
       if (!state.resolved) return state;
@@ -369,21 +293,12 @@ export class EscalationService {
     return null;
   }
 
-  /**
-   * Async wrapper matching the spec interface. Delegates to the sync
-   * variant since state is in-memory.
-   */
   static async getActiveEscalation(
     _runtime: IAgentRuntime,
   ): Promise<EscalationState | null> {
     return EscalationService.getActiveEscalationSync();
   }
 
-  // -----------------------------------------------------------------------
-  // Test helpers — not part of the public API.
-  // -----------------------------------------------------------------------
-
-  /** @internal Clear all state. For tests only. */
   static _reset(): void {
     for (const timer of pendingTimers.values()) clearTimeout(timer);
     pendingTimers.clear();

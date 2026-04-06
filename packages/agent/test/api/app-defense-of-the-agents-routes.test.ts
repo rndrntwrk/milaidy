@@ -89,6 +89,34 @@ async function startDefenseFixtureServer(): Promise<DefenseFixtureServer> {
   const server = http.createServer(async (req, res) => {
     const url = new URL(req.url ?? "/", "http://127.0.0.1");
     const body = await readJsonBody(req);
+
+    if (req.method === "GET" && url.pathname === "/") {
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.statusCode = 200;
+      res.end(`<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="/styles.css" />
+    <style>
+      @font-face {
+        font-family: "Fixture";
+        src: url("/fonts/fixture.woff2") format("woff2");
+      }
+    </style>
+  </head>
+  <body>
+    <div id="landing-overlay">Landing</div>
+    <div id="auth-modal" class="modal-overlay open">Auth</div>
+    <div id="class-modal" class="modal-overlay open">Class</div>
+    <div id="join-btn">Join</div>
+    <img src="/hero.png" />
+    <script src="/app.js"></script>
+  </body>
+</html>`);
+      return;
+    }
+
     res.setHeader("Content-Type", "application/json");
 
     if (req.method === "GET" && url.pathname === "/api/game/state") {
@@ -175,6 +203,7 @@ describe("Defense of the Agents app routes", () => {
   const originalApiKey = process.env.DEFENSE_OF_THE_AGENTS_API_KEY;
   const originalGameId = process.env.DEFENSE_OF_THE_AGENTS_GAME_ID;
   const originalAgentName = process.env.DEFENSE_OF_THE_AGENTS_AGENT_NAME;
+  const originalViewerUrl = process.env.DEFENSE_OF_THE_AGENTS_VIEWER_URL;
 
   beforeEach(async () => {
     fixtureServer = await startDefenseFixtureServer();
@@ -182,6 +211,7 @@ describe("Defense of the Agents app routes", () => {
     process.env.DEFENSE_OF_THE_AGENTS_API_KEY = "fixture-defense-api-key";
     process.env.DEFENSE_OF_THE_AGENTS_GAME_ID = "2";
     process.env.DEFENSE_OF_THE_AGENTS_AGENT_NAME = "Scout";
+    process.env.DEFENSE_OF_THE_AGENTS_VIEWER_URL = fixtureServer.url;
   });
 
   afterEach(async () => {
@@ -211,6 +241,11 @@ describe("Defense of the Agents app routes", () => {
       process.env.DEFENSE_OF_THE_AGENTS_AGENT_NAME = originalAgentName;
     } else {
       delete process.env.DEFENSE_OF_THE_AGENTS_AGENT_NAME;
+    }
+    if (originalViewerUrl !== undefined) {
+      process.env.DEFENSE_OF_THE_AGENTS_VIEWER_URL = originalViewerUrl;
+    } else {
+      delete process.env.DEFENSE_OF_THE_AGENTS_VIEWER_URL;
     }
 
     vi.restoreAllMocks();
@@ -263,6 +298,56 @@ describe("Defense of the Agents app routes", () => {
         }),
       }),
     );
+  });
+
+  test("serves a Milady spectator shell instead of the raw Defense site", async () => {
+    const { res } = createMockHttpResponse();
+    const chunks: string[] = [];
+    res.end = ((chunk?: string | Buffer) => {
+      chunks.push(chunk ? chunk.toString() : "");
+    }) as typeof res.end;
+
+    const handled = await handleAppPackageRoutes({
+      req: createMockIncomingMessage({
+        method: "GET",
+        url: "/api/apps/defense-of-the-agents/viewer",
+      }),
+      res,
+      method: "GET",
+      pathname: "/api/apps/defense-of-the-agents/viewer",
+      url: new URL(
+        "http://localhost:2138/api/apps/defense-of-the-agents/viewer",
+      ),
+      runtime: {
+        character: { name: "Scout" },
+        getSetting: (key: string) => {
+          if (key === "DEFENSE_OF_THE_AGENTS_AGENT_NAME") {
+            return "Scout";
+          }
+          return null;
+        },
+      },
+      readJsonBody: vi.fn(async () => null),
+      json: (response, data, status = 200) => {
+        response.writeHead(status);
+        response.end(JSON.stringify(data));
+      },
+      error: (response, message, status = 500) => {
+        response.writeHead(status);
+        response.end(JSON.stringify({ error: message }));
+      },
+    });
+
+    expect(handled).toBe(true);
+
+    const html = chunks.join("");
+    expect(html).toContain("milady-defense-embedded-style");
+    expect(html).toContain("milady-defense-spectator-banner");
+    expect(html).toContain(fixtureServer?.url ?? "");
+    expect(html).toContain('href="' + (fixtureServer?.url ?? "") + '/styles.css"');
+    expect(html).toContain('src="' + (fixtureServer?.url ?? "") + '/hero.png"');
+    expect(html).toContain('url("' + (fixtureServer?.url ?? "") + '/fonts/fixture.woff2")');
+    expect(html).toContain('const agentName = "Scout"');
   });
 
   test("message commands translate into deployments and return a refreshed session", async () => {

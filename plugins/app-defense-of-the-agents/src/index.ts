@@ -4,7 +4,23 @@ export function createAppDefenseOfTheAgentsPlugin(): Plugin {
   return {
     name: "@elizaos/app-defense-of-the-agents",
     description:
-      "Defense of the Agents app wrapper for Milady. Launches the public viewer and routes session commands to the live game API.",
+      "Defense of the Agents app wrapper for Milady. Serves a Milady spectator shell and routes session commands to the live game API.",
+    app: {
+      displayName: "Defense of the Agents",
+      category: "game",
+      launchType: "connect",
+      launchUrl: "https://www.defenseoftheagents.com/",
+      capabilities: ["strategy", "telemetry", "lane-control"],
+      runtimePlugin: "@elizaos/app-defense-of-the-agents",
+      viewer: {
+        url: "/api/apps/defense-of-the-agents/viewer",
+        sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
+      },
+      session: {
+        mode: "spectate-and-steer",
+        features: ["commands", "telemetry", "suggestions"],
+      },
+    },
   };
 }
 

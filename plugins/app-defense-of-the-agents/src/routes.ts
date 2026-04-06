@@ -16,11 +16,14 @@ interface AppLaunchSessionContext {
 const APP_NAME = "@elizaos/app-defense-of-the-agents";
 const APP_DISPLAY_NAME = "Defense of the Agents";
 const DEFAULT_API_BASE_URL = "https://wc2-agentic-dev-3o6un.ondigitalocean.app";
+const DEFAULT_VIEWER_URL = "https://www.defenseoftheagents.com/";
 const DEFAULT_HERO_CLASS = "mage";
 const DEFAULT_HERO_LANE = "mid";
 const DEFAULT_GAME_ID = 1;
 const GAME_SEARCH_LIMIT = 5;
 const FETCH_TIMEOUT_MS = 4_000;
+const VIEWER_FETCH_TIMEOUT_MS = 8_000;
+const VIEWER_ROUTE_PATH = "/api/apps/defense-of-the-agents/viewer";
 const DEPLOY_MESSAGE_LIMIT = 140;
 const EXPLICIT_MESSAGE_PREFIXES = ["say ", "message ", "announce "];
 const GAME_LOOP_INTERVAL_MS = 30_000;
@@ -389,6 +392,253 @@ function resolveSessionContext(
     ),
     runtime,
   };
+}
+
+function resolveViewerUrl(runtime: IAgentRuntime | null): string {
+  return (
+    resolveSettingLike(runtime, "DEFENSE_OF_THE_AGENTS_VIEWER_URL") ??
+    DEFAULT_VIEWER_URL
+  ).trim();
+}
+
+function absolutizeViewerHtmlAssetUrls(
+  html: string,
+  viewerUrl: string,
+): string {
+  const origin = new URL(viewerUrl).origin.replace(/\/+$/, "");
+
+  return html
+    .replace(
+      /(src|href)=("|')\/(?!\/)/g,
+      (_match, attribute: string, quote: string) =>
+        `${attribute}=${quote}${origin}/`,
+    )
+    .replace(
+      /url\((["']?)\/(?!\/)/g,
+      (_match, quote: string) => `url(${quote}${origin}/`,
+    );
+}
+
+function buildViewerShellInjection(
+  agentName: string,
+  viewerUrl: string,
+): string {
+  return `<style id="milady-defense-embedded-style">
+html, body { background: #000 !important; }
+#landing-overlay,
+#auth-modal,
+#class-modal,
+#landing-reopen,
+#profile-panel,
+#leaderboard-panel,
+#store-panel {
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+#join-btn,
+#lane-switcher,
+#leaderboard-toggle,
+#store-toggle {
+  display: none !important;
+}
+#scoreboard-toggle {
+  top: 18px !important;
+}
+#scoreboard-panel {
+  top: 54px !important;
+}
+#bottom-hud {
+  transform: translateX(-50%) !important;
+}
+#milady-defense-spectator-banner {
+  position: fixed;
+  top: 14px;
+  left: 14px;
+  z-index: 2200;
+  max-width: min(420px, calc(100vw - 28px));
+  padding: 14px 16px;
+  border: 1px solid rgba(252, 211, 18, 0.35);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(14, 12, 8, 0.96), rgba(7, 6, 4, 0.92));
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
+  color: #f6ead2;
+  font: 12px "Friz Quadrata", "Palatino Linotype", serif;
+}
+#milady-defense-spectator-banner .milady-defense-title {
+  color: #fcd312;
+  font-size: 15px;
+  margin-bottom: 6px;
+}
+#milady-defense-spectator-banner .milady-defense-body {
+  color: rgba(246, 234, 210, 0.82);
+  line-height: 1.5;
+}
+#milady-defense-spectator-banner .milady-defense-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 10px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(252, 211, 18, 0.4);
+  color: #fcd312;
+  text-decoration: none;
+  background: rgba(63, 48, 12, 0.48);
+}
+#milady-defense-spectator-banner .milady-defense-link:hover {
+  background: rgba(92, 70, 17, 0.62);
+}
+</style>
+<script id="milady-defense-embedded-bootstrap">
+(() => {
+  const agentName = ${JSON.stringify(agentName)};
+  const fullSiteUrl = ${JSON.stringify(viewerUrl)};
+  const hiddenIds = [
+    "landing-overlay",
+    "auth-modal",
+    "class-modal",
+    "landing-reopen",
+    "profile-panel",
+    "leaderboard-panel",
+    "store-panel",
+  ];
+  const hiddenSelectors = [
+    "#join-btn",
+    "#lane-switcher",
+    "#leaderboard-toggle",
+    "#store-toggle",
+  ];
+
+  const hideNode = (node) => {
+    if (!(node instanceof HTMLElement)) {
+      return;
+    }
+    node.classList.remove("open");
+    node.classList.add("hidden");
+    node.style.display = "none";
+    node.style.opacity = "0";
+    node.style.pointerEvents = "none";
+  };
+
+  const ensureBanner = () => {
+    if (document.getElementById("milady-defense-spectator-banner")) {
+      return;
+    }
+
+    const banner = document.createElement("div");
+    banner.id = "milady-defense-spectator-banner";
+
+    const title = document.createElement("div");
+    title.className = "milady-defense-title";
+    title.textContent = agentName
+      ? "Watching " + agentName
+      : "Watching Defense of the Agents";
+
+    const body = document.createElement("div");
+    body.className = "milady-defense-body";
+    body.textContent =
+      "Milady is steering this agent from the adjacent panel. Open the full site if you want to log in or join the battle yourself.";
+
+    const link = document.createElement("a");
+    link.className = "milady-defense-link";
+    link.href = fullSiteUrl;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.textContent = "Open Full Game";
+
+    banner.append(title, body, link);
+    document.body.appendChild(banner);
+  };
+
+  const applyEmbeddedViewerMode = () => {
+    localStorage.setItem("landing-closed", "1");
+    for (const id of hiddenIds) {
+      hideNode(document.getElementById(id));
+    }
+    for (const selector of hiddenSelectors) {
+      hideNode(document.querySelector(selector));
+    }
+    const scoreboardToggle = document.getElementById("scoreboard-toggle");
+    if (scoreboardToggle instanceof HTMLElement) {
+      scoreboardToggle.style.top = "18px";
+    }
+    const scoreboardPanel = document.getElementById("scoreboard-panel");
+    if (scoreboardPanel instanceof HTMLElement) {
+      scoreboardPanel.style.top = "54px";
+    }
+    document.documentElement.dataset.miladyDefenseViewer = "embedded";
+    ensureBanner();
+  };
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", applyEmbeddedViewerMode, {
+      once: true,
+    });
+  } else {
+    applyEmbeddedViewerMode();
+  }
+
+  window.addEventListener("load", applyEmbeddedViewerMode, { once: true });
+
+  const observer = new MutationObserver(() => {
+    applyEmbeddedViewerMode();
+  });
+  observer.observe(document.documentElement, {
+    subtree: true,
+    childList: true,
+    attributes: true,
+    attributeFilter: ["class", "style"],
+  });
+  window.addEventListener(
+    "beforeunload",
+    () => {
+      observer.disconnect();
+    },
+    { once: true },
+  );
+})();
+</script>`;
+}
+
+async function buildEmbeddedViewerHtml(
+  runtime: IAgentRuntime | null,
+): Promise<string> {
+  const viewerUrl = resolveViewerUrl(runtime);
+  const response = await fetch(viewerUrl, {
+    signal: AbortSignal.timeout(VIEWER_FETCH_TIMEOUT_MS),
+  });
+  const html = await response.text();
+
+  if (!response.ok) {
+    throw new Error(
+      `Defense viewer request failed (${response.status}): ${html.trim() || response.statusText}`,
+    );
+  }
+
+  const absolutizedHtml = absolutizeViewerHtmlAssetUrls(html, viewerUrl);
+  const injection = buildViewerShellInjection(
+    resolveAgentName(runtime, null),
+    viewerUrl,
+  );
+
+  if (absolutizedHtml.includes("</head>")) {
+    return absolutizedHtml.replace("</head>", `${injection}</head>`);
+  }
+
+  return `${injection}${absolutizedHtml}`;
+}
+
+function sendHtmlResponse(res: unknown, html: string): void {
+  const response = res as {
+    end: (body?: string) => void;
+    setHeader: (name: string, value: string) => void;
+    statusCode: number;
+  };
+  response.statusCode = 200;
+  response.setHeader("Cache-Control", "no-store");
+  response.setHeader("Content-Type", "text/html; charset=utf-8");
+  response.end(html);
 }
 
 async function fetchJson<T>(url: URL, init?: RequestInit): Promise<T> {
@@ -1515,16 +1765,33 @@ export async function resolveLaunchSession(
 export async function handleAppRoutes(ctx: {
   method: string;
   pathname: string;
+  url?: URL;
   runtime: unknown | null;
   error: (response: unknown, message: string, status?: number) => void;
   json: (response: unknown, data: unknown, status?: number) => void;
   readJsonBody: () => Promise<unknown>;
   res: unknown;
 }): Promise<boolean> {
+  const runtime = (asRuntimeLike(ctx.runtime) as IAgentRuntime | null) ?? null;
+
+  if (ctx.method === "GET" && ctx.pathname === VIEWER_ROUTE_PATH) {
+    try {
+      sendHtmlResponse(ctx.res, await buildEmbeddedViewerHtml(runtime));
+    } catch (error) {
+      ctx.error(
+        ctx.res,
+        error instanceof Error
+          ? error.message
+          : "Defense viewer failed to load.",
+        502,
+      );
+    }
+    return true;
+  }
+
   const sessionId = parseSessionId(ctx.pathname);
   if (!sessionId) return false;
 
-  const runtime = (asRuntimeLike(ctx.runtime) as IAgentRuntime | null) ?? null;
   const subroute = parseSessionSubroute(ctx.pathname);
 
   try {

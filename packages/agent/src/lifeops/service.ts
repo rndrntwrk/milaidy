@@ -124,8 +124,7 @@ import {
   LIFEOPS_WORKFLOW_TRIGGER_TYPES,
   LIFEOPS_X_CAPABILITIES,
 } from "@miladyai/shared/contracts/lifeops";
-import { loadElizaConfig } from "../config/config.js";
-import type { OwnerContactsConfig } from "../config/types.agent-defaults.js";
+import { loadOwnerContactsConfig } from "../config/owner-contacts.js";
 import { getAgentEventService } from "../runtime/agent-event-service.js";
 import {
   computeNextCronRunAtMs,
@@ -2876,23 +2875,6 @@ function parseWorkflowSchedulerState(
   };
 }
 
-function loadOwnerContactsConfig(): OwnerContactsConfig {
-  try {
-    const config = loadElizaConfig();
-    return config.agents?.defaults?.ownerContacts ?? {};
-  } catch (error) {
-    logger.warn(
-      {
-        boundary: "lifeops",
-        operation: "owner_contacts_config",
-        err: error instanceof Error ? error : undefined,
-      },
-      "[lifeops] Failed to load owner contacts config; runtime reminder channels will fall back to channel-policy metadata only.",
-    );
-    return {};
-  }
-}
-
 function normalizeWebsiteListForComparison(
   websites: readonly string[],
 ): string[] {
@@ -4428,7 +4410,12 @@ export class LifeOpsService {
       (metadata && normalizeOptionalString(metadata.source)) ??
       (metadata && normalizeOptionalString(metadata.platform)) ??
       channel;
-    const ownerContacts = loadOwnerContactsConfig();
+    const ownerContacts = loadOwnerContactsConfig({
+      boundary: "lifeops",
+      operation: "owner_contacts_config",
+      message:
+        "[lifeops] Failed to load owner contacts config; runtime reminder channels will fall back to channel-policy metadata only.",
+    });
     const contact = ownerContacts[configuredSource] ?? ownerContacts[channel];
     const entityId =
       (metadata && normalizeOptionalString(metadata.entityId)) ??
@@ -4459,9 +4446,6 @@ export class LifeOpsService {
   }
 
   private async readReminderActivityProfileSnapshot(): Promise<ReminderActivityProfileSnapshot | null> {
-    if (typeof this.runtime.getTasks !== "function") {
-      return null;
-    }
     try {
       const tasks = await this.runtime.getTasks({
         agentIds: [this.runtime.agentId],
@@ -4482,25 +4466,11 @@ export class LifeOpsService {
       if (!isRecord(profile)) {
         return null;
       }
-      const primaryPlatform =
-        typeof profile.primaryPlatform === "string" &&
-        profile.primaryPlatform.trim().length > 0
-          ? profile.primaryPlatform
-          : null;
-      const secondaryPlatform =
-        typeof profile.secondaryPlatform === "string" &&
-        profile.secondaryPlatform.trim().length > 0
-          ? profile.secondaryPlatform
-          : null;
-      const lastSeenPlatform =
-        typeof profile.lastSeenPlatform === "string" &&
-        profile.lastSeenPlatform.trim().length > 0
-          ? profile.lastSeenPlatform
-          : null;
       return {
-        primaryPlatform,
-        secondaryPlatform,
-        lastSeenPlatform,
+        primaryPlatform: normalizeOptionalString(profile.primaryPlatform) ?? null,
+        secondaryPlatform:
+          normalizeOptionalString(profile.secondaryPlatform) ?? null,
+        lastSeenPlatform: normalizeOptionalString(profile.lastSeenPlatform) ?? null,
         isCurrentlyActive: profile.isCurrentlyActive === true,
       };
     } catch (error) {
@@ -4632,7 +4602,12 @@ export class LifeOpsService {
       mapPlatformToReminderChannel(args.activityProfile?.secondaryPlatform),
     );
 
-    const ownerContacts = loadOwnerContactsConfig();
+    const ownerContacts = loadOwnerContactsConfig({
+      boundary: "lifeops",
+      operation: "owner_contacts_config",
+      message:
+        "[lifeops] Failed to load owner contacts config; runtime reminder channels will fall back to channel-policy metadata only.",
+    });
     for (const source of Object.keys(ownerContacts)) {
       const mappedChannel = mapPlatformToReminderChannel(source);
       if (mappedChannel === "in_app") {
@@ -4875,10 +4850,7 @@ export class LifeOpsService {
     if (!lastNormalAttempt) {
       return null;
     }
-    const lastScheduledPlanEntry = schedule.at(-1) ?? null;
-    if (!lastScheduledPlanEntry) {
-      return null;
-    }
+    const lastScheduledPlanEntry = schedule[schedule.length - 1];
     const lastScheduledPlanTime = Date.parse(lastScheduledPlanEntry.scheduledFor);
     const nowMs = args.now.getTime();
     const planExhausted = nowMs >= lastScheduledPlanTime;
@@ -5248,11 +5220,12 @@ export class LifeOpsService {
         args.channel === "sms" || args.channel === "voice"
           ? null
           : this.resolveRuntimeReminderTarget(args.channel, policy);
+      const requiresEscalationPermission = args.stepIndex > 0;
       if (policy && !policy.allowReminders) {
         outcome = "blocked_policy";
         deliveryMetadata.reason = "channel_policy";
       } else if (
-        lifecycle === "escalation" &&
+        (lifecycle === "escalation" || requiresEscalationPermission) &&
         policy &&
         !policy.allowEscalation
       ) {
@@ -5273,7 +5246,10 @@ export class LifeOpsService {
         } else if (!twilioPolicy) {
           outcome = "blocked_policy";
           deliveryMetadata.reason = "channel_policy";
-        } else if (lifecycle === "escalation" && !twilioPolicy.allowEscalation) {
+        } else if (
+          (lifecycle === "escalation" || requiresEscalationPermission) &&
+          !twilioPolicy.allowEscalation
+        ) {
           outcome = "blocked_policy";
           deliveryMetadata.reason = "channel_escalation_policy";
         } else {

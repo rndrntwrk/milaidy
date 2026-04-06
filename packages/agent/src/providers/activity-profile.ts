@@ -1,11 +1,3 @@
-/**
- * Activity Profile Provider — injects compact user activity context
- * into every prompt so the LLM knows time-of-day context and user state.
- *
- * Output format (< 200 chars):
- *   "User: active on telegram 5m ago | MORNING | standup in 42m"
- */
-
 import type {
   IAgentRuntime,
   Memory,
@@ -57,7 +49,6 @@ export const activityProfileProvider: Provider = {
     message: Memory,
     _state: State,
   ): Promise<ProviderResult> {
-    // Access control: owner/admin or agent self-talk only
     const source = (message.content as Record<string, unknown> | undefined)?.source;
     if (source !== "client_chat" && message.entityId !== runtime.agentId) {
       if (!(await hasAccess(runtime, message))) {
@@ -68,9 +59,6 @@ export const activityProfileProvider: Provider = {
     const timezone = resolveDefaultTimeZone();
     const now = new Date();
     const bucket = resolveCurrentBucket(timezone, now);
-
-    // Try to read profile from proactive task metadata
-    let profileText = "";
     try {
       const tasks = await runtime.getTasks({
         agentIds: [runtime.agentId],
@@ -86,7 +74,6 @@ export const activityProfileProvider: Provider = {
         const parts: string[] = [];
         const localDateKey = getLocalDateKey(getZonedDateParts(now, timezone));
 
-        // Platform + recency
         if (profile.lastSeenPlatform && profile.lastSeenAt > 0) {
           const ago = formatAgo(now.getTime() - profile.lastSeenAt);
           parts.push(
@@ -95,17 +82,13 @@ export const activityProfileProvider: Provider = {
               : `last seen on ${profile.lastSeenPlatform} ${ago}`,
           );
         }
-
-        // Time bucket
         parts.push(bucket);
         if (profile.effectiveDayKey !== localDateKey) {
           parts.push("previous day still open");
         }
 
-        profileText = parts.length > 0 ? `User: ${parts.join(" | ")}` : "";
-
         return {
-          text: profileText,
+          text: parts.length > 0 ? `User: ${parts.join(" | ")}` : "",
           values: {
             userIsActive: profile.isCurrentlyActive,
             userPrimaryPlatform: profile.primaryPlatform,
@@ -129,7 +112,6 @@ export const activityProfileProvider: Provider = {
       );
     }
 
-    // Fallback: just time bucket
     return {
       text: `User context: ${bucket}`,
       values: {

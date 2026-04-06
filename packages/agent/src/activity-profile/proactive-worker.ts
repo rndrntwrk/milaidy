@@ -1,15 +1,7 @@
-/**
- * Proactive Agent Worker — background task that fires GM/GN/nudges
- * at the right time on the right platform.
- *
- * Follows the same pattern as lifeops/runtime.ts task workers.
- */
-
 import type { IAgentRuntime, Task, TaskMetadata, UUID } from "@elizaos/core";
 import { logger, stringToUuid } from "@elizaos/core";
+import { loadOwnerContactsConfig } from "../config/owner-contacts.js";
 import { resolveDefaultTimeZone } from "../lifeops/defaults.js";
-import { loadElizaConfig } from "../config/config.js";
-import type { OwnerContactsConfig } from "../config/types.agent-defaults.js";
 import { LifeOpsService, LifeOpsServiceError } from "../lifeops/service.js";
 import {
   planGm,
@@ -29,13 +21,9 @@ import {
 import { resolveEffectiveDayKey } from "./analyzer.js";
 import type { ActivityProfile, FiredActionsLog, ProactiveAction } from "./types.js";
 
-// ── Constants ─────────────────────────────────────────
-
 export const PROACTIVE_TASK_NAME = "PROACTIVE_AGENT" as const;
 export const PROACTIVE_TASK_TAGS = ["queue", "repeat", "proactive"] as const;
 export const PROACTIVE_TASK_INTERVAL_MS = 60_000;
-
-// ── Task identification ───────────────────────────────
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -66,42 +54,18 @@ function buildProactiveMetadata(
   };
 }
 
-// ── Config helpers ────────────────────────────────────
-
-function loadOwnerContacts(): OwnerContactsConfig {
-  try {
-    const cfg = loadElizaConfig();
-    return cfg.agents?.defaults?.ownerContacts ?? {};
-  } catch (error) {
-    logger.warn(
-      {
-        boundary: "activity_profile",
-        operation: "owner_contacts_config",
-        err: error instanceof Error ? error : undefined,
-      },
-      "[proactive] Failed to load owner contacts config; proactive messages cannot route to owner channels until config is available.",
-    );
-    return {};
-  }
-}
-
-// ── Main execution ────────────────────────────────────
-
 export async function executeProactiveTask(
   runtime: IAgentRuntime,
-  _options: Record<string, unknown> = {},
 ): Promise<{ nextInterval: number }> {
   const now = new Date();
   const timezone = resolveDefaultTimeZone();
 
   try {
-    // 1. Resolve owner
     const ownerEntityId = await resolveOwnerEntityId(runtime);
     if (!ownerEntityId) {
       return { nextInterval: PROACTIVE_TASK_INTERVAL_MS };
     }
 
-    // 2. Load existing profile from task metadata
     const tasks = await runtime.getTasks({
       agentIds: [runtime.agentId],
       tags: [...PROACTIVE_TASK_TAGS],
@@ -112,14 +76,20 @@ export async function executeProactiveTask(
     }
 
     const metadata = isRecord(task.metadata) ? task.metadata : {};
-    let profile = readProfileFromMetadata(metadata);
-
-    // 3. Rebuild or refresh profile
-    if (profileNeedsRebuild(profile, now)) {
+    const currentProfile = readProfileFromMetadata(metadata);
+    let profile: ActivityProfile | null;
+    if (profileNeedsRebuild(currentProfile, now)) {
       logger.info("[proactive] Building full activity profile");
       profile = await buildActivityProfile(runtime, ownerEntityId, timezone, now);
-    } else if (profile) {
-      profile = await refreshCurrentState(runtime, ownerEntityId, profile, now);
+    } else if (currentProfile) {
+      profile = await refreshCurrentState(
+        runtime,
+        ownerEntityId,
+        currentProfile,
+        now,
+      );
+    } else {
+      profile = null;
     }
 
     if (!profile) {
@@ -128,23 +98,44 @@ export async function executeProactiveTask(
 
     const todayStr = resolveEffectiveDayKey(profile, timezone, now);
     let firedLog = readFiredLogFromMetadata(metadata, todayStr);
-
-    // 4. Fetch occurrences and calendar for planning
-    const { occurrences, calendarEvents } = await fetchPlannerContext(runtime, timezone, now);
-
-    // 5. Plan actions
-    const gmAction = planGm(profile, occurrences, calendarEvents, firedLog, timezone, now);
+    const { occurrences, calendarEvents } = await fetchPlannerContext(
+      runtime,
+      timezone,
+      now,
+    );
+    const gmAction = planGm(
+      profile,
+      occurrences,
+      calendarEvents,
+      firedLog,
+      timezone,
+      now,
+    );
     const gnAction = planGn(profile, firedLog, timezone, now);
-    const nudgeActions = planNudges(profile, occurrences, calendarEvents, firedLog, timezone, now);
-
-    const allActions = [gmAction, gnAction, ...nudgeActions].filter(
-      (a): a is ProactiveAction => a !== null && a.status === "pending",
+    const nudgeActions = planNudges(
+      profile,
+      occurrences,
+      calendarEvents,
+      firedLog,
+      timezone,
+      now,
     );
 
-    // 6. Fire due actions
-    const ownerContacts = loadOwnerContacts();
+    const allActions = [gmAction, gnAction, ...nudgeActions].filter(
+      (action): action is ProactiveAction =>
+        action !== null && action.status === "pending",
+    );
+
+    const ownerContacts = loadOwnerContactsConfig({
+      boundary: "activity_profile",
+      operation: "owner_contacts_config",
+      message:
+        "[proactive] Failed to load owner contacts config; proactive messages cannot route to owner channels until config is available.",
+    });
     for (const action of allActions) {
-      if (action.scheduledFor > now.getTime()) continue;
+      if (action.scheduledFor > now.getTime()) {
+        continue;
+      }
 
       const contact = ownerContacts[action.targetPlatform];
       if (!contact) {
@@ -161,8 +152,6 @@ export async function executeProactiveTask(
           >[0],
           { text: action.contextSummary, source: action.targetPlatform },
         );
-
-        // Record in fired log
         firedLog = recordFiredAction(firedLog, todayStr, action);
         logger.info(`[proactive] Fired ${action.kind} on ${action.targetPlatform}`);
       } catch (err) {
@@ -170,7 +159,6 @@ export async function executeProactiveTask(
       }
     }
 
-    // 7. Persist updated profile + fired log
     await runtime.updateTask(task.id, {
       metadata: {
         ...metadata,
@@ -185,8 +173,6 @@ export async function executeProactiveTask(
   return { nextInterval: PROACTIVE_TASK_INTERVAL_MS };
 }
 
-// ── Planner context fetching ──────────────────────────
-
 async function fetchPlannerContext(
   runtime: IAgentRuntime,
   timezone: string,
@@ -194,9 +180,9 @@ async function fetchPlannerContext(
 ): Promise<{ occurrences: OccurrenceSlim[]; calendarEvents: CalendarEventSlim[] }> {
   const occurrences: OccurrenceSlim[] = [];
   const calendarEvents: CalendarEventSlim[] = [];
+  const lifeOpsService = new LifeOpsService(runtime);
 
   try {
-    const lifeOpsService = new LifeOpsService(runtime);
     const overview = await lifeOpsService.getOverview(now);
 
     for (const occ of overview.occurrences) {
@@ -219,7 +205,6 @@ async function fetchPlannerContext(
   }
 
   try {
-    const lifeOpsService = new LifeOpsService(runtime);
     const feed = await lifeOpsService.getCalendarFeed(
       new URL("http://localhost/api/lifeops/calendar"),
       {},
@@ -251,8 +236,6 @@ async function fetchPlannerContext(
   return { occurrences, calendarEvents };
 }
 
-// ── Fired action recording ────────────────────────────
-
 function recordFiredAction(
   log: FiredActionsLog | null,
   todayStr: string,
@@ -275,8 +258,6 @@ function recordFiredAction(
   return current;
 }
 
-// ── Registration ──────────────────────────────────────
-
 export function registerProactiveTaskWorker(runtime: IAgentRuntime): void {
   if (runtime.getTaskWorker(PROACTIVE_TASK_NAME)) {
     return;
@@ -284,8 +265,7 @@ export function registerProactiveTaskWorker(runtime: IAgentRuntime): void {
   runtime.registerTaskWorker({
     name: PROACTIVE_TASK_NAME,
     shouldRun: async () => true,
-    execute: async (rt, options) =>
-      executeProactiveTask(rt, isRecord(options) ? options : {}),
+    execute: (rt) => executeProactiveTask(rt),
   });
 }
 
