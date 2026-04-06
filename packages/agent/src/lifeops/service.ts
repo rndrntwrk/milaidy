@@ -61,6 +61,7 @@ import type {
   LifeOpsSubjectType,
   LifeOpsTaskDefinition,
   LifeOpsTimeWindowDefinition,
+  LifeOpsWebsiteAccessPolicy,
   LifeOpsVisibilityScope,
   LifeOpsWindowPolicy,
   LifeOpsWorkflowAction,
@@ -1720,9 +1721,103 @@ function normalizeCadence(
         slots,
       }) as LifeOpsCadence;
     }
+    case "interval": {
+      const everyMinutes = Math.trunc(
+        normalizeFiniteNumber(cadence.everyMinutes, "cadence.everyMinutes"),
+      );
+      if (everyMinutes <= 0 || everyMinutes > DAY_MINUTES) {
+        fail(400, "cadence.everyMinutes must be between 1 and 1440");
+      }
+      const windows = normalizeWindowNames(
+        cadence.windows,
+        "cadence.windows",
+        windowPolicy,
+      );
+      const normalized: Extract<LifeOpsCadence, { kind: "interval" }> = {
+        kind: "interval",
+        everyMinutes,
+        windows,
+      };
+      if (cadence.startMinuteOfDay !== undefined) {
+        const startMinuteOfDay = Math.trunc(
+          normalizeFiniteNumber(
+            cadence.startMinuteOfDay,
+            "cadence.startMinuteOfDay",
+          ),
+        );
+        if (startMinuteOfDay < 0 || startMinuteOfDay >= DAY_MINUTES) {
+          fail(400, "cadence.startMinuteOfDay must be between 0 and 1439");
+        }
+        normalized.startMinuteOfDay = startMinuteOfDay;
+      }
+      if (cadence.maxOccurrencesPerDay !== undefined) {
+        const maxOccurrencesPerDay = normalizePositiveInteger(
+          cadence.maxOccurrencesPerDay,
+          "cadence.maxOccurrencesPerDay",
+        );
+        if (maxOccurrencesPerDay > Math.ceil(DAY_MINUTES / everyMinutes)) {
+          fail(
+            400,
+            "cadence.maxOccurrencesPerDay is larger than the interval allows",
+          );
+        }
+        normalized.maxOccurrencesPerDay = maxOccurrencesPerDay;
+      }
+      if (cadence.durationMinutes !== undefined) {
+        const durationMinutes = Math.trunc(
+          normalizeFiniteNumber(
+            cadence.durationMinutes,
+            "cadence.durationMinutes",
+          ),
+        );
+        if (durationMinutes <= 0 || durationMinutes > DAY_MINUTES) {
+          fail(400, "cadence.durationMinutes must be between 1 and 1440");
+        }
+        normalized.durationMinutes = durationMinutes;
+      }
+      return withVisibility(normalized) as LifeOpsCadence;
+    }
     default:
       fail(400, "cadence.kind is not supported");
   }
+}
+
+function normalizeWebsiteAccessPolicy(
+  value: unknown,
+  field: string,
+): LifeOpsWebsiteAccessPolicy | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  const record = requireRecord(value, field);
+  const groupKey = requireNonEmptyString(record.groupKey, `${field}.groupKey`);
+  if (!Array.isArray(record.websites) || record.websites.length === 0) {
+    fail(400, `${field}.websites must contain at least one website`);
+  }
+  const seen = new Set<string>();
+  const websites: string[] = [];
+  for (const [index, candidate] of record.websites.entries()) {
+    const website = requireNonEmptyString(
+      candidate,
+      `${field}.websites[${index}]`,
+    ).toLowerCase();
+    if (!seen.has(website)) {
+      seen.add(website);
+      websites.push(website);
+    }
+  }
+  const unlockDurationMinutes = normalizePositiveInteger(
+    record.unlockDurationMinutes,
+    `${field}.unlockDurationMinutes`,
+  );
+  const reason =
+    normalizeOptionalString(record.reason) ??
+    "Access is locked until this routine earns another unlock.";
+  return {
+    groupKey,
+    websites,
+    unlockDurationMinutes,
+    reason,
+  };
 }
 
 function normalizeProgressionRule(
@@ -4026,6 +4121,11 @@ export class LifeOpsService {
       cadence,
       windowPolicy,
       progressionRule,
+      websiteAccess:
+        normalizeWebsiteAccessPolicy(
+          request.websiteAccess,
+          "websiteAccess",
+        ) ?? null,
       reminderPlanId: null,
       goalId,
       source: normalizeOptionalString(request.source) ?? "manual",
@@ -4124,6 +4224,13 @@ export class LifeOpsService {
         request.progressionRule !== undefined
           ? normalizeProgressionRule(request.progressionRule)
           : current.definition.progressionRule,
+      websiteAccess:
+        request.websiteAccess !== undefined
+          ? (normalizeWebsiteAccessPolicy(
+              request.websiteAccess,
+              "websiteAccess",
+            ) ?? null)
+          : current.definition.websiteAccess,
       goalId:
         request.goalId !== undefined
           ? await this.ensureGoalExists(request.goalId ?? null, ownership)
@@ -4437,7 +4544,9 @@ export class LifeOpsService {
         ? goal.cadence.kind
         : null;
     const staleMs =
-      cadenceKind === "daily" || cadenceKind === "times_per_day"
+      cadenceKind === "daily" ||
+      cadenceKind === "times_per_day" ||
+      cadenceKind === "interval"
         ? 2 * 24 * 60 * 60 * 1000
         : cadenceKind === "weekly"
           ? 10 * 24 * 60 * 60 * 1000

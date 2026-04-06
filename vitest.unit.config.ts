@@ -11,6 +11,37 @@ export default mergeConfig(
     resolve: {
       alias: [
         {
+          find: "@elizaos/core",
+          replacement: path.join(
+            repoRoot,
+            "eliza",
+            "packages",
+            "typescript",
+            "src",
+            "index.ts",
+          ),
+        },
+        {
+          find: "@elizaos/plugin-cron",
+          replacement: path.join(repoRoot, "test", "stubs", "plugin-stub.mjs"),
+        },
+        {
+          find: "@elizaos/plugin-edge-tts/node",
+          replacement: path.join(repoRoot, "test", "stubs", "plugin-stub.mjs"),
+        },
+        {
+          find: "@elizaos/plugin-edge-tts",
+          replacement: path.join(repoRoot, "test", "stubs", "plugin-stub.mjs"),
+        },
+        {
+          find: "@elizaos/plugin-openai",
+          replacement: path.join(repoRoot, "test", "stubs", "plugin-stub.mjs"),
+        },
+        {
+          find: "@elizaos/plugin-trust",
+          replacement: path.join(repoRoot, "test", "stubs", "plugin-stub.mjs"),
+        },
+        {
           find: "@elizaos/plugin-agent-orchestrator",
           replacement: path.join(
             repoRoot,

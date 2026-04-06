@@ -234,6 +234,7 @@ function summarizeCadence(cadence: LifeOpsCadence): string {
     case "once": return `one-off due ${cadence.dueAt}`;
     case "daily": return `daily in ${cadence.windows.join(", ")}`;
     case "times_per_day": return `${cadence.slots.length} times per day`;
+    case "interval": return `every ${cadence.everyMinutes} minutes in ${cadence.windows.join(", ")}`;
     case "weekly": return `weekly on ${cadence.weekdays.join(", ")}`;
   }
 }

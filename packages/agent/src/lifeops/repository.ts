@@ -125,6 +125,11 @@ function parseTaskDefinition(
     progressionRule: parseJsonRecord(
       row.progression_rule_json,
     ) as unknown as LifeOpsTaskDefinition["progressionRule"],
+    websiteAccess: row.website_access_json
+      ? (parseJsonRecord(
+          row.website_access_json,
+        ) as unknown as LifeOpsTaskDefinition["websiteAccess"])
+      : null,
     reminderPlanId: row.reminder_plan_id ? toText(row.reminder_plan_id) : null,
     goalId: row.goal_id ? toText(row.goal_id) : null,
     source: toText(row.source),
@@ -524,6 +529,7 @@ export async function ensureLifeOpsTables(
       cadence_json TEXT NOT NULL,
       window_policy_json TEXT NOT NULL,
       progression_rule_json TEXT NOT NULL,
+      website_access_json TEXT,
       reminder_plan_id TEXT,
       goal_id TEXT,
       source TEXT NOT NULL DEFAULT 'manual',
@@ -865,6 +871,16 @@ export async function ensureLifeOpsTables(
       `UPDATE ${tableName}
           SET subject_id = agent_id
         WHERE subject_id = '' OR subject_id IS NULL`,
+    );
+  }
+
+  const existingDefinitionColumns = new Set(
+    await listTableColumns(runtime, "life_task_definitions"),
+  );
+  if (!existingDefinitionColumns.has("website_access_json")) {
+    await executeRawSql(
+      runtime,
+      "ALTER TABLE life_task_definitions ADD COLUMN website_access_json TEXT",
     );
   }
 
@@ -1229,7 +1245,7 @@ export class LifeOpsRepository {
         id, agent_id, domain, subject_type, subject_id, visibility_scope,
         context_policy, kind, title, description, original_intent, timezone,
         status, priority, cadence_json, window_policy_json,
-        progression_rule_json, reminder_plan_id, goal_id, source,
+        progression_rule_json, website_access_json, reminder_plan_id, goal_id, source,
         metadata_json, created_at, updated_at
       ) VALUES (
         ${sqlQuote(definition.id)},
@@ -1249,6 +1265,11 @@ export class LifeOpsRepository {
         ${sqlJson(definition.cadence)},
         ${sqlJson(definition.windowPolicy)},
         ${sqlJson(definition.progressionRule)},
+        ${sqlText(
+          definition.websiteAccess
+            ? JSON.stringify(definition.websiteAccess)
+            : null,
+        )},
         ${sqlText(definition.reminderPlanId)},
         ${sqlText(definition.goalId)},
         ${sqlQuote(definition.source)},
@@ -1278,6 +1299,11 @@ export class LifeOpsRepository {
              cadence_json = ${sqlJson(definition.cadence)},
              window_policy_json = ${sqlJson(definition.windowPolicy)},
              progression_rule_json = ${sqlJson(definition.progressionRule)},
+             website_access_json = ${sqlText(
+               definition.websiteAccess
+                 ? JSON.stringify(definition.websiteAccess)
+                 : null,
+             )},
              reminder_plan_id = ${sqlText(definition.reminderPlanId)},
              goal_id = ${sqlText(definition.goalId)},
              source = ${sqlQuote(definition.source)},

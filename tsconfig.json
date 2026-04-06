@@ -26,7 +26,10 @@
       "@miladyai/ui": ["./packages/ui/src/index.ts"],
       "@miladyai/ui/*": ["./packages/ui/src/*"],
       "@miladyai/agent/*": ["./packages/agent/src/*"],
-      "@elizaos/core": ["./node_modules/@elizaos/core"]
+      "@elizaos/core": [
+        "./eliza/packages/typescript/src/index.ts",
+        "./node_modules/@elizaos/core"
+      ]
     }
   },
   "include": [

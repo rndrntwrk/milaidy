@@ -259,6 +259,24 @@ export interface LifeOpsDailySlot {
   durationMinutes: number;
 }
 
+export interface LifeOpsIntervalCadence {
+  kind: "interval";
+  everyMinutes: number;
+  windows: LifeOpsTimeWindowName[];
+  startMinuteOfDay?: number;
+  maxOccurrencesPerDay?: number;
+  durationMinutes?: number;
+  visibilityLeadMinutes?: number;
+  visibilityLagMinutes?: number;
+}
+
+export interface LifeOpsWebsiteAccessPolicy {
+  groupKey: string;
+  websites: string[];
+  unlockDurationMinutes: number;
+  reason: string;
+}
+
 export type LifeOpsCadence =
   | {
       kind: "once";
@@ -278,6 +296,7 @@ export type LifeOpsCadence =
       visibilityLeadMinutes?: number;
       visibilityLagMinutes?: number;
     }
+  | LifeOpsIntervalCadence
   | {
       kind: "weekly";
       weekdays: number[];
@@ -341,6 +360,7 @@ export interface LifeOpsTaskDefinition {
   cadence: LifeOpsCadence;
   windowPolicy: LifeOpsWindowPolicy;
   progressionRule: LifeOpsProgressionRule;
+  websiteAccess: LifeOpsWebsiteAccessPolicy | null;
   reminderPlanId: string | null;
   goalId: string | null;
   source: string;
@@ -930,6 +950,7 @@ export interface CreateLifeOpsDefinitionRequest {
   cadence: LifeOpsCadence;
   windowPolicy?: LifeOpsWindowPolicy;
   progressionRule?: LifeOpsProgressionRule;
+  websiteAccess?: LifeOpsWebsiteAccessPolicy | null;
   reminderPlan?: {
     steps: LifeOpsReminderStep[];
     mutePolicy?: Record<string, unknown>;
@@ -950,6 +971,7 @@ export interface UpdateLifeOpsDefinitionRequest {
   cadence?: LifeOpsCadence;
   windowPolicy?: LifeOpsWindowPolicy;
   progressionRule?: LifeOpsProgressionRule;
+  websiteAccess?: LifeOpsWebsiteAccessPolicy | null;
   status?: LifeOpsDefinitionStatus;
   reminderPlan?: {
     steps: LifeOpsReminderStep[];

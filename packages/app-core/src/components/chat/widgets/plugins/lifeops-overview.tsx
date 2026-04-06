@@ -80,6 +80,10 @@ function cadenceLabel(cadence: LifeOpsCadence): string {
         return "Twice daily";
       }
       return `${cadence.slots.length}x daily`;
+    case "interval":
+      return cadence.everyMinutes >= 60 && cadence.everyMinutes % 60 === 0
+        ? `Every ${cadence.everyMinutes / 60}h`
+        : `Every ${cadence.everyMinutes}m`;
     case "weekly":
       return cadence.weekdays.length <= 2 ? "Occasional" : "Weekly";
   }
@@ -93,6 +97,8 @@ function cadenceDetail(cadence: LifeOpsCadence): string | null {
       return cadence.windows.length > 0 ? cadence.windows.join(", ") : null;
     case "times_per_day":
       return cadence.slots.map((slot) => slot.label).join(" / ");
+    case "interval":
+      return cadence.windows.length > 0 ? cadence.windows.join(", ") : null;
     case "weekly":
       return cadence.windows.length > 0 ? cadence.windows.join(", ") : null;
   }
