@@ -129,14 +129,6 @@ function uniqueLinks(links) {
   return [...deduped.values()];
 }
 
-function hasInstalledPackageDependencies(packageRoot) {
-  return existsSync(path.join(packageRoot, "node_modules"));
-}
-
-function getPluginInstallRoot(packageDir) {
-  return packageDir;
-}
-
 function getForceEnvKey(env = process.env) {
   return LOCAL_UPSTREAM_FORCE_ENVS.find((key) => env[key] === "1") ?? null;
 }
@@ -585,17 +577,6 @@ async function ensurePluginBuildOutputs(pluginsRoot) {
       continue;
     }
 
-    const installRoot = getPluginInstallRoot(packageDir);
-    if (!hasInstalledPackageDependencies(installRoot)) {
-      console.log(
-        `[setup-upstreams] Installing ${packageJson.name} dependencies in ${toDisplayPath(installRoot)}`,
-      );
-      await runCommand("bun", ["install"], {
-        cwd: installRoot,
-        label: `bun install (${packageJson.name})`,
-      });
-    }
-
     console.log(`[setup-upstreams] Building ${packageJson.name}`);
     await runCommand("bun", ["run", "build"], {
       cwd: packageDir,
@@ -647,8 +628,8 @@ export async function setupUpstreams(repoRoot = DEFAULT_REPO_ROOT) {
   await ensureElizaBuildOutputs(elizaRoot);
 
   const pluginsRoot = getRepoPluginsRoot(repoRoot);
-  await ensurePluginBuildOutputs(pluginsRoot);
   ensurePluginDependencyLinks(repoRoot, pluginsRoot);
+  await ensurePluginBuildOutputs(pluginsRoot);
   const updatedLinks = linkUpstreamPackages(repoRoot, {
     elizaRoot,
     pluginsRoot,
