@@ -138,6 +138,43 @@ All official elizaOS plugin repos live under [https://github.com/elizaOS-plugins
 - When asked to merge, merge **onto the current branch** (e.g., `git merge <source>` while staying on the current branch).
 - Do not create worktrees unless the user specifically requests one.
 
+## Worktree / Multi-Instance Development
+
+Each worktree (or parallel dev session) needs **isolated ports and state** to avoid conflicts.
+
+### Quick setup
+
+```bash
+# In your worktree, generate isolated env (slot 1 = +100 port offset):
+bash scripts/worktree-env.sh 1    # .env.worktree: API=31437, UI=2238, state=~/.milady-wt-1
+bash scripts/worktree-env.sh 2    # second worktree: API=31537, UI=2338, state=~/.milady-wt-2
+
+# All dev entry points auto-load .env.worktree when present:
+bun run dev                       # dev-ui.mjs
+bun run dev:desktop               # dev-platform.mjs
+bun run milady start              # run-node.mjs
+```
+
+### What gets isolated
+
+| Resource | Default (shared) | Worktree override |
+|----------|------------------|-------------------|
+| API port | 31337 | `MILADY_API_PORT` |
+| UI port | 2138 | `MILADY_PORT` |
+| Home port | 2142 | `MILADY_HOME_PORT` |
+| Gateway port | 18789 | `MILADY_GATEWAY_PORT` |
+| State dir (DB, config, creds) | `~/.milady/` | `MILADY_STATE_DIR` |
+| PGlite database | `~/.milady/workspace/.eliza/.elizadb` | Follows `MILADY_STATE_DIR` |
+| Config file | `~/.milady/milady.json` | Follows `MILADY_STATE_DIR` |
+
+### Key rules
+
+- **Always isolate `MILADY_STATE_DIR`** — the PGlite database uses a process lock (`postmaster.pid`). Two instances hitting the same DB will fail.
+- **Port auto-allocation still works** — even without `.env.worktree`, the orchestrator probes for free ports. But explicit offsets are more predictable.
+- **`bun install`** — run in the main worktree first. Git worktrees share `node_modules` via the repo root. The `.eliza-repo-setup.lock` prevents concurrent postinstall runs.
+- **`.env.worktree` is gitignored** — each worktree generates its own.
+- **Scripts that load `.env.worktree`**: `dev-ui.mjs`, `dev-platform.mjs`, `run-node.mjs`. Values never override already-set env vars.
+
 ## Security & Configuration
 
 - Never commit real secrets, phone numbers, or live configuration values

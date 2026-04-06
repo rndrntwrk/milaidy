@@ -35,6 +35,7 @@
     "apps/*/plugins/*",
     "apps/app/electrobun",
     "plugins/plugin-agent-orchestrator",
+    "plugins/app-defense-of-the-agents",
     "eliza/packages/*",
     "packages/app-core",
     "packages/ui",

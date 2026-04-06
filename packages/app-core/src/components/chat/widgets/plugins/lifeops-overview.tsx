@@ -34,8 +34,17 @@ const MAX_SECTION_GOALS = 3;
 const MAX_SECTION_REMINDERS = 2;
 const NEXT_WINDOW_MS = 6 * 60 * 60 * 1000;
 
-type OccurrenceAction = "complete" | "snooze" | "skip";
+type SnoozePreset = "15m" | "30m" | "1h" | "tonight" | "tomorrow_morning";
+type OccurrenceAction = "complete" | "skip";
 type OccurrenceBucket = "now" | "next" | "upcoming";
+
+const SNOOZE_PRESETS: Array<{ preset: SnoozePreset; label: string }> = [
+  { preset: "15m", label: "15 min" },
+  { preset: "30m", label: "30 min" },
+  { preset: "1h", label: "1 hour" },
+  { preset: "tonight", label: "Tonight" },
+  { preset: "tomorrow_morning", label: "Tomorrow" },
+];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -283,6 +292,60 @@ function GoalReviewPanel({ review }: { review: LifeOpsGoalReview }) {
   );
 }
 
+function SnoozeMenu({
+  occurrenceId,
+  disabled,
+  onSnooze,
+}: {
+  occurrenceId: string;
+  disabled: boolean;
+  onSnooze: (occurrenceId: string, preset: SnoozePreset) => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+
+  if (!open) {
+    return (
+      <Button
+        size="sm"
+        variant="ghost"
+        disabled={disabled}
+        onClick={() => setOpen(true)}
+        className="h-7 px-2 text-[11px]"
+      >
+        Snooze
+      </Button>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap gap-1">
+      {SNOOZE_PRESETS.map(({ preset, label }) => (
+        <Button
+          key={preset}
+          size="sm"
+          variant="ghost"
+          disabled={disabled}
+          onClick={() => {
+            setOpen(false);
+            void onSnooze(occurrenceId, preset);
+          }}
+          className="h-7 px-1.5 text-[10px]"
+        >
+          {label}
+        </Button>
+      ))}
+      <Button
+        size="sm"
+        variant="ghost"
+        onClick={() => setOpen(false)}
+        className="h-7 px-1.5 text-[10px] text-muted"
+      >
+        Cancel
+      </Button>
+    </div>
+  );
+}
+
 function OccurrenceRow({
   occurrence,
   actionPending,
@@ -290,6 +353,7 @@ function OccurrenceRow({
   explanation,
   isExpanded,
   onAction,
+  onSnooze,
   onExplain,
 }: {
   occurrence: LifeOpsOccurrenceView;
@@ -298,6 +362,7 @@ function OccurrenceRow({
   explanation: LifeOpsOccurrenceExplanation | null;
   isExpanded: boolean;
   onAction: (occurrenceId: string, action: OccurrenceAction) => Promise<void>;
+  onSnooze: (occurrenceId: string, preset: SnoozePreset) => Promise<void>;
   onExplain: (occurrenceId: string) => Promise<void>;
 }) {
   const cadence = cadenceLabel(occurrence.cadence);
@@ -359,15 +424,11 @@ function OccurrenceRow({
                 >
                   Done
                 </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
+                <SnoozeMenu
+                  occurrenceId={occurrence.id}
                   disabled={actionPending}
-                  onClick={() => void onAction(occurrence.id, "snooze")}
-                  className="h-7 px-2 text-[11px]"
-                >
-                  Snooze 15m
-                </Button>
+                  onSnooze={onSnooze}
+                />
                 <Button
                   size="sm"
                   variant="ghost"
@@ -484,6 +545,7 @@ function OccurrenceBucketBlock({
   occurrenceExplanations,
   expandedOccurrenceId,
   onOccurrenceAction,
+  onSnoozeOccurrence,
   onExplainOccurrence,
 }: {
   title: string;
@@ -494,6 +556,7 @@ function OccurrenceBucketBlock({
   occurrenceExplanations: Record<string, LifeOpsOccurrenceExplanation>;
   expandedOccurrenceId: string | null;
   onOccurrenceAction: (occurrenceId: string, action: OccurrenceAction) => Promise<void>;
+  onSnoozeOccurrence: (occurrenceId: string, preset: SnoozePreset) => Promise<void>;
   onExplainOccurrence: (occurrenceId: string) => Promise<void>;
 }) {
   if (occurrences.length === 0) {
@@ -520,6 +583,7 @@ function OccurrenceBucketBlock({
           explanation={occurrenceExplanations[occurrence.id] ?? null}
           isExpanded={expandedOccurrenceId === occurrence.id}
           onAction={onOccurrenceAction}
+          onSnooze={onSnoozeOccurrence}
           onExplain={onExplainOccurrence}
         />
       ))}
@@ -612,6 +676,7 @@ function AgentOpsSection({
   expandedOccurrenceId,
   expandedGoalId,
   onOccurrenceAction,
+  onSnoozeOccurrence,
   onExplainOccurrence,
   onReviewGoal,
 }: {
@@ -623,6 +688,7 @@ function AgentOpsSection({
   expandedOccurrenceId: string | null;
   expandedGoalId: string | null;
   onOccurrenceAction: (occurrenceId: string, action: OccurrenceAction) => Promise<void>;
+  onSnoozeOccurrence: (occurrenceId: string, preset: SnoozePreset) => Promise<void>;
   onExplainOccurrence: (occurrenceId: string) => Promise<void>;
   onReviewGoal: (goalId: string) => Promise<void>;
 }) {
@@ -655,6 +721,7 @@ function AgentOpsSection({
           explanation={occurrenceExplanations[occurrence.id] ?? null}
           isExpanded={expandedOccurrenceId === occurrence.id}
           onAction={onOccurrenceAction}
+          onSnooze={onSnoozeOccurrence}
           onExplain={onExplainOccurrence}
         />
       ))}
@@ -766,10 +833,6 @@ export function LifeOpsOverviewSidebarWidget(_props: ChatSidebarWidgetProps) {
       try {
         if (action === "complete") {
           await client.completeLifeOpsOccurrence(occurrenceId, {});
-        } else if (action === "snooze") {
-          await client.snoozeLifeOpsOccurrence(occurrenceId, {
-            preset: "15m",
-          });
         } else {
           await client.skipLifeOpsOccurrence(occurrenceId);
         }
@@ -779,6 +842,26 @@ export function LifeOpsOverviewSidebarWidget(_props: ChatSidebarWidgetProps) {
           cause instanceof Error && cause.message.trim().length > 0
             ? cause.message.trim()
             : "Life ops update failed.",
+        );
+      } finally {
+        setActionState((current) => (current === token ? null : current));
+      }
+    },
+    [loadOverview],
+  );
+
+  const onSnoozeOccurrence = useCallback(
+    async (occurrenceId: string, preset: SnoozePreset) => {
+      const token = `snooze:${occurrenceId}`;
+      setActionState(token);
+      try {
+        await client.snoozeLifeOpsOccurrence(occurrenceId, { preset });
+        await loadOverview(true);
+      } catch (cause) {
+        setError(
+          cause instanceof Error && cause.message.trim().length > 0
+            ? cause.message.trim()
+            : "Snooze failed.",
         );
       } finally {
         setActionState((current) => (current === token ? null : current));
@@ -930,6 +1013,7 @@ export function LifeOpsOverviewSidebarWidget(_props: ChatSidebarWidgetProps) {
             occurrenceExplanations={occurrenceExplanations}
             expandedOccurrenceId={expandedOccurrenceId}
             onOccurrenceAction={onOccurrenceAction}
+            onSnoozeOccurrence={onSnoozeOccurrence}
             onExplainOccurrence={onExplainOccurrence}
           />
           <OccurrenceBucketBlock
@@ -941,6 +1025,7 @@ export function LifeOpsOverviewSidebarWidget(_props: ChatSidebarWidgetProps) {
             occurrenceExplanations={occurrenceExplanations}
             expandedOccurrenceId={expandedOccurrenceId}
             onOccurrenceAction={onOccurrenceAction}
+            onSnoozeOccurrence={onSnoozeOccurrence}
             onExplainOccurrence={onExplainOccurrence}
           />
           <OccurrenceBucketBlock
@@ -952,6 +1037,7 @@ export function LifeOpsOverviewSidebarWidget(_props: ChatSidebarWidgetProps) {
             occurrenceExplanations={occurrenceExplanations}
             expandedOccurrenceId={expandedOccurrenceId}
             onOccurrenceAction={onOccurrenceAction}
+            onSnoozeOccurrence={onSnoozeOccurrence}
             onExplainOccurrence={onExplainOccurrence}
           />
           <GoalSection
@@ -971,6 +1057,7 @@ export function LifeOpsOverviewSidebarWidget(_props: ChatSidebarWidgetProps) {
             expandedOccurrenceId={expandedOccurrenceId}
             expandedGoalId={expandedGoalId}
             onOccurrenceAction={onOccurrenceAction}
+            onSnoozeOccurrence={onSnoozeOccurrence}
             onExplainOccurrence={onExplainOccurrence}
             onReviewGoal={onReviewGoal}
           />

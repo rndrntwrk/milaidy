@@ -304,6 +304,7 @@ function createRuntimeForStreamTests(options: {
   const runtimeSubset = {
     agentId: "test-agent-id",
     character: { name: "StreamTestAgent" } as AgentRuntime["character"],
+    registerSendHandler: () => {},
     getService: (serviceType: string) => {
       if (serviceType === "AGENT_EVENT") {
         return options.eventService ?? null;
@@ -370,6 +371,7 @@ function createRuntimeForAutonomySurfaceTests(options: {
   const runtimeSubset = {
     agentId: "autonomy-surface-agent",
     character: { name: "AutonomySurfaceAgent" } as AgentRuntime["character"],
+    registerSendHandler: () => {},
     messageService: {
       handleMessage: async (
         _runtime: AgentRuntime,
@@ -462,6 +464,7 @@ function createRuntimeForWorkbenchCrudTests(options?: {
   const runtimeSubset = {
     agentId: "workbench-crud-agent",
     character: { name: "WorkbenchCrudAgent" } as AgentRuntime["character"],
+    registerSendHandler: () => {},
     getSetting: () => undefined,
     getService: (serviceType: string) => {
       if (serviceType === "AUTONOMY") {
@@ -554,6 +557,7 @@ function createRuntimeForChatSseTests(options?: {
       name: "ChatStreamAgent",
       postExamples: ["Welcome to the conversation."],
     } as AgentRuntime["character"],
+    registerSendHandler: () => {},
     messageService: {
       handleMessage: async (
         runtime: AgentRuntime,
@@ -666,6 +670,7 @@ function createRuntimeForCompatEndpointTests(): AgentRuntime {
   const runtimeSubset = {
     agentId: "compat-endpoint-agent",
     character: { name: "CompatAgent" } as AgentRuntime["character"],
+    registerSendHandler: () => {},
     messageService: {
       handleMessage: async (
         _runtime: AgentRuntime,
@@ -1959,6 +1964,7 @@ describe("API Server E2E (no runtime)", () => {
       const runtime = {
         agentId: "restore-list-agent",
         character: { name: "RestoreListAgent" } as AgentRuntime["character"],
+        registerSendHandler: () => {},
         getService: () => null,
         getRoomsByWorld: async () => restoreGate.promise,
         getMemories: async (query: { count?: number }) =>
@@ -2012,6 +2018,7 @@ describe("API Server E2E (no runtime)", () => {
         character: {
           name: "RestoreMessagesAgent",
         } as AgentRuntime["character"],
+        registerSendHandler: () => {},
         getService: () => null,
         getRoomsByWorld: async () => restoreGate.promise,
         getMemories: async (query: { count?: number }) =>
@@ -4420,6 +4427,7 @@ describe("API Server E2E (no runtime)", () => {
       const runtime = {
         agentId: "skills-fallback-agent",
         character: { name: "SkillsFallbackAgent" },
+        registerSendHandler: () => {},
         getService: (serviceType: string) => {
           if (serviceType === "AGENT_SKILLS_SERVICE") {
             return {

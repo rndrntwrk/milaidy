@@ -166,6 +166,58 @@ export function consumeManagedDiscordCallbackUrl(rawUrl: string): {
   };
 }
 
+export interface ManagedGithubCallbackState {
+  status: "connected" | "error";
+  connectionId: string | null;
+  agentId: string | null;
+  message: string | null;
+}
+
+const MANAGED_GITHUB_CALLBACK_QUERY_KEYS = [
+  "github_connected",
+  "connection_id",
+  "platform",
+  "managed_github_agent",
+  "github_error",
+] as const;
+
+export function consumeManagedGithubCallbackUrl(rawUrl: string): {
+  callback: ManagedGithubCallbackState | null;
+  cleanedUrl: string | null;
+} {
+  let url: URL;
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    return { callback: null, cleanedUrl: null };
+  }
+
+  const connected = url.searchParams.get("github_connected") === "true";
+  const error = url.searchParams.get("github_error");
+  const agentId =
+    readString(url.searchParams.get("managed_github_agent")) ?? null;
+
+  if (!connected && !error) {
+    return { callback: null, cleanedUrl: null };
+  }
+
+  const callback: ManagedGithubCallbackState = {
+    status: connected ? "connected" : "error",
+    connectionId: readString(url.searchParams.get("connection_id")) ?? null,
+    agentId,
+    message: error ? decodeURIComponent(error) : null,
+  };
+
+  for (const key of MANAGED_GITHUB_CALLBACK_QUERY_KEYS) {
+    url.searchParams.delete(key);
+  }
+
+  return {
+    callback,
+    cleanedUrl: url.toString(),
+  };
+}
+
 export function normalizeBillingSummary(
   raw: CloudBillingSummary,
 ): CloudBillingSummary {

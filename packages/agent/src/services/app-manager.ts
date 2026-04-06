@@ -58,12 +58,17 @@ const LOCAL_DEV_HYPERSCAPE_API_BASE_URL = "http://localhost:5555";
 const PRODUCTION_HYPERSCAPE_API_BASE_URL = "https://hyperscape.gg";
 const RS_2004SCAPE_APP_ROUTE_SLUG = "2004scape";
 const RS_2004SCAPE_AUTH_MESSAGE_TYPE = "RS_2004SCAPE_AUTH";
+const RS_2004SCAPE_DEFAULT_URL = "http://localhost:8880";
+const BABYLON_APP_ROUTE_SLUG = "babylon";
+const LOCAL_DEV_BABYLON_CLIENT_URL = "http://localhost:3000";
+const PRODUCTION_BABYLON_CLIENT_URL = "https://staging.babylon.market";
 const SAFE_APP_URL_PROTOCOLS = new Set(["http:", "https:"]);
 const ALLOWED_APP_URL_TEMPLATE_KEYS = new Set([
   // Public display identity only.
   "BOT_NAME",
   "HYPERSCAPE_CHARACTER_ID",
   "HYPERSCAPE_CLIENT_URL",
+  "BABYLON_CLIENT_URL",
   "RS_SDK_BOT_NAME",
 ]);
 
@@ -125,6 +130,30 @@ function isHyperscapeAppName(appName: string): boolean {
 
 function is2004scapeAppName(appName: string): boolean {
   return packageNameToAppRouteSlug(appName) === RS_2004SCAPE_APP_ROUTE_SLUG;
+}
+
+function isBabylonAppName(appName: string): boolean {
+  return packageNameToAppRouteSlug(appName) === BABYLON_APP_ROUTE_SLUG;
+}
+
+/**
+ * Quick TCP-level probe to check if the 2004scape game server is reachable.
+ * Returns true if a connection can be established within the timeout.
+ */
+async function is2004scapeServerReachable(timeoutMs = 2000): Promise<boolean> {
+  try {
+    const url = new URL(RS_2004SCAPE_DEFAULT_URL);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const res = await fetch(url.href, {
+      method: "HEAD",
+      signal: controller.signal,
+    }).catch(() => null);
+    clearTimeout(timer);
+    return res !== null;
+  } catch {
+    return false;
+  }
 }
 
 function resolveDisplayViewerInfo(
@@ -248,6 +277,17 @@ function getTemplateFallbackValue(key: string): string | undefined {
     return isProductionRuntime()
       ? PRODUCTION_HYPERSCAPE_CLIENT_URL
       : LOCAL_DEV_HYPERSCAPE_CLIENT_URL;
+  }
+  if (key === "BABYLON_CLIENT_URL") {
+    const runtimeClientUrl = process.env.BABYLON_CLIENT_URL?.trim()
+      ?? process.env.BABYLON_APP_URL?.trim()
+      ?? process.env.BABYLON_API_URL?.trim();
+    if (runtimeClientUrl && runtimeClientUrl.length > 0) {
+      return runtimeClientUrl;
+    }
+    return isProductionRuntime()
+      ? PRODUCTION_BABYLON_CLIENT_URL
+      : LOCAL_DEV_BABYLON_CLIENT_URL;
   }
   if (key === "RS_SDK_BOT_NAME") {
     const runtimeBotName = process.env.BOT_NAME?.trim();
@@ -750,6 +790,21 @@ function buildViewerAuthMessage(
       agentId,
       characterId,
       followEntity: characterId,
+    };
+  }
+
+  // Babylon auth — passes agent credentials to the viewer iframe
+  if (isBabylonAppName(appName)) {
+    const agentId = resolveSettingLike(runtime, "BABYLON_AGENT_ID");
+    const agentSecret = resolveSettingLike(runtime, "BABYLON_AGENT_SECRET");
+    if (!agentId) {
+      return undefined;
+    }
+    return {
+      type: "BABYLON_AUTH",
+      authToken: agentSecret ?? "",
+      agentId,
+      characterId: agentId,
     };
   }
 
@@ -1286,17 +1341,59 @@ export class AppManager {
         ...await prepareHyperscapeLaunch(_runtime ?? null),
       );
     }
-    if (is2004scapeAppName(appInfo.name)) {
-      launchPreparationDiagnostics.push(
-        ...await prepare2004scapeLaunch(_runtime ?? null),
+    if (isBabylonAppName(appInfo.name)) {
+      const babylonUrl =
+        resolveSettingLike(_runtime, "BABYLON_CLIENT_URL") ??
+        resolveSettingLike(_runtime, "BABYLON_APP_URL") ??
+        resolveSettingLike(_runtime, "BABYLON_API_URL") ??
+        (isProductionRuntime()
+          ? PRODUCTION_BABYLON_CLIENT_URL
+          : LOCAL_DEV_BABYLON_CLIENT_URL);
+      const agentId = resolveSettingLike(_runtime, "BABYLON_AGENT_ID");
+      if (!agentId) {
+        launchPreparationDiagnostics.push({
+          code: "babylon-no-agent-id",
+          severity: "warning",
+          message:
+            "BABYLON_AGENT_ID is not set. The Babylon terminal will have limited functionality. Set BABYLON_AGENT_ID and BABYLON_AGENT_SECRET in your environment.",
+        });
+      }
+      logger.info(
+        `[app-manager] Babylon launch: url=${babylonUrl} agentId=${agentId ?? "(none)"}`,
       );
     }
+    if (is2004scapeAppName(appInfo.name)) {
+      const serverUp = await is2004scapeServerReachable();
+      if (!serverUp) {
+        logger.info(
+          `[app-manager] 2004scape server is not reachable at ${RS_2004SCAPE_DEFAULT_URL} — skipping plugin registration to avoid noisy SDK errors`,
+        );
+        launchPreparationDiagnostics.push({
+          code: "2004scape-server-unreachable",
+          severity: "warning",
+          message: `2004scape game server is not running at ${RS_2004SCAPE_DEFAULT_URL}. Start the server and re-launch the app.`,
+        });
+      } else {
+        launchPreparationDiagnostics.push(
+          ...await prepare2004scapeLaunch(_runtime ?? null),
+        );
+      }
+    }
 
-    const runtimePluginRegistered = await ensureRuntimePluginRegistered(
-      appInfo,
-      _runtime ?? null,
-      isLocal,
-    );
+    // Skip runtime plugin registration when the target service is unreachable
+    // (e.g. 2004scape server down) to avoid error-level logs from the SDK init.
+    const skipPluginRegistration =
+      is2004scapeAppName(appInfo.name) &&
+      launchPreparationDiagnostics.some((d) => d.code === "2004scape-server-unreachable");
+
+    let runtimePluginRegistered = false;
+    if (!skipPluginRegistration) {
+      runtimePluginRegistered = await ensureRuntimePluginRegistered(
+        appInfo,
+        _runtime ?? null,
+        isLocal,
+      );
+    }
     if (runtimePluginRegistered) {
       pluginInstalled = true;
     }

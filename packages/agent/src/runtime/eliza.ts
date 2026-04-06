@@ -1392,6 +1392,63 @@ export async function autoResolveDiscordAppId(): Promise<void> {
 }
 
 /**
+ * Fetch GitHub OAuth token from cloud if available and no local token is set.
+ * Called during async runtime init after cloud config is applied.
+ *
+ * Flow: If the agent has a managed GitHub connection in the cloud, and no
+ * local GITHUB_TOKEN is set, fetch the OAuth token from the cloud API and
+ * inject it into process.env so plugins (plugin-github, git-workspace-service)
+ * can use it for API calls and git credential helpers.
+ */
+/** @internal Exported for testing. */
+export async function autoFetchCloudGithubToken(
+  agentId?: string,
+): Promise<void> {
+  // Skip if a local token is already configured
+  if (process.env.GITHUB_TOKEN || process.env.GITHUB_PAT) return;
+
+  // Need cloud credentials and an agent ID
+  const cloudApiKey = process.env.ELIZAOS_CLOUD_API_KEY?.trim();
+  const cloudBaseUrl =
+    process.env.ELIZAOS_CLOUD_BASE_URL?.trim() || "https://api.elizacloud.ai";
+  if (!cloudApiKey || !agentId) return;
+
+  try {
+    const url = `${cloudBaseUrl}/api/v1/milady/agents/${encodeURIComponent(agentId)}/github/token`;
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${cloudApiKey}`,
+        Accept: "application/json",
+      },
+      signal: AbortSignal.timeout(10_000),
+    });
+
+    if (!res.ok) {
+      // 404 = no GitHub connection for this agent, which is fine
+      if (res.status !== 404) {
+        logger.warn(
+          `[eliza] Failed to fetch cloud GitHub token: ${res.status}`,
+        );
+      }
+      return;
+    }
+
+    const body = (await res.json()) as {
+      success?: boolean;
+      data?: { accessToken?: string; githubUsername?: string };
+    };
+    if (!body.success || !body.data?.accessToken) return;
+
+    process.env.GITHUB_TOKEN = body.data.accessToken;
+    logger.info(
+      `[eliza] Fetched GitHub token from cloud for @${body.data.githubUsername || "unknown"}`,
+    );
+  } catch (err) {
+    logger.warn(`[eliza] Could not fetch cloud GitHub token: ${err}`);
+  }
+}
+
+/**
  * Propagate cloud config from Eliza config into process.env so the
  * ElizaCloud plugin can discover settings at startup.
  */
@@ -2901,6 +2958,10 @@ export async function startEliza(
 
   // 5. Create the Eliza bridge plugin (workspace context + session keys + compaction)
   const agentId = character.name?.toLowerCase().replace(/\s+/g, "-") ?? "main";
+
+  // 5a. If cloud is configured and no local GitHub token, try fetching from cloud
+  await autoFetchCloudGithubToken(config.cloud?.agentId?.trim() || agentId);
+
   const elizaPlugin = createElizaPlugin({
     workspaceDir,
 
@@ -3582,6 +3643,9 @@ export async function startEliza(
           applyCloudConfigToEnv(freshConfig);
           applyX402ConfigToEnv(freshConfig);
           applyDatabaseConfigToEnv(freshConfig);
+          await autoFetchCloudGithubToken(
+            freshConfig.cloud?.agentId?.trim() || agentId,
+          );
 
           // Apply subscription-based credentials (Claude Max, Codex Max)
           // that may have been set up during onboarding.

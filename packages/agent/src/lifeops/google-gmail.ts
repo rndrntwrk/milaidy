@@ -218,7 +218,7 @@ function classifyReplyNeed(args: {
   const automated =
     Boolean(
       fromEmail &&
-        /(?:^|\b)(?:no-?reply|donotreply|notifications?|mailer-daemon)(?:\b|@)/i.test(
+        /(?:^|\b)(?:no-?reply|noreply-|donotreply|do-not-reply|notifications?|alerts?|mailer-daemon|postmaster|bounce|system|auto|daemon|news|updates?)(?:\b|[.@-])/i.test(
           fromEmail,
         ),
     ) ||
@@ -226,6 +226,7 @@ function classifyReplyNeed(args: {
     precedence === "bulk" ||
     precedence === "list" ||
     precedence === "junk" ||
+    precedence === "auto-reply" ||
     (autoSubmitted !== undefined && autoSubmitted !== "no");
 
   let triageScore = 0;
@@ -240,7 +241,7 @@ function classifyReplyNeed(args: {
     reasons.push("important label");
   }
   if (directlyAddressed) {
-    triageScore += 15;
+    triageScore += 25;
     reasons.push("directly addressed");
   }
   if (!automated && !fromSelf && isUnread && directlyAddressed) {

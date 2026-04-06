@@ -22,12 +22,16 @@ import { LifeOpsService } from "../lifeops/service.js";
 type ManageLifeOpsOperation =
   | "create_definition"
   | "update_definition"
+  | "delete_definition"
   | "create_goal"
   | "update_goal"
+  | "delete_goal"
   | "complete_occurrence"
   | "skip_occurrence"
   | "snooze_occurrence"
-  | "review_goal";
+  | "review_goal"
+  | "capture_phone"
+  | "configure_reminder_plan";
 
 type ManageLifeOpsParams = {
   operation?: ManageLifeOpsOperation;
@@ -52,6 +56,14 @@ type ManageLifeOpsParams = {
   note?: string;
   snoozePreset?: SnoozeLifeOpsOccurrenceRequest["preset"];
   snoozeMinutes?: number;
+  phoneNumber?: string;
+  allowSms?: boolean;
+  allowVoice?: boolean;
+  escalationSteps?: Array<{
+    channel: string;
+    offsetMinutes: number;
+    label: string;
+  }>;
 };
 
 function toActionData<T extends object>(data: T): ProviderDataRecord {
@@ -307,6 +319,26 @@ export const manageLifeOpsAction: Action = {
       };
     }
 
+    if (operation === "delete_definition") {
+      const target = await resolveDefinitionReference(
+        service,
+        params.targetId,
+        params.targetTitle,
+        params.domain,
+      );
+      if (!target) {
+        return {
+          success: false,
+          text: "I could not find that item to delete.",
+        };
+      }
+      await service.deleteDefinition(target.definition.id);
+      return {
+        success: true,
+        text: `Deleted "${target.definition.title}" and its occurrences.`,
+      };
+    }
+
     if (operation === "create_goal") {
       if (!params.title) {
         return {
@@ -359,6 +391,26 @@ export const manageLifeOpsAction: Action = {
         success: true,
         text: `Updated goal "${updated.goal.title}".`,
         data: toActionData(updated),
+      };
+    }
+
+    if (operation === "delete_goal") {
+      const target = await resolveGoalReference(
+        service,
+        params.targetId,
+        params.targetTitle,
+        params.domain,
+      );
+      if (!target) {
+        return {
+          success: false,
+          text: "I could not find that goal to delete.",
+        };
+      }
+      await service.deleteGoal(target.goal.id);
+      return {
+        success: true,
+        text: `Deleted goal "${target.goal.title}".`,
       };
     }
 
@@ -451,6 +503,67 @@ export const manageLifeOpsAction: Action = {
       };
     }
 
+    if (operation === "capture_phone") {
+      if (!params.phoneNumber) {
+        return {
+          success: false,
+          text: "A phone number is required to set up SMS or voice contact.",
+        };
+      }
+      const result = await service.capturePhoneConsent({
+        phoneNumber: params.phoneNumber,
+        consentGiven: true,
+        allowSms: params.allowSms ?? true,
+        allowVoice: params.allowVoice ?? false,
+        privacyClass: "private",
+      });
+      const channels: string[] = [];
+      if (params.allowSms !== false) channels.push("SMS");
+      if (params.allowVoice) channels.push("voice calls");
+      return {
+        success: true,
+        text: `Phone number ${result.phoneNumber} saved. Enabled for: ${channels.join(" and ") || "reminders"}.`,
+        data: toActionData(result),
+      };
+    }
+
+    if (operation === "configure_reminder_plan") {
+      const target = await resolveDefinitionReference(
+        service,
+        params.targetId,
+        params.targetTitle,
+        params.domain,
+      );
+      if (!target) {
+        return {
+          success: false,
+          text: "I could not find that item to configure its reminder plan.",
+        };
+      }
+      const steps: LifeOpsReminderStep[] = params.escalationSteps
+        ? params.escalationSteps.map((step) => ({
+            channel: step.channel as LifeOpsReminderStep["channel"],
+            offsetMinutes: step.offsetMinutes,
+            label: step.label,
+          }))
+        : params.reminderPlan?.steps ?? [
+            { channel: "in_app", offsetMinutes: 0, label: "In-app reminder" },
+          ];
+      const updated = await service.updateDefinition(target.definition.id, {
+        reminderPlan: {
+          steps,
+          mutePolicy: params.reminderPlan?.mutePolicy,
+          quietHours: params.reminderPlan?.quietHours,
+        },
+      });
+      const channelSummary = steps.map((s) => `${s.channel} at +${s.offsetMinutes}m`).join(", ");
+      return {
+        success: true,
+        text: `Updated reminder plan for "${updated.definition.title}": ${channelSummary}.`,
+        data: toActionData(updated),
+      };
+    }
+
     return {
       success: false,
       text: `Unsupported LifeOps operation: ${operation}.`,
@@ -460,19 +573,23 @@ export const manageLifeOpsAction: Action = {
     {
       name: "operation",
       description:
-        "LifeOps operation to run: create/update a definition, create/update a goal, complete/skip/snooze an occurrence, or review a goal.",
+        "LifeOps operation to run: create/update a definition, create/update a goal, complete/skip/snooze an occurrence, review a goal, capture a phone number for SMS/voice outreach, or configure escalation steps on a reminder plan.",
       required: true,
       schema: {
         type: "string" as const,
         enum: [
           "create_definition",
           "update_definition",
+          "delete_definition",
           "create_goal",
           "update_goal",
+          "delete_goal",
           "complete_occurrence",
           "skip_occurrence",
           "snooze_occurrence",
           "review_goal",
+          "capture_phone",
+          "configure_reminder_plan",
         ],
       },
     },
@@ -598,6 +715,34 @@ export const manageLifeOpsAction: Action = {
         "Explicit number of minutes to snooze when a preset is not appropriate.",
       required: false,
       schema: { type: "number" as const },
+    },
+    {
+      name: "phoneNumber",
+      description:
+        "Phone number for capture_phone, in E.164 format (e.g. +15551234567).",
+      required: false,
+      schema: { type: "string" as const },
+    },
+    {
+      name: "allowSms",
+      description:
+        "Whether to enable SMS reminders for the captured phone number. Defaults to true.",
+      required: false,
+      schema: { type: "boolean" as const },
+    },
+    {
+      name: "allowVoice",
+      description:
+        "Whether to enable voice call reminders for the captured phone number. Defaults to false.",
+      required: false,
+      schema: { type: "boolean" as const },
+    },
+    {
+      name: "escalationSteps",
+      description:
+        "Array of escalation steps for configure_reminder_plan. Each step has channel (in_app, sms, voice, telegram, discord), offsetMinutes (minutes after the occurrence is due), and label (human description). Example: [{ channel: 'in_app', offsetMinutes: 0, label: 'In-app reminder' }, { channel: 'sms', offsetMinutes: 15, label: 'SMS if not acknowledged' }].",
+      required: false,
+      schema: { type: "object" as const },
     },
   ],
 };

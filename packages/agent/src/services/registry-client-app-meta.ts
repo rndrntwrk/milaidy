@@ -39,11 +39,26 @@ interface LocalAppOverride {
 
 const LOCAL_APP_OVERRIDES: Readonly<Record<string, LocalAppOverride>> = {
   "@elizaos/app-babylon": {
+    displayName: "Babylon",
+    category: "game",
     launchType: "url",
-    launchUrl: "http://localhost:3000",
+    launchUrl: "{BABYLON_CLIENT_URL}",
+    capabilities: [
+      "trades",
+      "prediction-markets",
+      "social",
+      "team-chat",
+      "autonomous",
+    ],
     viewer: {
-      url: "http://localhost:3000",
+      url: "{BABYLON_CLIENT_URL}",
+      embedParams: { embedded: "true" },
+      postMessageAuth: true,
       sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
+    },
+    session: {
+      mode: "spectate-and-steer",
+      features: ["commands", "telemetry", "pause", "resume"],
     },
   },
   "@elizaos/app-hyperfy": {

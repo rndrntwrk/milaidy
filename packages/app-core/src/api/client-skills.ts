@@ -1,6 +1,6 @@
 /**
  * Skills domain methods — skills, catalog, marketplace, apps, Hyperscape,
- * custom actions, WhatsApp, agent events.
+ * Babylon, custom actions, WhatsApp, agent events.
  */
 
 import { packageNameToAppRouteSlug } from "@miladyai/shared/contracts/apps";
@@ -32,6 +32,14 @@ import type {
   SkillInfo,
   SkillMarketplaceResult,
   SkillScanReportSummary,
+  BabylonActivityFeed,
+  BabylonAgentStatus,
+  BabylonChatResponse,
+  BabylonLogEntry,
+  BabylonTeamChatInfo,
+  BabylonTeamResponse,
+  BabylonToggleResponse,
+  BabylonWallet,
 } from "./client-types";
 
 // ---------------------------------------------------------------------------
@@ -252,6 +260,33 @@ declare module "./client-base" {
       ok: boolean;
       accountId: string;
     }>;
+
+    // Babylon terminal methods
+    getBabylonAgentStatus(): Promise<BabylonAgentStatus>;
+    getBabylonAgentActivity(opts?: {
+      limit?: number;
+      type?: string;
+    }): Promise<BabylonActivityFeed>;
+    getBabylonAgentLogs(opts?: {
+      type?: string;
+      level?: string;
+    }): Promise<BabylonLogEntry[]>;
+    getBabylonAgentWallet(): Promise<BabylonWallet>;
+    getBabylonTeam(): Promise<BabylonTeamResponse>;
+    getBabylonTeamChat(): Promise<BabylonTeamChatInfo>;
+    sendBabylonTeamChat(
+      content: string,
+      mentions?: string[],
+    ): Promise<BabylonChatResponse>;
+    toggleBabylonAgent(
+      action: "pause" | "resume" | "toggle",
+    ): Promise<BabylonToggleResponse>;
+    toggleBabylonAgentAutonomy(opts: {
+      trading?: boolean;
+      posting?: boolean;
+      commenting?: boolean;
+      dms?: boolean;
+    }): Promise<BabylonToggleResponse>;
   }
 }
 
@@ -762,5 +797,84 @@ MiladyClient.prototype.disconnectWhatsApp = async function (
   return this.fetch("/api/whatsapp/disconnect", {
     method: "POST",
     body: JSON.stringify({ accountId }),
+  });
+};
+
+// ---------------------------------------------------------------------------
+// Babylon terminal methods
+// ---------------------------------------------------------------------------
+
+MiladyClient.prototype.getBabylonAgentStatus = async function (
+  this: MiladyClient,
+) {
+  return this.fetch("/api/apps/babylon/agent/status");
+};
+
+MiladyClient.prototype.getBabylonAgentActivity = async function (
+  this: MiladyClient,
+  opts?,
+) {
+  const params = new URLSearchParams();
+  if (opts?.limit) params.set("limit", String(opts.limit));
+  if (opts?.type) params.set("type", opts.type);
+  const qs = params.toString();
+  return this.fetch(`/api/apps/babylon/agent/activity${qs ? `?${qs}` : ""}`);
+};
+
+MiladyClient.prototype.getBabylonAgentLogs = async function (
+  this: MiladyClient,
+  opts?,
+) {
+  const params = new URLSearchParams();
+  if (opts?.type) params.set("type", opts.type);
+  if (opts?.level) params.set("level", opts.level);
+  const qs = params.toString();
+  return this.fetch(`/api/apps/babylon/agent/logs${qs ? `?${qs}` : ""}`);
+};
+
+MiladyClient.prototype.getBabylonAgentWallet = async function (
+  this: MiladyClient,
+) {
+  return this.fetch("/api/apps/babylon/agent/wallet");
+};
+
+MiladyClient.prototype.getBabylonTeam = async function (this: MiladyClient) {
+  return this.fetch("/api/apps/babylon/team");
+};
+
+MiladyClient.prototype.getBabylonTeamChat = async function (
+  this: MiladyClient,
+) {
+  return this.fetch("/api/apps/babylon/team/info");
+};
+
+MiladyClient.prototype.sendBabylonTeamChat = async function (
+  this: MiladyClient,
+  content,
+  mentions?,
+) {
+  return this.fetch("/api/apps/babylon/team/chat", {
+    method: "POST",
+    body: JSON.stringify({ content, mentions }),
+  });
+};
+
+MiladyClient.prototype.toggleBabylonAgent = async function (
+  this: MiladyClient,
+  action,
+) {
+  return this.fetch("/api/apps/babylon/agent/toggle", {
+    method: "POST",
+    body: JSON.stringify({ action }),
+  });
+};
+
+MiladyClient.prototype.toggleBabylonAgentAutonomy = async function (
+  this: MiladyClient,
+  opts,
+) {
+  return this.fetch("/api/apps/babylon/agent/autonomy", {
+    method: "POST",
+    body: JSON.stringify(opts),
   });
 };

@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "dev",
-      "runtimeExecutable": "/opt/homebrew/bin/npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeExecutable": "/bin/zsh",
+      "runtimeArgs": ["-l", "-c", "export PATH=\"/Users/shawwalters/.bun/bin:$PATH\" && bun run dev"],
       "port": 2138,
       "autoPort": true
     },

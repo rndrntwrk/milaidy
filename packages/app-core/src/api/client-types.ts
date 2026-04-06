@@ -7,3 +7,4 @@ export * from "./client-types-core";
 export * from "./client-types-config";
 export * from "./client-types-chat";
 export * from "./client-types-cloud";
+export * from "./client-types-babylon";

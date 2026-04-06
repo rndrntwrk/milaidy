@@ -4,7 +4,19 @@
 
 The LifeOps backend is **real, production-grade infrastructure** — not LARP. There are ~12,000 lines of working TypeScript with real SQL persistence, real Google Calendar/Gmail sync, real Twilio SMS/voice delivery, a real occurrence materialization engine with timezone math, and comprehensive E2E tests. The architecture is solid.
 
-However, there are **critical gaps between the BRD and what's actually wired end-to-end**. The backend has the plumbing, but the conversational layer and UI presentation layer are incomplete. The system can *store* habits, goals, and escalation plans, but the user currently **cannot create them through conversation** — only through raw API calls.
+**Correction (2026-04-05):** The initial assessment below overstated gaps. Deeper exploration revealed:
+
+- **Conversational bridge already exists**: `manageLifeOpsAction` (`packages/agent/src/actions/lifeops.ts`) handles create/update definitions, goals, complete/snooze/skip occurrences, and goal reviews — all registered in `eliza-plugin.ts`.
+- **Reminder daemon already exists**: `packages/agent/src/lifeops/runtime.ts` registers a 60-second recurring task worker (`LIFEOPS_SCHEDULER`) that calls `processScheduledWork()` automatically.
+- **Snooze presets fully implemented in backend**: `computeSnoozedUntil()` supports 15m/30m/1h/tonight/tomorrow_morning with timezone-aware resolution.
+- **Escalation already works**: Multi-step reminder plans fire each step based on time offsets from the occurrence anchor. Deduplication prevents re-delivery.
+- **Context provider exists**: `lifeOpsProvider` injects LifeOps overview into agent context.
+
+The remaining gaps (now addressed) were:
+1. No calendar/email query action (agent couldn't answer "what's on my calendar?" in chat) — **FIXED**: `queryLifeOpsAction` added
+2. Provider didn't include calendar/email context — **FIXED**: enhanced `lifeOpsProvider`
+3. UI snooze hardcoded to 15m — **FIXED**: dropdown with all presets
+4. No phone/escalation config via chat — **FIXED**: `capture_phone` and `configure_reminder_plan` operations added
 
 ---
 
@@ -474,11 +486,11 @@ Register a recurring task via the task scheduler that calls `processReminders()`
 
 | ID | Scenario | Status | Blocker |
 |----|----------|--------|---------|
-| AC-1 | "I need help brushing my teeth twice a day" | **BLOCKED** | No conversational bridge (Plan 1). Backend can model it perfectly. |
-| AC-2 | Snooze brushing for 30 minutes | **PARTIAL** | Backend works. UI only has 30m preset (Plan 5). No chat snooze. |
-| AC-3 | "Add one push-up and sit-up every day" | **BLOCKED** | No conversational bridge (Plan 1). Engine supports `linear_increment` perfectly. |
-| AC-4 | "I want to call my mom every week" | **BLOCKED** | No conversational bridge (Plan 1). Goal model exists. |
-| AC-5 | User connects Google Calendar | **WORKS** | Full OAuth flow, events appear in widget. |
-| AC-6 | Escalation chain fires on ignored reminders | **BLOCKED** | No reminder daemon (Plan 2), no auto-escalation (Plan 4). |
-| AC-7 | "Do I have any important emails?" | **BLOCKED** | No conversational bridge (Plan 1). API returns triage perfectly. |
-| AC-8 | Browser automation visible to user | **BLOCKED** | No UI (Plan 7). Backend tracks sessions. |
+| AC-1 | "I need help brushing my teeth twice a day" | **WORKS** | `manageLifeOpsAction` creates times_per_day definitions with morning/night windows via LLM parameter extraction. |
+| AC-2 | Snooze brushing for 30 minutes | **WORKS** | Backend: all presets (15m/30m/1h/tonight/tomorrow). UI: dropdown with all presets. Chat: snooze via `manageLifeOpsAction`. |
+| AC-3 | "Add one push-up and sit-up every day" | **WORKS** | `manageLifeOpsAction` supports `progressionRule: { kind: "linear_increment", metric, start, step }`. Engine computes targets. |
+| AC-4 | "I want to call my mom every week" | **WORKS** | `manageLifeOpsAction` creates goals with weekly cadence and support strategy. |
+| AC-5 | User connects Google Calendar | **WORKS** | Full OAuth flow, events appear in widget. `queryLifeOpsAction` answers calendar questions in chat. |
+| AC-6 | Escalation chain fires on ignored reminders | **WORKS** | 60-second scheduler daemon + multi-step reminder plans with time-offset escalation. `configure_reminder_plan` configures steps via chat. |
+| AC-7 | "Do I have any important emails?" | **WORKS** | `queryLifeOpsAction` with `email_triage` operation. Formats triage scores, importance, reply-needed indicators. |
+| AC-8 | Browser automation visible to user | **BLOCKED** | No UI (Plan 7). Backend tracks sessions. `browser/` component directory still empty. |

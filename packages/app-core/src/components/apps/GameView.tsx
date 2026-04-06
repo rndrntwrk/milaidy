@@ -28,11 +28,13 @@ import { useApp } from "../../state";
 import { openExternalUrl } from "../../utils";
 import type { DesktopClickAuditItem } from "../../utils/desktop-workspace";
 import { formatTime } from "../../utils/format";
+import { BabylonTerminal } from "./BabylonTerminal";
 
 const DEFAULT_VIEWER_SANDBOX = "allow-scripts allow-same-origin allow-popups";
 const READY_EVENT_BY_AUTH_TYPE: Record<string, string> = {
   HYPERSCAPE_AUTH: "HYPERSCAPE_READY",
   RS_2004SCAPE_AUTH: "RS_2004SCAPE_READY",
+  BABYLON_AUTH: "BABYLON_READY",
 };
 
 export function buildDisconnectedSessionState(
@@ -1081,7 +1083,13 @@ export function GameView() {
           className="h-7 text-xs shadow-sm hover:border-accent"
           onClick={() => setShowLogsPanel(!showLogsPanel)}
         >
-          {showLogsPanel ? t("game.hideLogs") : t("game.showLogs")}
+          {activeGameApp?.includes("babylon")
+            ? showLogsPanel
+              ? "Hide Terminal"
+              : "Terminal"
+            : showLogsPanel
+              ? t("game.hideLogs")
+              : t("game.showLogs")}
         </Button>
         {isElectrobun && (
           <DesktopGameWindowControls gameWindowId={gameWindowId} />
@@ -1166,7 +1174,12 @@ export function GameView() {
             />
           )}
         </div>
-        {showLogsPanel && renderLogsPanel()}
+        {showLogsPanel &&
+          (activeGameApp?.includes("babylon") ? (
+            <BabylonTerminal appName={activeGameApp} />
+          ) : (
+            renderLogsPanel()
+          ))}
       </div>
     </div>
   );

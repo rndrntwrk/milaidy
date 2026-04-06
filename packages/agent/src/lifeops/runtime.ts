@@ -1,6 +1,7 @@
 import type { IAgentRuntime, Task, TaskMetadata, UUID } from "@elizaos/core";
-import { stringToUuid } from "@elizaos/core";
+import { logger, stringToUuid } from "@elizaos/core";
 import { LifeOpsService } from "./service.js";
+import { readTwilioCredentialsFromEnv } from "./twilio.js";
 
 export const LIFEOPS_TASK_NAME = "LIFEOPS_SCHEDULER" as const;
 export const LIFEOPS_TASK_TAGS = ["queue", "repeat", "lifeops"] as const;
@@ -66,9 +67,49 @@ export function registerLifeOpsTaskWorker(runtime: IAgentRuntime): void {
   });
 }
 
+/**
+ * Wait for the database adapter to be ready before running task queries.
+ * PGlite may still be initializing when plugin init fires; a short probe
+ * avoids a noisy retry cycle in plugin-sql.
+ */
+async function waitForDbReady(
+  runtime: IAgentRuntime,
+  maxAttempts = 3,
+  delayMs = 500,
+): Promise<void> {
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      // Light-weight probe: fetch tasks with a filter that should match nothing.
+      await runtime.getTasks({ agentIds: [runtime.agentId], tags: ["__db_ready_probe__"] });
+      return;
+    } catch {
+      if (i < maxAttempts - 1) {
+        await new Promise((r) => setTimeout(r, delayMs));
+      }
+    }
+  }
+  // If still failing, let the caller proceed — the original retry logic in
+  // plugin-sql will handle it, we just reduced the likelihood of hitting it.
+}
+
+let credentialStatusLogged = false;
+function logCredentialStatus(): void {
+  if (credentialStatusLogged) return;
+  credentialStatusLogged = true;
+  const hasTwilio = Boolean(readTwilioCredentialsFromEnv());
+  if (!hasTwilio) {
+    logger.info(
+      "[lifeops] Twilio credentials not configured — SMS and voice reminders will be blocked. Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_PHONE_NUMBER to enable.",
+    );
+  }
+}
+
 export async function ensureLifeOpsSchedulerTask(
   runtime: IAgentRuntime,
 ): Promise<UUID> {
+  await waitForDbReady(runtime);
+  logCredentialStatus();
+
   const tasks = await runtime.getTasks({
     agentIds: [runtime.agentId],
     tags: [...LIFEOPS_TASK_TAGS],

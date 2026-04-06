@@ -75,6 +75,7 @@ import {
   ONBOARDING_PROVIDER_CATALOG,
 } from "../contracts/onboarding.js";
 import { createIntegrationTelemetrySpan } from "../diagnostics/integration-observability.js";
+import { registerClientChatSendHandler } from "../services/client-chat-sender.js";
 import { EMOTE_BY_ID, EMOTE_CATALOG } from "../emotes/catalog.js";
 import { resolveDefaultAgentWorkspaceDir } from "../providers/workspace.js";
 import {
@@ -7250,6 +7251,7 @@ export async function startApiServer(opts?: {
     void overlayDbCharacter(opts.runtime, state).catch((err) => {
       logger.warn("[api] Character overlay restore failed:", err);
     });
+    registerClientChatSendHandler(opts.runtime, state);
   }
 
   /** Hot-swap the runtime reference (used after an in-process restart). */
@@ -7285,6 +7287,9 @@ export async function startApiServer(opts?: {
 
     // Broadcast status update immediately after restart
     broadcastStatus();
+
+    // Re-register client_chat send handler on the new runtime
+    registerClientChatSendHandler(rt, state);
 
     // Wire coding-agent bridges (event-driven via getServiceLoadPromise)
     void wireCoordinatorBridgesWhenReady(state, {

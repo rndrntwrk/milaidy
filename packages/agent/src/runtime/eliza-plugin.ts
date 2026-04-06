@@ -23,11 +23,13 @@ import {
 } from "../actions/stream-control";
 import { terminalAction } from "../actions/terminal";
 import { manageLifeOpsAction } from "../actions/lifeops";
+import { queryLifeOpsAction } from "../actions/lifeops-query";
 import {
   skillCommandAction,
   addRegisteredSkillSlug,
   clearRegisteredSkillSlugs,
 } from "../actions/skill-command";
+import { adminPanelProvider } from "../providers/admin-panel";
 import { adminTrustProvider } from "../providers/admin-trust";
 
 import { createSessionKeyProvider } from "../providers/session-bridge";
@@ -40,6 +42,9 @@ import { createDynamicSkillProvider } from "../providers/skill-provider";
 import { lifeOpsProvider } from "../providers/lifeops";
 import { uiCatalogProvider } from "../providers/ui-catalog";
 import { createUserNameProvider } from "../providers/user-name";
+import { roleBackfillProvider } from "../providers/role-backfill";
+import { escalationTriggerProvider } from "../providers/escalation-trigger";
+import { lateJoinWhitelistEvaluator } from "../evaluators/late-join-whitelist";
 import { setUserNameAction } from "../actions/set-user-name";
 import { DEFAULT_AGENT_WORKSPACE_DIR } from "../providers/workspace";
 import { createWorkspaceProvider } from "../providers/workspace-provider";
@@ -71,6 +76,7 @@ export function createElizaPlugin(config?: ElizaPluginConfig): Plugin {
       maxCharsPerFile: config?.initMaxChars,
     }),
     adminTrustProvider,
+    adminPanelProvider,
     lifeOpsProvider,
 
     createSessionKeyProvider({ defaultAgentId: agentId }),
@@ -227,8 +233,12 @@ export function createElizaPlugin(config?: ElizaPluginConfig): Plugin {
       ...baseProviders,
 
       uiCatalogProvider,
+      roleBackfillProvider,
+      escalationTriggerProvider,
       // customActionsProvider,
     ],
+
+    evaluators: [lateJoinWhitelistEvaluator],
 
     actions: [
       restartAction,
@@ -237,6 +247,7 @@ export function createElizaPlugin(config?: ElizaPluginConfig): Plugin {
       createTriggerTaskAction,
       emoteAction,
       manageLifeOpsAction,
+      queryLifeOpsAction,
       setUserNameAction,
       skillCommandAction,
     ],

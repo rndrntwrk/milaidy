@@ -2245,9 +2245,9 @@
         "github"
       ],
       "category": "connector",
-      "envKey": "GITHUB_API_TOKEN",
+      "envKey": "GITHUB_TOKEN",
       "configKeys": [
-        "GITHUB_API_TOKEN",
+        "GITHUB_TOKEN",
         "GITHUB_OWNER",
         "GITHUB_REPO",
         "GITHUB_BRANCH",
@@ -2258,7 +2258,7 @@
       ],
       "version": "2.0.0-alpha.4",
       "pluginParameters": {
-        "GITHUB_API_TOKEN": {
+        "GITHUB_TOKEN": {
           "type": "string",
           "description": "GitHub personal access token for API authentication",
           "required": true,

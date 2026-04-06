@@ -43,8 +43,15 @@ export function toBoolean(value: unknown, fallback = false): boolean {
 
 export function parseJsonValue<T>(value: unknown, fallback: T): T {
   if (value === null || value === undefined || value === "") return fallback;
-  if (typeof value !== "string") return value as T;
-  return JSON.parse(value) as T;
+  if (typeof value !== "string") {
+    if (typeof value === "object") return value as T;
+    return fallback;
+  }
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return fallback;
+  }
 }
 
 export function parseJsonRecord(value: unknown): Record<string, unknown> {
@@ -126,12 +133,19 @@ export async function listTableColumns(
     const infoSchemaUnavailable =
       message.includes("information_schema") ||
       message.includes("no such table") ||
-      message.includes("does not exist");
+      message.includes("does not exist") ||
+      message.includes("syntax error") ||
+      message.includes("unknown table") ||
+      message.includes("relation") ||
+      message.includes("pragma");
     if (!infoSchemaUnavailable) {
       throw error;
     }
   }
 
+  if (!/^[a-zA-Z0-9_]+$/.test(tableName)) {
+    throw new Error(`invalid table name for PRAGMA: ${tableName}`);
+  }
   const rows = await executeRawSql(runtime, `PRAGMA table_info(${tableName})`);
   return rows.map((row) => toText(row.name)).filter((name) => name.length > 0);
 }

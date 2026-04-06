@@ -744,6 +744,12 @@ export async function handleLifeOpsRoutes(
         json(res, await service.updateDefinition(definitionId, body));
       });
     }
+    if (method === "DELETE") {
+      return runRoute(ctx, async (service) => {
+        await service.deleteDefinition(definitionId);
+        json(res, { deleted: true });
+      });
+    }
   }
 
   if (method === "GET" && pathname === "/api/lifeops/goals") {
@@ -774,6 +780,12 @@ export async function handleLifeOpsRoutes(
       if (!body) return true;
       return runRoute(ctx, async (service) => {
         json(res, await service.updateGoal(goalId, body));
+      });
+    }
+    if (method === "DELETE") {
+      return runRoute(ctx, async (service) => {
+        await service.deleteGoal(goalId);
+        json(res, { deleted: true });
       });
     }
   }

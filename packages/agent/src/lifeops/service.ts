@@ -4173,6 +4173,41 @@ export class LifeOpsService {
     };
   }
 
+  async deleteDefinition(definitionId: string): Promise<void> {
+    const definition = await this.repository.getDefinition(
+      this.agentId(),
+      definitionId,
+    );
+    if (!definition) {
+      fail(404, "life-ops definition not found");
+    }
+    await this.repository.deleteDefinition(this.agentId(), definitionId);
+    await this.recordAudit(
+      "definition_deleted",
+      "definition",
+      definitionId,
+      "definition deleted",
+      { title: definition.title },
+      {},
+    );
+  }
+
+  async deleteGoal(goalId: string): Promise<void> {
+    const goal = await this.repository.getGoal(this.agentId(), goalId);
+    if (!goal) {
+      fail(404, "life-ops goal not found");
+    }
+    await this.repository.deleteGoal(this.agentId(), goalId);
+    await this.recordAudit(
+      "goal_deleted",
+      "goal",
+      goalId,
+      "goal deleted",
+      { title: goal.title },
+      {},
+    );
+  }
+
   async listGoals(): Promise<LifeOpsGoalRecord[]> {
     const goals = await this.repository.listGoals(this.agentId());
     const records: LifeOpsGoalRecord[] = [];
@@ -4199,13 +4234,27 @@ export class LifeOpsService {
       ...ownership,
       title: requireNonEmptyString(request.title, "title"),
       description: normalizeOptionalString(request.description) ?? "",
-      cadence: normalizeNullableRecord(request.cadence, "cadence") ?? null,
-      supportStrategy:
-        normalizeOptionalRecord(request.supportStrategy, "supportStrategy") ??
-        {},
-      successCriteria:
-        normalizeOptionalRecord(request.successCriteria, "successCriteria") ??
-        {},
+      cadence: (() => {
+        const cadence = normalizeNullableRecord(request.cadence, "cadence");
+        if (cadence && typeof cadence.kind !== "string") {
+          fail(400, "goal cadence must include a 'kind' field when provided");
+        }
+        return cadence ?? null;
+      })(),
+      supportStrategy: (() => {
+        const strategy = normalizeOptionalRecord(request.supportStrategy, "supportStrategy") ?? {};
+        if (Array.isArray(strategy)) {
+          fail(400, "supportStrategy must be an object, not an array");
+        }
+        return strategy;
+      })(),
+      successCriteria: (() => {
+        const criteria = normalizeOptionalRecord(request.successCriteria, "successCriteria") ?? {};
+        if (Array.isArray(criteria)) {
+          fail(400, "successCriteria must be an object, not an array");
+        }
+        return criteria;
+      })(),
       status:
         request.status === undefined
           ? "active"
@@ -5210,8 +5259,7 @@ export class LifeOpsService {
     ownerType: "occurrence" | "calendar_event",
     ownerId: string,
   ): Promise<LifeOpsReminderInspection> {
-    const reminderPlan = ownerType === "occurrence" ? (() => null)() : null;
-    let plan: LifeOpsReminderPlan | null = reminderPlan;
+    let plan: LifeOpsReminderPlan | null = null;
     if (ownerType === "occurrence") {
       const occurrence = await this.repository.getOccurrence(
         this.agentId(),
@@ -5524,6 +5572,12 @@ export class LifeOpsService {
               !definition.permissionPolicy.trustedBrowserActions &&
               !args.confirmBrowserActions
             ) {
+              // KNOWN LIMITATION: The workflow does NOT wait for user
+              // confirmation. It records requiresConfirmation and moves on.
+              // The browser session remains in "awaiting_confirmation" state
+              // but the workflow step completes immediately. A future
+              // implementation should suspend execution until confirmation
+              // is received via the browser session API.
               value = {
                 sessionId: session.id,
                 status: session.status,

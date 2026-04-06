@@ -196,6 +196,21 @@ export interface CloudCompatManagedDiscordStatus {
   restarted?: boolean;
 }
 
+export interface CloudCompatManagedGithubStatus {
+  configured: boolean;
+  connected: boolean;
+  connectionId: string | null;
+  githubUserId: string | null;
+  githubUsername: string | null;
+  githubDisplayName: string | null;
+  githubAvatarUrl: string | null;
+  githubEmail: string | null;
+  scopes: string[];
+  adminElizaUserId: string | null;
+  connectedAt: string | null;
+  restarted?: boolean;
+}
+
 export interface CloudCompatJob {
   jobId: string;
   type: string;

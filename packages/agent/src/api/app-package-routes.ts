@@ -69,5 +69,13 @@ export async function handleAppPackageRoutes(
   const handler = resolveAppRouteHandler(routeModule, slug);
   if (!handler) return false;
 
-  return handler(ctx);
+  // App route handlers expect readJsonBody pre-bound to the current request,
+  // but the server-level helper requires (req, res) arguments.  Wrap it so
+  // handlers can call readJsonBody() with no arguments.
+  const boundCtx: AppPackageRouteContext = {
+    ...ctx,
+    readJsonBody: (() => ctx.readJsonBody(ctx.req, ctx.res)) as typeof ctx.readJsonBody,
+  };
+
+  return handler(boundCtx);
 }

@@ -3,8 +3,15 @@ import type {
   AppLaunchResult,
   AppSessionActionResult,
   AppSessionState,
-} from "../../../packages/agent/src/contracts/apps";
-import type { AppLaunchSessionContext } from "../../../packages/agent/src/services/app-package-modules";
+} from "@miladyai/shared/contracts/apps";
+
+/** Inlined from packages/agent — keeps this plugin free of circular deps. */
+interface AppLaunchSessionContext {
+  appName: string;
+  launchUrl: string | null;
+  runtime: IAgentRuntime | null;
+  viewer: AppLaunchResult["viewer"] | null;
+}
 
 const APP_NAME = "@elizaos/app-defense-of-the-agents";
 const APP_DISPLAY_NAME = "Defense of the Agents";

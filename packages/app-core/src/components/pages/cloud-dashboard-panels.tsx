@@ -1,6 +1,7 @@
 import { Button, Input, SectionCard } from "@miladyai/ui";
 import {
   ExternalLink,
+  Github,
   Loader2,
   MessageCircle,
   ShieldAlert,
@@ -13,6 +14,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   type CloudCompatAgent,
   type CloudCompatManagedDiscordStatus,
+  type CloudCompatManagedGithubStatus,
   client,
 } from "../../api";
 import { useIntervalWhenDocumentVisible } from "../../hooks/useDocumentVisibility";
@@ -172,6 +174,9 @@ export function AgentDetailSidebar({
     useState<CloudCompatManagedDiscordStatus | null>(null);
   const [discordBusy, setDiscordBusy] = useState(false);
   const [botNickname, setBotNickname] = useState("");
+  const [managedGithub, setManagedGithub] =
+    useState<CloudCompatManagedGithubStatus | null>(null);
+  const [githubBusy, setGithubBusy] = useState(false);
   const logsEndRef = useRef<HTMLDivElement>(null);
   const aliveRef = useRef(true);
   const lastAgentIdRef = useRef<string | null>(null);
@@ -186,16 +191,18 @@ export function AgentDetailSidebar({
   const fetchDetails = useCallback(async () => {
     if (!agent) return;
     try {
-      const [statusRes, logsRes, discordRes] = await Promise.all([
+      const [statusRes, logsRes, discordRes, githubRes] = await Promise.all([
         client.getCloudCompatAgentStatus(agent.agent_id),
         client.getCloudCompatAgentLogs(agent.agent_id, 100),
         client.getCloudCompatAgentManagedDiscord(agent.agent_id).catch(() => null),
+        client.getCloudCompatAgentManagedGithub(agent.agent_id).catch(() => null),
       ]);
 
       if (!aliveRef.current) return;
       setStatusDetail(statusRes.data);
       setLogs(typeof logsRes.data === "string" ? logsRes.data : "");
       setManagedDiscord(discordRes?.data ?? null);
+      setManagedGithub(githubRes?.data ?? null);
       if (!lastAgentIdRef.current || lastAgentIdRef.current !== agent.agent_id) {
         lastAgentIdRef.current = agent.agent_id;
         setBotNickname(discordRes?.data?.botNickname ?? agent.agent_name ?? "");
@@ -293,6 +300,69 @@ export function AgentDetailSidebar({
     } finally {
       if (aliveRef.current) {
         setDiscordBusy(false);
+      }
+    }
+  };
+
+  const handleConnectGithub = async () => {
+    if (!agent) return;
+    setGithubBusy(true);
+    try {
+      const response = await client.createCloudCompatAgentManagedGithubOauth(agent.agent_id);
+
+      await openExternalUrl(response.data.authorizeUrl);
+      setActionNotice(
+        t("elizaclouddashboard.GitHubSetupContinuesInBrowser", {
+          defaultValue: "Finish GitHub authorization in your browser, then return here.",
+        }),
+        "info",
+        5000,
+      );
+    } catch (error) {
+      setActionNotice(
+        error instanceof Error
+          ? error.message
+          : t("elizaclouddashboard.GitHubSetupFailed", {
+              defaultValue: "Failed to start GitHub setup.",
+            }),
+        "error",
+        4200,
+      );
+    } finally {
+      if (aliveRef.current) {
+        setGithubBusy(false);
+      }
+    }
+  };
+
+  const handleDisconnectGithub = async () => {
+    if (!agent) return;
+    setGithubBusy(true);
+    try {
+      const response = await client.disconnectCloudCompatAgentManagedGithub(agent.agent_id);
+      if (!aliveRef.current) return;
+      setManagedGithub(response.data);
+      setActionNotice(
+        t("elizaclouddashboard.GitHubDisconnected", {
+          defaultValue: "GitHub disconnected from this agent.",
+        }),
+        "success",
+        4200,
+      );
+      void fetchDetails();
+    } catch (error) {
+      setActionNotice(
+        error instanceof Error
+          ? error.message
+          : t("elizaclouddashboard.GitHubDisconnectFailed", {
+              defaultValue: "Failed to disconnect GitHub.",
+            }),
+        "error",
+        4200,
+      );
+    } finally {
+      if (aliveRef.current) {
+        setGithubBusy(false);
       }
     }
   };
@@ -484,6 +554,124 @@ export function AgentDetailSidebar({
                     {t("elizaclouddashboard.DiscordConnectedAt", {
                       defaultValue: "Linked {{time}}",
                       time: new Date(managedDiscord.connectedAt).toLocaleString(),
+                    })}
+                  </span>
+                </div>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-border/40 bg-bg/80 p-3">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <span className="text-[10px] text-muted uppercase font-bold tracking-wider flex items-center gap-2">
+                <Github className="w-3 h-3" />
+                {t("elizaclouddashboard.GitHub", {
+                  defaultValue: "GitHub",
+                })}
+              </span>
+              <span
+                className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+                  managedGithub?.connected
+                    ? "border-ok/30 bg-ok/10 text-ok"
+                    : "border-border/50 bg-bg/50 text-muted"
+                }`}
+              >
+                {managedGithub?.connected
+                  ? t("common.connected", {
+                      defaultValue: "Connected",
+                    })
+                  : t("common.notConnected", {
+                      defaultValue: "Not connected",
+                    })}
+              </span>
+            </div>
+
+            <div className="space-y-3">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-lg border border-border/30 bg-bg/55 p-3">
+                  <span className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-muted">
+                    {t("elizaclouddashboard.GitHubAccount", {
+                      defaultValue: "Account",
+                    })}
+                  </span>
+                  <span className="text-xs text-txt-strong">
+                    {managedGithub?.githubUsername
+                      ? `@${managedGithub.githubUsername}`
+                      : t("elizaclouddashboard.NoGitHubLinkedYet", {
+                          defaultValue: "No account linked yet",
+                        })}
+                  </span>
+                </div>
+                <div className="rounded-lg border border-border/30 bg-bg/55 p-3">
+                  <span className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-muted">
+                    {t("elizaclouddashboard.GitHubScopes", {
+                      defaultValue: "Scopes",
+                    })}
+                  </span>
+                  <span className="text-xs text-txt-strong font-mono">
+                    {managedGithub?.scopes?.length
+                      ? managedGithub.scopes.join(", ")
+                      : "—"}
+                  </span>
+                </div>
+              </div>
+
+              <p className="text-[11px] leading-relaxed text-muted">
+                {managedGithub?.configured
+                  ? t("elizaclouddashboard.GitHubOAuthCopy", {
+                      defaultValue:
+                        "Connect your GitHub account to let this agent push code, create pull requests, and manage issues on your behalf.",
+                    })
+                  : t("elizaclouddashboard.GitHubOAuthUnavailable", {
+                      defaultValue:
+                        "GitHub OAuth is not configured on Eliza Cloud yet.",
+                    })}
+              </p>
+
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="h-9 rounded-xl px-4 text-xs font-semibold"
+                  disabled={githubBusy || !managedGithub?.configured}
+                  onClick={() => void handleConnectGithub()}
+                >
+                  {githubBusy ? (
+                    <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+                  ) : (
+                    <Github className="mr-1.5 h-3 w-3" />
+                  )}
+                  {managedGithub?.connected
+                    ? t("elizaclouddashboard.ReconnectGitHub", {
+                        defaultValue: "Reconnect / change account",
+                      })
+                    : t("elizaclouddashboard.ConnectGitHub", {
+                        defaultValue: "Connect GitHub",
+                      })}
+                </Button>
+                {managedGithub?.connected ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-9 rounded-xl border-danger/30 px-4 text-xs text-danger hover:bg-danger/10"
+                    disabled={githubBusy}
+                    onClick={() => void handleDisconnectGithub()}
+                  >
+                    <Unplug className="mr-1.5 h-3 w-3" />
+                    {t("elizaclouddashboard.DisconnectGitHub", {
+                      defaultValue: "Disconnect",
+                    })}
+                  </Button>
+                ) : null}
+              </div>
+
+              {managedGithub?.connectedAt ? (
+                <div className="flex items-start gap-2 rounded-lg border border-border/25 bg-bg/40 px-3 py-2 text-[11px] text-muted">
+                  <ShieldAlert className="mt-0.5 h-3 w-3 shrink-0" />
+                  <span>
+                    {t("elizaclouddashboard.GitHubConnectedAt", {
+                      defaultValue: "Linked {{time}}",
+                      time: new Date(managedGithub.connectedAt).toLocaleString(),
                     })}
                   </span>
                 </div>

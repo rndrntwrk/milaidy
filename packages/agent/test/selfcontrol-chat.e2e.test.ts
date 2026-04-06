@@ -117,6 +117,7 @@ function createRuntimeForSelfControlChatTests(options: {
 
   const runtimeSubset = {
     agentId: "selfcontrol-chat-agent",
+    registerSendHandler: () => {},
     character: {
       name: "Chen",
       postExamples: ["Sure."],

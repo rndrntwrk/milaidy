@@ -369,6 +369,7 @@ function createApiRuntime(
     character: {
       name: "MilaidyLifeOpsValidation",
     } as AgentRuntime["character"],
+    registerSendHandler: () => {},
     getSetting: () => undefined,
     getService: () => null,
     getRoomsByWorld: async () => [],

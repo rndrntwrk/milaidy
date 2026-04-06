@@ -11,6 +11,10 @@ vi.mock("./service.js", () => ({
   },
 }));
 
+vi.mock("./twilio.js", () => ({
+  readTwilioCredentialsFromEnv: () => null,
+}));
+
 import {
   ensureLifeOpsSchedulerTask,
   executeLifeOpsSchedulerTask,
@@ -152,5 +156,66 @@ describe("lifeops runtime scheduler", () => {
       now: "2026-04-04T13:00:00.000Z",
     });
     expect(result).toEqual({ nextInterval: LIFEOPS_TASK_INTERVAL_MS });
+  });
+
+  describe("waitForDbReady (via ensureLifeOpsSchedulerTask)", () => {
+    it("proceeds immediately when DB is healthy", async () => {
+      const { runtime } = createRuntimeMock();
+      const getTasksSpy = vi.mocked(runtime.getTasks);
+
+      await ensureLifeOpsSchedulerTask(runtime);
+
+      // First call is the probe, second is the real getTasks for lifeops tags
+      expect(getTasksSpy).toHaveBeenCalledTimes(2);
+      // Probe call uses the sentinel tag
+      expect(getTasksSpy.mock.calls[0]?.[0]).toEqual(
+        expect.objectContaining({ tags: ["__db_ready_probe__"] }),
+      );
+    });
+
+    it("retries the DB probe on transient failure then succeeds", async () => {
+      const { runtime } = createRuntimeMock();
+      const getTasksSpy = vi.mocked(runtime.getTasks);
+
+      // First probe call fails, second succeeds
+      let probeCallCount = 0;
+      getTasksSpy.mockImplementation(async (params) => {
+        const tags = (params as { tags?: string[] }).tags;
+        if (tags?.includes("__db_ready_probe__")) {
+          probeCallCount++;
+          if (probeCallCount === 1) {
+            throw new Error("PGlite not ready");
+          }
+          return [];
+        }
+        return [];
+      });
+
+      const taskId = await ensureLifeOpsSchedulerTask(runtime);
+
+      // Should have retried the probe then proceeded to create
+      expect(probeCallCount).toBe(2);
+      expect(taskId).toBeDefined();
+    });
+
+    it("continues to create the task even when all probe attempts fail", async () => {
+      const { runtime, state } = createRuntimeMock();
+      const getTasksSpy = vi.mocked(runtime.getTasks);
+
+      // All probe calls fail, but real calls work
+      getTasksSpy.mockImplementation(async (params) => {
+        const tags = (params as { tags?: string[] }).tags;
+        if (tags?.includes("__db_ready_probe__")) {
+          throw new Error("PGlite never ready");
+        }
+        return [...state.tasks];
+      });
+
+      const taskId = await ensureLifeOpsSchedulerTask(runtime);
+
+      // Should still succeed by falling through to the actual task creation
+      expect(taskId).toBe("lifeops-task-id");
+      expect(state.tasks).toHaveLength(1);
+    });
   });
 });

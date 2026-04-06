@@ -7,6 +7,10 @@ const {
   mockGetOverview,
   mockCreateDefinition,
   mockReviewGoal,
+  mockCapturePhoneConsent,
+  mockUpdateDefinition,
+  mockDeleteDefinition,
+  mockDeleteGoal,
 } = vi.hoisted(() => ({
   mockCheckSenderRole: vi.fn(),
   mockListDefinitions: vi.fn(),
@@ -14,6 +18,10 @@ const {
   mockGetOverview: vi.fn(),
   mockCreateDefinition: vi.fn(),
   mockReviewGoal: vi.fn(),
+  mockCapturePhoneConsent: vi.fn(),
+  mockUpdateDefinition: vi.fn(),
+  mockDeleteDefinition: vi.fn(),
+  mockDeleteGoal: vi.fn(),
 }));
 
 vi.mock("@miladyai/plugin-roles", () => ({
@@ -27,6 +35,10 @@ vi.mock("../lifeops/service.js", () => ({
     getOverview = mockGetOverview;
     createDefinition = mockCreateDefinition;
     reviewGoal = mockReviewGoal;
+    capturePhoneConsent = mockCapturePhoneConsent;
+    updateDefinition = mockUpdateDefinition;
+    deleteDefinition = mockDeleteDefinition;
+    deleteGoal = mockDeleteGoal;
   },
 }));
 
@@ -40,6 +52,10 @@ describe("manageLifeOpsAction", () => {
     mockGetOverview.mockReset();
     mockCreateDefinition.mockReset();
     mockReviewGoal.mockReset();
+    mockCapturePhoneConsent.mockReset();
+    mockUpdateDefinition.mockReset();
+    mockDeleteDefinition.mockReset();
+    mockDeleteGoal.mockReset();
     mockCheckSenderRole.mockResolvedValue({
       entityId: "owner-1",
       role: "OWNER",
@@ -172,6 +188,252 @@ describe("manageLifeOpsAction", () => {
     expect(result).toMatchObject({
       success: true,
       text: expect.stringContaining("on track"),
+    });
+  });
+
+  it("captures a phone number with SMS consent", async () => {
+    mockCapturePhoneConsent.mockResolvedValue({
+      phoneNumber: "+15551234567",
+      policies: [
+        { channelType: "sms", allowEscalation: true },
+        { channelType: "voice", allowEscalation: false },
+      ],
+    });
+
+    const result = await manageLifeOpsAction.handler?.(
+      { agentId: "agent-1" } as never,
+      {
+        entityId: "owner-1",
+        content: {
+          source: "client_chat",
+          text: "my phone number is 555-123-4567, you can text me",
+        },
+      } as never,
+      {} as never,
+      {
+        parameters: {
+          operation: "capture_phone",
+          phoneNumber: "+15551234567",
+          allowSms: true,
+          allowVoice: false,
+        },
+      } as never,
+    );
+
+    expect(mockCapturePhoneConsent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        phoneNumber: "+15551234567",
+        consentGiven: true,
+        allowSms: true,
+        allowVoice: false,
+        privacyClass: "private",
+      }),
+    );
+    expect(result).toMatchObject({
+      success: true,
+      text: expect.stringContaining("+15551234567"),
+    });
+  });
+
+  it("configures a reminder plan with escalation steps", async () => {
+    mockListDefinitions.mockResolvedValue([
+      {
+        definition: {
+          id: "def-1",
+          title: "Brush teeth",
+          domain: "user_lifeops",
+        },
+      },
+    ]);
+    mockUpdateDefinition.mockResolvedValue({
+      definition: {
+        id: "def-1",
+        title: "Brush teeth",
+      },
+    });
+
+    const result = await manageLifeOpsAction.handler?.(
+      { agentId: "agent-1" } as never,
+      {
+        entityId: "owner-1",
+        content: {
+          source: "client_chat",
+          text: "text me if I ignore the brushing reminder",
+        },
+      } as never,
+      {} as never,
+      {
+        parameters: {
+          operation: "configure_reminder_plan",
+          targetTitle: "Brush teeth",
+          escalationSteps: [
+            { channel: "in_app", offsetMinutes: 0, label: "In-app reminder" },
+            { channel: "sms", offsetMinutes: 15, label: "SMS if not acknowledged" },
+          ],
+        },
+      } as never,
+    );
+
+    expect(mockUpdateDefinition).toHaveBeenCalledWith(
+      "def-1",
+      expect.objectContaining({
+        reminderPlan: expect.objectContaining({
+          steps: [
+            { channel: "in_app", offsetMinutes: 0, label: "In-app reminder" },
+            { channel: "sms", offsetMinutes: 15, label: "SMS if not acknowledged" },
+          ],
+        }),
+      }),
+    );
+    expect(result).toMatchObject({
+      success: true,
+      text: expect.stringContaining("Brush teeth"),
+    });
+  });
+
+  it("returns error when capture_phone has no phone number", async () => {
+    const result = await manageLifeOpsAction.handler?.(
+      { agentId: "agent-1" } as never,
+      {
+        entityId: "owner-1",
+        content: { source: "client_chat", text: "save my phone" },
+      } as never,
+      {} as never,
+      {
+        parameters: {
+          operation: "capture_phone",
+        },
+      } as never,
+    );
+
+    expect(result).toMatchObject({
+      success: false,
+      text: expect.stringContaining("phone number is required"),
+    });
+  });
+
+  it("deletes a definition by title", async () => {
+    mockListDefinitions.mockResolvedValue([
+      {
+        definition: {
+          id: "def-1",
+          title: "Brush teeth",
+          domain: "user_lifeops",
+        },
+      },
+    ]);
+    mockDeleteDefinition.mockResolvedValue(undefined);
+
+    const result = await manageLifeOpsAction.handler?.(
+      { agentId: "agent-1" } as never,
+      {
+        entityId: "owner-1",
+        content: { source: "client_chat", text: "delete the brushing reminder" },
+      } as never,
+      {} as never,
+      {
+        parameters: {
+          operation: "delete_definition",
+          targetTitle: "Brush teeth",
+        },
+      } as never,
+    );
+
+    expect(mockDeleteDefinition).toHaveBeenCalledWith("def-1");
+    expect(result).toMatchObject({
+      success: true,
+      text: expect.stringContaining("Brush teeth"),
+    });
+  });
+
+  it("deletes a goal by title", async () => {
+    mockListGoals.mockResolvedValue([
+      {
+        goal: {
+          id: "goal-1",
+          title: "Stay healthy",
+          domain: "user_lifeops",
+        },
+        links: [],
+      },
+    ]);
+    mockDeleteGoal.mockResolvedValue(undefined);
+
+    const result = await manageLifeOpsAction.handler?.(
+      { agentId: "agent-1" } as never,
+      {
+        entityId: "owner-1",
+        content: { source: "client_chat", text: "remove the stay healthy goal" },
+      } as never,
+      {} as never,
+      {
+        parameters: {
+          operation: "delete_goal",
+          targetTitle: "Stay healthy",
+        },
+      } as never,
+    );
+
+    expect(mockDeleteGoal).toHaveBeenCalledWith("goal-1");
+    expect(result).toMatchObject({
+      success: true,
+      text: expect.stringContaining("Stay healthy"),
+    });
+  });
+
+  it("configures a reminder plan with escalation steps", async () => {
+    mockListDefinitions.mockResolvedValue([
+      {
+        definition: {
+          id: "def-1",
+          title: "Brush teeth",
+          domain: "user_lifeops",
+        },
+      },
+    ]);
+    mockUpdateDefinition.mockResolvedValue({
+      definition: {
+        id: "def-1",
+        title: "Brush teeth",
+      },
+    });
+
+    const result = await manageLifeOpsAction.handler?.(
+      { agentId: "agent-1" } as never,
+      {
+        entityId: "owner-1",
+        content: {
+          source: "client_chat",
+          text: "text me if I ignore the brushing reminder",
+        },
+      } as never,
+      {} as never,
+      {
+        parameters: {
+          operation: "configure_reminder_plan",
+          targetTitle: "Brush teeth",
+          escalationSteps: [
+            { channel: "in_app", offsetMinutes: 0, label: "In-app reminder" },
+            { channel: "sms", offsetMinutes: 15, label: "SMS if not acknowledged" },
+          ],
+        },
+      } as never,
+    );
+
+    expect(mockUpdateDefinition).toHaveBeenCalledWith(
+      "def-1",
+      expect.objectContaining({
+        reminderPlan: expect.objectContaining({
+          steps: [
+            { channel: "in_app", offsetMinutes: 0, label: "In-app reminder" },
+            { channel: "sms", offsetMinutes: 15, label: "SMS if not acknowledged" },
+          ],
+        }),
+      }),
+    );
+    expect(result).toMatchObject({
+      success: true,
+      text: expect.stringContaining("Brush teeth"),
     });
   });
 });

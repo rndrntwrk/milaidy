@@ -22,7 +22,8 @@
     "strategy"
   ],
   "dependencies": {
-    "@elizaos/core": "workspace:*"
+    "@elizaos/core": "workspace:*",
+    "@miladyai/shared": "workspace:*"
   },
   "elizaos": {
     "kind": "app",

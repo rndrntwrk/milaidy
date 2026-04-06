@@ -41,6 +41,37 @@ vi.mock("../../src/services/registry-client", () => ({
 
 import { AppManager } from "../../src/services/app-manager";
 
+const RS_2004SCAPE_APP_INFO: RegistryPluginInfo = {
+  name: "@elizaos/app-2004scape",
+  gitRepo: "elizaos/app-2004scape",
+  gitUrl: "https://github.com/elizaos/app-2004scape",
+  displayName: "2004Scape",
+  description: "RuneScape 2004 agent integration",
+  homepage: "",
+  topics: ["game"],
+  stars: 0,
+  language: "TypeScript",
+  kind: "app",
+  category: "game",
+  launchType: "connect",
+  launchUrl: "http://localhost:8880",
+  runtimePlugin: undefined,
+  capabilities: [],
+  viewer: {
+    url: "http://localhost:8880",
+    embedParams: { bot: "{RS_SDK_BOT_NAME}" },
+    postMessageAuth: true,
+    sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
+  },
+  npm: {
+    package: "@elizaos/app-2004scape",
+    v0Version: null,
+    v1Version: "1.0.0",
+    v2Version: "1.0.0",
+  },
+  supports: { v0: false, v1: true, v2: true },
+};
+
 const HYPERSCAPE_APP_INFO: RegistryPluginInfo = {
   name: "@elizaos/app-hyperscape",
   gitRepo: "elizaos/app-hyperscape",
@@ -742,5 +773,89 @@ describe("AppManager", () => {
     } finally {
       await fixtureServer.close();
     }
+  });
+
+  describe("2004scape server reachability", () => {
+    const originalBotName = process.env.RS_SDK_BOT_NAME;
+    const originalBotPassword = process.env.RS_SDK_BOT_PASSWORD;
+    const originalBotNameCompat = process.env.BOT_NAME;
+    const originalBotPasswordCompat = process.env.BOT_PASSWORD;
+
+    afterEach(() => {
+      for (const [key, val] of [
+        ["RS_SDK_BOT_NAME", originalBotName],
+        ["RS_SDK_BOT_PASSWORD", originalBotPassword],
+        ["BOT_NAME", originalBotNameCompat],
+        ["BOT_PASSWORD", originalBotPasswordCompat],
+      ] as const) {
+        if (val !== undefined) {
+          process.env[key] = val;
+        } else {
+          delete process.env[key];
+        }
+      }
+    });
+
+    it("skips plugin registration and returns a warning diagnostic when 2004scape server is unreachable", async () => {
+      // No 2004scape server running on localhost:8880
+      const manager = new AppManager();
+      const pluginManager = buildPluginManager([], RS_2004SCAPE_APP_INFO);
+      const runtime = createRuntimeStub({ characterName: "TestAgent" });
+
+      const result = await manager.launch(
+        pluginManager,
+        "@elizaos/app-2004scape",
+        undefined,
+        runtime,
+      );
+
+      // Plugin registration should NOT have been called (server is down)
+      expect(runtime.registerPlugin).not.toHaveBeenCalled();
+
+      // Should include a server-unreachable diagnostic
+      const unreachableDiag = result.diagnostics?.find(
+        (d: { code: string }) => d.code === "2004scape-server-unreachable",
+      );
+      expect(unreachableDiag).toBeDefined();
+      expect(unreachableDiag?.severity).toBe("warning");
+      expect(unreachableDiag?.message).toContain("not running");
+    });
+
+    it("registers the plugin when 2004scape server IS reachable", async () => {
+      // Start a minimal fixture server on a dynamic port
+      const server = http.createServer((_req, res) => {
+        res.statusCode = 200;
+        res.end("ok");
+      });
+      await new Promise<void>((resolve) => {
+        server.listen(8880, "127.0.0.1", () => resolve());
+      });
+
+      try {
+        const manager = new AppManager();
+        const pluginManager = buildPluginManager([], RS_2004SCAPE_APP_INFO);
+        const runtime = createRuntimeStub({ characterName: "TestAgent" });
+
+        const result = await manager.launch(
+          pluginManager,
+          "@elizaos/app-2004scape",
+          undefined,
+          runtime,
+        );
+
+        // Plugin registration SHOULD have been called
+        expect(runtime.registerPlugin).toHaveBeenCalled();
+
+        // Should NOT include a server-unreachable diagnostic
+        const unreachableDiag = result.diagnostics?.find(
+          (d: { code: string }) => d.code === "2004scape-server-unreachable",
+        );
+        expect(unreachableDiag).toBeUndefined();
+      } finally {
+        await new Promise<void>((resolve) =>
+          server.close(() => resolve()),
+        );
+      }
+    });
   });
 });

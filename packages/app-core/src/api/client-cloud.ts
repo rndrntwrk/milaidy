@@ -16,6 +16,7 @@ import type {
   CloudBillingSummary,
   CloudCompatAgent,
   CloudCompatManagedDiscordStatus,
+  CloudCompatManagedGithubStatus,
   CloudCompatAgentStatus,
   CloudCompatJob,
   CloudCompatLaunchResult,
@@ -116,6 +117,39 @@ declare module "./client-base" {
     disconnectCloudCompatAgentManagedDiscord(agentId: string): Promise<{
       success: boolean;
       data: CloudCompatManagedDiscordStatus;
+    }>;
+    getCloudCompatAgentManagedGithub(agentId: string): Promise<{
+      success: boolean;
+      data: CloudCompatManagedGithubStatus;
+    }>;
+    createCloudCompatAgentManagedGithubOauth(
+      agentId: string,
+      request?: {
+        scopes?: string[];
+      },
+    ): Promise<{
+      success: boolean;
+      data: {
+        authorizeUrl: string;
+      };
+    }>;
+    linkCloudCompatAgentManagedGithub(
+      agentId: string,
+      connectionId: string,
+    ): Promise<{
+      success: boolean;
+      data: CloudCompatManagedGithubStatus;
+    }>;
+    disconnectCloudCompatAgentManagedGithub(agentId: string): Promise<{
+      success: boolean;
+      data: CloudCompatManagedGithubStatus;
+    }>;
+    getCloudCompatAgentGithubToken(agentId: string): Promise<{
+      success: boolean;
+      data: {
+        accessToken: string;
+        githubUsername: string;
+      };
     }>;
     deleteCloudCompatAgent(agentId: string): Promise<{
       success: boolean;
@@ -383,6 +417,56 @@ MiladyClient.prototype.disconnectCloudCompatAgentManagedDiscord =
       },
     );
   };
+
+MiladyClient.prototype.getCloudCompatAgentManagedGithub = async function (
+  this: MiladyClient,
+  agentId,
+) {
+  return this.fetch(
+    `/api/cloud/v1/milady/agents/${encodeURIComponent(agentId)}/github`,
+  );
+};
+
+MiladyClient.prototype.createCloudCompatAgentManagedGithubOauth =
+  async function (this: MiladyClient, agentId, request = {}) {
+    return this.fetch(
+      `/api/cloud/v1/milady/agents/${encodeURIComponent(agentId)}/github/oauth`,
+      {
+        method: "POST",
+        body: JSON.stringify(request),
+      },
+    );
+  };
+
+MiladyClient.prototype.linkCloudCompatAgentManagedGithub =
+  async function (this: MiladyClient, agentId, connectionId) {
+    return this.fetch(
+      `/api/cloud/v1/milady/agents/${encodeURIComponent(agentId)}/github/link`,
+      {
+        method: "POST",
+        body: JSON.stringify({ connectionId }),
+      },
+    );
+  };
+
+MiladyClient.prototype.disconnectCloudCompatAgentManagedGithub =
+  async function (this: MiladyClient, agentId) {
+    return this.fetch(
+      `/api/cloud/v1/milady/agents/${encodeURIComponent(agentId)}/github`,
+      {
+        method: "DELETE",
+      },
+    );
+  };
+
+MiladyClient.prototype.getCloudCompatAgentGithubToken = async function (
+  this: MiladyClient,
+  agentId,
+) {
+  return this.fetch(
+    `/api/cloud/v1/milady/agents/${encodeURIComponent(agentId)}/github/token`,
+  );
+};
 
 MiladyClient.prototype.deleteCloudCompatAgent = async function (
   this: MiladyClient,
