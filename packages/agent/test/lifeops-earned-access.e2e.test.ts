@@ -296,8 +296,10 @@ describe("LifeOps earned access E2E", () => {
     expect(run.data.run).toMatchObject({
       status: "success",
       result: {
-        callback: {
-          ok: true,
+        outputs: {
+          callback: {
+            ok: true,
+          },
         },
       },
     });
