@@ -41,7 +41,7 @@ export const CORE_PLUGINS: readonly string[] = [
 ];
 ```
 
-> **Remarque :** `@elizaos/plugin-secrets-manager`, `@elizaos/plugin-rolodex`, `@elizaos/plugin-trust`, `@elizaos/plugin-todo`, `@elizaos/plugin-personality` et `@elizaos/plugin-experience` sont importés statiquement pour une résolution rapide mais commentés dans la liste principale. Ils pourraient être réactivés dans une version future.
+> **Remarque :** `@elizaos/plugin-secrets-manager`, `@elizaos/plugin-rolodex`, `@elizaos/plugin-trust`, `@elizaos/plugin-personality` et `@elizaos/plugin-experience` sont importés statiquement pour une résolution rapide mais commentés dans la liste principale. Ils pourraient être réactivés dans une version future. `@elizaos/plugin-todo` a été retiré ; la fonctionnalité todo est désormais gérée par l'API workbench via les tâches runtime.
 
 <div id="optional-core-plugins">
 
