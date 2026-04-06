@@ -266,7 +266,9 @@
     "ai": "6.0.30",
     "@stwd/sdk": "^0.3.0",
     "@ai-sdk/groq": "3.0.31",
-    "libsignal": "git+https://github.com/whiskeysockets/libsignal-node.git#1c30d7d7e76a3b0aa120b04dc6a26f5a12dccf67"
+    "libsignal": "git+https://github.com/whiskeysockets/libsignal-node.git#1c30d7d7e76a3b0aa120b04dc6a26f5a12dccf67",
+    "@elizaos/plugin-sql": "2.0.0-alpha.17",
+    "@elizaos/plugin-cli": "2.0.0-alpha.3"
   },
   "patchedDependencies": {
     "@elizaos/plugin-agent-skills@2.0.0-alpha.70": "patches/@elizaos%2Fplugin-agent-skills@2.0.0-alpha.70.patch",
