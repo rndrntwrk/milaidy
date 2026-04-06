@@ -427,6 +427,10 @@ function ActivityItemsContent({ events }: { events: ActivityEvent[] }) {
   );
 }
 
+function getClientErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback;
+}
+
 function OrchestratorTasksWidget(_props: ChatSidebarWidgetProps) {
   const { ptySessions, t } = useApp();
   const activeSessions = useMemo(
@@ -447,6 +451,10 @@ function OrchestratorTasksWidget(_props: ChatSidebarWidgetProps) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [detailError, setDetailError] = useState<string | null>(null);
   const deferredSearch = useDeferredValue(search.trim());
+  const selectedThreadSummary = useMemo(
+    () => threads.find((thread) => thread.id === selectedThreadId) ?? null,
+    [selectedThreadId, threads],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -470,11 +478,7 @@ function OrchestratorTasksWidget(_props: ChatSidebarWidgetProps) {
         });
       } catch (error) {
         if (cancelled) return;
-        setLoadError(
-          error instanceof Error
-            ? error.message
-            : "Failed to load task threads.",
-        );
+        setLoadError(getClientErrorMessage(error, "Failed to load task threads."));
         setThreads([]);
         setSelectedThreadId(null);
         setSelectedThread(null);
@@ -512,11 +516,7 @@ function OrchestratorTasksWidget(_props: ChatSidebarWidgetProps) {
         setSelectedThread(detail);
       } catch (error) {
         if (cancelled) return;
-        setDetailError(
-          error instanceof Error
-            ? error.message
-            : "Failed to load task detail.",
-        );
+        setDetailError(getClientErrorMessage(error, "Failed to load task detail."));
         setSelectedThread(null);
       }
     };
@@ -525,7 +525,7 @@ function OrchestratorTasksWidget(_props: ChatSidebarWidgetProps) {
     return () => {
       cancelled = true;
     };
-  }, [selectedThreadId, threads]);
+  }, [selectedThreadId, selectedThreadSummary?.updatedAt]);
 
   const handleArchiveToggle = async () => {
     if (!selectedThread) return;
@@ -548,11 +548,7 @@ function OrchestratorTasksWidget(_props: ChatSidebarWidgetProps) {
       setThreads(nextThreads);
       setSelectedThreadId(nextThreads[0]?.id ?? null);
     } catch (error) {
-      setLoadError(
-        error instanceof Error
-          ? error.message
-          : "Failed to update task thread.",
-      );
+      setLoadError(getClientErrorMessage(error, "Failed to update task thread."));
     } finally {
       setMutating(false);
     }
