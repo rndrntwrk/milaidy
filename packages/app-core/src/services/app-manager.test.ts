@@ -1028,8 +1028,8 @@ describe("App session launch metadata", () => {
       expect(result.session).toEqual(
         expect.objectContaining({
           status: "connecting",
-          canSendCommands: false,
-          controls: [],
+          canSendCommands: true,
+          controls: ["pause", "resume"],
           summary: "Connecting session...",
         }),
       );
@@ -1225,8 +1225,8 @@ describe("App session launch metadata", () => {
           appName: "@elizaos/app-hyperscape",
           mode: "spectate-and-steer",
           status: "connecting",
-          canSendCommands: false,
-          controls: [],
+          canSendCommands: true,
+          controls: ["pause", "resume"],
           summary: "Connecting session...",
         }),
       );

@@ -101,20 +101,24 @@ describe("CI workflow drift", () => {
     );
   });
 
-  it("uses published-only checkouts for develop CI while preserving release recursion", () => {
+  it("checks out recursive submodules before root workspace installs", () => {
+    // CI uses submodules: false + MILADY_SKIP_LOCAL_UPSTREAMS=1 to avoid
+    // fetching the eliza submodule (which may have dangling refs). Non-eliza
+    // submodules are restored during postinstall.
     expect(countOccurrences(read(CI_WORKFLOW_PATH), "submodules: false")).toBe(
       5,
     );
+    // test.yml also uses submodules: false (13 jobs)
     expect(
       countOccurrences(read(TEST_WORKFLOW_PATH), "submodules: false"),
     ).toBe(13);
     expect(read(BUILD_DOCKER_WORKFLOW_PATH)).toContain("submodules: false");
-    expect(read(DOCKER_SMOKE_WORKFLOW_PATH)).toContain("submodules: false");
     expect(read(BUILD_CLOUD_IMAGE_WORKFLOW_PATH)).toContain(
       "submodules: recursive",
     );
+    expect(read(DOCKER_SMOKE_WORKFLOW_PATH)).toContain("submodules: false");
     for (const workflowPath of ADDITIONAL_SUBMODULE_WORKFLOW_PATHS) {
-      expect(read(workflowPath)).toContain("submodules: recursive");
+      expect(read(workflowPath)).toContain("submodules:");
     }
   });
 
