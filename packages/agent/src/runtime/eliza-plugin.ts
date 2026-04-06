@@ -22,8 +22,7 @@ import {
   goOfflineAction,
 } from "../actions/stream-control";
 import { terminalAction } from "../actions/terminal";
-import { manageLifeOpsAction } from "../actions/lifeops";
-import { queryLifeOpsAction } from "../actions/lifeops-query";
+import { lifeAction } from "../actions/life";
 import {
   skillCommandAction,
   addRegisteredSkillSlug,
@@ -246,8 +245,7 @@ export function createElizaPlugin(config?: ElizaPluginConfig): Plugin {
       terminalAction,
       createTriggerTaskAction,
       emoteAction,
-      manageLifeOpsAction,
-      queryLifeOpsAction,
+      lifeAction,
       setUserNameAction,
       skillCommandAction,
     ],

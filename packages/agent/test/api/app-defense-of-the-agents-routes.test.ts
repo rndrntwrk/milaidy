@@ -349,4 +349,188 @@ describe("Defense of the Agents app routes", () => {
       error: "Defense of the Agents does not expose pause or resume controls.",
     });
   });
+
+  test("message with empty content returns 400", async () => {
+    const { res, getJson, getStatus } = createMockHttpResponse();
+    const handled = await handleAppPackageRoutes({
+      req: createMockIncomingMessage({
+        method: "POST",
+        url: "/api/apps/defense-of-the-agents/session/Scout/message",
+      }),
+      res,
+      method: "POST",
+      pathname: "/api/apps/defense-of-the-agents/session/Scout/message",
+      url: new URL(
+        "http://localhost:2138/api/apps/defense-of-the-agents/session/Scout/message",
+      ),
+      runtime: null,
+      readJsonBody: vi.fn(async () => ({ content: "" })),
+      json: (response, data, status = 200) => {
+        response.writeHead(status);
+        response.end(JSON.stringify(data));
+      },
+      error: (response, message, status = 500) => {
+        response.writeHead(status);
+        response.end(JSON.stringify({ error: message }));
+      },
+    });
+
+    expect(handled).toBe(true);
+    expect(getStatus()).toBe(400);
+    expect(getJson()).toEqual({
+      error: "Command content is required.",
+    });
+  });
+
+  test("message with null body returns 400", async () => {
+    const { res, getJson, getStatus } = createMockHttpResponse();
+    const handled = await handleAppPackageRoutes({
+      req: createMockIncomingMessage({
+        method: "POST",
+        url: "/api/apps/defense-of-the-agents/session/Scout/message",
+      }),
+      res,
+      method: "POST",
+      pathname: "/api/apps/defense-of-the-agents/session/Scout/message",
+      url: new URL(
+        "http://localhost:2138/api/apps/defense-of-the-agents/session/Scout/message",
+      ),
+      runtime: null,
+      readJsonBody: vi.fn(async () => null),
+      json: (response, data, status = 200) => {
+        response.writeHead(status);
+        response.end(JSON.stringify(data));
+      },
+      error: (response, message, status = 500) => {
+        response.writeHead(status);
+        response.end(JSON.stringify({ error: message }));
+      },
+    });
+
+    expect(handled).toBe(true);
+    expect(getStatus()).toBe(400);
+    expect(getJson()).toEqual({
+      error: "Command content is required.",
+    });
+  });
+
+  test("structured JSON deployments are parsed and forwarded", async () => {
+    const { res, getJson, getStatus } = createMockHttpResponse();
+    const handled = await handleAppPackageRoutes({
+      req: createMockIncomingMessage({
+        method: "POST",
+        url: "/api/apps/defense-of-the-agents/session/Scout/message",
+      }),
+      res,
+      method: "POST",
+      pathname: "/api/apps/defense-of-the-agents/session/Scout/message",
+      url: new URL(
+        "http://localhost:2138/api/apps/defense-of-the-agents/session/Scout/message",
+      ),
+      runtime: null,
+      readJsonBody: vi.fn(async () => ({
+        content: JSON.stringify({
+          heroClass: "ranged",
+          heroLane: "bot",
+          action: "recall",
+        }),
+      })),
+      json: (response, data, status = 200) => {
+        response.writeHead(status);
+        response.end(JSON.stringify(data));
+      },
+      error: (response, message, status = 500) => {
+        response.writeHead(status);
+        response.end(JSON.stringify({ error: message }));
+      },
+    });
+
+    expect(handled).toBe(true);
+    expect(getStatus()).toBe(200);
+    expect(fixtureServer?.deploymentRequests).toEqual([
+      {
+        authorization: "Bearer fixture-defense-api-key",
+        body: {
+          heroClass: "ranged",
+          heroLane: "bot",
+          action: "recall",
+        },
+      },
+    ]);
+  });
+
+  test("recall command is detected from natural language", async () => {
+    const { res, getJson, getStatus } = createMockHttpResponse();
+    const handled = await handleAppPackageRoutes({
+      req: createMockIncomingMessage({
+        method: "POST",
+        url: "/api/apps/defense-of-the-agents/session/Scout/message",
+      }),
+      res,
+      method: "POST",
+      pathname: "/api/apps/defense-of-the-agents/session/Scout/message",
+      url: new URL(
+        "http://localhost:2138/api/apps/defense-of-the-agents/session/Scout/message",
+      ),
+      runtime: null,
+      readJsonBody: vi.fn(async () => ({
+        content: "recall to base",
+      })),
+      json: (response, data, status = 200) => {
+        response.writeHead(status);
+        response.end(JSON.stringify(data));
+      },
+      error: (response, message, status = 500) => {
+        response.writeHead(status);
+        response.end(JSON.stringify({ error: message }));
+      },
+    });
+
+    expect(handled).toBe(true);
+    expect(getStatus()).toBe(200);
+    expect(fixtureServer?.deploymentRequests[0]?.body).toEqual(
+      expect.objectContaining({
+        action: "recall",
+      }),
+    );
+  });
+
+  test("API errors are surfaced as 502 with a descriptive message", async () => {
+    // Point at a non-existent server to trigger a network error
+    const savedUrl = process.env.DEFENSE_OF_THE_AGENTS_API_URL;
+    process.env.DEFENSE_OF_THE_AGENTS_API_URL = "http://127.0.0.1:1";
+
+    const { res, getJson, getStatus } = createMockHttpResponse();
+    const handled = await handleAppPackageRoutes({
+      req: createMockIncomingMessage({
+        method: "GET",
+        url: "/api/apps/defense-of-the-agents/session/Scout",
+      }),
+      res,
+      method: "GET",
+      pathname: "/api/apps/defense-of-the-agents/session/Scout",
+      url: new URL(
+        "http://localhost:2138/api/apps/defense-of-the-agents/session/Scout",
+      ),
+      runtime: null,
+      readJsonBody: vi.fn(async () => null),
+      json: (response, data, status = 200) => {
+        response.writeHead(status);
+        response.end(JSON.stringify(data));
+      },
+      error: (response, message, status = 500) => {
+        response.writeHead(status);
+        response.end(JSON.stringify({ error: message }));
+      },
+    });
+
+    process.env.DEFENSE_OF_THE_AGENTS_API_URL = savedUrl;
+
+    expect(handled).toBe(true);
+    expect(getStatus()).toBe(502);
+    const body = getJson();
+    expect(body).toHaveProperty("error");
+    expect(typeof body.error).toBe("string");
+    expect(body.error.length).toBeGreaterThan(0);
+  });
 });

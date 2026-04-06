@@ -226,7 +226,7 @@ export function createEscalationTriggerProvider(): Provider {
       const lines = triggers.map(
         (t) => `- [${t.urgency.toUpperCase()}] ${t.message}`,
       );
-      const text = `# Escalation Context\n${lines.join("\n")}\n\nIf any of these warrant owner attention, use SEND_ADMIN_MESSAGE (urgency: "urgent" for emergencies).`;
+      const text = `# Escalation Context\n${lines.join("\n")}\n\nIf any of these warrant owner attention, use SEND_MESSAGE with target "admin" (urgency: "urgent" for emergencies).`;
 
       const highestUrgency = triggers.reduce<Urgency>((max, t) => {
         return (URGENCY_ORDER[t.urgency] ?? 0) >

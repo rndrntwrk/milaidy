@@ -118,8 +118,7 @@ describe("lifeOpsProvider", () => {
       {} as never,
     );
 
-    expect(result.text).toContain("Use MANAGE_LIFEOPS");
-    expect(result.text).toContain("Use QUERY_LIFEOPS");
+    expect(result.text).toContain("Use LIFE");
     expect(result.text).toContain("Owner open occurrences: 1");
     expect(result.text).toContain("Pay rent");
     expect(result.text).toContain("Review plugin health");

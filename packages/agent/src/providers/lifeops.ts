@@ -83,7 +83,7 @@ async function hasLifeOpsAccess(
 export const lifeOpsProvider: Provider = {
   name: "lifeops",
   description:
-    "Owner/admin and agent only. Provides the current LifeOps overview, upcoming calendar event, and email triage summary. Explains how to use MANAGE_LIFEOPS and QUERY_LIFEOPS for conversational capture, editing, completion, snoozing, goal review, and calendar/email queries.",
+    "Owner/admin and agent only. Provides the current LifeOps overview, upcoming calendar event, and email triage summary. Explains how to use LIFE for managing tasks, habits, goals, calendar, email, and reminders.",
   dynamic: true,
   position: 12,
   async get(
@@ -145,8 +145,7 @@ export const lifeOpsProvider: Provider = {
     return {
       text: [
         "## Life Ops",
-        "Use MANAGE_LIFEOPS whenever the user wants to create or edit reminders, routines, recurring tasks, goals, or goal reviews.",
-        "Use QUERY_LIFEOPS when the user asks about their calendar, schedule, emails, inbox, or wants a life-ops overview.",
+        "Use LIFE when the user wants to create, manage, complete, or query their tasks, habits, goals, calendar, email, or reminders.",
         "Owner life-ops are private to the owner/admin and the agent. Agent ops are internal and should stay separated unless explicitly requested.",
         formatCount("Owner open occurrences", overview.owner.summary.activeOccurrenceCount),
         formatCount("Owner active goals", overview.owner.summary.activeGoalCount),

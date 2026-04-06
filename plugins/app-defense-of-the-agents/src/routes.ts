@@ -23,6 +23,12 @@ const GAME_SEARCH_LIMIT = 5;
 const FETCH_TIMEOUT_MS = 4_000;
 const DEPLOY_MESSAGE_LIMIT = 140;
 const EXPLICIT_MESSAGE_PREFIXES = ["say ", "message ", "announce "];
+const GAME_LOOP_INTERVAL_MS = 30_000;
+const STRATEGY_REVIEW_INTERVAL_MS = 30 * 60 * 1000;
+const STRATEGY_HISTORY_LIMIT = 5;
+const STRATEGY_SETTING_CURRENT = "DEFENSE_STRATEGY_CURRENT";
+const STRATEGY_SETTING_BEST = "DEFENSE_STRATEGY_BEST";
+const STRATEGY_SETTING_HISTORY = "DEFENSE_STRATEGY_HISTORY";
 
 type HeroClass = "melee" | "ranged" | "mage";
 type HeroLane = "top" | "mid" | "bot";
@@ -121,6 +127,92 @@ interface LocatedHeroState {
   gameId: number;
   state: DefenseGameState;
   hero: DefenseHero | null;
+}
+
+// ---------------------------------------------------------------------------
+// Strategy types — self-improving heuristic play
+// ---------------------------------------------------------------------------
+
+interface StrategyMetrics {
+  ticksTracked: number;
+  ticksAlive: number;
+  levelStart: number;
+  levelEnd: number;
+  abilitiesLearned: number;
+  laneControlSum: number;
+  lastReviewedAt: number;
+}
+
+interface GameStrategy {
+  version: number;
+  heroClass: HeroClass;
+  preferredLane: HeroLane;
+  recallThreshold: number;
+  abilityPriority: string[];
+  laneReinforcementThreshold: number;
+  metrics: StrategyMetrics;
+}
+
+const DEFAULT_STRATEGY: GameStrategy = {
+  version: 1,
+  heroClass: "mage",
+  preferredLane: "mid",
+  recallThreshold: 0.25,
+  abilityPriority: [
+    "fireball",
+    "fortitude",
+    "tornado",
+    "fury",
+    "raise_skeleton",
+    "cleave",
+    "volley",
+    "critical_strike",
+    "bloodlust",
+    "thorns",
+    "divine_shield",
+  ],
+  laneReinforcementThreshold: 3,
+  metrics: {
+    ticksTracked: 0,
+    ticksAlive: 0,
+    levelStart: 1,
+    levelEnd: 1,
+    abilitiesLearned: 0,
+    laneControlSum: 0,
+    lastReviewedAt: Date.now(),
+  },
+};
+
+interface GameLoopHandle {
+  timer: ReturnType<typeof setInterval>;
+  reviewTimer: ReturnType<typeof setInterval>;
+  autoPlay: boolean;
+}
+
+/** Active game loops keyed by agentId. */
+const activeLoops = new Map<string, GameLoopHandle>();
+
+/** Optional system event bridge — loaded lazily from plugin-cron. */
+let pushSystemEventFn:
+  | ((agentId: string, text: string, source: string) => void)
+  | null = null;
+
+async function loadPushSystemEvent(): Promise<void> {
+  if (pushSystemEventFn) return;
+  try {
+    const mod = await import(
+      /* webpackIgnore: true */ "@elizaos/plugin-cron/heartbeat"
+    );
+    if (typeof mod.pushSystemEvent === "function") {
+      pushSystemEventFn = mod.pushSystemEvent;
+    }
+  } catch {
+    // plugin-cron not available — game loop still works, just no heartbeat bridge
+  }
+}
+
+function pushEvent(agentId: string, text: string): void {
+  pushSystemEventFn?.(agentId, text, "defense-of-the-agents");
 }
 
 const HERO_CLASS_VALUES = new Set<HeroClass>(["melee", "ranged", "mage"]);
@@ -429,6 +521,435 @@ function toAbilityLabel(abilityId: string): string {
     .join(" ");
 }
 
+// ---------------------------------------------------------------------------
+// Strategy persistence
+// ---------------------------------------------------------------------------
+
+function resolveStrategy(runtime: IAgentRuntime | null): GameStrategy {
+  const raw = resolveSettingLike(runtime, STRATEGY_SETTING_CURRENT);
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw) as GameStrategy;
+      if (typeof parsed.version === "number") return parsed;
+    } catch {
+      // corrupt — fall through to default
+    }
+  }
+  return { ...DEFAULT_STRATEGY, metrics: { ...DEFAULT_STRATEGY.metrics } };
+}
+
+function resolveBestStrategy(runtime: IAgentRuntime | null): GameStrategy | null {
+  const raw = resolveSettingLike(runtime, STRATEGY_SETTING_BEST);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as GameStrategy;
+    if (typeof parsed.version === "number") return parsed;
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function persistStrategy(runtime: IAgentRuntime | null, strategy: GameStrategy): void {
+  persistSetting(runtime, STRATEGY_SETTING_CURRENT, JSON.stringify(strategy));
+}
+
+function persistBestStrategy(runtime: IAgentRuntime | null, strategy: GameStrategy): void {
+  persistSetting(runtime, STRATEGY_SETTING_BEST, JSON.stringify(strategy));
+}
+
+function appendStrategyHistory(runtime: IAgentRuntime | null, strategy: GameStrategy): void {
+  let history: GameStrategy[] = [];
+  const raw = resolveSettingLike(runtime, STRATEGY_SETTING_HISTORY);
+  if (raw) {
+    try {
+      history = JSON.parse(raw) as GameStrategy[];
+    } catch {
+      history = [];
+    }
+  }
+  history.push(strategy);
+  if (history.length > STRATEGY_HISTORY_LIMIT) {
+    history = history.slice(-STRATEGY_HISTORY_LIMIT);
+  }
+  persistSetting(runtime, STRATEGY_SETTING_HISTORY, JSON.stringify(history));
+}
+
+// ---------------------------------------------------------------------------
+// Strategy scoring
+// ---------------------------------------------------------------------------
+
+function scoreStrategy(metrics: StrategyMetrics): number {
+  if (metrics.ticksTracked === 0) return 0;
+  const survivalRate = metrics.ticksAlive / metrics.ticksTracked;
+  const levelGain = metrics.levelEnd - metrics.levelStart;
+  const avgLaneControl =
+    metrics.ticksTracked > 0
+      ? metrics.laneControlSum / metrics.ticksTracked
+      : 0;
+  // Weighted: 40% survival, 30% level gain (normalized), 30% lane control (normalized)
+  return survivalRate * 0.4 + Math.min(levelGain / 5, 1) * 0.3 + Math.min(Math.max(avgLaneControl + 50, 0) / 100, 1) * 0.3;
+}
+
+// ---------------------------------------------------------------------------
+// Heuristic game loop tick
+// ---------------------------------------------------------------------------
+
+function pickAbility(
+  choices: string[],
+  priority: string[],
+): string | undefined {
+  for (const preferred of priority) {
+    if (choices.includes(preferred)) return preferred;
+  }
+  return choices[0];
+}
+
+function findWeakestAlliedLane(
+  state: DefenseGameState,
+  faction: string,
+): HeroLane {
+  const laneOrder: HeroLane[] = ["top", "mid", "bot"];
+  let weakest: HeroLane = "mid";
+  let worstDiff = Number.POSITIVE_INFINITY;
+  for (const lane of laneOrder) {
+    const ls = state.lanes[lane];
+    const diff =
+      faction === "orc" ? ls.orc - ls.human : ls.human - ls.orc;
+    if (diff < worstDiff) {
+      worstDiff = diff;
+      weakest = lane;
+    }
+  }
+  return weakest;
+}
+
+function buildCompactSummary(
+  hero: DefenseHero,
+  state: DefenseGameState,
+  gameId: number,
+  strategy: GameStrategy,
+): string {
+  const hpPct =
+    hero.maxHp > 0 ? Math.round((hero.hp / hero.maxHp) * 100) : 0;
+  const lane = state.lanes[hero.lane];
+  const alliedUnits =
+    hero.faction === "orc" ? lane.orc : lane.human;
+  const enemyUnits =
+    hero.faction === "orc" ? lane.human : lane.orc;
+  const abilityPart = hero.abilityChoices?.length
+    ? ` Choices: ${hero.abilityChoices.join(", ")}.`
+    : "";
+  return (
+    `[Game ${gameId}] ${toAbilityLabel(hero.class)} Lv${hero.level} ${hero.lane} lane, ` +
+    `${hpPct}% HP (${hero.hp}/${hero.maxHp}), ${alliedUnits}v${enemyUnits} units.${abilityPart} ` +
+    `Strategy v${strategy.version}.`
+  );
+}
+
+async function executeStrategyTick(
+  ctx: SessionContext,
+  strategy: GameStrategy,
+): Promise<{ deployed: boolean; action: string; hero: DefenseHero | null; state: DefenseGameState; gameId: number }> {
+  const located = await locateHeroState(ctx);
+  const { hero, state, gameId } = located;
+
+  if (state.winner) {
+    return { deployed: false, action: "game-over", hero, state, gameId };
+  }
+
+  if (!hero) {
+    // Not deployed yet — deploy with strategy defaults
+    await deployHero(ctx, {
+      heroClass: strategy.heroClass,
+      heroLane: strategy.preferredLane,
+    });
+    return { deployed: true, action: "initial-deploy", hero: null, state, gameId };
+  }
+
+  if (!hero.alive) {
+    return { deployed: false, action: "respawning", hero, state, gameId };
+  }
+
+  const deployment: DefenseDeploymentBody = {
+    heroClass: hero.class,
+    heroLane: hero.lane,
+  };
+  let action = "hold";
+
+  // Priority 1: Pick ability if available
+  if (hero.abilityChoices?.length) {
+    const pick = pickAbility(hero.abilityChoices, strategy.abilityPriority);
+    if (pick) {
+      deployment.abilityChoice = pick;
+      action = `ability:${pick}`;
+    }
+  }
+
+  // Priority 2: Recall if low HP
+  const hpRatio = hero.maxHp > 0 ? hero.hp / hero.maxHp : 1;
+  if (hpRatio <= strategy.recallThreshold && hpRatio > 0) {
+    deployment.action = "recall";
+    action = "recall";
+  } else {
+    // Priority 3: Reinforce weakest lane if differential exceeds threshold
+    const weakest = findWeakestAlliedLane(state, hero.faction);
+    const currentLane = state.lanes[hero.lane];
+    const currentDiff =
+      hero.faction === "orc"
+        ? currentLane.orc - currentLane.human
+        : currentLane.human - currentLane.orc;
+    const weakestLane = state.lanes[weakest];
+    const weakestDiff =
+      hero.faction === "orc"
+        ? weakestLane.orc - weakestLane.human
+        : weakestLane.human - weakestLane.orc;
+
+    if (
+      weakest !== hero.lane &&
+      weakestDiff < -strategy.laneReinforcementThreshold &&
+      currentDiff > 0
+    ) {
+      deployment.heroLane = weakest;
+      action = `move:${weakest}`;
+    }
+  }
+
+  // Only deploy if there's something to do beyond holding
+  if (action !== "hold") {
+    await deployHero(ctx, deployment);
+    return { deployed: true, action, hero, state, gameId };
+  }
+
+  return { deployed: false, action, hero, state, gameId };
+}
+
+// ---------------------------------------------------------------------------
+// Strategy review (called every ~30 minutes)
+// ---------------------------------------------------------------------------
+
+function buildReviewSummary(
+  current: GameStrategy,
+  best: GameStrategy | null,
+): string {
+  const m = current.metrics;
+  const survPct =
+    m.ticksTracked > 0
+      ? Math.round((m.ticksAlive / m.ticksTracked) * 100)
+      : 0;
+  const avgLane =
+    m.ticksTracked > 0
+      ? (m.laneControlSum / m.ticksTracked).toFixed(1)
+      : "0";
+  const currentScore = scoreStrategy(m).toFixed(3);
+
+  let review =
+    `Strategy Review v${current.version}: ` +
+    `${toAbilityLabel(current.heroClass)} ${current.preferredLane} lane, ` +
+    `recall@${Math.round(current.recallThreshold * 100)}%, ` +
+    `priority: ${current.abilityPriority.slice(0, 3).join(">")}. ` +
+    `Lv${m.levelStart}→${m.levelEnd}, survived ${survPct}%, ` +
+    `lane control avg ${avgLane}, score=${currentScore}.`;
+
+  if (best) {
+    const bestScore = scoreStrategy(best.metrics).toFixed(3);
+    review += ` Best: v${best.version} score=${bestScore}.`;
+    const diff = scoreStrategy(m) - scoreStrategy(best.metrics);
+    if (diff > 0) {
+      review += " Current BEATS best!";
+    } else if (diff < -0.05) {
+      review += " Current underperforming — reverting to best.";
+    } else {
+      review += " Roughly even.";
+    }
+  }
+
+  return review;
+}
+
+function runStrategyReview(runtime: IAgentRuntime | null): void {
+  const current = resolveStrategy(runtime);
+  const best = resolveBestStrategy(runtime);
+  const currentScore = scoreStrategy(current.metrics);
+  const bestScore = best ? scoreStrategy(best.metrics) : -1;
+
+  const review = buildReviewSummary(current, best);
+
+  // Push review to heartbeat
+  const agentId = asRuntimeLike(runtime)?.agentId;
+  if (agentId) {
+    pushEvent(agentId, review);
+  }
+
+  // Promote or revert
+  if (currentScore > bestScore) {
+    persistBestStrategy(runtime, { ...current });
+  }
+
+  // Archive current strategy
+  appendStrategyHistory(runtime, { ...current });
+
+  // Reset metrics for next review cycle, bump version
+  const nextStrategy: GameStrategy = {
+    ...current,
+    version: current.version + 1,
+    metrics: {
+      ticksTracked: 0,
+      ticksAlive: 0,
+      levelStart: current.metrics.levelEnd,
+      levelEnd: current.metrics.levelEnd,
+      abilitiesLearned: 0,
+      laneControlSum: 0,
+      lastReviewedAt: Date.now(),
+    },
+  };
+
+  // If underperforming, revert to best strategy params but keep new version number
+  if (best && currentScore < bestScore - 0.05) {
+    nextStrategy.heroClass = best.heroClass;
+    nextStrategy.preferredLane = best.preferredLane;
+    nextStrategy.recallThreshold = best.recallThreshold;
+    nextStrategy.abilityPriority = [...best.abilityPriority];
+    nextStrategy.laneReinforcementThreshold = best.laneReinforcementThreshold;
+  }
+
+  persistStrategy(runtime, nextStrategy);
+}
+
+// ---------------------------------------------------------------------------
+// Game loop lifecycle
+// ---------------------------------------------------------------------------
+
+function updateMetrics(
+  strategy: GameStrategy,
+  hero: DefenseHero | null,
+  state: DefenseGameState,
+): void {
+  strategy.metrics.ticksTracked += 1;
+  if (hero?.alive) {
+    strategy.metrics.ticksAlive += 1;
+  }
+  if (hero) {
+    strategy.metrics.levelEnd = Math.max(
+      strategy.metrics.levelEnd,
+      hero.level,
+    );
+    if (hero.lane) {
+      const lane = state.lanes[hero.lane];
+      const control =
+        hero.faction === "orc"
+          ? lane.orc - lane.human
+          : lane.human - lane.orc;
+      strategy.metrics.laneControlSum += control;
+    }
+  }
+}
+
+function startGameLoop(
+  runtime: IAgentRuntime | null,
+  ctx: SessionContext,
+): void {
+  const agentId = asRuntimeLike(runtime)?.agentId;
+  if (!agentId) return;
+
+  // Don't start a duplicate loop
+  if (activeLoops.has(agentId)) return;
+
+  void loadPushSystemEvent();
+
+  const timer = setInterval(() => {
+    void (async () => {
+      const strategy = resolveStrategy(runtime);
+      try {
+        const result = await executeStrategyTick(ctx, strategy);
+        updateMetrics(strategy, result.hero, result.state);
+        persistStrategy(runtime, strategy);
+
+        if (result.hero) {
+          pushEvent(
+            agentId,
+            buildCompactSummary(result.hero, result.state, result.gameId, strategy),
+          );
+        }
+      } catch (err) {
+        // Swallow tick errors — don't crash the loop
+        const msg = err instanceof Error ? err.message : String(err);
+        pushEvent(agentId, `[Game tick error] ${msg}`);
+      }
+    })();
+  }, GAME_LOOP_INTERVAL_MS);
+
+  const reviewTimer = setInterval(() => {
+    runStrategyReview(runtime);
+  }, STRATEGY_REVIEW_INTERVAL_MS);
+
+  activeLoops.set(agentId, { timer, reviewTimer, autoPlay: true });
+}
+
+function stopGameLoop(runtime: IAgentRuntime | null): void {
+  const agentId = asRuntimeLike(runtime)?.agentId;
+  if (!agentId) return;
+  const handle = activeLoops.get(agentId);
+  if (!handle) return;
+  clearInterval(handle.timer);
+  clearInterval(handle.reviewTimer);
+  activeLoops.delete(agentId);
+}
+
+function isAutoPlayActive(runtime: IAgentRuntime | null): boolean {
+  const agentId = asRuntimeLike(runtime)?.agentId;
+  if (!agentId) return false;
+  return activeLoops.has(agentId);
+}
+
+// ---------------------------------------------------------------------------
+// Strategy update parsing (from LLM or user commands)
+// ---------------------------------------------------------------------------
+
+function parseStrategyUpdate(
+  content: string,
+  current: GameStrategy,
+): GameStrategy | null {
+  const trimmed = content.trim();
+
+  // Handle JSON strategy object: {"strategy": {...}}
+  if (trimmed.startsWith("{")) {
+    try {
+      const parsed = JSON.parse(trimmed) as { strategy?: Partial<GameStrategy> };
+      const update = parsed.strategy ?? (parsed as Partial<GameStrategy>);
+      if (!update || typeof update !== "object") return null;
+
+      const next = { ...current };
+      if (typeof update.heroClass === "string") {
+        next.heroClass = normalizeHeroClass(update.heroClass);
+      }
+      if (typeof update.preferredLane === "string") {
+        next.preferredLane = normalizeHeroLane(update.preferredLane);
+      }
+      if (typeof update.recallThreshold === "number") {
+        next.recallThreshold = Math.max(0, Math.min(1, update.recallThreshold));
+      }
+      if (Array.isArray(update.abilityPriority)) {
+        next.abilityPriority = update.abilityPriority.filter(
+          (a): a is string => typeof a === "string",
+        );
+      }
+      if (typeof update.laneReinforcementThreshold === "number") {
+        next.laneReinforcementThreshold = Math.max(
+          0,
+          update.laneReinforcementThreshold,
+        );
+      }
+      next.version = current.version + 1;
+      return next;
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+}
+
 function buildSuggestedPrompts(
   state: DefenseGameState,
   hero: DefenseHero | null,
@@ -479,6 +1000,22 @@ function buildSuggestedPrompts(
   return Array.from(new Set(prompts)).slice(0, 4);
 }
 
+function buildSuggestedPromptsWithAutoPlay(
+  state: DefenseGameState,
+  hero: DefenseHero | null,
+  ctx: Pick<SessionContext, "defaultHeroClass" | "defaultLane">,
+  runtime: IAgentRuntime | null,
+): string[] {
+  const autoPlay = isAutoPlayActive(runtime);
+  const prompts = buildSuggestedPrompts(state, hero, ctx);
+  // Add auto-play toggle as first prompt
+  prompts.unshift(autoPlay ? "Auto-play OFF" : "Auto-play ON");
+  if (autoPlay) {
+    prompts.push("Review strategy");
+  }
+  return prompts.slice(0, 4);
+}
+
 function buildSummary(
   hero: DefenseHero | null,
   state: DefenseGameState,
@@ -510,8 +1047,11 @@ function buildTelemetry(
   state: DefenseGameState,
   hero: DefenseHero | null,
   gameId: number,
+  runtime: IAgentRuntime | null,
 ): AppSessionState["telemetry"] {
   const activeLane = hero ? state.lanes[hero.lane] : state.lanes.mid;
+  const strategy = resolveStrategy(runtime);
+  const best = resolveBestStrategy(runtime);
   return {
     gameId,
     tick: state.tick,
@@ -529,6 +1069,15 @@ function buildTelemetry(
     laneHumanUnits: activeLane?.human ?? null,
     laneOrcUnits: activeLane?.orc ?? null,
     laneFrontline: activeLane?.frontline ?? null,
+    autoPlay: isAutoPlayActive(runtime),
+    strategyVersion: strategy.version,
+    strategyScore: scoreStrategy(strategy.metrics),
+    bestStrategyVersion: best?.version ?? null,
+    bestStrategyScore: best ? scoreStrategy(best.metrics) : null,
+    survivalRate:
+      strategy.metrics.ticksTracked > 0
+        ? strategy.metrics.ticksAlive / strategy.metrics.ticksTracked
+        : null,
   };
 }
 
@@ -558,8 +1107,8 @@ function buildSessionState(
     controls: [],
     summary: buildSummary(hero, state, gameId),
     goalLabel: buildGoalLabel(hero),
-    suggestedPrompts: buildSuggestedPrompts(state, hero, ctx),
-    telemetry: buildTelemetry(state, hero, gameId),
+    suggestedPrompts: buildSuggestedPromptsWithAutoPlay(state, hero, ctx, ctx.runtime),
+    telemetry: buildTelemetry(state, hero, gameId, ctx.runtime),
   };
 }
 

@@ -21,7 +21,7 @@ vi.mock("@elizaos/core", async (importOriginal) => {
 });
 
 import type { UUID } from "@elizaos/core";
-import { sendAdminMessageAction } from "./send-admin-message";
+import { sendMessageAction } from "./send-message";
 
 function makeRuntime(overrides?: Record<string, unknown>) {
   return {
@@ -29,6 +29,7 @@ function makeRuntime(overrides?: Record<string, unknown>) {
     character: { name: "TestAgent" },
     getRoom: mockGetRoom,
     getWorld: mockGetWorld,
+    getService: () => null,
     sendMessageToTarget: mockSendMessageToTarget,
     ...overrides,
   } as never;
@@ -42,7 +43,21 @@ function makeMessage(entityId: string, roomId = "room-1") {
   } as never;
 }
 
-describe("sendAdminMessageAction", () => {
+/** Helper — call handler with admin target params */
+async function callAdminHandler(
+  runtime: ReturnType<typeof makeRuntime>,
+  message: ReturnType<typeof makeMessage>,
+  params: Record<string, unknown>,
+) {
+  return sendMessageAction.handler?.(
+    runtime,
+    message,
+    {} as never,
+    { parameters: { target: "admin", ...params } } as never,
+  );
+}
+
+describe("sendMessageAction — admin pathway (unified from SEND_ADMIN_MESSAGE)", () => {
   beforeEach(() => {
     mockCheckSenderRole.mockReset();
     mockSendMessageToTarget.mockReset();
@@ -52,24 +67,24 @@ describe("sendAdminMessageAction", () => {
   });
 
   // -----------------------------------------------------------------------
-  // validate
+  // Permission checks (moved from validate to handler)
   // -----------------------------------------------------------------------
 
   it("allows the agent itself (autonomous)", async () => {
-    const runtime = makeRuntime();
-    const message = makeMessage("agent-1");
+    mockGetRoom.mockResolvedValue(null);
 
-    const valid = await sendAdminMessageAction.validate?.(
-      runtime,
-      message,
-      {} as never,
+    const result = await callAdminHandler(
+      makeRuntime(),
+      makeMessage("agent-1"),
+      { text: "hello" },
     );
-    expect(valid).toBe(true);
+    expect(result).toMatchObject({ success: true });
     // checkSenderRole should NOT be called for self
     expect(mockCheckSenderRole).not.toHaveBeenCalled();
   });
 
   it("allows admin callers", async () => {
+    mockGetRoom.mockResolvedValue(null);
     mockCheckSenderRole.mockResolvedValue({
       entityId: "owner-1",
       role: "OWNER",
@@ -78,12 +93,12 @@ describe("sendAdminMessageAction", () => {
       canManageRoles: true,
     });
 
-    const valid = await sendAdminMessageAction.validate?.(
+    const result = await callAdminHandler(
       makeRuntime(),
       makeMessage("owner-1"),
-      {} as never,
+      { text: "hello" },
     );
-    expect(valid).toBe(true);
+    expect(result).toMatchObject({ success: true });
   });
 
   it("rejects non-admin callers", async () => {
@@ -95,12 +110,15 @@ describe("sendAdminMessageAction", () => {
       canManageRoles: false,
     });
 
-    const valid = await sendAdminMessageAction.validate?.(
+    const result = await callAdminHandler(
       makeRuntime(),
       makeMessage("user-1"),
-      {} as never,
+      { text: "hello" },
     );
-    expect(valid).toBe(false);
+    expect(result).toMatchObject({
+      success: false,
+      values: { error: "PERMISSION_DENIED" },
+    });
   });
 
   // -----------------------------------------------------------------------
@@ -108,11 +126,11 @@ describe("sendAdminMessageAction", () => {
   // -----------------------------------------------------------------------
 
   it("rejects missing text", async () => {
-    const result = await sendAdminMessageAction.handler?.(
+    const result = await sendMessageAction.handler?.(
       makeRuntime(),
       makeMessage("agent-1"),
       {} as never,
-      { parameters: {} } as never,
+      { parameters: { target: "admin" } } as never,
     );
     expect(result).toMatchObject({
       success: false,
@@ -122,11 +140,10 @@ describe("sendAdminMessageAction", () => {
   });
 
   it("rejects empty text", async () => {
-    const result = await sendAdminMessageAction.handler?.(
+    const result = await callAdminHandler(
       makeRuntime(),
       makeMessage("agent-1"),
-      {} as never,
-      { parameters: { text: "   " } } as never,
+      { text: "   " },
     );
     expect(result).toMatchObject({
       success: false,
@@ -135,11 +152,12 @@ describe("sendAdminMessageAction", () => {
   });
 
   it("rejects invalid urgency", async () => {
-    const result = await sendAdminMessageAction.handler?.(
+    mockGetRoom.mockResolvedValue(null);
+
+    const result = await callAdminHandler(
       makeRuntime(),
       makeMessage("agent-1"),
-      {} as never,
-      { parameters: { text: "hello", urgency: "critical" } } as never,
+      { text: "hello", urgency: "critical" },
     );
     expect(result).toMatchObject({
       success: false,
@@ -157,17 +175,16 @@ describe("sendAdminMessageAction", () => {
       metadata: { ownership: { ownerId: "owner-uuid-123" } },
     });
 
-    const result = await sendAdminMessageAction.handler?.(
+    const result = await callAdminHandler(
       makeRuntime(),
       makeMessage("agent-1"),
-      {} as never,
-      { parameters: { text: "Task completed" } } as never,
+      { text: "Task completed" },
     );
 
     expect(result).toMatchObject({
       success: true,
       values: { success: true, urgency: "normal" },
-      data: { actionName: "SEND_ADMIN_MESSAGE" },
+      data: { actionName: "SEND_MESSAGE" },
     });
     expect(mockSendMessageToTarget).toHaveBeenCalledOnce();
     const [target, content] = mockSendMessageToTarget.mock.calls[0];
@@ -180,11 +197,10 @@ describe("sendAdminMessageAction", () => {
   it("falls back to deterministic entity ID when no world ownership", async () => {
     mockGetRoom.mockResolvedValue(null);
 
-    const result = await sendAdminMessageAction.handler?.(
+    const result = await callAdminHandler(
       makeRuntime(),
       makeMessage("agent-1"),
-      {} as never,
-      { parameters: { text: "Alert!", urgency: "urgent" } } as never,
+      { text: "Alert!", urgency: "urgent" },
     );
 
     expect(result).toMatchObject({
@@ -206,11 +222,10 @@ describe("sendAdminMessageAction", () => {
     mockGetRoom.mockResolvedValue(null);
     mockSendMessageToTarget.mockRejectedValue(new Error("WS not connected"));
 
-    const result = await sendAdminMessageAction.handler?.(
+    const result = await callAdminHandler(
       makeRuntime(),
       makeMessage("agent-1"),
-      {} as never,
-      { parameters: { text: "urgent notification" } } as never,
+      { text: "urgent notification" },
     );
 
     expect(result).toMatchObject({
@@ -222,11 +237,10 @@ describe("sendAdminMessageAction", () => {
   it("trims whitespace from text", async () => {
     mockGetRoom.mockResolvedValue(null);
 
-    await sendAdminMessageAction.handler?.(
+    await callAdminHandler(
       makeRuntime(),
       makeMessage("agent-1"),
-      {} as never,
-      { parameters: { text: "  hello world  " } } as never,
+      { text: "  hello world  " },
     );
 
     const [, content] = mockSendMessageToTarget.mock.calls[0];
@@ -236,15 +250,28 @@ describe("sendAdminMessageAction", () => {
   it("defaults urgency to normal when omitted", async () => {
     mockGetRoom.mockResolvedValue(null);
 
-    const result = await sendAdminMessageAction.handler?.(
+    const result = await callAdminHandler(
       makeRuntime(),
       makeMessage("agent-1"),
-      {} as never,
-      { parameters: { text: "hi" } } as never,
+      { text: "hi" },
     );
 
     expect(result).toMatchObject({ values: { urgency: "normal" } });
     const [, content] = mockSendMessageToTarget.mock.calls[0];
     expect(content.metadata).toEqual({ urgency: "normal" });
+  });
+
+  it("recognizes target 'owner' as admin pathway", async () => {
+    mockGetRoom.mockResolvedValue(null);
+
+    const result = await sendMessageAction.handler?.(
+      makeRuntime(),
+      makeMessage("agent-1"),
+      {} as never,
+      { parameters: { target: "owner", text: "hi owner" } } as never,
+    );
+
+    expect(result).toMatchObject({ success: true });
+    expect(mockSendMessageToTarget).toHaveBeenCalledOnce();
   });
 });
