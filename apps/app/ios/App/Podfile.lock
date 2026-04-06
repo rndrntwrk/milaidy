@@ -28,48 +28,48 @@ PODS:
     - Capacitor
 
 DEPENDENCIES:
-  - "Capacitor (from `../../../../node_modules/.bun/@capacitor+ios@8.3.0+1a4bec108d739029/node_modules/@capacitor/ios`)"
-  - "CapacitorApp (from `../../../../node_modules/.bun/@capacitor+app@8.1.0+1a4bec108d739029/node_modules/@capacitor/app`)"
-  - "CapacitorCordova (from `../../../../node_modules/.bun/@capacitor+ios@8.3.0+1a4bec108d739029/node_modules/@capacitor/ios`)"
-  - "CapacitorKeyboard (from `../../../../node_modules/.bun/@capacitor+keyboard@8.0.0+1a4bec108d739029/node_modules/@capacitor/keyboard`)"
-  - "CapacitorStatusBar (from `../../../../node_modules/.bun/@capacitor+status-bar@8.0.2+1a4bec108d739029/node_modules/@capacitor/status-bar`)"
-  - MiladyaiCapacitorAgent (from `../../plugins/agent`)
-  - MiladyaiCapacitorCamera (from `../../plugins/camera`)
-  - MiladyaiCapacitorCanvas (from `../../plugins/canvas`)
-  - MiladyaiCapacitorGateway (from `../../plugins/gateway`)
-  - MiladyaiCapacitorLocation (from `../../plugins/location`)
-  - MiladyaiCapacitorScreencapture (from `../../plugins/screencapture`)
-  - MiladyaiCapacitorSwabble (from `../../plugins/swabble`)
-  - MiladyaiCapacitorTalkmode (from `../../plugins/talkmode`)
+  - "Capacitor (from `../../../../../../../node_modules/@capacitor/ios`)"
+  - "CapacitorApp (from `../../../../../../../node_modules/@capacitor/app`)"
+  - "CapacitorCordova (from `../../../../../../../node_modules/@capacitor/ios`)"
+  - "CapacitorKeyboard (from `../../../../../../../node_modules/@capacitor/keyboard`)"
+  - "CapacitorStatusBar (from `../../../../../../../node_modules/@capacitor/status-bar`)"
+  - MiladyaiCapacitorAgent (from `../../../../../../../apps/app/plugins/agent`)
+  - MiladyaiCapacitorCamera (from `../../../../../../../apps/app/plugins/camera`)
+  - MiladyaiCapacitorCanvas (from `../../../../../../../apps/app/plugins/canvas`)
+  - MiladyaiCapacitorGateway (from `../../../../../../../apps/app/plugins/gateway`)
+  - MiladyaiCapacitorLocation (from `../../../../../../../apps/app/plugins/location`)
+  - MiladyaiCapacitorScreencapture (from `../../../../../../../apps/app/plugins/screencapture`)
+  - MiladyaiCapacitorSwabble (from `../../../../../../../apps/app/plugins/swabble`)
+  - MiladyaiCapacitorTalkmode (from `../../../../../../../apps/app/plugins/talkmode`)
   - MiladyaiCapacitorWebsiteblocker (from `../../plugins/websiteblocker`)
 
 EXTERNAL SOURCES:
   Capacitor:
-    :path: "../../../../node_modules/.bun/@capacitor+ios@8.3.0+1a4bec108d739029/node_modules/@capacitor/ios"
+    :path: "../../../../../../../node_modules/@capacitor/ios"
   CapacitorApp:
-    :path: "../../../../node_modules/.bun/@capacitor+app@8.1.0+1a4bec108d739029/node_modules/@capacitor/app"
+    :path: "../../../../../../../node_modules/@capacitor/app"
   CapacitorCordova:
-    :path: "../../../../node_modules/.bun/@capacitor+ios@8.3.0+1a4bec108d739029/node_modules/@capacitor/ios"
+    :path: "../../../../../../../node_modules/@capacitor/ios"
   CapacitorKeyboard:
-    :path: "../../../../node_modules/.bun/@capacitor+keyboard@8.0.0+1a4bec108d739029/node_modules/@capacitor/keyboard"
+    :path: "../../../../../../../node_modules/@capacitor/keyboard"
   CapacitorStatusBar:
-    :path: "../../../../node_modules/.bun/@capacitor+status-bar@8.0.2+1a4bec108d739029/node_modules/@capacitor/status-bar"
+    :path: "../../../../../../../node_modules/@capacitor/status-bar"
   MiladyaiCapacitorAgent:
-    :path: "../../plugins/agent"
+    :path: "../../../../../../../apps/app/plugins/agent"
   MiladyaiCapacitorCamera:
-    :path: "../../plugins/camera"
+    :path: "../../../../../../../apps/app/plugins/camera"
   MiladyaiCapacitorCanvas:
-    :path: "../../plugins/canvas"
+    :path: "../../../../../../../apps/app/plugins/canvas"
   MiladyaiCapacitorGateway:
-    :path: "../../plugins/gateway"
+    :path: "../../../../../../../apps/app/plugins/gateway"
   MiladyaiCapacitorLocation:
-    :path: "../../plugins/location"
+    :path: "../../../../../../../apps/app/plugins/location"
   MiladyaiCapacitorScreencapture:
-    :path: "../../plugins/screencapture"
+    :path: "../../../../../../../apps/app/plugins/screencapture"
   MiladyaiCapacitorSwabble:
-    :path: "../../plugins/swabble"
+    :path: "../../../../../../../apps/app/plugins/swabble"
   MiladyaiCapacitorTalkmode:
-    :path: "../../plugins/talkmode"
+    :path: "../../../../../../../apps/app/plugins/talkmode"
   MiladyaiCapacitorWebsiteblocker:
     :path: "../../plugins/websiteblocker"
 
@@ -89,6 +89,6 @@ SPEC CHECKSUMS:
   MiladyaiCapacitorTalkmode: fe375718c8defd943b1ce3ff7dfd8af9864325c9
   MiladyaiCapacitorWebsiteblocker: 5ed6309dacf6ff341dccdbe6c140baeae50e65a4
 
-PODFILE CHECKSUM: 833e943a216aaefd3438ea2beda893cbb9e908b7
+PODFILE CHECKSUM: 9d6d66c18f369c8fb15c4c4800cf680ef9cdfc9f
 
 COCOAPODS: 1.16.2

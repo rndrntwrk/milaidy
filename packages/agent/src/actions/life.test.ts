@@ -400,13 +400,13 @@ describe("lifeAction", () => {
       messages: [{ id: "m1", subject: "Project update", from: "alice@co.com", fromEmail: "alice@co.com", isImportant: true, likelyReplyNeeded: false, receivedAt: new Date().toISOString(), snippet: "Status update" }],
       source: "cache", syncedAt: null, summary: { unreadCount: 2, importantNewCount: 1, likelyReplyNeededCount: 0 },
     });
-    const result = await invoke("any important emails");
+    const result = await invoke("any important emails", { action: "email" });
     expect(result).toMatchObject({ success: true, text: expect.stringContaining("Project update") });
   });
 
   it("rejects email when Gmail not connected", async () => {
     mockGetGoogleConnectorStatus.mockResolvedValue({ connected: true, grantedCapabilities: ["google.calendar.read"] });
-    const result = await invoke("check my inbox");
+    const result = await invoke("check my inbox", { action: "email" });
     expect(result).toMatchObject({ success: false, text: expect.stringContaining("Gmail is not connected") });
   });
 
@@ -420,7 +420,7 @@ describe("lifeAction", () => {
       },
       agentOps: { summary: { activeOccurrenceCount: 0, overdueOccurrenceCount: 0, snoozedOccurrenceCount: 0, activeGoalCount: 0, activeReminderCount: 0 }, occurrences: [], goals: [], reminders: [] },
     });
-    const result = await invoke("give me an overview");
+    const result = await invoke("give me an overview", { action: "overview" });
     expect(result).toMatchObject({ success: true, text: expect.stringContaining("Brush teeth") });
   });
 
@@ -429,7 +429,7 @@ describe("lifeAction", () => {
   it("matches by partial title (case-insensitive)", async () => {
     mockListDefinitions.mockResolvedValue([{ definition: { id: "d1", title: "Morning Brush Teeth", domain: "user_lifeops" } }]);
     mockDeleteDefinition.mockResolvedValue(undefined);
-    const result = await invoke("delete brush teeth", { target: "brush teeth" });
+    const result = await invoke("delete brush teeth", { action: "delete", target: "brush teeth" });
     expect(mockDeleteDefinition).toHaveBeenCalledWith("d1");
     expect(result).toMatchObject({ success: true });
   });

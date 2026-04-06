@@ -78,6 +78,7 @@ const MILADY_BRANDING: Partial<BrandingConfig> = {
     isDev: import.meta.env.DEV,
     injectedApiBase:
       typeof window === "undefined" ? undefined : window.__MILADY_API_BASE__,
+    isNativePlatform: Capacitor.isNativePlatform(),
   }),
 };
 
