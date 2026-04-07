@@ -108,8 +108,12 @@ parts:
       set -eu
       export PATH="$CRAFT_STAGE/bun/bin:$CRAFT_STAGE/node/bin:$PATH"
 
+      # Initialize workspace submodules and disable local eliza workspace
+      node scripts/init-submodules.mjs || true
+      node scripts/disable-local-eliza-workspace.mjs || true
+
       # Install dependencies using bun (project's native package manager)
-      bun install --frozen-lockfile || bun install
+      MILADY_SKIP_LOCAL_UPSTREAMS=1 bun install
 
       # Build the project
       bun run build || true
