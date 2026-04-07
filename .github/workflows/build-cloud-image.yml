@@ -78,7 +78,7 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ inputs.source_sha || github.sha }}
-          submodules: recursive
+          submodules: false
 
       - name: Setup Node.js 22
         uses: actions/setup-node@v4

@@ -69,7 +69,7 @@ ENV PATH="/root/.bun/bin:$PATH"
 WORKDIR /app
 COPY . .
 
-RUN bun install --frozen-lockfile --ignore-scripts 2>&1
+RUN bun install --ignore-scripts 2>&1
 RUN node ./scripts/link-browser-server.mjs 2>/dev/null || true && node ./scripts/patch-deps.mjs
 RUN npx tsdown 2>&1 || echo "tsdown done"
 

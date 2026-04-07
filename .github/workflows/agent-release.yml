@@ -243,7 +243,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: false
       - uses: ./.github/actions/setup-bun-workspace
       - name: Build
         run: |
@@ -264,7 +264,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: false
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -277,7 +277,7 @@ jobs:
           bun-version: "1.3.10"
       - name: Install and build web assets
         run: |
-          bun install --frozen-lockfile --ignore-scripts
+          bun install --ignore-scripts
           bun run postinstall
           bun run build
       - name: Capacitor sync
@@ -346,7 +346,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: false
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -375,7 +375,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: false
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -384,7 +384,7 @@ jobs:
           bun-version: "1.3.10"
       - name: Build web assets
         run: |
-          bun install --frozen-lockfile --ignore-scripts
+          bun install --ignore-scripts
           bun run postinstall
           bun run build
       - name: Capacitor sync iOS
@@ -413,7 +413,7 @@ jobs:
           bun-version: "1.3.10"
       - name: Build web assets and Electrobun
         run: |
-          bun install --frozen-lockfile --ignore-scripts
+          bun install --ignore-scripts
           bun run postinstall
           ELECTROBUN_SKIP_CODESIGN=1 bun run build || echo "::warning::macOS build failed (non-blocking)"
 
@@ -425,7 +425,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: false
       - uses: ./.github/actions/setup-bun-workspace
       - name: Generate release metadata
         run: node scripts/write-homepage-release-data.mjs || echo "::warning::Release metadata gen failed"

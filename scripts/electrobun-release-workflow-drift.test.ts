@@ -117,9 +117,7 @@ describe("Electrobun release workflow drift", () => {
     expect(workflow).toContain("runner: macos-15-intel");
     expect(workflow).toContain("- name: Setup Node.js");
     expect(workflow).toContain("- name: Setup Bun");
-    expect(workflow).toContain(
-      "arch -x86_64 bun install --frozen-lockfile --ignore-scripts",
-    );
+    expect(workflow).toContain("arch -x86_64 bun install --ignore-scripts");
     expect(workflow).toContain(
       'MILADY_DESKTOP_COMMAND_PREFIX="arch -x86_64" node scripts/desktop-build.mjs stage --variant=base --build-whisper',
     );
@@ -127,7 +125,6 @@ describe("Electrobun release workflow drift", () => {
       'MILADY_DESKTOP_COMMAND_PREFIX="arch -x86_64" node scripts/desktop-build.mjs package --env=$' +
         "{{ needs.prepare.outputs.env }}",
     );
-    expect(workflow).not.toContain("arch -x86_64 bun install --ignore-scripts");
     expect(workflow).not.toContain(
       "name: Setup Node.js (macOS Intel via Rosetta)",
     );

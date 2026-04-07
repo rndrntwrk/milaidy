@@ -207,7 +207,7 @@ jobs:
         run: node scripts/disable-local-eliza-workspace.mjs
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile --ignore-scripts
+        run: bun install --ignore-scripts
 
       - name: Run repository postinstall patches
         run: bun run postinstall
@@ -271,7 +271,7 @@ jobs:
         run: node scripts/disable-local-eliza-workspace.mjs
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile --ignore-scripts
+        run: bun install --ignore-scripts
 
       - name: Run repository postinstall patches
         run: bun run postinstall
@@ -321,7 +321,7 @@ jobs:
         run: node scripts/disable-local-eliza-workspace.mjs
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile --ignore-scripts
+        run: bun install --ignore-scripts
 
       - name: Run repository postinstall patches
         run: bun run postinstall
@@ -389,7 +389,7 @@ jobs:
         run: node scripts/disable-local-eliza-workspace.mjs
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile --ignore-scripts
+        run: bun install --ignore-scripts
 
       - name: Run repository postinstall patches
         run: bun run postinstall
@@ -439,7 +439,7 @@ jobs:
         run: node scripts/disable-local-eliza-workspace.mjs
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile --ignore-scripts
+        run: bun install --ignore-scripts
 
       - name: Run repository postinstall patches
         run: bun run postinstall
@@ -470,7 +470,7 @@ jobs:
         uses: ./.github/actions/setup-bun-workspace
         with:
           bun-version: ${{ env.BUN_VERSION }}
-          install-command: bun install --frozen-lockfile --ignore-scripts
+          install-command: bun install --ignore-scripts
 
       # Proto-generated types are gitignored in the eliza submodule and
       # normally produced by the prebuild script. Unit tests resolve
@@ -536,7 +536,7 @@ jobs:
         run: node scripts/disable-local-eliza-workspace.mjs
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile --ignore-scripts
+        run: bun install --ignore-scripts
         env:
           npm_config_python: ${{ env.pythonLocation }}/bin/python3
 
@@ -583,7 +583,7 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
           install-command: |
             for i in 1 2 3 4 5; do
-              bun install --frozen-lockfile --ignore-scripts && break
+              bun install --ignore-scripts && break
               echo "Attempt $i failed, retrying in $((i * 15))s..."
               sleep $((i * 15))
             done

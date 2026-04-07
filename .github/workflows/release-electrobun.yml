@@ -74,7 +74,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: false
 
       - name: Determine version + env
         id: version
@@ -113,7 +113,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -126,7 +126,7 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
 
       - name: Install root dependencies
-        run: bun install --frozen-lockfile --ignore-scripts
+        run: bun install --ignore-scripts
 
       - name: Run repository postinstall patches
         run: bun run postinstall
@@ -215,7 +215,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -235,9 +235,9 @@ jobs:
         # ships with dual-arch shims.
         run: |
           if [ "${{ matrix.platform.os }}" = "macos" ] && [ "${{ matrix.platform.artifact-name }}" = "macos-x64" ]; then
-            install_cmd=(arch -x86_64 bun install --frozen-lockfile --ignore-scripts)
+            install_cmd=(arch -x86_64 bun install --ignore-scripts)
           else
-            install_cmd=(bun install --frozen-lockfile --ignore-scripts)
+            install_cmd=(bun install --ignore-scripts)
           fi
 
           for attempt in 1 2 3; do

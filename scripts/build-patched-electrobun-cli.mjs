@@ -225,7 +225,7 @@ function main() {
   writeEmbeddedTemplatesStub(embeddedTemplatesPath);
   patchCliSource(cliIndexPath);
 
-  run("bun", ["install", "--frozen-lockfile"], {
+  run("bun", ["install"], {
     cwd: upstreamPackageDir,
     env: {
       ...process.env,

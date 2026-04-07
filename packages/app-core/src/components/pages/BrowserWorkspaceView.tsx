@@ -142,8 +142,45 @@ function resolveBrowserWorkspaceTargetOrigin(url: string): string {
   }
 }
 
-function resolveBrowserWorkspaceMessageOrigin(origin: string): string {
-  return origin && origin !== "null" ? origin : "*";
+/**
+ * Verify the postMessage origin against the tab's known URL and return a safe
+ * targetOrigin for the response. Returns null if the origin cannot be verified.
+ *
+ * With `allow-same-origin` in the iframe sandbox, a malicious page could
+ * present the parent's origin. We mitigate this by checking that the message
+ * origin matches the origin derived from the tab's URL — the URL the user or
+ * agent explicitly navigated to.
+ *
+ * @internal Exported for testing only.
+ */
+export function resolveBrowserWorkspaceMessageOrigin(
+  origin: string,
+  tabUrl?: string,
+): string | null {
+  if (!origin || origin === "null") {
+    return null;
+  }
+
+  // If we know the tab's URL, verify the message origin matches.
+  // This prevents a page loaded via allow-same-origin from spoofing
+  // the parent origin to access wallet signing.
+  if (tabUrl) {
+    try {
+      const expectedOrigin = new URL(tabUrl).origin;
+      if (
+        expectedOrigin &&
+        expectedOrigin !== "null" &&
+        origin !== expectedOrigin
+      ) {
+        return null;
+      }
+    } catch {
+      // Malformed tab URL — reject.
+      return null;
+    }
+  }
+
+  return origin;
 }
 
 function resolveBrowserWorkspaceSelection(
@@ -184,7 +221,8 @@ function resolveBrowserWorkspaceWalletAccounts(
   return state.evmAddress ? [state.evmAddress] : [];
 }
 
-function normalizeBrowserWorkspaceTxRequest(
+/** @internal Exported for testing only. */
+export function normalizeBrowserWorkspaceTxRequest(
   params: unknown,
   fallbackChainId: number,
 ): {
@@ -203,13 +241,15 @@ function normalizeBrowserWorkspaceTxRequest(
   const chainId =
     parseBrowserWorkspaceChainId(value.chainId) ?? fallbackChainId;
   const to = typeof value.to === "string" ? value.to.trim() : "";
+  // value is optional — ERC-20 and other contract calls legitimately omit it.
+  // Default to "0x0" when absent so these calls aren't silently rejected.
   const amount =
     typeof value.value === "string"
       ? value.value.trim()
       : typeof value.value === "number"
         ? String(value.value)
-        : "";
-  if (!to || !amount || !chainId) {
+        : "0x0";
+  if (!to || !chainId || !Number.isFinite(chainId)) {
     return null;
   }
   return {
@@ -276,6 +316,8 @@ export function BrowserWorkspaceView(): JSX.Element {
   const walletConfigRef = useRef(walletConfig);
   const browserWalletStateRef = useRef(browserWalletState);
   const browserWalletChainIdByTabRef = useRef(new Map<string, number>());
+  const workspaceTabsRef = useRef(workspace.tabs);
+  workspaceTabsRef.current = workspace.tabs;
   const previousSelectedTabIdRef = useRef<string | null>(null);
 
   if (typeof initialBrowseUrlRef.current === "undefined") {
@@ -439,6 +481,12 @@ export function BrowserWorkspaceView(): JSX.Element {
         selectedTabId,
         url,
       );
+      // React won't re-navigate an existing iframe when only the src attribute
+      // changes (same key = same DOM element). Set the src directly via the ref.
+      const iframe = iframeRefs.current.get(selectedTabId);
+      if (iframe && iframe.src !== tab.url) {
+        iframe.src = tab.url;
+      }
       await loadWorkspace({ preferTabId: tab.id, silent: true });
       setLocationInput(tab.url);
       setLocationDirty(false);
@@ -450,16 +498,16 @@ export function BrowserWorkspaceView(): JSX.Element {
     if (!selectedTabId) {
       return;
     }
-    const remainingTabs = workspace.tabs.filter(
-      (tab) => tab.id !== selectedTabId,
-    );
-    const nextTabId = remainingTabs[0]?.id ?? null;
     await client.closeBrowserWorkspaceTab(selectedTabId);
+    // Fetch fresh tab list after closing — avoids stale closure refs that
+    // could pick a tab the server no longer knows about.
+    const snapshot = await client.getBrowserWorkspace();
+    const nextTabId = snapshot.tabs[0]?.id ?? null;
     if (nextTabId) {
       await client.showBrowserWorkspaceTab(nextTabId);
     }
     await loadWorkspace({ preferTabId: nextTabId, silent: true });
-  }, [loadWorkspace, selectedTabId, workspace.tabs]);
+  }, [loadWorkspace, selectedTabId]);
 
   const registerBrowserWorkspaceIframe = useCallback(
     (tabId: string, iframe: HTMLIFrameElement | null) => {
@@ -590,7 +638,7 @@ export function BrowserWorkspaceView(): JSX.Element {
       }
       const request = event.data;
 
-      const sourceTab = workspace.tabs.find(
+      const sourceTab = workspaceTabsRef.current.find(
         (tab) => iframeRefs.current.get(tab.id)?.contentWindow === event.source,
       );
       const sourceWindow = sourceTab
@@ -600,11 +648,16 @@ export function BrowserWorkspaceView(): JSX.Element {
         return;
       }
 
+      const targetOrigin = resolveBrowserWorkspaceMessageOrigin(
+        event.origin,
+        sourceTab.url,
+      );
+      if (targetOrigin === null) {
+        // Refuse to respond — origin cannot be verified or doesn't match tab URL.
+        return;
+      }
       const respond = (response: BrowserWorkspaceWalletResponse) => {
-        sourceWindow.postMessage(
-          response,
-          resolveBrowserWorkspaceMessageOrigin(event.origin),
-        );
+        sourceWindow.postMessage(response, targetOrigin);
       };
       const currentWalletState = browserWalletStateRef.current;
       const currentTabChainId =
@@ -775,7 +828,9 @@ export function BrowserWorkspaceView(): JSX.Element {
           }
 
           browserWalletChainIdByTabRef.current.set(sourceTab.id, nextChainId);
-          postBrowserWalletReady(sourceTab, currentWalletState);
+          // Use the ref (not the stale closure snapshot) so the dApp receives
+          // the most up-to-date wallet state after the chain switch.
+          postBrowserWalletReady(sourceTab, browserWalletStateRef.current);
           respond({
             type: BROWSER_WALLET_RESPONSE_TYPE,
             requestId: request.requestId,
@@ -912,7 +967,7 @@ export function BrowserWorkspaceView(): JSX.Element {
     return () => {
       window.removeEventListener("message", onMessage);
     };
-  }, [loadBrowserWalletState, postBrowserWalletReady, workspace.tabs]);
+  }, [loadBrowserWalletState, postBrowserWalletReady]);
 
   const browserSidebar = (
     <Sidebar
