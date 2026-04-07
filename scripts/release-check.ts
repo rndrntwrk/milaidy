@@ -209,7 +209,7 @@ const requiredElectrobunPrWorkflowSnippets = [
   "contents: read",
   'BUN_VERSION: "1.3.9"',
   "name: Release Workflow Contract",
-  "bun install --frozen-lockfile --ignore-scripts",
+  "bun install --ignore-scripts",
   "bun run postinstall",
   "bun run test:regression-matrix:release-contract",
   "bun run test:release:contract",
