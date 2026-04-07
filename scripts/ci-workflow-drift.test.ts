@@ -99,9 +99,9 @@ describe("CI workflow drift", () => {
     ).toBe(6);
     expect(workflow).toContain('run-postinstall: "false"');
     expect(workflow).toContain("install-command: bun install");
-    expect(workflow).toContain(
-      "install-command: bun install --frozen-lockfile --ignore-scripts",
-    );
+    // --frozen-lockfile removed: submodules: false means the lockfile naturally
+    // diverges from checked-in state (missing submodule workspaces).
+    expect(workflow).toContain("bun install --ignore-scripts");
   });
 
   it("checks out recursive submodules before root workspace installs", () => {
