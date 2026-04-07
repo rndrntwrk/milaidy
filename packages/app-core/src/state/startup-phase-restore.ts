@@ -126,15 +126,14 @@ export async function runRestoringSession(
   // Probe the API when there is evidence of a prior install, or when no
   // persisted server exists (covers headless/VPS setups where config was
   // set via files without going through UI onboarding).
-  const probed =
-    !persistedActiveServer
-      ? await detectExistingOnboardingConnection({
-          client,
-          timeoutMs: isDesktop
-            ? Math.min(getBackendStartupTimeoutMs(), 30_000)
-            : Math.min(getBackendStartupTimeoutMs(), 3_500),
-        })
-      : null;
+  const probed = !persistedActiveServer
+    ? await detectExistingOnboardingConnection({
+        client,
+        timeoutMs: isDesktop
+          ? Math.min(getBackendStartupTimeoutMs(), 30_000)
+          : Math.min(getBackendStartupTimeoutMs(), 3_500),
+      })
+    : null;
   if (cancelled.current) return;
 
   const restoredActiveServer =
