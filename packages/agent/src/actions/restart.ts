@@ -47,6 +47,18 @@ export const restartAction: Action = {
   },
 
   handler: async (runtime, message, _state, options) => {
+    // Guard: only restart when the user explicitly asked. The runtime
+    // doesn't call validate before handler, and the LLM can fuzzy-match
+    // RESTART_AGENT from action loops or stray text fragments. Without
+    // this guard the agent can self-restart mid-task.
+    const userText = (message?.content?.text ?? "").toLowerCase();
+    const askedForRestart =
+      /\b(restart|reboot|reload|refresh|respawn)\b/i.test(userText) ||
+      userText.startsWith("/restart");
+    if (!askedForRestart) {
+      return { success: false, text: "" };
+    }
+
     // This action declares parameters, so the runtime provides HandlerOptions.
     const params = (options as HandlerOptions | undefined)?.parameters as { reason?: string } | undefined;
     const reason = params?.reason;
