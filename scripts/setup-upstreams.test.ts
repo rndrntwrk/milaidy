@@ -13,9 +13,11 @@ import { describe, expect, it } from "vitest";
 import {
   createPackageLink,
   ensurePluginDependencyLinks,
+  ensurePublishedElizaPackageLinks,
   getElizaPackageLinks,
   getElizaWorkspaceSkipReason,
   getPluginPackageLinks,
+  getPublishedElizaPackageSpecs,
   hasInstalledElizaDependencies,
   hasRequiredElizaWorkspaceFiles,
   isPackageLinkCurrent,
@@ -328,6 +330,113 @@ describe("ensurePluginDependencyLinks", () => {
       expect(realpathSync(path.join(packageDir, "node_modules", "tsup"))).toBe(
         realpathSync(installedDevDependencyDir),
       );
+    } finally {
+      rmSync(tempRoot, { force: true, recursive: true });
+    }
+  });
+});
+
+describe("getPublishedElizaPackageSpecs", () => {
+  it("collects non-workspace @elizaos package specs from the root manifest", () => {
+    const tempRoot = mkdtempSync(
+      path.join(os.tmpdir(), "milady-published-eliza-specs-"),
+    );
+
+    try {
+      const repoRoot = path.join(tempRoot, "milady");
+      mkdirSync(repoRoot, { recursive: true });
+      writeFileSync(
+        path.join(repoRoot, "package.json"),
+        JSON.stringify({
+          dependencies: {
+            "@elizaos/core": "2.0.0-alpha.113",
+            "@elizaos/plugin-agent-orchestrator": "workspace:*",
+          },
+          devDependencies: {
+            "@elizaos/prompts": "2.0.0-alpha.113",
+          },
+          peerDependencies: {
+            "@elizaos/skills": "2.0.0-alpha.113",
+          },
+        }),
+        "utf8",
+      );
+
+      expect(getPublishedElizaPackageSpecs(repoRoot)).toEqual([
+        ["@elizaos/core", "2.0.0-alpha.113"],
+        ["@elizaos/prompts", "2.0.0-alpha.113"],
+        ["@elizaos/skills", "2.0.0-alpha.113"],
+      ]);
+    } finally {
+      rmSync(tempRoot, { force: true, recursive: true });
+    }
+  });
+});
+
+describe("ensurePublishedElizaPackageLinks", () => {
+  it("restores public @elizaos package links from the Bun cache", () => {
+    const tempRoot = mkdtempSync(
+      path.join(os.tmpdir(), "milady-published-eliza-links-"),
+    );
+
+    try {
+      const repoRoot = path.join(tempRoot, "milady");
+      const cachedCoreDir = path.join(
+        repoRoot,
+        "node_modules",
+        ".bun",
+        "@elizaos+core@2.0.0-alpha.113+example",
+        "node_modules",
+        "@elizaos",
+        "core",
+      );
+
+      mkdirSync(path.join(repoRoot, "apps", "app"), { recursive: true });
+      mkdirSync(path.join(repoRoot, "apps", "home"), { recursive: true });
+      mkdirSync(cachedCoreDir, { recursive: true });
+      writeFileSync(
+        path.join(repoRoot, "package.json"),
+        JSON.stringify({
+          dependencies: {
+            "@elizaos/core": "2.0.0-alpha.113",
+          },
+        }),
+        "utf8",
+      );
+      writeFileSync(
+        path.join(cachedCoreDir, "package.json"),
+        JSON.stringify({ name: "@elizaos/core" }),
+        "utf8",
+      );
+
+      expect(ensurePublishedElizaPackageLinks(repoRoot)).toBe(3);
+      expect(
+        realpathSync(path.join(repoRoot, "node_modules", "@elizaos", "core")),
+      ).toBe(realpathSync(cachedCoreDir));
+      expect(
+        realpathSync(
+          path.join(
+            repoRoot,
+            "apps",
+            "app",
+            "node_modules",
+            "@elizaos",
+            "core",
+          ),
+        ),
+      ).toBe(realpathSync(cachedCoreDir));
+      expect(
+        realpathSync(
+          path.join(
+            repoRoot,
+            "apps",
+            "home",
+            "node_modules",
+            "@elizaos",
+            "core",
+          ),
+        ),
+      ).toBe(realpathSync(cachedCoreDir));
     } finally {
       rmSync(tempRoot, { force: true, recursive: true });
     }

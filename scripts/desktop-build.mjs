@@ -471,12 +471,12 @@ function stageDesktopBuild() {
     },
   );
 
-  runBun(["install", "--frozen-lockfile", "--ignore-scripts"], {
+  runBun(["install", "--ignore-scripts"], {
     cwd: APP_DIR,
     label: "Ensuring app workspace dependencies are installed",
   });
 
-  runBun(["install", "--frozen-lockfile", "--ignore-scripts"], {
+  runBun(["install", "--ignore-scripts"], {
     cwd: ELECTROBUN_DIR,
     label: "Ensuring Electrobun workspace dependencies are installed",
   });

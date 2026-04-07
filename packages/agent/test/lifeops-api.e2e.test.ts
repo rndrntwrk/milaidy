@@ -151,16 +151,13 @@ describe("Life-ops API E2E", () => {
           cadence: {
             kind: "times_per_day",
             slots: [
+              // Keep this fixture single-slot so the due occurrence set stays
+              // stable near UTC midnight; wrapped "later" slots make the
+              // perfect-day streak assertion flaky.
               {
                 key: "current",
                 label: "Current",
                 minuteOfDay,
-                durationMinutes: 20,
-              },
-              {
-                key: "later",
-                label: "Later",
-                minuteOfDay: (minuteOfDay + 120) % 1440,
                 durationMinutes: 20,
               },
             ],

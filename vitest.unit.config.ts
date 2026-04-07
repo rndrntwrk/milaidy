@@ -1,26 +1,50 @@
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig, mergeConfig } from "vitest/config";
+import { getElizaCoreEntry } from "./test/eliza-package-paths";
 import baseConfig from "./vitest.config";
 
 const repoRoot = path.dirname(fileURLToPath(import.meta.url));
+const elizaCoreEntry = getElizaCoreEntry(repoRoot);
+
+// Only alias @elizaos/core to the submodule source when its dependencies are
+// installed. CI checks out the submodule but skips dep install
+// (MILADY_SKIP_LOCAL_UPSTREAMS=1), so let it resolve via npm package instead.
+const elizaCoreSource = path.join(
+  repoRoot,
+  "eliza",
+  "packages",
+  "typescript",
+  "src",
+  "index.ts",
+);
+const useLocalElizaCore =
+  existsSync(elizaCoreSource) &&
+  existsSync(
+    path.join(repoRoot, "eliza", "packages", "typescript", "node_modules"),
+  );
 
 export default mergeConfig(
   baseConfig,
   defineConfig({
     resolve: {
       alias: [
-        {
-          find: "@elizaos/core",
-          replacement: path.join(
-            repoRoot,
-            "eliza",
-            "packages",
-            "typescript",
-            "src",
-            "index.ts",
-          ),
-        },
+        ...((useLocalElizaCore
+          ? elizaCoreSource
+          : elizaCoreEntry) != null
+          ? [
+              {
+                // Published-only CI disables the repo-local eliza checkout, so
+                // unit tests must fall back to the installed package entry in
+                // that mode.
+                find: "@elizaos/core",
+                replacement: useLocalElizaCore
+                  ? elizaCoreSource
+                  : (elizaCoreEntry as string),
+              },
+            ]
+          : []),
         {
           find: "@elizaos/plugin-cron",
           replacement: path.join(repoRoot, "test", "stubs", "plugin-stub.mjs"),

@@ -131,10 +131,11 @@ RUN set -e; \
       echo "$ANIMATION_POINTERS" | head -n 60; \
     fi
 
-# Install dependencies with the committed lockfile while skipping third-party
-# postinstall hooks that may fail in cloud builders. Then run our required
-# local patch/link scripts before building.
-RUN bun install --frozen-lockfile --ignore-scripts
+# Install dependencies while skipping third-party postinstall hooks that may
+# fail in cloud builders. Then run our required local patch/link scripts before
+# building. (--frozen-lockfile removed: lockfile references submodule workspaces
+# that are not checked out in Docker builds.)
+RUN bun install --ignore-scripts
 RUN node ./scripts/link-browser-server.mjs && node ./scripts/patch-deps.mjs
 RUN bun run build
 

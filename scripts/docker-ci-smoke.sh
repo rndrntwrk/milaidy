@@ -101,7 +101,9 @@ cleanup() {
 trap cleanup EXIT
 
 log "Installing dependencies"
-bun install --frozen-lockfile --ignore-scripts
+node scripts/init-submodules.mjs
+node scripts/disable-local-eliza-workspace.mjs
+bun install --ignore-scripts
 
 log "Running repository postinstall"
 SKIP_AVATAR_CLONE=1 MILADY_NO_VISION_DEPS=1 bun run postinstall

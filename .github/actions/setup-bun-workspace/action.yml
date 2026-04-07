@@ -76,6 +76,14 @@ runs:
         key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
         restore-keys: bun-${{ runner.os }}-
 
+    - name: Initialize tracked workspace submodules
+      shell: bash
+      run: node scripts/init-submodules.mjs
+
+    - name: Disable repo-local eliza workspace
+      shell: bash
+      run: node scripts/disable-local-eliza-workspace.mjs
+
     - name: Install dependencies
       shell: bash
       run: ${{ inputs.install-command }}

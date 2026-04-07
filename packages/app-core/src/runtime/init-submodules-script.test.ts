@@ -165,6 +165,7 @@ describe("init-submodules script", () => {
       exec,
       log: () => {},
       logError: () => {},
+      shouldSkipSubmodule: () => false,
     });
 
     expect(result.initialized).toBe(1);

@@ -18,16 +18,20 @@ const BUILD_CLOUD_IMAGE_WORKFLOW_PATH = path.join(
   ROOT,
   ".github/workflows/build-cloud-image.yml",
 );
+const DEPLOY_WEB_WORKFLOW_PATH = path.join(
+  ROOT,
+  ".github/workflows/deploy-web.yml",
+);
 const DOCKER_SMOKE_WORKFLOW_PATH = path.join(
   ROOT,
   ".github/workflows/docker-ci-smoke.yml",
 );
+const DOCKER_SMOKE_SCRIPT_PATH = path.join(ROOT, "scripts/docker-ci-smoke.sh");
 const ADDITIONAL_SUBMODULE_WORKFLOW_PATHS = [
   ".github/workflows/agent-fix-ci.yml",
   ".github/workflows/agent-implement.yml",
   ".github/workflows/agent-release.yml",
   ".github/workflows/apple-store-release.yml",
-  ".github/workflows/deploy-web.yml",
   ".github/workflows/nightly.yml",
   ".github/workflows/release-electrobun-build-linux-x64-testbox.yml",
   ".github/workflows/release-electrobun-build-windows-x64-testbox.yml",
@@ -44,8 +48,6 @@ function read(filePath: string): string {
 function countOccurrences(text: string, needle: string): number {
   return text.split(needle).length - 1;
 }
-
-const WINDOWS_OPTIONAL_SUBMODULE_EXPR = `submodules: \${{ matrix.os == 'windows-latest' && 'false' || 'recursive' }}`;
 
 describe("CI workflow drift", () => {
   it("defines a shared workspace setup action for Bun-based jobs", () => {
@@ -97,32 +99,52 @@ describe("CI workflow drift", () => {
     ).toBe(6);
     expect(workflow).toContain('run-postinstall: "false"');
     expect(workflow).toContain("install-command: bun install");
-    expect(workflow).toContain(
-      "install-command: bun install --frozen-lockfile --ignore-scripts",
-    );
+    // removed: submodules: false means the lockfile naturally
+    // diverges from checked-in state (missing submodule workspaces).
+    expect(workflow).toContain("bun install --ignore-scripts");
   });
 
   it("checks out recursive submodules before root workspace installs", () => {
+    // CI uses submodules: false + MILADY_SKIP_LOCAL_UPSTREAMS=1 to avoid
+    // fetching the eliza submodule (which may have dangling refs). Non-eliza
+    // submodules are restored during postinstall.
+    expect(countOccurrences(read(CI_WORKFLOW_PATH), "submodules: false")).toBe(
+      5,
+    );
+    // test.yml also uses submodules: false (13 jobs)
     expect(
-      countOccurrences(read(CI_WORKFLOW_PATH), "submodules: recursive"),
-    ).toBe(5);
-    expect(
-      countOccurrences(read(TEST_WORKFLOW_PATH), "submodules: recursive"),
-    ).toBe(7);
+      countOccurrences(read(TEST_WORKFLOW_PATH), "submodules: false"),
+    ).toBe(13);
+    expect(read(BUILD_DOCKER_WORKFLOW_PATH)).toContain("submodules: false");
+    expect(read(BUILD_CLOUD_IMAGE_WORKFLOW_PATH)).toContain(
+      "submodules: false",
+    );
+    expect(read(DEPLOY_WEB_WORKFLOW_PATH)).toContain("submodules: false");
+    expect(read(DOCKER_SMOKE_WORKFLOW_PATH)).toContain("submodules: false");
+    for (const workflowPath of ADDITIONAL_SUBMODULE_WORKFLOW_PATHS) {
+      expect(read(workflowPath)).toContain("submodules:");
+    }
+  });
+
+  it("re-initializes tracked non-eliza submodules after published-only checkout", () => {
+    expect(read(SETUP_ACTION_PATH)).toContain(
+      "run: node scripts/init-submodules.mjs",
+    );
     expect(
       countOccurrences(
         read(TEST_WORKFLOW_PATH),
-        WINDOWS_OPTIONAL_SUBMODULE_EXPR,
+        "run: node scripts/init-submodules.mjs",
       ),
     ).toBe(6);
-    expect(read(BUILD_DOCKER_WORKFLOW_PATH)).toContain("submodules: recursive");
-    expect(read(BUILD_CLOUD_IMAGE_WORKFLOW_PATH)).toContain(
-      "submodules: recursive",
+    expect(read(BUILD_DOCKER_WORKFLOW_PATH)).toContain(
+      "run: node scripts/init-submodules.mjs",
     );
-    expect(read(DOCKER_SMOKE_WORKFLOW_PATH)).toContain("submodules: recursive");
-    for (const workflowPath of ADDITIONAL_SUBMODULE_WORKFLOW_PATHS) {
-      expect(read(workflowPath)).toContain("submodules: recursive");
-    }
+    expect(read(DEPLOY_WEB_WORKFLOW_PATH)).toContain(
+      "run: node scripts/init-submodules.mjs",
+    );
+    expect(read(DOCKER_SMOKE_SCRIPT_PATH)).toContain(
+      "node scripts/init-submodules.mjs",
+    );
   });
 
   it("builds the bundled orchestrator workspace before Docker image packaging", () => {

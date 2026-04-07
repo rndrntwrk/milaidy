@@ -28,10 +28,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # Windows cannot checkout the optional plugin-openrouter submodule
-          # because that repo currently contains POSIX-only path names.
-          # These website blocker lanes do not need that optional checkout.
-          submodules: ${{ matrix.os == 'windows-latest' && 'false' || 'recursive' }}
+          # Published-only CI restores required non-eliza submodules during setup.
+          submodules: false
           fetch-depth: 0
 
       - name: Setup Bun
@@ -50,10 +48,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # Windows cannot checkout the optional plugin-openrouter submodule
-          # because that repo currently contains POSIX-only path names.
-          # These website blocker lanes do not need that optional checkout.
-          submodules: ${{ matrix.os == 'windows-latest' && 'false' || 'recursive' }}
+          # Published-only CI restores required non-eliza submodules during setup.
+          submodules: false
 
       # WHY setup-node before bun install: optional deps like @discordjs/opus fall back to node-gyp; Node 22 + colocated cache avoids nodejs.org header download. Engines require >=22.
       - name: Setup Node.js
@@ -68,6 +64,19 @@ jobs:
           install-command: bun install --ignore-scripts
           skip-avatar-clone: "true"
           no-vision-deps: "true"
+
+      # Proto-generated types are gitignored in the eliza submodule and
+      # normally produced by the prebuild script. Unit tests resolve
+      # @elizaos/core from source, so the generated directory must exist.
+      # The buf postinstall (downloads platform binary) is skipped by
+      # --ignore-scripts, so we run it explicitly before buf generate.
+      - name: Generate protobuf types
+        run: |
+          if [ -d eliza/packages/schemas ] && [ ! -d eliza/packages/typescript/src/types/generated ]; then
+            cd eliza/packages/schemas
+            node node_modules/@bufbuild/buf/install.js 2>/dev/null || true
+            npx --yes @bufbuild/buf@1.67.0 generate
+          fi
 
       - name: Run unit tests with coverage
         run: bun run test:coverage
@@ -87,10 +96,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # Windows cannot checkout the optional plugin-openrouter submodule
-          # because that repo currently contains POSIX-only path names.
-          # Postinstall only needs the local eliza submodule here.
-          submodules: ${{ matrix.os == 'windows-latest' && 'false' || 'recursive' }}
+          # Published-only CI restores required non-eliza submodules during setup.
+          submodules: false
 
       - name: Setup Node.js
         uses: useblacksmith/setup-node@v5
@@ -105,6 +112,19 @@ jobs:
           skip-avatar-clone: "true"
           no-vision-deps: "true"
 
+      # Proto-generated types are gitignored in the eliza submodule and
+      # normally produced by the prebuild script. Unit tests resolve
+      # @elizaos/core from source, so the generated directory must exist.
+      # The buf postinstall (downloads platform binary) is skipped by
+      # --ignore-scripts, so we run it explicitly before buf generate.
+      - name: Generate protobuf types
+        run: |
+          if [ -d eliza/packages/schemas ] && [ ! -d eliza/packages/typescript/src/types/generated ]; then
+            cd eliza/packages/schemas
+            node node_modules/@bufbuild/buf/install.js 2>/dev/null || true
+            npx --yes @bufbuild/buf@1.67.0 generate
+          fi
+
       - name: Run database security and query-guard tests
         run: bun run db:check
 
@@ -116,10 +136,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # Windows cannot checkout the optional plugin-openrouter submodule
-          # because that repo currently contains POSIX-only path names.
-          # Postinstall only needs the local eliza submodule here.
-          submodules: ${{ matrix.os == 'windows-latest' && 'false' || 'recursive' }}
+          # Published-only CI restores required non-eliza submodules during setup.
+          submodules: false
 
       - name: Setup Node.js
         uses: useblacksmith/setup-node@v5
@@ -151,14 +169,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # plugin-openrouter contains Windows-invalid fixture paths; skip recursive
-          # submodule checkout there but still keep full submodules elsewhere.
-          submodules: ${{ matrix.os == 'windows-latest' && 'false' || 'recursive' }}
+          # Published-only CI restores the required non-eliza submodules explicitly.
+          submodules: false
 
       - name: Initialize Windows-safe workspace submodules
         if: ${{ matrix.os == 'windows-latest' }}
         shell: bash
-        run: git submodule update --init --depth 1 eliza plugins/plugin-agent-orchestrator
+        run: git submodule update --init --depth 1 plugins/plugin-agent-orchestrator
+
+      - name: Initialize tracked workspace submodules
+        if: ${{ matrix.os != 'windows-latest' }}
+        run: node scripts/init-submodules.mjs
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -182,8 +203,11 @@ jobs:
           key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
           restore-keys: bun-${{ runner.os }}-
 
+      - name: Disable repo-local eliza workspace
+        run: node scripts/disable-local-eliza-workspace.mjs
+
       - name: Install dependencies
-        run: bun install --frozen-lockfile --ignore-scripts
+        run: bun install --ignore-scripts
 
       - name: Run repository postinstall patches
         run: bun run postinstall
@@ -209,14 +233,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # plugin-openrouter contains Windows-invalid fixture paths; skip recursive
-          # submodule checkout there but still keep full submodules elsewhere.
-          submodules: ${{ matrix.os == 'windows-latest' && 'false' || 'recursive' }}
+          # Published-only CI restores the required non-eliza submodules explicitly.
+          submodules: false
 
       - name: Initialize Windows-safe workspace submodules
         if: ${{ matrix.os == 'windows-latest' }}
         shell: bash
-        run: git submodule update --init --depth 1 eliza plugins/plugin-agent-orchestrator
+        run: git submodule update --init --depth 1 plugins/plugin-agent-orchestrator
+
+      - name: Initialize tracked workspace submodules
+        if: ${{ matrix.os != 'windows-latest' }}
+        run: node scripts/init-submodules.mjs
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -240,8 +267,11 @@ jobs:
           key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
           restore-keys: bun-${{ runner.os }}-
 
+      - name: Disable repo-local eliza workspace
+        run: node scripts/disable-local-eliza-workspace.mjs
+
       - name: Install dependencies
-        run: bun install --frozen-lockfile --ignore-scripts
+        run: bun install --ignore-scripts
 
       - name: Run repository postinstall patches
         run: bun run postinstall
@@ -260,7 +290,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -284,8 +314,14 @@ jobs:
           key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
           restore-keys: bun-${{ runner.os }}-
 
+      - name: Initialize tracked workspace submodules
+        run: node scripts/init-submodules.mjs
+
+      - name: Disable repo-local eliza workspace
+        run: node scripts/disable-local-eliza-workspace.mjs
+
       - name: Install dependencies
-        run: bun install --frozen-lockfile --ignore-scripts
+        run: bun install --ignore-scripts
 
       - name: Run repository postinstall patches
         run: bun run postinstall
@@ -304,7 +340,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -346,8 +382,14 @@ jobs:
           key: gradle-${{ runner.os }}-${{ hashFiles('apps/app/android/**/*.gradle*', 'apps/app/android/**/gradle-wrapper.properties', 'apps/app/plugins/websiteblocker/android/**/*.kt') }}
           restore-keys: gradle-${{ runner.os }}-
 
+      - name: Initialize tracked workspace submodules
+        run: node scripts/init-submodules.mjs
+
+      - name: Disable repo-local eliza workspace
+        run: node scripts/disable-local-eliza-workspace.mjs
+
       - name: Install dependencies
-        run: bun install --frozen-lockfile --ignore-scripts
+        run: bun install --ignore-scripts
 
       - name: Run repository postinstall patches
         run: bun run postinstall
@@ -366,7 +408,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -390,8 +432,14 @@ jobs:
           key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
           restore-keys: bun-${{ runner.os }}-
 
+      - name: Initialize tracked workspace submodules
+        run: node scripts/init-submodules.mjs
+
+      - name: Disable repo-local eliza workspace
+        run: node scripts/disable-local-eliza-workspace.mjs
+
       - name: Install dependencies
-        run: bun install --frozen-lockfile --ignore-scripts
+        run: bun install --ignore-scripts
 
       - name: Run repository postinstall patches
         run: bun run postinstall
@@ -410,7 +458,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: false
 
       # WHY useblacksmith: colocated cache avoids nodejs.org download timeouts on Blacksmith runners.
       - name: Setup Node.js
@@ -422,7 +470,20 @@ jobs:
         uses: ./.github/actions/setup-bun-workspace
         with:
           bun-version: ${{ env.BUN_VERSION }}
-          install-command: bun install --frozen-lockfile --ignore-scripts
+          install-command: bun install --ignore-scripts
+
+      # Proto-generated types are gitignored in the eliza submodule and
+      # normally produced by the prebuild script. Unit tests resolve
+      # @elizaos/core from source, so the generated directory must exist.
+      # The buf postinstall (downloads platform binary) is skipped by
+      # --ignore-scripts, so we run it explicitly before buf generate.
+      - name: Generate protobuf types
+        run: |
+          if [ -d eliza/packages/schemas ] && [ ! -d eliza/packages/typescript/src/types/generated ]; then
+            cd eliza/packages/schemas
+            node node_modules/@bufbuild/buf/install.js 2>/dev/null || true
+            npx --yes @bufbuild/buf@1.67.0 generate
+          fi
 
       - name: Run startup E2E contract guard
         run: bun run test:startup:contract
@@ -438,7 +499,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: false
 
       - name: Setup Node.js
         uses: useblacksmith/setup-node@v5
@@ -468,8 +529,14 @@ jobs:
           key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
           restore-keys: bun-${{ runner.os }}-
 
+      - name: Initialize tracked workspace submodules
+        run: node scripts/init-submodules.mjs
+
+      - name: Disable repo-local eliza workspace
+        run: node scripts/disable-local-eliza-workspace.mjs
+
       - name: Install dependencies
-        run: bun install --frozen-lockfile --ignore-scripts
+        run: bun install --ignore-scripts
         env:
           npm_config_python: ${{ env.pythonLocation }}/bin/python3
 
@@ -507,7 +574,7 @@ jobs:
         if: steps.cloud.outputs.enabled == 'true'
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: false
 
       - name: Setup workspace dependencies
         if: steps.cloud.outputs.enabled == 'true'
@@ -516,7 +583,7 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
           install-command: |
             for i in 1 2 3 4 5; do
-              bun install --frozen-lockfile --ignore-scripts && break
+              bun install --ignore-scripts && break
               echo "Attempt $i failed, retrying in $((i * 15))s..."
               sleep $((i * 15))
             done
@@ -537,7 +604,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          submodules: recursive
+          submodules: false
 
       - name: Setup workspace dependencies
         uses: ./.github/actions/setup-bun-workspace

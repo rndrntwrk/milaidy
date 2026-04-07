@@ -422,10 +422,15 @@ describe("life-ops calendar sync", () => {
       ),
     );
 
+    // Pass explicit time window so the server doesn't auto-compute from the
+    // current UTC day — avoids flaky failures near midnight when events at
+    // now+20min would cross the day boundary.
+    const timeMin = new Date(now.getTime() - 60_000).toISOString();
+    const timeMax = new Date(now.getTime() + 24 * 60 * 60_000).toISOString();
     const contextRes = await req(
       port,
       "GET",
-      "/api/lifeops/calendar/next-context?timeZone=UTC",
+      `/api/lifeops/calendar/next-context?timeZone=UTC&timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}`,
     );
     expect(contextRes.status).toBe(200);
     expect(contextRes.data).toMatchObject({

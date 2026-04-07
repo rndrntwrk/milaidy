@@ -41,4 +41,7 @@ fs.writeFileSync(
   '{"type":"module"}\n',
 );
 run("node", ["--import", "tsx", "scripts/write-build-info.ts"]);
+// Regenerate static asset manifest from the CI build output so hashes
+// match what release:check will validate.
+run("node", ["scripts/generate-static-asset-manifest.mjs"]);
 run("bun", ["run", "release:check"]);
