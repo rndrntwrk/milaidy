@@ -84,6 +84,7 @@ jobs:
         env:
           LANG: en_US.UTF-8
           npm_config_legacy_peer_deps: "true"
+          npm_config_strict_overrides: "false"
 
       - name: Build for iOS Simulator
         run: |
@@ -152,6 +153,7 @@ jobs:
         run: npx capacitor sync android
         env:
           npm_config_legacy_peer_deps: "true"
+          npm_config_strict_overrides: "false"
 
       - name: Build debug APK
         working-directory: apps/app/android
