@@ -197,7 +197,14 @@ function getBaseExport<T = unknown>(name: string): T | undefined {
 function resolveBasePlugin(): Plugin {
   const plugin = getBaseExport("default") ?? getBaseExport("codingAgentPlugin");
   if (!plugin || typeof plugin !== "object") {
-    throw new Error("plugin-agent-orchestrator did not export a plugin object");
+    // Return a no-op plugin stub when orchestrator is unavailable (cloud images)
+    return {
+      name: "agent-orchestrator-stub",
+      description: "Stub: plugin-agent-orchestrator not available in this environment",
+      actions: [],
+      providers: [],
+      services: [],
+    } as unknown as Plugin;
   }
   return plugin as Plugin;
 }
