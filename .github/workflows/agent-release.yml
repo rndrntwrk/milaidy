@@ -293,6 +293,14 @@ jobs:
         run: |
           chmod +x ./gradlew
           ./gradlew bundleRelease --no-daemon || echo "::warning::Android AAB build failed (non-blocking)"
+      - name: Upload AAB artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-aab
+          path: apps/app/android/app/build/outputs/bundle/release/*.aab
+          retention-days: 30
+          if-no-files-found: warn
 
   build-snap:
     name: Snap build
@@ -316,6 +324,14 @@ jobs:
       - name: Verify snap
         run: |
           sudo snap install --dangerous ${{ steps.snap.outputs.snap }} || echo "::warning::Snap install test failed (non-blocking)"
+      - name: Upload snap artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snap-package
+          path: ${{ steps.snap.outputs.snap }}
+          retention-days: 30
+          if-no-files-found: warn
 
   build-flatpak:
     name: Flatpak build
@@ -333,6 +349,14 @@ jobs:
       - name: Build flatpak
         run: |
           flatpak-builder --user --install-deps-from=flathub --force-clean build-dir packaging/flatpak/com.milady.Milady.yml || echo "::warning::Flatpak build failed (non-blocking)"
+      - name: Upload flatpak artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flatpak-bundle
+          path: packaging/flatpak/*.flatpak
+          retention-days: 30
+          if-no-files-found: warn
 
   build-pypi:
     name: PyPI package build
@@ -348,6 +372,14 @@ jobs:
         run: |
           pip install build
           python -m build packaging/pypi/ || echo "::warning::PyPI build failed (non-blocking)"
+      - name: Upload PyPI artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pypi-package
+          path: packaging/pypi/dist/
+          retention-days: 30
+          if-no-files-found: warn
 
   build-debian:
     name: Debian package build
@@ -377,7 +409,15 @@ jobs:
           else
             echo "::warning::No debian packaging found — skipping"
           fi
-
+      - name: Upload deb artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debian-package
+          path: |
+            ../*.deb
+          retention-days: 30
+          if-no-files-found: warn
   build-ios:
     name: iOS build validation
     needs: [version]
@@ -474,6 +514,16 @@ jobs:
           echo "Docs link check complete"
 
   # ── 4. Electrobun + Docker green → tag and publish ─────────────────
+  # NOTE: After the publish job creates a GitHub Release, the following
+  # standalone workflows auto-trigger via `release: types: [published]`:
+  #   - publish-npm.yml          → npm registry
+  #   - publish-packages.yml     → PyPI, Snap Store, Debian/APT, Flatpak
+  #   - android-release.yml      → Google Play Store (internal track)
+  #   - apple-store-release.yml  → TestFlight (iOS + macOS)
+  #   - deploy-web.yml           → Homepage deployment
+  #   - update-homebrew.yml      → Homebrew tap update
+  #   - build-docker.yml         → GHCR agent image push
+  # The cloud image is pushed via an explicit post-publish job below.
   publish:
     name: Tag & publish release
     needs: [version, build-electrobun, build-docker, build-cloud-image, build-npm]
@@ -592,15 +642,16 @@ jobs:
                 generatedNotes ? '' : null,
                 fullChangelog,
                 '',
-                '### Publishing pipelines (triggered by this release)',
-                '- [ ] Electrobun artifacts upload + updater channel',
-                '- [ ] npm publish',
-                '- [ ] PyPI publish',
-                '- [ ] Canonical agent image push to GHCR',
-                '- [ ] Cloud app image push to GHCR',
-                '- [ ] Android / iOS / macOS App Store',
-                '- [ ] Snap / Flatpak / Debian',
-                '- [ ] Homebrew / Homepage',
+                '### Publishing pipelines (auto-triggered by this release)',
+                '- ✅ Electrobun artifacts (uploaded during build phase)',
+                '- 🔄 npm publish → publish-npm.yml',
+                '- 🔄 PyPI / Snap / Debian / Flatpak → publish-packages.yml',
+                '- 🔄 Agent Docker image → build-docker.yml (GHCR push)',
+                '- 🔄 Cloud app Docker image → post-publish push',
+                '- 🔄 Android → android-release.yml (Play Store internal)',
+                '- 🔄 iOS / macOS → apple-store-release.yml (TestFlight)',
+                '- 🔄 Homebrew → update-homebrew.yml',
+                '- 🔄 Homepage → deploy-web.yml',
               ].filter(Boolean).join('\n'),
               prerelease,
               draft: false,
@@ -660,10 +711,22 @@ jobs:
               try { await github.rest.issues.removeLabel({ owner: context.repo.owner, repo: context.repo.repo, issue_number: issue, name: 'release-ready' }); } catch (e) {}
             }
 
-  # ── 5. Report — open issues for any failures/warnings ───────────────
+  # ── 5. Post-publish: push Docker images that were build-only verified ─
+  push-cloud-image:
+    name: Push cloud app image to GHCR
+    needs: [version, publish]
+    if: needs.publish.result == 'success'
+    uses: ./.github/workflows/build-cloud-image.yml
+    with:
+      version: ${{ needs.version.outputs.tag }}
+      push_image: true
+      source_sha: ${{ github.sha }}
+    secrets: inherit
+
+  # ── 6. Report — open issues for any failures/warnings ───────────────
   report:
     name: Report build results
-    needs: [version, build-electrobun, build-docker, build-cloud-image, build-npm, build-android, build-ios, build-macos-store, build-snap, build-flatpak, build-pypi, build-debian, build-homepage, build-docs, publish]
+    needs: [version, build-electrobun, build-docker, build-cloud-image, build-npm, build-android, build-ios, build-macos-store, build-snap, build-flatpak, build-pypi, build-debian, build-homepage, build-docs, publish, push-cloud-image]
     if: always() && needs.version.result == 'success'
     runs-on: ${{ vars.RUNNER_UBUNTU || 'blacksmith-4vcpu-ubuntu-2404' }}
     permissions:
@@ -687,6 +750,7 @@ jobs:
           R_HOMEPAGE: ${{ needs.build-homepage.result }}
           R_DOCS: ${{ needs.build-docs.result }}
           R_PUBLISH: ${{ needs.publish.result }}
+          R_PUSH_CLOUD: ${{ needs.push-cloud-image.result }}
         with:
           script: |
             const tag = process.env.TAG;
@@ -709,7 +773,7 @@ jobs:
               'Homepage': process.env.R_HOMEPAGE,
               'Docs': process.env.R_DOCS,
             };
-            const all = { ...blocking, ...nonBlocking, 'Tag & publish': process.env.R_PUBLISH };
+            const all = { ...blocking, ...nonBlocking, 'Tag & publish': process.env.R_PUBLISH, 'Cloud image push': process.env.R_PUSH_CLOUD };
 
             const icon = r => r === 'success' ? '✅' : r === 'failure' ? '❌' : '⏭️';
             const lines = Object.entries(all).map(([n, r]) => `| ${n} | ${icon(r)} ${r} |`);
