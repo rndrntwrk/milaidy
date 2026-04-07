@@ -43,6 +43,8 @@ import {
   isConnectorConfigured,
 } from "./plugin-auto-enable";
 import { CONNECTOR_IDS, MILADY_LOCAL_CONNECTOR_IDS } from "./schema";
+import { CONNECTOR_PLUGIN_MAP } from "../api/connector-health";
+import { CONNECTOR_ENV_MAP, collectConnectorEnvVars } from "./env-vars";
 
 /** Connectors registered locally in Milady, not in upstream @miladyai/agent. */
 const MILADY_LOCAL_CONNECTORS = new Set<string>(MILADY_LOCAL_CONNECTOR_IDS);
@@ -185,5 +187,107 @@ describe("connector runtime parity", () => {
       CONNECTOR_IDS.length - MILADY_LOCAL_CONNECTORS.size;
     // Milady-local connectors are injected before the upstream helper runs.
     expect(changes).toHaveLength(expectedChangeCount);
+  });
+});
+
+// ── Cloud / local parity ──────────────────────────────────────────────────
+// Ensures cloud containers get the same env vars, health monitoring, and
+// auto-enable behaviour as locally-run agents.
+
+describe("cloud discord env var parity", () => {
+  it("collectConnectorEnvVars emits DISCORD_API_TOKEN and DISCORD_BOT_TOKEN from botToken", () => {
+    const vars = collectConnectorEnvVars({
+      connectors: { discord: { botToken: "tok-123" } },
+    } as Record<string, unknown>);
+    expect(vars.DISCORD_API_TOKEN).toBe("tok-123");
+    expect(vars.DISCORD_BOT_TOKEN).toBe("tok-123");
+  });
+
+  it("collectConnectorEnvVars emits DISCORD_API_TOKEN and DISCORD_BOT_TOKEN from token", () => {
+    const vars = collectConnectorEnvVars({
+      connectors: { discord: { token: "tok-456" } },
+    } as Record<string, unknown>);
+    expect(vars.DISCORD_API_TOKEN).toBe("tok-456");
+    expect(vars.DISCORD_BOT_TOKEN).toBe("tok-456");
+  });
+
+  it("collectConnectorEnvVars emits DISCORD_APPLICATION_ID", () => {
+    const vars = collectConnectorEnvVars({
+      connectors: { discord: { botToken: "tok", applicationId: "app-id-789" } },
+    } as Record<string, unknown>);
+    expect(vars.DISCORD_APPLICATION_ID).toBe("app-id-789");
+  });
+
+  it("collectConnectorEnvVars omits discord vars when no token is set", () => {
+    const vars = collectConnectorEnvVars({
+      connectors: { discord: { applicationId: "app-id-789" } },
+    } as Record<string, unknown>);
+    expect(vars.DISCORD_API_TOKEN).toBeUndefined();
+    expect(vars.DISCORD_BOT_TOKEN).toBeUndefined();
+    // applicationId IS still emitted via the regular env map path
+    expect(vars.DISCORD_APPLICATION_ID).toBe("app-id-789");
+  });
+});
+
+describe("connector health monitor coverage parity", () => {
+  it("health monitor covers every connector in CONNECTOR_PLUGINS", () => {
+    const healthKeys = new Set(Object.keys(CONNECTOR_PLUGIN_MAP));
+    for (const connectorId of Object.keys(CONNECTOR_PLUGINS)) {
+      expect(healthKeys.has(connectorId)).toBe(true);
+    }
+  });
+
+  it("health monitor covers every connector in CONNECTOR_IDS", () => {
+    const healthKeys = new Set(Object.keys(CONNECTOR_PLUGIN_MAP));
+    for (const id of CONNECTOR_IDS) {
+      expect(healthKeys.has(id)).toBe(true);
+    }
+  });
+});
+
+describe("cloud-provisioned discord auto-enable", () => {
+  it("auto-enables discord plugin from connector config with token", () => {
+    const { config } = applyPluginAutoEnable({
+      config: {
+        plugins: {},
+        connectors: { discord: { botToken: "tok-cloud" } },
+      },
+      env: { MILADY_CLOUD_PROVISIONED: "1" },
+    });
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-discord");
+  });
+
+  it("auto-enables edge-tts for cloud-provisioned agents", () => {
+    const { config } = applyPluginAutoEnable({
+      config: { plugins: {} },
+      env: { MILADY_CLOUD_PROVISIONED: "1" },
+    });
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-edge-tts");
+  });
+
+  it("does not enable discord plugin when connector config is empty", () => {
+    const { config } = applyPluginAutoEnable({
+      config: {
+        plugins: {},
+        connectors: { discord: {} },
+      },
+      env: { MILADY_CLOUD_PROVISIONED: "1" },
+    });
+    expect(config.plugins?.allow ?? []).not.toContain(
+      "@elizaos/plugin-discord",
+    );
+  });
+
+  it("respects enabled: false on discord connector even with valid token", () => {
+    const { config } = applyPluginAutoEnable({
+      config: {
+        plugins: {},
+        connectors: { discord: { botToken: "tok", enabled: false } },
+      },
+      env: { MILADY_CLOUD_PROVISIONED: "1" },
+    });
+    expect(config.plugins?.allow ?? []).not.toContain(
+      "@elizaos/plugin-discord",
+    );
   });
 });
