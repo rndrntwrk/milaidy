@@ -23,11 +23,18 @@ import {
   stringToUuid,
   type UUID,
 } from "@elizaos/core";
-import {
-  getSelfControlStatus,
-  hasWebsiteBlockDeferralIntent,
-  hasWebsiteBlockIntent,
-} from "@miladyai/plugin-selfcontrol/selfcontrol";
+// Dynamic import: plugin-selfcontrol is desktop-only and may not be present in cloud images
+let getSelfControlStatus: (() => Promise<unknown>) | undefined;
+let hasWebsiteBlockDeferralIntent: ((text: string) => boolean) | undefined;
+let hasWebsiteBlockIntent: ((text: string) => boolean) | undefined;
+try {
+  const mod = await import("@miladyai/plugin-selfcontrol/selfcontrol");
+  getSelfControlStatus = mod.getSelfControlStatus;
+  hasWebsiteBlockDeferralIntent = mod.hasWebsiteBlockDeferralIntent;
+  hasWebsiteBlockIntent = mod.hasWebsiteBlockIntent;
+} catch {
+  // plugin-selfcontrol not available (cloud image) — website blocker features disabled
+}
 import type { ElizaConfig } from "../config/config.js";
 import { normalizeCharacterLanguage } from "../onboarding-presets.js";
 import { withMiladyTrajectoryStep } from "../runtime/trajectory-step-context.js";
@@ -218,11 +225,11 @@ function inferWebsiteBlockFallback(
 ): {
   name: "BLOCK_WEBSITES";
 } | null {
-  if (hasWebsiteBlockDeferralIntent(userText)) {
+  if (hasWebsiteBlockDeferralIntent?.(userText)) {
     return null;
   }
 
-  const userHasBlockIntent = hasWebsiteBlockIntent(userText);
+  const userHasBlockIntent = hasWebsiteBlockIntent?.(userText) ?? false;
   const modelLooksLikeBlockConfirmation =
     /\b(blocking|block|self ?control)\b/i.test(modelText);
   const userHasPermissionIntent = hasWebsiteBlockingPermissionIntent(userText);
@@ -1180,8 +1187,8 @@ export async function generateChatResponse(
       modelText,
     );
     if (inferredWebsiteBlockRecovery && !seenActionTags.has("BLOCK_WEBSITES")) {
-      const websiteBlockStatus = await getSelfControlStatus();
-      if (!websiteBlockStatus.active) {
+      const websiteBlockStatus = getSelfControlStatus ? await getSelfControlStatus() : { active: false };
+      if (!websiteBlockStatus.active && getSelfControlStatus) {
         runtime.logger?.warn(
           {
             src: "eliza-api",

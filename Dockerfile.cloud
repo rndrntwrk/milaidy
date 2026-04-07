@@ -24,6 +24,7 @@ COPY package.json bun.lock ./
 COPY patches ./patches
 COPY packages/agent/package.json ./packages/agent/package.json
 COPY packages/app-core/package.json ./packages/app-core/package.json
+COPY packages/plugin-selfcontrol/package.json ./packages/plugin-selfcontrol/package.json
 COPY packages/shared/package.json ./packages/shared/package.json
 COPY packages/ui/package.json ./packages/ui/package.json
 COPY packages/vrm-utils/package.json ./packages/vrm-utils/package.json
@@ -60,6 +61,7 @@ COPY dist ./dist
 COPY apps/app/dist ./apps/app/dist
 COPY packages/agent ./packages/agent
 COPY packages/app-core ./packages/app-core
+COPY packages/plugin-selfcontrol ./packages/plugin-selfcontrol
 COPY packages/shared ./packages/shared
 COPY packages/ui ./packages/ui
 COPY packages/vrm-utils ./packages/vrm-utils
@@ -71,7 +73,7 @@ RUN set -eux; \
   # Keep bun's symlink structure intact — cp -rL breaks transitive dep resolution.
   cp -a node_modules/. /runtime/node_modules/; \
   # Overlay workspace packages with full source (not just the symlinked dist).
-  for dir in packages/agent packages/app-core packages/shared packages/ui packages/vrm-utils; do \
+  for dir in packages/agent packages/app-core packages/plugin-selfcontrol packages/shared packages/ui packages/vrm-utils; do \
     name="$(node -p "require('./${dir}/package.json').name")"; \
     target="/runtime/node_modules/${name}"; \
     rm -rf "$target"; \
