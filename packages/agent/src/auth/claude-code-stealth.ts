@@ -129,6 +129,10 @@ export function installClaudeCodeStealthFetchInterceptor(): void {
       return originalFetch(nextRequest);
     }
 
+    if (typeof body === "string") {
+      const m = body.match(/"model":"([^"]+)"/);
+      if (m) console.log(`[stealth] →anthropic model=${m[1]}`);
+    }
     return originalFetch(url.toString(), nextInit);
   };
 
