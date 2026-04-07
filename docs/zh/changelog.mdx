@@ -3,6 +3,24 @@ title: 更新日志
 description: Milady 的最新动态——新功能、改进和修复。
 ---
 
+<Update label="2026-04-05" description="仪表盘聊天：动作回调就地替换（通过 SSE 实现 Discord 风格的渐进式消息）" tags={["Update", "Fix"]}>
+
+<div id="action-callbacks-replace-dont-concatenate-dashboard-sse">
+## 动作回调：替换而非拼接（仪表盘 SSE）
+</div>
+
+长时间运行的**动作**多次调用 `HandlerCallback` 时 — 与 Discord 上的**渐进式消息**模式相同 — 现在会**替换**流式助手回复中之前的回调文本，而不是**追加**它。
+
+**原因：** 在 Discord 上，一条消息会被**就地编辑**。网页仪表盘通过 **SSE** 进行流式传输；简单地将每个回调与现有字符串合并会产生粘连的状态行（`🔍 …🔍 …✨ …Now playing…`），与 Telegram/Discord 的实时更新相比显得不正常。
+
+**实现方式：** `generateChatResponse` 对回合中**第一个动作回调之前**已存在的文本做快照（`preCallbackText`，通常是 LLM 的流式回复）。每个后续回调将可见正文设置为 `preCallbackText + "\n\n" + latestCallbackText` 并发出 SSE **快照**，使客户端现有的 `fullText` 处理逻辑更新单个助手气泡。
+
+**插件契约：** 未更改 — 插件继续调用 `callback({ text, source })`。不需要 WebSocket 侧通道或运行时特定的钩子。
+
+**文档：** [动作回调与 SSE 流式传输](/zh/runtime/action-callback-streaming)。
+
+</Update>
+
 <Update label="2026-07-02" description="6月26日至7月2日当周；插件配置表单、Discord 命令、云端加固" tags={["Feature", "Update", "Fix"]}>
 <div id="chat-driven-plugin-configuration">
 ## 聊天驱动的插件配置
