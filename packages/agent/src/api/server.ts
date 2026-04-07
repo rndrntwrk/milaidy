@@ -26,7 +26,6 @@ import {
   createMessageMemory,
   logger,
   type Media,
-  ModelType,
   stringToUuid,
   type UUID
 } from "@elizaos/core";
@@ -3801,6 +3800,7 @@ function getCoordinatorFromRuntime(runtime: AgentRuntime): {
       errored: number;
     }) => Promise<void>,
   ) => void;
+  sourceRoomId?: string | null;
 } | null {
   const coordinator = runtime.getService("SWARM_COORDINATOR");
   if (coordinator) {
@@ -3912,119 +3912,86 @@ export async function handleSwarmSynthesis(
     `[swarm-synthesis] Generating synthesis for ${payload.total} tasks (${payload.completed} completed, ${payload.stopped} stopped, ${payload.errored} errored)`,
   );
 
-  const taskLines = payload.tasks
-    .map(
-      (t) =>
-        `- [${t.status.toUpperCase()}] "${t.label}" (${t.agentType})\n  Task: ${t.originalTask}\n  Result: ${t.completionSummary || "No summary available"}`,
-    )
-    .join("\n\n");
-
-  const prompt =
-    `You are summarizing the results of a task-agent swarm for the user. ` +
-    `${payload.total} agents were dispatched. ${payload.completed} completed, ` +
-    `${payload.stopped} stopped, ${payload.errored} errored.\n\n` +
-    `Here are the individual task results:\n\n${taskLines}\n\n` +
-    `Write a concise, conversational summary of what was accomplished. ` +
-    `Highlight key outcomes (PRs created, issues found, research results). ` +
-    `If any tasks failed or stopped, mention what went wrong. ` +
-    `Keep your personality — be warm and helpful but brief.`;
-
-  // Build a concise result message and ensure servers are actually running.
-  // For port-bound tasks: check if port is listening; if not but the workspace
-  // has an index.html, start a python http.server in the background ourselves.
-  const resultParts = await Promise.all(payload.tasks.map(async (t) => {
-    if (t.completionSummary) return t.completionSummary;
-    const portMatch = t.originalTask.match(/port\s+(\d+)/i);
-    const port = portMatch?.[1];
-    if (!port) return `done with: ${t.originalTask}`;
-
-    const checkPort = async (): Promise<boolean> => {
-      try {
-        const res = await fetch(`http://localhost:${port}/`, {
-          signal: AbortSignal.timeout(2000),
-        });
-        return res.ok;
-      } catch {
-        return false;
-      }
-    };
-
-    if (await checkPort()) {
-      return `built and serving at http://147.93.44.246:${port}`;
-    }
-
-    // Server not running — try to find the workspace dir and start it ourselves
-    try {
-      const { execSync } = await import("node:child_process");
-      const wsDir = execSync(
-        `ls -t /home/milady/.milady/workspaces/ | head -1`,
-        { encoding: "utf-8" },
-      ).trim();
-      const wsPath = `/home/milady/.milady/workspaces/${wsDir}`;
-      const fs = await import("node:fs");
-      if (fs.existsSync(`${wsPath}/index.html`)) {
-        execSync(
-          `cd ${wsPath} && nohup python3 -m http.server ${port} > /dev/null 2>&1 &`,
-          { stdio: "ignore" },
-        );
-        await new Promise((r) => setTimeout(r, 1500));
-        if (await checkPort()) {
-          return `built and serving at http://147.93.44.246:${port}`;
-        }
-      }
-    } catch {
-      // fall through
-    }
-    return `built the files but server isn't running on port ${port} — try restarting`;
-  }));
-  const resultText = resultParts.length === 1
-    ? `done — ${resultParts[0]}`
-    : `done — ${payload.total} tasks:\n${resultParts.map((r) => `• ${r}`).join("\n")}`;
-
+  const resultText = await buildSynthesisResultText(payload);
   logger.info("[swarm-synthesis] Synthesis generated, routing to user");
   await routeMessage(resultText, "swarm_synthesis");
+  await routeSynthesisToConnector(runtime, resultText);
+}
 
-  // Send to Discord directly via REST API since the action callback
-  // is no longer available by the time synthesis runs.
-  const discordToken = runtime.getSetting("DISCORD_API_TOKEN") as string | undefined;
-  if (discordToken) {
-    try {
-      const memories = await runtime.getMemories({ tableName: "messages", count: 50 });
-      for (const mem of memories) {
-        if (mem.content?.source === "discord" && mem.roomId) {
-          const room = await runtime.getRoom(mem.roomId);
-          if (room?.channelId) {
-            const res = await fetch(
-              `https://discord.com/api/v10/channels/${room.channelId}/messages`,
-              {
-                method: "POST",
-                headers: { Authorization: `Bot ${discordToken}`, "Content-Type": "application/json" },
-                body: JSON.stringify({ content: resultText }),
-              },
-            );
-            logger.info(`[swarm-synthesis] Discord send: ${res.status} to channel ${room.channelId}`);
-            break;
-          }
-        }
-      }
-    } catch (err) {
-      logger.warn(`[swarm-synthesis] Discord routing failed: ${err}`);
-    }
+/**
+ * Build the user-facing result message from swarm task data.
+ * For port-bound tasks, verifies the server is actually listening.
+ * No LLM call required — task data already has what we need.
+ */
+async function buildSynthesisResultText(payload: {
+  tasks: Array<{
+    originalTask: string;
+    completionSummary: string;
+    status: string;
+  }>;
+  total: number;
+}): Promise<string> {
+  const parts = await Promise.all(payload.tasks.map(buildTaskResultLine));
+  return parts.length === 1
+    ? `done — ${parts[0]}`
+    : `done — ${payload.total} tasks:\n${parts.map((p) => `• ${p}`).join("\n")}`;
+}
+
+async function buildTaskResultLine(task: {
+  originalTask: string;
+  completionSummary: string;
+}): Promise<string> {
+  if (task.completionSummary) return task.completionSummary;
+  const portMatch = task.originalTask.match(/port\s+(\d+)/i);
+  const port = portMatch?.[1];
+  if (!port) return task.originalTask;
+  if (await isPortServing(port)) {
+    const host = process.env.MILADY_PUBLIC_HOST ?? "localhost";
+    return `built and serving at http://${host}:${port}`;
   }
+  return `built the files but server isn't running on port ${port} yet`;
+}
 
-  // Keep the catch for backwards compatibility but it should never fire now
+async function isPortServing(port: string): Promise<boolean> {
   try {
-    void 0; // no-op
-  } catch (err) {
-    logger.error(`[swarm-synthesis] Unexpected: ${err}`);
-    const parts: string[] = [];
-    if (payload.completed > 0) parts.push(`${payload.completed} completed`);
-    if (payload.stopped > 0) parts.push(`${payload.stopped} stopped`);
-    if (payload.errored > 0) parts.push(`${payload.errored} errored`);
-    await routeMessage(
-      `All ${payload.total} task agents finished (${parts.join(", ")}). Review their work when you're ready.`,
-      "coding-agent",
+    const res = await fetch(`http://localhost:${port}/`, {
+      signal: AbortSignal.timeout(2000),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Route the synthesis text to the user's platform (Discord, Telegram, etc.)
+ * via the runtime's registered send handler. Uses the source room ID stored
+ * on the coordinator when the task was created.
+ */
+async function routeSynthesisToConnector(
+  runtime: AgentRuntime,
+  resultText: string,
+): Promise<void> {
+  const coordinator = getCoordinatorFromRuntime(runtime);
+  const sourceRoomId = coordinator?.sourceRoomId;
+  if (!sourceRoomId) return;
+  try {
+    const room = await runtime.getRoom(sourceRoomId as UUID);
+    if (!room?.source) return;
+    await runtime.sendMessageToTarget(
+      {
+        source: room.source,
+        roomId: room.id,
+        channelId: room.channelId ?? room.id,
+        serverId: room.serverId,
+      },
+      { text: resultText, source: "swarm_synthesis" },
     );
+    logger.info(
+      `[swarm-synthesis] Routed result to ${room.source} room ${room.id}`,
+    );
+  } catch (err) {
+    logger.debug(`[swarm-synthesis] Connector routing failed: ${err}`);
   }
 }
 
@@ -4057,10 +4024,6 @@ function wireCoordinatorEventRouting(st: ServerState): boolean {
   if (!st.runtime) return false;
   const coordinator = getCoordinatorFromRuntime(st.runtime);
   if (!coordinator?.setAgentDecisionCallback) return false;
-  // Skip the actual wiring: coordinator event routing through the main LLM
-  // generates noisy status messages in Discord. Return true so the bridge
-  // initialization succeeds, but don't register the callback.
-  return true;
 
   // Serialization queue — one coordinator event at a time
   let eventQueue: Promise<void> = Promise.resolve();
