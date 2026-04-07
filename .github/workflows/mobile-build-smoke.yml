@@ -80,7 +80,9 @@ jobs:
 
       - name: Capacitor sync iOS
         working-directory: apps/app
-        run: bunx capacitor sync ios
+        run: |
+          npm config set strict-overrides false
+          npx capacitor sync ios
         env:
           LANG: en_US.UTF-8
 
@@ -148,7 +150,9 @@ jobs:
 
       - name: Capacitor sync Android
         working-directory: apps/app
-        run: bunx capacitor sync android
+        run: |
+          npm config set strict-overrides false
+          npx capacitor sync android
 
       - name: Build debug APK
         working-directory: apps/app/android
