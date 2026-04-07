@@ -80,9 +80,9 @@ export const terminalAction: Action = {
   ],
 
   description:
-    "Run a shell command in the user's terminal. Use this when the user asks " +
-    "you to run a command, execute a script, install packages, or perform " +
-    "any terminal operation. Output is shown in real time.",
+    "Run a single explicit shell command that the user provided directly. " +
+    "Only use when the user gives a specific command like 'run ls -la' or 'execute npm install'. " +
+    "Do NOT use for building projects, creating websites, or multi-step work — use CREATE_TASK instead.",
 
   validate: async () => true,
 
