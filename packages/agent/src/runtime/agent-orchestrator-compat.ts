@@ -1224,6 +1224,20 @@ function installListAgentsHandler(action: Action | undefined): void {
     _options?: HandlerOptions,
     callback?: HandlerCallback,
   ): Promise<ActionResult | undefined> => {
+    // Only respond to explicit slash commands. The runtime can pick this
+    // action via fuzzy matching during action loops or coordinator events
+    // even when the user never asked for status. Without this guard, the
+    // bot spams the channel with "Active task agents" updates.
+    const userText = (_message?.content?.text ?? "").trim();
+    if (
+      !userText.startsWith("/subagents") &&
+      !userText.startsWith("/sub") &&
+      !userText.startsWith("/agents") &&
+      !userText.startsWith("/sessions")
+    ) {
+      return { success: false, text: "" };
+    }
+
     const ptyService = getPtyService(runtime);
     if (!ptyService) {
       if (callback) {
