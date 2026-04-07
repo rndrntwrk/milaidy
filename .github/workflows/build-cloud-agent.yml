@@ -86,6 +86,14 @@ jobs:
           restore-keys: |
             bun-store-cloud-${{ runner.os }}-
 
+      # ── 3.5. Init submodules (skip eliza workspace) ─────────────────────────
+      - name: Init non-eliza submodules
+        run: |
+          node scripts/init-submodules.mjs
+          node scripts/disable-local-eliza-workspace.mjs
+        env:
+          MILADY_SKIP_LOCAL_UPSTREAMS: "1"
+
       # ── 4. Install dependencies ─────────────────────────────────────────────
       - name: Install dependencies
         run: bun install --ignore-scripts
