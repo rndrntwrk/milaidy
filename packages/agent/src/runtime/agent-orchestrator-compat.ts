@@ -15,6 +15,7 @@ import type {
   ProviderResult,
   State,
 } from "@elizaos/core";
+import { installTaskProgressStreamer } from "./task-progress-streamer";
 
 // Dynamic import: plugin-agent-orchestrator is desktop-only and may be absent
 // in Docker, cloud, or headless environments.
@@ -1254,6 +1255,11 @@ function injectDefaultMemoryContent(action: Action | undefined): void {
     options?: HandlerOptions,
     callback?: HandlerCallback,
   ): Promise<ActionResult | undefined> => {
+    // Lazy install: the streamer needs a live runtime + ptyService to wire
+    // up sendMessageToTarget callbacks, neither of which exist at module
+    // load time. First task spawn is the earliest both are guaranteed.
+    installTaskProgressStreamer(runtime, getPtyService(runtime));
+
     const parameters =
       (options?.parameters as Record<string, unknown> | undefined) ?? {};
     const existing =
