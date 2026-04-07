@@ -83,7 +83,6 @@ jobs:
         run: npx capacitor sync ios
         env:
           LANG: en_US.UTF-8
-          npm_config_force: "true"
 
       - name: Build for iOS Simulator
         run: |
@@ -150,8 +149,6 @@ jobs:
       - name: Capacitor sync Android
         working-directory: apps/app
         run: npx capacitor sync android
-        env:
-          npm_config_force: "true"
 
       - name: Build debug APK
         working-directory: apps/app/android
