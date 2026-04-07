@@ -1215,6 +1215,62 @@ function injectPreferredAgentType(action: Action | undefined): void {
   };
 }
 
+/**
+ * Milady deployment-specific memory content for spawned task agents.
+ *
+ * Lives here (not in the shared plugin) because the rules below — public IP,
+ * `python3 -m http.server` for static hosting, structured `URL:` reporting —
+ * are conventions of THIS deployment, not the orchestrator plugin. Other
+ * deployments of plugin-agent-orchestrator will set their own conventions
+ * the same way.
+ */
+const MILADY_TASK_AGENT_MEMORY = `# Milady Conventions
+
+You are running on Milady's VPS. Public IP is 147.93.44.246.
+
+## Hosting static web pages
+- Name the entry HTML file \`index.html\` (never \`hello.html\`, \`page.html\`, etc.) so \`python3 -m http.server\` serves it as the directory root instead of returning a directory listing.
+- Start the server in the background, bound to all interfaces, with logs redirected: \`setsid nohup python3 -m http.server <port> --bind 0.0.0.0 > server.log 2>&1 < /dev/null & disown\`.
+- Verify with \`curl -sf http://127.0.0.1:<port>/\` and confirm the body is your page, not a directory listing.
+
+## Reporting
+When you finish a task that exposes a URL, end your response with one line in this exact format so the parent agent can quote it verbatim:
+
+    URL: http://147.93.44.246:<port>/
+`;
+
+/**
+ * Wraps an orchestrator action so every invocation carries Milady's default
+ * task-agent memory content. Existing caller-supplied memoryContent is
+ * preserved and appended after the defaults.
+ */
+function injectDefaultMemoryContent(action: Action | undefined): void {
+  if (!action?.handler) return;
+  const originalHandler = action.handler.bind(action);
+  action.handler = async (
+    runtime: IAgentRuntime,
+    message: Memory,
+    state?: State,
+    options?: HandlerOptions,
+    callback?: HandlerCallback,
+  ): Promise<ActionResult | undefined> => {
+    const parameters =
+      (options?.parameters as Record<string, unknown> | undefined) ?? {};
+    const existing =
+      typeof parameters.memoryContent === "string"
+        ? parameters.memoryContent
+        : undefined;
+    const memoryContent = existing
+      ? `${MILADY_TASK_AGENT_MEMORY}\n---\n\n${existing}`
+      : MILADY_TASK_AGENT_MEMORY;
+    const nextOptions = {
+      ...(options ?? {}),
+      parameters: { ...parameters, memoryContent },
+    } as HandlerOptions;
+    return originalHandler(runtime, message, state, nextOptions, callback);
+  };
+}
+
 function installListAgentsHandler(action: Action | undefined): void {
   if (!action) return;
   action.handler = async (
@@ -1453,6 +1509,8 @@ function patchPluginSurface(): void {
   }
 
   injectPreferredAgentType(baseActionMap.get("SPAWN_AGENT"));
+  injectDefaultMemoryContent(baseActionMap.get("CREATE_TASK"));
+  injectDefaultMemoryContent(baseActionMap.get("SPAWN_AGENT"));
   installListAgentsHandler(baseActionMap.get("LIST_AGENTS"));
 
   basePlugin.providers = [
