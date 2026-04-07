@@ -14,6 +14,9 @@ concurrency:
   group: windows-dev-smoke-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  MILADY_SKIP_LOCAL_UPSTREAMS: "1"
+
 jobs:
   dev-smoke:
     name: Windows smoke (${{ matrix.bun-version }})

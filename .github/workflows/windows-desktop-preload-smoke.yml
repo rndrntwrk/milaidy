@@ -14,6 +14,9 @@ concurrency:
   group: windows-desktop-preload-smoke-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  MILADY_SKIP_LOCAL_UPSTREAMS: "1"
+
 jobs:
   preload-smoke:
     name: desktop preload preflight (windows)
@@ -51,6 +54,7 @@ jobs:
         env:
           SKIP_AVATAR_CLONE: "1"
           MILADY_NO_VISION_DEPS: "1"
+          MILADY_SKIP_LOCAL_UPSTREAMS: "1"
 
       - name: Desktop preflight
         run: bun scripts/desktop-build.mjs preflight --variant=base
