@@ -409,13 +409,17 @@ jobs:
           else
             echo "::warning::No debian packaging found — skipping"
           fi
+      - name: Collect deb artifacts
+        if: success()
+        run: |
+          mkdir -p deb-output
+          cp ../*.deb deb-output/ 2>/dev/null || true
       - name: Upload deb artifact
         if: success()
         uses: actions/upload-artifact@v4
         with:
           name: debian-package
-          path: |
-            ../*.deb
+          path: deb-output/
           retention-days: 30
           if-no-files-found: warn
   build-ios:
