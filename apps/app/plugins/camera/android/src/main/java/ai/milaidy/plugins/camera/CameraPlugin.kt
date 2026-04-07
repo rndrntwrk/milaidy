@@ -16,8 +16,9 @@ import android.provider.MediaStore
 import android.util.Base64
 import android.util.Size
 import android.view.ViewGroup
-import android.webkit.WebView
 import androidx.camera.core.*
+import androidx.camera.core.resolutionselector.ResolutionSelector
+import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.video.*
 import androidx.core.content.ContextCompat
@@ -38,6 +39,7 @@ import java.text.SimpleDateFormat
 import java.util.*
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import kotlin.coroutines.resume
 
 @CapacitorPlugin(
     name = "MiladyCamera",
@@ -212,12 +214,21 @@ class CameraPlugin : Plugin() {
                     }
 
                     // Insert preview behind the WebView.
-                    val webView = bridge.webView as? WebView
+                    val webView = bridge.webView
                     val parent = webView?.parent as? ViewGroup
                     parent?.let { viewGroup ->
                         viewGroup.addView(previewView, 0)
                         webView.setBackgroundColor(android.graphics.Color.TRANSPARENT)
                     }
+
+                    val resolutionSelector = ResolutionSelector.Builder()
+                        .setResolutionStrategy(
+                            ResolutionStrategy(
+                                Size(width, height),
+                                ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER,
+                            )
+                        )
+                        .build()
 
                     currentDirection = direction
                     currentCameraSelector = if (direction == "front") {
@@ -227,7 +238,7 @@ class CameraPlugin : Plugin() {
                     }
 
                     preview = Preview.Builder()
-                        .setTargetResolution(Size(width, height))
+                        .setResolutionSelector(resolutionSelector)
                         .build()
                         .also {
                             it.setSurfaceProvider(previewView?.surfaceProvider)
@@ -236,7 +247,7 @@ class CameraPlugin : Plugin() {
                     // Build ImageCapture with flash mode from current settings.
                     imageCapture = ImageCapture.Builder()
                         .setCaptureMode(ImageCapture.CAPTURE_MODE_MAXIMIZE_QUALITY)
-                        .setTargetResolution(Size(width, height))
+                        .setResolutionSelector(resolutionSelector)
                         .setFlashMode(flashModeFromSetting(currentSettings["flash"] as? String ?: "off"))
                         .build()
 
@@ -561,7 +572,7 @@ class CameraPlugin : Plugin() {
             return
         }
 
-        val videoCapture = this.videoCapture ?: run {
+        this.videoCapture ?: run {
             call.reject("Camera not ready")
             return
         }
@@ -736,7 +747,7 @@ class CameraPlugin : Plugin() {
                 put("height", currentPreviewHeight)
                 put("fileSize", fileSize)
                 put("mimeType", "video/mp4")
-            }, null)
+            })
         }
     }
 
