@@ -52,10 +52,12 @@ $startupBootstrapFile = $null
 $stopProtectedProcessIds = [System.Collections.Generic.HashSet[int]]::new()
 [void]$stopProtectedProcessIds.Add([int]$PID)
 try {
-  $invoker = Get-CimInstance Win32_Process -Filter "ProcessId = $PID"
-  if ($invoker -and $invoker.ParentProcessId) {
-    # When the smoke script is launched via `bun run`, keep the Bun host alive.
-    [void]$stopProtectedProcessIds.Add([int]$invoker.ParentProcessId)
+  $currentPid = $PID
+  while ($currentPid -gt 0) {
+    $proc = Get-CimInstance Win32_Process -Filter "ProcessId = $currentPid"
+    if (-not $proc -or -not $proc.ParentProcessId -or $proc.ParentProcessId -eq $currentPid) { break }
+    [void]$stopProtectedProcessIds.Add([int]$proc.ParentProcessId)
+    $currentPid = $proc.ParentProcessId
   }
 } catch {
   # Best effort only; on failure we still protect the current PowerShell host.
