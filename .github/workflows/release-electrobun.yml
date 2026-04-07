@@ -60,6 +60,7 @@ permissions:
 env:
   CI: "true"
   BUN_VERSION: "1.3.9" # pinned: 1.3.10 clean-lockfile breaks Windows frozen installs — NOTE: repo standard is 1.3.10
+  MILADY_SKIP_LOCAL_UPSTREAMS: "1"
 
 jobs:
   prepare:
@@ -124,6 +125,11 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Init non-eliza submodules
+        run: |
+          node scripts/init-submodules.mjs
+          node scripts/disable-local-eliza-workspace.mjs
 
       - name: Install root dependencies
         run: bun install --ignore-scripts
@@ -226,6 +232,11 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Init non-eliza submodules
+        run: |
+          node scripts/init-submodules.mjs
+          node scripts/disable-local-eliza-workspace.mjs
 
       - name: Install root dependencies
         # --ignore-scripts skips native dependency install scripts (e.g. @tensorflow/tfjs-node
