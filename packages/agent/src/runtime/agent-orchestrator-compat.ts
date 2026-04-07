@@ -15,7 +15,13 @@ import type {
   ProviderResult,
   State,
 } from "@elizaos/core";
-import * as baseModule from "@elizaos/plugin-agent-orchestrator";
+// Dynamic import: plugin-agent-orchestrator is desktop-only and may be absent in cloud images
+let baseModule: Record<string, unknown> = {};
+try {
+  baseModule = await import("@elizaos/plugin-agent-orchestrator");
+} catch {
+  // Package not available (cloud image) — orchestrator features disabled
+}
 
 type AdapterId = "claude" | "codex" | "gemini" | "aider";
 type FrameworkId = AdapterId | "pi";
