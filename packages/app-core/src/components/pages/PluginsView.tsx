@@ -509,6 +509,25 @@ function PluginListView({
     [setActionNotice],
   );
 
+  const completePluginLifecycleRestart = useCallback(
+    async (messages: { waiting: string; success: string; failure: string }) => {
+      setActionNotice(messages.waiting, "info", 120_000, false, true);
+      const status = await client.restartAndWait(120_000);
+      if (status.state !== "running") {
+        setActionNotice(
+          messages.failure.replace("{{status}}", status.state),
+          "error",
+          3800,
+        );
+        return false;
+      }
+      await loadPlugins();
+      setActionNotice(messages.success, "success");
+      return true;
+    },
+    [loadPlugins, setActionNotice],
+  );
+
   const handleInstallPlugin = async (pluginId: string, npmName: string) => {
     const plugin = plugins.find((candidate) => candidate.id === pluginId);
     const stream = plugin ? getSelectedReleaseStream(plugin) : "alpha";
@@ -531,21 +550,36 @@ function PluginListView({
         async () =>
           await client.installRegistryPlugin(npmName, false, { stream }),
       )) as Awaited<ReturnType<typeof client.installRegistryPlugin>>;
-      await loadPlugins();
-      setActionNotice(
-        result.requiresRestart
-          ? t("pluginsview.PluginInstalledRestartRequired", {
-              plugin: npmName,
-              defaultValue:
-                "{{plugin}} installed. Restart required to activate.",
-            })
-          : t("pluginsview.PluginInstalledActivated", {
-              plugin: npmName,
-              defaultValue:
-                "{{plugin}} installed and activated without a full agent restart.",
-            }),
-        "success",
-      );
+      if (result.requiresRestart) {
+        const restarted = await completePluginLifecycleRestart({
+          waiting: t("pluginsview.PluginInstalledRestarting", {
+            plugin: npmName,
+            defaultValue:
+              "{{plugin}} installed. Restarting the agent and waiting for activation...",
+          }),
+          success: t("pluginsview.PluginInstalledRestartComplete", {
+            plugin: npmName,
+            defaultValue: "{{plugin}} installed and activated.",
+          }),
+          failure: t("pluginsview.PluginInstalledRestartFailed", {
+            plugin: npmName,
+            status: "{{status}}",
+            defaultValue:
+              "{{plugin}} installed, but the agent did not come back online (status: {{status}}).",
+          }),
+        });
+        if (!restarted) return;
+      } else {
+        await loadPlugins();
+        setActionNotice(
+          t("pluginsview.PluginInstalledActivated", {
+            plugin: npmName,
+            defaultValue:
+              "{{plugin}} installed and activated without a full agent restart.",
+          }),
+          "success",
+        );
+      }
     } catch (err) {
       setActionNotice(
         t("pluginsview.PluginInstallFailed", {
@@ -593,20 +627,35 @@ function PluginListView({
         async () =>
           await client.updateRegistryPlugin(npmName, false, { stream }),
       )) as Awaited<ReturnType<typeof client.updateRegistryPlugin>>;
-      await loadPlugins();
-      setActionNotice(
-        result.requiresRestart
-          ? t("pluginsview.PluginUpdatedRestartRequired", {
-              plugin: npmName,
-              defaultValue:
-                "{{plugin}} updated. Restart required to apply the new version.",
-            })
-          : t("pluginsview.PluginUpdatedActivated", {
-              plugin: npmName,
-              defaultValue: "{{plugin}} updated without a full agent restart.",
-            }),
-        "success",
-      );
+      if (result.requiresRestart) {
+        const restarted = await completePluginLifecycleRestart({
+          waiting: t("pluginsview.PluginUpdatedRestarting", {
+            plugin: npmName,
+            defaultValue:
+              "{{plugin}} updated. Restarting the agent and waiting for activation...",
+          }),
+          success: t("pluginsview.PluginUpdatedRestartComplete", {
+            plugin: npmName,
+            defaultValue: "{{plugin}} updated and activated.",
+          }),
+          failure: t("pluginsview.PluginUpdatedRestartFailed", {
+            plugin: npmName,
+            status: "{{status}}",
+            defaultValue:
+              "{{plugin}} updated, but the agent did not come back online (status: {{status}}).",
+          }),
+        });
+        if (!restarted) return;
+      } else {
+        await loadPlugins();
+        setActionNotice(
+          t("pluginsview.PluginUpdatedActivated", {
+            plugin: npmName,
+            defaultValue: "{{plugin}} updated without a full agent restart.",
+          }),
+          "success",
+        );
+      }
     } catch (err) {
       setActionNotice(
         t("pluginsview.PluginUpdateFailed", {
@@ -650,21 +699,36 @@ function PluginListView({
         },
         async () => await client.uninstallRegistryPlugin(npmName, false),
       )) as Awaited<ReturnType<typeof client.uninstallRegistryPlugin>>;
-      await loadPlugins();
-      setActionNotice(
-        result.requiresRestart
-          ? t("pluginsview.PluginUninstalledRestartRequired", {
-              plugin: npmName,
-              defaultValue:
-                "{{plugin}} uninstalled. Restart required to fully unload it.",
-            })
-          : t("pluginsview.PluginUninstalledActivated", {
-              plugin: npmName,
-              defaultValue:
-                "{{plugin}} uninstalled without a full agent restart.",
-            }),
-        "success",
-      );
+      if (result.requiresRestart) {
+        const restarted = await completePluginLifecycleRestart({
+          waiting: t("pluginsview.PluginUninstalledRestarting", {
+            plugin: npmName,
+            defaultValue:
+              "{{plugin}} uninstalled. Restarting the agent and waiting for cleanup...",
+          }),
+          success: t("pluginsview.PluginUninstalledRestartComplete", {
+            plugin: npmName,
+            defaultValue: "{{plugin}} uninstalled and fully unloaded.",
+          }),
+          failure: t("pluginsview.PluginUninstalledRestartFailed", {
+            plugin: npmName,
+            status: "{{status}}",
+            defaultValue:
+              "{{plugin}} uninstalled, but the agent did not come back online (status: {{status}}).",
+          }),
+        });
+        if (!restarted) return;
+      } else {
+        await loadPlugins();
+        setActionNotice(
+          t("pluginsview.PluginUninstalledActivated", {
+            plugin: npmName,
+            defaultValue:
+              "{{plugin}} uninstalled without a full agent restart.",
+          }),
+          "success",
+        );
+      }
       setPluginReleaseStreams((prev) => {
         if (!(pluginId in prev)) return prev;
         const next = { ...prev };
