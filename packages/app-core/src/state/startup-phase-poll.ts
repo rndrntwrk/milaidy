@@ -198,6 +198,7 @@ export async function runPollingBackend(
 
       if (
         sessionComplete &&
+        !complete &&
         !ctx?.persistedActiveServer &&
         !ctx?.hadPriorOnboarding
       ) {
