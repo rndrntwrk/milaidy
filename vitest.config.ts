@@ -277,6 +277,7 @@ export default defineConfig({
       "packages/app-core/src/**/*.test.tsx",
       "packages/plugin-selfcontrol/src/**/*.test.ts",
       "packages/plugin-selfcontrol/src/**/*.test.ts",
+      "packages/shared/src/**/*.test.ts",
       "packages/plugin-wechat/src/**/*.test.ts",
       "src/**/*.test.ts",
       "scripts/**/*.test.ts",

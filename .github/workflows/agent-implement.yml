@@ -254,7 +254,7 @@ jobs:
                - No secrets in code
 
             4. **Verify** — Run checks to make sure nothing is broken:
-               - `bun run check` (typecheck + lint)
+               - `bun run verify` (typecheck + lint; `check` aliases this)
                - `bun run test` (test suite)
 
             5. **Commit and push** — Use clear, concise commit messages:

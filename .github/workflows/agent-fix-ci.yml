@@ -250,7 +250,7 @@ jobs:
             2. Understand what failed (typecheck, lint, test, build)
             3. Fix the issue in the code
             4. Run the relevant check locally to verify:
-               - Typecheck: `bun run check`
+               - Typecheck + lint: `bun run verify` (`check` aliases this)
                - Tests: `bun run test`
                - Lint: `bun run lint:fix && bun run format:fix`
                - If the failure involves Electrobun desktop files (apps/app/electrobun/**):

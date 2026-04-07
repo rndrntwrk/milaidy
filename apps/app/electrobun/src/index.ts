@@ -67,6 +67,7 @@ import {
 } from "./runtime-layout";
 import { mergeRuntimePermissionStates } from "./runtime-permissions";
 import { startScreenshotDevServer } from "./screenshot-dev-server";
+import { printElectrobunDevSettingsBanner } from "./print-electrobun-dev-settings-banner";
 import { recordStartupPhase, resolveStartupBundlePath } from "./startup-trace";
 import {
   isDetachedSurface,
@@ -1612,6 +1613,10 @@ async function main(): Promise<void> {
   );
   console.log(
     `[Env] desktopRuntimeMode=${runtimeResolution.mode} externalApi=${runtimeResolution.externalApi.base ?? "none"}`,
+  );
+
+  printElectrobunDevSettingsBanner(
+    process.env as Record<string, string | undefined>,
   );
 
   await maybePromptStartupCrashReport();

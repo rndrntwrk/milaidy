@@ -87,7 +87,7 @@ describe("pre-review-local helpers", () => {
     expect(
       decisionFromFindings({
         classification: "feature",
-        issues: ["bun run lint failed."],
+        issues: ["bun run verify:lint failed."],
       }),
     ).toBe("REQUEST CHANGES");
 

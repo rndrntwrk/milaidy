@@ -87,6 +87,70 @@ function firstNonEmpty(
   return null;
 }
 
+/** First key in `keys` with a non-empty trimmed string value. */
+export function firstWinningEnvString(
+  env: RuntimeEnvRecord,
+  keys: readonly string[],
+): { key: string; value: string } | null {
+  for (const key of keys) {
+    const value = env[key]?.trim();
+    if (value) return { key, value };
+  }
+  return null;
+}
+
+export interface PortPreferenceResolution {
+  port: number;
+  sourceLabel: string;
+  changeLabel: string;
+  winningKey: string | null;
+}
+
+/** Preferred desktop API port from env precedence (before loopback reallocation). */
+export function resolveDesktopApiPortPreference(
+  env: RuntimeEnvRecord = process.env,
+): PortPreferenceResolution {
+  for (const key of DESKTOP_API_PORT_KEYS) {
+    const p = parsePositivePort(env[key]);
+    if (p !== null) {
+      return {
+        port: p,
+        sourceLabel: `env set — ${key}=${p}`,
+        changeLabel: `unset ${key} or set MILADY_API_PORT / ELIZA_API_PORT / ELIZA_PORT (first wins); built-in ${DEFAULT_DESKTOP_API_PORT}`,
+        winningKey: key,
+      };
+    }
+  }
+  return {
+    port: DEFAULT_DESKTOP_API_PORT,
+    sourceLabel: `default (unset — built-in ${DEFAULT_DESKTOP_API_PORT})`,
+    changeLabel:
+      "export MILADY_API_PORT=<port> (or ELIZA_API_PORT, ELIZA_PORT; first non-empty wins)",
+    winningKey: null,
+  };
+}
+
+/** Preferred dashboard UI port from MILADY_PORT (Vite dev), before reallocation. */
+export function resolveDesktopUiPortPreference(
+  env: RuntimeEnvRecord = process.env,
+): PortPreferenceResolution {
+  const p = parsePositivePort(env.MILADY_PORT);
+  if (p !== null) {
+    return {
+      port: p,
+      sourceLabel: `env set — MILADY_PORT=${p}`,
+      changeLabel: `unset MILADY_PORT for built-in ${DEFAULT_DESKTOP_UI_PORT}`,
+      winningKey: "MILADY_PORT",
+    };
+  }
+  return {
+    port: DEFAULT_DESKTOP_UI_PORT,
+    sourceLabel: `default (unset — built-in ${DEFAULT_DESKTOP_UI_PORT})`,
+    changeLabel: "export MILADY_PORT=<port>",
+    winningKey: null,
+  };
+}
+
 function parsePositivePort(raw: string | undefined): number | null {
   if (!raw) return null;
   const parsed = Number(raw);

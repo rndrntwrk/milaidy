@@ -4,24 +4,30 @@ sidebarTitle: Local development
 description: Why and how the Milady desktop dev orchestrator (scripts/dev-platform.mjs) runs Vite, the API, and Electrobun together — environment variables, signals, and shutdown behavior.
 ---
 
-The **desktop dev stack** is not a single binary. `bun run dev:desktop` and `bun run dev:desktop:watch` run `scripts/dev-platform.mjs`, which **orchestrates** separate processes: optional one-off `vite build`, optional repo-root `tsdown`, then long-lived **Vite** (watch mode only), **`bun --watch` API**, and **Electrobun**.
+The **desktop dev stack** is not a single binary. `bun run dev:desktop` and `bun run dev` run `scripts/dev-platform.mjs`, which **orchestrates** separate processes: optional one-off `vite build`, optional repo-root `tsdown`, then long-lived **Vite** (when `MILADY_DESKTOP_VITE_WATCH=1`), **`bun --watch` API**, and **Electrobun**.
 
 **Why orchestrate?** Electrobun needs (a) a renderer URL, (b) often a running dashboard API, and (c) in dev, a root `dist/` bundle for the embedded Milady runtime. Doing that manually is error-prone; one script keeps ports, env vars, and shutdown consistent.
 
 ## Commands
 
+**CLI flags** (preferred for ad-hoc use; `bun run dev:desktop -- --help` lists them): `--no-api`, `--force-renderer`, `--rollup-watch`, `--vite-force`.
+
 | Command | What starts | Typical use |
 |---------|-------------|-------------|
 | `bun run dev:desktop` | API (unless `--no-api`) + Electrobun; **skips** `vite build` when `apps/app/dist` is fresher than sources | Fast iteration against **built** renderer assets |
-| `bun run dev:desktop:watch` | Same, but **Vite dev server** + `MILADY_RENDERER_URL` for **HMR** | UI work; avoids `vite build --watch` (slow on large graphs) |
+| `bun run dev` | Same orchestrator with **`MILADY_DESKTOP_VITE_WATCH=1`** (root `package.json`) — **Vite dev server** + HMR | Default UI workflow |
 
-**Why two commands?** A full **production** Vite build is still useful when you want parity with shipped assets or when you are not touching the UI. **Watch** mode trades that for instant HMR by pointing Electrobun at the Vite dev server.
+**Startup tables:** the orchestrator, Vite, API, and Electrobun each print a **plain-text settings table** (columns *Setting / Effective / Source / Change*) so you can see defaults vs env and how to change a knob. Run without `--help` to see them in the terminal.
+
+**Why two commands?** A full **production** Vite build is still useful when you want parity with shipped assets or when you are not touching the UI. **`bun run dev`** points Electrobun at the Vite dev server for HMR.
 
 ### Legacy: Rollup `vite build --watch`
 
 If you explicitly need file output on every save (e.g. debugging Rollup behavior):
 
 ```bash
+MILADY_DESKTOP_VITE_WATCH=1 bun scripts/dev-platform.mjs -- --rollup-watch
+# or env-only:
 MILADY_DESKTOP_VITE_WATCH=1 MILADY_DESKTOP_VITE_BUILD_WATCH=1 bun scripts/dev-platform.mjs
 ```
 
@@ -38,13 +44,15 @@ MILADY_DESKTOP_VITE_WATCH=1 MILADY_DESKTOP_VITE_BUILD_WATCH=1 bun scripts/dev-pl
 | `MILADY_RENDERER_URL` | Set **by the orchestrator** when using Vite dev — Electrobun’s `resolveRendererUrl()` prefers this over the built-in static server (**why:** HMR only works against the dev server) |
 | `MILADY_DESKTOP_RENDERER_BUILD=always` | Force `vite build` even when `dist/` looks fresh |
 | `--force-renderer` | Same as always rebuilding the renderer |
+| `--vite-force` | Pass `vite --force` when the Vite dev server starts (clear dep optimization cache) |
+| `--rollup-watch` | With `MILADY_DESKTOP_VITE_WATCH=1`, use `vite build --watch` instead of `vite dev` |
 | `--no-api` | Electrobun only; no `dev-server.ts` child |
-| `MILADY_DESKTOP_SCREENSHOT_SERVER` | **Default on** for `dev:desktop` / `dev:desktop:watch`: Electrobun listens on `127.0.0.1:MILADY_SCREENSHOT_SERVER_PORT` (default **31339**); the Milady API proxies **`GET /api/dev/cursor-screenshot`** (loopback) as a **full-screen PNG** for agents/tools (macOS needs Screen Recording permission). Set to **`0`**, **`false`**, **`no`**, or **`off`** to disable. |
+| `MILADY_DESKTOP_SCREENSHOT_SERVER` | **Default on** for `dev:desktop` / `bun run dev`: Electrobun listens on `127.0.0.1:MILADY_SCREENSHOT_SERVER_PORT` (default **31339**); the Milady API proxies **`GET /api/dev/cursor-screenshot`** (loopback) as a **full-screen PNG** for agents/tools (macOS needs Screen Recording permission). Set to **`0`**, **`false`**, **`no`**, or **`off`** to disable. |
 | `MILADY_DESKTOP_DEV_LOG` | **Default on:** child logs (vite / api / electrobun) are mirrored to **`.milady/desktop-dev-console.log`** at the repo root. **`GET /api/dev/console-log`** on the API (loopback) returns a tail (`?maxLines=`, `?maxBytes=`). Set to **`0`** / **`false`** / **`no`** / **`off`** to disable. |
 
 ### When default ports are busy
 
-`scripts/dev-platform.mjs` runs **`dev:desktop`** and **`dev:desktop:watch`**. Before starting long-lived children it **probes loopback TCP** starting at:
+`scripts/dev-platform.mjs` runs **`dev:desktop`** and **`bun run dev`**. Before starting long-lived children it **probes loopback TCP** starting at:
 
 | Env | Role | Default |
 |-----|------|--------|
@@ -123,7 +131,7 @@ Editors and coding agents **do not** see the native Electrobun window, hear audi
 
 1. **Multi-process truth** — Health is not one PID. Vite, the API, and Electrobun can disagree on ports; logs are interleaved. A single JSON endpoint and one log file avoid “grep five terminals.”
 2. **Security vs convenience** — Screenshot and log tail endpoints are **loopback-only**; the screenshot path uses a **session token** between Electrobun and the API proxy; the log API only tails a file named **`desktop-dev-console.log`**. **Why:** local-first does not mean “any process on the LAN may pull your screen.”
-3. **Opt-out defaults** — Screenshot and aggregated logging are **on** for `dev:desktop` / `dev:desktop:watch` because agents and humans debugging together benefit; both disable with **`MILADY_DESKTOP_SCREENSHOT_SERVER=0`** and **`MILADY_DESKTOP_DEV_LOG=0`** so you can shrink attack surface or disk I/O.
+3. **Opt-out defaults** — Screenshot and aggregated logging are **on** for `dev:desktop` / `bun run dev` because agents and humans debugging together benefit; both disable with **`MILADY_DESKTOP_SCREENSHOT_SERVER=0`** and **`MILADY_DESKTOP_DEV_LOG=0`** so you can shrink attack surface or disk I/O.
 4. **Cursor does not auto-poll** — Discovery is **documentation + `.cursor/rules`** (see repo) plus you asking the agent to run `curl` or read a file. **Why:** the product does not silently scan your machine; hooks are there when instructed.
 
 ### `GET /api/dev/stack` (Milady API)
@@ -165,7 +173,6 @@ Browser smoke tests target the **same renderer URL** Electrobun loads in watch m
 | `bun run test:ui:playwright` | Run [`apps/app/test/ui-smoke/ui-smoke.spec.ts`](../../apps/app/test/ui-smoke/ui-smoke.spec.ts); auto-starts the Vite renderer on **:2138** when needed. |
 | `bun run test:ui:playwright:settings-chat` | Run [`apps/app/test/ui-smoke/settings-chat-companion.spec.ts`](../../apps/app/test/ui-smoke/settings-chat-companion.spec.ts) for companion media settings persistence. |
 | `bun run test:ui:playwright:packaged` | Run [`apps/app/test/ui-smoke/packaged-hash.spec.ts`](../../apps/app/test/ui-smoke/packaged-hash.spec.ts) against `apps/app/dist/index.html`; skips if `dist` is missing. |
-| `bun run test:ui:testcafe*` | Legacy aliases preserved for older local workflows; these now delegate to the Playwright commands above. |
 
 **Full test matrix:** `bun run test` does **not** run Playwright UI smoke by default. Set **`MILADY_TEST_UI_PLAYWRIGHT=1`** to append the UI suite to `test/scripts/test-parallel.mjs` (serial, after Vitest e2e). `MILADY_TEST_UI_TESTCAFE=1` is still accepted as a legacy alias.
 

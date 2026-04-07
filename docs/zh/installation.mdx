@@ -178,7 +178,7 @@ shasum -a 256 --check --ignore-missing SHA256SUMS.txt
     这会使用 `tsdown` 编译 TypeScript 源码、写入构建信息，并在 `apps/app` 中构建 Web 应用。
 
     <Info>
-    `bun run build:node` 是 `bun run build` 的别名——两者都通过 Node 运行相同的生产构建脚本。
+    `bun run build` 通过 Node 运行生产构建（`scripts/run-production-build.mjs`）。
     </Info>
   </Step>
   <Step title="启动 Milady">

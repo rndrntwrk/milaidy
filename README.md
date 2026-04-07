@@ -550,7 +550,7 @@ bun run build
 bun run milady start
 ```
 
-> `scripts/rt.sh` prefers bun but falls back to npm automatically. If you want to be explicit: `bun run build:node` uses only Node.
+> `scripts/rt.sh` prefers bun but falls back to npm automatically. `bun run build` runs the production build via Node (`scripts/run-production-build.mjs`).
 
 ### Dev mode (recommended for development)
 
@@ -572,10 +572,10 @@ bun run dev:desktop:watch  # + Vite dev server and MILADY_RENDERER_URL (HMR for 
 **IDE / agent hooks** — Editors and agents do not see the native window or auto-discover localhost. **Why we added hooks:** with desktop dev running, the API exposes **`GET /api/dev/stack`** (JSON: ports, renderer URL, which features are on). **`bun run desktop:stack-status -- --json`** probes ports and merges stack + health + status. By default, **`.milady/desktop-dev-console.log`** mirrors prefixed child logs and **`GET /api/dev/cursor-screenshot`** (loopback) returns a full-screen PNG via OS capture — both are opt-out via env (see doc). Cursor uses **`.cursor/rules/milady-desktop-dev-observability.mdc`** plus that guide.
 
 ```bash
-bun run check        # typecheck + lint (run before committing)
+bun run verify       # typecheck + lint (run before committing; `check` aliases this)
 bun run test         # parallel test suite
-bun run doctor       # diagnose environment issues
-bun run repair       # re-run postinstall hooks
+bun run milady:doctor # diagnose environment issues (`doctor` aliases this)
+bun run setup:sync   # re-run postinstall hooks (`repair` aliases this)
 ```
 
 See **[Architecture](docs/architecture.mdx)** for the full development guide including architecture overview and config reference. See **[CONTRIBUTING.md](./CONTRIBUTING.md)** for contribution guidelines.

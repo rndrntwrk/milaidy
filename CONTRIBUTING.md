@@ -72,7 +72,7 @@ There is no human escalation path. The agent's decision is final. If you disagre
 If you are a coding agent submitting work:
 
 - **TypeScript strict mode.** No `any` unless you explain why.
-- **Biome lint/format.** Run `bun run check` before submitting.
+- **Biome lint/format.** Run `bun run verify` before submitting (`bun run check` is an alias).
 - **Tests required.** Bug fixes need regression tests. Features need unit tests.
 - **Onboarding UX stability checks.** Any onboarding-affecting PR must verify viewport lock/no scroll drift in both `bun run dev` and desktop (`bun run start:desktop`) before merge.
 - **Database changes:** Run `bun run db:check` after any database-related work. Migrations are auto-applied by `@elizaos/plugin-sql` — there are no manual migration files.
