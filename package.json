@@ -294,7 +294,7 @@
     "@ai-sdk/groq": "3.0.31",
     "libsignal": "git+https://github.com/whiskeysockets/libsignal-node.git#1c30d7d7e76a3b0aa120b04dc6a26f5a12dccf67",
     "crypto-browserify": "3.12.1",
-    "tar": "7.5.13",
+    "tar": ">=7.5.13",
     "lodash": "4.18.1",
     "lodash-es": "4.18.1",
     "underscore": "1.13.8",
