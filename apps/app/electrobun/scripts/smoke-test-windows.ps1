@@ -466,7 +466,7 @@ if (-not $launcher) {
     "/LOG=$installerLogPath"
   )
 
-  $installerProcess = Start-Process -FilePath $installer.FullName -ArgumentList $installerArgs -WorkingDirectory (Split-Path -Parent $installer.FullName) -PassThru -Wait -NoNewWindow
+  $installerProcess = Start-Process -FilePath $installer.FullName -ArgumentList $installerArgs -WorkingDirectory (Split-Path -Parent $installer.FullName) -PassThru -Wait
   if ($installerProcess.ExitCode -ne 0) {
     Write-Host "Inno Setup installer failed with exit code $($installerProcess.ExitCode)."
     if (Test-Path $installerLogPath) {
