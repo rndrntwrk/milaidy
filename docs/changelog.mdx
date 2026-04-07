@@ -3,6 +3,38 @@ title: Changelog
 description: What's new in Milady — features, improvements, and fixes.
 ---
 
+<Update label="2026-04-07" description="Developer diagnostics, life-ops PGlite migrations, workspace scripts, terminal dev banners" tags={["Fix", "Update"]}>
+
+## Life-ops: safer migrations on PGlite
+
+Schema upgrades for the life-ops subsystem now run **core indexes after** ownership `ALTER TABLE` steps so legacy databases that predate `domain` / `subject_*` columns no longer fail during `CREATE INDEX`. Per-migration **savepoints** are wrapped in an explicit **`BEGIN` / `COMMIT`** transaction so **PGlite** and Postgres honor `SAVEPOINT` semantics (autocommit previously broke nested migration paths).
+
+**Why:** Real user databases hit “column does not exist” or savepoint errors during upgrade; the agent surface depends on life-ops storage staying migratable without manual DB surgery.
+
+## Plugin resolution: why optional plugins were requested
+
+When an **optional** plugin cannot be loaded (missing npm package, missing browser stagehand checkout), startup logs now include **`(added by: …)`** pointing at the **first** config or env source that put that package in the load set — for example `plugins.allow[...]`, `env: SOLANA_PRIVATE_KEY`, or `features.browser`.
+
+**Why:** “Cannot find module” looked like a framework bug; the actual fix is often to remove the plugin from allow-list, unset an env var, or install the package. Provenance tracing turns noise into an actionable checklist.
+
+Browser stagehand discovery now **walks parent directories** from the runtime file to find `plugins/plugin-browser/stagehand-server`, covering both Milady and **`eliza/` submodule** layouts (fixed `../` depth used to miss the workspace root).
+
+## Workspace tooling and repo hygiene
+
+New **workspace dependency** scripts (`workspace:deps:sync|check|restore`, `workspace:replace-versions`, `workspace:restore-refs`, `workspace:prepare`) and **`workspace-discovery`** helpers reduce manual `package.json` surgery when linking local elizaOS or plugin checkouts. **`plugins/plugin-discord`** is registered as a submodule; **`eliza`** submodule pin carries a **`bun.lock`** sync for `@elizaos/core`.
+
+**`.gitignore`:** `cache/audio/` and **`scripts/bin/*`** (with **`.gitkeep`**) keep large local caches and downloaded CLI binaries out of git while preserving a stable `PATH` hook for Electrobun dev.
+
+## Terminal dev banners (local development only)
+
+The orchestrator, Vite, API, and Electrobun can print **framed** settings tables with optional **figlet-style** subsystem titles and **TTY-aware ANSI** coloring when stdout is a terminal.
+
+**Why:** Four processes mean four env snapshots; the goal is **faster scanning** of effective ports and flags for humans and IDE agents — **not** a dashboard or companion UI change. **`NO_COLOR`** / **`FORCE_COLOR`** are respected.
+
+**Docs:** [Developer diagnostics and workspace](/guides/developer-diagnostics-and-workspace), [Plugin resolution — optional provenance](/plugin-resolution-and-node-path#optional-plugins-why-was-this-package-in-the-load-set).
+
+</Update>
+
 <Update label="2026-04-06" description="Week of March 31 – April 6; managed Discord bots, download channels, Vincent OAuth fix" tags={["Feature", "Update", "Fix"]}>
 
 ## Managed Discord for cloud agents

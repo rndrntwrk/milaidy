@@ -19,6 +19,14 @@ The **desktop dev stack** is not a single binary. `bun run dev:desktop` and `bun
 
 **Startup tables:** the orchestrator, Vite, API, and Electrobun each print a **plain-text settings table** (columns *Setting / Effective / Source / Change*) so you can see defaults vs env and how to change a knob. Run without `--help` to see them in the terminal.
 
+### Startup tables and terminal banners
+
+On a **TTY**, tables may use a **Unicode box frame** and a large **figlet-style** title for the subsystem name (orchestrator, Vite, API, Electrobun), with **ANSI color** (magenta title, cyan frame) unless **`NO_COLOR`** is set (**`FORCE_COLOR`** can opt in for piped output).
+
+**Why:** Desktop dev runs **four processes** with overlapping env (ports, URLs, feature flags). The goal is **fast visual scanning** of *effective* values for humans and IDE agents — the same rationale as port pre-allocation and prefixed logs. This is **not** companion or dashboard UI; it does not ship to end users as product chrome.
+
+**Docs:** [Developer diagnostics and workspace](../guides/developer-diagnostics-and-workspace.md).
+
 **Why two commands?** A full **production** Vite build is still useful when you want parity with shipped assets or when you are not touching the UI. **`bun run dev`** points Electrobun at the Vite dev server for HMR.
 
 ### Legacy: Rollup `vite build --watch`

@@ -1,3 +1,10 @@
+/**
+ * Large ASCII headings for dev startup banners.
+ *
+ * Why figlet: quick visual separation when four processes print similar tables
+ * in sequence — humans/agents spot which child is speaking without reading prefixes.
+ */
+
 import figlet from "figlet";
 
 /** Subsystem printed as giant ASCII above each dev settings table. */

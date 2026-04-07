@@ -2,6 +2,10 @@
  * Plain-text tables for dev startup banners (orchestrator, Vite, API, Electrobun).
  * Narrow layout uses Unicode box drawing (no ANSI here). Use `dev-settings-banner-style`
  * when printing to a TTY for cyan emphasis.
+ *
+ * Why: Multi-process desktop dev prints four overlapping env snapshots; a framed
+ * table makes effective ports and sources scannable in the terminal (developer
+ * observability, not end-user product UI).
  */
 
 export type DevSettingsRow = {

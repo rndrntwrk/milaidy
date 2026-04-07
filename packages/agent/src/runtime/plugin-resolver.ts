@@ -534,6 +534,8 @@ export async function resolvePlugins(
   // this function and subsequent consumers see the updated allow list.
   config.plugins = autoEnableResult.config.plugins;
 
+  // Provenance for "why is this package in the load set?" — surfaced when an
+  // optional plugin fails to resolve so logs point at config/env, not "eliza broke".
   const loadReasons: PluginLoadReasons = new Map();
   const pluginsToLoad = collectPluginNames(config, loadReasons);
   const corePluginSet = new Set<string>(CORE_PLUGINS);

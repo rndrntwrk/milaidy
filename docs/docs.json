@@ -48,6 +48,7 @@
             "pages": [
               "guides/beginners-development-guide",
               "guides/developer-playbook",
+              "guides/developer-diagnostics-and-workspace",
               "guides/onboarding-ui-flow",
               "guides/electrobun-mac-window-chrome",
               "guides/first-extension-walkthrough",

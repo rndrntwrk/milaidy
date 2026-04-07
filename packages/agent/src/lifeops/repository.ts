@@ -961,6 +961,9 @@ export async function ensureLifeOpsTables(
     );
   }
 
+  // Indexes reference ownership columns (see coreIndexStatements doc). Running
+  // this loop before the ALTERs above used to break legacy DBs that lacked
+  // domain / subject_* until migration — PGlite would fail CREATE INDEX.
   for (const statement of coreIndexStatements) {
     await executeRawSql(runtime, statement);
   }

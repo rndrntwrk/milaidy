@@ -4,6 +4,10 @@
  * Determines which plugin packages should be loaded based on config,
  * environment variables, feature flags, and provider precedence rules.
  *
+ * When callers pass a {@link PluginLoadReasons} map, the first source that
+ * added each package is recorded so `resolvePlugins` (`plugin-resolver.ts`)
+ * can explain optional load failures (config vs env vs feature flag).
+ *
  * Extracted from eliza.ts to reduce file size.
  *
  * @module plugin-collector
@@ -132,13 +136,25 @@ export const OPTIONAL_PLUGIN_MAP: Readonly<Record<string, string>> = {
 // ---------------------------------------------------------------------------
 
 /**
- * Collect the set of plugin package names that should be loaded
- * based on config, environment variables, and feature flags.
+ * First-winning provenance for each package name in the load set — e.g.
+ * `plugins.allow[...]`, `env: SOLANA_PRIVATE_KEY`, `CORE_PLUGINS`.
+ * {@link collectPluginNames} fills this when the optional `reasons` map is passed.
+ *
+ * **Why:** Optional plugins often fail with "Cannot find module"; without the
+ * source, operators assume the framework is broken instead of fixing config/env.
  */
-/** Maps each plugin in the load set to the reason it was added. Populated by collectPluginNames. */
 export type PluginLoadReasons = Map<string, string>;
 
-/** @internal Exported for testing. */
+/**
+ * Collect plugin package names to load from config, env, feature flags, and
+ * connector-derived allow-list mutations.
+ *
+ * @param reasons - When set, records the **first** reason each name was added
+ *   (subsequent adds for the same name are ignored). Used by `resolvePlugins`
+ *   to annotate benign optional load failures.
+ *
+ * @internal Exported for testing.
+ */
 export function collectPluginNames(
   config: ElizaConfig,
   reasons?: PluginLoadReasons,

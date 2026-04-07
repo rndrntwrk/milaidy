@@ -92,3 +92,11 @@ The published npm tarball for **`2.0.0-alpha.12`** contains **truncated** JavaSc
 - **Remove the pin** (restore a semver range) only after upstream publishes a fixed version and you have confirmed the artifact. **Why:** `^2.0.0-alpha.10` allowed Bun to resolve **`alpha.12`**, which broke installs that upgraded the lockfile.
 
 User-facing context and configuration for OpenRouter itself live in **[OpenRouter plugin](plugin-registry/llm/openrouter.md)** (Mintlify: `/plugin-registry/llm/openrouter`).
+
+## Optional plugins: why was this package in the load set?
+
+Optional plugins (and some core-adjacent packages) can end up in the load set because of **`plugins.allow`**, **`plugins.entries`**, **connector** configuration, **`features.*`**, **environment variables** (e.g. provider API keys or wallet keys that trigger auto-enable), or **`plugins.installs`**. When resolution fails with **missing npm module** or **missing browser stagehand**, the log used to look like a generic runtime error.
+
+**Why we record provenance:** `collectPluginNames()` optionally fills a **`PluginLoadReasons`** map (first source wins per package). `resolvePlugins()` passes it through; benign optional failures are summarized as **`Optional plugins not installed: … (added by: …)`**. That answers “what should I change?” — edit config, unset env, install the package, or add a plugin checkout — instead of chasing a false “eliza is broken” hypothesis.
+
+**Browser / stagehand:** `@elizaos/plugin-browser` expects a **stagehand-server** tree that is **not** in the npm tarball. Milady discovers `plugins/plugin-browser/stagehand-server` by **walking parents** from the runtime so both flat Milady checkouts and **`eliza/` submodule** layouts resolve. See **[Developer diagnostics and workspace](guides/developer-diagnostics-and-workspace.md)**.
