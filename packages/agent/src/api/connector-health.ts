@@ -19,12 +19,33 @@ export interface ConnectorHealthMonitorOptions {
 
 const DEFAULT_INTERVAL_MS = 60_000;
 
-const CONNECTOR_PLUGIN_MAP: Record<string, string> = {
+/**
+ * Maps connector config keys to the service/client name the plugin registers.
+ *
+ * Kept aligned with CONNECTOR_PLUGINS in plugin-auto-enable.ts — every
+ * connector that can be configured should be probeable here so that cloud
+ * and local agents get the same health monitoring coverage.
+ */
+export const CONNECTOR_PLUGIN_MAP: Record<string, string> = {
   discord: "discord",
   telegram: "telegram",
+  telegramAccount: "telegram-account",
   twitter: "twitter",
   slack: "slack",
   farcaster: "farcaster",
+  lens: "lens",
+  whatsapp: "whatsapp",
+  signal: "signal",
+  imessage: "imessage",
+  msteams: "msteams",
+  feishu: "feishu",
+  matrix: "matrix",
+  nostr: "nostr",
+  blooio: "blooio",
+  twitch: "twitch",
+  mattermost: "mattermost",
+  googlechat: "google-chat",
+  wechat: "wechat",
 };
 
 export class ConnectorHealthMonitor {
@@ -89,7 +110,7 @@ export class ConnectorHealthMonitor {
   }
 
   private async probeConnector(name: string): Promise<ConnectorStatus> {
-    const pluginName = CONNECTOR_PLUGIN_MAP[name.toLowerCase()];
+    const pluginName = CONNECTOR_PLUGIN_MAP[name];
     if (!pluginName) return "unknown";
 
     const service = this.runtime.getService(pluginName);
