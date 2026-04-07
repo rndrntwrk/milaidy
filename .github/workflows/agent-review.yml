@@ -558,8 +558,8 @@ jobs:
             const multilineDecisionPattern = /(?:^|\n)\s*(?:#{1,4}\s+)?(?:\d+\.\s*)?(?:\*{0,2})Decision(?:\*{0,2})?\s*:?\s*\n+\s*(?:\*{0,2})(APPROVE|REQUEST CHANGES|CLOSE)\b/i;
             const boldVerdictPattern = /\*{1,3}(APPROVE|REQUEST CHANGES|CLOSE)\b\*{1,3}/i;
             const bareLineVerdictPattern = /(?:^|\n)\s*(APPROVE|REQUEST CHANGES|CLOSE)\b/i;
-            const maxAttempts = 5; // Increased for fallback comment posting
-            const pollIntervalMs = 3_000;
+            const maxAttempts = 12;
+            const pollIntervalMs = 5_000;
 
             const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -577,10 +577,10 @@ jobs:
               return '';
             };
 
-            const findLatest = (items) => {
+            const findLatest = (items, { requireRunMarker = true } = {}) => {
               const filtered = items.filter((c) => {
                 if (!c?.body) return false;
-                if (!runMarker || !c.body.includes(runMarker)) return false;
+                if (requireRunMarker && runMarker && !c.body.includes(runMarker)) return false;
                 return Boolean(extractDecision(c.body));
               });
               return filtered.sort((a, b) =>
@@ -589,6 +589,7 @@ jobs:
             };
 
             let latest = null;
+            let usedFallbackReview = false;
             let attemptUsed = 1;
 
             for (let attempt = 1; attempt <= maxAttempts; attempt++) {
@@ -614,7 +615,7 @@ jobs:
                 ...comments.filter((c) => c.user?.type === 'Bot'),
                 ...normalizedReviews.filter((r) => r.user?.type === 'Bot'),
               ];
-              latest = findLatest(allBotEntries);
+              latest = findLatest(allBotEntries, { requireRunMarker: true });
 
               if (latest) {
                 break;
@@ -630,6 +631,37 @@ jobs:
             let decision = 'REQUEST CHANGES';
             let decisionCommentUrl = '';
 
+            if (!latest) {
+              const [comments, reviews] = await Promise.all([
+                github.paginate(github.rest.issues.listComments, {
+                  owner, repo, issue_number, per_page: 100,
+                }),
+                github.paginate(github.rest.pulls.listReviews, {
+                  owner, repo, pull_number: issue_number, per_page: 100,
+                }),
+              ]);
+
+              const normalizedReviews = reviews.map(r => ({
+                ...r,
+                created_at: r.submitted_at || r.created_at,
+              }));
+
+              const allBotEntries = [
+                ...comments.filter((c) => c.user?.type === 'Bot'),
+                ...normalizedReviews.filter((r) => r.user?.type === 'Bot'),
+              ];
+
+              const fallbackLatest = findLatest(allBotEntries, { requireRunMarker: false });
+              const fallbackDecision = extractDecision(fallbackLatest?.body || '');
+              if (fallbackLatest && fallbackDecision && fallbackDecision !== 'APPROVE') {
+                latest = fallbackLatest;
+                usedFallbackReview = true;
+                core.warning(`Falling back to latest parseable bot review with non-approve decision (${fallbackDecision}) because the exact run-marker comment was not visible before timeout.`);
+              } else if (fallbackLatest && fallbackDecision === 'APPROVE') {
+                core.warning('Ignoring stale fallback APPROVE review because it does not carry the current run marker.');
+              }
+            }
+
             if (latest) {
               const normalized = extractDecision(latest.body);
               decision = normalized || decision;
@@ -644,6 +676,10 @@ jobs:
               }
             } else {
               core.warning(`No structured review decision comment found for current run marker after ${attemptUsed} attempts. Treating as reject.`);
+            }
+
+            if (usedFallbackReview) {
+              core.notice(`Using fallback non-approve decision from ${decisionCommentUrl || 'a bot review comment'} after run-marker timeout.`);
             }
 
             core.setOutput('verdict', verdict);

@@ -36,6 +36,7 @@ import {
 } from "./sql.js";
 
 const schemaReady = new WeakSet<object>();
+const schemaInitializing = new WeakMap<object, Promise<void>>();
 
 export interface LifeOpsWebsiteAccessGrant {
   id: string;
@@ -657,6 +658,24 @@ export async function ensureLifeOpsTables(
   const key = runtime as unknown as object;
   if (schemaReady.has(key)) return;
 
+  // Prevent concurrent migration runs — PGlite cannot handle concurrent DDL.
+  // The first caller creates the migration promise; concurrent callers await it.
+  const pending = schemaInitializing.get(key);
+  if (pending) return pending;
+
+  const migrationPromise = runLifeOpsSchemaSetup(runtime, key);
+  schemaInitializing.set(key, migrationPromise);
+  try {
+    await migrationPromise;
+  } finally {
+    schemaInitializing.delete(key);
+  }
+}
+
+async function runLifeOpsSchemaSetup(
+  runtime: IAgentRuntime,
+  key: object,
+): Promise<void> {
   const statements = [
     `CREATE TABLE IF NOT EXISTS life_task_definitions (
       id TEXT PRIMARY KEY,
