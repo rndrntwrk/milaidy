@@ -31,7 +31,6 @@ import path from "node:path";
 import {
   resolveApiToken,
   resolveDesktopApiPort,
-  setApiToken,
 } from "@miladyai/shared/runtime-env";
 
 import { resolveDesktopRuntimeMode } from "../api-base";
@@ -297,29 +296,17 @@ export function resolveConfigDir(opts?: {
 }
 
 export function ensureDesktopApiToken(
-  env: NodeJS.ProcessEnv = process.env,
+  _env: NodeJS.ProcessEnv = process.env,
 ): string {
-  const existing = getDesktopApiToken(env);
-  if (existing) {
-    setApiToken(env, existing);
-    return existing;
-  }
-
-  const generated = crypto.randomBytes(16).toString("hex");
-  setApiToken(env, generated);
-  diagnosticLog(
-    "[Agent] Generated local API token for embedded desktop runtime",
-  );
-  return generated;
+  return "";
 }
 
 export function configureDesktopLocalApiAuth(
   env: NodeJS.ProcessEnv = process.env,
 ): string {
-  const token = ensureDesktopApiToken(env);
   env.MILADY_PAIRING_DISABLED = "1";
   env.ELIZA_PAIRING_DISABLED = "1";
-  return token;
+  return "";
 }
 
 function getDesktopApiToken(
