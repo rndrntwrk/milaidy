@@ -34,9 +34,16 @@ $env:LOCALAPPDATA = $testLocalAppDataRoot
 $env:MILADY_DESKTOP_TEST_PARTITION = "persist:bootstrap-isolated"
 New-Item -ItemType Directory -Force -Path $env:APPDATA | Out-Null
 New-Item -ItemType Directory -Force -Path $env:LOCALAPPDATA | Out-Null
+# Pre-create PGlite data directory with a short path to avoid MAX_PATH issues
+# during WASM init. PGlite creates deeply nested WAL files; a short root path
+# keeps the full path under the 260-char limit on Windows runners.
+$pgliteDataDir = Join-Path $tempRoot "pglite"
+New-Item -ItemType Directory -Force -Path $pgliteDataDir | Out-Null
+$env:PGLITE_DATA_DIR = $pgliteDataDir
 if ($env:GITHUB_ENV) {
   Add-Content -Path $env:GITHUB_ENV -Value "MILADY_TEST_WINDOWS_APPDATA_PATH=$($env:APPDATA)"
   Add-Content -Path $env:GITHUB_ENV -Value "MILADY_TEST_WINDOWS_LOCALAPPDATA_PATH=$($env:LOCALAPPDATA)"
+  Add-Content -Path $env:GITHUB_ENV -Value "PGLITE_DATA_DIR=$pgliteDataDir"
 }
 # Milady writes its startup log to AppData\Roaming\Milady on Windows, not the
 # Unix-style ~/.config/Milady path used on macOS/Linux.
@@ -464,21 +471,43 @@ if (-not $launcher) {
     "/SUPPRESSMSGBOXES",
     "/NORESTART",
     "/SP-",
+    "/CLOSEAPPLICATIONS",
     "/DIR=$installerRoot",
     "/LOG=$installerLogPath"
   )
 
+  # Attempt 1: direct Start-Process invocation
   $installerProcess = Start-Process -FilePath $installer.FullName -ArgumentList $installerArgs -WorkingDirectory (Split-Path -Parent $installer.FullName) -PassThru -Wait
   if ($installerProcess.ExitCode -ne 0) {
-    Write-Host "Inno Setup installer failed with exit code $($installerProcess.ExitCode)."
+    Write-Host "Inno Setup installer attempt 1 failed with exit code $($installerProcess.ExitCode)."
     if (Test-Path $installerLogPath) {
-      Write-Host "--- Inno Setup log ---"
+      Write-Host "--- Inno Setup log (attempt 1) ---"
       Get-Content $installerLogPath -Tail 100 | ForEach-Object { Write-Host $_ }
       Write-Host "--- end Inno Setup log ---"
-    } else {
-      Write-Host "Inno Setup log not found at $installerLogPath"
     }
-    throw "Windows installer exited with code $($installerProcess.ExitCode)"
+
+    # Attempt 2: retry via cmd /c — workaround for Windows Server 2025 headless
+    # runners where Start-Process cannot allocate a console subsystem for the
+    # Inno Setup decompressor, causing exit code -1.
+    Write-Host "Retrying installer via cmd /c (headless fallback)..."
+    Remove-Item $installerRoot -Recurse -Force -ErrorAction SilentlyContinue
+    New-Item -ItemType Directory -Force -Path $installerRoot | Out-Null
+    Remove-Item $installerLogPath -Force -ErrorAction SilentlyContinue
+
+    $cmdArgs = @($installerArgs | ForEach-Object { "`"$_`"" }) -join " "
+    $cmdLine = "`"$($installer.FullName)`" $cmdArgs"
+    $cmdProcess = Start-Process -FilePath "cmd.exe" -ArgumentList "/c", $cmdLine -WorkingDirectory (Split-Path -Parent $installer.FullName) -PassThru -Wait
+    if ($cmdProcess.ExitCode -ne 0) {
+      Write-Host "Inno Setup installer attempt 2 (cmd /c) failed with exit code $($cmdProcess.ExitCode)."
+      if (Test-Path $installerLogPath) {
+        Write-Host "--- Inno Setup log (attempt 2) ---"
+        Get-Content $installerLogPath -Tail 100 | ForEach-Object { Write-Host $_ }
+        Write-Host "--- end Inno Setup log ---"
+      } else {
+        Write-Host "Inno Setup log not found at $installerLogPath"
+      }
+      throw "Windows installer exited with code $($cmdProcess.ExitCode) (both direct and cmd /c attempts failed)"
+    }
   }
 
   $launcher = Find-Launcher $installerRoot
@@ -499,6 +528,10 @@ Remove-Item $startupStateFile -Force -ErrorAction SilentlyContinue
 Remove-Item $startupEventsFile -Force -ErrorAction SilentlyContinue
 Remove-Item $startupBootstrapFile -Force -ErrorAction SilentlyContinue
 Write-StartupBootstrap
+# Propagate PGlite data dir and disable local embeddings in the launcher env.
+# The launcher spawns agent.ts which spawns the runtime child process; these
+# env vars must be set in the outermost process for correct propagation.
+$env:MILADY_DISABLE_LOCAL_EMBEDDINGS = "1"
 $launcherProcess = Start-Process -FilePath $launcher.FullName -WorkingDirectory $launcherDir -PassThru
 $launcherStarted = $true
 

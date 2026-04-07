@@ -97,7 +97,7 @@ type BunSubprocess = ReturnType<typeof Bun.spawn>;
 // Constants
 // ---------------------------------------------------------------------------
 
-const HEALTH_POLL_INTERVAL_MS = 500;
+const HEALTH_POLL_INTERVAL_MS = process.platform === "win32" ? 2_000 : 500;
 const SIGTERM_GRACE_MS = 5_000;
 const AGENT_NAME_FETCH_TIMEOUT_MS = 5_000;
 const WINDOWS_ABS_PATH_RE = /^[A-Za-z]:[\\/]/;
@@ -1230,6 +1230,12 @@ export class AgentManager {
       // Disable local embeddings until upstream fix lands.
       if (process.platform === "win32") {
         childEnv.MILADY_DISABLE_LOCAL_EMBEDDINGS = "1";
+      }
+
+      // Propagate PGlite data dir from parent env so CI/smoke test overrides
+      // (e.g. a short Windows path avoiding MAX_PATH issues) reach the runtime.
+      if (process.env.PGLITE_DATA_DIR) {
+        childEnv.PGLITE_DATA_DIR = process.env.PGLITE_DATA_DIR;
       }
 
       if (nodePaths.length > 0) {
