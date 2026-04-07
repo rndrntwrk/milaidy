@@ -661,16 +661,9 @@ Les routes sous `/api/cloud/v1/` sont transmises en tant que `/api/v1/` vers le 
 |---------|--------|-------------|
 | `GET` | `/api/workbench/overview` | Obtenir la vue d'ensemble de l'atelier (tâches, déclencheurs, à faire, état d'autonomie) |
 | `GET` | `/api/workbench/tasks` | Lister les tâches de l'atelier |
-| `POST` | `/api/workbench/tasks` | Créer une tâche de l'atelier |
-| `GET` | `/api/workbench/tasks/:id` | Obtenir une tâche individuelle |
-| `PUT` | `/api/workbench/tasks/:id` | Mettre à jour une tâche |
-| `DELETE` | `/api/workbench/tasks/:id` | Supprimer une tâche |
-| `GET` | `/api/workbench/todos` | Lister les éléments à faire (crée automatiquement un todo de démarrage si vide) |
-| `POST` | `/api/workbench/todos` | Créer un élément à faire |
-| `GET` | `/api/workbench/todos/:id` | Obtenir un élément à faire |
-| `PUT` | `/api/workbench/todos/:id` | Mettre à jour un élément à faire |
-| `DELETE` | `/api/workbench/todos/:id` | Supprimer un élément à faire |
-| `POST` | `/api/workbench/todos/:id/complete` | Basculer l'état de complétion d'un à faire |
+| `POST` | `/api/workbench/tasks` | Créer ou mettre à jour une tâche de l'atelier |
+| `GET` | `/api/workbench/todos` | Lister les éléments à faire |
+| `POST` | `/api/workbench/todos` | Créer ou mettre à jour un élément à faire |
 
 ---
 
