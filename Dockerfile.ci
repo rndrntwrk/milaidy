@@ -32,6 +32,14 @@ RUN if [ -n "${VERSION_CLEAN}" ]; then \
   "; \
   fi
 
+# Remove unbuilt orchestrator (desktop-only, crashes tsx if dist/ missing)
+RUN rm -rf \
+  node_modules/@elizaos/plugin-agent-orchestrator \
+  node_modules/.bun/@elizaos+plugin-agent-orchestrator@* \
+  packages/agent/node_modules/@elizaos/plugin-agent-orchestrator \
+  plugins/plugin-agent-orchestrator \
+  2>/dev/null || true
+
 # Safe pruning only (GPU binaries + obvious dead weight)
 RUN rm -rf \
   node_modules/.bun/@node-llama-cpp+linux-x64-cuda-ext@* \
