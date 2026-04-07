@@ -69,7 +69,7 @@ describe("Electrobun test workflow drift", () => {
     );
     expect(workflow).toContain("name: Release Workflow Contract");
     expect(workflow).toContain(
-      "bun install --frozen-lockfile --ignore-scripts",
+      "bun install --ignore-scripts",
     );
     expect(workflow).toContain("bun run postinstall");
     expect(workflow).toContain(
