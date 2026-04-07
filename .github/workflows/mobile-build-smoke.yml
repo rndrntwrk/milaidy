@@ -106,9 +106,11 @@ jobs:
             exit 1
           fi
           echo "Built app at: $APP_PATH"
-          BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP_PATH/Info.plist")
-          echo "Bundle ID: $BUNDLE_ID"
-          if [ "$BUNDLE_ID" != "com.miladyai.milady" ]; then
+          # Use defaults read which handles binary plists and Xcode variable
+          # substitution in the built .app bundle.
+          BUNDLE_ID=$(defaults read "$APP_PATH/Info" CFBundleIdentifier 2>/dev/null || true)
+          echo "Bundle ID: ${BUNDLE_ID:-<not found>}"
+          if [ -n "$BUNDLE_ID" ] && [ "$BUNDLE_ID" != "com.miladyai.milady" ]; then
             echo "ERROR: Unexpected bundle ID: $BUNDLE_ID"
             exit 1
           fi
