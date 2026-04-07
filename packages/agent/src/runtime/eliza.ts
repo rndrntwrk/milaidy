@@ -134,6 +134,10 @@ import { shouldEnableTrajectoryLoggingByDefault } from "./trajectory-persistence
 import { installMiladyMessageTrajectoryStepBridge } from "./trajectory-step-context";
 
 const require = createRequire(import.meta.url);
+// Keep the orchestrator plugin behind a runtime require of the local compat
+// wrapper. A static ESM import here causes tsdown/rolldown to inline the
+// workspace-linked plugin source and emit a broken synthetic `default2`
+// re-export in cloud bundles.
 let pluginAgentOrchestrator: unknown = null;
 try {
   pluginAgentOrchestrator = require("./agent-orchestrator-compat");
