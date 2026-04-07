@@ -8,9 +8,16 @@
  * - Connection status indicator
  */
 
+import { packageNameToAppRouteSlug } from "@miladyai/shared/contracts/apps";
 import { Button, Input } from "@miladyai/ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { client, type LogEntry } from "../../api";
+import {
+  type AppRunSummary,
+  type AppSessionControlAction,
+  type AppSessionState,
+  client,
+  type LogEntry,
+} from "../../api";
 import { invokeDesktopBridgeRequest, isElectrobunRuntime } from "../../bridge";
 import { useBranding } from "../../config/branding";
 import {
@@ -22,17 +29,98 @@ import { useApp } from "../../state";
 import { openExternalUrl } from "../../utils";
 import type { DesktopClickAuditItem } from "../../utils/desktop-workspace";
 import { formatTime } from "../../utils/format";
+import { BabylonTerminal } from "./BabylonTerminal";
+import {
+  buildViewerSessionKey,
+  resolvePostMessageTargetOrigin,
+  resolveViewerReadyEventType,
+  shouldUseEmbeddedAppViewer,
+} from "./viewer-auth";
 
-const DEFAULT_VIEWER_SANDBOX = "allow-scripts allow-same-origin allow-popups";
-const READY_EVENT_BY_AUTH_TYPE: Record<string, string> = {
-  HYPERSCAPE_AUTH: "HYPERSCAPE_READY",
-  RS_2004SCAPE_AUTH: "RS_2004SCAPE_READY",
-};
+export function buildDisconnectedSessionState(
+  session: AppSessionState | null,
+): AppSessionState | null {
+  if (!session) return null;
+  return {
+    ...session,
+    status: "disconnected",
+    canSendCommands: false,
+    controls: [],
+    goalLabel: null,
+    suggestedPrompts: [],
+    telemetry: null,
+    summary: session.displayName
+      ? `Session unavailable: ${session.displayName}`
+      : "Session unavailable.",
+  };
+}
 
-function resolvePostMessageTargetOrigin(viewerUrl: string): string {
-  if (viewerUrl.startsWith("/")) return window.location.origin;
-  const match = viewerUrl.match(/^https?:\/\/[^/?#]+/i);
-  return match?.[0] ?? "*";
+type RunSteeringDisposition =
+  | "accepted"
+  | "queued"
+  | "rejected"
+  | "unsupported";
+
+interface RunSteeringResult {
+  success: boolean;
+  message: string;
+  disposition: RunSteeringDisposition;
+  status: number;
+  run?: AppRunSummary | null;
+  session?: AppSessionState | null;
+}
+
+function getSteeringNotice(
+  disposition: RunSteeringDisposition,
+  message: string,
+): {
+  tone: "info" | "success" | "error";
+  ttlMs: number;
+  text: string;
+} {
+  if (disposition === "queued") {
+    return {
+      tone: "info",
+      ttlMs: 2600,
+      text: message,
+    };
+  }
+  if (disposition === "accepted") {
+    return {
+      tone: "success",
+      ttlMs: 2400,
+      text: message,
+    };
+  }
+  return {
+    tone: "error",
+    ttlMs: 3200,
+    text: message,
+  };
+}
+
+function getSteeringFallbackMessage(
+  disposition: RunSteeringDisposition,
+  defaultValue: string,
+): string {
+  if (disposition === "queued") return "Command queued.";
+  if (disposition === "accepted") return "Command accepted.";
+  if (disposition === "unsupported") {
+    return "This run does not support that steering channel.";
+  }
+  return defaultValue;
+}
+
+function getApiStatus(err: unknown): number | null {
+  if (
+    err &&
+    typeof err === "object" &&
+    "status" in err &&
+    typeof (err as { status?: unknown }).status === "number"
+  ) {
+    return (err as { status: number }).status;
+  }
+  return null;
 }
 
 /** Tag badge colors for logs panel. */
@@ -133,7 +221,7 @@ export function DesktopGameWindowControls({
       ipcChannel: "gpuWindow:list",
     });
     setGpuWindowId(gpuWindows?.windows[0]?.id ?? null);
-  }, [gameWindowId]);
+  }, [gameWindowId, t]);
 
   useEffect(() => {
     void refresh();
@@ -441,14 +529,18 @@ export function DesktopGameWindowControls({
 export function GameView() {
   const { setTimeout } = useTimeout();
   const {
+    appRuns,
+    activeGameRunId,
     activeGameApp,
     activeGameDisplayName,
     activeGameViewerUrl,
     activeGameSandbox,
     activeGamePostMessageAuth,
     activeGamePostMessagePayload,
+    activeGameSession,
     gameOverlayEnabled,
     logs,
+    logLoadError,
     loadLogs,
     setState,
     setActionNotice,
@@ -463,61 +555,333 @@ export function GameView() {
   >("connecting");
   const [chatInput, setChatInput] = useState("");
   const [sendingChat, setSendingChat] = useState(false);
+  const [sessionBusyAction, setSessionBusyAction] =
+    useState<AppSessionControlAction | null>(null);
+  const [sessionState, setSessionState] = useState<AppSessionState | null>(
+    activeGameSession,
+  );
   const [gameWindowId, setGameWindowId] = useState<string | null>(null);
   const gameWindowIdRef = useRef<string | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const authSentRef = useRef(false);
   const viewerSessionRef = useRef<string>("");
+  const activeGameRun = useMemo(
+    () => appRuns.find((run) => run.runId === activeGameRunId) ?? null,
+    [activeGameRunId, appRuns],
+  );
+  const useEmbeddedViewer = useMemo(
+    () => shouldUseEmbeddedAppViewer(activeGameRun),
+    [activeGameRun],
+  );
+  const useNativeGameWindow = Boolean(
+    isElectrobun && activeGameViewerUrl && !useEmbeddedViewer,
+  );
 
-  // Send command to the agent - routes through elizaOS which processes
-  // the message and decides what game actions to take
-  const handleSendChat = useCallback(async () => {
-    const content = chatInput.trim();
-    if (!content) return;
-    setSendingChat(true);
-    try {
-      // Send message to elizaOS agent - it will process and execute game actions
-      // Examples: "go chop some wood", "attack the goblin", "go to the bank"
-      const response = await client.sendChatRest(content, "DM");
-      setChatInput("");
-      // Show agent's response
-      if (response.text) {
-        setActionNotice(
-          t("gameview.AgentResponseNotice", {
-            defaultValue: "Agent: {{response}}",
-            response: `${response.text.slice(0, 100)}${response.text.length > 100 ? "..." : ""}`,
-          }),
-          "success",
-          4000,
-        );
-      } else {
-        setActionNotice(
-          t("gameview.CommandSentToAgent", {
-            defaultValue: "Command sent to agent.",
-          }),
-          "success",
-          2000,
-        );
-      }
-      // Refresh logs to show activity
-      setTimeout(() => void loadLogs(), 1500);
-    } catch (err) {
-      setActionNotice(
-        t("gameview.FailedToSend", {
-          defaultValue: "Failed to send: {{message}}",
-          message: err instanceof Error ? err.message : "error",
+  const applySessionState = useCallback(
+    (nextSession: AppSessionState | null) => {
+      setSessionState(nextSession);
+      if (!activeGameRunId) return;
+      const nextUpdatedAt = new Date().toISOString();
+      setState(
+        "appRuns",
+        appRuns.map((run) => {
+          if (run.runId !== activeGameRunId) return run;
+          const nextHealth =
+            nextSession?.status === "disconnected"
+              ? {
+                  state: "degraded" as const,
+                  message:
+                    nextSession.summary ??
+                    run.summary ??
+                    "Session unavailable.",
+                }
+              : nextSession
+                ? {
+                    state: "healthy" as const,
+                    message: nextSession.summary ?? null,
+                  }
+                : run.health;
+          return {
+            ...run,
+            session: nextSession,
+            status: nextSession?.status ?? run.status,
+            summary: nextSession?.summary ?? run.summary,
+            updatedAt: nextUpdatedAt,
+            lastHeartbeatAt: nextSession ? nextUpdatedAt : run.lastHeartbeatAt,
+            health: nextHealth,
+          } satisfies AppRunSummary;
         }),
-        "error",
-        3000,
       );
-    } finally {
-      setSendingChat(false);
+    },
+    [activeGameRunId, appRuns, setState],
+  );
+
+  const applyRunState = useCallback(
+    (nextRun: AppRunSummary | null) => {
+      if (!nextRun) return;
+      const nextUpdatedAt = new Date().toISOString();
+      setSessionState(nextRun.session ?? null);
+      if (nextRun.runId !== activeGameRunId) return;
+      setState(
+        "appRuns",
+        appRuns.map((run) => {
+          if (run.runId !== nextRun.runId) return run;
+          const nextHealth =
+            nextRun.health ??
+            (nextRun.session?.status === "disconnected"
+              ? {
+                  state: "degraded" as const,
+                  message:
+                    nextRun.session.summary ??
+                    nextRun.summary ??
+                    "Session unavailable.",
+                }
+              : nextRun.session
+                ? {
+                    state: "healthy" as const,
+                    message: nextRun.session.summary ?? null,
+                  }
+                : run.health);
+          return {
+            ...run,
+            ...nextRun,
+            updatedAt: nextUpdatedAt,
+            lastHeartbeatAt: nextRun.session
+              ? nextUpdatedAt
+              : run.lastHeartbeatAt,
+            health: nextHealth,
+          } satisfies AppRunSummary;
+        }),
+      );
+    },
+    [activeGameRunId, appRuns, setState],
+  );
+
+  const refreshSessionState = useCallback(async () => {
+    if (!activeGameApp || !activeGameSession?.sessionId) return null;
+    try {
+      const nextSession = await client.getAppSessionState(
+        activeGameApp,
+        activeGameSession.sessionId,
+      );
+      applySessionState(nextSession);
+      setConnectionStatus("connected");
+      return nextSession;
+    } catch (err) {
+      console.warn("[GameView] Failed to refresh app session state:", err);
+      applySessionState(
+        buildDisconnectedSessionState(sessionState ?? activeGameSession),
+      );
+      setConnectionStatus("disconnected");
+      return null;
     }
   }, [
-    chatInput,
+    activeGameApp,
+    activeGameSession,
+    activeGameSession?.sessionId,
+    applySessionState,
+    sessionState,
+  ]);
+
+  useEffect(() => {
+    applySessionState(activeGameSession);
+  }, [activeGameSession, applySessionState]);
+
+  useEffect(() => {
+    if (!activeGameSession?.sessionId) return;
+    void refreshSessionState();
+  }, [activeGameSession?.sessionId, refreshSessionState]);
+
+  useIntervalWhenDocumentVisible(
+    () => {
+      void refreshSessionState();
+    },
+    3000,
+    Boolean(activeGameSession?.sessionId),
+  );
+
+  const sendChatCommand = useCallback(
+    async (rawContent: string) => {
+      const content = rawContent.trim();
+      if (!content) return;
+      const currentSession = sessionState ?? activeGameSession;
+      const currentRun = activeGameRun ?? null;
+      setSendingChat(true);
+      try {
+        if (currentRun?.runId) {
+          const response = (await client.sendAppRunMessage(
+            currentRun.runId,
+            content,
+          )) as RunSteeringResult;
+          if (response.run) {
+            applyRunState(response.run);
+          } else if (response.session) {
+            applySessionState(response.session);
+          }
+          const notice = getSteeringNotice(
+            response.disposition,
+            response.message ||
+              getSteeringFallbackMessage(
+                response.disposition,
+                t("gameview.CommandSentToAppRun", {
+                  defaultValue: "Command sent to app run.",
+                }),
+              ),
+          );
+          setActionNotice(notice.text, notice.tone, notice.ttlMs);
+          if (
+            response.disposition === "accepted" ||
+            response.disposition === "queued"
+          ) {
+            if (!response.run && !response.session) {
+              await refreshSessionState();
+            }
+            setChatInput("");
+            setTimeout(() => void loadLogs(), 1500);
+          }
+        } else if (
+          currentSession?.sessionId &&
+          currentSession.canSendCommands
+        ) {
+          const response = await client.sendAppSessionMessage(
+            activeGameApp,
+            currentSession.sessionId,
+            content,
+          );
+          if (response.session) {
+            applySessionState(response.session);
+          } else {
+            await refreshSessionState();
+          }
+          setActionNotice(
+            response.message ||
+              t("gameview.CommandSentToAppSession", {
+                defaultValue: "Command sent to app session.",
+              }),
+            "success",
+            2400,
+          );
+          setChatInput("");
+          setTimeout(() => void loadLogs(), 1500);
+        } else {
+          setActionNotice(
+            t("gameview.RunSteeringUnsupported", {
+              defaultValue: "This run does not expose a steering channel yet.",
+            }),
+            "error",
+            3200,
+          );
+        }
+      } catch (err) {
+        const status = getApiStatus(err);
+        setActionNotice(
+          status === 501 || status === 503
+            ? t("gameview.RunSteeringUnsupported", {
+                defaultValue:
+                  "This run does not expose a steering channel yet.",
+              })
+            : t("gameview.FailedToSend", {
+                defaultValue: "Failed to send: {{message}}",
+                message: err instanceof Error ? err.message : "error",
+              }),
+          "error",
+          3000,
+        );
+      } finally {
+        setSendingChat(false);
+      }
+    },
+    [
+      activeGameApp,
+      activeGameSession,
+      applySessionState,
+      loadLogs,
+      refreshSessionState,
+      setActionNotice,
+      setTimeout,
+      sessionState,
+      t,
+      activeGameRun,
+      applyRunState,
+    ],
+  );
+
+  const handleSendChat = useCallback(() => {
+    void sendChatCommand(chatInput);
+  }, [chatInput, sendChatCommand]);
+
+  const activeSessionState = sessionState ?? activeGameSession;
+  const sessionControlAction = useMemo<AppSessionControlAction | null>(() => {
+    if (activeSessionState?.controls?.includes("pause")) return "pause";
+    if (activeSessionState?.controls?.includes("resume")) return "resume";
+    return null;
+  }, [activeSessionState]);
+
+  const handleSessionControl = useCallback(async () => {
+    if (
+      !activeGameRunId ||
+      !activeGameApp ||
+      !activeGameSession?.sessionId ||
+      !sessionControlAction
+    )
+      return;
+    setSessionBusyAction(sessionControlAction);
+    try {
+      const response = (await client.controlAppRun(
+        activeGameRunId,
+        sessionControlAction,
+      )) as RunSteeringResult;
+      if (response.run) {
+        applyRunState(response.run);
+      } else if (response.session) {
+        applySessionState(response.session);
+      }
+      const notice = getSteeringNotice(
+        response.disposition,
+        response.message ||
+          getSteeringFallbackMessage(
+            response.disposition,
+            t("gameview.SessionControlSent", {
+              defaultValue: "Session control updated.",
+            }),
+          ),
+      );
+      setActionNotice(notice.text, notice.tone, notice.ttlMs);
+      if (
+        (response.disposition === "accepted" ||
+          response.disposition === "queued") &&
+        !response.run &&
+        !response.session
+      ) {
+        await refreshSessionState();
+      }
+    } catch (err) {
+      const status = getApiStatus(err);
+      setActionNotice(
+        status === 501 || status === 503
+          ? t("gameview.SessionControlUnsupported", {
+              defaultValue: "This run does not expose session controls.",
+            })
+          : t("gameview.SessionControlFailed", {
+              defaultValue: "Failed to update session: {{message}}",
+              message: err instanceof Error ? err.message : "error",
+            }),
+        "error",
+        3200,
+      );
+    } finally {
+      setSessionBusyAction(null);
+    }
+  }, [
+    activeGameApp,
+    activeGameSession?.sessionId,
+    applySessionState,
+    refreshSessionState,
+    sessionControlAction,
     setActionNotice,
-    loadLogs, // Refresh logs to show activity
-    setTimeout,
+    t,
+    activeGameRunId,
+    applyRunState,
   ]);
   const postMessageTargetOrigin = useMemo(
     () => resolvePostMessageTargetOrigin(activeGameViewerUrl),
@@ -525,14 +889,16 @@ export function GameView() {
   );
   const viewerSessionKey = useMemo(
     () =>
-      `${activeGameViewerUrl}::${JSON.stringify(activeGamePostMessagePayload ?? null)}`,
+      buildViewerSessionKey(activeGameViewerUrl, activeGamePostMessagePayload),
     [activeGamePostMessagePayload, activeGameViewerUrl],
   );
 
   // Filter logs relevant to the current game
   const gameLogs = useMemo(() => {
     if (!activeGameApp) return [];
-    const appKeyword = activeGameApp.toLowerCase().replace("@elizaos/app-", "");
+    const appKeyword = (
+      packageNameToAppRouteSlug(activeGameApp) ?? activeGameApp
+    ).toLowerCase();
     return logs.filter((entry) => {
       const message = (entry.message ?? "").toLowerCase();
       const source = (entry.source ?? "").toLowerCase();
@@ -565,7 +931,7 @@ export function GameView() {
   // Open the game URL in an isolated Electrobun BrowserWindow.
   // Runs whenever the viewer URL or game title changes and we're inside the desktop app.
   useEffect(() => {
-    if (!isElectrobun || !activeGameViewerUrl) return;
+    if (!useNativeGameWindow || !activeGameViewerUrl) return;
 
     let cancelled = false;
 
@@ -606,7 +972,13 @@ export function GameView() {
         setGameWindowId(null);
       }
     };
-  }, [activeGameViewerUrl, activeGameApp, activeGameDisplayName, isElectrobun]);
+  }, [
+    activeGameViewerUrl,
+    activeGameApp,
+    activeGameDisplayName,
+    t,
+    useNativeGameWindow,
+  ]);
 
   // Reset auth handshake state when the active viewer session changes.
   useEffect(() => {
@@ -614,28 +986,38 @@ export function GameView() {
       viewerSessionRef.current = viewerSessionKey;
       authSentRef.current = false;
     }
-    if (activeGamePostMessageAuth) {
+    if (activeGamePostMessageAuth && useEmbeddedViewer) {
       setConnectionStatus("connecting");
       return;
     }
-    // No auth required, assume connected once iframe loads.
+    if (useNativeGameWindow) {
+      setConnectionStatus("connecting");
+      return;
+    }
     setConnectionStatus("connected");
-  }, [activeGamePostMessageAuth, viewerSessionKey]);
+  }, [
+    activeGamePostMessageAuth,
+    useEmbeddedViewer,
+    useNativeGameWindow,
+    viewerSessionKey,
+  ]);
 
   const resetActiveGameState = useCallback(() => {
-    setState("activeGameApp", "");
-    setState("activeGameDisplayName", "");
-    setState("activeGameViewerUrl", "");
-    setState("activeGameSandbox", DEFAULT_VIEWER_SANDBOX);
-    setState("activeGamePostMessageAuth", false);
-    setState("activeGamePostMessagePayload", null);
+    setSessionState(null);
+    setState("activeGameRunId", "");
   }, [setState]);
 
   useEffect(() => {
-    if (!activeGamePostMessageAuth || !activeGamePostMessagePayload) return;
+    if (
+      !useEmbeddedViewer ||
+      !activeGamePostMessageAuth ||
+      !activeGamePostMessagePayload
+    )
+      return;
     if (authSentRef.current) return;
-    const expectedReadyType =
-      READY_EVENT_BY_AUTH_TYPE[activeGamePostMessagePayload.type];
+    const expectedReadyType = resolveViewerReadyEventType(
+      activeGamePostMessagePayload,
+    );
     if (!expectedReadyType) return;
 
     const onMessage = (event: MessageEvent<{ type?: string }>) => {
@@ -671,6 +1053,8 @@ export function GameView() {
     activeGamePostMessagePayload,
     postMessageTargetOrigin,
     setActionNotice,
+    t,
+    useEmbeddedViewer,
   ]);
 
   const handleOpenInNewTab = useCallback(async () => {
@@ -685,15 +1069,18 @@ export function GameView() {
         3600,
       );
     }
-  }, [activeGameViewerUrl, setActionNotice]);
+  }, [activeGameViewerUrl, setActionNotice, t]);
 
   const handleStop = useCallback(async () => {
-    if (!activeGameApp) return;
+    if (!activeGameRunId) return;
     setStopping(true);
     try {
-      const stopResult = await client.stopApp(activeGameApp);
+      const stopResult = await client.stopAppRun(activeGameRunId);
+      const nextRuns = appRuns.filter((run) => run.runId !== activeGameRunId);
+      setState("appRuns", nextRuns);
       resetActiveGameState();
       setState("tab", "apps");
+      setState("appsSubTab", nextRuns.length > 0 ? "running" : "browse");
       setActionNotice(
         stopResult.message,
         stopResult.success ? "success" : "info",
@@ -710,7 +1097,14 @@ export function GameView() {
     } finally {
       setStopping(false);
     }
-  }, [activeGameApp, resetActiveGameState, setState, setActionNotice]);
+  }, [
+    activeGameRunId,
+    appRuns,
+    resetActiveGameState,
+    setActionNotice,
+    setState,
+    t,
+  ]);
 
   if (!activeGameViewerUrl) {
     return (
@@ -753,10 +1147,187 @@ export function GameView() {
           {t("common.hide")}
         </Button>
       </div>
+      {activeSessionState?.goalLabel ? (
+        <div className="border-b border-border px-2 py-1.5 text-[10px] text-muted">
+          {activeSessionState.goalLabel}
+        </div>
+      ) : null}
+      {/* Defense of the Agents telemetry dashboard */}
+      {activeSessionState?.telemetry?.heroClass != null ? (
+        <div className="border-b border-border px-2 py-2 text-[10px] space-y-1.5">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-txt">
+              {String(activeSessionState.telemetry.heroClass)
+                .charAt(0)
+                .toUpperCase() +
+                String(activeSessionState.telemetry.heroClass).slice(1)}{" "}
+              Lv{String(activeSessionState.telemetry.heroLevel ?? "?")}
+            </span>
+            <span className="text-muted">
+              {String(activeSessionState.telemetry.heroLane ?? "?")} lane
+            </span>
+            {activeSessionState.telemetry.heroAlive === false ? (
+              <span className="text-danger font-semibold">DEAD</span>
+            ) : null}
+            {activeSessionState.telemetry.autoPlay ? (
+              <span className="px-1 py-0.5 rounded bg-ok/15 text-ok font-semibold">
+                AUTO
+              </span>
+            ) : (
+              <span className="px-1 py-0.5 rounded bg-muted/15 text-muted">
+                MANUAL
+              </span>
+            )}
+          </div>
+          {/* HP bar */}
+          {typeof activeSessionState.telemetry.heroHp === "number" &&
+          typeof activeSessionState.telemetry.heroMaxHp === "number" &&
+          activeSessionState.telemetry.heroMaxHp > 0 ? (
+            <div className="flex items-center gap-2">
+              <div className="flex-1 h-1.5 bg-border rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all"
+                  style={{
+                    width: `${Math.min(100, Math.round((Number(activeSessionState.telemetry.heroHp) / Number(activeSessionState.telemetry.heroMaxHp)) * 100))}%`,
+                    background:
+                      Number(activeSessionState.telemetry.heroHp) /
+                        Number(activeSessionState.telemetry.heroMaxHp) >
+                      0.5
+                        ? "rgb(34, 197, 94)"
+                        : Number(activeSessionState.telemetry.heroHp) /
+                              Number(activeSessionState.telemetry.heroMaxHp) >
+                            0.25
+                          ? "rgb(245, 158, 11)"
+                          : "rgb(239, 68, 68)",
+                  }}
+                />
+              </div>
+              <span className="text-muted whitespace-nowrap">
+                {activeSessionState.telemetry.heroHp}/
+                {activeSessionState.telemetry.heroMaxHp}
+              </span>
+            </div>
+          ) : null}
+          {/* Strategy info */}
+          {activeSessionState.telemetry.strategyVersion != null ? (
+            <div className="space-y-0.5 text-muted">
+              <div className="flex items-center gap-2">
+                <span>
+                  Strategy v
+                  {String(activeSessionState.telemetry.strategyVersion)}
+                </span>
+                {activeSessionState.telemetry.strategyScore != null ? (
+                  <span>
+                    score:{" "}
+                    {Number(activeSessionState.telemetry.strategyScore).toFixed(
+                      2,
+                    )}
+                  </span>
+                ) : null}
+                {activeSessionState.telemetry.bestStrategyVersion != null ? (
+                  <span>
+                    best: v
+                    {String(activeSessionState.telemetry.bestStrategyVersion)} (
+                    {Number(
+                      activeSessionState.telemetry.bestStrategyScore ?? 0,
+                    ).toFixed(2)}
+                    )
+                  </span>
+                ) : null}
+              </div>
+              {(activeSessionState.telemetry as Record<string, unknown>)
+                .abilityPriority ? (
+                <div className="text-[9px]">
+                  Priority:{" "}
+                  {(
+                    (activeSessionState.telemetry as Record<string, unknown>)
+                      .abilityPriority as string[]
+                  ).join(" > ")}
+                  {" · "}
+                  Recall @
+                  {Math.round(
+                    Number(
+                      (activeSessionState.telemetry as Record<string, unknown>)
+                        .recallThreshold ?? 0.25,
+                    ) * 100,
+                  )}
+                  % HP
+                </div>
+              ) : null}
+              {(activeSessionState.telemetry as Record<string, unknown>)
+                .ticksTracked != null ? (
+                <div className="text-[9px]">
+                  {String(
+                    (activeSessionState.telemetry as Record<string, unknown>)
+                      .ticksTracked,
+                  )}{" "}
+                  ticks tracked ·{" "}
+                  {String(
+                    (activeSessionState.telemetry as Record<string, unknown>)
+                      .abilitiesLearned ?? 0,
+                  )}{" "}
+                  abilities learned
+                  {activeSessionState.telemetry.survivalRate != null
+                    ? ` · ${Math.round(Number(activeSessionState.telemetry.survivalRate) * 100)}% survival`
+                    : ""}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+          {/* Lane pressure */}
+          {activeSessionState.telemetry.laneHumanUnits != null ? (
+            <div className="flex items-center gap-2 text-muted">
+              <span>Lane:</span>
+              <span
+                className={
+                  Number(activeSessionState.telemetry.laneFrontline ?? 0) > 0
+                    ? "text-ok"
+                    : Number(activeSessionState.telemetry.laneFrontline ?? 0) <
+                        0
+                      ? "text-danger"
+                      : ""
+                }
+              >
+                {String(activeSessionState.telemetry.laneHumanUnits)}v
+                {String(activeSessionState.telemetry.laneOrcUnits)} (
+                {Number(activeSessionState.telemetry.laneFrontline ?? 0) > 0
+                  ? "+"
+                  : ""}
+                {String(activeSessionState.telemetry.laneFrontline)})
+              </span>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+      {activeSessionState?.suggestedPrompts?.length ? (
+        <div className="flex flex-wrap gap-1 border-b border-border px-2 py-2">
+          {activeSessionState.suggestedPrompts.slice(0, 4).map((prompt) => (
+            <Button
+              key={prompt}
+              variant="outline"
+              size="sm"
+              className="h-6 max-w-full text-[10px] shadow-sm"
+              onClick={() => void sendChatCommand(prompt)}
+              disabled={sendingChat}
+            >
+              <span className="truncate">{prompt}</span>
+            </Button>
+          ))}
+        </div>
+      ) : null}
+      {logLoadError ? (
+        <div className="border-b border-danger/25 bg-danger/8 px-2 py-1.5 text-[10px] text-danger">
+          {t("gameview.LogLoadFailed", {
+            defaultValue: "Failed to load logs: {{message}}",
+            message: logLoadError,
+          })}
+        </div>
+      ) : null}
       {/* Chat input for sending commands to agent */}
       <div className="flex items-center gap-2 px-2 py-2 border-b border-border">
         <Input
           type="text"
+          data-testid="game-command-input"
           value={chatInput}
           onChange={(e) => setChatInput(e.target.value)}
           onKeyDown={(e) => {
@@ -772,6 +1343,7 @@ export function GameView() {
         <Button
           variant="default"
           size="sm"
+          data-testid="game-command-send"
           onClick={handleSendChat}
           disabled={sendingChat || !chatInput.trim()}
           className="h-8 shadow-sm font-bold tracking-wide"
@@ -780,7 +1352,59 @@ export function GameView() {
         </Button>
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto p-2 text-[11px] font-mono">
-        {gameLogs.length === 0 ? (
+        {/* Prefer telemetry activity feed when available (Defense game loop pushes entries here) */}
+        {Array.isArray(
+          (activeSessionState?.telemetry as Record<string, unknown> | null)
+            ?.recentActivity,
+        ) &&
+        (
+          (activeSessionState?.telemetry as Record<string, unknown>)
+            .recentActivity as { ts: number; action: string; detail: string }[]
+        ).length > 0 ? (
+          (
+            (activeSessionState?.telemetry as Record<string, unknown>)
+              .recentActivity as {
+              ts: number;
+              action: string;
+              detail: string;
+            }[]
+          )
+            .slice()
+            .reverse()
+            .slice(0, 30)
+            .map(
+              (
+                entry: { ts: number; action: string; detail: string },
+                idx: number,
+              ) => (
+                <div
+                  // biome-ignore lint/suspicious/noArrayIndexKey: composite key with index as tiebreaker
+                  key={`${entry.ts}-${idx}`}
+                  className="py-1 border-b border-border/50 flex flex-col gap-0.5"
+                >
+                  <div className="flex items-center gap-1">
+                    <span className="text-muted text-[10px]">
+                      {formatTime(entry.ts, { fallback: "—" })}
+                    </span>
+                    <span
+                      className={`font-semibold text-[10px] uppercase ${
+                        entry.action === "error"
+                          ? "text-danger"
+                          : entry.action.startsWith("ability")
+                            ? "text-ok"
+                            : entry.action.startsWith("move")
+                              ? "text-warn"
+                              : "text-muted"
+                      }`}
+                    >
+                      {entry.action.split(":")[0]}
+                    </span>
+                  </div>
+                  <div className="text-txt break-all">{entry.detail}</div>
+                </div>
+              ),
+            )
+        ) : gameLogs.length === 0 ? (
           <div className="text-center py-4 text-muted italic">
             {t("game.noAgentActivity")}
           </div>
@@ -859,16 +1483,50 @@ export function GameView() {
           </span>
         ) : null}
         <span className="flex-1" />
+        {activeSessionState?.status ? (
+          <span
+            data-testid="game-session-status"
+            className="max-w-48 truncate text-[10px] px-1.5 py-0.5 border border-border text-muted"
+            title={activeSessionState.summary ?? activeSessionState.status}
+          >
+            {activeSessionState.summary ?? activeSessionState.status}
+          </span>
+        ) : null}
+        {sessionControlAction ? (
+          <Button
+            variant="outline"
+            size="sm"
+            data-testid="game-session-control"
+            className="h-7 text-xs shadow-sm hover:border-accent"
+            onClick={() => void handleSessionControl()}
+            disabled={sessionBusyAction === sessionControlAction}
+          >
+            {sessionBusyAction === sessionControlAction
+              ? t("gameview.UpdatingSession", {
+                  defaultValue: "Updating…",
+                })
+              : sessionControlAction === "pause"
+                ? t("gameview.Pause", { defaultValue: "Pause" })
+                : t("gameview.Resume", { defaultValue: "Resume" })}
+          </Button>
+        ) : null}
         {/* Toggle logs panel */}
         <Button
           variant={showLogsPanel ? "default" : "outline"}
           size="sm"
+          data-testid="game-toggle-logs"
           className="h-7 text-xs shadow-sm hover:border-accent"
           onClick={() => setShowLogsPanel(!showLogsPanel)}
         >
-          {showLogsPanel ? t("game.hideLogs") : t("game.showLogs")}
+          {activeGameApp?.includes("babylon")
+            ? showLogsPanel
+              ? "Hide Terminal"
+              : "Terminal"
+            : showLogsPanel
+              ? t("game.hideLogs")
+              : t("game.showLogs")}
         </Button>
-        {isElectrobun && (
+        {useNativeGameWindow && (
           <DesktopGameWindowControls gameWindowId={gameWindowId} />
         )}
         <Button
@@ -915,7 +1573,7 @@ export function GameView() {
       </div>
       <div className="flex-1 min-h-0 flex">
         <div className="flex-1 min-h-0 relative">
-          {isElectrobun ? (
+          {useNativeGameWindow ? (
             /* Electrobun mode: game runs in an isolated BrowserWindow opened
                via game:openWindow RPC. The div below is a placeholder that
                fills the same space in the layout while the native window is
@@ -940,6 +1598,9 @@ export function GameView() {
               ref={iframeRef}
               src={activeGameViewerUrl}
               sandbox={activeGameSandbox}
+              allow="fullscreen *"
+              allowFullScreen
+              data-testid="game-view-iframe"
               className="w-full h-full border-none"
               title={
                 activeGameDisplayName ||
@@ -948,7 +1609,12 @@ export function GameView() {
             />
           )}
         </div>
-        {showLogsPanel && renderLogsPanel()}
+        {showLogsPanel &&
+          (activeGameApp?.includes("babylon") ? (
+            <BabylonTerminal appName={activeGameApp} />
+          ) : (
+            renderLogsPanel()
+          ))}
       </div>
     </div>
   );

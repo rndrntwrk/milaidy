@@ -17,9 +17,14 @@ export {
   STREAMING_PLUGINS,
 };
 
+const TELEGRAM_ACCOUNT_CLIENT_PLUGIN =
+  "@elizaos-plugins/client-telegram-account";
+
 // Extend upstream CONNECTOR_PLUGINS with Milady-local connectors.
 export const CONNECTOR_PLUGINS: Record<string, string> = {
   ..._upstreamConnectorPlugins,
+  telegramAccount:
+    _upstreamConnectorPlugins.telegramAccount ?? TELEGRAM_ACCOUNT_CLIENT_PLUGIN,
   wechat: "@miladyai/plugin-wechat",
 };
 
@@ -39,8 +44,11 @@ export function applyPluginAutoEnable(
     const plugins = config.plugins as Record<string, unknown>;
     if (plugins.allow == null) plugins.allow = [];
     const allow = plugins.allow as string[];
-    if (!allow.includes("wechat")) {
-      allow.push("wechat");
+    if (
+      !allow.includes("@miladyai/plugin-wechat") &&
+      !allow.includes("wechat")
+    ) {
+      allow.push("@miladyai/plugin-wechat");
     }
   }
 

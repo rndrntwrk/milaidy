@@ -36,7 +36,6 @@ import {
   patchCodexFolderApprovalPromptCompat,
   patchElectrobunWindowsTar,
   patchExtensionlessJsExports,
-  patchMissingLifecycleScript,
   patchNobleHashesCompat,
   patchProperLockfileSignalExitCompat,
   patchPtyManagerCursorPositionCompat,
@@ -63,16 +62,6 @@ try {
   patchBunExports(root, "@elizaos/plugin-coding-agent");
 } catch {
   // May fail if the bun patch already modified package.json.
-}
-try {
-  patchMissingLifecycleScript(
-    root,
-    "@elizaos/plugin-agent-orchestrator",
-    "postinstall",
-    "./scripts/ensure-node-pty.mjs",
-  );
-} catch {
-  // May fail if the version already has the script or JSON is already patched.
 }
 
 // @noble/curves and @noble/hashes publish ".js" subpath exports, while ethers
@@ -124,6 +113,187 @@ patchElectrobunWindowsTar(root);
  * defines `default3`. We replace it with a harmless empty default export.
  * Remove once a fixed @elizaos/plugin-pdf is published.
  */
+/**
+ * Patch @elizaos/plugin-evm alpha.7 action spec name mismatches.
+ *
+ * The published bundle declares its action specs by canonical name:
+ *   - "CROSS_CHAIN_TRANSFER" (similes: ["BRIDGE", "BRIDGE_TOKENS"])
+ *   - "SWAP" (similes: ["SWAP_TOKENS", "SWAP_TOKEN"])
+ *   - "GOV_QUEUE"
+ *   - "GOV_VOTE"
+ *
+ * ...but then looks up the same specs by the WRONG key a few thousand lines
+ * later:
+ *   requireActionSpec("BRIDGE")         // should be "CROSS_CHAIN_TRANSFER"
+ *   requireActionSpec("SWAP_TOKENS")    // should be "SWAP"
+ *   requireActionSpec("QUEUE_PROPOSAL") // should be "GOV_QUEUE"
+ *   requireActionSpec("VOTE_PROPOSAL")  // should be "GOV_VOTE"
+ *
+ * `requireActionSpec` throws when the lookup misses, so the plugin fails to
+ * initialize with "Action spec not found: BRIDGE" — preventing all EVM wallet
+ * actions (transfer, swap, bridge, governance) from loading. Patch the four
+ * requireActionSpec calls to use the canonical names so the plugin loads.
+ *
+ * Remove once a fixed @elizaos/plugin-evm is published.
+ */
+function patchPluginEvmActionSpecNames() {
+  const relPaths = ["dist/index.js", "dist/node/index.node.js"];
+  const searchDirs = [resolve(root, "node_modules/@elizaos/plugin-evm")];
+  const bunCacheDir = resolve(root, "node_modules/.bun");
+  if (existsSync(bunCacheDir)) {
+    try {
+      for (const entry of readdirSync(bunCacheDir)) {
+        if (entry.startsWith("@elizaos+plugin-evm@")) {
+          searchDirs.push(
+            resolve(bunCacheDir, entry, "node_modules/@elizaos/plugin-evm"),
+          );
+        }
+      }
+    } catch {}
+  }
+
+  // canonical-name → buggy-lookup-name pairs shipped in alpha.7
+  const REPLACEMENTS = [
+    [
+      'requireActionSpec("BRIDGE")',
+      'requireActionSpec("CROSS_CHAIN_TRANSFER")',
+    ],
+    ['requireActionSpec("SWAP_TOKENS")', 'requireActionSpec("SWAP")'],
+    ['requireActionSpec("QUEUE_PROPOSAL")', 'requireActionSpec("GOV_QUEUE")'],
+    ['requireActionSpec("VOTE_PROPOSAL")', 'requireActionSpec("GOV_VOTE")'],
+  ];
+
+  let patchedFiles = 0;
+  for (const dir of searchDirs) {
+    for (const relPath of relPaths) {
+      const target = resolve(dir, relPath);
+      if (!existsSync(target)) continue;
+      let src = readFileSync(target, "utf8");
+      let fileChanged = false;
+      for (const [bad, good] of REPLACEMENTS) {
+        if (src.includes(bad)) {
+          src = src.split(bad).join(good);
+          fileChanged = true;
+        }
+      }
+      if (fileChanged) {
+        writeFileSync(target, src, "utf8");
+        patchedFiles++;
+        console.log(
+          `[patch-deps] Applied plugin-evm action spec name fix: ${target}`,
+        );
+      }
+    }
+  }
+  if (patchedFiles > 0) {
+    console.log(
+      `[patch-deps] plugin-evm: fixed action spec lookups in ${patchedFiles} file(s).`,
+    );
+  }
+}
+patchPluginEvmActionSpecNames();
+
+/**
+ * Patch @elizaos/plugin-solana alpha.6 action spec name mismatches.
+ *
+ * Twin of the plugin-evm bug. The published bundle:
+ *   - Declares only ONE action: {name: "SWAP_SOLANA", similes: [...]}
+ *   - Calls `requireActionSpec("SWAP")` — wrong name, throws
+ *   - Calls `requireActionSpec("TRANSFER")` — no TRANSFER in the spec at all,
+ *     it was dropped from the exported list but the implementation code still
+ *     references it, so the plugin fails before it can register either action
+ *
+ * Patch strategy:
+ *   1. Inject a synthetic TRANSFER action spec into both `coreActionsSpec`
+ *      and `allActionsSpec` action arrays. The plugin's own transfer
+ *      handler code (line ~484 of the bundle) provides the handler; only
+ *      the name/description/similes metadata was missing.
+ *   2. Rewrite `requireActionSpec("SWAP")` → `requireActionSpec("SWAP_SOLANA")`
+ *      so the swap handler binds to the real spec name.
+ *
+ * Remove once a fixed @elizaos/plugin-solana is published.
+ */
+function patchPluginSolanaActionSpecNames() {
+  const relPaths = ["dist/index.js", "dist/node/index.node.js"];
+  const searchDirs = [resolve(root, "node_modules/@elizaos/plugin-solana")];
+  const bunCacheDir = resolve(root, "node_modules/.bun");
+  if (existsSync(bunCacheDir)) {
+    try {
+      for (const entry of readdirSync(bunCacheDir)) {
+        if (entry.startsWith("@elizaos+plugin-solana@")) {
+          searchDirs.push(
+            resolve(bunCacheDir, entry, "node_modules/@elizaos/plugin-solana"),
+          );
+        }
+      }
+    } catch {}
+  }
+
+  const TRANSFER_SPEC_JSON = `{
+      name: "TRANSFER",
+      description: "Transfer SOL or SPL tokens from the agent's Solana wallet to another address",
+      similes: ["SEND_SOL", "SEND_TOKEN", "SEND_TOKENS", "TRANSFER_SOL", "TRANSFER_TOKEN", "TRANSFER_TOKENS", "PAY"],
+      parameters: []
+    },`;
+
+  let patchedFiles = 0;
+  for (const dir of searchDirs) {
+    for (const relPath of relPaths) {
+      const target = resolve(dir, relPath);
+      if (!existsSync(target)) continue;
+      let src = readFileSync(target, "utf8");
+      let fileChanged = false;
+
+      // Each step guards itself with a marker check so the patch is
+      // incrementally idempotent — rerunning after adding a new fix
+      // applies only the missing steps.
+
+      // 1) Inject TRANSFER spec into BOTH coreActionsSpec.actions AND
+      //    allActionsSpec.actions. Only inject if the TRANSFER name
+      //    isn't already present (previous run would have added it).
+      if (!src.includes('name: "TRANSFER"')) {
+        const swapOpenPattern = /(\{\s*name:\s*"SWAP_SOLANA",)/g;
+        const matches = [...src.matchAll(swapOpenPattern)];
+        if (matches.length >= 2) {
+          src = src.replace(swapOpenPattern, `${TRANSFER_SPEC_JSON}\n    $1`);
+          fileChanged = true;
+        }
+      }
+
+      // 2) Fix the SWAP lookup to use the canonical SWAP_SOLANA name.
+      if (src.includes('requireActionSpec("SWAP")')) {
+        src = src
+          .split('requireActionSpec("SWAP")')
+          .join('requireActionSpec("SWAP_SOLANA")');
+        fileChanged = true;
+      }
+
+      // 3) Fix the provider lookup the same way: providers spec
+      //    declares {name: "solana-wallet"} but code looks up "wallet".
+      if (src.includes('requireProviderSpec("wallet")')) {
+        src = src
+          .split('requireProviderSpec("wallet")')
+          .join('requireProviderSpec("solana-wallet")');
+        fileChanged = true;
+      }
+
+      if (fileChanged) {
+        writeFileSync(target, src, "utf8");
+        patchedFiles++;
+        console.log(
+          `[patch-deps] Applied plugin-solana action spec fix: ${target}`,
+        );
+      }
+    }
+  }
+  if (patchedFiles > 0) {
+    console.log(
+      `[patch-deps] plugin-solana: fixed action spec lookups in ${patchedFiles} file(s).`,
+    );
+  }
+}
+patchPluginSolanaActionSpecNames();
+
 function patchPluginPdfBrokenDefault() {
   const relPaths = ["dist/node/index.node.js", "dist/index.js"];
   const searchDirs = [resolve(root, "node_modules/@elizaos/plugin-pdf")];
@@ -484,6 +654,118 @@ function patchPluginElizaCloudResponsesCompat() {
   }
 }
 patchPluginElizaCloudResponsesCompat();
+
+/**
+ * Patch @elizaos/plugin-discord mention routing.
+ *
+ * In busy channels the Discord agent should not jump into conversations that
+ * clearly target another user. Ignore messages that mention or reply to a
+ * different user unless the message is a DM.
+ *
+ * Remove once upstream exposes a setting or ships the same behavior.
+ */
+function patchPluginDiscordIgnoreOtherMentions() {
+  const relPaths = ["dist/index.js"];
+  const searchDirs = [resolve(root, "node_modules/@elizaos/plugin-discord")];
+  const bunCacheDir = resolve(root, "node_modules/.bun");
+  if (existsSync(bunCacheDir)) {
+    try {
+      for (const entry of readdirSync(bunCacheDir)) {
+        if (entry.startsWith("@elizaos+plugin-discord@")) {
+          searchDirs.push(
+            resolve(bunCacheDir, entry, "node_modules/@elizaos/plugin-discord"),
+          );
+        }
+      }
+    } catch {}
+  }
+
+  const oldSnippet = `    const isBotMentioned = !!(clientUser?.id && message.mentions.users && message.mentions.users.has(clientUser.id));
+    const isReplyToBot = !!message.reference?.messageId && message.mentions.repliedUser?.id === clientUser?.id;
+    const isInThread = message.channel.isThread();
+    const isDM = message.channel.type === DiscordChannelType3.DM;
+    if (this.discordSettings.shouldRespondOnlyToMentions) {
+      const shouldProcess = isDM || isBotMentioned || isReplyToBot;
+      if (!shouldProcess) {
+        this.runtime.logger.debug({
+          src: "plugin:discord",
+          agentId: this.runtime.agentId,
+          channelId: message.channel.id
+        }, "Strict mode: ignoring message (no mention or reply)");
+        return;
+      }
+      this.runtime.logger.debug({
+        src: "plugin:discord",
+        agentId: this.runtime.agentId,
+        channelId: message.channel.id
+      }, "Strict mode: processing message");
+    }
+`;
+  const newSnippet = `    const isBotMentioned = !!(clientUser?.id && message.mentions.users && message.mentions.users.has(clientUser.id));
+    const isReplyToBot = !!message.reference?.messageId && message.mentions.repliedUser?.id === clientUser?.id;
+    const mentionedOtherUsers = message.mentions.users ? Array.from(message.mentions.users.values()).some((user) => user.id !== clientUser?.id && user.id !== message.author.id) : false;
+    const isReplyToOtherUser = !!message.reference?.messageId && !!message.mentions.repliedUser?.id && message.mentions.repliedUser.id !== clientUser?.id && message.mentions.repliedUser.id !== message.author.id;
+    const isInThread = message.channel.isThread();
+    const isDM = message.channel.type === DiscordChannelType3.DM;
+    if (!isDM && (mentionedOtherUsers || isReplyToOtherUser)) {
+      this.runtime.logger.debug({
+        src: "plugin:discord",
+        agentId: this.runtime.agentId,
+        channelId: message.channel.id
+      }, "Ignoring message that targets another mentioned user");
+      return;
+    }
+    if (this.discordSettings.shouldRespondOnlyToMentions) {
+      const shouldProcess = isDM || isBotMentioned || isReplyToBot;
+      if (!shouldProcess) {
+        this.runtime.logger.debug({
+          src: "plugin:discord",
+          agentId: this.runtime.agentId,
+          channelId: message.channel.id
+        }, "Strict mode: ignoring message (no mention or reply)");
+        return;
+      }
+      this.runtime.logger.debug({
+        src: "plugin:discord",
+        agentId: this.runtime.agentId,
+        channelId: message.channel.id
+      }, "Strict mode: processing message");
+    }
+`;
+
+  let patched = 0;
+  const seenTargets = new Set();
+  for (const dir of searchDirs) {
+    const packageDir = existsSync(dir) ? realpathSync(dir) : dir;
+    for (const relPath of relPaths) {
+      const target = resolve(packageDir, relPath);
+      if (!existsSync(target) || seenTargets.has(target)) continue;
+      seenTargets.add(target);
+
+      let src = readFileSync(target, "utf8");
+      if (
+        src.includes("Ignoring message that targets another mentioned user")
+      ) {
+        continue;
+      }
+      if (!src.includes(oldSnippet)) continue;
+
+      src = src.replace(oldSnippet, newSnippet);
+      writeFileSync(target, src, "utf8");
+      patched++;
+      console.log(
+        `[patch-deps] Applied plugin-discord mention routing fix: ${target}`,
+      );
+    }
+  }
+
+  if (patched > 0) {
+    console.log(
+      `[patch-deps] plugin-discord: patched ${patched} mention routing bundle(s).`,
+    );
+  }
+}
+patchPluginDiscordIgnoreOtherMentions();
 
 /**
  * Patch @elizaos/plugin-sql UUID validation regex.
@@ -1138,122 +1420,55 @@ function patchAgentSkillsLocalFallback() {
 patchAgentSkillsLocalFallback();
 
 /**
- * Patch testcafe for Bun compatibility.
+ * Patch cssstyle's CommonJS parser bundle to use a CJS-compatible css-color.
  *
- * Two issues prevent TestCafe from running under `bunx testcafe`:
+ * cssstyle@6.2.0 still calls require("@asamuzakjp/css-color"), but the 5.x
+ * css-color line is ESM-only. Under some CI Node/Vitest fork-worker runs this
+ * trips ERR_REQUIRE_ASYNC_MODULE before jsdom-based tests even start.
  *
- * 1) api-based.js uses `module.constructor` to get the Module object, but in
- *    Bun `module.constructor._nodeModulePaths` is undefined. We fall back to
- *    `require('module')` which has the function.
+ * We install a root alias pinned to @asamuzakjp/css-color@4.1.2, whose exports
+ * still provide a require-compatible CJS entry point, then rewrite cssstyle's
+ * require() to target that alias.
  *
- * 2) callsite.js assumes callsite objects are always non-null, but Bun's stack
- *    trace capture can produce null callsites. We add null guards.
- *
- * Remove once TestCafe ships Bun-compatible builds.
+ * Remove once cssstyle ships a compatible CommonJS import path or the test
+ * stack stops loading it via require().
  */
-function patchTestCafeBunCompat() {
+function patchCssstyleColorCompat() {
+  const relPath = "lib/parsers.js";
+  const searchDirs = [resolve(root, "node_modules/cssstyle")];
   const bunCacheDir = resolve(root, "node_modules/.bun");
-  if (!existsSync(bunCacheDir)) return;
-
-  let patched = 0;
-
-  for (const entry of readdirSync(bunCacheDir)) {
-    if (!entry.startsWith("testcafe@")) continue;
-
-    const tcRoot = resolve(bunCacheDir, entry, "node_modules/testcafe");
-
-    if (!existsSync(tcRoot)) continue;
-
-    // Patch 1: module.constructor -> require('module') fallback
-    const apiBasedPath = resolve(tcRoot, "lib/compiler/test-file/api-based.js");
-    const moduleNeedle = "const Module = module.constructor;";
-    if (!existsSync(apiBasedPath)) {
-      console.warn(
-        "[patch-deps] testcafe: expected file missing (layout may have changed). " +
-          `Update patchTestCafeBunCompat() in patch-deps.mjs. Missing: ${apiBasedPath}`,
-      );
-    } else {
-      let src = readFileSync(apiBasedPath, "utf8");
-      const moduleAlreadyPatched =
-        src.includes("typeof module.constructor._nodeModulePaths") &&
-        src.includes("require('module')");
-      if (src.includes(moduleNeedle)) {
-        src = src.replace(
-          moduleNeedle,
-          "const Module = typeof module.constructor._nodeModulePaths === 'function' ? module.constructor : require('module');",
-        );
-        writeFileSync(apiBasedPath, src, "utf8");
-        patched++;
-        console.log(
-          `[patch-deps] Applied testcafe Module constructor Bun fix: ${apiBasedPath}`,
-        );
-      } else if (!moduleAlreadyPatched) {
-        console.warn(
-          "[patch-deps] testcafe: Module constructor patch needle not found in api-based.js — " +
-            "TestCafe may have refactored; Bun runs may fail until patch-deps.mjs is updated. " +
-            `File: ${apiBasedPath}`,
-        );
-      }
-    }
-
-    // Patch 2: null-safe callsite helpers
-    const callsitePath = resolve(tcRoot, "lib/utils/callsite.js");
-    const oldStackFrame =
-      "function getCallsiteStackFrameString(callsite) {\n    return callsite.stackFrames[callsite.callsiteFrameIdx].toString();\n}";
-    const newStackFrame =
-      "function getCallsiteStackFrameString(callsite) {\n    if (!callsite || !callsite.stackFrames) return '<unknown>';\n    return callsite.stackFrames[callsite.callsiteFrameIdx].toString();\n}";
-    const oldGetId =
-      "function getCallsiteId(callsite) {\n    return `\u0024{callsite.filename}:\u0024{callsite.lineNum}`;\n}";
-    const newGetId =
-      "function getCallsiteId(callsite) {\n    if (!callsite) return '<unknown>:0';\n    return `\u0024{callsite.filename}:\u0024{callsite.lineNum}`;\n}";
-
-    if (!existsSync(callsitePath)) {
-      console.warn(
-        "[patch-deps] testcafe: expected file missing (layout may have changed). " +
-          `Update patchTestCafeBunCompat() in patch-deps.mjs. Missing: ${callsitePath}`,
-      );
-    } else {
-      let src = readFileSync(callsitePath, "utf8");
-      let changed = false;
-
-      if (src.includes(oldStackFrame)) {
-        src = src.replace(oldStackFrame, newStackFrame);
-        changed = true;
-      }
-
-      if (src.includes(oldGetId)) {
-        src = src.replace(oldGetId, newGetId);
-        changed = true;
-      }
-
-      if (changed) {
-        writeFileSync(callsitePath, src, "utf8");
-        patched++;
-        console.log(
-          `[patch-deps] Applied testcafe callsite null-guard Bun fix: ${callsitePath}`,
-        );
-      } else {
-        const callsiteAlreadyPatched =
-          src.includes("if (!callsite || !callsite.stackFrames)") &&
-          src.includes("if (!callsite) return '<unknown>:0'");
-        if (!callsiteAlreadyPatched) {
-          console.warn(
-            "[patch-deps] testcafe: callsite.js present but patch patterns not found — " +
-              "TestCafe may have refactored; Bun runs may fail until patch-deps.mjs is updated. " +
-              `File: ${callsitePath}`,
-          );
+  if (existsSync(bunCacheDir)) {
+    try {
+      for (const entry of readdirSync(bunCacheDir)) {
+        if (entry.startsWith("cssstyle@")) {
+          searchDirs.push(resolve(bunCacheDir, entry, "node_modules/cssstyle"));
         }
       }
-    }
+    } catch {}
+  }
+
+  const needle = 'require("@asamuzakjp/css-color")';
+  const replacement = 'require("@miladyai/css-color-cjs")';
+
+  let patched = 0;
+  for (const dir of searchDirs) {
+    const target = resolve(dir, relPath);
+    if (!existsSync(target)) continue;
+    let src = readFileSync(target, "utf8");
+    if (!src.includes(needle)) continue;
+    src = src.replaceAll(needle, replacement);
+    writeFileSync(target, src, "utf8");
+    patched++;
+    console.log(`[patch-deps] Applied cssstyle color compat fix: ${target}`);
   }
 
   if (patched > 0) {
     console.log(
-      `[patch-deps] testcafe: applied ${patched} Bun compatibility patch(es).`,
+      `[patch-deps] cssstyle: fixed ${patched} parser require path(s).`,
     );
   }
 }
-patchTestCafeBunCompat();
+patchCssstyleColorCompat();
 
 /**
  * 8) @elizaos/plugin-groq: The published plugin bundles @ai-sdk/groq@1.x which

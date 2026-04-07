@@ -9,14 +9,29 @@
  *  - UI chrome: command palette, emote picker, dropped files
  */
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type {
+  AppRunSummary,
+  AppSessionState,
   McpMarketplaceResult,
   McpRegistryServerDetail,
   McpServerConfig,
   McpServerStatus,
 } from "../api";
 import type { GamePostMessageAuthPayload } from "./internal";
+
+/**
+ * Currently-selected connector chat in the unified messages sidebar.
+ * When non-null, ChatView swaps its main panel out for a read-only
+ * view of that room's inbox messages (rendered via `/api/inbox/
+ * messages?roomId=…`). Mutually exclusive with a live dashboard
+ * conversation — the sidebar clears one when selecting the other.
+ */
+export interface ActiveInboxChat {
+  id: string;
+  source: string;
+  title: string;
+}
 
 export function useMiscUiState() {
   // ── Command palette ────────────────────────────────────────────────
@@ -54,17 +69,37 @@ export function useMiscUiState() {
   const [shareIngestNotice, setShareIngestNotice] = useState("");
 
   // ── Game ───────────────────────────────────────────────────────────
-  const [activeGameApp, setActiveGameApp] = useState("");
-  const [activeGameDisplayName, setActiveGameDisplayName] = useState("");
-  const [activeGameViewerUrl, setActiveGameViewerUrl] = useState("");
-  const [activeGameSandbox, setActiveGameSandbox] = useState(
-    "allow-scripts allow-same-origin allow-popups",
-  );
-  const [activeGamePostMessageAuth, setActiveGamePostMessageAuth] =
-    useState(false);
-  const [activeGamePostMessagePayload, setActiveGamePostMessagePayload] =
-    useState<GamePostMessageAuthPayload | null>(null);
+  const [appRuns, setAppRuns] = useState<AppRunSummary[]>([]);
+  const [activeGameRunId, setActiveGameRunId] = useState("");
   const [gameOverlayEnabled, setGameOverlayEnabled] = useState(false);
+
+  const activeGameRun = useMemo(
+    () => appRuns.find((run) => run.runId === activeGameRunId) ?? null,
+    [activeGameRunId, appRuns],
+  );
+  const activeGameApp = activeGameRun?.appName ?? "";
+  const activeGameDisplayName = activeGameRun?.displayName ?? "";
+  const activeGameViewerUrl = activeGameRun?.viewer?.url ?? "";
+  const activeGameSandbox =
+    activeGameRun?.viewer?.sandbox ??
+    "allow-scripts allow-same-origin allow-popups";
+  const activeGamePostMessageAuth = Boolean(
+    activeGameRun?.viewer?.postMessageAuth,
+  );
+  const activeGamePostMessagePayload =
+    activeGameRun?.viewer?.authMessage ?? null;
+  const activeGameSession =
+    (activeGameRun?.session as AppSessionState | null) ?? null;
+
+  useEffect(() => {
+    if (!activeGameRunId) return;
+    if (appRuns.some((run) => run.runId === activeGameRunId)) return;
+    setActiveGameRunId("");
+  }, [activeGameRunId, appRuns]);
+
+  // ── Unified messages sidebar ───────────────────────────────────────
+  const [activeInboxChat, setActiveInboxChat] =
+    useState<ActiveInboxChat | null>(null);
 
   // ── Callbacks ──────────────────────────────────────────────────────
 
@@ -100,14 +135,19 @@ export function useMiscUiState() {
       mcpHeaderInputs,
       droppedFiles,
       shareIngestNotice,
+      appRuns,
+      activeGameRunId,
       activeGameApp,
       activeGameDisplayName,
       activeGameViewerUrl,
       activeGameSandbox,
       activeGamePostMessageAuth,
       activeGamePostMessagePayload,
+      activeGameSession,
       gameOverlayEnabled,
+      activeInboxChat,
     },
+    setActiveInboxChat,
     setCommandQuery,
     setCommandActiveIndex,
     setEmotePickerOpen,
@@ -123,12 +163,8 @@ export function useMiscUiState() {
     setMcpHeaderInputs,
     setDroppedFiles,
     setShareIngestNotice,
-    setActiveGameApp,
-    setActiveGameDisplayName,
-    setActiveGameViewerUrl,
-    setActiveGameSandbox,
-    setActiveGamePostMessageAuth,
-    setActiveGamePostMessagePayload,
+    setAppRuns,
+    setActiveGameRunId,
     setGameOverlayEnabled,
     closeCommandPalette,
     openEmotePicker,

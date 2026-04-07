@@ -36,6 +36,8 @@ import {
   autoTopUpFormReducer,
   BILLING_PRESET_AMOUNTS,
   buildAutoTopUpFormState,
+  consumeManagedDiscordCallbackUrl,
+  consumeManagedGithubCallbackUrl,
   CLOUD_ACCENT_CONTROL_TEXT_CLASSNAME,
   CLOUD_INSET_PANEL_CLASSNAME,
   CLOUD_PANEL_CLASSNAME,
@@ -118,6 +120,8 @@ export function CloudDashboard() {
   const [deployAgentName, setDeployAgentName] = useState("");
   const [deploying, setDeploying] = useState(false);
   const mountedRef = useRef(true);
+  const handledManagedDiscordCallbackRef = useRef(false);
+  const handledManagedGithubCallbackRef = useRef(false);
   const autoTopUpEnabled = autoTopUpForm.enabled;
   const autoTopUpAmount = autoTopUpForm.amount;
   const autoTopUpThreshold = autoTopUpForm.threshold;
@@ -752,6 +756,110 @@ export function CloudDashboard() {
       void fetchBillingData();
     }
   }, [fetchBillingData, fetchCloudAgents, loadDropStatus, elizaCloudConnected]);
+
+  useEffect(() => {
+    if (
+      handledManagedDiscordCallbackRef.current ||
+      typeof window === "undefined"
+    ) {
+      return;
+    }
+
+    const { callback, cleanedUrl } = consumeManagedDiscordCallbackUrl(
+      window.location.href,
+    );
+    if (!callback) {
+      return;
+    }
+
+    handledManagedDiscordCallbackRef.current = true;
+    setState("cloudDashboardView", "agents");
+    if (callback.agentId) {
+      setSelectedAgentId(callback.agentId);
+    }
+    if (cleanedUrl && cleanedUrl !== window.location.href) {
+      window.history.replaceState({}, document.title, cleanedUrl);
+    }
+
+    if (callback.status === "connected") {
+      setActionNotice(
+        callback.guildName
+          ? t("elizaclouddashboard.ManagedDiscordConnectedNotice", {
+              defaultValue: callback.restarted
+                ? "Managed Discord connected to {{guild}}. The agent restarted and is ready."
+                : "Managed Discord connected to {{guild}}.",
+              guild: callback.guildName,
+            })
+          : t("elizaclouddashboard.ManagedDiscordConnectedNoticeFallback", {
+              defaultValue: callback.restarted
+                ? "Managed Discord connected. The agent restarted and is ready."
+                : "Managed Discord connected.",
+            }),
+        "success",
+        5200,
+      );
+      void fetchCloudAgents();
+      return;
+    }
+
+    setActionNotice(
+      callback.message ||
+        t("elizaclouddashboard.ManagedDiscordConnectFailed", {
+          defaultValue: "Managed Discord setup did not complete.",
+        }),
+      "error",
+      5200,
+    );
+  }, [fetchCloudAgents, setActionNotice, setState, t]);
+
+  // Handle GitHub OAuth callback — link the connection to the agent
+  useEffect(() => {
+    if (
+      handledManagedGithubCallbackRef.current ||
+      typeof window === "undefined"
+    ) {
+      return;
+    }
+
+    const { callback, cleanedUrl } = consumeManagedGithubCallbackUrl(
+      window.location.href,
+    );
+    if (!callback) {
+      return;
+    }
+
+    handledManagedGithubCallbackRef.current = true;
+    setState("cloudDashboardView", "agents");
+    if (callback.agentId) {
+      setSelectedAgentId(callback.agentId);
+    }
+    if (cleanedUrl && cleanedUrl !== window.location.href) {
+      window.history.replaceState({}, document.title, cleanedUrl);
+    }
+
+    if (callback.status === "connected") {
+      // Server-side completion endpoint already linked the connection;
+      // just show a success notice and refresh agent list.
+      setActionNotice(
+        t("elizaclouddashboard.ManagedGithubConnectedNotice", {
+          defaultValue: "GitHub account connected to this agent.",
+        }),
+        "success",
+        5200,
+      );
+      void fetchCloudAgents();
+      return;
+    }
+
+    setActionNotice(
+      callback.message ||
+        t("elizaclouddashboard.ManagedGithubConnectFailed", {
+          defaultValue: "GitHub setup did not complete.",
+        }),
+      "error",
+      5200,
+    );
+  }, [fetchCloudAgents, setActionNotice, setState, t]);
 
   // Drop cached billing / agents when disconnected so we never show stale balances
   // after context clears credits (local state would otherwise outlive AppContext).

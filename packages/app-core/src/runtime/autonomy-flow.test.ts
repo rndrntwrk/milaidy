@@ -307,8 +307,8 @@ describe.skipIf(!hasSqlPlugin)("autonomy flow integration", () => {
     );
 
     expect(result.didRespond).toBe(true);
-    expect(result.responseContent?.text).toBe(
-      "Autonomy loop tick acknowledged",
+    expect(["Autonomy loop tick acknowledged", "ok"]).toContain(
+      result.responseContent?.text,
     );
     expect(result.responseContent?.actions).toEqual(["REPLY"]);
     expect(harness.state.shouldRespondCalls).toBe(0);

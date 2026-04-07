@@ -36,7 +36,7 @@ describe("handleSwarmSynthesis", () => {
     await handleSwarmSynthesis(st, makePayload(), routeMessage);
 
     expect(useModel).toHaveBeenCalledWith(ModelType.TEXT_SMALL, {
-      prompt: expect.stringContaining("coding agent swarm"),
+      prompt: expect.stringContaining("task-agent swarm"),
       maxTokens: 2048,
       temperature: 0.7,
     });
@@ -71,7 +71,7 @@ describe("handleSwarmSynthesis", () => {
     await handleSwarmSynthesis(st, payload, routeMessage);
 
     expect(routeMessage).toHaveBeenCalledWith(
-      "All 3 coding agents finished (2 completed, 1 stopped). Review their work when you're ready.",
+      "All 3 task agents finished (2 completed, 1 stopped). Review their work when you're ready.",
       "coding-agent",
     );
   });

@@ -26,6 +26,9 @@ describe("MiladyClient language header propagation", () => {
   beforeEach(() => {
     fetchMock = vi.fn();
     globalThis.fetch = fetchMock as typeof globalThis.fetch;
+    if (typeof window !== "undefined") {
+      window.sessionStorage.clear();
+    }
   });
 
   afterEach(() => {
@@ -33,6 +36,17 @@ describe("MiladyClient language header propagation", () => {
   });
 
   it("adds X-Milady-UI-Language to normal chat requests", async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          conversation: { id: "conv-compat", title: "Quick Chat" },
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
     fetchMock.mockResolvedValueOnce(
       new Response(JSON.stringify({ text: "ok", agentName: "Eliza" }), {
         status: 200,
@@ -44,9 +58,13 @@ describe("MiladyClient language header propagation", () => {
     client.setUiLanguage("zh-CN");
     await client.sendChatRest("hello");
 
-    const init = fetchMock.mock.calls[0][1] as RequestInit;
-    const headers = new Headers(init.headers as HeadersInit);
-    expect(headers.get("X-Milady-UI-Language")).toBe("zh-CN");
+    const createInit = fetchMock.mock.calls[0][1] as RequestInit;
+    const createHeaders = new Headers(createInit.headers as HeadersInit);
+    expect(createHeaders.get("X-Milady-UI-Language")).toBe("zh-CN");
+
+    const messageInit = fetchMock.mock.calls[1][1] as RequestInit;
+    const messageHeaders = new Headers(messageInit.headers as HeadersInit);
+    expect(messageHeaders.get("X-Milady-UI-Language")).toBe("zh-CN");
   });
 
   it("adds X-Milady-UI-Language to streaming chat requests", async () => {

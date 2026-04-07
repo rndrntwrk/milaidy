@@ -98,4 +98,22 @@ describe("CI workflow audit regressions", () => {
     expect(content).toMatch(/trust-scoring\.cjs/);
     expect(content).toMatch(/release-tracker/);
   });
+
+  it("deploy-origin-smoke runs both origin status smoke and life-ops smoke", () => {
+    const content = readWorkflow("deploy-origin-smoke.yml");
+    expect(content).toContain("name: Run deploy smoke checks");
+    expect(content).toContain("run: bun run smoke:api-status");
+    expect(content).toContain("MILADY_DEPLOY_BASE_URLS:");
+    expect(content).toContain("name: Run Life Ops smoke checks");
+    expect(content).toContain("run: bun run smoke:lifeops");
+    expect(content).toContain(
+      `MILADY_LIFEOPS_BASE_URLS: \${{ env.APP_ORIGIN }}`,
+    );
+    expect(content).toContain(
+      `MILADY_SMOKE_API_TOKEN: \${{ secrets.MILADY_API_TOKEN }}`,
+    );
+    expect(content).toContain(
+      `ELIZA_SMOKE_API_TOKEN: \${{ secrets.ELIZA_API_TOKEN }}`,
+    );
+  });
 });

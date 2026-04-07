@@ -246,6 +246,19 @@ export interface GpuViewInfo {
   viewId?: number | null;
 }
 
+// -- Steward Sidecar --
+export interface StewardRpcStatus {
+  state: "stopped" | "starting" | "running" | "error" | "restarting";
+  port: number | null;
+  pid: number | null;
+  error: string | null;
+  restartCount: number;
+  walletAddress: string | null;
+  agentId: string | null;
+  tenantId: string | null;
+  startedAt: number | null;
+}
+
 // -- Camera --
 export interface CameraDevice {
   deviceId: string;
@@ -285,6 +298,18 @@ export interface TalkModeConfig {
   modelSize?: string;
   language?: string;
   voiceId?: string;
+}
+
+// -- Music player (plugin-music-player HTTP routes) --
+/** Resolved HTTP URLs for plugin-music-player routes (agent process, not under /api). */
+export interface MusicPlayerDesktopPlaybackUrls {
+  ok: boolean;
+  reason?: string;
+  apiBase?: string;
+  guildId?: string;
+  streamUrl?: string;
+  nowPlayingUrl?: string;
+  queueUrl?: string;
 }
 
 // -- File Dialog --
@@ -930,6 +955,12 @@ export type MiladyRPCSchema = {
       talkmodeUpdateConfig: { params: TalkModeConfig; response: undefined };
       talkmodeAudioChunk: { params: { data: string }; response: undefined };
 
+      // ---- Music player (elizaOS plugin-music-player HTTP routes on agent) ----
+      musicPlayerGetDesktopPlaybackUrls: {
+        params: { guildId?: string };
+        response: MusicPlayerDesktopPlaybackUrls;
+      };
+
       // ---- Context Menu ----
       contextMenuAskAgent: {
         params: { text: string };
@@ -1024,6 +1055,28 @@ export type MiladyRPCSchema = {
       gpuViewList: {
         params: undefined;
         response: { views: GpuViewInfo[] };
+      };
+
+      // ---- Steward Sidecar ----
+      stewardGetStatus: {
+        params: undefined;
+        response: StewardRpcStatus;
+      };
+      stewardIsLocalEnabled: {
+        params: undefined;
+        response: { enabled: boolean };
+      };
+      stewardStart: {
+        params: undefined;
+        response: StewardRpcStatus;
+      };
+      stewardRestart: {
+        params: undefined;
+        response: StewardRpcStatus;
+      };
+      stewardReset: {
+        params: undefined;
+        response: StewardRpcStatus;
       };
     };
     // biome-ignore lint/complexity/noBannedTypes: empty message schema placeholder for future audio streaming
@@ -1142,6 +1195,9 @@ export type MiladyRPCSchema = {
 
       // GPU Window push events
       gpuWindowClosed: { id: string };
+
+      // Steward sidecar status push
+      stewardStatusUpdate: StewardRpcStatus;
 
       // WebGPU browser support status
       webGpuBrowserStatus: {
@@ -1357,6 +1413,9 @@ export const CHANNEL_TO_RPC_METHOD: Record<string, string> = {
   "talkmode:updateConfig": "talkmodeUpdateConfig",
   "talkmode:audioChunk": "talkmodeAudioChunk",
 
+  // Music player (desktop)
+  "musicPlayer:getDesktopPlaybackUrls": "musicPlayerGetDesktopPlaybackUrls",
+
   // Context Menu
   "contextMenu:askAgent": "contextMenuAskAgent",
   "contextMenu:createSkill": "contextMenuCreateSkill",
@@ -1384,6 +1443,13 @@ export const CHANNEL_TO_RPC_METHOD: Record<string, string> = {
   "gpuView:setHidden": "gpuViewSetHidden",
   "gpuView:getNativeHandle": "gpuViewGetNativeHandle",
   "gpuView:list": "gpuViewList",
+
+  // Steward Sidecar
+  "steward:getStatus": "stewardGetStatus",
+  "steward:isLocalEnabled": "stewardIsLocalEnabled",
+  "steward:start": "stewardStart",
+  "steward:restart": "stewardRestart",
+  "steward:reset": "stewardReset",
 };
 
 /**
@@ -1426,6 +1492,9 @@ export const PUSH_CHANNEL_TO_RPC_MESSAGE: Record<string, string> = {
 
   // GPU Window push events
   "gpuWindow:closed": "gpuWindowClosed",
+
+  // Steward sidecar
+  stewardStatusUpdate: "stewardStatusUpdate",
 
   // WebGPU browser support
   "webgpu:browserStatus": "webGpuBrowserStatus",

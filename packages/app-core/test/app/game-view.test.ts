@@ -1,28 +1,32 @@
 // @vitest-environment jsdom
 
-import type { AppViewerAuthMessage } from "@miladyai/app-core/api";
+import type {
+  AppRunSummary,
+  AppSessionState,
+  AppViewerAuthMessage,
+} from "@miladyai/app-core/api";
+import * as electrobunRpc from "@miladyai/app-core/bridge/electrobun-rpc";
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { text, findButtonByText, flush } from "../../../../test/helpers/react-test";
-import * as electrobunRpc from "@miladyai/app-core/bridge/electrobun-rpc";
+import { findButtonByText, flush } from "../../../../test/helpers/react-test";
 
 interface GameContextStub {
   t: (key: string, opts?: Record<string, unknown>) => string;
+  appRuns: AppRunSummary[];
+  activeGameRunId: string;
   activeGameApp: string;
   activeGameDisplayName: string;
   activeGameViewerUrl: string;
   activeGameSandbox: string;
   activeGamePostMessageAuth: boolean;
   activeGamePostMessagePayload: AppViewerAuthMessage | null;
+  activeGameSession: AppSessionState | null;
   gameOverlayEnabled: boolean;
   plugins: { id: string; enabled: boolean }[];
   logs: unknown[];
   loadLogs: () => Promise<void>;
-  setState: (
-    key: string,
-    value: string | boolean | AppViewerAuthMessage | null,
-  ) => void;
+  setState: (key: string, value: unknown) => void;
   setActionNotice: (
     text: string,
     tone?: "info" | "success" | "error",
@@ -37,7 +41,13 @@ type TestWindow = Window & {
 const { mockClientFns, mockUseApp } = vi.hoisted(() => ({
   mockClientFns: {
     getCodingAgentStatus: vi.fn(async () => null),
-    stopApp: vi.fn(),
+    getAppSessionState: vi.fn(async () => null),
+    sendAppRunMessage: vi.fn(),
+    sendAppSessionMessage: vi.fn(),
+    controlAppRun: vi.fn(),
+    controlAppSession: vi.fn(),
+    sendChatRest: vi.fn(),
+    stopAppRun: vi.fn(),
   },
   mockUseApp: vi.fn(),
 }));
@@ -51,24 +61,73 @@ vi.mock("@miladyai/app-core/state", () => ({
 
 import { GameView } from "../../src/components/apps/GameView";
 
+function createRunSummary(
+  overrides: Partial<AppRunSummary> = {},
+): AppRunSummary {
+  return {
+    runId: "run-1",
+    appName: "@elizaos/app-2004scape",
+    displayName: "2004scape",
+    pluginName: "@elizaos/app-2004scape",
+    launchType: "connect",
+    launchUrl: "http://localhost:5175/viewer",
+    viewer: {
+      url: "http://localhost:5175/viewer",
+      sandbox: "allow-scripts allow-same-origin",
+      postMessageAuth: false,
+    },
+    session: null,
+    status: "running",
+    summary: "Viewer ready.",
+    startedAt: "2026-04-06T00:00:00.000Z",
+    updatedAt: "2026-04-06T00:00:00.000Z",
+    lastHeartbeatAt: "2026-04-06T00:00:00.000Z",
+    supportsBackground: true,
+    viewerAttachment: "attached",
+    health: {
+      state: "healthy",
+      message: null,
+    },
+    ...overrides,
+  };
+}
+
 function createContext(overrides?: Partial<GameContextStub>): GameContextStub {
+  const run = createRunSummary({
+    viewer:
+      overrides?.activeGameViewerUrl === ""
+        ? null
+        : {
+            url:
+              overrides?.activeGameViewerUrl ?? "http://localhost:5175/viewer",
+            sandbox:
+              overrides?.activeGameSandbox ?? "allow-scripts allow-same-origin",
+            postMessageAuth: overrides?.activeGamePostMessageAuth ?? false,
+            authMessage: overrides?.activeGamePostMessagePayload ?? undefined,
+          },
+    session: overrides?.activeGameSession ?? null,
+  });
   return {
     t: (k: string, opts?: Record<string, unknown>) => {
       if (opts?.defaultValue && typeof opts.defaultValue === "string") {
         let str = opts.defaultValue;
         for (const [key, val] of Object.entries(opts)) {
-          if (key !== "defaultValue") str = str.replace(`{{${key}}}`, String(val));
+          if (key !== "defaultValue")
+            str = str.replace(`{{${key}}}`, String(val));
         }
         return str;
       }
       return k;
     },
+    appRuns: [run],
+    activeGameRunId: run.runId,
     activeGameApp: "@elizaos/app-2004scape",
     activeGameDisplayName: "2004scape",
     activeGameViewerUrl: "http://localhost:5175/viewer",
     activeGameSandbox: "allow-scripts allow-same-origin",
     activeGamePostMessageAuth: false,
     activeGamePostMessagePayload: null,
+    activeGameSession: null,
     gameOverlayEnabled: false,
     plugins: [],
     logs: [],
@@ -81,23 +140,33 @@ function createContext(overrides?: Partial<GameContextStub>): GameContextStub {
 
 describe("GameView", () => {
   beforeEach(() => {
-    delete (window as TestWindow & { __MILADY_ELECTROBUN_RPC__?: unknown }).__MILADY_ELECTROBUN_RPC__;
+    delete (window as TestWindow & { __MILADY_ELECTROBUN_RPC__?: unknown })
+      .__MILADY_ELECTROBUN_RPC__;
     vi.spyOn(electrobunRpc, "getElectrobunRendererRpc").mockReturnValue(
       undefined,
     );
-    mockClientFns.stopApp.mockReset();
+    mockClientFns.stopAppRun.mockReset();
+    mockClientFns.getAppSessionState.mockReset();
+    mockClientFns.sendAppRunMessage.mockReset();
+    mockClientFns.sendAppSessionMessage.mockReset();
+    mockClientFns.controlAppRun.mockReset();
+    mockClientFns.controlAppSession.mockReset();
+    mockClientFns.sendChatRest.mockReset();
     mockUseApp.mockReset();
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
     delete (window as TestWindow).__electrobunWindowId;
-    delete (window as TestWindow & { __MILADY_ELECTROBUN_RPC__?: unknown }).__MILADY_ELECTROBUN_RPC__;
+    delete (window as TestWindow & { __MILADY_ELECTROBUN_RPC__?: unknown })
+      .__MILADY_ELECTROBUN_RPC__;
     vi.restoreAllMocks();
   });
 
   it("renders empty state and Back to Apps returns to apps tab", async () => {
     const ctx = createContext({
+      appRuns: [],
+      activeGameRunId: "",
       activeGameApp: "",
       activeGameDisplayName: "",
       activeGameViewerUrl: "",
@@ -162,7 +231,9 @@ describe("GameView", () => {
     mockUseApp.mockReturnValue(ctx);
     (window as TestWindow).__electrobunWindowId = 1;
 
-    (window as TestWindow & { __MILADY_ELECTROBUN_RPC__?: unknown }).__MILADY_ELECTROBUN_RPC__ = {
+    (
+      window as TestWindow & { __MILADY_ELECTROBUN_RPC__?: unknown }
+    ).__MILADY_ELECTROBUN_RPC__ = {
       request: {
         desktopOpenExternal,
         gameOpenWindow,
@@ -193,18 +264,79 @@ describe("GameView", () => {
     expect(openSpy).not.toHaveBeenCalled();
   });
 
+  it("keeps auth-backed embedded viewers inside the app shell on Electrobun", async () => {
+    const payload: AppViewerAuthMessage = {
+      type: "HYPERSCAPE_AUTH",
+      authToken: "token-embedded",
+      agentId: "agent-1",
+      characterId: "char-1",
+      followEntity: "char-1",
+    };
+    const ctx = createContext({
+      activeGameApp: "@elizaos/app-hyperscape",
+      activeGameDisplayName: "Hyperscape",
+      activeGameViewerUrl:
+        "http://localhost:3333?embedded=true&mode=spectator&surface=agent-control",
+      activeGamePostMessageAuth: true,
+      activeGamePostMessagePayload: payload,
+      appRuns: [
+        createRunSummary({
+          appName: "@elizaos/app-hyperscape",
+          displayName: "Hyperscape",
+          viewer: {
+            url: "http://localhost:3333?embedded=true&mode=spectator&surface=agent-control",
+            embedParams: {
+              embedded: "true",
+              mode: "spectator",
+              surface: "agent-control",
+            },
+            sandbox: "allow-scripts allow-same-origin",
+            postMessageAuth: true,
+            authMessage: payload,
+          },
+        }),
+      ],
+    });
+    const gameOpenWindow = vi.fn(async () => ({ id: "game-window-1" }));
+    mockUseApp.mockReturnValue(ctx);
+    (window as TestWindow).__electrobunWindowId = 1;
+
+    (
+      window as TestWindow & { __MILADY_ELECTROBUN_RPC__?: unknown }
+    ).__MILADY_ELECTROBUN_RPC__ = {
+      request: {
+        gameOpenWindow,
+      },
+      onMessage: vi.fn(),
+      offMessage: vi.fn(),
+    };
+
+    let tree: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(GameView));
+    });
+    await flush();
+
+    expect(gameOpenWindow).not.toHaveBeenCalled();
+    expect(
+      tree.root.find(
+        (node) => node.props?.["data-testid"] === "game-view-iframe",
+      ),
+    ).toBeDefined();
+  });
+
   it("stops app, resets state, and navigates back on success", async () => {
     const ctx = createContext();
     mockUseApp.mockReturnValue(ctx);
-    mockClientFns.stopApp.mockResolvedValue({
+    mockClientFns.stopAppRun.mockResolvedValue({
       success: true,
       appName: ctx.activeGameApp,
+      runId: ctx.activeGameRunId,
       stoppedAt: new Date().toISOString(),
-      pluginUninstalled: true,
-      needsRestart: true,
-      stopScope: "plugin-uninstalled",
-      message:
-        "App disconnected and plugin uninstalled. Agent restart required.",
+      pluginUninstalled: false,
+      needsRestart: false,
+      stopScope: "viewer-session",
+      message: "2004scape stopped.",
     });
 
     let tree: TestRenderer.ReactTestRenderer;
@@ -217,30 +349,22 @@ describe("GameView", () => {
       await findButtonByText(tree?.root, "game.stop").props.onClick();
     });
 
-    expect(mockClientFns.stopApp).toHaveBeenCalledWith(ctx.activeGameApp);
-    expect(ctx.setState).toHaveBeenCalledWith("activeGameApp", "");
-    expect(ctx.setState).toHaveBeenCalledWith("activeGameDisplayName", "");
-    expect(ctx.setState).toHaveBeenCalledWith("activeGameViewerUrl", "");
-    expect(ctx.setState).toHaveBeenCalledWith(
-      "activeGamePostMessageAuth",
-      false,
-    );
-    expect(ctx.setState).toHaveBeenCalledWith(
-      "activeGamePostMessagePayload",
-      null,
-    );
+    expect(mockClientFns.stopAppRun).toHaveBeenCalledWith(ctx.activeGameRunId);
+    expect(ctx.setState).toHaveBeenCalledWith("appRuns", []);
+    expect(ctx.setState).toHaveBeenCalledWith("activeGameRunId", "");
     expect(ctx.setState).toHaveBeenCalledWith("tab", "apps");
+    expect(ctx.setState).toHaveBeenCalledWith("appsSubTab", "browse");
     expect(ctx.setActionNotice).toHaveBeenCalledWith(
-      "App disconnected and plugin uninstalled. Agent restart required.",
+      "2004scape stopped.",
       "success",
-      5000,
+      3200,
     );
   });
 
   it("shows stop errors when API call fails", async () => {
     const ctx = createContext();
     mockUseApp.mockReturnValue(ctx);
-    mockClientFns.stopApp.mockRejectedValue(new Error("stop failed"));
+    mockClientFns.stopAppRun.mockRejectedValue(new Error("stop failed"));
 
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
@@ -260,9 +384,10 @@ describe("GameView", () => {
   it("shows info notice when stop result is a no-op", async () => {
     const ctx = createContext();
     mockUseApp.mockReturnValue(ctx);
-    mockClientFns.stopApp.mockResolvedValue({
+    mockClientFns.stopAppRun.mockResolvedValue({
       success: false,
       appName: ctx.activeGameApp,
+      runId: ctx.activeGameRunId,
       stoppedAt: new Date().toISOString(),
       pluginUninstalled: false,
       needsRestart: false,
@@ -431,5 +556,193 @@ describe("GameView", () => {
       findButtonByText(tree?.root, "game.backToApps").props.onClick();
     });
     expect(ctx.setState).toHaveBeenCalledWith("tab", "apps");
+  });
+
+  it("uses run-scoped messaging when a live run is active and shows queued acknowledgements", async () => {
+    const ctx = createContext({
+      activeGameApp: "@elizaos/app-hyperscape",
+      activeGameSession: {
+        sessionId: "agent-1",
+        appName: "@elizaos/app-hyperscape",
+        mode: "spectate-and-steer",
+        status: "running",
+        canSendCommands: true,
+        controls: ["pause"],
+        summary: "running: Chop wood",
+      },
+    });
+    mockUseApp.mockReturnValue(ctx);
+    mockClientFns.getAppSessionState.mockResolvedValue(ctx.activeGameSession);
+    mockClientFns.sendAppRunMessage.mockResolvedValue({
+      success: true,
+      message: "Queued guidance for Hyperscape.",
+      disposition: "queued",
+      status: 202,
+      run: {
+        ...ctx.appRuns[0],
+        session: ctx.activeGameSession,
+      },
+    });
+
+    let tree: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(GameView));
+    });
+    await flush();
+
+    await act(async () => {
+      await findButtonByText(tree.root, "game.showLogs").props.onClick();
+    });
+
+    const input = tree.root.findAll(
+      (node) => node.props?.placeholder === "game.chatPlaceholder",
+    )[0];
+    expect(input).toBeDefined();
+    await act(async () => {
+      input.props.onChange({ target: { value: "go chop some wood" } });
+    });
+
+    await act(async () => {
+      await findButtonByText(tree.root, "common.send").props.onClick();
+    });
+
+    expect(mockClientFns.sendAppRunMessage).toHaveBeenCalledWith(
+      ctx.activeGameRunId,
+      "go chop some wood",
+    );
+    expect(ctx.setActionNotice).toHaveBeenCalledWith(
+      "Queued guidance for Hyperscape.",
+      "info",
+      2600,
+    );
+  });
+
+  it("shows run control acknowledgements for session-backed apps", async () => {
+    const ctx = createContext({
+      activeGameApp: "@elizaos/app-hyperscape",
+      activeGameSession: {
+        sessionId: "agent-2",
+        appName: "@elizaos/app-hyperscape",
+        mode: "spectate-and-steer",
+        status: "running",
+        canSendCommands: true,
+        controls: ["pause"],
+        summary: "running: Patrolling",
+      },
+    });
+    mockUseApp.mockReturnValue(ctx);
+    mockClientFns.getAppSessionState.mockResolvedValue(ctx.activeGameSession);
+    mockClientFns.controlAppRun.mockResolvedValue({
+      success: true,
+      message: "Hyperscape run paused.",
+      disposition: "accepted",
+      status: 200,
+      run: {
+        ...ctx.appRuns[0],
+        session: {
+          ...ctx.activeGameSession,
+          status: "paused",
+          controls: ["resume"],
+        },
+      },
+    });
+
+    let tree: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(GameView));
+    });
+    await flush();
+
+    await act(async () => {
+      await findButtonByText(tree.root, "Pause").props.onClick();
+    });
+
+    expect(mockClientFns.controlAppRun).toHaveBeenCalledWith(
+      ctx.activeGameRunId,
+      "pause",
+    );
+    expect(ctx.setActionNotice).toHaveBeenCalledWith(
+      "Hyperscape run paused.",
+      "success",
+      2400,
+    );
+  });
+
+  it("shows rejected notices when run steering is rejected", async () => {
+    const ctx = createContext();
+    mockUseApp.mockReturnValue(ctx);
+    mockClientFns.sendAppRunMessage.mockResolvedValue({
+      success: false,
+      message: "The run rejected that instruction.",
+      disposition: "rejected",
+      status: 409,
+      run: ctx.appRuns[0],
+    });
+
+    let tree: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(GameView));
+    });
+    await flush();
+
+    await act(async () => {
+      await findButtonByText(tree.root, "game.showLogs").props.onClick();
+    });
+
+    const input = tree.root.findAll(
+      (node) => node.props?.placeholder === "game.chatPlaceholder",
+    )[0];
+    await act(async () => {
+      input.props.onChange({ target: { value: "do the wrong thing" } });
+    });
+
+    await act(async () => {
+      await findButtonByText(tree.root, "common.send").props.onClick();
+    });
+
+    expect(ctx.setActionNotice).toHaveBeenCalledWith(
+      "The run rejected that instruction.",
+      "error",
+      3200,
+    );
+  });
+
+  it("shows unsupported notices when run steering is unavailable", async () => {
+    const ctx = createContext();
+    mockUseApp.mockReturnValue(ctx);
+    mockClientFns.sendAppRunMessage.mockResolvedValue({
+      success: false,
+      message: "This run does not expose a steering channel yet.",
+      disposition: "unsupported",
+      status: 501,
+      run: ctx.appRuns[0],
+    });
+
+    let tree: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(GameView));
+    });
+    await flush();
+
+    await act(async () => {
+      await findButtonByText(tree.root, "game.showLogs").props.onClick();
+    });
+
+    const input = tree.root.findAll(
+      (node) => node.props?.placeholder === "game.chatPlaceholder",
+    )[0];
+    await act(async () => {
+      input.props.onChange({ target: { value: "please steer" } });
+    });
+
+    await act(async () => {
+      await findButtonByText(tree.root, "common.send").props.onClick();
+    });
+
+    expect(ctx.setActionNotice).toHaveBeenCalledWith(
+      "This run does not expose a steering channel yet.",
+      "error",
+      3200,
+    );
   });
 });

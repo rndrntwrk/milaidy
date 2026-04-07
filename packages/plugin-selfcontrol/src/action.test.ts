@@ -1,95 +1,194 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import { SELFCONTROL_ACCESS_ERROR } from "./access";
+
+const roleMocks = vi.hoisted(() => ({
+  checkSenderRole: vi.fn(),
+}));
+
+vi.mock("@miladyai/plugin-roles", () => ({
+  checkSenderRole: roleMocks.checkSenderRole,
+}));
+
 import {
-  selfControlBlockWebsitesAction,
-  selfControlGetStatusAction,
-  selfControlUnblockWebsitesAction,
+  blockWebsitesAction,
+  getWebsiteBlockStatusAction,
+  requestWebsiteBlockingPermissionAction,
+  unblockWebsitesAction,
 } from "./action";
 import {
+  cancelSelfControlExpiryTimer,
   resetSelfControlStatusCache,
-  setSelfControlCommandRunnerForTests,
-  setSelfControlPathExistsForTests,
   setSelfControlPluginConfig,
 } from "./selfcontrol";
 
-afterEach(() => {
-  setSelfControlPluginConfig(undefined);
-  setSelfControlCommandRunnerForTests(null);
-  setSelfControlPathExistsForTests(null);
-  resetSelfControlStatusCache();
-  vi.restoreAllMocks();
+let tempDir = "";
+let hostsFilePath = "";
+
+beforeEach(() => {
+  tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "milady-selfcontrol-"));
+  hostsFilePath = path.join(tempDir, "hosts");
+  fs.writeFileSync(hostsFilePath, "127.0.0.1 localhost\n", "utf8");
+  setSelfControlPluginConfig({ hostsFilePath, statusCacheTtlMs: 0 });
+  roleMocks.checkSenderRole.mockReset().mockResolvedValue({
+    entityId: "user-1",
+    role: "ADMIN",
+    isOwner: false,
+    isAdmin: true,
+    canManageRoles: true,
+  });
 });
 
-describe("selfControlBlockWebsitesAction", () => {
-  it("starts a block when SelfControl is available and idle", async () => {
-    const runner = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        stdout: "NO",
-        stderr: "",
-        code: 0,
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        stdout: "INFO: Block successfully added.",
-        stderr: "",
-        code: 0,
-      });
+afterEach(() => {
+  cancelSelfControlExpiryTimer();
+  resetSelfControlStatusCache();
+  setSelfControlPluginConfig(undefined);
+  vi.restoreAllMocks();
+  if (tempDir) {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
 
-    setSelfControlPluginConfig({
-      cliPath: "/Applications/SelfControl.app/Contents/MacOS/selfcontrol-cli",
-    });
-    setSelfControlPathExistsForTests(async () => true);
-    setSelfControlCommandRunnerForTests(runner);
-
-    const result = await selfControlBlockWebsitesAction.handler(
+describe("blockWebsitesAction", () => {
+  it("uses explicit action parameters when they are provided", async () => {
+    const result = await blockWebsitesAction.handler(
       {} as never,
       {
-        content: { text: "Block x.com and twitter.com for 30 minutes." },
+        entityId: "user-1",
+        roomId: "room-1",
+        content: { text: "do it" },
+      } as never,
+      undefined,
+      {
+        parameters: {
+          websites: ["https://x.com", "twitter.com"],
+          durationMinutes: "180",
+        },
+      } as never,
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.text).toMatch(/Started a website block/i);
+    expect(result.data).toMatchObject({
+      websites: ["x.com", "twitter.com"],
+      durationMinutes: 180,
+    });
+
+    const hostsFile = fs.readFileSync(hostsFilePath, "utf8");
+    expect(hostsFile).toContain("0.0.0.0 x.com");
+    expect(hostsFile).toContain("0.0.0.0 twitter.com");
+  });
+
+  it("extracts websites from recent conversation context without the model path", async () => {
+    const getMemories = vi.fn().mockResolvedValue([
+      {
+        entityId: "user-1",
+        content: {
+          text: "Please block x.com and twitter.com for 30 minutes.",
+        },
+        createdAt: 1,
+      },
+    ]);
+
+    const result = await blockWebsitesAction.handler(
+      {
+        getMemories,
+      } as never,
+      {
+        entityId: "user-1",
+        roomId: "room-1",
+        content: { text: "do it" },
       } as never,
       undefined,
       undefined,
     );
 
     expect(result.success).toBe(true);
-    expect(result.text).toMatch(/Started a SelfControl block/i);
-    expect(runner).toHaveBeenNthCalledWith(
-      2,
-      "/Applications/SelfControl.app/Contents/MacOS/selfcontrol-cli",
-      expect.arrayContaining(["start", "--blocklist", "--enddate"]),
+    expect(result.text).toMatch(/Started a website block/i);
+    expect(getMemories).toHaveBeenCalledWith(
+      expect.objectContaining({
+        roomId: "room-1",
+        count: 16,
+      }),
+    );
+
+    const hostsFile = fs.readFileSync(hostsFilePath, "utf8");
+    expect(hostsFile).toContain("0.0.0.0 x.com");
+    expect(hostsFile).toContain("0.0.0.0 twitter.com");
+  });
+
+  it("fails with a conversation-aware error when the action has no parameters and no websites can be derived from recent messages", async () => {
+    const result = await blockWebsitesAction.handler(
+      {
+        getMemories: vi.fn().mockResolvedValue([]),
+      } as never,
+      {
+        entityId: "user-1",
+        roomId: "room-1",
+        content: { text: "nah use self control, block the website plz" },
+      } as never,
+      undefined,
+      undefined,
+    );
+
+    expect(result).toMatchObject({
+      success: false,
+      text: "Could not determine which public website hostnames to block from the recent conversation. Name the sites explicitly, or pass them to the action as parameters.",
+    });
+    expect(fs.readFileSync(hostsFilePath, "utf8")).toBe(
+      "127.0.0.1 localhost\n",
     );
   });
 
-  it("refuses to start a new block while another one is active", async () => {
-    const runner = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        stdout: "YES",
-        stderr: "",
-        code: 0,
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        stdout: `
-          BlockEndDate = "2026-04-04 13:44:54 +0000";
-          ActiveBlocklist = (
-            "x.com"
-          );
-        `,
-        stderr: "",
-        code: 0,
-      });
+  it("falls back to assistant-restated websites when the recent sender turn is shorthand", async () => {
+    const getMemories = vi.fn().mockResolvedValue([
+      {
+        entityId: "assistant-1",
+        content: {
+          text: "I can block x.com and twitter.com for an hour whenever you want.",
+        },
+        createdAt: 1,
+      },
+    ]);
 
-    setSelfControlPluginConfig({
-      cliPath: "/Applications/SelfControl.app/Contents/MacOS/selfcontrol-cli",
-    });
-    setSelfControlPathExistsForTests(async () => true);
-    setSelfControlCommandRunnerForTests(runner);
+    const result = await blockWebsitesAction.handler(
+      {
+        getMemories,
+      } as never,
+      {
+        entityId: "user-1",
+        roomId: "room-1",
+        content: { text: "do it" },
+      } as never,
+      undefined,
+      undefined,
+    );
 
-    const result = await selfControlBlockWebsitesAction.handler(
+    expect(result.success).toBe(true);
+    expect(result.text).toMatch(/Started a website block/i);
+    const hostsFile = fs.readFileSync(hostsFilePath, "utf8");
+    expect(hostsFile).toContain("0.0.0.0 x.com");
+    expect(hostsFile).toContain("0.0.0.0 twitter.com");
+  });
+
+  it("refuses to start a second block while another one is active", async () => {
+    await blockWebsitesAction.handler(
       {} as never,
       {
+        content: { text: "Block x.com for 30 minutes." },
+      } as never,
+      undefined,
+      undefined,
+    );
+
+    const result = await blockWebsitesAction.handler(
+      {} as never,
+      {
+        entityId: "user-1",
+        roomId: "room-1",
         content: { text: "Block twitter.com for 30 minutes." },
       } as never,
       undefined,
@@ -99,93 +198,175 @@ describe("selfControlBlockWebsitesAction", () => {
     expect(result.success).toBe(false);
     expect(result.text).toContain("already running");
   });
+
+  it("rejects non-admin users", async () => {
+    roleMocks.checkSenderRole.mockResolvedValue({
+      entityId: "user-1",
+      role: "USER",
+      isOwner: false,
+      isAdmin: false,
+      canManageRoles: false,
+    });
+
+    const validate = await blockWebsitesAction.validate?.(
+      {} as never,
+      {
+        entityId: "user-1",
+        roomId: "room-1",
+        content: { text: "block x.com" },
+      } as never,
+    );
+    expect(validate).toBe(false);
+
+    const result = await blockWebsitesAction.handler(
+      {} as never,
+      {
+        entityId: "user-1",
+        roomId: "room-1",
+        content: { text: "block x.com" },
+      } as never,
+      undefined,
+      undefined,
+    );
+
+    expect(result).toMatchObject({
+      success: false,
+      text: SELFCONTROL_ACCESS_ERROR,
+    });
+  });
+
+  it("does not block when the current message explicitly says not to block yet", async () => {
+    const validate = await blockWebsitesAction.validate?.(
+      {} as never,
+      {
+        entityId: "user-1",
+        roomId: "room-1",
+        content: {
+          text: "The websites distracting me are x.com and twitter.com. Do not block them yet.",
+        },
+      } as never,
+    );
+
+    expect(validate).toBe(false);
+
+    const result = await blockWebsitesAction.handler(
+      {} as never,
+      {
+        entityId: "user-1",
+        roomId: "room-1",
+        content: {
+          text: "The websites distracting me are x.com and twitter.com. Do not block them yet.",
+        },
+      } as never,
+      undefined,
+      undefined,
+    );
+
+    expect(result).toMatchObject({
+      success: true,
+      text: "I noted those websites and will wait for your confirmation before blocking them.",
+      data: {
+        deferred: true,
+      },
+    });
+    expect(fs.readFileSync(hostsFilePath, "utf8")).toBe(
+      "127.0.0.1 localhost\n",
+    );
+  });
 });
 
-describe("selfControlGetStatusAction", () => {
+describe("getWebsiteBlockStatusAction", () => {
   it("reports the active block details", async () => {
-    const runner = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        stdout: "YES",
-        stderr: "",
-        code: 0,
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        stdout: `
-          BlockEndDate = "2026-04-04 13:44:54 +0000";
-          ActiveBlocklist = (
-            "x.com",
-            "twitter.com"
-          );
-        `,
-        stderr: "",
-        code: 0,
-      });
-
-    setSelfControlPluginConfig({
-      cliPath: "/Applications/SelfControl.app/Contents/MacOS/selfcontrol-cli",
-    });
-    setSelfControlPathExistsForTests(async () => true);
-    setSelfControlCommandRunnerForTests(runner);
-
-    const result = await selfControlGetStatusAction.handler(
+    await blockWebsitesAction.handler(
       {} as never,
+      {
+        entityId: "user-1",
+        roomId: "room-1",
+        content: { text: "Block x.com and twitter.com for 30 minutes." },
+      } as never,
+      undefined,
+      undefined,
+    );
+
+    const result = await getWebsiteBlockStatusAction.handler(
       {} as never,
+      {
+        entityId: "user-1",
+        roomId: "room-1",
+        content: { text: "status?" },
+      } as never,
       undefined,
       undefined,
     );
 
     expect(result.success).toBe(true);
-    expect(result.text).toContain("2026-04-04T13:44:54.000Z");
+    expect(result.text).toContain("website block is active");
     expect(result.data).toMatchObject({
       active: true,
+      engine: "hosts-file",
+      requiresElevation: false,
       websites: ["x.com", "twitter.com"],
     });
   });
 });
 
-describe("selfControlUnblockWebsitesAction", () => {
-  it("explains that active SelfControl blocks cannot be ended early", async () => {
-    const runner = vi
-      .fn()
-      .mockResolvedValueOnce({
-        ok: true,
-        stdout: "YES",
-        stderr: "",
-        code: 0,
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        stdout: `
-          BlockEndDate = "2026-04-04 13:44:54 +0000";
-          ActiveBlocklist = (
-            "x.com"
-          );
-        `,
-        stderr: "",
-        code: 0,
-      });
-
-    setSelfControlPluginConfig({
-      cliPath: "/Applications/SelfControl.app/Contents/MacOS/selfcontrol-cli",
-    });
-    setSelfControlPathExistsForTests(async () => true);
-    setSelfControlCommandRunnerForTests(runner);
-
-    const result = await selfControlUnblockWebsitesAction.handler(
+describe("requestWebsiteBlockingPermissionAction", () => {
+  it("reports the website blocking permission state for admin users", async () => {
+    const result = await requestWebsiteBlockingPermissionAction.handler(
       {} as never,
-      {} as never,
+      {
+        entityId: "user-1",
+        roomId: "room-1",
+        content: { text: "give yourself permission to block websites" },
+      } as never,
       undefined,
       undefined,
     );
 
-    expect(result.success).toBe(false);
-    expect(result.text).toContain("cannot end an active block early");
+    expect(result.success).toBe(true);
+    expect(result.text).toContain("system hosts file directly");
     expect(result.data).toMatchObject({
-      canUnblockEarly: false,
-      active: true,
+      status: "granted",
+      canRequest: false,
+      hostsFilePath,
+      promptAttempted: false,
+      promptSucceeded: false,
     });
+  });
+});
+
+describe("unblockWebsitesAction", () => {
+  it("removes an active website block early", async () => {
+    await blockWebsitesAction.handler(
+      {} as never,
+      {
+        entityId: "user-1",
+        roomId: "room-1",
+        content: { text: "Block x.com for 30 minutes." },
+      } as never,
+      undefined,
+      undefined,
+    );
+
+    const result = await unblockWebsitesAction.handler(
+      {} as never,
+      {
+        entityId: "user-1",
+        roomId: "room-1",
+        content: { text: "remove it" },
+      } as never,
+      undefined,
+      undefined,
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.text).toContain("Removed the website block");
+    expect(result.data).toMatchObject({
+      active: false,
+      canUnblockEarly: true,
+    });
+    expect(fs.readFileSync(hostsFilePath, "utf8")).toBe(
+      "127.0.0.1 localhost\n",
+    );
   });
 });

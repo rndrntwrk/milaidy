@@ -148,6 +148,15 @@ describe("Trajectory I/O Capture E2E", () => {
     // Verify purpose/action metadata
     expect(call.purpose).toBe("action");
     expect(call.actionType).toBe("runtime.useModel");
+    expect(call.stepType).toBe("action");
+    expect(call.tags).toEqual(
+      expect.arrayContaining([
+        "llm",
+        "step:action",
+        "purpose:action",
+        "action:runtime_use_model",
+      ]),
+    );
   });
 
   it("captures provider access data alongside LLM calls", async () => {
@@ -408,11 +417,27 @@ describe("Trajectory I/O Capture E2E", () => {
 
     // Verify first call (shouldRespond)
     expect(llmCalls[0].purpose).toBe("should_respond");
+    expect(llmCalls[0].stepType).toBe("should_respond");
+    expect(llmCalls[0].tags).toEqual(
+      expect.arrayContaining([
+        "step:should_respond",
+        "purpose:should_respond",
+        "routing",
+      ]),
+    );
     expect(llmCalls[0].userPrompt).toBe("Hey there!");
     expect(llmCalls[0].response).toContain("RESPOND");
 
     // Verify second call (generate response)
     expect(llmCalls[1].purpose).toBe("action");
+    expect(llmCalls[1].stepType).toBe("action");
+    expect(llmCalls[1].tags).toEqual(
+      expect.arrayContaining([
+        "step:action",
+        "purpose:action",
+        "action:runtime_use_model",
+      ]),
+    );
     expect(llmCalls[1].userPrompt).toContain("How can you help me");
     expect(llmCalls[1].response).toContain("Hello!");
   });

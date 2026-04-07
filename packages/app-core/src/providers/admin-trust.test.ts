@@ -1,22 +1,7 @@
 import type { IAgentRuntime, Memory, State } from "@elizaos/core";
 import { describe, expect, it } from "vitest";
 
-// adminTrustProvider was removed in @elizaos/plugin-trust 2.x.
-// Import conditionally so the test file doesn't crash at module evaluation.
-let adminTrustProvider:
-  | {
-      get?: (
-        ...args: unknown[]
-      ) => Promise<{ values: Record<string, unknown> }>;
-    }
-  | undefined;
-try {
-  const mod = await import("@elizaos/plugin-trust");
-  adminTrustProvider = (mod as Record<string, unknown>)
-    .adminTrustProvider as typeof adminTrustProvider;
-} catch {
-  // plugin-trust doesn't export adminTrustProvider
-}
+import { adminTrustProvider } from "@miladyai/agent/providers/admin-trust";
 
 type FakeWorld = {
   metadata?: {
@@ -59,32 +44,29 @@ describe("admin-trust provider", () => {
     ],
   } as State;
 
-  it.skipIf(!provider?.get)(
-    "marks OWNER speaker as trusted admin",
-    async () => {
-      const runtime = createRuntime(
-        { worldId: "world-1" },
-        {
-          metadata: {
-            ownership: { ownerId: "admin-1" },
-            roles: { "admin-1": "OWNER" },
-          },
+  it("marks OWNER speaker as trusted admin", async () => {
+    const runtime = createRuntime(
+      { worldId: "world-1" },
+      {
+        metadata: {
+          ownership: { ownerId: "admin-1" },
+          roles: { "admin-1": "OWNER" },
         },
-      );
-      const message = {
-        roomId: "room-1",
-        entityId: "admin-1",
-        content: { text: "admin trust" },
-      } as unknown as Memory;
+      },
+    );
+    const message = {
+      roomId: "room-1",
+      entityId: "admin-1",
+      content: { text: "admin trust" },
+    } as unknown as Memory;
 
-      const result = await provider?.get?.(runtime, message, state);
-      const values = result?.values as Record<string, string | boolean>;
-      expect(values.trustedAdmin).toBe(true);
-      expect(values.adminRole).toBe("OWNER");
-    },
-  );
+    const result = await provider.get(runtime, message, state);
+    const values = result.values as Record<string, string | boolean>;
+    expect(values.trustedAdmin).toBe(true);
+    expect(values.adminRole).toBe("OWNER");
+  });
 
-  it.skipIf(!provider?.get)("does not trust non-owner speaker", async () => {
+  it("does not trust non-owner speaker", async () => {
     const runtime = createRuntime(
       { worldId: "world-1" },
       {
@@ -100,12 +82,12 @@ describe("admin-trust provider", () => {
       content: { text: "admin trust" },
     } as unknown as Memory;
 
-    const result = await provider?.get?.(runtime, message, state);
-    const values = result?.values as Record<string, string | boolean>;
+    const result = await provider.get(runtime, message, state);
+    const values = result.values as Record<string, string | boolean>;
     expect(values.trustedAdmin).toBe(false);
   });
 
-  it.skipIf(!provider?.get)("returns false when room is missing", async () => {
+  it("returns false when room is missing", async () => {
     const runtime = createRuntime(null, null);
     const message = {
       roomId: "room-1",
@@ -113,8 +95,8 @@ describe("admin-trust provider", () => {
       content: { text: "admin trust" },
     } as unknown as Memory;
 
-    const result = await provider?.get?.(runtime, message, state);
-    const values = result?.values as Record<string, string | boolean>;
+    const result = await provider.get(runtime, message, state);
+    const values = result.values as Record<string, string | boolean>;
     expect(values.trustedAdmin).toBe(false);
   });
 });

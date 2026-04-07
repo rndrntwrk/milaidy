@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
@@ -9,6 +10,7 @@ import {
   getAppCoreSourceRoot,
   getAutonomousSourceRoot,
   getElizaCoreEntry,
+  getInstalledPackageEntry,
   resolveModuleEntry,
 } from "./test/eliza-package-paths";
 
@@ -16,6 +18,49 @@ const repoRoot = path.dirname(fileURLToPath(import.meta.url));
 const elizaCoreEntry = getElizaCoreEntry(repoRoot);
 const autonomousSourceRoot = getAutonomousSourceRoot(repoRoot);
 const appCoreSourceRoot = getAppCoreSourceRoot(repoRoot);
+const packageManifest = JSON.parse(
+  fs.readFileSync(path.join(repoRoot, "package.json"), "utf8"),
+) as {
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+};
+const workspacePluginPackageNames = Object.keys({
+  ...(packageManifest.dependencies ?? {}),
+  ...(packageManifest.devDependencies ?? {}),
+})
+  .filter((packageName) => packageName.startsWith("@elizaos/plugin-"))
+  .sort();
+const resolvedPluginNames = new Set<string>();
+const elizaPluginAliases = workspacePluginPackageNames.flatMap((packageName) => {
+  const aliases: Array<{ find: string; replacement: string }> = [];
+  const nodeEntry = getInstalledPackageEntry(packageName, repoRoot, "node");
+  if (nodeEntry) {
+    aliases.push({
+      find: `${packageName}/node`,
+      replacement: nodeEntry,
+    });
+  }
+
+  const defaultEntry = getInstalledPackageEntry(packageName, repoRoot);
+  if (defaultEntry) {
+    resolvedPluginNames.add(packageName);
+    aliases.push({
+      find: packageName,
+      replacement: defaultEntry,
+    });
+  }
+
+  return aliases;
+});
+// Stub @elizaos/plugin-* packages whose npm tarball has a broken or missing
+// entry point (e.g. dist/index.js absent). Without this, vi.mock() factory
+// calls still fail because vitest cannot resolve the module specifier.
+const unresolvedPluginStubs = workspacePluginPackageNames
+  .filter((name) => !resolvedPluginNames.has(name))
+  .map((name) => ({
+    find: name,
+    replacement: path.join(repoRoot, "test", "stubs", "plugin-stub.mjs"),
+  }));
 const isCI = process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
 const isWindows = process.platform === "win32";
 const localWorkers = 2;
@@ -52,6 +97,8 @@ export default defineConfig({
               find: "@elizaos/core",
               replacement: elizaCoreEntry,
             },
+            ...elizaPluginAliases,
+            ...unresolvedPluginStubs,
           ]
         : []),
       ...(autonomousSourceRoot
@@ -243,6 +290,7 @@ export default defineConfig({
       "packages/plugin-selfcontrol/src/**/*.test.ts",
       "packages/plugin-selfcontrol/src/**/*.test.ts",
       "packages/plugin-wechat/src/**/*.test.ts",
+      "packages/plugin-music-player/src/**/*.test.ts",
       "src/**/*.test.ts",
       "scripts/**/*.test.ts",
       "apps/app/electrobun/src/**/*.test.ts",
@@ -261,6 +309,8 @@ export default defineConfig({
       // E2E lives under test/ too; run it via vitest.e2e.config.ts, not unit.
       "**/*.e2e.test.ts",
       "**/*.e2e.test.tsx",
+      // Requires plugin-training built dist which only exists after `bun run build`.
+      "**/training-service.import-ollama.test.ts",
     ],
     coverage: {
       provider: "v8",

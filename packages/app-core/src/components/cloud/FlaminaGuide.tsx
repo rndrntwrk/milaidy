@@ -9,6 +9,12 @@ type GuideContent = {
   skipEffectKey: string;
   characterImpactKey: string;
   recommendedKey: string;
+  titleDefault?: string;
+  descriptionDefault?: string;
+  whenToUseDefault?: string;
+  skipEffectDefault?: string;
+  characterImpactDefault?: string;
+  recommendedDefault?: string;
 };
 
 const GUIDE_CONTENT: Record<FlaminaGuideTopic, GuideContent> = {
@@ -46,18 +52,23 @@ const GUIDE_CONTENT: Record<FlaminaGuideTopic, GuideContent> = {
   },
 };
 
-const TASK_LABEL_KEYS: Record<FlaminaGuideTopic, string> = {
-  provider: "flaminaguide.tasks.provider.label",
-  rpc: "flaminaguide.tasks.rpc.label",
-  permissions: "flaminaguide.tasks.permissions.label",
-  voice: "flaminaguide.tasks.voice.label",
+type GuideLabel = {
+  key: string;
+  defaultValue?: string;
 };
 
-const TASK_DESCRIPTION_KEYS: Record<FlaminaGuideTopic, string> = {
-  provider: "flaminaguide.tasks.provider.description",
-  rpc: "flaminaguide.tasks.rpc.description",
-  permissions: "flaminaguide.tasks.permissions.description",
-  voice: "flaminaguide.tasks.voice.description",
+const TASK_LABELS: Record<FlaminaGuideTopic, GuideLabel> = {
+  provider: { key: "flaminaguide.tasks.provider.label" },
+  rpc: { key: "flaminaguide.tasks.rpc.label" },
+  permissions: { key: "flaminaguide.tasks.permissions.label" },
+  voice: { key: "flaminaguide.tasks.voice.label" },
+};
+
+const TASK_DESCRIPTIONS: Record<FlaminaGuideTopic, GuideLabel> = {
+  provider: { key: "flaminaguide.tasks.provider.description" },
+  rpc: { key: "flaminaguide.tasks.rpc.description" },
+  permissions: { key: "flaminaguide.tasks.permissions.description" },
+  voice: { key: "flaminaguide.tasks.voice.description" },
 };
 
 export function FlaminaGuideCard({
@@ -79,31 +90,35 @@ export function FlaminaGuideCard({
           Flamina
         </span>
         <h3 className="text-sm font-semibold text-txt-strong">
-          {t(guide.titleKey)}
+          {t(guide.titleKey, { defaultValue: guide.titleDefault })}
         </h3>
       </div>
-      <p className="mb-3 text-sm text-muted">{t(guide.descriptionKey)}</p>
+      <p className="mb-3 text-sm text-muted">
+        {t(guide.descriptionKey, { defaultValue: guide.descriptionDefault })}
+      </p>
       <div className="space-y-2 text-xs leading-5 text-txt">
         <p>
           <span className="font-semibold text-txt-strong">
             {t("flaminaguide.WhenToUseLabel")}
           </span>{" "}
-          {t(guide.whenToUseKey)}
+          {t(guide.whenToUseKey, { defaultValue: guide.whenToUseDefault })}
         </p>
         <p>
           <span className="font-semibold text-txt-strong">
             {t("flaminaguide.IfYouSkipLabel")}
           </span>{" "}
-          {t(guide.skipEffectKey)}
+          {t(guide.skipEffectKey, { defaultValue: guide.skipEffectDefault })}
         </p>
         <p>
           <span className="font-semibold text-txt-strong">
             {t("flaminaguide.CharacterImpactLabel")}
           </span>{" "}
-          {t(guide.characterImpactKey)}
+          {t(guide.characterImpactKey, {
+            defaultValue: guide.characterImpactDefault,
+          })}
         </p>
         <p className="rounded-xl border border-accent/20 bg-accent/5 px-3 py-2 text-[11px] text-txt">
-          {t(guide.recommendedKey)}
+          {t(guide.recommendedKey, { defaultValue: guide.recommendedDefault })}
         </p>
       </div>
     </section>
@@ -129,6 +144,14 @@ export function DeferredSetupChecklist({
     !Array.isArray(onboardingDeferredTasks) ||
     onboardingDeferredTasks.length === 0
   ) {
+    return null;
+  }
+
+  const tasks = onboardingDeferredTasks.filter(
+    (task): task is FlaminaGuideTopic =>
+      typeof task === "string" && task in TASK_LABELS,
+  );
+  if (tasks.length === 0) {
     return null;
   }
 
@@ -166,17 +189,21 @@ export function DeferredSetupChecklist({
       </div>
 
       <div className="space-y-2">
-        {(onboardingDeferredTasks as FlaminaGuideTopic[]).map((task) => (
+        {tasks.map((task) => (
           <div
             key={task}
             className="flex flex-col gap-2 rounded-xl border border-border/50 bg-bg/50 px-3 py-3 md:flex-row md:items-center md:justify-between"
           >
             <div>
               <div className="text-sm font-medium text-txt-strong">
-                {t(TASK_LABEL_KEYS[task])}
+                {t(TASK_LABELS[task].key, {
+                  defaultValue: TASK_LABELS[task].defaultValue,
+                })}
               </div>
               <p className="text-xs text-muted">
-                {t(TASK_DESCRIPTION_KEYS[task])}
+                {t(TASK_DESCRIPTIONS[task].key, {
+                  defaultValue: TASK_DESCRIPTIONS[task].defaultValue,
+                })}
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -192,7 +219,7 @@ export function DeferredSetupChecklist({
                 variant="ghost"
                 size="sm"
                 className="rounded-full text-[11px] font-semibold uppercase tracking-[0.12em] text-muted"
-                onClick={() => markDone(task as FlaminaGuideTopic)}
+                onClick={() => markDone(task)}
               >
                 {t("flaminaguide.Done")}
               </Button>

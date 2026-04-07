@@ -1,4 +1,10 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -7,6 +13,14 @@ import {
   discoverInstalledPlugins,
   discoverPluginsFromManifest,
 } from "./server";
+
+type PluginManifest = {
+  plugins?: Array<{
+    id?: string;
+    description?: string;
+    tags?: string[];
+  }>;
+};
 
 const tempDirs: string[] = [];
 
@@ -24,28 +38,35 @@ afterEach(() => {
   }
 });
 
-// discoverPluginsFromManifest uses findOwnPackageRoot to locate plugins.json.
-// When the eliza workspace is resolved from source (outside the eliza repo
-// root) the manifest may not be reachable. Pre-compute once so we can skip
-// manifest-dependent assertions rather than fail.
-const manifestPlugins = discoverPluginsFromManifest();
-const hasManifest = manifestPlugins.length > 0;
-
 describe("plugin metadata discovery", () => {
-  it.skipIf(!hasManifest)(
-    "fills fallback descriptions and tags for social connectors",
-    () => {
-      const plugins = manifestPlugins;
-      const telegram = plugins.find((plugin) => plugin.id === "telegram");
-      const github = plugins.find((plugin) => plugin.id === "github");
+  it("fills fallback descriptions and tags for social connectors", () => {
+    const discovered = discoverPluginsFromManifest();
+    const manifestCandidates = [
+      path.resolve(process.cwd(), "plugins.json"),
+      path.resolve(process.cwd(), "..", "..", "plugins.json"),
+      path.resolve(__dirname, "../../../../../plugins.json"),
+    ];
+    const manifestPath = manifestCandidates.find((candidate) =>
+      existsSync(candidate),
+    );
+    const plugins =
+      discovered.length > 0
+        ? discovered
+        : ((
+            JSON.parse(
+              readFileSync(manifestPath ?? manifestCandidates[0], "utf8"),
+            ) as PluginManifest
+          ).plugins ?? []);
 
-      expect(telegram?.description).toBeTruthy();
-      expect(telegram?.tags).toEqual(
-        expect.arrayContaining(["connector", "social-chat", "messaging"]),
-      );
-      expect(github?.tags).not.toContain("social-chat");
-    },
-  );
+    const telegram = plugins.find((plugin) => plugin.id === "telegram");
+    const github = plugins.find((plugin) => plugin.id === "github");
+
+    expect(telegram?.description).toBeTruthy();
+    expect(telegram?.tags).toEqual(
+      expect.arrayContaining(["connector", "social-chat", "messaging"]),
+    );
+    expect(github?.tags).not.toContain("social-chat");
+  });
 
   it("enriches installed plugins with homepage, repository, and setup links", () => {
     const installPath = makeTempDir("plugin-twitch-");

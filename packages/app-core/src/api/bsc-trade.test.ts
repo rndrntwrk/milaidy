@@ -175,7 +175,7 @@ describe("bsc-trade preflight", () => {
 
     expect(result.ok).toBe(true);
     expect(result.checks.rpcReady).toBe(true);
-    expect(result.rpcUrlHost).toBe("bsc-dataseed1.binance.org");
+    expect(result.rpcUrlHost).toBe("bsc.publicnode.com");
   });
 
   it("prefers the cloud BSC RPC proxy when cloud credentials are available", async () => {

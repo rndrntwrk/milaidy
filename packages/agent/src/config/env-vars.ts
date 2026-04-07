@@ -49,6 +49,59 @@ const BLOCKED_STARTUP_ENV_KEYS = new Set([
   "POSTGRES_URL",
 ]);
 
+/**
+ * Maps connector config fields to the environment variables expected by
+ * elizaOS plugins. Keep this aligned with runtime/eliza.ts.
+ */
+export const CONNECTOR_ENV_MAP: Readonly<
+  Record<string, Readonly<Record<string, string>>>
+> = {
+  discord: {
+    token: "DISCORD_API_TOKEN",
+    botToken: "DISCORD_API_TOKEN",
+    applicationId: "DISCORD_APPLICATION_ID",
+  },
+  telegram: {
+    botToken: "TELEGRAM_BOT_TOKEN",
+  },
+  telegramAccount: {
+    phone: "TELEGRAM_ACCOUNT_PHONE",
+    appId: "TELEGRAM_ACCOUNT_APP_ID",
+    appHash: "TELEGRAM_ACCOUNT_APP_HASH",
+    deviceModel: "TELEGRAM_ACCOUNT_DEVICE_MODEL",
+    systemVersion: "TELEGRAM_ACCOUNT_SYSTEM_VERSION",
+  },
+  slack: {
+    botToken: "SLACK_BOT_TOKEN",
+    appToken: "SLACK_APP_TOKEN",
+    userToken: "SLACK_USER_TOKEN",
+  },
+  signal: {
+    authDir: "SIGNAL_AUTH_DIR",
+    account: "SIGNAL_ACCOUNT_NUMBER",
+    httpUrl: "SIGNAL_HTTP_URL",
+    cliPath: "SIGNAL_CLI_PATH",
+  },
+  msteams: {
+    appId: "MSTEAMS_APP_ID",
+    appPassword: "MSTEAMS_APP_PASSWORD",
+  },
+  mattermost: {
+    botToken: "MATTERMOST_BOT_TOKEN",
+    baseUrl: "MATTERMOST_BASE_URL",
+  },
+  googlechat: {
+    serviceAccountKey: "GOOGLE_CHAT_SERVICE_ACCOUNT_KEY",
+  },
+  blooio: {
+    apiKey: "BLOOIO_API_KEY",
+    fromNumber: "BLOOIO_PHONE_NUMBER",
+    webhookSecret: "BLOOIO_WEBHOOK_SECRET",
+    webhookUrl: "BLOOIO_WEBHOOK_URL",
+    webhookPort: "BLOOIO_WEBHOOK_PORT",
+  },
+};
+
 export function collectConfigEnvVars(
   cfg?: ElizaConfig,
 ): Record<string, string> {
@@ -82,6 +135,62 @@ export function collectConfigEnvVars(
       continue;
     }
     entries[key] = value;
+  }
+
+  return entries;
+}
+
+export function collectConnectorEnvVars(
+  cfg?: ElizaConfig,
+): Record<string, string> {
+  const rawConnectors =
+    cfg?.connectors ?? (cfg as Record<string, unknown> | undefined)?.channels;
+  if (
+    !rawConnectors ||
+    typeof rawConnectors !== "object" ||
+    Array.isArray(rawConnectors)
+  ) {
+    return {};
+  }
+
+  const connectors = rawConnectors as Record<string, unknown>;
+  const entries: Record<string, string> = {};
+
+  for (const [connectorName, envMap] of Object.entries(CONNECTOR_ENV_MAP)) {
+    const connectorConfig = connectors[connectorName];
+    if (
+      !connectorConfig ||
+      typeof connectorConfig !== "object" ||
+      Array.isArray(connectorConfig)
+    ) {
+      continue;
+    }
+
+    const configObj = connectorConfig as Record<string, unknown>;
+
+    // Mirror Discord token aliases so older plugins and settings surfaces
+    // agree on a single configured state.
+    if (connectorName === "discord") {
+      const tokenValue =
+        (typeof configObj.token === "string" && configObj.token.trim()) ||
+        (typeof configObj.botToken === "string" && configObj.botToken.trim()) ||
+        "";
+      if (tokenValue) {
+        entries.DISCORD_API_TOKEN = tokenValue;
+        entries.DISCORD_BOT_TOKEN = tokenValue;
+      }
+    }
+
+    for (const [configField, envKey] of Object.entries(envMap)) {
+      const value = configObj[configField];
+      if (typeof value !== "string" || !value.trim()) {
+        continue;
+      }
+      if (BLOCKED_STARTUP_ENV_KEYS.has(envKey.toUpperCase())) {
+        continue;
+      }
+      entries[envKey] = value;
+    }
   }
 
   return entries;

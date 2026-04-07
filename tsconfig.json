@@ -26,7 +26,9 @@
       "@miladyai/ui": ["./packages/ui/src/index.ts"],
       "@miladyai/ui/*": ["./packages/ui/src/*"],
       "@miladyai/agent/*": ["./packages/agent/src/*"],
-      "@elizaos/core": ["./node_modules/@elizaos/core"]
+      "@elizaos/core": [
+        "./node_modules/@elizaos/core"
+      ]
     }
   },
   "include": [
@@ -37,6 +39,7 @@
     "node_modules",
     "node_modules/.bun",
     "dist",
+    "eliza",
     "plugins",
     "packages/app-core/src/**/*.test.ts",
     "packages/app-core/src/**/*.test.tsx",

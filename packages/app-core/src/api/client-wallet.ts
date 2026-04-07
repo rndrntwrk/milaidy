@@ -23,14 +23,20 @@ import type {
   WalletConfigStatus,
   WalletConfigUpdateRequest,
   WalletNftsResponse,
+  WalletTradingProfileResponse,
   WalletTradingProfileSourceFilter,
   WalletTradingProfileWindow,
-  WalletTradingProfileResponse,
 } from "@miladyai/agent/contracts/wallet";
 import type {
   StewardSignRequest,
   StewardSignResponse,
 } from "@miladyai/shared/contracts/wallet";
+import type {
+  BrowserWorkspaceSolanaMessageSignatureResult,
+  BrowserWorkspaceWalletMessageSignatureResult,
+  BrowserWorkspaceWalletTransactionResult,
+} from "../browser-workspace-wallet";
+import { MiladyClient } from "./client-base";
 import type {
   ApplyProductionWalletDefaultsResponse,
   RegistrationResult,
@@ -40,7 +46,6 @@ import type {
   WalletExportResult,
   WhitelistStatus,
 } from "./client-types";
-import { MiladyClient } from "./client-base";
 
 // ---------------------------------------------------------------------------
 // Declaration merging
@@ -103,6 +108,16 @@ declare module "./client-base" {
       reason?: string,
     ): Promise<StewardApprovalActionResponse>;
     signViaSteward(request: StewardSignRequest): Promise<StewardSignResponse>;
+    signBrowserWalletMessage(
+      message: string,
+    ): Promise<BrowserWorkspaceWalletMessageSignatureResult>;
+    signBrowserSolanaMessage(request: {
+      message?: string;
+      messageBase64?: string;
+    }): Promise<BrowserWorkspaceSolanaMessageSignatureResult>;
+    sendBrowserWalletTransaction(
+      request: StewardSignRequest,
+    ): Promise<BrowserWorkspaceWalletTransactionResult>;
     getWalletTradingProfile(
       window?: WalletTradingProfileWindow,
       source?: WalletTradingProfileSourceFilter,
@@ -259,8 +274,8 @@ MiladyClient.prototype.getStewardHistory = async function (
 ) {
   const params = new URLSearchParams();
   if (opts?.status) params.set("status", opts.status);
-  if (opts?.limit) params.set("limit", String(opts.limit));
-  if (opts?.offset) params.set("offset", String(opts.offset));
+  if (opts?.limit != null) params.set("limit", String(opts.limit));
+  if (opts?.offset != null) params.set("offset", String(opts.offset));
   const qs = params.toString();
   return this.fetch(`/api/wallet/steward-tx-records${qs ? `?${qs}` : ""}`);
 };
@@ -295,6 +310,36 @@ MiladyClient.prototype.signViaSteward = async function (
   request,
 ) {
   return this.fetch("/api/wallet/steward-sign", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+};
+
+MiladyClient.prototype.sendBrowserWalletTransaction = async function (
+  this: MiladyClient,
+  request,
+) {
+  return this.fetch("/api/wallet/browser-transaction", {
+    method: "POST",
+    body: JSON.stringify(request),
+  });
+};
+
+MiladyClient.prototype.signBrowserWalletMessage = async function (
+  this: MiladyClient,
+  message,
+) {
+  return this.fetch("/api/wallet/browser-sign-message", {
+    method: "POST",
+    body: JSON.stringify({ message }),
+  });
+};
+
+MiladyClient.prototype.signBrowserSolanaMessage = async function (
+  this: MiladyClient,
+  request,
+) {
+  return this.fetch("/api/wallet/browser-solana-sign-message", {
     method: "POST",
     body: JSON.stringify(request),
   });

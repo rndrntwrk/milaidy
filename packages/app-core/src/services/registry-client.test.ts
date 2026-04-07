@@ -121,15 +121,15 @@ function fakeGeneratedRegistry() {
         stargazers_count: 5,
         language: "TypeScript",
       },
-      "@elizaos/app-dungeons": {
+      "@elizaos/app-defense-of-the-agents": {
         git: {
-          repo: "elizaos/app-dungeons",
+          repo: "elizaos/app-defense-of-the-agents",
           v0: { version: null, branch: null },
           v1: { version: null, branch: null },
           v2: { version: "1.0.0", branch: "main" },
         },
         npm: {
-          repo: "@elizaos/app-dungeons",
+          repo: "@elizaos/app-defense-of-the-agents",
           v0: null,
           v1: null,
           v2: "1.0.0",
@@ -138,19 +138,19 @@ function fakeGeneratedRegistry() {
           v2CoreRange: ">=2.0.0",
         },
         supports: { v0: false, v1: false, v2: true },
-        description: "D&D VTT with AI Dungeon Master",
-        homepage: null,
-        topics: ["game", "rpg", "dnd"],
+        description: "Autonomous lane-defense strategy game",
+        homepage: "https://www.defenseoftheagents.com",
+        topics: ["game", "strategy", "tower-defense"],
         stargazers_count: 42,
         language: "TypeScript",
         kind: "app",
         app: {
-          displayName: "Dungeons",
+          displayName: "Defense of the Agents",
           category: "game",
-          launchType: "local",
-          launchUrl: "http://localhost:{port}",
+          launchType: "url",
+          launchUrl: "https://www.defenseoftheagents.com",
           icon: null,
-          capabilities: ["combat", "roleplay", "exploration"],
+          capabilities: ["combat", "strategy", "autonomous"],
           minPlayers: 1,
           maxPlayers: 6,
         },
@@ -632,7 +632,7 @@ describe("registry-client", () => {
 
       expect(apps.length).toBe(2);
       const names = apps.map((a: { name: string }) => a.name);
-      expect(names).toContain("@elizaos/app-dungeons");
+      expect(names).toContain("@elizaos/app-defense-of-the-agents");
       expect(names).toContain("@elizaos/app-babylon");
       // Regular plugins should NOT appear
       expect(names).not.toContain("@elizaos/plugin-solana");
@@ -643,9 +643,9 @@ describe("registry-client", () => {
       const { listApps } = await loadModule();
       const apps = await listApps();
 
-      // Babylon (200 stars) should come before Dungeons (42 stars)
+      // Babylon (200 stars) should come before Defense of the Agents (42 stars)
       expect(apps[0].name).toBe("@elizaos/app-babylon");
-      expect(apps[1].name).toBe("@elizaos/app-dungeons");
+      expect(apps[1].name).toBe("@elizaos/app-defense-of-the-agents");
     });
 
     it("populates all RegistryAppInfo fields from app metadata", async () => {
@@ -677,16 +677,17 @@ describe("registry-client", () => {
       const { listApps } = await loadModule();
       const apps = await listApps();
 
-      const dungeons = apps.find(
-        (a: { name: string }) => a.name === "@elizaos/app-dungeons",
+      const defense = apps.find(
+        (a: { name: string }) =>
+          a.name === "@elizaos/app-defense-of-the-agents",
       );
-      expect(dungeons).toBeDefined();
-      expect(dungeons.displayName).toBe("Dungeons");
-      expect(dungeons.category).toBe("game");
-      expect(dungeons.launchType).toBe("local");
-      expect(dungeons.launchUrl).toBe("http://localhost:{port}");
-      expect(dungeons.icon).toBeNull();
-      expect(dungeons.capabilities).toContain("combat");
+      expect(defense).toBeDefined();
+      expect(defense.displayName).toBe("Defense of the Agents");
+      expect(defense.category).toBe("game");
+      expect(defense.launchType).toBe("url");
+      expect(defense.launchUrl).toBe("https://www.defenseoftheagents.com");
+      expect(defense.icon).toBeNull();
+      expect(defense.capabilities).toContain("strategy");
     });
 
     it("falls back to safe sandbox when registry sandbox tokens are untrusted", async () => {
@@ -698,11 +699,14 @@ describe("registry-client", () => {
             Promise.resolve({
               lastUpdatedAt: "2026-02-07T00:00:00Z",
               registry: {
-                "@elizaos/app-dungeons": {
-                  ...fakeGeneratedRegistry().registry["@elizaos/app-dungeons"],
+                "@elizaos/app-defense-of-the-agents": {
+                  ...fakeGeneratedRegistry().registry[
+                    "@elizaos/app-defense-of-the-agents"
+                  ],
                   app: {
-                    ...fakeGeneratedRegistry().registry["@elizaos/app-dungeons"]
-                      .app,
+                    ...fakeGeneratedRegistry().registry[
+                      "@elizaos/app-defense-of-the-agents"
+                    ].app,
                     viewer: {
                       url: "https://example.org/embed",
                       sandbox:
@@ -758,17 +762,17 @@ describe("registry-client", () => {
 
     it("returns app info for an existing app", async () => {
       const { getAppInfo } = await loadModule();
-      const info = await getAppInfo("@elizaos/app-dungeons");
+      const info = await getAppInfo("@elizaos/app-defense-of-the-agents");
       expect(info).not.toBeNull();
-      expect(info?.displayName).toBe("Dungeons");
-      expect(info?.launchType).toBe("local");
+      expect(info?.displayName).toBe("Defense of the Agents");
+      expect(info?.launchType).toBe("url");
     });
 
     it("resolves app by bare name", async () => {
       const { getAppInfo } = await loadModule();
-      const info = await getAppInfo("app-dungeons");
+      const info = await getAppInfo("app-defense-of-the-agents");
       expect(info).not.toBeNull();
-      expect(info?.name).toBe("@elizaos/app-dungeons");
+      expect(info?.name).toBe("@elizaos/app-defense-of-the-agents");
     });
 
     it("returns null for a regular plugin (not an app)", async () => {
@@ -820,9 +824,9 @@ describe("registry-client", () => {
 
     it("matches on description", async () => {
       const { searchApps } = await loadModule();
-      const results = await searchApps("dungeon master");
+      const results = await searchApps("lane defense");
       expect(results.length).toBeGreaterThan(0);
-      // "D&D VTT with AI Dungeon Master" should match
+      expect(results[0]?.name).toBe("@elizaos/app-defense-of-the-agents");
     });
 
     it("does NOT return regular plugins", async () => {
@@ -846,10 +850,11 @@ describe("registry-client", () => {
 
     it("matches on topics", async () => {
       const { searchApps } = await loadModule();
-      const results = await searchApps("rpg");
+      const results = await searchApps("tower-defense");
       expect(
         results.some(
-          (r: { name: string }) => r.name === "@elizaos/app-dungeons",
+          (r: { name: string }) =>
+            r.name === "@elizaos/app-defense-of-the-agents",
         ),
       ).toBe(true);
     });
@@ -874,15 +879,15 @@ describe("registry-client", () => {
       const { getRegistryPlugins } = await loadModule();
       const registry = await getRegistryPlugins();
 
-      const dungeons = registry.get("@elizaos/app-dungeons");
-      expect(dungeons).toBeDefined();
-      expect(dungeons?.kind).toBe("app");
-      expect(dungeons?.appMeta).toBeDefined();
-      expect(dungeons?.appMeta?.displayName).toBe("Dungeons");
-      expect(dungeons?.appMeta?.category).toBe("game");
-      expect(dungeons?.appMeta?.launchType).toBe("local");
-      expect(dungeons?.appMeta?.capabilities).toContain("combat");
-      expect(dungeons?.appMeta?.maxPlayers).toBe(6);
+      const defense = registry.get("@elizaos/app-defense-of-the-agents");
+      expect(defense).toBeDefined();
+      expect(defense?.kind).toBe("app");
+      expect(defense?.appMeta).toBeDefined();
+      expect(defense?.appMeta?.displayName).toBe("Defense of the Agents");
+      expect(defense?.appMeta?.category).toBe("game");
+      expect(defense?.appMeta?.launchType).toBe("url");
+      expect(defense?.appMeta?.capabilities).toContain("combat");
+      expect(defense?.appMeta?.maxPlayers).toBe(6);
     });
 
     it("regular plugins have no kind or appMeta", async () => {
@@ -913,10 +918,11 @@ describe("registry-client", () => {
       const { listApps } = await loadModule();
       const apps = await listApps();
 
-      const dungeons = apps.find(
-        (a: { name: string }) => a.name === "@elizaos/app-dungeons",
+      const defense = apps.find(
+        (a: { name: string }) =>
+          a.name === "@elizaos/app-defense-of-the-agents",
       );
-      expect(dungeons?.icon).toBeNull();
+      expect(defense?.icon).toBeNull();
       // minPlayers and maxPlayers are in the wire format but not in RegistryAppInfo
       // (they're in appMeta) — verify they're present on the raw entry
     });
@@ -930,7 +936,7 @@ describe("registry-client", () => {
         packageName: "@elizaos/app-hyperscape",
         displayName: "Hyperscape",
         launchType: "connect",
-        launchUrl: "https://hyperscape.ai",
+        launchUrl: "https://hyperscape.gg",
       });
       process.env.ELIZA_WORKSPACE_ROOT = workspaceRoot;
 

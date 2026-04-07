@@ -5,6 +5,23 @@ export interface RegistryAppViewerMeta {
   sandbox?: string;
 }
 
+export type RegistryAppSessionMode =
+  | "viewer"
+  | "spectate-and-steer"
+  | "external";
+
+export type RegistryAppSessionFeature =
+  | "commands"
+  | "telemetry"
+  | "pause"
+  | "resume"
+  | "suggestions";
+
+export interface RegistryAppSessionMeta {
+  mode: RegistryAppSessionMode;
+  features?: RegistryAppSessionFeature[];
+}
+
 export interface AppUiExtensionConfig {
   detailPanelId: string;
 }
@@ -18,8 +35,10 @@ export interface RegistryAppMeta {
   capabilities: string[];
   minPlayers: number | null;
   maxPlayers: number | null;
+  runtimePlugin?: string;
   uiExtension?: AppUiExtensionConfig;
   viewer?: RegistryAppViewerMeta;
+  session?: RegistryAppSessionMeta;
 }
 
 export interface RegistryPluginInfo {
@@ -74,6 +93,7 @@ export interface RegistryAppInfo {
     postMessageAuth?: boolean;
     sandbox?: string;
   };
+  session?: RegistryAppSessionMeta;
 }
 
 export interface RegistrySearchResult {

@@ -62,6 +62,10 @@ const PLUGINS = [
     name: "@miladyai/capacitor-talkmode",
     exportName: "TalkMode",
   },
+  {
+    name: "@miladyai/capacitor-websiteblocker",
+    exportName: "WebsiteBlocker",
+  },
 ];
 
 describe("Capacitor Plugin Build Verification", () => {

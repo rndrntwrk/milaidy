@@ -41,7 +41,7 @@ export const CORE_PLUGINS: readonly string[] = [
 ];
 ```
 
-> **Nota:** `@elizaos/plugin-secrets-manager`, `@elizaos/plugin-rolodex`, `@elizaos/plugin-trust`, `@elizaos/plugin-todo`, `@elizaos/plugin-personality` y `@elizaos/plugin-experience` se importan estáticamente para una resolución rápida, pero están comentados en la lista principal. Podrían ser re-habilitados en una versión futura.
+> **Nota:** `@elizaos/plugin-secrets-manager`, `@elizaos/plugin-rolodex`, `@elizaos/plugin-trust`, `@elizaos/plugin-personality` y `@elizaos/plugin-experience` se importan estáticamente para una resolución rápida, pero están comentados en la lista principal. Podrían ser re-habilitados en una versión futura. `@elizaos/plugin-todo` ha sido retirado; la funcionalidad de todos ahora es manejada por la API del workbench a través de tareas del runtime.
 
 <div id="optional-core-plugins">
 
@@ -196,7 +196,6 @@ const CONNECTOR_PLUGINS = {
   twitter:     "@elizaos/plugin-twitter",
   whatsapp:    "@elizaos/plugin-whatsapp",
   signal:      "@elizaos/plugin-signal",
-  bluebubbles: "@elizaos/plugin-bluebubbles",
   imessage:    "@elizaos/plugin-imessage",
   farcaster:   "@elizaos/plugin-farcaster",
   lens:        "@elizaos/plugin-lens",

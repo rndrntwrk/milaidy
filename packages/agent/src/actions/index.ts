@@ -1,4 +1,5 @@
 export * from "./emote";
+export * from "./lifeops";
 export * from "./restart";
 export * from "./send-message";
 export * from "./stream-control";

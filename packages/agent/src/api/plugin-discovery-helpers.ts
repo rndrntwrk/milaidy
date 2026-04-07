@@ -71,6 +71,10 @@ export interface PluginEntry {
   validationWarnings: Array<{ field: string; message: string }>;
   npmName?: string;
   version?: string;
+  releaseStream?: "latest" | "alpha";
+  requestedVersion?: string;
+  latestVersion?: string | null;
+  alphaVersion?: string | null;
   pluginDeps?: string[];
   /** Whether this plugin is currently active in the runtime. */
   isActive?: boolean;
@@ -563,6 +567,10 @@ export function discoverInstalledPlugins(
     let pluginIcon: string | null = null;
     let pluginHomepage: string | undefined;
     let pluginRepository: string | undefined;
+    let installedVersion =
+      typeof (record as Record<string, string>).version === "string"
+        ? (record as Record<string, string>).version
+        : undefined;
 
     if (installPath) {
       // Check npm layout first, then direct layout
@@ -595,9 +603,13 @@ export function discoverInstalledPlugins(
               };
               logoUrl?: string;
               icon?: string;
+              version?: string;
             };
             if (pkg.name) name = pkg.name;
             if (pkg.description) description = pkg.description;
+            if (typeof pkg.version === "string" && pkg.version.length > 0) {
+              installedVersion = pkg.version;
+            }
             pluginTags = normalizePluginMetadataTags(pkg.keywords);
             if (pkg.elizaos?.displayName) name = pkg.elizaos.displayName;
             if (pkg.elizaos?.configKeys) {
@@ -650,6 +662,11 @@ export function discoverInstalledPlugins(
       id,
       name,
       npmName: packageName,
+      version: installedVersion,
+      releaseStream:
+        (record as { releaseStream?: "latest" | "alpha" }).releaseStream,
+      requestedVersion:
+        (record as { requestedVersion?: string }).requestedVersion,
       description: resolvedDescription,
       tags: resolvedTags,
       enabled: false, // Will be updated against the runtime below
@@ -833,7 +850,6 @@ export function categorizePlugin(
     "whatsapp",
     "signal",
     "imessage",
-    "bluebubbles",
     "farcaster",
     "bluesky",
     "matrix",
@@ -870,6 +886,9 @@ export function categorizePlugin(
 }
 
 const PLUGIN_SETUP_GUIDE_ROOT = "https://docs.eliza.ai/plugin-setup-guide";
+const PLUGIN_SETUP_GUIDE_URL_OVERRIDES: Record<string, string> = {
+  discord: "https://docs.elizaos.ai/plugin-registry/platform/discord",
+};
 const ELIZA_REPO_ROOT = "https://github.com/elizaos/eliza";
 const PLUGIN_METADATA_TAG_STOPWORDS = new Set([
   "plugin",
@@ -883,12 +902,12 @@ const PLUGIN_METADATA_TAG_STOPWORDS = new Set([
 ]);
 const SOCIAL_CHAT_CONNECTOR_IDS = new Set([
   "telegram",
+  "telegramaccount",
   "discord",
   "slack",
   "whatsapp",
   "signal",
   "imessage",
-  "bluebubbles",
   "matrix",
   "mattermost",
   "msteams",
@@ -958,7 +977,6 @@ const PLUGIN_SETUP_GUIDE_ANCHORS: Record<string, string> = {
   "google-chat": "#google-chat",
   signal: "#signal",
   imessage: "#imessage-macos-only",
-  bluebubbles: "#bluebubbles-imessage-from-any-platform",
   blooio: "#blooio-sms-via-api",
   nostr: "#nostr",
   line: "#line",
@@ -981,6 +999,10 @@ const PLUGIN_SETUP_GUIDE_ANCHORS: Record<string, string> = {
 };
 
 export function resolvePluginSetupGuideUrl(id: string): string | undefined {
+  const override = PLUGIN_SETUP_GUIDE_URL_OVERRIDES[id];
+  if (override) {
+    return override;
+  }
   const anchor = PLUGIN_SETUP_GUIDE_ANCHORS[id];
   return anchor ? `${PLUGIN_SETUP_GUIDE_ROOT}${anchor}` : undefined;
 }

@@ -414,11 +414,18 @@ E2E tests start the agent, load the plugin, and verify behavior through the chat
 // cypress/e2e/plugin.cy.ts
 describe('Weather Plugin E2E', () => {
   it('responds to weather queries', () => {
-    cy.request('POST', 'http://localhost:18789/api/chat', {
-      message: 'What is the weather in London?',
-    }).then((response) => {
-      expect(response.status).to.eq(200);
-      expect(response.body.text).to.include('London');
+    cy.request('POST', 'http://localhost:18789/api/conversations', {
+      title: 'Weather Plugin Test',
+    }).then(({ body }) => {
+      const conversationId = body.conversation.id;
+      cy.request(
+        'POST',
+        `http://localhost:18789/api/conversations/${conversationId}/messages`,
+        { text: 'What is the weather in London?' },
+      ).then((response) => {
+        expect(response.status).to.eq(200);
+        expect(response.body.text).to.include('London');
+      });
     });
   });
 });

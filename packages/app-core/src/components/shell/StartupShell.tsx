@@ -19,6 +19,7 @@ import {
   gatewayEndpointToApiBase,
 } from "../../bridge/gateway-discovery";
 import { applyColorScheme, applyContentPack } from "../../content-packs";
+import { isNative } from "../../platform/init";
 import {
   clearPersistedActiveServer,
   loadPersistedActivePackUrl,
@@ -562,6 +563,7 @@ export function StartupShell() {
                 discoveryLoading={discoveryLoading}
                 gateways={discoveredGateways}
                 showElizaCloudEntry={showElizaCloudEntry}
+                showCreateLocal={!isNative}
                 t={t}
                 onCreateLocal={handleCreateLocal}
                 onManualConnect={handleManualConnect}

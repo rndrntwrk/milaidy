@@ -1,0 +1,66 @@
+# Connect to Tlon (Urbit)
+
+Tlon is the chat and groups product built on Urbit — the P2P personal server platform. If you run an Urbit ship, your Milady agent can participate in Tlon channels and group conversations. This is a niche connector; most users don't need it.
+
+**What you'll learn:** get your ship's access code, point Milady at the running ship.
+
+## What you need before you start
+
+- **An Urbit ship** you control — can be a comet (free throwaway), a moon (hosted under a planet), or a planet (a real permanent identity you own). If you don't have one, set one up first via <a href="https://urbit.org/getting-started">urbit.org/getting-started</a>.
+- **The ship running** and accessible at an HTTP URL, either on localhost or remote.
+- **Milady running** with a working provider.
+
+## Step 1 — Get your ship's access code
+
+<Steps>
+  <li>Open Dojo (Urbit's command prompt) on your ship.</li>
+  <li>Type <code>+code</code> and press enter.</li>
+  <li>The ship prints a password-like string. Copy it.</li>
+</Steps>
+
+<Callout kind="warning">
+The access code is the ship owner's master credential. It grants full access to everything on the ship — files, chats, apps, identity. Treat it like a password and revoke + regenerate (<code>|code</code>) if it leaks.
+</Callout>
+
+## Step 2 — Find your ship URL
+
+- **Local ship:** usually <code>http://localhost:8080</code> (Urbit picks the next free port starting from 8080).
+- **Hosted ship (Tlon.io, Red Horizon, etc.):** your hosting provider gave you a URL.
+- **Self-hosted remote:** whatever URL your reverse proxy exposes.
+
+## Step 3 — Configure Milady
+
+<Steps>
+  <li>Open Milady. Go to <strong>Settings → Plugins → Tlon → Configure</strong>.</li>
+  <li>Set <strong>Ship</strong> to your ship name including the tilde (e.g. <code>~sampel-palnet</code>).</li>
+  <li>Set <strong>URL</strong> to the ship's HTTP URL from Step 2.</li>
+  <li>Paste the <strong>Code</strong> from Step 1.</li>
+  <li>(Optional) Set <strong>Group channels</strong> to a list of group channel paths the agent should listen in (format: <code>~ship/group/channel</code>).</li>
+  <li>Click <strong>Save</strong>.</li>
+</Steps>
+
+## Step 4 — Test it
+
+In a Tlon channel the agent is subscribed to, send a message. The agent should reply through the same channel.
+
+## Useful options
+
+| Option | What it does |
+| --- | --- |
+| **DM allowlist** | Comma-separated list of ship names allowed to DM the agent. |
+| **Auto-discover channels** | When on, the agent subscribes to new channels as they appear. When off, it only uses the channels listed explicitly. |
+
+## Troubleshooting
+
+**"Authentication failed."**
+Access code is wrong. Re-run `+code` in Dojo and copy fresh — codes can rotate.
+
+**Agent connects but doesn't see any messages.**
+Group channel paths aren't right. Tlon channel paths use the format `~host-ship/group-slug/channel-slug`. Double-check in the Tlon app's channel settings.
+
+**Ship URL times out.**
+Most commonly: the ship isn't running, or you're pointing at the wrong port. Urbit ships log their port on startup — check the terminal or Dojo.
+
+## What's next
+
+Tlon's a small ecosystem — if this connector doesn't meet your needs, [Matrix](/docs/intermediate/connect-matrix) or [Nostr](/docs/intermediate/connect-nostr) are similar-spirited federated alternatives with more active networks.

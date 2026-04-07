@@ -6,12 +6,14 @@ import {
   bundlesDependency,
   findFloatingDependencySpecs,
   findLocalPackHotspots,
+  findMismatchedSharedAgentDependencySpecs,
   findMissingPatchedElectrobunCliSnippets,
   hasLifecycleScriptReferencingMissingFile,
   isExactVersion,
   isExactVersionSpecifier,
   isNpmOverrideConflictError,
   isPackPathCoveredByFilesList,
+  isWorkspaceSpecifier,
   parseBunPackDryRunOutput,
   shouldSkipExactPackDryRun,
 } from "./release-check";
@@ -136,6 +138,13 @@ describe("release-check package guards", () => {
     expect(isExactVersionSpecifier("workspace:*")).toBe(false);
   });
 
+  it("detects workspace protocol specifiers for local plugin submodules", () => {
+    expect(isWorkspaceSpecifier("workspace:*")).toBe(true);
+    expect(isWorkspaceSpecifier("workspace:^")).toBe(true);
+    expect(isWorkspaceSpecifier("0.5.0")).toBe(false);
+    expect(isWorkspaceSpecifier(undefined)).toBe(false);
+  });
+
   it("rejects floating tags and range specifiers", () => {
     expect(isExactVersion("next")).toBe(false);
     expect(isExactVersion("latest")).toBe(false);
@@ -155,6 +164,51 @@ describe("release-check package guards", () => {
     expect(
       isExactVersion("https://registry.npmjs.org/foo/-/foo-1.0.0.tgz"),
     ).toBe(false);
+  });
+
+  it("flags shared agent dependencies that drift from the root's exact elizaOS pins", () => {
+    expect(
+      findMismatchedSharedAgentDependencySpecs(
+        {
+          dependencies: {
+            "@elizaos/core": "2.0.0-alpha.113",
+            "@elizaos/plugin-openai": "2.0.0-alpha.15",
+          },
+        },
+        {
+          dependencies: {
+            "@elizaos/core": "alpha",
+            "@elizaos/plugin-openai": "2.0.0-alpha.15",
+            "@elizaos/plugin-shell": "alpha",
+          },
+        },
+      ),
+    ).toEqual([
+      {
+        name: "@elizaos/core",
+        rootSpecifier: "2.0.0-alpha.113",
+        agentSpecifier: "alpha",
+      },
+    ]);
+  });
+
+  it("keeps packages/agent aligned with the root's exact elizaOS pins", () => {
+    const rootPackage = JSON.parse(
+      fs.readFileSync(
+        path.join(import.meta.dirname, "..", "package.json"),
+        "utf8",
+      ),
+    ) as { dependencies?: Record<string, string> };
+    const agentPackage = JSON.parse(
+      fs.readFileSync(
+        path.join(import.meta.dirname, "..", "packages/agent/package.json"),
+        "utf8",
+      ),
+    ) as { dependencies?: Record<string, string> };
+
+    expect(
+      findMismatchedSharedAgentDependencySpecs(rootPackage, agentPackage),
+    ).toEqual([]);
   });
 
   it("flags lifecycle hooks that reference missing files", () => {

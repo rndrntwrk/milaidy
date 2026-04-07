@@ -179,7 +179,7 @@ describe("validatePluginConfig", () => {
       },
       {
         key: "DISCORD_APPLICATION_ID",
-        required: true,
+        required: false,
         sensitive: false,
         type: "string",
         description: "Discord app ID",
@@ -193,27 +193,7 @@ describe("validatePluginConfig", () => {
       },
     ];
 
-    it("fails when both required params missing", () => {
-      const result = validatePluginConfig(
-        "discord",
-        "connector",
-        "DISCORD_API_TOKEN",
-        ["DISCORD_API_TOKEN", "DISCORD_APPLICATION_ID"],
-        undefined,
-        discordParams,
-      );
-      expect(result.valid).toBe(false);
-      expect(result.errors.length).toBe(2);
-      expect(result.errors.some((e) => e.field === "DISCORD_API_TOKEN")).toBe(
-        true,
-      );
-      expect(
-        result.errors.some((e) => e.field === "DISCORD_APPLICATION_ID"),
-      ).toBe(true);
-    });
-
-    it("fails when one required param missing", () => {
-      process.env.DISCORD_API_TOKEN = "MTE1MDY2NjQwOTA3MTQzODg5MA.token";
+    it("fails when the required bot token is missing", () => {
       const result = validatePluginConfig(
         "discord",
         "connector",
@@ -224,7 +204,23 @@ describe("validatePluginConfig", () => {
       );
       expect(result.valid).toBe(false);
       expect(result.errors.length).toBe(1);
-      expect(result.errors[0].field).toBe("DISCORD_APPLICATION_ID");
+      expect(result.errors.some((e) => e.field === "DISCORD_API_TOKEN")).toBe(
+        true,
+      );
+    });
+
+    it("passes when the application ID is omitted and the bot token is present", () => {
+      process.env.DISCORD_API_TOKEN = "MTE1MDY2NjQwOTA3MTQzODg5MA.token";
+      const result = validatePluginConfig(
+        "discord",
+        "connector",
+        "DISCORD_API_TOKEN",
+        ["DISCORD_API_TOKEN", "DISCORD_APPLICATION_ID"],
+        undefined,
+        discordParams,
+      );
+      expect(result.valid).toBe(true);
+      expect(result.errors).toHaveLength(0);
     });
 
     it("passes when all required params set", () => {

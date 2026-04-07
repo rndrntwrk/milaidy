@@ -7,7 +7,7 @@
  * Required env vars (loaded from repo root .env):
  *   OPENAI_API_KEY or ANTHROPIC_API_KEY — for embeddings and LLM
  *
- * Run: ELIZA_LIVE_TEST=1 npx vitest run -c vitest.e2e.config.ts test/knowledge-live.e2e.test.ts
+ * Run: MILADY_LIVE_TEST=1 npx vitest run -c vitest.e2e.config.ts test/knowledge-live.e2e.test.ts
  */
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -26,7 +26,8 @@ const hasLLM =
   Boolean(process.env.OPENAI_API_KEY?.trim()) ||
   Boolean(process.env.ANTHROPIC_API_KEY?.trim()) ||
   Boolean(process.env.GROQ_API_KEY?.trim());
-const isLiveTest = process.env.ELIZA_LIVE_TEST === "1";
+const isLiveTest =
+  process.env.MILADY_LIVE_TEST === "1" || process.env.ELIZA_LIVE_TEST === "1";
 const canRun = hasLLM && isLiveTest;
 
 // ═══════════════════════════════════════════════════════════════════════════

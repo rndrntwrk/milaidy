@@ -8,9 +8,13 @@ let mockedStateDir = "";
 let originalCwd = "";
 const toPosix = (value: string) => value.replaceAll("\\", "/");
 
-vi.mock("node:child_process", () => ({
-  execFile: vi.fn(),
-}));
+vi.mock("node:child_process", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("node:child_process")>();
+  return {
+    ...actual,
+    execFile: vi.fn(),
+  };
+});
 
 vi.mock("@elizaos/core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@elizaos/core")>();

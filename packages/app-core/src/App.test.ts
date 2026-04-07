@@ -5,18 +5,24 @@ import TestRenderer, { act } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
+  deferredChecklistRenderMock,
   subscribeDesktopBridgeEventMock,
   keyboardSetScrollMock,
+  settingsViewRenderMock,
   useAppMock,
   useBugReportStateMock,
   useContextMenuMock,
+  useLifeOpsActivitySignalsMock,
   useStreamPopoutNavigationMock,
 } = vi.hoisted(() => ({
+  deferredChecklistRenderMock: vi.fn(),
   subscribeDesktopBridgeEventMock: vi.fn(() => vi.fn()),
   keyboardSetScrollMock: vi.fn(() => Promise.resolve()),
+  settingsViewRenderMock: vi.fn(),
   useAppMock: vi.fn(),
   useBugReportStateMock: vi.fn(),
   useContextMenuMock: vi.fn(),
+  useLifeOpsActivitySignalsMock: vi.fn(),
   useStreamPopoutNavigationMock: vi.fn(),
 }));
 
@@ -44,6 +50,7 @@ vi.mock("./hooks", () => ({
     React.createElement(React.Fragment, null, children),
   useBugReportState: useBugReportStateMock,
   useContextMenu: useContextMenuMock,
+  useLifeOpsActivitySignals: useLifeOpsActivitySignalsMock,
   useStreamPopoutNavigation: useStreamPopoutNavigationMock,
 }));
 
@@ -78,7 +85,22 @@ vi.mock("./app-shell-components", () => {
 
     PairingView: stub("PairingView"),
     SaveCommandModal: stub("SaveCommandModal"),
-    SettingsView: stub("SettingsView"),
+    SettingsView: ({
+      children,
+      initialSection,
+    }: {
+      children?: React.ReactNode;
+      initialSection?: string;
+    }) =>
+      React.createElement(
+        "div",
+        {
+          "data-testid": "SettingsView",
+          "data-initial-section": initialSection ?? "",
+          ref: settingsViewRenderMock,
+        },
+        children,
+      ),
     SharedCompanionScene: passthrough,
     ShellOverlays: stub("ShellOverlays"),
     StartupFailureView: ({ error }: { error: { message: string } }) =>
@@ -109,12 +131,30 @@ vi.mock("./app-shell-components", () => {
   };
 });
 
-vi.mock("./components/FlaminaGuide", () => ({
-  DeferredSetupChecklist: ({ children }: { children?: React.ReactNode }) =>
+vi.mock("./components/cloud/FlaminaGuide", () => ({
+  DeferredSetupChecklist: ({
+    children,
+    onOpenTask,
+  }: {
+    children?: React.ReactNode;
+    onOpenTask?: (task: "provider") => void;
+  }) =>
     React.createElement(
       "div",
       { "data-testid": "DeferredSetupChecklist" },
       children,
+      React.createElement(
+        "button",
+        {
+          "data-testid": "DeferredSetupChecklist-open-provider",
+          type: "button",
+          onClick: () => {
+            deferredChecklistRenderMock();
+            onOpenTask?.("provider");
+          },
+        },
+        "open-provider",
+      ),
     ),
 }));
 
@@ -130,8 +170,10 @@ import { App } from "./App";
 
 describe("App", () => {
   beforeEach(() => {
+    deferredChecklistRenderMock.mockReset();
     subscribeDesktopBridgeEventMock.mockReset().mockReturnValue(vi.fn());
     keyboardSetScrollMock.mockReset();
+    settingsViewRenderMock.mockReset();
     useAppMock.mockReset();
     useBugReportStateMock.mockReset().mockReturnValue({});
     useContextMenuMock.mockReset().mockReturnValue({
@@ -140,6 +182,7 @@ describe("App", () => {
       confirmSaveCommand: vi.fn(),
       closeSaveCommandModal: vi.fn(),
     });
+    useLifeOpsActivitySignalsMock.mockReset();
     useStreamPopoutNavigationMock.mockReset();
   });
 

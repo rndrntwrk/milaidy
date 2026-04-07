@@ -16,9 +16,12 @@ describe("repoSetupSteps", () => {
     expect(repoSetupSteps).toEqual([
       "scripts/init-submodules.mjs",
       "scripts/patch-deps.mjs",
+      "scripts/setup-upstreams.mjs",
+      "scripts/ensure-bundled-workspaces.mjs",
       "scripts/ensure-skills.mjs",
       "scripts/ensure-avatars.mjs",
       "scripts/link-browser-server.mjs",
+      "scripts/link-external-plugins.mjs",
       "scripts/ensure-vision-deps.mjs",
     ]);
   });

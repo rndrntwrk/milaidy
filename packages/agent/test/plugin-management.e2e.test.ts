@@ -59,7 +59,7 @@ describe("Plugin Management E2E", () => {
   beforeAll(async () => {
     // Create a mock plugin manager
     mockPluginManager = {
-      installPlugin: vi.fn().mockImplementation(async (name) => {
+      installPlugin: vi.fn().mockImplementation(async (name, _progress, options) => {
         if (typeof name === "string" && name.includes("non-existent")) {
           return {
             success: false,
@@ -68,7 +68,46 @@ describe("Plugin Management E2E", () => {
             pluginName: name,
           };
         }
-        return { success: true, pluginName: name, requiresRestart: true };
+        const releaseStream = options?.releaseStream ?? "alpha";
+        const version =
+          options?.version ??
+          (releaseStream === "latest" ? "1.0.0" : "2.0.0-alpha.7");
+        return {
+          success: true,
+          pluginName: name,
+          version,
+          installPath: `/tmp/${encodeURIComponent(String(name))}`,
+          requiresRestart: true,
+          requestedVersion: version,
+          releaseStream,
+          latestVersion: "1.0.0",
+          alphaVersion: "2.0.0-alpha.7",
+        };
+      }),
+      updatePlugin: vi.fn().mockImplementation(async (name, _progress, options) => {
+        if (typeof name === "string" && name.includes("non-existent")) {
+          return {
+            success: false,
+            error: "Not found",
+            requiresRestart: false,
+            pluginName: name,
+          };
+        }
+        const releaseStream = options?.releaseStream ?? "alpha";
+        const version =
+          options?.version ??
+          (releaseStream === "latest" ? "1.0.0" : "2.0.0-alpha.7");
+        return {
+          success: true,
+          pluginName: name,
+          version,
+          installPath: `/tmp/${encodeURIComponent(String(name))}`,
+          requiresRestart: true,
+          requestedVersion: version,
+          releaseStream,
+          latestVersion: "1.0.0",
+          alphaVersion: "2.0.0-alpha.7",
+        };
       }),
       ejectPlugin: vi.fn().mockImplementation(async (name) => {
         if (name.includes("non-existent"))
@@ -119,7 +158,17 @@ describe("Plugin Management E2E", () => {
       listEjectedPlugins: vi.fn().mockResolvedValue([]),
       // Add other required methods to satisfy isPluginManagerLike check
       refreshRegistry: vi.fn(),
-      listInstalledPlugins: vi.fn(),
+      listInstalledPlugins: vi.fn().mockResolvedValue([
+        {
+          name: "@elizaos/plugin-test",
+          path: "/tmp/plugin-test",
+          version: "2.0.0-alpha.7",
+          releaseStream: "alpha",
+          requestedVersion: "2.0.0-alpha.7",
+          latestVersion: "1.0.0",
+          alphaVersion: "2.0.0-alpha.7",
+        },
+      ]),
       getRegistryPlugin: vi.fn(),
       searchRegistry: vi.fn(),
       uninstallPlugin: vi.fn().mockImplementation(async (name) => {
@@ -201,6 +250,62 @@ describe("Plugin Management E2E", () => {
       // We assume service attempts to install and fails
       expect(data.error).toBeDefined();
     });
+
+    it("returns release stream metadata for installs", async () => {
+      const { status, data } = await http$(
+        server.port,
+        "POST",
+        "/api/plugins/install",
+        { name: "@elizaos/plugin-test", stream: "alpha" },
+      );
+      expect(status).toBe(200);
+      expect(data.ok).toBe(true);
+      expect(data.pluginName).toBe("@elizaos/plugin-test");
+      expect(data.releaseStream).toBe("alpha");
+      expect(data.requestedVersion).toBe("2.0.0-alpha.7");
+      expect(data.latestVersion).toBe("1.0.0");
+      expect(data.alphaVersion).toBe("2.0.0-alpha.7");
+    });
+  });
+
+  describe("POST /api/plugins/update", () => {
+    it("returns 400 for missing name", async () => {
+      const { status, data } = await http$(
+        server.port,
+        "POST",
+        "/api/plugins/update",
+        {},
+      );
+      expect(status).toBe(400);
+      expect(data.error).toContain("must include 'name'");
+    });
+
+    it("returns 400 for invalid name format", async () => {
+      const { status, data } = await http$(
+        server.port,
+        "POST",
+        "/api/plugins/update",
+        { name: "invalid name with spaces" },
+      );
+      expect(status).toBe(400);
+      expect(data.error).toBe("Invalid plugin name format");
+    });
+
+    it("returns release stream metadata for updates", async () => {
+      const { status, data } = await http$(
+        server.port,
+        "POST",
+        "/api/plugins/update",
+        { name: "@elizaos/plugin-test", stream: "latest" },
+      );
+      expect(status).toBe(200);
+      expect(data.ok).toBe(true);
+      expect(data.pluginName).toBe("@elizaos/plugin-test");
+      expect(data.releaseStream).toBe("latest");
+      expect(data.requestedVersion).toBe("1.0.0");
+      expect(data.latestVersion).toBe("1.0.0");
+      expect(data.alphaVersion).toBe("2.0.0-alpha.7");
+    });
   });
 
   // ===================================================================
@@ -217,6 +322,17 @@ describe("Plugin Management E2E", () => {
       );
       expect(status).toBe(400);
       expect(data.error).toContain("must include 'name'");
+    });
+
+    it("returns 400 for invalid name format", async () => {
+      const { status, data } = await http$(
+        server.port,
+        "POST",
+        "/api/plugins/uninstall",
+        { name: "invalid name with spaces" },
+      );
+      expect(status).toBe(400);
+      expect(data.error).toBe("Invalid plugin name format");
     });
 
     it("returns 422 when uninstall fails", async () => {
@@ -242,6 +358,28 @@ describe("Plugin Management E2E", () => {
       expect(data.ok).toBe(true);
       expect(data.pluginName).toBe("@elizaos/plugin-test");
       expect(data.requiresRestart).toBe(true);
+    });
+  });
+
+  describe("GET /api/plugins/installed", () => {
+    it("returns installed plugin version metadata", async () => {
+      const { status, data } = await http$(
+        server.port,
+        "GET",
+        "/api/plugins/installed",
+      );
+      expect(status).toBe(200);
+      expect(data.count).toBe(1);
+      expect(data.plugins).toEqual([
+        expect.objectContaining({
+          name: "@elizaos/plugin-test",
+          version: "2.0.0-alpha.7",
+          releaseStream: "alpha",
+          requestedVersion: "2.0.0-alpha.7",
+          latestVersion: "1.0.0",
+          alphaVersion: "2.0.0-alpha.7",
+        }),
+      ]);
     });
   });
 

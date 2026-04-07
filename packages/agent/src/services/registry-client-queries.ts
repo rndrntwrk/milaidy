@@ -1,3 +1,8 @@
+import {
+  hasAppInterface,
+  packageNameToAppDisplayName,
+  packageNameToAppRouteSlug,
+} from "../contracts/apps.js";
 import type {
   RegistryAppInfo,
   RegistryPluginInfo,
@@ -24,32 +29,52 @@ export function getPluginInfoFromRegistry(
   let p = registry.get(name);
   if (p) return p;
 
+  const requestedBare = name.replace(/^@[^/]+\//, "").toLowerCase();
+
   if (!name.startsWith("@")) {
     p = registry.get(`@elizaos/${name}`);
     if (p) return p;
 
     p = registry.get(`@elizaos/plugin-${name}`);
     if (p) return p;
+
+    p = registry.get(`@elizaos/app-${name}`);
+    if (p) return p;
   }
 
-  const bare = name.replace(/^@[^/]+\//, "");
   for (const [key, value] of registry) {
-    if (key.endsWith(`/${bare}`)) return value;
+    if (key.toLowerCase().endsWith(`/${requestedBare}`)) return value;
+
+    const aliases = new Set<string>();
+    for (const candidate of [value.name, value.npm.package]) {
+      const trimmed = candidate?.trim();
+      if (!trimmed) continue;
+      aliases.add(trimmed.replace(/^@[^/]+\//, "").toLowerCase());
+
+      if (hasAppInterface(value)) {
+        const routeSlug = packageNameToAppRouteSlug(trimmed);
+        if (routeSlug) aliases.add(routeSlug.toLowerCase());
+      }
+    }
+
+    if (aliases.has(requestedBare)) {
+      return value;
+    }
   }
 
   return null;
 }
 
-export function scoreEntries(
-  entries: Iterable<RegistryPluginInfo>,
+export function scoreEntries<T extends RegistryPluginInfo>(
+  entries: Iterable<T>,
   query: string,
   limit: number,
-  extraNames?: (p: RegistryPluginInfo) => string[],
-  extraTerms?: (p: RegistryPluginInfo) => string[],
-): Array<{ p: RegistryPluginInfo; s: number }> {
+  extraNames?: (p: T) => string[],
+  extraTerms?: (p: T) => string[],
+): Array<{ p: T; s: number }> {
   const lq = query.toLowerCase();
   const terms = lq.split(/\s+/).filter((t) => t.length > 1);
-  const scored: Array<{ p: RegistryPluginInfo; s: number }> = [];
+  const scored: Array<{ p: T; s: number }> = [];
 
   for (const p of entries) {
     const ln = p.name.toLowerCase();
@@ -81,8 +106,8 @@ export function scoreEntries(
   return scored.slice(0, limit);
 }
 
-export function toSearchResults(
-  results: Array<{ p: RegistryPluginInfo; s: number }>,
+export function toSearchResults<T extends RegistryPluginInfo>(
+  results: Array<{ p: T; s: number }>,
 ): RegistrySearchResult[] {
   const max = results[0]?.s || 1;
   return results.map(({ p, s }) => ({
@@ -90,7 +115,9 @@ export function toSearchResults(
     description: p.description,
     score: s / max,
     tags: p.topics,
+    version: p.npm.v2Version || p.npm.v1Version || p.npm.v0Version,
     latestVersion: p.npm.v2Version || p.npm.v1Version || p.npm.v0Version,
+    npmPackage: p.npm.package,
     stars: p.stars,
     supports: p.supports,
     repository: `https://github.com/${p.gitRepo}`,
@@ -119,7 +146,7 @@ export function toAppInfo(
 
   return {
     name: p.name,
-    displayName: meta?.displayName ?? p.name.replace(/^@elizaos\/app-/, ""),
+    displayName: meta?.displayName ?? packageNameToAppDisplayName(p.name),
     description: p.description,
     category: meta?.category ?? "game",
     launchType: meta?.launchType ?? "url",
@@ -133,6 +160,7 @@ export function toAppInfo(
     npm: p.npm,
     uiExtension: meta?.uiExtension,
     viewer,
+    session: meta?.session,
   };
 }
 

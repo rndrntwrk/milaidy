@@ -10,6 +10,7 @@ import type {
   ConversationMessage,
   ImageAttachment,
 } from "@miladyai/app-core/api";
+import { client } from "@miladyai/app-core/api";
 import { isRoutineCodingAgentMessage } from "@miladyai/app-core/chat";
 import { useChatAvatarVoiceBridge } from "@miladyai/app-core/hooks";
 import { getVrmPreviewUrl, useApp } from "@miladyai/app-core/state";
@@ -61,6 +62,7 @@ export function ChatView({
   const {
     agentStatus,
     activeConversationId,
+    activeInboxChat,
     characterData,
     chatInput,
     chatSending,
@@ -84,8 +86,25 @@ export function ChatView({
     uiLanguage,
     ptySessions,
     sendChatText,
-    t,
+    t: appTranslate,
   } = useApp();
+
+  const t = useCallback(
+    (key: string, values?: Record<string, unknown>) => {
+      if (typeof appTranslate === "function") {
+        return appTranslate(key, values);
+      }
+
+      const template =
+        typeof values?.defaultValue === "string" ? values.defaultValue : key;
+
+      return template.replace(/\{\{(\w+)\}\}/g, (_match, token: string) => {
+        const value = values?.[token];
+        return value == null ? "" : String(value);
+      });
+    },
+    [appTranslate],
+  );
 
   const messagesRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -180,15 +199,22 @@ export function ChatView({
   const msgs = conversationMessages;
   const visibleMsgs = useMemo(
     () =>
-      msgs.filter(
-        (msg) =>
-          !(
-            chatSending &&
-            !chatFirstTokenReceived &&
-            msg.role === "assistant" &&
-            !msg.text.trim()
-          ) && !isRoutineCodingAgentMessage(msg),
-      ),
+      msgs
+        .filter(
+          (msg) =>
+            !(
+              chatSending &&
+              !chatFirstTokenReceived &&
+              msg.role === "assistant" &&
+              !msg.text.trim()
+            ) && !isRoutineCodingAgentMessage(msg),
+        )
+        // Default-tag any message that arrived without a source as
+        // "milady" so dashboard turns render the gold chip symmetric
+        // with connector messages. Live-streamed turns flow through
+        // the SSE path and don't carry the server-side default from
+        // conversation-routes.ts, so we catch them here too.
+        .map((msg) => (msg.source ? msg : { ...msg, source: "milady" })),
     [chatFirstTokenReceived, chatSending, msgs],
   );
   const {
@@ -564,6 +590,26 @@ export function ChatView({
     </ChatComposerShell>
   );
 
+  // ── Inbox-chat branch ────────────────────────────────────────────
+  //
+  // When the sidebar has selected a connector chat (iMessage/Telegram/
+  // etc.), we swap the main panel out for a read-only view of that
+  // room. Responding still has to happen via the connector plugin's
+  // own send path (plugin-imessage's IMESSAGE_SEND_MESSAGE action,
+  // plugin-telegram's reply tool, etc.), so the composer is disabled
+  // with a short note explaining why. The transcript itself reuses
+  // ChatTranscript + MessageContent so source-colored bubble borders
+  // render automatically.
+  if (activeInboxChat) {
+    return (
+      <InboxChatPanel
+        key={activeInboxChat.id}
+        activeInboxChat={activeInboxChat}
+        variant={variant}
+      />
+    );
+  }
+
   return (
     <ChatThreadLayout
       aria-label={t("aria.chatWorkspace")}
@@ -588,5 +634,105 @@ export function ChatView({
     >
       {messagesContent}
     </ChatThreadLayout>
+  );
+}
+
+/**
+ * Read-only panel shown when the unified messages sidebar has a
+ * connector chat selected. Polls `/api/inbox/messages?roomId=...`
+ * every 5 seconds, renders messages through the same ChatTranscript
+ * the dashboard uses so source-colored bubble borders light up, and
+ * disables the composer with a short note about how to reply.
+ */
+function InboxChatPanel({
+  activeInboxChat,
+  variant,
+}: {
+  activeInboxChat: { id: string; source: string; title: string };
+  variant: ChatViewVariant;
+}) {
+  const { t } = useApp();
+  const [messages, setMessages] = useState<ConversationMessage[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const response = await client.getInboxMessages({
+          limit: 200,
+          roomId: activeInboxChat.id,
+        });
+        if (cancelled) return;
+        // Server returns newest first; ChatTranscript expects
+        // oldest→newest (conversation layout) so reverse.
+        const next = [...response.messages]
+          .reverse()
+          .map((m) => m as unknown as ConversationMessage);
+        setMessages(next);
+      } catch {
+        // Transient errors keep the last snapshot; next poll retries.
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    void load();
+    const timer = window.setInterval(load, 5_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [activeInboxChat.id]);
+
+  const sourceLabel = activeInboxChat.source
+    ? activeInboxChat.source.charAt(0).toUpperCase() +
+      activeInboxChat.source.slice(1)
+    : "Channel";
+
+  return (
+    <div
+      className="flex flex-1 min-h-0 min-w-0 flex-col"
+      aria-label={t("inboxview.Title", { defaultValue: "Inbox" })}
+    >
+      <div className="flex items-center justify-between border-b border-border/40 px-5 py-3">
+        <div className="min-w-0">
+          <div className="text-sm font-bold text-txt truncate">
+            {activeInboxChat.title}
+          </div>
+          <div className="mt-0.5 text-[11px] text-muted">
+            {sourceLabel} · {messages.length}{" "}
+            {t("inboxview.TotalCountShort", { defaultValue: "messages" })}
+          </div>
+        </div>
+      </div>
+      <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
+        {loading && messages.length === 0 ? (
+          <div className="flex h-full items-center justify-center text-xs text-muted">
+            {t("inboxview.Loading", { defaultValue: "Loading messages…" })}
+          </div>
+        ) : messages.length === 0 ? (
+          <div className="flex h-full items-center justify-center text-center text-xs text-muted">
+            {t("inboxview.EmptyRoom", {
+              defaultValue: "No messages in this chat yet.",
+            })}
+          </div>
+        ) : (
+          <ChatTranscript
+            variant={variant}
+            messages={messages}
+            renderMessageContent={(message) => (
+              <MessageContent message={message as ConversationMessage} />
+            )}
+          />
+        )}
+      </div>
+      <div className="border-t border-border/40 bg-bg-hover/40 px-5 py-3 text-[11px] leading-5 text-muted">
+        {t("inboxview.ReadOnlyReplyHint", {
+          defaultValue:
+            "Read-only view. Reply from the {{source}} app — the connector plugin handles outbound messages.",
+          source: sourceLabel,
+        })}
+      </div>
+    </div>
   );
 }

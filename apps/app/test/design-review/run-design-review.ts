@@ -221,7 +221,7 @@ const views: ViewSpec[] = [
     path: "/wallets",
     shellMode: "native",
     lastNativeTab: "wallets",
-    readyChecks: [{ selector: '[data-testid="wallet-balance-value"]' }],
+    readyChecks: [{ selector: '[data-testid="wallets-sidebar"]' }],
   },
   {
     id: "knowledge",
@@ -237,7 +237,7 @@ const views: ViewSpec[] = [
     path: "/connectors",
     shellMode: "native",
     lastNativeTab: "connectors",
-    readyChecks: [{ selector: '[data-testid="plugins-view-social"]' }],
+    readyChecks: [{ selector: '[data-testid="connectors-settings-sidebar"]' }],
   },
   {
     id: "settings",
@@ -245,7 +245,7 @@ const views: ViewSpec[] = [
     path: "/settings",
     shellMode: "native",
     lastNativeTab: "settings",
-    readyChecks: [{ selector: '[aria-label="Close settings"]' }],
+    readyChecks: [{ selector: '[data-testid="settings-sidebar"]' }],
   },
   {
     id: "triggers",

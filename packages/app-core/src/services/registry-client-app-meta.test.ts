@@ -167,6 +167,28 @@ describe("registry-client-app-meta", () => {
         quality: "high",
       });
     });
+
+    it("merges session metadata and prefers patch features", () => {
+      const base: RegistryAppMeta = {
+        ...baseMeta,
+        session: {
+          mode: "spectate-and-steer",
+          features: ["commands", "pause"],
+        },
+      };
+      const patch: RegistryAppMeta = {
+        ...baseMeta,
+        session: {
+          mode: "spectate-and-steer",
+          features: ["resume", "telemetry"],
+        },
+      };
+      const result = mergeAppMeta(base, patch);
+      expect(result?.session).toEqual({
+        mode: "spectate-and-steer",
+        features: ["resume", "telemetry"],
+      });
+    });
   });
 
   // ── resolveAppOverride ───────────────────────────────────────────
@@ -194,16 +216,29 @@ describe("registry-client-app-meta", () => {
       expect(result).toBeDefined();
       expect(result?.launchType).toBe("url");
       expect(result?.launchUrl).toBe("http://localhost:3000");
+      expect(result?.uiExtension?.detailPanelId).toBe(
+        "babylon-operator-dashboard",
+      );
     });
 
-    it("applies override for @elizaos/app-hyperscape (connect type)", () => {
+    it("applies override for known package @elizaos/app-hyperscape", () => {
       const result = resolveAppOverride("@elizaos/app-hyperscape", undefined);
       expect(result).toBeDefined();
       expect(result?.launchType).toBe("connect");
+      expect(result?.viewer?.embedParams?.surface).toBe("agent-control");
       expect(result?.uiExtension?.detailPanelId).toBe(
-        "hyperscape-embedded-agents",
+        "hyperscape-embedded-agent-control",
       );
+    });
+
+    it("applies override for known package @elizaos/app-2004scape", () => {
+      const result = resolveAppOverride("@elizaos/app-2004scape", undefined);
+      expect(result).toBeDefined();
+      expect(result?.launchType).toBe("connect");
       expect(result?.viewer?.postMessageAuth).toBe(true);
+      expect(result?.uiExtension?.detailPanelId).toBe(
+        "2004scape-operator-dashboard",
+      );
     });
 
     it("merges override with existing metadata", () => {

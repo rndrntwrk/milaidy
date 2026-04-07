@@ -25,6 +25,7 @@ function createSyncManager() {
   };
 }
 
+const browserWorkspaceManager = createSyncManager();
 const cameraManager = createSyncManager();
 const canvasManager = createSyncManager();
 const desktopManager = createSyncManager();
@@ -41,6 +42,9 @@ const talkModeManager = createSyncManager();
 
 vi.mock("../agent", () => ({
   getAgentManager: () => agentManager,
+}));
+vi.mock("../browser-workspace", () => ({
+  getBrowserWorkspaceManager: () => browserWorkspaceManager,
 }));
 vi.mock("../camera", () => ({
   getCameraManager: () => cameraManager,
@@ -80,6 +84,7 @@ describe("native index disposal", () => {
     agentDisposeDeferred = createDeferred<void>();
     agentManager.dispose.mockImplementation(() => agentDisposeDeferred.promise);
     for (const manager of [
+      browserWorkspaceManager,
       cameraManager,
       canvasManager,
       desktopManager,
@@ -110,6 +115,7 @@ describe("native index disposal", () => {
     await disposePromise;
 
     expect(settled).toBe(true);
+    expect(browserWorkspaceManager.dispose).toHaveBeenCalledTimes(1);
     expect(cameraManager.dispose).toHaveBeenCalledTimes(1);
     expect(screenCaptureManager.dispose).toHaveBeenCalledTimes(1);
   });

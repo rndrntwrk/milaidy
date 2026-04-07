@@ -17,6 +17,7 @@ import { type ReactNode, useCallback, useEffect, useState } from "react";
 import {
   AdvancedPageView,
   AppsPageView,
+  BrowserWorkspaceView,
   BugReportModal,
   CharacterEditor,
   ChatView,
@@ -43,17 +44,20 @@ import {
 } from "./app-shell-components";
 import { TasksEventsPanel } from "./components/chat/TasksEventsPanel";
 import { DeferredSetupChecklist } from "./components/cloud/FlaminaGuide";
+import { MusicPlayerGlobal } from "./components/music/MusicPlayerGlobal";
 import { CompanionHeader } from "./components/companion/CompanionHeader";
 import {
   BugReportProvider,
   useBugReportState,
   useContextMenu,
+  useLifeOpsActivitySignals,
   useStreamPopoutNavigation,
 } from "./hooks";
 import { useActivityEvents } from "./hooks/useActivityEvents";
 import type { Tab } from "./navigation";
 import { APPS_ENABLED, COMPANION_ENABLED } from "./navigation";
 import { useApp } from "./state";
+import type { FlaminaGuideTopic } from "./state/types";
 
 const CHAT_MOBILE_BREAKPOINT_PX = 820;
 const CHAT_DESKTOP_COMPOSER_UNDERLAY_CLASS =
@@ -90,7 +94,7 @@ function TabScrollView({
 
 function TabContentView({ children }: { children: ReactNode }) {
   return (
-    <div className="flex-1 min-h-0 min-w-0 w-full overflow-hidden">
+    <div className="flex flex-col flex-1 min-h-0 min-w-0 w-full overflow-hidden">
       {children}
     </div>
   );
@@ -110,6 +114,12 @@ function ViewRouter({
     switch (tab) {
       case "chat":
         return <ChatView />;
+      case "browser":
+        return (
+          <TabContentView>
+            <BrowserWorkspaceView />
+          </TabContentView>
+        );
       case "companion":
         return COMPANION_ENABLED ? <CompanionView /> : <ChatView />;
       case "stream":
@@ -234,9 +244,13 @@ export function App() {
   const contextMenu = useContextMenu();
 
   useStreamPopoutNavigation(setTab);
+  useLifeOpsActivitySignals();
 
   const [customActionsPanelOpen, setCustomActionsPanelOpen] = useState(false);
   const [customActionsEditorOpen, setCustomActionsEditorOpen] = useState(false);
+  const [settingsInitialSection, setSettingsInitialSection] = useState<
+    string | null
+  >(null);
   const [tasksEventsPanelOpen, setTasksEventsPanelOpen] = useState(false);
   const { events: activityEvents, clearEvents: clearActivityEvents } =
     useActivityEvents();
@@ -323,10 +337,17 @@ export function App() {
   }, []);
 
   const handleDeferredTaskOpen = useCallback(
-    (task: "provider" | "rpc" | "permissions" | "voice") => {
+    (task: FlaminaGuideTopic) => {
       if (task === "voice") {
         setTab("voice");
         return;
+      }
+      if (task === "permissions") {
+        setSettingsInitialSection("permissions");
+      } else if (task === "provider") {
+        setSettingsInitialSection("ai-model");
+      } else {
+        setSettingsInitialSection(null);
       }
       setTab("settings");
     },
@@ -356,6 +377,13 @@ export function App() {
       setTasksEventsPanelOpen(false);
     }
   }, [isChat]);
+
+  useEffect(() => {
+    if (isSettingsPage || settingsInitialSection === null) {
+      return;
+    }
+    setSettingsInitialSection(null);
+  }, [isSettingsPage, settingsInitialSection]);
 
   useEffect(() => {
     if (!isNative || !isIOS) {
@@ -516,7 +544,7 @@ export function App() {
                   <DrawerSheetHeader className="sr-only">
                     <DrawerSheetTitle>
                       {t("taskseventspanel.Title", {
-                        defaultValue: "Tasks & Events",
+                        defaultValue: "Chat widgets",
                       })}
                     </DrawerSheetTitle>
                   </DrawerSheetHeader>
@@ -596,7 +624,9 @@ export function App() {
       <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden">
         <SettingsView
           key={tab === "voice" ? "settings-media" : "settings-root"}
-          initialSection={tab === "voice" ? "media" : undefined}
+          initialSection={
+            tab === "voice" ? "media" : (settingsInitialSection ?? undefined)
+          }
         />
       </div>
     </div>
@@ -672,6 +702,7 @@ export function App() {
         If we are in the crossfade phase, mount the shell but cover it with the fading onboarding layer.
       */}
       {appShell}
+      <MusicPlayerGlobal />
 
       {/* Persistent game overlay — stays visible across all tabs */}
       {activeGameViewerUrl && gameOverlayEnabled && tab !== "apps" && (

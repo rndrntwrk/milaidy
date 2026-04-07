@@ -4,16 +4,21 @@
  */
 
 import {
-  logger,
   type IAgentRuntime,
+  logger,
   type Memory,
   type Provider,
   type ProviderResult,
   type State,
   type UUID,
 } from "@elizaos/core";
-import { type RoleName, type RolesWorldMetadata } from "./types";
-import { getEntityRole, normalizeRole } from "./utils";
+import type { RoleName, RolesWorldMetadata } from "./types";
+import {
+  getEntityRole,
+  getLiveEntityMetadataFromMessage,
+  normalizeRole,
+  resolveEntityRole,
+} from "./utils";
 
 export const rolesProvider: Provider = {
   name: "roles",
@@ -43,8 +48,23 @@ export const rolesProvider: Provider = {
     }
 
     const metadata = (world.metadata ?? {}) as RolesWorldMetadata;
-    const roles = metadata.roles ?? {};
-    const speakerRole = getEntityRole(metadata, message.entityId);
+    const speakerRole = await resolveEntityRole(
+      runtime,
+      world,
+      metadata,
+      message.entityId,
+      {
+        liveEntityMetadata: getLiveEntityMetadataFromMessage(message),
+      },
+    );
+    const storedSpeakerRole = getEntityRole(metadata, message.entityId);
+    const roles =
+      speakerRole !== storedSpeakerRole
+        ? {
+            ...(metadata.roles ?? {}),
+            [message.entityId]: speakerRole,
+          }
+        : (metadata.roles ?? {});
 
     // Build a compact role summary for the agent context.
     const owners: string[] = [];
@@ -67,8 +87,11 @@ export const rolesProvider: Provider = {
           const entity = await runtime.getEntityById(id as UUID);
           const name =
             entity?.names?.[0] ??
-            (entity?.metadata as Record<string, Record<string, string>> | undefined)
-              ?.default?.name ??
+            (
+              entity?.metadata as
+                | Record<string, Record<string, string>>
+                | undefined
+            )?.default?.name ??
             id.slice(0, 8);
           results.push(name);
         } catch {

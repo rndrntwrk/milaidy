@@ -1,7 +1,9 @@
 import { logger } from "@elizaos/core";
+import { packageNameToAppDisplayName } from "@miladyai/shared/contracts/apps";
 import type {
   AppUiExtensionConfig,
   RegistryAppMeta,
+  RegistryAppSessionMeta,
   RegistryAppViewerMeta,
 } from "./registry-client-types.js";
 
@@ -29,34 +31,48 @@ interface LocalAppOverride {
   launchType?: string;
   launchUrl?: string | null;
   capabilities?: string[];
+  runtimePlugin?: string;
   uiExtension?: AppUiExtensionConfig;
   viewer?: RegistryAppViewerMeta;
+  session?: RegistryAppSessionMeta;
 }
 
 const LOCAL_APP_OVERRIDES: Readonly<Record<string, LocalAppOverride>> = {
   "@elizaos/app-babylon": {
     launchType: "url",
     launchUrl: "http://localhost:3000",
+    uiExtension: {
+      detailPanelId: "babylon-operator-dashboard",
+    },
     viewer: {
       url: "http://localhost:3000",
       sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
     },
   },
   "@elizaos/app-hyperscape": {
+    displayName: "Hyperscape",
+    category: "game",
     launchType: "connect",
-    launchUrl: "http://localhost:3333",
+    launchUrl: "{HYPERSCAPE_CLIENT_URL}",
+    capabilities: ["combat"],
+    runtimePlugin: "@hyperscape/plugin-hyperscape",
     uiExtension: {
-      detailPanelId: "hyperscape-embedded-agents",
+      detailPanelId: "hyperscape-embedded-agent-control",
     },
     viewer: {
-      url: "http://localhost:3333",
+      url: "{HYPERSCAPE_CLIENT_URL}",
       embedParams: {
         embedded: "true",
         mode: "spectator",
-        quality: "medium",
+        surface: "agent-control",
+        followEntity: "{HYPERSCAPE_CHARACTER_ID}",
       },
       postMessageAuth: true,
       sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
+    },
+    session: {
+      mode: "spectate-and-steer",
+      features: ["commands", "telemetry", "pause", "resume", "suggestions"],
     },
   },
   "@elizaos/app-hyperfy": {
@@ -69,34 +85,33 @@ const LOCAL_APP_OVERRIDES: Readonly<Record<string, LocalAppOverride>> = {
   },
   "@elizaos/app-2004scape": {
     launchType: "connect",
-    launchUrl: "http://localhost:8880",
+    launchUrl: "{RS_SDK_SERVER_URL}",
+    uiExtension: {
+      detailPanelId: "2004scape-operator-dashboard",
+    },
     viewer: {
-      url: "http://localhost:8880",
-      embedParams: { bot: "{RS_SDK_BOT_NAME}" },
+      url: "{RS_SDK_SERVER_URL}/bot",
+      embedParams: {
+        bot: "{RS_SDK_BOT_NAME}",
+        password: "{RS_SDK_BOT_PASSWORD}",
+      },
       postMessageAuth: true,
       sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
     },
-  },
-  "@elizaos/app-agent-town": {
-    launchType: "url",
-    launchUrl: "http://localhost:5173/ai-town/index.html",
-    viewer: {
-      url: "http://localhost:5173/ai-town/index.html",
-      sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
+    session: {
+      mode: "spectate-and-steer",
+      features: ["commands", "telemetry", "pause", "resume", "suggestions"],
     },
   },
-  "@elizaos/app-dungeons": {
-    launchType: "local",
-    launchUrl: "http://localhost:3345",
-    viewer: {
-      url: "http://localhost:3345",
-      sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
+  "@elizaos/app-defense-of-the-agents": {
+    uiExtension: {
+      detailPanelId: "defense-agent-control",
     },
   },
 };
 
 export function sanitizeSandbox(rawSandbox?: string): string {
-  if (!rawSandbox || !rawSandbox.trim()) {
+  if (!rawSandbox?.trim()) {
     return LOCAL_APP_DEFAULT_SANDBOX;
   }
 
@@ -148,6 +163,23 @@ function mergeViewer(
   });
 }
 
+function mergeSession(
+  base: RegistryAppSessionMeta | undefined,
+  patch: RegistryAppSessionMeta | undefined,
+): RegistryAppSessionMeta | undefined {
+  if (!base && !patch) return undefined;
+  if (!base) return patch;
+  if (!patch) return base;
+  return {
+    ...base,
+    ...patch,
+    features:
+      patch.features && patch.features.length > 0
+        ? patch.features
+        : base.features,
+  };
+}
+
 export function mergeAppMeta(
   base: RegistryAppMeta | undefined,
   patch: RegistryAppMeta | undefined,
@@ -160,8 +192,10 @@ export function mergeAppMeta(
     ...patch,
     capabilities:
       patch.capabilities.length > 0 ? patch.capabilities : base.capabilities,
+    runtimePlugin: patch.runtimePlugin ?? base.runtimePlugin,
     uiExtension: patch.uiExtension ?? base.uiExtension,
     viewer: mergeViewer(base.viewer, patch.viewer),
+    session: mergeSession(base.session, patch.session),
   };
 }
 
@@ -173,7 +207,7 @@ export function resolveAppOverride(
   if (!override) return appMeta;
   const base: RegistryAppMeta = appMeta ?? {
     displayName:
-      override.displayName ?? packageName.replace(/^@elizaos\/app-/, ""),
+      override.displayName ?? packageNameToAppDisplayName(packageName),
     category: override.category ?? "game",
     launchType: override.launchType ?? "url",
     launchUrl: override.launchUrl ?? null,
@@ -181,8 +215,10 @@ export function resolveAppOverride(
     capabilities: override.capabilities ?? [],
     minPlayers: null,
     maxPlayers: null,
+    runtimePlugin: override.runtimePlugin,
     uiExtension: override.uiExtension,
     viewer: override.viewer,
+    session: override.session,
   };
   return {
     ...base,
@@ -195,7 +231,9 @@ export function resolveAppOverride(
       override.capabilities !== undefined
         ? override.capabilities
         : base.capabilities,
+    runtimePlugin: override.runtimePlugin ?? base.runtimePlugin,
     uiExtension: override.uiExtension ?? base.uiExtension,
     viewer: mergeViewer(base.viewer, override.viewer),
+    session: mergeSession(base.session, override.session),
   };
 }

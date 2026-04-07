@@ -10,6 +10,7 @@
  *
  * @module plugin-resolver
  */
+import crypto from "node:crypto";
 import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -57,29 +58,49 @@ function formatError(err: unknown): string {
 
 function redactUserSegments(filepath: string): string {
   // Replace /Users/<name>/ or /home/<name>/ with /Users/<redacted>/ etc.
-  return filepath.replace(
-    /\/(Users|home)\/[^/]+\//g,
-    "/$1/<redacted>/",
-  );
+  return filepath.replace(/\/(Users|home)\/[^/]+\//g, "/$1/<redacted>/");
+}
+
+function sanitizePluginCacheSegment(value: string): string {
+  return value.replace(/[^a-zA-Z0-9._-]+/g, "_");
 }
 
 // ---------------------------------------------------------------------------
 // Workspace plugin overrides
 // ---------------------------------------------------------------------------
 
-const WORKSPACE_PLUGIN_OVERRIDES = new Set<string>([
-  // "@elizaos/plugin-trajectory-logger",
-  // "@elizaos/plugin-plugin-manager",
-  // "@elizaos/plugin-media-generation",
-  "@elizaos/plugin-twitch-streaming",
-  "@elizaos/plugin-youtube-streaming",
-]);
+function uniquePaths(paths: string[]): string[] {
+  const seen = new Set<string>();
+  const ordered: string[] = [];
+  for (const candidate of paths) {
+    const resolved = path.resolve(candidate);
+    if (!seen.has(resolved)) {
+      seen.add(resolved);
+      ordered.push(resolved);
+    }
+  }
+  return ordered;
+}
+
+function resolveWorkspaceRoots(): string[] {
+  const envRoot = process.env.ELIZA_WORKSPACE_ROOT?.trim();
+  if (envRoot) {
+    return uniquePaths([envRoot]);
+  }
+
+  const moduleDir = path.dirname(fileURLToPath(import.meta.url));
+  const cwd = process.cwd();
+  return uniquePaths([
+    cwd,
+    path.resolve(cwd, ".."),
+    path.resolve(cwd, "..", ".."),
+    path.resolve(moduleDir, "..", "..", "..", ".."),
+    path.resolve(moduleDir, "..", "..", ".."),
+  ]);
+}
 
 function getWorkspacePluginOverridePath(pluginName: string): string | null {
   if (process.env.ELIZA_DISABLE_WORKSPACE_PLUGIN_OVERRIDES === "1") {
-    return null;
-  }
-  if (!WORKSPACE_PLUGIN_OVERRIDES.has(pluginName)) {
     return null;
   }
 
@@ -87,21 +108,19 @@ function getWorkspacePluginOverridePath(pluginName: string): string | null {
   const pluginSegment = pluginSegmentMatch?.[1];
   if (!pluginSegment) return null;
 
-  const thisDir = path.dirname(fileURLToPath(import.meta.url));
-  const elizaRoot = path.resolve(thisDir, "..", "..");
-  const workspaceRoot = path.resolve(elizaRoot, "..");
-  const candidates = [
-    path.join(elizaRoot, "plugins", pluginSegment, "typescript"),
-    path.join(workspaceRoot, "plugins", pluginSegment, "typescript"),
-    path.join(elizaRoot, "plugins", pluginSegment),
-    path.join(workspaceRoot, "plugins", pluginSegment),
-    path.join(elizaRoot, "packages", pluginSegment),
-    path.join(workspaceRoot, "packages", pluginSegment),
-  ];
+  for (const workspaceRoot of resolveWorkspaceRoots()) {
+    const candidates = uniquePaths([
+      path.join(workspaceRoot, "plugins", pluginSegment, "typescript"),
+      path.join(workspaceRoot, "plugins", pluginSegment),
+      path.join(workspaceRoot, "eliza", "plugins", pluginSegment, "typescript"),
+      path.join(workspaceRoot, "eliza", "plugins", pluginSegment),
+      path.join(workspaceRoot, "eliza", "packages", pluginSegment),
+    ]);
 
-  for (const candidate of candidates) {
-    if (existsSync(path.join(candidate, "package.json"))) {
-      return candidate;
+    for (const candidate of candidates) {
+      if (existsSync(path.join(candidate, "package.json"))) {
+        return candidate;
+      }
     }
   }
 
@@ -194,7 +213,7 @@ function wrapPluginWithErrorBoundary(
  * @param packageName  The npm package name (e.g. "@elizaos/plugin-discord") — used
  *                     to navigate directly into node_modules when present.
  */
-async function importFromPath(
+export async function importPluginModuleFromPath(
   installPath: string,
   packageName: string,
 ): Promise<PluginModuleShape> {
@@ -217,9 +236,238 @@ async function importFromPath(
     /* git layout — pkgRoot stays as absPath */
   }
 
-  // Resolve entry point from package.json
-  const entryPoint = await resolvePackageEntry(pkgRoot);
+  const packageRelativePath =
+    pkgRoot === absPath ? [] : ["node_modules", ...packageName.split("/")];
+  const stagedPkgRoot = await stagePluginImportRoot({
+    installRoot: absPath,
+    packageRoot: pkgRoot,
+    packageRelativePath,
+    packageName,
+  });
+
+  // Resolve entry point from a staged filesystem snapshot so reloads pick up
+  // updated relative modules and bundled dependencies instead of reusing the
+  // previous ESM module graph from the original path.
+  const entryPoint = await resolvePackageEntry(stagedPkgRoot);
   return (await import(pathToFileURL(entryPoint).href)) as PluginModuleShape;
+}
+
+async function findNearestNodeModulesDir(
+  startDir: string,
+): Promise<string | null> {
+  let currentDir = path.resolve(startDir);
+  while (true) {
+    const candidate = path.join(currentDir, "node_modules");
+    try {
+      if ((await fs.stat(candidate)).isDirectory()) {
+        return candidate;
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+        throw error;
+      }
+    }
+
+    const parentDir = path.dirname(currentDir);
+    if (parentDir === currentDir) {
+      return null;
+    }
+    currentDir = parentDir;
+  }
+}
+
+async function findAncestorNodeModulesDirs(startDir: string): Promise<string[]> {
+  const dirs: string[] = [];
+  let currentDir = path.resolve(startDir);
+  while (true) {
+    const candidate = path.join(currentDir, "node_modules");
+    try {
+      if ((await fs.stat(candidate)).isDirectory()) {
+        dirs.push(candidate);
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+        throw error;
+      }
+    }
+
+    const parentDir = path.dirname(currentDir);
+    if (parentDir === currentDir) {
+      return dirs;
+    }
+    currentDir = parentDir;
+  }
+}
+
+async function linkAncestorNodeModulesIfNeeded(params: {
+  installRoot: string;
+  packageRoot: string;
+  stagedPackageRoot: string;
+}): Promise<void> {
+  const stagedNodeModulesPath = path.join(
+    params.stagedPackageRoot,
+    "node_modules",
+  );
+  if (existsSync(stagedNodeModulesPath)) {
+    return;
+  }
+
+  const ancestorNodeModules = await findNearestNodeModulesDir(
+    params.packageRoot,
+  );
+  if (!ancestorNodeModules) {
+    return;
+  }
+
+  const normalizedInstallRoot = path.resolve(params.installRoot);
+  const normalizedAncestorNodeModules = path.resolve(ancestorNodeModules);
+  if (
+    normalizedAncestorNodeModules ===
+      path.join(normalizedInstallRoot, "node_modules") ||
+    normalizedAncestorNodeModules.startsWith(
+      `${normalizedInstallRoot}${path.sep}`,
+    )
+  ) {
+    return;
+  }
+
+  await fs.symlink(ancestorNodeModules, stagedNodeModulesPath, "dir");
+}
+
+async function linkMissingPackagesFromNodeModules(params: {
+  sourceNodeModulesDir: string;
+  targetNodeModulesDir: string;
+}): Promise<void> {
+  const entries = await fs.readdir(params.sourceNodeModulesDir, {
+    withFileTypes: true,
+  });
+
+  for (const entry of entries) {
+    if (entry.name === ".bin" || entry.name.startsWith(".")) {
+      continue;
+    }
+
+    const sourcePath = path.join(params.sourceNodeModulesDir, entry.name);
+    const targetPath = path.join(params.targetNodeModulesDir, entry.name);
+
+    if (entry.isDirectory() && entry.name.startsWith("@")) {
+      await fs.mkdir(targetPath, { recursive: true });
+      const scopedEntries = await fs.readdir(sourcePath, { withFileTypes: true });
+      for (const scopedEntry of scopedEntries) {
+        if (scopedEntry.name.startsWith(".")) {
+          continue;
+        }
+        const scopedSourcePath = path.join(sourcePath, scopedEntry.name);
+        const scopedTargetPath = path.join(targetPath, scopedEntry.name);
+        if (existsSync(scopedTargetPath)) {
+          continue;
+        }
+        if (
+          !scopedEntry.isDirectory() &&
+          !scopedEntry.isSymbolicLink()
+        ) {
+          continue;
+        }
+        await fs.symlink(scopedSourcePath, scopedTargetPath, "dir");
+      }
+      continue;
+    }
+
+    if (
+      (!entry.isDirectory() && !entry.isSymbolicLink()) ||
+      existsSync(targetPath)
+    ) {
+      continue;
+    }
+
+    await fs.symlink(sourcePath, targetPath, "dir");
+  }
+}
+
+async function linkHoistedNodeModulesPackages(params: {
+  installRoot: string;
+  packageRoot: string;
+  stagedPackageRoot: string;
+}): Promise<void> {
+  const stagedNodeModulesPath = path.join(
+    params.stagedPackageRoot,
+    "node_modules",
+  );
+
+  if (!existsSync(stagedNodeModulesPath)) {
+    return;
+  }
+
+  const stagedNodeModulesStat = await fs.lstat(stagedNodeModulesPath);
+  if (stagedNodeModulesStat.isSymbolicLink()) {
+    return;
+  }
+
+  const normalizedInstallRoot = path.resolve(params.installRoot);
+  const internalNodeModulesRoot = path.join(normalizedInstallRoot, "node_modules");
+  const ancestorNodeModulesDirs = await findAncestorNodeModulesDirs(
+    path.dirname(params.packageRoot),
+  );
+
+  for (const ancestorNodeModules of ancestorNodeModulesDirs) {
+    const normalizedAncestorNodeModules = path.resolve(ancestorNodeModules);
+    if (
+      normalizedAncestorNodeModules === internalNodeModulesRoot ||
+      normalizedAncestorNodeModules.startsWith(
+        `${normalizedInstallRoot}${path.sep}`,
+      )
+    ) {
+      continue;
+    }
+
+    await linkMissingPackagesFromNodeModules({
+      sourceNodeModulesDir: ancestorNodeModules,
+      targetNodeModulesDir: stagedNodeModulesPath,
+    });
+  }
+}
+
+async function stagePluginImportRoot(params: {
+  installRoot: string;
+  packageRoot: string;
+  packageRelativePath: string[];
+  packageName: string;
+}): Promise<string> {
+  const stagingBaseDir = path.join(
+    resolveStateDir(),
+    "plugins",
+    ".runtime-imports",
+    sanitizePluginCacheSegment(params.packageName),
+  );
+  await fs.mkdir(stagingBaseDir, { recursive: true });
+
+  const stagingDir = await fs.mkdtemp(
+    path.join(stagingBaseDir, `${Date.now()}-${crypto.randomUUID()}-`),
+  );
+  const stagedInstallRoot = path.join(stagingDir, "root");
+  await fs.cp(params.installRoot, stagedInstallRoot, {
+    recursive: true,
+    force: true,
+    dereference: true,
+  });
+
+  const stagedPackageRoot =
+    params.packageRelativePath.length > 0
+      ? path.join(stagedInstallRoot, ...params.packageRelativePath)
+      : stagedInstallRoot;
+
+  await linkAncestorNodeModulesIfNeeded({
+    installRoot: params.installRoot,
+    packageRoot: params.packageRoot,
+    stagedPackageRoot,
+  });
+  await linkHoistedNodeModulesPackages({
+    installRoot: params.installRoot,
+    packageRoot: params.packageRoot,
+    stagedPackageRoot,
+  });
+
+  return stagedPackageRoot;
 }
 
 /**
@@ -255,14 +503,25 @@ export async function resolvePlugins(
   const repairedInstallRecords = new Set<string>();
 
   // NOTE: Auto-enable runs before dependency validation intentionally.
-  // It mutates config.plugins.allow based on env vars and connector config
-  // so that collectPluginNames() includes auto-enabled plugins. Dependency
-  // validation happens later during plugin init when the runtime is available.
-  const { config: autoEnabledConfig } = applyPluginAutoEnable({
+  // It returns a new config object (structuredClone under the hood) with
+  // `plugins.allow` populated based on env vars and connector configuration.
+  // We have to USE the returned config for collectPluginNames — the previous
+  // code discarded the return value and kept using the original `config`,
+  // which meant every env-gated plugin (plugin-evm, plugin-solana, etc.) was
+  // silently dropped. Capture the result and assign back so both the allow
+  // list and any downstream config reads see the mutation.
+  const autoEnableResult = applyPluginAutoEnable({
     config,
     env: process.env,
   } satisfies ApplyPluginAutoEnableParams);
-  Object.assign(config, autoEnabledConfig);
+  if (autoEnableResult.changes.length > 0) {
+    logger.info(
+      `[eliza] Plugin auto-enable: ${autoEnableResult.changes.join("; ")}`,
+    );
+  }
+  // Merge the cloned plugins.allow back into the caller's config so both
+  // this function and subsequent consumers see the updated allow list.
+  config.plugins = autoEnableResult.config.plugins;
 
   const pluginsToLoad = collectPluginNames(config);
   const corePluginSet = new Set<string>(CORE_PLUGINS);
@@ -340,6 +599,10 @@ export async function resolvePlugins(
     const ejectedRecord = ejectedRecords[pluginName];
     const installRecord = installRecords[pluginName];
     const workspaceOverridePath = getWorkspacePluginOverridePath(pluginName);
+    const staticElizaPlugin =
+      pluginName.startsWith("@elizaos/plugin-")
+        ? await resolveStaticElizaPlugin(pluginName)
+        : null;
 
     // Pre-flight: ensure native dependencies are available for special plugins.
     if (pluginName === "@elizaos/plugin-browser") {
@@ -364,21 +627,31 @@ export async function resolvePlugins(
         logger.debug(
           `[eliza] Loading ejected plugin: ${pluginName} from ${ejectedRecord.installPath}`,
         );
-        mod = await importFromPath(ejectedRecord.installPath, pluginName);
+        mod = await importPluginModuleFromPath(
+          ejectedRecord.installPath,
+          pluginName,
+        );
+      } else if (staticElizaPlugin) {
+        // Prefer statically imported official plugins over workspace staging.
+        // This keeps local node_modules links working while avoiding staging
+        // bugs in workspace packages with nested symlinked dependencies.
+        mod = staticElizaPlugin as PluginModuleShape;
       } else if (workspaceOverridePath) {
         logger.debug(
           `[eliza] Loading workspace plugin override: ${pluginName} from ${workspaceOverridePath}`,
         );
-        mod = await importFromPath(workspaceOverridePath, pluginName);
+        mod = await importPluginModuleFromPath(
+          workspaceOverridePath,
+          pluginName,
+        );
       } else if (installRecord?.installPath) {
         // Prefer bundled/node_modules copies for official Eliza plugins.
         const isOfficialElizaPlugin = pluginName.startsWith("@elizaos/plugin-");
 
         if (isOfficialElizaPlugin) {
           try {
-            const staticMod = await resolveStaticElizaPlugin(pluginName);
-            mod = staticMod
-              ? (staticMod as PluginModuleShape)
+            mod = staticElizaPlugin
+              ? (staticElizaPlugin as PluginModuleShape)
               : ((await import(pluginName)) as PluginModuleShape);
             if (repairBrokenInstallRecord(config, pluginName)) {
               repairedInstallRecords.add(pluginName);
@@ -387,12 +660,18 @@ export async function resolvePlugins(
             logger.warn(
               `[eliza] Node_modules resolution failed for ${pluginName} (${formatError(npmErr)}). Trying installed path at ${redactUserSegments(installRecord.installPath)}.`,
             );
-            mod = await importFromPath(installRecord.installPath, pluginName);
+            mod = await importPluginModuleFromPath(
+              installRecord.installPath,
+              pluginName,
+            );
           }
         } else {
           // User-installed plugin — load from its install directory on disk.
           try {
-            mod = await importFromPath(installRecord.installPath, pluginName);
+            mod = await importPluginModuleFromPath(
+              installRecord.installPath,
+              pluginName,
+            );
           } catch (installErr) {
             logger.warn(
               `[eliza] Installed plugin ${pluginName} failed at ${redactUserSegments(installRecord.installPath)} (${formatError(installErr)}). Falling back to node_modules resolution.`,

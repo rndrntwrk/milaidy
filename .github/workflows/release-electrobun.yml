@@ -60,6 +60,7 @@ permissions:
 env:
   CI: "true"
   BUN_VERSION: "1.3.9" # pinned: 1.3.10 clean-lockfile breaks Windows frozen installs — NOTE: repo standard is 1.3.10
+  MILADY_SKIP_LOCAL_UPSTREAMS: "1"
 
 jobs:
   prepare:
@@ -73,6 +74,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: false
 
       - name: Determine version + env
         id: version
@@ -110,6 +113,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -121,8 +126,13 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
+      - name: Init non-eliza submodules
+        run: |
+          node scripts/init-submodules.mjs
+          node scripts/disable-local-eliza-workspace.mjs
+
       - name: Install root dependencies
-        run: bun install --frozen-lockfile --ignore-scripts
+        run: bun install --ignore-scripts
 
       - name: Run repository postinstall patches
         run: bun run postinstall
@@ -210,6 +220,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -221,6 +233,11 @@ jobs:
         with:
           bun-version: ${{ env.BUN_VERSION }}
 
+      - name: Init non-eliza submodules
+        run: |
+          node scripts/init-submodules.mjs
+          node scripts/disable-local-eliza-workspace.mjs
+
       - name: Install root dependencies
         # --ignore-scripts skips native dependency install scripts (e.g. @tensorflow/tfjs-node
         # which has no pre-built binary for Node 22 on Windows and fails to compile).
@@ -229,9 +246,9 @@ jobs:
         # ships with dual-arch shims.
         run: |
           if [ "${{ matrix.platform.os }}" = "macos" ] && [ "${{ matrix.platform.artifact-name }}" = "macos-x64" ]; then
-            install_cmd=(arch -x86_64 bun install --frozen-lockfile --ignore-scripts)
+            install_cmd=(arch -x86_64 bun install --ignore-scripts)
           else
-            install_cmd=(bun install --frozen-lockfile --ignore-scripts)
+            install_cmd=(bun install --ignore-scripts)
           fi
 
           for attempt in 1 2 3; do
@@ -644,10 +661,11 @@ jobs:
           # server.listen() and the health endpoint never becomes reachable.
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           MILADY_WINDOWS_SMOKE_REQUIRE_INSTALLER: "1"
-          # Keep the installer smoke target on the same short root that the
-          # last all-green Windows release used; the longer runner temp path
-          # regressed into an Inno exit code 5 before launcher handoff.
-          MILADY_TEST_WINDOWS_INSTALL_DIR: C:\mi
+          # Use a short path under runner.temp to avoid MAX_PATH issues with
+          # deeply nested node_modules while staying in a user-writable location.
+          # Previous C:\mi (root of C:\) broke with exit code -1 on newer Windows
+          # Server 2025 runners that restrict non-elevated writes to the root.
+          MILADY_TEST_WINDOWS_INSTALL_DIR: ${{ runner.temp }}\mi
           MILADY_TEST_WINDOWS_LAUNCHER_DIR: ${{ runner.temp }}\milady-windows-ui-launcher
           MILADY_TEST_WINDOWS_LAUNCHER_PATH_FILE: ${{ runner.temp }}\milady-windows-ui-launcher.txt
         run: |
@@ -683,7 +701,7 @@ jobs:
           # fail waiting on local embedding model setup in CI.
           MILADY_DISABLE_LOCAL_EMBEDDINGS: "1"
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          MILADY_TEST_WINDOWS_PROOF_INSTALL_DIR: C:\mi-proof
+          MILADY_TEST_WINDOWS_PROOF_INSTALL_DIR: ${{ runner.temp }}\mi-proof
         run: |
           Remove-Item $env:MILADY_TEST_WINDOWS_PROOF_INSTALL_DIR -Recurse -Force -ErrorAction SilentlyContinue
           pwsh -File apps/app/electrobun/scripts/verify-windows-installer-proof.ps1 `

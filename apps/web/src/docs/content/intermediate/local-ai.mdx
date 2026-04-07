@@ -1,0 +1,55 @@
+# Use local model files directly
+
+The Local AI plugin lets you point Milady at model files already on your disk — `.gguf` files from Hugging Face or similar — and run them in-process, with no separate server running.
+
+**Who this is for:** people who already manage model files manually and want them loaded directly, without Ollama or another runtime in the middle. If you're new to local models, start with [Running Milady on Ollama](/docs/intermediate/local-ollama) instead — it's much simpler.
+
+## What you need before you start
+
+- **One or more `.gguf` model files** already downloaded to a folder on your machine.
+- **Enough RAM and disk space** to load them — the same considerations as Ollama.
+- **A GPU is optional but recommended** if you have one.
+
+## Step 1 — Organize your model files
+
+Pick one directory to hold everything. For example:
+
+```
+/Users/you/models/
+  llama-3.2-3b.gguf
+  llama-3.2-8b.gguf
+  nomic-embed-text.gguf
+```
+
+Remember the absolute path to this directory — Milady needs it.
+
+## Step 2 — Point Milady at your model folder
+
+<Steps>
+  <li>Open Milady. Go to <strong>Settings → Plugins → Local AI → Configure</strong>.</li>
+  <li>Set <strong>Models dir</strong> to the absolute path of your models folder (e.g. <code>/Users/you/models</code>).</li>
+  <li>Set <strong>Cache dir</strong> to a writable path for cached quantizations (e.g. <code>/tmp/ai-cache</code>).</li>
+  <li>Set <strong>Small model</strong> and <strong>Large model</strong> to the <em>filenames</em> of models in that directory — e.g. <code>llama-3.2-3b.gguf</code>.</li>
+  <li>Optionally set <strong>Embedding model</strong> and <strong>Embedding dimensions</strong> if you have an embedding model file.</li>
+  <li>If you want to pick a specific GPU, set <strong>CUDA visible devices</strong> to the GPU index (e.g. <code>0</code>).</li>
+  <li>Click <strong>Save</strong>.</li>
+</Steps>
+
+## Step 3 — Test it
+
+Start a new chat in Milady and send a message. First response will be slow — the model is being loaded into memory. Subsequent responses should be faster.
+
+## Troubleshooting
+
+**"Model file not found."**
+The filename in the Configure panel must match the file on disk exactly, including the `.gguf` extension. The file must be directly inside the Models dir, not a subdirectory.
+
+**Milady hangs on startup or the first message takes forever.**
+Loading a large `.gguf` file takes a minute or two the first time — that's normal. If it's longer than three minutes or uses all your RAM, the model is too big for your machine.
+
+**You want to use this model on multiple projects without duplicating files.**
+Keep one canonical Models dir and symlink into it from other machines' local setups, or use Ollama instead — Ollama manages its own model cache.
+
+## What's next
+
+[Running Milady on Ollama](/docs/intermediate/local-ollama) — if you didn't have a strong reason to pick Local AI, Ollama is easier for nearly every use case and can run the same underlying models.

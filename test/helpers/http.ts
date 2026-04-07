@@ -10,6 +10,20 @@ export type HttpResponse = {
   data: Record<string, unknown>;
 };
 
+export function readConversationId(data: Record<string, unknown>): string {
+  const conversation =
+    data.conversation &&
+    typeof data.conversation === "object" &&
+    !Array.isArray(data.conversation)
+      ? (data.conversation as Record<string, unknown>)
+      : null;
+  const id = typeof conversation?.id === "string" ? conversation.id : "";
+  if (!id) {
+    throw new Error("Conversation response did not include an id");
+  }
+  return id;
+}
+
 /**
  * Make an HTTP request to a local test server.
  */
@@ -68,4 +82,41 @@ export function req(
     if (b) r.write(b);
     r.end();
   });
+}
+
+export async function createConversation(
+  port: number,
+  options?: { title?: string; includeGreeting?: boolean; lang?: string },
+  headersOrContentType?:
+    | Record<string, string>
+    | string,
+): Promise<HttpResponse & { conversationId: string }> {
+  const response = await req(
+    port,
+    "POST",
+    "/api/conversations",
+    options,
+    headersOrContentType,
+  );
+  return {
+    ...response,
+    conversationId: readConversationId(response.data),
+  };
+}
+
+export function postConversationMessage(
+  port: number,
+  conversationId: string,
+  body?: Record<string, unknown> | string,
+  headersOrContentType?:
+    | Record<string, string>
+    | string,
+): Promise<HttpResponse> {
+  return req(
+    port,
+    "POST",
+    `/api/conversations/${encodeURIComponent(conversationId)}/messages`,
+    body,
+    headersOrContentType,
+  );
 }

@@ -48,6 +48,30 @@ export type {
   StewardWalletInfo,
 } from "./steward-sidecar/types";
 
+interface BunSubprocessLike {
+  kill: (signal?: string) => void;
+  pid?: number | null;
+  stdout: ReadableStream<Uint8Array> | null;
+  stderr: ReadableStream<Uint8Array> | null;
+  exited: Promise<number>;
+}
+
+interface BunRuntimeLike {
+  spawn: (
+    cmd: string[],
+    options: {
+      env: Record<string, string>;
+      cwd: string;
+      stdout: "pipe";
+      stderr: "pipe";
+    },
+  ) => BunSubprocessLike;
+}
+
+function getBunRuntime(): BunRuntimeLike | null {
+  return (globalThis as { Bun?: BunRuntimeLike }).Bun ?? null;
+}
+
 // ---------------------------------------------------------------------------
 // StewardSidecar
 // ---------------------------------------------------------------------------
@@ -305,8 +329,9 @@ export class StewardSidecar {
       { entryPoint, dataDir: this.config.dataDir },
     );
 
-    if (typeof globalThis.Bun !== "undefined") {
-      const proc = Bun.spawn(["bun", "run", entryPoint], {
+    const bun = getBunRuntime();
+    if (bun) {
+      const proc = bun.spawn(["bun", "run", entryPoint], {
         env,
         cwd: path.dirname(entryPoint),
         stdout: "pipe",
@@ -319,7 +344,7 @@ export class StewardSidecar {
       pipeOutput(proc.stdout, "stdout", this.config.onLog);
       pipeOutput(proc.stderr, "stderr", this.config.onLog);
 
-      proc.exited.then((code) => {
+      proc.exited.then((code: number) => {
         if (!this.stopping) {
           console.warn(
             `[StewardSidecar] Process exited unexpectedly (code ${code})`,

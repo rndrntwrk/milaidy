@@ -14,7 +14,6 @@ const autonomousSourceRoot = getAutonomousSourceRoot(repoRoot);
 const appCoreSourceRoot = getAppCoreSourceRoot(repoRoot);
 
 const liveTest = process.env.MILADY_LIVE_TEST === "1";
-
 // Startup e2e tests require module isolation so that vi.mock() registrations
 // from one test file do not bleed into another.  The shared e2e config uses
 // isolate:false for speed, but the startup tests mock the same modules

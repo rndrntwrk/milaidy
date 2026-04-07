@@ -475,8 +475,6 @@ export function buildChatAttachments(
     url: `attachment:img-${i}`,
     title: img.name,
     source: "client_chat",
-    description: "User-attached image",
-    text: "",
     contentType: ContentType.IMAGE,
     _data: img.data,
     _mimeType: img.mimeType,

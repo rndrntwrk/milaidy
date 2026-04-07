@@ -27,7 +27,7 @@ import { ApiError } from "./client-types";
 const GENERIC_NO_RESPONSE_TEXT =
   "Sorry, I couldn't generate a response right now. Please try again.";
 const DEFAULT_FETCH_TIMEOUT_MS = 10_000;
-const SESSION_STORAGE_API_BASE_KEY = "milady_api_base";
+const LOCAL_STORAGE_API_BASE_KEY = "milady_api_base";
 
 // ---------------------------------------------------------------------------
 // Client
@@ -80,7 +80,7 @@ export class MiladyClient {
     const injectedBase = getElizaApiBase();
     const storedBase =
       typeof window !== "undefined"
-        ? window.sessionStorage.getItem(SESSION_STORAGE_API_BASE_KEY)
+        ? window.localStorage.getItem(LOCAL_STORAGE_API_BASE_KEY)
         : null;
 
     this._explicitBase =
@@ -156,10 +156,12 @@ export class MiladyClient {
     setBootConfig({ ...config, apiBase: normalized || undefined });
     if (typeof window !== "undefined") {
       if (normalized) {
-        window.sessionStorage.setItem(SESSION_STORAGE_API_BASE_KEY, normalized);
+        window.localStorage.setItem(LOCAL_STORAGE_API_BASE_KEY, normalized);
       } else {
-        window.sessionStorage.removeItem(SESSION_STORAGE_API_BASE_KEY);
+        window.localStorage.removeItem(LOCAL_STORAGE_API_BASE_KEY);
       }
+      // Clean up legacy sessionStorage entry (same key was used historically)
+      window.sessionStorage.removeItem(LOCAL_STORAGE_API_BASE_KEY);
     }
   }
 
@@ -187,6 +189,18 @@ export class MiladyClient {
         message: "API not available (no HTTP origin)",
       });
     }
+    const requestUrl = (() => {
+      if (this.baseUrl) {
+        return `${this.baseUrl}${path}`;
+      }
+      if (typeof window !== "undefined") {
+        const proto = window.location.protocol;
+        if (proto === "http:" || proto === "https:") {
+          return new URL(path, window.location.origin).toString();
+        }
+      }
+      return path;
+    })();
     const makeRequest = async (token: string | null): Promise<Response> => {
       let timeoutId: ReturnType<typeof setTimeout> | undefined;
       let abortListener: (() => void) | undefined;
@@ -202,7 +216,7 @@ export class MiladyClient {
         },
       };
 
-      const fetchPromise = fetch(`${this.baseUrl}${path}`, requestInit);
+      const fetchPromise = fetch(requestUrl, requestInit);
       const pending: Promise<Response>[] = [fetchPromise];
 
       pending.push(
@@ -336,6 +350,17 @@ export class MiladyClient {
     }
 
     if (!host) return;
+
+    // On Capacitor native (iosScheme/androidScheme = "https"), the origin host
+    // is a dummy bundle host (e.g. "localhost" with no server behind it).
+    // Skip WS if we have no explicit baseUrl and the host doesn't look like a
+    // real backend (no port, not an IP, not a known API domain).
+    if (!this.baseUrl && typeof host === "string") {
+      const hasPort = host.includes(":");
+      const isLoopback =
+        host.startsWith("127.") || host.startsWith("localhost:");
+      if (!hasPort && !isLoopback) return;
+    }
 
     let url = `${wsProtocol}//${host}/ws`;
     const params = new URLSearchParams({ clientId: this.clientId });

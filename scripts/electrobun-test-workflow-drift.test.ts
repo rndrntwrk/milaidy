@@ -68,9 +68,7 @@ describe("Electrobun test workflow drift", () => {
       "runs-on: ${{ vars.RUNNER_UBUNTU || (github.repository_owner == 'milady-ai' && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-latest') }}",
     );
     expect(workflow).toContain("name: Release Workflow Contract");
-    expect(workflow).toContain(
-      "bun install --frozen-lockfile --ignore-scripts",
-    );
+    expect(workflow).toContain("bun install --ignore-scripts");
     expect(workflow).toContain("bun run postinstall");
     expect(workflow).toContain(
       "bun run test:regression-matrix:release-contract",

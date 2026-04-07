@@ -44,16 +44,20 @@ export function PanelHeader({
   media,
   ...props
 }: PanelHeaderProps) {
+  const hasActions = Boolean(actions);
+
   return (
     <div
       className={cn(
-        "flex flex-wrap items-start justify-between gap-3 px-4 py-3 sm:px-5",
+        hasActions
+          ? "grid grid-cols-[minmax(0,1fr)_auto] items-start gap-3 px-4 py-3 sm:px-5"
+          : "flex items-start gap-3 px-4 py-3 sm:px-5",
         bordered && "border-b border-border/18",
         className,
       )}
       {...props}
     >
-      <div className="flex min-w-0 items-start gap-3">
+      <div className="flex min-w-0 flex-1 items-start gap-3">
         {media ? <div className="shrink-0">{media}</div> : null}
         <div className={cn("min-w-0", contentClassName)}>
           {eyebrow ? (
@@ -88,7 +92,7 @@ export function PanelHeader({
         </div>
       </div>
       {actions ? (
-        <div className="inline-flex items-center gap-2 self-start">
+        <div className="inline-flex shrink-0 items-start justify-end gap-2 self-start justify-self-end">
           {actions}
         </div>
       ) : null}

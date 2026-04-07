@@ -1,12 +1,14 @@
 import type { BrowserWindow } from "electrobun/bun";
 import type { SendToWebview } from "../types.js";
 import { getAgentManager } from "./agent";
+import { getBrowserWorkspaceManager } from "./browser-workspace";
 import { getCameraManager } from "./camera";
 import { getCanvasManager } from "./canvas";
 import { getDesktopManager } from "./desktop";
 import { getGatewayDiscovery } from "./gateway";
 import { getGpuWindowManager } from "./gpu-window";
 import { getLocationManager } from "./location";
+import { getMusicPlayerManager } from "./music-player";
 import { getPermissionManager } from "./permissions";
 import { getScreenCaptureManager } from "./screencapture";
 import { isStewardLocalEnabled, stopSteward } from "./steward";
@@ -24,6 +26,7 @@ export function initializeNativeModules(
   desktop.setSendToWebview(sendToWebview);
 
   getAgentManager().setSendToWebview(sendToWebview);
+  getBrowserWorkspaceManager().setSendToWebview(sendToWebview);
   getCameraManager().setSendToWebview(sendToWebview);
   getCanvasManager().setSendToWebview(sendToWebview);
   getGatewayDiscovery().setSendToWebview(sendToWebview);
@@ -40,6 +43,7 @@ export function initializeNativeModules(
 export async function disposeNativeModules(): Promise<void> {
   const managers = [
     ["agent", getAgentManager()],
+    ["browser-workspace", getBrowserWorkspaceManager()],
     ["camera", getCameraManager()],
     ["canvas", getCanvasManager()],
     ["desktop", getDesktopManager()],
@@ -50,6 +54,7 @@ export async function disposeNativeModules(): Promise<void> {
     ["screencapture", getScreenCaptureManager()],
     ["swabble", getSwabbleManager()],
     ["talkmode", getTalkModeManager()],
+    ["music-player", getMusicPlayerManager()],
   ] as const;
 
   // Stop steward sidecar if it was running

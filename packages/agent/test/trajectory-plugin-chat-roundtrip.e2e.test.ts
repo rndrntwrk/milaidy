@@ -12,7 +12,11 @@ import trajectoryLoggerPlugin, {
   TrajectoryLoggerService,
 } from "@elizaos/plugin-trajectory-logger";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { req } from "../../../test/helpers/http";
+import {
+  createConversation,
+  postConversationMessage,
+  req,
+} from "../../../test/helpers/http";
 import { startApiServer } from "../src/api/server";
 
 type SqlQuery = {
@@ -295,11 +299,7 @@ describe("Trajectory logger chat roundtrip", () => {
     await db.close();
   });
 
-  // Skipped: the test's mock messageService doesn't wire MESSAGE_RECEIVED /
-  // MESSAGE_SENT events through the trajectory plugin's lifecycle, so the
-  // trajectory step never completes and LLM call data is never persisted.
-  // Tracking issue: https://github.com/milady-ai/milady/issues/1269
-  it.skip("captures chat prompt and response through the trajectories API", async () => {
+  it("captures conversation prompt and response through the trajectories API", async () => {
     if (!server) {
       throw new Error("API server did not start");
     }
@@ -307,7 +307,10 @@ describe("Trajectory logger chat roundtrip", () => {
     const prompt = "show me the exact trajectory prompt and response";
     const expectedResponse = `Trajectory reply: ${prompt}`;
 
-    const chat = await req(server.port, "POST", "/api/chat", {
+    const { conversationId } = await createConversation(server.port, {
+      title: "Trajectory roundtrip",
+    });
+    const chat = await postConversationMessage(server.port, conversationId, {
       text: prompt,
       mode: "simple",
     });

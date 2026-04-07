@@ -110,6 +110,33 @@ describe("registry-client-queries", () => {
       expect(getPluginInfoFromRegistry(registry, "discord")).toBe(pluginA);
     });
 
+    it("finds bare app slugs with the @elizaos/app- prefix", () => {
+      const app = makePlugin({ name: "@elizaos/app-hyperscape" });
+      registry.set("@elizaos/app-hyperscape", app);
+
+      expect(getPluginInfoFromRegistry(registry, "hyperscape")).toBe(app);
+    });
+
+    it("finds bare app slugs for plugin-backed app packages", () => {
+      const app = makePlugin({
+        name: "@hyperscape/plugin-hyperscape",
+        npm: {
+          package: "@hyperscape/plugin-hyperscape",
+          v0Version: null,
+          v1Version: null,
+          v2Version: "2.0.0",
+        },
+        kind: "app",
+      });
+      const pluginAppRegistry = new Map<string, RegistryPluginInfo>([
+        ["@hyperscape/plugin-hyperscape", app],
+      ]);
+
+      expect(getPluginInfoFromRegistry(pluginAppRegistry, "hyperscape")).toBe(
+        app,
+      );
+    });
+
     it("finds by suffix match across scopes", () => {
       expect(getPluginInfoFromRegistry(registry, "@other/my-plugin")).toBe(
         pluginC,
@@ -221,6 +248,26 @@ describe("registry-client-queries", () => {
       expect(result.uiExtension?.detailPanelId).toBe(
         "hyperscape-embedded-agents",
       );
+    });
+
+    it("derives a readable display name for plugin-backed app packages", () => {
+      const result = toAppInfo(
+        makePlugin({
+          name: "@hyperscape/plugin-hyperscape",
+          npm: {
+            package: "@hyperscape/plugin-hyperscape",
+            v0Version: null,
+            v1Version: null,
+            v2Version: "2.0.0",
+          },
+          kind: "app",
+          appMeta: undefined,
+        }),
+        (value) => value ?? "allow-scripts",
+        "allow-scripts",
+      );
+
+      expect(result.displayName).toBe("Hyperscape");
     });
   });
 

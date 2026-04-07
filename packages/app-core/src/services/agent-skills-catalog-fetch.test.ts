@@ -25,7 +25,6 @@ function createRuntime() {
 
 describe("plugin-agent-skills catalog fetch patch", () => {
   afterEach(() => {
-    vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
 
@@ -37,29 +36,40 @@ describe("plugin-agent-skills catalog fetch patch", () => {
       registryUrl: "https://skills.example",
     });
 
-    const fetchMock = vi.fn(async () => {
-      return new Response("rate limited", {
-        status: 429,
-        headers: {
-          "retry-after": "120",
-        },
-      });
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
-    const first = await service.getCatalog({ forceRefresh: true });
-
-    expect(first).toEqual([]);
-    // Verify the fetch was called
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    // @2.0.0-alpha.11 silently handles 429 without logger.info —
-    // the rate-limit logging was removed upstream
-    expect(logger.warn).not.toHaveBeenCalled();
-
-    // Second call within cooldown should not trigger another fetch
-    await expect(service.getCatalog({ forceRefresh: true })).resolves.toEqual(
-      [],
+    const fetchMock = vi.fn(
+      async () =>
+        new Response("rate limited", {
+          status: 429,
+          headers: {
+            "retry-after": "120",
+          },
+        }),
     );
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = fetchMock as typeof globalThis.fetch;
+
+    try {
+      const first = await service.getCatalog({ forceRefresh: true });
+
+      expect(first).toEqual([]);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(logger.info).toHaveBeenCalledTimes(1);
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.stringContaining(
+          "AgentSkills: Catalog rate limited (429); backing off for 120s",
+        ),
+      );
+      expect(logger.warn).not.toHaveBeenCalled();
+
+      // Second call within cooldown should not trigger another fetch
+      await expect(service.getCatalog({ forceRefresh: true })).resolves.toEqual(
+        [],
+      );
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(logger.info).toHaveBeenCalledTimes(1);
+      expect(logger.warn).not.toHaveBeenCalled();
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });

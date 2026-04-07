@@ -1,0 +1,90 @@
+# Connect to Twitch
+
+Your Milady agent can join a Twitch channel as a chatbot — responding to viewers, reacting to subs, running commands, all the things a traditional Twitch bot does. Setup uses Twitch's developer console plus a quick OAuth flow.
+
+**What you'll learn:** create a Twitch app, generate an OAuth access token for your bot account, paste everything into Milady.
+
+## What you need before you start
+
+- **Two Twitch accounts:** one for the streamer (whoever's channel the bot will live in) and one for the bot itself. Twitch strongly prefers bots use a separate account — using your main account causes confusion and can trip spam filters.
+- **Milady running** with a working provider.
+
+## Step 1 — Register a Twitch application
+
+<Steps>
+  <li>Sign in to <a href="https://dev.twitch.tv/console/apps">dev.twitch.tv/console/apps</a> with <strong>either</strong> the streamer or bot account (doesn't matter which).</li>
+  <li>Click <strong>Register Your Application</strong>.</li>
+  <li>Name: anything. OAuth Redirect URL: <code>http://localhost</code> is fine — we're not using the callback. Category: <strong>Chat Bot</strong>.</li>
+  <li>Click <strong>Create</strong>, then <strong>Manage</strong>.</li>
+  <li>Copy the <strong>Client ID</strong>.</li>
+  <li>Click <strong>New Secret</strong> and copy the <strong>Client Secret</strong>.</li>
+</Steps>
+
+## Step 2 — Get an OAuth access token for the bot
+
+For chat bots, the easiest path is twitchapps.com/tmi — a simple OAuth flow that gives you a working token in under a minute.
+
+<Steps>
+  <li>Sign out of Twitch, then sign in as the <strong>bot account</strong>.</li>
+  <li>Open <a href="https://twitchapps.com/tmi/">twitchapps.com/tmi</a>.</li>
+  <li>Click <strong>Connect</strong> and authorize.</li>
+  <li>Copy the generated token — it starts with <code>oauth:</code>. For Milady, you'll paste it <strong>without the <code>oauth:</code> prefix</strong>.</li>
+</Steps>
+
+<Callout kind="note" title="Why use twitchapps.com?">
+It's a long-standing community tool that shortcuts Twitch's OAuth flow for chat bots. If you'd rather not trust it, you can run the OAuth flow yourself with your client ID from Step 1 — Twitch's docs at <a href="https://dev.twitch.tv/docs/authentication/">dev.twitch.tv/docs/authentication</a> walk through it.
+</Callout>
+
+## Step 3 — Hand credentials to Milady
+
+<Steps>
+  <li>Open Milady. Go to <strong>Settings → Plugins → Twitch → Configure</strong>.</li>
+  <li>Set <strong>Username</strong> to the bot account's username (lowercase).</li>
+  <li>Paste <strong>Client ID</strong> from Step 1.</li>
+  <li>Paste <strong>Client Secret</strong> from Step 1.</li>
+  <li>Paste <strong>Access token</strong> from Step 2 (no <code>oauth:</code> prefix).</li>
+  <li>Set <strong>Channel</strong> to the streamer's channel name (lowercase, no <code>#</code>).</li>
+  <li>Click <strong>Save</strong>.</li>
+</Steps>
+
+## Step 4 — Test it
+
+Open the streamer's channel on twitch.tv. Send a message in chat. The bot should reply within a second.
+
+If nothing happens:
+
+- **Bot not in the chat at all:** access token is wrong. Re-generate via twitchapps.com and paste fresh.
+- **Bot in chat but silent:** the channel name in Milady is wrong, or the bot account isn't allowed to post in the channel (some channels have mod-only mode or follower-only chat).
+
+## Useful options
+
+| Option | What it does |
+| --- | --- |
+| **Channels** | Comma-separated list of additional channels beyond the primary one. Bot joins all of them. |
+| **Require mention** | Bot only responds when its username is mentioned. Turn on for busy channels. |
+| **Allowed roles** | Which Twitch user roles can trigger the bot: `broadcaster`, `moderator`, `vip`, `subscriber`, `viewer`. Restricting to `moderator` and up is a common choice. |
+
+## Making the bot a moderator
+
+Some features — like timing users out, slow-mode, or talking in sub-only chat — require mod privileges. In the streamer's chat, type:
+
+```
+/mod botusername
+```
+
+Done. The bot now shows a green sword icon and has mod powers.
+
+## Troubleshooting
+
+**"Login authentication failed" on connect.**
+Access token is wrong, expired, or doesn't match the username. Re-do Step 2.
+
+**Bot joined but can't post.**
+Either the channel has slow-mode / follower-only mode active and the bot account is too new, or the token's scopes are missing chat write. twitchapps.com tokens include chat read + write by default; if you rolled your own, make sure you included `chat:read` and `chat:edit`.
+
+**Twitch says the app's client ID doesn't match.**
+Access tokens are tied to a specific client ID. Did you regenerate the token against a different app? Re-generate in the context of the app you're using.
+
+## What's next
+
+- [Twitch streaming plugin](/docs/advanced/stream-twitch) — if you also want Milady to send RTMP video to a Twitch channel, that's a separate plugin.

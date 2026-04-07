@@ -13,9 +13,12 @@ const DEFAULT_REPO_ROOT = path.resolve(__dirname, "..");
 export const repoSetupSteps = [
   "scripts/init-submodules.mjs",
   "scripts/patch-deps.mjs",
+  "scripts/setup-upstreams.mjs",
+  "scripts/ensure-bundled-workspaces.mjs",
   "scripts/ensure-skills.mjs",
   "scripts/ensure-avatars.mjs",
   "scripts/link-browser-server.mjs",
+  "scripts/link-external-plugins.mjs",
   "scripts/ensure-vision-deps.mjs",
 ];
 
@@ -163,17 +166,6 @@ export async function runRepoSetup(repoRoot = DEFAULT_REPO_ROOT) {
     }
   } finally {
     await release();
-  }
-
-  const elizaRoot = path.resolve(repoRoot, "..", "eliza");
-  try {
-    await fs.access(elizaRoot);
-  } catch {
-    console.log("\n========================================================");
-    console.log("⚠️  NOTICE: Eliza Workspace Not Found");
-    console.log("If you plan to develop @elizaos packages locally, run:");
-    console.log("  bun run setup:eliza-workspace");
-    console.log("========================================================\n");
   }
 }
 

@@ -49,6 +49,7 @@ export interface TrajectoryLlmCallCardProps {
   tokensLabel: React.ReactNode;
   totalTokensValue: React.ReactNode;
   tokenBreakdownMeta: React.ReactNode;
+  tags?: readonly string[];
   inputLinesLabel: React.ReactNode;
   outputLinesLabel: React.ReactNode;
   userPrompt: string;
@@ -80,6 +81,7 @@ export function TrajectoryLlmCallCard({
   tokensLabel,
   totalTokensValue,
   tokenBreakdownMeta,
+  tags,
   inputLinesLabel,
   outputLinesLabel,
   userPrompt,
@@ -100,6 +102,18 @@ export function TrajectoryLlmCallCard({
             </span>
           </div>
           <div className="mt-2 text-xs text-muted">{latencyLabel}</div>
+          {tags && tags.length > 0 ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {tags.map((tag) => (
+                <span
+                  key={tag}
+                  className="rounded-full border border-border/24 bg-bg/60 px-2.5 py-1 text-[10px] font-medium tracking-[0.08em] text-muted"
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+          ) : null}
         </div>
       </div>
 

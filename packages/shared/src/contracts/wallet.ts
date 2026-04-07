@@ -223,6 +223,7 @@ export interface WalletConfigStatus {
   pluginEvmRequired?: boolean;
   executionReady?: boolean;
   executionBlockedReason?: string | null;
+  solanaSigningAvailable?: boolean;
 }
 
 export type TradePermissionMode =

@@ -647,25 +647,35 @@ export async function handleConversationRoutes(
       // Sort by createdAt ascending
       memories.sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
       const agentId = runtime.agentId;
-      const messages = memories.map((m) => {
-        const contentSource = (m.content as Record<string, unknown>)?.source;
-        const meta = m.metadata as Record<string, unknown> | undefined;
-        const entityName = meta?.entityName;
-        return {
-          id: m.id ?? "",
-          role: m.entityId === agentId ? "assistant" : "user",
-          text: (m.content as { text?: string })?.text ?? "",
-          timestamp: m.createdAt ?? 0,
-          source:
-            typeof contentSource === "string" && contentSource !== "client_chat"
+      const messages = memories
+        .map((m) => {
+          const contentSource = (m.content as Record<string, unknown>)?.source;
+          const meta = m.metadata as Record<string, unknown> | undefined;
+          const entityName = meta?.entityName;
+          // Surface a source tag for every visible message so the UI can render
+          // a consistent channel chip on native dashboard turns as well.
+          const normalizedSource =
+            typeof contentSource === "string" &&
+            contentSource.length > 0 &&
+            contentSource !== "client_chat"
               ? contentSource
-              : undefined,
-          from:
-            typeof entityName === "string" && entityName.length > 0
-              ? entityName
-              : undefined,
-        };
-      });
+              : "milady";
+          return {
+            id: m.id ?? "",
+            role: m.entityId === agentId ? "assistant" : "user",
+            text: (m.content as { text?: string })?.text ?? "",
+            timestamp: m.createdAt ?? 0,
+            source: normalizedSource,
+            from:
+              typeof entityName === "string" && entityName.length > 0
+                ? entityName
+                : undefined,
+          };
+        })
+        // Drop action-log memories that have no visible text (e.g.
+        // plugin action logs with only `thought` / `actions` fields).
+        // Without this filter they appear as blank chat bubbles.
+        .filter((m) => m.text.trim().length > 0);
       json(res, { messages });
     } catch (err) {
       logger.warn(

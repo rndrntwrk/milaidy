@@ -2,31 +2,56 @@ import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
 
+const skipLocalUpstreams =
+  process.env.MILADY_SKIP_LOCAL_UPSTREAMS === "1" ||
+  process.env.ELIZA_SKIP_LOCAL_UPSTREAMS === "1";
+
 /**
- * Return the sibling eliza workspace root (../eliza) if it exists and has the
- * requested package.  This avoids relying on node_modules symlinks which bun
- * may revert during execution.
+ * Return the repo-local eliza core workspace root when it is checked out as
+ * part of the Milady repo. This avoids relying on node_modules symlinks which
+ * Bun can rewrite differently across fresh CI installs.
  */
-function getSiblingElizaPackageRoot(
+function getRepoLocalElizaCoreRoot(
   packageName: string,
   repoRoot: string,
 ): string | undefined {
-  const elizaRoot = path.resolve(repoRoot, "..", "eliza");
-  if (!existsSync(path.join(elizaRoot, "package.json"))) return undefined;
-
-  const packageMap: Record<string, string> = {
-    "@elizaos/core": path.join(elizaRoot, "packages", "typescript"),
-  };
-
-  const candidate = packageMap[packageName];
-  if (candidate && existsSync(path.join(candidate, "package.json"))) {
-    // Only use sibling if it's actually built — otherwise the alias
-    // points to a missing file and all tests that import this package fail.
-    const hasDistOutput = existsSync(
-      path.join(candidate, "dist", "node", "index.node.js"),
-    );
-    if (hasDistOutput) return candidate;
+  if (packageName !== "@elizaos/core" || skipLocalUpstreams) {
+    return undefined;
   }
+
+  const elizaRoots = [
+    path.resolve(repoRoot, "eliza"),
+    path.resolve(repoRoot, "..", "eliza"),
+  ];
+
+  for (const elizaRoot of elizaRoots) {
+    if (!existsSync(path.join(elizaRoot, "package.json"))) {
+      continue;
+    }
+
+    const candidate = path.join(elizaRoot, "packages", "typescript");
+    if (!existsSync(path.join(candidate, "package.json"))) {
+      continue;
+    }
+
+    // Require both a source entry AND installed dependencies. CI checks out the
+    // submodule (submodules: recursive) but skips its dependency install
+    // (MILADY_SKIP_LOCAL_UPSTREAMS=1), so the source exists but imports of
+    // transitive deps like 'dedent' or 'adze' fail at runtime.
+    const hasSource =
+      existsSync(path.join(candidate, "dist", "node", "index.node.js")) ||
+      existsSync(path.join(candidate, "dist", "index.js")) ||
+      existsSync(path.join(candidate, "src", "index.node.ts")) ||
+      existsSync(path.join(candidate, "src", "index.ts")) ||
+      existsSync(path.join(candidate, "index.node.ts")) ||
+      existsSync(path.join(candidate, "index.ts"));
+    const hasDeps = existsSync(path.join(candidate, "node_modules"));
+
+    if (hasSource && hasDeps) {
+      return candidate;
+    }
+  }
+
   return undefined;
 }
 
@@ -74,10 +99,11 @@ export function getInstalledPackageRoot(
   packageName: string,
   fromDir?: string,
 ): string | undefined {
-  // Prefer sibling eliza workspace to avoid bun reverting symlinks
+  // Prefer the repo-local eliza core checkout to avoid Bun reverting symlinks
+  // or depending on registry package export quirks during fresh CI installs.
   if (fromDir) {
-    const sibling = getSiblingElizaPackageRoot(packageName, fromDir);
-    if (sibling) return sibling;
+    const localPackage = getRepoLocalElizaCoreRoot(packageName, fromDir);
+    if (localPackage) return localPackage;
   }
 
   const scopedRequire = getRequireFor(fromDir);
@@ -94,19 +120,60 @@ export function getInstalledPackageRoot(
   }
 }
 
+export function getInstalledPackageEntry(
+  packageName: string,
+  repoRoot: string,
+  subpath?: "node",
+): string | undefined {
+  const packageRoot = getInstalledPackageRoot(packageName, repoRoot);
+  if (!packageRoot) {
+    return undefined;
+  }
+
+  const candidates =
+    subpath === "node"
+      ? [
+          path.join(packageRoot, "dist", "node", "index.node"),
+          path.join(packageRoot, "index.node"),
+          path.join(packageRoot, "src", "index.node"),
+          path.join(packageRoot, "src", "index"),
+          path.join(packageRoot, "index"),
+        ]
+      : [
+          path.join(packageRoot, "dist", "node", "index.node"),
+          path.join(packageRoot, "dist", "index"),
+          path.join(packageRoot, "src", "index"),
+          path.join(packageRoot, "index.node"),
+          path.join(packageRoot, "index"),
+        ];
+
+  const resolvedCandidate = candidates
+    .map((candidate) => resolveModuleEntry(candidate))
+    .find((candidate) => existsSync(candidate));
+
+  return resolvedCandidate ?? resolveModuleEntry(candidates[0]);
+}
+
 export function getElizaCoreEntry(repoRoot: string): string | undefined {
   const packageRoot = getInstalledPackageRoot("@elizaos/core", repoRoot);
   if (!packageRoot) {
     return undefined;
   }
 
-  if (path.basename(packageRoot) === "src") {
-    return resolveModuleEntry(path.join(packageRoot, "index"));
-  }
-
-  return resolveModuleEntry(
+  const candidates = [
     path.join(packageRoot, "dist", "node", "index.node"),
-  );
+    path.join(packageRoot, "dist", "index"),
+    path.join(packageRoot, "src", "index.node"),
+    path.join(packageRoot, "src", "index"),
+    path.join(packageRoot, "index.node"),
+    path.join(packageRoot, "index"),
+  ];
+
+  const resolvedCandidate = candidates
+    .map((candidate) => resolveModuleEntry(candidate))
+    .find((candidate) => existsSync(candidate));
+
+  return resolvedCandidate ?? resolveModuleEntry(candidates[0]);
 }
 
 export function getAutonomousSourceRoot(repoRoot: string): string | undefined {

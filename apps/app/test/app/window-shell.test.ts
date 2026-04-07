@@ -16,6 +16,10 @@ describe("window shell routing", () => {
       mode: "surface",
       tab: "plugins",
     });
+    expect(parseWindowShellRoute("?shell=surface&tab=browser")).toEqual({
+      mode: "surface",
+      tab: "browser",
+    });
     expect(parseWindowShellRoute("?shell=surface&tab=connectors")).toEqual({
       mode: "surface",
       tab: "connectors",
@@ -61,6 +65,13 @@ describe("window shell routing", () => {
       ),
     ).toEqual({
       tab: "triggers",
+    });
+    expect(
+      resolveDetachedShellTarget(
+        parseWindowShellRoute("?shell=surface&tab=browser"),
+      ),
+    ).toEqual({
+      tab: "browser",
     });
   });
 

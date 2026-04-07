@@ -1,0 +1,88 @@
+# Connect to Farcaster
+
+Farcaster is a decentralized social protocol with a thriving crypto-native user base. Your Milady agent can post casts, reply to mentions, and have a real presence on the network. Setup uses Warpcast (the main Farcaster client) plus Neynar (the indexer that makes Farcaster data accessible via API).
+
+**What you'll learn:** get your Farcaster ID, create a signer through Neynar, and point Milady at both. About ten minutes.
+
+## What you need before you start
+
+- **A Warpcast account** at <a href="https://warpcast.com">warpcast.com</a>. Signing up costs a one-time $5 to register on-chain.
+- **A Neynar account** at <a href="https://neynar.com">neynar.com</a> — the indexer that bridges Farcaster to regular web APIs. Free tier is generous.
+- **Milady running** with a working provider.
+
+## Step 1 — Get your FID
+
+Your **FID (Farcaster ID)** is a number that identifies your account on-chain.
+
+<Steps>
+  <li>Open your Warpcast profile. The URL looks like <code>https://warpcast.com/yourusername</code>.</li>
+  <li>Click your profile picture or the hamburger menu → <strong>About</strong>.</li>
+  <li>The FID is shown in the profile details, or visible in URLs like <code>warpcast.com/~/profiles/12345</code>.</li>
+</Steps>
+
+Alternatively: ask any Farcaster user for their FID lookup link, or use `https://api.neynar.com/v2/farcaster/user/by_username?username=yourusername` once you have a Neynar API key.
+
+## Step 2 — Sign up for Neynar and get an API key
+
+<Steps>
+  <li>Open <a href="https://neynar.com">neynar.com</a> and create an account.</li>
+  <li>In the Neynar dashboard, go to <strong>API keys</strong>.</li>
+  <li>Copy your API key. Free tier gives you plenty of requests for a personal bot.</li>
+</Steps>
+
+## Step 3 — Create a signer for your FID
+
+A **signer** is a delegated key that Neynar uses to post and react on your behalf. You create it once and reuse it — you don't have to sign individual posts with your root Farcaster key.
+
+<Steps>
+  <li>In the Neynar dashboard, go to <strong>Signers → Create a signer</strong>.</li>
+  <li>Neynar walks you through an approval flow: you scan a QR code or open a deep link in Warpcast to authorize the signer on-chain. This costs a small amount of gas (Neynar subsidizes it in free tier).</li>
+  <li>Once approved, Neynar gives you a <strong>Signer UUID</strong>. Copy it.</li>
+</Steps>
+
+## Step 4 — Hand credentials to Milady
+
+<Steps>
+  <li>Open Milady. Go to <strong>Settings → Plugins → Farcaster → Configure</strong>.</li>
+  <li>Set <strong>FID</strong> to your Farcaster ID from Step 1 (just the number).</li>
+  <li>Set <strong>Signer UUID</strong> to the UUID from Step 3.</li>
+  <li>Paste your <strong>Neynar API key</strong> from Step 2.</li>
+  <li>Click <strong>Save</strong>.</li>
+</Steps>
+
+## Step 5 — Test it
+
+From another Farcaster account, mention your bot's @username in a cast. Within a minute, Milady should see it and reply.
+
+## Useful options
+
+| Option | What it does |
+| --- | --- |
+| **Enable cast** | Lets the agent post autonomously on an interval. Off by default — mention-only is safer. |
+| **Cast interval min / max** | Minutes between autonomous casts. 60/180 is a reasonable starting range. |
+| **Max cast length** | Farcaster caps casts at 320 characters. Don't raise. |
+| **Poll interval** | Seconds between notification checks. Default is fine. |
+
+## Autonomous posting
+
+Enabling autonomous casts is more culturally fraught on Farcaster than on Twitter — the network is small enough that bad bots get called out quickly. If you enable it:
+
+- Start with long intervals (120/240 minutes minimum).
+- Monitor replies for the first few days and prune behaviors that embarrass you.
+- Consider posting from a clearly-labeled bot account rather than your main FID.
+
+## Troubleshooting
+
+**"Invalid FID" when saving.**
+FID must be just the number (e.g. `12345`), not `@username` or a URL.
+
+**"Signer not approved."**
+You created the signer in Step 3 but didn't complete the on-chain approval flow in Warpcast. Go back to Neynar's signers page and click the pending signer — it'll show the QR/deep link to finish.
+
+**Mentions aren't being seen.**
+Neynar indexes the network, so this usually means the Neynar API key is wrong or you hit rate limits. Check the Neynar dashboard for usage stats.
+
+## What's next
+
+- [Connect to Bluesky](/docs/intermediate/connect-bluesky) — similar decentralized-social vibe, zero on-chain costs.
+- [Connect to Nostr](/docs/intermediate/connect-nostr) — the other big decentralized social protocol.

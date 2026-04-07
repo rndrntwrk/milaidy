@@ -64,6 +64,17 @@ export const SYSTEM_PERMISSIONS: PermissionDef[] = [
     platforms: ["darwin", "win32", "linux"],
     requiredForFeatures: ["shell"],
   },
+  {
+    id: "website-blocking",
+    name: "Website Blocking",
+    nameKey: "permissionssection.permission.websiteBlocking.name",
+    description:
+      "Edit the system hosts file to block distracting websites. This may require admin/root approval each time.",
+    descriptionKey: "permissionssection.permission.websiteBlocking.description",
+    icon: "shield-ban",
+    platforms: ["darwin", "win32", "linux"],
+    requiredForFeatures: ["website-blocker"],
+  },
 ];
 
 /** Capability toggle definition. */
@@ -103,10 +114,10 @@ export const CAPABILITIES: CapabilityDef[] = [
   },
   {
     id: "coding-agent",
-    label: "Coding Agent Swarms",
+    label: "Task Agent Swarms",
     labelKey: "permissionssection.capability.codingAgent.label",
     description:
-      "Orchestrate CLI coding agents (Claude Code, Gemini, Codex, Aider, Pi)",
+      "Orchestrate open-ended CLI task agents (Claude Code, Gemini CLI, Codex, Aider, Pi)",
     descriptionKey: "permissionssection.capability.codingAgent.description",
     requiredPermissions: [],
   },
@@ -182,6 +193,26 @@ export function getPermissionAction(
     platform === "win32" && (id === "microphone" || id === "camera");
 
   if (status === "not-determined" && canRequest) {
+    if (id === "website-blocking") {
+      const label =
+        platform === "ios"
+          ? translateWithFallback(
+              t,
+              "permissionssection.OpenSettings",
+              "Open Settings",
+            )
+          : translateWithFallback(
+              t,
+              "permissionssection.RequestApproval",
+              "Request Approval",
+            );
+      return {
+        ariaLabelPrefix: label,
+        label,
+        type: "request",
+      };
+    }
+
     const label = usesWindowsPrivacySettings
       ? translateWithFallback(
           t,
@@ -199,6 +230,26 @@ export function getPermissionAction(
       ariaLabelPrefix: label,
       label,
       type: usesWindowsPrivacySettings ? "settings" : "request",
+    };
+  }
+
+  if (id === "website-blocking") {
+    const label =
+      platform === "ios"
+        ? translateWithFallback(
+            t,
+            "permissionssection.OpenSettings",
+            "Open Settings",
+          )
+        : translateWithFallback(
+            t,
+            "permissionssection.OpenHostsFile",
+            "Open Hosts File",
+          );
+    return {
+      ariaLabelPrefix: label,
+      label,
+      type: "settings",
     };
   }
 
@@ -228,6 +279,17 @@ export function getPermissionBadge(
       };
     }
 
+    if (id === "website-blocking") {
+      return {
+        tone: "danger",
+        label: translateWithFallback(
+          t,
+          "permissionssection.badge.needsAdmin",
+          "Needs Admin",
+        ),
+      };
+    }
+
     if (platform === "darwin") {
       return {
         tone: "danger",
@@ -241,6 +303,17 @@ export function getPermissionBadge(
   }
 
   if (status === "not-determined") {
+    if (id === "website-blocking") {
+      return {
+        tone: "warning",
+        label: translateWithFallback(
+          t,
+          "permissionssection.badge.needsApproval",
+          "Needs Approval",
+        ),
+      };
+    }
+
     return {
       tone: "warning",
       label: translateWithFallback(

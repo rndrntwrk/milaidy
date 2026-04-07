@@ -21,11 +21,26 @@ describe("desktop permissions client patch", () => {
   it("prefers Electrobun RPC for permission reads used by onboarding", async () => {
     const originalGetPermissions = vi.fn(async () => ({
       accessibility: { id: "accessibility", status: "denied" },
+      "website-blocking": {
+        id: "website-blocking",
+        status: "not-determined",
+        canRequest: true,
+      },
     }));
-    const originalGetPermission = vi.fn(async () => ({
-      id: "accessibility",
-      status: "denied",
-    }));
+    const originalGetPermission = vi.fn(async (id) => {
+      if (id === "website-blocking") {
+        return {
+          id: "website-blocking",
+          status: "not-determined",
+          canRequest: true,
+        };
+      }
+
+      return {
+        id: "accessibility",
+        status: "denied",
+      };
+    });
     const originalRequestPermission = vi.fn(async () => ({
       id: "microphone",
       status: "denied",
@@ -74,6 +89,11 @@ describe("desktop permissions client patch", () => {
 
     await expect(client.getPermissions()).resolves.toEqual({
       accessibility: { id: "accessibility", status: "granted" },
+      "website-blocking": {
+        id: "website-blocking",
+        status: "not-determined",
+        canRequest: true,
+      },
     });
     await expect(client.getPermission("accessibility")).resolves.toEqual({
       id: "accessibility",
@@ -85,6 +105,11 @@ describe("desktop permissions client patch", () => {
     });
     await expect(client.refreshPermissions()).resolves.toEqual({
       accessibility: { id: "accessibility", status: "granted" },
+      "website-blocking": {
+        id: "website-blocking",
+        status: "not-determined",
+        canRequest: true,
+      },
     });
     await expect(client.setShellEnabled(true)).resolves.toEqual({
       id: "shell",
@@ -96,7 +121,15 @@ describe("desktop permissions client patch", () => {
     ).resolves.toBeUndefined();
 
     expect(originalGetPermissions).not.toHaveBeenCalled();
-    expect(originalGetPermission).not.toHaveBeenCalled();
+    expect(originalGetPermission).toHaveBeenCalledTimes(2);
+    expect(originalGetPermission).toHaveBeenNthCalledWith(
+      1,
+      "website-blocking",
+    );
+    expect(originalGetPermission).toHaveBeenNthCalledWith(
+      2,
+      "website-blocking",
+    );
     expect(originalRequestPermission).not.toHaveBeenCalled();
     expect(originalRefreshPermissions).not.toHaveBeenCalled();
     expect(originalSetShellEnabled).not.toHaveBeenCalled();
@@ -157,6 +190,124 @@ describe("desktop permissions client patch", () => {
     expect(originalIsShellEnabled).toHaveBeenCalledTimes(1);
     expect(originalOpenPermissionSettings).toHaveBeenCalledWith(
       "accessibility",
+    );
+
+    restore();
+  });
+
+  it("keeps website blocking permission on the runtime-owned HTTP path even when desktop RPC is available", async () => {
+    const originalGetPermissions = vi.fn(async () => ({
+      "website-blocking": {
+        id: "website-blocking",
+        status: "not-determined",
+        canRequest: true,
+        reason:
+          "Milady can ask the OS for administrator/root approval whenever it needs to edit the system hosts file.",
+      },
+    }));
+    const originalGetPermission = vi.fn(async () => ({
+      id: "website-blocking",
+      status: "not-determined",
+      canRequest: true,
+      reason:
+        "Milady can ask the OS for administrator/root approval whenever it needs to edit the system hosts file.",
+    }));
+    const originalRequestPermission = vi.fn(async () => ({
+      id: "website-blocking",
+      status: "not-determined",
+      canRequest: true,
+      reason:
+        "Milady can ask the OS for administrator/root approval whenever it needs to edit the system hosts file.",
+    }));
+    const originalOpenPermissionSettings = vi.fn(async () => undefined);
+    const originalRefreshPermissions = vi.fn(async () => ({
+      "website-blocking": {
+        id: "website-blocking",
+        status: "not-determined",
+        canRequest: true,
+      },
+    }));
+    const originalSetShellEnabled = vi.fn(async () => ({
+      id: "shell",
+      status: "granted",
+    }));
+    const originalIsShellEnabled = vi.fn(async () => true);
+    const client = {
+      getPermissions: originalGetPermissions,
+      getPermission: originalGetPermission,
+      requestPermission: originalRequestPermission,
+      openPermissionSettings: originalOpenPermissionSettings,
+      refreshPermissions: originalRefreshPermissions,
+      setShellEnabled: originalSetShellEnabled,
+      isShellEnabled: originalIsShellEnabled,
+    };
+
+    invokeDesktopBridgeRequestMock.mockImplementation(async (options) => {
+      switch (options.rpcMethod) {
+        case "permissionsGetAll":
+          return {
+            accessibility: { id: "accessibility", status: "granted" },
+          };
+        case "permissionsCheck":
+          return {
+            id: "website-blocking",
+            status: "denied",
+            canRequest: false,
+          };
+        case "permissionsRequest":
+          return {
+            id: "website-blocking",
+            status: "denied",
+            canRequest: false,
+          };
+        case "permissionsOpenSettings":
+          return undefined;
+        default:
+          return null;
+      }
+    });
+
+    const restore = installDesktopPermissionsClientPatch(client);
+
+    await expect(client.getPermissions()).resolves.toEqual({
+      accessibility: { id: "accessibility", status: "granted" },
+      "website-blocking": {
+        id: "website-blocking",
+        status: "not-determined",
+        canRequest: true,
+        reason:
+          "Milady can ask the OS for administrator/root approval whenever it needs to edit the system hosts file.",
+      },
+    });
+    await expect(client.getPermission("website-blocking")).resolves.toEqual({
+      id: "website-blocking",
+      status: "not-determined",
+      canRequest: true,
+      reason:
+        "Milady can ask the OS for administrator/root approval whenever it needs to edit the system hosts file.",
+    });
+    await expect(client.requestPermission("website-blocking")).resolves.toEqual(
+      {
+        id: "website-blocking",
+        status: "not-determined",
+        canRequest: true,
+        reason:
+          "Milady can ask the OS for administrator/root approval whenever it needs to edit the system hosts file.",
+      },
+    );
+
+    await client.openPermissionSettings("website-blocking");
+
+    expect(originalGetPermission).toHaveBeenCalledWith("website-blocking");
+    expect(originalRequestPermission).toHaveBeenCalledWith("website-blocking");
+    expect(originalOpenPermissionSettings).toHaveBeenCalledWith(
+      "website-blocking",
+    );
+    expect(invokeDesktopBridgeRequestMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        rpcMethod: "permissionsRequest",
+        params: { id: "website-blocking" },
+      }),
     );
 
     restore();

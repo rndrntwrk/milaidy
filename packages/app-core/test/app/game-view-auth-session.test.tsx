@@ -1,25 +1,30 @@
 // @vitest-environment jsdom
 
-import type { AppViewerAuthMessage, LogEntry } from "@miladyai/app-core/api";
+import type {
+  AppRunSummary,
+  AppSessionState,
+  AppViewerAuthMessage,
+  LogEntry,
+} from "@miladyai/app-core/api";
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 interface GameContextStub {
+  appRuns: AppRunSummary[];
+  activeGameRunId: string;
   activeGameApp: string;
   activeGameDisplayName: string;
   activeGameViewerUrl: string;
   activeGameSandbox: string;
   activeGamePostMessageAuth: boolean;
   activeGamePostMessagePayload: AppViewerAuthMessage | null;
+  activeGameSession: AppSessionState | null;
   gameOverlayEnabled: boolean;
   plugins: { id: string; enabled: boolean }[];
   logs: LogEntry[];
   loadLogs: () => Promise<void>;
-  setState: (
-    key: string,
-    value: string | boolean | AppViewerAuthMessage | null,
-  ) => void;
+  setState: (key: string, value: unknown) => void;
   setActionNotice: (
     text: string,
     tone?: "info" | "success" | "error",
@@ -30,7 +35,7 @@ interface GameContextStub {
 const { mockClientFns, mockUseApp } = vi.hoisted(() => ({
   mockClientFns: {
     getCodingAgentStatus: vi.fn(async () => null),
-    stopApp: vi.fn(),
+    stopAppRun: vi.fn(),
     sendChatRest: vi.fn(),
   },
   mockUseApp: vi.fn(),
@@ -46,9 +51,65 @@ vi.mock("@miladyai/app-core/state", () => ({
 import { flush } from "../../../../test/helpers/react-test";
 import { GameView } from "../../src/components/apps/GameView";
 
+function createRunSummary(
+  overrides: Partial<AppRunSummary> = {},
+): AppRunSummary {
+  return {
+    runId: "run-1",
+    appName: "@elizaos/app-2004scape",
+    displayName: "2004scape",
+    pluginName: "@elizaos/app-2004scape",
+    launchType: "connect",
+    launchUrl: "http://localhost:5175/viewer",
+    viewer: {
+      url: "http://localhost:5175/viewer",
+      sandbox: "allow-scripts allow-same-origin",
+      postMessageAuth: true,
+      authMessage: {
+        type: "RS_2004SCAPE_AUTH",
+        authToken: "testbot",
+        sessionToken: "password",
+      },
+    },
+    session: null,
+    status: "running",
+    summary: "Viewer ready.",
+    startedAt: "2026-04-06T00:00:00.000Z",
+    updatedAt: "2026-04-06T00:00:00.000Z",
+    lastHeartbeatAt: "2026-04-06T00:00:00.000Z",
+    supportsBackground: true,
+    viewerAttachment: "attached",
+    health: {
+      state: "healthy",
+      message: null,
+    },
+    ...overrides,
+  };
+}
+
 function createContext(overrides?: Partial<GameContextStub>): GameContextStub {
+  const run = createRunSummary({
+    viewer:
+      overrides?.activeGameViewerUrl === ""
+        ? null
+        : {
+            url:
+              overrides?.activeGameViewerUrl ?? "http://localhost:5175/viewer",
+            sandbox:
+              overrides?.activeGameSandbox ?? "allow-scripts allow-same-origin",
+            postMessageAuth: overrides?.activeGamePostMessageAuth ?? true,
+            authMessage: overrides?.activeGamePostMessagePayload ?? {
+              type: "RS_2004SCAPE_AUTH",
+              authToken: "testbot",
+              sessionToken: "password",
+            },
+          },
+    session: overrides?.activeGameSession ?? null,
+  });
   return {
     t: (k: string) => k,
+    appRuns: [run],
+    activeGameRunId: run.runId,
     activeGameApp: "@elizaos/app-2004scape",
     activeGameDisplayName: "2004scape",
     activeGameViewerUrl: "http://localhost:5175/viewer",
@@ -59,6 +120,7 @@ function createContext(overrides?: Partial<GameContextStub>): GameContextStub {
       authToken: "testbot",
       sessionToken: "password",
     },
+    activeGameSession: null,
     gameOverlayEnabled: false,
     plugins: [],
     logs: [],
@@ -71,7 +133,7 @@ function createContext(overrides?: Partial<GameContextStub>): GameContextStub {
 
 describe("GameView auth session reset", () => {
   beforeEach(() => {
-    mockClientFns.stopApp.mockReset();
+    mockClientFns.stopAppRun.mockReset();
     mockClientFns.sendChatRest.mockReset();
     mockUseApp.mockReset();
   });

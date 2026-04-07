@@ -1,7 +1,11 @@
 import type { AgentRuntime } from "@elizaos/core";
-import type { RouteRequestContext } from "./route-helpers";
-
+import {
+  getSelfControlPermissionState,
+  openSelfControlPermissionLocation,
+  requestSelfControlPermission,
+} from "@miladyai/plugin-selfcontrol/selfcontrol";
 import type { AutonomousConfigLike } from "../types/config-like";
+import type { RouteRequestContext } from "./route-helpers";
 
 interface PermissionAutonomousConfigLike extends AutonomousConfigLike {
   features?: {
@@ -17,6 +21,13 @@ interface PermissionState {
   status: string;
   lastChecked: number;
   canRequest: boolean;
+  reason?: string;
+}
+
+const WEBSITE_BLOCKING_PERMISSION_ID = "website-blocking";
+
+async function getWebsiteBlockingPermissionState(): Promise<PermissionState> {
+  return await getSelfControlPermissionState();
 }
 
 export interface PermissionRouteState {
@@ -52,8 +63,10 @@ export async function handlePermissionRoutes(
 
   if (method === "GET" && pathname === "/api/permissions") {
     const permStates = state.permissionStates ?? {};
+    const websiteBlockingPermission = await getWebsiteBlockingPermissionState();
     json(res, {
       ...permStates,
+      [WEBSITE_BLOCKING_PERMISSION_ID]: websiteBlockingPermission,
       _platform: process.platform,
       _shellEnabled: state.shellEnabled ?? true,
     });
@@ -88,6 +101,10 @@ export async function handlePermissionRoutes(
       error(res, "Invalid permission ID", 400);
       return true;
     }
+    if (permId === WEBSITE_BLOCKING_PERMISSION_ID) {
+      json(res, await getWebsiteBlockingPermissionState());
+      return true;
+    }
     const permStates = state.permissionStates ?? {};
     const permState = permStates[permId];
     if (!permState) {
@@ -116,6 +133,10 @@ export async function handlePermissionRoutes(
     pathname.match(/^\/api\/permissions\/[^/]+\/request$/)
   ) {
     const permId = pathname.split("/")[3];
+    if (permId === WEBSITE_BLOCKING_PERMISSION_ID) {
+      json(res, await requestSelfControlPermission());
+      return true;
+    }
     json(res, {
       message: `Permission request for ${permId}`,
       action: `ipc:permissions:request:${permId}`,
@@ -128,6 +149,25 @@ export async function handlePermissionRoutes(
     pathname.match(/^\/api\/permissions\/[^/]+\/open-settings$/)
   ) {
     const permId = pathname.split("/")[3];
+    if (permId === WEBSITE_BLOCKING_PERMISSION_ID) {
+      try {
+        const opened = await openSelfControlPermissionLocation();
+        json(res, {
+          opened,
+          id: WEBSITE_BLOCKING_PERMISSION_ID,
+          permission: await getWebsiteBlockingPermissionState(),
+        });
+      } catch (openError) {
+        error(
+          res,
+          openError instanceof Error
+            ? openError.message
+            : "Failed to open the hosts file location.",
+          500,
+        );
+      }
+      return true;
+    }
     json(res, {
       message: `Opening settings for ${permId}`,
       action: `ipc:permissions:openSettings:${permId}`,

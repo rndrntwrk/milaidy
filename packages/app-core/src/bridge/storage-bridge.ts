@@ -15,11 +15,16 @@ import { Preferences } from "@capacitor/preferences";
 
 const isNative = Capacitor.isNativePlatform();
 
-// Keys that should be synced to Capacitor Preferences
+// Keys that should be synced to Capacitor Preferences.
+// On iOS, WKWebView localStorage can be purged under memory pressure.
+// These keys are critical for session restoration on mobile.
 const SYNCED_KEYS = new Set([
   "eliza.control.settings.v1",
   "eliza.device.identity",
   "eliza.device.auth",
+  "milady:active-server",
+  "eliza:onboarding-complete",
+  "eliza:onboarding:step",
 ]);
 
 // In-memory cache of values from Preferences (for native)

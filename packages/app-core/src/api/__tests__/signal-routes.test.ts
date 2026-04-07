@@ -56,7 +56,7 @@ describe("handleSignalRoute", () => {
     const handled = await handleSignalRoute(
       createMockReq("GET"),
       createMockRes(),
-      "/api/chat",
+      "/api/not-handled",
       "GET",
       createState(),
     );

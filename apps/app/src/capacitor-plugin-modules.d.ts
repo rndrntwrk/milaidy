@@ -40,6 +40,13 @@ declare module "@miladyai/capacitor-location" {
   export const Location: LocationPluginType;
 }
 
+declare module "@miladyai/capacitor-mobile-signals" {
+  export * from "../plugins/mobile-signals/src/definitions";
+  import type { MobileSignalsPlugin as MobileSignalsPluginType } from "../plugins/mobile-signals/src/definitions";
+  export type { MobileSignalsPlugin } from "../plugins/mobile-signals/src/definitions";
+  export const MobileSignals: MobileSignalsPluginType;
+}
+
 declare module "@miladyai/capacitor-screencapture" {
   export * from "../plugins/screencapture/src/definitions";
   import type { ScreenCapturePlugin as ScreenCapturePluginType } from "../plugins/screencapture/src/definitions";
@@ -60,6 +67,13 @@ declare module "@miladyai/capacitor-talkmode" {
   import type { TalkModePlugin as TalkModePluginType } from "../plugins/talkmode/src/definitions";
   export type { TalkModePlugin } from "../plugins/talkmode/src/definitions";
   export const TalkMode: TalkModePluginType;
+}
+
+declare module "@miladyai/capacitor-websiteblocker" {
+  export * from "../plugins/websiteblocker/src/definitions";
+  import type { WebsiteBlockerPlugin as WebsiteBlockerPluginType } from "../plugins/websiteblocker/src/definitions";
+  export type { WebsiteBlockerPlugin } from "../plugins/websiteblocker/src/definitions";
+  export const WebsiteBlocker: WebsiteBlockerPluginType;
 }
 
 declare module "@elizaos/plugin-coding-agent";

@@ -19,6 +19,123 @@ const _require = createRequire(import.meta.url);
 const here = path.dirname(fileURLToPath(import.meta.url));
 const miladyRoot = path.resolve(here, "../..");
 
+/**
+ * Pinned @elizaos/core from the repo root (must match the agent/runtime lock).
+ */
+function getMiladyPinnedElizaCoreVersion(): string {
+  try {
+    const raw = JSON.parse(
+      fs.readFileSync(path.join(miladyRoot, "package.json"), "utf8"),
+    ) as {
+      dependencies?: Record<string, string>;
+      overrides?: Record<string, string>;
+    };
+    const spec =
+      raw.dependencies?.["@elizaos/core"] ??
+      raw.overrides?.["@elizaos/core"] ??
+      "";
+    const v = String(spec)
+      .trim()
+      .replace(/^[\^~]/, "");
+    if (v && v !== "workspace:*" && /^\d/.test(v)) {
+      const first = v.split(/\s+/)[0];
+      if (first) return first;
+    }
+  } catch {
+    /* fall through */
+  }
+  return "2.0.0-alpha.109";
+}
+
+/** Bun cache dir names look like `@elizaos+core@2.0.0-alpha.109+<hash>`. */
+function elizaCoreAlphaPrerelease(dir: string): number {
+  const m = dir.match(/@elizaos\+core@[\d.]+-alpha\.(\d+)/);
+  return m?.[1] ? parseInt(m[1], 10) : -1;
+}
+
+/**
+ * Bun stores a full npm tarball under node_modules/.bun even when the workspace
+ * symlink for @elizaos/core points at an unbuilt local eliza checkout.
+ *
+ * **WHY sort:** `readdir` order is arbitrary; picking `alpha.12` over `alpha.109`
+ * mismatches the API and tends to blank the Electrobun webview.
+ */
+function findElizaCoreBundleInBunStore(
+  kind: "browser" | "node",
+): string | null {
+  const bunDir = path.join(miladyRoot, "node_modules/.bun");
+  const rel =
+    kind === "browser"
+      ? "node_modules/@elizaos/core/dist/browser/index.browser.js"
+      : "node_modules/@elizaos/core/dist/node/index.node.js";
+  if (!fs.existsSync(bunDir)) return null;
+  let entries: string[];
+  try {
+    entries = fs.readdirSync(bunDir);
+  } catch {
+    return null;
+  }
+  const pinned = getMiladyPinnedElizaCoreVersion();
+  const pinnedPrefix = `@elizaos+core@${pinned}+`;
+
+  const withDist = entries.filter((dir) => {
+    if (!dir.startsWith("@elizaos+core@")) return false;
+    return fs.existsSync(path.join(bunDir, dir, rel));
+  });
+
+  const pinnedMatch = withDist.find((d) => d.startsWith(pinnedPrefix));
+  if (pinnedMatch) return path.join(bunDir, pinnedMatch, rel);
+
+  if (withDist.length === 0) return null;
+
+  withDist.sort(
+    (a, b) => elizaCoreAlphaPrerelease(b) - elizaCoreAlphaPrerelease(a),
+  );
+  const best = withDist[0];
+  return best ? path.join(bunDir, best, rel) : null;
+}
+
+/**
+ * Resolved file path for bundling `@elizaos/core` in the renderer.
+ * Linked eliza checkouts sometimes omit `dist/` until `bun run build`;
+ * fall back to `dist/node` (Vite stubs `node:` imports via nativeModuleStubPlugin),
+ * then to the bun install cache copy.
+ */
+function resolveElizaCoreBundlePath(): string {
+  const pkgDir = path.dirname(_require.resolve("@elizaos/core/package.json"));
+  const browserEntry = path.join(pkgDir, "dist/browser/index.browser.js");
+  const nodeEntry = path.join(pkgDir, "dist/node/index.node.js");
+  if (fs.existsSync(browserEntry)) return browserEntry;
+  if (fs.existsSync(nodeEntry)) {
+    console.warn(
+      "[milady][vite] @elizaos/core dist/browser is missing; using dist/node for the client bundle. " +
+        "For a linked eliza workspace, run `bun run build` in that checkout (e.g. packages/typescript). " +
+        "Or reinstall with ELIZA_SKIP_LOCAL_ELIZA=1 to use the published npm package.",
+    );
+    return nodeEntry;
+  }
+  const bunBrowser = findElizaCoreBundleInBunStore("browser");
+  if (bunBrowser) {
+    console.warn(
+      `[milady][vite] Linked @elizaos/core at ${pkgDir} has no dist/; using bun cache build at ${bunBrowser}. ` +
+        "Run `bun run build` in your eliza checkout or ELIZA_SKIP_LOCAL_ELIZA=1 bun install to align versions.",
+    );
+    return bunBrowser;
+  }
+  const bunNode = findElizaCoreBundleInBunStore("node");
+  if (bunNode) {
+    console.warn(
+      `[milady][vite] Linked @elizaos/core at ${pkgDir} has no dist/; using bun cache node bundle at ${bunNode}.`,
+    );
+    return bunNode;
+  }
+  throw new Error(
+    `[milady][vite] @elizaos/core has no built artifacts under ${pkgDir} and none in node_modules/.bun. ` +
+      "Expected dist/browser/index.browser.js or dist/node/index.node.js. " +
+      "Build your local eliza workspace or run `ELIZA_SKIP_LOCAL_ELIZA=1 bun install`.",
+  );
+}
+
 // The dev script sets MILADY_API_PORT; default to 31337 for standalone vite dev.
 const apiPort = resolveDesktopApiPort(process.env);
 const uiPort = resolveDesktopUiPort(process.env);
@@ -383,6 +500,26 @@ function nativeModuleStubPlugin(): Plugin {
         ].join("\n");
       }
 
+      // async_hooks — AsyncLocalStorage must be a real constructor because
+      // langsmith and @elizaos packages do `new AsyncLocalStorage()` at the
+      // top level. Uses function-constructor syntax (not class expressions)
+      // for maximum WebView compatibility. The renderChunk plugin
+      // (asyncLocalStoragePatchPlugin) also patches the final bundle output
+      // as a safety net for patterns inlined by Rollup.
+      if (modName === "node:async_hooks" || modName === "async_hooks") {
+        return [
+          "function AsyncLocalStorage() {} AsyncLocalStorage.prototype.getStore = function() { return undefined; }; AsyncLocalStorage.prototype.run = function(store, fn) { return fn.apply(void 0, [].slice.call(arguments, 2)); }; AsyncLocalStorage.prototype.enterWith = function() {}; AsyncLocalStorage.prototype.disable = function() {};",
+          "export { AsyncLocalStorage };",
+          "export function executionAsyncId() { return 0; }",
+          "export function triggerAsyncId() { return 0; }",
+          "export function executionAsyncResource() { return {}; }",
+          "function AsyncResource() {} AsyncResource.prototype.runInAsyncScope = function(fn) { return fn.apply(void 0, [].slice.call(arguments, 1)); }; AsyncResource.prototype.emitDestroy = function() { return this; }; AsyncResource.prototype.asyncId = function() { return 0; }; AsyncResource.prototype.triggerAsyncId = function() { return 0; };",
+          "export { AsyncResource };",
+          "export function createHook() { return { enable: function(){}, disable: function(){} }; }",
+          "export default { AsyncLocalStorage: AsyncLocalStorage, AsyncResource: AsyncResource, executionAsyncId: executionAsyncId, triggerAsyncId: triggerAsyncId, executionAsyncResource: executionAsyncResource, createHook: createHook };",
+        ].join("\n");
+      }
+
       // node:* builtins — return a Proxy-based module that provides any
       // named export as a no-op function.  This handles @elizaos/core's node
       // entry which uses createRequire, randomUUID, fs, etc. at the top level.
@@ -396,14 +533,25 @@ function nativeModuleStubPlugin(): Plugin {
       return "export default {};\n";
     },
     // Patch @elizaos/core browser entry at transform time to add missing
-    // exports that milady's agent plugins expect.
+    // exports and fix browser-incompatible patterns.
     transform(code, id) {
-      if (
-        !id.endsWith("index.browser.js") ||
-        (!id.includes("@elizaos/core") &&
-          !id.includes("packages/typescript/dist/browser"))
-      )
-        return null;
+      const isCoreDistFile =
+        id.endsWith("index.browser.js") || id.endsWith("index.node.js");
+      const normId = id.split(path.sep).join("/");
+      const isCorePackagePath =
+        normId.includes("/node_modules/@elizaos/core/") ||
+        normId.includes("packages/typescript/dist/");
+      if (!isCoreDistFile || !isCorePackagePath) return null;
+
+      // Fix AsyncLocalStorage: the browser entry has a try/catch that does
+      //   let {AsyncLocalStorage:$} = (() => {throw new Error(...)})()
+      // Rollup/esbuild may optimize the throw into (()=>({})) which makes
+      // AsyncLocalStorage undefined, causing "xte is not a constructor".
+      // Replace the broken IIFE pattern with a working stub class.
+      const patched = code.replace(
+        /\(\(\)\s*=>\s*\{\s*throw\s+new\s+Error\(\s*"Cannot require module "\s*\+\s*"node:async_hooks"\s*\)\s*;\s*\}\)\(\)/g,
+        "(function(){function A(){} A.prototype.getStore=function(){return undefined};A.prototype.run=function(s,fn){return fn.apply(void 0,[].slice.call(arguments,2))};A.prototype.enterWith=function(){};A.prototype.disable=function(){};return{AsyncLocalStorage:A}})()",
+      );
       // Names that downstream plugins (plugin-secrets-manager, agent runtime)
       // import from @elizaos/core but that are missing from the browser entry.
       const missingExports: Record<string, string> = {
@@ -420,17 +568,20 @@ function nativeModuleStubPlugin(): Plugin {
         // Check if already exported (as named export or re-export alias)
         const exportedAs = new RegExp(`\\b${n}\\b`);
         // Search only in export{} blocks
-        const exportBlocks = code.match(/export\s*\{[^}]+\}/g) || [];
+        const exportBlocks = patched.match(/export\s*\{[^}]+\}/g) || [];
         return !exportBlocks.some((b) => exportedAs.test(b));
       });
-      if (needed.length === 0) return null;
+      if (needed.length === 0 && patched === code) return null;
       // Use unique prefixed names to avoid collisions with minified vars
       const prefix = "__milady_stub_";
       const stubs = needed
         .map((n) => `var ${prefix}${n} = ${missingExports[n]};`)
         .join("\n");
-      const exports = `export { ${needed.map((n) => `${prefix}${n} as ${n}`).join(", ")} };`;
-      return { code: `${code}\n${stubs}\n${exports}`, map: null };
+      const exports =
+        needed.length > 0
+          ? `export { ${needed.map((n) => `${prefix}${n} as ${n}`).join(", ")} };`
+          : "";
+      return { code: `${patched}\n${stubs}\n${exports}`, map: null };
     },
   };
 }
@@ -449,6 +600,37 @@ const threeRootDir = path.resolve(miladyRoot, "node_modules/three");
  * `node_modules/three` path broke Rollup’s production path handling; a
  * pre-hook re-resolve from non-root importers keeps dev + `vite build` stable.
  */
+/**
+ * Patch the final bundle output to fix AsyncLocalStorage stubs.
+ *
+ * langsmith imports `{ AsyncLocalStorage } from "node:async_hooks"` at the
+ * top level. Vite's dep optimizer and Rollup inline the virtual-module stub
+ * as `(()=>({}))`, making AsyncLocalStorage `undefined` and causing
+ * `new undefined` → "xte is not a constructor" at runtime in mobile webviews.
+ *
+ * This plugin replaces the empty-object stub with a proper class in the
+ * final rendered chunks.
+ */
+function asyncLocalStoragePatchPlugin(): Plugin {
+  return {
+    name: "async-local-storage-patch",
+    enforce: "post",
+    renderChunk(code) {
+      // Match: var{AsyncLocalStorage:<id>}=(()=>({}))
+      const re =
+        /var\s*\{\s*AsyncLocalStorage\s*:\s*(\w+)\s*\}\s*=\s*\(\s*\(\s*\)\s*=>\s*\(\s*\{\s*\}\s*\)\s*\)/g;
+      if (!re.test(code)) return null;
+      re.lastIndex = 0;
+      const patched = code.replace(re, (_match, id) => {
+        // Use block-body arrow + named class — concise arrow with inline
+        // anonymous class fails in older WebViews (Chrome 124 and below).
+        return `var{AsyncLocalStorage:${id}}=(()=>{function A(){} A.prototype.getStore=function(){return undefined};A.prototype.run=function(s,fn){return fn.apply(void 0,[].slice.call(arguments,2))};A.prototype.enterWith=function(){};A.prototype.disable=function(){};return{AsyncLocalStorage:A}})()`;
+      });
+      return { code: patched, map: null };
+    },
+  };
+}
+
 function sparkPatchPlugin(): Plugin {
   return {
     name: "spark-patch",
@@ -556,6 +738,7 @@ export default defineConfig({
   plugins: [
     nativeModuleStubPlugin(),
     sparkPatchPlugin(),
+    asyncLocalStoragePatchPlugin(),
     watchWorkspacePackagesPlugin(),
     tailwindcss(),
     react(),
@@ -617,6 +800,10 @@ export default defineConfig({
         replacement: path.resolve(here, "plugins/location/src/index.ts"),
       },
       {
+        find: /^@miladyai\/capacitor-mobile-signals$/,
+        replacement: path.resolve(here, "plugins/mobile-signals/src/index.ts"),
+      },
+      {
         find: /^@miladyai\/capacitor-screencapture$/,
         replacement: path.resolve(here, "plugins/screencapture/src/index.ts"),
       },
@@ -627,6 +814,10 @@ export default defineConfig({
       {
         find: /^@miladyai\/capacitor-talkmode$/,
         replacement: path.resolve(here, "plugins/talkmode/src/index.ts"),
+      },
+      {
+        find: /^@miladyai\/capacitor-websiteblocker$/,
+        replacement: path.resolve(here, "plugins/websiteblocker/src/index.ts"),
       },
       {
         find: /^@miladyai\/plugin-selfcontrol\/(.*)/,
@@ -727,9 +918,7 @@ export default defineConfig({
           // needed exports and avoids pulling in createRequire/node:fs/etc.
           {
             find: /^@elizaos\/core$/,
-            replacement: `${path.dirname(
-              _require.resolve("@elizaos/core/package.json"),
-            )}/dist/browser/index.browser.js`,
+            replacement: resolveElizaCoreBundlePath(),
           },
         ];
       })(),
@@ -761,6 +950,7 @@ export default defineConfig({
     // Remap node: builtins to npm polyfills during dep optimization so
     // esbuild doesn't externalize them as "browser-external:node:*".
     esbuildOptions: {
+      target: "es2022",
       plugins: [
         {
           name: "node-builtins-polyfill",
@@ -894,6 +1084,19 @@ export default defineConfig({
       "/ws": {
         target: `ws://127.0.0.1:${apiPort}`,
         ws: true,
+      },
+      // elizaOS plugin-music-player HTTP routes live outside /api (e.g. /music-player/stream).
+      "/music-player": {
+        target: `http://127.0.0.1:${apiPort}`,
+        changeOrigin: true,
+        configure: (proxy) => {
+          proxy.on("error", (_err, _req, res) => {
+            if (!res.headersSent) {
+              res.writeHead(502, { "Content-Type": "application/json" });
+              res.end(JSON.stringify({ error: "API server unavailable" }));
+            }
+          });
+        },
       },
     },
     fs: {

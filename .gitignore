@@ -1,6 +1,7 @@
 node_modules
 **/node_modules/
 .env
+.env.worktree
 dist
 storybook-static
 coverage
@@ -133,6 +134,7 @@ data/
 # Debug PTY captures from plugin-agent-orchestrator (PARALLAX_DEBUG_CAPTURE=1)
 .parallax/
 .worktrees/
+.claude/worktrees/
 
 # Generated raw avatar/animation assets from local setup hooks (non-source)
 apps/app/public/animations/**/*.fbx
@@ -151,6 +153,7 @@ apps/app/ios/App/build*/
 
 # Ignored caches
 .ruff_cache/
+cache/audio/
 cache/voice/
 apps/app/.vite/
 
@@ -166,3 +169,7 @@ docs/tutorials/captures/
 # Agent skill files — per-user, not committed
 .agents/skills/
 .playwright-mcp/
+
+# Vendored binaries (large, platform-specific)
+scripts/bin/yt-dlp
+scripts/bin/yt-dlp_*

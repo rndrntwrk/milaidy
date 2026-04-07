@@ -21,6 +21,36 @@ export class ResearchTaskExecutor implements TaskExecutor {
   async execute(spec: TaskSpec, runtime: IAgentRuntime): Promise<TaskResult> {
     const startTime = Date.now();
     try {
+      try {
+        const researchResult = (await runtime.useModel(ModelType.RESEARCH, {
+          input: spec.description,
+          tools: [{ type: "web_search_preview" }],
+          background: true,
+          reasoningSummary: "auto",
+        })) as
+          | {
+              text?: string;
+              annotations?: Array<{ url?: string; title?: string }>;
+            }
+          | string;
+
+        const output =
+          typeof researchResult === "string"
+            ? researchResult
+            : researchResult.text ?? "";
+        if (output.trim().length > 0) {
+          return {
+            taskId: spec.id,
+            success: true,
+            output,
+            durationMs: Date.now() - startTime,
+          };
+        }
+      } catch {
+        // Fall through to the sequential synthesis path when the runtime
+        // does not expose a RESEARCH model or the provider rejects it.
+      }
+
       // Step 1: Decompose the research question into sub-questions
       const decomposition = await runtime.useModel(ModelType.TEXT_LARGE, {
         prompt: [

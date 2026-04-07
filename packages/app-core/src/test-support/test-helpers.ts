@@ -109,7 +109,6 @@ const DISCORD_PLUGIN_LOCAL_ENTRY_CANDIDATES = [
   "../plugins/plugin-discord/typescript/dist/index",
   "../plugins/plugin-discord/dist/index",
 ] as const;
-
 /**
  * Resolve the Discord plugin import specifier.
  * Prefers package resolution, then falls back to local plugin checkout paths.

@@ -17,6 +17,7 @@ type StreamableServerResponse = Pick<
 >;
 
 const MAX_BODY_BYTES = 1024 * 1024; // 1 MB
+
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
@@ -75,6 +76,7 @@ import {
   ONBOARDING_PROVIDER_CATALOG,
 } from "../contracts/onboarding.js";
 import { createIntegrationTelemetrySpan } from "../diagnostics/integration-observability.js";
+import { registerClientChatSendHandler } from "../services/client-chat-sender.js";
 import { EMOTE_BY_ID, EMOTE_CATALOG } from "../emotes/catalog.js";
 import { resolveDefaultAgentWorkspaceDir } from "../providers/workspace.js";
 import {
@@ -86,6 +88,7 @@ import {
   CORE_PLUGINS,
   OPTIONAL_CORE_PLUGINS,
 } from "../runtime/core-plugins.js";
+import * as agentOrchestratorCompat from "../runtime/agent-orchestrator-compat.js";
 import {
   buildTestHandler,
   registerCustomActionLive,
@@ -113,6 +116,7 @@ import {
   importAgent,
 } from "../services/agent-export.js";
 import { AppManager } from "../services/app-manager.js";
+import { createConfigPluginManager } from "../services/config-plugin-manager.js";
 import {
   getMcpServerDetails,
   searchMcpMarketplace,
@@ -170,24 +174,13 @@ import { parseClampedInteger } from "../utils/number-parsing.js";
 import { sanitizeSpeechText } from "../utils/spoken-text.js";
 import { handleAgentAdminRoutes } from "./agent-admin-routes.js";
 import { handleAgentLifecycleRoutes } from "./agent-lifecycle-routes.js";
-import { handleAgentStatusRoutes } from "./agent-status-routes.js";
-import { handleAvatarRoutes } from "./avatar-routes.js";
-import { handleChatRoutes } from "./chat-routes.js";
-import { handleConnectorRoutes } from "./connector-routes.js";
-import { handleConversationRoutes } from "./conversation-routes.js";
-import { handleDropRoutes } from "./drop-routes.js";
-import { handleMcpRoutes } from "./mcp-routes.js";
-import { handleMiscRoutes } from "./misc-routes.js";
-import { handleOnboardingRoutes } from "./onboarding-routes.js";
-import { handlePermissionsExtraRoutes } from "./permissions-routes-extra.js";
-import { handleProviderSwitchRoutes } from "./provider-switch-routes.js";
-import { handleTtsRoutes } from "./tts-routes.js";
-import { handleUpdateRoutes } from "./update-routes.js";
-import { handleWorkbenchRoutes } from "./workbench-routes.js";
 import { detectRuntimeModel, resolveProviderFromModel } from "./agent-model.js";
+import { handleAgentStatusRoutes } from "./agent-status-routes.js";
 import { handleAgentTransferRoutes } from "./agent-transfer-routes.js";
+import { handleAppPackageRoutes } from "./app-package-routes.js";
 import { handleAppsRoutes } from "./apps-routes.js";
 import { handleAuthRoutes } from "./auth-routes.js";
+import { handleAvatarRoutes } from "./avatar-routes.js";
 import {
   buildBscApproveUnsignedTx,
   buildBscBuyUnsignedTx,
@@ -198,7 +191,14 @@ import {
   resolvePrimaryBscRpcUrl,
 } from "./bsc-trade.js";
 import { handleBugReportRoutes } from "./bug-report-routes.js";
+import { handleBrowserWorkspaceRoutes } from "./browser-workspace-routes.js";
 import { handleCharacterRoutes } from "./character-routes.js";
+import {
+  generateChatResponse as generateChatResponseFromChatRoutes,
+  handleChatRoutes,
+  initSse as initSseFromChatRoutes,
+  writeSseJson as writeSseJsonFromChatRoutes,
+} from "./chat-routes.js";
 import { handleCloudBillingRoute } from "./cloud-billing-routes.js";
 import { handleCloudCompatRoute } from "./cloud-compat-routes.js";
 import { isCloudProvisionedContainer } from "./cloud-provisioning.js";
@@ -210,7 +210,10 @@ import {
   extractOpenAiSystemAndLastUser,
   resolveCompatRoomKey,
 } from "./compat-utils.js";
+import { handleConfigRoutes } from "./config-routes.js";
 import { ConnectorHealthMonitor } from "./connector-health.js";
+import { handleConnectorRoutes } from "./connector-routes.js";
+import { handleConversationRoutes } from "./conversation-routes.js";
 import type {
   SwarmEvent,
   TaskCompletionSummary,
@@ -223,11 +226,9 @@ import {
 } from "./credit-detection.js";
 import { handleDatabaseRoute } from "./database.js";
 import { handleDiagnosticsRoutes } from "./diagnostics-routes.js";
-import { handleSkillsRoutes } from "./skills-routes.js";
-import { handleHealthRoutes } from "./health-routes.js";
-import { handleConfigRoutes } from "./config-routes.js";
-import { handlePluginRoutes } from "./plugin-routes.js";
+import { handleDropRoutes } from "./drop-routes.js";
 import { DropService } from "./drop-service.js";
+import { handleHealthRoutes } from "./health-routes.js";
 import {
   readJsonBody as parseJsonBody,
   type ReadJsonBodyOptions,
@@ -237,8 +238,9 @@ import {
   sendJsonError,
 } from "./http-helpers.js";
 import { handleKnowledgeRoutes } from "./knowledge-routes.js";
-import { handleLifeOpsRoutes } from "./lifeops-routes.js";
 import { getKnowledgeService } from "./knowledge-service-loader.js";
+import { handleLifeOpsRoutes } from "./lifeops-routes.js";
+import { handleMcpRoutes } from "./mcp-routes.js";
 import {
   evictOldestConversation,
   getOrReadCachedFile,
@@ -247,14 +249,17 @@ import {
 } from "./memory-bounds.js";
 import { handleMemoryRoutes } from "./memory-routes.js";
 import { buildWhitelistTree, generateProof } from "./merkle-tree.js";
+import { handleMiscRoutes } from "./misc-routes.js";
 import { handleModelsRoutes } from "./models-routes.js";
 import { handleNfaRoutes } from "./nfa-routes.js";
-
+import { handleOnboardingRoutes } from "./onboarding-routes.js";
 import type {
   CoordinationLLMResponse,
   PTYService,
 } from "./parse-action-block.js";
 import { handlePermissionRoutes } from "./permissions-routes.js";
+import { handlePermissionsExtraRoutes } from "./permissions-routes-extra.js";
+import { handlePluginRoutes } from "./plugin-routes.js";
 import {
   type PluginParamInfo,
   validatePluginConfig,
@@ -263,19 +268,23 @@ import {
   applyOnboardingConnectionConfig,
   createProviderSwitchConnection,
 } from "./provider-switch-config.js";
+import { handleProviderSwitchRoutes } from "./provider-switch-routes.js";
 import { handleRegistryRoutes } from "./registry-routes.js";
 import { RegistryService } from "./registry-service.js";
+import { tryHandleRuntimePluginRoute } from "./runtime-plugin-routes.js";
 import { handleSandboxRoute } from "./sandbox-routes.js";
+import { hasPersistedOnboardingState } from "./server-helpers.js";
 import { applySignalQrOverride, handleSignalRoute } from "./signal-routes.js";
+import { discoverSkills } from "./skill-discovery-helpers.js";
+import { handleSkillsRoutes } from "./skills-routes.js";
 import { resolveStreamingUpdate } from "./streaming-text.js";
 import { handleSubscriptionRoutes } from "./subscription-routes.js";
 import { resolveTerminalRunLimits } from "./terminal-run-limits.js";
-import { hasPersistedOnboardingState } from "./server-helpers.js";
-// isFatalTodoDbError, TodoDbCircuitBreaker moved to workbench-helpers.ts
 import { handleTrainingRoutes } from "./training-routes.js";
 import type { TrainingServiceWithRuntime } from "./training-service-like.js";
 import { handleTrajectoryRoute } from "./trajectory-routes.js";
 import { handleTriggerRoutes } from "./trigger-routes.js";
+import { handleTtsRoutes } from "./tts-routes.js";
 import {
   generateVerificationMessage,
   isAddressWhitelisted,
@@ -283,6 +292,8 @@ import {
   verifyTweet,
 } from "./twitter-verify.js";
 import { TxService } from "./tx-service.js";
+import { handleUpdateRoutes } from "./update-routes.js";
+import { handleWebsiteBlockerRoutes } from "./website-blocker-routes.js";
 import {
   fetchEvmBalances,
   fetchSolanaBalances,
@@ -303,7 +314,6 @@ import {
   resolveWalletCapabilityStatus,
 } from "./wallet-capability.js";
 import { resolveWalletRpcReadiness } from "./wallet-rpc.js";
-import { discoverSkills } from "./skill-discovery-helpers.js";
 import { handleWalletTradeExecuteRoute } from "./wallet-trade-routes.js";
 import {
   loadWalletTradingProfile,
@@ -314,70 +324,69 @@ import {
   applyWhatsAppQrOverride,
   handleWhatsAppRoute,
 } from "./whatsapp-routes.js";
-import {
-  generateChatResponse as generateChatResponseFromChatRoutes,
-  initSse as initSseFromChatRoutes,
-  writeSseJson as writeSseJsonFromChatRoutes,
-} from "./chat-routes.js";
+import { handleIMessageRoute } from "./imessage-routes.js";
+import { handleInboxRoute } from "./inbox-routes.js";
+import { handleWorkbenchRoutes } from "./workbench-routes.js";
+
 export {
-  isNoResponsePlaceholder,
+  executeFallbackParsedActions,
+  extractXmlParams,
+  type FallbackParsedAction,
+  inferBalanceChainFromText,
+  isBalanceIntent,
+  maybeHandleDirectBinanceSkillRequest,
+  parseFallbackActionBlocks,
+  shouldForceCheckBalanceFallback,
+} from "./binance-skill-helpers.js";
+export {
   isClientVisibleNoResponse,
+  isNoResponsePlaceholder,
   stripAssistantStageDirections,
 } from "./chat-text-helpers.js";
-export {
-  inferBalanceChainFromText,
-  shouldForceCheckBalanceFallback,
-  isBalanceIntent,
-  extractXmlParams,
-  parseFallbackActionBlocks,
-  executeFallbackParsedActions,
-  maybeHandleDirectBinanceSkillRequest,
-  type FallbackParsedAction,
-} from "./binance-skill-helpers.js";
+
 import type { FallbackParsedAction } from "./binance-skill-helpers.js";
 import {
-  getModelOptions,
   classifyModel,
+  getInventoryProviderOptions,
+  getModelOptions,
+  getOrFetchAllProviders,
+  getOrFetchProvider,
   paramKeyToCategory,
   providerCachePath,
   readProviderCache,
   writeProviderCache,
-  getOrFetchProvider,
-  getOrFetchAllProviders,
-  getInventoryProviderOptions,
 } from "./model-provider-helpers.js";
 import {
-  type PluginEntry,
-  type PluginParamDef,
-  type SecretEntry,
-  maskValue,
-  buildParamDefs,
+  AGENT_EVENT_ALLOWED_STREAMS,
   aggregateSecrets,
+  BLOCKED_ENV_KEYS,
+  buildParamDefs,
+  CONFIG_WRITE_ALLOWED_TOP_KEYS,
   categorizePlugin,
   discoverInstalledPlugins,
   discoverPluginsFromManifest,
-  getReleaseBundledPluginIds,
   formatPluginName,
-  resolvePluginSetupGuideUrl,
+  getReleaseBundledPluginIds,
+  maskValue,
   normalizeRepositoryUrl,
-  CONFIG_WRITE_ALLOWED_TOP_KEYS,
-  AGENT_EVENT_ALLOWED_STREAMS,
-  BLOCKED_ENV_KEYS,
-} from "./plugin-discovery-helpers.js";
-// Re-export for downstream consumers (e.g. @miladyai/app-core)
-export {
-  discoverInstalledPlugins,
-  discoverPluginsFromManifest,
-  CONFIG_WRITE_ALLOWED_TOP_KEYS,
-  AGENT_EVENT_ALLOWED_STREAMS,
+  type PluginEntry,
+  type PluginParamDef,
+  resolvePluginSetupGuideUrl,
+  type SecretEntry,
 } from "./plugin-discovery-helpers.js";
 
-// @ts-expect-error plugin package does not ship declarations
+// Re-export for downstream consumers (e.g. @miladyai/app-core)
+export {
+  AGENT_EVENT_ALLOWED_STREAMS,
+  CONFIG_WRITE_ALLOWED_TOP_KEYS,
+  discoverInstalledPlugins,
+  discoverPluginsFromManifest,
+} from "./plugin-discovery-helpers.js";
+
 type PiAiPluginModule = typeof import("@elizaos/plugin-pi-ai");
 let _piAiPluginModule: PiAiPluginModule | null = null;
 async function loadPiAiPluginModule(): Promise<PiAiPluginModule> {
   if (!_piAiPluginModule) {
-    // @ts-expect-error plugin package does not ship declarations
     _piAiPluginModule = await import("@elizaos/plugin-pi-ai");
   }
   return _piAiPluginModule;
@@ -399,6 +408,7 @@ type OrchestratorFallbackRouteHandler = (
   req: http.IncomingMessage,
   res: http.ServerResponse,
   pathname: string,
+  method?: string,
 ) => Promise<boolean>;
 
 interface OrchestratorPluginFallbackModule {
@@ -420,7 +430,58 @@ function requirePluginManager(runtime: AgentRuntime | null): PluginManagerLike {
   if (!isPluginManagerLike(service)) {
     throw new Error("Plugin manager service not found");
   }
-  return service;
+  return wrapPluginManagerWithLocalFallback(service);
+}
+
+/**
+ * The upstream plugin-plugin-manager has its own registry client that only
+ * fetches from GitHub and scans a `plugins/` dir for `elizaos.plugin.json`.
+ * Workspace-vendored plugins (under `packages/plugin-*`) are invisible to it.
+ * Wrap `installPlugin` so that when the upstream returns "not found in the
+ * registry" we retry using our own registry-client (which discovers workspace
+ * packages and node_modules symlinks).
+ */
+function wrapPluginManagerWithLocalFallback(
+  pm: PluginManagerLike,
+): PluginManagerLike {
+  const originalInstall = pm.installPlugin.bind(pm);
+  const wrapped: PluginManagerLike = Object.create(pm);
+
+  wrapped.installPlugin = async (pluginName, onProgress) => {
+    const result = await originalInstall(pluginName, onProgress);
+    if (result.success || !result.error?.includes("not found in the registry")) {
+      return result;
+    }
+
+    // Upstream registry missed it — check Milady's own local discovery.
+    const { getPluginInfo } = await import("../services/registry-client.js");
+    const localInfo = await getPluginInfo(pluginName);
+    if (!localInfo?.localPath) {
+      return result;
+    }
+
+    // The plugin is a workspace package — just return success pointing at it.
+    // The runtime already resolves it via NODE_PATH / bun workspace links so
+    // there is nothing to download; the caller only needs to enable it in
+    // config and restart.
+    return {
+      success: true,
+      pluginName: localInfo.name,
+      version: localInfo.npm.v2Version ?? localInfo.npm.v1Version ?? "workspace",
+      installPath: localInfo.localPath,
+      requiresRestart: true,
+    };
+  };
+
+  return wrapped;
+}
+
+function getPluginManagerForState(state: ServerState): PluginManagerLike {
+  const service = state.runtime?.getService("plugin_manager");
+  if (isPluginManagerLike(service)) {
+    return service;
+  }
+  return createConfigPluginManager(() => state.config);
 }
 
 function requireCoreManager(runtime: AgentRuntime | null): CoreManagerLike {
@@ -786,7 +847,6 @@ export function findOwnPackageRoot(startDir: string): string {
   return startDir;
 }
 
-
 function removeResponseListener(
   res: StreamableServerResponse,
   event: "drain" | "error",
@@ -1012,6 +1072,7 @@ import {
   isAuthProtectedRoute,
   serveStaticUi,
 } from "./static-file-server.js";
+
 export { injectApiBaseIntoHtml };
 
 // Preserved for backward-compat — unused locally after extraction.
@@ -1069,14 +1130,14 @@ export function maybeAugmentChatMessageWithLanguage(
   };
 }
 
-
-export function getErrorMessage(err: unknown, fallback = "generation failed"): string {
+export function getErrorMessage(
+  err: unknown,
+  fallback = "generation failed",
+): string {
   if (err instanceof Error) return err.message;
   if (typeof err === "string") return err;
   return fallback;
 }
-
-
 
 const CHAT_KNOWLEDGE_MIN_SIMILARITY = 0.2;
 const CHAT_KNOWLEDGE_MAX_SNIPPETS = 3;
@@ -1288,7 +1349,6 @@ export async function maybeAugmentChatMessageWithKnowledge(
   }
 }
 
-
 interface ChatImageAttachment {
   /** Base64-encoded image data (no data URL prefix). */
   data: string;
@@ -1384,8 +1444,6 @@ export function buildChatAttachments(
     url: `attachment:img-${i}`,
     title: img.name,
     source: "client_chat",
-    description: "User-attached image",
-    text: "",
     contentType: ContentType.IMAGE,
     _data: img.data,
     _mimeType: img.mimeType,
@@ -1473,7 +1531,6 @@ export function buildUserMessages(params: {
     : userMessage;
   return { userMessage, messageToStore };
 }
-
 
 function parseBoundedLimit(rawLimit: string | null, fallback = 15): number {
   return parseClampedInteger(rawLimit, {
@@ -2561,25 +2618,28 @@ export function inferWalletExecutionFallback(
   );
 }
 
-export function hasUsableWalletFallbackParams(action: FallbackParsedAction): boolean {
+export function hasUsableWalletFallbackParams(
+  action: FallbackParsedAction,
+): boolean {
+  const parameters = action.parameters ?? {};
   if (action.name === "TRANSFER_TOKEN") {
     return (
-      typeof action.parameters.toAddress === "string" &&
-      /^0x[a-fA-F0-9]{40}$/.test(action.parameters.toAddress) &&
-      typeof action.parameters.amount === "string" &&
-      action.parameters.amount.trim().length > 0 &&
-      typeof action.parameters.assetSymbol === "string" &&
-      action.parameters.assetSymbol.trim().length > 0
+      typeof parameters.toAddress === "string" &&
+      /^0x[a-fA-F0-9]{40}$/.test(parameters.toAddress) &&
+      typeof parameters.amount === "string" &&
+      parameters.amount.trim().length > 0 &&
+      typeof parameters.assetSymbol === "string" &&
+      parameters.assetSymbol.trim().length > 0
     );
   }
 
   if (action.name === "EXECUTE_TRADE") {
     return (
-      (action.parameters.side === "buy" || action.parameters.side === "sell") &&
-      typeof action.parameters.amount === "string" &&
-      action.parameters.amount.trim().length > 0 &&
-      typeof action.parameters.tokenAddress === "string" &&
-      /^0x[a-fA-F0-9]{40}$/.test(action.parameters.tokenAddress)
+      (parameters.side === "buy" || parameters.side === "sell") &&
+      typeof parameters.amount === "string" &&
+      parameters.amount.trim().length > 0 &&
+      typeof parameters.tokenAddress === "string" &&
+      /^0x[a-fA-F0-9]{40}$/.test(parameters.tokenAddress)
     );
   }
 
@@ -2654,11 +2714,24 @@ export function trimWalletProgressPrefix(text: string): string {
 const PLUGIN_CONFIG_RE =
   /\b(?:set\s*up|configure|connect|enable|install|setup)\b.*?\b(telegram|discord|twitter|slack|anthropic|openai|openrouter|groq|google|gemini|deepseek|mistral|together|grok|zai|ollama)\b|\b(telegram|discord|twitter|slack|anthropic|openai|openrouter|groq|google|gemini|deepseek|mistral|together|grok|zai|ollama)\b.*?\b(?:plugin|connector|set\s*up|configure|connect|enable|setup)\b/i;
 
-const PLUGIN_PARAMS: Record<string, Array<{ key: string; label: string; secret: boolean }>> = {
-  telegram: [{ key: "TELEGRAM_BOT_TOKEN", label: "Bot Token (from @BotFather)", secret: true }],
+const PLUGIN_PARAMS: Record<
+  string,
+  Array<{ key: string; label: string; secret: boolean }>
+> = {
+  telegram: [
+    {
+      key: "TELEGRAM_BOT_TOKEN",
+      label: "Bot Token (from @BotFather)",
+      secret: true,
+    },
+  ],
   discord: [
-    { key: "DISCORD_APPLICATION_ID", label: "Application ID", secret: false },
     { key: "DISCORD_API_TOKEN", label: "Bot Token", secret: true },
+    {
+      key: "DISCORD_APPLICATION_ID",
+      label: "Application ID (optional, auto-resolved when omitted)",
+      secret: false,
+    },
   ],
   twitter: [
     { key: "TWITTER_USERNAME", label: "Username", secret: false },
@@ -2670,18 +2743,48 @@ const PLUGIN_PARAMS: Record<string, Array<{ key: string; label: string; secret: 
     { key: "SLACK_BOT_TOKEN", label: "Bot Token", secret: true },
     { key: "SLACK_SIGNING_SECRET", label: "Signing Secret", secret: true },
   ],
-  anthropic: [{ key: "ANTHROPIC_API_KEY", label: "API Key (console.anthropic.com)", secret: true }],
-  openai: [{ key: "OPENAI_API_KEY", label: "API Key (platform.openai.com)", secret: true }],
-  openrouter: [{ key: "OPENROUTER_API_KEY", label: "API Key (openrouter.ai)", secret: true }],
-  groq: [{ key: "GROQ_API_KEY", label: "API Key (console.groq.com)", secret: true }],
-  google: [{ key: "GOOGLE_GENERATIVE_AI_API_KEY", label: "API Key", secret: true }],
-  gemini: [{ key: "GOOGLE_GENERATIVE_AI_API_KEY", label: "API Key", secret: true }],
+  anthropic: [
+    {
+      key: "ANTHROPIC_API_KEY",
+      label: "API Key (console.anthropic.com)",
+      secret: true,
+    },
+  ],
+  openai: [
+    {
+      key: "OPENAI_API_KEY",
+      label: "API Key (platform.openai.com)",
+      secret: true,
+    },
+  ],
+  openrouter: [
+    {
+      key: "OPENROUTER_API_KEY",
+      label: "API Key (openrouter.ai)",
+      secret: true,
+    },
+  ],
+  groq: [
+    { key: "GROQ_API_KEY", label: "API Key (console.groq.com)", secret: true },
+  ],
+  google: [
+    { key: "GOOGLE_GENERATIVE_AI_API_KEY", label: "API Key", secret: true },
+  ],
+  gemini: [
+    { key: "GOOGLE_GENERATIVE_AI_API_KEY", label: "API Key", secret: true },
+  ],
   deepseek: [{ key: "DEEPSEEK_API_KEY", label: "API Key", secret: true }],
   mistral: [{ key: "MISTRAL_API_KEY", label: "API Key", secret: true }],
   together: [{ key: "TOGETHER_API_KEY", label: "API Key", secret: true }],
   grok: [{ key: "XAI_API_KEY", label: "API Key", secret: true }],
   zai: [{ key: "ZAI_API_KEY", label: "API Key", secret: true }],
-  ollama: [{ key: "OLLAMA_BASE_URL", label: "Ollama URL (e.g. http://localhost:11434)", secret: false }],
+  ollama: [
+    {
+      key: "OLLAMA_BASE_URL",
+      label: "Ollama URL (e.g. http://localhost:11434)",
+      secret: false,
+    },
+  ],
 };
 
 export async function resolvePluginConfigReply(
@@ -2699,7 +2802,10 @@ export async function resolvePluginConfigReply(
   const fieldIds: string[] = [];
   const state: Record<string, string> = { pluginId: pluginName };
 
-  elements.title = { type: "Heading", props: { level: 3, text: `Configure ${displayName}` } };
+  elements.title = {
+    type: "Heading",
+    props: { level: 3, text: `Configure ${displayName}` },
+  };
   elements.sep = { type: "Separator", props: {} };
 
   for (const param of params) {
@@ -2725,13 +2831,21 @@ export async function resolvePluginConfigReply(
       text: "Save & Enable",
       variant: "default",
       className: "font-semibold",
-      on: { press: { action: "plugin:save", params: { pluginId: pluginName } } },
+      on: {
+        press: { action: "plugin:save", params: { pluginId: pluginName } },
+      },
     },
   };
-  elements.actions = { type: "Stack", props: { direction: "row", gap: "2", children: ["saveBtn"] } };
+  elements.actions = {
+    type: "Stack",
+    props: { direction: "row", gap: "2", children: ["saveBtn"] },
+  };
   elements.root = {
     type: "Card",
-    props: { children: ["title", "sep", "fields", "actions"], className: "p-4 space-y-3" },
+    props: {
+      children: ["title", "sep", "fields", "actions"],
+      className: "p-4 space-y-3",
+    },
   };
 
   const spec = JSON.stringify({ version: 1, root: "root", elements, state });
@@ -3565,23 +3679,21 @@ export function decodePathComponent(
 
 // Workbench task/todo helpers — extracted to workbench-helpers.ts
 import {
-  WORKBENCH_TASK_TAG,
-  WORKBENCH_TODO_TAG,
   asObject,
+  isWorkbenchTodoTask,
   normalizeStringArray,
+  normalizeTags,
+  normalizeTaskId,
   normalizeTimestamp,
   parseNullableNumber,
-  readTaskMetadata,
-  normalizeTaskId,
   readTaskCompleted,
-  isWorkbenchTodoTask,
+  readTaskMetadata,
   toWorkbenchTask,
   toWorkbenchTodo,
-  normalizeTags,
-  getTodoDataService,
-  recordTodoDbFailure,
-  toWorkbenchTodoFromRecord,
+  WORKBENCH_TASK_TAG,
+  WORKBENCH_TODO_TAG,
 } from "./workbench-helpers.js";
+
 const _WORKBENCH_TASK_TAG = WORKBENCH_TASK_TAG;
 const _WORKBENCH_TODO_TAG = WORKBENCH_TODO_TAG;
 
@@ -3802,7 +3914,7 @@ export async function handleSwarmSynthesis(
     .join("\n\n");
 
   const prompt =
-    `You are summarizing the results of a coding agent swarm for the user. ` +
+    `You are summarizing the results of a task-agent swarm for the user. ` +
     `${payload.total} agents were dispatched. ${payload.completed} completed, ` +
     `${payload.stopped} stopped, ${payload.errored} errored.\n\n` +
     `Here are the individual task results:\n\n${taskLines}\n\n` +
@@ -3831,7 +3943,7 @@ export async function handleSwarmSynthesis(
     if (payload.stopped > 0) parts.push(`${payload.stopped} stopped`);
     if (payload.errored > 0) parts.push(`${payload.errored} errored`);
     await routeMessage(
-      `All ${payload.total} coding agents finished (${parts.join(", ")}). Review their work when you're ready.`,
+      `All ${payload.total} task agents finished (${parts.join(", ")}). Review their work when you're ready.`,
       "coding-agent",
     );
   }
@@ -3947,9 +4059,14 @@ function wireCoordinatorEventRouting(st: ServerState): boolean {
           rt.llmModeOption = "SMALL";
           let result: { text: string; agentName?: string };
           try {
-            result = await generateChatResponseFromChatRoutes(runtime, message, agentName, {
-              resolveNoResponseText: () => "I'll look into that.",
-            });
+            result = await generateChatResponseFromChatRoutes(
+              runtime,
+              message,
+              agentName,
+              {
+                resolveNoResponseText: () => "I'll look into that.",
+              },
+            );
           } finally {
             rt.llmModeOption = prevLlmMode;
           }
@@ -4479,92 +4596,48 @@ async function handleRequest(
     });
   };
 
-  const resolveHyperscapeApiBaseUrl = async (): Promise<string> => {
-    const fromEnv = process.env.HYPERSCAPE_API_URL?.trim();
-    if (fromEnv) {
-      return fromEnv.replace(/\/+$/, "");
+  const restartRuntime = async (reason: string): Promise<boolean> => {
+    if (!ctx?.onRestart) {
+      return false;
     }
-    // Default to the local Hyperscape API server. Viewer URLs can point at a
-    // client dev server (for example :3333) which does not expose API routes.
-    return "http://localhost:5555";
-  };
+    if (state.agentState === "restarting") {
+      return false;
+    }
 
-  const relayHyperscapeApi = async (
-    outboundMethod: "GET" | "POST",
-    outboundPath: string,
-    options?: {
-      rawBodyOverride?: string;
-      contentTypeOverride?: string | null;
-    },
-  ): Promise<void> => {
-    const baseUrl = await resolveHyperscapeApiBaseUrl();
+    const previousState = state.agentState;
+    logger.info(`[eliza-api] Applying runtime reload: ${reason}`);
+    state.agentState = "restarting";
+    state.startup = { ...state.startup, phase: "restarting" };
+    state.broadcastStatus?.();
 
-    let upstreamUrl: URL;
     try {
-      upstreamUrl = new URL(outboundPath, baseUrl);
-      upstreamUrl.search = url.search;
-    } catch {
-      error(res, `Invalid Hyperscape API URL: ${baseUrl}`, 500);
-      return;
-    }
-
-    let rawBody: string | undefined;
-    if (options?.rawBodyOverride !== undefined) {
-      rawBody = options.rawBodyOverride;
-    } else if (outboundMethod === "POST") {
-      try {
-        rawBody = await readBody(req);
-        if (rawBody.trim().length === 0) {
-          rawBody = undefined;
-        }
-      } catch (err) {
-        error(
-          res,
-          `Failed to read request body: ${err instanceof Error ? err.message : String(err)}`,
-          400,
-        );
-        return;
+      const newRuntime = await ctx.onRestart();
+      if (!newRuntime) {
+        state.agentState = previousState;
+        state.broadcastStatus?.();
+        return false;
       }
-    }
 
-    const outboundHeaders: Record<string, string> = {};
-    const contentType =
-      options?.contentTypeOverride !== undefined
-        ? options.contentTypeOverride
-        : typeof req.headers["content-type"] === "string"
-          ? req.headers["content-type"]
-          : null;
-    if (contentType && rawBody !== undefined) {
-      outboundHeaders["Content-Type"] = contentType;
-    }
-    const authorization = resolveHyperscapeAuthorizationHeader(req);
-    if (authorization) {
-      outboundHeaders.Authorization = authorization;
-    }
-
-    let upstreamResponse: Response;
-    try {
-      upstreamResponse = await fetch(upstreamUrl.toString(), {
-        method: outboundMethod,
-        headers: outboundHeaders,
-        body: rawBody !== undefined ? rawBody : undefined,
-      });
+      state.runtime = newRuntime;
+      state.chatConnectionReady = null;
+      state.chatConnectionPromise = null;
+      state.agentState = "running";
+      state.agentName =
+        newRuntime.character.name ?? resolveDefaultAgentName(state.config);
+      state.model = detectRuntimeModel(newRuntime, state.config);
+      state.startedAt = Date.now();
+      state.pendingRestartReasons = [];
+      ctx.onRuntimeSwapped?.();
+      state.broadcastStatus?.();
+      return true;
     } catch (err) {
-      error(
-        res,
-        `Failed to reach Hyperscape API: ${err instanceof Error ? err.message : String(err)}`,
-        502,
+      logger.warn(
+        `[eliza-api] Runtime reload failed: ${err instanceof Error ? err.message : String(err)}`,
       );
-      return;
+      state.agentState = previousState;
+      state.broadcastStatus?.();
+      return false;
     }
-
-    const responseText = await upstreamResponse.text();
-    const responseType = upstreamResponse.headers.get("content-type");
-    if (responseType) {
-      res.setHeader("Content-Type", responseType);
-    }
-    res.statusCode = upstreamResponse.status;
-    res.end(responseText);
   };
 
   // ── DNS rebinding protection ──────────────────────────────────────────
@@ -4751,7 +4824,8 @@ async function handleRequest(
       getCloudProviderOptions: getCloudProviderOptions as any,
       getModelOptions: getModelOptions as any,
       getInventoryProviderOptions: getInventoryProviderOptions as any,
-      resolveConfiguredCharacterLanguage: resolveConfiguredCharacterLanguage as any,
+      resolveConfiguredCharacterLanguage:
+        resolveConfiguredCharacterLanguage as any,
       normalizeCharacterLanguage: normalizeCharacterLanguage as any,
       readUiLanguageHeader: readUiLanguageHeader as any,
       applyOnboardingVoicePreset: applyOnboardingVoicePreset as any,
@@ -4964,7 +5038,7 @@ async function handleRequest(
       url,
       json,
       error,
-      getPluginManager: () => requirePluginManager(state.runtime) as never,
+      getPluginManager: () => getPluginManagerForState(state) as never,
       getLoadedPluginNames: () =>
         state.runtime?.plugins.map((plugin) => plugin.name) ?? [],
       getBundledPluginIds: () => getReleaseBundledPluginIds(),
@@ -4995,6 +5069,7 @@ async function handleRequest(
         error,
         readJsonBody,
         scheduleRuntimeRestart,
+        restartRuntime,
         BLOCKED_ENV_KEYS,
         discoverInstalledPlugins,
         maskValue,
@@ -5244,6 +5319,44 @@ async function handleRequest(
     if (handled) return;
   }
 
+  // ── Unified inbox routes (/api/inbox/*) ───────────────────────────────
+  // Cross-channel read-only feed that merges connector messages
+  // (imessage, telegram, discord, whatsapp, etc.) into a single
+  // time-ordered view. See api/inbox-routes.ts for details.
+  if (pathname.startsWith("/api/inbox")) {
+    const handled = await handleInboxRoute(
+      req,
+      res,
+      pathname,
+      method,
+      { runtime: state.runtime ?? null },
+      { json, error, readJsonBody },
+    );
+    if (handled) return;
+  }
+
+  // ── iMessage routes (/api/imessage/*) ─────────────────────────────────
+  // Read + CRUD endpoints exposed by @elizaos/plugin-imessage's
+  // IMessageService. See api/imessage-routes.ts for the handler.
+  if (pathname.startsWith("/api/imessage")) {
+    const handled = await handleIMessageRoute(
+      req,
+      res,
+      pathname,
+      method,
+      {
+        runtime: state.runtime
+          ? {
+              getService: (type: string) =>
+                (state.runtime as { getService: (t: string) => unknown }).getService(type),
+            }
+          : undefined,
+      },
+      { json, error, readJsonBody },
+    );
+    if (handled) return;
+  }
+
   // ── Signal routes (/api/signal/*) ─────────────────────────────────────
   if (pathname.startsWith("/api/signal")) {
     if (!state.signalPairingSessions) {
@@ -5317,7 +5430,6 @@ async function handleRequest(
     return;
   }
 
-
   // ── Avatar routes (extracted to avatar-routes.ts) ───────────────────
   if (
     await handleAvatarRoutes({
@@ -5332,14 +5444,10 @@ async function handleRequest(
     return;
   }
 
-
   // ═══════════════════════════════════════════════════════════════════════
   // Config routes (extracted to config-routes.ts)
   // ═══════════════════════════════════════════════════════════════════════
-  if (
-    pathname === "/api/config" ||
-    pathname === "/api/config/schema"
-  ) {
+  if (pathname === "/api/config" || pathname === "/api/config/schema") {
     if (
       await handleConfigRoutes({
         req,
@@ -5365,8 +5473,6 @@ async function handleRequest(
     }
   }
 
-
-
   // ── Permissions extra routes (extracted to permissions-routes-extra.ts) ──
   if (
     await handlePermissionsExtraRoutes({
@@ -5388,8 +5494,6 @@ async function handleRequest(
     return;
   }
 
-
-
   if (
     await handlePermissionRoutes({
       req,
@@ -5402,6 +5506,34 @@ async function handleRequest(
       error,
       saveConfig: saveElizaConfig,
       scheduleRuntimeRestart,
+    })
+  ) {
+    return;
+  }
+
+  if (
+    await handleWebsiteBlockerRoutes({
+      req,
+      res,
+      method,
+      pathname,
+      readJsonBody,
+      json,
+      error,
+    })
+  ) {
+    return;
+  }
+
+  if (
+    await handleBrowserWorkspaceRoutes({
+      req,
+      res,
+      method,
+      pathname,
+      readJsonBody,
+      json,
+      error,
     })
   ) {
     return;
@@ -5440,7 +5572,8 @@ async function handleRequest(
         resolvePrimaryBscRpcUrl,
         buildBscTradePreflight,
         buildBscTradeQuote,
-        updateWalletTradeLedgerEntryStatus: updateWalletTradeLedgerEntryStatus as any,
+        updateWalletTradeLedgerEntryStatus:
+          updateWalletTradeLedgerEntryStatus as any,
         loadWalletTradingProfile: loadWalletTradingProfile as any,
         resolveTradePermissionMode,
         isAgentAutomationRequest,
@@ -5556,14 +5689,10 @@ async function handleRequest(
   }
 
   // ═══════════════════════════════════════════════════════════════════════
-  // Chat + compat routes — delegated to chat-routes.ts
+  // OpenAI-compatible routes (/v1/*) — delegated to chat-routes.ts
   // ═══════════════════════════════════════════════════════════════════════
 
-  if (
-    pathname === "/api/chat" ||
-    pathname === "/api/chat/stream" ||
-    pathname.startsWith("/v1/")
-  ) {
+  if (pathname.startsWith("/v1/")) {
     // Cast state — ChatRouteState is a compatible subset of ServerState
     const handled = await handleChatRoutes({
       req,
@@ -5577,7 +5706,6 @@ async function handleRequest(
     });
     if (handled) return;
   }
-
 
   // ── Database management API ─────────────────────────────────────────────
   if (pathname.startsWith("/api/database/")) {
@@ -5708,9 +5836,7 @@ async function handleRequest(
     if (!handled) {
       try {
         const orchestratorPlugin =
-          (await import(
-            "@elizaos/plugin-agent-orchestrator"
-          )) as OrchestratorPluginFallbackModule;
+          agentOrchestratorCompat as OrchestratorPluginFallbackModule;
         if (orchestratorPlugin.createCodingAgentRouteHandler) {
           const coordinator = orchestratorPlugin.getCoordinator?.(
             state.runtime,
@@ -5763,7 +5889,7 @@ async function handleRequest(
       pathname,
       url,
       appManager: state.appManager as never,
-      getPluginManager: () => requirePluginManager(state.runtime) as never,
+      getPluginManager: () => getPluginManagerForState(state) as never,
       parseBoundedLimit,
       readJsonBody,
       json,
@@ -5774,27 +5900,20 @@ async function handleRequest(
     return;
   }
 
-  // ── Hyperscape control proxy routes (optional — package may not be installed) ──
-  try {
-    const hyperscapePkg = "@elizaos/app-hyperscape/routes";
-    const { handleAppsHyperscapeRoutes } = await import(
-      /* webpackIgnore: true */ hyperscapePkg
-    );
-    if (
-      await handleAppsHyperscapeRoutes({
-        req,
-        res,
-        method,
-        pathname,
-        relayHyperscapeApi,
-        readJsonBody,
-        error,
-      })
-    ) {
-      return;
-    }
-  } catch {
-    // @elizaos/app-hyperscape not available — skip hyperscape routes
+  if (
+    await handleAppPackageRoutes({
+      req,
+      res,
+      method,
+      pathname,
+      url,
+      readJsonBody,
+      json,
+      error,
+      runtime: state.runtime,
+    })
+  ) {
+    return;
   }
 
   // ═══════════════════════════════════════════════════════════════════════
@@ -5815,9 +5934,6 @@ async function handleRequest(
         readJsonBody,
         toWorkbenchTask: toWorkbenchTask as any,
         toWorkbenchTodo: toWorkbenchTodo as any,
-        toWorkbenchTodoFromRecord: toWorkbenchTodoFromRecord as any,
-        getTodoDataService: getTodoDataService as any,
-        recordTodoDbFailure,
         normalizeTags,
         readTaskMetadata,
         readTaskCompleted,
@@ -5842,6 +5958,7 @@ async function handleRequest(
         res,
         method,
         pathname,
+        url,
         state: state as any,
         json,
         error,
@@ -5908,6 +6025,20 @@ async function handleRequest(
     return;
   }
 
+  // ── elizaOS plugin HTTP routes (runtime.routes, e.g. /music-player/*) ───
+  if (
+    await tryHandleRuntimePluginRoute({
+      req,
+      res,
+      method,
+      pathname,
+      url,
+      runtime: state.runtime,
+      isAuthorized: () => isAuthorized(req),
+    })
+  ) {
+    return;
+  }
 
   // ── Connector plugin routes (dynamically registered) ────────────────────
   for (const handler of state.connectorRouteHandlers) {
@@ -5980,6 +6111,7 @@ export async function startApiServer(opts?: {
   // Hydrate persisted config.env values so addresses remain visible after restarts.
   const persistedEnv = config.env as Record<string, string> | undefined;
   const envKeysToHydrate = [
+    "MILADY_WALLET_OS_STORE",
     "EVM_PRIVATE_KEY",
     "SOLANA_PRIVATE_KEY",
     "ALCHEMY_API_KEY",
@@ -6110,7 +6242,6 @@ export async function startApiServer(opts?: {
     connectorRouteHandlers: [],
     connectorHealthMonitor: null,
   };
-
   const trainingServiceCtor = await resolveTrainingServiceCtor();
   const trainingServiceOptions = {
     getRuntime: () => state.runtime,
@@ -6123,7 +6254,7 @@ export async function startApiServer(opts?: {
   if (trainingServiceCtor) {
     state.trainingService = new trainingServiceCtor(trainingServiceOptions);
   } else {
-    logger.warn(
+    logger.info(
       "[eliza-api] Training service package unavailable; training routes will be disabled",
     );
   }
@@ -7199,6 +7330,7 @@ export async function startApiServer(opts?: {
     void overlayDbCharacter(opts.runtime, state).catch((err) => {
       logger.warn("[api] Character overlay restore failed:", err);
     });
+    registerClientChatSendHandler(opts.runtime, state);
   }
 
   /** Hot-swap the runtime reference (used after an in-process restart). */
@@ -7234,6 +7366,9 @@ export async function startApiServer(opts?: {
 
     // Broadcast status update immediately after restart
     broadcastStatus();
+
+    // Re-register client_chat send handler on the new runtime
+    registerClientChatSendHandler(rt, state);
 
     // Wire coding-agent bridges (event-driven via getServiceLoadPromise)
     void wireCoordinatorBridgesWhenReady(state, {

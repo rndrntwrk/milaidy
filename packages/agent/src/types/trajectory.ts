@@ -55,6 +55,8 @@ export interface TrajectoryLlmCall {
   maxTokens?: number;
   purpose?: string;
   actionType?: string;
+  stepType?: string;
+  tags?: string[];
   latencyMs?: number;
   promptTokens?: number;
   completionTokens?: number;

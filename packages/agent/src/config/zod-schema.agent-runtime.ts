@@ -582,6 +582,36 @@ export const ToolsSchema = z
   })
   .optional();
 
+const uuidPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export const OwnerContactEntrySchema = z
+  .object({
+    entityId: z
+      .string()
+      .regex(uuidPattern, "invalid UUID")
+      .optional(),
+    channelId: z.string().optional(),
+    roomId: z
+      .string()
+      .regex(uuidPattern, "invalid UUID")
+      .optional(),
+  })
+  .strict();
+
+export const OwnerContactsSchema = z
+  .record(z.string(), OwnerContactEntrySchema)
+  .optional();
+
+export const EscalationSchema = z
+  .object({
+    channels: z.array(z.string()).optional(),
+    waitMinutes: z.number().min(1).max(60).optional(),
+    maxRetries: z.number().int().min(1).max(10).optional(),
+  })
+  .strict()
+  .optional();
+
 export const AgentDefaultsSchema = z
   .object({
     model: z
@@ -618,6 +648,8 @@ export const AgentDefaultsSchema = z
         "invalid UUID format",
       )
       .optional(),
+    ownerContacts: OwnerContactsSchema,
+    escalation: EscalationSchema,
     repoRoot: z.string().optional(),
     skipInit: z.boolean().optional(),
     initMaxChars: z.number().int().positive().optional(),

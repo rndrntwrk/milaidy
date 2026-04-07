@@ -491,37 +491,44 @@ export function checkElizaWorkspace(projectRoot?: string): CheckResult {
   const root =
     projectRoot ??
     path.resolve(process.env.ELIZA_PROJECT_ROOT ?? process.cwd());
-  const elizaRoot = path.resolve(root, "..", "eliza");
+  const elizaRoot = path.join(root, "eliza");
+  const pluginsRoot = path.join(root, "plugins");
+  const hasElizaRoot = existsSync(path.join(elizaRoot, "package.json"));
+  const hasPluginsRoot = existsSync(pluginsRoot);
 
-  if (!existsSync(elizaRoot)) {
+  if (!hasElizaRoot && !hasPluginsRoot) {
     return {
-      label: "Eliza workspace",
+      label: "Local upstreams",
       category: "system",
       status: "warn",
       detail:
-        "Not found at ../eliza (optional — needed only for local @elizaos development)",
-      fix: "bun run setup:eliza-workspace",
+        "Not found at ./eliza or ./plugins (optional — needed only for repo-local @elizaos development)",
+      fix: "bun run setup:upstreams",
     };
   }
 
-  const elizaPkg = path.join(elizaRoot, "package.json");
-  if (!existsSync(elizaPkg)) {
+  if (existsSync(elizaRoot) && !hasElizaRoot) {
     return {
-      label: "Eliza workspace",
+      label: "Local upstreams",
       category: "system",
       status: "warn",
       detail: `${elizaRoot} exists but missing package.json`,
-      fix: "bun run setup:eliza-workspace",
+      fix: "bun run setup:upstreams",
     };
   }
 
-  // Check if symlinks are in place
   const coreLink = path.join(root, "node_modules", "@elizaos", "core");
+  const pluginManagerLink = path.join(
+    root,
+    "node_modules",
+    "@elizaos",
+    "plugin-agent-orchestrator",
+  );
   try {
     const realTarget = realpathSync(coreLink);
     if (realTarget.startsWith(elizaRoot)) {
       return {
-        label: "Eliza workspace",
+        label: "Local upstreams",
         category: "system",
         status: "pass",
         detail: `Linked to ${elizaRoot}`,
@@ -531,11 +538,32 @@ export function checkElizaWorkspace(projectRoot?: string): CheckResult {
     // Not a symlink or can't resolve — that's fine
   }
 
+  try {
+    const realTarget = realpathSync(pluginManagerLink);
+    if (realTarget.startsWith(pluginsRoot)) {
+      return {
+        label: "Local upstreams",
+        category: "system",
+        status: "pass",
+        detail: `Linked to ${pluginsRoot}`,
+      };
+    }
+  } catch {
+    // Not a symlink or can't resolve — that's fine
+  }
+
+  const foundLocations = [
+    hasElizaRoot ? "./eliza" : null,
+    hasPluginsRoot ? "./plugins" : null,
+  ]
+    .filter((value): value is string => Boolean(value))
+    .join(" and ");
+
   return {
-    label: "Eliza workspace",
+    label: "Local upstreams",
     category: "system",
     status: "pass",
-    detail: `Found at ${elizaRoot} (run setup:eliza-workspace to link)`,
+    detail: `Found at ${foundLocations} (run setup:upstreams to link)`,
   };
 }
 

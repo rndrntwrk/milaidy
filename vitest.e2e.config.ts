@@ -14,7 +14,6 @@ const autonomousSourceRoot = getAutonomousSourceRoot(repoRoot);
 const appCoreSourceRoot = getAppCoreSourceRoot(repoRoot);
 
 const liveTest = process.env.MILADY_LIVE_TEST === "1";
-
 export default defineConfig({
   resolve: {
     alias: [
@@ -148,6 +147,14 @@ export default defineConfig({
         find: "@elizaos/plugin-pi-ai",
         replacement: path.join(repoRoot, "test", "stubs", "pi-ai-module.ts"),
       },
+      {
+        find: "@elizaos/plugin-edge-tts",
+        replacement: path.join(repoRoot, "test", "stubs", "empty-module.mjs"),
+      },
+      {
+        find: "@elizaos/plugin-edge-tts/node",
+        replacement: path.join(repoRoot, "test", "stubs", "empty-module.mjs"),
+      },
       ...(!liveTest
         ? [
             {
@@ -243,6 +250,10 @@ export default defineConfig({
     exclude: [
       "dist/**",
       "**/node_modules/**",
+      "packages/app-core/test/app/startup-chat.e2e.test.ts",
+      "packages/app-core/test/app/startup-onboarding.e2e.test.ts",
+      "packages/app-core/test/app/startup-backend-missing.e2e.test.ts",
+      "packages/app-core/test/app/startup-token-401.e2e.test.ts",
       "**/*-live.test.ts",
       "**/*-live.test.tsx",
       "**/*.live.test.ts",

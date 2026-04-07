@@ -15,6 +15,41 @@ import { fileURLToPath } from "node:url";
 const scriptFile = fileURLToPath(import.meta.url);
 const __dirname = dirname(scriptFile);
 const root = resolve(__dirname, "..");
+const skipLocalUpstreams =
+  process.env.MILADY_SKIP_LOCAL_UPSTREAMS === "1" ||
+  process.env.ELIZA_SKIP_LOCAL_UPSTREAMS === "1";
+const SUBMODULE_READINESS_MARKERS = {
+  eliza: ["package.json", "packages/typescript/package.json"],
+  "plugins/plugin-agent-orchestrator": ["package.json"],
+  "steward-fi": ["package.json", "packages/api/package.json"],
+};
+
+// plugin-openrouter contains PGlite :memory:<UUID> paths committed under
+// typescript/ that Windows git rejects as invalid filenames. Skip checkout
+// until elizaos-plugins/plugin-openrouter#25 is merged; the package is
+// available via npm in the meantime.
+// TODO: remove once elizaos-plugins/plugin-openrouter#25 is merged.
+const SKIP_SUBMODULES = new Set(["plugins/plugin-openrouter"]);
+
+function getSubmoduleSkipReason(
+  submodulePath,
+  { skipLocal = skipLocalUpstreams } = {},
+) {
+  if (SKIP_SUBMODULES.has(submodulePath)) {
+    return "it is in the explicit skip list";
+  }
+  if (skipLocal && submodulePath === "eliza") {
+    return "local upstreams are disabled";
+  }
+  return null;
+}
+
+export function shouldSkipSubmoduleInit(
+  submodulePath,
+  { skipLocal = skipLocalUpstreams } = {},
+) {
+  return getSubmoduleSkipReason(submodulePath, { skipLocal }) !== null;
+}
 
 export function parseTrackedSubmodules(configOutput) {
   if (!configOutput.trim()) return [];
@@ -46,12 +81,36 @@ export function loadTrackedSubmodules({ exec = execSync, cwd = root } = {}) {
   }
 }
 
+export function getSubmoduleReadinessMarkerPaths(
+  submodulePath,
+  { rootDir = root } = {},
+) {
+  const markers = SUBMODULE_READINESS_MARKERS[submodulePath] ?? [];
+  return markers.map((marker) => resolve(rootDir, submodulePath, marker));
+}
+
+export function isSubmoduleCheckoutReady(
+  submodulePath,
+  { rootDir = root, exists = existsSync } = {},
+) {
+  const markerPaths = getSubmoduleReadinessMarkerPaths(submodulePath, {
+    rootDir,
+  });
+
+  if (markerPaths.length === 0) {
+    return true;
+  }
+
+  return markerPaths.every((markerPath) => exists(markerPath));
+}
+
 export function runInitSubmodules({
   rootDir = root,
   exists = existsSync,
   exec = execSync,
   log = console.log,
   logError = console.error,
+  shouldSkipSubmodule = shouldSkipSubmoduleInit,
 } = {}) {
   // Check if we're in a git repository
   const gitDir = resolve(rootDir, ".git");
@@ -77,7 +136,20 @@ export function runInitSubmodules({
   let failed = 0;
 
   for (const submodule of submodules) {
-    let needsInit = true;
+    const skipReason = getSubmoduleSkipReason(submodule.path);
+    if (shouldSkipSubmodule(submodule.path)) {
+      log(
+        `[init-submodules] Skipping ${submodule.name} (${submodule.path}) because ${skipReason ?? "local upstreams are disabled"}`,
+      );
+      continue;
+    }
+
+    const checkoutReady = isSubmoduleCheckoutReady(submodule.path, {
+      rootDir,
+      exists,
+    });
+    let needsInit = !checkoutReady;
+    let initReason = checkoutReady ? "" : "checkout is incomplete";
 
     try {
       const status = exec(`git submodule status -- "${submodule.path}"`, {
@@ -85,9 +157,16 @@ export function runInitSubmodules({
         encoding: "utf8",
         stdio: ["ignore", "pipe", "ignore"],
       }).trim();
-      needsInit = status.startsWith("-");
+      if (status.startsWith("-")) {
+        needsInit = true;
+        initReason = "submodule is not initialized";
+      }
     } catch {
       // If status lookup fails, attempt initialization directly.
+      needsInit = true;
+      if (!initReason) {
+        initReason = "status check failed";
+      }
     }
 
     if (!needsInit) {
@@ -96,13 +175,25 @@ export function runInitSubmodules({
     }
 
     log(
-      `[init-submodules] Initializing ${submodule.name} (${submodule.path})...`,
+      `[init-submodules] Initializing ${submodule.name} (${submodule.path})${
+        initReason ? ` because ${initReason}` : ""
+      }...`,
     );
     try {
       exec(`git submodule update --init --recursive "${submodule.path}"`, {
         cwd: rootDir,
         stdio: "inherit",
       });
+      if (
+        !isSubmoduleCheckoutReady(submodule.path, {
+          rootDir,
+          exists,
+        })
+      ) {
+        throw new Error(
+          `submodule checkout is still incomplete after update: ${submodule.path}`,
+        );
+      }
       initialized++;
       log(`[init-submodules] ${submodule.name} initialized successfully`);
     } catch (err) {

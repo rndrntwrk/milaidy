@@ -1,4 +1,5 @@
 export type DetachedShellTab =
+  | "browser"
   | "chat"
   | "release"
   | "triggers"
@@ -23,6 +24,7 @@ export function parseShellRoute(search: string): ShellRoute {
   if (shell === "surface") {
     const tab = params.get("tab");
     if (
+      tab === "browser" ||
       tab === "chat" ||
       tab === "release" ||
       tab === "triggers" ||

@@ -14,7 +14,8 @@ const APP_PLUGIN: RegistryPluginInfo = {
   topics: [],
   stars: 100,
   language: "TypeScript",
-  npm: { package: "@elizaos/app-hyperscape" },
+  kind: "app",
+  npm: { package: "@elizaos/app-hyperscape", v2Version: "1.0.0" },
   supports: { v0: false, v1: true, v2: true },
 };
 
@@ -26,7 +27,7 @@ const NON_APP_PLUGIN: RegistryPluginInfo = {
   topics: [],
   stars: 10,
   language: "TypeScript",
-  npm: { package: "@elizaos/plugin-foo" },
+  npm: { package: "@elizaos/plugin-foo", v2Version: "1.2.3" },
   supports: { v0: false, v1: true, v2: true },
 };
 
@@ -46,7 +47,7 @@ const APP_SEARCH: RegistrySearchResult = {
 const NON_APP_SEARCH: RegistrySearchResult = {
   name: "@elizaos/plugin-foo",
   description: "Foo plugin",
-  score: 0.8,
+  score: 1,
   tags: [],
   version: "1.2.3",
   latestVersion: "1.2.3",
@@ -101,6 +102,7 @@ function createAppManagerMock(): AppManagerLike {
       launchType: "connect",
       launchUrl: null,
       viewer: null,
+      session: null,
     })),
     stop: vi.fn(async () => ({
       success: true,

@@ -78,16 +78,18 @@ describe("EMBEDDING_PRESETS", () => {
     }
   });
 
-  it("uses 4096 dimensions for the performance preset", () => {
-    expect(EMBEDDING_PRESETS.performance.dimensions).toBe(4096);
+  it("keeps the performance preset compact and SQL-safe", () => {
+    expect(EMBEDDING_PRESETS.performance.dimensions).toBe(384);
     expect(EMBEDDING_PRESETS.performance.model).toBe(
-      "ggml-e5-mistral-7b-instruct-q4_k_m.gguf",
+      "bge-small-en-v1.5.Q4_K_M.gguf",
     );
-    expect(EMBEDDING_PRESETS.performance.model).toMatch(/^ggml-/);
+    expect(EMBEDDING_PRESETS.performance.label.toLowerCase()).toContain(
+      "compact",
+    );
   });
 
-  it("keeps fallback and standard presets at 768 dimensions", () => {
-    expect(EMBEDDING_PRESETS.fallback.dimensions).toBe(768);
-    expect(EMBEDDING_PRESETS.standard.dimensions).toBe(768);
+  it("keeps fallback and standard presets aligned with the compact default", () => {
+    expect(EMBEDDING_PRESETS.fallback.dimensions).toBe(384);
+    expect(EMBEDDING_PRESETS.standard.dimensions).toBe(384);
   });
 });

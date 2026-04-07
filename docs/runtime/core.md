@@ -155,7 +155,6 @@ const CHANNEL_PLUGIN_MAP = {
   twitter:     "@elizaos/plugin-twitter",
   whatsapp:    "@elizaos/plugin-whatsapp",
   signal:      "@elizaos/plugin-signal",
-  bluebubbles: "@elizaos/plugin-bluebubbles",
   imessage:    "@elizaos/plugin-imessage",
   farcaster:   "@elizaos/plugin-farcaster",
   lens:        "@elizaos/plugin-lens",

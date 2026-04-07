@@ -30,4 +30,17 @@ describe("patch-deps runtime hotfixes", () => {
     );
     expect(source).toContain('message.includes("lspci")');
   });
+
+  it("contains plugin-discord ignore-other-mentions patch", () => {
+    const source = readFileSync(
+      resolve(process.cwd(), "scripts/patch-deps.mjs"),
+      "utf8",
+    );
+
+    expect(source).toContain("patchPluginDiscordIgnoreOtherMentions");
+    expect(source).toContain(
+      "Ignoring message that targets another mentioned user",
+    );
+    expect(source).toContain("mentionedOtherUsers || isReplyToOtherUser");
+  });
 });

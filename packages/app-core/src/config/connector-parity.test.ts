@@ -30,6 +30,7 @@ vi.mock("@elizaos/plugin-rolodex", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-secrets-manager", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-shell", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-telegram", () => ({ default: {} }));
+vi.mock("@elizaos-plugins/client-telegram-account", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-trajectory-logger", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-trust", () => ({ default: {} }));
 vi.mock("@elizaos/plugin-twitch", () => ({ default: {} }));
@@ -87,7 +88,7 @@ describe("connector map parity", () => {
   });
 
   it("uses valid package name prefixes for all plugin mappings", () => {
-    const validPrefix = /^@(elizaos|elizaai|miladyai)\//;
+    const validPrefix = /^@(elizaos|elizaos-plugins|elizaai|miladyai)\//;
     for (const pkg of Object.values(CONNECTOR_PLUGINS)) {
       expect(pkg).toMatch(validPrefix);
     }
@@ -108,12 +109,18 @@ describe("connector map parity", () => {
  */
 const CONNECTOR_CREDS: Record<string, Record<string, unknown>> = {
   telegram: { botToken: "123:ABC" },
+  telegramAccount: {
+    phone: "+15551234567",
+    appId: "12345",
+    appHash: "hash-123",
+    deviceModel: "Milady Desktop",
+    systemVersion: "macOS 15",
+  },
   discord: { botToken: "discord-token" },
   slack: { token: "xoxb-slack" },
   twitter: { apiKey: "tw-key" },
   whatsapp: { authDir: "./auth/whatsapp" },
   signal: { account: "+15551234567" },
-  bluebubbles: { serverUrl: "http://localhost:1234", password: "pw" },
   imessage: { cliPath: "/usr/local/bin/imessage" },
   farcaster: { apiKey: "fc-key" },
   lens: { apiKey: "lens-key" },
@@ -171,7 +178,8 @@ describe("connector runtime parity", () => {
     });
     const allow = config.plugins?.allow ?? [];
     for (const id of CONNECTOR_IDS) {
-      expect(allow).toContain(id);
+      const expectedPkg = CONNECTOR_PLUGINS[id];
+      expect(allow).toContain(expectedPkg);
     }
     const expectedChangeCount =
       CONNECTOR_IDS.length - MILADY_LOCAL_CONNECTORS.size;

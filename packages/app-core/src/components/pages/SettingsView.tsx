@@ -34,10 +34,11 @@ import {
 } from "react";
 import { useApp } from "../../state";
 import { CodingAgentSettingsSection } from "../coding/CodingAgentSettingsSection";
-import { CloudDashboard } from "./ElizaCloudDashboard";
+import { LifeOpsSettingsSection } from "../settings/LifeOpsSettingsSection";
 import { MediaSettingsSection } from "../settings/MediaSettingsSection";
 import { PermissionsSection } from "../settings/PermissionsSection";
 import { ProviderSwitcher } from "../settings/ProviderSwitcher";
+import { CloudDashboard } from "./ElizaCloudDashboard";
 import { ReleaseCenterView } from "./ReleaseCenterView";
 
 interface SettingsSectionDef {
@@ -58,6 +59,21 @@ const SETTINGS_SECTIONS: SettingsSectionDef[] = [
     label: "providerswitcher.elizaCloud",
     description: "settings.sections.cloud.desc",
     keywords: ["cloud", "billing", "credits", "auth", "subscription"],
+  },
+  {
+    id: "life-ops",
+    label: "settings.sections.lifeops.label",
+    description: "settings.sections.lifeops.desc",
+    keywords: [
+      "life ops",
+      "google",
+      "gmail",
+      "calendar",
+      "oauth",
+      "connector",
+      "cloud managed",
+      "local google",
+    ],
   },
   {
     id: "ai-model",
@@ -539,14 +555,12 @@ export function SettingsView({
   const [searchQuery, setSearchQuery] = useState("");
   const shellRef = useRef<HTMLDivElement>(null);
 
-  const effectiveSections = SETTINGS_SECTIONS;
-
   const visibleSections = useMemo(
     () =>
-      effectiveSections.filter((section) =>
+      SETTINGS_SECTIONS.filter((section) =>
         matchesSettingsSection(section, searchQuery, t),
       ),
-    [effectiveSections, searchQuery, t],
+    [searchQuery, t],
   );
   const visibleSectionIds = useMemo(
     () => new Set(visibleSections.map((section) => section.id)),
@@ -640,7 +654,7 @@ export function SettingsView({
   });
   const activeSectionDef =
     visibleSections.find((section) => section.id === activeSection) ??
-    effectiveSections.find((section) => section.id === activeSection) ??
+    SETTINGS_SECTIONS.find((section) => section.id === activeSection) ??
     visibleSections[0] ??
     null;
 
@@ -735,6 +749,17 @@ export function SettingsView({
           ref={registerContentItem("ai-model")}
         >
           <ProviderSwitcher />
+        </SettingsSection>
+      )}
+
+      {visibleSectionIds.has("life-ops") && (
+        <SettingsSection
+          id="life-ops"
+          title={t("settings.sections.lifeops.label")}
+          description={t("settings.sections.lifeops.desc")}
+          ref={registerContentItem("life-ops")}
+        >
+          <LifeOpsSettingsSection />
         </SettingsSection>
       )}
 

@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createMockHeadersRequest } from "./../test-support/test-helpers";
 
 vi.mock("@elizaos/plugin-agent-orchestrator", () => ({
+  default: {},
   createCodingAgentRouteHandler: () => async () => false,
 }));
 

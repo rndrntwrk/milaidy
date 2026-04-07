@@ -50,6 +50,14 @@ export interface BrowserCaptureConfig {
   destinationId?: string;
 }
 
+export function getBrowserCaptureExecutablePath(): string {
+  return CHROME_PATH;
+}
+
+export function isBrowserCaptureSupported(): boolean {
+  return existsSync(CHROME_PATH);
+}
+
 interface ScreencastFrameEvent {
   data: string;
   sessionId: number;
@@ -84,6 +92,12 @@ export async function startBrowserCapture(config: BrowserCaptureConfig) {
   if (activeBrowser) {
     console.log("[browser-capture] Already running");
     return;
+  }
+
+  if (!isBrowserCaptureSupported()) {
+    throw new Error(
+      `Google Chrome not found at ${CHROME_PATH}. Install Chrome or update browser-capture before enabling screen capture.`,
+    );
   }
 
   const { url, width = 1280, height = 720, quality = 70 } = config;

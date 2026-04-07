@@ -81,3 +81,38 @@ export function parseWindowsPowerLineOutput(output: string): {
   }
   return { onBattery: false, known: false };
 }
+
+export function parseMacOsPowerSourceOutput(output: string): {
+  onBattery: boolean;
+  known: boolean;
+} {
+  if (output.includes("Battery Power")) {
+    return { onBattery: true, known: true };
+  }
+  if (output.includes("AC Power")) {
+    return { onBattery: false, known: true };
+  }
+  return { onBattery: false, known: false };
+}
+
+export function parseMacOsHidIdleTimeOutput(output: string): number | null {
+  const match = output.match(/"HIDIdleTime"\s*=\s*(\d+)/);
+  if (!match) {
+    return null;
+  }
+  const idleTimeNs = Number.parseInt(match[1] ?? "", 10);
+  if (!Number.isFinite(idleTimeNs) || idleTimeNs < 0) {
+    return null;
+  }
+  return Math.floor(idleTimeNs / 1_000_000_000);
+}
+
+export function parseMacOsSessionLockedOutput(output: string): boolean | null {
+  const match = output.match(
+    /(CGSSessionScreenIsLocked|screenIsLocked)\s*=\s*(\d)/,
+  );
+  if (!match) {
+    return null;
+  }
+  return (match[2] ?? "0") === "1";
+}

@@ -104,6 +104,15 @@ function PluginListView({
   const [installProgress, setInstallProgress] = useState<
     Map<string, { phase: string; message: string }>
   >(new Map());
+  const [updatingPlugins, setUpdatingPlugins] = useState<Set<string>>(
+    new Set(),
+  );
+  const [uninstallingPlugins, setUninstallingPlugins] = useState<Set<string>>(
+    new Set(),
+  );
+  const [pluginReleaseStreams, setPluginReleaseStreams] = useState<
+    Record<string, "latest" | "alpha">
+  >({});
   const pluginDescriptionFallback = t("pluginsview.NoDescriptionAvailable", {
     defaultValue: "No description available",
   });
@@ -436,84 +445,146 @@ function PluginListView({
     }
   };
 
-  const handleInstallPlugin = async (pluginId: string, npmName: string) => {
-    setInstallingPlugins((prev) => new Set(prev).add(pluginId));
-    let restartedForPluginManager = false;
-    try {
-      const pluginManagerGuard = ensurePluginManagerAllowed();
+  const getSelectedReleaseStream = useCallback(
+    (plugin: PluginInfo): "latest" | "alpha" =>
+      pluginReleaseStreams[plugin.id] ??
+      plugin.releaseStream ??
+      (plugin.alphaVersion ? "alpha" : "latest"),
+    [pluginReleaseStreams],
+  );
+
+  const handleReleaseStreamChange = useCallback(
+    (pluginId: string, stream: "latest" | "alpha") => {
+      setPluginReleaseStreams((prev) => {
+        if (prev[pluginId] === stream) return prev;
+        return { ...prev, [pluginId]: stream };
+      });
+    },
+    [],
+  );
+
+  const runWithPluginManager = useCallback(
+    async (
+      _pluginName: string,
+      notices: { prepare: string; recover: string },
+      task: () => Promise<unknown>,
+    ) => {
+      const restartForPluginManager = async (message: string) => {
+        const pluginManagerGuard = await ensurePluginManagerAllowed();
+        const pluginManagerBlockReason =
+          getPluginManagerBlockReason(pluginManagerGuard);
+        if (pluginManagerBlockReason) {
+          throw new Error(pluginManagerBlockReason);
+        }
+        setActionNotice(message, "success");
+        await client.restartAndWait(120_000);
+      };
+
+      let restartedForPluginManager = false;
+      const pluginManagerGuard = await ensurePluginManagerAllowed();
       const pluginManagerBlockReason =
         getPluginManagerBlockReason(pluginManagerGuard);
       if (pluginManagerBlockReason) {
         throw new Error(pluginManagerBlockReason);
       }
       if (pluginManagerGuard === "enabled") {
+        await restartForPluginManager(notices.prepare);
+        restartedForPluginManager = true;
+      }
+
+      try {
+        return await task();
+      } catch (err) {
+        if (
+          err instanceof Error &&
+          err.message.includes(PLUGIN_MANAGER_UNAVAILABLE_ERROR) &&
+          !restartedForPluginManager
+        ) {
+          await restartForPluginManager(notices.recover);
+          return await task();
+        }
+        throw err;
+      }
+    },
+    [setActionNotice],
+  );
+
+  const completePluginLifecycleRestart = useCallback(
+    async (messages: { waiting: string; success: string; failure: string }) => {
+      setActionNotice(messages.waiting, "info", 120_000, false, true);
+      const status = await client.restartAndWait(120_000);
+      if (status.state !== "running") {
         setActionNotice(
-          t("pluginsview.PluginInstallPreparing", {
+          messages.failure.replace("{{status}}", status.state),
+          "error",
+          3800,
+        );
+        return false;
+      }
+      await loadPlugins();
+      setActionNotice(messages.success, "success");
+      return true;
+    },
+    [loadPlugins, setActionNotice],
+  );
+
+  const handleInstallPlugin = async (pluginId: string, npmName: string) => {
+    const plugin = plugins.find((candidate) => candidate.id === pluginId);
+    const stream = plugin ? getSelectedReleaseStream(plugin) : "alpha";
+    setInstallingPlugins((prev) => new Set(prev).add(pluginId));
+    try {
+      const result = (await runWithPluginManager(
+        npmName,
+        {
+          prepare: t("pluginsview.PluginInstallPreparing", {
             plugin: npmName,
             defaultValue:
               "Enabling plugin installs for {{plugin}} and restarting the agent...",
           }),
+          recover: t("pluginsview.PluginInstallRecovering", {
+            plugin: npmName,
+            defaultValue:
+              "Finishing plugin install setup for {{plugin}} and restarting the agent...",
+          }),
+        },
+        async () =>
+          await client.installRegistryPlugin(npmName, false, { stream }),
+      )) as Awaited<ReturnType<typeof client.installRegistryPlugin>>;
+      if (result.requiresRestart) {
+        const restarted = await completePluginLifecycleRestart({
+          waiting: t("pluginsview.PluginInstalledRestarting", {
+            plugin: npmName,
+            defaultValue:
+              "{{plugin}} installed. Restarting the agent and waiting for activation...",
+          }),
+          success: t("pluginsview.PluginInstalledRestartComplete", {
+            plugin: npmName,
+            defaultValue: "{{plugin}} installed and activated.",
+          }),
+          failure: t("pluginsview.PluginInstalledRestartFailed", {
+            plugin: npmName,
+            status: "{{status}}",
+            defaultValue:
+              "{{plugin}} installed, but the agent did not come back online (status: {{status}}).",
+          }),
+        });
+        if (!restarted) return;
+      } else {
+        await loadPlugins();
+        setActionNotice(
+          t("pluginsview.PluginInstalledActivated", {
+            plugin: npmName,
+            defaultValue:
+              "{{plugin}} installed and activated without a full agent restart.",
+          }),
           "success",
         );
-        await client.restartAndWait(120_000);
-        restartedForPluginManager = true;
       }
-      await client.installRegistryPlugin(npmName);
-      await loadPlugins();
-      setActionNotice(
-        t("pluginsview.PluginInstalledRestartRequired", {
-          plugin: npmName,
-          defaultValue: "{{plugin}} installed. Restart required to activate.",
-        }),
-        "success",
-      );
     } catch (err) {
-      let installError = err;
-      if (
-        installError instanceof Error &&
-        installError.message.includes(PLUGIN_MANAGER_UNAVAILABLE_ERROR)
-      ) {
-        try {
-          const pluginManagerGuard = ensurePluginManagerAllowed();
-          const pluginManagerBlockReason =
-            getPluginManagerBlockReason(pluginManagerGuard);
-          if (pluginManagerBlockReason) {
-            throw new Error(pluginManagerBlockReason);
-          }
-          if (!restartedForPluginManager) {
-            setActionNotice(
-              t("pluginsview.PluginInstallRecovering", {
-                plugin: npmName,
-                defaultValue:
-                  "Finishing plugin install setup for {{plugin}} and restarting the agent...",
-              }),
-              "success",
-            );
-            await client.restartAndWait(120_000);
-            restartedForPluginManager = true;
-          }
-          await client.installRegistryPlugin(npmName);
-          await loadPlugins();
-          setActionNotice(
-            t("pluginsview.PluginInstalledRestartRequired", {
-              plugin: npmName,
-              defaultValue:
-                "{{plugin}} installed. Restart required to activate.",
-            }),
-            "success",
-          );
-          return;
-        } catch (recoveryErr) {
-          installError = recoveryErr;
-        }
-      }
       setActionNotice(
         t("pluginsview.PluginInstallFailed", {
           plugin: npmName,
-          message:
-            installError instanceof Error
-              ? installError.message
-              : "unknown error",
+          message: err instanceof Error ? err.message : "unknown error",
           defaultValue: "Failed to install {{plugin}}: {{message}}",
         }),
         "error",
@@ -527,6 +598,160 @@ function PluginListView({
       }
     } finally {
       setInstallingPlugins((prev) => {
+        const next = new Set(prev);
+        next.delete(pluginId);
+        return next;
+      });
+    }
+  };
+
+  const handleUpdatePlugin = async (pluginId: string, npmName: string) => {
+    const plugin = plugins.find((candidate) => candidate.id === pluginId);
+    const stream = plugin ? getSelectedReleaseStream(plugin) : "alpha";
+    setUpdatingPlugins((prev) => new Set(prev).add(pluginId));
+    try {
+      const result = (await runWithPluginManager(
+        npmName,
+        {
+          prepare: t("pluginsview.PluginUpdatePreparing", {
+            plugin: npmName,
+            defaultValue:
+              "Preparing updates for {{plugin}} and restarting the agent...",
+          }),
+          recover: t("pluginsview.PluginUpdateRecovering", {
+            plugin: npmName,
+            defaultValue:
+              "Finishing update setup for {{plugin}} and restarting the agent...",
+          }),
+        },
+        async () =>
+          await client.updateRegistryPlugin(npmName, false, { stream }),
+      )) as Awaited<ReturnType<typeof client.updateRegistryPlugin>>;
+      if (result.requiresRestart) {
+        const restarted = await completePluginLifecycleRestart({
+          waiting: t("pluginsview.PluginUpdatedRestarting", {
+            plugin: npmName,
+            defaultValue:
+              "{{plugin}} updated. Restarting the agent and waiting for activation...",
+          }),
+          success: t("pluginsview.PluginUpdatedRestartComplete", {
+            plugin: npmName,
+            defaultValue: "{{plugin}} updated and activated.",
+          }),
+          failure: t("pluginsview.PluginUpdatedRestartFailed", {
+            plugin: npmName,
+            status: "{{status}}",
+            defaultValue:
+              "{{plugin}} updated, but the agent did not come back online (status: {{status}}).",
+          }),
+        });
+        if (!restarted) return;
+      } else {
+        await loadPlugins();
+        setActionNotice(
+          t("pluginsview.PluginUpdatedActivated", {
+            plugin: npmName,
+            defaultValue: "{{plugin}} updated without a full agent restart.",
+          }),
+          "success",
+        );
+      }
+    } catch (err) {
+      setActionNotice(
+        t("pluginsview.PluginUpdateFailed", {
+          plugin: npmName,
+          message: err instanceof Error ? err.message : "unknown error",
+          defaultValue: "Failed to update {{plugin}}: {{message}}",
+        }),
+        "error",
+        3800,
+      );
+      try {
+        await loadPlugins();
+      } catch {
+        /* ignore */
+      }
+    } finally {
+      setUpdatingPlugins((prev) => {
+        const next = new Set(prev);
+        next.delete(pluginId);
+        return next;
+      });
+    }
+  };
+
+  const handleUninstallPlugin = async (pluginId: string, npmName: string) => {
+    setUninstallingPlugins((prev) => new Set(prev).add(pluginId));
+    try {
+      const result = (await runWithPluginManager(
+        npmName,
+        {
+          prepare: t("pluginsview.PluginUninstallPreparing", {
+            plugin: npmName,
+            defaultValue:
+              "Preparing uninstall for {{plugin}} and restarting the agent...",
+          }),
+          recover: t("pluginsview.PluginUninstallRecovering", {
+            plugin: npmName,
+            defaultValue:
+              "Finishing uninstall setup for {{plugin}} and restarting the agent...",
+          }),
+        },
+        async () => await client.uninstallRegistryPlugin(npmName, false),
+      )) as Awaited<ReturnType<typeof client.uninstallRegistryPlugin>>;
+      if (result.requiresRestart) {
+        const restarted = await completePluginLifecycleRestart({
+          waiting: t("pluginsview.PluginUninstalledRestarting", {
+            plugin: npmName,
+            defaultValue:
+              "{{plugin}} uninstalled. Restarting the agent and waiting for cleanup...",
+          }),
+          success: t("pluginsview.PluginUninstalledRestartComplete", {
+            plugin: npmName,
+            defaultValue: "{{plugin}} uninstalled and fully unloaded.",
+          }),
+          failure: t("pluginsview.PluginUninstalledRestartFailed", {
+            plugin: npmName,
+            status: "{{status}}",
+            defaultValue:
+              "{{plugin}} uninstalled, but the agent did not come back online (status: {{status}}).",
+          }),
+        });
+        if (!restarted) return;
+      } else {
+        await loadPlugins();
+        setActionNotice(
+          t("pluginsview.PluginUninstalledActivated", {
+            plugin: npmName,
+            defaultValue:
+              "{{plugin}} uninstalled without a full agent restart.",
+          }),
+          "success",
+        );
+      }
+      setPluginReleaseStreams((prev) => {
+        if (!(pluginId in prev)) return prev;
+        const next = { ...prev };
+        delete next[pluginId];
+        return next;
+      });
+    } catch (err) {
+      setActionNotice(
+        t("pluginsview.PluginUninstallFailed", {
+          plugin: npmName,
+          message: err instanceof Error ? err.message : "unknown error",
+          defaultValue: "Failed to uninstall {{plugin}}: {{message}}",
+        }),
+        "error",
+        3800,
+      );
+      try {
+        await loadPlugins();
+      } catch {
+        /* ignore */
+      }
+    } finally {
+      setUninstallingPlugins((prev) => {
         const next = new Set(prev);
         next.delete(pluginId);
         return next;
@@ -689,13 +914,19 @@ function PluginListView({
           togglingPlugins={togglingPlugins}
           hasPluginToggleInFlight={hasPluginToggleInFlight}
           installingPlugins={installingPlugins}
+          updatingPlugins={updatingPlugins}
+          uninstallingPlugins={uninstallingPlugins}
           installProgress={installProgress}
+          releaseStreamSelections={pluginReleaseStreams}
           draggingId={draggingId}
           dragOverId={dragOverId}
           pluginDescriptionFallback={pluginDescriptionFallback}
           onToggle={handleTogglePlugin}
           onToggleSettings={toggleSettings}
           onInstall={handleInstallPlugin}
+          onUpdate={handleUpdatePlugin}
+          onUninstall={handleUninstallPlugin}
+          onReleaseStreamChange={handleReleaseStreamChange}
           onOpenExternalUrl={handleOpenPluginExternalUrl}
           onDragStart={handleDragStart}
           onDragOver={handleDragOver}
@@ -768,7 +999,9 @@ function PluginListView({
       (p: PluginInfo) => p.id === effectiveGameSelected,
     ) ?? null;
   const selectedPluginLinks = selectedPlugin
-    ? getPluginResourceLinks(selectedPlugin)
+    ? getPluginResourceLinks(selectedPlugin, {
+        draftConfig: pluginConfigs[selectedPlugin.id],
+      })
     : [];
 
   useEffect(() => {

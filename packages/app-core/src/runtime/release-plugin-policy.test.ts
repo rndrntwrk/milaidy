@@ -23,6 +23,20 @@ describe("release-plugin-policy", () => {
     ]);
   });
 
+  it("includes optional core plugins when the runtime ships them", () => {
+    const bundled = getBundledRuntimePackages([
+      "@elizaos/core",
+      "@elizaos/prompts",
+      "@miladyai/plugin-selfcontrol",
+    ]);
+
+    expect(bundled).toEqual([
+      "@elizaos/core",
+      "@elizaos/prompts",
+      "@miladyai/plugin-selfcontrol",
+    ]);
+  });
+
   it("marks excluded registry plugins as post-release runtime installs", () => {
     const compatibility = classifyRegistryPluginRelease({
       packageName: "@elizaos/plugin-bnb-identity",

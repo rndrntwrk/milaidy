@@ -50,7 +50,8 @@ dotenv.config({ path: path.resolve(packageRoot, "..", "..", ".env") });
 const hasOpenAI = Boolean(process.env.OPENAI_API_KEY);
 const hasAnthropic = Boolean(process.env.ANTHROPIC_API_KEY);
 const hasGroq = Boolean(process.env.GROQ_API_KEY);
-const liveModelTestsEnabled = process.env.ELIZA_LIVE_TEST === "1";
+const liveModelTestsEnabled =
+  process.env.MILADY_LIVE_TEST === "1" || process.env.ELIZA_LIVE_TEST === "1";
 // This suite exercises the heaviest live-runtime init path and relies on
 // real provider availability. Keep it opt-in so default repo-wide E2E runs
 // remain deterministic; runtime integration coverage still exists elsewhere.
@@ -59,6 +60,20 @@ const hasModelProvider =
   liveModelTestsEnabled &&
   runAgentRuntimeE2E &&
   (hasOpenAI || hasAnthropic || hasGroq);
+
+function seedGroqModelDefaults(
+  secrets: Record<string, string>,
+): void {
+  if (!hasGroq) return;
+  if (!process.env.GROQ_SMALL_MODEL) {
+    process.env.GROQ_SMALL_MODEL = "llama-3.1-8b-instant";
+  }
+  if (!process.env.GROQ_LARGE_MODEL) {
+    process.env.GROQ_LARGE_MODEL = "qwen/qwen3-32b";
+  }
+  secrets.GROQ_SMALL_MODEL = process.env.GROQ_SMALL_MODEL;
+  secrets.GROQ_LARGE_MODEL = process.env.GROQ_LARGE_MODEL;
+}
 
 // ---------------------------------------------------------------------------
 // Plugin helpers — tracks failures
@@ -133,6 +148,27 @@ function http$(
     if (b) req.write(b);
     req.end();
   });
+}
+
+async function createConversationId(
+  port: number,
+  title: string,
+): Promise<string> {
+  const response = await http$(port, "POST", "/api/conversations", { title });
+  if (response.status !== 200) {
+    throw new Error(`Failed to create conversation: status=${response.status}`);
+  }
+  const conversation =
+    response.data.conversation &&
+    typeof response.data.conversation === "object" &&
+    !Array.isArray(response.data.conversation)
+      ? (response.data.conversation as Record<string, unknown>)
+      : null;
+  const id = typeof conversation?.id === "string" ? conversation.id : "";
+  if (!id) {
+    throw new Error("Conversation response missing id");
+  }
+  return id;
 }
 
 
@@ -231,10 +267,14 @@ async function postChatWithRetries(
   const errors: string[] = [];
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
+      const conversationId = await createConversationId(
+        port,
+        `REST API retry ${attempt}`,
+      );
       const response = await http$(
         port,
         "POST",
-        "/api/chat",
+        `/api/conversations/${encodeURIComponent(conversationId)}/messages`,
         { text: "What is 1+1? Number only.", mode: "simple" },
         { timeoutMs: 45_000 },
       );
@@ -261,7 +301,7 @@ async function postChatWithRetries(
     }
   }
   throw new Error(
-    `POST /api/chat failed after ${attempts} attempts: ${errors.join(" | ")}`,
+    `POST /api/conversations/:id/messages failed after ${attempts} attempts: ${errors.join(" | ")}`,
   );
 }
 
@@ -274,10 +314,14 @@ async function postChatPromptWithRetries(
   const errors: string[] = [];
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
+      const conversationId = await createConversationId(
+        port,
+        `Prompt retry ${attempt}`,
+      );
       const response = await http$(
         port,
         "POST",
-        "/api/chat",
+        `/api/conversations/${encodeURIComponent(conversationId)}/messages`,
         { text: prompt, mode: "simple" },
         { timeoutMs },
       );
@@ -304,7 +348,7 @@ async function postChatPromptWithRetries(
     }
   }
   throw new Error(
-    `POST /api/chat(prompt) failed after ${attempts} attempts: ${errors.join(" | ")}`,
+    `POST /api/conversations/:id/messages(prompt) failed after ${attempts} attempts: ${errors.join(" | ")}`,
   );
 }
 
@@ -369,7 +413,6 @@ describe("Agent Runtime E2E", () => {
     // NOTE: @elizaos/plugin-commands is excluded — commented out as "not yet ready" in core-plugins.ts
     "@elizaos/plugin-personality",
     "@elizaos/plugin-experience",
-    // "@elizaos/plugin-todo", // temporarily excluded — migration requires agentId in context not yet available
     // NOTE: @elizaos/plugin-form is excluded because its package.json has
     // an incorrect main/module/exports entry that prevents resolution.
   ];
@@ -386,6 +429,7 @@ describe("Agent Runtime E2E", () => {
     if (hasAnthropic)
       secrets.ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY as string;
     if (hasGroq) secrets.GROQ_API_KEY = process.env.GROQ_API_KEY as string;
+    seedGroqModelDefaults(secrets);
 
     const character = createCharacter({
       name: "TestAgent",
@@ -892,7 +936,7 @@ describe("Agent Runtime E2E", () => {
     });
 
     it.skipIf(!hasModelProvider)(
-      "POST /api/chat returns real response",
+      "POST /api/conversations/:id/messages returns real response",
       async () => {
         let chat: { status: number; data: Record<string, unknown> };
         try {
@@ -901,7 +945,7 @@ describe("Agent Runtime E2E", () => {
           if (
             await shouldSkipDueModelProviderUnavailable(
               runtime,
-              "POST /api/chat returns real response",
+              "POST /api/conversations/:id/messages returns real response",
             )
           ) {
             return;
@@ -914,7 +958,7 @@ describe("Agent Runtime E2E", () => {
           if (
             await shouldSkipDueModelProviderUnavailable(
               runtime,
-              "POST /api/chat returns real response",
+              "POST /api/conversations/:id/messages returns real response",
             )
           ) {
             return;
@@ -994,10 +1038,21 @@ describe("Agent Runtime E2E", () => {
     );
 
     it.skipIf(!hasModelProvider)(
-      "POST /api/chat rejects empty text",
+      "POST /api/conversations/:id/messages rejects empty text",
       async () => {
+        const conversationId = await createConversationId(
+          server?.port,
+          "Empty text validation",
+        );
         expect(
-          (await http$(server?.port, "POST", "/api/chat", { text: "" })).status,
+          (
+            await http$(
+              server?.port,
+              "POST",
+              `/api/conversations/${encodeURIComponent(conversationId)}/messages`,
+              { text: "" },
+            )
+          ).status,
         ).toBe(400);
       },
     );
@@ -1094,13 +1149,17 @@ describe("Agent Runtime E2E", () => {
 
   describe("error paths", () => {
     it.skipIf(!hasModelProvider)("non-JSON body → 400", async () => {
+      const conversationId = await createConversationId(
+        server?.port,
+        "Invalid JSON",
+      );
       const { status } = await new Promise<{ status: number }>(
         (resolve, reject) => {
           const req = http.request(
             {
               hostname: "127.0.0.1",
               port: server?.port,
-              path: "/api/chat",
+              path: `/api/conversations/${encodeURIComponent(conversationId)}/messages`,
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
@@ -1484,10 +1543,4 @@ describe("Agent Runtime E2E", () => {
   //  11. startEliza() — real subprocess test
   // ===================================================================
 
-  describe("startEliza subprocess", () => {
-    it.skip(
-      "startEliza() boots, prints chat prompt, and exits cleanly (interactive subprocess currently hangs under Vitest; headless startup is covered above)",
-      () => {},
-    );
-  });
 });

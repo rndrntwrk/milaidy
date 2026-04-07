@@ -23,7 +23,7 @@ Desktop dev rationale (signals, Quit, `detached` children): `docs/apps/desktop-l
 
 Optional — link a local elizaOS source checkout for live package development:
 ```bash
-bun run setup:eliza-workspace   # clones ../eliza if missing, symlinks all @elizaos/* packages
+bun run setup:upstreams   # initializes repo-local ./eliza and links local @elizaos/* packages
 ```
 
 ## Build & Test
@@ -64,7 +64,7 @@ scripts/
   dev-ui.mjs            Dev orchestrator (API + Vite)
   run-node.mjs          CLI runner (spawns entry.js with NODE_PATH)
   run-repo-setup.mjs    Postinstall sequencer
-  setup-eliza-workspace.mjs   Clone + link ../eliza packages
+  setup-upstreams.mjs   Initialize repo-local upstreams and link @elizaos packages
   patch-deps.mjs        Post-install patches for broken upstream exports
 ```
 
@@ -84,6 +84,9 @@ See `docs/plugin-resolution-and-node-path.md`.
 ### Electrobun startup guards (do not remove)
 The try/catch blocks in `apps/app/electrobun/src/native/agent.ts` keep the desktop window usable when the runtime fails.
 
+### Dashboard SSE: action callbacks replace in place
+In `packages/agent/src/api/chat-routes.ts`, **`HandlerCallback`** text from actions uses **`replaceCallbackText`**: each new callback replaces the previous callback’s segment after a frozen **`preCallbackText`** (the LLM stream so far). **Why:** Matches Discord-style progressive messages; the old path concatenated unrelated status strings in one bubble. The elizaOS callback contract is unchanged. See **`docs/runtime/action-callback-streaming.md`**.
+
 ## Config
 
 - **Runtime config**: `~/.milady/milady.json` (override with `MILADY_CONFIG_PATH` or `MILADY_STATE_DIR`; falls back to `ELIZA_CONFIG_PATH` / `ELIZA_STATE_DIR`)
@@ -102,7 +105,9 @@ The try/catch blocks in `apps/app/electrobun/src/native/agent.ts` keep the deskt
 
 ## Dependencies on elizaOS
 
-All `@elizaos/*` packages use the `alpha` dist-tag. When developing locally, `bun run setup:eliza-workspace` symlinks packages from `../eliza` so changes are picked up immediately. Set `ELIZA_SKIP_LOCAL_ELIZA=1` to use only npm-published versions.
+All `@elizaos/*` packages use the `alpha` dist-tag. When developing locally, `bun run setup:upstreams` links packages from repo-local `./eliza` and `./plugins` so changes are picked up immediately. Set `MILADY_SKIP_LOCAL_UPSTREAMS=1` to use only npm-published versions.
+
+All official elizaOS plugin repos live under [https://github.com/elizaOS-plugins](https://github.com/elizaOS-plugins). For plugin work, prefer adding the relevant plugin repo as a git submodule under `plugins/` so we keep a local checkout we can patch when needed, and depend on it via `workspace:*` so Milady resolves the local package directly during development. Publish new versions to npm when ready.
 
 ## Ports
 
@@ -120,6 +125,43 @@ All `@elizaos/*` packages use the `alpha` dist-tag. When developing locally, `bu
 - When asked to merge, merge **onto the current branch** (e.g., `git merge <source>` while staying on the current branch).
 - Do not create worktrees unless the user specifically requests one.
 
+## Worktree / Multi-Instance Development
+
+Each worktree (or parallel dev session) needs **isolated ports and state** to avoid conflicts.
+
+### Quick setup
+
+```bash
+# In your worktree, generate isolated env (slot 1 = +100 port offset):
+bash scripts/worktree-env.sh 1    # .env.worktree: API=31437, UI=2238, state=~/.milady-wt-1
+bash scripts/worktree-env.sh 2    # second worktree: API=31537, UI=2338, state=~/.milady-wt-2
+
+# All dev entry points auto-load .env.worktree when present:
+bun run dev                       # dev-ui.mjs
+bun run dev:desktop               # dev-platform.mjs
+bun run milady start              # run-node.mjs
+```
+
+### What gets isolated
+
+| Resource | Default (shared) | Worktree override |
+|----------|------------------|-------------------|
+| API port | 31337 | `MILADY_API_PORT` |
+| UI port | 2138 | `MILADY_PORT` |
+| Home port | 2142 | `MILADY_HOME_PORT` |
+| Gateway port | 18789 | `MILADY_GATEWAY_PORT` |
+| State dir (DB, config, creds) | `~/.milady/` | `MILADY_STATE_DIR` |
+| PGlite database | `~/.milady/workspace/.eliza/.elizadb` | Follows `MILADY_STATE_DIR` |
+| Config file | `~/.milady/milady.json` | Follows `MILADY_STATE_DIR` |
+
+### Key rules
+
+- **Always isolate `MILADY_STATE_DIR`** — the PGlite database uses a process lock (`postmaster.pid`). Two instances hitting the same DB will fail.
+- **Port auto-allocation still works** — even without `.env.worktree`, the orchestrator probes for free ports. But explicit offsets are more predictable.
+- **`bun install`** — run in the main worktree first. Git worktrees share `node_modules` via the repo root. The `.eliza-repo-setup.lock` prevents concurrent postinstall runs.
+- **`.env.worktree` is gitignored** — each worktree generates its own.
+- **Scripts that load `.env.worktree`**: `dev-ui.mjs`, `dev-platform.mjs`, `run-node.mjs`. Values never override already-set env vars.
+
 ## Common Pitfalls
 
 - **`bun install` fails on native deps**: TensorFlow, canvas, whisper-node require native build tools. On macOS install Xcode CLI tools (`xcode-select --install`). On Linux install `build-essential libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev`. Set `MILADY_NO_VISION_DEPS=1` to skip optional vision deps (camera, etc.).
@@ -136,7 +178,7 @@ All `@elizaos/*` packages use the `alpha` dist-tag. When developing locally, `bu
 |----------|---------|---------|
 | `MILADY_NO_VISION_DEPS` | Skip vision dep install (camera/fswebcam) | `0` |
 | `SKIP_AVATAR_CLONE` | Skip VRM avatar download during install | `0` |
-| `ELIZA_SKIP_LOCAL_ELIZA` | Use npm packages instead of `../eliza` workspace | `0` |
+| `MILADY_SKIP_LOCAL_UPSTREAMS` | Use npm packages instead of repo-local `./eliza` and `./plugins` sources | `0` |
 | `MILADY_PROMPT_TRACE` | Log prompt compaction stats to console | `0` |
 | `MILADY_TTS_DEBUG` | Log TTS pipeline traces (`[milady][tts]`): queue/proxy plus **playback** (`play:web-audio:*`, `play:browser:*`, `play:talkmode:*`) with a short `preview` of spoken text. When `/api/tts/cloud` is used, debug also adds `x-milady-tts-*` request headers for clip/full-line correlation, and those headers may include spoken-text previews. UI picks this up via Vite `define` in dev/build; for client-only, `VITE_MILADY_TTS_DEBUG` also works | `0` |
 | `MILADY_CAPTURE_PROMPTS` | Dump raw prompts to `.tmp/prompt-captures/` (dev-only, contains user messages) | `0` |
