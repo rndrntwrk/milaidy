@@ -142,8 +142,17 @@ function resolveBrowserWorkspaceTargetOrigin(url: string): string {
   }
 }
 
-function resolveBrowserWorkspaceMessageOrigin(origin: string): string {
-  return origin && origin !== "null" ? origin : "*";
+/** @internal Exported for testing only. */
+export function resolveBrowserWorkspaceMessageOrigin(
+  origin: string,
+): string | null {
+  if (origin && origin !== "null") {
+    return origin;
+  }
+  // Null-origin frames (sandboxed, file://, cross-origin navigations) cannot
+  // be verified. Even "getState" exposes wallet addresses, so no method is
+  // safe to broadcast with "*" targetOrigin — refuse to respond entirely.
+  return null;
 }
 
 function resolveBrowserWorkspaceSelection(
@@ -276,6 +285,8 @@ export function BrowserWorkspaceView(): JSX.Element {
   const walletConfigRef = useRef(walletConfig);
   const browserWalletStateRef = useRef(browserWalletState);
   const browserWalletChainIdByTabRef = useRef(new Map<string, number>());
+  const workspaceTabsRef = useRef(workspace.tabs);
+  workspaceTabsRef.current = workspace.tabs;
   const previousSelectedTabIdRef = useRef<string | null>(null);
 
   if (typeof initialBrowseUrlRef.current === "undefined") {
@@ -590,7 +601,7 @@ export function BrowserWorkspaceView(): JSX.Element {
       }
       const request = event.data;
 
-      const sourceTab = workspace.tabs.find(
+      const sourceTab = workspaceTabsRef.current.find(
         (tab) => iframeRefs.current.get(tab.id)?.contentWindow === event.source,
       );
       const sourceWindow = sourceTab
@@ -600,11 +611,13 @@ export function BrowserWorkspaceView(): JSX.Element {
         return;
       }
 
+      const targetOrigin = resolveBrowserWorkspaceMessageOrigin(event.origin);
+      if (targetOrigin === null) {
+        // Refuse to respond — origin cannot be verified (null-origin frame).
+        return;
+      }
       const respond = (response: BrowserWorkspaceWalletResponse) => {
-        sourceWindow.postMessage(
-          response,
-          resolveBrowserWorkspaceMessageOrigin(event.origin),
-        );
+        sourceWindow.postMessage(response, targetOrigin);
       };
       const currentWalletState = browserWalletStateRef.current;
       const currentTabChainId =
@@ -912,7 +925,7 @@ export function BrowserWorkspaceView(): JSX.Element {
     return () => {
       window.removeEventListener("message", onMessage);
     };
-  }, [loadBrowserWalletState, postBrowserWalletReady, workspace.tabs]);
+  }, [loadBrowserWalletState, postBrowserWalletReady]);
 
   const browserSidebar = (
     <Sidebar
