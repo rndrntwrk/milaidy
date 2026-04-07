@@ -123,9 +123,11 @@ export async function runRestoringSession(
   const isDesktop = forceLocal || isElectrobunRuntime();
   const hasExistingEvidence = hadPrior || Boolean(desktopInstall?.detected);
 
-  // Only probe the API when there is evidence of a prior install.
+  // Probe the API when there is evidence of a prior install, or when no
+  // persisted server exists (covers headless/VPS setups where config was
+  // set via files without going through UI onboarding).
   const probed =
-    !persistedActiveServer && hasExistingEvidence
+    !persistedActiveServer
       ? await detectExistingOnboardingConnection({
           client,
           timeoutMs: isDesktop
