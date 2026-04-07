@@ -3,6 +3,39 @@ title: Changelog
 description: What's new in Milady — features, improvements, and fixes.
 ---
 
+<Update label="2026-04-07" description="Week of April 7; music player, Babylon terminal, unified inbox, life-ops calendar and email" tags={["Feature", "Update", "Fix"]}>
+
+## Music player and library
+
+Your agent can now play, queue, and manage music directly from chat. Ask your agent to play a song and it streams audio through the dashboard with full transport controls — play, pause, skip, stop, and resume. A queue system lets you line up tracks, and a library plugin provides metadata lookup and collection management. The music player appears as a global widget in the dashboard when a track is active. On the desktop app, audio routes through the native playback system. Discord servers with a connected agent get live audio streaming automatically.
+
+## Babylon agent terminal
+
+A new Babylon tab in the [apps view](/dashboard/apps) gives your agent access to the Babylon prediction market game. The terminal panel shows real-time agent activity, team management, wallet balances, and filtered logs — all without leaving the dashboard. Your agent authenticates to Babylon automatically using a secure handshake, and live event data streams in via SSE with polling fallback.
+
+## Unified cross-channel inbox
+
+A new Inbox tab between Chat and Stream aggregates messages from every connected platform — iMessage, Telegram, Discord, WhatsApp, WeChat, Slack, Signal, and SMS — into a single time-ordered feed. Each message shows a color-coded source label so you can see at a glance which platform it came from. Filter by source using the chip row at the top to focus on specific channels. The inbox is read-only for triage; responding still flows through each connector's own send path. See [connectors](/guides/connectors) for setup.
+
+## Life-ops: Google Calendar and Gmail
+
+The [life-ops system](/rest/lifeops) now integrates with Google Calendar and Gmail. Connect your Google account and your agent can sync calendar events, set reminders with configurable escalation, and surface your next event as context in conversation. Gmail triage lets your agent read, categorize, and draft replies to emails on your behalf, with connector policy controls so you stay in charge of what gets sent.
+
+## Updates
+
+- **Plugin auto-enable fixed end-to-end** — Wallet and provider plugins (EVM, Solana, Anthropic, Eliza Cloud) now load correctly when their environment variables are set. Previously, three compounding bugs in the plugin resolver caused auto-enable to silently fail, leaving configured plugins inactive after startup.
+- **Cross-channel source labels in chat** — Messages from connectors now display a color-coded border and source chip (iMessage, Telegram, Discord, etc.) in the dashboard chat view, making it easy to distinguish cross-platform conversations at a glance.
+- **Unused connectors removed** — Six connectors that were never surfaced to users (Tlon, Google Chat, Line, Mattermost, Nextcloud Talk, Zalo) have been removed from the connector list to reduce clutter. All actively supported connectors remain available.
+- **iMessage setup simplified** — The [iMessage connector](/connectors/imessage) setup guide now reflects the actual plugin behavior: leave CLI path and DB path blank for the default AppleScript-based flow, which works out of the box on macOS without additional tooling.
+
+## Bug fixes
+
+- Fixed the desktop app crashing on startup when the self-control plugin could not be resolved — the plugin is now properly registered as a workspace package
+- Fixed the in-app browser page not filling the full viewport height, leaving dead space below the content
+- Fixed EVM and Solana wallet plugins failing to initialize due to action spec lookup mismatches — all wallet actions and governance actions now register correctly
+
+</Update>
+
 <Update label="2026-04-06" description="Week of March 31 – April 6; managed Discord bots, download channels, Vincent OAuth fix" tags={["Feature", "Update", "Fix"]}>
 
 ## Managed Discord for cloud agents
