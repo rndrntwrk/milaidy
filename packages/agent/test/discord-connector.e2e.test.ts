@@ -654,6 +654,8 @@ describeIfPluginAvailable("Discord Connector - Error Handling", () => {
     await discordPluginProbe?.init?.(
       {},
       {
+        character: { name: "TestBot" },
+        logger: { info: vi.fn() },
         getSetting: () => "",
       } as unknown as AgentRuntime,
     );

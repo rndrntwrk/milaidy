@@ -61,6 +61,7 @@ concurrency:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: milady-ai/milady/agent
+  MILADY_SKIP_LOCAL_UPSTREAMS: "1"
 
 permissions:
   contents: read
@@ -78,7 +79,7 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ inputs.source_sha || github.sha }}
-          submodules: recursive
+          submodules: false
 
       - name: Setup Node.js 22
         uses: actions/setup-node@v4
@@ -97,6 +98,11 @@ jobs:
           key: bun-store-${{ runner.os }}-${{ hashFiles('bun.lock') }}
           restore-keys: |
             bun-store-${{ runner.os }}-
+
+      - name: Init non-eliza submodules
+        run: |
+          node scripts/init-submodules.mjs
+          node scripts/disable-local-eliza-workspace.mjs
 
       - name: Install dependencies
         run: bun install --ignore-scripts

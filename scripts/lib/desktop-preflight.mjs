@@ -88,7 +88,7 @@ export function buildWindowsRepairSteps() {
     "1. Stop all Bun/Electrobun/Milady processes.",
     "2. Delete apps/app/electrobun/node_modules.",
     "3. Delete node_modules/.bun from the repo root.",
-    "4. From repo root, run: bun install --frozen-lockfile",
+    "4. From repo root, run: bun install",
     "5. Retry: bun run start:desktop",
   ];
 }

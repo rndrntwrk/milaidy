@@ -13,9 +13,7 @@ describe("desktop-build.mjs", () => {
     expect(script).toContain("scripts/write-build-info.ts");
     expect(script).toContain("scripts/copy-runtime-node-modules.ts");
     expect(script).toContain("--exclude-optional-pack");
-    expect(script).toContain(
-      'runBun(["install", "--frozen-lockfile", "--ignore-scripts"], {',
-    );
+    expect(script).toContain('runBun(["install", "--ignore-scripts"], {');
     expect(script).toContain(
       "Ensuring Electrobun workspace dependencies are installed",
     );

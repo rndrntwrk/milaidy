@@ -376,7 +376,7 @@ describe("life-ops gmail triage", () => {
     const contextRes = await req(
       port,
       "GET",
-      "/api/lifeops/calendar/next-context?timeZone=UTC",
+      `/api/lifeops/calendar/next-context?timeZone=UTC&timeMin=${encodeURIComponent(new Date(Date.now() - 60_000).toISOString())}&timeMax=${encodeURIComponent(new Date(Date.now() + 24 * 60 * 60_000).toISOString())}`,
     );
     expect(contextRes.status).toBe(200);
     expect(contextRes.data.linkedMail).toEqual(
@@ -889,7 +889,7 @@ describe("life-ops gmail triage", () => {
     const contextRes = await req(
       port,
       "GET",
-      "/api/lifeops/calendar/next-context?timeZone=UTC",
+      `/api/lifeops/calendar/next-context?timeZone=UTC&timeMin=${encodeURIComponent(new Date(Date.now() - 60_000).toISOString())}&timeMax=${encodeURIComponent(new Date(Date.now() + 24 * 60 * 60_000).toISOString())}`,
     );
     expect(contextRes.status).toBe(200);
     expect(contextRes.data.event).toMatchObject({

@@ -117,9 +117,7 @@ describe("Electrobun release workflow drift", () => {
     expect(workflow).toContain("runner: macos-15-intel");
     expect(workflow).toContain("- name: Setup Node.js");
     expect(workflow).toContain("- name: Setup Bun");
-    expect(workflow).toContain(
-      "arch -x86_64 bun install --frozen-lockfile --ignore-scripts",
-    );
+    expect(workflow).toContain("arch -x86_64 bun install --ignore-scripts");
     expect(workflow).toContain(
       'MILADY_DESKTOP_COMMAND_PREFIX="arch -x86_64" node scripts/desktop-build.mjs stage --variant=base --build-whisper',
     );
@@ -127,7 +125,6 @@ describe("Electrobun release workflow drift", () => {
       'MILADY_DESKTOP_COMMAND_PREFIX="arch -x86_64" node scripts/desktop-build.mjs package --env=$' +
         "{{ needs.prepare.outputs.env }}",
     );
-    expect(workflow).not.toContain("arch -x86_64 bun install --ignore-scripts");
     expect(workflow).not.toContain(
       "name: Setup Node.js (macOS Intel via Rosetta)",
     );
@@ -428,7 +425,9 @@ describe("Electrobun release workflow drift", () => {
     expect(workflow).toContain('$extractDir = "C:\\m"');
     expect(workflow).toContain("milady-dist/entry.js found");
     expect(workflow).toContain('-BuildDir "C:\\m"');
-    expect(workflow).toContain("MILADY_TEST_WINDOWS_INSTALL_DIR: C:\\mi");
+    expect(workflow).toContain(
+      "MILADY_TEST_WINDOWS_INSTALL_DIR: $" + "{{ runner.temp }}\\mi",
+    );
     expect(workflow).toContain(
       "name: Verify Windows public installer looks complete",
     );
@@ -712,7 +711,7 @@ describe("Electrobun release workflow drift", () => {
       "$stopProtectedProcessIds = [System.Collections.Generic.HashSet[int]]::new()",
     );
     expect(smokeScript).toContain(
-      'Get-CimInstance Win32_Process -Filter "ProcessId = $PID"',
+      'Get-CimInstance Win32_Process -Filter "ProcessId = $currentPid"',
     );
     expect(smokeScript).toContain(
       "-not $stopProtectedProcessIds.Contains([int]$_.Id)",
@@ -741,7 +740,9 @@ describe("Electrobun release workflow drift", () => {
     // the workflow also sets it so the entire process tree inherits it.
     expect(workflow).toContain('MILADY_DISABLE_LOCAL_EMBEDDINGS: "1"');
     expect(workflow).toContain('MILADY_WINDOWS_SMOKE_REQUIRE_INSTALLER: "1"');
-    expect(workflow).toContain("MILADY_TEST_WINDOWS_INSTALL_DIR: C:\\mi");
+    expect(workflow).toContain(
+      "MILADY_TEST_WINDOWS_INSTALL_DIR: $" + "{{ runner.temp }}\\mi",
+    );
     expect(workflow).toContain(
       'Add-Content -Path $env:GITHUB_ENV -Value "MILADY_TEST_WINDOWS_LAUNCHER_PATH=$launcherPath"',
     );
@@ -811,7 +812,8 @@ describe("Electrobun release workflow drift", () => {
       "path: apps/app/electrobun/artifacts/windows-installer-proof/**",
     );
     expect(workflow).toContain(
-      "MILADY_TEST_WINDOWS_PROOF_INSTALL_DIR: C:\\mi-proof",
+      "MILADY_TEST_WINDOWS_PROOF_INSTALL_DIR: $" +
+        "{{ runner.temp }}\\mi-proof",
     );
     expect(workflow).toContain(
       "if: always() && matrix.platform.os == 'windows'",

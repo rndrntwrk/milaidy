@@ -24,11 +24,31 @@ const SUBMODULE_READINESS_MARKERS = {
   "steward-fi": ["package.json", "packages/api/package.json"],
 };
 
+// plugin-openrouter contains PGlite :memory:<UUID> paths committed under
+// typescript/ that Windows git rejects as invalid filenames. Skip checkout
+// until elizaos-plugins/plugin-openrouter#25 is merged; the package is
+// available via npm in the meantime.
+// TODO: remove once elizaos-plugins/plugin-openrouter#25 is merged.
+const SKIP_SUBMODULES = new Set(["plugins/plugin-openrouter"]);
+
+function getSubmoduleSkipReason(
+  submodulePath,
+  { skipLocal = skipLocalUpstreams } = {},
+) {
+  if (SKIP_SUBMODULES.has(submodulePath)) {
+    return "it is in the explicit skip list";
+  }
+  if (skipLocal && submodulePath === "eliza") {
+    return "local upstreams are disabled";
+  }
+  return null;
+}
+
 export function shouldSkipSubmoduleInit(
   submodulePath,
   { skipLocal = skipLocalUpstreams } = {},
 ) {
-  return skipLocal && submodulePath === "eliza";
+  return getSubmoduleSkipReason(submodulePath, { skipLocal }) !== null;
 }
 
 export function parseTrackedSubmodules(configOutput) {
@@ -116,9 +136,10 @@ export function runInitSubmodules({
   let failed = 0;
 
   for (const submodule of submodules) {
+    const skipReason = getSubmoduleSkipReason(submodule.path);
     if (shouldSkipSubmodule(submodule.path)) {
       log(
-        `[init-submodules] Skipping ${submodule.name} (${submodule.path}) because local upstreams are disabled`,
+        `[init-submodules] Skipping ${submodule.name} (${submodule.path}) because ${skipReason ?? "local upstreams are disabled"}`,
       );
       continue;
     }

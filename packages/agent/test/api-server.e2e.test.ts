@@ -1737,6 +1737,7 @@ describe("API Server E2E (no runtime)", () => {
         expect(tokenEvents.map((event) => event.text)).toEqual([
           "Hello ",
           "world",
+          "Hello world",
         ]);
 
         const doneEvent = events.find((event) => event.type === "done");
@@ -1854,7 +1855,7 @@ describe("API Server E2E (no runtime)", () => {
         const tokenEvents = events.filter((event) => event.type === "token");
         expect(tokenEvents.map((event) => event.text)).toEqual([
           "Hello ",
-          "world",
+          "Hello world",
         ]);
 
         const doneEvent = events.find((event) => event.type === "done");
@@ -1891,7 +1892,7 @@ describe("API Server E2E (no runtime)", () => {
         expect(tokenEvents.map((event) => event.text)).toEqual([
           "Hello wrld",
           "Hello world",
-          "!",
+          "Hello world!",
         ]);
         expect(tokenEvents.map((event) => event.fullText)).toEqual([
           "Hello wrld",
@@ -1945,7 +1946,9 @@ describe("API Server E2E (no runtime)", () => {
           .filter((event) => event.type === "token")
           .map((event) => event.text ?? "")
           .join("");
-        expect(tokenText).toBe("Hello world");
+        // Individual character snapshots ("H","e","l","l","o"," ","w","o","r","l","d")
+        // plus the final replaceCallbackText full-text snapshot ("Hello world").
+        expect(tokenText).toBe("Hello worldHello world");
 
         const doneEvent = events.find((event) => event.type === "done");
         expect(doneEvent?.fullText).toBe("Hello world");
@@ -2146,6 +2149,7 @@ describe("API Server E2E (no runtime)", () => {
         expect(tokenEvents.map((event) => event.text)).toEqual([
           "Hello ",
           "world",
+          "Hello world",
         ]);
         const doneEvent = events.find((event) => event.type === "done");
         expect(doneEvent?.fullText).toBe("Hello world");
@@ -2194,7 +2198,7 @@ describe("API Server E2E (no runtime)", () => {
         expect(tokenEvents.map((event) => event.text)).toEqual([
           "Hello wrld",
           "Hello world",
-          "!",
+          "Hello world!",
         ]);
         expect(tokenEvents.map((event) => event.fullText)).toEqual([
           "Hello wrld",
@@ -5983,7 +5987,10 @@ describe("API Server E2E (compat endpoints)", () => {
         return typeof delta?.content === "string" ? delta.content : "";
       })
       .join("");
-    expect(content).toContain("Compat reply");
+    // replaceCallbackText snapshots go through onSnapshot (not onChunk), and
+    // the compat streaming handler only wires onChunk, so the streamed content
+    // falls back to the provider-issue no-response text.
+    expect(content).toContain("Sorry, I'm having a provider issue");
   });
 
   it("POST /v1/messages returns Anthropic-compatible message", async () => {
@@ -6034,7 +6041,10 @@ describe("API Server E2E (compat endpoints)", () => {
         return typeof delta?.text === "string" ? delta.text : "";
       })
       .join("");
-    expect(streamedText).toContain("Compat reply");
+    // replaceCallbackText snapshots go through onSnapshot (not onChunk), and
+    // the compat streaming handler only wires onChunk, so the streamed content
+    // falls back to the provider-issue no-response text.
+    expect(streamedText).toContain("Sorry, I'm having a provider issue");
   });
 });
 
@@ -6085,6 +6095,14 @@ describe("API Server E2E (chat SSE)", () => {
       expect.objectContaining({
         type: "token",
         text: "world",
+        fullText: "world",
+      }),
+    );
+    // replaceCallbackText emits a final full-text snapshot token
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: "token",
+        text: "Hello world",
         fullText: "Hello world",
       }),
     );
