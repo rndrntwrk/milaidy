@@ -31,6 +31,7 @@ import {
   collectPluginNames,
   CHANNEL_PLUGIN_MAP,
   OPTIONAL_PLUGIN_MAP,
+  type PluginLoadReasons,
 } from "./plugin-collector";
 import {
   CUSTOM_PLUGINS_DIRNAME,
@@ -54,6 +55,16 @@ import {
 
 function formatError(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+/** Missing npm package, Bun resolve, or browser stagehand — expected when optional plugins are allow-listed but not installed. */
+function isBenignOptionalPluginFailure(msg: string): boolean {
+  return (
+    msg.includes("Cannot find module") ||
+    msg.includes("MODULE_NOT_FOUND") ||
+    msg.includes("ResolveMessage") ||
+    msg === "browser server binary not found"
+  );
 }
 
 function redactUserSegments(filepath: string): string {
@@ -523,7 +534,8 @@ export async function resolvePlugins(
   // this function and subsequent consumers see the updated allow list.
   config.plugins = autoEnableResult.config.plugins;
 
-  const pluginsToLoad = collectPluginNames(config);
+  const loadReasons: PluginLoadReasons = new Map();
+  const pluginsToLoad = collectPluginNames(config, loadReasons);
   const corePluginSet = new Set<string>(CORE_PLUGINS);
 
   // Build a mutable map of install records so we can merge drop-in discoveries
@@ -543,6 +555,7 @@ export async function resolvePlugins(
   for (const [name, _record] of Object.entries(ejectedRecords)) {
     if (denyList.has(name)) continue;
     pluginsToLoad.add(name);
+    if (!loadReasons.has(name)) loadReasons.set(name, "ejected plugins dir");
     ejectedPluginNames.push(name);
   }
   if (ejectedPluginNames.length > 0) {
@@ -611,10 +624,7 @@ export async function resolvePlugins(
           name: pluginName,
           error: "browser server binary not found",
         });
-        logger.warn(
-          `[eliza] Skipping ${pluginName}: browser server not available. ` +
-            `Build the stagehand-server or remove the plugin from plugins.allow.`,
-        );
+        // ensureBrowserServerLink() already logged one debug line with setup hints.
         return null;
       }
     }
@@ -744,9 +754,11 @@ export async function resolvePlugins(
         );
       } else {
         if (optionalPluginNames.has(pluginName)) {
-          logger.debug(
-            `[eliza] Optional plugin ${pluginName} not available: ${msg}`,
-          );
+          if (!isBenignOptionalPluginFailure(msg)) {
+            logger.warn(
+              `[eliza] Optional plugin ${pluginName} failed to load: ${msg}`,
+            );
+          }
         } else {
           logger.info(`[eliza] Could not load plugin ${pluginName}: ${msg}`);
         }
@@ -775,14 +787,42 @@ export async function resolvePlugins(
   const loadDuration = Date.now() - loadStartTime;
   logger.info(`[eliza] Plugin loading took ${loadDuration}ms`);
 
-  // Summary logging
-  logger.info(
-    `[eliza] Plugin resolution complete: ${plugins.length}/${pluginsToLoad.size} loaded` +
-      (failedPlugins.length > 0 ? `, ${failedPlugins.length} failed` : ""),
+  // Summary logging — do not treat “optional + not installed” as top-level failures.
+  const optionalFailed = failedPlugins.filter((f) =>
+    optionalPluginNames.has(f.name),
   );
-  if (failedPlugins.length > 0) {
+  const seriousFailed = failedPlugins.filter(
+    (f) => !optionalPluginNames.has(f.name),
+  );
+  const benignOptionalFailed = optionalFailed.filter((f) =>
+    isBenignOptionalPluginFailure(f.error),
+  );
+  const noisyOptionalFailed = optionalFailed.filter(
+    (f) => !isBenignOptionalPluginFailure(f.error),
+  );
+  const detailFailures = [...seriousFailed, ...noisyOptionalFailed];
+
+  let completeMsg = `[eliza] Plugin resolution complete: ${plugins.length}/${pluginsToLoad.size} loaded`;
+  if (detailFailures.length > 0) {
+    completeMsg += `, ${detailFailures.length} failed`;
+  }
+  if (benignOptionalFailed.length > 0) {
+    completeMsg += ` (${benignOptionalFailed.length} optional unavailable)`;
+  }
+  logger.info(completeMsg);
+
+  if (detailFailures.length > 0) {
     logger.info(
-      `[eliza] Failed plugins: ${failedPlugins.map((f) => `${f.name} (${f.error})`).join(", ")}`,
+      `[eliza] Failed plugins: ${detailFailures.map((f) => `${f.name} (${f.error})`).join(", ")}`,
+    );
+  }
+  if (benignOptionalFailed.length > 0) {
+    const withReasons = benignOptionalFailed.map((f) => {
+      const reason = loadReasons.get(f.name);
+      return reason ? `${f.name} (added by: ${reason})` : f.name;
+    });
+    logger.info(
+      `[eliza] Optional plugins not installed: ${withReasons.join(", ")}`,
     );
   }
 

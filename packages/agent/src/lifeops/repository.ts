@@ -59,14 +59,24 @@ async function runMigrationWithSavepoint(
   migration: () => Promise<void>,
 ): Promise<void> {
   const safeName = name.replace(/[^a-zA-Z0-9_]/g, "_");
-  await executeRawSql(runtime, `SAVEPOINT ${safeName}`);
+  // Postgres / PGlite: SAVEPOINT only works inside a transaction. Each raw
+  // execute is typically autocommit, so open an explicit outer transaction.
+  // SQLite: BEGIN + SAVEPOINT is also valid.
+  await executeRawSql(runtime, "BEGIN");
   try {
-    await migration();
-    await executeRawSql(runtime, `RELEASE SAVEPOINT ${safeName}`);
+    await executeRawSql(runtime, `SAVEPOINT ${safeName}`);
+    try {
+      await migration();
+      await executeRawSql(runtime, `RELEASE SAVEPOINT ${safeName}`);
+    } catch (error) {
+      await executeRawSql(runtime, `ROLLBACK TO SAVEPOINT ${safeName}`).catch(
+        () => {},
+      );
+      throw error;
+    }
+    await executeRawSql(runtime, "COMMIT");
   } catch (error) {
-    await executeRawSql(runtime, `ROLLBACK TO SAVEPOINT ${safeName}`).catch(
-      () => {},
-    );
+    await executeRawSql(runtime, "ROLLBACK").catch(() => {});
     throw error;
   }
 }
@@ -846,6 +856,10 @@ export async function ensureLifeOpsTables(
       actor TEXT NOT NULL,
       created_at TEXT NOT NULL
     )`,
+  ];
+
+  /** Applied after legacy ownership columns are added — old DBs may lack domain/subject_* until ALTERs below. */
+  const coreIndexStatements = [
     `CREATE INDEX IF NOT EXISTS idx_life_task_definitions_agent_status
       ON life_task_definitions(agent_id, status)`,
     `CREATE INDEX IF NOT EXISTS idx_life_task_definitions_subject
@@ -884,7 +898,7 @@ export async function ensureLifeOpsTables(
       ON life_channel_policies(agent_id, channel_type)`,
     `CREATE INDEX IF NOT EXISTS idx_life_website_access_grants_group
       ON life_website_access_grants(agent_id, group_key, revoked_at, expires_at)`,
-  ];
+  ] as const;
 
   for (const statement of statements) {
     await executeRawSql(runtime, statement);
@@ -945,6 +959,10 @@ export async function ensureLifeOpsTables(
       runtime,
       "ALTER TABLE life_task_definitions ADD COLUMN website_access_json TEXT",
     );
+  }
+
+  for (const statement of coreIndexStatements) {
+    await executeRawSql(runtime, statement);
   }
 
   const existingConnectorGrantColumns = new Set(

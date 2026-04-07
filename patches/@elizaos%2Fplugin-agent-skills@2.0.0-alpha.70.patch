@@ -121,3 +121,22 @@ index c917dc10a01ec1232d9ef200e1b650341833a9d4..82c7646917ba6a3dcf423b3f4382fbc3
    }
    /**
     * Search ClawHub for skills.
+@@ -1065,16 +1065,16 @@ function validateFrontmatter(frontmatter, directoryName) {
+     if (frontmatter.name.includes("--")) {
+       errors.push({
+         field: "name",
+         message: "name cannot contain consecutive hyphens",
+         code: "NAME_CONSECUTIVE_HYPHENS"
+       });
+     }
+     if (directoryName && directoryName !== frontmatter.name) {
+-      errors.push({
++      warnings.push({
+         field: "name",
+-        message: `name "${frontmatter.name}" must match directory name "${directoryName}"`,
++        message: `name "${frontmatter.name}" should match directory name "${directoryName}" (using directory name as skill id)`,
+         code: "NAME_MISMATCH"
+       });
+     }
+   }
+   if (!frontmatter.description) {

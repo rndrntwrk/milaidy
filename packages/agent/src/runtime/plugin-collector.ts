@@ -135,8 +135,14 @@ export const OPTIONAL_PLUGIN_MAP: Readonly<Record<string, string>> = {
  * Collect the set of plugin package names that should be loaded
  * based on config, environment variables, and feature flags.
  */
+/** Maps each plugin in the load set to the reason it was added. Populated by collectPluginNames. */
+export type PluginLoadReasons = Map<string, string>;
+
 /** @internal Exported for testing. */
-export function collectPluginNames(config: ElizaConfig): Set<string> {
+export function collectPluginNames(
+  config: ElizaConfig,
+  reasons?: PluginLoadReasons,
+): Set<string> {
   migrateLegacyRuntimeConfig(config as Record<string, unknown>);
   const shellPluginDisabled = config.features?.shellEnabled === false;
   const localEmbeddingsExplicitlyDisabled = (() => {
@@ -213,6 +219,10 @@ export function collectPluginNames(config: ElizaConfig): Set<string> {
   // Allow-list entries are additive (extra plugins), not exclusive.
   const allowList = config.plugins?.allow;
   const pluginsToLoad = new Set<string>(CORE_PLUGINS);
+  const track = (name: string, reason: string) => {
+    if (reasons && !reasons.has(name)) reasons.set(name, reason);
+  };
+  for (const core of CORE_PLUGINS) track(core, "CORE_PLUGINS");
   if (localEmbeddingsExplicitlyDisabled) {
     pluginsToLoad.delete("@elizaos/plugin-local-embedding");
   }
@@ -224,6 +234,7 @@ export function collectPluginNames(config: ElizaConfig): Set<string> {
       const pluginName =
         CHANNEL_PLUGIN_MAP[item] ?? OPTIONAL_PLUGIN_MAP[item] ?? item;
       pluginsToLoad.add(pluginName);
+      track(pluginName, `plugins.allow[${JSON.stringify(item)}]`);
     }
   }
 
@@ -238,6 +249,7 @@ export function collectPluginNames(config: ElizaConfig): Set<string> {
       const pluginName = CHANNEL_PLUGIN_MAP[channelName];
       if (pluginName) {
         pluginsToLoad.add(pluginName);
+        track(pluginName, `connectors.${channelName}`);
       }
     }
   }
@@ -270,6 +282,7 @@ export function collectPluginNames(config: ElizaConfig): Set<string> {
     }
     if (process.env[envKey]?.trim()) {
       pluginsToLoad.add(pluginName);
+      track(pluginName, `env: ${envKey}`);
     }
   }
 
@@ -354,6 +367,7 @@ export function collectPluginNames(config: ElizaConfig): Set<string> {
           OPTIONAL_PLUGIN_MAP[key] ??
           (key.includes("/") ? key : `@elizaos/plugin-${key}`);
         pluginsToLoad.add(pluginName);
+        track(pluginName, `plugins.entries["${key}"]`);
       }
     }
   }
@@ -371,6 +385,7 @@ export function collectPluginNames(config: ElizaConfig): Set<string> {
         const pluginName = OPTIONAL_PLUGIN_MAP[featureName];
         if (pluginName) {
           pluginsToLoad.add(pluginName);
+          track(pluginName, `features.${featureName}`);
         }
       }
     }
@@ -379,6 +394,7 @@ export function collectPluginNames(config: ElizaConfig): Set<string> {
   // x402 plugin — auto-load when config section enabled
   if (config.x402?.enabled) {
     pluginsToLoad.add("@elizaos/plugin-x402");
+    track("@elizaos/plugin-x402", "config.x402.enabled");
   }
 
   // Opinion plugin — auto-load when API key is present.
@@ -386,6 +402,7 @@ export function collectPluginNames(config: ElizaConfig): Set<string> {
   // provider, and would be incorrectly removed during provider precedence.
   if (process.env.OPINION_API_KEY?.trim()) {
     pluginsToLoad.add("@elizaos/plugin-opinion");
+    track("@elizaos/plugin-opinion", "env: OPINION_API_KEY");
   }
 
   // User-installed plugins from config.plugins.installs
@@ -396,6 +413,7 @@ export function collectPluginNames(config: ElizaConfig): Set<string> {
     for (const [packageName, record] of Object.entries(installs)) {
       if (record && typeof record === "object") {
         pluginsToLoad.add(packageName);
+        track(packageName, "plugins.installs");
       }
     }
   }

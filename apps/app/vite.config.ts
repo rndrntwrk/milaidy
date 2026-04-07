@@ -6,9 +6,17 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react-swc";
 import type { Plugin } from "vite";
 import { defineConfig } from "vite";
+import { colorizeDevSettingsStartupBanner } from "../../packages/shared/src/dev-settings-banner-style.ts";
+import { prependDevSubsystemFigletHeading } from "../../packages/shared/src/dev-settings-figlet-heading.ts";
+import {
+  type DevSettingsRow,
+  formatDevSettingsTable,
+} from "../../packages/shared/src/dev-settings-table.ts";
 import {
   resolveDesktopApiPort,
+  resolveDesktopApiPortPreference,
   resolveDesktopUiPort,
+  resolveDesktopUiPortPreference,
 } from "../../packages/shared/src/runtime-env.ts";
 
 const _require = createRequire(import.meta.url);
@@ -72,6 +80,145 @@ function resolveManualChunk(id: string): string | undefined {
  * for non-http origins, so we intercept preflight OPTIONS requests and tag
  * every /api response with the correct headers before the proxy layer.
  */
+function envFlagEffective(name: string): "on" | "off" {
+  return process.env[name] === "1" ? "on" : "off";
+}
+
+function envFlagSource(name: string, whenOn = "1"): string {
+  const v = process.env[name]?.trim();
+  if (v === whenOn || (whenOn === "1" && v === "true"))
+    return `env set — ${name}=${v}`;
+  return `default (unset — off)`;
+}
+
+function buildViteDevSettingsRows(
+  mode: "dev-server" | "build-watch",
+): DevSettingsRow[] {
+  const apiPref = resolveDesktopApiPortPreference(process.env);
+  const uiPref = resolveDesktopUiPortPreference(process.env);
+  const apiPort = resolveDesktopApiPort(process.env);
+  const uiPort = resolveDesktopUiPort(process.env);
+  const assetBase =
+    process.env.VITE_ASSET_BASE_URL?.trim() ||
+    process.env.MILADY_ASSET_BASE_URL?.trim() ||
+    "—";
+
+  return [
+    {
+      setting: "MILADY_APP_SOURCEMAP",
+      effective: envFlagEffective("MILADY_APP_SOURCEMAP"),
+      source: envFlagSource("MILADY_APP_SOURCEMAP"),
+      change: "export MILADY_APP_SOURCEMAP=1 to enable; unset for off",
+    },
+    {
+      setting: "MILADY_DESKTOP_VITE_FAST_DIST",
+      effective: envFlagEffective("MILADY_DESKTOP_VITE_FAST_DIST"),
+      source: envFlagSource("MILADY_DESKTOP_VITE_FAST_DIST"),
+      change:
+        "set by dev orchestrator for Rollup watch; unset for normal dev server",
+    },
+    {
+      setting: "MILADY_TTS_DEBUG",
+      effective: process.env.MILADY_TTS_DEBUG?.trim() ? "set" : "—",
+      source: process.env.MILADY_TTS_DEBUG?.trim()
+        ? "env set — MILADY_TTS_DEBUG"
+        : "default (unset)",
+      change: "export MILADY_TTS_DEBUG=1 for TTS trace logs",
+    },
+    {
+      setting: "MILADY_SETTINGS_DEBUG / VITE_MILADY_SETTINGS_DEBUG",
+      effective:
+        process.env.MILADY_SETTINGS_DEBUG?.trim() ||
+        process.env.VITE_MILADY_SETTINGS_DEBUG?.trim()
+          ? "set"
+          : "—",
+      source: process.env.VITE_MILADY_SETTINGS_DEBUG?.trim()
+        ? "env set — VITE_MILADY_SETTINGS_DEBUG"
+        : process.env.MILADY_SETTINGS_DEBUG?.trim()
+          ? "env set — MILADY_SETTINGS_DEBUG"
+          : "default (unset)",
+      change: "export MILADY_SETTINGS_DEBUG=1 or VITE_MILADY_SETTINGS_DEBUG=1",
+    },
+    {
+      setting: "VITE_ASSET_BASE_URL / MILADY_ASSET_BASE_URL",
+      effective: assetBase,
+      source: process.env.VITE_ASSET_BASE_URL?.trim()
+        ? "env set — VITE_ASSET_BASE_URL"
+        : process.env.MILADY_ASSET_BASE_URL?.trim()
+          ? "env set — MILADY_ASSET_BASE_URL"
+          : "default (unset — empty)",
+      change: "export VITE_ASSET_BASE_URL=… or MILADY_ASSET_BASE_URL=…",
+    },
+    {
+      setting: "MILADY_DEV_POLLING",
+      effective: envFlagEffective("MILADY_DEV_POLLING"),
+      source: envFlagSource("MILADY_DEV_POLLING"),
+      change: "export MILADY_DEV_POLLING=1 for watch polling (VM/file shares)",
+    },
+    {
+      setting: "API port (resolved)",
+      effective: String(apiPort),
+      source: apiPref.sourceLabel,
+      change: `${apiPref.changeLabel}; proxy /api → http://127.0.0.1:${apiPort}`,
+    },
+    {
+      setting: "UI port (resolved)",
+      effective: String(uiPort),
+      source: uiPref.sourceLabel,
+      change: uiPref.changeLabel,
+    },
+    {
+      setting: "Mode",
+      effective:
+        mode === "dev-server" ? "vite dev (HMR)" : "vite build --watch",
+      source: "derived",
+      change:
+        mode === "dev-server"
+          ? "bun run dev (default); MILADY_DESKTOP_VITE_BUILD_WATCH=1 for Rollup watch"
+          : "MILADY_DESKTOP_VITE_WATCH=1 + MILADY_DESKTOP_VITE_BUILD_WATCH=1",
+    },
+  ];
+}
+
+/** Print effective env once per Vite process (dev server or first Rollup watch tick). */
+function miladyDevSettingsBannerPlugin(): Plugin {
+  let printedWatch = false;
+  return {
+    name: "milady-dev-settings-banner",
+    configureServer() {
+      return () => {
+        console.log(
+          colorizeDevSettingsStartupBanner(
+            prependDevSubsystemFigletHeading(
+              "vite",
+              formatDevSettingsTable(
+                "Vite — effective settings (dev server)",
+                buildViteDevSettingsRows("dev-server"),
+              ),
+            ),
+          ),
+        );
+      };
+    },
+    buildStart() {
+      if (process.env.MILADY_DESKTOP_VITE_FAST_DIST === "1" && !printedWatch) {
+        printedWatch = true;
+        console.log(
+          colorizeDevSettingsStartupBanner(
+            prependDevSubsystemFigletHeading(
+              "vite",
+              formatDevSettingsTable(
+                "Vite — effective settings (build --watch)",
+                buildViteDevSettingsRows("build-watch"),
+              ),
+            ),
+          ),
+        );
+      }
+    },
+  };
+}
+
 function desktopCorsPlugin(): Plugin {
   return {
     name: "desktop-cors",
@@ -625,6 +772,7 @@ export default defineConfig({
     tailwindcss(),
     react(),
     desktopCorsPlugin(),
+    miladyDevSettingsBannerPlugin(),
   ],
   esbuild: {
     // Override tsconfig target — some extended configs use ES2024 which older
@@ -830,6 +978,11 @@ export default defineConfig({
     // Remap node: builtins to npm polyfills during dep optimization so
     // esbuild doesn't externalize them as "browser-external:node:*".
     esbuildOptions: {
+      // Must match build/esbuild targets: Vite's dep optimizer otherwise
+      // defaults to legacy browser targets (chrome87, safari14, …) and
+      // esbuild fails with "Transforming destructuring … is not supported yet"
+      // across modern node_modules (Radix, three, zod, etc.).
+      target: "es2022",
       plugins: [
         {
           name: "node-builtins-polyfill",
