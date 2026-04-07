@@ -1,9 +1,9 @@
 const STEALTH_GUARD = Symbol.for("eliza.claudeCodeStealthInstalled");
-const CLAUDE_CODE_VERSION = "2.1.2";
+const CLAUDE_CODE_VERSION = "2.1.92";
 const CLAUDE_CODE_SYSTEM_PREFIX =
   "You are Claude Code, Anthropic's official CLI for Claude.";
 const ANTHROPIC_BETA =
-  "claude-code-20250219,oauth-2025-04-20,fine-grained-tool-streaming-2025-05-14,interleaved-thinking-2025-05-14";
+  "claude-code-20250219,oauth-2025-04-20,interleaved-thinking-2025-05-14,context-management-2025-06-27,prompt-caching-scope-2026-01-05,advanced-tool-use-2025-11-20,effort-2025-11-24";
 
 function isSetupToken(value: string | null): value is string {
   return typeof value === "string" && value.startsWith("sk-ant-oat");
@@ -85,6 +85,12 @@ export function installClaudeCodeStealthFetchInterceptor(): void {
       return originalFetch(input, init);
     }
 
+    // Add beta=true query param so the API serves the latest model versions
+    // (matches what claude-cli does, required for opus access).
+    if (!url.searchParams.has("beta")) {
+      url.searchParams.set("beta", "true");
+    }
+
     headers.delete("x-api-key");
     headers.set("authorization", `Bearer ${setupToken}`);
     headers.set("anthropic-beta", ANTHROPIC_BETA);
@@ -115,14 +121,15 @@ export function installClaudeCodeStealthFetchInterceptor(): void {
     };
 
     if (request && !init) {
-      const nextRequest = new Request(request, {
+      const nextRequest = new Request(url.toString(), {
+        method: request.method,
         headers,
         body: typeof body === "string" ? body : undefined,
       });
       return originalFetch(nextRequest);
     }
 
-    return originalFetch(input, nextInit);
+    return originalFetch(url.toString(), nextInit);
   };
 
   if ("preconnect" in globalThis.fetch) {
