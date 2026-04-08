@@ -177,6 +177,46 @@ interface ResolvedAppModuleTarget {
   bridgeExport: string | null;
 }
 
+interface LocalPackageJson {
+  elizaos?: {
+    app?: {
+      bridgeExport?: unknown;
+    };
+  };
+}
+
+interface LocalPluginManifest {
+  app?: {
+    bridgeExport?: unknown;
+  };
+}
+
+async function readJsonFile<T>(filePath: string): Promise<T | null> {
+  try {
+    return JSON.parse(await fs.promises.readFile(filePath, "utf8")) as T;
+  } catch {
+    return null;
+  }
+}
+
+function readBridgeExportValue(value: unknown): string | null {
+  return typeof value === "string" ? value : null;
+}
+
+async function readLocalBridgeExport(packageDir: string): Promise<string | null> {
+  const packageJson = await readJsonFile<LocalPackageJson>(
+    path.join(packageDir, "package.json"),
+  );
+  const manifest = await readJsonFile<LocalPluginManifest>(
+    path.join(packageDir, "elizaos.plugin.json"),
+  );
+
+  return (
+    readBridgeExportValue(packageJson?.elizaos?.app?.bridgeExport) ??
+    readBridgeExportValue(manifest?.app?.bridgeExport)
+  );
+}
+
 async function resolveAppModuleTarget(
   appIdentifier: string,
 ): Promise<ResolvedAppModuleTarget | null> {
@@ -207,7 +247,7 @@ async function resolveAppModuleTarget(
       return {
         packageName,
         localPath,
-        bridgeExport: null,
+        bridgeExport: await readLocalBridgeExport(localPath),
       };
     }
   }

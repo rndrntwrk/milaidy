@@ -19,6 +19,12 @@ function writeFile(filePath: string, content: string): void {
   fs.writeFileSync(filePath, content, "utf8");
 }
 
+const hyperscapePluginPackageJsonUrl = new URL(
+  "../../../../../hyperscape/packages/plugin-hyperscape/package.json",
+  import.meta.url,
+);
+const hasWorkspaceHyperscapePlugin = fs.existsSync(hyperscapePluginPackageJsonUrl);
+
 describe("app-package-modules", () => {
   const tempDirs: string[] = [];
   const initialCwd = process.cwd();
@@ -118,7 +124,7 @@ describe("app-package-modules", () => {
     await expect(routeModule?.handleAppRoutes?.({})).resolves.toBe(true);
   });
 
-  it("prefers workspace-local app packages before consulting the registry", async () => {
+  it("prefers workspace-local bridge exports before consulting the registry", async () => {
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "app-local-first-"));
     tempDirs.push(tempDir);
 
@@ -135,19 +141,33 @@ describe("app-package-modules", () => {
         {
           name: "@hyperscape/plugin-hyperscape",
           type: "module",
+          elizaos: {
+            app: {
+              displayName: "Hyperscape",
+              bridgeExport: "./custom/bridge",
+            },
+          },
         },
         null,
         2,
       ),
     );
     writeFile(
-      path.join(localAppDir, "dist", "routes.js"),
+      path.join(localAppDir, "custom", "bridge.ts"),
       [
         "export async function handleAppRoutes() {",
-        "  return true;",
+        "  return 'workspace-bridge';",
         "}",
         "",
       ].join("\n"),
+    );
+    writeFile(
+      path.join(localAppDir, "src", "app.ts"),
+      'throw new Error("canonical app entry should not load when bridgeExport is declared");\n',
+    );
+    writeFile(
+      path.join(localAppDir, "src", "routes.ts"),
+      'throw new Error("legacy routes entry should not load when bridgeExport is declared");\n',
     );
 
     registryClientMocks.getPluginInfo.mockRejectedValue(
@@ -157,7 +177,9 @@ describe("app-package-modules", () => {
     const routeModule = await importAppRouteModule("@hyperscape/plugin-hyperscape");
 
     expect(routeModule).not.toBeNull();
-    await expect(routeModule?.handleAppRoutes?.({})).resolves.toBe(true);
+    await expect(routeModule?.handleAppRoutes?.({})).resolves.toBe(
+      "workspace-bridge",
+    );
     expect(registryClientMocks.getPluginInfo).not.toHaveBeenCalled();
   });
 
@@ -213,4 +235,92 @@ describe("app-package-modules", () => {
       "bridge-export",
     );
   });
+
+  it("loads a workspace-local bridge export declared only in elizaos.plugin.json", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "app-manifest-bridge-"));
+    tempDirs.push(tempDir);
+
+    const workspaceRoot = path.join(tempDir, "workspace");
+    const repoRoot = path.join(workspaceRoot, "milady");
+    fs.mkdirSync(repoRoot, { recursive: true });
+    process.chdir(repoRoot);
+    previousCwd = repoRoot;
+
+    const localAppDir = path.join(workspaceRoot, "plugins", "plugin-manifest-app");
+    writeFile(
+      path.join(localAppDir, "package.json"),
+      JSON.stringify(
+        {
+          name: "@vendor/plugin-manifest-app",
+          type: "module",
+        },
+        null,
+        2,
+      ),
+    );
+    writeFile(
+      path.join(localAppDir, "elizaos.plugin.json"),
+      JSON.stringify(
+        {
+          app: {
+            displayName: "Manifest Bridge App",
+            bridgeExport: "./bridge-entry",
+          },
+        },
+        null,
+        2,
+      ),
+    );
+    writeFile(
+      path.join(localAppDir, "bridge-entry.ts"),
+      [
+        "export async function handleAppRoutes() {",
+        "  return 'manifest-bridge';",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    writeFile(
+      path.join(localAppDir, "src", "app.ts"),
+      'throw new Error("canonical app entry should not load when manifest bridgeExport is declared");\n',
+    );
+
+    registryClientMocks.getPluginInfo.mockRejectedValue(
+      new Error("registry should not be consulted"),
+    );
+
+    const routeModule = await importAppRouteModule("@vendor/plugin-manifest-app");
+
+    expect(routeModule).not.toBeNull();
+    await expect(routeModule?.handleAppRoutes?.({})).resolves.toBe(
+      "manifest-bridge",
+    );
+    expect(registryClientMocks.getPluginInfo).not.toHaveBeenCalled();
+  });
+
+  it.skipIf(!hasWorkspaceHyperscapePlugin)(
+    "loads the real sibling Hyperscape bridge from the workspace without registry help",
+    async () => {
+      process.chdir(initialCwd);
+      previousCwd = initialCwd;
+
+      registryClientMocks.getPluginInfo.mockRejectedValue(
+        new Error("registry should not be consulted"),
+      );
+
+      const plugin = await importAppPlugin("@hyperscape/plugin-hyperscape");
+      const routeModule = await importAppRouteModule(
+        "@hyperscape/plugin-hyperscape",
+      );
+
+      expect(plugin?.name).toBe("@hyperscape/plugin-hyperscape");
+      expect(routeModule).not.toBeNull();
+      expect(typeof plugin?.appBridge?.resolveLaunchSession).toBe("function");
+      expect(typeof routeModule?.prepareLaunch).toBe("function");
+      expect(typeof routeModule?.resolveViewerAuthMessage).toBe("function");
+      expect(typeof routeModule?.resolveLaunchSession).toBe("function");
+      expect(typeof routeModule?.refreshRunSession).toBe("function");
+      expect(registryClientMocks.getPluginInfo).not.toHaveBeenCalled();
+    },
+  );
 });
