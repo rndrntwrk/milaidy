@@ -139,11 +139,13 @@ describe.skipIf(!hasLocalHyperscapePlugin)("Hyperscape E2E Integration", () => {
     originalEnv = {
       HYPERSCAPE_CHARACTER_ID: process.env.HYPERSCAPE_CHARACTER_ID,
       HYPERSCAPE_AUTH_TOKEN: process.env.HYPERSCAPE_AUTH_TOKEN,
+      HYPERSCAPE_CLIENT_URL: process.env.HYPERSCAPE_CLIENT_URL,
     };
 
     // Set test credentials for hyperscape authentication
     process.env.HYPERSCAPE_CHARACTER_ID = "test-character-id";
     process.env.HYPERSCAPE_AUTH_TOKEN = "test-auth-token";
+    process.env.HYPERSCAPE_CLIENT_URL = "http://localhost:3333";
 
     appManager = new AppManager();
     pluginManager = createMockPluginManager();
