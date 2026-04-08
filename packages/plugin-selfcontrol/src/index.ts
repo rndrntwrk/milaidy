@@ -18,7 +18,16 @@ import {
   type SelfControlPluginConfig,
   setSelfControlPluginConfig,
 } from "./selfcontrol";
-import { SelfControlBlockerService, WebsiteBlockerService } from "./service";
+import {
+  clearWebsiteBlockerExpiryTasks,
+  executeWebsiteBlockerExpiryTask,
+  registerWebsiteBlockerTaskWorker,
+  SelfControlBlockerService,
+  syncWebsiteBlockerExpiryTask,
+  WEBSITE_BLOCKER_UNBLOCK_TASK_NAME,
+  WEBSITE_BLOCKER_UNBLOCK_TASK_TAGS,
+  WebsiteBlockerService,
+} from "./service";
 
 const selfControlPlugin: Plugin = {
   name: "@miladyai/plugin-selfcontrol",
@@ -61,9 +70,12 @@ export type {
 } from "./selfcontrol";
 export {
   blockWebsitesAction,
+  clearWebsiteBlockerExpiryTasks,
+  executeWebsiteBlockerExpiryTask,
   getSelfControlPermissionState,
   getWebsiteBlockStatusAction,
   openSelfControlPermissionLocation,
+  registerWebsiteBlockerTaskWorker,
   requestSelfControlPermission,
   requestWebsiteBlockingPermissionAction,
   SelfControlBlockerService,
@@ -72,7 +84,10 @@ export {
   selfControlProvider,
   selfControlRequestPermissionAction,
   selfControlUnblockWebsitesAction,
+  syncWebsiteBlockerExpiryTask,
   unblockWebsitesAction,
+  WEBSITE_BLOCKER_UNBLOCK_TASK_NAME,
+  WEBSITE_BLOCKER_UNBLOCK_TASK_TAGS,
   WebsiteBlockerService,
   websiteBlockerProvider,
 };

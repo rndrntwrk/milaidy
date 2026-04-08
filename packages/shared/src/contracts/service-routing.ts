@@ -29,8 +29,11 @@ export type ServiceRouteConfig = {
   transport?: ServiceTransport;
   accountId?: string;
   primaryModel?: string;
+  nanoModel?: string;
+  miniModel?: string;
   smallModel?: string;
   largeModel?: string;
+  megaModel?: string;
   remoteApiBase?: string;
 
   /**
@@ -38,7 +41,9 @@ export type ServiceRouteConfig = {
    * Each step can specify a model ID (e.g., a Vertex AI fine-tuned endpoint).
    * Falls back to: stepModel -> plugin override -> smallModel/largeModel -> system default.
    */
+  responseHandlerModel?: string;
   shouldRespondModel?: string;
+  actionPlannerModel?: string;
   plannerModel?: string;
   responseModel?: string;
   mediaDescriptionModel?: string;
@@ -82,21 +87,56 @@ export const SERVICE_CAPABILITIES = [
 ] as const satisfies readonly ServiceCapability[];
 
 export function buildElizaCloudServiceRoute(args: {
+  nanoModel?: string;
+  miniModel?: string;
   smallModel?: string;
   largeModel?: string;
+  megaModel?: string;
+  responseHandlerModel?: string;
+  shouldRespondModel?: string;
+  actionPlannerModel?: string;
+  plannerModel?: string;
+  responseModel?: string;
+  mediaDescriptionModel?: string;
 } = {}): ServiceRouteConfig {
   return {
     ...ELIZA_CLOUD_ROUTE_BASE,
+    ...(args.nanoModel ? { nanoModel: args.nanoModel } : {}),
+    ...(args.miniModel ? { miniModel: args.miniModel } : {}),
     ...(args.smallModel ? { smallModel: args.smallModel } : {}),
     ...(args.largeModel ? { largeModel: args.largeModel } : {}),
+    ...(args.megaModel ? { megaModel: args.megaModel } : {}),
+    ...(args.responseHandlerModel
+      ? { responseHandlerModel: args.responseHandlerModel }
+      : {}),
+    ...(args.shouldRespondModel
+      ? { shouldRespondModel: args.shouldRespondModel }
+      : {}),
+    ...(args.actionPlannerModel
+      ? { actionPlannerModel: args.actionPlannerModel }
+      : {}),
+    ...(args.plannerModel ? { plannerModel: args.plannerModel } : {}),
+    ...(args.responseModel ? { responseModel: args.responseModel } : {}),
+    ...(args.mediaDescriptionModel
+      ? { mediaDescriptionModel: args.mediaDescriptionModel }
+      : {}),
   };
 }
 
 export function buildDefaultElizaCloudServiceRouting(args: {
   base?: ServiceRoutingConfig | null;
   includeInference?: boolean;
+  nanoModel?: string;
+  miniModel?: string;
   smallModel?: string;
   largeModel?: string;
+  megaModel?: string;
+  responseHandlerModel?: string;
+  shouldRespondModel?: string;
+  actionPlannerModel?: string;
+  plannerModel?: string;
+  responseModel?: string;
+  mediaDescriptionModel?: string;
 } = {}): ServiceRoutingConfig {
   const next: ServiceRoutingConfig = { ...(args.base ?? {}) };
 
@@ -106,8 +146,17 @@ export function buildDefaultElizaCloudServiceRouting(args: {
 
   if (args.includeInference) {
     next.llmText ??= buildElizaCloudServiceRoute({
+      nanoModel: args.nanoModel,
+      miniModel: args.miniModel,
       smallModel: args.smallModel,
       largeModel: args.largeModel,
+      megaModel: args.megaModel,
+      responseHandlerModel: args.responseHandlerModel,
+      shouldRespondModel: args.shouldRespondModel,
+      actionPlannerModel: args.actionPlannerModel,
+      plannerModel: args.plannerModel,
+      responseModel: args.responseModel,
+      mediaDescriptionModel: args.mediaDescriptionModel,
     });
   }
 
@@ -219,8 +268,20 @@ export function normalizeServiceRouteConfig(
   const transport = normalizeServiceTransport(route.transport);
   const accountId = readTrimmedString(route, "accountId");
   const primaryModel = readTrimmedString(route, "primaryModel");
+  const nanoModel = readTrimmedString(route, "nanoModel");
+  const miniModel = readTrimmedString(route, "miniModel");
   const smallModel = readTrimmedString(route, "smallModel");
   const largeModel = readTrimmedString(route, "largeModel");
+  const megaModel = readTrimmedString(route, "megaModel");
+  const responseHandlerModel = readTrimmedString(route, "responseHandlerModel");
+  const shouldRespondModel = readTrimmedString(route, "shouldRespondModel");
+  const actionPlannerModel = readTrimmedString(route, "actionPlannerModel");
+  const plannerModel = readTrimmedString(route, "plannerModel");
+  const responseModel = readTrimmedString(route, "responseModel");
+  const mediaDescriptionModel = readTrimmedString(
+    route,
+    "mediaDescriptionModel",
+  );
   const remoteApiBase = readTrimmedString(route, "remoteApiBase");
 
   if (
@@ -228,8 +289,17 @@ export function normalizeServiceRouteConfig(
     !transport &&
     !accountId &&
     !primaryModel &&
+    !nanoModel &&
+    !miniModel &&
     !smallModel &&
     !largeModel &&
+    !megaModel &&
+    !responseHandlerModel &&
+    !shouldRespondModel &&
+    !actionPlannerModel &&
+    !plannerModel &&
+    !responseModel &&
+    !mediaDescriptionModel &&
     !remoteApiBase
   ) {
     return null;
@@ -240,8 +310,17 @@ export function normalizeServiceRouteConfig(
     ...(transport ? { transport } : {}),
     ...(accountId ? { accountId } : {}),
     ...(primaryModel ? { primaryModel } : {}),
+    ...(nanoModel ? { nanoModel } : {}),
+    ...(miniModel ? { miniModel } : {}),
     ...(smallModel ? { smallModel } : {}),
     ...(largeModel ? { largeModel } : {}),
+    ...(megaModel ? { megaModel } : {}),
+    ...(responseHandlerModel ? { responseHandlerModel } : {}),
+    ...(shouldRespondModel ? { shouldRespondModel } : {}),
+    ...(actionPlannerModel ? { actionPlannerModel } : {}),
+    ...(plannerModel ? { plannerModel } : {}),
+    ...(responseModel ? { responseModel } : {}),
+    ...(mediaDescriptionModel ? { mediaDescriptionModel } : {}),
     ...(remoteApiBase ? { remoteApiBase } : {}),
   };
 }

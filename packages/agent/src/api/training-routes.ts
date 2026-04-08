@@ -276,9 +276,12 @@ export async function handleTrainingRoutes(
   // === Synthetic dataset generation ===
 
   if (method === "GET" && pathname === "/api/training/blueprints") {
-    const { ALL_BLUEPRINTS } = await import("../training/scenario-blueprints.js");
+    const { ALL_BLUEPRINTS, BLUEPRINT_STATS } = await import(
+      "../training/scenario-blueprints.js"
+    );
     json(res, {
       count: ALL_BLUEPRINTS.length,
+      stats: BLUEPRINT_STATS,
       blueprints: ALL_BLUEPRINTS.map((b) => ({
         id: b.id,
         decision: b.decision,
@@ -306,7 +309,9 @@ export async function handleTrainingRoutes(
       variantsPerBlueprint?: number;
       filterContexts?: string[];
       filterDecisions?: string[];
+      limitBlueprints?: number;
       concurrency?: number;
+      includeRoleplay?: boolean;
     }>(req, res);
     if (!body) return true;
 
@@ -322,8 +327,16 @@ export async function handleTrainingRoutes(
       return true;
     }
 
-    const { generateDataset, exportToGeminiJSONL, createAnthropicTeacher, createOpenAITeacher } =
-      await import("../training/dataset-generator.js");
+    const {
+      generateDataset,
+      exportToGeminiJSONL,
+      createAnthropicTeacher,
+      createOpenAITeacher,
+    } = await import("../training/dataset-generator.js");
+    const {
+      buildRoleplayEpisodes,
+      exportRoleplayEpisodes,
+    } = await import("../training/roleplay-trajectories.js");
 
     const teacher = anthropicKey
       ? createAnthropicTeacher(anthropicKey)
@@ -337,6 +350,7 @@ export async function handleTrainingRoutes(
         teacher,
         outputDir,
         concurrency: body.concurrency ?? 5,
+        limitBlueprints: body.limitBlueprints,
         filterContexts: body.filterContexts as any,
         filterDecisions: body.filterDecisions as any,
       });
@@ -345,15 +359,172 @@ export async function handleTrainingRoutes(
       const report = validateDataset(samples);
 
       const paths = await exportToGeminiJSONL(samples, outputDir);
+      const roleplayPaths =
+        body.includeRoleplay === false
+          ? undefined
+          : await exportRoleplayEpisodes(
+              buildRoleplayEpisodes(samples),
+              samples,
+              outputDir,
+            );
 
       json(res, {
         samplesGenerated: samples.length,
         report,
         paths,
+        roleplayPaths,
         outputDir,
       }, 201);
     } catch (err) {
       error(res, `Dataset generation failed: ${String(err)}`, 500);
+    }
+    return true;
+  }
+
+  if (method === "POST" && pathname === "/api/training/generate-roleplay") {
+    const body = await readJsonBody<{
+      variantsPerBlueprint?: number;
+      filterContexts?: string[];
+      filterDecisions?: string[];
+      limitBlueprints?: number;
+      concurrency?: number;
+    }>(req, res);
+    if (!body) return true;
+
+    const anthropicKey =
+      resolveStringSetting(runtime?.getSetting("ANTHROPIC_API_KEY")) ??
+      process.env.ANTHROPIC_API_KEY;
+    const openaiKey =
+      resolveStringSetting(runtime?.getSetting("OPENAI_API_KEY")) ??
+      process.env.OPENAI_API_KEY;
+
+    if (!anthropicKey && !openaiKey) {
+      error(
+        res,
+        "No teacher model API key found. Set ANTHROPIC_API_KEY or OPENAI_API_KEY.",
+        400,
+      );
+      return true;
+    }
+
+    const {
+      generateDataset,
+      createAnthropicTeacher,
+      createOpenAITeacher,
+    } = await import("../training/dataset-generator.js");
+    const {
+      buildRoleplayEpisodes,
+      exportRoleplayEpisodes,
+    } = await import("../training/roleplay-trajectories.js");
+
+    const teacher = anthropicKey
+      ? createAnthropicTeacher(anthropicKey)
+      : createOpenAITeacher(openaiKey!);
+    const outputDir = `.tmp/training-roleplay-${Date.now()}`;
+
+    try {
+      const samples = await generateDataset({
+        variantsPerBlueprint: body.variantsPerBlueprint ?? 3,
+        teacher,
+        outputDir,
+        concurrency: body.concurrency ?? 5,
+        limitBlueprints: body.limitBlueprints,
+        filterContexts: body.filterContexts as any,
+        filterDecisions: body.filterDecisions as any,
+      });
+      const episodes = buildRoleplayEpisodes(samples);
+      const paths = await exportRoleplayEpisodes(episodes, samples, outputDir);
+
+      json(
+        res,
+        {
+          samplesGenerated: samples.length,
+          episodesGenerated: episodes.length,
+          outputDir,
+          paths,
+        },
+        201,
+      );
+    } catch (err) {
+      error(res, `Roleplay generation failed: ${String(err)}`, 500);
+    }
+    return true;
+  }
+
+  if (method === "POST" && pathname === "/api/training/trajectories/export") {
+    const body = await readJsonBody<{
+      limit?: number;
+      trajectoryIds?: string[];
+      agentName?: string;
+      outputPath?: string;
+    }>(req, res);
+    if (!body) return true;
+
+    const outputPath =
+      body.outputPath ?? `.tmp/training-trajectory-export-${Date.now()}.jsonl`;
+
+    try {
+      const explicitIds = Array.isArray(body.trajectoryIds)
+        ? body.trajectoryIds.filter((id) => typeof id === "string" && id.trim())
+        : [];
+      const listedTrajectories =
+        explicitIds.length > 0
+          ? null
+          : ((await trainingService.listTrajectories({
+              limit: body.limit ?? 100,
+              offset: 0,
+            })) as {
+              trajectories?: Array<Record<string, unknown>>;
+            });
+      const trajectoryIds =
+        explicitIds.length > 0
+          ? explicitIds
+          : (listedTrajectories?.trajectories ?? [])
+              .map((item) =>
+                String(item.trajectoryId ?? item.id ?? ""),
+              )
+              .filter((id: string) => id.length > 0);
+
+      const details = (
+        await Promise.all(
+          trajectoryIds.map((trajectoryId: string) =>
+            trainingService.getTrajectoryById(trajectoryId),
+          ),
+        )
+      ).filter(Boolean);
+
+      const { exportTrajectoriesAsTraining } = await import(
+        "../training/dataset-generator.js"
+      );
+
+      const exported = await exportTrajectoriesAsTraining(
+        details as Array<{
+          steps: Array<{
+            llmCalls: Array<{
+              purpose?: string;
+              systemPrompt?: string;
+              userPrompt?: string;
+              response?: string;
+              model?: string;
+            }>;
+          }>;
+          metadata?: Record<string, unknown>;
+        }>,
+        body.agentName ?? runtime?.character?.name ?? "Agent",
+        outputPath,
+      );
+
+      json(
+        res,
+        {
+          exportedExamples: exported,
+          trajectoriesConsidered: trajectoryIds.length,
+          outputPath,
+        },
+        201,
+      );
+    } catch (err) {
+      error(res, `Trajectory export failed: ${String(err)}`, 500);
     }
     return true;
   }
@@ -394,6 +565,154 @@ export async function handleTrainingRoutes(
       json(res, { job }, 201);
     } catch (err) {
       error(res, `Tuning job creation failed: ${String(err)}`, 500);
+    }
+    return true;
+  }
+
+  if (method === "GET" && pathname === "/api/training/vertex/job-status") {
+    const url = new URL(
+      req.url ?? "/",
+      `http://${req.headers.host ?? "localhost"}`,
+    );
+    const jobName = url.searchParams.get("name");
+    if (!jobName) {
+      error(res, "name query parameter is required", 400);
+      return true;
+    }
+
+    const { getTuningJobStatus } = await import("../training/vertex-tuning.js");
+
+    try {
+      const job = await getTuningJobStatus(jobName);
+      json(res, { job });
+    } catch (err) {
+      error(res, `Failed to get tuning job status: ${String(err)}`, 500);
+    }
+    return true;
+  }
+
+  if (method === "POST" && pathname === "/api/training/vertex/orchestrate") {
+    const body = await readJsonBody<{
+      projectId: string;
+      gcsBucket: string;
+      trainingDataPath?: string;
+      validationDataPath?: string;
+      slot?: string;
+      scope?: "global" | "organization" | "user";
+      ownerId?: string;
+      baseModel?: string;
+      displayName?: string;
+      region?: string;
+      epochs?: number;
+      variantsPerBlueprint?: number;
+      filterContexts?: string[];
+      filterDecisions?: string[];
+      limitBlueprints?: number;
+      concurrency?: number;
+    }>(req, res);
+    if (!body) return true;
+
+    if (!body.projectId || !body.gcsBucket) {
+      error(res, "projectId and gcsBucket are required", 400);
+      return true;
+    }
+
+    const anthropicKey =
+      resolveStringSetting(runtime?.getSetting("ANTHROPIC_API_KEY")) ??
+      process.env.ANTHROPIC_API_KEY;
+    const openaiKey =
+      resolveStringSetting(runtime?.getSetting("OPENAI_API_KEY")) ??
+      process.env.OPENAI_API_KEY;
+
+    const {
+      createAnthropicTeacher,
+      createOpenAITeacher,
+      exportToGeminiJSONL,
+      generateDataset,
+    } = await import("../training/dataset-generator.js");
+    const {
+      normalizeVertexBaseModel,
+      orchestrateVertexTuning,
+    } = await import("../training/vertex-tuning.js");
+
+    const slot = (body.slot ?? "should_respond") as
+      | "should_respond"
+      | "response_handler"
+      | "action_planner"
+      | "planner"
+      | "response"
+      | "media_description";
+
+    try {
+      let trainingDataPath = body.trainingDataPath;
+      let datasetOutputDir: string | undefined;
+      let datasetPaths:
+        | {
+            shouldRespondPath: string;
+            contextRoutingPath: string;
+            combinedPath: string;
+          }
+        | undefined;
+
+      if (!trainingDataPath) {
+        if (!anthropicKey && !openaiKey) {
+          error(
+            res,
+            "No teacher model API key found. Set ANTHROPIC_API_KEY or OPENAI_API_KEY, or provide trainingDataPath.",
+            400,
+          );
+          return true;
+        }
+
+        const teacher = anthropicKey
+          ? createAnthropicTeacher(anthropicKey)
+          : createOpenAITeacher(openaiKey!);
+        datasetOutputDir = `.tmp/training-orchestration-${Date.now()}`;
+        const samples = await generateDataset({
+          variantsPerBlueprint: body.variantsPerBlueprint ?? 5,
+          teacher,
+          outputDir: datasetOutputDir,
+          concurrency: body.concurrency ?? 5,
+          limitBlueprints: body.limitBlueprints,
+          filterContexts: body.filterContexts as any,
+          filterDecisions: body.filterDecisions as any,
+        });
+        datasetPaths = await exportToGeminiJSONL(samples, datasetOutputDir);
+        trainingDataPath =
+          slot === "should_respond" || slot === "response_handler"
+            ? datasetPaths.shouldRespondPath
+            : slot === "action_planner" || slot === "planner"
+              ? datasetPaths.combinedPath
+              : datasetPaths.combinedPath;
+      }
+
+      const orchestration = await orchestrateVertexTuning({
+        projectId: body.projectId,
+        region: body.region ?? "us-central1",
+        gcsBucket: body.gcsBucket,
+        baseModel: normalizeVertexBaseModel(body.baseModel, slot),
+        trainingDataPath,
+        validationDataPath: body.validationDataPath,
+        epochs: body.epochs ?? 3,
+        displayName:
+          body.displayName ??
+          `milady-${slot.replace(/_/g, "-")}-${Date.now()}`,
+        slot,
+        scope: body.scope ?? "global",
+        ownerId: body.ownerId,
+      });
+
+      json(
+        res,
+        {
+          ...orchestration,
+          datasetOutputDir,
+          datasetPaths,
+        },
+        201,
+      );
+    } catch (err) {
+      error(res, `Vertex orchestration failed: ${String(err)}`, 500);
     }
     return true;
   }

@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import type { IAgentRuntime, Task, UUID } from "@elizaos/core";
 import {
   cancelSelfControlExpiryTimer,
   resetSelfControlStatusCache,
@@ -17,10 +18,52 @@ import {
 let tempDir = "";
 let hostsFilePath = "";
 
+function createRuntimeMock(): IAgentRuntime {
+  const workerRegistry = new Map<string, unknown>();
+  let nextTaskId = 0;
+  const state = {
+    tasks: [] as Task[],
+  };
+
+  return {
+    agentId: "agent-selfcontrol" as UUID,
+    getTasks: vi.fn(async () => [...state.tasks]),
+    createTask: vi.fn(async (task: Task) => {
+      const id = (task.id ?? `website-blocker-task-${nextTaskId++}`) as UUID;
+      state.tasks.push({ ...task, id });
+      return id;
+    }),
+    updateTask: vi.fn(async (taskId: UUID, update: Partial<Task>) => {
+      state.tasks = state.tasks.map((task) =>
+        task.id === taskId
+          ? {
+              ...task,
+              ...update,
+              metadata: {
+                ...((task.metadata as Record<string, unknown> | undefined) ??
+                  {}),
+                ...((update.metadata as Record<string, unknown> | undefined) ??
+                  {}),
+              },
+            }
+          : task,
+      );
+    }),
+    deleteTask: vi.fn(async (taskId: UUID) => {
+      state.tasks = state.tasks.filter((task) => task.id !== taskId);
+    }),
+    registerTaskWorker: vi.fn((worker: { name: string }) => {
+      workerRegistry.set(worker.name, worker);
+    }),
+    getTaskWorker: vi.fn((name: string) => workerRegistry.get(name)),
+  } as unknown as IAgentRuntime;
+}
+
 function buildCtx(
   method: string,
   pathname: string,
   body?: Record<string, unknown>,
+  runtime?: IAgentRuntime,
 ): WebsiteBlockerRouteContext {
   const { res } = createMockHttpResponse();
   return {
@@ -28,6 +71,7 @@ function buildCtx(
     res,
     method,
     pathname,
+    runtime,
     json: vi.fn((response, data, status = 200) => {
       response.writeHead(status);
       response.end(JSON.stringify(data));
@@ -76,10 +120,16 @@ describe("website-blocker-routes", () => {
   });
 
   test("PUT /api/website-blocker starts a block from explicit websites", async () => {
-    const ctx = buildCtx("PUT", "/api/website-blocker", {
-      websites: ["x.com", "twitter.com"],
-      durationMinutes: 30,
-    });
+    const runtime = createRuntimeMock();
+    const ctx = buildCtx(
+      "PUT",
+      "/api/website-blocker",
+      {
+        websites: ["x.com", "twitter.com"],
+        durationMinutes: 30,
+      },
+      runtime,
+    );
 
     const handled = await handleWebsiteBlockerRoutes(ctx);
 
@@ -119,14 +169,20 @@ describe("website-blocker-routes", () => {
   });
 
   test("DELETE /api/website-blocker removes an active block", async () => {
+    const runtime = createRuntimeMock();
     await handleWebsiteBlockerRoutes(
-      buildCtx("PUT", "/api/website-blocker", {
-        websites: ["x.com"],
-        durationMinutes: 15,
-      }),
+      buildCtx(
+        "PUT",
+        "/api/website-blocker",
+        {
+          websites: ["x.com"],
+          durationMinutes: 15,
+        },
+        runtime,
+      ),
     );
 
-    const ctx = buildCtx("DELETE", "/api/website-blocker");
+    const ctx = buildCtx("DELETE", "/api/website-blocker", undefined, runtime);
     const handled = await handleWebsiteBlockerRoutes(ctx);
 
     expect(handled).toBe(true);
@@ -139,6 +195,25 @@ describe("website-blocker-routes", () => {
         websites: [],
       },
     });
+    expect(fs.readFileSync(hostsFilePath, "utf8")).toBe(
+      "127.0.0.1 localhost\n",
+    );
+  });
+
+  test("PUT /api/website-blocker rejects timed blocks when no runtime is available", async () => {
+    const ctx = buildCtx("PUT", "/api/website-blocker", {
+      websites: ["x.com"],
+      durationMinutes: 15,
+    });
+
+    const handled = await handleWebsiteBlockerRoutes(ctx);
+
+    expect(handled).toBe(true);
+    expect(ctx.error).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.stringContaining("Timed website blocks require the Eliza runtime"),
+      503,
+    );
     expect(fs.readFileSync(hostsFilePath, "utf8")).toBe(
       "127.0.0.1 localhost\n",
     );

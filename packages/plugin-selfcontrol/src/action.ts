@@ -19,6 +19,7 @@ import {
   startSelfControlBlock,
   stopSelfControlBlock,
 } from "./selfcontrol";
+import { syncWebsiteBlockerExpiryTask } from "./service";
 
 const WEBSITE_BLOCKER_CONTEXT_WINDOW = 16;
 
@@ -302,7 +303,10 @@ export const blockWebsitesAction: Action = {
       };
     }
 
-    const result = await startSelfControlBlock(parsed.request);
+    const result = await startSelfControlBlock({
+      ...parsed.request,
+      scheduledByAgentId: String(runtime.agentId),
+    });
     if (result.success === false) {
       return {
         success: false,
@@ -316,6 +320,25 @@ export const blockWebsitesAction: Action = {
             }
           : undefined,
       };
+    }
+
+    if (parsed.request.durationMinutes !== null) {
+      try {
+        const taskId = await syncWebsiteBlockerExpiryTask(runtime);
+        if (!taskId) {
+          await stopSelfControlBlock();
+          return {
+            success: false,
+            text: "Milady started the website block but could not schedule its automatic unblock task, so it rolled the block back.",
+          };
+        }
+      } catch (error) {
+        await stopSelfControlBlock();
+        return {
+          success: false,
+          text: `Milady could not schedule the automatic unblock task, so it rolled the website block back. ${error instanceof Error ? error.message : String(error)}`,
+        };
+      }
     }
 
     return {

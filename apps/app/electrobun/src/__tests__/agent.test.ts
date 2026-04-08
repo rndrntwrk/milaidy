@@ -70,10 +70,9 @@ vi.mock("../native/loopback-port", () => ({
 const mockSpawn = vi.fn();
 const mockSleep = vi.fn(() => Promise.resolve());
 
-vi.stubGlobal("Bun", {
-  spawn: mockSpawn,
-  sleep: mockSleep,
-});
+// Bun global is non-configurable on globalThis but Bun.spawn and Bun.sleep are writable; assign directly.
+(Bun as unknown as { spawn: unknown }).spawn = mockSpawn;
+(Bun as unknown as { sleep: unknown }).sleep = mockSleep;
 
 // Mock fetch for health checks
 const mockFetch = vi.fn();

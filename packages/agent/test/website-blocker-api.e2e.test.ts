@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import type { AgentRuntime, Task, UUID } from "@elizaos/core";
 import {
   cancelSelfControlExpiryTimer,
   resetSelfControlStatusCache,
@@ -13,6 +14,62 @@ import { startApiServer } from "../src/api/server";
 let tempDir = "";
 let hostsFilePath = "";
 let closeServer: (() => Promise<void>) | undefined;
+
+function createRuntimeMock(): AgentRuntime {
+  const workerRegistry = new Map<string, unknown>();
+  let nextTaskId = 0;
+  const tasks: Task[] = [];
+
+  return {
+    agentId: "website-blocker-api-agent" as UUID,
+    character: {
+      name: "Chen",
+    },
+    logger: {
+      debug: () => {},
+      info: () => {},
+      warn: () => {},
+      error: () => {},
+    },
+    getTask: async (taskId: UUID) =>
+      tasks.find((task) => task.id === taskId) ?? null,
+    getTasks: async () => [...tasks],
+    createTask: async (task: Task) => {
+      const id = (task.id ?? `website-blocker-task-${nextTaskId++}`) as UUID;
+      tasks.push({ ...task, id });
+      return id;
+    },
+    updateTask: async (taskId: UUID, update: Partial<Task>) => {
+      const index = tasks.findIndex((task) => task.id === taskId);
+      if (index === -1) {
+        return;
+      }
+      const current = tasks[index] as Task;
+      tasks[index] = {
+        ...current,
+        ...update,
+        metadata: {
+          ...((current.metadata as Record<string, unknown> | undefined) ?? {}),
+          ...((update.metadata as Record<string, unknown> | undefined) ?? {}),
+        },
+      };
+    },
+    deleteTask: async (taskId: UUID) => {
+      const index = tasks.findIndex((task) => task.id === taskId);
+      if (index !== -1) {
+        tasks.splice(index, 1);
+      }
+    },
+    registerTaskWorker: (worker: { name: string }) => {
+      workerRegistry.set(worker.name, worker);
+    },
+    getTaskWorker: (name: string) => workerRegistry.get(name),
+    getService: () => null,
+    getServicesByType: () => [],
+    emitEvent: async () => {},
+    registerSendHandler: () => {},
+  } as unknown as AgentRuntime;
+}
 
 afterEach(async () => {
   cancelSelfControlExpiryTimer();
@@ -38,7 +95,10 @@ describe("website-blocker API (e2e)", () => {
     await fs.writeFile(hostsFilePath, "127.0.0.1 localhost\n", "utf8");
     setSelfControlPluginConfig({ hostsFilePath, statusCacheTtlMs: 0 });
 
-    const server = await startApiServer({ port: 0 });
+    const server = await startApiServer({
+      port: 0,
+      runtime: createRuntimeMock(),
+    });
     closeServer = server.close;
 
     const startResponse = await req(

@@ -276,6 +276,27 @@ describe("installRuntimePluginLifecycle", () => {
     expect(runtime.getPluginOwnership?.("@elizaos/plugin-demo")).toBeNull();
   });
 
+  it("inherits plugin contexts for unscoped actions and providers", async () => {
+    const runtime = createMockRuntime();
+
+    await runtime.registerPlugin({
+      name: "@elizaos/plugin-wallet-demo",
+      description: "wallet demo",
+      contexts: ["wallet"],
+      actions: [{ name: "WALLET_ACTION" } as never],
+      providers: [{ name: "walletProvider" } as never],
+    });
+
+    expect(runtime.actions[0]).toMatchObject({
+      name: "WALLET_ACTION",
+      contexts: ["wallet"],
+    });
+    expect(runtime.providers[0]).toMatchObject({
+      name: "walletProvider",
+      contexts: ["wallet"],
+    });
+  });
+
   it("rolls back partial plugin registration when init fails", async () => {
     const runtime = createMockRuntime();
     const failingPlugin: Plugin = {

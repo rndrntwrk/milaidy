@@ -5590,6 +5590,7 @@ async function handleRequest(
       res,
       method,
       pathname,
+      runtime: state.runtime ?? undefined,
       readJsonBody,
       json,
       error,

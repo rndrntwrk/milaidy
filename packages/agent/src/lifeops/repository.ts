@@ -61,14 +61,22 @@ async function runMigrationWithSavepoint(
   migration: () => Promise<void>,
 ): Promise<void> {
   const safeName = name.replace(/[^a-zA-Z0-9_]/g, "_");
-  await executeRawSql(runtime, `SAVEPOINT ${safeName}`);
+  // PGlite/Postgres only allow SAVEPOINT inside an open transaction.
+  await executeRawSql(runtime, "BEGIN");
   try {
-    await migration();
-    await executeRawSql(runtime, `RELEASE SAVEPOINT ${safeName}`);
+    await executeRawSql(runtime, `SAVEPOINT ${safeName}`);
+    try {
+      await migration();
+      await executeRawSql(runtime, `RELEASE SAVEPOINT ${safeName}`);
+    } catch (error) {
+      await executeRawSql(runtime, `ROLLBACK TO SAVEPOINT ${safeName}`).catch(
+        () => {},
+      );
+      throw error;
+    }
+    await executeRawSql(runtime, "COMMIT");
   } catch (error) {
-    await executeRawSql(runtime, `ROLLBACK TO SAVEPOINT ${safeName}`).catch(
-      () => {},
-    );
+    await executeRawSql(runtime, "ROLLBACK").catch(() => {});
     throw error;
   }
 }
@@ -962,6 +970,11 @@ export async function ensureLifeOpsTables(
       metadata_json TEXT NOT NULL DEFAULT '{}',
       created_at TEXT NOT NULL
     )`,
+  ];
+
+  // Run after legacy ownership columns are present; older DBs do not have
+  // domain/subject_* until the ALTERs below.
+  const coreIndexStatements = [
     `CREATE INDEX IF NOT EXISTS idx_life_task_definitions_agent_status
       ON life_task_definitions(agent_id, status)`,
     `CREATE INDEX IF NOT EXISTS idx_life_task_definitions_subject
@@ -1002,7 +1015,7 @@ export async function ensureLifeOpsTables(
       ON life_channel_policies(agent_id, channel_type)`,
     `CREATE INDEX IF NOT EXISTS idx_life_website_access_grants_group
       ON life_website_access_grants(agent_id, group_key, revoked_at, expires_at)`,
-  ];
+  ] as const;
 
   for (const statement of statements) {
     await executeRawSql(runtime, statement);
@@ -1063,6 +1076,10 @@ export async function ensureLifeOpsTables(
       runtime,
       "ALTER TABLE life_task_definitions ADD COLUMN website_access_json TEXT",
     );
+  }
+
+  for (const statement of coreIndexStatements) {
+    await executeRawSql(runtime, statement);
   }
 
   const existingConnectorGrantColumns = new Set(

@@ -1,4 +1,5 @@
-import type { Memory } from "@elizaos/core";
+import type { IAgentRuntime, Memory } from "@elizaos/core";
+import { syncWebsiteBlockerExpiryTask } from "@miladyai/plugin-selfcontrol";
 import {
   getSelfControlStatus,
   parseSelfControlBlockRequest,
@@ -13,7 +14,9 @@ type WebsiteBlockerRequestBody = {
   text?: string;
 };
 
-export interface WebsiteBlockerRouteContext extends RouteRequestContext {}
+export interface WebsiteBlockerRouteContext extends RouteRequestContext {
+  runtime?: IAgentRuntime | null;
+}
 
 function toSyntheticMessage(text: string | undefined): Memory | undefined {
   if (typeof text !== "string" || text.trim().length === 0) {
@@ -53,7 +56,8 @@ function buildBlockRequest(
 export async function handleWebsiteBlockerRoutes(
   ctx: WebsiteBlockerRouteContext,
 ): Promise<boolean> {
-  const { req, res, method, pathname, readJsonBody, json } = ctx;
+  const { req, res, method, pathname, readJsonBody, json, error, runtime } =
+    ctx;
 
   if (
     pathname !== "/api/website-blocker" &&
@@ -85,8 +89,50 @@ export async function handleWebsiteBlockerRoutes(
       return true;
     }
 
-    const result = await startSelfControlBlock(parsed.request);
+    if (parsed.request.durationMinutes !== null && !runtime) {
+      error(
+        res,
+        "Timed website blocks require the Eliza runtime so Milady can schedule the automatic unblock task.",
+        503,
+      );
+      return true;
+    }
+
+    const result = await startSelfControlBlock({
+      ...parsed.request,
+      scheduledByAgentId: runtime ? String(runtime.agentId) : null,
+    });
     if (result.success === true) {
+      if (parsed.request.durationMinutes !== null && runtime) {
+        try {
+          const taskId = await syncWebsiteBlockerExpiryTask(runtime);
+          if (!taskId) {
+            await stopSelfControlBlock();
+            json(
+              res,
+              {
+                success: false,
+                error:
+                  "Milady started the website block but could not schedule its automatic unblock task, so it rolled the block back.",
+              },
+              500,
+            );
+            return true;
+          }
+        } catch (scheduleError) {
+          await stopSelfControlBlock();
+          json(
+            res,
+            {
+              success: false,
+              error: `Milady could not schedule the automatic unblock task, so it rolled the website block back. ${scheduleError instanceof Error ? scheduleError.message : String(scheduleError)}`,
+            },
+            500,
+          );
+          return true;
+        }
+      }
+
       json(
         res,
         {

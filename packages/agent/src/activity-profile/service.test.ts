@@ -1,7 +1,6 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { DatabaseSync } from "node:sqlite";
 import sharp from "sharp";
 import type { IAgentRuntime } from "@elizaos/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -13,6 +12,16 @@ import {
 } from "./service";
 import { LifeOpsScreenContextSampler } from "../lifeops/screen-context";
 import { LifeOpsService } from "../lifeops/service";
+
+let DatabaseSync: typeof import("node:sqlite").DatabaseSync;
+const hasNodeSqlite = await (async () => {
+  try {
+    ({ DatabaseSync } = await import("node:sqlite"));
+    return true;
+  } catch {
+    return false;
+  }
+})();
 
 const NOW = new Date("2026-04-06T07:00:00Z");
 const OWNER_ID = "owner-1";
@@ -74,7 +83,7 @@ async function createJpeg(text: string): Promise<Buffer> {
   return await sharp(Buffer.from(svg)).jpeg({ quality: 92 }).toBuffer();
 }
 
-describe("refreshCurrentState", () => {
+describe.skipIf(!hasNodeSqlite)("refreshCurrentState", () => {
   afterEach(() => {
     while (tempDirs.length > 0) {
       const dir = tempDirs.pop();

@@ -2726,7 +2726,7 @@ describe("API Server E2E (no runtime)", () => {
       }
     });
 
-    it("GET /api/trajectories/:id backfills chat prompt and response from conversation memory when detail is synthetic", async () => {
+    it("GET /api/trajectories/:id backfills chat prompt and response from conversation memory when detail has no LLM calls", async () => {
       const trajectoryId = "trajectory-conversation-backfill";
       const roomId = "room-conversation-backfill";
       const startTime = Date.now() - 2_000;
@@ -2748,7 +2748,7 @@ describe("API Server E2E (no runtime)", () => {
               endTime,
               durationMs: endTime - startTime,
               stepCount: 1,
-              llmCallCount: 1,
+              llmCallCount: 0,
               totalPromptTokens: 0,
               totalCompletionTokens: 0,
               totalReward: 0,
@@ -2769,23 +2769,9 @@ describe("API Server E2E (no runtime)", () => {
           durationMs: endTime - startTime,
           steps: [
             {
-              stepId: "step-synthetic",
+              stepId: "step-empty",
               timestamp: startTime + 100,
-              llmCalls: [
-                {
-                  callId: "call-synthetic",
-                  timestamp: startTime + 100,
-                  model: "milady/synthetic-trajectory-fallback",
-                  systemPrompt:
-                    "[synthetic] inserted by trajectory logger because no LLM calls were captured",
-                  userPrompt:
-                    "[synthetic] this trajectory completed without recorded model activity",
-                  response:
-                    "[synthetic] placeholder call inserted to enforce minimum llm_call_count=1",
-                  purpose: "other",
-                  actionType: "TRAJECTORY_FALLBACK",
-                },
-              ],
+              llmCalls: [],
               providerAccesses: [],
             },
           ],
@@ -2800,7 +2786,7 @@ describe("API Server E2E (no runtime)", () => {
         getStats: async () => ({
           totalTrajectories: 1,
           totalSteps: 1,
-          totalLlmCalls: 1,
+          totalLlmCalls: 0,
           totalPromptTokens: 0,
           totalCompletionTokens: 0,
           averageDurationMs: endTime - startTime,
@@ -2898,7 +2884,7 @@ describe("API Server E2E (no runtime)", () => {
               endTime,
               durationMs: endTime - startTime,
               stepCount: 1,
-              llmCallCount: 1,
+              llmCallCount: 0,
               totalPromptTokens: 0,
               totalCompletionTokens: 0,
               totalReward: 0,
@@ -2919,23 +2905,9 @@ describe("API Server E2E (no runtime)", () => {
           durationMs: endTime - startTime,
           steps: [
             {
-              stepId: "step-synthetic",
+              stepId: "step-no-llm",
               timestamp: startTime + 100,
-              llmCalls: [
-                {
-                  callId: "call-synthetic",
-                  timestamp: startTime + 100,
-                  model: "milady/synthetic-trajectory-fallback",
-                  systemPrompt:
-                    "[synthetic] inserted by trajectory logger because no LLM calls were captured",
-                  userPrompt:
-                    "[synthetic] this trajectory completed without recorded model activity",
-                  response:
-                    "[synthetic] placeholder call inserted to enforce minimum llm_call_count=1",
-                  purpose: "other",
-                  actionType: "TRAJECTORY_FALLBACK",
-                },
-              ],
+              llmCalls: [],
               providerAccesses: [
                 {
                   providerId: "provider-1",
@@ -2954,14 +2926,12 @@ describe("API Server E2E (no runtime)", () => {
             source: "client_chat",
             roomId,
             messageId,
-            syntheticLlmCall: true,
-            syntheticLlmCallSource: "finalize",
           },
         }),
         getStats: async () => ({
           totalTrajectories: 1,
           totalSteps: 1,
-          totalLlmCalls: 1,
+          totalLlmCalls: 0,
           totalPromptTokens: 0,
           totalCompletionTokens: 0,
           averageDurationMs: endTime - startTime,

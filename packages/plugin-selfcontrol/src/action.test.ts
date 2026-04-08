@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import type { IAgentRuntime, Task, UUID } from "@elizaos/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SELFCONTROL_ACCESS_ERROR } from "./access";
@@ -28,6 +29,51 @@ import {
 let tempDir = "";
 let hostsFilePath = "";
 
+function createRuntimeMock(
+  overrides: Partial<IAgentRuntime> = {},
+): IAgentRuntime & { __tasks: Task[] } {
+  const workerRegistry = new Map<string, unknown>();
+  let nextTaskId = 0;
+  const state = {
+    tasks: [] as Task[],
+  };
+
+  return {
+    agentId: "agent-selfcontrol" as UUID,
+    getTasks: vi.fn(async () => [...state.tasks]),
+    createTask: vi.fn(async (task: Task) => {
+      const id = (task.id ?? `website-blocker-task-${nextTaskId++}`) as UUID;
+      state.tasks.push({ ...task, id });
+      return id;
+    }),
+    updateTask: vi.fn(async (taskId: UUID, update: Partial<Task>) => {
+      state.tasks = state.tasks.map((task) =>
+        task.id === taskId
+          ? {
+              ...task,
+              ...update,
+              metadata: {
+                ...((task.metadata as Record<string, unknown> | undefined) ??
+                  {}),
+                ...((update.metadata as Record<string, unknown> | undefined) ??
+                  {}),
+              },
+            }
+          : task,
+      );
+    }),
+    deleteTask: vi.fn(async (taskId: UUID) => {
+      state.tasks = state.tasks.filter((task) => task.id !== taskId);
+    }),
+    registerTaskWorker: vi.fn((worker: { name: string }) => {
+      workerRegistry.set(worker.name, worker);
+    }),
+    getTaskWorker: vi.fn((name: string) => workerRegistry.get(name)),
+    __tasks: state.tasks,
+    ...overrides,
+  } as IAgentRuntime & { __tasks: Task[] };
+}
+
 beforeEach(() => {
   tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "milady-selfcontrol-"));
   hostsFilePath = path.join(tempDir, "hosts");
@@ -54,8 +100,9 @@ afterEach(() => {
 
 describe("blockWebsitesAction", () => {
   it("uses explicit action parameters when they are provided", async () => {
+    const runtime = createRuntimeMock();
     const result = await blockWebsitesAction.handler(
-      {} as never,
+      runtime,
       {
         entityId: "user-1",
         roomId: "room-1",
@@ -93,10 +140,11 @@ describe("blockWebsitesAction", () => {
       },
     ]);
 
+    const runtime = createRuntimeMock({
+      getMemories,
+    } as Partial<IAgentRuntime>);
     const result = await blockWebsitesAction.handler(
-      {
-        getMemories,
-      } as never,
+      runtime,
       {
         entityId: "user-1",
         roomId: "room-1",
@@ -121,10 +169,11 @@ describe("blockWebsitesAction", () => {
   });
 
   it("fails with a conversation-aware error when the action has no parameters and no websites can be derived from recent messages", async () => {
+    const runtime = createRuntimeMock({
+      getMemories: vi.fn().mockResolvedValue([]),
+    } as Partial<IAgentRuntime>);
     const result = await blockWebsitesAction.handler(
-      {
-        getMemories: vi.fn().mockResolvedValue([]),
-      } as never,
+      runtime,
       {
         entityId: "user-1",
         roomId: "room-1",
@@ -154,10 +203,11 @@ describe("blockWebsitesAction", () => {
       },
     ]);
 
+    const runtime = createRuntimeMock({
+      getMemories,
+    } as Partial<IAgentRuntime>);
     const result = await blockWebsitesAction.handler(
-      {
-        getMemories,
-      } as never,
+      runtime,
       {
         entityId: "user-1",
         roomId: "room-1",
@@ -175,8 +225,9 @@ describe("blockWebsitesAction", () => {
   });
 
   it("refuses to start a second block while another one is active", async () => {
+    const runtime = createRuntimeMock();
     await blockWebsitesAction.handler(
-      {} as never,
+      runtime,
       {
         content: { text: "Block x.com for 30 minutes." },
       } as never,
@@ -185,7 +236,7 @@ describe("blockWebsitesAction", () => {
     );
 
     const result = await blockWebsitesAction.handler(
-      {} as never,
+      runtime,
       {
         entityId: "user-1",
         roomId: "room-1",
@@ -208,18 +259,16 @@ describe("blockWebsitesAction", () => {
       canManageRoles: false,
     });
 
-    const validate = await blockWebsitesAction.validate?.(
-      {} as never,
-      {
-        entityId: "user-1",
-        roomId: "room-1",
-        content: { text: "block x.com" },
-      } as never,
-    );
+    const validate = await blockWebsitesAction.validate?.(createRuntimeMock(), {
+      entityId: "user-1",
+      roomId: "room-1",
+      content: { text: "block x.com" },
+    } as never);
     expect(validate).toBe(false);
 
+    const runtime = createRuntimeMock();
     const result = await blockWebsitesAction.handler(
-      {} as never,
+      runtime,
       {
         entityId: "user-1",
         roomId: "room-1",
@@ -236,21 +285,19 @@ describe("blockWebsitesAction", () => {
   });
 
   it("does not block when the current message explicitly says not to block yet", async () => {
-    const validate = await blockWebsitesAction.validate?.(
-      {} as never,
-      {
-        entityId: "user-1",
-        roomId: "room-1",
-        content: {
-          text: "The websites distracting me are x.com and twitter.com. Do not block them yet.",
-        },
-      } as never,
-    );
+    const runtime = createRuntimeMock();
+    const validate = await blockWebsitesAction.validate?.(runtime, {
+      entityId: "user-1",
+      roomId: "room-1",
+      content: {
+        text: "The websites distracting me are x.com and twitter.com. Do not block them yet.",
+      },
+    } as never);
 
     expect(validate).toBe(false);
 
     const result = await blockWebsitesAction.handler(
-      {} as never,
+      runtime,
       {
         entityId: "user-1",
         roomId: "room-1",
@@ -277,8 +324,9 @@ describe("blockWebsitesAction", () => {
 
 describe("getWebsiteBlockStatusAction", () => {
   it("reports the active block details", async () => {
+    const runtime = createRuntimeMock();
     await blockWebsitesAction.handler(
-      {} as never,
+      runtime,
       {
         entityId: "user-1",
         roomId: "room-1",
@@ -289,7 +337,7 @@ describe("getWebsiteBlockStatusAction", () => {
     );
 
     const result = await getWebsiteBlockStatusAction.handler(
-      {} as never,
+      runtime,
       {
         entityId: "user-1",
         roomId: "room-1",
@@ -312,8 +360,9 @@ describe("getWebsiteBlockStatusAction", () => {
 
 describe("requestWebsiteBlockingPermissionAction", () => {
   it("reports the website blocking permission state for admin users", async () => {
+    const runtime = createRuntimeMock();
     const result = await requestWebsiteBlockingPermissionAction.handler(
-      {} as never,
+      runtime,
       {
         entityId: "user-1",
         roomId: "room-1",
@@ -337,8 +386,9 @@ describe("requestWebsiteBlockingPermissionAction", () => {
 
 describe("unblockWebsitesAction", () => {
   it("removes an active website block early", async () => {
+    const runtime = createRuntimeMock();
     await blockWebsitesAction.handler(
-      {} as never,
+      runtime,
       {
         entityId: "user-1",
         roomId: "room-1",
@@ -349,7 +399,7 @@ describe("unblockWebsitesAction", () => {
     );
 
     const result = await unblockWebsitesAction.handler(
-      {} as never,
+      runtime,
       {
         entityId: "user-1",
         roomId: "room-1",

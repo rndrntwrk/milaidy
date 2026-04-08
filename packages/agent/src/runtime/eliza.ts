@@ -1171,6 +1171,32 @@ function isElizaCloudManagedProcessEnvKey(key: string): boolean {
   );
 }
 
+/**
+ * Locate `plugins/plugin-browser/stagehand-server` by walking upward from the
+ * runtime directory. Supports both this repo layout and a parent workspace
+ * that nests `eliza/packages/agent/...`.
+ */
+export function findPluginBrowserStagehandDir(startDir: string): string | null {
+  let dir = path.resolve(startDir);
+  for (let depth = 0; depth < 14; depth++) {
+    const candidate = path.join(
+      dir,
+      "plugins",
+      "plugin-browser",
+      "stagehand-server",
+    );
+    const distIndex = path.join(candidate, "dist", "index.js");
+    const srcEntry = path.join(candidate, "src", "index.ts");
+    if (existsSync(distIndex) || existsSync(srcEntry)) {
+      return candidate;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return null;
+}
+
 export function ensureBrowserServerLink(): boolean {
   try {
     // Resolve the plugin-browser package root via its package.json.
@@ -1183,16 +1209,14 @@ export function ensureBrowserServerLink(): boolean {
     // Already linked / available — nothing to do.
     if (existsSync(serverIndex)) return true;
 
-    // Walk upward from this file to find the eliza-workspace root.
-    // Layout: <workspace>/eliza/packages/agent/src/runtime/eliza.ts
     const thisDir = path.dirname(fileURLToPath(import.meta.url));
-    const workspaceRoot = path.resolve(thisDir, "..", "..", "..", "..", "..");
-    const stagehandDir = path.join(
-      workspaceRoot,
-      "plugins",
-      "plugin-browser",
-      "stagehand-server",
-    );
+    const stagehandDir = findPluginBrowserStagehandDir(thisDir);
+    if (!stagehandDir) {
+      logger.debug(
+        "[eliza] plugin-browser: no stagehand-server under plugins/plugin-browser",
+      );
+      return false;
+    }
     const stagehandIndex = path.join(stagehandDir, "dist", "index.js");
 
     // Auto-build if source exists but dist doesn't
@@ -1229,9 +1253,8 @@ export function ensureBrowserServerLink(): boolean {
     }
 
     if (!existsSync(stagehandIndex)) {
-      logger.info(
-        `[eliza] Browser server not found at ${stagehandDir} — ` +
-          `@elizaos/plugin-browser will not be loaded`,
+      logger.debug(
+        "[eliza] plugin-browser: stagehand-server present but dist/index.js missing",
       );
       return false;
     }

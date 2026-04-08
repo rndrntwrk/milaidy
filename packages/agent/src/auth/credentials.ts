@@ -219,42 +219,46 @@ function importClaudeCodeOAuthToken(): string | null {
  * Apply subscription credentials to the environment.
  * Called at startup to make credentials available to elizaOS plugins.
  *
+ * **Claude subscription tokens are NOT applied to the runtime environment.**
+ * Anthropic's TOS only permits Claude subscription tokens to be used through
+ * the Claude Code CLI itself.  Milady honours this by keeping the token
+ * available for the task-agent orchestrator (which spawns `claude` CLI
+ * subprocesses) but never injecting it into `process.env.ANTHROPIC_API_KEY`
+ * or installing the stealth fetch interceptor.
+ *
+ * Codex / ChatGPT subscription tokens *are* applied to the environment
+ * because OpenAI permits direct API usage with those tokens.
+ *
  * When a `config` is provided and the active subscription provider has
  * credentials, `model.primary` is auto-set so the user doesn't need to
- * configure it manually.
+ * configure it manually — but only for providers whose tokens are applied
+ * to the runtime (currently Codex only).
  */
 export async function applySubscriptionCredentials(config?: {
   agents?: {
     defaults?: { subscriptionProvider?: string; model?: { primary?: string } };
   };
 }): Promise<void> {
-  // Anthropic subscription → set ANTHROPIC_API_KEY
-  let anthropicToken = await getAccessToken("anthropic-subscription");
+  // ── Anthropic subscription ────────────────────────────────────────────
+  // We check whether the token exists (for status reporting) but do NOT
+  // set it as ANTHROPIC_API_KEY.  The token is only usable through the
+  // Claude Code CLI spawned by the task-agent orchestrator.
+  let hasAnthropicSubscription = await getAccessToken(
+    "anthropic-subscription",
+  ).then((t) => t !== null);
 
-  // Fallback: if no stored credentials, try importing from Claude Code's
-  // keychain or credentials file. This lets users who have Claude Code
-  // installed use Milady without separate API key setup.
-  if (!anthropicToken) {
-    anthropicToken = importClaudeCodeOAuthToken();
+  if (!hasAnthropicSubscription) {
+    hasAnthropicSubscription = importClaudeCodeOAuthToken() !== null;
   }
 
-  if (anthropicToken) {
-    process.env.ANTHROPIC_API_KEY = anthropicToken;
+  if (hasAnthropicSubscription) {
     logger.info(
-      "[auth] Applied Anthropic subscription credentials to environment",
+      "[auth] Claude subscription detected — available for task agents only (TOS restriction). " +
+        "Use Eliza Cloud, a direct Anthropic API key, or another provider for the main agent runtime.",
     );
-    // Install Claude stealth interceptor (non-fatal)
-    try {
-      const { applyClaudeCodeStealth } = await import("./apply-stealth");
-      applyClaudeCodeStealth();
-    } catch (err) {
-      logger.warn(
-        `[auth] Failed to apply Claude stealth: ${String(err)}`,
-      );
-    }
   }
 
-  // OpenAI Codex subscription → set OPENAI_API_KEY
+  // ── OpenAI Codex subscription → set OPENAI_API_KEY ────────────────────
   const codexToken = await getAccessToken("openai-codex");
   if (codexToken) {
     process.env.OPENAI_API_KEY = codexToken;
@@ -263,25 +267,33 @@ export async function applySubscriptionCredentials(config?: {
     );
   }
 
-  // Auto-set model.primary from subscription provider when not explicitly
-  // configured, so users who connect a subscription don't need to manually
-  // choose a model provider.
+  // Auto-set model.primary from subscription provider when the provider's
+  // token is actually applied to the runtime.  Claude subscriptions are
+  // excluded because their tokens aren't available for direct API use.
   if (config?.agents?.defaults) {
     const defaults = config.agents.defaults;
     const provider =
       defaults.subscriptionProvider as keyof typeof SUBSCRIPTION_PROVIDER_MAP;
-    const modelId = provider ? SUBSCRIPTION_PROVIDER_MAP[provider] : undefined;
-    if (modelId) {
-      if (!defaults.model) {
-        defaults.model = { primary: modelId };
-        logger.info(
-          `[auth] Auto-set model.primary to "${modelId}" from subscription provider`,
-        );
-      } else if (!defaults.model.primary) {
-        defaults.model.primary = modelId;
-        logger.info(
-          `[auth] Auto-set model.primary to "${modelId}" from subscription provider`,
-        );
+
+    // Only auto-set for providers whose tokens are applied to the runtime.
+    const runtimeApplicableProviders: ReadonlySet<string> = new Set([
+      "openai-codex",
+    ]);
+
+    if (provider && runtimeApplicableProviders.has(provider)) {
+      const modelId = SUBSCRIPTION_PROVIDER_MAP[provider];
+      if (modelId) {
+        if (!defaults.model) {
+          defaults.model = { primary: modelId };
+          logger.info(
+            `[auth] Auto-set model.primary to "${modelId}" from subscription provider`,
+          );
+        } else if (!defaults.model.primary) {
+          defaults.model.primary = modelId;
+          logger.info(
+            `[auth] Auto-set model.primary to "${modelId}" from subscription provider`,
+          );
+        }
       }
     }
   }

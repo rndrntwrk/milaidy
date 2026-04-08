@@ -113,7 +113,7 @@ describe("buildPluginListResponse", () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it("treats connectors.discord.token as a configured Discord plugin token", () => {
+  it("hydrates Discord env vars from connectors.discord.token", () => {
     saveElizaConfig({
       logging: { level: "error" },
       connectors: {
@@ -127,9 +127,13 @@ describe("buildPluginListResponse", () => {
 
     expect(discord.configured).toBe(true);
     expect(discord.validationErrors).toEqual([]);
+    // Discord has no pluginParameters in packages/agent/src/plugins.json.
+    expect(discord.parameters).toEqual([]);
+    expect(process.env.DISCORD_API_TOKEN).toBe("discord-token-123");
+    expect(process.env.DISCORD_BOT_TOKEN).toBe("discord-token-123");
   });
 
-  it("rehydrates connector tokens over empty or redacted Discord env placeholders", () => {
+  it("overrides placeholder Discord env values from connectors config", () => {
     process.env.DISCORD_API_TOKEN = "[REDACTED]";
     process.env.DISCORD_BOT_TOKEN = "";
 
@@ -146,6 +150,8 @@ describe("buildPluginListResponse", () => {
 
     expect(discord.configured).toBe(true);
     expect(discord.validationErrors).toEqual([]);
+    // Keep parity with manifest-backed metadata: no compat parameters for Discord.
+    expect(discord.parameters).toEqual([]);
     expect(process.env.DISCORD_API_TOKEN).toBe("discord-token-456");
     expect(process.env.DISCORD_BOT_TOKEN).toBe("discord-token-456");
   });
@@ -237,19 +243,11 @@ describe("buildPluginListResponse", () => {
     expect(discord.configured).toBe(true);
   });
 
-  it("lists a bundled feature plugin without setup fields", () => {
-    const acp = getPlugin("acp") as CompatPluginRecord & {
-      category: string;
-      configured: boolean;
-      enabled: boolean;
-      source: string;
-    };
-
-    expect(acp.enabled).toBe(false);
-    expect(acp.configured).toBe(true);
-    expect(acp.category).toBe("feature");
-    expect(acp.source).toBe("bundled");
-    expect(acp.parameters).toEqual([]);
-    expect(acp.validationErrors).toEqual([]);
+  it("does not include unknown bundled plugin ids", () => {
+    const ids = buildPluginListResponse(null).plugins.map(
+      (plugin) => plugin.id,
+    );
+    // "selfcontrol" is shipped via plugin-selfcontrol package, not bundled in plugins.json.
+    expect(ids).not.toContain("selfcontrol");
   });
 });

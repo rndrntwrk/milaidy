@@ -57,14 +57,16 @@ describe("applySubscriptionProviderConfig", () => {
     expect(config.agents?.defaults?.model?.primary).toBe("openai");
   });
 
-  it("sets subscriptionProvider and model.primary for anthropic-subscription", () => {
+  it("sets subscriptionProvider but NOT model.primary for anthropic-subscription (TOS restriction)", () => {
     const config = emptyConfig();
     applySubscriptionProviderConfig(config, "anthropic-subscription");
 
     expect(config.agents?.defaults?.subscriptionProvider).toBe(
       "anthropic-subscription",
     );
-    expect(config.agents?.defaults?.model?.primary).toBe("anthropic");
+    // Anthropic subscription tokens are restricted to Claude Code CLI (TOS).
+    // model.primary must NOT be set because the runtime cannot use them.
+    expect(config.agents?.defaults?.model?.primary).toBeUndefined();
   });
 
   it("normalizes openai-subscription to openai-codex", () => {
@@ -111,7 +113,7 @@ describe("clearSubscriptionProviderConfig", () => {
 });
 
 describe("applyOnboardingConnectionConfig", () => {
-  it("persists a sanitized subscription selection without deleting other credentials", async () => {
+  it("persists a sanitized subscription selection without setting model.primary for Claude (TOS)", async () => {
     const config = {
       env: { OPENAI_API_KEY: "sk-openai-existing" },
     } as Partial<ElizaConfig>;
@@ -125,15 +127,19 @@ describe("applyOnboardingConnectionConfig", () => {
     expect(config.agents?.defaults?.subscriptionProvider).toBe(
       "anthropic-subscription",
     );
-    expect(config.agents?.defaults?.model?.primary).toBe("anthropic");
-    expect(applySubscriptionCredentials).toHaveBeenCalledTimes(1);
+    // Anthropic subscription tokens can only be used through Claude Code CLI
+    // (TOS restriction).  model.primary is NOT set for the runtime.
+    expect(config.agents?.defaults?.model?.primary).toBeUndefined();
+    // applySubscriptionCredentials is NOT called for anthropic-subscription
+    // because the token is not applied to the runtime.
+    expect(applySubscriptionCredentials).not.toHaveBeenCalled();
     expect(deleteCredentials).not.toHaveBeenCalled();
     expect((config.env as Record<string, string>).OPENAI_API_KEY).toBe(
       "sk-openai-existing",
     );
   });
 
-  it("keeps an Anthropic setup token instead of rehydrating stored subscription credentials", async () => {
+  it("stores an Anthropic setup token for task-agent discovery without setting ANTHROPIC_API_KEY", async () => {
     const config = emptyConfig();
 
     await applyOnboardingConnectionConfig(config, {
@@ -146,10 +152,15 @@ describe("applyOnboardingConnectionConfig", () => {
     expect(config.agents?.defaults?.subscriptionProvider).toBe(
       "anthropic-subscription",
     );
-    expect(config.agents?.defaults?.model?.primary).toBe("anthropic");
-    expect((config.env as Record<string, string>)?.ANTHROPIC_API_KEY).toBe(
-      "sk-ant-oat01-test-token",
-    );
+    // model.primary NOT set (TOS restriction — Claude sub tokens are task-agent only)
+    expect(config.agents?.defaults?.model?.primary).toBeUndefined();
+    // Token stored for task-agent discovery but NOT as ANTHROPIC_API_KEY
+    expect(
+      (config.env as Record<string, unknown>)?.__anthropicSubscriptionToken,
+    ).toBe("sk-ant-oat01-test-token");
+    expect(
+      (config.env as Record<string, string>)?.ANTHROPIC_API_KEY,
+    ).toBeUndefined();
     expect(applySubscriptionCredentials).not.toHaveBeenCalled();
   });
 

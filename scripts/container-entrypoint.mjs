@@ -3,6 +3,7 @@ import { pathToFileURL } from "node:url";
 
 const CLOUD_MODES = new Set(["cloud", "cloud-agent", "cloud_agent"]);
 const AGENT_MODES = new Set(["agent", "default", "milady"]);
+const TSX_LOADER_PATH = "./node_modules/tsx/dist/loader.mjs";
 
 export function normalizeContainerMode(rawMode, env = process.env) {
   const candidate = String(rawMode ?? "")
@@ -42,7 +43,7 @@ export function resolveContainerLaunch(env = process.env) {
     return {
       mode,
       command: process.execPath,
-      args: ["--import", "tsx", "deploy/cloud-agent-entrypoint.ts"],
+      args: ["--import", TSX_LOADER_PATH, "deploy/cloud-agent-entrypoint.ts"],
       env: launchEnv,
     };
   }
@@ -50,7 +51,7 @@ export function resolveContainerLaunch(env = process.env) {
   return {
     mode,
     command: process.execPath,
-    args: ["--import", "tsx", "milady.mjs", "start"],
+    args: ["--import", TSX_LOADER_PATH, "milady.mjs", "start"],
     env: launchEnv,
   };
 }

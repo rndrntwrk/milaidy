@@ -286,6 +286,7 @@ export default defineConfig({
       // correct @miladyai/app-core alias resolution. Running both in parallel
       // causes file-system race conditions on shared test fixtures.
       "packages/app-core/src/**/*.test.ts",
+      "packages/shared/src/**/*.test.ts",
       "packages/app-core/src/**/*.test.tsx",
       "packages/plugin-selfcontrol/src/**/*.test.ts",
       "packages/plugin-selfcontrol/src/**/*.test.ts",

@@ -647,7 +647,7 @@ describe("applyPluginAutoEnable — hooks", () => {
 // ============================================================================
 
 describe("applyPluginAutoEnable — subscription provider", () => {
-  it("force-enables anthropic plugin when subscriptionProvider is anthropic-subscription", () => {
+  it("does NOT force-enable anthropic plugin for anthropic-subscription (TOS: task agents only)", () => {
     const params = makeParams({
       config: {
         agents: {
@@ -657,8 +657,12 @@ describe("applyPluginAutoEnable — subscription provider", () => {
     });
     const { config, changes } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("@elizaos/plugin-anthropic");
-    expect(changes.some((c) => c.includes("subscription"))).toBe(true);
+    // Anthropic subscription tokens are restricted to Claude Code CLI.
+    // The plugin must NOT be force-enabled from subscription alone.
+    expect(config.plugins?.allow ?? []).not.toContain(
+      "@elizaos/plugin-anthropic",
+    );
+    expect(changes.every((c) => !c.includes("subscription"))).toBe(true);
   });
 
   it("force-enables openai plugin when subscriptionProvider is openai-codex", () => {
@@ -673,7 +677,7 @@ describe("applyPluginAutoEnable — subscription provider", () => {
     expect(changes.some((c) => c.includes("subscription"))).toBe(true);
   });
 
-  it("overrides explicit enabled=false for the subscription plugin", () => {
+  it("does NOT override enabled=false for anthropic subscription (TOS: task agents only)", () => {
     const params = makeParams({
       config: {
         plugins: { entries: { anthropic: { enabled: false } } },
@@ -684,8 +688,11 @@ describe("applyPluginAutoEnable — subscription provider", () => {
     });
     const { config } = applyPluginAutoEnable(params);
 
-    expect(config.plugins?.allow).toContain("@elizaos/plugin-anthropic");
-    expect(config.plugins?.entries?.anthropic?.enabled).toBe(true);
+    // Anthropic subscription cannot enable the plugin — TOS restriction.
+    expect(config.plugins?.allow ?? []).not.toContain(
+      "@elizaos/plugin-anthropic",
+    );
+    expect(config.plugins?.entries?.anthropic?.enabled).toBe(false);
   });
 
   it("does nothing when subscriptionProvider is not set", () => {

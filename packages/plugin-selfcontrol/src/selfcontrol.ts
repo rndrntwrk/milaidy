@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { domainToASCII } from "node:url";
 import { promisify } from "node:util";
-import { type HandlerOptions, logger, type Memory } from "@elizaos/core";
+import type { HandlerOptions, Memory } from "@elizaos/core";
 import type {
   PermissionState,
   PermissionStatus,
@@ -36,10 +36,12 @@ export interface SelfControlStatus {
   available: boolean;
   active: boolean;
   hostsFilePath: string | null;
+  startedAt: string | null;
   endsAt: string | null;
   websites: string[];
   managedBy: string | null;
   metadata: Record<string, unknown> | null;
+  scheduledByAgentId: string | null;
   canUnblockEarly: boolean;
   requiresElevation: boolean;
   engine: "hosts-file";
@@ -62,6 +64,7 @@ export interface SelfControlBlockRequest {
   websites: string[];
   durationMinutes: number | null;
   metadata?: Record<string, unknown> | null;
+  scheduledByAgentId?: string | null;
 }
 
 export interface SelfControlBlockMetadata {
@@ -71,6 +74,7 @@ export interface SelfControlBlockMetadata {
   websites: string[];
   managedBy: string | null;
   metadata: Record<string, unknown> | null;
+  scheduledByAgentId?: string | null;
 }
 
 type StatusCacheEntry = {
@@ -86,13 +90,11 @@ type PrivilegedHostsWriteInvocation = {
 
 let currentConfig: SelfControlPluginConfig = {};
 let statusCache: StatusCacheEntry | undefined;
-let scheduledExpiryTimer: NodeJS.Timeout | undefined;
 
 export function setSelfControlPluginConfig(
   nextConfig: SelfControlPluginConfig | undefined,
 ): void {
   currentConfig = { ...(nextConfig ?? {}) };
-  cancelSelfControlExpiryTimer();
   resetSelfControlStatusCache();
 }
 
@@ -105,10 +107,7 @@ export function resetSelfControlStatusCache(): void {
 }
 
 export function cancelSelfControlExpiryTimer(): void {
-  if (scheduledExpiryTimer) {
-    clearTimeout(scheduledExpiryTimer);
-    scheduledExpiryTimer = undefined;
-  }
+  // Timed website unblocks are scheduled through Eliza tasks now.
 }
 
 export async function resolveSelfControlHostsFilePath(
@@ -127,7 +126,6 @@ export async function resolveSelfControlHostsFilePath(
 export async function reconcileSelfControlBlockState(
   config: SelfControlPluginConfig = currentConfig,
 ): Promise<SelfControlStatus> {
-  cancelSelfControlExpiryTimer();
   const elevationPromptMethod = resolveSelfControlElevationPromptMethod();
   const supportsElevationPrompt = elevationPromptMethod !== null;
 
@@ -137,10 +135,12 @@ export async function reconcileSelfControlBlockState(
       available: false,
       active: false,
       hostsFilePath: null,
+      startedAt: null,
       endsAt: null,
       websites: [],
       managedBy: null,
       metadata: null,
+      scheduledByAgentId: null,
       canUnblockEarly: false,
       requiresElevation: false,
       engine: "hosts-file",
@@ -159,10 +159,12 @@ export async function reconcileSelfControlBlockState(
       available: false,
       active: false,
       hostsFilePath,
+      startedAt: null,
       endsAt: null,
       websites: [],
       managedBy: null,
       metadata: null,
+      scheduledByAgentId: null,
       canUnblockEarly: false,
       requiresElevation: false,
       engine: "hosts-file",
@@ -188,10 +190,12 @@ export async function reconcileSelfControlBlockState(
       available: true,
       active: false,
       hostsFilePath,
+      startedAt: null,
       endsAt: null,
       websites: [],
       managedBy: null,
       metadata: null,
+      scheduledByAgentId: null,
       canUnblockEarly: writable,
       requiresElevation,
       engine: "hosts-file",
@@ -213,10 +217,12 @@ export async function reconcileSelfControlBlockState(
           available: true,
           active: false,
           hostsFilePath,
+          startedAt: null,
           endsAt: null,
           websites: [],
           managedBy: null,
           metadata: null,
+          scheduledByAgentId: null,
           canUnblockEarly: true,
           requiresElevation: false,
           engine: "hosts-file",
@@ -230,10 +236,12 @@ export async function reconcileSelfControlBlockState(
         available: true,
         active: true,
         hostsFilePath,
+        startedAt: block.startedAt,
         endsAt: block.endsAt,
         websites: block.websites,
         managedBy: block.managedBy,
         metadata: block.metadata,
+        scheduledByAgentId: block.scheduledByAgentId,
         canUnblockEarly: false,
         requiresElevation: true,
         engine: "hosts-file",
@@ -245,18 +253,18 @@ export async function reconcileSelfControlBlockState(
           : "The website block has expired, but Milady cannot remove it without administrator/root access.",
       };
     }
-
-    scheduleSelfControlExpiry(block.endsAt, config);
   }
 
   return {
     available: true,
     active: true,
     hostsFilePath,
+    startedAt: block.startedAt,
     endsAt: block.endsAt,
     websites: block.websites,
     managedBy: block.managedBy,
     metadata: block.metadata,
+    scheduledByAgentId: block.scheduledByAgentId,
     canUnblockEarly: writable,
     requiresElevation,
     engine: "hosts-file",
@@ -456,6 +464,11 @@ export async function startSelfControlBlock(
       !Array.isArray(normalizedRequest.request.metadata)
         ? { ...normalizedRequest.request.metadata }
         : null,
+    scheduledByAgentId:
+      typeof normalizedRequest.request.scheduledByAgentId === "string" &&
+      normalizedRequest.request.scheduledByAgentId.trim().length > 0
+        ? normalizedRequest.request.scheduledByAgentId.trim()
+        : null,
   };
 
   try {
@@ -485,9 +498,6 @@ export async function startSelfControlBlock(
     };
   }
 
-  if (metadata.endsAt) {
-    scheduleSelfControlExpiry(metadata.endsAt, config);
-  }
   resetSelfControlStatusCache();
   return {
     success: true,
@@ -559,10 +569,12 @@ export async function stopSelfControlBlock(
     status: {
       ...status,
       active: false,
+      startedAt: null,
       endsAt: null,
       websites: [],
       managedBy: null,
       metadata: null,
+      scheduledByAgentId: null,
     },
   };
 }
@@ -707,25 +719,6 @@ function buildSelfControlPermissionReason(
   return "Milady cannot raise an administrator/root prompt for website blocking on this machine. Open the hosts file location and change ownership or run Milady with elevated access.";
 }
 
-function scheduleSelfControlExpiry(
-  endsAt: string,
-  config: SelfControlPluginConfig = currentConfig,
-): void {
-  cancelSelfControlExpiryTimer();
-  const endsAtMs = Date.parse(endsAt);
-  if (!Number.isFinite(endsAtMs)) return;
-
-  const delayMs = Math.max(endsAtMs - Date.now(), 0);
-  scheduledExpiryTimer = setTimeout(() => {
-    void reconcileSelfControlBlockState(config).catch((error) => {
-      logger.warn(
-        `[selfcontrol] Failed to reconcile scheduled expiry: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    });
-  }, delayMs);
-  scheduledExpiryTimer.unref?.();
-}
-
 function normalizeSelfControlBlockRequest(
   request: SelfControlBlockRequest,
 ):
@@ -764,6 +757,11 @@ function normalizeSelfControlBlockRequest(
         !Array.isArray(request.metadata)
           ? { ...request.metadata }
           : null,
+      scheduledByAgentId:
+        typeof request.scheduledByAgentId === "string" &&
+        request.scheduledByAgentId.trim().length > 0
+          ? request.scheduledByAgentId.trim()
+          : null,
     },
   };
 }
@@ -773,16 +771,17 @@ async function clearManagedSelfControlBlock(
   hostsContent: string,
   options: { allowElevationPrompt: boolean },
 ): Promise<void> {
-  cancelSelfControlExpiryTimer();
   const nextContent = stripManagedSelfControlBlock(hostsContent);
   await writeHostsFileContent(hostsFilePath, nextContent, options);
 }
 
 function extractManagedSelfControlBlock(content: string): {
+  startedAt: string | null;
   endsAt: string | null;
   websites: string[];
   managedBy: string | null;
   metadata: Record<string, unknown> | null;
+  scheduledByAgentId: string | null;
 } | null {
   const pattern = new RegExp(
     `${escapeRegExp(BLOCK_START_MARKER)}[\\s\\S]*?${escapeRegExp(BLOCK_END_MARKER)}`,
@@ -799,6 +798,7 @@ function extractManagedSelfControlBlock(content: string): {
       : extractManagedBlockWebsiteTargets(block);
 
   return {
+    startedAt: metadata?.startedAt ?? null,
     endsAt: metadata?.endsAt ?? null,
     websites,
     managedBy:
@@ -810,6 +810,11 @@ function extractManagedSelfControlBlock(content: string): {
       typeof metadata.metadata === "object" &&
       !Array.isArray(metadata.metadata)
         ? metadata.metadata
+        : null,
+    scheduledByAgentId:
+      typeof metadata?.scheduledByAgentId === "string" &&
+      metadata.scheduledByAgentId.trim().length > 0
+        ? metadata.scheduledByAgentId.trim()
         : null,
   };
 }
@@ -844,7 +849,8 @@ function parseManagedBlockMetadata(
           : null,
       websites,
       managedBy:
-        typeof parsed.managedBy === "string" && parsed.managedBy.trim().length > 0
+        typeof parsed.managedBy === "string" &&
+        parsed.managedBy.trim().length > 0
           ? parsed.managedBy.trim()
           : null,
       metadata:
@@ -852,6 +858,11 @@ function parseManagedBlockMetadata(
         typeof parsed.metadata === "object" &&
         !Array.isArray(parsed.metadata)
           ? (parsed.metadata as Record<string, unknown>)
+          : null,
+      scheduledByAgentId:
+        typeof parsed.scheduledByAgentId === "string" &&
+        parsed.scheduledByAgentId.trim().length > 0
+          ? parsed.scheduledByAgentId.trim()
           : null,
     };
   } catch {

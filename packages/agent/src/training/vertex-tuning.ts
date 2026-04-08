@@ -44,6 +44,16 @@ export interface VertexTuningConfig {
   accessToken?: string;
 }
 
+export type VertexTuningSlot =
+  | "should_respond"
+  | "response_handler"
+  | "action_planner"
+  | "planner"
+  | "response"
+  | "media_description";
+
+export type VertexTuningScope = "global" | "organization" | "user";
+
 export interface TuningJob {
   name: string;
   state: "JOB_STATE_PENDING" | "JOB_STATE_RUNNING" | "JOB_STATE_SUCCEEDED" | "JOB_STATE_FAILED" | "JOB_STATE_CANCELLED";
@@ -61,6 +71,99 @@ export interface TunedModelEndpoint {
   model: string;
   /** The endpoint for inference */
   endpoint: string;
+}
+
+export interface VertexModelPreferencePatch {
+  scope: VertexTuningScope;
+  slot: VertexTuningSlot;
+  ownerId?: string;
+  modelPreferences: {
+    nanoModel?: string;
+    miniModel?: string;
+    smallModel?: string;
+    largeModel?: string;
+    megaModel?: string;
+    responseHandlerModel?: string;
+    shouldRespondModel?: string;
+    actionPlannerModel?: string;
+    plannerModel?: string;
+    responseModel?: string;
+    mediaDescriptionModel?: string;
+  };
+}
+
+export interface VertexTuningOrchestrationConfig extends VertexTuningConfig {
+  slot?: VertexTuningSlot;
+  scope?: VertexTuningScope;
+  ownerId?: string;
+}
+
+export interface VertexTuningOrchestrationResult {
+  job: TuningJob;
+  slot: VertexTuningSlot;
+  scope: VertexTuningScope;
+  recommendedModelId: string;
+  modelPreferencePatch: VertexModelPreferencePatch;
+}
+
+export function normalizeVertexBaseModel(
+  baseModel: string | undefined,
+  slot: VertexTuningSlot = "should_respond",
+): VertexTuningConfig["baseModel"] {
+  if (baseModel === "gemini-2.5-flash" || baseModel === "flash") {
+    return "gemini-2.5-flash";
+  }
+  if (baseModel === "gemini-2.5-flash-lite" || baseModel === "flash-lite") {
+    return "gemini-2.5-flash-lite";
+  }
+
+  switch (slot) {
+    case "action_planner":
+    case "planner":
+    case "response":
+      return "gemini-2.5-flash";
+    case "media_description":
+    case "response_handler":
+    case "should_respond":
+    default:
+      return "gemini-2.5-flash-lite";
+  }
+}
+
+export function buildVertexModelPreferencePatch(params: {
+  slot: VertexTuningSlot;
+  tunedModelId: string;
+  scope?: VertexTuningScope;
+  ownerId?: string;
+}): VertexModelPreferencePatch {
+  const scope = params.scope ?? "global";
+  const modelPreferences: VertexModelPreferencePatch["modelPreferences"] = {};
+
+  switch (params.slot) {
+    case "should_respond":
+    case "response_handler":
+      modelPreferences.responseHandlerModel = params.tunedModelId;
+      modelPreferences.shouldRespondModel = params.tunedModelId;
+      break;
+    case "action_planner":
+    case "planner":
+      modelPreferences.actionPlannerModel = params.tunedModelId;
+      modelPreferences.plannerModel = params.tunedModelId;
+      break;
+    case "response":
+      modelPreferences.responseModel = params.tunedModelId;
+      break;
+    case "media_description":
+      modelPreferences.mediaDescriptionModel = params.tunedModelId;
+      break;
+  }
+
+  return {
+    scope,
+    slot: params.slot,
+    ownerId: params.ownerId,
+    modelPreferences,
+  };
 }
 
 /**
@@ -310,4 +413,33 @@ export async function runFullTuningPipeline(
 
   progress("failed", `Tuning failed: ${finalJob.error?.message ?? "unknown"}`);
   return { job: finalJob };
+}
+
+export async function orchestrateVertexTuning(
+  config: VertexTuningOrchestrationConfig,
+): Promise<VertexTuningOrchestrationResult> {
+  const slot = config.slot ?? "should_respond";
+  const scope = config.scope ?? "global";
+  const job = await createTuningJob({
+    ...config,
+    baseModel: normalizeVertexBaseModel(config.baseModel, slot),
+  });
+
+  const recommendedModelId =
+    job.tunedModelEndpointName?.trim() ||
+    job.tunedModelDisplayName?.trim() ||
+    config.displayName;
+
+  return {
+    job,
+    slot,
+    scope,
+    recommendedModelId,
+    modelPreferencePatch: buildVertexModelPreferencePatch({
+      slot,
+      tunedModelId: recommendedModelId,
+      scope,
+      ownerId: config.ownerId,
+    }),
+  };
 }

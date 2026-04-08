@@ -171,22 +171,24 @@ export function TrajectoriesView({
       aria-label={t("trajectoriesview.Entries", {
         defaultValue: "Entries",
       })}
+      header={
+        <SidebarHeader
+          search={{
+            value: searchQuery,
+            onChange: (event) => {
+              setSearchQuery(event.target.value);
+              setPage(0);
+            },
+            onClear: () => {
+              setSearchQuery("");
+              setPage(0);
+            },
+            placeholder: t("trajectoriesview.Search"),
+            "aria-label": t("trajectoriesview.Search"),
+          }}
+        />
+      }
     >
-      <SidebarHeader
-        search={{
-          value: searchQuery,
-          onChange: (event) => {
-            setSearchQuery(event.target.value);
-            setPage(0);
-          },
-          onClear: () => {
-            setSearchQuery("");
-            setPage(0);
-          },
-          placeholder: t("trajectoriesview.Search"),
-          "aria-label": t("trajectoriesview.Search"),
-        }}
-      />
       <SidebarScrollRegion>
         <SidebarPanel>
           <SidebarContent.Toolbar className="mb-3 justify-end">
@@ -341,57 +343,30 @@ export function TrajectoriesView({
       contentInnerClassName="mx-auto w-full max-w-[76rem]"
       data-testid="trajectories-view"
     >
-      <PagePanel variant="section">
-        <PagePanel.Header
-          eyebrow={t("nav.advanced")}
-          heading={t("advancedpageview.Trajectories", {
-            defaultValue: "Trajectories",
-          })}
-          description={t("advancedpageview.TrajectoriesDescription", {
-            defaultValue: "LLM call history and analysis",
-          })}
-          className="border-border/35"
-          actions={
-            <PagePanel.Meta className="border-border/45 px-2.5 py-1 font-bold tracking-[0.16em] text-muted">
-              {total > 0
-                ? t("trajectoriesview.ShowingRange", {
-                    start: page * pageSize + 1,
-                    end: Math.min((page + 1) * pageSize, total),
-                    total,
-                  })
-                : t("trajectoriesview.ZeroEntries", {
-                    defaultValue: "0 entries",
-                  })}
-            </PagePanel.Meta>
+      {error ? (
+        <PagePanel.Notice tone="danger" className="mb-4">
+          {error}
+        </PagePanel.Notice>
+      ) : null}
+
+      {loading && trajectories.length === 0 ? (
+        <PagePanel.Loading
+          variant="surface"
+          heading={t("trajectoriesview.LoadingTrajectories")}
+        />
+      ) : !loading && trajectories.length === 0 ? (
+        <PagePanel.Empty
+          variant="surface"
+          className="min-h-[14rem] rounded-[1.6rem]"
+          title={
+            hasActiveFilters
+              ? t("trajectoriesview.NoTrajectoriesMatchingFilters")
+              : t("trajectoriesview.NoTrajectoriesYet")
           }
         />
-        <div className="bg-bg/18 px-4 py-4 sm:px-5">
-          {error ? (
-            <PagePanel.Notice tone="danger" className="mb-4">
-              {error}
-            </PagePanel.Notice>
-          ) : null}
-
-          {loading && trajectories.length === 0 ? (
-            <PagePanel.Loading
-              variant="surface"
-              heading={t("trajectoriesview.LoadingTrajectories")}
-            />
-          ) : !loading && trajectories.length === 0 ? (
-            <PagePanel.Empty
-              variant="surface"
-              className="min-h-[14rem] rounded-[1.6rem]"
-              title={
-                hasActiveFilters
-                  ? t("trajectoriesview.NoTrajectoriesMatchingFilters")
-                  : t("trajectoriesview.NoTrajectoriesYet")
-              }
-            />
-          ) : detailTrajectoryId ? (
-            <TrajectoryDetailView trajectoryId={detailTrajectoryId} />
-          ) : null}
-        </div>
-      </PagePanel>
+      ) : detailTrajectoryId ? (
+        <TrajectoryDetailView trajectoryId={detailTrajectoryId} />
+      ) : null}
     </PageLayout>
   );
 }

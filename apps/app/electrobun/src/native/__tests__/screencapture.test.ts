@@ -68,9 +68,10 @@ vi.mock("electrobun/bun", () => ({
   }),
 }));
 
-vi.stubGlobal("Bun", {
-  spawn: vi.fn(() => ({ exited: Promise.resolve(0) })),
-});
+// Bun global is non-configurable on globalThis but Bun.spawn is writable; assign directly.
+(Bun as unknown as { spawn: unknown }).spawn = vi.fn(() => ({
+  exited: Promise.resolve(0),
+}));
 
 vi.stubGlobal(
   "fetch",

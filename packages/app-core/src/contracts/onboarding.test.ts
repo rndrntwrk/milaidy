@@ -147,6 +147,39 @@ describe("onboarding provider catalog", () => {
     });
   });
 
+  it("preserves per-step cloud model overrides when inferring onboarding connections", () => {
+    expect(
+      inferOnboardingConnectionFromConfig({
+        serviceRouting: {
+          llmText: {
+            backend: "elizacloud",
+            transport: "cloud-proxy",
+            accountId: "elizacloud",
+            nanoModel: "google/gemini-2.5-flash-lite-nano-ft",
+            miniModel: "google/gemini-2.5-flash-lite-mini-ft",
+            smallModel: "google/gemini-2.5-flash-lite",
+            largeModel: "google/gemini-2.5-flash",
+            megaModel: "google/gemini-2.5-pro-ft",
+            responseHandlerModel: "google/gemini-2.5-flash-lite-ft-should",
+            actionPlannerModel: "google/gemini-2.5-flash-ft-plan",
+            responseModel: "google/gemini-2.5-flash-ft-response",
+          },
+        },
+      }),
+    ).toEqual({
+      kind: "cloud-managed",
+      cloudProvider: "elizacloud",
+      nanoModel: "google/gemini-2.5-flash-lite-nano-ft",
+      miniModel: "google/gemini-2.5-flash-lite-mini-ft",
+      smallModel: "google/gemini-2.5-flash-lite",
+      largeModel: "google/gemini-2.5-flash",
+      megaModel: "google/gemini-2.5-pro-ft",
+      responseHandlerModel: "google/gemini-2.5-flash-lite-ft-should",
+      actionPlannerModel: "google/gemini-2.5-flash-ft-plan",
+      responseModel: "google/gemini-2.5-flash-ft-response",
+    });
+  });
+
   it("treats explicit local-provider selections as not using cloud inference", () => {
     expect(
       isCloudInferenceSelectedInConfig({
@@ -190,10 +223,7 @@ describe("onboarding provider catalog", () => {
         largeModel: "anthropic/claude-sonnet-4.5",
       },
     });
-    expect(migrated.cloud).not.toMatchObject({
-      provider: "elizacloud",
-      inferenceMode: "cloud",
-    });
+    expect(migrated.cloud).toBeUndefined();
     expect(isCloudInferenceSelectedInConfig(migrated)).toBe(true);
   });
 

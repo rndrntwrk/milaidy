@@ -22,7 +22,55 @@ import {
   ALL_BLUEPRINTS,
   type ScenarioBlueprint,
 } from "./scenario-blueprints.js";
-import { ALL_CONTEXTS, ACTION_CONTEXT_MAP } from "./context-catalog.js";
+import {
+  ALL_CONTEXTS,
+  ACTION_CONTEXT_MAP,
+  PROVIDER_CONTEXT_MAP,
+} from "./context-catalog.js";
+
+const SHOULD_RESPOND_PROMPT_TEMPLATE = `task: Decide whether {{agentName}} should respond, ignore, or stop.
+
+context:
+{{providers}}
+
+available_contexts:
+{{availableContexts}}
+
+rules[6]:
+- direct mention of {{agentName}} -> RESPOND
+- different assistant name -> IGNORE
+- continuing an active thread with {{agentName}} -> RESPOND
+- request to stop or be quiet -> STOP
+- talking to someone else -> IGNORE
+- if unsure, prefer IGNORE over hallucinating relevance
+
+context_routing:
+- primaryContext: choose one context from available_contexts, or "general" if none apply
+- secondaryContexts: optional comma-separated list of additional relevant contexts
+- evidenceTurnIds: optional comma-separated list of memory IDs supporting the decision
+
+decision_note:
+- talking TO {{agentName}} means name mention, reply chain, or direct continuation
+- talking ABOUT {{agentName}} is not enough
+
+output:
+TOON only. Return exactly one TOON document. No prose before or after it. No <think>.
+
+Example:
+name: {{agentName}}
+reasoning: Direct mention and clear follow-up.
+action: RESPOND
+primaryContext: wallet
+secondaryContexts:
+evidenceTurnIds:
+
+Example:
+name: {{agentName}}
+reasoning: Direct mention but no relevant action.
+action: IGNORE
+primaryContext: general
+secondaryContexts:
+evidenceTurnIds:`;
 
 // ==================== Types ====================
 
@@ -353,7 +401,10 @@ export async function generateSample(
 
   // Convert to training format
   const messages: ConversationMessage[] = parsed.messages.map((m) => ({
-    role: "user" as const,
+    role:
+      m.name.trim().toLowerCase() === agentName.trim().toLowerCase()
+        ? ("assistant" as const)
+        : ("user" as const),
     name: m.name,
     content: m.content,
   }));
@@ -397,6 +448,8 @@ export interface GenerationConfig {
   filterContexts?: AgentContext[];
   /** Optional filter: only generate for these decisions */
   filterDecisions?: Array<"RESPOND" | "IGNORE" | "STOP">;
+  /** Optional hard cap on the number of canonical blueprints to expand */
+  limitBlueprints?: number;
   /** Concurrency limit for teacher API calls */
   concurrency?: number;
   /** Progress callback */
@@ -423,6 +476,10 @@ export async function generateDataset(
   if (config.filterDecisions) {
     const decSet = new Set(config.filterDecisions);
     blueprints = blueprints.filter((b) => decSet.has(b.decision));
+  }
+
+  if (config.limitBlueprints && config.limitBlueprints > 0) {
+    blueprints = blueprints.slice(0, config.limitBlueprints);
   }
 
   const totalSamples = blueprints.length * config.variantsPerBlueprint;
@@ -477,44 +534,15 @@ export function toGeminiFormat(
   sample: TrainingSample,
   includeContextRouting: boolean = true,
 ): GeminiTuningExample {
-  // Build the system prompt (the shouldRespond template with agent name filled)
-  const systemContent = `You are ${sample.agentName}, an AI assistant in a group chat.
-Decide whether to RESPOND, IGNORE, or STOP based on the conversation.${
-    includeContextRouting
-      ? `\nAlso determine the primary domain context from: ${ALL_CONTEXTS.join(", ")}`
-      : ""
-  }`;
-
-  // Build the user message (the conversation history)
-  const conversationLines = sample.messages
-    .map((m) => `[${m.name}]: ${m.content}`)
-    .join("\n");
-
-  const userContent = `Platform: ${sample.metadata.platform}
-Agent name: ${sample.agentName}
-
-Conversation:
-${conversationLines}
-
-Should ${sample.agentName} respond?`;
-
-  // Build the model response (the expected classifier output)
-  let modelContent: string;
-  if (includeContextRouting) {
-    modelContent = `name: ${sample.agentName}
-reasoning: ${sample.expectedOutput.reasoning}
-action: ${sample.expectedOutput.decision}
-primaryContext: ${sample.expectedOutput.primaryContext}
-secondaryContexts: [${sample.expectedOutput.secondaryContexts.join(", ")}]`;
-  } else {
-    modelContent = `name: ${sample.agentName}
-reasoning: ${sample.expectedOutput.reasoning}
-action: ${sample.expectedOutput.decision}`;
-  }
-
-  if (sample.expectedOutput.expectedAction) {
-    modelContent += `\nexpectedAction: ${sample.expectedOutput.expectedAction}`;
-  }
+  const systemContent = buildShouldRespondSystemPrompt(
+    sample,
+    includeContextRouting,
+  );
+  const userContent = buildShouldRespondUserPrompt(sample);
+  const modelContent = buildClassifierToonResponse(
+    sample,
+    includeContextRouting,
+  );
 
   return {
     messages: [
@@ -523,6 +551,139 @@ action: ${sample.expectedOutput.decision}`;
       { role: "model", content: modelContent },
     ],
   };
+}
+
+function renderTemplate(
+  template: string,
+  values: Record<string, string>,
+): string {
+  return template.replace(/{{(\w+)}}/g, (_match, key) => values[key] ?? "");
+}
+
+function uniqueStrings(values: string[]): string[] {
+  return [...new Set(values.filter((value) => value.trim().length > 0))];
+}
+
+function listContextsForSample(sample: TrainingSample): AgentContext[] {
+  const contexts = new Set<AgentContext>([
+    "general",
+    sample.expectedOutput.primaryContext,
+    ...sample.expectedOutput.secondaryContexts,
+  ]);
+
+  if (sample.expectedOutput.expectedAction) {
+    for (const actionContext of ACTION_CONTEXT_MAP[sample.expectedOutput.expectedAction] ?? []) {
+      contexts.add(actionContext);
+    }
+  }
+
+  return [...contexts];
+}
+
+function getRelevantActions(sample: TrainingSample): string[] {
+  const activeContexts = new Set(listContextsForSample(sample));
+  const contextualActions = Object.entries(ACTION_CONTEXT_MAP)
+    .filter(([, contexts]) => contexts.some((context) => activeContexts.has(context)))
+    .map(([actionName]) => actionName);
+
+  return uniqueStrings([
+    sample.expectedOutput.expectedAction ?? "",
+    ...contextualActions,
+  ]).slice(0, 18);
+}
+
+function getRelevantProviders(sample: TrainingSample): string[] {
+  const activeContexts = new Set(listContextsForSample(sample));
+  return Object.entries(PROVIDER_CONTEXT_MAP)
+    .filter(([, contexts]) => contexts.some((context) => activeContexts.has(context)))
+    .map(([providerName]) => providerName)
+    .slice(0, 12);
+}
+
+function buildProvidersBlock(sample: TrainingSample): string {
+  const actions = getRelevantActions(sample);
+  const providers = getRelevantProviders(sample);
+
+  return [
+    `platform: ${sample.metadata.platform}`,
+    "actions:",
+    ...(actions.length > 0 ? actions : ["REPLY"]).map((action) => `- ${action}`),
+    "providers:",
+    ...(providers.length > 0 ? providers : ["recentMessages"]).map(
+      (provider) => `- ${provider}`,
+    ),
+  ].join("\n");
+}
+
+function buildShouldRespondSystemPrompt(
+  sample: TrainingSample,
+  includeContextRouting: boolean,
+): string {
+  const baseTemplate = includeContextRouting
+    ? SHOULD_RESPOND_PROMPT_TEMPLATE
+    : SHOULD_RESPOND_PROMPT_TEMPLATE
+        .replace(/\ncontext_routing:[\s\S]*?\ndecision_note:/m, "\ndecision_note:")
+        .replace(/\nprimaryContext:.*$/m, "")
+        .replace(/\nsecondaryContexts:.*$/m, "")
+        .replace(/\nevidenceTurnIds:.*$/m, "");
+
+  return renderTemplate(baseTemplate, {
+    agentName: sample.agentName,
+    providers: buildProvidersBlock(sample),
+    availableContexts: listContextsForSample(sample).join(", "),
+  }).trim();
+}
+
+function buildShouldRespondUserPrompt(sample: TrainingSample): string {
+  const conversationLines = sample.messages
+    .map((message, index) => {
+      const turnId = `turn-${String(index + 1).padStart(3, "0")}`;
+      const speaker =
+        message.role === "assistant" ? sample.agentName : message.name ?? "user";
+      return `[${turnId}] ${speaker}: ${message.content}`;
+    })
+    .join("\n");
+
+  return [
+    `platform: ${sample.metadata.platform}`,
+    `agent_name: ${sample.agentName}`,
+    "conversation:",
+    conversationLines,
+    "decision_target: evaluate the final message in this group-chat window.",
+  ].join("\n");
+}
+
+function buildClassifierToonResponse(
+  sample: TrainingSample,
+  includeContextRouting: boolean,
+): string {
+  const evidenceTurnIds = sample.messages
+    .slice(Math.max(0, sample.messages.length - 3))
+    .map((_, index, tail) => {
+      const absoluteIndex = sample.messages.length - tail.length + index + 1;
+      return `turn-${String(absoluteIndex).padStart(3, "0")}`;
+    })
+    .join(", ");
+
+  const lines = [
+    `name: ${sample.agentName}`,
+    `reasoning: ${sample.expectedOutput.reasoning}`,
+    `action: ${sample.expectedOutput.decision}`,
+  ];
+
+  if (includeContextRouting) {
+    lines.push(`primaryContext: ${sample.expectedOutput.primaryContext}`);
+    lines.push(
+      `secondaryContexts: ${sample.expectedOutput.secondaryContexts.join(", ")}`,
+    );
+    lines.push(`evidenceTurnIds: ${evidenceTurnIds}`);
+  }
+
+  if (sample.expectedOutput.expectedAction) {
+    lines.push(`expectedAction: ${sample.expectedOutput.expectedAction}`);
+  }
+
+  return lines.join("\n");
 }
 
 /**

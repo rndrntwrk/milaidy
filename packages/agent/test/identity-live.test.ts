@@ -612,6 +612,7 @@ class LiveScenarioRunner {
       const autoAccept = role === "OWNER" || role === "ADMIN";
 
       for (const identity of extraction.identities) {
+        if (!identity.handle) continue;
         const normalizedHandle = identity.handle.replace(/^@/, "");
         if (!KNOWN_PLATFORMS.has(identity.platform)) continue;
         if (!normalizedHandle || normalizedHandle.trim().length === 0) continue;
@@ -789,7 +790,7 @@ describe.skipIf(!LIVE_TESTS_ENABLED)("Live LLM Identity Scenarios", () => {
         const latencyMs = Math.round(performance.now() - start);
 
         const extractedPlatforms = result.identities.map((i) => i.platform.toLowerCase());
-        const extractedHandles = result.identities.map((i) => i.handle.replace(/^@/, "").toLowerCase());
+        const extractedHandles = result.identities.map((i) => (i.handle ?? "").replace(/^@/, "").toLowerCase());
 
         // Platform alias map for flexible matching (LLMs may use different names)
         const PLATFORM_ALIASES: Record<string, string[]> = {
@@ -1083,7 +1084,7 @@ describe.skipIf(!LIVE_TESTS_ENABLED)("Live LLM Identity Scenarios", () => {
       });
 
       const twitterExtracted = result.extraction.identities.some(
-        (i) => i.platform === "twitter" && i.handle.replace(/^@/, "").includes("alice_codes"),
+        (i) => i.platform === "twitter" && (i.handle ?? "").replace(/^@/, "").includes("alice_codes"),
       );
       const claimIsPending = result.claimsStored.some(
         (c) => c.platform === "twitter" && c.status === "proposed",
@@ -1170,7 +1171,7 @@ describe.skipIf(!LIVE_TESTS_ENABLED)("Live LLM Identity Scenarios", () => {
       });
 
       const githubExtracted = result.extraction.identities.some(
-        (i) => i.platform === "github" && i.handle.replace(/^@/, "").includes("bob-admin"),
+        (i) => i.platform === "github" && (i.handle ?? "").replace(/^@/, "").includes("bob-admin"),
       );
       const claimIsAccepted = result.claimsStored.some(
         (c) => c.platform === "github" && c.status === "accepted" && c.claimTier === "admin_verified",
@@ -1404,7 +1405,7 @@ describe.skipIf(!LIVE_TESTS_ENABLED)("Live LLM Identity Scenarios", () => {
         const latencyMs = Math.round(performance.now() - start);
 
         const extractedPlatforms = result.identities.map((i) => i.platform.toLowerCase());
-        const extractedHandles = result.identities.map((i) => i.handle.replace(/^@/, "").toLowerCase());
+        const extractedHandles = result.identities.map((i) => (i.handle ?? "").replace(/^@/, "").toLowerCase());
 
         const PLATFORM_ALIASES: Record<string, string[]> = {
           email: ["email", "mail", "etc", "e-mail"],
@@ -1858,7 +1859,7 @@ describe.skipIf(!LIVE_TESTS_ENABLED)("Live LLM Identity Scenarios", () => {
         const latencyMs = Math.round(performance.now() - start);
 
         const extractedPlatforms = result.identities.map((i) => i.platform.toLowerCase());
-        const extractedHandles = result.identities.map((i) => i.handle.replace(/^@/, "").toLowerCase());
+        const extractedHandles = result.identities.map((i) => (i.handle ?? "").replace(/^@/, "").toLowerCase());
 
         const PLATFORM_ALIASES: Record<string, string[]> = {
           email: ["email", "mail", "e-mail"],
@@ -2240,7 +2241,7 @@ describe.skipIf(!LIVE_TESTS_ENABLED)("Live LLM Identity Scenarios", () => {
 
       // Should extract the corrected handle
       const corrected = t2.extraction.identities.some(
-        (i) => i.handle.replace(/^@/, "").includes("tommyplays2017"),
+        (i) => (i.handle ?? "").replace(/^@/, "").includes("tommyplays2017"),
       );
 
       tracker.record({
@@ -2419,7 +2420,7 @@ describe.skipIf(!LIVE_TESTS_ENABLED)("Live LLM Identity Scenarios", () => {
       transcript.addFromResult("Sarah", "client_chat", t1);
 
       const ghFound = t1.extraction.identities.some(
-        (i) => i.platform === "github" && i.handle.replace(/^@/, "").includes("sarah-builds"),
+        (i) => i.platform === "github" && (i.handle ?? "").replace(/^@/, "").includes("sarah-builds"),
       );
       const emailFound = t1.extraction.identities.some(
         (i) => i.platform === "email" && i.handle.includes("sarah@projectlabs.dev"),
@@ -2615,7 +2616,7 @@ describe.skipIf(!LIVE_TESTS_ENABLED)("Live LLM Identity Scenarios", () => {
 
       // The correction should have extracted the new handle
       const correctedExtraction = t2.extraction.identities.some(
-        (i) => i.platform === "twitter" && i.handle.replace(/^@/, "").includes("bob_builds"),
+        (i) => i.platform === "twitter" && (i.handle ?? "").replace(/^@/, "").includes("bob_builds"),
       );
       tracker.record({
         name: "correction: new handle extracted from correction",
@@ -2673,7 +2674,7 @@ describe.skipIf(!LIVE_TESTS_ENABLED)("Live LLM Identity Scenarios", () => {
 
       // Should extract the identity but mark it as "other" reported
       const extracted = result.extraction.identities.find(
-        (i) => i.platform === "twitter" && i.handle.replace(/^@/, "").includes("shawmakesmagic"),
+        (i) => i.platform === "twitter" && (i.handle ?? "").replace(/^@/, "").includes("shawmakesmagic"),
       );
       const isHearsay = extracted?.reportedBy === "other";
       const lowerConfidence = extracted ? extracted.confidence <= 0.7 : false;
@@ -3041,7 +3042,7 @@ describe.skipIf(!LIVE_TESTS_ENABLED)("Live LLM Identity Scenarios", () => {
         );
 
         const extractedPlatforms = result.identities.map((i) => i.platform);
-        const extractedHandles = result.identities.map((i) => i.handle.replace(/^@/, ""));
+        const extractedHandles = result.identities.map((i) => (i.handle ?? "").replace(/^@/, ""));
 
         let passed: boolean;
         if (tc.expectedPlatforms.length === 0) {

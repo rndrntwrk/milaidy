@@ -12,7 +12,7 @@
  *
  */
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { getTrajectoryContextMock } = vi.hoisted(() => ({
   getTrajectoryContextMock: vi.fn(() => undefined),
@@ -542,9 +542,40 @@ import { installPromptOptimizations } from "../prompt-optimization";
 import { withMiladyTrajectoryStep } from "../trajectory-step-context";
 
 describe("installPromptOptimizations", () => {
+  // detectRuntimeModel() reads ENV_PROVIDER_SIGNALS (OPENAI_API_KEY, ANTHROPIC_API_KEY, …)
+  // and returns a provider label instead of the raw model type when any signal key is set.
+  // Clear them here so the mock runtime (no plugins) falls through to "undefined" and
+  // the model label in trajectory logs matches the raw type string (e.g. "TEXT_LARGE").
+  const savedProviderEnv: Record<string, string | undefined> = {};
+  const PROVIDER_SIGNAL_KEYS = [
+    "OPENAI_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "OPENROUTER_API_KEY",
+    "GROQ_API_KEY",
+    "GOOGLE_GENERATIVE_AI_API_KEY",
+    "XAI_API_KEY",
+    "DEEPSEEK_API_KEY",
+    "MISTRAL_API_KEY",
+    "TOGETHER_API_KEY",
+  ] as const;
+
   beforeEach(() => {
     getTrajectoryContextMock.mockReset();
     getTrajectoryContextMock.mockReturnValue(undefined);
+    for (const key of PROVIDER_SIGNAL_KEYS) {
+      savedProviderEnv[key] = process.env[key];
+      delete process.env[key];
+    }
+  });
+
+  afterEach(() => {
+    for (const key of PROVIDER_SIGNAL_KEYS) {
+      if (savedProviderEnv[key] !== undefined) {
+        process.env[key] = savedProviderEnv[key];
+      } else {
+        delete process.env[key];
+      }
+    }
   });
 
   function createMockRuntime(options?: {
