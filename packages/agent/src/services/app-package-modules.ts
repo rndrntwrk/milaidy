@@ -199,10 +199,6 @@ async function readJsonFile<T>(filePath: string): Promise<T | null> {
   }
 }
 
-function readBridgeExportValue(value: unknown): string | null {
-  return typeof value === "string" ? value : null;
-}
-
 async function readLocalBridgeExport(packageDir: string): Promise<string | null> {
   const packageJson = await readJsonFile<LocalPackageJson>(
     path.join(packageDir, "package.json"),
@@ -210,11 +206,14 @@ async function readLocalBridgeExport(packageDir: string): Promise<string | null>
   const manifest = await readJsonFile<LocalPluginManifest>(
     path.join(packageDir, "elizaos.plugin.json"),
   );
-
-  return (
-    readBridgeExportValue(packageJson?.elizaos?.app?.bridgeExport) ??
-    readBridgeExportValue(manifest?.app?.bridgeExport)
-  );
+  const packageBridgeExport = packageJson?.elizaos?.app?.bridgeExport;
+  if (typeof packageBridgeExport === "string") {
+    return packageBridgeExport;
+  }
+  const manifestBridgeExport = manifest?.app?.bridgeExport;
+  return typeof manifestBridgeExport === "string"
+    ? manifestBridgeExport
+    : null;
 }
 
 async function resolveAppModuleTarget(
