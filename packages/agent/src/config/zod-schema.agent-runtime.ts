@@ -463,6 +463,7 @@ export const AgentEntrySchema = z
     model: AgentModelSchema.optional(),
     skills: z.array(z.string()).optional(),
     memorySearch: MemorySearchSchema,
+    advancedMemory: z.boolean().optional(),
     humanDelay: HumanDelaySchema.optional(),
     heartbeat: HeartbeatSchema,
     identity: IdentitySchema,
@@ -587,15 +588,9 @@ const uuidPattern =
 
 export const OwnerContactEntrySchema = z
   .object({
-    entityId: z
-      .string()
-      .regex(uuidPattern, "invalid UUID")
-      .optional(),
+    entityId: z.string().regex(uuidPattern, "invalid UUID").optional(),
     channelId: z.string().optional(),
-    roomId: z
-      .string()
-      .regex(uuidPattern, "invalid UUID")
-      .optional(),
+    roomId: z.string().regex(uuidPattern, "invalid UUID").optional(),
   })
   .strict();
 
@@ -664,6 +659,7 @@ export const AgentDefaultsSchema = z
     contextTokens: z.number().int().positive().optional(),
     cliBackends: z.record(z.string(), CliBackendSchema).optional(),
     memorySearch: MemorySearchSchema,
+    advancedMemory: z.boolean().optional(),
     contextPruning: z
       .object({
         mode: z.union([z.literal("off"), z.literal("cache-ttl")]).optional(),

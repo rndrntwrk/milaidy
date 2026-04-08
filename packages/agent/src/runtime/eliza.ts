@@ -2556,6 +2556,10 @@ export function buildCharacterFromConfig(config: ElizaConfig): Character {
   const postExamples = agentEntry?.postExamples ?? bundledPreset?.postExamples;
   const messageExamples =
     agentEntry?.messageExamples ?? bundledPreset?.messageExamples;
+  const advancedMemory =
+    agentEntry?.advancedMemory ??
+    config.agents?.defaults?.advancedMemory ??
+    true;
 
   // Collect secrets from process.env (API keys the plugins need)
   const secretKeys = [
@@ -2675,6 +2679,7 @@ export function buildCharacterFromConfig(config: ElizaConfig): Character {
     ...(adjectives ? { adjectives } : {}),
     ...(postExamples ? { postExamples } : {}),
     ...(mappedExamples ? { messageExamples: mappedExamples } : {}),
+    advancedMemory,
     secrets,
   });
 }

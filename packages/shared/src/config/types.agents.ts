@@ -37,6 +37,8 @@ export type AgentConfig = {
   heartbeat?: AgentDefaultsConfig["heartbeat"];
   identity?: IdentityConfig;
   groupChat?: GroupChatConfig;
+  /** Enable built-in advanced memory providers/evaluators for this agent. */
+  advancedMemory?: boolean;
 
   // ── Personality fields (set during onboarding from style presets) ──────
   /** Agent bio lines. Set during onboarding from the chosen style preset. */

@@ -11,13 +11,17 @@
  * Pure-function tests — no live server needed.
  */
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { envSnapshot, saveEnv } from "../../../test/helpers/test-utils";
 import type { ElizaConfig } from "../src/config/config";
+import {
+  AgentDefaultsSchema,
+  AgentEntrySchema,
+} from "../src/config/zod-schema.agent-runtime";
 import {
   applyCloudConfigToEnv,
   buildCharacterFromConfig,
   collectPluginNames,
 } from "../src/runtime/eliza";
-import { envSnapshot, saveEnv } from "../../../test/helpers/test-utils";
 
 const CLOUD_ENV_KEYS = [
   "ELIZAOS_CLOUD_ENABLED",
@@ -152,6 +156,52 @@ describe("buildCharacterFromConfig — cloud secret propagation", () => {
       (char.secrets as Record<string, string> | undefined)
         ?.ELIZAOS_CLOUD_API_KEY,
     ).toBeUndefined();
+  });
+
+  it("enables advanced memory by default", () => {
+    const char = buildCharacterFromConfig({} as ElizaConfig);
+    expect(char.advancedMemory).toBe(true);
+  });
+
+  it("honors per-agent advanced memory disablement", () => {
+    const config = {
+      agents: {
+        list: [{ id: "main", name: "Chen", advancedMemory: false }],
+      },
+    } as ElizaConfig;
+    const char = buildCharacterFromConfig(config);
+    expect(char.advancedMemory).toBe(false);
+  });
+
+  it("inherits default advanced memory config when the agent does not override it", () => {
+    const config = {
+      agents: {
+        defaults: { advancedMemory: false },
+        list: [{ id: "main", name: "Chen" }],
+      },
+    } as ElizaConfig;
+    const char = buildCharacterFromConfig(config);
+    expect(char.advancedMemory).toBe(false);
+  });
+});
+
+describe("advancedMemory config parsing", () => {
+  it("accepts advancedMemory on agent entries", () => {
+    const parsed = AgentEntrySchema.parse({
+      id: "main",
+      name: "Chen",
+      advancedMemory: false,
+    });
+
+    expect(parsed.advancedMemory).toBe(false);
+  });
+
+  it("accepts advancedMemory in agent defaults", () => {
+    const parsed = AgentDefaultsSchema.parse({
+      advancedMemory: false,
+    });
+
+    expect(parsed.advancedMemory).toBe(false);
   });
 });
 
