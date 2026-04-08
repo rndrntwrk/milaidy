@@ -61,17 +61,11 @@ async function runMigrationWithSavepoint(
   name: string,
   migration: () => Promise<void>,
 ): Promise<void> {
-  const safeName = name.replace(/[^a-zA-Z0-9_]/g, "_");
-  await executeRawSql(runtime, `SAVEPOINT ${safeName}`);
-  try {
-    await migration();
-    await executeRawSql(runtime, `RELEASE SAVEPOINT ${safeName}`);
-  } catch (error) {
-    await executeRawSql(runtime, `ROLLBACK TO SAVEPOINT ${safeName}`).catch(
-      () => {},
-    );
-    throw error;
-  }
+  // PGlite connection pooling prohibits multi-step transactional states
+  // using sequential raw queries because each db.execute uses an isolated
+  // connection. We skip the SAVEPOINT wrapping to avoid syntax crashes,
+  // relying on the idempotency of the _next table swap pattern.
+  await migration();
 }
 
 function isoNow(): string {
@@ -981,46 +975,6 @@ async function runLifeOpsSchemaSetup(
       metadata_json TEXT NOT NULL DEFAULT '{}',
       created_at TEXT NOT NULL
     )`,
-    `CREATE INDEX IF NOT EXISTS idx_life_task_definitions_agent_status
-      ON life_task_definitions(agent_id, status)`,
-    `CREATE INDEX IF NOT EXISTS idx_life_task_definitions_subject
-      ON life_task_definitions(agent_id, domain, subject_type, subject_id, status)`,
-    `CREATE INDEX IF NOT EXISTS idx_life_task_occurrences_agent_state_start
-      ON life_task_occurrences(agent_id, state, relevance_start_at)`,
-    `CREATE INDEX IF NOT EXISTS idx_life_task_occurrences_subject
-      ON life_task_occurrences(agent_id, domain, subject_type, subject_id, state, relevance_start_at)`,
-    `CREATE INDEX IF NOT EXISTS idx_life_task_occurrences_definition
-      ON life_task_occurrences(definition_id, relevance_start_at)`,
-    `CREATE INDEX IF NOT EXISTS idx_life_goal_definitions_agent_status
-      ON life_goal_definitions(agent_id, status)`,
-    `CREATE INDEX IF NOT EXISTS idx_life_goal_definitions_subject
-      ON life_goal_definitions(agent_id, domain, subject_type, subject_id, status)`,
-    `CREATE INDEX IF NOT EXISTS idx_life_reminder_plans_owner
-      ON life_reminder_plans(agent_id, owner_type, owner_id)`,
-    `CREATE INDEX IF NOT EXISTS idx_life_audit_events_owner
-      ON life_audit_events(agent_id, owner_type, owner_id, created_at)`,
-    `CREATE INDEX IF NOT EXISTS idx_life_activity_signals_agent
-      ON life_activity_signals(agent_id, observed_at DESC)`,
-    `CREATE INDEX IF NOT EXISTS idx_life_workflow_definitions_agent
-      ON life_workflow_definitions(agent_id, status, updated_at)`,
-    `CREATE INDEX IF NOT EXISTS idx_life_workflow_definitions_subject
-      ON life_workflow_definitions(agent_id, domain, subject_type, subject_id, status, updated_at)`,
-    `CREATE INDEX IF NOT EXISTS idx_life_workflow_runs_workflow
-      ON life_workflow_runs(agent_id, workflow_id, started_at)`,
-    `CREATE INDEX IF NOT EXISTS idx_life_browser_sessions_agent
-      ON life_browser_sessions(agent_id, status, updated_at)`,
-    `CREATE INDEX IF NOT EXISTS idx_life_browser_sessions_subject
-      ON life_browser_sessions(agent_id, domain, subject_type, subject_id, status, updated_at)`,
-    `CREATE INDEX IF NOT EXISTS idx_life_goal_links_goal
-      ON life_goal_links(goal_id)`,
-    `CREATE INDEX IF NOT EXISTS idx_life_goal_links_linked
-      ON life_goal_links(linked_type, linked_id)`,
-    `CREATE INDEX IF NOT EXISTS idx_life_reminder_attempts_plan
-      ON life_reminder_attempts(plan_id, owner_type, owner_id)`,
-    `CREATE INDEX IF NOT EXISTS idx_life_channel_policies_agent
-      ON life_channel_policies(agent_id, channel_type)`,
-    `CREATE INDEX IF NOT EXISTS idx_life_website_access_grants_group
-      ON life_website_access_grants(agent_id, group_key, revoked_at, expires_at)`,
   ];
 
   for (const statement of statements) {
@@ -1140,10 +1094,10 @@ async function runLifeOpsSchemaSetup(
         capabilities_json,
         token_ref,
         mode,
-        COALESCE(execution_target, 'local'),
-        COALESCE(source_of_truth, 'local_storage'),
-        COALESCE(preferred_by_agent, FALSE),
-        cloud_connection_id,
+        'local',
+        'local_storage',
+        FALSE,
+        NULL,
         COALESCE(metadata_json, '{}'),
         last_refresh_at,
         created_at,
@@ -1429,6 +1383,46 @@ async function runLifeOpsSchemaSetup(
   }
 
   const postMigrationIndexStatements = [
+    `CREATE INDEX IF NOT EXISTS idx_life_task_definitions_agent_status
+      ON life_task_definitions(agent_id, status)`,
+    `CREATE INDEX IF NOT EXISTS idx_life_task_definitions_subject
+      ON life_task_definitions(agent_id, domain, subject_type, subject_id, status)`,
+    `CREATE INDEX IF NOT EXISTS idx_life_task_occurrences_agent_state_start
+      ON life_task_occurrences(agent_id, state, relevance_start_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_life_task_occurrences_subject
+      ON life_task_occurrences(agent_id, domain, subject_type, subject_id, state, relevance_start_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_life_task_occurrences_definition
+      ON life_task_occurrences(definition_id, relevance_start_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_life_goal_definitions_agent_status
+      ON life_goal_definitions(agent_id, status)`,
+    `CREATE INDEX IF NOT EXISTS idx_life_goal_definitions_subject
+      ON life_goal_definitions(agent_id, domain, subject_type, subject_id, status)`,
+    `CREATE INDEX IF NOT EXISTS idx_life_reminder_plans_owner
+      ON life_reminder_plans(agent_id, owner_type, owner_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_life_audit_events_owner
+      ON life_audit_events(agent_id, owner_type, owner_id, created_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_life_activity_signals_agent
+      ON life_activity_signals(agent_id, observed_at DESC)`,
+    `CREATE INDEX IF NOT EXISTS idx_life_workflow_definitions_agent
+      ON life_workflow_definitions(agent_id, status, updated_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_life_workflow_definitions_subject
+      ON life_workflow_definitions(agent_id, domain, subject_type, subject_id, status, updated_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_life_workflow_runs_workflow
+      ON life_workflow_runs(agent_id, workflow_id, started_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_life_browser_sessions_agent
+      ON life_browser_sessions(agent_id, status, updated_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_life_browser_sessions_subject
+      ON life_browser_sessions(agent_id, domain, subject_type, subject_id, status, updated_at)`,
+    `CREATE INDEX IF NOT EXISTS idx_life_goal_links_goal
+      ON life_goal_links(goal_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_life_goal_links_linked
+      ON life_goal_links(linked_type, linked_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_life_reminder_attempts_plan
+      ON life_reminder_attempts(plan_id, owner_type, owner_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_life_channel_policies_agent
+      ON life_channel_policies(agent_id, channel_type)`,
+    `CREATE INDEX IF NOT EXISTS idx_life_website_access_grants_group
+      ON life_website_access_grants(agent_id, group_key, revoked_at, expires_at)`,
     `CREATE INDEX IF NOT EXISTS idx_life_calendar_events_agent
       ON life_calendar_events(agent_id, provider, side)`,
     `CREATE INDEX IF NOT EXISTS idx_life_calendar_events_window

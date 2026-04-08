@@ -327,9 +327,10 @@ function main(): void {
 
   const developerId = resolveDeveloperId();
   if (!developerId) {
-    throw new Error(
-      "runtime-sign: no Developer ID Application identity available for codesign",
+    console.warn(
+      "[runtime-sign] WARNING: no Developer ID Application identity available for codesign. Skipping runtime signing.",
     );
+    return;
   }
 
   let signedCount = 0;

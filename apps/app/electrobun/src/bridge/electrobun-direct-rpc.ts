@@ -12,7 +12,7 @@
  * `request.<method>(params)` plus `onMessage(<message>, listener)`.
  */
 
-import { getBootConfig, setBootConfig } from "@miladyai/app-core/config";
+
 import { Electroview } from "electrobun/view";
 import type { RpcMessageListener } from "../types.js";
 import { ensureElectrobunGlobal } from "./electrobun-stub.js";
@@ -43,13 +43,26 @@ function dispatchMessage(messageName: string, payload: unknown): void {
       });
     }
     // Propagate to boot config so MiladyClient picks up port changes.
-    // The client reads boot config (not window globals) after construction.
-    const config = getBootConfig();
-    setBootConfig({
-      ...config,
+    // We modify it directly instead of importing @miladyai/app-core/config
+    // to prevent bundling React and the entire UI layer into the preload script.
+    const globalObj = window as any;
+    const BOOT_KEY = "__MILADY_APP_BOOT_CONFIG__";
+    const storeSym = Symbol.for("milady.app.boot-config");
+    
+    // Get existing config from either the window global or the secret symbol store
+    const store = globalObj[storeSym];
+    const existingConfig = store?.current || globalObj[BOOT_KEY] || {};
+    
+    const newConfig = {
+      ...existingConfig,
       apiBase: apiBaseUpdate.base,
       ...(apiBaseUpdate.token ? { apiToken: apiBaseUpdate.token } : {}),
-    });
+    };
+    
+    globalObj[BOOT_KEY] = newConfig;
+    if (store) {
+      store.current = newConfig;
+    }
   }
 
   const listeners = listenersByRpcMessage[messageName];
