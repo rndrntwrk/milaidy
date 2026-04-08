@@ -304,6 +304,26 @@ export async function handleTrainingRoutes(
     return true;
   }
 
+  if (method === "GET" && pathname === "/api/training/context-audit") {
+    if (!runtime || !Array.isArray((runtime as { plugins?: unknown }).plugins)) {
+      error(res, "Runtime with loaded plugins is required for context audit", 503);
+      return true;
+    }
+
+    const { auditRuntimeContextCoverage, hasContextAuditGaps } = await import(
+      "../training/context-audit.js"
+    );
+    const audit = auditRuntimeContextCoverage(
+      runtime as AgentRuntime & { plugins: NonNullable<AgentRuntime["plugins"]> },
+    );
+
+    json(res, {
+      audit,
+      hasGaps: hasContextAuditGaps(audit),
+    });
+    return true;
+  }
+
   if (method === "POST" && pathname === "/api/training/generate-dataset") {
     const body = await readJsonBody<{
       variantsPerBlueprint?: number;

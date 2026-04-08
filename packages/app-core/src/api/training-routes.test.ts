@@ -284,6 +284,48 @@ describe("training routes", () => {
     });
   });
 
+  test("audits loaded runtime plugin context coverage", async () => {
+    runtime = {
+      character: { name: "Eliza" },
+      plugins: [
+        {
+          name: "catalog-covered-plugin",
+          actions: [{ name: "SET_USER_NAME" }],
+          providers: [{ name: "userName" }],
+        },
+        {
+          name: "gap-plugin",
+          actions: [{ name: "UNKNOWN_ACTION" }],
+          providers: [{ name: "unknownProvider" }],
+        },
+      ],
+    } as unknown as AgentRuntime;
+
+    const result = await invoke({
+      method: "GET",
+      pathname: "/api/training/context-audit",
+    });
+
+    expect(result.status).toBe(200);
+    expect(result.payload).toMatchObject({
+      hasGaps: true,
+      audit: {
+        pluginCount: 2,
+        gapCount: 2,
+        coverageBySource: {
+          actions: expect.objectContaining({
+            catalog: 1,
+            default: 1,
+          }),
+          providers: expect.objectContaining({
+            catalog: 1,
+            default: 1,
+          }),
+        },
+      },
+    });
+  });
+
   test("starts training job and returns created job", async () => {
     const result = await invoke({
       method: "POST",
