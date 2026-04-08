@@ -71,4 +71,40 @@ describe("Coding agent route readiness", () => {
     expect(response.status).toBe(200);
     expect(response.data).toEqual([]);
   });
+
+  it("returns empty task and session lists for startup polling before services exist", async () => {
+    const tasks = await req(
+      server?.port ?? 0,
+      "GET",
+      "/api/coding-agents/tasks",
+    );
+    const sessions = await req(
+      server?.port ?? 0,
+      "GET",
+      "/api/coding-agents/sessions",
+    );
+
+    expect(tasks.status).toBe(200);
+    expect(tasks.data).toEqual({ tasks: [] });
+    expect(sessions.status).toBe(200);
+    expect(sessions.data).toEqual({ sessions: [] });
+  });
+
+  it("returns not found for task and session detail polling before services exist", async () => {
+    const task = await req(
+      server?.port ?? 0,
+      "GET",
+      "/api/coding-agents/tasks/nonexistent-task",
+    );
+    const session = await req(
+      server?.port ?? 0,
+      "GET",
+      "/api/coding-agents/sessions/nonexistent-session",
+    );
+
+    expect(task.status).toBe(404);
+    expect(task.data).toMatchObject({ error: "Task not found" });
+    expect(session.status).toBe(404);
+    expect(session.data).toMatchObject({ error: "Session not found" });
+  });
 });

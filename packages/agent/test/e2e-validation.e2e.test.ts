@@ -1027,6 +1027,7 @@ describe("Deadlock Detection", () => {
   }, 45_000);
 
   it("rapid state transitions do not cause deadlock", async () => {
+    const isolatedState = withIsolatedApiStateDir();
     const srv = await startApiServer({ port: 0 });
     try {
       const startTime = performance.now();
@@ -1048,11 +1049,16 @@ describe("Deadlock Detection", () => {
       expect(fulfilled.length).toBe(results.length);
       expect(elapsed).toBeLessThan(30_000);
     } finally {
-      await srv.close();
+      try {
+        await srv.close();
+      } finally {
+        isolatedState.restore();
+      }
     }
   }, 45_000);
 
   it("interleaved read/write operations do not deadlock", async () => {
+    const isolatedState = withIsolatedApiStateDir();
     const srv = await startApiServer({ port: 0 });
     try {
       // Interleave reads and writes
@@ -1076,7 +1082,11 @@ describe("Deadlock Detection", () => {
       // All should complete without deadlock
       expect(fulfilled.length).toBe(results.length);
     } finally {
-      await srv.close();
+      try {
+        await srv.close();
+      } finally {
+        isolatedState.restore();
+      }
     }
   }, 45_000);
 });

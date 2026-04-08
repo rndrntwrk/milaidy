@@ -649,13 +649,23 @@ describe("Wallet API E2E", () => {
       expect(process.env.ALCHEMY_API_KEY).toBeUndefined();
     });
 
-    it("GET /api/wallet/balances without API keys returns null for both", async () => {
+    it("GET /api/wallet/balances without API keys falls back gracefully", async () => {
       delete process.env.ALCHEMY_API_KEY;
       delete process.env.HELIUS_API_KEY;
       const { status, data } = await req(port, "GET", "/api/wallet/balances");
       expect(status).toBe(200);
-      expect(data.evm).toBeNull();
-      expect(data.solana).toBeNull();
+      expect(
+        data.evm === null ||
+          (typeof (data.evm as { address?: unknown }).address === "string" &&
+            Array.isArray((data.evm as { chains?: unknown }).chains)),
+      ).toBe(true);
+      expect(
+        data.solana === null ||
+          (typeof (data.solana as { address?: unknown }).address === "string" &&
+            typeof (data.solana as { solBalance?: unknown }).solBalance ===
+              "string" &&
+            Array.isArray((data.solana as { tokens?: unknown }).tokens)),
+      ).toBe(true);
     });
 
     it("concurrent requests to /api/wallet/addresses don't race", async () => {

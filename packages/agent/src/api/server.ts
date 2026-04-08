@@ -4337,6 +4337,119 @@ async function handleCodingAgentsFallback(
     }
     return sessionId;
   };
+  const parseTaskId = (raw: string): string | null => {
+    let taskId = "";
+    try {
+      taskId = decodeURIComponent(raw);
+    } catch {
+      return null;
+    }
+    if (!taskId || taskId.includes("/") || taskId.includes("..")) {
+      return null;
+    }
+    return taskId;
+  };
+  const ptyListService = runtime.getService("PTY_SERVICE") as
+    | (PTYService & {
+        listSessions?: () => Promise<unknown[]>;
+      })
+    | null;
+
+  // GET /api/coding-agents/tasks
+  if (method === "GET" && pathname === "/api/coding-agents/tasks") {
+    try {
+      const url = new URL(req.url ?? pathname, "http://localhost");
+      const requestedStatus = url.searchParams.get("status");
+      const requestedLimit = Number(url.searchParams.get("limit"));
+      let tasks = (await codeTaskService?.getTasks?.()) ?? [];
+      if (!Array.isArray(tasks)) {
+        tasks = [];
+      }
+      if (requestedStatus) {
+        tasks = tasks.filter(
+          (task) => task.metadata?.status === requestedStatus,
+        );
+      }
+      if (Number.isFinite(requestedLimit) && requestedLimit > 0) {
+        tasks = tasks.slice(0, requestedLimit);
+      }
+      json(res, { tasks });
+      return true;
+    } catch (e) {
+      error(res, `Failed to list coding agent tasks: ${e}`, 500);
+      return true;
+    }
+  }
+
+  const taskMatch = pathname.match(/^\/api\/coding-agents\/tasks\/([^/]+)$/);
+  if (method === "GET" && taskMatch) {
+    const taskId = parseTaskId(taskMatch[1]);
+    if (!taskId) {
+      error(res, "Invalid task ID", 400);
+      return true;
+    }
+    try {
+      const tasks = (await codeTaskService?.getTasks?.()) ?? [];
+      const task = Array.isArray(tasks)
+        ? tasks.find((entry) => entry.id === taskId)
+        : undefined;
+      if (!task) {
+        error(res, "Task not found", 404);
+        return true;
+      }
+      json(res, { task });
+      return true;
+    } catch (e) {
+      error(res, `Failed to get coding agent task: ${e}`, 500);
+      return true;
+    }
+  }
+
+  // GET /api/coding-agents/sessions
+  if (method === "GET" && pathname === "/api/coding-agents/sessions") {
+    try {
+      const sessions = (await ptyListService?.listSessions?.()) ?? [];
+      json(res, { sessions: Array.isArray(sessions) ? sessions : [] });
+      return true;
+    } catch (e) {
+      error(res, `Failed to list coding agent sessions: ${e}`, 500);
+      return true;
+    }
+  }
+
+  const sessionMatch = pathname.match(
+    /^\/api\/coding-agents\/sessions\/([^/]+)$/,
+  );
+  if (method === "GET" && sessionMatch) {
+    const sessionId = parseSessionId(sessionMatch[1]);
+    if (!sessionId) {
+      error(res, "Invalid session ID", 400);
+      return true;
+    }
+    try {
+      const sessions = (await ptyListService?.listSessions?.()) ?? [];
+      const session = Array.isArray(sessions)
+        ? sessions.find((entry) => {
+            if (!entry || typeof entry !== "object") return false;
+            const raw = entry as Record<string, unknown>;
+            return (
+              raw.id === sessionId ||
+              raw.sessionId === sessionId ||
+              raw.roomId === sessionId
+            );
+          })
+        : undefined;
+      if (!session) {
+        error(res, "Session not found", 404);
+        return true;
+      }
+      json(res, { session });
+      return true;
+    } catch (e) {
+      error(res, `Failed to get coding agent session: ${e}`, 500);
+      return true;
+    }
+  }
 
   // GET /api/coding-agents/preflight
   if (method === "GET" && pathname === "/api/coding-agents/preflight") {
@@ -4888,7 +5001,7 @@ async function handleRequest(
       error,
       saveConfig: saveElizaConfig,
       loadSubscriptionAuth: async () =>
-        (await import("../auth/index")) as never,
+        (await import("../auth/index.js")) as never,
     } as never)
   ) {
     return;
@@ -5899,6 +6012,14 @@ async function handleRequest(
     // before the runtime is available — prevents 30s timeout → 500 errors.
     if (pathname === "/api/coding-agents") {
       json(res, []);
+    } else if (pathname === "/api/coding-agents/tasks") {
+      json(res, { tasks: [] });
+    } else if (pathname === "/api/coding-agents/sessions") {
+      json(res, { sessions: [] });
+    } else if (/^\/api\/coding-agents\/tasks\/[^/]+$/.test(pathname)) {
+      error(res, "Task not found", 404);
+    } else if (/^\/api\/coding-agents\/sessions\/[^/]+$/.test(pathname)) {
+      error(res, "Session not found", 404);
     } else if (pathname === "/api/coding-agents/scratch") {
       json(res, []);
     } else {
