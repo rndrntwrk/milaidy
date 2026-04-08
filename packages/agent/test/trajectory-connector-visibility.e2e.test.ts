@@ -1,14 +1,23 @@
-import { existsSync } from "node:fs";
-import path from "node:path";
 import { PGlite } from "@electric-sql/pglite";
 import type { AgentRuntime } from "@elizaos/core";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { TrajectoryLoggerService } from "@elizaos/plugin-trajectory-logger";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { req } from "../../../test/helpers/http";
 import { startApiServer } from "../src/api/server";
-import { DatabaseTrajectoryLogger } from "../src/runtime/trajectory-storage";
 
 type SqlQuery = {
   queryChunks?: Array<{ value?: unknown }>;
+};
+
+type TestRuntime = AgentRuntime & {
+  adapter: {
+    db: {
+      execute: (query: SqlQuery) => Promise<{
+        rows: Array<Record<string, unknown>>;
+        fields: Array<{ name: string }>;
+      }>;
+    };
+  };
 };
 
 function extractSqlText(query: SqlQuery): string {
@@ -22,77 +31,57 @@ function extractSqlText(query: SqlQuery): string {
     .join("");
 }
 
-const testUtilsPath = path.resolve(
-  process.cwd(),
-  "eliza/packages/typescript/src/__tests__/test-utils.ts",
-);
-const hasElizaTestUtils = existsSync(testUtilsPath);
-
-const { cleanupTestRuntime, createTestDatabaseAdapter, createTestRuntime } =
-  hasElizaTestUtils
-    ? await import(
-        "../../../eliza/packages/typescript/src/__tests__/test-utils"
-      )
-    : {
-        cleanupTestRuntime: undefined,
-        createTestDatabaseAdapter: undefined,
-        createTestRuntime: undefined,
-      };
-
-const describeIfEliza = hasElizaTestUtils ? describe : describe.skip;
-
-describeIfEliza("Connector trajectory visibility", () => {
+describe("Connector trajectory visibility", () => {
   let db: PGlite;
-  let runtime: AgentRuntime;
-  let trajectoryLogger: DatabaseTrajectoryLogger;
+  let runtime: TestRuntime;
+  let trajectoryLogger: TrajectoryLoggerService;
   let server: { port: number; close: () => Promise<void> } | null = null;
 
   beforeAll(async () => {
     db = new PGlite();
 
-    const adapter = createTestDatabaseAdapter() as ReturnType<
-      typeof createTestDatabaseAdapter
-    > & {
-      db: {
-        execute: (query: SqlQuery) => Promise<{
-          rows: Array<Record<string, unknown>>;
-          fields: Array<{ name: string }>;
-        }>;
-      };
-    };
-    adapter.db.execute = async (query: SqlQuery) => {
-      const result = await db.query<Record<string, unknown>>(
-        extractSqlText(query),
-      );
-      return {
-        rows: result.rows,
-        fields: (result.fields ?? []).map((field) => ({
-          name: field.name,
-        })),
-      };
-    };
+    runtime = {
+      agentId: "trajectory-connector-visibility-agent",
+      character: {
+        name: "TrajectoryConnectorVisibilityAgent",
+      } as AgentRuntime["character"],
+      logger: {
+        debug: () => {},
+        info: () => {},
+        warn: () => {},
+        error: () => {},
+      } as AgentRuntime["logger"],
+      adapter: {
+        db: {
+          execute: async (query: SqlQuery) => {
+            const result = await db.query<Record<string, unknown>>(
+              extractSqlText(query),
+            );
+            return {
+              rows: result.rows,
+              fields: (result.fields ?? []).map((field) => ({
+                name: field.name,
+              })),
+            };
+          },
+        },
+      },
+      getSetting: () => undefined,
+      getAgent: async () => null,
+      getRoomsByWorld: async () => [],
+      getService: () => null,
+      getServicesByType: () => [],
+    } as TestRuntime;
 
-    runtime = (await createTestRuntime({
-      adapter,
-    })) as AgentRuntime;
-
-    trajectoryLogger = new DatabaseTrajectoryLogger(runtime);
+    trajectoryLogger = new TrajectoryLoggerService(runtime);
     await trajectoryLogger.initialize();
 
-    const originalGetService = runtime.getService.bind(runtime);
-    const originalGetServicesByType =
-      typeof runtime.getServicesByType === "function"
-        ? runtime.getServicesByType.bind(runtime)
-        : undefined;
-
     runtime.getService = ((serviceType: string) =>
-      serviceType === "trajectory_logger"
-        ? (trajectoryLogger as object)
-        : originalGetService(serviceType)) as AgentRuntime["getService"];
+      serviceType === "trajectory_logger" ? trajectoryLogger : null) as AgentRuntime["getService"];
     runtime.getServicesByType = ((serviceType: string) =>
       serviceType === "trajectory_logger"
         ? [trajectoryLogger]
-        : (originalGetServicesByType?.(serviceType) ?? [])) as AgentRuntime["getServicesByType"];
+        : []) as AgentRuntime["getServicesByType"];
 
     server = await startApiServer({ port: 0, runtime });
   }, 120_000);
@@ -101,7 +90,6 @@ describeIfEliza("Connector trajectory visibility", () => {
     if (server) {
       await server.close();
     }
-    await cleanupTestRuntime(runtime);
     await db.close();
   });
 
@@ -118,11 +106,19 @@ describeIfEliza("Connector trajectory visibility", () => {
         messageId: "connector-message",
       },
     });
+    const stepId = trajectoryLogger.startStep(trajectoryId, {
+      timestamp: Date.now() - 1_000,
+      agentBalance: 0,
+      agentPoints: 0,
+      agentPnL: 0,
+      openPositions: 0,
+    });
     const prompt = "hello from the discord connector";
     const response = "Hello from connector!";
-    const startTime = Date.now() - 1_000;
+    const startTime = Date.now() - 900;
+
     trajectoryLogger.logLlmCall({
-      stepId: trajectoryId,
+      stepId,
       callId: "connector-call-1",
       timestamp: startTime + 20,
       model: "test-model",
@@ -137,6 +133,12 @@ describeIfEliza("Connector trajectory visibility", () => {
       latencyMs: 5,
       promptTokens: Math.ceil(prompt.length / 4),
       completionTokens: Math.ceil(response.length / 4),
+    });
+    trajectoryLogger.completeStep(trajectoryId, stepId, {
+      actionType: "RESPOND",
+      actionName: "RESPOND",
+      parameters: {},
+      success: true,
     });
     await trajectoryLogger.endTrajectory(trajectoryId, "completed");
 

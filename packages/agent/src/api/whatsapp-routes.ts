@@ -60,6 +60,69 @@ export async function handleWhatsAppRoute(
 ): Promise<boolean> {
   if (!pathname.startsWith("/api/whatsapp")) return false;
 
+  if (pathname === "/api/whatsapp/webhook" && method === "GET") {
+    const url = new URL(
+      req.url ?? "/",
+      `http://${req.headers.host ?? "localhost"}`,
+    );
+    const mode = url.searchParams.get("hub.mode") ?? "";
+    const token = url.searchParams.get("hub.verify_token") ?? "";
+    const challenge = url.searchParams.get("hub.challenge") ?? "";
+
+    const service = state.runtime?.getService("whatsapp") as
+      | {
+          verifyWebhook?: (
+            mode: string,
+            token: string,
+            challenge: string,
+          ) => string | null;
+        }
+      | null
+      | undefined;
+
+    if (!service || typeof service.verifyWebhook !== "function") {
+      json(res, { error: "WhatsApp service unavailable" }, 503);
+      return true;
+    }
+
+    const verifiedChallenge = service.verifyWebhook(mode, token, challenge);
+    if (!verifiedChallenge) {
+      json(res, { error: "Webhook verification failed" }, 403);
+      return true;
+    }
+
+    res.statusCode = 200;
+    res.setHeader("Content-Type", "text/plain");
+    res.end(verifiedChallenge);
+    return true;
+  }
+
+  if (pathname === "/api/whatsapp/webhook" && method === "POST") {
+    const service = state.runtime?.getService("whatsapp") as
+      | {
+          handleWebhook?: (event: Record<string, unknown>) => Promise<void>;
+        }
+      | null
+      | undefined;
+
+    if (!service || typeof service.handleWebhook !== "function") {
+      json(res, { error: "WhatsApp service unavailable" }, 503);
+      return true;
+    }
+
+    const body = await readJsonBody<Record<string, unknown>>(req, res);
+    if (!body) {
+      return true;
+    }
+
+    await service.handleWebhook(body);
+
+    res.statusCode = 200;
+    res.setHeader("Content-Type", "text/plain");
+    res.end("EVENT_RECEIVED");
+    return true;
+  }
+
   if (method === "POST" && pathname === "/api/whatsapp/pair") {
     const body = await readJsonBody<{ accountId?: string }>(req, res);
     let accountId: string;

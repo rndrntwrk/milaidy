@@ -1493,37 +1493,51 @@ export function buildUserMessages(params: {
   const source = messageSource?.trim() || "client_chat";
   const { attachments, compactAttachments } = buildChatAttachments(images);
   const id = crypto.randomUUID() as UUID;
+  const mergeMessageMetadata = (message: MessageMemory): MessageMemory =>
+    metadata
+      ? ({
+          ...message,
+          metadata: {
+            ...message.metadata,
+            ...metadata,
+          },
+        } as MessageMemory)
+      : message;
   // In-memory message carries _data/_mimeType so action handlers can upload.
-  const userMessage = createMessageMemory({
-    id,
-    entityId: userId,
-    agentId,
-    roomId,
-    content: {
-      text: prompt,
-      source,
-      channelType,
-      ...(conversationMode ? { conversationMode } : {}),
-      ...(attachments?.length ? { attachments } : {}),
-      ...(metadata ? { metadata } : {}),
-    } as Content & { text: string },
-  });
+  const userMessage = mergeMessageMetadata(
+    createMessageMemory({
+      id,
+      entityId: userId,
+      agentId,
+      roomId,
+      content: {
+        text: prompt,
+        source,
+        channelType,
+        ...(conversationMode ? { conversationMode } : {}),
+        ...(attachments?.length ? { attachments } : {}),
+        ...(metadata ? { metadata } : {}),
+      } as Content & { text: string },
+    }),
+  );
   // Persisted message: compact placeholder URL, no raw bytes in DB.
   const messageToStore = compactAttachments?.length
-    ? createMessageMemory({
-        id,
-        entityId: userId,
-        agentId,
-        roomId,
-        content: {
-          text: prompt,
-          source,
-          channelType,
-          ...(conversationMode ? { conversationMode } : {}),
-          attachments: compactAttachments,
-          ...(metadata ? { metadata } : {}),
-        } as Content & { text: string },
-      })
+    ? mergeMessageMetadata(
+        createMessageMemory({
+          id,
+          entityId: userId,
+          agentId,
+          roomId,
+          content: {
+            text: prompt,
+            source,
+            channelType,
+            ...(conversationMode ? { conversationMode } : {}),
+            attachments: compactAttachments,
+            ...(metadata ? { metadata } : {}),
+          } as Content & { text: string },
+        }),
+      )
     : userMessage;
   return { userMessage, messageToStore };
 }
@@ -4656,6 +4670,7 @@ async function handleRequest(
     method === "GET" &&
     pathname === "/api/onboarding/status" &&
     isCloudProvisionedContainer();
+  const isWhatsAppWebhookEndpoint = pathname === "/api/whatsapp/webhook";
   const isAuthProtectedPath = isAuthProtectedRoute(pathname);
   const registryService = state.registryService;
   const dropService = state.dropService;
@@ -4762,6 +4777,7 @@ async function handleRequest(
     !isAuthEndpoint &&
     !isHealthEndpoint &&
     !isCloudOnboardingStatusEndpoint &&
+    !isWhatsAppWebhookEndpoint &&
     !isAuthorized(req)
   ) {
     json(res, { error: "Unauthorized" }, 401);
@@ -4774,6 +4790,7 @@ async function handleRequest(
     !isAuthEndpoint &&
     !isHealthEndpoint &&
     !isCloudOnboardingStatusEndpoint &&
+    !isWhatsAppWebhookEndpoint &&
     !isAuthorized(req)
   ) {
     json(res, { error: "Unauthorized" }, 401);
