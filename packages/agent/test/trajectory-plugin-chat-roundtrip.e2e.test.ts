@@ -95,6 +95,7 @@ async function waitForTrajectoryCall(
 
 async function waitForTrajectoryByMessageId(
   port: number,
+  trajectoryLogger: TrajectoryLoggerService,
   messageId: string,
 ): Promise<{
   trajectory: {
@@ -109,14 +110,19 @@ async function waitForTrajectoryByMessageId(
   }>;
 }> {
   for (let attempt = 0; attempt < 60; attempt += 1) {
-    const list = await req(port, "GET", "/api/trajectories?limit=50");
-    const trajectories = Array.isArray(list.data.trajectories)
-      ? (list.data.trajectories as Array<{ id?: string }>)
-      : [];
+    const list = await trajectoryLogger.listTrajectories({ limit: 50 });
 
-    for (const trajectory of trajectories) {
+    for (const trajectory of list.trajectories) {
       const trajectoryId = String(trajectory.id ?? "");
       if (!trajectoryId) continue;
+
+      const persisted = await trajectoryLogger.getTrajectoryDetail(trajectoryId);
+      if (
+        String(persisted?.metadata?.messageId ?? "") !== messageId ||
+        persisted?.endTime == null
+      ) {
+        continue;
+      }
 
       const detail = await req(
         port,
@@ -465,7 +471,11 @@ describe("Trajectory logger chat roundtrip", () => {
       status: "completed",
     });
 
-    const detail = await waitForTrajectoryByMessageId(server.port, messageId);
+    const detail = await waitForTrajectoryByMessageId(
+      server.port,
+      trajectoryLogger,
+      messageId,
+    );
     expect(detail.trajectory.status).toBe("completed");
     expect(detail.llmCalls).toHaveLength(1);
     expect(detail.llmCalls[0]?.userPrompt).toBe("process this silently");
@@ -532,7 +542,11 @@ describe("Trajectory logger chat roundtrip", () => {
       error: "Run exceeded timeout",
     });
 
-    const detail = await waitForTrajectoryByMessageId(server.port, messageId);
+    const detail = await waitForTrajectoryByMessageId(
+      server.port,
+      trajectoryLogger,
+      messageId,
+    );
     expect(detail.trajectory.status).toBe("error");
     expect(detail.llmCalls).toHaveLength(1);
     expect(detail.llmCalls[0]?.userPrompt).toBe("this run times out");
