@@ -11,6 +11,7 @@ import {
 function makeDeps(): ContentPackApplyDeps {
   return {
     setCustomVrmUrl: vi.fn(),
+    setCustomVrmPreviewUrl: vi.fn(),
     setCustomBackgroundUrl: vi.fn(),
     setCustomWorldUrl: vi.fn(),
     setSelectedVrmIndex: vi.fn(),
@@ -37,9 +38,18 @@ function makePack(
 describe("applyContentPack", () => {
   it("applies custom VRM URL and sets index to 0", () => {
     const deps = makeDeps();
-    applyContentPack(makePack({ vrmUrl: "/packs/test/model.vrm.gz" }), deps);
+    applyContentPack(
+      makePack({
+        vrmUrl: "/packs/test/model.vrm.gz",
+        vrmPreviewUrl: "/packs/test/preview.png",
+      }),
+      deps,
+    );
     expect(deps.setCustomVrmUrl).toHaveBeenCalledWith(
       "/packs/test/model.vrm.gz",
+    );
+    expect(deps.setCustomVrmPreviewUrl).toHaveBeenCalledWith(
+      "/packs/test/preview.png",
     );
     expect(deps.setSelectedVrmIndex).toHaveBeenCalledWith(0);
   });
@@ -52,6 +62,7 @@ describe("applyContentPack", () => {
     );
     expect(deps.setSelectedVrmIndex).toHaveBeenCalledWith(3);
     expect(deps.setCustomVrmUrl).toHaveBeenCalledWith("");
+    expect(deps.setCustomVrmPreviewUrl).toHaveBeenCalledWith("");
   });
 
   it("applies background URL", () => {

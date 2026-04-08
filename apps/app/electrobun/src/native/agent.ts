@@ -31,6 +31,8 @@ import path from "node:path";
 import {
   resolveApiToken,
   resolveDesktopApiPort,
+  resolveDisableAutoApiToken,
+  setApiToken,
 } from "@miladyai/shared/runtime-env";
 
 import { resolveDesktopRuntimeMode } from "../api-base";
@@ -298,13 +300,19 @@ export function resolveConfigDir(opts?: {
 export function ensureDesktopApiToken(
   env: NodeJS.ProcessEnv = process.env,
 ): string {
-  // Prefer MILADY_API_TOKEN, fall back to ELIZA_API_TOKEN.
-  const existing = env.MILADY_API_TOKEN || env.ELIZA_API_TOKEN;
-  const token = existing || crypto.randomBytes(16).toString("hex");
-  // Mirror both aliases so the agent process and the desktop process agree.
-  env.MILADY_API_TOKEN = token;
-  env.ELIZA_API_TOKEN = token;
-  return token;
+  const existingToken = resolveApiToken(env);
+  if (existingToken) {
+    setApiToken(env, existingToken);
+    return existingToken;
+  }
+
+  if (resolveDisableAutoApiToken(env)) {
+    return "";
+  }
+
+  const generated = crypto.randomBytes(16).toString("hex");
+  setApiToken(env, generated);
+  return generated;
 }
 
 export function configureDesktopLocalApiAuth(

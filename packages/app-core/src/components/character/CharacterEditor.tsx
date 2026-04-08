@@ -24,6 +24,7 @@ import {
 } from "../../voice/types";
 import {
   CharacterRoster,
+  createCustomPackRosterEntry,
   type CharacterRosterEntry,
   resolveRosterEntries,
 } from "./CharacterRoster";
@@ -139,6 +140,10 @@ export function CharacterEditor({
     onboardingOptions,
     selectedVrmIndex,
     customVrmUrl: _customVrmUrl,
+    customVrmPreviewUrl,
+    customCatchphrase,
+    customVoicePresetId,
+    activePackId,
     t,
     uiLanguage,
     registryStatus: _registryStatus,
@@ -317,10 +322,33 @@ export function CharacterEditor({
     }
   }, [onboardingPresetStyles, uiLanguage]);
 
-  const baseRosterEntries = useMemo(
-    () => resolveRosterEntries(rosterStyles),
-    [rosterStyles],
-  );
+  const baseRosterEntries = useMemo(() => {
+    const base = resolveRosterEntries(rosterStyles);
+    if (activePackId && _customVrmUrl) {
+      const customOnboardingName =
+        typeof characterData?.name === "string" && characterData.name.trim()
+          ? characterData.name
+          : "Custom";
+      base.unshift(
+        createCustomPackRosterEntry({
+          id: activePackId,
+          name: customOnboardingName,
+          previewUrl: customVrmPreviewUrl || undefined,
+          catchphrase: customCatchphrase || undefined,
+          voicePresetId: customVoicePresetId || undefined,
+        }),
+      );
+    }
+    return base;
+  }, [
+    rosterStyles,
+    activePackId,
+    _customVrmUrl,
+    customVrmPreviewUrl,
+    characterData?.name,
+    customCatchphrase,
+    customVoicePresetId,
+  ]);
 
   // If the user renamed the selected character, reflect it in the roster
   const characterRoster = useMemo(() => {

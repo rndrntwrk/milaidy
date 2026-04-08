@@ -8,5 +8,7 @@ export {
   ContentPackLoadError,
   loadBundledContentPack,
   loadContentPackFromUrl,
+  loadContentPackFromFiles,
+  releaseLoadedContentPack,
   resolveContentPackFromManifest,
 } from "./load-pack";

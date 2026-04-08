@@ -144,6 +144,10 @@ function successResponse() {
   return Promise.resolve({
     ok: true,
     status: 200,
+    headers: {
+      get: (name: string) =>
+        name.toLowerCase() === "content-type" ? "audio/mpeg" : null,
+    },
     blob: () =>
       Promise.resolve(new Blob(["fake-audio"], { type: "audio/mpeg" })),
   });

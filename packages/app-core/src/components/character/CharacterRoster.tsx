@@ -21,6 +21,7 @@ export type CharacterRosterEntry = {
   id: string;
   name: string;
   avatarIndex: number;
+  previewUrl?: string;
   voicePresetId?: string;
   catchphrase?: string;
   greetingAnimation?: string;
@@ -44,6 +45,40 @@ export function resolveRosterEntries(
       preset,
     };
   });
+}
+
+export function createCustomPackRosterEntry(args: {
+  id: string;
+  name: string;
+  previewUrl?: string;
+  catchphrase?: string;
+  voicePresetId?: string;
+}): CharacterRosterEntry {
+  const name = args.name.trim() || "Custom";
+  return {
+    id: args.id,
+    name,
+    avatarIndex: 0,
+    previewUrl: args.previewUrl,
+    voicePresetId: args.voicePresetId,
+    catchphrase: args.catchphrase,
+    preset: {
+      id: args.id,
+      name,
+      avatarIndex: 0,
+      voicePresetId: args.voicePresetId ?? "",
+      greetingAnimation: "",
+      catchphrase: args.catchphrase ?? "",
+      hint: "",
+      bio: [],
+      system: "",
+      adjectives: [],
+      style: { all: [], chat: [], post: [] },
+      topics: [],
+      postExamples: [],
+      messageExamples: [],
+    },
+  };
 }
 
 /* ── Component ────────────────────────────────────────────────────────── */
@@ -133,7 +168,12 @@ export function CharacterRoster({
                   />
                 )}
                 <img
-                  src={getVrmPreviewUrl(entry.avatarIndex)}
+                  src={
+                    entry.previewUrl ??
+                    getVrmPreviewUrl(
+                      entry.avatarIndex > 0 ? entry.avatarIndex : 1,
+                    )
+                  }
                   alt={entry.name}
                   draggable={false}
                   className={`h-full w-full object-cover transition-transform duration-300 ease-out${isSelected ? " scale-[1.04]" : ""}`}
