@@ -248,6 +248,7 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
     setActionNotice,
     retryStartup,
     forceLocalBootstrapRef,
+    addDeferredOnboardingTask,
     client,
   } = deps;
 
