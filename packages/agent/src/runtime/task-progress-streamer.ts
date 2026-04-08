@@ -27,9 +27,7 @@ const HEARTBEAT_AFTER_MS = 45_000;
 
 interface SessionMetadata {
   roomId?: UUID;
-  worldId?: UUID;
   source?: string;
-  label?: string;
 }
 
 interface PTYServiceWithEvents {
@@ -68,6 +66,12 @@ export function installTaskProgressStreamer(
   const heartbeatSent = new Set<string>();
   const finalSent = new Set<string>();
 
+  const forgetSession = (sessionId: string): void => {
+    sessionStartedAt.delete(sessionId);
+    heartbeatSent.delete(sessionId);
+    finalSent.delete(sessionId);
+  };
+
   svc.onSessionEvent((sessionId, event) => {
     if (!sessionStartedAt.has(sessionId)) {
       sessionStartedAt.set(sessionId, Date.now());
@@ -100,6 +104,11 @@ export function installTaskProgressStreamer(
         sessionId,
         "task agent errored — check logs",
       );
+      return;
+    }
+
+    if (event === "stopped") {
+      forgetSession(sessionId);
     }
   });
 }
@@ -148,14 +157,11 @@ async function postToOriginatingChannel(
     .catch(() => null);
   const channelId = room?.channelId;
   if (!channelId) return;
+  const source = meta.source ?? "discord";
   try {
     await (runtime as RuntimeWithMessageTarget).sendMessageToTarget(
-      {
-        source: meta.source ?? "discord",
-        roomId: meta.roomId,
-        channelId,
-      },
-      { text, source: meta.source ?? "discord" },
+      { source, roomId: meta.roomId, channelId },
+      { text, source },
     );
   } catch (err) {
     logger.warn(
