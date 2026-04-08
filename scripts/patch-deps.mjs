@@ -2055,9 +2055,7 @@ function patchElizaCoreNodeTypes() {
     try {
       for (const entry of readdirSync(bunCacheDir)) {
         if (entry.startsWith("@elizaos+core@")) {
-          dirs.push(
-            resolve(bunCacheDir, entry, "node_modules/@elizaos/core"),
-          );
+          dirs.push(resolve(bunCacheDir, entry, "node_modules/@elizaos/core"));
         }
       }
     } catch {}

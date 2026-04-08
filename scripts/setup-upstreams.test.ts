@@ -255,9 +255,7 @@ describe("getPluginPackageLinks", () => {
         (l: { linkPath: string }) => l.linkPath,
       );
       expect(allLinkPaths).not.toEqual(
-        expect.arrayContaining([
-          expect.stringContaining("hyperscape"),
-        ]),
+        expect.arrayContaining([expect.stringContaining("hyperscape")]),
       );
     } finally {
       rmSync(tempRoot, { force: true, recursive: true });

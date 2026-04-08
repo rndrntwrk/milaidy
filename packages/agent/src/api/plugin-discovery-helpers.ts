@@ -270,7 +270,7 @@ function normalizePluginParameters(
   const normalized = Object.fromEntries(
     Object.entries(rawParameters)
       .filter(([, definition]) => isRecord(definition))
-      .map(([key, definition]) => {
+      .map(([key, definition]: [string, Record<string, unknown>]) => {
         const options = Array.isArray(definition.options)
           ? definition.options.filter(
               (value): value is string => typeof value === "string",

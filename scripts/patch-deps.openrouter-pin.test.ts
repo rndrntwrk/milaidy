@@ -17,7 +17,9 @@ describe("OpenRouter plugin dependency pin", () => {
       readFileSync(path.join(root, "package.json"), "utf8"),
     ) as { dependencies: Record<string, string> };
     const v = pkg.dependencies["@elizaos/plugin-openrouter"];
-    expect(v).toBe("workspace:*");
+    // Accept either workspace:* (when local submodule is linked) or an exact
+    // semver pin (CI overrides).  The key invariant: no caret/tilde range.
+    expect(v).toMatch(/^(workspace:\*|\d+\.\d+\.\d+.*)$/);
 
     const patchDeps = readFileSync(
       path.join(root, "scripts/patch-deps.mjs"),
