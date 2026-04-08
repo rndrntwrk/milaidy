@@ -872,7 +872,8 @@ describe("GameView", () => {
     ).toBe(1);
     expect(
       tree?.root.findAll(
-        (node) => node.props["data-testid"] === "game-command-input",
+        (node) =>
+          node.props["data-testid"] === "2004scape-live-operator-surface",
       ).length,
     ).toBe(0);
 
@@ -893,7 +894,8 @@ describe("GameView", () => {
     ).toBe(0);
     expect(
       tree?.root.findAll(
-        (node) => node.props["data-testid"] === "game-command-input",
+        (node) =>
+          node.props["data-testid"] === "2004scape-live-operator-surface",
       ).length,
     ).toBe(1);
   });
