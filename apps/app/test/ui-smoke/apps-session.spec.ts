@@ -1633,6 +1633,13 @@ test("apps page launches a 2004scape session with auto-login and mobile dashboar
     await expect(surface).not.toContainText("RS_2004SCAPE_AUTH");
     await expect(surface).not.toContainText("bot-pass");
 
+    const initialRunPollCount = fixture.state.runPollCount;
+    await page.waitForTimeout(6_500);
+    expect(
+      fixture.state.runPollCount - initialRunPollCount,
+    ).toBeLessThanOrEqual(3);
+    expect(fixture.state.sessionPollCount).toBeLessThanOrEqual(1);
+
     await page.getByTestId("game-mobile-surface-chat").click();
     const chatSurface = page.getByTestId("2004scape-live-operator-surface");
     const promptButton = chatSurface.getByRole("button", {

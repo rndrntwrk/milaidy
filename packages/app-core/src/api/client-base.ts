@@ -35,7 +35,6 @@ const LOCAL_STORAGE_API_BASE_KEY = "milady_api_base";
 
 export class MiladyClient {
   private _baseUrl: string;
-  private _explicitBase: boolean;
   private _userSetBase: boolean;
   private _token: string | null;
   private readonly clientId: string;
@@ -84,8 +83,6 @@ export class MiladyClient {
         ? window.localStorage.getItem(LOCAL_STORAGE_API_BASE_KEY)
         : null;
 
-    this._explicitBase =
-      baseUrl != null || Boolean(bootBase?.trim() || storedBase?.trim());
     this._userSetBase = baseUrl != null;
 
     // Priority: explicit arg > boot config > desktop injection > session storage > same origin.
@@ -154,7 +151,6 @@ export class MiladyClient {
 
   setBaseUrl(baseUrl: string | null): void {
     const normalized = baseUrl?.trim().replace(/\/+$/, "") || "";
-    this._explicitBase = normalized.length > 0;
     this._userSetBase = normalized.length > 0;
     this._baseUrl = normalized;
     this.disconnectWs();
@@ -209,10 +205,35 @@ export class MiladyClient {
       return path;
     })();
     const makeRequest = async (token: string | null): Promise<Response> => {
+      const timeoutMs = options?.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS;
+      const abortController = new AbortController();
       let timeoutId: ReturnType<typeof setTimeout> | undefined;
+      let timedOut = false;
       let abortListener: (() => void) | undefined;
+
+      if (init?.signal?.aborted) {
+        throw new ApiError({
+          kind: "network",
+          path,
+          message: "Request aborted",
+        });
+      }
+
+      timeoutId = setTimeout(() => {
+        timedOut = true;
+        abortController.abort();
+      }, timeoutMs);
+
+      if (init?.signal) {
+        abortListener = () => {
+          abortController.abort();
+        };
+        init.signal.addEventListener("abort", abortListener, { once: true });
+      }
+
       const requestInit: RequestInit = {
         ...init,
+        signal: abortController.signal,
         headers: {
           "X-Milady-Client-Id": this.clientId,
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -223,53 +244,24 @@ export class MiladyClient {
         },
       };
 
-      const fetchPromise = fetch(requestUrl, requestInit);
-      const pending: Promise<Response>[] = [fetchPromise];
-
-      pending.push(
-        new Promise<Response>((_, reject) => {
-          timeoutId = setTimeout(() => {
-            reject(
-              new ApiError({
-                kind: "timeout",
-                path,
-                message: `Request timed out after ${options?.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS}ms`,
-              }),
-            );
-          }, options?.timeoutMs ?? DEFAULT_FETCH_TIMEOUT_MS);
-        }),
-      );
-
-      if (init?.signal) {
-        if (init.signal.aborted) {
+      try {
+        return await fetch(requestUrl, requestInit);
+      } catch (err) {
+        if (timedOut) {
+          throw new ApiError({
+            kind: "timeout",
+            path,
+            message: `Request timed out after ${timeoutMs}ms`,
+          });
+        }
+        if (abortController.signal.aborted) {
           throw new ApiError({
             kind: "network",
             path,
             message: "Request aborted",
+            cause: err,
           });
         }
-
-        pending.push(
-          new Promise<Response>((_, reject) => {
-            abortListener = () => {
-              reject(
-                new ApiError({
-                  kind: "network",
-                  path,
-                  message: "Request aborted",
-                }),
-              );
-            };
-            init.signal?.addEventListener("abort", abortListener, {
-              once: true,
-            });
-          }),
-        );
-      }
-
-      try {
-        return await Promise.race(pending);
-      } catch (err) {
         if (err instanceof ApiError) {
           throw err;
         }

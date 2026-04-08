@@ -569,6 +569,11 @@ export function GameView() {
   );
   const [gameWindowId, setGameWindowId] = useState<string | null>(null);
   const gameWindowIdRef = useRef<string | null>(null);
+  const appRunsRef = useRef(appRuns);
+  const activeGameSessionRef = useRef(activeGameSession);
+  const sessionStateRef = useRef(sessionState);
+  const refreshSessionPromiseRef =
+    useRef<Promise<AppSessionState | null> | null>(null);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const authSentRef = useRef(false);
   const viewerSessionRef = useRef<string>("");
@@ -610,43 +615,54 @@ export function GameView() {
     activeGameRun?.viewerAttachment === "attached" &&
     (activeGameRun?.supportsViewerDetach ?? true);
 
+  useEffect(() => {
+    appRunsRef.current = appRuns;
+  }, [appRuns]);
+
+  useEffect(() => {
+    activeGameSessionRef.current = activeGameSession;
+  }, [activeGameSession]);
+
+  useEffect(() => {
+    sessionStateRef.current = sessionState;
+  }, [sessionState]);
+
   const applySessionState = useCallback(
     (nextSession: AppSessionState | null) => {
       setSessionState(nextSession);
+      sessionStateRef.current = nextSession;
       if (!activeGameRunId) return;
+      const currentRuns = appRunsRef.current;
       const nextUpdatedAt = new Date().toISOString();
-      setState(
-        "appRuns",
-        appRuns.map((run) => {
-          if (run.runId !== activeGameRunId) return run;
-          const nextHealth =
-            nextSession?.status === "disconnected"
+      const nextRuns = currentRuns.map((run) => {
+        if (run.runId !== activeGameRunId) return run;
+        const nextHealth =
+          nextSession?.status === "disconnected"
+            ? {
+                state: "degraded" as const,
+                message:
+                  nextSession.summary ?? run.summary ?? "Session unavailable.",
+              }
+            : nextSession
               ? {
-                  state: "degraded" as const,
-                  message:
-                    nextSession.summary ??
-                    run.summary ??
-                    "Session unavailable.",
+                  state: "healthy" as const,
+                  message: nextSession.summary ?? null,
                 }
-              : nextSession
-                ? {
-                    state: "healthy" as const,
-                    message: nextSession.summary ?? null,
-                  }
-                : run.health;
-          return {
-            ...run,
-            session: nextSession,
-            status: nextSession?.status ?? run.status,
-            summary: nextSession?.summary ?? run.summary,
-            updatedAt: nextUpdatedAt,
-            lastHeartbeatAt: nextSession ? nextUpdatedAt : run.lastHeartbeatAt,
-            health: nextHealth,
-          } satisfies AppRunSummary;
-        }),
-      );
+              : run.health;
+        return {
+          ...run,
+          session: nextSession,
+          status: nextSession?.status ?? run.status,
+          summary: nextSession?.summary ?? run.summary,
+          updatedAt: nextUpdatedAt,
+          lastHeartbeatAt: nextSession ? nextUpdatedAt : run.lastHeartbeatAt,
+          health: nextHealth,
+        } satisfies AppRunSummary;
+      });
+      appRunsRef.current = nextRuns;
+      setState("appRuns", nextRuns);
     },
-    [activeGameRunId, appRuns, setState],
+    [activeGameRunId, setState],
   );
 
   const applyRunState = useCallback(
@@ -654,99 +670,109 @@ export function GameView() {
       if (!nextRun) return;
       const nextUpdatedAt = new Date().toISOString();
       setSessionState(nextRun.session ?? null);
+      sessionStateRef.current = nextRun.session ?? null;
       if (nextRun.runId !== activeGameRunId) return;
-      setState(
-        "appRuns",
-        appRuns.map((run) => {
-          if (run.runId !== nextRun.runId) return run;
-          const nextHealth =
-            nextRun.health ??
-            (nextRun.session?.status === "disconnected"
+      const currentRuns = appRunsRef.current;
+      const nextRuns = currentRuns.map((run) => {
+        if (run.runId !== nextRun.runId) return run;
+        const nextHealth =
+          nextRun.health ??
+          (nextRun.session?.status === "disconnected"
+            ? {
+                state: "degraded" as const,
+                message:
+                  nextRun.session.summary ??
+                  nextRun.summary ??
+                  "Session unavailable.",
+              }
+            : nextRun.session
               ? {
-                  state: "degraded" as const,
-                  message:
-                    nextRun.session.summary ??
-                    nextRun.summary ??
-                    "Session unavailable.",
+                  state: "healthy" as const,
+                  message: nextRun.session.summary ?? null,
                 }
-              : nextRun.session
-                ? {
-                    state: "healthy" as const,
-                    message: nextRun.session.summary ?? null,
-                  }
-                : run.health);
-          return {
-            ...run,
-            ...nextRun,
-            updatedAt: nextUpdatedAt,
-            lastHeartbeatAt: nextRun.session
-              ? nextUpdatedAt
-              : run.lastHeartbeatAt,
-            health: nextHealth,
-          } satisfies AppRunSummary;
-        }),
-      );
+              : run.health);
+        return {
+          ...run,
+          ...nextRun,
+          updatedAt: nextUpdatedAt,
+          lastHeartbeatAt: nextRun.session
+            ? nextUpdatedAt
+            : run.lastHeartbeatAt,
+          health: nextHealth,
+        } satisfies AppRunSummary;
+      });
+      appRunsRef.current = nextRuns;
+      setState("appRuns", nextRuns);
     },
-    [activeGameRunId, appRuns, setState],
+    [activeGameRunId, setState],
   );
 
   const refreshSessionState = useCallback(async () => {
-    if (activeGameRunId) {
-      try {
-        const nextRun = await client.getAppRun(activeGameRunId);
-        if (nextRun) {
-          applyRunState(nextRun);
-          setConnectionStatus(
-            nextRun.health.state === "offline" ||
-              nextRun.session?.status === "disconnected"
-              ? "disconnected"
-              : "connected",
-          );
-          return nextRun.session ?? null;
-        }
-      } catch (err) {
-        console.warn("[GameView] Failed to refresh app run state:", err);
-        if (!activeGameApp || !activeGameSession?.sessionId) {
-          setConnectionStatus("disconnected");
-          return sessionState ?? activeGameSession ?? null;
-        }
-      }
+    if (refreshSessionPromiseRef.current) {
+      return refreshSessionPromiseRef.current;
     }
 
-    if (!activeGameApp || !activeGameSession?.sessionId) return null;
-    try {
-      const nextSession = await client.getAppSessionState(
-        activeGameApp,
-        activeGameSession.sessionId,
-      );
-      applySessionState(nextSession);
-      setConnectionStatus("connected");
-      return nextSession;
-    } catch (err) {
-      console.warn("[GameView] Failed to refresh app session state:", err);
+    const refreshTask = (async () => {
+      const currentSession =
+        sessionStateRef.current ?? activeGameSessionRef.current;
+
       if (activeGameRunId) {
-        setConnectionStatus("disconnected");
-        return sessionState ?? activeGameSession ?? null;
+        try {
+          const nextRun = await client.getAppRun(activeGameRunId);
+          if (nextRun) {
+            applyRunState(nextRun);
+            setConnectionStatus(
+              nextRun.health.state === "offline" ||
+                nextRun.session?.status === "disconnected"
+                ? "disconnected"
+                : "connected",
+            );
+            return nextRun.session ?? null;
+          }
+        } catch (err) {
+          console.warn("[GameView] Failed to refresh app run state:", err);
+          if (!activeGameApp || !currentSession?.sessionId) {
+            setConnectionStatus("disconnected");
+            return currentSession ?? null;
+          }
+        }
       }
-      applySessionState(
-        buildDisconnectedSessionState(sessionState ?? activeGameSession),
-      );
-      setConnectionStatus("disconnected");
-      return null;
+
+      if (!activeGameApp || !currentSession?.sessionId) return null;
+      try {
+        const nextSession = await client.getAppSessionState(
+          activeGameApp,
+          currentSession.sessionId,
+        );
+        applySessionState(nextSession);
+        setConnectionStatus("connected");
+        return nextSession;
+      } catch (err) {
+        console.warn("[GameView] Failed to refresh app session state:", err);
+        if (activeGameRunId) {
+          setConnectionStatus("disconnected");
+          return currentSession ?? null;
+        }
+        applySessionState(buildDisconnectedSessionState(currentSession));
+        setConnectionStatus("disconnected");
+        return null;
+      }
+    })();
+
+    refreshSessionPromiseRef.current = refreshTask;
+    try {
+      return await refreshTask;
+    } finally {
+      if (refreshSessionPromiseRef.current === refreshTask) {
+        refreshSessionPromiseRef.current = null;
+      }
     }
-  }, [
-    activeGameRunId,
-    activeGameApp,
-    activeGameSession,
-    activeGameSession?.sessionId,
-    applyRunState,
-    applySessionState,
-    sessionState,
-  ]);
+  }, [activeGameRunId, activeGameApp, applyRunState, applySessionState]);
 
   useEffect(() => {
-    applySessionState(activeGameSession);
-  }, [activeGameSession, applySessionState]);
+    setSessionState(activeGameSession);
+    sessionStateRef.current = activeGameSession;
+  }, [activeGameSession]);
 
   useEffect(() => {
     setShowLogsPanel(dashboardPanelEnabled);
@@ -754,16 +780,16 @@ export function GameView() {
   }, [dashboardPanelEnabled]);
 
   useEffect(() => {
-    if (!activeGameSession?.sessionId) return;
+    if (!activeGameRunId && !activeGameSession?.sessionId) return;
     void refreshSessionState();
-  }, [activeGameSession?.sessionId, refreshSessionState]);
+  }, [activeGameRunId, activeGameSession?.sessionId, refreshSessionState]);
 
   useIntervalWhenDocumentVisible(
     () => {
       void refreshSessionState();
     },
     3000,
-    Boolean(activeGameSession?.sessionId),
+    Boolean(activeGameRunId || activeGameSession?.sessionId),
   );
 
   const sendChatCommand = useCallback(

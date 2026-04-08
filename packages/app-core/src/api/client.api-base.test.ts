@@ -171,4 +171,51 @@ describe("MiladyClient runtime API base/token fallback", () => {
       expect.any(Object),
     );
   });
+
+  it("aborts timed-out requests instead of leaving fetches pending", async () => {
+    vi.useFakeTimers();
+    try {
+      const { setBootConfig, DEFAULT_BOOT_CONFIG } = await import(
+        "../config/boot-config"
+      );
+      const { MiladyClient } = await import("./client-base");
+
+      class TestClient extends MiladyClient {
+        request(path: string, timeoutMs: number): Promise<Response> {
+          return this.rawRequest(path, undefined, { timeoutMs });
+        }
+      }
+
+      setBootConfig(DEFAULT_BOOT_CONFIG);
+      let aborted = false;
+      vi.spyOn(globalThis, "fetch").mockImplementation(
+        (_input: string | URL | Request, init?: RequestInit) =>
+          new Promise<Response>((_resolve, reject) => {
+            init?.signal?.addEventListener(
+              "abort",
+              () => {
+                aborted = true;
+                reject(new DOMException("Aborted", "AbortError"));
+              },
+              { once: true },
+            );
+          }),
+      );
+
+      const client = new TestClient();
+      const request = expect(
+        client.request("/api/slow", 50),
+      ).rejects.toMatchObject({
+        kind: "timeout",
+        path: "/api/slow",
+      });
+
+      await vi.advanceTimersByTimeAsync(50);
+
+      await request;
+      expect(aborted).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
