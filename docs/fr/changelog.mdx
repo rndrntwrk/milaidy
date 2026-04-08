@@ -3,6 +3,24 @@ title: Journal des modifications
 description: Nouveautés de Milady — fonctionnalités, améliorations et correctifs.
 ---
 
+<Update label="2026-04-05" description="Chat du tableau de bord : les callbacks d'action remplacent sur place (messages progressifs à la Discord via SSE)" tags={["Update", "Fix"]}>
+
+<div id="action-callbacks-replace-dont-concatenate-dashboard-sse">
+## Callbacks d'action : remplacer, pas concaténer (SSE du tableau de bord)
+</div>
+
+Les **actions** de longue durée qui appellent `HandlerCallback` plusieurs fois — le même schéma que les **messages progressifs** sur Discord — **remplacent** désormais le texte du callback précédent dans la réponse streamée de l'assistant au lieu de l'**ajouter à la suite**.
+
+**Pourquoi :** Sur Discord, un message est **modifié sur place**. Le tableau de bord web streame via **SSE** ; fusionner naïvement chaque callback avec la chaîne existante produisait des lignes d'état collées (`🔍 …🔍 …✨ …Now playing…`) et semblait cassé par rapport aux mises à jour en direct de Telegram/Discord.
+
+**Comment :** `generateChatResponse` prend un instantané du texte qui existait **avant le premier callback d'action** du tour (`preCallbackText`, typiquement la réponse streamée du LLM). Chaque callback suivant définit le corps visible à `preCallbackText + "\n\n" + latestCallbackText` et émet un **instantané** SSE pour que le traitement `fullText` existant du client mette à jour la bulle unique de l'assistant.
+
+**Contrat des plugins :** Inchangé — les plugins continuent d'appeler `callback({ text, source })`. Aucun canal WebSocket latéral ni hook spécifique au runtime n'est requis.
+
+**Docs :** [Callbacks d'action et streaming SSE](/fr/runtime/action-callback-streaming).
+
+</Update>
+
 <Update label="2026-07-02" description="Semaine du 26 juin au 2 juillet ; formulaires de configuration de plugins, commandes Discord, renforcement du cloud" tags={["Feature", "Update", "Fix"]}>
 <div id="chat-driven-plugin-configuration">
 ## Configuration de plugins par le chat
