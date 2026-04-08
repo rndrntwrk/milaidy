@@ -90,10 +90,6 @@
 	path = plugins/plugin-plugin-manager
 	url = https://github.com/elizaos-plugins/plugin-plugin-manager.git
 	branch = alpha
-[submodule "plugins/plugin-rolodex"]
-	path = plugins/plugin-rolodex
-	url = https://github.com/elizaos-plugins/plugin-rolodex.git
-	branch = alpha
 [submodule "plugins/plugin-secrets-manager"]
 	path = plugins/plugin-secrets-manager
 	url = https://github.com/elizaos-plugins/plugin-secrets-manager.git
