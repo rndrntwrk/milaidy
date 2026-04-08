@@ -30,7 +30,7 @@ import { useApp } from "../../state";
 import { openExternalUrl } from "../../utils";
 import type { DesktopClickAuditItem } from "../../utils/desktop-workspace";
 import { formatTime } from "../../utils/format";
-import { BabylonTerminal } from "./BabylonTerminal";
+import { getAppOperatorSurface } from "./surfaces/registry";
 import {
   buildViewerSessionKey,
   resolvePostMessageTargetOrigin,
@@ -583,6 +583,10 @@ export function GameView() {
   );
   const usesNativeAgentInterface = activeGameApp.includes("hyperscape");
   const supportsOperatorDashboard = !usesNativeAgentInterface;
+  const OperatorSurface = useMemo(
+    () => getAppOperatorSurface(activeGameApp),
+    [activeGameApp],
+  );
 
   const applySessionState = useCallback(
     (nextSession: AppSessionState | null) => {
@@ -1663,10 +1667,23 @@ export function GameView() {
         {showLogsPanel && supportsOperatorDashboard
           ? isCompactLayout
             ? mobileSurface === "dashboard"
-              ? renderLogsPanel("standalone")
+              ? OperatorSurface
+                ? (
+                    <div className="h-full overflow-y-auto">
+                      <OperatorSurface
+                        appName={activeGameApp}
+                        variant="live"
+                      />
+                    </div>
+                  )
+                : renderLogsPanel("standalone")
               : null
-            : activeGameApp?.includes("babylon")
-              ? <BabylonTerminal appName={activeGameApp} />
+            : OperatorSurface
+              ? (
+                  <div className="w-[30rem] min-h-0 overflow-y-auto border-l border-border bg-card">
+                    <OperatorSurface appName={activeGameApp} variant="live" />
+                  </div>
+                )
               : renderLogsPanel()
           : null}
       </div>

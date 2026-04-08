@@ -47,6 +47,18 @@ const { mockClientFns, mockUseApp } = vi.hoisted(() => ({
     controlHyperscapeEmbeddedAgent: vi.fn(),
     sendHyperscapeAgentMessage: vi.fn(),
     sendHyperscapeEmbeddedAgentCommand: vi.fn(),
+    getBabylonAgentStatus: vi.fn(),
+    getBabylonAgentSummary: vi.fn(),
+    getBabylonAgentGoals: vi.fn(),
+    getBabylonAgentRecentTrades: vi.fn(),
+    getBabylonPredictionMarkets: vi.fn(),
+    getBabylonTeamDashboard: vi.fn(),
+    getBabylonTeamConversations: vi.fn(),
+    getBabylonAgentChat: vi.fn(),
+    getBabylonAgentWallet: vi.fn(),
+    getBabylonAgentTradingBalance: vi.fn(),
+    toggleBabylonAgent: vi.fn(),
+    sendBabylonAgentChat: vi.fn(),
   },
   mockUseApp: vi.fn(),
 }));
@@ -289,6 +301,18 @@ describe("AppsView", () => {
     mockClientFns.controlHyperscapeEmbeddedAgent.mockReset();
     mockClientFns.sendHyperscapeAgentMessage.mockReset();
     mockClientFns.sendHyperscapeEmbeddedAgentCommand.mockReset();
+    mockClientFns.getBabylonAgentStatus.mockReset();
+    mockClientFns.getBabylonAgentSummary.mockReset();
+    mockClientFns.getBabylonAgentGoals.mockReset();
+    mockClientFns.getBabylonAgentRecentTrades.mockReset();
+    mockClientFns.getBabylonPredictionMarkets.mockReset();
+    mockClientFns.getBabylonTeamDashboard.mockReset();
+    mockClientFns.getBabylonTeamConversations.mockReset();
+    mockClientFns.getBabylonAgentChat.mockReset();
+    mockClientFns.getBabylonAgentWallet.mockReset();
+    mockClientFns.getBabylonAgentTradingBalance.mockReset();
+    mockClientFns.toggleBabylonAgent.mockReset();
+    mockClientFns.sendBabylonAgentChat.mockReset();
     mockUseApp.mockReset();
 
     mockClientFns.listHyperscapeEmbeddedAgents.mockResolvedValue({
@@ -324,6 +348,53 @@ describe("AppsView", () => {
     mockClientFns.sendHyperscapeEmbeddedAgentCommand.mockResolvedValue({
       success: true,
       message: "command sent",
+    });
+    mockClientFns.getBabylonAgentStatus.mockResolvedValue({
+      name: "Babylon",
+      displayName: "Babylon",
+      agentStatus: "running",
+      autonomous: true,
+      autonomousTrading: true,
+      autonomousPosting: false,
+    });
+    mockClientFns.getBabylonAgentSummary.mockResolvedValue({
+      portfolio: {
+        totalPnL: 12,
+        positions: 1,
+        totalAssets: 320,
+        available: 120,
+        wallet: 200,
+        agents: 120,
+        totalPoints: 4,
+      },
+    });
+    mockClientFns.getBabylonAgentGoals.mockResolvedValue([]);
+    mockClientFns.getBabylonAgentRecentTrades.mockResolvedValue({ items: [] });
+    mockClientFns.getBabylonPredictionMarkets.mockResolvedValue({
+      markets: [],
+    });
+    mockClientFns.getBabylonTeamDashboard.mockResolvedValue({
+      agents: [],
+      summary: null,
+    });
+    mockClientFns.getBabylonTeamConversations.mockResolvedValue({
+      conversations: [],
+    });
+    mockClientFns.getBabylonAgentChat.mockResolvedValue({ messages: [] });
+    mockClientFns.getBabylonAgentWallet.mockResolvedValue({
+      balance: 0,
+      transactions: [],
+    });
+    mockClientFns.getBabylonAgentTradingBalance.mockResolvedValue({
+      balance: 0,
+    });
+    mockClientFns.toggleBabylonAgent.mockResolvedValue({
+      success: true,
+      message: "updated",
+    });
+    mockClientFns.sendBabylonAgentChat.mockResolvedValue({
+      success: true,
+      message: "sent",
     });
     mockClientFns.listInstalledApps.mockResolvedValue([]);
     mockClientFns.listAppRuns.mockResolvedValue([]);

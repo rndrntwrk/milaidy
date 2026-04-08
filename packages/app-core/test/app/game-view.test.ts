@@ -9,7 +9,11 @@ import * as electrobunRpc from "@miladyai/app-core/bridge/electrobun-rpc";
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { findButtonByText, flush } from "../../../../test/helpers/react-test";
+import {
+  findButtonByText,
+  flush,
+  text,
+} from "../../../../test/helpers/react-test";
 
 interface GameContextStub {
   t: (key: string, opts?: Record<string, unknown>) => string;
@@ -50,6 +54,16 @@ const { mockClientFns, mockUseApp } = vi.hoisted(() => ({
     controlAppSession: vi.fn(),
     sendChatRest: vi.fn(),
     stopAppRun: vi.fn(),
+    getBabylonAgentStatus: vi.fn(),
+    getBabylonAgentSummary: vi.fn(),
+    getBabylonAgentGoals: vi.fn(),
+    getBabylonAgentRecentTrades: vi.fn(),
+    getBabylonPredictionMarkets: vi.fn(),
+    getBabylonTeamDashboard: vi.fn(),
+    getBabylonTeamConversations: vi.fn(),
+    getBabylonAgentChat: vi.fn(),
+    getBabylonAgentWallet: vi.fn(),
+    getBabylonAgentTradingBalance: vi.fn(),
   },
   mockUseApp: vi.fn(),
 }));
@@ -154,8 +168,58 @@ describe("GameView", () => {
     mockClientFns.controlAppRun.mockReset();
     mockClientFns.controlAppSession.mockReset();
     mockClientFns.sendChatRest.mockReset();
+    mockClientFns.getBabylonAgentStatus.mockReset();
+    mockClientFns.getBabylonAgentSummary.mockReset();
+    mockClientFns.getBabylonAgentGoals.mockReset();
+    mockClientFns.getBabylonAgentRecentTrades.mockReset();
+    mockClientFns.getBabylonPredictionMarkets.mockReset();
+    mockClientFns.getBabylonTeamDashboard.mockReset();
+    mockClientFns.getBabylonTeamConversations.mockReset();
+    mockClientFns.getBabylonAgentChat.mockReset();
+    mockClientFns.getBabylonAgentWallet.mockReset();
+    mockClientFns.getBabylonAgentTradingBalance.mockReset();
     mockUseApp.mockReset();
     originalMatchMedia = window.matchMedia;
+
+    mockClientFns.getBabylonAgentStatus.mockResolvedValue({
+      name: "Babylon",
+      displayName: "Babylon",
+      agentStatus: "running",
+      autonomous: true,
+      autonomousTrading: true,
+      autonomousPosting: false,
+    });
+    mockClientFns.getBabylonAgentSummary.mockResolvedValue({
+      portfolio: {
+        totalPnL: 25,
+        positions: 2,
+        totalAssets: 1200,
+        available: 200,
+        wallet: 500,
+        agents: 500,
+        totalPoints: 10,
+      },
+    });
+    mockClientFns.getBabylonAgentGoals.mockResolvedValue([]);
+    mockClientFns.getBabylonAgentRecentTrades.mockResolvedValue({ items: [] });
+    mockClientFns.getBabylonPredictionMarkets.mockResolvedValue({
+      markets: [],
+    });
+    mockClientFns.getBabylonTeamDashboard.mockResolvedValue({
+      agents: [],
+      summary: null,
+    });
+    mockClientFns.getBabylonTeamConversations.mockResolvedValue({
+      conversations: [],
+    });
+    mockClientFns.getBabylonAgentChat.mockResolvedValue({ messages: [] });
+    mockClientFns.getBabylonAgentWallet.mockResolvedValue({
+      balance: 0,
+      transactions: [],
+    });
+    mockClientFns.getBabylonAgentTradingBalance.mockResolvedValue({
+      balance: 0,
+    });
   });
 
   afterEach(() => {
@@ -863,5 +927,33 @@ describe("GameView", () => {
         (node) => node.props["data-testid"] === "game-mobile-surface-dashboard",
       ).length,
     ).toBe(0);
+  });
+
+  it("renders the Babylon live operator surface in the dashboard pane", async () => {
+    const ctx = createContext({
+      activeGameApp: "@elizaos/app-babylon",
+      activeGameDisplayName: "Babylon",
+      appRuns: [
+        createRunSummary({
+          appName: "@elizaos/app-babylon",
+          displayName: "Babylon",
+        }),
+      ],
+    });
+    mockUseApp.mockReturnValue(ctx);
+
+    let tree: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(GameView));
+    });
+    await flush();
+
+    expect(
+      tree?.root.findAll(
+        (node) =>
+          node.props["data-testid"] === "babylon-live-operator-surface",
+      ).length,
+    ).toBe(1);
+    expect(text(tree?.root)).toContain("Babylon Live Dashboard");
   });
 });
