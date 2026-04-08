@@ -11,7 +11,6 @@
  * to renderer code. It mirrors the native Electrobun RPC surface directly:
  * `request.<method>(params)` plus `onMessage(<message>, listener)`.
  */
-
 import { Electroview } from "electrobun/view";
 import type { RpcMessageListener } from "../types.js";
 import { ensureElectrobunGlobal } from "./electrobun-stub.js";
@@ -73,7 +72,9 @@ function dispatchMessage(messageName: string, payload: unknown): void {
         enumerable: false,
       });
     }
-    // MiladyClient reads boot config after construction, so keep that store in sync.
+    // Propagate to boot config so MiladyClient picks up port changes.
+    // We modify it directly instead of importing @miladyai/app-core/config
+    // to prevent bundling React and the entire UI layer into the preload script.
     updateBootConfig({
       apiBase: apiBaseUpdate.base,
       ...(apiBaseUpdate.token ? { apiToken: apiBaseUpdate.token } : {}),

@@ -328,7 +328,7 @@ function main(): void {
   const developerId = resolveDeveloperId();
   if (!developerId) {
     throw new Error(
-      "runtime-sign: no Developer ID Application identity available for codesign",
+      "[runtime-sign] no Developer ID Application identity available for codesign. Set ELECTROBUN_SKIP_CODESIGN=1 to skip runtime signing explicitly.",
     );
   }
 

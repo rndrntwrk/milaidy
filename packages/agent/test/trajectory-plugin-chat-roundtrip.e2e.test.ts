@@ -127,6 +127,7 @@ async function waitForTrajectoryByMessageId(
         | {
             id?: string;
             status?: string;
+            endTime?: string | number | null;
             metadata?: Record<string, unknown>;
           }
         | undefined;
@@ -134,7 +135,8 @@ async function waitForTrajectoryByMessageId(
       if (
         String(record?.metadata?.messageId ?? "") === messageId &&
         typeof record?.status === "string" &&
-        record.status !== "active"
+        record.endTime !== null &&
+        record.endTime !== undefined
       ) {
         return {
           trajectory: {

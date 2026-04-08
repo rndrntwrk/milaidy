@@ -562,33 +562,6 @@ export async function readChatRequestPayload(
   };
 }
 
-type ChatTrajectoryLogger = {
-  isEnabled?: () => boolean;
-  setEnabled?: (enabled: boolean) => void;
-  startTrajectory?: (
-    stepIdOrAgentId: string,
-    options?: {
-      source?: string;
-      metadata?: Record<string, unknown>;
-      scenarioId?: string;
-      batchId?: string;
-    },
-  ) => Promise<string>;
-  startStep?: (
-    trajectoryId: string,
-    envState?: Record<string, unknown>,
-  ) => string;
-};
-
-function getMessageMetadata(
-  message: ReturnType<typeof createMessageMemory>,
-): Record<string, unknown> {
-  if (!message.metadata || typeof message.metadata !== "object") {
-    message.metadata = { type: "message" };
-  }
-  return message.metadata as Record<string, unknown>;
-}
-
 function readMessageTrajectoryStepId(
   message: ReturnType<typeof createMessageMemory>,
 ): string | null {
@@ -598,144 +571,6 @@ function readMessageTrajectoryStepId(
   return typeof stepId === "string" && stepId.trim().length > 0
     ? stepId.trim()
     : null;
-}
-
-function asRecord(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null;
-}
-
-function readGroupingValue(
-  source: Record<string, unknown> | null,
-  ...keys: string[]
-): string | undefined {
-  if (!source) return undefined;
-  for (const key of keys) {
-    const value = source[key];
-    if (typeof value === "string" && value.trim().length > 0) {
-      return value.trim();
-    }
-  }
-  return undefined;
-}
-
-function readChatTrajectoryGrouping(
-  messageMetadata: Record<string, unknown>,
-  contentMetadata: Record<string, unknown> | null,
-): {
-  scenarioId?: string;
-  batchId?: string;
-} {
-  const nestedSources = [
-    asRecord(messageMetadata.eval),
-    asRecord(contentMetadata?.eval),
-    asRecord(contentMetadata?.evaluation),
-    asRecord(contentMetadata?.scenario),
-  ];
-  const scenarioId =
-    readGroupingValue(messageMetadata, "scenarioId", "scenario_id") ??
-    readGroupingValue(contentMetadata, "scenarioId", "scenario_id") ??
-    nestedSources
-      .map((source) => readGroupingValue(source, "scenarioId", "scenario_id"))
-      .find(Boolean);
-  const batchId =
-    readGroupingValue(messageMetadata, "batchId", "batch_id") ??
-    readGroupingValue(contentMetadata, "batchId", "batch_id") ??
-    nestedSources
-      .map((source) => readGroupingValue(source, "batchId", "batch_id"))
-      .find(Boolean);
-
-  return { scenarioId, batchId };
-}
-
-async function ensureChatTrajectoryStep(
-  runtime: AgentRuntime,
-  message: ReturnType<typeof createMessageMemory>,
-  source: string,
-): Promise<void> {
-  if (readMessageTrajectoryStepId(message)) return;
-
-  const trajectoryLogger = runtime.getService?.(
-    "trajectory_logger",
-  ) as ChatTrajectoryLogger | null;
-  if (
-    !trajectoryLogger ||
-    typeof trajectoryLogger.startTrajectory !== "function"
-  ) {
-    return;
-  }
-
-  try {
-    if (
-      typeof trajectoryLogger.isEnabled === "function" &&
-      !trajectoryLogger.isEnabled() &&
-      typeof trajectoryLogger.setEnabled === "function"
-    ) {
-      trajectoryLogger.setEnabled(true);
-    }
-
-    const metadata = getMessageMetadata(message);
-    const content = message.content as Content & {
-      channelType?: unknown;
-      metadata?: unknown;
-    };
-    const contentMetadata = asRecord(content.metadata);
-    const grouping = readChatTrajectoryGrouping(metadata, contentMetadata);
-    const trajectoryId = await trajectoryLogger.startTrajectory(
-      runtime.agentId,
-      {
-        source,
-        scenarioId: grouping.scenarioId,
-        batchId: grouping.batchId,
-        metadata: {
-          roomId: message.roomId,
-          entityId: message.entityId,
-          messageId: message.id,
-          channelType: metadata.channelType ?? content.channelType,
-          conversationId: metadata.sessionKey,
-          ...(grouping.scenarioId ? { scenarioId: grouping.scenarioId } : {}),
-          ...(grouping.batchId ? { batchId: grouping.batchId } : {}),
-        },
-      },
-    );
-
-    const stepId =
-      typeof trajectoryLogger.startStep === "function"
-        ? trajectoryLogger.startStep(trajectoryId, {
-            timestamp: Date.now(),
-            agentBalance: 0,
-            agentPoints: 0,
-            agentPnL: 0,
-            openPositions: 0,
-          })
-        : trajectoryId;
-
-    if (typeof stepId === "string" && stepId.trim().length > 0) {
-      metadata.trajectoryStepId = stepId;
-      runtime.logger?.warn(
-        {
-          src: "eliza-api",
-          messageId: message.id,
-          roomId: message.roomId,
-          trajectoryId,
-          trajectoryStepId: stepId,
-        },
-        "[eliza-api] Trajectory logger fallback started a chat trajectory after MESSAGE_RECEIVED did not inject a step id",
-      );
-    }
-  } catch (err) {
-    runtime.logger?.error(
-      {
-        err,
-        src: "eliza-api",
-        messageId: message.id,
-        roomId: message.roomId,
-      },
-      "Failed to start trajectory logging for chat request",
-    );
-    throw err;
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -825,8 +660,6 @@ export async function generateChatResponse(
       "Failed to emit MESSAGE_RECEIVED event",
     );
   }
-
-  await ensureChatTrajectoryStep(runtime, message, messageSource);
 
   let result:
     | Awaited<
@@ -1032,11 +865,9 @@ export async function generateChatResponse(
             ? ({ text: responseText } as Content)
             : null;
       const messagesToEmit =
-        responseMessages.length > 0
-          ? responseMessages
-          : fallbackResponseContent
-            ? [{ id: crypto.randomUUID(), content: fallbackResponseContent }]
-            : [];
+        responseMessages.length === 0 && fallbackResponseContent
+          ? [{ id: crypto.randomUUID(), content: fallbackResponseContent }]
+          : [];
       if (
         messagesToEmit.length > 0 &&
         typeof runtime.emitEvent === "function"

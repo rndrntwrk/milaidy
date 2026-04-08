@@ -204,8 +204,15 @@ export async function runCoordinatorPreflight(options?: {
     { shareCapabilities, configPath },
   );
 
+  let coordinatorStatusResponse:
+    | {
+        frameworks?: FrameworkAvailability[];
+      }
+    | undefined;
   try {
-    await client.requestJson("/api/coding-agents/coordinator/status");
+    coordinatorStatusResponse = await client.requestJson<{
+      frameworks?: FrameworkAvailability[];
+    }>("/api/coding-agents/coordinator/status");
   } catch (error) {
     addCheck(
       "milady-api",
@@ -259,11 +266,8 @@ export async function runCoordinatorPreflight(options?: {
     claudeProvider,
   );
 
-  const coordinatorStatus = await client.requestJson<{
-    frameworks?: FrameworkAvailability[];
-  }>("/api/coding-agents/coordinator/status");
-  const frameworks = Array.isArray(coordinatorStatus.frameworks)
-    ? coordinatorStatus.frameworks
+  const frameworks = Array.isArray(coordinatorStatusResponse?.frameworks)
+    ? coordinatorStatusResponse.frameworks
     : [];
   const frameworkMap = new Map(
     frameworks.flatMap((framework) =>

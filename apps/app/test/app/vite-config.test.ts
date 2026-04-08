@@ -43,6 +43,38 @@ describe("app vite config", () => {
     expect(pluginNames).toContain("desktop-cors");
   });
 
+  it("strips spark inline worker source map trailers for WKWebView", async () => {
+    const loaded = await loadConfigFromFile(
+      { command: "serve", mode: "development" },
+      CONFIG_PATH,
+      APP_DIR,
+    );
+    const plugins = (loaded?.config.plugins ?? []) as Array<{
+      name?: string;
+      transform?: (
+        code: string,
+        id: string,
+      ) => { code: string; map?: unknown } | string | null | undefined;
+    }>;
+    const sparkPatch = plugins.find((plugin) => plugin.name === "spark-patch");
+
+    expect(sparkPatch?.transform).toBeDefined();
+
+    const result = sparkPatch?.transform?.(
+      [
+        "const jsContent = 'hello\\n//# sourceMappingURL=worker-CaMzlx2k.js.map\\n';",
+        "function getShaders() { if (!shaders) { return 1; } }",
+      ].join("\n"),
+      "/tmp/@sparkjsdev/spark/dist/spark.module.js",
+    );
+
+    const transformed = typeof result === "string" ? result : result?.code;
+    expect(transformed).toBeDefined();
+    expect(transformed).not.toContain(
+      "sourceMappingURL=worker-CaMzlx2k.js.map",
+    );
+  });
+
   it("uses app-local Vite cache dir and ignores Electrobun native build output", async () => {
     const loaded = await loadConfigFromFile(
       { command: "serve", mode: "development" },
@@ -50,6 +82,13 @@ describe("app vite config", () => {
       APP_DIR,
     );
     expect(loaded?.config.cacheDir).toBe(path.join(APP_DIR, ".vite"));
+    expect(loaded?.config.server?.origin).toBe("http://127.0.0.1:2138");
+    expect(loaded?.config.server?.hmr).toEqual(
+      expect.objectContaining({
+        host: "127.0.0.1",
+        port: 2138,
+      }),
+    );
     const ignored = loaded?.config.server?.watch?.ignored;
     expect(ignored).toEqual(
       expect.arrayContaining([

@@ -31,6 +31,7 @@ import {
 import { showBackgroundNoticeOnce } from "./background-notice";
 import { startBrowserWorkspaceBridgeServer } from "./browser-workspace-bridge-server";
 import { readNavigationEventUrl } from "./cloud-auth-window";
+import { scheduleDevtoolsLayoutRefresh } from "./devtools-layout";
 import {
   resolveBootstrapShellRenderer,
   resolveBootstrapViewRenderer,
@@ -603,6 +604,30 @@ function requestAppQuit(): void {
 
 const cleanupFns: Array<() => void | Promise<void>> = [];
 let lastFocusedWindow: ManagedWindowLike | null = null;
+const macOpenedDevtoolsWindowIds = new Set<number>();
+
+async function openBrowserDevtoolsFallback(
+  targetWindow: ManagedWindowLike | BrowserWindow | null,
+): Promise<void> {
+  const currentUrl = (
+    targetWindow?.webview as { url?: string | null } | undefined
+  )?.url;
+  const url = currentUrl?.trim() || (await resolveRendererUrl());
+
+  if (!/^https?:\/\//i.test(url)) {
+    Utils.showNotification({
+      title: "Developer Tools Unavailable",
+      body: "Native macOS Electrobun devtools are disabled, and the renderer URL is not browser-openable.",
+    });
+    return;
+  }
+
+  Utils.openExternal(url);
+  Utils.showNotification({
+    title: "Opened Renderer in Browser",
+    body: "Native macOS Electrobun devtools are disabled due to a WKWebView crash/layout bug. Use browser devtools instead.",
+  });
+}
 
 function sendToActiveRenderer(message: string, payload?: unknown): void {
   currentSendToWebview?.(message, payload);
@@ -1089,6 +1114,20 @@ function trackFocusedWindow(window: ManagedWindowLike): void {
   lastFocusedWindow = window;
   window.on("focus", () => {
     lastFocusedWindow = window;
+    const windowId = (window as { id?: number }).id;
+    if (
+      process.platform === "darwin" &&
+      typeof windowId === "number" &&
+      macOpenedDevtoolsWindowIds.has(windowId)
+    ) {
+      scheduleDevtoolsLayoutRefresh(window);
+    }
+  });
+  window.on("close", () => {
+    const windowId = (window as { id?: number }).id;
+    if (typeof windowId === "number") {
+      macOpenedDevtoolsWindowIds.delete(windowId);
+    }
   });
 }
 
@@ -1101,13 +1140,48 @@ function toggleFocusedWindowDevTools(): void {
       }
     | undefined;
 
+  if (
+    process.platform === "darwin" &&
+    process.env.MILADY_ALLOW_UNSAFE_NATIVE_DEVTOOLS !== "1"
+  ) {
+    void openBrowserDevtoolsFallback(targetWindow);
+    return;
+  }
+
+  // Electrobun's WKWebView native toggle can crash on macOS when invoked
+  // again after devtools are already open. Keep the shortcut open-only there.
+  if (process.platform === "darwin" && targetWindow) {
+    const windowId = (targetWindow as { id?: number }).id;
+    if (
+      typeof windowId === "number" &&
+      macOpenedDevtoolsWindowIds.has(windowId)
+    ) {
+      scheduleDevtoolsLayoutRefresh(targetWindow);
+      console.warn(
+        "[DevTools] Ignoring repeated toggle on macOS native renderer because Electrobun WKWebView toggleDevTools is unstable.",
+      );
+      return;
+    }
+
+    if (typeof webview?.openDevTools === "function") {
+      webview.openDevTools();
+      if (typeof windowId === "number") {
+        macOpenedDevtoolsWindowIds.add(windowId);
+      }
+      scheduleDevtoolsLayoutRefresh(targetWindow);
+      return;
+    }
+  }
+
   if (typeof webview?.toggleDevTools === "function") {
     webview.toggleDevTools();
+    scheduleDevtoolsLayoutRefresh(targetWindow);
     return;
   }
 
   if (typeof webview?.openDevTools === "function") {
     webview.openDevTools();
+    scheduleDevtoolsLayoutRefresh(targetWindow);
     return;
   }
 

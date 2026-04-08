@@ -57,18 +57,23 @@ describe("buildApplicationMenu", () => {
   });
 
   it("keeps the view menu to explicit display controls only", () => {
-    const viewLabels = (getMenu("View")?.submenu ?? []).map(
+    const macViewLabels = (getMenu("View", false, [], true)?.submenu ?? []).map(
       (item) => item.label ?? item.type ?? "",
     );
+    const winViewLabels = (
+      getMenu("View", false, [], false)?.submenu ?? []
+    ).map((item) => item.label ?? item.type ?? "");
 
-    expect(viewLabels).toContain("Reload");
-    expect(viewLabels).toContain("Force Reload");
-    expect(viewLabels).toContain("Toggle Developer Tools");
-    expect(viewLabels).toContain("Actual Size");
-    expect(viewLabels).toContain("Toggle Full Screen");
-    expect(viewLabels).not.toContain("Show Chat");
-    expect(viewLabels).not.toContain("Show Companion");
-    expect(viewLabels).not.toContain("Show Heartbeats");
+    expect(macViewLabels).toContain("Reload");
+    expect(macViewLabels).toContain("Force Reload");
+    expect(macViewLabels).toContain("Open Renderer in Browser for Debugging");
+    expect(macViewLabels).toContain("Actual Size");
+    expect(macViewLabels).toContain("Toggle Full Screen");
+    expect(macViewLabels).not.toContain("Show Chat");
+    expect(macViewLabels).not.toContain("Show Companion");
+    expect(macViewLabels).not.toContain("Show Heartbeats");
+
+    expect(winViewLabels).toContain("Toggle Developer Tools");
   });
 
   it("renders heartbeat monitoring summary in the native menu", () => {

@@ -280,16 +280,18 @@ function syncCompatConnectorConfigValues(
     return;
   }
 
-  const envMap = CONNECTOR_ENV_MAP[connectorKey];
+  const envMap =
+    CONNECTOR_ENV_MAP[connectorKey as keyof typeof CONNECTOR_ENV_MAP];
   if (!envMap) {
     return;
   }
+  const typedEnvMap = envMap as Record<string, string>;
 
   const connectors = asRecord(config.connectors) ?? {};
   const connectorEntry = asRecord(connectors[connectorKey]) ?? {};
   const envToField = new Map<string, string>();
 
-  for (const [field, envKey] of Object.entries(envMap)) {
+  for (const [field, envKey] of Object.entries(typedEnvMap)) {
     if (!envToField.has(envKey)) {
       envToField.set(envKey, field);
     }
