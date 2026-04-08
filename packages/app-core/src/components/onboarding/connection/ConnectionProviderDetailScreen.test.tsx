@@ -343,6 +343,29 @@ describe("ConnectionProviderDetailScreen", () => {
     expect(setState).toHaveBeenCalledWith("onboardingCloudApiKey", "ec-test-key");
   });
 
+  it("switches Eliza Cloud tabs and starts the login flow from the login tab", () => {
+    const dispatch = vi.fn();
+    const handleCloudLogin = vi.fn();
+    mockUseApp.mockReturnValue(
+      createState({
+        onboardingProvider: "elizacloud",
+        onboardingElizaCloudTab: "login",
+        handleCloudLogin,
+      }),
+    );
+
+    render(<ConnectionProviderDetailScreen dispatch={dispatch} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Connect account" }));
+    expect(handleCloudLogin).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "API Key" }));
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "setElizaCloudTab",
+      tab: "apikey",
+    });
+  });
+
   it("exposes openrouter model choices as a radiogroup", () => {
     mockUseApp.mockReturnValue(
       createState({
@@ -816,6 +839,44 @@ describe("ConnectionProviderDetailScreen", () => {
 
     expect(screen.getByRole("button", { name: "Log in with OpenAI" })).toBeTruthy();
     expect(screen.queryByLabelText("Redirect URL")).toBeNull();
+  });
+
+  it("surfaces OpenAI exchange exceptions with the real error message", async () => {
+    mockClient.exchangeOpenAICode.mockRejectedValueOnce(
+      new Error("openai callback broke"),
+    );
+    mockUseApp.mockReturnValue(
+      createState({
+        onboardingProvider: "openai-subscription",
+        onboardingOptions: {
+          providers: [
+            {
+              id: "openai-subscription",
+              name: "ChatGPT Subscription",
+              description: "Plus/Pro subscription",
+            },
+          ],
+          openrouterModels: [],
+          piAiModels: [],
+          piAiDefaultModel: "",
+        },
+      }),
+    );
+
+    render(<ConnectionProviderDetailScreen dispatch={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Log in with OpenAI" }));
+    await screen.findByLabelText("Redirect URL");
+    fireEvent.change(screen.getByLabelText("Redirect URL"), {
+      target: {
+        value: "localhost:1455/auth/callback?code=openai-failure",
+      },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Complete login" }));
+
+    expect(
+      await screen.findByText("Exchange failed: openai callback broke"),
+    ).toBeTruthy();
   });
 
   it("uses the default footer controls for direct API-key providers", () => {

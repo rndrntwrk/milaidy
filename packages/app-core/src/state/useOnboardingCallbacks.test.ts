@@ -1,13 +1,20 @@
 // @vitest-environment jsdom
 
-const { mockInvokeDesktopBridgeRequest } = vi.hoisted(() => ({
+const { mockInvokeDesktopBridgeRequest, mockCapacitorAgentStart } = vi.hoisted(() => ({
   mockInvokeDesktopBridgeRequest: vi.fn(async () => undefined),
+  mockCapacitorAgentStart: vi.fn(async () => undefined),
 }));
 
 vi.mock("../bridge", () => ({
   invokeDesktopBridgeRequest: (...args: unknown[]) =>
     mockInvokeDesktopBridgeRequest(...args),
   scanProviderCredentials: vi.fn(async () => []),
+}));
+
+vi.mock("@miladyai/capacitor-agent", () => ({
+  Agent: {
+    start: (...args: unknown[]) => mockCapacitorAgentStart(...args),
+  },
 }));
 
 import { getDefaultStylePreset } from "@miladyai/shared/onboarding-presets";
@@ -65,6 +72,8 @@ describe("useOnboardingCallbacks", () => {
       .__ELIZA_CLOUD_AUTH_TOKEN__;
     mockInvokeDesktopBridgeRequest.mockReset();
     mockInvokeDesktopBridgeRequest.mockResolvedValue(undefined);
+    mockCapacitorAgentStart.mockReset();
+    mockCapacitorAgentStart.mockResolvedValue(undefined);
     vi.restoreAllMocks();
   });
 
@@ -686,6 +695,87 @@ describe("useOnboardingCallbacks", () => {
     expect(setOnboardingComplete).toHaveBeenCalledWith(true);
   });
 
+  it("falls back to the Capacitor agent starter when the desktop bridge start request fails", async () => {
+    mockInvokeDesktopBridgeRequest.mockRejectedValueOnce(
+      new Error("desktop bridge unavailable"),
+    );
+    const getAuthStatus = vi.fn().mockResolvedValue({
+      required: false,
+      pairingEnabled: false,
+      expiresAt: null,
+    });
+    const submitOnboarding = vi.fn().mockResolvedValue(undefined);
+
+    const { result } = renderHook(() => {
+      const onboarding = useOnboardingState();
+      return {
+        onboarding,
+        callbacks: useOnboardingCallbacks({
+          onboarding,
+          setOnboardingStep: vi.fn(),
+          setOnboardingMode: vi.fn(),
+          setOnboardingActiveGuide: vi.fn(),
+          addDeferredOnboardingTask: vi.fn(),
+          setOnboardingDetectedProviders: vi.fn(),
+          setOnboardingServerTarget: vi.fn(),
+          setOnboardingCloudApiKey: vi.fn(),
+          setOnboardingProvider: vi.fn(),
+          setOnboardingApiKey: vi.fn(),
+          setOnboardingPrimaryModel: vi.fn(),
+          setOnboardingRemoteApiBase: vi.fn(),
+          setOnboardingRemoteToken: vi.fn(),
+          setOnboardingRemoteConnecting: vi.fn(),
+          setOnboardingRemoteError: vi.fn(),
+          setOnboardingRemoteConnected: vi.fn(),
+          setPostOnboardingChecklistDismissed: vi.fn(),
+          setOnboardingComplete: vi.fn(),
+          coordinatorOnboardingCompleteRef: { current: null },
+          initialTabSetRef: { current: false },
+          setTab: vi.fn(),
+          defaultLandingTab: "chat",
+          loadCharacter: vi.fn(async () => {}),
+          uiLanguage: "en",
+          selectedVrmIndex: 1,
+          walletConfig: {},
+          elizaCloudConnected: false,
+          setActionNotice: vi.fn(),
+          retryStartup: vi.fn(),
+          forceLocalBootstrapRef: { current: false },
+          client: {
+            getAuthStatus,
+            submitOnboarding,
+            updateConfig: vi.fn().mockResolvedValue({}),
+          } as unknown as MiladyClient,
+        }),
+      };
+    });
+
+    act(() => {
+      result.current.onboarding.setOptions({
+        names: [],
+        styles: [getDefaultStylePreset("en")],
+        providers: [],
+        cloudProviders: [],
+        models: { small: [], large: [] },
+        inventoryProviders: [],
+        sharedStyleRules: "Keep responses brief.",
+      });
+      result.current.onboarding.setField("name", "Chen");
+      result.current.onboarding.setField("serverTarget", "local");
+      result.current.onboarding.setField("provider", "openai");
+      result.current.onboarding.setField("apiKey", "sk-openai-test");
+    });
+
+    await act(async () => {
+      await result.current.callbacks.handleOnboardingFinish();
+    });
+
+    expect(mockInvokeDesktopBridgeRequest).toHaveBeenCalledTimes(1);
+    expect(mockCapacitorAgentStart).toHaveBeenCalledTimes(1);
+    expect(getAuthStatus).toHaveBeenCalledTimes(1);
+    expect(submitOnboarding).toHaveBeenCalledTimes(1);
+  });
+
   it("delegates cloud onboarding finish through the same chat handoff path", async () => {
     const submitOnboarding = vi.fn().mockResolvedValue(undefined);
     const setOnboardingComplete = vi.fn();
@@ -1265,6 +1355,89 @@ describe("useOnboardingCallbacks", () => {
     );
     expect(setOnboardingComplete).toHaveBeenCalledWith(true);
     expect(setTab).toHaveBeenCalledWith("settings");
+  });
+
+  it("strips raw API keys from detected providers after onboarding completes", async () => {
+    const submitOnboarding = vi.fn().mockResolvedValue(undefined);
+    const setOnboardingDetectedProviders = vi.fn();
+
+    const { result } = renderHook(() => {
+      const onboarding = useOnboardingState();
+      return {
+        onboarding,
+        callbacks: useOnboardingCallbacks({
+          onboarding,
+          setOnboardingStep: vi.fn(),
+          setOnboardingMode: vi.fn(),
+          setOnboardingActiveGuide: vi.fn(),
+          addDeferredOnboardingTask: vi.fn(),
+          setOnboardingDetectedProviders,
+          setOnboardingServerTarget: vi.fn(),
+          setOnboardingCloudApiKey: vi.fn(),
+          setOnboardingProvider: vi.fn(),
+          setOnboardingApiKey: vi.fn(),
+          setOnboardingPrimaryModel: vi.fn(),
+          setOnboardingRemoteApiBase: vi.fn(),
+          setOnboardingRemoteToken: vi.fn(),
+          setOnboardingRemoteConnecting: vi.fn(),
+          setOnboardingRemoteError: vi.fn(),
+          setOnboardingRemoteConnected: vi.fn(),
+          setPostOnboardingChecklistDismissed: vi.fn(),
+          setOnboardingComplete: vi.fn(),
+          coordinatorOnboardingCompleteRef: { current: null },
+          initialTabSetRef: { current: false },
+          setTab: vi.fn(),
+          defaultLandingTab: "chat",
+          loadCharacter: vi.fn(async () => {}),
+          uiLanguage: "en",
+          selectedVrmIndex: 1,
+          walletConfig: {},
+          elizaCloudConnected: false,
+          setActionNotice: vi.fn(),
+          retryStartup: vi.fn(),
+          forceLocalBootstrapRef: { current: false },
+          client: {
+            getAuthStatus: vi.fn().mockResolvedValue({
+              required: false,
+              pairingEnabled: false,
+              expiresAt: null,
+            }),
+            submitOnboarding,
+            updateConfig: vi.fn().mockResolvedValue({}),
+          } as unknown as MiladyClient,
+        }),
+      };
+    });
+
+    act(() => {
+      result.current.onboarding.setOptions({
+        names: [],
+        styles: [getDefaultStylePreset("en")],
+        providers: [],
+        cloudProviders: [],
+        models: { small: [], large: [] },
+        inventoryProviders: [],
+        sharedStyleRules: "Keep responses brief.",
+      });
+      result.current.onboarding.setDetectedProviders([
+        { id: "openrouter", apiKey: "sk-or-test" },
+        { id: "ollama" },
+      ]);
+      result.current.onboarding.setField("name", "Chen");
+      result.current.onboarding.setField("serverTarget", "local");
+      result.current.onboarding.setField("provider", "openai");
+      result.current.onboarding.setField("apiKey", "sk-openai-test");
+    });
+
+    await act(async () => {
+      await result.current.callbacks.handleOnboardingFinish();
+    });
+
+    expect(submitOnboarding).toHaveBeenCalledTimes(1);
+    expect(setOnboardingDetectedProviders).toHaveBeenCalledWith([
+      { id: "openrouter" },
+      { id: "ollama" },
+    ]);
   });
 
   it("surfaces onboarding completion failures instead of only logging them", async () => {

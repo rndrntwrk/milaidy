@@ -339,6 +339,47 @@ describe("ProviderSwitcher subscription selection behavior", () => {
     expect(mockSwitchProvider).not.toHaveBeenCalled();
   });
 
+  it("prefers translated subscription labels when the i18n key resolves", async () => {
+    mockUseApp.mockReturnValue({
+      t: (key: string) =>
+        key === "providerswitcher.chatgptSubscription"
+          ? "Translated ChatGPT"
+          : key,
+      setActionNotice: (...args: unknown[]) => mockSetActionNotice(...args),
+      elizaCloudConnected: false,
+      elizaCloudCredits: null,
+      elizaCloudCreditsLow: false,
+      elizaCloudCreditsCritical: false,
+      elizaCloudUserId: null,
+      elizaCloudLoginBusy: false,
+      elizaCloudLoginError: null,
+      elizaCloudDisconnecting: false,
+      plugins: [],
+      pluginSaving: new Set<string>(),
+      pluginSaveSuccess: new Set<string>(),
+      loadPlugins: vi.fn(async () => {}),
+      handlePluginConfigSave: vi.fn(),
+      handleCloudLogin: vi.fn(async () => {}),
+      handleCloudDisconnect: vi.fn(async () => {}),
+      setState: vi.fn(),
+      setTab: vi.fn(),
+    });
+
+    let tree!: ReactTestRenderer;
+    await act(async () => {
+      tree = create(<ProviderSwitcher {...defaultProps()} />);
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    const optionLabels = getSelect(tree)
+      .findAll((node: ReactTestInstance) => node.type === "option")
+      .map((node: ReactTestInstance) => node.children.join(""));
+
+    expect(optionLabels).toContain("Translated ChatGPT");
+  });
+
   it("selects disconnected ChatGPT Subscription without switching the runtime", async () => {
     mockGetSubscriptionStatus.mockResolvedValue({ providers: [] });
 
@@ -1116,6 +1157,23 @@ describe("ProviderSwitcher subscription selection behavior", () => {
 
     expect(warnSpy).toHaveBeenCalledWith(
       "[eliza] Failed to load config",
+      expect.any(Error),
+    );
+  });
+
+  it("warns instead of pretending subscription status loaded when the status fetch fails", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    mockGetSubscriptionStatus.mockRejectedValueOnce(new Error("status failed"));
+
+    await act(async () => {
+      create(<ProviderSwitcher {...defaultProps()} />);
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      "[eliza] Failed to load subscription status",
       expect.any(Error),
     );
   });

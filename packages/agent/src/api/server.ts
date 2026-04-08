@@ -258,6 +258,7 @@ import type {
   PTYService,
 } from "./parse-action-block.js";
 import { handlePermissionRoutes } from "./permissions-routes.js";
+import { handleRolodexRoutes } from "./rolodex-routes.js";
 import { handlePermissionsExtraRoutes } from "./permissions-routes-extra.js";
 import { handlePluginRoutes } from "./plugin-routes.js";
 import {
@@ -5608,6 +5609,21 @@ async function handleRequest(
       error,
       saveConfig: saveElizaConfig,
       scheduleRuntimeRestart,
+    })
+  ) {
+    return;
+  }
+
+  if (
+    await handleRolodexRoutes({
+      req,
+      res,
+      method,
+      pathname,
+      runtime: state.runtime ?? undefined,
+      readJsonBody,
+      json,
+      error,
     })
   ) {
     return;
