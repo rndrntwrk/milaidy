@@ -1,9 +1,21 @@
-import { Button, Input, SectionCard } from "@miladyai/ui";
 import {
+  Button,
+  Input,
+  SectionCard,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Switch,
+} from "@miladyai/ui";
+import {
+  ChevronDown,
   ExternalLink,
   Github,
   Loader2,
   MessageCircle,
+  Settings2,
   ShieldAlert,
   Terminal,
   Trash2,
@@ -13,6 +25,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   type CloudCompatAgent,
+  type CloudCompatDiscordConfig,
   type CloudCompatManagedDiscordStatus,
   type CloudCompatManagedGithubStatus,
   client,
@@ -150,6 +163,458 @@ export function CloudAgentCard({
           )}
         </Button>
       </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Action toggle labels (display name → config key)
+// ---------------------------------------------------------------------------
+
+const ACTION_TOGGLES: Array<{
+  key: keyof NonNullable<CloudCompatDiscordConfig["actions"]>;
+  label: string;
+}> = [
+  { key: "reactions", label: "Reactions" },
+  { key: "stickers", label: "Stickers" },
+  { key: "emojiUploads", label: "Emoji Uploads" },
+  { key: "stickerUploads", label: "Sticker Uploads" },
+  { key: "polls", label: "Polls" },
+  { key: "permissions", label: "Permissions" },
+  { key: "messages", label: "Messages" },
+  { key: "threads", label: "Threads" },
+  { key: "pins", label: "Pins" },
+  { key: "search", label: "Search" },
+  { key: "memberInfo", label: "Member Info" },
+  { key: "roleInfo", label: "Role Info" },
+  { key: "roles", label: "Roles" },
+  { key: "channelInfo", label: "Channel Info" },
+  { key: "voiceStatus", label: "Voice Status" },
+  { key: "events", label: "Events" },
+  { key: "moderation", label: "Moderation" },
+  { key: "channels", label: "Channels" },
+  { key: "presence", label: "Presence" },
+];
+
+// ---------------------------------------------------------------------------
+// DiscordSettingsPanel — expandable advanced config
+// ---------------------------------------------------------------------------
+
+function DiscordSettingsPanel({
+  agentId,
+  setActionNotice,
+  t,
+}: {
+  agentId: string;
+  setActionNotice: (msg: string, kind: string, duration: number) => void;
+  t: (key: string, opts?: Record<string, unknown>) => string;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [config, setConfig] = useState<CloudCompatDiscordConfig | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+
+  const fetchConfig = useCallback(async () => {
+    try {
+      const res = await client.getCloudCompatAgentDiscordConfig(agentId);
+      setConfig(res.data);
+      setLoadError(false);
+    } catch {
+      setLoadError(true);
+    }
+  }, [agentId]);
+
+  useEffect(() => {
+    if (expanded && !config && !loadError) {
+      void fetchConfig();
+    }
+  }, [expanded, config, loadError, fetchConfig]);
+
+  const patch = (partial: CloudCompatDiscordConfig) => {
+    setConfig((prev) => ({ ...prev, ...partial }));
+    setDirty(true);
+  };
+
+  const patchActions = (
+    key: keyof NonNullable<CloudCompatDiscordConfig["actions"]>,
+    value: boolean,
+  ) => {
+    setConfig((prev) => ({
+      ...prev,
+      actions: { ...prev?.actions, [key]: value },
+    }));
+    setDirty(true);
+  };
+
+  const handleSave = async () => {
+    if (!config) return;
+    setSaving(true);
+    try {
+      const res = await client.updateCloudCompatAgentDiscordConfig(
+        agentId,
+        config,
+      );
+      setConfig(res.data);
+      setDirty(false);
+      setActionNotice(
+        t("elizaclouddashboard.DiscordSettingsSaved", {
+          defaultValue: "Discord settings saved.",
+        }),
+        "success",
+        3000,
+      );
+    } catch (error) {
+      setActionNotice(
+        error instanceof Error
+          ? error.message
+          : t("elizaclouddashboard.DiscordSettingsSaveFailed", {
+              defaultValue: "Failed to save Discord settings.",
+            }),
+        "error",
+        4200,
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="rounded-lg border border-border/25 bg-bg/40">
+      <button
+        type="button"
+        className="flex w-full items-center justify-between px-3 py-2 text-left"
+        onClick={() => setExpanded((v) => !v)}
+      >
+        <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-muted">
+          <Settings2 className="h-3 w-3" />
+          {t("elizaclouddashboard.DiscordSettings", {
+            defaultValue: "Discord Settings",
+          })}
+        </span>
+        <ChevronDown
+          className={`h-3 w-3 text-muted transition-transform ${expanded ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {expanded && (
+        <div className="space-y-3 border-t border-border/25 px-3 pb-3 pt-3">
+          {loadError ? (
+            <p className="text-[11px] text-muted">
+              {t("elizaclouddashboard.DiscordSettingsLoadError", {
+                defaultValue:
+                  "Could not load Discord settings. The cloud endpoint may not be available yet.",
+              })}
+            </p>
+          ) : !config ? (
+            <div className="flex items-center gap-2 text-[11px] text-muted">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              {t("common.loading", { defaultValue: "Loading..." })}
+            </div>
+          ) : (
+            <>
+              {/* ── DM Policy ─────────────────────────────── */}
+              <div className="rounded-lg border border-border/30 bg-bg/55 p-3">
+                <span className="mb-2 block text-[10px] font-bold uppercase tracking-wider text-muted">
+                  {t("elizaclouddashboard.DiscordDmPolicy", {
+                    defaultValue: "DM Policy",
+                  })}
+                </span>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-xs text-txt-strong">
+                      {t("elizaclouddashboard.DiscordDmEnabled", {
+                        defaultValue: "DMs enabled",
+                      })}
+                    </span>
+                    <Switch
+                      checked={config.dm?.enabled ?? true}
+                      onCheckedChange={(v) =>
+                        patch({ dm: { ...config.dm, enabled: v } })
+                      }
+                      className="scale-75"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-xs text-txt-strong">
+                      {t("elizaclouddashboard.DiscordDmPolicyLabel", {
+                        defaultValue: "Policy",
+                      })}
+                    </span>
+                    <Select
+                      value={config.dm?.policy ?? "pairing"}
+                      onValueChange={(v) =>
+                        patch({
+                          dm: {
+                            ...config.dm,
+                            policy: v as "open" | "pairing" | "allowlist",
+                          },
+                        })
+                      }
+                    >
+                      <SelectTrigger className="h-7 w-28 rounded-md border-border/40 bg-bg/80 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="open">Open</SelectItem>
+                        <SelectItem value="pairing">Pairing</SelectItem>
+                        <SelectItem value="allowlist">Allowlist</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-xs text-txt-strong">
+                      {t("elizaclouddashboard.DiscordGroupDms", {
+                        defaultValue: "Group DMs",
+                      })}
+                    </span>
+                    <Switch
+                      checked={config.dm?.groupEnabled ?? false}
+                      onCheckedChange={(v) =>
+                        patch({ dm: { ...config.dm, groupEnabled: v } })
+                      }
+                      className="scale-75"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* ── Guild Settings ────────────────────────── */}
+              <div className="rounded-lg border border-border/30 bg-bg/55 p-3">
+                <span className="mb-2 block text-[10px] font-bold uppercase tracking-wider text-muted">
+                  {t("elizaclouddashboard.DiscordGuildSettings", {
+                    defaultValue: "Guild Settings",
+                  })}
+                </span>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-xs text-txt-strong">
+                      {t("elizaclouddashboard.DiscordRequireMention", {
+                        defaultValue: "Require @mention",
+                      })}
+                    </span>
+                    <Switch
+                      checked={config.requireMention ?? false}
+                      onCheckedChange={(v) => patch({ requireMention: v })}
+                      className="scale-75"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-xs text-txt-strong">
+                      {t("elizaclouddashboard.DiscordReactionNotifs", {
+                        defaultValue: "Reaction notifications",
+                      })}
+                    </span>
+                    <Select
+                      value={config.reactionNotifications ?? "off"}
+                      onValueChange={(v) =>
+                        patch({
+                          reactionNotifications: v as
+                            | "off"
+                            | "own"
+                            | "all"
+                            | "allowlist",
+                        })
+                      }
+                    >
+                      <SelectTrigger className="h-7 w-28 rounded-md border-border/40 bg-bg/80 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="off">Off</SelectItem>
+                        <SelectItem value="own">Own</SelectItem>
+                        <SelectItem value="all">All</SelectItem>
+                        <SelectItem value="allowlist">Allowlist</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+
+              {/* ── Action Toggles ────────────────────────── */}
+              <div className="rounded-lg border border-border/30 bg-bg/55 p-3">
+                <span className="mb-2 block text-[10px] font-bold uppercase tracking-wider text-muted">
+                  {t("elizaclouddashboard.DiscordActions", {
+                    defaultValue: "Action Toggles",
+                  })}
+                </span>
+                <div className="grid grid-cols-1 gap-x-4 gap-y-1.5 sm:grid-cols-2 lg:grid-cols-3">
+                  {ACTION_TOGGLES.map(({ key, label }) => (
+                    <div
+                      key={key}
+                      className="flex items-center justify-between gap-2"
+                    >
+                      <span className="text-[11px] text-txt-strong">
+                        {label}
+                      </span>
+                      <Switch
+                        checked={config.actions?.[key] ?? true}
+                        onCheckedChange={(v) => patchActions(key, v)}
+                        className="scale-[0.6]"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* ── Message Formatting ────────────────────── */}
+              <div className="rounded-lg border border-border/30 bg-bg/55 p-3">
+                <span className="mb-2 block text-[10px] font-bold uppercase tracking-wider text-muted">
+                  {t("elizaclouddashboard.DiscordFormatting", {
+                    defaultValue: "Message Formatting",
+                  })}
+                </span>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div>
+                    <span className="mb-1 block text-[11px] text-muted">
+                      {t("elizaclouddashboard.DiscordMaxLines", {
+                        defaultValue: "Max lines per message",
+                      })}
+                    </span>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={config.maxLinesPerMessage ?? ""}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        patch({
+                          maxLinesPerMessage: v ? Number(v) : undefined,
+                        });
+                      }}
+                      className="h-7 rounded-md bg-bg/80 text-xs"
+                      placeholder="Default"
+                    />
+                  </div>
+                  <div>
+                    <span className="mb-1 block text-[11px] text-muted">
+                      {t("elizaclouddashboard.DiscordChunkLimit", {
+                        defaultValue: "Text chunk limit",
+                      })}
+                    </span>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={config.textChunkLimit ?? ""}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        patch({
+                          textChunkLimit: v ? Number(v) : undefined,
+                        });
+                      }}
+                      className="h-7 rounded-md bg-bg/80 text-xs"
+                      placeholder="Default"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* ── Intents ───────────────────────────────── */}
+              <div className="rounded-lg border border-border/30 bg-bg/55 p-3">
+                <span className="mb-2 block text-[10px] font-bold uppercase tracking-wider text-muted">
+                  {t("elizaclouddashboard.DiscordIntents", {
+                    defaultValue: "Privileged Intents",
+                  })}
+                </span>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-xs text-txt-strong">
+                      {t("elizaclouddashboard.DiscordPresenceIntent", {
+                        defaultValue: "Presence",
+                      })}
+                    </span>
+                    <Switch
+                      checked={config.intents?.presence ?? false}
+                      onCheckedChange={(v) =>
+                        patch({
+                          intents: { ...config.intents, presence: v },
+                        })
+                      }
+                      className="scale-75"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-xs text-txt-strong">
+                      {t("elizaclouddashboard.DiscordGuildMembersIntent", {
+                        defaultValue: "Guild Members",
+                      })}
+                    </span>
+                    <Switch
+                      checked={config.intents?.guildMembers ?? false}
+                      onCheckedChange={(v) =>
+                        patch({
+                          intents: { ...config.intents, guildMembers: v },
+                        })
+                      }
+                      className="scale-75"
+                    />
+                  </div>
+                  <p className="text-[10px] leading-relaxed text-warn">
+                    {t("elizaclouddashboard.DiscordIntentsWarning", {
+                      defaultValue:
+                        "Privileged intents require opt-in via the Discord Developer Portal. Enable them there first or the bot will fail to connect.",
+                    })}
+                  </p>
+                </div>
+              </div>
+
+              {/* ── Advanced ──────────────────────────────── */}
+              <div className="rounded-lg border border-border/30 bg-bg/55 p-3">
+                <span className="mb-2 block text-[10px] font-bold uppercase tracking-wider text-muted">
+                  {t("elizaclouddashboard.DiscordAdvanced", {
+                    defaultValue: "Advanced",
+                  })}
+                </span>
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-xs text-txt-strong">
+                      {t("elizaclouddashboard.DiscordPluralKit", {
+                        defaultValue: "PluralKit integration",
+                      })}
+                    </span>
+                    <Switch
+                      checked={config.pluralkit?.enabled ?? false}
+                      onCheckedChange={(v) =>
+                        patch({ pluralkit: { enabled: v } })
+                      }
+                      className="scale-75"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-xs text-txt-strong">
+                      {t("elizaclouddashboard.DiscordExecApprovals", {
+                        defaultValue: "Exec approvals via DM",
+                      })}
+                    </span>
+                    <Switch
+                      checked={config.execApprovals?.enabled ?? false}
+                      onCheckedChange={(v) =>
+                        patch({ execApprovals: { enabled: v } })
+                      }
+                      className="scale-75"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* ── Save Button ───────────────────────────── */}
+              <Button
+                variant="default"
+                size="sm"
+                className="h-8 w-full rounded-xl text-xs font-semibold"
+                disabled={!dirty || saving}
+                onClick={() => void handleSave()}
+              >
+                {saving ? (
+                  <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+                ) : null}
+                {t("elizaclouddashboard.DiscordSaveSettings", {
+                  defaultValue: "Save Discord Settings",
+                })}
+              </Button>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -578,6 +1043,14 @@ export function AgentDetailSidebar({
                     })}
                   </span>
                 </div>
+              ) : null}
+
+              {managedDiscord?.connected ? (
+                <DiscordSettingsPanel
+                  agentId={agent.agent_id}
+                  setActionNotice={setActionNotice}
+                  t={t}
+                />
               ) : null}
             </div>
           </div>

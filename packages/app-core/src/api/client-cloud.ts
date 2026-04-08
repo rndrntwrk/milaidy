@@ -15,6 +15,7 @@ import type {
   CloudBillingSettingsUpdateRequest,
   CloudBillingSummary,
   CloudCompatAgent,
+  CloudCompatDiscordConfig,
   CloudCompatManagedDiscordStatus,
   CloudCompatManagedGithubStatus,
   CloudCompatAgentStatus,
@@ -117,6 +118,17 @@ declare module "./client-base" {
     disconnectCloudCompatAgentManagedDiscord(agentId: string): Promise<{
       success: boolean;
       data: CloudCompatManagedDiscordStatus;
+    }>;
+    getCloudCompatAgentDiscordConfig(agentId: string): Promise<{
+      success: boolean;
+      data: CloudCompatDiscordConfig;
+    }>;
+    updateCloudCompatAgentDiscordConfig(
+      agentId: string,
+      config: CloudCompatDiscordConfig,
+    ): Promise<{
+      success: boolean;
+      data: CloudCompatDiscordConfig;
     }>;
     getCloudCompatAgentManagedGithub(agentId: string): Promise<{
       success: boolean;
@@ -417,6 +429,29 @@ MiladyClient.prototype.disconnectCloudCompatAgentManagedDiscord =
       },
     );
   };
+
+MiladyClient.prototype.getCloudCompatAgentDiscordConfig = async function (
+  this: MiladyClient,
+  agentId,
+) {
+  return this.fetch(
+    `/api/cloud/v1/milady/agents/${encodeURIComponent(agentId)}/discord/config`,
+  );
+};
+
+MiladyClient.prototype.updateCloudCompatAgentDiscordConfig = async function (
+  this: MiladyClient,
+  agentId,
+  config,
+) {
+  return this.fetch(
+    `/api/cloud/v1/milady/agents/${encodeURIComponent(agentId)}/discord/config`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(config),
+    },
+  );
+};
 
 MiladyClient.prototype.getCloudCompatAgentManagedGithub = async function (
   this: MiladyClient,
