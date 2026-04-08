@@ -186,3 +186,4 @@ bun run milady start              # run-node.mjs
 | `MILADY_CAPTURE_PROMPTS` | Dump raw prompts to `.tmp/prompt-captures/` (dev-only, contains user messages) | `0` |
 | `MILADY_ACTION_COMPACTION` | Context-aware action param stripping | `1` (enabled) |
 | `MILADY_PROMPT_OPT_MODE` | Prompt optimization mode (`baseline` or `compact`) | `baseline` |
+| `PARALLAX_LLM_PROVIDER` | Coding-agent LLM provider mode: `subscription` (each CLI's built-in login), `api_keys` (user-provided per-provider keys), or `cloud` (route through Eliza Cloud). Set via the Coding Agents settings UI; consumed by `packages/agent/src/runtime/agent-orchestrator-compat.ts`. | `subscription` |
