@@ -116,11 +116,15 @@ async function scanCodexCredentials(
   if (!data?.OPENAI_API_KEY) return null;
 
   const cliInstalled = await isCliInstalled("codex");
+  const authMode =
+    typeof data.auth_mode === "string" && data.auth_mode.trim()
+      ? data.auth_mode.trim()
+      : "api-key";
   return {
-    id: "openai",
+    id: authMode === "api-key" ? "openai" : "openai-subscription",
     source: "codex-auth",
     apiKey: data.OPENAI_API_KEY,
-    authMode: data.auth_mode ?? "api-key",
+    authMode,
     cliInstalled,
     status: "unchecked",
   };

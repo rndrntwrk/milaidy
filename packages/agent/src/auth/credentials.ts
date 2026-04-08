@@ -139,6 +139,46 @@ export async function getAccessToken(
   }
 }
 
+function readConfiguredAnthropicSetupToken(): string | null {
+  const configPath =
+    process.env.MILADY_CONFIG_PATH?.trim() ||
+    process.env.ELIZA_CONFIG_PATH?.trim() ||
+    path.join(
+      process.env.MILADY_STATE_DIR?.trim() ||
+        process.env.ELIZA_STATE_DIR?.trim() ||
+        path.join(os.homedir(), ".milady"),
+      (process.env.ELIZA_NAMESPACE?.trim() || "milady") === "milady"
+        ? "milady.json"
+        : `${process.env.ELIZA_NAMESPACE?.trim()}.json`,
+    );
+  try {
+    const parsed = JSON.parse(fs.readFileSync(configPath, "utf-8")) as {
+      env?: Record<string, unknown>;
+    };
+    const token = parsed.env?.__anthropicSubscriptionToken;
+    return typeof token === "string" && token.trim() ? token.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
+function hasCodexCliSubscriptionAuth(): boolean {
+  const authPath = path.join(os.homedir(), ".codex", "auth.json");
+  try {
+    const data = JSON.parse(fs.readFileSync(authPath, "utf-8")) as {
+      auth_mode?: string;
+      OPENAI_API_KEY?: string;
+    };
+    return Boolean(
+      data.OPENAI_API_KEY?.trim() &&
+        data.auth_mode?.trim() &&
+        data.auth_mode.trim().toLowerCase() !== "api-key",
+    );
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Get all configured subscription providers and their status.
  */
@@ -154,10 +194,18 @@ export function getSubscriptionStatus(): Array<{
   ];
   return providers.map((provider) => {
     const stored = loadCredentials(provider);
+    const importedClaudeAuth =
+      provider === "anthropic-subscription"
+        ? importClaudeCodeOAuthToken() ?? readConfiguredAnthropicSetupToken()
+        : null;
+    const importedCodexAuth =
+      provider === "openai-codex" && hasCodexCliSubscriptionAuth();
     return {
       provider,
-      configured: stored !== null,
-      valid: stored ? stored.credentials.expires > Date.now() : false,
+      configured: stored !== null || Boolean(importedClaudeAuth || importedCodexAuth),
+      valid: stored
+        ? stored.credentials.expires > Date.now()
+        : Boolean(importedClaudeAuth || importedCodexAuth),
       expiresAt: stored?.credentials.expires ?? null,
     };
   });

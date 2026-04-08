@@ -1,5 +1,6 @@
 import {
   normalizeOnboardingProviderId,
+  requiresAdditionalRuntimeProvider,
   type OnboardingCredentialInputs,
   type OnboardingLocalProviderId,
 } from "@miladyai/shared/contracts/onboarding";
@@ -20,6 +21,7 @@ export interface BuildOnboardingConnectionArgs {
   onboardingCloudApiKey: string;
   onboardingProvider: string;
   onboardingApiKey: string;
+  omitRuntimeProvider?: boolean;
   onboardingVoiceProvider: string;
   onboardingVoiceApiKey: string;
   onboardingPrimaryModel: string;
@@ -83,6 +85,17 @@ export function buildOnboardingRuntimeConfig(
     };
   }
 
+  const localProviderId = resolveLocalProviderId(args.onboardingProvider);
+  if (
+    localProviderId === "anthropic-subscription" ||
+    localProviderId === "openai-subscription"
+  ) {
+    linkedAccounts[localProviderId] = {
+      status: "linked",
+      source: "subscription",
+    };
+  }
+
   const deploymentTarget: DeploymentTargetConfig =
     serverTarget === "remote"
       ? {
@@ -102,34 +115,34 @@ export function buildOnboardingRuntimeConfig(
 
   const serviceRouting: ServiceRoutingConfig = {};
   let llmTextRoute: ServiceRouteConfig | undefined;
+  const shouldConfigureRuntimeProvider =
+    !args.omitRuntimeProvider &&
+    !requiresAdditionalRuntimeProvider(args.onboardingProvider);
 
-  if (args.onboardingProvider === "elizacloud") {
+  if (args.onboardingProvider === "elizacloud" && shouldConfigureRuntimeProvider) {
     llmTextRoute = buildElizaCloudServiceRoute({
       smallModel,
       largeModel,
     });
-  } else {
-    const providerId = resolveLocalProviderId(args.onboardingProvider);
-    if (providerId) {
+  } else if (shouldConfigureRuntimeProvider && localProviderId) {
       const primaryModel = resolveOnboardingPrimaryModel({
-        providerId,
+        providerId: localProviderId,
         onboardingPrimaryModel: args.onboardingPrimaryModel,
         onboardingOpenRouterModel: args.onboardingOpenRouterModel,
       });
       llmTextRoute =
         serverTarget === "remote"
           ? {
-              backend: providerId,
+              backend: localProviderId,
               transport: "remote",
               remoteApiBase: args.onboardingRemoteApiBase.trim(),
               ...(primaryModel ? { primaryModel } : {}),
             }
           : {
-              backend: providerId,
+              backend: localProviderId,
               transport: "direct",
               ...(primaryModel ? { primaryModel } : {}),
             };
-    }
   }
 
   if (llmTextRoute) {
@@ -145,7 +158,9 @@ export function buildOnboardingRuntimeConfig(
       serviceRouting,
       buildDefaultElizaCloudServiceRouting({
         base: serviceRouting,
-        includeInference: args.onboardingProvider === "elizacloud",
+        includeInference:
+          shouldConfigureRuntimeProvider &&
+          args.onboardingProvider === "elizacloud",
         smallModel,
         largeModel,
       }),

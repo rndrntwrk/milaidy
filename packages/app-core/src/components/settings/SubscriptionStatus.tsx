@@ -88,6 +88,7 @@ export interface SubscriptionStatusProps {
   setOpenaiConnected: (v: boolean) => void;
   handleSelectSubscription: (
     providerId: SubscriptionProviderSelectionId,
+    activate?: boolean,
   ) => Promise<void>;
   loadSubscriptionStatus: () => Promise<void>;
 }

@@ -127,7 +127,7 @@ describe("scanProviderCredentials", () => {
     vi.clearAllMocks();
   });
 
-  it("returns openai from codex auth and preserves auth mode", async () => {
+  it("returns openai-subscription from Codex ChatGPT auth and preserves auth mode", async () => {
     setPlatform("linux");
     files["/Users/test/.codex/auth.json"] = JSON.stringify({
       OPENAI_API_KEY: "sk-openai",
@@ -139,7 +139,7 @@ describe("scanProviderCredentials", () => {
 
     expect(providers).toEqual([
       {
-        id: "openai",
+        id: "openai-subscription",
         source: "codex-auth",
         apiKey: "****enai",
         authMode: "chatgpt",

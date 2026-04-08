@@ -73,7 +73,7 @@ describe("applySubscriptionCredentials", () => {
     }
   });
 
-  test("auto-sets model.primary from subscriptionProvider when model is missing", async () => {
+  test("does not auto-set model.primary for anthropic-subscription", async () => {
     const { applySubscriptionCredentials } = await import("./credentials");
     const config = {
       agents: {
@@ -86,7 +86,7 @@ describe("applySubscriptionCredentials", () => {
 
     await applySubscriptionCredentials(config);
 
-    expect(config.agents.defaults.model).toEqual({ primary: "anthropic" });
+    expect(config.agents.defaults.model).toBeUndefined();
   });
 
   test("auto-sets model.primary when model exists but primary is missing", async () => {
@@ -131,7 +131,7 @@ describe("applySubscriptionCredentials", () => {
     ).resolves.toBeUndefined();
   });
 
-  test("calls applyClaudeCodeStealth when Anthropic token is applied", async () => {
+  test("does not apply Anthropic subscription tokens to runtime env", async () => {
     // Set up a mock credential file for anthropic-subscription
     const authDir = require("node:path").join(
       require("node:os").homedir(),
@@ -158,7 +158,7 @@ describe("applySubscriptionCredentials", () => {
 
     await applySubscriptionCredentials();
 
-    expect(process.env.ANTHROPIC_API_KEY).toBe("sk-ant-oat01-test-token");
-    expect(applyClaudeCodeStealth).toHaveBeenCalledTimes(1);
+    expect(process.env.ANTHROPIC_API_KEY).toBeUndefined();
+    expect(applyClaudeCodeStealth).not.toHaveBeenCalled();
   });
 });

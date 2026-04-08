@@ -21,7 +21,10 @@ import {
   type ConnectionEvent,
   isProviderConfirmDisabled,
 } from "../../../onboarding/connection-flow";
-import { getProviderLogo } from "../../../providers";
+import {
+  getProviderLogo,
+  requiresAdditionalRuntimeProvider,
+} from "../../../providers";
 import { useApp } from "../../../state";
 import { openExternalUrl } from "../../../utils";
 import { OnboardingTabs } from "../OnboardingTabs";
@@ -195,6 +198,7 @@ export function ConnectionProviderDetailScreen({
   const [anthropicCode, setAnthropicCode] = useState("");
   const [anthropicConnected, setAnthropicConnected] = useState(false);
   const [anthropicError, setAnthropicError] = useState("");
+  const [anthropicSaving, setAnthropicSaving] = useState(false);
 
   const [apiKeyFormatWarning, setApiKeyFormatWarning] = useState("");
 
@@ -341,6 +345,36 @@ export function ConnectionProviderDetailScreen({
     }
   };
 
+  const handleAnthropicSaveSetupToken = async () => {
+    const token = onboardingApiKey.trim();
+    if (!token || anthropicSaving) {
+      return;
+    }
+    setAnthropicSaving(true);
+    setAnthropicError("");
+    try {
+      const result = await client.submitAnthropicSetupToken(token);
+      if (!result.success) {
+        setAnthropicError(
+          t("subscriptionstatus.FailedToSaveSetupToken", {
+            defaultValue: "Failed to save setup token",
+          }),
+        );
+        return;
+      }
+      setAnthropicConnected(true);
+    } catch (err) {
+      setAnthropicError(
+        t("subscriptionstatus.FailedToSaveTokenError", {
+          message: formatRequestError(err),
+          defaultValue: "Failed to save token: {{message}}",
+        }),
+      );
+    } finally {
+      setAnthropicSaving(false);
+    }
+  };
+
   const handleOpenAIStart = async () => {
     try {
       const { authUrl } = await client.startOpenAILogin();
@@ -391,6 +425,9 @@ export function ConnectionProviderDetailScreen({
   };
 
   const clearProvider = () => dispatch({ type: "clearProvider" });
+  const anthropicRequiresRuntimeProvider =
+    onboardingProvider === "anthropic-subscription" &&
+    requiresAdditionalRuntimeProvider(onboardingProvider);
 
   useAdvanceOnboardingWhenElizaCloudOAuthConnected({
     active: onboardingProvider === "elizacloud",
@@ -658,14 +695,24 @@ export function ConnectionProviderDetailScreen({
             onChange={(tab) => dispatch({ type: "setSubscriptionTab", tab })}
           />
 
-          {onboardingSubscriptionTab === "token" ? (
+          {anthropicConnected ? (
+            <div className={onboardingCenteredStackClassName}>
+              <OnboardingStatusBanner ref={anthropicStatusRef} tone="success">
+                <ConnectedIcon title={t("onboarding.connected")} />
+                {t("onboarding.connectedToClaude")}
+              </OnboardingStatusBanner>
+              <div className={`${onboardingHelperTextClassName} text-center`}>
+                {t("subscriptionstatus.ClaudeTosWarningShort")}
+              </div>
+            </div>
+          ) : onboardingSubscriptionTab === "token" ? (
             <div className={onboardingInfoPanelClassName}>
               <OnboardingField
                 controlId="anthropic-setup-token"
                 label={t("onboarding.enterSetupToken")}
                 description={t("onboarding.setupTokenInstructions")}
                 descriptionClassName="whitespace-pre-line"
-                message={apiKeyFormatWarning}
+                message={anthropicError || apiKeyFormatWarning}
                 messageTone="danger"
               >
                 {({ describedBy, invalid }) => (
@@ -682,16 +729,6 @@ export function ConnectionProviderDetailScreen({
                   />
                 )}
               </OnboardingField>
-            </div>
-          ) : anthropicConnected ? (
-            <div className={onboardingCenteredStackClassName}>
-              <OnboardingStatusBanner ref={anthropicStatusRef} tone="success">
-                <ConnectedIcon title={t("onboarding.connected")} />
-                {t("onboarding.connectedToClaude")}
-              </OnboardingStatusBanner>
-              <div className={`${onboardingHelperTextClassName} text-center`}>
-                {t("onboarding.claudeSubscriptionReady")}
-              </div>
             </div>
           ) : !anthropicOAuthStarted ? (
             <div className={onboardingCenteredStackClassName}>
@@ -1048,45 +1085,137 @@ export function ConnectionProviderDetailScreen({
         </div>
       ) : null}
 
-      <div className={onboardingFooterClass}>
-        <Button
-          variant="ghost"
-          className={onboardingSecondaryActionClass}
-          style={onboardingSecondaryActionTextShadowStyle}
-          onClick={clearProvider}
-          type="button"
-        >
-          {t("onboarding.back")}
-        </Button>
-        <Button
-          variant="ghost"
-          className={onboardingSecondaryActionClass}
-          style={onboardingSecondaryActionTextShadowStyle}
-          onClick={() => {
-            void handleOnboardingNext();
-          }}
-          type="button"
-        >
-          {t("onboarding.configureAiLater", {
-            defaultValue: "Set up later",
-          })}
-        </Button>
-        <Button
-          className={onboardingPrimaryActionClass}
-          style={onboardingPrimaryActionTextShadowStyle}
-          disabled={isConfirmDisabled}
-          onClick={(e) => {
-            spawnOnboardingRipple(e.currentTarget, {
-              x: e.clientX,
-              y: e.clientY,
-            });
-            handleOnboardingNext();
-          }}
-          type="button"
-        >
-          {t("onboarding.confirm")}
-        </Button>
-      </div>
+      {anthropicRequiresRuntimeProvider ? (
+        <div className={onboardingFooterClass}>
+          <Button
+            variant="ghost"
+            className={onboardingSecondaryActionClass}
+            style={onboardingSecondaryActionTextShadowStyle}
+            onClick={clearProvider}
+            type="button"
+          >
+            {t("onboarding.back")}
+          </Button>
+          {anthropicConnected ? (
+            <>
+              <Button
+                variant="ghost"
+                className={onboardingSecondaryActionClass}
+                style={onboardingSecondaryActionTextShadowStyle}
+                onClick={() => {
+                  void handleOnboardingNext({ omitRuntimeProvider: true });
+                }}
+                type="button"
+              >
+                {t("onboarding.continueLimitedSetup", {
+                  defaultValue: "Continue with limited setup",
+                })}
+              </Button>
+              <Button
+                className={onboardingPrimaryActionClass}
+                style={onboardingPrimaryActionTextShadowStyle}
+                onClick={clearProvider}
+                type="button"
+              >
+                {t("onboarding.addAnotherProvider", {
+                  defaultValue: "Add another provider",
+                })}
+              </Button>
+            </>
+          ) : onboardingSubscriptionTab === "token" ? (
+            <>
+              <Button
+                variant="ghost"
+                className={onboardingSecondaryActionClass}
+                style={onboardingSecondaryActionTextShadowStyle}
+                onClick={() => {
+                  void handleOnboardingNext();
+                }}
+                type="button"
+              >
+                {t("onboarding.configureAiLater", {
+                  defaultValue: "Set up later",
+                })}
+              </Button>
+              <Button
+                className={onboardingPrimaryActionClass}
+                style={onboardingPrimaryActionTextShadowStyle}
+                disabled={!onboardingApiKey.trim() || anthropicSaving}
+                onClick={(e) => {
+                  spawnOnboardingRipple(e.currentTarget, {
+                    x: e.clientX,
+                    y: e.clientY,
+                  });
+                  void handleAnthropicSaveSetupToken();
+                }}
+                type="button"
+              >
+                {anthropicSaving
+                  ? t("onboarding.savingClaudeSubscription", {
+                      defaultValue: "Saving Claude subscription...",
+                    })
+                  : t("onboarding.saveClaudeSubscription", {
+                      defaultValue: "Save Claude subscription",
+                    })}
+              </Button>
+            </>
+          ) : (
+            <Button
+              variant="ghost"
+              className={onboardingSecondaryActionClass}
+              style={onboardingSecondaryActionTextShadowStyle}
+              onClick={() => {
+                void handleOnboardingNext();
+              }}
+              type="button"
+            >
+              {t("onboarding.configureAiLater", {
+                defaultValue: "Set up later",
+              })}
+            </Button>
+          )}
+        </div>
+      ) : (
+        <div className={onboardingFooterClass}>
+          <Button
+            variant="ghost"
+            className={onboardingSecondaryActionClass}
+            style={onboardingSecondaryActionTextShadowStyle}
+            onClick={clearProvider}
+            type="button"
+          >
+            {t("onboarding.back")}
+          </Button>
+          <Button
+            variant="ghost"
+            className={onboardingSecondaryActionClass}
+            style={onboardingSecondaryActionTextShadowStyle}
+            onClick={() => {
+              void handleOnboardingNext();
+            }}
+            type="button"
+          >
+            {t("onboarding.configureAiLater", {
+              defaultValue: "Set up later",
+            })}
+          </Button>
+          <Button
+            className={onboardingPrimaryActionClass}
+            style={onboardingPrimaryActionTextShadowStyle}
+            disabled={isConfirmDisabled}
+            onClick={(e) => {
+              spawnOnboardingRipple(e.currentTarget, {
+                x: e.clientX,
+                y: e.clientY,
+              });
+              void handleOnboardingNext();
+            }}
+            type="button"
+          >
+            {t("onboarding.confirm")}
+          </Button>
+        </div>
+      )}
     </>
   );
 }

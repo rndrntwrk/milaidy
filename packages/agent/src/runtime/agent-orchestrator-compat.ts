@@ -275,7 +275,33 @@ function readConfiguredSubscriptionProvider(): string | undefined {
 }
 
 function hasClaudeSubscriptionAuth(): boolean {
-  if (process.env.ANTHROPIC_API_KEY?.trim()) return true;
+  const config = readJsonFile(resolveMiladyConfigPath());
+  if (config && typeof config === "object" && !Array.isArray(config)) {
+    const env = (config as Record<string, unknown>).env;
+    if (env && typeof env === "object" && !Array.isArray(env)) {
+      const setupToken = (env as Record<string, unknown>)
+        .__anthropicSubscriptionToken;
+      if (typeof setupToken === "string" && setupToken.trim()) {
+        return true;
+      }
+    }
+  }
+
+  const storedPath = path.join(
+    process.env.ELIZA_HOME || path.join(os.homedir(), ".eliza"),
+    "auth",
+    "anthropic-subscription.json",
+  );
+  const stored = readJsonFile(storedPath);
+  if (stored && typeof stored === "object" && !Array.isArray(stored)) {
+    const credentials = (stored as Record<string, unknown>).credentials;
+    if (credentials && typeof credentials === "object" && !Array.isArray(credentials)) {
+      const expires = (credentials as Record<string, unknown>).expires;
+      if (typeof expires === "number" && expires > Date.now()) {
+        return true;
+      }
+    }
+  }
 
   const credentialsPath = path.join(os.homedir(), ".claude", ".credentials.json");
   const fileToken = extractOauthAccessToken(readJsonFile(credentialsPath));
@@ -296,12 +322,41 @@ function hasClaudeSubscriptionAuth(): boolean {
 }
 
 function hasCodexSubscriptionAuth(): boolean {
-  if (process.env.OPENAI_API_KEY?.trim()) return true;
+  const storedPath = path.join(
+    process.env.ELIZA_HOME || path.join(os.homedir(), ".eliza"),
+    "auth",
+    "openai-codex.json",
+  );
+  const stored = readJsonFile(storedPath);
+  if (stored && typeof stored === "object" && !Array.isArray(stored)) {
+    const credentials = (stored as Record<string, unknown>).credentials;
+    if (credentials && typeof credentials === "object" && !Array.isArray(credentials)) {
+      const expires = (credentials as Record<string, unknown>).expires;
+      if (typeof expires === "number" && expires > Date.now()) {
+        return true;
+      }
+    }
+  }
+
   const authPath = path.join(os.homedir(), ".codex", "auth.json");
   const auth = readJsonFile(authPath);
   if (!auth || typeof auth !== "object" || Array.isArray(auth)) return false;
   const key = (auth as Record<string, unknown>).OPENAI_API_KEY;
-  return typeof key === "string" && key.trim().length > 0;
+  const authMode = (auth as Record<string, unknown>).auth_mode;
+  return (
+    typeof key === "string" &&
+    key.trim().length > 0 &&
+    typeof authMode === "string" &&
+    authMode.trim().toLowerCase() !== "api-key"
+  );
+}
+
+function hasAnthropicApiCredential(): boolean {
+  return Boolean(process.env.ANTHROPIC_API_KEY?.trim());
+}
+
+function hasOpenAIApiCredential(): boolean {
+  return Boolean(process.env.OPENAI_API_KEY?.trim());
 }
 
 function hasGeminiCredential(): boolean {
@@ -357,8 +412,8 @@ async function computeFrameworkState(
     }
   }
 
-  const claudeReady = hasClaudeSubscriptionAuth();
-  const codexReady = hasCodexSubscriptionAuth();
+  const claudeSubscriptionReady = hasClaudeSubscriptionAuth();
+  const codexSubscriptionReady = hasCodexSubscriptionAuth();
   const geminiReady = hasGeminiCredential();
   const piReady = hasPiBinary();
 
@@ -373,18 +428,22 @@ async function computeFrameworkState(
     const installed = preflight?.installed === true;
     const subscriptionReady =
       id === "claude"
-        ? claudeReady
+        ? claudeSubscriptionReady
         : id === "codex"
-          ? codexReady
+          ? codexSubscriptionReady
           : false;
     const authReady =
       id === "claude"
-        ? claudeReady
+        ? claudeSubscriptionReady || hasAnthropicApiCredential()
         : id === "codex"
-          ? codexReady
+          ? codexSubscriptionReady || hasOpenAIApiCredential()
           : id === "gemini"
             ? geminiReady
-            : claudeReady || codexReady || geminiReady;
+            : claudeSubscriptionReady ||
+                codexSubscriptionReady ||
+                hasAnthropicApiCredential() ||
+                hasOpenAIApiCredential() ||
+                geminiReady;
     const reason =
       id === "claude" && subscriptionReady
         ? "ready to use the user's Claude subscription"

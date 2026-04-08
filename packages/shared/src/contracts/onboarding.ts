@@ -633,6 +633,12 @@ export function getSubscriptionProviderFamily(
   return selectionId === "anthropic-subscription" ? "anthropic" : "openai";
 }
 
+export function requiresAdditionalRuntimeProvider(
+  providerId: unknown,
+): boolean {
+  return normalizeOnboardingProviderId(providerId) === "anthropic-subscription";
+}
+
 export function normalizeOnboardingProviderId(
   value: unknown,
 ): OnboardingProviderId | null {

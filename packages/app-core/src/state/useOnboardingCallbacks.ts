@@ -317,10 +317,11 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
 
   // ── runOnboardingChatHandoff ──────────────────────────────────────
 
-  const runOnboardingChatHandoff = useCallback(async () => {
-    if (!onboardingOptions) return;
+  const runOnboardingChatHandoff = useCallback(
+    async (options?: OnboardingNextOptions) => {
+      if (!onboardingOptions) return;
 
-    try {
+      try {
       const style = resolveSelectedOnboardingStyle({
         styles: onboardingOptions.styles,
         onboardingStyle,
@@ -337,6 +338,7 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
         onboardingCloudApiKey,
         onboardingProvider,
         onboardingApiKey,
+        omitRuntimeProvider: options?.omitRuntimeProvider,
         onboardingVoiceProvider,
         onboardingVoiceApiKey,
         onboardingPrimaryModel,
@@ -480,52 +482,57 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
         );
       }
 
-      if (runtimeConfig.needsProviderSetup) {
-        setActionNotice(
-          "Choose a chat provider in Settings to start chatting.",
-          "info",
-          6000,
-        );
-        completeOnboarding("settings");
-        return;
-      }
+        if (runtimeConfig.needsProviderSetup) {
+          setActionNotice(
+            "Choose a chat provider in Settings to start chatting.",
+            "info",
+            6000,
+          );
+          completeOnboarding("settings");
+          return;
+        }
 
-      completeOnboarding();
-    } catch (err) {
-      console.error("[onboarding] Failed to complete onboarding", err);
-    }
-  }, [
-    onboardingOptions,
-    onboardingStyle,
-    onboardingName,
-    onboardingServerTarget,
-    onboardingCloudApiKey,
-    onboardingSmallModel,
-    onboardingLargeModel,
-    onboardingProvider,
-    onboardingApiKey,
-    onboardingRemoteApiBase,
-    onboardingRemote,
-    onboardingRemoteToken,
-    onboardingOpenRouterModel,
-    onboardingPrimaryModel,
-    onboardingVoiceProvider,
-    onboardingVoiceApiKey,
-    selectedVrmIndex,
-    uiLanguage,
-    onboardingRpcSelections,
-    onboardingRpcKeys,
-    walletConfig,
-    completeOnboarding,
-    client,
-    setActionNotice,
-  ]);
+        completeOnboarding();
+      } catch (err) {
+        console.error("[onboarding] Failed to complete onboarding", err);
+      }
+    },
+    [
+      onboardingOptions,
+      onboardingStyle,
+      onboardingName,
+      onboardingServerTarget,
+      onboardingCloudApiKey,
+      onboardingSmallModel,
+      onboardingLargeModel,
+      onboardingProvider,
+      onboardingApiKey,
+      onboardingRemoteApiBase,
+      onboardingRemote,
+      onboardingRemoteToken,
+      onboardingOpenRouterModel,
+      onboardingPrimaryModel,
+      onboardingVoiceProvider,
+      onboardingVoiceApiKey,
+      selectedVrmIndex,
+      uiLanguage,
+      onboardingRpcSelections,
+      onboardingRpcKeys,
+      walletConfig,
+      completeOnboarding,
+      client,
+      setActionNotice,
+    ],
+  );
 
   // ── handleOnboardingFinish ────────────────────────────────────────
 
-  const handleOnboardingFinish = useCallback(async () => {
-    await runOnboardingChatHandoff();
-  }, [runOnboardingChatHandoff]);
+  const handleOnboardingFinish = useCallback(
+    async (options?: OnboardingNextOptions) => {
+      await runOnboardingChatHandoff(options);
+    },
+    [runOnboardingChatHandoff],
+  );
 
   // ── goToOnboardingStep ───────────────────────────────────────────
 
@@ -579,12 +586,12 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
   // ── advanceOnboarding / handleOnboardingNext ─────────────────────
 
   const advanceOnboarding = useCallback(
-    async (_options?: OnboardingNextOptions) => {
+    async (options?: OnboardingNextOptions) => {
       const nextStep = resolveOnboardingNextStep(onboardingStep);
 
       if (!nextStep) {
         // Last step (providers) — finish onboarding and go to chat
-        await handleOnboardingFinish();
+        await handleOnboardingFinish(options);
         return;
       }
 

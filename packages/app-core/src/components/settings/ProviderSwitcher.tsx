@@ -381,9 +381,16 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
   );
 
   const handleSelectSubscription = useCallback(
-    async (providerId: SubscriptionProviderSelectionId) => {
+    async (
+      providerId: SubscriptionProviderSelectionId,
+      activate: boolean = true,
+    ) => {
       hasManualSelection.current = true;
       setSelectedProviderId(providerId);
+
+      if (!activate) {
+        return;
+      }
 
       try {
         await client.switchProvider(providerId);
@@ -509,6 +516,13 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
               return;
             }
             if (isSubscriptionProviderSelectionId(nextId)) {
+              if (
+                nextId === "anthropic-subscription" ||
+                (nextId === "openai-subscription" && !openaiConnected)
+              ) {
+                void handleSelectSubscription(nextId, false);
+                return;
+              }
               void handleSelectSubscription(nextId);
               return;
             }

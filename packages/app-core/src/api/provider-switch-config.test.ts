@@ -127,6 +127,7 @@ describe("applyOnboardingConnectionConfig", () => {
     expect(config.agents?.defaults?.subscriptionProvider).toBe(
       "anthropic-subscription",
     );
+    expect(config.serviceRouting?.llmText).toBeUndefined();
     // Anthropic subscription tokens can only be used through Claude Code CLI
     // (TOS restriction).  model.primary is NOT set for the runtime.
     expect(config.agents?.defaults?.model?.primary).toBeUndefined();
@@ -152,6 +153,7 @@ describe("applyOnboardingConnectionConfig", () => {
     expect(config.agents?.defaults?.subscriptionProvider).toBe(
       "anthropic-subscription",
     );
+    expect(config.serviceRouting?.llmText).toBeUndefined();
     // model.primary NOT set (TOS restriction — Claude sub tokens are task-agent only)
     expect(config.agents?.defaults?.model?.primary).toBeUndefined();
     // Token stored for task-agent discovery but NOT as ANTHROPIC_API_KEY

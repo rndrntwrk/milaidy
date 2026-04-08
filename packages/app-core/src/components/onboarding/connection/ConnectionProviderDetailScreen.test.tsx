@@ -4,15 +4,23 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
+  mockClient,
   mockUseApp,
   mockUseBranding,
   mockOpenExternalUrl,
   mockGetProviderLogo,
 } = vi.hoisted(() => ({
+  mockClient: {
+    submitAnthropicSetupToken: vi.fn(async () => ({ success: true })),
+  },
   mockUseApp: vi.fn(),
   mockUseBranding: vi.fn(() => ({})),
   mockOpenExternalUrl: vi.fn(async () => {}),
   mockGetProviderLogo: vi.fn(() => "logo://provider"),
+}));
+
+vi.mock("../../../api", () => ({
+  client: mockClient,
 }));
 
 vi.mock("../../../state", () => ({
@@ -29,6 +37,8 @@ vi.mock("../../../utils", () => ({
 
 vi.mock("../../../providers", () => ({
   getProviderLogo: (...args: unknown[]) => mockGetProviderLogo(...args),
+  requiresAdditionalRuntimeProvider: (value: unknown) =>
+    value === "anthropic-subscription",
 }));
 
 vi.mock("./useAdvanceOnboardingWhenElizaCloudOAuthConnected", () => ({
@@ -42,7 +52,9 @@ function t(key: string): string {
     "onboarding.apiKey": "API Key",
     "onboarding.enterApiKey": "Enter API key",
     "onboarding.back": "Back",
+    "onboarding.addAnotherProvider": "Add another provider",
     "onboarding.connected": "Connected",
+    "onboarding.continueLimitedSetup": "Continue with limited setup",
     "onboarding.confirm": "Confirm",
     "onboarding.connectAccount": "Connect account",
     "onboarding.connecting": "Connecting",
@@ -51,10 +63,13 @@ function t(key: string): string {
     "onboarding.openLoginPageInBrowserDesc":
       "Open the login page in your browser to continue.",
     "onboarding.reportIssue": "Report issue",
+    "onboarding.saveClaudeSubscription": "Save Claude subscription",
     "onboarding.useExistingKey": "Use an existing key.",
     "onboarding.getOneHere": "Get one here",
     "onboarding.freeCredits": "Free credits included.",
     "onboarding.selectModel": "Select model",
+    "subscriptionstatus.ClaudeTosWarningShort":
+      "Powers task agents only (Claude Code CLI). For the main agent runtime, connect Eliza Cloud or a direct API key.",
   };
 
   return translations[key] ?? key;
@@ -95,6 +110,7 @@ function createState(overrides: Record<string, unknown> = {}) {
 
 describe("ConnectionProviderDetailScreen", () => {
   beforeEach(() => {
+    mockClient.submitAnthropicSetupToken.mockClear();
     mockUseApp.mockReset();
     mockUseBranding.mockImplementation(() => ({}));
     mockOpenExternalUrl.mockReset();
@@ -222,5 +238,47 @@ describe("ConnectionProviderDetailScreen", () => {
     const selectedModel = screen.getByRole("radio", { name: /Mixtral/i });
     expect(selectedModel).toBeTruthy();
     expect(selectedModel.getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("offers add-another-provider and limited-setup actions after Claude subscription connects", async () => {
+    const dispatch = vi.fn();
+    mockUseApp.mockReturnValue(
+      createState({
+        onboardingProvider: "anthropic-subscription",
+        onboardingOptions: {
+          providers: [
+            {
+              id: "anthropic-subscription",
+              name: "Claude Subscription",
+              description: "Task agents only",
+            },
+          ],
+          openrouterModels: [],
+          piAiModels: [],
+          piAiDefaultModel: "",
+        },
+        onboardingSubscriptionTab: "token",
+        onboardingApiKey: "sk-ant-oat01-test-token",
+      }),
+    );
+
+    render(<ConnectionProviderDetailScreen dispatch={dispatch} />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Save Claude subscription" }),
+    );
+
+    expect(mockClient.submitAnthropicSetupToken).toHaveBeenCalledWith(
+      "sk-ant-oat01-test-token",
+    );
+    expect(
+      await screen.findByRole("button", { name: "Add another provider" }),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Add another provider" }));
+
+    expect(
+      screen.getByRole("button", { name: "Continue with limited setup" }),
+    ).toBeTruthy();
+    expect(dispatch).toHaveBeenCalledWith({ type: "clearProvider" });
   });
 });

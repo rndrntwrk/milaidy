@@ -94,7 +94,7 @@ describe("buildOnboardingRuntimeConfig", () => {
     });
   });
 
-  it("builds a remote llm route when a remote backend is selected", () => {
+  it("keeps Claude subscription linked but requires another runtime provider", () => {
     expect(
       buildOnboardingRuntimeConfig({
         onboardingServerTarget: "remote",
@@ -118,18 +118,15 @@ describe("buildOnboardingRuntimeConfig", () => {
         remoteApiBase: "https://example.com/api",
         remoteAccessToken: "remote-key",
       },
-      credentialInputs: {
-        llmApiKey: "sk-ant-oat01-test",
-      },
-      linkedAccounts: undefined,
-      serviceRouting: {
-        llmText: {
-          backend: "anthropic-subscription",
-          transport: "remote",
-          remoteApiBase: "https://example.com/api",
+      credentialInputs: undefined,
+      linkedAccounts: {
+        "anthropic-subscription": {
+          status: "linked",
+          source: "subscription",
         },
       },
-      needsProviderSetup: false,
+      serviceRouting: undefined,
+      needsProviderSetup: true,
     });
   });
 

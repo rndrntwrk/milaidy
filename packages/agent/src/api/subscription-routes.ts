@@ -254,6 +254,24 @@ export async function handleSubscriptionRoutes(
       try {
         const { deleteCredentials } = await loadSubscriptionAuth();
         deleteCredentials(provider);
+
+        if (provider === "anthropic-subscription" && state.config.env) {
+          delete (state.config.env as Record<string, unknown>)
+            .__anthropicSubscriptionToken;
+        }
+        if (state.config.agents?.defaults?.subscriptionProvider === provider) {
+          delete state.config.agents.defaults.subscriptionProvider;
+        }
+        const llmBackend = state.config.serviceRouting?.llmText?.backend;
+        const deletedProviderId =
+          provider === "openai-codex" ? "openai-subscription" : provider;
+        if (llmBackend === deletedProviderId && state.config.serviceRouting) {
+          delete state.config.serviceRouting.llmText;
+          if (Object.keys(state.config.serviceRouting).length === 0) {
+            delete state.config.serviceRouting;
+          }
+        }
+        ctx.saveConfig(state.config);
         json(res, { success: true });
       } catch (err) {
         logger.error(

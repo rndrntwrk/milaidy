@@ -7,6 +7,7 @@ export {
   getStoredSubscriptionProvider,
   getSubscriptionProviderFamily,
   isSubscriptionProviderSelectionId,
+  requiresAdditionalRuntimeProvider,
   normalizeOnboardingProviderId,
   normalizeSubscriptionProviderSelectionId,
   ONBOARDING_PROVIDER_CATALOG,

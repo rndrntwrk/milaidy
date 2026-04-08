@@ -1,10 +1,23 @@
-import { Button, PagePanel, StatusBadge } from "@miladyai/ui";
+import {
+  Button,
+  PagePanel,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  StatusBadge,
+} from "@miladyai/ui";
 import { ChevronRight } from "lucide-react";
-import type { ReactNode, RefCallback } from "react";
-import type { PluginInfo } from "../../api";
+import { useState, type ReactNode, type RefCallback } from "react";
+import { client, type CloudCompatAgent, type PluginInfo } from "../../api";
 import { useApp } from "../../state";
 import { WhatsAppQrOverlay } from "../connectors/WhatsAppQrOverlay";
 import { PluginConfigForm, TelegramPluginConfig } from "./PluginConfigForm";
+import {
+  buildManagedDiscordSettingsReturnUrl,
+  resolveManagedDiscordAgentChoice,
+} from "./cloud-dashboard-utils";
 import {
   getPluginResourceLinks,
   pluginResourceLinkLabel,
@@ -142,7 +155,19 @@ function ConnectorPluginCard({
   testResults,
   togglingPlugins,
 }: ConnectorPluginCardProps) {
-  const { elizaCloudConnected, setState, setTab } = useApp();
+  const {
+    elizaCloudConnected,
+    setActionNotice,
+    setState,
+    setTab,
+  } = useApp();
+  const [managedDiscordBusy, setManagedDiscordBusy] = useState(false);
+  const [managedDiscordAgents, setManagedDiscordAgents] = useState<
+    CloudCompatAgent[]
+  >([]);
+  const [managedDiscordPickerOpen, setManagedDiscordPickerOpen] = useState(false);
+  const [managedDiscordSelectedAgentId, setManagedDiscordSelectedAgentId] =
+    useState<string | null>(null);
   const hasParams =
     (plugin.parameters?.length ?? 0) > 0 && plugin.id !== "__ui-showcase__";
   const isExpanded = connectorExpandedIds.has(plugin.id);
@@ -169,9 +194,143 @@ function ConnectorPluginCard({
   const pluginLinks = getPluginResourceLinks(plugin, {
     draftConfig: pluginConfigs[plugin.id],
   });
-  const handleOpenManagedDiscord = () => {
+  const openCloudAgentsView = () => {
     setState("cloudDashboardView", "agents");
     setTab("settings");
+  };
+  const startManagedDiscordOauth = async (agent: CloudCompatAgent) => {
+    const oauthResponse = await client.createCloudCompatAgentManagedDiscordOauth(
+      agent.agent_id,
+      {
+        returnUrl:
+          typeof window !== "undefined"
+            ? buildManagedDiscordSettingsReturnUrl(window.location.href) ??
+              undefined
+            : undefined,
+        botNickname: agent.agent_name?.trim() || undefined,
+      },
+    );
+
+    await handleOpenPluginExternalUrl(oauthResponse.data.authorizeUrl);
+    setManagedDiscordPickerOpen(false);
+    setActionNotice(
+      t("elizaclouddashboard.DiscordSetupContinuesInBrowser", {
+        defaultValue:
+          "Finish Discord setup in your browser, then return here.",
+      }),
+      "info",
+      5000,
+    );
+  };
+  const handleOpenManagedDiscord = async () => {
+    if (managedDiscordBusy) {
+      return;
+    }
+
+    if (!elizaCloudConnected) {
+      setState("cloudDashboardView", "billing");
+      setTab("settings");
+      setActionNotice(
+        t("pluginsview.ManagedDiscordRequiresCloud", {
+          defaultValue:
+            "Connect Eliza Cloud first, then you can use managed Discord OAuth.",
+        }),
+        "info",
+        5000,
+      );
+      return;
+    }
+
+    setManagedDiscordBusy(true);
+    try {
+      const response = await client.getCloudCompatAgents();
+      const agents = Array.isArray(response.data) ? response.data : [];
+      const choice = resolveManagedDiscordAgentChoice(agents);
+
+      if (choice.mode === "none") {
+        setManagedDiscordAgents([]);
+        setManagedDiscordSelectedAgentId(null);
+        setManagedDiscordPickerOpen(false);
+        openCloudAgentsView();
+        setActionNotice(
+          t("pluginsview.ManagedDiscordNeedsAgent", {
+            defaultValue:
+              "Deploy a cloud agent first, then connect managed Discord from the Cloud agents screen.",
+          }),
+          "info",
+          5200,
+        );
+        return;
+      }
+
+      if (choice.mode === "picker") {
+        setManagedDiscordAgents(agents);
+        setManagedDiscordSelectedAgentId(choice.selectedAgentId);
+        setManagedDiscordPickerOpen(true);
+        setActionNotice(
+          t("pluginsview.ManagedDiscordChooseInline", {
+            defaultValue:
+              "Choose which cloud agent should own managed Discord, then continue.",
+          }),
+          "info",
+          4200,
+        );
+        return;
+      }
+
+      await startManagedDiscordOauth(choice.agent);
+    } catch (error) {
+      openCloudAgentsView();
+      setActionNotice(
+        error instanceof Error
+          ? error.message
+          : t("elizaclouddashboard.DiscordSetupFailed", {
+              defaultValue: "Failed to start Discord setup.",
+            }),
+        "error",
+        4200,
+      );
+    } finally {
+      setManagedDiscordBusy(false);
+    }
+  };
+  const handleConfirmManagedDiscordAgent = async () => {
+    if (managedDiscordBusy || !managedDiscordSelectedAgentId) {
+      return;
+    }
+
+    const agent = managedDiscordAgents.find(
+      (candidate) => candidate.agent_id === managedDiscordSelectedAgentId,
+    );
+    if (!agent) {
+      setActionNotice(
+        t("pluginsview.ManagedDiscordChooseInline", {
+          defaultValue:
+            "Choose which cloud agent should own managed Discord, then continue.",
+        }),
+        "error",
+        4200,
+      );
+      return;
+    }
+
+    setManagedDiscordBusy(true);
+    try {
+      await startManagedDiscordOauth(agent);
+    } catch (error) {
+      openCloudAgentsView();
+      setActionNotice(
+        error instanceof Error
+          ? error.message
+          : t("elizaclouddashboard.DiscordSetupFailed", {
+              defaultValue: "Failed to start Discord setup.",
+            }),
+        "error",
+        4200,
+      );
+    } finally {
+      setManagedDiscordBusy(false);
+    }
   };
 
   const connectorHeaderMedia = (
@@ -307,9 +466,14 @@ function ConnectorPluginCard({
                 variant="outline"
                 size="sm"
                 className="h-8 rounded-xl px-4 text-[11px] font-semibold"
-                onClick={handleOpenManagedDiscord}
+                onClick={() => {
+                  void handleOpenManagedDiscord();
+                }}
+                disabled={managedDiscordBusy}
               >
-                {elizaCloudConnected
+                {managedDiscordBusy
+                  ? "..."
+                  : elizaCloudConnected
                   ? t("pluginsview.UseManagedDiscord", {
                       defaultValue: "Use managed Discord",
                     })
@@ -328,6 +492,50 @@ function ConnectorPluginCard({
                   defaultValue:
                     "Prefer OAuth? Connect Eliza Cloud to use the managed Discord app instead of a local bot token.",
                 })}
+            {managedDiscordPickerOpen && managedDiscordAgents.length > 1 ? (
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+                <Select
+                  value={managedDiscordSelectedAgentId ?? "__none__"}
+                  onValueChange={(next) =>
+                    setManagedDiscordSelectedAgentId(
+                      next === "__none__" ? null : next,
+                    )
+                  }
+                >
+                  <SelectTrigger className="h-9 min-w-[14rem] rounded-xl border-border/40 bg-bg/80 text-sm">
+                    <SelectValue
+                      placeholder={t("pluginsview.ManagedDiscordSelectAgent", {
+                        defaultValue: "Select a cloud agent",
+                      })}
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {managedDiscordAgents.map((agent) => (
+                      <SelectItem key={agent.agent_id} value={agent.agent_id}>
+                        {agent.agent_name || agent.agent_id}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="h-9 rounded-xl px-4 text-[11px] font-semibold"
+                  onClick={() => {
+                    void handleConfirmManagedDiscordAgent();
+                  }}
+                  disabled={
+                    managedDiscordBusy || !managedDiscordSelectedAgentId
+                  }
+                >
+                  {managedDiscordBusy
+                    ? "..."
+                    : t("common.continue", {
+                        defaultValue: "Continue",
+                      })}
+                </Button>
+              </div>
+            ) : null}
           </PagePanel.Notice>
         )}
 

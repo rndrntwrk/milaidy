@@ -123,6 +123,7 @@ export type FlaminaGuideTopic = "provider" | "rpc" | "permissions" | "voice";
 
 export interface OnboardingNextOptions {
   allowPermissionBypass?: boolean;
+  omitRuntimeProvider?: boolean;
   skipTask?: string;
 }
 

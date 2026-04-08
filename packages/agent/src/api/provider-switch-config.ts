@@ -12,6 +12,7 @@ import {
   migrateLegacyRuntimeConfig,
   normalizeOnboardingProviderId,
   normalizeOnboardingCredentialInputs,
+  requiresAdditionalRuntimeProvider,
   type OnboardingCredentialInputs,
   type OnboardingConnection,
   type OnboardingLlmPersistenceSelection,
@@ -816,6 +817,21 @@ export async function applyOnboardingConnectionConfig(
     : {
         llmText: directLlmRoute,
       };
+
+  if (requiresAdditionalRuntimeProvider(normalizedConnection.provider)) {
+    const currentBackend = normalizeOnboardingProviderId(
+      normalizeServiceRoutingConfig(config.serviceRouting)?.llmText?.backend,
+    );
+    applyCanonicalOnboardingConfig(config, {
+      deploymentTarget: existingDeploymentTarget,
+      linkedAccounts,
+      clearRoutes:
+        currentBackend === normalizedConnection.provider ? ["llmText"] : [],
+    });
+    migrateLegacyRuntimeConfig(config as Record<string, unknown>);
+    return;
+  }
+
   applyCanonicalOnboardingConfig(config, {
     deploymentTarget: existingDeploymentTarget,
     linkedAccounts,

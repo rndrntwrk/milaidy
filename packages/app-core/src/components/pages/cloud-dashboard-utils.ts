@@ -2,7 +2,9 @@ import type {
   CloudBillingCheckoutResponse,
   CloudBillingSettings,
   CloudBillingSummary,
+  CloudCompatAgent,
 } from "../../api";
+import { pathForTab } from "../../navigation";
 
 export const ELIZA_CLOUD_INSTANCES_URL =
   "https://www.elizacloud.ai/dashboard/eliza";
@@ -163,6 +165,73 @@ export function consumeManagedDiscordCallbackUrl(rawUrl: string): {
   return {
     callback,
     cleanedUrl: url.toString(),
+  };
+}
+
+export function buildManagedDiscordSettingsReturnUrl(
+  rawUrl: string,
+): string | null {
+  let url: URL;
+  try {
+    url = new URL(rawUrl);
+  } catch {
+    return null;
+  }
+
+  const settingsPath = pathForTab("settings");
+
+  if (url.protocol === "file:") {
+    url.hash = settingsPath;
+    url.search = "";
+    return url.toString();
+  }
+
+  const normalizedPath = url.pathname.replace(/\/+$/, "") || "/";
+  const settingsPathname = normalizedPath.replace(/\/[^/]*$/, settingsPath);
+  url.pathname = settingsPathname === "" ? settingsPath : settingsPathname;
+  url.search = "";
+  url.hash = "";
+  return url.toString();
+}
+
+export function resolveManagedDiscordAgentChoice(
+  agents: CloudCompatAgent[],
+):
+  | {
+      mode: "none";
+      agent: null;
+      selectedAgentId: null;
+    }
+  | {
+      mode: "direct";
+      agent: CloudCompatAgent;
+      selectedAgentId: string;
+    }
+  | {
+      mode: "picker";
+      agent: null;
+      selectedAgentId: string;
+    } {
+  if (agents.length === 0) {
+    return {
+      mode: "none",
+      agent: null,
+      selectedAgentId: null,
+    };
+  }
+
+  if (agents.length === 1) {
+    return {
+      mode: "direct",
+      agent: agents[0],
+      selectedAgentId: agents[0].agent_id,
+    };
+  }
+
+  return {
+    mode: "picker",
+    agent: null,
+    selectedAgentId: agents[0].agent_id,
   };
 }
 
