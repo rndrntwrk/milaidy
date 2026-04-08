@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import type { IAgentRuntime, Plugin } from "@elizaos/core";
 import { logger } from "@elizaos/core";
 import {
@@ -63,6 +63,29 @@ type AppPluginModule = {
   default?: AppPluginWithBridge;
   [key: string]: unknown;
 };
+
+const MODULE_DIR = path.dirname(fileURLToPath(import.meta.url));
+
+async function importBuiltIn2004ScapeRouteModule(): Promise<AppRouteModule> {
+  const candidatePaths = [
+    path.join(MODULE_DIR, "built-in-app-routes", "2004scape.js"),
+    path.join(MODULE_DIR, "built-in-app-routes", "2004scape.ts"),
+  ];
+  const module =
+    await importFirstExistingModule<AppRouteModule>(candidatePaths);
+  if (!module) {
+    throw new Error("2004scape built-in route module is unavailable");
+  }
+  return module;
+}
+
+const BUILT_IN_APP_ROUTE_MODULE_IMPORTERS = new Map<
+  string,
+  () => Promise<AppRouteModule>
+>([
+  ["@elizaos/app-2004scape", importBuiltIn2004ScapeRouteModule],
+  ["2004scape", importBuiltIn2004ScapeRouteModule],
+]);
 
 function uniquePaths(paths: string[]): string[] {
   const seen = new Set<string>();
@@ -199,7 +222,9 @@ async function readJsonFile<T>(filePath: string): Promise<T | null> {
   }
 }
 
-async function readLocalBridgeExport(packageDir: string): Promise<string | null> {
+async function readLocalBridgeExport(
+  packageDir: string,
+): Promise<string | null> {
   const packageJson = await readJsonFile<LocalPackageJson>(
     path.join(packageDir, "package.json"),
   );
@@ -211,9 +236,7 @@ async function readLocalBridgeExport(packageDir: string): Promise<string | null>
     return packageBridgeExport;
   }
   const manifestBridgeExport = manifest?.app?.bridgeExport;
-  return typeof manifestBridgeExport === "string"
-    ? manifestBridgeExport
-    : null;
+  return typeof manifestBridgeExport === "string" ? manifestBridgeExport : null;
 }
 
 async function resolveAppModuleTarget(
@@ -252,7 +275,10 @@ async function resolveAppModuleTarget(
   }
 
   const registryInfo = await getPluginInfo(trimmed);
-  if (registryInfo && (hasAppInterface(registryInfo) || registryInfo.localPath)) {
+  if (
+    registryInfo &&
+    (hasAppInterface(registryInfo) || registryInfo.localPath)
+  ) {
     return {
       packageName: registryInfo.name,
       localPath: registryInfo.localPath ?? null,
@@ -380,9 +406,7 @@ function resolvePluginExport(
   return null;
 }
 
-function resolvePluginAppBridge(
-  plugin: Plugin | null,
-): AppRouteModule | null {
+function resolvePluginAppBridge(plugin: Plugin | null): AppRouteModule | null {
   if (!plugin || typeof plugin !== "object") {
     return null;
   }
@@ -395,12 +419,43 @@ function resolvePluginAppBridge(
   return bridge;
 }
 
+async function importBuiltInAppRouteModule(
+  appIdentifier: string,
+  packageName: string | null,
+): Promise<AppRouteModule | null> {
+  const candidates = [
+    appIdentifier.trim(),
+    packageName?.trim() ?? null,
+    packageNameToAppSlug(appIdentifier),
+  ];
+
+  for (const candidate of candidates) {
+    if (!candidate) {
+      continue;
+    }
+    const importer = BUILT_IN_APP_ROUTE_MODULE_IMPORTERS.get(candidate);
+    if (importer) {
+      return importer();
+    }
+  }
+
+  return null;
+}
+
 export async function importAppRouteModule(
   appIdentifier: string,
 ): Promise<AppRouteModule | null> {
   const resolved = await resolveAppModuleTarget(appIdentifier);
   const packageName = resolved?.packageName ?? null;
   const label = packageName ?? appIdentifier;
+
+  const builtInModule = await importBuiltInAppRouteModule(
+    appIdentifier,
+    packageName,
+  );
+  if (builtInModule) {
+    return builtInModule;
+  }
 
   try {
     const localModule = await importLocalAppRouteModule(appIdentifier);

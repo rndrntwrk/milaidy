@@ -450,13 +450,11 @@ function persist2004scapeCredential(
 async function prepare2004scapeLaunch(
   runtime: IAgentRuntime | null,
 ): Promise<AppLaunchDiagnostic[]> {
-  if (!runtime) return [];
-
   const primaryName = resolveSettingLike(runtime, "RS_SDK_BOT_NAME");
   const compatName = resolveSettingLike(runtime, "BOT_NAME");
   const primaryPassword = resolveSettingLike(runtime, "RS_SDK_BOT_PASSWORD");
   const compatPassword = resolveSettingLike(runtime, "BOT_PASSWORD");
-  const agentDisplayName = runtime.character?.name || "agent";
+  const agentDisplayName = runtime?.character?.name || "agent";
   const username =
     primaryName ?? compatName ?? generateBotUsername(agentDisplayName);
   const password = primaryPassword ?? compatPassword ?? generateBotPassword();
@@ -906,14 +904,9 @@ async function buildViewerAuthMessage(
 
   // 2004scape auth - uses auto-provisioned or user-supplied credentials
   if (is2004scapeAppName(appInfo.name)) {
-    let username = resolve2004scapeCredential(runtime, "RS_SDK_BOT_NAME");
-    let password = resolve2004scapeCredential(runtime, "RS_SDK_BOT_PASSWORD");
-
-    if (runtime && (!username || !password)) {
-      await prepare2004scapeLaunch(runtime);
-      username = resolve2004scapeCredential(runtime, "RS_SDK_BOT_NAME");
-      password = resolve2004scapeCredential(runtime, "RS_SDK_BOT_PASSWORD");
-    }
+    await prepare2004scapeLaunch(runtime ?? null);
+    const username = resolve2004scapeCredential(runtime, "RS_SDK_BOT_NAME");
+    const password = resolve2004scapeCredential(runtime, "RS_SDK_BOT_PASSWORD");
 
     if (!username || !password) {
       logger.warn(
@@ -927,6 +920,8 @@ async function buildViewerAuthMessage(
       type: RS_2004SCAPE_AUTH_MESSAGE_TYPE,
       authToken: username,
       sessionToken: password,
+      characterId: username,
+      agentId: runtime?.agentId,
     };
   }
 
@@ -1083,16 +1078,6 @@ async function prepareLaunch(
   runtime: IAgentRuntime | null,
 ): Promise<AppLaunchPreparation> {
   const routeModule = await importAppRouteModule(appInfo.name);
-  if (typeof routeModule?.prepareLaunch === "function") {
-    return (
-      (await routeModule.prepareLaunch({
-        appName: appInfo.name,
-        launchUrl,
-        runtime,
-        viewer: null,
-      })) ?? {}
-    );
-  }
 
   if (isBabylonAppName(appInfo.name)) {
     const diagnostics = await prepareBabylonLaunch(runtime);
@@ -1121,9 +1106,33 @@ async function prepareLaunch(
         ],
       };
     }
+    const routePreparation =
+      typeof routeModule?.prepareLaunch === "function"
+        ? ((await routeModule.prepareLaunch({
+            appName: appInfo.name,
+            launchUrl,
+            runtime,
+            viewer: null,
+          })) ?? {})
+        : {};
     return {
-      diagnostics: await prepare2004scapeLaunch(runtime),
+      ...routePreparation,
+      diagnostics: [
+        ...(routePreparation.diagnostics ?? []),
+        ...(await prepare2004scapeLaunch(runtime)),
+      ],
     };
+  }
+
+  if (typeof routeModule?.prepareLaunch === "function") {
+    return (
+      (await routeModule.prepareLaunch({
+        appName: appInfo.name,
+        launchUrl,
+        runtime,
+        viewer: null,
+      })) ?? {}
+    );
   }
 
   return {};
@@ -2183,9 +2192,9 @@ export class AppManager {
     await ensureRuntimeReady(appInfo, viewer, launchUrl, _runtime ?? null);
 
     // Build viewer config from registry app metadata
-    const session = _runtime
-      ? await resolveLaunchSession(appInfo, viewer, launchUrl, _runtime)
-      : buildAppSession(appInfo, viewer?.authMessage, _runtime);
+    const session = viewer
+      ? await resolveLaunchSession(appInfo, viewer, launchUrl, _runtime ?? null)
+      : buildAppSession(appInfo, undefined, _runtime);
     const diagnostics = [
       ...launchPreparationDiagnostics,
       ...(await collectLaunchDiagnostics(

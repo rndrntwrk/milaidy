@@ -23,6 +23,19 @@ interface RecentActivityEntry {
   ts?: string | number;
 }
 
+interface GameplayNote {
+  id: string;
+  label: string;
+  detail: string;
+}
+
+interface NearbyTarget {
+  id: string;
+  name: string;
+  distance: number | null;
+  action: string | null;
+}
+
 function firstNonEmptyString(
   ...values: Array<string | null | undefined>
 ): string | null {
@@ -78,6 +91,185 @@ function extractRecentActivity(
     .reverse();
 }
 
+function asRecord(
+  value: AppSessionJsonValue | null | undefined,
+): Record<string, AppSessionJsonValue> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, AppSessionJsonValue>)
+    : null;
+}
+
+function asArray(
+  value: AppSessionJsonValue | null | undefined,
+): AppSessionJsonValue[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function readStringValue(
+  record: Record<string, AppSessionJsonValue> | null | undefined,
+  key: string,
+): string | null {
+  const value = record?.[key];
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function readNumberValue(
+  record: Record<string, AppSessionJsonValue> | null | undefined,
+  key: string,
+): number | null {
+  const value = record?.[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function readBooleanValue(
+  record: Record<string, AppSessionJsonValue> | null | undefined,
+  key: string,
+): boolean | null {
+  const value = record?.[key];
+  return typeof value === "boolean" ? value : null;
+}
+
+function formatDistance(distance: number | null): string {
+  return distance === null ? "nearby" : `${distance.toFixed(1)} tiles`;
+}
+
+function formatPlayerState(
+  player: Record<string, AppSessionJsonValue> | null,
+): string {
+  if (!player) return "Waiting for live player telemetry.";
+  const worldX = readNumberValue(player, "worldX");
+  const worldZ = readNumberValue(player, "worldZ");
+  const hp = readNumberValue(player, "hp");
+  const maxHp = readNumberValue(player, "maxHp");
+  const coordText =
+    worldX !== null && worldZ !== null
+      ? `${worldX}, ${worldZ}`
+      : "Coords pending";
+  const hpText =
+    hp !== null && maxHp !== null ? `${hp}/${maxHp} HP` : "HP pending";
+  return `${coordText} · ${hpText}`;
+}
+
+function extractNearbyTargets(
+  telemetry: Record<string, AppSessionJsonValue> | null,
+): NearbyTarget[] {
+  const npcTargets = asArray(telemetry?.nearbyNpcs)
+    .map((entry) => asRecord(entry))
+    .filter(
+      (entry): entry is Record<string, AppSessionJsonValue> => entry !== null,
+    )
+    .map((entry, index) => {
+      const options = asArray(entry.optionsWithIndex)
+        .map((option) => asRecord(option))
+        .filter(
+          (option): option is Record<string, AppSessionJsonValue> =>
+            option !== null,
+        );
+      return {
+        id: `npc-${index}-${readStringValue(entry, "name") ?? "target"}`,
+        name: readStringValue(entry, "name") ?? "Unknown NPC",
+        distance: readNumberValue(entry, "distance"),
+        action:
+          readStringValue(options[0], "text") ??
+          (options.length > 0 ? "Interact" : null),
+      } satisfies NearbyTarget;
+    });
+
+  const locTargets = asArray(telemetry?.nearbyLocs)
+    .map((entry) => asRecord(entry))
+    .filter(
+      (entry): entry is Record<string, AppSessionJsonValue> => entry !== null,
+    )
+    .map((entry, index) => {
+      const options = asArray(entry.optionsWithIndex)
+        .map((option) => asRecord(option))
+        .filter(
+          (option): option is Record<string, AppSessionJsonValue> =>
+            option !== null,
+        );
+      return {
+        id: `loc-${index}-${readStringValue(entry, "name") ?? "target"}`,
+        name: readStringValue(entry, "name") ?? "Unknown object",
+        distance: readNumberValue(entry, "distance"),
+        action:
+          readStringValue(options[0], "text") ??
+          (options.length > 0 ? "Interact" : null),
+      } satisfies NearbyTarget;
+    });
+
+  return [...npcTargets, ...locTargets]
+    .sort((left, right) => (left.distance ?? 999) - (right.distance ?? 999))
+    .slice(0, 4);
+}
+
+function extractGameplayNotes(
+  telemetry: Record<string, AppSessionJsonValue> | null,
+): GameplayNote[] {
+  const gameMessages = asArray(telemetry?.gameMessages)
+    .map((entry) => asRecord(entry))
+    .filter(
+      (entry): entry is Record<string, AppSessionJsonValue> => entry !== null,
+    )
+    .map((entry, index) => ({
+      id: `message-${index}`,
+      label: readStringValue(entry, "sender") ?? "Game",
+      detail: readStringValue(entry, "text") ?? "No message text.",
+    }));
+  const recentDialogs = asArray(telemetry?.recentDialogs)
+    .map((entry) => asRecord(entry))
+    .filter(
+      (entry): entry is Record<string, AppSessionJsonValue> => entry !== null,
+    )
+    .map((entry, index) => {
+      const parts = asArray(entry.text).filter(
+        (part): part is string =>
+          typeof part === "string" && part.trim().length > 0,
+      );
+      return {
+        id: `dialog-${index}`,
+        label: "Dialog",
+        detail: parts.join(" ").trim() || "Dialog prompt pending.",
+      } satisfies GameplayNote;
+    });
+
+  return [...recentDialogs, ...gameMessages].slice(-4).reverse();
+}
+
+function summarizeInventoryAndSkills(
+  telemetry: Record<string, AppSessionJsonValue> | null,
+): string {
+  const inventory = asArray(telemetry?.inventory)
+    .map((entry) => asRecord(entry))
+    .filter(
+      (entry): entry is Record<string, AppSessionJsonValue> => entry !== null,
+    )
+    .map((entry) => {
+      const name = readStringValue(entry, "name") ?? "Item";
+      const amount = readNumberValue(entry, "amount");
+      return amount && amount > 1 ? `${name} x${amount}` : name;
+    })
+    .slice(0, 4);
+  const skills = asArray(telemetry?.skills)
+    .map((entry) => asRecord(entry))
+    .filter(
+      (entry): entry is Record<string, AppSessionJsonValue> => entry !== null,
+    )
+    .map((entry) => {
+      const name = readStringValue(entry, "name") ?? "Skill";
+      const level = readNumberValue(entry, "level");
+      return level !== null ? `${name} ${level}` : name;
+    })
+    .slice(0, 4);
+  const parts = [skills.join(" · "), inventory.join(" · ")].filter(
+    (part) => part.length > 0,
+  );
+  return parts.length > 0
+    ? parts.join(" | ")
+    : "No inventory or skill data yet.";
+}
+
 export function TwoThousandFourScapeOperatorSurface({
   appName,
   variant = "detail",
@@ -98,6 +290,23 @@ export function TwoThousandFourScapeOperatorSurface({
       ? session.telemetry
       : null;
   const recentActivity = extractRecentActivity(telemetry);
+  const tutorial = asRecord(telemetry?.tutorial);
+  const player = asRecord(telemetry?.player);
+  const combatStyle = asRecord(telemetry?.combatStyle);
+  const nearbyTargets = extractNearbyTargets(telemetry);
+  const gameplayNotes = extractGameplayNotes(telemetry);
+  const autoPlayEnabled =
+    readBooleanValue(telemetry, "autoPlay") ??
+    (!session || session.status !== "paused");
+  const intentLabel =
+    readStringValue(telemetry, "intent") ??
+    (session?.status === "paused" ? "paused" : "tutorial");
+  const tutorialActive = readBooleanValue(tutorial, "active") ?? false;
+  const tutorialPrompt =
+    readStringValue(tutorial, "prompt") ??
+    (tutorialActive
+      ? "Working through the starter flow."
+      : "Tutorial is clear.");
   const surfaceTitle =
     variant === "live"
       ? "2004scape Live Dashboard"
@@ -108,6 +317,7 @@ export function TwoThousandFourScapeOperatorSurface({
   const showChat = focus !== "dashboard";
   const viewerLocation = sanitizeViewerLocation(run?.viewer?.url);
   const botUsername = firstNonEmptyString(
+    readStringValue(telemetry, "botName"),
     typeof run?.viewer?.embedParams?.bot === "string"
       ? run.viewer.embedParams.bot
       : null,
@@ -125,9 +335,7 @@ export function TwoThousandFourScapeOperatorSurface({
       : "Waiting for stored credentials"
     : "Manual login required";
   const autoLoginSubtitle = botUsername
-    ? viewerLocation
-      ? `Bot ${botUsername} · ${viewerLocation}`
-      : `Bot ${botUsername}`
+    ? `Bot ${botUsername} is ready for automatic sign-in.`
     : viewerLocation
       ? `Viewer ${viewerLocation}`
       : "Launch with a live runtime to create bot credentials automatically.";
@@ -174,6 +382,33 @@ export function TwoThousandFourScapeOperatorSurface({
         : viewerLocation
           ? `Viewer ${viewerLocation}`
           : "Viewer status will update after launch.";
+  const tutorialLabel = tutorialActive
+    ? "Tutorial in progress"
+    : "Tutorial clear";
+  const tutorialTone = tutorialActive ? "warn" : "success";
+  const tutorialSubtitle = tutorialPrompt;
+  const loopLabel = autoPlayEnabled ? "Autoplay active" : "Autoplay paused";
+  const loopSubtitle =
+    session?.summary ??
+    run?.summary ??
+    "Waiting for the 2004scape runtime to report live state.";
+  const playerLabel = formatPlayerState(player);
+  const playerSubtitle = [
+    readStringValue(player, "name"),
+    readStringValue(combatStyle, "weaponName"),
+    readStringValue(combatStyle, "activeStyle"),
+  ]
+    .filter((value): value is string => Boolean(value))
+    .join(" · ");
+  const fieldIntelLabel =
+    nearbyTargets.length > 0
+      ? nearbyTargets
+          .map((target) =>
+            target.action ? `${target.name} (${target.action})` : target.name,
+          )
+          .join(" · ")
+      : "No nearby targets reported yet.";
+  const fieldIntelSubtitle = summarizeInventoryAndSkills(telemetry);
 
   const sendOperatorMessage = useCallback(
     async (content: string) => {
@@ -281,39 +516,31 @@ export function TwoThousandFourScapeOperatorSurface({
       </div>
 
       {showDashboard ? (
-        <SurfaceSection title="Login & Runtime">
+        <SurfaceSection title="Launch & Loop">
           <SurfaceGrid>
             <SurfaceCard
-              label="Auto-login"
+              label="Bot Login"
               value={autoLoginLabel}
               tone={hasAutoLoginCredentials ? "success" : "warn"}
               subtitle={autoLoginSubtitle}
             />
             <SurfaceCard
-              label="Agent Loop"
-              value={runtimeLabel}
+              label="Autoplay"
+              value={loopLabel}
               tone={runtimeTone}
-              subtitle={
-                session?.status ??
-                run.health.message ??
-                run.summary ??
-                "Waiting for the 2004scape runtime to respond."
-              }
+              subtitle={loopSubtitle}
+            />
+            <SurfaceCard
+              label="Tutorial"
+              value={tutorialLabel}
+              tone={tutorialTone}
+              subtitle={tutorialSubtitle}
             />
             <SurfaceCard
               label="Operator Chat"
               value={steeringLabel}
               tone={steeringReady ? "success" : "warn"}
               subtitle={steeringSubtitle}
-            />
-            <SurfaceCard
-              label="Identity"
-              value={session?.characterId ?? botUsername ?? "Identity pending"}
-              subtitle={
-                session?.agentId
-                  ? `Agent ${session.agentId}`
-                  : "The agent identity will appear once the session is attached."
-              }
             />
           </SurfaceGrid>
         </SurfaceSection>
@@ -332,16 +559,40 @@ export function TwoThousandFourScapeOperatorSurface({
               }
             />
             <SurfaceCard
-              label="Loop Summary"
-              value={
-                session?.summary ?? run.summary ?? "No session summary yet."
-              }
+              label="Current Intent"
+              value={intentLabel}
               subtitle={
-                session?.followEntity
-                  ? `Following ${session.followEntity}`
-                  : session?.controls?.length
-                    ? `Controls: ${session.controls.join(" · ")}`
-                    : "No follow target is attached yet."
+                runtimeLabel !== "Connected to 2004scape"
+                  ? runtimeLabel
+                  : (run.health.message ?? "Live loop is responding.")
+              }
+            />
+            <SurfaceCard
+              label="Player"
+              value={playerLabel}
+              subtitle={
+                playerSubtitle ||
+                "Player identity and combat state will appear after login."
+              }
+            />
+            <SurfaceCard
+              label="Viewer"
+              value={viewerLabel}
+              tone={toneForViewerAttachment(run.viewerAttachment)}
+              subtitle={viewerSubtitle}
+            />
+            <SurfaceCard
+              label="Field Intel"
+              value={fieldIntelLabel}
+              subtitle={fieldIntelSubtitle}
+            />
+            <SurfaceCard
+              label="Identity"
+              value={session?.characterId ?? botUsername ?? "Identity pending"}
+              subtitle={
+                session?.agentId
+                  ? `Agent ${session.agentId}`
+                  : "The agent identity will appear once the session is attached."
               }
             />
             <SurfaceCard
@@ -351,15 +602,59 @@ export function TwoThousandFourScapeOperatorSurface({
               )}
               subtitle={`Started ${formatDetailTimestamp(run.startedAt)}`}
             />
-            <SurfaceCard
-              label="Viewer"
-              value={viewerLabel}
-              tone={toneForViewerAttachment(run.viewerAttachment)}
-              subtitle={viewerSubtitle}
-            />
           </SurfaceGrid>
+          {nearbyTargets.length > 0 ? (
+            <div className="space-y-2">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
+                Nearby Targets
+              </div>
+              <div className="grid gap-2 md:grid-cols-2">
+                {nearbyTargets.map((target) => (
+                  <div
+                    key={target.id}
+                    className="rounded-xl border border-border/30 bg-bg/60 px-3 py-2"
+                  >
+                    <div className="flex items-center gap-2 text-[11px] font-medium text-txt">
+                      <span>{target.name}</span>
+                      <span className="ml-auto text-[10px] uppercase tracking-[0.18em] text-muted">
+                        {formatDistance(target.distance)}
+                      </span>
+                    </div>
+                    <div className="mt-1 text-[11px] leading-5 text-muted-strong">
+                      {target.action
+                        ? `Primary action: ${target.action}`
+                        : "Waiting for an action hint."}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+          {gameplayNotes.length > 0 ? (
+            <div className="space-y-2">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
+                Game Feed
+              </div>
+              {gameplayNotes.map((entry) => (
+                <div
+                  key={entry.id}
+                  className="rounded-xl border border-border/30 bg-bg/60 px-3 py-2"
+                >
+                  <div className="text-[11px] font-medium text-txt">
+                    {entry.label}
+                  </div>
+                  <div className="mt-1 text-[11px] leading-5 text-muted-strong">
+                    {entry.detail}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
           {recentActivity.length > 0 ? (
             <div className="space-y-2">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
+                Recent Activity
+              </div>
               {recentActivity.map((entry) => (
                 <div
                   key={entry.id}
@@ -431,7 +726,7 @@ export function TwoThousandFourScapeOperatorSurface({
             <Input
               value={operatorMessage}
               onChange={(event) => setOperatorMessage(event.target.value)}
-              placeholder="Tell the bot what to do, what to avoid, or what to explain."
+              placeholder="Tell the bot what to train, where to go, or what to say."
               className="min-h-11 rounded-xl"
               onKeyDown={(event) => {
                 if (event.key === "Enter" && !event.shiftKey) {

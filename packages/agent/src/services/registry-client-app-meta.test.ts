@@ -25,9 +25,15 @@ describe("agent registry-client-app-meta", () => {
       resolveAppOverride("@elizaos/app-babylon", undefined)?.uiExtension
         ?.detailPanelId,
     ).toBe("babylon-operator-dashboard");
-    expect(
-      resolveAppOverride("@elizaos/app-2004scape", undefined)?.uiExtension
-        ?.detailPanelId,
-    ).toBe("2004scape-operator-dashboard");
+    const result = resolveAppOverride("@elizaos/app-2004scape", undefined);
+    expect(result?.uiExtension?.detailPanelId).toBe(
+      "2004scape-operator-dashboard",
+    );
+    expect(result?.launchUrl).toBe("/api/apps/2004scape/viewer");
+    expect(result?.viewer?.url).toBe("/api/apps/2004scape/viewer");
+    expect(result?.viewer?.embedParams).toEqual({
+      bot: "",
+      password: "",
+    });
   });
 });

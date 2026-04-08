@@ -24,17 +24,17 @@ const hyperscapePluginPackageJsonUrl = new URL(
   "../../../../../hyperscape/packages/plugin-hyperscape/package.json",
   import.meta.url,
 );
-const hasWorkspaceHyperscapePlugin = fs.existsSync(hyperscapePluginPackageJsonUrl);
+const hasWorkspaceHyperscapePlugin = fs.existsSync(
+  hyperscapePluginPackageJsonUrl,
+);
 
 describe("app-package-modules", () => {
   const tempDirs: string[] = [];
   const initialCwd = process.cwd();
-  let previousCwd = initialCwd;
 
   afterEach(() => {
     vi.clearAllMocks();
     process.chdir(initialCwd);
-    previousCwd = initialCwd;
     for (const tempDir of tempDirs.splice(0)) {
       fs.rmSync(tempDir, { recursive: true, force: true });
     }
@@ -133,9 +133,12 @@ describe("app-package-modules", () => {
     const repoRoot = path.join(workspaceRoot, "milady");
     fs.mkdirSync(repoRoot, { recursive: true });
     process.chdir(repoRoot);
-    previousCwd = repoRoot;
 
-    const localAppDir = path.join(workspaceRoot, "plugins", "plugin-hyperscape");
+    const localAppDir = path.join(
+      workspaceRoot,
+      "plugins",
+      "plugin-hyperscape",
+    );
     writeFile(
       path.join(localAppDir, "package.json"),
       JSON.stringify(
@@ -175,7 +178,9 @@ describe("app-package-modules", () => {
       new Error("registry should not be consulted"),
     );
 
-    const routeModule = await importAppRouteModule("@hyperscape/plugin-hyperscape");
+    const routeModule = await importAppRouteModule(
+      "@hyperscape/plugin-hyperscape",
+    );
 
     expect(routeModule).not.toBeNull();
     await expect(routeModule?.handleAppRoutes?.({})).resolves.toBe(
@@ -185,7 +190,9 @@ describe("app-package-modules", () => {
   });
 
   it("loads a declared bridge export before legacy app or routes entrypoints", async () => {
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "app-bridge-export-"));
+    const tempDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "app-bridge-export-"),
+    );
     tempDirs.push(tempDir);
 
     writeFile(
@@ -229,7 +236,9 @@ describe("app-package-modules", () => {
       },
     });
 
-    const routeModule = await importAppRouteModule("@vendor/plugin-bridge-export");
+    const routeModule = await importAppRouteModule(
+      "@vendor/plugin-bridge-export",
+    );
 
     expect(routeModule).not.toBeNull();
     await expect(routeModule?.handleAppRoutes?.({})).resolves.toBe(
@@ -238,16 +247,21 @@ describe("app-package-modules", () => {
   });
 
   it("loads a workspace-local bridge export declared only in elizaos.plugin.json", async () => {
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "app-manifest-bridge-"));
+    const tempDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "app-manifest-bridge-"),
+    );
     tempDirs.push(tempDir);
 
     const workspaceRoot = path.join(tempDir, "workspace");
     const repoRoot = path.join(workspaceRoot, "milady");
     fs.mkdirSync(repoRoot, { recursive: true });
     process.chdir(repoRoot);
-    previousCwd = repoRoot;
 
-    const localAppDir = path.join(workspaceRoot, "plugins", "plugin-manifest-app");
+    const localAppDir = path.join(
+      workspaceRoot,
+      "plugins",
+      "plugin-manifest-app",
+    );
     writeFile(
       path.join(localAppDir, "package.json"),
       JSON.stringify(
@@ -290,7 +304,9 @@ describe("app-package-modules", () => {
       new Error("registry should not be consulted"),
     );
 
-    const routeModule = await importAppRouteModule("@vendor/plugin-manifest-app");
+    const routeModule = await importAppRouteModule(
+      "@vendor/plugin-manifest-app",
+    );
 
     expect(routeModule).not.toBeNull();
     await expect(routeModule?.handleAppRoutes?.({})).resolves.toBe(
@@ -299,11 +315,23 @@ describe("app-package-modules", () => {
     expect(registryClientMocks.getPluginInfo).not.toHaveBeenCalled();
   });
 
+  it("loads the built-in 2004scape route module without registry metadata", async () => {
+    registryClientMocks.getPluginInfo.mockResolvedValue(null);
+
+    const routeModule = await importAppRouteModule("@elizaos/app-2004scape");
+    const slugRouteModule = await importAppRouteModule("2004scape");
+
+    expect(routeModule).not.toBeNull();
+    expect(slugRouteModule).not.toBeNull();
+    expect(typeof routeModule?.resolveLaunchSession).toBe("function");
+    expect(typeof routeModule?.refreshRunSession).toBe("function");
+    expect(typeof routeModule?.handleAppRoutes).toBe("function");
+  });
+
   itIf(hasWorkspaceHyperscapePlugin)(
     "loads the real sibling Hyperscape bridge from the workspace without registry help",
     async () => {
       process.chdir(initialCwd);
-      previousCwd = initialCwd;
 
       registryClientMocks.getPluginInfo.mockRejectedValue(
         new Error("registry should not be consulted"),

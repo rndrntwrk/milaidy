@@ -9,19 +9,20 @@
  * - GET /api/apps/info/:name (app detail)
  *
  * 2004scape tests hit the always-live remote server (rs-sdk-demo.fly.dev):
- * - Launch returns viewer URL pointing to remote server
+ * - Launch returns the local wrapper viewer URL
  * - PostMessage auth with auto-provisioned credentials
- * - RS_SDK_SERVER_URL override support
+ * - The wrapper keeps credentials out of the iframe URL
+ * - RS_SDK_SERVER_URL still drives the wrapped remote client
  */
 import fs from "node:fs";
 import http from "node:http";
+import type { AddressInfo } from "node:net";
+import net from "node:net";
 import os from "node:os";
 import path from "node:path";
-import net from "node:net";
-import type { AddressInfo } from "node:net";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { startApiServer } from "../src/api/server";
 import { req } from "../../../test/helpers/http";
+import { startApiServer } from "../src/api/server";
 
 // ---------------------------------------------------------------------------
 // HTTP helper
@@ -271,10 +272,13 @@ function restoreEnv(snapshot: Record<string, string | undefined>): void {
 }
 
 async function withBabylonFixtureApi<T>(
-  callback: (server: {
-    port: number;
-    close: () => Promise<void>;
-  }, fixture: BabylonFixtureServer) => Promise<T>,
+  callback: (
+    server: {
+      port: number;
+      close: () => Promise<void>;
+    },
+    fixture: BabylonFixtureServer,
+  ) => Promise<T>,
 ): Promise<T> {
   const fixture = await startBabylonFixtureServer();
   const stateDir = fs.mkdtempSync(
@@ -309,7 +313,7 @@ async function withBabylonFixtureApi<T>(
 const KNOWN_LOCAL_APP_NAME = "@hyperscape/plugin-hyperscape";
 
 /** Check if a TCP port is listening. */
-function isPortOpen(port: number, host = "127.0.0.1"): Promise<boolean> {
+function _isPortOpen(port: number, host = "127.0.0.1"): Promise<boolean> {
   return new Promise((resolve) => {
     const socket = new net.Socket();
     socket.setTimeout(2000);
@@ -335,7 +339,7 @@ interface HttpTarget {
   port: number;
 }
 
-function parseHttpTarget(rawUrl: string): HttpTarget | null {
+function _parseHttpTarget(rawUrl: string): HttpTarget | null {
   if (!rawUrl || rawUrl.startsWith("/")) return null;
   try {
     const url = new URL(rawUrl);
@@ -888,7 +892,7 @@ describe("Apps E2E", () => {
       expect(html).toContain("<canvas");
     });
 
-    it("launch returns viewer URL pointing to remote server", async () => {
+    it("launch returns viewer URL pointing to the local wrapper", async () => {
       const { status, data } = await api(
         server.port,
         "POST",
@@ -901,7 +905,7 @@ describe("Apps E2E", () => {
 
       const viewer = asObject(body.viewer as JsonValue);
       expect(typeof viewer.url).toBe("string");
-      expect(viewer.url as string).toContain("rs-sdk-demo.fly.dev");
+      expect(viewer.url).toBe("/api/apps/2004scape/viewer");
     });
 
     it("launch includes postMessageAuth and credentials", async () => {
@@ -924,34 +928,33 @@ describe("Apps E2E", () => {
       expect(typeof authMsg.sessionToken).toBe("string");
     });
 
-    it("viewer URL includes bot query parameter", async () => {
-      const { data } = await api(
-        server.port,
-        "POST",
-        "/api/apps/launch",
-        { name: "@elizaos/app-2004scape" },
-      );
+    it("viewer URL keeps credentials out of the iframe query string", async () => {
+      const { data } = await api(server.port, "POST", "/api/apps/launch", {
+        name: "@elizaos/app-2004scape",
+      });
       const viewer = asObject(asObject(data).viewer as JsonValue);
       const url = viewer.url as string;
-      expect(url).toMatch(/[?&]bot=/);
+      expect(url).toBe("/api/apps/2004scape/viewer");
+      expect(url).not.toMatch(/[?&]bot=/);
+      expect(url).not.toMatch(/[?&]password=/);
     });
 
-    it("viewer URL includes password param when credentials are set", async () => {
+    it("launch still provisions credentials without leaking them in the viewer URL", async () => {
       const origName = process.env.RS_SDK_BOT_NAME;
       const origPassword = process.env.RS_SDK_BOT_PASSWORD;
       try {
         process.env.RS_SDK_BOT_NAME = "testuser";
         process.env.RS_SDK_BOT_PASSWORD = "testpass123";
-        const { data } = await api(
-          server.port,
-          "POST",
-          "/api/apps/launch",
-          { name: "@elizaos/app-2004scape" },
-        );
+        const { data } = await api(server.port, "POST", "/api/apps/launch", {
+          name: "@elizaos/app-2004scape",
+        });
         const viewer = asObject(asObject(data).viewer as JsonValue);
-        const url = viewer.url as string;
-        expect(url).toContain("password=testpass123");
-        expect(url).toContain("bot=testuser");
+        const authMsg = asObject(viewer.authMessage as JsonValue);
+        expect(viewer.url).toBe("/api/apps/2004scape/viewer");
+        expect((viewer.url as string).includes("password=")).toBe(false);
+        expect((viewer.url as string).includes("bot=")).toBe(false);
+        expect(authMsg.authToken).toBe("testuser");
+        expect(authMsg.sessionToken).toBe("testpass123");
       } finally {
         if (origName !== undefined) {
           process.env.RS_SDK_BOT_NAME = origName;
@@ -966,18 +969,35 @@ describe("Apps E2E", () => {
       }
     });
 
-    it("RS_SDK_SERVER_URL env override is respected", async () => {
+    it("local wrapper HTML includes the injected bridge shell", async () => {
+      const response = await fetch(
+        `http://127.0.0.1:${server.port}/api/apps/2004scape/viewer`,
+        {
+          signal: AbortSignal.timeout(20_000),
+        },
+      );
+      expect(response.status).toBe(200);
+      const html = await response.text();
+      expect(html).toContain('id="milady-2004scape-bridge"');
+      expect(html).toContain("/api/apps/2004scape/session");
+      expect(html).toContain("/api/apps/2004scape/viewer/proxy/");
+      expect(html).toContain("window.WebSocket = MiladyWebSocket");
+      expect(html).toContain("REMOTE_HOSTNAME");
+      expect(html).toContain("rs-sdk-demo.fly.dev");
+    });
+
+    it("RS_SDK_SERVER_URL env override is preserved inside the wrapped session state", async () => {
       const original = process.env.RS_SDK_SERVER_URL;
       try {
         process.env.RS_SDK_SERVER_URL = "https://custom-server.example.com";
-        const { data } = await api(
-          server.port,
-          "POST",
-          "/api/apps/launch",
-          { name: "@elizaos/app-2004scape" },
+        const { data } = await api(server.port, "POST", "/api/apps/launch", {
+          name: "@elizaos/app-2004scape",
+        });
+        const session = asObject(asObject(data).session as JsonValue);
+        const telemetry = asObject(session.telemetry as JsonValue);
+        expect(telemetry.remoteServerUrl).toBe(
+          "https://custom-server.example.com",
         );
-        const viewer = asObject(asObject(data).viewer as JsonValue);
-        expect(viewer.url as string).toContain("custom-server.example.com");
       } finally {
         if (original !== undefined) {
           process.env.RS_SDK_SERVER_URL = original;
@@ -993,14 +1013,12 @@ describe("Apps E2E", () => {
       try {
         process.env.RS_SDK_BOT_NAME = "custombot";
         delete process.env.RS_SDK_BOT_PASSWORD;
-        const { data } = await api(
-          server.port,
-          "POST",
-          "/api/apps/launch",
-          { name: "@elizaos/app-2004scape" },
-        );
+        const { data } = await api(server.port, "POST", "/api/apps/launch", {
+          name: "@elizaos/app-2004scape",
+        });
         const viewer = asObject(asObject(data).viewer as JsonValue);
         const authMsg = asObject(viewer.authMessage as JsonValue);
+        expect(viewer.url).toBe("/api/apps/2004scape/viewer");
         expect(authMsg.authToken).toBe("custombot");
       } finally {
         if (origName !== undefined) {
@@ -1014,6 +1032,41 @@ describe("Apps E2E", () => {
           delete process.env.RS_SDK_BOT_PASSWORD;
         }
       }
+    });
+
+    it("run-scoped steering queues guidance and accepts control actions", async () => {
+      const launch = await api(server.port, "POST", "/api/apps/launch", {
+        name: "@elizaos/app-2004scape",
+      });
+      expect(launch.status).toBe(200);
+
+      const run = asObject(asObject(launch.data).run as JsonValue);
+      const runId = run.runId as string;
+      expect(typeof runId).toBe("string");
+
+      const messageResult = await api(
+        server.port,
+        "POST",
+        `/api/apps/runs/${runId}/message`,
+        { content: "Chop nearby tree" },
+      );
+      expect(messageResult.status).toBe(202);
+      const messageBody = asObject(messageResult.data);
+      expect(messageBody.disposition).toBe("queued");
+      expect(messageBody.message).toBe(
+        "Queued 2004scape guidance for the live loop.",
+      );
+
+      const controlResult = await api(
+        server.port,
+        "POST",
+        `/api/apps/runs/${runId}/control`,
+        { action: "pause" },
+      );
+      expect(controlResult.status).toBe(200);
+      const controlBody = asObject(controlResult.data);
+      expect(controlBody.disposition).toBe("accepted");
+      expect(controlBody.message).toBe("Paused the 2004scape autoplay loop.");
     });
   });
 

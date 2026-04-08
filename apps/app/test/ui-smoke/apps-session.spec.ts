@@ -1297,14 +1297,58 @@ async function startTwoThousandFourScapeSessionFixture(): Promise<FixtureServer>
       followEntity: "character-2004-1",
       canSendCommands: true,
       controls: ["pause", "resume"],
-      summary: "Mining and banking safely in Lumbridge.",
-      goalLabel: "Train mining without risking the account.",
-      suggestedPrompts: ["bank before logging off", "avoid combat"],
+      summary: "Tutorial island: Do you want to skip the tutorial?",
+      goalLabel: "Finish tutorial and reach the mainland.",
+      suggestedPrompts: [
+        "Finish tutorial",
+        "Chop nearby tree",
+        "Catch nearby fish",
+        "Walk around",
+      ],
       telemetry: {
+        botName: "bot-user",
+        autoPlay: true,
+        intent: "tutorial",
+        tutorial: {
+          active: true,
+          guideNearby: true,
+          prompt: "Do you want to skip the tutorial?",
+        },
+        player: {
+          name: "Bot User",
+          worldX: 3222,
+          worldZ: 3221,
+          hp: 10,
+          maxHp: 10,
+        },
+        combatStyle: {
+          weaponName: "Bronze dagger",
+          activeStyle: "Accurate",
+        },
+        nearbyNpcs: [
+          {
+            name: "RuneScape Guide",
+            distance: 1.2,
+            optionsWithIndex: [{ text: "Talk-to" }],
+          },
+        ],
+        nearbyLocs: [
+          {
+            name: "Tree",
+            distance: 2.4,
+            optionsWithIndex: [{ text: "Chop down" }],
+          },
+        ],
+        gameMessages: [
+          {
+            sender: "Game",
+            text: "Welcome to RuneScape.",
+          },
+        ],
         recentActivity: [
           {
-            action: "mine",
-            detail: "Mined iron ore near the south wall.",
+            action: "tutorial",
+            detail: "Accepted the starter appearance preset.",
             ts: "2026-04-06T00:00:10.000Z",
           },
         ],
@@ -1581,14 +1625,18 @@ test("apps page launches a 2004scape session with auto-login and mobile dashboar
     await expect(surface).toBeVisible();
     await expect(surface.getByText("2004scape Live Dashboard")).toBeVisible();
     await expect(surface).toContainText("Credentials stored");
-    await expect(surface).toContainText("Bot bot-user");
+    await expect(surface).toContainText(
+      "Bot bot-user is ready for automatic sign-in.",
+    );
+    await expect(surface).toContainText("Tutorial in progress");
+    await expect(surface).toContainText("RuneScape Guide");
     await expect(surface).not.toContainText("RS_2004SCAPE_AUTH");
     await expect(surface).not.toContainText("bot-pass");
 
     await page.getByTestId("game-mobile-surface-chat").click();
     const chatSurface = page.getByTestId("2004scape-live-operator-surface");
     const promptButton = chatSurface.getByRole("button", {
-      name: "bank before logging off",
+      name: "Chop nearby tree",
     });
     await expect(promptButton).toBeVisible();
     await promptButton.click();
@@ -1597,7 +1645,43 @@ test("apps page launches a 2004scape session with auto-login and mobile dashboar
       .poll(() => fixture.state.lastCommand, {
         message: "2004scape guidance should reach the session bridge",
       })
-      .toBe("bank before logging off");
+      .toBe("Chop nearby tree");
+
+    const operatorInput = chatSurface.getByPlaceholder(
+      "Tell the bot what to train, where to go, or what to say.",
+    );
+    await operatorInput.fill("say hello from mobile");
+    await chatSurface.getByRole("button", { name: "Send" }).click();
+
+    await expect
+      .poll(() => fixture.state.lastCommand, {
+        message: "manual 2004scape chat should reach the session bridge",
+      })
+      .toBe("say hello from mobile");
+
+    const pauseButton = chatSurface.getByRole("button", {
+      name: "Pause session",
+    });
+    await expect(pauseButton).toBeVisible();
+    await pauseButton.click();
+
+    await expect
+      .poll(() => fixture.state.lastControlAction, {
+        message: "pause control should reach the 2004scape session bridge",
+      })
+      .toBe("pause");
+
+    const resumeButton = chatSurface.getByRole("button", {
+      name: "Resume session",
+    });
+    await expect(resumeButton).toBeVisible();
+    await resumeButton.click();
+
+    await expect
+      .poll(() => fixture.state.lastControlAction, {
+        message: "resume control should reach the 2004scape session bridge",
+      })
+      .toBe("resume");
   } finally {
     if (!page.isClosed()) {
       await page.goto("about:blank");

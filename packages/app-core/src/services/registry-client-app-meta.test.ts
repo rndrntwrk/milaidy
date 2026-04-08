@@ -257,7 +257,13 @@ describe("registry-client-app-meta", () => {
       const result = resolveAppOverride("@elizaos/app-2004scape", undefined);
       expect(result).toBeDefined();
       expect(result?.launchType).toBe("connect");
+      expect(result?.launchUrl).toBe("/api/apps/2004scape/viewer");
       expect(result?.viewer?.postMessageAuth).toBe(true);
+      expect(result?.viewer?.url).toBe("/api/apps/2004scape/viewer");
+      expect(result?.viewer?.embedParams).toEqual({
+        bot: "",
+        password: "",
+      });
       expect(result?.uiExtension?.detailPanelId).toBe(
         "2004scape-operator-dashboard",
       );

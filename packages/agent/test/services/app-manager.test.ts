@@ -1967,6 +1967,8 @@ describe("AppManager", () => {
         expect((authMessage?.authToken ?? "").length).toBeLessThanOrEqual(12);
         expect(authMessage?.authToken).not.toBe("testbot");
         expect((authMessage?.sessionToken ?? "").length).toBeGreaterThan(0);
+        expect(result.viewer?.url).toBe("/api/apps/2004scape/viewer");
+        expect(result.viewer?.embedParams).toBeUndefined();
 
         expect(process.env.RS_SDK_BOT_NAME).toBe(authMessage?.authToken);
         expect(process.env.BOT_NAME).toBe(authMessage?.authToken);
@@ -2018,6 +2020,8 @@ describe("AppManager", () => {
             sessionToken: "legacy-pass-42",
           }),
         );
+        expect(result.viewer?.url).toBe("/api/apps/2004scape/viewer");
+        expect(result.viewer?.embedParams).toBeUndefined();
         expect(process.env.RS_SDK_BOT_NAME).toBe("legacybot");
         expect(process.env.RS_SDK_BOT_PASSWORD).toBe("legacy-pass-42");
         expect(runtime.getSetting("RS_SDK_BOT_NAME")).toBe("legacybot");
@@ -2059,6 +2063,8 @@ describe("AppManager", () => {
             sessionToken: "stable-pass-42",
           }),
         );
+        expect(result.viewer?.url).toBe("/api/apps/2004scape/viewer");
+        expect(result.viewer?.embedParams).toBeUndefined();
         expect(process.env.BOT_NAME).toBe("stablebot");
         expect(process.env.BOT_PASSWORD).toBe("stable-pass-42");
         expect(runtime.getSetting("BOT_NAME")).toBe("stablebot");
