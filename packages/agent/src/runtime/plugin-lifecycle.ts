@@ -10,6 +10,10 @@ import type {
   ServiceTypeName,
   UUID,
 } from "@elizaos/core";
+import {
+  resolveActionContexts,
+  resolveProviderContexts,
+} from "../training/context-catalog";
 
 type RuntimeAction = NonNullable<Plugin["actions"]>[number];
 type RuntimeProvider = NonNullable<Plugin["providers"]>[number];
@@ -174,6 +178,38 @@ function inheritPluginContexts<
   return {
     ...component,
     contexts: [...pluginContexts],
+  };
+}
+
+function applyEffectiveActionContexts(
+  action: RuntimeAction,
+  pluginContexts: string[] | undefined,
+): RuntimeAction {
+  const inherited = inheritPluginContexts(action, pluginContexts);
+  if ((inherited.contexts?.length ?? 0) > 0) {
+    return inherited;
+  }
+
+  return {
+    ...inherited,
+    contexts: [...resolveActionContexts(inherited.name, inherited.contexts, pluginContexts)],
+  };
+}
+
+function applyEffectiveProviderContexts(
+  provider: RuntimeProvider,
+  pluginContexts: string[] | undefined,
+): RuntimeProvider {
+  const inherited = inheritPluginContexts(provider, pluginContexts);
+  if ((inherited.contexts?.length ?? 0) > 0) {
+    return inherited;
+  }
+
+  return {
+    ...inherited,
+    contexts: [
+      ...resolveProviderContexts(inherited.name, inherited.contexts, pluginContexts),
+    ],
   };
 }
 
@@ -598,7 +634,10 @@ export function installRuntimePluginLifecycle(runtime: AgentRuntime): void {
     const capture = pluginRegistrationContext.getStore();
     const actionsBefore = runtime.actions.length;
     originalRegisterAction(
-      inheritPluginContexts(action, getPluginContexts(capture?.ownership.plugin)),
+      applyEffectiveActionContexts(
+        action,
+        getPluginContexts(capture?.ownership.plugin),
+      ),
     );
     if (!capture || runtime.actions.length <= actionsBefore) return;
     for (const registeredAction of runtime.actions.slice(actionsBefore)) {
@@ -610,7 +649,7 @@ export function installRuntimePluginLifecycle(runtime: AgentRuntime): void {
     const capture = pluginRegistrationContext.getStore();
     const providersBefore = runtime.providers.length;
     originalRegisterProvider(
-      inheritPluginContexts(
+      applyEffectiveProviderContexts(
         provider,
         getPluginContexts(capture?.ownership.plugin),
       ),
