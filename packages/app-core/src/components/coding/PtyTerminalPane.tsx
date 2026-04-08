@@ -56,6 +56,31 @@ export function PtyTerminalPane({
             "--accent-muted",
             "rgba(90, 154, 42, 0.3)",
           ),
+          // Full 16-color ANSI palette. xterm's defaults render several
+          // dim colors (especially brightBlack, blue, and red) that are
+          // illegible against our near-black background. Codex uses
+          // brightBlack heavily for commentary / status rows, so a
+          // readable palette is required for the terminal to be usable.
+          //
+          // Palette inspired by Tokyo Night (Storm variant) — chosen
+          // for high contrast against #0a0a0a while staying aesthetic
+          // and coherent with the green accent already used by the app.
+          black: "#1a1b26",
+          red: "#f7768e",
+          green: "#9ece6a",
+          yellow: "#e0af68",
+          blue: "#7aa2f7",
+          magenta: "#bb9af7",
+          cyan: "#7dcfff",
+          white: "#c0caf5",
+          brightBlack: "#6e7681", // dim commentary — must be readable
+          brightRed: "#ff7a93",
+          brightGreen: "#b9f27c",
+          brightYellow: "#ffd580",
+          brightBlue: "#8fb3ff",
+          brightMagenta: "#caa9fa",
+          brightCyan: "#a2e9ff",
+          brightWhite: "#ffffff",
         },
       });
 

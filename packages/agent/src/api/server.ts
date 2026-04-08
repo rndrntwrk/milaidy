@@ -76,7 +76,6 @@ import {
   ONBOARDING_PROVIDER_CATALOG,
 } from "../contracts/onboarding.js";
 import { createIntegrationTelemetrySpan } from "../diagnostics/integration-observability.js";
-import { registerClientChatSendHandler } from "../services/client-chat-sender.js";
 import { EMOTE_BY_ID, EMOTE_CATALOG } from "../emotes/catalog.js";
 import { resolveDefaultAgentWorkspaceDir } from "../providers/workspace.js";
 import {
@@ -84,11 +83,11 @@ import {
   type AgentEventServiceLike,
   getAgentEventService,
 } from "../runtime/agent-event-service.js";
+import * as agentOrchestratorCompat from "../runtime/agent-orchestrator-compat.js";
 import {
   CORE_PLUGINS,
   OPTIONAL_CORE_PLUGINS,
 } from "../runtime/core-plugins.js";
-import * as agentOrchestratorCompat from "../runtime/agent-orchestrator-compat.js";
 import {
   buildTestHandler,
   registerCustomActionLive,
@@ -116,6 +115,7 @@ import {
   importAgent,
 } from "../services/agent-export.js";
 import { AppManager } from "../services/app-manager.js";
+import { registerClientChatSendHandler } from "../services/client-chat-sender.js";
 import { createConfigPluginManager } from "../services/config-plugin-manager.js";
 import {
   getMcpServerDetails,
@@ -181,6 +181,7 @@ import { handleAppPackageRoutes } from "./app-package-routes.js";
 import { handleAppsRoutes } from "./apps-routes.js";
 import { handleAuthRoutes } from "./auth-routes.js";
 import { handleAvatarRoutes } from "./avatar-routes.js";
+import { handleBrowserWorkspaceRoutes } from "./browser-workspace-routes.js";
 import {
   buildBscApproveUnsignedTx,
   buildBscBuyUnsignedTx,
@@ -191,7 +192,6 @@ import {
   resolvePrimaryBscRpcUrl,
 } from "./bsc-trade.js";
 import { handleBugReportRoutes } from "./bug-report-routes.js";
-import { handleBrowserWorkspaceRoutes } from "./browser-workspace-routes.js";
 import { handleCharacterRoutes } from "./character-routes.js";
 import {
   generateChatResponse as generateChatResponseFromChatRoutes,
@@ -237,6 +237,8 @@ import {
   sendJson,
   sendJsonError,
 } from "./http-helpers.js";
+import { handleIMessageRoute } from "./imessage-routes.js";
+import { handleInboxRoute } from "./inbox-routes.js";
 import { handleKnowledgeRoutes } from "./knowledge-routes.js";
 import { getKnowledgeService } from "./knowledge-service-loader.js";
 import { handleLifeOpsRoutes } from "./lifeops-routes.js";
@@ -251,6 +253,7 @@ import { handleMemoryRoutes } from "./memory-routes.js";
 import { buildWhitelistTree, generateProof } from "./merkle-tree.js";
 import { handleMiscRoutes } from "./misc-routes.js";
 import { handleModelsRoutes } from "./models-routes.js";
+import { tryHandleMusicPlayerStatusFallback } from "./music-player-route-fallback.js";
 import { handleNfaRoutes } from "./nfa-routes.js";
 import { handleOnboardingRoutes } from "./onboarding-routes.js";
 import type {
@@ -258,7 +261,6 @@ import type {
   PTYService,
 } from "./parse-action-block.js";
 import { handlePermissionRoutes } from "./permissions-routes.js";
-import { handleRolodexRoutes } from "./rolodex-routes.js";
 import { handlePermissionsExtraRoutes } from "./permissions-routes-extra.js";
 import { handlePluginRoutes } from "./plugin-routes.js";
 import {
@@ -272,7 +274,7 @@ import {
 import { handleProviderSwitchRoutes } from "./provider-switch-routes.js";
 import { handleRegistryRoutes } from "./registry-routes.js";
 import { RegistryService } from "./registry-service.js";
-import { tryHandleMusicPlayerStatusFallback } from "./music-player-route-fallback.js";
+import { handleRolodexRoutes } from "./rolodex-routes.js";
 import { tryHandleRuntimePluginRoute } from "./runtime-plugin-routes.js";
 import { handleSandboxRoute } from "./sandbox-routes.js";
 import { hasPersistedOnboardingState } from "./server-helpers.js";
@@ -295,7 +297,6 @@ import {
 } from "./twitter-verify.js";
 import { TxService } from "./tx-service.js";
 import { handleUpdateRoutes } from "./update-routes.js";
-import { handleWebsiteBlockerRoutes } from "./website-blocker-routes.js";
 import {
   fetchEvmBalances,
   fetchSolanaBalances,
@@ -315,12 +316,11 @@ import {
   recordWalletTradeLedgerEntry,
   updateWalletTradeLedgerEntryStatus,
 } from "./wallet-trading-profile.js";
+import { handleWebsiteBlockerRoutes } from "./website-blocker-routes.js";
 import {
   applyWhatsAppQrOverride,
   handleWhatsAppRoute,
 } from "./whatsapp-routes.js";
-import { handleIMessageRoute } from "./imessage-routes.js";
-import { handleInboxRoute } from "./inbox-routes.js";
 import { handleWorkbenchRoutes } from "./workbench-routes.js";
 
 export {
@@ -4234,6 +4234,7 @@ async function handleCodingAgentsFallback(
     installed?: boolean;
     installCommand?: string;
     docsUrl?: string;
+    auth?: import("./coding-agents-preflight-normalize").NormalizedPreflightAuth;
   };
   type CodeTaskService = {
     getTasks?: () => Promise<
@@ -4356,12 +4357,16 @@ async function handleCodingAgentsFallback(
           break;
         }
       }
+      const { normalizePreflightAuth } = await import(
+        "./coding-agents-preflight-normalize"
+      );
       const normalized = rows.flatMap((item): AgentPreflightRecord[] => {
         if (!item || typeof item !== "object") return [];
         const raw = item as Record<string, unknown>;
         const adapter =
           typeof raw.adapter === "string" ? raw.adapter.trim() : "";
         if (!adapter) return [];
+        const auth = normalizePreflightAuth(raw.auth);
         return [
           {
             adapter,
@@ -4371,6 +4376,7 @@ async function handleCodingAgentsFallback(
                 ? raw.installCommand
                 : undefined,
             docsUrl: typeof raw.docsUrl === "string" ? raw.docsUrl : undefined,
+            ...(auth ? { auth } : {}),
           },
         ];
       });
@@ -4598,6 +4604,71 @@ async function handleCodingAgentsFallback(
       json(res, []);
       return true;
     }
+  }
+
+  // POST /api/coding-agents/auth/:agent — trigger CLI auth flow
+  const authMatch = pathname.match(/^\/api\/coding-agents\/auth\/(\w+)$/);
+  if (method === "POST" && authMatch) {
+    const agentType = authMatch[1];
+    // Allowlist the adapter type. The `\w+` regex on the route pattern
+    // stops path traversal but still accepts arbitrary identifiers
+    // like `__proto__`, `constructor`, or any future adapter name the
+    // package happens to export. `createAdapter` takes an unvalidated
+    // string and we don't want it to resolve a prototype-pollution
+    // sentinel or an adapter we haven't audited, so gate on the four
+    // shapes the UI actually ships today.
+    const ALLOWED_AGENT_TYPES = new Set(["claude", "codex", "gemini", "aider"]);
+    if (!ALLOWED_AGENT_TYPES.has(agentType)) {
+      error(res, `Unsupported agent type: ${agentType}`, 400);
+      return true;
+    }
+    try {
+      const { createAdapter } = await import("coding-agent-adapters");
+      const adapter = createAdapter(
+        agentType as import("coding-agent-adapters").AdapterType,
+      );
+      // Server-side timeout: some CLI auth flows spawn an interactive
+      // subprocess that can hang indefinitely in headless / Docker
+      // environments. Cap the wait so we don't pin an async for
+      // longer than the client is willing to poll.
+      const AUTH_TIMEOUT_MS = 15_000;
+      const timeoutError = new Error("auth trigger timeout");
+      const triggered = await Promise.race([
+        adapter.triggerAuth(),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(timeoutError), AUTH_TIMEOUT_MS),
+        ),
+      ]).catch((e) => {
+        if (e === timeoutError) return "__timeout__" as const;
+        throw e;
+      });
+      if (triggered === "__timeout__") {
+        error(res, `Auth trigger timed out for ${agentType}`, 504);
+      } else if (!triggered) {
+        // 4xx — otherwise the client's `res.ok` check passes and it
+        // kicks off a 2-minute spurious polling loop even though no
+        // auth flow was ever initiated.
+        error(res, `No auth flow available for ${agentType}`, 400);
+      } else {
+        // Whitelist + URL-scheme-validate before forwarding to the
+        // browser. See `coding-agents-auth-sanitize.ts` for rationale.
+        const { sanitizeAuthResult } = await import(
+          "./coding-agents-auth-sanitize"
+        );
+        json(res, sanitizeAuthResult(triggered));
+      }
+    } catch (e) {
+      // Log the full error server-side for debugging (including stack
+      // trace) but return a generic message to the client so we don't
+      // leak internal adapter error strings through the HTTP surface.
+      logger.error(
+        `[coding-agents/auth] triggerAuth failed for ${agentType}: ${
+          e instanceof Error ? (e.stack ?? e.message) : String(e)
+        }`,
+      );
+      error(res, `Auth trigger failed for ${agentType}`, 500);
+    }
+    return true;
   }
 
   // Not handled by fallback

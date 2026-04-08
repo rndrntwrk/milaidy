@@ -178,3 +178,9 @@ docs/tutorials/captures/
 # Vendored binaries (large, platform-specific)
 scripts/bin/yt-dlp
 scripts/bin/yt-dlp_*
+
+# Local debugging scripts — not shipped
+# codex-sniff.ts: local proxy between Codex CLI and Vercel AI Gateway
+# for inspecting request/response shapes end-to-end. Kept out of git
+# because it's a developer tool, not product code.
+scripts/codex-sniff.ts
