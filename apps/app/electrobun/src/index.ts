@@ -60,6 +60,7 @@ import {
 } from "./native/mac-window-effects";
 import { getPermissionManager } from "./native/permissions";
 import { checkWebGpuSupport } from "./native/webgpu-browser-support";
+import { printElectrobunDevSettingsBanner } from "./print-electrobun-dev-settings-banner";
 import { resolveRendererAsset } from "./renderer-static";
 import { registerRpcHandlers } from "./rpc-handlers";
 import {
@@ -68,7 +69,6 @@ import {
 } from "./runtime-layout";
 import { mergeRuntimePermissionStates } from "./runtime-permissions";
 import { startScreenshotDevServer } from "./screenshot-dev-server";
-import { printElectrobunDevSettingsBanner } from "./print-electrobun-dev-settings-banner";
 import { recordStartupPhase, resolveStartupBundlePath } from "./startup-trace";
 import {
   isDetachedSurface,

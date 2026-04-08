@@ -42,14 +42,21 @@ describe("chat trajectory wiring", () => {
     expect(emitIdx).toBeLessThan(handleIdx);
   });
 
-  it("only falls back to manual trajectory start after MESSAGE_RECEIVED", () => {
+  it("reads MESSAGE_RECEIVED step ids before wrapping handleMessage", () => {
     const emitIdx = chatRoutesSource.indexOf('emitEvent("MESSAGE_RECEIVED"');
-    const fallbackIdx = chatRoutesSource.lastIndexOf(
-      "await ensureChatTrajectoryStep(",
+    const generationReadIdx = chatRoutesSource.indexOf(
+      "readMessageTrajectoryStepId(generationMessage)",
+    );
+    const wrapperIdx = chatRoutesSource.indexOf(
+      "withMiladyTrajectoryStep(trajectoryStepId",
+    );
+    const handleIdx = chatRoutesSource.indexOf(
+      "runtime.messageService?.handleMessage",
     );
 
-    expect(fallbackIdx).toBeGreaterThan(-1);
-    expect(fallbackIdx).toBeGreaterThan(emitIdx);
+    expect(generationReadIdx).toBeGreaterThan(emitIdx);
+    expect(wrapperIdx).toBeGreaterThan(generationReadIdx);
+    expect(handleIdx).toBeGreaterThan(wrapperIdx);
     expect(chatRoutesSource).toContain("readMessageTrajectoryStepId(message)");
   });
 

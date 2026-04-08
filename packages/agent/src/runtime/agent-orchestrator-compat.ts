@@ -414,6 +414,9 @@ async function computeFrameworkState(
 
   const claudeSubscriptionReady = hasClaudeSubscriptionAuth();
   const codexSubscriptionReady = hasCodexSubscriptionAuth();
+  const claudeReady =
+    claudeSubscriptionReady || hasAnthropicApiCredential();
+  const codexReady = codexSubscriptionReady || hasOpenAIApiCredential();
   const geminiReady = hasGeminiCredential();
   const piReady = hasPiBinary();
 
@@ -434,9 +437,9 @@ async function computeFrameworkState(
           : false;
     const authReady =
       id === "claude"
-        ? claudeSubscriptionReady || hasAnthropicApiCredential()
+        ? claudeReady
         : id === "codex"
-          ? codexSubscriptionReady || hasOpenAIApiCredential()
+          ? codexReady
           : id === "gemini"
             ? geminiReady
             : claudeSubscriptionReady ||

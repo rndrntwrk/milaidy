@@ -206,7 +206,11 @@ function DiscordSettingsPanel({
   t,
 }: {
   agentId: string;
-  setActionNotice: (msg: string, kind: string, duration: number) => void;
+  setActionNotice: (
+    msg: string,
+    kind?: "success" | "error" | "info",
+    duration?: number,
+  ) => void;
   t: (key: string, opts?: Record<string, unknown>) => string;
 }) {
   const [expanded, setExpanded] = useState(false);

@@ -1,3 +1,7 @@
+---
+title: Developer diagnostics and workspace tooling
+---
+
 # Developer diagnostics and workspace tooling (WHYs)
 
 This guide is for **people building Milady from source** — editors, agents, and maintainers. It explains **why** recent developer-facing behavior exists so you can debug faster without mistaking optional noise for product bugs.

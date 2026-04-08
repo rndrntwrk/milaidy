@@ -40,6 +40,9 @@ type RuntimePluginWithLifecycleHooks = Plugin & {
   dispose?: PluginDisposeHook;
   applyConfig?: PluginApplyConfigHook;
 };
+type RuntimePluginWithContexts = Plugin & {
+  contexts?: string[];
+};
 
 type RuntimeServiceRegistrationStatus =
   | "pending"
@@ -152,11 +155,18 @@ function pushUniqueString(items: string[], value: string): void {
   }
 }
 
+function getPluginContexts(plugin: Plugin | undefined): string[] | undefined {
+  const contexts = (plugin as RuntimePluginWithContexts | undefined)?.contexts;
+  return Array.isArray(contexts)
+    ? contexts.filter((value): value is string => typeof value === "string")
+    : undefined;
+}
+
 function inheritPluginContexts<
   T extends {
-    contexts?: Plugin["contexts"];
+    contexts?: string[];
   },
->(component: T, pluginContexts: Plugin["contexts"] | undefined): T {
+>(component: T, pluginContexts: string[] | undefined): T {
   if (!pluginContexts?.length || (component.contexts?.length ?? 0) > 0) {
     return component;
   }
@@ -588,7 +598,7 @@ export function installRuntimePluginLifecycle(runtime: AgentRuntime): void {
     const capture = pluginRegistrationContext.getStore();
     const actionsBefore = runtime.actions.length;
     originalRegisterAction(
-      inheritPluginContexts(action, capture?.ownership.plugin.contexts),
+      inheritPluginContexts(action, getPluginContexts(capture?.ownership.plugin)),
     );
     if (!capture || runtime.actions.length <= actionsBefore) return;
     for (const registeredAction of runtime.actions.slice(actionsBefore)) {
@@ -600,7 +610,10 @@ export function installRuntimePluginLifecycle(runtime: AgentRuntime): void {
     const capture = pluginRegistrationContext.getStore();
     const providersBefore = runtime.providers.length;
     originalRegisterProvider(
-      inheritPluginContexts(provider, capture?.ownership.plugin.contexts),
+      inheritPluginContexts(
+        provider,
+        getPluginContexts(capture?.ownership.plugin),
+      ),
     );
     if (!capture || runtime.providers.length <= providersBefore) return;
     for (const registeredProvider of runtime.providers.slice(providersBefore)) {

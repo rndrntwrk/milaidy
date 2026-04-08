@@ -6,12 +6,13 @@ import { findPluginBrowserStagehandDir } from "./eliza.js";
 
 describe("findPluginBrowserStagehandDir", () => {
   it("finds stagehand from packages/agent/src/runtime (Milady layout)", () => {
-import { findPluginBrowserStagehandDir } from "./eliza.js";
-
-describe("findPluginBrowserStagehandDir", () => {
-  it("finds stagehand from packages/agent/src/runtime (Milady layout)", () => {
     const root = mkdtempSync(join(tmpdir(), "milady-stagehand-"));
-    const stagehand = join(root, "plugins", "plugin-browser", "stagehand-server");
+    const stagehand = join(
+      root,
+      "plugins",
+      "plugin-browser",
+      "stagehand-server",
+    );
     mkdirSync(join(stagehand, "src"), { recursive: true });
     writeFileSync(join(stagehand, "src", "index.ts"), "export {}\n");
     const runtimeDir = join(root, "packages", "agent", "src", "runtime");
@@ -19,7 +20,6 @@ describe("findPluginBrowserStagehandDir", () => {
     expect(findPluginBrowserStagehandDir(runtimeDir)).toBe(stagehand);
   });
 
-  it("finds stagehand from eliza/packages/agent/src/runtime (parent workspace layout)", () => {
   it("finds stagehand from eliza/packages/agent/src/runtime (parent workspace layout)", () => {
     const workspace = mkdtempSync(join(tmpdir(), "eliza-ws-stagehand-"));
     const stagehand = join(
