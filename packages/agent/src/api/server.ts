@@ -4624,14 +4624,48 @@ async function handleCodingAgentsFallback(
       const adapter = createAdapter(
         agentType as import("coding-agent-adapters").AdapterType,
       );
-      const result = await adapter.triggerAuth();
-      if (!result) {
-        json(res, { error: `No auth flow available for ${agentType}` });
+      // Server-side timeout: some CLI auth flows spawn an interactive
+      // subprocess that can hang indefinitely in headless / Docker
+      // environments. Cap the wait so we don't pin an async for
+      // longer than the client is willing to poll.
+      const AUTH_TIMEOUT_MS = 15_000;
+      const timeoutError = new Error("auth trigger timeout");
+      const triggered = await Promise.race([
+        adapter.triggerAuth(),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(timeoutError), AUTH_TIMEOUT_MS),
+        ),
+      ]).catch((e) => {
+        if (e === timeoutError) return "__timeout__" as const;
+        throw e;
+      });
+      if (triggered === "__timeout__") {
+        error(res, `Auth trigger timed out for ${agentType}`, 504);
+      } else if (!triggered) {
+        // 4xx — otherwise the client's `res.ok` check passes and it
+        // kicks off a 2-minute spurious polling loop even though no
+        // auth flow was ever initiated.
+        error(res, `No auth flow available for ${agentType}`, 400);
       } else {
-        json(res, result);
+        // Whitelist fields before forwarding to the browser. The
+        // adapter's response shape is untyped (`unknown`) and could
+        // in principle carry access tokens or internal secrets in
+        // unexpected fields — only surface the fields the UI needs.
+        const r = triggered as Record<string, unknown>;
+        const sanitized: Record<string, unknown> = {};
+        if (typeof r.launched === "boolean") sanitized.launched = r.launched;
+        if (typeof r.url === "string") sanitized.url = r.url;
+        if (typeof r.deviceCode === "string") {
+          sanitized.deviceCode = r.deviceCode;
+        }
+        if (typeof r.instructions === "string") {
+          sanitized.instructions = r.instructions;
+        }
+        json(res, sanitized);
       }
     } catch (e) {
-      error(res, `Auth trigger failed: ${e}`, 500);
+      // Avoid leaking internal adapter error strings to the client.
+      error(res, `Auth trigger failed for ${agentType}`, 500);
     }
     return true;
   }

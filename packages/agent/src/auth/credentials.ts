@@ -223,10 +223,15 @@ export function getSubscriptionStatus(): Array<{
 
     // For the Claude blob path, derive expiry from the blob itself
     // so the UI can surface an accurate "valid" state even before a
-    // refresh runs.
+    // refresh runs. Older Claude Code credential files omit
+    // `expiresAt` entirely — treat a null expiry on an otherwise
+    // parseable blob as "valid" (the presence of an accessToken is
+    // itself evidence the user is authenticated; the runtime will
+    // refresh via the refresh token on first use if needed).
     const blobExpiresAt = claudeBlob?.expiresAt ?? null;
-    const blobValid =
-      blobExpiresAt !== null ? blobExpiresAt > Date.now() : false;
+    const blobValid = claudeBlob
+      ? blobExpiresAt === null || blobExpiresAt > Date.now()
+      : false;
 
     return {
       provider,

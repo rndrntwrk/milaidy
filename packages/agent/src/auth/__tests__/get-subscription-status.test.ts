@@ -89,9 +89,7 @@ describe("getSubscriptionStatus", () => {
     const result = getSubscriptionStatus();
     expect(Array.isArray(result)).toBe(true);
     // Sanity: must not be a thenable.
-    expect(
-      (result as unknown as { then?: unknown }).then,
-    ).toBeUndefined();
+    expect((result as unknown as { then?: unknown }).then).toBeUndefined();
   });
 
   it("reports anthropic-subscription as NOT configured when no Claude blob or setup token exists", () => {
@@ -160,6 +158,34 @@ describe("getSubscriptionStatus", () => {
       (r) => r.provider === "anthropic-subscription",
     );
     expect(anthropic?.configured).toBe(true);
+    expect(anthropic?.expiresAt).toBeNull();
+  });
+
+  it("treats a Claude blob with null expiresAt (older format) as valid", () => {
+    // Older `~/.claude/.credentials.json` payloads omit `expiresAt`
+    // entirely. The presence of a parseable access token is itself
+    // evidence the user is authenticated — the runtime will refresh
+    // via the refresh token on first use if needed. If we reported
+    // these blobs as `valid: false`, the UI would incorrectly prompt
+    // users with a working Claude Code install to re-authenticate.
+    const dir = path.join(tmpHome, ".claude");
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(
+      path.join(dir, ".credentials.json"),
+      JSON.stringify({
+        claudeAiOauth: {
+          accessToken: "sk-ant-oat01-legacy",
+          refreshToken: "sk-ant-ort01-refresh",
+          // no expiresAt
+        },
+      }),
+      "utf-8",
+    );
+    const anthropic = getSubscriptionStatus().find(
+      (r) => r.provider === "anthropic-subscription",
+    );
+    expect(anthropic?.configured).toBe(true);
+    expect(anthropic?.valid).toBe(true);
     expect(anthropic?.expiresAt).toBeNull();
   });
 
