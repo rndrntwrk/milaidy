@@ -235,9 +235,9 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           show_full_output: true
           claude_args: |
-            --allowedTools "Read,Edit,Write,MultiEdit,Glob,Grep,LS,Bash(gh pr diff:*),Bash(gh pr view:*),Bash(jq:*),Bash(cat:*),Bash(bun run check:*),Bash(bun run lint:*),Bash(bun run typecheck:*),Bash(bunx @biomejs/biome format:*),Bash(bunx @biomejs/biome check:*),Bash(git status:*),Bash(git diff:*)"
+            --allowedTools "Read,Edit,Write,MultiEdit,Glob,Grep,LS,Bash(gh pr diff:*),Bash(gh pr view:*),Bash(jq:*),Bash(cat:*),Bash(bun run verify:*),Bash(bun run check:*),Bash(bun run lint:*),Bash(bun run typecheck:*),Bash(bunx @biomejs/biome format:*),Bash(bunx @biomejs/biome check:*),Bash(git status:*),Bash(git diff:*)"
           prompt: |
-            You are applying Greptile code review suggestions to PR #${{ needs.detect.outputs.pr_number }} on the Milady repository. Your job is to read every Greptile finding, validate it against the current state of the code, apply the fixes, and verify the result with `bun run check`.
+            You are applying Greptile code review suggestions to PR #${{ needs.detect.outputs.pr_number }} on the Milady repository. Your job is to read every Greptile finding, validate it against the current state of the code, apply the fixes, and verify the result with `bun run verify`.
 
             **Milady is an agents-only codebase.** The preliminary agent-review verdict already signed off on the PR structure; your job is only to address Greptile's findings, nothing more. Do NOT introduce scope creep. Do NOT refactor surrounding code. Do NOT add features. One fix per finding, that is it.
 
@@ -272,11 +272,11 @@ jobs:
             - Never modify `.github/actionlint.yaml`, `.greptile/`, `CLAUDE.md`, or any file outside the set of files that had findings. Stay surgical.
 
             ### 4. Verify
-            After all fixes are applied, run `bun run check` (typecheck + Biome lint). If it fails:
+            After all fixes are applied, run `bun run verify` (typecheck + Biome lint). If it fails:
             - Inspect the failure. Is it caused by one of your fixes?
-            - If yes: revert that specific fix via Edit, log "fix reverted due to check failure: <reason>", and re-run `bun run check`.
+            - If yes: revert that specific fix via Edit, log "fix reverted due to verify failure: <reason>", and re-run `bun run verify`.
             - If no (pre-existing failure unrelated to your changes): proceed — log the pre-existing failure but do not attempt to fix it.
-            - Loop until `bun run check` is green OR only pre-existing failures remain.
+            - Loop until `bun run verify` is green OR only pre-existing failures remain.
 
             ### 5. Report
             Emit a final summary as markdown to stdout using this exact structure (the downstream step will parse it and include it in the commit message + PR comment):
@@ -291,7 +291,7 @@ jobs:
             - [P<severity>] `<path>:<line>` — <reason> (drift | context mismatch | invariant risk | structural ambiguity)
 
             ### Verification
-            - bun run check: <pass | fail with details>
+            - bun run verify: <pass | fail with details>
             - Pre-existing failures (if any): <list>
 
             ### Files touched

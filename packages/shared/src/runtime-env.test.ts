@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
+  firstWinningEnvString,
+  resolveAllowNullOrigin,
   resolveApiAllowedHosts,
   resolveApiAllowedOrigins,
   resolveApiBindHost,
-  resolveAllowNullOrigin,
   resolveConfiguredApiToken,
   resolveDesktopApiPort,
+  resolveDesktopApiPortPreference,
+  resolveDesktopUiPortPreference,
   resolveDisableAutoApiToken,
   resolveMiladyRuntimeEnv,
   resolveSingleProcessPort,
@@ -90,5 +93,32 @@ describe("runtime env helpers", () => {
       singleProcessPort: 5000,
       uiPort: 5000,
     });
+  });
+
+  it("describeDesktopApiPortPreference reports winning env key", () => {
+    const pref = resolveDesktopApiPortPreference({
+      ELIZA_API_PORT: "31400",
+      MILADY_API_PORT: "31399",
+    });
+    expect(pref.port).toBe(31399);
+    expect(pref.winningKey).toBe("MILADY_API_PORT");
+    expect(pref.sourceLabel).toContain("MILADY_API_PORT=31399");
+
+    const def = resolveDesktopApiPortPreference({});
+    expect(def.port).toBe(31337);
+    expect(def.winningKey).toBeNull();
+    expect(def.sourceLabel).toContain("built-in");
+  });
+
+  it("resolveDesktopUiPortPreference uses MILADY_PORT only", () => {
+    const p = resolveDesktopUiPortPreference({ MILADY_PORT: "3000" });
+    expect(p.port).toBe(3000);
+    expect(p.winningKey).toBe("MILADY_PORT");
+  });
+
+  it("firstWinningEnvString returns first hit", () => {
+    expect(
+      firstWinningEnvString({ A: "", B: "x" }, ["A", "B"] as const),
+    ).toEqual({ key: "B", value: "x" });
   });
 });

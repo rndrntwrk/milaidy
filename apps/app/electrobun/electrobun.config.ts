@@ -35,7 +35,7 @@ export default {
     views: {},
     // Watch these extra dirs in dev --watch mode so changes to the Vite
     // renderer build or shared types trigger a bun-side rebuild + relaunch.
-    watch: ["../dist", "src/shared/"],
+    watch: ["../dist", "src/shared/", "src/bridge/"],
     // Ignore test files and build artifacts from watch triggers.
     watchIgnore: [
       "src/**/*.test.ts",

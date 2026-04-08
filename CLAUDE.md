@@ -30,7 +30,7 @@ bun run setup:upstreams   # initializes repo-local ./eliza and links local @eliz
 
 ```bash
 bun run build        # tsdown + vite
-bun run check        # typecheck + lint
+bun run verify       # typecheck + lint (`bun run check` aliases this)
 bun run test         # parallel test suite
 bun run test:e2e     # end-to-end tests
 bun run db:check     # database security + readonly tests
@@ -96,7 +96,7 @@ In `packages/agent/src/api/chat-routes.ts`, **`HandlerCallback`** text from acti
 ## Code Standards
 
 - TypeScript strict mode. No `any` without explanation.
-- Biome for lint + format: `bun run lint:fix && bun run format:fix`
+- Biome for lint + format: `bun run verify:lint:fix && bun run verify:format:fix` (aliases: `lint:fix`, `format:fix`)
 - Tests required for bug fixes and features. Coverage floor: 25% lines, 15% branches.
 - Files under ~500 LOC. Split when it improves clarity.
 - No secrets in code. No real credentials.
@@ -166,7 +166,7 @@ bun run milady start              # run-node.mjs
 
 - **`bun install` fails on native deps**: TensorFlow, canvas, whisper-node require native build tools. On macOS install Xcode CLI tools (`xcode-select --install`). On Linux install `build-essential libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev`. Set `MILADY_NO_VISION_DEPS=1` to skip optional vision deps (camera, etc.).
 - **Avatar assets missing**: `bun install` clones VRM models from GitHub. On restricted networks set `SKIP_AVATAR_CLONE=1` and manually copy avatars to `apps/app/public/vrms/`.
-- **Plugin not found at runtime**: Ensure NODE_PATH is set. Run `bun run repair` to re-run postinstall.
+- **Plugin not found at runtime**: Ensure NODE_PATH is set. Run `bun run setup:sync` to re-run postinstall (`bun run repair` aliases this).
 - **Stale Vite cache after patching deps**: run `MILADY_VITE_FORCE=1 bun run dev` (or delete `apps/app/.vite/`). Dev no longer passes `--force` by default so dependency pre-bundling can cache between runs.
 - **Cold rebuild / stuck artifacts**: `bun run clean` removes root `dist`, UI + Capacitor plugin `dist`, `apps/app/.vite`, Turbo, Foundry test `out/`/`cache`, Playwright output, and `node_modules/.cache` under main workspaces. `bun run clean:deep` also removes Electrobun `build/`/`artifacts/` and generated `preload.js`, plus Electron pack dirs. For a global Bun store wipe (affects all projects): `MILADY_CLEAN_GLOBAL_TOOL_CACHE=1 bun run clean`.
 - **Config file not found**: The actual path is `~/.milady/milady.json` (because `ELIZA_NAMESPACE=milady`). The generic eliza default `~/.eliza/eliza.json` does not apply when running as Milady.

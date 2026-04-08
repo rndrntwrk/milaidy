@@ -350,8 +350,8 @@ export function runChecks() {
   const issues = scanForBlockedDiffPatterns(base, changed.files);
 
   const checks = [
-    { name: "bun run lint", command: "bun run lint" },
-    { name: "bun run typecheck", command: "bun run typecheck" },
+    { name: "bun run verify:lint", command: "bun run verify:lint" },
+    { name: "bun run verify:typecheck", command: "bun run verify:typecheck" },
   ];
 
   const missingTests = [];

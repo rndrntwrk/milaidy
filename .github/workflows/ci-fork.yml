@@ -32,7 +32,7 @@ jobs:
           install-command: bun install --ignore-scripts
 
       - name: Biome lint
-        run: bun run lint
+        run: bun run verify:lint
 
       - name: Biome format check
         run: bun run format
@@ -56,7 +56,7 @@ jobs:
           install-command: bun install --ignore-scripts
 
       - name: Run type checker
-        run: bun run typecheck
+        run: bun run verify:typecheck
 
   test:
     name: Targeted Tests
@@ -103,6 +103,6 @@ jobs:
         run: bun run build
 
       - name: Build homepage
-        run: bun run build:homepage
+        run: bun run build:web
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

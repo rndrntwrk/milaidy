@@ -49,8 +49,8 @@ Write the framework name as **elizaOS** in prose, comments, user-facing strings,
 
 - Install deps: `bun install`
 - Type-check/build: `bun run build` (runs tsdown + UI build)
-- Lint/format: `bun run check`
-- Run CLI in dev: `bun run milady ...` or `bun run dev:cli`
+- Lint/format: `bun run verify` (alias: `bun run check`)
+- Run CLI in dev: `bun run milady ...` or `bun run dev`
 - Desktop (Electrobun): `bun run dev:desktop` skips a full Vite build when `apps/app/dist` is fresh; `bun run dev:desktop:watch` runs the Vite dev server and sets `MILADY_RENDERER_URL` for HMR (Rollup `vite build --watch`: add `MILADY_DESKTOP_VITE_BUILD_WATCH=1`). **Busy default ports:** orchestrator and embedded runtime probe loopback for the next free API/UI ports and sync `MILADY_API_PORT` / `ELIZA_PORT` / `MILADY_PORT` so proxies and the UI agree (**why:** fixed defaults collide with other stacks or tools). Rationale: `docs/apps/desktop-local-development.md`. **Observability for agents:** same doc describes `GET /api/dev/stack`, `desktop:stack-status`, aggregated console + screenshot hooks (**why:** multi-process dev is opaque without them); `.cursor/rules/milady-desktop-dev-observability.mdc` nudges Cursor to use them.
 - Tests: `bun run test` (parallel unit + playwright), `bun run test:e2e`, `bun run test:live`
 - Coverage: `bun run test:coverage`
@@ -64,7 +64,7 @@ bun run setup:upstreams   # initializes repo-local ./eliza and links local @eliz
 ## Coding Style & Naming Conventions
 
 - Language: TypeScript (ESM). Prefer strict typing; avoid `any` and `unknown` unless absolutely necessary.
-- Formatting/linting via Biome; run `bun run check` before commits.
+- Formatting/linting via Biome; run `bun run verify` before commits (`bun run check` is an alias).
 - Add brief code comments for tricky or non-obvious logic.
 - Aim to keep files under ~500 LOC; split/refactor when it improves clarity or testability.
 - **Do not remove exception-handling guards** in `apps/app/electrobun/src/native/agent.ts` as "excess" or during deslop/cleanup. The try/catch and `.catch()` there keep the desktop app usable when the runtime fails to load (API server stays up, UI can show error). See `docs/electrobun-startup.md`.
@@ -185,7 +185,7 @@ bun run milady start              # run-node.mjs
 
 - **`bun install` fails on native deps**: TensorFlow, canvas, whisper-node require native build tools. On macOS install Xcode CLI tools (`xcode-select --install`). On Linux install `build-essential libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev`. Set `MILADY_NO_VISION_DEPS=1` to skip optional vision deps (camera, etc.).
 - **Avatar assets missing**: `bun install` clones VRM models from GitHub. On restricted networks set `SKIP_AVATAR_CLONE=1` and manually copy avatars to `apps/app/public/vrms/`.
-- **Plugin not found at runtime**: Ensure `NODE_PATH` is set. Run `bun run repair` to re-run postinstall.
+- **Plugin not found at runtime**: Ensure `NODE_PATH` is set. Run `bun run setup:sync` to re-run postinstall (`bun run repair` is an alias).
 - **Stale Vite cache after patching deps**: run `MILADY_VITE_FORCE=1 bun run dev` (or delete `apps/app/.vite/`). Dev no longer passes `--force` by default so dependency pre-bundling can cache between runs.
 - **Cold rebuild / stuck artifacts**: `bun run clean` removes root `dist`, UI + Capacitor plugin `dist`, `apps/app/.vite`, Turbo, Foundry test `out/`/`cache`, Playwright output, and `node_modules/.cache` under main workspaces. `bun run clean:deep` also removes Electrobun `build/`/`artifacts/` and generated `preload.js`, plus Electron pack dirs. For a global Bun store wipe (affects all projects): `MILADY_CLEAN_GLOBAL_TOOL_CACHE=1 bun run clean`.
 - **Config file not found**: The actual path is `~/.milady/milady.json` (because `ELIZA_NAMESPACE=milady`). The generic eliza default `~/.eliza/eliza.json` does not apply when running as Milady.

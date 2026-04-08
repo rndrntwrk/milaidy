@@ -155,7 +155,12 @@ apps/app/ios/App/build*/
 .ruff_cache/
 cache/audio/
 cache/voice/
+cache/audio/
 apps/app/.vite/
+
+# Local tool binaries (e.g. yt-dlp); PATH may prepend this dir in dev
+scripts/bin/*
+!scripts/bin/.gitkeep
 
 # Dev workflow artifacts
 milady-*.html

@@ -122,3 +122,7 @@
 	path = plugins/plugin-whatsapp
 	url = https://github.com/elizaos-plugins/plugin-whatsapp.git
 	branch = alpha
+[submodule "plugins/plugin-discord"]
+	path = plugins/plugin-discord
+	url = https://github.com/elizaos-plugins/plugin-discord.git
+	branch = alpha

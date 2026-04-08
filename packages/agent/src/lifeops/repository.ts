@@ -62,7 +62,9 @@ async function runMigrationWithSavepoint(
   migration: () => Promise<void>,
 ): Promise<void> {
   const safeName = name.replace(/[^a-zA-Z0-9_]/g, "_");
-  // PGlite/Postgres only allow SAVEPOINT inside an open transaction.
+  // Postgres / PGlite: SAVEPOINT only works inside a transaction. Each raw
+  // execute is typically autocommit, so open an explicit outer transaction.
+  // SQLite: BEGIN + SAVEPOINT is also valid.
   await executeRawSql(runtime, "BEGIN");
   try {
     await executeRawSql(runtime, `SAVEPOINT ${safeName}`);
@@ -976,6 +978,9 @@ async function runLifeOpsSchemaSetup(
       actor TEXT NOT NULL,
       created_at TEXT NOT NULL
     )`,
+  ];
+
+  /** Applied after legacy ownership columns are added — old DBs may lack domain/subject_* until ALTERs below. */
     `CREATE TABLE IF NOT EXISTS life_activity_signals (
       id TEXT PRIMARY KEY,
       agent_id TEXT NOT NULL,
@@ -991,8 +996,7 @@ async function runLifeOpsSchemaSetup(
     )`,
   ];
 
-  // Run after legacy ownership columns are present; older DBs do not have
-  // domain/subject_* until the ALTERs below.
+  /** Applied after legacy ownership columns are added — old DBs may lack domain/subject_* until ALTERs below. */
   const coreIndexStatements = [
     `CREATE INDEX IF NOT EXISTS idx_life_task_definitions_agent_status
       ON life_task_definitions(agent_id, status)`,
@@ -1097,6 +1101,9 @@ async function runLifeOpsSchemaSetup(
     );
   }
 
+  // Indexes reference ownership columns (see coreIndexStatements doc). Running
+  // this loop before the ALTERs above used to break legacy DBs that lacked
+  // domain / subject_* until migration — PGlite would fail CREATE INDEX.
   for (const statement of coreIndexStatements) {
     await executeRawSql(runtime, statement);
   }

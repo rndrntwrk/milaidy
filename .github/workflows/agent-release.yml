@@ -495,7 +495,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Build homepage
-        run: bun run build:homepage
+        run: bun run build:web
 
   build-docs:
     name: Docs validation

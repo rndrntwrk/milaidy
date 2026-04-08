@@ -1120,17 +1120,6 @@ export function shouldIgnoreMissingPluginExport(pluginName: string): boolean {
 // ---------------------------------------------------------------------------
 
 /**
- * The `@elizaos/plugin-browser` npm package expects a `dist/server/` directory
- * containing the compiled stagehand-server, but the npm publish doesn't include
- * it.  The actual source/build lives in the workspace at
- * `plugins/plugin-browser/stagehand-server/`.
- *
- * This function checks whether the server is reachable from the installed
- * package and, if not, creates a symlink so the plugin's process-manager can
- * find it.  Returns `true` when the server index.js is available (or was made
- * available via symlink), `false` otherwise.
- */
-/**
  * Returns true if the given env var key is safe to forward to runtime.settings.
  * Blocks blockchain private keys, secrets, passwords, tokens, credentials,
  * mnemonics, and seed phrases while allowing API keys that plugins need.
@@ -1172,19 +1161,20 @@ function isElizaCloudManagedProcessEnvKey(key: string): boolean {
 }
 
 /**
- * Locate `plugins/plugin-browser/stagehand-server` by walking upward from the
- * runtime directory. Supports both this repo layout and a parent workspace
- * that nests `eliza/packages/agent/...`.
+ * Locate `plugins/plugin-browser/stagehand-server` by walking parents of
+ * `startDir`. Supports both Milady (`milady/packages/agent/...`) and upstream
+ * eliza (`<workspace>/eliza/packages/agent/...` → stagehand under workspace).
+ *
+ * **Why walk parents:** A fixed number of `../` segments fails when the agent
+ * runtime lives under `eliza/packages/agent` vs `milady/packages/agent`; the
+ * checkout is always at `<workspace>/plugins/plugin-browser/stagehand-server`.
+ *
+ * @internal Exported for unit tests.
  */
 export function findPluginBrowserStagehandDir(startDir: string): string | null {
   let dir = path.resolve(startDir);
   for (let depth = 0; depth < 14; depth++) {
-    const candidate = path.join(
-      dir,
-      "plugins",
-      "plugin-browser",
-      "stagehand-server",
-    );
+    const candidate = path.join(dir, "plugins", "plugin-browser", "stagehand-server");
     const distIndex = path.join(candidate, "dist", "index.js");
     const srcEntry = path.join(candidate, "src", "index.ts");
     if (existsSync(distIndex) || existsSync(srcEntry)) {
@@ -1197,6 +1187,18 @@ export function findPluginBrowserStagehandDir(startDir: string): string | null {
   return null;
 }
 
+/**
+ * `@elizaos/plugin-browser` expects `dist/server/` with the stagehand binary
+ * tree inside the npm package, but the published tarball does not ship it.
+ * When missing, symlink to a repo checkout at `plugins/plugin-browser/stagehand-server`
+ * (discovered via {@link findPluginBrowserStagehandDir}) so the plugin's
+ * process-manager can spawn the server.
+ *
+ * **Why:** Without the symlink, browser automation fails at runtime even when
+ * the user built stagehand locally — the plugin only looks under its package root.
+ *
+ * @returns `true` when `dist/server` already resolves or symlink succeeded.
+ */
 export function ensureBrowserServerLink(): boolean {
   try {
     // Resolve the plugin-browser package root via its package.json.
@@ -1213,7 +1215,8 @@ export function ensureBrowserServerLink(): boolean {
     const stagehandDir = findPluginBrowserStagehandDir(thisDir);
     if (!stagehandDir) {
       logger.debug(
-        "[eliza] plugin-browser: no stagehand-server under plugins/plugin-browser",
+        "[eliza] plugin-browser: no stagehand-server under plugins/plugin-browser — " +
+          "run node scripts/link-browser-server.mjs or add the plugin checkout",
       );
       return false;
     }
@@ -1254,7 +1257,7 @@ export function ensureBrowserServerLink(): boolean {
 
     if (!existsSync(stagehandIndex)) {
       logger.debug(
-        "[eliza] plugin-browser: stagehand-server present but dist/index.js missing",
+        "[eliza] plugin-browser: stagehand-server present but dist/index.js missing — build it",
       );
       return false;
     }

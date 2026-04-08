@@ -129,7 +129,7 @@ Key Biome rules configured in `biome.json`:
 bun run build
 
 # Build using Node.js (instead of Bun runtime)
-bun run build:node
+bun run build
 
 # Desktop app (Electrobun)
 bun run build:desktop

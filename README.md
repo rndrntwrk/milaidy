@@ -554,15 +554,19 @@ bun run build
 bun run milady start
 ```
 
-> `scripts/rt.sh` prefers bun but falls back to npm automatically. If you want to be explicit: `bun run build:node` uses only Node.
+> `scripts/rt.sh` prefers bun but falls back to npm automatically. `bun run build` runs the production build via Node (`scripts/run-production-build.mjs`).
 
 ### Dev mode (recommended for development)
 
 ```bash
-bun run dev          # starts API (:31337) + Vite UI (:2138) with hot reload (defaults; see Ports if busy)
+bun run dev:web:ui   # API (:31337) + Vite dashboard UI (:2138); hot reload (defaults; see Ports if busy)
+bun run dev          # desktop dev orchestrator + Electrobun, with Vite watch/HMR (root package.json default)
+bun run dev:desktop  # same orchestrator without forcing Vite watch — see package.json for exact env
 ```
 
-The dev orchestrator frees the UI listen port when needed, waits for the API to be healthy, then starts Vite with an `/api` proxy to **`MILADY_API_PORT`**.
+**Why two entry points:** `dev:web:ui` is the **browser dashboard** stack only. **`bun run dev`** is optimized for **Electrobun** work (multi-process: orchestrator, API, Vite, native shell) so ports and env stay aligned — **why** a single implicit command used to confuse people editing only the web UI vs the desktop shell.
+
+The web-ui orchestrator frees the listen port when needed, waits for the API to be healthy, then starts Vite with an `/api` proxy to **`MILADY_API_PORT`**.
 
 ### Desktop shell (Electrobun)
 
@@ -576,17 +580,22 @@ bun run dev:desktop:watch  # + Vite dev server and MILADY_RENDERER_URL (HMR for 
 **IDE / agent hooks** — Editors and agents do not see the native window or auto-discover localhost. **Why we added hooks:** with desktop dev running, the API exposes **`GET /api/dev/stack`** (JSON: ports, renderer URL, which features are on). **`bun run desktop:stack-status -- --json`** probes ports and merges stack + health + status. By default, **`.milady/desktop-dev-console.log`** mirrors prefixed child logs and **`GET /api/dev/cursor-screenshot`** (loopback) returns a full-screen PNG via OS capture — both are opt-out via env (see doc). Cursor uses **`.cursor/rules/milady-desktop-dev-observability.mdc`** plus that guide.
 
 ```bash
-bun run check        # typecheck + lint (run before committing)
+bun run verify       # typecheck + lint (run before committing; `check` aliases this)
 bun run test         # parallel test suite
-bun run doctor       # diagnose environment issues
-bun run repair       # re-run postinstall hooks
+bun run milady:doctor # diagnose environment issues (`doctor` aliases this)
+bun run setup:sync   # re-run postinstall hooks (`repair` aliases this)
+bun run workspace:deps:sync   # normalize workspace:* / local checkout edges (`fix-deps` aliases sync)
+bun run workspace:deps:check  # verify workspace deps without writing (`fix-deps:check`)
 ```
+
+**Why workspace scripts:** Local **`./eliza`** and **`plugins/*`** checkouts frequently drift dependency edges; the scripts automate what used to be manual `package.json` surgery. See **[Developer diagnostics and workspace](docs/guides/developer-diagnostics-and-workspace.md)**.
 
 See **[Architecture](docs/architecture.mdx)** for the full development guide including architecture overview and config reference. See **[CONTRIBUTING.md](./CONTRIBUTING.md)** for contribution guidelines.
 
 ### Documentation (with WHYs)
 
-- **[Plugin resolution and NODE_PATH](docs/plugin-resolution-and-node-path.md)** — Why we set `NODE_PATH` in three places so dynamic plugin imports resolve when building from source (CLI, desktop dev, Electrobun). Includes **pinned `@elizaos/plugin-openrouter`** and **why** `alpha.12` must not be resolved until upstream fixes the published bundle.
+- **[Developer diagnostics and workspace](docs/guides/developer-diagnostics-and-workspace.md)** — Why optional-plugin logs include **load provenance**, why stagehand path **walks parents**, why life-ops migrations use explicit **transactions** and **deferred indexes**, and why **workspace:** scripts / **gitignore** rules exist for local checkouts.
+- **[Plugin resolution and NODE_PATH](docs/plugin-resolution-and-node-path.md)** — Why we set `NODE_PATH` in three places so dynamic plugin imports resolve when building from source (CLI, desktop dev, Electrobun). Includes **pinned `@elizaos/plugin-openrouter`**, **why** `alpha.12` must not be resolved until upstream fixes the published bundle, and **optional plugin provenance** when a package is missing.
 - **[Build and release](docs/build-and-release.md)** — Why the release pipeline uses strict shell, retries, setup-node v3/Blacksmith, Bun cache, timeouts; why size-report pipelines handle SIGPIPE; why Windows plugin build uses `npx -p typescript tsc`.
 - **[Desktop local development](docs/apps/desktop-local-development.md)** — Why `dev:desktop` / `dev:desktop:watch` orchestrate Vite, API, and Electrobun; HMR vs `vite build --watch`; Ctrl-C, Quit, and `detached` children; **IDE/agent observability** (`/api/dev/stack`, aggregated console, screenshot proxy, WHY loopback and opt-out).
 - **[Desktop main-process reset](docs/apps/desktop-main-process-reset.md)** — Why **Reset Milady…** runs HTTP in the Electrobun main process after native confirm, how the renderer syncs UI state, reachable API probing (`res.ok`), and where tests live.

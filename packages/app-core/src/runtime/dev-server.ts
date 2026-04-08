@@ -23,13 +23,15 @@ console.log(`${getLogPrefix()} Script starting...`);
 import process from "node:process";
 import type { AgentRuntime } from "@elizaos/core";
 import { logger } from "@elizaos/core";
+import { setRestartHandler } from "@miladyai/agent/runtime/restart";
+import { colorizeDevSettingsStartupBanner } from "@miladyai/shared/dev-settings-banner-style";
 import {
   resolveApiToken,
   resolveDesktopApiPort,
   syncResolvedApiPort,
 } from "@miladyai/shared/runtime-env";
-import { setRestartHandler } from "@miladyai/agent/runtime/restart";
 import { startApiServer } from "../api/server";
+import { formatApiDevSettingsBannerText } from "./api-dev-settings-banner.js";
 import { shutdownRuntime, startEliza } from "./eliza";
 
 console.log(
@@ -47,6 +49,9 @@ try {
 console.log(`${getLogPrefix()} dotenv loaded (${Date.now() - SCRIPT_START}ms)`);
 
 const port = resolveDesktopApiPort(process.env);
+const hadUserApiTokenInEnv = !!(
+  process.env.MILADY_API_TOKEN?.trim() || process.env.ELIZA_API_TOKEN?.trim()
+);
 
 /** The currently active runtime — swapped on restart. */
 let currentRuntime: AgentRuntime | null = null;
@@ -376,6 +381,14 @@ async function main() {
   }
   console.log(`${getLogPrefix()} ╰──────────────────────────────────────────╯`);
   console.log("");
+
+  console.log(
+    colorizeDevSettingsStartupBanner(
+      formatApiDevSettingsBannerText(actualPort, {
+        hadUserApiTokenInEnv,
+      }),
+    ),
+  );
 
   // 2. Boot the elizaOS agent runtime without blocking server readiness.
   scheduleRuntimeBootstrap(0, "startup");

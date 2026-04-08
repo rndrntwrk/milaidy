@@ -81,8 +81,8 @@ describe("release support workflow drift", () => {
       scripts?: Record<string, string>;
     };
 
-    expect(workflow).toContain("run: bun run build:homepage");
-    expect(pkg.scripts?.["build:homepage"]).toBe("bun run build:web");
+    expect(workflow).toContain("run: bun run build:web");
+    expect(pkg.scripts?.["build:web"]).toContain("apps/web");
   });
 
   it("keeps stable release publishing idempotent", () => {

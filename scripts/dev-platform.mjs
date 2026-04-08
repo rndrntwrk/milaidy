@@ -16,10 +16,9 @@
  * 3. **Long-lived children** (see `launch()`):
  *    - **API** — `bun --watch dev-server` unless `--no-api`.
  *    - **Watch + default** — Vite **dev** server + `MILADY_RENDERER_URL` for Electrobun (HMR).
- *      Stale dep chunks: `MILADY_VITE_FORCE=1` (passes `vite --force`, same as dev-ui).
- *    - **Watch + `MILADY_DESKTOP_VITE_BUILD_WATCH=1`** — legacy `vite build --watch`
- *      (Rollup re-emits large chunks each save). **Why separate flag:** production watch is
- *      intentionally opt-in because it is much slower than the dev server on big graphs.
+ *      Stale dep chunks: `--vite-force` or `MILADY_VITE_FORCE=1` / `ELIZA_VITE_FORCE=1` (passes `vite --force`).
+ *    - **Watch + Rollup** — `--rollup-watch` or `MILADY_DESKTOP_VITE_BUILD_WATCH=1` with
+ *      `MILADY_DESKTOP_VITE_WATCH=1`: legacy `vite build --watch` (slow on large graphs).
  *    - **Electrobun** — `bun run dev` in `apps/app/electrobun`.
  *
  * ## Port allocation (`launch()`) — WHY
@@ -59,6 +58,8 @@ import { appendFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { createConnection } from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import chalk from "chalk";
+import { colorizeDevSettingsStartupBanner } from "../packages/shared/src/dev-settings-banner-style.ts";
 import {
   resolveDesktopApiPort,
   resolveDesktopUiPort,
@@ -67,6 +68,7 @@ import { allocateFirstFreeLoopbackPort } from "./lib/allocate-loopback-port.mjs"
 import { signalSpawnedProcessTree } from "./lib/kill-process-tree.mjs";
 import { killUiListenPort } from "./lib/kill-ui-listen-port.mjs";
 import { extendNodePathEnv } from "./lib/node-path-env.mjs";
+import { formatOrchestratorDesktopDevBanner } from "./lib/orchestrator-desktop-dev-banner.mjs";
 import { viteRendererBuildNeeded } from "./lib/vite-renderer-dist-stale.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -80,19 +82,56 @@ if (existsSync(_worktreeEnvPath)) {
   dotenvConfig({ path: _worktreeEnvPath, override: false });
 }
 
+if (process.argv.includes("--help") || process.argv.includes("-h")) {
+  console.log(`Usage: bun run dev:desktop [options]
+       MILADY_DESKTOP_VITE_WATCH=1 bun scripts/dev-platform.mjs   # same as bun run dev
+
+Starts Vite (optional), API (optional), and Electrobun with aligned ports and env.
+
+Options:
+  --no-api           Skip the API server (Electrobun + renderer only)
+  --force-renderer   Force vite build before starting (even if dist is fresh)
+  --rollup-watch     Use vite build --watch instead of vite dev (requires MILADY_DESKTOP_VITE_WATCH=1)
+  --vite-force       Pass --force to Vite (clear dep optimization cache on dev server start)
+  -h, --help         Show this help
+
+At startup, four settings tables print (Unicode frame; cyan on TTY) (orchestrator, Vite, API, Electrobun):
+columns Setting / Effective / Source / Change — Source shows default vs explicitly set.
+Secrets are redacted. Run without --help to see them.
+
+Environment (CI / automation; flags override where noted):
+  MILADY_DESKTOP_RENDERER_BUILD=always   Same as --force-renderer
+  MILADY_DESKTOP_VITE_BUILD_WATCH=1      Same as --rollup-watch (with MILADY_DESKTOP_VITE_WATCH=1)
+  MILADY_VITE_FORCE=1 / ELIZA_VITE_FORCE=1   Same as --vite-force
+  MILADY_DESKTOP_SCREENSHOT_SERVER=0     Disable screenshot dev server
+  MILADY_DESKTOP_DEV_LOG=0               Disable aggregated log file
+  MILADY_API_PORT / ELIZA_API_PORT / ELIZA_PORT   API port (first non-empty wins)
+  MILADY_PORT                            UI port (Vite dev)
+
+Docs: docs/apps/desktop-local-development.md
+`);
+  process.exit(0);
+}
+
 const appDir = path.join(repoRoot, "apps/app");
 const electrobunDir = path.join(appDir, "electrobun");
 const skipApi = process.argv.includes("--no-api");
+const forceRendererCli = process.argv.includes("--force-renderer");
 const forceRenderer =
-  process.argv.includes("--force-renderer") ||
+  forceRendererCli ||
   process.env.MILADY_DESKTOP_RENDERER_BUILD === "always" ||
   process.env.MILADY_DESKTOP_RENDERER_BUILD === "1";
 const viteWatch = process.env.MILADY_DESKTOP_VITE_WATCH === "1";
+const viteDepForceCli = process.argv.includes("--vite-force");
 const viteDepForce =
-  process.env.MILADY_VITE_FORCE === "1" || process.env.ELIZA_VITE_FORCE === "1";
+  viteDepForceCli ||
+  process.env.MILADY_VITE_FORCE === "1" ||
+  process.env.ELIZA_VITE_FORCE === "1";
+const viteRollupWatchCli = process.argv.includes("--rollup-watch");
 /** Legacy: Rollup `vite build --watch` (tens of seconds per edit on large graphs). */
 const viteRollupWatch =
-  viteWatch && process.env.MILADY_DESKTOP_VITE_BUILD_WATCH === "1";
+  viteWatch &&
+  (viteRollupWatchCli || process.env.MILADY_DESKTOP_VITE_BUILD_WATCH === "1");
 /** Default when VITE_WATCH: Vite dev server + Electrobun MILADY_RENDERER_URL (fast HMR). */
 const viteDevServer = viteWatch && !viteRollupWatch;
 /** On by default for `dev:desktop` / `dev:desktop:watch`; set to 0/false/no/off to disable. */
@@ -128,10 +167,12 @@ const desktopDevLogPath = desktopDevLogOptOut
   ? null
   : path.resolve(repoRoot, ".milady", "desktop-dev-console.log");
 
-const needRendererBuild =
-  forceRenderer || viteRendererBuildNeeded(appDir, repoRoot);
+const rendererDistStale = viteRendererBuildNeeded(appDir, repoRoot);
+const needRendererBuild = forceRenderer || rendererDistStale;
+let ranInitialViteBuild = false;
 
 if (needRendererBuild) {
+  ranInitialViteBuild = true;
   console.log("\n[eliza] Building renderer (vite build)…");
   execSync("bun run vite build", { cwd: appDir, stdio: "inherit" });
   console.log("[eliza] Renderer ready.\n");
@@ -193,16 +234,26 @@ if (viteRollupWatch) namesForLog.push("vite");
 namesForLog.push("electrobun");
 const PREFIX_PAD = Math.max(...namesForLog.map((n) => n.length));
 
+const CHILD_COLORS = {
+  vite: chalk.cyan,
+  api: chalk.green,
+  electrobun: chalk.magenta,
+  default: chalk.white,
+};
+
 function prefixStream(name, stream) {
-  const prefix = `[${name.padEnd(PREFIX_PAD)}]`;
+  const plainTag = `[${name.padEnd(PREFIX_PAD)}]`;
+  const colorFn = CHILD_COLORS[name] ?? CHILD_COLORS.default;
   stream.on("data", (chunk) => {
     for (const line of chunk.toString().split("\n")) {
       if (line.trim()) {
-        const row = `${prefix} ${line}\n`;
-        process.stdout.write(row);
+        // Use the child color for both streams. Many tools (including Electrobun)
+        // write normal startup logs to stderr; red prefixes read as errors.
+        const coloredTag = colorFn(plainTag);
+        process.stdout.write(`${coloredTag} ${line}\n`);
         if (desktopDevLogPath) {
           try {
-            appendFileSync(desktopDevLogPath, row, "utf8");
+            appendFileSync(desktopDevLogPath, `${plainTag} ${line}\n`, "utf8");
           } catch {
             /* ignore disk errors — console remains primary */
           }
@@ -276,6 +327,63 @@ async function launch() {
     );
   }
 
+  const serviceLine = namesForLog.join(", ");
+  const orchestratorBanner = formatOrchestratorDesktopDevBanner({
+    worktreePath: _worktreeEnvPath,
+    worktreeLoaded: existsSync(_worktreeEnvPath),
+    skipApi,
+    forceRenderer,
+    forceRendererCli,
+    viteWatch,
+    viteRollupWatch,
+    viteDevServer,
+    viteDepForce,
+    viteDepForceCli,
+    viteRollupWatchCli,
+    ranInitialViteBuild,
+    rendererStaleReason: rendererDistStale
+      ? "dist missing or older than renderer sources"
+      : null,
+    preferredApiPort: preferredApi,
+    allocatedApiPort: resolvedApiPort,
+    preferredUiPort: preferredUi,
+    allocatedUiPort: uiDevPort,
+    screenshotServerEnabled,
+    screenshotPort,
+    screenshotTokenRedacted: screenshotServerEnabled ? "set (redacted)" : "—",
+    screenshotProxyUrl: `http://127.0.0.1:${screenshotPort}`,
+    desktopDevLogPath,
+    desktopDevLogOptOut,
+    childrenList: serviceLine,
+    elizaNamespace: process.env.ELIZA_NAMESPACE?.trim() || "milady",
+    elizaNamespaceUnset: !process.env.ELIZA_NAMESPACE?.trim(),
+  });
+  console.log(
+    `${chalk.bold(`Milady desktop dev${skipApi ? " (no API)" : ""}`)}\n`,
+  );
+  console.log(colorizeDevSettingsStartupBanner(orchestratorBanner));
+  if (screenshotServerEnabled && !skipApi) {
+    console.log(
+      chalk.dim(
+        `[eliza] Screenshot: GET http://127.0.0.1:${apiPort}/api/dev/cursor-screenshot → Electrobun :${screenshotPort}`,
+      ),
+    );
+  }
+  if (desktopDevLogPath && !skipApi) {
+    console.log(
+      chalk.dim(
+        `[eliza] Console log tail: GET http://127.0.0.1:${apiPort}/api/dev/console-log  | file: ${desktopDevLogPath}`,
+      ),
+    );
+  } else if (desktopDevLogPath && skipApi) {
+    console.log(
+      chalk.dim(
+        `[eliza] Dev console log file: ${desktopDevLogPath} (no API proxy — --no-api)`,
+      ),
+    );
+  }
+  console.log("");
+
   if (viteDevServer) {
     killUiListenPort(uiDevPort);
     console.log(
@@ -303,29 +411,6 @@ async function launch() {
     );
     await waitForPort(uiDevPort);
     console.log(`[eliza] Vite ready on ${rendererUrlForShell}\n`);
-  }
-
-  const serviceLine = namesForLog.join(", ");
-  console.log(
-    `Milady desktop dev${skipApi ? " (no API)" : ""}\n` +
-      `  Services: ${serviceLine}\n`,
-  );
-  if (screenshotServerEnabled && !skipApi) {
-    console.log(
-      "[eliza] Screenshot server for Cursor/agents: enabled\n" +
-        `  GET http://127.0.0.1:${apiPort}/api/dev/cursor-screenshot  (PNG, loopback; proxies Electrobun on :${screenshotPort})\n`,
-    );
-  }
-  if (desktopDevLogPath && !skipApi) {
-    console.log(
-      "[eliza] Dev console log (aggregated child output)\n" +
-        `  file: ${desktopDevLogPath}\n` +
-        `  GET http://127.0.0.1:${apiPort}/api/dev/console-log  (tail, loopback; ?maxLines=&maxBytes=)\n`,
-    );
-  } else if (desktopDevLogPath && skipApi) {
-    console.log(
-      `[eliza] Dev console log file: ${desktopDevLogPath}  (no API proxy — started with --no-api)\n`,
-    );
   }
 
   if (!skipApi) {

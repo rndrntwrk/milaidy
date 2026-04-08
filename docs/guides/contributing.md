@@ -165,7 +165,7 @@ turbo run lint
 bun run build
 
 # TypeScript only
-bun run build:node
+bun run build
 
 # Desktop app (Electrobun)
 bun run build:desktop

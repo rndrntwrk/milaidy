@@ -60,6 +60,26 @@ The [life-ops system](/rest/lifeops) now integrates with Google Calendar and Gma
 
 </Update>
 
+<Update label="2026-04-07" description="Developer diagnostics, life-ops PGlite migrations, workspace scripts, terminal dev banners" tags={["Fix", "Update"]}>
+
+## Life-ops: safer migrations on PGlite
+
+Schema upgrades for the life-ops subsystem now run core indexes after the ownership `ALTER TABLE` steps, so legacy databases that predate `domain` and `subject_*` columns no longer fail during `CREATE INDEX`. Per-migration savepoints are also wrapped in an explicit `BEGIN` / `COMMIT` transaction so PGlite and Postgres both honor `SAVEPOINT` semantics during upgrades.
+
+## Plugin resolution: why optional plugins were requested
+
+When an optional plugin cannot be loaded because a package or browser stagehand checkout is missing, startup logs now include the first config or env source that added it to the load set. That turns a generic "Cannot find module" error into an actionable fix: remove it from `plugins.allow`, unset the env var that auto-enabled it, or install the package.
+
+## Workspace tooling and repo hygiene
+
+New workspace dependency scripts (`workspace:deps:sync|check|restore`, `workspace:replace-versions`, `workspace:restore-refs`, `workspace:prepare`) reduce manual `package.json` surgery when linking local elizaOS or plugin checkouts. The repo also now ignores `cache/audio/` and `scripts/bin/*` while keeping `scripts/bin/.gitkeep` so local binaries and caches stay out of git.
+
+## Terminal dev banners
+
+The orchestrator, Vite, API, and Electrobun can now print framed settings tables with optional figlet-style headings and TTY-aware ANSI coloring during local development. This is strictly terminal diagnostics for developer workflows, not a dashboard UI change.
+
+</Update>
+
 <Update label="2026-04-06" description="Week of March 31 – April 6; managed Discord bots, download channels, Vincent OAuth fix" tags={["Feature", "Update", "Fix"]}>
 
 ## Managed Discord for cloud agents

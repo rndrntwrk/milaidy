@@ -124,7 +124,7 @@ if (existsSync(stagehandIndex)) {
 // removes Docker env defaults, and handles EADDRINUSE properly.
 
 const patchedPm = join(
-  workspaceRoot,
+  repoRoot,
   "plugins",
   "plugin-browser",
   "typescript",

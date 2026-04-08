@@ -83,7 +83,7 @@ describe("lifeops repository PGlite schema", () => {
     expect(grants[0]?.preferredByAgent).toBe(true);
   });
 
-  it("upgrades legacy life_task_definitions before creating subject indexes", async () => {
+  it("upgrades legacy life_task_definitions without domain columns before creating subject indexes", async () => {
     db = new PGlite();
 
     await requireDb().exec(`
@@ -144,7 +144,7 @@ describe("lifeops repository PGlite schema", () => {
     expect(subjectIdx.rows?.length ?? 0).toBeGreaterThan(0);
   });
 
-  it("runs connector-grants savepoint migration on PGlite", async () => {
+  it("runs connector-grants savepoint migration on PGlite (BEGIN + SAVEPOINT)", async () => {
     db = new PGlite();
 
     await requireDb().exec(`

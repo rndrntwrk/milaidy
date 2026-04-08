@@ -1420,6 +1420,121 @@ function patchAgentSkillsLocalFallback() {
 patchAgentSkillsLocalFallback();
 
 /**
+ * Milady: use directory slug as canonical skill `name` when SKILL.md `name`
+ * differs (avoids noisy validation + matches AgentSkillsService slug).
+ *
+ * Also repairs a bad Bun patch apply that left `resolvedSkillName` before
+ * `references`/`assets` and dropped `const version` (syntax error at return).
+ *
+ * Applied via patch-deps (not unified diff) because multi-hunk patches on this
+ * bundle have fuzz-matched incorrectly under .bun install layouts.
+ */
+function patchAgentSkillsDirectorySlugAsName() {
+  const relPath = "dist/index.js";
+  const searchDirs = [
+    resolve(root, "node_modules/@elizaos/plugin-agent-skills"),
+  ];
+  const bunCacheDir = resolve(root, "node_modules/.bun");
+  if (existsSync(bunCacheDir)) {
+    try {
+      for (const entry of readdirSync(bunCacheDir)) {
+        if (entry.startsWith("@elizaos+plugin-agent-skills@")) {
+          searchDirs.push(
+            resolve(
+              bunCacheDir,
+              entry,
+              "node_modules/@elizaos/plugin-agent-skills",
+            ),
+          );
+        }
+      }
+    } catch {}
+  }
+
+  const corruptedNeedle = `    const scripts = await storage.listFiles(slug, "scripts");
+    const resolvedSkillName =
+      typeof slug === "string" &&
+      slug.length > 0 &&
+      typeof frontmatter.name === "string" &&
+      slug !== frontmatter.name
+        ? slug
+        : typeof frontmatter.name === "string"
+          ? frontmatter.name
+          : String(frontmatter.name || "");
+    const references = await storage.listFiles(slug, "references");
+    const assets = await storage.listFiles(slug, "assets");
+      name: resolvedSkillName,
+    return {
+      slug,
+      name: typeof frontmatter.name === "string" ? frontmatter.name : String(frontmatter.name || ""),`;
+
+  const upgradedNeedle = `    const version = frontmatter.metadata?.version?.toString() || "local";
+    return {
+      slug,
+      name: typeof frontmatter.name === "string" ? frontmatter.name : String(frontmatter.name || ""),`;
+
+  const repairReplacement = `    const scripts = await storage.listFiles(slug, "scripts");
+    const references = await storage.listFiles(slug, "references");
+    const assets = await storage.listFiles(slug, "assets");
+    const version = frontmatter.metadata?.version?.toString() || "local";
+    const resolvedSkillName =
+      typeof slug === "string" &&
+      slug.length > 0 &&
+      typeof frontmatter.name === "string" &&
+      slug !== frontmatter.name
+        ? slug
+        : typeof frontmatter.name === "string"
+          ? frontmatter.name
+          : String(frontmatter.name || "");
+    return {
+      slug,
+      name: resolvedSkillName,`;
+
+  const upgradedReplacement = `    const version = frontmatter.metadata?.version?.toString() || "local";
+    const resolvedSkillName =
+      typeof slug === "string" &&
+      slug.length > 0 &&
+      typeof frontmatter.name === "string" &&
+      slug !== frontmatter.name
+        ? slug
+        : typeof frontmatter.name === "string"
+          ? frontmatter.name
+          : String(frontmatter.name || "");
+    return {
+      slug,
+      name: resolvedSkillName,`;
+
+  let patched = 0;
+  for (const dir of searchDirs) {
+    const target = resolve(dir, relPath);
+    if (!existsSync(target)) continue;
+    let src = readFileSync(target, "utf8");
+    if (src.includes(corruptedNeedle)) {
+      src = src.replace(corruptedNeedle, repairReplacement);
+      writeFileSync(target, src, "utf8");
+      patched++;
+      console.log(
+        `[patch-deps] Repaired corrupted plugin-agent-skills loadSkill block: ${target}`,
+      );
+      continue;
+    }
+    if (!src.includes(upgradedNeedle)) continue;
+    src = src.replace(upgradedNeedle, upgradedReplacement);
+    writeFileSync(target, src, "utf8");
+    patched++;
+    console.log(
+      `[patch-deps] Applied plugin-agent-skills directory-slug-as-name: ${target}`,
+    );
+  }
+  if (patched === 0) {
+    console.log(
+      "[patch-deps] plugin-agent-skills directory-slug-as-name: already patched or pattern not found.",
+    );
+  }
+}
+patchAgentSkillsDirectorySlugAsName();
+
+/**
  * Patch cssstyle's CommonJS parser bundle to use a CJS-compatible css-color.
  *
  * cssstyle@6.2.0 still calls require("@asamuzakjp/css-color"), but the 5.x
