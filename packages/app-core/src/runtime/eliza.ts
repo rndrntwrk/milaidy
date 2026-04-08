@@ -1,3 +1,4 @@
+import { createRequire } from "node:module";
 import {
   type AgentRuntime,
   AutonomyService,
@@ -63,6 +64,7 @@ const INTERNAL_CHANNEL_PLUGIN_OVERRIDES = {
 /** Swarm / PTY paths call TEXT_TO_SPEECH; Edge TTS supplies that model with no API key. */
 const AGENT_ORCHESTRATOR_PLUGIN = "@elizaos/plugin-agent-orchestrator";
 const EDGE_TTS_PLUGIN = "@elizaos/plugin-edge-tts";
+const require = createRequire(import.meta.url);
 
 export function isMiladyEdgeTtsDisabled(
   config: Parameters<typeof upstreamCollectPluginNames>[0],
@@ -239,6 +241,7 @@ export async function ensureMiladyTextToSpeechHandler(
 
   type EdgeTtsPluginModule = {
     default?: { models?: Record<string, TtsModelHandler> };
+    edgeTTSPlugin?: { models?: Record<string, TtsModelHandler> };
   };
 
   const readHandler = (
@@ -266,6 +269,14 @@ export async function ensureMiladyTextToSpeechHandler(
         "@elizaos/plugin-edge-tts"
       )) as EdgeTtsPluginModule;
       handler = readHandler(rootMod.default);
+    }
+    if (!handler) {
+      try {
+        const cjsMod = require("@elizaos/plugin-edge-tts") as EdgeTtsPluginModule;
+        handler = readHandler(cjsMod.edgeTTSPlugin);
+      } catch {
+        handler = undefined;
+      }
     }
     if (!handler) {
       logger.warn(

@@ -244,7 +244,7 @@ export function App() {
   const contextMenu = useContextMenu();
 
   useStreamPopoutNavigation(setTab);
-  useLifeOpsActivitySignals();
+  useLifeOpsActivitySignals(startupCoordinator.phase === "ready");
 
   const [customActionsPanelOpen, setCustomActionsPanelOpen] = useState(false);
   const [customActionsEditorOpen, setCustomActionsEditorOpen] = useState(false);

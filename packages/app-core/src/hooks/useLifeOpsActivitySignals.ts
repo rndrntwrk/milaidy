@@ -98,17 +98,24 @@ function mapMobileSignal(
   };
 }
 
-export function useLifeOpsActivitySignals(): void {
+export function useLifeOpsActivitySignals(enabled = true): void {
   const platformRef = useRef(resolveActivityPlatform());
   const lastSentRef = useRef<Map<string, SignalFingerprint>>(new Map());
 
   useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+
     let mounted = true;
 
     const reportCaptureError = (error: unknown): void => {
       if (
         isApiError(error) &&
-        (error.kind === "network" || error.kind === "timeout")
+        (error.kind === "network" ||
+          error.kind === "timeout" ||
+          (error.status === 503 &&
+            error.path === "/api/lifeops/activity-signals"))
       ) {
         return;
       }
@@ -337,5 +344,5 @@ export function useLifeOpsActivitySignals(): void {
       window.clearInterval(pageHeartbeat);
       window.clearInterval(desktopPoller);
     };
-  }, []);
+  }, [enabled]);
 }

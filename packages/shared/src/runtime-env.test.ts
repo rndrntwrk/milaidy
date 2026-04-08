@@ -69,6 +69,7 @@ describe("runtime env helpers", () => {
     expect(resolveDisableAutoApiToken(env)).toBe(true);
     expect(resolveDesktopApiPort(env)).toBe(31338);
     expect(resolveSingleProcessPort(env)).toBe(31338);
+    expect(resolveDesktopApiPort({})).toBe(31337);
     expect(resolveUiPort({})).toBe(2138);
   });
 

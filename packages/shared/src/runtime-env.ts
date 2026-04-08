@@ -1,6 +1,7 @@
 const DEFAULT_API_BIND_HOST = "127.0.0.1";
 export const DEFAULT_SERVER_ONLY_PORT = 2138;
-export const DEFAULT_DESKTOP_API_PORT = 2138;
+// Dev mode splits the Milady API from the Vite UI: API on 31337, UI on 2138.
+export const DEFAULT_DESKTOP_API_PORT = 31337;
 export const DEFAULT_DESKTOP_UI_PORT = 2138;
 
 const ENABLED_ENV_VALUES = new Set(["1", "true", "yes", "on"]);
