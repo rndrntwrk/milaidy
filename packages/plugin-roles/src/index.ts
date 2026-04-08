@@ -19,8 +19,10 @@ import { updateRoleAction } from "./action";
 import { rolesProvider } from "./provider";
 import type { RolesPluginConfig, RolesWorldMetadata } from "./types";
 import {
+  hasConfiguredCanonicalOwner,
   matchEntityToConnectorAdminWhitelist,
   normalizeRole,
+  resolveCanonicalOwnerId,
   setConnectorAdminWhitelist,
 } from "./utils";
 
@@ -46,8 +48,12 @@ export { ROLE_RANK } from "./types";
 export {
   canModifyRole,
   checkSenderRole,
+  getConfiguredOwnerEntityIds,
   getEntityRole,
+  hasConfiguredCanonicalOwner,
   normalizeRole,
+  resolveCanonicalOwnerId,
+  resolveCanonicalOwnerIdForMessage,
   resolveWorldForMessage,
   setEntityRole,
 } from "./utils";
@@ -126,18 +132,39 @@ async function ensureOwnerRole(runtime: IAgentRuntime): Promise<boolean> {
       if (!world.id) continue;
 
       await updateWorldMetadata(runtime, world.id, (metadata) => {
-        const ownerId = metadata.ownership?.ownerId;
+        const ownerId = resolveCanonicalOwnerId(runtime, metadata);
         if (!ownerId) return false;
 
-        const currentRole = normalizeRole(metadata.roles?.[ownerId]);
-        if (currentRole === "OWNER") return false;
+        let changed = false;
+
+        metadata.ownership ??= {};
+        if (metadata.ownership.ownerId !== ownerId) {
+          metadata.ownership.ownerId = ownerId;
+          changed = true;
+        }
 
         if (!metadata.roles) metadata.roles = {};
-        metadata.roles[ownerId] = "OWNER";
-        logger.info(
-          `[roles] Auto-assigned OWNER role to world owner ${ownerId} in world ${world.id}`,
-        );
-        return true;
+        if (normalizeRole(metadata.roles[ownerId]) !== "OWNER") {
+          metadata.roles[ownerId] = "OWNER";
+          changed = true;
+        }
+
+        if (hasConfiguredCanonicalOwner(runtime)) {
+          for (const [entityId, role] of Object.entries(metadata.roles)) {
+            if (entityId !== ownerId && normalizeRole(role) === "OWNER") {
+              delete metadata.roles[entityId];
+              changed = true;
+            }
+          }
+        }
+
+        if (changed) {
+          logger.info(
+            `[roles] Synced canonical OWNER ${ownerId} in world ${world.id}`,
+          );
+        }
+
+        return changed;
       });
     }
     return true;

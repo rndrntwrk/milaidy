@@ -1396,7 +1396,7 @@ describe("API Server E2E (no runtime)", () => {
       }
     });
 
-    it("POST /api/conversations/:id/messages starts a fallback trajectory when hooks do not set a step id", async () => {
+    it("POST /api/conversations/:id/messages does not synthesize a fallback trajectory when hooks do not set a step id", async () => {
       const starts: Array<{ stepId: string; source?: string }> = [];
       const ends: Array<{ stepId: string; status?: string }> = [];
       const trajectoryLogger = {
@@ -1429,9 +1429,7 @@ describe("API Server E2E (no runtime)", () => {
 
         expect(status).toBe(200);
         expect(String(data.text ?? "")).toBe("Hello world");
-        expect(starts).toHaveLength(1);
-        expect(starts[0]?.stepId).toBe("chat-stream-agent");
-        expect(starts[0]?.source).toBe("client_chat");
+        expect(starts).toHaveLength(0);
         expect(ends).toHaveLength(0);
       } finally {
         await streamServer.close();
@@ -1533,7 +1531,7 @@ describe("API Server E2E (no runtime)", () => {
       }
     });
 
-    it("POST /api/conversations/:id/messages falls back to starting and ending a trajectory when MESSAGE_RECEIVED misses the step id", async () => {
+    it("POST /api/conversations/:id/messages does not inject a fallback trajectory step id when MESSAGE_RECEIVED misses the step id", async () => {
       const starts: Array<{
         agentId: string;
         source?: string;
@@ -1599,7 +1597,7 @@ describe("API Server E2E (no runtime)", () => {
             message && typeof message === "object" && "metadata" in message
               ? (message.metadata as { trajectoryStepId?: string } | undefined)
               : undefined;
-          expect(metadata?.trajectoryStepId).toBe("trajectory-fallback-step");
+          expect(metadata?.trajectoryStepId).toBeUndefined();
           await onResponse({ text: "Hello world" } as Content);
           return {
             responseContent: {
@@ -1622,14 +1620,10 @@ describe("API Server E2E (no runtime)", () => {
 
         expect(status).toBe(200);
         expect(String(data.text ?? "")).toBe("Hello world");
-        expect(enabled).toBe(true);
-        expect(starts).toHaveLength(1);
-        expect(starts[0]?.agentId).toBe("chat-stream-agent");
-        expect(starts[0]?.source).toBe("client_chat");
-        expect(steps).toEqual(["trajectory-fallback-id"]);
-        expect(ends).toEqual([
-          { stepId: "trajectory-fallback-step", status: "completed" },
-        ]);
+        expect(enabled).toBe(false);
+        expect(starts).toHaveLength(0);
+        expect(steps).toEqual([]);
+        expect(ends).toEqual([]);
       } finally {
         await streamServer.close();
       }

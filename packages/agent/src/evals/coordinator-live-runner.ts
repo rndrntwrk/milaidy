@@ -206,6 +206,26 @@ function responseLooksShareable(text: string): boolean {
   return URL_RE.test(text) || ABSOLUTE_PATH_RE.test(text);
 }
 
+function trajectoryGrouping(
+  trajectory: TrajectoryListItem,
+): {
+  scenarioId?: string;
+  batchId?: string;
+} {
+  const metadata =
+    trajectory.metadata && typeof trajectory.metadata === "object"
+      ? trajectory.metadata
+      : {};
+  return {
+    scenarioId:
+      trajectory.scenarioId ??
+      (typeof metadata.scenarioId === "string" ? metadata.scenarioId : undefined),
+    batchId:
+      trajectory.batchId ??
+      (typeof metadata.batchId === "string" ? metadata.batchId : undefined),
+  };
+}
+
 async function listFilesRecursively(
   root: string,
   limit = 200,
@@ -512,8 +532,10 @@ async function gatherScenarioEvidence(params: {
     {
       id: "trajectory-batch-filter",
       passed: trajectories.every(
-        (trajectory) =>
-          trajectory.scenarioId === scenario.id && trajectory.batchId === batchId,
+        (trajectory) => {
+          const grouping = trajectoryGrouping(trajectory);
+          return grouping.scenarioId === scenario.id && grouping.batchId === batchId;
+        },
       ),
       details: {
         sources: trajectories.map((trajectory) => trajectory.source ?? "unknown"),
@@ -618,8 +640,10 @@ async function gatherScenarioEvidence(params: {
       (thread) => thread.scenarioId === scenario.id && thread.batchId === batchId,
     ),
     groupedTrajectories: trajectories.every(
-      (trajectory) =>
-        trajectory.scenarioId === scenario.id && trajectory.batchId === batchId,
+      (trajectory) => {
+        const grouping = trajectoryGrouping(trajectory);
+        return grouping.scenarioId === scenario.id && grouping.batchId === batchId;
+      },
     ),
   });
   await client.writeJson(path.join(outputDir, "checks.json"), checks);

@@ -21,6 +21,7 @@ function createInitRuntime(opts: {
   worlds: MockWorld[];
   worldRooms?: Record<string, MockRoom[]>;
   roomEntities?: Record<string, MockEntity[]>;
+  settings?: Record<string, string | boolean | number | null>;
 }): IAgentRuntime {
   return {
     getAllWorlds: vi.fn().mockResolvedValue(opts.worlds),
@@ -37,6 +38,10 @@ function createInitRuntime(opts: {
 
     getEntitiesForRoom: vi.fn().mockImplementation(async (roomId: string) => {
       return opts.roomEntities?.[roomId] ?? [];
+    }),
+
+    getSetting: vi.fn().mockImplementation((key: string) => {
+      return opts.settings?.[key] ?? null;
     }),
   } as unknown as IAgentRuntime;
 }
@@ -111,6 +116,28 @@ describe("ensureOwnerRole via init()", () => {
     const runtime = createInitRuntime({ worlds: [w1, w2] });
     await rolesPlugin.init!({}, runtime);
     expect(runtime.updateWorld).toHaveBeenCalledTimes(2);
+  });
+
+  it("rewrites connector-local world ownership to the configured canonical owner", async () => {
+    const world: MockWorld = {
+      id: "w1",
+      metadata: {
+        ownership: { ownerId: "discord-guild-owner" },
+        roles: { "discord-guild-owner": "OWNER" },
+      },
+    };
+    const runtime = createInitRuntime({
+      worlds: [world],
+      settings: {
+        MILADY_ADMIN_ENTITY_ID: "owner-canonical",
+      },
+    });
+
+    await rolesPlugin.init!({}, runtime);
+
+    expect(world.metadata.ownership?.ownerId).toBe("owner-canonical");
+    expect(world.metadata.roles?.["owner-canonical"]).toBe("OWNER");
+    expect(world.metadata.roles?.["discord-guild-owner"]).toBeUndefined();
   });
 
   it("does not crash when getAllWorlds throws", async () => {

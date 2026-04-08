@@ -194,4 +194,52 @@ describe("lifeops repository PGlite schema", () => {
     );
     expect(sideCol.rows?.length ?? 0).toBeGreaterThan(0);
   });
+
+  it("reinitializes schema when the runtime is rebound to a fresh database", async () => {
+    db = new PGlite();
+
+    const runtime = {
+      agentId: "lifeops-reset-schema-agent",
+      character: { name: "lifeops-reset-schema-agent" },
+      getSetting: () => undefined,
+      getService: () => null,
+      adapter: {
+        db: {
+          execute: async (query: SqlQuery) => {
+            const sql = extractSqlText(query).trim();
+            return requireDb().query(sql);
+          },
+        },
+      },
+    } as unknown as IAgentRuntime;
+
+    const repository = new LifeOpsRepository(runtime);
+
+    await expect(
+      repository.listActiveDefinitions("lifeops-reset-schema-agent"),
+    ).resolves.toEqual([]);
+
+    let definitionTable = await requireDb().query<{ table_name: string }>(
+      `SELECT table_name
+         FROM information_schema.tables
+        WHERE table_schema = current_schema()
+          AND table_name = 'life_task_definitions'`,
+    );
+    expect(definitionTable.rows?.length ?? 0).toBeGreaterThan(0);
+
+    await requireDb().close();
+    db = new PGlite();
+
+    await expect(
+      repository.listActiveDefinitions("lifeops-reset-schema-agent"),
+    ).resolves.toEqual([]);
+
+    definitionTable = await requireDb().query<{ table_name: string }>(
+      `SELECT table_name
+         FROM information_schema.tables
+        WHERE table_schema = current_schema()
+          AND table_name = 'life_task_definitions'`,
+    );
+    expect(definitionTable.rows?.length ?? 0).toBeGreaterThan(0);
+  });
 });

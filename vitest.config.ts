@@ -31,27 +31,29 @@ const workspacePluginPackageNames = Object.keys({
   .filter((packageName) => packageName.startsWith("@elizaos/plugin-"))
   .sort();
 const resolvedPluginNames = new Set<string>();
-const elizaPluginAliases = workspacePluginPackageNames.flatMap((packageName) => {
-  const aliases: Array<{ find: string; replacement: string }> = [];
-  const nodeEntry = getInstalledPackageEntry(packageName, repoRoot, "node");
-  if (nodeEntry) {
-    aliases.push({
-      find: `${packageName}/node`,
-      replacement: nodeEntry,
-    });
-  }
+const elizaPluginAliases = workspacePluginPackageNames.flatMap(
+  (packageName) => {
+    const aliases: Array<{ find: string; replacement: string }> = [];
+    const nodeEntry = getInstalledPackageEntry(packageName, repoRoot, "node");
+    if (nodeEntry) {
+      aliases.push({
+        find: `${packageName}/node`,
+        replacement: nodeEntry,
+      });
+    }
 
-  const defaultEntry = getInstalledPackageEntry(packageName, repoRoot);
-  if (defaultEntry) {
-    resolvedPluginNames.add(packageName);
-    aliases.push({
-      find: packageName,
-      replacement: defaultEntry,
-    });
-  }
+    const defaultEntry = getInstalledPackageEntry(packageName, repoRoot);
+    if (defaultEntry) {
+      resolvedPluginNames.add(packageName);
+      aliases.push({
+        find: packageName,
+        replacement: defaultEntry,
+      });
+    }
 
-  return aliases;
-});
+    return aliases;
+  },
+);
 // Stub @elizaos/plugin-* packages whose npm tarball has a broken or missing
 // entry point (e.g. dist/index.js absent). Without this, vi.mock() factory
 // calls still fail because vitest cannot resolve the module specifier.
@@ -288,9 +290,11 @@ export default defineConfig({
       "packages/app-core/src/**/*.test.ts",
       "packages/shared/src/**/*.test.ts",
       "packages/app-core/src/**/*.test.tsx",
+      "packages/plugin-roles/test/**/*.test.ts",
       "packages/plugin-selfcontrol/src/**/*.test.ts",
       "packages/plugin-wechat/src/**/*.test.ts",
       "packages/plugin-music-player/src/**/*.test.ts",
+      "plugins/plugin-discord/typescript/__tests__/identity.test.ts",
       "src/**/*.test.ts",
       "scripts/**/*.test.ts",
       "apps/app/electrobun/src/**/*.test.ts",

@@ -68,8 +68,7 @@ export const coordinatorScenarios: CoordinatorScenario[] = [
     channels: ALL_CHANNELS,
     requiredCapabilities: ["create_task", "continue_task", "artifact_visibility"],
     turns: [
-      { speaker: "user", text: "Can you make a little web page for me that shows my birthday and astrological sign?" },
-      { speaker: "user", text: "I can do that, right?" },
+      { speaker: "user", text: "Can you make a little web page for me that shows my birthday, March 14, 1991, and my astrological sign?" },
       { speaker: "user", text: "Can I view that?" },
       { speaker: "user", text: "Change it so it also shows the weekday I was born on." },
     ],

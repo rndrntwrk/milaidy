@@ -3,7 +3,6 @@ import { describe, expect, it, vi } from "vitest";
 import { rolesProvider } from "../src/provider";
 import { setConnectorAdminWhitelist } from "../src/utils";
 import type { RoleName, RolesWorldMetadata } from "../src/types";
-import { setConnectorAdminWhitelist } from "../src/utils";
 
 function mockRuntime(opts: {
   room?: { worldId: string | null } | null;
@@ -13,6 +12,7 @@ function mockRuntime(opts: {
     { names: string[]; metadata?: Record<string, unknown> }
   >;
   updateWorld?: ReturnType<typeof vi.fn>;
+  settings?: Record<string, string | boolean | number | null>;
 }): IAgentRuntime {
   return {
     getRoom: vi.fn().mockResolvedValue(opts.room ?? null),
@@ -30,6 +30,9 @@ function mockRuntime(opts: {
       const e = opts.entities?.[id];
       if (!e) return null;
       return { id, names: e.names, metadata: e.metadata ?? {} };
+    }),
+    getSetting: vi.fn().mockImplementation((key: string) => {
+      return opts.settings?.[key] ?? null;
     }),
   } as unknown as IAgentRuntime;
 }
@@ -75,6 +78,29 @@ describe("rolesProvider", () => {
     expect(result.text).toContain("Shaw");
     expect(result.text).toContain("Alice");
     expect(result.text).toContain("Bob");
+  });
+
+  it("filters connector-local OWNER entries when a canonical owner is configured", async () => {
+    const runtime = mockRuntime({
+      room: { worldId: "w1" },
+      worldMeta: {
+        ownership: { ownerId: "discord-guild-owner" },
+        roles: { "discord-guild-owner": "OWNER", "owner-app": "OWNER" },
+      },
+      settings: {
+        MILADY_ADMIN_ENTITY_ID: "owner-app",
+      },
+      entities: {
+        "owner-app": { names: ["Shaw"] },
+        "discord-guild-owner": { names: ["GuildOwner"] },
+      },
+    });
+
+    const result = await rolesProvider.get(runtime, msg("owner-app"), emptyState);
+    expect(result.values?.speakerRole).toBe("OWNER");
+    expect(result.data?.owners).toEqual(["owner-app"]);
+    expect(result.text).toContain("Shaw");
+    expect(result.text).not.toContain("GuildOwner");
   });
 
   it("returns USER speaker (no manage)", async () => {

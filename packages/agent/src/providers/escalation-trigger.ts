@@ -19,6 +19,7 @@ import type {
   UUID,
 } from "@elizaos/core";
 import { logger } from "@elizaos/core";
+import { resolveCanonicalOwnerIdForMessage } from "@miladyai/plugin-roles";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -31,10 +32,6 @@ interface Trigger {
   message: string;
   urgency: Urgency;
 }
-
-type WorldMetadataShape = {
-  ownership?: { ownerId?: string };
-};
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -64,21 +61,6 @@ const EMPTY: ProviderResult = {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-async function resolveOwnerEntityId(
-  runtime: IAgentRuntime,
-  message: Memory,
-): Promise<string | null> {
-  try {
-    const room = await runtime.getRoom(message.roomId);
-    if (!room?.worldId) return null;
-    const world = await runtime.getWorld(room.worldId);
-    const metadata = (world?.metadata ?? {}) as WorldMetadataShape;
-    return metadata.ownership?.ownerId ?? null;
-  } catch {
-    return null;
-  }
-}
 
 /**
  * Check when the owner last sent a message across their rooms.
@@ -145,7 +127,10 @@ async function checkOwnerInactivity(
   // Only run during autonomous agent loops (agent talking to itself).
   if (message.entityId !== runtime.agentId) return;
 
-  const ownerEntityId = await resolveOwnerEntityId(runtime, message);
+  const ownerEntityId = await resolveCanonicalOwnerIdForMessage(
+    runtime,
+    message,
+  );
   if (!ownerEntityId) return;
 
   const lastOwnerMessage = await findLastOwnerMessageTimestamp(

@@ -147,6 +147,7 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
     props.handleCloudDisconnect ?? app.handleCloudDisconnect;
   const setState = props.setState ?? app.setState;
   const setTab = props.setTab ?? app.setTab;
+  const setActionNotice = app.setActionNotice;
   /* ── Model selection state ─────────────────────────────────────── */
   const [modelOptions, setModelOptions] = useState<
     OnboardingOptions["models"] | null
@@ -354,9 +355,30 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
     );
   }, [allAiProviders, resolvedSelectedId]);
 
+  const restoreSelection = useCallback(
+    (previousSelectedId: string | null, previousManualSelection: boolean) => {
+      hasManualSelection.current = previousManualSelection;
+      setSelectedProviderId(previousSelectedId);
+    },
+    [],
+  );
+
+  const notifySelectionFailure = useCallback(
+    (prefix: string, err: unknown) => {
+      const message =
+        err instanceof Error && err.message.trim()
+          ? `${prefix}: ${err.message}`
+          : prefix;
+      setActionNotice?.(message, "error", 6000);
+    },
+    [setActionNotice],
+  );
+
   /* ── Handlers ─────────────────────────────────────────────────── */
   const handleSwitchProvider = useCallback(
     async (newId: string) => {
+      const previousSelectedId = resolvedSelectedId;
+      const previousManualSelection = hasManualSelection.current;
       hasManualSelection.current = true;
       setSelectedProviderId(newId);
       const target =
@@ -374,10 +396,11 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
       try {
         await client.switchProvider(providerId);
       } catch (err) {
-        console.warn("[eliza] Provider switch failed", err);
+        restoreSelection(previousSelectedId, previousManualSelection);
+        notifySelectionFailure("Failed to switch AI provider", err);
       }
     },
-    [allAiProviders],
+    [allAiProviders, notifySelectionFailure, resolvedSelectedId, restoreSelection],
   );
 
   const handleSelectSubscription = useCallback(
@@ -385,6 +408,8 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
       providerId: SubscriptionProviderSelectionId,
       activate: boolean = true,
     ) => {
+      const previousSelectedId = resolvedSelectedId;
+      const previousManualSelection = hasManualSelection.current;
       hasManualSelection.current = true;
       setSelectedProviderId(providerId);
 
@@ -395,21 +420,25 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
       try {
         await client.switchProvider(providerId);
       } catch (err) {
-        console.warn("[eliza] Provider switch failed", err);
+        restoreSelection(previousSelectedId, previousManualSelection);
+        notifySelectionFailure("Failed to update subscription provider", err);
       }
     },
-    [],
+    [notifySelectionFailure, resolvedSelectedId, restoreSelection],
   );
 
   const handleSelectCloud = useCallback(async () => {
+    const previousSelectedId = resolvedSelectedId;
+    const previousManualSelection = hasManualSelection.current;
     hasManualSelection.current = true;
     setSelectedProviderId("__cloud__");
     try {
       await client.switchProvider("elizacloud");
     } catch (err) {
-      console.warn("[eliza] Failed to select cloud provider", err);
+      restoreSelection(previousSelectedId, previousManualSelection);
+      notifySelectionFailure("Failed to select Eliza Cloud", err);
     }
-  }, []);
+  }, [notifySelectionFailure, resolvedSelectedId, restoreSelection]);
 
   const handlePiAiSave = useCallback(async () => {
     setPiAiSaving(true);
@@ -420,17 +449,24 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
       setPiAiSaveSuccess(true);
       setTimeout(() => setPiAiSaveSuccess(false), 2000);
     } catch (err) {
-      console.warn("[eliza] Failed to enable pi-ai", err);
+      notifySelectionFailure("Failed to enable pi.ai", err);
+      throw err;
     } finally {
       setPiAiSaving(false);
     }
-  }, [piAiModelSpec, setTimeout]);
+  }, [notifySelectionFailure, piAiModelSpec, setTimeout]);
 
   const handleSelectPiAi = useCallback(async () => {
+    const previousSelectedId = resolvedSelectedId;
+    const previousManualSelection = hasManualSelection.current;
     hasManualSelection.current = true;
     setSelectedProviderId("pi-ai");
-    await handlePiAiSave();
-  }, [handlePiAiSave]);
+    try {
+      await handlePiAiSave();
+    } catch {
+      restoreSelection(previousSelectedId, previousManualSelection);
+    }
+  }, [handlePiAiSave, resolvedSelectedId, restoreSelection]);
 
   const normalizedPiAiModelSpec = piAiModelSpec.trim();
   const hasKnownPiAiModel = (piAiModelOptions ?? []).some(

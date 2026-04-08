@@ -164,7 +164,7 @@ describe("subscription auth routes (e2e contract)", () => {
       expect(res.data.error).toContain("Missing code");
     });
 
-    it("persists setup token to config file and env", async () => {
+    it("persists setup token for task-agent discovery without injecting runtime auth", async () => {
       const token = "sk-ant-oat01-integration-test";
 
       const setupRes = await req(
@@ -175,12 +175,13 @@ describe("subscription auth routes (e2e contract)", () => {
       );
       expect(setupRes.status).toBe(200);
       expect(setupRes.data.success).toBe(true);
-      expect(process.env.ANTHROPIC_API_KEY).toBe(token);
+      expect(process.env.ANTHROPIC_API_KEY).toBeUndefined();
 
       const configPath = path.join(stateDir, "eliza.json");
       const rawConfig = await fs.readFile(configPath, "utf-8");
       const parsed = JSON.parse(rawConfig) as { env?: Record<string, string> };
-      expect(parsed.env?.ANTHROPIC_API_KEY).toBe(token);
+      expect(parsed.env?.__anthropicSubscriptionToken).toBe(token);
+      expect(parsed.env?.ANTHROPIC_API_KEY).toBeUndefined();
     });
 
     it("returns 400 for setup-token with invalid format", async () => {
@@ -192,6 +193,25 @@ describe("subscription auth routes (e2e contract)", () => {
       );
       expect(res.status).toBe(400);
       expect(res.data.error).toContain("Invalid token format");
+    });
+
+    it("accepts setup-token values with surrounding whitespace and stores the trimmed token", async () => {
+      const res = await req(
+        port,
+        "POST",
+        "/api/subscription/anthropic/setup-token",
+        { token: "  sk-ant-oat01-trimmed-token  " },
+      );
+      expect(res.status).toBe(200);
+      expect(res.data.success).toBe(true);
+      expect(process.env.ANTHROPIC_API_KEY).toBeUndefined();
+
+      const configPath = path.join(stateDir, "eliza.json");
+      const rawConfig = await fs.readFile(configPath, "utf-8");
+      const parsed = JSON.parse(rawConfig) as { env?: Record<string, string> };
+      expect(parsed.env?.__anthropicSubscriptionToken).toBe(
+        "sk-ant-oat01-trimmed-token",
+      );
     });
 
     it("returns 500 when Anthropic credential exchange rejects", async () => {

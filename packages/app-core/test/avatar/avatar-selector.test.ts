@@ -3,6 +3,7 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { setBootConfig } from "../../src/config/boot-config";
 
 // Build the VRM asset roster from STYLE_PRESETS inside vi.hoisted so it's
 // available when vi.mock runs (both are hoisted above normal imports).
@@ -29,25 +30,21 @@ const { TEST_VRM_ASSETS } = vi.hoisted(() => {
 });
 
 // Mock boot config so VRM helpers resolve the standard Milady roster.
-vi.mock("../../src/config/boot-config", async (importOriginal) => {
-  const mod = (await importOriginal()) as Record<string, unknown>;
-  return {
-    ...mod,
-    getBootConfig: () => ({
-      branding: {},
-      cloudApiBase: "https://www.elizacloud.ai",
-      vrmAssets: TEST_VRM_ASSETS,
-    }),
-  };
-});
-
 import {
   getCompanionBackgroundUrl,
   getVrmPreviewUrl,
   getVrmTitle,
   getVrmUrl,
   VRM_COUNT,
-} from "@miladyai/app-core/state";
+} from "../../src/state/vrm";
+
+beforeEach(() => {
+  setBootConfig({
+    branding: {},
+    cloudApiBase: "https://www.elizacloud.ai",
+    vrmAssets: TEST_VRM_ASSETS,
+  });
+});
 
 describe("Avatar VRM Utilities", () => {
   describe("getVrmUrl", () => {

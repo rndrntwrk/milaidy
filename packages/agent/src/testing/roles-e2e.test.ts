@@ -17,14 +17,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   mockGetEntityRole,
+  mockHasConfiguredCanonicalOwner,
   mockResolveWorldForMessage,
+  mockResolveCanonicalOwnerId,
   mockSetEntityRole,
   mockNormalizeRole,
   mockCanModifyRole,
   mockCheckSenderRole,
 } = vi.hoisted(() => ({
   mockGetEntityRole: vi.fn(),
+  mockHasConfiguredCanonicalOwner: vi.fn(),
   mockResolveWorldForMessage: vi.fn(),
+  mockResolveCanonicalOwnerId: vi.fn(),
   mockSetEntityRole: vi.fn(),
   mockNormalizeRole: vi.fn(),
   mockCanModifyRole: vi.fn(),
@@ -33,7 +37,9 @@ const {
 
 vi.mock("@miladyai/plugin-roles", () => ({
   getEntityRole: mockGetEntityRole,
+  hasConfiguredCanonicalOwner: mockHasConfiguredCanonicalOwner,
   resolveWorldForMessage: mockResolveWorldForMessage,
+  resolveCanonicalOwnerId: mockResolveCanonicalOwnerId,
   setEntityRole: mockSetEntityRole,
   normalizeRole: mockNormalizeRole,
   canModifyRole: mockCanModifyRole,
@@ -236,6 +242,16 @@ function wireCheckSenderRole(worlds: Map<UUID, MockWorld>, rooms: Map<UUID, Mock
   );
 }
 
+function wireCanonicalOwnerResolver(worlds: Map<UUID, MockWorld>) {
+  mockHasConfiguredCanonicalOwner.mockReturnValue(false);
+  mockResolveCanonicalOwnerId.mockImplementation(
+    (_runtime: unknown, metadata?: RolesMetadata) =>
+      metadata?.ownership?.ownerId ??
+      worlds.get(WORLD_ID)?.metadata.ownership?.ownerId ??
+      null,
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Default scaffolding factory
 // ---------------------------------------------------------------------------
@@ -287,6 +303,7 @@ function createScaffolding(overrides?: {
   wireNormalizeRole();
   wireCanModifyRole();
   wireCheckSenderRole(worlds, rooms);
+  wireCanonicalOwnerResolver(worlds);
 
   // Config
   const adminWhitelist = overrides?.connectorAdmins ?? {};

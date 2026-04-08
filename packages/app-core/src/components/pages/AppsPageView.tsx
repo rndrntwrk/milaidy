@@ -8,7 +8,17 @@ import { useApp } from "../../state";
 import { AppsView } from "./AppsView";
 import { GameView } from "../apps/GameView";
 
-export function AppsPageView({ inModal }: { inModal?: boolean } = {}) {
+type AppsPageViewRenderer = () => JSX.Element;
+
+export function AppsPageView({
+  inModal,
+  appsView: AppsViewRenderer = AppsView as AppsPageViewRenderer,
+  gameView: GameViewRenderer = GameView as AppsPageViewRenderer,
+}: {
+  inModal?: boolean;
+  appsView?: AppsPageViewRenderer;
+  gameView?: AppsPageViewRenderer;
+} = {}) {
   const { appsSubTab, activeGameViewerUrl, setState } = useApp();
   const hasActiveGame =
     typeof activeGameViewerUrl === "string" &&
@@ -21,7 +31,7 @@ export function AppsPageView({ inModal }: { inModal?: boolean } = {}) {
   }, [appsSubTab, hasActiveGame, setState]);
 
   if (appsSubTab === "games" && hasActiveGame) {
-    return <GameView />;
+    return <GameViewRenderer />;
   }
 
   if (inModal) {
@@ -42,11 +52,11 @@ export function AppsPageView({ inModal }: { inModal?: boolean } = {}) {
         }
       >
         <div className="settings-section-pane pt-4">
-          <AppsView />
+          <AppsViewRenderer />
         </div>
       </div>
     );
   }
 
-  return <AppsView />;
+  return <AppsViewRenderer />;
 }

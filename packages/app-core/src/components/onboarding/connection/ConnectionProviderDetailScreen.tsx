@@ -26,6 +26,10 @@ import {
   requiresAdditionalRuntimeProvider,
 } from "../../../providers";
 import { useApp } from "../../../state";
+import {
+  formatSubscriptionRequestError,
+  normalizeOpenAICallbackInput,
+} from "../../../utils/subscription-auth";
 import { openExternalUrl } from "../../../utils";
 import { OnboardingTabs } from "../OnboardingTabs";
 import {
@@ -52,13 +56,6 @@ import {
   spawnOnboardingRipple,
 } from "../onboarding-step-chrome";
 import { useAdvanceOnboardingWhenElizaCloudOAuthConnected } from "./useAdvanceOnboardingWhenElizaCloudOAuthConnected";
-
-function formatRequestError(err: unknown): string {
-  if (err instanceof Error) {
-    return err.message;
-  }
-  return String(err);
-}
 
 const providerOverrides: Record<
   string,
@@ -198,7 +195,9 @@ export function ConnectionProviderDetailScreen({
   const [anthropicCode, setAnthropicCode] = useState("");
   const [anthropicConnected, setAnthropicConnected] = useState(false);
   const [anthropicError, setAnthropicError] = useState("");
+  const [anthropicExchangeBusy, setAnthropicExchangeBusy] = useState(false);
   const [anthropicSaving, setAnthropicSaving] = useState(false);
+  const [openaiExchangeBusy, setOpenaiExchangeBusy] = useState(false);
 
   const [apiKeyFormatWarning, setApiKeyFormatWarning] = useState("");
 
@@ -314,7 +313,7 @@ export function ConnectionProviderDetailScreen({
     } catch (err) {
       setAnthropicError(
         t("onboarding.failedToStartLogin", {
-          message: formatRequestError(err),
+          message: formatSubscriptionRequestError(err),
           defaultValue: "Failed to start login: {{message}}",
         }),
       );
@@ -322,9 +321,14 @@ export function ConnectionProviderDetailScreen({
   };
 
   const handleAnthropicExchange = async () => {
+    const code = anthropicCode.trim();
+    if (!code || anthropicExchangeBusy) {
+      return;
+    }
     setAnthropicError("");
+    setAnthropicExchangeBusy(true);
     try {
-      const result = await client.exchangeAnthropicCode(anthropicCode);
+      const result = await client.exchangeAnthropicCode(code);
       if (result.success) {
         setAnthropicConnected(true);
         return;
@@ -338,10 +342,12 @@ export function ConnectionProviderDetailScreen({
     } catch (err) {
       setAnthropicError(
         t("onboarding.exchangeFailedWithMessage", {
-          message: formatRequestError(err),
+          message: formatSubscriptionRequestError(err),
           defaultValue: "Exchange failed: {{message}}",
         }),
       );
+    } finally {
+      setAnthropicExchangeBusy(false);
     }
   };
 
@@ -366,7 +372,7 @@ export function ConnectionProviderDetailScreen({
     } catch (err) {
       setAnthropicError(
         t("subscriptionstatus.FailedToSaveTokenError", {
-          message: formatRequestError(err),
+          message: formatSubscriptionRequestError(err),
           defaultValue: "Failed to save token: {{message}}",
         }),
       );
@@ -391,7 +397,7 @@ export function ConnectionProviderDetailScreen({
     } catch (err) {
       setOpenaiError(
         t("onboarding.failedToStartLogin", {
-          message: formatRequestError(err),
+          message: formatSubscriptionRequestError(err),
           defaultValue: "Failed to start login: {{message}}",
         }),
       );
@@ -399,9 +405,18 @@ export function ConnectionProviderDetailScreen({
   };
 
   const handleOpenAIExchange = async () => {
+    if (openaiExchangeBusy) {
+      return;
+    }
+    const normalized = normalizeOpenAICallbackInput(openaiCallbackUrl);
+    if (!normalized.ok) {
+      setOpenaiError(t(normalized.error));
+      return;
+    }
     setOpenaiError("");
+    setOpenaiExchangeBusy(true);
     try {
-      const data = await client.exchangeOpenAICode(openaiCallbackUrl);
+      const data = await client.exchangeOpenAICode(normalized.code);
       if (data.success) {
         setOpenaiOAuthStarted(false);
         setOpenaiCallbackUrl("");
@@ -419,8 +434,15 @@ export function ConnectionProviderDetailScreen({
           ? t("onboarding.loginSessionExpired")
           : msg,
       );
-    } catch (_err) {
-      setOpenaiError(t("onboarding.networkError"));
+    } catch (err) {
+      setOpenaiError(
+        t("onboarding.exchangeFailedWithMessage", {
+          message: formatSubscriptionRequestError(err),
+          defaultValue: "Exchange failed: {{message}}",
+        }),
+      );
+    } finally {
+      setOpenaiExchangeBusy(false);
     }
   };
 
@@ -784,7 +806,7 @@ export function ConnectionProviderDetailScreen({
                 type="button"
                 className={`${onboardingPrimaryActionClass} self-center`}
                 style={onboardingPrimaryActionTextShadowStyle}
-                disabled={!anthropicCode}
+                disabled={!anthropicCode.trim() || anthropicExchangeBusy}
                 onClick={(e) => {
                   spawnOnboardingRipple(e.currentTarget, {
                     x: e.clientX,
@@ -875,7 +897,7 @@ export function ConnectionProviderDetailScreen({
                   type="button"
                   className={onboardingPrimaryActionClass}
                   style={onboardingPrimaryActionTextShadowStyle}
-                  disabled={!openaiCallbackUrl}
+                  disabled={!openaiCallbackUrl.trim() || openaiExchangeBusy}
                   onClick={(e) => {
                     spawnOnboardingRipple(e.currentTarget, {
                       x: e.clientX,

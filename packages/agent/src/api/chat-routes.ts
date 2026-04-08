@@ -38,6 +38,13 @@ try {
 }
 import type { ElizaConfig } from "../config/config.js";
 import { normalizeCharacterLanguage } from "../onboarding-presets.js";
+import {
+  startTrajectoryStepInDatabase,
+} from "../runtime/trajectory-storage.js";
+import {
+  asRecord,
+  resolveTrajectoryGrouping,
+} from "../runtime/trajectory-internals.js";
 import { detectRuntimeModel } from "./agent-model.js";
 import {
   isClientVisibleNoResponse,
@@ -573,6 +580,47 @@ function readMessageTrajectoryStepId(
     : null;
 }
 
+function readMessageTrajectoryGrouping(
+  message: ReturnType<typeof createMessageMemory>,
+): {
+  scenarioId?: string;
+  batchId?: string;
+} {
+  const contentMetadata = asRecord(message.content.metadata) ?? {};
+  const evalMetadata = asRecord(contentMetadata.eval) ?? {};
+  const messageMetadata = asRecord(message.metadata) ?? {};
+  return resolveTrajectoryGrouping({
+    ...contentMetadata,
+    ...evalMetadata,
+    ...messageMetadata,
+  });
+}
+
+async function persistMessageTrajectoryGrouping(
+  runtime: AgentRuntime,
+  message: ReturnType<typeof createMessageMemory>,
+): Promise<void> {
+  const stepId = readMessageTrajectoryStepId(message);
+  if (!stepId) return;
+
+  const grouping = readMessageTrajectoryGrouping(message);
+  if (!grouping.scenarioId && !grouping.batchId) return;
+
+  await startTrajectoryStepInDatabase({
+    runtime,
+    stepId,
+    source:
+      typeof message.content.source === "string" &&
+      message.content.source.trim().length > 0
+        ? message.content.source
+        : undefined,
+    metadata: {
+      ...(grouping.scenarioId ? { scenarioId: grouping.scenarioId } : {}),
+      ...(grouping.batchId ? { batchId: grouping.batchId } : {}),
+    },
+  });
+}
+
 // ---------------------------------------------------------------------------
 // generateChatResponse
 // ---------------------------------------------------------------------------
@@ -583,116 +631,116 @@ export async function generateChatResponse(
   agentName: string,
   opts?: ChatGenerateOptions,
 ): Promise<ChatGenerationResult> {
-  const originalUserText = String(
-    extractCompatTextContent(message.content) ?? "",
-  );
-  type StreamSource = "unset" | "callback" | "onStreamChunk";
-  let responseText = "";
-  let forcedWalletExecutionText = false;
-  let activeStreamSource: StreamSource = "unset";
-  // Snapshot of `responseText` at the moment the first action callback runs.
-  // WHY: LLM streaming genuinely appends token deltas. Action handlers that
-  // call HandlerCallback multiple times (Discord "progressive message" pattern)
-  // send unrelated status strings — merging them with mergeStreamingText would
-  // concatenate ("🔍…" + "✨…" + "Now playing…"). We preserve the streamed
-  // prefix and replace only the callback suffix so the dashboard SSE client
-  // gets snapshot fullText updates (same UX as editing one chat bubble).
-  let preCallbackText: string | null = null;
-  const messageSource =
-    typeof message.content.source === "string" &&
-    message.content.source.trim().length > 0
-      ? message.content.source
-      : "api";
-  const emitChunk = (chunk: string): void => {
-    if (!chunk) return;
-    responseText += chunk;
-    opts?.onChunk?.(chunk);
-  };
-  const emitSnapshot = (text: string): void => {
-    if (!text) return;
-    responseText = text;
-    opts?.onSnapshot?.(text);
-  };
-  const claimStreamSource = (
-    source: Exclude<StreamSource, "unset">,
-  ): boolean => {
-    if (activeStreamSource === "unset") {
-      activeStreamSource = source;
-      return true;
-    }
-    return activeStreamSource === source;
-  };
-  const appendIncomingText = (incoming: string): void => {
-    const update = resolveStreamingUpdate(responseText, incoming);
-    if (update.kind === "noop") return;
-    if (update.kind === "append") {
-      emitChunk(update.emittedText);
-      return;
-    }
-    emitSnapshot(update.nextText);
-  };
-  /** Latest action callback wins: replaces prior callback text, keeps LLM prefix. */
-  const replaceCallbackText = (incoming: string): void => {
-    if (preCallbackText === null) {
-      preCallbackText = responseText;
-    }
-    const separator = preCallbackText.length > 0 ? "\n\n" : "";
-    const nextText = `${preCallbackText}${separator}${incoming}`;
-    emitSnapshot(nextText);
-  };
-
-  // Emit inbound events so trajectory/session hooks run for API chat.
   try {
-    if (typeof runtime.emitEvent === "function") {
-      await runtime.emitEvent("MESSAGE_RECEIVED", {
-        message,
-        source: messageSource,
-      });
+    const originalUserText = String(
+      extractCompatTextContent(message.content) ?? "",
+    );
+    type StreamSource = "unset" | "callback" | "onStreamChunk";
+    let responseText = "";
+    let forcedWalletExecutionText = false;
+    let activeStreamSource: StreamSource = "unset";
+    // Snapshot of `responseText` at the moment the first action callback runs.
+    // WHY: LLM streaming genuinely appends token deltas. Action handlers that
+    // call HandlerCallback multiple times (Discord "progressive message" pattern)
+    // send unrelated status strings — merging them with mergeStreamingText would
+    // concatenate ("🔍…" + "✨…" + "Now playing…"). We preserve the streamed
+    // prefix and replace only the callback suffix so the dashboard SSE client
+    // gets snapshot fullText updates (same UX as editing one chat bubble).
+    let preCallbackText: string | null = null;
+    const messageSource =
+      typeof message.content.source === "string" &&
+      message.content.source.trim().length > 0
+        ? message.content.source
+        : "api";
+    const emitChunk = (chunk: string): void => {
+      if (!chunk) return;
+      responseText += chunk;
+      opts?.onChunk?.(chunk);
+    };
+    const emitSnapshot = (text: string): void => {
+      if (!text) return;
+      responseText = text;
+      opts?.onSnapshot?.(text);
+    };
+    const claimStreamSource = (
+      source: Exclude<StreamSource, "unset">,
+    ): boolean => {
+      if (activeStreamSource === "unset") {
+        activeStreamSource = source;
+        return true;
+      }
+      return activeStreamSource === source;
+    };
+    const appendIncomingText = (incoming: string): void => {
+      const update = resolveStreamingUpdate(responseText, incoming);
+      if (update.kind === "noop") return;
+      if (update.kind === "append") {
+        emitChunk(update.emittedText);
+        return;
+      }
+      emitSnapshot(update.nextText);
+    };
+    /** Latest action callback wins: replaces prior callback text, keeps LLM prefix. */
+    const replaceCallbackText = (incoming: string): void => {
+      if (preCallbackText === null) {
+        preCallbackText = responseText;
+      }
+      const separator = preCallbackText.length > 0 ? "\n\n" : "";
+      const nextText = `${preCallbackText}${separator}${incoming}`;
+      emitSnapshot(nextText);
+    };
+
+    // Emit inbound events so trajectory/session hooks run for API chat.
+    try {
+      if (typeof runtime.emitEvent === "function") {
+        await runtime.emitEvent("MESSAGE_RECEIVED", {
+          message,
+          source: messageSource,
+        });
+      }
+    } catch (err) {
+      runtime.logger?.warn(
+        {
+          err,
+          src: "eliza-api",
+          messageId: message.id,
+          roomId: message.roomId,
+        },
+        "Failed to emit MESSAGE_RECEIVED event",
+      );
     }
-  } catch (err) {
-    runtime.logger?.warn(
-      {
-        err,
-        src: "eliza-api",
-        messageId: message.id,
-        roomId: message.roomId,
-      },
-      "Failed to emit MESSAGE_RECEIVED event",
-    );
-  }
+    const trajectoryStepId = readMessageTrajectoryStepId(message);
+    const trajectoryContext =
+      typeof trajectoryStepId === "string" && trajectoryStepId.trim().length > 0
+        ? { trajectoryStepId: trajectoryStepId.trim() }
+        : undefined;
 
-  const trajectoryStepId = readMessageTrajectoryStepId(message);
-  const trajectoryContext =
-    typeof trajectoryStepId === "string" && trajectoryStepId.trim().length > 0
-      ? { trajectoryStepId: trajectoryStepId.trim() }
-      : undefined;
+    let result:
+      | Awaited<
+          ReturnType<NonNullable<AgentRuntime["messageService"]>["handleMessage"]>
+        >
+      | undefined;
+    let actionCallbacksSeen = 0;
+    const seenActionTags = new Set<string>();
+    const recordActionCallback = (actionTag: string, hasText: boolean): void => {
+      actionCallbacksSeen += 1;
+      seenActionTags.add(actionTag.toUpperCase());
+      runtime.logger?.info(
+        {
+          src: "eliza-api",
+          action: actionTag,
+          hasText,
+        },
+        `[eliza-api] Action callback fired: ${actionTag}`,
+      );
+    };
+    const directWalletExecutionFallback = WALLET_EXECUTION_INTENT_RE.test(
+      originalUserText,
+    )
+      ? inferWalletExecutionFallback(originalUserText)
+      : null;
 
-  let result:
-    | Awaited<
-        ReturnType<NonNullable<AgentRuntime["messageService"]>["handleMessage"]>
-      >
-    | undefined;
-  let actionCallbacksSeen = 0;
-  const seenActionTags = new Set<string>();
-  const recordActionCallback = (actionTag: string, hasText: boolean): void => {
-    actionCallbacksSeen += 1;
-    seenActionTags.add(actionTag.toUpperCase());
-    runtime.logger?.info(
-      {
-        src: "eliza-api",
-        action: actionTag,
-        hasText,
-      },
-      `[eliza-api] Action callback fired: ${actionTag}`,
-    );
-  };
-  const directWalletExecutionFallback = WALLET_EXECUTION_INTENT_RE.test(
-    originalUserText,
-  )
-    ? inferWalletExecutionFallback(originalUserText)
-    : null;
-
-  await runWithTrajectoryContext(trajectoryContext, async () => {
+    await runWithTrajectoryContext(trajectoryContext, async () => {
     try {
       // Binance skill direct dispatch
       const directSkillText = await maybeHandleDirectBinanceSkillRequest(
@@ -1104,81 +1152,96 @@ export async function generateChatResponse(
         }
       }
     }
-  });
+    });
 
-  const resultText = extractCompatTextContent(result?.responseContent);
+    const resultText = extractCompatTextContent(result?.responseContent);
 
-  // Fallback: if callbacks weren't used for text, stream + return final text.
-  if (!responseText && resultText) {
-    if (opts?.onSnapshot) {
-      emitSnapshot(resultText);
-    } else {
-      emitChunk(resultText);
-    }
-  } else if (
-    actionCallbacksSeen === 0 &&
-    resultText &&
-    resultText !== responseText &&
-    resultText.startsWith(responseText)
-  ) {
-    emitChunk(resultText.slice(responseText.length));
-  } else if (
-    actionCallbacksSeen === 0 &&
-    resultText &&
-    resultText !== responseText &&
-    !forcedWalletExecutionText
-  ) {
-    if (opts?.onSnapshot) {
-      emitSnapshot(resultText);
-    } else {
-      responseText = resultText;
-    }
-  }
-
-  if (
-    actionCallbacksSeen === 0 &&
-    isWalletActionRequiredIntent(originalUserText)
-  ) {
-    const normalizedVisibleText = stripAssistantStageDirections(
-      (responseText || resultText || "").trim(),
-    );
-    if (
-      normalizedVisibleText.length === 0 ||
-      WALLET_PROGRESS_ONLY_RE.test(normalizedVisibleText)
-    ) {
-      const failureText = buildWalletActionNotExecutedReply(
-        runtime,
-        originalUserText.trim(),
-      );
+    // Fallback: if callbacks weren't used for text, stream + return final text.
+    if (!responseText && resultText) {
       if (opts?.onSnapshot) {
-        emitSnapshot(failureText);
+        emitSnapshot(resultText);
       } else {
-        responseText = failureText;
+        emitChunk(resultText);
+      }
+    } else if (
+      actionCallbacksSeen === 0 &&
+      resultText &&
+      resultText !== responseText &&
+      resultText.startsWith(responseText)
+    ) {
+      emitChunk(resultText.slice(responseText.length));
+    } else if (
+      actionCallbacksSeen === 0 &&
+      resultText &&
+      resultText !== responseText &&
+      !forcedWalletExecutionText
+    ) {
+      if (opts?.onSnapshot) {
+        emitSnapshot(resultText);
+      } else {
+        responseText = resultText;
       }
     }
+
+    if (
+      actionCallbacksSeen === 0 &&
+      isWalletActionRequiredIntent(originalUserText)
+    ) {
+      const normalizedVisibleText = stripAssistantStageDirections(
+        (responseText || resultText || "").trim(),
+      );
+      if (
+        normalizedVisibleText.length === 0 ||
+        WALLET_PROGRESS_ONLY_RE.test(normalizedVisibleText)
+      ) {
+        const failureText = buildWalletActionNotExecutedReply(
+          runtime,
+          originalUserText.trim(),
+        );
+        if (opts?.onSnapshot) {
+          emitSnapshot(failureText);
+        } else {
+          responseText = failureText;
+        }
+      }
+    }
+
+    const noResponseFallback = opts?.resolveNoResponseText?.();
+    const normalizedResponseText = trimWalletProgressPrefix(responseText);
+    const finalText = isClientVisibleNoResponse(normalizedResponseText)
+      ? (noResponseFallback ?? (responseText || "(no response)"))
+      : normalizedResponseText;
+
+    // Estimate token usage from text lengths (~4 chars per token)
+    const promptText = extractCompatTextContent(message.content) ?? "";
+    const estPromptTokens = Math.ceil(promptText.length / 4);
+    const estCompletionTokens = Math.ceil(finalText.length / 4);
+
+    return {
+      text: finalText,
+      agentName,
+      usage: {
+        promptTokens: estPromptTokens,
+        completionTokens: estCompletionTokens,
+        totalTokens: estPromptTokens + estCompletionTokens,
+        model: detectRuntimeModel(runtime, undefined) ?? undefined,
+      },
+    };
+  } finally {
+    try {
+      await persistMessageTrajectoryGrouping(runtime, message);
+    } catch (err) {
+      runtime.logger?.warn(
+        {
+          err,
+          src: "eliza-api",
+          messageId: message.id,
+          roomId: message.roomId,
+        },
+        "Failed to persist trajectory grouping metadata",
+      );
+    }
   }
-
-  const noResponseFallback = opts?.resolveNoResponseText?.();
-  const normalizedResponseText = trimWalletProgressPrefix(responseText);
-  const finalText = isClientVisibleNoResponse(normalizedResponseText)
-    ? (noResponseFallback ?? (responseText || "(no response)"))
-    : normalizedResponseText;
-
-  // Estimate token usage from text lengths (~4 chars per token)
-  const promptText = extractCompatTextContent(message.content) ?? "";
-  const estPromptTokens = Math.ceil(promptText.length / 4);
-  const estCompletionTokens = Math.ceil(finalText.length / 4);
-
-  return {
-    text: finalText,
-    agentName,
-    usage: {
-      promptTokens: estPromptTokens,
-      completionTokens: estCompletionTokens,
-      totalTokens: estPromptTokens + estCompletionTokens,
-      model: detectRuntimeModel(runtime, undefined) ?? undefined,
-    },
-  };
 }
 
 // ---------------------------------------------------------------------------

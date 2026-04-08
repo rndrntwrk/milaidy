@@ -3377,6 +3377,19 @@ export async function startEliza(
       // Forward Eliza config env vars as runtime settings
       ...(preferredProviderId ? { MODEL_PROVIDER: preferredProviderId } : {}),
       ...(visionModeSetting ? { VISION_MODE: visionModeSetting } : {}),
+      ...(typeof config.agents?.defaults?.adminEntityId === "string" &&
+      config.agents.defaults.adminEntityId.trim().length > 0
+        ? {
+            MILADY_ADMIN_ENTITY_ID: config.agents.defaults.adminEntityId.trim(),
+          }
+        : {}),
+      ...(config.agents?.defaults?.ownerContacts
+        ? {
+            MILADY_OWNER_CONTACTS_JSON: JSON.stringify(
+              config.agents.defaults.ownerContacts,
+            ),
+          }
+        : {}),
       // Forward skills config so plugin-agent-skills can apply allow/deny filtering
       ...(config.skills?.allowBundled
         ? { SKILLS_ALLOWLIST: config.skills.allowBundled.join(",") }

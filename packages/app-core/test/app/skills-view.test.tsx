@@ -281,7 +281,10 @@ vi.mock("@miladyai/ui", () => ({
     React.createElement("textarea", props),
 }));
 
-vi.mock("../../src/state", () => ({
+vi.mock("@miladyai/app-core/state", () => ({
+  useApp: () => mockUseApp(),
+}));
+vi.mock("../../src/state/index.ts", () => ({
   useApp: () => mockUseApp(),
 }));
 
@@ -296,7 +299,7 @@ vi.mock("../../src/api", () => ({
   },
 }));
 
-import { SkillsView } from "../../src/components/pages/SkillsView";
+import { SkillsView } from "../../src/components/pages/SkillsView.tsx";
 
 function createAppState(overrides?: Record<string, unknown>) {
   return {

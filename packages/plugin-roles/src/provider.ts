@@ -16,7 +16,9 @@ import type { RoleName, RolesWorldMetadata } from "./types";
 import {
   getEntityRole,
   getLiveEntityMetadataFromMessage,
+  hasConfiguredCanonicalOwner,
   normalizeRole,
+  resolveCanonicalOwnerId,
   resolveEntityRole,
 } from "./utils";
 
@@ -58,13 +60,25 @@ export const rolesProvider: Provider = {
       },
     );
     const storedSpeakerRole = getEntityRole(metadata, message.entityId);
-    const roles =
-      speakerRole !== storedSpeakerRole
-        ? {
-            ...(metadata.roles ?? {}),
-            [message.entityId]: speakerRole,
-          }
-        : (metadata.roles ?? {});
+    const roles = { ...(metadata.roles ?? {}) };
+    const canonicalOwnerId = resolveCanonicalOwnerId(runtime, metadata);
+
+    if (hasConfiguredCanonicalOwner(runtime) && canonicalOwnerId) {
+      for (const [entityId, role] of Object.entries(roles)) {
+        if (entityId !== canonicalOwnerId && normalizeRole(role) === "OWNER") {
+          delete roles[entityId];
+        }
+      }
+      roles[canonicalOwnerId] = "OWNER";
+    }
+
+    if (speakerRole !== storedSpeakerRole) {
+      if (speakerRole === "GUEST") {
+        delete roles[message.entityId];
+      } else {
+        roles[message.entityId] = speakerRole;
+      }
+    }
 
     // Build a compact role summary for the agent context.
     const owners: string[] = [];

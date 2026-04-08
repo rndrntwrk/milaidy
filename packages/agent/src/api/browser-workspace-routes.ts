@@ -1,5 +1,7 @@
 import {
   closeBrowserWorkspaceTab,
+  executeBrowserWorkspaceCommand,
+  type BrowserWorkspaceCommand,
   evaluateBrowserWorkspaceTab,
   getBrowserWorkspaceSnapshot,
   getBrowserWorkspaceUnavailableMessage,
@@ -29,6 +31,8 @@ type EvaluateBrowserWorkspaceBody = {
   script?: string;
 };
 
+type BrowserWorkspaceCommandBody = BrowserWorkspaceCommand;
+
 export interface BrowserWorkspaceRouteContext extends RouteRequestContext {}
 
 export async function handleBrowserWorkspaceRoutes(
@@ -38,6 +42,7 @@ export async function handleBrowserWorkspaceRoutes(
 
   if (
     pathname !== "/api/browser-workspace" &&
+    pathname !== "/api/browser-workspace/command" &&
     pathname !== "/api/browser-workspace/tabs" &&
     !pathname.startsWith("/api/browser-workspace/tabs/")
   ) {
@@ -47,6 +52,17 @@ export async function handleBrowserWorkspaceRoutes(
   try {
     if (pathname === "/api/browser-workspace" && method === "GET") {
       json(res, await getBrowserWorkspaceSnapshot());
+      return true;
+    }
+
+    if (pathname === "/api/browser-workspace/command" && method === "POST") {
+      const body =
+        (await readJsonBody<BrowserWorkspaceCommandBody>(req, res)) ?? null;
+      if (!body?.subaction) {
+        json(res, { error: "subaction is required" }, 400);
+        return true;
+      }
+      json(res, await executeBrowserWorkspaceCommand(body));
       return true;
     }
 

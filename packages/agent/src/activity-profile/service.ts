@@ -4,6 +4,7 @@
  */
 
 import type { IAgentRuntime, UUID } from "@elizaos/core";
+import { resolveCanonicalOwnerId } from "@miladyai/plugin-roles";
 import type { LifeOpsActivitySignal } from "@miladyai/shared/contracts/lifeops";
 import { LifeOpsService } from "../lifeops/service.js";
 import { resolveDefaultTimeZone } from "../lifeops/defaults.js";
@@ -45,6 +46,11 @@ type WorldMetadataShape = {
 export async function resolveOwnerEntityId(
   runtime: IAgentRuntime,
 ): Promise<string | null> {
+  const configuredOwnerId = resolveCanonicalOwnerId(runtime);
+  if (configuredOwnerId) {
+    return configuredOwnerId;
+  }
+
   // Find owner via the agent's rooms → world → ownership metadata
   try {
     const roomIds = await runtime.getRoomsForParticipant(runtime.agentId);

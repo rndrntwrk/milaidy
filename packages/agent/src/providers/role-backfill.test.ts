@@ -1,12 +1,20 @@
 import type { Memory, UUID } from "@elizaos/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockNormalizeRole } = vi.hoisted(() => ({
+const {
+  mockHasConfiguredCanonicalOwner,
+  mockNormalizeRole,
+  mockResolveCanonicalOwnerId,
+} = vi.hoisted(() => ({
+  mockHasConfiguredCanonicalOwner: vi.fn(),
   mockNormalizeRole: vi.fn(),
+  mockResolveCanonicalOwnerId: vi.fn(),
 }));
 
 vi.mock("@miladyai/plugin-roles", () => ({
+  hasConfiguredCanonicalOwner: mockHasConfiguredCanonicalOwner,
   normalizeRole: mockNormalizeRole,
+  resolveCanonicalOwnerId: mockResolveCanonicalOwnerId,
 }));
 
 import { roleBackfillProvider } from "./role-backfill";
@@ -53,8 +61,15 @@ function getUpdateWorld(runtime: unknown): ReturnType<typeof vi.fn> {
 describe("roleBackfillProvider", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // Default: owner has no role
-    mockNormalizeRole.mockReturnValue("NONE");
+    mockNormalizeRole.mockImplementation((raw: string | undefined | null) => {
+      if (!raw) return "NONE";
+      return raw.toUpperCase() === "OWNER" ? "OWNER" : "NONE";
+    });
+    mockHasConfiguredCanonicalOwner.mockReturnValue(false);
+    mockResolveCanonicalOwnerId.mockImplementation(
+      (_runtime: unknown, metadata?: { ownership?: { ownerId?: string } }) =>
+        metadata?.ownership?.ownerId ?? null,
+    );
   });
 
   it("has correct metadata", () => {
@@ -178,5 +193,29 @@ describe("roleBackfillProvider", () => {
     const call = updateWorld.mock.calls[0][0];
     expect(call.metadata.roles["other-entity"]).toBe("ADMIN");
     expect(call.metadata.roles[OWNER_ID]).toBe("OWNER");
+  });
+
+  it("rewrites connector-local ownership to the configured canonical owner", async () => {
+    mockHasConfiguredCanonicalOwner.mockReturnValue(true);
+    mockResolveCanonicalOwnerId.mockReturnValue("owner-canonical");
+
+    const runtime = makeRuntime({
+      getWorld: vi.fn().mockResolvedValue({
+        id: WORLD_ID,
+        metadata: {
+          ownership: { ownerId: "discord-guild-owner" },
+          roles: { "discord-guild-owner": "OWNER" },
+        },
+      }),
+    });
+
+    await roleBackfillProvider.get(runtime, makeMessage(), {} as never);
+
+    const updateWorld = getUpdateWorld(runtime);
+    expect(updateWorld).toHaveBeenCalledOnce();
+    const call = updateWorld.mock.calls[0][0];
+    expect(call.metadata.ownership.ownerId).toBe("owner-canonical");
+    expect(call.metadata.roles["owner-canonical"]).toBe("OWNER");
+    expect(call.metadata.roles["discord-guild-owner"]).toBeUndefined();
   });
 });

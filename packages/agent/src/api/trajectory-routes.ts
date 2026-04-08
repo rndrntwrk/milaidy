@@ -94,6 +94,8 @@ interface UITrajectoryRecord {
   providerAccessCount: number;
   totalPromptTokens: number;
   totalCompletionTokens: number;
+  scenarioId?: string | null;
+  batchId?: string | null;
   metadata: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
@@ -418,13 +420,15 @@ function listItemToUIRecord(item: TrajectoryListItem): UITrajectoryRecord {
     providerAccessCount: item.providerAccessCount ?? 0,
     totalPromptTokens: item.totalPromptTokens,
     totalCompletionTokens: item.totalCompletionTokens,
+    ...(item.scenarioId ? { scenarioId: item.scenarioId } : {}),
+    ...(item.batchId ? { batchId: item.batchId } : {}),
     metadata: {
       ...(item.metadata ?? {}),
       ...(item.scenarioId ? { scenarioId: item.scenarioId } : {}),
       ...(item.batchId ? { batchId: item.batchId } : {}),
     },
     createdAt: item.createdAt,
-    updatedAt: item.createdAt,
+    updatedAt: item.updatedAt,
   };
 }
 

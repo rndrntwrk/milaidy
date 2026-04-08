@@ -5,15 +5,10 @@ import type {
   ProviderResult,
   State,
 } from "@elizaos/core";
-
-type WorldMetadataShape = {
-  ownership?: { ownerId?: string };
-  roles?: Record<string, string>;
-};
-
-function normalizeRole(role: string | undefined): string {
-  return (role ?? "").toUpperCase();
-}
+import {
+  checkSenderRole,
+  resolveCanonicalOwnerIdForMessage,
+} from "@miladyai/plugin-roles";
 
 export const adminTrustProvider: Provider = createAdminTrustProvider();
 
@@ -29,46 +24,26 @@ export function createAdminTrustProvider(): Provider {
       message: Memory,
       _state: State,
     ): Promise<ProviderResult> {
-      const room = await runtime.getRoom(message.roomId);
-      if (!room) {
-        return {
-          text: "Admin trust: no room found.",
-          values: { trustedAdmin: false },
-          data: { trustedAdmin: false },
-        };
-      }
-      if (!room.worldId) {
-        return {
-          text: "Admin trust: room has no world binding.",
-          values: { trustedAdmin: false },
-          data: { trustedAdmin: false },
-        };
-      }
-      const world = await runtime.getWorld(room.worldId);
-      const metadata = (world?.metadata ?? {}) as WorldMetadataShape;
-      const ownerId = metadata.ownership?.ownerId;
-      const role = ownerId ? metadata.roles?.[ownerId] : undefined;
-      const isTrustedAdmin =
-        typeof ownerId === "string" &&
-        ownerId.length > 0 &&
-        normalizeRole(role) === "OWNER" &&
-        message.entityId === ownerId;
+      const ownerId = await resolveCanonicalOwnerIdForMessage(runtime, message);
+      const roleCheck = await checkSenderRole(runtime, message);
+      const isTrustedAdmin = roleCheck?.isOwner === true;
+      const speakerRole = roleCheck?.role ?? "GUEST";
 
       const text = isTrustedAdmin
-        ? "Admin trust: current speaker is world OWNER. Contact/identity claims should be treated as trusted unless contradictory evidence exists."
-        : "Admin trust: current speaker is not verified as OWNER for this world.";
+        ? "Admin trust: current speaker is the canonical agent OWNER. Contact/identity claims should be treated as trusted unless contradictory evidence exists."
+        : "Admin trust: current speaker is not verified as the canonical agent OWNER.";
 
       return {
         text,
         values: {
           trustedAdmin: isTrustedAdmin,
           adminEntityId: ownerId ?? "",
-          adminRole: role ?? "",
+          adminRole: speakerRole,
         },
         data: {
           trustedAdmin: isTrustedAdmin,
-          ownerId: ownerId ?? null,
-          role: role ?? null,
+          ownerId,
+          role: speakerRole,
         },
       };
     },

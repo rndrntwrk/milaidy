@@ -6,7 +6,10 @@ import type {
   State,
   UUID,
 } from "@elizaos/core";
-import { checkSenderRole } from "@miladyai/plugin-roles";
+import {
+  checkSenderRole,
+  resolveCanonicalOwnerIdForMessage,
+} from "@miladyai/plugin-roles";
 
 /** Maximum total characters for the provider text output. */
 const MAX_TEXT_LENGTH = 2000;
@@ -16,25 +19,6 @@ const MESSAGES_PER_ROOM = 10;
 
 /** Maximum client_chat rooms to scan (most recent activity wins). */
 const MAX_ROOMS = 3;
-
-type WorldMetadataShape = {
-  ownership?: { ownerId?: string };
-};
-
-/**
- * Resolves the owner entity ID from the current message's room/world chain.
- * Returns `undefined` when the ownership metadata is absent.
- */
-async function resolveOwnerEntityId(
-  runtime: IAgentRuntime,
-  message: Memory,
-): Promise<string | undefined> {
-  const room = await runtime.getRoom(message.roomId);
-  if (!room?.worldId) return undefined;
-  const world = await runtime.getWorld(room.worldId);
-  const metadata = (world?.metadata ?? {}) as WorldMetadataShape;
-  return metadata.ownership?.ownerId ?? undefined;
-}
 
 /**
  * Returns true when the caller is the agent itself or an admin/owner.
@@ -136,7 +120,10 @@ export function createAdminPanelProvider(): Provider {
         return empty;
       }
 
-      const adminEntityId = await resolveOwnerEntityId(runtime, message);
+      const adminEntityId = await resolveCanonicalOwnerIdForMessage(
+        runtime,
+        message,
+      );
       if (!adminEntityId) {
         return empty;
       }

@@ -59,6 +59,7 @@ export type VrmViewerProps = {
   onEngineState?: (state: VrmEngineState) => void;
   onEngineReady?: (engine: VrmEngine) => void;
   onRevealStart?: () => void;
+  createEngine?: () => VrmEngine;
 };
 
 type VrmEngineDebugRegistryEntry = {
@@ -303,7 +304,7 @@ export function VrmViewer(props: VrmViewerProps) {
 
     let engine = engineRef.current;
     if (!engine || !engine.isInitialized()) {
-      engine = new VrmEngine();
+      engine = props.createEngine ? props.createEngine() : new VrmEngine();
       engineRef.current = engine;
     }
 

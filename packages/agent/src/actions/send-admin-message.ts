@@ -6,7 +6,10 @@ import type {
   UUID,
 } from "@elizaos/core";
 import { logger, stringToUuid } from "@elizaos/core";
-import { checkSenderRole } from "@miladyai/plugin-roles";
+import {
+  checkSenderRole,
+  resolveCanonicalOwnerIdForMessage,
+} from "@miladyai/plugin-roles";
 
 type SendAdminMessageParams = {
   text?: string;
@@ -26,21 +29,9 @@ async function resolveAdminEntityId(
   runtime: IAgentRuntime,
   message: Memory,
 ): Promise<UUID> {
-  // Try world-based ownership first (same as adminTrustProvider)
-  try {
-    const room = await runtime.getRoom(message.roomId);
-    if (room?.worldId) {
-      const world = await runtime.getWorld(room.worldId);
-      const metadata = (world?.metadata ?? {}) as {
-        ownership?: { ownerId?: string };
-      };
-      const ownerId = metadata.ownership?.ownerId;
-      if (typeof ownerId === "string" && ownerId.length > 0) {
-        return ownerId as UUID;
-      }
-    }
-  } catch {
-    // Fall through to deterministic ID
+  const ownerId = await resolveCanonicalOwnerIdForMessage(runtime, message);
+  if (ownerId) {
+    return ownerId as UUID;
   }
 
   // Deterministic fallback (same as chat-routes ensureAdminEntityIdForChat

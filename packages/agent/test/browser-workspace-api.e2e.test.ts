@@ -20,6 +20,7 @@ import {
 
 type LocalSiteFixture = {
   counterUrl: string;
+  formUrl: string;
   tasksUrl: string;
   close: () => Promise<void>;
 };
@@ -43,11 +44,33 @@ async function startLocalSiteFixture(): Promise<LocalSiteFixture> {
               <head><meta charset="utf-8" /><title>Tasks Fixture</title></head>
               <body><h1>Tasks Fixture</h1><p>Agent task board</p></body>
             </html>`
-        : `<!doctype html>
-            <html lang="en">
-              <head><meta charset="utf-8" /><title>Counter Fixture</title></head>
-              <body><h1>Counter Fixture</h1><p>Agent browser workspace test page</p></body>
-            </html>`;
+        : url.pathname === "/welcome"
+          ? `<!doctype html>
+              <html lang="en">
+                <head><meta charset="utf-8" /><title>Welcome Fixture</title></head>
+                <body>
+                  <h1>Welcome, ${url.searchParams.get("name") || "Anonymous"}</h1>
+                  <a href="/tasks">Open tasks</a>
+                </body>
+              </html>`
+          : url.pathname === "/form"
+            ? `<!doctype html>
+                <html lang="en">
+                  <head><meta charset="utf-8" /><title>Browser Form Fixture</title></head>
+                  <body>
+                    <h1>Browser Form Fixture</h1>
+                    <form action="/welcome" method="get">
+                      <label>Agent name<input name="name" value="" /></label>
+                      <button type="submit">Continue</button>
+                    </form>
+                    <a href="/tasks">Open tasks</a>
+                  </body>
+                </html>`
+            : `<!doctype html>
+                <html lang="en">
+                  <head><meta charset="utf-8" /><title>Counter Fixture</title></head>
+                  <body><h1>Counter Fixture</h1><p>Agent browser workspace test page</p></body>
+                </html>`;
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
     res.end(html);
   });
@@ -61,6 +84,7 @@ async function startLocalSiteFixture(): Promise<LocalSiteFixture> {
 
   return {
     counterUrl: `${primaryBase}/counter`,
+    formUrl: `${primaryBase}/form`,
     tasksUrl: `${primaryBase}/tasks`,
     close: () =>
       new Promise<void>((resolve, reject) => {
@@ -235,5 +259,59 @@ describe("Browser workspace API E2E", () => {
       success: true,
       text: expect.stringContaining(siteFixture.counterUrl),
     });
+  });
+
+  it("runs browser subactions through the real command route", async () => {
+    const open = await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+      subaction: "open",
+      show: true,
+      url: siteFixture.formUrl,
+    });
+    expect(open.status).toBe(200);
+    expect((open.data.tab as BrowserWorkspaceTab).url).toBe(siteFixture.formUrl);
+
+    const inspect = await req(
+      apiServer.port,
+      "POST",
+      "/api/browser-workspace/command",
+      {
+        subaction: "inspect",
+      },
+    );
+    expect(inspect.status).toBe(200);
+    expect(inspect.data.elements).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ selector: "input[name=\"name\"]" }),
+        expect.objectContaining({ selector: "button[type=\"submit\"]" }),
+      ]),
+    );
+
+    const batch = await req(
+      apiServer.port,
+      "POST",
+      "/api/browser-workspace/command",
+      {
+        subaction: "batch",
+        steps: [
+          {
+            subaction: "fill",
+            selector: "input[name=\"name\"]",
+            value: "Milady",
+          },
+          {
+            subaction: "click",
+            selector: "button[type=\"submit\"]",
+          },
+          {
+            subaction: "get",
+            selector: "h1",
+            getMode: "text",
+          },
+        ],
+      },
+    );
+    expect(batch.status).toBe(200);
+    expect(batch.data.subaction).toBe("batch");
+    expect(batch.data.value).toBe("Welcome, Milady");
   });
 });

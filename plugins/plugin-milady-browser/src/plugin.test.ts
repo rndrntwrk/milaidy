@@ -1,15 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const browserWorkspaceMocks = vi.hoisted(() => ({
-  evaluateBrowserWorkspaceTab: vi.fn(),
+  executeBrowserWorkspaceCommand: vi.fn(),
   getBrowserWorkspaceMode: vi.fn(() => "web"),
   listBrowserWorkspaceTabs: vi.fn(),
-  closeBrowserWorkspaceTab: vi.fn(),
-  hideBrowserWorkspaceTab: vi.fn(),
-  navigateBrowserWorkspaceTab: vi.fn(),
-  openBrowserWorkspaceTab: vi.fn(),
-  showBrowserWorkspaceTab: vi.fn(),
-  snapshotBrowserWorkspaceTab: vi.fn(),
 }));
 
 const stewardWalletMocks = vi.hoisted(() => ({
@@ -25,18 +19,10 @@ const stewardWalletMocks = vi.hoisted(() => ({
 }));
 
 vi.mock("@miladyai/agent/services/browser-workspace", () => ({
-  closeBrowserWorkspaceTab: browserWorkspaceMocks.closeBrowserWorkspaceTab,
-  evaluateBrowserWorkspaceTab:
-    browserWorkspaceMocks.evaluateBrowserWorkspaceTab,
+  executeBrowserWorkspaceCommand:
+    browserWorkspaceMocks.executeBrowserWorkspaceCommand,
   getBrowserWorkspaceMode: browserWorkspaceMocks.getBrowserWorkspaceMode,
-  hideBrowserWorkspaceTab: browserWorkspaceMocks.hideBrowserWorkspaceTab,
   listBrowserWorkspaceTabs: browserWorkspaceMocks.listBrowserWorkspaceTabs,
-  navigateBrowserWorkspaceTab:
-    browserWorkspaceMocks.navigateBrowserWorkspaceTab,
-  openBrowserWorkspaceTab: browserWorkspaceMocks.openBrowserWorkspaceTab,
-  showBrowserWorkspaceTab: browserWorkspaceMocks.showBrowserWorkspaceTab,
-  snapshotBrowserWorkspaceTab:
-    browserWorkspaceMocks.snapshotBrowserWorkspaceTab,
 }));
 
 vi.mock("@miladyai/agent/services/steward-wallet", () => ({
@@ -62,16 +48,20 @@ afterEach(() => {
 });
 
 describe("@miladyai/plugin-milady-browser", () => {
-  it("opens a browser tab in web mode through the shared workspace service", async () => {
-    browserWorkspaceMocks.openBrowserWorkspaceTab.mockResolvedValue({
-      id: "btab_web_1",
-      title: "example.com",
-      url: "https://example.com/",
-      partition: "persist:milady-browser",
-      visible: true,
-      createdAt: "2026-04-05T18:45:00.000Z",
-      updatedAt: "2026-04-05T18:45:00.000Z",
-      lastFocusedAt: "2026-04-05T18:45:00.000Z",
+  it("routes browser subactions through the shared command surface", async () => {
+    browserWorkspaceMocks.executeBrowserWorkspaceCommand.mockResolvedValue({
+      mode: "web",
+      subaction: "open",
+      tab: {
+        id: "btab_web_1",
+        title: "example.com",
+        url: "https://example.com/",
+        partition: "persist:milady-browser",
+        visible: true,
+        createdAt: "2026-04-05T18:45:00.000Z",
+        updatedAt: "2026-04-05T18:45:00.000Z",
+        lastFocusedAt: "2026-04-05T18:45:00.000Z",
+      },
     });
     const callback = vi.fn();
 
@@ -85,7 +75,7 @@ describe("@miladyai/plugin-milady-browser", () => {
       undefined,
       {
         parameters: {
-          operation: "open",
+          subaction: "open",
           url: "https://example.com",
           show: true,
         },
@@ -93,8 +83,9 @@ describe("@miladyai/plugin-milady-browser", () => {
       callback,
     );
 
-    expect(browserWorkspaceMocks.openBrowserWorkspaceTab).toHaveBeenCalledWith(
+    expect(browserWorkspaceMocks.executeBrowserWorkspaceCommand).toHaveBeenCalledWith(
       expect.objectContaining({
+        subaction: "open",
         show: true,
         url: "https://example.com",
       }),
@@ -108,7 +99,7 @@ describe("@miladyai/plugin-milady-browser", () => {
   });
 
   it("returns desktop-only eval errors instead of rejecting the action", async () => {
-    browserWorkspaceMocks.evaluateBrowserWorkspaceTab.mockRejectedValue(
+    browserWorkspaceMocks.executeBrowserWorkspaceCommand.mockRejectedValue(
       new Error(
         "Milady browser workspace eval is only available in the desktop app.",
       ),
@@ -125,7 +116,7 @@ describe("@miladyai/plugin-milady-browser", () => {
       undefined,
       {
         parameters: {
-          operation: "eval",
+          subaction: "eval",
           id: "btab_web_1",
           script: "document.title",
         },
@@ -136,6 +127,73 @@ describe("@miladyai/plugin-milady-browser", () => {
     expect(result).toMatchObject({
       success: false,
       text: expect.stringContaining("only available in the desktop app"),
+    });
+  });
+
+  it("supports browser batches through stepsJson on the main action", async () => {
+    browserWorkspaceMocks.executeBrowserWorkspaceCommand.mockResolvedValue({
+      mode: "web",
+      subaction: "batch",
+      steps: [
+        {
+          mode: "web",
+          subaction: "open",
+          tab: {
+            id: "btab_web_1",
+            title: "form",
+            url: "http://127.0.0.1:4010/form",
+            partition: "persist:milady-browser",
+            visible: true,
+            createdAt: "2026-04-05T18:45:00.000Z",
+            updatedAt: "2026-04-05T18:45:00.000Z",
+            lastFocusedAt: "2026-04-05T18:45:00.000Z",
+          },
+        },
+        {
+          mode: "web",
+          subaction: "get",
+          value: "Welcome, Milady",
+        },
+      ],
+      value: "Welcome, Milady",
+    });
+
+    const result = await manageMiladyBrowserWorkspaceAction.handler(
+      {} as never,
+      { content: { text: "Complete the browser task" } } as never,
+      undefined,
+      {
+        parameters: {
+          subaction: "batch",
+          stepsJson: JSON.stringify([
+            {
+              subaction: "open",
+              url: "http://127.0.0.1:4010/form",
+              show: true,
+            },
+            {
+              subaction: "get",
+              selector: "h1",
+              getMode: "text",
+            },
+          ]),
+        },
+      },
+      vi.fn(),
+    );
+
+    expect(browserWorkspaceMocks.executeBrowserWorkspaceCommand).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subaction: "batch",
+        steps: expect.arrayContaining([
+          expect.objectContaining({ subaction: "open" }),
+          expect.objectContaining({ subaction: "get" }),
+        ]),
+      }),
+    );
+    expect(result).toMatchObject({
+      success: true,
+      text: expect.stringContaining("Completed 2 browser subactions"),
     });
   });
 

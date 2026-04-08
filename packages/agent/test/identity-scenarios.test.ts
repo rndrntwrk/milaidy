@@ -43,13 +43,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   mockGetEntityRole,
+  mockHasConfiguredCanonicalOwner,
   mockResolveWorldForMessage,
+  mockResolveCanonicalOwnerId,
+  mockResolveCanonicalOwnerIdForMessage,
   mockSetEntityRole,
   mockNormalizeRole,
   mockCheckSenderRole,
 } = vi.hoisted(() => ({
   mockGetEntityRole: vi.fn(),
+  mockHasConfiguredCanonicalOwner: vi.fn(),
   mockResolveWorldForMessage: vi.fn(),
+  mockResolveCanonicalOwnerId: vi.fn(),
+  mockResolveCanonicalOwnerIdForMessage: vi.fn(),
   mockSetEntityRole: vi.fn(),
   mockNormalizeRole: vi.fn(),
   mockCheckSenderRole: vi.fn(),
@@ -57,7 +63,10 @@ const {
 
 vi.mock("@miladyai/plugin-roles", () => ({
   getEntityRole: mockGetEntityRole,
+  hasConfiguredCanonicalOwner: mockHasConfiguredCanonicalOwner,
   resolveWorldForMessage: mockResolveWorldForMessage,
+  resolveCanonicalOwnerId: mockResolveCanonicalOwnerId,
+  resolveCanonicalOwnerIdForMessage: mockResolveCanonicalOwnerIdForMessage,
   setEntityRole: mockSetEntityRole,
   normalizeRole: mockNormalizeRole,
   checkSenderRole: mockCheckSenderRole,
@@ -1005,6 +1014,11 @@ class ScenarioRunner {
   // -----------------------------------------------------------------------
 
   private wirePluginRolesMocks(): void {
+    const runner = this;
+    const getOwnerId = () =>
+      runner.worlds.get(runner.defaultWorldId)?.metadata.ownership?.ownerId ??
+      null;
+
     mockNormalizeRole.mockImplementation(
       (raw: string | undefined | null) => {
         if (!raw) return "NONE";
@@ -1027,6 +1041,28 @@ class ScenarioRunner {
         const world = this.worlds.get(room.worldId as string);
         if (!world) return null;
         return { world, metadata: world.metadata };
+      },
+    );
+
+    mockHasConfiguredCanonicalOwner.mockImplementation(
+      () => getOwnerId() != null,
+    );
+
+    mockResolveCanonicalOwnerId.mockImplementation(
+      (_runtime: unknown, metadata?: RolesMetadata) =>
+        getOwnerId() ?? metadata?.ownership?.ownerId ?? null,
+    );
+
+    mockResolveCanonicalOwnerIdForMessage.mockImplementation(
+      async (_runtime: unknown, message: Memory) => {
+        const ownerId = getOwnerId();
+        if (ownerId) {
+          return ownerId;
+        }
+        const room = runner.rooms.get(message.roomId);
+        if (!room?.worldId) return null;
+        const world = runner.worlds.get(room.worldId as string);
+        return world?.metadata.ownership?.ownerId ?? null;
       },
     );
 

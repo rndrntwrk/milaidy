@@ -149,11 +149,11 @@ vi.mock("@miladyai/app-core/utils", () => ({
   openExternalUrl: vi.fn(),
 }));
 
-vi.mock("../../src/bridge", () => ({
+const bridgeMockModule = {
   isElectrobunRuntime: () => isElectrobunRuntimeMock(),
-}));
+};
 
-vi.mock("../../src/utils/desktop-bug-report", () => ({
+const desktopBugReportMockModule = {
   loadDesktopBugReportDiagnostics: (...args: unknown[]) =>
     loadDesktopBugReportDiagnosticsMock(...args),
   openDesktopLogsFolder: (...args: unknown[]) =>
@@ -165,7 +165,13 @@ vi.mock("../../src/utils/desktop-bug-report", () => ({
     lastError: string | null;
   }) =>
     `Startup Phase: ${diagnostics.phase}\nLast Error: ${diagnostics.lastError ?? "none"}`,
-}));
+};
+
+vi.mock("../../src/bridge/index.ts", () => bridgeMockModule);
+vi.mock(
+  "../../src/utils/desktop-bug-report.ts",
+  () => desktopBugReportMockModule,
+);
 
 import { BugReportModal } from "../../src/components/shell/BugReportModal";
 
@@ -197,6 +203,38 @@ function findButton(root: TestRenderer.ReactTestInstance, label: string) {
   return getButtons(root).find((b) => b.children.join("").includes(label));
 }
 
+function disableElectrobunRuntime(): void {
+  const runtimeWindow = window as Window & {
+    __electrobunWindowId?: number;
+    __MILADY_ELECTROBUN_RPC__?: unknown;
+  };
+  delete runtimeWindow.__electrobunWindowId;
+  delete runtimeWindow.__MILADY_ELECTROBUN_RPC__;
+}
+
+function enableElectrobunRuntime(): void {
+  const runtimeWindow = window as Window & {
+    __electrobunWindowId?: number;
+    __MILADY_ELECTROBUN_RPC__?: {
+      request: Record<string, (params?: unknown) => Promise<unknown>>;
+      onMessage: typeof vi.fn;
+      offMessage: typeof vi.fn;
+    };
+  };
+  runtimeWindow.__electrobunWindowId = 1;
+  runtimeWindow.__MILADY_ELECTROBUN_RPC__ = {
+    request: {
+      desktopGetStartupDiagnostics: async () =>
+        loadDesktopBugReportDiagnosticsMock(),
+      desktopOpenLogsFolder: async () => openDesktopLogsFolderMock(),
+      desktopCreateBugReportBundle: async (params?: unknown) =>
+        createDesktopBugReportBundleMock(params),
+    },
+    onMessage: vi.fn(),
+    offMessage: vi.fn(),
+  };
+}
+
 /** Fill both required fields and return the tree root. */
 async function fillRequired(root: TestRenderer.ReactTestInstance) {
   const textareas = getTextareas(root);
@@ -212,6 +250,7 @@ async function fillRequired(root: TestRenderer.ReactTestInstance) {
 
 describe("BugReportModal", () => {
   beforeEach(() => {
+    disableElectrobunRuntime();
     mockUseBugReport.mockReset();
     mockClient.checkBugReportInfo.mockReset().mockResolvedValue({});
     mockClient.submitBugReport.mockReset().mockResolvedValue({});
@@ -525,7 +564,7 @@ describe("BugReportModal", () => {
   });
 
   it("loads desktop diagnostics in the Electrobun runtime", async () => {
-    isElectrobunRuntimeMock.mockReturnValue(true);
+    enableElectrobunRuntime();
     setupMock(true);
 
     await act(async () => {
@@ -537,7 +576,7 @@ describe("BugReportModal", () => {
   });
 
   it("opens the desktop logs folder", async () => {
-    isElectrobunRuntimeMock.mockReturnValue(true);
+    enableElectrobunRuntime();
     setupMock(true);
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
@@ -554,7 +593,7 @@ describe("BugReportModal", () => {
   });
 
   it("copies desktop diagnostics", async () => {
-    isElectrobunRuntimeMock.mockReturnValue(true);
+    enableElectrobunRuntime();
     setupMock(true);
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
@@ -573,7 +612,7 @@ describe("BugReportModal", () => {
   });
 
   it("creates a local report bundle", async () => {
-    isElectrobunRuntimeMock.mockReturnValue(true);
+    enableElectrobunRuntime();
     setupMock(true);
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {

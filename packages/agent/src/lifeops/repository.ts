@@ -22,6 +22,7 @@ import type {
 } from "@miladyai/shared/contracts/lifeops";
 import {
   executeRawSql,
+  getRuntimeDb,
   listTableColumns,
   parseJsonArray,
   parseJsonRecord,
@@ -37,6 +38,22 @@ import {
 
 const schemaReady = new WeakSet<object>();
 const schemaInitializing = new WeakMap<object, Promise<void>>();
+
+async function hasLifeOpsSchema(runtime: IAgentRuntime): Promise<boolean> {
+  try {
+    const rows = await executeRawSql(
+      runtime,
+      `SELECT 1
+         FROM information_schema.tables
+        WHERE table_schema = current_schema()
+          AND table_name = 'life_task_definitions'
+        LIMIT 1`,
+    );
+    return rows.length > 0;
+  } catch {
+    return false;
+  }
+}
 
 export interface LifeOpsWebsiteAccessGrant {
   id: string;
@@ -665,8 +682,16 @@ function parseGmailSyncState(
 export async function ensureLifeOpsTables(
   runtime: IAgentRuntime,
 ): Promise<void> {
-  const key = runtime as unknown as object;
-  if (schemaReady.has(key)) return;
+  // Cache schema readiness per underlying DB instance rather than per
+  // runtime object. In desktop/dev restarts the runtime can survive while the
+  // adapter is rebound to a fresh PGlite database after corruption recovery.
+  // If we key on runtime, later reads skip schema setup and crash on missing
+  // lifeops tables in the new database.
+  const key = getRuntimeDb(runtime) as unknown as object;
+  if (schemaReady.has(key)) {
+    if (await hasLifeOpsSchema(runtime)) return;
+    schemaReady.delete(key);
+  }
 
   // Prevent concurrent migration runs — PGlite cannot handle concurrent DDL.
   // The first caller creates the migration promise; concurrent callers await it.

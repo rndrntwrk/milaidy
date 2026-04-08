@@ -1,14 +1,24 @@
-import type { IAgentRuntime, Memory, UUID } from "@elizaos/core";
+import {
+  createUniqueUuid,
+  type IAgentRuntime,
+  type Memory,
+  type Relationship,
+  type UUID,
+} from "@elizaos/core";
 import { describe, expect, it, vi } from "vitest";
 import type { RoleName, RolesWorldMetadata } from "../src/types";
 import { ROLE_RANK } from "../src/types";
 import {
   canModifyRole,
   checkSenderRole,
+  getConfiguredOwnerEntityIds,
   getEntityRole,
   getLiveEntityMetadataFromMessage,
+  hasConfiguredCanonicalOwner,
   matchEntityToConnectorAdminWhitelist,
   normalizeRole,
+  resolveCanonicalOwnerId,
+  resolveCanonicalOwnerIdForMessage,
   resolveEntityRole,
   resolveWorldForMessage,
   setConnectorAdminWhitelist,
@@ -27,6 +37,8 @@ function mockRuntime(opts: {
     string,
     { names?: string[]; metadata?: Record<string, unknown> }
   >;
+  relationships?: Relationship[];
+  settings?: Record<string, string | boolean | number | null>;
 }): IAgentRuntime {
   return {
     getRoom: vi.fn().mockResolvedValue(opts.room ?? null),
@@ -41,6 +53,10 @@ function mockRuntime(opts: {
         metadata: entity.metadata ?? {},
       };
     }),
+    getRelationships: vi.fn().mockResolvedValue(opts.relationships ?? []),
+    getSetting: vi.fn().mockImplementation((key: string) => {
+      return opts.settings?.[key] ?? null;
+    }),
   } as unknown as IAgentRuntime;
 }
 
@@ -48,14 +64,21 @@ function msg(
   entityId: string,
   roomId = "room-1",
   metadata?: Record<string, unknown>,
+  memoryMetadata?: Record<string, unknown>,
 ): Memory {
   return {
     entityId: entityId as UUID,
     roomId: roomId as UUID,
     content: {
       text: "",
+      source:
+        typeof memoryMetadata?.discordServerId === "string" ||
+        typeof memoryMetadata?.discordChannelId === "string"
+          ? "discord"
+          : undefined,
       ...(metadata ? { metadata } : {}),
     },
+    ...(memoryMetadata ? { metadata: memoryMetadata } : {}),
   } as Memory;
 }
 
@@ -410,11 +433,17 @@ describe("resolveEntityRole", () => {
     });
     setConnectorAdminWhitelist(runtime, { discord: ["discord-admin-2"] });
 
-    const role = await resolveEntityRole(runtime, world, world.metadata, "speaker", {
-      liveEntityMetadata: {
-        discord: { userId: "discord-admin-2", username: "owner" },
+    const role = await resolveEntityRole(
+      runtime,
+      world,
+      world.metadata,
+      "speaker",
+      {
+        liveEntityMetadata: {
+          discord: { userId: "discord-admin-2", username: "owner" },
+        },
       },
-    });
+    );
 
     expect(role).toBe("ADMIN");
     expect(world.metadata.roles?.speaker).toBeUndefined();
@@ -441,6 +470,73 @@ describe("getLiveEntityMetadataFromMessage", () => {
 
   it("returns undefined when bridge sender metadata is absent", () => {
     expect(getLiveEntityMetadataFromMessage(msg("speaker"))).toBeUndefined();
+  });
+
+  it("extracts native Discord sender metadata from memory metadata", () => {
+    expect(
+      getLiveEntityMetadataFromMessage(
+        msg("speaker", "room-1", undefined, {
+          fromId: "discord-owner-111",
+          discordServerId: "guild-1",
+          entityName: "Shaw",
+        }),
+      ),
+    ).toEqual({
+      discord: {
+        userId: "discord-owner-111",
+        id: "discord-owner-111",
+        name: "Shaw",
+        username: "Shaw",
+      },
+    });
+  });
+});
+
+describe("canonical owner settings", () => {
+  it("collects the configured adminEntityId and owner contact entity ids", () => {
+    const runtime = mockRuntime({
+      settings: {
+        MILADY_ADMIN_ENTITY_ID: "owner-canonical",
+        MILADY_OWNER_CONTACTS_JSON: JSON.stringify({
+          client_chat: { entityId: "owner-canonical" },
+          discord: { entityId: "owner-canonical" },
+          telegram: { entityId: "owner-shadow" },
+        }),
+      },
+    });
+
+    expect(getConfiguredOwnerEntityIds(runtime)).toEqual([
+      "owner-canonical",
+      "owner-shadow",
+    ]);
+    expect(hasConfiguredCanonicalOwner(runtime)).toBe(true);
+  });
+
+  it("prefers the configured canonical owner over world ownership metadata", () => {
+    const runtime = mockRuntime({
+      settings: {
+        MILADY_ADMIN_ENTITY_ID: "owner-canonical",
+      },
+    });
+
+    expect(
+      resolveCanonicalOwnerId(runtime, {
+        ownership: { ownerId: "discord-guild-owner" },
+      }),
+    ).toBe("owner-canonical");
+  });
+
+  it("resolves the canonical owner for a message even when no room/world can be loaded", async () => {
+    const runtime = mockRuntime({
+      room: null,
+      settings: {
+        MILADY_ADMIN_ENTITY_ID: "owner-canonical",
+      },
+    });
+
+    await expect(
+      resolveCanonicalOwnerIdForMessage(runtime, msg("speaker")),
+    ).resolves.toBe("owner-canonical");
   });
 });
 
@@ -559,6 +655,200 @@ describe("checkSenderRole", () => {
     expect(
       await checkSenderRole(mockRuntime({ room: null }), msg("e1")),
     ).toBeNull();
+  });
+
+  it("returns OWNER when the sender is the stored world owner even before roles backfill", async () => {
+    const runtime = mockRuntime({
+      room: { worldId: "w1" },
+      world: {
+        id: "w1",
+        metadata: { ownership: { ownerId: "owner-1" }, roles: {} },
+      },
+    });
+
+    expect(await checkSenderRole(runtime, msg("owner-1"))).toEqual({
+      entityId: "owner-1",
+      role: "OWNER",
+      isOwner: true,
+      isAdmin: true,
+      canManageRoles: true,
+    });
+  });
+
+  it("does not treat a connector-local OWNER as the canonical owner when a canonical owner is configured", async () => {
+    const runtime = mockRuntime({
+      room: { worldId: "w1" },
+      world: {
+        id: "w1",
+        metadata: {
+          ownership: { ownerId: "discord-guild-owner" },
+          roles: { "discord-guild-owner": "OWNER" },
+        },
+      },
+      settings: {
+        MILADY_ADMIN_ENTITY_ID: "app-owner",
+      },
+    });
+
+    expect(await checkSenderRole(runtime, msg("discord-guild-owner"))).toEqual({
+      entityId: "discord-guild-owner",
+      role: "GUEST",
+      isOwner: false,
+      isAdmin: false,
+      canManageRoles: false,
+    });
+  });
+
+  it("returns OWNER for a Discord sender whose live connector identity matches the owner entity", async () => {
+    const runtime = mockRuntime({
+      room: { worldId: "w1" },
+      world: {
+        id: "w1",
+        metadata: { ownership: { ownerId: "owner-app" }, roles: {} },
+      },
+      entities: {
+        "owner-app": {
+          metadata: {
+            discord: { userId: "discord-owner-111", username: "shaw" },
+          },
+        },
+      },
+    });
+
+    expect(
+      await checkSenderRole(
+        runtime,
+        msg("discord-shadow", "room-1", undefined, {
+          fromId: "discord-owner-111",
+          discordServerId: "guild-1",
+        }),
+      ),
+    ).toEqual({
+      entityId: "discord-shadow",
+      role: "OWNER",
+      isOwner: true,
+      isAdmin: true,
+      canManageRoles: true,
+    });
+  });
+
+  it("returns OWNER for a sender with a confirmed identity link to the world owner", async () => {
+    const runtime = mockRuntime({
+      room: { worldId: "w1" },
+      world: {
+        id: "w1",
+        metadata: { ownership: { ownerId: "owner-app" }, roles: {} },
+      },
+      relationships: [
+        {
+          id: "rel-1" as UUID,
+          sourceEntityId: "discord-shadow" as UUID,
+          targetEntityId: "owner-app" as UUID,
+          agentId: "agent-1" as UUID,
+          tags: ["identity_link"],
+          metadata: { status: "confirmed" },
+        } as Relationship,
+      ],
+    });
+
+    expect(await checkSenderRole(runtime, msg("discord-shadow"))).toEqual({
+      entityId: "discord-shadow",
+      role: "OWNER",
+      isOwner: true,
+      isAdmin: true,
+      canManageRoles: true,
+    });
+  });
+
+  it("upgrades a linked canonical owner identity above a stored ADMIN role", async () => {
+    const runtime = mockRuntime({
+      room: { worldId: "w1" },
+      world: {
+        id: "w1",
+        metadata: {
+          ownership: { ownerId: "owner-app" },
+          roles: { "discord-shadow": "ADMIN" },
+        },
+      },
+      relationships: [
+        {
+          id: "rel-1" as UUID,
+          sourceEntityId: "discord-shadow" as UUID,
+          targetEntityId: "owner-app" as UUID,
+          agentId: "agent-1" as UUID,
+          tags: ["identity_link"],
+          metadata: { status: "confirmed" },
+        } as Relationship,
+      ],
+    });
+
+    expect(await checkSenderRole(runtime, msg("discord-shadow"))).toEqual({
+      entityId: "discord-shadow",
+      role: "OWNER",
+      isOwner: true,
+      isAdmin: true,
+      canManageRoles: true,
+    });
+  });
+
+  it("returns OWNER for a sender linked to the configured canonical owner even when world ownership points elsewhere", async () => {
+    const runtime = mockRuntime({
+      room: { worldId: "w1" },
+      world: {
+        id: "w1",
+        metadata: {
+          ownership: { ownerId: "discord-guild-owner" },
+          roles: { "discord-guild-owner": "OWNER" },
+        },
+      },
+      settings: {
+        MILADY_ADMIN_ENTITY_ID: "owner-app",
+      },
+      relationships: [
+        {
+          id: "rel-1" as UUID,
+          sourceEntityId: "discord-shadow" as UUID,
+          targetEntityId: "owner-app" as UUID,
+          agentId: "agent-1" as UUID,
+          tags: ["identity_link"],
+          metadata: { status: "confirmed" },
+        } as Relationship,
+      ],
+    });
+
+    expect(await checkSenderRole(runtime, msg("discord-shadow"))).toEqual({
+      entityId: "discord-shadow",
+      role: "OWNER",
+      isOwner: true,
+      isAdmin: true,
+      canManageRoles: true,
+    });
+  });
+});
+
+describe("resolveWorldForMessage", () => {
+  it("falls back to native Discord world metadata when the room lookup is missing", async () => {
+    const runtime = mockRuntime({
+      room: null,
+      world: {
+        id: "w-discord",
+        metadata: { roles: { e1: "OWNER" as RoleName } },
+      },
+    });
+    const message = msg("e1", "room-1", undefined, {
+      fromId: "discord-owner-111",
+      discordServerId: "guild-123",
+    });
+
+    const result = await resolveWorldForMessage(runtime, message);
+
+    expect(result?.world).toEqual({
+      id: "w-discord",
+      metadata: { roles: { e1: "OWNER" } },
+    });
+    expect(runtime.getWorld).toHaveBeenCalledWith(
+      createUniqueUuid(runtime, "guild-123"),
+    );
   });
 });
 

@@ -8,6 +8,22 @@ import {
 
 vi.mock("../../src/services/browser-workspace", () => ({
   closeBrowserWorkspaceTab: vi.fn(async () => true),
+  executeBrowserWorkspaceCommand: vi.fn(async () => ({
+    mode: "web",
+    subaction: "inspect",
+    elements: [
+      {
+        selector: "button[type=\"submit\"]",
+        tag: "button",
+        text: "Continue",
+        type: "submit",
+        name: null,
+        href: null,
+        value: null,
+      },
+    ],
+    value: { title: "Fixture", url: "http://127.0.0.1:4010/form" },
+  })),
   evaluateBrowserWorkspaceTab: vi.fn(async () => ({ ok: true })),
   getBrowserWorkspaceSnapshot: vi.fn(async () => ({
     mode: "web",
@@ -124,6 +140,22 @@ describe("browser-workspace-routes", () => {
     expect(payload).toMatchObject({
       mode: "web",
       tabs: [{ id: "btab_1" }],
+    });
+  });
+
+  it("executes browser commands from /api/browser-workspace/command", async () => {
+    const ctx = buildCtx("POST", "/api/browser-workspace/command", {
+      subaction: "inspect",
+      id: "btab_1",
+    });
+
+    const handled = await handleBrowserWorkspaceRoutes(ctx);
+
+    expect(handled).toBe(true);
+    const payload = (ctx.json as ReturnType<typeof vi.fn>).mock.calls[0][1];
+    expect(payload).toMatchObject({
+      subaction: "inspect",
+      elements: [expect.objectContaining({ selector: "button[type=\"submit\"]" })],
     });
   });
 

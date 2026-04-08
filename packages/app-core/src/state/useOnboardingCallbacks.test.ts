@@ -415,6 +415,11 @@ describe("useOnboardingCallbacks", () => {
           retryStartup: vi.fn(),
           forceLocalBootstrapRef: { current: false },
           client: {
+            getAuthStatus: vi.fn().mockResolvedValue({
+              required: false,
+              pairingEnabled: false,
+              expiresAt: null,
+            }),
             submitOnboarding,
             updateConfig: vi.fn().mockResolvedValue({}),
           } as unknown as MiladyClient,
@@ -471,6 +476,91 @@ describe("useOnboardingCallbacks", () => {
     );
     expect(setOnboardingComplete).toHaveBeenCalledWith(true);
     expect(setTab).toHaveBeenCalledWith("settings");
+  });
+
+  it("surfaces onboarding completion failures instead of only logging them", async () => {
+    const submitOnboarding = vi
+      .fn()
+      .mockRejectedValue(new Error("submit failed"));
+    const setOnboardingComplete = vi.fn();
+    const setTab = vi.fn();
+    const setActionNotice = vi.fn();
+
+    const { result } = renderHook(() => {
+      const onboarding = useOnboardingState();
+      return {
+        onboarding,
+        callbacks: useOnboardingCallbacks({
+          onboarding,
+          setOnboardingStep: vi.fn(),
+          setOnboardingMode: vi.fn(),
+          setOnboardingActiveGuide: vi.fn(),
+          addDeferredOnboardingTask: vi.fn(),
+          setOnboardingDetectedProviders: vi.fn(),
+          setOnboardingServerTarget: vi.fn(),
+          setOnboardingCloudApiKey: vi.fn(),
+          setOnboardingProvider: vi.fn(),
+          setOnboardingApiKey: vi.fn(),
+          setOnboardingPrimaryModel: vi.fn(),
+          setOnboardingRemoteApiBase: vi.fn(),
+          setOnboardingRemoteToken: vi.fn(),
+          setOnboardingRemoteConnecting: vi.fn(),
+          setOnboardingRemoteError: vi.fn(),
+          setOnboardingRemoteConnected: vi.fn(),
+          setPostOnboardingChecklistDismissed: vi.fn(),
+          setOnboardingComplete,
+          coordinatorOnboardingCompleteRef: { current: null },
+          initialTabSetRef: { current: false },
+          setTab,
+          defaultLandingTab: "chat",
+          loadCharacter: vi.fn(async () => {}),
+          uiLanguage: "en",
+          selectedVrmIndex: 1,
+          walletConfig: {},
+          elizaCloudConnected: false,
+          setActionNotice,
+          retryStartup: vi.fn(),
+          forceLocalBootstrapRef: { current: false },
+          client: {
+            getAuthStatus: vi.fn().mockResolvedValue({
+              required: false,
+              pairingEnabled: false,
+              expiresAt: null,
+            }),
+            submitOnboarding,
+            updateConfig: vi.fn().mockResolvedValue({}),
+          } as unknown as MiladyClient,
+        }),
+      };
+    });
+
+    act(() => {
+      result.current.onboarding.setOptions({
+        names: [],
+        styles: [getDefaultStylePreset("en")],
+        providers: [],
+        cloudProviders: [],
+        models: { small: [], large: [] },
+        inventoryProviders: [],
+        sharedStyleRules: "Keep responses brief.",
+      });
+      result.current.onboarding.setField("name", "Chen");
+      result.current.onboarding.setField("serverTarget", "local");
+      result.current.onboarding.setField("provider", "openai");
+      result.current.onboarding.setField("apiKey", "sk-openai-test");
+    });
+
+    await act(async () => {
+      await result.current.callbacks.handleOnboardingFinish();
+    });
+
+    expect(setActionNotice).toHaveBeenCalledWith(
+      "Failed to complete onboarding: submit failed",
+      "error",
+      8000,
+    );
+    expect(setOnboardingComplete).not.toHaveBeenCalled();
+    expect(setTab).not.toHaveBeenCalled();
   });
 
   it("completes Eliza Cloud onboarding without queuing Google setup work", async () => {

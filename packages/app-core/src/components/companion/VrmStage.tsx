@@ -17,7 +17,7 @@ import type {
   VrmEngine,
   VrmEngineState,
 } from "../avatar/VrmEngine";
-import { VrmViewer } from "../avatar/VrmViewer";
+import { VrmViewer, type VrmViewerProps } from "../avatar/VrmViewer";
 
 const AVATAR_CHANGE_WAVE_DELAY_MS = 650;
 const AVATAR_CHANGE_WAVE_EMOTE: AppEmoteEventDetail = {
@@ -47,6 +47,7 @@ export const VrmStage = memo(function VrmStage({
   companionVrmPowerMode = "balanced",
   companionHalfFramerateMode = "when_saving_power",
   companionAnimateWhenHidden = false,
+  viewerComponent: ViewerComponent = VrmViewer,
   t,
 }: {
   active?: boolean;
@@ -62,6 +63,7 @@ export const VrmStage = memo(function VrmStage({
   companionVrmPowerMode?: CompanionVrmPowerMode;
   companionHalfFramerateMode?: CompanionHalfFramerateMode;
   companionAnimateWhenHidden?: boolean;
+  viewerComponent?: (props: VrmViewerProps) => JSX.Element;
   t: TranslateFn;
 }) {
   useRenderGuard("VrmStage");
@@ -260,7 +262,7 @@ export const VrmStage = memo(function VrmStage({
 
       {/* Single persistent VrmViewer — world stays loaded, only character swaps */}
       <div className="absolute inset-0 z-10">
-        <VrmViewer
+        <ViewerComponent
           active={active}
           vrmPath={vrmPath}
           worldUrl={worldUrl}

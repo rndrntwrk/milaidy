@@ -77,6 +77,7 @@ describe("Trajectory I/O Capture E2E", () => {
   }, 150_000);
 
   it("captures LLM call input and output data with full fidelity", async () => {
+    expect(initFailed).toBe(false);
     if (initFailed) return;
 
     // Start a trajectory — in "new" mode (no agentId in options),
@@ -115,15 +116,10 @@ describe("Trajectory I/O Capture E2E", () => {
 
     // Verify the trajectory detail contains the correct input/output
     const detail = await dbLogger.getTrajectoryDetail(stepId);
-    if (!detail) {
-      console.warn(
-        "[trajectory-io] trajectory detail not found — database write may have failed silently, skipping",
-      );
-      return;
-    }
-    expect((detail.steps ?? []).length).toBeGreaterThanOrEqual(1);
+    expect(detail).toBeDefined();
+    expect((detail!.steps ?? []).length).toBeGreaterThanOrEqual(1);
 
-    const llmCalls = (detail.steps ?? [])[0]?.llmCalls ?? [];
+    const llmCalls = (detail!.steps ?? [])[0]?.llmCalls ?? [];
     expect(llmCalls.length).toBe(1);
 
     const call = llmCalls[0];
@@ -160,6 +156,7 @@ describe("Trajectory I/O Capture E2E", () => {
   });
 
   it("captures provider access data alongside LLM calls", async () => {
+    expect(initFailed).toBe(false);
     if (initFailed) return;
 
     // Use legacy signature (agentId in options) so stepId is the first arg
@@ -205,14 +202,9 @@ describe("Trajectory I/O Capture E2E", () => {
     await new Promise((r) => setTimeout(r, 1000));
 
     const detail = await dbLogger.getTrajectoryDetail(stepId);
-    if (!detail) {
-      console.warn(
-        "[trajectory-io] trajectory detail not found — skipping",
-      );
-      return;
-    }
+    expect(detail).toBeDefined();
 
-    const step = (detail.steps ?? [])[0];
+    const step = (detail!.steps ?? [])[0];
     expect(step).toBeDefined();
 
     // Verify provider access was captured
@@ -229,6 +221,7 @@ describe("Trajectory I/O Capture E2E", () => {
   });
 
   it("creates separate trajectories for separate messages", async () => {
+    expect(initFailed).toBe(false);
     if (initFailed) return;
 
     const stepId1 = "io-separate-msg-001";
@@ -282,17 +275,12 @@ describe("Trajectory I/O Capture E2E", () => {
     // Verify separate trajectories
     const detail1 = await dbLogger.getTrajectoryDetail(stepId1);
     const detail2 = await dbLogger.getTrajectoryDetail(stepId2);
-
-    if (!detail1 || !detail2) {
-      console.warn(
-        "[trajectory-io] one or both trajectory details not found — skipping",
-      );
-      return;
-    }
+    expect(detail1).toBeDefined();
+    expect(detail2).toBeDefined();
 
     // Each trajectory should have its own LLM calls
-    const calls1 = (detail1.steps ?? [])[0]?.llmCalls ?? [];
-    const calls2 = (detail2.steps ?? [])[0]?.llmCalls ?? [];
+    const calls1 = (detail1!.steps ?? [])[0]?.llmCalls ?? [];
+    const calls2 = (detail2!.steps ?? [])[0]?.llmCalls ?? [];
 
     expect(calls1.length).toBe(1);
     expect(calls2.length).toBe(1);
@@ -305,6 +293,7 @@ describe("Trajectory I/O Capture E2E", () => {
   });
 
   it("trajectory lifecycle: start → active → completed with correct status", async () => {
+    expect(initFailed).toBe(false);
     if (initFailed) return;
 
     const stepId = "io-lifecycle-step-003";
@@ -334,12 +323,7 @@ describe("Trajectory I/O Capture E2E", () => {
 
     // Before ending: trajectory should exist
     const beforeEnd = await dbLogger.getTrajectoryDetail(stepId);
-    if (!beforeEnd) {
-      console.warn(
-        "[trajectory-io] trajectory detail not found before end — skipping",
-      );
-      return;
-    }
+    expect(beforeEnd).toBeDefined();
 
     // End the trajectory
     await dbLogger.endTrajectory(stepId, "completed");
@@ -348,18 +332,14 @@ describe("Trajectory I/O Capture E2E", () => {
 
     // After ending: verify completed status
     const afterEnd = await dbLogger.getTrajectoryDetail(stepId);
-    if (!afterEnd) {
-      console.warn(
-        "[trajectory-io] trajectory detail not found after end — skipping",
-      );
-      return;
-    }
-    expect(afterEnd.metrics?.finalStatus).toBe("completed");
-    expect(afterEnd.endTime).toBeDefined();
-    expect(afterEnd.durationMs).toBeGreaterThanOrEqual(0);
+    expect(afterEnd).toBeDefined();
+    expect(afterEnd!.metrics?.finalStatus).toBe("completed");
+    expect(afterEnd!.endTime).toBeDefined();
+    expect(afterEnd!.durationMs).toBeGreaterThanOrEqual(0);
   });
 
   it("handles multiple LLM calls within a single trajectory", async () => {
+    expect(initFailed).toBe(false);
     if (initFailed) return;
 
     const stepId = "io-multi-call-step-005";
@@ -405,14 +385,9 @@ describe("Trajectory I/O Capture E2E", () => {
     await new Promise((r) => setTimeout(r, 1000));
 
     const detail = await dbLogger.getTrajectoryDetail(stepId);
-    if (!detail) {
-      console.warn(
-        "[trajectory-io] multi-call trajectory detail not found — skipping",
-      );
-      return;
-    }
+    expect(detail).toBeDefined();
 
-    const llmCalls = (detail.steps ?? [])[0]?.llmCalls ?? [];
+    const llmCalls = (detail!.steps ?? [])[0]?.llmCalls ?? [];
     expect(llmCalls.length).toBe(2);
 
     // Verify first call (shouldRespond)
@@ -443,6 +418,7 @@ describe("Trajectory I/O Capture E2E", () => {
   });
 
   it("preserves long prompts and responses without truncation", async () => {
+    expect(initFailed).toBe(false);
     if (initFailed) return;
 
     const stepId = "io-long-content-step-006";
@@ -476,20 +452,10 @@ describe("Trajectory I/O Capture E2E", () => {
     await new Promise((r) => setTimeout(r, 1000));
 
     const detail = await dbLogger.getTrajectoryDetail(stepId);
-    if (!detail) {
-      console.warn(
-        "[trajectory-io] long content trajectory detail not found — skipping",
-      );
-      return;
-    }
+    expect(detail).toBeDefined();
 
-    const call = (detail.steps ?? [])[0]?.llmCalls?.[0];
-    if (!call) {
-      console.warn(
-        "[trajectory-io] no LLM call found in trajectory — skipping",
-      );
-      return;
-    }
+    const call = (detail!.steps ?? [])[0]?.llmCalls?.[0];
+    expect(call).toBeDefined();
 
     // Verify prompts/responses are preserved (they may be truncated at 2x limit
     // by the truncateField helper, but should contain substantial content)

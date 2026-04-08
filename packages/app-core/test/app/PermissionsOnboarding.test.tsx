@@ -72,10 +72,12 @@ vi.mock("@miladyai/app-core/api", () => ({
   },
 }));
 
-vi.mock("../../src/bridge", () => ({
+const bridgeMockModule = {
   invokeDesktopBridgeRequest: mockInvokeDesktopBridgeRequest,
   subscribeDesktopBridgeEvent: mockSubscribeDesktopBridgeEvent,
-}));
+};
+
+vi.mock("../../src/bridge/index.ts", () => bridgeMockModule);
 
 vi.mock("@miladyai/ui", () => ({
   Button: ({
@@ -181,11 +183,65 @@ function ensureNavigatorPermissionMocks(): void {
   }
 }
 
+function installDesktopRpcMock(): void {
+  (
+    window as Window & {
+      __MILADY_ELECTROBUN_RPC__?: {
+        request: Record<string, (params?: unknown) => Promise<unknown>>;
+        onMessage: typeof vi.fn;
+        offMessage: typeof vi.fn;
+      };
+    }
+  ).__MILADY_ELECTROBUN_RPC__ = {
+    request: {
+      permissionsGetAll: (params?: unknown) =>
+        mockInvokeDesktopBridgeRequest({
+          rpcMethod: "permissionsGetAll",
+          ipcChannel: "permissions:getAll",
+          params,
+        }),
+      permissionsIsShellEnabled: (params?: unknown) =>
+        mockInvokeDesktopBridgeRequest({
+          rpcMethod: "permissionsIsShellEnabled",
+          ipcChannel: "permissions:isShellEnabled",
+          params,
+        }),
+      permissionsGetPlatform: (params?: unknown) =>
+        mockInvokeDesktopBridgeRequest({
+          rpcMethod: "permissionsGetPlatform",
+          ipcChannel: "permissions:getPlatform",
+          params,
+        }),
+      permissionsRequest: (params?: unknown) =>
+        mockInvokeDesktopBridgeRequest({
+          rpcMethod: "permissionsRequest",
+          ipcChannel: "permissions:request",
+          params,
+        }),
+      permissionsOpenSettings: (params?: unknown) =>
+        mockInvokeDesktopBridgeRequest({
+          rpcMethod: "permissionsOpenSettings",
+          ipcChannel: "permissions:openSettings",
+          params,
+        }),
+      permissionsSetShellEnabled: (params?: unknown) =>
+        mockInvokeDesktopBridgeRequest({
+          rpcMethod: "permissionsSetShellEnabled",
+          ipcChannel: "permissions:setShellEnabled",
+          params,
+        }),
+    },
+    onMessage: vi.fn(),
+    offMessage: vi.fn(),
+  };
+}
+
 // ====================================================================
 
 describe("PermissionsOnboardingSection", () => {
   beforeEach(() => {
     ensureNavigatorPermissionMocks();
+    installDesktopRpcMock();
     mockUseApp.mockReset();
     mockIsWeb.mockReturnValue(false);
     mockIsDesktop.mockReturnValue(true);

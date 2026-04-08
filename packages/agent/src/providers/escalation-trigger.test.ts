@@ -9,10 +9,18 @@ const { mockGetActiveEscalationSync } = vi.hoisted(() => ({
   mockGetActiveEscalationSync: vi.fn(),
 }));
 
+const { mockResolveCanonicalOwnerIdForMessage } = vi.hoisted(() => ({
+  mockResolveCanonicalOwnerIdForMessage: vi.fn(),
+}));
+
 vi.mock("../services/escalation.js", () => ({
   EscalationService: {
     getActiveEscalationSync: mockGetActiveEscalationSync,
   },
+}));
+
+vi.mock("@miladyai/plugin-roles", () => ({
+  resolveCanonicalOwnerIdForMessage: mockResolveCanonicalOwnerIdForMessage,
 }));
 
 import { createEscalationTriggerProvider } from "./escalation-trigger";
@@ -65,6 +73,8 @@ describe("escalationTriggerProvider", () => {
   beforeEach(() => {
     mockGetActiveEscalationSync.mockReset();
     mockGetActiveEscalationSync.mockReturnValue(null);
+    mockResolveCanonicalOwnerIdForMessage.mockReset();
+    mockResolveCanonicalOwnerIdForMessage.mockResolvedValue(OWNER_ID);
   });
 
   it("has correct metadata", () => {

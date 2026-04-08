@@ -6,6 +6,10 @@ import { text, flush } from "../../../../test/helpers/react-test";
 interface AppsPageContextStub {
   appsSubTab: "browse" | "games";
   activeGameViewerUrl: string;
+  activeGameRunId: string;
+  activeGameDisplayName: string;
+  appRuns: unknown[];
+  t: (key: string, options?: { defaultValue?: string }) => string;
   setState: (key: string, value: "browse" | "games") => void;
 }
 
@@ -17,15 +21,10 @@ vi.mock("@miladyai/app-core/state", () => ({
   useApp: () => mockUseApp(),
 }));
 
-vi.mock("../../src/components/pages/AppsView", () => ({
-  AppsView: () => React.createElement("div", null, "APPS_VIEW"),
-}));
+import { AppsPageView } from "../../src/components/pages/AppsPageView.tsx";
 
-vi.mock("../../src/components/apps/GameView", () => ({
-  GameView: () => React.createElement("div", null, "GAME_VIEW"),
-}));
-
-import { AppsPageView } from "../../src/components/pages/AppsPageView";
+const StubAppsView = () => React.createElement("div", null, "APPS_VIEW");
+const StubGameView = () => React.createElement("div", null, "GAME_VIEW");
 
 function createContext(
   overrides?: Partial<AppsPageContextStub>,
@@ -33,6 +32,11 @@ function createContext(
   return {
     appsSubTab: "browse",
     activeGameViewerUrl: "",
+    activeGameRunId: "",
+    activeGameDisplayName: "",
+    appRuns: [],
+    t: (key: string, options?: { defaultValue?: string }) =>
+      options?.defaultValue ?? key,
     setState: vi.fn<AppsPageContextStub["setState"]>(),
     ...overrides,
   };
@@ -52,7 +56,12 @@ describe("AppsPageView", () => {
 
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
-      tree = TestRenderer.create(React.createElement(AppsPageView));
+      tree = TestRenderer.create(
+        React.createElement(AppsPageView, {
+          appsView: StubAppsView,
+          gameView: StubGameView,
+        }),
+      );
     });
     await flush();
 
@@ -73,7 +82,12 @@ describe("AppsPageView", () => {
 
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
-      tree = TestRenderer.create(React.createElement(AppsPageView));
+      tree = TestRenderer.create(
+        React.createElement(AppsPageView, {
+          appsView: StubAppsView,
+          gameView: StubGameView,
+        }),
+      );
     });
     await flush();
 
@@ -91,7 +105,12 @@ describe("AppsPageView", () => {
 
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
-      tree = TestRenderer.create(React.createElement(AppsPageView));
+      tree = TestRenderer.create(
+        React.createElement(AppsPageView, {
+          appsView: StubAppsView,
+          gameView: StubGameView,
+        }),
+      );
     });
     await flush();
 

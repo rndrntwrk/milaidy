@@ -25,19 +25,17 @@ vi.mock("@miladyai/app-core/utils", () => ({
   DESKTOP_WORKSPACE_SURFACES: [],
 }));
 
-vi.mock("../../src/components/avatar/VrmViewer", () => ({
-  VrmViewer: (props: Record<string, unknown>) => {
-    viewerRenderCount++;
-    viewerPropsRef.current = props;
-    return React.createElement("div", null, "VrmViewer");
-  },
-}));
-
 vi.mock("../../src/components/character/AvatarLoader", () => ({
   AvatarLoader: () => React.createElement("div", null, "AvatarLoader"),
 }));
 
-import { VrmStage } from "../../src/components/companion/VrmStage";
+import { VrmStage } from "../../src/components/companion/VrmStage.tsx";
+
+function StubVrmViewer(props: Record<string, unknown>) {
+  viewerRenderCount++;
+  viewerPropsRef.current = props;
+  return React.createElement("div", null, "VrmViewer");
+}
 
 describe("VrmStage", () => {
   beforeEach(() => {
@@ -57,6 +55,7 @@ describe("VrmStage", () => {
           vrmPath: "/vrms/eliza-1.vrm.gz",
           worldUrl: "/worlds/companion-day.spz",
           fallbackPreviewUrl: "/vrms/previews/eliza-1.png",
+          viewerComponent: StubVrmViewer as never,
           t: (key: string) => key,
         }),
       );
@@ -91,6 +90,7 @@ describe("VrmStage", () => {
           vrmPath: "/vrms/eliza-1.vrm.gz",
           fallbackPreviewUrl: "/vrms/previews/eliza-1.png",
           onEngineReady: handleEngineReady,
+          viewerComponent: StubVrmViewer as never,
           t: (key: string) => key,
         }),
       );
@@ -125,6 +125,7 @@ describe("VrmStage", () => {
         React.createElement(VrmStage, {
           vrmPath: "/vrms/eliza-1.vrm.gz",
           fallbackPreviewUrl: "/vrms/previews/eliza-1.png",
+          viewerComponent: StubVrmViewer as never,
           t: (key: string) => key,
         }),
       );
@@ -179,6 +180,7 @@ describe("VrmStage", () => {
             vrmPath: "/vrms/eliza-1.vrm.gz",
             fallbackPreviewUrl: "/vrms/previews/eliza-1.png",
             playWaveOnAvatarChange: true,
+            viewerComponent: StubVrmViewer as never,
             t: (key: string) => key,
           }),
         );
@@ -235,6 +237,7 @@ describe("VrmStage", () => {
             vrmPath: "/vrms/eliza-1.vrm.gz",
             fallbackPreviewUrl: "/vrms/previews/eliza-1.png",
             playWaveOnAvatarChange: true,
+            viewerComponent: StubVrmViewer as never,
             t: (key: string) => key,
           }),
         );

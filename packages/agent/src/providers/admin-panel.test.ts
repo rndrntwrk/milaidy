@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Memory, ProviderResult, UUID } from "@elizaos/core";
 
-const { mockCheckSenderRole } = vi.hoisted(() => ({
+const { mockCheckSenderRole, mockResolveCanonicalOwnerIdForMessage } = vi.hoisted(() => ({
   mockCheckSenderRole: vi.fn(),
+  mockResolveCanonicalOwnerIdForMessage: vi.fn(),
 }));
 
 vi.mock("@miladyai/plugin-roles", () => ({
   checkSenderRole: mockCheckSenderRole,
+  resolveCanonicalOwnerIdForMessage: mockResolveCanonicalOwnerIdForMessage,
 }));
 
 import { createAdminPanelProvider } from "./admin-panel";
@@ -33,6 +35,7 @@ function makeRuntime(overrides: Record<string, unknown> = {}) {
       id: WORLD_ID,
       metadata: { ownership: { ownerId: OWNER_ID } },
     }),
+    getSetting: vi.fn().mockReturnValue(null),
     getRoomsForParticipant: vi.fn().mockResolvedValue([CHAT_ROOM_ID]),
     getMemoriesByRoomIds: vi.fn().mockResolvedValue([]),
     ...overrides,
@@ -53,6 +56,7 @@ describe("adminPanelProvider", () => {
 
   beforeEach(() => {
     mockCheckSenderRole.mockReset();
+    mockResolveCanonicalOwnerIdForMessage.mockReset();
     mockCheckSenderRole.mockResolvedValue({
       entityId: OWNER_ID,
       role: "OWNER",
@@ -60,6 +64,7 @@ describe("adminPanelProvider", () => {
       isAdmin: true,
       canManageRoles: true,
     });
+    mockResolveCanonicalOwnerIdForMessage.mockResolvedValue(OWNER_ID);
   });
 
   it("returns empty for non-admin callers", async () => {
@@ -94,6 +99,35 @@ describe("adminPanelProvider", () => {
 
     expect(result.text).toBe("");
     expect(result.data).toEqual({ messageCount: 0 });
+  });
+
+  it("uses the configured canonical owner even when the current room has no world", async () => {
+    const runtime = makeRuntime({
+      getRoom: vi.fn().mockImplementation(async (id: string) => {
+        if (id === ROOM_ID) {
+          return { id: ROOM_ID, worldId: null, source: "discord" };
+        }
+        if (id === CHAT_ROOM_ID) {
+          return { id: CHAT_ROOM_ID, worldId: WORLD_ID, source: "client_chat" };
+        }
+        return null;
+      }),
+      getSetting: vi.fn().mockImplementation((key: string) =>
+        key === "MILADY_ADMIN_ENTITY_ID" ? OWNER_ID : null,
+      ),
+      getMemoriesByRoomIds: vi.fn().mockResolvedValue([
+        {
+          entityId: OWNER_ID,
+          content: { text: "hello from the owner" },
+          createdAt: Date.now(),
+        },
+      ]),
+    });
+
+    const result = await provider.get(runtime, makeMessage(), {} as never);
+
+    expect(result.values).toEqual({ hasAdminChat: true });
+    expect(result.text).toContain("hello from the owner");
   });
 
   it("returns empty when owner has no client_chat rooms", async () => {

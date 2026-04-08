@@ -9,70 +9,11 @@ import {
   type SubscriptionProviderSelectionId,
 } from "../../providers";
 import { useApp } from "../../state";
+import {
+  formatSubscriptionRequestError,
+  normalizeOpenAICallbackInput,
+} from "../../utils/subscription-auth";
 import { openExternalUrl } from "../../utils";
-
-function formatRequestError(err: unknown): string {
-  if (err instanceof Error) return err.message;
-  return String(err);
-}
-
-function normalizeOpenAICallbackInput(input: string):
-  | {
-      ok: true;
-      code: string;
-    }
-  | {
-      ok: false;
-      error: string;
-    } {
-  const trimmed = input.trim();
-  if (!trimmed) {
-    return {
-      ok: false,
-      error: "subscriptionstatus.PasteCallbackUrlFromLocalhost",
-    };
-  }
-
-  const normalized =
-    trimmed.startsWith("localhost:") || trimmed.startsWith("127.0.0.1:")
-      ? `http://${trimmed}`
-      : trimmed;
-
-  // Allow raw codes in addition to full callback URLs.
-  if (!normalized.includes("://")) {
-    if (normalized.length > 4096) {
-      return { ok: false, error: "subscriptionstatus.CallbackCodeTooLong" };
-    }
-    return { ok: true, code: normalized };
-  }
-
-  let parsed: URL;
-  try {
-    parsed = new URL(normalized);
-  } catch {
-    return { ok: false, error: "subscriptionstatus.InvalidCallbackUrl" };
-  }
-
-  const hostOk =
-    parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1";
-  if (
-    !hostOk ||
-    parsed.port !== "1455" ||
-    parsed.pathname !== "/auth/callback"
-  ) {
-    return {
-      ok: false,
-      error: "subscriptionstatus.ExpectedCallbackUrl",
-    };
-  }
-  if (!parsed.searchParams.get("code")) {
-    return {
-      ok: false,
-      error: "subscriptionstatus.CallbackUrlMissingCode",
-    };
-  }
-  return { ok: true, code: normalized };
-}
 
 export interface SubscriptionStatusProps {
   resolvedSelectedId: string | null;
@@ -166,7 +107,7 @@ export function SubscriptionStatus({
     } catch (err) {
       setAnthropicError(
         t("subscriptionstatus.FailedToSaveTokenError", {
-          message: formatRequestError(err),
+          message: formatSubscriptionRequestError(err),
         }),
       );
     } finally {
@@ -198,7 +139,7 @@ export function SubscriptionStatus({
         await client.restartAgent();
       } catch (err) {
         const msg = t("subscriptionstatus.DisconnectFailedError", {
-          message: formatRequestError(err),
+          message: formatSubscriptionRequestError(err),
         });
         if (providerId === "anthropic-subscription") setAnthropicError(msg);
         if (providerId === "openai-subscription") setOpenaiError(msg);
@@ -222,7 +163,7 @@ export function SubscriptionStatus({
     } catch (err) {
       setAnthropicError(
         t("subscriptionstatus.FailedToStartLogin", {
-          message: formatRequestError(err),
+          message: formatSubscriptionRequestError(err),
         }),
       );
     }
@@ -249,7 +190,7 @@ export function SubscriptionStatus({
     } catch (err) {
       setAnthropicError(
         t("subscriptionstatus.ExchangeFailedError", {
-          message: formatRequestError(err),
+          message: formatSubscriptionRequestError(err),
         }),
       );
     } finally {
@@ -276,7 +217,7 @@ export function SubscriptionStatus({
     } catch (err) {
       setOpenaiError(
         t("subscriptionstatus.FailedToStartLogin", {
-          message: formatRequestError(err),
+          message: formatSubscriptionRequestError(err),
         }),
       );
     }
@@ -311,8 +252,11 @@ export function SubscriptionStatus({
           : msg,
       );
     } catch (err) {
-      console.warn("[eliza] OpenAI exchange failed", err);
-      setOpenaiError(t("onboarding.networkError"));
+      setOpenaiError(
+        t("subscriptionstatus.ExchangeFailedError", {
+          message: formatSubscriptionRequestError(err),
+        }),
+      );
     } finally {
       openaiExchangeBusyRef.current = false;
       setOpenaiExchangeBusy(false);

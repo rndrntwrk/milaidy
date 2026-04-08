@@ -89,6 +89,37 @@ try {
 patchAutonomousTypeError(root);
 patchElectrobunWindowsTar(root);
 
+function uniqueResolvedPaths(paths) {
+  return [...new Set(paths.map((candidate) => resolve(candidate)))];
+}
+
+function collectWorkspacePluginOverrideDirs(packageName) {
+  const pluginSegmentMatch = packageName.match(/^@[^/]+\/(plugin-[^/]+)$/);
+  const pluginSegment = pluginSegmentMatch?.[1];
+  if (!pluginSegment) return [];
+
+  const workspaceRoots = uniqueResolvedPaths([
+    root,
+    resolve(root, ".."),
+    resolve(root, "..", ".."),
+  ]);
+  const candidates = [];
+
+  for (const workspaceRoot of workspaceRoots) {
+    candidates.push(
+      resolve(workspaceRoot, "plugins", pluginSegment, "typescript"),
+      resolve(workspaceRoot, "plugins", pluginSegment),
+      resolve(workspaceRoot, "eliza", "plugins", pluginSegment, "typescript"),
+      resolve(workspaceRoot, "eliza", "plugins", pluginSegment),
+      resolve(workspaceRoot, "eliza", "packages", pluginSegment),
+    );
+  }
+
+  return uniqueResolvedPaths(
+    candidates.filter((candidate) => existsSync(resolve(candidate, "package.json"))),
+  );
+}
+
 // ---------------------------------------------------------------------------
 // @elizaos/plugin-openrouter — version is pinned in root package.json to
 // 2.0.0-alpha.10 (exact, no caret).
@@ -214,8 +245,18 @@ patchPluginEvmActionSpecNames();
  * Remove once a fixed @elizaos/plugin-solana is published.
  */
 function patchPluginSolanaActionSpecNames() {
-  const relPaths = ["dist/index.js", "dist/node/index.node.js"];
-  const searchDirs = [resolve(root, "node_modules/@elizaos/plugin-solana")];
+  const relPaths = [
+    "dist/index.js",
+    "dist/node/index.node.js",
+    "actions/swap.ts",
+    "actions/transfer.ts",
+    "providers/wallet.ts",
+    "generated/specs/specs.ts",
+  ];
+  const searchDirs = [
+    resolve(root, "node_modules/@elizaos/plugin-solana"),
+    ...collectWorkspacePluginOverrideDirs("@elizaos/plugin-solana"),
+  ];
   const bunCacheDir = resolve(root, "node_modules/.bun");
   if (existsSync(bunCacheDir)) {
     try {
@@ -293,6 +334,169 @@ function patchPluginSolanaActionSpecNames() {
   }
 }
 patchPluginSolanaActionSpecNames();
+
+/**
+ * Patch bigint-buffer optional native binding warning noise.
+ *
+ * Workspace override plugins can resolve transitive packages directly from the
+ * user's Bun install cache instead of the repo's node_modules tree. When
+ * bigint-buffer cannot build its optional native addon, it logs a warning even
+ * though the pure JS fallback is fully functional. Keep the fallback and hide
+ * the warning unless explicitly debugging native bindings.
+ */
+function patchBigintBufferNativeFallbackNoise() {
+  const relPaths = ["dist/node.js"];
+  const searchDirs = [resolve(root, "node_modules/bigint-buffer")];
+  const bunCacheDir = resolve(root, "node_modules/.bun");
+  if (existsSync(bunCacheDir)) {
+    try {
+      for (const entry of readdirSync(bunCacheDir)) {
+        if (entry.startsWith("bigint-buffer@")) {
+          searchDirs.push(resolve(bunCacheDir, entry, "node_modules/bigint-buffer"));
+        }
+      }
+    } catch {}
+  }
+
+  const globalBunCacheDir =
+    process.env.HOME &&
+    existsSync(resolve(process.env.HOME, ".bun", "install", "cache"))
+      ? resolve(process.env.HOME, ".bun", "install", "cache")
+      : null;
+  if (globalBunCacheDir) {
+    try {
+      for (const entry of readdirSync(globalBunCacheDir)) {
+        if (entry.startsWith("bigint-buffer@")) {
+          searchDirs.push(resolve(globalBunCacheDir, entry));
+        }
+      }
+    } catch {}
+  }
+
+  const oldSnippet =
+    "console.warn('bigint: Failed to load bindings, pure JS will be used (try npm run rebuild?)');";
+  const newSnippet =
+    "if (process.env.MILADY_DEBUG_BIGINT_BINDINGS === \"1\") {\n        console.warn('bigint: Failed to load bindings, pure JS will be used (try npm run rebuild?)');\n    }";
+
+  let patched = 0;
+  for (const dir of uniqueResolvedPaths(searchDirs)) {
+    for (const relPath of relPaths) {
+      const target = resolve(dir, relPath);
+      if (!existsSync(target)) continue;
+      let src = readFileSync(target, "utf8");
+      if (!src.includes(oldSnippet)) continue;
+      src = src.replace(oldSnippet, newSnippet);
+      writeFileSync(target, src, "utf8");
+      patched++;
+      console.log(
+        `[patch-deps] Applied bigint-buffer native fallback log patch: ${target}`,
+      );
+    }
+  }
+
+  if (patched > 0) {
+    console.log(
+      `[patch-deps] bigint-buffer: patched ${patched} native fallback warning path(s).`,
+    );
+  }
+}
+patchBigintBufferNativeFallbackNoise();
+
+/**
+ * Force Baileys to reuse the repo root sharp package.
+ *
+ * Bun's virtual store can leave nested sharp copies under Baileys cache entries.
+ * If both a nested sharp and the repo root sharp load in the same process, macOS
+ * ends up with duplicate libvips dylibs and Objective-C class warnings. Replace
+ * Baileys' nested sharp copies with a symlink to the canonical root package so
+ * the process only loads one sharp/libvips pair.
+ */
+function patchBaileysNestedSharpCopies() {
+  const bunCacheDir = resolve(root, "node_modules/.bun");
+  const rootSharp = resolve(root, "node_modules/sharp");
+  if (!existsSync(bunCacheDir) || !existsSync(rootSharp)) {
+    return;
+  }
+
+  const rootSharpRealPath = realpathSync(rootSharp);
+  const linkType = process.platform === "win32" ? "junction" : "dir";
+  let patched = 0;
+
+  try {
+    for (const entry of readdirSync(bunCacheDir)) {
+      if (!entry.startsWith("@whiskeysockets+baileys@")) continue;
+      const nestedSharp = resolve(bunCacheDir, entry, "node_modules/sharp");
+      rmSync(nestedSharp, { recursive: true, force: true });
+      symlinkSync(rootSharpRealPath, nestedSharp, linkType);
+      patched++;
+      console.log(
+        `[patch-deps] Linked Baileys nested sharp to root sharp: ${nestedSharp} -> ${rootSharpRealPath}`,
+      );
+    }
+  } catch (error) {
+    console.warn(
+      `[patch-deps] Failed to normalize Baileys sharp dependency: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+
+  if (patched > 0) {
+    console.log(
+      `[patch-deps] Baileys: normalized ${patched} nested sharp path(s) to the root sharp package.`,
+    );
+  }
+}
+patchBaileysNestedSharpCopies();
+
+/**
+ * Normalize stale Bun sharp store aliases to the canonical root sharp version.
+ *
+ * Bun can retain older sharp store entries after dependency upgrades. If any
+ * import path still resolves to the stale 0.33.5 store while the repo root
+ * uses 0.34.5, macOS ends up loading both libvips 1.0.4 and 1.2.4 into the
+ * same process. Alias the stale store entries to the canonical ones so every
+ * resolution path lands on the same sharp/libvips build.
+ */
+function patchLegacySharpStoreAliases() {
+  const bunCacheDir = resolve(root, "node_modules/.bun");
+  if (!existsSync(bunCacheDir)) {
+    return;
+  }
+
+  const linkType = process.platform === "win32" ? "junction" : "dir";
+  const aliasPairs = [
+    ["sharp@0.33.5", "sharp@0.34.5"],
+    ["@img+sharp-darwin-arm64@0.33.5", "@img+sharp-darwin-arm64@0.34.5"],
+    [
+      "@img+sharp-libvips-darwin-arm64@1.0.4",
+      "@img+sharp-libvips-darwin-arm64@1.2.4",
+    ],
+  ];
+
+  let patched = 0;
+  for (const [staleEntry, canonicalEntry] of aliasPairs) {
+    const stalePath = resolve(bunCacheDir, staleEntry);
+    const canonicalPath = resolve(bunCacheDir, canonicalEntry);
+    if (!existsSync(stalePath) || !existsSync(canonicalPath)) continue;
+
+    const canonicalRealPath = realpathSync(canonicalPath);
+    const staleRealPath = realpathSync(stalePath);
+    if (staleRealPath === canonicalRealPath) continue;
+
+    rmSync(stalePath, { recursive: true, force: true });
+    symlinkSync(canonicalRealPath, stalePath, linkType);
+    patched++;
+    console.log(
+      `[patch-deps] Aliased stale sharp store entry ${staleEntry} -> ${canonicalRealPath}`,
+    );
+  }
+
+  if (patched > 0) {
+    console.log(
+      `[patch-deps] sharp: normalized ${patched} stale Bun store alias(es) to the canonical sharp version.`,
+    );
+  }
+}
+patchLegacySharpStoreAliases();
 
 function patchPluginPdfBrokenDefault() {
   const relPaths = ["dist/node/index.node.js", "dist/index.js"];

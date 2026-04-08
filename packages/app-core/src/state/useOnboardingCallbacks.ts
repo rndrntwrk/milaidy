@@ -495,6 +495,11 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
         completeOnboarding();
       } catch (err) {
         console.error("[onboarding] Failed to complete onboarding", err);
+        const message =
+          err instanceof Error && err.message.trim()
+            ? `Failed to complete onboarding: ${err.message}`
+            : "Failed to complete onboarding.";
+        setActionNotice(message, "error", 8000);
       }
     },
     [

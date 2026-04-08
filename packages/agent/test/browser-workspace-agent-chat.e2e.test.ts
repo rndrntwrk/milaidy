@@ -29,8 +29,10 @@ import {
 
 type LocalSiteFixture = {
   counterUrl: string;
+  formUrl: string;
   tasksUrl: string;
   notesUrl: string;
+  welcomeUrl: string;
   close: () => Promise<void>;
 };
 
@@ -72,6 +74,22 @@ async function startLocalSiteFixture(): Promise<LocalSiteFixture> {
   const server = http.createServer((req, res) => {
     const url = new URL(req.url ?? "/", "http://127.0.0.1");
     const page =
+      url.pathname === "/form"
+        ? {
+            title: "Browser Form Fixture",
+            body: `<h1>Browser Form Fixture</h1>
+              <form action="/welcome" method="get">
+                <label>Agent name <input name="name" value="" /></label>
+                <button type="submit">Continue</button>
+              </form>
+              <a href="/tasks">Open tasks</a>`,
+          }
+        : url.pathname === "/welcome"
+          ? {
+              title: "Welcome Fixture",
+              body: `<h1>Welcome, ${url.searchParams.get("name") || "Anonymous"}</h1><a href="/tasks">Open tasks</a>`,
+            }
+          :
       url.pathname === "/tasks"
         ? {
             title: "Tasks Fixture",
@@ -102,8 +120,10 @@ async function startLocalSiteFixture(): Promise<LocalSiteFixture> {
 
   return {
     counterUrl: `${baseUrl}/counter`,
+    formUrl: `${baseUrl}/form`,
     tasksUrl: `${baseUrl}/tasks`,
     notesUrl: `${baseUrl}/notes`,
+    welcomeUrl: `${baseUrl}/welcome?name=Milady`,
     close: () =>
       new Promise<void>((resolve, reject) => {
         server.close((error) => {
@@ -131,6 +151,7 @@ describe("Browser workspace agent chat E2E", () => {
   let previousPgliteDataDir: string | undefined;
   let pgliteDir = "";
   let plannerTurn = 0;
+  let plannerScenario: "task" | "tabs" = "tabs";
 
   beforeAll(async () => {
     previousPgliteDataDir = process.env.PGLITE_DATA_DIR;
@@ -160,6 +181,38 @@ describe("Browser workspace agent chat E2E", () => {
     vi.spyOn(runtime, "isCheckShouldRespondEnabled").mockReturnValue(false);
     vi.spyOn(runtime, "dynamicPromptExecFromState").mockImplementation(
       async () => {
+        if (plannerScenario === "task") {
+          switch (plannerTurn++) {
+            case 0:
+              return buildBrowserActionResponse({
+                subaction: "batch",
+                stepsJson: JSON.stringify([
+                  {
+                    subaction: "open",
+                    show: true,
+                    url: siteFixture.formUrl,
+                  },
+                  {
+                    subaction: "fill",
+                    selector: "input[name=\"name\"]",
+                    value: "Milady",
+                  },
+                  {
+                    subaction: "click",
+                    selector: "button[type=\"submit\"]",
+                  },
+                  {
+                    subaction: "get",
+                    selector: "h1",
+                    getMode: "text",
+                  },
+                ]),
+              });
+            default:
+              throw new Error(`Unexpected planner turn ${plannerTurn - 1}.`);
+          }
+        }
+
         switch (plannerTurn++) {
           case 0:
             return buildBrowserActionResponse({
@@ -221,6 +274,7 @@ describe("Browser workspace agent chat E2E", () => {
 
   beforeEach(async () => {
     plannerTurn = 0;
+    plannerScenario = "tabs";
     const tabs = await listBrowserWorkspaceTabs();
     await Promise.all(tabs.map((tab) => closeBrowserWorkspaceTab(tab.id)));
   });
@@ -351,6 +405,31 @@ describe("Browser workspace agent chat E2E", () => {
     tabs = await listBrowserWorkspaceTabs();
     expect(tabs).toHaveLength(1);
     expect(tabs[0]?.url).toBe(siteFixture.notesUrl);
+    expect(tabs[0]?.visible).toBe(true);
+  });
+
+  it("uses one browser batch action to complete a real browser task through chat", async () => {
+    plannerScenario = "task";
+    const { conversationId } = await createConversation(apiServer.port, {
+      includeGreeting: false,
+      title: "Browser agent task",
+    });
+
+    const taskRun = await postConversationMessage(apiServer.port, conversationId, {
+      text: "Use the Milady browser workspace to open the browser form, submit the name Milady, and tell me the greeting.",
+    });
+
+    expect(taskRun.status).toBe(200);
+    expect(taskRun.data.text).toEqual(
+      expect.stringContaining("Completed 4 browser subactions"),
+    );
+    expect(taskRun.data.text).toEqual(
+      expect.stringContaining("Welcome, Milady"),
+    );
+
+    const tabs = await listBrowserWorkspaceTabs();
+    expect(tabs).toHaveLength(1);
+    expect(tabs[0]?.url).toBe(siteFixture.welcomeUrl);
     expect(tabs[0]?.visible).toBe(true);
   });
 });

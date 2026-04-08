@@ -28,6 +28,7 @@ function createMockRuntime(
     string,
     { names: string[]; metadata?: Record<string, Record<string, string>> }
   > = {},
+  settings?: Record<string, string | boolean | number | null>,
 ): IAgentRuntime {
   // getEntitiesForRoom returns entity objects (per linter fix)
   const entityObjects = Object.entries(entities).map(([id, e]) => ({
@@ -45,6 +46,9 @@ function createMockRuntime(
       const e = entities[id];
       if (!e) return null;
       return { id, names: e.names, metadata: e.metadata ?? {} };
+    }),
+    getSetting: vi.fn().mockImplementation((key: string) => {
+      return settings?.[key] ?? null;
     }),
   } as unknown as IAgentRuntime;
 }
@@ -246,12 +250,29 @@ describe("updateRoleAction.handler", () => {
     expect(world.metadata.roles?.[targetId]).toBe("GUEST");
   });
 
-  it("OWNER promotes to OWNER", async () => {
+  it("rejects assigning OWNER to a non-canonical entity", async () => {
+    runtime = createMockRuntime(
+      world,
+      {
+        [ownerId]: { names: ["Shaw"] },
+        [targetId]: {
+          names: ["alice"],
+          metadata: { discord: { username: "alice", name: "Alice" } },
+        },
+      },
+      {
+        MILADY_ADMIN_ENTITY_ID: ownerId,
+      },
+    );
+
     const result = await updateRoleAction.handler(
       runtime, createMessage(ownerId, "/role @alice OWNER"), {} as any, undefined, callback,
     );
-    expect(result).toEqual(expect.objectContaining({ success: true }));
-    expect(world.metadata.roles?.[targetId]).toBe("OWNER");
+    expect(result).toEqual(expect.objectContaining({ success: false }));
+    expect(world.metadata.roles?.[targetId]).toBeUndefined();
+    expect(callback).toHaveBeenCalledWith(expect.objectContaining({
+      text: expect.stringContaining("reserved for the canonical agent owner"),
+    }));
   });
 
   it("ADMIN promotes GUEST to USER", async () => {

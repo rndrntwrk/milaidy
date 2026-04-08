@@ -1,8 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockCheckSenderRole, mockSendMessageToTarget, mockGetRoom, mockGetWorld } =
+const {
+  mockCheckSenderRole,
+  mockResolveCanonicalOwnerIdForMessage,
+  mockSendMessageToTarget,
+  mockGetRoom,
+  mockGetWorld,
+} =
   vi.hoisted(() => ({
     mockCheckSenderRole: vi.fn(),
+    mockResolveCanonicalOwnerIdForMessage: vi.fn(),
     mockSendMessageToTarget: vi.fn(),
     mockGetRoom: vi.fn(),
     mockGetWorld: vi.fn(),
@@ -10,6 +17,7 @@ const { mockCheckSenderRole, mockSendMessageToTarget, mockGetRoom, mockGetWorld 
 
 vi.mock("@miladyai/plugin-roles", () => ({
   checkSenderRole: mockCheckSenderRole,
+  resolveCanonicalOwnerIdForMessage: mockResolveCanonicalOwnerIdForMessage,
 }));
 
 vi.mock("@elizaos/core", async (importOriginal) => {
@@ -31,6 +39,7 @@ function makeRuntime(overrides?: Record<string, unknown>) {
     getWorld: mockGetWorld,
     getService: () => null,
     sendMessageToTarget: mockSendMessageToTarget,
+    getSetting: () => null,
     ...overrides,
   } as never;
 }
@@ -63,7 +72,9 @@ describe("sendMessageAction — admin pathway (unified from SEND_ADMIN_MESSAGE)"
     mockSendMessageToTarget.mockReset();
     mockGetRoom.mockReset();
     mockGetWorld.mockReset();
+    mockResolveCanonicalOwnerIdForMessage.mockReset();
     mockSendMessageToTarget.mockResolvedValue(undefined);
+    mockResolveCanonicalOwnerIdForMessage.mockResolvedValue(null);
   });
 
   // -----------------------------------------------------------------------
@@ -169,11 +180,8 @@ describe("sendMessageAction — admin pathway (unified from SEND_ADMIN_MESSAGE)"
   // handler — successful sends
   // -----------------------------------------------------------------------
 
-  it("sends to admin using world ownership metadata", async () => {
-    mockGetRoom.mockResolvedValue({ worldId: "world-1" });
-    mockGetWorld.mockResolvedValue({
-      metadata: { ownership: { ownerId: "owner-uuid-123" } },
-    });
+  it("sends to the configured canonical owner before consulting world ownership metadata", async () => {
+    mockResolveCanonicalOwnerIdForMessage.mockResolvedValue("owner-uuid-123");
 
     const result = await callAdminHandler(
       makeRuntime(),

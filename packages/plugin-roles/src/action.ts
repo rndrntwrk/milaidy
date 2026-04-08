@@ -22,6 +22,7 @@ import {
   canModifyRole,
   getLiveEntityMetadataFromMessage,
   normalizeRole,
+  resolveCanonicalOwnerId,
   resolveEntityRole,
   resolveWorldForMessage,
 } from "./utils";
@@ -251,6 +252,16 @@ export const updateRoleAction: Action = {
       metadata,
       targetEntityId,
     );
+
+    if (newRole === "OWNER") {
+      const canonicalOwnerId = resolveCanonicalOwnerId(runtime, metadata);
+      if (!canonicalOwnerId || targetEntityId !== canonicalOwnerId) {
+        await callback?.({
+          text: "OWNER is reserved for the canonical agent owner. Use ADMIN for additional elevated users.",
+        });
+        return { success: false };
+      }
+    }
 
     // Prevent the last OWNER from demoting themselves
     if (

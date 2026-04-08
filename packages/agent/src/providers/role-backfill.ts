@@ -22,7 +22,11 @@ import {
   type ProviderResult,
   type State,
 } from "@elizaos/core";
-import { normalizeRole } from "@miladyai/plugin-roles";
+import {
+  hasConfiguredCanonicalOwner,
+  normalizeRole,
+  resolveCanonicalOwnerId,
+} from "@miladyai/plugin-roles";
 
 type RolesWorldMetadata = {
   ownership?: { ownerId?: string };
@@ -56,17 +60,39 @@ export const roleBackfillProvider: Provider = {
       if (!world) return EMPTY;
 
       const metadata = (world.metadata ?? {}) as RolesWorldMetadata;
-      const ownerId = metadata.ownership?.ownerId;
+      const ownerId = resolveCanonicalOwnerId(runtime, metadata);
       if (!ownerId) return EMPTY;
 
       const roles = metadata.roles ?? {};
       const currentOwnerRole = normalizeRole(roles[ownerId]);
+      const needsOwnershipSync = metadata.ownership?.ownerId !== ownerId;
+      const configuredOwner = hasConfiguredCanonicalOwner(runtime);
+      const hasStaleOwners = configuredOwner
+        ? Object.entries(roles).some(
+            ([entityId, role]) =>
+              entityId !== ownerId && normalizeRole(role) === "OWNER",
+          )
+        : false;
 
       // Already has OWNER role -- no-op
-      if (currentOwnerRole === "OWNER") return EMPTY;
+      if (
+        currentOwnerRole === "OWNER" &&
+        !needsOwnershipSync &&
+        !hasStaleOwners
+      ) {
+        return EMPTY;
+      }
 
       // Backfill: set OWNER role for the world owner
+      metadata.ownership = { ...(metadata.ownership ?? {}), ownerId };
       roles[ownerId] = "OWNER";
+      if (configuredOwner) {
+        for (const [entityId, role] of Object.entries(roles)) {
+          if (entityId !== ownerId && normalizeRole(role) === "OWNER") {
+            delete roles[entityId];
+          }
+        }
+      }
       const updatedMetadata = {
         ...metadata,
         roles,

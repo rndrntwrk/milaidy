@@ -113,6 +113,21 @@ describe("Trajectory Database E2E", () => {
     dbLogger = new DatabaseTrajectoryLogger(runtime);
     await dbLogger.initialize();
 
+    const originalGetService = runtime.getService.bind(runtime);
+    const originalGetServicesByType =
+      typeof runtime.getServicesByType === "function"
+        ? runtime.getServicesByType.bind(runtime)
+        : undefined;
+
+    runtime.getService = ((serviceType: string) =>
+      serviceType === "trajectory_logger"
+        ? (dbLogger as object)
+        : originalGetService(serviceType)) as AgentRuntime["getService"];
+    runtime.getServicesByType = ((serviceType: string) =>
+      serviceType === "trajectory_logger"
+        ? [dbLogger]
+        : (originalGetServicesByType?.(serviceType) ?? [])) as AgentRuntime["getServicesByType"];
+
     // Start the API server
     server = await startApiServer({ port: 0, runtime });
   }, 180_000);
@@ -140,7 +155,8 @@ describe("Trajectory Database E2E", () => {
   }, 150_000);
 
   it("persists LLM calls to the real trajectory database", async () => {
-    if (initFailed) return; // skip when PGlite/runtime init fails
+    expect(initFailed).toBe(false);
+    if (initFailed) return;
     // Use our directly created database-backed logger
     expect(dbLogger).toBeDefined();
     expect(dbLogger.isEnabled()).toBe(true);
@@ -201,14 +217,9 @@ describe("Trajectory Database E2E", () => {
     const trajectories = directList.trajectories;
     expect(trajectories).toBeDefined();
 
-    // We should find our stepId — if writes silently failed, skip
+    // We should find our stepId — missing rows mean the write path failed.
     const traj = trajectories.find((t) => t.id === stepId);
-    if (!traj) {
-      console.warn(
-        "[trajectory-db] trajectory not found after write — database write may have failed silently, skipping",
-      );
-      return;
-    }
+    expect(traj).toBeDefined();
     expect(traj.stepCount).toBe(1);
     expect(traj.llmCallCount).toBe(1);
     expect(traj.totalPromptTokens).toBe(15);
@@ -234,6 +245,25 @@ describe("Trajectory Database E2E", () => {
       true,
     );
 
+    if (!server) {
+      throw new Error("API server did not start");
+    }
+
+    const apiList = await _http$(
+      server.port,
+      "GET",
+      "/api/trajectories?limit=50&scenarioId=coordinator-build-birthday-page&batchId=live-eval-batch-001",
+    );
+    expect(apiList.status).toBe(200);
+    const apiTrajectory = Array.isArray(apiList.data.trajectories)
+      ? (apiList.data.trajectories as Array<Record<string, unknown>>).find(
+          (item) => item.id === stepId,
+        )
+      : undefined;
+    expect(apiTrajectory).toBeDefined();
+    expect(apiTrajectory?.scenarioId).toBe("coordinator-build-birthday-page");
+    expect(apiTrajectory?.batchId).toBe("live-eval-batch-001");
+
     const promptSearch = await dbLogger.listTrajectories({
       limit: 50,
       offset: 0,
@@ -254,22 +284,17 @@ describe("Trajectory Database E2E", () => {
 
     // Get the details directly from our logger
     const details = await dbLogger.getTrajectoryDetail(stepId);
-    if (!details) {
-      console.warn(
-        "[trajectory-db] trajectory detail not found — skipping detail assertions",
-      );
-      return;
-    }
+    expect(details).toBeDefined();
 
-    const steps = details.steps ?? [];
+    const steps = details!.steps ?? [];
     expect(Array.isArray(steps)).toBe(true);
     expect(steps.length).toEqual(1);
-    expect(details.scenarioId).toBe("coordinator-build-birthday-page");
-    expect(details.batchId).toBe("live-eval-batch-001");
-    expect(details.metadata?.scenarioId).toBe(
+    expect(details!.scenarioId).toBe("coordinator-build-birthday-page");
+    expect(details!.batchId).toBe("live-eval-batch-001");
+    expect(details!.metadata?.scenarioId).toBe(
       "coordinator-build-birthday-page",
     );
-    expect(details.metadata?.batchId).toBe("live-eval-batch-001");
+    expect(details!.metadata?.batchId).toBe("live-eval-batch-001");
 
     const llmCalls = steps[0]?.llmCalls ?? [];
     expect(llmCalls.length).toBe(1);

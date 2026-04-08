@@ -1,35 +1,23 @@
 import type { IAgentRuntime, Memory, State } from "@elizaos/core";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+const {
+  mockCheckSenderRole,
+  mockResolveCanonicalOwnerIdForMessage,
+} = vi.hoisted(() => ({
+  mockCheckSenderRole: vi.fn(),
+  mockResolveCanonicalOwnerIdForMessage: vi.fn(),
+}));
+
+vi.mock("@miladyai/plugin-roles", () => ({
+  checkSenderRole: mockCheckSenderRole,
+  resolveCanonicalOwnerIdForMessage: mockResolveCanonicalOwnerIdForMessage,
+}));
 
 import { adminTrustProvider } from "@miladyai/agent/providers/admin-trust";
 
-type FakeWorld = {
-  metadata?: {
-    ownership?: { ownerId?: string };
-    roles?: Record<string, string>;
-  };
-};
-
-function createRuntime(
-  room: { worldId?: string } | null,
-  world: FakeWorld | null,
-): IAgentRuntime {
-  const runtimeSubset: Pick<IAgentRuntime, "getRoom" | "getWorld"> = {
-    getRoom: async () => {
-      if (!room) return null;
-      return {
-        id: "room-1",
-        worldId: room.worldId ?? "",
-      } as never;
-    },
-    getWorld: async () => {
-      if (!world) return null;
-      return {
-        metadata: world.metadata ?? {},
-      } as never;
-    },
-  };
-  return runtimeSubset as IAgentRuntime;
+function createRuntime(): IAgentRuntime {
+  return {} as IAgentRuntime;
 }
 
 describe("admin-trust provider", () => {
@@ -44,59 +32,63 @@ describe("admin-trust provider", () => {
     ],
   } as State;
 
-  it("marks OWNER speaker as trusted admin", async () => {
-    const runtime = createRuntime(
-      { worldId: "world-1" },
-      {
-        metadata: {
-          ownership: { ownerId: "admin-1" },
-          roles: { "admin-1": "OWNER" },
-        },
-      },
-    );
+  it("marks canonical OWNER speaker as trusted admin", async () => {
+    mockResolveCanonicalOwnerIdForMessage.mockResolvedValue("admin-1");
+    mockCheckSenderRole.mockResolvedValue({
+      entityId: "shadow-admin",
+      role: "OWNER",
+      isOwner: true,
+      isAdmin: true,
+      canManageRoles: true,
+    });
+
     const message = {
       roomId: "room-1",
-      entityId: "admin-1",
+      entityId: "shadow-admin",
       content: { text: "admin trust" },
     } as unknown as Memory;
 
-    const result = await provider.get(runtime, message, state);
+    const result = await provider.get(createRuntime(), message, state);
     const values = result.values as Record<string, string | boolean>;
     expect(values.trustedAdmin).toBe(true);
+    expect(values.adminEntityId).toBe("admin-1");
     expect(values.adminRole).toBe("OWNER");
   });
 
-  it("does not trust non-owner speaker", async () => {
-    const runtime = createRuntime(
-      { worldId: "world-1" },
-      {
-        metadata: {
-          ownership: { ownerId: "admin-1" },
-          roles: { "admin-1": "OWNER" },
-        },
-      },
-    );
+  it("does not trust non-owner speakers", async () => {
+    mockResolveCanonicalOwnerIdForMessage.mockResolvedValue("admin-1");
+    mockCheckSenderRole.mockResolvedValue({
+      entityId: "user-2",
+      role: "USER",
+      isOwner: false,
+      isAdmin: false,
+      canManageRoles: false,
+    });
+
     const message = {
       roomId: "room-1",
       entityId: "user-2",
       content: { text: "admin trust" },
     } as unknown as Memory;
 
-    const result = await provider.get(runtime, message, state);
+    const result = await provider.get(createRuntime(), message, state);
     const values = result.values as Record<string, string | boolean>;
     expect(values.trustedAdmin).toBe(false);
   });
 
-  it("returns false when room is missing", async () => {
-    const runtime = createRuntime(null, null);
+  it("returns false when no canonical owner can be resolved", async () => {
+    mockResolveCanonicalOwnerIdForMessage.mockResolvedValue(null);
+    mockCheckSenderRole.mockResolvedValue(null);
+
     const message = {
       roomId: "room-1",
       entityId: "admin-1",
       content: { text: "admin trust" },
     } as unknown as Memory;
 
-    const result = await provider.get(runtime, message, state);
+    const result = await provider.get(createRuntime(), message, state);
     const values = result.values as Record<string, string | boolean>;
     expect(values.trustedAdmin).toBe(false);
+    expect(values.adminEntityId).toBe("");
   });
 });

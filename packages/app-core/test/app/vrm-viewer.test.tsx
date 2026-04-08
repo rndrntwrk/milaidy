@@ -7,71 +7,62 @@ vi.mock("@miladyai/app-core/utils", () => ({
   resolveAppAssetUrl: (path: string) => path,
 }));
 
-vi.mock("../../src/components/avatar/VrmEngine", () => {
-  class MockVrmEngine {
-    static instances: MockVrmEngine[] = [];
+class MockVrmEngine {
+  static instances: MockVrmEngine[] = [];
 
-    loadVrmFromUrl = vi.fn(async () => {});
-    getState = vi.fn(() => ({
-      vrmLoaded: true,
-      vrmName: "eliza-1.vrm.gz",
-      loadError: null,
-      idlePlaying: false,
-      idleTime: 0,
-      idleTracks: 0,
-    }));
-    setInteractionEnabled = vi.fn();
-    setCameraProfile = vi.fn();
-    setInteractionMode = vi.fn();
-    setPaused = vi.fn();
-    setMinimalBackgroundMode = vi.fn();
-    setLowPowerRenderMode = vi.fn();
-    setHalfFramerateMode = vi.fn();
-    setPointerParallaxEnabled = vi.fn();
-    setPointerParallaxTarget = vi.fn();
-    resetPointerParallax = vi.fn();
-    setWorldUrl = vi.fn(async () => {});
-    resize = vi.fn();
-    dispose = vi.fn();
-    isInitialized = vi.fn(() => false);
+  loadVrmFromUrl = vi.fn(async () => {});
+  getState = vi.fn(() => ({
+    vrmLoaded: true,
+    vrmName: "eliza-1.vrm.gz",
+    loadError: null,
+    idlePlaying: false,
+    idleTime: 0,
+    idleTracks: 0,
+  }));
+  getDebugInfo = vi.fn(() => ({}));
+  setInteractionEnabled = vi.fn();
+  setCameraProfile = vi.fn();
+  setInteractionMode = vi.fn();
+  setPaused = vi.fn();
+  setMinimalBackgroundMode = vi.fn();
+  setLowPowerRenderMode = vi.fn();
+  setHalfFramerateMode = vi.fn();
+  setPointerParallaxEnabled = vi.fn();
+  setPointerParallaxTarget = vi.fn();
+  resetPointerParallax = vi.fn();
+  setWorldUrl = vi.fn(async () => {});
+  setMouthOpen = vi.fn();
+  setSpeaking = vi.fn();
+  resize = vi.fn();
+  dispose = vi.fn();
+  isInitialized = vi.fn(() => false);
 
-    private readyPromise: Promise<void>;
-    private resolveReadyPromise: () => void = () => {};
-    private rejectReadyPromise: (error?: unknown) => void = () => {};
+  private readyPromise: Promise<void>;
+  private resolveReadyPromise: () => void = () => {};
+  private rejectReadyPromise: (error?: unknown) => void = () => {};
 
-    constructor() {
-      this.readyPromise = new Promise<void>((resolve, reject) => {
-        this.resolveReadyPromise = resolve;
-        this.rejectReadyPromise = reject;
-      });
-      MockVrmEngine.instances.push(this);
-    }
-
-    setup = vi.fn(() => {});
-
-    whenReady = vi.fn(() => this.readyPromise);
-
-    resolveReady(): void {
-      this.resolveReadyPromise();
-    }
-
-    rejectReady(error: unknown): void {
-      this.rejectReadyPromise(error);
-    }
+  constructor() {
+    this.readyPromise = new Promise<void>((resolve, reject) => {
+      this.resolveReadyPromise = resolve;
+      this.rejectReadyPromise = reject;
+    });
+    MockVrmEngine.instances.push(this);
   }
 
-  (
-    globalThis as {
-      __elizaVrmViewerMock?: { instances: MockVrmEngine[] };
-    }
-  ).__elizaVrmViewerMock = { instances: MockVrmEngine.instances };
+  setup = vi.fn(() => {});
 
-  return {
-    VrmEngine: MockVrmEngine,
-  };
-});
+  whenReady = vi.fn(() => this.readyPromise);
 
-import { VrmViewer } from "../../src/components/avatar/VrmViewer";
+  resolveReady(): void {
+    this.resolveReadyPromise();
+  }
+
+  rejectReady(error: unknown): void {
+    this.rejectReadyPromise(error);
+  }
+}
+
+import { VrmViewer } from "../../src/components/avatar/VrmViewer.tsx";
 
 type MockVrmEngineInstance = {
   setWorldUrl: ReturnType<typeof vi.fn>;
@@ -81,17 +72,7 @@ type MockVrmEngineInstance = {
 };
 
 function getMockInstances(): MockVrmEngineInstance[] {
-  const store = (
-    globalThis as {
-      __elizaVrmViewerMock?: { instances: MockVrmEngineInstance[] };
-    }
-  ).__elizaVrmViewerMock;
-
-  if (!store) {
-    throw new Error("Expected VRM viewer mock store to be initialized.");
-  }
-
-  return store.instances;
+  return MockVrmEngine.instances;
 }
 
 describe("VrmViewer", () => {
@@ -126,7 +107,10 @@ describe("VrmViewer", () => {
     await act(async () => {
       renderer = TestRenderer.create(
         <StrictMode>
-          <VrmViewer vrmPath="/vrms/eliza-1.vrm.gz" />
+          <VrmViewer
+            vrmPath="/vrms/eliza-1.vrm.gz"
+            createEngine={() => new MockVrmEngine() as never}
+          />
         </StrictMode>,
         {
           createNodeMock: (element) => {
@@ -186,7 +170,8 @@ describe("VrmViewer", () => {
         <VrmViewer
           vrmPath="/vrms/eliza-1.vrm.gz"
           worldUrl="/worlds/companion-day.spz"
-                  />,
+          createEngine={() => new MockVrmEngine() as never}
+        />,
         {
           createNodeMock: (element) => {
             if (element.type === "canvas") {
@@ -246,7 +231,8 @@ describe("VrmViewer", () => {
         <VrmViewer
           vrmPath="/vrms/eliza-1.vrm.gz"
           worldUrl="/worlds/companion-day.spz"
-                  />,
+          createEngine={() => new MockVrmEngine() as never}
+        />,
         {
           createNodeMock: (element) => {
             if (element.type === "canvas") {
@@ -315,7 +301,8 @@ describe("VrmViewer", () => {
         <VrmViewer
           vrmPath="/vrms/eliza-1.vrm.gz"
           worldUrl="/worlds/companion-day.spz"
-                    onEngineState={onEngineState}
+          onEngineState={onEngineState}
+          createEngine={() => new MockVrmEngine() as never}
         />,
         {
           createNodeMock: (element) => {
