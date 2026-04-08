@@ -1212,8 +1212,9 @@ export default defineConfig({
     strictPort: true,
     // WKWebView (Electrobun) can build broken HMR / source-map URLs when the
     // client advertises 0.0.0.0; pin the HMR endpoint to loopback.
+    // On VPS, override with MILADY_HMR_HOST to allow remote access.
     hmr: {
-      host: "127.0.0.1",
+      host: process.env.MILADY_HMR_HOST || "127.0.0.1",
       port: uiPort,
     },
     cors: {

@@ -1238,8 +1238,7 @@ function startVite() {
   viteProcess.on("exit", (code) => {
     if (shuttingDown) return;
     if (code !== 0) {
-      console.error(`${green(logPrefix)} vite exited with code ${code}`);
-      cleanup(code ?? 1);
+      console.error(`${green(logPrefix)} vite exited with code ${code} — API server continues without UI`);
     }
   });
 }
