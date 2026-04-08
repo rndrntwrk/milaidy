@@ -1504,6 +1504,20 @@ export function GameView() {
             {t("gameview.postMessageAuth")}
           </span>
         ) : null}
+        {usesNativeAgentInterface ? (
+          <span
+            data-testid="game-native-agent-interface"
+            className="text-[10px] px-1.5 py-0.5 border border-accent/30 bg-accent/10 text-accent"
+            title={t("gameview.NativeAgentInterfaceHint", {
+              defaultValue:
+                "Hyperscape already includes the agent console, timeline, logs, and chat inside the embedded viewer.",
+            })}
+          >
+            {t("gameview.NativeAgentInterface", {
+              defaultValue: "Embedded agent UI",
+            })}
+          </span>
+        ) : null}
         <span className="flex-1" />
         {activeSessionState?.status ? (
           <span

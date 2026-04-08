@@ -929,6 +929,12 @@ describe("GameView", () => {
         (node) => node.props["data-testid"] === "game-mobile-surface-dashboard",
       ).length,
     ).toBe(0);
+    expect(
+      tree?.root.findAll(
+        (node) =>
+          node.props["data-testid"] === "game-native-agent-interface",
+      ).length,
+    ).toBe(1);
   });
 
   it("renders the Babylon live operator surface in the dashboard pane", async () => {
