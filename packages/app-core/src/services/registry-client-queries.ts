@@ -1,5 +1,4 @@
 import {
-  hasAppInterface,
   packageNameToAppDisplayName,
   packageNameToAppRouteSlug,
 } from "@miladyai/shared/contracts/apps";
@@ -51,10 +50,8 @@ export function getPluginInfoFromRegistry(
       if (!trimmed) continue;
       aliases.add(trimmed.replace(/^@[^/]+\//, "").toLowerCase());
 
-      if (hasAppInterface(value)) {
-        const routeSlug = packageNameToAppRouteSlug(trimmed);
-        if (routeSlug) aliases.add(routeSlug.toLowerCase());
-      }
+      const routeSlug = packageNameToAppRouteSlug(trimmed);
+      if (routeSlug) aliases.add(routeSlug.toLowerCase());
     }
 
     if (aliases.has(requestedBare)) {

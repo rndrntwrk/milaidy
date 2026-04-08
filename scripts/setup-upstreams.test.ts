@@ -247,13 +247,16 @@ describe("getPluginPackageLinks", () => {
             ),
             targetPath: tsDir,
           },
-          {
-            linkPath: path.join(
-              miladyRoot,
-              "node_modules/@hyperscape/plugin-hyperscape",
-            ),
-            targetPath: appDir,
-          },
+        ]),
+      );
+
+      // Non-@elizaos scoped packages are excluded from linking
+      const allLinkPaths = getPluginPackageLinks(miladyRoot, pluginsRoot).map(
+        (l: { linkPath: string }) => l.linkPath,
+      );
+      expect(allLinkPaths).not.toEqual(
+        expect.arrayContaining([
+          expect.stringContaining("hyperscape"),
         ]),
       );
     } finally {

@@ -7,6 +7,7 @@ import { textOf } from "../../../../../../test/helpers/react-test";
 
 const mockUseApp = vi.hoisted(() => vi.fn());
 const mockClient = vi.hoisted(() => ({
+  sendAppRunMessage: vi.fn(),
   sendAppSessionMessage: vi.fn(),
   controlAppSession: vi.fn(),
 }));
@@ -142,7 +143,7 @@ describe("TwoThousandFourScapeDetailExtension", () => {
       appRuns: [createRun()],
     });
 
-    mockClient.sendAppSessionMessage.mockResolvedValue({
+    mockClient.sendAppRunMessage.mockResolvedValue({
       success: true,
       message: "Queued",
     });
@@ -197,9 +198,8 @@ describe("TwoThousandFourScapeDetailExtension", () => {
     act(() => {
       sendButton?.props.onClick();
     });
-    expect(mockClient.sendAppSessionMessage).toHaveBeenCalledWith(
-      "@elizaos/app-2004scape",
-      "2004scape-session",
+    expect(mockClient.sendAppRunMessage).toHaveBeenCalledWith(
+      "run-2004-1",
       "Keep banking first.",
     );
   });
