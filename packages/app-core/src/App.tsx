@@ -45,8 +45,8 @@ import {
 } from "./app-shell-components";
 import { TasksEventsPanel } from "./components/chat/TasksEventsPanel";
 import { DeferredSetupChecklist } from "./components/cloud/FlaminaGuide";
-import { MusicPlayerGlobal } from "./components/music/MusicPlayerGlobal";
 import { CompanionHeader } from "./components/companion/CompanionHeader";
+import { MusicPlayerGlobal } from "./components/music/MusicPlayerGlobal";
 import {
   BugReportProvider,
   useBugReportState,
@@ -182,6 +182,7 @@ function ViewRouter({
       case "skills":
       case "fine-tuning":
       case "trajectories":
+      case "rolodex":
       case "runtime":
       case "database":
       case "desktop":
@@ -278,6 +279,7 @@ export function App() {
     tab === "skills" ||
     tab === "fine-tuning" ||
     tab === "trajectories" ||
+    tab === "rolodex" ||
     tab === "runtime" ||
     tab === "database" ||
     tab === "desktop" ||

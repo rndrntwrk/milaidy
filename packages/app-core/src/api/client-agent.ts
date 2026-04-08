@@ -45,6 +45,11 @@ import type {
   PluginInfo,
   PluginMutationResult,
   RawPtySession,
+  RolodexGraphQuery,
+  RolodexGraphSnapshot,
+  RolodexGraphStats,
+  RolodexPersonDetail,
+  RolodexPersonSummary,
   RuntimeDebugSnapshot,
   SecretInfo,
   SecurityAuditFilter,
@@ -344,6 +349,12 @@ declare module "./client-base" {
       fromSeq?: number;
     }): Promise<AgentEventsResponse>;
     getExtensionStatus(): Promise<ExtensionStatus>;
+    getRolodexGraph(query?: RolodexGraphQuery): Promise<RolodexGraphSnapshot>;
+    getRolodexPeople(query?: RolodexGraphQuery): Promise<{
+      people: RolodexPersonSummary[];
+      stats: RolodexGraphStats;
+    }>;
+    getRolodexPerson(id: string): Promise<RolodexPersonDetail>;
     getCharacter(): Promise<{
       character: CharacterData;
       agentName: string;
@@ -1440,6 +1451,56 @@ MiladyClient.prototype.getExtensionStatus = async function (
   this: MiladyClient,
 ) {
   return this.fetch("/api/extension/status");
+};
+
+MiladyClient.prototype.getRolodexGraph = async function (
+  this: MiladyClient,
+  query,
+) {
+  const params = new URLSearchParams();
+  if (query?.search) params.set("search", query.search);
+  if (query?.platform) params.set("platform", query.platform);
+  if (typeof query?.limit === "number")
+    params.set("limit", String(query.limit));
+  if (typeof query?.offset === "number")
+    params.set("offset", String(query.offset));
+  const qs = params.toString();
+  const response = await this.fetch<{ data: RolodexGraphSnapshot }>(
+    `/api/rolodex/graph${qs ? `?${qs}` : ""}`,
+  );
+  return response.data;
+};
+
+MiladyClient.prototype.getRolodexPeople = async function (
+  this: MiladyClient,
+  query,
+) {
+  const params = new URLSearchParams();
+  if (query?.search) params.set("search", query.search);
+  if (query?.platform) params.set("platform", query.platform);
+  if (typeof query?.limit === "number")
+    params.set("limit", String(query.limit));
+  if (typeof query?.offset === "number")
+    params.set("offset", String(query.offset));
+  const qs = params.toString();
+  const response = await this.fetch<{
+    data: RolodexPersonSummary[];
+    stats: RolodexGraphStats;
+  }>(`/api/rolodex/people${qs ? `?${qs}` : ""}`);
+  return {
+    people: response.data,
+    stats: response.stats,
+  };
+};
+
+MiladyClient.prototype.getRolodexPerson = async function (
+  this: MiladyClient,
+  id,
+) {
+  const response = await this.fetch<{ data: RolodexPersonDetail }>(
+    `/api/rolodex/people/${encodeURIComponent(id)}`,
+  );
+  return response.data;
 };
 
 MiladyClient.prototype.getCharacter = async function (this: MiladyClient) {

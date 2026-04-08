@@ -287,7 +287,12 @@ describe("App", () => {
       t: (key: string) => key,
     });
 
-    for (const tab of ["plugins", "skills", "trajectories"] as const) {
+    for (const tab of [
+      "plugins",
+      "skills",
+      "trajectories",
+      "rolodex",
+    ] as const) {
       useAppMock.mockImplementation(() => makeState(tab));
 
       let renderer!: TestRenderer.ReactTestRenderer;

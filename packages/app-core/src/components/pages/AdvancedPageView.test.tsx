@@ -28,6 +28,11 @@ vi.mock("./PluginsPageView", () => ({
     React.createElement("div", null, contentHeader, "plugins-view"),
 }));
 
+vi.mock("./RolodexView", () => ({
+  RolodexView: ({ contentHeader }: { contentHeader?: React.ReactNode }) =>
+    React.createElement("div", null, contentHeader, "rolodex-view"),
+}));
+
 vi.mock("./RuntimeView", () => ({
   RuntimeView: ({ contentHeader }: { contentHeader?: React.ReactNode }) =>
     React.createElement("div", null, contentHeader, "runtime-view"),
@@ -178,5 +183,32 @@ describe("AdvancedPageView", () => {
           Array.isArray(node.children) && node.children.includes("fine-tuning"),
       ).length,
     ).toBeGreaterThan(0);
+  });
+
+  it("renders the rolodex advanced workspace when the rolodex tab is active", async () => {
+    const setTab = vi.fn();
+    mockUseApp.mockReturnValue({
+      tab: "rolodex",
+      setTab,
+      t: (key: string, vars?: Record<string, unknown>) => testT(key, vars),
+    });
+
+    let tree!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(AdvancedPageView));
+    });
+
+    expect(
+      tree.root.findAll(
+        (node) =>
+          Array.isArray(node.children) &&
+          node.children.includes("rolodex-view"),
+      ).length,
+    ).toBeGreaterThan(0);
+    expect(
+      tree.root.findByProps({ "data-testid": "advanced-subtab-rolodex" }).props[
+        "aria-pressed"
+      ],
+    ).toBe(true);
   });
 });

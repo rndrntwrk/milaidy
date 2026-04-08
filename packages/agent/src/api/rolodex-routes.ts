@@ -1,9 +1,25 @@
 import type { IAgentRuntime, UUID } from "@elizaos/core";
-import type {
-  RolodexGraphQuery,
-  RolodexGraphService,
-} from "@miladyai/plugin-rolodex";
 import type { RouteRequestContext } from "./route-helpers";
+
+type RolodexGraphQuery = {
+  search?: string | null;
+  platform?: string | null;
+  limit?: number;
+  offset?: number;
+};
+
+type RolodexGraphService = {
+  getGraphSnapshot: (query?: RolodexGraphQuery) => Promise<{
+    people: unknown[];
+    relationships: unknown[];
+    stats: {
+      totalPeople: number;
+      totalRelationships: number;
+      totalIdentities: number;
+    };
+  }>;
+  getPersonDetail: (primaryEntityId: UUID) => Promise<unknown | null>;
+};
 
 export interface RolodexRouteContext extends RouteRequestContext {
   runtime?: IAgentRuntime | null;

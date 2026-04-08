@@ -13,6 +13,8 @@
   "advancedpageview.SecurityDescription": "Cofre de chaves de API e credenciais",
   "advancedpageview.Skills": "Habilidades",
   "advancedpageview.SkillsDescription": "Habilidades personalizadas do agente",
+  "advancedpageview.Rolodex": "Rolodex",
+  "advancedpageview.RolodexDescription": "Pessoas, identidades, fatos e relações entre canais",
   "advancedpageview.Trajectories": "Trajetórias",
   "advancedpageview.TrajectoriesDescription": "Histórico e análise de chamadas LLM",
   "agentactivitybox.Error": "Erro",
