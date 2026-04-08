@@ -300,8 +300,10 @@
   },
   "overrides": {
     "@elizaos/plugin-anthropic": "2.0.0-alpha.13",
+    "@elizaos/plugin-cli": "2.0.0-alpha.9",
     "@elizaos/plugin-discord": "2.0.0-alpha.10",
     "@elizaos/plugin-knowledge": "2.0.0-alpha.8",
+    "@elizaos/plugin-sql": "2.0.0-alpha.18",
     "@elizaos/plugin-telegram": "2.0.0-alpha.12",
     "@elizaos/config": "1.7.3-alpha.4",
     "@elizaos/core": "2.0.0-alpha.115",
