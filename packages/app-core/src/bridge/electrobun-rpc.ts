@@ -116,6 +116,12 @@ export interface ExistingElizaInstallInfo {
   source: "config-path-env" | "state-dir-env" | "default-state-dir";
 }
 
+export interface DesktopRuntimeModeInfo {
+  mode: "local" | "external" | "disabled";
+  externalApiBase?: string | null;
+  externalApiSource?: string | null;
+}
+
 export async function scanProviderCredentials(): Promise<DetectedProvider[]> {
   const result = await invokeDesktopBridgeRequest<{
     providers: DetectedProvider[];
@@ -131,6 +137,13 @@ export async function inspectExistingElizaInstall(): Promise<ExistingElizaInstal
   return invokeDesktopBridgeRequest<ExistingElizaInstallInfo>({
     rpcMethod: "agentInspectExistingInstall",
     ipcChannel: "agent:inspectExistingInstall",
+  });
+}
+
+export async function getDesktopRuntimeMode(): Promise<DesktopRuntimeModeInfo | null> {
+  return invokeDesktopBridgeRequest<DesktopRuntimeModeInfo>({
+    rpcMethod: "desktopGetRuntimeMode",
+    ipcChannel: "desktop:getRuntimeMode",
   });
 }
 

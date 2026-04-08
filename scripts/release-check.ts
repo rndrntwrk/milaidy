@@ -1034,7 +1034,8 @@ function assertServerDynamicHyperscapeImport() {
   const lines = serverSource.split("\n");
   const staticImports = lines.filter(
     (line) =>
-      /^\s*import\s/.test(line) && line.includes("@hyperscape/plugin-hyperscape"),
+      /^\s*import\s/.test(line) &&
+      line.includes("@hyperscape/plugin-hyperscape"),
   );
   if (staticImports.length > 0) {
     console.error(

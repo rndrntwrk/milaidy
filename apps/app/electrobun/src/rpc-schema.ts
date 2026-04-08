@@ -572,6 +572,14 @@ export type MiladyRPCSchema = {
         params: undefined;
         response: DesktopStartupDiagnostics;
       };
+      desktopGetRuntimeMode: {
+        params: undefined;
+        response: {
+          mode: "local" | "external" | "disabled";
+          externalApiBase?: string | null;
+          externalApiSource?: string | null;
+        };
+      };
       desktopOpenLogsFolder: { params: undefined; response: undefined };
       desktopCreateBugReportBundle: {
         params: {
@@ -1295,6 +1303,7 @@ export const CHANNEL_TO_RPC_METHOD: Record<string, string> = {
   "desktop:setDockIconVisibility": "desktopSetDockIconVisibility",
   "desktop:getPath": "desktopGetPath",
   "desktop:getStartupDiagnostics": "desktopGetStartupDiagnostics",
+  "desktop:getRuntimeMode": "desktopGetRuntimeMode",
   "desktop:openLogsFolder": "desktopOpenLogsFolder",
   "desktop:createBugReportBundle": "desktopCreateBugReportBundle",
   "desktop:beep": "desktopBeep",

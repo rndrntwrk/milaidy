@@ -8,6 +8,7 @@
 import { type OnboardingOptions, client } from "../api";
 import {
   getBackendStartupTimeoutMs,
+  getDesktopRuntimeMode,
   inspectExistingElizaInstall,
   invokeDesktopBridgeRequest,
   isElectrobunRuntime,
@@ -186,6 +187,10 @@ export async function runRestoringSession(
     clientRef: client,
     startLocalRuntime: async () => {
       try {
+        const runtimeMode = await getDesktopRuntimeMode().catch(() => null);
+        if (runtimeMode && runtimeMode.mode !== "local") {
+          return;
+        }
         await invokeDesktopBridgeRequest({
           rpcMethod: "agentStart",
           ipcChannel: "agent:start",

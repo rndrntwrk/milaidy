@@ -52,10 +52,10 @@ describe("patch-deps runtime hotfixes", () => {
 
     expect(source).toContain("collectWorkspacePluginOverrideDirs");
     expect(source).toContain("includeGlobalBunCache: true");
-    expect(source).toContain('actions/swap.ts');
-    expect(source).toContain('service.ts');
-    expect(source).toContain('generated/specs/specs.ts');
-    expect(source).toContain('JUPITER_SERVICE');
+    expect(source).toContain("actions/swap.ts");
+    expect(source).toContain("service.ts");
+    expect(source).toContain("generated/specs/specs.ts");
+    expect(source).toContain("JUPITER_SERVICE");
   });
 
   it("contains bigint-buffer native fallback log patch", () => {
@@ -66,7 +66,9 @@ describe("patch-deps runtime hotfixes", () => {
 
     expect(source).toContain("patchBigintBufferNativeFallbackNoise");
     expect(source).toContain("MILADY_DEBUG_BIGINT_BINDINGS");
-    expect(source).toContain("bigint: Failed to load bindings, pure JS will be used");
+    expect(source).toContain(
+      "bigint: Failed to load bindings, pure JS will be used",
+    );
   });
 
   it("contains Baileys sharp dedupe patch", () => {

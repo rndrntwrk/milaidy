@@ -7,34 +7,22 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const indexPath = path.resolve(here, "../index.ts");
 
 describe("devtools toggle guard", () => {
-  it("keeps the browser fallback path for guarded macOS devtools", () => {
+  it("does not route macOS devtools through a second debug window", () => {
     const source = fs.readFileSync(indexPath, "utf8");
-    expect(source).toContain("async function openBrowserDevtoolsFallback(");
-    expect(source).toContain("function shouldUseBrowserDevtoolsFallback()");
-    expect(source).toContain(
-      'process.env.MILADY_ALLOW_UNSAFE_NATIVE_DEVTOOLS !== "1"',
+    expect(source).not.toContain("async function openDetachedDevtoolsWindow(");
+    expect(source).not.toContain('title: "Milady Debug Tools"');
+    expect(source).not.toContain(
+      "void openDetachedDevtoolsWindow(targetWindow)",
     );
-    expect(source).toContain("!shouldForceMainWindowCef(process.env)");
-    expect(source).toContain("void openBrowserDevtoolsFallback(targetWindow)");
-    expect(source).toContain("Opened Renderer in Browser");
-    expect(source).toContain("WKWebView crash/layout bug");
   });
 
-  it("opens a dedicated macOS debug window instead of docking devtools into the main window", () => {
+  it("toggles devtools on the focused webview directly", () => {
     const source = fs.readFileSync(indexPath, "utf8");
-    expect(source).toContain("async function openDetachedDevtoolsWindow(");
-    expect(source).toContain('title: "Milady Debug Tools"');
-    expect(source).toContain("wireSettingsRpc(debugWindow)");
-    expect(source).toContain("debugWebview?.openDevTools?.()");
-    expect(source).toContain("void openDetachedDevtoolsWindow(targetWindow)");
-  });
-
-  it("keeps an escape hatch for unsafe native toggling", () => {
-    const source = fs.readFileSync(indexPath, "utf8");
+    expect(source).toContain("function toggleFocusedWindowDevTools(): void {");
+    expect(source).toContain("webview?.toggleDevTools");
+    expect(source).toContain("webview?.openDevTools");
     expect(source).toContain(
-      "const macOpenedDevtoolsWindowIds = new Set<number>()",
+      'if (typeof webview?.toggleDevTools === "function") {',
     );
-    expect(source).toContain("MILADY_ALLOW_UNSAFE_NATIVE_DEVTOOLS");
-    expect(source).toContain("shouldUseBrowserDevtoolsFallback()");
   });
 });

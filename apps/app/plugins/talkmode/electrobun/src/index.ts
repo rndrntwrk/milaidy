@@ -112,6 +112,7 @@ const toNativeTalkModeConfig = (
  */
 export class TalkModeElectrobun implements TalkModePlugin {
   private config: TalkModeConfig = {};
+  private captureChunkCount = 0;
   private state: TalkModeState = "idle";
   private statusText = "Off";
   private enabled = false;
@@ -141,6 +142,14 @@ export class TalkModeElectrobun implements TalkModePlugin {
     if (typeof window !== "undefined" && window.speechSynthesis) {
       this.synthesis = window.speechSynthesis;
     }
+  }
+
+  private logDebug(message: string, details?: unknown): void {
+    if (typeof details === "undefined") {
+      console.info(`[TalkModeElectrobun] ${message}`);
+      return;
+    }
+    console.info(`[TalkModeElectrobun] ${message}`, details);
   }
 
   private async invokeBridge<T>(
@@ -185,6 +194,12 @@ export class TalkModeElectrobun implements TalkModePlugin {
     }
 
     // Try native STT/TTS via the Electrobun bridge first
+    this.logDebug("start requested", {
+      hasDirectRpc: !!getElectrobunRendererRpc(),
+      requestedEngine: options?.config?.stt?.engine ?? null,
+      requestedLanguage: options?.config?.stt?.language ?? null,
+    });
+
     const nativeResult = await this.invokeBridge<{
       available?: boolean;
       started?: boolean;
@@ -203,8 +218,25 @@ export class TalkModeElectrobun implements TalkModePlugin {
           this.setupNativeListeners();
           this.setState("listening", "Listening");
           this.captureSampleRate = this.config.stt?.sampleRate ?? 16000;
-          await this.startAudioCapture();
-          return { started: true };
+          try {
+            await this.startAudioCapture();
+            this.logDebug("native whisper capture started", {
+              sampleRate: this.captureSampleRate,
+            });
+            return { started: true };
+          } catch (error) {
+            const message =
+              error instanceof Error
+                ? error.message
+                : "Failed to start desktop microphone capture";
+            this.logDebug("native whisper capture failed", {
+              message,
+            });
+            this.enabled = false;
+            this.stopAudioCapture();
+            await this.invokeBridge("talkmodeStop", "talkmode:stop");
+            return { started: false, error: message };
+          }
         }
 
         await this.invokeBridge("talkmodeStop", "talkmode:stop");
@@ -509,11 +541,30 @@ export class TalkModeElectrobun implements TalkModePlugin {
     ) {
       return;
     }
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new Error("navigator.mediaDevices.getUserMedia is unavailable");
+    }
+    if (typeof AudioContext === "undefined") {
+      throw new Error("AudioContext is unavailable");
+    }
 
+    this.captureChunkCount = 0;
     this.captureStream = await navigator.mediaDevices.getUserMedia({
       audio: true,
     });
     this.captureContext = new AudioContext();
+    if (typeof this.captureContext.resume === "function") {
+      await this.captureContext.resume().catch((error) => {
+        this.logDebug("capture AudioContext resume failed", {
+          message: error instanceof Error ? error.message : String(error),
+          state: this.captureContext?.state,
+        });
+      });
+    }
+    this.logDebug("capture stream acquired", {
+      contextState: this.captureContext.state,
+      sampleRate: this.captureContext.sampleRate,
+    });
     const source = this.captureContext.createMediaStreamSource(
       this.captureStream,
     );
@@ -545,6 +596,13 @@ export class TalkModeElectrobun implements TalkModePlugin {
 
   private sendAudioChunk(downsampled: Float32Array): void {
     const rpcRequest = getElectrobunRendererRpc()?.request?.talkmodeAudioChunk;
+    this.captureChunkCount += 1;
+    if (this.captureChunkCount === 1) {
+      this.logDebug("sending first captured audio chunk", {
+        samples: downsampled.length,
+        sampleRate: this.captureSampleRate,
+      });
+    }
     if (!rpcRequest) {
       return;
     }
@@ -562,6 +620,7 @@ export class TalkModeElectrobun implements TalkModePlugin {
   }
 
   private stopAudioCapture(): void {
+    this.captureChunkCount = 0;
     if (this.captureProcessor) {
       this.captureProcessor.disconnect();
       this.captureProcessor = null;

@@ -15,6 +15,7 @@ import { type RefObject, useCallback } from "react";
 import type { StylePreset } from "../api";
 import { MiladyClient, type VoiceConfig } from "../api";
 import {
+  getDesktopRuntimeMode,
   invokeDesktopBridgeRequest,
   type scanProviderCredentials,
 } from "../bridge";
@@ -322,165 +323,175 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
       if (!onboardingOptions) return;
 
       try {
-      const style = resolveSelectedOnboardingStyle({
-        styles: onboardingOptions.styles,
-        onboardingStyle,
-        selectedVrmIndex,
-        uiLanguage,
-      });
+        const style = resolveSelectedOnboardingStyle({
+          styles: onboardingOptions.styles,
+          onboardingStyle,
+          selectedVrmIndex,
+          uiLanguage,
+        });
 
-      const systemPrompt = style?.system
-        ? style.system.replace(/\{\{name\}\}/g, onboardingName)
-        : `You are ${onboardingName}, an autonomous AI agent powered by elizaOS. ${onboardingOptions.sharedStyleRules}`;
+        const systemPrompt = style?.system
+          ? style.system.replace(/\{\{name\}\}/g, onboardingName)
+          : `You are ${onboardingName}, an autonomous AI agent powered by elizaOS. ${onboardingOptions.sharedStyleRules}`;
 
-      const runtimeConfig = buildOnboardingRuntimeConfig({
-        onboardingServerTarget,
-        onboardingCloudApiKey,
-        onboardingProvider,
-        onboardingApiKey,
-        omitRuntimeProvider: options?.omitRuntimeProvider,
-        onboardingVoiceProvider,
-        onboardingVoiceApiKey,
-        onboardingPrimaryModel,
-        onboardingOpenRouterModel,
-        onboardingRemoteConnected: onboardingRemote.status === "connected",
-        onboardingRemoteApiBase,
-        onboardingRemoteToken,
-        onboardingSmallModel,
-        onboardingLargeModel,
-      });
+        const runtimeConfig = buildOnboardingRuntimeConfig({
+          onboardingServerTarget,
+          onboardingCloudApiKey,
+          onboardingProvider,
+          onboardingApiKey,
+          omitRuntimeProvider: options?.omitRuntimeProvider,
+          onboardingVoiceProvider,
+          onboardingVoiceApiKey,
+          onboardingPrimaryModel,
+          onboardingOpenRouterModel,
+          onboardingRemoteConnected: onboardingRemote.status === "connected",
+          onboardingRemoteApiBase,
+          onboardingRemoteToken,
+          onboardingSmallModel,
+          onboardingLargeModel,
+        });
 
-      const rpcSel = onboardingRpcSelections as Record<string, string>;
-      const rpcK = onboardingRpcKeys as Record<string, string>;
-      const nextWalletConfig = buildWalletRpcUpdateRequest({
-        walletConfig,
-        rpcFieldValues: rpcK,
-        selectedProviders: {
-          evm: rpcSel.evm,
-          bsc: rpcSel.bsc,
-          solana: rpcSel.solana,
-        },
-      });
-
-      const isSandboxMode = onboardingServerTarget === "elizacloud";
-      const isLocalMode =
-        onboardingServerTarget === "local" || !onboardingServerTarget;
-      const isRemoteMode = onboardingServerTarget === "remote";
-
-      if (isSandboxMode) {
-        const cloudApiBase =
-          getBootConfig().cloudApiBase ?? "https://www.elizacloud.ai";
-        const authToken = ((window as unknown as Record<string, unknown>)
-          .__ELIZA_CLOUD_AUTH_TOKEN__ ?? "") as string;
-
-        if (!authToken) {
-          throw new Error(
-            "Eliza Cloud authentication required. Please log in first.",
-          );
-        }
-
-        await client.provisionCloudSandbox({
-          cloudApiBase,
-          authToken,
-          name: onboardingName,
-          bio: style?.bio ?? ["An autonomous AI agent."],
-          onProgress: (status, detail) => {
-            console.log(`[Sandbox] ${status}: ${detail ?? ""}`);
+        const rpcSel = onboardingRpcSelections as Record<string, string>;
+        const rpcK = onboardingRpcKeys as Record<string, string>;
+        const nextWalletConfig = buildWalletRpcUpdateRequest({
+          walletConfig,
+          rpcFieldValues: rpcK,
+          selectedProviders: {
+            evm: rpcSel.evm,
+            bsc: rpcSel.bsc,
+            solana: rpcSel.solana,
           },
         });
 
-        client.setBaseUrl(cloudApiBase);
-        client.setToken(authToken);
-        savePersistedActiveServer(
-          createPersistedActiveServer({
-            kind: "cloud",
-            apiBase: cloudApiBase,
-            accessToken: authToken,
-          }),
-        );
-      } else if (isLocalMode) {
-        try {
-          await invokeDesktopBridgeRequest({
-            rpcMethod: "agentStart",
-            ipcChannel: "agent:start",
+        const isSandboxMode = onboardingServerTarget === "elizacloud";
+        const isLocalMode =
+          onboardingServerTarget === "local" || !onboardingServerTarget;
+        const isRemoteMode = onboardingServerTarget === "remote";
+
+        if (isSandboxMode) {
+          const cloudApiBase =
+            getBootConfig().cloudApiBase ?? "https://www.elizacloud.ai";
+          const authToken = ((window as unknown as Record<string, unknown>)
+            .__ELIZA_CLOUD_AUTH_TOKEN__ ?? "") as string;
+
+          if (!authToken) {
+            throw new Error(
+              "Eliza Cloud authentication required. Please log in first.",
+            );
+          }
+
+          await client.provisionCloudSandbox({
+            cloudApiBase,
+            authToken,
+            name: onboardingName,
+            bio: style?.bio ?? ["An autonomous AI agent."],
+            onProgress: (status, detail) => {
+              console.log(`[Sandbox] ${status}: ${detail ?? ""}`);
+            },
           });
-        } catch {
-          try {
-            const agentPluginId = "@miladyai/capacitor-agent";
-            const { Agent } = await import(/* @vite-ignore */ agentPluginId);
-            await Agent.start();
-          } catch {
-            /* dev mode where agent is already running */
+
+          client.setBaseUrl(cloudApiBase);
+          client.setToken(authToken);
+          savePersistedActiveServer(
+            createPersistedActiveServer({
+              kind: "cloud",
+              apiBase: cloudApiBase,
+              accessToken: authToken,
+            }),
+          );
+        } else if (isLocalMode) {
+          const desktopRuntimeMode = await getDesktopRuntimeMode().catch(
+            () => null,
+          );
+          const shouldStartEmbeddedDesktopRuntime =
+            !desktopRuntimeMode || desktopRuntimeMode.mode === "local";
+
+          if (shouldStartEmbeddedDesktopRuntime) {
+            try {
+              await invokeDesktopBridgeRequest({
+                rpcMethod: "agentStart",
+                ipcChannel: "agent:start",
+              });
+            } catch {
+              try {
+                const agentPluginId = "@miladyai/capacitor-agent";
+                const { Agent } = await import(
+                  /* @vite-ignore */ agentPluginId
+                );
+                await Agent.start();
+              } catch {
+                /* dev mode where agent is already running */
+              }
+            }
           }
+
+          const localDeadline = Date.now() + 120_000;
+          let pollMs = 1000;
+          while (Date.now() < localDeadline) {
+            try {
+              await client.getAuthStatus();
+              break;
+            } catch {
+              await new Promise((r) => setTimeout(r, pollMs));
+              pollMs = Math.min(pollMs * 1.5, 5000);
+            }
+          }
+
+          savePersistedActiveServer(
+            createPersistedActiveServer({ kind: "local" }),
+          );
+        } else if (isRemoteMode) {
+          savePersistedActiveServer(
+            createPersistedActiveServer({
+              kind: "remote",
+              apiBase: onboardingRemoteApiBase,
+              accessToken: onboardingRemoteToken || undefined,
+            }),
+          );
         }
 
-        const localDeadline = Date.now() + 120_000;
-        let pollMs = 1000;
-        while (Date.now() < localDeadline) {
-          try {
-            await client.getAuthStatus();
-            break;
-          } catch {
-            await new Promise((r) => setTimeout(r, pollMs));
-            pollMs = Math.min(pollMs * 1.5, 5000);
-          }
+        const sandboxMode = isSandboxMode ? "standard" : "off";
+        await client.submitOnboarding({
+          name: onboardingName,
+          sandboxMode: sandboxMode as "off",
+          bio: style?.bio ?? ["An autonomous AI agent."],
+          systemPrompt,
+          style: style?.style,
+          adjectives: style?.adjectives,
+          topics: style?.topics,
+          postExamples: style?.postExamples,
+          messageExamples: style?.messageExamples,
+          avatarIndex: style?.avatarIndex ?? selectedVrmIndex,
+          language: uiLanguage,
+          presetId: (style?.id ?? onboardingStyle) || "chen",
+          deploymentTarget: runtimeConfig.deploymentTarget,
+          ...(runtimeConfig.linkedAccounts
+            ? { linkedAccounts: runtimeConfig.linkedAccounts }
+            : {}),
+          ...(runtimeConfig.serviceRouting
+            ? { serviceRouting: runtimeConfig.serviceRouting }
+            : {}),
+          ...(runtimeConfig.credentialInputs
+            ? { credentialInputs: runtimeConfig.credentialInputs }
+            : {}),
+          walletConfig: nextWalletConfig,
+        } as Parameters<typeof client.submitOnboarding>[0]);
+        try {
+          await persistOnboardingStyleVoice({
+            style,
+            voiceProvider: onboardingVoiceProvider,
+            voiceApiKey: onboardingVoiceApiKey,
+            cloudTtsSelected:
+              runtimeConfig.serviceRouting?.tts?.transport === "cloud-proxy" &&
+              runtimeConfig.serviceRouting?.tts?.backend === "elizacloud",
+            clientRef: client,
+          });
+        } catch (err) {
+          console.warn(
+            "[onboarding] Failed to persist selected voice preset",
+            err,
+          );
         }
-
-        savePersistedActiveServer(
-          createPersistedActiveServer({ kind: "local" }),
-        );
-      } else if (isRemoteMode) {
-        savePersistedActiveServer(
-          createPersistedActiveServer({
-            kind: "remote",
-            apiBase: onboardingRemoteApiBase,
-            accessToken: onboardingRemoteToken || undefined,
-          }),
-        );
-      }
-
-      const sandboxMode = isSandboxMode ? "standard" : "off";
-      await client.submitOnboarding({
-        name: onboardingName,
-        sandboxMode: sandboxMode as "off",
-        bio: style?.bio ?? ["An autonomous AI agent."],
-        systemPrompt,
-        style: style?.style,
-        adjectives: style?.adjectives,
-        topics: style?.topics,
-        postExamples: style?.postExamples,
-        messageExamples: style?.messageExamples,
-        avatarIndex: style?.avatarIndex ?? selectedVrmIndex,
-        language: uiLanguage,
-        presetId: (style?.id ?? onboardingStyle) || "chen",
-        deploymentTarget: runtimeConfig.deploymentTarget,
-        ...(runtimeConfig.linkedAccounts
-          ? { linkedAccounts: runtimeConfig.linkedAccounts }
-          : {}),
-        ...(runtimeConfig.serviceRouting
-          ? { serviceRouting: runtimeConfig.serviceRouting }
-          : {}),
-        ...(runtimeConfig.credentialInputs
-          ? { credentialInputs: runtimeConfig.credentialInputs }
-          : {}),
-        walletConfig: nextWalletConfig,
-      } as Parameters<typeof client.submitOnboarding>[0]);
-      try {
-        await persistOnboardingStyleVoice({
-          style,
-          voiceProvider: onboardingVoiceProvider,
-          voiceApiKey: onboardingVoiceApiKey,
-          cloudTtsSelected:
-            runtimeConfig.serviceRouting?.tts?.transport === "cloud-proxy" &&
-            runtimeConfig.serviceRouting?.tts?.backend === "elizacloud",
-          clientRef: client,
-        });
-      } catch (err) {
-        console.warn(
-          "[onboarding] Failed to persist selected voice preset",
-          err,
-        );
-      }
 
         if (runtimeConfig.needsProviderSetup) {
           setActionNotice(

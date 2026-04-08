@@ -11,6 +11,7 @@ import fs from "node:fs";
 
 import { Utils } from "electrobun/bun";
 import { setAgentReady } from "./agent-ready-state";
+import { resolveDesktopRuntimeMode } from "./api-base";
 import { showBackgroundNoticeOnce } from "./background-notice";
 import { postCloudDisconnectFromMain } from "./cloud-disconnect-from-main";
 import { getAgentManager } from "./native/agent";
@@ -196,6 +197,17 @@ export function registerRpcHandlers(
         console.error("[RPC] agentCloudDisconnectWithConfirm failed", err);
         throw err;
       }
+    },
+
+    desktopGetRuntimeMode: async () => {
+      const runtimeMode = resolveDesktopRuntimeMode(
+        process.env as Record<string, string | undefined>,
+      );
+      return {
+        mode: runtimeMode.mode,
+        externalApiBase: runtimeMode.externalApi.base,
+        externalApiSource: runtimeMode.externalApi.source,
+      };
     },
 
     // ---- Renderer diagnostics ----

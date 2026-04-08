@@ -11,6 +11,7 @@ vi.mock("../api", () => ({
 
 vi.mock("../bridge", () => ({
   getBackendStartupTimeoutMs: vi.fn(() => 30_000),
+  getDesktopRuntimeMode: vi.fn(async () => null),
   inspectExistingElizaInstall: vi.fn(async () => null),
   invokeDesktopBridgeRequest: vi.fn(async () => {}),
   isElectrobunRuntime: vi.fn(() => false),
@@ -29,6 +30,7 @@ vi.mock("./persistence", () => ({
 
 import { client } from "../api";
 import {
+  getDesktopRuntimeMode,
   inspectExistingElizaInstall,
   invokeDesktopBridgeRequest,
 } from "../bridge";
@@ -44,6 +46,7 @@ import {
 
 describe("applyRestoredConnection", () => {
   it("clears stale session state before restoring a local runtime", async () => {
+    vi.mocked(getDesktopRuntimeMode).mockResolvedValue({ mode: "local" });
     const clientRef = {
       setBaseUrl: vi.fn(),
       setToken: vi.fn(),
@@ -63,6 +66,35 @@ describe("applyRestoredConnection", () => {
     expect(clientRef.setToken).toHaveBeenCalledWith(null);
     expect(clientRef.setBaseUrl).toHaveBeenCalledWith(null);
     expect(startLocalRuntime).toHaveBeenCalledTimes(1);
+  });
+
+  it("skips embedded runtime start when desktop is already in external api mode", async () => {
+    vi.mocked(getDesktopRuntimeMode).mockResolvedValue({ mode: "external" });
+    const clientRef = {
+      setBaseUrl: vi.fn(),
+      setToken: vi.fn(),
+    };
+
+    await applyRestoredConnection({
+      restoredActiveServer: {
+        id: "local:embedded",
+        kind: "local",
+        label: "This device",
+      },
+      clientRef,
+      startLocalRuntime: async () => {
+        const runtimeMode = await getDesktopRuntimeMode();
+        if (runtimeMode?.mode !== "local") {
+          return;
+        }
+        await invokeDesktopBridgeRequest({
+          rpcMethod: "agentStart",
+          ipcChannel: "agent:start",
+        });
+      },
+    });
+
+    expect(invokeDesktopBridgeRequest).not.toHaveBeenCalled();
   });
 
   it("clears stale tokens when restoring a remote target without an access token", async () => {
@@ -99,6 +131,7 @@ describe("applyRestoredConnection", () => {
 
 describe("runRestoringSession", () => {
   it("restores an existing backend-configured install even without prior local onboarding evidence", async () => {
+    vi.mocked(getDesktopRuntimeMode).mockResolvedValue({ mode: "local" });
     vi.mocked(loadPersistedActiveServer).mockReturnValue(null);
     vi.mocked(loadPersistedOnboardingComplete).mockReturnValue(false);
     vi.mocked(inspectExistingElizaInstall).mockResolvedValue(null);

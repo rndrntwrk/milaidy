@@ -4310,7 +4310,7 @@ describe("Application menu (automated)", () => {
     }
   });
 
-  it("View menu includes reload, forceReload, and the mac debug-browser label", async () => {
+  it("View menu includes reload, forceReload, and the devtools toggle label", async () => {
     const fs = await vi.importActual<typeof import("node:fs")>("node:fs");
     const path = await vi.importActual<typeof import("node:path")>("node:path");
     const menuSource = fs.readFileSync(
@@ -4318,7 +4318,7 @@ describe("Application menu (automated)", () => {
       "utf8",
     );
     expect(menuSource).toContain("reload");
-    expect(menuSource).toContain("Open Renderer in Browser for Debugging");
+    expect(menuSource).toContain("Toggle Developer Tools");
     expect(menuSource).toContain("toggle-devtools");
   });
 

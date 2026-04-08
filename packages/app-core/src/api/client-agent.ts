@@ -1672,7 +1672,11 @@ MiladyClient.prototype.getCodingAgentStatus = async function (
       );
       status.taskCount = status.tasks.length;
     }
-    if (status && (!status.tasks || status.tasks.length === 0)) {
+    if (status && !status.tasks) {
+      // Only fall back to the raw PTY session list when the coordinator
+      // didn't return a tasks array at all (null/undefined).  An empty
+      // array means "no tasks" — no need to hit /api/coding-agents which
+      // may not have a handler and would hang until timeout.
       try {
         const ptySessions =
           await this.fetch<RawPtySession[]>("/api/coding-agents");

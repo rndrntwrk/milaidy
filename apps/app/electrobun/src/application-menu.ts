@@ -222,14 +222,12 @@ export function buildApplicationMenu({
   heartbeatSnapshot,
   detachedWindows,
   agentReady = true,
-  useBrowserDebugFallback = isMac,
 }: {
   isMac: boolean;
   browserEnabled: boolean;
   heartbeatSnapshot: HeartbeatMenuSnapshot;
   detachedWindows: ManagedWindowSnapshot[];
   agentReady?: boolean;
-  useBrowserDebugFallback?: boolean;
 }): ApplicationMenuItem[] {
   const visibleDetachedWindows = browserEnabled
     ? detachedWindows
@@ -313,10 +311,7 @@ export function buildApplicationMenu({
         { label: "Reload", role: "reload" },
         { label: "Force Reload", role: "forceReload" },
         {
-          label:
-            isMac && useBrowserDebugFallback
-              ? "Open Renderer in Browser for Debugging"
-              : "Toggle Developer Tools",
+          label: "Toggle Developer Tools",
           action: "toggle-devtools",
           accelerator: isMac ? "Alt+Command+I" : "Ctrl+Shift+I",
         },

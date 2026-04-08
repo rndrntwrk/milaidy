@@ -17,6 +17,7 @@ describe("dev-platform.mjs", () => {
     );
     expect(script).toContain("MILADY_API_PORT: apiPort");
     expect(script).toContain("ELIZA_API_PORT: apiPort");
+    expect(script).toContain("await waitForPort(Number(apiPort));");
   });
 
   it("only injects the external desktop API base when the helper API is enabled", () => {
@@ -33,6 +34,30 @@ describe("dev-platform.mjs", () => {
     expect(script).toContain("desktopWhisperAssetsMissing()");
     expect(script).toContain('execSync("bun run build:whisper"');
     expect(script).toContain("ensureDesktopWhisperAssets();");
+  });
+
+  it("repairs the jsdom Bun package link before launching desktop dev", () => {
+    const script = fs.readFileSync(SCRIPT_PATH, "utf8");
+
+    expect(script).toContain('ensureBunRootPackageLink("jsdom")');
+    expect(script).toContain('path.join(rootNodeModules, ".bun")');
+    expect(script).toContain("Restored missing Bun package link");
+  });
+
+  it("allocates coordinated browser-workspace and screenshot ports instead of colliding at startup", () => {
+    const script = fs.readFileSync(SCRIPT_PATH, "utf8");
+
+    expect(script).toContain("preferredBrowserWorkspacePort");
+    expect(script).toContain("allocateDistinctLoopbackPort(");
+    expect(script).toContain("MILADY_BROWSER_WORKSPACE_PORT");
+    expect(script).toContain(
+      "Screenshot port " + "$" + "{preferredScreenshotPort} in use",
+    );
+    expect(script).toContain(
+      "Browser workspace port " +
+        "$" +
+        "{preferredBrowserWorkspacePort} in use",
+    );
   });
 
   it("enables the macOS CEF workaround for desktop dev unless explicitly overridden", () => {

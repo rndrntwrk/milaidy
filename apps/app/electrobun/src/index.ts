@@ -100,11 +100,9 @@ const HEARTBEAT_MENU_REFRESH_MS = 30_000;
 const CONFIG_EXPORT_FILE_NAME = "milady-config.json";
 const STARTUP_CRASH_REPORT_FILE = "startup-crash-report-latest.md";
 const STARTUP_CRASH_PROMPT_MARKER_FILE = "startup-crash-last-prompted.txt";
-const DEBUG_WINDOW_OFFSET_PX = 48;
 let heartbeatMenuSnapshot: HeartbeatMenuSnapshot =
   EMPTY_HEARTBEAT_MENU_SNAPSHOT;
 let heartbeatMenuRefreshTimer: ReturnType<typeof setInterval> | null = null;
-let debugDevtoolsWindow: BrowserWindow | null = null;
 
 import {
   isAgentReady,
@@ -131,11 +129,7 @@ function resolveDesktopAppIconPath(): string {
 }
 
 function shouldUseBrowserDevtoolsFallback(): boolean {
-  return (
-    process.platform === "darwin" &&
-    process.env.MILADY_ALLOW_UNSAFE_NATIVE_DEVTOOLS !== "1" &&
-    !shouldForceMainWindowCef(process.env)
-  );
+  return false;
 }
 
 function setupApplicationMenu(): void {
@@ -146,7 +140,6 @@ function setupApplicationMenu(): void {
     heartbeatSnapshot: heartbeatMenuSnapshot,
     detachedWindows: surfaceWindowManager?.listWindows() ?? [],
     agentReady: isAgentReady(),
-    useBrowserDebugFallback: shouldUseBrowserDevtoolsFallback(),
   });
   ApplicationMenu.setApplicationMenu(
     menu as unknown as Parameters<typeof ApplicationMenu.setApplicationMenu>[0],
@@ -1162,75 +1155,6 @@ function trackFocusedWindow(window: ManagedWindowLike): void {
   });
 }
 
-async function openDetachedDevtoolsWindow(
-  targetWindow: BrowserWindow | null,
-): Promise<void> {
-  if (debugDevtoolsWindow) {
-    try {
-      debugDevtoolsWindow.show();
-      debugDevtoolsWindow.focus();
-      const debugWebview = debugDevtoolsWindow.webview as
-        | { openDevTools?: () => void }
-        | undefined;
-      debugWebview?.openDevTools?.();
-      return;
-    } catch {
-      debugDevtoolsWindow = null;
-    }
-  }
-
-  const currentUrl = (
-    targetWindow?.webview as { url?: string | null } | undefined
-  )?.url;
-  const rendererUrl = currentUrl?.trim() || (await resolveRendererUrl());
-
-  let preload = "// preload unavailable";
-  try {
-    preload = readResolvedPreloadScript(import.meta.dir);
-  } catch (err) {
-    console.error("[DevTools] Failed to read preload script:", err);
-  }
-
-  const baseFrame = targetWindow?.getFrame?.() ?? {
-    x: 120,
-    y: 120,
-    width: 1280,
-    height: 900,
-  };
-
-  const debugWindow = new BrowserWindow({
-    title: "Milady Debug Tools",
-    url: rendererUrl,
-    preload,
-    frame: {
-      x: baseFrame.x + DEBUG_WINDOW_OFFSET_PX,
-      y: baseFrame.y + DEBUG_WINDOW_OFFSET_PX,
-      width: Math.max(1100, baseFrame.width),
-      height: Math.max(780, baseFrame.height),
-    },
-    titleBarStyle: "default",
-    transparent: false,
-  });
-
-  debugDevtoolsWindow = debugWindow;
-  wireSettingsRpc(debugWindow);
-  trackFocusedWindow(debugWindow);
-  debugWindow.webview.on("dom-ready", () => {
-    injectApiBase(debugWindow);
-    const debugWebview = debugWindow.webview as
-      | { openDevTools?: () => void }
-      | undefined;
-    debugWebview?.openDevTools?.();
-  });
-  debugWindow.on("close", () => {
-    if (debugDevtoolsWindow?.id === debugWindow.id) {
-      debugDevtoolsWindow = null;
-    }
-  });
-  debugWindow.show();
-  debugWindow.focus();
-}
-
 function toggleFocusedWindowDevTools(): void {
   const targetWindow = lastFocusedWindow ?? currentWindow;
   const webview = targetWindow?.webview as
@@ -1242,11 +1166,6 @@ function toggleFocusedWindowDevTools(): void {
 
   if (shouldUseBrowserDevtoolsFallback()) {
     void openBrowserDevtoolsFallback(targetWindow);
-    return;
-  }
-
-  if (process.platform === "darwin") {
-    void openDetachedDevtoolsWindow(targetWindow);
     return;
   }
 

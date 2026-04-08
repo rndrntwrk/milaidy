@@ -22,14 +22,12 @@ function getMenu(
     singleton: boolean;
   }> = [],
   isMac = true,
-  useBrowserDebugFallback = isMac,
 ) {
   const menu = buildApplicationMenu({
     isMac,
     browserEnabled,
     heartbeatSnapshot: EMPTY_HEARTBEAT_MENU_SNAPSHOT,
     detachedWindows,
-    useBrowserDebugFallback,
   });
   return menu.find((item) => item.label === label);
 }
@@ -68,7 +66,7 @@ describe("buildApplicationMenu", () => {
 
     expect(macViewLabels).toContain("Reload");
     expect(macViewLabels).toContain("Force Reload");
-    expect(macViewLabels).toContain("Open Renderer in Browser for Debugging");
+    expect(macViewLabels).toContain("Toggle Developer Tools");
     expect(macViewLabels).toContain("Actual Size");
     expect(macViewLabels).toContain("Toggle Full Screen");
     expect(macViewLabels).not.toContain("Show Chat");
@@ -78,10 +76,10 @@ describe("buildApplicationMenu", () => {
     expect(winViewLabels).toContain("Toggle Developer Tools");
   });
 
-  it("keeps native devtools visible on macOS when the CEF workaround is enabled", () => {
-    const macViewLabels = (
-      getMenu("View", false, [], true, false)?.submenu ?? []
-    ).map((item) => item.label ?? item.type ?? "");
+  it("keeps native devtools visible on macOS", () => {
+    const macViewLabels = (getMenu("View", false, [], true)?.submenu ?? []).map(
+      (item) => item.label ?? item.type ?? "",
+    );
 
     expect(macViewLabels).toContain("Toggle Developer Tools");
     expect(macViewLabels).not.toContain(

@@ -116,7 +116,9 @@ function collectWorkspacePluginOverrideDirs(packageName) {
   }
 
   return uniqueResolvedPaths(
-    candidates.filter((candidate) => existsSync(resolve(candidate, "package.json"))),
+    candidates.filter((candidate) =>
+      existsSync(resolve(candidate, "package.json")),
+    ),
   );
 }
 
@@ -136,14 +138,21 @@ function collectInstalledPackageDirs(
     try {
       for (const entry of readdirSync(bunCacheDir)) {
         if (entry.startsWith(bunEntryPrefix)) {
-          searchDirs.push(resolve(bunCacheDir, entry, "node_modules", packageName));
+          searchDirs.push(
+            resolve(bunCacheDir, entry, "node_modules", packageName),
+          );
         }
       }
     } catch {}
   }
 
   if (includeGlobalBunCache && process.env.HOME) {
-    const globalBunCacheDir = resolve(process.env.HOME, ".bun", "install", "cache");
+    const globalBunCacheDir = resolve(
+      process.env.HOME,
+      ".bun",
+      "install",
+      "cache",
+    );
     if (existsSync(globalBunCacheDir)) {
       const [scope, unscopedName] = packageName.split("/");
       if (packageName.startsWith("@") && unscopedName) {
@@ -491,7 +500,9 @@ function patchBigintBufferNativeFallbackNoise() {
     try {
       for (const entry of readdirSync(bunCacheDir)) {
         if (entry.startsWith("bigint-buffer@")) {
-          searchDirs.push(resolve(bunCacheDir, entry, "node_modules/bigint-buffer"));
+          searchDirs.push(
+            resolve(bunCacheDir, entry, "node_modules/bigint-buffer"),
+          );
         }
       }
     } catch {}
@@ -676,7 +687,9 @@ function patchJsdomCanvasAutoload() {
 
       writeFileSync(target, src.replace(oldSnippet, newSnippet), "utf8");
       patched++;
-      console.log(`[patch-deps] Disabled eager jsdom canvas autoload: ${target}`);
+      console.log(
+        `[patch-deps] Disabled eager jsdom canvas autoload: ${target}`,
+      );
     }
   }
 

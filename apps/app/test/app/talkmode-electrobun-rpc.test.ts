@@ -25,6 +25,7 @@ interface ProcessorStub {
 
 let originalAudioContext: typeof globalThis.AudioContext | undefined;
 let processorStub: ProcessorStub;
+let captureResumeMock: ReturnType<typeof vi.fn>;
 
 function installAudioCaptureStubs(): void {
   const mockStream = {
@@ -60,10 +61,12 @@ function installAudioCaptureStubs(): void {
   };
 
   originalAudioContext = globalThis.AudioContext;
+  captureResumeMock = vi.fn(async () => {});
 
   class MockAudioContext {
     sampleRate = 48000;
     destination = {};
+    state = "suspended";
     createMediaStreamSource = vi.fn(() => ({
       connect: vi.fn(),
     }));
@@ -73,6 +76,10 @@ function installAudioCaptureStubs(): void {
       connect: vi.fn(),
       disconnect: vi.fn(),
     }));
+    resume = vi.fn(async () => {
+      this.state = "running";
+      await captureResumeMock();
+    });
     close = vi.fn(async () => {});
   }
 
@@ -165,6 +172,8 @@ describe("TalkModeElectrobun direct Electrobun RPC bridge", () => {
         },
       }),
     ).resolves.toEqual({ started: true });
+
+    expect(captureResumeMock).toHaveBeenCalledTimes(1);
 
     expect(invokeBridge).toHaveBeenNthCalledWith(
       1,
