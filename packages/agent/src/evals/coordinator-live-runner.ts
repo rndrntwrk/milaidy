@@ -7,18 +7,19 @@ import {
   resolveCoordinatorEvalBaseUrl,
 } from "./coordinator-eval-client.js";
 import {
+  type CoordinatorPreflightResult,
+  runCoordinatorPreflight,
+} from "./coordinator-preflight.js";
+import {
   type CoordinatorEvalChannel,
   type CoordinatorScenario,
   listCoordinatorScenarios,
 } from "./coordinator-scenarios.js";
-import {
-  type CoordinatorPreflightResult,
-  runCoordinatorPreflight,
-} from "./coordinator-preflight.js";
 
 const execFileAsync = promisify(execFile);
 const URL_RE = /\bhttps?:\/\/\S+/i;
-const ABSOLUTE_PATH_RE = /(?:^|\s)(\/[A-Za-z0-9._\-~/]+(?:\/[A-Za-z0-9._\-~]+)+)/;
+const ABSOLUTE_PATH_RE =
+  /(?:^|\s)(\/[A-Za-z0-9._\-~/]+(?:\/[A-Za-z0-9._\-~]+)+)/;
 const DEFAULT_SCENARIO_TIMEOUT_MS = 180_000;
 const TURN_SETTLE_MS = 1_500;
 
@@ -129,7 +130,13 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function channelMessageSource(channel: CoordinatorEvalChannel): string | undefined {
+function perTurnTimeoutMs(totalTimeoutMs: number): number {
+  return Math.max(1_000, Math.floor(totalTimeoutMs / 2));
+}
+
+function channelMessageSource(
+  channel: CoordinatorEvalChannel,
+): string | undefined {
   return channel === "app_chat" ? "client_chat" : channel;
 }
 
@@ -141,15 +148,16 @@ function allCoordinatorChannels(
   );
 }
 
-function getCheck(
-  preflight: CoordinatorPreflightResult,
-  id: string,
-) {
+function getCheck(preflight: CoordinatorPreflightResult, id: string) {
   return preflight.checks.find((check) => check.id === id);
 }
 
-function uniqueChannels(channels: CoordinatorEvalChannel[]): CoordinatorEvalChannel[] {
-  return channels.filter((channel, index) => channels.indexOf(channel) === index);
+function uniqueChannels(
+  channels: CoordinatorEvalChannel[],
+): CoordinatorEvalChannel[] {
+  return channels.filter(
+    (channel, index) => channels.indexOf(channel) === index,
+  );
 }
 
 function scenarioNeedsTaskThread(scenario: CoordinatorScenario): boolean {
@@ -206,9 +214,7 @@ function responseLooksShareable(text: string): boolean {
   return URL_RE.test(text) || ABSOLUTE_PATH_RE.test(text);
 }
 
-function trajectoryGrouping(
-  trajectory: TrajectoryListItem,
-): {
+function trajectoryGrouping(trajectory: TrajectoryListItem): {
   scenarioId?: string;
   batchId?: string;
 } {
@@ -219,7 +225,9 @@ function trajectoryGrouping(
   return {
     scenarioId:
       trajectory.scenarioId ??
-      (typeof metadata.scenarioId === "string" ? metadata.scenarioId : undefined),
+      (typeof metadata.scenarioId === "string"
+        ? metadata.scenarioId
+        : undefined),
     batchId:
       trajectory.batchId ??
       (typeof metadata.batchId === "string" ? metadata.batchId : undefined),
@@ -261,9 +269,13 @@ async function collectChangedFilesForWorkdir(workdir: string): Promise<{
   files: string[];
 }> {
   try {
-    const result = await execFileAsync("git", ["-C", workdir, "status", "--short"], {
-      timeout: 10_000,
-    });
+    const result = await execFileAsync(
+      "git",
+      ["-C", workdir, "status", "--short"],
+      {
+        timeout: 10_000,
+      },
+    );
     const files = result.stdout
       .split("\n")
       .map((line) => line.trim())
@@ -336,7 +348,8 @@ function evaluatePreflight(params: {
     }));
 
   const runnableFrameworks = ["codex", "claude"].filter(
-    (frameworkId) => getCheck(preflight, `framework-${frameworkId}`)?.status === "pass",
+    (frameworkId) =>
+      getCheck(preflight, `framework-${frameworkId}`)?.status === "pass",
   );
   const hardBlockers: EvaluatedPreflightIssue[] = [];
 
@@ -440,7 +453,8 @@ async function gatherScenarioEvidence(params: {
       }>(
         `/api/trajectories?limit=200&scenarioId=${encodeURIComponent(scenario.id)}&batchId=${encodeURIComponent(batchId)}`,
       ),
-    (value) => Array.isArray(value.trajectories) && value.trajectories.length > 0,
+    (value) =>
+      Array.isArray(value.trajectories) && value.trajectories.length > 0,
     Math.max(30_000, Math.floor(timeoutMs / 2)),
   );
   const trajectories = Array.isArray(trajectoriesResult.trajectories)
@@ -465,7 +479,7 @@ async function gatherScenarioEvidence(params: {
       ),
     (value) =>
       !scenarioNeedsTaskThread(scenario) ||
-      typeof value.total === "number" && value.total > 0,
+      (typeof value.total === "number" && value.total > 0),
     Math.max(30_000, Math.floor(timeoutMs / 2)),
   );
   const threadDetails: TaskThreadDetail[] = [];
@@ -523,7 +537,9 @@ async function gatherScenarioEvidence(params: {
     }
   }
 
-  const allArtifacts = threadDetails.flatMap((thread) => thread.artifacts ?? []);
+  const allArtifacts = threadDetails.flatMap(
+    (thread) => thread.artifacts ?? [],
+  );
   const transcriptCount = threadDetails.reduce(
     (sum, thread) => sum + (thread.transcripts?.length ?? 0),
     0,
@@ -546,14 +562,16 @@ async function gatherScenarioEvidence(params: {
     },
     {
       id: "trajectory-batch-filter",
-      passed: trajectories.every(
-        (trajectory) => {
-          const grouping = trajectoryGrouping(trajectory);
-          return grouping.scenarioId === scenario.id && grouping.batchId === batchId;
-        },
-      ),
+      passed: trajectories.every((trajectory) => {
+        const grouping = trajectoryGrouping(trajectory);
+        return (
+          grouping.scenarioId === scenario.id && grouping.batchId === batchId
+        );
+      }),
       details: {
-        sources: trajectories.map((trajectory) => trajectory.source ?? "unknown"),
+        sources: trajectories.map(
+          (trajectory) => trajectory.source ?? "unknown",
+        ),
       },
     },
     {
@@ -642,8 +660,14 @@ async function gatherScenarioEvidence(params: {
   await client.writeJson(path.join(outputDir, "threads.json"), threadDetails);
   await client.writeJson(path.join(outputDir, "artifacts.json"), allArtifacts);
   await client.writeJson(path.join(outputDir, "shares.json"), shareDetails);
-  await client.writeJson(path.join(outputDir, "changed-files.json"), changedFiles);
-  await client.writeJson(path.join(outputDir, "trajectories.json"), trajectories);
+  await client.writeJson(
+    path.join(outputDir, "changed-files.json"),
+    changedFiles,
+  );
+  await client.writeJson(
+    path.join(outputDir, "trajectories.json"),
+    trajectories,
+  );
   await client.writeJson(path.join(outputDir, "db-assertions.json"), {
     scenarioId: scenario.id,
     batchId,
@@ -652,14 +676,15 @@ async function gatherScenarioEvidence(params: {
     trajectoryCount: trajectories.length,
     transcriptCount,
     groupedThreads: threadDetails.every(
-      (thread) => thread.scenarioId === scenario.id && thread.batchId === batchId,
+      (thread) =>
+        thread.scenarioId === scenario.id && thread.batchId === batchId,
     ),
-    groupedTrajectories: trajectories.every(
-      (trajectory) => {
-        const grouping = trajectoryGrouping(trajectory);
-        return grouping.scenarioId === scenario.id && grouping.batchId === batchId;
-      },
-    ),
+    groupedTrajectories: trajectories.every((trajectory) => {
+      const grouping = trajectoryGrouping(trajectory);
+      return (
+        grouping.scenarioId === scenario.id && grouping.batchId === batchId
+      );
+    }),
   });
   await client.writeJson(path.join(outputDir, "checks.json"), checks);
 
@@ -698,10 +723,13 @@ export async function runCoordinatorLiveScenarios(
   const batchId = options.batchId?.trim() || generateBatchId();
   const client = new CoordinatorEvalClient(baseUrl);
   const preflight = await runCoordinatorPreflight({ baseUrl });
-  const selectedScenarios = listCoordinatorScenarios(options.profile ?? "full")
-    .filter((scenario) =>
-      options.scenarioIds?.length ? options.scenarioIds.includes(scenario.id) : true,
-    );
+  const selectedScenarios = listCoordinatorScenarios(
+    options.profile ?? "full",
+  ).filter((scenario) =>
+    options.scenarioIds?.length
+      ? options.scenarioIds.includes(scenario.id)
+      : true,
+  );
   if (selectedScenarios.length === 0) {
     throw new Error("No coordinator scenarios matched the requested filters.");
   }
@@ -711,9 +739,15 @@ export async function runCoordinatorLiveScenarios(
       ? options.channels
       : allCoordinatorChannels(preflight),
   );
+  const scenarioTimeoutMs =
+    options.scenarioTimeoutMs ?? DEFAULT_SCENARIO_TIMEOUT_MS;
+  const turnTimeoutMs = perTurnTimeoutMs(scenarioTimeoutMs);
   const runs: CoordinatorScenarioRunResult[] = [];
   await mkdir(path.join(outputRoot, batchId), { recursive: true });
-  await client.writeJson(path.join(outputRoot, batchId, "preflight.json"), preflight);
+  await client.writeJson(
+    path.join(outputRoot, batchId, "preflight.json"),
+    preflight,
+  );
   const preflightEvaluation = evaluatePreflight({
     preflight,
     requestedChannels,
@@ -740,29 +774,62 @@ export async function runCoordinatorLiveScenarios(
     for (const channel of preflightEvaluation.usableChannels) {
       if (!scenario.channels.includes(channel)) continue;
 
-      const conversation = await client.createConversation(
-        `[eval:${batchId}] ${scenario.id} ${channel} ${scenario.title}`,
+      let conversation: Awaited<
+        ReturnType<CoordinatorEvalClient["createConversation"]>
+      >;
+      try {
+        conversation = await client.createConversation(
+          `[eval:${batchId}] ${scenario.id} ${channel} ${scenario.title}`,
+          turnTimeoutMs,
+        );
+      } catch (error) {
+        throw new Error(
+          `Scenario ${scenario.id} could not create a conversation on ${channel}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+      const outputDir = scenarioOutputDir(
+        outputRoot,
+        batchId,
+        scenario.id,
+        channel,
       );
-      const outputDir = scenarioOutputDir(outputRoot, batchId, scenario.id, channel);
-      const responses: Array<{ turn: number; prompt: string; responseText: string }> = [];
+      const responses: Array<{
+        turn: number;
+        prompt: string;
+        responseText: string;
+      }> = [];
 
       for (const [index, turn] of scenario.turns.entries()) {
-        const response = await client.postConversationMessage({
-          conversationId: conversation.id,
-          text: turn.text,
-          source: channelMessageSource(channel),
-          channelType: "DM",
-          metadata: {
-            scenarioId: scenario.id,
-            batchId,
-            eval: {
+        let response: Awaited<
+          ReturnType<CoordinatorEvalClient["postConversationMessage"]>
+        >;
+        try {
+          response = await client.postConversationMessage({
+            conversationId: conversation.id,
+            text: turn.text,
+            source: channelMessageSource(channel),
+            channelType: "DM",
+            timeoutMs: turnTimeoutMs,
+            metadata: {
               scenarioId: scenario.id,
               batchId,
-              channel,
+              eval: {
+                scenarioId: scenario.id,
+                batchId,
+                channel,
+              },
+              connectorName: channel === "app_chat" ? null : channel,
             },
-            connectorName: channel === "app_chat" ? null : channel,
-          },
-        });
+          });
+        } catch (error) {
+          throw new Error(
+            `Scenario ${scenario.id} turn ${index + 1} on ${channel} failed: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
+        }
         responses.push({
           turn: index + 1,
           prompt: turn.text,
@@ -778,7 +845,7 @@ export async function runCoordinatorLiveScenarios(
         batchId,
         conversationId: conversation.id,
         outputDir,
-        timeoutMs: options.scenarioTimeoutMs ?? DEFAULT_SCENARIO_TIMEOUT_MS,
+        timeoutMs: scenarioTimeoutMs,
       });
       evidence.responses = responses;
 

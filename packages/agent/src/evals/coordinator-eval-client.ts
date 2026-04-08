@@ -5,6 +5,7 @@ export interface CoordinatorEvalRequestOptions {
   method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
   body?: unknown;
   headers?: Record<string, string>;
+  timeoutMs?: number;
 }
 
 export interface CoordinatorEvalConversationMessage {
@@ -26,6 +27,11 @@ function ensureAbsoluteBaseUrl(baseUrl: string): string {
     throw new Error(`Invalid Milady base URL: ${baseUrl}`);
   }
   return normalized;
+}
+
+function formatRequestError(pathname: string, error: unknown): Error {
+  const message = error instanceof Error ? error.message : String(error);
+  return new Error(`Request failed ${pathname}: ${message}`);
 }
 
 export function resolveCoordinatorEvalBaseUrl(explicit?: string): string {
@@ -63,17 +69,25 @@ export class CoordinatorEvalClient {
     pathname: string,
     options: CoordinatorEvalRequestOptions = {},
   ): Promise<T> {
-    const response = await fetch(`${this.baseUrl}${pathname}`, {
-      method: options.method ?? "GET",
-      headers: {
-        ...(options.body !== undefined
-          ? { "content-type": "application/json" }
+    let response: Response;
+    try {
+      response = await fetch(`${this.baseUrl}${pathname}`, {
+        method: options.method ?? "GET",
+        headers: {
+          ...(options.body !== undefined
+            ? { "content-type": "application/json" }
+            : {}),
+          ...(options.headers ?? {}),
+        },
+        body:
+          options.body !== undefined ? JSON.stringify(options.body) : undefined,
+        ...(typeof options.timeoutMs === "number" && options.timeoutMs > 0
+          ? { signal: AbortSignal.timeout(options.timeoutMs) }
           : {}),
-        ...(options.headers ?? {}),
-      },
-      body:
-        options.body !== undefined ? JSON.stringify(options.body) : undefined,
-    });
+      });
+    } catch (error) {
+      throw formatRequestError(pathname, error);
+    }
 
     const data = (await readResponseBody(response)) as T;
     if (!response.ok) {
@@ -88,17 +102,25 @@ export class CoordinatorEvalClient {
     pathname: string,
     options: CoordinatorEvalRequestOptions = {},
   ): Promise<Uint8Array> {
-    const response = await fetch(`${this.baseUrl}${pathname}`, {
-      method: options.method ?? "GET",
-      headers: {
-        ...(options.body !== undefined
-          ? { "content-type": "application/json" }
+    let response: Response;
+    try {
+      response = await fetch(`${this.baseUrl}${pathname}`, {
+        method: options.method ?? "GET",
+        headers: {
+          ...(options.body !== undefined
+            ? { "content-type": "application/json" }
+            : {}),
+          ...(options.headers ?? {}),
+        },
+        body:
+          options.body !== undefined ? JSON.stringify(options.body) : undefined,
+        ...(typeof options.timeoutMs === "number" && options.timeoutMs > 0
+          ? { signal: AbortSignal.timeout(options.timeoutMs) }
           : {}),
-        ...(options.headers ?? {}),
-      },
-      body:
-        options.body !== undefined ? JSON.stringify(options.body) : undefined,
-    });
+      });
+    } catch (error) {
+      throw formatRequestError(pathname, error);
+    }
     const buffer = new Uint8Array(await response.arrayBuffer());
     if (!response.ok) {
       throw new Error(
@@ -108,12 +130,16 @@ export class CoordinatorEvalClient {
     return buffer;
   }
 
-  async createConversation(title: string): Promise<CoordinatorEvalConversation> {
+  async createConversation(
+    title: string,
+    timeoutMs?: number,
+  ): Promise<CoordinatorEvalConversation> {
     const response = await this.requestJson<{
       conversation?: { id?: string; title?: string };
     }>("/api/conversations", {
       method: "POST",
       body: { title, includeGreeting: false },
+      timeoutMs,
     });
     const conversationId = response.conversation?.id?.trim();
     if (!conversationId) {
@@ -127,12 +153,13 @@ export class CoordinatorEvalClient {
 
   async listConversationMessages(
     conversationId: string,
+    timeoutMs?: number,
   ): Promise<CoordinatorEvalConversationMessage[]> {
     const response = await this.requestJson<{
       messages?: CoordinatorEvalConversationMessage[];
-    }>(
-      `/api/conversations/${encodeURIComponent(conversationId)}/messages`,
-    );
+    }>(`/api/conversations/${encodeURIComponent(conversationId)}/messages`, {
+      timeoutMs,
+    });
     return Array.isArray(response.messages) ? response.messages : [];
   }
 
@@ -142,6 +169,7 @@ export class CoordinatorEvalClient {
     channelType?: string;
     source?: string;
     metadata?: Record<string, unknown>;
+    timeoutMs?: number;
   }): Promise<{ text: string; raw: Record<string, unknown> }> {
     const response = await this.requestJson<Record<string, unknown>>(
       `/api/conversations/${encodeURIComponent(params.conversationId)}/messages`,
@@ -153,6 +181,7 @@ export class CoordinatorEvalClient {
           ...(params.source ? { source: params.source } : {}),
           ...(params.metadata ? { metadata: params.metadata } : {}),
         },
+        timeoutMs: params.timeoutMs,
       },
     );
 

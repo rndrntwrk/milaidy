@@ -19,6 +19,16 @@ function takeRepeatedFlag(name: string): string[] {
   return values;
 }
 
+function takeIntegerFlag(name: string): number | undefined {
+  const raw = takeFlag(name);
+  if (!raw) return undefined;
+  const value = Number.parseInt(raw, 10);
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(`Invalid integer value for ${name}: ${raw}`);
+  }
+  return value;
+}
+
 try {
   const profile = takeFlag("--profile") as
     | "smoke"
@@ -27,6 +37,7 @@ try {
     | undefined;
   const outputRoot = takeFlag("--output");
   const batchId = takeFlag("--batch-id");
+  const scenarioTimeoutMs = takeIntegerFlag("--scenario-timeout-ms");
   const scenarioIds = [
     ...takeRepeatedFlag("--scenario"),
     ...(takeFlag("--scenarios")
@@ -47,6 +58,7 @@ try {
     batchId,
     profile,
     outputRoot,
+    ...(scenarioTimeoutMs ? { scenarioTimeoutMs } : {}),
     ...(scenarioIds.length > 0 ? { scenarioIds } : {}),
     ...(channelValues.length > 0 ? { channels: channelValues } : {}),
   });
@@ -67,6 +79,7 @@ try {
         runnableFrameworks: result.runnableFrameworks,
         preflightFailures: result.preflightFailures,
         preflightWarnings: result.preflightWarnings,
+        scenarioTimeoutMs: scenarioTimeoutMs ?? null,
         runCount: result.runs.length,
         passed,
         failed,

@@ -20,6 +20,7 @@ type MutableTestState = {
     string,
     Array<{ text?: string; content?: { text?: string } }>
   >;
+  hangingPrompt: string | null;
   outputRoot: string;
   preflight: CoordinatorPreflightResult;
   workdir: string;
@@ -218,7 +219,19 @@ class FakeCoordinatorEvalClient {
   async postConversationMessage(params: {
     conversationId: string;
     text: string;
+    timeoutMs?: number;
   }): Promise<{ text: string }> {
+    if (state.hangingPrompt && params.text === state.hangingPrompt) {
+      return await new Promise<{ text: string }>((_resolve, reject) => {
+        setTimeout(
+          () =>
+            reject(
+              new Error(`Request timed out after ${params.timeoutMs ?? 0}ms`),
+            ),
+          params.timeoutMs ?? 1_000,
+        );
+      });
+    }
     const messages = state.conversations.get(params.conversationId) ?? [];
     messages.push({ text: params.text });
     messages.push({
@@ -261,6 +274,7 @@ describe("coordinator live runner", () => {
     );
     await writeFile(path.join(state.workdir, "index.html"), "<h1>hello</h1>\n");
     state.conversations = new Map();
+    state.hangingPrompt = null;
     state.preflight = makePreflight();
   });
 
@@ -326,5 +340,21 @@ describe("coordinator live runner", () => {
         channels: ["app_chat"],
       }),
     ).rejects.toThrow(/task-frameworks/);
+  });
+
+  it("fails fast when a conversation turn hangs past the eval timeout budget", async () => {
+    state.hangingPrompt =
+      "Can you make a little web page for me that shows my birthday, March 14, 1991, and my astrological sign?";
+
+    await expect(
+      runCoordinatorLiveScenarios({
+        baseUrl: "http://127.0.0.1:31337",
+        batchId,
+        outputRoot: state.outputRoot,
+        scenarioIds: [scenarioId],
+        channels: ["app_chat"],
+        scenarioTimeoutMs: 2_000,
+      }),
+    ).rejects.toThrow(/timed out/i);
   });
 });
