@@ -3,6 +3,30 @@ title: Changelog
 description: What's new in Milady — features, improvements, and fixes.
 ---
 
+<Update label="2026-04-08" description="Week of April 8; auto-restart after plugin install, onboarding skip, EVM opt-in, stability fixes" tags={["Update", "Fix"]}>
+
+## Auto-restart after plugin install
+
+Installing a plugin on the desktop app now automatically restarts the agent so the new plugin takes effect immediately. A progress indicator shows restart status, and if the restart fails, you get a clear error message instead of a silent hang. No more manually restarting after every plugin install.
+
+## Onboarding skipped when already configured
+
+If your backend is already set up — for example, after restoring from a backup or reconnecting an existing agent — the [onboarding wizard](/guides/beginners-user-guide) is now skipped automatically. You go straight to chat instead of stepping through setup screens you've already completed.
+
+## Updates
+
+- **EVM plugin is now opt-in** — The EVM wallet plugin previously loaded automatically when an EVM private key was present, but a registration issue caused startup crashes. It now requires `ENABLE_EVM_PLUGIN=1` in your environment to activate. Once the upstream issue is resolved, auto-enable will return. See [wallet setup](/guides/wallet) for details.
+- **Smoother desktop authentication** — Brief network hiccups no longer trigger unnecessary re-authentication prompts on the desktop app. Transient 401 responses are now handled gracefully so your session stays connected.
+
+## Bug fixes
+
+- Fixed plugins crashing the agent on startup in Docker, headless, and cloud environments when optional desktop-only packages were missing — these plugins now degrade gracefully
+- Fixed concurrent database migrations corrupting state on startup when multiple components initialized at the same time
+- Fixed the desktop app not picking up port changes after a runtime restart, requiring a full app relaunch
+- Fixed Windows desktop health checks timing out during startup due to an aggressive polling interval
+
+</Update>
+
 <Update label="2026-04-07" description="Week of April 7; music player, Babylon terminal, unified inbox, life-ops calendar and email" tags={["Feature", "Update", "Fix"]}>
 
 ## Music player and library
