@@ -454,6 +454,97 @@ describe.skipIf(!hasLocalHyperscapeRoutes)("handleAppPackageRoutes", () => {
     );
   });
 
+  test("returns 400 for invalid session message and control payloads", async () => {
+    const emptyMessage = createMockHttpResponse();
+    const emptyMessageHandled = await handleAppPackageRoutes({
+      req: createMockIncomingMessage({
+        method: "POST",
+        url: "/api/apps/hyperscape/session/agent-1/message",
+      }),
+      res: emptyMessage.res,
+      method: "POST",
+      pathname: "/api/apps/hyperscape/session/agent-1/message",
+      url: new URL(
+        "http://localhost:2138/api/apps/hyperscape/session/agent-1/message",
+      ),
+      runtime: null,
+      readJsonBody: vi.fn(async () => ({ content: "   " })),
+      json: (response, data, status = 200) => {
+        response.writeHead(status);
+        response.end(JSON.stringify(data));
+      },
+      error: (response, message, status = 500) => {
+        response.writeHead(status);
+        response.end(JSON.stringify({ error: message }));
+      },
+    });
+
+    expect(emptyMessageHandled).toBe(true);
+    expect(emptyMessage.getStatus()).toBe(400);
+    expect(emptyMessage.getJson()).toEqual({ error: "content is required" });
+    expect(fixtureServer?.receivedCommands).toEqual([]);
+
+    const invalidControl = createMockHttpResponse();
+    const invalidControlHandled = await handleAppPackageRoutes({
+      req: createMockIncomingMessage({
+        method: "POST",
+        url: "/api/apps/hyperscape/session/agent-1/control",
+      }),
+      res: invalidControl.res,
+      method: "POST",
+      pathname: "/api/apps/hyperscape/session/agent-1/control",
+      url: new URL(
+        "http://localhost:2138/api/apps/hyperscape/session/agent-1/control",
+      ),
+      runtime: null,
+      readJsonBody: vi.fn(async () => ({ action: "rewind" })),
+      json: (response, data, status = 200) => {
+        response.writeHead(status);
+        response.end(JSON.stringify(data));
+      },
+      error: (response, message, status = 500) => {
+        response.writeHead(status);
+        response.end(JSON.stringify({ error: message }));
+      },
+    });
+
+    expect(invalidControlHandled).toBe(true);
+    expect(invalidControl.getStatus()).toBe(400);
+    expect(invalidControl.getJson()).toEqual({
+      error: "action must be pause or resume",
+    });
+  });
+
+  test("returns 404 when the requested session cannot be resolved", async () => {
+    const { res, getJson, getStatus } = createMockHttpResponse();
+    const handled = await handleAppPackageRoutes({
+      req: createMockIncomingMessage({
+        method: "GET",
+        url: "/api/apps/hyperscape/session/unknown-session",
+      }),
+      res,
+      method: "GET",
+      pathname: "/api/apps/hyperscape/session/unknown-session",
+      url: new URL(
+        "http://localhost:2138/api/apps/hyperscape/session/unknown-session",
+      ),
+      runtime: null,
+      readJsonBody: vi.fn(async () => null),
+      json: (response, data, status = 200) => {
+        response.writeHead(status);
+        response.end(JSON.stringify(data));
+      },
+      error: (response, message, status = 500) => {
+        response.writeHead(status);
+        response.end(JSON.stringify({ error: message }));
+      },
+    });
+
+    expect(handled).toBe(true);
+    expect(getStatus()).toBe(404);
+    expect(getJson()).toEqual({ error: "Hyperscape session not found" });
+  });
+
   test("mapped external agents resolve to live session state and use agent routes for controls", async () => {
     const { res, getJson, getStatus } = createMockHttpResponse();
     const handled = await handleAppPackageRoutes({
