@@ -3,21 +3,21 @@ title: Registro de cambios
 description: Novedades en Milady — funcionalidades, mejoras y correcciones.
 ---
 
-<Update label="2026-04-05" description="Chat del panel: los callbacks de acciones reemplazan en su lugar (mensajes progresivos estilo Discord sobre SSE)" tags={["Update", "Fix"]}>
+<Update label="2026-04-05" description="Chat del panel: los callbacks de acción reemplazan en el lugar (mensajes progresivos al estilo Discord sobre SSE)" tags={["Update", "Fix"]}>
 
 <div id="action-callbacks-replace-dont-concatenate-dashboard-sse">
-## Callbacks de acciones: reemplazar, no concatenar (SSE del panel)
+## Callbacks de acción: reemplazar, no concatenar (SSE del panel)
 </div>
 
 Las **acciones** de larga duración que llaman a `HandlerCallback` múltiples veces — el mismo patrón que los **mensajes progresivos** en Discord — ahora **reemplazan** el texto del callback anterior en la respuesta transmitida del asistente en lugar de **añadirlo**.
 
-**Por qué:** En Discord, un mensaje se **edita en su lugar**. El panel web transmite sobre **SSE**; combinar ingenuamente cada callback con la cadena existente producía líneas de estado pegadas (`🔍 …🔍 …✨ …Now playing…`) y se veía roto comparado con las actualizaciones en vivo de Telegram/Discord.
+**Por qué:** En Discord, un mensaje se **edita en el lugar**. El panel web transmite por **SSE**; fusionar ingenuamente cada callback con la cadena existente producía líneas de estado pegadas (`🔍 …🔍 …✨ …Now playing…`) y se veía roto en comparación con las actualizaciones en vivo de Telegram/Discord.
 
-**Cómo:** `generateChatResponse` toma una instantánea del texto que existía **antes del primer callback de acción** en el turno (`preCallbackText`, normalmente la respuesta transmitida del LLM). Cada callback posterior establece el cuerpo visible como `preCallbackText + "\n\n" + latestCallbackText` y emite una **instantánea** SSE para que el manejo existente de `fullText` del cliente actualice la burbuja única del asistente.
+**Cómo:** `generateChatResponse` toma una instantánea del texto que existía **antes del primer callback de acción** en el turno (`preCallbackText`, típicamente la respuesta transmitida del LLM). Cada callback posterior establece el cuerpo visible como `preCallbackText + "\n\n" + latestCallbackText` y emite una **instantánea** SSE para que el manejo existente de `fullText` del cliente actualice la burbuja única del asistente.
 
-**Contrato de plugins:** Sin cambios — los plugins siguen llamando a `callback({ text, source })`. No se requiere canal lateral WebSocket ni hooks específicos del runtime.
+**Contrato del plugin:** Sin cambios — los plugins siguen llamando a `callback({ text, source })`. No se requiere canal lateral WebSocket ni hooks específicos del runtime.
 
-**Documentación:** [Callbacks de acciones y streaming SSE](/es/runtime/action-callback-streaming).
+**Documentación:** [Callbacks de acción y transmisión SSE](/es/runtime/action-callback-streaming).
 
 </Update>
 
