@@ -126,3 +126,7 @@
 	path = plugins/plugin-discord
 	url = https://github.com/elizaos-plugins/plugin-discord.git
 	branch = alpha
+[submodule "cloud"]
+	path = cloud
+	url = https://github.com/elizaOS/cloud.git
+	branch = dev

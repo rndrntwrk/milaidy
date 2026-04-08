@@ -19,6 +19,7 @@ const skipLocalUpstreams =
   process.env.MILADY_SKIP_LOCAL_UPSTREAMS === "1" ||
   process.env.ELIZA_SKIP_LOCAL_UPSTREAMS === "1";
 const SUBMODULE_READINESS_MARKERS = {
+  cloud: ["package.json"],
   eliza: ["package.json", "packages/typescript/package.json"],
   "plugins/plugin-agent-orchestrator": ["package.json"],
   "steward-fi": ["package.json", "packages/api/package.json"],
