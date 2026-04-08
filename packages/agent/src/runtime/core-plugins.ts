@@ -17,7 +17,7 @@ export const CORE_PLUGINS: readonly string[] = [
   "@elizaos/plugin-commands", // slash command handling (skills auto-register as /commands)
   "@elizaos/plugin-plugin-manager", // dynamic plugin management for registry/plugin installs
   // Native runtime features live inside @elizaos/core now:
-  // knowledge, relationships/rolodex, trajectories.
+  // knowledge, relationships/relationships, trajectories.
   // "@elizaos/plugin-secrets-manager", // secrets management — load early, other plugins depend on it
   // "@elizaos/plugin-trust", // trust scoring and policy signals
   "@miladyai/plugin-roles", // role-based access control (OWNER/ADMIN/NONE)

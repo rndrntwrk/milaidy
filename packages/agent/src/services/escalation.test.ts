@@ -211,7 +211,7 @@ describe("EscalationService", () => {
     expect(mockSendMessageToTarget).not.toHaveBeenCalled();
   });
 
-  it("uses rolodex hints to resolve the selected escalation endpoint", async () => {
+  it("uses relationships hints to resolve the selected escalation endpoint", async () => {
     setConfig(
       { channels: ["discord"], waitMinutes: 1, maxRetries: 3 },
       { discord: { entityId: "owner-1" } },
@@ -219,12 +219,12 @@ describe("EscalationService", () => {
 
     const runtime = makeRuntime({
       getService: vi.fn((name: string) =>
-        name === "rolodex"
+        name === "relationships"
           ? {
               getContact: vi.fn().mockResolvedValue({
                 preferences: { preferredCommunicationChannel: "discord" },
                 customFields: {
-                  discordChannelId: "dm-rolodex",
+                  discordChannelId: "dm-relationships",
                 },
               }),
             }
@@ -251,13 +251,13 @@ describe("EscalationService", () => {
       expect.objectContaining({
         source: "discord",
         entityId: "owner-1",
-        channelId: "dm-rolodex",
+        channelId: "dm-relationships",
       }),
       expect.objectContaining({
         metadata: expect.objectContaining({
           routeSource: "discord",
-          routeResolution: "config+rolodex",
-          routeEndpoint: "dm-rolodex",
+          routeResolution: "config+relationships",
+          routeEndpoint: "dm-relationships",
           routeLastResponseChannel: "discord",
         }),
       }),

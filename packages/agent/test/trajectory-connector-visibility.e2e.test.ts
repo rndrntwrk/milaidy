@@ -1,5 +1,5 @@
 import { PGlite } from "@electric-sql/pglite";
-import { type AgentRuntime, TrajectoryLoggerService } from "@elizaos/core";
+import { type AgentRuntime, TrajectoriesService } from "@elizaos/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { req } from "../../../test/helpers/http";
 import { startApiServer } from "../src/api/server";
@@ -33,7 +33,7 @@ function extractSqlText(query: SqlQuery): string {
 describe("Connector trajectory visibility", () => {
   let db: PGlite;
   let runtime: TestRuntime;
-  let trajectoryLogger: TrajectoryLoggerService;
+  let trajectoryLogger: TrajectoriesService;
   let server: { port: number; close: () => Promise<void> } | null = null;
 
   beforeAll(async () => {
@@ -72,13 +72,13 @@ describe("Connector trajectory visibility", () => {
       getServicesByType: () => [],
     } as TestRuntime;
 
-    trajectoryLogger = new TrajectoryLoggerService(runtime);
+    trajectoryLogger = new TrajectoriesService(runtime);
     await trajectoryLogger.initialize();
 
     runtime.getService = ((serviceType: string) =>
-      serviceType === "trajectory_logger" ? trajectoryLogger : null) as AgentRuntime["getService"];
+      serviceType === "trajectories" ? trajectoryLogger : null) as AgentRuntime["getService"];
     runtime.getServicesByType = ((serviceType: string) =>
-      serviceType === "trajectory_logger"
+      serviceType === "trajectories"
         ? [trajectoryLogger]
         : []) as AgentRuntime["getServicesByType"];
 

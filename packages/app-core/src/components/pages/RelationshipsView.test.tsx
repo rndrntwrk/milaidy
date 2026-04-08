@@ -4,11 +4,11 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockUseApp, mockGetRolodexGraph, mockGetRolodexPerson } = vi.hoisted(
+const { mockUseApp, mockGetRelationshipsGraph, mockGetRelationshipsPerson } = vi.hoisted(
   () => ({
     mockUseApp: vi.fn(),
-    mockGetRolodexGraph: vi.fn(),
-    mockGetRolodexPerson: vi.fn(),
+    mockGetRelationshipsGraph: vi.fn(),
+    mockGetRelationshipsPerson: vi.fn(),
   }),
 );
 
@@ -18,8 +18,8 @@ vi.mock("../../state", () => ({
 
 vi.mock("@miladyai/app-core/api", () => ({
   client: {
-    getRolodexGraph: (...args: unknown[]) => mockGetRolodexGraph(...args),
-    getRolodexPerson: (...args: unknown[]) => mockGetRolodexPerson(...args),
+    getRelationshipsGraph: (...args: unknown[]) => mockGetRelationshipsGraph(...args),
+    getRelationshipsPerson: (...args: unknown[]) => mockGetRelationshipsPerson(...args),
   },
 }));
 
@@ -135,8 +135,8 @@ vi.mock("@miladyai/ui", () => {
   };
 });
 
-vi.mock("./RolodexGraphPanel", () => ({
-  RolodexGraphPanel: ({
+vi.mock("./RelationshipsGraphPanel", () => ({
+  RelationshipsGraphPanel: ({
     snapshot,
     onSelectGroupId,
   }: {
@@ -161,8 +161,8 @@ vi.mock("./RolodexGraphPanel", () => ({
   ),
 }));
 
-vi.mock("./RolodexIdentityCluster", () => ({
-  RolodexIdentityCluster: ({
+vi.mock("./RelationshipsIdentityCluster", () => ({
+  RelationshipsIdentityCluster: ({
     person,
   }: {
     person: { displayName: string; memberEntityIds: string[] };
@@ -173,15 +173,15 @@ vi.mock("./RolodexIdentityCluster", () => ({
   ),
 }));
 
-import { RolodexView } from "./RolodexView";
+import { RelationshipsView } from "./RelationshipsView";
 
-describe("RolodexView", () => {
+describe("RelationshipsView", () => {
   beforeEach(() => {
     mockUseApp.mockReturnValue({
       t: (key: string, options?: { defaultValue?: string }) =>
         options?.defaultValue ?? key,
     });
-    mockGetRolodexGraph.mockResolvedValue({
+    mockGetRelationshipsGraph.mockResolvedValue({
       people: [
         {
           groupId: "group-1",
@@ -227,7 +227,7 @@ describe("RolodexView", () => {
         totalIdentities: 3,
       },
     });
-    mockGetRolodexPerson.mockImplementation(async (id: string) => ({
+    mockGetRelationshipsPerson.mockImplementation(async (id: string) => ({
       groupId: id === "person-1" ? "group-1" : "group-2",
       primaryEntityId: id,
       displayName: id === "person-1" ? "Chris" : "Alice",
@@ -290,10 +290,10 @@ describe("RolodexView", () => {
   });
 
   it("loads the graph, selects the first person, and renders detail data", async () => {
-    render(<RolodexView />);
+    render(<RelationshipsView />);
 
     await waitFor(() =>
-      expect(mockGetRolodexGraph).toHaveBeenCalledWith({
+      expect(mockGetRelationshipsGraph).toHaveBeenCalledWith({
         search: undefined,
         platform: undefined,
         limit: 200,
@@ -307,9 +307,9 @@ describe("RolodexView", () => {
   });
 
   it("switches detail panes when a different person is selected", async () => {
-    render(<RolodexView />);
+    render(<RelationshipsView />);
     await waitFor(() => {
-      expect(mockGetRolodexPerson).toHaveBeenCalledWith("person-1");
+      expect(mockGetRelationshipsPerson).toHaveBeenCalledWith("person-1");
     });
 
     const aliceButtons = screen.getAllByRole("button", { name: /Alice/i });
@@ -317,7 +317,7 @@ describe("RolodexView", () => {
     fireEvent.click(aliceButtons[0]);
 
     await waitFor(() => {
-      expect(mockGetRolodexPerson).toHaveBeenCalledWith("person-2");
+      expect(mockGetRelationshipsPerson).toHaveBeenCalledWith("person-2");
     });
     expect(await screen.findByText("Works on growth.")).toBeTruthy();
   });

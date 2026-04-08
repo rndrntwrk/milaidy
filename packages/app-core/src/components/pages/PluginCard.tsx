@@ -111,6 +111,16 @@ export function PluginCard({
     : p.category === "ai-provider"
       ? "ai provider"
       : p.category;
+  const notLoadedLabel = t("pluginsview.NotLoaded", {
+    defaultValue: "Not loaded",
+  });
+  const isStoreInstallMissing =
+    p.source === "store" && p.enabled && !p.isActive && Boolean(p.npmName);
+  const inactiveLabel = p.loadError
+    ? loadFailedLabel
+    : p.source === "store"
+      ? notInstalledLabel
+      : notLoadedLabel;
 
   const enabledBorder = isShowcase
     ? "border-l-[3px] border-l-accent"
@@ -239,7 +249,7 @@ export function PluginCard({
               p.loadError || "Plugin is enabled but not loaded in the runtime"
             }
           >
-            {p.loadError ? loadFailedLabel : notInstalledLabel}
+            {inactiveLabel}
           </span>
         )}
         {isToggleBusy && (
@@ -351,11 +361,7 @@ export function PluginCard({
           </span>
         )}
         <div className="flex-1" />
-        {p.enabled &&
-          !p.isActive &&
-          p.npmName &&
-          !isShowcase &&
-          !p.loadError && (
+        {isStoreInstallMissing && !isShowcase && !p.loadError && (
             <Button
               variant="default"
               size="sm"

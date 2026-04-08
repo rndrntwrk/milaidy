@@ -6,8 +6,8 @@ import {
   getTrajectoryContext,
   ModelType,
   runWithTrajectoryContext,
-  trajectoryLoggerPlugin,
-  TrajectoryLoggerService,
+  trajectoriesPlugin,
+  TrajectoriesService,
   type UUID,
 } from "@elizaos/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -94,7 +94,7 @@ async function waitForTrajectoryCall(
 
 describe("Trajectory logger chat roundtrip", () => {
   let runtime: TestRuntime;
-  let trajectoryLogger: TrajectoryLoggerService;
+  let trajectoryLogger: TrajectoriesService;
   let db: PGlite;
   let server: { port: number; close: () => Promise<void> } | null = null;
 
@@ -170,9 +170,9 @@ describe("Trajectory logger chat roundtrip", () => {
       >;
     };
     runtime.getService = (serviceType: string) =>
-      serviceType === "trajectory_logger" ? trajectoryLogger : null;
+      serviceType === "trajectories" ? trajectoryLogger : null;
     runtime.getServicesByType = (serviceType: string) =>
-      serviceType === "trajectory_logger" ? [trajectoryLogger] : [];
+      serviceType === "trajectories" ? [trajectoryLogger] : [];
     runtime.getSetting = () => undefined;
     runtime.ensureConnection = async () => {};
     runtime.getWorld = async () => null;
@@ -273,8 +273,8 @@ describe("Trajectory logger chat roundtrip", () => {
       const eventNames = Array.isArray(event) ? event : [event];
       for (const eventName of eventNames) {
         const handlers =
-          trajectoryLoggerPlugin.events?.[
-            eventName as keyof typeof trajectoryLoggerPlugin.events
+          trajectoriesPlugin.events?.[
+            eventName as keyof typeof trajectoriesPlugin.events
           ] ?? [];
         for (const handler of handlers) {
           await handler({
@@ -285,7 +285,7 @@ describe("Trajectory logger chat roundtrip", () => {
       }
     };
 
-    trajectoryLogger = new TrajectoryLoggerService(runtime);
+    trajectoryLogger = new TrajectoriesService(runtime);
     await trajectoryLogger.initialize();
 
     server = await startApiServer({ port: 0, runtime });

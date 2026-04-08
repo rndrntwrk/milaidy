@@ -35,7 +35,7 @@ describe("tabFromPath", () => {
     expect(tabFromPath("/triggers")).toBe("triggers");
     expect(tabFromPath("/fine-tuning")).toBe("fine-tuning");
     expect(tabFromPath("/trajectories")).toBe("trajectories");
-    expect(tabFromPath("/rolodex")).toBe("rolodex");
+    expect(tabFromPath("/relationships")).toBe("relationships");
     expect(tabFromPath("/runtime")).toBe("runtime");
     expect(tabFromPath("/database")).toBe("database");
     expect(tabFromPath("/logs")).toBe("logs");
@@ -100,7 +100,7 @@ describe("pathForTab", () => {
     "advanced",
     "fine-tuning",
     "trajectories",
-    "rolodex",
+    "relationships",
     "runtime",
     "database",
     "desktop",
@@ -150,7 +150,7 @@ describe("tab groups", () => {
       "skills",
       "fine-tuning",
       "trajectories",
-      "rolodex",
+      "relationships",
       "runtime",
       "database",
       "logs",
@@ -173,7 +173,7 @@ describe("tab groups", () => {
       "advanced",
       "fine-tuning",
       "trajectories",
-      "rolodex",
+      "relationships",
       "runtime",
       "database",
       "logs",
@@ -206,6 +206,6 @@ describe("titleForTab", () => {
     expect(titleForTab("advanced")).toBe("Advanced");
     expect(titleForTab("stream")).toBe("Stream");
     expect(titleForTab("database")).toBe("Databases");
-    expect(titleForTab("rolodex")).toBe("Rolodex");
+    expect(titleForTab("relationships")).toBe("Relationships");
   });
 });

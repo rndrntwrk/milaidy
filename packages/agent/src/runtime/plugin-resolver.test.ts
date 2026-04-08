@@ -1,6 +1,7 @@
 import os from "node:os";
 import path from "node:path";
 import fs from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { findRuntimePluginExport, STATIC_ELIZA_PLUGINS } from "./eliza";
 import { importPluginModuleFromPath, resolvePlugins } from "./plugin-resolver";
@@ -13,6 +14,15 @@ const ENV_KEYS = [
 const envBackup = new Map<string, string | undefined>();
 
 let tempRoot = "";
+const tempNodeModulesPackages = new Set<string>();
+const repoNodeModulesRoot = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "..",
+  "..",
+  "..",
+  "node_modules",
+);
 
 async function writeFile(filePath: string, content: string): Promise<void> {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
@@ -115,6 +125,10 @@ describe("importPluginModuleFromPath", () => {
       }
     }
     envBackup.clear();
+    for (const packageRoot of tempNodeModulesPackages) {
+      await fs.rm(packageRoot, { recursive: true, force: true });
+    }
+    tempNodeModulesPackages.clear();
     await fs.rm(tempRoot, { recursive: true, force: true });
   });
 
@@ -265,6 +279,7 @@ describe("resolvePlugins", () => {
 
   afterEach(async () => {
     delete STATIC_ELIZA_PLUGINS["@elizaos/plugin-hot-reload"];
+    delete STATIC_ELIZA_PLUGINS["@elizaos/plugin-workspace-node-modules"];
     for (const key of ENV_KEYS) {
       const previousValue = envBackup.get(key);
       if (previousValue === undefined) {
@@ -274,6 +289,10 @@ describe("resolvePlugins", () => {
       }
     }
     envBackup.clear();
+    for (const packageRoot of tempNodeModulesPackages) {
+      await fs.rm(packageRoot, { recursive: true, force: true });
+    }
+    tempNodeModulesPackages.clear();
     await fs.rm(tempRoot, { recursive: true, force: true });
   });
 
@@ -305,6 +324,47 @@ describe("resolvePlugins", () => {
 
     expect(resolved.find((plugin) => plugin.name === pluginName)?.plugin.name).toBe(
       "static-hot-reload",
+    );
+  });
+
+  it("prefers repo node_modules over staged workspace imports for official plugins", async () => {
+    const pluginName = "@elizaos/plugin-workspace-node-modules";
+    const workspacePluginRoot = path.join(
+      tempRoot,
+      "plugins",
+      "plugin-workspace-node-modules",
+      "typescript",
+    );
+    const nodeModulesPluginRoot = path.join(
+      repoNodeModulesRoot,
+      "@elizaos",
+      "plugin-workspace-node-modules",
+    );
+    tempNodeModulesPackages.add(nodeModulesPluginRoot);
+
+    await writePackageJson(workspacePluginRoot, pluginName);
+    await writeFile(
+      path.join(workspacePluginRoot, "index.js"),
+      'throw new Error("workspace override should not load");\n',
+    );
+
+    await writePackageJson(nodeModulesPluginRoot, pluginName);
+    await writeFile(
+      path.join(nodeModulesPluginRoot, "index.js"),
+      'export const plugin = { name: "node-modules-hot-reload", description: "node-modules", actions: [] };\n',
+    );
+
+    const resolved = await resolvePlugins(
+      {
+        plugins: {
+          allow: [pluginName],
+        },
+      } as never,
+      { quiet: true },
+    );
+
+    expect(resolved.find((plugin) => plugin.name === pluginName)?.plugin.name).toBe(
+      "node-modules-hot-reload",
     );
   });
 });

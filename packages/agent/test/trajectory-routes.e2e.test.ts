@@ -138,17 +138,17 @@ describe("trajectory routes", () => {
 
     const runtime = createTrajectoryRuntime({
       getServicesByType: (serviceType: string) =>
-        serviceType === "trajectory_logger"
+        serviceType === "trajectories"
           ? ready
             ? [coreLogger, compatibleLogger]
             : [coreLogger]
           : [],
       getService: (serviceType: string) =>
-        serviceType === "trajectory_logger" && ready ? compatibleLogger : null,
+        serviceType === "trajectories" && ready ? compatibleLogger : null,
       getServiceRegistrationStatus: (serviceType: string) =>
-        serviceType === "trajectory_logger" && !ready ? "pending" : "registered",
+        serviceType === "trajectories" && !ready ? "pending" : "registered",
       getServiceLoadPromise: async (serviceType: string) => {
-        expect(serviceType).toBe("trajectory_logger");
+        expect(serviceType).toBe("trajectories");
         loadRequested = true;
         await new Promise((resolve) => setTimeout(resolve, 25));
         ready = true;
@@ -180,16 +180,16 @@ describe("trajectory routes", () => {
 
     expect(response.status).toBe(503);
     expect(String(response.data.error)).toContain(
-      "Trajectory logger service not available",
+      "Trajectories service not available",
     );
   });
 
   it("returns 503 when ZIP export is requested but unavailable in the logger", async () => {
     const runtime = createTrajectoryRuntime({
       getService: (serviceType: string) =>
-        serviceType === "trajectory_logger" ? createCompatibleLogger() : null,
+        serviceType === "trajectories" ? createCompatibleLogger() : null,
       getServicesByType: (serviceType: string) =>
-        serviceType === "trajectory_logger" ? [createCompatibleLogger()] : [],
+        serviceType === "trajectories" ? [createCompatibleLogger()] : [],
     });
 
     const server = await startApiServer({ port: 0, runtime });
@@ -220,7 +220,7 @@ describe("trajectory routes", () => {
 
     expect(response.status).toBe(503);
     expect(String(response.data.error)).toContain(
-      "Trajectory logger service not available",
+      "Trajectories service not available",
     );
   });
 
@@ -239,7 +239,7 @@ describe("trajectory routes", () => {
 
     expect(response.status).toBe(503);
     expect(String(response.data.error)).toContain(
-      "Trajectory logger service not available",
+      "Trajectories service not available",
     );
   });
 
@@ -247,9 +247,9 @@ describe("trajectory routes", () => {
     const logger = createCompatibleLogger();
     const runtime = createTrajectoryRuntime({
       getService: (serviceType: string) =>
-        serviceType === "trajectory_logger" ? logger : null,
+        serviceType === "trajectories" ? logger : null,
       getServicesByType: (serviceType: string) =>
-        serviceType === "trajectory_logger" ? [logger] : [],
+        serviceType === "trajectories" ? [logger] : [],
     });
 
     const server = await startApiServer({ port: 0, runtime });
@@ -282,9 +282,9 @@ describe("trajectory routes", () => {
     });
     const runtime = createTrajectoryRuntime({
       getService: (serviceType: string) =>
-        serviceType === "trajectory_logger" ? logger : null,
+        serviceType === "trajectories" ? logger : null,
       getServicesByType: (serviceType: string) =>
-        serviceType === "trajectory_logger" ? [logger] : [],
+        serviceType === "trajectories" ? [logger] : [],
     });
 
     const server = await startApiServer({ port: 0, runtime });
@@ -311,7 +311,7 @@ describe("trajectory routes", () => {
 
     expect(response.status).toBe(503);
     expect(String(response.data.error)).toContain(
-      "Trajectory logger service not available",
+      "Trajectories service not available",
     );
   });
 
@@ -325,9 +325,9 @@ describe("trajectory routes", () => {
     });
     const runtime = createTrajectoryRuntime({
       getService: (serviceType: string) =>
-        serviceType === "trajectory_logger" ? logger : null,
+        serviceType === "trajectories" ? logger : null,
       getServicesByType: (serviceType: string) =>
-        serviceType === "trajectory_logger" ? [logger] : [],
+        serviceType === "trajectories" ? [logger] : [],
     });
 
     const server = await startApiServer({ port: 0, runtime });
@@ -363,7 +363,7 @@ describe("trajectory routes", () => {
 
     expect(response.status).toBe(503);
     expect(String(response.data.error)).toContain(
-      "Trajectory logger service not available",
+      "Trajectories service not available",
     );
   });
 
@@ -380,7 +380,7 @@ describe("trajectory routes", () => {
 
     expect(response.status).toBe(503);
     expect(String(response.data.error)).toContain(
-      "Trajectory logger service not available",
+      "Trajectories service not available",
     );
   });
 
@@ -421,9 +421,9 @@ describe("trajectory routes", () => {
     });
     const runtime = createTrajectoryRuntime({
       getService: (serviceType: string) =>
-        serviceType === "trajectory_logger" ? logger : null,
+        serviceType === "trajectories" ? logger : null,
       getServicesByType: (serviceType: string) =>
-        serviceType === "trajectory_logger" ? [logger] : [],
+        serviceType === "trajectories" ? [logger] : [],
     });
 
     const server = await startApiServer({ port: 0, runtime });
@@ -459,7 +459,7 @@ describe("trajectory routes", () => {
 
     expect(response.status).toBe(503);
     expect(String(response.data.error)).toContain(
-      "Trajectory logger service not available",
+      "Trajectories service not available",
     );
   });
 
@@ -485,9 +485,9 @@ describe("trajectory routes", () => {
     });
     const runtime = createTrajectoryRuntime({
       getService: (serviceType: string) =>
-        serviceType === "trajectory_logger" ? logger : null,
+        serviceType === "trajectories" ? logger : null,
       getServicesByType: (serviceType: string) =>
-        serviceType === "trajectory_logger" ? [logger] : [],
+        serviceType === "trajectories" ? [logger] : [],
     });
 
     const server = await startApiServer({ port: 0, runtime });
@@ -521,9 +521,9 @@ describe("trajectory routes", () => {
     });
     const runtime = createTrajectoryRuntime({
       getService: (serviceType: string) =>
-        serviceType === "trajectory_logger" ? logger : null,
+        serviceType === "trajectories" ? logger : null,
       getServicesByType: (serviceType: string) =>
-        serviceType === "trajectory_logger" ? [logger] : [],
+        serviceType === "trajectories" ? [logger] : [],
     });
 
     const server = await startApiServer({ port: 0, runtime });

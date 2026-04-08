@@ -28,9 +28,9 @@ vi.mock("./PluginsPageView", () => ({
     React.createElement("div", null, contentHeader, "plugins-view"),
 }));
 
-vi.mock("./RolodexView", () => ({
-  RolodexView: ({ contentHeader }: { contentHeader?: React.ReactNode }) =>
-    React.createElement("div", null, contentHeader, "rolodex-view"),
+vi.mock("./RelationshipsView", () => ({
+  RelationshipsView: ({ contentHeader }: { contentHeader?: React.ReactNode }) =>
+    React.createElement("div", null, contentHeader, "relationships-view"),
 }));
 
 vi.mock("./RuntimeView", () => ({
@@ -185,10 +185,10 @@ describe("AdvancedPageView", () => {
     ).toBeGreaterThan(0);
   });
 
-  it("renders the rolodex advanced workspace when the rolodex tab is active", async () => {
+  it("renders the relationships advanced workspace when the relationships tab is active", async () => {
     const setTab = vi.fn();
     mockUseApp.mockReturnValue({
-      tab: "rolodex",
+      tab: "relationships",
       setTab,
       t: (key: string, vars?: Record<string, unknown>) => testT(key, vars),
     });
@@ -202,11 +202,11 @@ describe("AdvancedPageView", () => {
       tree.root.findAll(
         (node) =>
           Array.isArray(node.children) &&
-          node.children.includes("rolodex-view"),
+          node.children.includes("relationships-view"),
       ).length,
     ).toBeGreaterThan(0);
     expect(
-      tree.root.findByProps({ "data-testid": "advanced-subtab-rolodex" }).props[
+      tree.root.findByProps({ "data-testid": "advanced-subtab-relationships" }).props[
         "aria-pressed"
       ],
     ).toBe(true);

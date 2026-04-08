@@ -116,8 +116,8 @@ const SOCIAL_FEED_CONNECTORS = new Set([
 const DATABASES = new Set(["sql", "localdb", "inmemorydb"]);
 const NATIVE_RUNTIME_FEATURE_PLUGIN_IDS = new Set([
   "knowledge",
-  "rolodex",
-  "trajectory-logger",
+  "relationships",
+  "trajectories",
 ]);
 
 export const PLUGIN_SETUP_GUIDE_ROOT =

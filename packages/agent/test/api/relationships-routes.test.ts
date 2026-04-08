@@ -1,7 +1,7 @@
 import type { IAgentRuntime, UUID } from "@elizaos/core";
 import { describe, expect, test, vi } from "vitest";
-import type { RolodexRouteContext } from "../../src/api/rolodex-routes";
-import { handleRolodexRoutes } from "../../src/api/rolodex-routes";
+import type { RelationshipsRouteContext } from "../../src/api/relationships-routes";
+import { handleRelationshipsRoutes } from "../../src/api/relationships-routes";
 import {
   createMockHttpResponse,
   createMockIncomingMessage,
@@ -12,7 +12,7 @@ function buildCtx(
   pathname: string,
   reqUrl = pathname,
   runtime?: IAgentRuntime,
-): RolodexRouteContext {
+): RelationshipsRouteContext {
   const { res } = createMockHttpResponse();
   return {
     req: createMockIncomingMessage({ method, url: reqUrl }),
@@ -32,8 +32,8 @@ function buildCtx(
   };
 }
 
-describe("rolodex-routes", () => {
-  test("GET /api/rolodex/graph returns the graph snapshot", async () => {
+describe("relationships-routes", () => {
+  test("GET /api/relationships/graph returns the graph snapshot", async () => {
     const service = {
       getGraphSnapshot: vi.fn(async () => ({
         people: [{ groupId: "group-1", primaryEntityId: "person-1" as UUID }],
@@ -43,17 +43,17 @@ describe("rolodex-routes", () => {
     };
     const runtime = {
       getService: vi.fn((serviceType: string) =>
-        serviceType === "rolodex_graph" ? service : null,
+        serviceType === "relationships_graph" ? service : null,
       ),
     } as unknown as IAgentRuntime;
     const ctx = buildCtx(
       "GET",
-      "/api/rolodex/graph",
-      "/api/rolodex/graph?search=chris",
+      "/api/relationships/graph",
+      "/api/relationships/graph?search=chris",
       runtime,
     );
 
-    const handled = await handleRolodexRoutes(ctx);
+    const handled = await handleRelationshipsRoutes(ctx);
 
     expect(handled).toBe(true);
     expect(service.getGraphSnapshot).toHaveBeenCalledWith({
@@ -71,7 +71,7 @@ describe("rolodex-routes", () => {
     });
   });
 
-  test("GET /api/rolodex/people/:id returns person detail", async () => {
+  test("GET /api/relationships/people/:id returns person detail", async () => {
     const service = {
       getPersonDetail: vi.fn(async () => ({
         groupId: "group-1",
@@ -85,17 +85,17 @@ describe("rolodex-routes", () => {
     };
     const runtime = {
       getService: vi.fn((serviceType: string) =>
-        serviceType === "rolodex_graph" ? service : null,
+        serviceType === "relationships_graph" ? service : null,
       ),
     } as unknown as IAgentRuntime;
     const ctx = buildCtx(
       "GET",
-      "/api/rolodex/people/person-1",
+      "/api/relationships/people/person-1",
       undefined,
       runtime,
     );
 
-    const handled = await handleRolodexRoutes(ctx);
+    const handled = await handleRelationshipsRoutes(ctx);
 
     expect(handled).toBe(true);
     expect(service.getPersonDetail).toHaveBeenCalledWith("person-1");

@@ -3,9 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { shouldEnableTrajectoryLoggingByDefault } from "../trajectory-persistence";
 
 const ENV_KEYS = [
-  "MILADY_TRAJECTORY_LOGGING",
-  "TRAJECTORY_LOGGING_ENABLED",
-  "ELIZA_TRAJECTORY_LOGGING",
+  "ENABLE_TRAJECTORIES",
 ] as const;
 
 const ORIGINAL_ENV = Object.fromEntries(
@@ -33,13 +31,13 @@ describe("shouldEnableTrajectoryLoggingByDefault", () => {
   });
 
   it("honors explicit disable overrides", () => {
-    process.env.MILADY_TRAJECTORY_LOGGING = "false";
+    process.env.ENABLE_TRAJECTORIES = "false";
 
     expect(shouldEnableTrajectoryLoggingByDefault()).toBe(false);
   });
 
   it("honors explicit enable overrides", () => {
-    process.env.TRAJECTORY_LOGGING_ENABLED = "1";
+    process.env.ENABLE_TRAJECTORIES = "1";
 
     expect(shouldEnableTrajectoryLoggingByDefault()).toBe(true);
   });

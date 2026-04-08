@@ -258,7 +258,7 @@ import type {
   PTYService,
 } from "./parse-action-block.js";
 import { handlePermissionRoutes } from "./permissions-routes.js";
-import { handleRolodexRoutes } from "./rolodex-routes.js";
+import { handleRelationshipsRoutes } from "./relationships-routes.js";
 import { handlePermissionsExtraRoutes } from "./permissions-routes-extra.js";
 import { handlePluginRoutes } from "./plugin-routes.js";
 import {
@@ -5736,7 +5736,7 @@ async function handleRequest(
   }
 
   if (
-    await handleRolodexRoutes({
+    await handleRelationshipsRoutes({
       req,
       res,
       method,

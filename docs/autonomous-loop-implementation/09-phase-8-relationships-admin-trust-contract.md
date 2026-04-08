@@ -1,6 +1,6 @@
-# Phase 8: Rolodex Admin Trust Contract
+# Phase 8: Relationships Admin Trust Contract
 
-Goal: define explicit, auditable trust behavior so owner/admin claims are handled correctly in rolodex workflows.
+Goal: define explicit, auditable trust behavior so owner/admin claims are handled correctly in relationships workflows.
 
 ## User intent this phase addresses
 
@@ -16,7 +16,7 @@ the system should accept this with reduced friction compared with non-privileged
 
 Milady currently lacks a durable role-aware trust contract in its web chat identity path.
 
-Even if rolodex is enabled, claim trust quality depends on reliable role identity.
+Even if relationships is enabled, claim trust quality depends on reliable role identity.
 
 ## Precondition from prior phases
 
@@ -75,18 +75,18 @@ This is critical for forensic debugging and user trust.
 
 ## Integration options
 
-## Option A: role-aware wrapper in Milady before rolodex action
+## Option A: role-aware wrapper in Milady before relationships action
 
 Pros:
 
-- minimal rolodex plugin changes
+- minimal relationships plugin changes
 - Milady controls trust gate
 
 Cons:
 
-- duplicated trust logic outside rolodex domain
+- duplicated trust logic outside relationships domain
 
-## Option B: implement directly in rolodex plugin (preferred long-term)
+## Option B: implement directly in relationships plugin (preferred long-term)
 
 Pros:
 
@@ -100,7 +100,7 @@ Cons:
 ## Option C: hybrid staged rollout (recommended)
 
 1. short term wrapper in Milady
-2. migrate logic into rolodex plugin once stable
+2. migrate logic into relationships plugin once stable
 
 ## Security threat model highlights
 

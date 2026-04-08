@@ -130,7 +130,7 @@ describe("LifeOpsService", () => {
     });
   });
 
-  it("uses rolodex routing hints to resolve the selected reminder endpoint and history", async () => {
+  it("uses relationships routing hints to resolve the selected reminder endpoint and history", async () => {
     configMocks.loadElizaConfig.mockReturnValue({
       agents: {
         defaults: {
@@ -141,17 +141,17 @@ describe("LifeOpsService", () => {
       },
     });
     const runtime = createRuntime();
-    const rolodexContact = {
+    const relationshipsContact = {
       preferences: { preferredCommunicationChannel: "discord" },
       customFields: {
-        discordChannelId: "dm-rolodex",
+        discordChannelId: "dm-relationships",
       },
     };
     (runtime as unknown as { getService: ReturnType<typeof vi.fn> }).getService =
       vi.fn((name: string) =>
-        name === "rolodex"
+        name === "relationships"
           ? {
-              getContact: vi.fn().mockResolvedValue(rolodexContact),
+              getContact: vi.fn().mockResolvedValue(relationshipsContact),
             }
           : null,
       );
@@ -186,10 +186,10 @@ describe("LifeOpsService", () => {
         dispatchReminderAttempt: (args: Record<string, unknown>) => Promise<Record<string, unknown>>;
       }
     ).dispatchReminderAttempt({
-      plan: { id: "plan-rolodex" },
+      plan: { id: "plan-relationships" },
       ownerType: "occurrence",
-      ownerId: "occ-rolodex",
-      occurrenceId: "occ-rolodex",
+      ownerId: "occ-relationships",
+      occurrenceId: "occ-relationships",
       subjectType: "owner",
       title: "Brush teeth",
       channel: "discord",
@@ -206,12 +206,12 @@ describe("LifeOpsService", () => {
       expect.objectContaining({
         source: "discord",
         entityId: "owner-1",
-        channelId: "dm-rolodex",
+        channelId: "dm-relationships",
       }),
       expect.objectContaining({
         metadata: expect.objectContaining({
           routeResolution: expect.objectContaining({
-            sourceOfTruth: "config+rolodex",
+            sourceOfTruth: "config+relationships",
             preferredCommunicationChannel: "discord",
             platformIdentities: [
               {
@@ -223,17 +223,17 @@ describe("LifeOpsService", () => {
             lastResponseAt: "2026-04-06T11:59:00.000Z",
             lastResponseChannel: "discord",
           }),
-          routeEndpoint: "dm-rolodex",
+          routeEndpoint: "dm-relationships",
           routeSource: "discord",
         }),
       }),
     );
     expect(attempt).toMatchObject({
       outcome: "delivered",
-      connectorRef: "runtime:discord:dm-rolodex",
+      connectorRef: "runtime:discord:dm-relationships",
       deliveryMetadata: expect.objectContaining({
         routeResolution: expect.objectContaining({
-          sourceOfTruth: "config+rolodex",
+          sourceOfTruth: "config+relationships",
         }),
       }),
     });

@@ -16,6 +16,8 @@ import {
   handlePluginsCompatRoutes,
 } from "./plugins-compat-routes";
 
+const mockApplyPluginRuntimeMutation = vi.hoisted(() => vi.fn());
+
 const tmpPaths = vi.hoisted(() => {
   const os = require("node:os");
   const path = require("node:path");
@@ -49,6 +51,11 @@ vi.mock("@miladyai/agent/config/paths", () => ({
   resolveConfigPath: () => tmpPaths.tmpConfigPath,
   resolveStateDir: () => tmpPaths.tmpStateDir,
   resolveUserPath: (value: string) => value,
+}));
+
+vi.mock("@miladyai/agent/api/plugin-runtime-apply", () => ({
+  applyPluginRuntimeMutation: (...args: unknown[]) =>
+    mockApplyPluginRuntimeMutation(...args),
 }));
 
 type CompatPluginRecord = {
@@ -122,6 +129,8 @@ describe("buildPluginListResponse", () => {
       envBackup.set(key, process.env[key]);
       delete process.env[key];
     }
+
+    mockApplyPluginRuntimeMutation.mockReset();
   });
 
   afterEach(() => {
@@ -400,6 +409,165 @@ describe("buildPluginListResponse", () => {
     expect(persisted.connectors?.discord?.applicationId).toBe(
       "222222222222222222",
     );
+  });
+
+  it("applies Discord enable in place when a live runtime is available", async () => {
+    process.env.ELIZA_API_TOKEN = "test-api-token";
+
+    saveElizaConfig({
+      logging: { level: "error" },
+      plugins: {
+        entries: {
+          discord: { enabled: false },
+        },
+      },
+      connectors: {
+        discord: {
+          enabled: false,
+          token: "discord-token-live",
+        },
+      },
+    } as ElizaConfig);
+
+    mockApplyPluginRuntimeMutation.mockResolvedValueOnce({
+      mode: "plugin_reload",
+      requiresRestart: false,
+      restartedRuntime: false,
+      loadedPackages: ["@elizaos/plugin-discord"],
+      unloadedPackages: [],
+      reloadedPackages: [],
+      appliedConfigPackage: null,
+      reason: "Plugin toggle: discord",
+    });
+
+    const req = createAsyncJsonRequest(
+      { enabled: true },
+      {
+        method: "PUT",
+        url: "/api/plugins/discord",
+        headers: {
+          authorization: "Bearer test-api-token",
+          host: "localhost:3000",
+        },
+      },
+    );
+    const { res, getJson, getStatus } = createMockHttpResponse<{
+      ok: boolean;
+      applied?: string;
+      requiresRestart?: boolean;
+      loadedPackages?: string[];
+    }>();
+    const runtime = { plugins: [] };
+    const state = {
+      current: runtime as never,
+      pendingAgentName: null,
+      pendingRestartReasons: [],
+    };
+
+    const handled = await handlePluginsCompatRoutes(req, res, state);
+
+    expect(handled).toBe(true);
+    expect(getStatus()).toBe(200);
+    expect(getJson()).toMatchObject({
+      ok: true,
+      applied: "plugin_reload",
+      requiresRestart: false,
+      loadedPackages: ["@elizaos/plugin-discord"],
+    });
+    expect(state.pendingRestartReasons).toEqual([]);
+    expect(mockApplyPluginRuntimeMutation).toHaveBeenCalledTimes(1);
+    expect(mockApplyPluginRuntimeMutation.mock.calls[0]?.[0]).toMatchObject({
+      runtime,
+      changedPluginId: "discord",
+      changedPluginPackage: "@elizaos/plugin-discord",
+      expectRuntimeGraphChange: true,
+      reason: "Plugin toggle: discord",
+    });
+  });
+
+  it("reloads Discord config in place without queuing a restart", async () => {
+    process.env.ELIZA_API_TOKEN = "test-api-token";
+
+    saveElizaConfig({
+      logging: { level: "error" },
+      plugins: {
+        entries: {
+          discord: { enabled: true },
+        },
+      },
+      connectors: {
+        discord: {
+          enabled: true,
+          token: "discord-token-old",
+        },
+      },
+    } as ElizaConfig);
+
+    mockApplyPluginRuntimeMutation.mockResolvedValueOnce({
+      mode: "plugin_reload",
+      requiresRestart: false,
+      restartedRuntime: false,
+      loadedPackages: [],
+      unloadedPackages: ["@elizaos/plugin-discord"],
+      reloadedPackages: ["@elizaos/plugin-discord"],
+      appliedConfigPackage: null,
+      reason: "Plugin config updated: discord",
+    });
+
+    const req = createAsyncJsonRequest(
+      {
+        config: {
+          DISCORD_API_TOKEN: "discord-token-new",
+          DISCORD_APPLICATION_ID: "222222222222222222",
+        },
+      },
+      {
+        method: "PUT",
+        url: "/api/plugins/discord",
+        headers: {
+          authorization: "Bearer test-api-token",
+          host: "localhost:3000",
+        },
+      },
+    );
+    const { res, getJson, getStatus } = createMockHttpResponse<{
+      ok: boolean;
+      applied?: string;
+      requiresRestart?: boolean;
+      unloadedPackages?: string[];
+      reloadedPackages?: string[];
+    }>();
+    const runtime = { plugins: [] };
+    const state = {
+      current: runtime as never,
+      pendingAgentName: null,
+      pendingRestartReasons: [],
+    };
+
+    const handled = await handlePluginsCompatRoutes(req, res, state);
+
+    expect(handled).toBe(true);
+    expect(getStatus()).toBe(200);
+    expect(getJson()).toMatchObject({
+      ok: true,
+      applied: "plugin_reload",
+      requiresRestart: false,
+      unloadedPackages: ["@elizaos/plugin-discord"],
+      reloadedPackages: ["@elizaos/plugin-discord"],
+    });
+    expect(state.pendingRestartReasons).toEqual([]);
+    expect(mockApplyPluginRuntimeMutation).toHaveBeenCalledTimes(1);
+    expect(mockApplyPluginRuntimeMutation.mock.calls[0]?.[0]).toMatchObject({
+      runtime,
+      changedPluginId: "discord",
+      changedPluginPackage: "@elizaos/plugin-discord",
+      config: {
+        DISCORD_API_TOKEN: "discord-token-new",
+        DISCORD_APPLICATION_ID: "222222222222222222",
+      },
+      expectRuntimeGraphChange: false,
+      reason: "Plugin config updated: discord",
+    });
   });
 
   it("reads Discord enable state from the persisted config path", () => {

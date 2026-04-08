@@ -871,6 +871,44 @@ describe("PluginsView game modal", () => {
     ).toBeGreaterThan(0);
   });
 
+  it("does not show install copy for bundled discord when it is enabled but inactive", async () => {
+    narrowViewport = true;
+    mockUseApp.mockReturnValue(
+      baseContext([
+        createPlugin("discord", "Discord", "connector", {
+          enabled: true,
+          isActive: false,
+          source: "bundled",
+          npmName: "@elizaos/plugin-discord",
+        }),
+      ]),
+    );
+
+    let tree!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(
+        React.createElement(PluginsView, { inModal: true, mode: "social" }),
+      );
+    });
+
+    const discordCard = tree?.root.findAll(
+      (node) => node.props?.["data-testid"] === "connector-card-discord",
+    )[0];
+    await act(async () => {
+      if (typeof discordCard.props.onClick === "function") {
+        discordCard.props.onClick();
+      } else {
+        discordCard.props.onExpandedChange?.(true);
+      }
+    });
+
+    expect(text(tree?.root)).toContain("Not loaded");
+    expect(text(tree?.root)).not.toContain(
+      "Install this connector to activate it in the runtime.",
+    );
+    expect(text(tree?.root)).not.toContain("Install Plugin");
+  });
+
   it("re-selects the first visible plugin when the selected one is filtered out", async () => {
     const state = baseContext([
       createPlugin("alpha-plugin", "Alpha Plugin", "feature"),

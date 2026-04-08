@@ -291,7 +291,7 @@ describe("App", () => {
       "plugins",
       "skills",
       "trajectories",
-      "rolodex",
+      "relationships",
     ] as const) {
       useAppMock.mockImplementation(() => makeState(tab));
 

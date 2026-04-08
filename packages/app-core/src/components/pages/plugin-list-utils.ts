@@ -125,7 +125,7 @@ export const ALWAYS_ON_PLUGIN_IDS = new Set([
   "elizacloud",
   "evm",
   "memory",
-  "rolodex",
+  "relationships",
   "tts",
   "elevenlabs",
   "cron",

@@ -54,10 +54,6 @@
 	path = plugins/plugin-google-genai
 	url = https://github.com/elizaos-plugins/plugin-google-genai.git
 	branch = alpha
-[submodule "plugins/plugin-knowledge"]
-	path = plugins/plugin-knowledge
-	url = https://github.com/elizaos-plugins/plugin-knowledge.git
-	branch = alpha
 [submodule "plugins/plugin-local-embedding"]
 	path = plugins/plugin-local-embedding
 	url = https://github.com/elizaos-plugins/plugin-local-embedding.git
@@ -105,10 +101,6 @@
 [submodule "plugins/plugin-telegram"]
 	path = plugins/plugin-telegram
 	url = https://github.com/elizaos-plugins/plugin-telegram.git
-	branch = alpha
-[submodule "plugins/plugin-trajectory-logger"]
-	path = plugins/plugin-trajectory-logger
-	url = https://github.com/elizaos-plugins/plugin-trajectory-logger.git
 	branch = alpha
 [submodule "plugins/plugin-trust"]
 	path = plugins/plugin-trust

@@ -82,7 +82,7 @@ Files:
 - same provider module from Phase 2
 - `src/api/server.ts` and/or runtime helper path for canonical admin room discovery
 
-## Phase 8: Rolodex trust contract
+## Phase 8: Relationships trust contract
 
 Files (short-term Milady wrapper):
 
@@ -90,7 +90,7 @@ Files (short-term Milady wrapper):
 
 Files (long-term plugin-native):
 
-- rolodex plugin package source (outside current milady repo if external dependency)
+- relationships plugin package source (outside current milady repo if external dependency)
 
 ## B. Alternatives Matrix by Phase
 
@@ -263,7 +263,7 @@ Severity scale:
   - unify internals or clearly deprecate one path
   - shared helper for identity/room setup
 
-## R9: External rolodex package mismatch
+## R9: External relationships package mismatch
 
 - severity: Medium
 - phase: 8
@@ -370,7 +370,7 @@ Reason:
 1. `/api/workbench/overview` autonomy state is currently placeholder.
 2. two chat APIs create duplicate identity/setup logic.
 3. role metadata population is not first-class in current setup.
-4. rolodex enablement path is configurable and can be absent.
+4. relationships enablement path is configurable and can be absent.
 5. event payload redaction policy is not defined yet.
 
 These are accepted as known constraints and should be tracked as checklist items in implementation PRs.

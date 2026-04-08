@@ -35,7 +35,7 @@ Need deterministic source ordering:
 Include only messages satisfying at least one:
 
 - explicit directive intent
-- identity assertion relevant to rolodex/trust
+- identity assertion relevant to relationships/trust
 - unresolved operational objective
 
 Exclude:

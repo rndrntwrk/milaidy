@@ -120,11 +120,11 @@ describe("Trajectory Database E2E", () => {
         : undefined;
 
     runtime.getService = ((serviceType: string) =>
-      serviceType === "trajectory_logger"
+      serviceType === "trajectories"
         ? (dbLogger as object)
         : originalGetService(serviceType)) as AgentRuntime["getService"];
     runtime.getServicesByType = ((serviceType: string) =>
-      serviceType === "trajectory_logger"
+      serviceType === "trajectories"
         ? [dbLogger]
         : (originalGetServicesByType?.(serviceType) ?? [])) as AgentRuntime["getServicesByType"];
 

@@ -22,7 +22,7 @@ The initial 8-phase plan had the right directional goals, but it had major gaps:
    - "Blend admin chat with autonomous context" was directionally right, but lacked strict token budget policy, summarization boundaries, and source precedence.
    - This can cause runaway context growth and degraded model behavior.
 
-5. **Rolodex trust policy lacked threat model**
+5. **Relationships trust policy lacked threat model**
    - "Trust admin claims" is useful UX but dangerous if identity linkage is weak.
    - No policy was defined for replay attacks, account hijack, or stale role state.
 
@@ -98,11 +98,11 @@ Eliza role provider logic expects role metadata for hierarchy.
 
 Implication: owner/admin semantics are partially present but not complete.
 
-## 7) Rolodex plugin is listed, not guaranteed active
+## 7) Relationships plugin is listed, not guaranteed active
 
-`plugins.json` includes `relationships`, but Milady default plugin loading is auto-detected + allowlist/entries driven. Rolodex is not guaranteed loaded unless configured.
+`plugins.json` includes `relationships`, but Milady default plugin loading is auto-detected + allowlist/entries driven. Relationships is not guaranteed loaded unless configured.
 
-Implication: trust behavior depending on rolodex requires explicit enable/load policy.
+Implication: trust behavior depending on relationships requires explicit enable/load policy.
 
 ## Where the Earlier Plan Was Correct
 
@@ -155,7 +155,7 @@ These must be resolved before implementation begins:
 3. Which room is canonical "admin chat" if multiple conversations exist?
 4. Should owner role be global per agent or per world?
 5. How much event history should be replayable on reconnect?
-6. Is rolodex trust global or scoped to specific claim categories (social handles, phone, wallet)?
+6. Is relationships trust global or scoped to specific claim categories (social handles, phone, wallet)?
 
 ## Bottom Line
 

@@ -191,6 +191,19 @@ function ConnectorPluginCard({
   const isSaving = pluginSaving.has(plugin.id);
   const saveSuccess = pluginSaveSuccess.has(plugin.id);
   const testResult = testResults.get(plugin.id);
+  const notLoadedLabel = t("pluginsview.NotLoaded", {
+    defaultValue: "Not loaded",
+  });
+  const isStoreInstallMissing =
+    plugin.source === "store" &&
+    plugin.enabled &&
+    !plugin.isActive &&
+    Boolean(plugin.npmName);
+  const inactiveLabel = plugin.loadError
+    ? loadFailedLabel
+    : plugin.source === "store"
+      ? notInstalledLabel
+      : notLoadedLabel;
   const pluginLinks = getPluginResourceLinks(plugin, {
     draftConfig: pluginConfigs[plugin.id],
   });
@@ -383,7 +396,7 @@ function ConnectorPluginCard({
           {plugin.enabled && !plugin.isActive && (
             <span className="mt-1.5 flex flex-wrap items-center gap-2 text-[11px] text-muted">
               <StatusBadge
-                label={plugin.loadError ? loadFailedLabel : notInstalledLabel}
+                label={inactiveLabel}
                 tone={plugin.loadError ? "danger" : "warning"}
               />
             </span>
@@ -558,10 +571,7 @@ function ConnectorPluginCard({
           </div>
         )}
 
-        {plugin.enabled &&
-          !plugin.isActive &&
-          plugin.npmName &&
-          !plugin.loadError && (
+        {isStoreInstallMissing && !plugin.loadError && (
             <PagePanel.Notice
               tone="warning"
               className="mb-4"

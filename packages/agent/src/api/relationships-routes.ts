@@ -1,15 +1,15 @@
 import type { IAgentRuntime, UUID } from "@elizaos/core";
 import type { RouteRequestContext } from "./route-helpers.js";
 
-type RolodexGraphQuery = {
+type RelationshipsGraphQuery = {
   search?: string | null;
   platform?: string | null;
   limit?: number;
   offset?: number;
 };
 
-type RolodexGraphService = {
-  getGraphSnapshot: (query?: RolodexGraphQuery) => Promise<{
+type RelationshipsGraphService = {
+  getGraphSnapshot: (query?: RelationshipsGraphQuery) => Promise<{
     people: unknown[];
     relationships: unknown[];
     stats: {
@@ -21,12 +21,12 @@ type RolodexGraphService = {
   getPersonDetail: (primaryEntityId: UUID) => Promise<unknown | null>;
 };
 
-export interface RolodexRouteContext extends RouteRequestContext {
+export interface RelationshipsRouteContext extends RouteRequestContext {
   runtime?: IAgentRuntime | null;
 }
 
-function parseQuery(reqUrl: string | undefined): RolodexGraphQuery {
-  const url = new URL(reqUrl ?? "/api/rolodex/graph", "http://localhost");
+function parseQuery(reqUrl: string | undefined): RelationshipsGraphQuery {
+  const url = new URL(reqUrl ?? "/api/relationships/graph", "http://localhost");
   const limit = url.searchParams.get("limit");
   const offset = url.searchParams.get("offset");
 
@@ -38,24 +38,24 @@ function parseQuery(reqUrl: string | undefined): RolodexGraphQuery {
   };
 }
 
-function getRolodexGraphService(
+function getRelationshipsGraphService(
   runtime?: IAgentRuntime | null,
-): RolodexGraphService | null {
+): RelationshipsGraphService | null {
   if (!runtime) {
     return null;
   }
-  return runtime.getService("rolodex_graph") as RolodexGraphService | null;
+  return runtime.getService("relationships_graph") as RelationshipsGraphService | null;
 }
 
-export async function handleRolodexRoutes(
-  ctx: RolodexRouteContext,
+export async function handleRelationshipsRoutes(
+  ctx: RelationshipsRouteContext,
 ): Promise<boolean> {
   const { req, res, method, pathname, json, error, runtime } = ctx;
 
   if (
-    pathname !== "/api/rolodex/graph" &&
-    pathname !== "/api/rolodex/people" &&
-    !pathname.startsWith("/api/rolodex/people/")
+    pathname !== "/api/relationships/graph" &&
+    pathname !== "/api/relationships/people" &&
+    !pathname.startsWith("/api/relationships/people/")
   ) {
     return false;
   }
@@ -64,24 +64,24 @@ export async function handleRolodexRoutes(
     return false;
   }
 
-  const rolodexGraph = getRolodexGraphService(runtime);
-  if (!rolodexGraph) {
+  const relationshipsGraph = getRelationshipsGraphService(runtime);
+  if (!relationshipsGraph) {
     error(
       res,
-      "Rolodex graph service is not available. Make sure the rolodex plugin is enabled.",
+      "Relationships graph service is not available. Make sure the native relationships feature is enabled.",
       503,
     );
     return true;
   }
 
-  if (pathname === "/api/rolodex/graph") {
-    const snapshot = await rolodexGraph.getGraphSnapshot(parseQuery(req.url));
+  if (pathname === "/api/relationships/graph") {
+    const snapshot = await relationshipsGraph.getGraphSnapshot(parseQuery(req.url));
     json(res, { data: snapshot }, 200);
     return true;
   }
 
-  if (pathname === "/api/rolodex/people") {
-    const snapshot = await rolodexGraph.getGraphSnapshot(parseQuery(req.url));
+  if (pathname === "/api/relationships/people") {
+    const snapshot = await relationshipsGraph.getGraphSnapshot(parseQuery(req.url));
     json(
       res,
       {
@@ -94,16 +94,16 @@ export async function handleRolodexRoutes(
   }
 
   const primaryEntityId = decodeURIComponent(
-    pathname.slice("/api/rolodex/people/".length),
+    pathname.slice("/api/relationships/people/".length),
   );
   if (!primaryEntityId) {
-    error(res, "Missing rolodex person identifier.", 400);
+    error(res, "Missing relationships person identifier.", 400);
     return true;
   }
 
-  const detail = await rolodexGraph.getPersonDetail(primaryEntityId as UUID);
+  const detail = await relationshipsGraph.getPersonDetail(primaryEntityId as UUID);
   if (!detail) {
-    error(res, "Rolodex person not found.", 404);
+    error(res, "Relationships person not found.", 404);
     return true;
   }
 

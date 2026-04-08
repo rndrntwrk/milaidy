@@ -9,6 +9,10 @@ import {
   saveElizaConfig,
 } from "@miladyai/agent/config/config";
 import {
+  applyPluginRuntimeMutation,
+  type PluginRuntimeApplyResult,
+} from "@miladyai/agent/api/plugin-runtime-apply";
+import {
   findPrimaryEnvKey,
   readBundledPluginPackageMetadata,
 } from "@miladyai/agent/api/server";
@@ -385,6 +389,67 @@ function compatMutationRequiresRestart(
   }
 
   return false;
+}
+
+function createCompatRuntimeApplyFallback(
+  reason: string,
+  requiresRestart: boolean,
+): PluginRuntimeApplyResult {
+  return {
+    mode: requiresRestart ? "restart_required" : "none",
+    requiresRestart,
+    restartedRuntime: false,
+    loadedPackages: [],
+    unloadedPackages: [],
+    reloadedPackages: [],
+    appliedConfigPackage: null,
+    reason,
+  };
+}
+
+async function applyCompatRuntimeMutation(options: {
+  state: CompatRuntimeState;
+  pluginId: string;
+  plugin: CompatPluginRecord;
+  body: Record<string, unknown>;
+  previousConfig: ReturnType<typeof loadElizaConfig>;
+  nextConfig: ReturnType<typeof loadElizaConfig>;
+}): Promise<PluginRuntimeApplyResult> {
+  const { state, pluginId, plugin, body, previousConfig, nextConfig } = options;
+  const reason =
+    typeof body.enabled === "boolean"
+      ? `Plugin toggle: ${pluginId}`
+      : `Plugin config updated: ${pluginId}`;
+  const requiresRestartFallback = compatMutationRequiresRestart(plugin, body);
+
+  if (!state.current) {
+    return createCompatRuntimeApplyFallback(reason, requiresRestartFallback);
+  }
+
+  try {
+    return await applyPluginRuntimeMutation({
+      runtime: state.current,
+      previousConfig,
+      nextConfig,
+      changedPluginId: pluginId,
+      changedPluginPackage: plugin.npmName,
+      config:
+        body.config &&
+        typeof body.config === "object" &&
+        !Array.isArray(body.config)
+          ? (body.config as Record<string, string>)
+          : undefined,
+      expectRuntimeGraphChange: typeof body.enabled === "boolean",
+      reason,
+    });
+  } catch (error) {
+    logger.warn(
+      `[api/plugins] Live runtime apply failed for "${pluginId}": ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+    return createCompatRuntimeApplyFallback(reason, true);
+  }
 }
 
 function titleCasePluginId(id: string): string {
@@ -961,14 +1026,34 @@ export async function handlePluginsCompatRoutes(
       return true;
     }
 
+    const previousConfig = structuredClone(loadElizaConfig());
     const result = persistCompatPluginMutation(pluginId, body, plugin);
-    if (result.status === 200 && compatMutationRequiresRestart(plugin, body)) {
-      const reason =
-        typeof body.enabled === "boolean"
-          ? `Plugin toggle: ${pluginId}`
-          : `Plugin config updated: ${pluginId}`;
-      scheduleCompatRuntimeRestart(state, reason);
-      result.payload.requiresRestart = true;
+    if (result.status === 200) {
+      const nextConfig = loadElizaConfig();
+      const runtimeApply = await applyCompatRuntimeMutation({
+        state,
+        pluginId,
+        plugin,
+        body,
+        previousConfig,
+        nextConfig,
+      });
+
+      if (runtimeApply.requiresRestart) {
+        scheduleCompatRuntimeRestart(state, runtimeApply.reason);
+      }
+
+      const refreshed = (
+        buildPluginListResponse(state.current).plugins as unknown as CompatPluginRecord[]
+      ).find((candidate) => candidate.id === pluginId);
+
+      result.payload.plugin = refreshed ?? result.payload.plugin ?? plugin;
+      result.payload.applied = runtimeApply.mode;
+      result.payload.requiresRestart = runtimeApply.requiresRestart;
+      result.payload.restartedRuntime = runtimeApply.restartedRuntime;
+      result.payload.loadedPackages = runtimeApply.loadedPackages;
+      result.payload.unloadedPackages = runtimeApply.unloadedPackages;
+      result.payload.reloadedPackages = runtimeApply.reloadedPackages;
     }
     sendJsonResponse(res, result.status, result.payload);
     return true;

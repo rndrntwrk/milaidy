@@ -239,21 +239,21 @@ Goal: Suggest one-off tasks when the user appears to have downtime.
 ### QA / Setup
 - easiest to QA with seeded tasks plus a connected calendar
 
-## 8. Rolodex-Driven Channel Routing
+## 8. Relationships-Driven Channel Routing
 
 Status: In progress
 Priority: P1
 Goal: Replace the current mostly `ownerContacts` and channel-policy routing with a fuller owner identity graph.
 
 ### Scope
-- use the rolodex/contact graph as the source for owner reachability
+- use the relationships/contact graph as the source for owner reachability
 - map one person across Discord, Telegram, phone, email, and app identity
 - persist response history and preferred fallback behavior
 
 ### Implementation TODOs
-- inspect current rolodex plugin/service capabilities and integrate them into LifeOps routing
-- define how channel policies and rolodex records combine without conflicting
-- update reminder escalation to prefer rolodex-backed identities over static config
+- inspect current relationships plugin/service capabilities and integrate them into LifeOps routing
+- define how channel policies and relationships records combine without conflicting
+- update reminder escalation to prefer relationships-backed identities over static config
 - track response and escalation history per owner endpoint
 - add tests proving fallback order across multiple connected endpoints
 
@@ -263,12 +263,12 @@ Goal: Replace the current mostly `ownerContacts` and channel-policy routing with
 - escalation decisions can explain which identity record and history led to the selected channel
 
 ### Current progress
-- `packages/agent/src/config/owner-contacts.ts` now loads rolodex-backed routing hints and platform identities on top of static owner contact config.
+- `packages/agent/src/config/owner-contacts.ts` now loads relationships-backed routing hints and platform identities on top of static owner contact config.
 - `packages/agent/src/services/escalation.ts` and `packages/agent/src/lifeops/service.ts` now use those hints when resolving fallback routing.
 - Remaining work is deeper endpoint history persistence and broader channel coverage beyond the currently connected sources.
 
 ### QA / Setup
-- requires connected private channels and rolodex population
+- requires connected private channels and relationships population
 
 ## 9. Reminder Intensity Model Alignment
 
@@ -382,7 +382,7 @@ Goal: Close gaps where real UI code exists but executed test coverage is thin.
 1. Desktop Activity Signals
 2. Screen Capture And OCR Signal
 3. Opportunistic Downtime Nudges
-4. Rolodex-Driven Channel Routing
+4. Relationships-Driven Channel Routing
 5. Gmail Search And Batch Reply Workflows
 6. Agentic Calendar Surface
 7. Reminder Intensity Model Alignment

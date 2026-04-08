@@ -602,11 +602,11 @@ describe("installPromptOptimizations", () => {
       actions: [{ name: "REPLY" }, { name: "CREATE_TASK" }],
       logger: { info: () => {}, warn: () => {} },
       getService: (serviceType: string) =>
-        serviceType === "trajectory_logger"
+        serviceType === "trajectories"
           ? (options?.trajectoryLogger ?? null)
           : null,
       getServicesByType: (serviceType: string) =>
-        serviceType === "trajectory_logger"
+        serviceType === "trajectories"
           ? (options?.trajectoryLoggersByType ?? [])
           : [],
       useModel: async (modelType: string, payload: Record<string, unknown>) => {

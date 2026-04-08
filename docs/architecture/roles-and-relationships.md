@@ -1,4 +1,4 @@
-# Roles & Rolodex Architecture
+# Roles & Relationships Architecture
 
 ## Overview
 
@@ -331,7 +331,7 @@ eliza/packages/typescript/src/
     platforms.ts    ALL_PLATFORMS, SOCIAL_PLATFORMS, normalizePlatform
   services/
     EntityResolutionService.ts   Small-world graph, signal scoring, thresholds
-    RolodexService.ts            Claim/relationship CRUD
+    RelationshipsService.ts            Claim/relationship CRUD
     FollowUpService.ts           Follow-up tracking
   evaluators/
     relationshipExtraction.ts    LLM extraction → claims → resolution

@@ -47,7 +47,7 @@ export function tabFlags(tab: Tab) {
     tab === "advanced" ||
     tab === "fine-tuning" ||
     tab === "trajectories" ||
-    tab === "rolodex" ||
+    tab === "relationships" ||
     tab === "runtime" ||
     tab === "database" ||
     tab === "logs";

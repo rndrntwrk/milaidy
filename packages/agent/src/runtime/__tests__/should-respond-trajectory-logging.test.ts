@@ -155,11 +155,11 @@ describeIfEliza("shouldRespond trajectory logging", () => {
     };
 
     vi.spyOn(runtime, "getService").mockImplementation((serviceType: string) =>
-      serviceType === "trajectory_logger" ? (stubLogger as object) : null,
+      serviceType === "trajectories" ? (stubLogger as object) : null,
     );
     vi.spyOn(runtime, "getServicesByType").mockImplementation(
       (serviceType: string) =>
-        serviceType === "trajectory_logger" ? [stubLogger, richLogger] : [],
+        serviceType === "trajectories" ? [stubLogger, richLogger] : [],
     );
     vi.spyOn(runtime, "useModel").mockImplementation(
       async (
@@ -265,11 +265,11 @@ describeIfEliza("shouldRespond trajectory logging", () => {
     };
 
     vi.spyOn(runtime, "getService").mockImplementation((serviceType: string) =>
-      serviceType === "trajectory_logger" ? (stubLogger as object) : null,
+      serviceType === "trajectories" ? (stubLogger as object) : null,
     );
     vi.spyOn(runtime, "getServicesByType").mockImplementation(
       (serviceType: string) =>
-        serviceType === "trajectory_logger" ? [stubLogger, richLogger] : [],
+        serviceType === "trajectories" ? [stubLogger, richLogger] : [],
     );
     vi.spyOn(runtime, "useModel").mockImplementation(
       async (

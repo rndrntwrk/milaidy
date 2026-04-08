@@ -1,31 +1,31 @@
-export interface RolodexGraphQuery {
+export interface RelationshipsGraphQuery {
   search?: string;
   platform?: string;
   limit?: number;
   offset?: number;
 }
 
-export interface RolodexIdentityHandle {
+export interface RelationshipsIdentityHandle {
   entityId: string;
   platform: string;
   handle: string;
 }
 
-export interface RolodexIdentitySummary {
+export interface RelationshipsIdentitySummary {
   entityId: string;
   names: string[];
   platforms: string[];
-  handles: RolodexIdentityHandle[];
+  handles: RelationshipsIdentityHandle[];
 }
 
-export interface RolodexPersonSummary {
+export interface RelationshipsPersonSummary {
   groupId: string;
   primaryEntityId: string;
   memberEntityIds: string[];
   displayName: string;
   aliases: string[];
   platforms: string[];
-  identities: RolodexIdentitySummary[];
+  identities: RelationshipsIdentitySummary[];
   emails: string[];
   phones: string[];
   websites: string[];
@@ -37,7 +37,7 @@ export interface RolodexPersonSummary {
   lastInteractionAt?: string;
 }
 
-export interface RolodexPersonFact {
+export interface RelationshipsPersonFact {
   id: string;
   sourceType: "claim" | "contact" | "memory";
   text: string;
@@ -48,7 +48,7 @@ export interface RolodexPersonFact {
   updatedAt?: string;
 }
 
-export interface RolodexConversationMessage {
+export interface RelationshipsConversationMessage {
   id: string;
   entityId?: string;
   speaker: string;
@@ -56,14 +56,14 @@ export interface RolodexConversationMessage {
   createdAt?: number;
 }
 
-export interface RolodexConversationSnippet {
+export interface RelationshipsConversationSnippet {
   roomId: string;
   roomName: string;
   lastActivityAt?: string;
-  messages: RolodexConversationMessage[];
+  messages: RelationshipsConversationMessage[];
 }
 
-export interface RolodexGraphEdge {
+export interface RelationshipsGraphEdge {
   id: string;
   sourcePersonId: string;
   targetPersonId: string;
@@ -75,7 +75,7 @@ export interface RolodexGraphEdge {
   rawRelationshipIds: string[];
 }
 
-export interface RolodexIdentityEdge {
+export interface RelationshipsIdentityEdge {
   id: string;
   sourceEntityId: string;
   targetEntityId: string;
@@ -83,21 +83,21 @@ export interface RolodexIdentityEdge {
   status: string;
 }
 
-export interface RolodexPersonDetail extends RolodexPersonSummary {
-  facts: RolodexPersonFact[];
-  recentConversations: RolodexConversationSnippet[];
-  relationships: RolodexGraphEdge[];
-  identityEdges: RolodexIdentityEdge[];
+export interface RelationshipsPersonDetail extends RelationshipsPersonSummary {
+  facts: RelationshipsPersonFact[];
+  recentConversations: RelationshipsConversationSnippet[];
+  relationships: RelationshipsGraphEdge[];
+  identityEdges: RelationshipsIdentityEdge[];
 }
 
-export interface RolodexGraphStats {
+export interface RelationshipsGraphStats {
   totalPeople: number;
   totalRelationships: number;
   totalIdentities: number;
 }
 
-export interface RolodexGraphSnapshot {
-  people: RolodexPersonSummary[];
-  relationships: RolodexGraphEdge[];
-  stats: RolodexGraphStats;
+export interface RelationshipsGraphSnapshot {
+  people: RelationshipsPersonSummary[];
+  relationships: RelationshipsGraphEdge[];
+  stats: RelationshipsGraphStats;
 }

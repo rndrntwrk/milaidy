@@ -611,13 +611,19 @@ export async function resolvePlugins(
     plugin: Plugin;
   } | null> {
     const isCore = corePluginSet.has(pluginName);
+    const isOfficialElizaPlugin = pluginName.startsWith("@elizaos/plugin-");
     const ejectedRecord = ejectedRecords[pluginName];
     const installRecord = installRecords[pluginName];
     const workspaceOverridePath = getWorkspacePluginOverridePath(pluginName);
-    const staticElizaPlugin =
-      pluginName.startsWith("@elizaos/plugin-")
-        ? await resolveStaticElizaPlugin(pluginName)
-        : null;
+    const staticElizaPlugin = isOfficialElizaPlugin
+      ? await resolveStaticElizaPlugin(pluginName)
+      : null;
+
+    const importOfficialPluginFromNodeModules =
+      async (): Promise<PluginModuleShape> =>
+        (await import(
+          resolveElizaPluginImportSpecifier(pluginName)
+        )) as PluginModuleShape;
 
     // Pre-flight: ensure native dependencies are available for special plugins.
     if (pluginName === "@elizaos/plugin-browser") {
@@ -652,19 +658,32 @@ export async function resolvePlugins(
         logger.debug(
           `[eliza] Loading workspace plugin override: ${pluginName} from ${workspaceOverridePath}`,
         );
-        mod = await importPluginModuleFromPath(
-          workspaceOverridePath,
-          pluginName,
-        );
+        if (isOfficialElizaPlugin) {
+          // Prefer the repo-level package import for official workspace plugins.
+          // In local checkouts, root node_modules usually symlinks back to the
+          // workspace package while keeping dependency resolution intact.
+          try {
+            mod = await importOfficialPluginFromNodeModules();
+          } catch (npmErr) {
+            logger.warn(
+              `[eliza] Node_modules resolution failed for workspace plugin ${pluginName} (${formatError(npmErr)}). Falling back to staged workspace import at ${redactUserSegments(workspaceOverridePath)}.`,
+            );
+            mod = await importPluginModuleFromPath(
+              workspaceOverridePath,
+              pluginName,
+            );
+          }
+        } else {
+          mod = await importPluginModuleFromPath(
+            workspaceOverridePath,
+            pluginName,
+          );
+        }
       } else if (installRecord?.installPath) {
         // Prefer bundled/node_modules copies for official Eliza plugins.
-        const isOfficialElizaPlugin = pluginName.startsWith("@elizaos/plugin-");
-
         if (isOfficialElizaPlugin) {
           try {
-            mod = staticElizaPlugin
-              ? (staticElizaPlugin as PluginModuleShape)
-              : ((await import(pluginName)) as PluginModuleShape);
+            mod = await importOfficialPluginFromNodeModules();
             if (repairBrokenInstallRecord(config, pluginName)) {
               repairedInstallRecords.add(pluginName);
             }
@@ -697,16 +716,14 @@ export async function resolvePlugins(
             }
           }
         }
-      } else if (pluginName.startsWith("@elizaos/plugin-")) {
+      } else if (isOfficialElizaPlugin) {
         // Eliza plugins can resolve either from bundled local wrappers
         // under eliza-dist/plugins/* or from packaged node_modules.
-        mod = (await import(
-          resolveElizaPluginImportSpecifier(pluginName)
-        )) as PluginModuleShape;
+        mod = await importOfficialPluginFromNodeModules();
       } else {
         // Built-in/npm plugin — try bundled static import first, then
         // fall back to bare node_modules resolution.
-        const staticMod = pluginName.startsWith("@elizaos/plugin-")
+        const staticMod = isOfficialElizaPlugin
           ? await resolveStaticElizaPlugin(pluginName)
           : null;
         mod = staticMod

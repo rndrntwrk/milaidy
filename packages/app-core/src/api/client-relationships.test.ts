@@ -10,13 +10,13 @@ vi.mock("../bridge/native-plugins", () => ({
 
 import { MiladyClient } from "./client";
 
-describe("MiladyClient rolodex API", () => {
+describe("MiladyClient relationships API", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     mockGetWebsiteBlockerPlugin.mockReset();
   });
 
-  it("fetches and unwraps the rolodex graph snapshot", async () => {
+  it("fetches and unwraps the relationships graph snapshot", async () => {
     mockGetWebsiteBlockerPlugin.mockReturnValue(null);
     const fetchSpy = vi
       .spyOn(MiladyClient.prototype, "fetch")
@@ -38,7 +38,7 @@ describe("MiladyClient rolodex API", () => {
       } as never);
 
     const client = new MiladyClient("http://127.0.0.1:31337");
-    const graph = await client.getRolodexGraph({
+    const graph = await client.getRelationshipsGraph({
       search: "chris",
       platform: "discord",
       limit: 25,
@@ -46,7 +46,7 @@ describe("MiladyClient rolodex API", () => {
     });
 
     expect(fetchSpy).toHaveBeenCalledWith(
-      "/api/rolodex/graph?search=chris&platform=discord&limit=25&offset=10",
+      "/api/relationships/graph?search=chris&platform=discord&limit=25&offset=10",
     );
     expect(graph.stats.totalPeople).toBe(1);
   });
@@ -69,7 +69,7 @@ describe("MiladyClient rolodex API", () => {
     } as never);
 
     const client = new MiladyClient("http://127.0.0.1:31337");
-    const result = await client.getRolodexPeople();
+    const result = await client.getRelationshipsPeople();
 
     expect(result.people[0]?.displayName).toBe("Chris");
     expect(result.stats.totalRelationships).toBe(2);
@@ -104,9 +104,9 @@ describe("MiladyClient rolodex API", () => {
       } as never);
 
     const client = new MiladyClient("http://127.0.0.1:31337");
-    const person = await client.getRolodexPerson("person 1");
+    const person = await client.getRelationshipsPerson("person 1");
 
-    expect(fetchSpy).toHaveBeenCalledWith("/api/rolodex/people/person%201");
+    expect(fetchSpy).toHaveBeenCalledWith("/api/relationships/people/person%201");
     expect(person.displayName).toBe("Chris");
   });
 });

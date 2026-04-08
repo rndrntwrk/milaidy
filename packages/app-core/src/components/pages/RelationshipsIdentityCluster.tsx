@@ -1,4 +1,4 @@
-import type { RolodexPersonDetail } from "@miladyai/app-core/api";
+import type { RelationshipsPersonDetail } from "@miladyai/app-core/api";
 
 const CLUSTER_SIZE = 320;
 const CLUSTER_CENTER = CLUSTER_SIZE / 2;
@@ -9,7 +9,7 @@ function shortLabel(value: string, maxLength = 14): string {
   return value.length > maxLength ? `${value.slice(0, maxLength - 1)}…` : value;
 }
 
-function identityLabel(person: RolodexPersonDetail, index: number): string {
+function identityLabel(person: RelationshipsPersonDetail, index: number): string {
   const identity = person.identities[index];
   if (!identity) {
     return `${index + 1}`;
@@ -21,10 +21,10 @@ function identityLabel(person: RolodexPersonDetail, index: number): string {
   return shortLabel(identity.names[0] ?? identity.entityId, 14);
 }
 
-export function RolodexIdentityCluster({
+export function RelationshipsIdentityCluster({
   person,
 }: {
-  person: RolodexPersonDetail;
+  person: RelationshipsPersonDetail;
 }) {
   const total = Math.max(person.identities.length, 1);
 
@@ -38,7 +38,7 @@ export function RolodexIdentityCluster({
       >
         <defs>
           <radialGradient
-            id="rolodex-identity-cluster-fill"
+            id="relationships-identity-cluster-fill"
             cx="50%"
             cy="38%"
             r="68%"
@@ -68,7 +68,7 @@ export function RolodexIdentityCluster({
           cx={CLUSTER_CENTER}
           cy={CLUSTER_CENTER}
           r={INNER_RADIUS}
-          fill="url(#rolodex-identity-cluster-fill)"
+          fill="url(#relationships-identity-cluster-fill)"
           stroke="rgba(255,255,255,0.88)"
           strokeWidth={3}
         />

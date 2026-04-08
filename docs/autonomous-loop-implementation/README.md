@@ -5,7 +5,7 @@ This folder contains a detailed implementation dossier for making Milady "autono
 - real-time visibility into autonomous reasoning/actions
 - clear admin identity and trust semantics
 - controlled context blending between admin chat and autonomous loop
-- explicit rolodex trust behavior for owner/admin inputs
+- explicit relationships trust behavior for owner/admin inputs
 
 ## Document Index
 
@@ -54,8 +54,8 @@ This folder contains a detailed implementation dossier for making Milady "autono
    - Anti-context-bloat mechanisms
    - Deterministic provider ordering and truncation
 
-10. `09-phase-8-rolodex-admin-trust-contract.md`
-    - Role-aware trust policy for rolodex claims
+10. `09-phase-8-relationships-admin-trust-contract.md`
+    - Role-aware trust policy for relationships claims
     - "Admin says this is my handle" acceptance model
     - Verification fallback for non-admin actors
 

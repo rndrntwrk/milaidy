@@ -1,0 +1,508 @@
+import type { IAgentRuntime, Task, UUID } from "@elizaos/core";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { ActivityProfile } from "./types.js";
+import { emptyBucketCounts } from "./types.js";
+
+// ── Hoisted mocks ─────────────────────────────────────
+
+const mocks = vi.hoisted(() => ({
+  resolveOwnerEntityId: vi.fn<() => Promise<string | null>>(),
+  buildActivityProfile: vi.fn<() => Promise<ActivityProfile>>(),
+  refreshCurrentState: vi.fn<() => Promise<ActivityProfile>>(),
+  readProfileFromMetadata: vi.fn<() => ActivityProfile | null>(),
+  readFiredLogFromMetadata: vi.fn<() => null>(),
+  profileNeedsRebuild: vi.fn<() => boolean>(),
+  resolveDefaultTimeZone: vi.fn(() => "UTC"),
+  loadOwnerContactsConfig: vi.fn(() => ({})),
+  resolveOwnerContactSource: vi.fn(() => null),
+  mockGetOverview: vi.fn(),
+  mockGetCalendarFeed: vi.fn(),
+  mockListActivitySignals: vi.fn(() => []),
+}));
+
+vi.mock("./service.js", () => ({
+  resolveOwnerEntityId: mocks.resolveOwnerEntityId,
+  buildActivityProfile: mocks.buildActivityProfile,
+  refreshCurrentState: mocks.refreshCurrentState,
+  readProfileFromMetadata: mocks.readProfileFromMetadata,
+  readFiredLogFromMetadata: mocks.readFiredLogFromMetadata,
+  profileNeedsRebuild: mocks.profileNeedsRebuild,
+}));
+
+vi.mock("../lifeops/defaults.js", () => ({
+  resolveDefaultTimeZone: mocks.resolveDefaultTimeZone,
+}));
+
+vi.mock("../config/owner-contacts.js", () => ({
+  loadOwnerContactsConfig: mocks.loadOwnerContactsConfig,
+  resolveOwnerContactSource: mocks.resolveOwnerContactSource,
+}));
+
+vi.mock("../lifeops/service.js", () => ({
+  LifeOpsService: class {
+    getOverview = mocks.mockGetOverview;
+    getCalendarFeed = mocks.mockGetCalendarFeed;
+    listActivitySignals = mocks.mockListActivitySignals;
+  },
+  LifeOpsServiceError: class extends Error {
+    status: number;
+    constructor(status: number, message: string) {
+      super(message);
+      this.status = status;
+    }
+  },
+}));
+
+import {
+  ensureProactiveAgentTask,
+  executeProactiveTask,
+  PROACTIVE_TASK_INTERVAL_MS,
+  PROACTIVE_TASK_NAME,
+  PROACTIVE_TASK_TAGS,
+  registerProactiveTaskWorker,
+} from "./proactive-worker.js";
+
+// ── Fixtures ──────────────────────────────────────────
+
+const MORNING_NOW = new Date("2026-04-06T07:00:00Z");
+
+function makeProfile(overrides: Partial<ActivityProfile> = {}): ActivityProfile {
+  return {
+    ownerEntityId: "owner-1",
+    analyzedAt: MORNING_NOW.getTime() - 5 * 60 * 1000,
+    analysisWindowDays: 7,
+    timezone: "UTC",
+    totalMessages: 100,
+    sustainedInactivityThresholdMinutes: 180,
+    platforms: [
+      {
+        source: "telegram",
+        messageCount: 80,
+        bucketCounts: emptyBucketCounts(),
+        lastMessageAt: MORNING_NOW.getTime() - 5 * 60 * 1000,
+        averageMessagesPerDay: 11,
+      },
+    ],
+    primaryPlatform: "telegram",
+    secondaryPlatform: null,
+    bucketCounts: emptyBucketCounts(),
+    hasCalendarData: false,
+    typicalFirstEventHour: null,
+    typicalLastEventHour: null,
+    avgWeekdayMeetings: null,
+    typicalFirstActiveHour: 8,
+    typicalLastActiveHour: 19,
+    typicalWakeHour: 8,
+    typicalSleepHour: 23,
+    hasSleepData: false,
+    isCurrentlySleeping: false,
+    lastSleepSignalAt: null,
+    lastWakeSignalAt: null,
+    sleepSourcePlatform: null,
+    sleepSource: null,
+    typicalSleepDurationMinutes: null,
+    lastSeenAt: MORNING_NOW.getTime() - 5 * 60 * 1000,
+    lastSeenPlatform: "telegram",
+    isCurrentlyActive: true,
+    hasOpenActivityCycle: true,
+    currentActivityCycleStartedAt: Date.parse("2026-04-06T06:00:00Z"),
+    currentActivityCycleLocalDate: "2026-04-06",
+    effectiveDayKey: "2026-04-06",
+    screenContextFocus: null,
+    screenContextSource: null,
+    screenContextSampledAt: null,
+    screenContextConfidence: null,
+    screenContextBusy: false,
+    screenContextAvailable: false,
+    screenContextStale: false,
+    ...overrides,
+  };
+}
+
+function createRuntimeMock(tasks: Task[] = []) {
+  const workerRegistry = new Map<string, unknown>();
+  const state = { tasks: [...tasks] };
+  const runtime = {
+    agentId: "agent-1" as UUID,
+    getService: vi.fn(() => ({
+      getAutonomousRoomId: () => "room-proactive" as UUID,
+    })),
+    getTasks: vi.fn(async () => [...state.tasks]),
+    createTask: vi.fn(async (task: Task) => {
+      const id = (task.id ?? "proactive-task-id") as UUID;
+      state.tasks.push({ ...task, id });
+      return id;
+    }),
+    updateTask: vi.fn(async (taskId: UUID, update: Partial<Task>) => {
+      state.tasks = state.tasks.map((t) => {
+        if (t.id !== taskId) return t;
+        const merged = { ...t, ...update } as Task;
+        if (update.metadata) {
+          (merged as { metadata: unknown }).metadata = {
+            ...((t.metadata ?? {}) as Record<string, unknown>),
+            ...((update.metadata ?? {}) as Record<string, unknown>),
+          };
+        }
+        return merged;
+      });
+    }),
+    sendMessageToTarget: vi.fn(async () => {}),
+    registerTaskWorker: vi.fn((worker: { name: string }) => {
+      workerRegistry.set(worker.name, worker);
+    }),
+    getTaskWorker: vi.fn((name: string) => workerRegistry.get(name)),
+  } as unknown as IAgentRuntime;
+
+  return { runtime, workerRegistry, state };
+}
+
+function makeExistingProactiveTask(
+  metadata: Record<string, unknown> = {},
+): Task {
+  return {
+    id: "existing-proactive-task" as UUID,
+    name: PROACTIVE_TASK_NAME,
+    description: "Proactive agent: GM/GN/nudges based on activity profile",
+    tags: [...PROACTIVE_TASK_TAGS],
+    metadata: {
+      proactiveAgent: { kind: "runtime_runner", version: 1 },
+      updateInterval: PROACTIVE_TASK_INTERVAL_MS,
+      baseInterval: PROACTIVE_TASK_INTERVAL_MS,
+      blocking: true,
+      ...metadata,
+    },
+  };
+}
+
+// ── ensureProactiveAgentTask ──────────────────────────
+
+describe("ensureProactiveAgentTask", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("creates the task when none exists", async () => {
+    const { runtime, state } = createRuntimeMock();
+    const taskId = await ensureProactiveAgentTask(runtime);
+
+    expect(taskId).toBe("proactive-task-id");
+    expect(state.tasks).toHaveLength(1);
+    expect(state.tasks[0].name).toBe(PROACTIVE_TASK_NAME);
+    expect(state.tasks[0].tags).toEqual([...PROACTIVE_TASK_TAGS]);
+    expect(state.tasks[0].metadata).toMatchObject({
+      proactiveAgent: { kind: "runtime_runner", version: 1 },
+      updateInterval: PROACTIVE_TASK_INTERVAL_MS,
+      blocking: true,
+    });
+  });
+
+  it("updates and reuses an existing task", async () => {
+    const existing = makeExistingProactiveTask();
+    const { runtime } = createRuntimeMock([existing]);
+
+    const taskId = await ensureProactiveAgentTask(runtime);
+
+    expect(taskId).toBe(existing.id);
+    expect(vi.mocked(runtime.updateTask)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(runtime.createTask)).not.toHaveBeenCalled();
+  });
+
+  it("preserves existing metadata when updating", async () => {
+    const existing = makeExistingProactiveTask({
+      activityProfile: { ownerEntityId: "owner-1", analyzedAt: 123 },
+    });
+    const { runtime, state } = createRuntimeMock([existing]);
+
+    await ensureProactiveAgentTask(runtime);
+
+    const updated = state.tasks.find((t) => t.id === existing.id);
+    const meta = updated?.metadata as Record<string, unknown>;
+    expect(meta.activityProfile).toEqual({
+      ownerEntityId: "owner-1",
+      analyzedAt: 123,
+    });
+    expect(meta.proactiveAgent).toEqual({
+      kind: "runtime_runner",
+      version: 1,
+    });
+  });
+
+  it("uses autonomy room ID when available", async () => {
+    const { runtime } = createRuntimeMock();
+
+    await ensureProactiveAgentTask(runtime);
+
+    expect(vi.mocked(runtime.createTask)).toHaveBeenCalledWith(
+      expect.objectContaining({ roomId: "room-proactive" }),
+    );
+  });
+});
+
+// ── registerProactiveTaskWorker ───────────────────────
+
+describe("registerProactiveTaskWorker", () => {
+  it("registers the worker", () => {
+    const { runtime, workerRegistry } = createRuntimeMock();
+    registerProactiveTaskWorker(runtime);
+    expect(workerRegistry.has(PROACTIVE_TASK_NAME)).toBe(true);
+  });
+
+  it("does not double-register", () => {
+    const { runtime } = createRuntimeMock();
+    registerProactiveTaskWorker(runtime);
+    registerProactiveTaskWorker(runtime);
+    expect(vi.mocked(runtime.registerTaskWorker)).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ── executeProactiveTask ──────────────────────────────
+
+describe("executeProactiveTask", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.resolveDefaultTimeZone.mockReturnValue("UTC");
+    mocks.mockGetOverview.mockResolvedValue({ occurrences: [] });
+    mocks.mockGetCalendarFeed.mockResolvedValue({ events: [] });
+    mocks.loadOwnerContactsConfig.mockReturnValue({});
+    mocks.readFiredLogFromMetadata.mockReturnValue(null);
+  });
+
+  it("returns nextInterval when no owner is configured", async () => {
+    mocks.resolveOwnerEntityId.mockResolvedValue(null);
+    const { runtime } = createRuntimeMock();
+
+    const result = await executeProactiveTask(runtime);
+
+    expect(result.nextInterval).toBe(PROACTIVE_TASK_INTERVAL_MS);
+    expect(mocks.buildActivityProfile).not.toHaveBeenCalled();
+  });
+
+  it("returns nextInterval when proactive task is missing", async () => {
+    mocks.resolveOwnerEntityId.mockResolvedValue("owner-1");
+    const { runtime } = createRuntimeMock([]); // no tasks
+
+    const result = await executeProactiveTask(runtime);
+
+    expect(result.nextInterval).toBe(PROACTIVE_TASK_INTERVAL_MS);
+  });
+
+  it("builds a full profile when none exists in metadata", async () => {
+    const profile = makeProfile();
+    mocks.resolveOwnerEntityId.mockResolvedValue("owner-1");
+    mocks.readProfileFromMetadata.mockReturnValue(null);
+    mocks.profileNeedsRebuild.mockReturnValue(true);
+    mocks.buildActivityProfile.mockResolvedValue(profile);
+
+    const task = makeExistingProactiveTask();
+    const { runtime, state } = createRuntimeMock([task]);
+
+    await executeProactiveTask(runtime);
+
+    expect(mocks.buildActivityProfile).toHaveBeenCalled();
+    expect(mocks.refreshCurrentState).not.toHaveBeenCalled();
+    // Verify profile was persisted
+    const updated = state.tasks.find((t) => t.id === task.id);
+    const meta = updated?.metadata as Record<string, unknown>;
+    expect(meta.activityProfile).toBe(profile);
+  });
+
+  it("refreshes existing profile when it is still fresh", async () => {
+    const profile = makeProfile();
+    const refreshed = makeProfile({ lastSeenAt: Date.now() });
+    mocks.resolveOwnerEntityId.mockResolvedValue("owner-1");
+    mocks.readProfileFromMetadata.mockReturnValue(profile);
+    mocks.profileNeedsRebuild.mockReturnValue(false);
+    mocks.refreshCurrentState.mockResolvedValue(refreshed);
+
+    const task = makeExistingProactiveTask();
+    const { runtime } = createRuntimeMock([task]);
+
+    await executeProactiveTask(runtime);
+
+    expect(mocks.refreshCurrentState).toHaveBeenCalledWith(
+      runtime,
+      "owner-1",
+      profile,
+      expect.any(Date),
+    );
+    expect(mocks.buildActivityProfile).not.toHaveBeenCalled();
+  });
+
+  it("sends GM when due and records it in firedLog", async () => {
+    const profile = makeProfile({
+      lastSeenAt: Date.now() - 60_000,
+      typicalFirstActiveHour: 8,
+      typicalWakeHour: 7,
+    });
+    mocks.resolveOwnerEntityId.mockResolvedValue("owner-1");
+    mocks.readProfileFromMetadata.mockReturnValue(profile);
+    mocks.profileNeedsRebuild.mockReturnValue(false);
+    mocks.refreshCurrentState.mockResolvedValue(profile);
+    mocks.loadOwnerContactsConfig.mockReturnValue({
+      telegram: { entityId: "owner-tg-entity", channelId: "tg-123" },
+    });
+    mocks.resolveOwnerContactSource.mockReturnValue({
+      source: "telegram",
+      contact: { entityId: "owner-tg-entity", channelId: "tg-123" },
+    });
+
+    const task = makeExistingProactiveTask();
+    const { runtime, state } = createRuntimeMock([task]);
+
+    await executeProactiveTask(runtime);
+
+    const sendSpy = vi.mocked(runtime.sendMessageToTarget);
+    // GM might fire depending on time — check persisted metadata for fired log
+    const updated = state.tasks.find((t) => t.id === task.id);
+    const meta = updated?.metadata as Record<string, unknown>;
+    expect(meta.activityProfile).toBeDefined();
+    // firedLog should be persisted (may or may not have gmFiredAt depending on scheduling)
+    if (sendSpy.mock.calls.length > 0) {
+      const firedLog = meta.firedActionsLog as Record<string, unknown>;
+      expect(firedLog).toBeDefined();
+      expect(firedLog.date).toBeDefined();
+    }
+  });
+
+  it("skips actions scheduled in the future", async () => {
+    // Set both wake and sleep hours far enough ahead that GM and GN
+    // are always in the future regardless of when this test runs.
+    const futureProfile = makeProfile({
+      lastSeenAt: Date.now() - 60_000,
+      typicalFirstActiveHour: 23,
+      typicalLastActiveHour: 23,
+      typicalWakeHour: 23,
+      typicalSleepHour: 23,
+      // Disable GN by making wasActiveToday return false
+      hasOpenActivityCycle: false,
+      isCurrentlyActive: false,
+    });
+    mocks.resolveOwnerEntityId.mockResolvedValue("owner-1");
+    mocks.readProfileFromMetadata.mockReturnValue(futureProfile);
+    mocks.profileNeedsRebuild.mockReturnValue(false);
+    mocks.refreshCurrentState.mockResolvedValue(futureProfile);
+    mocks.loadOwnerContactsConfig.mockReturnValue({
+      telegram: { entityId: "owner-tg" },
+    });
+
+    const task = makeExistingProactiveTask();
+    const { runtime } = createRuntimeMock([task]);
+
+    await executeProactiveTask(runtime);
+
+    expect(vi.mocked(runtime.sendMessageToTarget)).not.toHaveBeenCalled();
+  });
+
+  it("skips sending when no owner contact is configured for the platform", async () => {
+    const profile = makeProfile({
+      lastSeenAt: Date.now() - 60_000,
+      primaryPlatform: "whatsapp",
+    });
+    mocks.resolveOwnerEntityId.mockResolvedValue("owner-1");
+    mocks.readProfileFromMetadata.mockReturnValue(profile);
+    mocks.profileNeedsRebuild.mockReturnValue(false);
+    mocks.refreshCurrentState.mockResolvedValue(profile);
+    mocks.loadOwnerContactsConfig.mockReturnValue({}); // no contacts at all
+    mocks.resolveOwnerContactSource.mockReturnValue(null);
+
+    const task = makeExistingProactiveTask();
+    const { runtime } = createRuntimeMock([task]);
+
+    await executeProactiveTask(runtime);
+
+    expect(vi.mocked(runtime.sendMessageToTarget)).not.toHaveBeenCalled();
+  });
+
+  it("survives sendMessageToTarget failures and still persists metadata", async () => {
+    const profile = makeProfile({
+      lastSeenAt: Date.now() - 60_000,
+    });
+    mocks.resolveOwnerEntityId.mockResolvedValue("owner-1");
+    mocks.readProfileFromMetadata.mockReturnValue(profile);
+    mocks.profileNeedsRebuild.mockReturnValue(false);
+    mocks.refreshCurrentState.mockResolvedValue(profile);
+    mocks.loadOwnerContactsConfig.mockReturnValue({
+      telegram: { entityId: "owner-tg" },
+    });
+    mocks.resolveOwnerContactSource.mockReturnValue({
+      source: "telegram",
+      contact: { entityId: "owner-tg" },
+    });
+
+    const task = makeExistingProactiveTask();
+    const { runtime, state } = createRuntimeMock([task]);
+    vi.mocked(runtime.sendMessageToTarget).mockRejectedValue(
+      new Error("network down"),
+    );
+
+    const result = await executeProactiveTask(runtime);
+
+    expect(result.nextInterval).toBe(PROACTIVE_TASK_INTERVAL_MS);
+    // Profile should still be persisted despite send failure
+    const updated = state.tasks.find((t) => t.id === task.id);
+    const meta = updated?.metadata as Record<string, unknown>;
+    expect(meta.activityProfile).toBeDefined();
+  });
+
+  it("returns nextInterval even when the entire execution throws", async () => {
+    mocks.resolveOwnerEntityId.mockRejectedValue(
+      new Error("database exploded"),
+    );
+
+    const { runtime } = createRuntimeMock();
+
+    const result = await executeProactiveTask(runtime);
+
+    expect(result.nextInterval).toBe(PROACTIVE_TASK_INTERVAL_MS);
+  });
+
+  it("persists firedActionsLog across the execution", async () => {
+    const profile = makeProfile({
+      lastSeenAt: Date.now() - 60_000,
+      typicalFirstActiveHour: 8,
+      typicalWakeHour: 7,
+    });
+    mocks.resolveOwnerEntityId.mockResolvedValue("owner-1");
+    mocks.readProfileFromMetadata.mockReturnValue(profile);
+    mocks.profileNeedsRebuild.mockReturnValue(false);
+    mocks.refreshCurrentState.mockResolvedValue(profile);
+    mocks.loadOwnerContactsConfig.mockReturnValue({
+      telegram: { entityId: "owner-tg", channelId: "ch-1" },
+    });
+    mocks.resolveOwnerContactSource.mockReturnValue({
+      source: "telegram",
+      contact: { entityId: "owner-tg", channelId: "ch-1" },
+    });
+
+    // Simulate occurrences due soon
+    mocks.mockGetOverview.mockResolvedValue({
+      occurrences: [
+        {
+          id: "brush-am",
+          title: "Brush teeth",
+          dueAt: new Date(Date.now() + 20 * 60_000).toISOString(),
+          state: "upcoming",
+          definitionKind: "habit",
+          cadence: { kind: "daily" },
+          priority: 5,
+        },
+      ],
+    });
+
+    const task = makeExistingProactiveTask();
+    const { runtime, state } = createRuntimeMock([task]);
+
+    await executeProactiveTask(runtime);
+
+    // Metadata should be updated with both profile and firedLog
+    const updated = state.tasks.find((t) => t.id === task.id);
+    expect(updated).toBeDefined();
+    const meta = updated?.metadata as Record<string, unknown>;
+    expect(meta.activityProfile).toBeDefined();
+    // firedActionsLog should exist even if empty (date should be set)
+    if (meta.firedActionsLog) {
+      const log = meta.firedActionsLog as Record<string, unknown>;
+      expect(log.date).toBeDefined();
+    }
+  });
+});

@@ -183,7 +183,7 @@ function collectCandidates(
   };
 
   if (typeof runtimeLike.getServicesByType === "function") {
-    const byType = runtimeLike.getServicesByType("trajectory_logger");
+    const byType = runtimeLike.getServicesByType("trajectories");
     if (Array.isArray(byType)) {
       for (const candidate of byType) {
         add(candidate);
@@ -194,7 +194,7 @@ function collectCandidates(
   }
 
   if (typeof runtimeLike.getService === "function") {
-    add(runtimeLike.getService("trajectory_logger"));
+    add(runtimeLike.getService("trajectories"));
   }
 
   return candidates;
@@ -223,7 +223,7 @@ async function getTrajectoryLogger(
   // The service may still be starting — wait for it if the runtime supports it.
   const status =
     typeof runtimeLike.getServiceRegistrationStatus === "function"
-      ? runtimeLike.getServiceRegistrationStatus("trajectory_logger")
+      ? runtimeLike.getServiceRegistrationStatus("trajectories")
       : "unknown";
 
   if (
@@ -232,7 +232,7 @@ async function getTrajectoryLogger(
   ) {
     try {
       await Promise.race([
-        runtimeLike.getServiceLoadPromise("trajectory_logger"),
+        runtimeLike.getServiceLoadPromise("trajectories"),
         new Promise<void>((resolve) => setTimeout(resolve, 5000)),
       ]);
     } catch {
@@ -988,7 +988,7 @@ async function handleGetTrajectories(
 ): Promise<void> {
   const logger = await getTrajectoryLogger(runtime);
   if (!logger) {
-    sendJsonError(res, "Trajectory logger service not available", 503);
+    sendJsonError(res, "Trajectories service not available", 503);
     return;
   }
 
@@ -1058,7 +1058,7 @@ async function handleGetTrajectoryDetail(
 ): Promise<void> {
   const logger = await getTrajectoryLogger(runtime);
   if (!logger) {
-    sendJsonError(res, "Trajectory logger service not available", 503);
+    sendJsonError(res, "Trajectories service not available", 503);
     return;
   }
 
@@ -1084,7 +1084,7 @@ async function handleGetStats(
 ): Promise<void> {
   const logger = await getTrajectoryLogger(runtime);
   if (!logger) {
-    sendJsonError(res, "Trajectory logger service not available", 503);
+    sendJsonError(res, "Trajectories service not available", 503);
     return;
   }
 
@@ -1099,7 +1099,7 @@ async function handleGetConfig(
 ): Promise<void> {
   const logger = await getTrajectoryLogger(runtime);
   if (!logger) {
-    sendJsonError(res, "Trajectory logger service not available", 503);
+    sendJsonError(res, "Trajectories service not available", 503);
     return;
   }
 
@@ -1115,7 +1115,7 @@ async function handlePutConfig(
 ): Promise<void> {
   const logger = await getTrajectoryLogger(runtime);
   if (!logger) {
-    sendJsonError(res, "Trajectory logger service not available", 503);
+    sendJsonError(res, "Trajectories service not available", 503);
     return;
   }
 
@@ -1138,7 +1138,7 @@ async function handleExportTrajectories(
 ): Promise<void> {
   const logger = await getTrajectoryLogger(runtime);
   if (!logger) {
-    sendJsonError(res, "Trajectory logger service not available", 503);
+    sendJsonError(res, "Trajectories service not available", 503);
     return;
   }
 
@@ -1219,7 +1219,7 @@ async function handleDeleteTrajectories(
 ): Promise<void> {
   const logger = await getTrajectoryLogger(runtime);
   if (!logger) {
-    sendJsonError(res, "Trajectory logger service not available", 503);
+    sendJsonError(res, "Trajectories service not available", 503);
     return;
   }
 

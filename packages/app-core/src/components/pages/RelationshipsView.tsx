@@ -1,9 +1,9 @@
 import {
   client,
-  type RolodexGraphQuery,
-  type RolodexGraphSnapshot,
-  type RolodexPersonDetail,
-  type RolodexPersonSummary,
+  type RelationshipsGraphQuery,
+  type RelationshipsGraphSnapshot,
+  type RelationshipsPersonDetail,
+  type RelationshipsPersonSummary,
 } from "@miladyai/app-core/api";
 import {
   Button,
@@ -25,8 +25,8 @@ import {
 } from "react";
 import { useApp } from "../../state";
 import { formatDateTime } from "../../utils/format";
-import { RolodexGraphPanel } from "./RolodexGraphPanel";
-import { RolodexIdentityCluster } from "./RolodexIdentityCluster";
+import { RelationshipsGraphPanel } from "./RelationshipsGraphPanel";
+import { RelationshipsIdentityCluster } from "./RelationshipsIdentityCluster";
 
 const TOOLBAR_BUTTON_BASE =
   "h-8 rounded-full px-3.5 text-[10px] font-semibold tracking-[0.12em] border border-border/32 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_84%,transparent),color-mix(in_srgb,var(--bg)_95%,transparent))] text-muted-strong shadow-[inset_0_1px_0_rgba(255,255,255,0.14),0_14px_20px_-18px_rgba(15,23,42,0.14)] backdrop-blur-md transition-[border-color,background-color,color,transform,box-shadow] duration-200 hover:border-border/46 hover:bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_90%,transparent),color-mix(in_srgb,var(--bg)_97%,transparent))] hover:text-txt hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_16px_22px_-18px_rgba(15,23,42,0.16)] active:scale-95 disabled:hover:border-border/32 disabled:hover:bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_84%,transparent),color-mix(in_srgb,var(--bg)_95%,transparent))] disabled:hover:text-muted-strong";
@@ -37,7 +37,7 @@ function toTimestamp(value?: string): number {
   return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
-function sortPeople(people: RolodexPersonSummary[]): RolodexPersonSummary[] {
+function sortPeople(people: RelationshipsPersonSummary[]): RelationshipsPersonSummary[] {
   return [...people].sort((left, right) => {
     const timeDiff =
       toTimestamp(right.lastInteractionAt) -
@@ -49,21 +49,21 @@ function sortPeople(people: RolodexPersonSummary[]): RolodexPersonSummary[] {
   });
 }
 
-function summarizeHandles(person: RolodexPersonSummary): string {
+function summarizeHandles(person: RelationshipsPersonSummary): string {
   const handles = person.identities.flatMap((identity) =>
     identity.handles.map((handle) => `@${handle.handle}`),
   );
   return handles.slice(0, 3).join(", ");
 }
 
-function platformOptions(snapshot: RolodexGraphSnapshot | null): string[] {
+function platformOptions(snapshot: RelationshipsGraphSnapshot | null): string[] {
   if (!snapshot) return [];
   return [...new Set(snapshot.people.flatMap((person) => person.platforms))]
     .filter((platform) => platform.trim().length > 0)
     .sort((left, right) => left.localeCompare(right));
 }
 
-function topContacts(person: RolodexPersonDetail): Array<{
+function topContacts(person: RelationshipsPersonDetail): Array<{
   label: string;
   value: string;
 }> {
@@ -81,7 +81,7 @@ function topContacts(person: RolodexPersonDetail): Array<{
   return rows;
 }
 
-function PersonSummaryCard({ person }: { person: RolodexPersonDetail }) {
+function PersonSummaryCard({ person }: { person: RelationshipsPersonDetail }) {
   const contacts = topContacts(person);
 
   return (
@@ -173,14 +173,14 @@ function PersonSummaryCard({ person }: { person: RolodexPersonDetail }) {
         </div>
 
         <PagePanel variant="surface" className="px-4 py-4">
-          <RolodexIdentityCluster person={person} />
+          <RelationshipsIdentityCluster person={person} />
         </PagePanel>
       </div>
     </PagePanel>
   );
 }
 
-function FactsPanel({ person }: { person: RolodexPersonDetail }) {
+function FactsPanel({ person }: { person: RelationshipsPersonDetail }) {
   return (
     <PagePanel variant="surface" className="px-4 py-4">
       <div className="flex items-center justify-between gap-3">
@@ -225,7 +225,7 @@ function FactsPanel({ person }: { person: RolodexPersonDetail }) {
   );
 }
 
-function RelationshipsPanel({ person }: { person: RolodexPersonDetail }) {
+function RelationshipsPanel({ person }: { person: RelationshipsPersonDetail }) {
   return (
     <PagePanel variant="surface" className="px-4 py-4">
       <div className="flex items-center justify-between gap-3">
@@ -276,7 +276,7 @@ function RelationshipsPanel({ person }: { person: RolodexPersonDetail }) {
   );
 }
 
-function ConversationsPanel({ person }: { person: RolodexPersonDetail }) {
+function ConversationsPanel({ person }: { person: RelationshipsPersonDetail }) {
   return (
     <PagePanel variant="surface" className="px-4 py-4">
       <div className="flex items-center justify-between gap-3">
@@ -336,7 +336,7 @@ function ConversationsPanel({ person }: { person: RolodexPersonDetail }) {
   );
 }
 
-export function RolodexView({
+export function RelationshipsView({
   contentHeader,
 }: {
   contentHeader?: ReactNode;
@@ -346,19 +346,19 @@ export function RolodexView({
   const [platform, setPlatform] = useState<string>("all");
   const [graphLoading, setGraphLoading] = useState(true);
   const [graphError, setGraphError] = useState<string | null>(null);
-  const [graph, setGraph] = useState<RolodexGraphSnapshot | null>(null);
+  const [graph, setGraph] = useState<RelationshipsGraphSnapshot | null>(null);
   const [selectedPersonId, setSelectedPersonId] = useState<string | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
-  const [detail, setDetail] = useState<RolodexPersonDetail | null>(null);
+  const [detail, setDetail] = useState<RelationshipsPersonDetail | null>(null);
   const deferredSearch = useDeferredValue(search);
 
-  const loadGraph = useCallback(async (query: RolodexGraphQuery) => {
+  const loadGraph = useCallback(async (query: RelationshipsGraphQuery) => {
     setGraphLoading(true);
     setGraphError(null);
 
     try {
-      const snapshot = await client.getRolodexGraph(query);
+      const snapshot = await client.getRelationshipsGraph(query);
       const nextGraph = {
         ...snapshot,
         people: sortPeople(snapshot.people),
@@ -368,7 +368,7 @@ export function RolodexView({
       setGraphError(
         error instanceof Error
           ? error.message
-          : "Failed to load the rolodex graph.",
+          : "Failed to load the relationships graph.",
       );
       setGraph(null);
     } finally {
@@ -410,7 +410,7 @@ export function RolodexView({
     setDetailError(null);
 
     void client
-      .getRolodexPerson(selectedPersonId)
+      .getRelationshipsPerson(selectedPersonId)
       .then((person) => {
         if (!cancelled) {
           setDetail(person);
@@ -445,7 +445,7 @@ export function RolodexView({
   const selectedGroupId = selectedSummary?.groupId ?? null;
 
   const sidebar = (
-    <Sidebar testId="rolodex-sidebar">
+    <Sidebar testId="relationships-sidebar">
       <SidebarHeader
         search={{
           value: search,
@@ -571,7 +571,7 @@ export function RolodexView({
     <PageLayout
       sidebar={sidebar}
       contentHeader={contentHeader}
-      data-testid="rolodex-view"
+      data-testid="relationships-view"
     >
       <div className="flex min-h-0 flex-1 flex-col gap-4">
         {graphError ? (
@@ -593,14 +593,14 @@ export function RolodexView({
           <PagePanel.Empty
             variant="panel"
             className="min-h-[24rem]"
-            description="Connectors, rolodex extraction, and confirmed identity links will populate this workspace."
-            title="No rolodex data available"
+            description="Connectors, relationships extraction, and confirmed identity links will populate this workspace."
+            title="No relationships data available"
           />
         ) : (
           <>
             <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
               <PagePanel variant="surface" className="px-4 py-4">
-                <RolodexGraphPanel
+                <RelationshipsGraphPanel
                   snapshot={graph}
                   selectedGroupId={selectedGroupId}
                   onSelectGroupId={(groupId) => {

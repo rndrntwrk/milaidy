@@ -198,7 +198,8 @@ export function PluginSettingsDialog({
         </AdminDialog.BodyScroll>
         {!isShowcase && (
           <AdminDialog.Footer className="flex justify-end gap-3">
-            {plugin.enabled &&
+            {plugin.source === "store" &&
+              plugin.enabled &&
               !plugin.isActive &&
               plugin.npmName &&
               !plugin.loadError && (

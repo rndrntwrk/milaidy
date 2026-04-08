@@ -33,13 +33,13 @@ Services are accessible via the runtime:
 const service = runtime.getService("AGENT_SKILLS_SERVICE");
 
 // Get all services of a type (returns array for multi-instance services)
-const services = runtime.getServicesByType("trajectory_logger");
+const services = runtime.getServicesByType("trajectories");
 
 // Wait for a service to finish loading
 const svcPromise = runtime.getServiceLoadPromise("AGENT_SKILLS_SERVICE");
 
 // Check registration status
-const status = runtime.getServiceRegistrationStatus("trajectory_logger");
+const status = runtime.getServiceRegistrationStatus("trajectories");
 // Returns: "pending" | "registering" | "registered" | "failed" | "unknown"
 ```
 
@@ -53,7 +53,7 @@ Core plugins are always loaded and each provides one or more services:
 | `@elizaos/plugin-local-embedding` | `TEXT_EMBEDDING` handler | Local GGUF embedding model via node-llama-cpp |
 | `@elizaos/plugin-form` | Form service | Structured form packaging for guided user journeys |
 | `knowledge` | Knowledge service | RAG knowledge indexing and retrieval |
-| `trajectories` | `trajectory_logger` | Debug and RL training trajectory capture |
+| `trajectories` | `trajectories` | Debug and RL training trajectory capture |
 | `@elizaos/plugin-agent-orchestrator` | Orchestrator service | Multi-agent task coordination and spawning |
 | `@elizaos/plugin-cron` | Cron service | Scheduled job execution |
 | `@elizaos/plugin-shell` | Shell service | Shell command execution with security controls |
@@ -90,7 +90,7 @@ These services are available but not loaded by default — enable via admin pane
 The trajectory logger is treated specially during startup. Milady waits for it to become available with a 3-second timeout before enabling it:
 
 ```typescript
-await waitForTrajectoryLoggerService(runtime, "post-init", 3000);
+await waitForTrajectoriesService(runtime, "post-init", 3000);
 ensureTrajectoryLoggerEnabled(runtime, "post-init");
 ```
 

@@ -28,7 +28,7 @@ describe("native feature bootstrap wiring", () => {
   it("guards trajectory bootstrap behind the native trajectories toggle", () => {
     const waitBlock =
       elizaSource.match(
-        /async function waitForTrajectoryLoggerService\([\s\S]*?\n\}/m,
+        /async function waitForTrajectoriesService\([\s\S]*?\n\}/m,
       )?.[0] ?? "";
     const ensureBlock =
       elizaSource.match(

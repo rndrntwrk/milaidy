@@ -6,7 +6,7 @@
  *   - Skills: Custom agent skills
  *   - Fine-Tuning: Dataset and model training workflows
  *   - Trajectories: LLM call viewer and analysis
- *   - Rolodex: Cross-channel people, identity, and relationship graph
+ *   - Relationships: Cross-channel people, identity, and relationship graph
  *   - Runtime: Runtime object inspection
  *   - Databases: Tables/media/vector browser
  *   - Logs: Runtime log viewer
@@ -22,7 +22,7 @@ import { FineTuningView } from "../settings/FineTuningView";
 import { DatabasePageView } from "./DatabasePageView";
 import { LogsPageView } from "./LogsPageView";
 import { PluginsPageView } from "./PluginsPageView";
-import { RolodexView } from "./RolodexView";
+import { RelationshipsView } from "./RelationshipsView";
 import { RuntimeView } from "./RuntimeView";
 import { SkillsView } from "./SkillsView";
 import { TrajectoriesView } from "./TrajectoriesView";
@@ -32,7 +32,7 @@ type SubTab =
   | "skills"
   | "fine-tuning"
   | "trajectories"
-  | "rolodex"
+  | "relationships"
   | "runtime"
   | "database"
   | "desktop"
@@ -69,9 +69,9 @@ const SUB_TABS: Array<{
     descriptionKey: "advancedpageview.TrajectoriesDescription",
   },
   {
-    id: "rolodex",
-    labelKey: "advancedpageview.Rolodex",
-    descriptionKey: "advancedpageview.RolodexDescription",
+    id: "relationships",
+    labelKey: "advancedpageview.Relationships",
+    descriptionKey: "advancedpageview.RelationshipsDescription",
   },
   {
     id: "runtime",
@@ -112,8 +112,8 @@ function mapTabToSubTab(tab: Tab): SubTab {
       return "fine-tuning";
     case "trajectories":
       return "trajectories";
-    case "rolodex":
-      return "rolodex";
+    case "relationships":
+      return "relationships";
     case "runtime":
       return "runtime";
     case "database":
@@ -211,8 +211,8 @@ export function AdvancedPageView({ inModal }: { inModal?: boolean } = {}) {
             onSelectTrajectory={setSelectedTrajectoryId}
           />
         );
-      case "rolodex":
-        return <RolodexView contentHeader={advancedContentHeader} />;
+      case "relationships":
+        return <RelationshipsView contentHeader={advancedContentHeader} />;
       case "runtime":
         return <RuntimeView contentHeader={advancedContentHeader} />;
       case "database":

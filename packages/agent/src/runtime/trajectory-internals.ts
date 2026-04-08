@@ -1108,7 +1108,7 @@ export async function resolveTrajectoryLogger(
   };
 
   if (typeof runtimeLike.getServicesByType === "function") {
-    const byType = runtimeLike.getServicesByType("trajectory_logger");
+    const byType = runtimeLike.getServicesByType("trajectories");
     if (Array.isArray(byType)) {
       for (const item of byType) push(item);
     } else {
@@ -1116,7 +1116,7 @@ export async function resolveTrajectoryLogger(
     }
   }
   if (typeof runtimeLike.getService === "function") {
-    push(runtimeLike.getService("trajectory_logger"));
+    push(runtimeLike.getService("trajectories"));
   }
 
   if (candidates.length === 0) return null;
@@ -1643,11 +1643,7 @@ export async function writeCompressedJsonlRows(
 }
 
 export function shouldEnableTrajectoryLoggingByDefault(): boolean {
-  const explicit = toOptionalBoolean(
-    process.env.MILADY_TRAJECTORY_LOGGING ??
-      process.env.TRAJECTORY_LOGGING_ENABLED ??
-      process.env.ELIZA_TRAJECTORY_LOGGING,
-  );
+  const explicit = toOptionalBoolean(process.env.ENABLE_TRAJECTORIES);
   if (explicit !== undefined) return explicit;
 
   // Trajectory capture underpins debugging, export, and training workflows.

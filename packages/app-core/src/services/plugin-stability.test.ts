@@ -13,7 +13,7 @@
  */
 
 import {
-  trajectoryLoggerPlugin,
+  trajectoriesPlugin,
   type Plugin,
   type Provider,
   type ProviderResult,
@@ -1008,14 +1008,14 @@ describe("Version Skew Detection (issue #10)", () => {
   });
 
   it("native trajectories export a runtime service from core", () => {
-    expect(trajectoryLoggerPlugin).toBeDefined();
-    expect(Array.isArray(trajectoryLoggerPlugin.services)).toBe(true);
-    expect(trajectoryLoggerPlugin.services?.length ?? 0).toBeGreaterThan(0);
-    const serviceNames = (trajectoryLoggerPlugin.services ?? []).map(
+    expect(trajectoriesPlugin).toBeDefined();
+    expect(Array.isArray(trajectoriesPlugin.services)).toBe(true);
+    expect(trajectoriesPlugin.services?.length ?? 0).toBeGreaterThan(0);
+    const serviceNames = (trajectoriesPlugin.services ?? []).map(
       (serviceClass) => serviceClass.name,
     );
     expect(
-      serviceNames.some((name) => name.startsWith("TrajectoryLoggerService")),
+      serviceNames.some((name) => name.startsWith("TrajectoriesService")),
     ).toBe(true);
     expect(OPTIONAL_CORE_PLUGINS).not.toContain("trajectories");
   });

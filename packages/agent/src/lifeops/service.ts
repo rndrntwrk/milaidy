@@ -331,7 +331,7 @@ type ReminderActivityProfileSnapshot = {
 };
 
 type RuntimeOwnerContactResolution = {
-  sourceOfTruth: "config" | "rolodex" | "config+rolodex";
+  sourceOfTruth: "config" | "relationships" | "config+relationships";
   preferredCommunicationChannel: string | null;
   platformIdentities: Array<{
     platform: string;

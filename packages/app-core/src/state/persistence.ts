@@ -416,7 +416,7 @@ function normalizeLastNativeTab(tab: unknown): Tab {
     case "advanced":
     case "fine-tuning":
     case "trajectories":
-    case "rolodex":
+    case "relationships":
     case "voice":
     case "runtime":
     case "database":

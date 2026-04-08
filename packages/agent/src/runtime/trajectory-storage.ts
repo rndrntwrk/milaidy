@@ -945,7 +945,7 @@ export async function flushTrajectoryWrites(
  * expected by trajectory-routes.ts.
  */
 export class DatabaseTrajectoryLogger extends Service {
-  static serviceType = "trajectory_logger";
+  static serviceType = "trajectories";
   capabilityDescription =
     "Database-backed trajectory logging service for LLM call persistence";
 

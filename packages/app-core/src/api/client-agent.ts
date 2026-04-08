@@ -45,11 +45,11 @@ import type {
   PluginInfo,
   PluginMutationResult,
   RawPtySession,
-  RolodexGraphQuery,
-  RolodexGraphSnapshot,
-  RolodexGraphStats,
-  RolodexPersonDetail,
-  RolodexPersonSummary,
+  RelationshipsGraphQuery,
+  RelationshipsGraphSnapshot,
+  RelationshipsGraphStats,
+  RelationshipsPersonDetail,
+  RelationshipsPersonSummary,
   RuntimeDebugSnapshot,
   SecretInfo,
   SecurityAuditFilter,
@@ -349,12 +349,12 @@ declare module "./client-base" {
       fromSeq?: number;
     }): Promise<AgentEventsResponse>;
     getExtensionStatus(): Promise<ExtensionStatus>;
-    getRolodexGraph(query?: RolodexGraphQuery): Promise<RolodexGraphSnapshot>;
-    getRolodexPeople(query?: RolodexGraphQuery): Promise<{
-      people: RolodexPersonSummary[];
-      stats: RolodexGraphStats;
+    getRelationshipsGraph(query?: RelationshipsGraphQuery): Promise<RelationshipsGraphSnapshot>;
+    getRelationshipsPeople(query?: RelationshipsGraphQuery): Promise<{
+      people: RelationshipsPersonSummary[];
+      stats: RelationshipsGraphStats;
     }>;
-    getRolodexPerson(id: string): Promise<RolodexPersonDetail>;
+    getRelationshipsPerson(id: string): Promise<RelationshipsPersonDetail>;
     getCharacter(): Promise<{
       character: CharacterData;
       agentName: string;
@@ -1453,7 +1453,7 @@ MiladyClient.prototype.getExtensionStatus = async function (
   return this.fetch("/api/extension/status");
 };
 
-MiladyClient.prototype.getRolodexGraph = async function (
+MiladyClient.prototype.getRelationshipsGraph = async function (
   this: MiladyClient,
   query,
 ) {
@@ -1465,13 +1465,13 @@ MiladyClient.prototype.getRolodexGraph = async function (
   if (typeof query?.offset === "number")
     params.set("offset", String(query.offset));
   const qs = params.toString();
-  const response = await this.fetch<{ data: RolodexGraphSnapshot }>(
-    `/api/rolodex/graph${qs ? `?${qs}` : ""}`,
+  const response = await this.fetch<{ data: RelationshipsGraphSnapshot }>(
+    `/api/relationships/graph${qs ? `?${qs}` : ""}`,
   );
   return response.data;
 };
 
-MiladyClient.prototype.getRolodexPeople = async function (
+MiladyClient.prototype.getRelationshipsPeople = async function (
   this: MiladyClient,
   query,
 ) {
@@ -1484,21 +1484,21 @@ MiladyClient.prototype.getRolodexPeople = async function (
     params.set("offset", String(query.offset));
   const qs = params.toString();
   const response = await this.fetch<{
-    data: RolodexPersonSummary[];
-    stats: RolodexGraphStats;
-  }>(`/api/rolodex/people${qs ? `?${qs}` : ""}`);
+    data: RelationshipsPersonSummary[];
+    stats: RelationshipsGraphStats;
+  }>(`/api/relationships/people${qs ? `?${qs}` : ""}`);
   return {
     people: response.data,
     stats: response.stats,
   };
 };
 
-MiladyClient.prototype.getRolodexPerson = async function (
+MiladyClient.prototype.getRelationshipsPerson = async function (
   this: MiladyClient,
   id,
 ) {
-  const response = await this.fetch<{ data: RolodexPersonDetail }>(
-    `/api/rolodex/people/${encodeURIComponent(id)}`,
+  const response = await this.fetch<{ data: RelationshipsPersonDetail }>(
+    `/api/relationships/people/${encodeURIComponent(id)}`,
   );
   return response.data;
 };

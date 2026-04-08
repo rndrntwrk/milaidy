@@ -238,7 +238,7 @@ function collectRuntimeCandidates(runtime: RuntimeLike): unknown[] {
   };
 
   if (typeof runtime.getServicesByType === "function") {
-    const value = runtime.getServicesByType("trajectory_logger");
+    const value = runtime.getServicesByType("trajectories");
     if (Array.isArray(value)) {
       for (const entry of value) {
         push(entry);
@@ -249,7 +249,7 @@ function collectRuntimeCandidates(runtime: RuntimeLike): unknown[] {
   }
 
   if (typeof runtime.getService === "function") {
-    push(runtime.getService("trajectory_logger"));
+    push(runtime.getService("trajectories"));
   }
 
   return candidates;

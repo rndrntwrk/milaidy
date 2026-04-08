@@ -16,7 +16,7 @@ export function createAdminTrustProvider(): Provider {
   return {
     name: "elizaAdminTrust",
     description:
-      "Marks owner/admin chat identity as trusted for contact assertions (rolodex-oriented).",
+      "Marks owner/admin chat identity as trusted for contact assertions (relationships-oriented).",
     dynamic: true,
     position: 11,
     async get(

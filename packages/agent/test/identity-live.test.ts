@@ -2722,7 +2722,7 @@ describeIf(LIVE_TESTS_ENABLED)("Live LLM Identity Scenarios", () => {
   // =========================================================================
   // Category 10: Multi-Turn Conversation Context (Short Confirmations)
   //
-  // These test the CRITICAL requirement: "everything in rolodex happens from
+  // These test the CRITICAL requirement: "everything in relationships happens from
   // the recent conversation, not just the last message." Users often reply
   // with just "sure", "yes", "yeah" after the agent asks a question.
   // =========================================================================

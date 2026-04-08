@@ -1414,7 +1414,7 @@ describe("API Server E2E (no runtime)", () => {
       };
       const runtime = createRuntimeForChatSseTests({
         getService: (serviceType) =>
-          serviceType === "trajectory_logger" ? trajectoryLogger : null,
+          serviceType === "trajectories" ? trajectoryLogger : null,
       });
       const streamServer = await startApiServer({ port: 0, runtime });
       try {
@@ -1455,7 +1455,7 @@ describe("API Server E2E (no runtime)", () => {
       const runtime = createRuntimeForChatSseTests({
         getService: () => null,
         getServicesByType: (serviceType) =>
-          serviceType === "trajectory_logger" ? [trajectoryLogger] : [],
+          serviceType === "trajectories" ? [trajectoryLogger] : [],
       });
       const streamServer = await startApiServer({ port: 0, runtime });
       try {
@@ -1493,7 +1493,7 @@ describe("API Server E2E (no runtime)", () => {
 
       const runtime = createRuntimeForChatSseTests({
         getService: (serviceType) =>
-          serviceType === "trajectory_logger" ? trajectoryLogger : null,
+          serviceType === "trajectories" ? trajectoryLogger : null,
         onEmitEvent: (_event, payload) => {
           if (
             payload &&
@@ -1573,7 +1573,7 @@ describe("API Server E2E (no runtime)", () => {
 
       const runtime = createRuntimeForChatSseTests({
         getService: (serviceType) =>
-          serviceType === "trajectory_logger" ? trajectoryLogger : null,
+          serviceType === "trajectories" ? trajectoryLogger : null,
         onEmitEvent: async (event, payload) => {
           const eventName = Array.isArray(event) ? event[0] : event;
           if (
@@ -1654,9 +1654,9 @@ describe("API Server E2E (no runtime)", () => {
       };
       const runtime = createRuntimeForChatSseTests({
         getService: (serviceType) =>
-          serviceType === "trajectory_logger" ? coreLogger : null,
+          serviceType === "trajectories" ? coreLogger : null,
         getServicesByType: (serviceType) =>
-          serviceType === "trajectory_logger"
+          serviceType === "trajectories"
             ? [coreLogger, persistentLogger]
             : [],
         handleMessage: async (runtimeArg, message, onResponse) => {
@@ -1669,7 +1669,7 @@ describe("API Server E2E (no runtime)", () => {
                 }) => void;
               } | null;
             }
-          ).getService("trajectory_logger");
+          ).getService("trajectories");
           const metadata =
             message && typeof message === "object" && "metadata" in message
               ? (message.metadata as { trajectoryStepId?: string } | undefined)
@@ -2623,9 +2623,9 @@ describe("API Server E2E (no runtime)", () => {
 
       const runtime = createRuntimeForChatSseTests({
         getService: (serviceType) =>
-          serviceType === "trajectory_logger" ? trajectoryLogger : null,
+          serviceType === "trajectories" ? trajectoryLogger : null,
         getServicesByType: (serviceType) =>
-          serviceType === "trajectory_logger" ? [trajectoryLogger] : [],
+          serviceType === "trajectories" ? [trajectoryLogger] : [],
       }) as AgentRuntime & { adapter?: unknown };
       runtime.adapter = {};
 
@@ -2697,9 +2697,9 @@ describe("API Server E2E (no runtime)", () => {
 
       const runtime = createRuntimeForChatSseTests({
         getService: (serviceType) =>
-          serviceType === "trajectory_logger" ? trajectoryLogger : null,
+          serviceType === "trajectories" ? trajectoryLogger : null,
         getServicesByType: (serviceType) =>
-          serviceType === "trajectory_logger" ? [trajectoryLogger] : [],
+          serviceType === "trajectories" ? [trajectoryLogger] : [],
       }) as AgentRuntime & { adapter?: unknown };
       runtime.adapter = {};
 
@@ -2800,9 +2800,9 @@ describe("API Server E2E (no runtime)", () => {
 
       const runtime = createRuntimeForChatSseTests({
         getService: (serviceType) =>
-          serviceType === "trajectory_logger" ? trajectoryLogger : null,
+          serviceType === "trajectories" ? trajectoryLogger : null,
         getServicesByType: (serviceType) =>
-          serviceType === "trajectory_logger" ? [trajectoryLogger] : [],
+          serviceType === "trajectories" ? [trajectoryLogger] : [],
       }) as AgentRuntime & { adapter?: unknown };
       runtime.adapter = {};
       runtime.getMemories = async () =>
@@ -2945,9 +2945,9 @@ describe("API Server E2E (no runtime)", () => {
 
       const runtime = createRuntimeForChatSseTests({
         getService: (serviceType) =>
-          serviceType === "trajectory_logger" ? trajectoryLogger : null,
+          serviceType === "trajectories" ? trajectoryLogger : null,
         getServicesByType: (serviceType) =>
-          serviceType === "trajectory_logger" ? [trajectoryLogger] : [],
+          serviceType === "trajectories" ? [trajectoryLogger] : [],
       }) as AgentRuntime & {
         adapter?: {
           db?: {
@@ -3162,9 +3162,9 @@ describe("API Server E2E (no runtime)", () => {
 
       const runtime = createRuntimeForChatSseTests({
         getService: (serviceType) =>
-          serviceType === "trajectory_logger" ? trajectoryLogger : null,
+          serviceType === "trajectories" ? trajectoryLogger : null,
         getServicesByType: (serviceType) =>
-          serviceType === "trajectory_logger" ? [trajectoryLogger] : [],
+          serviceType === "trajectories" ? [trajectoryLogger] : [],
       }) as AgentRuntime & { adapter?: unknown };
       runtime.adapter = {};
 
@@ -3232,9 +3232,9 @@ describe("API Server E2E (no runtime)", () => {
 
       const runtime = createRuntimeForChatSseTests({
         getService: (serviceType) =>
-          serviceType === "trajectory_logger" ? trajectoryLogger : null,
+          serviceType === "trajectories" ? trajectoryLogger : null,
         getServicesByType: (serviceType) =>
-          serviceType === "trajectory_logger" ? [trajectoryLogger] : [],
+          serviceType === "trajectories" ? [trajectoryLogger] : [],
       }) as AgentRuntime & { adapter?: unknown };
       runtime.adapter = {};
 
@@ -4119,9 +4119,9 @@ describe("API Server E2E (no runtime)", () => {
 
       const runtime = createRuntimeForChatSseTests({
         getServicesByType: (serviceType) =>
-          serviceType === "trajectory_logger" ? [coreLogger] : [],
+          serviceType === "trajectories" ? [coreLogger] : [],
         getService: (serviceType) =>
-          serviceType === "trajectory_logger" ? fullLogger : null,
+          serviceType === "trajectories" ? fullLogger : null,
       }) as AgentRuntime & { adapter?: unknown };
       runtime.adapter = {};
 
@@ -4141,9 +4141,9 @@ describe("API Server E2E (no runtime)", () => {
     it("GET /api/trajectories returns 503 when no route-compatible logger is available", async () => {
       const runtime = createRuntimeForChatSseTests({
         getServicesByType: (serviceType) =>
-          serviceType === "trajectory_logger" ? [{ logLlmCall: () => {} }] : [],
+          serviceType === "trajectories" ? [{ logLlmCall: () => {} }] : [],
         getService: (serviceType) =>
-          serviceType === "trajectory_logger" ? { logLlmCall: () => {} } : null,
+          serviceType === "trajectories" ? { logLlmCall: () => {} } : null,
       }) as AgentRuntime & { adapter?: unknown };
       runtime.adapter = {};
 
@@ -4152,7 +4152,7 @@ describe("API Server E2E (no runtime)", () => {
         const res = await req(streamServer.port, "GET", "/api/trajectories");
         expect(res.status).toBe(503);
         expect(String(res.data.error)).toContain(
-          "Trajectory logger service not available",
+          "Trajectories service not available",
         );
       } finally {
         await streamServer.close();

@@ -1,7 +1,7 @@
 import type {
-  RolodexGraphEdge,
-  RolodexGraphSnapshot,
-  RolodexPersonSummary,
+  RelationshipsGraphEdge,
+  RelationshipsGraphSnapshot,
+  RelationshipsPersonSummary,
 } from "@miladyai/app-core/api";
 
 const GRAPH_WIDTH = 960;
@@ -16,7 +16,7 @@ type GraphPosition = {
   y: number;
 };
 
-function nodeRadius(person: RolodexPersonSummary): number {
+function nodeRadius(person: RelationshipsPersonSummary): number {
   return Math.min(58, 26 + person.memberEntityIds.length * 4);
 }
 
@@ -24,14 +24,14 @@ function shortLabel(value: string, maxLength = 20): string {
   return value.length > maxLength ? `${value.slice(0, maxLength - 1)}…` : value;
 }
 
-function edgeColor(edge: RolodexGraphEdge): string {
+function edgeColor(edge: RelationshipsGraphEdge): string {
   if (edge.sentiment === "positive") return "rgba(73, 197, 122, 0.48)";
   if (edge.sentiment === "negative") return "rgba(239, 68, 68, 0.44)";
   return "rgba(240, 185, 11, 0.34)";
 }
 
 function buildNodePositions(
-  people: RolodexPersonSummary[],
+  people: RelationshipsPersonSummary[],
 ): Map<string, GraphPosition> {
   const positions = new Map<string, GraphPosition>();
   const total = Math.max(people.length, 1);
@@ -70,12 +70,12 @@ function GraphLegend() {
   );
 }
 
-export function RolodexGraphPanel({
+export function RelationshipsGraphPanel({
   snapshot,
   selectedGroupId,
   onSelectGroupId,
 }: {
-  snapshot: RolodexGraphSnapshot | null;
+  snapshot: RelationshipsGraphSnapshot | null;
   selectedGroupId: string | null;
   onSelectGroupId: (groupId: string) => void;
 }) {
@@ -86,7 +86,7 @@ export function RolodexGraphPanel({
           No identities match the current filters.
         </div>
         <p className="mt-2 max-w-lg text-sm leading-6 text-muted">
-          The graph will render once the rolodex has people, identity links, and
+          The graph will render once the relationships has people, identity links, and
           relationships to visualize.
         </p>
       </div>
@@ -114,10 +114,10 @@ export function RolodexGraphPanel({
           viewBox={`0 0 ${GRAPH_WIDTH} ${GRAPH_HEIGHT}`}
           className="h-[24rem] w-full"
           role="img"
-          aria-label="Rolodex relationship graph"
+          aria-label="Relationships relationship graph"
         >
           <defs>
-            <radialGradient id="rolodex-node-fill" cx="50%" cy="35%" r="70%">
+            <radialGradient id="relationships-node-fill" cx="50%" cy="35%" r="70%">
               <stop offset="0%" stopColor="rgba(255,240,199,0.92)" />
               <stop offset="100%" stopColor="rgba(240,185,11,0.86)" />
             </radialGradient>
@@ -166,7 +166,7 @@ export function RolodexGraphPanel({
                   />
                   <circle
                     r={radius}
-                    fill="url(#rolodex-node-fill)"
+                    fill="url(#relationships-node-fill)"
                     stroke={
                       selected
                         ? "rgba(255,255,255,0.92)"

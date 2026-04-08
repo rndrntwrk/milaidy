@@ -156,7 +156,7 @@ function resolveTrajectoryLogger(runtime: AgentRuntime): TrajectoryLoggerLike | 
   };
 
   if (typeof runtimeWithService.getServicesByType === "function") {
-    const byType = runtimeWithService.getServicesByType("trajectory_logger");
+    const byType = runtimeWithService.getServicesByType("trajectories");
     if (Array.isArray(byType)) {
       for (const candidate of byType) {
         push(candidate);
@@ -167,7 +167,7 @@ function resolveTrajectoryLogger(runtime: AgentRuntime): TrajectoryLoggerLike | 
   }
 
   if (typeof runtimeWithService.getService === "function") {
-    push(runtimeWithService.getService("trajectory_logger"));
+    push(runtimeWithService.getService("trajectories"));
   }
 
   if (candidates.length === 0) return null;

@@ -55,6 +55,23 @@ function getRepoLocalElizaCoreRoot(
   return undefined;
 }
 
+function isRepoLocalElizaCorePackageRoot(
+  packageName: string,
+  packageRoot: string,
+  repoRoot: string,
+): boolean {
+  if (packageName !== "@elizaos/core") {
+    return false;
+  }
+
+  const localRoot = getRepoLocalElizaCoreRoot(packageName, repoRoot);
+  if (!localRoot) {
+    return false;
+  }
+
+  return path.resolve(packageRoot) === path.resolve(localRoot);
+}
+
 const MODULE_EXTENSIONS = [
   ".ts",
   ".tsx",
@@ -130,8 +147,30 @@ export function getInstalledPackageEntry(
     return undefined;
   }
 
-  const candidates =
-    subpath === "node"
+  const preferSource = isRepoLocalElizaCorePackageRoot(
+    packageName,
+    packageRoot,
+    repoRoot,
+  );
+  const candidates = preferSource
+    ? subpath === "node"
+      ? [
+          path.join(packageRoot, "src", "index.node"),
+          path.join(packageRoot, "src", "index"),
+          path.join(packageRoot, "dist", "node", "index.node"),
+          path.join(packageRoot, "dist", "index"),
+          path.join(packageRoot, "index.node"),
+          path.join(packageRoot, "index"),
+        ]
+      : [
+          path.join(packageRoot, "src", "index.node"),
+          path.join(packageRoot, "src", "index"),
+          path.join(packageRoot, "dist", "node", "index.node"),
+          path.join(packageRoot, "dist", "index"),
+          path.join(packageRoot, "index.node"),
+          path.join(packageRoot, "index"),
+        ]
+    : subpath === "node"
       ? [
           path.join(packageRoot, "dist", "node", "index.node"),
           path.join(packageRoot, "index.node"),
@@ -160,14 +199,27 @@ export function getElizaCoreEntry(repoRoot: string): string | undefined {
     return undefined;
   }
 
-  const candidates = [
-    path.join(packageRoot, "dist", "node", "index.node"),
-    path.join(packageRoot, "dist", "index"),
-    path.join(packageRoot, "src", "index.node"),
-    path.join(packageRoot, "src", "index"),
-    path.join(packageRoot, "index.node"),
-    path.join(packageRoot, "index"),
-  ];
+  const candidates = isRepoLocalElizaCorePackageRoot(
+    "@elizaos/core",
+    packageRoot,
+    repoRoot,
+  )
+    ? [
+        path.join(packageRoot, "src", "index.node"),
+        path.join(packageRoot, "src", "index"),
+        path.join(packageRoot, "dist", "node", "index.node"),
+        path.join(packageRoot, "dist", "index"),
+        path.join(packageRoot, "index.node"),
+        path.join(packageRoot, "index"),
+      ]
+    : [
+        path.join(packageRoot, "dist", "node", "index.node"),
+        path.join(packageRoot, "dist", "index"),
+        path.join(packageRoot, "src", "index.node"),
+        path.join(packageRoot, "src", "index"),
+        path.join(packageRoot, "index.node"),
+        path.join(packageRoot, "index"),
+      ];
 
   const resolvedCandidate = candidates
     .map((candidate) => resolveModuleEntry(candidate))

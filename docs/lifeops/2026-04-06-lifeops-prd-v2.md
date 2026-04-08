@@ -389,11 +389,11 @@ It must allow simple conversational completion, for example:
 
 It should respond with encouraging reinforcement and streak-aware phrasing when appropriate.
 
-## 15. Cross-platform identity and rolodex
+## 15. Cross-platform identity and relationships
 
 LifeOps must understand the owner as one person reachable across multiple connected platforms.
 
-The product should maintain a private owner contact graph or rolodex that includes:
+The product should maintain a private owner contact graph or relationships that includes:
 
 - app identity
 - Discord identity
@@ -402,7 +402,7 @@ The product should maintain a private owner contact graph or rolodex that includ
 - email address
 - any other connected private endpoints
 
-This rolodex must support:
+This relationships must support:
 
 - preferred channel selection
 - fallback channel selection
@@ -574,7 +574,7 @@ AC-21: The assistant respects reminder intensity settings and quiet hours.
 - Phase 0: brush teeth seed, two-slot routine model, basic metrics, live-LLM acceptance path
 - Phase 1: daytime routines, blocker linkage, adaptive morning/night inference
 - Phase 2: calendar and email as first-class LifeOps surfaces
-- Phase 3: multi-channel escalation and rolodex routing
+- Phase 3: multi-channel escalation and relationships routing
 - Phase 4: screen capture awareness and richer context inference
 - Phase 5: Telegram user-path exploration and mobile wake/sleep signals
 

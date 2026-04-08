@@ -769,7 +769,7 @@ type TrajectoryLoggerRuntimeLike = {
   ) => TrajectoryLoggerRegistrationStatus;
 };
 
-async function waitForTrajectoryLoggerService(
+async function waitForTrajectoriesService(
   runtime: AgentRuntime,
   context: string,
   timeoutMs = 3000,
@@ -782,13 +782,13 @@ async function waitForTrajectoryLoggerService(
 
   // Check if already available
   if (typeof runtimeLike.getService === "function") {
-    const existing = runtimeLike.getService("trajectory_logger");
+    const existing = runtimeLike.getService("trajectories");
     if (existing) return;
   }
 
   const registrationStatus =
     typeof runtimeLike.getServiceRegistrationStatus === "function"
-      ? runtimeLike.getServiceRegistrationStatus("trajectory_logger")
+      ? runtimeLike.getServiceRegistrationStatus("trajectories")
       : "unknown";
 
   if (
@@ -811,17 +811,17 @@ async function waitForTrajectoryLoggerService(
 
   try {
     await Promise.race([
-      runtimeLike.getServiceLoadPromise("trajectory_logger").then(() => {}),
+      runtimeLike.getServiceLoadPromise("trajectories").then(() => {}),
       timeoutPromise,
     ]);
     if (timedOut) {
       logger.debug(
-        `[eliza] trajectory_logger still ${registrationStatus} after ${timeoutMs}ms (${context})`,
+        `[eliza] trajectories still ${registrationStatus} after ${timeoutMs}ms (${context})`,
       );
     }
   } catch (err) {
     logger.debug(
-      `[eliza] trajectory_logger registration failed while waiting (${context}): ${formatError(err)}`,
+      `[eliza] trajectories registration failed while waiting (${context}): ${formatError(err)}`,
     );
   } finally {
     if (timeoutHandle) clearTimeout(timeoutHandle);
@@ -837,14 +837,14 @@ function ensureTrajectoryLoggerEnabled(
     return;
   }
 
-  const trajectoryLogger = runtime.getService("trajectory_logger") as
+  const trajectoryLogger = runtime.getService("trajectories") as
     | TrajectoryLoggerControl
     | null
     | undefined;
 
   if (!trajectoryLogger) {
     logger.warn(
-      `[eliza] trajectory_logger service unavailable (${context}); trajectory capture disabled`,
+      `[eliza] trajectories service unavailable (${context}); trajectory capture disabled`,
     );
     return;
   }
@@ -860,7 +860,7 @@ function ensureTrajectoryLoggerEnabled(
   ) {
     trajectoryLogger.setEnabled(shouldEnable);
     logger.info(
-      `[eliza] trajectory_logger defaulted ${shouldEnable ? "on" : "off"} (${context})`,
+      `[eliza] trajectories defaulted ${shouldEnable ? "on" : "off"} (${context})`,
     );
   }
 }
@@ -885,7 +885,7 @@ async function prepareRuntimeForTrajectoryCapture(
   runtime: AgentRuntime,
   context: string,
 ): Promise<void> {
-  await waitForTrajectoryLoggerService(runtime, context);
+  await waitForTrajectoriesService(runtime, context);
   ensureTrajectoryLoggerEnabled(runtime, context);
   await installPromptOptimizationLayer(runtime, context);
 }
@@ -2243,7 +2243,7 @@ export function installRuntimeMethodBindings(runtime: AgentRuntime): void {
     return result;
   };
 
-  // Add targeted diagnostics around component writes. Rolodex reflection and
+  // Add targeted diagnostics around component writes. Relationships reflection and
   // relationship extraction rely heavily on components; when inserts fail,
   // upstream logs often hide the concrete DB cause/constraint.
   if (!runtimeWithBindings.__elizaComponentWriteDiagnosticsInstalled) {
