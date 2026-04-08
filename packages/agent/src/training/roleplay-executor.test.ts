@@ -8,6 +8,7 @@ import type { RoleplayEpisode } from "./roleplay-trajectories";
 import {
   buildRoleplayExecutionReport,
   executeRoleplayEpisode,
+  executeRoleplayEpisodes,
   exportRoleplayExecutionResults,
 } from "./roleplay-executor";
 
@@ -56,6 +57,43 @@ function createRuntimeWithTrajectory(trajectory: Trajectory): AgentRuntime {
           };
         },
       ),
+    },
+  } as unknown as AgentRuntime;
+}
+
+function createRuntimeWithDelayedTrajectory(
+  trajectory: Trajectory,
+  missingAfterAttempts = false,
+): AgentRuntime {
+  let attempts = 0;
+  const logger = {
+    getTrajectoryDetail: vi.fn(async () => {
+      attempts += 1;
+      if (missingAfterAttempts) {
+        return null;
+      }
+      return attempts >= 3 ? trajectory : null;
+    }),
+  };
+
+  return {
+    agentId: "00000000-0000-0000-0000-000000000111",
+    character: {
+      name: "Nova",
+    },
+    createMemory: vi.fn(async () => undefined),
+    ensureConnection: vi.fn(async () => undefined),
+    getActionResults: vi.fn(() => []),
+    getServicesByType: vi.fn(() => [logger]),
+    getService: vi.fn(() => logger),
+    messageService: {
+      handleMessage: vi.fn(async () => ({
+        didRespond: false,
+        responseContent: null,
+        responseMessages: [],
+        state: { values: {}, data: {} },
+        mode: "ignore",
+      })),
     },
   } as unknown as AgentRuntime;
 }
@@ -172,5 +210,59 @@ describe("roleplay executor", () => {
     expect(reportRaw).toContain("\"trajectoryDatasetSummary\"");
     expect(plannerRaw).toContain("\"role\":\"model\"");
     expect(exported.trajectoryDataset?.summary.taskMetrics.action_planner.exampleCount).toBe(1);
+  });
+
+  test("waits for delayed trajectory capture before finalizing the execution result", async () => {
+    const runtime = createRuntimeWithDelayedTrajectory(trajectory);
+    const execution = await executeRoleplayEpisode(episode, {
+      runtime,
+    });
+
+    expect(execution.trajectoryCaptured).toBe(true);
+    expect(execution.actualDecision).toBe("RESPOND");
+    expect(execution.actualPrimaryContext).toBe("wallet");
+    expect(execution.warnings).toEqual([]);
+  });
+
+  test("reports warning counts and decision confusion when replay evidence is missing", async () => {
+    const mismatchEpisode: RoleplayEpisode = {
+      ...episode,
+      id: "episode-2",
+      evaluationTurnId: "turn-001",
+      turns: [
+        {
+          id: "turn-001",
+          role: "participant",
+          speaker: "Bob",
+          content: "Nova do something useful.",
+          isEvaluationTarget: true,
+        },
+      ],
+    };
+
+    const goodExecution = await executeRoleplayEpisode(episode, {
+      runtime: createRuntimeWithTrajectory(trajectory),
+    });
+    const badExecution = await executeRoleplayEpisodes([mismatchEpisode], {
+      runtime: createRuntimeWithDelayedTrajectory(trajectory, true),
+    });
+    const report = buildRoleplayExecutionReport([
+      goodExecution,
+      ...badExecution,
+    ]);
+
+    expect(badExecution[0]?.trajectoryCaptured).toBe(false);
+    expect(badExecution[0]?.actualDecision).toBe("IGNORE");
+    expect(badExecution[0]?.warnings).toEqual(
+      expect.arrayContaining([
+        "trajectory_capture_missing",
+        "context_routing_missing",
+      ]),
+    );
+    expect(report.totalEpisodes).toBe(2);
+    expect(report.decisionConfusionMatrix.RESPOND.RESPOND).toBe(1);
+    expect(report.decisionConfusionMatrix.RESPOND.IGNORE).toBe(1);
+    expect(report.warningCounts.trajectory_capture_missing).toBe(1);
+    expect(report.warningCounts.context_routing_missing).toBe(1);
   });
 });

@@ -1,11 +1,14 @@
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AgentRuntime } from "@elizaos/core";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { createRouteInvoker } from "../test-support/route-test-helpers";
 import { handleTrainingRoutes } from "./training-routes";
 import type { TrainingServiceLike } from "./training-service-like";
+
+const ORIGINAL_ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
+const ORIGINAL_OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 function createMockTrainingService(): TrainingServiceLike {
   return {
@@ -190,6 +193,20 @@ describe("training routes", () => {
     trainingService = createMockTrainingService();
   });
 
+  afterEach(() => {
+    if (ORIGINAL_ANTHROPIC_API_KEY === undefined) {
+      delete process.env.ANTHROPIC_API_KEY;
+    } else {
+      process.env.ANTHROPIC_API_KEY = ORIGINAL_ANTHROPIC_API_KEY;
+    }
+
+    if (ORIGINAL_OPENAI_API_KEY === undefined) {
+      delete process.env.OPENAI_API_KEY;
+    } else {
+      process.env.OPENAI_API_KEY = ORIGINAL_OPENAI_API_KEY;
+    }
+  });
+
   const invoke = createRouteInvoker<
     Record<string, unknown> | null,
     AgentRuntime | null,
@@ -323,6 +340,22 @@ describe("training routes", () => {
           }),
         },
       },
+    });
+  });
+
+  test("returns 503 when context audit is requested without loaded plugins", async () => {
+    runtime = {
+      character: { name: "Eliza" },
+    } as unknown as AgentRuntime;
+
+    const result = await invoke({
+      method: "GET",
+      pathname: "/api/training/context-audit",
+    });
+
+    expect(result.status).toBe(503);
+    expect(result.payload).toMatchObject({
+      error: "Runtime with loaded plugins is required for context audit",
     });
   });
 
@@ -503,6 +536,56 @@ describe("training routes", () => {
     });
   });
 
+  test("rejects synthetic dataset generation when no teacher API key is configured", async () => {
+    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.OPENAI_API_KEY;
+
+    const result = await invoke({
+      method: "POST",
+      pathname: "/api/training/generate-dataset",
+      body: {
+        variantsPerBlueprint: 1,
+      },
+    });
+
+    expect(result.status).toBe(400);
+    expect(result.payload).toMatchObject({
+      error: expect.stringContaining("No teacher model API key found"),
+    });
+  });
+
+  test("requires a runtime for roleplay execution", async () => {
+    runtime = null;
+
+    const result = await invoke({
+      method: "POST",
+      pathname: "/api/training/roleplay/execute",
+      body: {
+        episodesPath: "/tmp/episodes.json",
+      },
+    });
+
+    expect(result.status).toBe(503);
+    expect(result.payload).toMatchObject({
+      error: "Runtime is required to execute roleplay episodes",
+    });
+  });
+
+  test("requires an input path for roleplay execution", async () => {
+    runtime = createRoleplayRuntime();
+
+    const result = await invoke({
+      method: "POST",
+      pathname: "/api/training/roleplay/execute",
+      body: {},
+    });
+
+    expect(result.status).toBe(400);
+    expect(result.payload).toMatchObject({
+      error: "episodesPath or manifestPath is required",
+    });
+  });
+
   test("executes roleplay manifests through the runtime and returns a report", async () => {
     runtime = createRoleplayRuntime();
     const outputDir = await mkdtemp(join(tmpdir(), "training-route-roleplay-"));
@@ -608,5 +691,66 @@ describe("training routes", () => {
         }),
       },
     });
+  });
+
+  test("exports raw should-respond JSONL and writes inspectable examples", async () => {
+    const outputPath = join(
+      await mkdtemp(join(tmpdir(), "training-route-raw-export-")),
+      "training.jsonl",
+    );
+
+    (
+      trainingService.getTrajectoryById as ReturnType<typeof vi.fn>
+    ).mockResolvedValueOnce({
+      trajectoryId: "trajectory-export-1",
+      metadata: { source: "test" },
+      steps: [
+        {
+          llmCalls: [
+            {
+              purpose: "should_respond",
+              systemPrompt: "system prompt",
+              userPrompt: "user prompt",
+              response: "action: RESPOND",
+              model: "RESPONSE_HANDLER",
+            },
+            {
+              purpose: "action",
+              systemPrompt: "planner prompt",
+              userPrompt: "swap now",
+              response: "<actions>SWAP_TOKEN</actions>",
+              model: "ACTION_PLANNER",
+            },
+          ],
+        },
+      ],
+    });
+
+    const result = await invoke({
+      method: "POST",
+      pathname: "/api/training/trajectories/export",
+      body: {
+        trajectoryIds: ["trajectory-export-1"],
+        outputPath,
+      },
+    });
+
+    const exportedLines = (await readFile(outputPath, "utf-8"))
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as { messages: Array<{ role: string; content: string }> });
+
+    expect(result.status).toBe(201);
+    expect(result.payload).toMatchObject({
+      exportedExamples: 1,
+      trajectoriesConsidered: 1,
+      outputPath,
+    });
+    expect(exportedLines).toHaveLength(1);
+    expect(exportedLines[0]?.messages).toEqual([
+      { role: "system", content: "system prompt" },
+      { role: "user", content: "user prompt" },
+      { role: "model", content: "action: RESPOND" },
+    ]);
   });
 });

@@ -338,10 +338,10 @@ export async function handleTrainingRoutes(
     if (!body) return true;
 
     const anthropicKey =
-      resolveStringSetting(runtime?.getSetting("ANTHROPIC_API_KEY")) ??
+      resolveStringSetting(runtime?.getSetting?.("ANTHROPIC_API_KEY")) ??
       process.env.ANTHROPIC_API_KEY;
     const openaiKey =
-      resolveStringSetting(runtime?.getSetting("OPENAI_API_KEY")) ??
+      resolveStringSetting(runtime?.getSetting?.("OPENAI_API_KEY")) ??
       process.env.OPENAI_API_KEY;
 
     if (!anthropicKey && !openaiKey) {
@@ -414,10 +414,10 @@ export async function handleTrainingRoutes(
     if (!body) return true;
 
     const anthropicKey =
-      resolveStringSetting(runtime?.getSetting("ANTHROPIC_API_KEY")) ??
+      resolveStringSetting(runtime?.getSetting?.("ANTHROPIC_API_KEY")) ??
       process.env.ANTHROPIC_API_KEY;
     const openaiKey =
-      resolveStringSetting(runtime?.getSetting("OPENAI_API_KEY")) ??
+      resolveStringSetting(runtime?.getSetting?.("OPENAI_API_KEY")) ??
       process.env.OPENAI_API_KEY;
 
     if (!anthropicKey && !openaiKey) {
@@ -731,10 +731,10 @@ export async function handleTrainingRoutes(
     }
 
     const anthropicKey =
-      resolveStringSetting(runtime?.getSetting("ANTHROPIC_API_KEY")) ??
+      resolveStringSetting(runtime?.getSetting?.("ANTHROPIC_API_KEY")) ??
       process.env.ANTHROPIC_API_KEY;
     const openaiKey =
-      resolveStringSetting(runtime?.getSetting("OPENAI_API_KEY")) ??
+      resolveStringSetting(runtime?.getSetting?.("OPENAI_API_KEY")) ??
       process.env.OPENAI_API_KEY;
 
     const {

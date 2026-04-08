@@ -86,4 +86,57 @@ describe("trajectory task datasets", () => {
     });
     expect(exported.summary.taskMetrics.should_respond.exampleCount).toBe(1);
   });
+
+  test("honors explicit task filters and skips incomplete calls", async () => {
+    const incompleteTrajectory: Trajectory = {
+      trajectoryId: "trajectory-2",
+      agentId: "agent-1",
+      startTime: Date.now(),
+      steps: [
+        {
+          timestamp: Date.now(),
+          llmCalls: [
+            {
+              purpose: "should_respond",
+              systemPrompt: "missing response",
+              userPrompt: "user prompt only",
+              model: "RESPONSE_HANDLER",
+            },
+            {
+              purpose: "response",
+              systemPrompt: "missing user prompt",
+              response: "hello",
+            },
+          ],
+        },
+      ],
+    };
+
+    const outputDir = await mkdtemp(join(tmpdir(), "trajectory-task-filter-"));
+    const exported = await exportTrajectoryTaskDatasets(
+      [trajectory, incompleteTrajectory],
+      outputDir,
+      ["action_planner"],
+    );
+
+    const shouldRespondJsonl = await readFile(exported.paths.shouldRespondPath, "utf-8");
+    const actionPlannerJsonl = await readFile(exported.paths.actionPlannerPath, "utf-8");
+    const parsedPlannerExamples = actionPlannerJsonl
+      .trim()
+      .split("\n")
+      .filter((line) => line.length > 0)
+      .map((line) => JSON.parse(line) as { messages: Array<{ role: string; content: string }> });
+
+    expect(exported.summary.tasks).toEqual(["action_planner"]);
+    expect(exported.counts.should_respond).toBe(0);
+    expect(exported.counts.action_planner).toBe(1);
+    expect(shouldRespondJsonl).toBe("");
+    expect(parsedPlannerExamples).toHaveLength(1);
+    expect(parsedPlannerExamples[0]?.messages[2]?.content).toContain("SWAP_TOKEN");
+    expect(exported.summary.taskMetrics.action_planner).toMatchObject({
+      exampleCount: 1,
+      sourceCallCount: 1,
+      sourceTrajectoryCount: 1,
+    });
+  });
 });
