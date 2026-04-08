@@ -978,9 +978,6 @@ async function runLifeOpsSchemaSetup(
       actor TEXT NOT NULL,
       created_at TEXT NOT NULL
     )`,
-  ];
-
-  /** Applied after legacy ownership columns are added — old DBs may lack domain/subject_* until ALTERs below. */
     `CREATE TABLE IF NOT EXISTS life_activity_signals (
       id TEXT PRIMARY KEY,
       agent_id TEXT NOT NULL,

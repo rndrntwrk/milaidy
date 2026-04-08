@@ -765,6 +765,7 @@ export async function handleConversationRoutes(
       images,
       conversationMode,
       preferredLanguage,
+      source,
       metadata: chatMetadata,
     } = chatPayload;
 
@@ -796,6 +797,7 @@ export async function handleConversationRoutes(
       roomId: conv.roomId,
       channelType,
       conversationMode,
+      messageSource: source,
       metadata: chatMetadata,
     });
 
@@ -955,6 +957,7 @@ export async function handleConversationRoutes(
       images,
       conversationMode,
       preferredLanguage,
+      source,
       metadata: restMetadata,
     } = chatPayload;
     const runtime = state.runtime;
@@ -984,6 +987,7 @@ export async function handleConversationRoutes(
       roomId: conv.roomId,
       channelType,
       conversationMode,
+      messageSource: source,
       metadata: restMetadata,
     });
 

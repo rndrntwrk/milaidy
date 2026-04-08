@@ -162,6 +162,8 @@
     "test:force": "node --import tsx test/scripts/test-force.ts",
     "test:orchestrator:integration": "node --import tsx test/scripts/orchestrator-task-thread-integration.ts",
     "test:orchestrator:live:failover": "node --import tsx test/scripts/orchestrator-live-failover.ts",
+    "test:coordinator:preflight": "node --import tsx test/scripts/coordinator-scenario-preflight.ts",
+    "test:coordinator:live": "node --import tsx test/scripts/coordinator-scenario-live.ts",
     "test:research:thread:live": "node --import tsx test/scripts/research-task-thread-live.ts",
     "test:discord:role-policy:live": "node --import tsx test/scripts/discord-role-policy-live.ts",
     "test:selfcontrol:unit": "bunx vitest run packages/plugin-selfcontrol/src/selfcontrol.test.ts packages/plugin-selfcontrol/src/action.test.ts packages/plugin-selfcontrol/src/provider.test.ts packages/plugin-selfcontrol/src/index.test.ts packages/agent/test/api/website-blocker-routes.test.ts packages/app-core/src/api/permissions-routes.test.ts apps/app/electrobun/src/__tests__/runtime-permissions.test.ts && cd apps/app && bunx vitest run --config vitest.config.ts ../../packages/app-core/test/app/PermissionsSection.test.tsx test/plugins/package-metadata.test.ts test/plugins/websiteblocker.test.ts",

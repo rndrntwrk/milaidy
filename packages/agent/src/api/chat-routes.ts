@@ -495,6 +495,7 @@ export async function readChatRequestPayload(
   images?: ChatImageAttachment[];
   conversationMode?: "simple" | "power";
   preferredLanguage?: string;
+  source?: string;
   metadata?: Record<string, unknown>;
 } | null> {
   const body = await helpers.readJsonBody<{
@@ -503,6 +504,7 @@ export async function readChatRequestPayload(
     images?: ChatImageAttachment[];
     conversationMode?: string;
     language?: string;
+    source?: string;
     metadata?: Record<string, unknown>;
   }>(req, res, { maxBytes });
   if (!body) return null;
@@ -539,6 +541,10 @@ export async function readChatRequestPayload(
   const preferredLanguage = rawPreferredLanguage
     ? normalizeCharacterLanguage(rawPreferredLanguage)
     : undefined;
+  const source =
+    typeof body.source === "string" && body.source.trim().length > 0
+      ? body.source.trim()
+      : undefined;
   const metadata =
     body.metadata &&
     typeof body.metadata === "object" &&
@@ -551,6 +557,7 @@ export async function readChatRequestPayload(
     images,
     ...(conversationMode ? { conversationMode } : {}),
     ...(preferredLanguage ? { preferredLanguage } : {}),
+    ...(source ? { source } : {}),
     ...(metadata ? { metadata } : {}),
   };
 }

@@ -93,6 +93,72 @@ async function waitForTrajectoryCall(
   throw new Error("Timed out waiting for trajectory prompt/response roundtrip");
 }
 
+async function waitForTrajectoryByMessageId(
+  port: number,
+  messageId: string,
+): Promise<{
+  trajectory: {
+    id: string;
+    status: string;
+    metadata?: Record<string, unknown>;
+  };
+  llmCalls: Array<{
+    systemPrompt?: string;
+    userPrompt?: string;
+    response?: string;
+  }>;
+}> {
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    const list = await req(port, "GET", "/api/trajectories?limit=50");
+    const trajectories = Array.isArray(list.data.trajectories)
+      ? (list.data.trajectories as Array<{ id?: string }>)
+      : [];
+
+    for (const trajectory of trajectories) {
+      const trajectoryId = String(trajectory.id ?? "");
+      if (!trajectoryId) continue;
+
+      const detail = await req(
+        port,
+        "GET",
+        `/api/trajectories/${encodeURIComponent(trajectoryId)}`,
+      );
+      const record = detail.data.trajectory as
+        | {
+            id?: string;
+            status?: string;
+            metadata?: Record<string, unknown>;
+          }
+        | undefined;
+
+      if (
+        String(record?.metadata?.messageId ?? "") === messageId &&
+        typeof record?.status === "string" &&
+        record.status !== "active"
+      ) {
+        return {
+          trajectory: {
+            id: String(record.id ?? trajectoryId),
+            status: record.status,
+            metadata: record.metadata,
+          },
+          llmCalls: Array.isArray(detail.data.llmCalls)
+            ? (detail.data.llmCalls as Array<{
+                systemPrompt?: string;
+                userPrompt?: string;
+                response?: string;
+              }>)
+            : [],
+        };
+      }
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+
+  throw new Error(`Timed out waiting for trajectory tied to ${messageId}`);
+}
+
 describe("Trajectory logger chat roundtrip", () => {
   let runtime: TestRuntime;
   let trajectoryLogger: TrajectoryLoggerService;
@@ -336,5 +402,138 @@ describe("Trajectory logger chat roundtrip", () => {
     );
     expect(detail.llmCall.userPrompt).toBe(prompt);
     expect(detail.llmCall.response).toBe(expectedResponse);
+  });
+
+  it("closes a received trajectory on RUN_ENDED even when no MESSAGE_SENT is emitted", async () => {
+    if (!server) {
+      throw new Error("API server did not start");
+    }
+
+    const messageId = crypto.randomUUID();
+    const message = {
+      id: messageId,
+      entityId: "silent-user",
+      roomId: crypto.randomUUID(),
+      createdAt: Date.now(),
+      content: {
+        text: "process this silently",
+        source: "discord",
+      },
+      metadata: {},
+    } as Content & Record<string, unknown>;
+
+    await runtime.emitEvent("MESSAGE_RECEIVED", {
+      runtime,
+      message,
+      source: "discord",
+    });
+
+    const stepId = String(
+      (message.metadata as { trajectoryStepId?: string }).trajectoryStepId ?? "",
+    );
+    expect(stepId.length).toBeGreaterThan(0);
+
+    trajectoryLogger.logLlmCall({
+      stepId,
+      callId: "silent-call-1",
+      timestamp: Date.now(),
+      model: "test-model",
+      systemPrompt: "You are a silent regression test agent.",
+      userPrompt: "process this silently",
+      response: "internal trace only",
+      temperature: 0,
+      maxTokens: 64,
+      purpose: "response",
+      actionType: "runtime.useModel",
+      latencyMs: 3,
+      promptTokens: 6,
+      completionTokens: 4,
+    });
+
+    await runtime.emitEvent("RUN_ENDED", {
+      runtime,
+      source: "messageHandler",
+      runId: crypto.randomUUID(),
+      messageId,
+      roomId: message.roomId,
+      entityId: message.entityId,
+      startTime: Date.now() - 50,
+      endTime: Date.now(),
+      duration: 50,
+      status: "completed",
+    });
+
+    const detail = await waitForTrajectoryByMessageId(server.port, messageId);
+    expect(detail.trajectory.status).toBe("completed");
+    expect(detail.llmCalls).toHaveLength(1);
+    expect(detail.llmCalls[0]?.userPrompt).toBe("process this silently");
+    expect(detail.llmCalls[0]?.response).toBe("internal trace only");
+  });
+
+  it("closes timed out trajectories through RUN_TIMEOUT without synthetic fallback calls", async () => {
+    if (!server) {
+      throw new Error("API server did not start");
+    }
+
+    const messageId = crypto.randomUUID();
+    const message = {
+      id: messageId,
+      entityId: "timeout-user",
+      roomId: crypto.randomUUID(),
+      createdAt: Date.now(),
+      content: {
+        text: "this run times out",
+        source: "telegram",
+      },
+      metadata: {},
+    } as Content & Record<string, unknown>;
+
+    await runtime.emitEvent("MESSAGE_RECEIVED", {
+      runtime,
+      message,
+      source: "telegram",
+    });
+
+    const stepId = String(
+      (message.metadata as { trajectoryStepId?: string }).trajectoryStepId ?? "",
+    );
+    expect(stepId.length).toBeGreaterThan(0);
+
+    trajectoryLogger.logLlmCall({
+      stepId,
+      callId: "timeout-call-1",
+      timestamp: Date.now(),
+      model: "test-model",
+      systemPrompt: "You are a timeout regression test agent.",
+      userPrompt: "this run times out",
+      response: "partial trace",
+      temperature: 0,
+      maxTokens: 64,
+      purpose: "response",
+      actionType: "runtime.useModel",
+      latencyMs: 7,
+      promptTokens: 5,
+      completionTokens: 3,
+    });
+
+    await runtime.emitEvent("RUN_TIMEOUT", {
+      runtime,
+      source: "messageHandler",
+      runId: crypto.randomUUID(),
+      messageId,
+      roomId: message.roomId,
+      entityId: message.entityId,
+      startTime: Date.now() - 250,
+      endTime: Date.now(),
+      duration: 250,
+      status: "timeout",
+      error: "Run exceeded timeout",
+    });
+
+    const detail = await waitForTrajectoryByMessageId(server.port, messageId);
+    expect(detail.trajectory.status).toBe("error");
+    expect(detail.llmCalls).toHaveLength(1);
+    expect(detail.llmCalls[0]?.userPrompt).toBe("this run times out");
+    expect(detail.llmCalls[0]?.response).toBe("partial trace");
   });
 });

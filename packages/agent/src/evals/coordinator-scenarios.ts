@@ -760,6 +760,262 @@ export const coordinatorScenarios: CoordinatorScenario[] = [
     ],
     evidence: ["trajectory API filters", "report bundle"],
   }),
+  scenario({
+    id: "B006",
+    family: "build_and_edit",
+    profile: "core",
+    title: "build a tiny CLI and revise its output format",
+    summary:
+      "The user asks for a small command-line tool and then asks for a format change without restarting the task.",
+    channels: ALL_CHANNELS,
+    requiredCapabilities: ["create_task", "continue_task", "iterative_editing"],
+    turns: [
+      { speaker: "user", text: "Make me a tiny CLI that prints my birthday countdown in days." },
+      { speaker: "user", text: "Actually make the output JSON instead of plain text." },
+    ],
+    doneWhen: [
+      "The CLI is created in files.",
+      "The output-format change updates the same task instead of spawning a new one.",
+    ],
+    evidence: ["task thread", "changed files", "trajectory records"],
+  }),
+  scenario({
+    id: "B007",
+    family: "build_and_edit",
+    profile: "full",
+    title: "add a small feature in the same repo from prior context",
+    summary:
+      "The user references the current repo implicitly and expects the agent to stay in that project.",
+    channels: ALL_CHANNELS,
+    requiredCapabilities: ["repo_tasking", "continue_task", "worktree_artifacts"],
+    turns: [
+      { speaker: "user", text: "In the same repo, add a small page that lists archived tasks too." },
+      { speaker: "user", text: "Show me which files changed." },
+    ],
+    doneWhen: [
+      "The repo context is reused correctly.",
+      "Changed files in the existing workspace are surfaced.",
+    ],
+    evidence: ["task thread", "changed files", "artifacts"],
+  }),
+  scenario({
+    id: "C005",
+    family: "continuation",
+    profile: "core",
+    title: "treat keep-going language as continuation",
+    summary:
+      "The user uses loose continuation language and expects the same task to keep moving.",
+    channels: ALL_CHANNELS,
+    requiredCapabilities: ["continue_task", "thread_lookup"],
+    turns: [
+      { speaker: "user", text: "Make me a tiny habit tracker page." },
+      { speaker: "user", text: "Okay keep going with that." },
+      { speaker: "user", text: "Now make it feel a little more serious." },
+    ],
+    doneWhen: [
+      "All turns stay on one task thread.",
+    ],
+    evidence: ["task thread updates", "changed files"],
+  }),
+  scenario({
+    id: "C006",
+    family: "continuation",
+    profile: "full",
+    title: "interpret same-project follow-up after a completed answer",
+    summary:
+      "The user asks a new but related change after the agent already reported completion.",
+    channels: ALL_CHANNELS,
+    requiredCapabilities: ["continue_task", "thread_lookup", "repo_tasking"],
+    turns: [
+      { speaker: "user", text: "Build me a tiny changelog viewer." },
+      { speaker: "user", text: "Cool, in that same project add a filter for only today." },
+    ],
+    doneWhen: [
+      "The follow-up is attached to the prior work item or clearly linked task history.",
+    ],
+    evidence: ["task thread", "changed files", "task events"],
+  }),
+  scenario({
+    id: "P005",
+    family: "preview_and_share",
+    profile: "core",
+    title: "surface the direct file path when that is the best view mechanism",
+    summary:
+      "The user does not need a server link; the agent should provide the artifact itself.",
+    channels: ALL_CHANNELS,
+    requiredCapabilities: ["artifact_lookup", "preview_visibility"],
+    turns: [
+      { speaker: "user", text: "Make me a little printable checklist page." },
+      { speaker: "user", text: "Where is the actual file?" },
+    ],
+    doneWhen: [
+      "A direct artifact path or attachment route is returned.",
+    ],
+    evidence: ["artifacts", "task thread", "trajectory records"],
+  }),
+  scenario({
+    id: "S005",
+    family: "pause_resume_stop",
+    profile: "core",
+    title: "pause a research task and then convert the pause into a new direction",
+    summary:
+      "The user interrupts the current direction and redirects the same task after discussion.",
+    channels: ALL_CHANNELS,
+    requiredCapabilities: ["task_control", "pause_task", "continue_task"],
+    turns: [
+      { speaker: "user", text: "Research options for connector observability." },
+      { speaker: "user", text: "Hold that thought. I care more about logging and trajectories than dashboards." },
+      { speaker: "user", text: "Okay continue with that new emphasis." },
+    ],
+    doneWhen: [
+      "The task pauses for redirection.",
+      "The resumed work reflects the corrected emphasis.",
+    ],
+    evidence: ["task events", "task thread status", "artifacts"],
+  }),
+  scenario({
+    id: "H007",
+    family: "history_and_reporting",
+    profile: "full",
+    title: "list blocked tasks from the last week",
+    summary:
+      "The user wants a filtered operational view, not a raw dump.",
+    channels: ALL_CHANNELS,
+    requiredCapabilities: ["task_history", "time_window_lookup", "search_lookup"],
+    turns: [
+      { speaker: "user", text: "Show me every blocked task from the last week." },
+    ],
+    doneWhen: [
+      "The answer is bounded to blocked tasks in the requested window.",
+    ],
+    evidence: ["task history query", "task thread summaries"],
+  }),
+  scenario({
+    id: "H008",
+    family: "history_and_reporting",
+    profile: "full",
+    title: "search recent work by topic and completion state",
+    summary:
+      "The user asks for recent finished work on a topic.",
+    channels: ALL_CHANNELS,
+    requiredCapabilities: ["task_history", "time_window_lookup", "search_lookup"],
+    turns: [
+      { speaker: "user", text: "What finished work did we do recently on calendar stuff?" },
+    ],
+    doneWhen: [
+      "The response combines topical search with status-aware filtering.",
+    ],
+    evidence: ["task history query", "db assertions"],
+  }),
+  scenario({
+    id: "R004",
+    family: "research_and_planning",
+    profile: "full",
+    title: "research a comparison and deliver it in a structured artifact",
+    summary:
+      "The user wants a comparative output that should result in a concrete written artifact.",
+    channels: ALL_CHANNELS,
+    requiredCapabilities: ["create_task", "live_provider_execution", "artifact_reporting"],
+    turns: [
+      { speaker: "user", text: "Compare Codex and Claude for coordinator task work and put it in a small table I can read." },
+      { speaker: "user", text: "Can you save that somewhere?" },
+    ],
+    doneWhen: [
+      "A research artifact is produced.",
+      "The artifact is attached or discoverable through the thread.",
+    ],
+    evidence: ["artifacts", "task thread", "trajectory records"],
+  }),
+  scenario({
+    id: "K004",
+    family: "connector_behavior",
+    profile: "core",
+    title: "WhatsApp-origin request continues across follow-up turns",
+    summary:
+      "The agent should preserve connector-origin context through multiple turns.",
+    channels: ["whatsapp"],
+    requiredCapabilities: ["connector_ingress", "continue_task"],
+    turns: [
+      { speaker: "user", text: "Make me a tiny quote card." },
+      { speaker: "user", text: "Now give it a second style too." },
+      { speaker: "user", text: "Can I see both?" },
+    ],
+    doneWhen: [
+      "The WhatsApp-origin thread persists across follow-up turns.",
+    ],
+    evidence: ["connector trajectory", "task thread", "artifacts"],
+  }),
+  scenario({
+    id: "K005",
+    family: "connector_behavior",
+    profile: "full",
+    title: "Matrix-origin pause and resume flow",
+    summary:
+      "Connector-origin conversations should support interruption controls too.",
+    channels: ["matrix"],
+    requiredCapabilities: ["connector_ingress", "task_control", "resume_task"],
+    turns: [
+      { speaker: "user", text: "Build a tiny status card for my current tasks." },
+      { speaker: "user", text: "Pause that." },
+      { speaker: "user", text: "Okay continue and add a recent history list." },
+    ],
+    doneWhen: [
+      "The task pauses and resumes within the same connector-origin flow.",
+    ],
+    evidence: ["connector trajectory", "task events", "changed files"],
+  }),
+  scenario({
+    id: "F003",
+    family: "recovery_and_failover",
+    profile: "full",
+    title: "missing provider readiness is surfaced as a concrete failure reason",
+    summary:
+      "If a framework cannot run because auth or installation is missing, the failure should be explicit and auditable.",
+    channels: ALL_CHANNELS,
+    requiredCapabilities: ["framework_failover", "task_recovery"],
+    turns: [
+      { speaker: "user", text: "Use whichever task agent can actually run this and tell me clearly if one is unavailable." },
+    ],
+    doneWhen: [
+      "Any framework readiness issue is surfaced explicitly in task evidence or response text.",
+    ],
+    evidence: ["task events", "trajectory records", "task thread"],
+  }),
+  scenario({
+    id: "T004",
+    family: "task_management",
+    profile: "full",
+    title: "stop one task while leaving the rest alone",
+    summary:
+      "The user wants granular task control rather than a global stop.",
+    channels: ALL_CHANNELS,
+    requiredCapabilities: ["task_control", "task_detail_lookup", "stop_task"],
+    turns: [
+      { speaker: "user", text: "Show me the current task list." },
+      { speaker: "user", text: "Stop the most recent one, but leave the others running." },
+    ],
+    doneWhen: [
+      "One task is interrupted or stopped without wiping the rest of the task list.",
+    ],
+    evidence: ["task thread status", "task history query", "task events"],
+  }),
+  scenario({
+    id: "V004",
+    family: "visibility_and_audit",
+    profile: "full",
+    title: "task threads are retrievable by scenario and batch identifiers",
+    summary:
+      "The evaluator must be able to retrieve coordinator task state with the same scenario and batch tags used for trajectories.",
+    channels: ALL_CHANNELS,
+    requiredCapabilities: ["scenario_tagging", "batch_tagging", "task_thread_logging"],
+    turns: [
+      { speaker: "user", text: "Run this as a tagged coordinator evaluation and make sure the task history is grouped with it." },
+    ],
+    doneWhen: [
+      "Task thread queries scoped by scenario and batch return the expected run.",
+    ],
+    evidence: ["task thread query filters", "trajectory records", "bundle manifest"],
+  }),
 ];
 
 export const coordinatorScenarioById = new Map(

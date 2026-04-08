@@ -1476,6 +1476,7 @@ export function buildUserMessages(params: {
   roomId: UUID;
   channelType: ChannelType;
   conversationMode?: "simple" | "power";
+  messageSource?: string;
   metadata?: Record<string, unknown>;
 }): { userMessage: MessageMemory; messageToStore: MessageMemory } {
   const {
@@ -1486,8 +1487,10 @@ export function buildUserMessages(params: {
     roomId,
     channelType,
     conversationMode,
+    messageSource,
     metadata,
   } = params;
+  const source = messageSource?.trim() || "client_chat";
   const { attachments, compactAttachments } = buildChatAttachments(images);
   const id = crypto.randomUUID() as UUID;
   // In-memory message carries _data/_mimeType so action handlers can upload.
@@ -1498,7 +1501,7 @@ export function buildUserMessages(params: {
     roomId,
     content: {
       text: prompt,
-      source: "client_chat",
+      source,
       channelType,
       ...(conversationMode ? { conversationMode } : {}),
       ...(attachments?.length ? { attachments } : {}),
@@ -1514,7 +1517,7 @@ export function buildUserMessages(params: {
         roomId,
         content: {
           text: prompt,
-          source: "client_chat",
+          source,
           channelType,
           ...(conversationMode ? { conversationMode } : {}),
           attachments: compactAttachments,

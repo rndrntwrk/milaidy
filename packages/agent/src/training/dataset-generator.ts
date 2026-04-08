@@ -17,6 +17,8 @@
 import { randomUUID } from "crypto";
 import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
+import * as ElizaCore from "@elizaos/core";
+import type { IAgentRuntime } from "@elizaos/core";
 import type { AgentContext } from "./context-types.js";
 import {
   ALL_BLUEPRINTS,
@@ -160,36 +162,134 @@ export interface TeacherModel {
   generate(systemPrompt: string, userPrompt: string): Promise<string>;
 }
 
+type TeacherCallLog = {
+  runtime?: IAgentRuntime;
+  model: string;
+  modelVersion?: string;
+  systemPrompt: string;
+  userPrompt: string;
+  response: string;
+  temperature: number;
+  maxTokens: number;
+  actionType: string;
+  latencyMs: number;
+  promptTokens?: number;
+  completionTokens?: number;
+};
+
+const logActiveTrajectoryLlmCall =
+  "logActiveTrajectoryLlmCall" in ElizaCore &&
+  typeof ElizaCore.logActiveTrajectoryLlmCall === "function"
+    ? ElizaCore.logActiveTrajectoryLlmCall
+    : undefined;
+
+const withStandaloneTrajectory =
+  "withStandaloneTrajectory" in ElizaCore &&
+  typeof ElizaCore.withStandaloneTrajectory === "function"
+    ? ElizaCore.withStandaloneTrajectory
+    : async <T>(
+        _runtime: IAgentRuntime | undefined,
+        _options: Record<string, unknown>,
+        callback: () => Promise<T>,
+      ): Promise<T> => await callback();
+
+function logTeacherCall({
+  runtime,
+  model,
+  modelVersion,
+  systemPrompt,
+  userPrompt,
+  response,
+  temperature,
+  maxTokens,
+  actionType,
+  latencyMs,
+  promptTokens,
+  completionTokens,
+}: TeacherCallLog): void {
+  logActiveTrajectoryLlmCall?.(runtime, {
+    model,
+    modelVersion,
+    systemPrompt,
+    userPrompt,
+    response,
+    temperature,
+    maxTokens,
+    purpose: "training.teacher",
+    actionType,
+    latencyMs,
+    promptTokens,
+    completionTokens,
+  });
+}
+
 /**
  * Create a teacher model using the Anthropic API.
  */
-export function createAnthropicTeacher(apiKey: string): TeacherModel {
+export function createAnthropicTeacher(
+  apiKey: string,
+  runtime?: IAgentRuntime,
+): TeacherModel {
   return {
     name: "anthropic/claude-sonnet-4",
     async generate(systemPrompt: string, userPrompt: string): Promise<string> {
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          "x-api-key": apiKey,
-          "anthropic-version": "2023-06-01",
+      return await withStandaloneTrajectory(
+        runtime,
+        {
+          source: "training",
+          metadata: {
+            provider: "anthropic",
+            model: "claude-sonnet-4-20250514",
+            purpose: "teacher",
+          },
         },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 4096,
-          system: systemPrompt,
-          messages: [{ role: "user", content: userPrompt }],
-        }),
-      });
-      if (!response.ok) {
-        throw new Error(
-          `Anthropic API error: ${response.status} ${await response.text()}`,
-        );
-      }
-      const data = (await response.json()) as {
-        content: Array<{ type: string; text: string }>;
-      };
-      return data.content[0]?.text ?? "";
+        async () => {
+          const startedAt = Date.now();
+          const response = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              "x-api-key": apiKey,
+              "anthropic-version": "2023-06-01",
+            },
+            body: JSON.stringify({
+              model: "claude-sonnet-4-20250514",
+              max_tokens: 4096,
+              temperature: 1,
+              system: systemPrompt,
+              messages: [{ role: "user", content: userPrompt }],
+            }),
+          });
+          if (!response.ok) {
+            throw new Error(
+              `Anthropic API error: ${response.status} ${await response.text()}`,
+            );
+          }
+          const data = (await response.json()) as {
+            content: Array<{ type: string; text: string }>;
+            usage?: {
+              input_tokens?: number;
+              output_tokens?: number;
+            };
+          };
+          const text = data.content[0]?.text ?? "";
+          logTeacherCall({
+            runtime,
+            model: "anthropic/claude-sonnet-4",
+            modelVersion: "claude-sonnet-4-20250514",
+            systemPrompt,
+            userPrompt,
+            response: text,
+            temperature: 1,
+            maxTokens: 4096,
+            actionType: "training.teacher.anthropic.generate",
+            latencyMs: Date.now() - startedAt,
+            promptTokens: data.usage?.input_tokens,
+            completionTokens: data.usage?.output_tokens,
+          });
+          return text;
+        },
+      );
     },
   };
 }
@@ -197,38 +297,75 @@ export function createAnthropicTeacher(apiKey: string): TeacherModel {
 /**
  * Create a teacher model using the OpenAI API.
  */
-export function createOpenAITeacher(apiKey: string): TeacherModel {
+export function createOpenAITeacher(
+  apiKey: string,
+  runtime?: IAgentRuntime,
+): TeacherModel {
   return {
     name: "openai/gpt-5",
     async generate(systemPrompt: string, userPrompt: string): Promise<string> {
-      const response = await fetch(
-        "https://api.openai.com/v1/chat/completions",
+      return await withStandaloneTrajectory(
+        runtime,
         {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            authorization: `Bearer ${apiKey}`,
-          },
-          body: JSON.stringify({
+          source: "training",
+          metadata: {
+            provider: "openai",
             model: "gpt-5",
-            messages: [
-              { role: "system", content: systemPrompt },
-              { role: "user", content: userPrompt },
-            ],
-            max_tokens: 4096,
+            purpose: "teacher",
+          },
+        },
+        async () => {
+          const startedAt = Date.now();
+          const response = await fetch(
+            "https://api.openai.com/v1/chat/completions",
+            {
+              method: "POST",
+              headers: {
+                "content-type": "application/json",
+                authorization: `Bearer ${apiKey}`,
+              },
+              body: JSON.stringify({
+                model: "gpt-5",
+                messages: [
+                  { role: "system", content: systemPrompt },
+                  { role: "user", content: userPrompt },
+                ],
+                max_tokens: 4096,
+                temperature: 0.9,
+              }),
+            },
+          );
+          if (!response.ok) {
+            throw new Error(
+              `OpenAI API error: ${response.status} ${await response.text()}`,
+            );
+          }
+          const data = (await response.json()) as {
+            model?: string;
+            choices: Array<{ message: { content: string } }>;
+            usage?: {
+              prompt_tokens?: number;
+              completion_tokens?: number;
+            };
+          };
+          const text = data.choices[0]?.message?.content ?? "";
+          logTeacherCall({
+            runtime,
+            model: "openai/gpt-5",
+            modelVersion: data.model,
+            systemPrompt,
+            userPrompt,
+            response: text,
             temperature: 0.9,
-          }),
+            maxTokens: 4096,
+            actionType: "training.teacher.openai.generate",
+            latencyMs: Date.now() - startedAt,
+            promptTokens: data.usage?.prompt_tokens,
+            completionTokens: data.usage?.completion_tokens,
+          });
+          return text;
         },
       );
-      if (!response.ok) {
-        throw new Error(
-          `OpenAI API error: ${response.status} ${await response.text()}`,
-        );
-      }
-      const data = (await response.json()) as {
-        choices: Array<{ message: { content: string } }>;
-      };
-      return data.choices[0]?.message?.content ?? "";
     },
   };
 }
