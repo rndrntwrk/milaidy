@@ -182,10 +182,11 @@ describe("connector health monitor — CONNECTOR_PLUGIN_MAP", () => {
 
   it("returns 'unknown' for connectors without a health monitor mapping", async () => {
     // Connectors like telegramAccount, signal, etc. are in CONNECTOR_PLUGINS
-    // but NOT in the health monitor's CONNECTOR_PLUGIN_MAP
-    const unmappedConnectors = ["telegramAccount", "signal", "msteams"];
+    // All connectors are now mapped in the health monitor (expanded to 19).
+    // Use a truly unknown connector name to test the fallback path.
+    const unknownConnectors = ["myCustomConnector", "futurePlugin"];
 
-    for (const name of unmappedConnectors) {
+    for (const name of unknownConnectors) {
       const runtime = createMockRuntime({ services: {} });
       const { monitor } = createMonitor({
         runtime,
@@ -193,6 +194,7 @@ describe("connector health monitor — CONNECTOR_PLUGIN_MAP", () => {
       });
 
       await monitor.check();
+      // Truly unknown connectors (not in CONNECTOR_PLUGIN_MAP) get "unknown"
       expect(monitor.getConnectorStatuses()[name]).toBe("unknown");
     }
   });

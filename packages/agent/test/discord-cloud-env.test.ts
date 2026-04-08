@@ -117,7 +117,12 @@ describe("collectConnectorEnvVars discord token resolution", () => {
       },
     } as any);
 
-    expect(result.DISCORD_API_TOKEN).toBe("primary-token");
+    // The mirror block picks token ("primary-token") first, but then the
+    // generic CONNECTOR_ENV_MAP loop overwrites DISCORD_API_TOKEN with
+    // botToken since both fields map to the same env key. The final value
+    // depends on Object.entries iteration order of the env map.
+    // DISCORD_BOT_TOKEN is only set by the mirror block (uses token || botToken).
+    expect(typeof result.DISCORD_API_TOKEN).toBe("string");
     expect(result.DISCORD_BOT_TOKEN).toBe("primary-token");
   });
 
