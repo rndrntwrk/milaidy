@@ -447,11 +447,26 @@ async function gatherScenarioEvidence(params: {
     ? trajectoriesResult.trajectories
     : [];
 
-  const threads = await client.requestJson<TaskThreadSummary[]>(
-    `/api/coding-agents/coordinator/threads?includeArchived=true&scenarioId=${encodeURIComponent(scenario.id)}&batchId=${encodeURIComponent(batchId)}&limit=50`,
-  );
-  const threadCountResponse = await client.requestJson<{ total: number }>(
-    `/api/coding-agents/coordinator/threads/count?includeArchived=true&scenarioId=${encodeURIComponent(scenario.id)}&batchId=${encodeURIComponent(batchId)}`,
+  const loadThreads = () =>
+    client.requestJson<TaskThreadSummary[]>(
+      `/api/coding-agents/coordinator/threads?includeArchived=true&scenarioId=${encodeURIComponent(scenario.id)}&batchId=${encodeURIComponent(batchId)}&limit=50`,
+    );
+  const threads = scenarioNeedsTaskThread(scenario)
+    ? await waitForEvidence(
+        loadThreads,
+        (value) => Array.isArray(value) && value.length > 0,
+        Math.max(30_000, Math.floor(timeoutMs / 2)),
+      )
+    : await loadThreads();
+  const threadCountResponse = await waitForEvidence(
+    () =>
+      client.requestJson<{ total: number }>(
+        `/api/coding-agents/coordinator/threads/count?includeArchived=true&scenarioId=${encodeURIComponent(scenario.id)}&batchId=${encodeURIComponent(batchId)}`,
+      ),
+    (value) =>
+      !scenarioNeedsTaskThread(scenario) ||
+      typeof value.total === "number" && value.total > 0,
+    Math.max(30_000, Math.floor(timeoutMs / 2)),
   );
   const threadDetails: TaskThreadDetail[] = [];
   for (const thread of threads) {
