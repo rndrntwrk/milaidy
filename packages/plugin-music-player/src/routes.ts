@@ -322,7 +322,7 @@ async function statusHandler(
 
   const active = findActiveGuild(musicService);
   if (!active) {
-    res.status(404).json({ error: "No track is currently playing" });
+    res.status(200).json({ error: "No track is currently playing" });
     return;
   }
 

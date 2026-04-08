@@ -684,6 +684,17 @@ function sparkPatchPlugin(): Plugin {
         "THREE.ShaderChunk.splatDefines = splatDefines_default;\nfunction getShaders() {\n  if (!shaders) {",
       );
 
+      // Spark ships an inline blob worker string with a relative
+      // //# sourceMappingURL=worker-*.js.map trailer. In Electrobun's
+      // WKWebView/null-origin context Safari resolves that against the blob
+      // URL itself, producing malformed blob://nullhttp//... requests and
+      // noisy access-control errors in the console. Strip the worker map
+      // trailer from the inlined string; main bundle source maps still work.
+      patched = patched.replace(
+        /\\n\/\/# sourceMappingURL=worker-[A-Za-z0-9_-]+\.js\.map\\n(?=';)/g,
+        "",
+      );
+
       if (patched === code) return null;
       return { code: patched, map: null };
     },
@@ -1058,8 +1069,11 @@ export default defineConfig({
     host: true,
     port: uiPort,
     strictPort: true,
-    // WKWebView (Electrobun) can build broken HMR / source-map URLs when the
-    // client advertises 0.0.0.0; pin the HMR endpoint to loopback.
+    // Electrobun/WKWebView runs the renderer in a null-origin context. When
+    // Vite leaves dev asset URLs relative, worker source-map lookups can turn
+    // into malformed blob://nullhttp//... requests. Pin the dev origin so
+    // worker chunks, source maps, and HMR all resolve against loopback.
+    origin: `http://127.0.0.1:${uiPort}`,
     hmr: {
       host: "127.0.0.1",
       port: uiPort,
