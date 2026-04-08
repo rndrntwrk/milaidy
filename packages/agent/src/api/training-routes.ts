@@ -339,8 +339,8 @@ export async function handleTrainingRoutes(
     } = await import("../training/roleplay-trajectories.js");
 
     const teacher = anthropicKey
-      ? createAnthropicTeacher(anthropicKey, runtime)
-      : createOpenAITeacher(openaiKey!, runtime);
+      ? createAnthropicTeacher(anthropicKey, runtime ?? undefined)
+      : createOpenAITeacher(openaiKey!, runtime ?? undefined);
 
     const outputDir = `.tmp/training-data-${Date.now()}`;
 
@@ -418,8 +418,8 @@ export async function handleTrainingRoutes(
     } = await import("../training/roleplay-trajectories.js");
 
     const teacher = anthropicKey
-      ? createAnthropicTeacher(anthropicKey, runtime)
-      : createOpenAITeacher(openaiKey!, runtime);
+      ? createAnthropicTeacher(anthropicKey, runtime ?? undefined)
+      : createOpenAITeacher(openaiKey!, runtime ?? undefined);
     const outputDir = `.tmp/training-roleplay-${Date.now()}`;
 
     try {
@@ -665,8 +665,8 @@ export async function handleTrainingRoutes(
         }
 
         const teacher = anthropicKey
-          ? createAnthropicTeacher(anthropicKey, runtime)
-          : createOpenAITeacher(openaiKey!, runtime);
+          ? createAnthropicTeacher(anthropicKey, runtime ?? undefined)
+          : createOpenAITeacher(openaiKey!, runtime ?? undefined);
         datasetOutputDir = `.tmp/training-orchestration-${Date.now()}`;
         const samples = await generateDataset({
           variantsPerBlueprint: body.variantsPerBlueprint ?? 5,
