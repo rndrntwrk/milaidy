@@ -1,7 +1,9 @@
+import { DEFAULT_DESKTOP_API_PORT } from "@miladyai/shared/runtime-env";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { installPluginAction } from "../../actions/install-plugin";
 
 const ensurePluginManagerAllowedMock = vi.fn(() => "already-enabled");
+const API_BASE = `http://localhost:${DEFAULT_DESKTOP_API_PORT}`;
 
 vi.mock("../../runtime/plugin-manager-guard", async (importOriginal) => {
   const actual =
@@ -72,7 +74,7 @@ describe("installPluginAction", () => {
 
     expect(result.success).toBe(true);
     expect(vi.mocked(fetch)).toHaveBeenCalledWith(
-      "http://localhost:2138/api/plugins/install",
+      `${API_BASE}/api/plugins/install`,
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({
@@ -201,12 +203,12 @@ describe("installPluginAction", () => {
     expect(result.success).toBe(true);
     expect(vi.mocked(fetch)).toHaveBeenNthCalledWith(
       1,
-      "http://localhost:2138/api/agent/restart",
+      `${API_BASE}/api/agent/restart`,
       expect.objectContaining({ method: "POST" }),
     );
     expect(vi.mocked(fetch)).toHaveBeenNthCalledWith(
       2,
-      "http://localhost:2138/api/plugins/install",
+      `${API_BASE}/api/plugins/install`,
       expect.objectContaining({
         body: JSON.stringify({
           name: "@elizaos/plugin-telegram",
@@ -251,12 +253,12 @@ describe("installPluginAction", () => {
     expect(result.text).toBe("installed after restart");
     expect(vi.mocked(fetch)).toHaveBeenNthCalledWith(
       2,
-      "http://localhost:2138/api/agent/restart",
+      `${API_BASE}/api/agent/restart`,
       expect.objectContaining({ method: "POST" }),
     );
     expect(vi.mocked(fetch)).toHaveBeenNthCalledWith(
       3,
-      "http://localhost:2138/api/plugins/install",
+      `${API_BASE}/api/plugins/install`,
       expect.objectContaining({
         body: JSON.stringify({
           name: "@elizaos/plugin-telegram",
@@ -303,12 +305,12 @@ describe("installPluginAction", () => {
     expect(vi.mocked(fetch)).toHaveBeenCalledTimes(3);
     expect(vi.mocked(fetch)).toHaveBeenNthCalledWith(
       1,
-      "http://localhost:2138/api/agent/restart",
+      `${API_BASE}/api/agent/restart`,
       expect.objectContaining({ method: "POST" }),
     );
     expect(vi.mocked(fetch)).toHaveBeenNthCalledWith(
       2,
-      "http://localhost:2138/api/plugins/install",
+      `${API_BASE}/api/plugins/install`,
       expect.objectContaining({
         body: JSON.stringify({
           name: "@elizaos/plugin-telegram",
@@ -318,7 +320,7 @@ describe("installPluginAction", () => {
     );
     expect(vi.mocked(fetch)).toHaveBeenNthCalledWith(
       3,
-      "http://localhost:2138/api/plugins/install",
+      `${API_BASE}/api/plugins/install`,
       expect.objectContaining({
         body: JSON.stringify({
           name: "@elizaos/plugin-telegram",

@@ -152,6 +152,8 @@ const runOnce = (entry, extraArgs = []) =>
       env: {
         ...process.env,
         VITEST_GROUP: entry.name,
+        MILADY_LIVE_TEST: "0",
+        ELIZA_LIVE_TEST: "0",
         NODE_OPTIONS: sanitiseNodeOptions(nextNodeOptions),
         NODE_NO_WARNINGS: process.env.NODE_NO_WARNINGS ?? "1",
       },

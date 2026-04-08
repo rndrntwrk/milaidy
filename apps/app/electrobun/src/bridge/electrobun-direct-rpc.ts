@@ -12,7 +12,6 @@
  * `request.<method>(params)` plus `onMessage(<message>, listener)`.
  */
 
-import { getBootConfig, setBootConfig } from "@miladyai/app-core/config";
 import { Electroview } from "electrobun/view";
 import type { RpcMessageListener } from "../types.js";
 import { ensureElectrobunGlobal } from "./electrobun-stub.js";

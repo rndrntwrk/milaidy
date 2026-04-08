@@ -209,10 +209,14 @@ export async function executeProactiveTask(
         ownerContacts,
       });
       const contact = resolvedTarget?.contact;
-      if (
-        !resolvedTarget ||
-        (!contact.entityId && !contact.channelId && !contact.roomId)
-      ) {
+      if (!resolvedTarget || !contact) {
+        logger.warn(
+          `[proactive] No owner contact for platform ${action.targetPlatform}, skipping ${action.kind}`,
+        );
+        continue;
+      }
+
+      if (!contact.entityId && !contact.channelId && !contact.roomId) {
         logger.warn(
           `[proactive] No owner contact for platform ${action.targetPlatform}, skipping ${action.kind}`,
         );

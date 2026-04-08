@@ -6,6 +6,7 @@
  */
 
 import type { HandlerOptions } from "@elizaos/core";
+import { DEFAULT_DESKTOP_API_PORT } from "@miladyai/shared/runtime-env";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { checkBalanceAction } from "./check-balance";
 
@@ -160,7 +161,9 @@ describe("CHECK_BALANCE action", () => {
 
     expect(mockFetch).toHaveBeenCalledOnce();
     const [url] = mockFetch.mock.calls[0] as [string, RequestInit];
-    expect(url).toBe("http://127.0.0.1:2138/api/wallet/balances");
+    expect(url).toBe(
+      `http://127.0.0.1:${DEFAULT_DESKTOP_API_PORT}/api/wallet/balances`,
+    );
   });
 
   // ── Multi-chain response formatting ──────────────────────────────────────
