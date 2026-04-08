@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
-import http from "node:http";
+import type http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import type {
@@ -15,6 +15,7 @@ import type {
   ProviderResult,
   State,
 } from "@elizaos/core";
+
 // Dynamic import: plugin-agent-orchestrator is desktop-only and may be absent
 // in Docker, cloud, or headless environments.
 let baseModule: Record<string, unknown> = {};
@@ -255,12 +256,7 @@ const FRAMEWORK_LABELS: Record<FrameworkId, string> = {
   aider: "Aider",
   pi: "Pi",
 };
-const STANDARD_FRAMEWORKS: AdapterId[] = [
-  "claude",
-  "codex",
-  "gemini",
-  "aider",
-];
+const STANDARD_FRAMEWORKS: AdapterId[] = ["claude", "codex", "gemini", "aider"];
 
 const TASK_AGENT_COMPLEXITY_RE =
   /\b(repo|repository|code|coding|debug|fix|implement|investigate|research|analyze|analysis|summarize|summary|write|draft|document|plan|workflow|automation|parallel|delegate|subtask|agent|orchestrate|coordinate|compare|test|tests|pull request|pr\b|branch|commit)\b/i;
@@ -287,7 +283,8 @@ function resolveBasePlugin(): Plugin {
     // Return a no-op stub when orchestrator is unavailable
     return {
       name: "agent-orchestrator-stub",
-      description: "Stub: plugin-agent-orchestrator not available in this environment",
+      description:
+        "Stub: plugin-agent-orchestrator not available in this environment",
       actions: [],
       providers: [],
       services: [],
@@ -360,6 +357,35 @@ function readConfiguredSubscriptionProvider(): string | undefined {
     : undefined;
 }
 
+/**
+ * Read a key from the env section of milady.json. The settings UI writes here,
+ * and we want changes to take effect without restart, so we read the file
+ * directly instead of relying on the runtime's in-memory character settings.
+ */
+function readMiladyEnvKey(key: string): string | undefined {
+  const config = readJsonFile(resolveMiladyConfigPath());
+  if (!config || typeof config !== "object" || Array.isArray(config)) return;
+  const env = (config as Record<string, unknown>).env;
+  if (!env || typeof env !== "object" || Array.isArray(env)) return;
+  const value = (env as Record<string, unknown>)[key];
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+/**
+ * Read the cloud.apiKey from milady.json. Used to detect when Eliza Cloud is
+ * paired so cloud-mode auth can mark Anthropic/OpenAI agents as ready.
+ */
+function readMiladyCloudApiKey(): string | undefined {
+  const config = readJsonFile(resolveMiladyConfigPath());
+  if (!config || typeof config !== "object" || Array.isArray(config)) return;
+  const cloud = (config as Record<string, unknown>).cloud;
+  if (!cloud || typeof cloud !== "object" || Array.isArray(cloud)) return;
+  const apiKey = (cloud as Record<string, unknown>).apiKey;
+  return typeof apiKey === "string" && apiKey.trim()
+    ? apiKey.trim()
+    : undefined;
+}
+
 function hasClaudeSubscriptionAuth(): boolean {
   const config = readJsonFile(resolveMiladyConfigPath());
   if (config && typeof config === "object" && !Array.isArray(config)) {
@@ -381,7 +407,11 @@ function hasClaudeSubscriptionAuth(): boolean {
   const stored = readJsonFile(storedPath);
   if (stored && typeof stored === "object" && !Array.isArray(stored)) {
     const credentials = (stored as Record<string, unknown>).credentials;
-    if (credentials && typeof credentials === "object" && !Array.isArray(credentials)) {
+    if (
+      credentials &&
+      typeof credentials === "object" &&
+      !Array.isArray(credentials)
+    ) {
       const expires = (credentials as Record<string, unknown>).expires;
       if (typeof expires === "number" && expires > Date.now()) {
         return true;
@@ -389,7 +419,11 @@ function hasClaudeSubscriptionAuth(): boolean {
     }
   }
 
-  const credentialsPath = path.join(os.homedir(), ".claude", ".credentials.json");
+  const credentialsPath = path.join(
+    os.homedir(),
+    ".claude",
+    ".credentials.json",
+  );
   const fileToken = extractOauthAccessToken(readJsonFile(credentialsPath));
   if (fileToken) return true;
 
@@ -416,7 +450,11 @@ function hasCodexSubscriptionAuth(): boolean {
   const stored = readJsonFile(storedPath);
   if (stored && typeof stored === "object" && !Array.isArray(stored)) {
     const credentials = (stored as Record<string, unknown>).credentials;
-    if (credentials && typeof credentials === "object" && !Array.isArray(credentials)) {
+    if (
+      credentials &&
+      typeof credentials === "object" &&
+      !Array.isArray(credentials)
+    ) {
       const expires = (credentials as Record<string, unknown>).expires;
       if (typeof expires === "number" && expires > Date.now()) {
         return true;
@@ -502,6 +540,10 @@ async function computeFrameworkState(
         "gemini",
         "aider",
       ]);
+      // checkAvailableAgents returns `result.adapter` as the human-readable
+      // display name (e.g. "Claude Code", "OpenAI Codex"), not the lowercase
+      // ID. Map back to the canonical framework ID via case-insensitive
+      // substring match so the framework state correctly reports installed.
       for (const result of results) {
         const adapter = normalizePreflightAdapterId(result.adapter);
         if (adapter) {
@@ -513,10 +555,26 @@ async function computeFrameworkState(
     }
   }
 
+  // When the user has selected Eliza Cloud as the LLM provider and has a
+  // paired cloud.apiKey, treat Claude as fully auth-ready — it will route
+  // through the cloud proxy at spawn time. Eliza Cloud does NOT proxy
+  // Gemini, so cloud mode does not affect Gemini's auth state.
+  //
+  // Codex-through-Eliza-Cloud is intentionally NOT gated on `cloudReady`:
+  // the upstream responses-stream reconciliation (elizaOS/cloud#427) has
+  // not deployed yet, so marking Codex ready in cloud mode would mislead
+  // users into starting a session that hits a runtime failure with no
+  // explanation. Restore `cloudReady ||` on the codexReady line once
+  // cloud#427 + cloud#428 have shipped.
+  const llmProvider =
+    readMiladyEnvKey("PARALLAX_LLM_PROVIDER") || "subscription";
+  const cloudReady =
+    llmProvider === "cloud" && Boolean(readMiladyCloudApiKey());
+
   const claudeSubscriptionReady = hasClaudeSubscriptionAuth();
   const codexSubscriptionReady = hasCodexSubscriptionAuth();
   const claudeReady =
-    claudeSubscriptionReady || hasAnthropicApiCredential();
+    cloudReady || claudeSubscriptionReady || hasAnthropicApiCredential();
   const codexReady = codexSubscriptionReady || hasOpenAIApiCredential();
   const geminiReady = hasGeminiCredential();
   const piReady = hasPiBinary();
@@ -544,10 +602,10 @@ async function computeFrameworkState(
           : id === "gemini"
             ? geminiReady
             : claudeSubscriptionReady ||
-                codexSubscriptionReady ||
-                hasAnthropicApiCredential() ||
-                hasOpenAIApiCredential() ||
-                geminiReady;
+              codexSubscriptionReady ||
+              hasAnthropicApiCredential() ||
+              hasOpenAIApiCredential() ||
+              geminiReady;
     const reason =
       id === "claude" && subscriptionReady
         ? "ready to use the user's Claude subscription"
@@ -581,13 +639,20 @@ async function computeFrameworkState(
     reason: piReady ? "CLI detected" : "CLI not detected",
   });
 
+  // Read PARALLAX_DEFAULT_AGENT_TYPE from milady.json first (the settings UI
+  // writes here, takes effect without restart) and fall back to runtime/env.
   const explicitDefault =
-    (runtime.getSetting("PARALLAX_DEFAULT_AGENT_TYPE") as string | undefined)
+    (
+      readMiladyEnvKey("PARALLAX_DEFAULT_AGENT_TYPE") ??
+      (runtime.getSetting("PARALLAX_DEFAULT_AGENT_TYPE") as string | undefined)
+    )
       ?.trim()
       .toLowerCase() ?? "";
   let preferred: PreferredFramework | undefined;
 
-  const byId = new Map(frameworks.map((framework) => [framework.id, framework]));
+  const byId = new Map(
+    frameworks.map((framework) => [framework.id, framework]),
+  );
   if (
     (explicitDefault === "claude" ||
       explicitDefault === "codex" ||
@@ -600,12 +665,20 @@ async function computeFrameworkState(
       id: explicitDefault as FrameworkId,
       reason: "explicit PARALLAX_DEFAULT_AGENT_TYPE override",
     };
-  } else if (providerPrefersClaude && byId.get("claude")?.installed && claudeReady) {
+  } else if (
+    providerPrefersClaude &&
+    byId.get("claude")?.installed &&
+    claudeReady
+  ) {
     preferred = {
       id: "claude",
       reason: "configured Claude subscription should drive Claude Code first",
     };
-  } else if (providerPrefersCodex && byId.get("codex")?.installed && codexReady) {
+  } else if (
+    providerPrefersCodex &&
+    byId.get("codex")?.installed &&
+    codexReady
+  ) {
     preferred = {
       id: "codex",
       reason: "configured OpenAI subscription should drive Codex first",
@@ -627,8 +700,7 @@ async function computeFrameworkState(
     };
   } else {
     const fallback =
-      frameworks.find((framework) => framework.installed) ??
-      frameworks[0];
+      frameworks.find((framework) => framework.installed) ?? frameworks[0];
     preferred = {
       id: fallback.id,
       reason: fallback.installed
@@ -818,7 +890,7 @@ function createTaskAgentExamplesProvider(): Provider {
         "</actions>",
         "<params>",
         "  <CREATE_TASK>",
-        "    <agents>Research Playwright tradeoffs and browser sandboxing. Your identifier is \"research\". | Compare Stagehand, Playwright, and browser-use for Milady. Your identifier is \"comparison\". | Draft a recommendation memo in TASK_AGENTS.md using the findings. Your identifier is \"writer\".</agents>",
+        '    <agents>Research Playwright tradeoffs and browser sandboxing. Your identifier is "research". | Compare Stagehand, Playwright, and browser-use for Milady. Your identifier is "comparison". | Draft a recommendation memo in TASK_AGENTS.md using the findings. Your identifier is "writer".</agents>',
         "  </CREATE_TASK>",
         "</params>",
         "",
@@ -856,7 +928,8 @@ function createActiveWorkspaceContextProvider(): Provider {
   const baseProvider = baseProviderMap.get("ACTIVE_WORKSPACE_CONTEXT");
   return {
     name: "ACTIVE_WORKSPACE_CONTEXT",
-    description: "Live status of active workspaces, task-agent sessions, and current task progress",
+    description:
+      "Live status of active workspaces, task-agent sessions, and current task progress",
     position: baseProvider?.position ?? 1,
     get: async (
       runtime: IAgentRuntime,
@@ -884,7 +957,11 @@ function createActiveWorkspaceContextProvider(): Provider {
         `Preferred framework: ${FRAMEWORK_LABELS[frameworkState.preferred.id]} (${frameworkState.preferred.reason}).`,
       );
 
-      if (workspaces.length === 0 && sessions.length === 0 && tasks.length === 0) {
+      if (
+        workspaces.length === 0 &&
+        sessions.length === 0 &&
+        tasks.length === 0
+      ) {
         lines.push("No active workspaces or task-agent sessions.");
         lines.push(
           "Use CREATE_TASK when the user needs anything more involved than a simple direct reply.",
@@ -912,7 +989,9 @@ function createActiveWorkspaceContextProvider(): Provider {
           }
         }
 
-        const trackedPaths = new Set(workspaces.map((workspace) => workspace.path));
+        const trackedPaths = new Set(
+          workspaces.map((workspace) => workspace.path),
+        );
         const standaloneSessions = sessions.filter(
           (session) => !trackedPaths.has(session.workdir),
         );
@@ -1115,9 +1194,7 @@ function injectPreferredAgentType(action: Action | undefined): void {
     const ptyService = getPtyService(runtime);
     const frameworkState = await getFrameworkState(runtime, ptyService);
     const preferredAgentType =
-      frameworkState.preferred.id === "pi"
-        ? "pi"
-        : frameworkState.preferred.id;
+      frameworkState.preferred.id === "pi" ? "pi" : frameworkState.preferred.id;
 
     const nextMessage = {
       ...message,
@@ -1203,7 +1280,9 @@ function installListAgentsHandler(action: Action | undefined): void {
           task.completionSummary ||
           task.decisions.at(-1)?.reasoning ||
           truncateText(task.originalTask, 110);
-        lines.push(`- [${task.status}] "${task.label}" (${task.agentType}) -> ${detail}`);
+        lines.push(
+          `- [${task.status}] "${task.label}" (${task.agentType}) -> ${detail}`,
+        );
       }
     }
 
@@ -1368,11 +1447,7 @@ function patchPluginSurface(): void {
   ];
 }
 
-function sendJson(
-  res: http.ServerResponse,
-  body: unknown,
-  status = 200,
-): void {
+function sendJson(res: http.ServerResponse, body: unknown, status = 200): void {
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json");
   res.end(JSON.stringify(body));
@@ -1421,7 +1496,10 @@ function parseThreadListOptions(rawUrl: string | undefined): {
   search?: string;
   limit?: number;
 } {
-  const url = new URL(rawUrl ?? "http://localhost/api/coding-agents/coordinator/threads", "http://localhost");
+  const url = new URL(
+    rawUrl ?? "http://localhost/api/coding-agents/coordinator/threads",
+    "http://localhost",
+  );
   const status = url.searchParams.get("status") ?? undefined;
   const statusesRaw = url.searchParams.get("statuses");
   const statuses = statusesRaw
@@ -1457,12 +1535,12 @@ function parseThreadListOptions(rawUrl: string | undefined): {
         ? Number(latestActivityBeforeRaw)
         : undefined,
     hasActiveSession:
-      hasActiveSessionRaw === null
-        ? undefined
-        : hasActiveSessionRaw === "true",
+      hasActiveSessionRaw === null ? undefined : hasActiveSessionRaw === "true",
     search: url.searchParams.get("search") ?? undefined,
     limit:
-      limitRaw && Number.isFinite(Number(limitRaw)) ? Number(limitRaw) : undefined,
+      limitRaw && Number.isFinite(Number(limitRaw))
+        ? Number(limitRaw)
+        : undefined,
   };
 }
 
@@ -1515,9 +1593,7 @@ function isRemoteAccessibleUrl(value: string): boolean {
   }
 }
 
-function discoverTaskShareOptions(
-  thread: TaskThreadDetail,
-): {
+function discoverTaskShareOptions(thread: TaskThreadDetail): {
   threadId: string;
   title: string;
   shareCapabilities: string[];
@@ -1528,10 +1604,11 @@ function discoverTaskShareOptions(
   const seen = new Set<string>();
 
   const pushTarget = (target: Record<string, unknown>) => {
-    const type =
-      typeof target.type === "string" ? target.type : "unknown";
+    const type = typeof target.type === "string" ? target.type : "unknown";
     const value =
-      typeof target.value === "string" ? target.value : JSON.stringify(target.value);
+      typeof target.value === "string"
+        ? target.value
+        : JSON.stringify(target.value);
     const key = `${type}:${value}`;
     if (seen.has(key)) return;
     seen.add(key);
@@ -1611,7 +1688,8 @@ async function handleSettingsRoute(
     defaultAgentType: frameworkState.preferred.id,
     preferredAgentType: frameworkState.preferred.id,
     preferredAgentReason: frameworkState.preferred.reason,
-    configuredSubscriptionProvider: frameworkState.configuredSubscriptionProvider,
+    configuredSubscriptionProvider:
+      frameworkState.configuredSubscriptionProvider,
     frameworks: frameworkState.frameworks,
   });
   return true;
@@ -1726,20 +1804,22 @@ function patchPtyServiceClass(): void {
     | ((runtime: IAgentRuntime) => Promise<unknown>)
     | undefined;
   if (typeof originalStart === "function") {
-    ((ptyServiceClass as unknown) as {
-      start: (runtime: IAgentRuntime) => Promise<unknown>;
-    }).start = async (runtime: IAgentRuntime) => {
-        const service = await originalStart(runtime);
-        if (service && typeof service === "object") {
-          (
-            service as {
-              capabilityDescription?: string;
-            }
-          ).capabilityDescription =
-            "Manages asynchronous PTY task-agent sessions for open-ended background work";
-        }
-        return service;
-      };
+    (
+      ptyServiceClass as unknown as {
+        start: (runtime: IAgentRuntime) => Promise<unknown>;
+      }
+    ).start = async (runtime: IAgentRuntime) => {
+      const service = await originalStart(runtime);
+      if (service && typeof service === "object") {
+        (
+          service as {
+            capabilityDescription?: string;
+          }
+        ).capabilityDescription =
+          "Manages asynchronous PTY task-agent sessions for open-ended background work";
+      }
+      return service;
+    };
   }
 }
 
@@ -1750,8 +1830,9 @@ export function createCodingAgentRouteHandler(
   runtime: IAgentRuntime,
   coordinator?: unknown,
 ): PatchedRouteHandler {
-  const baseFactory =
-    getBaseExport<RouteHandlerFactory>("createCodingAgentRouteHandler");
+  const baseFactory = getBaseExport<RouteHandlerFactory>(
+    "createCodingAgentRouteHandler",
+  );
   const baseHandler = baseFactory?.(runtime, coordinator);
 
   return async (
@@ -1769,12 +1850,17 @@ export function createCodingAgentRouteHandler(
     ) {
       return handleCoordinatorStatusRoute(runtime, res);
     }
-    if (method === "GET" && pathname === "/api/coding-agents/coordinator/threads") {
+    if (
+      method === "GET" &&
+      pathname === "/api/coding-agents/coordinator/threads"
+    ) {
       const resolvedCoordinator = resolveCoordinator(runtime);
       if (!resolvedCoordinator?.listTaskThreads) return false;
       sendJson(
         res,
-        await resolvedCoordinator.listTaskThreads(parseThreadListOptions(req.url)),
+        await resolvedCoordinator.listTaskThreads(
+          parseThreadListOptions(req.url),
+        ),
       );
       return true;
     }
