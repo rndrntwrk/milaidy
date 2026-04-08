@@ -1,6 +1,5 @@
 import {
   Button,
-  SaveFooter,
   Select,
   SelectContent,
   SelectItem,
@@ -10,13 +9,13 @@ import {
 import { useCallback, useEffect, useState } from "react";
 import type { AgentPreflightResult } from "../../api";
 import { client } from "../../api";
-import { useTimeout } from "../../hooks";
 import { useApp } from "../../state";
 
 type AgentTab = "claude" | "gemini" | "codex" | "aider";
 type AiderProvider = "anthropic" | "openai" | "google";
 type ApprovalPreset = "readonly" | "standard" | "permissive" | "autonomous";
 type AgentSelectionStrategy = "fixed" | "ranked";
+type LlmProvider = "subscription" | "api_keys" | "cloud";
 
 const AGENT_TABS: AgentTab[] = ["claude", "gemini", "codex", "aider"];
 
@@ -82,6 +81,21 @@ const FALLBACK_MODELS: Record<string, ModelOption[]> = {
   ],
 };
 
+/** Aider uses short aliases that auto-resolve to the latest model version. */
+const AIDER_MODELS: Record<string, ModelOption[]> = {
+  anthropic: [
+    { value: "opus", label: "Claude Opus" },
+    { value: "sonnet", label: "Claude Sonnet" },
+    { value: "haiku", label: "Claude Haiku" },
+  ],
+  "google-genai": [{ value: "gemini", label: "Gemini" }],
+  openai: [
+    { value: "o3", label: "o3" },
+    { value: "4o", label: "GPT-4o" },
+    { value: "o4-mini", label: "o4-mini" },
+  ],
+};
+
 const AGENT_LABELS: Record<AgentTab, string> = {
   claude: "Claude",
   gemini: "Gemini",
@@ -137,15 +151,10 @@ function CodingDirInput({
 }
 
 export function CodingAgentSettingsSection() {
-  const { setTimeout } = useTimeout();
   const { t } = useApp();
 
-  const [activeTab, setActiveTab] = useState<AgentTab>("claude");
+  const [activeTab, setActiveTab] = useState<AgentTab | null>(null);
   const [loading, setLoading] = useState(true);
-  const [dirty, setDirty] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [saveSuccess, setSaveSuccess] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
   const [prefs, setPrefs] = useState<Record<string, string>>({});
   const [providerModels, setProviderModels] = useState<
     Record<string, ModelOption[]>
@@ -154,6 +163,14 @@ export function CodingAgentSettingsSection() {
   const [preflightByAgent, setPreflightByAgent] = useState<
     Partial<Record<AgentTab, AgentPreflightResult>>
   >({});
+  const [authInProgress, setAuthInProgress] = useState<AgentTab | null>(null);
+  const [authResult, setAuthResult] = useState<{
+    agent: AgentTab;
+    launched?: boolean;
+    url?: string;
+    deviceCode?: string;
+    instructions: string;
+  } | null>(null);
 
   useEffect(() => {
     void (async () => {
@@ -171,7 +188,12 @@ export function CodingAgentSettingsSection() {
           ]);
 
         const env = (cfg.env ?? {}) as Record<string, string>;
+        const cloud = (cfg.cloud ?? {}) as Record<string, string>;
         const loaded: Record<string, string> = {};
+        // Store cloud API key for reference in cloud mode
+        if (cloud.apiKey) {
+          loaded._CLOUD_API_KEY = cloud.apiKey;
+        }
         for (const agent of ["CLAUDE", "GEMINI", "CODEX", "AIDER"] as const) {
           const prefix = `PARALLAX_${agent}`;
           if (env[`${prefix}_MODEL_POWERFUL`]) {
@@ -201,6 +223,19 @@ export function CodingAgentSettingsSection() {
         }
         if (env.PARALLAX_CODING_DIRECTORY) {
           loaded.PARALLAX_CODING_DIRECTORY = env.PARALLAX_CODING_DIRECTORY;
+        }
+        if (env.PARALLAX_LLM_PROVIDER) {
+          loaded.PARALLAX_LLM_PROVIDER = env.PARALLAX_LLM_PROVIDER;
+        }
+        // API keys — load presence indicators (masked)
+        for (const key of [
+          "ANTHROPIC_API_KEY",
+          "OPENAI_API_KEY",
+          "GOOGLE_GENERATIVE_AI_API_KEY",
+          "ANTHROPIC_BASE_URL",
+          "OPENAI_BASE_URL",
+        ] as const) {
+          if (env[key]) loaded[key] = env[key];
         }
         setPrefs(loaded);
 
@@ -253,13 +288,21 @@ export function CodingAgentSettingsSection() {
     })();
   }, []);
 
+  const llmProvider = (prefs.PARALLAX_LLM_PROVIDER ||
+    "subscription") as LlmProvider;
+  const isCloud = llmProvider === "cloud";
+
   const installedAgents = AGENT_TABS.filter(
     (agent) => preflightByAgent[agent]?.installed === true,
   );
+  // Gemini CLI can't route through cloud (no Google-native proxy)
+  const providerFilteredAgents = isCloud
+    ? AGENT_TABS.filter((agent) => agent !== "gemini")
+    : AGENT_TABS;
   const availableAgents =
     preflightLoaded && installedAgents.length > 0
-      ? installedAgents
-      : AGENT_TABS;
+      ? installedAgents.filter((a) => providerFilteredAgents.includes(a))
+      : providerFilteredAgents;
 
   const getInstallState = (
     agent: AgentTab,
@@ -271,39 +314,96 @@ export function CodingAgentSettingsSection() {
   };
 
   useEffect(() => {
-    if (availableAgents.length === 0) {
-      return;
-    }
-    if (!availableAgents.includes(activeTab)) {
+    if (loading || availableAgents.length === 0) return;
+    if (activeTab === null) {
+      const saved = prefs.PARALLAX_DEFAULT_AGENT_TYPE as AgentTab | undefined;
+      setActiveTab(
+        saved && availableAgents.includes(saved) ? saved : availableAgents[0],
+      );
+    } else if (!availableAgents.includes(activeTab)) {
       setActiveTab(availableAgents[0]);
     }
-  }, [activeTab, availableAgents]);
+  }, [loading, activeTab, availableAgents, prefs.PARALLAX_DEFAULT_AGENT_TYPE]);
 
   const setPref = useCallback((key: string, value: string) => {
-    setPrefs((previous) => ({ ...previous, [key]: value }));
-    setDirty(true);
+    setPrefs((previous) => {
+      const next = { ...previous, [key]: value };
+      // Auto-save: fire and forget
+      const envPatch: Record<string, string> = {};
+      for (const [k, v] of Object.entries(next)) {
+        if (v != null) envPatch[k] = v;
+      }
+      void client.updateConfig({ env: envPatch });
+      return next;
+    });
   }, []);
 
-  const handleSave = useCallback(async () => {
-    setSaving(true);
-    setSaveError(null);
-    setSaveSuccess(false);
+  // Reset Aider provider to anthropic if cloud is selected and google was chosen
+  useEffect(() => {
+    if (isCloud && prefs.PARALLAX_AIDER_PROVIDER === "google") {
+      setPref("PARALLAX_AIDER_PROVIDER", "anthropic");
+    }
+  }, [isCloud, prefs.PARALLAX_AIDER_PROVIDER, setPref]);
+
+  const refreshPreflight = useCallback(async () => {
     try {
-      const envPatch: Record<string, string> = {};
-      for (const [key, value] of Object.entries(prefs)) {
-        if (value != null) {
-          envPatch[key] = value;
+      const preflightRes = await fetch("/api/coding-agents/preflight");
+      if (preflightRes.ok) {
+        const results = await preflightRes.json();
+        if (Array.isArray(results)) {
+          const mapped: Partial<Record<AgentTab, AgentPreflightResult>> = {};
+          for (const item of results as AgentPreflightResult[]) {
+            const raw = item.adapter?.toLowerCase();
+            const key = raw ? ADAPTER_NAME_TO_TAB[raw] : undefined;
+            if (key) mapped[key] = item;
+          }
+          setPreflightByAgent(mapped);
+          return mapped;
         }
       }
-      await client.updateConfig({ env: envPatch });
-      setDirty(false);
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 2500);
-    } catch (error) {
-      setSaveError(error instanceof Error ? error.message : "Failed to save");
+    } catch {
+      /* ignore */
     }
-    setSaving(false);
-  }, [prefs, setTimeout]);
+    return null;
+  }, []);
+
+  const handleAuth = useCallback(
+    async (agent: AgentTab) => {
+      setAuthInProgress(agent);
+      setAuthResult(null);
+      try {
+        const res = await fetch(`/api/coding-agents/auth/${agent}`, {
+          method: "POST",
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setAuthResult({ agent, ...data });
+          // Poll for auth completion — check every 3s for up to 2 minutes
+          let attempts = 0;
+          const maxAttempts = 40;
+          const poll = setInterval(async () => {
+            attempts++;
+            const mapped = await refreshPreflight();
+            if (
+              mapped?.[agent]?.auth?.status === "authenticated" ||
+              attempts >= maxAttempts
+            ) {
+              clearInterval(poll);
+              setAuthInProgress(null);
+              if (mapped?.[agent]?.auth?.status === "authenticated") {
+                setAuthResult(null);
+              }
+            }
+          }, 3000);
+        } else {
+          setAuthInProgress(null);
+        }
+      } catch {
+        setAuthInProgress(null);
+      }
+    },
+    [refreshPreflight],
+  );
 
   const getProviderId = (
     tab: AgentTab,
@@ -313,10 +413,23 @@ export function CodingAgentSettingsSection() {
       ? AIDER_PROVIDER_MAP[aiderProvider]
       : AGENT_PROVIDER_MAP[tab];
 
-  const getModelOptions = (providerId: string): ModelOption[] =>
-    providerModels[providerId] ?? FALLBACK_MODELS[providerId] ?? [];
+  const getModelOptions = (providerId: string): ModelOption[] => {
+    // Aider uses short aliases, not full model IDs
+    if (activeTab === "aider") {
+      return AIDER_MODELS[providerId] ?? [];
+    }
+    return providerModels[providerId] ?? FALLBACK_MODELS[providerId] ?? [];
+  };
 
   if (loading) {
+    return (
+      <div className="py-4 text-center text-[var(--muted)] text-xs">
+        {t("codingagentsettingssection.LoadingCodingAgent")}
+      </div>
+    );
+  }
+
+  if (!activeTab) {
     return (
       <div className="py-4 text-center text-[var(--muted)] text-xs">
         {t("codingagentsettingssection.LoadingCodingAgent")}
@@ -332,15 +445,10 @@ export function CodingAgentSettingsSection() {
   const powerfulValue = prefs[`${prefix}_MODEL_POWERFUL`] ?? "";
   const fastValue = prefs[`${prefix}_MODEL_FAST`] ?? "";
   const isDynamic = Boolean(providerModels[providerId]);
-  const approvalPreset = (prefs.PARALLAX_DEFAULT_APPROVAL_PRESET ||
-    "permissive") as ApprovalPreset;
   const selectionStrategy = (prefs.PARALLAX_AGENT_SELECTION_STRATEGY ||
     "fixed") as AgentSelectionStrategy;
-  const defaultAgentType = (prefs.PARALLAX_DEFAULT_AGENT_TYPE ||
-    "claude") as AgentTab;
-  const effectiveDefaultAgentType = availableAgents.includes(defaultAgentType)
-    ? defaultAgentType
-    : availableAgents[0];
+  const approvalPreset = (prefs.PARALLAX_DEFAULT_APPROVAL_PRESET ||
+    "permissive") as ApprovalPreset;
 
   if (preflightLoaded && installedAgents.length === 0) {
     return (
@@ -371,6 +479,97 @@ export function CodingAgentSettingsSection() {
   return (
     <div className="flex flex-col gap-4">
       <SettingsControls.Field>
+        <SettingsControls.FieldLabel>LLM Provider</SettingsControls.FieldLabel>
+        <Select
+          value={llmProvider}
+          onValueChange={(value) => setPref("PARALLAX_LLM_PROVIDER", value)}
+        >
+          <SettingsControls.SelectTrigger variant="compact">
+            <SelectValue />
+          </SettingsControls.SelectTrigger>
+          <SelectContent>
+            <SelectItem value="subscription">CLI Subscription</SelectItem>
+            <SelectItem value="api_keys">API Keys</SelectItem>
+            <SelectItem value="cloud">Eliza Cloud</SelectItem>
+          </SelectContent>
+        </Select>
+        <SettingsControls.FieldDescription>
+          {llmProvider === "subscription"
+            ? "Use each CLI's built-in login (Claude Code, Codex, and Gemini subscriptions)."
+            : isCloud
+              ? "Route all agent LLM calls through Eliza Cloud. Gemini CLI is not supported."
+              : "Provide your own API keys for each provider (Anthropic, OpenAI, Google)."}
+        </SettingsControls.FieldDescription>
+      </SettingsControls.Field>
+
+      {llmProvider === "api_keys" && (
+        <div className="flex flex-col gap-3">
+          <SettingsControls.Field>
+            <SettingsControls.FieldLabel>
+              Anthropic API Key
+            </SettingsControls.FieldLabel>
+            <SettingsControls.Input
+              variant="compact"
+              type="password"
+              placeholder="sk-ant-..."
+              value={prefs.ANTHROPIC_API_KEY || ""}
+              onChange={(e) => setPref("ANTHROPIC_API_KEY", e.target.value)}
+            />
+            <SettingsControls.FieldDescription>
+              For Claude Code and Aider (Anthropic provider).
+            </SettingsControls.FieldDescription>
+          </SettingsControls.Field>
+          <SettingsControls.Field>
+            <SettingsControls.FieldLabel>
+              OpenAI API Key
+            </SettingsControls.FieldLabel>
+            <SettingsControls.Input
+              variant="compact"
+              type="password"
+              placeholder="sk-..."
+              value={prefs.OPENAI_API_KEY || ""}
+              onChange={(e) => setPref("OPENAI_API_KEY", e.target.value)}
+            />
+            <SettingsControls.FieldDescription>
+              For Codex and Aider (OpenAI provider).
+            </SettingsControls.FieldDescription>
+          </SettingsControls.Field>
+          <SettingsControls.Field>
+            <SettingsControls.FieldLabel>
+              Google API Key
+            </SettingsControls.FieldLabel>
+            <SettingsControls.Input
+              variant="compact"
+              type="password"
+              placeholder="AIza..."
+              value={prefs.GOOGLE_GENERATIVE_AI_API_KEY || ""}
+              onChange={(e) =>
+                setPref("GOOGLE_GENERATIVE_AI_API_KEY", e.target.value)
+              }
+            />
+            <SettingsControls.FieldDescription>
+              For Gemini CLI and Aider (Google provider).
+            </SettingsControls.FieldDescription>
+          </SettingsControls.Field>
+        </div>
+      )}
+
+      {isCloud && (
+        <div className="flex flex-col gap-3">
+          {prefs._CLOUD_API_KEY ? (
+            <SettingsControls.MutedText className="text-xs text-green-500">
+              Using your Eliza Cloud account for coding agent LLM calls.
+            </SettingsControls.MutedText>
+          ) : (
+            <SettingsControls.MutedText className="text-xs text-amber-500">
+              No Eliza Cloud account connected. Pair your account in the Cloud
+              settings section first.
+            </SettingsControls.MutedText>
+          )}
+        </div>
+      )}
+
+      <SettingsControls.Field>
         <SettingsControls.FieldLabel>
           {t("codingagentsettingssection.AgentSelectionStra")}
         </SettingsControls.FieldLabel>
@@ -398,34 +597,6 @@ export function CodingAgentSettingsSection() {
             : t("codingagentsettingssection.AgentUsedWhenNoEStrategyRanked")}
         </SettingsControls.FieldDescription>
       </SettingsControls.Field>
-
-      {selectionStrategy === "fixed" && (
-        <SettingsControls.Field>
-          <SettingsControls.FieldLabel>
-            {t("codingagentsettingssection.DefaultAgentType")}
-          </SettingsControls.FieldLabel>
-          <Select
-            value={effectiveDefaultAgentType}
-            onValueChange={(value) =>
-              setPref("PARALLAX_DEFAULT_AGENT_TYPE", value)
-            }
-          >
-            <SettingsControls.SelectTrigger variant="compact">
-              <SelectValue />
-            </SettingsControls.SelectTrigger>
-            <SelectContent>
-              {availableAgents.map((agent) => (
-                <SelectItem key={agent} value={agent}>
-                  {AGENT_LABELS[agent]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <SettingsControls.FieldDescription>
-            {t("codingagentsettingssection.AgentUsedWhenNoE")}
-          </SettingsControls.FieldDescription>
-        </SettingsControls.Field>
-      )}
 
       <SettingsControls.Field>
         <SettingsControls.FieldLabel>
@@ -530,6 +701,29 @@ export function CodingAgentSettingsSection() {
         {availableAgents.map((agent) => {
           const active = activeTab === agent;
           const installState = getInstallState(agent);
+          const needsAuth =
+            llmProvider === "subscription" &&
+            installState === "installed" &&
+            preflightByAgent[agent]?.auth?.status === "unauthenticated";
+          const isAuthenticating = authInProgress === agent;
+
+          if (needsAuth) {
+            return (
+              <Button
+                key={agent}
+                variant="ghost"
+                size="sm"
+                disabled={isAuthenticating}
+                className="flex-1 h-9 rounded-lg border border-amber-500/30 px-3 py-2 text-xs font-semibold text-amber-500 hover:bg-amber-500/10 hover:text-amber-400"
+                onClick={() => handleAuth(agent)}
+              >
+                {isAuthenticating
+                  ? `Authenticating ${AGENT_LABELS[agent]}...`
+                  : `Authenticate ${AGENT_LABELS[agent]}`}
+              </Button>
+            );
+          }
+
           return (
             <Button
               key={agent}
@@ -537,18 +731,29 @@ export function CodingAgentSettingsSection() {
               size="sm"
               className={`flex-1 h-9 rounded-lg border border-transparent px-3 py-2 text-xs font-semibold ${
                 active
-                  ? "bg-accent text-accent-fg shadow-sm"
+                  ? "bg-accent text-accent-fg dark:text-accent-fg shadow-sm"
                   : "text-muted hover:bg-bg-hover hover:text-txt"
               }`}
-              onClick={() => setActiveTab(agent)}
+              onClick={() => {
+                setActiveTab(agent);
+                setPref("PARALLAX_DEFAULT_AGENT_TYPE", agent);
+              }}
             >
               <span className="inline-flex items-center gap-1.5">
                 <span>{AGENT_LABELS[agent]}</span>
-                {installState === "installed" && (
-                  <span className="text-[10px] font-medium opacity-80">
-                    {t("codingagentsettingssection.Installed")}
-                  </span>
-                )}
+                {installState === "installed" &&
+                  llmProvider === "subscription" &&
+                  preflightByAgent[agent]?.auth?.status === "authenticated" && (
+                    <span className="text-[10px] font-medium text-green-500 opacity-90">
+                      ✓
+                    </span>
+                  )}
+                {installState === "installed" &&
+                  llmProvider !== "subscription" && (
+                    <span className="text-[10px] font-medium opacity-80">
+                      {t("codingagentsettingssection.Installed")}
+                    </span>
+                  )}
                 {installState === "unknown" && (
                   <span className="text-[10px] font-medium opacity-70">
                     {t("codingagentsettingssection.Unknown")}
@@ -559,6 +764,54 @@ export function CodingAgentSettingsSection() {
           );
         })}
       </SettingsControls.SegmentedGroup>
+
+      {authResult && (
+        <div className="mt-1.5 flex flex-col gap-1.5">
+          {authResult.url && (
+            <a
+              href={authResult.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs font-medium text-accent hover:underline w-fit"
+            >
+              Open sign-in page →
+            </a>
+          )}
+          {authResult.deviceCode && (
+            <SettingsControls.MutedText className="text-xs">
+              Enter code{" "}
+              <span className="font-mono font-bold select-all">
+                {authResult.deviceCode}
+              </span>{" "}
+              at the sign-in page.
+            </SettingsControls.MutedText>
+          )}
+          {authResult.launched === false && (
+            <div className="flex items-center gap-2">
+              <SettingsControls.MutedText className="text-xs text-amber-500">
+                {authResult.instructions}
+              </SettingsControls.MutedText>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 px-2 text-[10px]"
+                disabled={authInProgress !== null}
+                onClick={() => handleAuth(authResult.agent)}
+              >
+                Retry
+              </Button>
+            </div>
+          )}
+          {authResult.launched !== false &&
+            !authResult.url &&
+            !authResult.deviceCode &&
+            authResult.instructions && (
+              <SettingsControls.MutedText className="text-xs">
+                {authResult.instructions}
+              </SettingsControls.MutedText>
+            )}
+        </div>
+      )}
 
       {preflightLoaded && (
         <SettingsControls.MutedText className="mt-1.5">
@@ -595,9 +848,11 @@ export function CodingAgentSettingsSection() {
               <SelectItem value="openai">
                 {t("codingagentsettingssection.OpenAI")}
               </SelectItem>
-              <SelectItem value="google">
-                {t("codingagentsettingssection.Google")}
-              </SelectItem>
+              {!isCloud && (
+                <SelectItem value="google">
+                  {t("codingagentsettingssection.Google")}
+                </SelectItem>
+              )}
             </SelectContent>
           </Select>
         </SettingsControls.Field>
@@ -658,19 +913,17 @@ export function CodingAgentSettingsSection() {
         </SettingsControls.Field>
       </div>
 
-      <SettingsControls.MutedText className="mt-1.5">
-        {isDynamic
-          ? t("codingagentsettingssection.ModelsFetched")
-          : t("codingagentsettingssection.UsingFallback")}
-      </SettingsControls.MutedText>
-
-      <SaveFooter
-        dirty={dirty}
-        saving={saving}
-        saveError={saveError}
-        saveSuccess={saveSuccess}
-        onSave={() => void handleSave()}
-      />
+      {/* Only show the "configure API key" hint when the user is actually
+          using direct provider keys. In cloud or subscription mode the
+          fallback list is the expected source of truth, and Aider uses its
+          own short aliases regardless. */}
+      {llmProvider === "api_keys" && activeTab !== "aider" && (
+        <SettingsControls.MutedText className="mt-1.5">
+          {isDynamic
+            ? t("codingagentsettingssection.ModelsFetched")
+            : t("codingagentsettingssection.UsingFallback")}
+        </SettingsControls.MutedText>
+      )}
     </div>
   );
 }

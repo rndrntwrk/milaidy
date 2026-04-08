@@ -6,7 +6,7 @@
  */
 
 import crypto from "node:crypto";
-import http from "node:http";
+import type http from "node:http";
 
 import {
   type AgentRuntime,
@@ -17,7 +17,25 @@ import {
   stringToUuid,
   type UUID,
 } from "@elizaos/core";
-
+import type { ElizaConfig } from "../config/config.js";
+import type { AgentEventPayloadLike } from "../runtime/agent-event-service.js";
+import type { AppManager } from "../services/app-manager.js";
+import type { SandboxManager } from "../services/sandbox-manager.js";
+import { generateChatResponse as generateChatResponseFromChatRoutes } from "./chat-routes.js";
+import type { CloudRouteState } from "./cloud-routes.js";
+import type { ConnectorHealthMonitor } from "./connector-health.js";
+import type {
+  SwarmEvent,
+  TaskCompletionSummary,
+  TaskContext,
+} from "./coordinator-types.js";
+import type { DropService } from "./drop-service.js";
+import {
+  readJsonBody as parseJsonBody,
+  type ReadJsonBodyOptions,
+  sendJson,
+  sendJsonError,
+} from "./http-helpers.js";
 import type {
   CoordinationLLMResponse,
   PTYService,
@@ -26,29 +44,8 @@ import {
   parseActionBlock,
   stripActionBlockFromDisplay,
 } from "./parse-action-block.js";
-import type {
-  SwarmEvent,
-  TaskCompletionSummary,
-  TaskContext,
-} from "./coordinator-types.js";
-import type { AgentEventPayloadLike } from "../runtime/agent-event-service.js";
-import { resolveAppUserName, type ConversationMeta } from "./server-helpers.js";
-import {
-  readJsonBody as parseJsonBody,
-  type ReadJsonBodyOptions,
-  sendJson,
-  sendJsonError,
-} from "./http-helpers.js";
-import {
-  generateChatResponse as generateChatResponseFromChatRoutes,
-} from "./chat-routes.js";
-import type { ElizaConfig } from "../config/config.js";
-import type { SandboxManager } from "../services/sandbox-manager.js";
-import type { AppManager } from "../services/app-manager.js";
 import type { RegistryService } from "./registry-service.js";
-import type { DropService } from "./drop-service.js";
-import type { CloudRouteState } from "./cloud-routes.js";
-import type { ConnectorHealthMonitor } from "./connector-health.js";
+import { type ConversationMeta, resolveAppUserName } from "./server-helpers.js";
 
 // ---------------------------------------------------------------------------
 // Internal type re-used in this module
@@ -256,7 +253,9 @@ export function wireCodingAgentWsBridge(st: CodingAgentServerState): boolean {
  * finish, we synthesize a summary via the agent's LLM and post it as a
  * persisted message in the conversation.
  */
-export function wireCodingAgentSwarmSynthesis(st: CodingAgentServerState): boolean {
+export function wireCodingAgentSwarmSynthesis(
+  st: CodingAgentServerState,
+): boolean {
   if (!st.runtime) return false;
   const coordinator = getCoordinatorFromRuntime(st.runtime);
   if (!coordinator?.setSwarmCompleteCallback) return false;
@@ -370,7 +369,9 @@ export async function handleSwarmSynthesis(
  * If the callback fails or Eliza's response has no action block,
  * returns null → coordinator falls back to the small LLM.
  */
-export function wireCoordinatorEventRouting(st: CodingAgentServerState): boolean {
+export function wireCoordinatorEventRouting(
+  st: CodingAgentServerState,
+): boolean {
   if (!st.runtime) return false;
   const coordinator = getCoordinatorFromRuntime(st.runtime);
   if (!coordinator?.setAgentDecisionCallback) return false;
@@ -453,9 +454,14 @@ export function wireCoordinatorEventRouting(st: CodingAgentServerState): boolean
           rt.llmModeOption = "SMALL";
           let result: { text: string; agentName?: string };
           try {
-            result = await generateChatResponseFromChatRoutes(runtime, message, agentName, {
-              resolveNoResponseText: () => "I'll look into that.",
-            });
+            result = await generateChatResponseFromChatRoutes(
+              runtime,
+              message,
+              agentName,
+              {
+                resolveNoResponseText: () => "I'll look into that.",
+              },
+            );
           } finally {
             rt.llmModeOption = prevLlmMode;
           }
@@ -536,6 +542,7 @@ export async function handleCodingAgentsFallback(
     installed?: boolean;
     installCommand?: string;
     docsUrl?: string;
+    auth?: Record<string, unknown>;
   };
   type CodeTaskService = {
     getTasks?: () => Promise<
@@ -673,6 +680,9 @@ export async function handleCodingAgentsFallback(
                 ? raw.installCommand
                 : undefined,
             docsUrl: typeof raw.docsUrl === "string" ? raw.docsUrl : undefined,
+            ...(raw.auth && typeof raw.auth === "object"
+              ? { auth: raw.auth as Record<string, unknown> }
+              : {}),
           },
         ];
       });
@@ -888,6 +898,27 @@ export async function handleCodingAgentsFallback(
       error(res, `Failed to promote scratch workspace: ${e}`, 500);
       return true;
     }
+  }
+
+  // POST /api/coding-agents/auth/:agent — trigger CLI auth flow
+  const authMatch = pathname.match(/^\/api\/coding-agents\/auth\/(\w+)$/);
+  if (method === "POST" && authMatch) {
+    const agentType = authMatch[1];
+    try {
+      const { createAdapter } = await import("coding-agent-adapters");
+      const adapter = createAdapter(
+        agentType as import("coding-agent-adapters").AdapterType,
+      );
+      const result = await adapter.triggerAuth();
+      if (!result) {
+        json(res, { error: `No auth flow available for ${agentType}` });
+      } else {
+        json(res, result);
+      }
+    } catch (e) {
+      error(res, `Auth trigger failed: ${e}`, 500);
+    }
+    return true;
   }
 
   // Not handled by fallback

@@ -76,7 +76,6 @@ import {
   ONBOARDING_PROVIDER_CATALOG,
 } from "../contracts/onboarding.js";
 import { createIntegrationTelemetrySpan } from "../diagnostics/integration-observability.js";
-import { registerClientChatSendHandler } from "../services/client-chat-sender.js";
 import { EMOTE_BY_ID, EMOTE_CATALOG } from "../emotes/catalog.js";
 import { resolveDefaultAgentWorkspaceDir } from "../providers/workspace.js";
 import {
@@ -84,11 +83,11 @@ import {
   type AgentEventServiceLike,
   getAgentEventService,
 } from "../runtime/agent-event-service.js";
+import * as agentOrchestratorCompat from "../runtime/agent-orchestrator-compat.js";
 import {
   CORE_PLUGINS,
   OPTIONAL_CORE_PLUGINS,
 } from "../runtime/core-plugins.js";
-import * as agentOrchestratorCompat from "../runtime/agent-orchestrator-compat.js";
 import {
   buildTestHandler,
   registerCustomActionLive,
@@ -116,6 +115,7 @@ import {
   importAgent,
 } from "../services/agent-export.js";
 import { AppManager } from "../services/app-manager.js";
+import { registerClientChatSendHandler } from "../services/client-chat-sender.js";
 import { createConfigPluginManager } from "../services/config-plugin-manager.js";
 import {
   getMcpServerDetails,
@@ -181,6 +181,7 @@ import { handleAppPackageRoutes } from "./app-package-routes.js";
 import { handleAppsRoutes } from "./apps-routes.js";
 import { handleAuthRoutes } from "./auth-routes.js";
 import { handleAvatarRoutes } from "./avatar-routes.js";
+import { handleBrowserWorkspaceRoutes } from "./browser-workspace-routes.js";
 import {
   buildBscApproveUnsignedTx,
   buildBscBuyUnsignedTx,
@@ -191,7 +192,6 @@ import {
   resolvePrimaryBscRpcUrl,
 } from "./bsc-trade.js";
 import { handleBugReportRoutes } from "./bug-report-routes.js";
-import { handleBrowserWorkspaceRoutes } from "./browser-workspace-routes.js";
 import { handleCharacterRoutes } from "./character-routes.js";
 import {
   generateChatResponse as generateChatResponseFromChatRoutes,
@@ -237,6 +237,8 @@ import {
   sendJson,
   sendJsonError,
 } from "./http-helpers.js";
+import { handleIMessageRoute } from "./imessage-routes.js";
+import { handleInboxRoute } from "./inbox-routes.js";
 import { handleKnowledgeRoutes } from "./knowledge-routes.js";
 import { getKnowledgeService } from "./knowledge-service-loader.js";
 import { handleLifeOpsRoutes } from "./lifeops-routes.js";
@@ -251,6 +253,7 @@ import { handleMemoryRoutes } from "./memory-routes.js";
 import { buildWhitelistTree, generateProof } from "./merkle-tree.js";
 import { handleMiscRoutes } from "./misc-routes.js";
 import { handleModelsRoutes } from "./models-routes.js";
+import { tryHandleMusicPlayerStatusFallback } from "./music-player-route-fallback.js";
 import { handleNfaRoutes } from "./nfa-routes.js";
 import { handleOnboardingRoutes } from "./onboarding-routes.js";
 import type {
@@ -258,7 +261,6 @@ import type {
   PTYService,
 } from "./parse-action-block.js";
 import { handlePermissionRoutes } from "./permissions-routes.js";
-import { handleRolodexRoutes } from "./rolodex-routes.js";
 import { handlePermissionsExtraRoutes } from "./permissions-routes-extra.js";
 import { handlePluginRoutes } from "./plugin-routes.js";
 import {
@@ -272,7 +274,7 @@ import {
 import { handleProviderSwitchRoutes } from "./provider-switch-routes.js";
 import { handleRegistryRoutes } from "./registry-routes.js";
 import { RegistryService } from "./registry-service.js";
-import { tryHandleMusicPlayerStatusFallback } from "./music-player-route-fallback.js";
+import { handleRolodexRoutes } from "./rolodex-routes.js";
 import { tryHandleRuntimePluginRoute } from "./runtime-plugin-routes.js";
 import { handleSandboxRoute } from "./sandbox-routes.js";
 import { hasPersistedOnboardingState } from "./server-helpers.js";
@@ -295,7 +297,6 @@ import {
 } from "./twitter-verify.js";
 import { TxService } from "./tx-service.js";
 import { handleUpdateRoutes } from "./update-routes.js";
-import { handleWebsiteBlockerRoutes } from "./website-blocker-routes.js";
 import {
   fetchEvmBalances,
   fetchSolanaBalances,
@@ -315,12 +316,11 @@ import {
   recordWalletTradeLedgerEntry,
   updateWalletTradeLedgerEntryStatus,
 } from "./wallet-trading-profile.js";
+import { handleWebsiteBlockerRoutes } from "./website-blocker-routes.js";
 import {
   applyWhatsAppQrOverride,
   handleWhatsAppRoute,
 } from "./whatsapp-routes.js";
-import { handleIMessageRoute } from "./imessage-routes.js";
-import { handleInboxRoute } from "./inbox-routes.js";
 import { handleWorkbenchRoutes } from "./workbench-routes.js";
 
 export {
@@ -4245,6 +4245,7 @@ async function handleCodingAgentsFallback(
     installed?: boolean;
     installCommand?: string;
     docsUrl?: string;
+    auth?: Record<string, unknown>;
   };
   type CodeTaskService = {
     getTasks?: () => Promise<
@@ -4382,6 +4383,9 @@ async function handleCodingAgentsFallback(
                 ? raw.installCommand
                 : undefined,
             docsUrl: typeof raw.docsUrl === "string" ? raw.docsUrl : undefined,
+            ...(raw.auth && typeof raw.auth === "object"
+              ? { auth: raw.auth as Record<string, unknown> }
+              : {}),
           },
         ];
       });
@@ -4609,6 +4613,27 @@ async function handleCodingAgentsFallback(
       json(res, []);
       return true;
     }
+  }
+
+  // POST /api/coding-agents/auth/:agent — trigger CLI auth flow
+  const authMatch = pathname.match(/^\/api\/coding-agents\/auth\/(\w+)$/);
+  if (method === "POST" && authMatch) {
+    const agentType = authMatch[1];
+    try {
+      const { createAdapter } = await import("coding-agent-adapters");
+      const adapter = createAdapter(
+        agentType as import("coding-agent-adapters").AdapterType,
+      );
+      const result = await adapter.triggerAuth();
+      if (!result) {
+        json(res, { error: `No auth flow available for ${agentType}` });
+      } else {
+        json(res, result);
+      }
+    } catch (e) {
+      error(res, `Auth trigger failed: ${e}`, 500);
+    }
+    return true;
   }
 
   // Not handled by fallback

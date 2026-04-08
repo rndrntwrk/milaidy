@@ -4,6 +4,7 @@
  * Stores OAuth credentials in ~/.eliza/auth/ as JSON files.
  */
 
+import { execSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -16,8 +17,6 @@ import {
   SUBSCRIPTION_PROVIDER_MAP,
   type SubscriptionProvider,
 } from "./types";
-
-import { execSync } from "node:child_process";
 
 const AUTH_DIR = path.join(
   process.env.ELIZA_HOME || path.join(os.homedir(), ".eliza"),
@@ -196,13 +195,14 @@ export function getSubscriptionStatus(): Array<{
     const stored = loadCredentials(provider);
     const importedClaudeAuth =
       provider === "anthropic-subscription"
-        ? importClaudeCodeOAuthToken() ?? readConfiguredAnthropicSetupToken()
+        ? (importClaudeCodeOAuthToken() ?? readConfiguredAnthropicSetupToken())
         : null;
     const importedCodexAuth =
       provider === "openai-codex" && hasCodexCliSubscriptionAuth();
     return {
       provider,
-      configured: stored !== null || Boolean(importedClaudeAuth || importedCodexAuth),
+      configured:
+        stored !== null || Boolean(importedClaudeAuth || importedCodexAuth),
       valid: stored
         ? stored.credentials.expires > Date.now()
         : Boolean(importedClaudeAuth || importedCodexAuth),
@@ -212,25 +212,67 @@ export function getSubscriptionStatus(): Array<{
 }
 
 /**
- * Try to import an OAuth token from Claude Code's keychain or credentials file.
- * Claude Code stores OAuth tokens that are valid for the Anthropic API when
- * used with the stealth interceptor.
+ * Parsed Claude Code OAuth credential blob.
  */
-function importClaudeCodeOAuthToken(): string | null {
+interface ClaudeCodeCredentialBlob {
+  accessToken: string;
+  refreshToken: string | null;
+  expiresAt: number | null;
+  source: string;
+}
+
+/**
+ * Try to read a Claude Code OAuth credential blob from disk or the macOS
+ * keychain. Does NOT validate expiry — that's the caller's job (so it can
+ * decide whether to refresh via the refresh token).
+ *
+ * Claude Code stores credentials in two places:
+ *   - `~/.claude/.credentials.json` (Linux / older macOS installs)
+ *   - macOS Keychain entry "Claude Code-credentials" (current macOS)
+ *
+ * Note that Claude Code's runtime keeps the live access token in memory and
+ * refreshes it via the refresh token on demand — the persisted access token
+ * will often be expired even though the user is actively using Claude Code.
+ * That's why we always need to be ready to refresh.
+ */
+function readClaudeCodeOAuthBlob(): ClaudeCodeCredentialBlob | null {
+  const parse = (
+    raw: string,
+    source: string,
+  ): ClaudeCodeCredentialBlob | null => {
+    try {
+      const parsed = JSON.parse(raw) as {
+        claudeAiOauth?: {
+          accessToken?: string;
+          access_token?: string;
+          refreshToken?: string;
+          refresh_token?: string;
+          expiresAt?: number;
+          expires_at?: number;
+        };
+      };
+      const oauth = parsed?.claudeAiOauth;
+      if (!oauth) return null;
+      const accessToken = oauth.accessToken ?? oauth.access_token;
+      if (typeof accessToken !== "string" || !accessToken.trim()) return null;
+      return {
+        accessToken: accessToken.trim(),
+        refreshToken: oauth.refreshToken ?? oauth.refresh_token ?? null,
+        expiresAt: oauth.expiresAt ?? oauth.expires_at ?? null,
+        source,
+      };
+    } catch {
+      return null;
+    }
+  };
+
   // 1. Try ~/.claude/.credentials.json
   const credPath = path.join(os.homedir(), ".claude", ".credentials.json");
   try {
     if (fs.existsSync(credPath)) {
-      const data = JSON.parse(fs.readFileSync(credPath, "utf-8"));
-      const token =
-        data?.claudeAiOauth?.accessToken ??
-        data?.claudeAiOauth?.access_token;
-      if (typeof token === "string" && token.trim()) {
-        logger.info(
-          "[auth] Imported OAuth token from Claude Code credentials file",
-        );
-        return token.trim();
-      }
+      const raw = fs.readFileSync(credPath, "utf-8");
+      const blob = parse(raw, "credentials file");
+      if (blob) return blob;
     }
   } catch {
     // Non-fatal
@@ -244,16 +286,8 @@ function importClaudeCodeOAuthToken(): string | null {
         { encoding: "utf8", timeout: 3000 },
       ).trim();
       if (raw) {
-        const parsed = JSON.parse(raw);
-        const token =
-          parsed?.claudeAiOauth?.accessToken ??
-          parsed?.claudeAiOauth?.access_token;
-        if (typeof token === "string" && token.trim()) {
-          logger.info(
-            "[auth] Imported OAuth token from Claude Code keychain",
-          );
-          return token.trim();
-        }
+        const blob = parse(raw, "keychain");
+        if (blob) return blob;
       }
     } catch {
       // Keychain not available or no entry
@@ -261,6 +295,47 @@ function importClaudeCodeOAuthToken(): string | null {
   }
 
   return null;
+}
+
+/**
+ * Import a usable Anthropic OAuth access token from Claude Code's stored
+ * credentials. If the persisted access token is still valid, returns it
+ * directly. If it has expired, attempts to refresh via the persisted refresh
+ * token. Returns null if no credentials are available, the token is expired
+ * with no refresh token, or the refresh fails.
+ */
+async function importClaudeCodeOAuthToken(): Promise<string | null> {
+  const blob = readClaudeCodeOAuthBlob();
+  if (!blob) return null;
+
+  const expired =
+    typeof blob.expiresAt === "number" && blob.expiresAt <= Date.now();
+
+  if (!expired) {
+    logger.info(`[auth] Imported OAuth token from Claude Code ${blob.source}`);
+    return blob.accessToken;
+  }
+
+  if (!blob.refreshToken) {
+    logger.info(
+      `[auth] Claude Code OAuth token from ${blob.source} is expired and no refresh token is available. Run "claude auth login" to refresh.`,
+    );
+    return null;
+  }
+
+  // Try to refresh. Claude Code's persisted access token is often stale even
+  // when the user is actively using Claude Code, because Claude Code keeps the
+  // live token in memory and only persists the original OAuth grant.
+  try {
+    const refreshed = await refreshAnthropicToken(blob.refreshToken);
+    logger.info(`[auth] Refreshed Claude Code OAuth token from ${blob.source}`);
+    return refreshed.access;
+  } catch (err) {
+    logger.warn(
+      `[auth] Failed to refresh expired Claude Code OAuth token from ${blob.source}: ${String(err)}. Run "claude auth login" to refresh.`,
+    );
+    return null;
+  }
 }
 
 /**
@@ -296,7 +371,7 @@ export async function applySubscriptionCredentials(config?: {
   ).then((t) => t !== null);
 
   if (!hasAnthropicSubscription) {
-    hasAnthropicSubscription = importClaudeCodeOAuthToken() !== null;
+    hasAnthropicSubscription = (await importClaudeCodeOAuthToken()) !== null;
   }
 
   if (hasAnthropicSubscription) {

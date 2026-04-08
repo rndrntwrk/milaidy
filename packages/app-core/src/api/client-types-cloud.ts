@@ -777,6 +777,12 @@ export interface AgentPreflightResult {
   installed?: boolean;
   installCommand?: string;
   docsUrl?: string;
+  auth?: {
+    status: "authenticated" | "unauthenticated" | "unknown";
+    method?: string;
+    detail?: string;
+    loginHint?: string;
+  };
 }
 
 export interface CodingAgentTaskThread {
