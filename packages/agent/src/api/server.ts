@@ -4647,21 +4647,12 @@ async function handleCodingAgentsFallback(
         // auth flow was ever initiated.
         error(res, `No auth flow available for ${agentType}`, 400);
       } else {
-        // Whitelist fields before forwarding to the browser. The
-        // adapter's response shape is untyped (`unknown`) and could
-        // in principle carry access tokens or internal secrets in
-        // unexpected fields — only surface the fields the UI needs.
-        const r = triggered as Record<string, unknown>;
-        const sanitized: Record<string, unknown> = {};
-        if (typeof r.launched === "boolean") sanitized.launched = r.launched;
-        if (typeof r.url === "string") sanitized.url = r.url;
-        if (typeof r.deviceCode === "string") {
-          sanitized.deviceCode = r.deviceCode;
-        }
-        if (typeof r.instructions === "string") {
-          sanitized.instructions = r.instructions;
-        }
-        json(res, sanitized);
+        // Whitelist + URL-scheme-validate before forwarding to the
+        // browser. See `coding-agents-auth-sanitize.ts` for rationale.
+        const { sanitizeAuthResult } = await import(
+          "./coding-agents-auth-sanitize"
+        );
+        json(res, sanitizeAuthResult(triggered));
       }
     } catch (e) {
       // Avoid leaking internal adapter error strings to the client.

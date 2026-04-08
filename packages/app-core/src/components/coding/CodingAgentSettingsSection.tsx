@@ -533,7 +533,11 @@ export function CodingAgentSettingsSection() {
   return (
     <div className="flex flex-col gap-4">
       <SettingsControls.Field>
-        <SettingsControls.FieldLabel>LLM Provider</SettingsControls.FieldLabel>
+        <SettingsControls.FieldLabel>
+          {t("codingagentsettingssection.LlmProvider", {
+            defaultValue: "LLM Provider",
+          })}
+        </SettingsControls.FieldLabel>
         <Select
           value={llmProvider}
           onValueChange={(value) => setPref("PARALLAX_LLM_PROVIDER", value)}
@@ -542,17 +546,38 @@ export function CodingAgentSettingsSection() {
             <SelectValue />
           </SettingsControls.SelectTrigger>
           <SelectContent>
-            <SelectItem value="subscription">CLI Subscription</SelectItem>
-            <SelectItem value="api_keys">API Keys</SelectItem>
-            <SelectItem value="cloud">Eliza Cloud</SelectItem>
+            <SelectItem value="subscription">
+              {t("codingagentsettingssection.LlmProviderSubscription", {
+                defaultValue: "CLI Subscription",
+              })}
+            </SelectItem>
+            <SelectItem value="api_keys">
+              {t("codingagentsettingssection.LlmProviderApiKeys", {
+                defaultValue: "API Keys",
+              })}
+            </SelectItem>
+            <SelectItem value="cloud">
+              {t("codingagentsettingssection.LlmProviderCloud", {
+                defaultValue: "Eliza Cloud",
+              })}
+            </SelectItem>
           </SelectContent>
         </Select>
         <SettingsControls.FieldDescription>
           {llmProvider === "subscription"
-            ? "Use each CLI's built-in login (Claude Code, Codex, and Gemini subscriptions)."
+            ? t("codingagentsettingssection.LlmProviderDescSubscription", {
+                defaultValue:
+                  "Use each CLI's built-in login (Claude Code, Codex, and Gemini subscriptions).",
+              })
             : isCloud
-              ? "Route all agent LLM calls through Eliza Cloud. Gemini CLI is not supported."
-              : "Provide your own API keys for each provider (Anthropic, OpenAI, Google)."}
+              ? t("codingagentsettingssection.LlmProviderDescCloud", {
+                  defaultValue:
+                    "Route all agent LLM calls through Eliza Cloud. Gemini CLI is not supported.",
+                })
+              : t("codingagentsettingssection.LlmProviderDescApiKeys", {
+                  defaultValue:
+                    "Provide your own API keys for each provider (Anthropic, OpenAI, Google).",
+                })}
         </SettingsControls.FieldDescription>
       </SettingsControls.Field>
 
@@ -560,7 +585,9 @@ export function CodingAgentSettingsSection() {
         <div className="flex flex-col gap-3">
           <SettingsControls.Field>
             <SettingsControls.FieldLabel>
-              Anthropic API Key
+              {t("codingagentsettingssection.AnthropicApiKey", {
+                defaultValue: "Anthropic API Key",
+              })}
             </SettingsControls.FieldLabel>
             <SettingsControls.Input
               variant="compact"
@@ -570,12 +597,16 @@ export function CodingAgentSettingsSection() {
               onChange={(e) => setPref("ANTHROPIC_API_KEY", e.target.value)}
             />
             <SettingsControls.FieldDescription>
-              For Claude Code and Aider (Anthropic provider).
+              {t("codingagentsettingssection.AnthropicApiKeyDesc", {
+                defaultValue: "For Claude Code and Aider (Anthropic provider).",
+              })}
             </SettingsControls.FieldDescription>
           </SettingsControls.Field>
           <SettingsControls.Field>
             <SettingsControls.FieldLabel>
-              OpenAI API Key
+              {t("codingagentsettingssection.OpenaiApiKey", {
+                defaultValue: "OpenAI API Key",
+              })}
             </SettingsControls.FieldLabel>
             <SettingsControls.Input
               variant="compact"
@@ -585,12 +616,16 @@ export function CodingAgentSettingsSection() {
               onChange={(e) => setPref("OPENAI_API_KEY", e.target.value)}
             />
             <SettingsControls.FieldDescription>
-              For Codex and Aider (OpenAI provider).
+              {t("codingagentsettingssection.OpenaiApiKeyDesc", {
+                defaultValue: "For Codex and Aider (OpenAI provider).",
+              })}
             </SettingsControls.FieldDescription>
           </SettingsControls.Field>
           <SettingsControls.Field>
             <SettingsControls.FieldLabel>
-              Google API Key
+              {t("codingagentsettingssection.GoogleApiKey", {
+                defaultValue: "Google API Key",
+              })}
             </SettingsControls.FieldLabel>
             <SettingsControls.Input
               variant="compact"
@@ -602,7 +637,9 @@ export function CodingAgentSettingsSection() {
               }
             />
             <SettingsControls.FieldDescription>
-              For Gemini CLI and Aider (Google provider).
+              {t("codingagentsettingssection.GoogleApiKeyDesc", {
+                defaultValue: "For Gemini CLI and Aider (Google provider).",
+              })}
             </SettingsControls.FieldDescription>
           </SettingsControls.Field>
         </div>
@@ -612,12 +649,17 @@ export function CodingAgentSettingsSection() {
         <div className="flex flex-col gap-3">
           {prefs._CLOUD_API_KEY ? (
             <SettingsControls.MutedText className="text-xs text-green-500">
-              Using your Eliza Cloud account for coding agent LLM calls.
+              {t("codingagentsettingssection.CloudPaired", {
+                defaultValue:
+                  "Using your Eliza Cloud account for coding agent LLM calls.",
+              })}
             </SettingsControls.MutedText>
           ) : (
             <SettingsControls.MutedText className="text-xs text-amber-500">
-              No Eliza Cloud account connected. Pair your account in the Cloud
-              settings section first.
+              {t("codingagentsettingssection.CloudUnpaired", {
+                defaultValue:
+                  "No Eliza Cloud account connected. Pair your account in the Cloud settings section first.",
+              })}
             </SettingsControls.MutedText>
           )}
         </div>
@@ -772,8 +814,14 @@ export function CodingAgentSettingsSection() {
                 onClick={() => handleAuth(agent)}
               >
                 {isAuthenticating
-                  ? `Authenticating ${AGENT_LABELS[agent]}...`
-                  : `Authenticate ${AGENT_LABELS[agent]}`}
+                  ? t("codingagentsettingssection.AuthenticatingAgent", {
+                      defaultValue: "Authenticating {{agent}}...",
+                      agent: AGENT_LABELS[agent],
+                    })
+                  : t("codingagentsettingssection.AuthenticateAgent", {
+                      defaultValue: "Authenticate {{agent}}",
+                      agent: AGENT_LABELS[agent],
+                    })}
               </Button>
             );
           }
@@ -828,16 +876,22 @@ export function CodingAgentSettingsSection() {
               rel="noopener noreferrer"
               className="text-xs font-medium text-accent hover:underline w-fit"
             >
-              Open sign-in page →
+              {t("codingagentsettingssection.OpenSignInPage", {
+                defaultValue: "Open sign-in page →",
+              })}
             </a>
           )}
           {authResult.deviceCode && (
             <SettingsControls.MutedText className="text-xs">
-              Enter code{" "}
+              {t("codingagentsettingssection.EnterDeviceCodePrefix", {
+                defaultValue: "Enter code",
+              })}{" "}
               <span className="font-mono font-bold select-all">
                 {authResult.deviceCode}
               </span>{" "}
-              at the sign-in page.
+              {t("codingagentsettingssection.EnterDeviceCodeSuffix", {
+                defaultValue: "at the sign-in page.",
+              })}
             </SettingsControls.MutedText>
           )}
           {authResult.launched === false && (
@@ -852,7 +906,9 @@ export function CodingAgentSettingsSection() {
                 disabled={authInProgress !== null}
                 onClick={() => handleAuth(authResult.agent)}
               >
-                Retry
+                {t("codingagentsettingssection.Retry", {
+                  defaultValue: "Retry",
+                })}
               </Button>
             </div>
           )}

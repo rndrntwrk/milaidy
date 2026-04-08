@@ -107,6 +107,8 @@ In `packages/agent/src/api/chat-routes.ts`, **`HandlerCallback`** text from acti
 
 All `@elizaos/*` packages use the `alpha` dist-tag. When developing locally, `bun run setup:upstreams` links packages from repo-local `./eliza` and `./plugins` so changes are picked up immediately. Set `MILADY_SKIP_LOCAL_UPSTREAMS=1` to use only npm-published versions.
 
+**Pinned plugin exception — `@elizaos/plugin-agent-orchestrator`:** this package is pinned to an exact published version (currently `0.6.1`) in `packages/agent/package.json` rather than tracking `alpha`, because coordinator/orchestrator behavior is load-bearing for Parallax multi-agent work and we want reproducible builds against a vetted snapshot. To develop against a local checkout of the plugin, run `bun run setup:upstreams` to link the repo-local copy under `plugins/plugin-agent-orchestrator`; otherwise Bun will resolve the pinned npm version.
+
 All official elizaOS plugin repos live under [https://github.com/elizaOS-plugins](https://github.com/elizaOS-plugins). For plugin work, prefer adding the relevant plugin repo as a git submodule under `plugins/` so we keep a local checkout we can patch when needed, and depend on it via `workspace:*` so Milady resolves the local package directly during development. Publish new versions to npm when ready.
 
 ## Ports
