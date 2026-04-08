@@ -1,3 +1,6 @@
+import { readFile } from "node:fs/promises";
+import { spawn } from "node:child_process";
+
 /**
  * Vertex AI fine-tuning pipeline for Gemini models.
  *
@@ -174,12 +177,21 @@ async function getAccessToken(providedToken?: string): Promise<string> {
 
   // Try gcloud CLI
   try {
-    const proc = Bun.spawn(["gcloud", "auth", "print-access-token"], {
-      stdout: "pipe",
-      stderr: "pipe",
+    const proc = spawn("gcloud", ["auth", "print-access-token"], {
+      stdio: ["ignore", "pipe", "pipe"],
     });
-    const text = await new Response(proc.stdout).text();
-    const code = await proc.exited;
+
+    const stdoutChunks: Uint8Array[] = [];
+    proc.stdout?.on("data", (chunk: Buffer | string) => {
+      stdoutChunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
+    });
+
+    const code = await new Promise<number | null>((resolve, reject) => {
+      proc.once("error", reject);
+      proc.once("close", resolve);
+    });
+    const text = Buffer.concat(stdoutChunks).toString("utf8");
+
     if (code === 0 && text.trim()) {
       return text.trim();
     }
@@ -201,8 +213,7 @@ export async function uploadToGCS(
   objectName: string,
   accessToken: string,
 ): Promise<string> {
-  const file = Bun.file(localPath);
-  const content = await file.arrayBuffer();
+  const content = await readFile(localPath);
 
   const uploadUrl = `https://storage.googleapis.com/upload/storage/v1/b/${bucket}/o?uploadType=media&name=${encodeURIComponent(objectName)}`;
 

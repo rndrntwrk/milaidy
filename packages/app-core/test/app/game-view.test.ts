@@ -47,6 +47,7 @@ let originalMatchMedia: typeof window.matchMedia | undefined;
 const { mockClientFns, mockUseApp } = vi.hoisted(() => ({
   mockClientFns: {
     getCodingAgentStatus: vi.fn(async () => null),
+    getAppRun: vi.fn(async () => null),
     getAppSessionState: vi.fn(async () => null),
     sendAppRunMessage: vi.fn(),
     sendAppSessionMessage: vi.fn(),
@@ -162,6 +163,7 @@ describe("GameView", () => {
       undefined,
     );
     mockClientFns.stopAppRun.mockReset();
+    mockClientFns.getAppRun.mockReset();
     mockClientFns.getAppSessionState.mockReset();
     mockClientFns.sendAppRunMessage.mockReset();
     mockClientFns.sendAppSessionMessage.mockReset();

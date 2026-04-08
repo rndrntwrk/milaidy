@@ -35,6 +35,7 @@ interface GameContextStub {
 const { mockClientFns, mockUseApp } = vi.hoisted(() => ({
   mockClientFns: {
     getCodingAgentStatus: vi.fn(async () => null),
+    getAppRun: vi.fn(async () => null),
     stopAppRun: vi.fn(),
     sendChatRest: vi.fn(),
   },
@@ -133,6 +134,7 @@ function createContext(overrides?: Partial<GameContextStub>): GameContextStub {
 
 describe("GameView auth session reset", () => {
   beforeEach(() => {
+    mockClientFns.getAppRun.mockReset();
     mockClientFns.stopAppRun.mockReset();
     mockClientFns.sendChatRest.mockReset();
     mockUseApp.mockReset();
