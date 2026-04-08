@@ -1,4 +1,6 @@
 import type { AgentRuntime } from "@elizaos/core";
+import type { RoleplayExecutionReport } from "../training/roleplay-executor";
+import type { TrajectoryTaskDatasetExport } from "../training/trajectory-task-datasets";
 import { parsePositiveInteger } from "../utils/number-parsing";
 import type { RouteHelpers, RouteRequestContext } from "./route-helpers";
 import { detectAvailableBackends } from "./training-backend-check";
@@ -506,9 +508,12 @@ export async function handleTrainingRoutes(
         timeoutMs: body.timeoutMs,
         executeAllParticipantTurns: body.executeAllParticipantTurns ?? false,
       });
-      const report = buildRoleplayExecutionReport(executions);
       const outputDir = body.outputDir ?? `.tmp/training-roleplay-execution-${Date.now()}`;
       const paths = await exportRoleplayExecutionResults(executions, outputDir);
+      const report = buildRoleplayExecutionReport(
+        executions,
+        paths.trajectoryDataset?.summary ?? null,
+      );
 
       json(
         res,
@@ -573,10 +578,7 @@ export async function handleTrainingRoutes(
 
       let exported = 0;
       let taskDataset:
-        | {
-            counts: Record<string, number>;
-            paths: Record<string, string>;
-          }
+        | Pick<TrajectoryTaskDatasetExport, "counts" | "paths" | "summary">
         | undefined;
 
       if (body.splitByTask || body.outputDir || body.tasks?.length) {
@@ -594,9 +596,10 @@ export async function handleTrainingRoutes(
           dataset.counts.action_planner +
           dataset.counts.response +
           dataset.counts.media_description;
-        taskDataset = dataset as unknown as {
-          counts: Record<string, number>;
-          paths: Record<string, string>;
+        taskDataset = {
+          counts: dataset.counts,
+          paths: dataset.paths,
+          summary: dataset.summary,
         };
       } else {
         const { exportTrajectoriesAsTraining } = await import(
@@ -767,11 +770,11 @@ export async function handleTrainingRoutes(
         | {
             episodesExecuted: number;
             outputDir: string;
-            report: Record<string, unknown>;
-            trajectoryDataset: {
-              counts: Record<string, number>;
-              paths: Record<string, string>;
-            } | null;
+            report: RoleplayExecutionReport;
+            trajectoryDataset: Pick<
+              TrajectoryTaskDatasetExport,
+              "counts" | "paths" | "summary"
+            > | null;
           }
         | undefined;
 
@@ -793,19 +796,23 @@ export async function handleTrainingRoutes(
             runtime,
             executeAllParticipantTurns: body.executeAllParticipantTurns ?? false,
           });
-          const report = buildRoleplayExecutionReport(executions);
           const exportedReplay = await exportRoleplayExecutionResults(
             executions,
             roleplayOutputDir,
           );
+          const report = buildRoleplayExecutionReport(
+            executions,
+            exportedReplay.trajectoryDataset?.summary ?? null,
+          );
           roleplayExecution = {
             episodesExecuted: executions.length,
             outputDir: roleplayOutputDir,
-            report: report as Record<string, unknown>,
+            report,
             trajectoryDataset: exportedReplay.trajectoryDataset
               ? {
                   counts: exportedReplay.trajectoryDataset.counts,
                   paths: exportedReplay.trajectoryDataset.paths,
+                  summary: exportedReplay.trajectoryDataset.summary,
                 }
               : null,
           };

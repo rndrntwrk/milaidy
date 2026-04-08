@@ -32,6 +32,22 @@ export interface TrajectoryTaskDatasetExport {
   counts: Record<TrajectoryTrainingTask, number>;
   paths: TrajectoryTaskDatasetPaths;
   examples: Record<TrajectoryTrainingTask, GeminiTuningExample[]>;
+  summary: TrajectoryTaskDatasetSummary;
+}
+
+export interface TrajectoryTaskDatasetTaskSummary {
+  exampleCount: number;
+  sourceCallCount: number;
+  sourceTrajectoryCount: number;
+}
+
+export interface TrajectoryTaskDatasetSummary {
+  generatedAt: string;
+  trajectoryCount: number;
+  llmCallCount: number;
+  counts: Record<TrajectoryTrainingTask, number>;
+  tasks: TrajectoryTrainingTask[];
+  taskMetrics: Record<TrajectoryTrainingTask, TrajectoryTaskDatasetTaskSummary>;
 }
 
 type TrajectoryCallLike = TrajectoryLlmCall & {
@@ -45,6 +61,47 @@ const TASK_FILE_NAMES: Record<TrajectoryTrainingTask, string> = {
   response: "response_trajectories.jsonl",
   media_description: "media_description_trajectories.jsonl",
 };
+
+type TaskExampleMap = Record<TrajectoryTrainingTask, GeminiTuningExample[]>;
+type TaskCountMap = Record<TrajectoryTrainingTask, number>;
+type TaskTrajectoryIdMap = Record<TrajectoryTrainingTask, Set<string>>;
+
+interface TrajectoryTaskExtractionResult {
+  examples: TaskExampleMap;
+  sourceCallCounts: TaskCountMap;
+  sourceTrajectoryIds: TaskTrajectoryIdMap;
+  llmCallCount: number;
+}
+
+function createEmptyExampleMap(): TaskExampleMap {
+  return {
+    should_respond: [],
+    context_routing: [],
+    action_planner: [],
+    response: [],
+    media_description: [],
+  };
+}
+
+function createEmptyCountMap(): TaskCountMap {
+  return {
+    should_respond: 0,
+    context_routing: 0,
+    action_planner: 0,
+    response: 0,
+    media_description: 0,
+  };
+}
+
+function createEmptyTrajectoryIdMap(): TaskTrajectoryIdMap {
+  return {
+    should_respond: new Set<string>(),
+    context_routing: new Set<string>(),
+    action_planner: new Set<string>(),
+    response: new Set<string>(),
+    media_description: new Set<string>(),
+  };
+}
 
 function normalizeToken(value: unknown): string {
   if (typeof value !== "string") {
@@ -209,10 +266,10 @@ function buildExampleForTask(
   };
 }
 
-export function extractTrajectoryExamplesByTask(
+function collectTrajectoryExamplesByTask(
   trajectories: Trajectory[],
   tasks?: readonly TrajectoryTrainingTask[],
-): Record<TrajectoryTrainingTask, GeminiTuningExample[]> {
+): TrajectoryTaskExtractionResult {
   const requestedTasks = new Set<TrajectoryTrainingTask>(
     tasks ?? [
       "should_respond",
@@ -222,18 +279,16 @@ export function extractTrajectoryExamplesByTask(
       "media_description",
     ],
   );
-
-  const examples: Record<TrajectoryTrainingTask, GeminiTuningExample[]> = {
-    should_respond: [],
-    context_routing: [],
-    action_planner: [],
-    response: [],
-    media_description: [],
-  };
+  const examples = createEmptyExampleMap();
+  const sourceCallCounts = createEmptyCountMap();
+  const sourceTrajectoryIds = createEmptyTrajectoryIdMap();
+  let llmCallCount = 0;
 
   for (const trajectory of trajectories) {
+    const trajectoryId = trajectory.trajectoryId;
     for (const step of trajectory.steps ?? []) {
       for (const llmCall of step.llmCalls ?? []) {
+        llmCallCount += 1;
         const call = llmCall as TrajectoryCallLike;
         const inferredTasks = inferTasksForCall(call);
         for (const task of inferredTasks) {
@@ -242,15 +297,31 @@ export function extractTrajectoryExamplesByTask(
           }
 
           const example = buildExampleForTask(call, task);
-          if (example) {
-            examples[task].push(example);
+          if (!example) {
+            continue;
           }
+
+          examples[task].push(example);
+          sourceCallCounts[task] += 1;
+          sourceTrajectoryIds[task].add(trajectoryId);
         }
       }
     }
   }
 
-  return examples;
+  return {
+    examples,
+    sourceCallCounts,
+    sourceTrajectoryIds,
+    llmCallCount,
+  };
+}
+
+export function extractTrajectoryExamplesByTask(
+  trajectories: Trajectory[],
+  tasks?: readonly TrajectoryTrainingTask[],
+): Record<TrajectoryTrainingTask, GeminiTuningExample[]> {
+  return collectTrajectoryExamplesByTask(trajectories, tasks).examples;
 }
 
 export async function exportTrajectoryTaskDatasets(
@@ -260,7 +331,8 @@ export async function exportTrajectoryTaskDatasets(
 ): Promise<TrajectoryTaskDatasetExport> {
   await mkdir(outputDir, { recursive: true });
 
-  const examples = extractTrajectoryExamplesByTask(trajectories, tasks);
+  const extraction = collectTrajectoryExamplesByTask(trajectories, tasks);
+  const { examples } = extraction;
   const counts: Record<TrajectoryTrainingTask, number> = {
     should_respond: examples.should_respond.length,
     context_routing: examples.context_routing.length,
@@ -276,6 +348,50 @@ export async function exportTrajectoryTaskDatasets(
     responsePath: join(outputDir, TASK_FILE_NAMES.response),
     mediaDescriptionPath: join(outputDir, TASK_FILE_NAMES.media_description),
     summaryPath: join(outputDir, "trajectory_dataset_summary.json"),
+  };
+  const summary: TrajectoryTaskDatasetSummary = {
+    generatedAt: new Date().toISOString(),
+    trajectoryCount: trajectories.length,
+    llmCallCount: extraction.llmCallCount,
+    counts,
+    tasks: [
+      "should_respond",
+      "context_routing",
+      "action_planner",
+      "response",
+      "media_description",
+    ].filter((task) => tasks?.includes(task as TrajectoryTrainingTask) ?? true) as TrajectoryTrainingTask[],
+    taskMetrics: {
+      should_respond: {
+        exampleCount: counts.should_respond,
+        sourceCallCount: extraction.sourceCallCounts.should_respond,
+        sourceTrajectoryCount:
+          extraction.sourceTrajectoryIds.should_respond.size,
+      },
+      context_routing: {
+        exampleCount: counts.context_routing,
+        sourceCallCount: extraction.sourceCallCounts.context_routing,
+        sourceTrajectoryCount:
+          extraction.sourceTrajectoryIds.context_routing.size,
+      },
+      action_planner: {
+        exampleCount: counts.action_planner,
+        sourceCallCount: extraction.sourceCallCounts.action_planner,
+        sourceTrajectoryCount:
+          extraction.sourceTrajectoryIds.action_planner.size,
+      },
+      response: {
+        exampleCount: counts.response,
+        sourceCallCount: extraction.sourceCallCounts.response,
+        sourceTrajectoryCount: extraction.sourceTrajectoryIds.response.size,
+      },
+      media_description: {
+        exampleCount: counts.media_description,
+        sourceCallCount: extraction.sourceCallCounts.media_description,
+        sourceTrajectoryCount:
+          extraction.sourceTrajectoryIds.media_description.size,
+      },
+    },
   };
 
   await writeFile(
@@ -301,21 +417,13 @@ export async function exportTrajectoryTaskDatasets(
 
   await writeFile(
     paths.summaryPath,
-    JSON.stringify(
-      {
-        generatedAt: new Date().toISOString(),
-        trajectoryCount: trajectories.length,
-        counts,
-        tasks: tasks ?? Object.keys(counts),
-      },
-      null,
-      2,
-    ),
+    JSON.stringify(summary, null, 2),
   );
 
   return {
     counts,
     paths,
     examples,
+    summary,
   };
 }

@@ -17,7 +17,10 @@ import type {
 import {
   exportTrajectoryTaskDatasets,
   type TrajectoryTaskDatasetExport,
+  type TrajectoryTaskDatasetSummary,
 } from "./trajectory-task-datasets.js";
+
+type RoleplayDecision = "RESPOND" | "IGNORE" | "STOP";
 
 export interface RoleplayTurnExecution {
   turnId: string;
@@ -39,19 +42,25 @@ export interface RoleplayEpisodeExecution {
   episodeId: string;
   blueprintId: string;
   agentName: string;
+  pattern?: string;
   evaluationTurnId: string;
-  expectedDecision: "RESPOND" | "IGNORE" | "STOP";
-  actualDecision: "RESPOND" | "IGNORE" | "STOP";
+  expectedDecision: RoleplayDecision;
+  actualDecision: RoleplayDecision;
   expectedPrimaryContext: string;
   actualPrimaryContext?: string;
   expectedSecondaryContexts: string[];
   actualSecondaryContexts: string[];
   expectedAction?: string;
   actualActions: string[];
+  selectedActions: string[];
+  executedActions: string[];
   decisionMatch: boolean;
   primaryContextMatch: boolean;
   secondaryContextExactMatch: boolean;
+  routingMatch: boolean;
   actionMatch: boolean;
+  selectedActionMatch: boolean;
+  executedActionMatch: boolean;
   trajectoryCaptured: boolean;
   responseText: string;
   callbackTexts: string[];
@@ -60,26 +69,60 @@ export interface RoleplayEpisodeExecution {
   trajectory?: Trajectory | null;
 }
 
-export interface RoleplayExecutionReport {
+export interface RoleplayBucketReport {
   totalEpisodes: number;
   decisionMatches: number;
+  routingMatches: number;
   primaryContextMatches: number;
   secondaryContextExactMatches: number;
+  actionRelevantEpisodes: number;
   actionMatches: number;
-  trajectoryCaptured: number;
+  selectedActionMatches: number;
+  executedActionMatches: number;
   decisionAccuracy: number;
+  routingAccuracy: number;
   primaryContextAccuracy: number;
   secondaryContextExactAccuracy: number;
   actionAccuracy: number;
+  selectedActionAccuracy: number;
+  executedActionAccuracy: number;
+}
+
+export interface RoleplayExecutionReport {
+  totalEpisodes: number;
+  decisionMatches: number;
+  routingMatches: number;
+  primaryContextMatches: number;
+  secondaryContextExactMatches: number;
+  actionMatches: number;
+  selectedActionMatches: number;
+  executedActionMatches: number;
+  trajectoryCaptured: number;
+  decisionAccuracy: number;
+  routingAccuracy: number;
+  primaryContextAccuracy: number;
+  secondaryContextExactAccuracy: number;
+  actionAccuracy: number;
+  selectedActionAccuracy: number;
+  executedActionAccuracy: number;
   trajectoryCaptureRate: number;
+  decisionConfusionMatrix: Record<RoleplayDecision, Record<RoleplayDecision, number>>;
+  warningCounts: Record<string, number>;
+  byPrimaryContext: Record<string, RoleplayBucketReport>;
+  byPattern: Record<string, RoleplayBucketReport>;
+  trajectoryDatasetSummary?: TrajectoryTaskDatasetSummary | null;
   mismatches: Array<{
     episodeId: string;
+    pattern?: string;
     expectedDecision: string;
     actualDecision: string;
     expectedPrimaryContext: string;
     actualPrimaryContext?: string;
     expectedAction?: string;
     actualActions: string[];
+    selectedActions: string[];
+    executedActions: string[];
+    warnings: string[];
   }>;
 }
 
@@ -132,6 +175,10 @@ type TrajectoryLoggerLike = {
   getTrajectoryDetail?: (trajectoryId: string) => Promise<Trajectory | null>;
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
 function parseDelimitedList(value: string): string[] {
   return value
     .split(",")
@@ -158,7 +205,7 @@ function readTag(response: string, tagName: string): string | undefined {
 }
 
 function parseRoutingDecision(response: string): {
-  decision?: "RESPOND" | "IGNORE" | "STOP";
+  decision?: RoleplayDecision;
   primaryContext?: string;
   secondaryContexts: string[];
 } {
@@ -270,10 +317,7 @@ function collectExecutedActionNames(
         return result;
       }
 
-      const record =
-        result && typeof result === "object"
-          ? (result as Record<string, unknown>)
-          : null;
+      const record = isRecord(result) ? result : null;
       if (!record) {
         return "";
       }
@@ -282,10 +326,7 @@ function collectExecutedActionNames(
         return record.actionName;
       }
 
-      const data =
-        record.data && typeof record.data === "object"
-          ? (record.data as Record<string, unknown>)
-          : null;
+      const data = isRecord(record.data) ? record.data : null;
       return typeof data?.actionName === "string" ? data.actionName : "";
     })
     .map((action) => normalizeActionName(action))
@@ -296,8 +337,8 @@ function resolveActualDecision(args: {
   didRespond: boolean;
   callbackContents: Content[];
   responseContent: Content | null;
-  shouldRespondDecision?: "RESPOND" | "IGNORE" | "STOP";
-}): "RESPOND" | "IGNORE" | "STOP" {
+  shouldRespondDecision?: RoleplayDecision;
+}): RoleplayDecision {
   const callbackActions = args.callbackContents.flatMap((content) =>
     collectActionNamesFromContent(content),
   );
@@ -332,6 +373,86 @@ function secondaryContextsEqual(expected: string[], actual: string[]): boolean {
     .sort();
 
   return JSON.stringify(normalizedExpected) === JSON.stringify(normalizedActual);
+}
+
+function buildEmptyBucketReport(): RoleplayBucketReport {
+  return {
+    totalEpisodes: 0,
+    decisionMatches: 0,
+    routingMatches: 0,
+    primaryContextMatches: 0,
+    secondaryContextExactMatches: 0,
+    actionRelevantEpisodes: 0,
+    actionMatches: 0,
+    selectedActionMatches: 0,
+    executedActionMatches: 0,
+    decisionAccuracy: 0,
+    routingAccuracy: 0,
+    primaryContextAccuracy: 0,
+    secondaryContextExactAccuracy: 0,
+    actionAccuracy: 0,
+    selectedActionAccuracy: 0,
+    executedActionAccuracy: 0,
+  };
+}
+
+function finalizeBucketReport(bucket: RoleplayBucketReport): RoleplayBucketReport {
+  return {
+    ...bucket,
+    decisionAccuracy: bucket.decisionMatches / (bucket.totalEpisodes || 1),
+    routingAccuracy: bucket.routingMatches / (bucket.totalEpisodes || 1),
+    primaryContextAccuracy:
+      bucket.primaryContextMatches / (bucket.totalEpisodes || 1),
+    secondaryContextExactAccuracy:
+      bucket.secondaryContextExactMatches / (bucket.totalEpisodes || 1),
+    actionAccuracy: bucket.actionMatches / (bucket.actionRelevantEpisodes || 1),
+    selectedActionAccuracy:
+      bucket.selectedActionMatches / (bucket.actionRelevantEpisodes || 1),
+    executedActionAccuracy:
+      bucket.executedActionMatches / (bucket.actionRelevantEpisodes || 1),
+  };
+}
+
+function updateBucketReport(
+  bucket: RoleplayBucketReport,
+  execution: RoleplayEpisodeExecution,
+): void {
+  bucket.totalEpisodes += 1;
+  if (execution.decisionMatch) {
+    bucket.decisionMatches += 1;
+  }
+  if (execution.routingMatch) {
+    bucket.routingMatches += 1;
+  }
+  if (execution.primaryContextMatch) {
+    bucket.primaryContextMatches += 1;
+  }
+  if (execution.secondaryContextExactMatch) {
+    bucket.secondaryContextExactMatches += 1;
+  }
+  if (execution.expectedAction) {
+    bucket.actionRelevantEpisodes += 1;
+    if (execution.actionMatch) {
+      bucket.actionMatches += 1;
+    }
+    if (execution.selectedActionMatch) {
+      bucket.selectedActionMatches += 1;
+    }
+    if (execution.executedActionMatch) {
+      bucket.executedActionMatches += 1;
+    }
+  }
+}
+
+function createDecisionConfusionMatrix(): Record<
+  RoleplayDecision,
+  Record<RoleplayDecision, number>
+> {
+  return {
+    RESPOND: { RESPOND: 0, IGNORE: 0, STOP: 0 },
+    IGNORE: { RESPOND: 0, IGNORE: 0, STOP: 0 },
+    STOP: { RESPOND: 0, IGNORE: 0, STOP: 0 },
+  };
 }
 
 function resolveMessageRoutingFallback(message: Memory): {
@@ -610,8 +731,18 @@ export async function executeRoleplayEpisode(
     episode.secondaryContexts,
     evaluationTurn.actualSecondaryContexts,
   );
+  const routingMatch = primaryContextMatch && secondaryContextExactMatch;
+  const normalizedExpectedAction = episode.expectedAction
+    ? normalizeActionName(episode.expectedAction)
+    : "";
+  const selectedActionMatch = episode.expectedAction
+    ? evaluationTurn.selectedActions.includes(normalizedExpectedAction)
+    : true;
+  const executedActionMatch = episode.expectedAction
+    ? evaluationTurn.executedActions.includes(normalizedExpectedAction)
+    : true;
   const actionMatch = episode.expectedAction
-    ? actualActions.includes(normalizeActionName(episode.expectedAction))
+    ? actualActions.includes(normalizedExpectedAction)
     : true;
   const trajectory =
     evaluationTurn.trajectoryId && logger
@@ -622,6 +753,10 @@ export async function executeRoleplayEpisode(
     episodeId: episode.id,
     blueprintId: episode.blueprintId,
     agentName: episode.agentName,
+    pattern:
+      typeof episode.metadata?.pattern === "string"
+        ? episode.metadata.pattern
+        : undefined,
     evaluationTurnId: episode.evaluationTurnId,
     expectedDecision: episode.expectedDecision,
     actualDecision: evaluationTurn.actualDecision ?? "IGNORE",
@@ -631,10 +766,15 @@ export async function executeRoleplayEpisode(
     actualSecondaryContexts: evaluationTurn.actualSecondaryContexts,
     expectedAction: episode.expectedAction,
     actualActions,
+    selectedActions: evaluationTurn.selectedActions,
+    executedActions: evaluationTurn.executedActions,
     decisionMatch,
     primaryContextMatch,
     secondaryContextExactMatch,
+    routingMatch,
     actionMatch,
+    selectedActionMatch,
+    executedActionMatch,
     trajectoryCaptured: Boolean(trajectory),
     responseText: evaluationTurn.responseText,
     callbackTexts: evaluationTurn.callbackTexts,
@@ -665,9 +805,11 @@ export async function executeRoleplayEpisodes(
 
 export function buildRoleplayExecutionReport(
   executions: RoleplayEpisodeExecution[],
+  trajectoryDatasetSummary?: TrajectoryTaskDatasetSummary | null,
 ): RoleplayExecutionReport {
   const totalEpisodes = executions.length;
   const decisionMatches = executions.filter((execution) => execution.decisionMatch).length;
+  const routingMatches = executions.filter((execution) => execution.routingMatch).length;
   const primaryContextMatches = executions.filter(
     (execution) => execution.primaryContextMatch,
   ).length;
@@ -680,39 +822,93 @@ export function buildRoleplayExecutionReport(
   const actionMatches = actionRelevantExecutions.filter(
     (execution) => execution.actionMatch,
   ).length;
+  const selectedActionMatches = actionRelevantExecutions.filter(
+    (execution) => execution.selectedActionMatch,
+  ).length;
+  const executedActionMatches = actionRelevantExecutions.filter(
+    (execution) => execution.executedActionMatch,
+  ).length;
   const trajectoryCaptured = executions.filter(
     (execution) => execution.trajectoryCaptured,
   ).length;
+  const decisionConfusionMatrix = createDecisionConfusionMatrix();
+  const warningCounts: Record<string, number> = {};
+  const byPrimaryContext: Record<string, RoleplayBucketReport> = {};
+  const byPattern: Record<string, RoleplayBucketReport> = {};
+
+  for (const execution of executions) {
+    decisionConfusionMatrix[execution.expectedDecision][execution.actualDecision] += 1;
+
+    for (const warning of execution.warnings) {
+      warningCounts[warning] = (warningCounts[warning] ?? 0) + 1;
+    }
+
+    const contextKey = execution.expectedPrimaryContext.toLowerCase();
+    byPrimaryContext[contextKey] ??= buildEmptyBucketReport();
+    updateBucketReport(byPrimaryContext[contextKey], execution);
+
+    const patternKey = execution.pattern ?? "unknown";
+    byPattern[patternKey] ??= buildEmptyBucketReport();
+    updateBucketReport(byPattern[patternKey], execution);
+  }
 
   return {
     totalEpisodes,
     decisionMatches,
+    routingMatches,
     primaryContextMatches,
     secondaryContextExactMatches,
     actionMatches,
+    selectedActionMatches,
+    executedActionMatches,
     trajectoryCaptured,
     decisionAccuracy: decisionMatches / (totalEpisodes || 1),
+    routingAccuracy: routingMatches / (totalEpisodes || 1),
     primaryContextAccuracy: primaryContextMatches / (totalEpisodes || 1),
     secondaryContextExactAccuracy:
       secondaryContextExactMatches / (totalEpisodes || 1),
     actionAccuracy: actionMatches / (actionRelevantExecutions.length || 1),
+    selectedActionAccuracy:
+      selectedActionMatches / (actionRelevantExecutions.length || 1),
+    executedActionAccuracy:
+      executedActionMatches / (actionRelevantExecutions.length || 1),
     trajectoryCaptureRate: trajectoryCaptured / (totalEpisodes || 1),
+    decisionConfusionMatrix,
+    warningCounts,
+    byPrimaryContext: Object.fromEntries(
+      Object.entries(byPrimaryContext).map(([context, bucket]) => [
+        context,
+        finalizeBucketReport(bucket),
+      ]),
+    ),
+    byPattern: Object.fromEntries(
+      Object.entries(byPattern).map(([pattern, bucket]) => [
+        pattern,
+        finalizeBucketReport(bucket),
+      ]),
+    ),
+    trajectoryDatasetSummary,
     mismatches: executions
       .filter(
         (execution) =>
           !execution.decisionMatch ||
-          !execution.primaryContextMatch ||
-          !execution.secondaryContextExactMatch ||
-          !execution.actionMatch,
+          !execution.routingMatch ||
+          !execution.actionMatch ||
+          !execution.selectedActionMatch ||
+          !execution.executedActionMatch,
       )
       .map((execution) => ({
         episodeId: execution.episodeId,
+        pattern: execution.pattern,
         expectedDecision: execution.expectedDecision,
         actualDecision: execution.actualDecision,
         expectedPrimaryContext: execution.expectedPrimaryContext,
         actualPrimaryContext: execution.actualPrimaryContext,
         expectedAction: execution.expectedAction,
         actualActions: execution.actualActions,
+        selectedActions: execution.selectedActions,
+        executedActions: execution.executedActions,
+        warnings: execution.warnings,
       })),
   };
 }
@@ -729,12 +925,6 @@ export async function exportRoleplayExecutionResults(
     .map((execution) => execution.trajectory)
     .filter((trajectory): trajectory is Trajectory => Boolean(trajectory));
 
-  await writeFile(executionsPath, JSON.stringify(executions, null, 2));
-  await writeFile(
-    reportPath,
-    JSON.stringify(buildRoleplayExecutionReport(executions), null, 2),
-  );
-
   const trajectoryDataset =
     trajectories.length > 0
       ? await exportTrajectoryTaskDatasets(
@@ -742,6 +932,13 @@ export async function exportRoleplayExecutionResults(
           join(outputDir, "trajectory-datasets"),
         )
       : undefined;
+  const report = buildRoleplayExecutionReport(
+    executions,
+    trajectoryDataset?.summary ?? null,
+  );
+
+  await writeFile(executionsPath, JSON.stringify(executions, null, 2));
+  await writeFile(reportPath, JSON.stringify(report, null, 2));
 
   return {
     executionsPath,

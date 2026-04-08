@@ -561,7 +561,14 @@ describe("training routes", () => {
       episodesExecuted: 1,
       report: expect.objectContaining({
         decisionAccuracy: 1,
+        routingAccuracy: 1,
         actionAccuracy: 1,
+        trajectoryDatasetSummary: expect.objectContaining({
+          counts: expect.objectContaining({
+            should_respond: expect.any(Number),
+            action_planner: expect.any(Number),
+          }),
+        }),
       }),
       paths: expect.objectContaining({
         executionsPath: expect.any(String),
@@ -586,6 +593,14 @@ describe("training routes", () => {
       taskDataset: {
         counts: expect.objectContaining({
           should_respond: expect.any(Number),
+        }),
+        summary: expect.objectContaining({
+          llmCallCount: expect.any(Number),
+          taskMetrics: expect.objectContaining({
+            should_respond: expect.objectContaining({
+              exampleCount: expect.any(Number),
+            }),
+          }),
         }),
         paths: expect.objectContaining({
           shouldRespondPath: expect.any(String),

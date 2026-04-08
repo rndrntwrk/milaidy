@@ -100,22 +100,30 @@ const trajectory: Trajectory = {
   agentId: "00000000-0000-0000-0000-000000000111",
   startTime: Date.now(),
   steps: [
-    {
-      timestamp: Date.now(),
-      llmCalls: [
-        {
-          purpose: "should_respond",
+      {
+        timestamp: Date.now(),
+        llmCalls: [
+          {
+            purpose: "should_respond",
           systemPrompt:
             "available_contexts:\nwallet, automation\ncontext_routing:\n- primaryContext: wallet\n- secondaryContexts: automation\n- evidenceTurnIds: turn-002\ndecision_note:",
-          userPrompt:
-            "conversation:\n[turn-001] Alice: ETH is pumping again.\n[turn-002] Bob: Nova swap half to USDC.",
-          response:
-            "name: Nova\nreasoning: Direct wallet request.\naction: RESPOND\nprimaryContext: wallet\nsecondaryContexts: automation\nevidenceTurnIds: turn-002",
-        },
-      ],
-    },
-  ],
-};
+            userPrompt:
+              "conversation:\n[turn-001] Alice: ETH is pumping again.\n[turn-002] Bob: Nova swap half to USDC.",
+            response:
+              "name: Nova\nreasoning: Direct wallet request.\naction: RESPOND\nprimaryContext: wallet\nsecondaryContexts: automation\nevidenceTurnIds: turn-002",
+          },
+          {
+            purpose: "action",
+            model: "ACTION_PLANNER",
+            systemPrompt: "Decide which actions to take.",
+            userPrompt: "User asked the agent to swap half to USDC.",
+            response:
+              "<response><thought>Need a wallet trade.</thought><actions>SWAP_TOKEN</actions><text>Swapping now.</text></response>",
+          },
+        ],
+      },
+    ],
+  };
 
 describe("roleplay executor", () => {
   test("replays an episode against a runtime and scores decision/context/action agreement", async () => {
@@ -127,13 +135,24 @@ describe("roleplay executor", () => {
     expect(execution.actualDecision).toBe("RESPOND");
     expect(execution.actualPrimaryContext).toBe("wallet");
     expect(execution.actualActions).toContain("SWAP_TOKEN");
+    expect(execution.selectedActions).toContain("SWAP_TOKEN");
+    expect(execution.executedActions).toContain("SWAP_TOKEN");
     expect(execution.decisionMatch).toBe(true);
+    expect(execution.routingMatch).toBe(true);
     expect(execution.primaryContextMatch).toBe(true);
     expect(execution.actionMatch).toBe(true);
+    expect(execution.selectedActionMatch).toBe(true);
+    expect(execution.executedActionMatch).toBe(true);
 
     const report = buildRoleplayExecutionReport([execution]);
     expect(report.decisionAccuracy).toBe(1);
+    expect(report.routingAccuracy).toBe(1);
     expect(report.actionAccuracy).toBe(1);
+    expect(report.selectedActionAccuracy).toBe(1);
+    expect(report.executedActionAccuracy).toBe(1);
+    expect(report.decisionConfusionMatrix.RESPOND.RESPOND).toBe(1);
+    expect(report.byPrimaryContext.wallet?.decisionAccuracy).toBe(1);
+    expect(report.byPattern.group_direct_mention?.routingAccuracy).toBe(1);
   });
 
   test("exports execution results plus per-task trajectory corpora", async () => {
@@ -150,6 +169,8 @@ describe("roleplay executor", () => {
       : "";
 
     expect(reportRaw).toContain("\"decisionAccuracy\": 1");
+    expect(reportRaw).toContain("\"trajectoryDatasetSummary\"");
     expect(plannerRaw).toContain("\"role\":\"model\"");
+    expect(exported.trajectoryDataset?.summary.taskMetrics.action_planner.exampleCount).toBe(1);
   });
 });

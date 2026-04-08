@@ -67,9 +67,23 @@ describe("trajectory task datasets", () => {
     const plannerJsonl = await readFile(exported.paths.actionPlannerPath, "utf-8");
     const summary = JSON.parse(
       await readFile(exported.paths.summaryPath, "utf-8"),
-    ) as { counts: Record<string, number> };
+    ) as {
+      counts: Record<string, number>;
+      llmCallCount: number;
+      taskMetrics: Record<
+        string,
+        { exampleCount: number; sourceCallCount: number; sourceTrajectoryCount: number }
+      >;
+    };
 
     expect(plannerJsonl).toContain("SWAP_TOKEN");
     expect(summary.counts.action_planner).toBe(1);
+    expect(summary.llmCallCount).toBe(2);
+    expect(summary.taskMetrics.action_planner).toMatchObject({
+      exampleCount: 1,
+      sourceCallCount: 1,
+      sourceTrajectoryCount: 1,
+    });
+    expect(exported.summary.taskMetrics.should_respond.exampleCount).toBe(1);
   });
 });
