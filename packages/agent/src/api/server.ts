@@ -3664,7 +3664,12 @@ export function resolveWebSocketUpgradeRejection(
   return null;
 }
 
-const RESET_STATE_ALLOWED_SEGMENTS = new Set([".eliza", "eliza"]);
+const RESET_STATE_ALLOWED_SEGMENTS = new Set([
+  ".eliza",
+  "eliza",
+  ".milady",
+  "milady",
+]);
 
 function hasAllowedResetSegment(resolvedState: string): boolean {
   return resolvedState

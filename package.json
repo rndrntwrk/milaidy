@@ -300,7 +300,7 @@
   },
   "overrides": {
     "@elizaos/plugin-anthropic": "2.0.0-alpha.13",
-    "@elizaos/plugin-discord": "2.0.0-alpha.10",
+    "@elizaos/plugin-discord": "2.0.0-alpha.11",
     "@elizaos/plugin-knowledge": "2.0.0-alpha.8",
     "@elizaos/plugin-telegram": "2.0.0-alpha.12",
     "@elizaos/config": "1.7.3-alpha.4",
@@ -321,8 +321,6 @@
     "esbuild": "0.28.0"
   },
   "patchedDependencies": {
-    "@elizaos/plugin-agent-skills@2.0.0-alpha.70": "patches/@elizaos%2Fplugin-agent-skills@2.0.0-alpha.70.patch",
-    "@elizaos/plugin-sql@2.0.0-alpha.17": "patches/@elizaos%2Fplugin-sql@2.0.0-alpha.17.patch",
     "@noble/curves@2.0.1": "patches/@noble%2Fcurves@2.0.1.patch",
     "proper-lockfile@4.1.2": "patches/proper-lockfile@4.1.2.patch",
     "@pixiv/three-vrm@3.5.1": "patches/@pixiv%2Fthree-vrm@3.5.1.patch"
