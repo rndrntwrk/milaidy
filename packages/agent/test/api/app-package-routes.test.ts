@@ -9,17 +9,17 @@ import {
 } from "../../src/test-support/test-helpers";
 
 const hyperscapeLocalPathUrl = new URL(
-  "../../../../../plugins/app-hyperscape/",
+  "../../../../../hyperscape/packages/plugin-hyperscape/",
   import.meta.url,
 );
 const HYPERSCAPE_LOCAL_PATH = fileURLToPath(hyperscapeLocalPathUrl);
 const hasLocalHyperscapeRoutes = existsSync(
-  new URL("src/routes.ts", hyperscapeLocalPathUrl),
+  new URL("src/app.ts", hyperscapeLocalPathUrl),
 );
 
 vi.mock("../../src/services/registry-client.js", () => ({
   getPluginInfo: vi.fn(async () => ({
-    name: "@elizaos/app-hyperscape",
+    name: "@hyperscape/plugin-hyperscape",
     localPath: hasLocalHyperscapeRoutes ? HYPERSCAPE_LOCAL_PATH : null,
   })),
 }));
@@ -346,7 +346,7 @@ describe.skipIf(!hasLocalHyperscapeRoutes)("handleAppPackageRoutes", () => {
     expect(getJson()).toEqual(
       expect.objectContaining({
         sessionId: "agent-1",
-        appName: "@elizaos/app-hyperscape",
+        appName: "@hyperscape/plugin-hyperscape",
         mode: "spectate-and-steer",
         status: "running",
         goalLabel: "Scout the ruins",

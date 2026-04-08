@@ -30,30 +30,78 @@ export type BrowserWorkspaceOperation =
   | "hide"
   | "close"
   | "eval"
-  | "snapshot";
+  | "screenshot";
 
 export type BrowserWorkspaceSubaction =
   | BrowserWorkspaceOperation
   | "back"
   | "batch"
+  | "check"
   | "click"
   | "fill"
+  | "find"
+  | "focus"
   | "forward"
   | "get"
+  | "hover"
   | "inspect"
+  | "keydown"
+  | "keyboardinserttext"
+  | "keyboardtype"
   | "press"
   | "reload"
+  | "scroll"
+  | "scrollinto"
+  | "select"
+  | "snapshot"
   | "type"
+  | "dblclick"
+  | "uncheck"
   | "wait";
 
 export type BrowserWorkspaceGetMode =
   | "attr"
+  | "box"
+  | "checked"
   | "count"
+  | "enabled"
   | "html"
+  | "styles"
   | "text"
   | "title"
   | "url"
-  | "value";
+  | "value"
+  | "visible";
+
+export type BrowserWorkspaceFindBy =
+  | "alt"
+  | "first"
+  | "label"
+  | "last"
+  | "nth"
+  | "placeholder"
+  | "role"
+  | "testid"
+  | "text"
+  | "title";
+
+export type BrowserWorkspaceFindAction =
+  | "check"
+  | "click"
+  | "fill"
+  | "focus"
+  | "hover"
+  | "text"
+  | "type"
+  | "uncheck";
+
+export type BrowserWorkspaceWaitState = "hidden" | "visible";
+
+export type BrowserWorkspaceScrollDirection =
+  | "down"
+  | "left"
+  | "right"
+  | "up";
 
 export interface BrowserWorkspaceTab {
   id: string;
@@ -107,6 +155,7 @@ export interface BrowserWorkspaceDomElementSummary {
 
 export interface BrowserWorkspaceCommand {
   subaction: BrowserWorkspaceSubaction;
+  action?: BrowserWorkspaceFindAction;
   id?: string;
   url?: string;
   title?: string;
@@ -117,8 +166,16 @@ export interface BrowserWorkspaceCommand {
   text?: string;
   value?: string;
   attribute?: string;
+  direction?: BrowserWorkspaceScrollDirection;
+  exact?: boolean;
+  findBy?: BrowserWorkspaceFindBy;
+  index?: number;
   key?: string;
   getMode?: BrowserWorkspaceGetMode;
+  name?: string;
+  pixels?: number;
+  role?: string;
+  state?: BrowserWorkspaceWaitState;
   timeoutMs?: number;
   steps?: BrowserWorkspaceCommand[];
 }
@@ -412,6 +469,214 @@ function collectBrowserWorkspaceInspectElements(
   return summaries;
 }
 
+function getBrowserWorkspaceElementSearchTexts(element: Element): string[] {
+  const labelText =
+    element.id && element.ownerDocument
+      ? Array.from(
+          element.ownerDocument.querySelectorAll(`label[for="${element.id}"]`),
+        )
+          .map((label) => label.textContent)
+          .join(" ")
+      : "";
+  return [
+    element.textContent,
+    element.getAttribute("aria-label"),
+    element.getAttribute("placeholder"),
+    element.getAttribute("title"),
+    element.getAttribute("name"),
+    element.getAttribute("alt"),
+    element.getAttribute("data-testid"),
+    labelText,
+    (element as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement).value,
+  ]
+    .map((value) => normalizeBrowserWorkspaceText(value))
+    .filter(Boolean);
+}
+
+function browserWorkspaceTextMatches(
+  candidate: string,
+  wanted: string,
+  exact = false,
+): boolean {
+  const normalizedCandidate = normalizeBrowserWorkspaceText(candidate).toLowerCase();
+  const normalizedWanted = normalizeBrowserWorkspaceText(wanted).toLowerCase();
+  if (!normalizedCandidate || !normalizedWanted) {
+    return false;
+  }
+  return exact
+    ? normalizedCandidate === normalizedWanted
+    : normalizedCandidate.includes(normalizedWanted);
+}
+
+function isBrowserWorkspaceElementVisible(element: Element): boolean {
+  if (element.hasAttribute("hidden") || element.getAttribute("aria-hidden") === "true") {
+    return false;
+  }
+
+  const htmlElement = element as HTMLElement;
+  const inlineDisplay = htmlElement.style?.display?.trim().toLowerCase();
+  const inlineVisibility = htmlElement.style?.visibility?.trim().toLowerCase();
+  if (inlineDisplay === "none" || inlineVisibility === "hidden") {
+    return false;
+  }
+
+  return true;
+}
+
+function findBrowserWorkspaceElementByLabel(
+  document: Document,
+  labelText: string,
+  exact = false,
+): Element | null {
+  const labels = Array.from(document.querySelectorAll("label"));
+  for (const label of labels) {
+    if (!browserWorkspaceTextMatches(label.textContent ?? "", labelText, exact)) {
+      continue;
+    }
+
+    const forId = label.getAttribute("for")?.trim();
+    if (forId) {
+      const explicit = document.getElementById(forId);
+      if (explicit) {
+        return explicit;
+      }
+    }
+
+    const nested = label.querySelector("input, textarea, select, button");
+    if (nested) {
+      return nested;
+    }
+  }
+  return null;
+}
+
+function getBrowserWorkspaceNativeRole(element: Element): string | null {
+  const explicitRole = element.getAttribute("role")?.trim().toLowerCase();
+  if (explicitRole) {
+    return explicitRole;
+  }
+
+  const tag = element.tagName.toLowerCase();
+  if (tag === "a" && element.getAttribute("href")) return "link";
+  if (tag === "button") return "button";
+  if (tag === "select") return "combobox";
+  if (tag === "option") return "option";
+  if (tag === "textarea") return "textbox";
+  if (tag === "form") return "form";
+  if (/^h[1-6]$/.test(tag)) return "heading";
+  if (tag === "input") {
+    const input = element as HTMLInputElement;
+    const type = (input.type || "text").toLowerCase();
+    if (type === "checkbox") return "checkbox";
+    if (type === "radio") return "radio";
+    if (
+      ["button", "submit", "reset", "image"].includes(type)
+    ) {
+      return "button";
+    }
+    return "textbox";
+  }
+  return null;
+}
+
+function findBrowserWorkspaceElementByRole(
+  document: Document,
+  role: string,
+  name?: string,
+  exact = false,
+): Element | null {
+  const wantedRole = role.trim().toLowerCase();
+  if (!wantedRole) {
+    return null;
+  }
+
+  const candidates = Array.from(
+    document.querySelectorAll(
+      "a, button, input, textarea, select, option, form, h1, h2, h3, h4, h5, h6, [role], [data-testid]",
+    ),
+  );
+  for (const candidate of candidates) {
+    if (getBrowserWorkspaceNativeRole(candidate) !== wantedRole) {
+      continue;
+    }
+    if (!name?.trim()) {
+      return candidate;
+    }
+    const haystacks = getBrowserWorkspaceElementSearchTexts(candidate);
+    if (haystacks.some((value) => browserWorkspaceTextMatches(value, name, exact))) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+function resolveBrowserWorkspaceFindElement(
+  document: Document,
+  command: BrowserWorkspaceCommand,
+): Element | null {
+  switch (command.findBy) {
+    case "alt":
+      return Array.from(document.querySelectorAll("[alt]")).find((element) =>
+        browserWorkspaceTextMatches(element.getAttribute("alt") ?? "", command.text ?? "", command.exact),
+      ) ?? null;
+    case "first":
+      return command.selector?.trim()
+        ? document.querySelector(command.selector)
+        : null;
+    case "label":
+      return command.text?.trim()
+        ? findBrowserWorkspaceElementByLabel(document, command.text, command.exact)
+        : null;
+    case "last":
+      return command.selector?.trim()
+        ? Array.from(document.querySelectorAll(command.selector)).at(-1) ?? null
+        : null;
+    case "nth":
+      if (!command.selector?.trim()) {
+        return null;
+      }
+      if (typeof command.index !== "number" || !Number.isInteger(command.index)) {
+        return null;
+      }
+      return Array.from(document.querySelectorAll(command.selector)).at(command.index) ?? null;
+    case "placeholder":
+      return Array.from(document.querySelectorAll("[placeholder]")).find((element) =>
+        browserWorkspaceTextMatches(
+          element.getAttribute("placeholder") ?? "",
+          command.text ?? "",
+          command.exact,
+        ),
+      ) ?? null;
+    case "role":
+      return command.role?.trim()
+        ? findBrowserWorkspaceElementByRole(
+            document,
+            command.role,
+            command.name,
+            command.exact,
+          )
+        : null;
+    case "testid":
+      return command.text?.trim()
+        ? document.querySelector(`[data-testid=${buildBrowserWorkspaceCssStringLiteral(command.text)}]`)
+        : null;
+    case "text":
+      return command.text?.trim()
+        ? findBrowserWorkspaceElementByText(document, command.text)
+        : null;
+    case "title":
+      return Array.from(document.querySelectorAll("[title]")).find((element) =>
+        browserWorkspaceTextMatches(
+          element.getAttribute("title") ?? "",
+          command.text ?? "",
+          command.exact,
+        ),
+      ) ?? null;
+    default:
+      return null;
+  }
+}
+
 function findBrowserWorkspaceElementByText(
   document: Document,
   needle: string,
@@ -453,10 +718,15 @@ function resolveBrowserWorkspaceElement(
   document: Document,
   selector?: string,
   text?: string,
+  command?: BrowserWorkspaceCommand,
 ): Element | null {
   const normalizedSelector = selector?.trim();
   if (normalizedSelector) {
     return document.querySelector(normalizedSelector);
+  }
+
+  if (command?.findBy) {
+    return resolveBrowserWorkspaceFindElement(document, command);
   }
 
   const normalizedText = text?.trim();
@@ -469,19 +739,107 @@ function resolveBrowserWorkspaceElement(
 
 function ensureBrowserWorkspaceFormControlElement(
   element: Element,
-  subaction: "fill" | "type",
+  subaction: "fill" | "keyboardinserttext" | "keyboardtype" | "select" | "type",
 ): HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement {
   if (
     element.tagName === "INPUT" ||
     element.tagName === "TEXTAREA" ||
     element.tagName === "SELECT"
   ) {
-    return element;
+    return element as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
   }
 
   throw new Error(
     `Milady browser workspace ${subaction} requires an input, textarea, or select target.`,
   );
+}
+
+function ensureBrowserWorkspaceCheckboxElement(
+  element: Element,
+  subaction: "check" | "uncheck",
+): HTMLInputElement {
+  if (element.tagName === "INPUT") {
+    const input = element as HTMLInputElement;
+    const type = input.type.trim().toLowerCase();
+    if (type === "checkbox" || type === "radio") {
+      return input;
+    }
+  }
+
+  throw new Error(
+    `Milady browser workspace ${subaction} requires a checkbox or radio input target.`,
+  );
+}
+
+function getBrowserWorkspaceElementStyles(
+  element: Element,
+  window: Window,
+): Record<string, string | null> {
+  const computed = window.getComputedStyle(element);
+  return {
+    display: computed.display || null,
+    visibility: computed.visibility || null,
+    opacity: computed.opacity || null,
+  };
+}
+
+function getBrowserWorkspaceElementBox(
+  element: Element,
+): {
+  bottom: number;
+  height: number;
+  left: number;
+  right: number;
+  top: number;
+  width: number;
+  x: number;
+  y: number;
+} {
+  const box =
+    typeof (element as HTMLElement).getBoundingClientRect === "function"
+      ? (element as HTMLElement).getBoundingClientRect()
+      : {
+          bottom: 0,
+          height: 0,
+          left: 0,
+          right: 0,
+          top: 0,
+          width: 0,
+          x: 0,
+          y: 0,
+        };
+  return {
+    bottom: box.bottom,
+    height: box.height,
+    left: box.left,
+    right: box.right,
+    top: box.top,
+    width: box.width,
+    x: box.x,
+    y: box.y,
+  };
+}
+
+function getBrowserWorkspaceElementValue(
+  element: Element,
+): string | boolean | null {
+  if (
+    element.tagName === "INPUT" ||
+    element.tagName === "TEXTAREA" ||
+    element.tagName === "SELECT"
+  ) {
+    const control =
+      element as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
+    if (element.tagName === "INPUT") {
+      const input = control as HTMLInputElement;
+      const type = input.type.trim().toLowerCase();
+      if (type === "checkbox" || type === "radio") {
+        return input.checked;
+      }
+    }
+    return control.value;
+  }
+  return null;
 }
 
 function findClosestBrowserWorkspaceForm(
@@ -493,6 +851,136 @@ function findClosestBrowserWorkspaceForm(
   return (element.tagName === "FORM"
     ? element
     : element.closest("form")) as HTMLFormElement | null;
+}
+
+async function activateWebBrowserWorkspaceElement(
+  tab: WebBrowserWorkspaceTabState,
+  element: Element,
+  subaction: "click" | "dblclick",
+): Promise<BrowserWorkspaceCommandResult> {
+  const tag = element.tagName.toLowerCase();
+  if (tag === "a") {
+    const href = element.getAttribute("href")?.trim();
+    if (!href) {
+      throw new Error("Target link does not have an href.");
+    }
+    const nextUrl = new URL(href, tab.url).toString();
+    tab.url = assertBrowserWorkspaceUrl(nextUrl);
+    tab.title = inferBrowserWorkspaceTitle(tab.url);
+    tab.dom = null;
+    tab.loadedUrl = null;
+    pushWebBrowserWorkspaceHistory(tab, tab.url);
+    await loadWebBrowserWorkspaceTabDocument(tab);
+    return {
+      mode: "web",
+      subaction,
+      tab: cloneWebBrowserWorkspaceTabState(tab),
+      value: {
+        clickCount: subaction === "dblclick" ? 2 : 1,
+        selector: buildBrowserWorkspaceElementSelector(element),
+        url: tab.url,
+      },
+    };
+  }
+
+  const inputElement = tag === "input" ? (element as HTMLInputElement) : null;
+  const inputType = inputElement?.type?.toLowerCase() ?? "";
+  if (inputElement && (inputType === "checkbox" || inputType === "radio")) {
+    inputElement.checked = inputType === "radio" ? true : !inputElement.checked;
+    return {
+      mode: "web",
+      subaction,
+      value: {
+        checked: inputElement.checked,
+        clickCount: subaction === "dblclick" ? 2 : 1,
+        selector: buildBrowserWorkspaceElementSelector(element),
+      },
+    };
+  }
+
+  const submitForm = findClosestBrowserWorkspaceForm(element);
+  if (
+    submitForm &&
+    (tag === "form" ||
+      tag === "button" ||
+      (tag === "input" && ["button", "image", "submit"].includes(inputType || "submit")))
+  ) {
+    await submitWebBrowserWorkspaceForm(tab, submitForm);
+    return {
+      mode: "web",
+      subaction,
+      tab: cloneWebBrowserWorkspaceTabState(tab),
+      value: {
+        clickCount: subaction === "dblclick" ? 2 : 1,
+        selector: buildBrowserWorkspaceElementSelector(element),
+        url: tab.url,
+      },
+    };
+  }
+
+  return {
+    mode: "web",
+    subaction,
+    value: {
+      clickCount: subaction === "dblclick" ? 2 : 1,
+      selector: buildBrowserWorkspaceElementSelector(element),
+      text: normalizeBrowserWorkspaceText(element.textContent),
+    },
+  };
+}
+
+function setBrowserWorkspaceControlValue(
+  control: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement,
+  nextValue: string,
+): void {
+  control.value = nextValue;
+  if (control.tagName === "TEXTAREA") {
+    control.textContent = nextValue;
+  }
+  control.setAttribute("value", nextValue);
+}
+
+function scrollWebBrowserWorkspaceTarget(
+  dom: JSDOM,
+  element: Element | null,
+  direction: BrowserWorkspaceScrollDirection,
+  pixels: number,
+): {
+  axis: "x" | "y";
+  selector: string | null;
+  value: number;
+} {
+  const resolvedPixels = Number.isFinite(pixels) ? Math.max(1, Math.abs(pixels)) : 240;
+  const axis = direction === "left" || direction === "right" ? "x" : "y";
+  const delta =
+    direction === "up" || direction === "left" ? -resolvedPixels : resolvedPixels;
+
+  if (element && element instanceof dom.window.HTMLElement) {
+    if (axis === "y") {
+      element.scrollTop = (element.scrollTop || 0) + delta;
+      return {
+        axis,
+        selector: buildBrowserWorkspaceElementSelector(element),
+        value: element.scrollTop,
+      };
+    }
+    element.scrollLeft = (element.scrollLeft || 0) + delta;
+    return {
+      axis,
+      selector: buildBrowserWorkspaceElementSelector(element),
+      value: element.scrollLeft,
+    };
+  }
+
+  const key = axis === "y" ? "__miladyScrollY" : "__miladyScrollX";
+  const current = Number((dom.window as unknown as Record<string, unknown>)[key] ?? 0);
+  const next = current + delta;
+  (dom.window as unknown as Record<string, unknown>)[key] = next;
+  return {
+    axis,
+    selector: null,
+    value: next,
+  };
 }
 
 function ensureBrowserWorkspaceDom(
@@ -661,6 +1149,12 @@ function createDesktopBrowserWorkspaceCommandScript(
 (() => {
   const command = ${JSON.stringify(command)};
   const normalize = (value) => String(value ?? "").replace(/\\s+/g, " ").trim();
+  const textMatches = (candidate, wanted, exact = false) => {
+    const left = normalize(candidate).toLowerCase();
+    const right = normalize(wanted).toLowerCase();
+    if (!left || !right) return false;
+    return exact ? left === right : left.includes(right);
+  };
   const selectorFor = (element) => {
     if (!element) return "";
     if (element.id) return "#" + element.id.replace(/[^a-zA-Z0-9_-]/g, "\\\\$&");
@@ -695,6 +1189,54 @@ function createDesktopBrowserWorkspaceCommandScript(
       value: typeof value === "string" ? value : null,
     };
   };
+  const searchTexts = (element) => {
+    const labelText = element.id
+      ? Array.from(document.querySelectorAll('label[for="' + element.id + '"]'))
+          .map((label) => label.textContent)
+          .join(" ")
+      : "";
+    return [
+      element.textContent,
+      element.getAttribute?.("aria-label"),
+      element.getAttribute?.("placeholder"),
+      element.getAttribute?.("title"),
+      element.getAttribute?.("name"),
+      element.getAttribute?.("alt"),
+      element.getAttribute?.("data-testid"),
+      labelText,
+      element.value,
+    ]
+      .map((value) => normalize(value))
+      .filter(Boolean);
+  };
+  const isVisible = (element) => {
+    if (!element) return false;
+    if (element.hasAttribute?.("hidden") || element.getAttribute?.("aria-hidden") === "true") {
+      return false;
+    }
+    const style = element.style || {};
+    return style.display !== "none" && style.visibility !== "hidden";
+  };
+  const nativeRole = (element) => {
+    const explicit = element.getAttribute?.("role")?.trim()?.toLowerCase();
+    if (explicit) return explicit;
+    const tag = element.tagName.toLowerCase();
+    if (tag === "a" && element.getAttribute?.("href")) return "link";
+    if (tag === "button") return "button";
+    if (tag === "select") return "combobox";
+    if (tag === "option") return "option";
+    if (tag === "textarea") return "textbox";
+    if (tag === "form") return "form";
+    if (/^h[1-6]$/.test(tag)) return "heading";
+    if (tag === "input") {
+      const type = (element.type || "text").toLowerCase();
+      if (type === "checkbox") return "checkbox";
+      if (type === "radio") return "radio";
+      if (["button", "submit", "reset", "image"].includes(type)) return "button";
+      return "textbox";
+    }
+    return null;
+  };
   const findByText = (wanted) => {
     const needle = normalize(wanted).toLowerCase();
     if (!needle) return null;
@@ -719,8 +1261,74 @@ function createDesktopBrowserWorkspaceCommandScript(
     }
     return null;
   };
+  const findByLabel = (wanted, exact = false) => {
+    const labels = Array.from(document.querySelectorAll("label"));
+    for (const label of labels) {
+      if (!textMatches(label.textContent, wanted, exact)) continue;
+      const forId = label.getAttribute("for");
+      if (forId) {
+        const explicit = document.getElementById(forId);
+        if (explicit) return explicit;
+      }
+      const nested = label.querySelector("input, textarea, select, button");
+      if (nested) return nested;
+    }
+    return null;
+  };
+  const findByRole = (role, name, exact = false) => {
+    const candidates = Array.from(
+      document.querySelectorAll(
+        "a, button, input, textarea, select, option, form, h1, h2, h3, h4, h5, h6, [role], [data-testid]"
+      )
+    );
+    for (const candidate of candidates) {
+      if (nativeRole(candidate) !== role.trim().toLowerCase()) continue;
+      if (!name) return candidate;
+      if (searchTexts(candidate).some((value) => textMatches(value, name, exact))) {
+        return candidate;
+      }
+    }
+    return null;
+  };
+  const findSemantic = () => {
+    switch (command.findBy) {
+      case "alt":
+        return Array.from(document.querySelectorAll("[alt]")).find((element) =>
+          textMatches(element.getAttribute("alt"), command.text, command.exact)
+        ) || null;
+      case "first":
+        return command.selector ? document.querySelector(command.selector) : null;
+      case "label":
+        return command.text ? findByLabel(command.text, command.exact) : null;
+      case "last":
+        return command.selector
+          ? Array.from(document.querySelectorAll(command.selector)).at(-1) || null
+          : null;
+      case "nth":
+        return command.selector && Number.isInteger(command.index)
+          ? Array.from(document.querySelectorAll(command.selector)).at(command.index) || null
+          : null;
+      case "placeholder":
+        return Array.from(document.querySelectorAll("[placeholder]")).find((element) =>
+          textMatches(element.getAttribute("placeholder"), command.text, command.exact)
+        ) || null;
+      case "role":
+        return command.role ? findByRole(command.role, command.name, command.exact) : null;
+      case "testid":
+        return command.text ? document.querySelector('[data-testid="' + command.text + '"]') : null;
+      case "text":
+        return command.text ? findByText(command.text) : null;
+      case "title":
+        return Array.from(document.querySelectorAll("[title]")).find((element) =>
+          textMatches(element.getAttribute("title"), command.text, command.exact)
+        ) || null;
+      default:
+        return null;
+    }
+  };
   const findTarget = () => {
     if (command.selector) return document.querySelector(command.selector);
+    if (command.findBy) return findSemantic();
     if (command.text) return findByText(command.text);
     return null;
   };
@@ -732,8 +1340,14 @@ function createDesktopBrowserWorkspaceCommandScript(
     )
       .slice(0, 40)
       .map((element) => serialize(element));
-  const setInputValue = (appendMode) => {
-    const element = findTarget();
+  const snapshot = () => ({
+    title: document.title,
+    url: location.href,
+    bodyText: normalize(document.body?.textContent).slice(0, 800),
+    elements: inspect(),
+  });
+  const setInputValue = (appendMode, target) => {
+    const element = target || findTarget();
     if (!element) {
       throw new Error("Target element was not found.");
     }
@@ -752,6 +1366,112 @@ function createDesktopBrowserWorkspaceCommandScript(
     element.dispatchEvent(new Event("change", { bubbles: true }));
     return { selector: selectorFor(element), value: element.value };
   };
+  const setChecked = (targetValue) => {
+    const element = findTarget();
+    if (!element) throw new Error("Target element was not found.");
+    if (!(element instanceof HTMLInputElement)) {
+      throw new Error("Target element is not a checkbox or radio input.");
+    }
+    const type = (element.type || "").toLowerCase();
+    if (type !== "checkbox" && type !== "radio") {
+      throw new Error("Target element is not a checkbox or radio input.");
+    }
+    element.checked = targetValue;
+    element.dispatchEvent(new Event("input", { bubbles: true }));
+    element.dispatchEvent(new Event("change", { bubbles: true }));
+    return { checked: element.checked, selector: selectorFor(element) };
+  };
+  const setSelectValue = () => {
+    const element = findTarget();
+    if (!element) throw new Error("Target element was not found.");
+    if (!(element instanceof HTMLSelectElement)) {
+      throw new Error("Target element is not a select.");
+    }
+    const targetValue = command.value ?? "";
+    const option = Array.from(element.options).find(
+      (entry) =>
+        entry.value === targetValue || textMatches(entry.textContent, targetValue, true)
+    );
+    if (!option) {
+      throw new Error("Select option was not found.");
+    }
+    element.value = option.value;
+    option.selected = true;
+    element.dispatchEvent(new Event("input", { bubbles: true }));
+    element.dispatchEvent(new Event("change", { bubbles: true }));
+    return { selector: selectorFor(element), value: element.value };
+  };
+  const focusElement = (element) => {
+    if (!element) throw new Error("Target element was not found.");
+    if (typeof element.focus === "function") {
+      element.focus();
+    }
+    return {
+      focused: document.activeElement === element,
+      selector: selectorFor(element),
+    };
+  };
+  const hoverElement = (element) => {
+    if (!element) throw new Error("Target element was not found.");
+    element.setAttribute("data-milady-hover", "true");
+    return { hovered: true, selector: selectorFor(element) };
+  };
+  const activateElement = (subaction, element) => {
+    if (!element) throw new Error("Target element was not found.");
+    if (subaction === "dblclick") {
+      element.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    }
+    if (typeof element.click === "function") {
+      element.click();
+    }
+    return {
+      clickCount: subaction === "dblclick" ? 2 : 1,
+      element: serialize(element),
+      url: location.href,
+    };
+  };
+  const keyboardTarget = () => findTarget() || document.activeElement || document.body;
+  const keyboardWrite = (appendMode) => {
+    const target = keyboardTarget();
+    if (
+      !(
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement
+      )
+    ) {
+      throw new Error("Keyboard text input requires an input, textarea, or select target.");
+    }
+    return setInputValue(appendMode, target);
+  };
+  const keyPhase = (phase) => {
+    const target = keyboardTarget();
+    const key = command.key || "Enter";
+    target.dispatchEvent(new KeyboardEvent(phase, { key, bubbles: true }));
+    return { key, phase, selector: selectorFor(target) };
+  };
+  const scrollTarget = () => findTarget();
+  const scroll = () => {
+    const target = scrollTarget();
+    const direction = command.direction || "down";
+    const pixels = Math.max(1, Math.abs(Number(command.pixels) || 240));
+    const axis = direction === "left" || direction === "right" ? "x" : "y";
+    const delta = direction === "up" || direction === "left" ? -pixels : pixels;
+    if (target instanceof HTMLElement) {
+      if (axis === "y") {
+        target.scrollTop = (target.scrollTop || 0) + delta;
+        return { axis, selector: selectorFor(target), value: target.scrollTop };
+      }
+      target.scrollLeft = (target.scrollLeft || 0) + delta;
+      return { axis, selector: selectorFor(target), value: target.scrollLeft };
+    }
+    if (axis === "y") {
+      window.scrollBy(0, delta);
+      return { axis, selector: null, value: window.scrollY };
+    }
+    window.scrollBy(delta, 0);
+    return { axis, selector: null, value: window.scrollX };
+  };
   const getResult = () => {
     if (command.getMode === "title") return document.title;
     if (command.getMode === "url") return location.href;
@@ -765,12 +1485,32 @@ function createDesktopBrowserWorkspaceCommandScript(
       case "attr":
         if (!command.attribute) throw new Error("attr lookups require attribute");
         return element.getAttribute(command.attribute);
+      case "box":
+        return element.getBoundingClientRect();
+      case "checked":
+        return element instanceof HTMLInputElement
+          ? Boolean(element.checked)
+          : element instanceof HTMLOptionElement
+            ? Boolean(element.selected)
+            : false;
+      case "enabled":
+        return "disabled" in element ? !Boolean(element.disabled) : true;
       case "html":
         return element.innerHTML;
+      case "styles": {
+        const computed = getComputedStyle(element);
+        return {
+          display: computed.display || null,
+          visibility: computed.visibility || null,
+          opacity: computed.opacity || null,
+        };
+      }
       case "text":
         return normalize(element.textContent);
       case "value":
         return element.value ?? element.getAttribute?.("value");
+      case "visible":
+        return isVisible(element);
       default:
         return normalize(element.textContent);
     }
@@ -781,7 +1521,22 @@ function createDesktopBrowserWorkspaceCommandScript(
       const check = () => {
         try {
           if (command.selector && document.querySelector(command.selector)) {
-            resolve({ ok: true, selector: command.selector });
+            const found = document.querySelector(command.selector);
+            const visible =
+              !command.state || command.state === "visible"
+                ? found && isVisible(found)
+                : !found || !isVisible(found);
+            if (visible) {
+              resolve({ ok: true, selector: command.selector, state: command.state || "visible" });
+              return;
+            }
+          }
+          if (
+            command.findBy &&
+            (!command.state || command.state === "visible") &&
+            findSemantic()
+          ) {
+            resolve({ findBy: command.findBy, ok: true });
             return;
           }
           if (command.text && normalize(document.body?.textContent).includes(command.text)) {
@@ -791,6 +1546,13 @@ function createDesktopBrowserWorkspaceCommandScript(
           if (command.url && location.href.includes(command.url)) {
             resolve({ ok: true, url: location.href });
             return;
+          }
+          if (command.script) {
+            const fn = new Function("document", "window", "location", "return (" + command.script + ");");
+            if (fn(document, window, location)) {
+              resolve({ ok: true, script: true });
+              return;
+            }
           }
           if (Date.now() >= deadline) {
             reject(new Error("Timed out waiting for browser workspace condition."));
@@ -807,16 +1569,63 @@ function createDesktopBrowserWorkspaceCommandScript(
   switch (command.subaction) {
     case "inspect":
       return { title: document.title, url: location.href, elements: inspect() };
+    case "snapshot":
+      return snapshot();
     case "get":
       return { value: getResult() };
-    case "click": {
+    case "find": {
       const element = findTarget();
       if (!element) throw new Error("Target element was not found.");
-      if (typeof element.click === "function") element.click();
-      return { clicked: true, element: serialize(element), url: location.href };
+      switch (command.action) {
+        case "check":
+          return setChecked(true);
+        case "click":
+          return activateElement("click", element);
+        case "fill":
+          return setInputValue(false, element);
+        case "focus":
+          return focusElement(element);
+        case "hover":
+          return hoverElement(element);
+        case "text":
+        case undefined:
+          return { element: serialize(element), value: normalize(element.textContent) };
+        case "type":
+          return setInputValue(true, element);
+        case "uncheck":
+          return setChecked(false);
+        default:
+          throw new Error("Unsupported find action.");
+      }
     }
+    case "click": {
+      const element = findTarget();
+      return activateElement("click", element);
+    }
+    case "dblclick": {
+      const element = findTarget();
+      return activateElement("dblclick", element);
+    }
+    case "check":
+      return setChecked(true);
     case "fill":
       return setInputValue(false);
+    case "focus": {
+      const element = findTarget();
+      return focusElement(element);
+    }
+    case "hover": {
+      const element = findTarget();
+      return hoverElement(element);
+    }
+    case "keyboardinserttext":
+      return keyboardWrite(false);
+    case "keyboardtype":
+      return keyboardWrite(true);
+    case "keydown":
+      return keyPhase("keydown");
+    case "keyup":
+      return keyPhase("keyup");
     case "type":
       return setInputValue(true);
     case "press": {
@@ -826,6 +1635,20 @@ function createDesktopBrowserWorkspaceCommandScript(
       target.dispatchEvent(new KeyboardEvent("keyup", { key, bubbles: true }));
       return { key, url: location.href };
     }
+    case "scroll":
+      return scroll();
+    case "scrollinto": {
+      const element = findTarget();
+      if (!element) throw new Error("Target element was not found.");
+      if (typeof element.scrollIntoView === "function") {
+        element.scrollIntoView();
+      }
+      return { scrolled: true, selector: selectorFor(element) };
+    }
+    case "select":
+      return setSelectValue();
+    case "uncheck":
+      return setChecked(false);
     case "wait":
       return waitForCondition();
     case "back":
@@ -860,10 +1683,11 @@ async function executeDesktopBrowserWorkspaceDomCommand(
     env,
   );
 
-  if (command.subaction === "inspect") {
+  if (command.subaction === "inspect" || command.subaction === "snapshot") {
     const value =
       result && typeof result === "object" && !Array.isArray(result)
         ? (result as {
+            bodyText?: string;
             elements?: BrowserWorkspaceDomElementSummary[];
           })
         : null;
@@ -956,9 +1780,11 @@ async function executeWebBrowserWorkspaceDomCommand(
     const tab = getWebBrowserWorkspaceTabState(id);
     const dom = await ensureLoadedWebBrowserWorkspaceTabDocument(tab);
     const document = dom.window.document;
+    const resolveTarget = () =>
+      resolveBrowserWorkspaceElement(document, command.selector, command.text, command);
 
     switch (command.subaction) {
-      case "inspect": {
+      case "inspect":
         return {
           mode: "web",
           subaction: command.subaction,
@@ -968,21 +1794,26 @@ async function executeWebBrowserWorkspaceDomCommand(
             url: tab.url,
           },
         };
-      }
+      case "snapshot":
+        return {
+          mode: "web",
+          subaction: command.subaction,
+          elements: collectBrowserWorkspaceInspectElements(document),
+          value: {
+            bodyText: normalizeBrowserWorkspaceText(document.body?.textContent).slice(
+              0,
+              800,
+            ),
+            title: tab.title,
+            url: tab.url,
+          },
+        };
       case "get": {
         if (command.getMode === "title") {
-          return {
-            mode: "web",
-            subaction: command.subaction,
-            value: tab.title,
-          };
+          return { mode: "web", subaction: command.subaction, value: tab.title };
         }
         if (command.getMode === "url") {
-          return {
-            mode: "web",
-            subaction: command.subaction,
-            value: tab.url,
-          };
+          return { mode: "web", subaction: command.subaction, value: tab.url };
         }
         if (command.getMode === "count") {
           if (!command.selector?.trim()) {
@@ -995,11 +1826,7 @@ async function executeWebBrowserWorkspaceDomCommand(
           };
         }
 
-        const element = resolveBrowserWorkspaceElement(
-          document,
-          command.selector,
-          command.text,
-        );
+        const element = resolveTarget();
         if (!element) {
           throw new Error("Target element was not found.");
         }
@@ -1012,18 +1839,42 @@ async function executeWebBrowserWorkspaceDomCommand(
             }
             value = element.getAttribute(command.attribute);
             break;
+          case "box":
+            value = getBrowserWorkspaceElementBox(element);
+            break;
+          case "checked":
+            value =
+              element.tagName === "INPUT"
+                ? Boolean((element as HTMLInputElement).checked)
+                : element.tagName === "OPTION"
+                  ? Boolean((element as HTMLOptionElement).selected)
+                  : false;
+            break;
+          case "enabled":
+            value =
+              "disabled" in element
+                ? !Boolean(
+                    (
+                      element as
+                        | HTMLButtonElement
+                        | HTMLInputElement
+                        | HTMLSelectElement
+                        | HTMLTextAreaElement
+                    ).disabled,
+                  )
+                : true;
+            break;
           case "html":
             value = element.innerHTML;
             break;
+          case "styles":
+            value = getBrowserWorkspaceElementStyles(element, dom.window);
+            break;
           case "value":
-            value =
-              element.tagName === "INPUT" ||
-              element.tagName === "TEXTAREA" ||
-              element.tagName === "SELECT"
-                ? (
-                    element as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
-                  ).value
-                : null;
+            value = getBrowserWorkspaceElementValue(element);
+            break;
+          case "visible":
+            value = isBrowserWorkspaceElementVisible(element);
             break;
           case "text":
           default:
@@ -1031,19 +1882,126 @@ async function executeWebBrowserWorkspaceDomCommand(
             break;
         }
 
+        return { mode: "web", subaction: command.subaction, value };
+      }
+      case "find": {
+        const element = resolveTarget();
+        if (!element) {
+          throw new Error("Target element was not found.");
+        }
+
+        switch (command.action) {
+          case "check": {
+            const input = ensureBrowserWorkspaceCheckboxElement(element, "check");
+            input.checked = true;
+            return {
+              mode: "web",
+              subaction: command.subaction,
+              value: {
+                checked: input.checked,
+                selector: buildBrowserWorkspaceElementSelector(input),
+              },
+            };
+          }
+          case "click":
+            return {
+              ...(await activateWebBrowserWorkspaceElement(tab, element, "click")),
+              subaction: command.subaction,
+            };
+          case "fill": {
+            const control = ensureBrowserWorkspaceFormControlElement(element, "fill");
+            setBrowserWorkspaceControlValue(control, command.value ?? "");
+            return {
+              mode: "web",
+              subaction: command.subaction,
+              value: {
+                selector: buildBrowserWorkspaceElementSelector(control),
+                value: control.value,
+              },
+            };
+          }
+          case "focus":
+            if (typeof (element as HTMLElement).focus === "function") {
+              (element as HTMLElement).focus();
+            }
+            return {
+              mode: "web",
+              subaction: command.subaction,
+              value: {
+                focused: document.activeElement === element,
+                selector: buildBrowserWorkspaceElementSelector(element),
+              },
+            };
+          case "hover":
+            element.setAttribute("data-milady-hover", "true");
+            return {
+              mode: "web",
+              subaction: command.subaction,
+              value: {
+                hovered: true,
+                selector: buildBrowserWorkspaceElementSelector(element),
+              },
+            };
+          case "type": {
+            const control = ensureBrowserWorkspaceFormControlElement(element, "type");
+            setBrowserWorkspaceControlValue(
+              control,
+              `${control.value ?? ""}${command.value ?? ""}`,
+            );
+            return {
+              mode: "web",
+              subaction: command.subaction,
+              value: {
+                selector: buildBrowserWorkspaceElementSelector(control),
+                value: control.value,
+              },
+            };
+          }
+          case "uncheck": {
+            const input = ensureBrowserWorkspaceCheckboxElement(element, "uncheck");
+            input.checked = false;
+            return {
+              mode: "web",
+              subaction: command.subaction,
+              value: {
+                checked: input.checked,
+                selector: buildBrowserWorkspaceElementSelector(input),
+              },
+            };
+          }
+          case "text":
+          case undefined:
+            return {
+              mode: "web",
+              subaction: command.subaction,
+              value: {
+                element: createBrowserWorkspaceElementSummary(element),
+                text: normalizeBrowserWorkspaceText(element.textContent),
+              },
+            };
+          default:
+            throw new Error(`Unsupported browser workspace find action: ${command.action}`);
+        }
+      }
+      case "check": {
+        const element = resolveTarget();
+        if (!element) {
+          throw new Error("Target element was not found.");
+        }
+        const input = ensureBrowserWorkspaceCheckboxElement(element, "check");
+        input.checked = true;
         return {
           mode: "web",
           subaction: command.subaction,
-          value,
+          value: {
+            checked: input.checked,
+            selector: buildBrowserWorkspaceElementSelector(input),
+          },
         };
       }
       case "fill":
       case "type": {
-        const element = resolveBrowserWorkspaceElement(
-          document,
-          command.selector,
-          command.text,
-        );
+        const element = resolveTarget();
         if (!element) {
           throw new Error("Target element was not found.");
         }
@@ -1055,11 +2013,7 @@ async function executeWebBrowserWorkspaceDomCommand(
           command.subaction === "type"
             ? `${control.value ?? ""}${command.value ?? ""}`
             : (command.value ?? "");
-        control.value = nextValue;
-        if (control.tagName === "TEXTAREA") {
-          control.textContent = nextValue;
-        }
-        control.setAttribute("value", nextValue);
+        setBrowserWorkspaceControlValue(control, nextValue);
         return {
           mode: "web",
           subaction: command.subaction,
@@ -1069,91 +2023,101 @@ async function executeWebBrowserWorkspaceDomCommand(
           },
         };
       }
-      case "click": {
-        const element = resolveBrowserWorkspaceElement(
-          document,
-          command.selector,
-          command.text,
-        );
+      case "focus": {
+        const element = resolveTarget();
         if (!element) {
           throw new Error("Target element was not found.");
         }
-
-        const tag = element.tagName.toLowerCase();
-        if (tag === "a") {
-          const href = element.getAttribute("href")?.trim();
-          if (!href) {
-            throw new Error("Target link does not have an href.");
-          }
-          const nextUrl = new URL(href, tab.url).toString();
-          tab.url = assertBrowserWorkspaceUrl(nextUrl);
-          tab.title = inferBrowserWorkspaceTitle(tab.url);
-          tab.dom = null;
-          tab.loadedUrl = null;
-          pushWebBrowserWorkspaceHistory(tab, tab.url);
-          await loadWebBrowserWorkspaceTabDocument(tab);
-          return {
-            mode: "web",
-            subaction: command.subaction,
-            tab: cloneWebBrowserWorkspaceTabState(tab),
-            value: {
-              selector: buildBrowserWorkspaceElementSelector(element),
-              url: tab.url,
-            },
-          };
+        if (typeof (element as HTMLElement).focus === "function") {
+          (element as HTMLElement).focus();
         }
-
-        const inputElement = tag === "input" ? (element as HTMLInputElement) : null;
-        const inputType = inputElement?.type?.toLowerCase() ?? "";
-        if (inputElement && (inputType === "checkbox" || inputType === "radio")) {
-          inputElement.checked =
-            inputType === "radio" ? true : !inputElement.checked;
-          return {
-            mode: "web",
-            subaction: command.subaction,
-            value: {
-              selector: buildBrowserWorkspaceElementSelector(element),
-              checked: inputElement.checked,
-            },
-          };
-        }
-
-        const submitForm = findClosestBrowserWorkspaceForm(element);
-        if (
-          submitForm &&
-          (tag === "form" ||
-            tag === "button" ||
-            (tag === "input" &&
-              ["button", "image", "submit"].includes(inputType || "submit")))
-        ) {
-          await submitWebBrowserWorkspaceForm(tab, submitForm);
-          return {
-            mode: "web",
-            subaction: command.subaction,
-            tab: cloneWebBrowserWorkspaceTabState(tab),
-            value: {
-              selector: buildBrowserWorkspaceElementSelector(element),
-              url: tab.url,
-            },
-          };
-        }
-
         return {
           mode: "web",
           subaction: command.subaction,
           value: {
+            focused: document.activeElement === element,
             selector: buildBrowserWorkspaceElementSelector(element),
-            text: normalizeBrowserWorkspaceText(element.textContent),
           },
         };
       }
+      case "hover": {
+        const element = resolveTarget();
+        if (!element) {
+          throw new Error("Target element was not found.");
+        }
+        element.setAttribute("data-milady-hover", "true");
+        return {
+          mode: "web",
+          subaction: command.subaction,
+          value: {
+            hovered: true,
+            selector: buildBrowserWorkspaceElementSelector(element),
+          },
+        };
+      }
+      case "keyboardinserttext":
+      case "keyboardtype": {
+        const active = document.activeElement;
+        if (
+          !active ||
+          !(
+            active.tagName === "INPUT" ||
+            active.tagName === "TEXTAREA" ||
+            active.tagName === "SELECT"
+          )
+        ) {
+          throw new Error(
+            "Milady browser workspace keyboard text input requires a focused input target.",
+          );
+        }
+        const control = ensureBrowserWorkspaceFormControlElement(
+          active,
+          command.subaction === "keyboardtype" ? "type" : "keyboardinserttext",
+        );
+        const nextValue =
+          command.subaction === "keyboardtype"
+            ? `${control.value ?? ""}${command.value ?? ""}`
+            : (command.value ?? "");
+        setBrowserWorkspaceControlValue(control, nextValue);
+        return {
+          mode: "web",
+          subaction: command.subaction,
+          value: {
+            selector: buildBrowserWorkspaceElementSelector(control),
+            value: control.value,
+          },
+        };
+      }
+      case "keydown":
+      case "keyup":
+        return {
+          mode: "web",
+          subaction: command.subaction,
+          value: {
+            key: command.key?.trim() || "Enter",
+            selector:
+              document.activeElement && document.activeElement instanceof Element
+                ? buildBrowserWorkspaceElementSelector(document.activeElement)
+                : null,
+          },
+        };
+      case "click": {
+        const element = resolveTarget();
+        if (!element) {
+          throw new Error("Target element was not found.");
+        }
+        return activateWebBrowserWorkspaceElement(tab, element, "click");
+      }
+      case "dblclick": {
+        const element = resolveTarget();
+        if (!element) {
+          throw new Error("Target element was not found.");
+        }
+        return activateWebBrowserWorkspaceElement(tab, element, "dblclick");
+      }
       case "press": {
         const key = command.key?.trim() || "Enter";
-        const element = resolveBrowserWorkspaceElement(
-          document,
-          command.selector,
-          command.text,
-        );
+        const element = resolveTarget();
         const form = findClosestBrowserWorkspaceForm(element);
 
         if (key === "Enter" && form) {
@@ -1166,10 +2130,83 @@ async function executeWebBrowserWorkspaceDomCommand(
           };
         }
 
+        return { mode: "web", subaction: command.subaction, value: { key } };
+      }
+      case "scroll": {
         return {
           mode: "web",
           subaction: command.subaction,
-          value: { key },
+          value: scrollWebBrowserWorkspaceTarget(
+            dom,
+            resolveTarget(),
+            command.direction ?? "down",
+            command.pixels ?? 240,
+          ),
+        };
+      }
+      case "scrollinto": {
+        const element = resolveTarget();
+        if (!element) {
+          throw new Error("Target element was not found.");
+        }
+        if (typeof (element as HTMLElement).focus === "function") {
+          (element as HTMLElement).focus();
+        }
+        return {
+          mode: "web",
+          subaction: command.subaction,
+          value: {
+            scrolled: true,
+            selector: buildBrowserWorkspaceElementSelector(element),
+          },
+        };
+      }
+      case "select": {
+        const element = resolveTarget();
+        if (!element) {
+          throw new Error("Target element was not found.");
+        }
+        if (element.tagName !== "SELECT") {
+          throw new Error("Milady browser workspace select requires a select target.");
+        }
+        const select = ensureBrowserWorkspaceFormControlElement(element, "select");
+        const option = Array.from((select as HTMLSelectElement).options).find(
+          (entry) =>
+            entry.value === (command.value ?? "") ||
+            browserWorkspaceTextMatches(
+              entry.textContent ?? "",
+              command.value ?? "",
+              true,
+            ),
+        );
+        if (!option) {
+          throw new Error("Select option was not found.");
+        }
+        (select as HTMLSelectElement).value = option.value;
+        option.selected = true;
+        return {
+          mode: "web",
+          subaction: command.subaction,
+          value: {
+            selector: buildBrowserWorkspaceElementSelector(select),
+            value: (select as HTMLSelectElement).value,
+          },
+        };
+      }
+      case "uncheck": {
+        const element = resolveTarget();
+        if (!element) {
+          throw new Error("Target element was not found.");
+        }
+        const input = ensureBrowserWorkspaceCheckboxElement(element, "uncheck");
+        input.checked = false;
+        return {
+          mode: "web",
+          subaction: command.subaction,
+          value: {
+            checked: input.checked,
+            selector: buildBrowserWorkspaceElementSelector(input),
+          },
         };
       }
       case "wait": {
@@ -1185,7 +2222,16 @@ async function executeWebBrowserWorkspaceDomCommand(
           const currentDocument = currentDom.window.document;
 
           const matchesSelector = command.selector?.trim()
-            ? Boolean(currentDocument.querySelector(command.selector))
+            ? (() => {
+                const found = currentDocument.querySelector(command.selector);
+                if (!command.state || command.state === "visible") {
+                  return Boolean(found) && isBrowserWorkspaceElementVisible(found);
+                }
+                return !found || !isBrowserWorkspaceElementVisible(found);
+              })()
+            : false;
+          const matchesFind = command.findBy
+            ? Boolean(resolveBrowserWorkspaceFindElement(currentDocument, command))
             : false;
           const matchesText = command.text?.trim()
             ? normalizeBrowserWorkspaceText(currentDocument.body?.textContent).includes(
@@ -1195,18 +2241,36 @@ async function executeWebBrowserWorkspaceDomCommand(
           const matchesUrl = command.url?.trim()
             ? tab.url.includes(command.url.trim())
             : false;
+          const matchesScript = command.script?.trim()
+            ? Boolean(
+                new Function(
+                  "document",
+                  "window",
+                  "location",
+                  `return (${command.script});`,
+                )(currentDocument, currentDom.window, currentDom.window.location),
+              )
+            : false;
 
           if (
             matchesSelector ||
+            matchesFind ||
             matchesText ||
             matchesUrl ||
-            (!command.selector && !command.text && !command.url)
+            matchesScript ||
+            (!command.selector &&
+              !command.findBy &&
+              !command.text &&
+              !command.url &&
+              !command.script)
           ) {
             return {
               mode: "web",
               subaction: command.subaction,
               value: {
+                findBy: command.findBy ?? null,
                 selector: command.selector ?? null,
+                state: command.state ?? null,
                 text: command.text ?? null,
                 url: tab.url,
               },
@@ -1566,7 +2630,7 @@ export async function executeBrowserWorkspaceCommand(
         ),
       };
     }
-    case "snapshot": {
+    case "screenshot": {
       const id = await resolveDesktopBrowserWorkspaceTargetTabId(command, env);
       return {
         mode: "desktop",
@@ -1623,11 +2687,24 @@ export async function executeBrowserWorkspaceCommand(
       });
     }
     case "inspect":
+    case "snapshot":
+    case "check":
     case "click":
+    case "dblclick":
+    case "find":
     case "fill":
+    case "focus":
     case "get":
+    case "hover":
+    case "keydown":
+    case "keyboardinserttext":
+    case "keyboardtype":
     case "press":
+    case "scroll":
+    case "scrollinto":
+    case "select":
     case "type":
+    case "uncheck":
     case "wait":
       if (isBrowserWorkspaceBridgeConfigured(env)) {
         return executeDesktopBrowserWorkspaceDomCommand(command, env);

@@ -1,7 +1,6 @@
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { textOf } from "../../../../test/helpers/react-test";
 
 const { mockUseApp } = vi.hoisted(() => ({
   mockUseApp: vi.fn(),
@@ -24,14 +23,35 @@ vi.mock("@miladyai/app-core/state", () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-vi.mock("../../src/components/pages/ChatView", () => ({
-  ChatView: () => React.createElement("section", null, "ChatView Ready"),
-}));
+function chatViewStub() {
+  return {
+    ChatView: () => React.createElement("section", null, "ChatView Ready"),
+  };
+}
 
-vi.mock("../../src/components/conversations/ConversationsSidebar", () => ({
-  ConversationsSidebar: () =>
-    React.createElement("aside", null, "ConversationsSidebar Ready"),
-}));
+vi.mock(import("../../src/components/pages/ChatView"), chatViewStub);
+vi.mock(import("../../src/components/pages/ChatView.js"), chatViewStub);
+vi.mock(import("../../src/components/pages/ChatView.tsx"), chatViewStub);
+
+function conversationsSidebarStub() {
+  return {
+    ConversationsSidebar: () =>
+      React.createElement("aside", null, "ConversationsSidebar Ready"),
+  };
+}
+
+vi.mock(
+  import("../../src/components/conversations/ConversationsSidebar"),
+  conversationsSidebarStub,
+);
+vi.mock(
+  import("../../src/components/conversations/ConversationsSidebar.js"),
+  conversationsSidebarStub,
+);
+vi.mock(
+  import("../../src/components/conversations/ConversationsSidebar.tsx"),
+  conversationsSidebarStub,
+);
 
 vi.mock("@miladyai/app-core/api", () => ({
   client: {
@@ -57,14 +77,35 @@ function createContext() {
       },
     ],
     activeConversationId: "conv-1",
+    activeInboxChat: null,
+    characterData: null,
+    chatInput: "",
     onboardingLoading: false,
     startupPhase: "ready",
     conversationMessages: [],
     chatSending: false,
+    chatFirstTokenReceived: false,
+    companionMessageCutoffTs: 0,
     handleNewConversation: vi.fn(async () => {}),
     handleChatClear: vi.fn(async () => {}),
+    handleChatSend: vi.fn(async () => {}),
+    handleChatStop: vi.fn(),
+    handleChatEdit: vi.fn(async () => true),
     setActionNotice: vi.fn(),
     setTab: vi.fn(),
+    setState: vi.fn(),
+    copyToClipboard: vi.fn(async () => {}),
+    elizaCloudConnected: false,
+    elizaCloudVoiceProxyAvailable: false,
+    elizaCloudHasPersistedKey: false,
+    chatAgentVoiceMuted: false,
+    selectedVrmIndex: 0,
+    droppedFiles: [],
+    shareIngestNotice: "",
+    chatPendingImages: [],
+    setChatPendingImages: vi.fn(),
+    ptySessions: [],
+    sendChatText: vi.fn(async () => {}),
     uiLanguage: "en",
   };
 }
@@ -93,6 +134,20 @@ describe("ChatModalView", () => {
       options: ["user-sign-only", "manual-local-key", "agent-auto"],
     }));
     mockUseApp.mockReturnValue(createContext());
+    Object.assign(document, {
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    });
+    Object.defineProperty(window, "setInterval", {
+      value: globalThis.setInterval.bind(globalThis),
+      configurable: true,
+      writable: true,
+    });
+    Object.defineProperty(window, "clearInterval", {
+      value: globalThis.clearInterval.bind(globalThis),
+      configurable: true,
+      writable: true,
+    });
   });
 
   it("renders full overlay layout by default", async () => {
@@ -111,9 +166,14 @@ describe("ChatModalView", () => {
     );
     expect(shells.length).toBe(1);
 
-    const content = textOf(tree?.root);
-    expect(content).toContain("ChatView Ready");
-    expect(content).toContain("ConversationsSidebar Ready");
+    const sidebars = tree?.root.findAll(
+      (node) => node.props["data-chat-game-sidebar"] === true,
+    );
+    const threads = tree?.root.findAll(
+      (node) => node.props["data-chat-game-thread"] === true,
+    );
+    expect(sidebars.length).toBe(1);
+    expect(threads.length).toBe(1);
   });
 
   it("renders companion dock layout", async () => {

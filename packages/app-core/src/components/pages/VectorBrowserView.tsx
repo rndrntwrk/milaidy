@@ -24,7 +24,14 @@ import {
   SidebarScrollRegion,
 } from "@miladyai/ui";
 import type { ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { client, type QueryResult, type TableInfo } from "../../api";
 import { useApp } from "../../state";
 import {
@@ -298,12 +305,14 @@ function VectorGraph({
 
 // ── 3D Graph sub-component (Three.js) ──────────────────────────────────
 
-function VectorGraph3D({
+export function VectorGraph3D({
   memories,
   onSelect,
+  createRenderer = createVectorBrowserRenderer,
 }: {
   memories: MemoryRecord[];
   onSelect: (mem: MemoryRecord) => void;
+  createRenderer?: () => Promise<THREE.WebGLRenderer>;
 }) {
   const { t } = useApp();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -347,7 +356,7 @@ function VectorGraph3D({
   }, [withEmbeddings]);
 
   // Initialize Three.js scene
-  useEffect(() => {
+  useLayoutEffect(() => {
     const container = containerRef.current;
     if (!container || points3D.length === 0) return;
 
@@ -378,7 +387,7 @@ function VectorGraph3D({
 
       let renderer: THREE.WebGLRenderer;
       try {
-        renderer = await createVectorBrowserRenderer();
+        renderer = await createRenderer();
       } catch {
         if (!cancelled) {
           setRendererUnavailable(true);
@@ -720,7 +729,7 @@ function VectorGraph3D({
       cleanupRef.current?.();
       cleanupRef.current = null;
     };
-  }, [points3D, withEmbeddings, typeColors, onSelect]);
+  }, [createRenderer, points3D, withEmbeddings, typeColors, onSelect]);
 
   if (withEmbeddings.length < 2) {
     return (

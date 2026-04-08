@@ -906,9 +906,11 @@ export async function generateChatResponse(
               ? ({ text: responseText } as Content)
               : null;
         const messagesToEmit =
-          responseMessages.length === 0 && fallbackResponseContent
-            ? [{ id: crypto.randomUUID(), content: fallbackResponseContent }]
-            : [];
+          responseMessages.length > 0
+            ? responseMessages
+            : fallbackResponseContent
+              ? [{ id: crypto.randomUUID(), content: fallbackResponseContent }]
+              : [];
         if (
           messagesToEmit.length > 0 &&
           typeof runtime.emitEvent === "function"

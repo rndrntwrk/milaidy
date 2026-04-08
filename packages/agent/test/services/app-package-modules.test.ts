@@ -127,12 +127,12 @@ describe("app-package-modules", () => {
     process.chdir(repoRoot);
     previousCwd = repoRoot;
 
-    const localAppDir = path.join(workspaceRoot, "plugins", "app-hyperscape");
+    const localAppDir = path.join(workspaceRoot, "plugins", "plugin-hyperscape");
     writeFile(
       path.join(localAppDir, "package.json"),
       JSON.stringify(
         {
-          name: "@elizaos/app-hyperscape",
+          name: "@hyperscape/plugin-hyperscape",
           type: "module",
         },
         null,
@@ -153,7 +153,7 @@ describe("app-package-modules", () => {
       new Error("registry should not be consulted"),
     );
 
-    const routeModule = await importAppRouteModule("@elizaos/app-hyperscape");
+    const routeModule = await importAppRouteModule("@hyperscape/plugin-hyperscape");
 
     expect(routeModule).not.toBeNull();
     await expect(routeModule?.handleAppRoutes?.({})).resolves.toBe(true);

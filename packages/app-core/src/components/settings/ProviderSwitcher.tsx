@@ -182,6 +182,16 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
     (cfg: Record<string, unknown>) => {
       const llmText = resolveServiceRoutingInConfig(cfg)?.llmText;
       const providerId = getOnboardingProviderOption(llmText?.backend)?.id;
+      const savedSubscriptionProvider =
+        typeof (cfg.agents as { defaults?: { subscriptionProvider?: unknown } })
+          ?.defaults?.subscriptionProvider === "string" &&
+        isSubscriptionProviderSelectionId(
+          (cfg.agents as { defaults?: { subscriptionProvider?: string } })
+            .defaults?.subscriptionProvider ?? "",
+        )
+          ? (cfg.agents as { defaults?: { subscriptionProvider?: string } })
+              .defaults?.subscriptionProvider ?? null
+          : null;
       const nextSelectedId =
         llmText?.transport === "cloud-proxy" && providerId === "elizacloud"
           ? "__cloud__"
@@ -189,7 +199,7 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
             ? (providerId ?? null)
             : llmText?.transport === "remote" && providerId
               ? providerId
-              : null;
+              : savedSubscriptionProvider;
 
       if (!hasManualSelection.current) {
         setSelectedProviderId(nextSelectedId);
@@ -480,8 +490,6 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
         : "__custom__";
 
   /* ── Render ───────────────────────────────────────────────────── */
-  const totalCols =
-    allAiProviders.length + 2 + SUBSCRIPTION_PROVIDER_SELECTIONS.length;
   const isCloudSelected = resolvedSelectedId === "__cloud__";
   const isPiAiSelected = resolvedSelectedId === "pi-ai";
   const isSubscriptionSelected =
@@ -508,27 +516,6 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
       disabled: false,
     })),
   ];
-
-  if (totalCols === 0) {
-    return (
-      <div className="p-4 border border-[var(--warning)] bg-[var(--card)]">
-        <div className="text-xs text-[var(--warning)]">
-          {t("providerswitcher.noAiProvidersAvailable")}{" "}
-          <Button
-            variant="link"
-            size="sm"
-            className="min-h-[auto] px-0 text-txt underline p-0 h-auto"
-            onClick={() => {
-              setTab("plugins");
-            }}
-          >
-            {t("runtimeview.Plugins")}
-          </Button>{" "}
-          {t("providerswitcher.page")}
-        </div>
-      </div>
-    );
-  }
 
   return (
     <>
@@ -736,6 +723,10 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
                           } catch (err) {
                             console.warn(
                               "[eliza] Failed to save cloud model config",
+                              err,
+                            );
+                            notifySelectionFailure(
+                              "Failed to save cloud model config",
                               err,
                             );
                           }

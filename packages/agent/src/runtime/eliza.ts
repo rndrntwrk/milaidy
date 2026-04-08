@@ -125,11 +125,11 @@ import {
 } from "../providers/workspace";
 import { SandboxAuditLog } from "../security/audit-log";
 import { SandboxManager, type SandboxMode } from "../services/sandbox-manager";
+import * as pluginAgentOrchestrator from "./agent-orchestrator-compat";
 import { CORE_PLUGINS, OPTIONAL_CORE_PLUGINS } from "./core-plugins";
 import { seedBundledKnowledge } from "./default-knowledge";
 import { createElizaPlugin } from "./eliza-plugin";
 import { detectEmbeddingPreset } from "./embedding-presets";
-import * as pluginAgentOrchestrator from "./agent-orchestrator-compat";
 import { installRuntimePluginLifecycle } from "./plugin-lifecycle";
 import { shouldEnableTrajectoryLoggingByDefault } from "./trajectory-persistence";
 
@@ -429,15 +429,13 @@ export function configureLocalEmbeddingPlugin(
     process.env.OPENAI_LARGE_MODEL ?? process.env.LARGE_MODEL;
   setEnvIfMissing(
     "GROQ_SMALL_MODEL",
-    currentSharedSmallModel &&
-      !isLikelyOpenAiTextModel(currentSharedSmallModel)
+    currentSharedSmallModel && !isLikelyOpenAiTextModel(currentSharedSmallModel)
       ? currentSharedSmallModel
       : "llama-3.1-8b-instant",
   );
   setEnvIfMissing(
     "GROQ_LARGE_MODEL",
-    currentSharedLargeModel &&
-      !isLikelyOpenAiTextModel(currentSharedLargeModel)
+    currentSharedLargeModel && !isLikelyOpenAiTextModel(currentSharedLargeModel)
       ? currentSharedLargeModel
       : "qwen/qwen3-32b",
   );
@@ -1172,7 +1170,12 @@ function isElizaCloudManagedProcessEnvKey(key: string): boolean {
 export function findPluginBrowserStagehandDir(startDir: string): string | null {
   let dir = path.resolve(startDir);
   for (let depth = 0; depth < 14; depth++) {
-    const candidate = path.join(dir, "plugins", "plugin-browser", "stagehand-server");
+    const candidate = path.join(
+      dir,
+      "plugins",
+      "plugin-browser",
+      "stagehand-server",
+    );
     const distIndex = path.join(candidate, "dist", "index.js");
     const srcEntry = path.join(candidate, "src", "index.ts");
     if (existsSync(distIndex) || existsSync(srcEntry)) {
@@ -1420,15 +1423,25 @@ export function applyConnectorSecretsToEnv(config: ElizaConfig): void {
       }
 
       const accounts = configObj.accounts;
-      if (accounts && typeof accounts === "object" && !Array.isArray(accounts)) {
+      if (
+        accounts &&
+        typeof accounts === "object" &&
+        !Array.isArray(accounts)
+      ) {
         const firstEnabledAccount = Object.values(
           accounts as Record<string, unknown>,
         ).find((account) => {
-          if (!account || typeof account !== "object" || Array.isArray(account)) {
+          if (
+            !account ||
+            typeof account !== "object" ||
+            Array.isArray(account)
+          ) {
             return false;
           }
           const candidate = account as Record<string, unknown>;
-          return candidate.enabled !== false && typeof candidate.authDir === "string";
+          return (
+            candidate.enabled !== false && typeof candidate.authDir === "string"
+          );
         }) as Record<string, unknown> | undefined;
 
         if (

@@ -80,15 +80,27 @@ vi.mock("../../src/components/chat/MessageContent", () => ({
     React.createElement("span", null, message.text),
 }));
 
-vi.mock("../../src/components/companion-scene-status-context", () => ({
-  useCompanionSceneStatus: () => mockUseCompanionSceneStatus(),
-}));
+function companionSceneStatusStub() {
+  return {
+    useCompanionSceneStatus: () => mockUseCompanionSceneStatus(),
+  };
+}
+
+vi.mock(
+  "../../src/components/companion-scene-status-context",
+  companionSceneStatusStub,
+);
+vi.mock(
+  "../../src/components/companion-scene-status-context.ts",
+  companionSceneStatusStub,
+);
 
 vi.mock("@miladyai/app-core/api", () => ({
   client: mockClient,
 }));
 
 import { textOf } from "../../../../test/helpers/react-test";
+import { CompanionSceneStatusContext } from "../../src/components/companion-scene-status-context";
 import {
   __resetCompanionSpeechMemoryForTests,
   ChatView,
@@ -126,6 +138,14 @@ function createContext(
     t: (k: string) => k,
     ...overrides,
   };
+}
+
+function createGameModalElement() {
+  return React.createElement(
+    CompanionSceneStatusContext.Provider,
+    { value: mockUseCompanionSceneStatus() },
+    React.createElement(ChatView, { variant: "game-modal" }),
+  );
 }
 
 describe("ChatView game-modal variant", () => {
@@ -190,7 +210,7 @@ describe("ChatView game-modal variant", () => {
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(
-        React.createElement(ChatView, { variant: "game-modal" }),
+        createGameModalElement(),
       );
     });
 
@@ -218,7 +238,7 @@ describe("ChatView game-modal variant", () => {
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(
-        React.createElement(ChatView, { variant: "game-modal" }),
+        createGameModalElement(),
       );
     });
 
@@ -238,7 +258,7 @@ describe("ChatView game-modal variant", () => {
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(
-        React.createElement(ChatView, { variant: "game-modal" }),
+        createGameModalElement(),
       );
     });
 
@@ -282,7 +302,7 @@ describe("ChatView game-modal variant", () => {
 
     await act(async () => {
       TestRenderer.create(
-        React.createElement(ChatView, { variant: "game-modal" }),
+        createGameModalElement(),
       );
     });
 
@@ -303,7 +323,7 @@ describe("ChatView game-modal variant", () => {
     );
 
     await act(async () => {
-      TestRenderer.create(React.createElement(ChatView, { variant: "game-modal" }));
+      TestRenderer.create(createGameModalElement());
     });
 
     expect(mockUseVoiceChat).toHaveBeenCalledWith(
@@ -343,7 +363,7 @@ describe("ChatView game-modal variant", () => {
         React.createElement(
           React.StrictMode,
           null,
-          React.createElement(ChatView, { variant: "game-modal" }),
+          createGameModalElement(),
         ),
       );
     });
@@ -359,7 +379,7 @@ describe("ChatView game-modal variant", () => {
         React.createElement(
           React.StrictMode,
           null,
-          React.createElement(ChatView, { variant: "game-modal" }),
+          createGameModalElement(),
         ),
       );
     });
@@ -403,7 +423,7 @@ describe("ChatView game-modal variant", () => {
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(
-        React.createElement(ChatView, { variant: "game-modal" }),
+        createGameModalElement(),
       );
     });
 
@@ -416,7 +436,7 @@ describe("ChatView game-modal variant", () => {
     });
 
     await act(async () => {
-      tree.update(React.createElement(ChatView, { variant: "game-modal" }));
+      tree.update(createGameModalElement());
     });
 
     expect(queueAssistantSpeech).not.toHaveBeenCalled();
@@ -427,7 +447,7 @@ describe("ChatView game-modal variant", () => {
     });
 
     await act(async () => {
-      tree.update(React.createElement(ChatView, { variant: "game-modal" }));
+      tree.update(createGameModalElement());
     });
 
     expect(queueAssistantSpeech).toHaveBeenCalledTimes(1);
@@ -468,7 +488,7 @@ describe("ChatView game-modal variant", () => {
 
     await act(async () => {
       TestRenderer.create(
-        React.createElement(ChatView, { variant: "game-modal" }),
+        createGameModalElement(),
       );
     });
 
@@ -506,7 +526,7 @@ describe("ChatView game-modal variant", () => {
 
     await act(async () => {
       firstTree = TestRenderer.create(
-        React.createElement(ChatView, { variant: "game-modal" }),
+        createGameModalElement(),
       );
     });
 
@@ -519,7 +539,7 @@ describe("ChatView game-modal variant", () => {
 
     await act(async () => {
       firstTree?.update(
-        React.createElement(ChatView, { variant: "game-modal" }),
+        createGameModalElement(),
       );
     });
 
@@ -538,7 +558,7 @@ describe("ChatView game-modal variant", () => {
 
     await act(async () => {
       secondTree = TestRenderer.create(
-        React.createElement(ChatView, { variant: "game-modal" }),
+        createGameModalElement(),
       );
     });
 
@@ -566,7 +586,7 @@ describe("ChatView game-modal variant", () => {
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(
-        React.createElement(ChatView, { variant: "game-modal" }),
+        createGameModalElement(),
       );
     });
 
@@ -593,7 +613,7 @@ describe("ChatView game-modal variant", () => {
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(
-        React.createElement(ChatView, { variant: "game-modal" }),
+        createGameModalElement(),
       );
     });
 
@@ -623,7 +643,7 @@ describe("ChatView game-modal variant", () => {
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(
-        React.createElement(ChatView, { variant: "game-modal" }),
+        createGameModalElement(),
       );
     });
 
@@ -662,7 +682,7 @@ describe("ChatView game-modal variant", () => {
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(
-        React.createElement(ChatView, { variant: "game-modal" }),
+        createGameModalElement(),
       );
     });
 
@@ -690,7 +710,7 @@ describe("ChatView game-modal variant", () => {
 
     await act(async () => {
       TestRenderer.create(
-        React.createElement(ChatView, { variant: "game-modal" }),
+        createGameModalElement(),
       );
     });
 
@@ -723,7 +743,7 @@ describe("ChatView game-modal variant", () => {
 
     await act(async () => {
       TestRenderer.create(
-        React.createElement(ChatView, { variant: "game-modal" }),
+        createGameModalElement(),
       );
       await Promise.resolve();
     });
@@ -767,7 +787,7 @@ describe("ChatView game-modal variant", () => {
 
     await act(async () => {
       TestRenderer.create(
-        React.createElement(ChatView, { variant: "game-modal" }),
+        createGameModalElement(),
       );
     });
 
@@ -790,7 +810,7 @@ describe("ChatView game-modal variant", () => {
 
     await act(async () => {
       TestRenderer.create(
-        React.createElement(ChatView, { variant: "game-modal" }),
+        createGameModalElement(),
       );
     });
 
@@ -813,7 +833,7 @@ describe("ChatView game-modal variant", () => {
 
     await act(async () => {
       TestRenderer.create(
-        React.createElement(ChatView, { variant: "game-modal" }),
+        createGameModalElement(),
       );
     });
 
@@ -830,7 +850,7 @@ describe("ChatView game-modal variant", () => {
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(
-        React.createElement(ChatView, { variant: "game-modal" }),
+        createGameModalElement(),
       );
     });
 
@@ -896,7 +916,7 @@ describe("ChatView game-modal variant", () => {
       let tree: TestRenderer.ReactTestRenderer;
       await act(async () => {
         tree = TestRenderer.create(
-          React.createElement(ChatView, { variant: "game-modal" }),
+          createGameModalElement(),
         );
       });
 
@@ -920,7 +940,7 @@ describe("ChatView game-modal variant", () => {
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(
-        React.createElement(ChatView, { variant: "game-modal" }),
+        createGameModalElement(),
         {
           createNodeMock: (element) => {
             const node = element as {
@@ -967,7 +987,7 @@ describe("ChatView game-modal variant", () => {
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(
-        React.createElement(ChatView, { variant: "game-modal" }),
+        createGameModalElement(),
       );
     });
 
@@ -999,7 +1019,7 @@ describe("ChatView game-modal variant", () => {
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(
-        React.createElement(ChatView, { variant: "game-modal" }),
+        createGameModalElement(),
       );
     });
 
@@ -1013,7 +1033,7 @@ describe("ChatView game-modal variant", () => {
     });
 
     await act(async () => {
-      tree.update(React.createElement(ChatView, { variant: "game-modal" }));
+      tree.update(createGameModalElement());
     });
 
     let rows = tree.root.findAllByProps({
@@ -1065,7 +1085,7 @@ describe("ChatView game-modal variant", () => {
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(
-        React.createElement(ChatView, { variant: "game-modal" }),
+        createGameModalElement(),
       );
     });
 
@@ -1076,7 +1096,7 @@ describe("ChatView game-modal variant", () => {
     });
 
     await act(async () => {
-      tree.update(React.createElement(ChatView, { variant: "game-modal" }));
+      tree.update(createGameModalElement());
     });
 
     expect(
@@ -1101,7 +1121,7 @@ describe("ChatView game-modal variant", () => {
     });
 
     await act(async () => {
-      tree.update(React.createElement(ChatView, { variant: "game-modal" }));
+      tree.update(createGameModalElement());
     });
 
     const rows = tree.root.findAllByProps({
@@ -1130,7 +1150,7 @@ describe("ChatView game-modal variant", () => {
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(
-        React.createElement(ChatView, { variant: "game-modal" }),
+        createGameModalElement(),
       );
     });
 
@@ -1176,15 +1196,25 @@ describe("ChatView game-modal variant", () => {
     let tree: TestRenderer.ReactTestRenderer;
     await act(async () => {
       tree = TestRenderer.create(
-        React.createElement(ChatView, { variant: "game-modal" }),
+        createGameModalElement(),
       );
     });
 
     const rows = tree.root.findAllByProps({
       "data-testid": "companion-message-row",
     });
-    const assistantBubble = rows[0]?.findAllByType("div").at(-2);
-    const userBubble = rows[1]?.findAllByType("div").at(-2);
+    const assistantBubble = rows[0]?.find(
+      (node) =>
+        node.type === "div" &&
+        typeof node.props.className === "string" &&
+        node.props.className.includes("border-border/32"),
+    );
+    const userBubble = rows[1]?.find(
+      (node) =>
+        node.type === "div" &&
+        typeof node.props.className === "string" &&
+        node.props.className.includes("border-accent/24"),
+    );
     const composerDock = tree.root.findByProps({
       "data-no-camera-drag": "true",
     });

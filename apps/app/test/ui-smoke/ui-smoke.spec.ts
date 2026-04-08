@@ -226,7 +226,7 @@ function createMultiRunFixture(): MultiRunFixture {
   return {
     apps: [
       buildCatalogApp(
-        "@elizaos/app-hyperscape",
+        "@hyperscape/plugin-hyperscape",
         "Hyperscape",
         "Spectate your agent live in a multiplayer world and steer it with real-time commands.",
         {
@@ -298,14 +298,14 @@ function createMultiRunFixture(): MultiRunFixture {
       ),
     ],
     runs: [
-      buildRun("run-hyperscape", "@elizaos/app-hyperscape", "Hyperscape", {
+      buildRun("run-hyperscape", "@hyperscape/plugin-hyperscape", "Hyperscape", {
         summary: "Scout is following the moon gate.",
         status: "running",
         viewerAttachment: "attached",
         health: { state: "healthy", message: "Scout is live in Hyperscape" },
         session: {
           sessionId: "run-hyperscape-session",
-          appName: "@elizaos/app-hyperscape",
+          appName: "@hyperscape/plugin-hyperscape",
           mode: "spectate-and-steer",
           status: "running",
           displayName: "Hyperscape",

@@ -221,8 +221,8 @@ describe("registry-client-app-meta", () => {
       );
     });
 
-    it("applies override for known package @elizaos/app-hyperscape", () => {
-      const result = resolveAppOverride("@elizaos/app-hyperscape", undefined);
+    it("applies override for known package @hyperscape/plugin-hyperscape", () => {
+      const result = resolveAppOverride("@hyperscape/plugin-hyperscape", undefined);
       expect(result).toBeDefined();
       expect(result?.launchType).toBe("connect");
       expect(result?.viewer?.embedParams?.surface).toBe("agent-control");

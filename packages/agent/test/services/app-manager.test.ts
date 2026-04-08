@@ -81,9 +81,9 @@ const RS_2004SCAPE_APP_INFO: RegistryPluginInfo = {
 };
 
 const HYPERSCAPE_APP_INFO: RegistryPluginInfo = {
-  name: "@elizaos/app-hyperscape",
-  gitRepo: "elizaos/app-hyperscape",
-  gitUrl: "https://github.com/elizaos/app-hyperscape",
+  name: "@hyperscape/plugin-hyperscape",
+  gitRepo: "HyperscapeAI/hyperscape",
+  gitUrl: "https://github.com/HyperscapeAI/hyperscape",
   displayName: "Hyperscape",
   description: "Hyperscape live session bridge",
   homepage: "https://hyperscape.gg",
@@ -138,7 +138,7 @@ const HYPERSCAPE_APP_INFO: RegistryPluginInfo = {
     },
   },
   npm: {
-    package: "@elizaos/app-hyperscape",
+    package: "@hyperscape/plugin-hyperscape",
     v0Version: null,
     v1Version: "1.0.0",
     v2Version: "1.0.0",
@@ -225,32 +225,32 @@ function buildPluginManager(
     searchRegistry: vi.fn(async () => []),
     installPlugin: vi.fn(async () => ({
       success: true,
-      pluginName: registryPlugin?.name ?? "@elizaos/app-hyperscape",
+      pluginName: registryPlugin?.name ?? "@hyperscape/plugin-hyperscape",
       version: "1.0.0",
       installPath: "/tmp/hyperscape",
       requiresRestart: false,
     })),
     uninstallPlugin: vi.fn(async () => ({
       success: true,
-      pluginName: registryPlugin?.name ?? "@elizaos/app-hyperscape",
+      pluginName: registryPlugin?.name ?? "@hyperscape/plugin-hyperscape",
       requiresRestart: false,
     })),
     listEjectedPlugins: vi.fn(async () => []),
     ejectPlugin: vi.fn(async () => ({
       success: true,
-      pluginName: "@elizaos/app-hyperscape",
+      pluginName: "@hyperscape/plugin-hyperscape",
       ejectedPath: "/tmp/hyperscape",
       requiresRestart: false,
     })),
     syncPlugin: vi.fn(async () => ({
       success: true,
-      pluginName: "@elizaos/app-hyperscape",
+      pluginName: "@hyperscape/plugin-hyperscape",
       ejectedPath: "/tmp/hyperscape",
       requiresRestart: false,
     })),
     reinjectPlugin: vi.fn(async () => ({
       success: true,
-      pluginName: "@elizaos/app-hyperscape",
+      pluginName: "@hyperscape/plugin-hyperscape",
       removedPath: "/tmp/hyperscape",
       requiresRestart: false,
     })),
@@ -828,7 +828,7 @@ describe("AppManager", () => {
     const installed = await manager.listInstalled(
       buildPluginManager([
         {
-          name: "@elizaos/app-hyperscape",
+          name: "@hyperscape/plugin-hyperscape",
           version: "1.2.3",
           installedAt: "2026-04-04T12:34:56.000Z",
         },
@@ -837,7 +837,7 @@ describe("AppManager", () => {
 
     expect(installed).toEqual([
       expect.objectContaining({
-        name: "@elizaos/app-hyperscape",
+        name: "@hyperscape/plugin-hyperscape",
         version: "1.2.3",
         installedAt: "2026-04-04T12:34:56.000Z",
       }),
@@ -849,7 +849,7 @@ describe("AppManager", () => {
     const installed = await manager.listInstalled(
       buildPluginManager([
         {
-          name: "@elizaos/app-hyperscape",
+          name: "@hyperscape/plugin-hyperscape",
           version: "1.2.3",
         },
       ]),
@@ -933,7 +933,7 @@ describe("AppManager", () => {
 
     expect(apps).toEqual([
       expect.objectContaining({
-        name: "@elizaos/app-hyperscape",
+        name: "@hyperscape/plugin-hyperscape",
         launchType: "connect",
         launchUrl: "http://localhost:3333",
         localPath: "/tmp/hyperscape",
@@ -952,7 +952,7 @@ describe("AppManager", () => {
     const fixtureServer = await startHyperscapeFixtureServer();
     process.env.HYPERSCAPE_API_URL = fixtureServer.url;
 
-    const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "milady-app-hyperscape-live-"));
+    const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "milady-plugin-hyperscape-live-"));
     try {
       const manager = new AppManager({ stateDir });
       const runtime = createRuntimeStub({
@@ -965,7 +965,7 @@ describe("AppManager", () => {
       });
       const result = await manager.launch(
         buildPluginManager([]),
-        "@elizaos/app-hyperscape",
+        "@hyperscape/plugin-hyperscape",
         undefined,
         runtime,
       );
@@ -994,7 +994,7 @@ describe("AppManager", () => {
       });
       expect(result.run).toEqual(
         expect.objectContaining({
-          appName: "@elizaos/app-hyperscape",
+          appName: "@hyperscape/plugin-hyperscape",
           displayName: "Hyperscape",
           characterId: "char-runtime",
           agentId: "runtime-agent-id",
@@ -1058,7 +1058,7 @@ describe("AppManager", () => {
       const manager = new AppManager({ stateDir });
       const launchResult = await manager.launch(
         buildPluginManager([]),
-        "@elizaos/app-hyperscape",
+        "@hyperscape/plugin-hyperscape",
         undefined,
         runtime,
       );
@@ -1188,7 +1188,7 @@ describe("AppManager", () => {
       });
       const result = await manager.launch(
         buildPluginManager([]),
-        "@elizaos/app-hyperscape",
+        "@hyperscape/plugin-hyperscape",
         undefined,
         runtime,
       );
@@ -1211,7 +1211,7 @@ describe("AppManager", () => {
             services: [{ serviceType: "hyperscapeService" }],
           };
         }
-        if (packageName === "@elizaos/app-hyperscape") {
+        if (packageName === "@hyperscape/plugin-hyperscape") {
           return { name: packageName };
         }
         return null;
@@ -1230,12 +1230,12 @@ describe("AppManager", () => {
       });
 
       await runtime.registerPlugin?.({
-        name: "@elizaos/app-hyperscape",
+        name: "@hyperscape/plugin-hyperscape",
       } as never);
 
       const result = await manager.launch(
         buildPluginManager([]),
-        "@elizaos/app-hyperscape",
+        "@hyperscape/plugin-hyperscape",
         undefined,
         runtime,
       );
@@ -1272,7 +1272,7 @@ describe("AppManager", () => {
 
       const result = await manager.launch(
         buildPluginManager([]),
-        "@elizaos/app-hyperscape",
+        "@hyperscape/plugin-hyperscape",
         undefined,
         runtime,
       );
@@ -1493,7 +1493,7 @@ describe("AppManager", () => {
 
       const launchedHyperscape = await manager.launch(
         buildPluginManager([], HYPERSCAPE_APP_INFO),
-        "@elizaos/app-hyperscape",
+        "@hyperscape/plugin-hyperscape",
         undefined,
         runtime,
       );
@@ -1511,7 +1511,7 @@ describe("AppManager", () => {
       expect(refreshRunSession).toHaveBeenCalledTimes(2);
       expect(refreshRunSession).toHaveBeenCalledWith(
         expect.objectContaining({
-          appName: "@elizaos/app-hyperscape",
+          appName: "@hyperscape/plugin-hyperscape",
           runId: launchedHyperscape.run?.runId,
         }),
       );
@@ -1523,7 +1523,7 @@ describe("AppManager", () => {
       );
       expect(runs).toHaveLength(2);
       expect(
-        runs.find((run) => run.appName === "@elizaos/app-hyperscape"),
+        runs.find((run) => run.appName === "@hyperscape/plugin-hyperscape"),
       ).toEqual(
         expect.objectContaining({
           runId: launchedHyperscape.run?.runId,
@@ -1613,7 +1613,7 @@ describe("AppManager", () => {
       appPackageModuleMocks.importAppRouteModule.mockResolvedValue({
         resolveLaunchSession: vi.fn(async () => ({
           sessionId: "char-runtime",
-          appName: "@elizaos/app-hyperscape",
+          appName: "@hyperscape/plugin-hyperscape",
           mode: "spectate-and-steer" as const,
           status: "connecting",
           displayName: "Hyperscape",
@@ -1631,7 +1631,7 @@ describe("AppManager", () => {
 
       const launched = await manager.launch(
         pluginManager,
-        "@elizaos/app-hyperscape",
+        "@hyperscape/plugin-hyperscape",
         undefined,
         runtime,
       );
@@ -1780,7 +1780,7 @@ describe("AppManager", () => {
 
       const info = await manager.getInfo(
         pluginManager,
-        "@elizaos/app-hyperscape",
+        "@hyperscape/plugin-hyperscape",
       );
 
       expect(info).not.toBeNull();
@@ -1807,7 +1807,7 @@ describe("AppManager", () => {
 
       const info = await manager.getInfo(
         pluginManager,
-        "@elizaos/app-hyperscape",
+        "@hyperscape/plugin-hyperscape",
       );
 
       expect(info).not.toBeNull();

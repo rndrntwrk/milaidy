@@ -8,8 +8,12 @@ import type {
 import {
   type BrowserWorkspaceCommand,
   type BrowserWorkspaceCommandResult,
+  type BrowserWorkspaceFindAction,
+  type BrowserWorkspaceFindBy,
   type BrowserWorkspaceGetMode,
+  type BrowserWorkspaceScrollDirection,
   type BrowserWorkspaceSubaction,
+  type BrowserWorkspaceWaitState,
   executeBrowserWorkspaceCommand,
 } from "@miladyai/agent/services/browser-workspace";
 
@@ -29,22 +33,35 @@ function normalizeSubaction(
   switch (value.trim().toLowerCase()) {
     case "back":
     case "batch":
+    case "check":
     case "click":
     case "close":
+    case "dblclick":
     case "eval":
     case "fill":
+    case "find":
+    case "focus":
     case "forward":
     case "get":
     case "hide":
+    case "hover":
     case "inspect":
+    case "keydown":
+    case "keyboardinserttext":
+    case "keyboardtype":
     case "list":
     case "navigate":
     case "open":
     case "press":
     case "reload":
+    case "scroll":
+    case "scrollinto":
+    case "screenshot":
+    case "select":
     case "show":
     case "snapshot":
     case "type":
+    case "uncheck":
     case "wait":
       return value.trim().toLowerCase() as BrowserWorkspaceSubaction;
     default:
@@ -56,13 +73,84 @@ function normalizeGetMode(value: string | undefined): BrowserWorkspaceGetMode | 
   if (!value) return null;
   switch (value.trim().toLowerCase()) {
     case "attr":
+    case "box":
+    case "checked":
     case "count":
+    case "enabled":
     case "html":
+    case "styles":
     case "text":
     case "title":
     case "url":
     case "value":
+    case "visible":
       return value.trim().toLowerCase() as BrowserWorkspaceGetMode;
+    default:
+      return null;
+  }
+}
+
+function normalizeFindBy(value: string | undefined): BrowserWorkspaceFindBy | null {
+  if (!value) return null;
+  switch (value.trim().toLowerCase()) {
+    case "alt":
+    case "first":
+    case "label":
+    case "last":
+    case "nth":
+    case "placeholder":
+    case "role":
+    case "testid":
+    case "text":
+    case "title":
+      return value.trim().toLowerCase() as BrowserWorkspaceFindBy;
+    default:
+      return null;
+  }
+}
+
+function normalizeFindAction(
+  value: string | undefined,
+): BrowserWorkspaceFindAction | null {
+  if (!value) return null;
+  switch (value.trim().toLowerCase()) {
+    case "check":
+    case "click":
+    case "fill":
+    case "focus":
+    case "hover":
+    case "text":
+    case "type":
+    case "uncheck":
+      return value.trim().toLowerCase() as BrowserWorkspaceFindAction;
+    default:
+      return null;
+  }
+}
+
+function normalizeWaitState(
+  value: string | undefined,
+): BrowserWorkspaceWaitState | null {
+  if (!value) return null;
+  switch (value.trim().toLowerCase()) {
+    case "hidden":
+    case "visible":
+      return value.trim().toLowerCase() as BrowserWorkspaceWaitState;
+    default:
+      return null;
+  }
+}
+
+function normalizeScrollDirection(
+  value: string | undefined,
+): BrowserWorkspaceScrollDirection | null {
+  if (!value) return null;
+  switch (value.trim().toLowerCase()) {
+    case "down":
+    case "left":
+    case "right":
+    case "up":
+      return value.trim().toLowerCase() as BrowserWorkspaceScrollDirection;
     default:
       return null;
   }
@@ -97,6 +185,9 @@ function parseCommandRecord(
   if (!subaction) return null;
 
   return {
+    action: normalizeFindAction(
+      typeof raw.action === "string" ? raw.action : undefined,
+    ) ?? undefined,
     subaction,
     id: typeof raw.id === "string" ? raw.id : undefined,
     url: typeof raw.url === "string" ? raw.url : undefined,
@@ -104,6 +195,16 @@ function parseCommandRecord(
     script: typeof raw.script === "string" ? raw.script : undefined,
     show: parseBooleanLike(raw.show),
     partition: typeof raw.partition === "string" ? raw.partition : undefined,
+    direction:
+      normalizeScrollDirection(
+        typeof raw.direction === "string" ? raw.direction : undefined,
+      ) ?? undefined,
+    exact: parseBooleanLike(raw.exact),
+    findBy:
+      normalizeFindBy(
+        typeof raw.findBy === "string" ? raw.findBy : undefined,
+      ) ?? undefined,
+    index: parseNumberLike(raw.index),
     selector: typeof raw.selector === "string" ? raw.selector : undefined,
     text:
       typeof raw.text === "string"
@@ -126,6 +227,13 @@ function parseCommandRecord(
           ? raw.mode
           : undefined,
     ) ?? undefined,
+    name: typeof raw.name === "string" ? raw.name : undefined,
+    pixels: parseNumberLike(raw.pixels),
+    role: typeof raw.role === "string" ? raw.role : undefined,
+    state:
+      normalizeWaitState(
+        typeof raw.state === "string" ? raw.state : undefined,
+      ) ?? undefined,
     timeoutMs: parseNumberLike(raw.timeoutMs),
     steps: Array.isArray(raw.steps)
       ? raw.steps
@@ -189,11 +297,14 @@ function parseRequest(
   const lower = messageText.toLowerCase();
   const inferred =
     fromParams ??
+    (typeof params.findBy === "string" ? "find" : null) ??
     (steps?.length ? "batch" : null) ??
     (/\b(list|tabs?)\b/.test(lower)
       ? "list"
       : /\b(snapshot|screenshot)\b/.test(lower)
-        ? "snapshot"
+        ? /\bscreenshot\b/.test(lower)
+          ? "screenshot"
+          : "snapshot"
         : /\b(open|new tab|browse)\b/.test(lower) && Boolean(url)
           ? "open"
           : /\bnavigate\b/.test(lower) && Boolean(url)
@@ -206,6 +317,30 @@ function parseRequest(
                   ? "close"
                   : /\binspect\b|\bscan page\b|\bwhat.*page\b/.test(lower)
                     ? "inspect"
+                    : /\bdouble click\b|\bdblclick\b/.test(lower)
+                      ? "dblclick"
+                      : /\bhover\b/.test(lower)
+                        ? "hover"
+                        : /\bfocus\b/.test(lower)
+                          ? "focus"
+                          : /\bselect\b/.test(lower)
+                            ? "select"
+                            : /\bcheck\b/.test(lower)
+                              ? "check"
+                              : /\buncheck\b/.test(lower)
+                                ? "uncheck"
+                                : /\bscroll into\b/.test(lower)
+                                  ? "scrollinto"
+                                  : /\bscroll\b/.test(lower)
+                                    ? "scroll"
+                                    : /\bkey down\b/.test(lower)
+                                      ? "keydown"
+                                      : /\bkey up\b/.test(lower)
+                                        ? "keyup"
+                                        : /\bkeyboard type\b/.test(lower)
+                                          ? "keyboardtype"
+                                          : /\binsert text\b/.test(lower)
+                                            ? "keyboardinserttext"
                     : /\bclick\b/.test(lower) &&
                         (typeof params.selector === "string" ||
                           typeof params.text === "string")
@@ -225,6 +360,10 @@ function parseRequest(
   if (!inferred) return null;
 
   return {
+    action:
+      normalizeFindAction(
+        typeof params.action === "string" ? params.action : undefined,
+      ) ?? undefined,
     subaction: inferred,
     id,
     url,
@@ -233,6 +372,16 @@ function parseRequest(
     show: parseBooleanLike(params.show),
     partition:
       typeof params.partition === "string" ? params.partition : undefined,
+    direction:
+      normalizeScrollDirection(
+        typeof params.direction === "string" ? params.direction : undefined,
+      ) ?? undefined,
+    exact: parseBooleanLike(params.exact),
+    findBy:
+      normalizeFindBy(
+        typeof params.findBy === "string" ? params.findBy : undefined,
+      ) ?? undefined,
+    index: parseNumberLike(params.index),
     selector: typeof params.selector === "string" ? params.selector : undefined,
     text:
       typeof params.text === "string"
@@ -255,6 +404,13 @@ function parseRequest(
           : typeof params.mode === "string"
             ? params.mode
             : undefined,
+      ) ?? undefined,
+    name: typeof params.name === "string" ? params.name : undefined,
+    pixels: parseNumberLike(params.pixels),
+    role: typeof params.role === "string" ? params.role : undefined,
+    state:
+      normalizeWaitState(
+        typeof params.state === "string" ? params.state : undefined,
       ) ?? undefined,
     timeoutMs: parseNumberLike(params.timeoutMs),
     steps,
@@ -312,8 +468,24 @@ function formatSingleCommandResult(result: BrowserWorkspaceCommandResult): strin
         : "The requested browser tab was not open.";
     case "eval":
       return `Evaluated JavaScript in the browser tab: ${stringifyResult(result.value)}`;
+    case "screenshot":
+      return `Captured a browser screenshot (${result.snapshot?.data.length ?? 0} base64 chars).`;
     case "snapshot":
-      return `Captured a browser snapshot (${result.snapshot?.data.length ?? 0} base64 chars).`;
+      return result.elements?.length
+        ? [
+            `Captured a browser DOM snapshot at ${stringifyResult(
+              result.value && typeof result.value === "object"
+                ? (result.value as { url?: string }).url
+                : null,
+            )}.`,
+            ...result.elements
+              .slice(0, 8)
+              .map(
+                (element) =>
+                  `- ${element.selector} <${element.tag}> ${element.text || element.value || ""}`.trim(),
+              ),
+          ].join("\n")
+        : `Captured a browser DOM snapshot: ${stringifyResult(result.value)}`;
     case "inspect": {
       const prefix =
         result.value && typeof result.value === "object" && !Array.isArray(result.value)
@@ -335,15 +507,33 @@ function formatSingleCommandResult(result: BrowserWorkspaceCommandResult): strin
     }
     case "get":
       return `Read from the browser: ${stringifyResult(result.value)}`;
+    case "find":
+      return `Found in the browser: ${stringifyResult(result.value)}`;
+    case "check":
+    case "uncheck":
+      return `Updated browser selection: ${stringifyResult(result.value)}`;
     case "fill":
     case "type":
+    case "keyboardinserttext":
+    case "keyboardtype":
+    case "select":
       return `Updated browser input: ${stringifyResult(result.value)}`;
     case "click":
+    case "dblclick":
       return `Clicked the browser element: ${stringifyResult(result.value)}`;
+    case "focus":
+      return `Focused a browser element: ${stringifyResult(result.value)}`;
+    case "hover":
+      return `Hovered a browser element: ${stringifyResult(result.value)}`;
     case "press":
+    case "keydown":
+    case "keyup":
       return `Sent a key press in the browser: ${stringifyResult(result.value)}`;
     case "wait":
       return `Wait condition satisfied in the browser: ${stringifyResult(result.value)}`;
+    case "scroll":
+    case "scrollinto":
+      return `Scrolled in the browser: ${stringifyResult(result.value)}`;
     case "back":
       return `Moved the browser tab back: ${stringifyResult(result.value)}`;
     case "forward":
@@ -376,7 +566,7 @@ function formatBrowserWorkspaceCommandResult(
 export const manageMiladyBrowserWorkspaceAction: Action = {
   name: "MANAGE_MILADY_BROWSER_WORKSPACE",
   description:
-    "Use the Milady browser workspace through one main action. Pass a subaction such as list, open, navigate, show, hide, close, inspect, click, fill, type, press, wait, get, back, forward, reload, eval, snapshot, or batch. Use batch with stepsJson to run a series of browser subactions in order.",
+    "Use the Milady browser workspace through one main action. Pass a subaction such as list, open, navigate, show, hide, close, inspect, snapshot, screenshot, find, click, dblclick, fill, type, keyboardtype, keyboardinserttext, focus, hover, select, check, uncheck, press, keydown, keyup, scroll, scrollinto, wait, get, back, forward, reload, eval, or batch. Use batch with stepsJson to run a series of browser subactions in order.",
   similes: [
     "browser command",
     "browser subaction",
@@ -388,7 +578,7 @@ export const manageMiladyBrowserWorkspaceAction: Action = {
     {
       name: "subaction",
       description:
-        "Browser subaction to run: list, open, navigate, show, hide, close, inspect, click, fill, type, press, wait, get, back, forward, reload, eval, snapshot, or batch.",
+        "Browser subaction to run: list, open, navigate, show, hide, close, inspect, snapshot, screenshot, find, click, dblclick, fill, type, keyboardtype, keyboardinserttext, focus, hover, select, check, uncheck, press, keydown, keyup, scroll, scrollinto, wait, get, back, forward, reload, eval, or batch.",
       required: false,
       schema: {
         type: "string",
@@ -400,17 +590,31 @@ export const manageMiladyBrowserWorkspaceAction: Action = {
           "hide",
           "close",
           "inspect",
+          "snapshot",
+          "screenshot",
+          "find",
           "click",
+          "dblclick",
           "fill",
           "type",
+          "keyboardtype",
+          "keyboardinserttext",
+          "focus",
+          "hover",
+          "select",
+          "check",
+          "uncheck",
           "press",
+          "keydown",
+          "keyup",
+          "scroll",
+          "scrollinto",
           "wait",
           "get",
           "back",
           "forward",
           "reload",
           "eval",
-          "snapshot",
           "batch",
         ],
       },
@@ -463,18 +667,105 @@ export const manageMiladyBrowserWorkspaceAction: Action = {
     {
       name: "getMode",
       description:
-        "Lookup mode for get: text, html, value, attr, title, url, or count.",
+        "Lookup mode for get: text, html, value, attr, title, url, count, box, styles, visible, enabled, or checked.",
       required: false,
       schema: {
         type: "string",
-        enum: ["text", "html", "value", "attr", "title", "url", "count"],
+        enum: [
+          "text",
+          "html",
+          "value",
+          "attr",
+          "title",
+          "url",
+          "count",
+          "box",
+          "styles",
+          "visible",
+          "enabled",
+          "checked",
+        ],
       },
+    },
+    {
+      name: "findBy",
+      description:
+        "Semantic locator strategy for find: role, text, label, placeholder, alt, title, testid, first, last, or nth.",
+      required: false,
+      schema: {
+        type: "string",
+        enum: [
+          "role",
+          "text",
+          "label",
+          "placeholder",
+          "alt",
+          "title",
+          "testid",
+          "first",
+          "last",
+          "nth",
+        ],
+      },
+    },
+    {
+      name: "action",
+      description:
+        "Optional action for find: text, click, fill, type, focus, hover, check, or uncheck.",
+      required: false,
+      schema: {
+        type: "string",
+        enum: ["text", "click", "fill", "type", "focus", "hover", "check", "uncheck"],
+      },
+    },
+    {
+      name: "role",
+      description: "Role name for findBy=role, such as button or textbox.",
+      required: false,
+      schema: { type: "string" },
+    },
+    {
+      name: "name",
+      description:
+        "Accessible name matcher for findBy=role, or a secondary semantic name when needed.",
+      required: false,
+      schema: { type: "string" },
+    },
+    {
+      name: "exact",
+      description: "Whether semantic text matching should be exact.",
+      required: false,
+      schema: { type: "boolean" },
+    },
+    {
+      name: "index",
+      description: "Zero-based index for findBy=nth.",
+      required: false,
+      schema: { type: "number" },
     },
     {
       name: "key",
       description: "Keyboard key for press, such as Enter or Tab.",
       required: false,
       schema: { type: "string" },
+    },
+    {
+      name: "state",
+      description: "Optional wait state for selector waits: visible or hidden.",
+      required: false,
+      schema: { type: "string", enum: ["visible", "hidden"] },
+    },
+    {
+      name: "direction",
+      description: "Scroll direction for scroll subactions.",
+      required: false,
+      schema: { type: "string", enum: ["up", "down", "left", "right"] },
+    },
+    {
+      name: "pixels",
+      description: "Scroll distance in pixels for scroll subactions.",
+      required: false,
+      schema: { type: "number" },
     },
     {
       name: "script",

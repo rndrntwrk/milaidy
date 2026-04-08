@@ -6,9 +6,9 @@ import {
 import type { RegistryPluginInfo } from "../../src/services/plugin-manager-types";
 
 const HYPERSCAPE_APP_INFO: RegistryPluginInfo = {
-  name: "@elizaos/app-hyperscape",
-  gitRepo: "elizaos/app-hyperscape",
-  gitUrl: "https://github.com/elizaos/app-hyperscape",
+  name: "@hyperscape/plugin-hyperscape",
+  gitRepo: "HyperscapeAI/hyperscape",
+  gitUrl: "https://github.com/HyperscapeAI/hyperscape",
   description: "Hyperscape live session bridge",
   homepage: "https://hyperscape.gg",
   topics: ["game"],
@@ -16,7 +16,7 @@ const HYPERSCAPE_APP_INFO: RegistryPluginInfo = {
   language: "TypeScript",
   kind: "app",
   npm: {
-    package: "@elizaos/app-hyperscape",
+    package: "@hyperscape/plugin-hyperscape",
     v0Version: null,
     v1Version: null,
     v2Version: "1.0.0",

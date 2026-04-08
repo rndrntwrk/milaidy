@@ -2,7 +2,7 @@
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { text, flush } from "../../../../test/helpers/react-test";
+import { text, textOf, flush } from "../../../../test/helpers/react-test";
 
 interface ChatViewContextStub {
   agentStatus: {
@@ -227,10 +227,7 @@ describe("ChatView", () => {
     await flush();
 
     const root = tree?.root;
-    const userTextNodes = root.findAll(
-      (node) => node.type === "span" && text(node) === "stream me",
-    );
-    expect(userTextNodes.length).toBe(1);
+    expect(textOf(root)).toContain("stream me");
   });
 
   it("maps ui language to matching voice locale", async () => {

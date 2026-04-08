@@ -58,14 +58,26 @@ async function startLocalSiteFixture(): Promise<LocalSiteFixture> {
                 <html lang="en">
                   <head><meta charset="utf-8" /><title>Browser Form Fixture</title></head>
                   <body>
-                    <h1>Browser Form Fixture</h1>
-                    <form action="/welcome" method="get">
-                      <label>Agent name<input name="name" value="" /></label>
-                      <button type="submit">Continue</button>
-                    </form>
-                    <a href="/tasks">Open tasks</a>
-                  </body>
-                </html>`
+	                    <h1>Browser Form Fixture</h1>
+	                    <form action="/welcome" method="get">
+	                      <label>Agent name<input name="name" value="" /></label>
+	                      <label>
+	                        Plan
+	                        <select name="plan">
+	                          <option value="basic">Basic</option>
+	                          <option value="pro">Pro</option>
+	                        </select>
+	                      </label>
+	                      <label>
+	                        <input type="checkbox" name="terms" value="yes" />
+	                        Accept terms
+	                      </label>
+	                      <button type="submit">Continue</button>
+	                      <button type="button" data-testid="secondary-action">Secondary</button>
+	                    </form>
+	                    <a href="/tasks">Open tasks</a>
+	                  </body>
+	                </html>`
             : `<!doctype html>
                 <html lang="en">
                   <head><meta charset="utf-8" /><title>Counter Fixture</title></head>
@@ -313,5 +325,66 @@ describe("Browser workspace API E2E", () => {
     expect(batch.status).toBe(200);
     expect(batch.data.subaction).toBe("batch");
     expect(batch.data.value).toBe("Welcome, Milady");
+  });
+
+  it("supports semantic browser subactions through the real command route", async () => {
+    const open = await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+      subaction: "open",
+      show: true,
+      url: siteFixture.formUrl,
+    });
+    expect(open.status).toBe(200);
+
+    const fill = await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+      subaction: "find",
+      findBy: "label",
+      action: "fill",
+      text: "Agent name",
+      value: "Milady",
+    });
+    expect(fill.status).toBe(200);
+    expect(fill.data.value).toEqual(expect.objectContaining({ value: "Milady" }));
+
+    const select = await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+      subaction: "select",
+      findBy: "label",
+      text: "Plan",
+      value: "pro",
+    });
+    expect(select.status).toBe(200);
+    expect(select.data.value).toEqual(expect.objectContaining({ value: "pro" }));
+
+    const check = await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+      subaction: "check",
+      findBy: "label",
+      text: "Accept terms",
+    });
+    expect(check.status).toBe(200);
+    expect(check.data.value).toEqual(expect.objectContaining({ checked: true }));
+
+    const snapshot = await req(
+      apiServer.port,
+      "POST",
+      "/api/browser-workspace/command",
+      {
+        subaction: "snapshot",
+      },
+    );
+    expect(snapshot.status).toBe(200);
+    expect(snapshot.data.elements).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ selector: "input[name=\"name\"]" }),
+        expect.objectContaining({ selector: "select[name=\"plan\"]" }),
+      ]),
+    );
+
+    const checked = await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+      subaction: "get",
+      findBy: "label",
+      text: "Accept terms",
+      getMode: "checked",
+    });
+    expect(checked.status).toBe(200);
+    expect(checked.data.value).toBe(true);
   });
 });

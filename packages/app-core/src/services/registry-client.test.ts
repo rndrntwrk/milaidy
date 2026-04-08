@@ -932,8 +932,8 @@ describe("registry-client", () => {
     it("discovers local app packages when remote registry has no apps", async () => {
       const workspaceRoot = path.join(tmpDir, "workspace");
       await writeLocalAppPackage(workspaceRoot, {
-        dirName: "app-hyperscape",
-        packageName: "@elizaos/app-hyperscape",
+        dirName: "plugin-hyperscape",
+        packageName: "@hyperscape/plugin-hyperscape",
         displayName: "Hyperscape",
         launchType: "connect",
         launchUrl: "https://hyperscape.gg",
@@ -957,20 +957,20 @@ describe("registry-client", () => {
 
       const { listApps, getPluginInfo } = await loadModule();
       const apps = await listApps();
-      expect(apps.some((app) => app.name === "@elizaos/app-hyperscape")).toBe(
+      expect(apps.some((app) => app.name === "@hyperscape/plugin-hyperscape")).toBe(
         true,
       );
 
       const hyperscape = apps.find(
-        (app) => app.name === "@elizaos/app-hyperscape",
+        (app) => app.name === "@hyperscape/plugin-hyperscape",
       );
       // The launchUrl may be the raw value from package.json or a template
       // placeholder depending on whether an app override is applied.
       expect(hyperscape?.launchUrl).toBeDefined();
 
-      const pluginInfo = await getPluginInfo("@elizaos/app-hyperscape");
+      const pluginInfo = await getPluginInfo("@hyperscape/plugin-hyperscape");
       expect(pluginInfo?.localPath).toContain(
-        path.join("plugins", "app-hyperscape"),
+        path.join("plugins", "plugin-hyperscape"),
       );
     });
   });

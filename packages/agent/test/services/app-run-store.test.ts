@@ -35,7 +35,7 @@ describe("app run store migration", () => {
           runs: [
             {
               runId: "run-1",
-              appName: "@elizaos/app-hyperscape",
+              appName: "@hyperscape/plugin-hyperscape",
               displayName: "Hyperscape",
               pluginName: "@hyperscape/plugin-hyperscape",
               launchType: "connect",
@@ -48,7 +48,7 @@ describe("app run store migration", () => {
               },
               session: {
                 sessionId: "session-1",
-                appName: "@elizaos/app-hyperscape",
+                appName: "@hyperscape/plugin-hyperscape",
                 mode: "spectate-and-steer",
                 status: "running",
                 displayName: "Hyperscape",
@@ -166,7 +166,7 @@ describe("app run store migration", () => {
         },
         {
           runId: "run-newer",
-          appName: "@elizaos/app-hyperscape",
+          appName: "@hyperscape/plugin-hyperscape",
           displayName: "Hyperscape",
           pluginName: "@hyperscape/plugin-hyperscape",
           launchType: "connect",

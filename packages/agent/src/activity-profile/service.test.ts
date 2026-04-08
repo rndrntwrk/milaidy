@@ -7,7 +7,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { analyzeMessages } from "./analyzer";
 import {
   buildActivityProfile,
+  profileNeedsRebuild,
+  readFiredLogFromMetadata,
+  readProfileFromMetadata,
   refreshCurrentState,
+  resolveOwnerEntityId,
   setScreenContextSamplerForTesting,
 } from "./service";
 import { LifeOpsScreenContextSampler } from "../lifeops/screen-context";
@@ -282,5 +286,184 @@ describe.skipIf(!hasNodeSqlite)("refreshCurrentState", () => {
     expect(refreshed.isCurrentlyActive).toBe(false);
     expect(refreshed.hasOpenActivityCycle).toBe(false);
     expect(refreshed.effectiveDayKey).toBe("2026-04-06");
+  });
+});
+
+// ── Pure helper tests (no SQLite required) ────────────
+
+describe("readProfileFromMetadata", () => {
+  it("returns null for null metadata", () => {
+    expect(readProfileFromMetadata(null)).toBeNull();
+  });
+
+  it("returns null when activityProfile key is missing", () => {
+    expect(readProfileFromMetadata({ other: "data" })).toBeNull();
+  });
+
+  it("returns null when activityProfile is not an object", () => {
+    expect(readProfileFromMetadata({ activityProfile: "corrupted" })).toBeNull();
+  });
+
+  it("returns null when required fields are missing (stale version)", () => {
+    expect(
+      readProfileFromMetadata({
+        activityProfile: { analyzedAt: 123 },
+      }),
+    ).toBeNull();
+  });
+
+  it("returns the profile when shape is valid", () => {
+    const profile = {
+      ownerEntityId: "owner-1",
+      analyzedAt: Date.now(),
+      totalMessages: 50,
+      timezone: "UTC",
+    };
+    const result = readProfileFromMetadata({ activityProfile: profile });
+    expect(result).not.toBeNull();
+    expect(result!.ownerEntityId).toBe("owner-1");
+  });
+});
+
+describe("readFiredLogFromMetadata", () => {
+  it("returns null for null metadata", () => {
+    expect(readFiredLogFromMetadata(null, "2026-04-06")).toBeNull();
+  });
+
+  it("returns null when firedActionsLog is missing", () => {
+    expect(readFiredLogFromMetadata({}, "2026-04-06")).toBeNull();
+  });
+
+  it("returns null when date does not match", () => {
+    expect(
+      readFiredLogFromMetadata(
+        {
+          firedActionsLog: {
+            date: "2026-04-05",
+            nudgedOccurrenceIds: [],
+            nudgedCalendarEventIds: [],
+          },
+        },
+        "2026-04-06",
+      ),
+    ).toBeNull();
+  });
+
+  it("returns null when shape is corrupted", () => {
+    expect(
+      readFiredLogFromMetadata(
+        { firedActionsLog: "not-an-object" },
+        "2026-04-06",
+      ),
+    ).toBeNull();
+  });
+
+  it("returns null when nudgedOccurrenceIds is not an array", () => {
+    expect(
+      readFiredLogFromMetadata(
+        {
+          firedActionsLog: {
+            date: "2026-04-06",
+            nudgedOccurrenceIds: "broken",
+          },
+        },
+        "2026-04-06",
+      ),
+    ).toBeNull();
+  });
+
+  it("returns the log when shape and date match", () => {
+    const log = {
+      date: "2026-04-06",
+      gmFiredAt: 12345,
+      nudgedOccurrenceIds: ["occ-1"],
+      nudgedCalendarEventIds: [],
+    };
+    const result = readFiredLogFromMetadata(
+      { firedActionsLog: log },
+      "2026-04-06",
+    );
+    expect(result).not.toBeNull();
+    expect(result!.gmFiredAt).toBe(12345);
+  });
+});
+
+describe("profileNeedsRebuild", () => {
+  it("returns true for null profile", () => {
+    expect(profileNeedsRebuild(null, NOW)).toBe(true);
+  });
+
+  it("returns true when profile is older than 60 minutes", () => {
+    const staleProfile = {
+      analyzedAt: NOW.getTime() - 61 * 60 * 1000,
+    } as Parameters<typeof profileNeedsRebuild>[0] & { analyzedAt: number };
+    expect(profileNeedsRebuild(staleProfile, NOW)).toBe(true);
+  });
+
+  it("returns false when profile is recent", () => {
+    const freshProfile = {
+      analyzedAt: NOW.getTime() - 5 * 60 * 1000,
+    } as Parameters<typeof profileNeedsRebuild>[0] & { analyzedAt: number };
+    expect(profileNeedsRebuild(freshProfile, NOW)).toBe(false);
+  });
+});
+
+describe("resolveOwnerEntityId", () => {
+  it("resolves owner from world ownership metadata", async () => {
+    const runtime = {
+      agentId: "agent-1",
+      character: {},
+      getRoomsForParticipant: vi.fn().mockResolvedValue(["room-1"]),
+      getRoom: vi.fn().mockResolvedValue({ id: "room-1", worldId: "world-1", source: "telegram" }),
+      getWorld: vi.fn().mockResolvedValue({
+        id: "world-1",
+        metadata: { ownership: { ownerId: "owner-abc" } },
+      }),
+    } as unknown as IAgentRuntime;
+
+    const result = await resolveOwnerEntityId(runtime);
+    expect(result).toBe("owner-abc");
+  });
+
+  it("returns null when no rooms exist", async () => {
+    const runtime = {
+      agentId: "agent-1",
+      character: {},
+      getRoomsForParticipant: vi.fn().mockResolvedValue([]),
+    } as unknown as IAgentRuntime;
+
+    const result = await resolveOwnerEntityId(runtime);
+    expect(result).toBeNull();
+  });
+
+  it("returns null when world has no ownership", async () => {
+    const runtime = {
+      agentId: "agent-1",
+      character: {},
+      getRoomsForParticipant: vi.fn().mockResolvedValue(["room-1"]),
+      getRoom: vi.fn().mockResolvedValue({ id: "room-1", worldId: "world-1" }),
+      getWorld: vi.fn().mockResolvedValue({ id: "world-1", metadata: {} }),
+    } as unknown as IAgentRuntime;
+
+    const result = await resolveOwnerEntityId(runtime);
+    expect(result).toBeNull();
+  });
+
+  it("survives room-level errors and continues checking", async () => {
+    const runtime = {
+      agentId: "agent-1",
+      character: {},
+      getRoomsForParticipant: vi.fn().mockResolvedValue(["room-bad", "room-good"]),
+      getRoom: vi.fn()
+        .mockRejectedValueOnce(new Error("room lookup failed"))
+        .mockResolvedValueOnce({ id: "room-good", worldId: "world-1" }),
+      getWorld: vi.fn().mockResolvedValue({
+        id: "world-1",
+        metadata: { ownership: { ownerId: "owner-xyz" } },
+      }),
+    } as unknown as IAgentRuntime;
+
+    const result = await resolveOwnerEntityId(runtime);
+    expect(result).toBe("owner-xyz");
   });
 });

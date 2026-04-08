@@ -29,6 +29,8 @@ import {
 
 type LocalSiteFixture = {
   counterUrl: string;
+  formUrl: string;
+  welcomeUrl: string;
   tasksUrl: string;
   notesUrl: string;
   close: () => Promise<void>;
@@ -71,16 +73,27 @@ function buildBrowserActionResponse(params: Record<string, string | boolean>): {
 async function startLocalSiteFixture(): Promise<LocalSiteFixture> {
   const server = http.createServer((req, res) => {
     const url = new URL(req.url ?? "/", "http://127.0.0.1");
-    const page =
-      url.pathname === "/tasks"
-        ? {
-            title: "Tasks Fixture",
-            body: "<h1>Tasks Fixture</h1><p>Agent task board</p>",
-          }
-        : url.pathname === "/notes"
-          ? {
-              title: "Notes Fixture",
-              body: "<h1>Notes Fixture</h1><p>Agent notes page</p>",
+	    const page =
+	      url.pathname === "/tasks"
+	        ? {
+	            title: "Tasks Fixture",
+	            body: "<h1>Tasks Fixture</h1><p>Agent task board</p>",
+	          }
+	        : url.pathname === "/welcome"
+	          ? {
+	              title: "Welcome Fixture",
+	              body: `<h1>Welcome, ${url.searchParams.get("name") || "Anonymous"}</h1><p>Agent browser workspace welcome page</p>`,
+	            }
+	          : url.pathname === "/form"
+	            ? {
+	                title: "Browser Form Fixture",
+	                body:
+	                  '<h1>Browser Form Fixture</h1><form action="/welcome" method="get"><label>Agent name<input name="name" value="" /></label><label>Plan<select name="plan"><option value="basic">Basic</option><option value="pro">Pro</option></select></label><label><input type="checkbox" name="terms" value="yes" />Accept terms</label><button type="submit">Continue</button></form>',
+	              }
+	        : url.pathname === "/notes"
+	          ? {
+	              title: "Notes Fixture",
+	              body: "<h1>Notes Fixture</h1><p>Agent notes page</p>",
             }
           : {
               title: "Counter Fixture",
@@ -100,11 +113,13 @@ async function startLocalSiteFixture(): Promise<LocalSiteFixture> {
   const address = server.address() as AddressInfo;
   const baseUrl = `http://127.0.0.1:${address.port}`;
 
-  return {
-    counterUrl: `${baseUrl}/counter`,
-    tasksUrl: `${baseUrl}/tasks`,
-    notesUrl: `${baseUrl}/notes`,
-    close: () =>
+	  return {
+	    counterUrl: `${baseUrl}/counter`,
+	    formUrl: `${baseUrl}/form`,
+	    welcomeUrl: `${baseUrl}/welcome?name=Milady`,
+	    tasksUrl: `${baseUrl}/tasks`,
+	    notesUrl: `${baseUrl}/notes`,
+	    close: () =>
       new Promise<void>((resolve, reject) => {
         server.close((error) => {
           if (error) {
@@ -131,6 +146,7 @@ describe("Browser workspace agent chat E2E", () => {
   let previousPgliteDataDir: string | undefined;
   let pgliteDir = "";
   let plannerTurn = 0;
+  let plannerScenario: "form" | "tabs" = "tabs";
 
   beforeAll(async () => {
     previousPgliteDataDir = process.env.PGLITE_DATA_DIR;
@@ -160,6 +176,49 @@ describe("Browser workspace agent chat E2E", () => {
     vi.spyOn(runtime, "isCheckShouldRespondEnabled").mockReturnValue(false);
     vi.spyOn(runtime, "dynamicPromptExecFromState").mockImplementation(
       async () => {
+        if (plannerScenario === "form") {
+          return buildBrowserActionResponse({
+            operation: "batch",
+            stepsJson: JSON.stringify([
+              {
+                subaction: "open",
+                show: true,
+                url: siteFixture.formUrl,
+              },
+              {
+                subaction: "find",
+                findBy: "label",
+                action: "fill",
+                text: "Agent name",
+                value: "Milady",
+              },
+              {
+                subaction: "select",
+                findBy: "label",
+                text: "Plan",
+                value: "pro",
+              },
+              {
+                subaction: "check",
+                findBy: "label",
+                text: "Accept terms",
+              },
+              {
+                subaction: "find",
+                findBy: "role",
+                role: "button",
+                name: "Continue",
+                action: "click",
+              },
+              {
+                subaction: "get",
+                selector: "h1",
+                getMode: "text",
+              },
+            ]),
+          });
+        }
+
         switch (plannerTurn++) {
           case 0:
             return buildBrowserActionResponse({
@@ -221,6 +280,7 @@ describe("Browser workspace agent chat E2E", () => {
 
   beforeEach(async () => {
     plannerTurn = 0;
+    plannerScenario = "tabs";
     const tabs = await listBrowserWorkspaceTabs();
     await Promise.all(tabs.map((tab) => closeBrowserWorkspaceTab(tab.id)));
   });
@@ -351,6 +411,31 @@ describe("Browser workspace agent chat E2E", () => {
     tabs = await listBrowserWorkspaceTabs();
     expect(tabs).toHaveLength(1);
     expect(tabs[0]?.url).toBe(siteFixture.notesUrl);
+    expect(tabs[0]?.visible).toBe(true);
+  });
+
+  it("uses the real chat API and runtime to complete a richer browser task through one main browser action", async () => {
+    plannerScenario = "form";
+    const { conversationId } = await createConversation(apiServer.port, {
+      includeGreeting: false,
+      title: "Browser agent form task",
+    });
+
+    const response = await postConversationMessage(apiServer.port, conversationId, {
+      text: "Open the form, fill the name, choose the pro plan, accept terms, submit it, and tell me the heading.",
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.data.text).toEqual(
+      expect.stringContaining("Completed 6 browser subactions"),
+    );
+    expect(response.data.text).toEqual(
+      expect.stringContaining("Welcome, Milady"),
+    );
+
+    const tabs = await listBrowserWorkspaceTabs();
+    expect(tabs).toHaveLength(1);
+    expect(tabs[0]?.url).toBe(siteFixture.welcomeUrl);
     expect(tabs[0]?.visible).toBe(true);
   });
 });

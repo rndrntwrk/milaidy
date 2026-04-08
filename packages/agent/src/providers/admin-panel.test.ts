@@ -1,10 +1,11 @@
+import type { Memory, UUID } from "@elizaos/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Memory, ProviderResult, UUID } from "@elizaos/core";
 
-const { mockCheckSenderRole, mockResolveCanonicalOwnerIdForMessage } = vi.hoisted(() => ({
-  mockCheckSenderRole: vi.fn(),
-  mockResolveCanonicalOwnerIdForMessage: vi.fn(),
-}));
+const { mockCheckSenderRole, mockResolveCanonicalOwnerIdForMessage } =
+  vi.hoisted(() => ({
+    mockCheckSenderRole: vi.fn(),
+    mockResolveCanonicalOwnerIdForMessage: vi.fn(),
+  }));
 
 vi.mock("@miladyai/plugin-roles", () => ({
   checkSenderRole: mockCheckSenderRole,
@@ -91,11 +92,7 @@ describe("adminPanelProvider", () => {
       getRoom: vi.fn().mockResolvedValue({ id: ROOM_ID, worldId: null }),
     });
 
-    const result = await provider.get(
-      runtime,
-      makeMessage(),
-      {} as never,
-    );
+    const result = await provider.get(runtime, makeMessage(), {} as never);
 
     expect(result.text).toBe("");
     expect(result.data).toEqual({ messageCount: 0 });
@@ -112,9 +109,11 @@ describe("adminPanelProvider", () => {
         }
         return null;
       }),
-      getSetting: vi.fn().mockImplementation((key: string) =>
-        key === "MILADY_ADMIN_ENTITY_ID" ? OWNER_ID : null,
-      ),
+      getSetting: vi
+        .fn()
+        .mockImplementation((key: string) =>
+          key === "MILADY_ADMIN_ENTITY_ID" ? OWNER_ID : null,
+        ),
       getMemoriesByRoomIds: vi.fn().mockResolvedValue([
         {
           entityId: OWNER_ID,
@@ -135,11 +134,7 @@ describe("adminPanelProvider", () => {
       getRoomsForParticipant: vi.fn().mockResolvedValue([]),
     });
 
-    const result = await provider.get(
-      runtime,
-      makeMessage(),
-      {} as never,
-    );
+    const result = await provider.get(runtime, makeMessage(), {} as never);
 
     expect(result.text).toBe("");
     expect(result.values).toEqual({ hasAdminChat: false });
@@ -164,11 +159,7 @@ describe("adminPanelProvider", () => {
       getMemoriesByRoomIds: vi.fn().mockResolvedValue(messages),
     });
 
-    const result = await provider.get(
-      runtime,
-      makeMessage(),
-      {} as never,
-    );
+    const result = await provider.get(runtime, makeMessage(), {} as never);
 
     expect(result.values).toEqual({ hasAdminChat: true });
     expect(result.data).toEqual({ messageCount: 2 });
@@ -221,11 +212,7 @@ describe("adminPanelProvider", () => {
       getMemoriesByRoomIds: vi.fn().mockResolvedValue(messages),
     });
 
-    const result = await provider.get(
-      runtime,
-      makeMessage(),
-      {} as never,
-    );
+    const result = await provider.get(runtime, makeMessage(), {} as never);
 
     expect((result.text as string).length).toBeLessThanOrEqual(2000);
     expect((result.text as string).endsWith("...")).toBe(true);
@@ -234,10 +221,9 @@ describe("adminPanelProvider", () => {
   it("filters rooms to only client_chat source", async () => {
     const discordRoomId = "discord-room-fff" as UUID;
     const runtime = makeRuntime({
-      getRoomsForParticipant: vi.fn().mockResolvedValue([
-        CHAT_ROOM_ID,
-        discordRoomId,
-      ]),
+      getRoomsForParticipant: vi
+        .fn()
+        .mockResolvedValue([CHAT_ROOM_ID, discordRoomId]),
       getRoom: vi.fn().mockImplementation(async (id: string) => {
         if (id === ROOM_ID) {
           return { id: ROOM_ID, worldId: WORLD_ID, source: "discord" };

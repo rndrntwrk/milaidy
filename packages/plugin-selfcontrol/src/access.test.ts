@@ -105,6 +105,41 @@ describe("getSelfControlAccess", () => {
     });
   });
 
+  it("allows a Telegram sender whose connector identity matches the canonical owner entity", async () => {
+    const runtime = createRuntimeMock({
+      room: { worldId: "world-1" },
+      world: {
+        id: "world-1",
+        metadata: {
+          ownership: { ownerId: "app-owner" },
+          roles: {},
+        },
+      },
+      entities: {
+        "app-owner": {
+          metadata: {
+            telegram: { id: "777777", username: "shaw_w" },
+          },
+        },
+        "telegram-shadow": {
+          metadata: {
+            telegram: { id: "777777", username: "shaw_w" },
+          },
+        },
+      },
+      settings: {
+        MILADY_ADMIN_ENTITY_ID: "app-owner",
+      },
+    });
+
+    await expect(
+      getSelfControlAccess(runtime, createMessage("telegram-shadow")),
+    ).resolves.toEqual({
+      allowed: true,
+      role: "OWNER",
+    });
+  });
+
   it("still denies an unrelated sender", async () => {
     const runtime = createRuntimeMock({
       room: { worldId: "world-1" },

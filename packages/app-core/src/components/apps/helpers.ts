@@ -4,7 +4,7 @@ export const DEFAULT_VIEWER_SANDBOX =
   "allow-scripts allow-same-origin allow-popups";
 
 const CURATED_APP_NAMES = new Set([
-  "@elizaos/app-hyperscape",
+  "@hyperscape/plugin-hyperscape",
   "@elizaos/app-2004scape",
   "@elizaos/app-babylon",
   "@elizaos/app-defense-of-the-agents",

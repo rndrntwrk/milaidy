@@ -306,7 +306,7 @@ async function withBabylonFixtureApi<T>(
   }
 }
 
-const KNOWN_LOCAL_APP_NAME = "@elizaos/app-hyperscape";
+const KNOWN_LOCAL_APP_NAME = "@hyperscape/plugin-hyperscape";
 
 /** Check if a TCP port is listening. */
 function isPortOpen(port: number, host = "127.0.0.1"): Promise<boolean> {
@@ -1144,7 +1144,7 @@ describe("Apps E2E", () => {
 
       try {
         const response = await api(server.port, "POST", "/api/apps/launch", {
-          name: "@elizaos/app-hyperscape",
+          name: "@hyperscape/plugin-hyperscape",
         });
         expect(response.status).toBe(200);
         const body = asObject(response.data);
@@ -1203,7 +1203,7 @@ describe("Apps E2E", () => {
 
       try {
         const response = await api(server.port, "POST", "/api/apps/launch", {
-          name: "@elizaos/app-hyperscape",
+          name: "@hyperscape/plugin-hyperscape",
         });
         expect(response.status).toBe(200);
         const body = asObject(response.data);

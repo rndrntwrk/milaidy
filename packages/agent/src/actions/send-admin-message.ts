@@ -107,7 +107,10 @@ export const sendAdminMessageAction: Action = {
           text.trim(),
         );
       } catch (escErr) {
-        logger.warn("[SEND_ADMIN_MESSAGE] Escalation start failed:", escErr instanceof Error ? escErr.message : String(escErr));
+        logger.warn(
+          "[SEND_ADMIN_MESSAGE] Escalation start failed:",
+          escErr instanceof Error ? escErr.message : String(escErr),
+        );
       }
     }
 

@@ -956,14 +956,14 @@ describe("Electrobun release workflow drift", () => {
     );
   });
 
-  it("does not statically import @elizaos/app-hyperscape at the top level", () => {
+  it("does not statically import @hyperscape/plugin-hyperscape at the top level", () => {
     const serverSource = fs.readFileSync(SERVER_TS_PATH, "utf8");
 
     // Must NOT have a top-level static import of the package
     const lines = serverSource.split("\n");
     const staticImports = lines.filter(
       (line) =>
-        /^\s*import\s/.test(line) && line.includes("@elizaos/app-hyperscape"),
+        /^\s*import\s/.test(line) && line.includes("@hyperscape/plugin-hyperscape"),
     );
     expect(staticImports).toHaveLength(0);
   });

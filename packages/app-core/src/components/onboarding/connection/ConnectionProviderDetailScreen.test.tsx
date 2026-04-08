@@ -65,7 +65,10 @@ vi.mock("./useAdvanceOnboardingWhenElizaCloudOAuthConnected", () => ({
 
 import { ConnectionProviderDetailScreen } from "./ConnectionProviderDetailScreen";
 
-function t(key: string): string {
+function t(
+  key: string,
+  params?: Record<string, string | number | undefined>,
+): string {
   const translations: Record<string, string> = {
     "onboarding.apiKey": "API Key",
     "onboarding.enterApiKey": "Enter API key",
@@ -112,7 +115,15 @@ function t(key: string): string {
       "Powers task agents only (Claude Code CLI). For the main agent runtime, connect Eliza Cloud or a direct API key.",
   };
 
-  return translations[key] ?? key;
+  const template =
+    translations[key] ?? String(params?.defaultValue ?? key);
+  if (!params) {
+    return template;
+  }
+  return Object.entries(params).reduce(
+    (acc, [name, value]) => acc.replace(`{{${name}}}`, String(value ?? "")),
+    template,
+  );
 }
 
 function createState(overrides: Record<string, unknown> = {}) {
@@ -282,6 +293,43 @@ describe("ConnectionProviderDetailScreen", () => {
     const selectedModel = screen.getByRole("radio", { name: /Mixtral/i });
     expect(selectedModel).toBeTruthy();
     expect(selectedModel.getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("updates the selected OpenRouter model when a choice card is clicked", () => {
+    const setState = vi.fn();
+    mockUseApp.mockReturnValue(
+      createState({
+        onboardingProvider: "openrouter",
+        onboardingApiKey: "sk-test-12345678901234567890",
+        onboardingOpenRouterModel: "mixtral",
+        onboardingOptions: {
+          providers: [
+            {
+              id: "openrouter",
+              name: "OpenRouter",
+              description: "Many models",
+            },
+          ],
+          openrouterModels: [
+            { id: "mixtral", name: "Mixtral", description: "Fast model" },
+            {
+              id: "sonnet",
+              name: "Claude Sonnet",
+              description: "Balanced model",
+            },
+          ],
+          piAiModels: [],
+          piAiDefaultModel: "",
+        },
+        setState,
+      }),
+    );
+
+    render(<ConnectionProviderDetailScreen dispatch={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("radio", { name: /Claude Sonnet/i }));
+
+    expect(setState).toHaveBeenCalledWith("onboardingOpenRouterModel", "sonnet");
   });
 
   it("trims Claude tokens and lets the user continue with limited setup after saving", async () => {
@@ -477,6 +525,78 @@ describe("ConnectionProviderDetailScreen", () => {
     );
   });
 
+  it("clears Claude OAuth errors when the user edits the authorization code", async () => {
+    mockClient.exchangeAnthropicCode.mockRejectedValueOnce(
+      new Error("bad claude code"),
+    );
+    mockUseApp.mockReturnValue(
+      createState({
+        onboardingProvider: "anthropic-subscription",
+        onboardingOptions: {
+          providers: [
+            {
+              id: "anthropic-subscription",
+              name: "Claude Subscription",
+              description: "Task agents only",
+            },
+          ],
+          openrouterModels: [],
+          piAiModels: [],
+          piAiDefaultModel: "",
+        },
+        onboardingSubscriptionTab: "oauth",
+      }),
+    );
+
+    render(<ConnectionProviderDetailScreen dispatch={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Log in with Claude" }));
+    await screen.findByLabelText("Paste auth code");
+    fireEvent.change(screen.getByLabelText("Paste auth code"), {
+      target: { value: "anthro-code-123" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+
+    expect(
+      await screen.findByText("Exchange failed: bad claude code"),
+    ).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText("Paste auth code"), {
+      target: { value: "anthro-code-456" },
+    });
+
+    expect(screen.queryByText("Exchange failed: bad claude code")).toBeNull();
+  });
+
+  it("lets the user defer Claude OAuth setup from the footer", () => {
+    const handleOnboardingNext = vi.fn(async () => {});
+    mockUseApp.mockReturnValue(
+      createState({
+        onboardingProvider: "anthropic-subscription",
+        onboardingOptions: {
+          providers: [
+            {
+              id: "anthropic-subscription",
+              name: "Claude Subscription",
+              description: "Task agents only",
+            },
+          ],
+          openrouterModels: [],
+          piAiModels: [],
+          piAiDefaultModel: "",
+        },
+        onboardingSubscriptionTab: "oauth",
+        handleOnboardingNext,
+      }),
+    );
+
+    render(<ConnectionProviderDetailScreen dispatch={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Set up later" }));
+
+    expect(handleOnboardingNext).toHaveBeenCalledWith();
+  });
+
   it("normalizes OpenAI callback URLs before exchange", async () => {
     mockUseApp.mockReturnValue(
       createState({
@@ -544,5 +664,25 @@ describe("ConnectionProviderDetailScreen", () => {
     expect(
       await screen.findByText("Expected a localhost:1455/auth/callback URL."),
     ).toBeTruthy();
+  });
+
+  it("uses the default footer controls for direct API-key providers", () => {
+    const dispatch = vi.fn();
+    const handleOnboardingNext = vi.fn(async () => {});
+    mockUseApp.mockReturnValue(
+      createState({
+        onboardingProvider: "openai",
+        onboardingApiKey: "sk-test-12345678901234567890",
+        handleOnboardingNext,
+      }),
+    );
+
+    render(<ConnectionProviderDetailScreen dispatch={dispatch} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+
+    expect(dispatch).toHaveBeenCalledWith({ type: "clearProvider" });
+    expect(handleOnboardingNext).toHaveBeenCalledWith();
   });
 });

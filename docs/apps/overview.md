@@ -56,7 +56,7 @@ These are the independent applications listed above. Each is a complete, pre-bui
 
 ### Plugin Apps (Game/Experience Apps)
 
-These are elizaOS plugins with names like `@elizaos/app-hyperscape` that are installed through the Dashboard's **Apps** browser. When launched:
+These are elizaOS plugins with names like `@hyperscape/plugin-hyperscape` that are installed through the Dashboard's **Apps** browser. When launched:
 
 1. The plugin is installed into the agent runtime
 2. The agent connects to an external service (e.g., a metaverse, a game server)

@@ -69,7 +69,7 @@ describe("release-plugin-policy", () => {
 
   it("marks launchable apps as app-catalog installs instead of runtime plugins", () => {
     const compatibility = classifyRegistryPluginRelease({
-      packageName: "@elizaos/app-hyperscape",
+      packageName: "@hyperscape/plugin-hyperscape",
       bundledPluginIds: new Set(["sql", "openai"]),
       kind: "app",
     });

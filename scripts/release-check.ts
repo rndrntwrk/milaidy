@@ -1028,17 +1028,17 @@ function assertServerDynamicHyperscapeImport() {
     autonomousServerPathCandidates,
   );
 
-  // @elizaos/app-hyperscape must never be a static top-level import. The
+  // @hyperscape/plugin-hyperscape must never be a static top-level import. The
   // API server has to remain bootable when the optional app package is not
   // installed (for example in Windows smoke and release validation runs).
   const lines = serverSource.split("\n");
   const staticImports = lines.filter(
     (line) =>
-      /^\s*import\s/.test(line) && line.includes("@elizaos/app-hyperscape"),
+      /^\s*import\s/.test(line) && line.includes("@hyperscape/plugin-hyperscape"),
   );
   if (staticImports.length > 0) {
     console.error(
-      "release-check: server.ts must NOT have a static import of @elizaos/app-hyperscape/routes. Use a dynamic import inside a try-catch.",
+      "release-check: server.ts must NOT have a static import of @hyperscape/plugin-hyperscape/routes. Use a dynamic import inside a try-catch.",
     );
     for (const line of staticImports) {
       console.error(`  - ${line.trim()}`);

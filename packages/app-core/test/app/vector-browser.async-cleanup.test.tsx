@@ -18,7 +18,7 @@ const {
   executeDatabaseQueryMock: vi.fn(),
 }));
 
-vi.mock("../../src/components/avatar/vector-browser-three", () => {
+vi.mock(import("../../src/components/avatar/vector-browser-three.ts"), () => {
   class MockVector2 {
     x = 0;
     y = 0;
@@ -120,6 +120,8 @@ vi.mock("../../src/components/avatar/vector-browser-three", () => {
     }
   }
 
+  createVectorBrowserRendererMock.mockImplementation(async () => new MockRenderer());
+
   return {
     THREE: {
       Scene: MockScene,
@@ -137,10 +139,7 @@ vi.mock("../../src/components/avatar/vector-browser-three", () => {
       Raycaster: MockRaycaster,
       BufferAttribute: class {},
     },
-    createVectorBrowserRenderer:
-      createVectorBrowserRendererMock.mockImplementation(
-        async () => new MockRenderer(),
-      ),
+    createVectorBrowserRenderer: () => createVectorBrowserRendererMock(),
   };
 });
 
@@ -156,7 +155,7 @@ vi.mock("@miladyai/app-core/state", () => ({
 }));
 
 import { client } from "@miladyai/app-core/api";
-import { VectorBrowserView } from "../../src/components/pages/VectorBrowserView";
+import { VectorGraph3D } from "../../src/components/pages/VectorBrowserView";
 
 async function flush(times = 4): Promise<void> {
   for (let i = 0; i < times; i++) {
@@ -340,35 +339,64 @@ describe("VectorBrowserView async cleanup", () => {
 
     createVectorBrowserRendererMock.mockImplementation(async () => rendererReady);
 
+    const memories = [
+      {
+        id: "1",
+        content: "alpha memory",
+        roomId: "room-1",
+        entityId: "entity-1",
+        type: "message",
+        createdAt: "2026-03-07T00:00:00.000Z",
+        unique: false,
+        embedding: [0.1, 0.2, 0.3],
+        raw: {},
+      },
+      {
+        id: "2",
+        content: "beta memory",
+        roomId: "room-1",
+        entityId: "entity-1",
+        type: "message",
+        createdAt: "2026-03-07T00:01:00.000Z",
+        unique: false,
+        embedding: [0.2, 0.3, 0.4],
+        raw: {},
+      },
+      {
+        id: "3",
+        content: "gamma memory",
+        roomId: "room-1",
+        entityId: "entity-1",
+        type: "message",
+        createdAt: "2026-03-07T00:02:00.000Z",
+        unique: false,
+        embedding: [0.3, 0.4, 0.5],
+        raw: {},
+      },
+    ];
+
     function Harness() {
       const [visible, setVisible] = useState(true);
       hideGraph = () => setVisible(false);
-      return visible ? <VectorBrowserView /> : null;
+      return visible ? (
+        <VectorGraph3D
+          memories={memories}
+          onSelect={() => {}}
+          createRenderer={createVectorBrowserRendererMock}
+        />
+      ) : null;
     }
 
-    act(() => {
+    await act(async () => {
       root.render(<Harness />);
     });
     await flush();
-
-    const threeDButton = Array.from(host.querySelectorAll("button")).find(
-      (button) => button.textContent?.trim() === "vectorbrowserview.3D",
-    );
-    expect(threeDButton).toBeTruthy();
-
-    act(() => {
-      threeDButton?.dispatchEvent(
-        new MouseEvent("click", {
-          bubbles: true,
-        }),
-      );
-    });
     await vi.waitFor(() => {
       expect(createVectorBrowserRendererMock.mock.calls.length).toBeGreaterThan(
         0,
       );
     });
-    act(() => {
+    await act(async () => {
       hideGraph?.();
     });
     resolveRenderer?.({

@@ -4,27 +4,32 @@
  */
 
 import type { IAgentRuntime, UUID } from "@elizaos/core";
+import { logger } from "@elizaos/core";
 import { resolveCanonicalOwnerId } from "@miladyai/plugin-roles";
 import type { LifeOpsActivitySignal } from "@miladyai/shared/contracts/lifeops";
-import { LifeOpsService } from "../lifeops/service.js";
 import { resolveDefaultTimeZone } from "../lifeops/defaults.js";
-import {
-  analyzeMessages,
-  enrichWithCalendar,
-  resolveCurrentActivityState,
-  SUSTAINED_INACTIVITY_GAP_MS,
-  type CalendarEventRecord,
-  type MessageRecord,
-} from "./analyzer.js";
 import {
   LifeOpsScreenContextSampler,
   type LifeOpsScreenContextSummary,
 } from "../lifeops/screen-context.js";
+import { LifeOpsService } from "../lifeops/service.js";
+import {
+  analyzeMessages,
+  type CalendarEventRecord,
+  enrichWithCalendar,
+  type MessageRecord,
+  resolveCurrentActivityState,
+  SUSTAINED_INACTIVITY_GAP_MS,
+} from "./analyzer.js";
 import type {
   ActivityProfile,
   ActivitySignalRecord,
   FiredActionsLog,
 } from "./types.js";
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
 
 // ── Constants ─────────────────────────────────────────
 
@@ -63,9 +68,7 @@ export async function resolveOwnerEntityId(
         if (metadata.ownership?.ownerId) {
           return metadata.ownership.ownerId;
         }
-      } catch {
-        continue;
-      }
+      } catch {}
     }
   } catch {
     // Fall through
@@ -152,10 +155,7 @@ function mergeScreenContext(
     screenContextAvailable: screenContext?.available ?? false,
     screenContextStale: screenContext?.stale ?? false,
   };
-  const activityState = resolveCurrentActivityState(
-    updatedProfile,
-    now,
-  );
+  const activityState = resolveCurrentActivityState(updatedProfile, now);
   return {
     ...updatedProfile,
     ...activityState,
@@ -236,8 +236,15 @@ export async function buildActivityProfile(
       endAt: e.endAt,
       isAllDay: e.isAllDay,
     }));
-  } catch {
-    // Calendar not connected — that's fine
+  } catch (err) {
+    logger.debug(
+      {
+        boundary: "activity_profile",
+        operation: "calendar_enrichment",
+        err: err instanceof Error ? err : undefined,
+      },
+      "[activity-profile] Calendar not available for profile enrichment; proceeding without calendar data.",
+    );
   }
 
   const withCalendar = enrichWithCalendar(baseProfile, calendarEvents, tz);
@@ -305,7 +312,10 @@ export async function refreshCurrentState(
   }
 
   for (const signal of activitySignals) {
-    if (signal.state !== "active" || signal.observedAt > currentTime.getTime()) {
+    if (
+      signal.state !== "active" ||
+      signal.observedAt > currentTime.getTime()
+    ) {
       continue;
     }
     if (signal.observedAt >= lastSeenAt) {
@@ -345,16 +355,25 @@ export function readProfileFromMetadata(
   metadata: Record<string, unknown> | null,
 ): ActivityProfile | null {
   if (!metadata?.activityProfile) return null;
-  return metadata.activityProfile as ActivityProfile;
+  const candidate = metadata.activityProfile;
+  if (!isRecord(candidate)) return null;
+  // Reject profiles missing required shape fields (corrupt or stale version)
+  if (typeof candidate.analyzedAt !== "number") return null;
+  if (typeof candidate.ownerEntityId !== "string") return null;
+  if (typeof candidate.totalMessages !== "number") return null;
+  return candidate as ActivityProfile;
 }
 
 export function readFiredLogFromMetadata(
   metadata: Record<string, unknown> | null,
   todayDateStr: string,
 ): FiredActionsLog | null {
-  const log = metadata?.firedActionsLog as FiredActionsLog | undefined;
-  if (!log || log.date !== todayDateStr) return null;
-  return log;
+  if (!metadata?.firedActionsLog) return null;
+  const log = metadata.firedActionsLog;
+  if (!isRecord(log)) return null;
+  if (typeof log.date !== "string" || log.date !== todayDateStr) return null;
+  if (!Array.isArray(log.nudgedOccurrenceIds)) return null;
+  return log as FiredActionsLog;
 }
 
 export function profileNeedsRebuild(

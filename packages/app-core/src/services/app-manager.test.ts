@@ -459,7 +459,7 @@ describe("Hyperscape Auto-Provisioning", () => {
   let tempDir: string;
   let originalEnv: Record<string, string | undefined>;
 
-  const HYPERSCAPE_APP_NAME = "@elizaos/app-hyperscape";
+  const HYPERSCAPE_APP_NAME = "@hyperscape/plugin-hyperscape";
   const HYPERSCAPE_PLUGIN_NAME = "@elizaos/plugin-hyperscape";
 
   beforeEach(async () => {
@@ -521,7 +521,7 @@ describe("Hyperscape Auto-Provisioning", () => {
         json: async () => ({
           registry: {
             [HYPERSCAPE_APP_NAME]: {
-              git: { repo: "elizaos/app-hyperscape", v0: {}, v1: {}, v2: {} },
+              git: { repo: "HyperscapeAI/hyperscape", v0: {}, v1: {}, v2: {} },
               npm: {
                 repo: HYPERSCAPE_PLUGIN_NAME,
                 v0: null,
@@ -575,7 +575,7 @@ describe("Hyperscape Auto-Provisioning", () => {
       json: async () => ({
         registry: {
           [HYPERSCAPE_APP_NAME]: {
-            git: { repo: "elizaos/app-hyperscape", v0: {}, v1: {}, v2: {} },
+            git: { repo: "HyperscapeAI/hyperscape", v0: {}, v1: {}, v2: {} },
             npm: {
               repo: HYPERSCAPE_PLUGIN_NAME,
               v0: null,
@@ -621,7 +621,7 @@ describe("Hyperscape Auto-Provisioning", () => {
       json: async () => ({
         registry: {
           [HYPERSCAPE_APP_NAME]: {
-            git: { repo: "elizaos/app-hyperscape", v0: {}, v1: {}, v2: {} },
+            git: { repo: "HyperscapeAI/hyperscape", v0: {}, v1: {}, v2: {} },
             npm: {
               repo: HYPERSCAPE_PLUGIN_NAME,
               v0: null,
@@ -817,9 +817,9 @@ describe("App session launch metadata", () => {
     overrides: Partial<RegistryPluginInfo> = {},
   ): RegistryPluginInfo {
     return {
-      name: "@elizaos/app-hyperscape",
-      gitRepo: "elizaos/app-hyperscape",
-      gitUrl: "https://github.com/elizaos/app-hyperscape",
+      name: "@hyperscape/plugin-hyperscape",
+      gitRepo: "HyperscapeAI/hyperscape",
+      gitUrl: "https://github.com/HyperscapeAI/hyperscape",
       description: "Hyperscape app",
       topics: ["app"],
       stars: 0,
@@ -829,7 +829,7 @@ describe("App session launch metadata", () => {
       kind: "app",
       runtimePlugin: "@hyperscape/plugin-hyperscape",
       npm: {
-        package: "@elizaos/app-hyperscape",
+        package: "@hyperscape/plugin-hyperscape",
         v0Version: null,
         v1Version: null,
         v2Version: "1.0.0",
@@ -1011,7 +1011,7 @@ describe("App session launch metadata", () => {
     expect(result.session).toEqual(
       expect.objectContaining({
         sessionId: "11111111-1111-1111-1111-111111111111",
-        appName: "@elizaos/app-hyperscape",
+        appName: "@hyperscape/plugin-hyperscape",
         mode: "spectate-and-steer",
         agentId: "11111111-1111-1111-1111-111111111111",
         characterId: "character-456",
@@ -1222,7 +1222,7 @@ describe("App session launch metadata", () => {
       expect(result.session).toEqual(
         expect.objectContaining({
           sessionId: "33333333-3333-3333-3333-333333333333",
-          appName: "@elizaos/app-hyperscape",
+          appName: "@hyperscape/plugin-hyperscape",
           mode: "spectate-and-steer",
           status: "connecting",
           canSendCommands: true,

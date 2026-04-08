@@ -488,7 +488,7 @@ describe("AppsView", () => {
   it("uses an exact curated app allowlist in production", () => {
     expect(
       shouldShowAppInAppsView(
-        createApp("@elizaos/app-hyperscape", "Hyperscape", "Game", {
+        createApp("@hyperscape/plugin-hyperscape", "Hyperscape", "Game", {
           category: "game",
         }),
         true,
@@ -528,7 +528,7 @@ describe("AppsView", () => {
   it("does not restrict the apps list by production allowlist in development", () => {
     expect(
       shouldShowAppInAppsView(
-        createApp("@elizaos/app-hyperscape", "Hyperscape", "Arena", {
+        createApp("@hyperscape/plugin-hyperscape", "Hyperscape", "Arena", {
           category: "game",
         }),
         false,
@@ -628,7 +628,7 @@ describe("AppsView", () => {
       uiLanguage: "en",
       t,
     });
-    const app = createApp("@elizaos/app-hyperscape", "Hyperscape", "Arena", {
+    const app = createApp("@hyperscape/plugin-hyperscape", "Hyperscape", "Arena", {
       uiExtension: { detailPanelId: "hyperscape-embedded-agents" },
     });
     const run = createRunSummary({
@@ -760,9 +760,9 @@ describe("AppsView", () => {
   it("prefers a run that needs recovery when the running tab opens", async () => {
     const staleRun = createRunSummary({
       runId: "run-stale",
-      appName: "@elizaos/app-hyperscape",
+      appName: "@hyperscape/plugin-hyperscape",
       displayName: "Hyperscape",
-      pluginName: "@elizaos/app-hyperscape",
+      pluginName: "@hyperscape/plugin-hyperscape",
       status: "stale",
       summary: "Reconnect the viewer to continue observing.",
       viewerAttachment: "detached",
@@ -772,7 +772,7 @@ describe("AppsView", () => {
       },
       session: {
         sessionId: "stale-session",
-        appName: "@elizaos/app-hyperscape",
+        appName: "@hyperscape/plugin-hyperscape",
         mode: "spectate-and-steer",
         status: "disconnected",
         displayName: "Hyperscape",
@@ -821,7 +821,7 @@ describe("AppsView", () => {
       t: tStub,
     });
     mockClientFns.listApps.mockResolvedValue([
-      createApp("@elizaos/app-hyperscape", "Hyperscape", "Arena"),
+      createApp("@hyperscape/plugin-hyperscape", "Hyperscape", "Arena"),
       createApp("@elizaos/app-babylon", "Babylon", "Market"),
     ]);
     mockClientFns.listAppRuns.mockResolvedValue([healthyRun, staleRun]);
@@ -846,7 +846,7 @@ describe("AppsView", () => {
       uiLanguage: "en",
       t: tStub,
     });
-    const app = createApp("@elizaos/app-hyperscape", "Hyperscape", "Arena", {
+    const app = createApp("@hyperscape/plugin-hyperscape", "Hyperscape", "Arena", {
       uiExtension: { detailPanelId: "hyperscape-embedded-agents" },
     });
     const run = createRunSummary({
@@ -1058,7 +1058,7 @@ describe("AppsView", () => {
       uiLanguage: "en",
       t: tStub,
     });
-    const appOne = createApp("@elizaos/app-hyperscape", "Hyperscape", "Arena");
+    const appOne = createApp("@hyperscape/plugin-hyperscape", "Hyperscape", "Arena");
     const appTwo = createApp("@elizaos/app-babylon", "Babylon", "Wallet");
     mockClientFns.listApps.mockResolvedValue([appOne, appTwo]);
     mockClientFns.listAppRuns.mockResolvedValue([
@@ -1117,7 +1117,7 @@ describe("AppsView", () => {
       uiLanguage: "en",
       t: tStub,
     });
-    const app = createApp("@elizaos/app-hyperscape", "Hyperscape", "Arena", {
+    const app = createApp("@hyperscape/plugin-hyperscape", "Hyperscape", "Arena", {
       uiExtension: { detailPanelId: "hyperscape-embedded-agents" },
     });
     mockClientFns.listApps.mockResolvedValue([app]);
@@ -1153,7 +1153,7 @@ describe("AppsView", () => {
       uiLanguage: "en",
       t: tStub,
     });
-    const app = createApp("@elizaos/app-hyperscape", "Hyperscape", "Arena");
+    const app = createApp("@hyperscape/plugin-hyperscape", "Hyperscape", "Arena");
     mockClientFns.listApps.mockResolvedValue([app]);
     mockClientFns.listAppRuns.mockResolvedValue([
       createRunSummary({
@@ -1187,7 +1187,7 @@ describe("AppsView", () => {
       uiLanguage: "en",
       t: tStub,
     });
-    const appOne = createApp("@elizaos/app-hyperscape", "Hyperscape", "Arena");
+    const appOne = createApp("@hyperscape/plugin-hyperscape", "Hyperscape", "Arena");
     const appTwo = createApp("@elizaos/app-babylon", "Babylon", "Wallet");
     mockClientFns.listApps.mockResolvedValue([appOne, appTwo]);
 

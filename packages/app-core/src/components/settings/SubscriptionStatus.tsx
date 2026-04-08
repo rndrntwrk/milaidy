@@ -461,6 +461,7 @@ export function SubscriptionStatus({
                   onClick={() => {
                     setAnthropicOAuthStarted(false);
                     setAnthropicCode("");
+                    setAnthropicError("");
                   }}
                 >
                   {t("onboarding.startOver")}
@@ -579,6 +580,7 @@ export function SubscriptionStatus({
                   onClick={() => {
                     setOpenaiOAuthStarted(false);
                     setOpenaiCallbackUrl("");
+                    setOpenaiError("");
                   }}
                 >
                   {t("onboarding.startOver")}

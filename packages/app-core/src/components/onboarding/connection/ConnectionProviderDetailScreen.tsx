@@ -798,7 +798,10 @@ export function ConnectionProviderDetailScreen({
                     className={`${onboardingInputClassName} text-center`}
                     placeholder={t("onboarding.pasteAuthCode")}
                     value={anthropicCode}
-                    onChange={(e) => setAnthropicCode(e.target.value)}
+                    onChange={(e) => {
+                      setAnthropicCode(e.target.value);
+                      setAnthropicError("");
+                    }}
                   />
                 )}
               </OnboardingField>

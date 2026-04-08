@@ -210,6 +210,178 @@ describe("trajectory routes", () => {
     );
   });
 
+  it("returns stats from the active trajectory logger", async () => {
+    const logger = createCompatibleLogger({
+      getStats: async () => ({
+        totalTrajectories: 7,
+        totalSteps: 9,
+        totalLlmCalls: 11,
+        totalPromptTokens: 123,
+        totalCompletionTokens: 456,
+        averageDurationMs: 789,
+        averageReward: 1.5,
+        bySource: { client_chat: 5, discord: 2 },
+        byStatus: { completed: 6, active: 1 },
+        byScenario: { eval: 3 },
+      }),
+    });
+    const runtime = createTrajectoryRuntime({
+      getService: (serviceType: string) =>
+        serviceType === "trajectory_logger" ? logger : null,
+      getServicesByType: (serviceType: string) =>
+        serviceType === "trajectory_logger" ? [logger] : [],
+    });
+
+    const server = await startApiServer({ port: 0, runtime });
+    servers.push(server);
+
+    const response = await req(server.port, "GET", "/api/trajectories/stats");
+
+    expect(response.status).toBe(200);
+    expect(response.data.totalTrajectories).toBe(7);
+    expect(response.data.totalCompletionTokens).toBe(456);
+    expect(response.data.bySource).toEqual({ client_chat: 5, discord: 2 });
+  });
+
+  it("round-trips trajectory logger config through GET and PUT", async () => {
+    let enabled = true;
+    const logger = createCompatibleLogger({
+      isEnabled: () => enabled,
+      setEnabled: (nextEnabled) => {
+        enabled = nextEnabled;
+      },
+    });
+    const runtime = createTrajectoryRuntime({
+      getService: (serviceType: string) =>
+        serviceType === "trajectory_logger" ? logger : null,
+      getServicesByType: (serviceType: string) =>
+        serviceType === "trajectory_logger" ? [logger] : [],
+    });
+
+    const server = await startApiServer({ port: 0, runtime });
+    servers.push(server);
+
+    const before = await req(server.port, "GET", "/api/trajectories/config");
+    expect(before.status).toBe(200);
+    expect(before.data.enabled).toBe(true);
+
+    const update = await req(server.port, "PUT", "/api/trajectories/config", {
+      enabled: false,
+    });
+    expect(update.status).toBe(200);
+    expect(update.data.enabled).toBe(false);
+
+    const after = await req(server.port, "GET", "/api/trajectories/config");
+    expect(after.status).toBe(200);
+    expect(after.data.enabled).toBe(false);
+  });
+
+  it("returns trajectory detail records from the logger", async () => {
+    const startedAt = Date.now() - 2_000;
+    const finishedAt = Date.now() - 1_000;
+    const logger = createCompatibleLogger({
+      getTrajectoryDetail: async (trajectoryId: string) => ({
+        trajectoryId,
+        agentId: "trajectory-routes-agent",
+        startTime: startedAt,
+        endTime: finishedAt,
+        durationMs: finishedAt - startedAt,
+        metadata: {
+          source: "client_chat",
+        },
+        metrics: {
+          finalStatus: "completed",
+        },
+        steps: [
+          {
+            stepId: "detail-step-1",
+            timestamp: startedAt + 100,
+            llmCalls: [
+              {
+                callId: "detail-call-1",
+                model: "gpt-5.2",
+                userPrompt: "trajectory prompt",
+                response: "trajectory response",
+                timestamp: startedAt + 150,
+                promptTokens: 12,
+                completionTokens: 18,
+              },
+            ],
+          },
+        ],
+      }),
+    });
+    const runtime = createTrajectoryRuntime({
+      getService: (serviceType: string) =>
+        serviceType === "trajectory_logger" ? logger : null,
+      getServicesByType: (serviceType: string) =>
+        serviceType === "trajectory_logger" ? [logger] : [],
+    });
+
+    const server = await startApiServer({ port: 0, runtime });
+    servers.push(server);
+
+    const response = await req(
+      server.port,
+      "GET",
+      "/api/trajectories/trajectory-detail-1",
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.data.trajectory?.id).toBe("trajectory-detail-1");
+    expect(response.data.trajectory?.status).toBe("completed");
+    expect(response.data.llmCalls?.[0]?.userPrompt).toBe("trajectory prompt");
+    expect(response.data.llmCalls?.[0]?.response).toBe("trajectory response");
+  });
+
+  it("returns downloadable JSON exports with the requested filters", async () => {
+    const exportTrajectories = async (options: Record<string, unknown>) => {
+      expect(options).toEqual({
+        format: "json",
+        includePrompts: true,
+        trajectoryIds: ["trajectory-a"],
+        startDate: "2026-01-01T00:00:00.000Z",
+        endDate: "2026-01-02T00:00:00.000Z",
+        scenarioId: "scenario-1",
+        batchId: "batch-1",
+      });
+      return {
+        data: '[{"id":"trajectory-a"}]',
+        filename: "trajectory-export.json",
+        mimeType: "application/json",
+      };
+    };
+    const logger = createCompatibleLogger({
+      exportTrajectories,
+    });
+    const runtime = createTrajectoryRuntime({
+      getService: (serviceType: string) =>
+        serviceType === "trajectory_logger" ? logger : null,
+      getServicesByType: (serviceType: string) =>
+        serviceType === "trajectory_logger" ? [logger] : [],
+    });
+
+    const server = await startApiServer({ port: 0, runtime });
+    servers.push(server);
+
+    const response = await req(server.port, "POST", "/api/trajectories/export", {
+      format: "json",
+      includePrompts: true,
+      trajectoryIds: ["trajectory-a"],
+      startDate: "2026-01-01T00:00:00.000Z",
+      endDate: "2026-01-02T00:00:00.000Z",
+      scenarioId: "scenario-1",
+      batchId: "batch-1",
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers["content-type"]).toBe("application/json");
+    expect(String(response.headers["content-disposition"])).toContain(
+      'attachment; filename="trajectory-export.json"',
+    );
+    expect(response.data._raw).toBe('[{"id":"trajectory-a"}]');
+  });
+
   it("deletes only the requested trajectory ids", async () => {
     const deleteTrajectories = async (trajectoryIds: string[]) => {
       expect(trajectoryIds).toEqual(["trajectory-a", "trajectory-b"]);

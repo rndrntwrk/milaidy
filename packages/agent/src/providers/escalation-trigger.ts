@@ -70,9 +70,7 @@ async function findLastOwnerMessageTimestamp(
   runtime: IAgentRuntime,
   ownerEntityId: string,
 ): Promise<number> {
-  const roomIds = await runtime.getRoomsForParticipant(
-    ownerEntityId as UUID,
-  );
+  const roomIds = await runtime.getRoomsForParticipant(ownerEntityId as UUID);
   if (roomIds.length === 0) return 0;
 
   // Limit scan breadth
@@ -139,8 +137,7 @@ async function checkOwnerInactivity(
   );
   if (lastOwnerMessage === 0) return;
 
-  const hoursSinceOwner =
-    (Date.now() - lastOwnerMessage) / (1000 * 60 * 60);
+  const hoursSinceOwner = (Date.now() - lastOwnerMessage) / (1000 * 60 * 60);
   if (hoursSinceOwner > OWNER_INACTIVE_HOURS) {
     triggers.push({
       type: "owner_inactive",
@@ -214,8 +211,7 @@ export function createEscalationTriggerProvider(): Provider {
       const text = `# Escalation Context\n${lines.join("\n")}\n\nIf any of these warrant owner attention, use SEND_ADMIN_MESSAGE (urgency: "urgent" for emergencies — this triggers multi-channel escalation).`;
 
       const highestUrgency = triggers.reduce<Urgency>((max, t) => {
-        return (URGENCY_ORDER[t.urgency] ?? 0) >
-          (URGENCY_ORDER[max] ?? 0)
+        return (URGENCY_ORDER[t.urgency] ?? 0) > (URGENCY_ORDER[max] ?? 0)
           ? t.urgency
           : max;
       }, "low");

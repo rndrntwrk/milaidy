@@ -240,18 +240,36 @@ export function syncCompatConfigFiles(): void {
     return;
   }
 
-  const sourcePath = fs.existsSync(elizaConfigPath)
-    ? elizaConfigPath
-    : fs.existsSync(miladyConfigPath)
-      ? miladyConfigPath
-      : undefined;
-
-  if (!sourcePath) {
+  const elizaExists = fs.existsSync(elizaConfigPath);
+  const miladyExists = fs.existsSync(miladyConfigPath);
+  if (!elizaExists && !miladyExists) {
     return;
   }
 
-  const targetPath =
-    sourcePath === elizaConfigPath ? miladyConfigPath : elizaConfigPath;
+  let sourcePath: string;
+  let targetPath: string;
+
+  if (elizaExists && !miladyExists) {
+    sourcePath = elizaConfigPath;
+    targetPath = miladyConfigPath;
+  } else if (!elizaExists && miladyExists) {
+    sourcePath = miladyConfigPath;
+    targetPath = elizaConfigPath;
+  } else {
+    const elizaStat = fs.statSync(elizaConfigPath);
+    const miladyStat = fs.statSync(miladyConfigPath);
+
+    if (miladyStat.mtimeMs > elizaStat.mtimeMs) {
+      sourcePath = miladyConfigPath;
+      targetPath = elizaConfigPath;
+    } else if (elizaStat.mtimeMs > miladyStat.mtimeMs) {
+      sourcePath = elizaConfigPath;
+      targetPath = miladyConfigPath;
+    } else {
+      return;
+    }
+  }
+
   fs.mkdirSync(path.dirname(targetPath), { recursive: true });
   fs.copyFileSync(sourcePath, targetPath);
 }

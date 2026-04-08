@@ -51,8 +51,11 @@ describe("patch-deps runtime hotfixes", () => {
     );
 
     expect(source).toContain("collectWorkspacePluginOverrideDirs");
+    expect(source).toContain("includeGlobalBunCache: true");
     expect(source).toContain('actions/swap.ts');
+    expect(source).toContain('service.ts');
     expect(source).toContain('generated/specs/specs.ts');
+    expect(source).toContain('JUPITER_SERVICE');
   });
 
   it("contains bigint-buffer native fallback log patch", () => {
@@ -86,5 +89,27 @@ describe("patch-deps runtime hotfixes", () => {
     expect(source).toContain("patchLegacySharpStoreAliases");
     expect(source).toContain("sharp@0.33.5");
     expect(source).toContain("@img+sharp-libvips-darwin-arm64@1.0.4");
+  });
+
+  it("contains plugin-knowledge runtime bundle sync", () => {
+    const source = readFileSync(
+      resolve(process.cwd(), "scripts/patch-deps.mjs"),
+      "utf8",
+    );
+
+    expect(source).toContain("patchPluginKnowledgeRuntimeBundles");
+    expect(source).toContain("@elizaos/plugin-knowledge");
+    expect(source).toContain("Synced plugin-knowledge runtime bundle");
+  });
+
+  it("contains jsdom canvas opt-in patch", () => {
+    const source = readFileSync(
+      resolve(process.cwd(), "scripts/patch-deps.mjs"),
+      "utf8",
+    );
+
+    expect(source).toContain("patchJsdomCanvasAutoload");
+    expect(source).toContain("MILADY_ENABLE_JSDOM_CANVAS");
+    expect(source).toContain('exports.Canvas = require("canvas")');
   });
 });

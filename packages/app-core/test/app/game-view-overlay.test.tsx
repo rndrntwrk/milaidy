@@ -37,9 +37,9 @@ function createRunSummary(
 ): AppRunSummary {
   return {
     runId: "run-1",
-    appName: "@elizaos/app-hyperscape",
+    appName: "@hyperscape/plugin-hyperscape",
     displayName: "Hyperscape",
-    pluginName: "@elizaos/app-hyperscape",
+    pluginName: "@hyperscape/plugin-hyperscape",
     launchType: "connect",
     launchUrl: "http://localhost:3333",
     viewer: {

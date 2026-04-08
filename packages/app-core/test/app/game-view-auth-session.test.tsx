@@ -166,6 +166,13 @@ describe("GameView auth session reset", () => {
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
       postMessage: vi.fn(),
+      setInterval: vi.fn((cb: TimerHandler) => {
+        if (typeof cb === "function") {
+          cb();
+        }
+        return 1;
+      }),
+      clearInterval: vi.fn(),
       location: { origin: "http://localhost:3000" },
       open: vi.fn(),
     } as unknown as Window & typeof globalThis;

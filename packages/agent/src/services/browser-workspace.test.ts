@@ -52,21 +52,33 @@ async function startBrowserFixture(): Promise<BrowserFixture> {
     }
 
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-    res.end(`<!doctype html>
-      <html lang="en">
-        <head><meta charset="utf-8" /><title>Browser Form Fixture</title></head>
-        <body>
-          <h1>Browser Form Fixture</h1>
-          <form action="/welcome" method="get">
-            <label>
-              Agent name
-              <input name="name" value="" />
-            </label>
-            <button type="submit">Continue</button>
-          </form>
-          <a href="/tasks">Open tasks</a>
-        </body>
-      </html>`);
+	    res.end(`<!doctype html>
+	      <html lang="en">
+	        <head><meta charset="utf-8" /><title>Browser Form Fixture</title></head>
+	        <body>
+	          <h1>Browser Form Fixture</h1>
+	          <form action="/welcome" method="get">
+	            <label>
+	              Agent name
+	              <input name="name" value="" />
+	            </label>
+	            <label>
+	              Plan
+	              <select name="plan">
+	                <option value="basic">Basic</option>
+	                <option value="pro">Pro</option>
+	              </select>
+	            </label>
+	            <label>
+	              <input type="checkbox" name="terms" value="yes" />
+	              Accept terms
+	            </label>
+	            <button type="submit">Continue</button>
+	            <button type="button" data-testid="secondary-action">Secondary</button>
+	          </form>
+	          <a href="/tasks">Open tasks</a>
+	        </body>
+	      </html>`);
   });
 
   await new Promise<void>((resolve) => {
@@ -284,5 +296,92 @@ describe("browser-workspace service", () => {
     expect(result.subaction).toBe("batch");
     expect(result.steps).toHaveLength(4);
     expect(result.value).toBe("Welcome, BrowserAgent");
+  });
+
+  it("supports semantic find, select, check, snapshot, and richer get modes", async () => {
+    await executeBrowserWorkspaceCommand(
+      {
+        subaction: "open",
+        show: true,
+        url: fixture.formUrl,
+      },
+      {} as NodeJS.ProcessEnv,
+    );
+
+    const fillName = await executeBrowserWorkspaceCommand(
+      {
+        subaction: "find",
+        findBy: "label",
+        action: "fill",
+        text: "Agent name",
+        value: "Milady",
+      },
+      {} as NodeJS.ProcessEnv,
+    );
+    expect(fillName.value).toEqual(
+      expect.objectContaining({ value: "Milady" }),
+    );
+
+    const selectPlan = await executeBrowserWorkspaceCommand(
+      {
+        subaction: "select",
+        findBy: "label",
+        text: "Plan",
+        value: "pro",
+      },
+      {} as NodeJS.ProcessEnv,
+    );
+    expect(selectPlan.value).toEqual(
+      expect.objectContaining({ value: "pro" }),
+    );
+
+    const checkTerms = await executeBrowserWorkspaceCommand(
+      {
+        subaction: "check",
+        findBy: "label",
+        text: "Accept terms",
+      },
+      {} as NodeJS.ProcessEnv,
+    );
+    expect(checkTerms.value).toEqual(
+      expect.objectContaining({ checked: true }),
+    );
+
+    const snapshot = await executeBrowserWorkspaceCommand(
+      {
+        subaction: "snapshot",
+      },
+      {} as NodeJS.ProcessEnv,
+    );
+    expect(snapshot.elements).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ selector: "input[name=\"name\"]" }),
+        expect.objectContaining({ selector: "select[name=\"plan\"]" }),
+      ]),
+    );
+
+    const styles = await executeBrowserWorkspaceCommand(
+      {
+        subaction: "get",
+        findBy: "testid",
+        text: "secondary-action",
+        getMode: "styles",
+      },
+      {} as NodeJS.ProcessEnv,
+    );
+    expect(styles.value).toEqual(
+      expect.objectContaining({ display: expect.any(String) }),
+    );
+
+    const checked = await executeBrowserWorkspaceCommand(
+      {
+        subaction: "get",
+        findBy: "label",
+        text: "Accept terms",
+        getMode: "checked",
+      },
+      {} as NodeJS.ProcessEnv,
+    );
+    expect(checked.value).toBe(true);
   });
 });

@@ -15,7 +15,7 @@ Milady already has the beginnings of an app-store and game session shell, but th
 The four supported games are:
 
 - `@elizaos/app-2004scape`
-- `@elizaos/app-hyperscape`
+- `@hyperscape/plugin-hyperscape`
 - `@elizaos/app-babylon`
 - `@elizaos/app-defense-of-the-agents`
 

@@ -2332,7 +2332,9 @@ export class AppManager {
 
     // Check if this is a local plugin (already present in plugins/ directory)
     const isLocal =
-      Boolean(localPluginInfo?.localPath) || isLocalPlugin(appInfo);
+      Boolean(localPluginInfo?.localPath) ||
+      Boolean(appInfo.localPath) ||
+      isLocalPlugin(appInfo);
 
     // Check if the plugin is already installed
     const installed = await pluginManager.listInstalledPlugins();

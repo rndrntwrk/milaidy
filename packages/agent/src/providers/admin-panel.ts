@@ -74,10 +74,7 @@ async function fetchOwnerChatMessages(
   return memories.slice(0, MESSAGES_PER_ROOM * MAX_ROOMS);
 }
 
-function formatMessages(
-  messages: Memory[],
-  agentId: string,
-): string {
+function formatMessages(messages: Memory[], agentId: string): string {
   if (messages.length === 0) return "";
 
   // Display oldest-first for natural reading order

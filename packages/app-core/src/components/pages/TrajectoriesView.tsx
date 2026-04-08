@@ -32,6 +32,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { Download, RefreshCw, Trash2, XCircle } from "lucide-react";
 import { TrajectoryDetailView } from "./TrajectoryDetailView";
 import { ConfirmDeleteControl } from "../shared/confirm-delete-control";
 import {
@@ -328,26 +329,26 @@ export function TrajectoriesView({
             <SidebarContent.ToolbarActions>
               <Button
                 variant="outline"
-                size="sm"
+                size="icon"
                 type="button"
-                className="h-9 rounded-full px-4 text-[11px] font-bold tracking-[0.12em]"
+                className="h-9 w-9 rounded-full"
                 onClick={() => void loadTrajectories()}
                 disabled={loading}
+                title={t("common.refresh")}
               >
-                {loading
-                  ? t("common.loading", { defaultValue: "Loading..." })
-                  : t("common.refresh")}
+                <RefreshCw className={`h-3.5 w-3.5${loading ? " animate-spin" : ""}`} />
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
                     variant="outline"
-                    size="sm"
+                    size="icon"
                     type="button"
-                    className="h-9 rounded-full px-4 text-[11px] font-bold tracking-[0.12em]"
+                    className="h-9 w-9 rounded-full"
                     disabled={exporting || trajectories.length === 0}
+                    title={t("common.export")}
                   >
-                    {exporting ? t("common.exporting") : t("common.export")}
+                    <Download className="h-3.5 w-3.5" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
@@ -366,11 +367,12 @@ export function TrajectoriesView({
                 </DropdownMenuContent>
               </DropdownMenu>
               <ConfirmDeleteControl
-                triggerClassName="h-9 rounded-full border border-danger/25 px-4 text-[11px] font-bold tracking-[0.12em] text-danger transition-all hover:border-danger/45 hover:bg-danger/10"
+                triggerClassName="h-9 w-9 rounded-full border border-danger/25 text-danger transition-all hover:border-danger/45 hover:bg-danger/10"
                 confirmClassName="h-9 rounded-full border border-danger/25 bg-danger/14 px-4 text-[11px] font-bold text-danger transition-all hover:bg-danger/20"
                 cancelClassName="h-9 rounded-full border border-border/35 px-4 text-[11px] font-bold text-muted-strong transition-all hover:border-border-strong hover:text-txt"
                 disabled={deleteDisabled}
-                triggerLabel={t("trajectoriesview.DeleteCurrent", {
+                triggerLabel={<Trash2 className="h-3.5 w-3.5" />}
+                triggerTitle={t("trajectoriesview.DeleteCurrent", {
                   defaultValue: "Delete current",
                 })}
                 promptText={t("trajectoriesview.DeleteCurrentPrompt", {
@@ -386,11 +388,12 @@ export function TrajectoriesView({
                 }}
               />
               <ConfirmDeleteControl
-                triggerClassName="h-9 rounded-full border border-danger/25 px-4 text-[11px] font-bold tracking-[0.12em] text-danger transition-all hover:border-danger/45 hover:bg-danger/10"
+                triggerClassName="h-9 w-9 rounded-full border border-danger/25 text-danger transition-all hover:border-danger/45 hover:bg-danger/10"
                 confirmClassName="h-9 rounded-full border border-danger/25 bg-danger/14 px-4 text-[11px] font-bold text-danger transition-all hover:bg-danger/20"
                 cancelClassName="h-9 rounded-full border border-border/35 px-4 text-[11px] font-bold text-muted-strong transition-all hover:border-border-strong hover:text-txt"
                 disabled={clearAllDisabled}
-                triggerLabel={t("trajectoriesview.ClearAll", {
+                triggerLabel={<XCircle className="h-3.5 w-3.5" />}
+                triggerTitle={t("trajectoriesview.ClearAll", {
                   defaultValue: "Clear all",
                 })}
                 promptText={t("trajectoriesview.ClearAllPrompt", {

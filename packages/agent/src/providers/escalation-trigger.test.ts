@@ -1,5 +1,5 @@
+import type { Memory, UUID } from "@elizaos/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { Memory, ProviderResult, UUID } from "@elizaos/core";
 
 // ---------------------------------------------------------------------------
 // Mocks — hoisted so vi.mock calls can reference them
@@ -206,11 +206,7 @@ describe("escalationTriggerProvider", () => {
       ]),
     });
 
-    const result = await provider.get(
-      runtime,
-      makeMessage(),
-      {} as never,
-    );
+    const result = await provider.get(runtime, makeMessage(), {} as never);
 
     expect(result.values).toMatchObject({
       hasEscalationTriggers: true,
@@ -239,11 +235,7 @@ describe("escalationTriggerProvider", () => {
       ]),
     });
 
-    const result = await provider.get(
-      runtime,
-      makeMessage(),
-      {} as never,
-    );
+    const result = await provider.get(runtime, makeMessage(), {} as never);
 
     expect(result.values).toMatchObject({
       hasEscalationTriggers: true,
@@ -261,11 +253,7 @@ describe("escalationTriggerProvider", () => {
       getRelationships: vi.fn().mockRejectedValue(new Error("not available")),
     });
 
-    const result = await provider.get(
-      runtime,
-      makeMessage(),
-      {} as never,
-    );
+    const result = await provider.get(runtime, makeMessage(), {} as never);
 
     // Should not throw, just return empty
     expect(result.values).toEqual({ hasEscalationTriggers: false });

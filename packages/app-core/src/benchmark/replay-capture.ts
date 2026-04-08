@@ -1,4 +1,4 @@
-import { z } from "zod";
+import z from "zod";
 
 const UnknownRecord = z.record(z.string(), z.unknown());
 

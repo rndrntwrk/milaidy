@@ -318,6 +318,30 @@ export function BabylonOperatorSurface({
     }
   }, [chatInput, loadDashboard, run, sending]);
 
+  const handleSuggestedPrompt = useCallback(
+    async (prompt: string) => {
+      const content = prompt.trim();
+      if (!run || content.length === 0 || sending) return;
+
+      setSending(true);
+      setStatusMessage(null);
+      try {
+        const result = await client.sendBabylonAgentChat(content);
+        setStatusMessage(result.message ?? "Suggestion sent to Babylon.");
+        await loadDashboard();
+      } catch (error) {
+        setStatusMessage(
+          error instanceof Error
+            ? error.message
+            : "Failed to send the Babylon operator message.",
+        );
+      } finally {
+        setSending(false);
+      }
+    },
+    [loadDashboard, run, sending],
+  );
+
   if (!run) {
     return (
       <SurfaceEmptyState
@@ -487,6 +511,22 @@ export function BabylonOperatorSurface({
       </SurfaceSection>
 
       <SurfaceSection title="Steering">
+        {run.session?.suggestedPrompts?.length ? (
+          <div className="flex flex-wrap gap-2">
+            {run.session.suggestedPrompts.slice(0, 4).map((prompt) => (
+              <Button
+                key={prompt}
+                type="button"
+                variant="outline"
+                size="sm"
+                className="min-h-10 rounded-xl px-3 shadow-sm"
+                onClick={() => void handleSuggestedPrompt(prompt)}
+              >
+                {prompt}
+              </Button>
+            ))}
+          </div>
+        ) : null}
         <div className="grid gap-2 md:grid-cols-2">
           <SurfaceCard
             label="Autonomy"

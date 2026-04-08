@@ -28,7 +28,7 @@ import { HyperscapeDetailExtension } from "./HyperscapeDetailExtension";
 
 function createApp(overrides: Partial<RegistryAppInfo> = {}): RegistryAppInfo {
   return {
-    name: "@elizaos/app-hyperscape",
+    name: "@hyperscape/plugin-hyperscape",
     displayName: "Hyperscape",
     description: "Embedded live agent control surface.",
     category: "game",
@@ -41,7 +41,7 @@ function createApp(overrides: Partial<RegistryAppInfo> = {}): RegistryAppInfo {
     latestVersion: "1.0.0",
     supports: { v0: false, v1: false, v2: true },
     npm: {
-      package: "@elizaos/app-hyperscape",
+      package: "@hyperscape/plugin-hyperscape",
       v0Version: null,
       v1Version: null,
       v2Version: "1.0.0",
@@ -56,9 +56,9 @@ function createApp(overrides: Partial<RegistryAppInfo> = {}): RegistryAppInfo {
 function createRun(overrides: Partial<AppRunSummary> = {}): AppRunSummary {
   return {
     runId: "run-hyperscape-1",
-    appName: "@elizaos/app-hyperscape",
+    appName: "@hyperscape/plugin-hyperscape",
     displayName: "Hyperscape",
-    pluginName: "@elizaos/app-hyperscape",
+    pluginName: "@hyperscape/plugin-hyperscape",
     launchType: "connect",
     launchUrl: "https://hyperscape.gg",
     viewer: {
@@ -74,7 +74,7 @@ function createRun(overrides: Partial<AppRunSummary> = {}): AppRunSummary {
     },
     session: {
       sessionId: "hyperscape-session",
-      appName: "@elizaos/app-hyperscape",
+      appName: "@hyperscape/plugin-hyperscape",
       mode: "spectate-and-steer",
       status: "running",
       displayName: "Hyperscape",

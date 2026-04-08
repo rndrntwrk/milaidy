@@ -27,11 +27,9 @@ import type {
   Memory,
   Provider,
   ProviderResult,
-  Relationship,
   Room,
   State,
   UUID,
-  World,
 } from "@elizaos/core";
 import { stringToUuid } from "@elizaos/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -98,12 +96,12 @@ vi.mock("@elizaos/core", async (importOriginal) => {
 // Imports — must come after vi.mock
 // ---------------------------------------------------------------------------
 
-import { lateJoinWhitelistEvaluator } from "../src/evaluators/late-join-whitelist";
-import { roleBackfillProvider } from "../src/providers/role-backfill";
-import { createAdminTrustProvider } from "../src/providers/admin-trust";
-import { createAdminPanelProvider } from "../src/providers/admin-panel";
-import { createEscalationTriggerProvider } from "../src/providers/escalation-trigger";
 import { sendMessageAction } from "../src/actions/send-message";
+import { lateJoinWhitelistEvaluator } from "../src/evaluators/late-join-whitelist";
+import { createAdminPanelProvider } from "../src/providers/admin-panel";
+import { createAdminTrustProvider } from "../src/providers/admin-trust";
+import { createEscalationTriggerProvider } from "../src/providers/escalation-trigger";
+import { roleBackfillProvider } from "../src/providers/role-backfill";
 import { EscalationService } from "../src/services/escalation";
 
 // ---------------------------------------------------------------------------
@@ -339,7 +337,7 @@ class ScenarioRunner {
 
   // Providers and evaluators (real implementations)
   private providers: Provider[];
-  private evaluators: typeof lateJoinWhitelistEvaluator[];
+  private evaluators: (typeof lateJoinWhitelistEvaluator)[];
   private actions: Action[];
 
   // Runtime reference
@@ -572,9 +570,7 @@ class ScenarioRunner {
     status: "proposed" | "confirmed" | "rejected",
     metadata?: Record<string, unknown>,
   ): UUID {
-    const id = stringToUuid(
-      `link-${Date.now()}-${this.relationships.length}`,
-    );
+    const id = stringToUuid(`link-${Date.now()}-${this.relationships.length}`);
     this.relationships.push({
       id,
       sourceEntityId: sourceEntityId as UUID,
@@ -588,11 +584,7 @@ class ScenarioRunner {
   /**
    * Set a role directly on a world (for multi-world role tests).
    */
-  setRole(
-    worldId: UUID | string,
-    entityId: UUID | string,
-    role: string,
-  ): void {
+  setRole(worldId: UUID | string, entityId: UUID | string, role: string): void {
     const world = this.worlds.get(worldId as string);
     if (world) {
       world.metadata.roles = {
@@ -643,10 +635,7 @@ class ScenarioRunner {
     return this.worlds.get(worldId);
   }
 
-  getRoleInWorld(
-    worldId: UUID | string,
-    entityId: UUID | string,
-  ): string {
+  getRoleInWorld(worldId: UUID | string, entityId: UUID | string): string {
     const world = this.worlds.get(worldId as string);
     return world?.metadata.roles?.[entityId as string] ?? "NONE";
   }
@@ -669,7 +658,7 @@ class ScenarioRunner {
     const entityId = params.entityId as UUID;
     const worldId = params.worldId
       ? (params.worldId as UUID)
-      : this.platformWorldMap.get(params.platform) ?? this.defaultWorldId;
+      : (this.platformWorldMap.get(params.platform) ?? this.defaultWorldId);
     const roomId = this.resolveRoomForPlatform(params.platform, worldId);
 
     // Ensure entity exists with platform metadata
@@ -733,11 +722,7 @@ class ScenarioRunner {
     const providerResults: Record<string, ProviderResult> = {};
     for (const provider of this.providers) {
       try {
-        const result = await provider.get(
-          this.runtime,
-          message,
-          {} as State,
-        );
+        const result = await provider.get(this.runtime, message, {} as State);
         providerResults[provider.name] = result;
       } catch {
         // Skip providers that fail (missing dependencies, etc.)
@@ -748,7 +733,7 @@ class ScenarioRunner {
     const actionSelection = await this.selectAction(message, providerResults);
 
     // Step 5: Execute action if selected
-    let actionResult: unknown = undefined;
+    let actionResult: unknown;
     if (actionSelection?.action && actionSelection.action !== "NONE") {
       const action = this.actions.find(
         (a) => a.name === actionSelection.action,
@@ -778,8 +763,7 @@ class ScenarioRunner {
       const entityName =
         entity?.names?.[0] ?? (entityId === this.agentId ? "Agent" : entityId);
       const world = this.worlds.get(worldId);
-      const role =
-        world?.metadata.roles?.[entityId as string] ?? "NONE";
+      const role = world?.metadata.roles?.[entityId as string] ?? "NONE";
 
       const systemActions: string[] = [];
       const stateChanges: string[] = [];
@@ -806,9 +790,7 @@ class ScenarioRunner {
           }
         }
         if (ext.rejected && ext.rejected.length > 0) {
-          systemActions.push(
-            `Rejected: ${ext.rejected.join(", ")}`,
-          );
+          systemActions.push(`Rejected: ${ext.rejected.join(", ")}`);
         }
         const claims = this.getClaims(entityId);
         if (claims.length > 0) {
@@ -897,25 +879,20 @@ class ScenarioRunner {
 
         // Validate platform
         if (!KNOWN_PLATFORMS.has(identity.platform)) {
-          rejected.push(
-            `${identity.platform}: unknown platform`,
-          );
+          rejected.push(`${identity.platform}: unknown platform`);
           continue;
         }
 
         // Validate handle is non-empty
         if (!normalizedHandle || normalizedHandle.trim().length === 0) {
-          rejected.push(
-            `${identity.platform}: empty handle`,
-          );
+          rejected.push(`${identity.platform}: empty handle`);
           continue;
         }
 
         // Check for existing claim on same platform+handle — update instead of duplicate
         const existingIdx = existing.findIndex(
           (e) =>
-            e.platform === identity.platform &&
-            e.handle === normalizedHandle,
+            e.platform === identity.platform && e.handle === normalizedHandle,
         );
 
         const claim: IdentityClaim = {
@@ -937,8 +914,7 @@ class ScenarioRunner {
         accepted.push(identity);
       }
 
-      (entity.metadata as Record<string, unknown>).identityClaims =
-        existing;
+      (entity.metadata as Record<string, unknown>).identityClaims = existing;
 
       return {
         identities: accepted,
@@ -996,9 +972,7 @@ class ScenarioRunner {
     }
 
     // Create new room for this platform in the target world
-    const roomId = stringToUuid(
-      `room-${platform}-${worldId}`,
-    );
+    const roomId = stringToUuid(`room-${platform}-${worldId}`);
     this.rooms.set(roomId, {
       id: roomId,
       worldId,
@@ -1014,19 +988,15 @@ class ScenarioRunner {
   // -----------------------------------------------------------------------
 
   private wirePluginRolesMocks(): void {
-    const runner = this;
     const getOwnerId = () =>
-      runner.worlds.get(runner.defaultWorldId)?.metadata.ownership?.ownerId ??
-      null;
+      this.worlds.get(this.defaultWorldId)?.metadata.ownership?.ownerId ?? null;
 
-    mockNormalizeRole.mockImplementation(
-      (raw: string | undefined | null) => {
-        if (!raw) return "NONE";
-        const upper = raw.toUpperCase();
-        if (upper === "OWNER" || upper === "ADMIN") return upper;
-        return "NONE";
-      },
-    );
+    mockNormalizeRole.mockImplementation((raw: string | undefined | null) => {
+      if (!raw) return "NONE";
+      const upper = raw.toUpperCase();
+      if (upper === "OWNER" || upper === "ADMIN") return upper;
+      return "NONE";
+    });
 
     mockGetEntityRole.mockImplementation(
       (metadata: RolesMetadata | undefined, entityId: string) => {
@@ -1059,9 +1029,9 @@ class ScenarioRunner {
         if (ownerId) {
           return ownerId;
         }
-        const room = runner.rooms.get(message.roomId);
+        const room = this.rooms.get(message.roomId);
         if (!room?.worldId) return null;
-        const world = runner.worlds.get(room.worldId as string);
+        const world = this.worlds.get(room.worldId as string);
         return world?.metadata.ownership?.ownerId ?? null;
       },
     );
@@ -1112,49 +1082,47 @@ class ScenarioRunner {
   // -----------------------------------------------------------------------
 
   private buildRuntime(): IAgentRuntime {
-    const self = this;
-
     const runtime = {
       agentId: this.agentId,
       character: { name: "ScenarioAgent", postExamples: [] },
 
       // Entity operations
       getEntityById: vi.fn(async (id: UUID) => {
-        return self.entities.get(id) ?? null;
+        return this.entities.get(id) ?? null;
       }),
       getEntity: vi.fn(async (id: UUID) => {
-        return self.entities.get(id) ?? null;
+        return this.entities.get(id) ?? null;
       }),
       updateEntity: vi.fn(async (entity: Entity) => {
-        self.entities.set(entity.id, entity);
+        this.entities.set(entity.id, entity);
       }),
       createEntity: vi.fn(async (entity: Entity) => {
-        self.entities.set(entity.id, entity);
+        this.entities.set(entity.id, entity);
         return entity;
       }),
 
       // Room operations
       getRoom: vi.fn(async (id: UUID) => {
-        return self.rooms.get(id) ?? null;
+        return this.rooms.get(id) ?? null;
       }),
       getRooms: vi.fn(async (worldId: UUID) => {
-        return Array.from(self.rooms.values()).filter(
+        return Array.from(this.rooms.values()).filter(
           (r) => r.worldId === worldId,
         );
       }),
       getEntitiesForRoom: vi.fn(async (_roomId: UUID) => {
-        return Array.from(self.entities.values());
+        return Array.from(this.entities.values());
       }),
       getRoomsForParticipant: vi.fn(async (entityId: UUID) => {
         // Return rooms where this entity has sent messages, plus client_chat rooms
         const roomsWithMessages = new Set<string>();
-        for (const [roomId, memories] of self.memories.entries()) {
+        for (const [roomId, memories] of this.memories.entries()) {
           if (memories.some((m) => m.entityId === entityId)) {
             roomsWithMessages.add(roomId);
           }
         }
         // Also include client_chat rooms (for admin panel)
-        for (const room of Array.from(self.rooms.values())) {
+        for (const room of Array.from(this.rooms.values())) {
           if (room.source === "client_chat") {
             roomsWithMessages.add(room.id);
           }
@@ -1164,32 +1132,30 @@ class ScenarioRunner {
 
       // World operations
       getWorld: vi.fn(async (id: UUID) => {
-        return self.worlds.get(id) ?? null;
+        return this.worlds.get(id) ?? null;
       }),
       getAllWorlds: vi.fn(async () => {
-        return Array.from(self.worlds.values());
+        return Array.from(this.worlds.values());
       }),
       updateWorld: vi.fn(async (world: MockWorld) => {
-        self.worlds.set(world.id, { ...world });
+        this.worlds.set(world.id, { ...world });
       }),
 
       // Memory operations
       createMemory: vi.fn(async (memory: Memory, _tableName?: string) => {
         const roomId = memory.roomId as string;
-        const current = self.memories.get(roomId) ?? [];
+        const current = this.memories.get(roomId) ?? [];
         current.push({
           ...memory,
           createdAt: memory.createdAt ?? Date.now(),
         });
-        self.memories.set(roomId, current);
+        this.memories.set(roomId, current);
       }),
-      getMemories: vi.fn(
-        async (query: { roomId?: string; count?: number }) => {
-          const current = self.memories.get(query.roomId ?? "") ?? [];
-          const count = Math.max(1, query.count ?? current.length);
-          return current.slice(-count);
-        },
-      ),
+      getMemories: vi.fn(async (query: { roomId?: string; count?: number }) => {
+        const current = this.memories.get(query.roomId ?? "") ?? [];
+        const count = Math.max(1, query.count ?? current.length);
+        return current.slice(-count);
+      }),
       getMemoriesByRoomIds: vi.fn(
         async (query: {
           roomIds?: UUID[];
@@ -1199,7 +1165,7 @@ class ScenarioRunner {
           const roomIds = query.roomIds ?? [];
           const merged: Memory[] = [];
           for (const rid of roomIds) {
-            merged.push(...(self.memories.get(rid) ?? []));
+            merged.push(...(this.memories.get(rid) ?? []));
           }
           return merged.slice(-(query.limit ?? merged.length));
         },
@@ -1210,14 +1176,13 @@ class ScenarioRunner {
         async (query: { entityIds?: string[]; tags?: string[] }) => {
           const entityIds = query.entityIds ?? [];
           const tags = query.tags ?? [];
-          return self.relationships.filter((r) => {
+          return this.relationships.filter((r) => {
             const entityMatch =
               entityIds.length === 0 ||
               entityIds.includes(r.sourceEntityId) ||
               entityIds.includes(r.targetEntityId);
             const tagMatch =
-              tags.length === 0 ||
-              tags.some((t) => r.tags.includes(t));
+              tags.length === 0 || tags.some((t) => r.tags.includes(t));
             return entityMatch && tagMatch;
           });
         },
@@ -1237,7 +1202,7 @@ class ScenarioRunner {
             metadata?: Record<string, unknown>;
           },
         ) => {
-          self.sentMessages.push({ target, content });
+          this.sentMessages.push({ target, content });
         },
       ),
       registerSendHandler: vi.fn(),
@@ -1447,9 +1412,9 @@ describe("identity scenarios", () => {
 
       // User has ADMIN in discord world but no role in app world
       expect(runner.getRoleInWorld(discordWorldId, userId)).toBe("ADMIN");
-      expect(
-        runner.getRoleInWorld(runner.getDefaultWorldId(), userId),
-      ).toBe("NONE");
+      expect(runner.getRoleInWorld(runner.getDefaultWorldId(), userId)).toBe(
+        "NONE",
+      );
     });
 
     it("should detect matching discord entity for cross-platform link", async () => {
@@ -1471,9 +1436,7 @@ describe("identity scenarios", () => {
       });
 
       // Create discord world with the same owner
-      const discordWorldId = runner.setupWorld("discord", {
-        ownerId,
-      });
+      runner.setupWorld("discord", { ownerId });
 
       // New discord entity arrives
       const discordEntityId = stringToUuid("discord-shaw");
@@ -1486,16 +1449,14 @@ describe("identity scenarios", () => {
       // Create identity link between them
       runner.addIdentityLink(discordEntityId, ownerId, "confirmed");
 
-      const result = await runner.sendMessage({
+      await runner.sendMessage({
         text: "hey it's me",
         entityId: discordEntityId,
         platform: "discord",
       });
 
       // The link exists
-      const links = runner.getRelationships(discordEntityId, [
-        "identity_link",
-      ]);
+      const links = runner.getRelationships(discordEntityId, ["identity_link"]);
       expect(links.length).toBe(1);
       expect(links[0].metadata.status).toBe("confirmed");
 
@@ -1617,7 +1578,9 @@ describe("identity scenarios", () => {
         runner.runtime,
         message,
         {} as State,
-        { parameters: { target: "admin", text: "notification" } } as HandlerOptions,
+        {
+          parameters: { target: "admin", text: "notification" },
+        } as HandlerOptions,
       );
       expect(result).toMatchObject({
         success: true,
@@ -1763,17 +1726,13 @@ describe("identity scenarios", () => {
       // Still only 1 claim — updated, not duplicated
       const secondClaims = runner.getClaims(userId);
       expect(secondClaims.length).toBe(1);
-      expect(secondClaims[0].claimedAt).toBeGreaterThanOrEqual(
-        firstClaimedAt,
-      );
+      expect(secondClaims[0].claimedAt).toBeGreaterThanOrEqual(firstClaimedAt);
 
       runner.printTranscript();
     });
 
     it("should allow user to unlink own claim via relationship status change", async () => {
-      const runner = new ScenarioRunner(
-        "Claim Lifecycle — unlink own claim",
-      );
+      const runner = new ScenarioRunner("Claim Lifecycle — unlink own claim");
       const userId = stringToUuid("alice");
       runner.setupEntity(userId, {
         name: "Alice",
@@ -1790,16 +1749,10 @@ describe("identity scenarios", () => {
       });
 
       const twitterEntityId = stringToUuid("alice-twitter");
-      const linkId = runner.addIdentityLink(
-        userId,
-        twitterEntityId,
-        "confirmed",
-      );
+      runner.addIdentityLink(userId, twitterEntityId, "confirmed");
 
       // Verify setup
-      const linksBefore = runner.getRelationships(userId, [
-        "identity_link",
-      ]);
+      const linksBefore = runner.getRelationships(userId, ["identity_link"]);
       expect(linksBefore.length).toBe(1);
       expect(linksBefore[0].metadata.status).toBe("confirmed");
 
@@ -1815,9 +1768,7 @@ describe("identity scenarios", () => {
       }
 
       // Verify link is rejected
-      const linksAfter = runner.getRelationships(userId, [
-        "identity_link",
-      ]);
+      const linksAfter = runner.getRelationships(userId, ["identity_link"]);
       expect(linksAfter[0].metadata.status).toBe("rejected");
 
       // Verify claim is rejected
@@ -2012,9 +1963,7 @@ describe("identity scenarios", () => {
       expect(state.channelsSent).toEqual(["client_chat"]);
       expect(runner.sentMessages.length).toBe(1);
       expect(runner.sentMessages[0].target.source).toBe("client_chat");
-      expect(runner.sentMessages[0].content.metadata?.escalation).toBe(
-        true,
-      );
+      expect(runner.sentMessages[0].content.metadata?.escalation).toBe(true);
 
       // No response — advance to telegram
       await EscalationService.checkEscalation(runner.runtime, state.id);
@@ -2143,9 +2092,7 @@ describe("identity scenarios", () => {
     });
 
     it("should detect active escalation in provider output", async () => {
-      const runner = new ScenarioRunner(
-        "Escalation — provider detection",
-      );
+      const runner = new ScenarioRunner("Escalation — provider detection");
       const ownerId = stringToUuid("owner-entity");
       runner.setupOwner(ownerId, { name: "Shaw" });
       runner.setConfig({
@@ -2208,8 +2155,7 @@ describe("identity scenarios", () => {
       const expiredClaim = claims[0];
 
       // Verify claim is old
-      const ageHours =
-        (Date.now() - expiredClaim.claimedAt) / (1000 * 60 * 60);
+      const ageHours = (Date.now() - expiredClaim.claimedAt) / (1000 * 60 * 60);
       expect(ageHours).toBeGreaterThan(48);
 
       // Simulate confirmation attempt on expired claim — auto-reject
@@ -2245,8 +2191,7 @@ describe("identity scenarios", () => {
       const claims = runner.getClaims(userId);
       const claim = claims[0];
 
-      const ageHours =
-        (Date.now() - claim.claimedAt) / (1000 * 60 * 60);
+      const ageHours = (Date.now() - claim.claimedAt) / (1000 * 60 * 60);
       expect(ageHours).toBeLessThan(48);
 
       // Not expired — can be confirmed
@@ -2279,9 +2224,9 @@ describe("identity scenarios", () => {
       }
 
       // Verify: OWNER in app-world, NONE in discord-world
-      expect(
-        runner.getRoleInWorld(runner.getDefaultWorldId(), ownerId),
-      ).toBe("OWNER");
+      expect(runner.getRoleInWorld(runner.getDefaultWorldId(), ownerId)).toBe(
+        "OWNER",
+      );
       expect(runner.getRoleInWorld(discordWorldId, ownerId)).toBe("NONE");
 
       // Owner sends message in discord — triggers roleBackfillProvider
@@ -2328,9 +2273,7 @@ describe("identity scenarios", () => {
       expect(result.evaluators.late_join_whitelist).toBeDefined();
 
       // ADMIN set in discord world
-      const discordWorldId = runner
-        .getWorldForPlatform("discord")
-        ?.id as UUID;
+      const discordWorldId = runner.getWorldForPlatform("discord")?.id as UUID;
       expect(runner.getRoleInWorld(discordWorldId, adminId)).toBe("ADMIN");
 
       // OWNER still present
@@ -2340,9 +2283,7 @@ describe("identity scenarios", () => {
     });
 
     it("should allow OWNER and ADMIN roles to coexist in same world", async () => {
-      const runner = new ScenarioRunner(
-        "Role Consistency — coexisting roles",
-      );
+      const runner = new ScenarioRunner("Role Consistency — coexisting roles");
       const ownerId = stringToUuid("owner-entity");
       runner.setupOwner(ownerId, { name: "Shaw" });
 
@@ -2366,9 +2307,7 @@ describe("identity scenarios", () => {
 
   describe("Scenario 9: Admin Panel Cross-Platform Context", () => {
     it("should mark owner as trusted admin in provider output", async () => {
-      const runner = new ScenarioRunner(
-        "Admin Panel — owner trust check",
-      );
+      const runner = new ScenarioRunner("Admin Panel — owner trust check");
       const ownerId = stringToUuid("owner-entity");
       runner.setupOwner(ownerId, { name: "Shaw" });
 
@@ -2387,9 +2326,7 @@ describe("identity scenarios", () => {
     });
 
     it("should not mark non-owner as trusted admin", async () => {
-      const runner = new ScenarioRunner(
-        "Admin Panel — non-owner untrusted",
-      );
+      const runner = new ScenarioRunner("Admin Panel — non-owner untrusted");
       const ownerId = stringToUuid("owner-entity");
       runner.setupOwner(ownerId, { name: "Shaw" });
 
@@ -2419,11 +2356,7 @@ describe("identity scenarios", () => {
       runner.setupEntity(userId, { name: "Bob", platform: "discord" });
 
       // Add a proposed (pending) identity link
-      runner.addIdentityLink(
-        userId,
-        stringToUuid("bob-twitter"),
-        "proposed",
-      );
+      runner.addIdentityLink(userId, stringToUuid("bob-twitter"), "proposed");
 
       const result = await runner.sendMessage({
         text: "just checking in",
@@ -2440,9 +2373,7 @@ describe("identity scenarios", () => {
     });
 
     it("should allow agent to send admin message with urgency metadata", async () => {
-      const runner = new ScenarioRunner(
-        "Admin Panel — send admin message",
-      );
+      const runner = new ScenarioRunner("Admin Panel — send admin message");
       const ownerId = stringToUuid("owner-entity");
       runner.setupOwner(ownerId, { name: "Shaw" });
 
@@ -2459,7 +2390,11 @@ describe("identity scenarios", () => {
         message,
         {} as State,
         {
-          parameters: { target: "admin", text: "Task completed", urgency: "important" },
+          parameters: {
+            target: "admin",
+            text: "Task completed",
+            urgency: "important",
+          },
         } as HandlerOptions,
       );
 
@@ -2472,9 +2407,7 @@ describe("identity scenarios", () => {
     });
 
     it("should reject SEND_MESSAGE to admin with empty text", async () => {
-      const runner = new ScenarioRunner(
-        "Admin Panel — reject empty text",
-      );
+      const runner = new ScenarioRunner("Admin Panel — reject empty text");
       const ownerId = stringToUuid("owner-entity");
       runner.setupOwner(ownerId, { name: "Shaw" });
 
@@ -2500,9 +2433,7 @@ describe("identity scenarios", () => {
     });
 
     it("should reject SEND_MESSAGE to admin with invalid urgency", async () => {
-      const runner = new ScenarioRunner(
-        "Admin Panel — reject invalid urgency",
-      );
+      const runner = new ScenarioRunner("Admin Panel — reject invalid urgency");
       const ownerId = stringToUuid("owner-entity");
       runner.setupOwner(ownerId, { name: "Shaw" });
 
@@ -2559,7 +2490,11 @@ describe("identity scenarios", () => {
         message,
         {} as State,
         {
-          parameters: { target: "admin", text: "Server is down!", urgency: "urgent" },
+          parameters: {
+            target: "admin",
+            text: "Server is down!",
+            urgency: "urgent",
+          },
         } as HandlerOptions,
       );
 
@@ -2620,8 +2555,7 @@ describe("identity scenarios", () => {
       const discordWorld = runner.getWorldForPlatform("discord");
       // Admin was promoted in the default world (shared) since discord
       // room maps to default world when no separate discord world exists
-      const adminRole =
-        discordWorld?.metadata.roles?.[adminId] ?? "NONE";
+      const adminRole = discordWorld?.metadata.roles?.[adminId] ?? "NONE";
       expect(adminRole).toBe("ADMIN");
 
       runner.printTranscript();

@@ -9,6 +9,7 @@
  */
 
 import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { AppManager } from "../services/app-manager";
 import type {
@@ -17,10 +18,15 @@ import type {
 } from "../services/plugin-manager-types";
 
 // Mock local Hyperscape plugin as it appears from local plugin scanning
+const hyperscapeLocalPluginUrl = new URL(
+  "../../../../../hyperscape/packages/plugin-hyperscape/",
+  import.meta.url,
+);
+
 const HYPERSCAPE_LOCAL_PLUGIN: RegistryPluginInfo = {
-  name: "@elizaos/app-hyperscape",
-  gitRepo: "elizaos/app-hyperscape",
-  gitUrl: "https://github.com/elizaos/app-hyperscape",
+  name: "@hyperscape/plugin-hyperscape",
+  gitRepo: "HyperscapeAI/hyperscape",
+  gitUrl: "https://github.com/HyperscapeAI/hyperscape",
   displayName: "Hyperscape",
   description:
     "AI-powered 3D multiplayer RPG — explore, fight, gather, craft, and socialize with AI agents",
@@ -30,12 +36,13 @@ const HYPERSCAPE_LOCAL_PLUGIN: RegistryPluginInfo = {
   language: "TypeScript",
   kind: "app",
   npm: {
-    package: "@elizaos/app-hyperscape",
+    package: "@hyperscape/plugin-hyperscape",
     v0Version: null,
     v1Version: "1.0.0",
     v2Version: "1.0.0",
   },
   supports: { v0: false, v1: true, v2: true },
+  localPath: fileURLToPath(hyperscapeLocalPluginUrl),
   // App-specific metadata
   category: "game",
   capabilities: [
@@ -69,10 +76,7 @@ const HYPERSCAPE_LOCAL_PLUGIN: RegistryPluginInfo = {
 };
 
 const hasLocalHyperscapePlugin = existsSync(
-  new URL(
-    "../../../../../plugins/app-hyperscape/elizaos.plugin.json",
-    import.meta.url,
-  ),
+  new URL("elizaos.plugin.json", hyperscapeLocalPluginUrl),
 );
 
 function createMockPluginManager(
@@ -160,7 +164,7 @@ describe.skipIf(!hasLocalHyperscapePlugin)("Hyperscape E2E Integration", () => {
     test("lists available apps including Hyperscape", async () => {
       const apps = await appManager.listAvailable(pluginManager);
       const hyperscape = apps.find(
-        (app) => app.name === "@elizaos/app-hyperscape",
+        (app) => app.name === "@hyperscape/plugin-hyperscape",
       );
 
       expect(apps.length).toBeGreaterThan(0);
@@ -179,14 +183,14 @@ describe.skipIf(!hasLocalHyperscapePlugin)("Hyperscape E2E Integration", () => {
       const results = await appManager.search(pluginManager, "hyperscape");
 
       expect(results.length).toBeGreaterThan(0);
-      expect(results[0].name).toBe("@elizaos/app-hyperscape");
+      expect(results[0].name).toBe("@hyperscape/plugin-hyperscape");
     });
 
     test("search returns Hyperscape for RPG queries", async () => {
       const results = await appManager.search(pluginManager, "rpg");
 
       expect(results.length).toBeGreaterThan(0);
-      expect(results.some((r) => r.name === "@elizaos/app-hyperscape")).toBe(
+      expect(results.some((r) => r.name === "@hyperscape/plugin-hyperscape")).toBe(
         true,
       );
     });
@@ -196,21 +200,31 @@ describe.skipIf(!hasLocalHyperscapePlugin)("Hyperscape E2E Integration", () => {
     test("returns full Hyperscape metadata", async () => {
       const info = await appManager.getInfo(
         pluginManager,
-        "@elizaos/app-hyperscape",
+        "@hyperscape/plugin-hyperscape",
       );
 
       expect(info).not.toBeNull();
-      expect(info?.name).toBe("@elizaos/app-hyperscape");
+      expect(info?.name).toBe("@hyperscape/plugin-hyperscape");
       expect(info?.displayName).toBe("Hyperscape");
       expect(info?.category).toBe("game");
       expect(info?.capabilities).toContain("combat");
-      expect(info?.capabilities).toEqual(["combat"]);
+      expect(info?.capabilities).toEqual(
+        expect.arrayContaining([
+          "combat",
+          "skills",
+          "inventory",
+          "banking",
+          "social-chat",
+          "exploration",
+          "crafting",
+        ]),
+      );
     });
 
     test("returns viewer configuration", async () => {
       const info = (await appManager.getInfo(
         pluginManager,
-        "@elizaos/app-hyperscape",
+        "@hyperscape/plugin-hyperscape",
       )) as RegistryPluginInfo & {
         viewer?: { url: string; postMessageAuth?: boolean };
       };
@@ -234,7 +248,7 @@ describe.skipIf(!hasLocalHyperscapePlugin)("Hyperscape E2E Integration", () => {
     test("launches Hyperscape successfully", async () => {
       const result = await appManager.launch(
         pluginManager,
-        "@elizaos/app-hyperscape",
+        "@hyperscape/plugin-hyperscape",
       );
 
       expect(result.displayName).toBe("Hyperscape");
@@ -245,7 +259,7 @@ describe.skipIf(!hasLocalHyperscapePlugin)("Hyperscape E2E Integration", () => {
     test("returns viewer config with correct URL", async () => {
       const result = await appManager.launch(
         pluginManager,
-        "@elizaos/app-hyperscape",
+        "@hyperscape/plugin-hyperscape",
       );
       const viewerUrl = new URL(result.viewer?.url ?? "http://localhost");
 
@@ -278,7 +292,7 @@ describe.skipIf(!hasLocalHyperscapePlugin)("Hyperscape E2E Integration", () => {
     test("returns viewer sandbox policy", async () => {
       const result = await appManager.launch(
         pluginManager,
-        "@elizaos/app-hyperscape",
+        "@hyperscape/plugin-hyperscape",
       );
 
       expect(result.viewer?.sandbox).toBe(
@@ -297,7 +311,7 @@ describe.skipIf(!hasLocalHyperscapePlugin)("Hyperscape E2E Integration", () => {
     test("does not require restart for local plugins", async () => {
       const result = await appManager.launch(
         pluginManager,
-        "@elizaos/app-hyperscape",
+        "@hyperscape/plugin-hyperscape",
       );
 
       // Local plugins should already be available
@@ -309,7 +323,7 @@ describe.skipIf(!hasLocalHyperscapePlugin)("Hyperscape E2E Integration", () => {
     test("indicates postMessage auth is configured", async () => {
       const result = await appManager.launch(
         pluginManager,
-        "@elizaos/app-hyperscape",
+        "@hyperscape/plugin-hyperscape",
       );
 
       // Without HYPERSCAPE_AUTH_TOKEN env var, postMessageAuth should be false
@@ -322,12 +336,12 @@ describe.skipIf(!hasLocalHyperscapePlugin)("Hyperscape E2E Integration", () => {
     test("complete discovery to launch flow", async () => {
       // Step 1: List apps
       const apps = await appManager.listAvailable(pluginManager);
-      expect(apps.some((a) => a.name === "@elizaos/app-hyperscape")).toBe(true);
+      expect(apps.some((a) => a.name === "@hyperscape/plugin-hyperscape")).toBe(true);
 
       // Step 2: Get app info
       const info = await appManager.getInfo(
         pluginManager,
-        "@elizaos/app-hyperscape",
+        "@hyperscape/plugin-hyperscape",
       );
       expect(info).not.toBeNull();
       expect(info?.displayName).toBe("Hyperscape");
@@ -335,7 +349,7 @@ describe.skipIf(!hasLocalHyperscapePlugin)("Hyperscape E2E Integration", () => {
       // Step 3: Launch app
       const launchResult = await appManager.launch(
         pluginManager,
-        "@elizaos/app-hyperscape",
+        "@hyperscape/plugin-hyperscape",
       );
       const viewerUrl = new URL(launchResult.viewer?.url ?? "http://localhost");
       expect(viewerUrl.origin).toBe("http://localhost:3333");
@@ -350,7 +364,7 @@ describe.skipIf(!hasLocalHyperscapePlugin)("Hyperscape E2E Integration", () => {
       // Step 4: Verify can stop
       const stopResult = await appManager.stop(
         pluginManager,
-        "@elizaos/app-hyperscape",
+        "@hyperscape/plugin-hyperscape",
       );
       expect(stopResult.success).toBe(true);
     });

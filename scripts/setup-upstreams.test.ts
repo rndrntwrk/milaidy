@@ -216,11 +216,11 @@ describe("getPluginPackageLinks", () => {
         "utf8",
       );
 
-      const appDir = path.join(pluginsRoot, "app-hyperscape");
+      const appDir = path.join(pluginsRoot, "plugin-hyperscape");
       mkdirSync(appDir, { recursive: true });
       writeFileSync(
         path.join(appDir, "package.json"),
-        JSON.stringify({ name: "@elizaos/app-hyperscape" }),
+        JSON.stringify({ name: "@hyperscape/plugin-hyperscape" }),
         "utf8",
       );
 
@@ -250,7 +250,7 @@ describe("getPluginPackageLinks", () => {
           {
             linkPath: path.join(
               miladyRoot,
-              "node_modules/@elizaos/app-hyperscape",
+              "node_modules/@hyperscape/plugin-hyperscape",
             ),
             targetPath: appDir,
           },

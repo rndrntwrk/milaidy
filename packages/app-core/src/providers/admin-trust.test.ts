@@ -1,13 +1,11 @@
 import type { IAgentRuntime, Memory, State } from "@elizaos/core";
 import { describe, expect, it, vi } from "vitest";
 
-const {
-  mockCheckSenderRole,
-  mockResolveCanonicalOwnerIdForMessage,
-} = vi.hoisted(() => ({
-  mockCheckSenderRole: vi.fn(),
-  mockResolveCanonicalOwnerIdForMessage: vi.fn(),
-}));
+const { mockCheckSenderRole, mockResolveCanonicalOwnerIdForMessage } =
+  vi.hoisted(() => ({
+    mockCheckSenderRole: vi.fn(),
+    mockResolveCanonicalOwnerIdForMessage: vi.fn(),
+  }));
 
 vi.mock("@miladyai/plugin-roles", () => ({
   checkSenderRole: mockCheckSenderRole,

@@ -336,5 +336,17 @@ describe("Trajectory logger chat roundtrip", () => {
     );
     expect(detail.llmCall.userPrompt).toBe(prompt);
     expect(detail.llmCall.response).toBe(expectedResponse);
+
+    const hydratedDetail = await req(
+      server.port,
+      "GET",
+      `/api/trajectories/${encodeURIComponent(detail.trajectoryId)}`,
+    );
+    expect(hydratedDetail.status).toBe(200);
+    const trajectory = hydratedDetail.data.trajectory as Record<string, unknown>;
+    expect(trajectory.id).toBe(detail.trajectoryId);
+    expect(trajectory.source).toBe("client_chat");
+    expect(trajectory.status).toBe("completed");
+    expect(typeof trajectory.endTime).toBe("number");
   });
 });

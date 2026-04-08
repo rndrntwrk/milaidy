@@ -72,7 +72,6 @@ export async function handleOnboardingCompatRoute(
   }
   const rawBody = Buffer.concat(chunks);
 
-  let replayBody = rawBody;
   let capturedCloudApiKey: string | undefined;
 
   try {
@@ -177,9 +176,6 @@ export async function handleOnboardingCompatRoute(
       );
     }
 
-    if (replayBodyRecord !== body) {
-      replayBody = Buffer.from(JSON.stringify(replayBodyRecord), "utf8");
-    }
   } catch {
     // JSON parse failed — let upstream handle the error
   }
@@ -190,7 +186,5 @@ export async function handleOnboardingCompatRoute(
     scheduleCloudApiKeyResave(capturedCloudApiKey);
   }
 
-  req.push(replayBody);
-  req.push(null);
-  return false;
+  return true;
 }

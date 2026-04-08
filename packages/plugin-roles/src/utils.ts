@@ -101,7 +101,9 @@ function parseOwnerContactEntityIds(raw: string | undefined): string[] {
 
     return Object.values(parsed)
       .map((entry) =>
-        entry && typeof entry.entityId === "string" ? entry.entityId.trim() : "",
+        entry && typeof entry.entityId === "string"
+          ? entry.entityId.trim()
+          : "",
       )
       .filter((entityId) => entityId.length > 0);
   } catch (error) {
@@ -180,9 +182,7 @@ async function getEntityMetadata(
   }
 }
 
-export function getConfiguredOwnerEntityIds(
-  runtime: IAgentRuntime,
-): string[] {
+export function getConfiguredOwnerEntityIds(runtime: IAgentRuntime): string[] {
   const configuredAdminEntityId = getRuntimeSettingString(
     runtime,
     CANONICAL_OWNER_SETTING_KEY,
@@ -205,9 +205,7 @@ export function getConfiguredOwnerEntityIds(
   return [...deduped];
 }
 
-export function hasConfiguredCanonicalOwner(
-  runtime: IAgentRuntime,
-): boolean {
+export function hasConfiguredCanonicalOwner(runtime: IAgentRuntime): boolean {
   return getConfiguredOwnerEntityIds(runtime).length > 0;
 }
 

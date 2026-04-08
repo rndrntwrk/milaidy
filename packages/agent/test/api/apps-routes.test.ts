@@ -166,14 +166,14 @@ describe("handleAppsRoutes", () => {
     const listRuns = vi.fn(async (_runtime?: IAgentRuntime | null) => [
       {
         runId: "run-1",
-        appName: "@elizaos/app-hyperscape",
+        appName: "@hyperscape/plugin-hyperscape",
         displayName: "Hyperscape",
       },
     ]);
     const runs = [
       {
         runId: "run-1",
-        appName: "@elizaos/app-hyperscape",
+        appName: "@hyperscape/plugin-hyperscape",
         displayName: "Hyperscape",
       },
     ];
@@ -246,7 +246,7 @@ describe("handleAppsRoutes", () => {
     const { res, getStatus, getJson } = createMockHttpResponse();
     const run = {
       runId: "run-1",
-      appName: "@elizaos/app-hyperscape",
+      appName: "@hyperscape/plugin-hyperscape",
       displayName: "Hyperscape",
       session: {
         sessionId: "agent-1",
@@ -277,7 +277,7 @@ describe("handleAppsRoutes", () => {
           message: "Queued guidance for Hyperscape.",
           session: {
             sessionId: "agent-1",
-            appName: "@elizaos/app-hyperscape",
+            appName: "@hyperscape/plugin-hyperscape",
             mode: "spectate-and-steer",
             status: "running",
           },
@@ -310,7 +310,7 @@ describe("handleAppsRoutes", () => {
       status: 202,
       run: {
         runId: "run-1",
-        appName: "@elizaos/app-hyperscape",
+        appName: "@hyperscape/plugin-hyperscape",
         displayName: "Hyperscape",
         session: {
           sessionId: "agent-1",
@@ -322,7 +322,7 @@ describe("handleAppsRoutes", () => {
       },
       session: {
         sessionId: "agent-1",
-        appName: "@elizaos/app-hyperscape",
+        appName: "@hyperscape/plugin-hyperscape",
         mode: "spectate-and-steer",
         status: "running",
       },
@@ -442,7 +442,7 @@ describe("handleAppsRoutes", () => {
     const pluginManager = buildPluginManager();
     const stop = vi.fn(async () => ({
       success: true,
-      appName: "@elizaos/app-hyperscape",
+      appName: "@hyperscape/plugin-hyperscape",
       runId: "run-1",
       stoppedAt: "2026-04-06T00:00:00.000Z",
       pluginUninstalled: false,
@@ -467,7 +467,7 @@ describe("handleAppsRoutes", () => {
     expect(getStatus()).toBe(200);
     expect(getJson()).toEqual({
       success: true,
-      appName: "@elizaos/app-hyperscape",
+      appName: "@hyperscape/plugin-hyperscape",
       runId: "run-1",
       stoppedAt: "2026-04-06T00:00:00.000Z",
       pluginUninstalled: false,

@@ -6,14 +6,13 @@ const {
   mockSendMessageToTarget,
   mockGetRoom,
   mockGetWorld,
-} =
-  vi.hoisted(() => ({
-    mockCheckSenderRole: vi.fn(),
-    mockResolveCanonicalOwnerIdForMessage: vi.fn(),
-    mockSendMessageToTarget: vi.fn(),
-    mockGetRoom: vi.fn(),
-    mockGetWorld: vi.fn(),
-  }));
+} = vi.hoisted(() => ({
+  mockCheckSenderRole: vi.fn(),
+  mockResolveCanonicalOwnerIdForMessage: vi.fn(),
+  mockSendMessageToTarget: vi.fn(),
+  mockGetRoom: vi.fn(),
+  mockGetWorld: vi.fn(),
+}));
 
 vi.mock("@miladyai/plugin-roles", () => ({
   checkSenderRole: mockCheckSenderRole,
@@ -245,11 +244,9 @@ describe("sendMessageAction — admin pathway (unified from SEND_ADMIN_MESSAGE)"
   it("trims whitespace from text", async () => {
     mockGetRoom.mockResolvedValue(null);
 
-    await callAdminHandler(
-      makeRuntime(),
-      makeMessage("agent-1"),
-      { text: "  hello world  " },
-    );
+    await callAdminHandler(makeRuntime(), makeMessage("agent-1"), {
+      text: "  hello world  ",
+    });
 
     const [, content] = mockSendMessageToTarget.mock.calls[0];
     expect(content.text).toBe("hello world");

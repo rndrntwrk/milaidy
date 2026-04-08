@@ -1,7 +1,7 @@
+import type { IAgentRuntime } from "@elizaos/core";
 import { describe, expect, it, vi } from "vitest";
 import rolesPlugin from "../src/index";
-import type { RoleName, RolesWorldMetadata } from "../src/types";
-import type { IAgentRuntime, UUID } from "@elizaos/core";
+import type { RolesWorldMetadata } from "../src/types";
 
 type MockWorld = { id: string; metadata: RolesWorldMetadata };
 type MockRoom = { id: string; worldId: string | null };
@@ -10,6 +10,11 @@ type MockEntity = {
   names: string[];
   metadata: Record<string, Record<string, string>>;
 };
+
+function getPluginInit() {
+  expect(typeof rolesPlugin.init).toBe("function");
+  return rolesPlugin.init;
+}
 
 async function advanceTimersAndFlush(ms: number): Promise<void> {
   vi.advanceTimersByTime(ms);
@@ -56,11 +61,11 @@ describe("plugin shape", () => {
   });
   it("has a provider", () => {
     expect(rolesPlugin.providers).toHaveLength(1);
-    expect(rolesPlugin.providers![0].name).toBe("roles");
+    expect(rolesPlugin.providers?.[0]?.name).toBe("roles");
   });
   it("has an action", () => {
     expect(rolesPlugin.actions).toHaveLength(1);
-    expect(rolesPlugin.actions![0].name).toBe("UPDATE_ROLE");
+    expect(rolesPlugin.actions?.[0]?.name).toBe("UPDATE_ROLE");
   });
   it("has an init function", () => {
     expect(typeof rolesPlugin.init).toBe("function");
@@ -78,7 +83,7 @@ describe("ensureOwnerRole via init()", () => {
       metadata: { ownership: { ownerId: "user-1" }, roles: {} },
     };
     const runtime = createInitRuntime({ worlds: [world] });
-    await rolesPlugin.init!({}, runtime);
+    await getPluginInit()?.({}, runtime);
     expect(runtime.updateWorld).toHaveBeenCalledTimes(1);
     expect(world.metadata.roles?.["user-1"]).toBe("OWNER");
   });
@@ -86,17 +91,20 @@ describe("ensureOwnerRole via init()", () => {
   it("skips when owner already has OWNER role", async () => {
     const world: MockWorld = {
       id: "w1",
-      metadata: { ownership: { ownerId: "user-1" }, roles: { "user-1": "OWNER" } },
+      metadata: {
+        ownership: { ownerId: "user-1" },
+        roles: { "user-1": "OWNER" },
+      },
     };
     const runtime = createInitRuntime({ worlds: [world] });
-    await rolesPlugin.init!({}, runtime);
+    await getPluginInit()?.({}, runtime);
     expect(runtime.updateWorld).not.toHaveBeenCalled();
   });
 
   it("skips worlds without ownership", async () => {
     const world: MockWorld = { id: "w1", metadata: { roles: {} } };
     const runtime = createInitRuntime({ worlds: [world] });
-    await rolesPlugin.init!({}, runtime);
+    await getPluginInit()?.({}, runtime);
     expect(runtime.updateWorld).not.toHaveBeenCalled();
   });
 
@@ -106,15 +114,21 @@ describe("ensureOwnerRole via init()", () => {
       metadata: { ownership: { ownerId: "user-1" } } as RolesWorldMetadata,
     };
     const runtime = createInitRuntime({ worlds: [world] });
-    await rolesPlugin.init!({}, runtime);
+    await getPluginInit()?.({}, runtime);
     expect(world.metadata.roles?.["user-1"]).toBe("OWNER");
   });
 
   it("processes multiple worlds", async () => {
-    const w1: MockWorld = { id: "w1", metadata: { ownership: { ownerId: "u1" }, roles: {} } };
-    const w2: MockWorld = { id: "w2", metadata: { ownership: { ownerId: "u2" }, roles: {} } };
+    const w1: MockWorld = {
+      id: "w1",
+      metadata: { ownership: { ownerId: "u1" }, roles: {} },
+    };
+    const w2: MockWorld = {
+      id: "w2",
+      metadata: { ownership: { ownerId: "u2" }, roles: {} },
+    };
     const runtime = createInitRuntime({ worlds: [w1, w2] });
-    await rolesPlugin.init!({}, runtime);
+    await getPluginInit()?.({}, runtime);
     expect(runtime.updateWorld).toHaveBeenCalledTimes(2);
   });
 
@@ -133,7 +147,7 @@ describe("ensureOwnerRole via init()", () => {
       },
     });
 
-    await rolesPlugin.init!({}, runtime);
+    await getPluginInit()?.({}, runtime);
 
     expect(world.metadata.ownership?.ownerId).toBe("owner-canonical");
     expect(world.metadata.roles?.["owner-canonical"]).toBe("OWNER");
@@ -145,7 +159,7 @@ describe("ensureOwnerRole via init()", () => {
       getAllWorlds: vi.fn().mockRejectedValue(new Error("DB error")),
       updateWorld: vi.fn(),
     } as unknown as IAgentRuntime;
-    await rolesPlugin.init!({}, runtime);
+    await getPluginInit()?.({}, runtime);
   });
 
   it("retries owner bootstrap until worlds become available", async () => {
@@ -165,7 +179,7 @@ describe("ensureOwnerRole via init()", () => {
         updateWorld: vi.fn().mockResolvedValue(undefined),
       } as unknown as IAgentRuntime;
 
-      await rolesPlugin.init!({}, runtime);
+      await getPluginInit()?.({}, runtime);
       expect(runtime.updateWorld).not.toHaveBeenCalled();
 
       await advanceTimersAndFlush(1_500);
@@ -181,13 +195,15 @@ describe("ensureOwnerRole via init()", () => {
   it("stops retrying owner bootstrap after the bounded retry budget", async () => {
     vi.useFakeTimers();
     try {
-      const getAllWorlds = vi.fn().mockRejectedValue(new Error("still not ready"));
+      const getAllWorlds = vi
+        .fn()
+        .mockRejectedValue(new Error("still not ready"));
       const runtime = {
         getAllWorlds,
         updateWorld: vi.fn().mockResolvedValue(undefined),
       } as unknown as IAgentRuntime;
 
-      await rolesPlugin.init!({}, runtime);
+      await getPluginInit()?.({}, runtime);
       await advanceTimersAndFlush(1_500);
       await advanceTimersAndFlush(5_000);
       await advanceTimersAndFlush(15_000);
@@ -217,12 +233,19 @@ describe("applyConnectorAdminWhitelists via init()", () => {
       roomEntities: {
         r1: [
           { id: "o1", names: ["Shaw"], metadata: {} },
-          { id: "dc-user", names: ["Alice"], metadata: { discord: { userId: "123456789" } } },
+          {
+            id: "dc-user",
+            names: ["Alice"],
+            metadata: { discord: { userId: "123456789" } },
+          },
         ],
       },
     });
 
-    await rolesPlugin.init!({ connectorAdmins: { discord: ["123456789"] } }, runtime);
+    await getPluginInit()?.(
+      { connectorAdmins: { discord: ["123456789"] } },
+      runtime,
+    );
     expect(world.metadata.roles?.["dc-user"]).toBe("ADMIN");
   });
 
@@ -237,19 +260,29 @@ describe("applyConnectorAdminWhitelists via init()", () => {
       roomEntities: {
         r1: [
           { id: "o1", names: ["Shaw"], metadata: {} },
-          { id: "tg-user", names: ["Bob"], metadata: { telegram: { username: "bob_tg" } } },
+          {
+            id: "tg-user",
+            names: ["Bob"],
+            metadata: { telegram: { username: "bob_tg" } },
+          },
         ],
       },
     });
 
-    await rolesPlugin.init!({ connectorAdmins: { telegram: ["bob_tg"] } }, runtime);
+    await getPluginInit()?.(
+      { connectorAdmins: { telegram: ["bob_tg"] } },
+      runtime,
+    );
     expect(world.metadata.roles?.["tg-user"]).toBe("ADMIN");
   });
 
   it("skips entities that already have a role", async () => {
     const world: MockWorld = {
       id: "w1",
-      metadata: { ownership: { ownerId: "o1" }, roles: { o1: "OWNER", existing: "USER" } },
+      metadata: {
+        ownership: { ownerId: "o1" },
+        roles: { o1: "OWNER", existing: "USER" },
+      },
     };
     const runtime = createInitRuntime({
       worlds: [world],
@@ -257,12 +290,19 @@ describe("applyConnectorAdminWhitelists via init()", () => {
       roomEntities: {
         r1: [
           { id: "o1", names: ["Shaw"], metadata: {} },
-          { id: "existing", names: ["Existing"], metadata: { discord: { userId: "wl-id" } } },
+          {
+            id: "existing",
+            names: ["Existing"],
+            metadata: { discord: { userId: "wl-id" } },
+          },
         ],
       },
     });
 
-    await rolesPlugin.init!({ connectorAdmins: { discord: ["wl-id"] } }, runtime);
+    await getPluginInit()?.(
+      { connectorAdmins: { discord: ["wl-id"] } },
+      runtime,
+    );
     // Should not have updated — entity already has a role
     expect(runtime.updateWorld).not.toHaveBeenCalled();
   });
@@ -273,7 +313,7 @@ describe("applyConnectorAdminWhitelists via init()", () => {
       metadata: { ownership: { ownerId: "o1" }, roles: { o1: "OWNER" } },
     };
     const runtime = createInitRuntime({ worlds: [world] });
-    await rolesPlugin.init!({ connectorAdmins: { discord: [] } }, runtime);
+    await getPluginInit()?.({ connectorAdmins: { discord: [] } }, runtime);
     expect(runtime.updateWorld).not.toHaveBeenCalled();
   });
 
@@ -288,13 +328,20 @@ describe("applyConnectorAdminWhitelists via init()", () => {
       roomEntities: {
         r1: [
           { id: "o1", names: ["Shaw"], metadata: {} },
-          { id: "dc-user", names: ["User"], metadata: { discord: { userId: "my-id" } } },
+          {
+            id: "dc-user",
+            names: ["User"],
+            metadata: { discord: { userId: "my-id" } },
+          },
         ],
       },
     });
 
     // Whitelist is for telegram, not discord
-    await rolesPlugin.init!({ connectorAdmins: { telegram: ["my-id"] } }, runtime);
+    await getPluginInit()?.(
+      { connectorAdmins: { telegram: ["my-id"] } },
+      runtime,
+    );
     expect(world.metadata.roles?.["dc-user"]).toBeUndefined();
   });
 });

@@ -46,7 +46,7 @@ describe("apps catalog helpers", () => {
     ).toBe(false);
     expect(
       shouldShowAppInAppsView(
-        makeApp({ name: "@elizaos/app-hyperscape" }),
+        makeApp({ name: "@hyperscape/plugin-hyperscape" }),
         false,
       ),
     ).toBe(true);
@@ -67,7 +67,7 @@ describe("apps catalog helpers", () => {
   it("uses the same curated allowlist in production", () => {
     expect(
       shouldShowAppInAppsView(
-        makeApp({ name: "@elizaos/app-hyperscape" }),
+        makeApp({ name: "@hyperscape/plugin-hyperscape" }),
         true,
       ),
     ).toBe(true);
@@ -93,7 +93,7 @@ describe("apps catalog helpers", () => {
           displayName: "Unlisted Game",
         }),
         makeApp({
-          name: "@elizaos/app-hyperscape",
+          name: "@hyperscape/plugin-hyperscape",
           displayName: "Hyperscape",
         }),
         makeApp({
@@ -110,7 +110,7 @@ describe("apps catalog helpers", () => {
     );
 
     expect(visibleApps.map((app) => app.name)).toEqual([
-      "@elizaos/app-hyperscape",
+      "@hyperscape/plugin-hyperscape",
       "@elizaos/app-defense-of-the-agents",
       "@elizaos/app-babylon",
     ]);
@@ -125,12 +125,12 @@ describe("apps catalog helpers", () => {
             displayName: "Unlisted Game",
           }),
           makeApp({
-            name: "@elizaos/app-hyperscape",
+            name: "@hyperscape/plugin-hyperscape",
             displayName: "Hyperscape",
           }),
         ],
         false,
       ),
-    ).toBe("@elizaos/app-hyperscape");
+    ).toBe("@hyperscape/plugin-hyperscape");
   });
 });

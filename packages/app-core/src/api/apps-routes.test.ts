@@ -7,15 +7,15 @@ import type {
 import { handleAppsRoutes } from "./apps-routes";
 
 const APP_PLUGIN: RegistryPluginInfo = {
-  name: "@elizaos/app-hyperscape",
-  gitRepo: "elizaos/app-hyperscape",
-  gitUrl: "https://github.com/elizaos/app-hyperscape",
+  name: "@hyperscape/plugin-hyperscape",
+  gitRepo: "HyperscapeAI/hyperscape",
+  gitUrl: "https://github.com/HyperscapeAI/hyperscape",
   description: "Hyperscape app",
   topics: [],
   stars: 100,
   language: "TypeScript",
   kind: "app",
-  npm: { package: "@elizaos/app-hyperscape", v2Version: "1.0.0" },
+  npm: { package: "@hyperscape/plugin-hyperscape", v2Version: "1.0.0" },
   supports: { v0: false, v1: true, v2: true },
 };
 
@@ -32,14 +32,14 @@ const NON_APP_PLUGIN: RegistryPluginInfo = {
 };
 
 const APP_SEARCH: RegistrySearchResult = {
-  name: "@elizaos/app-hyperscape",
+  name: "@hyperscape/plugin-hyperscape",
   description: "Hyperscape app",
   score: 1,
   tags: [],
   version: "1.0.0",
   latestVersion: "1.0.0",
-  npmPackage: "@elizaos/app-hyperscape",
-  repository: "https://github.com/elizaos/app-hyperscape",
+  npmPackage: "@hyperscape/plugin-hyperscape",
+  repository: "https://github.com/HyperscapeAI/hyperscape",
   stars: 100,
   supports: { v0: false, v1: true, v2: true },
 };

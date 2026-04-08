@@ -164,6 +164,13 @@ vi.mock("@miladyai/ui", () => {
   };
 });
 
+vi.mock("lucide-react", () => ({
+  Download: () => <span>download-icon</span>,
+  RefreshCw: () => <span>refresh-icon</span>,
+  Trash2: () => <span>trash-icon</span>,
+  XCircle: () => <span>clear-icon</span>,
+}));
+
 vi.mock("./TrajectoryDetailView", () => ({
   TrajectoryDetailView: ({ trajectoryId }: { trajectoryId: string }) => (
     <div>Trajectory detail: {trajectoryId}</div>

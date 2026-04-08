@@ -156,7 +156,13 @@ async function findEntityByName(
 
 export const updateRoleAction: Action = {
   name: "UPDATE_ROLE",
-  similes: ["CHANGE_ROLE", "SET_ROLE", "ASSIGN_ROLE", "MAKE_ADMIN", "MAKE_OWNER"],
+  similes: [
+    "CHANGE_ROLE",
+    "SET_ROLE",
+    "ASSIGN_ROLE",
+    "MAKE_ADMIN",
+    "MAKE_OWNER",
+  ],
   description:
     "Assign a role (OWNER, ADMIN, USER, GUEST) to a user. " +
     "Usage: /role @username ADMIN. Only OWNERs and ADMINs can assign roles.",
@@ -167,9 +173,7 @@ export const updateRoleAction: Action = {
     _state?: State,
   ): Promise<boolean> => {
     const text =
-      typeof message?.content?.text === "string"
-        ? message.content.text
-        : "";
+      typeof message?.content?.text === "string" ? message.content.text : "";
     // Only trigger on explicit role commands
     return parseRoleCommand(text) !== null;
   },
@@ -177,14 +181,12 @@ export const updateRoleAction: Action = {
   handler: async (
     runtime: IAgentRuntime,
     message: Memory,
-    state?: State,
+    _state?: State,
     _options?: Record<string, unknown>,
     callback?: HandlerCallback,
   ) => {
     const text =
-      typeof message?.content?.text === "string"
-        ? message.content.text
-        : "";
+      typeof message?.content?.text === "string" ? message.content.text : "";
 
     const parsed = parseRoleCommand(text);
     if (!parsed) {
@@ -281,7 +283,8 @@ export const updateRoleAction: Action = {
     }
     if (!canModifyRole(requesterRole, targetCurrentRole, newRole)) {
       await callback?.({
-        text: `Cannot change ${targetName}'s role from ${targetCurrentRole} to ${newRole}. ` +
+        text:
+          `Cannot change ${targetName}'s role from ${targetCurrentRole} to ${newRole}. ` +
           `Your role (${requesterRole}) doesn't have sufficient permissions.`,
       });
       return { success: false };

@@ -6,7 +6,7 @@ describe("buildDisconnectedSessionState", () => {
     expect(
       buildDisconnectedSessionState({
         sessionId: "agent-3",
-        appName: "@elizaos/app-hyperscape",
+        appName: "@hyperscape/plugin-hyperscape",
         mode: "spectate-and-steer",
         status: "connecting",
         displayName: "Scout",

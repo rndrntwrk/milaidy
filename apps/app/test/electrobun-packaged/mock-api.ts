@@ -1065,7 +1065,7 @@ export async function startMockApiServer(
     if (method === "GET" && pathname === "/api/apps") {
       json(res, 200, [
         {
-          name: "@elizaos/app-hyperscape",
+          name: "@hyperscape/plugin-hyperscape",
           displayName: "Hyperscape",
           description: "Mock app",
           category: "game",
@@ -1074,11 +1074,11 @@ export async function startMockApiServer(
           icon: null,
           capabilities: [],
           stars: 100,
-          repository: "https://github.com/elizaos/app-hyperscape",
+          repository: "https://github.com/HyperscapeAI/hyperscape",
           latestVersion: "1.0.0",
           supports: { v0: false, v1: false, v2: true },
           npm: {
-            package: "@elizaos/app-hyperscape",
+            package: "@hyperscape/plugin-hyperscape",
             v0Version: null,
             v1Version: null,
             v2Version: "1.0.0",

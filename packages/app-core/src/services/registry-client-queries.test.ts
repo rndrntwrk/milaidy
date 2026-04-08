@@ -111,8 +111,8 @@ describe("registry-client-queries", () => {
     });
 
     it("finds bare app slugs with the @elizaos/app- prefix", () => {
-      const app = makePlugin({ name: "@elizaos/app-hyperscape" });
-      registry.set("@elizaos/app-hyperscape", app);
+      const app = makePlugin({ name: "@hyperscape/plugin-hyperscape" });
+      registry.set("@hyperscape/plugin-hyperscape", app);
 
       expect(getPluginInfoFromRegistry(registry, "hyperscape")).toBe(app);
     });
@@ -240,7 +240,7 @@ describe("registry-client-queries", () => {
         },
       };
       const result = toAppInfo(
-        makePlugin({ name: "@elizaos/app-hyperscape", appMeta }),
+        makePlugin({ name: "@hyperscape/plugin-hyperscape", appMeta }),
         (value) => value ?? "allow-scripts",
         "allow-scripts",
       );

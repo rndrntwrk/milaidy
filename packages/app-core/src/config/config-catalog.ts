@@ -22,7 +22,7 @@
  */
 
 import type { ReactNode } from "react";
-import { z } from "zod";
+import z from "zod";
 import type {
   ConfigUiHint,
   DynamicValue,

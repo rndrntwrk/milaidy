@@ -20,7 +20,7 @@ describe("agent registry-client-app-meta", () => {
         ?.detailPanelId,
     ).toBe("babylon-operator-dashboard");
     expect(
-      resolveAppOverride("@elizaos/app-hyperscape", undefined)?.uiExtension
+      resolveAppOverride("@hyperscape/plugin-hyperscape", undefined)?.uiExtension
         ?.detailPanelId,
     ).toBe("hyperscape-embedded-agent-control");
     expect(

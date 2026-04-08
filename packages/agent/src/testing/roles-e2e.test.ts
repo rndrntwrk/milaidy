@@ -7,7 +7,7 @@
  * internals individually.
  */
 
-import type { Entity, Memory, Room, State, UUID, World } from "@elizaos/core";
+import type { Memory, State, UUID } from "@elizaos/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // ---------------------------------------------------------------------------
@@ -146,7 +146,10 @@ function makeMessage(entityId: UUID, roomId: UUID = ROOM_ID): Memory {
 }
 
 /** Wire up mockResolveWorldForMessage to use the stateful worlds map */
-function wireResolveWorld(worlds: Map<UUID, MockWorld>, rooms: Map<UUID, MockRoom>) {
+function wireResolveWorld(
+  worlds: Map<UUID, MockWorld>,
+  rooms: Map<UUID, MockRoom>,
+) {
   mockResolveWorldForMessage.mockImplementation(
     async (_runtime: unknown, message: Memory) => {
       const room = rooms.get(message.roomId);
@@ -159,7 +162,10 @@ function wireResolveWorld(worlds: Map<UUID, MockWorld>, rooms: Map<UUID, MockRoo
 }
 
 /** Wire up mockGetEntityRole to read from stateful world metadata */
-function wireGetEntityRole(worlds: Map<UUID, MockWorld>, rooms: Map<UUID, MockRoom>) {
+function wireGetEntityRole(
+  _worlds: Map<UUID, MockWorld>,
+  _rooms: Map<UUID, MockRoom>,
+) {
   mockGetEntityRole.mockImplementation(
     (metadata: RolesMetadata | undefined, entityId: string) => {
       const roles = metadata?.roles ?? {};
@@ -222,7 +228,10 @@ function wireCanModifyRole() {
 }
 
 /** Wire up mockCheckSenderRole to read from stateful world metadata */
-function wireCheckSenderRole(worlds: Map<UUID, MockWorld>, rooms: Map<UUID, MockRoom>) {
+function wireCheckSenderRole(
+  worlds: Map<UUID, MockWorld>,
+  rooms: Map<UUID, MockRoom>,
+) {
   mockCheckSenderRole.mockImplementation(
     async (_runtime: unknown, message: Memory) => {
       const room = rooms.get(message.roomId);
@@ -560,7 +569,9 @@ describe("roles e2e", () => {
         {} as State,
       );
 
-      expect(worlds.get(WORLD_ID)?.metadata.roles?.[OWNER_ENTITY]).toBe("OWNER");
+      expect(worlds.get(WORLD_ID)?.metadata.roles?.[OWNER_ENTITY]).toBe(
+        "OWNER",
+      );
 
       // Subsequent messages — backfill is idempotent
       for (let i = 0; i < 3; i++) {
@@ -572,7 +583,9 @@ describe("roles e2e", () => {
       }
 
       // Still OWNER, updateWorld called only once (first backfill)
-      expect(worlds.get(WORLD_ID)?.metadata.roles?.[OWNER_ENTITY]).toBe("OWNER");
+      expect(worlds.get(WORLD_ID)?.metadata.roles?.[OWNER_ENTITY]).toBe(
+        "OWNER",
+      );
       // First call does the backfill, subsequent calls should skip
       // (updateWorld called once in backfill + once in the initial set)
       expect(runtime.updateWorld).toHaveBeenCalledTimes(1);
@@ -632,7 +645,7 @@ describe("roles e2e", () => {
     });
 
     it("checkSenderRole returns correct result for OWNER entity", async () => {
-      const { runtime, worlds } = createScaffolding({ ownerRolePreset: "OWNER" });
+      const { runtime } = createScaffolding({ ownerRolePreset: "OWNER" });
       const message = makeMessage(OWNER_ENTITY);
 
       const result = await mockCheckSenderRole(runtime, message);
@@ -745,7 +758,7 @@ describe("roles e2e", () => {
     });
 
     it("does not match when connector key differs", async () => {
-      const { runtime, entities } = createScaffolding({
+      const { runtime } = createScaffolding({
         connectorAdmins: { telegram: ["discord-admin-222"] },
       });
 
@@ -822,13 +835,11 @@ describe("roles e2e", () => {
 
       // Step 1: Owner sends first message, backfill fires
       const ownerMsg = makeMessage(OWNER_ENTITY);
-      await roleBackfillProvider.get(
-        runtime as never,
-        ownerMsg,
-        {} as State,
-      );
+      await roleBackfillProvider.get(runtime as never, ownerMsg, {} as State);
 
-      expect(worlds.get(WORLD_ID)?.metadata.roles?.[OWNER_ENTITY]).toBe("OWNER");
+      expect(worlds.get(WORLD_ID)?.metadata.roles?.[OWNER_ENTITY]).toBe(
+        "OWNER",
+      );
 
       // Step 2: Admin-eligible entity joins and sends message
       const adminMsg = makeMessage(ADMIN_ENTITY);
@@ -859,11 +870,7 @@ describe("roles e2e", () => {
       const nobodyMsg = makeMessage(NOBODY_ENTITY);
 
       // Backfill — no effect on nobody
-      await roleBackfillProvider.get(
-        runtime as never,
-        nobodyMsg,
-        {} as State,
-      );
+      await roleBackfillProvider.get(runtime as never, nobodyMsg, {} as State);
 
       // Late-join — not in whitelist, no promotion
       await lateJoinWhitelistEvaluator.handler(

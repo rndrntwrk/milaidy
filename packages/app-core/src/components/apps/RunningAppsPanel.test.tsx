@@ -35,9 +35,9 @@ import { getRunAttentionReasons, RunningAppsPanel } from "./RunningAppsPanel";
 function createRun(overrides: Partial<AppRunSummary> = {}): AppRunSummary {
   return {
     runId: "run-1",
-    appName: "@elizaos/app-hyperscape",
+    appName: "@hyperscape/plugin-hyperscape",
     displayName: "Hyperscape",
-    pluginName: "@elizaos/app-hyperscape",
+    pluginName: "@hyperscape/plugin-hyperscape",
     launchType: "connect",
     launchUrl: "https://example.com/hyperscape",
     viewer: {
@@ -51,7 +51,7 @@ function createRun(overrides: Partial<AppRunSummary> = {}): AppRunSummary {
     },
     session: {
       sessionId: "session-1",
-      appName: "@elizaos/app-hyperscape",
+      appName: "@hyperscape/plugin-hyperscape",
       mode: "spectate-and-steer",
       status: "running",
       displayName: "Hyperscape",
@@ -112,7 +112,7 @@ describe("RunningAppsPanel", () => {
         viewerAttachment: "detached",
         session: {
           sessionId: "session-1",
-          appName: "@elizaos/app-hyperscape",
+          appName: "@hyperscape/plugin-hyperscape",
           mode: "spectate-and-steer",
           status: "disconnected",
           displayName: "Hyperscape",
@@ -155,7 +155,7 @@ describe("RunningAppsPanel", () => {
       },
       session: {
         sessionId: "session-1",
-        appName: "@elizaos/app-hyperscape",
+        appName: "@hyperscape/plugin-hyperscape",
         mode: "spectate-and-steer",
         status: "stale",
         displayName: "Hyperscape",

@@ -89,6 +89,11 @@ function t(
     "subscriptionstatus.ExpectedCallbackUrl":
       "Expected a localhost:1455/auth/callback URL.",
     "subscriptionstatus.ExchangeFailedError": "Exchange failed: {{message}}",
+    "subscriptionstatus.FailedToStartLogin": "Failed to start login: {{message}}",
+    "subscriptionstatus.FailedToGetAuthUrl": "Failed to get auth URL",
+    "subscriptionstatus.NoAuthUrlReturned": "No auth URL returned",
+    "subscriptionstatus.DisconnectFailedError": "Disconnect failed: {{message}}",
+    "subscriptionstatus.ExchangeFailed": "Exchange failed",
     "subscriptionstatus.SaveToken": "Save token",
     "subscriptionstatus.SavingAmpRestart": "Saving and restarting…",
     "subscriptionstatus.skAntOat01": "sk-ant-oat01-...",
@@ -98,6 +103,13 @@ function t(
     "apikeyconfig.saving": "Saving",
     "subscriptionstatus.ClaudeTosWarningShort":
       "Claude subscription powers task agents only.",
+    "subscriptionstatus.PasteTheAuthorizat": "Paste the authorization code",
+    "subscriptionstatus.AfterLoggingInCo":
+      "After logging in, paste the authorization code.",
+    "subscriptionstatus.Completing": "Completing",
+    "providerswitcher.disconnect": "Disconnect",
+    "providerswitcher.disconnecting": "Disconnecting",
+    "onboarding.loginSessionExpired": "Login session expired",
     "onboarding.setupTokenInstructions":
       "Run claude setup-token and paste the result.",
   };
@@ -226,5 +238,196 @@ describe("SubscriptionStatus", () => {
     expect(
       await screen.findByText("Exchange failed: exchange broke"),
     ).toBeTruthy();
+  });
+
+  it("shows a Claude login start error when the OAuth bootstrap fails", async () => {
+    mockClient.startAnthropicLogin.mockRejectedValueOnce(
+      new Error("claude start broke"),
+    );
+
+    renderSubscriptionStatus({
+      resolvedSelectedId: "anthropic-subscription",
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "OAuth login" }));
+    fireEvent.click(screen.getByRole("button", { name: "Log in with Claude" }));
+
+    expect(
+      await screen.findByText("Failed to start login: claude start broke"),
+    ).toBeTruthy();
+  });
+
+  it("clears Claude OAuth errors when the user starts over", async () => {
+    mockClient.exchangeAnthropicCode.mockRejectedValueOnce(
+      new Error("bad claude code"),
+    );
+
+    renderSubscriptionStatus({
+      resolvedSelectedId: "anthropic-subscription",
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "OAuth login" }));
+    fireEvent.click(screen.getByRole("button", { name: "Log in with Claude" }));
+    await screen.findByPlaceholderText("Paste the authorization code");
+    fireEvent.change(screen.getByPlaceholderText("Paste the authorization code"), {
+      target: { value: "anthro-code-123" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+
+    expect(
+      await screen.findByText("Exchange failed: bad claude code"),
+    ).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Start over" }));
+
+    expect(screen.getByRole("button", { name: "Log in with Claude" })).toBeTruthy();
+    expect(screen.queryByText("Exchange failed: bad claude code")).toBeNull();
+  });
+
+  it("completes the OpenAI OAuth flow and refreshes the runtime state", async () => {
+    const handleSelectSubscription = vi.fn(async () => {});
+    const loadSubscriptionStatus = vi.fn(async () => {});
+    const setOpenaiConnected = vi.fn();
+
+    renderSubscriptionStatus({
+      handleSelectSubscription,
+      loadSubscriptionStatus,
+      setOpenaiConnected,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Log in with OpenAI" }));
+    await screen.findByPlaceholderText(
+      "http://localhost:1455/auth/callback?code=...",
+    );
+    fireEvent.change(
+      screen.getByPlaceholderText(
+        "http://localhost:1455/auth/callback?code=...",
+      ),
+      {
+        target: { value: "localhost:1455/auth/callback?code=openai-success" },
+      },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Complete login" }));
+
+    await waitFor(() => {
+      expect(mockClient.exchangeOpenAICode).toHaveBeenCalledWith(
+        "http://localhost:1455/auth/callback?code=openai-success",
+      );
+    });
+    expect(setOpenaiConnected).toHaveBeenCalledWith(true);
+    expect(handleSelectSubscription).toHaveBeenCalledWith("openai-subscription");
+    expect(loadSubscriptionStatus).toHaveBeenCalledTimes(1);
+    expect(mockClient.restartAgent).toHaveBeenCalledTimes(1);
+  });
+
+  it("maps expired OpenAI login flows to the session-expired message", async () => {
+    mockClient.exchangeOpenAICode.mockResolvedValueOnce({
+      success: false,
+      error: "No active flow for this callback",
+    });
+
+    renderSubscriptionStatus();
+
+    fireEvent.click(screen.getByRole("button", { name: "Log in with OpenAI" }));
+    await screen.findByPlaceholderText(
+      "http://localhost:1455/auth/callback?code=...",
+    );
+    fireEvent.change(
+      screen.getByPlaceholderText(
+        "http://localhost:1455/auth/callback?code=...",
+      ),
+      {
+        target: { value: "localhost:1455/auth/callback?code=openai-expired" },
+      },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Complete login" }));
+
+    expect(await screen.findByText("Login session expired")).toBeTruthy();
+  });
+
+  it("clears OpenAI OAuth errors when the user starts over", async () => {
+    mockClient.exchangeOpenAICode.mockRejectedValueOnce(
+      new Error("bad openai callback"),
+    );
+
+    renderSubscriptionStatus();
+
+    fireEvent.click(screen.getByRole("button", { name: "Log in with OpenAI" }));
+    await screen.findByPlaceholderText(
+      "http://localhost:1455/auth/callback?code=...",
+    );
+    fireEvent.change(
+      screen.getByPlaceholderText(
+        "http://localhost:1455/auth/callback?code=...",
+      ),
+      {
+        target: { value: "localhost:1455/auth/callback?code=openai-code" },
+      },
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Complete login" }));
+
+    expect(
+      await screen.findByText("Exchange failed: bad openai callback"),
+    ).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Start over" }));
+
+    expect(screen.getByRole("button", { name: "Log in with OpenAI" })).toBeTruthy();
+    expect(screen.queryByText("Exchange failed: bad openai callback")).toBeNull();
+  });
+
+  it("surfaces missing OpenAI auth URLs before opening the browser flow", async () => {
+    mockClient.startOpenAILogin.mockResolvedValueOnce({ authUrl: "" });
+
+    renderSubscriptionStatus();
+
+    fireEvent.click(screen.getByRole("button", { name: "Log in with OpenAI" }));
+
+    expect(await screen.findByText("No auth URL returned")).toBeTruthy();
+    expect(mockOpenExternalUrl).not.toHaveBeenCalled();
+  });
+
+  it("disconnects Claude subscription and clears the connected state", async () => {
+    const setAnthropicConnected = vi.fn();
+    const loadSubscriptionStatus = vi.fn(async () => {});
+
+    renderSubscriptionStatus({
+      resolvedSelectedId: "anthropic-subscription",
+      anthropicConnected: true,
+      setAnthropicConnected,
+      loadSubscriptionStatus,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Disconnect" }));
+
+    await waitFor(() => {
+      expect(mockClient.deleteSubscription).toHaveBeenCalledWith(
+        "anthropic-subscription",
+      );
+    });
+    expect(setAnthropicConnected).toHaveBeenCalledWith(false);
+    expect(loadSubscriptionStatus).toHaveBeenCalledTimes(1);
+    expect(mockClient.restartAgent).toHaveBeenCalledTimes(1);
+  });
+
+  it("surfaces disconnect failures on the matching provider panel", async () => {
+    const setOpenaiConnected = vi.fn();
+    mockClient.deleteSubscription.mockRejectedValueOnce(
+      new Error("disconnect broke"),
+    );
+
+    renderSubscriptionStatus({
+      resolvedSelectedId: "openai-subscription",
+      openaiConnected: true,
+      setOpenaiConnected,
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Disconnect" }));
+
+    expect(
+      await screen.findByText("Disconnect failed: disconnect broke"),
+    ).toBeTruthy();
+    expect(setOpenaiConnected).not.toHaveBeenCalled();
+    expect(mockClient.restartAgent).not.toHaveBeenCalled();
   });
 });

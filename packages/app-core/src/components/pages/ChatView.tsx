@@ -64,7 +64,7 @@ export function ChatView({
     activeConversationId,
     activeInboxChat,
     characterData,
-    chatInput,
+    chatInput: rawChatInput,
     chatSending,
     chatFirstTokenReceived,
     companionMessageCutoffTs,
@@ -77,17 +77,24 @@ export function ChatView({
     elizaCloudHasPersistedKey,
     setState,
     copyToClipboard,
-    droppedFiles,
-    shareIngestNotice,
+    droppedFiles: rawDroppedFiles,
+    shareIngestNotice: rawShareIngestNotice,
     chatAgentVoiceMuted: agentVoiceMuted,
     selectedVrmIndex,
-    chatPendingImages,
+    chatPendingImages: rawChatPendingImages,
     setChatPendingImages,
     uiLanguage,
     ptySessions,
     sendChatText,
     t: appTranslate,
   } = useApp();
+  const droppedFiles = Array.isArray(rawDroppedFiles) ? rawDroppedFiles : [];
+  const chatInput = typeof rawChatInput === "string" ? rawChatInput : "";
+  const shareIngestNotice =
+    typeof rawShareIngestNotice === "string" ? rawShareIngestNotice : "";
+  const chatPendingImages = Array.isArray(rawChatPendingImages)
+    ? rawChatPendingImages
+    : [];
 
   const t = useCallback(
     (key: string, values?: Record<string, unknown>) => {

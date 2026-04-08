@@ -38,8 +38,12 @@ export type AppRouteModule = {
   [key: string]: unknown;
 };
 
+type AppPluginWithBridge = Plugin & {
+  appBridge?: AppRouteModule;
+};
+
 type AppPluginModule = {
-  default?: Plugin;
+  default?: AppPluginWithBridge;
   [key: string]: unknown;
 };
 
@@ -161,6 +165,19 @@ async function resolveAppModuleTarget(
   const trimmed = appIdentifier.trim();
   if (!trimmed) return null;
 
+  if (!trimmed.startsWith("@")) {
+    const registryInfo = await getPluginInfo(trimmed);
+    if (
+      registryInfo &&
+      (hasAppInterface(registryInfo) || registryInfo.localPath)
+    ) {
+      return {
+        packageName: registryInfo.name,
+        localPath: registryInfo.localPath ?? null,
+      };
+    }
+  }
+
   const packageCandidates = trimmed.startsWith("@")
     ? [trimmed]
     : [`@elizaos/app-${trimmed}`, `@elizaos/plugin-${trimmed}`];
@@ -176,10 +193,7 @@ async function resolveAppModuleTarget(
   }
 
   const registryInfo = await getPluginInfo(trimmed);
-  if (
-    registryInfo &&
-    (hasAppInterface(registryInfo) || registryInfo.localPath)
-  ) {
+  if (registryInfo && (hasAppInterface(registryInfo) || registryInfo.localPath)) {
     return {
       packageName: registryInfo.name,
       localPath: registryInfo.localPath ?? null,
@@ -200,6 +214,9 @@ async function importLocalAppRouteModule(
   if (!localPath) return null;
 
   const candidatePaths = [
+    path.join(localPath, "src", "app.ts"),
+    path.join(localPath, "src", "app.js"),
+    path.join(localPath, "dist", "app.js"),
     path.join(localPath, "src", "routes.ts"),
     path.join(localPath, "src", "routes.js"),
     path.join(localPath, "dist", "routes.js"),
@@ -249,6 +266,21 @@ function resolvePluginExport(
   return null;
 }
 
+function resolvePluginAppBridge(
+  plugin: Plugin | null,
+): AppRouteModule | null {
+  if (!plugin || typeof plugin !== "object") {
+    return null;
+  }
+
+  const bridge = (plugin as AppPluginWithBridge).appBridge;
+  if (!bridge || typeof bridge !== "object") {
+    return null;
+  }
+
+  return bridge;
+}
+
 export async function importAppRouteModule(
   appIdentifier: string,
 ): Promise<AppRouteModule | null> {
@@ -275,10 +307,19 @@ export async function importAppRouteModule(
 
   try {
     return (await import(
+      /* webpackIgnore: true */ `${packageName}/app`
+    )) as AppRouteModule;
+  } catch {
+    // Fall through to legacy routes entrypoint / plugin export bridge.
+  }
+
+  try {
+    return (await import(
       /* webpackIgnore: true */ `${packageName}/routes`
     )) as AppRouteModule;
   } catch {
-    return null;
+    const plugin = await importAppPlugin(packageName);
+    return resolvePluginAppBridge(plugin);
   }
 }
 

@@ -120,6 +120,60 @@ function collectWorkspacePluginOverrideDirs(packageName) {
   );
 }
 
+function collectInstalledPackageDirs(
+  packageName,
+  { includeWorkspaceOverrides = false, includeGlobalBunCache = false } = {},
+) {
+  const searchDirs = [resolve(root, `node_modules/${packageName}`)];
+
+  if (includeWorkspaceOverrides) {
+    searchDirs.push(...collectWorkspacePluginOverrideDirs(packageName));
+  }
+
+  const bunCacheDir = resolve(root, "node_modules/.bun");
+  if (existsSync(bunCacheDir)) {
+    const bunEntryPrefix = `${packageName.replace("/", "+")}@`;
+    try {
+      for (const entry of readdirSync(bunCacheDir)) {
+        if (entry.startsWith(bunEntryPrefix)) {
+          searchDirs.push(resolve(bunCacheDir, entry, "node_modules", packageName));
+        }
+      }
+    } catch {}
+  }
+
+  if (includeGlobalBunCache && process.env.HOME) {
+    const globalBunCacheDir = resolve(process.env.HOME, ".bun", "install", "cache");
+    if (existsSync(globalBunCacheDir)) {
+      const [scope, unscopedName] = packageName.split("/");
+      if (packageName.startsWith("@") && unscopedName) {
+        const scopedCacheDir = resolve(globalBunCacheDir, scope);
+        if (existsSync(scopedCacheDir)) {
+          const globalEntryPrefix = `${unscopedName}@`;
+          try {
+            for (const entry of readdirSync(scopedCacheDir)) {
+              if (entry.startsWith(globalEntryPrefix)) {
+                searchDirs.push(resolve(scopedCacheDir, entry));
+              }
+            }
+          } catch {}
+        }
+      } else {
+        const globalEntryPrefix = `${packageName}@`;
+        try {
+          for (const entry of readdirSync(globalBunCacheDir)) {
+            if (entry.startsWith(globalEntryPrefix)) {
+              searchDirs.push(resolve(globalBunCacheDir, entry));
+            }
+          }
+        } catch {}
+      }
+    }
+  }
+
+  return uniqueResolvedPaths(searchDirs);
+}
+
 // ---------------------------------------------------------------------------
 // @elizaos/plugin-openrouter — version is pinned in root package.json to
 // 2.0.0-alpha.10 (exact, no caret).
@@ -252,23 +306,12 @@ function patchPluginSolanaActionSpecNames() {
     "actions/transfer.ts",
     "providers/wallet.ts",
     "generated/specs/specs.ts",
+    "service.ts",
   ];
-  const searchDirs = [
-    resolve(root, "node_modules/@elizaos/plugin-solana"),
-    ...collectWorkspacePluginOverrideDirs("@elizaos/plugin-solana"),
-  ];
-  const bunCacheDir = resolve(root, "node_modules/.bun");
-  if (existsSync(bunCacheDir)) {
-    try {
-      for (const entry of readdirSync(bunCacheDir)) {
-        if (entry.startsWith("@elizaos+plugin-solana@")) {
-          searchDirs.push(
-            resolve(bunCacheDir, entry, "node_modules/@elizaos/plugin-solana"),
-          );
-        }
-      }
-    } catch {}
-  }
+  const searchDirs = collectInstalledPackageDirs("@elizaos/plugin-solana", {
+    includeWorkspaceOverrides: true,
+    includeGlobalBunCache: true,
+  });
 
   const TRANSFER_SPEC_JSON = `{
       name: "TRANSFER",
@@ -318,6 +361,49 @@ function patchPluginSolanaActionSpecNames() {
         fileChanged = true;
       }
 
+      // 4) Jupiter is optional in Milady dev. Older plugin-solana builds
+      //    let the rejected service-load promise bubble as an unhandled
+      //    rejection during startup. Swallow the optional dependency miss
+      //    and continue with Jupiter-backed swaps disabled.
+      const sourceJupiterSnippet = `runtime.getServiceLoadPromise("JUPITER_SERVICE" as ServiceTypeName).then(async () => {
+      const service = runtime.getService("JUPITER_SERVICE" as ServiceTypeName);
+      if (this.isJupiterService(service)) {
+        this.jupiterService = service;
+      } else {
+        this.jupiterService = null;
+      }
+    });`;
+      const sourceJupiterReplacement = `runtime
+      .getServiceLoadPromise("JUPITER_SERVICE" as ServiceTypeName)
+      .then(async () => {
+        const service = runtime.getService("JUPITER_SERVICE" as ServiceTypeName);
+        if (this.isJupiterService(service)) {
+          this.jupiterService = service;
+        } else {
+          this.jupiterService = null;
+        }
+      })
+      .catch(() => {
+        this.jupiterService = null;
+      });`;
+      if (src.includes(sourceJupiterSnippet)) {
+        src = src.replace(sourceJupiterSnippet, sourceJupiterReplacement);
+        fileChanged = true;
+      }
+
+      const distJupiterSnippet = `runtime.getServiceLoadPromise("JUPITER_SERVICE").then(async (s) => {
+      this.jupiterService = runtime.getService("JUPITER_SERVICE");
+    });`;
+      const distJupiterReplacement = `runtime.getServiceLoadPromise("JUPITER_SERVICE").then(async (s) => {
+      this.jupiterService = runtime.getService("JUPITER_SERVICE");
+    }).catch(() => {
+      this.jupiterService = null;
+    });`;
+      if (src.includes(distJupiterSnippet)) {
+        src = src.replace(distJupiterSnippet, distJupiterReplacement);
+        fileChanged = true;
+      }
+
       if (fileChanged) {
         writeFileSync(target, src, "utf8");
         patchedFiles++;
@@ -334,6 +420,59 @@ function patchPluginSolanaActionSpecNames() {
   }
 }
 patchPluginSolanaActionSpecNames();
+
+/**
+ * Sync the workspace plugin-knowledge dist into installed cache entries.
+ *
+ * The runtime can resolve plugin-knowledge from Bun's install cache instead of
+ * the repo workspace package. When that happens, stale cache bundles keep
+ * logging the old "Basic Embedding mode" message and miss Milady's local
+ * embedding support. Copy the current workspace runtime bundle into every
+ * installed cache entry so all resolution paths use the same code.
+ */
+function patchPluginKnowledgeRuntimeBundles() {
+  const sourceDir = collectWorkspacePluginOverrideDirs(
+    "@elizaos/plugin-knowledge",
+  ).find((candidate) =>
+    existsSync(resolve(candidate, "dist", "cjs", "index.node.cjs")),
+  );
+  if (!sourceDir) return;
+
+  const relPaths = [
+    "dist/index.js",
+    "dist/node/index.node.js",
+    "dist/cjs/index.node.cjs",
+  ];
+  const searchDirs = collectInstalledPackageDirs("@elizaos/plugin-knowledge", {
+    includeGlobalBunCache: true,
+  });
+
+  let patched = 0;
+  for (const dir of searchDirs) {
+    for (const relPath of relPaths) {
+      const sourcePath = resolve(sourceDir, relPath);
+      const targetPath = resolve(dir, relPath);
+      if (!existsSync(sourcePath) || !existsSync(targetPath)) continue;
+
+      const next = readFileSync(sourcePath, "utf8");
+      const current = readFileSync(targetPath, "utf8");
+      if (current === next) continue;
+
+      writeFileSync(targetPath, next, "utf8");
+      patched++;
+      console.log(
+        `[patch-deps] Synced plugin-knowledge runtime bundle: ${targetPath}`,
+      );
+    }
+  }
+
+  if (patched > 0) {
+    console.log(
+      `[patch-deps] plugin-knowledge: synced ${patched} runtime bundle file(s) from the workspace override.`,
+    );
+  }
+}
+patchPluginKnowledgeRuntimeBundles();
 
 /**
  * Patch bigint-buffer optional native binding warning noise.
@@ -497,6 +636,57 @@ function patchLegacySharpStoreAliases() {
   }
 }
 patchLegacySharpStoreAliases();
+
+/**
+ * Keep jsdom from eagerly requiring node-canvas on startup.
+ *
+ * Browser-workspace code uses jsdom for DOM parsing, but Milady does not need
+ * canvas-backed rendering in normal runtime boot. jsdom's eager `require("canvas")`
+ * pulls in a second libvips/gio stack on macOS, which collides with sharp.
+ * Make canvas opt-in for the rare cases that genuinely need it.
+ */
+function patchJsdomCanvasAutoload() {
+  const relPaths = ["lib/jsdom/utils.js"];
+  const searchDirs = collectInstalledPackageDirs("jsdom", {
+    includeGlobalBunCache: true,
+  });
+  const oldSnippet = `try {
+  exports.Canvas = require("canvas");
+} catch {
+  exports.Canvas = null;
+}`;
+  const newSnippet = `if (process.env.MILADY_ENABLE_JSDOM_CANVAS === "1") {
+  try {
+    exports.Canvas = require("canvas");
+  } catch {
+    exports.Canvas = null;
+  }
+} else {
+  exports.Canvas = null;
+}`;
+
+  let patched = 0;
+  for (const dir of searchDirs) {
+    for (const relPath of relPaths) {
+      const target = resolve(dir, relPath);
+      if (!existsSync(target)) continue;
+
+      const src = readFileSync(target, "utf8");
+      if (!src.includes(oldSnippet)) continue;
+
+      writeFileSync(target, src.replace(oldSnippet, newSnippet), "utf8");
+      patched++;
+      console.log(`[patch-deps] Disabled eager jsdom canvas autoload: ${target}`);
+    }
+  }
+
+  if (patched > 0) {
+    console.log(
+      `[patch-deps] jsdom: patched ${patched} eager canvas autoload path(s).`,
+    );
+  }
+}
+patchJsdomCanvasAutoload();
 
 function patchPluginPdfBrokenDefault() {
   const relPaths = ["dist/node/index.node.js", "dist/index.js"];

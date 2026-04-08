@@ -1,11 +1,11 @@
 import { Button } from "@miladyai/ui";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { useApp } from "../../state";
 
 type ConfirmDeleteControlProps = {
   onConfirm: () => void;
   disabled?: boolean;
-  triggerLabel?: string;
+  triggerLabel?: string | ReactNode;
   confirmLabel?: string;
   cancelLabel?: string;
   busyLabel?: string;
@@ -14,6 +14,7 @@ type ConfirmDeleteControlProps = {
   confirmClassName: string;
   cancelClassName: string;
   promptClassName?: string;
+  triggerTitle?: string;
 };
 
 export function ConfirmDeleteControl({
@@ -28,6 +29,7 @@ export function ConfirmDeleteControl({
   confirmClassName,
   cancelClassName,
   promptClassName = "text-[11px] text-[#e74c3c] ml-1",
+  triggerTitle,
 }: ConfirmDeleteControlProps) {
   const { t } = useApp();
   const [confirming, setConfirming] = useState(false);
@@ -52,6 +54,8 @@ export function ConfirmDeleteControl({
         className={triggerClassName}
         onClick={() => setConfirming(true)}
         disabled={disabled}
+        title={triggerTitle}
+        aria-label={triggerTitle}
       >
         {resolvedTriggerLabel}
       </Button>

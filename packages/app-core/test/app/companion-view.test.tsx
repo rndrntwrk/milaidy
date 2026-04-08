@@ -9,6 +9,9 @@ const mockUseApp = vi.fn();
 const viewerPropsRef: { current: null | Record<string, unknown> } = {
   current: null,
 };
+const { latestEngineRef } = vi.hoisted(() => ({
+  latestEngineRef: { current: null as null | Record<string, unknown> },
+}));
 
 vi.mock("@miladyai/app-core/state", () => ({
   useApp: () => mockUseApp(),
@@ -34,21 +37,92 @@ vi.mock("@miladyai/app-core/state", () => ({
   useTranslation: () => ({ t: (k: string) => k }),
 }));
 
-vi.mock("../../src/components/avatar/VrmViewer", () => ({
-  VrmViewer: (props: Record<string, unknown>) => {
-    viewerPropsRef.current = props;
-    return React.createElement("div", null, "VrmViewer");
-  },
-}));
+function vrmStageStub() {
+  return {
+    VrmStage: (props: Record<string, unknown>) => {
+      viewerPropsRef.current = props;
+      return React.createElement("div", null, "VrmViewer");
+    },
+  };
+}
 
-vi.mock("../../src/components/pages/ChatModalView", () => ({
-  ChatModalView: () =>
-    React.createElement(
-      "div",
-      { "data-testid": "companion-chat-modal-stub" },
-      "ChatModalView",
-    ),
-}));
+vi.mock(import("../../src/components/companion/VrmStage"), vrmStageStub);
+vi.mock(import("../../src/components/companion/VrmStage.tsx"), vrmStageStub);
+
+function chatModalViewStub() {
+  return {
+    ChatModalView: () =>
+      React.createElement(
+        "div",
+        { "data-testid": "companion-chat-modal-stub" },
+        "ChatModalView",
+      ),
+  };
+}
+
+vi.mock(
+  import("../../src/components/pages/ChatModalView"),
+  chatModalViewStub,
+);
+vi.mock(
+  import("../../src/components/pages/ChatModalView.tsx"),
+  chatModalViewStub,
+);
+
+function vrmViewerStub() {
+  return {
+    VrmViewer: (props: Record<string, unknown>) => {
+      viewerPropsRef.current = props;
+      return React.createElement("div", null, "VrmViewer");
+    },
+  };
+}
+
+vi.mock(import("../../src/components/avatar/VrmViewer"), vrmViewerStub);
+vi.mock(import("../../src/components/avatar/VrmViewer.tsx"), vrmViewerStub);
+
+vi.mock(import("../../src/components/avatar/VrmEngine"), () => {
+  class MockVrmEngine {
+    initialized = false;
+    setup = vi.fn(() => {
+      this.initialized = true;
+    });
+    isInitialized = vi.fn(() => this.initialized);
+    whenReady = vi.fn(async () => {});
+    setPaused = vi.fn();
+    setMinimalBackgroundMode = vi.fn();
+    setCameraProfile = vi.fn();
+    setInteractionMode = vi.fn();
+    setInteractionEnabled = vi.fn();
+    setPointerParallaxEnabled = vi.fn();
+    resetPointerParallax = vi.fn();
+    resize = vi.fn();
+    getState = vi.fn(() => ({
+      vrmLoaded: true,
+      vrmName: "Milady",
+      loadError: null,
+      idlePlaying: false,
+      idleTime: 0,
+      idleTracks: 0,
+      revealStarted: true,
+    }));
+    setWorldUrl = vi.fn(async () => {});
+    loadVrmFromUrl = vi.fn(async () => {});
+    dispose = vi.fn();
+    setCompanionZoomNormalized = vi.fn();
+    setDragOrbitTarget = vi.fn();
+    resetDragOrbit = vi.fn();
+    attachOverlayManager = vi.fn();
+    setCameraAnimation = vi.fn();
+    constructor() {
+      latestEngineRef.current = this as unknown as Record<string, unknown>;
+    }
+  }
+
+  return {
+    VrmEngine: MockVrmEngine,
+  };
+});
 
 vi.mock("../../src/components/coding/PtyConsoleDrawer", () => ({
   PtyConsoleDrawer: () => React.createElement("div", null, "PtyConsoleDrawer"),
@@ -76,6 +150,7 @@ vi.mock("@miladyai/app-core/utils", () => ({
   resolveAppAssetUrl: (p: string) => p,
   DESKTOP_WORKSPACE_SURFACES: [],
   modelLooksLikeElizaCloudHosted: () => false,
+  miladyTtsDebug: vi.fn(),
 }));
 
 import { CompanionSceneHost } from "../../src/components/companion/CompanionSceneHost";
@@ -87,21 +162,37 @@ function createContext(overrides: Record<string, unknown> = {}) {
   return {
     t: (k: string) => k,
     chatMode: "simple",
+    chatInput: "",
+    chatSending: false,
+    chatFirstTokenReceived: false,
+    companionMessageCutoffTs: 0,
     chatAgentVoiceMuted: false,
     conversations: [{ id: "conv-1", title: "Chat", status: "completed" }],
     conversationMessages: [],
     activeConversationId: null,
+    activeInboxChat: null,
+    characterData: null,
     chatLastUsage: null,
     elizaCloudAuthRejected: false,
     elizaCloudCreditsError: null,
     elizaCloudEnabled: false,
     elizaCloudConnected: false,
+    elizaCloudVoiceProxyAvailable: false,
+    elizaCloudHasPersistedKey: false,
     setState: vi.fn(),
+    handleChatSend: vi.fn(async () => {}),
+    handleChatStop: vi.fn(),
+    handleChatEdit: vi.fn(async () => true),
     handleStartDraftConversation: vi.fn(async () => {}),
     handleNewConversation: vi.fn(async () => {}),
     selectedVrmIndex: 1,
     customVrmUrl: "",
     customBackgroundUrl: "",
+    droppedFiles: [],
+    shareIngestNotice: "",
+    chatPendingImages: [],
+    setChatPendingImages: vi.fn(),
+    sendChatText: vi.fn(async () => {}),
     walletAddresses: null,
     walletBalances: null,
     walletNfts: null,
@@ -280,6 +371,8 @@ describe("CompanionView", () => {
         innerHeight: 900,
         setTimeout: globalThis.setTimeout.bind(globalThis),
         clearTimeout: globalThis.clearTimeout.bind(globalThis),
+        setInterval: globalThis.setInterval.bind(globalThis),
+        clearInterval: globalThis.clearInterval.bind(globalThis),
         addEventListener: vi.fn(
           (type: string, listener: EventListenerOrEventListenerObject) => {
             if (typeof listener !== "function") return;
@@ -339,9 +432,10 @@ describe("CompanionView", () => {
       tree = TestRenderer.create(React.createElement(CompanionView));
     });
 
-    const content = text(tree?.root);
-    // Should render the mock VrmViewer text
-    expect(content).toContain("VrmViewer");
+    const companionRoot = tree?.root.findAllByProps({
+      "data-testid": "companion-root",
+    });
+    expect(companionRoot).toHaveLength(1);
     // ChatModalView is gated behind avatarReady (VRM teleport), so it won't
     // render until the avatar finishes loading. Verify the header overlay is
     // present instead (rendered with opacity 0 while waiting).
@@ -379,7 +473,7 @@ describe("CompanionView", () => {
 
       expect(
         tree?.root.findAllByProps({
-          "data-testid": "companion-chat-modal-stub",
+          "data-chat-game-dock": true,
         }),
       ).toHaveLength(1);
     } finally {
@@ -569,23 +663,15 @@ describe("CompanionView", () => {
       tree = TestRenderer.create(React.createElement(CompanionView));
     });
 
-    const setDragOrbitTarget = vi.fn();
-    const resetDragOrbit = vi.fn();
-    const setCompanionZoomNormalized = vi.fn();
-    await act(async () => {
-      const ready = viewerPropsRef.current?.onEngineReady as
-        | ((value: unknown) => void)
-        | undefined;
-      ready?.({
-        setPaused: vi.fn(),
-        setCameraAnimation: vi.fn(),
-        setPointerParallaxEnabled: vi.fn(),
-        setDragOrbitTarget,
-        resetDragOrbit,
-        setCompanionZoomNormalized,
-        attachOverlayManager: vi.fn(),
-      });
-    });
+    const engine = latestEngineRef.current as {
+      setDragOrbitTarget: ReturnType<typeof vi.fn>;
+      resetDragOrbit: ReturnType<typeof vi.fn>;
+      setCompanionZoomNormalized: ReturnType<typeof vi.fn>;
+    } | null;
+    const setDragOrbitTarget = engine?.setDragOrbitTarget ?? vi.fn();
+    const resetDragOrbit = engine?.resetDragOrbit ?? vi.fn();
+    const setCompanionZoomNormalized =
+      engine?.setCompanionZoomNormalized ?? vi.fn();
 
     expect(setCompanionZoomNormalized).toHaveBeenCalledWith(0.95);
     setDragOrbitTarget.mockClear();
@@ -707,21 +793,11 @@ describe("CompanionView", () => {
       renderWithCompanionRootMock(rootMock);
     });
 
-    const setCompanionZoomNormalized = vi.fn();
-    await act(async () => {
-      const ready = viewerPropsRef.current?.onEngineReady as
-        | ((value: unknown) => void)
-        | undefined;
-      ready?.({
-        setPaused: vi.fn(),
-        setCameraAnimation: vi.fn(),
-        setPointerParallaxEnabled: vi.fn(),
-        setDragOrbitTarget: vi.fn(),
-        resetDragOrbit: vi.fn(),
-        setCompanionZoomNormalized,
-        attachOverlayManager: vi.fn(),
-      });
-    });
+    const engine = latestEngineRef.current as {
+      setCompanionZoomNormalized: ReturnType<typeof vi.fn>;
+    } | null;
+    const setCompanionZoomNormalized =
+      engine?.setCompanionZoomNormalized ?? vi.fn();
     setCompanionZoomNormalized.mockClear();
 
     const wheelListener = rootMock.getListener("wheel");
@@ -846,8 +922,13 @@ describe("CompanionView", () => {
       tree = TestRenderer.create(React.createElement(CompanionView));
     });
 
-    const setCompanionZoomNormalized = vi.fn();
-    const resetDragOrbit = vi.fn();
+    const engine = latestEngineRef.current as {
+      setCompanionZoomNormalized: ReturnType<typeof vi.fn>;
+      resetDragOrbit: ReturnType<typeof vi.fn>;
+    } | null;
+    const setCompanionZoomNormalized =
+      engine?.setCompanionZoomNormalized ?? vi.fn();
+    const resetDragOrbit = engine?.resetDragOrbit ?? vi.fn();
     const currentTarget = {
       setPointerCapture: vi.fn(),
       releasePointerCapture: vi.fn(),
@@ -855,21 +936,6 @@ describe("CompanionView", () => {
       clientWidth: 1440,
       clientHeight: 900,
     };
-
-    await act(async () => {
-      const ready = viewerPropsRef.current?.onEngineReady as
-        | ((value: unknown) => void)
-        | undefined;
-      ready?.({
-        setPaused: vi.fn(),
-        setCameraAnimation: vi.fn(),
-        setPointerParallaxEnabled: vi.fn(),
-        setDragOrbitTarget: vi.fn(),
-        resetDragOrbit,
-        setCompanionZoomNormalized,
-        attachOverlayManager: vi.fn(),
-      });
-    });
 
     const root = tree?.root.findByProps({
       "data-testid": "companion-root",
@@ -920,21 +986,11 @@ describe("CompanionView", () => {
       tree = TestRenderer.create(React.createElement(CompanionView));
     });
 
-    const setCompanionZoomNormalized = vi.fn();
-    await act(async () => {
-      const ready = viewerPropsRef.current?.onEngineReady as
-        | ((value: unknown) => void)
-        | undefined;
-      ready?.({
-        setPaused: vi.fn(),
-        setCameraAnimation: vi.fn(),
-        setPointerParallaxEnabled: vi.fn(),
-        setDragOrbitTarget: vi.fn(),
-        resetDragOrbit: vi.fn(),
-        setCompanionZoomNormalized,
-        attachOverlayManager: vi.fn(),
-      });
-    });
+    const engine = latestEngineRef.current as {
+      setCompanionZoomNormalized: ReturnType<typeof vi.fn>;
+    } | null;
+    const setCompanionZoomNormalized =
+      engine?.setCompanionZoomNormalized ?? vi.fn();
 
     expect(tree).not.toBeNull();
     expect(setCompanionZoomNormalized).toHaveBeenCalledWith(0.62);

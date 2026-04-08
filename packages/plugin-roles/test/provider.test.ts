@@ -1,8 +1,8 @@
 import type { IAgentRuntime, Memory, State, UUID } from "@elizaos/core";
 import { describe, expect, it, vi } from "vitest";
 import { rolesProvider } from "../src/provider";
-import { setConnectorAdminWhitelist } from "../src/utils";
 import type { RoleName, RolesWorldMetadata } from "../src/types";
+import { setConnectorAdminWhitelist } from "../src/utils";
 
 function mockRuntime(opts: {
   room?: { worldId: string | null } | null;
@@ -96,7 +96,11 @@ describe("rolesProvider", () => {
       },
     });
 
-    const result = await rolesProvider.get(runtime, msg("owner-app"), emptyState);
+    const result = await rolesProvider.get(
+      runtime,
+      msg("owner-app"),
+      emptyState,
+    );
     expect(result.values?.speakerRole).toBe("OWNER");
     expect(result.data?.owners).toEqual(["owner-app"]);
     expect(result.text).toContain("Shaw");

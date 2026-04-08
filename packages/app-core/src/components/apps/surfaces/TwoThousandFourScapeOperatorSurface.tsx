@@ -86,30 +86,58 @@ export function TwoThousandFourScapeOperatorSurface({
       ? "2004scape Live Dashboard"
       : "2004scape Operator Surface";
 
+  const sendOperatorMessage = useCallback(
+    async (content: string) => {
+      if (!run || content.length === 0 || sending) return false;
+
+      setSending(true);
+      setStatusMessage(null);
+      try {
+        if (run.runId) {
+          const response = await client.sendAppRunMessage(run.runId, content);
+          setStatusMessage(response.message ?? "Operator message sent.");
+          return response.success;
+        }
+        if (session?.sessionId) {
+          const response = await client.sendAppSessionMessage(
+            appName,
+            session.sessionId,
+            content,
+          );
+          setStatusMessage(response.message ?? "Operator message sent.");
+          return response.success;
+        }
+        setStatusMessage("Waiting for the 2004scape command bridge.");
+        return false;
+      } catch (error) {
+        setStatusMessage(
+          error instanceof Error
+            ? error.message
+            : "Failed to send the 2004scape operator message.",
+        );
+        return false;
+      } finally {
+        setSending(false);
+      }
+    },
+    [appName, run, sending, session?.sessionId],
+  );
+
   const handleSendMessage = useCallback(async () => {
     const content = operatorMessage.trim();
-    if (!run || !session?.sessionId || content.length === 0 || sending) return;
-
-    setSending(true);
-    setStatusMessage(null);
-    try {
-      const response = await client.sendAppSessionMessage(
-        appName,
-        session.sessionId,
-        content,
-      );
+    if (content.length === 0) return;
+    const sent = await sendOperatorMessage(content);
+    if (sent) {
       setOperatorMessage("");
-      setStatusMessage(response.message ?? "Operator message sent.");
-    } catch (error) {
-      setStatusMessage(
-        error instanceof Error
-          ? error.message
-          : "Failed to send the 2004scape operator message.",
-      );
-    } finally {
-      setSending(false);
     }
-  }, [appName, operatorMessage, run, session?.sessionId, sending]);
+  }, [operatorMessage, sendOperatorMessage]);
+
+  const handleSuggestedPrompt = useCallback(
+    async (prompt: string) => {
+      await sendOperatorMessage(prompt.trim());
+    },
+    [sendOperatorMessage],
+  );
 
   const handleControl = useCallback(
     async (action: "pause" | "resume") => {
@@ -316,6 +344,22 @@ export function TwoThousandFourScapeOperatorSurface({
       </SurfaceSection>
 
       <SurfaceSection title="Steering">
+        {session?.suggestedPrompts?.length ? (
+          <div className="flex flex-wrap gap-2">
+            {session.suggestedPrompts.slice(0, 4).map((prompt) => (
+              <Button
+                key={prompt}
+                type="button"
+                variant="outline"
+                size="sm"
+                className="min-h-10 rounded-xl px-3 shadow-sm"
+                onClick={() => void handleSuggestedPrompt(prompt)}
+              >
+                {prompt}
+              </Button>
+            ))}
+          </div>
+        ) : null}
         <div className="flex flex-wrap gap-2">
           {session?.controls?.includes("pause") ? (
             <Button
