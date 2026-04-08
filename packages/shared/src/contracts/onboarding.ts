@@ -1248,7 +1248,8 @@ function resolveConfiguredLocalProviderFromSignals(
   );
   if (
     storedSubscriptionProvider &&
-    storedSubscriptionProvider !== "elizacloud"
+    storedSubscriptionProvider !== "elizacloud" &&
+    !requiresAdditionalRuntimeProvider(storedSubscriptionProvider)
   ) {
     return storedSubscriptionProvider;
   }

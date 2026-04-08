@@ -33,6 +33,8 @@ export interface TrajectoryListItem {
   providerAccessCount?: number;
   totalPromptTokens: number;
   totalCompletionTokens: number;
+  scenarioId?: string;
+  batchId?: string;
   createdAt: string;
   metadata?: Record<string, unknown>;
 }
@@ -84,6 +86,8 @@ export interface Trajectory {
   startTime: number;
   endTime?: number;
   durationMs?: number;
+  scenarioId?: string;
+  batchId?: string;
   steps?: TrajectoryStep[];
   metrics?: { finalStatus?: string };
   metadata?: Record<string, unknown>;

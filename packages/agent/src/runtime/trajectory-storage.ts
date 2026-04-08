@@ -43,6 +43,7 @@ import {
   loadTrajectoryById,
   mergeMetadata,
   normalizeStatus,
+  normalizeTrajectoryMetadata,
   normalizeStepId,
   normalizeLlmCallPayload,
   normalizeProviderAccessPayload,
@@ -261,6 +262,89 @@ async function writeCompletedTrajectoryStep({
   await saveTrajectory(runtime, trajectory);
 }
 
+function buildTrajectoryWhereClauses(
+  options: TrajectoryListOptions,
+): string[] {
+  const whereClauses: string[] = [];
+  if (options.source) {
+    whereClauses.push(`source = ${sqlQuote(options.source)}`);
+  }
+  if (options.status) {
+    whereClauses.push(`status = ${sqlQuote(options.status)}`);
+  }
+  if (options.scenarioId) {
+    whereClauses.push(`scenario_id = ${sqlQuote(options.scenarioId)}`);
+  }
+  if (options.batchId) {
+    whereClauses.push(`batch_id = ${sqlQuote(options.batchId)}`);
+  }
+  if (options.startDate) {
+    const startTime = new Date(options.startDate).getTime();
+    if (Number.isFinite(startTime)) {
+      whereClauses.push(`start_time >= ${startTime}`);
+    }
+  }
+  if (options.endDate) {
+    const endTime = new Date(options.endDate).getTime();
+    if (Number.isFinite(endTime)) {
+      whereClauses.push(`start_time <= ${endTime}`);
+    }
+  }
+  if (options.search) {
+    const searchPattern = `%${options.search.toLowerCase().replace(/[%_]/g, "\\$&")}%`;
+    const quotedPattern = sqlQuote(searchPattern);
+    whereClauses.push(
+      `(
+        LOWER(COALESCE(id, '')) LIKE ${quotedPattern}
+        OR LOWER(COALESCE(scenario_id, '')) LIKE ${quotedPattern}
+        OR LOWER(COALESCE(batch_id, '')) LIKE ${quotedPattern}
+        OR LOWER(COALESCE(metadata, '')) LIKE ${quotedPattern}
+        OR LOWER(COALESCE(steps_json, '')) LIKE ${quotedPattern}
+      )`,
+    );
+  }
+  return whereClauses;
+}
+
+function buildTrajectoryWhereClause(options: TrajectoryListOptions): string {
+  const whereClauses = buildTrajectoryWhereClauses(options);
+  return whereClauses.length > 0 ? `WHERE ${whereClauses.join(" AND ")}` : "";
+}
+
+function rowToTrajectoryListItem(
+  row: unknown,
+  agentId: string,
+): TrajectoryListItem | null {
+  const r = asRecord(row);
+  if (!r) return null;
+  const normalizedMetadata = normalizeTrajectoryMetadata(parseMetadata(r.metadata), {
+    scenarioId: r.scenario_id,
+    batchId: r.batch_id,
+  });
+
+  return {
+    id: toText(r.id ?? r.trajectory_id, ""),
+    agentId: toText(r.agent_id, agentId),
+    source: toText(r.source, "runtime"),
+    status: normalizeStatus(r.status, "completed"),
+    startTime: toNumber(r.start_time, Date.now()),
+    endTime: toOptionalNumber(r.end_time) ?? null,
+    durationMs: toOptionalNumber(r.duration_ms) ?? null,
+    stepCount: toNumber(r.step_count, 0),
+    llmCallCount: toNumber(r.llm_call_count, 0),
+    providerAccessCount: toNumber(r.provider_access_count, 0),
+    totalPromptTokens: toNumber(r.total_prompt_tokens, 0),
+    totalCompletionTokens: toNumber(r.total_completion_tokens, 0),
+    scenarioId: normalizedMetadata.scenarioId,
+    batchId: normalizedMetadata.batchId,
+    createdAt: toText(
+      r.created_at,
+      new Date(toNumber(r.start_time, Date.now())).toISOString(),
+    ),
+    metadata: normalizedMetadata.metadata,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Public write API
 // ---------------------------------------------------------------------------
@@ -389,6 +473,8 @@ export async function installDatabaseTrajectoryLogger(
         entityId?: string;
         source?: string;
         metadata?: Record<string, unknown>;
+        scenarioId?: string;
+        batchId?: string;
       },
     ) => Promise<string>;
     startStep?: (trajectoryId: string) => string;
@@ -411,12 +497,18 @@ export async function installDatabaseTrajectoryLogger(
       entityId?: string;
       source?: string;
       metadata?: Record<string, unknown>;
+      scenarioId?: string;
+      batchId?: string;
     },
   ): Promise<string> => {
     const isLegacySignature = typeof options?.agentId === "string";
     const stepId = isLegacySignature
       ? stepIdOrAgentId
       : `step-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const startMetadata = normalizeTrajectoryMetadata(options?.metadata, {
+      scenarioId: options?.scenarioId,
+      batchId: options?.batchId,
+    }).metadata;
 
     const writePromise = enqueueStepWrite(runtime, stepId, async () => {
       const tableReady = await ensureTrajectoriesTable(runtime);
@@ -426,7 +518,7 @@ export async function installDatabaseTrajectoryLogger(
         runtime,
         stepId,
         source: options?.source ?? "chat",
-        metadata: options?.metadata,
+        metadata: startMetadata,
       });
     });
 
@@ -479,39 +571,7 @@ export async function installDatabaseTrajectoryLogger(
     const limit = Math.min(500, Math.max(1, options.limit ?? 50));
     const offset = Math.max(0, options.offset ?? 0);
 
-    const whereClauses: string[] = [];
-    if (options.source) {
-      whereClauses.push(`source = ${sqlQuote(options.source)}`);
-    }
-    if (options.status) {
-      whereClauses.push(`status = ${sqlQuote(options.status)}`);
-    }
-    if (options.startDate) {
-      const startTime = new Date(options.startDate).getTime();
-      if (Number.isFinite(startTime)) {
-        whereClauses.push(`start_time >= ${startTime}`);
-      }
-    }
-    if (options.endDate) {
-      const endTime = new Date(options.endDate).getTime();
-      if (Number.isFinite(endTime)) {
-        whereClauses.push(`start_time <= ${endTime}`);
-      }
-    }
-    if (options.search) {
-      const searchPattern = `%${options.search.toLowerCase().replace(/[%_]/g, "\\$&")}%`;
-      const quotedPattern = sqlQuote(searchPattern);
-      whereClauses.push(
-        `(
-          LOWER(COALESCE(id, '')) LIKE ${quotedPattern}
-          OR LOWER(COALESCE(metadata, '')) LIKE ${quotedPattern}
-          OR LOWER(COALESCE(steps_json, '')) LIKE ${quotedPattern}
-        )`,
-      );
-    }
-
-    const whereClause =
-      whereClauses.length > 0 ? `WHERE ${whereClauses.join(" AND ")}` : "";
+    const whereClause = buildTrajectoryWhereClause(options);
 
     try {
       const countResult = await executeRawSql(
@@ -527,30 +587,8 @@ export async function installDatabaseTrajectoryLogger(
       );
 
       const rows = extractRows(result);
-      const trajectories: TrajectoryListItem[] = rows
-        .map((row) => {
-          const r = asRecord(row);
-          if (!r) return null;
-          return {
-            id: toText(r.id ?? r.trajectory_id, ""),
-            agentId: toText(r.agent_id, runtime.agentId),
-            source: toText(r.source, "runtime"),
-            status: normalizeStatus(r.status, "completed"),
-            startTime: toNumber(r.start_time, Date.now()),
-            endTime: toOptionalNumber(r.end_time) ?? null,
-            durationMs: toOptionalNumber(r.duration_ms) ?? null,
-            stepCount: toNumber(r.step_count, 0),
-            llmCallCount: toNumber(r.llm_call_count, 0),
-            providerAccessCount: toNumber(r.provider_access_count, 0),
-            totalPromptTokens: toNumber(r.total_prompt_tokens, 0),
-            totalCompletionTokens: toNumber(r.total_completion_tokens, 0),
-            createdAt: toText(
-              r.created_at,
-              new Date(toNumber(r.start_time, Date.now())).toISOString(),
-            ),
-            metadata: parseMetadata(r.metadata),
-          };
-        })
+      const trajectories = rows
+        .map((row) => rowToTrajectoryListItem(row, runtime.agentId))
         .filter(Boolean) as TrajectoryListItem[];
 
       return { trajectories, total, offset, limit };
@@ -579,6 +617,8 @@ export async function installDatabaseTrajectoryLogger(
       durationMs: persisted.endTime
         ? persisted.endTime - persisted.startTime
         : undefined,
+      scenarioId: persisted.scenarioId,
+      batchId: persisted.batchId,
       steps: persisted.steps.map((step) => ({
         stepId: step.stepId,
         timestamp: step.timestamp,
@@ -1077,39 +1117,7 @@ export class DatabaseTrajectoryLogger extends Service {
     const limit = Math.min(500, Math.max(1, options.limit ?? 50));
     const offset = Math.max(0, options.offset ?? 0);
 
-    const whereClauses: string[] = [];
-    if (options.source) {
-      whereClauses.push(`source = ${sqlQuote(options.source)}`);
-    }
-    if (options.status) {
-      whereClauses.push(`status = ${sqlQuote(options.status)}`);
-    }
-    if (options.startDate) {
-      const startTime = new Date(options.startDate).getTime();
-      if (Number.isFinite(startTime)) {
-        whereClauses.push(`start_time >= ${startTime}`);
-      }
-    }
-    if (options.endDate) {
-      const endTime = new Date(options.endDate).getTime();
-      if (Number.isFinite(endTime)) {
-        whereClauses.push(`start_time <= ${endTime}`);
-      }
-    }
-    if (options.search) {
-      const searchPattern = `%${options.search.toLowerCase().replace(/[%_]/g, "\\$&")}%`;
-      const quotedPattern = sqlQuote(searchPattern);
-      whereClauses.push(
-        `(
-          LOWER(COALESCE(id, '')) LIKE ${quotedPattern}
-          OR LOWER(COALESCE(metadata, '')) LIKE ${quotedPattern}
-          OR LOWER(COALESCE(steps_json, '')) LIKE ${quotedPattern}
-        )`,
-      );
-    }
-
-    const whereClause =
-      whereClauses.length > 0 ? `WHERE ${whereClauses.join(" AND ")}` : "";
+    const whereClause = buildTrajectoryWhereClause(options);
 
     try {
       const countResult = await executeRawSql(
@@ -1125,30 +1133,8 @@ export class DatabaseTrajectoryLogger extends Service {
       );
 
       const rows = extractRows(result);
-      const trajectories: TrajectoryListItem[] = rows
-        .map((row) => {
-          const r = asRecord(row);
-          if (!r) return null;
-          return {
-            id: toText(r.id ?? r.trajectory_id, ""),
-            agentId: toText(r.agent_id, this.runtime.agentId),
-            source: toText(r.source, "runtime"),
-            status: normalizeStatus(r.status, "completed"),
-            startTime: toNumber(r.start_time, Date.now()),
-            endTime: toOptionalNumber(r.end_time) ?? null,
-            durationMs: toOptionalNumber(r.duration_ms) ?? null,
-            stepCount: toNumber(r.step_count, 0),
-            llmCallCount: toNumber(r.llm_call_count, 0),
-            providerAccessCount: toNumber(r.provider_access_count, 0),
-            totalPromptTokens: toNumber(r.total_prompt_tokens, 0),
-            totalCompletionTokens: toNumber(r.total_completion_tokens, 0),
-            createdAt: toText(
-              r.created_at,
-              new Date(toNumber(r.start_time, Date.now())).toISOString(),
-            ),
-            metadata: parseMetadata(r.metadata),
-          };
-        })
+      const trajectories = rows
+        .map((row) => rowToTrajectoryListItem(row, this.runtime.agentId))
         .filter(Boolean) as TrajectoryListItem[];
 
       return { trajectories, total, offset, limit };
@@ -1175,6 +1161,8 @@ export class DatabaseTrajectoryLogger extends Service {
       durationMs: persisted.endTime
         ? persisted.endTime - persisted.startTime
         : undefined,
+      scenarioId: persisted.scenarioId,
+      batchId: persisted.batchId,
       steps: persisted.steps.map((step) => ({
         stepId: step.stepId,
         timestamp: step.timestamp,
@@ -1238,6 +1226,8 @@ export class DatabaseTrajectoryLogger extends Service {
       limit: 10000,
       startDate: options.startDate,
       endDate: options.endDate,
+      scenarioId: options.scenarioId,
+      batchId: options.batchId,
     });
 
     let ids = listResult.trajectories.map((t) => t.id);
@@ -1326,7 +1316,8 @@ async function exportRawTrajectoriesToCompressedArchive(
     `SELECT
       id, trajectory_id, agent_id, source, status, start_time, end_time,
       duration_ms, step_count, llm_call_count, provider_access_count,
-      total_prompt_tokens, total_completion_tokens, total_reward, steps_json,
+      total_prompt_tokens, total_completion_tokens, total_reward, scenario_id,
+      batch_id, steps_json,
       metadata, created_at, updated_at, episode_length, ai_judge_reward,
       ai_judge_reasoning, archetype
     FROM trajectories
@@ -1394,13 +1385,14 @@ export async function pruneOldTrajectories(
           id, agent_id, source, status, start_time, end_time, duration_ms,
           step_count, llm_call_count, provider_access_count,
           total_prompt_tokens, total_completion_tokens, total_reward,
-          metadata, observations, archive_blob_path, created_at, updated_at, archived_at
+          scenario_id, batch_id, metadata, observations, archive_blob_path,
+          created_at, updated_at, archived_at
         )
         SELECT
           id, agent_id, source, status, start_time, end_time, duration_ms,
           step_count, llm_call_count, provider_access_count,
           total_prompt_tokens, total_completion_tokens, total_reward,
-          metadata,
+          scenario_id, batch_id, metadata,
           COALESCE(json_extract(metadata, '$.observations'), '[]'),
           ${sqlQuote(archivePath)},
           created_at, updated_at,
@@ -1418,13 +1410,14 @@ export async function pruneOldTrajectories(
             id, agent_id, source, status, start_time, end_time, duration_ms,
             step_count, llm_call_count, provider_access_count,
             total_prompt_tokens, total_completion_tokens, total_reward,
-            metadata, observations, archive_blob_path, created_at, updated_at, archived_at
+            scenario_id, batch_id, metadata, observations, archive_blob_path,
+            created_at, updated_at, archived_at
           )
           SELECT
             id, agent_id, source, status, start_time, end_time, duration_ms,
             step_count, llm_call_count, provider_access_count,
             total_prompt_tokens, total_completion_tokens, total_reward,
-            metadata,
+            scenario_id, batch_id, metadata,
             COALESCE(metadata::json->>'observations', '[]'),
             ${sqlQuote(archivePath)},
             created_at, updated_at,

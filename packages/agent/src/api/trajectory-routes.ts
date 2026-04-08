@@ -386,6 +386,8 @@ function toPersistedTrajectory(traj: Trajectory): PersistedTrajectory {
     status,
     startTime: traj.startTime,
     endTime: typeof traj.endTime === "number" ? traj.endTime : null,
+    scenarioId: typeof traj.scenarioId === "string" ? traj.scenarioId : undefined,
+    batchId: typeof traj.batchId === "string" ? traj.batchId : undefined,
     steps: persistedSteps,
     metadata,
     totalReward: 0,
@@ -416,7 +418,11 @@ function listItemToUIRecord(item: TrajectoryListItem): UITrajectoryRecord {
     providerAccessCount: item.providerAccessCount ?? 0,
     totalPromptTokens: item.totalPromptTokens,
     totalCompletionTokens: item.totalCompletionTokens,
-    metadata: {},
+    metadata: {
+      ...(item.metadata ?? {}),
+      ...(item.scenarioId ? { scenarioId: item.scenarioId } : {}),
+      ...(item.batchId ? { batchId: item.batchId } : {}),
+    },
     createdAt: item.createdAt,
     updatedAt: item.createdAt,
   };

@@ -84,6 +84,8 @@ export type PersistedTrajectory = {
   status: TrajectoryStatus;
   startTime: number;
   endTime: number | null;
+  scenarioId?: string;
+  batchId?: string;
   steps: PersistedStep[];
   metadata: Record<string, unknown>;
   totalReward: number;
@@ -135,6 +137,11 @@ export function toText(value: unknown, fallback = ""): string {
   if (typeof value === "string") return value;
   if (value === undefined || value === null) return fallback;
   return String(value);
+}
+
+export function toOptionalText(value: unknown): string | undefined {
+  const normalized = toText(value, "").trim();
+  return normalized.length > 0 ? normalized : undefined;
 }
 
 export function toNumber(value: unknown, fallback = 0): number {
@@ -319,6 +326,74 @@ export function parseJsonValue(value: unknown): unknown {
   } catch {
     return value;
   }
+}
+
+const TRAJECTORY_SCENARIO_METADATA_KEYS = ["scenarioId", "scenario_id"];
+const TRAJECTORY_BATCH_METADATA_KEYS = ["batchId", "batch_id"];
+
+function readGroupingValue(
+  metadata: Record<string, unknown>,
+  keys: string[],
+): string | undefined {
+  return toOptionalText(readRecordValue(metadata, keys));
+}
+
+export function resolveTrajectoryGrouping(
+  metadata: Record<string, unknown> | undefined,
+  fallback?: {
+    scenarioId?: unknown;
+    batchId?: unknown;
+  },
+): {
+  scenarioId?: string;
+  batchId?: string;
+} {
+  const record = metadata ?? {};
+  const scenarioId =
+    readGroupingValue(record, TRAJECTORY_SCENARIO_METADATA_KEYS) ??
+    toOptionalText(fallback?.scenarioId);
+  const batchId =
+    readGroupingValue(record, TRAJECTORY_BATCH_METADATA_KEYS) ??
+    toOptionalText(fallback?.batchId);
+  return { scenarioId, batchId };
+}
+
+export function normalizeTrajectoryMetadata(
+  metadata: Record<string, unknown> | undefined,
+  fallback?: {
+    scenarioId?: unknown;
+    batchId?: unknown;
+  },
+): {
+  metadata: Record<string, unknown>;
+  scenarioId?: string;
+  batchId?: string;
+} {
+  const normalizedMetadata = {
+    ...(metadata ?? {}),
+  };
+  const { scenarioId, batchId } = resolveTrajectoryGrouping(
+    normalizedMetadata,
+    fallback,
+  );
+
+  if (scenarioId) {
+    normalizedMetadata.scenarioId = scenarioId;
+  } else {
+    delete normalizedMetadata.scenarioId;
+  }
+
+  if (batchId) {
+    normalizedMetadata.batchId = batchId;
+  } else {
+    delete normalizedMetadata.batchId;
+  }
+
+  return {
+    metadata: normalizedMetadata,
+    scenarioId,
+    batchId,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -713,6 +788,8 @@ export async function ensureTrajectoriesTable(
         { name: "trajectory_id", def: "TEXT" },
         { name: "metadata", def: "TEXT NOT NULL DEFAULT '{}'" },
         { name: "steps_json", def: "TEXT NOT NULL DEFAULT '[]'" },
+        { name: "scenario_id", def: "TEXT" },
+        { name: "batch_id", def: "TEXT" },
         { name: "archetype", def: "TEXT" },
         { name: "episode_length", def: "INTEGER" },
         { name: "ai_judge_reward", def: "REAL" },
@@ -753,6 +830,8 @@ export async function ensureTrajectoriesTable(
         total_prompt_tokens INTEGER NOT NULL DEFAULT 0,
         total_completion_tokens INTEGER NOT NULL DEFAULT 0,
         total_reward REAL NOT NULL DEFAULT 0,
+        scenario_id TEXT,
+        batch_id TEXT,
         steps_json TEXT NOT NULL DEFAULT '[]',
         metadata TEXT NOT NULL DEFAULT '{}',
         created_at TEXT NOT NULL,
@@ -781,6 +860,8 @@ export async function ensureTrajectoriesTable(
         total_prompt_tokens INTEGER NOT NULL DEFAULT 0,
         total_completion_tokens INTEGER NOT NULL DEFAULT 0,
         total_reward REAL NOT NULL DEFAULT 0,
+        scenario_id TEXT,
+        batch_id TEXT,
         metadata TEXT NOT NULL DEFAULT '{}',
         observations TEXT NOT NULL DEFAULT '[]',
         archive_blob_path TEXT,
@@ -800,7 +881,7 @@ export async function ensureTrajectoriesTable(
       // ignore when column already exists
     }
 
-    // Best-effort forward migration: add scenario_id column + index
+    // Best-effort forward migration for grouping columns.
     try {
       await executeRawSql(
         runtime,
@@ -816,6 +897,38 @@ export async function ensureTrajectoriesTable(
       );
     } catch {
       // ignore if index creation fails
+    }
+    try {
+      await executeRawSql(
+        runtime,
+        `ALTER TABLE trajectories ADD COLUMN batch_id TEXT`,
+      );
+    } catch {
+      // ignore when column already exists
+    }
+    try {
+      await executeRawSql(
+        runtime,
+        `CREATE INDEX IF NOT EXISTS idx_trajectories_batch_id ON trajectories(batch_id)`,
+      );
+    } catch {
+      // ignore if index creation fails
+    }
+    try {
+      await executeRawSql(
+        runtime,
+        `ALTER TABLE trajectory_archive ADD COLUMN scenario_id TEXT`,
+      );
+    } catch {
+      // ignore when column already exists
+    }
+    try {
+      await executeRawSql(
+        runtime,
+        `ALTER TABLE trajectory_archive ADD COLUMN batch_id TEXT`,
+      );
+    } catch {
+      // ignore when column already exists
     }
 
     if (needsRecreate) {
@@ -1072,12 +1185,15 @@ export function createBaseTrajectory(
 ): PersistedTrajectory {
   const normalizedSource = source?.trim() || "runtime";
   const createdAt = new Date(now).toISOString();
+  const normalizedMetadata = normalizeTrajectoryMetadata(metadata);
   return {
     id: stepId,
     source: normalizedSource,
     status: "active",
     startTime: now,
     endTime: null,
+    scenarioId: normalizedMetadata.scenarioId,
+    batchId: normalizedMetadata.batchId,
     steps: [
       {
         stepId,
@@ -1087,9 +1203,7 @@ export function createBaseTrajectory(
         providerAccesses: [],
       },
     ],
-    metadata: {
-      ...(metadata ?? {}),
-    },
+    metadata: normalizedMetadata.metadata,
     totalReward: 0,
     createdAt,
     updatedAt: createdAt,
@@ -1124,7 +1238,7 @@ export function mergeMetadata(
   for (const [key, value] of Object.entries(incoming)) {
     if (value !== undefined) merged[key] = value;
   }
-  return merged;
+  return normalizeTrajectoryMetadata(merged).metadata;
 }
 
 export function collectTrajectoryTimestamps(
@@ -1201,6 +1315,13 @@ export async function loadTrajectoryById(
     const steps = parseSteps(
       readRecordValue(row, ["steps_json", "stepsJson", "steps"]),
     );
+    const normalizedMetadata = normalizeTrajectoryMetadata(
+      parseMetadata(readRecordValue(row, ["metadata", "meta"])),
+      {
+        scenarioId: readRecordValue(row, ["scenario_id", "scenarioId"]),
+        batchId: readRecordValue(row, ["batch_id", "batchId"]),
+      },
+    );
 
     return {
       id: toText(
@@ -1211,8 +1332,10 @@ export async function loadTrajectoryById(
       status: normalizeStatus(readRecordValue(row, ["status"]), "completed"),
       startTime,
       endTime,
+      scenarioId: normalizedMetadata.scenarioId,
+      batchId: normalizedMetadata.batchId,
       steps,
-      metadata: parseMetadata(readRecordValue(row, ["metadata", "meta"])),
+      metadata: normalizedMetadata.metadata,
       totalReward: toNumber(
         readRecordValue(row, ["total_reward", "totalReward"]),
         0,
@@ -1278,6 +1401,13 @@ export async function loadTrajectoryByStepId(
     );
     const endTime =
       toOptionalNumber(readRecordValue(row, ["end_time", "endTime"])) ?? null;
+    const normalizedMetadata = normalizeTrajectoryMetadata(
+      parseMetadata(readRecordValue(row, ["metadata", "meta"])),
+      {
+        scenarioId: readRecordValue(row, ["scenario_id", "scenarioId"]),
+        batchId: readRecordValue(row, ["batch_id", "batchId"]),
+      },
+    );
 
     return {
       id: toText(
@@ -1288,10 +1418,12 @@ export async function loadTrajectoryByStepId(
       status: normalizeStatus(readRecordValue(row, ["status"]), "completed"),
       startTime,
       endTime,
+      scenarioId: normalizedMetadata.scenarioId,
+      batchId: normalizedMetadata.batchId,
       steps: parseSteps(
         readRecordValue(row, ["steps_json", "stepsJson", "steps"]),
       ),
-      metadata: parseMetadata(readRecordValue(row, ["metadata", "meta"])),
+      metadata: normalizedMetadata.metadata,
       totalReward: toNumber(
         readRecordValue(row, ["total_reward", "totalReward"]),
         0,
@@ -1314,6 +1446,14 @@ export async function saveTrajectory(
   runtime: IAgentRuntime,
   trajectory: PersistedTrajectory,
 ): Promise<boolean> {
+  const normalizedMetadata = normalizeTrajectoryMetadata(trajectory.metadata, {
+    scenarioId: trajectory.scenarioId,
+    batchId: trajectory.batchId,
+  });
+  trajectory.metadata = normalizedMetadata.metadata;
+  trajectory.scenarioId = normalizedMetadata.scenarioId;
+  trajectory.batchId = normalizedMetadata.batchId;
+
   const summary = summarizeTrajectory(trajectory);
   const isActive = trajectory.status === "active";
   const endTime = isActive ? null : (trajectory.endTime ?? summary.endTime);
@@ -1341,6 +1481,8 @@ export async function saveTrajectory(
       total_prompt_tokens,
       total_completion_tokens,
       total_reward,
+      scenario_id,
+      batch_id,
       steps_json,
       metadata,
       created_at,
@@ -1361,6 +1503,8 @@ export async function saveTrajectory(
       ${sqlNumber(summary.totalPromptTokens)},
       ${sqlNumber(summary.totalCompletionTokens)},
       ${sqlNumber(trajectory.totalReward)},
+      ${trajectory.scenarioId ? sqlQuote(trajectory.scenarioId) : "NULL"},
+      ${trajectory.batchId ? sqlQuote(trajectory.batchId) : "NULL"},
       ${sqlQuote(JSON.stringify(trajectory.steps))},
       ${sqlQuote(JSON.stringify(trajectory.metadata))},
       ${sqlQuote(createdAt)},
@@ -1381,6 +1525,8 @@ export async function saveTrajectory(
       total_prompt_tokens = EXCLUDED.total_prompt_tokens,
       total_completion_tokens = EXCLUDED.total_completion_tokens,
       total_reward = EXCLUDED.total_reward,
+      scenario_id = EXCLUDED.scenario_id,
+      batch_id = EXCLUDED.batch_id,
       steps_json = EXCLUDED.steps_json,
       metadata = EXCLUDED.metadata,
       created_at = EXCLUDED.created_at,

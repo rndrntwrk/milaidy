@@ -28,6 +28,7 @@ import {
   buildDefaultElizaCloudServiceRouting,
   buildElizaCloudServiceRoute,
   normalizeDeploymentTargetConfig,
+  normalizeServiceRoutingConfig,
 } from "../contracts/service-routing";
 
 type MutableElizaConfig = Partial<ElizaConfig> & {

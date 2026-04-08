@@ -151,7 +151,11 @@ describe("Trajectory Database E2E", () => {
     await dbLogger.startTrajectory(stepId, {
       agentId: "test-agent",
       source: "runtime",
-      metadata: { trigger: "test" },
+      metadata: {
+        trigger: "test",
+        scenarioId: "coordinator-build-birthday-page",
+        batchId: "live-eval-batch-001",
+      },
     });
 
     // Call the logger method - it writes directly to the database
@@ -209,6 +213,26 @@ describe("Trajectory Database E2E", () => {
     expect(traj.llmCallCount).toBe(1);
     expect(traj.totalPromptTokens).toBe(15);
     expect(traj.totalCompletionTokens).toBe(8);
+    expect(traj.scenarioId).toBe("coordinator-build-birthday-page");
+    expect(traj.batchId).toBe("live-eval-batch-001");
+
+    const scenarioFiltered = await dbLogger.listTrajectories({
+      limit: 50,
+      offset: 0,
+      scenarioId: "coordinator-build-birthday-page",
+    });
+    expect(
+      scenarioFiltered.trajectories.some((item) => item.id === stepId),
+    ).toBe(true);
+
+    const batchFiltered = await dbLogger.listTrajectories({
+      limit: 50,
+      offset: 0,
+      batchId: "live-eval-batch-001",
+    });
+    expect(batchFiltered.trajectories.some((item) => item.id === stepId)).toBe(
+      true,
+    );
 
     const promptSearch = await dbLogger.listTrajectories({
       limit: 50,
@@ -240,6 +264,12 @@ describe("Trajectory Database E2E", () => {
     const steps = details.steps ?? [];
     expect(Array.isArray(steps)).toBe(true);
     expect(steps.length).toEqual(1);
+    expect(details.scenarioId).toBe("coordinator-build-birthday-page");
+    expect(details.batchId).toBe("live-eval-batch-001");
+    expect(details.metadata?.scenarioId).toBe(
+      "coordinator-build-birthday-page",
+    );
+    expect(details.metadata?.batchId).toBe("live-eval-batch-001");
 
     const llmCalls = steps[0]?.llmCalls ?? [];
     expect(llmCalls.length).toBe(1);
@@ -346,5 +376,17 @@ describe("Trajectory Database E2E", () => {
 
     expect(migratedRow).toBeDefined();
     expect(migratedRow?.providerAccessCount).toBe(2);
+
+    const columnRows = await db.query<Record<string, unknown>>(
+      `SELECT column_name
+         FROM information_schema.columns
+        WHERE table_name = 'trajectories'
+          AND column_name IN ('scenario_id', 'batch_id')
+        ORDER BY column_name`,
+    );
+    expect(columnRows.rows.map((row) => row.column_name)).toEqual([
+      "batch_id",
+      "scenario_id",
+    ]);
   });
 });

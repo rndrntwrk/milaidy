@@ -563,6 +563,8 @@ type ChatTrajectoryLogger = {
     options?: {
       source?: string;
       metadata?: Record<string, unknown>;
+      scenarioId?: string;
+      batchId?: string;
     },
   ) => Promise<string>;
   startStep?: (
@@ -589,6 +591,55 @@ function readMessageTrajectoryStepId(
   return typeof stepId === "string" && stepId.trim().length > 0
     ? stepId.trim()
     : null;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function readGroupingValue(
+  source: Record<string, unknown> | null,
+  ...keys: string[]
+): string | undefined {
+  if (!source) return undefined;
+  for (const key of keys) {
+    const value = source[key];
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+  return undefined;
+}
+
+function readChatTrajectoryGrouping(
+  messageMetadata: Record<string, unknown>,
+  contentMetadata: Record<string, unknown> | null,
+): {
+  scenarioId?: string;
+  batchId?: string;
+} {
+  const nestedSources = [
+    asRecord(messageMetadata.eval),
+    asRecord(contentMetadata?.eval),
+    asRecord(contentMetadata?.evaluation),
+    asRecord(contentMetadata?.scenario),
+  ];
+  const scenarioId =
+    readGroupingValue(messageMetadata, "scenarioId", "scenario_id") ??
+    readGroupingValue(contentMetadata, "scenarioId", "scenario_id") ??
+    nestedSources
+      .map((source) => readGroupingValue(source, "scenarioId", "scenario_id"))
+      .find(Boolean);
+  const batchId =
+    readGroupingValue(messageMetadata, "batchId", "batch_id") ??
+    readGroupingValue(contentMetadata, "batchId", "batch_id") ??
+    nestedSources
+      .map((source) => readGroupingValue(source, "batchId", "batch_id"))
+      .find(Boolean);
+
+  return { scenarioId, batchId };
 }
 
 async function ensureChatTrajectoryStep(
@@ -620,17 +671,24 @@ async function ensureChatTrajectoryStep(
     const metadata = getMessageMetadata(message);
     const content = message.content as Content & {
       channelType?: unknown;
+      metadata?: unknown;
     };
+    const contentMetadata = asRecord(content.metadata);
+    const grouping = readChatTrajectoryGrouping(metadata, contentMetadata);
     const trajectoryId = await trajectoryLogger.startTrajectory(
       runtime.agentId,
       {
         source,
+        scenarioId: grouping.scenarioId,
+        batchId: grouping.batchId,
         metadata: {
           roomId: message.roomId,
           entityId: message.entityId,
           messageId: message.id,
           channelType: metadata.channelType ?? content.channelType,
           conversationId: metadata.sessionKey,
+          ...(grouping.scenarioId ? { scenarioId: grouping.scenarioId } : {}),
+          ...(grouping.batchId ? { batchId: grouping.batchId } : {}),
         },
       },
     );

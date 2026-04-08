@@ -243,6 +243,18 @@ describe("onboarding provider catalog", () => {
     expect(isCloudInferenceSelectedInConfig(migrated)).toBe(false);
   });
 
+  it("does not infer a main-runtime route from Claude subscription legacy defaults", () => {
+    const migrated = migrateLegacyRuntimeConfig({
+      agents: {
+        defaults: {
+          subscriptionProvider: "anthropic-subscription",
+        },
+      },
+    });
+
+    expect(migrated.serviceRouting).toBeUndefined();
+  });
+
   it("keeps linked cloud auth separate from service routing", () => {
     const topology = resolveElizaCloudTopology({
       linkedAccounts: {

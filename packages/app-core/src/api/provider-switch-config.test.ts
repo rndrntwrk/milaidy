@@ -113,7 +113,7 @@ describe("clearSubscriptionProviderConfig", () => {
 });
 
 describe("applyOnboardingConnectionConfig", () => {
-  it("persists a sanitized subscription selection without setting model.primary for Claude (TOS)", async () => {
+  it("persists a Claude subscription without disturbing an existing runtime provider", async () => {
     const config = {
       env: { OPENAI_API_KEY: "sk-openai-existing" },
     } as Partial<ElizaConfig>;
@@ -127,7 +127,10 @@ describe("applyOnboardingConnectionConfig", () => {
     expect(config.agents?.defaults?.subscriptionProvider).toBe(
       "anthropic-subscription",
     );
-    expect(config.serviceRouting?.llmText).toBeUndefined();
+    expect(config.serviceRouting?.llmText).toEqual({
+      backend: "openai",
+      transport: "direct",
+    });
     // Anthropic subscription tokens can only be used through Claude Code CLI
     // (TOS restriction).  model.primary is NOT set for the runtime.
     expect(config.agents?.defaults?.model?.primary).toBeUndefined();
