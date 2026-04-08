@@ -372,6 +372,107 @@ describe("useOnboardingCallbacks", () => {
     expect(setTab).toHaveBeenCalledWith("chat");
   });
 
+  it("finishes Claude limited setup without creating a runtime route and sends the user to settings", async () => {
+    const submitOnboarding = vi.fn().mockResolvedValue(undefined);
+    const setOnboardingComplete = vi.fn();
+    const setTab = vi.fn();
+    const setActionNotice = vi.fn();
+    const loadCharacter = vi.fn().mockResolvedValue(undefined);
+
+    const { result } = renderHook(() => {
+      const onboarding = useOnboardingState();
+      return {
+        onboarding,
+        callbacks: useOnboardingCallbacks({
+          onboarding,
+          setOnboardingStep: vi.fn(),
+          setOnboardingMode: vi.fn(),
+          setOnboardingActiveGuide: vi.fn(),
+          addDeferredOnboardingTask: vi.fn(),
+          setOnboardingDetectedProviders: vi.fn(),
+          setOnboardingServerTarget: vi.fn(),
+          setOnboardingCloudApiKey: vi.fn(),
+          setOnboardingProvider: vi.fn(),
+          setOnboardingApiKey: vi.fn(),
+          setOnboardingPrimaryModel: vi.fn(),
+          setOnboardingRemoteApiBase: vi.fn(),
+          setOnboardingRemoteToken: vi.fn(),
+          setOnboardingRemoteConnecting: vi.fn(),
+          setOnboardingRemoteError: vi.fn(),
+          setOnboardingRemoteConnected: vi.fn(),
+          setPostOnboardingChecklistDismissed: vi.fn(),
+          setOnboardingComplete,
+          coordinatorOnboardingCompleteRef: { current: null },
+          initialTabSetRef: { current: false },
+          setTab,
+          defaultLandingTab: "chat",
+          loadCharacter,
+          uiLanguage: "en",
+          selectedVrmIndex: 1,
+          walletConfig: {},
+          elizaCloudConnected: false,
+          setActionNotice,
+          retryStartup: vi.fn(),
+          forceLocalBootstrapRef: { current: false },
+          client: {
+            submitOnboarding,
+            updateConfig: vi.fn().mockResolvedValue({}),
+          } as unknown as MiladyClient,
+        }),
+      };
+    });
+
+    act(() => {
+      result.current.onboarding.setOptions({
+        names: [],
+        styles: [getDefaultStylePreset("en")],
+        providers: [],
+        cloudProviders: [],
+        models: { small: [], large: [] },
+        inventoryProviders: [],
+        sharedStyleRules: "Keep responses brief.",
+      });
+      result.current.onboarding.setField("name", "Chen");
+      result.current.onboarding.setField("serverTarget", "local");
+      result.current.onboarding.setField(
+        "provider",
+        "anthropic-subscription",
+      );
+      result.current.onboarding.setField(
+        "apiKey",
+        "sk-ant-oat01-test-token",
+      );
+    });
+
+    await act(async () => {
+      await result.current.callbacks.handleOnboardingFinish({
+        omitRuntimeProvider: true,
+      });
+    });
+
+    const payload = submitOnboarding.mock.calls[0]?.[0] as
+      | Record<string, unknown>
+      | undefined;
+
+    expect(payload).toBeDefined();
+    expect(payload?.deploymentTarget).toEqual({ runtime: "local" });
+    expect(payload?.linkedAccounts).toEqual({
+      "anthropic-subscription": {
+        status: "linked",
+        source: "subscription",
+      },
+    });
+    expect(payload?.serviceRouting).toBeUndefined();
+    expect(payload?.credentialInputs).toBeUndefined();
+    expect(setActionNotice).toHaveBeenCalledWith(
+      "Choose a chat provider in Settings to start chatting.",
+      "info",
+      6000,
+    );
+    expect(setOnboardingComplete).toHaveBeenCalledWith(true);
+    expect(setTab).toHaveBeenCalledWith("settings");
+  });
+
   it("completes Eliza Cloud onboarding without queuing Google setup work", async () => {
     const submitOnboarding = vi.fn().mockResolvedValue(undefined);
     const provisionCloudSandbox = vi.fn().mockResolvedValue(undefined);

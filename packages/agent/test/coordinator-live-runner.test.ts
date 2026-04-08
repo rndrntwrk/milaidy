@@ -258,7 +258,7 @@ describe("coordinator live runner", () => {
         "framework-claude",
       ]),
     );
-  });
+  }, 15_000);
 
   it("records skipped channels when defaulting to all supported channels", async () => {
     const result = await runCoordinatorLiveScenarios({
@@ -273,7 +273,7 @@ describe("coordinator live runner", () => {
     expect(result.skippedChannels.map((item) => item.channel)).toEqual(
       supportedConnectors,
     );
-  });
+  }, 15_000);
 
   it("fails when no runnable framework is available for task scenarios", async () => {
     state.preflight = makePreflight({

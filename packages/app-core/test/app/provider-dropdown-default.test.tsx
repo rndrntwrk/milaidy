@@ -243,7 +243,7 @@ describe("ProviderSwitcher provider dropdown default", () => {
     expect(selectValue).toBe("__cloud__");
   });
 
-  it("switches to subscription providers even when plugin ids use short slugs", async () => {
+  it("selects Claude Subscription without switching the main runtime immediately", async () => {
     mockGetConfig.mockResolvedValue({
       models: {},
       cloud: {
@@ -312,7 +312,8 @@ describe("ProviderSwitcher provider dropdown default", () => {
       await Promise.resolve();
     });
 
-    expect(mockSwitchProvider).toHaveBeenCalledWith("anthropic-subscription");
+    expect(getSelectValue(tree)).toBe("anthropic-subscription");
+    expect(mockSwitchProvider).not.toHaveBeenCalled();
     expect(mockUpdateConfig).not.toHaveBeenCalled();
     expect(handlePluginToggle).not.toHaveBeenCalled();
   });
