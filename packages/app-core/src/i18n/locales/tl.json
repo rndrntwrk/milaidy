@@ -955,8 +955,6 @@
   "gameview.LogLoadFailed": "Hindi na-load ang mga log: {{message}}",
   "gameview.MobileSurfaceDashboard": "Dashboard",
   "gameview.MobileSurfaceGame": "Laro",
-  "gameview.NativeAgentInterface": "Naka-embed na agent UI",
-  "gameview.NativeAgentInterfaceHint": "Kasama na ng Hyperscape ang console ng agent, timeline, logs, at chat sa loob ng naka-embed na viewer.",
   "gameview.NativeGameActionFailed": "Nabigo ang pagkilos ng katutubong laro.",
   "gameview.Pause": "I-pause",
   "gameview.NativeGameStateRefreshed": "Na-refresh ang estado ng katutubong laro.",

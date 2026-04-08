@@ -1,7 +1,6 @@
 import type { RegistryAppInfo } from "../../../api";
 import { BabylonDetailExtension } from "./BabylonDetailExtension";
 import { DefenseAgentsDetailExtension } from "./DefenseAgentsDetailExtension";
-import { HyperscapeDetailExtension } from "./HyperscapeDetailExtension";
 import { TwoThousandFourScapeDetailExtension } from "./TwoThousandFourScapeDetailExtension";
 import type { AppDetailExtensionComponent } from "./types";
 
@@ -9,7 +8,6 @@ const DETAIL_EXTENSION_COMPONENTS: Record<string, AppDetailExtensionComponent> =
   {
     "babylon-operator-dashboard": BabylonDetailExtension,
     "defense-agent-control": DefenseAgentsDetailExtension,
-    "hyperscape-embedded-agent-control": HyperscapeDetailExtension,
     "2004scape-operator-dashboard": TwoThousandFourScapeDetailExtension,
   };
 

@@ -485,7 +485,7 @@ describe("AppsView", () => {
     vi.restoreAllMocks();
   });
 
-  it("uses an exact curated app allowlist in production", () => {
+  it("shows valid app-capable games in production without a curated allowlist", () => {
     expect(
       shouldShowAppInAppsView(
         createApp("@hyperscape/plugin-hyperscape", "Hyperscape", "Game", {
@@ -522,10 +522,10 @@ describe("AppsView", () => {
         }),
         true,
       ),
-    ).toBe(false);
+    ).toBe(true);
   });
 
-  it("does not restrict the apps list by production allowlist in development", () => {
+  it("keeps the same visibility rules in development", () => {
     expect(
       shouldShowAppInAppsView(
         createApp("@hyperscape/plugin-hyperscape", "Hyperscape", "Arena", {

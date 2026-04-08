@@ -955,8 +955,6 @@
   "gameview.LogLoadFailed": "Không tải được nhật ký: {{message}}",
   "gameview.MobileSurfaceDashboard": "Bảng điều khiển",
   "gameview.MobileSurfaceGame": "Trò chơi",
-  "gameview.NativeAgentInterface": "Giao diện agent nhúng",
-  "gameview.NativeAgentInterfaceHint": "Hyperscape đã bao gồm bảng điều khiển agent, dòng thời gian, nhật ký và chat ngay trong trình xem nhúng.",
   "gameview.NativeGameActionFailed": "Hành động trò chơi gốc không thành công.",
   "gameview.Pause": "Tạm dừng",
   "gameview.NativeGameStateRefreshed": "Đã làm mới trạng thái trò chơi gốc.",

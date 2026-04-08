@@ -3340,22 +3340,6 @@ function isSharedTerminalClientId(clientId: string): boolean {
   return SHARED_TERMINAL_CLIENT_IDS.has(clientId);
 }
 
-/**
- * Resolve Authorization for Hyperscape API relays.
- *
- * Security: never forward the incoming request Authorization header
- * (which typically carries ELIZA_API_TOKEN for this API). Hyperscape relay
- * auth must come from the dedicated HYPERSCAPE_AUTH_TOKEN secret instead.
- */
-export function resolveHyperscapeAuthorizationHeader(
-  req: Pick<http.IncomingMessage, "headers">,
-): string | null {
-  void req;
-  const envToken = process.env.HYPERSCAPE_AUTH_TOKEN?.trim();
-  if (!envToken) return null;
-  return /^Bearer\s+/i.test(envToken) ? envToken : `Bearer ${envToken}`;
-}
-
 function tokenMatches(expected: string, provided: string): boolean {
   const a = Buffer.from(expected, "utf8");
   const b = Buffer.from(provided, "utf8");
@@ -5962,7 +5946,19 @@ async function handleRequest(
     // Then try the older coding-agent plugin when present.
     if (!handled) {
       try {
-        const codingAgentPlugin = await import("@elizaos/plugin-coding-agent");
+        const codingAgentPlugin = (await import(
+          "@elizaos/plugin-coding-agent"
+        )) as {
+          createCodingAgentRouteHandler?: (
+            runtime: typeof state.runtime,
+            coordinator?: unknown,
+          ) => (
+            req: typeof req,
+            res: typeof res,
+            pathname: string,
+          ) => Promise<boolean>;
+          getCoordinator?: (runtime: typeof state.runtime) => unknown;
+        };
         if (codingAgentPlugin.createCodingAgentRouteHandler) {
           const coordinator = codingAgentPlugin.getCoordinator?.(state.runtime);
           const handler = codingAgentPlugin.createCodingAgentRouteHandler(

@@ -955,8 +955,6 @@
   "gameview.LogLoadFailed": "No se pudieron cargar los registros: {{message}}",
   "gameview.MobileSurfaceDashboard": "Panel",
   "gameview.MobileSurfaceGame": "Juego",
-  "gameview.NativeAgentInterface": "IU de agente integrada",
-  "gameview.NativeAgentInterfaceHint": "Hyperscape ya incluye la consola del agente, la línea de tiempo, los registros y el chat dentro del visor integrado.",
   "gameview.NativeGameActionFailed": "La acción del juego nativo falló.",
   "gameview.Pause": "Pausar",
   "gameview.NativeGameStateRefreshed": "Estado del juego nativo actualizado.",

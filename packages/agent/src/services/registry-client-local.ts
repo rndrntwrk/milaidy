@@ -26,6 +26,7 @@ interface LocalPackageAppMeta {
   minPlayers?: number | null;
   maxPlayers?: number | null;
   runtimePlugin?: string;
+  bridgeExport?: string;
   uiExtension?: AppUiExtensionConfig;
   viewer?: RegistryAppViewerMeta;
   session?: RegistryAppSessionMeta;
@@ -191,6 +192,7 @@ function toLocalAppMeta(
     minPlayers: app?.minPlayers ?? null,
     maxPlayers: app?.maxPlayers ?? null,
     runtimePlugin: app?.runtimePlugin,
+    bridgeExport: app?.bridgeExport,
     uiExtension: app?.uiExtension,
     viewer: app?.viewer ?? legacy?.viewer,
     session: app?.session ?? legacy?.session,
@@ -367,6 +369,37 @@ async function discoverLocalWorkspaceApps(): Promise<
         includeTypescriptChild: true,
       },
     ];
+
+    let workspaceEntries: Array<import("node:fs").Dirent> = [];
+    try {
+      workspaceEntries = await fs.readdir(workspaceRoot, { withFileTypes: true });
+    } catch (err) {
+      logger.debug(
+        `[registry] could not read workspace root ${workspaceRoot}: ${err}`,
+      );
+    }
+
+    for (const entry of workspaceEntries) {
+      if (!entry.isDirectory() || entry.name.startsWith(".")) {
+        continue;
+      }
+      const repoRoot = path.join(workspaceRoot, entry.name);
+      discoveredRoots.push(
+        { root: path.join(repoRoot, "plugins"), includeTypescriptChild: true },
+        {
+          root: path.join(repoRoot, "packages"),
+          includeTypescriptChild: false,
+        },
+        {
+          root: path.join(repoRoot, "eliza", "packages"),
+          includeTypescriptChild: false,
+        },
+        {
+          root: path.join(repoRoot, "eliza", "plugins"),
+          includeTypescriptChild: true,
+        },
+      );
+    }
 
     for (const candidateRoot of discoveredRoots) {
       const candidates = await collectWorkspacePackageCandidates(

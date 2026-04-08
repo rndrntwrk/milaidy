@@ -955,8 +955,6 @@
   "gameview.LogLoadFailed": "无法加载日志：{{message}}",
   "gameview.MobileSurfaceDashboard": "控制面板",
   "gameview.MobileSurfaceGame": "游戏",
-  "gameview.NativeAgentInterface": "内嵌代理界面",
-  "gameview.NativeAgentInterfaceHint": "Hyperscape 已经在嵌入式查看器中内置了代理控制台、时间线、日志和聊天。",
   "gameview.NativeGameActionFailed": "本机游戏操作失败。",
   "gameview.Pause": "暂停",
   "gameview.NativeGameStateRefreshed": "本机游戏状态已刷新。",

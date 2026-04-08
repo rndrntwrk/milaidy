@@ -955,8 +955,6 @@
   "gameview.LogLoadFailed": "Falha ao carregar logs: {{message}}",
   "gameview.MobileSurfaceDashboard": "Painel",
   "gameview.MobileSurfaceGame": "Jogo",
-  "gameview.NativeAgentInterface": "UI de agente incorporada",
-  "gameview.NativeAgentInterfaceHint": "O Hyperscape já inclui o console do agente, a linha do tempo, os logs e o chat dentro do visualizador incorporado.",
   "gameview.NativeGameActionFailed": "A ação do jogo nativo falhou.",
   "gameview.Pause": "Pausar",
   "gameview.NativeGameStateRefreshed": "Estado nativo do jogo atualizado.",

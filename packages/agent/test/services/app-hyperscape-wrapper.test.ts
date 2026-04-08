@@ -15,6 +15,10 @@ const hyperscapePluginModule = hasHyperscapePluginModule
         };
         appBridge?: {
           handleAppRoutes?: unknown;
+          prepareLaunch?: unknown;
+          resolveViewerAuthMessage?: unknown;
+          ensureRuntimeReady?: unknown;
+          collectLaunchDiagnostics?: unknown;
           resolveLaunchSession?: unknown;
           refreshRunSession?: unknown;
         };
@@ -29,6 +33,10 @@ describe.skipIf(!hasHyperscapePluginModule)("plugin-hyperscape app bridge", () =
     expect(plugin?.app?.displayName).toBe("Hyperscape");
     expect(plugin?.app?.runtimePlugin).toBe("@hyperscape/plugin-hyperscape");
     expect(typeof plugin?.appBridge?.handleAppRoutes).toBe("function");
+    expect(typeof plugin?.appBridge?.prepareLaunch).toBe("function");
+    expect(typeof plugin?.appBridge?.resolveViewerAuthMessage).toBe("function");
+    expect(typeof plugin?.appBridge?.ensureRuntimeReady).toBe("function");
+    expect(typeof plugin?.appBridge?.collectLaunchDiagnostics).toBe("function");
     expect(typeof plugin?.appBridge?.resolveLaunchSession).toBe("function");
     expect(typeof plugin?.appBridge?.refreshRunSession).toBe("function");
   });

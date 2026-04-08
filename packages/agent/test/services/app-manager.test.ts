@@ -121,6 +121,7 @@ const HYPERSCAPE_APP_INFO: RegistryPluginInfo = {
     minPlayers: null,
     maxPlayers: null,
     runtimePlugin: "@hyperscape/plugin-hyperscape",
+    bridgeExport: "./app",
     viewer: {
       url: "{HYPERSCAPE_CLIENT_URL}",
       embedParams: {
@@ -963,10 +964,10 @@ describe("AppManager", () => {
       expect.objectContaining({
         name: "@hyperscape/plugin-hyperscape",
         launchType: "connect",
-        launchUrl: "http://localhost:3333",
+        launchUrl: "{HYPERSCAPE_CLIENT_URL}",
         localPath: "/tmp/hyperscape",
         viewer: expect.objectContaining({
-          url: "http://localhost:3333",
+          url: "{HYPERSCAPE_CLIENT_URL}",
           postMessageAuth: true,
         }),
         session: expect.objectContaining({
@@ -1000,7 +1001,7 @@ describe("AppManager", () => {
 
       expect(runtime.registerPlugin).toHaveBeenCalledTimes(1);
       expect(result.viewer?.url).toBe(
-        "http://localhost:3333?embedded=true&mode=spectator&surface=agent-control&hiddenUI=chat%2Cinventory%2Cminimap%2Chotbar%2Cstats&quality=medium&followEntity=char-runtime",
+        "http://localhost:3333?embedded=true&mode=spectator&surface=agent-control&followEntity=char-runtime&hiddenUI=chat%2Cinventory%2Cminimap%2Chotbar%2Cstats&quality=medium",
       );
       expect(result.viewer?.postMessageAuth).toBe(true);
       expect(result.viewer?.authMessage).toEqual(
@@ -1297,6 +1298,186 @@ describe("AppManager", () => {
     }
   });
 
+  it("drives launch state through generic plugin bridge hooks", async () => {
+    const bridgeAppInfo: RegistryPluginInfo = {
+      ...HYPERSCAPE_APP_INFO,
+      name: "@vendor/plugin-test-app",
+      displayName: "Test Bridge App",
+      launchUrl: "https://example.com/launch",
+      runtimePlugin: "@vendor/plugin-test-app",
+      viewer: {
+        url: "https://example.com/viewer",
+        embedParams: {
+          embedded: "true",
+        },
+        postMessageAuth: true,
+        sandbox: "allow-scripts allow-same-origin allow-popups",
+      },
+      appMeta: {
+        displayName: "Test Bridge App",
+        category: "game",
+        launchType: "connect",
+        launchUrl: "https://example.com/launch",
+        icon: null,
+        capabilities: ["observe"],
+        minPlayers: null,
+        maxPlayers: null,
+        runtimePlugin: "@vendor/plugin-test-app",
+        bridgeExport: "./app",
+        viewer: {
+          url: "https://example.com/viewer",
+          embedParams: {
+            embedded: "true",
+          },
+          postMessageAuth: true,
+          sandbox: "allow-scripts allow-same-origin allow-popups",
+        },
+        session: {
+          mode: "spectate-and-steer",
+          features: ["commands", "pause", "resume"],
+        },
+      },
+      npm: {
+        package: "@vendor/plugin-test-app",
+        v0Version: null,
+        v1Version: "1.0.0",
+        v2Version: "1.0.0",
+      },
+    };
+    const prepareLaunch = vi.fn(async () => ({
+      diagnostics: [
+        {
+          code: "bridge-preflight",
+          severity: "info" as const,
+          message: "bridge preflight complete",
+        },
+      ],
+      launchUrl: "https://prepared.example/launch",
+      viewer: {
+        url: "https://prepared.example/viewer",
+        embedParams: {
+          embedded: "true",
+          surface: "operator",
+        },
+        postMessageAuth: true,
+        sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
+      },
+    }));
+    const resolveViewerAuthMessage = vi.fn(async () => ({
+      type: "TEST_BRIDGE_AUTH",
+      authToken: "bridge-token",
+      agentId: "runtime-agent-id",
+      followEntity: "bridge-follow-entity",
+    }));
+    const ensureRuntimeReady = vi.fn(async () => undefined);
+    const resolveLaunchSession = vi.fn(async () => ({
+      sessionId: "bridge-session",
+      appName: "@vendor/plugin-test-app",
+      mode: "spectate-and-steer" as const,
+      status: "running",
+      displayName: "Test Bridge App",
+      agentId: "runtime-agent-id",
+      followEntity: "bridge-follow-entity",
+      canSendCommands: true,
+      controls: ["pause"] as const,
+      summary: "Bridge session attached.",
+      goalLabel: "Observe bridge target",
+      suggestedPrompts: ["hold position"],
+    }));
+    const collectLaunchDiagnostics = vi.fn(async () => [
+      {
+        code: "bridge-runtime",
+        severity: "warning" as const,
+        message: "bridge runtime note",
+      },
+    ]);
+
+    appPackageModuleMocks.importAppRouteModule.mockResolvedValue({
+      prepareLaunch,
+      resolveViewerAuthMessage,
+      ensureRuntimeReady,
+      resolveLaunchSession,
+      collectLaunchDiagnostics,
+    });
+
+    const manager = new AppManager();
+    const runtime = createRuntimeStub();
+    const result = await manager.launch(
+      buildPluginManager([], bridgeAppInfo),
+      "@vendor/plugin-test-app",
+      undefined,
+      runtime,
+    );
+
+    expect(prepareLaunch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        appName: "@vendor/plugin-test-app",
+        launchUrl: "https://example.com/launch",
+        viewer: null,
+      }),
+    );
+    expect(resolveViewerAuthMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        appName: "@vendor/plugin-test-app",
+        launchUrl: "https://prepared.example/launch",
+        viewer: null,
+      }),
+    );
+    expect(ensureRuntimeReady).toHaveBeenCalledWith(
+      expect.objectContaining({
+        appName: "@vendor/plugin-test-app",
+        launchUrl: "https://prepared.example/launch",
+        viewer: expect.objectContaining({
+          url: "https://prepared.example/viewer?embedded=true&surface=operator&followEntity=bridge-follow-entity",
+          postMessageAuth: true,
+          authMessage: expect.objectContaining({
+            type: "TEST_BRIDGE_AUTH",
+            followEntity: "bridge-follow-entity",
+          }),
+        }),
+      }),
+    );
+    expect(resolveLaunchSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        appName: "@vendor/plugin-test-app",
+        launchUrl: "https://prepared.example/launch",
+      }),
+    );
+    expect(collectLaunchDiagnostics).toHaveBeenCalledWith(
+      expect.objectContaining({
+        appName: "@vendor/plugin-test-app",
+        launchUrl: "https://prepared.example/launch",
+        session: expect.objectContaining({
+          sessionId: "bridge-session",
+        }),
+      }),
+    );
+    expect(result.viewer).toEqual(
+      expect.objectContaining({
+        url: "https://prepared.example/viewer?embedded=true&surface=operator&followEntity=bridge-follow-entity",
+        postMessageAuth: true,
+        authMessage: expect.objectContaining({
+          type: "TEST_BRIDGE_AUTH",
+          authToken: "bridge-token",
+          followEntity: "bridge-follow-entity",
+        }),
+      }),
+    );
+    expect(result.launchUrl).toBe("https://prepared.example/launch");
+    expect(result.session).toEqual(
+      expect.objectContaining({
+        sessionId: "bridge-session",
+        goalLabel: "Observe bridge target",
+      }),
+    );
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "bridge-preflight" }),
+        expect.objectContaining({ code: "bridge-runtime" }),
+      ]),
+    );
+  });
+
   it("auto-provisions a local wallet for Hyperscape launch when the runtime has none", async () => {
     const fixtureServer = await startHyperscapeFixtureServer();
     process.env.HYPERSCAPE_API_URL = fixtureServer.url;
@@ -1421,6 +1602,7 @@ describe("AppManager", () => {
 
   describe("multi-app control plane", () => {
     it("refreshes multiple persisted app runs through their route modules when listing runs", async () => {
+      process.env.HYPERSCAPE_CLIENT_URL = "http://localhost:3333";
       const stateDir = fs.mkdtempSync(
         path.join(os.tmpdir(), "milady-app-manager-refresh-"),
       );
@@ -1644,6 +1826,7 @@ describe("AppManager", () => {
     });
 
     it("marks runs degraded when verification fails during attach", async () => {
+      process.env.HYPERSCAPE_CLIENT_URL = "http://localhost:3333";
       const stateDir = fs.mkdtempSync(
         path.join(os.tmpdir(), "milady-app-manager-attach-"),
       );
@@ -1800,26 +1983,65 @@ describe("AppManager", () => {
   });
 
   describe("getInfo", () => {
-    it("applies local app meta overrides so displayName and launchType are populated", async () => {
-      // Registry entry with NO appMeta — simulates a bare npm-published plugin
-      // that relies on LOCAL_APP_OVERRIDES in registry-client-app-meta.ts.
+    it("returns plugin-provided metadata without relying on host overrides", async () => {
       const bareRegistryEntry: RegistryPluginInfo = {
         ...HYPERSCAPE_APP_INFO,
-        displayName: undefined,
-        launchType: undefined,
-        launchUrl: undefined,
-        category: undefined,
-        capabilities: undefined,
-        viewer: undefined,
-        session: undefined,
-        appMeta: undefined,
+        displayName: "Hyperscape",
+        launchType: "connect",
+        launchUrl: "{HYPERSCAPE_CLIENT_URL}",
+        category: "game",
+        capabilities: ["combat"],
+        viewer: {
+          url: "{HYPERSCAPE_CLIENT_URL}",
+          embedParams: {
+            embedded: "true",
+            mode: "spectator",
+            surface: "agent-control",
+          },
+          postMessageAuth: true,
+          sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
+        },
+        session: {
+          mode: "spectate-and-steer",
+          features: ["commands", "telemetry", "pause", "resume", "suggestions"],
+        },
+        appMeta: {
+          displayName: "Hyperscape",
+          category: "game",
+          launchType: "connect",
+          launchUrl: "{HYPERSCAPE_CLIENT_URL}",
+          icon: null,
+          capabilities: ["combat"],
+          minPlayers: null,
+          maxPlayers: null,
+          runtimePlugin: "@hyperscape/plugin-hyperscape",
+          bridgeExport: "./app",
+          viewer: {
+            url: "{HYPERSCAPE_CLIENT_URL}",
+            embedParams: {
+              embedded: "true",
+              mode: "spectator",
+              surface: "agent-control",
+            },
+            postMessageAuth: true,
+            sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
+          },
+          session: {
+            mode: "spectate-and-steer",
+            features: [
+              "commands",
+              "telemetry",
+              "pause",
+              "resume",
+              "suggestions",
+            ],
+          },
+        },
       };
 
       const manager = new AppManager();
       const pluginManager = buildPluginManager([], bareRegistryEntry);
 
-      // getPluginInfo (registry-client mock) returns the same bare entry
-      // to simulate both pluginManager and local registry returning it.
       registryClientMocks.getPluginInfo.mockResolvedValue(bareRegistryEntry);
 
       const info = await manager.getInfo(
@@ -1828,11 +2050,9 @@ describe("AppManager", () => {
       );
 
       expect(info).not.toBeNull();
-      // resolveAppOverride should supply these from LOCAL_APP_OVERRIDES
-      expect(typeof info!.displayName).toBe("string");
-      expect(info!.displayName!.length).toBeGreaterThan(0);
-      expect(typeof info!.launchType).toBe("string");
-      expect(info!.launchType!.length).toBeGreaterThan(0);
+      expect(info!.displayName).toBe("Hyperscape");
+      expect(info!.launchType).toBe("connect");
+      expect(info!.appMeta?.bridgeExport).toBe("./app");
     });
 
     it("returns null for an unknown app", async () => {

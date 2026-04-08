@@ -955,8 +955,6 @@
   "gameview.LogLoadFailed": "로그를 불러오지 못했습니다: {{message}}",
   "gameview.MobileSurfaceDashboard": "대시보드",
   "gameview.MobileSurfaceGame": "게임",
-  "gameview.NativeAgentInterface": "내장 에이전트 UI",
-  "gameview.NativeAgentInterfaceHint": "Hyperscape에는 임베디드 뷰어 안에 이미 에이전트 콘솔, 타임라인, 로그, 채팅이 포함되어 있습니다.",
   "gameview.NativeGameActionFailed": "기본 게임 작업이 실패했습니다.",
   "gameview.Pause": "일시중지",
   "gameview.NativeGameStateRefreshed": "기본 게임 상태가 새로 고쳐졌습니다.",

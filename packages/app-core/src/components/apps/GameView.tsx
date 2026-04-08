@@ -3,7 +3,7 @@
  *
  * Features:
  * - Full-screen iframe for game client
- * - PostMessage auth for HYPERSCAPE_AUTH / RS_2004SCAPE_AUTH
+ * - PostMessage auth for embedded app viewers
  * - Split-screen mode with agent logs panel
  * - Connection status indicator
  */
@@ -581,8 +581,7 @@ export function GameView() {
   const useNativeGameWindow = Boolean(
     isElectrobun && activeGameViewerUrl && !useEmbeddedViewer,
   );
-  const usesNativeAgentInterface = activeGameApp.includes("hyperscape");
-  const supportsOperatorDashboard = !usesNativeAgentInterface;
+  const supportsOperatorDashboard = true;
   const OperatorSurface = useMemo(
     () => getAppOperatorSurface(activeGameApp),
     [activeGameApp],
@@ -1337,6 +1336,28 @@ export function GameView() {
           ))}
         </div>
       ) : null}
+      {activeSessionState?.recommendations?.length ? (
+        <div className="border-b border-border px-2 py-2 text-[10px] space-y-1.5">
+          <div className="font-semibold text-txt">
+            {t("gameview.Recommendations", {
+              defaultValue: "Recommendations",
+            })}
+          </div>
+          {activeSessionState.recommendations.slice(0, 3).map((item) => (
+            <div key={item.id} className="space-y-0.5">
+              <div className="text-txt">
+                {item.label}
+                {typeof item.priority === "number" ? (
+                  <span className="ml-1 text-muted">#{item.priority}</span>
+                ) : null}
+              </div>
+              {item.reason ? (
+                <div className="text-muted">{item.reason}</div>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
       {logLoadError ? (
         <div className="border-b border-danger/25 bg-danger/8 px-2 py-1.5 text-[10px] text-danger">
           {t("gameview.LogLoadFailed", {
@@ -1426,6 +1447,39 @@ export function GameView() {
                 </div>
               ),
             )
+        ) : Array.isArray(activeSessionState?.activity) &&
+          activeSessionState.activity.length > 0 ? (
+          activeSessionState.activity
+            .slice()
+            .sort(
+              (a, b) =>
+                Number(b.timestamp ?? 0) - Number(a.timestamp ?? 0),
+            )
+            .slice(0, 30)
+            .map((entry) => (
+              <div
+                key={entry.id}
+                className="py-1 border-b border-border/50 flex flex-col gap-0.5"
+              >
+                <div className="flex items-center gap-1">
+                  <span className="text-muted text-[10px]">
+                    {formatTime(entry.timestamp ?? 0, { fallback: "—" })}
+                  </span>
+                  <span
+                    className={`font-semibold text-[10px] uppercase ${
+                      entry.severity === "error"
+                        ? "text-danger"
+                        : entry.severity === "warning"
+                          ? "text-warn"
+                          : "text-muted"
+                    }`}
+                  >
+                    {entry.type}
+                  </span>
+                </div>
+                <div className="text-txt break-all">{entry.message}</div>
+              </div>
+            ))
         ) : gameLogs.length === 0 ? (
           <div className="text-center py-4 text-muted italic">
             {t("game.noAgentActivity")}
@@ -1502,20 +1556,6 @@ export function GameView() {
         {activeGamePostMessageAuth ? (
           <span className="text-[10px] px-1.5 py-0.5 border border-border text-muted">
             {t("gameview.postMessageAuth")}
-          </span>
-        ) : null}
-        {usesNativeAgentInterface ? (
-          <span
-            data-testid="game-native-agent-interface"
-            className="text-[10px] px-1.5 py-0.5 border border-accent/30 bg-accent/10 text-accent"
-            title={t("gameview.NativeAgentInterfaceHint", {
-              defaultValue:
-                "Hyperscape already includes the agent console, timeline, logs, and chat inside the embedded viewer.",
-            })}
-          >
-            {t("gameview.NativeAgentInterface", {
-              defaultValue: "Embedded agent UI",
-            })}
           </span>
         ) : null}
         <span className="flex-1" />

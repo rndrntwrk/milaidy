@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// Cloud types — Cloud*, App*, Hyperscape*, Trajectory*, Registry*, Whitelist*,
+// Cloud types — Cloud*, App*, Trajectory*, Registry*, Whitelist*,
 // Verification*, Wallet display types, CodingAgent*, Pty*
 // ---------------------------------------------------------------------------
 
@@ -329,6 +329,23 @@ export interface AppUiExtensionConfig {
   detailPanelId: string;
 }
 
+export interface AppSessionRecommendation {
+  id: string;
+  label: string;
+  type?: string;
+  reason?: string | null;
+  priority?: number | null;
+  command?: string | null;
+}
+
+export interface AppSessionActivityItem {
+  id: string;
+  type: string;
+  message: string;
+  timestamp?: number | null;
+  severity?: "info" | "warning" | "error";
+}
+
 export interface AppSessionConfig {
   mode: AppSessionMode;
   features?: AppSessionFeature[];
@@ -348,6 +365,8 @@ export interface AppSessionState {
   summary?: string | null;
   goalLabel?: string | null;
   suggestedPrompts?: string[];
+  recommendations?: AppSessionRecommendation[];
+  activity?: AppSessionActivityItem[];
   telemetry?: Record<string, AppSessionJsonValue> | null;
 }
 
@@ -449,151 +468,6 @@ export interface AppStopResult {
   needsRestart: boolean;
   stopScope: "plugin-uninstalled" | "viewer-session" | "no-op";
   message: string;
-}
-
-// Hyperscape
-export type HyperscapeScriptedRole =
-  | "combat"
-  | "woodcutting"
-  | "fishing"
-  | "mining"
-  | "balanced";
-
-export type HyperscapeEmbeddedAgentControlAction =
-  | "start"
-  | "stop"
-  | "pause"
-  | "resume";
-
-export type HyperscapeJsonValue =
-  | string
-  | number
-  | boolean
-  | null
-  | HyperscapeJsonValue[]
-  | { [key: string]: HyperscapeJsonValue };
-
-export type HyperscapePosition =
-  | [number, number, number]
-  | {
-      x: number;
-      y: number;
-      z: number;
-    };
-
-export interface HyperscapeEmbeddedAgent {
-  agentId: string;
-  characterId: string;
-  accountId: string;
-  name: string;
-  scriptedRole: HyperscapeScriptedRole | null;
-  state: string;
-  entityId: string | null;
-  position: HyperscapePosition | null;
-  health: number | null;
-  maxHealth: number | null;
-  startedAt: number | null;
-  lastActivity: number | null;
-  error: string | null;
-}
-
-export interface HyperscapeEmbeddedAgentsResponse {
-  success: boolean;
-  agents: HyperscapeEmbeddedAgent[];
-  count: number;
-  error?: string;
-}
-
-export interface HyperscapeActionResponse {
-  success: boolean;
-  message?: string;
-  error?: string;
-}
-
-export interface HyperscapeEmbeddedAgentMutationResponse
-  extends HyperscapeActionResponse {
-  agent?: HyperscapeEmbeddedAgent | null;
-}
-
-export interface HyperscapeAvailableGoal {
-  id: string;
-  type: string;
-  description: string;
-  priority: number;
-  reason?: string;
-}
-
-export interface HyperscapeGoalState {
-  type?: string;
-  description?: string;
-  progress?: number;
-  target?: number;
-  progressPercent?: number;
-  elapsedMs?: number;
-  startedAt?: number;
-  locked?: boolean;
-  lockedBy?: string;
-}
-
-export interface HyperscapeAgentGoalResponse {
-  success: boolean;
-  goal: HyperscapeGoalState | null;
-  availableGoals?: HyperscapeAvailableGoal[];
-  goalsPaused?: boolean;
-  message?: string;
-  error?: string;
-}
-
-export interface HyperscapeQuickCommand {
-  id: string;
-  label: string;
-  command: string;
-  icon: string;
-  available: boolean;
-  reason?: string;
-}
-
-export interface HyperscapeNearbyLocation {
-  id: string;
-  name: string;
-  type: string;
-  distance: number;
-}
-
-export interface HyperscapeInventoryItem {
-  id: string;
-  name: string;
-  slot: number;
-  quantity: number;
-  canEquip: boolean;
-  canUse: boolean;
-  canDrop: boolean;
-}
-
-export interface HyperscapeQuickActionsResponse {
-  success: boolean;
-  nearbyLocations: HyperscapeNearbyLocation[];
-  availableGoals: HyperscapeAvailableGoal[];
-  quickCommands: HyperscapeQuickCommand[];
-  inventory: HyperscapeInventoryItem[];
-  playerPosition: [number, number, number] | null;
-  message?: string;
-  error?: string;
-}
-
-export interface HyperscapeThought {
-  id: string;
-  type: string;
-  content: string;
-  timestamp: number;
-}
-
-export interface HyperscapeAgentThoughtsResponse {
-  success: boolean;
-  thoughts: HyperscapeThought[];
-  count: number;
-  message?: string;
-  error?: string;
 }
 
 // Trajectories

@@ -221,14 +221,10 @@ describe("registry-client-app-meta", () => {
       );
     });
 
-    it("applies override for known package @hyperscape/plugin-hyperscape", () => {
-      const result = resolveAppOverride("@hyperscape/plugin-hyperscape", undefined);
-      expect(result).toBeDefined();
-      expect(result?.launchType).toBe("connect");
-      expect(result?.viewer?.embedParams?.surface).toBe("agent-control");
-      expect(result?.uiExtension?.detailPanelId).toBe(
-        "hyperscape-embedded-agent-control",
-      );
+    it("does not inject vendor-specific overrides for plugin-owned apps", () => {
+      expect(
+        resolveAppOverride("@hyperscape/plugin-hyperscape", undefined),
+      ).toBeUndefined();
     });
 
     it("applies override for known package @elizaos/app-2004scape", () => {

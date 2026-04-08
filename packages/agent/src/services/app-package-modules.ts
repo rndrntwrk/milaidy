@@ -4,8 +4,11 @@ import { pathToFileURL } from "node:url";
 import type { IAgentRuntime, Plugin } from "@elizaos/core";
 import { logger } from "@elizaos/core";
 import {
+  type AppLaunchDiagnostic,
+  type AppLaunchPreparation,
   type AppLaunchResult,
   type AppSessionState,
+  type AppViewerAuthMessage,
   hasAppInterface,
   packageNameToAppRouteSlug,
 } from "../contracts/apps";
@@ -18,12 +21,20 @@ export interface AppLaunchSessionContext {
   viewer: AppLaunchResult["viewer"] | null;
 }
 
+export type AppLaunchPreparationResolver = (
+  ctx: AppLaunchSessionContext,
+) => Promise<AppLaunchPreparation | null>;
+
+export type AppViewerAuthMessageResolver = (
+  ctx: AppLaunchSessionContext,
+) => Promise<AppViewerAuthMessage | null>;
+
 export type AppLaunchSessionResolver = (
   ctx: AppLaunchSessionContext,
 ) => Promise<AppSessionState | null>;
 
 export interface AppRunSessionContext extends AppLaunchSessionContext {
-  runId: string;
+  runId?: string;
   session: AppSessionState | null;
 }
 
@@ -33,6 +44,12 @@ export type AppRunSessionRefresher = (
 
 export type AppRouteModule = {
   handleAppRoutes?: (ctx: unknown) => Promise<boolean>;
+  prepareLaunch?: AppLaunchPreparationResolver;
+  resolveViewerAuthMessage?: AppViewerAuthMessageResolver;
+  ensureRuntimeReady?: (ctx: AppLaunchSessionContext) => Promise<void>;
+  collectLaunchDiagnostics?: (
+    ctx: AppRunSessionContext,
+  ) => Promise<AppLaunchDiagnostic[]>;
   resolveLaunchSession?: AppLaunchSessionResolver;
   refreshRunSession?: AppRunSessionRefresher;
   [key: string]: unknown;
@@ -157,6 +174,7 @@ export function packageNameToAppSlug(packageName: string): string | null {
 interface ResolvedAppModuleTarget {
   packageName: string | null;
   localPath: string | null;
+  bridgeExport: string | null;
 }
 
 async function resolveAppModuleTarget(
@@ -174,6 +192,7 @@ async function resolveAppModuleTarget(
       return {
         packageName: registryInfo.name,
         localPath: registryInfo.localPath ?? null,
+        bridgeExport: registryInfo.appMeta?.bridgeExport ?? null,
       };
     }
   }
@@ -188,6 +207,7 @@ async function resolveAppModuleTarget(
       return {
         packageName,
         localPath,
+        bridgeExport: null,
       };
     }
   }
@@ -197,13 +217,67 @@ async function resolveAppModuleTarget(
     return {
       packageName: registryInfo.name,
       localPath: registryInfo.localPath ?? null,
+      bridgeExport: registryInfo.appMeta?.bridgeExport ?? null,
     };
   }
 
   return {
     packageName: trimmed.startsWith("@") ? trimmed : null,
     localPath: null,
+    bridgeExport: null,
   };
+}
+
+function normalizeBridgeExport(bridgeExport: string | null): string | null {
+  if (!bridgeExport) return null;
+  const trimmed = bridgeExport.trim();
+  if (!trimmed.startsWith("./") || trimmed.length <= 2) {
+    return null;
+  }
+  return trimmed;
+}
+
+function buildLocalBridgeCandidates(
+  localPath: string,
+  bridgeExport: string | null,
+): string[] {
+  const normalized = normalizeBridgeExport(bridgeExport);
+  if (!normalized) {
+    return [];
+  }
+
+  const relativePath = normalized.slice(2);
+  const hasExtension = /\.[cm]?[jt]s$/.test(relativePath);
+  const candidates = new Set<string>();
+
+  const add = (candidate: string) => {
+    candidates.add(path.join(localPath, candidate));
+  };
+
+  if (hasExtension) {
+    add(relativePath);
+    add(path.join("src", relativePath));
+    add(path.join("dist", relativePath.replace(/\.ts$/, ".js")));
+  } else {
+    add(`${relativePath}.ts`);
+    add(`${relativePath}.js`);
+    add(path.join("src", `${relativePath}.ts`));
+    add(path.join("src", `${relativePath}.js`));
+    add(path.join("dist", `${relativePath}.js`));
+  }
+
+  return [...candidates];
+}
+
+function bridgeExportToSpecifier(
+  packageName: string,
+  bridgeExport: string | null,
+): string | null {
+  const normalized = normalizeBridgeExport(bridgeExport);
+  if (!normalized) {
+    return null;
+  }
+  return `${packageName}/${normalized.slice(2)}`;
 }
 
 async function importLocalAppRouteModule(
@@ -214,6 +288,7 @@ async function importLocalAppRouteModule(
   if (!localPath) return null;
 
   const candidatePaths = [
+    ...buildLocalBridgeCandidates(localPath, resolved?.bridgeExport ?? null),
     path.join(localPath, "src", "app.ts"),
     path.join(localPath, "src", "app.js"),
     path.join(localPath, "dist", "app.js"),
@@ -303,6 +378,21 @@ export async function importAppRouteModule(
 
   if (!packageName) {
     return null;
+  }
+
+  const bridgeSpecifier = bridgeExportToSpecifier(
+    packageName,
+    resolved?.bridgeExport ?? null,
+  );
+
+  if (bridgeSpecifier) {
+    try {
+      return (await import(
+        /* webpackIgnore: true */ bridgeSpecifier
+      )) as AppRouteModule;
+    } catch {
+      // Fall through to canonical app/routes entrypoints.
+    }
   }
 
   try {

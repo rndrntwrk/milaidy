@@ -955,8 +955,6 @@
   "gameview.LogLoadFailed": "Failed to load logs: {{message}}",
   "gameview.MobileSurfaceDashboard": "Dashboard",
   "gameview.MobileSurfaceGame": "Game",
-  "gameview.NativeAgentInterface": "Embedded agent UI",
-  "gameview.NativeAgentInterfaceHint": "Hyperscape already includes the agent console, timeline, logs, and chat inside the embedded viewer.",
   "gameview.NativeGameActionFailed": "Native game action failed.",
   "gameview.Pause": "Pause",
   "gameview.NativeGameStateRefreshed": "Native game state refreshed.",

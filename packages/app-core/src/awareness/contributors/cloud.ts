@@ -14,8 +14,7 @@ export const cloudContributor: AwarenessContributor = {
 
   async summary(runtime: IAgentRuntime): Promise<string> {
     const elizaToken = runtime.getSetting?.("ELIZA_CLOUD_AUTH_TOKEN");
-    const hyperToken = runtime.getSetting?.("HYPERSCAPE_AUTH_TOKEN");
-    const connected = !!elizaToken || !!hyperToken;
+    const connected = !!elizaToken;
 
     return connected ? "Cloud: connected" : "Cloud: disconnected";
   },

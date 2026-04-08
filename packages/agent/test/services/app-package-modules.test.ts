@@ -21,12 +21,13 @@ function writeFile(filePath: string, content: string): void {
 
 describe("app-package-modules", () => {
   const tempDirs: string[] = [];
-  let previousCwd = process.cwd();
+  const initialCwd = process.cwd();
+  let previousCwd = initialCwd;
 
   afterEach(() => {
     vi.clearAllMocks();
-    process.chdir(previousCwd);
-    previousCwd = process.cwd();
+    process.chdir(initialCwd);
+    previousCwd = initialCwd;
     for (const tempDir of tempDirs.splice(0)) {
       fs.rmSync(tempDir, { recursive: true, force: true });
     }
@@ -158,5 +159,58 @@ describe("app-package-modules", () => {
     expect(routeModule).not.toBeNull();
     await expect(routeModule?.handleAppRoutes?.({})).resolves.toBe(true);
     expect(registryClientMocks.getPluginInfo).not.toHaveBeenCalled();
+  });
+
+  it("loads a declared bridge export before legacy app or routes entrypoints", async () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "app-bridge-export-"));
+    tempDirs.push(tempDir);
+
+    writeFile(
+      path.join(tempDir, "package.json"),
+      JSON.stringify(
+        {
+          name: "@vendor/plugin-bridge-export",
+          type: "module",
+          elizaos: {
+            app: {
+              displayName: "Bridge Export App",
+              bridgeExport: "./app",
+            },
+          },
+        },
+        null,
+        2,
+      ),
+    );
+    writeFile(
+      path.join(tempDir, "src", "app.ts"),
+      [
+        "export async function handleAppRoutes() {",
+        "  return 'bridge-export';",
+        "}",
+        "",
+      ].join("\n"),
+    );
+    writeFile(
+      path.join(tempDir, "src", "routes.ts"),
+      'throw new Error("legacy routes entry should not load");\n',
+    );
+
+    registryClientMocks.getPluginInfo.mockResolvedValue({
+      name: "@vendor/plugin-bridge-export",
+      kind: "app",
+      localPath: tempDir,
+      appMeta: {
+        displayName: "Bridge Export App",
+        bridgeExport: "./app",
+      },
+    });
+
+    const routeModule = await importAppRouteModule("@vendor/plugin-bridge-export");
+
+    expect(routeModule).not.toBeNull();
+    await expect(routeModule?.handleAppRoutes?.({})).resolves.toBe(
+      "bridge-export",
+    );
   });
 });

@@ -60,6 +60,7 @@ export async function fetchFromNetwork(params: {
               minPlayers: number | null;
               maxPlayers: number | null;
               runtimePlugin?: string;
+              bridgeExport?: string;
               uiExtension?: {
                 detailPanelId: string;
               };
@@ -118,6 +119,7 @@ export async function fetchFromNetwork(params: {
             minPlayers: e.app.minPlayers ?? null,
             maxPlayers: e.app.maxPlayers ?? null,
             runtimePlugin: e.app.runtimePlugin,
+            bridgeExport: e.app.bridgeExport,
             uiExtension: e.app.uiExtension,
             viewer: e.app.viewer
               ? {

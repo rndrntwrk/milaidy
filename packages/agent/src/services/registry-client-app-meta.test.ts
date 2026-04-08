@@ -14,19 +14,14 @@ describe("agent registry-client-app-meta", () => {
     expect(sanitizeSandbox(undefined)).toBe(LOCAL_APP_DEFAULT_SANDBOX);
   });
 
-  it("registers Babylon, Hyperscape, and 2004scape detail panels", () => {
+  it("registers only host-owned detail panels", () => {
     expect(
       resolveAppOverride("@elizaos/app-babylon", undefined)?.uiExtension
         ?.detailPanelId,
     ).toBe("babylon-operator-dashboard");
-    expect(
-      resolveAppOverride("@hyperscape/plugin-hyperscape", undefined)?.uiExtension
-        ?.detailPanelId,
-    ).toBe("hyperscape-embedded-agent-control");
     expect(
       resolveAppOverride("@elizaos/app-2004scape", undefined)?.uiExtension
         ?.detailPanelId,
     ).toBe("2004scape-operator-dashboard");
   });
 });
-

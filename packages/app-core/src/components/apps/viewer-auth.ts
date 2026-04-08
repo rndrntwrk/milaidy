@@ -3,12 +3,6 @@ import type {
   AppViewerAuthMessage,
 } from "../../api/client-types-cloud";
 
-const READY_EVENT_BY_AUTH_TYPE: Record<string, string> = {
-  HYPERSCAPE_AUTH: "HYPERSCAPE_READY",
-  RS_2004SCAPE_AUTH: "RS_2004SCAPE_READY",
-  BABYLON_AUTH: "BABYLON_READY",
-};
-
 function normalizeEmbedFlag(value: string | undefined): boolean {
   return value?.trim().toLowerCase() === "true";
 }
@@ -26,7 +20,11 @@ export function resolveViewerReadyEventType(
     return null;
   }
 
-  return READY_EVENT_BY_AUTH_TYPE[payload.type] ?? null;
+  const normalizedType = payload.type.trim();
+  if (normalizedType.length === 0) {
+    return null;
+  }
+  return normalizedType.replace(/_AUTH$/i, "_READY");
 }
 
 export function buildViewerSessionKey(

@@ -69,7 +69,6 @@ export {
 // Re-export helpers from split-out modules so tests can import from "./server"
 export {
   ensureApiTokenForBindHost,
-  resolveHyperscapeAuthorizationHeader,
   resolveMcpTerminalAuthorizationRejection,
   resolveTerminalRunClientId,
   resolveTerminalRunRejection,

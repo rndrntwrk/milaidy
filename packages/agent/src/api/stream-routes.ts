@@ -120,7 +120,7 @@ function formatErrorMessage(err: unknown): string {
  * Priority:
  * 1. STREAM_MODE env var (explicit override)
  * 2. Desktop screen capture bridge -> "pipe" (POST /api/stream/frame -> FFmpeg stdin)
- * 3. Linux with DISPLAY or Xvfb -> "x11grab" (Hyperscape approach)
+ * 3. Linux with DISPLAY or Xvfb -> "x11grab" (GPU-backed game-stream approach)
  * 4. macOS -> "avfoundation" (native screen capture)
  * 5. Fallback -> "file" (Puppeteer CDP -> temp JPEG -> FFmpeg)
  */
@@ -304,7 +304,7 @@ async function startStreamPipeline(
     }
 
     case "x11grab": {
-      // Linux Xvfb mode (Hyperscape approach): capture virtual display.
+      // Linux Xvfb mode: capture the virtual display for GPU-backed streams.
       const display =
         process.env.STREAM_DISPLAY ?? ":99";
       logger.info(`[stream] Capture mode: x11grab (display ${display})`);
