@@ -302,7 +302,9 @@ async function startRuntime(
 		env: {
 			...process.env,
 			CI: "1",
+			ELIZA_SKIP_LOCAL_UPSTREAMS: "1",
 			ELIZA_CONFIG_PATH: configPath,
+			MILADY_SKIP_LOCAL_UPSTREAMS: "1",
 			MILADY_CONFIG_PATH: configPath,
 			ELIZA_STATE_DIR: stateDir,
 			MILADY_STATE_DIR: stateDir,

@@ -1638,6 +1638,29 @@ function createBrowserWorkspaceSnapshotRecord(
   };
 }
 
+function buildBrowserWorkspaceDocumentSnapshotText(document: Document): string {
+  const bodyText = normalizeBrowserWorkspaceText(document.body?.textContent);
+  const controlText = Array.from(
+    document.querySelectorAll("input, textarea, select, option:checked"),
+  )
+    .map((element) => {
+      const name =
+        element.getAttribute("name") ||
+        element.getAttribute("id") ||
+        element.tagName.toLowerCase();
+      const value =
+        element.tagName === "SELECT"
+          ? (element as HTMLSelectElement).value
+          : "value" in (element as HTMLInputElement | HTMLTextAreaElement)
+            ? (element as HTMLInputElement | HTMLTextAreaElement).value
+            : element.textContent ?? "";
+      return `${name}:${normalizeBrowserWorkspaceText(value)}`;
+    })
+    .filter(Boolean)
+    .join(" ");
+  return normalizeBrowserWorkspaceText(`${bodyText} ${controlText}`);
+}
+
 function diffBrowserWorkspaceSnapshots(
   before: BrowserWorkspaceSnapshotRecord | null,
   after: BrowserWorkspaceSnapshotRecord,
@@ -3267,7 +3290,7 @@ async function executeWebBrowserWorkspaceUtilityCommand(
         const data = createBrowserWorkspaceSyntheticScreenshotData(
           tab.title,
           tab.url,
-          document.body?.textContent ?? "",
+          buildBrowserWorkspaceDocumentSnapshotText(document),
           runtime.settings.viewport ?? undefined,
         );
         runtime.lastScreenshotData = data;
@@ -3603,7 +3626,7 @@ async function executeWebBrowserWorkspaceUtilityCommand(
         const snapshot = createBrowserWorkspaceSnapshotRecord(
           tab.title,
           tab.url,
-          document.body?.textContent ?? "",
+          buildBrowserWorkspaceDocumentSnapshotText(document),
         );
         if (command.diffAction === "url") {
           const leftUrl = command.url?.trim() || tab.url;
@@ -3640,7 +3663,7 @@ async function executeWebBrowserWorkspaceUtilityCommand(
             createBrowserWorkspaceSyntheticScreenshotData(
               tab.title,
               tab.url,
-              document.body?.textContent ?? "",
+              buildBrowserWorkspaceDocumentSnapshotText(document),
               runtime.settings.viewport ?? undefined,
             );
           const baseline =
@@ -3816,10 +3839,7 @@ async function executeWebBrowserWorkspaceDomCommand(
             collectBrowserWorkspaceInspectElements(document),
           ),
           value: {
-            bodyText: normalizeBrowserWorkspaceText(document.body?.textContent).slice(
-              0,
-              800,
-            ),
+            bodyText: buildBrowserWorkspaceDocumentSnapshotText(document).slice(0, 800),
             title: tab.title,
             url: tab.url,
           },

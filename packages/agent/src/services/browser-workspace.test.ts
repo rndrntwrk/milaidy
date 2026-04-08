@@ -602,7 +602,7 @@ describe("browser-workspace service", () => {
   });
 
   it("supports clipboard, upload, drag, frame, tab, and window browser parity helpers", async () => {
-    await executeBrowserWorkspaceCommand(
+    const open = await executeBrowserWorkspaceCommand(
       {
         subaction: "open",
         show: true,
@@ -610,10 +610,13 @@ describe("browser-workspace service", () => {
       },
       {} as NodeJS.ProcessEnv,
     );
+    const tabId = open.tab?.id ?? "";
+    expect(tabId).toMatch(/^btab_\d+$/);
 
     await executeBrowserWorkspaceCommand(
       {
         subaction: "clipboard",
+        id: tabId,
         clipboardAction: "write",
         value: "Milady clipboard",
       },
@@ -622,6 +625,7 @@ describe("browser-workspace service", () => {
     await executeBrowserWorkspaceCommand(
       {
         subaction: "clipboard",
+        id: tabId,
         clipboardAction: "paste",
         selector: 'input[name="name"]',
       },
@@ -630,6 +634,7 @@ describe("browser-workspace service", () => {
     const pasted = await executeBrowserWorkspaceCommand(
       {
         subaction: "get",
+        id: tabId,
         selector: 'input[name="name"]',
         getMode: "value",
       },
@@ -694,6 +699,7 @@ describe("browser-workspace service", () => {
     const upload = await executeBrowserWorkspaceCommand(
       {
         subaction: "upload",
+        id: tabId,
         selector: 'input[name="attachment"]',
         files: ["/tmp/demo-a.txt", "/tmp/demo-b.txt"],
       },
@@ -706,6 +712,7 @@ describe("browser-workspace service", () => {
     const drag = await executeBrowserWorkspaceCommand(
       {
         subaction: "drag",
+        id: tabId,
         selector: '[data-testid="drag-source"]',
         value: '[data-testid="drop-target"]',
       },
@@ -721,6 +728,7 @@ describe("browser-workspace service", () => {
     const frame = await executeBrowserWorkspaceCommand(
       {
         subaction: "frame",
+        id: tabId,
         frameAction: "select",
         selector: 'iframe[title="Embedded Frame"]',
       },
@@ -733,6 +741,7 @@ describe("browser-workspace service", () => {
     await executeBrowserWorkspaceCommand(
       {
         subaction: "fill",
+        id: tabId,
         selector: 'input[name="frameName"]',
         value: "Inside Frame",
       },
@@ -741,6 +750,7 @@ describe("browser-workspace service", () => {
     const frameValue = await executeBrowserWorkspaceCommand(
       {
         subaction: "get",
+        id: tabId,
         selector: 'input[name="frameName"]',
         getMode: "value",
       },
@@ -751,6 +761,7 @@ describe("browser-workspace service", () => {
     await executeBrowserWorkspaceCommand(
       {
         subaction: "frame",
+        id: tabId,
         frameAction: "main",
       },
       {} as NodeJS.ProcessEnv,
@@ -807,7 +818,7 @@ describe("browser-workspace service", () => {
   });
 
   it("supports settings, cookies/storage, network, dialog, console/errors, diff, trace/profile, state, and pdf helpers", async () => {
-    await executeBrowserWorkspaceCommand(
+    const open = await executeBrowserWorkspaceCommand(
       {
         subaction: "open",
         show: true,
@@ -815,10 +826,13 @@ describe("browser-workspace service", () => {
       },
       {} as NodeJS.ProcessEnv,
     );
+    const tabId = open.tab?.id ?? "";
+    expect(tabId).toMatch(/^btab_\d+$/);
 
     const settings = await executeBrowserWorkspaceCommand(
       {
         subaction: "set",
+        id: tabId,
         setAction: "viewport",
         width: 900,
         height: 700,
@@ -835,6 +849,7 @@ describe("browser-workspace service", () => {
     await executeBrowserWorkspaceCommand(
       {
         subaction: "set",
+        id: tabId,
         setAction: "headers",
         headers: { "x-milady-test": "yes" },
       },
@@ -843,6 +858,7 @@ describe("browser-workspace service", () => {
     await executeBrowserWorkspaceCommand(
       {
         subaction: "set",
+        id: tabId,
         setAction: "credentials",
         username: "milady",
         password: "browser",
@@ -852,6 +868,7 @@ describe("browser-workspace service", () => {
     await executeBrowserWorkspaceCommand(
       {
         subaction: "set",
+        id: tabId,
         setAction: "media",
         media: "dark",
       },
@@ -868,6 +885,7 @@ describe("browser-workspace service", () => {
     await executeBrowserWorkspaceCommand(
       {
         subaction: "set",
+        id: tabId,
         setAction: "geo",
         latitude: 37.78,
         longitude: -122.41,
@@ -903,6 +921,7 @@ describe("browser-workspace service", () => {
     await executeBrowserWorkspaceCommand(
       {
         subaction: "cookies",
+        id: tabId,
         cookieAction: "set",
         name: "session",
         value: "abc123",
@@ -912,6 +931,7 @@ describe("browser-workspace service", () => {
     const cookies = await executeBrowserWorkspaceCommand(
       {
         subaction: "cookies",
+        id: tabId,
         cookieAction: "get",
       },
       {} as NodeJS.ProcessEnv,
@@ -931,6 +951,7 @@ describe("browser-workspace service", () => {
     await executeBrowserWorkspaceCommand(
       {
         subaction: "storage",
+        id: tabId,
         storageArea: "local",
         storageAction: "set",
         entryKey: "draft",
@@ -941,6 +962,7 @@ describe("browser-workspace service", () => {
     const localStorageValue = await executeBrowserWorkspaceCommand(
       {
         subaction: "storage",
+        id: tabId,
         storageArea: "local",
         entryKey: "draft",
       },
@@ -960,6 +982,7 @@ describe("browser-workspace service", () => {
     await executeBrowserWorkspaceCommand(
       {
         subaction: "network",
+        id: tabId,
         networkAction: "route",
         url: "**/mocked",
         responseBody: "mocked response",
@@ -971,6 +994,7 @@ describe("browser-workspace service", () => {
     await executeBrowserWorkspaceCommand(
       {
         subaction: "network",
+        id: tabId,
         networkAction: "harstart",
       },
       {} as NodeJS.ProcessEnv,
@@ -978,6 +1002,7 @@ describe("browser-workspace service", () => {
     const mocked = await executeBrowserWorkspaceCommand(
       {
         subaction: "eval",
+        id: tabId,
         script: 'fetch("http://127.0.0.1/mocked").then((response) => response.text())',
       },
       {} as NodeJS.ProcessEnv,
@@ -987,6 +1012,7 @@ describe("browser-workspace service", () => {
     const echoed = await executeBrowserWorkspaceCommand(
       {
         subaction: "eval",
+        id: tabId,
         script: `fetch(${JSON.stringify(fixture.tasksUrl.replace("/tasks", "/echo"))}).then((response) => response.json())`,
       },
       {} as NodeJS.ProcessEnv,
@@ -1001,6 +1027,7 @@ describe("browser-workspace service", () => {
     const requests = await executeBrowserWorkspaceCommand(
       {
         subaction: "network",
+        id: tabId,
         networkAction: "requests",
       },
       {} as NodeJS.ProcessEnv,
@@ -1011,6 +1038,7 @@ describe("browser-workspace service", () => {
     const requestDetail = await executeBrowserWorkspaceCommand(
       {
         subaction: "network",
+        id: tabId,
         networkAction: "request",
         requestId: requestList[0]?.id,
       },
@@ -1040,6 +1068,7 @@ describe("browser-workspace service", () => {
     await executeBrowserWorkspaceCommand(
       {
         subaction: "eval",
+        id: tabId,
         script: 'console.log("browser-log"); "ok"',
       },
       {} as NodeJS.ProcessEnv,
@@ -1047,6 +1076,7 @@ describe("browser-workspace service", () => {
     const consoleEntries = await executeBrowserWorkspaceCommand(
       {
         subaction: "console",
+        id: tabId,
       },
       {} as NodeJS.ProcessEnv,
     );
@@ -1068,6 +1098,7 @@ describe("browser-workspace service", () => {
       executeBrowserWorkspaceCommand(
         {
           subaction: "eval",
+          id: tabId,
           script: 'throw new Error("browser-boom")',
         },
         {} as NodeJS.ProcessEnv,
@@ -1077,6 +1108,7 @@ describe("browser-workspace service", () => {
     const errors = await executeBrowserWorkspaceCommand(
       {
         subaction: "errors",
+        id: tabId,
       },
       {} as NodeJS.ProcessEnv,
     );
@@ -1097,6 +1129,7 @@ describe("browser-workspace service", () => {
     await executeBrowserWorkspaceCommand(
       {
         subaction: "eval",
+        id: tabId,
         script: 'confirm("Proceed?")',
       },
       {} as NodeJS.ProcessEnv,
@@ -1104,6 +1137,7 @@ describe("browser-workspace service", () => {
     const dialog = await executeBrowserWorkspaceCommand(
       {
         subaction: "dialog",
+        id: tabId,
         dialogAction: "status",
       },
       {} as NodeJS.ProcessEnv,
@@ -1114,6 +1148,7 @@ describe("browser-workspace service", () => {
     const accepted = await executeBrowserWorkspaceCommand(
       {
         subaction: "dialog",
+        id: tabId,
         dialogAction: "accept",
       },
       {} as NodeJS.ProcessEnv,
@@ -1149,6 +1184,7 @@ describe("browser-workspace service", () => {
     const firstDiff = await executeBrowserWorkspaceCommand(
       {
         subaction: "diff",
+        id: tabId,
         diffAction: "snapshot",
       },
       {} as NodeJS.ProcessEnv,
@@ -1158,6 +1194,7 @@ describe("browser-workspace service", () => {
     await executeBrowserWorkspaceCommand(
       {
         subaction: "fill",
+        id: tabId,
         selector: 'input[name="name"]',
         value: "Diff Me",
       },
@@ -1166,6 +1203,7 @@ describe("browser-workspace service", () => {
     const secondDiff = await executeBrowserWorkspaceCommand(
       {
         subaction: "diff",
+        id: tabId,
         diffAction: "snapshot",
       },
       {} as NodeJS.ProcessEnv,
@@ -1185,12 +1223,14 @@ describe("browser-workspace service", () => {
     await executeBrowserWorkspaceCommand(
       {
         subaction: "screenshot",
+        id: tabId,
       },
       {} as NodeJS.ProcessEnv,
     );
     const screenshotDiff = await executeBrowserWorkspaceCommand(
       {
         subaction: "diff",
+        id: tabId,
         diffAction: "screenshot",
       },
       {} as NodeJS.ProcessEnv,
@@ -1200,6 +1240,7 @@ describe("browser-workspace service", () => {
     await executeBrowserWorkspaceCommand(
       {
         subaction: "trace",
+        id: tabId,
         traceAction: "start",
       },
       {} as NodeJS.ProcessEnv,
@@ -1208,6 +1249,7 @@ describe("browser-workspace service", () => {
     const trace = await executeBrowserWorkspaceCommand(
       {
         subaction: "trace",
+        id: tabId,
         traceAction: "stop",
         filePath: traceFile,
       },
@@ -1219,6 +1261,7 @@ describe("browser-workspace service", () => {
     await executeBrowserWorkspaceCommand(
       {
         subaction: "profiler",
+        id: tabId,
         profilerAction: "start",
       },
       {} as NodeJS.ProcessEnv,
@@ -1227,6 +1270,7 @@ describe("browser-workspace service", () => {
     const profile = await executeBrowserWorkspaceCommand(
       {
         subaction: "profiler",
+        id: tabId,
         profilerAction: "stop",
         filePath: profileFile,
       },
@@ -1239,6 +1283,7 @@ describe("browser-workspace service", () => {
     const savedState = await executeBrowserWorkspaceCommand(
       {
         subaction: "state",
+        id: tabId,
         stateAction: "save",
         filePath: stateFile,
       },
@@ -1250,6 +1295,7 @@ describe("browser-workspace service", () => {
     await executeBrowserWorkspaceCommand(
       {
         subaction: "storage",
+        id: tabId,
         storageArea: "local",
         storageAction: "clear",
       },
@@ -1265,6 +1311,7 @@ describe("browser-workspace service", () => {
     await executeBrowserWorkspaceCommand(
       {
         subaction: "state",
+        id: tabId,
         stateAction: "load",
         filePath: stateFile,
       },
@@ -1273,6 +1320,7 @@ describe("browser-workspace service", () => {
     const restoredStorage = await executeBrowserWorkspaceCommand(
       {
         subaction: "storage",
+        id: tabId,
         storageArea: "local",
         entryKey: "draft",
       },
