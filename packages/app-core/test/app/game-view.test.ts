@@ -964,4 +964,87 @@ describe("GameView", () => {
     ).toBe(1);
     expect(text(tree?.root)).toContain("Babylon Live Dashboard");
   });
+
+  it("renders the Defense live operator surface in the dashboard pane", async () => {
+    const ctx = createContext({
+      activeGameApp: "@elizaos/app-defense-of-the-agents",
+      activeGameDisplayName: "Defense of the Agents",
+      appRuns: [
+        createRunSummary({
+          appName: "@elizaos/app-defense-of-the-agents",
+          displayName: "Defense of the Agents",
+          session: {
+            sessionId: "defense-session",
+            appName: "@elizaos/app-defense-of-the-agents",
+            mode: "spectate-and-steer",
+            status: "running",
+            displayName: "Defense of the Agents",
+            canSendCommands: true,
+            controls: [],
+            summary: "Holding mid lane while autoplay farms safely.",
+            suggestedPrompts: ["tell the hero to rotate bot"],
+            telemetry: {
+              heroClass: "Ranger",
+              heroLane: "mid",
+              heroLevel: 12,
+              heroHp: 73,
+              heroMaxHp: 100,
+              autoPlay: true,
+              strategyVersion: 3,
+              recentActivity: [
+                {
+                  ts: 1_712_345_678_000,
+                  action: "rotate",
+                  detail: "Moved from top lane to defend mid.",
+                },
+              ],
+            },
+          },
+        }),
+      ],
+      activeGameSession: {
+        sessionId: "defense-session",
+        appName: "@elizaos/app-defense-of-the-agents",
+        mode: "spectate-and-steer",
+        status: "running",
+        displayName: "Defense of the Agents",
+        canSendCommands: true,
+        controls: [],
+        summary: "Holding mid lane while autoplay farms safely.",
+        suggestedPrompts: ["tell the hero to rotate bot"],
+        telemetry: {
+          heroClass: "Ranger",
+          heroLane: "mid",
+          heroLevel: 12,
+          heroHp: 73,
+          heroMaxHp: 100,
+          autoPlay: true,
+          strategyVersion: 3,
+          recentActivity: [
+            {
+              ts: 1_712_345_678_000,
+              action: "rotate",
+              detail: "Moved from top lane to defend mid.",
+            },
+          ],
+        },
+      },
+    });
+    mockUseApp.mockReturnValue(ctx);
+
+    let tree: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(GameView));
+    });
+    await flush();
+
+    expect(
+      tree?.root.findAll(
+        (node) =>
+          node.props["data-testid"] === "defense-live-operator-surface",
+      ).length,
+    ).toBe(1);
+    expect(text(tree?.root)).toContain("Defense Live Dashboard");
+    expect(text(tree?.root)).toContain("tell the hero to rotate bot");
+  });
 });
