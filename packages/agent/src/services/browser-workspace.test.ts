@@ -1,13 +1,23 @@
+import * as fs from "node:fs";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
 import os from "node:os";
 import path from "node:path";
-import * as fs from "node:fs";
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
+import {
+  __resetBrowserWorkspaceStateForTests,
   closeBrowserWorkspaceTab,
-  executeBrowserWorkspaceCommand,
   evaluateBrowserWorkspaceTab,
+  executeBrowserWorkspaceCommand,
   getBrowserWorkspaceMode,
   getBrowserWorkspaceSnapshot,
   isBrowserWorkspaceBridgeConfigured,
@@ -69,7 +79,7 @@ async function startBrowserFixture(): Promise<BrowserFixture> {
     }
 
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-	    res.end(`<!doctype html>
+    res.end(`<!doctype html>
 	      <html lang="en">
 	        <head><meta charset="utf-8" /><title>Browser Form Fixture</title></head>
 	        <body>
@@ -134,8 +144,13 @@ describe("browser-workspace service", () => {
   beforeEach(async () => {
     globalThis.fetch = originalFetch;
     vi.restoreAllMocks();
+    await __resetBrowserWorkspaceStateForTests();
     const tabs = await listBrowserWorkspaceTabs({} as NodeJS.ProcessEnv);
-    await Promise.all(tabs.map((tab) => closeBrowserWorkspaceTab(tab.id, {} as NodeJS.ProcessEnv)));
+    await Promise.all(
+      tabs.map((tab) =>
+        closeBrowserWorkspaceTab(tab.id, {} as NodeJS.ProcessEnv),
+      ),
+    );
   });
 
   afterEach(() => {
@@ -144,6 +159,7 @@ describe("browser-workspace service", () => {
   });
 
   afterAll(async () => {
+    await __resetBrowserWorkspaceStateForTests();
     await fixture.close();
   });
 
@@ -261,8 +277,8 @@ describe("browser-workspace service", () => {
     );
     expect(inspect.elements).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ selector: "input[name=\"name\"]" }),
-        expect.objectContaining({ selector: "button[type=\"submit\"]" }),
+        expect.objectContaining({ selector: 'input[name="name"]' }),
+        expect.objectContaining({ selector: 'button[type="submit"]' }),
       ]),
     );
 
@@ -270,7 +286,7 @@ describe("browser-workspace service", () => {
       {
         subaction: "fill",
         id: tabId,
-        selector: "input[name=\"name\"]",
+        selector: 'input[name="name"]',
         value: "Milady",
       },
       {} as NodeJS.ProcessEnv,
@@ -279,7 +295,7 @@ describe("browser-workspace service", () => {
       {
         subaction: "click",
         id: tabId,
-        selector: "button[type=\"submit\"]",
+        selector: 'button[type="submit"]',
       },
       {} as NodeJS.ProcessEnv,
     );
@@ -315,13 +331,13 @@ describe("browser-workspace service", () => {
           {
             subaction: "fill",
             id: tabId,
-            selector: "input[name=\"name\"]",
+            selector: 'input[name="name"]',
             value: "BrowserAgent",
           },
           {
             subaction: "click",
             id: tabId,
-            selector: "button[type=\"submit\"]",
+            selector: 'button[type="submit"]',
           },
           {
             subaction: "get",
@@ -376,9 +392,7 @@ describe("browser-workspace service", () => {
       },
       {} as NodeJS.ProcessEnv,
     );
-    expect(selectPlan.value).toEqual(
-      expect.objectContaining({ value: "pro" }),
-    );
+    expect(selectPlan.value).toEqual(expect.objectContaining({ value: "pro" }));
 
     const checkTerms = await executeBrowserWorkspaceCommand(
       {
@@ -402,8 +416,8 @@ describe("browser-workspace service", () => {
     );
     expect(snapshot.elements).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ selector: "input[name=\"name\"]" }),
-        expect.objectContaining({ selector: "select[name=\"plan\"]" }),
+        expect.objectContaining({ selector: 'input[name="name"]' }),
+        expect.objectContaining({ selector: 'select[name="plan"]' }),
       ]),
     );
 
@@ -676,7 +690,9 @@ describe("browser-workspace service", () => {
       },
       {} as NodeJS.ProcessEnv,
     );
-    expect(mouseDown.value).toEqual(expect.objectContaining({ buttons: ["left"] }));
+    expect(mouseDown.value).toEqual(
+      expect.objectContaining({ buttons: ["left"] }),
+    );
     const mouseUp = await executeBrowserWorkspaceCommand(
       {
         subaction: "mouse",
@@ -842,7 +858,11 @@ describe("browser-workspace service", () => {
     );
     expect(settings.value).toEqual(
       expect.objectContaining({
-        viewport: expect.objectContaining({ width: 900, height: 700, scale: 2 }),
+        viewport: expect.objectContaining({
+          width: 900,
+          height: 700,
+          scale: 2,
+        }),
       }),
     );
 
@@ -936,7 +956,9 @@ describe("browser-workspace service", () => {
       },
       {} as NodeJS.ProcessEnv,
     );
-    expect(cookies.value).toEqual(expect.objectContaining({ session: "abc123" }));
+    expect(cookies.value).toEqual(
+      expect.objectContaining({ session: "abc123" }),
+    );
     await executeBrowserWorkspaceCommand(
       {
         subaction: "storage",
@@ -1003,7 +1025,8 @@ describe("browser-workspace service", () => {
       {
         subaction: "eval",
         id: tabId,
-        script: 'fetch("http://127.0.0.1/mocked").then((response) => response.text())',
+        script:
+          'fetch("http://127.0.0.1/mocked").then((response) => response.text())',
       },
       {} as NodeJS.ProcessEnv,
     );
@@ -1032,7 +1055,10 @@ describe("browser-workspace service", () => {
       },
       {} as NodeJS.ProcessEnv,
     );
-    const requestList = requests.value as Array<{ id: string; status: number | null }>;
+    const requestList = requests.value as Array<{
+      id: string;
+      status: number | null;
+    }>;
     expect(requestList.some((entry) => entry.status === 201)).toBe(true);
 
     const requestDetail = await executeBrowserWorkspaceCommand(
@@ -1044,7 +1070,9 @@ describe("browser-workspace service", () => {
       },
       {} as NodeJS.ProcessEnv,
     );
-    expect(requestDetail.value).toEqual(expect.objectContaining({ id: requestList[0]?.id }));
+    expect(requestDetail.value).toEqual(
+      expect.objectContaining({ id: requestList[0]?.id }),
+    );
     const filteredRequests = await executeBrowserWorkspaceCommand(
       {
         subaction: "network",
@@ -1082,7 +1110,9 @@ describe("browser-workspace service", () => {
     );
     expect(consoleEntries.value).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ message: expect.stringContaining("browser-log") }),
+        expect.objectContaining({
+          message: expect.stringContaining("browser-log"),
+        }),
       ]),
     );
     const clearedConsole = await executeBrowserWorkspaceCommand(
@@ -1114,7 +1144,9 @@ describe("browser-workspace service", () => {
     );
     expect(errors.value).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ message: expect.stringContaining("browser-boom") }),
+        expect.objectContaining({
+          message: expect.stringContaining("browser-boom"),
+        }),
       ]),
     );
     const clearedErrors = await executeBrowserWorkspaceCommand(
@@ -1143,7 +1175,11 @@ describe("browser-workspace service", () => {
       {} as NodeJS.ProcessEnv,
     );
     expect(dialog.value).toEqual(
-      expect.objectContaining({ message: "Proceed?", open: true, type: "confirm" }),
+      expect.objectContaining({
+        message: "Proceed?",
+        open: true,
+        type: "confirm",
+      }),
     );
     const accepted = await executeBrowserWorkspaceCommand(
       {
@@ -1168,7 +1204,9 @@ describe("browser-workspace service", () => {
       },
       {} as NodeJS.ProcessEnv,
     );
-    expect(dismissed.value).toEqual(expect.objectContaining({ accepted: false }));
+    expect(dismissed.value).toEqual(
+      expect.objectContaining({ accepted: false }),
+    );
 
     const highlight = await executeBrowserWorkspaceCommand(
       {
@@ -1208,7 +1246,9 @@ describe("browser-workspace service", () => {
       },
       {} as NodeJS.ProcessEnv,
     );
-    expect(secondDiff.value).toEqual(expect.objectContaining({ changed: true }));
+    expect(secondDiff.value).toEqual(
+      expect.objectContaining({ changed: true }),
+    );
     const urlDiff = await executeBrowserWorkspaceCommand(
       {
         subaction: "diff",
@@ -1235,7 +1275,9 @@ describe("browser-workspace service", () => {
       },
       {} as NodeJS.ProcessEnv,
     );
-    expect(screenshotDiff.value).toEqual(expect.objectContaining({ changed: false }));
+    expect(screenshotDiff.value).toEqual(
+      expect.objectContaining({ changed: false }),
+    );
 
     await executeBrowserWorkspaceCommand(
       {
@@ -1245,7 +1287,10 @@ describe("browser-workspace service", () => {
       },
       {} as NodeJS.ProcessEnv,
     );
-    const traceFile = path.join(os.tmpdir(), `milady-browser-trace-${Date.now()}.json`);
+    const traceFile = path.join(
+      os.tmpdir(),
+      `milady-browser-trace-${Date.now()}.json`,
+    );
     const trace = await executeBrowserWorkspaceCommand(
       {
         subaction: "trace",
@@ -1266,7 +1311,10 @@ describe("browser-workspace service", () => {
       },
       {} as NodeJS.ProcessEnv,
     );
-    const profileFile = path.join(os.tmpdir(), `milady-browser-profile-${Date.now()}.json`);
+    const profileFile = path.join(
+      os.tmpdir(),
+      `milady-browser-profile-${Date.now()}.json`,
+    );
     const profile = await executeBrowserWorkspaceCommand(
       {
         subaction: "profiler",
@@ -1277,9 +1325,14 @@ describe("browser-workspace service", () => {
       {} as NodeJS.ProcessEnv,
     );
     expect(fs.existsSync(profileFile)).toBe(true);
-    expect(profile.value).toEqual(expect.objectContaining({ path: profileFile }));
+    expect(profile.value).toEqual(
+      expect.objectContaining({ path: profileFile }),
+    );
 
-    const stateFile = path.join(os.tmpdir(), `milady-browser-state-${Date.now()}.json`);
+    const stateFile = path.join(
+      os.tmpdir(),
+      `milady-browser-state-${Date.now()}.json`,
+    );
     const savedState = await executeBrowserWorkspaceCommand(
       {
         subaction: "state",
@@ -1289,7 +1342,9 @@ describe("browser-workspace service", () => {
       },
       {} as NodeJS.ProcessEnv,
     );
-    expect(savedState.value).toEqual(expect.objectContaining({ path: stateFile }));
+    expect(savedState.value).toEqual(
+      expect.objectContaining({ path: stateFile }),
+    );
     expect(fs.existsSync(stateFile)).toBe(true);
 
     await executeBrowserWorkspaceCommand(
@@ -1333,7 +1388,9 @@ describe("browser-workspace service", () => {
       },
       {} as NodeJS.ProcessEnv,
     );
-    expect(restoredCookies.value).toEqual(expect.objectContaining({ session: "abc123" }));
+    expect(restoredCookies.value).toEqual(
+      expect.objectContaining({ session: "abc123" }),
+    );
 
     const pdfFile = path.join(os.tmpdir(), `milady-browser-${Date.now()}.pdf`);
     const pdf = await executeBrowserWorkspaceCommand(
@@ -1346,7 +1403,10 @@ describe("browser-workspace service", () => {
     expect(pdf.value).toEqual(expect.objectContaining({ path: pdfFile }));
     expect(fs.existsSync(pdfFile)).toBe(true);
 
-    const harFile = path.join(os.tmpdir(), `milady-browser-har-${Date.now()}.json`);
+    const harFile = path.join(
+      os.tmpdir(),
+      `milady-browser-har-${Date.now()}.json`,
+    );
     const har = await executeBrowserWorkspaceCommand(
       {
         subaction: "network",

@@ -1,4 +1,3 @@
-import * as fs from "node:fs";
 import * as fsp from "node:fs/promises";
 import * as path from "node:path";
 import { JSDOM } from "jsdom";
@@ -122,11 +121,7 @@ export type BrowserWorkspaceFindAction =
 
 export type BrowserWorkspaceWaitState = "hidden" | "visible";
 
-export type BrowserWorkspaceScrollDirection =
-  | "down"
-  | "left"
-  | "right"
-  | "up";
+export type BrowserWorkspaceScrollDirection = "down" | "left" | "right" | "up";
 
 export type BrowserWorkspaceClipboardAction =
   | "copy"
@@ -433,8 +428,23 @@ const webWorkspaceState: {
 };
 
 const browserWorkspaceElementRefs = new Map<string, Map<string, string>>();
-const browserWorkspaceRuntimeState = new Map<string, BrowserWorkspaceRuntimeState>();
+const browserWorkspaceRuntimeState = new Map<
+  string,
+  BrowserWorkspaceRuntimeState
+>();
 let browserWorkspaceClipboardText = "";
+
+/** @internal - test-only reset */
+export async function __resetBrowserWorkspaceStateForTests(): Promise<void> {
+  await withWebStateLock(async () => {
+    webWorkspaceState.nextId = 1;
+    webWorkspaceState.tabs = [];
+    browserWorkspaceElementRefs.clear();
+    browserWorkspaceRuntimeState.clear();
+    browserWorkspaceClipboardText = "";
+  });
+  webStateLock = Promise.resolve();
+}
 
 function normalizeEnvValue(value: string | undefined): string | null {
   if (typeof value !== "string") {
@@ -525,7 +535,9 @@ function clearBrowserWorkspaceRuntimeState(
   mode: BrowserWorkspaceMode,
   tabId: string,
 ): void {
-  browserWorkspaceRuntimeState.delete(getBrowserWorkspaceRuntimeStateKey(mode, tabId));
+  browserWorkspaceRuntimeState.delete(
+    getBrowserWorkspaceRuntimeStateKey(mode, tabId),
+  );
 }
 
 function resetBrowserWorkspaceRuntimeNavigationState(
@@ -544,7 +556,10 @@ function appendBrowserWorkspaceTraceEntry(
   if (!state.trace.active) {
     return;
   }
-  state.trace.entries.push({ ...entry, timestamp: getBrowserWorkspaceTimestamp() });
+  state.trace.entries.push({
+    ...entry,
+    timestamp: getBrowserWorkspaceTimestamp(),
+  });
 }
 
 function appendBrowserWorkspaceProfilerEntry(
@@ -619,7 +634,11 @@ function resolveBrowserWorkspaceCommandElementRefs(
     return command;
   }
 
-  const resolvedSelector = resolveBrowserWorkspaceElementRef(mode, tabId, match[1]);
+  const resolvedSelector = resolveBrowserWorkspaceElementRef(
+    mode,
+    tabId,
+    match[1],
+  );
   if (!resolvedSelector) {
     throw new Error(
       `Unknown browser snapshot element ref ${match[1]}. Run snapshot or inspect again before reusing element refs.`,
@@ -686,7 +705,9 @@ function inferBrowserWorkspaceTitle(url: string): string {
   }
 }
 
-function cloneBrowserWorkspaceTab(tab: BrowserWorkspaceTab): BrowserWorkspaceTab {
+function cloneBrowserWorkspaceTab(
+  tab: BrowserWorkspaceTab,
+): BrowserWorkspaceTab {
   return { ...tab };
 }
 
@@ -717,7 +738,7 @@ function clearWebBrowserWorkspaceTabElementRefs(tabId: string): void {
 
 function createEmptyWebBrowserWorkspaceDom(url: string): JSDOM {
   return new JSDOM(
-    "<!doctype html><html lang=\"en\"><head><title>New Tab</title></head><body></body></html>",
+    '<!doctype html><html lang="en"><head><title>New Tab</title></head><body></body></html>',
     {
       pretendToBeVisual: true,
       url,
@@ -824,7 +845,9 @@ function installBrowserWorkspaceWebRuntime(
       consoleTarget[level] = (...args: unknown[]) => {
         state.consoleEntries.push({
           level,
-          message: args.map((value) => normalizeBrowserWorkspaceText(value)).join(" "),
+          message: args
+            .map((value) => normalizeBrowserWorkspaceText(value))
+            .join(" "),
           timestamp: getBrowserWorkspaceTimestamp(),
         });
         return undefined;
@@ -878,7 +901,9 @@ function installBrowserWorkspaceWebRuntime(
           ...init,
           headers:
             init?.headers ??
-            ((input as Request).headers ? (input as Request).headers : undefined),
+            ((input as Request).headers
+              ? (input as Request).headers
+              : undefined),
           method:
             init?.method ??
             (typeof (input as Request).method === "string"
@@ -895,7 +920,9 @@ function getWebBrowserWorkspaceTabIndex(tabId: string): number {
   return webWorkspaceState.tabs.findIndex((tab) => tab.id === tabId);
 }
 
-function getWebBrowserWorkspaceTabState(tabId: string): WebBrowserWorkspaceTabState {
+function getWebBrowserWorkspaceTabState(
+  tabId: string,
+): WebBrowserWorkspaceTabState {
   const tab = webWorkspaceState.tabs.find((entry) => entry.id === tabId);
   if (!tab) {
     throw createBrowserWorkspaceNotFoundError(tabId);
@@ -913,7 +940,9 @@ function getCurrentWebBrowserWorkspaceTabState(): WebBrowserWorkspaceTabState | 
     [...webWorkspaceState.tabs].sort((left, right) => {
       const leftTime = left.lastFocusedAt ?? left.updatedAt;
       const rightTime = right.lastFocusedAt ?? right.updatedAt;
-      return rightTime.localeCompare(leftTime) || left.id.localeCompare(right.id);
+      return (
+        rightTime.localeCompare(leftTime) || left.id.localeCompare(right.id)
+      );
     })[0] ??
     null
   );
@@ -926,7 +955,8 @@ function createWebBrowserWorkspaceTab(
   const url = assertBrowserWorkspaceUrl(request.url?.trim() || "about:blank");
   const visible = request.show === true;
   const id = `btab_${webWorkspaceState.nextId++}`;
-  const dom = url === "about:blank" ? createEmptyWebBrowserWorkspaceDom(url) : null;
+  const dom =
+    url === "about:blank" ? createEmptyWebBrowserWorkspaceDom(url) : null;
   if (dom) {
     const bootstrapTab = {
       id,
@@ -969,9 +999,9 @@ function buildBrowserWorkspaceElementSelector(element: Element): string {
   const escapedId =
     typeof (globalThis as { CSS?: { escape?: (value: string) => string } }).CSS
       ?.escape === "function"
-      ? (globalThis as { CSS: { escape: (value: string) => string } }).CSS.escape(
-          element.id,
-        )
+      ? (
+          globalThis as { CSS: { escape: (value: string) => string } }
+        ).CSS.escape(element.id)
       : element.id.replace(/[^a-zA-Z0-9_-]/g, "\\$&");
 
   if (element.id) {
@@ -1085,7 +1115,8 @@ function resolveBrowserWorkspaceIframeDocument(
     }
     if (
       iframe.contentDocument &&
-      normalizeBrowserWorkspaceText(iframe.contentDocument.body?.textContent).length > 0
+      normalizeBrowserWorkspaceText(iframe.contentDocument.body?.textContent)
+        .length > 0
     ) {
       return iframe.contentDocument;
     }
@@ -1148,7 +1179,8 @@ function getBrowserWorkspaceElementSearchTexts(element: Element): string[] {
     element.getAttribute("alt"),
     element.getAttribute("data-testid"),
     labelText,
-    (element as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement).value,
+    (element as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement)
+      .value,
   ]
     .map((value) => normalizeBrowserWorkspaceText(value))
     .filter(Boolean);
@@ -1159,7 +1191,8 @@ function browserWorkspaceTextMatches(
   wanted: string,
   exact = false,
 ): boolean {
-  const normalizedCandidate = normalizeBrowserWorkspaceText(candidate).toLowerCase();
+  const normalizedCandidate =
+    normalizeBrowserWorkspaceText(candidate).toLowerCase();
   const normalizedWanted = normalizeBrowserWorkspaceText(wanted).toLowerCase();
   if (!normalizedCandidate || !normalizedWanted) {
     return false;
@@ -1170,7 +1203,10 @@ function browserWorkspaceTextMatches(
 }
 
 function isBrowserWorkspaceElementVisible(element: Element): boolean {
-  if (element.hasAttribute("hidden") || element.getAttribute("aria-hidden") === "true") {
+  if (
+    element.hasAttribute("hidden") ||
+    element.getAttribute("aria-hidden") === "true"
+  ) {
     return false;
   }
 
@@ -1191,7 +1227,9 @@ function findBrowserWorkspaceElementByLabel(
 ): Element | null {
   const labels = Array.from(document.querySelectorAll("label"));
   for (const label of labels) {
-    if (!browserWorkspaceTextMatches(label.textContent ?? "", labelText, exact)) {
+    if (
+      !browserWorkspaceTextMatches(label.textContent ?? "", labelText, exact)
+    ) {
       continue;
     }
 
@@ -1230,9 +1268,7 @@ function getBrowserWorkspaceNativeRole(element: Element): string | null {
     const type = (input.type || "text").toLowerCase();
     if (type === "checkbox") return "checkbox";
     if (type === "radio") return "radio";
-    if (
-      ["button", "submit", "reset", "image"].includes(type)
-    ) {
+    if (["button", "submit", "reset", "image"].includes(type)) {
       return "button";
     }
     return "textbox";
@@ -1264,7 +1300,9 @@ function findBrowserWorkspaceElementByRole(
       return candidate;
     }
     const haystacks = getBrowserWorkspaceElementSearchTexts(candidate);
-    if (haystacks.some((value) => browserWorkspaceTextMatches(value, name, exact))) {
+    if (
+      haystacks.some((value) => browserWorkspaceTextMatches(value, name, exact))
+    ) {
       return candidate;
     }
   }
@@ -1324,9 +1362,15 @@ function parseBrowserWorkspaceSemanticSelector(
       return { selector: trimBrowserWorkspaceQuotedValue(rawValue) };
     case "data-testid":
     case "testid":
-      return { findBy: "testid", text: trimBrowserWorkspaceQuotedValue(rawValue) };
+      return {
+        findBy: "testid",
+        text: trimBrowserWorkspaceQuotedValue(rawValue),
+      };
     case "label":
-      return { findBy: "label", text: trimBrowserWorkspaceQuotedValue(rawValue) };
+      return {
+        findBy: "label",
+        text: trimBrowserWorkspaceQuotedValue(rawValue),
+      };
     case "placeholder":
       return {
         findBy: "placeholder",
@@ -1348,9 +1392,15 @@ function parseBrowserWorkspaceSemanticSelector(
       };
     }
     case "text":
-      return { findBy: "text", text: trimBrowserWorkspaceQuotedValue(rawValue) };
+      return {
+        findBy: "text",
+        text: trimBrowserWorkspaceQuotedValue(rawValue),
+      };
     case "title":
-      return { findBy: "title", text: trimBrowserWorkspaceQuotedValue(rawValue) };
+      return {
+        findBy: "title",
+        text: trimBrowserWorkspaceQuotedValue(rawValue),
+      };
     default:
       return null;
   }
@@ -1446,7 +1496,8 @@ function findBrowserWorkspaceNetworkRoute(
   return (
     [...state.networkRoutes]
       .reverse()
-      .find((route) => browserWorkspacePatternMatches(route.pattern, url)) ?? null
+      .find((route) => browserWorkspacePatternMatches(route.pattern, url)) ??
+    null
   );
 }
 
@@ -1501,7 +1552,9 @@ async function fetchBrowserWorkspaceTrackedResponse(
 
   if (
     route &&
-    (route.body !== null || route.status !== null || Object.keys(route.headers).length > 0)
+    (route.body !== null ||
+      route.status !== null ||
+      Object.keys(route.headers).length > 0)
   ) {
     const response = new Response(route?.body ?? "", {
       headers: route?.headers,
@@ -1566,14 +1619,24 @@ async function fetchBrowserWorkspaceTrackedResponse(
 }
 
 function escapeBrowserWorkspacePdfText(value: string): string {
-  return value.replaceAll("\\", "\\\\").replaceAll("(", "\\(").replaceAll(")", "\\)");
+  return value
+    .replaceAll("\\", "\\\\")
+    .replaceAll("(", "\\(")
+    .replaceAll(")", "\\)");
 }
 
-function createBrowserWorkspacePdfBuffer(title: string, bodyText: string): Buffer {
+function createBrowserWorkspacePdfBuffer(
+  title: string,
+  bodyText: string,
+): Buffer {
   const lines = [
     title.trim() || "Milady Browser Workspace",
     "",
-    ...bodyText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).slice(0, 32),
+    ...bodyText
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .slice(0, 32),
   ];
   const contentLines = lines.map((line, index) => {
     const offset = index === 0 ? "50 750 Td" : "0 -18 Td";
@@ -1614,7 +1677,11 @@ function createBrowserWorkspaceSyntheticScreenshotData(
     title || "Milady Browser Workspace",
     url,
     "",
-    ...bodyText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).slice(0, 18),
+    ...bodyText
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .slice(0, 18),
   ];
   const escapedLines = lines.map((line) =>
     line
@@ -1653,7 +1720,7 @@ function buildBrowserWorkspaceDocumentSnapshotText(document: Document): string {
           ? (element as HTMLSelectElement).value
           : "value" in (element as HTMLInputElement | HTMLTextAreaElement)
             ? (element as HTMLInputElement | HTMLTextAreaElement).value
-            : element.textContent ?? "";
+            : (element.textContent ?? "");
       return `${name}:${normalizeBrowserWorkspaceText(value)}`;
     })
     .filter(Boolean)
@@ -1692,39 +1759,58 @@ function resolveBrowserWorkspaceFindElement(
 ): Element | null {
   switch (command.findBy) {
     case "alt":
-      return Array.from(document.querySelectorAll("[alt]")).find((element) =>
-        browserWorkspaceTextMatches(element.getAttribute("alt") ?? "", command.text ?? "", command.exact),
-      ) ?? null;
+      return (
+        Array.from(document.querySelectorAll("[alt]")).find((element) =>
+          browserWorkspaceTextMatches(
+            element.getAttribute("alt") ?? "",
+            command.text ?? "",
+            command.exact,
+          ),
+        ) ?? null
+      );
     case "first":
       return command.selector?.trim()
         ? queryBrowserWorkspaceSelector(document, command.selector)
         : null;
     case "label":
       return command.text?.trim()
-        ? findBrowserWorkspaceElementByLabel(document, command.text, command.exact)
+        ? findBrowserWorkspaceElementByLabel(
+            document,
+            command.text,
+            command.exact,
+          )
         : null;
     case "last":
       return command.selector?.trim()
-        ? queryAllBrowserWorkspaceSelector(document, command.selector).at(-1) ?? null
+        ? (queryAllBrowserWorkspaceSelector(document, command.selector).at(
+            -1,
+          ) ?? null)
         : null;
     case "nth":
       if (!command.selector?.trim()) {
         return null;
       }
-      if (typeof command.index !== "number" || !Number.isInteger(command.index)) {
+      if (
+        typeof command.index !== "number" ||
+        !Number.isInteger(command.index)
+      ) {
         return null;
       }
-      return queryAllBrowserWorkspaceSelector(document, command.selector).at(
-        command.index,
-      ) ?? null;
+      return (
+        queryAllBrowserWorkspaceSelector(document, command.selector).at(
+          command.index,
+        ) ?? null
+      );
     case "placeholder":
-      return Array.from(document.querySelectorAll("[placeholder]")).find((element) =>
-        browserWorkspaceTextMatches(
-          element.getAttribute("placeholder") ?? "",
-          command.text ?? "",
-          command.exact,
-        ),
-      ) ?? null;
+      return (
+        Array.from(document.querySelectorAll("[placeholder]")).find((element) =>
+          browserWorkspaceTextMatches(
+            element.getAttribute("placeholder") ?? "",
+            command.text ?? "",
+            command.exact,
+          ),
+        ) ?? null
+      );
     case "role":
       return command.role?.trim()
         ? findBrowserWorkspaceElementByRole(
@@ -1736,20 +1822,24 @@ function resolveBrowserWorkspaceFindElement(
         : null;
     case "testid":
       return command.text?.trim()
-        ? document.querySelector(`[data-testid=${buildBrowserWorkspaceCssStringLiteral(command.text)}]`)
+        ? document.querySelector(
+            `[data-testid=${buildBrowserWorkspaceCssStringLiteral(command.text)}]`,
+          )
         : null;
     case "text":
       return command.text?.trim()
         ? findBrowserWorkspaceElementByText(document, command.text)
         : null;
     case "title":
-      return Array.from(document.querySelectorAll("[title]")).find((element) =>
-        browserWorkspaceTextMatches(
-          element.getAttribute("title") ?? "",
-          command.text ?? "",
-          command.exact,
-        ),
-      ) ?? null;
+      return (
+        Array.from(document.querySelectorAll("[title]")).find((element) =>
+          browserWorkspaceTextMatches(
+            element.getAttribute("title") ?? "",
+            command.text ?? "",
+            command.exact,
+          ),
+        ) ?? null
+      );
     default:
       return null;
   }
@@ -1873,7 +1963,10 @@ function ensureBrowserWorkspaceFormControlElement(
     element.tagName === "TEXTAREA" ||
     element.tagName === "SELECT"
   ) {
-    return element as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
+    return element as
+      | HTMLInputElement
+      | HTMLTextAreaElement
+      | HTMLSelectElement;
   }
 
   throw new Error(
@@ -1941,9 +2034,7 @@ function normalizeBrowserWorkspaceCommand(
   };
 }
 
-function getBrowserWorkspaceElementBox(
-  element: Element,
-): {
+function getBrowserWorkspaceElementBox(element: Element): {
   bottom: number;
   height: number;
   left: number;
@@ -1986,8 +2077,10 @@ function getBrowserWorkspaceElementValue(
     element.tagName === "TEXTAREA" ||
     element.tagName === "SELECT"
   ) {
-    const control =
-      element as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
+    const control = element as
+      | HTMLInputElement
+      | HTMLTextAreaElement
+      | HTMLSelectElement;
     if (element.tagName === "INPUT") {
       const input = control as HTMLInputElement;
       const type = input.type.trim().toLowerCase();
@@ -2006,9 +2099,9 @@ function findClosestBrowserWorkspaceForm(
   if (!element) {
     return null;
   }
-  return (element.tagName === "FORM"
-    ? element
-    : element.closest("form")) as HTMLFormElement | null;
+  return (
+    element.tagName === "FORM" ? element : element.closest("form")
+  ) as HTMLFormElement | null;
 }
 
 async function activateWebBrowserWorkspaceElement(
@@ -2062,7 +2155,8 @@ async function activateWebBrowserWorkspaceElement(
     submitForm &&
     (tag === "form" ||
       tag === "button" ||
-      (tag === "input" && ["button", "image", "submit"].includes(inputType || "submit")))
+      (tag === "input" &&
+        ["button", "image", "submit"].includes(inputType || "submit")))
   ) {
     await submitWebBrowserWorkspaceForm(tab, submitForm);
     return {
@@ -2109,10 +2203,14 @@ function scrollWebBrowserWorkspaceTarget(
   selector: string | null;
   value: number;
 } {
-  const resolvedPixels = Number.isFinite(pixels) ? Math.max(1, Math.abs(pixels)) : 240;
+  const resolvedPixels = Number.isFinite(pixels)
+    ? Math.max(1, Math.abs(pixels))
+    : 240;
   const axis = direction === "left" || direction === "right" ? "x" : "y";
   const delta =
-    direction === "up" || direction === "left" ? -resolvedPixels : resolvedPixels;
+    direction === "up" || direction === "left"
+      ? -resolvedPixels
+      : resolvedPixels;
 
   if (element && element instanceof dom.window.HTMLElement) {
     if (axis === "y") {
@@ -2132,7 +2230,9 @@ function scrollWebBrowserWorkspaceTarget(
   }
 
   const key = axis === "y" ? "__miladyScrollY" : "__miladyScrollX";
-  const current = Number((dom.window as unknown as Record<string, unknown>)[key] ?? 0);
+  const current = Number(
+    (dom.window as unknown as Record<string, unknown>)[key] ?? 0,
+  );
   const next = current + delta;
   (dom.window as unknown as Record<string, unknown>)[key] = next;
   return {
@@ -2142,9 +2242,7 @@ function scrollWebBrowserWorkspaceTarget(
   };
 }
 
-function ensureBrowserWorkspaceDom(
-  tab: WebBrowserWorkspaceTabState,
-): JSDOM {
+function ensureBrowserWorkspaceDom(tab: WebBrowserWorkspaceTabState): JSDOM {
   if (tab.dom && tab.loadedUrl === tab.url) {
     return tab.dom;
   }
@@ -2242,7 +2340,9 @@ function resolveBrowserWorkspaceCurrentTab(
     [...tabs].sort((left, right) => {
       const leftTime = left.lastFocusedAt ?? left.updatedAt;
       const rightTime = right.lastFocusedAt ?? right.updatedAt;
-      return rightTime.localeCompare(leftTime) || left.id.localeCompare(right.id);
+      return (
+        rightTime.localeCompare(leftTime) || left.id.localeCompare(right.id)
+      );
     })[0] ??
     null
   );
@@ -2457,9 +2557,9 @@ function createDesktopBrowserWorkspaceCommandScript(
   };
   const trimQuoted = (value) => {
     const trimmed = String(value || "").trim();
-    const hasTextMatch = trimmed.match(/^has-text\((['"])([\s\S]*?)\\1\)$/i);
-    if (hasTextMatch?.[2]) {
-      return hasTextMatch[2].trim();
+    const hasTextMatch = trimmed.match(/^has-text\\((?:"([^"]*)"|'([^']*)')\\)$/i);
+    if (hasTextMatch?.[1] || hasTextMatch?.[2]) {
+      return (hasTextMatch[1] || hasTextMatch[2] || "").trim();
     }
     if (
       (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
@@ -2472,18 +2572,18 @@ function createDesktopBrowserWorkspaceCommandScript(
   const normalizeSelectorSyntax = (selector) => {
     let normalized = String(selector || "").trim();
     normalized = normalized.replace(
-      /^role\s*[:=]\s*([a-z0-9_-]+)\s+name\s*[:=]\s*(.+)$/i,
+      /^role\\s*[:=]\\s*([a-z0-9_-]+)\\s+name\\s*[:=]\\s*(.+)$/i,
       "role=$1[name=$2]"
     );
     normalized = normalized.replace(
-      /^((?:label|text|placeholder|alt|title|testid|data-testid)\s*[:=]\s*(?:has-text\((['"])[\s\S]*?\\2\)|"[^"]+"|'[^']+'|[^>]+?))\s+((?:input|textarea|select)[\s\S]*)$/i,
-      "$1 >> $3"
+      /^((?:label|text|placeholder|alt|title|testid|data-testid)\\s*[:=]\\s*(?:has-text\\((?:"[^"]*"|'[^']*')\\)|"[^"]+"|'[^']+'|[^>]+?))\\s+((?:input|textarea|select)[\\s\\S]*)$/i,
+      "$1 >> $2"
     );
     return normalized;
   };
   const parseSemanticSelector = (selector) => {
     const trimmed = normalizeSelectorSyntax(selector);
-    const match = trimmed.match(/^([a-z-]+)\s*[:=]\s*(.+)$/i);
+    const match = trimmed.match(/^([a-z-]+)\\s*[:=]\\s*(.+)$/i);
     if (!match) return null;
     const kind = match[1]?.trim()?.toLowerCase();
     const rawValue = match[2]?.trim() || "";
@@ -2502,7 +2602,7 @@ function createDesktopBrowserWorkspaceCommandScript(
         return { findBy: "placeholder", text: trimQuoted(rawValue) };
       case "role": {
         const roleMatch = rawValue.match(
-          /^([a-z0-9_-]+)(?:\s*\[\s*name\s*[:=]\s*(.+?)\s*\])?$/i
+          /^([a-z0-9_-]+)(?:\\s*\\[\\s*name\\s*[:=]\\s*(.+?)\\s*\\])?$/i
         );
         if (!roleMatch?.[1]) return null;
         return {
@@ -2599,7 +2699,7 @@ function createDesktopBrowserWorkspaceCommandScript(
   const findTarget = () => {
     if (command.selector) {
       const selectorChain = normalizeSelectorSyntax(command.selector)
-        .split(/\s*>>\s*/)
+        .split(/s*>>s*/)
         .map((segment) => segment.trim())
         .filter(Boolean);
       if (selectorChain.length > 1) {
@@ -2611,7 +2711,7 @@ function createDesktopBrowserWorkspaceCommandScript(
             continue;
           }
           if (
-            /^(input|textarea|select)(?:\[[^\]]+\])?$/i.test(segment) &&
+            /^(input|textarea|select)(?:[[^]]+])?$/i.test(segment) &&
             (current.tagName === "INPUT" ||
               current.tagName === "TEXTAREA" ||
               current.tagName === "SELECT")
@@ -2988,11 +3088,609 @@ function createDesktopBrowserWorkspaceCommandScript(
 `.trim();
 }
 
+function createDesktopBrowserWorkspaceUtilityScript(
+  command: BrowserWorkspaceCommand,
+): string {
+  return `
+(() => {
+  const command = ${JSON.stringify(command)};
+  const normalize = (value) => String(value ?? "").replace(/\\s+/g, " ").trim();
+  const state =
+    window.__miladyBrowserWorkspaceState ||
+    (window.__miladyBrowserWorkspaceState = {
+      clipboardText: "",
+      consoleEntries: [],
+      currentFrame: null,
+      dialog: null,
+      errors: [],
+      highlightedSelector: null,
+      mouse: { buttons: [], x: 0, y: 0 },
+      networkHar: { active: false, entries: [], startedAt: null },
+      networkNextRequestId: 1,
+      networkRequests: [],
+      networkRoutes: [],
+      settings: {
+        credentials: null,
+        device: null,
+        geo: null,
+        headers: {},
+        media: null,
+        offline: false,
+        viewport: null
+      }
+    });
+  const patternMatches = (pattern, value) => {
+    const trimmed = String(pattern ?? "").trim();
+    if (!trimmed) return false;
+    if (!trimmed.includes("*")) return String(value ?? "").includes(trimmed);
+    let wildcard = "";
+    for (let i = 0; i < trimmed.length; i += 1) {
+      const char = trimmed[i];
+      if (char === "*") {
+        if (trimmed[i + 1] === "*") {
+          wildcard += ".*";
+          i += 1;
+        } else {
+          wildcard += ".*";
+        }
+      } else {
+        wildcard += char.replace(/[|\\\\{}()[\\]^$+?.]/g, "\\\\$&");
+      }
+    }
+    return new RegExp("^" + wildcard + "$", "i").test(String(value ?? ""));
+  };
+  const buildSelector = (element) => {
+    if (!element || !element.tagName) return null;
+    const testId = element.getAttribute && element.getAttribute("data-testid");
+    if (testId) return '[data-testid="' + testId + '"]';
+    const name = element.getAttribute && element.getAttribute("name");
+    if (name) return element.tagName.toLowerCase() + '[name="' + name + '"]';
+    const title = element.getAttribute && element.getAttribute("title");
+    if (title) return element.tagName.toLowerCase() + '[title="' + title + '"]';
+    return element.tagName.toLowerCase();
+  };
+  const activeDocument = (() => {
+    if (!state.currentFrame) return document;
+    try {
+      const frame = document.querySelector(state.currentFrame);
+      return frame && frame.contentDocument ? frame.contentDocument : document;
+    } catch {
+      return document;
+    }
+  })();
+  const queryOne = (selector, root = activeDocument) => {
+    try {
+      return root.querySelector(selector);
+    } catch {
+      throw new Error("Invalid selector " + selector);
+    }
+  };
+  const findByText = (needle) => {
+    const wanted = normalize(needle).toLowerCase();
+    if (!wanted) return null;
+    const candidates = Array.from(
+      activeDocument.querySelectorAll(
+        "a, button, input, textarea, select, option, label, h1, h2, h3, [role='button'], [data-testid]"
+      )
+    );
+    return (
+      candidates.find((element) => {
+        const haystacks = [
+          element.textContent,
+          element.getAttribute("aria-label"),
+          element.getAttribute("placeholder"),
+          element.getAttribute("title"),
+          element.getAttribute("name"),
+          element.value
+        ]
+          .map((value) => normalize(value).toLowerCase())
+          .filter(Boolean);
+        return haystacks.some((value) => value.includes(wanted));
+      }) || null
+    );
+  };
+  const resolveTarget = () => {
+    if (command.selector) return queryOne(command.selector);
+    if (command.text) return findByText(command.text);
+    return activeDocument.activeElement || activeDocument.body;
+  };
+  const recordRequest = (request) => {
+    const entry = {
+      ...request,
+      id: "req_" + state.networkNextRequestId++,
+      timestamp: new Date().toISOString()
+    };
+    state.networkRequests.push(entry);
+    if (state.networkHar.active) state.networkHar.entries.push(entry);
+    return entry;
+  };
+  if (!state.consoleWrapped) {
+    for (const level of ["log", "info", "warn", "error"]) {
+      console[level] = (...args) => {
+        state.consoleEntries.push({
+          level,
+          message: args.map((value) => normalize(value)).join(" "),
+          timestamp: new Date().toISOString()
+        });
+      };
+    }
+    state.consoleWrapped = true;
+  }
+  if (!state.dialogWrapped) {
+    window.alert = (message) => {
+      state.dialog = { defaultValue: null, message: String(message ?? ""), open: true, type: "alert" };
+    };
+    window.confirm = (message) => {
+      state.dialog = { defaultValue: null, message: String(message ?? ""), open: true, type: "confirm" };
+      return false;
+    };
+    window.prompt = (message, defaultValue) => {
+      state.dialog = {
+        defaultValue: defaultValue ?? null,
+        message: String(message ?? ""),
+        open: true,
+        type: "prompt"
+      };
+      return null;
+    };
+    state.dialogWrapped = true;
+  }
+  if (!state.fetchWrapped) {
+    state.originalFetch = window.fetch ? window.fetch.bind(window) : null;
+    window.fetch = async (input, init = {}) => {
+      const inputUrl =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : typeof input?.url === "string"
+              ? input.url
+              : String(input);
+      const url = new URL(inputUrl, location.href).toString();
+      if (state.settings.offline) {
+        recordRequest({
+          matchedRoute: null,
+          method: String(init.method || "GET").toUpperCase(),
+          resourceType: "fetch",
+          responseBody: null,
+          responseHeaders: {},
+          status: 0,
+          url
+        });
+        throw new Error("Browser workspace is offline.");
+      }
+      const route = [...state.networkRoutes].reverse().find((entry) => patternMatches(entry.pattern, url)) || null;
+      if (route && route.abort) {
+        recordRequest({
+          matchedRoute: route.pattern,
+          method: String(init.method || "GET").toUpperCase(),
+          resourceType: "fetch",
+          responseBody: null,
+          responseHeaders: route.headers || {},
+          status: 0,
+          url
+        });
+        throw new Error("Browser workspace network route aborted request: " + url);
+      }
+      if (route && (route.body !== null || route.status !== null || Object.keys(route.headers || {}).length > 0)) {
+        const response = new Response(route.body || "", {
+          headers: route.headers || {},
+          status: route.status || 200
+        });
+        recordRequest({
+          matchedRoute: route.pattern,
+          method: String(init.method || "GET").toUpperCase(),
+          resourceType: "fetch",
+          responseBody: route.body || "",
+          responseHeaders: route.headers || {},
+          status: route.status || 200,
+          url
+        });
+        return response;
+      }
+      const headers = new Headers(init.headers || {});
+      for (const [key, value] of Object.entries(state.settings.headers || {})) {
+        if (!headers.has(key)) headers.set(key, value);
+      }
+      if (state.settings.credentials && state.settings.credentials.username && !headers.has("Authorization")) {
+        headers.set(
+          "Authorization",
+          "Basic " + btoa(state.settings.credentials.username + ":" + state.settings.credentials.password)
+        );
+      }
+      const response = await state.originalFetch(url, { ...init, headers });
+      recordRequest({
+        matchedRoute: null,
+        method: String(init.method || "GET").toUpperCase(),
+        resourceType: "fetch",
+        responseBody: null,
+        responseHeaders: Object.fromEntries(response.headers.entries()),
+        status: response.status,
+        url: response.url || url
+      });
+      return response;
+    };
+    state.fetchWrapped = true;
+  }
+  Object.defineProperty(navigator, "onLine", {
+    configurable: true,
+    get: () => !state.settings.offline
+  });
+  switch (command.subaction) {
+    case "clipboard": {
+      const action = command.clipboardAction || "read";
+      if (action === "read") return state.clipboardText;
+      if (action === "write") {
+        state.clipboardText = command.value || command.text || "";
+        return state.clipboardText;
+      }
+      if (action === "copy") {
+        const target = resolveTarget();
+        state.clipboardText =
+          target && typeof target.value === "string"
+            ? String(target.value || "")
+            : normalize(target?.textContent || activeDocument.body?.textContent);
+        return state.clipboardText;
+      }
+      const target = resolveTarget();
+      if (target && typeof target.value === "string") {
+        target.value = String(target.value || "") + state.clipboardText;
+        target.setAttribute("value", target.value);
+        return { selector: buildSelector(target), value: target.value };
+      }
+      return state.clipboardText;
+    }
+    case "mouse": {
+      const action = command.mouseAction || "move";
+      if (action === "move") {
+        state.mouse.x = typeof command.x === "number" ? command.x : state.mouse.x;
+        state.mouse.y = typeof command.y === "number" ? command.y : state.mouse.y;
+        return state.mouse;
+      }
+      if (action === "down") {
+        const button = command.button || "left";
+        state.mouse.buttons = Array.from(new Set([...(state.mouse.buttons || []), button]));
+        return state.mouse;
+      }
+      if (action === "up") {
+        const button = command.button || "left";
+        state.mouse.buttons = (state.mouse.buttons || []).filter((entry) => entry !== button);
+        return state.mouse;
+      }
+      window.scrollBy(command.deltaX || 0, command.deltaY || command.pixels || 240);
+      return { axis: Math.abs(command.deltaY || 0) >= Math.abs(command.deltaX || 0) ? "y" : "x", value: window.scrollY };
+    }
+    case "drag": {
+      const source = resolveTarget();
+      const target = command.value ? queryOne(command.value) : null;
+      if (!source || !target) throw new Error("Milady browser workspace drag requires source selector and target selector in value.");
+      source.setAttribute("data-milady-dragging", "true");
+      target.setAttribute("data-milady-drop-target", "true");
+      return { source: buildSelector(source), target: buildSelector(target) };
+    }
+    case "upload": {
+      const target = resolveTarget();
+      if (!target || target.tagName !== "INPUT") throw new Error("Milady browser workspace upload requires a file input target.");
+      const files = Array.isArray(command.files) ? command.files.map((entry) => String(entry).split(/[\\\\/]/).pop()) : [];
+      target.setAttribute("data-milady-uploaded-files", files.join(","));
+      return { files, selector: buildSelector(target) };
+    }
+    case "set": {
+      const action = command.setAction || "viewport";
+      if (action === "viewport") {
+        state.settings.viewport = { width: command.width || 1280, height: command.height || 720, scale: command.scale || 1 };
+      } else if (action === "device") {
+        state.settings.device = command.device || null;
+      } else if (action === "geo") {
+        state.settings.geo =
+          typeof command.latitude === "number" && typeof command.longitude === "number"
+            ? { latitude: command.latitude, longitude: command.longitude }
+            : null;
+      } else if (action === "offline") {
+        state.settings.offline = Boolean(command.offline);
+      } else if (action === "headers") {
+        state.settings.headers = command.headers || {};
+      } else if (action === "credentials") {
+        state.settings.credentials =
+          command.username || command.password
+            ? { username: command.username || "", password: command.password || "" }
+            : null;
+      } else if (action === "media") {
+        state.settings.media = command.media || null;
+      }
+      return state.settings;
+    }
+    case "cookies": {
+      const action = command.cookieAction || "get";
+      if (action === "clear") {
+        const current = document.cookie || "";
+        current.split(/;\\s*/).forEach((entry) => {
+          const name = entry.split("=")[0];
+          if (name) document.cookie = name + "=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/";
+        });
+        return { cleared: true };
+      }
+      if (action === "set") {
+        const name = command.name || command.entryKey;
+        if (!name) throw new Error("Milady browser workspace cookies set requires name.");
+        document.cookie = name + "=" + (command.value || "") + "; path=/";
+      }
+      const cookieString = document.cookie || "";
+      return Object.fromEntries(
+        cookieString
+          .split(/;\\s*/)
+          .filter(Boolean)
+          .map((entry) => {
+            const [name, ...rest] = entry.split("=");
+            return [name, rest.join("=")];
+          })
+      );
+    }
+    case "storage": {
+      const storage = command.storageArea === "session" ? sessionStorage : localStorage;
+      const action = command.storageAction || "get";
+      if (action === "clear") {
+        storage.clear();
+        return { cleared: true };
+      }
+      if (action === "set") {
+        const key = command.entryKey || command.name;
+        if (!key) throw new Error("Milady browser workspace storage set requires entryKey.");
+        storage.setItem(key, command.value || "");
+      }
+      if (command.entryKey || command.name) {
+        return storage.getItem(command.entryKey || command.name);
+      }
+      const out = {};
+      for (let i = 0; i < storage.length; i += 1) {
+        const key = storage.key(i);
+        if (key) out[key] = storage.getItem(key) || "";
+      }
+      return out;
+    }
+    case "network": {
+      const action = command.networkAction || "requests";
+      if (action === "route") {
+        if (!command.url) throw new Error("Milady browser workspace network route requires url pattern.");
+        state.networkRoutes.push({
+          abort: Boolean(command.offline),
+          body: command.responseBody ?? null,
+          headers: command.responseHeaders || {},
+          pattern: command.url,
+          status: typeof command.responseStatus === "number" ? command.responseStatus : null
+        });
+        return state.networkRoutes;
+      }
+      if (action === "unroute") {
+        state.networkRoutes = command.url
+          ? state.networkRoutes.filter((entry) => entry.pattern !== command.url)
+          : [];
+        return state.networkRoutes;
+      }
+      if (action === "request") {
+        return state.networkRequests.find((entry) => entry.id === command.requestId) || null;
+      }
+      if (action === "harstart") {
+        state.networkHar = { active: true, entries: [], startedAt: new Date().toISOString() };
+        return state.networkHar;
+      }
+      if (action === "harstop") {
+        state.networkHar.active = false;
+        return { log: { entries: state.networkHar.entries, startedAt: state.networkHar.startedAt } };
+      }
+      let requests = [...state.networkRequests];
+      if (command.filter) requests = requests.filter((entry) => entry.url.includes(command.filter));
+      if (command.method) requests = requests.filter((entry) => entry.method === String(command.method).toUpperCase());
+      if (command.status) requests = requests.filter((entry) => String(entry.status || "") === String(command.status));
+      return requests;
+    }
+    case "dialog": {
+      const action = command.dialogAction || "status";
+      if (action === "status") return state.dialog;
+      if (state.dialog) state.dialog.open = false;
+      const result =
+        action === "accept"
+          ? { accepted: true, dialog: state.dialog, promptText: command.promptText || command.value || null }
+          : { accepted: false, dialog: state.dialog };
+      state.dialog = null;
+      return result;
+    }
+    case "console":
+      if (command.consoleAction === "clear") state.consoleEntries = [];
+      return state.consoleEntries;
+    case "errors":
+      if (command.consoleAction === "clear") state.errors = [];
+      return state.errors;
+    case "highlight": {
+      const target = resolveTarget();
+      if (!target) throw new Error("Target element was not found.");
+      target.setAttribute("data-milady-highlight", "true");
+      state.highlightedSelector = buildSelector(target);
+      return { selector: state.highlightedSelector };
+    }
+    case "frame": {
+      if ((command.frameAction || "select") === "main") {
+        state.currentFrame = null;
+        return { frame: null };
+      }
+      const frame = command.selector ? document.querySelector(command.selector) : null;
+      if (!frame || frame.tagName !== "IFRAME") throw new Error("Milady browser workspace frame select requires an iframe selector.");
+      state.currentFrame = buildSelector(frame);
+      return { frame: state.currentFrame };
+    }
+    default:
+      throw new Error("Unsupported desktop browser workspace utility subaction: " + command.subaction);
+  }
+})()
+`.trim();
+}
+
+async function executeDesktopBrowserWorkspaceUtilityCommand(
+  command: BrowserWorkspaceCommand,
+  env: NodeJS.ProcessEnv,
+): Promise<BrowserWorkspaceCommandResult> {
+  const id = await resolveDesktopBrowserWorkspaceTargetTabId(command, env);
+  const startedAt = Date.now();
+  const result = await evaluateBrowserWorkspaceTab(
+    {
+      id,
+      script: createDesktopBrowserWorkspaceUtilityScript({
+        ...command,
+        id,
+      }),
+    },
+    env,
+  );
+  const runtime = getBrowserWorkspaceRuntimeState("desktop", id);
+  appendBrowserWorkspaceTraceEntry(runtime, {
+    subaction: command.subaction,
+    type: "utility",
+  });
+  appendBrowserWorkspaceProfilerEntry(runtime, {
+    durationMs: Date.now() - startedAt,
+    subaction: command.subaction,
+    type: "utility",
+  });
+  return {
+    mode: "desktop",
+    subaction: command.subaction,
+    value: result,
+  };
+}
+
+async function getDesktopBrowserWorkspaceSnapshotRecord(
+  command: BrowserWorkspaceCommand,
+  env: NodeJS.ProcessEnv,
+): Promise<BrowserWorkspaceSnapshotRecord> {
+  const id = await resolveDesktopBrowserWorkspaceTargetTabId(command, env);
+  const result = await evaluateBrowserWorkspaceTab(
+    {
+      id,
+      script: `
+(() => {
+  const activeDocument = (() => {
+    const state = window.__miladyBrowserWorkspaceState || {};
+    if (!state.currentFrame) return document;
+    try {
+      const frame = document.querySelector(state.currentFrame);
+      return frame && frame.contentDocument ? frame.contentDocument : document;
+    } catch {
+      return document;
+    }
+  })();
+  const normalize = (value) => String(value ?? "").replace(/\\s+/g, " ").trim();
+  const controlText = Array.from(activeDocument.querySelectorAll("input, textarea, select, option:checked"))
+    .map((element) => {
+      const name = element.getAttribute("name") || element.getAttribute("id") || element.tagName.toLowerCase();
+      const value =
+        element.tagName === "SELECT"
+          ? element.value
+          : typeof element.value === "string"
+            ? element.value
+            : element.textContent || "";
+      return name + ":" + normalize(value);
+    })
+    .filter(Boolean)
+    .join(" ");
+  return {
+    bodyText: normalize((activeDocument.body?.textContent || "") + " " + controlText),
+    title: normalize(document.title),
+    url: location.href
+  };
+})()
+      `.trim(),
+    },
+    env,
+  );
+  return result as BrowserWorkspaceSnapshotRecord;
+}
+
+async function getDesktopBrowserWorkspaceSessionState(
+  command: BrowserWorkspaceCommand,
+  env: NodeJS.ProcessEnv,
+): Promise<Record<string, unknown>> {
+  const id = await resolveDesktopBrowserWorkspaceTargetTabId(command, env);
+  const result = await evaluateBrowserWorkspaceTab(
+    {
+      id,
+      script: `
+(() => {
+  const state = window.__miladyBrowserWorkspaceState || {};
+  const readStorage = (storage) => {
+    const out = {};
+    for (let i = 0; i < storage.length; i += 1) {
+      const key = storage.key(i);
+      if (key) out[key] = storage.getItem(key) || "";
+    }
+    return out;
+  };
+  const cookies = Object.fromEntries(
+    String(document.cookie || "")
+      .split(/;\\s*/)
+      .filter(Boolean)
+      .map((entry) => {
+        const [name, ...rest] = entry.split("=");
+        return [name, rest.join("=")];
+      })
+  );
+  return {
+    clipboard: state.clipboardText || "",
+    cookies,
+    localStorage: readStorage(localStorage),
+    sessionStorage: readStorage(sessionStorage),
+    settings: state.settings || {},
+    url: location.href
+  };
+})()
+      `.trim(),
+    },
+    env,
+  );
+  return result as Record<string, unknown>;
+}
+
+async function loadDesktopBrowserWorkspaceSessionState(
+  command: BrowserWorkspaceCommand,
+  payload: Record<string, unknown>,
+  env: NodeJS.ProcessEnv,
+): Promise<void> {
+  const id = await resolveDesktopBrowserWorkspaceTargetTabId(command, env);
+  await evaluateBrowserWorkspaceTab(
+    {
+      id,
+      script: `
+(() => {
+  const payload = ${JSON.stringify(payload)};
+  const state =
+    window.__miladyBrowserWorkspaceState ||
+    (window.__miladyBrowserWorkspaceState = { settings: {} });
+  localStorage.clear();
+  for (const [key, value] of Object.entries(payload.localStorage || {})) {
+    localStorage.setItem(key, String(value ?? ""));
+  }
+  sessionStorage.clear();
+  for (const [key, value] of Object.entries(payload.sessionStorage || {})) {
+    sessionStorage.setItem(key, String(value ?? ""));
+  }
+  for (const [key, value] of Object.entries(payload.cookies || {})) {
+    document.cookie = key + "=" + String(value ?? "") + "; path=/";
+  }
+  state.clipboardText = typeof payload.clipboard === "string" ? payload.clipboard : "";
+  state.settings = typeof payload.settings === "object" && payload.settings ? payload.settings : state.settings;
+  return { loaded: true };
+})()
+      `.trim(),
+    },
+    env,
+  );
+}
+
 async function executeDesktopBrowserWorkspaceDomCommand(
   command: BrowserWorkspaceCommand,
   env: NodeJS.ProcessEnv,
 ): Promise<BrowserWorkspaceCommandResult> {
   const id = await resolveDesktopBrowserWorkspaceTargetTabId(command, env);
+  const startedAt = Date.now();
   command = resolveBrowserWorkspaceCommandElementRefs(command, "desktop", id);
   const result = await evaluateBrowserWorkspaceTab(
     {
@@ -3026,6 +3724,16 @@ async function executeDesktopBrowserWorkspaceDomCommand(
     };
   }
 
+  const runtime = getBrowserWorkspaceRuntimeState("desktop", id);
+  appendBrowserWorkspaceTraceEntry(runtime, {
+    subaction: command.subaction,
+    type: "dom",
+  });
+  appendBrowserWorkspaceProfilerEntry(runtime, {
+    durationMs: Date.now() - startedAt,
+    subaction: command.subaction,
+    type: "dom",
+  });
   return {
     mode: "desktop",
     subaction: command.subaction,
@@ -3107,9 +3815,7 @@ async function submitWebBrowserWorkspaceForm(
   pushWebBrowserWorkspaceHistory(tab, finalUrl);
 }
 
-function readBrowserWorkspaceStorage(
-  storage: Storage,
-): Record<string, string> {
+function readBrowserWorkspaceStorage(storage: Storage): Record<string, string> {
   const entries: Record<string, string> = {};
   for (let index = 0; index < storage.length; index += 1) {
     const key = storage.key(index);
@@ -3121,7 +3827,9 @@ function readBrowserWorkspaceStorage(
   return entries;
 }
 
-function readBrowserWorkspaceCookies(document: Document): Record<string, string> {
+function readBrowserWorkspaceCookies(
+  document: Document,
+): Record<string, string> {
   const cookieString = document.cookie || "";
   if (!cookieString.trim()) {
     return {};
@@ -3205,7 +3913,12 @@ async function executeWebBrowserWorkspaceUtilityCommand(
     const frameContext = resolveWebBrowserWorkspaceCommandDocument(tab, dom);
     const document = frameContext.document;
     const resolveTarget = () =>
-      resolveBrowserWorkspaceElement(document, command.selector, command.text, command);
+      resolveBrowserWorkspaceElement(
+        document,
+        command.selector,
+        command.text,
+        command,
+      );
 
     switch (command.subaction) {
       case "eval": {
@@ -3295,8 +4008,12 @@ async function executeWebBrowserWorkspaceUtilityCommand(
         );
         runtime.lastScreenshotData = data;
         if (command.filePath?.trim() || command.outputPath?.trim()) {
-          const targetPath = command.filePath?.trim() || command.outputPath?.trim() || "";
-          await writeBrowserWorkspaceFile(targetPath, Buffer.from(data, "base64"));
+          const targetPath =
+            command.filePath?.trim() || command.outputPath?.trim() || "";
+          await writeBrowserWorkspaceFile(
+            targetPath,
+            Buffer.from(data, "base64"),
+          );
           return {
             mode: "web",
             subaction: command.subaction,
@@ -3304,24 +4021,42 @@ async function executeWebBrowserWorkspaceUtilityCommand(
             value: { path: path.resolve(targetPath) },
           };
         }
-        return { mode: "web", subaction: command.subaction, snapshot: { data } };
+        return {
+          mode: "web",
+          subaction: command.subaction,
+          snapshot: { data },
+        };
       }
       case "clipboard": {
         const action = command.clipboardAction ?? "read";
         if (action === "read") {
-          return { mode: "web", subaction: command.subaction, value: browserWorkspaceClipboardText };
+          return {
+            mode: "web",
+            subaction: command.subaction,
+            value: browserWorkspaceClipboardText,
+          };
         }
         if (action === "write") {
           browserWorkspaceClipboardText = command.value ?? command.text ?? "";
-          return { mode: "web", subaction: command.subaction, value: browserWorkspaceClipboardText };
+          return {
+            mode: "web",
+            subaction: command.subaction,
+            value: browserWorkspaceClipboardText,
+          };
         }
         if (action === "copy") {
           const target = resolveTarget();
           browserWorkspaceClipboardText =
             target && "value" in (target as HTMLInputElement)
               ? String((target as HTMLInputElement).value ?? "")
-              : normalizeBrowserWorkspaceText(target?.textContent ?? document.body?.textContent);
-          return { mode: "web", subaction: command.subaction, value: browserWorkspaceClipboardText };
+              : normalizeBrowserWorkspaceText(
+                  target?.textContent ?? document.body?.textContent,
+                );
+          return {
+            mode: "web",
+            subaction: command.subaction,
+            value: browserWorkspaceClipboardText,
+          };
         }
         const target = resolveTarget() ?? document.activeElement;
         if (
@@ -3330,7 +4065,10 @@ async function executeWebBrowserWorkspaceUtilityCommand(
             target.tagName === "TEXTAREA" ||
             target.tagName === "SELECT")
         ) {
-          const control = ensureBrowserWorkspaceFormControlElement(target, "clipboard");
+          const control = ensureBrowserWorkspaceFormControlElement(
+            target,
+            "clipboard",
+          );
           setBrowserWorkspaceControlValue(
             control,
             `${control.value ?? ""}${browserWorkspaceClipboardText}`,
@@ -3344,7 +4082,11 @@ async function executeWebBrowserWorkspaceUtilityCommand(
             },
           };
         }
-        return { mode: "web", subaction: command.subaction, value: browserWorkspaceClipboardText };
+        return {
+          mode: "web",
+          subaction: command.subaction,
+          value: browserWorkspaceClipboardText,
+        };
       }
       case "mouse": {
         const action = command.mouseAction ?? "move";
@@ -3353,10 +4095,14 @@ async function executeWebBrowserWorkspaceUtilityCommand(
           runtime.mouse.y = command.y ?? runtime.mouse.y;
         } else if (action === "down") {
           const button = command.button ?? "left";
-          runtime.mouse.buttons = Array.from(new Set([...runtime.mouse.buttons, button]));
+          runtime.mouse.buttons = Array.from(
+            new Set([...runtime.mouse.buttons, button]),
+          );
         } else if (action === "up") {
           const button = command.button ?? "left";
-          runtime.mouse.buttons = runtime.mouse.buttons.filter((entry) => entry !== button);
+          runtime.mouse.buttons = runtime.mouse.buttons.filter(
+            (entry) => entry !== button,
+          );
         } else {
           return {
             mode: "web",
@@ -3369,7 +4115,11 @@ async function executeWebBrowserWorkspaceUtilityCommand(
             ),
           };
         }
-        return { mode: "web", subaction: command.subaction, value: runtime.mouse };
+        return {
+          mode: "web",
+          subaction: command.subaction,
+          value: runtime.mouse,
+        };
       }
       case "drag": {
         const source = resolveTarget();
@@ -3377,7 +4127,9 @@ async function executeWebBrowserWorkspaceUtilityCommand(
           ? resolveBrowserWorkspaceElement(document, command.value)
           : null;
         if (!source || !target) {
-          throw new Error("Milady browser workspace drag requires source selector and target selector in value.");
+          throw new Error(
+            "Milady browser workspace drag requires source selector and target selector in value.",
+          );
         }
         source.setAttribute("data-milady-dragging", "true");
         target.setAttribute("data-milady-drop-target", "true");
@@ -3393,9 +4145,13 @@ async function executeWebBrowserWorkspaceUtilityCommand(
       case "upload": {
         const target = resolveTarget();
         if (!target || target.tagName !== "INPUT") {
-          throw new Error("Milady browser workspace upload requires a file input target.");
+          throw new Error(
+            "Milady browser workspace upload requires a file input target.",
+          );
         }
-        const files = (command.files ?? []).map((entry) => path.basename(entry));
+        const files = (command.files ?? []).map((entry) =>
+          path.basename(entry),
+        );
         target.setAttribute("data-milady-uploaded-files", files.join(","));
         return {
           mode: "web",
@@ -3425,7 +4181,9 @@ async function executeWebBrowserWorkspaceUtilityCommand(
         } else if (action === "offline") {
           runtime.settings.offline = Boolean(command.offline);
         } else if (action === "headers") {
-          runtime.settings.headers = normalizeBrowserWorkspaceHeaders(command.headers);
+          runtime.settings.headers = normalizeBrowserWorkspaceHeaders(
+            command.headers,
+          );
         } else if (action === "credentials") {
           runtime.settings.credentials =
             command.username || command.password
@@ -3438,20 +4196,32 @@ async function executeWebBrowserWorkspaceUtilityCommand(
           runtime.settings.media = command.media ?? null;
         }
         applyBrowserWorkspaceDomSettings(dom, runtime);
-        return { mode: "web", subaction: command.subaction, value: runtime.settings };
+        return {
+          mode: "web",
+          subaction: command.subaction,
+          value: runtime.settings,
+        };
       }
       case "cookies": {
         const action = command.cookieAction ?? "get";
         if (action === "clear") {
-          for (const key of Object.keys(readBrowserWorkspaceCookies(document))) {
+          for (const key of Object.keys(
+            readBrowserWorkspaceCookies(document),
+          )) {
             document.cookie = `${key}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
           }
-          return { mode: "web", subaction: command.subaction, value: { cleared: true } };
+          return {
+            mode: "web",
+            subaction: command.subaction,
+            value: { cleared: true },
+          };
         }
         if (action === "set") {
           const cookieName = command.name?.trim() || command.entryKey?.trim();
           if (!cookieName) {
-            throw new Error("Milady browser workspace cookies set requires name.");
+            throw new Error(
+              "Milady browser workspace cookies set requires name.",
+            );
           }
           document.cookie = `${cookieName}=${command.value ?? ""}; path=/`;
         }
@@ -3469,27 +4239,43 @@ async function executeWebBrowserWorkspaceUtilityCommand(
         const action = command.storageAction ?? "get";
         if (action === "clear") {
           area.clear();
-          return { mode: "web", subaction: command.subaction, value: { cleared: true } };
+          return {
+            mode: "web",
+            subaction: command.subaction,
+            value: { cleared: true },
+          };
         }
         if (action === "set") {
           const key = command.entryKey?.trim() || command.name?.trim();
           if (!key) {
-            throw new Error("Milady browser workspace storage set requires entryKey.");
+            throw new Error(
+              "Milady browser workspace storage set requires entryKey.",
+            );
           }
           area.setItem(key, command.value ?? "");
         }
         if (command.entryKey?.trim() || command.name?.trim()) {
           const key = command.entryKey?.trim() || command.name?.trim() || "";
-          return { mode: "web", subaction: command.subaction, value: area.getItem(key) };
+          return {
+            mode: "web",
+            subaction: command.subaction,
+            value: area.getItem(key),
+          };
         }
-        return { mode: "web", subaction: command.subaction, value: readBrowserWorkspaceStorage(area) };
+        return {
+          mode: "web",
+          subaction: command.subaction,
+          value: readBrowserWorkspaceStorage(area),
+        };
       }
       case "network": {
         const action = command.networkAction ?? "requests";
         if (action === "route") {
           const pattern = command.url?.trim();
           if (!pattern) {
-            throw new Error("Milady browser workspace network route requires url pattern.");
+            throw new Error(
+              "Milady browser workspace network route requires url pattern.",
+            );
           }
           runtime.networkRoutes.push({
             abort: Boolean(command.offline),
@@ -3497,19 +4283,37 @@ async function executeWebBrowserWorkspaceUtilityCommand(
             headers: normalizeBrowserWorkspaceHeaders(command.responseHeaders),
             pattern,
             status:
-              typeof command.responseStatus === "number" ? command.responseStatus : null,
+              typeof command.responseStatus === "number"
+                ? command.responseStatus
+                : null,
           });
-          return { mode: "web", subaction: command.subaction, value: runtime.networkRoutes };
+          return {
+            mode: "web",
+            subaction: command.subaction,
+            value: runtime.networkRoutes,
+          };
         }
         if (action === "unroute") {
           runtime.networkRoutes = command.url?.trim()
-            ? runtime.networkRoutes.filter((route) => route.pattern !== command.url?.trim())
+            ? runtime.networkRoutes.filter(
+                (route) => route.pattern !== command.url?.trim(),
+              )
             : [];
-          return { mode: "web", subaction: command.subaction, value: runtime.networkRoutes };
+          return {
+            mode: "web",
+            subaction: command.subaction,
+            value: runtime.networkRoutes,
+          };
         }
         if (action === "request") {
-          const request = runtime.networkRequests.find((entry) => entry.id === command.requestId);
-          return { mode: "web", subaction: command.subaction, value: request ?? null };
+          const request = runtime.networkRequests.find(
+            (entry) => entry.id === command.requestId,
+          );
+          return {
+            mode: "web",
+            subaction: command.subaction,
+            value: request ?? null,
+          };
         }
         if (action === "harstart") {
           runtime.networkHar = {
@@ -3517,7 +4321,11 @@ async function executeWebBrowserWorkspaceUtilityCommand(
             entries: [],
             startedAt: getBrowserWorkspaceTimestamp(),
           };
-          return { mode: "web", subaction: command.subaction, value: runtime.networkHar };
+          return {
+            mode: "web",
+            subaction: command.subaction,
+            value: runtime.networkHar,
+          };
         }
         if (action === "harstop") {
           runtime.networkHar.active = false;
@@ -3528,8 +4336,12 @@ async function executeWebBrowserWorkspaceUtilityCommand(
             },
           };
           if (command.filePath?.trim() || command.outputPath?.trim()) {
-            const targetPath = command.filePath?.trim() || command.outputPath?.trim() || "";
-            await writeBrowserWorkspaceFile(targetPath, JSON.stringify(har, null, 2));
+            const targetPath =
+              command.filePath?.trim() || command.outputPath?.trim() || "";
+            await writeBrowserWorkspaceFile(
+              targetPath,
+              JSON.stringify(har, null, 2),
+            );
             return {
               mode: "web",
               subaction: command.subaction,
@@ -3540,11 +4352,15 @@ async function executeWebBrowserWorkspaceUtilityCommand(
         }
         let requests = [...runtime.networkRequests];
         if (command.filter?.trim()) {
-          requests = requests.filter((entry) => entry.url.includes(command.filter ?? ""));
+          requests = requests.filter((entry) =>
+            entry.url.includes(command.filter ?? ""),
+          );
         }
         if (command.method?.trim()) {
           requests = requests.filter(
-            (entry) => entry.method.toUpperCase() === command.method?.trim().toUpperCase(),
+            (entry) =>
+              entry.method.toUpperCase() ===
+              command.method?.trim().toUpperCase(),
           );
         }
         if (command.status?.trim()) {
@@ -3564,7 +4380,11 @@ async function executeWebBrowserWorkspaceUtilityCommand(
       case "dialog": {
         const action = command.dialogAction ?? "status";
         if (action === "status") {
-          return { mode: "web", subaction: command.subaction, value: runtime.dialog };
+          return {
+            mode: "web",
+            subaction: command.subaction,
+            value: runtime.dialog,
+          };
         }
         if (runtime.dialog) {
           runtime.dialog.open = false;
@@ -3584,13 +4404,21 @@ async function executeWebBrowserWorkspaceUtilityCommand(
         if (command.consoleAction === "clear") {
           runtime.consoleEntries = [];
         }
-        return { mode: "web", subaction: command.subaction, value: runtime.consoleEntries };
+        return {
+          mode: "web",
+          subaction: command.subaction,
+          value: runtime.consoleEntries,
+        };
       }
       case "errors": {
         if (command.consoleAction === "clear") {
           runtime.errors = [];
         }
-        return { mode: "web", subaction: command.subaction, value: runtime.errors };
+        return {
+          mode: "web",
+          subaction: command.subaction,
+          value: runtime.errors,
+        };
       }
       case "highlight": {
         const target = resolveTarget();
@@ -3598,7 +4426,8 @@ async function executeWebBrowserWorkspaceUtilityCommand(
           throw new Error("Target element was not found.");
         }
         target.setAttribute("data-milady-highlight", "true");
-        runtime.highlightedSelector = buildBrowserWorkspaceElementSelector(target);
+        runtime.highlightedSelector =
+          buildBrowserWorkspaceElementSelector(target);
         return {
           mode: "web",
           subaction: command.subaction,
@@ -3609,11 +4438,20 @@ async function executeWebBrowserWorkspaceUtilityCommand(
         const action = command.frameAction ?? "select";
         if (action === "main") {
           runtime.currentFrame = null;
-          return { mode: "web", subaction: command.subaction, value: { frame: null } };
+          return {
+            mode: "web",
+            subaction: command.subaction,
+            value: { frame: null },
+          };
         }
-        const frame = resolveBrowserWorkspaceElement(dom.window.document, command.selector);
+        const frame = resolveBrowserWorkspaceElement(
+          dom.window.document,
+          command.selector,
+        );
         if (!frame || frame.tagName !== "IFRAME") {
-          throw new Error("Milady browser workspace frame select requires an iframe selector.");
+          throw new Error(
+            "Milady browser workspace frame select requires an iframe selector.",
+          );
         }
         runtime.currentFrame = buildBrowserWorkspaceElementSelector(frame);
         return {
@@ -3632,9 +4470,16 @@ async function executeWebBrowserWorkspaceUtilityCommand(
           const leftUrl = command.url?.trim() || tab.url;
           const rightUrl = command.secondaryUrl?.trim();
           if (!rightUrl) {
-            throw new Error("Milady browser workspace diff url requires secondaryUrl.");
+            throw new Error(
+              "Milady browser workspace diff url requires secondaryUrl.",
+            );
           }
-          const left = await fetchBrowserWorkspaceTrackedResponse(runtime, leftUrl, {}, "document");
+          const left = await fetchBrowserWorkspaceTrackedResponse(
+            runtime,
+            leftUrl,
+            {},
+            "document",
+          );
           const right = await fetchBrowserWorkspaceTrackedResponse(
             runtime,
             rightUrl,
@@ -3666,10 +4511,12 @@ async function executeWebBrowserWorkspaceUtilityCommand(
               buildBrowserWorkspaceDocumentSnapshotText(document),
               runtime.settings.viewport ?? undefined,
             );
-          const baseline =
-            command.baselinePath?.trim()
-              ? await fsp.readFile(path.resolve(command.baselinePath.trim()), "base64")
-              : runtime.lastScreenshotData;
+          const baseline = command.baselinePath?.trim()
+            ? await fsp.readFile(
+                path.resolve(command.baselinePath.trim()),
+                "base64",
+              )
+            : runtime.lastScreenshotData;
           runtime.lastScreenshotData = currentData;
           return {
             mode: "web",
@@ -3681,12 +4528,14 @@ async function executeWebBrowserWorkspaceUtilityCommand(
             },
           };
         }
-        const baseline =
-          command.baselinePath?.trim()
-            ? (JSON.parse(
-                await fsp.readFile(path.resolve(command.baselinePath.trim()), "utf8"),
-              ) as BrowserWorkspaceSnapshotRecord)
-            : runtime.lastSnapshot;
+        const baseline = command.baselinePath?.trim()
+          ? (JSON.parse(
+              await fsp.readFile(
+                path.resolve(command.baselinePath.trim()),
+                "utf8",
+              ),
+            ) as BrowserWorkspaceSnapshotRecord)
+          : runtime.lastSnapshot;
         const diff = diffBrowserWorkspaceSnapshots(baseline, snapshot);
         runtime.lastSnapshot = snapshot;
         return { mode: "web", subaction: command.subaction, value: diff };
@@ -3696,49 +4545,81 @@ async function executeWebBrowserWorkspaceUtilityCommand(
           runtime.trace.active = false;
           const traceValue = { entries: runtime.trace.entries };
           if (command.filePath?.trim() || command.outputPath?.trim()) {
-            const targetPath = command.filePath?.trim() || command.outputPath?.trim() || "";
-            await writeBrowserWorkspaceFile(targetPath, JSON.stringify(traceValue, null, 2));
+            const targetPath =
+              command.filePath?.trim() || command.outputPath?.trim() || "";
+            await writeBrowserWorkspaceFile(
+              targetPath,
+              JSON.stringify(traceValue, null, 2),
+            );
             return {
               mode: "web",
               subaction: command.subaction,
               value: { path: path.resolve(targetPath), ...traceValue },
             };
           }
-          return { mode: "web", subaction: command.subaction, value: traceValue };
+          return {
+            mode: "web",
+            subaction: command.subaction,
+            value: traceValue,
+          };
         }
         runtime.trace = { active: true, entries: [] };
         runtime.trace.entries.push({
           command: "trace:start",
           timestamp: getBrowserWorkspaceTimestamp(),
         });
-        return { mode: "web", subaction: command.subaction, value: { active: true } };
+        return {
+          mode: "web",
+          subaction: command.subaction,
+          value: { active: true },
+        };
       }
       case "profiler": {
         if (command.profilerAction === "stop") {
           runtime.profiler.active = false;
           const profileValue = { entries: runtime.profiler.entries };
           if (command.filePath?.trim() || command.outputPath?.trim()) {
-            const targetPath = command.filePath?.trim() || command.outputPath?.trim() || "";
-            await writeBrowserWorkspaceFile(targetPath, JSON.stringify(profileValue, null, 2));
+            const targetPath =
+              command.filePath?.trim() || command.outputPath?.trim() || "";
+            await writeBrowserWorkspaceFile(
+              targetPath,
+              JSON.stringify(profileValue, null, 2),
+            );
             return {
               mode: "web",
               subaction: command.subaction,
               value: { path: path.resolve(targetPath), ...profileValue },
             };
           }
-          return { mode: "web", subaction: command.subaction, value: profileValue };
+          return {
+            mode: "web",
+            subaction: command.subaction,
+            value: profileValue,
+          };
         }
         runtime.profiler = {
           active: true,
-          entries: [{ command: "profiler:start", timestamp: getBrowserWorkspaceTimestamp() }],
+          entries: [
+            {
+              command: "profiler:start",
+              timestamp: getBrowserWorkspaceTimestamp(),
+            },
+          ],
         };
-        return { mode: "web", subaction: command.subaction, value: { active: true } };
+        return {
+          mode: "web",
+          subaction: command.subaction,
+          value: { active: true },
+        };
       }
       case "state": {
         if (command.stateAction === "load") {
-          const filePath = command.filePath?.trim() || command.outputPath?.trim();
+          const filePath =
+            command.filePath?.trim() || command.outputPath?.trim();
           if (!filePath) {
-            throw new Error("Milady browser workspace state load requires filePath.");
+            throw new Error(
+              "Milady browser workspace state load requires filePath.",
+            );
           }
           const payload = JSON.parse(
             await fsp.readFile(path.resolve(filePath), "utf8"),
@@ -3755,19 +4636,28 @@ async function executeWebBrowserWorkspaceUtilityCommand(
             typeof payload.clipboard === "string"
               ? payload.clipboard
               : browserWorkspaceClipboardText;
-          return { mode: "web", subaction: command.subaction, value: { loaded: true } };
+          return {
+            mode: "web",
+            subaction: command.subaction,
+            value: { loaded: true },
+          };
         }
         const payload = {
           clipboard: browserWorkspaceClipboardText,
           cookies: readBrowserWorkspaceCookies(document),
           localStorage: readBrowserWorkspaceStorage(dom.window.localStorage),
-          sessionStorage: readBrowserWorkspaceStorage(dom.window.sessionStorage),
+          sessionStorage: readBrowserWorkspaceStorage(
+            dom.window.sessionStorage,
+          ),
           settings: runtime.settings,
           url: tab.url,
         };
         const filePath = command.filePath?.trim() || command.outputPath?.trim();
         if (filePath) {
-          await writeBrowserWorkspaceFile(filePath, JSON.stringify(payload, null, 2));
+          await writeBrowserWorkspaceFile(
+            filePath,
+            JSON.stringify(payload, null, 2),
+          );
           return {
             mode: "web",
             subaction: command.subaction,
@@ -3806,11 +4696,15 @@ async function executeWebBrowserWorkspaceDomCommand(
     command = resolveBrowserWorkspaceCommandElementRefs(command, "web", id);
     const tab = getWebBrowserWorkspaceTabState(id);
     const dom = await ensureLoadedWebBrowserWorkspaceTabDocument(tab);
-    const runtime = getBrowserWorkspaceRuntimeState("web", id);
     const frameContext = resolveWebBrowserWorkspaceCommandDocument(tab, dom);
     const document = frameContext.document;
     const resolveTarget = () =>
-      resolveBrowserWorkspaceElement(document, command.selector, command.text, command);
+      resolveBrowserWorkspaceElement(
+        document,
+        command.selector,
+        command.text,
+        command,
+      );
 
     switch (command.subaction) {
       case "inspect":
@@ -3839,21 +4733,30 @@ async function executeWebBrowserWorkspaceDomCommand(
             collectBrowserWorkspaceInspectElements(document),
           ),
           value: {
-            bodyText: buildBrowserWorkspaceDocumentSnapshotText(document).slice(0, 800),
+            bodyText: buildBrowserWorkspaceDocumentSnapshotText(document).slice(
+              0,
+              800,
+            ),
             title: tab.title,
             url: tab.url,
           },
         };
       case "get": {
         if (command.getMode === "title") {
-          return { mode: "web", subaction: command.subaction, value: tab.title };
+          return {
+            mode: "web",
+            subaction: command.subaction,
+            value: tab.title,
+          };
         }
         if (command.getMode === "url") {
           return { mode: "web", subaction: command.subaction, value: tab.url };
         }
         if (command.getMode === "count") {
           if (!command.selector?.trim()) {
-            throw new Error("Milady browser workspace get count requires selector.");
+            throw new Error(
+              "Milady browser workspace get count requires selector.",
+            );
           }
           const semanticCommand = mergeBrowserWorkspaceSelectorCommand(
             command,
@@ -3865,7 +4768,10 @@ async function executeWebBrowserWorkspaceDomCommand(
             value: semanticCommand
               ? Number(
                   Boolean(
-                    resolveBrowserWorkspaceFindElement(document, semanticCommand),
+                    resolveBrowserWorkspaceFindElement(
+                      document,
+                      semanticCommand,
+                    ),
                   ),
                 )
               : queryAllBrowserWorkspaceSelector(document, command.selector)
@@ -3882,7 +4788,9 @@ async function executeWebBrowserWorkspaceDomCommand(
         switch (command.getMode) {
           case "attr":
             if (!command.attribute?.trim()) {
-              throw new Error("Milady browser workspace attr lookups require attribute.");
+              throw new Error(
+                "Milady browser workspace attr lookups require attribute.",
+              );
             }
             value = element.getAttribute(command.attribute);
             break;
@@ -3900,15 +4808,13 @@ async function executeWebBrowserWorkspaceDomCommand(
           case "enabled":
             value =
               "disabled" in element
-                ? !Boolean(
-                    (
-                      element as
-                        | HTMLButtonElement
-                        | HTMLInputElement
-                        | HTMLSelectElement
-                        | HTMLTextAreaElement
-                    ).disabled,
-                  )
+                ? !(
+                    element as
+                      | HTMLButtonElement
+                      | HTMLInputElement
+                      | HTMLSelectElement
+                      | HTMLTextAreaElement
+                  ).disabled
                 : true;
             break;
           case "html":
@@ -3923,7 +4829,6 @@ async function executeWebBrowserWorkspaceDomCommand(
           case "visible":
             value = isBrowserWorkspaceElementVisible(element);
             break;
-          case "text":
           default:
             value = normalizeBrowserWorkspaceText(element.textContent);
             break;
@@ -3939,7 +4844,10 @@ async function executeWebBrowserWorkspaceDomCommand(
 
         switch (command.action) {
           case "check": {
-            const input = ensureBrowserWorkspaceCheckboxElement(element, "check");
+            const input = ensureBrowserWorkspaceCheckboxElement(
+              element,
+              "check",
+            );
             input.checked = true;
             return {
               mode: "web",
@@ -3952,11 +4860,18 @@ async function executeWebBrowserWorkspaceDomCommand(
           }
           case "click":
             return {
-              ...(await activateWebBrowserWorkspaceElement(tab, element, "click")),
+              ...(await activateWebBrowserWorkspaceElement(
+                tab,
+                element,
+                "click",
+              )),
               subaction: command.subaction,
             };
           case "fill": {
-            const control = ensureBrowserWorkspaceFormControlElement(element, "fill");
+            const control = ensureBrowserWorkspaceFormControlElement(
+              element,
+              "fill",
+            );
             setBrowserWorkspaceControlValue(control, command.value ?? "");
             return {
               mode: "web",
@@ -3990,7 +4905,10 @@ async function executeWebBrowserWorkspaceDomCommand(
               },
             };
           case "type": {
-            const control = ensureBrowserWorkspaceFormControlElement(element, "type");
+            const control = ensureBrowserWorkspaceFormControlElement(
+              element,
+              "type",
+            );
             setBrowserWorkspaceControlValue(
               control,
               `${control.value ?? ""}${command.value ?? ""}`,
@@ -4005,7 +4923,10 @@ async function executeWebBrowserWorkspaceDomCommand(
             };
           }
           case "uncheck": {
-            const input = ensureBrowserWorkspaceCheckboxElement(element, "uncheck");
+            const input = ensureBrowserWorkspaceCheckboxElement(
+              element,
+              "uncheck",
+            );
             input.checked = false;
             return {
               mode: "web",
@@ -4027,7 +4948,9 @@ async function executeWebBrowserWorkspaceDomCommand(
               },
             };
           default:
-            throw new Error(`Unsupported browser workspace find action: ${command.action}`);
+            throw new Error(
+              `Unsupported browser workspace find action: ${command.action}`,
+            );
         }
       }
       case "check": {
@@ -4143,7 +5066,8 @@ async function executeWebBrowserWorkspaceDomCommand(
           value: {
             key: command.key?.trim() || "Enter",
             selector:
-              document.activeElement && document.activeElement instanceof Element
+              document.activeElement &&
+              document.activeElement instanceof Element
                 ? buildBrowserWorkspaceElementSelector(document.activeElement)
                 : null,
           },
@@ -4214,9 +5138,14 @@ async function executeWebBrowserWorkspaceDomCommand(
           throw new Error("Target element was not found.");
         }
         if (element.tagName !== "SELECT") {
-          throw new Error("Milady browser workspace select requires a select target.");
+          throw new Error(
+            "Milady browser workspace select requires a select target.",
+          );
         }
-        const select = ensureBrowserWorkspaceFormControlElement(element, "select");
+        const select = ensureBrowserWorkspaceFormControlElement(
+          element,
+          "select",
+        );
         const option = Array.from((select as HTMLSelectElement).options).find(
           (entry) =>
             entry.value === (command.value ?? "") ||
@@ -4275,7 +5204,8 @@ async function executeWebBrowserWorkspaceDomCommand(
           };
         }
         const timeoutMs =
-          typeof command.timeoutMs === "number" && Number.isFinite(command.timeoutMs)
+          typeof command.timeoutMs === "number" &&
+          Number.isFinite(command.timeoutMs)
             ? Math.max(100, command.timeoutMs)
             : DEFAULT_TIMEOUT_MS;
         const deadline = Date.now() + timeoutMs;
@@ -4287,25 +5217,29 @@ async function executeWebBrowserWorkspaceDomCommand(
 
           const matchesSelector = command.selector?.trim()
             ? (() => {
-              const found = resolveBrowserWorkspaceElement(
-                currentDocument,
-                command.selector,
-                undefined,
-                command,
-              );
-              if (!command.state || command.state === "visible") {
-                  return found ? isBrowserWorkspaceElementVisible(found) : false;
-              }
-              return !found || !isBrowserWorkspaceElementVisible(found);
-            })()
+                const found = resolveBrowserWorkspaceElement(
+                  currentDocument,
+                  command.selector,
+                  undefined,
+                  command,
+                );
+                if (!command.state || command.state === "visible") {
+                  return found
+                    ? isBrowserWorkspaceElementVisible(found)
+                    : false;
+                }
+                return !found || !isBrowserWorkspaceElementVisible(found);
+              })()
             : false;
           const matchesFind = command.findBy
-            ? Boolean(resolveBrowserWorkspaceFindElement(currentDocument, command))
+            ? Boolean(
+                resolveBrowserWorkspaceFindElement(currentDocument, command),
+              )
             : false;
           const matchesText = command.text?.trim()
-            ? normalizeBrowserWorkspaceText(currentDocument.body?.textContent).includes(
-                command.text.trim(),
-              )
+            ? normalizeBrowserWorkspaceText(
+                currentDocument.body?.textContent,
+              ).includes(command.text.trim())
             : false;
           const matchesUrl = command.url?.trim()
             ? tab.url.includes(command.url.trim())
@@ -4317,7 +5251,11 @@ async function executeWebBrowserWorkspaceDomCommand(
                   "window",
                   "location",
                   `return (${command.script});`,
-                )(currentDocument, currentDom.window, currentDom.window.location),
+                )(
+                  currentDocument,
+                  currentDom.window,
+                  currentDom.window.location,
+                ),
               )
             : false;
 
@@ -4407,7 +5345,9 @@ export async function listBrowserWorkspaceTabs(
 ): Promise<BrowserWorkspaceTab[]> {
   if (!isBrowserWorkspaceBridgeConfigured(env)) {
     return cloneBrowserWorkspaceTabs(
-      webWorkspaceState.tabs.map((tab) => cloneWebBrowserWorkspaceTabState(tab)),
+      webWorkspaceState.tabs.map((tab) =>
+        cloneWebBrowserWorkspaceTabState(tab),
+      ),
     );
   }
 
@@ -4467,7 +5407,9 @@ export async function navigateBrowserWorkspaceTab(
       clearWebBrowserWorkspaceTabElementRefs(existing.id);
       pushWebBrowserWorkspaceHistory(existing, nextUrl);
       const nextDom =
-        nextUrl === "about:blank" ? createEmptyWebBrowserWorkspaceDom(nextUrl) : null;
+        nextUrl === "about:blank"
+          ? createEmptyWebBrowserWorkspaceDom(nextUrl)
+          : null;
       const nextTab: WebBrowserWorkspaceTabState = {
         ...existing,
         title: inferBrowserWorkspaceTitle(nextUrl),
@@ -4510,7 +5452,9 @@ export async function showBrowserWorkspaceTab(
         lastFocusedAt: tab.id === id ? lastFocusedAt : tab.lastFocusedAt,
         updatedAt: tab.id === id ? lastFocusedAt : tab.updatedAt,
       }));
-      return cloneWebBrowserWorkspaceTabState(getWebBrowserWorkspaceTabState(id));
+      return cloneWebBrowserWorkspaceTabState(
+        getWebBrowserWorkspaceTabState(id),
+      );
     });
   }
 
@@ -4619,7 +5563,9 @@ export async function executeBrowserWorkspaceCommand(
     case "batch": {
       const steps = Array.isArray(command.steps) ? command.steps : [];
       if (steps.length === 0) {
-        throw new Error("Milady browser workspace batch requires at least one step.");
+        throw new Error(
+          "Milady browser workspace batch requires at least one step.",
+        );
       }
       const results: BrowserWorkspaceCommandResult[] = [];
       for (const step of steps) {
@@ -4638,24 +5584,23 @@ export async function executeBrowserWorkspaceCommand(
         subaction: command.subaction,
         tabs: await listBrowserWorkspaceTabs(env),
       };
-    case "open":
-      {
-        const tab = await openBrowserWorkspaceTab(
-          {
-            partition: command.partition,
-            show: command.show,
-            title: command.title,
-            url: command.url,
-          },
-          env,
-        );
-        clearBrowserWorkspaceElementRefs(getBrowserWorkspaceMode(env), tab.id);
-        return {
-          mode: getBrowserWorkspaceMode(env),
-          subaction: command.subaction,
-          tab,
-        };
-      }
+    case "open": {
+      const tab = await openBrowserWorkspaceTab(
+        {
+          partition: command.partition,
+          show: command.show,
+          title: command.title,
+          url: command.url,
+        },
+        env,
+      );
+      clearBrowserWorkspaceElementRefs(getBrowserWorkspaceMode(env), tab.id);
+      return {
+        mode: getBrowserWorkspaceMode(env),
+        subaction: command.subaction,
+        tab,
+      };
+    }
     case "navigate": {
       const id = isBrowserWorkspaceBridgeConfigured(env)
         ? await resolveDesktopBrowserWorkspaceTargetTabId(command, env)
@@ -4707,7 +5652,9 @@ export async function executeBrowserWorkspaceCommand(
     }
     case "eval": {
       if (!isBrowserWorkspaceBridgeConfigured(env)) {
-        return (await executeWebBrowserWorkspaceUtilityCommand(command)) as BrowserWorkspaceCommandResult;
+        return (await executeWebBrowserWorkspaceUtilityCommand(
+          command,
+        )) as BrowserWorkspaceCommandResult;
       }
       const id = await resolveDesktopBrowserWorkspaceTargetTabId(command, env);
       return {
@@ -4724,7 +5671,9 @@ export async function executeBrowserWorkspaceCommand(
     }
     case "screenshot": {
       if (!isBrowserWorkspaceBridgeConfigured(env)) {
-        return (await executeWebBrowserWorkspaceUtilityCommand(command)) as BrowserWorkspaceCommandResult;
+        return (await executeWebBrowserWorkspaceUtilityCommand(
+          command,
+        )) as BrowserWorkspaceCommandResult;
       }
       const id = await resolveDesktopBrowserWorkspaceTargetTabId(command, env);
       return {
@@ -4736,7 +5685,6 @@ export async function executeBrowserWorkspaceCommand(
     case "clipboard":
     case "console":
     case "cookies":
-    case "diff":
     case "dialog":
     case "drag":
     case "errors":
@@ -4744,19 +5692,201 @@ export async function executeBrowserWorkspaceCommand(
     case "highlight":
     case "mouse":
     case "network":
-    case "pdf":
-    case "profiler":
     case "set":
-    case "state":
     case "storage":
-    case "trace":
     case "upload": {
       if (!isBrowserWorkspaceBridgeConfigured(env)) {
-        return (await executeWebBrowserWorkspaceUtilityCommand(command)) as BrowserWorkspaceCommandResult;
+        return (await executeWebBrowserWorkspaceUtilityCommand(
+          command,
+        )) as BrowserWorkspaceCommandResult;
       }
-      throw new Error(
-        `Milady browser workspace ${command.subaction} desktop parity is not wired yet.`,
+      return executeDesktopBrowserWorkspaceUtilityCommand(command, env);
+    }
+    case "diff": {
+      if (!isBrowserWorkspaceBridgeConfigured(env)) {
+        return (await executeWebBrowserWorkspaceUtilityCommand(
+          command,
+        )) as BrowserWorkspaceCommandResult;
+      }
+      const id = await resolveDesktopBrowserWorkspaceTargetTabId(command, env);
+      const runtime = getBrowserWorkspaceRuntimeState("desktop", id);
+      const snapshot = await getDesktopBrowserWorkspaceSnapshotRecord(
+        command,
+        env,
       );
+      if (command.diffAction === "screenshot") {
+        const screenshot = await snapshotBrowserWorkspaceTab(id, env);
+        const currentData = screenshot.data;
+        const baseline = command.baselinePath?.trim()
+          ? await fsp.readFile(
+              path.resolve(command.baselinePath.trim()),
+              "base64",
+            )
+          : runtime.lastScreenshotData;
+        runtime.lastScreenshotData = currentData;
+        return {
+          mode: "desktop",
+          subaction: command.subaction,
+          value: {
+            baselineLength: baseline?.length ?? 0,
+            changed: baseline !== currentData,
+            currentLength: currentData.length,
+          },
+        };
+      }
+      if (command.diffAction === "url") {
+        const leftUrl = command.url?.trim() || snapshot.url;
+        const rightUrl = command.secondaryUrl?.trim();
+        if (!rightUrl) {
+          throw new Error(
+            "Milady browser workspace diff url requires secondaryUrl.",
+          );
+        }
+        const left = await browserWorkspacePageFetch(leftUrl);
+        const right = await browserWorkspacePageFetch(rightUrl);
+        return {
+          mode: "desktop",
+          subaction: command.subaction,
+          value: diffBrowserWorkspaceSnapshots(
+            createBrowserWorkspaceSnapshotRecord(
+              leftUrl,
+              left.url || leftUrl,
+              await left.text(),
+            ),
+            createBrowserWorkspaceSnapshotRecord(
+              rightUrl,
+              right.url || rightUrl,
+              await right.text(),
+            ),
+          ),
+        };
+      }
+      const baseline = command.baselinePath?.trim()
+        ? (JSON.parse(
+            await fsp.readFile(
+              path.resolve(command.baselinePath.trim()),
+              "utf8",
+            ),
+          ) as BrowserWorkspaceSnapshotRecord)
+        : runtime.lastSnapshot;
+      const diff = diffBrowserWorkspaceSnapshots(baseline, snapshot);
+      runtime.lastSnapshot = snapshot;
+      return { mode: "desktop", subaction: command.subaction, value: diff };
+    }
+    case "trace":
+    case "profiler": {
+      if (!isBrowserWorkspaceBridgeConfigured(env)) {
+        return (await executeWebBrowserWorkspaceUtilityCommand(
+          command,
+        )) as BrowserWorkspaceCommandResult;
+      }
+      const id = await resolveDesktopBrowserWorkspaceTargetTabId(command, env);
+      const runtime = getBrowserWorkspaceRuntimeState("desktop", id);
+      const target =
+        command.subaction === "trace" ? runtime.trace : runtime.profiler;
+      const stop =
+        command.subaction === "trace"
+          ? command.traceAction === "stop"
+          : command.profilerAction === "stop";
+      if (stop) {
+        target.active = false;
+        const payload = { entries: target.entries };
+        const filePath = command.filePath?.trim() || command.outputPath?.trim();
+        if (filePath) {
+          await writeBrowserWorkspaceFile(
+            filePath,
+            JSON.stringify(payload, null, 2),
+          );
+          return {
+            mode: "desktop",
+            subaction: command.subaction,
+            value: { path: path.resolve(filePath), ...payload },
+          };
+        }
+        return {
+          mode: "desktop",
+          subaction: command.subaction,
+          value: payload,
+        };
+      }
+      target.active = true;
+      target.entries = [
+        {
+          command: `${command.subaction}:start`,
+          timestamp: getBrowserWorkspaceTimestamp(),
+        },
+      ];
+      return {
+        mode: "desktop",
+        subaction: command.subaction,
+        value: { active: true },
+      };
+    }
+    case "state": {
+      if (!isBrowserWorkspaceBridgeConfigured(env)) {
+        return (await executeWebBrowserWorkspaceUtilityCommand(
+          command,
+        )) as BrowserWorkspaceCommandResult;
+      }
+      if (command.stateAction === "load") {
+        const filePath = command.filePath?.trim() || command.outputPath?.trim();
+        if (!filePath) {
+          throw new Error(
+            "Milady browser workspace state load requires filePath.",
+          );
+        }
+        const payload = JSON.parse(
+          await fsp.readFile(path.resolve(filePath), "utf8"),
+        ) as Record<string, unknown>;
+        await loadDesktopBrowserWorkspaceSessionState(command, payload, env);
+        return {
+          mode: "desktop",
+          subaction: command.subaction,
+          value: { loaded: true },
+        };
+      }
+      const payload = await getDesktopBrowserWorkspaceSessionState(
+        command,
+        env,
+      );
+      const filePath = command.filePath?.trim() || command.outputPath?.trim();
+      if (filePath) {
+        await writeBrowserWorkspaceFile(
+          filePath,
+          JSON.stringify(payload, null, 2),
+        );
+        return {
+          mode: "desktop",
+          subaction: command.subaction,
+          value: { path: path.resolve(filePath), ...payload },
+        };
+      }
+      return { mode: "desktop", subaction: command.subaction, value: payload };
+    }
+    case "pdf": {
+      if (!isBrowserWorkspaceBridgeConfigured(env)) {
+        return (await executeWebBrowserWorkspaceUtilityCommand(
+          command,
+        )) as BrowserWorkspaceCommandResult;
+      }
+      const filePath = command.filePath?.trim() || command.outputPath?.trim();
+      if (!filePath) {
+        throw new Error("Milady browser workspace pdf requires filePath.");
+      }
+      const snapshot = await getDesktopBrowserWorkspaceSnapshotRecord(
+        command,
+        env,
+      );
+      const pdf = createBrowserWorkspacePdfBuffer(
+        snapshot.title,
+        snapshot.bodyText,
+      );
+      const resolved = await writeBrowserWorkspaceFile(filePath, pdf);
+      return {
+        mode: "desktop",
+        subaction: command.subaction,
+        value: { path: resolved, size: pdf.byteLength },
+      };
     }
     case "tab": {
       const action = command.tabAction ?? "list";
@@ -4786,14 +5916,15 @@ export async function executeBrowserWorkspaceCommand(
       }
       if (action === "switch") {
         const tabs = await listBrowserWorkspaceTabs(env);
-        const target =
-          command.id?.trim()
-            ? tabs.find((tab) => tab.id === command.id?.trim())
-            : typeof command.index === "number"
-              ? tabs[command.index] ?? null
-              : null;
+        const target = command.id?.trim()
+          ? tabs.find((tab) => tab.id === command.id?.trim())
+          : typeof command.index === "number"
+            ? (tabs[command.index] ?? null)
+            : null;
         if (!target) {
-          throw new Error("Milady browser workspace tab switch requires a valid id or index.");
+          throw new Error(
+            "Milady browser workspace tab switch requires a valid id or index.",
+          );
         }
         return {
           mode: getBrowserWorkspaceMode(env),
@@ -4805,7 +5936,9 @@ export async function executeBrowserWorkspaceCommand(
         command.id?.trim() ||
         (await listBrowserWorkspaceTabs(env))[command.index ?? -1]?.id;
       if (!targetId) {
-        throw new Error("Milady browser workspace tab close requires a valid id or index.");
+        throw new Error(
+          "Milady browser workspace tab close requires a valid id or index.",
+        );
       }
       return {
         mode: getBrowserWorkspaceMode(env),
@@ -4833,7 +5966,10 @@ export async function executeBrowserWorkspaceCommand(
     case "forward":
     case "reload": {
       if (isBrowserWorkspaceBridgeConfigured(env)) {
-        const id = await resolveDesktopBrowserWorkspaceTargetTabId(command, env);
+        const id = await resolveDesktopBrowserWorkspaceTargetTabId(
+          command,
+          env,
+        );
         clearBrowserWorkspaceElementRefs("desktop", id);
         return executeDesktopBrowserWorkspaceDomCommand(command, env);
       }

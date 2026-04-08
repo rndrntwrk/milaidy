@@ -1,3 +1,5 @@
+import { createRequire } from "node:module";
+
 export interface SqliteStatementCompat {
   all(...params: unknown[]): Array<Record<string, unknown>>;
   get(...params: unknown[]): Record<string, unknown> | null;
@@ -30,6 +32,7 @@ interface BunSqliteModule {
   Database: new (filename: string) => BunSqliteDatabaseCompat;
 }
 
+const require = createRequire(import.meta.url);
 let DatabaseSyncValue: SqliteDatabaseSyncConstructor | undefined;
 let hasSqliteValue = false;
 
@@ -40,17 +43,15 @@ function isBunRuntime(): boolean {
   );
 }
 
-async function importBunSqlite(): Promise<BunSqliteModule> {
-  return (0, eval)('import("bun:sqlite")') as Promise<BunSqliteModule>;
-}
-
 try {
-  ({ DatabaseSync: DatabaseSyncValue } = await import("node:sqlite"));
+  ({ DatabaseSync: DatabaseSyncValue } = require("node:sqlite") as {
+    DatabaseSync: SqliteDatabaseSyncConstructor;
+  });
   hasSqliteValue = true;
 } catch {
   if (isBunRuntime()) {
     try {
-      const { Database } = await importBunSqlite();
+      const { Database } = require("bun:sqlite") as BunSqliteModule;
 
       class BunDatabaseSyncCompat implements SqliteDatabaseCompat {
         private readonly db: BunSqliteDatabaseCompat;

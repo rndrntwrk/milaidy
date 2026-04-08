@@ -4,9 +4,9 @@
 
 import { existsSync } from "node:fs";
 import { platform } from "node:os";
-import { delimiter, extname, isAbsolute, join } from "node:path";
-import type { HookConfig, InternalHooksConfig } from "../config/types.hooks";
-import type { ElizaHookMetadata } from "./types";
+import { delimiter, dirname, extname, isAbsolute, join } from "node:path";
+import type { HookConfig, InternalHooksConfig } from "../config/types.hooks.js";
+import type { ElizaHookMetadata } from "./types.js";
 
 function binaryExists(name: string): boolean {
   const pathExts =
@@ -28,7 +28,11 @@ function binaryExists(name: string): boolean {
     return true;
   }
 
-  const pathDirs = (process.env.PATH ?? "").split(delimiter);
+  const pathDirs = [
+    ...new Set(
+      [(process.env.PATH ?? "").split(delimiter), dirname(process.execPath)].flat(),
+    ),
+  ].filter(Boolean);
   for (const dir of pathDirs) {
     for (const candidate of baseCandidates) {
       if (existsSync(join(dir, candidate))) return true;

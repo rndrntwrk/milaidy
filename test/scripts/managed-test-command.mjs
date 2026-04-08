@@ -7,6 +7,7 @@ const SIGNAL_EXIT_CODES = {
   SIGINT: 130,
   SIGTERM: 143,
 };
+const HEARTBEAT_INTERVAL_MS = 5_000;
 
 const REPO_TEST_PROCESS_MARKERS = [
   "node_modules/.bin/vitest run --config vitest.config.ts",
@@ -135,19 +136,10 @@ function collectDescendantPids(rootPid) {
   return descendants;
 }
 
-async function waitForExit(pid, timeoutMs) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (!isPidAlive(pid)) {
-      return true;
-    }
-    await sleep(100);
-  }
-  return !isPidAlive(pid);
-}
-
 async function waitForProcessesExit(pids, timeoutMs) {
-  const uniquePids = [...new Set(pids.filter((pid) => Number.isInteger(pid) && pid > 0))];
+  const uniquePids = [
+    ...new Set(pids.filter((pid) => Number.isInteger(pid) && pid > 0)),
+  ];
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (uniquePids.every((pid) => !isPidAlive(pid))) {
@@ -242,18 +234,21 @@ function listLockFiles(lockDir) {
     .map((entry) => path.join(lockDir, entry));
 }
 
+function parseLockPid(value) {
+  return Number.isInteger(value)
+    ? value
+    : Number.parseInt(String(value ?? ""), 10);
+}
+
 async function cleanupStaleLock(lockPath) {
   const existing = readLock(lockPath);
   if (!existing) {
+    removeLock(lockPath);
     return;
   }
 
-  const ownerPid = Number.isInteger(existing.ownerPid)
-    ? existing.ownerPid
-    : Number.parseInt(String(existing.ownerPid ?? ""), 10);
-  const childPid = Number.isInteger(existing.childPid)
-    ? existing.childPid
-    : Number.parseInt(String(existing.childPid ?? ""), 10);
+  const ownerPid = parseLockPid(existing.ownerPid);
+  const childPid = parseLockPid(existing.childPid);
 
   if (ownerPid && isPidAlive(ownerPid)) {
     throw new Error(
@@ -266,6 +261,48 @@ async function cleanupStaleLock(lockPath) {
   }
 
   removeLock(lockPath);
+}
+
+async function cleanupOtherLockFiles(lockDir, currentLockPath) {
+  const activeLocks = [];
+
+  for (const lockPath of listLockFiles(lockDir)) {
+    if (lockPath === currentLockPath) {
+      continue;
+    }
+
+    const existing = readLock(lockPath);
+    if (!existing) {
+      removeLock(lockPath);
+      continue;
+    }
+
+    const ownerPid = parseLockPid(existing.ownerPid);
+    const childPid = parseLockPid(existing.childPid);
+
+    if (ownerPid && isPidAlive(ownerPid)) {
+      activeLocks.push({
+        lockName: existing.lockName ?? path.basename(lockPath, ".json"),
+        ownerPid,
+      });
+      continue;
+    }
+
+    if (childPid && isPidAlive(childPid)) {
+      await killProcessTree(childPid);
+    }
+
+    removeLock(lockPath);
+  }
+
+  if (activeLocks.length > 0) {
+    const summary = activeLocks
+      .map((entry) => `"${entry.lockName}" (pid ${entry.ownerPid})`)
+      .join(", ");
+    throw new Error(
+      `[test-runner] Another managed test run is already active: ${summary}.`,
+    );
+  }
 }
 
 function listRepoProcessTable(repoRoot) {
@@ -392,6 +429,7 @@ export async function runManagedTestCommand({
     "test-runner",
     `${lockName}.json`,
   );
+  await cleanupOtherLockFiles(path.dirname(lockPath), lockPath);
   await cleanupOrphanedRepoTestProcesses(repoRoot);
   await cleanupStaleLock(lockPath);
 
@@ -412,6 +450,7 @@ export async function runManagedTestCommand({
 
   let child = null;
   let shuttingDown = false;
+  let heartbeatTimer = null;
 
   const cleanup = async (reason = "cleanup") => {
     if (shuttingDown) {
@@ -446,6 +485,13 @@ export async function runManagedTestCommand({
         stdio: "inherit",
       });
 
+      heartbeatTimer = setInterval(() => {
+        console.log(
+          `[test-runner] HEARTBEAT ${label} (${Date.now() - startedAt}ms)`,
+        );
+      }, HEARTBEAT_INTERVAL_MS);
+      heartbeatTimer.unref?.();
+
       writeLock(lockPath, {
         ...initialState,
         childPid: child.pid ?? null,
@@ -456,6 +502,10 @@ export async function runManagedTestCommand({
       });
 
       child.on("exit", (code, signal) => {
+        if (heartbeatTimer) {
+          clearInterval(heartbeatTimer);
+          heartbeatTimer = null;
+        }
         if (code === 0) {
           resolve();
           return;
@@ -470,6 +520,10 @@ export async function runManagedTestCommand({
 
     console.log(`[test-runner] PASS ${label} (${Date.now() - startedAt}ms)`);
   } finally {
+    if (heartbeatTimer) {
+      clearInterval(heartbeatTimer);
+      heartbeatTimer = null;
+    }
     for (const [signal, handler] of signalHandlers) {
       process.off(signal, handler);
     }
