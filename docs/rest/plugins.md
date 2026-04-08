@@ -208,7 +208,6 @@ Install a plugin package from npm. Plugin installation may take significant time
 |-------|------|----------|-------------|
 | `name` | string | Yes | npm package name |
 | `autoRestart` | boolean | No | Whether to restart the agent after install (defaults to `true`) |
-| `version` | string | No | Version (defaults to latest) |
 
 **Response**
 
