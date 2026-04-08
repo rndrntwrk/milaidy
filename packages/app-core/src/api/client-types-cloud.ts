@@ -520,6 +520,7 @@ export interface HyperscapeAvailableGoal {
   type: string;
   description: string;
   priority: number;
+  reason?: string;
 }
 
 export interface HyperscapeGoalState {
@@ -576,6 +577,21 @@ export interface HyperscapeQuickActionsResponse {
   quickCommands: HyperscapeQuickCommand[];
   inventory: HyperscapeInventoryItem[];
   playerPosition: [number, number, number] | null;
+  message?: string;
+  error?: string;
+}
+
+export interface HyperscapeThought {
+  id: string;
+  type: string;
+  content: string;
+  timestamp: number;
+}
+
+export interface HyperscapeAgentThoughtsResponse {
+  success: boolean;
+  thoughts: HyperscapeThought[];
+  count: number;
   message?: string;
   error?: string;
 }

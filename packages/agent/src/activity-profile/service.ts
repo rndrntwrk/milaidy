@@ -361,7 +361,7 @@ export function readProfileFromMetadata(
   if (typeof candidate.analyzedAt !== "number") return null;
   if (typeof candidate.ownerEntityId !== "string") return null;
   if (typeof candidate.totalMessages !== "number") return null;
-  return candidate as ActivityProfile;
+  return candidate as unknown as ActivityProfile;
 }
 
 export function readFiredLogFromMetadata(
@@ -373,7 +373,7 @@ export function readFiredLogFromMetadata(
   if (!isRecord(log)) return null;
   if (typeof log.date !== "string" || log.date !== todayDateStr) return null;
   if (!Array.isArray(log.nudgedOccurrenceIds)) return null;
-  return log as FiredActionsLog;
+  return log as unknown as FiredActionsLog;
 }
 
 export function profileNeedsRebuild(

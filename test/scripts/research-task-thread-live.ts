@@ -16,6 +16,19 @@ type CodexEvent =
 					type?: string;
 					url?: string;
 					query?: string;
+					queries?: string[];
+				};
+			};
+	  }
+	| {
+			type: "item.started";
+			item?: {
+				type?: string;
+				action?: {
+					type?: string;
+					url?: string;
+					query?: string;
+					queries?: string[];
 				};
 			};
 	  }
@@ -222,10 +235,15 @@ async function main(): Promise<void> {
 	const events = parseCodexEvents(commandResult.stdout);
 	const searchEvents = events.filter(
 		(event) =>
-			event.type === "item.completed" &&
+			(event.type === "item.completed" || event.type === "item.started") &&
 			event.item?.type === "web_search" &&
-			typeof event.item.action?.url === "string" &&
-			event.item.action.url.length > 0,
+			(event.item.action?.type === "search" ||
+				(typeof event.item.action?.query === "string" &&
+					event.item.action.query.length > 0) ||
+				(Array.isArray(event.item.action?.queries) &&
+					event.item.action.queries.length > 0) ||
+				(typeof event.item.action?.url === "string" &&
+					event.item.action.url.length > 0)),
 	);
 	assert.ok(
 		searchEvents.length > 0,
@@ -237,14 +255,30 @@ async function main(): Promise<void> {
 		"Expected Codex research report to include source URLs",
 	);
 
-	const uniqueUrls = [...new Set(searchEvents.map((event) => event.item?.action?.url).filter(Boolean))];
+	const uniqueSearchQueries = [
+		...new Set(
+			searchEvents.flatMap((event) => {
+				const action = event.item?.action;
+				if (!action) {
+					return [];
+				}
+				const queries = Array.isArray(action.queries) ? action.queries : [];
+				return [
+					...(typeof action.query === "string" && action.query.length > 0
+						? [action.query]
+						: []),
+					...queries,
+				];
+			}),
+		),
+	];
 	const reportBody = [
 		"# Live Codex Research Report",
 		"",
 		finalMessage,
 		"",
-		"## Observed Search URLs",
-		...uniqueUrls.map((url) => `- ${url}`),
+		"## Observed Search Queries",
+		...uniqueSearchQueries.map((query) => `- ${query}`),
 	].join("\n");
 	fs.writeFileSync(reportPath, reportBody, "utf8");
 
@@ -264,7 +298,7 @@ async function main(): Promise<void> {
 		metadata: {
 			provider: "codex",
 			searchEventCount: searchEvents.length,
-			urls: uniqueUrls,
+			searchQueries: uniqueSearchQueries,
 		},
 	});
 	await coordinator.taskRegistry.recordArtifact({
@@ -293,7 +327,7 @@ async function main(): Promise<void> {
 		data: {
 			provider: "codex",
 			searchEventCount: searchEvents.length,
-			urlCount: uniqueUrls.length,
+			queryCount: uniqueSearchQueries.length,
 		},
 	});
 
@@ -337,7 +371,7 @@ async function main(): Promise<void> {
 			reportPath,
 			transcriptPath,
 			searchEventCount: searchEvents.length,
-			urlCount: uniqueUrls.length,
+			queryCount: uniqueSearchQueries.length,
 		}),
 	);
 }

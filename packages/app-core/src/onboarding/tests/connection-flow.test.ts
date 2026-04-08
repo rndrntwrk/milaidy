@@ -91,14 +91,10 @@ describe("connection-flow", () => {
         onboardingServerTarget: "elizacloud",
       });
       expect(deriveConnectionScreen(stuck)).toBe("providerGrid");
-      const after = mergeConnectionSnapshot(
-        stuck,
-        getResetConnectionWizardToHostingStepPatch(),
-      );
+      const patch = getResetConnectionWizardToHostingStepPatch();
+      const after = mergeConnectionSnapshot(stuck, patch);
       expect(deriveConnectionScreen(after)).toBe("hosting");
-      expect(getResetConnectionWizardToHostingStepPatch()).not.toHaveProperty(
-        "onboardingCloudApiKey",
-      );
+      expect(patch.onboardingCloudApiKey).toBe("");
     });
   });
 

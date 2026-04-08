@@ -325,18 +325,23 @@ export function TrajectoriesView({
     >
       <SidebarScrollRegion>
         <SidebarPanel>
-          <SidebarContent.Toolbar className="mb-3 flex-wrap justify-end gap-2">
+          <SidebarContent.Toolbar className="mb-3 items-center justify-between gap-2">
+            <SidebarContent.SectionLabel>
+              {t("trajectoriesview.Entries", {
+                defaultValue: "Entries",
+              })}
+            </SidebarContent.SectionLabel>
             <SidebarContent.ToolbarActions>
               <Button
                 variant="outline"
                 size="icon"
                 type="button"
-                className="h-9 w-9 rounded-full"
+                className="h-7 w-7 rounded-full"
                 onClick={() => void loadTrajectories()}
                 disabled={loading}
                 title={t("common.refresh")}
               >
-                <RefreshCw className={`h-3.5 w-3.5${loading ? " animate-spin" : ""}`} />
+                <RefreshCw className={`h-3 w-3${loading ? " animate-spin" : ""}`} />
               </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -344,11 +349,11 @@ export function TrajectoriesView({
                     variant="outline"
                     size="icon"
                     type="button"
-                    className="h-9 w-9 rounded-full"
+                    className="h-7 w-7 rounded-full"
                     disabled={exporting || trajectories.length === 0}
                     title={t("common.export")}
                   >
-                    <Download className="h-3.5 w-3.5" />
+                    <Download className="h-3 w-3" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
@@ -367,11 +372,12 @@ export function TrajectoriesView({
                 </DropdownMenuContent>
               </DropdownMenu>
               <ConfirmDeleteControl
-                triggerClassName="h-9 w-9 rounded-full border border-danger/25 text-danger transition-all hover:border-danger/45 hover:bg-danger/10"
-                confirmClassName="h-9 rounded-full border border-danger/25 bg-danger/14 px-4 text-[11px] font-bold text-danger transition-all hover:bg-danger/20"
-                cancelClassName="h-9 rounded-full border border-border/35 px-4 text-[11px] font-bold text-muted-strong transition-all hover:border-border-strong hover:text-txt"
+                triggerVariant="outline"
+                triggerClassName="h-7 w-7 rounded-full text-danger transition-all hover:bg-danger/10"
+                confirmClassName="h-7 rounded-full border border-danger/25 bg-danger/14 px-3 text-[10px] font-bold text-danger transition-all hover:bg-danger/20"
+                cancelClassName="h-7 rounded-full border border-border/35 px-3 text-[10px] font-bold text-muted-strong transition-all hover:border-border-strong hover:text-txt"
                 disabled={deleteDisabled}
-                triggerLabel={<Trash2 className="h-3.5 w-3.5" />}
+                triggerLabel={<Trash2 className="h-3 w-3" />}
                 triggerTitle={t("trajectoriesview.DeleteCurrent", {
                   defaultValue: "Delete current",
                 })}
@@ -388,11 +394,12 @@ export function TrajectoriesView({
                 }}
               />
               <ConfirmDeleteControl
-                triggerClassName="h-9 w-9 rounded-full border border-danger/25 text-danger transition-all hover:border-danger/45 hover:bg-danger/10"
-                confirmClassName="h-9 rounded-full border border-danger/25 bg-danger/14 px-4 text-[11px] font-bold text-danger transition-all hover:bg-danger/20"
-                cancelClassName="h-9 rounded-full border border-border/35 px-4 text-[11px] font-bold text-muted-strong transition-all hover:border-border-strong hover:text-txt"
+                triggerVariant="outline"
+                triggerClassName="h-7 w-7 rounded-full text-danger transition-all hover:bg-danger/10"
+                confirmClassName="h-7 rounded-full border border-danger/25 bg-danger/14 px-3 text-[10px] font-bold text-danger transition-all hover:bg-danger/20"
+                cancelClassName="h-7 rounded-full border border-border/35 px-3 text-[10px] font-bold text-muted-strong transition-all hover:border-border-strong hover:text-txt"
                 disabled={clearAllDisabled}
-                triggerLabel={<XCircle className="h-3.5 w-3.5" />}
+                triggerLabel={<XCircle className="h-3 w-3" />}
                 triggerTitle={t("trajectoriesview.ClearAll", {
                   defaultValue: "Clear all",
                 })}
@@ -408,22 +415,6 @@ export function TrajectoriesView({
               />
             </SidebarContent.ToolbarActions>
           </SidebarContent.Toolbar>
-
-          <SidebarContent.SectionHeader
-            meta={
-              total > 0
-                ? `${total} ${t("trajectoriesview.Entries", {
-                    defaultValue: "Entries",
-                  }).toLowerCase()}`
-                : undefined
-            }
-          >
-            <SidebarContent.SectionLabel>
-              {t("trajectoriesview.Entries", {
-                defaultValue: "Entries",
-              })}
-            </SidebarContent.SectionLabel>
-          </SidebarContent.SectionHeader>
 
           {loading && trajectories.length === 0 ? (
             <SidebarContent.EmptyState>

@@ -10,6 +10,7 @@ const mockClient = vi.hoisted(() => ({
   listHyperscapeEmbeddedAgents: vi.fn(),
   getHyperscapeAgentGoal: vi.fn(),
   getHyperscapeAgentQuickActions: vi.fn(),
+  getHyperscapeAgentThoughts: vi.fn(),
   sendHyperscapeAgentMessage: vi.fn(),
   sendHyperscapeEmbeddedAgentCommand: vi.fn(),
   controlHyperscapeEmbeddedAgent: vi.fn(),
@@ -178,6 +179,7 @@ describe("HyperscapeDetailExtension", () => {
           type: "scout",
           description: "Scout the woodland path",
           priority: 10,
+          reason: "The ridge gives the safest line of sight.",
         },
       ],
       goalsPaused: false,
@@ -193,6 +195,7 @@ describe("HyperscapeDetailExtension", () => {
           type: "scout",
           description: "Scout the woodland path",
           priority: 10,
+          reason: "The ridge gives the safest line of sight.",
         },
       ],
       quickCommands: [
@@ -216,6 +219,18 @@ describe("HyperscapeDetailExtension", () => {
         },
       ],
       playerPosition: [12, 4, 8],
+    });
+    mockClient.getHyperscapeAgentThoughts.mockResolvedValue({
+      success: true,
+      thoughts: [
+        {
+          id: "thought-1",
+          type: "reasoning",
+          content: "Stay near the ridge until the area is clear.",
+          timestamp: 1712361660000,
+        },
+      ],
+      count: 1,
     });
     mockClient.sendHyperscapeAgentMessage.mockResolvedValue({
       success: true,
@@ -249,6 +264,10 @@ describe("HyperscapeDetailExtension", () => {
     expect(output).toContain("Scout the woodland path");
     expect(output).toContain("Woodland Path");
     expect(output).toContain("Bronze sword");
+    expect(output).toContain("Planner Reasons");
+    expect(output).toContain("Stay near the ridge until the area is clear.");
+    expect(output).toContain("Scout the woodland path (#10)");
+    expect(output).toContain("The ridge gives the safest line of sight.");
     expect(output).toContain("Use the embedded agent-control viewer");
 
     const pauseButton = tree.root

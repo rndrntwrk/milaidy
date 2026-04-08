@@ -3,6 +3,7 @@ import type { IAgentRuntime } from "@elizaos/core";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   createLifeOpsConnectorGrant,
+  ensureLifeOpsTables,
   LifeOpsRepository,
 } from "../src/lifeops/repository";
 
@@ -81,6 +82,42 @@ describe("lifeops repository PGlite schema", () => {
     expect(grants).toHaveLength(1);
     expect(grants[0]?.provider).toBe("google");
     expect(grants[0]?.preferredByAgent).toBe(true);
+  });
+
+  it("retries schema bootstrap once when the first lifeops table create fails", async () => {
+    db = new PGlite();
+    let failedOnce = false;
+
+    const runtime = {
+      agentId: "lifeops-schema-retry-agent",
+      character: { name: "lifeops-schema-retry-agent" },
+      getSetting: () => undefined,
+      getService: () => null,
+      adapter: {
+        db: {
+          execute: async (query: SqlQuery) => {
+            const sql = extractSqlText(query).trim();
+            if (
+              !failedOnce &&
+              sql.startsWith("CREATE TABLE IF NOT EXISTS life_task_definitions")
+            ) {
+              failedOnce = true;
+              throw new Error(
+                "Failed query: CREATE TABLE IF NOT EXISTS life_task_definitions",
+              );
+            }
+            return requireDb().query(sql);
+          },
+        },
+      },
+    } as unknown as IAgentRuntime;
+
+    const repository = new LifeOpsRepository(runtime);
+
+    await expect(
+      repository.listConnectorGrants("lifeops-schema-retry-agent"),
+    ).resolves.toEqual([]);
+    expect(failedOnce).toBe(true);
   });
 
   it("upgrades legacy life_task_definitions without domain columns before creating subject indexes", async () => {
@@ -241,5 +278,51 @@ describe("lifeops repository PGlite schema", () => {
           AND table_name = 'life_task_definitions'`,
     );
     expect(definitionTable.rows?.length ?? 0).toBeGreaterThan(0);
+  });
+
+  it("deduplicates schema setup across runtimes that share one raw connection", async () => {
+    const rawConnection = {};
+    let definitionCreateCalls = 0;
+    let releaseFirstCreate: (() => void) | null = null;
+    const firstCreateBlocked = new Promise<void>((resolve) => {
+      releaseFirstCreate = resolve;
+    });
+    let firstCreatePending = true;
+
+    function makeRuntime(agentId: string): IAgentRuntime {
+      return {
+        agentId,
+        character: { name: agentId },
+        getSetting: () => undefined,
+        getService: () => null,
+        adapter: {
+          getRawConnection: () => rawConnection,
+          db: {
+            execute: async (query: SqlQuery) => {
+              const sql = extractSqlText(query).trim();
+              if (
+                sql.startsWith(
+                  "CREATE TABLE IF NOT EXISTS life_task_definitions",
+                )
+              ) {
+                definitionCreateCalls += 1;
+                if (firstCreatePending) {
+                  firstCreatePending = false;
+                  await firstCreateBlocked;
+                }
+              }
+              return [];
+            },
+          },
+        },
+      } as unknown as IAgentRuntime;
+    }
+
+    const first = ensureLifeOpsTables(makeRuntime("lifeops-shared-a"));
+    const second = ensureLifeOpsTables(makeRuntime("lifeops-shared-b"));
+    releaseFirstCreate?.();
+    await Promise.all([first, second]);
+
+    expect(definitionCreateCalls).toBe(1);
   });
 });

@@ -1,5 +1,6 @@
 import { EventEmitter } from "node:events";
 import type http from "node:http";
+import { logger } from "@elizaos/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ElizaConfig } from "../config/config";
 import type { CloudCompatRouteState } from "./cloud-compat-routes";
@@ -8,15 +9,22 @@ import {
   resolveCloudBaseUrl,
 } from "./cloud-compat-routes";
 
+const { sendJson, sendJsonError, validateCloudBaseUrl, mockLogger } =
+  vi.hoisted(() => ({
+    sendJson: vi.fn(),
+    sendJsonError: vi.fn(),
+    validateCloudBaseUrl: vi.fn(() => Promise.resolve(null)),
+    mockLogger: {
+      info: vi.fn(),
+      warn: vi.fn(),
+      debug: vi.fn(),
+      error: vi.fn(),
+    },
+  }));
+
 vi.mock("@elizaos/core", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@elizaos/core")>()),
-  logger: { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() },
-}));
-
-const { sendJson, sendJsonError, validateCloudBaseUrl } = vi.hoisted(() => ({
-  sendJson: vi.fn(),
-  sendJsonError: vi.fn(),
-  validateCloudBaseUrl: vi.fn(() => Promise.resolve(null)),
+  logger: mockLogger,
 }));
 
 vi.mock("@miladyai/agent/cloud/validate-url", () => ({
@@ -309,6 +317,34 @@ describe("cloud-compat-routes", () => {
 
       expect(result).toBe(true);
       expect(sendJson).toHaveBeenCalledWith(expect.anything(), mockBody, 404);
+    });
+
+    it("suppresses upstream HTML 404 warnings for resource routes", async () => {
+      const mockResponse = new Response("<!DOCTYPE html><html></html>", {
+        status: 404,
+        headers: { "Content-Type": "text/html" },
+      });
+      vi.mocked(fetch).mockResolvedValue(mockResponse);
+
+      const result = await handleCloudCompatRoute(
+        makeReq({ url: "/api/cloud/v1/milady/agents/abc-123/pairing-token" }),
+        makeRes(),
+        "/api/cloud/v1/milady/agents/abc-123/pairing-token",
+        "POST",
+        makeState(),
+      );
+
+      expect(result).toBe(true);
+      expect(sendJson).toHaveBeenCalledWith(
+        expect.anything(),
+        {
+          success: false,
+          error: "Eliza Cloud returned 404 for this API route.",
+          code: "CLOUD_ROUTE_NOT_FOUND",
+        },
+        404,
+      );
+      expect(vi.mocked(logger.warn)).not.toHaveBeenCalled();
     });
 
     it("retries once on 503 response", async () => {

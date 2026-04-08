@@ -15,6 +15,7 @@ type ConfirmDeleteControlProps = {
   cancelClassName: string;
   promptClassName?: string;
   triggerTitle?: string;
+  triggerVariant?: "destructive" | "outline" | "ghost";
 };
 
 export function ConfirmDeleteControl({
@@ -30,6 +31,7 @@ export function ConfirmDeleteControl({
   cancelClassName,
   promptClassName = "text-[11px] text-[#e74c3c] ml-1",
   triggerTitle,
+  triggerVariant = "destructive",
 }: ConfirmDeleteControlProps) {
   const { t } = useApp();
   const [confirming, setConfirming] = useState(false);
@@ -48,7 +50,7 @@ export function ConfirmDeleteControl({
   if (!confirming) {
     return (
       <Button
-        variant="destructive"
+        variant={triggerVariant}
         size="sm"
         type="button"
         className={triggerClassName}

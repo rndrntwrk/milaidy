@@ -175,6 +175,7 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
     OnboardingOptions["piAiModels"]
   >([]);
   const [piAiDefaultModelSpec, setPiAiDefaultModelSpec] = useState("");
+  const [piAiCustomMode, setPiAiCustomMode] = useState(false);
   const [piAiSaving, setPiAiSaving] = useState(false);
   const [piAiSaveSuccess, setPiAiSaveSuccess] = useState(false);
 
@@ -207,7 +208,9 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
       const piAiSelected =
         llmText?.transport === "direct" && providerId === "pi-ai";
       if (piAiSelected) {
-        setPiAiModelSpec(llmText.primaryModel ?? "");
+        const nextPiAiModelSpec = llmText.primaryModel ?? "";
+        setPiAiModelSpec(nextPiAiModelSpec);
+        setPiAiCustomMode(Boolean(nextPiAiModelSpec.trim()));
       }
     },
     [],
@@ -273,6 +276,7 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
         syncSelectionFromConfig(cfg as Record<string, unknown>);
         if (!(llmText?.transport === "direct" && providerId === "pi-ai")) {
           setPiAiModelSpec("");
+          setPiAiCustomMode(false);
         }
       } catch (err) {
         console.warn("[eliza] Failed to load config", err);
@@ -483,7 +487,9 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
     (model) => model.id === normalizedPiAiModelSpec,
   );
   const piAiModelSelectValue =
-    normalizedPiAiModelSpec.length === 0
+    piAiCustomMode
+      ? "__custom__"
+      : normalizedPiAiModelSpec.length === 0
       ? "__default__"
       : hasKnownPiAiModel
         ? normalizedPiAiModelSpec
@@ -492,6 +498,23 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
   /* ── Render ───────────────────────────────────────────────────── */
   const isCloudSelected = resolvedSelectedId === "__cloud__";
   const isPiAiSelected = resolvedSelectedId === "pi-ai";
+  useEffect(() => {
+    if (!isPiAiSelected || normalizedPiAiModelSpec.length === 0) {
+      return;
+    }
+    if (hasKnownPiAiModel && piAiCustomMode) {
+      setPiAiCustomMode(false);
+      return;
+    }
+    if (!hasKnownPiAiModel && !piAiCustomMode) {
+      setPiAiCustomMode(true);
+    }
+  }, [
+    hasKnownPiAiModel,
+    isPiAiSelected,
+    normalizedPiAiModelSpec,
+    piAiCustomMode,
+  ]);
   const isSubscriptionSelected =
     isSubscriptionProviderSelectionId(resolvedSelectedId);
   const providerChoices = [
@@ -831,15 +854,18 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
                 value={piAiModelSelectValue}
                 onValueChange={(next) => {
                   if (next === "__default__") {
+                    setPiAiCustomMode(false);
                     setPiAiModelSpec("");
                     return;
                   }
                   if (next === "__custom__") {
+                    setPiAiCustomMode(true);
                     if (piAiModelSelectValue !== "__custom__") {
                       setPiAiModelSpec("");
                     }
                     return;
                   }
+                  setPiAiCustomMode(false);
                   setPiAiModelSpec(next);
                 }}
               >
@@ -869,7 +895,10 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
                 <Input
                   type="text"
                   value={piAiModelSpec}
-                  onChange={(e) => setPiAiModelSpec(e.target.value)}
+                  onChange={(e) => {
+                    setPiAiCustomMode(true);
+                    setPiAiModelSpec(e.target.value);
+                  }}
                   placeholder={t("providerswitcher.providerModelPlaceholder")}
                   className="mt-2 bg-card text-[13px]"
                 />

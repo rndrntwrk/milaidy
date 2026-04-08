@@ -374,6 +374,8 @@ export {
   CONFIG_WRITE_ALLOWED_TOP_KEYS,
   discoverInstalledPlugins,
   discoverPluginsFromManifest,
+  findPrimaryEnvKey,
+  readBundledPluginPackageMetadata,
 } from "./plugin-discovery-helpers.js";
 
 type PiAiPluginModule = typeof import("@elizaos/plugin-pi-ai");

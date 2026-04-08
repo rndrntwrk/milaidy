@@ -4,7 +4,7 @@ import path from "node:path";
 import sharp from "sharp";
 import type { IAgentRuntime } from "@elizaos/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { analyzeMessages } from "./analyzer";
+import { analyzeMessages, enrichWithCalendar } from "./analyzer";
 import {
   buildActivityProfile,
   profileNeedsRebuild,
@@ -114,7 +114,7 @@ describe.skipIf(!hasNodeSqlite)("refreshCurrentState", () => {
     );
 
     const runtime = createRuntime({}, []);
-    const profile = analyzeMessages([], new Map(), OWNER_ID, "UTC", 7, NOW);
+    const profile = enrichWithCalendar(analyzeMessages([], new Map(), OWNER_ID, "UTC", 7, NOW), [], "UTC");
     const refreshed = await refreshCurrentState(
       runtime,
       OWNER_ID,
@@ -140,7 +140,7 @@ describe.skipIf(!hasNodeSqlite)("refreshCurrentState", () => {
         },
       ],
     );
-    const profile = analyzeMessages([], new Map(), OWNER_ID, "UTC", 7, NOW);
+    const profile = enrichWithCalendar(analyzeMessages([], new Map(), OWNER_ID, "UTC", 7, NOW), [], "UTC");
 
     const refreshed = await refreshCurrentState(
       runtime,
@@ -166,7 +166,7 @@ describe.skipIf(!hasNodeSqlite)("refreshCurrentState", () => {
         },
       ],
     );
-    const profile = analyzeMessages([], new Map(), OWNER_ID, "UTC", 7, NOW);
+    const profile = enrichWithCalendar(analyzeMessages([], new Map(), OWNER_ID, "UTC", 7, NOW), [], "UTC");
 
     const refreshed = await refreshCurrentState(
       runtime,
@@ -199,7 +199,7 @@ describe.skipIf(!hasNodeSqlite)("refreshCurrentState", () => {
     expect(built.isCurrentlyActive).toBe(true);
     expect(built.hasOpenActivityCycle).toBe(true);
 
-    const staleBase = analyzeMessages([], new Map(), OWNER_ID, "UTC", 7, NOW);
+    const staleBase = enrichWithCalendar(analyzeMessages([], new Map(), OWNER_ID, "UTC", 7, NOW), [], "UTC");
     const refreshed = await refreshCurrentState(runtime, OWNER_ID, staleBase, NOW);
     expect(refreshed.lastSeenPlatform).toBe("desktop_app");
     expect(refreshed.isCurrentlyActive).toBe(true);
@@ -227,7 +227,7 @@ describe.skipIf(!hasNodeSqlite)("refreshCurrentState", () => {
     expect(built.isCurrentlyActive).toBe(true);
     expect(built.hasOpenActivityCycle).toBe(true);
 
-    const staleBase = analyzeMessages([], new Map(), OWNER_ID, "UTC", 7, NOW);
+    const staleBase = enrichWithCalendar(analyzeMessages([], new Map(), OWNER_ID, "UTC", 7, NOW), [], "UTC");
     const refreshed = await refreshCurrentState(runtime, OWNER_ID, staleBase, NOW);
     expect(refreshed.lastSeenPlatform).toBe("ios");
     expect(refreshed.isCurrentlyActive).toBe(true);
@@ -281,7 +281,7 @@ describe.skipIf(!hasNodeSqlite)("refreshCurrentState", () => {
     expect(built.effectiveDayKey).toBe("2026-04-06");
     expect(built.typicalSleepDurationMinutes).toBe(420);
 
-    const staleBase = analyzeMessages([], new Map(), OWNER_ID, "UTC", 7, NOW);
+    const staleBase = enrichWithCalendar(analyzeMessages([], new Map(), OWNER_ID, "UTC", 7, NOW), [], "UTC");
     const refreshed = await refreshCurrentState(runtime, OWNER_ID, staleBase, NOW);
     expect(refreshed.isCurrentlyActive).toBe(false);
     expect(refreshed.hasOpenActivityCycle).toBe(false);

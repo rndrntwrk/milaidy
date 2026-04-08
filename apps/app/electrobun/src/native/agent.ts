@@ -924,7 +924,7 @@ async function drainStderrToLog(
 const PGLITE_LOCK_RE =
   /pglite data dir is already in use|database is locked|lock file already exists/i;
 const PGLITE_RECOVERY_RE =
-  /failed query:\s*create schema if not exists|aborted\(\)\. build with -sassertions|database disk image is malformed|file is not a database|malformed database schema|checksum mismatch|checkpoint failed|wal file/i;
+  /failed query:\s*(?:create schema if not exists|create table if not exists life_)|aborted\(\)\. build with -sassertions|database disk image is malformed|file is not a database|malformed database schema|checksum mismatch|checkpoint failed|wal file/i;
 
 function shouldAutoRecoverPgliteFailure(line: string): boolean {
   if (PGLITE_LOCK_RE.test(line)) {

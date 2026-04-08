@@ -68,6 +68,36 @@ describe("plugin metadata discovery", () => {
     expect(github?.tags).not.toContain("social-chat");
   });
 
+  it("hydrates config schemas for bundled providers and connectors", () => {
+    const plugins = discoverPluginsFromManifest();
+    const telegram = plugins.find((plugin) => plugin.id === "telegram");
+    const openai = plugins.find((plugin) => plugin.id === "openai");
+
+    expect(telegram?.configKeys).toEqual(
+      expect.arrayContaining(["TELEGRAM_BOT_TOKEN"]),
+    );
+    expect(
+      telegram?.parameters.some(
+        (parameter) =>
+          parameter.key === "TELEGRAM_BOT_TOKEN" &&
+          parameter.required === true &&
+          parameter.sensitive === true,
+      ),
+    ).toBe(true);
+
+    expect(openai?.configKeys).toEqual(
+      expect.arrayContaining(["OPENAI_API_KEY"]),
+    );
+    expect(
+      openai?.parameters.some(
+        (parameter) =>
+          parameter.key === "OPENAI_API_KEY" &&
+          parameter.required === true &&
+          parameter.sensitive === true,
+      ),
+    ).toBe(true);
+  });
+
   it("enriches installed plugins with homepage, repository, and setup links", () => {
     const installPath = makeTempDir("plugin-twitch-");
     writeFileSync(

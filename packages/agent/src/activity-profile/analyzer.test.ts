@@ -183,7 +183,7 @@ describe("analyzeMessages", () => {
   });
 
   it("treats persisted desktop activity signals as live presence", () => {
-    const activitySignals = [
+    const activitySignals: ActivitySignalRecord[] = [
       {
         source: "desktop_power",
         platform: "desktop_app",

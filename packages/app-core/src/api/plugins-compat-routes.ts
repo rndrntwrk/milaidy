@@ -9,6 +9,10 @@ import {
   saveElizaConfig,
 } from "@miladyai/agent/config/config";
 import {
+  findPrimaryEnvKey,
+  readBundledPluginPackageMetadata,
+} from "@miladyai/agent/api/server";
+import {
   ensureCompatApiAuthorized,
   ensureCompatSensitiveRouteAuthorized,
 } from "./auth";
@@ -45,6 +49,7 @@ interface ManifestPluginParameter {
   type?: string;
   description?: string;
   required?: boolean;
+  optional?: boolean;
   sensitive?: boolean;
   default?: string | number | boolean;
   options?: string[];
@@ -390,6 +395,12 @@ function titleCasePluginId(id: string): string {
     .join(" ");
 }
 
+function inferSensitiveConfigKey(key: string): boolean {
+  return /(?:_API_KEY|_SECRET|_TOKEN|_PASSWORD|_PRIVATE_KEY|_SIGNING_|ENCRYPTION_)/i.test(
+    key,
+  );
+}
+
 function buildPluginParamDefs(
   parameters: Record<string, ManifestPluginParameter> | undefined,
   savedValues?: Record<string, string>,
@@ -414,7 +425,10 @@ function buildPluginParamDefs(
     const effectiveValue =
       envValue ?? (savedValue ? savedValue.trim() || undefined : undefined);
     const isSet = Boolean(effectiveValue);
-    const sensitive = Boolean(definition.sensitive);
+    const sensitive =
+      typeof definition.sensitive === "boolean"
+        ? definition.sensitive
+        : inferSensitiveConfigKey(key);
     const currentValue =
       !isSet || !effectiveValue
         ? null
@@ -426,7 +440,9 @@ function buildPluginParamDefs(
       key,
       type: definition.type ?? "string",
       description: definition.description ?? "",
-      required: Boolean(definition.required),
+      required:
+        definition.required === true ||
+        (definition.optional === false && definition.required !== false),
       sensitive,
       default:
         definition.default === undefined
@@ -548,6 +564,7 @@ export function buildPluginListResponse(runtime: AgentRuntime | null): {
   const configRecord = config as Record<string, unknown>;
   const loadedNames = resolveLoadedPluginNames(runtime);
   const manifestPath = resolvePluginManifestPath();
+  const manifestRoot = manifestPath ? path.dirname(manifestPath) : process.cwd();
   const manifest = manifestPath
     ? (JSON.parse(fs.readFileSync(manifestPath, "utf8")) as PluginManifestFile)
     : null;
@@ -559,7 +576,22 @@ export function buildPluginListResponse(runtime: AgentRuntime | null): {
   for (const entry of manifest?.plugins ?? []) {
     const pluginId = normalizePluginId(entry.id);
     const category = normalizePluginCategory(entry.category);
-    const parameters = buildPluginParamDefs(entry.pluginParameters);
+    const bundledMeta =
+      entry.dirName && manifestRoot
+        ? readBundledPluginPackageMetadata(
+            manifestRoot,
+            entry.dirName,
+            entry.npmName,
+          )
+        : undefined;
+    const configKeys =
+      Array.isArray(entry.configKeys) && entry.configKeys.length > 0
+        ? entry.configKeys
+        : (bundledMeta?.configKeys ?? []);
+    const envKey = entry.envKey ?? findPrimaryEnvKey(configKeys);
+    const parameters = buildPluginParamDefs(
+      entry.pluginParameters ?? bundledMeta?.pluginParameters,
+    );
     const active = isPluginLoaded(pluginId, entry.npmName, loadedNames);
     const enabled =
       active ||
@@ -582,13 +614,14 @@ export function buildPluginListResponse(runtime: AgentRuntime | null): {
     plugins.set(pluginId, {
       id: pluginId,
       name: entry.name ?? titleCasePluginId(pluginId),
-      description: entry.description ?? "",
+      description: entry.description ?? bundledMeta?.description ?? "",
       tags: entry.tags ?? [],
       enabled,
       configured: validationErrors.length === 0,
-      envKey: entry.envKey ?? null,
+      envKey,
       category,
       source: "bundled",
+      configKeys,
       parameters,
       validationErrors,
       validationWarnings: [],
@@ -599,10 +632,10 @@ export function buildPluginListResponse(runtime: AgentRuntime | null): {
         undefined,
       pluginDeps: entry.pluginDeps,
       isActive: active,
-      configUiHints: entry.configUiHints,
-      icon: entry.logoUrl ?? entry.icon ?? null,
-      homepage: entry.homepage,
-      repository: entry.repository,
+      configUiHints: entry.configUiHints ?? bundledMeta?.configUiHints,
+      icon: entry.logoUrl ?? entry.icon ?? bundledMeta?.icon ?? null,
+      homepage: entry.homepage ?? bundledMeta?.homepage,
+      repository: entry.repository ?? bundledMeta?.repository,
       setupGuideUrl: entry.setupGuideUrl,
     });
   }

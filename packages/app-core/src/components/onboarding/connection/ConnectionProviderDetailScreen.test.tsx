@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 
+import type React from "react";
 import {
   cleanup,
   fireEvent,
@@ -49,6 +50,52 @@ vi.mock("../../../utils", () => ({
   openExternalUrl: (...args: unknown[]) => mockOpenExternalUrl(...args),
 }));
 
+vi.mock("@miladyai/ui", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@miladyai/ui")>();
+  return {
+    ...actual,
+    Button: ({
+      children,
+      ...props
+    }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
+      <button {...props}>{children}</button>
+    ),
+    Input: (props: React.InputHTMLAttributes<HTMLInputElement>) => (
+      <input {...props} />
+    ),
+    Select: ({
+      value,
+      onValueChange,
+      children,
+      ...props
+    }: {
+      value: string;
+      onValueChange: (value: string) => void;
+      children?: React.ReactNode;
+    } & React.SelectHTMLAttributes<HTMLSelectElement>) => (
+      <select
+        {...props}
+        value={value}
+        onChange={(e: React.ChangeEvent<HTMLSelectElement>) =>
+          onValueChange(e.target.value)
+        }
+      >
+        {children}
+      </select>
+    ),
+    SelectTrigger: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+    SelectValue: () => null,
+    SelectContent: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+    SelectItem: ({
+      value,
+      children,
+    }: {
+      value: string;
+      children?: React.ReactNode;
+    }) => <option value={value}>{children}</option>,
+  };
+});
+
 vi.mock("../../../providers", async () => {
   const actual = await vi.importActual<typeof import("../../../providers")>(
     "../../../providers",
@@ -88,6 +135,11 @@ function t(
     "onboarding.requiresChatGPTSub": "Requires ChatGPT subscription",
     "onboarding.pasteAuthCode": "Paste auth code",
     "onboarding.authCodeInstructions": "Paste the full auth code here.",
+    "onboarding.keyFormatWarning": "Key format looks invalid.",
+    "onboarding.primaryModelOptional": "Primary model (optional)",
+    "onboarding.modelPlaceholder": "provider/model",
+    "onboarding.piCredentialsHint": "Pi credentials. ",
+    "onboarding.piManualHint": "Enter a model manually.",
     "onboarding.exchangeFailedWithMessage": "Exchange failed: {{message}}",
     "onboarding.failedToStartLogin": "Failed to start login: {{message}}",
     "onboarding.almostThere": "Almost there",
@@ -98,6 +150,8 @@ function t(
       "http://localhost:1455/auth/callback?code=...",
     "onboarding.completeLogin": "Complete login",
     "onboarding.startOver": "Start over",
+    "onboarding.setupToken": "Setup token",
+    "onboarding.oauthLogin": "OAuth login",
     "onboarding.openLoginPageInBrowser": "Open login page in browser",
     "onboarding.openLoginPageInBrowserDesc":
       "Open the login page in your browser to continue.",
@@ -195,6 +249,18 @@ describe("ConnectionProviderDetailScreen", () => {
     expect(backButton.className).not.toContain("bg-bg-accent");
   });
 
+  it("shows an API-key format warning for invalid direct-provider keys", () => {
+    mockUseApp.mockReturnValue(createState());
+
+    render(<ConnectionProviderDetailScreen dispatch={vi.fn()} />);
+
+    fireEvent.change(screen.getByLabelText("API Key"), {
+      target: { value: "not-a-real-openai-key" },
+    });
+
+    expect(screen.getByText("Key format looks invalid.")).toBeTruthy();
+  });
+
   it("renders an actionable browser-login recovery control for Eliza Cloud", () => {
     mockUseApp.mockReturnValue(
       createState({
@@ -255,6 +321,26 @@ describe("ConnectionProviderDetailScreen", () => {
     );
     const content = banner.querySelector("[data-onboarding-status-content]");
     expect(content?.textContent).toContain("Connected");
+  });
+
+  it("updates the Eliza Cloud API key through the direct-key path", () => {
+    const setState = vi.fn();
+    mockUseApp.mockReturnValue(
+      createState({
+        onboardingProvider: "elizacloud",
+        onboardingElizaCloudTab: "apikey",
+        onboardingCloudApiKey: "",
+        setState,
+      }),
+    );
+
+    render(<ConnectionProviderDetailScreen dispatch={vi.fn()} />);
+
+    fireEvent.change(screen.getByPlaceholderText("ec-..."), {
+      target: { value: "ec-test-key" },
+    });
+
+    expect(setState).toHaveBeenCalledWith("onboardingCloudApiKey", "ec-test-key");
   });
 
   it("exposes openrouter model choices as a radiogroup", () => {
@@ -597,6 +683,37 @@ describe("ConnectionProviderDetailScreen", () => {
     expect(handleOnboardingNext).toHaveBeenCalledWith();
   });
 
+  it("switches the Claude subscription flow between setup-token and OAuth tabs", () => {
+    const dispatch = vi.fn();
+    mockUseApp.mockReturnValue(
+      createState({
+        onboardingProvider: "anthropic-subscription",
+        onboardingOptions: {
+          providers: [
+            {
+              id: "anthropic-subscription",
+              name: "Claude Subscription",
+              description: "Task agents only",
+            },
+          ],
+          openrouterModels: [],
+          piAiModels: [],
+          piAiDefaultModel: "",
+        },
+        onboardingSubscriptionTab: "token",
+      }),
+    );
+
+    render(<ConnectionProviderDetailScreen dispatch={dispatch} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "OAuth login" }));
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "setSubscriptionTab",
+      tab: "oauth",
+    });
+  });
+
   it("normalizes OpenAI callback URLs before exchange", async () => {
     mockUseApp.mockReturnValue(
       createState({
@@ -666,6 +783,41 @@ describe("ConnectionProviderDetailScreen", () => {
     ).toBeTruthy();
   });
 
+  it("lets the user restart the OpenAI callback flow from the callback step", async () => {
+    mockUseApp.mockReturnValue(
+      createState({
+        onboardingProvider: "openai-subscription",
+        onboardingOptions: {
+          providers: [
+            {
+              id: "openai-subscription",
+              name: "ChatGPT Subscription",
+              description: "Plus/Pro subscription",
+            },
+          ],
+          openrouterModels: [],
+          piAiModels: [],
+          piAiDefaultModel: "",
+        },
+      }),
+    );
+
+    render(<ConnectionProviderDetailScreen dispatch={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Log in with OpenAI" }));
+    await screen.findByLabelText("Redirect URL");
+    fireEvent.change(screen.getByLabelText("Redirect URL"), {
+      target: {
+        value: "localhost:1455/auth/callback?code=openai-auth-code",
+      },
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Start over" }));
+
+    expect(screen.getByRole("button", { name: "Log in with OpenAI" })).toBeTruthy();
+    expect(screen.queryByLabelText("Redirect URL")).toBeNull();
+  });
+
   it("uses the default footer controls for direct API-key providers", () => {
     const dispatch = vi.fn();
     const handleOnboardingNext = vi.fn(async () => {});
@@ -680,9 +832,168 @@ describe("ConnectionProviderDetailScreen", () => {
     render(<ConnectionProviderDetailScreen dispatch={dispatch} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    fireEvent.click(screen.getByRole("button", { name: "Set up later" }));
     fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
 
     expect(dispatch).toHaveBeenCalledWith({ type: "clearProvider" });
-    expect(handleOnboardingNext).toHaveBeenCalledWith();
+    expect(handleOnboardingNext).toHaveBeenCalledTimes(2);
+    expect(handleOnboardingNext).toHaveBeenNthCalledWith(1);
+    expect(handleOnboardingNext).toHaveBeenNthCalledWith(2);
+  });
+
+  it("updates the manual pi.ai model override when no catalog models are available", () => {
+    const setState = vi.fn();
+    mockUseApp.mockReturnValue(
+      createState({
+        onboardingProvider: "pi-ai",
+        onboardingOptions: {
+          providers: [
+            {
+              id: "pi-ai",
+              name: "Pi Credentials",
+              description: "Local auth",
+            },
+          ],
+          openrouterModels: [],
+          piAiModels: [],
+          piAiDefaultModel: "",
+        },
+        setState,
+      }),
+    );
+
+    render(<ConnectionProviderDetailScreen dispatch={vi.fn()} />);
+
+    fireEvent.change(screen.getByPlaceholderText("provider/model"), {
+      target: { value: "pi/custom-model" },
+    });
+
+    expect(setState).toHaveBeenCalledWith(
+      "onboardingPrimaryModel",
+      "pi/custom-model",
+    );
+  });
+
+  it("switches pi.ai to a known catalog model from the dropdown", () => {
+    const setState = vi.fn();
+    mockUseApp.mockReturnValue(
+      createState({
+        onboardingProvider: "pi-ai",
+        onboardingOptions: {
+          providers: [
+            {
+              id: "pi-ai",
+              name: "Pi Credentials",
+              description: "Local auth",
+            },
+          ],
+          openrouterModels: [],
+          piAiModels: [
+            {
+              id: "pi/default",
+              name: "Pi Default",
+              provider: "Pi",
+              description: "Default",
+            },
+            {
+              id: "pi/creative",
+              name: "Pi Creative",
+              provider: "Pi",
+              description: "Creative",
+            },
+          ],
+          piAiDefaultModel: "pi/default",
+        },
+        onboardingPrimaryModel: "",
+        setState,
+      }),
+    );
+
+    render(<ConnectionProviderDetailScreen dispatch={vi.fn()} />);
+
+    fireEvent.change(screen.getByRole("combobox"), {
+      target: { value: "pi/creative" },
+    });
+
+    expect(setState).toHaveBeenCalledWith("onboardingPrimaryModel", "pi/creative");
+  });
+
+  it("clears the pi.ai override when the user switches to a custom model", () => {
+    const setState = vi.fn();
+    mockUseApp.mockReturnValue(
+      createState({
+        onboardingProvider: "pi-ai",
+        onboardingOptions: {
+          providers: [
+            {
+              id: "pi-ai",
+              name: "Pi Credentials",
+              description: "Local auth",
+            },
+          ],
+          openrouterModels: [],
+          piAiModels: [
+            {
+              id: "pi/default",
+              name: "Pi Default",
+              provider: "Pi",
+              description: "Default",
+            },
+          ],
+          piAiDefaultModel: "pi/default",
+        },
+        onboardingPrimaryModel: "pi/default",
+        setState,
+      }),
+    );
+
+    render(<ConnectionProviderDetailScreen dispatch={vi.fn()} />);
+
+    fireEvent.change(screen.getByRole("combobox"), {
+      target: { value: "__custom__" },
+    });
+
+    expect(setState).toHaveBeenCalledWith("onboardingPrimaryModel", "");
+  });
+
+  it("updates the custom pi.ai model input when an unknown model is already selected", () => {
+    const setState = vi.fn();
+    mockUseApp.mockReturnValue(
+      createState({
+        onboardingProvider: "pi-ai",
+        onboardingOptions: {
+          providers: [
+            {
+              id: "pi-ai",
+              name: "Pi Credentials",
+              description: "Local auth",
+            },
+          ],
+          openrouterModels: [],
+          piAiModels: [
+            {
+              id: "pi/default",
+              name: "Pi Default",
+              provider: "Pi",
+              description: "Default",
+            },
+          ],
+          piAiDefaultModel: "pi/default",
+        },
+        onboardingPrimaryModel: "pi/custom-existing",
+        setState,
+      }),
+    );
+
+    render(<ConnectionProviderDetailScreen dispatch={vi.fn()} />);
+
+    fireEvent.change(screen.getByPlaceholderText("provider/model"), {
+      target: { value: "pi/custom-updated" },
+    });
+
+    expect(setState).toHaveBeenCalledWith(
+      "onboardingPrimaryModel",
+      "pi/custom-updated",
+    );
   });
 });

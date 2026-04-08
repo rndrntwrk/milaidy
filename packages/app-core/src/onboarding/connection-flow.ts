@@ -176,6 +176,7 @@ export function resolveConnectionUiSpec(
 
 const resetCloudSelectionPatch = (): ConnectionStatePatch => ({
   ...toOnboardingTargetPatch(""),
+  onboardingCloudApiKey: "",
   onboardingApiKey: "",
   onboardingRemoteError: null,
   onboardingRemoteConnecting: false,

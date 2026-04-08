@@ -168,7 +168,10 @@ function getSelect(tree: ReactTestRenderer): ReactTestInstance {
     (node: ReactTestInstance) =>
       node.type === "select" &&
       node.props.value !== undefined &&
-      node.props.id === "provider-switcher-select",
+      node.findAll(
+        (child: ReactTestInstance) =>
+          child.type === "option" && child.props.value === "__cloud__",
+      ).length > 0,
   );
 }
 
@@ -202,6 +205,24 @@ function getInputByPlaceholder(
     throw new Error(`Input not found: ${placeholder}`);
   }
   return matches[0];
+}
+
+function getPiAiModelSelect(tree: ReactTestRenderer): ReactTestInstance {
+  return tree.root.find(
+    (node: ReactTestInstance) =>
+      node.type === "select" &&
+      node.props.value !== undefined &&
+      node.findAll(
+        (child: ReactTestInstance) =>
+          child.type === "option" && child.props.value === "__custom__",
+      ).length > 0,
+  );
+}
+
+function getSelectOptionValues(tree: ReactTestRenderer): string[] {
+  return getSelect(tree)
+    .findAll((node: ReactTestInstance) => node.type === "option")
+    .map((node: ReactTestInstance) => node.props.value);
 }
 
 describe("ProviderSwitcher subscription selection behavior", () => {
@@ -430,6 +451,34 @@ describe("ProviderSwitcher subscription selection behavior", () => {
     expect(mockSwitchProvider).toHaveBeenCalledWith("openai");
   });
 
+  it("rolls direct-provider selection back and surfaces an error when switching fails", async () => {
+    mockSwitchProvider.mockRejectedValueOnce(new Error("provider failed"));
+
+    let tree!: ReactTestRenderer;
+    await act(async () => {
+      tree = create(<ProviderSwitcher {...defaultProps()} />);
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    expect(getSelectValue(tree)).toBe("__cloud__");
+
+    await act(async () => {
+      getSelect(tree).props.onChange({
+        target: { value: "openai" },
+      });
+      await Promise.resolve();
+    });
+
+    expect(getSelectValue(tree)).toBe("__cloud__");
+    expect(mockSetActionNotice).toHaveBeenCalledWith(
+      "Failed to switch AI provider: provider failed",
+      "error",
+      6000,
+    );
+  });
+
   it("rolls cloud selection back and surfaces an error when Eliza Cloud switching fails", async () => {
     mockGetSubscriptionStatus.mockResolvedValue({
       providers: [
@@ -534,6 +583,50 @@ describe("ProviderSwitcher subscription selection behavior", () => {
       "error",
       6000,
     );
+  });
+
+  it("sorts unknown direct providers after catalog-backed ones and alphabetically", async () => {
+    let tree!: ReactTestRenderer;
+    await act(async () => {
+      tree = create(
+        <ProviderSwitcher
+          {...defaultProps()}
+          plugins={[
+            {
+              id: "plugin-zeta",
+              name: "Zeta",
+              category: "ai-provider",
+              enabled: true,
+              configured: true,
+              parameters: [],
+            },
+            {
+              id: "plugin-openai",
+              name: "OpenAI",
+              category: "ai-provider",
+              enabled: true,
+              configured: true,
+              parameters: [],
+            },
+            {
+              id: "plugin-alpha",
+              name: "Alpha",
+              category: "ai-provider",
+              enabled: true,
+              configured: true,
+              parameters: [],
+            },
+          ]}
+        />,
+      );
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    const optionValues = getSelectOptionValues(tree);
+    expect(optionValues.indexOf("openai")).toBeLessThan(optionValues.indexOf("alpha"));
+    expect(optionValues.indexOf("alpha")).toBeLessThan(optionValues.indexOf("zeta"));
   });
 
   it("shows Eliza Cloud billing controls and disconnect flow when cloud is selected", async () => {
@@ -766,6 +859,264 @@ describe("ProviderSwitcher subscription selection behavior", () => {
       "pi-ai",
       undefined,
       "pi/custom-new",
+    );
+  });
+
+  it("saves a known pi.ai model selected from the dropdown", async () => {
+    mockGetConfig.mockResolvedValue({
+      serviceRouting: {
+        llmText: {
+          backend: "pi-ai",
+          transport: "direct",
+          primaryModel: "pi/default",
+        },
+      },
+      models: {},
+      cloud: {
+        enabled: false,
+        inferenceMode: "byok",
+        services: { inference: false },
+      },
+      agents: {},
+      env: { vars: {} },
+    });
+    mockGetOnboardingOptions.mockResolvedValue({
+      models: { small: [], large: [] },
+      piAiModels: [
+        {
+          id: "pi/default",
+          name: "Pi Default",
+          provider: "Pi",
+          description: "Default",
+        },
+        {
+          id: "pi/creative",
+          name: "Pi Creative",
+          provider: "Pi",
+          description: "Creative",
+        },
+      ],
+      piAiDefaultModel: "pi/default",
+    });
+
+    let tree!: ReactTestRenderer;
+    await act(async () => {
+      tree = create(<ProviderSwitcher {...defaultProps()} />);
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    await act(async () => {
+      getPiAiModelSelect(tree).props.onChange({
+        target: { value: "pi/creative" },
+      });
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      getButtonByText(tree, "apikeyconfig.save").props.onClick();
+      await Promise.resolve();
+    });
+
+    expect(mockSwitchProvider).toHaveBeenCalledWith(
+      "pi-ai",
+      undefined,
+      "pi/creative",
+    );
+  });
+
+  it("clears the pi.ai override when the dropdown returns to the default model", async () => {
+    mockGetConfig.mockResolvedValue({
+      serviceRouting: {
+        llmText: {
+          backend: "pi-ai",
+          transport: "direct",
+          primaryModel: "pi/custom-old",
+        },
+      },
+      models: {},
+      cloud: {
+        enabled: false,
+        inferenceMode: "byok",
+        services: { inference: false },
+      },
+      agents: {},
+      env: { vars: {} },
+    });
+    mockGetOnboardingOptions.mockResolvedValue({
+      models: { small: [], large: [] },
+      piAiModels: [
+        {
+          id: "pi/default",
+          name: "Pi Default",
+          provider: "Pi",
+          description: "Default",
+        },
+      ],
+      piAiDefaultModel: "pi/default",
+    });
+
+    let tree!: ReactTestRenderer;
+    await act(async () => {
+      tree = create(<ProviderSwitcher {...defaultProps()} />);
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    await act(async () => {
+      getPiAiModelSelect(tree).props.onChange({
+        target: { value: "__default__" },
+      });
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      getButtonByText(tree, "apikeyconfig.save").props.onClick();
+      await Promise.resolve();
+    });
+
+    expect(mockSwitchProvider).toHaveBeenCalledWith("pi-ai", undefined, undefined);
+  });
+
+  it("resets the pi.ai override before showing the custom-model input", async () => {
+    mockGetConfig.mockResolvedValue({
+      serviceRouting: {
+        llmText: {
+          backend: "pi-ai",
+          transport: "direct",
+          primaryModel: "pi/default",
+        },
+      },
+      models: {},
+      cloud: {
+        enabled: false,
+        inferenceMode: "byok",
+        services: { inference: false },
+      },
+      agents: {},
+      env: { vars: {} },
+    });
+    mockGetOnboardingOptions.mockResolvedValue({
+      models: { small: [], large: [] },
+      piAiModels: [
+        {
+          id: "pi/default",
+          name: "Pi Default",
+          provider: "Pi",
+          description: "Default",
+        },
+      ],
+      piAiDefaultModel: "pi/default",
+    });
+
+    let tree!: ReactTestRenderer;
+    await act(async () => {
+      tree = create(<ProviderSwitcher {...defaultProps()} />);
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    await act(async () => {
+      getPiAiModelSelect(tree).props.onChange({
+        target: { value: "__custom__" },
+      });
+      await Promise.resolve();
+    });
+
+    expect(
+      getInputByPlaceholder(tree, "providerswitcher.providerModelPlaceholder").props
+        .value,
+    ).toBe("");
+  });
+
+  it("uses the fallback pi.ai text input when no catalog models are available", async () => {
+    mockGetConfig.mockResolvedValue({
+      serviceRouting: {
+        llmText: {
+          backend: "pi-ai",
+          transport: "direct",
+          primaryModel: "",
+        },
+      },
+      models: {},
+      cloud: {
+        enabled: false,
+        inferenceMode: "byok",
+        services: { inference: false },
+      },
+      agents: {},
+      env: { vars: {} },
+    });
+    mockGetOnboardingOptions.mockResolvedValue({
+      models: { small: [], large: [] },
+      piAiModels: [],
+      piAiDefaultModel: "",
+    });
+
+    let tree!: ReactTestRenderer;
+    await act(async () => {
+      tree = create(<ProviderSwitcher {...defaultProps()} />);
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    await act(async () => {
+      getInputByPlaceholder(
+        tree,
+        "providerswitcher.providerModelPlaceholder",
+      ).props.onChange({
+        target: { value: "pi/fallback-manual" },
+      });
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      getButtonByText(tree, "apikeyconfig.save").props.onClick();
+      await Promise.resolve();
+    });
+
+    expect(mockSwitchProvider).toHaveBeenCalledWith(
+      "pi-ai",
+      undefined,
+      "pi/fallback-manual",
+    );
+  });
+
+  it("warns instead of pretending config loaded when onboarding options fail", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    mockGetOnboardingOptions.mockRejectedValueOnce(new Error("options failed"));
+
+    await act(async () => {
+      create(<ProviderSwitcher {...defaultProps()} />);
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      "[eliza] Failed to load onboarding options",
+      expect.any(Error),
+    );
+  });
+
+  it("warns instead of pretending config loaded when config fetch fails", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    mockGetConfig.mockRejectedValueOnce(new Error("config failed"));
+
+    await act(async () => {
+      create(<ProviderSwitcher {...defaultProps()} />);
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      "[eliza] Failed to load config",
+      expect.any(Error),
     );
   });
 });

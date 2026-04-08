@@ -44,6 +44,7 @@ import type {
 } from "../contracts/lifeops.js";
 import { LIFEOPS_ACTIVITY_SIGNAL_STATES } from "../contracts/lifeops.js";
 import { createIntegrationTelemetrySpan } from "../diagnostics/integration-observability.js";
+import { isRetryableLifeOpsStorageError } from "../lifeops/sql.js";
 import { LifeOpsService, LifeOpsServiceError } from "../lifeops/service.js";
 import type { ReadJsonBodyOptions } from "./http-helpers.js";
 
@@ -181,6 +182,24 @@ async function runRoute(
         errorKind: "lifeops_service_error",
       });
       ctx.error(ctx.res, error.message, error.status);
+      return true;
+    }
+    if (isRetryableLifeOpsStorageError(error)) {
+      const message = "Life Ops storage is still initializing. Refresh in a moment.";
+      logger.warn(
+        {
+          boundary: "lifeops",
+          operation,
+          statusCode: 503,
+        },
+        `[lifeops] Route unavailable: ${message}`,
+      );
+      span.failure({
+        statusCode: 503,
+        error,
+        errorKind: "lifeops_storage_unavailable",
+      });
+      ctx.error(ctx.res, message, 503);
       return true;
     }
     logger.error(

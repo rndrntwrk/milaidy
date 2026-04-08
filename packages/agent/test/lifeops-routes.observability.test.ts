@@ -178,6 +178,38 @@ describe("life-ops route observability", () => {
     );
   });
 
+  it("turns retryable lifeops storage bootstrap failures into a 503", async () => {
+    serviceGetGoogleStatusMock.mockRejectedValue(
+      new Error(
+        "Failed query: CREATE TABLE IF NOT EXISTS life_task_definitions",
+      ),
+    );
+    const ctx = createContext();
+
+    const handled = await handleLifeOpsRoutes(ctx);
+
+    expect(handled).toBe(true);
+    expect(spanFailureMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        statusCode: 503,
+        errorKind: "lifeops_storage_unavailable",
+      }),
+    );
+    expect(loggerWarnMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        boundary: "lifeops",
+        operation: "GET /api/lifeops/connectors/google/status",
+        statusCode: 503,
+      }),
+      "[lifeops] Route unavailable: Life Ops storage is still initializing. Refresh in a moment.",
+    );
+    expect(ctx.error).toHaveBeenCalledWith(
+      ctx.res,
+      "Life Ops storage is still initializing. Refresh in a moment.",
+      503,
+    );
+  });
+
   it("logs unhandled route crashes before rethrowing", async () => {
     serviceGetGoogleStatusMock.mockRejectedValue(new Error("boom"));
     const ctx = createContext();

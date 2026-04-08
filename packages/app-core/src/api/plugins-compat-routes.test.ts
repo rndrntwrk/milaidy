@@ -25,6 +25,7 @@ const ENV_KEYS = [
   "DISCORD_API_TOKEN",
   "DISCORD_BOT_TOKEN",
   "DISCORD_APPLICATION_ID",
+  "TELEGRAM_BOT_TOKEN",
   "ELIZA_API_TOKEN",
   "ELIZA_PERSIST_CONFIG_PATH",
   "MILADY_PERSIST_CONFIG_PATH",
@@ -62,6 +63,10 @@ function getPlugin(
 
 function getDiscordPlugin(): CompatPluginRecord {
   return getPlugin("discord");
+}
+
+function getTelegramPlugin(): CompatPluginRecord {
+  return getPlugin("telegram");
 }
 
 function createAsyncJsonRequest(
@@ -181,6 +186,29 @@ describe("buildPluginListResponse", () => {
     });
     expect(process.env.DISCORD_API_TOKEN).toBe("discord-token-456");
     expect(process.env.DISCORD_BOT_TOKEN).toBe("discord-token-456");
+  });
+
+  it("hydrates Telegram parameters from bundled package metadata", () => {
+    process.env.TELEGRAM_BOT_TOKEN = "telegram-token-123";
+
+    const telegram = getTelegramPlugin();
+
+    expect(telegram.parameters.map((parameter) => parameter.key)).toEqual(
+      expect.arrayContaining([
+        "TELEGRAM_BOT_TOKEN",
+        "TELEGRAM_ALLOWED_CHATS",
+        "TELEGRAM_API_ROOT",
+      ]),
+    );
+    expect(
+      telegram.parameters.find(
+        (parameter) => parameter.key === "TELEGRAM_BOT_TOKEN",
+      ),
+    ).toMatchObject({
+      isSet: true,
+    });
+    expect(telegram.configured).toBe(true);
+    expect(telegram.validationErrors).toEqual([]);
   });
 
   it("marks Discord toggles as pending restart on the compat API route", async () => {

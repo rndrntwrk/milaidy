@@ -2,7 +2,6 @@ import crypto from "node:crypto";
 import type { IAgentRuntime } from "@elizaos/core";
 import type {
   LifeOpsActivitySignal,
-  LifeOpsHealthSignal,
   LifeOpsAuditEvent,
   LifeOpsBrowserSession,
   LifeOpsCalendarEvent,
@@ -12,6 +11,7 @@ import type {
   LifeOpsGmailMessageSummary,
   LifeOpsGoalDefinition,
   LifeOpsGoalLink,
+  LifeOpsHealthSignal,
   LifeOpsOccurrence,
   LifeOpsOccurrenceView,
   LifeOpsReminderAttempt,
@@ -22,7 +22,8 @@ import type {
 } from "@miladyai/shared/contracts/lifeops";
 import {
   executeRawSql,
-  getRuntimeDb,
+  getRuntimeDbCacheKey,
+  isRetryableLifeOpsStorageError,
   listTableColumns,
   parseJsonArray,
   parseJsonRecord,
@@ -38,6 +39,7 @@ import {
 
 const schemaReady = new WeakSet<object>();
 const schemaInitializing = new WeakMap<object, Promise<void>>();
+const LIFEOPS_SCHEMA_RETRY_DELAY_MS = 150;
 
 async function hasLifeOpsSchema(runtime: IAgentRuntime): Promise<boolean> {
   try {
@@ -396,7 +398,9 @@ function parseHealthSignal(value: unknown): LifeOpsHealthSignal | null {
   }
   const record = value as Record<string, unknown>;
   const sleepRecord =
-    record.sleep && typeof record.sleep === "object" && !Array.isArray(record.sleep)
+    record.sleep &&
+    typeof record.sleep === "object" &&
+    !Array.isArray(record.sleep)
       ? (record.sleep as Record<string, unknown>)
       : null;
   const biometricsRecord =
@@ -413,9 +417,10 @@ function parseHealthSignal(value: unknown): LifeOpsHealthSignal | null {
       : null;
 
   return {
-    source: toText(record.source, "healthkit") === "health_connect"
-      ? "health_connect"
-      : "healthkit",
+    source:
+      toText(record.source, "healthkit") === "health_connect"
+        ? "health_connect"
+        : "healthkit",
     permissions: {
       sleep: toBoolean(permissionsRecord?.sleep ?? false),
       biometrics: toBoolean(permissionsRecord?.biometrics ?? false),
@@ -429,7 +434,9 @@ function parseHealthSignal(value: unknown): LifeOpsHealthSignal | null {
       stage: sleepRecord?.stage ? toText(sleepRecord.stage) : null,
     },
     biometrics: {
-      sampleAt: biometricsRecord?.sampleAt ? toText(biometricsRecord.sampleAt) : null,
+      sampleAt: biometricsRecord?.sampleAt
+        ? toText(biometricsRecord.sampleAt)
+        : null,
       heartRateBpm: parseOptionalFiniteNumber(biometricsRecord?.heartRateBpm),
       restingHeartRateBpm: parseOptionalFiniteNumber(
         biometricsRecord?.restingHeartRateBpm,
@@ -445,7 +452,9 @@ function parseHealthSignal(value: unknown): LifeOpsHealthSignal | null {
       ),
     },
     warnings: Array.isArray(record.warnings)
-      ? record.warnings.map((warning) => toText(warning)).filter((warning) => warning.length > 0)
+      ? record.warnings
+          .map((warning) => toText(warning))
+          .filter((warning) => warning.length > 0)
       : [],
   };
 }
@@ -682,12 +691,11 @@ function parseGmailSyncState(
 export async function ensureLifeOpsTables(
   runtime: IAgentRuntime,
 ): Promise<void> {
-  // Cache schema readiness per underlying DB instance rather than per
-  // runtime object. In desktop/dev restarts the runtime can survive while the
-  // adapter is rebound to a fresh PGlite database after corruption recovery.
-  // If we key on runtime, later reads skip schema setup and crash on missing
-  // lifeops tables in the new database.
-  const key = getRuntimeDb(runtime) as unknown as object;
+  // Cache schema readiness per underlying DB connection rather than per
+  // runtime or per Drizzle wrapper. Multiple runtimes/adapters can share the
+  // same PGlite connection manager, and keying on the wrapper lets concurrent
+  // lifeops bootstraps race the same DDL.
+  const key = getRuntimeDbCacheKey(runtime);
   if (schemaReady.has(key)) {
     if (await hasLifeOpsSchema(runtime)) return;
     schemaReady.delete(key);
@@ -698,7 +706,7 @@ export async function ensureLifeOpsTables(
   const pending = schemaInitializing.get(key);
   if (pending) return pending;
 
-  const migrationPromise = runLifeOpsSchemaSetup(runtime, key);
+  const migrationPromise = runLifeOpsSchemaSetupWithRetry(runtime, key);
   schemaInitializing.set(key, migrationPromise);
   try {
     await migrationPromise;
@@ -1536,6 +1544,25 @@ async function runLifeOpsSchemaSetup(
   schemaReady.add(key);
 }
 
+async function runLifeOpsSchemaSetupWithRetry(
+  runtime: IAgentRuntime,
+  key: object,
+): Promise<void> {
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
+      await runLifeOpsSchemaSetup(runtime, key);
+      return;
+    } catch (error) {
+      if (attempt >= 2 || !isRetryableLifeOpsStorageError(error)) {
+        throw error;
+      }
+      await new Promise((resolve) =>
+        setTimeout(resolve, LIFEOPS_SCHEMA_RETRY_DELAY_MS),
+      );
+    }
+  }
+}
+
 export class LifeOpsRepository {
   constructor(private readonly runtime: IAgentRuntime) {}
 
@@ -1771,7 +1798,9 @@ export class LifeOpsRepository {
     if (definitionIds.length === 0) {
       return [];
     }
-    const definitionList = definitionIds.map((definitionId) => sqlQuote(definitionId)).join(", ");
+    const definitionList = definitionIds
+      .map((definitionId) => sqlQuote(definitionId))
+      .join(", ");
     const rows = await executeRawSql(
       this.runtime,
       `SELECT *

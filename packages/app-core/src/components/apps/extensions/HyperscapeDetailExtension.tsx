@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   client,
   type HyperscapeAvailableGoal,
+  type HyperscapeAgentThoughtsResponse,
   type HyperscapeEmbeddedAgent,
   type HyperscapeGoalState,
   type HyperscapeInventoryItem,
@@ -10,6 +11,7 @@ import {
   type HyperscapePosition,
   type HyperscapeQuickCommand,
   type HyperscapeQuickActionsResponse,
+  type HyperscapeThought,
 } from "../../../api";
 import { useApp } from "../../../state";
 import {
@@ -55,6 +57,26 @@ function formatNumeric(value: number | null | undefined): string {
   return value.toFixed(0);
 }
 
+function summarizeGoalRecommendation(goal: HyperscapeAvailableGoal): string {
+  const description = goal.description?.trim() || goal.type?.trim() || "Goal";
+  const reason = goal.reason?.trim();
+  const priority =
+    typeof goal.priority === "number" ? `#${goal.priority}` : "unranked";
+  return reason
+    ? `${description} (${priority}) - ${reason}`
+    : `${description} (${priority})`;
+}
+
+function summarizeThought(thought: HyperscapeThought): string {
+  const content = thought.content?.trim() || "No thought content reported.";
+  const timestamp =
+    typeof thought.timestamp === "number"
+      ? formatDetailTimestamp(thought.timestamp)
+      : "Timestamp unavailable";
+  const kind = thought.type?.trim() || "thought";
+  return `${kind} · ${timestamp} · ${content}`;
+}
+
 export function HyperscapeDetailExtension({ app }: AppDetailExtensionProps) {
   const { appRuns } = useApp();
   const { run, matchingRuns } = useMemo(
@@ -78,6 +100,7 @@ export function HyperscapeDetailExtension({ app }: AppDetailExtensionProps) {
     HyperscapeNearbyLocation[]
   >([]);
   const [inventory, setInventory] = useState<HyperscapeInventoryItem[]>([]);
+  const [thoughts, setThoughts] = useState<HyperscapeThought[]>([]);
   const [playerPosition, setPlayerPosition] = useState<
     [number, number, number] | null
   >(null);
@@ -118,6 +141,7 @@ export function HyperscapeDetailExtension({ app }: AppDetailExtensionProps) {
         setQuickCommands([]);
         setNearbyLocations([]);
         setInventory([]);
+        setThoughts([]);
         setPlayerPosition(null);
         setStatusMessage(
           "Waiting for the embedded Hyperscape agent to connect.",
@@ -125,13 +149,19 @@ export function HyperscapeDetailExtension({ app }: AppDetailExtensionProps) {
         return;
       }
 
-      const [goalResponse, quickActionsResponse] = await Promise.all([
-        client.getHyperscapeAgentGoal(nextActiveAgent.agentId),
-        client.getHyperscapeAgentQuickActions(nextActiveAgent.agentId),
-      ]);
+      const [goalResponse, quickActionsResponse, thoughtsResponse] =
+        await Promise.all([
+          client.getHyperscapeAgentGoal(nextActiveAgent.agentId),
+          client.getHyperscapeAgentQuickActions(nextActiveAgent.agentId),
+          client
+            .getHyperscapeAgentThoughts(nextActiveAgent.agentId, { limit: 5 })
+            .catch(() => null),
+        ]);
 
       const quickActions =
         quickActionsResponse as HyperscapeQuickActionsResponse;
+      const thoughtSnapshot =
+        thoughtsResponse as HyperscapeAgentThoughtsResponse | null;
       setGoal(goalResponse.goal);
       setAvailableGoals(
         Array.isArray(goalResponse.availableGoals)
@@ -152,6 +182,11 @@ export function HyperscapeDetailExtension({ app }: AppDetailExtensionProps) {
       );
       setInventory(
         Array.isArray(quickActions.inventory) ? quickActions.inventory : [],
+      );
+      setThoughts(
+        Array.isArray(thoughtSnapshot?.thoughts)
+          ? thoughtSnapshot.thoughts
+          : [],
       );
       setPlayerPosition(quickActions.playerPosition ?? null);
       setStatusMessage(
@@ -290,6 +325,7 @@ export function HyperscapeDetailExtension({ app }: AppDetailExtensionProps) {
         <SurfaceBadge tone={toneForHealthState(run.health.state)}>
           {run.health.state}
         </SurfaceBadge>
+        {loading ? <SurfaceBadge tone="neutral">refreshing</SurfaceBadge> : null}
         <span className="ml-auto text-[10px] uppercase tracking-[0.18em] text-muted">
           {matchingRuns.length} active run{matchingRuns.length === 1 ? "" : "s"}
         </span>
@@ -416,6 +452,87 @@ export function HyperscapeDetailExtension({ app }: AppDetailExtensionProps) {
               Resume session
             </Button>
           ) : null}
+        </div>
+      </SurfaceSection>
+
+      <SurfaceSection title="Thoughts & Recommendations">
+        <div className="grid gap-2 md:grid-cols-2">
+          <SurfaceCard
+            label="Recommended Next Steps"
+            value={
+              availableGoals.length > 0
+                ? availableGoals
+                    .slice(0, 2)
+                    .map((candidate) => candidate.description || candidate.type)
+                    .join(" · ")
+                : "No recommended goals published yet."
+            }
+            subtitle={
+              availableGoals.length > 0
+                ? availableGoals
+                    .slice(0, 2)
+                    .map(summarizeGoalRecommendation)
+                    .join(" | ")
+                : "Recommendations will appear once the planner publishes alternatives."
+            }
+          />
+          <SurfaceCard
+            label="Latest Thinking"
+            value={
+              thoughts.length > 0
+                ? thoughts[0]?.content || "Thought stream online."
+                : "No recent thoughts published."
+            }
+            subtitle={
+              thoughts.length > 0
+                ? summarizeThought(thoughts[0]!)
+                : "The agent thought stream will appear once it starts reasoning in-world."
+            }
+          />
+        </div>
+        <div className="grid gap-2 md:grid-cols-2">
+          <div className="rounded-xl border border-border/30 bg-bg/60 p-3">
+            <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
+              Planner Reasons
+            </div>
+            {availableGoals.length === 0 ? (
+              <div className="text-[11px] italic text-muted">
+                No alternate goals available yet.
+              </div>
+            ) : (
+              <div className="space-y-2 text-[11px] leading-5 text-muted-strong">
+                {availableGoals.slice(0, 4).map((candidate) => (
+                  <div
+                    key={candidate.id}
+                    className="rounded-lg border border-border/20 bg-card/60 px-3 py-2"
+                  >
+                    {summarizeGoalRecommendation(candidate)}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="rounded-xl border border-border/30 bg-bg/60 p-3">
+            <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted">
+              Thought Stream
+            </div>
+            {thoughts.length === 0 ? (
+              <div className="text-[11px] italic text-muted">
+                No recent thoughts available.
+              </div>
+            ) : (
+              <div className="space-y-2 text-[11px] leading-5 text-muted-strong">
+                {thoughts.slice(0, 4).map((thought) => (
+                  <div
+                    key={thought.id}
+                    className="rounded-lg border border-border/20 bg-card/60 px-3 py-2"
+                  >
+                    {summarizeThought(thought)}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </SurfaceSection>
 

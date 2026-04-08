@@ -7,6 +7,7 @@
  */
 
 import fs from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { logger, type UUID } from "@elizaos/core";
@@ -32,6 +33,8 @@ import {
   validatePluginConfig,
 } from "./plugin-validation.js";
 import { findOwnPackageRoot } from "./server.js";
+
+const require = createRequire(import.meta.url);
 
 export interface PluginParamDef {
   key: string;
@@ -192,6 +195,174 @@ export interface PluginIndex {
   plugins: PluginIndexEntry[];
 }
 
+type PackageJsonLike = {
+  description?: unknown;
+  homepage?: unknown;
+  repository?: unknown;
+  keywords?: unknown;
+  logoUrl?: unknown;
+  icon?: unknown;
+  elizaos?: {
+    logoUrl?: unknown;
+    configKeys?: unknown;
+    configUiHints?: unknown;
+  };
+  agentConfig?: {
+    pluginParameters?: unknown;
+    configUiHints?: unknown;
+  };
+};
+
+type NormalizedPluginParameter = {
+  type: string;
+  description: string;
+  required: boolean;
+  sensitive: boolean;
+  default?: string;
+  options?: string[];
+};
+
+type PluginPackageMetadata = {
+  description?: string;
+  homepage?: string;
+  repository?: string;
+  icon?: string | null;
+  tags?: string[];
+  configKeys?: string[];
+  pluginParameters?: Record<string, NormalizedPluginParameter>;
+  configUiHints?: Record<string, Record<string, unknown>>;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function inferSensitiveConfigKey(key: string): boolean {
+  const upper = key.toUpperCase();
+  return (
+    upper.includes("_API_KEY") ||
+    upper.includes("_SECRET") ||
+    upper.includes("_TOKEN") ||
+    upper.includes("_PASSWORD") ||
+    upper.includes("_PRIVATE_KEY") ||
+    upper.includes("_SIGNING_") ||
+    upper.includes("ENCRYPTION_")
+  );
+}
+
+export function findPrimaryEnvKey(configKeys: string[]): string | null {
+  return (
+    configKeys.find((key) =>
+      /(?:_API_KEY|_BOT_TOKEN|_ACCESS_TOKEN|_TOKEN|_SECRET|_PRIVATE_KEY)$/i.test(
+        key,
+      ),
+    ) ?? null
+  );
+}
+
+function normalizePluginParameters(
+  rawParameters: unknown,
+): Record<string, NormalizedPluginParameter> | undefined {
+  if (!isRecord(rawParameters)) {
+    return undefined;
+  }
+
+  const normalized = Object.fromEntries(
+    Object.entries(rawParameters)
+      .filter(([, definition]) => isRecord(definition))
+      .map(([key, definition]) => {
+        const options = Array.isArray(definition.options)
+          ? definition.options.filter(
+              (value): value is string => typeof value === "string",
+            )
+          : undefined;
+
+        const normalizedDefinition: NormalizedPluginParameter = {
+          type: typeof definition.type === "string" ? definition.type : "string",
+          description:
+            typeof definition.description === "string" &&
+            definition.description.trim().length > 0
+              ? definition.description
+              : inferDescription(key),
+          required:
+            definition.required === true ||
+            (definition.optional === false && definition.required !== false),
+          sensitive:
+            definition.sensitive === true || inferSensitiveConfigKey(key),
+        };
+
+        if (definition.default !== undefined) {
+          normalizedDefinition.default = String(definition.default);
+        }
+        if (options && options.length > 0) {
+          normalizedDefinition.options = options;
+        }
+
+        return [key, normalizedDefinition];
+      }),
+  );
+
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
+}
+
+function normalizeConfigUiHints(
+  rawHints: unknown,
+): Record<string, Record<string, unknown>> | undefined {
+  if (!isRecord(rawHints)) {
+    return undefined;
+  }
+
+  const normalized = Object.fromEntries(
+    Object.entries(rawHints).filter(([, value]) => isRecord(value)),
+  ) as Record<string, Record<string, unknown>>;
+
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
+}
+
+function extractPluginPackageMetadata(
+  pkg: PackageJsonLike,
+  keyFallback: { dirName: string; npmName?: string },
+): PluginPackageMetadata {
+  const pluginParameters = normalizePluginParameters(
+    pkg.agentConfig?.pluginParameters,
+  );
+  const configKeys =
+    Array.isArray(pkg.elizaos?.configKeys) &&
+    pkg.elizaos.configKeys.every((value) => typeof value === "string")
+      ? [...pkg.elizaos.configKeys]
+      : pluginParameters
+        ? Object.keys(pluginParameters)
+        : undefined;
+
+  return {
+    description:
+      typeof pkg.description === "string" && pkg.description.trim().length > 0
+        ? pkg.description.trim()
+        : undefined,
+    homepage:
+      typeof pkg.homepage === "string" && pkg.homepage.trim().length > 0
+        ? pkg.homepage
+        : undefined,
+    repository:
+      normalizeRepositoryUrl(pkg.repository) ??
+      deriveElizaRepositoryUrl(keyFallback.npmName, keyFallback.dirName),
+    icon:
+      typeof pkg.logoUrl === "string"
+        ? pkg.logoUrl
+        : typeof pkg.elizaos?.logoUrl === "string"
+          ? pkg.elizaos.logoUrl
+          : typeof pkg.icon === "string"
+            ? pkg.icon
+            : null,
+    tags: normalizePluginMetadataTags(pkg.keywords),
+    configKeys,
+    pluginParameters,
+    configUiHints:
+      normalizeConfigUiHints(pkg.agentConfig?.configUiHints) ??
+      normalizeConfigUiHints(pkg.elizaos?.configUiHints),
+  };
+}
+
 export function maskValue(value: string): string {
   if (value.length <= 8) return "****";
   return `${value.slice(0, 4)}...${value.slice(-4)}`;
@@ -203,12 +374,20 @@ export function buildParamDefs(
   return Object.entries(pluginParams).map(([key, def]) => {
     const envValue = process.env[key];
     const isSet = Boolean(envValue?.trim());
-    const sensitive = Boolean(def.sensitive);
+    const sensitive =
+      typeof def.sensitive === "boolean"
+        ? def.sensitive
+        : inferSensitiveConfigKey(key);
     return {
       key,
       type: (def.type as string) ?? "string",
-      description: (def.description as string) ?? "",
-      required: Boolean(def.required),
+      description:
+        typeof def.description === "string" && def.description.trim().length > 0
+          ? def.description
+          : inferDescription(key),
+      required:
+        def.required === true ||
+        (def.optional === false && def.required !== false),
       sensitive,
       default: def.default as string | undefined,
       options: Array.isArray(def.options)
@@ -716,21 +895,27 @@ export function discoverPluginsFromManifest(): PluginEntry[] {
             inferredCategory === "feature"
               ? (p.category ?? inferredCategory)
               : inferredCategory;
-          const envKey = p.envKey;
           const bundledMeta = readBundledPluginPackageMetadata(
             packageRoot,
             p.dirName,
             p.npmName,
           );
-          const filteredConfigKeys = p.configKeys.filter(
+          const resolvedConfigKeys =
+            p.configKeys.length > 0
+              ? p.configKeys
+              : (bundledMeta.configKeys ?? []);
+          const filteredConfigKeys = resolvedConfigKeys.filter(
             (k) => !HIDDEN_KEYS.has(k),
           );
-          const configured = envKey
-            ? Boolean(process.env[envKey])
-            : filteredConfigKeys.length === 0;
-          const filteredParams = p.pluginParameters
+          const envKey = p.envKey ?? findPrimaryEnvKey(filteredConfigKeys);
+          const resolvedPluginParameters = p.pluginParameters
+            ? Object.keys(p.pluginParameters).length > 0
+              ? p.pluginParameters
+              : bundledMeta.pluginParameters
+            : bundledMeta.pluginParameters;
+          const filteredParams = resolvedPluginParameters
             ? Object.fromEntries(
-                Object.entries(p.pluginParameters).filter(
+                Object.entries(resolvedPluginParameters).filter(
                   ([k]) => !HIDDEN_KEYS.has(k),
                 ),
               )
@@ -754,6 +939,7 @@ export function discoverPluginsFromManifest(): PluginEntry[] {
             undefined,
             paramInfos,
           );
+          const configured = validation.errors.length === 0;
 
           const description = resolvePluginDescription(
             p.id,
@@ -785,7 +971,9 @@ export function discoverPluginsFromManifest(): PluginEntry[] {
             npmName: p.npmName,
             version: p.version,
             pluginDeps: p.pluginDeps,
-            ...(p.configUiHints ? { configUiHints: p.configUiHints } : {}),
+            ...(p.configUiHints ?? bundledMeta.configUiHints
+              ? { configUiHints: p.configUiHints ?? bundledMeta.configUiHints }
+              : {}),
             icon: p.logoUrl ?? p.icon ?? bundledMeta.icon ?? null,
             homepage: p.homepage ?? bundledMeta.homepage,
             repository:
@@ -1149,43 +1337,74 @@ export function readBundledPluginPackageMetadata(
   packageRoot: string,
   dirName: string,
   npmName?: string,
-): {
-  description?: string;
-  homepage?: string;
-  repository?: string;
-  icon?: string | null;
-  tags?: string[];
-} {
-  const pkgPath = path.join(packageRoot, "packages", dirName, "package.json");
-  if (!fs.existsSync(pkgPath)) {
-    return {
-      repository: deriveElizaRepositoryUrl(npmName, dirName),
-      tags: [],
-    };
+): PluginPackageMetadata {
+  const candidates = [
+    path.join(packageRoot, "packages", dirName, "package.json"),
+    path.join(packageRoot, "plugins", dirName, "typescript", "package.json"),
+    path.join(packageRoot, "plugins", dirName, "package.json"),
+  ];
+
+  if (npmName) {
+    try {
+      candidates.push(require.resolve(`${npmName}/package.json`));
+    } catch {
+      // Ignore resolution failures for packages that are not installed locally.
+    }
   }
-  try {
-    const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8")) as {
-      description?: string;
-      homepage?: string;
-      repository?: string | { type?: string; url?: string };
-      keywords?: string[];
-      logoUrl?: string;
-      icon?: string;
-      elizaos?: { logoUrl?: string };
-    };
-    return {
-      description: pkg.description?.trim() || undefined,
-      homepage: pkg.homepage ?? undefined,
-      repository:
-        normalizeRepositoryUrl(pkg.repository) ??
-        deriveElizaRepositoryUrl(npmName, dirName),
-      icon: pkg.logoUrl ?? pkg.elizaos?.logoUrl ?? pkg.icon ?? null,
-      tags: normalizePluginMetadataTags(pkg.keywords),
-    };
-  } catch {
-    return {
-      repository: deriveElizaRepositoryUrl(npmName, dirName),
-      tags: [],
-    };
+
+  const metadata: PluginPackageMetadata = {
+    repository: deriveElizaRepositoryUrl(npmName, dirName),
+    tags: [],
+  };
+
+  const seen = new Set<string>();
+  for (const pkgPath of candidates) {
+    if (!pkgPath || seen.has(pkgPath) || !fs.existsSync(pkgPath)) {
+      continue;
+    }
+    seen.add(pkgPath);
+
+    try {
+      const pkg = JSON.parse(
+        fs.readFileSync(pkgPath, "utf-8"),
+      ) as PackageJsonLike;
+      const extracted = extractPluginPackageMetadata(pkg, { dirName, npmName });
+
+      if (!metadata.description && extracted.description) {
+        metadata.description = extracted.description;
+      }
+      if (!metadata.homepage && extracted.homepage) {
+        metadata.homepage = extracted.homepage;
+      }
+      if (
+        (!metadata.repository ||
+          metadata.repository === deriveElizaRepositoryUrl(npmName, dirName)) &&
+        extracted.repository
+      ) {
+        metadata.repository = extracted.repository;
+      }
+      if (metadata.icon == null && extracted.icon != null) {
+        metadata.icon = extracted.icon;
+      }
+      if ((metadata.tags?.length ?? 0) === 0 && (extracted.tags?.length ?? 0) > 0) {
+        metadata.tags = extracted.tags;
+      }
+      if (
+        (metadata.configKeys?.length ?? 0) === 0 &&
+        (extracted.configKeys?.length ?? 0) > 0
+      ) {
+        metadata.configKeys = extracted.configKeys;
+      }
+      if (!metadata.pluginParameters && extracted.pluginParameters) {
+        metadata.pluginParameters = extracted.pluginParameters;
+      }
+      if (!metadata.configUiHints && extracted.configUiHints) {
+        metadata.configUiHints = extracted.configUiHints;
+      }
+    } catch {
+      // Ignore malformed package metadata and continue to the next candidate.
+    }
   }
+
+  return metadata;
 }

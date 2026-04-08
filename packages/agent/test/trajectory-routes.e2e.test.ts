@@ -167,6 +167,23 @@ describe("trajectory routes", () => {
     expect(response.data.trajectories[0]?.id).toBe("trajectory-routes-1");
   });
 
+  it("returns 503 when trajectory listing is requested without a logger service", async () => {
+    const runtime = createTrajectoryRuntime({
+      getService: () => null,
+      getServicesByType: () => [],
+    });
+
+    const server = await startApiServer({ port: 0, runtime });
+    servers.push(server);
+
+    const response = await req(server.port, "GET", "/api/trajectories?limit=10");
+
+    expect(response.status).toBe(503);
+    expect(String(response.data.error)).toContain(
+      "Trajectory logger service not available",
+    );
+  });
+
   it("returns 503 when ZIP export is requested but unavailable in the logger", async () => {
     const runtime = createTrajectoryRuntime({
       getService: (serviceType: string) =>
@@ -185,6 +202,44 @@ describe("trajectory routes", () => {
     expect(response.status).toBe(503);
     expect(String(response.data.error)).toContain(
       "Trajectory ZIP export is unavailable in the active logger",
+    );
+  });
+
+  it("returns 503 when trajectory export is requested without a logger service", async () => {
+    const runtime = createTrajectoryRuntime({
+      getService: () => null,
+      getServicesByType: () => [],
+    });
+
+    const server = await startApiServer({ port: 0, runtime });
+    servers.push(server);
+
+    const response = await req(server.port, "POST", "/api/trajectories/export", {
+      format: "json",
+    });
+
+    expect(response.status).toBe(503);
+    expect(String(response.data.error)).toContain(
+      "Trajectory logger service not available",
+    );
+  });
+
+  it("returns 503 when trajectory deletion is requested without a logger service", async () => {
+    const runtime = createTrajectoryRuntime({
+      getService: () => null,
+      getServicesByType: () => [],
+    });
+
+    const server = await startApiServer({ port: 0, runtime });
+    servers.push(server);
+
+    const response = await req(server.port, "DELETE", "/api/trajectories", {
+      clearAll: true,
+    });
+
+    expect(response.status).toBe(503);
+    expect(String(response.data.error)).toContain(
+      "Trajectory logger service not available",
     );
   });
 
@@ -243,6 +298,23 @@ describe("trajectory routes", () => {
     expect(response.data.bySource).toEqual({ client_chat: 5, discord: 2 });
   });
 
+  it("returns 503 when trajectory stats are requested without a logger service", async () => {
+    const runtime = createTrajectoryRuntime({
+      getService: () => null,
+      getServicesByType: () => [],
+    });
+
+    const server = await startApiServer({ port: 0, runtime });
+    servers.push(server);
+
+    const response = await req(server.port, "GET", "/api/trajectories/stats");
+
+    expect(response.status).toBe(503);
+    expect(String(response.data.error)).toContain(
+      "Trajectory logger service not available",
+    );
+  });
+
   it("round-trips trajectory logger config through GET and PUT", async () => {
     let enabled = true;
     const logger = createCompatibleLogger({
@@ -274,6 +346,42 @@ describe("trajectory routes", () => {
     const after = await req(server.port, "GET", "/api/trajectories/config");
     expect(after.status).toBe(200);
     expect(after.data.enabled).toBe(false);
+  });
+
+  it("returns 503 when trajectory config updates are requested without a logger service", async () => {
+    const runtime = createTrajectoryRuntime({
+      getService: () => null,
+      getServicesByType: () => [],
+    });
+
+    const server = await startApiServer({ port: 0, runtime });
+    servers.push(server);
+
+    const response = await req(server.port, "PUT", "/api/trajectories/config", {
+      enabled: false,
+    });
+
+    expect(response.status).toBe(503);
+    expect(String(response.data.error)).toContain(
+      "Trajectory logger service not available",
+    );
+  });
+
+  it("returns 503 when trajectory config is requested without a logger service", async () => {
+    const runtime = createTrajectoryRuntime({
+      getService: () => null,
+      getServicesByType: () => [],
+    });
+
+    const server = await startApiServer({ port: 0, runtime });
+    servers.push(server);
+
+    const response = await req(server.port, "GET", "/api/trajectories/config");
+
+    expect(response.status).toBe(503);
+    expect(String(response.data.error)).toContain(
+      "Trajectory logger service not available",
+    );
   });
 
   it("returns trajectory detail records from the logger", async () => {
@@ -334,6 +442,27 @@ describe("trajectory routes", () => {
     expect(response.data.llmCalls?.[0]?.response).toBe("trajectory response");
   });
 
+  it("returns 503 when trajectory detail is requested without a logger service", async () => {
+    const runtime = createTrajectoryRuntime({
+      getService: () => null,
+      getServicesByType: () => [],
+    });
+
+    const server = await startApiServer({ port: 0, runtime });
+    servers.push(server);
+
+    const response = await req(
+      server.port,
+      "GET",
+      "/api/trajectories/trajectory-detail-missing",
+    );
+
+    expect(response.status).toBe(503);
+    expect(String(response.data.error)).toContain(
+      "Trajectory logger service not available",
+    );
+  });
+
   it("returns downloadable JSON exports with the requested filters", async () => {
     const exportTrajectories = async (options: Record<string, unknown>) => {
       expect(options).toEqual({
@@ -379,7 +508,7 @@ describe("trajectory routes", () => {
     expect(String(response.headers["content-disposition"])).toContain(
       'attachment; filename="trajectory-export.json"',
     );
-    expect(response.data._raw).toBe('[{"id":"trajectory-a"}]');
+    expect(response.data as unknown).toEqual([{ id: "trajectory-a" }]);
   });
 
   it("deletes only the requested trajectory ids", async () => {

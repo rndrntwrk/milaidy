@@ -490,7 +490,13 @@ async function startHyperscapeFixtureServer(): Promise<HyperscapeFixtureServer> 
           success: true,
           goal: { description: "Scout the ruins" },
           goalsPaused: false,
-          availableGoals: [{ description: "Scout the ruins", type: "explore" }],
+          availableGoals: [
+            {
+              description: "Scout the ruins",
+              type: "explore",
+              reason: "The ruins have the highest value loot nearby.",
+            },
+          ],
         }),
       );
       return;
@@ -509,6 +515,28 @@ async function startHyperscapeFixtureServer(): Promise<HyperscapeFixtureServer> 
           ],
           nearbyLocations: [{ name: "Ruins" }],
           playerPosition: [12, 0, 18],
+        }),
+      );
+      return;
+    }
+
+    if (
+      req.method === "GET" &&
+      url.pathname === "/api/agents/runtime-agent-id/thoughts"
+    ) {
+      res.statusCode = 200;
+      res.end(
+        JSON.stringify({
+          success: true,
+          thoughts: [
+            {
+              id: "thought-1",
+              type: "reasoning",
+              content: "The ruins are the safest high-value route right now.",
+              timestamp: 1_710_000_000_500,
+            },
+          ],
+          count: 1,
         }),
       );
       return;
@@ -972,7 +1000,7 @@ describe("AppManager", () => {
 
       expect(runtime.registerPlugin).toHaveBeenCalledTimes(1);
       expect(result.viewer?.url).toBe(
-        "http://localhost:3333?embedded=true&mode=spectator&surface=agent-control&followEntity=char-runtime",
+        "http://localhost:3333?embedded=true&mode=spectator&surface=agent-control&hiddenUI=chat%2Cinventory%2Cminimap%2Chotbar%2Cstats&quality=medium&followEntity=char-runtime",
       );
       expect(result.viewer?.postMessageAuth).toBe(true);
       expect(result.viewer?.authMessage).toEqual(
@@ -992,6 +1020,22 @@ describe("AppManager", () => {
         characterId: "char-runtime",
         followEntity: "char-runtime",
       });
+      expect(result.session?.telemetry).toEqual(
+        expect.objectContaining({
+          recentThoughts: [
+            expect.objectContaining({
+              content: "The ruins are the safest high-value route right now.",
+              type: "reasoning",
+            }),
+          ],
+          recommendedGoals: [
+            expect.objectContaining({
+              description: "Scout the ruins",
+              reason: "The ruins have the highest value loot nearby.",
+            }),
+          ],
+        }),
+      );
       expect(result.run).toEqual(
         expect.objectContaining({
           appName: "@hyperscape/plugin-hyperscape",

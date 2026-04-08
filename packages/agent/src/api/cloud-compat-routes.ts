@@ -2,9 +2,8 @@ import type http from "node:http";
 import { logger } from "@elizaos/core";
 import { normalizeCloudSiteUrl } from "../cloud/base-url";
 import { validateCloudBaseUrl } from "../cloud/validate-url";
-import { sendJson, sendJsonError } from "./http-helpers";
-
 import type { CloudProxyConfigLike } from "../types/config-like";
+import { sendJson, sendJsonError } from "./http-helpers";
 
 export interface CloudCompatRouteState {
   config: CloudProxyConfigLike;
@@ -87,6 +86,39 @@ function summarizeUpstreamBody(bodyText: string): string {
   return trimmed.length > 300 ? `${trimmed.slice(0, 297)}...` : trimmed;
 }
 
+function isResourceCompatPath(pathname: string): boolean {
+  return pathname.split("/").filter(Boolean).length >= 5;
+}
+
+function sendUpstreamNotFound(
+  res: http.ServerResponse,
+  pathname: string,
+  upstreamBody?: unknown,
+): void {
+  if (isResourceCompatPath(pathname)) {
+    sendJson(
+      res,
+      upstreamBody ?? {
+        success: false,
+        error: "Eliza Cloud returned 404 for this API route.",
+        code: "CLOUD_ROUTE_NOT_FOUND",
+      },
+      404,
+    );
+    return;
+  }
+
+  sendJson(
+    res,
+    {
+      success: false,
+      error: "This Cloud feature is not available yet.",
+      code: "CLOUD_NOT_READY",
+    },
+    404,
+  );
+}
+
 async function parseUpstreamJsonResponse(
   upstreamRes: Response,
   method: string,
@@ -109,7 +141,7 @@ async function parseUpstreamJsonResponse(
   const contentType = upstreamRes.headers.get("content-type");
   const expectsJson = JSON_CONTENT_TYPE_RE.test(contentType ?? "");
 
-  if (!expectsJson && !/^\s*[\[{]/.test(bodyText)) {
+  if (!expectsJson && !/^\s*[[{]/.test(bodyText)) {
     return { kind: "non-json", bodyText };
   }
 
@@ -207,25 +239,15 @@ export async function handleCloudCompatRoute(
 
     if (parsed.kind === "json") {
       if (upstreamRes.status === 404) {
-        const compatSegments = pathname.split("/").filter(Boolean);
-        const isResourcePath = compatSegments.length >= 5;
-
-        if (isResourcePath) {
-          sendJson(res, parsed.body, 404);
-        } else {
-          sendJson(
-            res,
-            {
-              success: false,
-              error: "This Cloud feature is not available yet.",
-              code: "CLOUD_NOT_READY",
-            },
-            404,
-          );
-        }
+        sendUpstreamNotFound(res, pathname, parsed.body);
         return true;
       }
       sendJson(res, parsed.body, upstreamRes.status);
+      return true;
+    }
+
+    if (upstreamRes.status === 404) {
+      sendUpstreamNotFound(res, pathname);
       return true;
     }
 

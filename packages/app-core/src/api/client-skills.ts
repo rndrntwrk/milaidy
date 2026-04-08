@@ -42,6 +42,7 @@ import type {
   CatalogSkill,
   HyperscapeActionResponse,
   HyperscapeAgentGoalResponse,
+  HyperscapeAgentThoughtsResponse,
   HyperscapeEmbeddedAgentControlAction,
   HyperscapeEmbeddedAgentMutationResponse,
   HyperscapeEmbeddedAgentsResponse,
@@ -263,6 +264,10 @@ declare module "./client-base" {
     getHyperscapeAgentQuickActions(
       agentId: string,
     ): Promise<HyperscapeQuickActionsResponse>;
+    getHyperscapeAgentThoughts(
+      agentId: string,
+      options?: { limit?: number; since?: number },
+    ): Promise<HyperscapeAgentThoughtsResponse>;
     listCustomActions(): Promise<CustomActionDef[]>;
     createCustomAction(
       action: Omit<CustomActionDef, "id" | "createdAt" | "updatedAt">,
@@ -954,6 +959,24 @@ MiladyClient.prototype.getHyperscapeAgentQuickActions = async function (
 ) {
   return this.fetch(
     `/api/apps/hyperscape/agents/${encodeURIComponent(agentId)}/quick-actions`,
+  );
+};
+
+MiladyClient.prototype.getHyperscapeAgentThoughts = async function (
+  this: MiladyClient,
+  agentId,
+  options,
+) {
+  const params = new URLSearchParams();
+  if (typeof options?.limit === "number" && Number.isFinite(options.limit)) {
+    params.set("limit", String(Math.max(1, Math.trunc(options.limit))));
+  }
+  if (typeof options?.since === "number" && Number.isFinite(options.since)) {
+    params.set("since", String(Math.max(0, Math.trunc(options.since))));
+  }
+  const suffix = params.size > 0 ? `?${params.toString()}` : "";
+  return this.fetch(
+    `/api/apps/hyperscape/agents/${encodeURIComponent(agentId)}/thoughts${suffix}`,
   );
 };
 

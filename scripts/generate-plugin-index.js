@@ -250,26 +250,227 @@ function deriveMiladyRepositoryUrl(npmName, dirName) {
   return `${MILADY_REPO_ROOT}/tree/main/packages/${dirName}`;
 }
 
+function isRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function inferSensitiveKey(key) {
+  const upper = key.toUpperCase();
+  return (
+    upper.includes("_API_KEY") ||
+    upper.includes("_SECRET") ||
+    upper.includes("_TOKEN") ||
+    upper.includes("_PASSWORD") ||
+    upper.includes("_PRIVATE_KEY") ||
+    upper.includes("_SIGNING_") ||
+    upper.includes("ENCRYPTION_")
+  );
+}
+
+function normalizePluginParameters(rawParameters) {
+  if (!isRecord(rawParameters)) {
+    return undefined;
+  }
+
+  const normalized = {};
+  for (const [key, definition] of Object.entries(rawParameters)) {
+    if (!isRecord(definition)) continue;
+
+    const normalizedDefinition = {
+      type: typeof definition.type === "string" ? definition.type : "string",
+      description:
+        typeof definition.description === "string" && definition.description
+          ? definition.description
+          : inferKeyDescription(key),
+      required:
+        definition.required === true ||
+        (definition.optional === false && definition.required !== false),
+      sensitive:
+        definition.sensitive === true || inferSensitiveKey(key),
+    };
+
+    if (definition.default !== undefined) {
+      normalizedDefinition.default = String(definition.default);
+    }
+    if (Array.isArray(definition.options)) {
+      const options = definition.options.filter(
+        (value) => typeof value === "string",
+      );
+      if (options.length > 0) {
+        normalizedDefinition.options = options;
+      }
+    }
+
+    normalized[key] = normalizedDefinition;
+  }
+
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
+}
+
+function normalizeConfigUiHints(rawHints) {
+  if (!isRecord(rawHints)) return undefined;
+  const normalized = Object.fromEntries(
+    Object.entries(rawHints).filter(([, value]) => isRecord(value)),
+  );
+  return Object.keys(normalized).length > 0 ? normalized : undefined;
+}
+
+function extractPackageMetadata(pkg, dirName, npmName) {
+  const pluginParameters = normalizePluginParameters(
+    pkg.agentConfig?.pluginParameters,
+  );
+  const configKeys =
+    Array.isArray(pkg.elizaos?.configKeys) &&
+    pkg.elizaos.configKeys.every((value) => typeof value === "string")
+      ? [...pkg.elizaos.configKeys]
+      : pluginParameters
+        ? Object.keys(pluginParameters)
+        : [];
+
+  return {
+    description: typeof pkg.description === "string" ? pkg.description : "",
+    homepage: typeof pkg.homepage === "string" ? pkg.homepage : undefined,
+    repository:
+      normalizeRepositoryUrl(pkg.repository) ??
+      deriveMiladyRepositoryUrl(npmName, dirName),
+    icon: pkg.logoUrl ?? pkg.elizaos?.logoUrl ?? pkg.icon ?? undefined,
+    tags: normalizeTags(pkg.keywords ?? []),
+    configKeys,
+    pluginParameters,
+    configUiHints:
+      normalizeConfigUiHints(pkg.agentConfig?.configUiHints) ??
+      normalizeConfigUiHints(pkg.elizaos?.configUiHints),
+  };
+}
+
+function mergePackageMetadata(base, next) {
+  return {
+    description: base.description || next.description || "",
+    homepage: base.homepage || next.homepage,
+    repository: base.repository || next.repository,
+    icon: base.icon || next.icon,
+    tags: base.tags?.length ? base.tags : next.tags,
+    configKeys: base.configKeys?.length ? base.configKeys : next.configKeys,
+    pluginParameters: base.pluginParameters || next.pluginParameters,
+    configUiHints: base.configUiHints || next.configUiHints,
+  };
+}
+
 function readLocalPackageMetadata(dirName, npmName) {
   if (!dirName) return {};
-  const pkgPath = path.join(packageRoot, "packages", dirName, "package.json");
-  if (!fs.existsSync(pkgPath)) {
-    return { repository: deriveMiladyRepositoryUrl(npmName, dirName) };
+  const candidates = [
+    path.join(packageRoot, "packages", dirName, "package.json"),
+    path.join(packageRoot, "plugins", dirName, "typescript", "package.json"),
+    path.join(packageRoot, "plugins", dirName, "package.json"),
+  ];
+
+  let metadata = {
+    repository: deriveMiladyRepositoryUrl(npmName, dirName),
+    tags: [],
+    configKeys: [],
+  };
+
+  for (const pkgPath of candidates) {
+    if (!fs.existsSync(pkgPath)) continue;
+    try {
+      const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+      metadata = mergePackageMetadata(
+        metadata,
+        extractPackageMetadata(pkg, dirName, npmName),
+      );
+    } catch {
+      // Ignore malformed package.json files and continue.
+    }
   }
+
+  return metadata;
+}
+
+async function fetchPublishedPackageManifest(packageName, version) {
+  if (!packageName) return {};
+
+  const dirName = `plugin-${packageName.split("/").pop()?.replace(/^plugin-/, "") ?? ""}`;
+  const fetchVersionMetadata = async (candidateVersion) => {
+    if (!candidateVersion) return {};
+    try {
+      const response = await fetch(
+        `https://registry.npmjs.org/${encodeURIComponent(packageName)}/${encodeURIComponent(candidateVersion)}`,
+      );
+      if (!response.ok) return {};
+      const pkg = await response.json();
+      return extractPackageMetadata(pkg, dirName, packageName);
+    } catch {
+      return {};
+    }
+  };
+
+  const hasConfigMetadata = (metadata) =>
+    Array.isArray(metadata?.configKeys) && metadata.configKeys.length > 0;
+
+  let metadata = await fetchVersionMetadata(version);
+  if (hasConfigMetadata(metadata)) {
+    return metadata;
+  }
+
   try {
-    const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
-    return {
-      description: typeof pkg.description === "string" ? pkg.description : "",
-      homepage: typeof pkg.homepage === "string" ? pkg.homepage : undefined,
-      repository:
-        normalizeRepositoryUrl(pkg.repository) ??
-        deriveMiladyRepositoryUrl(npmName, dirName),
-      icon: pkg.logoUrl ?? pkg.elizaos?.logoUrl ?? pkg.icon ?? undefined,
-      tags: normalizeTags(pkg.keywords ?? []),
-    };
+    const response = await fetch(
+      `https://registry.npmjs.org/${encodeURIComponent(packageName)}`,
+    );
+    if (!response.ok) return metadata;
+    const packument = await response.json();
+    const tags = packument["dist-tags"] ?? {};
+    const fallbackVersions = [
+      tags.next,
+      tags.alpha,
+      tags.latest,
+      version,
+    ].filter(Boolean);
+
+    const seen = new Set();
+    for (const candidateVersion of fallbackVersions) {
+      if (!candidateVersion || seen.has(candidateVersion)) continue;
+      seen.add(candidateVersion);
+      const candidateMetadata = await fetchVersionMetadata(candidateVersion);
+      metadata = mergePackageMetadata(metadata, candidateMetadata);
+      if (hasConfigMetadata(metadata)) {
+        return metadata;
+      }
+    }
   } catch {
-    return { repository: deriveMiladyRepositoryUrl(npmName, dirName) };
+    // Ignore packument fallback failures and return the best metadata we found.
   }
+
+  return metadata;
+}
+
+async function fetchPublishedPackageManifestMap(packages) {
+  const uniquePackages = [];
+  const seen = new Set();
+  for (const entry of packages) {
+    if (!entry?.name || !entry?.version) continue;
+    const key = `${entry.name}@${entry.version}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    uniquePackages.push(entry);
+  }
+
+  const results = new Map();
+  let index = 0;
+  const workerCount = Math.min(8, uniquePackages.length);
+
+  async function worker() {
+    while (index < uniquePackages.length) {
+      const current = uniquePackages[index];
+      index += 1;
+      results.set(
+        current.name,
+        await fetchPublishedPackageManifest(current.name, current.version),
+      );
+    }
+  }
+
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+  return results;
 }
 
 function normalizeTag(tag) {
@@ -338,47 +539,6 @@ export function inferDescription(id, name, category) {
     default:
       return `${name} plugin for ${id.replace(/-/g, " ")} workflows.`;
   }
-}
-
-async function fetchNpmMetadata(packageName) {
-  if (!packageName) return { description: "", keywords: [] };
-  try {
-    const response = await fetch(
-      `https://registry.npmjs.org/${encodeURIComponent(packageName)}`,
-    );
-    if (!response.ok) return { description: "", keywords: [] };
-    const pkg = await response.json();
-    const tags = pkg["dist-tags"] ?? {};
-    const version =
-      pkg.versions?.[tags.latest] ??
-      pkg.versions?.[tags.next] ??
-      pkg.versions?.[Object.keys(pkg.versions ?? {}).pop()];
-    return {
-      description:
-        typeof version?.description === "string" ? version.description : "",
-      keywords: Array.isArray(version?.keywords) ? version.keywords : [],
-    };
-  } catch {
-    return { description: "", keywords: [] };
-  }
-}
-
-async function fetchNpmMetadataMap(packageNames) {
-  const uniqueNames = [...new Set(packageNames.filter(Boolean))];
-  const results = new Map();
-  let index = 0;
-  const workerCount = Math.min(8, uniqueNames.length);
-
-  async function worker() {
-    while (index < uniqueNames.length) {
-      const current = uniqueNames[index];
-      index += 1;
-      results.set(current, await fetchNpmMetadata(current));
-    }
-  }
-
-  await Promise.all(Array.from({ length: workerCount }, () => worker()));
-  return results;
 }
 
 function findEnvKey(configKeys) {
@@ -585,15 +745,16 @@ async function main() {
 
   // Registry format: { registry: { "@elizaos/plugin-xxx": { ... } } }
   const packages = registry.registry || {};
-  const npmMetadata = await fetchNpmMetadataMap(
+  const publishedPackageMetadata = await fetchPublishedPackageManifestMap(
     Object.entries(packages)
       .filter(
-        ([, pkgInfo]) =>
-          !pkgInfo.description ||
-          !Array.isArray(pkgInfo.topics) ||
-          !pkgInfo.topics.length,
+        ([npmName, pkgInfo]) =>
+          npmName.startsWith("@elizaos/plugin-") && pkgInfo.supports?.v2,
       )
-      .map(([npmName]) => npmName),
+      .map(([npmName, pkgInfo]) => ({
+        name: npmName,
+        version: pkgInfo.npm?.v2,
+      })),
   );
 
   for (const [npmName, pkgInfo] of Object.entries(packages)) {
@@ -612,10 +773,7 @@ async function main() {
     const existingEntry = existingManifest.get(id);
     const localMeta = readLocalPackageMetadata(dirName, npmName);
     const override = metadataOverrides[id] ?? {};
-    const npmMeta = npmMetadata.get(npmName) ?? {
-      description: "",
-      keywords: [],
-    };
+    const publishedMeta = publishedPackageMetadata.get(npmName) ?? {};
 
     // Preserve existing category if the inferred one is just "feature" (default)
     const inferredCategory = categorize(id);
@@ -628,29 +786,40 @@ async function main() {
       override.description ||
       pkgInfo.description ||
       localMeta.description ||
-      npmMeta.description ||
+      publishedMeta.description ||
       existingEntry?.description ||
       inferDescription(id, name, category);
     const tags = mergeTags(
       override.tags,
       localMeta.tags,
       pkgInfo.topics,
-      npmMeta.keywords,
+      publishedMeta.tags,
       CATEGORY_TAGS[category] ?? [],
       category === "connector" ? connectorTags(id) : [],
       idTags(id),
       existingEntry?.tags,
     );
 
-    // Preserve configKeys from existing manifest
-    const configKeys = existingEntry?.configKeys || [];
+    // Preserve existing manifest config when present, otherwise hydrate from
+    // local or published package metadata.
+    const configKeys =
+      existingEntry?.configKeys?.length > 0
+        ? existingEntry.configKeys
+        : localMeta.configKeys?.length > 0
+          ? localMeta.configKeys
+          : publishedMeta.configKeys ?? [];
     const envKey = findEnvKey(configKeys);
 
     // Preserve pluginDeps from existing manifest
     const pluginDeps = existingEntry?.pluginDeps;
 
-    // Preserve pluginParameters from existing manifest, or infer from configKeys
-    let finalPluginParams = existingEntry?.pluginParameters;
+    // Preserve pluginParameters from existing manifest when present, otherwise
+    // hydrate them from package metadata before falling back to key inference.
+    let finalPluginParams =
+      existingEntry?.pluginParameters &&
+      Object.keys(existingEntry.pluginParameters).length > 0
+        ? existingEntry.pluginParameters
+        : localMeta.pluginParameters || publishedMeta.pluginParameters;
     if (!finalPluginParams && configKeys.length > 0) {
       finalPluginParams = inferPluginParameters(configKeys);
     }
@@ -668,10 +837,26 @@ async function main() {
       version: version || undefined,
       pluginDeps: pluginDeps?.length > 0 ? pluginDeps : undefined,
       pluginParameters: finalPluginParams,
-      ...(pkgInfo.homepage || existingEntry?.homepage || localMeta.homepage
+      ...(existingEntry?.configUiHints ||
+      localMeta.configUiHints ||
+      publishedMeta.configUiHints
+        ? {
+            configUiHints:
+              existingEntry?.configUiHints ||
+              localMeta.configUiHints ||
+              publishedMeta.configUiHints,
+          }
+        : {}),
+      ...(pkgInfo.homepage ||
+      existingEntry?.homepage ||
+      localMeta.homepage ||
+      publishedMeta.homepage
         ? {
             homepage:
-              pkgInfo.homepage || existingEntry?.homepage || localMeta.homepage,
+              pkgInfo.homepage ||
+              existingEntry?.homepage ||
+              localMeta.homepage ||
+              publishedMeta.homepage,
           }
         : {}),
       ...(() => {
@@ -680,7 +865,8 @@ async function main() {
             pkgInfo.gitRepo ? `https://github.com/${pkgInfo.gitRepo}` : "",
           ) ??
           existingEntry?.repository ??
-          localMeta.repository;
+          localMeta.repository ??
+          publishedMeta.repository;
         return repository ? { repository } : {};
       })(),
       ...(() => {
@@ -688,8 +874,8 @@ async function main() {
           resolveSetupGuideUrl(id) ?? existingEntry?.setupGuideUrl;
         return setupGuideUrl ? { setupGuideUrl } : {};
       })(),
-      ...(existingEntry?.icon || localMeta.icon
-        ? { icon: existingEntry?.icon ?? localMeta.icon }
+      ...(existingEntry?.icon || localMeta.icon || publishedMeta.icon
+        ? { icon: existingEntry?.icon ?? localMeta.icon ?? publishedMeta.icon }
         : {}),
     });
   }

@@ -1058,6 +1058,45 @@ describe("AgentManager", () => {
       vi.useRealTimers();
     });
 
+    it("restarts once after a lifeops schema bootstrap failure is detected", async () => {
+      vi.useFakeTimers();
+      const mockProc1 = createMockProcess({
+        pid: 111,
+        stderr: makeReadableStream(
+          "Failed query: CREATE TABLE IF NOT EXISTS life_task_definitions",
+        ),
+      });
+      const mockProc2 = createMockProcess({ pid: 222 });
+      mockSpawn.mockReturnValueOnce(mockProc1).mockReturnValueOnce(mockProc2);
+
+      mockFetch.mockResolvedValueOnce(makeHealthyResponse());
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ agents: [{ name: "Milady" }] }),
+      });
+      mockFetch.mockResolvedValueOnce(makeHealthyResponse());
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ agents: [{ name: "Milady" }] }),
+      });
+
+      const status = await manager.start();
+      expect(status.state).toBe("running");
+
+      mockProc1._exitDeferred.resolve(1);
+      await Promise.resolve();
+      await vi.advanceTimersByTimeAsync(500);
+
+      const fs = await import("node:fs");
+      expect(fs.default.rmSync).toHaveBeenCalledWith(
+        "/mock/home/.milady/workspace/.eliza/.elizadb",
+        { recursive: true, force: true },
+      );
+      expect(mockSpawn).toHaveBeenCalledTimes(2);
+
+      vi.useRealTimers();
+    });
+
     it("does not delete or restart when the PGLite data dir is actively locked", async () => {
       const mockProc = createMockProcess({
         pid: 111,

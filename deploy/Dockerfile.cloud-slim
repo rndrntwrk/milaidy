@@ -158,13 +158,19 @@ COPY --from=pruner --chown=agent:agent /build/node_modules ./node_modules
 # Copy scripts needed for runtime
 COPY --from=pruner --chown=agent:agent /build/scripts ./scripts
 
-# The runtime uses tsx against a node_modules tree copied from the build host.
-# Install the Linux esbuild package in-image so tsx never resolves a macOS-only
-# optional dependency when the image is built on a Darwin workstation.
-RUN npm install --no-save --ignore-scripts "esbuild@${ESBUILD_VERSION}" "@esbuild/linux-x64@${ESBUILD_VERSION}" \
-  && npm cache clean --force
+# The build context copies a host-built node_modules tree. Install a Linux
+# esbuild binary outside the workspace package graph and point tsx at it so the
+# runtime never reuses a macOS-only optional dependency.
+RUN mkdir -p /tmp/esbuild-linux \
+  && cd /tmp/esbuild-linux \
+  && npm init -y >/dev/null 2>&1 \
+  && npm install --ignore-scripts "@esbuild/linux-x64@${ESBUILD_VERSION}" >/dev/null 2>&1 \
+  && cp node_modules/@esbuild/linux-x64/bin/esbuild /usr/local/bin/esbuild \
+  && chmod +x /usr/local/bin/esbuild \
+  && rm -rf /tmp/esbuild-linux /root/.npm
 
 ENV NODE_ENV=production
+ENV ESBUILD_BINARY_PATH=/usr/local/bin/esbuild
 ENV MILADY_API_BIND="0.0.0.0"
 # PORT is used by cloud platforms (Railway, Fly.io); maps to MILADY_PORT locally
 ENV PORT=2138
