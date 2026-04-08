@@ -273,7 +273,8 @@ export async function ensureMiladyTextToSpeechHandler(
     }
     if (!handler) {
       try {
-        const cjsMod = require("@elizaos/plugin-edge-tts") as EdgeTtsPluginModule;
+        const cjsMod =
+          require("@elizaos/plugin-edge-tts") as EdgeTtsPluginModule;
         handler = readHandler(cjsMod.edgeTTSPlugin);
       } catch {
         handler = undefined;
