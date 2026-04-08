@@ -17,6 +17,7 @@ import {
 } from "../bridge/native-plugins";
 
 const APP_SIGNAL_DEDUP_WINDOW_MS = 5_000;
+const RUNTIME_READY_POLL_MS = 5_000;
 const PAGE_HEARTBEAT_MS = 60_000;
 const DESKTOP_POWER_POLL_MS = 60_000;
 const MOBILE_HEALTH_POLL_MS = 30 * 60_000;
@@ -101,9 +102,16 @@ function mapMobileSignal(
 export function useLifeOpsActivitySignals(): void {
   const platformRef = useRef(resolveActivityPlatform());
   const lastSentRef = useRef<Map<string, SignalFingerprint>>(new Map());
+  const runtimeReadyRef = useRef(false);
 
   useEffect(() => {
     let mounted = true;
+
+    const isRuntimeUnavailableError = (error: unknown): boolean =>
+      isApiError(error) &&
+      error.kind === "http" &&
+      error.status === 503 &&
+      /agent runtime is not available/i.test(error.message);
 
     const reportCaptureError = (error: unknown): void => {
       if (
@@ -112,13 +120,29 @@ export function useLifeOpsActivitySignals(): void {
       ) {
         return;
       }
+      if (isRuntimeUnavailableError(error)) {
+        runtimeReadyRef.current = false;
+        return;
+      }
       console.warn("[lifeops] failed to capture activity signal", error);
+    };
+
+    const refreshRuntimeReady = async (): Promise<boolean> => {
+      try {
+        const status = await client.getStatus();
+        const ready = status.state === "running";
+        runtimeReadyRef.current = ready;
+        return ready;
+      } catch {
+        runtimeReadyRef.current = false;
+        return false;
+      }
     };
 
     const sendSignal = async (
       signal: CaptureLifeOpsActivitySignalRequest,
     ): Promise<LifeOpsActivitySignal | null> => {
-      if (!mounted) {
+      if (!mounted || !runtimeReadyRef.current) {
         return null;
       }
       const normalized: CaptureLifeOpsActivitySignalRequest = {
@@ -137,9 +161,18 @@ export function useLifeOpsActivitySignals(): void {
         return null;
       }
       lastSentRef.current.set(dedupeKey, { fingerprint, sentAtMs: nowMs });
-      const { signal: persisted } =
-        await client.captureLifeOpsActivitySignal(normalized);
-      return persisted;
+      try {
+        const { signal: persisted } =
+          await client.captureLifeOpsActivitySignal(normalized);
+        return persisted;
+      } catch (error) {
+        lastSentRef.current.delete(dedupeKey);
+        if (isRuntimeUnavailableError(error)) {
+          runtimeReadyRef.current = false;
+          return null;
+        }
+        throw error;
+      }
     };
 
     const sendSnapshotResult = async (result: {
@@ -265,6 +298,9 @@ export function useLifeOpsActivitySignals(): void {
     };
 
     const startMobileSignals = async (): Promise<void> => {
+      if (mobileSignalsHandle || mobileSignalsStarted) {
+        return;
+      }
       if (
         !mobileSignals ||
         typeof mobileSignals.addListener !== "function" ||
@@ -298,10 +334,21 @@ export function useLifeOpsActivitySignals(): void {
       }, MOBILE_HEALTH_POLL_MS);
     };
 
-    emitLifecycleState("active");
-    emitPageState("mount");
-    void emitDesktopSnapshot("mount");
-    void startMobileSignals().catch(reportCaptureError);
+    const emitCurrentState = (reason: string): void => {
+      emitLifecycleState("active");
+      emitPageState(reason);
+      void emitDesktopSnapshot(reason);
+      void refreshMobileHealthSnapshot(reason).catch(reportCaptureError);
+    };
+
+    void refreshRuntimeReady()
+      .then((ready) => {
+        if (ready) {
+          emitCurrentState("mount");
+          void startMobileSignals().catch(reportCaptureError);
+        }
+      })
+      .catch(() => {});
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
     document.addEventListener(APP_RESUME_EVENT, handleResume);
@@ -309,6 +356,18 @@ export function useLifeOpsActivitySignals(): void {
     window.addEventListener("focus", handleFocus);
     window.addEventListener("blur", handleBlur);
 
+    const runtimePoller = window.setInterval(() => {
+      const wasReady = runtimeReadyRef.current;
+      void refreshRuntimeReady()
+        .then((ready) => {
+          if (!mounted || !ready || wasReady) {
+            return;
+          }
+          emitCurrentState("runtime-ready");
+          void startMobileSignals().catch(reportCaptureError);
+        })
+        .catch(() => {});
+    }, RUNTIME_READY_POLL_MS);
     const pageHeartbeat = window.setInterval(() => {
       if (document.visibilityState === "visible") {
         emitPageState("heartbeat");
@@ -334,6 +393,7 @@ export function useLifeOpsActivitySignals(): void {
       if (mobileHealthPoller !== null) {
         window.clearInterval(mobileHealthPoller);
       }
+      window.clearInterval(runtimePoller);
       window.clearInterval(pageHeartbeat);
       window.clearInterval(desktopPoller);
     };

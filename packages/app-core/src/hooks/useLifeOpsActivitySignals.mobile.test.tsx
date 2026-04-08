@@ -54,8 +54,16 @@ const mocks = vi.hoisted(() => {
     warnings: [],
     metadata: { reason: "snapshot" },
   } as const;
+  const getStatus = vi.fn(async () => ({
+    state: "running",
+    agentName: "Milady",
+    model: undefined,
+    uptime: undefined,
+    startedAt: undefined,
+  }));
   return {
     captureLifeOpsActivitySignal,
+    getStatus,
     getMobileSignalsPlugin: vi.fn(() => ({
       checkPermissions: vi.fn(async () => ({
         status: "granted",
@@ -146,6 +154,7 @@ const mocks = vi.hoisted(() => {
 vi.mock("../api", () => ({
   client: {
     captureLifeOpsActivitySignal: mocks.captureLifeOpsActivitySignal,
+    getStatus: mocks.getStatus,
   },
 }));
 
@@ -186,6 +195,13 @@ describe("useLifeOpsActivitySignals mobile bridge", () => {
     latestTree = null;
     mobileListeners.clear();
     mocks.captureLifeOpsActivitySignal.mockClear();
+    mocks.getStatus.mockReset().mockResolvedValue({
+      state: "running",
+      agentName: "Milady",
+      model: undefined,
+      uptime: undefined,
+      startedAt: undefined,
+    });
     mocks.getMobileSignalsPlugin.mockClear();
     mocks.isElectrobunRuntime.mockReset().mockReturnValue(false);
     mocks.loadDesktopWorkspaceSnapshot.mockClear();

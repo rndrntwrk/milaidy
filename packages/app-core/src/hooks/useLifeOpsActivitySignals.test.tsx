@@ -22,8 +22,16 @@ const mocks = vi.hoisted(() => {
       state: request.state,
     },
   }));
+  const getStatus = vi.fn(async () => ({
+    state: "running",
+    agentName: "Milady",
+    model: undefined,
+    uptime: undefined,
+    startedAt: undefined,
+  }));
   return {
     captureLifeOpsActivitySignal,
+    getStatus,
     isElectrobunRuntime: vi.fn(() => false),
     loadDesktopWorkspaceSnapshot: vi.fn(async () => ({
       supported: false,
@@ -50,6 +58,7 @@ const mocks = vi.hoisted(() => {
 vi.mock("../api", () => ({
   client: {
     captureLifeOpsActivitySignal: mocks.captureLifeOpsActivitySignal,
+    getStatus: mocks.getStatus,
   },
 }));
 
@@ -85,6 +94,13 @@ describe("useLifeOpsActivitySignals", () => {
   beforeEach(() => {
     latestTree = null;
     mocks.captureLifeOpsActivitySignal.mockClear();
+    mocks.getStatus.mockReset().mockResolvedValue({
+      state: "running",
+      agentName: "Milady",
+      model: undefined,
+      uptime: undefined,
+      startedAt: undefined,
+    });
     mocks.isElectrobunRuntime.mockReset().mockReturnValue(false);
     mocks.loadDesktopWorkspaceSnapshot.mockClear();
     vi.useFakeTimers();
@@ -228,6 +244,53 @@ describe("useLifeOpsActivitySignals", () => {
     );
   });
 
+  it("waits for the agent runtime before capturing signals", async () => {
+    mocks.getStatus
+      .mockResolvedValueOnce({
+        state: "starting",
+        agentName: "Milady",
+        model: undefined,
+        uptime: undefined,
+        startedAt: undefined,
+      })
+      .mockResolvedValue({
+        state: "running",
+        agentName: "Milady",
+        model: undefined,
+        uptime: undefined,
+        startedAt: undefined,
+      });
+
+    await act(async () => {
+      latestTree = TestRenderer.create(React.createElement(Harness));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mocks.captureLifeOpsActivitySignal).not.toHaveBeenCalled();
+
+    await act(async () => {
+      vi.advanceTimersByTime(5_000);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(mocks.captureLifeOpsActivitySignal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: "app_lifecycle",
+        state: "active",
+        platform: "web_app",
+      }),
+    );
+    expect(mocks.captureLifeOpsActivitySignal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: "page_visibility",
+        state: "active",
+        metadata: expect.objectContaining({ reason: "runtime-ready" }),
+      }),
+    );
+  });
+
   it("suppresses expected network telemetry failures", async () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     mocks.captureLifeOpsActivitySignal.mockRejectedValueOnce(
@@ -235,6 +298,26 @@ describe("useLifeOpsActivitySignals", () => {
         kind: "network",
         path: "/api/lifeops/activity-signals",
         message: "fetch failed",
+      }),
+    );
+
+    await act(async () => {
+      latestTree = TestRenderer.create(React.createElement(Harness));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it("suppresses runtime-unavailable 503 capture failures", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    mocks.captureLifeOpsActivitySignal.mockRejectedValueOnce(
+      new ApiError({
+        kind: "http",
+        path: "/api/lifeops/activity-signals",
+        status: 503,
+        message: "Agent runtime is not available",
       }),
     );
 
