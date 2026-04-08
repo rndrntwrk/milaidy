@@ -1404,6 +1404,8 @@ MiladyClient.prototype.getTrajectories = async function (
   if (options?.limit) params.set("limit", String(options.limit));
   if (options?.offset) params.set("offset", String(options.offset));
   if (options?.source) params.set("source", options.source);
+  if (options?.scenarioId) params.set("scenarioId", options.scenarioId);
+  if (options?.batchId) params.set("batchId", options.batchId);
   if (options?.status) params.set("status", options.status);
   if (options?.startDate) params.set("startDate", options.startDate);
   if (options?.endDate) params.set("endDate", options.endDate);

@@ -588,6 +588,8 @@ export interface TrajectoryRecord {
   entityId: string | null;
   conversationId: string | null;
   source: string;
+  scenarioId?: string | null;
+  batchId?: string | null;
   status: "active" | "completed" | "error";
   startTime: number;
   endTime: number | null;
@@ -638,6 +640,8 @@ export interface TrajectoryListOptions {
   limit?: number;
   offset?: number;
   source?: string;
+  scenarioId?: string;
+  batchId?: string;
   status?: "active" | "completed" | "error";
   startDate?: string;
   endDate?: string;
@@ -763,6 +767,8 @@ export interface CodingAgentTaskThread {
   id: string;
   title: string;
   kind: string;
+  scenarioId?: string | null;
+  batchId?: string | null;
   status:
     | "open"
     | "active"
@@ -878,6 +884,8 @@ export interface CodingAgentTaskThreadDetail extends CodingAgentTaskThread {
   roomId?: string | null;
   worldId?: string | null;
   ownerUserId?: string | null;
+  scenarioId?: string | null;
+  batchId?: string | null;
   summary?: string;
   acceptanceCriteria?: string[];
   currentPlan?: Record<string, unknown>;
