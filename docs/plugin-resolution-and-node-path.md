@@ -76,7 +76,10 @@ Some `@elizaos` packages (e.g. `@elizaos/plugin-coding-agent`) publish a `packag
 
 ## Pinned: `@elizaos/plugin-openrouter`
 
-Root `package.json` lists **`@elizaos/plugin-openrouter`** as an **exact** version (**`2.0.0-alpha.10`**) instead of a caret range.
+This repo currently resolves **`@elizaos/plugin-openrouter`** via a local
+workspace link (**`workspace:*`**) during development. The important published
+artifact note is unchanged: **`2.0.0-alpha.10`** is the last known-good npm
+tarball, while **`2.0.0-alpha.12`** shipped broken dist entrypoints.
 
 ### What went wrong in `2.0.0-alpha.12`
 
@@ -84,12 +87,17 @@ The published npm tarball for **`2.0.0-alpha.12`** contains **truncated** JavaSc
 
 **Why Bun errors:** When the runtime loads the plugin, Bun builds/transpiles that entry file and fails with errors like *`openrouterPlugin` is not declared in this file* — the symbols are exported but never defined. The CommonJS build (`dist/cjs/index.node.cjs`) is incomplete in the same way (export getters reference a missing `import_plugin` chunk).
 
-**Why we pin instead of postinstall-patching the dist:** The broken release is missing the entire plugin body, not a single wrong identifier (contrast `@elizaos/plugin-pdf`, where a small string replace fixes a bad export alias). Reconstructing the plugin from source inside Milady would fork upstream and be fragile. **Pinning to `2.0.0-alpha.10`** restores a full bundle (~500+ lines in `index.node.js`) that loads cleanly.
+**Why we do not postinstall-patch the dist:** The broken release is missing the
+entire plugin body, not a single wrong identifier (contrast
+`@elizaos/plugin-pdf`, where a small string replace fixes a bad export alias).
+Reconstructing the plugin from source inside Milady would fork upstream and be
+fragile. When you are not using the local workspace checkout, prefer the known
+good published **`2.0.0-alpha.10`** artifact.
 
 ### Maintainer notes
 
 - **Before bumping** the OpenRouter dependency, verify the **published tarball** on npm: open `dist/node/index.node.js` and confirm it defines the default export / `openrouterPlugin`, or run `bun build node_modules/@elizaos/plugin-openrouter/dist/node/index.node.js --target=bun` after install.
-- **Remove the pin** (restore a semver range) only after upstream publishes a fixed version and you have confirmed the artifact. **Why:** `^2.0.0-alpha.10` allowed Bun to resolve **`alpha.12`**, which broke installs that upgraded the lockfile.
+- **Do not replace the workspace link with an unfenced semver range** until upstream publishes a fixed version and you have confirmed the artifact. **Why:** `^2.0.0-alpha.10` allowed Bun to resolve **`alpha.12`**, which broke installs that upgraded the lockfile.
 
 User-facing context and configuration for OpenRouter itself live in **[OpenRouter plugin](plugin-registry/llm/openrouter.md)** (Mintlify: `/plugin-registry/llm/openrouter`).
 

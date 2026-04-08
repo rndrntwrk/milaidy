@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { describeIf } from "../../../test/helpers/conditional-tests.ts";
 
 const EXPECTED_FILES = ["game.js", "index.html", "styles.css"];
 const REAL_HOME_DIR = os.userInfo().homedir;
@@ -25,6 +26,15 @@ const CODEX_UNAVAILABLE_OUTPUT_PATTERNS = [
   "rate_limit_exceeded",
   "429 Too Many Requests",
   "You've hit your usage limit",
+  "invalid or expired jwt",
+  "invalid_api_key",
+  "401 unauthorized",
+  "403 forbidden",
+  "404 not found",
+  "api.groq.com/openai/v1/responses",
+  "featured_plugins",
+  "chatgpt.com/backend-api/codex/featured_plugins",
+  "do not have access",
 ];
 
 function createIsolatedCodexHome(): string {
@@ -53,6 +63,7 @@ function runCodexExec(
         "exec",
         "--model",
         "gpt-5.4",
+        "--ephemeral",
         "--full-auto",
         "--skip-git-repo-check",
         "--color",
@@ -113,7 +124,7 @@ function isCodexUnavailableOutput(output: string): boolean {
   );
 }
 
-describe.skipIf(!(CODEX_AVAILABLE && CODEX_AUTH_AVAILABLE))(
+describeIf((CODEX_AVAILABLE && CODEX_AUTH_AVAILABLE))(
   "Coding agent Codex artifact generation",
   () => {
     const cleanupDirs: string[] = [];

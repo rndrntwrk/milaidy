@@ -307,7 +307,12 @@ export default defineConfig({
     exclude: [
       "dist/**",
       "**/node_modules/**",
+      "**/*-live.test.ts",
+      "**/*-live.test.tsx",
       "**/*.live.test.ts",
+      "**/*.live.test.tsx",
+      "**/*-real.test.ts",
+      "**/*-real.test.tsx",
       "**/*.real.test.ts",
       "**/*.real.test.tsx",
       // E2E lives under test/ too; run it via vitest.e2e.config.ts, not unit.

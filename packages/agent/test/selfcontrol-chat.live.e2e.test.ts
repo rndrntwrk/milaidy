@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { describeIf } from "../../../test/helpers/conditional-tests.ts";
 import {
   createConversation,
   postConversationMessage,
@@ -356,7 +357,7 @@ function assertNoProviderIssue(
   );
 }
 
-describe.skipIf(!LIVE_TESTS_ENABLED)(
+describeIf(LIVE_TESTS_ENABLED)(
   "Live: website blocker API roundtrip",
   () => {
     let runtime: StartedRuntime | undefined;
@@ -427,7 +428,7 @@ describe.skipIf(!LIVE_TESTS_ENABLED)(
   },
 );
 
-describe.skipIf(
+describeIf(
   !(
     LIVE_TESTS_ENABLED &&
     LIVE_CHAT_TESTS_ENABLED &&

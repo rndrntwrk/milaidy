@@ -1,10 +1,10 @@
 /**
  * Verifies that the shared chat generation path delegates trajectory creation to
- * @elizaos/plugin-trajectory-logger's MESSAGE_RECEIVED event handler,
+ * the native trajectories MESSAGE_RECEIVED event handler,
  * which sets trajectoryStepId on the message metadata before handleMessage.
  *
  * The server.ts code must NOT create its own trajectory (which would
- * conflict with the plugin's step ID).
+ * conflict with the native handler's step ID).
  */
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -12,11 +12,6 @@ import { describe, expect, it } from "vitest";
 
 const chatRoutesSource = readFileSync(
   path.resolve(import.meta.dirname, "..", "chat-routes.ts"),
-  "utf-8",
-);
-
-const corePluginsSource = readFileSync(
-  path.resolve(import.meta.dirname, "..", "..", "runtime", "core-plugins.ts"),
   "utf-8",
 );
 
@@ -48,7 +43,7 @@ describe("chat trajectory wiring", () => {
       "const trajectoryStepId = readMessageTrajectoryStepId(message);",
     );
     const wrapperIdx = chatRoutesSource.indexOf(
-      "await runWithTrajectoryContext(trajectoryContext, async () => {",
+      "runWithTrajectoryContext(trajectoryContext, async () => {",
     );
     const handleIdx = chatRoutesSource.indexOf(
       "runtime.messageService?.handleMessage",
@@ -58,10 +53,6 @@ describe("chat trajectory wiring", () => {
     expect(wrapperIdx).toBeGreaterThan(contextReadIdx);
     expect(handleIdx).toBeGreaterThan(wrapperIdx);
     expect(chatRoutesSource).not.toContain("withMiladyTrajectoryStep(");
-  });
-
-  it("keeps the trajectory logger in the core plugin list", () => {
-    expect(corePluginsSource).toContain("@elizaos/plugin-trajectory-logger");
   });
 });
 

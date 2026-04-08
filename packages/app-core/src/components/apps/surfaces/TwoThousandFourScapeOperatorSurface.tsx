@@ -1,15 +1,15 @@
 import { Button, Input } from "@miladyai/ui";
 import { useCallback, useMemo, useState } from "react";
-import { client, type AppSessionJsonValue } from "../../../api";
+import { type AppSessionJsonValue, client } from "../../../api";
 import { useApp } from "../../../state";
 import {
   formatDetailTimestamp,
-  selectLatestRunForApp,
   SurfaceBadge,
   SurfaceCard,
   SurfaceEmptyState,
   SurfaceGrid,
   SurfaceSection,
+  selectLatestRunForApp,
   toneForHealthState,
   toneForStatusText,
   toneForViewerAttachment,
@@ -17,6 +17,7 @@ import {
 import type { AppOperatorSurfaceProps } from "./types";
 
 interface RecentActivityEntry {
+  id: string;
   action?: string;
   detail?: string;
   ts?: string | number;
@@ -43,6 +44,13 @@ function extractRecentActivity(
         return null;
       const record = entry as Record<string, AppSessionJsonValue>;
       const normalizedEntry: RecentActivityEntry = {
+        id: [
+          typeof record.action === "string" ? record.action : "activity",
+          typeof record.ts === "string" || typeof record.ts === "number"
+            ? String(record.ts)
+            : "unknown",
+          typeof record.detail === "string" ? record.detail : "detail",
+        ].join("-"),
         action: typeof record.action === "string" ? record.action : undefined,
         detail: typeof record.detail === "string" ? record.detail : undefined,
         ts:
@@ -62,6 +70,7 @@ function extractRecentActivity(
 export function TwoThousandFourScapeOperatorSurface({
   appName,
   variant = "detail",
+  focus = "all",
 }: AppOperatorSurfaceProps) {
   const { appRuns } = useApp();
   const { run, matchingRuns } = useMemo(
@@ -84,7 +93,11 @@ export function TwoThousandFourScapeOperatorSurface({
   const surfaceTitle =
     variant === "live"
       ? "2004scape Live Dashboard"
-      : "2004scape Operator Surface";
+      : variant === "running"
+        ? "2004scape Run Surface"
+        : "2004scape Operator Surface";
+  const showDashboard = focus !== "chat";
+  const showChat = focus !== "dashboard";
 
   const sendOperatorMessage = useCallback(
     async (content: string) => {
@@ -95,15 +108,6 @@ export function TwoThousandFourScapeOperatorSurface({
       try {
         if (run.runId) {
           const response = await client.sendAppRunMessage(run.runId, content);
-          setStatusMessage(response.message ?? "Operator message sent.");
-          return response.success;
-        }
-        if (session?.sessionId) {
-          const response = await client.sendAppSessionMessage(
-            appName,
-            session.sessionId,
-            content,
-          );
           setStatusMessage(response.message ?? "Operator message sent.");
           return response.success;
         }
@@ -120,7 +124,7 @@ export function TwoThousandFourScapeOperatorSurface({
         setSending(false);
       }
     },
-    [appName, run, sending, session?.sessionId],
+    [run, sending],
   );
 
   const handleSendMessage = useCallback(async () => {
@@ -141,14 +145,10 @@ export function TwoThousandFourScapeOperatorSurface({
 
   const handleControl = useCallback(
     async (action: "pause" | "resume") => {
-      if (!run || !session?.sessionId) return;
+      if (!run) return;
       setStatusMessage(null);
       try {
-        const response = await client.controlAppSession(
-          appName,
-          session.sessionId,
-          action,
-        );
+        const response = await client.controlAppRun(run.runId, action);
         setStatusMessage(
           response.message ??
             (action === "pause"
@@ -163,7 +163,7 @@ export function TwoThousandFourScapeOperatorSurface({
         );
       }
     },
-    [appName, run, session?.sessionId],
+    [run],
   );
 
   if (!run) {
@@ -181,7 +181,9 @@ export function TwoThousandFourScapeOperatorSurface({
       data-testid={
         variant === "live"
           ? "2004scape-live-operator-surface"
-          : "2004scape-detail-operator-surface"
+          : variant === "running"
+            ? "2004scape-running-operator-surface"
+            : "2004scape-detail-operator-surface"
       }
     >
       <div className="flex flex-wrap items-center gap-2">
@@ -202,111 +204,117 @@ export function TwoThousandFourScapeOperatorSurface({
         </span>
       </div>
 
-      <SurfaceSection title="Login & Runtime">
-        <SurfaceGrid>
-          <SurfaceCard
-            label="Auto-login"
-            value={autoLoginLabel}
-            subtitle={
-              run.viewer?.url
-                ? `Viewer ${run.viewer.url}`
-                : "Viewer URL unavailable."
-            }
-          />
-          <SurfaceCard
-            label="Runtime"
-            value={
-              run.supportsBackground
-                ? "Continuously running service"
-                : "Foreground session only"
-            }
-            subtitle={
-              session?.status ??
-              run.summary ??
-              "Waiting for the 2004scape runtime to respond."
-            }
-          />
-          <SurfaceCard
-            label="Command Bridge"
-            value={
-              session?.canSendCommands
-                ? "Operator chat is live."
-                : "Waiting for command bridge."
-            }
-            subtitle={session?.sessionId ?? "No session yet."}
-          />
-          <SurfaceCard
-            label="Identity"
-            value={session?.characterId ?? "Character not resolved"}
-            subtitle={
-              session?.agentId
-                ? `Agent ${session.agentId}`
-                : "The agent identity will appear once the session is attached."
-            }
-          />
-        </SurfaceGrid>
-      </SurfaceSection>
+      {showDashboard ? (
+        <SurfaceSection title="Login & Runtime">
+          <SurfaceGrid>
+            <SurfaceCard
+              label="Auto-login"
+              value={autoLoginLabel}
+              subtitle={
+                run.viewer?.url
+                  ? `Viewer ${run.viewer.url}`
+                  : "Viewer URL unavailable."
+              }
+            />
+            <SurfaceCard
+              label="Runtime"
+              value={
+                run.supportsBackground
+                  ? "Continuously running service"
+                  : "Foreground session only"
+              }
+              subtitle={
+                session?.status ??
+                run.summary ??
+                "Waiting for the 2004scape runtime to respond."
+              }
+            />
+            <SurfaceCard
+              label="Command Bridge"
+              value={
+                session?.canSendCommands
+                  ? "Operator chat is live."
+                  : "Waiting for command bridge."
+              }
+              subtitle={session?.sessionId ?? "No session yet."}
+            />
+            <SurfaceCard
+              label="Identity"
+              value={session?.characterId ?? "Character not resolved"}
+              subtitle={
+                session?.agentId
+                  ? `Agent ${session.agentId}`
+                  : "The agent identity will appear once the session is attached."
+              }
+            />
+          </SurfaceGrid>
+        </SurfaceSection>
+      ) : null}
 
-      <SurfaceSection title="Current State">
-        <SurfaceGrid>
-          <SurfaceCard
-            label="Goal"
-            value={session?.goalLabel ?? "No goal recorded."}
-            subtitle={
-              session?.summary ?? run.summary ?? "No session summary yet."
-            }
-          />
-          <SurfaceCard
-            label="Follow Target"
-            value={session?.followEntity ?? "No follow target."}
-            subtitle={
-              session?.controls?.length
-                ? `Controls: ${session.controls.join(" · ")}`
-                : "No direct control actions exposed yet."
-            }
-          />
-          <SurfaceCard
-            label="Last Heartbeat"
-            value={formatDetailTimestamp(run.lastHeartbeatAt ?? run.updatedAt)}
-            subtitle={`Started ${formatDetailTimestamp(run.startedAt)}`}
-          />
-          <SurfaceCard
-            label="Viewer Attachment"
-            value={run.viewerAttachment}
-            subtitle={
-              run.viewer?.authMessage?.type
-                ? `Auth ${run.viewer.authMessage.type}`
-                : undefined
-            }
-          />
-        </SurfaceGrid>
-        {recentActivity.length > 0 ? (
-          <div className="space-y-2">
-            {recentActivity.map((entry, index) => (
-              <div
-                key={`${entry.action ?? "activity"}-${index}`}
-                className="rounded-xl border border-border/30 bg-bg/60 px-3 py-2"
-              >
-                <div className="flex items-center gap-2 text-[11px] font-medium text-txt">
-                  <span>{entry.action ?? "activity"}</span>
-                  <span className="ml-auto text-[10px] uppercase tracking-[0.18em] text-muted">
-                    {formatDetailTimestamp(entry.ts)}
-                  </span>
+      {showDashboard ? (
+        <SurfaceSection title="Current State">
+          <SurfaceGrid>
+            <SurfaceCard
+              label="Goal"
+              value={session?.goalLabel ?? "No goal recorded."}
+              subtitle={
+                session?.summary ?? run.summary ?? "No session summary yet."
+              }
+            />
+            <SurfaceCard
+              label="Follow Target"
+              value={session?.followEntity ?? "No follow target."}
+              subtitle={
+                session?.controls?.length
+                  ? `Controls: ${session.controls.join(" · ")}`
+                  : "No direct control actions exposed yet."
+              }
+            />
+            <SurfaceCard
+              label="Last Heartbeat"
+              value={formatDetailTimestamp(
+                run.lastHeartbeatAt ?? run.updatedAt,
+              )}
+              subtitle={`Started ${formatDetailTimestamp(run.startedAt)}`}
+            />
+            <SurfaceCard
+              label="Viewer Attachment"
+              value={run.viewerAttachment}
+              subtitle={
+                run.viewer?.authMessage?.type
+                  ? `Auth ${run.viewer.authMessage.type}`
+                  : undefined
+              }
+            />
+          </SurfaceGrid>
+          {recentActivity.length > 0 ? (
+            <div className="space-y-2">
+              {recentActivity.map((entry) => (
+                <div
+                  key={entry.id}
+                  className="rounded-xl border border-border/30 bg-bg/60 px-3 py-2"
+                >
+                  <div className="flex items-center gap-2 text-[11px] font-medium text-txt">
+                    <span>{entry.action ?? "activity"}</span>
+                    <span className="ml-auto text-[10px] uppercase tracking-[0.18em] text-muted">
+                      {formatDetailTimestamp(entry.ts)}
+                    </span>
+                  </div>
+                  <div className="mt-1 text-[11px] leading-5 text-muted-strong">
+                    {entry.detail ?? "No detail captured."}
+                  </div>
                 </div>
-                <div className="mt-1 text-[11px] leading-5 text-muted-strong">
-                  {entry.detail ?? "No detail captured."}
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="rounded-xl border border-border/30 bg-bg/60 px-3 py-2 text-[11px] italic text-muted">
-            No recent gameplay activity has been captured yet.
-          </div>
-        )}
-      </SurfaceSection>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-border/30 bg-bg/60 px-3 py-2 text-[11px] italic text-muted">
+              No recent gameplay activity has been captured yet.
+            </div>
+          )}
+        </SurfaceSection>
+      ) : null}
 
-      {session?.suggestedPrompts?.length ? (
+      {showDashboard && session?.suggestedPrompts?.length ? (
         <SurfaceSection title="Suggested Prompts">
           <div className="flex flex-wrap gap-2">
             {session.suggestedPrompts.map((prompt) => (
@@ -321,97 +329,101 @@ export function TwoThousandFourScapeOperatorSurface({
         </SurfaceSection>
       ) : null}
 
-      <SurfaceSection title="Telemetry">
-        <div className="grid gap-2 md:grid-cols-2">
-          <SurfaceCard
-            label="Status Fields"
-            value={[
-              `status: ${formatTelemetryValue(session?.status)}`,
-              `summary: ${formatTelemetryValue(session?.summary)}`,
-              `goalLabel: ${formatTelemetryValue(session?.goalLabel)}`,
-              `characterId: ${formatTelemetryValue(session?.characterId)}`,
-            ].join(" · ")}
-          />
-          <SurfaceCard
-            label="Configured Notes"
-            value={[
-              `viewer: ${formatTelemetryValue(run.viewer?.url)}`,
-              `postMessageAuth: ${run.viewer?.postMessageAuth ? "true" : "false"}`,
-              `supportsBackground: ${run.supportsBackground ? "true" : "false"}`,
-            ].join(" · ")}
-          />
-        </div>
-      </SurfaceSection>
+      {showDashboard ? (
+        <SurfaceSection title="Telemetry">
+          <div className="grid gap-2 md:grid-cols-2">
+            <SurfaceCard
+              label="Status Fields"
+              value={[
+                `status: ${formatTelemetryValue(session?.status)}`,
+                `summary: ${formatTelemetryValue(session?.summary)}`,
+                `goalLabel: ${formatTelemetryValue(session?.goalLabel)}`,
+                `characterId: ${formatTelemetryValue(session?.characterId)}`,
+              ].join(" · ")}
+            />
+            <SurfaceCard
+              label="Configured Notes"
+              value={[
+                `viewer: ${formatTelemetryValue(run.viewer?.url)}`,
+                `postMessageAuth: ${run.viewer?.postMessageAuth ? "true" : "false"}`,
+                `supportsBackground: ${run.supportsBackground ? "true" : "false"}`,
+              ].join(" · ")}
+            />
+          </div>
+        </SurfaceSection>
+      ) : null}
 
-      <SurfaceSection title="Steering">
-        {session?.suggestedPrompts?.length ? (
+      {showChat ? (
+        <SurfaceSection title="Steering">
+          {session?.suggestedPrompts?.length ? (
+            <div className="flex flex-wrap gap-2">
+              {session.suggestedPrompts.slice(0, 4).map((prompt) => (
+                <Button
+                  key={prompt}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="min-h-10 rounded-xl px-3 shadow-sm"
+                  onClick={() => void handleSuggestedPrompt(prompt)}
+                >
+                  {prompt}
+                </Button>
+              ))}
+            </div>
+          ) : null}
           <div className="flex flex-wrap gap-2">
-            {session.suggestedPrompts.slice(0, 4).map((prompt) => (
+            {session?.controls?.includes("pause") ? (
               <Button
-                key={prompt}
                 type="button"
                 variant="outline"
                 size="sm"
                 className="min-h-10 rounded-xl px-3 shadow-sm"
-                onClick={() => void handleSuggestedPrompt(prompt)}
+                onClick={() => void handleControl("pause")}
               >
-                {prompt}
+                Pause session
               </Button>
-            ))}
+            ) : null}
+            {session?.controls?.includes("resume") ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="min-h-10 rounded-xl px-3 shadow-sm"
+                onClick={() => void handleControl("resume")}
+              >
+                Resume session
+              </Button>
+            ) : null}
           </div>
-        ) : null}
-        <div className="flex flex-wrap gap-2">
-          {session?.controls?.includes("pause") ? (
+          <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
+            <Input
+              value={operatorMessage}
+              onChange={(event) => setOperatorMessage(event.target.value)}
+              placeholder="Tell the bot what to do, what to avoid, or what to explain."
+              className="min-h-11 rounded-xl"
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault();
+                  void handleSendMessage();
+                }
+              }}
+              disabled={!session?.sessionId}
+            />
             <Button
               type="button"
-              variant="outline"
-              size="sm"
-              className="min-h-10 rounded-xl px-3 shadow-sm"
-              onClick={() => void handleControl("pause")}
-            >
-              Pause session
-            </Button>
-          ) : null}
-          {session?.controls?.includes("resume") ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="min-h-10 rounded-xl px-3 shadow-sm"
-              onClick={() => void handleControl("resume")}
-            >
-              Resume session
-            </Button>
-          ) : null}
-        </div>
-        <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
-          <Input
-            value={operatorMessage}
-            onChange={(event) => setOperatorMessage(event.target.value)}
-            placeholder="Tell the bot what to do, what to avoid, or what to explain."
-            className="min-h-11 rounded-xl"
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey) {
-                event.preventDefault();
-                void handleSendMessage();
+              className="min-h-11 rounded-xl px-4 shadow-sm"
+              onClick={() => void handleSendMessage()}
+              disabled={
+                sending ||
+                !session?.sessionId ||
+                operatorMessage.trim().length === 0
               }
-            }}
-            disabled={!session?.sessionId}
-          />
-          <Button
-            type="button"
-            className="min-h-11 rounded-xl px-4 shadow-sm"
-            onClick={() => void handleSendMessage()}
-            disabled={
-              sending ||
-              !session?.sessionId ||
-              operatorMessage.trim().length === 0
-            }
-          >
-            {sending ? "Sending" : "Send"}
-          </Button>
-        </div>
-      </SurfaceSection>
+            >
+              {sending ? "Sending" : "Send"}
+            </Button>
+          </div>
+        </SurfaceSection>
+      ) : null}
 
       {statusMessage ? (
         <div className="rounded-2xl border border-border/35 bg-card/70 px-4 py-3 text-[11px] leading-5 text-muted-strong">

@@ -32,6 +32,7 @@ const FALLBACK_FRAMEWORK =
 	(PRIMARY_FRAMEWORK === "claude" ? "codex" : "claude");
 const USE_REAL_PRIMARY_FAILURE =
 	process.env.ORCHESTRATOR_LIVE_REAL_PRIMARY_FAILURE === "1";
+const KEEP_ARTIFACTS = process.env.MILADY_KEEP_LIVE_ARTIFACTS === "1";
 
 type MiladyConfig = {
 	cloud?: {
@@ -80,7 +81,14 @@ async function cleanup(): Promise<void> {
 	} catch {}
 
 	if (workdir) {
-		fs.rmSync(workdir, { recursive: true, force: true });
+		if (KEEP_ARTIFACTS) {
+			console.log(
+				"[orchestrator-live-failover] preserving artifacts",
+				JSON.stringify({ workdir }),
+			);
+		} else {
+			fs.rmSync(workdir, { recursive: true, force: true });
+		}
 	}
 }
 
@@ -287,6 +295,7 @@ async function main(): Promise<void> {
 			replacementSessionId,
 			primaryFramework: PRIMARY_FRAMEWORK,
 			fallbackFramework: FALLBACK_FRAMEWORK,
+			workdir,
 			outputFile,
 		}),
 	);

@@ -1064,13 +1064,6 @@ export default defineConfig({
             find: /^@elizaos\/agent$/,
             replacement: path.resolve(here, "src/stubs/empty-node-module.ts"),
           },
-          // @elizaos/plugin-knowledge browser build is broken — force node entry.
-          {
-            find: /^@elizaos\/plugin-knowledge$/,
-            replacement: `${path.dirname(
-              _require.resolve("@elizaos/plugin-knowledge/package.json"),
-            )}/dist/node/index.node.js`,
-          },
           // @elizaos/core — force ALL copies (including nested ones in plugins
           // like plugin-secrets-manager that ship their own older core) to the
           // main workspace copy's browser entry.  The browser entry has all

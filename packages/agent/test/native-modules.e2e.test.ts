@@ -25,6 +25,7 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { itIf } from "../../../test/helpers/conditional-tests.ts";
 
 // ---------------------------------------------------------------------------
 // Environment
@@ -353,12 +354,12 @@ const elizaTsPath =
 
 describe("Native Module Installation Verification", () => {
   describe("TensorFlow.js", () => {
-    it.skipIf(!hasTfjsNode)("@tensorflow/tfjs-node is installed", async () => {
+    itIf(hasTfjsNode)("@tensorflow/tfjs-node is installed", async () => {
       const packagePath = findPackagePath("@tensorflow", "tfjs-node");
       expect(fs.existsSync(packagePath!)).toBe(true);
     });
 
-    it.skipIf(!hasTfjsNode || !hasTfjsNodeBinding)(
+    itIf(hasTfjsNode)(
       "@tensorflow/tfjs-node has native binding",
       () => {
         const hasBinding = hasNativeBinding("@tensorflow/tfjs-node", [
@@ -369,19 +370,19 @@ describe("Native Module Installation Verification", () => {
       },
     );
 
-    it.skipIf(!hasTfjsCore)("@tensorflow/tfjs-core is installed", async () => {
+    itIf(hasTfjsCore)("@tensorflow/tfjs-core is installed", async () => {
       const packagePath = findPackagePath("@tensorflow", "tfjs-core");
       expect(fs.existsSync(packagePath!)).toBe(true);
     });
   });
 
   describe("TensorFlow Models", () => {
-    it.skipIf(!hasCocoSsd)("@tensorflow-models/coco-ssd is installed", () => {
+    itIf(hasCocoSsd)("@tensorflow-models/coco-ssd is installed", () => {
       const packagePath = findPackagePath("@tensorflow-models", "coco-ssd");
       expect(fs.existsSync(packagePath!)).toBe(true);
     });
 
-    it.skipIf(!hasMobilenet)(
+    itIf(hasMobilenet)(
       "@tensorflow-models/mobilenet is installed",
       () => {
         const packagePath = findPackagePath("@tensorflow-models", "mobilenet");
@@ -389,7 +390,7 @@ describe("Native Module Installation Verification", () => {
       },
     );
 
-    it.skipIf(!hasPoseDetection)(
+    itIf(hasPoseDetection)(
       "@tensorflow-models/pose-detection is installed",
       () => {
         const packagePath = findPackagePath(
@@ -402,17 +403,17 @@ describe("Native Module Installation Verification", () => {
   });
 
   describe("Sharp Image Processing", () => {
-    it.skipIf(!hasSharp)("sharp is installed", () => {
+    itIf(hasSharp)("sharp is installed", () => {
       const packagePath = findPackagePath("sharp");
       expect(fs.existsSync(packagePath!)).toBe(true);
     });
 
-    it.skipIf(!hasSharp)("sharp can be imported", async () => {
+    itIf(hasSharp)("sharp can be imported", async () => {
       const result = await canImportModuleInSubprocess("sharp");
       expect(result.success).toBe(true);
     });
 
-    it.skipIf(!hasSharp)("sharp can process an image buffer", async () => {
+    itIf(hasSharp)("sharp can process an image buffer", async () => {
       const result = runModuleSnippet(`
 					const sharp = (await importFromWorkspace("sharp")).default;
 					const buffer = await sharp({
@@ -432,17 +433,17 @@ describe("Native Module Installation Verification", () => {
   });
 
   describe("Canvas for Face Recognition", () => {
-    it.skipIf(!hasCanvas)("canvas is installed", () => {
+    itIf(hasCanvas)("canvas is installed", () => {
       const packagePath = findPackagePath("canvas");
       expect(fs.existsSync(packagePath!)).toBe(true);
     });
 
-    it.skipIf(!hasCanvasBinding)("canvas has native binding", () => {
+    itIf(hasCanvasBinding)("canvas has native binding", () => {
       const hasBinding = hasNativeBinding("canvas", ["canvas.node", ".node"]);
       expect(hasBinding).toBe(true);
     });
 
-    it.skipIf(!hasCanvasBinding)("canvas can be imported", async () => {
+    itIf(hasCanvasBinding)("canvas can be imported", async () => {
       // Pre-resolve canvas's main entry file in the outer process. Bun places
       // canvas under `node_modules/.bun/canvas@<ver>/node_modules/canvas/`
       // and only links it into `packages/agent/node_modules/canvas`, which
@@ -456,7 +457,7 @@ describe("Native Module Installation Verification", () => {
       expect(result.success, result.error).toBe(true);
     });
 
-    it.skipIf(!hasCanvasBinding)("canvas can create a 2D context", async () => {
+    itIf(hasCanvasBinding)("canvas can create a 2D context", async () => {
       const canvasMainFile = findPackageMainFile("canvas");
       expect(canvasMainFile, "canvas main file not resolvable").toBeTruthy();
       const result = runModuleSnippet(
@@ -479,24 +480,24 @@ describe("Native Module Installation Verification", () => {
   });
 
   describe("Face-API.js", () => {
-    it.skipIf(!hasFaceApi)("face-api.js is installed", () => {
+    itIf(hasFaceApi)("face-api.js is installed", () => {
       const packagePath = findPackagePath("face-api.js");
       expect(fs.existsSync(packagePath!)).toBe(true);
     });
 
-    it.skipIf(!hasFaceApi)("face-api.js can be imported", async () => {
+    itIf(hasFaceApi)("face-api.js can be imported", async () => {
       const result = await canImportModule("face-api.js");
       expect(result.success).toBe(true);
     });
   });
 
   describe("Tesseract.js OCR", () => {
-    it.skipIf(!hasTesseract)("tesseract.js is installed", () => {
+    itIf(hasTesseract)("tesseract.js is installed", () => {
       const packagePath = findPackagePath("tesseract.js");
       expect(fs.existsSync(packagePath!)).toBe(true);
     });
 
-    it.skipIf(!hasTesseract)("tesseract.js can be imported", async () => {
+    itIf(hasTesseract)("tesseract.js can be imported", async () => {
       const result = await canImportModule("tesseract.js");
       expect(result.success).toBe(true);
     });
@@ -504,12 +505,12 @@ describe("Native Module Installation Verification", () => {
 });
 
 describe("Plugin-Vision Availability", () => {
-  it.skipIf(!hasPluginVision)("@elizaos/plugin-vision is installed", () => {
+  itIf(hasPluginVision)("@elizaos/plugin-vision is installed", () => {
     const packagePath = findPackagePath("@elizaos", "plugin-vision");
     expect(fs.existsSync(packagePath!)).toBe(true);
   });
 
-  it.skipIf(!hasPluginVision)(
+  itIf(hasPluginVision)(
     "@elizaos/plugin-vision can be imported",
     async () => {
       const result = await canImportModule("@elizaos/plugin-vision");
@@ -517,7 +518,7 @@ describe("Plugin-Vision Availability", () => {
     },
   );
 
-  it.skipIf(!hasPluginVision)("plugin-vision has required dependencies", () => {
+  itIf(hasPluginVision)("plugin-vision has required dependencies", () => {
     const visionPkgDir = findPackagePath("@elizaos", "plugin-vision");
     const visionPkgPath = path.join(visionPkgDir!, "package.json");
     expect(fs.existsSync(visionPkgPath)).toBe(true);
@@ -530,7 +531,7 @@ describe("Plugin-Vision Availability", () => {
     expect(visionPkgContent).toContain('"tesseract.js"');
   });
 
-  it.skipIf(!hasSharp || !hasTesseract)(
+  itIf(hasPluginVision)(
     "vision dependencies are installed in node_modules",
     () => {
       const sharpPath = findPackagePath("sharp");
@@ -542,7 +543,7 @@ describe("Plugin-Vision Availability", () => {
 });
 
 describe("Electrobun Native Module Configuration", () => {
-  it.skipIf(!electrobunPkgPath)(
+  itIf(electrobunPkgPath)(
     "electrobun app package is present and depends on electrobun",
     () => {
       const electrobunPkg = JSON.parse(
@@ -552,14 +553,14 @@ describe("Electrobun Native Module Configuration", () => {
     },
   );
 
-  it.skipIf(!hasAnyNativeModuleDep)(
+  itIf(hasAnyNativeModuleDep)(
     "root runtime declares native module dependencies for desktop packaging",
     () => {
       expect(hasAnyNativeModuleDep).toBe(true);
     },
   );
 
-  it.skipIf(!copyRuntimeScript || !releaseWorkflow)(
+  itIf(copyRuntimeScript || !releaseWorkflow)(
     "desktop packaging scripts exist for runtime dependency bundling",
     () => {
       expect(fs.existsSync(copyRuntimeScript!)).toBe(true);
@@ -569,7 +570,7 @@ describe("Electrobun Native Module Configuration", () => {
 });
 
 describe("Core Plugins with Vision Integration", () => {
-  it.skipIf(!corePluginsPath)(
+  itIf(corePluginsPath)(
     "plugin-vision is in OPTIONAL_CORE_PLUGINS",
     async () => {
       const { OPTIONAL_CORE_PLUGINS } = await import(
@@ -579,34 +580,34 @@ describe("Core Plugins with Vision Integration", () => {
     },
   );
 
-  it.skipIf(!elizaTsPath)("plugin-vision has static import in eliza.ts", () => {
+  itIf(elizaTsPath)("plugin-vision has static import in eliza.ts", () => {
     const elizaContent = fs.readFileSync(elizaTsPath!, "utf-8");
     expect(elizaContent).toContain("plugin-vision");
   });
 });
 
 describe("PTY Native Modules", () => {
-  it.skipIf(!hasNodePty)("node-pty is installed", () => {
+  itIf(hasNodePty)("node-pty is installed", () => {
     const packagePath = findPackagePath("node-pty");
     expect(fs.existsSync(packagePath!)).toBe(true);
   });
 
-  it.skipIf(!hasLydellNodePty)("@lydell/node-pty is available", () => {
+  itIf(hasLydellNodePty)("@lydell/node-pty is available", () => {
     expect(hasLydellNodePty).toBe(true);
   });
 
-  it.skipIf(!hasPtyManager)("pty-manager is installed", () => {
+  itIf(hasPtyManager)("pty-manager is installed", () => {
     const packagePath = findPackagePath("pty-manager");
     expect(fs.existsSync(packagePath!)).toBe(true);
   });
 
-  it.skipIf(!hasPtyDeps)("root runtime declares PTY dependencies", () => {
+  itIf(hasPtyDeps)("root runtime declares PTY dependencies", () => {
     expect(!!allDeps["pty-manager"]).toBe(true);
   });
 });
 
 describe("Local Embedding Native Modules", () => {
-  it.skipIf(!hasEmbeddingDeps)(
+  itIf(hasEmbeddingDeps)(
     "root runtime declares local embedding dependencies",
     () => {
       expect(!!allDeps["node-llama-cpp"] || !!allDeps["whisper-node"]).toBe(

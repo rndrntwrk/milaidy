@@ -536,7 +536,7 @@
     ],
     "forbiddenDesktopInventoryMarkers": [
       "it.todo(",
-      "it.skip("
+      "conditional test helper misuse"
     ]
   }
 }

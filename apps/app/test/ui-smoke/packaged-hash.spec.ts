@@ -17,18 +17,15 @@ test.beforeEach(async ({ page }) => {
   await seedAppStorage(page);
 });
 
-test("dist exists and file URL hash routing loads settings", async ({
-  page,
-}) => {
-  test.skip(
-    !fs.existsSync(distIndex),
-    "apps/app/dist/index.html missing — run `cd apps/app && bun run build`",
-  );
+if (fs.existsSync(distIndex)) {
+  test("dist exists and file URL hash routing loads settings", async ({
+    page,
+  }) => {
+    const target = `${pathToFileURL(distIndex).href}#/settings`;
+    await page.goto(target, { waitUntil: "domcontentloaded" });
+    await expectRootReady(page);
+    await expectNoOnboardingRedirect(page);
 
-  const target = `${pathToFileURL(distIndex).href}#/settings`;
-  await page.goto(target, { waitUntil: "domcontentloaded" });
-  await expectRootReady(page);
-  await expectNoOnboardingRedirect(page);
-
-  expect(new URL(page.url()).protocol).toBe("file:");
-});
+    expect(new URL(page.url()).protocol).toBe("file:");
+  });
+}

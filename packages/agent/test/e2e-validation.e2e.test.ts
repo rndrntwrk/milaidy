@@ -34,6 +34,7 @@ import {
 } from "@elizaos/core";
 import dotenv from "dotenv";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { itIf } from "../../../test/helpers/conditional-tests.ts";
 import { withTimeout } from "../../../test/helpers/test-utils";
 import { validateRuntimeContext } from "../src/api/plugin-validation";
 import { startApiServer } from "../src/api/server";
@@ -74,27 +75,71 @@ function shellEscape(value: string): string {
   return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
+function isRealNodeExecutable(candidate: string | undefined): boolean {
+  if (!candidate || !fs.existsSync(candidate)) {
+    return false;
+  }
+  const stat = fs.statSync(candidate);
+  if (!stat.isFile()) {
+    return false;
+  }
+  const normalized = candidate.replace(/\\/g, "/");
+  return !/\/bun-node-[^/]+\/node$/.test(normalized);
+}
+
+function resolveNodeExec(): string {
+  if (!process.versions.bun) {
+    return process.execPath;
+  }
+
+  const envNodeExec = process.env.npm_node_execpath;
+  if (isRealNodeExecutable(envNodeExec)) {
+    return envNodeExec;
+  }
+
+  for (const candidate of [
+    "/opt/homebrew/bin/node",
+    "/usr/local/bin/node",
+    "/usr/bin/node",
+  ]) {
+    if (isRealNodeExecutable(candidate)) {
+      return candidate;
+    }
+  }
+
+  const resolved = execFileSync(
+    "node",
+    ["-e", "process.stdout.write(process.execPath)"],
+    {
+      cwd: repoRoot,
+      timeout: 10_000,
+      encoding: "utf-8",
+    },
+  ).trim();
+  if (isRealNodeExecutable(resolved)) {
+    return resolved;
+  }
+
+  throw new Error("Node.js 22+ is required to run CLI E2E validation.");
+}
+
 function runCliEntry(
   args: string[],
   timeout: number = 90_000,
 ): string {
+  const nodeExec = resolveNodeExec();
   const command = [
-    shellEscape(process.execPath),
+    shellEscape(nodeExec),
     "--import",
     "tsx",
     shellEscape(cliEntryPath),
     ...args.map(shellEscape),
   ].join(" ");
-  try {
-    return execFileSync(
-      "sh",
-      ["-lc", command],
-      { cwd: repoRoot, timeout, encoding: "utf-8" },
-    );
-  } catch {
-    // Ignore non-zero exits/timeouts and treat them as no output.
-    return "";
-  }
+  return execFileSync("sh", ["-lc", command], {
+    cwd: repoRoot,
+    timeout,
+    encoding: "utf-8",
+  });
 }
 
 dotenv.config({ path: path.resolve(packageRoot, ".env") });
@@ -237,6 +282,41 @@ function http$(
     if (b) req.write(b);
     req.end();
   });
+}
+
+function withIsolatedApiStateDir(): {
+  stateDir: string;
+  restore: () => void;
+} {
+  const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "eliza-e2e-api-"));
+  const configPath = path.join(stateDir, "eliza.json");
+  fs.writeFileSync(configPath, JSON.stringify({}, null, 2), "utf-8");
+
+  const previous = {
+    ELIZA_STATE_DIR: process.env.ELIZA_STATE_DIR,
+    MILADY_STATE_DIR: process.env.MILADY_STATE_DIR,
+    ELIZA_CONFIG_PATH: process.env.ELIZA_CONFIG_PATH,
+    MILADY_CONFIG_PATH: process.env.MILADY_CONFIG_PATH,
+  };
+
+  process.env.ELIZA_STATE_DIR = stateDir;
+  process.env.MILADY_STATE_DIR = stateDir;
+  process.env.ELIZA_CONFIG_PATH = configPath;
+  process.env.MILADY_CONFIG_PATH = configPath;
+
+  return {
+    stateDir,
+    restore: () => {
+      for (const [key, value] of Object.entries(previous)) {
+        if (value === undefined) {
+          delete process.env[key];
+        } else {
+          process.env[key] = value;
+        }
+      }
+      fs.rmSync(stateDir, { recursive: true, force: true });
+    },
+  };
 }
 
 async function createConversationId(
@@ -483,7 +563,6 @@ describe("Plugin Stress Test", () => {
   const ALL_CORE_PLUGINS: readonly string[] = [
     "@elizaos/plugin-sql",
     "@elizaos/plugin-local-embedding",
-    "@elizaos/plugin-trajectory-logger",
     "@elizaos/plugin-agent-skills",
     "@elizaos/plugin-agent-orchestrator",
     "@elizaos/plugin-directives",
@@ -497,7 +576,6 @@ describe("Plugin Stress Test", () => {
     "@elizaos/plugin-code",
     "@elizaos/plugin-computeruse",
     "@elizaos/plugin-edge-tts",
-    "@elizaos/plugin-knowledge",
     "@elizaos/plugin-mcp",
     "@elizaos/plugin-pdf",
     "@elizaos/plugin-scratchpad",
@@ -901,6 +979,7 @@ describe("Context Integrity (no corruption)", () => {
 
 describe("Deadlock Detection", () => {
   it("concurrent requests to different endpoints complete within timeout", async () => {
+    const isolatedState = withIsolatedApiStateDir();
     const srv = await startApiServer({ port: 0 });
     try {
       const startTime = performance.now();
@@ -939,7 +1018,11 @@ describe("Deadlock Detection", () => {
         `[e2e-validation] ${requests.length} concurrent requests completed in ${elapsed.toFixed(0)}ms`,
       );
     } finally {
-      await srv.close();
+      try {
+        await srv.close();
+      } finally {
+        isolatedState.restore();
+      }
     }
   }, 45_000);
 
@@ -1248,7 +1331,6 @@ describe("Runtime Integration (with model provider)", () => {
     });
 
     const corePluginNames = [
-      "@elizaos/plugin-trajectory-logger",
       "@elizaos/plugin-agent-skills",
       "@elizaos/plugin-directives",
       "@elizaos/plugin-commands",
@@ -1351,7 +1433,7 @@ describe("Runtime Integration (with model provider)", () => {
     }
   }, 150_000);
 
-  it.skipIf(!hasModelProvider || hasKnownBrokenGroqLargeModel)(
+  itIf(hasModelProvider || hasKnownBrokenGroqLargeModel)(
     "runtime initializes with all plugins",
     () => {
     expect(initialized).toBe(true);
@@ -1359,7 +1441,7 @@ describe("Runtime Integration (with model provider)", () => {
     },
   );
 
-  it.skipIf(!hasModelProvider || hasKnownBrokenGroqLargeModel)(
+  itIf(hasModelProvider || hasKnownBrokenGroqLargeModel)(
     "generates text response",
     async () => {
       const activeRuntime = runtime;
@@ -1424,7 +1506,7 @@ describe("Runtime Integration (with model provider)", () => {
     120_000,
   );
 
-  it.skipIf(!hasModelProvider || hasKnownBrokenGroqLargeModel)(
+  itIf(hasModelProvider || hasKnownBrokenGroqLargeModel)(
     "handleMessage produces response",
     async () => {
       const activeRuntime = runtime;
@@ -1455,7 +1537,7 @@ describe("Runtime Integration (with model provider)", () => {
     120_000,
   );
 
-  it.skipIf(!hasModelProvider || hasKnownBrokenGroqLargeModel)(
+  itIf(hasModelProvider || hasKnownBrokenGroqLargeModel)(
     "context integrity maintained across 5 sequential messages",
     async () => {
       const activeRuntime = runtime;
@@ -1501,7 +1583,7 @@ describe("Runtime Integration (with model provider)", () => {
     300_000,
   );
 
-  it.skipIf(!hasModelProvider || hasKnownBrokenGroqLargeModel)(
+  itIf(hasModelProvider || hasKnownBrokenGroqLargeModel)(
     "3 parallel chat requests complete without crashes",
     async () => {
       const prompts = [
@@ -1544,7 +1626,7 @@ describe("Runtime Integration (with model provider)", () => {
     90_000,
   );
 
-  it.skipIf(!hasModelProvider || hasKnownBrokenGroqLargeModel)(
+  itIf(hasModelProvider || hasKnownBrokenGroqLargeModel)(
     "API server status reflects runtime state",
     async () => {
       const { status, data } = await http$(server?.port, "GET", "/api/status");

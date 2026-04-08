@@ -9,13 +9,14 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { DatabaseSync } from "node:sqlite";
 import crypto from "node:crypto";
 import type { AgentRuntime, Task, UUID } from "@elizaos/core";
 import { describe, expect, it, vi } from "vitest";
+import { describeIf, itIf } from "../../../test/helpers/conditional-tests.ts";
 import { startApiServer } from "../src/api/server";
 import { LifeOpsRepository } from "../src/lifeops/repository";
 import { LifeOpsService } from "../src/lifeops/service";
+import { DatabaseSync } from "../src/test-utils/sqlite-compat";
 import { req } from "../../../test/helpers/http";
 import { saveEnv, sleep } from "../../../test/helpers/test-utils";
 
@@ -3395,8 +3396,7 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
   });
 }
 
-const describeLive =
-  process.env.MILADY_LIFEOPS_LIVE_TEST === "1" ? describe : describe.skip;
+const describeLive = describeIf(process.env.MILADY_LIFEOPS_LIVE_TEST === "1");
 
 function liveScenarioTitle(id: string): string {
   return liveScenarios.find((scenario) => scenario.id === id)?.title ?? id;
@@ -3443,7 +3443,7 @@ const hasTwilioConfig =
   Boolean(readOptionalEnv("TWILIO_PHONE_NUMBER"));
 
 describeLive("Milaidy PRD live connector coverage", () => {
-  it.skipIf(!hasLiveGoogleLocalConfig() || !liveGoogleLocalCallbackFile)(
+  itIf(hasLiveGoogleLocalConfig() || !liveGoogleLocalCallbackFile)(
     `[LIVE-01] ${liveScenarioTitle("LIVE-01")}`,
     async () => {
       await withLiveLifeOpsApiServer(async ({ port, stateDir }) => {
@@ -3472,7 +3472,7 @@ describeLive("Milaidy PRD live connector coverage", () => {
     LIVE_TEST_TIMEOUT_MS,
   );
 
-  it.skipIf(!hasLiveGoogleRemoteConfig() || !liveGoogleRemoteCallbackFile)(
+  itIf(hasLiveGoogleRemoteConfig() || !liveGoogleRemoteCallbackFile)(
     `[LIVE-02] ${liveScenarioTitle("LIVE-02")}`,
     async () => {
       await withLiveLifeOpsApiServer(async ({ port, stateDir }) => {
@@ -3495,7 +3495,7 @@ describeLive("Milaidy PRD live connector coverage", () => {
     LIVE_TEST_TIMEOUT_MS,
   );
 
-  it.skipIf(!hasLiveGoogleLocalConfig() || !liveGoogleCalendarCallbackFile)(
+  itIf(hasLiveGoogleLocalConfig() || !liveGoogleCalendarCallbackFile)(
     `[LIVE-03] ${liveScenarioTitle("LIVE-03")}`,
     async () => {
       await withLiveLifeOpsApiServer(async ({ port, stateDir }) => {
@@ -3546,7 +3546,7 @@ describeLive("Milaidy PRD live connector coverage", () => {
     LIVE_TEST_TIMEOUT_MS,
   );
 
-  it.skipIf(!hasLiveGoogleLocalConfig() || !liveGoogleGmailCallbackFile)(
+  itIf(hasLiveGoogleLocalConfig() || !liveGoogleGmailCallbackFile)(
     `[LIVE-04] ${liveScenarioTitle("LIVE-04")}`,
     async () => {
       await withLiveLifeOpsApiServer(async ({ port, stateDir, runtime }) => {
@@ -3582,7 +3582,7 @@ describeLive("Milaidy PRD live connector coverage", () => {
     LIVE_TEST_TIMEOUT_MS,
   );
 
-  it.skipIf(
+  itIf(
     !hasLiveGoogleLocalConfig() ||
       !liveGoogleRevokeCallbackFile ||
       !liveGoogleRevokeMarkerFile,
@@ -3631,7 +3631,7 @@ describeLive("Milaidy PRD live connector coverage", () => {
     LIVE_TEST_TIMEOUT_MS,
   );
 
-  it.skipIf(!hasTwilioConfig || !liveTwilioToPhone)(
+  itIf(hasTwilioConfig || !liveTwilioToPhone)(
     `[LIVE-06] ${liveScenarioTitle("LIVE-06")}`,
     async () => {
       await withLiveLifeOpsApiServer(async ({ port, runtime }) => {
@@ -3733,7 +3733,7 @@ describeLive("Milaidy PRD live connector coverage", () => {
     LIVE_TEST_TIMEOUT_MS,
   );
 
-  it.skipIf(
+  itIf(
     !liveGoogleAdminBlockCallbackFile ||
       (liveGoogleAdminBlockMode === "local"
         ? !hasLiveGoogleLocalConfig()

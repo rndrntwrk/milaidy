@@ -57,8 +57,8 @@ const { mockClientFns, mockUseApp } = vi.hoisted(() => ({
     getBabylonAgentChat: vi.fn(),
     getBabylonAgentWallet: vi.fn(),
     getBabylonAgentTradingBalance: vi.fn(),
-    toggleBabylonAgent: vi.fn(),
-    sendBabylonAgentChat: vi.fn(),
+    controlAppRun: vi.fn(),
+    sendAppRunMessage: vi.fn(),
   },
   mockUseApp: vi.fn(),
 }));
@@ -311,8 +311,8 @@ describe("AppsView", () => {
     mockClientFns.getBabylonAgentChat.mockReset();
     mockClientFns.getBabylonAgentWallet.mockReset();
     mockClientFns.getBabylonAgentTradingBalance.mockReset();
-    mockClientFns.toggleBabylonAgent.mockReset();
-    mockClientFns.sendBabylonAgentChat.mockReset();
+    mockClientFns.controlAppRun.mockReset();
+    mockClientFns.sendAppRunMessage.mockReset();
     mockUseApp.mockReset();
 
     mockClientFns.listHyperscapeEmbeddedAgents.mockResolvedValue({
@@ -388,11 +388,11 @@ describe("AppsView", () => {
     mockClientFns.getBabylonAgentTradingBalance.mockResolvedValue({
       balance: 0,
     });
-    mockClientFns.toggleBabylonAgent.mockResolvedValue({
+    mockClientFns.controlAppRun.mockResolvedValue({
       success: true,
       message: "updated",
     });
-    mockClientFns.sendBabylonAgentChat.mockResolvedValue({
+    mockClientFns.sendAppRunMessage.mockResolvedValue({
       success: true,
       message: "sent",
     });
@@ -476,7 +476,6 @@ describe("AppsView", () => {
         value: originalMatchMedia,
       });
     } else {
-      // biome-ignore lint/performance/noDelete: test cleanup for mutable global
       delete (window as Window & { matchMedia?: typeof window.matchMedia })
         .matchMedia;
     }
@@ -628,9 +627,14 @@ describe("AppsView", () => {
       uiLanguage: "en",
       t,
     });
-    const app = createApp("@hyperscape/plugin-hyperscape", "Hyperscape", "Arena", {
-      uiExtension: { detailPanelId: "hyperscape-embedded-agents" },
-    });
+    const app = createApp(
+      "@hyperscape/plugin-hyperscape",
+      "Hyperscape",
+      "Arena",
+      {
+        uiExtension: { detailPanelId: "hyperscape-embedded-agents" },
+      },
+    );
     const run = createRunSummary({
       runId: "run-hyperscape",
       appName: app.name,
@@ -846,9 +850,14 @@ describe("AppsView", () => {
       uiLanguage: "en",
       t: tStub,
     });
-    const app = createApp("@hyperscape/plugin-hyperscape", "Hyperscape", "Arena", {
-      uiExtension: { detailPanelId: "hyperscape-embedded-agents" },
-    });
+    const app = createApp(
+      "@hyperscape/plugin-hyperscape",
+      "Hyperscape",
+      "Arena",
+      {
+        uiExtension: { detailPanelId: "hyperscape-embedded-agents" },
+      },
+    );
     const run = createRunSummary({
       runId: "run-auth-missing",
       appName: app.name,
@@ -1058,7 +1067,11 @@ describe("AppsView", () => {
       uiLanguage: "en",
       t: tStub,
     });
-    const appOne = createApp("@hyperscape/plugin-hyperscape", "Hyperscape", "Arena");
+    const appOne = createApp(
+      "@hyperscape/plugin-hyperscape",
+      "Hyperscape",
+      "Arena",
+    );
     const appTwo = createApp("@elizaos/app-babylon", "Babylon", "Wallet");
     mockClientFns.listApps.mockResolvedValue([appOne, appTwo]);
     mockClientFns.listAppRuns.mockResolvedValue([
@@ -1110,16 +1123,21 @@ describe("AppsView", () => {
     expect(mockClientFns.listApps).toHaveBeenCalledTimes(2);
   });
 
-  it("opens detail pane for app with unregistered uiExtension without crashing", async () => {
+  it("renders the registered Hyperscape host surface without legacy API calls", async () => {
     const ctx = createAppsContext();
     mockUseApp.mockReturnValue({
       ...ctx,
       uiLanguage: "en",
       t: tStub,
     });
-    const app = createApp("@hyperscape/plugin-hyperscape", "Hyperscape", "Arena", {
-      uiExtension: { detailPanelId: "hyperscape-embedded-agents" },
-    });
+    const app = createApp(
+      "@hyperscape/plugin-hyperscape",
+      "Hyperscape",
+      "Arena",
+      {
+        uiExtension: { detailPanelId: "hyperscape-embedded-agents" },
+      },
+    );
     mockClientFns.listApps.mockResolvedValue([app]);
 
     let tree!: TestRenderer.ReactTestRenderer;
@@ -1133,16 +1151,13 @@ describe("AppsView", () => {
     });
     await flush();
 
-    // The detail pane should render with a Back button and app name
     expect(
       tree?.root.findAll((node) => text(node).includes("appsview.Back")).length,
     ).toBeGreaterThanOrEqual(1);
     expect(
       tree?.root.findAll((node) => text(node) === "Hyperscape").length,
     ).toBeGreaterThan(0);
-
-    // The extension panel ID is not registered, so no extension UI should render.
-    // Hyperscape API calls should NOT be made when the extension is absent.
+    expect(textOf(tree.root)).toContain("Hyperscape host surface");
     expect(mockClientFns.listHyperscapeEmbeddedAgents).not.toHaveBeenCalled();
   });
 
@@ -1153,7 +1168,11 @@ describe("AppsView", () => {
       uiLanguage: "en",
       t: tStub,
     });
-    const app = createApp("@hyperscape/plugin-hyperscape", "Hyperscape", "Arena");
+    const app = createApp(
+      "@hyperscape/plugin-hyperscape",
+      "Hyperscape",
+      "Arena",
+    );
     mockClientFns.listApps.mockResolvedValue([app]);
     mockClientFns.listAppRuns.mockResolvedValue([
       createRunSummary({
@@ -1187,7 +1206,11 @@ describe("AppsView", () => {
       uiLanguage: "en",
       t: tStub,
     });
-    const appOne = createApp("@hyperscape/plugin-hyperscape", "Hyperscape", "Arena");
+    const appOne = createApp(
+      "@hyperscape/plugin-hyperscape",
+      "Hyperscape",
+      "Arena",
+    );
     const appTwo = createApp("@elizaos/app-babylon", "Babylon", "Wallet");
     mockClientFns.listApps.mockResolvedValue([appOne, appTwo]);
 

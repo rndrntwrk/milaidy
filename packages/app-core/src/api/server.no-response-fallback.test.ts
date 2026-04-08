@@ -4,6 +4,8 @@ import { req } from "../../../../test/helpers/http";
 import { startApiServer } from "./server";
 
 describe("conversation no-response fallback", () => {
+  const originalChatGenerationTimeoutEnv =
+    process.env.MILADY_CHAT_GENERATION_TIMEOUT_MS;
   let port = 0;
   let close: () => Promise<void> = async () => {};
   let updateRuntime: (runtime: AgentRuntime) => void = () => {};
@@ -45,6 +47,12 @@ describe("conversation no-response fallback", () => {
   }, 30_000);
 
   afterAll(async () => {
+    if (originalChatGenerationTimeoutEnv === undefined) {
+      delete process.env.MILADY_CHAT_GENERATION_TIMEOUT_MS;
+    } else {
+      process.env.MILADY_CHAT_GENERATION_TIMEOUT_MS =
+        originalChatGenerationTimeoutEnv;
+    }
     await close();
   });
 
@@ -185,5 +193,47 @@ describe("conversation no-response fallback", () => {
       text: "Eliza Cloud credits are depleted. Top up the cloud balance and try again.",
       agentName: "Reimu",
     });
+  });
+
+  it("uses the provider issue fallback when chat generation times out", async () => {
+    process.env.MILADY_CHAT_GENERATION_TIMEOUT_MS = "1000";
+    const isolatedServer = await startApiServer({ port: 0 });
+    isolatedServer.updateRuntime(runtime);
+    try {
+      createMemory.mockClear();
+      getMemories.mockClear();
+      handleMessage.mockImplementationOnce(
+        async () =>
+          await new Promise<never>(() => {
+            // Intentionally never resolves.
+          }),
+      );
+
+      const created = await req(isolatedServer.port, "POST", "/api/conversations", {
+        title: "Timed out fallback thread",
+      });
+      expect(created.status).toBe(200);
+      const conversationId = String(
+        (created.data.conversation as { id?: string } | undefined)?.id ?? "",
+      );
+      expect(conversationId).not.toBe("");
+
+      const response = await req(
+        isolatedServer.port,
+        "POST",
+        `/api/conversations/${conversationId}/messages`,
+        {
+          text: "hello timeout",
+        },
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.data).toMatchObject({
+        text: "Sorry, I'm having a provider issue",
+        agentName: "Reimu",
+      });
+    } finally {
+      await isolatedServer.close();
+    }
   });
 });

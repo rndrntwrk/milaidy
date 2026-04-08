@@ -46,6 +46,7 @@ type CommandResult = {
 const RESEARCH_PROMPT =
 	"Use web search only. Find the official Playwright browser support page and the official Puppeteer supported browsers page. " +
 	"Return a concise Markdown report with sections Summary, Tradeoffs, and Sources. Include at least two source URLs and no code blocks.";
+const KEEP_ARTIFACTS = process.env.MILADY_KEEP_LIVE_ARTIFACTS === "1";
 
 let runtime: AgentRuntime | undefined;
 let cleanupRuntime: (() => Promise<void>) | undefined;
@@ -133,7 +134,14 @@ async function cleanup(): Promise<void> {
 	} catch {}
 
 	if (reportDir) {
-		fs.rmSync(reportDir, { recursive: true, force: true });
+		if (KEEP_ARTIFACTS) {
+			console.log(
+				"[research-task-thread-live] preserving artifacts",
+				JSON.stringify({ reportDir }),
+			);
+		} else {
+			fs.rmSync(reportDir, { recursive: true, force: true });
+		}
 	}
 }
 
@@ -368,6 +376,7 @@ async function main(): Promise<void> {
 		JSON.stringify({
 			threadId: thread.id,
 			sessionId,
+			reportDir,
 			reportPath,
 			transcriptPath,
 			searchEventCount: searchEvents.length,

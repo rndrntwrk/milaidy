@@ -4,6 +4,7 @@ import fs from "node:fs";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
 import { describe, it, expect } from "vitest";
+import { describeIf } from "../../../test/helpers/conditional-tests.ts";
 import { AgentRuntime, createCharacter, logger, ModelType, type Plugin } from "@elizaos/core";
 
 const testDir = path.dirname(fileURLToPath(import.meta.url));
@@ -16,7 +17,7 @@ const liveModelTestsEnabled =
 const runRuntimeDebugE2E = process.env.ELIZA_RUN_RUNTIME_DEBUG_E2E === "1";
 const shouldRunRuntimeDebug = hasOpenAI && liveModelTestsEnabled && runRuntimeDebugE2E;
 
-describe.skipIf(!shouldRunRuntimeDebug)("Runtime init debug", () => {
+describeIf(shouldRunRuntimeDebug)("Runtime init debug", () => {
   it("find the hang in initialize()", async () => {
     logger.level = "warn";
 

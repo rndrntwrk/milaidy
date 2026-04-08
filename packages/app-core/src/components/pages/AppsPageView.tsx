@@ -5,8 +5,8 @@
 import type React from "react";
 import { useEffect } from "react";
 import { useApp } from "../../state";
-import { AppsView } from "./AppsView";
 import { GameView } from "../apps/GameView";
+import { AppsView } from "./AppsView";
 
 type AppsPageViewRenderer = () => React.ReactElement;
 
@@ -19,10 +19,8 @@ export function AppsPageView({
   appsView?: AppsPageViewRenderer;
   gameView?: AppsPageViewRenderer;
 } = {}) {
-  const { appsSubTab, activeGameViewerUrl, setState } = useApp();
-  const hasActiveGame =
-    typeof activeGameViewerUrl === "string" &&
-    activeGameViewerUrl.trim().length > 0;
+  const { appsSubTab, activeGameRunId, setState } = useApp();
+  const hasActiveGame = activeGameRunId.trim().length > 0;
 
   useEffect(() => {
     if (appsSubTab === "games" && !hasActiveGame) {

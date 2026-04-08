@@ -12,7 +12,12 @@
  * Issue: #3 — Plugin & Provider Stability
  */
 
-import type { Plugin, Provider, ProviderResult } from "@elizaos/core";
+import {
+  trajectoryLoggerPlugin,
+  type Plugin,
+  type Provider,
+  type ProviderResult,
+} from "@elizaos/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { validateRuntimeContext } from "../api/plugin-validation";
 import { CONNECTOR_PLUGINS } from "../config/plugin-auto-enable";
@@ -301,7 +306,6 @@ describe("Plugin Loading — Isolation", () => {
    */
   for (const pluginName of CORE_PLUGINS) {
     if (
-      pluginName.includes("plugin-rolodex") ||
       pluginName.includes("plugin-secrets-manager") ||
       pluginName.includes("plugin-shell")
     ) {
@@ -345,7 +349,6 @@ describe("Plugin Loading — All Together", () => {
 
     for (const pluginName of CORE_PLUGINS) {
       if (
-        pluginName.includes("plugin-rolodex") ||
         pluginName.includes("plugin-secrets-manager") ||
         pluginName.includes("plugin-shell")
       ) {
@@ -410,7 +413,6 @@ describe("Plugin Loading — All Together", () => {
   it("loaded plugins have non-empty name and description", async () => {
     for (const pluginName of CORE_PLUGINS) {
       if (
-        pluginName.includes("plugin-rolodex") ||
         pluginName.includes("plugin-secrets-manager") ||
         pluginName.includes("plugin-shell")
       ) {
@@ -971,7 +973,6 @@ describe("Version Skew Detection (issue #10)", () => {
       "@elizaos/plugin-openai",
       "@elizaos/plugin-ollama",
       "@elizaos/plugin-google-genai",
-      "@elizaos/plugin-knowledge",
     ];
 
     for (const name of affectedPlugins) {
@@ -1000,30 +1001,23 @@ describe("Version Skew Detection (issue #10)", () => {
     }
   });
 
-  it("plugin-knowledge is in CORE_PLUGINS", () => {
-    expect(CORE_PLUGINS).toContain("@elizaos/plugin-knowledge");
-    expect(OPTIONAL_CORE_PLUGINS).not.toContain("@elizaos/plugin-knowledge");
+  it("native runtime features are not package-based core plugins", () => {
+    expect(CORE_PLUGINS).not.toContain("knowledge");
+    expect(CORE_PLUGINS).not.toContain("relationships");
+    expect(CORE_PLUGINS).not.toContain("trajectories");
   });
 
-  it("plugin-trajectory-logger is in CORE_PLUGINS", () => {
-    expect(CORE_PLUGINS).toContain("@elizaos/plugin-trajectory-logger");
-    expect(OPTIONAL_CORE_PLUGINS).not.toContain(
-      "@elizaos/plugin-trajectory-logger",
+  it("native trajectories export a runtime service from core", () => {
+    expect(trajectoryLoggerPlugin).toBeDefined();
+    expect(Array.isArray(trajectoryLoggerPlugin.services)).toBe(true);
+    expect(trajectoryLoggerPlugin.services?.length ?? 0).toBeGreaterThan(0);
+    const serviceNames = (trajectoryLoggerPlugin.services ?? []).map(
+      (serviceClass) => serviceClass.name,
     );
-  });
-
-  it("plugin-trajectory-logger exports a runtime service", async () => {
-    const mod = (await import("@elizaos/plugin-trajectory-logger")) as {
-      default?: Plugin;
-      TrajectoryLoggerService?: unknown;
-    };
-    const plugin = mod.default;
-    expect(plugin).toBeDefined();
-    expect(Array.isArray(plugin?.services)).toBe(true);
-    expect(plugin?.services?.length ?? 0).toBeGreaterThan(0);
-    if (mod.TrajectoryLoggerService) {
-      expect(plugin?.services).toContain(mod.TrajectoryLoggerService);
-    }
+    expect(
+      serviceNames.some((name) => name.startsWith("TrajectoryLoggerService")),
+    ).toBe(true);
+    expect(OPTIONAL_CORE_PLUGINS).not.toContain("trajectories");
   });
 });
 

@@ -2,6 +2,7 @@ import http from "node:http";
 import type { AddressInfo } from "node:net";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { describeIf } from "../../../test/helpers/conditional-tests.ts";
 import { manageMiladyBrowserWorkspaceAction } from "../../../plugins/plugin-milady-browser/src/action";
 import {
   closeBrowserWorkspaceTab,
@@ -168,7 +169,7 @@ async function startLocalSiteFixture(): Promise<LocalSiteFixture> {
   };
 }
 
-describe.skipIf(!LIVE_TESTS_ENABLED || !livePlanner)(
+describeIf(LIVE_TESTS_ENABLED || !livePlanner)(
   "Browser workspace live planner validation",
   () => {
     let siteFixture: LocalSiteFixture;
@@ -191,9 +192,16 @@ describe.skipIf(!LIVE_TESTS_ENABLED || !livePlanner)(
 
         const prompt = [
           "Return only JSON.",
-          "Plan one browser batch for the Milady browser workspace.",
-          `Open ${siteFixture.formUrl} visibly, use semantic browser subactions to fill the Agent name label with Milady, set the Plan label to pro, check the Accept terms checkbox, click the Continue button by role/name, then read selector h1 with getMode text.`,
-          'The JSON shape must be {"subaction":"batch","steps":[...]} and each step must use explicit subaction fields.',
+          'Plan one browser batch for the Milady browser workspace using exactly this supported schema: {"subaction":"batch","steps":[...]}',
+          `Target URL: ${siteFixture.formUrl}`,
+          'Use exactly 6 steps in this order.',
+          'Step 1 must be {"subaction":"open","url":"<target-url>","show":true}.',
+          'Step 2 must fill the Agent name field using {"subaction":"find","findBy":"label","text":"Agent name","action":"fill","value":"Milady"}.',
+          'Step 3 must choose the plan using {"subaction":"select","findBy":"label","text":"Plan","value":"pro"}.',
+          'Step 4 must check terms using {"subaction":"check","findBy":"label","text":"Accept terms"}.',
+          'Step 5 must click Continue using {"subaction":"find","findBy":"role","role":"button","name":"Continue","action":"click"}.',
+          'Step 6 must read the heading using {"subaction":"get","selector":"h1","getMode":"text"}.',
+          'Do not use read, goto, visible, option, label, by, or Playwright-style selector syntax.',
         ].join(" ");
 
         const rawPlan = await livePlanner.complete(prompt);
@@ -228,7 +236,13 @@ describe.skipIf(!LIVE_TESTS_ENABLED || !livePlanner)(
 
         const remainingTabs = await listBrowserWorkspaceTabs();
         expect(remainingTabs).toHaveLength(1);
-        expect(remainingTabs[0]?.url).toBe(siteFixture.welcomeUrl);
+        const submittedUrl = new URL(remainingTabs[0]?.url ?? "");
+        expect(`${submittedUrl.origin}${submittedUrl.pathname}`).toBe(
+          `${new URL(siteFixture.welcomeUrl).origin}${new URL(siteFixture.welcomeUrl).pathname}`,
+        );
+        expect(submittedUrl.searchParams.get("name")).toBe("Milady");
+        expect(submittedUrl.searchParams.get("plan")).toBe("pro");
+        expect(submittedUrl.searchParams.get("terms")).toBe("yes");
       },
       60_000,
     );

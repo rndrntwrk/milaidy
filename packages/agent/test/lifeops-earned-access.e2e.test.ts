@@ -1,6 +1,5 @@
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
-import { DatabaseSync } from "node:sqlite";
 import os from "node:os";
 import path from "node:path";
 import type { AgentRuntime, Task, UUID } from "@elizaos/core";
@@ -12,6 +11,7 @@ import {
 import { afterEach, describe, expect, it } from "vitest";
 import { req } from "../../../test/helpers/http";
 import { startApiServer } from "../src/api/server";
+import { DatabaseSync } from "../src/test-utils/sqlite-compat";
 
 type SqlQuery = {
   queryChunks?: Array<{ value?: unknown }>;

@@ -1,11 +1,16 @@
 import type { Action, HandlerCallback, IAgentRuntime, Memory, State } from '@elizaos/core';
 import { logger } from '@elizaos/core';
+import type { ZoneManager } from '../router';
+
+interface MusicZoneService {
+  getZoneManager(): ZoneManager;
+}
 
 /**
  * Action to manage audio zones dynamically
  * Allows users to create, delete, and modify zones at runtime
  */
-export const manageZones: Action = {
+export const manageZones = {
   name: 'MANAGE_ZONES',
   similes: [
     'CREATE_ZONE',
@@ -53,22 +58,28 @@ export const manageZones: Action = {
         return;
       }
 
-      // Access zone manager (this would need to be added to MusicService)
-      // const zoneManager = (musicService as any).zoneManager;
+      const zoneManager = (musicService as unknown as MusicZoneService).getZoneManager?.();
+      if (!zoneManager) {
+        await callback({
+          text: '❌ Zone manager not available',
+          source,
+        });
+        return;
+      }
 
       const text = message.content.text?.toLowerCase() || '';
 
       // Parse command
       if (text.includes('create zone')) {
-        await handleCreateZone(text, callback, source);
+        await handleCreateZone(zoneManager, text, callback, source);
       } else if (text.includes('delete zone') || text.includes('remove zone')) {
-        await handleDeleteZone(text, callback, source);
-      } else if (text.includes('list zone') || text.includes('show zone')) {
-        await handleListZones(callback, source);
-      } else if (text.includes('add to zone')) {
-        await handleAddToZone(text, callback, source);
-      } else if (text.includes('remove from zone')) {
-        await handleRemoveFromZone(text, callback, source);
+        await handleDeleteZone(zoneManager, text, callback, source);
+      } else if (/\b(?:list|show)\s+zones?\b/.test(text)) {
+        await handleListZones(zoneManager, text, callback, source);
+      } else if (/\badd\s+.+\s+to zone\b/.test(text)) {
+        await handleAddToZone(zoneManager, text, callback, source);
+      } else if (/\bremove\s+.+\s+from zone\b/.test(text)) {
+        await handleRemoveFromZone(zoneManager, text, callback, source);
       } else {
         await callback({
           text: `Available zone commands:
@@ -124,9 +135,14 @@ export const manageZones: Action = {
       },
     ],
   ],
-};
+} as Action;
 
-async function handleCreateZone(text: string, callback: HandlerCallback, source: string) {
+async function handleCreateZone(
+  zoneManager: ZoneManager,
+  text: string,
+  callback: HandlerCallback,
+  source: string
+) {
   // Parse: "create zone <name> with <targetIds>"
   const match = text.match(/create zone (\w+[\w-]*) with (.+)/);
   if (!match) {
@@ -138,10 +154,9 @@ async function handleCreateZone(text: string, callback: HandlerCallback, source:
   }
 
   const [, zoneName, targetsStr] = match;
-  const targetIds = targetsStr.split(',').map(s => s.trim());
-
-  // TODO: Actually create the zone via zone manager
-  logger.log(`[ManageZones] Would create zone "${zoneName}" with targets: ${targetIds.join(', ')}`);
+  const targetIds = [...new Set(targetsStr.split(',').map(s => s.trim()).filter(Boolean))];
+  const zone = zoneManager.create(zoneName, targetIds);
+  logger.log(`[ManageZones] Created zone "${zone.name}" with targets: ${zone.targetIds.join(', ')}`);
 
   await callback({
     text: `✅ Created zone "${zoneName}" with ${targetIds.length} target(s)`,
@@ -149,7 +164,12 @@ async function handleCreateZone(text: string, callback: HandlerCallback, source:
   });
 }
 
-async function handleDeleteZone(text: string, callback: HandlerCallback, source: string) {
+async function handleDeleteZone(
+  zoneManager: ZoneManager,
+  text: string,
+  callback: HandlerCallback,
+  source: string
+) {
   // Parse: "delete zone <name>"
   const match = text.match(/(?:delete|remove) zone (\w+[\w-]*)/);
   if (!match) {
@@ -161,9 +181,14 @@ async function handleDeleteZone(text: string, callback: HandlerCallback, source:
   }
 
   const [, zoneName] = match;
-
-  // TODO: Actually delete the zone via zone manager
-  logger.log(`[ManageZones] Would delete zone "${zoneName}"`);
+  if (!zoneManager.delete(zoneName)) {
+    await callback({
+      text: `❌ Zone "${zoneName}" not found`,
+      source,
+    });
+    return;
+  }
+  logger.log(`[ManageZones] Deleted zone "${zoneName}"`);
 
   await callback({
     text: `✅ Deleted zone "${zoneName}"`,
@@ -171,21 +196,61 @@ async function handleDeleteZone(text: string, callback: HandlerCallback, source:
   });
 }
 
-async function handleListZones(callback: HandlerCallback, source: string) {
-  // TODO: Actually list zones via zone manager
-  logger.log('[ManageZones] Would list all zones');
+async function handleListZones(
+  zoneManager: ZoneManager,
+  text: string,
+  callback: HandlerCallback,
+  source: string
+) {
+  const detailMatch = text.match(/show zone (\w+[\w-]*)/);
+  if (detailMatch) {
+    const zone = zoneManager.get(detailMatch[1]);
+    if (!zone) {
+      await callback({
+        text: `❌ Zone "${detailMatch[1]}" not found`,
+        source,
+      });
+      return;
+    }
+
+    const metadata = zone.metadata
+      ? `\nMetadata: ${JSON.stringify(zone.metadata)}`
+      : '';
+    await callback({
+      text: `Zone "${zone.name}":
+• Targets: ${zone.targetIds.length}
+• IDs: ${zone.targetIds.join(', ')}${metadata}`,
+      source,
+    });
+    return;
+  }
+
+  const zones = zoneManager.list();
+  logger.log(`[ManageZones] Listing ${zones.length} zone(s)`);
+
+  if (zones.length === 0) {
+    await callback({
+      text: 'No zones configured yet.',
+      source,
+    });
+    return;
+  }
 
   await callback({
     text: `Active zones:
-• main-stage (2 targets)
-• vip-lounge (1 target)
+${zones.map((zone) => `• ${zone.name} (${zone.targetIds.length} targets)`).join('\n')}
 
 Use "show zone <name>" for details`,
     source,
   });
 }
 
-async function handleAddToZone(text: string, callback: HandlerCallback, source: string) {
+async function handleAddToZone(
+  zoneManager: ZoneManager,
+  text: string,
+  callback: HandlerCallback,
+  source: string
+) {
   // Parse: "add <targetId> to zone <name>"
   const match = text.match(/add (.+?) to zone (\w+[\w-]*)/);
   if (!match) {
@@ -197,9 +262,8 @@ async function handleAddToZone(text: string, callback: HandlerCallback, source: 
   }
 
   const [, targetId, zoneName] = match;
-
-  // TODO: Actually add to zone via zone manager
-  logger.log(`[ManageZones] Would add "${targetId}" to zone "${zoneName}"`);
+  zoneManager.addTarget(zoneName, targetId.trim());
+  logger.log(`[ManageZones] Added "${targetId}" to zone "${zoneName}"`);
 
   await callback({
     text: `✅ Added target to zone "${zoneName}"`,
@@ -207,7 +271,12 @@ async function handleAddToZone(text: string, callback: HandlerCallback, source: 
   });
 }
 
-async function handleRemoveFromZone(text: string, callback: HandlerCallback, source: string) {
+async function handleRemoveFromZone(
+  zoneManager: ZoneManager,
+  text: string,
+  callback: HandlerCallback,
+  source: string
+) {
   // Parse: "remove <targetId> from zone <name>"
   const match = text.match(/remove (.+?) from zone (\w+[\w-]*)/);
   if (!match) {
@@ -219,9 +288,8 @@ async function handleRemoveFromZone(text: string, callback: HandlerCallback, sou
   }
 
   const [, targetId, zoneName] = match;
-
-  // TODO: Actually remove from zone via zone manager
-  logger.log(`[ManageZones] Would remove "${targetId}" from zone "${zoneName}"`);
+  zoneManager.removeTarget(zoneName, targetId.trim());
+  logger.log(`[ManageZones] Removed "${targetId}" from zone "${zoneName}"`);
 
   await callback({
     text: `✅ Removed target from zone "${zoneName}"`,
@@ -230,4 +298,3 @@ async function handleRemoveFromZone(text: string, callback: HandlerCallback, sou
 }
 
 export default manageZones;
-

@@ -2,6 +2,7 @@ import { Button } from "@miladyai/ui";
 import type { AppRunSummary } from "../../api";
 import { useApp } from "../../state";
 import { getAppEmoji } from "./helpers";
+import { getAppOperatorSurface } from "./surfaces/registry";
 
 const HEARTBEAT_STALE_MS = 2 * 60 * 1000;
 const DOWN_STATUS_PATTERNS = [
@@ -167,6 +168,9 @@ export function RunningAppsPanel({
   const { t } = useApp();
   const selectedRun =
     runs.find((run) => run.runId === selectedRunId) ?? runs[0] ?? null;
+  const SelectedOperatorSurface = selectedRun
+    ? getAppOperatorSurface(selectedRun.appName)
+    : null;
   const selectedRunAttentionReasons = selectedRun
     ? getRunAttentionReasons(selectedRun)
     : [];
@@ -302,7 +306,8 @@ export function RunningAppsPanel({
                 onClick={() => onDetachRun(selectedRun)}
                 disabled={
                   busyRunId === selectedRun.runId ||
-                  selectedRun.viewerAttachment !== "attached"
+                  selectedRun.viewerAttachment !== "attached" ||
+                  selectedRun.supportsViewerDetach === false
                 }
               >
                 Detach viewer
@@ -459,6 +464,13 @@ export function RunningAppsPanel({
                 ))}
               </div>
             </div>
+          ) : null}
+
+          {SelectedOperatorSurface ? (
+            <SelectedOperatorSurface
+              appName={selectedRun.appName}
+              variant="running"
+            />
           ) : null}
         </section>
       ) : null}

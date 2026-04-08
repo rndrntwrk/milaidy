@@ -31,6 +31,7 @@ import {
 } from "@miladyai/app-core/src/test-support/test-helpers";
 import dotenv from "dotenv";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { describeIf } from "../../../test/helpers/conditional-tests.ts";
 
 // ---------------------------------------------------------------------------
 // Environment Setup
@@ -59,10 +60,9 @@ const runLiveWriteTests = runLiveTests && hasValidSignerUUID;
 const FARCASTER_PLUGIN_IMPORT = resolveFarcasterPluginImportSpecifier();
 const hasPlugin = FARCASTER_PLUGIN_IMPORT !== null;
 
-const describeIfLive = hasPlugin && runLiveTests ? describe : describe.skip;
-const describeIfLiveWrite =
-  hasPlugin && runLiveWriteTests ? describe : describe.skip;
-const describeIfPluginAvailable = hasPlugin ? describe : describe.skip;
+const describeIfLive = describeIf(hasPlugin && runLiveTests);
+const describeIfLiveWrite = describeIf(hasPlugin && runLiveWriteTests);
+const describeIfPluginAvailable = describeIf(hasPlugin);
 
 // Neynar paid plan: 300 req/min. Free: 6 req/60s.
 const RATE_LIMIT_DELAY_MS = 250;

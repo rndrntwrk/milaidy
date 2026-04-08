@@ -1,11 +1,40 @@
 import type { Action, HandlerCallback, IAgentRuntime, Memory, State } from '@elizaos/core';
 import { logger } from '@elizaos/core';
+import type { AudioRouter, AudioRoutingMode, ZoneManager } from '../router';
+
+interface MusicRoutingService {
+  getAudioRouter(): AudioRouter;
+  getZoneManager(): ZoneManager;
+  setRoutingMode(mode: AudioRoutingMode): void;
+  getRoutingMode(): AudioRoutingMode;
+  listRoutingTargets(): string[];
+  startBroadcastRoute(
+    sourceId: string,
+    targetIds: string[],
+    mode?: AudioRoutingMode
+  ): Promise<{
+    sourceId: string;
+    targetIds: string[];
+    mode: AudioRoutingMode;
+  }>;
+  stopBroadcastRoute(sourceId: string): Promise<void>;
+  getRoutingStatus(): {
+    mode: AudioRoutingMode;
+    activeRoutes: Array<{
+      sourceId: string;
+      targetIds: string[];
+      mode: AudioRoutingMode;
+    }>;
+    registeredTargets: string[];
+    zoneCount: number;
+  };
+}
 
 /**
  * Action to manage audio routing
  * Allows users to configure simulcast/independent modes and routing assignments
  */
-export const manageRouting: Action = {
+export const manageRouting = {
   name: 'MANAGE_ROUTING',
   similes: [
     'SET_ROUTING_MODE',
@@ -50,18 +79,30 @@ export const manageRouting: Action = {
         });
         return;
       }
+      const routingService = musicService as unknown as MusicRoutingService;
+      if (
+        !routingService.getAudioRouter ||
+        !routingService.getZoneManager ||
+        !routingService.startBroadcastRoute
+      ) {
+        await callback({
+          text: '❌ Audio routing is not available in this runtime',
+          source,
+        });
+        return;
+      }
 
       const text = message.content.text?.toLowerCase() || '';
 
       // Parse command
       if (text.includes('set mode') || text.includes('switch mode')) {
-        await handleSetMode(text, callback, source);
-      } else if (text.includes('simulcast') || text.includes('route to')) {
-        await handleStartRouting(text, callback, source);
+        await handleSetMode(routingService, text, callback, source);
+      } else if (/\bsimulcast\s+.+\s+to\b/.test(text) || /\broute\s+.+\s+to\b/.test(text)) {
+        await handleStartRouting(routingService, text, callback, source);
       } else if (text.includes('stop routing')) {
-        await handleStopRouting(text, callback, source);
+        await handleStopRouting(routingService, text, callback, source);
       } else if (text.includes('show routing') || text.includes('routing status')) {
-        await handleShowRouting(callback, source);
+        await handleShowRouting(routingService, callback, source);
       } else {
         await callback({
           text: `Available routing commands:
@@ -117,11 +158,16 @@ export const manageRouting: Action = {
       },
     ],
   ],
-};
+} as Action;
 
-async function handleSetMode(text: string, callback: HandlerCallback, source: string) {
+async function handleSetMode(
+  musicService: MusicRoutingService,
+  text: string,
+  callback: HandlerCallback,
+  source: string
+) {
   // Parse: "set mode <simulcast|independent>"
-  const match = text.match(/set mode (simulcast|independent)/);
+  const match = text.match(/(?:set|switch) mode (simulcast|independent)/);
   if (!match) {
     await callback({
       text: '❌ Invalid format. Use: set mode simulcast|independent',
@@ -131,9 +177,8 @@ async function handleSetMode(text: string, callback: HandlerCallback, source: st
   }
 
   const [, mode] = match;
-
-  // TODO: Actually set the mode via audio router
-  logger.log(`[ManageRouting] Would set mode to: ${mode}`);
+  musicService.setRoutingMode(mode as AudioRoutingMode);
+  logger.log(`[ManageRouting] Set default routing mode to: ${mode}`);
 
   await callback({
     text: `✅ Routing mode set to: ${mode}`,
@@ -141,7 +186,12 @@ async function handleSetMode(text: string, callback: HandlerCallback, source: st
   });
 }
 
-async function handleStartRouting(text: string, callback: HandlerCallback, source: string) {
+async function handleStartRouting(
+  musicService: MusicRoutingService,
+  text: string,
+  callback: HandlerCallback,
+  source: string
+) {
   // Parse: "route <stream> to <zones>" or "simulcast <stream> to <zones>"
   const routeMatch = text.match(/route (.+?) to (.+)/);
   const simulcastMatch = text.match(/simulcast (.+?) to (.+)/);
@@ -156,19 +206,35 @@ async function handleStartRouting(text: string, callback: HandlerCallback, sourc
   }
 
   const [, streamId, zonesStr] = match;
-  const zones = zonesStr.includes('all') ? ['all zones'] : zonesStr.split(',').map(s => s.trim());
+  const selectors = zonesStr
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean);
+  const targetIds = resolveTargetIds(musicService, selectors);
+  if (targetIds.length === 0) {
+    await callback({
+      text: '❌ No routing targets matched. Create zones first or register routing targets.',
+      source,
+    });
+    return;
+  }
 
-  // TODO: Actually start routing via audio router
-  logger.log(`[ManageRouting] Would route "${streamId}" to zones: ${zones.join(', ')}`);
+  const mode = simulcastMatch ? 'simulcast' : musicService.getRoutingMode();
+  const route = await musicService.startBroadcastRoute(streamId.trim(), targetIds, mode);
+  logger.log(`[ManageRouting] Routed "${streamId}" to targets: ${targetIds.join(', ')}`);
 
-  const mode = simulcastMatch ? 'simulcast' : 'independent';
   await callback({
-    text: `🎵 Broadcasting ${streamId} to ${zones.length} zone(s) in ${mode} mode`,
+    text: `🎵 Broadcasting ${route.sourceId} to ${route.targetIds.length} target(s) in ${route.mode} mode`,
     source,
   });
 }
 
-async function handleStopRouting(text: string, callback: HandlerCallback, source: string) {
+async function handleStopRouting(
+  musicService: MusicRoutingService,
+  text: string,
+  callback: HandlerCallback,
+  source: string
+) {
   // Parse: "stop routing <stream>"
   const match = text.match(/stop routing (.+)/);
   if (!match) {
@@ -180,9 +246,8 @@ async function handleStopRouting(text: string, callback: HandlerCallback, source
   }
 
   const [, streamId] = match;
-
-  // TODO: Actually stop routing via audio router
-  logger.log(`[ManageRouting] Would stop routing for "${streamId}"`);
+  await musicService.stopBroadcastRoute(streamId.trim());
+  logger.log(`[ManageRouting] Stopped routing for "${streamId}"`);
 
   await callback({
     text: `✅ Stopped routing for ${streamId}`,
@@ -190,20 +255,58 @@ async function handleStopRouting(text: string, callback: HandlerCallback, source
   });
 }
 
-async function handleShowRouting(callback: HandlerCallback, source: string) {
-  // TODO: Actually get routing status from audio router
-  logger.log('[ManageRouting] Would show routing status');
+async function handleShowRouting(
+  musicService: MusicRoutingService,
+  callback: HandlerCallback,
+  source: string
+) {
+  const status = musicService.getRoutingStatus();
+  const routesText = status.activeRoutes.length
+    ? status.activeRoutes
+        .map(route => `  - ${route.sourceId} → ${route.targetIds.length} targets (${route.mode})`)
+        .join('\n')
+    : '  - none';
 
   await callback({
     text: `📊 Routing Status:
-• Mode: simulcast
-• Active Routes: 2
-  - main-stream → 3 targets
-  - background-music → 2 targets
-• Total Targets: 5`,
+• Mode: ${status.mode}
+• Registered Targets: ${status.registeredTargets.length}
+• Zones: ${status.zoneCount}
+• Active Routes: ${status.activeRoutes.length}
+${routesText}`,
     source,
   });
 }
 
-export default manageRouting;
+function resolveTargetIds(
+  musicService: MusicRoutingService,
+  selectors: string[]
+): string[] {
+  const zoneManager = musicService.getZoneManager();
+  const registeredTargets = new Set(musicService.listRoutingTargets());
 
+  if (selectors.length === 1 && selectors[0].includes('all')) {
+    const zoneTargets = zoneManager
+      .list()
+      .flatMap(zone => zone.targetIds);
+    const allTargets = zoneTargets.length > 0 ? zoneTargets : Array.from(registeredTargets);
+    return [...new Set(allTargets)];
+  }
+
+  const targetIds = new Set<string>();
+  for (const selector of selectors) {
+    if (zoneManager.exists(selector)) {
+      for (const targetId of zoneManager.getTargets(selector)) {
+        targetIds.add(targetId);
+      }
+      continue;
+    }
+    if (registeredTargets.has(selector)) {
+      targetIds.add(selector);
+    }
+  }
+
+  return Array.from(targetIds);
+}
+
+export default manageRouting;

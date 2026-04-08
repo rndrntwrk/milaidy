@@ -28,6 +28,8 @@ vi.mock("../../src/app-shell-components", async () => {
     ChatView: () => React.createElement("div", null, "ChatView"),
     CompanionShell: () => React.createElement("div", null, "CompanionShell"),
     CompanionView: () => React.createElement("div", null, "CompanionView"),
+    ConnectionLostOverlay: () =>
+      React.createElement("div", null, "ConnectionLostOverlay"),
     ConnectionFailedBanner: () =>
       React.createElement("div", null, "ConnectionFailedBanner"),
     ConnectorsPageView: () =>

@@ -76,6 +76,7 @@ describe("AppsPageView", () => {
     mockUseApp.mockReturnValue(
       createContext({
         appsSubTab: "games",
+        activeGameRunId: "run-1",
         activeGameViewerUrl: "http://localhost:5175/viewer",
       }),
     );

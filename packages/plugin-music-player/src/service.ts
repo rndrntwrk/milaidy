@@ -4,6 +4,11 @@ import { MusicQueue, type QueuedTrack } from './queue';
 import { AudioCacheService } from './services/audioCache';
 import { Broadcast } from './core';
 import type { IAudioBroadcast } from './contracts';
+import {
+  AudioRouter,
+  type AudioRoutingMode,
+  ZoneManager,
+} from './router';
 
 const MUSIC_SERVICE_NAME = 'music';
 
@@ -24,6 +29,19 @@ interface MusicLibraryService {
   trackSkip(entityId: UUID, trackUrl: string, roomId?: UUID, worldId?: UUID): Promise<void>;
 }
 
+interface RoutingTarget {
+  id: string;
+  type: string;
+  guildId?: string;
+  channelId?: string;
+  play?: (stream: NodeJS.ReadableStream, opts?: Record<string, unknown>) => Promise<unknown>;
+  playAudio?: (stream: NodeJS.ReadableStream, opts?: Record<string, unknown>) => Promise<unknown>;
+  feed?: (stream: NodeJS.ReadableStream) => Promise<unknown>;
+  stop?: () => Promise<unknown>;
+  stopAudio?: () => Promise<unknown>;
+  [key: string]: unknown;
+}
+
 /**
  * Music service that manages music queues and playback
  * Pure playback engine - analytics/preferences are optional via music-library plugin
@@ -36,6 +54,8 @@ export class MusicService extends Service {
   private broadcasts: Map<string, Broadcast> = new Map(); // key: guildId
   private voiceManager: any; // VoiceManager from plugin-discord
   private audioCache: AudioCacheService;
+  private readonly audioRouter: AudioRouter = new AudioRouter();
+  private readonly zoneManager: ZoneManager = new ZoneManager();
 
   constructor(runtime?: IAgentRuntime) {
     super(runtime);
@@ -61,6 +81,9 @@ export class MusicService extends Service {
       broadcast.destroy();
     }
     this.broadcasts.clear();
+
+    await this.audioRouter.unrouteAll();
+    this.zoneManager.clear();
   }
 
   /**
@@ -68,6 +91,82 @@ export class MusicService extends Service {
    */
   setVoiceManager(voiceManager: any): void {
     this.voiceManager = voiceManager;
+  }
+
+  getAudioRouter(): AudioRouter {
+    return this.audioRouter;
+  }
+
+  getZoneManager(): ZoneManager {
+    return this.zoneManager;
+  }
+
+  setRoutingMode(mode: AudioRoutingMode): void {
+    this.audioRouter.setDefaultMode(mode);
+  }
+
+  getRoutingMode(): AudioRoutingMode {
+    return this.audioRouter.getDefaultMode();
+  }
+
+  registerRoutingTargets(targets: RoutingTarget[]): void {
+    this.audioRouter.registerTargets(targets);
+  }
+
+  unregisterRoutingTarget(targetId: string): void {
+    this.audioRouter.unregisterTarget(targetId);
+  }
+
+  listRoutingTargets(): string[] {
+    return this.audioRouter.getRegisteredTargetIds();
+  }
+
+  async startBroadcastRoute(
+    sourceId: string,
+    targetIds: string[],
+    mode?: AudioRoutingMode
+  ): Promise<{
+    sourceId: string;
+    targetIds: string[];
+    mode: AudioRoutingMode;
+  }> {
+    const broadcast = this.getBroadcast(sourceId);
+    const subscription = broadcast.subscribe(`router:${sourceId}`);
+    try {
+      await this.audioRouter.route(
+        sourceId,
+        subscription.stream,
+        targetIds,
+        mode,
+        () => subscription.unsubscribe()
+      );
+      return this.audioRouter.getRoute(sourceId)!;
+    } catch (error) {
+      subscription.unsubscribe();
+      throw error;
+    }
+  }
+
+  async stopBroadcastRoute(sourceId: string): Promise<void> {
+    await this.audioRouter.unroute(sourceId);
+  }
+
+  getRoutingStatus(): {
+    mode: AudioRoutingMode;
+    activeRoutes: Array<{
+      sourceId: string;
+      targetIds: string[];
+      mode: AudioRoutingMode;
+    }>;
+    registeredTargets: string[];
+    zoneCount: number;
+  } {
+    return {
+      mode: this.audioRouter.getDefaultMode(),
+      activeRoutes: this.audioRouter.getActiveRoutes(),
+      registeredTargets: this.audioRouter.getRegisteredTargetIds(),
+      zoneCount: this.zoneManager.count(),
+    };
   }
 
   /**
@@ -590,4 +689,3 @@ export class MusicService extends Service {
     }
   }
 }
-

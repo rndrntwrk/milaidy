@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describeIf } from "../../../../test/helpers/conditional-tests.ts";
 
 type SignalServiceInstance = {
   stop: () => Promise<void>;
@@ -96,7 +97,7 @@ function jsonResponse(body: unknown): Response {
   });
 }
 
-describe.skipIf(!hasSignalPluginSource)("signalPlugin", () => {
+describeIf(hasSignalPluginSource)("signalPlugin", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });

@@ -29,6 +29,7 @@ import {
 } from "@elizaos/core";
 import dotenv from "dotenv";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { itIf } from "../../../test/helpers/conditional-tests.ts";
 import { withTimeout, sleep } from "../../../test/helpers/test-utils";
 import { startApiServer } from "../src/api/server";
 import { ensureAgentWorkspace } from "../src/providers/workspace";
@@ -408,7 +409,6 @@ describe("Agent Runtime E2E", () => {
   );
 
   const corePluginNames = [
-    "@elizaos/plugin-trajectory-logger",
     "@elizaos/plugin-agent-skills",
     // NOTE: @elizaos/plugin-commands is excluded — commented out as "not yet ready" in core-plugins.ts
     "@elizaos/plugin-personality",
@@ -610,12 +610,12 @@ describe("Agent Runtime E2E", () => {
   // ===================================================================
 
   describe("startup", () => {
-    it.skipIf(!hasModelProvider)("initializes successfully", () => {
+    itIf(hasModelProvider)("initializes successfully", () => {
       expect(initialized).toBe(true);
       expect(runtime.character.name).toBe("TestAgent");
     });
 
-    it.skipIf(!hasModelProvider)("every core plugin loaded", () => {
+    itIf(hasModelProvider)("every core plugin loaded", () => {
       const coreResults = pluginLoadResults.filter((r) =>
         corePluginNames.includes(r.name),
       );
@@ -627,18 +627,18 @@ describe("Agent Runtime E2E", () => {
       }
     });
 
-    it.skipIf(!hasModelProvider)(
+    itIf(hasModelProvider)(
       "loaded at least 8 plugins (6 core + init + 1 provider)",
       () => {
         expect(runtime.plugins.length).toBeGreaterThanOrEqual(8);
       },
     );
 
-    it.skipIf(!hasModelProvider)("messageService is non-null", () => {
+    itIf(hasModelProvider)("messageService is non-null", () => {
       expect(runtime.messageService).not.toBeNull();
     });
 
-    it.skipIf(!hasModelProvider)(
+    itIf(hasModelProvider)(
       "checkShouldRespond is enabled (production default)",
       () => {
         expect(runtime.isCheckShouldRespondEnabled()).toBe(true);
@@ -648,7 +648,7 @@ describe("Agent Runtime E2E", () => {
       },
     );
 
-    it.skipIf(!hasModelProvider)("AUTONOMY service type is registered", () => {
+    itIf(hasModelProvider)("AUTONOMY service type is registered", () => {
       const serviceTypes = Array.from(runtime.services.keys());
       logger.info(`[e2e] Service types: ${serviceTypes.join(", ")}`);
       const hasAutonomy = serviceTypes.some((t) =>
@@ -666,7 +666,7 @@ describe("Agent Runtime E2E", () => {
   // ===================================================================
 
   describe("shouldRespond (production mode)", () => {
-    it.skipIf(!hasModelProvider)(
+    itIf(hasModelProvider)(
       "DM messages get responses with checkShouldRespond=true",
       async () => {
         // checkShouldRespond is TRUE. DMs should STILL get responses because
@@ -711,7 +711,7 @@ describe("Agent Runtime E2E", () => {
   // ===================================================================
 
   describe("messaging", () => {
-    it.skipIf(!hasModelProvider)(
+    itIf(hasModelProvider)(
       "generateText returns non-empty text",
       async () => {
         let text = "";
@@ -747,7 +747,7 @@ describe("Agent Runtime E2E", () => {
       60_000,
     );
 
-    it.skipIf(!hasModelProvider)(
+    itIf(hasModelProvider)(
       "handleMessage returns non-empty text",
       async () => {
         const conversationRoomId = crypto.randomUUID() as UUID;
@@ -788,7 +788,7 @@ describe("Agent Runtime E2E", () => {
       120_000,
     );
 
-    it.skipIf(!hasModelProvider)(
+    itIf(hasModelProvider)(
       "multi-turn: agent remembers context",
       async () => {
         const conversationRoomId = crypto.randomUUID() as UUID;
@@ -880,11 +880,11 @@ describe("Agent Runtime E2E", () => {
   // ===================================================================
 
   describe("autonomy (real thinking)", () => {
-    it.skipIf(!hasModelProvider)("autonomy flag is enabled", () => {
+    itIf(hasModelProvider)("autonomy flag is enabled", () => {
       expect(runtime.enableAutonomy).toBe(true);
     });
 
-    it.skipIf(!hasModelProvider)(
+    itIf(hasModelProvider)(
       "performAutonomousThink() completes a real think cycle",
       async () => {
         // Get the actual AutonomyService and call performAutonomousThink() directly.
@@ -902,7 +902,7 @@ describe("Agent Runtime E2E", () => {
       180_000,
     );
 
-    it.skipIf(!hasModelProvider)(
+    itIf(hasModelProvider)(
       "autonomy REST endpoint reflects enabled state",
       async () => {
         const get1 = await http$(server?.port, "GET", "/api/agent/autonomy");
@@ -928,14 +928,14 @@ describe("Agent Runtime E2E", () => {
   // ===================================================================
 
   describe("REST API", () => {
-    it.skipIf(!hasModelProvider)("GET /api/status", async () => {
+    itIf(hasModelProvider)("GET /api/status", async () => {
       const { status, data } = await http$(server?.port, "GET", "/api/status");
       expect(status).toBe(200);
       expect(data.state).toBe("running");
       expect(typeof data.startedAt).toBe("number");
     });
 
-    it.skipIf(!hasModelProvider)(
+    itIf(hasModelProvider)(
       "POST /api/conversations/:id/messages returns real response",
       async () => {
         let chat: { status: number; data: Record<string, unknown> };
@@ -969,7 +969,7 @@ describe("Agent Runtime E2E", () => {
       180_000,
     );
 
-    it.skipIf(!hasModelProvider)(
+    itIf(hasModelProvider)(
       "todo CRUD works through workbench endpoints",
       async () => {
         const todoName = `REST Todo ${Date.now()}`;
@@ -1037,7 +1037,7 @@ describe("Agent Runtime E2E", () => {
       120_000,
     );
 
-    it.skipIf(!hasModelProvider)(
+    itIf(hasModelProvider)(
       "POST /api/conversations/:id/messages rejects empty text",
       async () => {
         const conversationId = await createConversationId(
@@ -1057,7 +1057,7 @@ describe("Agent Runtime E2E", () => {
       },
     );
 
-    it.skipIf(!hasModelProvider)(
+    itIf(hasModelProvider)(
       "GET /api/onboarding/options has non-empty arrays",
       async () => {
         const { data } = await http$(
@@ -1071,7 +1071,7 @@ describe("Agent Runtime E2E", () => {
       },
     );
 
-    it.skipIf(!hasModelProvider)(
+    itIf(hasModelProvider)(
       "POST /api/onboarding writes agent name",
       async () => {
         const { data } = await http$(server?.port, "POST", "/api/onboarding", {
@@ -1084,7 +1084,7 @@ describe("Agent Runtime E2E", () => {
       },
     );
 
-    it.skipIf(!hasModelProvider)("PUT /api/config round-trips", async () => {
+    itIf(hasModelProvider)("PUT /api/config round-trips", async () => {
       const original = (await http$(server?.port, "GET", "/api/config")).data;
       await http$(server?.port, "PUT", "/api/config", {
         features: { temp_cfg: { enabled: true, name: "TempCfg" } },
@@ -1097,7 +1097,7 @@ describe("Agent Runtime E2E", () => {
       await http$(server?.port, "PUT", "/api/config", original); // restore
     });
 
-    it.skipIf(!hasModelProvider)(
+    itIf(hasModelProvider)(
       "GET /api/logs has entries with timestamp/level/message",
       async () => {
         const entries = (await http$(server?.port, "GET", "/api/logs")).data
@@ -1109,7 +1109,7 @@ describe("Agent Runtime E2E", () => {
       },
     );
 
-    it.skipIf(!hasModelProvider)(
+    itIf(hasModelProvider)(
       "PUT /api/plugins/:id returns 404 for nonexistent",
       async () => {
         expect(
@@ -1122,7 +1122,7 @@ describe("Agent Runtime E2E", () => {
       },
     );
 
-    it.skipIf(!hasModelProvider)(
+    itIf(hasModelProvider)(
       "pause → resume verifies state change",
       async () => {
         await http$(server?.port, "POST", "/api/agent/pause");
@@ -1136,7 +1136,7 @@ describe("Agent Runtime E2E", () => {
       },
     );
 
-    it.skipIf(!hasModelProvider)("404 for unknown route", async () => {
+    itIf(hasModelProvider)("404 for unknown route", async () => {
       expect(
         (await http$(server?.port, "GET", "/api/nonexistent")).status,
       ).toBe(404);
@@ -1148,7 +1148,7 @@ describe("Agent Runtime E2E", () => {
   // ===================================================================
 
   describe("error paths", () => {
-    it.skipIf(!hasModelProvider)("non-JSON body → 400", async () => {
+    itIf(hasModelProvider)("non-JSON body → 400", async () => {
       const conversationId = await createConversationId(
         server?.port,
         "Invalid JSON",
@@ -1179,13 +1179,13 @@ describe("Agent Runtime E2E", () => {
       expect(status).toBe(400);
     });
 
-    it.skipIf(!hasModelProvider)("generateText empty → throws", async () => {
+    itIf(hasModelProvider)("generateText empty → throws", async () => {
       await expect(
         runtime.generateText("", { maxTokens: 10 }),
       ).rejects.toThrow();
     });
 
-    it.skipIf(!hasModelProvider)(
+    itIf(hasModelProvider)(
       "generateText whitespace → throws",
       async () => {
         await expect(
@@ -1200,7 +1200,7 @@ describe("Agent Runtime E2E", () => {
   // ===================================================================
 
   describe("concurrent", () => {
-    it.skipIf(!hasModelProvider)(
+    itIf(hasModelProvider)(
       "5 parallel status + 3 parallel chat",
       async () => {
         const prompts = [
@@ -1252,7 +1252,7 @@ describe("Agent Runtime E2E", () => {
   // ===================================================================
 
   describe("workspace", () => {
-    it.skipIf(!hasModelProvider)(
+    itIf(hasModelProvider)(
       "creates directory and is idempotent",
       async () => {
         const d = path.join(workspaceDir, "ws-test");
@@ -1269,7 +1269,7 @@ describe("Agent Runtime E2E", () => {
   // ===================================================================
 
   describe("triggers (real LLM execution)", () => {
-    it.skipIf(!hasModelProvider)(
+    itIf(hasModelProvider)(
       "creates trigger, executes it, LLM processes instruction, run history records success",
       async () => {
         // Register the trigger worker on the real runtime (same as eliza-plugin.ts does).
@@ -1434,7 +1434,7 @@ describe("Agent Runtime E2E", () => {
   // ===================================================================
 
   describe("todos (real LLM + actions)", () => {
-    it.skipIf(!hasModelProvider)(
+    itIf(hasModelProvider)(
       "runtime exposes todo actions",
       async () => {
         const runtimeDebug = await http$(server?.port, "GET", "/api/runtime");
@@ -1466,7 +1466,7 @@ describe("Agent Runtime E2E", () => {
       120_000,
     );
 
-    it.skipIf(!hasModelProvider)(
+    itIf(hasModelProvider)(
       "chat can create a todo via action and workbench API reflects it",
       async () => {
         const todoName = `LLM Todo ${Date.now()}`;

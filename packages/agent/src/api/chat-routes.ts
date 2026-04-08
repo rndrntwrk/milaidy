@@ -118,6 +118,7 @@ export interface ChatGenerateOptions {
   isAborted?: () => boolean;
   resolveNoResponseText?: () => string;
   preferredLanguage?: string;
+  timeoutDuration?: number;
 }
 
 export interface LogEntry {
@@ -143,6 +144,7 @@ const PROVIDER_ISSUE_CHAT_REPLY = "Sorry, I'm having a provider issue";
 const INSUFFICIENT_CREDITS_CHAT_REPLY =
   "Eliza Cloud credits are depleted. Top up the cloud balance and try again.";
 const GENERIC_NO_RESPONSE_CHAT_REPLY = PROVIDER_ISSUE_CHAT_REPLY;
+const DEFAULT_CHAT_GENERATION_TIMEOUT_MS = 90_000;
 const WEBSITE_BLOCK_SUBJECT_RE =
   /\b(websites?|sites?|domains?|x\.com|twitter\.com)\b/i;
 const WEBSITE_BLOCK_FOLLOW_UP_RE =
@@ -196,6 +198,52 @@ export function resolveNoResponseFallback(
 
 function getProviderIssueChatReply(): string {
   return PROVIDER_ISSUE_CHAT_REPLY;
+}
+
+function resolveChatGenerationTimeoutMs(explicit?: number): number {
+  if (typeof explicit === "number" && Number.isFinite(explicit) && explicit > 0) {
+    return Math.max(1_000, Math.floor(explicit));
+  }
+
+  const fromEnv =
+    process.env.MILADY_CHAT_GENERATION_TIMEOUT_MS?.trim() ||
+    process.env.ELIZA_CHAT_GENERATION_TIMEOUT_MS?.trim();
+  if (!fromEnv) return DEFAULT_CHAT_GENERATION_TIMEOUT_MS;
+
+  const parsed = Number.parseInt(fromEnv, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return DEFAULT_CHAT_GENERATION_TIMEOUT_MS;
+  }
+
+  return Math.max(1_000, parsed);
+}
+
+function createChatGenerationTimeoutError(timeoutMs: number): Error {
+  return new Error(`Chat generation timed out after ${timeoutMs}ms`);
+}
+
+async function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  createError: () => Error,
+  onTimeout?: () => void,
+): Promise<T> {
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_resolve, reject) => {
+        timeoutHandle = setTimeout(() => {
+          onTimeout?.();
+          reject(createError());
+        }, timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeoutHandle) {
+      clearTimeout(timeoutHandle);
+    }
+  }
 }
 
 export function getChatFailureReply(
@@ -631,6 +679,10 @@ export async function generateChatResponse(
   agentName: string,
   opts?: ChatGenerateOptions,
 ): Promise<ChatGenerationResult> {
+  const generationTimeoutMs = resolveChatGenerationTimeoutMs(
+    opts?.timeoutDuration,
+  );
+  let generationTimedOut = false;
   try {
     const originalUserText = String(
       extractCompatTextContent(message.content) ?? "",
@@ -740,212 +792,221 @@ export async function generateChatResponse(
       ? inferWalletExecutionFallback(originalUserText)
       : null;
 
-    await runWithTrajectoryContext(trajectoryContext, async () => {
-    try {
-      // Binance skill direct dispatch
-      const directSkillText = await maybeHandleDirectBinanceSkillRequest(
-        runtime,
-        message,
-        replaceCallbackText,
-        emitSnapshot,
-      );
-      if (directSkillText) {
-        const finalText = isClientVisibleNoResponse(directSkillText)
-          ? directSkillText || "(no response)"
-          : directSkillText;
-        result = {
-          didRespond: true,
-          responseContent: { text: finalText },
-          responseMessages: [],
-        } as typeof result;
-        responseText = finalText;
-        forcedWalletExecutionText = isClientVisibleNoResponse(directSkillText);
-        return;
-      }
-
-      // Direct dispatch for explicit task creation intent from UI
-      const contentMetadata = message.content.metadata as
-        | Record<string, unknown>
-        | undefined;
-      if (contentMetadata?.intent === "create_task") {
-        const coordinator = runtime.getService("SWARM_COORDINATOR");
-        if (coordinator) {
-          const createTaskAction = runtime.actions.find(
-            (a) => a?.name?.toUpperCase() === "CREATE_TASK",
+    await withTimeout(
+      Promise.resolve(
+        runWithTrajectoryContext(trajectoryContext, async () => {
+        try {
+          // Binance skill direct dispatch
+          const directSkillText = await maybeHandleDirectBinanceSkillRequest(
+            runtime,
+            message,
+            replaceCallbackText,
+            emitSnapshot,
           );
-          if (createTaskAction) {
-            runtime.logger?.info(
-              {
-                src: "eliza-api",
-                agentType: contentMetadata.agentType,
-                intent: "create_task",
-              },
-              "[eliza-api] Direct dispatch CREATE_TASK from UI intent",
-            );
-            let actionResponseText = "";
-            await createTaskAction.handler(
-              runtime,
-              message,
-              undefined,
-              {},
-              async (content: Content) => {
-                const chunk = extractCompatTextContent(content);
-                if (chunk) {
-                  replaceCallbackText(chunk);
-                  actionResponseText = responseText;
-                }
-                return [];
-              },
-            );
-            const finalText =
-              actionResponseText || responseText || "Task created.";
+          if (directSkillText) {
+            const finalText = isClientVisibleNoResponse(directSkillText)
+              ? directSkillText || "(no response)"
+              : directSkillText;
             result = {
               didRespond: true,
               responseContent: { text: finalText },
               responseMessages: [],
             } as typeof result;
             responseText = finalText;
+            forcedWalletExecutionText = isClientVisibleNoResponse(directSkillText);
             return;
           }
-        }
-        // Fall through to normal LLM-based routing if coordinator not available
-      }
 
-      if (directWalletExecutionFallback?.errorText) {
-        forcedWalletExecutionText = true;
-        responseText = directWalletExecutionFallback.errorText;
-        result = {
-          didRespond: true,
-          responseContent: { text: directWalletExecutionFallback.errorText },
-          responseMessages: [],
-        };
-      } else if (directWalletExecutionFallback?.action) {
-        runtime.logger?.info(
-          {
-            src: "eliza-api",
-            action: directWalletExecutionFallback.action.name,
-            parameters: directWalletExecutionFallback.action.parameters,
-          },
-          "[eliza-api] Direct wallet execution dispatch from prompt intent",
-        );
-        await executeFallbackParsedActions(
-          runtime,
-          message,
-          [directWalletExecutionFallback.action],
-          appendIncomingText,
-          recordActionCallback,
-          {
-            getCurrentText: () => responseText,
-            onCallbackText: replaceCallbackText,
-          },
-        );
-        result = {
-          didRespond: true,
-          responseContent: { text: responseText },
-          responseMessages: [],
-        };
-      } else {
-        const languageAugmentedMessage = maybeAugmentChatMessageWithLanguage(
-          message,
-          opts?.preferredLanguage,
-        );
-        const walletAugmentedMessage = maybeAugmentChatMessageWithWalletContext(
-          runtime,
-          languageAugmentedMessage,
-        );
-        const generationMessage = await maybeAugmentChatMessageWithKnowledge(
-          runtime,
-          walletAugmentedMessage,
-        );
-        result = await runtime.messageService?.handleMessage(
-          runtime,
-          generationMessage,
-          async (content: Content) => {
-            if (opts?.isAborted?.()) {
-              throw new Error("client_disconnected");
-            }
-
-            const actionTag = (content as Record<string, unknown>)?.action;
-            if (typeof actionTag === "string" && actionTag.length > 0) {
-              recordActionCallback(
-                actionTag,
-                Boolean(extractCompatTextContent(content)),
+          // Direct dispatch for explicit task creation intent from UI
+          const contentMetadata = message.content.metadata as
+            | Record<string, unknown>
+            | undefined;
+          if (contentMetadata?.intent === "create_task") {
+            const coordinator = runtime.getService("SWARM_COORDINATOR");
+            if (coordinator) {
+              const createTaskAction = runtime.actions.find(
+                (a) => a?.name?.toUpperCase() === "CREATE_TASK",
               );
+              if (createTaskAction) {
+                runtime.logger?.info(
+                  {
+                    src: "eliza-api",
+                    agentType: contentMetadata.agentType,
+                    intent: "create_task",
+                  },
+                  "[eliza-api] Direct dispatch CREATE_TASK from UI intent",
+                );
+                let actionResponseText = "";
+                await createTaskAction.handler(
+                  runtime,
+                  message,
+                  undefined,
+                  {},
+                  async (content: Content) => {
+                    if (generationTimedOut || opts?.isAborted?.()) {
+                      throw createChatGenerationTimeoutError(generationTimeoutMs);
+                    }
+
+                    const chunk = extractCompatTextContent(content);
+                    if (chunk) {
+                      replaceCallbackText(chunk);
+                      actionResponseText = responseText;
+                    }
+                    return [];
+                  },
+                );
+                const finalText =
+                  actionResponseText || responseText || "Task created.";
+                result = {
+                  didRespond: true,
+                  responseContent: { text: finalText },
+                  responseMessages: [],
+                } as typeof result;
+                responseText = finalText;
+                return;
+              }
             }
-
-            const chunk = extractCompatTextContent(content);
-            if (!chunk) return [];
-            if (!claimStreamSource("callback")) return [];
-            replaceCallbackText(chunk);
-            return [];
-          },
-          {
-            onStreamChunk: opts?.onChunk
-              ? async (chunk: string) => {
-                  if (opts?.isAborted?.()) {
-                    throw new Error("client_disconnected");
-                  }
-                  if (!chunk) return;
-                  if (!claimStreamSource("onStreamChunk")) return;
-                  appendIncomingText(chunk);
-                }
-              : undefined,
-          },
-        );
-      }
-
-      // Ensure MESSAGE_SENT hooks run for API chat flows.
-      try {
-        const responseMessages = Array.isArray(result?.responseMessages)
-          ? (result.responseMessages as Array<{ id?: string; content?: Content }>)
-          : [];
-        const fallbackResponseContent =
-          result?.responseContent && typeof result.responseContent === "object"
-            ? (result.responseContent as Content)
-            : responseText
-              ? ({ text: responseText } as Content)
-              : null;
-        const messagesToEmit =
-          responseMessages.length > 0
-            ? responseMessages
-            : fallbackResponseContent
-              ? [{ id: crypto.randomUUID(), content: fallbackResponseContent }]
-              : [];
-        if (
-          messagesToEmit.length > 0 &&
-          typeof runtime.emitEvent === "function"
-        ) {
-          for (const responseMessage of messagesToEmit) {
-            const memoryLike = {
-              id: responseMessage.id ?? crypto.randomUUID(),
-              roomId: message.roomId,
-              entityId: runtime.agentId,
-              content: responseMessage.content ?? { text: "" },
-              metadata: message.metadata,
-            } as unknown as ReturnType<typeof createMessageMemory>;
-            await runtime.emitEvent("MESSAGE_SENT", {
-              message: memoryLike,
-              source: messageSource,
-            });
+            // Fall through to normal LLM-based routing if coordinator not available
           }
-        }
-      } catch (err) {
-        runtime.logger?.warn(
-          {
-            err,
-            src: "eliza-api",
-            messageId: message.id,
-            roomId: message.roomId,
-          },
-          "Failed to emit MESSAGE_SENT event",
-        );
-      }
-    } catch (err) {
-      throw err;
-    }
 
-    // Post-process fallback actions
-    if (result) {
+          if (directWalletExecutionFallback?.errorText) {
+            forcedWalletExecutionText = true;
+            responseText = directWalletExecutionFallback.errorText;
+            result = {
+              didRespond: true,
+              responseContent: { text: directWalletExecutionFallback.errorText },
+              responseMessages: [],
+            };
+          } else if (directWalletExecutionFallback?.action) {
+            runtime.logger?.info(
+              {
+                src: "eliza-api",
+                action: directWalletExecutionFallback.action.name,
+                parameters: directWalletExecutionFallback.action.parameters,
+              },
+              "[eliza-api] Direct wallet execution dispatch from prompt intent",
+            );
+            await executeFallbackParsedActions(
+              runtime,
+              message,
+              [directWalletExecutionFallback.action],
+              appendIncomingText,
+              recordActionCallback,
+              {
+                getCurrentText: () => responseText,
+                onCallbackText: replaceCallbackText,
+              },
+            );
+            result = {
+              didRespond: true,
+              responseContent: { text: responseText },
+              responseMessages: [],
+            };
+          } else {
+            const languageAugmentedMessage = maybeAugmentChatMessageWithLanguage(
+              message,
+              opts?.preferredLanguage,
+            );
+            const walletAugmentedMessage = maybeAugmentChatMessageWithWalletContext(
+              runtime,
+              languageAugmentedMessage,
+            );
+            const generationMessage = await maybeAugmentChatMessageWithKnowledge(
+              runtime,
+              walletAugmentedMessage,
+            );
+            result = await runtime.messageService?.handleMessage(
+              runtime,
+              generationMessage,
+              async (content: Content) => {
+                if (generationTimedOut || opts?.isAborted?.()) {
+                  throw createChatGenerationTimeoutError(generationTimeoutMs);
+                }
+
+                const actionTag = (content as Record<string, unknown>)?.action;
+                if (typeof actionTag === "string" && actionTag.length > 0) {
+                  recordActionCallback(
+                    actionTag,
+                    Boolean(extractCompatTextContent(content)),
+                  );
+                }
+
+                const chunk = extractCompatTextContent(content);
+                if (!chunk) return [];
+                if (!claimStreamSource("callback")) return [];
+                replaceCallbackText(chunk);
+                return [];
+              },
+              {
+                timeoutDuration: generationTimeoutMs,
+                onStreamChunk: opts?.onChunk
+                  ? async (chunk: string) => {
+                      if (generationTimedOut || opts?.isAborted?.()) {
+                        throw createChatGenerationTimeoutError(
+                          generationTimeoutMs,
+                        );
+                      }
+                      if (!chunk) return;
+                      if (!claimStreamSource("onStreamChunk")) return;
+                      appendIncomingText(chunk);
+                    }
+                  : undefined,
+              },
+            );
+          }
+
+          // Ensure MESSAGE_SENT hooks run for API chat flows.
+          try {
+            const responseMessages = Array.isArray(result?.responseMessages)
+              ? (result.responseMessages as Array<{ id?: string; content?: Content }>)
+              : [];
+            const fallbackResponseContent =
+              result?.responseContent && typeof result.responseContent === "object"
+                ? (result.responseContent as Content)
+                : responseText
+                  ? ({ text: responseText } as Content)
+                  : null;
+            const messagesToEmit =
+              responseMessages.length > 0
+                ? responseMessages
+                : fallbackResponseContent
+                  ? [{ id: crypto.randomUUID(), content: fallbackResponseContent }]
+                  : [];
+            if (
+              messagesToEmit.length > 0 &&
+              typeof runtime.emitEvent === "function"
+            ) {
+              for (const responseMessage of messagesToEmit) {
+                const memoryLike = {
+                  id: responseMessage.id ?? crypto.randomUUID(),
+                  roomId: message.roomId,
+                  entityId: runtime.agentId,
+                  content: responseMessage.content ?? { text: "" },
+                  metadata: message.metadata,
+                } as unknown as ReturnType<typeof createMessageMemory>;
+                await runtime.emitEvent("MESSAGE_SENT", {
+                  message: memoryLike,
+                  source: messageSource,
+                });
+              }
+            }
+          } catch (err) {
+            runtime.logger?.warn(
+              {
+                err,
+                src: "eliza-api",
+                messageId: message.id,
+                roomId: message.roomId,
+              },
+              "Failed to emit MESSAGE_SENT event",
+            );
+          }
+        } catch (err) {
+          throw err;
+        }
+
+        // Post-process fallback actions
+        if (result) {
       const rc = result.responseContent as Record<string, unknown> | null;
       const resultRecord = result as unknown as Record<string, unknown>;
       runtime.logger?.info(
@@ -1154,7 +1215,14 @@ export async function generateChatResponse(
         }
       }
     }
-    });
+        }),
+      ),
+      generationTimeoutMs,
+      () => createChatGenerationTimeoutError(generationTimeoutMs),
+      () => {
+        generationTimedOut = true;
+      },
+    );
 
     const resultText = extractCompatTextContent(result?.responseContent);
 

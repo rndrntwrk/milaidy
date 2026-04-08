@@ -41,7 +41,10 @@ import type {
   RegistrySearchResult,
 } from "./plugin-manager-types";
 import { getPluginInfo, getRegistryPlugins } from "./registry-client";
-import { resolveAppOverride } from "./registry-client-app-meta";
+import {
+  mergeAppMeta as mergeRegistryAppMeta,
+  resolveAppOverride,
+} from "./registry-client-app-meta";
 import { scoreEntries, toSearchResults } from "./registry-client-queries.js";
 
 const LOCAL_PLUGINS_DIR = "plugins";
@@ -227,6 +230,54 @@ function mergeLocalRegistryInfo<T extends RegistryPluginInfo>(
   }
   mergeAppMeta(appInfo, localInfo.appMeta);
   return appInfo;
+}
+
+function deriveAppMetaFromPluginInfo(
+  appInfo: RegistryPluginInfo,
+): RegistryPluginInfo["appMeta"] | undefined {
+  const hasTopLevelAppMeta =
+    appInfo.displayName !== undefined ||
+    appInfo.category !== undefined ||
+    appInfo.launchType !== undefined ||
+    appInfo.launchUrl !== undefined ||
+    appInfo.icon !== undefined ||
+    appInfo.capabilities !== undefined ||
+    appInfo.runtimePlugin !== undefined ||
+    appInfo.uiExtension !== undefined ||
+    appInfo.viewer !== undefined ||
+    appInfo.session !== undefined;
+
+  if (!hasTopLevelAppMeta) {
+    return undefined;
+  }
+
+  return {
+    displayName:
+      appInfo.displayName ?? packageNameToAppDisplayName(appInfo.name),
+    category: appInfo.category ?? "game",
+    launchType: appInfo.launchType ?? "url",
+    launchUrl: appInfo.launchUrl ?? null,
+    icon: appInfo.icon ?? null,
+    capabilities: appInfo.capabilities ?? [],
+    minPlayers: null,
+    maxPlayers: null,
+    runtimePlugin: appInfo.runtimePlugin,
+    uiExtension: appInfo.uiExtension,
+    viewer: appInfo.viewer,
+    session: appInfo.session,
+  };
+}
+
+function resolveEffectiveAppMeta(
+  packageName: string,
+  appInfo: RegistryPluginInfo,
+): RegistryPluginInfo["appMeta"] | undefined {
+  const derivedAppMeta = deriveAppMetaFromPluginInfo(appInfo);
+  const baseAppMeta = mergeRegistryAppMeta(derivedAppMeta, appInfo.appMeta);
+  if (baseAppMeta) {
+    return resolveAppOverride(packageName, baseAppMeta) ?? baseAppMeta;
+  }
+  return resolveAppOverride(packageName, undefined);
 }
 
 function isAutoInstallable(appInfo: RegistryPluginInfo): boolean {
@@ -1826,12 +1877,7 @@ export class AppManager {
     // Apply local app overrides (viewer URL, sandbox, embed params, etc.)
     // so displayName / launchType / viewer are populated even when the
     // npm registry has no metadata for this app.
-    if (appInfo.appMeta) {
-      appInfo.appMeta =
-        resolveAppOverride(name, appInfo.appMeta) ?? appInfo.appMeta;
-    } else {
-      appInfo.appMeta = resolveAppOverride(name, undefined);
-    }
+    appInfo.appMeta = resolveEffectiveAppMeta(name, appInfo);
 
     return flattenAppInfo(appInfo);
   }
@@ -1977,12 +2023,7 @@ export class AppManager {
     // Apply local app overrides (viewer URL, sandbox, embed params, etc.)
     // and flatten appMeta onto the top-level fields so launchUrl / viewer
     // are populated even when the npm registry has no metadata for this app.
-    if (appInfo.appMeta) {
-      appInfo.appMeta =
-        resolveAppOverride(name, appInfo.appMeta) ?? appInfo.appMeta;
-    } else {
-      appInfo.appMeta = resolveAppOverride(name, undefined);
-    }
+    appInfo.appMeta = resolveEffectiveAppMeta(name, appInfo);
     appInfo = flattenAppInfo(appInfo);
 
     // The app's plugin is what the agent needs to play the game.

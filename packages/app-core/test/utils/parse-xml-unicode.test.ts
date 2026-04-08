@@ -1,5 +1,8 @@
-import { parseKeyValueXml } from "@elizaos/core";
 import { describe, expect, it } from "vitest";
+
+const { parseKeyValueXml } = await import(
+  "../../../../eliza/packages/typescript/src/utils.ts"
+);
 
 /**
  * Verify that the upstream elizaOS parseKeyValueXml function preserves

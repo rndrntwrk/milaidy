@@ -18,6 +18,7 @@
  */
 
 import { describe, expect, it } from "vitest";
+import { describeIf } from "../../../test/helpers/conditional-tests.ts";
 
 const signalPluginModule = await import("@elizaos/plugin-signal").catch(
   () => null,
@@ -26,7 +27,7 @@ const signalPlugin = signalPluginModule?.default;
 const hasSignalPlugin = Boolean(signalPlugin);
 
 describe("Signal Connector (@elizaos/plugin-signal)", () => {
-  describe.skipIf(!hasSignalPlugin)("Plugin Structure", () => {
+  describeIf(hasSignalPlugin)("Plugin Structure", () => {
     it("plugin can be imported", () => {
       expect(signalPluginModule).toBeDefined();
       expect(signalPlugin).toBeDefined();

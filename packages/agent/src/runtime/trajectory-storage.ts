@@ -298,8 +298,8 @@ function buildTrajectoryWhereClauses(
         LOWER(COALESCE(id, '')) LIKE ${quotedPattern}
         OR LOWER(COALESCE(scenario_id, '')) LIKE ${quotedPattern}
         OR LOWER(COALESCE(batch_id, '')) LIKE ${quotedPattern}
-        OR LOWER(COALESCE(metadata, '')) LIKE ${quotedPattern}
-        OR LOWER(COALESCE(steps_json, '')) LIKE ${quotedPattern}
+        OR LOWER(COALESCE(CAST(metadata AS TEXT), '')) LIKE ${quotedPattern}
+        OR LOWER(COALESCE(CAST(steps_json AS TEXT), '')) LIKE ${quotedPattern}
       )`,
     );
   }

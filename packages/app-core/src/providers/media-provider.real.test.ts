@@ -13,6 +13,7 @@
  */
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { describeIf, itIf } from "../../../../test/helpers/conditional-tests.ts";
 import type { ImageConfig, VisionConfig } from "../config/types.eliza";
 import {
   createImageProvider,
@@ -23,7 +24,7 @@ import {
 
 // Skip if not in real API test mode
 const REAL_API_MODE = process.env.REAL_API_TEST === "1";
-const describeFn = REAL_API_MODE ? describe : describe.skip;
+const describeFn = describeIf(REAL_API_MODE);
 
 // Load API keys from environment (user should set these from eliza/.env)
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
@@ -272,7 +273,7 @@ describeFn("Ollama Local Vision Provider (Real API)", () => {
     }
   }, 60000);
 
-  it.skip("should auto-download vision model if not present (SLOW - downloads ~4GB model)", async () => {
+  itIf(REAL_API_MODE && process.env.MILADY_OLLAMA_DOWNLOAD_TEST === "1")("should auto-download vision model if not present (SLOW - downloads ~4GB model)", async () => {
     if (!ollamaAvailable) {
       console.log("[Ollama] Skipping - Ollama server not running");
       return;

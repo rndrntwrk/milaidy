@@ -114,6 +114,11 @@ const SOCIAL_FEED_CONNECTORS = new Set([
 ]);
 
 const DATABASES = new Set(["sql", "localdb", "inmemorydb"]);
+const NATIVE_RUNTIME_FEATURE_PLUGIN_IDS = new Set([
+  "knowledge",
+  "rolodex",
+  "trajectory-logger",
+]);
 
 export const PLUGIN_SETUP_GUIDE_ROOT =
   "https://docs.eliza.ai/plugin-setup-guide";
@@ -753,7 +758,11 @@ async function main() {
     Object.entries(packages)
       .filter(
         ([npmName, pkgInfo]) =>
-          npmName.startsWith("@elizaos/plugin-") && pkgInfo.supports?.v2,
+          npmName.startsWith("@elizaos/plugin-") &&
+          pkgInfo.supports?.v2 &&
+          !NATIVE_RUNTIME_FEATURE_PLUGIN_IDS.has(
+            npmName.replace("@elizaos/plugin-", ""),
+          ),
       )
       .map(([npmName, pkgInfo]) => ({
         name: npmName,
@@ -769,6 +778,7 @@ async function main() {
     if (!pkgInfo.supports?.v2) continue;
 
     const id = npmName.replace("@elizaos/plugin-", "");
+    if (NATIVE_RUNTIME_FEATURE_PLUGIN_IDS.has(id)) continue;
     const dirName = `plugin-${id}`;
     // Use v2 npm version (next/alpha)
     const version = pkgInfo.npm?.v2 || undefined;
@@ -896,6 +906,7 @@ async function main() {
       for (const base of list) {
         if (!base?.id || entries.some((e) => e.id === base.id)) continue;
         const id = base.id;
+        if (NATIVE_RUNTIME_FEATURE_PLUGIN_IDS.has(id)) continue;
         const dirName = base.dirName || `plugin-${id}`;
         const npmName = base.npmName || `@elizaos/plugin-${id}`;
         const localMeta = readLocalPackageMetadata(dirName, npmName);
@@ -963,6 +974,7 @@ async function main() {
 
   for (const [id, existingEntry] of existingManifest.entries()) {
     if (entries.some((entry) => entry.id === id)) continue;
+    if (NATIVE_RUNTIME_FEATURE_PLUGIN_IDS.has(id)) continue;
 
     const dirName = existingEntry.dirName || `plugin-${id}`;
     const npmName = existingEntry.npmName;

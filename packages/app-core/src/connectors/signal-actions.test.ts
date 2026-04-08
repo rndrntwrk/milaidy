@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describeIf } from "../../../../test/helpers/conditional-tests.ts";
 
 type SignalSendMessageAction = {
   name: string;
@@ -83,7 +84,7 @@ function createMessage(overrides: Record<string, unknown> = {}) {
   };
 }
 
-describe.skipIf(!hasSignalActionsModule)("signal sendMessage action", () => {
+describeIf(hasSignalActionsModule)("signal sendMessage action", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });

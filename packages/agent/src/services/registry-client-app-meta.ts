@@ -38,6 +38,24 @@ interface LocalAppOverride {
 }
 
 const LOCAL_APP_OVERRIDES: Readonly<Record<string, LocalAppOverride>> = {
+  "@hyperscape/plugin-hyperscape": {
+    uiExtension: {
+      detailPanelId: "hyperscape-embedded-agents",
+    },
+    session: {
+      mode: "spectate-and-steer",
+      features: ["commands", "telemetry", "pause", "resume", "suggestions"],
+    },
+  },
+  "@elizaos/app-hyperscape": {
+    uiExtension: {
+      detailPanelId: "hyperscape-embedded-agents",
+    },
+    session: {
+      mode: "spectate-and-steer",
+      features: ["commands", "telemetry", "pause", "resume", "suggestions"],
+    },
+  },
   "@elizaos/app-babylon": {
     displayName: "Babylon",
     category: "game",
@@ -195,6 +213,18 @@ export function resolveAppOverride(
 ): RegistryAppMeta | undefined {
   const override = LOCAL_APP_OVERRIDES[packageName];
   if (!override) return appMeta;
+  const hasStandaloneMetadata = Object.values({
+    displayName: override.displayName,
+    category: override.category,
+    launchType: override.launchType,
+    launchUrl: override.launchUrl,
+    capabilities: override.capabilities,
+    runtimePlugin: override.runtimePlugin,
+    viewer: override.viewer,
+  }).some((value) => value !== undefined);
+  if (!appMeta && !hasStandaloneMetadata) {
+    return undefined;
+  }
   const base: RegistryAppMeta = appMeta ?? {
     displayName:
       override.displayName ?? packageNameToAppDisplayName(packageName),

@@ -145,6 +145,7 @@ export interface EvaluateBrowserWorkspaceTabRequest {
 }
 
 export interface BrowserWorkspaceDomElementSummary {
+  ref?: string;
   selector: string;
   tag: string;
   text: string;
@@ -208,6 +209,8 @@ const webWorkspaceState: {
   tabs: [],
 };
 
+const browserWorkspaceElementRefs = new Map<string, Map<string, string>>();
+
 function normalizeEnvValue(value: string | undefined): string | null {
   if (typeof value !== "string") {
     return null;
@@ -224,6 +227,85 @@ function normalizeBrowserWorkspaceText(value: unknown): string {
 
 function getBrowserWorkspaceTimestamp(): string {
   return new Date().toISOString();
+}
+
+function getBrowserWorkspaceElementRefStateKey(
+  mode: BrowserWorkspaceMode,
+  tabId: string,
+): string {
+  return `${mode}:${tabId}`;
+}
+
+function clearBrowserWorkspaceElementRefs(
+  mode: BrowserWorkspaceMode,
+  tabId: string,
+): void {
+  browserWorkspaceElementRefs.delete(
+    getBrowserWorkspaceElementRefStateKey(mode, tabId),
+  );
+}
+
+function registerBrowserWorkspaceElementRefs(
+  mode: BrowserWorkspaceMode,
+  tabId: string,
+  elements: BrowserWorkspaceDomElementSummary[],
+): BrowserWorkspaceDomElementSummary[] {
+  if (elements.length === 0) {
+    clearBrowserWorkspaceElementRefs(mode, tabId);
+    return [];
+  }
+
+  const refs = new Map<string, string>();
+  const augmented = elements.map((element, index) => {
+    const ref = `@e${index + 1}`;
+    refs.set(ref, element.selector);
+    return { ...element, ref };
+  });
+  browserWorkspaceElementRefs.set(
+    getBrowserWorkspaceElementRefStateKey(mode, tabId),
+    refs,
+  );
+  return augmented;
+}
+
+function resolveBrowserWorkspaceElementRef(
+  mode: BrowserWorkspaceMode,
+  tabId: string,
+  ref: string,
+): string | null {
+  return (
+    browserWorkspaceElementRefs
+      .get(getBrowserWorkspaceElementRefStateKey(mode, tabId))
+      ?.get(ref.trim()) ?? null
+  );
+}
+
+function resolveBrowserWorkspaceCommandElementRefs(
+  command: BrowserWorkspaceCommand,
+  mode: BrowserWorkspaceMode,
+  tabId: string,
+): BrowserWorkspaceCommand {
+  const selector = command.selector?.trim();
+  if (!selector) {
+    return command;
+  }
+
+  const match = selector.match(/^(@e\d+)([\s\S]*)$/i);
+  if (!match?.[1]) {
+    return command;
+  }
+
+  const resolvedSelector = resolveBrowserWorkspaceElementRef(mode, tabId, match[1]);
+  if (!resolvedSelector) {
+    throw new Error(
+      `Unknown browser snapshot element ref ${match[1]}. Run snapshot or inspect again before reusing element refs.`,
+    );
+  }
+
+  return {
+    ...command,
+    selector: `${resolvedSelector}${match[2] ?? ""}`,
+  };
 }
 
 function assertBrowserWorkspaceUrl(rawUrl: string): string {
@@ -303,6 +385,10 @@ function cloneWebBrowserWorkspaceTabState(
     updatedAt: tab.updatedAt,
     lastFocusedAt: tab.lastFocusedAt,
   };
+}
+
+function clearWebBrowserWorkspaceTabElementRefs(tabId: string): void {
+  clearBrowserWorkspaceElementRefs("web", tabId);
 }
 
 function createEmptyWebBrowserWorkspaceDom(url: string): JSDOM {
@@ -611,6 +697,129 @@ function findBrowserWorkspaceElementByRole(
   return null;
 }
 
+function trimBrowserWorkspaceQuotedValue(value: string): string {
+  const trimmed = value.trim();
+  const hasTextMatch = trimmed.match(/^has-text\((['"])([\s\S]*?)\1\)$/i);
+  if (hasTextMatch?.[2]) {
+    return hasTextMatch[2].trim();
+  }
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1).trim();
+  }
+  return trimmed;
+}
+
+function normalizeBrowserWorkspaceSelectorSyntax(selector: string): string {
+  let normalized = selector.trim();
+  normalized = normalized.replace(
+    /^role\s*[:=]\s*([a-z0-9_-]+)\s+name\s*[:=]\s*(.+)$/i,
+    "role=$1[name=$2]",
+  );
+  normalized = normalized.replace(
+    /^((?:label|text|placeholder|alt|title|testid|data-testid)\s*[:=]\s*(?:has-text\((['"])[\s\S]*?\2\)|"[^"]+"|'[^']+'|[^>]+?))\s+((?:input|textarea|select)[\s\S]*)$/i,
+    "$1 >> $3",
+  );
+  return normalized;
+}
+
+function parseBrowserWorkspaceSemanticSelector(
+  selector: string,
+): Pick<
+  BrowserWorkspaceCommand,
+  "findBy" | "name" | "role" | "selector" | "text"
+> | null {
+  const trimmed = normalizeBrowserWorkspaceSelectorSyntax(selector);
+  const match = trimmed.match(/^([a-z-]+)\s*[:=]\s*(.+)$/i);
+  if (!match) {
+    return null;
+  }
+
+  const kind = match[1]?.trim().toLowerCase();
+  const rawValue = match[2]?.trim() ?? "";
+  if (!kind || !rawValue) {
+    return null;
+  }
+
+  switch (kind) {
+    case "alt":
+      return { findBy: "alt", text: trimBrowserWorkspaceQuotedValue(rawValue) };
+    case "css":
+      return { selector: trimBrowserWorkspaceQuotedValue(rawValue) };
+    case "data-testid":
+    case "testid":
+      return { findBy: "testid", text: trimBrowserWorkspaceQuotedValue(rawValue) };
+    case "label":
+      return { findBy: "label", text: trimBrowserWorkspaceQuotedValue(rawValue) };
+    case "placeholder":
+      return {
+        findBy: "placeholder",
+        text: trimBrowserWorkspaceQuotedValue(rawValue),
+      };
+    case "role": {
+      const roleMatch = rawValue.match(
+        /^([a-z0-9_-]+)(?:\s*\[\s*name\s*[:=]\s*(.+?)\s*\])?$/i,
+      );
+      if (!roleMatch?.[1]) {
+        return null;
+      }
+      return {
+        findBy: "role",
+        name: roleMatch[2]
+          ? trimBrowserWorkspaceQuotedValue(roleMatch[2])
+          : undefined,
+        role: roleMatch[1].trim().toLowerCase(),
+      };
+    }
+    case "text":
+      return { findBy: "text", text: trimBrowserWorkspaceQuotedValue(rawValue) };
+    case "title":
+      return { findBy: "title", text: trimBrowserWorkspaceQuotedValue(rawValue) };
+    default:
+      return null;
+  }
+}
+
+function mergeBrowserWorkspaceSelectorCommand(
+  command: BrowserWorkspaceCommand | undefined,
+  selector: string,
+): BrowserWorkspaceCommand | null {
+  const parsed = parseBrowserWorkspaceSemanticSelector(selector);
+  if (!parsed) {
+    return null;
+  }
+
+  return {
+    ...command,
+    ...parsed,
+    selector: parsed.selector,
+  } as BrowserWorkspaceCommand;
+}
+
+function queryBrowserWorkspaceSelector(
+  root: Document | Element,
+  selector: string,
+): Element | null {
+  try {
+    return root.querySelector(selector);
+  } catch {
+    throw new Error(`Invalid selector ${selector}`);
+  }
+}
+
+function queryAllBrowserWorkspaceSelector(
+  root: Document | Element,
+  selector: string,
+): Element[] {
+  try {
+    return Array.from(root.querySelectorAll(selector));
+  } catch {
+    throw new Error(`Invalid selector ${selector}`);
+  }
+}
+
 function resolveBrowserWorkspaceFindElement(
   document: Document,
   command: BrowserWorkspaceCommand,
@@ -622,7 +831,7 @@ function resolveBrowserWorkspaceFindElement(
       ) ?? null;
     case "first":
       return command.selector?.trim()
-        ? document.querySelector(command.selector)
+        ? queryBrowserWorkspaceSelector(document, command.selector)
         : null;
     case "label":
       return command.text?.trim()
@@ -630,7 +839,7 @@ function resolveBrowserWorkspaceFindElement(
         : null;
     case "last":
       return command.selector?.trim()
-        ? Array.from(document.querySelectorAll(command.selector)).at(-1) ?? null
+        ? queryAllBrowserWorkspaceSelector(document, command.selector).at(-1) ?? null
         : null;
     case "nth":
       if (!command.selector?.trim()) {
@@ -639,7 +848,9 @@ function resolveBrowserWorkspaceFindElement(
       if (typeof command.index !== "number" || !Number.isInteger(command.index)) {
         return null;
       }
-      return Array.from(document.querySelectorAll(command.selector)).at(command.index) ?? null;
+      return queryAllBrowserWorkspaceSelector(document, command.selector).at(
+        command.index,
+      ) ?? null;
     case "placeholder":
       return Array.from(document.querySelectorAll("[placeholder]")).find((element) =>
         browserWorkspaceTextMatches(
@@ -721,9 +932,52 @@ function resolveBrowserWorkspaceElement(
   text?: string,
   command?: BrowserWorkspaceCommand,
 ): Element | null {
-  const normalizedSelector = selector?.trim();
+  const normalizedSelector = selector
+    ? normalizeBrowserWorkspaceSelectorSyntax(selector)
+    : undefined;
   if (normalizedSelector) {
-    return document.querySelector(normalizedSelector);
+    const selectorChain = normalizedSelector
+      .split(/\s*>>\s*/)
+      .map((segment) => segment.trim())
+      .filter(Boolean);
+    if (selectorChain.length > 1) {
+      let current = resolveBrowserWorkspaceElement(
+        document,
+        selectorChain[0],
+        undefined,
+        command,
+      );
+      for (let index = 1; current && index < selectorChain.length; index += 1) {
+        const segment = selectorChain[index];
+        if (!segment) {
+          continue;
+        }
+        if (
+          typeof (current as Element).matches === "function" &&
+          (current as Element).matches(segment)
+        ) {
+          continue;
+        }
+        if (
+          /^(input|textarea|select)(?:\[[^\]]+\])?$/i.test(segment) &&
+          (current.tagName === "INPUT" ||
+            current.tagName === "TEXTAREA" ||
+            current.tagName === "SELECT")
+        ) {
+          continue;
+        }
+        current = queryBrowserWorkspaceSelector(current, segment);
+      }
+      return current;
+    }
+    const semanticCommand = mergeBrowserWorkspaceSelectorCommand(
+      command,
+      normalizedSelector,
+    );
+    if (semanticCommand) {
+      return resolveBrowserWorkspaceFindElement(document, semanticCommand);
+    }
+    return queryBrowserWorkspaceSelector(document, normalizedSelector);
   }
 
   if (command?.findBy) {
@@ -1291,47 +1545,190 @@ function createDesktopBrowserWorkspaceCommandScript(
     }
     return null;
   };
-  const findSemantic = () => {
-    switch (command.findBy) {
+  const trimQuoted = (value) => {
+    const trimmed = String(value || "").trim();
+    const hasTextMatch = trimmed.match(/^has-text\((['"])([\s\S]*?)\\1\)$/i);
+    if (hasTextMatch?.[2]) {
+      return hasTextMatch[2].trim();
+    }
+    if (
+      (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+      (trimmed.startsWith("'") && trimmed.endsWith("'"))
+    ) {
+      return trimmed.slice(1, -1).trim();
+    }
+    return trimmed;
+  };
+  const normalizeSelectorSyntax = (selector) => {
+    let normalized = String(selector || "").trim();
+    normalized = normalized.replace(
+      /^role\s*[:=]\s*([a-z0-9_-]+)\s+name\s*[:=]\s*(.+)$/i,
+      "role=$1[name=$2]"
+    );
+    normalized = normalized.replace(
+      /^((?:label|text|placeholder|alt|title|testid|data-testid)\s*[:=]\s*(?:has-text\((['"])[\s\S]*?\\2\)|"[^"]+"|'[^']+'|[^>]+?))\s+((?:input|textarea|select)[\s\S]*)$/i,
+      "$1 >> $3"
+    );
+    return normalized;
+  };
+  const parseSemanticSelector = (selector) => {
+    const trimmed = normalizeSelectorSyntax(selector);
+    const match = trimmed.match(/^([a-z-]+)\s*[:=]\s*(.+)$/i);
+    if (!match) return null;
+    const kind = match[1]?.trim()?.toLowerCase();
+    const rawValue = match[2]?.trim() || "";
+    if (!kind || !rawValue) return null;
+    switch (kind) {
+      case "alt":
+        return { findBy: "alt", text: trimQuoted(rawValue) };
+      case "css":
+        return { selector: trimQuoted(rawValue) };
+      case "data-testid":
+      case "testid":
+        return { findBy: "testid", text: trimQuoted(rawValue) };
+      case "label":
+        return { findBy: "label", text: trimQuoted(rawValue) };
+      case "placeholder":
+        return { findBy: "placeholder", text: trimQuoted(rawValue) };
+      case "role": {
+        const roleMatch = rawValue.match(
+          /^([a-z0-9_-]+)(?:\s*\[\s*name\s*[:=]\s*(.+?)\s*\])?$/i
+        );
+        if (!roleMatch?.[1]) return null;
+        return {
+          findBy: "role",
+          name: roleMatch[2] ? trimQuoted(roleMatch[2]) : undefined,
+          role: roleMatch[1].trim().toLowerCase(),
+        };
+      }
+      case "text":
+        return { findBy: "text", text: trimQuoted(rawValue) };
+      case "title":
+        return { findBy: "title", text: trimQuoted(rawValue) };
+      default:
+        return null;
+    }
+  };
+  const mergeSelectorCommand = (selector) => {
+    const parsed = parseSemanticSelector(selector);
+    if (!parsed) return null;
+    return { ...command, ...parsed, selector: parsed.selector };
+  };
+  const queryOne = (selector) => {
+    try {
+      return document.querySelector(selector);
+    } catch {
+      throw new Error("Invalid selector " + selector);
+    }
+  };
+  const queryAll = (selector) => {
+    try {
+      return Array.from(document.querySelectorAll(selector));
+    } catch {
+      throw new Error("Invalid selector " + selector);
+    }
+  };
+  const findSemantic = (targetCommand = command) => {
+    switch (targetCommand.findBy) {
       case "alt":
         return Array.from(document.querySelectorAll("[alt]")).find((element) =>
-          textMatches(element.getAttribute("alt"), command.text, command.exact)
+          textMatches(
+            element.getAttribute("alt"),
+            targetCommand.text,
+            targetCommand.exact
+          )
         ) || null;
       case "first":
-        return command.selector ? document.querySelector(command.selector) : null;
+        return targetCommand.selector ? queryOne(targetCommand.selector) : null;
       case "label":
-        return command.text ? findByLabel(command.text, command.exact) : null;
+        return targetCommand.text
+          ? findByLabel(targetCommand.text, targetCommand.exact)
+          : null;
       case "last":
-        return command.selector
-          ? Array.from(document.querySelectorAll(command.selector)).at(-1) || null
+        return targetCommand.selector
+          ? queryAll(targetCommand.selector).at(-1) || null
           : null;
       case "nth":
-        return command.selector && Number.isInteger(command.index)
-          ? Array.from(document.querySelectorAll(command.selector)).at(command.index) || null
+        return targetCommand.selector && Number.isInteger(targetCommand.index)
+          ? queryAll(targetCommand.selector).at(targetCommand.index) || null
           : null;
       case "placeholder":
         return Array.from(document.querySelectorAll("[placeholder]")).find((element) =>
-          textMatches(element.getAttribute("placeholder"), command.text, command.exact)
+          textMatches(
+            element.getAttribute("placeholder"),
+            targetCommand.text,
+            targetCommand.exact
+          )
         ) || null;
       case "role":
-        return command.role ? findByRole(command.role, command.name, command.exact) : null;
+        return targetCommand.role
+          ? findByRole(
+              targetCommand.role,
+              targetCommand.name,
+              targetCommand.exact
+            )
+          : null;
       case "testid":
-        return command.text ? document.querySelector('[data-testid="' + command.text + '"]') : null;
+        return targetCommand.text
+          ? document.querySelector('[data-testid="' + targetCommand.text + '"]')
+          : null;
       case "text":
-        return command.text ? findByText(command.text) : null;
+        return targetCommand.text ? findByText(targetCommand.text) : null;
       case "title":
         return Array.from(document.querySelectorAll("[title]")).find((element) =>
-          textMatches(element.getAttribute("title"), command.text, command.exact)
+          textMatches(
+            element.getAttribute("title"),
+            targetCommand.text,
+            targetCommand.exact
+          )
         ) || null;
       default:
         return null;
     }
   };
   const findTarget = () => {
-    if (command.selector) return document.querySelector(command.selector);
+    if (command.selector) {
+      const selectorChain = normalizeSelectorSyntax(command.selector)
+        .split(/\s*>>\s*/)
+        .map((segment) => segment.trim())
+        .filter(Boolean);
+      if (selectorChain.length > 1) {
+        let current = queryTarget(selectorChain[0]);
+        for (let index = 1; current && index < selectorChain.length; index += 1) {
+          const segment = selectorChain[index];
+          if (!segment) continue;
+          if (typeof current.matches === "function" && current.matches(segment)) {
+            continue;
+          }
+          if (
+            /^(input|textarea|select)(?:\[[^\]]+\])?$/i.test(segment) &&
+            (current.tagName === "INPUT" ||
+              current.tagName === "TEXTAREA" ||
+              current.tagName === "SELECT")
+          ) {
+            continue;
+          }
+          current = queryOneWithin(current, segment);
+        }
+        return current;
+      }
+      return queryTarget(command.selector);
+    }
     if (command.findBy) return findSemantic();
     if (command.text) return findByText(command.text);
     return null;
+  };
+  const queryOneWithin = (root, selector) => {
+    try {
+      return root.querySelector(selector);
+    } catch {
+      throw new Error("Invalid selector " + selector);
+    }
+  };
+  const queryTarget = (selector) => {
+    const semantic = mergeSelectorCommand(selector);
+    if (semantic) return findSemantic(semantic);
+    return queryOne(selector);
   };
   const inspect = () =>
     Array.from(
@@ -1478,7 +1875,8 @@ function createDesktopBrowserWorkspaceCommandScript(
     if (command.getMode === "url") return location.href;
     if (command.getMode === "count") {
       if (!command.selector) throw new Error("count requires selector");
-      return document.querySelectorAll(command.selector).length;
+      const semantic = mergeSelectorCommand(command.selector);
+      return semantic ? Number(Boolean(findSemantic(semantic))) : queryAll(command.selector).length;
     }
     const element = findTarget();
     if (!element) throw new Error("Target element was not found.");
@@ -1521,8 +1919,8 @@ function createDesktopBrowserWorkspaceCommandScript(
       const deadline = Date.now() + (Number(command.timeoutMs) || 4000);
       const check = () => {
         try {
-          if (command.selector && document.querySelector(command.selector)) {
-            const found = document.querySelector(command.selector);
+          if (command.selector && findTarget()) {
+            const found = findTarget();
             const visible =
               !command.state || command.state === "visible"
                 ? found && isVisible(found)
@@ -1673,6 +2071,7 @@ async function executeDesktopBrowserWorkspaceDomCommand(
   env: NodeJS.ProcessEnv,
 ): Promise<BrowserWorkspaceCommandResult> {
   const id = await resolveDesktopBrowserWorkspaceTargetTabId(command, env);
+  command = resolveBrowserWorkspaceCommandElementRefs(command, "desktop", id);
   const result = await evaluateBrowserWorkspaceTab(
     {
       id,
@@ -1692,10 +2091,15 @@ async function executeDesktopBrowserWorkspaceDomCommand(
             elements?: BrowserWorkspaceDomElementSummary[];
           })
         : null;
+    const elements = registerBrowserWorkspaceElementRefs(
+      "desktop",
+      id,
+      Array.isArray(value?.elements) ? value.elements : [],
+    );
     return {
       mode: "desktop",
       subaction: command.subaction,
-      elements: Array.isArray(value?.elements) ? value.elements : [],
+      elements,
       value: result,
     };
   }
@@ -1778,6 +2182,7 @@ async function executeWebBrowserWorkspaceDomCommand(
 ): Promise<BrowserWorkspaceCommandResult> {
   return withWebStateLock(async () => {
     const id = findWebBrowserWorkspaceTargetTabId(command);
+    command = resolveBrowserWorkspaceCommandElementRefs(command, "web", id);
     const tab = getWebBrowserWorkspaceTabState(id);
     const dom = await ensureLoadedWebBrowserWorkspaceTabDocument(tab);
     const document = dom.window.document;
@@ -1786,20 +2191,30 @@ async function executeWebBrowserWorkspaceDomCommand(
 
     switch (command.subaction) {
       case "inspect":
+        clearWebBrowserWorkspaceTabElementRefs(tab.id);
         return {
           mode: "web",
           subaction: command.subaction,
-          elements: collectBrowserWorkspaceInspectElements(document),
+          elements: registerBrowserWorkspaceElementRefs(
+            "web",
+            tab.id,
+            collectBrowserWorkspaceInspectElements(document),
+          ),
           value: {
             title: tab.title,
             url: tab.url,
           },
         };
       case "snapshot":
+        clearWebBrowserWorkspaceTabElementRefs(tab.id);
         return {
           mode: "web",
           subaction: command.subaction,
-          elements: collectBrowserWorkspaceInspectElements(document),
+          elements: registerBrowserWorkspaceElementRefs(
+            "web",
+            tab.id,
+            collectBrowserWorkspaceInspectElements(document),
+          ),
           value: {
             bodyText: normalizeBrowserWorkspaceText(document.body?.textContent).slice(
               0,
@@ -1820,10 +2235,21 @@ async function executeWebBrowserWorkspaceDomCommand(
           if (!command.selector?.trim()) {
             throw new Error("Milady browser workspace get count requires selector.");
           }
+          const semanticCommand = mergeBrowserWorkspaceSelectorCommand(
+            command,
+            command.selector,
+          );
           return {
             mode: "web",
             subaction: command.subaction,
-            value: document.querySelectorAll(command.selector).length,
+            value: semanticCommand
+              ? Number(
+                  Boolean(
+                    resolveBrowserWorkspaceFindElement(document, semanticCommand),
+                  ),
+                )
+              : queryAllBrowserWorkspaceSelector(document, command.selector)
+                  .length,
           };
         }
 
@@ -2211,6 +2637,23 @@ async function executeWebBrowserWorkspaceDomCommand(
         };
       }
       case "wait": {
+        if (
+          !command.selector &&
+          !command.findBy &&
+          !command.text &&
+          !command.url &&
+          !command.script &&
+          typeof command.timeoutMs === "number" &&
+          Number.isFinite(command.timeoutMs)
+        ) {
+          const waitedMs = Math.max(0, command.timeoutMs);
+          await sleep(waitedMs);
+          return {
+            mode: "web",
+            subaction: command.subaction,
+            value: { waitedMs },
+          };
+        }
         const timeoutMs =
           typeof command.timeoutMs === "number" && Number.isFinite(command.timeoutMs)
             ? Math.max(100, command.timeoutMs)
@@ -2224,7 +2667,12 @@ async function executeWebBrowserWorkspaceDomCommand(
 
           const matchesSelector = command.selector?.trim()
             ? (() => {
-              const found = currentDocument.querySelector(command.selector);
+              const found = resolveBrowserWorkspaceElement(
+                currentDocument,
+                command.selector,
+                undefined,
+                command,
+              );
               if (!command.state || command.state === "visible") {
                   return found ? isBrowserWorkspaceElementVisible(found) : false;
               }
@@ -2356,6 +2804,7 @@ export async function openBrowserWorkspaceTab(
   if (!isBrowserWorkspaceBridgeConfigured(env)) {
     return withWebStateLock(() => {
       const tab = createWebBrowserWorkspaceTab(request);
+      clearWebBrowserWorkspaceTabElementRefs(tab.id);
       if (tab.visible) {
         webWorkspaceState.tabs = webWorkspaceState.tabs.map((entry) => ({
           ...entry,
@@ -2393,6 +2842,7 @@ export async function navigateBrowserWorkspaceTab(
 
       const existing = webWorkspaceState.tabs[index];
       const updatedAt = getBrowserWorkspaceTimestamp();
+      clearWebBrowserWorkspaceTabElementRefs(existing.id);
       pushWebBrowserWorkspaceHistory(existing, nextUrl);
       const nextTab: WebBrowserWorkspaceTabState = {
         ...existing,
@@ -2481,6 +2931,7 @@ export async function closeBrowserWorkspaceTab(
   if (!isBrowserWorkspaceBridgeConfigured(env)) {
     return withWebStateLock(() => {
       const initialLength = webWorkspaceState.tabs.length;
+      clearWebBrowserWorkspaceTabElementRefs(id);
       webWorkspaceState.tabs = webWorkspaceState.tabs.filter(
         (tab) => tab.id !== id,
       );

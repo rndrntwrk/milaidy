@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { describeIf } from "../../../test/helpers/conditional-tests.ts";
 import {
   FRAME_FILE,
   getBrowserCaptureExecutablePath,
@@ -61,7 +62,7 @@ async function getFreePort(): Promise<number> {
   });
 }
 
-describe.skipIf(!(LIVE_TESTS_ENABLED && SCREEN_TESTS_ENABLED && CHROME_SUPPORTED))(
+describeIf((LIVE_TESTS_ENABLED && SCREEN_TESTS_ENABLED && CHROME_SUPPORTED))(
   "Live: LifeOps screen context from browser capture",
   () => {
     let closeServer: (() => Promise<void>) | undefined;

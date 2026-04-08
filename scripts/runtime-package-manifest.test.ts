@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { describe, expect, it } from "vitest";
+import { itIf } from "../test/helpers/conditional-tests.ts";
 
 // Skip tsx child-process tests when process.execPath is Bun — tsx --import hooks require real Node.js
 const isNodeAvailable = !process.execPath.includes("bun");
@@ -73,7 +74,7 @@ describe("runtime-package-manifest", () => {
     expect(bundled).not.toContain("@elizaos/plugin-streaming-base");
   });
 
-  it.skipIf(!isNodeAvailable)(
+  itIf(isNodeAvailable)(
     "resolves the manifest module through node tsx like desktop staging",
     () => {
       const repoRoot = path.join(__dirname, "..");

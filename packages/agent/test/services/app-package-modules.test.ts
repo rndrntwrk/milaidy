@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { itIf } from "../../../../test/helpers/conditional-tests.ts";
 
 const registryClientMocks = vi.hoisted(() => ({
   getPluginInfo: vi.fn(),
@@ -298,7 +299,7 @@ describe("app-package-modules", () => {
     expect(registryClientMocks.getPluginInfo).not.toHaveBeenCalled();
   });
 
-  it.skipIf(!hasWorkspaceHyperscapePlugin)(
+  itIf(hasWorkspaceHyperscapePlugin)(
     "loads the real sibling Hyperscape bridge from the workspace without registry help",
     async () => {
       process.chdir(initialCwd);

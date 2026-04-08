@@ -17,7 +17,7 @@ function createBootstrapTodoView(id = "bootstrap-todo") {
     isUrgent: false,
     type: "task",
     isCompleted: false,
-    tags: ["TODO", "bootstrap"],
+    tags: ["bootstrap-pending", "bootstrap"],
     createdAt: null,
     updatedAt: null,
   };

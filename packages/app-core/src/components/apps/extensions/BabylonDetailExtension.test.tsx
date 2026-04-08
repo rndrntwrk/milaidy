@@ -17,8 +17,8 @@ const mockClient = vi.hoisted(() => ({
   getBabylonAgentChat: vi.fn(),
   getBabylonAgentWallet: vi.fn(),
   getBabylonAgentTradingBalance: vi.fn(),
-  toggleBabylonAgent: vi.fn(),
-  sendBabylonAgentChat: vi.fn(),
+  controlAppRun: vi.fn(),
+  sendAppRunMessage: vi.fn(),
 }));
 
 vi.mock("../../../state", () => ({
@@ -272,13 +272,12 @@ describe("BabylonDetailExtension", () => {
     mockClient.getBabylonAgentTradingBalance.mockResolvedValue({
       balance: 150,
     });
-    mockClient.toggleBabylonAgent.mockResolvedValue({
-      ok: true,
-      agentId: "agent-babylon",
-      autonomous: false,
+    mockClient.controlAppRun.mockResolvedValue({
+      success: true,
+      message: "Babylon autonomy paused.",
     });
-    mockClient.sendBabylonAgentChat.mockResolvedValue({
-      ok: true,
+    mockClient.sendAppRunMessage.mockResolvedValue({
+      success: true,
       message: "Queued",
     });
 
@@ -303,10 +302,14 @@ describe("BabylonDetailExtension", () => {
       .find((node) => textOf(node) === "Pause agent");
     expect(pauseButton).toBeDefined();
 
-    act(() => {
+    await act(async () => {
       pauseButton?.props.onClick();
+      await flushPromises();
     });
-    expect(mockClient.toggleBabylonAgent).toHaveBeenCalledWith("pause");
+    expect(mockClient.controlAppRun).toHaveBeenCalledWith(
+      "run-babylon-1",
+      "pause",
+    );
 
     const input = tree.root
       .findAll((node) => node.type === "input")
@@ -325,10 +328,12 @@ describe("BabylonDetailExtension", () => {
       .find((node) => textOf(node) === "Send");
     expect(sendButton).toBeDefined();
 
-    act(() => {
+    await act(async () => {
       sendButton?.props.onClick();
+      await flushPromises();
     });
-    expect(mockClient.sendBabylonAgentChat).toHaveBeenCalledWith(
+    expect(mockClient.sendAppRunMessage).toHaveBeenCalledWith(
+      "run-babylon-1",
       "Hold the line.",
     );
   });

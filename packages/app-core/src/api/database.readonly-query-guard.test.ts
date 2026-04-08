@@ -1,6 +1,6 @@
 import type { AgentRuntime } from "@elizaos/core";
 import { handleDatabaseRoute } from "@miladyai/agent/api/database";
-import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { createTestRuntime } from "../../../../test/helpers/pglite-runtime";
 import {
   createMockHttpResponse,
@@ -10,6 +10,32 @@ import {
 interface DbExecuteResult {
   rows: Array<Record<string, unknown>>;
   fields?: Array<{ name: string }>;
+}
+
+async function waitForExecuteIdle(runtime: AgentRuntime): Promise<void> {
+  const execute = vi.spyOn(
+    runtime.adapter.db as Record<string, unknown>,
+    "execute",
+  );
+  const deadline = Date.now() + 5_000;
+  let lastCount = execute.mock.calls.length;
+  let stableSince = Date.now();
+
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 25));
+    const nextCount = execute.mock.calls.length;
+    if (nextCount !== lastCount) {
+      lastCount = nextCount;
+      stableSince = Date.now();
+      continue;
+    }
+    if (Date.now() - stableSince >= 100) {
+      execute.mockRestore();
+      return;
+    }
+  }
+
+  execute.mockRestore();
 }
 
 function _makeRuntime(executeResult: DbExecuteResult) {
@@ -32,10 +58,15 @@ describe("database read-only query guard", () => {
     ({ runtime, cleanup } = await createTestRuntime({
       characterName: "QueryGuardTestAgent",
     }));
+    await waitForExecuteIdle(runtime);
   }, 180_000);
 
   afterAll(async () => {
     await cleanup();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   /** Spy on the real adapter's execute method to verify the guard's behavior. */

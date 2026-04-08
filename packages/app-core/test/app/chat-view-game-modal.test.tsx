@@ -80,19 +80,21 @@ vi.mock("../../src/components/chat/MessageContent", () => ({
     React.createElement("span", null, message.text),
 }));
 
-function companionSceneStatusStub() {
+async function companionSceneStatusStub() {
+  const actual = await vi.importActual<
+    typeof import("../../src/components/companion-scene-status-context")
+  >("../../src/components/companion-scene-status-context");
   return {
+    ...actual,
     useCompanionSceneStatus: () => mockUseCompanionSceneStatus(),
   };
 }
 
-vi.mock(
-  "../../src/components/companion-scene-status-context",
-  companionSceneStatusStub,
+vi.mock("../../src/components/companion-scene-status-context", () =>
+  companionSceneStatusStub(),
 );
-vi.mock(
-  "../../src/components/companion-scene-status-context.ts",
-  companionSceneStatusStub,
+vi.mock("../../src/components/companion-scene-status-context.ts", () =>
+  companionSceneStatusStub(),
 );
 
 vi.mock("@miladyai/app-core/api", () => ({

@@ -386,5 +386,19 @@ describe("Browser workspace API E2E", () => {
     });
     expect(checked.status).toBe(200);
     expect(checked.data.value).toBe(true);
+
+    const click = await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+      subaction: "click",
+      selector: 'role=button[name="Continue"]',
+    });
+    expect(click.status).toBe(200);
+
+    const heading = await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+      subaction: "get",
+      selector: "text=Welcome, Milady",
+      getMode: "text",
+    });
+    expect(heading.status).toBe(200);
+    expect(heading.data.value).toBe("Welcome, Milady");
   });
 });

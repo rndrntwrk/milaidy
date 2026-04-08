@@ -7,8 +7,9 @@ import { textOf } from "../../../../../../test/helpers/react-test";
 
 const mockUseApp = vi.hoisted(() => vi.fn());
 const mockClient = vi.hoisted(() => ({
+  sendAppRunMessage: vi.fn(),
   sendAppSessionMessage: vi.fn(),
-  controlAppSession: vi.fn(),
+  controlAppRun: vi.fn(),
 }));
 
 vi.mock("../../../state", () => ({
@@ -142,11 +143,11 @@ describe("TwoThousandFourScapeDetailExtension", () => {
       appRuns: [createRun()],
     });
 
-    mockClient.sendAppSessionMessage.mockResolvedValue({
+    mockClient.sendAppRunMessage.mockResolvedValue({
       success: true,
       message: "Queued",
     });
-    mockClient.controlAppSession.mockResolvedValue({
+    mockClient.controlAppRun.mockResolvedValue({
       success: true,
       message: "Control accepted",
     });
@@ -174,9 +175,8 @@ describe("TwoThousandFourScapeDetailExtension", () => {
     act(() => {
       pauseButton?.props.onClick();
     });
-    expect(mockClient.controlAppSession).toHaveBeenCalledWith(
-      "@elizaos/app-2004scape",
-      "2004scape-session",
+    expect(mockClient.controlAppRun).toHaveBeenCalledWith(
+      "run-2004-1",
       "pause",
     );
 
@@ -194,12 +194,12 @@ describe("TwoThousandFourScapeDetailExtension", () => {
       .findAll((node) => node.type === "button")
       .find((node) => textOf(node) === "Send");
     expect(sendButton).toBeDefined();
-    act(() => {
+    await act(async () => {
       sendButton?.props.onClick();
+      await flushPromises();
     });
-    expect(mockClient.sendAppSessionMessage).toHaveBeenCalledWith(
-      "@elizaos/app-2004scape",
-      "2004scape-session",
+    expect(mockClient.sendAppRunMessage).toHaveBeenCalledWith(
+      "run-2004-1",
       "Keep banking first.",
     );
   });

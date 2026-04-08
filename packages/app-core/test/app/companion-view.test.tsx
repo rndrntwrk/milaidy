@@ -41,13 +41,35 @@ function vrmStageStub() {
   return {
     VrmStage: (props: Record<string, unknown>) => {
       viewerPropsRef.current = props;
+      React.useEffect(() => {
+        const engine = {
+          setPaused: vi.fn(),
+          setCameraAnimation: vi.fn(),
+          setPointerParallaxEnabled: vi.fn(),
+          setDragOrbitTarget: vi.fn(),
+          resetDragOrbit: vi.fn(),
+          setCompanionZoomNormalized: vi.fn(),
+          attachOverlayManager: vi.fn(),
+        };
+        latestEngineRef.current = engine;
+
+        const onEngineReady = props.onEngineReady;
+        if (typeof onEngineReady === "function") {
+          onEngineReady(engine);
+        }
+
+        const onLayerEngineReady = props.onLayerEngineReady;
+        if (typeof onLayerEngineReady === "function") {
+          onLayerEngineReady(String(props.vrmPath ?? ""), engine);
+        }
+      }, [props]);
       return React.createElement("div", null, "VrmViewer");
     },
   };
 }
 
-vi.mock(import("../../src/components/companion/VrmStage"), vrmStageStub);
-vi.mock(import("../../src/components/companion/VrmStage.tsx"), vrmStageStub);
+vi.mock("../../src/components/companion/VrmStage", vrmStageStub);
+vi.mock("../../src/components/companion/VrmStage.tsx", vrmStageStub);
 
 function chatModalViewStub() {
   return {
@@ -60,14 +82,8 @@ function chatModalViewStub() {
   };
 }
 
-vi.mock(
-  import("../../src/components/pages/ChatModalView"),
-  chatModalViewStub,
-);
-vi.mock(
-  import("../../src/components/pages/ChatModalView.tsx"),
-  chatModalViewStub,
-);
+vi.mock("../../src/components/pages/ChatModalView", chatModalViewStub);
+vi.mock("../../src/components/pages/ChatModalView.tsx", chatModalViewStub);
 
 function vrmViewerStub() {
   return {
@@ -78,10 +94,10 @@ function vrmViewerStub() {
   };
 }
 
-vi.mock(import("../../src/components/avatar/VrmViewer"), vrmViewerStub);
-vi.mock(import("../../src/components/avatar/VrmViewer.tsx"), vrmViewerStub);
+vi.mock("../../src/components/avatar/VrmViewer", vrmViewerStub);
+vi.mock("../../src/components/avatar/VrmViewer.tsx", vrmViewerStub);
 
-vi.mock(import("../../src/components/avatar/VrmEngine"), () => {
+vi.mock("../../src/components/avatar/VrmEngine", () => {
   class MockVrmEngine {
     initialized = false;
     setup = vi.fn(() => {
@@ -340,12 +356,25 @@ function renderWithCompanionRootMock(
   });
 }
 
+function createMockStageEngine() {
+  return {
+    setPaused: vi.fn(),
+    setCameraAnimation: vi.fn(),
+    setPointerParallaxEnabled: vi.fn(),
+    setDragOrbitTarget: vi.fn(),
+    resetDragOrbit: vi.fn(),
+    setCompanionZoomNormalized: vi.fn(),
+    attachOverlayManager: vi.fn(),
+  };
+}
+
 describe("CompanionView", () => {
   const originalWindow = globalThis.window;
   const originalLocalStorage = globalThis.localStorage;
 
   beforeEach(() => {
     viewerPropsRef.current = null;
+    latestEngineRef.current = null;
     const storage = new Map<string, string>();
     const windowListeners = new Map<string, Set<EventListener>>();
     Object.defineProperty(globalThis, "localStorage", {
@@ -466,14 +495,25 @@ describe("CompanionView", () => {
           "data-testid": "companion-chat-modal-stub",
         }),
       ).toHaveLength(0);
+      expect(
+        tree?.root.findAll((node) => {
+          const style = node.props?.style as
+            | { opacity?: number; pointerEvents?: string }
+            | undefined;
+          return style?.opacity === 0 && style.pointerEvents === "none";
+        }),
+      ).toHaveLength(1);
 
       await act(async () => {
         vi.advanceTimersByTime(1400);
       });
 
       expect(
-        tree?.root.findAllByProps({
-          "data-chat-game-dock": true,
+        tree?.root.findAll((node) => {
+          const style = node.props?.style as
+            | { opacity?: number; pointerEvents?: string }
+            | undefined;
+          return style?.opacity === 1 && style.pointerEvents === "auto";
         }),
       ).toHaveLength(1);
     } finally {
@@ -663,15 +703,21 @@ describe("CompanionView", () => {
       tree = TestRenderer.create(React.createElement(CompanionView));
     });
 
-    const engine = latestEngineRef.current as {
+    const engine = createMockStageEngine();
+    await act(async () => {
+      const ready = viewerPropsRef.current?.onEngineReady as
+        | ((value: unknown) => void)
+        | undefined;
+      ready?.(engine);
+    });
+    const readyEngine = engine as {
       setDragOrbitTarget: ReturnType<typeof vi.fn>;
       resetDragOrbit: ReturnType<typeof vi.fn>;
       setCompanionZoomNormalized: ReturnType<typeof vi.fn>;
-    } | null;
-    const setDragOrbitTarget = engine?.setDragOrbitTarget ?? vi.fn();
-    const resetDragOrbit = engine?.resetDragOrbit ?? vi.fn();
-    const setCompanionZoomNormalized =
-      engine?.setCompanionZoomNormalized ?? vi.fn();
+    };
+    const setDragOrbitTarget = readyEngine.setDragOrbitTarget;
+    const resetDragOrbit = readyEngine.resetDragOrbit;
+    const setCompanionZoomNormalized = readyEngine.setCompanionZoomNormalized;
 
     expect(setCompanionZoomNormalized).toHaveBeenCalledWith(0.95);
     setDragOrbitTarget.mockClear();
@@ -793,11 +839,14 @@ describe("CompanionView", () => {
       renderWithCompanionRootMock(rootMock);
     });
 
-    const engine = latestEngineRef.current as {
-      setCompanionZoomNormalized: ReturnType<typeof vi.fn>;
-    } | null;
-    const setCompanionZoomNormalized =
-      engine?.setCompanionZoomNormalized ?? vi.fn();
+    const engine = createMockStageEngine();
+    await act(async () => {
+      const ready = viewerPropsRef.current?.onEngineReady as
+        | ((value: unknown) => void)
+        | undefined;
+      ready?.(engine);
+    });
+    const setCompanionZoomNormalized = engine.setCompanionZoomNormalized;
     setCompanionZoomNormalized.mockClear();
 
     const wheelListener = rootMock.getListener("wheel");
@@ -922,13 +971,15 @@ describe("CompanionView", () => {
       tree = TestRenderer.create(React.createElement(CompanionView));
     });
 
-    const engine = latestEngineRef.current as {
-      setCompanionZoomNormalized: ReturnType<typeof vi.fn>;
-      resetDragOrbit: ReturnType<typeof vi.fn>;
-    } | null;
-    const setCompanionZoomNormalized =
-      engine?.setCompanionZoomNormalized ?? vi.fn();
-    const resetDragOrbit = engine?.resetDragOrbit ?? vi.fn();
+    const engine = createMockStageEngine();
+    await act(async () => {
+      const ready = viewerPropsRef.current?.onEngineReady as
+        | ((value: unknown) => void)
+        | undefined;
+      ready?.(engine);
+    });
+    const setCompanionZoomNormalized = engine.setCompanionZoomNormalized;
+    const resetDragOrbit = engine.resetDragOrbit;
     const currentTarget = {
       setPointerCapture: vi.fn(),
       releasePointerCapture: vi.fn(),
@@ -986,11 +1037,14 @@ describe("CompanionView", () => {
       tree = TestRenderer.create(React.createElement(CompanionView));
     });
 
-    const engine = latestEngineRef.current as {
-      setCompanionZoomNormalized: ReturnType<typeof vi.fn>;
-    } | null;
-    const setCompanionZoomNormalized =
-      engine?.setCompanionZoomNormalized ?? vi.fn();
+    const engine = createMockStageEngine();
+    await act(async () => {
+      const ready = viewerPropsRef.current?.onEngineReady as
+        | ((value: unknown) => void)
+        | undefined;
+      ready?.(engine);
+    });
+    const setCompanionZoomNormalized = engine.setCompanionZoomNormalized;
 
     expect(tree).not.toBeNull();
     expect(setCompanionZoomNormalized).toHaveBeenCalledWith(0.62);

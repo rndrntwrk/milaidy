@@ -6,11 +6,10 @@ import {
   getTrajectoryContext,
   ModelType,
   runWithTrajectoryContext,
+  trajectoryLoggerPlugin,
+  TrajectoryLoggerService,
   type UUID,
 } from "@elizaos/core";
-import trajectoryLoggerPlugin, {
-  TrajectoryLoggerService,
-} from "@elizaos/plugin-trajectory-logger";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   createConversation,

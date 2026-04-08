@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import puppeteer, { type Browser, type Page } from "puppeteer-core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { describeIf } from "../../../../test/helpers/conditional-tests.ts";
 
 const envPath = path.resolve(
   import.meta.dirname,
@@ -164,7 +165,7 @@ function logQaStep(profile: Profile, step: string) {
 let browser: Browser | null = null;
 let UI_URL = DEFAULT_UI_URL;
 
-describe.skipIf(!CAN_RUN)("Live QA checklist", () => {
+describeIf(CAN_RUN)("Live QA checklist", () => {
   beforeAll(async () => {
     if (!CAN_RUN) return;
     await fs.mkdir(QA_ARTIFACT_DIR, { recursive: true });

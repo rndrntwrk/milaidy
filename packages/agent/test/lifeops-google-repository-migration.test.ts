@@ -1,16 +1,12 @@
 import type { IAgentRuntime } from "@elizaos/core";
 import { describe, expect, it } from "vitest";
+import { describeIf } from "../../../test/helpers/conditional-tests.ts";
 import { LifeOpsRepository } from "../src/lifeops/repository";
-
-let DatabaseSync: typeof import("node:sqlite").DatabaseSync;
-const hasNodeSqlite = await (async () => {
-  try {
-    ({ DatabaseSync } = await import("node:sqlite"));
-    return true;
-  } catch {
-    return false;
-  }
-})();
+import {
+  DatabaseSync,
+  hasSqlite,
+  type SqliteDatabaseSync,
+} from "../src/test-utils/sqlite-compat";
 
 type SqlQuery = {
   queryChunks?: Array<{ value?: unknown }>;
@@ -31,7 +27,10 @@ function extractSqlText(query: SqlQuery): string {
     .join("");
 }
 
-function createRuntime(agentId: string, sqlite: DatabaseSync): IAgentRuntime {
+function createRuntime(
+  agentId: string,
+  sqlite: SqliteDatabaseSync,
+): IAgentRuntime {
   return {
     agentId,
     character: {
@@ -57,7 +56,7 @@ function createRuntime(agentId: string, sqlite: DatabaseSync): IAgentRuntime {
   } as unknown as IAgentRuntime;
 }
 
-describe.skipIf(!hasNodeSqlite)("LifeOpsRepository Google side migrations", () => {
+describeIf(hasSqlite)("LifeOpsRepository Google side migrations", () => {
   it("migrates pre-side Google cache tables and preserves owner rows while allowing agent rows with the same external ids", async () => {
     const agentId = "lifeops-google-legacy-migration-agent";
     const sqlite = new DatabaseSync(":memory:");

@@ -9,6 +9,7 @@
 
 import { existsSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describeIf } from "../../../../test/helpers/conditional-tests.ts";
 import {
   createMockHttpResponse,
   createMockIncomingMessage,
@@ -1002,7 +1003,7 @@ async function loadCustomRtmpPlugin(): Promise<{
 // createTwitchDestination() — destination adapter unit tests
 // ---------------------------------------------------------------------------
 
-describe.skipIf(!hasTwitchDestinationModule)(
+describeIf(hasTwitchDestinationModule)(
   "createTwitchDestination()",
   () => {
     it("returns a StreamingDestination with id and name", async () => {
@@ -1076,7 +1077,7 @@ describe.skipIf(!hasTwitchDestinationModule)(
 // createYoutubeDestination() — destination adapter unit tests
 // ---------------------------------------------------------------------------
 
-describe.skipIf(!hasYoutubeDestinationModule)(
+describeIf(hasYoutubeDestinationModule)(
   "createYoutubeDestination()",
   () => {
     it("returns a StreamingDestination with id and name", async () => {

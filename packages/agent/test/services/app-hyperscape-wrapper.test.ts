@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { describeIf } from "../../../../test/helpers/conditional-tests.ts";
 
 const hyperscapePluginModuleUrl = new URL(
   "../../../../../hyperscape/packages/plugin-hyperscape/src/index.ts",
@@ -26,7 +27,7 @@ const hyperscapePluginModule = hasHyperscapePluginModule
     })
   : null;
 
-describe.skipIf(!hasHyperscapePluginModule)("plugin-hyperscape app bridge", () => {
+describeIf(hasHyperscapePluginModule)("plugin-hyperscape app bridge", () => {
   it("exports app metadata and a host bridge from the runtime plugin", () => {
     const plugin = hyperscapePluginModule?.hyperscapePlugin;
 

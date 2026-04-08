@@ -143,7 +143,7 @@ describe("browser-workspace service", () => {
       {} as NodeJS.ProcessEnv,
     );
 
-    expect(tab.id).toBe("btab_1");
+    expect(tab.id).toMatch(/^btab_\d+$/);
 
     await expect(
       evaluateBrowserWorkspaceTab(
@@ -158,7 +158,7 @@ describe("browser-workspace service", () => {
       getBrowserWorkspaceSnapshot({} as NodeJS.ProcessEnv),
     ).resolves.toMatchObject({
       mode: "web",
-      tabs: [{ id: "btab_1", visible: true }],
+      tabs: [{ id: tab.id, visible: true }],
     });
   });
 
@@ -383,5 +383,64 @@ describe("browser-workspace service", () => {
       {} as NodeJS.ProcessEnv,
     );
     expect(checked.value).toBe(true);
+  });
+
+  it("accepts semantic selector shorthand that real browser planners commonly emit", async () => {
+    await executeBrowserWorkspaceCommand(
+      {
+        subaction: "open",
+        show: true,
+        url: fixture.formUrl,
+      },
+      {} as NodeJS.ProcessEnv,
+    );
+
+    const fill = await executeBrowserWorkspaceCommand(
+      {
+        subaction: "fill",
+        selector: "label=Agent name",
+        value: "Milady",
+      },
+      {} as NodeJS.ProcessEnv,
+    );
+    expect(fill.value).toEqual(expect.objectContaining({ value: "Milady" }));
+
+    const select = await executeBrowserWorkspaceCommand(
+      {
+        subaction: "select",
+        selector: "label=Plan",
+        value: "pro",
+      },
+      {} as NodeJS.ProcessEnv,
+    );
+    expect(select.value).toEqual(expect.objectContaining({ value: "pro" }));
+
+    const check = await executeBrowserWorkspaceCommand(
+      {
+        subaction: "check",
+        selector: "label=Accept terms",
+      },
+      {} as NodeJS.ProcessEnv,
+    );
+    expect(check.value).toEqual(expect.objectContaining({ checked: true }));
+
+    const click = await executeBrowserWorkspaceCommand(
+      {
+        subaction: "click",
+        selector: 'role=button[name="Continue"]',
+      },
+      {} as NodeJS.ProcessEnv,
+    );
+    expect(click.tab?.url).toContain("/welcome");
+
+    const heading = await executeBrowserWorkspaceCommand(
+      {
+        subaction: "get",
+        selector: "text=Welcome, Milady",
+        getMode: "text",
+      },
+      {} as NodeJS.ProcessEnv,
+    );
+    expect(heading.value).toBe("Welcome, Milady");
   });
 });

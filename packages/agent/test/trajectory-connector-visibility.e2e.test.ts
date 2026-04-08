@@ -1,6 +1,5 @@
 import { PGlite } from "@electric-sql/pglite";
-import type { AgentRuntime } from "@elizaos/core";
-import { TrajectoryLoggerService } from "@elizaos/plugin-trajectory-logger";
+import { type AgentRuntime, TrajectoryLoggerService } from "@elizaos/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { req } from "../../../test/helpers/http";
 import { startApiServer } from "../src/api/server";

@@ -2,6 +2,7 @@ import http from "node:http";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { describeIf } from "../../../../test/helpers/conditional-tests.ts";
 import { handleAppPackageRoutes } from "../../src/api/app-package-routes";
 import {
   createMockHttpResponse,
@@ -269,7 +270,7 @@ async function startHyperscapeFixtureServer(): Promise<HyperscapeFixtureServer> 
   };
 }
 
-describe.skipIf(!hasLocalHyperscapeRoutes)("handleAppPackageRoutes", () => {
+describeIf(hasLocalHyperscapeRoutes)("handleAppPackageRoutes", () => {
   let fixtureServer: HyperscapeFixtureServer | null = null;
   const originalApiUrl = process.env.HYPERSCAPE_API_URL;
 

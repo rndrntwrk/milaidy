@@ -939,7 +939,7 @@ describe("GameView", () => {
     expect(
       tree?.root.findAll(
         (node) =>
-          node.props["data-testid"] === "game-native-agent-interface",
+          node.props["data-testid"] === "game-view-iframe",
       ).length,
     ).toBe(1);
   });

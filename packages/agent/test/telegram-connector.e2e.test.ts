@@ -35,6 +35,7 @@ import {
 } from "@miladyai/app-core/src/test-support/test-helpers";
 import dotenv from "dotenv";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { describeIf } from "../../../test/helpers/conditional-tests.ts";
 
 // ---------------------------------------------------------------------------
 // Environment Setup
@@ -54,9 +55,8 @@ const runLiveTests = hasTelegramToken && hasChatId && liveTestsEnabled;
 const TELEGRAM_PLUGIN_IMPORT = resolveTelegramPluginImportSpecifier();
 const hasTelegramPlugin = TELEGRAM_PLUGIN_IMPORT !== null;
 
-const describeIfLive =
-  hasTelegramPlugin && runLiveTests ? describe : describe.skip;
-const describeIfPluginAvailable = hasTelegramPlugin ? describe : describe.skip;
+const describeIfLive = describeIf(hasTelegramPlugin && runLiveTests);
+const describeIfPluginAvailable = describeIf(hasTelegramPlugin);
 
 logger.info(
   `[telegram-connector] Live tests ${runLiveTests ? "ENABLED" : "DISABLED"} (TELEGRAM_BOT_TOKEN=${hasTelegramToken}, TELEGRAM_TEST_CHAT_ID=${hasChatId}, MILADY_LIVE_TEST=${liveTestsEnabled})`,

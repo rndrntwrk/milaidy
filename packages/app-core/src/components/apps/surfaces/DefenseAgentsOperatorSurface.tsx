@@ -2,7 +2,6 @@ import { Button, Input } from "@miladyai/ui";
 import { useCallback, useMemo, useState } from "react";
 import { client } from "../../../api";
 import { useApp } from "../../../state";
-import { selectLatestRunForApp } from "../extensions/surface";
 import type { AppOperatorSurfaceProps } from "./types";
 
 function DetailCard({ label, value }: { label: string; value: string }) {
@@ -45,6 +44,7 @@ function statusTone(status: string): string {
 export function DefenseAgentsOperatorSurface({
   appName,
   variant = "detail",
+  focus = "all",
 }: AppOperatorSurfaceProps) {
   const { appRuns } = useApp();
   const availableRuns = Array.isArray(appRuns) ? appRuns : [];
@@ -90,20 +90,22 @@ export function DefenseAgentsOperatorSurface({
       ? `Version ${telemetry.strategyVersion}`
       : "Ready after launch";
   const surfaceTitle =
-    variant === "live" ? "Defense Live Dashboard" : "Live Operator Surface";
+    variant === "live"
+      ? "Defense Live Dashboard"
+      : variant === "running"
+        ? "Defense Run Surface"
+        : "Live Operator Surface";
+  const showDashboard = focus !== "chat";
+  const showChat = focus !== "dashboard";
 
   const handleSendMessage = useCallback(async () => {
     const content = operatorMessage.trim();
-    if (!run?.session?.sessionId || content.length === 0 || sending) return;
+    if (!run || content.length === 0 || sending) return;
 
     setSending(true);
     setStatusMessage(null);
     try {
-      const response = await client.sendAppSessionMessage(
-        appName,
-        run.session.sessionId,
-        content,
-      );
+      const response = await client.sendAppRunMessage(run.runId, content);
       setOperatorMessage("");
       setStatusMessage(response.message ?? "Operator message sent.");
     } catch (error) {
@@ -115,20 +117,16 @@ export function DefenseAgentsOperatorSurface({
     } finally {
       setSending(false);
     }
-  }, [appName, operatorMessage, run?.session?.sessionId, sending]);
+  }, [operatorMessage, run, sending]);
 
   const handlePrompt = useCallback(
     async (prompt: string) => {
-      if (!run?.session?.sessionId || sending) return;
+      if (!run || sending) return;
 
       setSending(true);
       setStatusMessage(null);
       try {
-        const response = await client.sendAppSessionMessage(
-          appName,
-          run.session.sessionId,
-          prompt,
-        );
+        const response = await client.sendAppRunMessage(run.runId, prompt);
         setStatusMessage(response.message ?? "Suggested prompt sent.");
       } catch (error) {
         setStatusMessage(
@@ -140,7 +138,7 @@ export function DefenseAgentsOperatorSurface({
         setSending(false);
       }
     },
-    [appName, run?.session?.sessionId, sending],
+    [run, sending],
   );
 
   if (!run) {
@@ -184,7 +182,9 @@ export function DefenseAgentsOperatorSurface({
       data-testid={
         variant === "live"
           ? "defense-live-operator-surface"
-          : "defense-detail-operator-surface"
+          : variant === "running"
+            ? "defense-running-operator-surface"
+            : "defense-detail-operator-surface"
       }
     >
       <div className="flex flex-wrap items-center gap-2">
@@ -201,130 +201,138 @@ export function DefenseAgentsOperatorSurface({
         </span>
       </div>
 
-      <div className="grid gap-2 md:grid-cols-2">
-        <DetailCard
-          label="Agent Status"
-          value={`${heroClass} ${heroLevel} in ${heroLane} lane`}
-        />
-        <DetailCard label="Hero Health" value={heroHp} />
-        <DetailCard label="Autoplay Script" value={autoPlayLabel} />
-        <DetailCard label="Strategy Script" value={strategyLabel} />
-      </div>
+      {showDashboard ? (
+        <div className="grid gap-2 md:grid-cols-2">
+          <DetailCard
+            label="Agent Status"
+            value={`${heroClass} ${heroLevel} in ${heroLane} lane`}
+          />
+          <DetailCard label="Hero Health" value={heroHp} />
+          <DetailCard label="Autoplay Script" value={autoPlayLabel} />
+          <DetailCard label="Strategy Script" value={strategyLabel} />
+        </div>
+      ) : null}
 
-      <div className="rounded-[1.4rem] border border-border/35 bg-card/74 p-4 shadow-sm">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
-          Session Summary
-        </div>
-        <p className="mt-2 text-[12px] leading-6 text-muted-strong">
-          {run.summary || run.health.message || "Run active."}
-        </p>
-        <div className="mt-3 grid gap-2 md:grid-cols-2">
-          <DetailCard
-            label="Operator Channel"
-            value={
-              run.session?.canSendCommands
-                ? "Ready for live suggestions and steering."
-                : "Waiting for the live command channel."
-            }
-          />
-          <DetailCard
-            label="Last Verified"
-            value={formatTimestamp(run.lastHeartbeatAt ?? run.updatedAt)}
-          />
-        </div>
-      </div>
-
-      <div className="rounded-[1.4rem] border border-border/35 bg-card/74 p-4 shadow-sm">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
-          Active Scripts
-        </div>
-        <div className="mt-3 grid gap-2 md:grid-cols-2">
-          <DetailCard
-            label="Autoplay Loop"
-            value={
-              telemetry?.autoPlay === true
-                ? "Running lane-defense automation."
-                : "Standing by for operator-led play."
-            }
-          />
-          <DetailCard
-            label="Strategy Review"
-            value={
-              typeof telemetry?.bestStrategyVersion === "number"
-                ? `Tracking best version ${telemetry.bestStrategyVersion}.`
-                : "Scoring strategy performance in-session."
-            }
-          />
-          <DetailCard
-            label="Viewer Shell"
-            value={
-              run.viewer
-                ? "Local spectator shell is available for stable viewing."
-                : "Viewer shell unavailable."
-            }
-          />
-          <DetailCard
-            label="Operator Steering"
-            value={
-              run.session?.canSendCommands
-                ? "Chat guidance is live."
-                : "Command bridge is reconnecting."
-            }
-          />
-        </div>
-      </div>
-
-      <div className="rounded-[1.4rem] border border-border/35 bg-card/74 p-4 shadow-sm">
-        <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
-          Steering
-        </div>
-        <div className="mt-3 grid gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
-          <Input
-            value={operatorMessage}
-            onChange={(event) => setOperatorMessage(event.target.value)}
-            placeholder="Tell the hero how to rotate, defend, or adapt the current strategy."
-            className="min-h-11 rounded-xl"
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey) {
-                event.preventDefault();
-                void handleSendMessage();
-              }
-            }}
-            disabled={!run.session?.sessionId}
-          />
-          <Button
-            type="button"
-            className="min-h-11 rounded-xl px-4 shadow-sm"
-            onClick={() => void handleSendMessage()}
-            disabled={
-              sending ||
-              !run.session?.sessionId ||
-              operatorMessage.trim().length === 0
-            }
-          >
-            {sending ? "Sending" : "Send"}
-          </Button>
-        </div>
-        {run.session?.suggestedPrompts?.length ? (
-          <div className="mt-3 flex flex-wrap gap-2">
-            {run.session.suggestedPrompts.map((prompt) => (
-              <Button
-                key={prompt}
-                type="button"
-                variant="outline"
-                size="sm"
-                className="min-h-9 rounded-xl px-3 shadow-sm"
-                onClick={() => void handlePrompt(prompt)}
-                disabled={sending}
-              >
-                {prompt}
-              </Button>
-            ))}
+      {showDashboard ? (
+        <div className="rounded-[1.4rem] border border-border/35 bg-card/74 p-4 shadow-sm">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+            Session Summary
           </div>
-        ) : null}
-      </div>
+          <p className="mt-2 text-[12px] leading-6 text-muted-strong">
+            {run.summary || run.health.message || "Run active."}
+          </p>
+          <div className="mt-3 grid gap-2 md:grid-cols-2">
+            <DetailCard
+              label="Operator Channel"
+              value={
+                run.session?.canSendCommands
+                  ? "Ready for live suggestions and steering."
+                  : "Waiting for the live command channel."
+              }
+            />
+            <DetailCard
+              label="Last Verified"
+              value={formatTimestamp(run.lastHeartbeatAt ?? run.updatedAt)}
+            />
+          </div>
+        </div>
+      ) : null}
 
-      {recentActivity.length > 0 ? (
+      {showDashboard ? (
+        <div className="rounded-[1.4rem] border border-border/35 bg-card/74 p-4 shadow-sm">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+            Active Scripts
+          </div>
+          <div className="mt-3 grid gap-2 md:grid-cols-2">
+            <DetailCard
+              label="Autoplay Loop"
+              value={
+                telemetry?.autoPlay === true
+                  ? "Running lane-defense automation."
+                  : "Standing by for operator-led play."
+              }
+            />
+            <DetailCard
+              label="Strategy Review"
+              value={
+                typeof telemetry?.bestStrategyVersion === "number"
+                  ? `Tracking best version ${telemetry.bestStrategyVersion}.`
+                  : "Scoring strategy performance in-session."
+              }
+            />
+            <DetailCard
+              label="Viewer Shell"
+              value={
+                run.viewer
+                  ? "Local spectator shell is available for stable viewing."
+                  : "Viewer shell unavailable."
+              }
+            />
+            <DetailCard
+              label="Operator Steering"
+              value={
+                run.session?.canSendCommands
+                  ? "Chat guidance is live."
+                  : "Command bridge is reconnecting."
+              }
+            />
+          </div>
+        </div>
+      ) : null}
+
+      {showChat ? (
+        <div className="rounded-[1.4rem] border border-border/35 bg-card/74 p-4 shadow-sm">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
+            Steering
+          </div>
+          <div className="mt-3 grid gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
+            <Input
+              value={operatorMessage}
+              onChange={(event) => setOperatorMessage(event.target.value)}
+              placeholder="Tell the hero how to rotate, defend, or adapt the current strategy."
+              className="min-h-11 rounded-xl"
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault();
+                  void handleSendMessage();
+                }
+              }}
+              disabled={!run.session?.sessionId}
+            />
+            <Button
+              type="button"
+              className="min-h-11 rounded-xl px-4 shadow-sm"
+              onClick={() => void handleSendMessage()}
+              disabled={
+                sending ||
+                !run.session?.canSendCommands ||
+                operatorMessage.trim().length === 0
+              }
+            >
+              {sending ? "Sending" : "Send"}
+            </Button>
+          </div>
+          {run.session?.suggestedPrompts?.length ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {run.session.suggestedPrompts.map((prompt) => (
+                <Button
+                  key={prompt}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="min-h-9 rounded-xl px-3 shadow-sm"
+                  onClick={() => void handlePrompt(prompt)}
+                  disabled={sending}
+                >
+                  {prompt}
+                </Button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {showChat && recentActivity.length > 0 ? (
         <div className="rounded-[1.4rem] border border-border/35 bg-card/74 p-4 shadow-sm">
           <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
             Recent Behavior

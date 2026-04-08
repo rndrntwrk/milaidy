@@ -34,6 +34,7 @@ import {
 import dotenv from "dotenv";
 import { ethers } from "ethers";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { describeIf } from "../../../test/helpers/conditional-tests.ts";
 
 // ---------------------------------------------------------------------------
 // Environment Setup
@@ -66,11 +67,11 @@ const LENS_PLUGIN_IMPORT = resolveLensPluginImportSpecifier();
 const hasPlugin = LENS_PLUGIN_IMPORT !== null;
 
 // Plugin-dependent tests (need @elizaos/plugin-lens installed)
-const describeIfPluginAvailable = hasPlugin ? describe : describe.skip;
+const describeIfPluginAvailable = describeIf(hasPlugin);
 
 // API-level live tests (need creds only, plugin NOT required)
-const describeIfLive = runLiveTests ? describe : describe.skip;
-const describeIfLiveWrite = runLiveWriteTests ? describe : describe.skip;
+const describeIfLive = describeIf(runLiveTests);
+const describeIfLiveWrite = describeIf(runLiveWriteTests);
 
 // Lens V3 GraphQL API
 const RATE_LIMIT_DELAY_MS = 500;

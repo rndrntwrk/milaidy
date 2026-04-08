@@ -3,7 +3,7 @@ import http from "node:http";
 import type { AddressInfo } from "node:net";
 import os from "node:os";
 import path from "node:path";
-import { AgentRuntime, createCharacter } from "@elizaos/core";
+import { AgentRuntime, createCharacter, ModelType } from "@elizaos/core";
 import pluginSql from "@elizaos/plugin-sql";
 import {
   afterAll,
@@ -68,6 +68,24 @@ function buildBrowserActionResponse(params: Record<string, string | boolean>): {
     simple: false,
     params: buildBrowserActionParams(params),
   };
+}
+
+function serializeBrowserActionResponse(response: {
+  thought: string;
+  actions: string;
+  text: string;
+  simple: boolean;
+  params: string;
+}): string {
+  const fields = [
+    `<thought>${escapeXml(response.thought)}</thought>`,
+    `<actions>${escapeXml(response.actions)}</actions>`,
+    `<text>${escapeXml(response.text)}</text>`,
+    `<simple>${response.simple ? "true" : "false"}</simple>`,
+    `<params>${response.params}</params>`,
+  ].join("");
+
+  return `<response>${fields}</response>`;
 }
 
 async function startLocalSiteFixture(): Promise<LocalSiteFixture> {
@@ -174,73 +192,82 @@ describe("Browser workspace agent chat E2E", () => {
     runtime.setSetting("CONTINUE_AFTER_ACTIONS", "false");
     runtime.setSetting("USE_MULTI_STEP", "false");
     vi.spyOn(runtime, "isCheckShouldRespondEnabled").mockReturnValue(false);
-    vi.spyOn(runtime, "dynamicPromptExecFromState").mockImplementation(
+    runtime.registerModel(
+      ModelType.ACTION_PLANNER,
       async () => {
         if (plannerScenario === "form") {
-          return buildBrowserActionResponse({
-            operation: "batch",
-            stepsJson: JSON.stringify([
-              {
-                subaction: "open",
-                show: true,
-                url: siteFixture.formUrl,
-              },
-              {
-                subaction: "find",
-                findBy: "label",
-                action: "fill",
-                text: "Agent name",
-                value: "Milady",
-              },
-              {
-                subaction: "select",
-                findBy: "label",
-                text: "Plan",
-                value: "pro",
-              },
-              {
-                subaction: "check",
-                findBy: "label",
-                text: "Accept terms",
-              },
-              {
-                subaction: "find",
-                findBy: "role",
-                role: "button",
-                name: "Continue",
-                action: "click",
-              },
-              {
-                subaction: "get",
-                selector: "h1",
-                getMode: "text",
-              },
-            ]),
-          });
+          return serializeBrowserActionResponse(
+            buildBrowserActionResponse({
+              operation: "batch",
+              stepsJson: JSON.stringify([
+                {
+                  subaction: "open",
+                  show: true,
+                  url: siteFixture.formUrl,
+                },
+                {
+                  subaction: "find",
+                  findBy: "label",
+                  action: "fill",
+                  text: "Agent name",
+                  value: "Milady",
+                },
+                {
+                  subaction: "select",
+                  findBy: "label",
+                  text: "Plan",
+                  value: "pro",
+                },
+                {
+                  subaction: "check",
+                  findBy: "label",
+                  text: "Accept terms",
+                },
+                {
+                  subaction: "find",
+                  findBy: "role",
+                  role: "button",
+                  name: "Continue",
+                  action: "click",
+                },
+                {
+                  subaction: "get",
+                  selector: "h1",
+                  getMode: "text",
+                },
+              ]),
+            }),
+          );
         }
 
         switch (plannerTurn++) {
           case 0:
-            return buildBrowserActionResponse({
-              operation: "open",
-              show: true,
-              url: siteFixture.counterUrl,
-            });
+            return serializeBrowserActionResponse(
+              buildBrowserActionResponse({
+                operation: "open",
+                show: true,
+                url: siteFixture.counterUrl,
+              }),
+            );
           case 1:
-            return buildBrowserActionResponse({
-              operation: "open",
-              show: false,
-              url: siteFixture.tasksUrl,
-            });
+            return serializeBrowserActionResponse(
+              buildBrowserActionResponse({
+                operation: "open",
+                show: false,
+                url: siteFixture.tasksUrl,
+              }),
+            );
           case 2: {
             const tasksTab = await findTabByUrl(siteFixture.tasksUrl);
             if (!tasksTab) {
               throw new Error("Tasks tab was not opened before the show step.");
             }
-            return buildBrowserActionResponse({
-              id: tasksTab.id,
-              operation: "show",
-            });
+            return serializeBrowserActionResponse(
+              buildBrowserActionResponse({
+                id: tasksTab.id,
+                operation: "show",
+              }),
+            );
           }
           case 3: {
             const visibleTab = (await listBrowserWorkspaceTabs()).find(
@@ -249,30 +276,37 @@ describe("Browser workspace agent chat E2E", () => {
             if (!visibleTab) {
               throw new Error("No visible tab was available for navigation.");
             }
-            return buildBrowserActionResponse({
-              id: visibleTab.id,
-              operation: "navigate",
-              url: siteFixture.notesUrl,
-            });
+            return serializeBrowserActionResponse(
+              buildBrowserActionResponse({
+                id: visibleTab.id,
+                operation: "navigate",
+                url: siteFixture.notesUrl,
+              }),
+            );
           }
           case 4:
-            return buildBrowserActionResponse({
-              operation: "list",
-            });
+            return serializeBrowserActionResponse(
+              buildBrowserActionResponse({
+                operation: "list",
+              }),
+            );
           case 5: {
             const counterTab = await findTabByUrl(siteFixture.counterUrl);
             if (!counterTab) {
               throw new Error("Counter tab was not available for closing.");
             }
-            return buildBrowserActionResponse({
-              id: counterTab.id,
-              operation: "close",
-            });
+            return serializeBrowserActionResponse(
+              buildBrowserActionResponse({
+                id: counterTab.id,
+                operation: "close",
+              }),
+            );
           }
           default:
             throw new Error(`Unexpected planner turn ${plannerTurn - 1}.`);
         }
       },
+      "browser-workspace-test",
     );
 
     apiServer = await startApiServer({ port: 0, runtime });
@@ -435,7 +469,13 @@ describe("Browser workspace agent chat E2E", () => {
 
     const tabs = await listBrowserWorkspaceTabs();
     expect(tabs).toHaveLength(1);
-    expect(tabs[0]?.url).toBe(siteFixture.welcomeUrl);
+    const submittedUrl = new URL(tabs[0]?.url ?? "");
+    expect(`${submittedUrl.origin}${submittedUrl.pathname}`).toBe(
+      `${new URL(siteFixture.welcomeUrl).origin}${new URL(siteFixture.welcomeUrl).pathname}`,
+    );
+    expect(submittedUrl.searchParams.get("name")).toBe("Milady");
+    expect(submittedUrl.searchParams.get("plan")).toBe("pro");
+    expect(submittedUrl.searchParams.get("terms")).toBe("yes");
     expect(tabs[0]?.visible).toBe(true);
   });
 });

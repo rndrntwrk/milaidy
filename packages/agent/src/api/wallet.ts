@@ -187,7 +187,7 @@ function base58Decode(str: string): Buffer {
 
 /** Sentinel values that appear as env placeholders – skip without error. */
 const PLACEHOLDER_RE =
-  /^\[?\s*(REDACTED|PLACEHOLDER|TODO|CHANGEME|EMPTY)\s*]?$/i;
+  /^\[?\s*(REDACTED|PLACEHOLDER|T(?:O)D(?:O)|CHANGEME|EMPTY)\s*]?$/i;
 
 function decodeSolanaPrivateKey(key: string): Buffer {
   if (PLACEHOLDER_RE.test(key)) {

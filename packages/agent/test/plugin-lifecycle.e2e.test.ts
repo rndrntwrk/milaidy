@@ -5,8 +5,12 @@
  * Starts a real API server (no runtime) to test the plugin management
  * flow end-to-end through HTTP.
  */
+import fs from "node:fs/promises";
 import http from "node:http";
+import os from "node:os";
+import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { saveEnv } from "../../../test/helpers/test-utils";
 import { startApiServer } from "../src/api/server";
 
 // ---------------------------------------------------------------------------
@@ -65,19 +69,61 @@ function getStandardManagedPlugins(
   return plugins.filter(isStandardManagedPlugin);
 }
 
+function buildPluginParamValue(param: Record<string, unknown>): unknown {
+  switch (param.type) {
+    case "number":
+    case "integer":
+      return 1;
+    case "boolean":
+      return true;
+    case "json":
+      return "{}";
+    default:
+      return "test-value-1234567890abcdefghij";
+  }
+}
+
+function buildRequiredPluginConfig(
+  parameters: Array<Record<string, unknown>>,
+): Record<string, unknown> {
+  const config: Record<string, unknown> = {};
+  for (const param of parameters) {
+    if (param.required !== true || typeof param.key !== "string") continue;
+    config[param.key] = buildPluginParamValue(param);
+  }
+  return config;
+}
+
 // ---------------------------------------------------------------------------
 // Test suite
 // ---------------------------------------------------------------------------
 
 describe("Plugin Lifecycle E2E", () => {
   let server: { port: number; close: () => Promise<void> };
+  let stateDir = "";
+  let envBackup: { restore: () => void };
 
   beforeAll(async () => {
+    envBackup = saveEnv(
+      "ELIZA_STATE_DIR",
+      "MILADY_STATE_DIR",
+      "ELIZA_CONFIG_PATH",
+      "MILADY_CONFIG_PATH",
+    );
+    stateDir = await fs.mkdtemp(path.join(os.tmpdir(), "milady-plugin-lifecycle-"));
+    process.env.ELIZA_STATE_DIR = stateDir;
+    process.env.MILADY_STATE_DIR = stateDir;
+    delete process.env.ELIZA_CONFIG_PATH;
+    delete process.env.MILADY_CONFIG_PATH;
     server = await startApiServer({ port: 0 });
   }, 30_000);
 
   afterAll(async () => {
     if (server) await server.close();
+    envBackup.restore();
+    if (stateDir) {
+      await fs.rm(stateDir, { recursive: true, force: true });
+    }
   });
 
   // ===================================================================
@@ -382,10 +428,7 @@ describe("Plugin Lifecycle E2E", () => {
       const requiredParams = (
         provider.parameters as Array<Record<string, unknown>>
       ).filter((pr) => pr.required === true);
-      const config: Record<string, string> = {};
-      for (const param of requiredParams) {
-        config[param.key as string] = "sk-ant-test-1234567890abcdefghij";
-      }
+      const config = buildRequiredPluginConfig(requiredParams);
 
       const { status, data } = await http$(
         server.port,
@@ -416,10 +459,7 @@ describe("Plugin Lifecycle E2E", () => {
       const requiredParams = (
         provider.parameters as Array<Record<string, unknown>>
       ).filter((pr) => pr.required === true);
-      const config: Record<string, string> = {};
-      for (const param of requiredParams) {
-        config[param.key as string] = "test-value-1234567890abcdefghij";
-      }
+      const config = buildRequiredPluginConfig(requiredParams);
 
       await http$(server.port, "PUT", `/api/plugins/${provider.id}`, {
         config,
@@ -445,7 +485,10 @@ describe("Plugin Lifecycle E2E", () => {
       const plugins = listData.plugins as Array<Record<string, unknown>>;
       const withNonSensitive = plugins.find((p) =>
         (p.parameters as Array<Record<string, unknown>>).some(
-          (pr) => pr.required === true && pr.sensitive === false,
+          (pr) =>
+            pr.required === true &&
+            pr.sensitive === false &&
+            pr.type === "string",
         ),
       );
       if (!withNonSensitive) return;
@@ -454,21 +497,17 @@ describe("Plugin Lifecycle E2E", () => {
         Record<string, unknown>
       >;
       const targetParam = allParams.find(
-        (pr) => pr.required === true && pr.sensitive === false,
+        (pr) =>
+          pr.required === true &&
+          pr.sensitive === false &&
+          pr.type === "string",
       );
       if (!targetParam) return;
 
       // Must set ALL required params for PUT to succeed (validation checks them all)
-      const config: Record<string, string> = {};
+      const config = buildRequiredPluginConfig(allParams);
       const testValue = "lifecycle-test-value-12345";
-      for (const pr of allParams) {
-        if (pr.required) {
-          config[pr.key as string] =
-            pr.key === targetParam.key
-              ? testValue
-              : "placeholder-required-value-12345";
-        }
-      }
+      config[targetParam.key as string] = testValue;
 
       const { status } = await http$(
         server.port,
@@ -519,10 +558,7 @@ describe("Plugin Lifecycle E2E", () => {
         const requiredParams = (
           needsConfig.parameters as Array<Record<string, unknown>>
         ).filter((pr) => pr.required === true);
-        const config: Record<string, string> = {};
-        for (const param of requiredParams) {
-          config[param.key as string] = "lifecycle-roundtrip-1234567890";
-        }
+        const config = buildRequiredPluginConfig(requiredParams);
         const { status: configStatus } = await http$(
           server.port,
           "PUT",

@@ -1,18 +1,13 @@
-import type { DatabaseSync as DatabaseSyncType } from "node:sqlite";
 import { PGlite } from "@electric-sql/pglite";
 import type { IAgentRuntime } from "@elizaos/core";
 import { afterEach, describe, expect, it } from "vitest";
+import { describeIf } from "../../../../test/helpers/conditional-tests.ts";
 import { listTableColumns } from "./sql";
-
-let DatabaseSync: typeof import("node:sqlite").DatabaseSync;
-const hasNodeSqlite = await (async () => {
-  try {
-    ({ DatabaseSync } = await import("node:sqlite"));
-    return true;
-  } catch {
-    return false;
-  }
-})();
+import {
+  DatabaseSync,
+  hasSqlite,
+  type SqliteDatabaseSync,
+} from "../test-utils/sqlite-compat";
 
 type SqlQuery = {
   queryChunks?: Array<{ value?: unknown }>;
@@ -34,11 +29,11 @@ function extractSqlText(query: SqlQuery): string {
     .join("");
 }
 
-describe.skipIf(!hasNodeSqlite)("lifeops sql helpers", () => {
-  let sqlite: DatabaseSyncType | null = null;
+describeIf(hasSqlite)("lifeops sql helpers", () => {
+  let sqlite: SqliteDatabaseSync | null = null;
   let pg: PGlite | null = null;
 
-  function requireSqlite(): DatabaseSync {
+  function requireSqlite(): SqliteDatabaseSync {
     if (!sqlite) {
       throw new Error("SQLite test database unavailable");
     }

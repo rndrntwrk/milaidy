@@ -43,6 +43,7 @@ function normalizeSubaction(
     case "focus":
     case "forward":
     case "get":
+    case "goto":
     case "hide":
     case "hover":
     case "inspect":
@@ -63,7 +64,12 @@ function normalizeSubaction(
     case "type":
     case "uncheck":
     case "wait":
+      if (value.trim().toLowerCase() === "goto") {
+        return "navigate";
+      }
       return value.trim().toLowerCase() as BrowserWorkspaceSubaction;
+    case "read":
+      return "get";
     default:
       return null;
   }
@@ -184,6 +190,63 @@ function parseCommandRecord(
   );
   if (!subaction) return null;
 
+  const resolvedFindBy =
+    normalizeFindBy(
+      typeof raw.findBy === "string"
+        ? raw.findBy
+        : typeof raw.by === "string"
+          ? raw.by
+          : typeof raw.label === "string"
+            ? "label"
+            : undefined,
+    ) ?? undefined;
+  const rawLabel =
+    typeof raw.label === "string" ? raw.label : undefined;
+  const rawTargetText =
+    typeof raw.targetText === "string" ? raw.targetText : undefined;
+  const rawTextValue =
+    typeof raw.text === "string" ? raw.text : undefined;
+  const rawValueValue =
+    typeof raw.value === "string" ? raw.value : undefined;
+  const rawOptionValue =
+    typeof raw.option === "string" ? raw.option : undefined;
+  const usesByLocatorValue =
+    typeof raw.by === "string" &&
+    typeof raw.findBy !== "string" &&
+    typeof raw.label !== "string";
+  const writesTextValue = [
+    "fill",
+    "keyboardinserttext",
+    "keyboardtype",
+    "select",
+    "type",
+  ].includes(subaction);
+  const rawText =
+    rawLabel ??
+    rawTargetText ??
+    (usesByLocatorValue &&
+    rawValueValue &&
+    (rawTextValue || rawOptionValue || !writesTextValue)
+      ? rawValueValue
+      : rawTextValue);
+  const inferredWriteValue =
+    typeof rawText === "string" &&
+    ["fill", "keyboardinserttext", "keyboardtype", "select", "type"].includes(
+      subaction,
+    ) &&
+    (typeof raw.selector === "string" ||
+      typeof raw.findBy === "string" ||
+      typeof raw.label === "string")
+      ? rawText
+      : undefined;
+  const parsedValue =
+    rawOptionValue ??
+    (writesTextValue && usesByLocatorValue && rawValueValue && rawTextValue
+      ? rawTextValue
+      : undefined) ??
+    rawValueValue ??
+    inferredWriteValue;
+
   return {
     action: normalizeFindAction(
       typeof raw.action === "string" ? raw.action : undefined,
@@ -193,26 +256,18 @@ function parseCommandRecord(
     url: typeof raw.url === "string" ? raw.url : undefined,
     title: typeof raw.title === "string" ? raw.title : undefined,
     script: typeof raw.script === "string" ? raw.script : undefined,
-    show: parseBooleanLike(raw.show),
+    show: parseBooleanLike(raw.show) ?? parseBooleanLike(raw.visible),
     partition: typeof raw.partition === "string" ? raw.partition : undefined,
     direction:
       normalizeScrollDirection(
         typeof raw.direction === "string" ? raw.direction : undefined,
       ) ?? undefined,
     exact: parseBooleanLike(raw.exact),
-    findBy:
-      normalizeFindBy(
-        typeof raw.findBy === "string" ? raw.findBy : undefined,
-      ) ?? undefined,
+    findBy: resolvedFindBy,
     index: parseNumberLike(raw.index),
     selector: typeof raw.selector === "string" ? raw.selector : undefined,
-    text:
-      typeof raw.text === "string"
-        ? raw.text
-        : typeof raw.targetText === "string"
-          ? raw.targetText
-          : undefined,
-    value: typeof raw.value === "string" ? raw.value : undefined,
+    text: rawText,
+    value: parsedValue,
     attribute:
       typeof raw.attribute === "string"
         ? raw.attribute
@@ -229,7 +284,14 @@ function parseCommandRecord(
     ) ?? undefined,
     name: typeof raw.name === "string" ? raw.name : undefined,
     pixels: parseNumberLike(raw.pixels),
-    role: typeof raw.role === "string" ? raw.role : undefined,
+    role:
+      typeof raw.role === "string"
+        ? raw.role
+        : typeof raw.by === "string" &&
+            raw.by.trim().toLowerCase() === "role" &&
+            typeof raw.name === "string"
+          ? "button"
+          : undefined,
     state:
       normalizeWaitState(
         typeof raw.state === "string" ? raw.state : undefined,
@@ -294,6 +356,45 @@ function parseRequest(
       : (messageText.match(TAB_ID_RE)?.[1] ?? undefined);
   const steps =
     parseStepsParam(params.steps) ?? parseStepsParam(params.stepsJson);
+  const resolvedFindBy =
+    normalizeFindBy(
+      typeof params.findBy === "string"
+        ? params.findBy
+        : typeof params.by === "string"
+          ? params.by
+          : typeof params.label === "string"
+            ? "label"
+            : undefined,
+    ) ?? undefined;
+  const rawLabel =
+    typeof params.label === "string" ? params.label : undefined;
+  const rawTargetText =
+    typeof params.targetText === "string" ? params.targetText : undefined;
+  const rawTextValue =
+    typeof params.text === "string" ? params.text : undefined;
+  const rawValueValue =
+    typeof params.value === "string" ? params.value : undefined;
+  const rawOptionValue =
+    typeof params.option === "string" ? params.option : undefined;
+  const usesByLocatorValue =
+    typeof params.by === "string" &&
+    typeof params.findBy !== "string" &&
+    typeof params.label !== "string";
+  const writesTextValue = [
+    "fill",
+    "keyboardinserttext",
+    "keyboardtype",
+    "select",
+    "type",
+  ];
+  const rawText =
+    rawLabel ??
+    rawTargetText ??
+    (usesByLocatorValue &&
+    rawValueValue &&
+    (rawTextValue || rawOptionValue || !writesTextValue.includes(fromParams ?? ""))
+      ? rawValueValue
+      : rawTextValue);
   const lower = messageText.toLowerCase();
   const inferred =
     fromParams ??
@@ -359,6 +460,23 @@ function parseRequest(
 
   if (!inferred) return null;
 
+  const inferredWriteValue =
+    typeof rawText === "string" &&
+    writesTextValue.includes(inferred) &&
+    (typeof params.selector === "string" || typeof params.findBy === "string")
+      ? rawText
+      : undefined;
+  const parsedValue =
+    rawOptionValue ??
+    (writesTextValue.includes(inferred) &&
+    usesByLocatorValue &&
+    rawValueValue &&
+    rawTextValue
+      ? rawTextValue
+      : undefined) ??
+    rawValueValue ??
+    inferredWriteValue;
+
   return {
     action:
       normalizeFindAction(
@@ -369,7 +487,7 @@ function parseRequest(
     url,
     title: typeof params.title === "string" ? params.title : undefined,
     script: typeof params.script === "string" ? params.script : undefined,
-    show: parseBooleanLike(params.show),
+    show: parseBooleanLike(params.show) ?? parseBooleanLike(params.visible),
     partition:
       typeof params.partition === "string" ? params.partition : undefined,
     direction:
@@ -377,19 +495,11 @@ function parseRequest(
         typeof params.direction === "string" ? params.direction : undefined,
       ) ?? undefined,
     exact: parseBooleanLike(params.exact),
-    findBy:
-      normalizeFindBy(
-        typeof params.findBy === "string" ? params.findBy : undefined,
-      ) ?? undefined,
+    findBy: resolvedFindBy,
     index: parseNumberLike(params.index),
     selector: typeof params.selector === "string" ? params.selector : undefined,
-    text:
-      typeof params.text === "string"
-        ? params.text
-        : typeof params.targetText === "string"
-          ? params.targetText
-          : undefined,
-    value: typeof params.value === "string" ? params.value : undefined,
+    text: rawText,
+    value: parsedValue,
     attribute:
       typeof params.attribute === "string"
         ? params.attribute
@@ -407,7 +517,14 @@ function parseRequest(
       ) ?? undefined,
     name: typeof params.name === "string" ? params.name : undefined,
     pixels: parseNumberLike(params.pixels),
-    role: typeof params.role === "string" ? params.role : undefined,
+    role:
+      typeof params.role === "string"
+        ? params.role
+        : typeof params.by === "string" &&
+            params.by.trim().toLowerCase() === "role" &&
+            typeof params.name === "string"
+          ? "button"
+          : undefined,
     state:
       normalizeWaitState(
         typeof params.state === "string" ? params.state : undefined,

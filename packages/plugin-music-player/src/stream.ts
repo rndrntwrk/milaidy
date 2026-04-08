@@ -97,8 +97,8 @@ export class ContinuousAudioStream extends PassThrough {
     this.isCrossFading = true;
     this._crossFadeStartTime = Date.now();
 
-    // For now, simple cross-fade: stop current, start next
-    // TODO: Implement proper volume-based cross-fade when volume control is available
+    // Current implementation performs a clean handoff once the active stream
+    // reaches its end. True volume-shaped fades require a mixer stage.
     this.currentTrackStream.once('end', () => {
       if (this.nextTrackStream) {
         // Switch to next track
@@ -152,4 +152,3 @@ export class ContinuousAudioStream extends PassThrough {
     return this.isCrossFading;
   }
 }
-

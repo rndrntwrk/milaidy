@@ -17,6 +17,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { ethers } from "ethers";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { describeIf } from "../../../test/helpers/conditional-tests.ts";
 import { DropService } from "../src/api/drop-service";
 import { RegistryService } from "../src/api/registry-service";
 import { TxService } from "../src/api/tx-service";
@@ -75,8 +76,7 @@ function hasContractArtifacts(): boolean {
   );
 }
 
-const describeAnvil =
-  hasAnvilBinary() && hasContractArtifacts() ? describe : describe.skip;
+const describeAnvil = describeIf(hasAnvilBinary() && hasContractArtifacts());
 
 // ---------------------------------------------------------------------------
 // Test Suite

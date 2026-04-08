@@ -66,18 +66,15 @@ import * as pluginCron from "@elizaos/plugin-cron";
 import * as pluginElizacloud from "@elizaos/plugin-elizacloud";
 import * as pluginExperience from "@elizaos/plugin-experience";
 import * as pluginForm from "@elizaos/plugin-form";
-import * as pluginKnowledge from "@elizaos/plugin-knowledge";
 import * as pluginLocalEmbedding from "@elizaos/plugin-local-embedding";
 import * as pluginOllama from "@elizaos/plugin-ollama";
 import * as pluginOpenai from "@elizaos/plugin-openai";
 import * as pluginPdf from "@elizaos/plugin-pdf";
 import * as pluginPersonality from "@elizaos/plugin-personality";
 import * as pluginPluginManager from "@elizaos/plugin-plugin-manager";
-import * as pluginRolodex from "@elizaos/plugin-rolodex";
 import * as pluginSecretsManager from "@elizaos/plugin-secrets-manager";
 import * as pluginShell from "@elizaos/plugin-shell";
 import * as pluginSql from "@elizaos/plugin-sql";
-import * as pluginTrajectoryLogger from "@elizaos/plugin-trajectory-logger";
 import * as pluginTrust from "@elizaos/plugin-trust";
 import * as pluginRoles from "@miladyai/plugin-roles";
 import * as pluginSelfControl from "@miladyai/plugin-selfcontrol";
@@ -216,9 +213,6 @@ export const STATIC_ELIZA_PLUGINS: Record<string, unknown> = {
   "@elizaos/plugin-local-embedding": pluginLocalEmbedding,
   "@elizaos/plugin-secrets-manager": pluginSecretsManager,
   "@elizaos/plugin-form": pluginForm,
-  "@elizaos/plugin-knowledge": pluginKnowledge,
-  "@elizaos/plugin-rolodex": pluginRolodex,
-  "@elizaos/plugin-trajectory-logger": pluginTrajectoryLogger,
   "@elizaos/plugin-agent-orchestrator": pluginAgentOrchestrator,
   "@elizaos/plugin-cron": pluginCron,
   "@elizaos/plugin-shell": pluginShell,
@@ -286,7 +280,7 @@ export interface ResolvedPlugin {
  * It preserves the runtime shape used by `sandboxAuditHandler`:
  * - `direction` and `url` are required
  * - `tokenIds` tracks tokens associated with the audit payload
- * TODO(elizaos): replace/remove when upstream re-exports this type.
+ * Remove this local shim once the dependency line used here re-exports it.
  */
 type SandboxFetchAuditEvent = {
   direction: "inbound" | "outbound";
@@ -780,6 +774,10 @@ async function waitForTrajectoryLoggerService(
   context: string,
   timeoutMs = 3000,
 ): Promise<void> {
+  if (!runtime.isTrajectoriesEnabled()) {
+    return;
+  }
+
   const runtimeLike = runtime as unknown as TrajectoryLoggerRuntimeLike;
 
   // Check if already available
@@ -834,6 +832,11 @@ function ensureTrajectoryLoggerEnabled(
   runtime: AgentRuntime,
   context: string,
 ): void {
+  if (!runtime.isTrajectoriesEnabled()) {
+    logger.info(`[eliza] Native trajectories disabled (${context})`);
+    return;
+  }
+
   const trajectoryLogger = runtime.getService("trajectory_logger") as
     | TrajectoryLoggerControl
     | null
@@ -3358,7 +3361,7 @@ export async function startEliza(
     character,
     // advancedCapabilities: true,
     actionPlanning: true,
-    // advancedMemory: true, // Not supported in this version of AgentRuntime
+    // advancedMemory is enabled via character.advancedMemory
     plugins: [elizaPlugin, ...pluginsForRuntime],
     ...(runtimeLogLevel ? { logLevel: runtimeLogLevel } : {}),
     // Sandbox options — only active when mode != "off"
@@ -3597,7 +3600,13 @@ export async function startEliza(
     await prepareRuntimeForTrajectoryCapture(runtime, "runtime.initialize()");
 
     try {
-      await seedBundledKnowledge(runtime);
+      if (runtime.isKnowledgeEnabled()) {
+        await seedBundledKnowledge(runtime);
+      } else {
+        logger.info(
+          "[eliza] Native knowledge disabled; skipping bundled knowledge seeding",
+        );
+      }
     } catch (err) {
       logger.warn(
         `[eliza] Failed to seed bundled knowledge: ${formatError(err)}`,
@@ -4203,8 +4212,8 @@ export async function startInCloudMode(
       logger.info(
         `[eliza] Cloud agent connected (headless). Agent: ${proxy.agentName}`,
       );
-      // Return undefined — the cloud proxy handles everything.
-      // TODO: Wire proxy into the API server for GUI mode.
+      // Return undefined here; GUI cloud mode is handled through the
+      // dedicated cloud proxy routes instead of a local AgentRuntime.
       return undefined;
     }
 

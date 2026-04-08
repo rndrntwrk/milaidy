@@ -15,6 +15,7 @@
  */
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { describeIf } from "../../../test/helpers/conditional-tests.ts";
 import {
   createConversation,
   postConversationMessage,
@@ -54,7 +55,7 @@ const canRun = hasLLM && hasEvmKey;
 // 1. LIVE: AUTHENTICATED FULL FLOW (Auth + Onboarding + Wallet + LLM Chat)
 // ═══════════════════════════════════════════════════════════════════════════
 
-describe.skipIf(!canRun)(
+describeIf(canRun)(
   "Live: Authenticated full flow (LLM + wallet + auth)",
   () => {
     const API_TOKEN = `live-e2e-test-token-${Date.now()}`;
@@ -327,7 +328,7 @@ describe.skipIf(!canRun)(
 // 2. LIVE: TOKEN HEADER VARIANTS WITH LLM
 // ═══════════════════════════════════════════════════════════════════════════
 
-describe.skipIf(!canRun)("Live: Token header variants with LLM", () => {
+describeIf(canRun)("Live: Token header variants with LLM", () => {
   const API_TOKEN = `header-variant-token-${Date.now()}`;
   let port: number;
   let close: () => Promise<void>;
@@ -404,7 +405,7 @@ describe.skipIf(!canRun)("Live: Token header variants with LLM", () => {
 // 3. LIVE: AUTH + CORS + WALLET COMBINED
 // ═══════════════════════════════════════════════════════════════════════════
 
-describe.skipIf(!canRun)("Live: Auth + CORS + wallet combined", () => {
+describeIf(canRun)("Live: Auth + CORS + wallet combined", () => {
   const API_TOKEN = `combined-test-token-${Date.now()}`;
   const EXPORT_TOKEN = `combined-wallet-export-token-${Date.now()}`;
   let port: number;

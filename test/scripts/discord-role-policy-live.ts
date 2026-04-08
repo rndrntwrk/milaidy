@@ -56,6 +56,8 @@ type DiscordMember = {
 	roles?: string[];
 };
 
+const KEEP_ARTIFACTS = process.env.MILADY_KEEP_LIVE_ARTIFACTS === "1";
+
 async function waitFor(
 	predicate: () => Promise<boolean>,
 	message: string,
@@ -162,7 +164,14 @@ async function cleanup(): Promise<void> {
 		await cleanupRuntime?.();
 	} catch {}
 	if (workdir) {
-		fs.rmSync(workdir, { recursive: true, force: true });
+		if (KEEP_ARTIFACTS) {
+			console.log(
+				"[discord-role-policy-live] preserving artifacts",
+				JSON.stringify({ workdir }),
+			);
+		} else {
+			fs.rmSync(workdir, { recursive: true, force: true });
+		}
 	}
 }
 
@@ -424,6 +433,7 @@ async function main(): Promise<void> {
 			allowedDiscordUserId: cozyGuildDetail.owner_id,
 			deniedDiscordUserId: deniedUserId,
 			sessionId: allowedSessionId,
+			workdir,
 			firstFile,
 			secondFile,
 		}),

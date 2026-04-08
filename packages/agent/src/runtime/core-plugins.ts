@@ -10,16 +10,15 @@ export const CORE_PLUGINS: readonly string[] = [
   "@elizaos/plugin-sql", // database adapter — required
   "@elizaos/plugin-local-embedding", // local embeddings — required for memory
   "@elizaos/plugin-form", // form handling for guided user journeys
-  "@elizaos/plugin-knowledge", // RAG knowledge management — required for knowledge tab
-  "@elizaos/plugin-trajectory-logger", // trajectory logging for debugging and RL training
   "@elizaos/plugin-agent-orchestrator", // task-agent orchestration (PTY, coordinator, workspace provisioning)
   "@elizaos/plugin-cron", // scheduled jobs and automation
   "@elizaos/plugin-shell", // shell command execution
   "@elizaos/plugin-agent-skills", // skill execution and marketplace runtime
   "@elizaos/plugin-commands", // slash command handling (skills auto-register as /commands)
   "@elizaos/plugin-plugin-manager", // dynamic plugin management for registry/plugin installs
+  // Native runtime features live inside @elizaos/core now:
+  // knowledge, relationships/rolodex, trajectories.
   // "@elizaos/plugin-secrets-manager", // secrets management — load early, other plugins depend on it
-  // "@elizaos/plugin-rolodex", // contact graph and relationship/social memory
   // "@elizaos/plugin-trust", // trust scoring and policy signals
   "@miladyai/plugin-roles", // role-based access control (OWNER/ADMIN/NONE)
   // "@elizaos/plugin-personality", // personality coherence
