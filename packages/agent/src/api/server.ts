@@ -5953,8 +5953,8 @@ async function handleRequest(
             runtime: typeof state.runtime,
             coordinator?: unknown,
           ) => (
-            req: typeof req,
-            res: typeof res,
+            req: http.IncomingMessage,
+            res: http.ServerResponse,
             pathname: string,
           ) => Promise<boolean>;
           getCoordinator?: (runtime: typeof state.runtime) => unknown;

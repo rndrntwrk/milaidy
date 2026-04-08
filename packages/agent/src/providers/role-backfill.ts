@@ -25,12 +25,13 @@ import {
 import {
   hasConfiguredCanonicalOwner,
   normalizeRole,
+  type RoleName,
   resolveCanonicalOwnerId,
 } from "@miladyai/plugin-roles";
 
 type RolesWorldMetadata = {
   ownership?: { ownerId?: string };
-  roles?: Record<string, string>;
+  roles?: Record<string, RoleName>;
 };
 
 const EMPTY: ProviderResult = {

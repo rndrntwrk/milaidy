@@ -1,5 +1,6 @@
 import {
   type IAgentRuntime,
+  type JsonValue,
   type Memory,
   type MemoryMetadata,
   type MemoryStorageProvider,
@@ -21,7 +22,8 @@ type SessionSummaryRecord = Awaited<
 type SessionSummaryInput = Parameters<
   MemoryStorageProvider["storeSessionSummary"]
 >[0];
-type JsonRecord = Record<string, unknown>;
+type UnknownRecord = Record<string, unknown>;
+type JsonRecord = Record<string, JsonValue>;
 
 type EntityLink = {
   entityA: UUID;
@@ -55,12 +57,70 @@ type AdvancedMemoryEnvelope = {
 const LONG_TERM_MEMORY_TABLE = "long_term_memories";
 const SESSION_SUMMARY_TABLE = "session_summaries";
 
-function isRecord(value: unknown): value is JsonRecord {
+function isRecord(value: unknown): value is UnknownRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function asRecord(value: unknown): JsonRecord | null {
+function asRecord(value: unknown): UnknownRecord | null {
   return isRecord(value) ? value : null;
+}
+
+function toJsonValue(value: unknown): JsonValue | undefined {
+  if (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+  ) {
+    return value;
+  }
+
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => toJsonValue(entry))
+      .filter((entry): entry is JsonValue => entry !== undefined);
+  }
+
+  if (isRecord(value)) {
+    const entries = Object.entries(value)
+      .map(([key, entry]) => {
+        const jsonValue = toJsonValue(entry);
+        return jsonValue === undefined ? null : ([key, jsonValue] as const);
+      })
+      .filter(
+        (entry): entry is readonly [string, JsonValue] => entry !== null,
+      );
+    return Object.fromEntries(entries);
+  }
+
+  return undefined;
+}
+
+function toJsonRecord(value: unknown): JsonRecord | undefined {
+  const jsonValue = toJsonValue(value);
+  return isRecord(jsonValue) ? jsonValue : undefined;
+}
+
+function buildCustomMemoryMetadata(params: {
+  scope: "shared" | "room";
+  timestamp: number;
+  source?: string;
+  advancedMemory: JsonRecord;
+  existing?: UnknownRecord | null;
+}): MemoryMetadata {
+  const metadata: MemoryMetadata = {
+    ...(params.existing ?? {}),
+    type: "custom",
+    scope: params.scope,
+    timestamp: params.timestamp,
+    advancedMemory: params.advancedMemory,
+  };
+
+  if (params.source) {
+    metadata.source = params.source;
+  }
+
+  return metadata;
 }
 
 function asString(value: unknown): string | undefined {
@@ -126,13 +186,13 @@ function getAdvancedMemoryEnvelope(
       | undefined,
     confidence: asNumber(advancedMemory.confidence),
     source: asString(advancedMemory.source),
-    semanticMetadata: asRecord(advancedMemory.semanticMetadata) ?? undefined,
+    semanticMetadata: toJsonRecord(advancedMemory.semanticMetadata),
     messageCount: asNumber(advancedMemory.messageCount),
     lastMessageOffset: asNumber(advancedMemory.lastMessageOffset),
     startTime: asString(advancedMemory.startTime),
     endTime: asString(advancedMemory.endTime),
     topics: asStringArray(advancedMemory.topics),
-    summaryMetadata: asRecord(advancedMemory.summaryMetadata) ?? undefined,
+    summaryMetadata: toJsonRecord(advancedMemory.summaryMetadata),
     updatedAt: asString(advancedMemory.updatedAt),
     lastAccessedAt: asString(advancedMemory.lastAccessedAt),
     accessCount: asNumber(advancedMemory.accessCount),
@@ -144,6 +204,7 @@ export class AdvancedMemoryStorageService
   implements MemoryStorageProvider
 {
   static serviceType = "memoryStorage" as const;
+  private initialized = false;
 
   capabilityDescription =
     "Persistent advanced-memory storage backed by Milady's generic memory tables";
@@ -223,7 +284,12 @@ export class AdvancedMemoryStorageService
 
   private parseLongTermMemory(memory: Memory): LongTermMemoryRecord | null {
     const envelope = getAdvancedMemoryEnvelope(memory);
-    if (!envelope || envelope.kind !== "long_term_memory" || !memory.id) {
+    if (
+      !envelope ||
+      envelope.kind !== "long_term_memory" ||
+      !memory.id ||
+      !memory.agentId
+    ) {
       return null;
     }
 
@@ -251,7 +317,13 @@ export class AdvancedMemoryStorageService
 
   private parseSessionSummary(memory: Memory): SessionSummaryRecord | null {
     const envelope = getAdvancedMemoryEnvelope(memory);
-    if (!envelope || envelope.kind !== "session_summary" || !memory.id) {
+    if (
+      !envelope ||
+      envelope.kind !== "session_summary" ||
+      !memory.id ||
+      !memory.agentId ||
+      !memory.roomId
+    ) {
       return null;
     }
 
@@ -310,6 +382,20 @@ export class AdvancedMemoryStorageService
   ): Promise<LongTermMemoryRecord> {
     const now = new Date();
     const anchorEntityId = await this.getAnchorEntityId(memory.entityId);
+    const advancedMemory = toJsonRecord({
+      kind: "long_term_memory",
+      originalEntityId: memory.entityId,
+      anchorEntityId,
+      category: memory.category,
+      confidence: memory.confidence,
+      source: memory.source,
+      semanticMetadata: memory.metadata,
+      updatedAt: now.toISOString(),
+      accessCount: 0,
+    });
+    if (!advancedMemory) {
+      throw new Error("Long-term memory metadata is not JSON-serializable");
+    }
     const id = await this.runtime.createMemory(
       {
         agentId: this.runtime.agentId,
@@ -317,23 +403,12 @@ export class AdvancedMemoryStorageService
         roomId: this.getLongTermRoomId(anchorEntityId),
         worldId: this.getMemoryWorldId(),
         content: { text: memory.content },
-        metadata: {
-          type: "long_term_memory",
+        metadata: buildCustomMemoryMetadata({
           scope: "shared",
           timestamp: now.getTime(),
           source: memory.source,
-          advancedMemory: {
-            kind: "long_term_memory",
-            originalEntityId: memory.entityId,
-            anchorEntityId,
-            category: memory.category,
-            confidence: memory.confidence,
-            source: memory.source,
-            semanticMetadata: memory.metadata,
-            updatedAt: now.toISOString(),
-            accessCount: 0,
-          },
-        } as MemoryMetadata,
+          advancedMemory,
+        }),
         embedding: memory.embedding,
         createdAt: now.getTime(),
         unique: false,
@@ -403,29 +478,34 @@ export class AdvancedMemoryStorageService
 
     const currentEnvelope = getAdvancedMemoryEnvelope(existing);
     const updatedAt = new Date();
+    const advancedMemory = toJsonRecord({
+      ...(currentEnvelope ?? {}),
+      kind: "long_term_memory",
+      originalEntityId: currentEnvelope?.originalEntityId ?? entityId,
+      anchorEntityId: parsed.entityId,
+      category: updates.category ?? parsed.category,
+      confidence: updates.confidence ?? parsed.confidence,
+      source: updates.source ?? parsed.source,
+      semanticMetadata: updates.metadata ?? parsed.metadata,
+      updatedAt: updatedAt.toISOString(),
+      lastAccessedAt: updates.lastAccessedAt?.toISOString(),
+      accessCount: updates.accessCount ?? parsed.accessCount ?? 0,
+    });
+    if (!advancedMemory) {
+      throw new Error("Updated long-term memory metadata is not JSON-serializable");
+    }
     await this.runtime.updateMemory({
       id,
       content: {
         text: updates.content ?? parsed.content,
       },
-      metadata: {
-        ...(existing.metadata ?? {}),
+      metadata: buildCustomMemoryMetadata({
+        existing: asRecord(existing.metadata),
+        scope: "shared",
         timestamp: updatedAt.getTime(),
         source: updates.source ?? parsed.source,
-        advancedMemory: {
-          ...(currentEnvelope ?? {}),
-          kind: "long_term_memory",
-          originalEntityId: currentEnvelope?.originalEntityId ?? entityId,
-          anchorEntityId: parsed.entityId,
-          category: updates.category ?? parsed.category,
-          confidence: updates.confidence ?? parsed.confidence,
-          source: updates.source ?? parsed.source,
-          semanticMetadata: updates.metadata ?? parsed.metadata,
-          updatedAt: updatedAt.toISOString(),
-          lastAccessedAt: updates.lastAccessedAt?.toISOString(),
-          accessCount: updates.accessCount ?? parsed.accessCount ?? 0,
-        },
-      } as MemoryMetadata,
+        advancedMemory,
+      }),
       ...(updates.embedding ? { embedding: updates.embedding } : {}),
     });
   }
@@ -453,6 +533,20 @@ export class AdvancedMemoryStorageService
     summary: SessionSummaryInput,
   ): Promise<SessionSummaryRecord> {
     const now = new Date();
+    const advancedMemory = toJsonRecord({
+      kind: "session_summary",
+      originalEntityId: summary.entityId,
+      messageCount: summary.messageCount,
+      lastMessageOffset: summary.lastMessageOffset,
+      startTime: summary.startTime.toISOString(),
+      endTime: summary.endTime.toISOString(),
+      topics: summary.topics,
+      summaryMetadata: summary.metadata,
+      updatedAt: now.toISOString(),
+    });
+    if (!advancedMemory) {
+      throw new Error("Session summary metadata is not JSON-serializable");
+    }
     const id = await this.runtime.createMemory(
       {
         agentId: this.runtime.agentId,
@@ -460,22 +554,11 @@ export class AdvancedMemoryStorageService
         roomId: summary.roomId,
         worldId: this.getMemoryWorldId(),
         content: { text: summary.summary },
-        metadata: {
-          type: "session_summary",
+        metadata: buildCustomMemoryMetadata({
           scope: "room",
           timestamp: now.getTime(),
-          advancedMemory: {
-            kind: "session_summary",
-            originalEntityId: summary.entityId,
-            messageCount: summary.messageCount,
-            lastMessageOffset: summary.lastMessageOffset,
-            startTime: summary.startTime.toISOString(),
-            endTime: summary.endTime.toISOString(),
-            topics: summary.topics,
-            summaryMetadata: summary.metadata,
-            updatedAt: now.toISOString(),
-          },
-        } as MemoryMetadata,
+          advancedMemory,
+        }),
         embedding: summary.embedding,
         createdAt: now.getTime(),
         unique: false,
@@ -524,29 +607,32 @@ export class AdvancedMemoryStorageService
 
     const currentEnvelope = getAdvancedMemoryEnvelope(existing);
     const updatedAt = new Date();
+    const advancedMemory = toJsonRecord({
+      ...(currentEnvelope ?? {}),
+      kind: "session_summary",
+      originalEntityId: currentEnvelope?.originalEntityId ?? parsed.entityId,
+      messageCount: updates.messageCount ?? parsed.messageCount,
+      lastMessageOffset: updates.lastMessageOffset ?? parsed.lastMessageOffset,
+      startTime: (updates.startTime ?? parsed.startTime).toISOString(),
+      endTime: (updates.endTime ?? parsed.endTime).toISOString(),
+      topics: updates.topics ?? parsed.topics,
+      summaryMetadata: updates.metadata ?? parsed.metadata,
+      updatedAt: updatedAt.toISOString(),
+    });
+    if (!advancedMemory) {
+      throw new Error("Updated session summary metadata is not JSON-serializable");
+    }
     await this.runtime.updateMemory({
       id,
       content: {
         text: updates.summary ?? parsed.summary,
       },
-      metadata: {
-        ...(existing.metadata ?? {}),
+      metadata: buildCustomMemoryMetadata({
+        existing: asRecord(existing.metadata),
+        scope: "room",
         timestamp: updatedAt.getTime(),
-        advancedMemory: {
-          ...(currentEnvelope ?? {}),
-          kind: "session_summary",
-          originalEntityId:
-            currentEnvelope?.originalEntityId ?? parsed.entityId,
-          messageCount: updates.messageCount ?? parsed.messageCount,
-          lastMessageOffset:
-            updates.lastMessageOffset ?? parsed.lastMessageOffset,
-          startTime: (updates.startTime ?? parsed.startTime).toISOString(),
-          endTime: (updates.endTime ?? parsed.endTime).toISOString(),
-          topics: updates.topics ?? parsed.topics,
-          summaryMetadata: updates.metadata ?? parsed.metadata,
-          updatedAt: updatedAt.toISOString(),
-        },
-      } as MemoryMetadata,
+        advancedMemory,
+      }),
       ...(updates.embedding ? { embedding: updates.embedding } : {}),
     });
   }

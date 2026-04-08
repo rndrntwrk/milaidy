@@ -963,6 +963,19 @@ describe("App session launch metadata", () => {
           }),
         );
       }
+      if (
+        url.includes("/api/agents/11111111-1111-1111-1111-111111111111/thoughts")
+      ) {
+        return Promise.resolve(
+          jsonResponse(
+            {
+              success: false,
+              error: "thoughts unavailable",
+            },
+            { status: 404 },
+          ),
+        );
+      }
       return Promise.reject(new Error(`Unexpected Hyperscape fetch: ${url}`));
     });
 
@@ -1082,6 +1095,19 @@ describe("App session launch metadata", () => {
             nearbyLocations: [],
             availableGoals: [],
           }),
+        );
+      }
+      if (
+        url.includes("/api/agents/22222222-2222-2222-2222-222222222222/thoughts")
+      ) {
+        return Promise.resolve(
+          jsonResponse(
+            {
+              success: false,
+              error: "thoughts unavailable",
+            },
+            { status: 404 },
+          ),
         );
       }
       return Promise.reject(new Error(`Unexpected Hyperscape fetch: ${url}`));

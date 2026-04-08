@@ -65,6 +65,15 @@ const PRODUCTION_BABYLON_CLIENT_URL = "https://staging.babylon.market";
 const BABYLON_AGENT_SESSION_TOKEN_KEY = "BABYLON_AGENT_SESSION_TOKEN";
 const BABYLON_AGENT_SESSION_EXPIRES_AT_KEY = "BABYLON_AGENT_SESSION_EXPIRES_AT";
 const SAFE_APP_URL_PROTOCOLS = new Set(["http:", "https:"]);
+const SAFE_APP_TEMPLATE_ENV_KEYS = new Set([
+  "BABYLON_CLIENT_URL",
+  "BOT_NAME",
+  "HYPERSCAPE_CHARACTER_ID",
+  "HYPERSCAPE_CLIENT_URL",
+  "RS_SDK_BOT_NAME",
+  "RS_SDK_BOT_PASSWORD",
+  "RS_SDK_SERVER_URL",
+]);
 const RUN_REFRESH_MIN_INTERVAL_MS = 5_000;
 const MAX_RUN_EVENTS = 20;
 
@@ -692,14 +701,27 @@ async function prepareBabylonLaunch(
   ];
 }
 
-function substituteTemplateVars(raw: string): string {
+function readSafeTemplateEnv(key: string): string | undefined {
+  if (!SAFE_APP_TEMPLATE_ENV_KEYS.has(key)) {
+    return undefined;
+  }
+  const value = process.env[key];
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : undefined;
+}
+
+function substituteTemplateVars(
+  raw: string,
+  options?: { preserveUnknown?: boolean },
+): string {
+  const preserveUnknown = options?.preserveUnknown ?? true;
   return raw.replace(/\{([A-Z0-9_]+)\}/g, (_full, key: string) => {
-    const value = process.env[key];
-    if (value && value.trim().length > 0) {
-      return value.trim();
+    const value = readSafeTemplateEnv(key) ?? getTemplateFallbackValue(key);
+    if (value !== undefined) {
+      return value;
     }
-    const fallbackValue = getTemplateFallbackValue(key);
-    return fallbackValue ?? `{${key}}`;
+    return preserveUnknown ? `{${key}}` : "";
   });
 }
 
@@ -708,9 +730,11 @@ function buildViewerUrl(
   embedParams?: Record<string, string>,
 ): string {
   if (!embedParams || Object.keys(embedParams).length === 0) {
-    return substituteTemplateVars(baseUrl);
+    return substituteTemplateVars(baseUrl, { preserveUnknown: false });
   }
-  const resolvedBaseUrl = substituteTemplateVars(baseUrl);
+  const resolvedBaseUrl = substituteTemplateVars(baseUrl, {
+    preserveUnknown: false,
+  });
   const [beforeHash, hashPartRaw] = resolvedBaseUrl.split("#", 2);
   const [pathPart, queryPartRaw] = beforeHash.split("?", 2);
   const queryParams = new URLSearchParams(queryPartRaw ?? "");
@@ -733,7 +757,10 @@ function resolveViewerEmbedParams(
   if (!embedParams) return undefined;
   const resolved = Object.fromEntries(
     Object.entries(embedParams)
-      .map(([key, value]) => [key, substituteTemplateVars(value).trim()])
+      .map(([key, value]) => [
+        key,
+        substituteTemplateVars(value, { preserveUnknown: false }).trim(),
+      ])
       .filter(([, value]) => value.length > 0),
   );
   return Object.keys(resolved).length > 0 ? resolved : undefined;
@@ -1042,7 +1069,9 @@ function applyLaunchPreparation(
   preparation: AppLaunchPreparation,
 ): RegistryAppPlugin {
   const launchUrl =
-    preparation.launchUrl !== undefined ? preparation.launchUrl : appInfo.launchUrl;
+    preparation.launchUrl !== undefined
+      ? preparation.launchUrl ?? undefined
+      : appInfo.launchUrl;
   const viewer =
     preparation.viewer === undefined
       ? appInfo.viewer
@@ -1142,11 +1171,15 @@ async function collectLaunchDiagnostics(
 ): Promise<AppLaunchDiagnostic[]> {
   const routeModule = await importAppRouteModule(appInfo.name);
   if (typeof routeModule?.collectLaunchDiagnostics === "function") {
+    const diagnosticViewer =
+      viewer && appInfo.viewer?.postMessageAuth && !viewer.authMessage
+        ? { ...viewer, postMessageAuth: true }
+        : viewer;
     return routeModule.collectLaunchDiagnostics({
       appName: appInfo.name,
       launchUrl,
       runtime,
-      viewer,
+      viewer: diagnosticViewer,
       session,
     });
   }
@@ -2007,7 +2040,11 @@ export class AppManager {
     }
 
     const initialLaunchUrl = appInfo.launchUrl
-      ? normalizeSafeAppUrl(substituteTemplateVars(appInfo.launchUrl))
+      ? normalizeSafeAppUrl(
+          substituteTemplateVars(appInfo.launchUrl, {
+            preserveUnknown: false,
+          }),
+        )
       : null;
     const launchPreparation = await prepareLaunch(
       appInfo,
@@ -2018,7 +2055,9 @@ export class AppManager {
     appInfo = applyLaunchPreparation(appInfo, launchPreparation);
 
     const resolvedLaunchUrl = appInfo.launchUrl
-      ? substituteTemplateVars(appInfo.launchUrl)
+      ? substituteTemplateVars(appInfo.launchUrl, {
+          preserveUnknown: false,
+        })
       : null;
     const launchUrl = resolvedLaunchUrl
       ? normalizeSafeAppUrl(resolvedLaunchUrl)

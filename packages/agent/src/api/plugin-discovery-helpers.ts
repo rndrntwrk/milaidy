@@ -198,7 +198,13 @@ export interface PluginIndex {
 type PackageJsonLike = {
   description?: unknown;
   homepage?: unknown;
-  repository?: unknown;
+  repository?:
+    | string
+    | {
+        type?: string;
+        url?: string;
+      }
+    | null;
   keywords?: unknown;
   logoUrl?: unknown;
   icon?: unknown;
@@ -222,6 +228,16 @@ type NormalizedPluginParameter = {
   options?: string[];
 };
 
+type RawPluginParameterDefinition = {
+  type?: unknown;
+  description?: unknown;
+  required?: unknown;
+  optional?: unknown;
+  sensitive?: unknown;
+  default?: unknown;
+  options?: unknown;
+};
+
 type PluginPackageMetadata = {
   description?: string;
   homepage?: string;
@@ -235,6 +251,12 @@ type PluginPackageMetadata = {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isPluginParameterDefinition(
+  value: unknown,
+): value is RawPluginParameterDefinition {
+  return isRecord(value);
 }
 
 function inferSensitiveConfigKey(key: string): boolean {
@@ -269,11 +291,14 @@ function normalizePluginParameters(
 
   const normalized = Object.fromEntries(
     Object.entries(rawParameters)
-      .filter(([, definition]) => isRecord(definition))
-      .map(([key, definition]) => {
+      .flatMap(([key, definition]) => {
+        if (!isPluginParameterDefinition(definition)) {
+          return [];
+        }
+
         const options = Array.isArray(definition.options)
           ? definition.options.filter(
-              (value): value is string => typeof value === "string",
+              (value: unknown): value is string => typeof value === "string",
             )
           : undefined;
 
@@ -298,7 +323,7 @@ function normalizePluginParameters(
           normalizedDefinition.options = options;
         }
 
-        return [key, normalizedDefinition];
+        return [[key, normalizedDefinition] as const];
       }),
   );
 

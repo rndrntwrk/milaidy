@@ -194,6 +194,7 @@ interface PTYServiceLike {
   listSessions: () => Promise<SessionSummary[]>;
   checkAvailableAgents: (types?: AdapterId[]) => Promise<AdapterPreflight[]>;
   resolveAgentType?: () => Promise<string>;
+  coordinator?: CoordinatorLike;
 }
 
 interface WorkspaceServiceLike {
@@ -710,9 +711,9 @@ function resolveCoordinator(
 
   const ptyService = (runtime as RuntimeWithServices).getService(
     "PTY_SERVICE",
-  ) as (PTYServiceLike & { coordinator?: unknown }) | undefined;
+  ) as unknown as PTYServiceLike | undefined;
   if (ptyService?.coordinator) {
-    return ptyService.coordinator as CoordinatorLike;
+    return ptyService.coordinator;
   }
 
   const helper =

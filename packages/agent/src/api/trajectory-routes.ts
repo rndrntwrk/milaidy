@@ -428,7 +428,7 @@ function listItemToUIRecord(item: TrajectoryListItem): UITrajectoryRecord {
       ...(item.batchId ? { batchId: item.batchId } : {}),
     },
     createdAt: item.createdAt,
-    updatedAt: item.updatedAt,
+    updatedAt: item.updatedAt ?? item.createdAt,
   };
 }
 

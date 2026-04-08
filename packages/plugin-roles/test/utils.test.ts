@@ -758,6 +758,10 @@ describe("checkSenderRole", () => {
       isAdmin: true,
       canManageRoles: true,
     });
+    expect(runtime.getRelationships).toHaveBeenCalledWith({
+      entityIds: ["discord-shadow"],
+      tags: ["identity_link"],
+    });
   });
 
   it("upgrades a linked canonical owner identity above a stored ADMIN role", async () => {

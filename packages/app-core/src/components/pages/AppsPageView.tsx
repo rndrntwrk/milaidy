@@ -8,7 +8,7 @@ import { useApp } from "../../state";
 import { AppsView } from "./AppsView";
 import { GameView } from "../apps/GameView";
 
-type AppsPageViewRenderer = () => JSX.Element;
+type AppsPageViewRenderer = () => React.ReactElement;
 
 export function AppsPageView({
   inModal,

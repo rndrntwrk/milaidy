@@ -46,6 +46,7 @@ export type BrowserWorkspaceSubaction =
   | "hover"
   | "inspect"
   | "keydown"
+  | "keyup"
   | "keyboardinserttext"
   | "keyboardtype"
   | "press"
@@ -1725,7 +1726,7 @@ async function submitWebBrowserWorkspaceForm(
   const searchParams = new URLSearchParams();
 
   for (const [key, value] of formData.entries()) {
-    searchParams.append(key, typeof value === "string" ? value : value.name);
+    searchParams.append(key, String(value));
   }
 
   if (method === "get") {
@@ -2223,12 +2224,12 @@ async function executeWebBrowserWorkspaceDomCommand(
 
           const matchesSelector = command.selector?.trim()
             ? (() => {
-                const found = currentDocument.querySelector(command.selector);
-                if (!command.state || command.state === "visible") {
-                  return Boolean(found) && isBrowserWorkspaceElementVisible(found);
-                }
-                return !found || !isBrowserWorkspaceElementVisible(found);
-              })()
+              const found = currentDocument.querySelector(command.selector);
+              if (!command.state || command.state === "visible") {
+                  return found ? isBrowserWorkspaceElementVisible(found) : false;
+              }
+              return !found || !isBrowserWorkspaceElementVisible(found);
+            })()
             : false;
           const matchesFind = command.findBy
             ? Boolean(resolveBrowserWorkspaceFindElement(currentDocument, command))
@@ -2697,6 +2698,7 @@ export async function executeBrowserWorkspaceCommand(
     case "get":
     case "hover":
     case "keydown":
+    case "keyup":
     case "keyboardinserttext":
     case "keyboardtype":
     case "press":
