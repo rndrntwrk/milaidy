@@ -1,7 +1,10 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { saveElizaConfig } from "@miladyai/agent/config/config";
+import {
+  loadElizaConfig,
+  saveElizaConfig,
+} from "@miladyai/agent/config/config";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ElizaConfig } from "../config/types";
 import {
@@ -127,8 +130,20 @@ describe("buildPluginListResponse", () => {
 
     expect(discord.configured).toBe(true);
     expect(discord.validationErrors).toEqual([]);
-    // Discord has no pluginParameters in packages/agent/src/plugins.json.
-    expect(discord.parameters).toEqual([]);
+    expect(discord.parameters.map((parameter) => parameter.key)).toEqual(
+      expect.arrayContaining([
+        "DISCORD_API_TOKEN",
+        "DISCORD_APPLICATION_ID",
+        "CHANNEL_IDS",
+      ]),
+    );
+    expect(
+      discord.parameters.find(
+        (parameter) => parameter.key === "DISCORD_API_TOKEN",
+      ),
+    ).toMatchObject({
+      isSet: true,
+    });
     expect(process.env.DISCORD_API_TOKEN).toBe("discord-token-123");
     expect(process.env.DISCORD_BOT_TOKEN).toBe("discord-token-123");
   });
@@ -150,8 +165,20 @@ describe("buildPluginListResponse", () => {
 
     expect(discord.configured).toBe(true);
     expect(discord.validationErrors).toEqual([]);
-    // Keep parity with manifest-backed metadata: no compat parameters for Discord.
-    expect(discord.parameters).toEqual([]);
+    expect(discord.parameters.map((parameter) => parameter.key)).toEqual(
+      expect.arrayContaining([
+        "DISCORD_API_TOKEN",
+        "DISCORD_APPLICATION_ID",
+        "CHANNEL_IDS",
+      ]),
+    );
+    expect(
+      discord.parameters.find(
+        (parameter) => parameter.key === "DISCORD_API_TOKEN",
+      ),
+    ).toMatchObject({
+      isSet: true,
+    });
     expect(process.env.DISCORD_API_TOKEN).toBe("discord-token-456");
     expect(process.env.DISCORD_BOT_TOKEN).toBe("discord-token-456");
   });
@@ -201,8 +228,134 @@ describe("buildPluginListResponse", () => {
     expect(getJson()).toMatchObject({
       ok: true,
       plugin: { enabled: true },
+      requiresRestart: true,
     });
     expect(state.pendingRestartReasons).toEqual(["Plugin toggle: discord"]);
+
+    const persisted = loadElizaConfig();
+    expect(persisted.plugins?.entries?.discord?.enabled).toBe(true);
+    expect(persisted.connectors?.discord?.enabled).toBe(true);
+  });
+
+  it("persists Discord disable state to connectors.discord.enabled", async () => {
+    process.env.ELIZA_API_TOKEN = "test-api-token";
+
+    saveElizaConfig({
+      logging: { level: "error" },
+      plugins: {
+        entries: {
+          discord: { enabled: true },
+        },
+      },
+      connectors: {
+        discord: {
+          token: "discord-token-disable",
+        },
+      },
+    } as ElizaConfig);
+
+    const req = createAsyncJsonRequest(
+      { enabled: false },
+      {
+        method: "PUT",
+        url: "/api/plugins/discord",
+        headers: {
+          authorization: "Bearer test-api-token",
+          host: "localhost:3000",
+        },
+      },
+    );
+    const { res, getJson, getStatus } = createMockHttpResponse<{
+      ok: boolean;
+      plugin: { enabled: boolean };
+    }>();
+    const state = {
+      current: null,
+      pendingAgentName: null,
+      pendingRestartReasons: [],
+    };
+
+    const handled = await handlePluginsCompatRoutes(req, res, state);
+
+    expect(handled).toBe(true);
+    expect(getStatus()).toBe(200);
+    expect(getJson()).toMatchObject({
+      ok: true,
+      plugin: { enabled: false },
+      requiresRestart: true,
+    });
+    expect(state.pendingRestartReasons).toEqual(["Plugin toggle: discord"]);
+
+    const persisted = loadElizaConfig();
+    expect(persisted.plugins?.entries?.discord?.enabled).toBe(false);
+    expect(persisted.connectors?.discord?.enabled).toBe(false);
+    expect(persisted.connectors?.discord?.token).toBe("discord-token-disable");
+  });
+
+  it("mirrors Discord config values into connectors config and marks restart required", async () => {
+    process.env.ELIZA_API_TOKEN = "test-api-token";
+
+    saveElizaConfig({
+      logging: { level: "error" },
+      plugins: {
+        entries: {
+          discord: { enabled: true },
+        },
+      },
+      connectors: {
+        discord: {
+          enabled: true,
+          token: "discord-token-old",
+          applicationId: "111111111111111111",
+        },
+      },
+    } as ElizaConfig);
+
+    const req = createAsyncJsonRequest(
+      {
+        config: {
+          DISCORD_API_TOKEN: "discord-token-new",
+          DISCORD_APPLICATION_ID: "222222222222222222",
+        },
+      },
+      {
+        method: "PUT",
+        url: "/api/plugins/discord",
+        headers: {
+          authorization: "Bearer test-api-token",
+          host: "localhost:3000",
+        },
+      },
+    );
+    const { res, getJson, getStatus } = createMockHttpResponse<{
+      ok: boolean;
+      requiresRestart?: boolean;
+    }>();
+    const state = {
+      current: null,
+      pendingAgentName: null,
+      pendingRestartReasons: [],
+    };
+
+    const handled = await handlePluginsCompatRoutes(req, res, state);
+
+    expect(handled).toBe(true);
+    expect(getStatus()).toBe(200);
+    expect(getJson()).toMatchObject({
+      ok: true,
+      requiresRestart: true,
+    });
+    expect(state.pendingRestartReasons).toEqual([
+      "Plugin config updated: discord",
+    ]);
+
+    const persisted = loadElizaConfig();
+    expect(persisted.connectors?.discord?.enabled).toBe(true);
+    expect(persisted.connectors?.discord?.token).toBe("discord-token-new");
+    expect(persisted.connectors?.discord?.botToken).toBeUndefined();
+    expect(persisted.connectors?.discord?.applicationId).toBe(
+      "222222222222222222",
+    );
   });
 
   it("reads Discord enable state from the persisted config path", () => {
@@ -240,6 +393,30 @@ describe("buildPluginListResponse", () => {
     };
 
     expect(discord.enabled).toBe(true);
+    expect(discord.configured).toBe(true);
+  });
+
+  it("prefers connectors.discord.enabled over a stale plugin entry toggle", () => {
+    saveElizaConfig({
+      logging: { level: "error" },
+      plugins: {
+        entries: {
+          discord: { enabled: true },
+        },
+      },
+      connectors: {
+        discord: {
+          enabled: false,
+          token: "discord-token-stale-plugin-flag",
+        },
+      },
+    } as ElizaConfig);
+
+    const discord = getDiscordPlugin() as CompatPluginRecord & {
+      enabled: boolean;
+    };
+
+    expect(discord.enabled).toBe(false);
     expect(discord.configured).toBe(true);
   });
 

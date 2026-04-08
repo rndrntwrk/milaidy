@@ -33,6 +33,7 @@ import {
   useState,
 } from "react";
 import { TrajectoryDetailView } from "./TrajectoryDetailView";
+import { ConfirmDeleteControl } from "../shared/confirm-delete-control";
 import {
   formatTrajectoryDuration,
   formatTrajectoryTimestamp,
@@ -65,7 +66,7 @@ export function TrajectoriesView({
   selectedTrajectoryId = null,
   onSelectTrajectory,
 }: TrajectoriesViewProps) {
-  const { t } = useApp();
+  const { t, setActionNotice } = useApp();
   const [loading, setLoading] = useState(true);
   const [result, setResult] = useState<TrajectoryListResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -75,6 +76,10 @@ export function TrajectoriesView({
   const pageSize = 50;
 
   const [exporting, setExporting] = useState(false);
+  const [deletingTrajectoryId, setDeletingTrajectoryId] = useState<
+    string | null
+  >(null);
+  const [clearingAll, setClearingAll] = useState(false);
 
   const loadTrajectories = useCallback(async () => {
     setLoading(true);
@@ -164,6 +169,127 @@ export function TrajectoriesView({
     trajectories.length === 0
       ? null
       : (selectedTrajectoryId ?? trajectories[0]?.id ?? null);
+  const deleteDisabled =
+    loading ||
+    clearingAll ||
+    deletingTrajectoryId !== null ||
+    detailTrajectoryId === null;
+  const clearAllDisabled =
+    loading || clearingAll || deletingTrajectoryId !== null || total === 0;
+
+  const handleDeleteTrajectory = useCallback(
+    async (trajectoryId: string) => {
+      const normalizedId = trajectoryId.trim();
+      if (!normalizedId) return;
+
+      setDeletingTrajectoryId(normalizedId);
+      setError(null);
+
+      try {
+        const response = await client.deleteTrajectories([normalizedId]);
+        const deletedCount = Number(response.deleted ?? 0);
+
+        if (selectedTrajectoryId === normalizedId) {
+          const remainingOnPage = trajectories.filter(
+            (trajectory) => trajectory.id !== normalizedId,
+          );
+          onSelectTrajectory?.(remainingOnPage[0]?.id ?? null);
+        }
+
+        if (page > 0 && trajectories.length <= 1) {
+          setPage((currentPage) => Math.max(0, currentPage - 1));
+        } else {
+          await loadTrajectories();
+        }
+
+        if (deletedCount > 0) {
+          setActionNotice?.(
+            t("trajectoriesview.TrajectoryDeleted", {
+              defaultValue: "Trajectory deleted.",
+            }),
+            "success",
+            2400,
+          );
+        } else {
+          setActionNotice?.(
+            t("trajectoriesview.NoTrajectoryDeleted", {
+              defaultValue: "No trajectory was deleted.",
+            }),
+            "info",
+            2400,
+          );
+        }
+      } catch (err) {
+        const message =
+          err instanceof Error
+            ? err.message
+            : t("trajectoriesview.FailedToDelete", {
+                defaultValue: "Failed to delete trajectory",
+              });
+        setError(message);
+        setActionNotice?.(message, "error", 4200);
+      } finally {
+        setDeletingTrajectoryId((currentId) =>
+          currentId === normalizedId ? null : currentId,
+        );
+      }
+    },
+    [
+      loadTrajectories,
+      onSelectTrajectory,
+      page,
+      selectedTrajectoryId,
+      setActionNotice,
+      t,
+      trajectories,
+    ],
+  );
+
+  const handleClearAllTrajectories = useCallback(async () => {
+    setClearingAll(true);
+    setError(null);
+
+    try {
+      const response = await client.clearAllTrajectories();
+      setResult({
+        trajectories: [],
+        total: 0,
+        offset: 0,
+        limit: pageSize,
+      });
+      setPage(0);
+      onSelectTrajectory?.(null);
+
+      if (Number(response.deleted ?? 0) > 0) {
+        setActionNotice?.(
+          t("trajectoriesview.TrajectoriesCleared", {
+            defaultValue: "Trajectories cleared.",
+          }),
+          "success",
+          2400,
+        );
+      } else {
+        setActionNotice?.(
+          t("trajectoriesview.NoTrajectoryDeleted", {
+            defaultValue: "No trajectory was deleted.",
+          }),
+          "info",
+          2400,
+        );
+      }
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : t("trajectoriesview.FailedToClear", {
+              defaultValue: "Failed to clear trajectories",
+            });
+      setError(message);
+      setActionNotice?.(message, "error", 4200);
+    } finally {
+      setClearingAll(false);
+    }
+  }, [onSelectTrajectory, pageSize, setActionNotice, t]);
 
   const trajectoriesSidebar = (
     <Sidebar
@@ -191,7 +317,7 @@ export function TrajectoriesView({
     >
       <SidebarScrollRegion>
         <SidebarPanel>
-          <SidebarContent.Toolbar className="mb-3 justify-end">
+          <SidebarContent.Toolbar className="mb-3 flex-wrap justify-end gap-2">
             <SidebarContent.ToolbarActions>
               <Button
                 variant="outline"
@@ -228,10 +354,48 @@ export function TrajectoriesView({
                     {t("trajectoriesview.CSVSummaryOnly")}
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => handleExport("zip", true)}>
-                    {t("trajectoriesview.ZIPFolders")}
+                  {t("trajectoriesview.ZIPFolders")}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+              <ConfirmDeleteControl
+                triggerClassName="h-9 rounded-full border border-danger/25 px-4 text-[11px] font-bold tracking-[0.12em] text-danger transition-all hover:border-danger/45 hover:bg-danger/10"
+                confirmClassName="h-9 rounded-full border border-danger/25 bg-danger/14 px-4 text-[11px] font-bold text-danger transition-all hover:bg-danger/20"
+                cancelClassName="h-9 rounded-full border border-border/35 px-4 text-[11px] font-bold text-muted-strong transition-all hover:border-border-strong hover:text-txt"
+                disabled={deleteDisabled}
+                triggerLabel={t("trajectoriesview.DeleteCurrent", {
+                  defaultValue: "Delete current",
+                })}
+                promptText={t("trajectoriesview.DeleteCurrentPrompt", {
+                  defaultValue: "Delete this trajectory?",
+                })}
+                busyLabel={t("trajectoriesview.Deleting", {
+                  defaultValue: "Deleting...",
+                })}
+                onConfirm={() => {
+                  if (detailTrajectoryId) {
+                    void handleDeleteTrajectory(detailTrajectoryId);
+                  }
+                }}
+              />
+              <ConfirmDeleteControl
+                triggerClassName="h-9 rounded-full border border-danger/25 px-4 text-[11px] font-bold tracking-[0.12em] text-danger transition-all hover:border-danger/45 hover:bg-danger/10"
+                confirmClassName="h-9 rounded-full border border-danger/25 bg-danger/14 px-4 text-[11px] font-bold text-danger transition-all hover:bg-danger/20"
+                cancelClassName="h-9 rounded-full border border-border/35 px-4 text-[11px] font-bold text-muted-strong transition-all hover:border-border-strong hover:text-txt"
+                disabled={clearAllDisabled}
+                triggerLabel={t("trajectoriesview.ClearAll", {
+                  defaultValue: "Clear all",
+                })}
+                promptText={t("trajectoriesview.ClearAllPrompt", {
+                  defaultValue: "Delete all trajectories?",
+                })}
+                busyLabel={t("trajectoriesview.Clearing", {
+                  defaultValue: "Clearing...",
+                })}
+                onConfirm={() => {
+                  void handleClearAllTrajectories();
+                }}
+              />
             </SidebarContent.ToolbarActions>
           </SidebarContent.Toolbar>
 

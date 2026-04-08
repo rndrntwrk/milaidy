@@ -262,6 +262,7 @@ export function usePluginsSkillsState({
             prev.includes(restartReason) ? prev : [...prev, restartReason],
           );
           showRestartBanner();
+          await triggerRestart();
         }
 
         await loadPlugins();
@@ -271,7 +272,7 @@ export function usePluginsSkillsState({
               ? `Provider settings saved, but activating ${plugin?.name ?? pluginId} failed: ${providerSwitchError.message}`
               : "Provider settings saved. Restarting agent..."
             : result.requiresRestart
-              ? "Plugin settings saved. Restart required to apply."
+              ? "Plugin settings saved. Agent restarted."
               : "Plugin settings saved without a full agent restart.",
           isAiProvider && providerSwitchError ? "error" : "success",
         );
@@ -297,7 +298,15 @@ export function usePluginsSkillsState({
         });
       }
     },
-    [loadPlugins, setActionNotice, plugins],
+    [
+      loadPlugins,
+      plugins,
+      setActionNotice,
+      setPendingRestart,
+      setPendingRestartReasons,
+      showRestartBanner,
+      triggerRestart,
+    ],
   );
 
   // ── Skill callbacks ─────────────────────────────────────────────────
