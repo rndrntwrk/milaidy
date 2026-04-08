@@ -1,17 +1,31 @@
-import { describe, expect, test } from "vitest";
-import { ALL_BLUEPRINTS } from "./scenario-blueprints";
-import type { TrainingSample } from "./dataset-generator";
-import { toGeminiFormat } from "./dataset-generator";
-import {
+import { describe, expect, test, vi } from "vitest";
+
+const mockWithStandaloneTrajectory = vi.fn(
+  async (
+    _runtime: unknown,
+    _options: Record<string, unknown>,
+    callback: () => Promise<unknown>,
+  ) => await callback(),
+);
+const mockLogActiveTrajectoryLlmCall = vi.fn();
+
+vi.mock("@elizaos/core", () => ({
+  withStandaloneTrajectory: mockWithStandaloneTrajectory,
+  logActiveTrajectoryLlmCall: mockLogActiveTrajectoryLlmCall,
+}));
+
+const { ALL_BLUEPRINTS } = await import("./scenario-blueprints");
+const { toGeminiFormat } = await import("./dataset-generator");
+const {
   buildRoleplayEpisode,
   toRoleplayManifestLine,
-} from "./roleplay-trajectories";
-import {
+} = await import("./roleplay-trajectories");
+const {
   buildVertexModelPreferencePatch,
   normalizeVertexBaseModel,
-} from "./vertex-tuning";
+} = await import("./vertex-tuning");
 
-const sample: TrainingSample = {
+const sample = {
   id: "sample-1",
   blueprintId: "bp-1",
   agentName: "Nova",

@@ -451,12 +451,70 @@ export async function handleTrainingRoutes(
     return true;
   }
 
+  if (method === "POST" && pathname === "/api/training/roleplay/execute") {
+    const body = await readJsonBody<{
+      episodesPath?: string;
+      manifestPath?: string;
+      outputDir?: string;
+      timeoutMs?: number;
+      executeAllParticipantTurns?: boolean;
+    }>(req, res);
+    if (!body) return true;
+
+    if (!runtime) {
+      error(res, "Runtime is required to execute roleplay episodes", 503);
+      return true;
+    }
+
+    const inputPath = body.episodesPath ?? body.manifestPath;
+    if (!inputPath) {
+      error(res, "episodesPath or manifestPath is required", 400);
+      return true;
+    }
+
+    const {
+      buildRoleplayExecutionReport,
+      executeRoleplayEpisodes,
+      exportRoleplayExecutionResults,
+      loadRoleplayEpisodesFromPath,
+    } = await import("../training/roleplay-executor.js");
+
+    try {
+      const episodes = await loadRoleplayEpisodesFromPath(inputPath);
+      const executions = await executeRoleplayEpisodes(episodes, {
+        runtime,
+        timeoutMs: body.timeoutMs,
+        executeAllParticipantTurns: body.executeAllParticipantTurns ?? false,
+      });
+      const report = buildRoleplayExecutionReport(executions);
+      const outputDir = body.outputDir ?? `.tmp/training-roleplay-execution-${Date.now()}`;
+      const paths = await exportRoleplayExecutionResults(executions, outputDir);
+
+      json(
+        res,
+        {
+          episodesExecuted: executions.length,
+          report,
+          outputDir,
+          paths,
+        },
+        201,
+      );
+    } catch (err) {
+      error(res, `Roleplay execution failed: ${String(err)}`, 500);
+    }
+    return true;
+  }
+
   if (method === "POST" && pathname === "/api/training/trajectories/export") {
     const body = await readJsonBody<{
       limit?: number;
       trajectoryIds?: string[];
       agentName?: string;
       outputPath?: string;
+      outputDir?: string;
+      splitByTask?: boolean;
+      tasks?: string[];
     }>(req, res);
     if (!body) return true;
 
@@ -493,26 +551,54 @@ export async function handleTrainingRoutes(
         )
       ).filter(Boolean);
 
-      const { exportTrajectoriesAsTraining } = await import(
-        "../training/dataset-generator.js"
-      );
+      let exported = 0;
+      let taskDataset:
+        | {
+            counts: Record<string, number>;
+            paths: Record<string, string>;
+          }
+        | undefined;
 
-      const exported = await exportTrajectoriesAsTraining(
-        details as Array<{
-          steps: Array<{
-            llmCalls: Array<{
-              purpose?: string;
-              systemPrompt?: string;
-              userPrompt?: string;
-              response?: string;
-              model?: string;
+      if (body.splitByTask || body.outputDir || body.tasks?.length) {
+        const {
+          exportTrajectoryTaskDatasets,
+        } = await import("../training/trajectory-task-datasets.js");
+        const dataset = await exportTrajectoryTaskDatasets(
+          details as any,
+          body.outputDir ?? `.tmp/training-trajectory-export-${Date.now()}`,
+          body.tasks as any,
+        );
+        exported =
+          dataset.counts.should_respond +
+          dataset.counts.context_routing +
+          dataset.counts.action_planner +
+          dataset.counts.response +
+          dataset.counts.media_description;
+        taskDataset = dataset as unknown as {
+          counts: Record<string, number>;
+          paths: Record<string, string>;
+        };
+      } else {
+        const { exportTrajectoriesAsTraining } = await import(
+          "../training/dataset-generator.js"
+        );
+        exported = await exportTrajectoriesAsTraining(
+          details as Array<{
+            steps: Array<{
+              llmCalls: Array<{
+                purpose?: string;
+                systemPrompt?: string;
+                userPrompt?: string;
+                response?: string;
+                model?: string;
+              }>;
             }>;
-          }>;
-          metadata?: Record<string, unknown>;
-        }>,
-        body.agentName ?? runtime?.character?.name ?? "Agent",
-        outputPath,
-      );
+            metadata?: Record<string, unknown>;
+          }>,
+          body.agentName ?? runtime?.character?.name ?? "Agent",
+          outputPath,
+        );
+      }
 
       json(
         res,
@@ -520,6 +606,7 @@ export async function handleTrainingRoutes(
           exportedExamples: exported,
           trajectoriesConsidered: trajectoryIds.length,
           outputPath,
+          taskDataset,
         },
         201,
       );
@@ -597,6 +684,9 @@ export async function handleTrainingRoutes(
       gcsBucket: string;
       trainingDataPath?: string;
       validationDataPath?: string;
+      roleplayEpisodesPath?: string;
+      roleplayManifestPath?: string;
+      executeAllParticipantTurns?: boolean;
       slot?: string;
       scope?: "global" | "organization" | "user";
       ownerId?: string;
@@ -653,37 +743,99 @@ export async function handleTrainingRoutes(
             combinedPath: string;
           }
         | undefined;
+      let roleplayExecution:
+        | {
+            episodesExecuted: number;
+            outputDir: string;
+            report: Record<string, unknown>;
+            trajectoryDataset: {
+              counts: Record<string, number>;
+              paths: Record<string, string>;
+            } | null;
+          }
+        | undefined;
 
       if (!trainingDataPath) {
-        if (!anthropicKey && !openaiKey) {
-          error(
-            res,
-            "No teacher model API key found. Set ANTHROPIC_API_KEY or OPENAI_API_KEY, or provide trainingDataPath.",
-            400,
+        datasetOutputDir = `.tmp/training-orchestration-${Date.now()}`;
+        const roleplayInputPath =
+          body.roleplayEpisodesPath ?? body.roleplayManifestPath;
+
+        if (runtime && roleplayInputPath) {
+          const {
+            buildRoleplayExecutionReport,
+            executeRoleplayEpisodes,
+            exportRoleplayExecutionResults,
+            loadRoleplayEpisodesFromPath,
+          } = await import("../training/roleplay-executor.js");
+          const episodes = await loadRoleplayEpisodesFromPath(roleplayInputPath);
+          const roleplayOutputDir = `${datasetOutputDir}/roleplay-execution`;
+          const executions = await executeRoleplayEpisodes(episodes, {
+            runtime,
+            executeAllParticipantTurns: body.executeAllParticipantTurns ?? false,
+          });
+          const report = buildRoleplayExecutionReport(executions);
+          const exportedReplay = await exportRoleplayExecutionResults(
+            executions,
+            roleplayOutputDir,
           );
-          return true;
+          roleplayExecution = {
+            episodesExecuted: executions.length,
+            outputDir: roleplayOutputDir,
+            report: report as Record<string, unknown>,
+            trajectoryDataset: exportedReplay.trajectoryDataset
+              ? {
+                  counts: exportedReplay.trajectoryDataset.counts,
+                  paths: exportedReplay.trajectoryDataset.paths,
+                }
+              : null,
+          };
+
+          const roleplayTaskPath =
+            slot === "should_respond" || slot === "response_handler"
+              ? exportedReplay.trajectoryDataset?.paths.shouldRespondPath
+              : slot === "action_planner" || slot === "planner"
+                ? exportedReplay.trajectoryDataset?.paths.actionPlannerPath
+                : slot === "response"
+                  ? exportedReplay.trajectoryDataset?.paths.responsePath
+                  : slot === "media_description"
+                    ? exportedReplay.trajectoryDataset?.paths.mediaDescriptionPath
+                    : undefined;
+
+          if (roleplayTaskPath) {
+            trainingDataPath = roleplayTaskPath;
+          }
         }
 
-        const teacher = anthropicKey
-          ? createAnthropicTeacher(anthropicKey, runtime ?? undefined)
-          : createOpenAITeacher(openaiKey!, runtime ?? undefined);
-        datasetOutputDir = `.tmp/training-orchestration-${Date.now()}`;
-        const samples = await generateDataset({
-          variantsPerBlueprint: body.variantsPerBlueprint ?? 5,
-          teacher,
-          outputDir: datasetOutputDir,
-          concurrency: body.concurrency ?? 5,
-          limitBlueprints: body.limitBlueprints,
-          filterContexts: body.filterContexts as any,
-          filterDecisions: body.filterDecisions as any,
-        });
-        datasetPaths = await exportToGeminiJSONL(samples, datasetOutputDir);
-        trainingDataPath =
-          slot === "should_respond" || slot === "response_handler"
-            ? datasetPaths.shouldRespondPath
-            : slot === "action_planner" || slot === "planner"
-              ? datasetPaths.combinedPath
-              : datasetPaths.combinedPath;
+        if (!trainingDataPath) {
+          if (!anthropicKey && !openaiKey) {
+            error(
+              res,
+              "No teacher model API key found. Set ANTHROPIC_API_KEY or OPENAI_API_KEY, provide trainingDataPath, or provide roleplayEpisodesPath/roleplayManifestPath.",
+              400,
+            );
+            return true;
+          }
+
+          const teacher = anthropicKey
+            ? createAnthropicTeacher(anthropicKey, runtime ?? undefined)
+            : createOpenAITeacher(openaiKey!, runtime ?? undefined);
+          const samples = await generateDataset({
+            variantsPerBlueprint: body.variantsPerBlueprint ?? 5,
+            teacher,
+            outputDir: datasetOutputDir,
+            concurrency: body.concurrency ?? 5,
+            limitBlueprints: body.limitBlueprints,
+            filterContexts: body.filterContexts as any,
+            filterDecisions: body.filterDecisions as any,
+          });
+          datasetPaths = await exportToGeminiJSONL(samples, datasetOutputDir);
+          trainingDataPath =
+            slot === "should_respond" || slot === "response_handler"
+              ? datasetPaths.shouldRespondPath
+              : slot === "action_planner" || slot === "planner"
+                ? datasetPaths.combinedPath
+                : datasetPaths.combinedPath;
+        }
       }
 
       const orchestration = await orchestrateVertexTuning({
@@ -708,6 +860,7 @@ export async function handleTrainingRoutes(
           ...orchestration,
           datasetOutputDir,
           datasetPaths,
+          roleplayExecution,
         },
         201,
       );

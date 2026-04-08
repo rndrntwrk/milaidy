@@ -1,6 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import type {
   AgentRuntime,
+  AgentContext,
   Plugin,
   PluginEventRegistration,
   PluginModelRegistration,
@@ -14,6 +15,7 @@ import {
   resolveActionContexts,
   resolveProviderContexts,
 } from "../training/context-catalog";
+import type { AgentContext as TrainingAgentContext } from "../training/context-types";
 
 type RuntimeAction = NonNullable<Plugin["actions"]>[number];
 type RuntimeProvider = NonNullable<Plugin["providers"]>[number];
@@ -47,6 +49,19 @@ type RuntimePluginWithLifecycleHooks = Plugin & {
 type RuntimePluginWithContexts = Plugin & {
   contexts?: string[];
 };
+
+function toTrainingContexts(
+  contexts: AgentContext[] | undefined,
+): TrainingAgentContext[] | undefined {
+  if (!Array.isArray(contexts) || contexts.length === 0) {
+    return undefined;
+  }
+
+  return contexts.filter(
+    (context): context is TrainingAgentContext =>
+      typeof context === "string" && context.trim().length > 0,
+  );
+}
 
 type RuntimeServiceRegistrationStatus =
   | "pending"
@@ -192,7 +207,13 @@ function applyEffectiveActionContexts(
 
   return {
     ...inherited,
-    contexts: [...resolveActionContexts(inherited.name, inherited.contexts, pluginContexts)],
+    contexts: [
+      ...resolveActionContexts(
+        inherited.name,
+        toTrainingContexts(inherited.contexts),
+        toTrainingContexts(pluginContexts as AgentContext[] | undefined),
+      ),
+    ],
   };
 }
 
@@ -208,7 +229,11 @@ function applyEffectiveProviderContexts(
   return {
     ...inherited,
     contexts: [
-      ...resolveProviderContexts(inherited.name, inherited.contexts, pluginContexts),
+      ...resolveProviderContexts(
+        inherited.name,
+        toTrainingContexts(inherited.contexts),
+        toTrainingContexts(pluginContexts as AgentContext[] | undefined),
+      ),
     ],
   };
 }

@@ -1,3 +1,6 @@
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { AgentRuntime } from "@elizaos/core";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { createRouteInvoker } from "../test-support/route-test-helpers";
@@ -105,6 +108,74 @@ function createMockTrainingService(): TrainingServiceLike {
       output: "ok",
     }),
   };
+}
+
+function createRoleplayRuntime(): AgentRuntime {
+  const trajectory = {
+    trajectoryId: "00000000-0000-0000-0000-000000000222",
+    agentId: "00000000-0000-0000-0000-000000000111",
+    startTime: Date.now(),
+    steps: [
+      {
+        timestamp: Date.now(),
+        llmCalls: [
+          {
+            purpose: "should_respond",
+            systemPrompt:
+              "available_contexts:\nwallet, automation\ncontext_routing:\n- primaryContext: wallet\n- secondaryContexts: automation\n- evidenceTurnIds: turn-002\ndecision_note:",
+            userPrompt:
+              "conversation:\n[turn-001] Alice: ETH is pumping again.\n[turn-002] Bob: Nova swap half to USDC.",
+            response:
+              "name: Nova\nreasoning: Direct wallet request.\naction: RESPOND\nprimaryContext: wallet\nsecondaryContexts: automation\nevidenceTurnIds: turn-002",
+          },
+          {
+            purpose: "action",
+            model: "ACTION_PLANNER",
+            systemPrompt: "Decide which actions to take.",
+            userPrompt: "User asked the agent to swap tokens.",
+            response:
+              "<response><thought>Need a wallet trade.</thought><actions>SWAP_TOKEN</actions><text>Swapping now.</text></response>",
+          },
+        ],
+      },
+    ],
+  };
+  const logger = {
+    getTrajectoryDetail: vi.fn(async () => trajectory),
+  };
+
+  return {
+    agentId: "00000000-0000-0000-0000-000000000111",
+    character: { name: "Nova" },
+    createMemory: vi.fn(async () => undefined),
+    ensureConnection: vi.fn(async () => undefined),
+    getActionResults: vi.fn(() => [{ data: { actionName: "SWAP_TOKEN" } }]),
+    getServicesByType: vi.fn(() => [logger]),
+    getService: vi.fn(() => logger),
+    messageService: {
+      handleMessage: vi.fn(async (_runtime, _message, callback) => {
+        await callback?.({
+          text: "Swapping now.",
+          actions: ["SWAP_TOKEN"],
+          source: "discord",
+          channelType: "GROUP",
+        });
+
+        return {
+          didRespond: true,
+          responseContent: {
+            text: "Swapping now.",
+            actions: ["SWAP_TOKEN"],
+            source: "discord",
+            channelType: "GROUP",
+          },
+          responseMessages: [],
+          state: { values: {}, data: {} },
+          mode: "actions",
+        };
+      }),
+    },
+  } as unknown as AgentRuntime;
 }
 
 describe("training routes", () => {
@@ -387,6 +458,98 @@ describe("training routes", () => {
     expect(result.status).toBe(400);
     expect(result.payload).toMatchObject({
       error: "name query parameter is required",
+    });
+  });
+
+  test("executes roleplay manifests through the runtime and returns a report", async () => {
+    runtime = createRoleplayRuntime();
+    const outputDir = await mkdtemp(join(tmpdir(), "training-route-roleplay-"));
+    const episodesPath = join(outputDir, "episodes.json");
+    await writeFile(
+      episodesPath,
+      JSON.stringify([
+        {
+          id: "episode-1",
+          blueprintId: "respond-wallet-swap-001",
+          agentName: "Nova",
+          platform: "discord",
+          roomType: "group",
+          primaryContext: "wallet",
+          secondaryContexts: ["automation"],
+          expectedDecision: "RESPOND",
+          expectedAction: "SWAP_TOKEN",
+          evaluationTurnId: "turn-002",
+          turns: [
+            {
+              id: "turn-001",
+              role: "participant",
+              speaker: "Alice",
+              content: "ETH is pumping again.",
+              isEvaluationTarget: false,
+            },
+            {
+              id: "turn-002",
+              role: "participant",
+              speaker: "Bob",
+              content: "Nova swap half to USDC.",
+              isEvaluationTarget: true,
+            },
+          ],
+          metadata: {
+            pattern: "group_direct_mention",
+            generatedBy: "test",
+            generatedAt: new Date(0).toISOString(),
+            sourceSampleId: "sample-1",
+          },
+        },
+      ]),
+    );
+
+    const result = await invoke({
+      method: "POST",
+      pathname: "/api/training/roleplay/execute",
+      body: {
+        episodesPath,
+        outputDir,
+      },
+    });
+
+    expect(result.status).toBe(201);
+    expect(result.payload).toMatchObject({
+      episodesExecuted: 1,
+      report: expect.objectContaining({
+        decisionAccuracy: 1,
+        actionAccuracy: 1,
+      }),
+      paths: expect.objectContaining({
+        executionsPath: expect.any(String),
+        reportPath: expect.any(String),
+      }),
+    });
+  });
+
+  test("exports trajectory corpora split by task", async () => {
+    const result = await invoke({
+      method: "POST",
+      pathname: "/api/training/trajectories/export",
+      body: {
+        splitByTask: true,
+        outputDir: await mkdtemp(join(tmpdir(), "training-route-trajectories-")),
+      },
+    });
+
+    expect(result.status).toBe(201);
+    expect(result.payload).toMatchObject({
+      exportedExamples: expect.any(Number),
+      taskDataset: {
+        counts: expect.objectContaining({
+          should_respond: expect.any(Number),
+        }),
+        paths: expect.objectContaining({
+          shouldRespondPath: expect.any(String),
+          actionPlannerPath: expect.any(String),
+        }),
+      },
     });
   });
 });
