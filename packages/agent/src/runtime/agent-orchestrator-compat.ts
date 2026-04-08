@@ -1219,25 +1219,49 @@ function injectPreferredAgentType(action: Action | undefined): void {
 /**
  * Milady deployment-specific memory content for spawned task agents.
  *
- * Lives here (not in the shared plugin) because the rules below — public IP,
- * `python3 -m http.server` for static hosting, structured `URL:` reporting —
- * are conventions of THIS deployment, not the orchestrator plugin. Other
- * deployments of plugin-agent-orchestrator will set their own conventions
- * the same way.
+ * Lives here (not in the shared plugin) because the agent-home pattern below
+ * is a milady convention — other deployments of plugin-agent-orchestrator
+ * will write their own contract the same way via their own compat layer.
  */
-const MILADY_TASK_AGENT_MEMORY = `# Milady Conventions
+const MILADY_TASK_AGENT_MEMORY = `# Milady — Agent Home
 
-You are running on Milady's VPS. Public IP is 147.93.44.246.
+You live inside one Next.js app called **agent-home**, which is the public face of Milady's VPS. Every "app", page, demo, or experiment you build becomes a new entry inside that one project. There are no other public servers, no per-build ports, no separate hosting. Anyone visiting https://milady.nubs.site sees you and everything you have ever built.
 
-## Hosting static web pages
-- Name the entry HTML file \`index.html\` (never \`hello.html\`, \`page.html\`, etc.) so \`python3 -m http.server\` serves it as the directory root instead of returning a directory listing.
-- Start the server in the background, bound to all interfaces, with logs redirected: \`setsid nohup python3 -m http.server <port> --bind 0.0.0.0 > server.log 2>&1 < /dev/null & disown\`.
-- Verify with \`curl -sf http://127.0.0.1:<port>/\` and confirm the body is your page, not a directory listing.
+## Where things go
+
+The agent-home project lives at \`/home/milady/projects/agent-home\` and is already running on \`127.0.0.1:6900\`, fronted by Traefik + Cloudflare for the public domain. **Do not start any other web servers.** Do not run \`python -m http.server\`. Do not bind any new ports. The home is already up.
+
+To create a new "app", write into:
+- \`/home/milady/projects/agent-home/data/apps/<slug>/index.html\` — the page itself
+- \`/home/milady/projects/agent-home/data/apps/<slug>/style.css\` (optional) — relative paths work because the canonical URL has a trailing slash
+- \`/home/milady/projects/agent-home/data/apps/<slug>/<anything>.{png,svg,js,...}\` (optional) — assets, served by the same catch-all
+- \`/home/milady/projects/agent-home/data/apps/<slug>/meta.json\` — \`{ "description": "one-line summary shown on the home index" }\`
+
+A catch-all route handler at \`app/apps/[...path]/route.ts\` serves anything you write into \`data/apps/\` at request time. **No rebuild, no restart needed** — your file appears immediately. The home page (\`/\`) lists every directory in \`data/apps/\` automatically.
+
+## Slug naming
+
+Use lowercase kebab-case slugs: \`hello-world\`, \`iq6900-oracle\`, \`solana-balance-checker\`. No spaces, no underscores at the start (those are reserved for internal smoke tests).
+
+## Backends, when you need them
+
+If a build needs a backend (Rust, Node, Python, Go, anything), write the source under \`/home/milady/projects/agent-home/data/apps/<slug>/server/\` and start it bound to **127.0.0.1 only** (never 0.0.0.0). Then add a Next.js route handler at \`app/apps/<slug>/api/[...path]/route.ts\` that proxies to it via \`fetch("http://127.0.0.1:<internal-port>/...")\`. The internal port is invisible to the public; only the proxied API route is reachable, under your slug.
 
 ## Reporting
-When you finish a task that exposes a URL, end your response with one line in this exact format so the parent agent can quote it verbatim:
 
-    URL: http://147.93.44.246:<port>/
+When you finish, end your response with one line in this exact format so the parent agent can quote it verbatim:
+
+    URL: https://milady.nubs.site/apps/<slug>/
+
+Always include the trailing slash. Always use the domain, never an IP, never a port number.
+
+## Hard rules
+
+1. **Never** start a web server on a new port. The home is already running on 6900.
+2. **Never** write into \`public/\` of the agent-home project — Next.js bakes \`public/\` at build time and your files would not appear. Always use \`data/apps/<slug>/\`.
+3. **Never** modify \`app/\`, \`next.config.ts\`, \`package.json\`, or any other file outside \`data/apps/<slug>/\` unless the task is explicitly about evolving the home itself.
+4. **Always** verify your work by curling \`http://127.0.0.1:6900/apps/<slug>/\` (the local URL) before reporting done. The body should contain your content, not a 404.
+5. **Always** report the public URL with the trailing slash.
 `;
 
 /**
