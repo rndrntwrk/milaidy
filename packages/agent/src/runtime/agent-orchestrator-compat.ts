@@ -1245,7 +1245,9 @@ Use lowercase kebab-case slugs: \`hello-world\`, \`iq6900-oracle\`, \`solana-bal
 
 ## Backends, when you need them
 
-If a build needs a backend (Rust, Node, Python, Go, anything), write the source under \`/home/milady/projects/agent-home/data/apps/<slug>/server/\` and start it bound to **127.0.0.1 only** (never 0.0.0.0). Then add a Next.js route handler at \`app/apps/<slug>/api/[...path]/route.ts\` that proxies to it via \`fetch("http://127.0.0.1:<internal-port>/...")\`. The internal port is invisible to the public; only the proxied API route is reachable, under your slug.
+If a build needs a backend (Rust, Node, Python, Go, anything), write the source under \`/home/milady/projects/agent-home/data/apps/<slug>/server/\` and start it bound to **127.0.0.1 only** (never 0.0.0.0). Then add a Next.js route handler at \`/home/milady/projects/agent-home/app/apps/<slug>/api/[...path]/route.ts\` that proxies to it via \`fetch("http://127.0.0.1:<internal-port>/...")\`. The internal port is invisible to the public; only the proxied API route is reachable, under your slug.
+
+Adding a route handler under \`app/\` is a code change Next.js only picks up at build time, so after writing the proxy file you must run \`cd /home/milady/projects/agent-home && npm run build\` and then restart the running next-server (kill the existing process listening on 6900 and re-launch with \`setsid nohup npm start -- -p 6900 -H 0.0.0.0 > server.log 2>&1 < /dev/null & disown\`). Pure static pages under \`data/apps/<slug>/\` do not need a rebuild — they are served at request time by the catch-all route handler.
 
 ## Reporting
 
@@ -1259,8 +1261,8 @@ Always include the trailing slash. Always use the domain, never an IP, never a p
 
 1. **Never** start a web server on a new port. The home is already running on 6900.
 2. **Never** write into \`public/\` of the agent-home project — Next.js bakes \`public/\` at build time and your files would not appear. Always use \`data/apps/<slug>/\`.
-3. **Never** modify \`app/\`, \`next.config.ts\`, \`package.json\`, or any other file outside \`data/apps/<slug>/\` unless the task is explicitly about evolving the home itself.
-4. **Always** verify your work by curling \`http://127.0.0.1:6900/apps/<slug>/\` (the local URL) before reporting done. The body should contain your content, not a 404.
+3. **Only** the following directories are yours to write into: \`data/apps/<slug>/\` (your slug, freely) and \`app/apps/<slug>/\` (your slug, only when you need an API proxy route handler). **Never** touch \`next.config.ts\`, \`package.json\`, the home page, the layout, the catch-all route, or any other path outside your slug.
+4. **Always** verify your work by curling \`http://127.0.0.1:6900/apps/<slug>/\` (the local URL) before reporting done. The body should contain your content, not a 404. If you added an API proxy, also curl \`http://127.0.0.1:6900/apps/<slug>/api/<path>\` to confirm the proxy works after the rebuild.
 5. **Always** report the public URL with the trailing slash.
 `;
 
