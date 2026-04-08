@@ -24,6 +24,7 @@ import {
   CompanionShell,
   CompanionView,
   ConnectionFailedBanner,
+  ConnectionLostOverlay,
   ConnectorsPageView,
   ConversationsSidebar,
   CustomActionEditor,
@@ -724,6 +725,7 @@ export function App() {
           setEditingAction(null);
         }}
       />
+      <ConnectionLostOverlay />
       <ConnectionFailedBanner />
       <SystemWarningBanner />
       {desktopShuttingDown ? (

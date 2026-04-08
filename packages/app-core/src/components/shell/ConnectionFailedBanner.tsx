@@ -3,8 +3,8 @@ import { isElectrobunRuntime } from "../../bridge";
 import { useApp } from "../../state";
 
 /**
- * Banner shown during WebSocket reconnection attempts (yellow) and
- * after all attempts are exhausted (red). Offers Retry when failed.
+ * Banner shown during WebSocket reconnection attempts.
+ * A dedicated modal overlay handles the terminal failed state.
  */
 export function ConnectionFailedBanner() {
   const { t } = useApp();
@@ -17,6 +17,7 @@ export function ConnectionFailedBanner() {
   } = useApp();
 
   if (!backendConnection) return null;
+  if (backendConnection.showDisconnectedUI) return null;
 
   if (backendConnection.state === "reconnecting") {
     return (
