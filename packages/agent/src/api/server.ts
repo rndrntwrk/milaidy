@@ -4610,6 +4610,18 @@ async function handleCodingAgentsFallback(
   const authMatch = pathname.match(/^\/api\/coding-agents\/auth\/(\w+)$/);
   if (method === "POST" && authMatch) {
     const agentType = authMatch[1];
+    // Allowlist the adapter type. The `\w+` regex on the route pattern
+    // stops path traversal but still accepts arbitrary identifiers
+    // like `__proto__`, `constructor`, or any future adapter name the
+    // package happens to export. `createAdapter` takes an unvalidated
+    // string and we don't want it to resolve a prototype-pollution
+    // sentinel or an adapter we haven't audited, so gate on the four
+    // shapes the UI actually ships today.
+    const ALLOWED_AGENT_TYPES = new Set(["claude", "codex", "gemini", "aider"]);
+    if (!ALLOWED_AGENT_TYPES.has(agentType)) {
+      error(res, `Unsupported agent type: ${agentType}`, 400);
+      return true;
+    }
     try {
       const { createAdapter } = await import("coding-agent-adapters");
       const adapter = createAdapter(
@@ -4646,7 +4658,14 @@ async function handleCodingAgentsFallback(
         json(res, sanitizeAuthResult(triggered));
       }
     } catch (e) {
-      // Avoid leaking internal adapter error strings to the client.
+      // Log the full error server-side for debugging (including stack
+      // trace) but return a generic message to the client so we don't
+      // leak internal adapter error strings through the HTTP surface.
+      logger.error(
+        `[coding-agents/auth] triggerAuth failed for ${agentType}: ${
+          e instanceof Error ? (e.stack ?? e.message) : String(e)
+        }`,
+      );
       error(res, `Auth trigger failed for ${agentType}`, 500);
     }
     return true;
