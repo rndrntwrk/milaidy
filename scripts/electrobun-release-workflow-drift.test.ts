@@ -963,7 +963,8 @@ describe("Electrobun release workflow drift", () => {
     const lines = serverSource.split("\n");
     const staticImports = lines.filter(
       (line) =>
-        /^\s*import\s/.test(line) && line.includes("@hyperscape/plugin-hyperscape"),
+        /^\s*import\s/.test(line) &&
+        line.includes("@hyperscape/plugin-hyperscape"),
     );
     expect(staticImports).toHaveLength(0);
   });

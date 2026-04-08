@@ -562,8 +562,7 @@ async function startSessionFixture(
       ? {
           url: buildViewerUrl(req, scenario),
           postMessageAuth: Boolean(scenario.viewerAuthMessage),
-          sandbox:
-            "allow-scripts allow-same-origin allow-popups allow-forms",
+          sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
           authMessage: scenario.viewerAuthMessage ?? undefined,
         }
       : null;
@@ -726,7 +725,8 @@ async function startSessionFixture(
 
     if (
       req.method === "POST" &&
-      url.pathname === `/api/apps/runs/${encodeURIComponent(scenario.runId)}/message`
+      url.pathname ===
+        `/api/apps/runs/${encodeURIComponent(scenario.runId)}/message`
     ) {
       const body = await readJsonBody(req);
       const content =
@@ -741,9 +741,7 @@ async function startSessionFixture(
         success: true,
         message: `Command relayed to ${scenario.displayName}`,
         disposition:
-          scenario.appName === "@elizaos/app-2004scape"
-            ? "queued"
-            : "accepted",
+          scenario.appName === "@elizaos/app-2004scape" ? "queued" : "accepted",
         status: 200,
         run,
         session: state.sessionState,
@@ -753,7 +751,8 @@ async function startSessionFixture(
 
     if (
       req.method === "POST" &&
-      url.pathname === `/api/apps/runs/${encodeURIComponent(scenario.runId)}/control`
+      url.pathname ===
+        `/api/apps/runs/${encodeURIComponent(scenario.runId)}/control`
     ) {
       const body = await readJsonBody(req);
       const action = typeof body?.action === "string" ? body.action.trim() : "";
@@ -840,7 +839,10 @@ async function startSessionFixture(
       return;
     }
 
-    if (scenario.extraRoutes && (await scenario.extraRoutes(req, res, url, state))) {
+    if (
+      scenario.extraRoutes &&
+      (await scenario.extraRoutes(req, res, url, state))
+    ) {
       return;
     }
 
@@ -925,7 +927,13 @@ async function startAppsSessionFixture(): Promise<FixtureServer> {
     viewerTitle: "Hyperscape Viewer Fixture",
     launchType: "connect",
     capabilities: ["combat", "skills", "inventory", "social-chat"],
-    sessionFeatures: ["commands", "telemetry", "pause", "resume", "suggestions"],
+    sessionFeatures: [
+      "commands",
+      "telemetry",
+      "pause",
+      "resume",
+      "suggestions",
+    ],
     runId: "run-hyperscape-1",
     viewerReadyEventType: "HYPERSCAPE_READY",
     viewerQuery: {
@@ -1019,7 +1027,10 @@ async function startBabylonSessionFixture(): Promise<FixtureServer> {
       },
     },
     extraRoutes: async (req, res, url, state) => {
-      if (req.method === "GET" && url.pathname === "/api/apps/babylon/agent/status") {
+      if (
+        req.method === "GET" &&
+        url.pathname === "/api/apps/babylon/agent/status"
+      ) {
         sendJson(req, res, 200, {
           id: "agent-babylon-1",
           name: "babylon-alpha",
@@ -1038,7 +1049,10 @@ async function startBabylonSessionFixture(): Promise<FixtureServer> {
         });
         return true;
       }
-      if (req.method === "GET" && url.pathname === "/api/apps/babylon/agent/summary") {
+      if (
+        req.method === "GET" &&
+        url.pathname === "/api/apps/babylon/agent/summary"
+      ) {
         sendJson(req, res, 200, {
           agent: {
             id: "agent-babylon-1",
@@ -1058,7 +1072,10 @@ async function startBabylonSessionFixture(): Promise<FixtureServer> {
         });
         return true;
       }
-      if (req.method === "GET" && url.pathname === "/api/apps/babylon/agent/goals") {
+      if (
+        req.method === "GET" &&
+        url.pathname === "/api/apps/babylon/agent/goals"
+      ) {
         sendJson(req, res, 200, [
           {
             id: "goal-1",
@@ -1111,7 +1128,10 @@ async function startBabylonSessionFixture(): Promise<FixtureServer> {
         });
         return true;
       }
-      if (req.method === "GET" && url.pathname === "/api/apps/babylon/team/dashboard") {
+      if (
+        req.method === "GET" &&
+        url.pathname === "/api/apps/babylon/team/dashboard"
+      ) {
         sendJson(req, res, 200, {
           agents: [
             {
@@ -1155,13 +1175,19 @@ async function startBabylonSessionFixture(): Promise<FixtureServer> {
         });
         return true;
       }
-      if (req.method === "GET" && url.pathname === "/api/apps/babylon/agent/chat") {
+      if (
+        req.method === "GET" &&
+        url.pathname === "/api/apps/babylon/agent/chat"
+      ) {
         sendJson(req, res, 200, {
           messages: state.chatMessages ?? [],
         });
         return true;
       }
-      if (req.method === "POST" && url.pathname === "/api/apps/babylon/agent/chat") {
+      if (
+        req.method === "POST" &&
+        url.pathname === "/api/apps/babylon/agent/chat"
+      ) {
         const body = await readJsonBody(req);
         const content =
           typeof body?.content === "string" ? body.content.trim() : "";
@@ -1182,7 +1208,10 @@ async function startBabylonSessionFixture(): Promise<FixtureServer> {
         });
         return true;
       }
-      if (req.method === "GET" && url.pathname === "/api/apps/babylon/agent/wallet") {
+      if (
+        req.method === "GET" &&
+        url.pathname === "/api/apps/babylon/agent/wallet"
+      ) {
         sendJson(req, res, 200, {
           balance: 350,
           transactions: [],
@@ -1198,7 +1227,10 @@ async function startBabylonSessionFixture(): Promise<FixtureServer> {
         });
         return true;
       }
-      if (req.method === "POST" && url.pathname === "/api/apps/babylon/agent/toggle") {
+      if (
+        req.method === "POST" &&
+        url.pathname === "/api/apps/babylon/agent/toggle"
+      ) {
         const body = await readJsonBody(req);
         state.lastControlAction =
           typeof body?.action === "string" ? body.action : null;
@@ -1223,7 +1255,13 @@ async function startTwoThousandFourScapeSessionFixture(): Promise<FixtureServer>
     viewerTitle: "2004scape Viewer Fixture",
     launchType: "connect",
     capabilities: ["auto-login", "bot-loop", "telemetry", "steering"],
-    sessionFeatures: ["commands", "telemetry", "pause", "resume", "suggestions"],
+    sessionFeatures: [
+      "commands",
+      "telemetry",
+      "pause",
+      "resume",
+      "suggestions",
+    ],
     runId: "run-2004scape-1",
     viewerReadyEventType: "RS_2004SCAPE_READY",
     viewerAuthMessage: {
@@ -1422,7 +1460,9 @@ test("apps page launches a Babylon session with embedded auth and the live dashb
       `/apps?apiBase=${encodeURIComponent(fixture.baseUrl)}`,
     );
 
-    await expect(page.getByTestId("app-card--elizaos-app-babylon")).toBeVisible();
+    await expect(
+      page.getByTestId("app-card--elizaos-app-babylon"),
+    ).toBeVisible();
     await page.getByTestId("apps-detail-launch").click();
 
     await expect
@@ -1511,12 +1551,16 @@ test("apps page launches a 2004scape session with auto-login and mobile dashboar
       '"type": "RS_2004SCAPE_AUTH"',
     );
 
-    await expect(page.getByTestId("game-mobile-surface-dashboard")).toBeVisible();
+    await expect(
+      page.getByTestId("game-mobile-surface-dashboard"),
+    ).toBeVisible();
     await page.getByTestId("game-mobile-surface-dashboard").click();
     const surface = page.getByTestId("2004scape-live-operator-surface");
     await expect(surface).toBeVisible();
     await expect(surface.getByText("2004scape Live Dashboard")).toBeVisible();
-    await expect(surface.getByText("Auto-login RS_2004SCAPE_AUTH")).toBeVisible();
+    await expect(
+      surface.getByText("Auto-login RS_2004SCAPE_AUTH"),
+    ).toBeVisible();
 
     const promptButton = surface.getByRole("button", {
       name: "bank before logging off",

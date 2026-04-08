@@ -285,8 +285,7 @@ function normalizePluginParameters(rawParameters) {
       required:
         definition.required === true ||
         (definition.optional === false && definition.required !== false),
-      sensitive:
-        definition.sensitive === true || inferSensitiveKey(key),
+      sensitive: definition.sensitive === true || inferSensitiveKey(key),
     };
 
     if (definition.default !== undefined) {
@@ -389,7 +388,12 @@ function readLocalPackageMetadata(dirName, npmName) {
 async function fetchPublishedPackageManifest(packageName, version) {
   if (!packageName) return {};
 
-  const dirName = `plugin-${packageName.split("/").pop()?.replace(/^plugin-/, "") ?? ""}`;
+  const dirName = `plugin-${
+    packageName
+      .split("/")
+      .pop()
+      ?.replace(/^plugin-/, "") ?? ""
+  }`;
   const fetchVersionMetadata = async (candidateVersion) => {
     if (!candidateVersion) return {};
     try {
@@ -807,7 +811,7 @@ async function main() {
         ? existingEntry.configKeys
         : localMeta.configKeys?.length > 0
           ? localMeta.configKeys
-          : publishedMeta.configKeys ?? [];
+          : (publishedMeta.configKeys ?? []);
     const envKey = findEnvKey(configKeys);
 
     // Preserve pluginDeps from existing manifest
