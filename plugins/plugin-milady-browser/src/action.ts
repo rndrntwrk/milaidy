@@ -308,7 +308,7 @@ function formatSingleCommandResult(result: BrowserWorkspaceCommandResult): strin
     }
     case "close":
       return result.closed
-        ? "Closed the browser tab."
+        ? "Closed browser tab."
         : "The requested browser tab was not open.";
     case "eval":
       return `Evaluated JavaScript in the browser tab: ${stringifyResult(result.value)}`;
