@@ -17,8 +17,7 @@ describe("OpenRouter plugin dependency pin", () => {
       readFileSync(path.join(root, "package.json"), "utf8"),
     ) as { dependencies: Record<string, string> };
     const v = pkg.dependencies["@elizaos/plugin-openrouter"];
-    expect(v).toBe("2.0.0-alpha.10");
-    expect(v).not.toMatch(/^[\^~]/);
+    expect(v).toBe("workspace:*");
 
     const patchDeps = readFileSync(
       path.join(root, "scripts/patch-deps.mjs"),

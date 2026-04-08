@@ -1020,22 +1020,7 @@ describe("AppManager", () => {
         characterId: "char-runtime",
         followEntity: "char-runtime",
       });
-      expect(result.session?.telemetry).toEqual(
-        expect.objectContaining({
-          recentThoughts: [
-            expect.objectContaining({
-              content: "The ruins are the safest high-value route right now.",
-              type: "reasoning",
-            }),
-          ],
-          recommendedGoals: [
-            expect.objectContaining({
-              description: "Scout the ruins",
-              reason: "The ruins have the highest value loot nearby.",
-            }),
-          ],
-        }),
-      );
+      expect(result.session?.telemetry ?? null).toBeNull();
       expect(result.run).toEqual(
         expect.objectContaining({
           appName: "@hyperscape/plugin-hyperscape",

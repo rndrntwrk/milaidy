@@ -16,6 +16,18 @@ import {
   handlePluginsCompatRoutes,
 } from "./plugins-compat-routes";
 
+const tmpPaths = vi.hoisted(() => {
+  const os = require("node:os");
+  const path = require("node:path");
+  const fallbackDir = path.join(os.tmpdir(), "milady-compat-routes-fallback");
+  return {
+    tmpDir: fallbackDir,
+    tmpConfigPath: path.join(fallbackDir, "eliza.json"),
+    tmpPersistConfigPath: path.join(fallbackDir, "milady.json"),
+    tmpStateDir: path.join(fallbackDir, "state"),
+  };
+});
+
 let tmpDir: string;
 let tmpConfigPath: string;
 let tmpPersistConfigPath: string;
@@ -34,8 +46,8 @@ const ENV_KEYS = [
 const envBackup = new Map<string, string | undefined>();
 
 vi.mock("@miladyai/agent/config/paths", () => ({
-  resolveConfigPath: () => tmpConfigPath,
-  resolveStateDir: () => tmpStateDir,
+  resolveConfigPath: () => tmpPaths.tmpConfigPath,
+  resolveStateDir: () => tmpPaths.tmpStateDir,
   resolveUserPath: (value: string) => value,
 }));
 
@@ -101,6 +113,10 @@ describe("buildPluginListResponse", () => {
     tmpConfigPath = path.join(tmpDir, "eliza.json");
     tmpPersistConfigPath = path.join(tmpDir, "milady.json");
     tmpStateDir = path.join(tmpDir, "state");
+    tmpPaths.tmpDir = tmpDir;
+    tmpPaths.tmpConfigPath = tmpConfigPath;
+    tmpPaths.tmpPersistConfigPath = tmpPersistConfigPath;
+    tmpPaths.tmpStateDir = tmpStateDir;
 
     for (const key of ENV_KEYS) {
       envBackup.set(key, process.env[key]);

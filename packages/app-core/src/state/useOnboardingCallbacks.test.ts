@@ -8,6 +8,7 @@ const { mockInvokeDesktopBridgeRequest, mockCapacitorAgentStart } = vi.hoisted((
 vi.mock("../bridge", () => ({
   invokeDesktopBridgeRequest: (...args: unknown[]) =>
     mockInvokeDesktopBridgeRequest(...args),
+  getDesktopRuntimeMode: vi.fn(async () => null),
   scanProviderCredentials: vi.fn(async () => []),
 }));
 
