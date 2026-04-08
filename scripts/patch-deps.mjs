@@ -2038,3 +2038,53 @@ function patchGroqSdkVersion() {
   }
 }
 patchGroqSdkVersion();
+
+/**
+ * Stub missing @elizaos/core type declarations.
+ *
+ * The npm-published @elizaos/core@2.0.0-alpha.115 declares
+ * `"types": "./dist/node/index.d.ts"` in its exports but doesn't ship that
+ * file. TypeScript strict-mode builds that import @elizaos/core then fail
+ * with TS7016 (noImplicitAny). This creates a minimal re-export stub so the
+ * package resolves types correctly.
+ */
+function patchElizaCoreNodeTypes() {
+  const bunCacheDir = resolve(root, "node_modules/.bun");
+  const dirs = [resolve(root, "node_modules/@elizaos/core")];
+  if (existsSync(bunCacheDir)) {
+    try {
+      for (const entry of readdirSync(bunCacheDir)) {
+        if (entry.startsWith("@elizaos+core@")) {
+          dirs.push(
+            resolve(bunCacheDir, entry, "node_modules/@elizaos/core"),
+          );
+        }
+      }
+    } catch {}
+  }
+
+  let patched = 0;
+  for (const pkgDir of dirs) {
+    const nodeDir = resolve(pkgDir, "dist/node");
+    const dtsTarget = resolve(nodeDir, "index.d.ts");
+    if (existsSync(dtsTarget)) continue;
+
+    // Find the main .d.ts that contains the real type exports.
+    const mainDts = resolve(pkgDir, "dist/index.d.ts");
+    if (!existsSync(mainDts) || !existsSync(nodeDir)) continue;
+
+    try {
+      writeFileSync(
+        dtsTarget,
+        '// Auto-generated stub — see patch-deps.mjs patchElizaCoreNodeTypes\nexport * from "../index";\n',
+      );
+      patched++;
+    } catch {}
+  }
+  if (patched > 0) {
+    console.log(
+      `[patch-deps] Created ${patched} @elizaos/core dist/node/index.d.ts stub(s)`,
+    );
+  }
+}
+patchElizaCoreNodeTypes();
