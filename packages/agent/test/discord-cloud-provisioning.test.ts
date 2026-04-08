@@ -87,8 +87,7 @@ describe("cloud container with DISCORD_API_TOKEN", () => {
     expect(changes.some((c) => c.includes("discord"))).toBe(true);
   });
 
-  it("edge-tts auto-enables in cloud-provisioned containers", () => {
-    // Cloud containers get MILADY_CLOUD_PROVISIONED=1 for voice output support
+  it("cloud provisioning does not change connector auto-enable behavior", () => {
     const config = {
       plugins: {},
       connectors: {
@@ -101,10 +100,13 @@ describe("cloud container with DISCORD_API_TOKEN", () => {
       env: { MILADY_CLOUD_PROVISIONED: "1" },
     });
 
-    expect(updatedConfig.plugins?.allow).toContain("@elizaos/plugin-edge-tts");
+    expect(updatedConfig.plugins?.allow).toContain("@elizaos/plugin-discord");
+    expect(updatedConfig.plugins?.allow ?? []).not.toContain(
+      "@elizaos/plugin-edge-tts",
+    );
   });
 
-  it("edge-tts auto-enables with ELIZA_CLOUD_PROVISIONED variant", () => {
+  it("ELIZA_CLOUD_PROVISIONED does not inject edge-tts into the allow list", () => {
     const config = { plugins: {}, connectors: {} };
 
     const { config: updatedConfig } = applyPluginAutoEnable({
@@ -112,7 +114,9 @@ describe("cloud container with DISCORD_API_TOKEN", () => {
       env: { ELIZA_CLOUD_PROVISIONED: "1" },
     });
 
-    expect(updatedConfig.plugins?.allow).toContain("@elizaos/plugin-edge-tts");
+    expect(updatedConfig.plugins?.allow ?? []).not.toContain(
+      "@elizaos/plugin-edge-tts",
+    );
   });
 
   it("token format validation warns on suspiciously short tokens", () => {
@@ -206,9 +210,12 @@ describe("cloud container without discord token", () => {
       env: { MILADY_CLOUD_PROVISIONED: "1" },
     });
 
-    // Only edge-tts should auto-enable (from cloud provisioning), not discord
+    // Cloud provisioning alone does not inject connector or TTS plugins here.
     expect(updatedConfig.plugins?.allow ?? []).not.toContain(
       "@elizaos/plugin-discord",
+    );
+    expect(updatedConfig.plugins?.allow ?? []).not.toContain(
+      "@elizaos/plugin-edge-tts",
     );
   });
 
@@ -355,7 +362,9 @@ describe("full cloud provisioning simulation", () => {
       env: { MILADY_CLOUD_PROVISIONED: "1" },
     });
     expect(enabledConfig.plugins?.allow).toContain("@elizaos/plugin-discord");
-    expect(enabledConfig.plugins?.allow).toContain("@elizaos/plugin-edge-tts");
+    expect(enabledConfig.plugins?.allow ?? []).not.toContain(
+      "@elizaos/plugin-edge-tts",
+    );
 
     // Step 3: Validate config
     const discordParams: PluginParamInfo[] = [

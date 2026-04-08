@@ -6,11 +6,8 @@
  * edge cases in case-sensitivity.
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  ConnectorHealthMonitor,
-  type ConnectorStatus,
-} from "../src/api/connector-health";
+import { describe, expect, it } from "vitest";
+import { ConnectorHealthMonitor } from "../src/api/connector-health";
 import { CONNECTOR_PLUGINS } from "../src/config/plugin-auto-enable";
 
 // ---------------------------------------------------------------------------
@@ -205,26 +202,26 @@ describe("connector health monitor — CONNECTOR_PLUGIN_MAP", () => {
 // ---------------------------------------------------------------------------
 
 describe("connector health monitor — case sensitivity", () => {
-  it("connector names are case-sensitive (lowercase lookup)", async () => {
-    // The health monitor lowercases the connector name when looking up the
-    // CONNECTOR_PLUGIN_MAP. This test ensures that mixed-case connector
-    // names like "telegramAccount" and "googlechat" are handled correctly.
-    const runtime = createMockRuntime({ services: {} });
+  it("normalizes mixed-case connector names before plugin lookup", async () => {
+    const runtime = createMockRuntime({
+      services: {
+        discord: { name: "discord" },
+        "telegram-account": { name: "telegram-account" },
+      },
+    });
     const { monitor } = createMonitor({
       runtime,
       connectors: {
-        // These names should be lowercased when looking up the plugin map
         Discord: { enabled: true },
-        DISCORD: { enabled: true },
+        TelegramAccount: { enabled: true },
       },
     });
 
     await monitor.check();
     const statuses = monitor.getConnectorStatuses();
-    // The monitor lowercases for lookup, so these should resolve to "discord"
-    // in the CONNECTOR_PLUGIN_MAP — the status depends on whether the service
-    // is loaded, but at minimum they should not crash
-    expect(Object.keys(statuses).length).toBeGreaterThanOrEqual(0);
+
+    expect(statuses.Discord).toBe("ok");
+    expect(statuses.TelegramAccount).toBe("ok");
   });
 
   it("camelCase connector IDs in config are preserved", () => {

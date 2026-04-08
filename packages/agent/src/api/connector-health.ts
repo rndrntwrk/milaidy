@@ -47,6 +47,12 @@ export const CONNECTOR_PLUGIN_MAP: Record<string, string> = {
   googlechat: "google-chat",
   wechat: "wechat",
 };
+const CONNECTOR_PLUGIN_MAP_NORMALIZED = Object.fromEntries(
+  Object.entries(CONNECTOR_PLUGIN_MAP).map(([connectorName, pluginName]) => [
+    connectorName.toLowerCase(),
+    pluginName,
+  ]),
+);
 
 export class ConnectorHealthMonitor {
   private runtime: AgentRuntime;
@@ -110,7 +116,9 @@ export class ConnectorHealthMonitor {
   }
 
   private async probeConnector(name: string): Promise<ConnectorStatus> {
-    const pluginName = CONNECTOR_PLUGIN_MAP[name];
+    const pluginName =
+      CONNECTOR_PLUGIN_MAP[name] ??
+      CONNECTOR_PLUGIN_MAP_NORMALIZED[name.toLowerCase()];
     if (!pluginName) return "unknown";
 
     const service = this.runtime.getService(pluginName);
