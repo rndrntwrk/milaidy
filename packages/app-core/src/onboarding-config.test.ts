@@ -130,6 +130,67 @@ describe("buildOnboardingRuntimeConfig", () => {
     });
   });
 
+  it("keeps Claude subscription and Eliza Cloud linked during cloud hosting without creating a runtime route", () => {
+    expect(
+      buildOnboardingRuntimeConfig({
+        onboardingServerTarget: "elizacloud",
+        onboardingCloudApiKey: "ck-cloud-test",
+        onboardingProvider: "anthropic-subscription",
+        onboardingApiKey: "sk-ant-oat01-test",
+        onboardingPrimaryModel: "",
+        onboardingOpenRouterModel: "",
+        onboardingRemoteConnected: false,
+        onboardingRemoteApiBase: "",
+        onboardingRemoteToken: "",
+        onboardingSmallModel: "openai/gpt-5-mini",
+        onboardingLargeModel: "anthropic/claude-sonnet-4.5",
+        onboardingVoiceProvider: "",
+        onboardingVoiceApiKey: "",
+      }),
+    ).toEqual({
+      deploymentTarget: {
+        runtime: "cloud",
+        provider: "elizacloud",
+      },
+      credentialInputs: {
+        cloudApiKey: "ck-cloud-test",
+      },
+      linkedAccounts: {
+        elizacloud: {
+          status: "linked",
+          source: "api-key",
+        },
+        "anthropic-subscription": {
+          status: "linked",
+          source: "subscription",
+        },
+      },
+      serviceRouting: {
+        tts: {
+          backend: "elizacloud",
+          transport: "cloud-proxy",
+          accountId: "elizacloud",
+        },
+        media: {
+          backend: "elizacloud",
+          transport: "cloud-proxy",
+          accountId: "elizacloud",
+        },
+        embeddings: {
+          backend: "elizacloud",
+          transport: "cloud-proxy",
+          accountId: "elizacloud",
+        },
+        rpc: {
+          backend: "elizacloud",
+          transport: "cloud-proxy",
+          accountId: "elizacloud",
+        },
+      },
+      needsProviderSetup: true,
+    });
+  });
+
   it("keeps a linked Eliza Cloud account when local inference uses another provider", () => {
     expect(
       buildOnboardingRuntimeConfig({

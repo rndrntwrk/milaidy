@@ -169,6 +169,56 @@ describe("applyOnboardingConnectionConfig", () => {
     expect(applySubscriptionCredentials).not.toHaveBeenCalled();
   });
 
+  it("clears an invalid Claude runtime route while preserving other service routes", async () => {
+    const config = {
+      serviceRouting: {
+        llmText: {
+          backend: "anthropic-subscription",
+          transport: "direct",
+        },
+        rpc: {
+          backend: "elizacloud",
+          transport: "cloud-proxy",
+          accountId: "elizacloud",
+        },
+      },
+    } as Partial<ElizaConfig>;
+
+    await applyOnboardingConnectionConfig(config, {
+      kind: "local-provider",
+      provider: "anthropic-subscription",
+    });
+
+    expect(config.agents?.defaults?.subscriptionProvider).toBe(
+      "anthropic-subscription",
+    );
+    expect(config.serviceRouting).toEqual({
+      rpc: {
+        backend: "elizacloud",
+        transport: "cloud-proxy",
+        accountId: "elizacloud",
+      },
+    });
+    expect(applySubscriptionCredentials).not.toHaveBeenCalled();
+  });
+
+  it("keeps Codex subscription runtime-capable and applies stored credentials", async () => {
+    const config = emptyConfig();
+
+    await applyOnboardingConnectionConfig(config, {
+      kind: "local-provider",
+      provider: "openai-subscription",
+    });
+
+    expect(config.agents?.defaults?.subscriptionProvider).toBe("openai-codex");
+    expect(config.agents?.defaults?.model?.primary).toBe("openai");
+    expect(config.serviceRouting?.llmText).toEqual({
+      backend: "openai-subscription",
+      transport: "direct",
+    });
+    expect(applySubscriptionCredentials).toHaveBeenCalledWith(config);
+  });
+
   it("preserves an existing direct-provider key when selection changes without a new apiKey", async () => {
     const config = {
       env: {
