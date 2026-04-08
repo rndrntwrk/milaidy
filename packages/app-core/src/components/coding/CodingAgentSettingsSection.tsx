@@ -346,6 +346,13 @@ export function CodingAgentSettingsSection() {
   // and creating a second read path that bypasses the `cloud.apiKey`
   // contract. These synthetic keys are read-only from the UI's
   // perspective and must never round-trip through env.
+  // Track the last auto-save failure so we can show an inline error
+  // banner. SaveFooter used to own this surface; when we switched to
+  // debounced auto-save we lost the error-feedback path entirely and
+  // a failed POST would silently lose the user's typed API key on
+  // restart. `.catch()` on the fire-and-forget promise closes that
+  // gap without reintroducing the explicit Save button.
+  const [autoSaveError, setAutoSaveError] = useState<string | null>(null);
   const autoSaveArmedRef = useRef(false);
   useEffect(() => {
     // Skip the first render (initial load from getConfig) so we
@@ -361,7 +368,14 @@ export function CodingAgentSettingsSection() {
       if (v != null) envPatch[k] = v;
     }
     const timer = setTimeout(() => {
-      void client.updateConfig({ env: envPatch });
+      client
+        .updateConfig({ env: envPatch })
+        .then(() => setAutoSaveError(null))
+        .catch((err: unknown) => {
+          setAutoSaveError(
+            err instanceof Error ? err.message : "Failed to save settings",
+          );
+        });
     }, 400);
     return () => clearTimeout(timer);
   }, [prefs, loading]);
@@ -532,6 +546,17 @@ export function CodingAgentSettingsSection() {
 
   return (
     <div className="flex flex-col gap-4">
+      {autoSaveError && (
+        <div
+          role="alert"
+          className="rounded-md border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-500"
+        >
+          {t("codingagentsettingssection.AutoSaveFailed", {
+            defaultValue: "Failed to save settings: {{error}}",
+            error: autoSaveError,
+          })}
+        </div>
+      )}
       <SettingsControls.Field>
         <SettingsControls.FieldLabel>
           {t("codingagentsettingssection.LlmProvider", {

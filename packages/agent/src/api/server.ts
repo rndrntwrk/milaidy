@@ -4245,7 +4245,7 @@ async function handleCodingAgentsFallback(
     installed?: boolean;
     installCommand?: string;
     docsUrl?: string;
-    auth?: Record<string, unknown>;
+    auth?: import("./coding-agents-preflight-normalize").NormalizedPreflightAuth;
   };
   type CodeTaskService = {
     getTasks?: () => Promise<
@@ -4368,12 +4368,16 @@ async function handleCodingAgentsFallback(
           break;
         }
       }
+      const { normalizePreflightAuth } = await import(
+        "./coding-agents-preflight-normalize"
+      );
       const normalized = rows.flatMap((item): AgentPreflightRecord[] => {
         if (!item || typeof item !== "object") return [];
         const raw = item as Record<string, unknown>;
         const adapter =
           typeof raw.adapter === "string" ? raw.adapter.trim() : "";
         if (!adapter) return [];
+        const auth = normalizePreflightAuth(raw.auth);
         return [
           {
             adapter,
@@ -4383,9 +4387,7 @@ async function handleCodingAgentsFallback(
                 ? raw.installCommand
                 : undefined,
             docsUrl: typeof raw.docsUrl === "string" ? raw.docsUrl : undefined,
-            ...(raw.auth && typeof raw.auth === "object"
-              ? { auth: raw.auth as Record<string, unknown> }
-              : {}),
+            ...(auth ? { auth } : {}),
           },
         ];
       });
