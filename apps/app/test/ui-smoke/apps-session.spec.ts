@@ -1580,9 +1580,10 @@ test("apps page launches a 2004scape session with auto-login and mobile dashboar
     const surface = page.getByTestId("2004scape-live-operator-surface");
     await expect(surface).toBeVisible();
     await expect(surface.getByText("2004scape Live Dashboard")).toBeVisible();
-    await expect(
-      surface.getByText("Auto-login RS_2004SCAPE_AUTH"),
-    ).toBeVisible();
+    await expect(surface).toContainText("Credentials stored");
+    await expect(surface).toContainText("Bot bot-user");
+    await expect(surface).not.toContainText("RS_2004SCAPE_AUTH");
+    await expect(surface).not.toContainText("bot-pass");
 
     await page.getByTestId("game-mobile-surface-chat").click();
     const chatSurface = page.getByTestId("2004scape-live-operator-surface");

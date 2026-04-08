@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 
-import type { AppRunSummary, RegistryAppInfo } from "../../../api";
 import TestRenderer, { act } from "react-test-renderer";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { textOf } from "../../../../../../test/helpers/react-test";
+import type { AppRunSummary, RegistryAppInfo } from "../../../api";
 
 const mockUseApp = vi.hoisted(() => vi.fn());
 const mockClient = vi.hoisted(() => ({
@@ -67,6 +67,7 @@ function createRun(overrides: Partial<AppRunSummary> = {}): AppRunSummary {
       authMessage: {
         type: "RS_2004SCAPE_AUTH",
         authToken: "token",
+        sessionToken: "secret",
         characterId: "character-1",
         agentId: "agent-1",
       },
@@ -118,7 +119,9 @@ function flushPromises(): Promise<void> {
 describe("TwoThousandFourScapeDetailExtension", () => {
   beforeEach(() => {
     mockUseApp.mockReset();
-    Object.values(mockClient).forEach((mockFn) => mockFn.mockReset());
+    Object.values(mockClient).forEach((mockFn) => {
+      mockFn.mockReset();
+    });
   });
 
   it("shows the operator fallback before a run exists", () => {
@@ -162,11 +165,15 @@ describe("TwoThousandFourScapeDetailExtension", () => {
 
     const output = textOf(tree.root);
     expect(output).toContain("2004scape Operator Surface");
-    expect(output).toContain("Auto-login RS_2004SCAPE_AUTH");
-    expect(output).toContain("Continuously running service");
+    expect(output).toContain("Credentials stored");
+    expect(output).toContain("Bot BotName");
+    expect(output).toContain("Connected to 2004scape");
+    expect(output).toContain("Live steering ready");
     expect(output).toContain("Mining and banking safely in Lumbridge.");
     expect(output).toContain("Mined iron ore near the south wall.");
     expect(output).toContain("bank before logging off");
+    expect(output).not.toContain("RS_2004SCAPE_AUTH");
+    expect(output).not.toContain("secret");
 
     const pauseButton = tree.root
       .findAll((node) => node.type === "button")

@@ -981,7 +981,9 @@ describe("AppManager", () => {
     const fixtureServer = await startHyperscapeFixtureServer();
     process.env.HYPERSCAPE_API_URL = fixtureServer.url;
 
-    const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "milady-plugin-hyperscape-live-"));
+    const stateDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "milady-plugin-hyperscape-live-"),
+    );
     try {
       const manager = new AppManager({ stateDir });
       const runtime = createRuntimeStub({
@@ -1534,7 +1536,9 @@ describe("AppManager", () => {
     process.env.BABYLON_API_URL = fixtureServer.url;
     process.env.BABYLON_CLIENT_URL = fixtureServer.url;
 
-    const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "milady-app-babylon-live-"));
+    const stateDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "milady-app-babylon-live-"),
+    );
     try {
       const manager = new AppManager({ stateDir });
       const runtime = createRuntimeStub({
@@ -1820,7 +1824,9 @@ describe("AppManager", () => {
           ]),
           awaySummary: expect.objectContaining({
             eventCount: 2,
-            message: expect.stringContaining("Defense loop is holding mid lane."),
+            message: expect.stringContaining(
+              "Defense loop is holding mid lane.",
+            ),
           }),
           healthDetails: expect.objectContaining({
             checkedAt: expect.any(String),
@@ -1902,7 +1908,9 @@ describe("AppManager", () => {
             }),
           ]),
           awaySummary: expect.objectContaining({
-            message: expect.stringContaining("Run verification failed: viewer bridge is offline"),
+            message: expect.stringContaining(
+              "Run verification failed: viewer bridge is offline",
+            ),
           }),
         }),
       );
@@ -1927,6 +1935,136 @@ describe("AppManager", () => {
         } else {
           delete process.env[key];
         }
+      }
+    });
+
+    it("auto-provisions 2004scape credentials and mirrors them into legacy keys", async () => {
+      delete process.env.RS_SDK_BOT_NAME;
+      delete process.env.RS_SDK_BOT_PASSWORD;
+      delete process.env.BOT_NAME;
+      delete process.env.BOT_PASSWORD;
+
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = vi
+        .fn()
+        .mockResolvedValue(new Response("ok", { status: 200 }));
+
+      try {
+        const manager = new AppManager();
+        const pluginManager = buildPluginManager([], RS_2004SCAPE_APP_INFO);
+        const runtime = createRuntimeStub({ characterName: "Scout Bot" });
+
+        const result = await manager.launch(
+          pluginManager,
+          "@elizaos/app-2004scape",
+          undefined,
+          runtime,
+        );
+
+        const authMessage = result.viewer?.authMessage;
+        expect(authMessage?.type).toBe("RS_2004SCAPE_AUTH");
+        expect(authMessage?.authToken).toMatch(/^[a-z0-9]+$/);
+        expect((authMessage?.authToken ?? "").length).toBeLessThanOrEqual(12);
+        expect(authMessage?.authToken).not.toBe("testbot");
+        expect((authMessage?.sessionToken ?? "").length).toBeGreaterThan(0);
+
+        expect(process.env.RS_SDK_BOT_NAME).toBe(authMessage?.authToken);
+        expect(process.env.BOT_NAME).toBe(authMessage?.authToken);
+        expect(process.env.RS_SDK_BOT_PASSWORD).toBe(authMessage?.sessionToken);
+        expect(process.env.BOT_PASSWORD).toBe(authMessage?.sessionToken);
+        expect(runtime.getSetting("RS_SDK_BOT_NAME")).toBe(
+          authMessage?.authToken,
+        );
+        expect(runtime.getSetting("BOT_NAME")).toBe(authMessage?.authToken);
+        expect(runtime.getSetting("RS_SDK_BOT_PASSWORD")).toBe(
+          authMessage?.sessionToken,
+        );
+        expect(runtime.getSetting("BOT_PASSWORD")).toBe(
+          authMessage?.sessionToken,
+        );
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
+
+    it("promotes legacy BOT credentials into the RS_SDK launch contract", async () => {
+      delete process.env.RS_SDK_BOT_NAME;
+      delete process.env.RS_SDK_BOT_PASSWORD;
+      process.env.BOT_NAME = "legacybot";
+      process.env.BOT_PASSWORD = "legacy-pass-42";
+
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = vi
+        .fn()
+        .mockResolvedValue(new Response("ok", { status: 200 }));
+
+      try {
+        const manager = new AppManager();
+        const pluginManager = buildPluginManager([], RS_2004SCAPE_APP_INFO);
+        const runtime = createRuntimeStub({ characterName: "Scout Bot" });
+
+        const result = await manager.launch(
+          pluginManager,
+          "@elizaos/app-2004scape",
+          undefined,
+          runtime,
+        );
+
+        const authMessage = result.viewer?.authMessage;
+        expect(authMessage).toEqual(
+          expect.objectContaining({
+            type: "RS_2004SCAPE_AUTH",
+            authToken: "legacybot",
+            sessionToken: "legacy-pass-42",
+          }),
+        );
+        expect(process.env.RS_SDK_BOT_NAME).toBe("legacybot");
+        expect(process.env.RS_SDK_BOT_PASSWORD).toBe("legacy-pass-42");
+        expect(runtime.getSetting("RS_SDK_BOT_NAME")).toBe("legacybot");
+        expect(runtime.getSetting("RS_SDK_BOT_PASSWORD")).toBe(
+          "legacy-pass-42",
+        );
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
+
+    it("prefers RS_SDK credentials when legacy BOT credentials drift out of sync", async () => {
+      process.env.RS_SDK_BOT_NAME = "stablebot";
+      process.env.RS_SDK_BOT_PASSWORD = "stable-pass-42";
+      process.env.BOT_NAME = "wrongbot";
+      process.env.BOT_PASSWORD = "wrong-pass-42";
+
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = vi
+        .fn()
+        .mockResolvedValue(new Response("ok", { status: 200 }));
+
+      try {
+        const manager = new AppManager();
+        const pluginManager = buildPluginManager([], RS_2004SCAPE_APP_INFO);
+        const runtime = createRuntimeStub({ characterName: "Scout Bot" });
+
+        const result = await manager.launch(
+          pluginManager,
+          "@elizaos/app-2004scape",
+          undefined,
+          runtime,
+        );
+
+        expect(result.viewer?.authMessage).toEqual(
+          expect.objectContaining({
+            type: "RS_2004SCAPE_AUTH",
+            authToken: "stablebot",
+            sessionToken: "stable-pass-42",
+          }),
+        );
+        expect(process.env.BOT_NAME).toBe("stablebot");
+        expect(process.env.BOT_PASSWORD).toBe("stable-pass-42");
+        expect(runtime.getSetting("BOT_NAME")).toBe("stablebot");
+        expect(runtime.getSetting("BOT_PASSWORD")).toBe("stable-pass-42");
+      } finally {
+        globalThis.fetch = originalFetch;
       }
     });
 
@@ -2059,9 +2197,9 @@ describe("AppManager", () => {
       );
 
       expect(info).not.toBeNull();
-      expect(info!.displayName).toBe("Hyperscape");
-      expect(info!.launchType).toBe("connect");
-      expect(info!.appMeta?.bridgeExport).toBe("./app");
+      expect(info?.displayName).toBe("Hyperscape");
+      expect(info?.launchType).toBe("connect");
+      expect(info?.appMeta?.bridgeExport).toBe("./app");
     });
 
     it("returns null for an unknown app", async () => {
@@ -2084,8 +2222,8 @@ describe("AppManager", () => {
       );
 
       expect(info).not.toBeNull();
-      expect(info!.displayName).toBe("Hyperscape");
-      expect(info!.launchType).toBe("connect");
+      expect(info?.displayName).toBe("Hyperscape");
+      expect(info?.launchType).toBe("connect");
     });
   });
 });

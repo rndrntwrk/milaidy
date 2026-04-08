@@ -18,13 +18,13 @@ import {
   type AppLaunchDiagnostic,
   type AppLaunchPreparation,
   type AppLaunchResult,
-  type AppRunCapabilityAvailability,
   type AppRunActionResult,
   type AppRunAwaySummary,
+  type AppRunCapabilityAvailability,
   type AppRunEvent,
   type AppRunSummary,
-  type AppSessionState,
   type AppSessionJsonValue,
+  type AppSessionState,
   type AppStopResult,
   type AppViewerAuthMessage,
   hasAppInterface,
@@ -32,8 +32,15 @@ import {
   packageNameToAppDisplayName,
   packageNameToAppRouteSlug,
 } from "../contracts/apps.js";
-import { importAppPlugin, importAppRouteModule } from "./app-package-modules.js";
+import {
+  importAppPlugin,
+  importAppRouteModule,
+} from "./app-package-modules.js";
 import { readAppRunStore, writeAppRunStore } from "./app-run-store.js";
+import {
+  generateBotPassword,
+  generateBotUsername,
+} from "./credential-words.js";
 import type {
   InstallProgressLike,
   PluginManagerLike,
@@ -61,6 +68,11 @@ export type {
 const DEFAULT_VIEWER_SANDBOX = "allow-scripts allow-same-origin allow-popups";
 const RS_2004SCAPE_APP_ROUTE_SLUG = "2004scape";
 const RS_2004SCAPE_AUTH_MESSAGE_TYPE = "RS_2004SCAPE_AUTH";
+const RS_2004SCAPE_BOT_NAME_KEYS = ["RS_SDK_BOT_NAME", "BOT_NAME"] as const;
+const RS_2004SCAPE_BOT_PASSWORD_KEYS = [
+  "RS_SDK_BOT_PASSWORD",
+  "BOT_PASSWORD",
+] as const;
 const DEFAULT_RS_SDK_SERVER_URL = "https://rs-sdk-demo.fly.dev";
 const BABYLON_APP_ROUTE_SLUG = "babylon";
 const LOCAL_DEV_BABYLON_CLIENT_URL = "http://localhost:3000";
@@ -333,7 +345,14 @@ function getTemplateFallbackValue(key: string): string | undefined {
     if (runtimeBotName && runtimeBotName.length > 0) {
       return runtimeBotName;
     }
-    return "testbot";
+    return undefined;
+  }
+  if (key === "RS_SDK_BOT_PASSWORD") {
+    const runtimeBotPassword = process.env.BOT_PASSWORD?.trim();
+    if (runtimeBotPassword && runtimeBotPassword.length > 0) {
+      return runtimeBotPassword;
+    }
+    return undefined;
   }
   if (key === "RS_SDK_SERVER_URL") {
     return DEFAULT_RS_SDK_SERVER_URL;
@@ -364,6 +383,27 @@ function resolve2004scapeServerUrl(runtime?: IAgentRuntime | null): string {
   return DEFAULT_RS_SDK_SERVER_URL;
 }
 
+function get2004scapeCredentialKeys(
+  key: "RS_SDK_BOT_NAME" | "RS_SDK_BOT_PASSWORD",
+): readonly string[] {
+  return key === "RS_SDK_BOT_NAME"
+    ? RS_2004SCAPE_BOT_NAME_KEYS
+    : RS_2004SCAPE_BOT_PASSWORD_KEYS;
+}
+
+function resolve2004scapeCredential(
+  runtime: IAgentRuntime | null | undefined,
+  key: "RS_SDK_BOT_NAME" | "RS_SDK_BOT_PASSWORD",
+): string | undefined {
+  for (const credentialKey of get2004scapeCredentialKeys(key)) {
+    const value = resolveSettingLike(runtime, credentialKey);
+    if (value) {
+      return value;
+    }
+  }
+  return undefined;
+}
+
 // ---------------------------------------------------------------------------
 // 2004scape credential auto-provisioning
 // ---------------------------------------------------------------------------
@@ -374,16 +414,11 @@ function persist2004scapeCredential(
   value: string,
   secret = false,
 ): void {
-  process.env[key] = value;
-  if (!runtime) return;
-
-  try {
-    runtime.setSetting(key, value, secret);
-  } catch (err) {
-    logger.error(
-      `[app-manager] Failed to persist 2004scape credential "${key}": ${err}`,
-    );
+  const credentialKeys = get2004scapeCredentialKeys(key);
+  for (const credentialKey of credentialKeys) {
+    process.env[credentialKey] = value;
   }
+  if (!runtime) return;
 
   const character = runtime.character as {
     settings?: { secrets?: Record<string, string> };
@@ -395,61 +430,53 @@ function persist2004scapeCredential(
   if (!character.settings.secrets) {
     character.settings.secrets = {};
   }
-  character.settings.secrets[key] = value;
   if (!character.secrets) {
     character.secrets = {};
   }
-  character.secrets[key] = value;
+
+  for (const credentialKey of credentialKeys) {
+    try {
+      runtime.setSetting(credentialKey, value, secret);
+    } catch (err) {
+      logger.error(
+        `[app-manager] Failed to persist 2004scape credential "${credentialKey}": ${err}`,
+      );
+    }
+    character.settings.secrets[credentialKey] = value;
+    character.secrets[credentialKey] = value;
+  }
 }
 
-/**
- * Derive a 2004scape-safe username from the agent's display name.
- * Rules: lowercase alphanumeric only, max 12 chars.
- */
-function derive2004scapeUsername(agentName: string): string {
-  return (
-    agentName
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, "")
-      .slice(0, 12) || "agent"
-  );
-}
-
-function generateRandomPassword(length = 16): string {
-  const chars =
-    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  const bytes = crypto.randomBytes(length);
-  return Array.from(bytes, (b) => chars[b % chars.length]).join("");
-}
 async function prepare2004scapeLaunch(
   runtime: IAgentRuntime | null,
 ): Promise<AppLaunchDiagnostic[]> {
   if (!runtime) return [];
 
-  const existingName = resolveSettingLike(runtime, "RS_SDK_BOT_NAME");
-  const existingPassword = resolveSettingLike(runtime, "RS_SDK_BOT_PASSWORD");
-
-  // Both present — nothing to do.
-  if (existingName && existingPassword) {
-    return [];
-  }
-
-  // One present but not the other — respect what the user set,
-  // only fill in the missing half.
+  const primaryName = resolveSettingLike(runtime, "RS_SDK_BOT_NAME");
+  const compatName = resolveSettingLike(runtime, "BOT_NAME");
+  const primaryPassword = resolveSettingLike(runtime, "RS_SDK_BOT_PASSWORD");
+  const compatPassword = resolveSettingLike(runtime, "BOT_PASSWORD");
   const agentDisplayName = runtime.character?.name || "agent";
-  const username = existingName || derive2004scapeUsername(agentDisplayName);
-  const password = existingPassword || generateRandomPassword();
+  const username =
+    primaryName ?? compatName ?? generateBotUsername(agentDisplayName);
+  const password = primaryPassword ?? compatPassword ?? generateBotPassword();
 
-  if (!existingName) {
+  const shouldPersistName = primaryName !== username || compatName !== username;
+  const shouldPersistPassword =
+    primaryPassword !== password || compatPassword !== password;
+
+  if (shouldPersistName) {
     persist2004scapeCredential(runtime, "RS_SDK_BOT_NAME", username);
   }
-  if (!existingPassword) {
+  if (shouldPersistPassword) {
     persist2004scapeCredential(runtime, "RS_SDK_BOT_PASSWORD", password, true);
   }
 
-  logger.info(
-    `[app-manager] Auto-provisioned 2004scape credentials for "${username}"`,
-  );
+  if (shouldPersistName || shouldPersistPassword) {
+    logger.info(
+      `[app-manager] Prepared 2004scape credentials for "${username}"`,
+    );
+  }
 
   return [];
 }
@@ -879,20 +906,21 @@ async function buildViewerAuthMessage(
 
   // 2004scape auth - uses auto-provisioned or user-supplied credentials
   if (is2004scapeAppName(appInfo.name)) {
-    const username =
-      resolveSettingLike(runtime, "RS_SDK_BOT_NAME") ||
-      process.env.BOT_NAME?.trim() ||
-      "testbot";
-    const password =
-      resolveSettingLike(runtime, "RS_SDK_BOT_PASSWORD") ||
-      process.env.BOT_PASSWORD?.trim() ||
-      "";
+    let username = resolve2004scapeCredential(runtime, "RS_SDK_BOT_NAME");
+    let password = resolve2004scapeCredential(runtime, "RS_SDK_BOT_PASSWORD");
 
-    if (!password) {
+    if (runtime && (!username || !password)) {
+      await prepare2004scapeLaunch(runtime);
+      username = resolve2004scapeCredential(runtime, "RS_SDK_BOT_NAME");
+      password = resolve2004scapeCredential(runtime, "RS_SDK_BOT_PASSWORD");
+    }
+
+    if (!username || !password) {
       logger.warn(
-        "[app-manager] 2004scape credentials incomplete — no password set. " +
-          "Launch the app to auto-provision credentials.",
+        "[app-manager] 2004scape credentials are unavailable. " +
+          "Launch the app with a live runtime to auto-provision credentials.",
       );
+      return undefined;
     }
 
     return {
@@ -1121,7 +1149,7 @@ function applyLaunchPreparation(
 ): RegistryAppPlugin {
   const launchUrl =
     preparation.launchUrl !== undefined
-      ? preparation.launchUrl ?? undefined
+      ? (preparation.launchUrl ?? undefined)
       : appInfo.launchUrl;
   const viewer =
     preparation.viewer === undefined
@@ -1189,15 +1217,18 @@ function collect2004scapeLaunchDiagnostics(
   }
 
   const diagnostics: AppLaunchDiagnostic[] = [];
-  const botName = resolveSettingLike(runtime, "RS_SDK_BOT_NAME");
-  const botPassword = resolveSettingLike(runtime, "RS_SDK_BOT_PASSWORD");
+  const botName = resolve2004scapeCredential(runtime, "RS_SDK_BOT_NAME");
+  const botPassword = resolve2004scapeCredential(
+    runtime,
+    "RS_SDK_BOT_PASSWORD",
+  );
 
   if (!botName || !botPassword) {
     diagnostics.push({
       code: "2004scape-credentials-missing",
       severity: "warning",
       message:
-        "2004scape bot credentials could not be generated. The viewer will load without auto-login.",
+        "2004scape bot credentials are not stored yet. The viewer will load without auto-login until launch provisions them.",
     });
   }
 
@@ -1206,7 +1237,7 @@ function collect2004scapeLaunchDiagnostics(
       code: "2004scape-auth-unavailable",
       severity: "error",
       message:
-        "2004scape auto-sign-in requires RS_SDK_BOT_NAME and RS_SDK_BOT_PASSWORD to be configured.",
+        "2004scape auto-sign-in could not resolve stored bot credentials for this run.",
     });
   }
 
@@ -1406,14 +1437,17 @@ function deriveHealthFacetState(
   return "unknown";
 }
 
-function deriveRunHealthDetails(run: AppRunSummary): AppRunSummary["healthDetails"] {
-  const viewerState: AppRunSummary["healthDetails"]["viewer"]["state"] = !run.viewer
-    ? "unknown"
-    : run.viewerAttachment === "attached"
-      ? "healthy"
-      : run.viewerAttachment === "detached"
-        ? "degraded"
-        : "offline";
+function deriveRunHealthDetails(
+  run: AppRunSummary,
+): AppRunSummary["healthDetails"] {
+  const viewerState: AppRunSummary["healthDetails"]["viewer"]["state"] =
+    !run.viewer
+      ? "unknown"
+      : run.viewerAttachment === "attached"
+        ? "healthy"
+        : run.viewerAttachment === "detached"
+          ? "degraded"
+          : "offline";
   const authState: AppRunSummary["healthDetails"]["auth"]["state"] = run.session
     ? run.viewerAttachment === "attached" || run.viewer == null
       ? "healthy"
@@ -1468,7 +1502,7 @@ function deriveAwaySummary(run: AppRunSummary): AppRunAwaySummary {
     message:
       recent.length > 0
         ? recent.join(" ")
-        : run.summary ?? `${run.displayName} is ${run.status}.`,
+        : (run.summary ?? `${run.displayName} is ${run.status}.`),
     eventCount: run.recentEvents.length,
     since: run.recentEvents.at(-1)?.createdAt ?? run.startedAt,
     until: run.recentEvents[0]?.createdAt ?? run.updatedAt,
@@ -1553,7 +1587,8 @@ function buildRunSummary(input: {
           runId: input.runId,
           appName: input.appName,
           viewerAttachment:
-            input.viewerAttachment ?? (input.viewer ? "attached" : "unavailable"),
+            input.viewerAttachment ??
+            (input.viewer ? "attached" : "unavailable"),
           characterId: input.session?.characterId ?? null,
           agentId: input.session?.agentId ?? null,
         },
@@ -1714,42 +1749,48 @@ export class AppManager {
       if (!nextSession) {
         const summary = "Run session is no longer available.";
         const nextRun = this.storeRun(
-          updateRunSummary(run, {
-            session: buildUnavailableSession(run, "offline", summary),
-            status: "offline",
-            summary,
-          }, {
-            kind: "health",
-            severity: "warning",
-            message: summary,
-            status: "offline",
-            details: {
-              runId: run.runId,
-              appName: run.appName,
+          updateRunSummary(
+            run,
+            {
+              session: buildUnavailableSession(run, "offline", summary),
+              status: "offline",
+              summary,
             },
-          }),
+            {
+              kind: "health",
+              severity: "warning",
+              message: summary,
+              status: "offline",
+              details: {
+                runId: run.runId,
+                appName: run.appName,
+              },
+            },
+          ),
         );
         return nextRun;
       }
       const nextRun = this.storeRun(
-        updateRunSummary(run, {
-          session: nextSession,
-          status: nextSession.status,
-          summary: nextSession.summary ?? run.summary,
-        }, {
-          kind: "refresh",
-          severity:
-            nextSession.status === "running" ? "info" : "warning",
-          message:
-            nextSession.summary ??
-            `${run.displayName} session refreshed.`,
-          status: nextSession.status,
-          details: {
-            runId: run.runId,
-            appName: run.appName,
-            sessionId: nextSession.sessionId,
+        updateRunSummary(
+          run,
+          {
+            session: nextSession,
+            status: nextSession.status,
+            summary: nextSession.summary ?? run.summary,
           },
-        }),
+          {
+            kind: "refresh",
+            severity: nextSession.status === "running" ? "info" : "warning",
+            message:
+              nextSession.summary ?? `${run.displayName} session refreshed.`,
+            status: nextSession.status,
+            details: {
+              runId: run.runId,
+              appName: run.appName,
+              sessionId: nextSession.sessionId,
+            },
+          },
+        ),
       );
       return nextRun;
     } catch (error) {
@@ -1759,20 +1800,24 @@ export class AppManager {
           : "Run verification failed.";
       const nextStatus = run.session ? "disconnected" : "offline";
       const nextRun = this.storeRun(
-        updateRunSummary(run, {
-          session: buildUnavailableSession(run, nextStatus, message),
-          status: nextStatus,
-          summary: message,
-        }, {
-          kind: "health",
-          severity: "error",
-          message,
-          status: nextStatus,
-          details: {
-            runId: run.runId,
-            appName: run.appName,
+        updateRunSummary(
+          run,
+          {
+            session: buildUnavailableSession(run, nextStatus, message),
+            status: nextStatus,
+            summary: message,
           },
-        }),
+          {
+            kind: "health",
+            severity: "error",
+            message,
+            status: nextStatus,
+            details: {
+              runId: run.runId,
+              appName: run.appName,
+            },
+          },
+        ),
       );
       return nextRun;
     }
@@ -1923,20 +1968,23 @@ export class AppManager {
     }
 
     const updated = this.storeRun(
-      updateRunSummary(run, {
-        viewerAttachment: run.viewer ? "attached" : "unavailable",
-      }, {
-        kind: "attach",
-        message:
-          run.viewer
+      updateRunSummary(
+        run,
+        {
+          viewerAttachment: run.viewer ? "attached" : "unavailable",
+        },
+        {
+          kind: "attach",
+          message: run.viewer
             ? `${run.displayName} viewer attached.`
             : `${run.displayName} viewer is unavailable.`,
-        status: run.session?.status ?? run.status,
-        details: {
-          runId: run.runId,
-          appName: run.appName,
+          status: run.session?.status ?? run.status,
+          details: {
+            runId: run.runId,
+            appName: run.appName,
+          },
         },
-      }),
+      ),
     );
 
     return {
@@ -1956,20 +2004,23 @@ export class AppManager {
     }
 
     const updated = this.storeRun(
-      updateRunSummary(run, {
-        viewerAttachment: run.viewer ? "detached" : "unavailable",
-      }, {
-        kind: "detach",
-        message:
-          run.viewer
+      updateRunSummary(
+        run,
+        {
+          viewerAttachment: run.viewer ? "detached" : "unavailable",
+        },
+        {
+          kind: "detach",
+          message: run.viewer
             ? `${run.displayName} viewer detached.`
             : `${run.displayName} viewer is unavailable.`,
-        status: run.session?.status ?? run.status,
-        details: {
-          runId: run.runId,
-          appName: run.appName,
+          status: run.session?.status ?? run.status,
+          details: {
+            runId: run.runId,
+            appName: run.appName,
+          },
         },
-      }),
+      ),
     );
 
     return {
@@ -2148,26 +2199,30 @@ export class AppManager {
     const existingRun = this.findMatchingRun(name, session, viewer);
     const run = this.storeRun(
       existingRun
-        ? updateRunSummary(existingRun, {
-            displayName: appInfo.displayName ?? appInfo.name,
-            pluginName,
-            launchType: appInfo.launchType ?? "connect",
-            launchUrl,
-            viewer,
-            session,
-            viewerAttachment: viewer ? "attached" : "unavailable",
-          }, {
-            kind: "refresh",
-            message:
-              session?.summary ??
-              `${appInfo.displayName ?? appInfo.name} launch state refreshed.`,
-            status: session?.status ?? (viewer ? "running" : "launching"),
-            details: {
-              runId: existingRun.runId,
-              appName: name,
-              sessionId: session?.sessionId ?? null,
+        ? updateRunSummary(
+            existingRun,
+            {
+              displayName: appInfo.displayName ?? appInfo.name,
+              pluginName,
+              launchType: appInfo.launchType ?? "connect",
+              launchUrl,
+              viewer,
+              session,
+              viewerAttachment: viewer ? "attached" : "unavailable",
             },
-          })
+            {
+              kind: "refresh",
+              message:
+                session?.summary ??
+                `${appInfo.displayName ?? appInfo.name} launch state refreshed.`,
+              status: session?.status ?? (viewer ? "running" : "launching"),
+              details: {
+                runId: existingRun.runId,
+                appName: name,
+                sessionId: session?.sessionId ?? null,
+              },
+            },
+          )
         : buildRunSummary({
             runId: crypto.randomUUID(),
             appName: name,

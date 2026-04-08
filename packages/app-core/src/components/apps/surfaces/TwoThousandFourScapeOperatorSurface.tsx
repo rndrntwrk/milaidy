@@ -23,14 +23,25 @@ interface RecentActivityEntry {
   ts?: string | number;
 }
 
-function formatTelemetryValue(value: AppSessionJsonValue | undefined): string {
-  if (typeof value === "string") return value;
-  if (typeof value === "number")
-    return Number.isFinite(value) ? `${value}` : "Unknown";
-  if (typeof value === "boolean") return value ? "true" : "false";
-  if (value == null) return "Unavailable";
-  if (Array.isArray(value)) return `${value.length} entries`;
-  return "Structured telemetry";
+function firstNonEmptyString(
+  ...values: Array<string | null | undefined>
+): string | null {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+  return null;
+}
+
+function sanitizeViewerLocation(url: string | undefined): string | null {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    return `${parsed.origin}${parsed.pathname}`;
+  } catch {
+    return null;
+  }
 }
 
 function extractRecentActivity(
@@ -87,9 +98,6 @@ export function TwoThousandFourScapeOperatorSurface({
       ? session.telemetry
       : null;
   const recentActivity = extractRecentActivity(telemetry);
-  const autoLoginLabel = run?.viewer?.postMessageAuth
-    ? `Auto-login ${run.viewer.authMessage?.type ?? "configured"}`
-    : "Manual login required";
   const surfaceTitle =
     variant === "live"
       ? "2004scape Live Dashboard"
@@ -98,6 +106,74 @@ export function TwoThousandFourScapeOperatorSurface({
         : "2004scape Operator Surface";
   const showDashboard = focus !== "chat";
   const showChat = focus !== "dashboard";
+  const viewerLocation = sanitizeViewerLocation(run?.viewer?.url);
+  const botUsername = firstNonEmptyString(
+    typeof run?.viewer?.embedParams?.bot === "string"
+      ? run.viewer.embedParams.bot
+      : null,
+    run?.viewer?.authMessage?.authToken,
+    session?.characterId,
+  );
+  const hasAutoLoginCredentials = Boolean(
+    run?.viewer?.postMessageAuth &&
+      run.viewer.authMessage?.authToken &&
+      run.viewer.authMessage?.sessionToken,
+  );
+  const autoLoginLabel = run?.viewer?.postMessageAuth
+    ? hasAutoLoginCredentials
+      ? "Credentials stored"
+      : "Waiting for stored credentials"
+    : "Manual login required";
+  const autoLoginSubtitle = botUsername
+    ? viewerLocation
+      ? `Bot ${botUsername} · ${viewerLocation}`
+      : `Bot ${botUsername}`
+    : viewerLocation
+      ? `Viewer ${viewerLocation}`
+      : "Launch with a live runtime to create bot credentials automatically.";
+  const runtimeLabel =
+    session?.status === "running"
+      ? "Connected to 2004scape"
+      : session?.status === "paused"
+        ? "Loop paused"
+        : session?.status === "connecting"
+          ? "Connecting to 2004scape"
+          : session?.status === "disconnected"
+            ? "Waiting for the game gateway"
+            : run?.supportsBackground
+              ? "Continuous background run"
+              : "Foreground session only";
+  const runtimeTone =
+    session?.status === "running"
+      ? "success"
+      : run?.health.state === "offline"
+        ? "danger"
+        : run?.health.state === "degraded" || session?.status === "disconnected"
+          ? "warn"
+          : "neutral";
+  const steeringReady = Boolean(session?.canSendCommands && session?.sessionId);
+  const steeringLabel = steeringReady
+    ? "Live steering ready"
+    : session?.sessionId
+      ? "Bridge reconnecting"
+      : "Waiting for command bridge";
+  const steeringSubtitle = session?.sessionId
+    ? `Session ${session.sessionId}`
+    : `Run ${run?.runId ?? "pending"}`;
+  const viewerLabel =
+    run?.viewerAttachment === "attached"
+      ? "Viewer attached"
+      : run?.viewerAttachment === "detached"
+        ? "Viewer detached"
+        : "Viewer pending";
+  const viewerSubtitle =
+    run?.viewerAttachment === "attached"
+      ? "The run stays alive if you leave this screen."
+      : run?.viewerAttachment === "detached"
+        ? "Reattach without restarting the autonomous loop."
+        : viewerLocation
+          ? `Viewer ${viewerLocation}`
+          : "Viewer status will update after launch.";
 
   const sendOperatorMessage = useCallback(
     async (content: string) => {
@@ -210,37 +286,29 @@ export function TwoThousandFourScapeOperatorSurface({
             <SurfaceCard
               label="Auto-login"
               value={autoLoginLabel}
-              subtitle={
-                run.viewer?.url
-                  ? `Viewer ${run.viewer.url}`
-                  : "Viewer URL unavailable."
-              }
+              tone={hasAutoLoginCredentials ? "success" : "warn"}
+              subtitle={autoLoginSubtitle}
             />
             <SurfaceCard
-              label="Runtime"
-              value={
-                run.supportsBackground
-                  ? "Continuously running service"
-                  : "Foreground session only"
-              }
+              label="Agent Loop"
+              value={runtimeLabel}
+              tone={runtimeTone}
               subtitle={
                 session?.status ??
+                run.health.message ??
                 run.summary ??
                 "Waiting for the 2004scape runtime to respond."
               }
             />
             <SurfaceCard
-              label="Command Bridge"
-              value={
-                session?.canSendCommands
-                  ? "Operator chat is live."
-                  : "Waiting for command bridge."
-              }
-              subtitle={session?.sessionId ?? "No session yet."}
+              label="Operator Chat"
+              value={steeringLabel}
+              tone={steeringReady ? "success" : "warn"}
+              subtitle={steeringSubtitle}
             />
             <SurfaceCard
               label="Identity"
-              value={session?.characterId ?? "Character not resolved"}
+              value={session?.characterId ?? botUsername ?? "Identity pending"}
               subtitle={
                 session?.agentId
                   ? `Agent ${session.agentId}`
@@ -252,22 +320,28 @@ export function TwoThousandFourScapeOperatorSurface({
       ) : null}
 
       {showDashboard ? (
-        <SurfaceSection title="Current State">
+        <SurfaceSection title="Live State">
           <SurfaceGrid>
             <SurfaceCard
               label="Goal"
               value={session?.goalLabel ?? "No goal recorded."}
               subtitle={
-                session?.summary ?? run.summary ?? "No session summary yet."
+                session?.summary ??
+                run.summary ??
+                "The bot has not reported a live objective yet."
               }
             />
             <SurfaceCard
-              label="Follow Target"
-              value={session?.followEntity ?? "No follow target."}
+              label="Loop Summary"
+              value={
+                session?.summary ?? run.summary ?? "No session summary yet."
+              }
               subtitle={
-                session?.controls?.length
-                  ? `Controls: ${session.controls.join(" · ")}`
-                  : "No direct control actions exposed yet."
+                session?.followEntity
+                  ? `Following ${session.followEntity}`
+                  : session?.controls?.length
+                    ? `Controls: ${session.controls.join(" · ")}`
+                    : "No follow target is attached yet."
               }
             />
             <SurfaceCard
@@ -278,13 +352,10 @@ export function TwoThousandFourScapeOperatorSurface({
               subtitle={`Started ${formatDetailTimestamp(run.startedAt)}`}
             />
             <SurfaceCard
-              label="Viewer Attachment"
-              value={run.viewerAttachment}
-              subtitle={
-                run.viewer?.authMessage?.type
-                  ? `Auth ${run.viewer.authMessage.type}`
-                  : undefined
-              }
+              label="Viewer"
+              value={viewerLabel}
+              tone={toneForViewerAttachment(run.viewerAttachment)}
+              subtitle={viewerSubtitle}
             />
           </SurfaceGrid>
           {recentActivity.length > 0 ? (
@@ -311,45 +382,6 @@ export function TwoThousandFourScapeOperatorSurface({
               No recent gameplay activity has been captured yet.
             </div>
           )}
-        </SurfaceSection>
-      ) : null}
-
-      {showDashboard && session?.suggestedPrompts?.length ? (
-        <SurfaceSection title="Suggested Prompts">
-          <div className="flex flex-wrap gap-2">
-            {session.suggestedPrompts.map((prompt) => (
-              <span
-                key={prompt}
-                className="inline-flex max-w-full items-center rounded-full border border-border/30 bg-bg/75 px-2 py-0.5 text-[10px] text-muted-strong"
-              >
-                {prompt}
-              </span>
-            ))}
-          </div>
-        </SurfaceSection>
-      ) : null}
-
-      {showDashboard ? (
-        <SurfaceSection title="Telemetry">
-          <div className="grid gap-2 md:grid-cols-2">
-            <SurfaceCard
-              label="Status Fields"
-              value={[
-                `status: ${formatTelemetryValue(session?.status)}`,
-                `summary: ${formatTelemetryValue(session?.summary)}`,
-                `goalLabel: ${formatTelemetryValue(session?.goalLabel)}`,
-                `characterId: ${formatTelemetryValue(session?.characterId)}`,
-              ].join(" · ")}
-            />
-            <SurfaceCard
-              label="Configured Notes"
-              value={[
-                `viewer: ${formatTelemetryValue(run.viewer?.url)}`,
-                `postMessageAuth: ${run.viewer?.postMessageAuth ? "true" : "false"}`,
-                `supportsBackground: ${run.supportsBackground ? "true" : "false"}`,
-              ].join(" · ")}
-            />
-          </div>
         </SurfaceSection>
       ) : null}
 
@@ -431,7 +463,7 @@ export function TwoThousandFourScapeOperatorSurface({
         </div>
       ) : null}
       <div className="text-[10px] uppercase tracking-[0.18em] text-muted">
-        2004scape runtime ready for verification.
+        2004scape run stays independent from the viewer.
       </div>
     </section>
   );
