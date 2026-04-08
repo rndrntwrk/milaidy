@@ -6,7 +6,7 @@ import {
   SelectValue,
   SettingsControls,
 } from "@miladyai/ui";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { AgentPreflightResult } from "../../api";
 import { client } from "../../api";
 import { useApp } from "../../state";
@@ -328,9 +328,19 @@ export function CodingAgentSettingsSection() {
   const setPref = useCallback((key: string, value: string) => {
     setPrefs((previous) => {
       const next = { ...previous, [key]: value };
-      // Auto-save: fire and forget
+      // Auto-save: fire and forget.
+      //
+      // Filter out `_`-prefixed synthetic keys that we load from
+      // non-env sources (e.g. `_CLOUD_API_KEY` is loaded from
+      // `config.cloud.apiKey` — see the load effect above). Writing
+      // them back into `config.env` on every keystroke would leak
+      // the cloud API key into the env surface, duplicating it and
+      // creating a second read path that bypasses the cloud.apiKey
+      // contract. These synthetic keys are read-only from the UI's
+      // perspective and must never round-trip through env.
       const envPatch: Record<string, string> = {};
       for (const [k, v] of Object.entries(next)) {
+        if (k.startsWith("_")) continue;
         if (v != null) envPatch[k] = v;
       }
       void client.updateConfig({ env: envPatch });
@@ -367,8 +377,30 @@ export function CodingAgentSettingsSection() {
     return null;
   }, []);
 
+  // Ref to any in-flight auth-polling interval so we can cancel it on
+  // unmount or when a new auth flow starts. Without this, closing the
+  // settings panel while a poll is active leaks a network-request
+  // loop that keeps firing every 3 seconds forever.
+  const authPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    // Cleanup on unmount — stops the poll if the component is torn
+    // down mid-flow.
+    return () => {
+      if (authPollRef.current !== null) {
+        clearInterval(authPollRef.current);
+        authPollRef.current = null;
+      }
+    };
+  }, []);
+
   const handleAuth = useCallback(
     async (agent: AgentTab) => {
+      // Cancel any previous in-flight poll before starting a new one.
+      if (authPollRef.current !== null) {
+        clearInterval(authPollRef.current);
+        authPollRef.current = null;
+      }
       setAuthInProgress(agent);
       setAuthResult(null);
       try {
@@ -378,7 +410,7 @@ export function CodingAgentSettingsSection() {
         if (res.ok) {
           const data = await res.json();
           setAuthResult({ agent, ...data });
-          // Poll for auth completion — check every 3s for up to 2 minutes
+          // Poll for auth completion — check every 3s for up to 2 minutes.
           let attempts = 0;
           const maxAttempts = 40;
           const poll = setInterval(async () => {
@@ -389,12 +421,16 @@ export function CodingAgentSettingsSection() {
               attempts >= maxAttempts
             ) {
               clearInterval(poll);
+              if (authPollRef.current === poll) {
+                authPollRef.current = null;
+              }
               setAuthInProgress(null);
               if (mapped?.[agent]?.auth?.status === "authenticated") {
                 setAuthResult(null);
               }
             }
           }, 3000);
+          authPollRef.current = poll;
         } else {
           setAuthInProgress(null);
         }

@@ -180,6 +180,14 @@ function hasCodexCliSubscriptionAuth(): boolean {
 
 /**
  * Get all configured subscription providers and their status.
+ *
+ * IMPORTANT: stays synchronous. For Anthropic we check whether a
+ * Claude Code OAuth credential blob exists on disk or in the keychain
+ * via `readClaudeCodeOAuthBlob()` (sync, no refresh) rather than
+ * calling `importClaudeCodeOAuthToken()` which is async and returns
+ * a `Promise<string | null>` that would always be truthy when
+ * awaited without `await` — silently marking every user as
+ * "configured: true".
  */
 export function getSubscriptionStatus(): Array<{
   provider: SubscriptionProvider;
@@ -193,20 +201,41 @@ export function getSubscriptionStatus(): Array<{
   ];
   return providers.map((provider) => {
     const stored = loadCredentials(provider);
-    const importedClaudeAuth =
-      provider === "anthropic-subscription"
-        ? (importClaudeCodeOAuthToken() ?? readConfiguredAnthropicSetupToken())
-        : null;
+    let importedClaudeAuth: string | null = null;
+    if (provider === "anthropic-subscription") {
+      const blob = readClaudeCodeOAuthBlob();
+      if (blob && blob.accessToken) {
+        // Blob exists with a parsed accessToken — the user has Claude
+        // Code installed and authenticated. Expiry is validated
+        // below via the `valid` field.
+        importedClaudeAuth = blob.accessToken;
+      } else {
+        importedClaudeAuth = readConfiguredAnthropicSetupToken();
+      }
+    }
     const importedCodexAuth =
       provider === "openai-codex" && hasCodexCliSubscriptionAuth();
+
+    // For the Claude blob path, derive expiry from the blob itself
+    // so the UI can surface an accurate "valid" state even before a
+    // refresh runs.
+    const blobExpiresAt =
+      provider === "anthropic-subscription"
+        ? (readClaudeCodeOAuthBlob()?.expiresAt ?? null)
+        : null;
+    const blobValid =
+      blobExpiresAt !== null ? blobExpiresAt > Date.now() : false;
+
     return {
       provider,
       configured:
         stored !== null || Boolean(importedClaudeAuth || importedCodexAuth),
       valid: stored
         ? stored.credentials.expires > Date.now()
-        : Boolean(importedClaudeAuth || importedCodexAuth),
-      expiresAt: stored?.credentials.expires ?? null,
+        : provider === "anthropic-subscription" && importedClaudeAuth
+          ? blobValid
+          : Boolean(importedCodexAuth),
+      expiresAt: stored?.credentials.expires ?? blobExpiresAt,
     };
   });
 }
