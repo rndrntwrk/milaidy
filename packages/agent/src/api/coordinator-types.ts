@@ -1,14 +1,56 @@
-/**
- * Local stubs for types removed from @elizaos/plugin-agent-orchestrator 2.x.
- * Used as structural types for the SwarmCoordinator callbacks;
- * no runtime import from the plugin is needed.
- */
+export type CoordinationDecisionKind =
+  | "respond"
+  | "escalate"
+  | "ignore"
+  | "complete"
+  | "auto_resolved"
+  | "stopped";
 
-// biome-ignore lint/suspicious/noExplicitAny: legacy coordinator event payload
-export type SwarmEvent = Record<string, any>;
+export interface CoordinationDecision {
+  timestamp: number;
+  event: string;
+  promptText: string;
+  decision: CoordinationDecisionKind;
+  response?: string;
+  reasoning: string;
+}
 
-// biome-ignore lint/suspicious/noExplicitAny: legacy coordinator task context
-export type TaskContext = Record<string, any>;
+export type CoordinatorTaskStatus =
+  | "active"
+  | "blocked"
+  | "tool_running"
+  | "completed"
+  | "error"
+  | "stopped";
+
+export interface TaskContext {
+  threadId: string;
+  taskNodeId?: string;
+  sessionId: string;
+  agentType: string;
+  label: string;
+  originalTask: string;
+  workdir: string;
+  repo?: string;
+  status: CoordinatorTaskStatus;
+  decisions: CoordinationDecision[];
+  autoResolvedCount: number;
+  registeredAt: number;
+  lastActivityAt: number;
+  idleCheckCount: number;
+  taskDelivered: boolean;
+  completionSummary?: string;
+  lastSeenDecisionIndex: number;
+  lastInputSentAt?: number;
+  stoppedAt?: number;
+}
+
+export interface SwarmEvent {
+  type: string;
+  sessionId: string;
+  timestamp: number;
+  data: unknown;
+}
 
 export interface TaskCompletionSummary {
   sessionId: string;
