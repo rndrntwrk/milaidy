@@ -34,16 +34,25 @@ function normalizeSubaction(
     case "back":
     case "batch":
     case "check":
+    case "clipboard":
     case "click":
     case "close":
+    case "console":
+    case "cookies":
     case "dblclick":
+    case "diff":
+    case "dialog":
+    case "drag":
+    case "errors":
     case "eval":
     case "fill":
     case "find":
     case "focus":
     case "forward":
+    case "frame":
     case "get":
     case "goto":
+    case "highlight":
     case "hide":
     case "hover":
     case "inspect":
@@ -51,19 +60,30 @@ function normalizeSubaction(
     case "keyboardinserttext":
     case "keyboardtype":
     case "list":
+    case "mouse":
     case "navigate":
+    case "network":
     case "open":
+    case "pdf":
     case "press":
+    case "profiler":
     case "reload":
     case "scroll":
     case "scrollinto":
     case "screenshot":
     case "select":
+    case "set":
     case "show":
     case "snapshot":
+    case "state":
+    case "storage":
+    case "tab":
+    case "trace":
     case "type":
     case "uncheck":
+    case "upload":
     case "wait":
+    case "window":
       if (value.trim().toLowerCase() === "goto") {
         return "navigate";
       }
@@ -176,6 +196,45 @@ function parseNumberLike(value: unknown): number | undefined {
   if (typeof value !== "string") return undefined;
   const parsed = Number.parseInt(value.trim(), 10);
   return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function parseStringRecordLike(
+  value: unknown,
+): Record<string, string> | undefined {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return Object.fromEntries(
+      Object.entries(value).filter(
+        (entry): entry is [string, string] =>
+          typeof entry[0] === "string" && typeof entry[1] === "string",
+      ),
+    );
+  }
+  if (typeof value !== "string" || value.trim().length === 0) {
+    return undefined;
+  }
+  try {
+    return parseStringRecordLike(JSON.parse(value));
+  } catch {
+    return undefined;
+  }
+}
+
+function parseStringArrayLike(value: unknown): string[] | undefined {
+  if (Array.isArray(value)) {
+    const entries = value.filter((entry): entry is string => typeof entry === "string");
+    return entries.length > 0 ? entries : undefined;
+  }
+  if (typeof value !== "string" || value.trim().length === 0) {
+    return undefined;
+  }
+  try {
+    return parseStringArrayLike(JSON.parse(value));
+  } catch {
+    return value
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+  }
 }
 
 function parseCommandRecord(
