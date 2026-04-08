@@ -4,7 +4,7 @@ sidebarTitle: Local development
 description: Why and how the Milady desktop dev orchestrator (scripts/dev-platform.mjs) runs Vite, the API, and Electrobun together — environment variables, signals, and shutdown behavior.
 ---
 
-The **desktop dev stack** is not a single binary. `bun run dev:desktop` and `bun run dev` run `scripts/dev-platform.mjs`, which **orchestrates** separate processes: optional one-off `vite build`, optional repo-root `tsdown`, then long-lived **Vite** (when `MILADY_DESKTOP_VITE_WATCH=1`), **`bun --watch` API**, and **Electrobun**.
+The **desktop dev stack** is not a single binary. `bun run dev:desktop` and `bun run dev:desktop:watch` run `scripts/dev-platform.mjs`, which **orchestrates** separate processes: optional one-off `vite build`, optional repo-root `tsdown`, then long-lived **Vite** (when `MILADY_DESKTOP_VITE_WATCH=1`), **`bun --watch` API**, and **Electrobun**.
 
 **Why orchestrate?** Electrobun needs (a) a renderer URL, (b) often a running dashboard API, and (c) in dev, a root `dist/` bundle for the embedded Milady runtime. Doing that manually is error-prone; one script keeps ports, env vars, and shutdown consistent.
 
@@ -15,7 +15,8 @@ The **desktop dev stack** is not a single binary. `bun run dev:desktop` and `bun
 | Command | What starts | Typical use |
 |---------|-------------|-------------|
 | `bun run dev:desktop` | API (unless `--no-api`) + Electrobun; **skips** `vite build` when `apps/app/dist` is fresher than sources | Fast iteration against **built** renderer assets |
-| `bun run dev` | Same orchestrator with **`MILADY_DESKTOP_VITE_WATCH=1`** (root `package.json`) — **Vite dev server** + HMR | Default UI workflow |
+| `bun run dev:desktop:watch` | Same orchestrator with **`MILADY_DESKTOP_VITE_WATCH=1`** — **Vite dev server** + HMR | Desktop UI workflow |
+| `bun run dev` / `bun run dev:web:ui` | Browser dashboard stack only (API + Vite) | Headless-friendly dashboard iteration |
 
 **Startup tables:** the orchestrator, Vite, API, and Electrobun each print a **plain-text settings table** (columns *Setting / Effective / Source / Change*) so you can see defaults vs env and how to change a knob. Run without `--help` to see them in the terminal.
 
@@ -27,7 +28,7 @@ On a **TTY**, tables may use a **Unicode box frame** and a large **figlet-style*
 
 **Docs:** [Developer diagnostics and workspace](../guides/developer-diagnostics-and-workspace.md).
 
-**Why two commands?** A full **production** Vite build is still useful when you want parity with shipped assets or when you are not touching the UI. **`bun run dev`** points Electrobun at the Vite dev server for HMR.
+**Why separate commands?** A full **production** Vite build is still useful when you want parity with shipped assets or when you are not touching the desktop shell UI. `bun run dev:desktop:watch` points Electrobun at the Vite dev server for HMR, while `bun run dev` stays on the browser dashboard stack.
 
 ### Legacy: Rollup `vite build --watch`
 

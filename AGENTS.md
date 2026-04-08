@@ -50,7 +50,8 @@ Write the framework name as **elizaOS** in prose, comments, user-facing strings,
 - Install deps: `bun install`
 - Type-check/build: `bun run build` (runs tsdown + UI build)
 - Lint/format: `bun run verify` (alias: `bun run check`)
-- Run CLI in dev: `bun run milady ...` or `bun run dev`
+- Run CLI in dev: `bun run milady ...`
+- Browser dashboard stack: `bun run dev` or `bun run dev:web:ui`
 - Desktop (Electrobun): `bun run dev:desktop` skips a full Vite build when `apps/app/dist` is fresh; `bun run dev:desktop:watch` runs the Vite dev server and sets `MILADY_RENDERER_URL` for HMR (Rollup `vite build --watch`: add `MILADY_DESKTOP_VITE_BUILD_WATCH=1`). **Busy default ports:** orchestrator and embedded runtime probe loopback for the next free API/UI ports and sync `MILADY_API_PORT` / `ELIZA_PORT` / `MILADY_PORT` so proxies and the UI agree (**why:** fixed defaults collide with other stacks or tools). Rationale: `docs/apps/desktop-local-development.md`. **Observability for agents:** same doc describes `GET /api/dev/stack`, `desktop:stack-status`, aggregated console + screenshot hooks (**why:** multi-process dev is opaque without them); `.cursor/rules/milady-desktop-dev-observability.mdc` nudges Cursor to use them.
 - Tests: `bun run test` (parallel unit + playwright), `bun run test:e2e`, `bun run test:live`
 - Coverage: `bun run test:coverage`

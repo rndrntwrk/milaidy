@@ -559,12 +559,13 @@ bun run milady start
 ### Dev mode (recommended for development)
 
 ```bash
-bun run dev:web:ui   # API (:31337) + Vite dashboard UI (:2138); hot reload (defaults; see Ports if busy)
-bun run dev          # desktop dev orchestrator + Electrobun, with Vite watch/HMR (root package.json default)
-bun run dev:desktop  # same orchestrator without forcing Vite watch — see package.json for exact env
+bun run dev          # API (:31337) + Vite dashboard UI (:2138); hot reload (defaults; see Ports if busy)
+bun run dev:web:ui   # explicit alias for the same browser dashboard stack
+bun run dev:desktop  # desktop dev orchestrator + Electrobun, using built renderer assets when fresh
+bun run dev:desktop:watch  # same desktop orchestrator with Vite watch/HMR
 ```
 
-**Why two entry points:** `dev:web:ui` is the **browser dashboard** stack only. **`bun run dev`** is optimized for **Electrobun** work (multi-process: orchestrator, API, Vite, native shell) so ports and env stay aligned — **why** a single implicit command used to confuse people editing only the web UI vs the desktop shell.
+**Why separate entry points:** `dev` / `dev:web:ui` are the **browser dashboard** stack only. `dev:desktop` / `dev:desktop:watch` are the **Electrobun** workflow (multi-process: orchestrator, API, optional Vite, native shell) so desktop env and ports stay aligned without changing the default headless-friendly dev command.
 
 The web-ui orchestrator frees the listen port when needed, waits for the API to be healthy, then starts Vite with an `/api` proxy to **`MILADY_API_PORT`**.
 

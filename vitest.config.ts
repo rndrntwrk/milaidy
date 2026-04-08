@@ -289,8 +289,6 @@ export default defineConfig({
       "packages/shared/src/**/*.test.ts",
       "packages/app-core/src/**/*.test.tsx",
       "packages/plugin-selfcontrol/src/**/*.test.ts",
-      "packages/plugin-selfcontrol/src/**/*.test.ts",
-      "packages/shared/src/**/*.test.ts",
       "packages/plugin-wechat/src/**/*.test.ts",
       "packages/plugin-music-player/src/**/*.test.ts",
       "src/**/*.test.ts",
