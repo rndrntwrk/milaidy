@@ -1,5 +1,8 @@
 import http from "node:http";
 import type { AddressInfo } from "node:net";
+import os from "node:os";
+import path from "node:path";
+import * as fs from "node:fs";
 import {
   afterAll,
   beforeAll,
@@ -37,6 +40,18 @@ function inferLabel(url: string): string {
 async function startLocalSiteFixture(): Promise<LocalSiteFixture> {
   const server = http.createServer((req, res) => {
     const url = new URL(req.url ?? "/", "http://127.0.0.1");
+    if (url.pathname === "/echo") {
+      res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
+      res.end(
+        JSON.stringify({
+          authorization: req.headers.authorization ?? null,
+          headers: req.headers,
+          method: req.method ?? "GET",
+          url: url.toString(),
+        }),
+      );
+      return;
+    }
     const html =
       url.pathname === "/tasks"
         ? `<!doctype html>
@@ -72,8 +87,15 @@ async function startLocalSiteFixture(): Promise<LocalSiteFixture> {
 	                        <input type="checkbox" name="terms" value="yes" />
 	                        Accept terms
 	                      </label>
+                        <input type="file" name="attachment" />
 	                      <button type="submit">Continue</button>
 	                      <button type="button" data-testid="secondary-action">Secondary</button>
+                        <div data-testid="drag-source" draggable="true">Drag Source</div>
+                        <div data-testid="drop-target">Drop Target</div>
+                        <iframe
+                          title="Embedded Frame"
+                          srcdoc='<!doctype html><html lang="en"><body><label>Frame name<input name="frameName" value="" /></label><button type="button" data-testid="frame-button">Frame Continue</button></body></html>'
+                        ></iframe>
 	                    </form>
 	                    <a href="/tasks">Open tasks</a>
 	                  </body>
