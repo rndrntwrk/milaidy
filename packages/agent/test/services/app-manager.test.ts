@@ -952,8 +952,9 @@ describe("AppManager", () => {
     const fixtureServer = await startHyperscapeFixtureServer();
     process.env.HYPERSCAPE_API_URL = fixtureServer.url;
 
+    const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "milady-app-hyperscape-live-"));
     try {
-      const manager = new AppManager();
+      const manager = new AppManager({ stateDir });
       const runtime = createRuntimeStub({
         characterName: "Scout",
         agentRecord: {
@@ -1036,6 +1037,7 @@ describe("AppManager", () => {
       }
     } finally {
       await fixtureServer.close();
+      fs.rmSync(stateDir, { force: true, recursive: true });
     }
   });
 
@@ -1298,8 +1300,9 @@ describe("AppManager", () => {
     process.env.BABYLON_API_URL = fixtureServer.url;
     process.env.BABYLON_CLIENT_URL = fixtureServer.url;
 
+    const stateDir = fs.mkdtempSync(path.join(os.tmpdir(), "milady-app-babylon-live-"));
     try {
-      const manager = new AppManager();
+      const manager = new AppManager({ stateDir });
       const runtime = createRuntimeStub({
         settings: {
           BABYLON_API_URL: fixtureServer.url,
@@ -1368,6 +1371,7 @@ describe("AppManager", () => {
       );
     } finally {
       await fixtureServer.close();
+      fs.rmSync(stateDir, { force: true, recursive: true });
     }
   });
 

@@ -186,7 +186,7 @@ function setVisibilityState(state: DocumentVisibilityState): void {
 let latestTree: TestRenderer.ReactTestRenderer | null = null;
 
 function Harness() {
-  useLifeOpsActivitySignals();
+  useLifeOpsActivitySignals(true);
   return null;
 }
 

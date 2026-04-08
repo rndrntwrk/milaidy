@@ -137,7 +137,7 @@ describeIfEliza("shouldRespond trajectory logging", () => {
         modelType: (typeof ModelType)[keyof typeof ModelType],
         params: unknown,
       ) => {
-        if (modelType === ModelType.TEXT_SMALL) {
+        if (modelType === "RESPONSE_HANDLER" || modelType === ModelType.TEXT_SMALL) {
           return "<response><name>TestAgent</name><reasoning>Ambiguous group chat needs a decision</reasoning><action>RESPOND</action></response>";
         }
 
@@ -201,9 +201,11 @@ describeIfEliza("shouldRespond trajectory logging", () => {
     expect(
       new Set(loggedCalls.map((call) => String(call.stepId ?? ""))),
     ).toEqual(new Set(["should-respond-step"]));
+    // Both LLM calls should have a non-empty model label (the exact label is
+    // environment-specific — it reflects the configured provider, e.g. "openai").
     expect(
-      new Set(loggedCalls.map((call) => String(call.model ?? ""))),
-    ).toEqual(new Set(["TEXT_SMALL", "TEXT_LARGE"]));
+      loggedCalls.every((call) => typeof call.model === "string" && call.model.length > 0),
+    ).toBe(true);
     expect(
       loggedCalls.some((call) =>
         String(call.response ?? "").includes("<action>RESPOND</action>"),
@@ -216,5 +218,118 @@ describeIfEliza("shouldRespond trajectory logging", () => {
         ),
       ),
     ).toBe(true);
+  });
+
+  it("starts a trajectory from MESSAGE_RECEIVED before connector message handling", async () => {
+    const stubLogger = {
+      logLlmCall: vi.fn(),
+      getLlmCallLogs: () => [],
+    };
+    const richLogger = {
+      logLlmCall: vi.fn(),
+      listTrajectories: vi.fn(),
+      getTrajectoryDetail: vi.fn(),
+    };
+
+    vi.spyOn(runtime, "getService").mockImplementation((serviceType: string) =>
+      serviceType === "trajectory_logger" ? (stubLogger as object) : null,
+    );
+    vi.spyOn(runtime, "getServicesByType").mockImplementation(
+      (serviceType: string) =>
+        serviceType === "trajectory_logger" ? [stubLogger, richLogger] : [],
+    );
+    vi.spyOn(runtime, "emitEvent").mockImplementation(
+      async (event: string | string[], payload?: unknown) => {
+        const eventName = Array.isArray(event) ? event[0] : event;
+        if (
+          eventName === "MESSAGE_RECEIVED" &&
+          payload &&
+          typeof payload === "object" &&
+          "message" in payload &&
+          payload.message &&
+          typeof payload.message === "object"
+        ) {
+          const messagePayload = payload.message as Memory;
+          messagePayload.metadata = {
+            ...(messagePayload.metadata ?? {}),
+            type: "message",
+            trajectoryStepId: "connector-step",
+          };
+        }
+      },
+    );
+    vi.spyOn(runtime, "useModel").mockImplementation(
+      async (
+        modelType: (typeof ModelType)[keyof typeof ModelType],
+        params: unknown,
+      ) => {
+        if (modelType === "RESPONSE_HANDLER" || modelType === ModelType.TEXT_SMALL) {
+          return "<response><name>TestAgent</name><reasoning>Connector group chat needs a decision</reasoning><action>RESPOND</action></response>";
+        }
+
+        const responseText =
+          "<response><thought>Processing message</thought><actions>REPLY</actions><providers></providers><text>Hello from connector!</text></response>";
+        const text = (params as { stream?: boolean } | null | undefined)?.stream;
+        if (text) {
+          return {
+            textStream: (async function* () {
+              yield "<response><thought>Processing message</thought>";
+              yield "<actions>REPLY</actions><providers></providers>";
+              yield "<text>Hello from connector!</text></response>";
+            })(),
+            text: Promise.resolve(responseText),
+          };
+        }
+        return responseText;
+      },
+    );
+
+    installPromptOptimizations(runtime as never);
+    installMiladyMessageTrajectoryStepBridge(runtime as never);
+
+    const callback = vi.fn(async (content: Content) => [
+      {
+        id: "trajectory-response-memory-2" as UUID,
+        content,
+        entityId: "trajectory-entity" as UUID,
+        agentId: runtime.agentId,
+        roomId: "trajectory-room" as UUID,
+        createdAt: Date.now(),
+      },
+    ]);
+
+    const message: Memory = {
+      id: "trajectory-message-2" as UUID,
+      roomId: "trajectory-room" as UUID,
+      entityId: "trajectory-user" as UUID,
+      agentId: runtime.agentId,
+      createdAt: Date.now(),
+      content: {
+        text: "hello from discord connector",
+        source: "discord",
+        channelType: ChannelType.GROUP,
+      },
+      metadata: {
+        type: "message",
+      },
+    };
+
+    const result = await runtime.messageService!.handleMessage(
+      runtime,
+      message,
+      callback,
+    );
+
+    expect(result.didRespond).toBe(true);
+    expect(message.metadata).toMatchObject({
+      trajectoryStepId: "connector-step",
+    });
+    expect(runtime.emitEvent).toHaveBeenCalledWith(
+      "MESSAGE_RECEIVED",
+      expect.objectContaining({
+        message,
+        source: "discord",
+      }),
+    );
   });
 });

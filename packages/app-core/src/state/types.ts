@@ -405,9 +405,14 @@ export interface AppState {
   characterDraft: CharacterData;
   selectedVrmIndex: number;
   customVrmUrl: string;
+  customVrmPreviewUrl: string;
   customBackgroundUrl: string;
   /** Active content pack ID, or null if no pack is selected. */
   activePackId: string | null;
+  /** Active content pack custom catchphrase for voice preview override. */
+  customCatchphrase: string;
+  /** Active content pack voice preset ID override. */
+  customVoicePresetId: string;
   /** Custom companion world URL from content pack (overrides day/night default). */
   customWorldUrl: string;
 

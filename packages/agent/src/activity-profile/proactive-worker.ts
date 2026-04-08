@@ -1,6 +1,9 @@
 import type { IAgentRuntime, Task, TaskMetadata, UUID } from "@elizaos/core";
 import { logger, stringToUuid } from "@elizaos/core";
-import { loadOwnerContactsConfig } from "../config/owner-contacts.js";
+import {
+  loadOwnerContactsConfig,
+  resolveOwnerContactSource,
+} from "../config/owner-contacts.js";
 import { resolveDefaultTimeZone } from "../lifeops/defaults.js";
 import { LifeOpsService, LifeOpsServiceError } from "../lifeops/service.js";
 import {
@@ -52,6 +55,55 @@ function buildProactiveMetadata(
       kind: "runtime_runner",
       version: 1,
     },
+  };
+}
+
+type ProactiveOwnerContact = {
+  entityId?: string;
+  channelId?: string;
+  roomId?: string;
+};
+
+export function resolveProactiveDeliverySource(targetPlatform: string): string {
+  if (
+    targetPlatform === "web_app" ||
+    targetPlatform === "desktop_app" ||
+    targetPlatform === "mobile_app"
+  ) {
+    return "client_chat";
+  }
+  return targetPlatform;
+}
+
+export function resolveProactiveOwnerContact(args: {
+  targetPlatform: string;
+  ownerEntityId: string;
+  ownerContacts: Record<string, ProactiveOwnerContact>;
+}): { source: string; contact: ProactiveOwnerContact } | null {
+  const deliverySource = resolveProactiveDeliverySource(args.targetPlatform);
+  if (deliverySource === "client_chat") {
+    return {
+      source: "client_chat",
+      contact: { entityId: args.ownerEntityId },
+    };
+  }
+
+  const resolved = resolveOwnerContactSource(args.ownerContacts, deliverySource);
+  if (resolved) {
+    return {
+      source: resolved.source,
+      contact: resolved.contact,
+    };
+  }
+
+  const contact = args.ownerContacts[deliverySource];
+  if (!contact) {
+    return null;
+  }
+
+  return {
+    source: deliverySource,
+    contact,
   };
 }
 
@@ -151,8 +203,20 @@ export async function executeProactiveTask(
         continue;
       }
 
-      const contact = ownerContacts[action.targetPlatform];
-      if (!contact) {
+      const resolvedTarget = resolveProactiveOwnerContact({
+        targetPlatform: action.targetPlatform,
+        ownerEntityId,
+        ownerContacts,
+      });
+      const contact = resolvedTarget?.contact;
+      if (!resolvedTarget || !contact) {
+        logger.warn(
+          `[proactive] No owner contact for platform ${action.targetPlatform}, skipping ${action.kind}`,
+        );
+        continue;
+      }
+
+      if (!contact.entityId && !contact.channelId && !contact.roomId) {
         logger.warn(
           `[proactive] No owner contact for platform ${action.targetPlatform}, skipping ${action.kind}`,
         );
@@ -161,13 +225,18 @@ export async function executeProactiveTask(
 
       try {
         await runtime.sendMessageToTarget(
-          { source: action.targetPlatform, entityId: contact.entityId } as Parameters<
+          {
+            source: resolvedTarget.source,
+            entityId: contact.entityId as UUID | undefined,
+            channelId: contact.channelId,
+            roomId: contact.roomId as UUID | undefined,
+          } as Parameters<
             typeof runtime.sendMessageToTarget
           >[0],
-          { text: action.contextSummary, source: action.targetPlatform },
+          { text: action.contextSummary, source: resolvedTarget.source },
         );
         firedLog = recordFiredAction(firedLog, todayStr, action);
-        logger.info(`[proactive] Fired ${action.kind} on ${action.targetPlatform}`);
+        logger.info(`[proactive] Fired ${action.kind} on ${resolvedTarget.source}`);
       } catch (err) {
         logger.warn(`[proactive] Failed to send ${action.kind}: ${err}`);
       }

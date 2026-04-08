@@ -39,6 +39,33 @@ const mockHomedir = vi.mocked(os.homedir);
 
 const ORIGINAL_PLATFORM = process.platform;
 
+/** Stub all ENV_PROVIDER_MAP env vars to empty string to prevent real
+ *  credentials from the host environment leaking into tests. */
+function isolateEnvVars(): void {
+  const PROVIDER_ENV_VARS = [
+    "OPENAI_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "GROQ_API_KEY",
+    "GOOGLE_GENERATIVE_AI_API_KEY",
+    "GOOGLE_API_KEY",
+    "OPENROUTER_API_KEY",
+    "XAI_API_KEY",
+    "DEEPSEEK_API_KEY",
+    "MISTRAL_API_KEY",
+    "TOGETHER_API_KEY",
+    "ZAI_API_KEY",
+    "OLLAMA_BASE_URL",
+    "ELIZA_USE_PI_AI",
+    "MILADY_USE_PI_AI",
+    "ELIZAOS_CLOUD_API_KEY",
+    "AI_GATEWAY_API_KEY",
+    "AIGATEWAY_API_KEY",
+  ];
+  for (const key of PROVIDER_ENV_VARS) {
+    vi.stubEnv(key, "");
+  }
+}
+
 function makeSpawnResult(exitCode: number, stdout = ""): SpawnResult {
   return {
     exited: Promise.resolve(exitCode),
@@ -62,6 +89,7 @@ describe("scanProviderCredentials", () => {
   }
 
   beforeEach(() => {
+    isolateEnvVars();
     files = {};
     installedClis = new Set();
     keychainResult = null;
@@ -87,7 +115,8 @@ describe("scanProviderCredentials", () => {
       throw new Error(`unexpected spawn command: ${cmd.join(" ")}`);
     });
 
-    vi.stubGlobal("Bun", { spawn: mockSpawn });
+    // Bun global is non-configurable on globalThis but Bun.spawn is writable; assign directly.
+    (Bun as unknown as { spawn: unknown }).spawn = mockSpawn;
     setPlatform(ORIGINAL_PLATFORM);
   });
 
@@ -388,6 +417,7 @@ describe("scanAndValidateProviderCredentials", () => {
   }
 
   beforeEach(() => {
+    isolateEnvVars();
     files = {};
     installedClis = new Set();
     mockExistsSync.mockImplementation((filePath) => String(filePath) in files);
@@ -400,7 +430,8 @@ describe("scanAndValidateProviderCredentials", () => {
         return makeSpawnResult(installedClis.has(cmd[1] ?? "") ? 0 : 1);
       throw new Error(`unexpected spawn: ${cmd.join(" ")}`);
     });
-    vi.stubGlobal("Bun", { spawn: mockSpawn });
+    // Bun global is non-configurable on globalThis but Bun.spawn is writable; assign directly.
+    (Bun as unknown as { spawn: unknown }).spawn = mockSpawn;
     mockFetch = vi.fn();
     vi.stubGlobal("fetch", mockFetch);
     setPlatform("linux");
@@ -507,6 +538,7 @@ describe("scanProviderCredentials — env var detection", () => {
   }
 
   beforeEach(() => {
+    isolateEnvVars();
     files = {};
     mockExistsSync.mockImplementation((filePath) => String(filePath) in files);
     mockReadFileSync.mockImplementation(
@@ -517,7 +549,8 @@ describe("scanProviderCredentials — env var detection", () => {
       if (cmd[0] === "which") return makeSpawnResult(1);
       throw new Error(`unexpected spawn: ${cmd.join(" ")}`);
     });
-    vi.stubGlobal("Bun", { spawn: mockSpawn });
+    // Bun global is non-configurable on globalThis but Bun.spawn is writable; assign directly.
+    (Bun as unknown as { spawn: unknown }).spawn = mockSpawn;
     setPlatform("linux");
   });
 
@@ -652,6 +685,7 @@ describe("scanAndValidateProviderCredentials — endpoint validation", () => {
   }
 
   beforeEach(() => {
+    isolateEnvVars();
     files = {};
     mockExistsSync.mockImplementation((filePath) => String(filePath) in files);
     mockReadFileSync.mockImplementation(
@@ -662,7 +696,8 @@ describe("scanAndValidateProviderCredentials — endpoint validation", () => {
       if (cmd[0] === "which") return makeSpawnResult(1);
       throw new Error(`unexpected spawn: ${cmd.join(" ")}`);
     });
-    vi.stubGlobal("Bun", { spawn: mockSpawn });
+    // Bun global is non-configurable on globalThis but Bun.spawn is writable; assign directly.
+    (Bun as unknown as { spawn: unknown }).spawn = mockSpawn;
     mockFetch = vi.fn();
     vi.stubGlobal("fetch", mockFetch);
     setPlatform("linux");
@@ -751,6 +786,7 @@ describe("scanAndValidateProviderCredentials — integration", () => {
   }
 
   beforeEach(() => {
+    isolateEnvVars();
     files = {};
     mockExistsSync.mockImplementation((filePath) => String(filePath) in files);
     mockReadFileSync.mockImplementation(
@@ -761,7 +797,8 @@ describe("scanAndValidateProviderCredentials — integration", () => {
       if (cmd[0] === "which") return makeSpawnResult(1);
       throw new Error(`unexpected spawn: ${cmd.join(" ")}`);
     });
-    vi.stubGlobal("Bun", { spawn: mockSpawn });
+    // Bun global is non-configurable on globalThis but Bun.spawn is writable; assign directly.
+    (Bun as unknown as { spawn: unknown }).spawn = mockSpawn;
     mockFetch = vi.fn();
     vi.stubGlobal("fetch", mockFetch);
     setPlatform("linux");

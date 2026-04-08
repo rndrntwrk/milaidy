@@ -27,9 +27,15 @@ import {
   createTuningJob,
   waitForTuningJob,
   listTuningJobs,
+  normalizeVertexBaseModel,
+  orchestrateVertexTuning,
   type VertexTuningConfig,
 } from "./vertex-tuning.js";
-import { ALL_BLUEPRINTS } from "./scenario-blueprints.js";
+import { ALL_BLUEPRINTS, BLUEPRINT_STATS } from "./scenario-blueprints.js";
+import {
+  buildRoleplayEpisodes,
+  exportRoleplayEpisodes,
+} from "./roleplay-trajectories.js";
 
 function getTeacherModel(): TeacherModel {
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
@@ -59,6 +65,7 @@ async function cmdGenerate(args: string[]) {
       concurrency: { type: "string", default: "5" },
       contexts: { type: "string" },
       decisions: { type: "string" },
+      limitBlueprints: { type: "string" },
     },
   });
 
@@ -72,17 +79,27 @@ async function cmdGenerate(args: string[]) {
   const filterDecisions = values.decisions
     ? (values.decisions.split(",") as any[])
     : undefined;
+  const limitBlueprints = values.limitBlueprints
+    ? parseInt(values.limitBlueprints, 10)
+    : undefined;
 
   const teacher = getTeacherModel();
 
+  const blueprintCount = limitBlueprints
+    ? Math.min(limitBlueprints, ALL_BLUEPRINTS.length)
+    : ALL_BLUEPRINTS.length;
+
   console.log(`\nScenario blueprints: ${ALL_BLUEPRINTS.length}`);
+  console.log(`Manual blueprints: ${BLUEPRINT_STATS.manualCount}`);
+  console.log(`Generated blueprints: ${BLUEPRINT_STATS.totalCount - BLUEPRINT_STATS.manualCount}`);
   console.log(`Variants per blueprint: ${variantsPerBlueprint}`);
-  console.log(`Expected total samples: ${ALL_BLUEPRINTS.length * variantsPerBlueprint}`);
+  console.log(`Expected total samples: ${blueprintCount * variantsPerBlueprint}`);
   console.log(`Output directory: ${outputDir}`);
   console.log(`Teacher model: ${teacher.name}`);
   console.log(`Concurrency: ${concurrency}`);
   if (filterContexts) console.log(`Filter contexts: ${filterContexts.join(", ")}`);
   if (filterDecisions) console.log(`Filter decisions: ${filterDecisions.join(", ")}`);
+  if (limitBlueprints) console.log(`Limit blueprints: ${limitBlueprints}`);
   console.log("");
 
   const config: GenerationConfig = {
@@ -92,6 +109,7 @@ async function cmdGenerate(args: string[]) {
     concurrency,
     filterContexts,
     filterDecisions,
+    limitBlueprints,
     onProgress: (completed, total, sample) => {
       const pct = ((completed / total) * 100).toFixed(1);
       process.stdout.write(
@@ -115,6 +133,13 @@ async function cmdGenerate(args: string[]) {
   console.log(`  Combined: ${paths.combinedPath}`);
   console.log(`  Should-respond only: ${paths.shouldRespondPath}`);
   console.log(`  Context routing: ${paths.contextRoutingPath}`);
+  const roleplayPaths = await exportRoleplayEpisodes(
+    buildRoleplayEpisodes(samples),
+    samples,
+    outputDir,
+  );
+  console.log(`  Roleplay episodes: ${roleplayPaths.episodesPath}`);
+  console.log(`  Roleplay manifest: ${roleplayPaths.manifestPath}`);
   console.log("\nDone!");
 }
 
@@ -164,9 +189,7 @@ async function cmdTune(args: string[]) {
   }
 
   const baseModel =
-    values.model === "flash"
-      ? ("gemini-2.5-flash" as const)
-      : ("gemini-2.5-flash-lite" as const);
+    normalizeVertexBaseModel(values.model, "should_respond");
 
   const config: VertexTuningConfig = {
     projectId: values.project,
@@ -235,6 +258,49 @@ async function cmdListJobs(args: string[]) {
   }
 }
 
+async function cmdOrchestrate(args: string[]) {
+  const { values } = parseArgs({
+    args,
+    options: {
+      project: { type: "string" },
+      bucket: { type: "string" },
+      data: { type: "string" },
+      slot: { type: "string", default: "should_respond" },
+      scope: { type: "string", default: "global" },
+      ownerId: { type: "string" },
+      model: { type: "string" },
+      name: { type: "string", default: "milady-tuned-model" },
+      epochs: { type: "string", default: "3" },
+      region: { type: "string", default: "us-central1" },
+    },
+  });
+
+  if (!values.project || !values.bucket || !values.data) {
+    console.error(
+      "Usage: orchestrate --project <gcp-project> --bucket <gcs-bucket> --data <path-to-jsonl> [--slot should_respond|action_planner|response] [--scope global|organization|user]",
+    );
+    process.exit(1);
+  }
+
+  const result = await orchestrateVertexTuning({
+    projectId: values.project,
+    region: values.region,
+    gcsBucket: values.bucket,
+    baseModel: normalizeVertexBaseModel(values.model, values.slot as any),
+    trainingDataPath: values.data,
+    epochs: parseInt(values.epochs!, 10),
+    displayName: values.name!,
+    slot: values.slot as any,
+    scope: values.scope as any,
+    ownerId: values.ownerId,
+  });
+
+  console.log(`\nJob created: ${result.job.name}`);
+  console.log(`Recommended model ID: ${result.recommendedModelId}`);
+  console.log("Model preference patch:");
+  console.log(JSON.stringify(result.modelPreferencePatch, null, 2));
+}
+
 // ==================== Main ====================
 
 async function main() {
@@ -254,6 +320,9 @@ async function main() {
       break;
     case "list-jobs":
       await cmdListJobs(restArgs);
+      break;
+    case "orchestrate":
+      await cmdOrchestrate(restArgs);
       break;
     default:
       console.log(`Usage: cli.ts <command> [options]
@@ -280,6 +349,13 @@ Commands:
 
   list-jobs         List Vertex AI tuning jobs
     --project ID    GCP project ID
+
+  orchestrate       Submit a tuned-model job and emit the model preference patch
+    --project ID    GCP project ID
+    --bucket NAME   GCS bucket for training data
+    --data PATH     Path to training JSONL
+    --slot NAME     should_respond | action_planner | response | media_description
+    --scope NAME    global | organization | user
 
 Environment:
   ANTHROPIC_API_KEY   Use Claude as teacher model

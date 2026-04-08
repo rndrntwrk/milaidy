@@ -127,7 +127,7 @@ describe("release support workflow drift", () => {
     const dockerfile = fs.readFileSync(CANONICAL_IMAGE_DOCKERFILE, "utf8");
 
     expect(dockerfile).toContain(
-      'CMD ["node", "--import", "tsx", "milady.mjs", "start"]',
+      'CMD ["node", "--import", "./node_modules/tsx/dist/loader.mjs", "milady.mjs", "start"]',
     );
     expect(dockerfile).toContain("EXPOSE 2138");
     expect(dockerfile).toContain("http://127.0.0.1:$" + "{port}/api/health");

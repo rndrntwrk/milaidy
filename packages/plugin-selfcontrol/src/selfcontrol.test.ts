@@ -247,30 +247,29 @@ describe("hosts-file blocking", () => {
     expect(block).toContain("::1 twitter.com");
   });
 
-  it("expires a timed block automatically while the runtime is active", async () => {
+  it("persists timed block scheduling metadata for the runtime task worker", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-04T10:00:00.000Z"));
 
     const result = await startSelfControlBlock({
       websites: ["x.com"],
       durationMinutes: 1,
+      scheduledByAgentId: "agent-selfcontrol",
     });
 
     expect(result).toMatchObject({
       success: true,
       endsAt: "2026-04-04T10:01:00.000Z",
     });
-    expect(fs.readFileSync(hostsFilePath, "utf8")).toContain("0.0.0.0 x.com");
-
-    await vi.advanceTimersByTimeAsync(60_000);
 
     const status = await getSelfControlStatus();
-
-    expect(status.active).toBe(false);
-    expect(status.websites).toEqual([]);
-    expect(fs.readFileSync(hostsFilePath, "utf8")).toBe(
-      "127.0.0.1 localhost\n",
-    );
+    expect(status).toMatchObject({
+      active: true,
+      startedAt: "2026-04-04T10:00:00.000Z",
+      endsAt: "2026-04-04T10:01:00.000Z",
+      scheduledByAgentId: "agent-selfcontrol",
+      websites: ["x.com"],
+    });
   });
 
   it("preserves managed metadata for LifeOps-owned blocks", async () => {

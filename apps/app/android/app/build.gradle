@@ -57,11 +57,11 @@ android {
         sourceCompatibility JavaVersion.VERSION_21
         targetCompatibility JavaVersion.VERSION_21
     }
-}
 
-repositories {
-    flatDir{
-        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    packaging {
+        jniLibs {
+            keepDebugSymbols += ["**/libimage_processing_util_jni.so"]
+        }
     }
 }
 

@@ -82,6 +82,35 @@ process.env.VITEST = "true";
 process.env.LOG_LEVEL ??= "error";
 // Allow tests to run without a real database (uses InMemoryDatabaseAdapter).
 process.env.ALLOW_NO_DATABASE ??= "true";
+// ---------------------------------------------------------------------------
+// Bun global shim — Electrobun desktop shell tests run in the Bun runtime,
+// but the Vitest pool is Node. Install a minimal shim so that module-level
+// code referencing the Bun global (e.g. Bun.spawn, Bun.version) does not
+// throw ReferenceError at import time. Individual tests override Bun.spawn
+// with vi.fn() in their own setup blocks.
+// ---------------------------------------------------------------------------
+if (typeof globalThis.Bun === "undefined") {
+  (globalThis as Record<string, unknown>).Bun = {
+    version: "1.3.11",
+    spawn: (_cmd: unknown, _opts?: unknown) => ({
+      pid: 0,
+      exitCode: 0,
+      exited: Promise.resolve(0),
+      stdout: new ReadableStream({ start(c) { c.close(); } }),
+      stderr: new ReadableStream({ start(c) { c.close(); } }),
+      kill: () => {},
+    }),
+    spawnSync: (_cmd: unknown, _opts?: unknown) => ({
+      exitCode: 0,
+      stdout: Buffer.from(""),
+      stderr: Buffer.from(""),
+    }),
+    sleep: (ms: number) => new Promise<void>((r) => setTimeout(r, ms)),
+    env: { ...process.env },
+  };
+}
+
+
 
 declare global {
   // React 18 testing flag to suppress act() environment warnings.

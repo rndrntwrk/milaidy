@@ -22,6 +22,10 @@ const SUBMODULE_READINESS_MARKERS = {
   eliza: ["package.json", "packages/typescript/package.json"],
   "plugins/plugin-agent-orchestrator": ["package.json"],
   "steward-fi": ["package.json", "packages/api/package.json"],
+  "test/contracts/lib/openzeppelin-contracts": [
+    "package.json",
+    "contracts/package.json",
+  ],
 };
 
 // plugin-openrouter contains PGlite :memory:<UUID> paths committed under

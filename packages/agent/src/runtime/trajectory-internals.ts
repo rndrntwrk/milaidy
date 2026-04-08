@@ -205,11 +205,7 @@ export function inferTrajectoryLlmStepType(params: {
 
   const purpose = normalizeTrajectoryTag(params.purpose);
   const actionType = normalizeTrajectoryTag(params.actionType);
-  const model = normalizeTrajectoryTag(params.model);
-  const isSynthetic =
-    actionType === "trajectory_fallback" || model.includes("synthetic");
 
-  if (isSynthetic) return "synthetic";
   if (purpose === "should_respond") return "should_respond";
   if (
     purpose === "compose_state" ||
@@ -254,7 +250,6 @@ export function inferTrajectoryLlmTags(params: {
   if (stepType) push(`step:${stepType}`);
   if (purpose) push(`purpose:${purpose}`);
   if (actionType) push(`action:${actionType}`);
-  if (stepType === "synthetic") push("synthetic");
   if (stepType === "should_respond") push("routing");
   if (stepType === "compose_state") push("context");
   if (

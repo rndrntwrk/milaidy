@@ -13,6 +13,11 @@ import {
   ensureCompatSensitiveRouteAuthorized,
 } from "./auth";
 import {
+  CONNECTOR_PLUGINS,
+  STREAMING_PLUGINS,
+} from "../config/plugin-auto-enable";
+import { CONNECTOR_ENV_MAP } from "../config/env-vars";
+import {
   sendJsonError as sendJsonErrorResponse,
   sendJson as sendJsonResponse,
 } from "./response";
@@ -191,6 +196,192 @@ function normalizePluginId(rawName: string): string {
     .replace(/^(plugin|app)-/, "");
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  return value as Record<string, unknown>;
+}
+
+function resolveCompatConfigKey(
+  pluginId: string,
+  npmName: string | undefined,
+  pluginMap: Record<string, string>,
+): string | null {
+  const candidates = new Set<string>([pluginId, normalizePluginId(pluginId)]);
+  if (typeof npmName === "string" && npmName.length > 0) {
+    candidates.add(npmName);
+    candidates.add(normalizePluginId(npmName));
+  }
+
+  for (const [configKey, packageName] of Object.entries(pluginMap)) {
+    if (
+      candidates.has(configKey) ||
+      candidates.has(packageName) ||
+      candidates.has(normalizePluginId(packageName))
+    ) {
+      return configKey;
+    }
+  }
+
+  return null;
+}
+
+function readCompatSectionEnabled(
+  section: unknown,
+  configKey: string | null,
+): boolean | undefined {
+  if (!configKey) {
+    return undefined;
+  }
+
+  const sectionRecord = asRecord(section);
+  if (!sectionRecord) {
+    return undefined;
+  }
+
+  const targetRecord = asRecord(sectionRecord[configKey]);
+  if (!targetRecord || typeof targetRecord.enabled !== "boolean") {
+    return undefined;
+  }
+
+  return targetRecord.enabled;
+}
+
+function writeCompatSectionEnabled(
+  parent: Record<string, unknown>,
+  sectionKey: string,
+  configKey: string | null,
+  enabled: boolean,
+): void {
+  if (!configKey) {
+    return;
+  }
+
+  const section = asRecord(parent[sectionKey]) ?? {};
+  const entry = asRecord(section[configKey]) ?? {};
+  entry.enabled = enabled;
+  section[configKey] = entry;
+  parent[sectionKey] = section;
+}
+
+function syncCompatConnectorConfigValues(
+  config: Record<string, unknown>,
+  pluginId: string,
+  npmName: string | undefined,
+  values: Record<string, string>,
+): void {
+  const connectorKey = resolveCompatConfigKey(
+    pluginId,
+    npmName,
+    CONNECTOR_PLUGINS,
+  );
+  if (!connectorKey) {
+    return;
+  }
+
+  const envMap =
+    CONNECTOR_ENV_MAP[connectorKey as keyof typeof CONNECTOR_ENV_MAP];
+  if (!envMap) {
+    return;
+  }
+  const typedEnvMap = envMap as Record<string, string>;
+
+  const connectors = asRecord(config.connectors) ?? {};
+  const connectorEntry = asRecord(connectors[connectorKey]) ?? {};
+  const envToField = new Map<string, string>();
+
+  for (const [field, envKey] of Object.entries(typedEnvMap)) {
+    if (!envToField.has(envKey)) {
+      envToField.set(envKey, field);
+    }
+  }
+
+  let touched = false;
+  for (const [envKey, field] of envToField.entries()) {
+    if (!(envKey in values)) {
+      continue;
+    }
+
+    touched = true;
+    const value = values[envKey];
+    if (value.trim()) {
+      connectorEntry[field] = value;
+    } else {
+      delete connectorEntry[field];
+    }
+  }
+
+  // Canonicalize Discord onto `connectors.discord.token`; keep the legacy
+  // `botToken` alias cleared so the config does not drift between fields.
+  if (connectorKey === "discord" && "DISCORD_API_TOKEN" in values) {
+    touched = true;
+    const tokenValue = values.DISCORD_API_TOKEN.trim();
+    if (tokenValue) {
+      connectorEntry.token = tokenValue;
+    } else {
+      delete connectorEntry.token;
+    }
+    delete connectorEntry.botToken;
+  }
+
+  if (!touched) {
+    return;
+  }
+
+  connectors[connectorKey] = connectorEntry;
+  config.connectors = connectors;
+}
+
+function resolvePersistedPluginEnabled(
+  pluginId: string,
+  category: PluginCategory,
+  npmName: string | undefined,
+  configEntries: Record<string, { enabled?: unknown }>,
+  config: Record<string, unknown>,
+): boolean | undefined {
+  const pluginEnabled =
+    typeof configEntries[pluginId]?.enabled === "boolean"
+      ? Boolean(configEntries[pluginId]?.enabled)
+      : undefined;
+
+  if (category === "connector") {
+    const connectorEnabled = readCompatSectionEnabled(
+      config.connectors,
+      resolveCompatConfigKey(pluginId, npmName, CONNECTOR_PLUGINS),
+    );
+    return connectorEnabled ?? pluginEnabled;
+  }
+
+  if (category === "streaming") {
+    const streamingEnabled = readCompatSectionEnabled(
+      config.streaming,
+      resolveCompatConfigKey(pluginId, npmName, STREAMING_PLUGINS),
+    );
+    return streamingEnabled ?? pluginEnabled;
+  }
+
+  return pluginEnabled;
+}
+
+function compatMutationRequiresRestart(
+  plugin: CompatPluginRecord,
+  body: Record<string, unknown>,
+): boolean {
+  if (typeof body.enabled === "boolean") {
+    return true;
+  }
+
+  if (
+    body.config !== undefined &&
+    (plugin.category === "connector" || plugin.category === "streaming")
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 function titleCasePluginId(id: string): string {
   return id
     .split("-")
@@ -354,6 +545,7 @@ export function buildPluginListResponse(runtime: AgentRuntime | null): {
   plugins: Array<Record<string, unknown>>;
 } {
   const config = loadElizaConfig();
+  const configRecord = config as Record<string, unknown>;
   const loadedNames = resolveLoadedPluginNames(runtime);
   const manifestPath = resolvePluginManifestPath();
   const manifest = manifestPath
@@ -366,13 +558,20 @@ export function buildPluginListResponse(runtime: AgentRuntime | null): {
 
   for (const entry of manifest?.plugins ?? []) {
     const pluginId = normalizePluginId(entry.id);
+    const category = normalizePluginCategory(entry.category);
     const parameters = buildPluginParamDefs(entry.pluginParameters);
     const active = isPluginLoaded(pluginId, entry.npmName, loadedNames);
     const enabled =
       active ||
-      (typeof configEntries[pluginId]?.enabled === "boolean"
-        ? Boolean(configEntries[pluginId]?.enabled)
-        : false);
+      Boolean(
+        resolvePersistedPluginEnabled(
+          pluginId,
+          category,
+          entry.npmName,
+          configEntries,
+          configRecord,
+        ),
+      );
     const validationErrors = parameters
       .filter((parameter) => parameter.required && !parameter.isSet)
       .map((parameter) => ({
@@ -388,7 +587,7 @@ export function buildPluginListResponse(runtime: AgentRuntime | null): {
       enabled,
       configured: validationErrors.length === 0,
       envKey: entry.envKey ?? null,
-      category: normalizePluginCategory(entry.category),
+      category,
       source: "bundled",
       parameters,
       validationErrors,
@@ -552,6 +751,7 @@ export function persistCompatPluginMutation(
   payload: Record<string, unknown>;
 } {
   const config = loadElizaConfig();
+  const configRecord = config as Record<string, unknown>;
   config.plugins ??= {};
   config.plugins.entries ??= {};
   config.plugins.entries[pluginId] ??= {};
@@ -566,6 +766,24 @@ export function persistCompatPluginMutation(
     if (CAPABILITY_FEATURE_IDS.has(pluginId)) {
       config.features ??= {};
       config.features[pluginId] = body.enabled;
+    }
+
+    if (plugin.category === "connector") {
+      writeCompatSectionEnabled(
+        configRecord,
+        "connectors",
+        resolveCompatConfigKey(pluginId, plugin.npmName, CONNECTOR_PLUGINS),
+        body.enabled,
+      );
+    }
+
+    if (plugin.category === "streaming") {
+      writeCompatSectionEnabled(
+        configRecord,
+        "streaming",
+        resolveCompatConfigKey(pluginId, plugin.npmName, STREAMING_PLUGINS),
+        body.enabled,
+      );
     }
   }
 
@@ -609,6 +827,14 @@ export function persistCompatPluginMutation(
     }
 
     pluginEntry.config = nextConfig;
+    if (plugin.category === "connector") {
+      syncCompatConnectorConfigValues(
+        configRecord,
+        pluginId,
+        plugin.npmName,
+        values,
+      );
+    }
 
     saveElizaConfig(config);
 
@@ -703,8 +929,13 @@ export async function handlePluginsCompatRoutes(
     }
 
     const result = persistCompatPluginMutation(pluginId, body, plugin);
-    if (result.status === 200 && typeof body.enabled === "boolean") {
-      scheduleCompatRuntimeRestart(state, `Plugin toggle: ${pluginId}`);
+    if (result.status === 200 && compatMutationRequiresRestart(plugin, body)) {
+      const reason =
+        typeof body.enabled === "boolean"
+          ? `Plugin toggle: ${pluginId}`
+          : `Plugin config updated: ${pluginId}`;
+      scheduleCompatRuntimeRestart(state, reason);
+      result.payload.requiresRestart = true;
     }
     sendJsonResponse(res, result.status, result.payload);
     return true;

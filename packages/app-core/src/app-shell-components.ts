@@ -31,6 +31,7 @@ export { StreamView } from "./components/pages/StreamView";
 export { BugReportModal } from "./components/shell/BugReportModal";
 export { CompanionShell } from "./components/shell/CompanionShell";
 export { ConnectionFailedBanner } from "./components/shell/ConnectionFailedBanner";
+export { ConnectionLostOverlay } from "./components/shell/ConnectionLostOverlay";
 export { Header } from "./components/shell/Header";
 export { PairingView } from "./components/shell/PairingView";
 export { ShellOverlays } from "./components/shell/ShellOverlays";

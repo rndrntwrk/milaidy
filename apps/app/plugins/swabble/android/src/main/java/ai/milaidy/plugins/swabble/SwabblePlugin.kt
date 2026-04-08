@@ -557,7 +557,7 @@ class SwabblePlugin : Plugin() {
 
         // Pass 2: fuzzy match using Levenshtein distance
         val words = transcript.split("\\s+".toRegex()).filter { it.isNotEmpty() }
-        for ((wordIndex, word) in words.withIndex()) {
+        for ((wordIndex, _) in words.withIndex()) {
             for (trigger in config.triggers) {
                 val triggerWords = trigger.split("\\s+".toRegex()).filter { it.isNotEmpty() }
                 val triggerLen = triggerWords.size

@@ -24,6 +24,7 @@ import {
   CompanionShell,
   CompanionView,
   ConnectionFailedBanner,
+  ConnectionLostOverlay,
   ConnectorsPageView,
   ConversationsSidebar,
   CustomActionEditor,
@@ -244,7 +245,7 @@ export function App() {
   const contextMenu = useContextMenu();
 
   useStreamPopoutNavigation(setTab);
-  useLifeOpsActivitySignals();
+  useLifeOpsActivitySignals(startupCoordinator.phase === "ready");
 
   const [customActionsPanelOpen, setCustomActionsPanelOpen] = useState(false);
   const [customActionsEditorOpen, setCustomActionsEditorOpen] = useState(false);
@@ -724,6 +725,7 @@ export function App() {
           setEditingAction(null);
         }}
       />
+      <ConnectionLostOverlay />
       <ConnectionFailedBanner />
       <SystemWarningBanner />
       {desktopShuttingDown ? (

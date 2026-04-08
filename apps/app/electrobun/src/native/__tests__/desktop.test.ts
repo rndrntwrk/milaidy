@@ -192,10 +192,9 @@ vi.mock("electrobun/bun", () => {
   };
 });
 
-vi.stubGlobal("Bun", {
-  spawn: vi.fn(() => makeSpawnResult("")),
-  version: "1.2.3",
-});
+// Bun global is non-configurable on globalThis but Bun.spawn is writable; assign directly.
+// Bun.version is non-writable/non-configurable — the real version is used for tests that read it.
+(Bun as unknown as { spawn: unknown }).spawn = vi.fn(() => makeSpawnResult(""));
 
 // ---------------------------------------------------------------------------
 // Module under test (after mocks)

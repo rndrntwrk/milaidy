@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import http from "node:http";
 import os from "node:os";
 import path from "node:path";
-import type { AgentRuntime, Content, UUID } from "@elizaos/core";
+import type { AgentRuntime, Content, Task, UUID } from "@elizaos/core";
 import {
   selfControlBlockWebsitesAction,
   selfControlRequestPermissionAction,
@@ -114,6 +114,9 @@ function createRuntimeForSelfControlChatTests(options: {
     string,
     { id: UUID; metadata?: Record<string, unknown> | null }
   >();
+  const workerRegistry = new Map<string, unknown>();
+  let nextTaskId = 0;
+  const scheduledTasks: Task[] = [];
 
   const runtimeSubset = {
     agentId: "selfcontrol-chat-agent",
@@ -200,6 +203,39 @@ function createRuntimeForSelfControlChatTests(options: {
       >;
     },
     getRoomsByWorld: async () => [],
+    getTask: async (taskId: UUID) =>
+      scheduledTasks.find((task) => task.id === taskId) ?? null,
+    getTasks: async () => [...scheduledTasks],
+    createTask: async (task: Task) => {
+      const id = (task.id ?? `website-blocker-task-${nextTaskId++}`) as UUID;
+      scheduledTasks.push({ ...task, id });
+      return id;
+    },
+    updateTask: async (taskId: UUID, update: Partial<Task>) => {
+      const index = scheduledTasks.findIndex((task) => task.id === taskId);
+      if (index === -1) {
+        return;
+      }
+      const current = scheduledTasks[index] as Task;
+      scheduledTasks[index] = {
+        ...current,
+        ...update,
+        metadata: {
+          ...((current.metadata as Record<string, unknown> | undefined) ?? {}),
+          ...((update.metadata as Record<string, unknown> | undefined) ?? {}),
+        },
+      };
+    },
+    deleteTask: async (taskId: UUID) => {
+      const index = scheduledTasks.findIndex((task) => task.id === taskId);
+      if (index !== -1) {
+        scheduledTasks.splice(index, 1);
+      }
+    },
+    registerTaskWorker: (worker: { name: string }) => {
+      workerRegistry.set(worker.name, worker);
+    },
+    getTaskWorker: (name: string) => workerRegistry.get(name),
     emitEvent: async () => {},
     getService: () => null,
     getServicesByType: () => [],

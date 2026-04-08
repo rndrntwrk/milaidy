@@ -357,6 +357,14 @@ export function SubscriptionStatus({
             )}
           </div>
 
+          {/* TOS restriction warning — Claude subscription tokens can only
+              be used through the Claude Code CLI, not for direct API calls. */}
+          <div className="text-xs leading-relaxed p-2.5 mb-3 border border-[var(--warning,#f39c12)]/30 bg-[var(--warning,#f39c12)]/5 rounded">
+            <span className="font-semibold">
+              {t("subscriptionstatus.ClaudeTosWarningShort")}
+            </span>
+          </div>
+
           {anthropicStatus?.configured && !anthropicStatus.valid && (
             <div className="text-xs text-[var(--warning,#f39c12)] mb-3">
               {t("subscriptionstatus.ClaudeSubscription")}
@@ -552,6 +560,12 @@ export function SubscriptionStatus({
               </Button>
             )}
           </div>
+
+          {openaiConnected && (
+            <div className="text-xs leading-relaxed p-2.5 mb-3 border border-[var(--ok,#16a34a)]/30 bg-[var(--ok,#16a34a)]/5 rounded">
+              {t("subscriptionstatus.CodexAllAccess")}
+            </div>
+          )}
 
           {openaiStatus?.configured && !openaiStatus.valid && (
             <div className="text-xs text-[var(--warning,#f39c12)] mb-3">

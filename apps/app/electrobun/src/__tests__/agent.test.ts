@@ -1,3 +1,4 @@
+import { DEFAULT_DESKTOP_API_PORT } from "@miladyai/shared/runtime-env";
 import {
   afterEach,
   beforeEach,
@@ -70,10 +71,9 @@ vi.mock("../native/loopback-port", () => ({
 const mockSpawn = vi.fn();
 const mockSleep = vi.fn(() => Promise.resolve());
 
-vi.stubGlobal("Bun", {
-  spawn: mockSpawn,
-  sleep: mockSleep,
-});
+// Bun global is non-configurable on globalThis but Bun.spawn and Bun.sleep are writable; assign directly.
+(Bun as unknown as { spawn: unknown }).spawn = mockSpawn;
+(Bun as unknown as { sleep: unknown }).sleep = mockSleep;
 
 // Mock fetch for health checks
 const mockFetch = vi.fn();
@@ -637,7 +637,7 @@ describe("AgentManager", () => {
 
         expect(mockFetch).toHaveBeenNthCalledWith(
           1,
-          "http://127.0.0.1:2138/api/health",
+          `http://127.0.0.1:${DEFAULT_DESKTOP_API_PORT}/api/health`,
           expect.objectContaining({
             headers: expectedHeaders,
             signal: expect.anything(),
@@ -645,7 +645,7 @@ describe("AgentManager", () => {
         );
         expect(mockFetch).toHaveBeenNthCalledWith(
           2,
-          "http://127.0.0.1:2138/api/agents",
+          `http://127.0.0.1:${DEFAULT_DESKTOP_API_PORT}/api/agents`,
           expect.objectContaining({
             headers: expectedHeaders,
             signal: expect.anything(),
@@ -686,7 +686,7 @@ describe("AgentManager", () => {
         .map(([, line]) => String(line))
         .join("\n");
       expect(initialLog).toContain(
-        "[Agent] Runtime ready -- port: 2138, pid: 12345",
+        `[Agent] Runtime ready -- port: ${DEFAULT_DESKTOP_API_PORT}, pid: 12345`,
       );
       expect(initialLog).not.toContain("Runtime started -- agent:");
 
@@ -701,7 +701,7 @@ describe("AgentManager", () => {
         .map(([, line]) => String(line))
         .join("\n");
       expect(finalLog).toContain(
-        "[Agent] Runtime started -- agent: DeferredAgent, port: 2138, pid: 12345",
+        `[Agent] Runtime started -- agent: DeferredAgent, port: ${DEFAULT_DESKTOP_API_PORT}, pid: 12345`,
       );
     });
 
@@ -718,7 +718,7 @@ describe("AgentManager", () => {
       const status = await manager.start();
       expect(status.state).toBe("running");
       expect(status.agentName).toBe("Milady");
-      expect(status.port).toBe(2138);
+      expect(status.port).toBe(DEFAULT_DESKTOP_API_PORT);
       expect(status.startedAt).toBeGreaterThan(0);
       expect(status.error).toBeNull();
 
@@ -950,7 +950,7 @@ describe("AgentManager", () => {
         });
 
         const status = await manager.start();
-        expect(status.port).toBe(2138);
+        expect(status.port).toBe(DEFAULT_DESKTOP_API_PORT);
         expect(process.env.MILADY_PORT).toBeUndefined();
         expect(process.env.MILADY_API_PORT).toBeUndefined();
         expect(process.env.ELIZA_PORT).toBeUndefined();
@@ -1159,7 +1159,7 @@ describe("AgentManager", () => {
   describe("restartClearingLocalDb()", () => {
     it("is a no-op in external API mode (no spawn, no throw)", async () => {
       const originalApiBase = process.env.MILADY_DESKTOP_API_BASE;
-      process.env.MILADY_DESKTOP_API_BASE = "http://127.0.0.1:2138";
+      process.env.MILADY_DESKTOP_API_BASE = `http://127.0.0.1:${DEFAULT_DESKTOP_API_PORT}`;
 
       try {
         const status = await manager.restartClearingLocalDb();

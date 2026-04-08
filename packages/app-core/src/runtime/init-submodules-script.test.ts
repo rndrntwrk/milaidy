@@ -14,6 +14,10 @@ const GITMODULES = resolve(ROOT, ".gitmodules");
 const ELIZA_MARKERS = getSubmoduleReadinessMarkerPaths("eliza", {
   rootDir: ROOT,
 });
+const OPENZEPPELIN_MARKERS = getSubmoduleReadinessMarkerPaths(
+  "test/contracts/lib/openzeppelin-contracts",
+  { rootDir: ROOT },
+);
 
 function createExistsStub(extraPaths: string[] = []) {
   return (filePath: string) =>
@@ -24,6 +28,7 @@ function createExistsStub(extraPaths: string[] = []) {
 
 describe("init-submodules script", () => {
   it("discovers tracked submodules from .gitmodules git-config output", () => {
+    const existingPaths = new Set<string>([GIT_DIR, GITMODULES]);
     const exec = vi.fn((command: string) => {
       if (
         command ===
@@ -47,6 +52,9 @@ describe("init-submodules script", () => {
         command ===
         'git submodule update --init --recursive "test/contracts/lib/openzeppelin-contracts"'
       ) {
+        for (const marker of OPENZEPPELIN_MARKERS) {
+          existingPaths.add(marker);
+        }
         return "";
       }
       throw new Error(`Unexpected command: ${command}`);
@@ -54,7 +62,7 @@ describe("init-submodules script", () => {
 
     const result = runInitSubmodules({
       rootDir: ROOT,
-      exists: createExistsStub(),
+      exists: (filePath: string) => existingPaths.has(filePath),
       exec,
       log: () => {},
       logError: () => {},

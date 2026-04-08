@@ -1,7 +1,6 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { DatabaseSync } from "node:sqlite";
 import type { IAgentRuntime } from "@elizaos/core";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { saveEnv } from "../../../test/helpers/test-utils";
@@ -11,6 +10,16 @@ import {
   LifeOpsRepository,
 } from "../src/lifeops/repository";
 import { LifeOpsService } from "../src/lifeops/service";
+
+let DatabaseSync: typeof import("node:sqlite").DatabaseSync;
+const hasNodeSqlite = await (async () => {
+  try {
+    ({ DatabaseSync } = await import("node:sqlite"));
+    return true;
+  } catch {
+    return false;
+  }
+})();
 
 type SqlQuery = {
   queryChunks?: Array<{ value?: unknown }>;
@@ -134,7 +143,7 @@ async function seedManagedGoogleGrant(args: {
   );
 }
 
-describe("life-ops Google mode preference", () => {
+describe.skipIf(!hasNodeSqlite)("life-ops Google mode preference", () => {
   let databasePath = "";
   let envBackup: { restore: () => void };
 

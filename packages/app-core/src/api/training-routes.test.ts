@@ -175,7 +175,9 @@ describe("training routes", () => {
   });
 
   test("returns 404 when trajectory is missing", async () => {
-    vi.mocked(trainingService.getTrajectoryById).mockResolvedValueOnce(null);
+    (
+      trainingService.getTrajectoryById as ReturnType<typeof vi.fn>
+    ).mockResolvedValueOnce(null);
     const result = await invoke({
       method: "GET",
       pathname: "/api/training/trajectories/trajectory-404",
@@ -194,6 +196,20 @@ describe("training routes", () => {
     expect(trainingService.buildDataset).toHaveBeenCalledWith({
       limit: 100,
       minLlmCallsPerTrajectory: 2,
+    });
+  });
+
+  test("lists expanded blueprint metadata", async () => {
+    const result = await invoke({
+      method: "GET",
+      pathname: "/api/training/blueprints",
+    });
+    expect(result.status).toBe(200);
+    expect(result.payload).toMatchObject({
+      count: expect.any(Number),
+      stats: expect.objectContaining({
+        totalCount: expect.any(Number),
+      }),
     });
   });
 
@@ -220,9 +236,9 @@ describe("training routes", () => {
   });
 
   test("returns 400 when training job start fails", async () => {
-    vi.mocked(trainingService.startTrainingJob).mockRejectedValueOnce(
-      new Error("bad request"),
-    );
+    (
+      trainingService.startTrainingJob as ReturnType<typeof vi.fn>
+    ).mockRejectedValueOnce(new Error("bad request"));
     const result = await invoke({
       method: "POST",
       pathname: "/api/training/jobs",
@@ -360,5 +376,17 @@ describe("training routes", () => {
     });
     expect(result.status).toBe(200);
     expect(trainingService.benchmarkModel).toHaveBeenCalledWith("model-1");
+  });
+
+  test("requires a job name for Vertex job status lookup", async () => {
+    const result = await invoke({
+      method: "GET",
+      pathname: "/api/training/vertex/job-status",
+      url: "/api/training/vertex/job-status",
+    });
+    expect(result.status).toBe(400);
+    expect(result.payload).toMatchObject({
+      error: "name query parameter is required",
+    });
   });
 });

@@ -33,13 +33,15 @@ const DOCKERFILES = [
     name: "Dockerfile.slim",
     path: path.join(ROOT, "Dockerfile.slim"),
     expectedBase: "slim",
-    expectedCommand: 'CMD ["node", "--import", "tsx", "milady.mjs", "start"]',
+    expectedCommand:
+      'CMD ["node", "--import", "./node_modules/tsx/dist/loader.mjs", "milady.mjs", "start"]',
   },
   {
     name: "Dockerfile.ci",
     path: path.join(ROOT, "Dockerfile.ci"),
     expectedBase: "slim",
-    expectedCommand: 'CMD ["node", "--import", "tsx", "milady.mjs", "start"]',
+    expectedCommand:
+      'CMD ["node", "--import", "./node_modules/tsx/dist/loader.mjs", "milady.mjs", "start"]',
   },
 ] as const;
 

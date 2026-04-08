@@ -797,15 +797,24 @@ async function handleMiladyCompatRoute(
       method === "POST" &&
       url.pathname === "/api/cloud/disconnect"
     ) {
+      // Include apiKey: null so the upstream state.config does not restore the
+      // just-cleared key when it merges and re-saves during the loopback.
+      // Include serviceRouting: { llmText: null } so the upstream's in-memory
+      // serviceRouting (derived from legacy cloud.enabled=true at load time) is
+      // cleared — without it, the loopback save re-persists the cloud-proxy route.
+      const disconnectPatch = {
+        cloud: { enabled: false, apiKey: null },
+        serviceRouting: { llmText: null },
+      };
       if (isMiladySettingsDebugEnabled()) {
         logger.debug(
-          `[milady][settings][compat] POST /api/cloud/disconnect → loopback PUT /api/config patch=${JSON.stringify(sanitizeForSettingsDebug({ cloud: { enabled: false } }))}`,
+          `[milady][settings][compat] POST /api/cloud/disconnect → loopback PUT /api/config patch=${JSON.stringify(sanitizeForSettingsDebug(disconnectPatch))}`,
         );
       }
       try {
         await compatLoopbackRequest(req, "/api/config", {
           method: "PUT",
-          body: JSON.stringify({ cloud: { enabled: false } }),
+          body: JSON.stringify(disconnectPatch),
         });
         if (isMiladySettingsDebugEnabled()) {
           logger.debug(

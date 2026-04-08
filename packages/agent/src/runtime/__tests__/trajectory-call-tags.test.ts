@@ -24,25 +24,6 @@ describe("trajectory call tagging", () => {
     );
   });
 
-  it("marks synthetic fallback calls explicitly", () => {
-    const call = enrichTrajectoryLlmCall({
-      model: "milady/synthetic-trajectory-fallback",
-      purpose: "other",
-      actionType: "TRAJECTORY_FALLBACK",
-    });
-
-    expect(call.stepType).toBe("synthetic");
-    expect(call.tags).toEqual(
-      expect.arrayContaining([
-        "llm",
-        "step:synthetic",
-        "purpose:other",
-        "action:trajectory_fallback",
-        "synthetic",
-      ]),
-    );
-  });
-
   it("collapses orchestrator decisions into a stable step type", () => {
     expect(
       inferTrajectoryLlmStepType({

@@ -146,9 +146,14 @@ describe("subscription routes", () => {
       body: { token },
     });
 
+    // The source stores the token as __anthropicSubscriptionToken in config.env
+    // (not ANTHROPIC_API_KEY) to comply with Anthropic's TOS — the token is
+    // only used by spawned claude CLI subprocesses, not injected into the runtime.
     expect(result.status).toBe(200);
-    expect(process.env.ANTHROPIC_API_KEY).toBe(token);
-    expect(state.config.env).toMatchObject({ ANTHROPIC_API_KEY: token });
+    expect(process.env.ANTHROPIC_API_KEY).toBeUndefined();
+    expect(state.config.env).toMatchObject({
+      __anthropicSubscriptionToken: token,
+    });
     expect(saveConfig).toHaveBeenCalledWith(state.config);
   });
 

@@ -249,7 +249,7 @@ jobs:
             VERSION_CLEAN=${{ steps.version.outputs.version_clean }}
             MILADY_RELEASE_TAG=${{ steps.version.outputs.is_release == 'true' && steps.version.outputs.version || '' }}
           cache-from: type=gha,scope=milady-docker
-          cache-to: type=gha,scope=milady-docker,mode=max
+          cache-to: type=gha,scope=milady-docker,mode=max,ignore-error=true
           provenance: false
 
       # ── 15. Build summary ───────────────────────────────────────────────────

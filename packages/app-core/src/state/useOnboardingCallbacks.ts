@@ -617,6 +617,11 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
     const previousStep = resolveOnboardingPreviousStep(onboardingStep);
 
     if (!previousStep) return;
+    // Reset connection subflow when leaving "providers" so the user starts
+    // fresh at the hosting screen when they advance again.
+    if (onboardingStep === "providers") {
+      applyResetConnectionWizardToHostingStep();
+    }
     setOnboardingStep(previousStep);
     setOnboardingActiveGuide(
       onboardingMode === "advanced"
@@ -624,6 +629,7 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
         : null,
     );
   }, [
+    applyResetConnectionWizardToHostingStep,
     onboardingMode,
     onboardingStep,
     setOnboardingActiveGuide,
@@ -637,6 +643,11 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
   const handleOnboardingJumpToStep = useCallback(
     (target: OnboardingStep) => {
       if (!canRevertOnboardingTo({ current: onboardingStep, target })) return;
+      // Reset connection subflow when jumping away from "providers" so the
+      // user starts fresh at the hosting screen when they advance again.
+      if (onboardingStep === "providers") {
+        applyResetConnectionWizardToHostingStep();
+      }
       setOnboardingStep(target);
       setOnboardingActiveGuide(
         onboardingMode === "advanced"
@@ -645,6 +656,7 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
       );
     },
     [
+      applyResetConnectionWizardToHostingStep,
       onboardingMode,
       onboardingStep,
       setOnboardingStep,

@@ -19,7 +19,6 @@ import java.time.Instant
 class WebsiteBlockerPlugin : Plugin() {
     private data class PendingStartRequest(
         val websites: List<String>,
-        val durationMinutes: Long?,
         val endsAtEpochMs: Long?,
     )
 
@@ -45,12 +44,12 @@ class WebsiteBlockerPlugin : Plugin() {
         val endsAtEpochMs = durationMinutes?.let { System.currentTimeMillis() + it * 60_000 }
         val permissionIntent = VpnService.prepare(context)
         if (permissionIntent != null) {
-            pendingStartRequest = PendingStartRequest(websites, durationMinutes, endsAtEpochMs)
+            pendingStartRequest = PendingStartRequest(websites, endsAtEpochMs)
             startActivityForResult(call, permissionIntent, "handleVpnPermissionResult")
             return
         }
 
-        startBlockInternal(websites, durationMinutes, endsAtEpochMs)
+        startBlockInternal(websites, endsAtEpochMs)
         call.resolve(buildStartResult(websites, durationMinutes, endsAtEpochMs))
     }
 
@@ -126,13 +125,12 @@ class WebsiteBlockerPlugin : Plugin() {
             pendingStartRequest = null
             startBlockInternal(
                 pendingStart.websites,
-                pendingStart.durationMinutes,
                 pendingStart.endsAtEpochMs,
             )
             call.resolve(
                 buildStartResult(
                     pendingStart.websites,
-                    pendingStart.durationMinutes,
+                    durationMinutesFromEndsAt(pendingStart.endsAtEpochMs),
                     pendingStart.endsAtEpochMs,
                 ),
             )
@@ -144,7 +142,6 @@ class WebsiteBlockerPlugin : Plugin() {
 
     private fun startBlockInternal(
         websites: List<String>,
-        durationMinutes: Long?,
         endsAtEpochMs: Long?,
     ) {
         WebsiteBlockerStateStore.save(context, websites, endsAtEpochMs)
@@ -160,6 +157,12 @@ class WebsiteBlockerPlugin : Plugin() {
             )
         }
         ContextCompat.startForegroundService(context, serviceIntent)
+    }
+
+    private fun durationMinutesFromEndsAt(endsAtEpochMs: Long?): Long? {
+        if (endsAtEpochMs == null) return null
+        val remainingMs = endsAtEpochMs - System.currentTimeMillis()
+        return if (remainingMs <= 0) 0 else kotlin.math.ceil(remainingMs / 60_000.0).toLong()
     }
 
     private fun buildStartResult(

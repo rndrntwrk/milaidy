@@ -19,7 +19,7 @@ describe("container entrypoint mode selection", () => {
     expect(launch.mode).toBe("cloud-agent");
     expect(launch.args).toEqual([
       "--import",
-      "tsx",
+      "./node_modules/tsx/dist/loader.mjs",
       "deploy/cloud-agent-entrypoint.ts",
     ]);
     expect(launch.env.PORT).toBe("4318");
@@ -44,6 +44,11 @@ describe("container entrypoint mode selection", () => {
     });
 
     expect(launch.mode).toBe("agent");
-    expect(launch.args).toEqual(["--import", "tsx", "milady.mjs", "start"]);
+    expect(launch.args).toEqual([
+      "--import",
+      "./node_modules/tsx/dist/loader.mjs",
+      "milady.mjs",
+      "start",
+    ]);
   });
 });

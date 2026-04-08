@@ -4,9 +4,7 @@ sidebarTitle: "Workbench"
 description: "REST API endpoints for the workbench — tasks, todos, life-ops, and the unified overview dashboard."
 ---
 
-The workbench API manages the agent's task board and todo list. Tasks represent higher-level objectives tracked by the runtime, while todos are lightweight checklist items stored as runtime tasks. The overview endpoint aggregates both alongside trigger, autonomy, and life-ops state for the dashboard.
-
-When no todos exist, the API automatically creates a bootstrap todo to guide the initial user interaction.
+The workbench API manages the agent's task board and todo list. Tasks represent higher-level objectives tracked by the runtime, while todos are lightweight checklist items. Todos are persisted to the database when the todo data service plugin is available, falling back to the runtime task system otherwise. The overview endpoint aggregates both alongside trigger, autonomy, and life-ops state for the dashboard.
 
 ## Endpoints
 
@@ -14,16 +12,9 @@ When no todos exist, the API automatically creates a bootstrap todo to guide the
 |--------|------|-------------|
 | GET | `/api/workbench/overview` | Unified dashboard overview |
 | GET | `/api/workbench/tasks` | List all tasks |
-| POST | `/api/workbench/tasks` | Create a new task |
-| GET | `/api/workbench/tasks/:id` | Get a single task |
-| PUT | `/api/workbench/tasks/:id` | Update a task |
-| DELETE | `/api/workbench/tasks/:id` | Delete a task |
+| POST | `/api/workbench/tasks` | Create or update a workbench task |
 | GET | `/api/workbench/todos` | List all todos |
-| POST | `/api/workbench/todos` | Create a new todo |
-| GET | `/api/workbench/todos/:id` | Get a single todo |
-| PUT | `/api/workbench/todos/:id` | Update a todo |
-| DELETE | `/api/workbench/todos/:id` | Delete a todo |
-| POST | `/api/workbench/todos/:id/complete` | Toggle todo completion |
+| POST | `/api/workbench/todos` | Create or update a workbench to-do item |
 
 ---
 
@@ -209,7 +200,7 @@ Delete a task.
 
 ### GET /api/workbench/todos
 
-List all workbench todos, sorted alphabetically. All todos are stored as runtime tasks. When no todos exist, a bootstrap todo is automatically created to guide onboarding.
+List all workbench todos, sorted alphabetically. Todos are aggregated from both the database-backed todo data service and the runtime task system, de-duplicated by name.
 
 **Response**
 
@@ -233,7 +224,7 @@ List all workbench todos, sorted alphabetically. All todos are stored as runtime
 
 ### POST /api/workbench/todos
 
-Create a new todo. The todo is stored as a runtime task.
+Create or update a to-do item. When the todo data service plugin is available, the todo is persisted to the database first, falling back to the runtime task system on failure.
 
 **Request Body**
 
@@ -259,84 +250,6 @@ Create a new todo. The todo is stored as a runtime task.
     "isUrgent": false,
     "type": "task"
   }
-}
-```
-
----
-
-### GET /api/workbench/todos/:id
-
-Get a single todo by ID.
-
-**Response**
-
-```json
-{
-  "todo": { "id": "uuid", "name": "...", "isCompleted": false }
-}
-```
-
-| Status | Condition |
-|--------|-----------|
-| 404 | Todo not found |
-
----
-
-### PUT /api/workbench/todos/:id
-
-Update an existing todo.
-
-**Request Body**
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `name` | string | No | Updated name |
-| `description` | string | No | Updated description |
-| `priority` | number\|null | No | Updated priority |
-| `isUrgent` | boolean | No | Urgency flag |
-| `type` | string | No | Todo type |
-| `isCompleted` | boolean | No | Completion state |
-| `tags` | string[] | No | Updated tags |
-
-**Response**
-
-```json
-{
-  "todo": { "id": "uuid", "name": "Updated", "isCompleted": true }
-}
-```
-
----
-
-### DELETE /api/workbench/todos/:id
-
-Delete a todo.
-
-**Response**
-
-```json
-{
-  "ok": true
-}
-```
-
----
-
-### POST /api/workbench/todos/:id/complete
-
-Toggle the completion state of a todo. This is a convenience endpoint that only updates the `isCompleted` field.
-
-**Request Body**
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `isCompleted` | boolean | Yes | Whether the todo is complete |
-
-**Response**
-
-```json
-{
-  "ok": true
 }
 ```
 

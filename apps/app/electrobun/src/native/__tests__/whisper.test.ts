@@ -37,7 +37,8 @@ vi.mock("node:fs", () => {
   };
 });
 
-vi.stubGlobal("Bun", { spawn: vi.fn() });
+// Bun global is non-configurable on globalThis but Bun.spawn is writable; assign directly.
+(Bun as unknown as { spawn: unknown }).spawn = vi.fn();
 
 // ---------------------------------------------------------------------------
 // Module under test — imported after mocks so module-level code sees them.

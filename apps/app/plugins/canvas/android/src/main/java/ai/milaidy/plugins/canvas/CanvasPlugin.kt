@@ -9,6 +9,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -151,8 +152,8 @@ class CanvasPlugin : Plugin() {
             return
         }
 
-        val width = sizeObj.getInt("width") ?: 100
-        val height = sizeObj.getInt("height") ?: 100
+        val width = sizeObj.int("width", 100)
+        val height = sizeObj.int("height", 100)
         val size = CanvasSize(width, height)
 
         val canvasId = "canvas_${nextCanvasId++}"
@@ -214,7 +215,7 @@ class CanvasPlugin : Plugin() {
         }
 
         activity.runOnUiThread {
-            val webView = bridge.webView as? WebView
+            val webView = bridge.webView
             val parent = webView?.parent as? ViewGroup
 
             if (parent != null) {
@@ -300,8 +301,8 @@ class CanvasPlugin : Plugin() {
             return
         }
 
-        val width = sizeObj.getInt("width") ?: canvas.size.width
-        val height = sizeObj.getInt("height") ?: canvas.size.height
+        val width = sizeObj.int("width", canvas.size.width)
+        val height = sizeObj.int("height", canvas.size.height)
         val newSize = CanvasSize(width, height)
 
         activity.runOnUiThread {
@@ -334,12 +335,10 @@ class CanvasPlugin : Plugin() {
 
             val rect = rectObj?.let {
                 RectF(
-                    it.getDouble("x")?.toFloat() ?: 0f,
-                    it.getDouble("y")?.toFloat() ?: 0f,
-                    (it.getDouble("x")?.toFloat() ?: 0f) + (it.getDouble("width")
-                        ?.toFloat() ?: 0f),
-                    (it.getDouble("y")?.toFloat() ?: 0f) + (it.getDouble("height")
-                        ?.toFloat() ?: 0f)
+                    it.float("x"),
+                    it.float("y"),
+                    it.float("x") + it.float("width"),
+                    it.float("y") + it.float("height")
                 )
             }
 
@@ -368,9 +367,9 @@ class CanvasPlugin : Plugin() {
         }
 
         val layerId = "layer_${nextLayerId++}"
-        val visible = layerObj.getBoolean("visible") ?: true
-        val opacity = layerObj.getDouble("opacity")?.toFloat() ?: 1f
-        val zIndex = layerObj.getInt("zIndex") ?: 0
+        val visible = layerObj.boolean("visible", true)
+        val opacity = layerObj.float("opacity", 1f)
+        val zIndex = layerObj.int("zIndex")
         val name = layerObj.getString("name")
 
         activity.runOnUiThread {
@@ -419,15 +418,15 @@ class CanvasPlugin : Plugin() {
         }
 
         activity.runOnUiThread {
-            layerObj.getBoolean("visible")?.let {
+            layerObj.booleanOrNull("visible")?.let {
                 layer.visible = it
                 layer.view.visibility = if (it) View.VISIBLE else View.GONE
             }
-            layerObj.getDouble("opacity")?.let {
-                layer.opacity = it.toFloat()
+            layerObj.floatOrNull("opacity")?.let {
+                layer.opacity = it
                 layer.view.alpha = layer.opacity
             }
-            layerObj.getInt("zIndex")?.let {
+            layerObj.intOrNull("zIndex")?.let {
                 layer.zIndex = it
                 sortLayers(canvas)
             }
@@ -547,7 +546,7 @@ class CanvasPlugin : Plugin() {
             strokeObj?.let {
                 paint.color = colorFromFillOrStroke(it)
                 paint.style = Paint.Style.STROKE
-                paint.strokeWidth = it.getDouble("width")?.toFloat() ?: 1f
+                paint.strokeWidth = it.float("width", 1f)
                 applyStrokeStyle(paint, it)
                 if (cornerRadius > 0) {
                     drawCanvas.drawRoundRect(rect, cornerRadius, cornerRadius, paint)
@@ -592,8 +591,8 @@ class CanvasPlugin : Plugin() {
             val paint = Paint().apply { isAntiAlias = true }
             val saveCount = applyDrawOptions(drawCanvas, canvas, drawOpts)
 
-            val cx = centerObj.getDouble("x")?.toFloat() ?: 0f
-            val cy = centerObj.getDouble("y")?.toFloat() ?: 0f
+            val cx = centerObj.float("x")
+            val cy = centerObj.float("y")
             val rect = RectF(cx - radiusX, cy - radiusY, cx + radiusX, cy + radiusY)
 
             fillObj?.let {
@@ -613,7 +612,7 @@ class CanvasPlugin : Plugin() {
             strokeObj?.let {
                 paint.color = colorFromFillOrStroke(it)
                 paint.style = Paint.Style.STROKE
-                paint.strokeWidth = it.getDouble("width")?.toFloat() ?: 1f
+                paint.strokeWidth = it.float("width", 1f)
                 applyStrokeStyle(paint, it)
                 drawCanvas.drawOval(rect, paint)
             }
@@ -660,15 +659,15 @@ class CanvasPlugin : Plugin() {
                 isAntiAlias = true
                 style = Paint.Style.STROKE
                 color = colorFromFillOrStroke(strokeObj)
-                strokeWidth = strokeObj.getDouble("width")?.toFloat() ?: 1f
+                strokeWidth = strokeObj.float("width", 1f)
             }
             applyStrokeStyle(paint, strokeObj)
 
             drawCanvas.drawLine(
-                fromObj.getDouble("x")?.toFloat() ?: 0f,
-                fromObj.getDouble("y")?.toFloat() ?: 0f,
-                toObj.getDouble("x")?.toFloat() ?: 0f,
-                toObj.getDouble("y")?.toFloat() ?: 0f,
+                fromObj.float("x"),
+                fromObj.float("y"),
+                toObj.float("x"),
+                toObj.float("y"),
                 paint
             )
 
@@ -694,7 +693,7 @@ class CanvasPlugin : Plugin() {
             call.reject("Missing path")
             return
         }
-        val commands = pathObj.getJSONArray("commands") ?: run {
+        val commands = pathObj.arrayOrNull("commands") ?: run {
             call.reject("Missing commands in path")
             return
         }
@@ -729,7 +728,7 @@ class CanvasPlugin : Plugin() {
             strokeObj?.let {
                 paint.color = colorFromFillOrStroke(it)
                 paint.style = Paint.Style.STROKE
-                paint.strokeWidth = it.getDouble("width")?.toFloat() ?: 1f
+                paint.strokeWidth = it.float("width", 1f)
                 applyStrokeStyle(paint, it)
                 drawCanvas.drawPath(path, paint)
             }
@@ -859,11 +858,11 @@ class CanvasPlugin : Plugin() {
             val drawCanvas = targetView.getDrawCanvas()
             val saveCount = applyDrawOptions(drawCanvas, canvas, drawOpts)
 
-            val fontSize = styleObj.getDouble("size")?.toFloat() ?: 14f
+            val fontSize = styleObj.float("size", 14f)
             val fontName = styleObj.getString("font") ?: "sans-serif"
             val align = styleObj.getString("align") ?: "left"
             val baseline = styleObj.getString("baseline") ?: "alphabetic"
-            val maxWidth = styleObj.getDouble("maxWidth")?.toFloat()
+            val maxWidth = styleObj.floatOrNull("maxWidth")
 
             val typeface = try {
                 Typeface.create(fontName, Typeface.NORMAL)
@@ -883,8 +882,8 @@ class CanvasPlugin : Plugin() {
                 }
             }
 
-            var x = positionObj.getDouble("x")?.toFloat() ?: 0f
-            var y = positionObj.getDouble("y")?.toFloat() ?: 0f
+            var x = positionObj.float("x")
+            var y = positionObj.float("y")
 
             // Adjust for baseline.
             val metrics = paint.fontMetrics
@@ -974,12 +973,10 @@ class CanvasPlugin : Plugin() {
                 if (srcRectObj != null) {
                     // Crop source bitmap then draw into dest.
                     val srcRect = Rect(
-                        srcRectObj.getDouble("x")?.toInt() ?: 0,
-                        srcRectObj.getDouble("y")?.toInt() ?: 0,
-                        ((srcRectObj.getDouble("x") ?: 0.0) + (srcRectObj.getDouble("width")
-                            ?: 0.0)).toInt(),
-                        ((srcRectObj.getDouble("y") ?: 0.0) + (srcRectObj.getDouble("height")
-                            ?: 0.0)).toInt()
+                        srcRectObj.int("x"),
+                        srcRectObj.int("y"),
+                        (srcRectObj.double("x") + srcRectObj.double("width")).toInt(),
+                        (srcRectObj.double("y") + srcRectObj.double("height")).toInt()
                     )
                     val dst = Rect(
                         destRect.left.toInt(), destRect.top.toInt(),
@@ -1064,7 +1061,7 @@ class CanvasPlugin : Plugin() {
                                 paint.color = colorFromFillOrStroke(strokeObj)
                                 paint.style = Paint.Style.STROKE
                                 paint.strokeWidth =
-                                    strokeObj.getDouble("width")?.toFloat() ?: 1f
+                                    strokeObj.float("width", 1f)
                                 applyStrokeStyle(paint, strokeObj)
                                 if (cr > 0) drawCanvas.drawRoundRect(rect, cr, cr, paint)
                                 else drawCanvas.drawRect(rect, paint)
@@ -1099,7 +1096,7 @@ class CanvasPlugin : Plugin() {
                                 paint.color = colorFromFillOrStroke(strokeObj)
                                 paint.style = Paint.Style.STROKE
                                 paint.strokeWidth =
-                                    strokeObj.getDouble("width")?.toFloat() ?: 1f
+                                    strokeObj.float("width", 1f)
                                 applyStrokeStyle(paint, strokeObj)
                                 drawCanvas.drawOval(ellRect, paint)
                             }
@@ -1114,7 +1111,7 @@ class CanvasPlugin : Plugin() {
                             paint.color = colorFromFillOrStroke(strokeObj)
                             paint.style = Paint.Style.STROKE
                             paint.strokeWidth =
-                                strokeObj.getDouble("width")?.toFloat() ?: 1f
+                                strokeObj.float("width", 1f)
                             applyStrokeStyle(paint, strokeObj)
                             drawCanvas.drawLine(
                                 fromJson.optDouble("x", 0.0).toFloat(),
@@ -1148,7 +1145,7 @@ class CanvasPlugin : Plugin() {
                                 paint.color = colorFromFillOrStroke(strokeObj)
                                 paint.style = Paint.Style.STROKE
                                 paint.strokeWidth =
-                                    strokeObj.getDouble("width")?.toFloat() ?: 1f
+                                    strokeObj.float("width", 1f)
                                 applyStrokeStyle(paint, strokeObj)
                                 drawCanvas.drawPath(androidPath, paint)
                             }
@@ -1162,7 +1159,7 @@ class CanvasPlugin : Plugin() {
                             val styleObj = jsObjectFromJSON(styleJson)
                             val textPaint = Paint().apply {
                                 isAntiAlias = true
-                                textSize = styleObj.getDouble("size")?.toFloat() ?: 14f
+                                textSize = styleObj.float("size", 14f)
                                 color = colorFromFillOrStroke(styleObj)
                                 textAlign = when (styleObj.getString("align")) {
                                     "center" -> Paint.Align.CENTER
@@ -1208,7 +1205,7 @@ class CanvasPlugin : Plugin() {
                     }
                     "clear" -> {
                         val clearRectJson = args.optJSONObject("rect")
-                        val clearLayerId = args.optString("layerId", null)
+                        val clearLayerId = args.stringOrNull("layerId")
                         val clearView =
                             clearLayerId?.let { canvas.layers[it]?.view } ?: targetView
                         if (clearRectJson != null) {
@@ -1245,10 +1242,10 @@ class CanvasPlugin : Plugin() {
             val bitmap = canvas.view.getBitmap()
 
             val region = if (rectObj != null) {
-                val x = rectObj.getDouble("x")?.toInt() ?: 0
-                val y = rectObj.getDouble("y")?.toInt() ?: 0
-                val w = rectObj.getDouble("width")?.toInt() ?: bitmap.width
-                val h = rectObj.getDouble("height")?.toInt() ?: bitmap.height
+                val x = rectObj.int("x")
+                val y = rectObj.int("y")
+                val w = rectObj.int("width", bitmap.width)
+                val h = rectObj.int("height", bitmap.height)
                 Rect(x, y, (x + w).coerceAtMost(bitmap.width), (y + h).coerceAtMost(bitmap.height))
             } else {
                 Rect(0, 0, bitmap.width, bitmap.height)
@@ -1444,12 +1441,10 @@ class CanvasPlugin : Plugin() {
 
             // Apply placement if provided, otherwise fill the canvas.
             if (placementObj != null) {
-                val x = placementObj.getDouble("x")?.toFloat() ?: 0f
-                val y = placementObj.getDouble("y")?.toFloat() ?: 0f
-                val w = placementObj.getDouble("width")?.toFloat()
-                    ?: canvas.size.width.toFloat()
-                val h = placementObj.getDouble("height")?.toFloat()
-                    ?: canvas.size.height.toFloat()
+                val x = placementObj.float("x")
+                val y = placementObj.float("y")
+                val w = placementObj.float("width", canvas.size.width.toFloat())
+                val h = placementObj.float("height", canvas.size.height.toFloat())
                 wv.x = x
                 wv.y = y
                 wv.layoutParams = FrameLayout.LayoutParams(w.toInt(), h.toInt())
@@ -1785,14 +1780,14 @@ class CanvasPlugin : Plugin() {
 
             override fun onReceivedError(
                 view: WebView,
-                errorCode: Int,
-                description: String?,
-                failingUrl: String?
+                request: WebResourceRequest,
+                error: WebResourceError
             ) {
-                super.onReceivedError(view, errorCode, description, failingUrl)
+                super.onReceivedError(view, request, error)
                 pluginRef.notifyListeners("navigationError", JSObject().apply {
                     put("canvasId", canvasId)
-                    put("error", description ?: "Unknown error")
+                    put("error", error.description?.toString() ?: "Unknown error")
+                    put("url", request.url?.toString() ?: "")
                 })
             }
         }
@@ -1841,7 +1836,7 @@ class CanvasPlugin : Plugin() {
         }
 
         // Blend mode via Paint is per-draw; opacity and shadow are applied via layer.
-        val opacity = options.getDouble("opacity")
+        val opacity = options.doubleOrNull("opacity")
         if (opacity != null && opacity < 1.0) {
             canvas.saveLayerAlpha(
                 null, (opacity * 255).toInt().coerceIn(0, 255)
@@ -1859,11 +1854,11 @@ class CanvasPlugin : Plugin() {
 
     private fun applyShadow(paint: Paint, shadowObj: JSObject?) {
         if (shadowObj == null) return
-        val blur = shadowObj.getDouble("blur")?.toFloat() ?: 0f
-        val offsetX = shadowObj.getDouble("offsetX")?.toFloat() ?: 0f
-        val offsetY = shadowObj.getDouble("offsetY")?.toFloat() ?: 0f
+        val blur = shadowObj.float("blur")
+        val offsetX = shadowObj.float("offsetX")
+        val offsetY = shadowObj.float("offsetY")
         val colorObj = shadowObj.getJSObject("color")
-        val colorStr = shadowObj.getString("color")
+        val colorStr = shadowObj.stringOrNull("color")
         val color = when {
             colorObj != null -> colorFromObject(colorObj)
             colorStr != null -> colorFromHexString(colorStr)
@@ -1902,7 +1897,7 @@ class CanvasPlugin : Plugin() {
             else -> Paint.Join.MITER
         }
 
-        val dashPattern = strokeObj.getJSONArray("dashPattern")
+        val dashPattern = strokeObj.arrayOrNull("dashPattern")
         if (dashPattern != null && dashPattern.length() > 0) {
             val intervals = FloatArray(dashPattern.length()) {
                 dashPattern.optDouble(it, 0.0).toFloat()
@@ -1923,7 +1918,7 @@ class CanvasPlugin : Plugin() {
 
     private fun createShader(gradientObj: JSObject): Shader {
         val type = gradientObj.getString("type") ?: "linear"
-        val stops = gradientObj.getJSONArray("stops")
+        val stops = gradientObj.arrayOrNull("stops")
 
         val colors = mutableListOf<Int>()
         val positions = mutableListOf<Float>()
@@ -1934,7 +1929,7 @@ class CanvasPlugin : Plugin() {
                 positions.add(stop.optDouble("offset", 0.0).toFloat())
 
                 val colorObj = stop.optJSONObject("color")
-                val colorStr = stop.optString("color", null)
+                val colorStr = stop.stringOrNull("color")
                 val color = when {
                     colorObj != null -> colorFromObject(jsObjectFromJSON(colorObj))
                     colorStr != null && colorStr.startsWith("#") -> colorFromHexString(colorStr)
@@ -1953,9 +1948,9 @@ class CanvasPlugin : Plugin() {
 
         return when (type) {
             "radial" -> {
-                val x0 = gradientObj.getDouble("x0")?.toFloat() ?: 0f
-                val y0 = gradientObj.getDouble("y0")?.toFloat() ?: 0f
-                val r1 = gradientObj.getDouble("r1")?.toFloat() ?: 1f
+                val x0 = gradientObj.float("x0")
+                val y0 = gradientObj.float("y0")
+                val r1 = gradientObj.float("r1", 1f)
                 RadialGradient(
                     x0, y0, r1.coerceAtLeast(0.001f),
                     colors.toIntArray(), positions.toFloatArray(),
@@ -1963,10 +1958,10 @@ class CanvasPlugin : Plugin() {
                 )
             }
             else -> {
-                val x0 = gradientObj.getDouble("x0")?.toFloat() ?: 0f
-                val y0 = gradientObj.getDouble("y0")?.toFloat() ?: 0f
-                val x1 = gradientObj.getDouble("x1")?.toFloat() ?: 0f
-                val y1 = gradientObj.getDouble("y1")?.toFloat() ?: 0f
+                val x0 = gradientObj.float("x0")
+                val y0 = gradientObj.float("y0")
+                val x1 = gradientObj.float("x1")
+                val y1 = gradientObj.float("y1")
                 LinearGradient(
                     x0, y0, x1, y1,
                     colors.toIntArray(), positions.toFloatArray(),
@@ -1980,29 +1975,29 @@ class CanvasPlugin : Plugin() {
 
     private fun matrixFromTransformObject(obj: JSObject): Matrix {
         val m = Matrix()
-        val tx = obj.getDouble("translateX")?.toFloat() ?: 0f
-        val ty = obj.getDouble("translateY")?.toFloat() ?: 0f
+        val tx = obj.float("translateX")
+        val ty = obj.float("translateY")
         if (tx != 0f || ty != 0f) m.postTranslate(tx, ty)
 
-        val sx = obj.getDouble("scaleX")?.toFloat()
-        val sy = obj.getDouble("scaleY")?.toFloat()
+        val sx = obj.floatOrNull("scaleX")
+        val sy = obj.floatOrNull("scaleY")
         if (sx != null || sy != null) {
             m.postScale(sx ?: 1f, sy ?: 1f)
         }
 
-        val rotation = obj.getDouble("rotation")?.toFloat()
+        val rotation = obj.floatOrNull("rotation")
         if (rotation != null && rotation != 0f) {
             m.postRotate(Math.toDegrees(rotation.toDouble()).toFloat())
         }
 
-        val skewX = obj.getDouble("skewX")?.toFloat()
+        val skewX = obj.floatOrNull("skewX")
         if (skewX != null && skewX != 0f) {
             val skewMatrix = Matrix()
             skewMatrix.setSkew(tan(skewX.toDouble()).toFloat(), 0f)
             m.postConcat(skewMatrix)
         }
 
-        val skewY = obj.getDouble("skewY")?.toFloat()
+        val skewY = obj.floatOrNull("skewY")
         if (skewY != null && skewY != 0f) {
             val skewMatrix = Matrix()
             skewMatrix.setSkew(0f, tan(skewY.toDouble()).toFloat())
@@ -2016,10 +2011,10 @@ class CanvasPlugin : Plugin() {
 
     private fun colorFromObject(obj: JSObject?): Int {
         if (obj == null) return Color.BLACK
-        val r = obj.getInt("r") ?: 0
-        val g = obj.getInt("g") ?: 0
-        val b = obj.getInt("b") ?: 0
-        val a = ((obj.getDouble("a") ?: 1.0) * 255).toInt()
+        val r = obj.int("r")
+        val g = obj.int("g")
+        val b = obj.int("b")
+        val a = (obj.double("a", 1.0) * 255).toInt()
         return Color.argb(a, r, g, b)
     }
 
@@ -2071,12 +2066,44 @@ class CanvasPlugin : Plugin() {
     // ---- Rect Utilities ----
 
     private fun rectFromObject(obj: JSObject): RectF {
-        val x = obj.getDouble("x")?.toFloat() ?: 0f
-        val y = obj.getDouble("y")?.toFloat() ?: 0f
-        val w = obj.getDouble("width")?.toFloat() ?: 0f
-        val h = obj.getDouble("height")?.toFloat() ?: 0f
+        val x = obj.float("x")
+        val y = obj.float("y")
+        val w = obj.float("width")
+        val h = obj.float("height")
         return RectF(x, y, x + w, y + h)
     }
+
+    private fun JSObject.boolean(name: String, defaultValue: Boolean = false): Boolean =
+        booleanOrNull(name) ?: defaultValue
+
+    private fun JSObject.booleanOrNull(name: String): Boolean? =
+        if (has(name) && !isNull(name)) optBoolean(name) else null
+
+    private fun JSObject.double(name: String, defaultValue: Double = 0.0): Double =
+        doubleOrNull(name) ?: defaultValue
+
+    private fun JSObject.doubleOrNull(name: String): Double? =
+        if (has(name) && !isNull(name)) optDouble(name) else null
+
+    private fun JSObject.float(name: String, defaultValue: Float = 0f): Float =
+        doubleOrNull(name)?.toFloat() ?: defaultValue
+
+    private fun JSObject.floatOrNull(name: String): Float? = doubleOrNull(name)?.toFloat()
+
+    private fun JSObject.int(name: String, defaultValue: Int = 0): Int =
+        intOrNull(name) ?: defaultValue
+
+    private fun JSObject.intOrNull(name: String): Int? =
+        if (has(name) && !isNull(name)) optInt(name) else null
+
+    private fun JSObject.arrayOrNull(name: String): JSONArray? =
+        if (has(name) && !isNull(name)) optJSONArray(name) else null
+
+    private fun JSObject.stringOrNull(name: String): String? =
+        if (has(name) && !isNull(name)) opt(name)?.takeUnless { it === JSONObject.NULL }?.toString() else null
+
+    private fun JSONObject.stringOrNull(name: String): String? =
+        if (has(name) && !isNull(name)) opt(name)?.takeUnless { it === JSONObject.NULL }?.toString() else null
 
     private fun rectFromJSON(obj: JSONObject): RectF {
         val x = obj.optDouble("x", 0.0).toFloat()

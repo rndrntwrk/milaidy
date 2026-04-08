@@ -382,13 +382,21 @@ export function applyPluginAutoEnable(
   // toggle entries.  This takes priority over explicit `enabled: false` for
   // the subscription's own plugin because the user deliberately connected
   // the subscription.
+  //
+  // Exception: Anthropic subscriptions are restricted to the Claude Code
+  // CLI by TOS.  Their tokens cannot be used by the runtime, so we must
+  // NOT force-enable @elizaos/plugin-anthropic based on subscription alone.
+  // A direct ANTHROPIC_API_KEY (set below via env-var detection) will still
+  // enable the plugin if available.
   const subscriptionProvider = getSubscriptionProvider(updatedConfig);
-  const subscriptionPluginId =
-    typeof subscriptionProvider === "string"
-      ? SUBSCRIPTION_PROVIDER_MAP[
-          subscriptionProvider as keyof typeof SUBSCRIPTION_PROVIDER_MAP
-        ]
-      : undefined;
+  const subscriptionIsRuntimeApplicable =
+    typeof subscriptionProvider === "string" &&
+    subscriptionProvider !== "anthropic-subscription";
+  const subscriptionPluginId = subscriptionIsRuntimeApplicable
+    ? SUBSCRIPTION_PROVIDER_MAP[
+        subscriptionProvider as keyof typeof SUBSCRIPTION_PROVIDER_MAP
+      ]
+    : undefined;
   if (subscriptionPluginId) {
     const pluginName = PROVIDER_PLUGINS[subscriptionPluginId];
     if (pluginName) {

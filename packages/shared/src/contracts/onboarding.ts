@@ -226,7 +226,7 @@ export const ONBOARDING_PROVIDER_CATALOG = [
     pluginName: "@elizaos/plugin-anthropic",
     keyPrefix: null,
     description:
-      "Use your Claude Pro or Max subscription via OAuth or setup token.",
+      "Powers task agents via Claude Code CLI. For the main agent, use Eliza Cloud or a direct API key.",
     family: "anthropic",
     authMode: "subscription",
     group: "subscription",
@@ -413,12 +413,73 @@ export type OnboardingLocalProviderId = Exclude<
   "elizacloud"
 >;
 
-export interface OnboardingCloudManagedConnection {
+interface OnboardingCloudModelPreferences {
+  nanoModel?: string;
+  miniModel?: string;
+  smallModel?: string;
+  largeModel?: string;
+  megaModel?: string;
+  responseHandlerModel?: string;
+  shouldRespondModel?: string;
+  actionPlannerModel?: string;
+  plannerModel?: string;
+  responseModel?: string;
+  mediaDescriptionModel?: string;
+}
+
+function pickOnboardingCloudModelPreferences(
+  value: OnboardingCloudModelPreferences,
+): OnboardingCloudModelPreferences {
+  return {
+    ...(value.nanoModel ? { nanoModel: value.nanoModel } : {}),
+    ...(value.miniModel ? { miniModel: value.miniModel } : {}),
+    ...(value.smallModel ? { smallModel: value.smallModel } : {}),
+    ...(value.largeModel ? { largeModel: value.largeModel } : {}),
+    ...(value.megaModel ? { megaModel: value.megaModel } : {}),
+    ...(value.responseHandlerModel
+      ? { responseHandlerModel: value.responseHandlerModel }
+      : {}),
+    ...(value.shouldRespondModel
+      ? { shouldRespondModel: value.shouldRespondModel }
+      : {}),
+    ...(value.actionPlannerModel
+      ? { actionPlannerModel: value.actionPlannerModel }
+      : {}),
+    ...(value.plannerModel ? { plannerModel: value.plannerModel } : {}),
+    ...(value.responseModel ? { responseModel: value.responseModel } : {}),
+    ...(value.mediaDescriptionModel
+      ? { mediaDescriptionModel: value.mediaDescriptionModel }
+      : {}),
+  };
+}
+
+function readOnboardingCloudModelPreferences(
+  source: Record<string, unknown> | null | undefined,
+): OnboardingCloudModelPreferences {
+  if (!source) {
+    return {};
+  }
+
+  return pickOnboardingCloudModelPreferences({
+    nanoModel: readConfigString(source, "nanoModel"),
+    miniModel: readConfigString(source, "miniModel"),
+    smallModel: readConfigString(source, "smallModel"),
+    largeModel: readConfigString(source, "largeModel"),
+    megaModel: readConfigString(source, "megaModel"),
+    responseHandlerModel: readConfigString(source, "responseHandlerModel"),
+    shouldRespondModel: readConfigString(source, "shouldRespondModel"),
+    actionPlannerModel: readConfigString(source, "actionPlannerModel"),
+    plannerModel: readConfigString(source, "plannerModel"),
+    responseModel: readConfigString(source, "responseModel"),
+    mediaDescriptionModel: readConfigString(source, "mediaDescriptionModel"),
+  });
+}
+
+export interface OnboardingCloudManagedConnection
+  extends OnboardingCloudModelPreferences {
   kind: "cloud-managed";
   cloudProvider: "elizacloud";
   apiKey?: string;
-  smallModel?: string;
-  largeModel?: string;
 }
 
 export interface OnboardingLocalProviderConnection {
@@ -469,11 +530,11 @@ export interface OnboardingLlmPersistenceSelection {
   transport: "direct" | "remote" | "cloud-proxy";
   apiKey?: string;
   primaryModel?: string;
-  smallModel?: string;
-  largeModel?: string;
   remoteApiBase?: string;
   remoteAccessToken?: string;
 }
+export interface OnboardingLlmPersistenceSelection
+  extends OnboardingCloudModelPreferences {}
 
 export interface OnboardingData {
   name: string;
@@ -809,15 +870,23 @@ export function hasExplicitCanonicalRuntimeConfig(
 }
 
 function buildElizaCloudTextRoute(args: {
+  nanoModel?: string;
+  miniModel?: string;
   smallModel?: string;
   largeModel?: string;
+  megaModel?: string;
+  responseHandlerModel?: string;
+  shouldRespondModel?: string;
+  actionPlannerModel?: string;
+  plannerModel?: string;
+  responseModel?: string;
+  mediaDescriptionModel?: string;
 }): ServiceRouteConfig {
   return {
     backend: "elizacloud",
     transport: "cloud-proxy",
     accountId: "elizacloud",
-    ...(args.smallModel ? { smallModel: args.smallModel } : {}),
-    ...(args.largeModel ? { largeModel: args.largeModel } : {}),
+    ...pickOnboardingCloudModelPreferences(args),
   };
 }
 
@@ -1116,8 +1185,7 @@ function deriveOnboardingConnectionFromRuntimeConfig(
     return {
       kind: "cloud-managed",
       cloudProvider: "elizacloud",
-      ...(llmText.smallModel ? { smallModel: llmText.smallModel } : {}),
-      ...(llmText.largeModel ? { largeModel: llmText.largeModel } : {}),
+      ...pickOnboardingCloudModelPreferences(llmText),
     };
   }
 
@@ -1212,8 +1280,7 @@ export function normalizePersistedOnboardingConnection(
       kind: "cloud-managed",
       cloudProvider: "elizacloud",
       apiKey: normalizeSecretString(connection.apiKey),
-      smallModel: readConfigString(connection, "smallModel"),
-      largeModel: readConfigString(connection, "largeModel"),
+      ...readOnboardingCloudModelPreferences(connection),
     };
   }
 
@@ -1302,8 +1369,7 @@ export function deriveOnboardingCredentialPersistencePlan(args: {
         backend: "elizacloud",
         transport: "cloud-proxy",
         apiKey: cloudApiKey,
-        ...(llmRoute.smallModel ? { smallModel: llmRoute.smallModel } : {}),
-        ...(llmRoute.largeModel ? { largeModel: llmRoute.largeModel } : {}),
+        ...pickOnboardingCloudModelPreferences(llmRoute),
       },
       cloudApiKey,
     };
@@ -1362,8 +1428,7 @@ export function stripOnboardingConnectionSecrets(
     return {
       kind: "cloud-managed",
       cloudProvider: "elizacloud",
-      smallModel: connection.smallModel,
-      largeModel: connection.largeModel,
+      ...pickOnboardingCloudModelPreferences(connection),
     };
   }
 

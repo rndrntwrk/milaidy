@@ -74,7 +74,7 @@ const providerOverrides: Record<
   },
   "anthropic-subscription": {
     nameDefault: "Claude Sub",
-    descriptionDefault: "Pro/Max subscription",
+    descriptionDefault: "Task agents only (Claude Code CLI)",
     nameKey: "onboarding.providerClaudeSubscription",
     descriptionKey: "onboarding.providerClaudeSubscriptionDetailDescription",
   },
@@ -644,6 +644,11 @@ export function ConnectionProviderDetailScreen({
 
       {onboardingProvider === "anthropic-subscription" && (
         <div className={onboardingDetailStackClassName}>
+          {/* TOS restriction: Claude subscription → task agents only */}
+          <div className="text-xs leading-relaxed p-2.5 border border-[var(--warning,#f39c12)]/30 bg-[var(--warning,#f39c12)]/5 rounded">
+            {t("subscriptionstatus.ClaudeTosWarning")}
+          </div>
+
           <OnboardingTabs
             tabs={[
               { id: "token" as const, label: t("onboarding.setupToken") },

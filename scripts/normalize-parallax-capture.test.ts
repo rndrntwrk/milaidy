@@ -6,9 +6,12 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
+// Skip when process.execPath is Bun — tsx --import hooks require real Node.js
+const isNodeAvailable = !process.execPath.includes("bun");
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-describe("normalize-parallax-capture", () => {
+describe.skipIf(!isNodeAvailable)("normalize-parallax-capture", () => {
   it("runs through node tsx and writes a normalized replay artifact", () => {
     const tmpDir = mkdtempSync(
       path.join(os.tmpdir(), "milady-normalize-parallax-capture-"),

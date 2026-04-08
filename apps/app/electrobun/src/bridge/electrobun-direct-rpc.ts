@@ -22,11 +22,43 @@ type RendererBridgeRpc = {
 };
 
 const listenersByRpcMessage: Record<string, Set<RpcMessageListener>> = {};
+const BOOT_CONFIG_STORE_KEY = Symbol.for("milady.app.boot-config");
+const BOOT_CONFIG_WINDOW_KEY = "__MILADY_APP_BOOT_CONFIG__";
+
+type BootConfig = {
+  apiBase?: string;
+  apiToken?: string;
+  [key: string]: unknown;
+};
+
+type BootConfigStore = {
+  current: BootConfig;
+};
 
 // Electrobun's native layer sets these globals before preloads run.
 // __electrobun must exist before Electroview.init() tries to write to it.
 // If the built-in preload hasn't fired yet (rare edge case), stub it.
 ensureElectrobunGlobal();
+
+function updateBootConfig(
+  updates: Pick<BootConfig, "apiBase" | "apiToken">,
+): void {
+  const globalObject = window as unknown as Record<PropertyKey, unknown> & {
+    [BOOT_CONFIG_WINDOW_KEY]?: BootConfig;
+  };
+  const currentConfig =
+    globalObject[BOOT_CONFIG_WINDOW_KEY] ??
+    (globalObject[BOOT_CONFIG_STORE_KEY] as BootConfigStore | undefined)
+      ?.current ??
+    {};
+  const nextConfig = {
+    ...currentConfig,
+    ...updates,
+  };
+
+  globalObject[BOOT_CONFIG_WINDOW_KEY] = nextConfig;
+  globalObject[BOOT_CONFIG_STORE_KEY] = { current: nextConfig };
+}
 
 function dispatchMessage(messageName: string, payload: unknown): void {
   if (messageName === "apiBaseUpdate") {
@@ -43,28 +75,10 @@ function dispatchMessage(messageName: string, payload: unknown): void {
     // Propagate to boot config so MiladyClient picks up port changes.
     // We modify it directly instead of importing @miladyai/app-core/config
     // to prevent bundling React and the entire UI layer into the preload script.
-    const BOOT_KEY = "__MILADY_APP_BOOT_CONFIG__";
-    const storeSym = Symbol.for("milady.app.boot-config");
-    type BootConfigStore = { current?: Record<string, unknown> };
-    const bootWindow = window as Window & {
-      [BOOT_KEY]?: Record<string, unknown>;
-      [key: symbol]: unknown;
-    };
-
-    // Get existing config from either the window global or the secret symbol store
-    const store = bootWindow[storeSym] as BootConfigStore | undefined;
-    const existingConfig = store?.current || bootWindow[BOOT_KEY] || {};
-
-    const newConfig = {
-      ...existingConfig,
+    updateBootConfig({
       apiBase: apiBaseUpdate.base,
       ...(apiBaseUpdate.token ? { apiToken: apiBaseUpdate.token } : {}),
-    };
-
-    bootWindow[BOOT_KEY] = newConfig;
-    if (store) {
-      store.current = newConfig;
-    }
+    });
   }
 
   const listeners = listenersByRpcMessage[messageName];

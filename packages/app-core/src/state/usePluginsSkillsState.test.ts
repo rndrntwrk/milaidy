@@ -172,4 +172,55 @@ describe("usePluginsSkillsState.handlePluginConfigSave", () => {
     expect(showRestartBanner).toHaveBeenCalledTimes(1);
     expect(mockTriggerRestart).toHaveBeenCalledTimes(1);
   });
+
+  it("restarts after saving connector settings when the server requires it", async () => {
+    const setActionNotice = vi.fn();
+    const setPendingRestart = vi.fn();
+    const setPendingRestartReasons = vi.fn();
+    const showRestartBanner = vi.fn();
+    const discordPlugin: PluginInfo = {
+      id: "discord",
+      name: "Discord",
+      category: "connector",
+      enabled: true,
+      configured: true,
+      parameters: [],
+    };
+    const { result } = renderHook(() =>
+      usePluginsSkillsState({
+        setActionNotice,
+        setPendingRestart,
+        setPendingRestartReasons,
+        showRestartBanner,
+        triggerRestart: (...args: unknown[]) => mockTriggerRestart(...args),
+      }),
+    );
+
+    act(() => {
+      result.current.setPlugins([discordPlugin]);
+    });
+
+    mockUpdatePlugin.mockResolvedValueOnce({
+      ok: true,
+      applied: "restart_required",
+      requiresRestart: true,
+    });
+
+    await act(async () => {
+      await result.current.handlePluginConfigSave("discord", {
+        DISCORD_API_TOKEN: "discord-token-test",
+      });
+    });
+
+    expect(mockUpdatePlugin).toHaveBeenCalledWith("discord", {
+      config: { DISCORD_API_TOKEN: "discord-token-test" },
+    });
+    expect(setPendingRestart).toHaveBeenCalledWith(true);
+    expect(setPendingRestartReasons).toHaveBeenCalledTimes(1);
+    expect(
+      setPendingRestartReasons.mock.calls[0]?.[0](["other change"]),
+    ).toEqual(["other change", "Plugin config updated: discord"]);
+    expect(showRestartBanner).toHaveBeenCalledTimes(1);
+    expect(mockTriggerRestart).toHaveBeenCalledTimes(1);
+  });
 });

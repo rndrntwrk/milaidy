@@ -86,7 +86,7 @@ function setVisibilityState(state: DocumentVisibilityState): void {
 let latestTree: TestRenderer.ReactTestRenderer | null = null;
 
 function Harness() {
-  useLifeOpsActivitySignals();
+  useLifeOpsActivitySignals(true);
   return null;
 }
 
@@ -310,13 +310,27 @@ describe("useLifeOpsActivitySignals", () => {
     expect(warnSpy).not.toHaveBeenCalled();
   });
 
-  it("suppresses runtime-unavailable 503 capture failures", async () => {
+  it("does not emit signals before the hook is enabled", async () => {
+    function DisabledHarness() {
+      useLifeOpsActivitySignals(false);
+      return null;
+    }
+
+    await act(async () => {
+      latestTree = TestRenderer.create(React.createElement(DisabledHarness));
+      await Promise.resolve();
+    });
+
+    expect(mocks.captureLifeOpsActivitySignal).not.toHaveBeenCalled();
+  });
+
+  it("suppresses runtime-unavailable telemetry failures", async () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     mocks.captureLifeOpsActivitySignal.mockRejectedValueOnce(
       new ApiError({
         kind: "http",
-        path: "/api/lifeops/activity-signals",
         status: 503,
+        path: "/api/lifeops/activity-signals",
         message: "Agent runtime is not available",
       }),
     );

@@ -2,6 +2,7 @@ import { Button, PagePanel, StatusBadge } from "@miladyai/ui";
 import { ChevronRight } from "lucide-react";
 import type { ReactNode, RefCallback } from "react";
 import type { PluginInfo } from "../../api";
+import { useApp } from "../../state";
 import { WhatsAppQrOverlay } from "../connectors/WhatsAppQrOverlay";
 import { PluginConfigForm, TelegramPluginConfig } from "./PluginConfigForm";
 import {
@@ -141,6 +142,7 @@ function ConnectorPluginCard({
   testResults,
   togglingPlugins,
 }: ConnectorPluginCardProps) {
+  const { elizaCloudConnected, setState, setTab } = useApp();
   const hasParams =
     (plugin.parameters?.length ?? 0) > 0 && plugin.id !== "__ui-showcase__";
   const isExpanded = connectorExpandedIds.has(plugin.id);
@@ -167,6 +169,10 @@ function ConnectorPluginCard({
   const pluginLinks = getPluginResourceLinks(plugin, {
     draftConfig: pluginConfigs[plugin.id],
   });
+  const handleOpenManagedDiscord = () => {
+    setState("cloudDashboardView", "agents");
+    setTab("settings");
+  };
 
   const connectorHeaderMedia = (
     <span
@@ -292,6 +298,39 @@ function ConnectorPluginCard({
         heading={connectorHeaderHeading}
         headingClassName="w-full text-inherit"
       >
+        {plugin.id === "discord" && (
+          <PagePanel.Notice
+            tone="default"
+            className="mb-4"
+            actions={
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 rounded-xl px-4 text-[11px] font-semibold"
+                onClick={handleOpenManagedDiscord}
+              >
+                {elizaCloudConnected
+                  ? t("pluginsview.UseManagedDiscord", {
+                      defaultValue: "Use managed Discord",
+                    })
+                  : t("pluginsview.OpenElizaCloud", {
+                      defaultValue: "Open Eliza Cloud",
+                    })}
+              </Button>
+            }
+          >
+            {elizaCloudConnected
+              ? t("pluginsview.ManagedDiscordHintConnected", {
+                  defaultValue:
+                    "Prefer OAuth? Use Eliza Cloud managed Discord for the shared app and server-owner setup flow.",
+                })
+              : t("pluginsview.ManagedDiscordHint", {
+                  defaultValue:
+                    "Prefer OAuth? Connect Eliza Cloud to use the managed Discord app instead of a local bot token.",
+                })}
+          </PagePanel.Notice>
+        )}
+
         {pluginLinks.length > 0 && (
           <div className="mb-4 flex flex-wrap gap-2">
             {pluginLinks.map((link) => (

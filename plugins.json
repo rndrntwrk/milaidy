@@ -277,7 +277,7 @@
       "dirName": "plugin-discord",
       "name": "Discord",
       "npmName": "@elizaos/plugin-discord",
-      "description": "A Discord plugin for ElizaOS, enabling integration with Discord servers for interaction, voice, and message management.",
+      "description": "A Discord plugin for elizaOS, enabling integration with Discord servers for interaction, voice, and message management.",
       "tags": [
         "connector",
         "social",
@@ -286,9 +286,75 @@
         "discord"
       ],
       "category": "connector",
-      "envKey": null,
-      "configKeys": [],
+      "envKey": "DISCORD_API_TOKEN",
+      "configKeys": [
+        "DISCORD_API_TOKEN",
+        "DISCORD_APPLICATION_ID",
+        "CHANNEL_IDS",
+        "DISCORD_TEST_CHANNEL_ID",
+        "DISCORD_VOICE_CHANNEL_ID",
+        "DISCORD_SHOULD_IGNORE_BOT_MESSAGES",
+        "DISCORD_SHOULD_IGNORE_DIRECT_MESSAGES",
+        "DISCORD_SHOULD_RESPOND_ONLY_TO_MENTIONS",
+        "DISCORD_LISTEN_CHANNEL_IDS"
+      ],
       "version": "2.0.0-alpha.4",
+      "pluginParameters": {
+        "DISCORD_API_TOKEN": {
+          "type": "string",
+          "description": "Discord API token used to authenticate and log in the Discord client/service.",
+          "required": true,
+          "sensitive": true
+        },
+        "DISCORD_APPLICATION_ID": {
+          "type": "string",
+          "description": "Discord application ID for the bot (auto-resolved from bot token if omitted)",
+          "required": false,
+          "sensitive": false
+        },
+        "CHANNEL_IDS": {
+          "type": "string",
+          "description": "Comma-separated list of Discord channel IDs that will be parsed into an array if provided.",
+          "required": false,
+          "sensitive": false
+        },
+        "DISCORD_TEST_CHANNEL_ID": {
+          "type": "string",
+          "description": "Discord channel ID used during test suite to locate the test channel for sending messages, voice interactions, and other test operations.",
+          "required": false,
+          "sensitive": false
+        },
+        "DISCORD_VOICE_CHANNEL_ID": {
+          "type": "string",
+          "description": "ID of the Discord voice channel the bot should join when scanning a guild. If not supplied, the bot selects a channel based on member activity.",
+          "required": false,
+          "sensitive": false
+        },
+        "DISCORD_SHOULD_IGNORE_BOT_MESSAGES": {
+          "type": "boolean",
+          "description": "If true, the bot will ignore messages from other bots. Can be overridden by character settings.",
+          "required": false,
+          "sensitive": false
+        },
+        "DISCORD_SHOULD_IGNORE_DIRECT_MESSAGES": {
+          "type": "boolean",
+          "description": "If true, the bot will ignore direct messages. Can be overridden by character settings.",
+          "required": false,
+          "sensitive": false
+        },
+        "DISCORD_SHOULD_RESPOND_ONLY_TO_MENTIONS": {
+          "type": "boolean",
+          "description": "If true, the bot will only respond when explicitly mentioned. Can be overridden by character settings.",
+          "required": false,
+          "sensitive": false
+        },
+        "DISCORD_LISTEN_CHANNEL_IDS": {
+          "type": "string",
+          "description": "Comma-separated list of Discord channel IDs where the bot will only listen (not respond).",
+          "required": false,
+          "sensitive": false
+        }
+      },
       "setupGuideUrl": "https://docs.eliza.ai/plugin-setup-guide#discord"
     },
     {

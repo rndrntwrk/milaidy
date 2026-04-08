@@ -1,8 +1,18 @@
-import { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync as DatabaseSyncType } from "node:sqlite";
 import { PGlite } from "@electric-sql/pglite";
 import type { IAgentRuntime } from "@elizaos/core";
 import { afterEach, describe, expect, it } from "vitest";
 import { listTableColumns } from "./sql";
+
+let DatabaseSync: typeof import("node:sqlite").DatabaseSync;
+const hasNodeSqlite = await (async () => {
+  try {
+    ({ DatabaseSync } = await import("node:sqlite"));
+    return true;
+  } catch {
+    return false;
+  }
+})();
 
 type SqlQuery = {
   queryChunks?: Array<{ value?: unknown }>;
@@ -24,8 +34,8 @@ function extractSqlText(query: SqlQuery): string {
     .join("");
 }
 
-describe("lifeops sql helpers", () => {
-  let sqlite: DatabaseSync | null = null;
+describe.skipIf(!hasNodeSqlite)("lifeops sql helpers", () => {
+  let sqlite: DatabaseSyncType | null = null;
   let pg: PGlite | null = null;
 
   function requireSqlite(): DatabaseSync {

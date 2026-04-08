@@ -71,7 +71,7 @@ Create a new conversation with its own room.
 
 ### GET /api/conversations/:id/messages
 
-Retrieve up to 200 messages for a conversation, sorted oldest first.
+Retrieve up to 200 messages for a conversation, sorted oldest first. Messages with empty text content (such as action-log memories) are automatically filtered out.
 
 **Response**
 
@@ -99,7 +99,7 @@ Retrieve up to 200 messages for a conversation, sorted oldest first.
 | `messages[].role` | string | `user` or `assistant` |
 | `messages[].text` | string | Message text content |
 | `messages[].timestamp` | number | Unix timestamp (ms) when the message was created |
-| `messages[].source` | string\|undefined | Source identifier if not `client_chat` |
+| `messages[].source` | string\|undefined | Source identifier (omitted for web-chat messages) |
 
 **Errors**
 
@@ -149,12 +149,19 @@ Same as `POST /api/conversations/:id/messages`.
 
 **SSE Events**
 
-Token events:
+Token events (append semantics — each text chunk extends the reply):
 ```
 data: {"type":"token","text":"Here's"}
 data: {"type":"token","text":" what"}
 data: {"type":"token","text":" I think..."}
 ```
+
+Snapshot events (replace semantics — used when action callbacks update the reply in-place):
+```
+data: {"type":"token","fullText":"Here's what I think...\n\nSearching for track..."}
+```
+
+When a `fullText` field is present, it is authoritative and the client should replace the entire assistant message text rather than appending.
 
 Final event:
 ```
@@ -162,6 +169,10 @@ data: {"type":"done","fullText":"Here's what I think...","agentName":"Milady"}
 ```
 
 The conversation title is auto-generated in the background if it is still `"New Chat"`, and a `conversation-updated` WebSocket event is broadcast.
+
+<Info>
+Action callbacks (e.g. from music playback, wallet flows) use **replace** semantics: each successive callback replaces the callback portion of the message rather than appending. This matches the progressive-message pattern used on Discord and Telegram. See [Action callbacks and SSE streaming](/runtime/action-callback-streaming) for details.
+</Info>
 
 ---
 

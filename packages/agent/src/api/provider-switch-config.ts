@@ -357,13 +357,22 @@ function applyLocalProviderCapabilities(
   ) {
     applySubscriptionProviderConfig(config, storedProviderId);
 
-    const setupToken =
-      storedProviderId === "anthropic-subscription"
-        ? trimToUndefined(selection.apiKey)
-        : undefined;
-
-    if (setupToken?.startsWith("sk-ant-")) {
-      setEnvValue(config, "ANTHROPIC_API_KEY", setupToken);
+    // Anthropic subscription tokens (OAuth / setup tokens) must NOT be
+    // injected into the runtime environment as ANTHROPIC_API_KEY.
+    // Anthropic's TOS only permits these tokens through the Claude Code
+    // CLI.  The task-agent orchestrator spawns actual `claude` CLI
+    // subprocesses and that path is fine.  For OpenAI/Codex tokens,
+    // direct API use is permitted so we do apply them.
+    if (storedProviderId === "anthropic-subscription") {
+      // Store the setup token in config for task-agent discovery but do
+      // NOT set it in process.env.
+      const setupToken = trimToUndefined(selection.apiKey);
+      if (setupToken?.startsWith("sk-ant-")) {
+        const env = ensureEnv(config);
+        // Persist only for config-level discovery, not runtime env.
+        (env as Record<string, unknown>).__anthropicSubscriptionToken =
+          setupToken;
+      }
       return Promise.resolve();
     }
 
@@ -508,8 +517,13 @@ function toOnboardingConnectionFromSelection(
 /**
  * Apply subscription provider configuration to the config object.
  *
- * Sets `agents.defaults.subscriptionProvider` and `agents.defaults.model.primary`
- * so the runtime auto-detects the correct provider on restart.
+ * Sets `agents.defaults.subscriptionProvider` so the task-agent orchestrator
+ * knows which subscription is active.
+ *
+ * For providers whose tokens can be used directly by the runtime (Codex),
+ * also sets `agents.defaults.model.primary`.  For Anthropic subscriptions,
+ * `model.primary` is NOT set because those tokens are restricted to the
+ * Claude Code CLI (TOS).
  *
  * Mutates `config` in place.
  */
@@ -530,7 +544,14 @@ export function applySubscriptionProviderConfig(
 
   if (modelProvider) {
     defaults.subscriptionProvider = subscriptionKey;
-    defaults.model = { ...defaults.model, primary: modelProvider };
+
+    // Only set model.primary for providers whose tokens work with the
+    // runtime.  Anthropic subscription tokens are restricted to Claude
+    // Code CLI (TOS) so the runtime cannot use them for LLM inference.
+    const runtimeApplicable = subscriptionKey !== "anthropic-subscription";
+    if (runtimeApplicable) {
+      defaults.model = { ...defaults.model, primary: modelProvider };
+    }
   }
 }
 

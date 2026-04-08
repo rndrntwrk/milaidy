@@ -72,6 +72,16 @@ vi.mock("./app-shell-components", () => {
     CompanionShell: stub("CompanionShell"),
     CompanionView: stub("CompanionView"),
     ConnectionFailedBanner: stub("ConnectionFailedBanner"),
+    ConnectionLostOverlay: () => {
+      const app = useAppMock();
+      const conn = app?.backendConnection;
+      if (conn?.state === "failed" && conn?.showDisconnectedUI) {
+        return React.createElement("div", {
+          "data-testid": "ConnectionLostOverlay",
+        });
+      }
+      return null;
+    },
     ConnectorsPageView: stub("ConnectorsPageView"),
     ConversationsSidebar: stub("ConversationsSidebar"),
     CustomActionEditor: stub("CustomActionEditor"),
@@ -339,6 +349,43 @@ describe("App", () => {
       "data-testid": "TasksEventsPanel",
     });
     expect(panel.props["data-open"]).toBe("true");
+  });
+
+  it("shows the connection-lost overlay when backend reconnect attempts are exhausted", async () => {
+    useAppMock.mockImplementation(() => ({
+      onboardingLoading: false,
+      startupPhase: "ready",
+      startupError: null,
+      startupCoordinator: { phase: "ready" },
+      authRequired: false,
+      onboardingComplete: true,
+      retryStartup: vi.fn(),
+      tab: "chat",
+      setTab: vi.fn(),
+      actionNotice: null,
+      uiShellMode: "native",
+      agentStatus: { state: "running" },
+      backendConnection: {
+        state: "failed",
+        reconnectAttempt: 15,
+        maxReconnectAttempts: 15,
+        showDisconnectedUI: true,
+      },
+      unreadConversations: new Set(),
+      activeGameViewerUrl: null,
+      gameOverlayEnabled: false,
+      t: (key: string, options?: { defaultValue?: string }) =>
+        options?.defaultValue ?? key,
+    }));
+
+    let renderer!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(React.createElement(App));
+    });
+
+    expect(
+      renderer.root.findAllByProps({ "data-testid": "ConnectionLostOverlay" }),
+    ).toHaveLength(1);
   });
 
   it("shows a shutdown overlay when desktop quit starts", async () => {

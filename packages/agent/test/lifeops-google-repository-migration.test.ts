@@ -1,7 +1,16 @@
-import { DatabaseSync } from "node:sqlite";
 import type { IAgentRuntime } from "@elizaos/core";
 import { describe, expect, it } from "vitest";
 import { LifeOpsRepository } from "../src/lifeops/repository";
+
+let DatabaseSync: typeof import("node:sqlite").DatabaseSync;
+const hasNodeSqlite = await (async () => {
+  try {
+    ({ DatabaseSync } = await import("node:sqlite"));
+    return true;
+  } catch {
+    return false;
+  }
+})();
 
 type SqlQuery = {
   queryChunks?: Array<{ value?: unknown }>;
@@ -48,7 +57,7 @@ function createRuntime(agentId: string, sqlite: DatabaseSync): IAgentRuntime {
   } as unknown as IAgentRuntime;
 }
 
-describe("LifeOpsRepository Google side migrations", () => {
+describe.skipIf(!hasNodeSqlite)("LifeOpsRepository Google side migrations", () => {
   it("migrates pre-side Google cache tables and preserves owner rows while allowing agent rows with the same external ids", async () => {
     const agentId = "lifeops-google-legacy-migration-agent";
     const sqlite = new DatabaseSync(":memory:");

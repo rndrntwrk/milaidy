@@ -1,9 +1,13 @@
+// @vitest-environment jsdom
+
 import type { ContentPackManifest } from "@miladyai/shared/contracts/content-pack";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   ContentPackLoadError,
   loadBundledContentPack,
+  loadContentPackFromFiles,
   loadContentPackFromUrl,
+  releaseLoadedContentPack,
   resolveContentPackFromManifest,
 } from "./load-pack";
 
@@ -20,6 +24,23 @@ const VALID_MANIFEST: ContentPackManifest = {
     personality: { name: "Nyx", bio: ["Cyberpunk AI"] },
   },
 };
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+function makeFile(
+  path: string,
+  content: string,
+  type = "application/json",
+): File {
+  const file = new File([content], path.split("/").at(-1) ?? path, { type });
+  Object.defineProperty(file, "webkitRelativePath", {
+    configurable: true,
+    value: path,
+  });
+  return file;
+}
 
 describe("resolveContentPackFromManifest", () => {
   it("resolves all asset paths relative to base URL", () => {
@@ -103,8 +124,6 @@ describe("loadContentPackFromUrl", () => {
     await expect(
       loadContentPackFromUrl("https://example.com/packs/missing/"),
     ).rejects.toThrow(ContentPackLoadError);
-
-    vi.unstubAllGlobals();
   });
 
   it("throws ContentPackLoadError on invalid manifest", async () => {
@@ -119,8 +138,6 @@ describe("loadContentPackFromUrl", () => {
     await expect(
       loadContentPackFromUrl("https://example.com/packs/bad/"),
     ).rejects.toThrow(ContentPackLoadError);
-
-    vi.unstubAllGlobals();
   });
 
   it("resolves a valid manifest from URL", async () => {
@@ -143,7 +160,78 @@ describe("loadContentPackFromUrl", () => {
       kind: "url",
       url: "https://example.com/packs/test-pack/",
     });
+  });
+});
 
-    vi.unstubAllGlobals();
+describe("loadContentPackFromFiles", () => {
+  it("loads a valid pack from a selected local folder", async () => {
+    const createObjectURL = vi
+      .fn()
+      .mockReturnValueOnce("blob:vrm")
+      .mockReturnValueOnce("blob:preview")
+      .mockReturnValueOnce("blob:bg");
+    vi.stubGlobal("URL", {
+      createObjectURL,
+      revokeObjectURL: vi.fn(),
+    });
+
+    const pack = await loadContentPackFromFiles([
+      makeFile("medusa/pack.json", JSON.stringify(VALID_MANIFEST)),
+      makeFile("medusa/model.vrm.gz", "vrm", "model/gltf-binary"),
+      makeFile("medusa/preview.png", "preview", "image/png"),
+      makeFile("medusa/bg.png", "background", "image/png"),
+    ]);
+
+    expect(pack.source).toEqual({ kind: "file", path: "medusa" });
+    expect(pack.vrmUrl).toBe("blob:vrm");
+    expect(pack.vrmPreviewUrl).toBe("blob:preview");
+    expect(pack.backgroundUrl).toBe("blob:bg");
+    expect(createObjectURL).toHaveBeenCalledTimes(3);
+  });
+
+  it("releases tracked object URLs for file-backed packs", async () => {
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal("URL", {
+      createObjectURL: vi
+        .fn()
+        .mockReturnValueOnce("blob:vrm")
+        .mockReturnValueOnce("blob:preview"),
+      revokeObjectURL,
+    });
+
+    const pack = await loadContentPackFromFiles([
+      makeFile("medusa/pack.json", JSON.stringify(VALID_MANIFEST)),
+      makeFile("medusa/model.vrm.gz", "vrm", "model/gltf-binary"),
+      makeFile("medusa/preview.png", "preview", "image/png"),
+    ]);
+
+    releaseLoadedContentPack(pack);
+
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:vrm");
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:preview");
+  });
+
+  it("matches trailing path segments instead of the first duplicate filename", async () => {
+    const createObjectURL = vi
+      .fn()
+      .mockReturnValueOnce("blob:vrm")
+      .mockReturnValueOnce("blob:preview");
+    vi.stubGlobal("URL", {
+      createObjectURL,
+      revokeObjectURL: vi.fn(),
+    });
+
+    const pack = await loadContentPackFromFiles([
+      makeFile("medusa/pack.json", JSON.stringify(VALID_MANIFEST)),
+      makeFile("medusa/preview.png", "preview", "image/png"),
+      makeFile("other/model.vrm.gz", "wrong", "model/gltf-binary"),
+      makeFile("medusa/model.vrm.gz", "right", "model/gltf-binary"),
+    ]);
+
+    expect(pack.vrmUrl).toBe("blob:vrm");
+    expect(createObjectURL.mock.calls[0][0]).toBeInstanceOf(File);
+    expect((createObjectURL.mock.calls[0][0] as File).webkitRelativePath).toBe(
+      "medusa/model.vrm.gz",
+    );
   });
 });

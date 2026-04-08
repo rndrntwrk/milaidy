@@ -145,9 +145,6 @@ export function TrajectoryDetailView({
             <div className="mt-2 text-[1.8rem] font-semibold leading-tight text-txt">
               {formatTrajectoryTimestamp(trajectory.createdAt, "detailed")}
             </div>
-            <p className="mt-3 max-w-3xl text-sm leading-6 text-muted">
-              {t("trajectorydetailview.OverviewDescription")}
-            </p>
           </div>
           {onBack ? (
             <Button

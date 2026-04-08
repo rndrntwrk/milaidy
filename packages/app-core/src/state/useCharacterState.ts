@@ -47,7 +47,10 @@ export function useCharacterState({
   const [characterDraft, setCharacterDraft] = useState<CharacterData>({});
   const [selectedVrmIndex, setSelectedVrmIndexRaw] = useState(loadAvatarIndex);
   const [customVrmUrl, setCustomVrmUrl] = useState("");
+  const [customVrmPreviewUrl, setCustomVrmPreviewUrl] = useState("");
   const [customBackgroundUrl, setCustomBackgroundUrl] = useState("");
+  const [customCatchphrase, setCustomCatchphrase] = useState("");
+  const [customVoicePresetId, setCustomVoicePresetId] = useState("");
   const [activePackId, setActivePackIdRaw] = useState<string | null>(() =>
     loadPersistedActivePackId(),
   );
@@ -217,7 +220,10 @@ export function useCharacterState({
       characterDraft,
       selectedVrmIndex,
       customVrmUrl,
+      customVrmPreviewUrl,
       customBackgroundUrl,
+      customCatchphrase,
+      customVoicePresetId,
       activePackId,
       customWorldUrl,
     },
@@ -227,7 +233,10 @@ export function useCharacterState({
     setCharacterSaveError,
     setSelectedVrmIndex,
     setCustomVrmUrl,
+    setCustomVrmPreviewUrl,
     setCustomBackgroundUrl,
+    setCustomCatchphrase,
+    setCustomVoicePresetId,
     setActivePackId,
     setCustomWorldUrl,
     loadCharacter,

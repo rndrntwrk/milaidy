@@ -119,10 +119,18 @@ export async function handleSubscriptionRoutes(
       return true;
     }
     try {
-      process.env.ANTHROPIC_API_KEY = body.token.trim();
+      // Store the setup token in config for task-agent discovery but do
+      // NOT inject it into process.env.ANTHROPIC_API_KEY.  Anthropic's
+      // TOS only permits subscription tokens through the Claude Code CLI.
+      // The task-agent orchestrator spawns `claude` CLI subprocesses
+      // which use the token legitimately.
       if (!state.config.env) state.config.env = {};
-      state.config.env.ANTHROPIC_API_KEY = body.token.trim();
+      (state.config.env as Record<string, unknown>).__anthropicSubscriptionToken =
+        body.token.trim();
       ctx.saveConfig(state.config);
+      logger.info(
+        "[api] Saved Anthropic setup token for task agents (not applied to runtime — TOS restriction)",
+      );
       json(res, { success: true });
     } catch (err) {
       logger.error(

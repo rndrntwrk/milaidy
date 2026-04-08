@@ -22,6 +22,7 @@
 
 # ── Stage 1: Build ──────────────────────────────────────────────────────────
 FROM node:22-bookworm AS builder
+ARG ESBUILD_VERSION=0.28.0
 
 # Install bun for fast dependency resolution
 RUN curl -fsSL https://bun.sh/install | bash -s "bun-v1.3.9"
@@ -119,6 +120,7 @@ RUN rm -rf apps/app/electrobun apps/app/android apps/app/ios apps/app/dist apps/
 
 # ── Stage 3: Slim Runtime ──────────────────────────────────────────────────
 FROM node:22-bookworm-slim AS runtime
+ARG ESBUILD_VERSION
 
 RUN apt-get update && \
   apt-get install -y --no-install-recommends curl ca-certificates && \
@@ -156,6 +158,12 @@ COPY --from=pruner --chown=agent:agent /build/node_modules ./node_modules
 # Copy scripts needed for runtime
 COPY --from=pruner --chown=agent:agent /build/scripts ./scripts
 
+# The runtime uses tsx against a node_modules tree copied from the build host.
+# Install the Linux esbuild package in-image so tsx never resolves a macOS-only
+# optional dependency when the image is built on a Darwin workstation.
+RUN npm install --no-save --ignore-scripts "esbuild@${ESBUILD_VERSION}" "@esbuild/linux-x64@${ESBUILD_VERSION}" \
+  && npm cache clean --force
+
 ENV NODE_ENV=production
 ENV MILADY_API_BIND="0.0.0.0"
 # PORT is used by cloud platforms (Railway, Fly.io); maps to MILADY_PORT locally
@@ -176,5 +184,5 @@ EXPOSE ${BRIDGE_PORT}
 USER agent
 
 # Start the real Milady runtime in headless/server-only mode
-# Uses tsx register for TypeScript workspace package resolution
-CMD ["node", "--import", "tsx", "milady.mjs", "start", "--headless"]
+# Use the image's pinned tsx loader so TypeScript workspace resolution stays in sync.
+CMD ["node", "--import", "./node_modules/tsx/dist/loader.mjs", "milady.mjs", "start", "--headless"]

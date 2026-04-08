@@ -660,15 +660,16 @@ async function ensureChatTrajectoryStep(
       );
     }
   } catch (err) {
-    runtime.logger?.warn(
+    runtime.logger?.error(
       {
         err,
         src: "eliza-api",
         messageId: message.id,
         roomId: message.roomId,
       },
-      "Failed to start fallback trajectory logging for chat request",
+      "Failed to start trajectory logging for chat request",
     );
+    throw err;
   }
 }
 

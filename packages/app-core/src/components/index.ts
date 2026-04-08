@@ -110,6 +110,7 @@ export * from "./shell/BugReportModal";
 export * from "./shell/CommandPalette";
 export * from "./shell/CompanionShell";
 export * from "./shell/ConnectionFailedBanner";
+export * from "./shell/ConnectionLostOverlay";
 export * from "./shell/companion-shell-styles";
 export * from "./shell/Header";
 export * from "./shell/LoadingScreen";
