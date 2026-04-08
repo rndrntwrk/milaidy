@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describeIf } from "../../../../../test/helpers/conditional-tests.ts";
 import {
   ChannelType,
   ModelType,
@@ -44,7 +45,7 @@ import { installPromptOptimizations } from "../prompt-optimization";
 
 // Skip the entire suite when the eliza submodule test utils aren't available
 // (CI runs with submodules: false).
-const describeIfEliza = hasElizaTestUtils ? describe : describe.skip;
+const describeIfEliza = describeIf(hasElizaTestUtils);
 
 describeIfEliza("shouldRespond trajectory logging", () => {
   let runtime: IAgentRuntime;

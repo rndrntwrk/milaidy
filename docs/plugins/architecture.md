@@ -25,8 +25,8 @@ export const CORE_PLUGINS: readonly string[] = [
   "@elizaos/plugin-sql",               // database adapter — required
   "@elizaos/plugin-local-embedding",   // local embeddings — required for memory
   "@elizaos/plugin-form",              // form handling for guided user journeys
-  "@elizaos/plugin-knowledge",         // RAG knowledge management — required for knowledge tab
-  "@elizaos/plugin-trajectory-logger", // trajectory logging for debugging and RL training
+  "knowledge",         // RAG knowledge management — required for knowledge tab
+  "trajectories", // trajectory logging for debugging and RL training
   "@elizaos/plugin-agent-orchestrator",// multi-agent orchestration (PTY, SwarmCoordinator, workspace provisioning)
   "@elizaos/plugin-cron",              // scheduled jobs and automation
   "@elizaos/plugin-shell",             // shell command execution
@@ -37,7 +37,7 @@ export const CORE_PLUGINS: readonly string[] = [
 ];
 ```
 
-> **Note:** `@elizaos/plugin-secrets-manager`, `@elizaos/plugin-rolodex`, `@elizaos/plugin-trust`, `@elizaos/plugin-personality`, and `@elizaos/plugin-experience` are statically imported for fast resolution but commented out of the core list. They may be re-enabled in a future release. `@elizaos/plugin-todo` and `@elizaos/plugin-goals` have been removed; their functionality is now handled by the LifeOps system via runtime tasks.
+> **Note:** `@elizaos/plugin-secrets-manager`, `relationships`, `@elizaos/plugin-trust`, `@elizaos/plugin-personality`, and `@elizaos/plugin-experience` are statically imported for fast resolution but commented out of the core list. They may be re-enabled in a future release. `@elizaos/plugin-todo` and `@elizaos/plugin-goals` have been removed; their functionality is now handled by the LifeOps system via runtime tasks.
 
 ### Optional Core Plugins
 

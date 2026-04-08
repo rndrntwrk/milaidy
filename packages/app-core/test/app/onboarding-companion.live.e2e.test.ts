@@ -12,9 +12,10 @@ import {
 } from "@playwright/test";
 import { createServer as createViteServer, type ViteDevServer } from "vite";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { describeIf } from "../../../../test/helpers/conditional-tests.ts";
 
 const LIVE_TESTS_ENABLED = process.env.MILADY_LIVE_TEST === "1";
-const describeLive = LIVE_TESTS_ENABLED ? describe : describe.skip;
+const describeLive = describeIf(LIVE_TESTS_ENABLED);
 const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..", "..", "..");
 const APP_ROOT = path.join(REPO_ROOT, "apps/app");
 const SCREENSHOT_DIR = path.join(REPO_ROOT, "test-results", "live-onboarding");

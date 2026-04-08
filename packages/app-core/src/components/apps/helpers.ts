@@ -3,14 +3,6 @@ import type { RegistryAppInfo } from "../../api";
 export const DEFAULT_VIEWER_SANDBOX =
   "allow-scripts allow-same-origin allow-popups";
 
-const CURATED_APP_NAMES = new Set([
-  "@hyperscape/plugin-hyperscape",
-  "@elizaos/app-2004scape",
-  "@elizaos/app-babylon",
-  "@elizaos/app-defense-of-the-agents",
-]);
-const PROD_ALLOWED_APPS = CURATED_APP_NAMES;
-
 export const CATEGORY_LABELS: Record<string, string> = {
   game: "Game",
   social: "Social",
@@ -41,7 +33,7 @@ interface AppsCatalogFilterOptions {
 export function isCuratedGameApp(
   app: Pick<RegistryAppInfo, "category" | "name">,
 ): boolean {
-  return app.category !== "game" || CURATED_APP_NAMES.has(app.name);
+  return app.name.trim().length > 0;
 }
 
 export function shouldShowAppInAppsView(
@@ -50,9 +42,8 @@ export function shouldShowAppInAppsView(
     ? import.meta.env.PROD
     : Boolean(import.meta.env.PROD),
 ): boolean {
-  if (!isCuratedGameApp(app)) return false;
-  if (!isProd) return true;
-  return PROD_ALLOWED_APPS.has(app.name);
+  void isProd;
+  return isCuratedGameApp(app);
 }
 
 export function filterAppsForCatalog(
@@ -105,14 +96,11 @@ export function getAppShortName(app: RegistryAppInfo): string {
 }
 
 export function getAppEmoji(app: RegistryAppInfo): string {
-  const name = (app.name ?? "").toLowerCase();
-  if (name.includes("hyperscape")) return "🌌";
-  if (name.includes("2004") || name.includes("runescape")) return "⚔️";
-  if (name.includes("babylon")) return "🏛️";
-  if (name.includes("defense-of-the-agents")) return "🛡️";
   if (app.category === "game") return "🎮";
   if (app.category === "social") return "💬";
   if (app.category === "world") return "🌍";
+  if (app.category === "platform") return "🧩";
+  if (app.category === "utility") return "🛠️";
   return "📦";
 }
 

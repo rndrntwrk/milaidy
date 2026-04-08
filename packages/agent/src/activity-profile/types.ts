@@ -1,8 +1,3 @@
-/**
- * User Activity Profile — data model for tracking when and where the user
- * is active across platforms, derived from message history and calendar data.
- */
-
 import type { LifeOpsHealthSignal } from "@miladyai/shared/contracts/lifeops";
 
 export type TimeBucket =

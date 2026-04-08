@@ -34,15 +34,25 @@ function normalizeSubaction(
     case "back":
     case "batch":
     case "check":
+    case "clipboard":
     case "click":
     case "close":
+    case "console":
+    case "cookies":
     case "dblclick":
+    case "diff":
+    case "dialog":
+    case "drag":
+    case "errors":
     case "eval":
     case "fill":
     case "find":
     case "focus":
     case "forward":
+    case "frame":
     case "get":
+    case "goto":
+    case "highlight":
     case "hide":
     case "hover":
     case "inspect":
@@ -50,20 +60,36 @@ function normalizeSubaction(
     case "keyboardinserttext":
     case "keyboardtype":
     case "list":
+    case "mouse":
     case "navigate":
+    case "network":
     case "open":
+    case "pdf":
     case "press":
+    case "profiler":
     case "reload":
     case "scroll":
     case "scrollinto":
     case "screenshot":
     case "select":
+    case "set":
     case "show":
     case "snapshot":
+    case "state":
+    case "storage":
+    case "tab":
+    case "trace":
     case "type":
     case "uncheck":
+    case "upload":
     case "wait":
+    case "window":
+      if (value.trim().toLowerCase() === "goto") {
+        return "navigate";
+      }
       return value.trim().toLowerCase() as BrowserWorkspaceSubaction;
+    case "read":
+      return "get";
     default:
       return null;
   }
@@ -172,6 +198,45 @@ function parseNumberLike(value: unknown): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+function parseStringRecordLike(
+  value: unknown,
+): Record<string, string> | undefined {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return Object.fromEntries(
+      Object.entries(value).filter(
+        (entry): entry is [string, string] =>
+          typeof entry[0] === "string" && typeof entry[1] === "string",
+      ),
+    );
+  }
+  if (typeof value !== "string" || value.trim().length === 0) {
+    return undefined;
+  }
+  try {
+    return parseStringRecordLike(JSON.parse(value));
+  } catch {
+    return undefined;
+  }
+}
+
+function parseStringArrayLike(value: unknown): string[] | undefined {
+  if (Array.isArray(value)) {
+    const entries = value.filter((entry): entry is string => typeof entry === "string");
+    return entries.length > 0 ? entries : undefined;
+  }
+  if (typeof value !== "string" || value.trim().length === 0) {
+    return undefined;
+  }
+  try {
+    return parseStringArrayLike(JSON.parse(value));
+  } catch {
+    return value
+      .split(",")
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+  }
+}
+
 function parseCommandRecord(
   raw: Record<string, unknown>,
 ): BrowserWorkspaceCommand | null {
@@ -184,6 +249,63 @@ function parseCommandRecord(
   );
   if (!subaction) return null;
 
+  const resolvedFindBy =
+    normalizeFindBy(
+      typeof raw.findBy === "string"
+        ? raw.findBy
+        : typeof raw.by === "string"
+          ? raw.by
+          : typeof raw.label === "string"
+            ? "label"
+            : undefined,
+    ) ?? undefined;
+  const rawLabel =
+    typeof raw.label === "string" ? raw.label : undefined;
+  const rawTargetText =
+    typeof raw.targetText === "string" ? raw.targetText : undefined;
+  const rawTextValue =
+    typeof raw.text === "string" ? raw.text : undefined;
+  const rawValueValue =
+    typeof raw.value === "string" ? raw.value : undefined;
+  const rawOptionValue =
+    typeof raw.option === "string" ? raw.option : undefined;
+  const usesByLocatorValue =
+    typeof raw.by === "string" &&
+    typeof raw.findBy !== "string" &&
+    typeof raw.label !== "string";
+  const writesTextValue = [
+    "fill",
+    "keyboardinserttext",
+    "keyboardtype",
+    "select",
+    "type",
+  ].includes(subaction);
+  const rawText =
+    rawLabel ??
+    rawTargetText ??
+    (usesByLocatorValue &&
+    rawValueValue &&
+    (rawTextValue || rawOptionValue || !writesTextValue)
+      ? rawValueValue
+      : rawTextValue);
+  const inferredWriteValue =
+    typeof rawText === "string" &&
+    ["fill", "keyboardinserttext", "keyboardtype", "select", "type"].includes(
+      subaction,
+    ) &&
+    (typeof raw.selector === "string" ||
+      typeof raw.findBy === "string" ||
+      typeof raw.label === "string")
+      ? rawText
+      : undefined;
+  const parsedValue =
+    rawOptionValue ??
+    (writesTextValue && usesByLocatorValue && rawValueValue && rawTextValue
+      ? rawTextValue
+      : undefined) ??
+    rawValueValue ??
+    inferredWriteValue;
+
   return {
     action: normalizeFindAction(
       typeof raw.action === "string" ? raw.action : undefined,
@@ -193,26 +315,18 @@ function parseCommandRecord(
     url: typeof raw.url === "string" ? raw.url : undefined,
     title: typeof raw.title === "string" ? raw.title : undefined,
     script: typeof raw.script === "string" ? raw.script : undefined,
-    show: parseBooleanLike(raw.show),
+    show: parseBooleanLike(raw.show) ?? parseBooleanLike(raw.visible),
     partition: typeof raw.partition === "string" ? raw.partition : undefined,
     direction:
       normalizeScrollDirection(
         typeof raw.direction === "string" ? raw.direction : undefined,
       ) ?? undefined,
     exact: parseBooleanLike(raw.exact),
-    findBy:
-      normalizeFindBy(
-        typeof raw.findBy === "string" ? raw.findBy : undefined,
-      ) ?? undefined,
+    findBy: resolvedFindBy,
     index: parseNumberLike(raw.index),
     selector: typeof raw.selector === "string" ? raw.selector : undefined,
-    text:
-      typeof raw.text === "string"
-        ? raw.text
-        : typeof raw.targetText === "string"
-          ? raw.targetText
-          : undefined,
-    value: typeof raw.value === "string" ? raw.value : undefined,
+    text: rawText,
+    value: parsedValue,
     attribute:
       typeof raw.attribute === "string"
         ? raw.attribute
@@ -229,12 +343,22 @@ function parseCommandRecord(
     ) ?? undefined,
     name: typeof raw.name === "string" ? raw.name : undefined,
     pixels: parseNumberLike(raw.pixels),
-    role: typeof raw.role === "string" ? raw.role : undefined,
+    role:
+      typeof raw.role === "string"
+        ? raw.role
+        : typeof raw.by === "string" &&
+            raw.by.trim().toLowerCase() === "role" &&
+            typeof raw.name === "string"
+          ? "button"
+          : undefined,
     state:
       normalizeWaitState(
         typeof raw.state === "string" ? raw.state : undefined,
       ) ?? undefined,
-    timeoutMs: parseNumberLike(raw.timeoutMs),
+    timeoutMs:
+      parseNumberLike(raw.timeoutMs) ??
+      parseNumberLike(raw.ms) ??
+      parseNumberLike(raw.milliseconds),
     steps: Array.isArray(raw.steps)
       ? raw.steps
           .map((entry) =>
@@ -294,6 +418,45 @@ function parseRequest(
       : (messageText.match(TAB_ID_RE)?.[1] ?? undefined);
   const steps =
     parseStepsParam(params.steps) ?? parseStepsParam(params.stepsJson);
+  const resolvedFindBy =
+    normalizeFindBy(
+      typeof params.findBy === "string"
+        ? params.findBy
+        : typeof params.by === "string"
+          ? params.by
+          : typeof params.label === "string"
+            ? "label"
+            : undefined,
+    ) ?? undefined;
+  const rawLabel =
+    typeof params.label === "string" ? params.label : undefined;
+  const rawTargetText =
+    typeof params.targetText === "string" ? params.targetText : undefined;
+  const rawTextValue =
+    typeof params.text === "string" ? params.text : undefined;
+  const rawValueValue =
+    typeof params.value === "string" ? params.value : undefined;
+  const rawOptionValue =
+    typeof params.option === "string" ? params.option : undefined;
+  const usesByLocatorValue =
+    typeof params.by === "string" &&
+    typeof params.findBy !== "string" &&
+    typeof params.label !== "string";
+  const writesTextValue = [
+    "fill",
+    "keyboardinserttext",
+    "keyboardtype",
+    "select",
+    "type",
+  ];
+  const rawText =
+    rawLabel ??
+    rawTargetText ??
+    (usesByLocatorValue &&
+    rawValueValue &&
+    (rawTextValue || rawOptionValue || !writesTextValue.includes(fromParams ?? ""))
+      ? rawValueValue
+      : rawTextValue);
   const lower = messageText.toLowerCase();
   const inferred =
     fromParams ??
@@ -359,6 +522,23 @@ function parseRequest(
 
   if (!inferred) return null;
 
+  const inferredWriteValue =
+    typeof rawText === "string" &&
+    writesTextValue.includes(inferred) &&
+    (typeof params.selector === "string" || typeof params.findBy === "string")
+      ? rawText
+      : undefined;
+  const parsedValue =
+    rawOptionValue ??
+    (writesTextValue.includes(inferred) &&
+    usesByLocatorValue &&
+    rawValueValue &&
+    rawTextValue
+      ? rawTextValue
+      : undefined) ??
+    rawValueValue ??
+    inferredWriteValue;
+
   return {
     action:
       normalizeFindAction(
@@ -369,7 +549,7 @@ function parseRequest(
     url,
     title: typeof params.title === "string" ? params.title : undefined,
     script: typeof params.script === "string" ? params.script : undefined,
-    show: parseBooleanLike(params.show),
+    show: parseBooleanLike(params.show) ?? parseBooleanLike(params.visible),
     partition:
       typeof params.partition === "string" ? params.partition : undefined,
     direction:
@@ -377,19 +557,11 @@ function parseRequest(
         typeof params.direction === "string" ? params.direction : undefined,
       ) ?? undefined,
     exact: parseBooleanLike(params.exact),
-    findBy:
-      normalizeFindBy(
-        typeof params.findBy === "string" ? params.findBy : undefined,
-      ) ?? undefined,
+    findBy: resolvedFindBy,
     index: parseNumberLike(params.index),
     selector: typeof params.selector === "string" ? params.selector : undefined,
-    text:
-      typeof params.text === "string"
-        ? params.text
-        : typeof params.targetText === "string"
-          ? params.targetText
-          : undefined,
-    value: typeof params.value === "string" ? params.value : undefined,
+    text: rawText,
+    value: parsedValue,
     attribute:
       typeof params.attribute === "string"
         ? params.attribute
@@ -407,12 +579,22 @@ function parseRequest(
       ) ?? undefined,
     name: typeof params.name === "string" ? params.name : undefined,
     pixels: parseNumberLike(params.pixels),
-    role: typeof params.role === "string" ? params.role : undefined,
+    role:
+      typeof params.role === "string"
+        ? params.role
+        : typeof params.by === "string" &&
+            params.by.trim().toLowerCase() === "role" &&
+            typeof params.name === "string"
+          ? "button"
+          : undefined,
     state:
       normalizeWaitState(
         typeof params.state === "string" ? params.state : undefined,
       ) ?? undefined,
-    timeoutMs: parseNumberLike(params.timeoutMs),
+    timeoutMs:
+      parseNumberLike(params.timeoutMs) ??
+      parseNumberLike(params.ms) ??
+      parseNumberLike(params.milliseconds),
     steps,
   };
 }
@@ -425,6 +607,15 @@ function stringifyResult(value: unknown): string {
   } catch {
     return String(value);
   }
+}
+
+function formatBrowserWorkspaceElementLine(
+  element: BrowserWorkspaceCommandResult["elements"] extends Array<infer T>
+    ? T
+    : never,
+): string {
+  const refPrefix = typeof element.ref === "string" ? `${element.ref} ` : "";
+  return `${refPrefix}${element.selector} <${element.tag}> ${element.text || element.value || ""}`.trim();
 }
 
 function formatSingleCommandResult(result: BrowserWorkspaceCommandResult): string {
@@ -480,10 +671,7 @@ function formatSingleCommandResult(result: BrowserWorkspaceCommandResult): strin
             )}.`,
             ...result.elements
               .slice(0, 8)
-              .map(
-                (element) =>
-                  `- ${element.selector} <${element.tag}> ${element.text || element.value || ""}`.trim(),
-              ),
+              .map((element) => `- ${formatBrowserWorkspaceElementLine(element)}`),
           ].join("\n")
         : `Captured a browser DOM snapshot: ${stringifyResult(result.value)}`;
     case "inspect": {
@@ -499,10 +687,7 @@ function formatSingleCommandResult(result: BrowserWorkspaceCommandResult): strin
         head,
         ...result.elements
           .slice(0, 8)
-          .map(
-            (element) =>
-              `- ${element.selector} <${element.tag}> ${element.text || element.value || ""}`.trim(),
-          ),
+          .map((element) => `- ${formatBrowserWorkspaceElementLine(element)}`),
       ].join("\n");
     }
     case "get":
@@ -566,7 +751,7 @@ function formatBrowserWorkspaceCommandResult(
 export const manageMiladyBrowserWorkspaceAction: Action = {
   name: "MANAGE_MILADY_BROWSER_WORKSPACE",
   description:
-    "Use the Milady browser workspace through one main action. Pass a subaction such as list, open, navigate, show, hide, close, inspect, snapshot, screenshot, find, click, dblclick, fill, type, keyboardtype, keyboardinserttext, focus, hover, select, check, uncheck, press, keydown, keyup, scroll, scrollinto, wait, get, back, forward, reload, eval, or batch. Use batch with stepsJson to run a series of browser subactions in order.",
+    "Use the Milady browser workspace through one main action. Pass a subaction such as list, open, navigate, show, hide, close, inspect, snapshot, screenshot, find, click, dblclick, fill, type, keyboardtype, keyboardinserttext, focus, hover, select, check, uncheck, press, keydown, keyup, scroll, scrollinto, wait, get, back, forward, reload, eval, or batch. Use batch with stepsJson to run a series of browser subactions in order. Snapshot and inspect return reusable element refs like @e1 that can be passed back as selector values.",
   similes: [
     "browser command",
     "browser subaction",
@@ -641,7 +826,8 @@ export const manageMiladyBrowserWorkspaceAction: Action = {
     },
     {
       name: "selector",
-      description: "CSS selector for browser element subactions.",
+      description:
+        "CSS selector or reusable snapshot ref like @e1 for browser element subactions.",
       required: false,
       schema: { type: "string" },
     },
@@ -782,7 +968,15 @@ export const manageMiladyBrowserWorkspaceAction: Action = {
     },
     {
       name: "timeoutMs",
-      description: "Optional timeout in milliseconds for wait subactions.",
+      description:
+        "Optional timeout in milliseconds for wait subactions. When no selector/text/url/script condition is provided, wait sleeps for this duration.",
+      required: false,
+      schema: { type: "number" },
+    },
+    {
+      name: "ms",
+      description:
+        "Alias for timeoutMs, useful for timed waits that simply sleep for a number of milliseconds.",
       required: false,
       schema: { type: "number" },
     },

@@ -14,7 +14,10 @@
 .env.*.local
 node_modules/.cache
 apps/app/android
+apps/app/ios
 apps/app/electrobun
+apps/app/screenshots
+apps/app/test-results
 apps/homepage
 apps/home
 apps/landing
@@ -27,6 +30,9 @@ install.sh
 install.ps1
 packaging/
 artifacts/
+.docker-home
+.tmp
+.milady
 Dockerfile
 Dockerfile.alpha89
 Dockerfile.fixed

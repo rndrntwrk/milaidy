@@ -81,16 +81,18 @@ const {
   loadDesktopBugReportDiagnosticsMock,
   openDesktopLogsFolderMock,
   createDesktopBugReportBundleMock,
-} = vi.hoisted(() => ({
-  mockUseBugReport: vi.fn(),
-  mockClient: {
+  bridgeMockModule,
+  desktopBugReportMockModule,
+} = vi.hoisted(() => {
+  const mockUseBugReport = vi.fn();
+  const mockClient = {
     getCodingAgentStatus: vi.fn(async () => null),
     checkBugReportInfo: vi.fn().mockResolvedValue({}),
     submitBugReport: vi.fn().mockResolvedValue({}),
-  },
-  mockCopyToClipboard: vi.fn(),
-  isElectrobunRuntimeMock: vi.fn(() => false),
-  mockDesktopDiagnostics: {
+  };
+  const mockCopyToClipboard = vi.fn();
+  const isElectrobunRuntimeMock = vi.fn(() => false);
+  const mockDesktopDiagnostics = {
     state: "error",
     phase: "startup_failed",
     updatedAt: "2026-03-26T00:00:00.000Z",
@@ -108,11 +110,38 @@ const {
     appRuntime: "electrobun/1.3.10",
     packaged: true,
     locale: "zh-CN",
-  },
-  loadDesktopBugReportDiagnosticsMock: vi.fn(),
-  openDesktopLogsFolderMock: vi.fn(),
-  createDesktopBugReportBundleMock: vi.fn(),
-}));
+  };
+  const loadDesktopBugReportDiagnosticsMock = vi.fn();
+  const openDesktopLogsFolderMock = vi.fn();
+  const createDesktopBugReportBundleMock = vi.fn();
+
+  return {
+    mockUseBugReport,
+    mockClient,
+    mockCopyToClipboard,
+    isElectrobunRuntimeMock,
+    mockDesktopDiagnostics,
+    loadDesktopBugReportDiagnosticsMock,
+    openDesktopLogsFolderMock,
+    createDesktopBugReportBundleMock,
+    bridgeMockModule: {
+      isElectrobunRuntime: () => isElectrobunRuntimeMock(),
+    },
+    desktopBugReportMockModule: {
+      loadDesktopBugReportDiagnostics: (...args: unknown[]) =>
+        loadDesktopBugReportDiagnosticsMock(...args),
+      openDesktopLogsFolder: (...args: unknown[]) =>
+        openDesktopLogsFolderMock(...args),
+      createDesktopBugReportBundle: (...args: unknown[]) =>
+        createDesktopBugReportBundleMock(...args),
+      formatDesktopBugReportDiagnostics: (diagnostics: {
+        phase: string;
+        lastError: string | null;
+      }) =>
+        `Startup Phase: ${diagnostics.phase}\nLast Error: ${diagnostics.lastError ?? "none"}`,
+    },
+  };
+});
 
 const mockSetTimeout = (fn: () => void, ms: number) =>
   globalThis.setTimeout(fn, ms);
@@ -149,25 +178,12 @@ vi.mock("@miladyai/app-core/utils", () => ({
   openExternalUrl: vi.fn(),
 }));
 
-const bridgeMockModule = {
-  isElectrobunRuntime: () => isElectrobunRuntimeMock(),
-};
-
-const desktopBugReportMockModule = {
-  loadDesktopBugReportDiagnostics: (...args: unknown[]) =>
-    loadDesktopBugReportDiagnosticsMock(...args),
-  openDesktopLogsFolder: (...args: unknown[]) =>
-    openDesktopLogsFolderMock(...args),
-  createDesktopBugReportBundle: (...args: unknown[]) =>
-    createDesktopBugReportBundleMock(...args),
-  formatDesktopBugReportDiagnostics: (diagnostics: {
-    phase: string;
-    lastError: string | null;
-  }) =>
-    `Startup Phase: ${diagnostics.phase}\nLast Error: ${diagnostics.lastError ?? "none"}`,
-};
-
+vi.mock("../../src/bridge", () => bridgeMockModule);
 vi.mock("../../src/bridge/index.ts", () => bridgeMockModule);
+vi.mock(
+  "../../src/utils/desktop-bug-report",
+  () => desktopBugReportMockModule,
+);
 vi.mock(
   "../../src/utils/desktop-bug-report.ts",
   () => desktopBugReportMockModule,
@@ -208,6 +224,7 @@ function disableElectrobunRuntime(): void {
     __electrobunWindowId?: number;
     __MILADY_ELECTROBUN_RPC__?: unknown;
   };
+  isElectrobunRuntimeMock.mockReturnValue(false);
   delete runtimeWindow.__electrobunWindowId;
   delete runtimeWindow.__MILADY_ELECTROBUN_RPC__;
 }
@@ -221,6 +238,7 @@ function enableElectrobunRuntime(): void {
       offMessage: typeof vi.fn;
     };
   };
+  isElectrobunRuntimeMock.mockReturnValue(true);
   runtimeWindow.__electrobunWindowId = 1;
   runtimeWindow.__MILADY_ELECTROBUN_RPC__ = {
     request: {

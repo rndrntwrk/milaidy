@@ -37,13 +37,13 @@ function makeApp(
 }
 
 describe("apps catalog helpers", () => {
-  it("hides non-curated games from the apps view", () => {
+  it("shows app-capable games without a host-maintained allowlist", () => {
     expect(
       shouldShowAppInAppsView(
         makeApp({ name: "@elizaos/app-unlisted-game" }),
         false,
       ),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       shouldShowAppInAppsView(
         makeApp({ name: "@hyperscape/plugin-hyperscape" }),
@@ -64,7 +64,7 @@ describe("apps catalog helpers", () => {
     ).toBe(true);
   });
 
-  it("uses the same curated allowlist in production", () => {
+  it("uses the same visibility rules in production", () => {
     expect(
       shouldShowAppInAppsView(
         makeApp({ name: "@hyperscape/plugin-hyperscape" }),
@@ -82,10 +82,10 @@ describe("apps catalog helpers", () => {
         makeApp({ name: "@elizaos/app-unlisted-game" }),
         true,
       ),
-    ).toBe(false);
+    ).toBe(true);
   });
 
-  it("keeps curated games and non-game apps in the catalog", () => {
+  it("keeps all valid apps in the catalog", () => {
     const visibleApps = filterAppsForCatalog(
       [
         makeApp({
@@ -110,13 +110,14 @@ describe("apps catalog helpers", () => {
     );
 
     expect(visibleApps.map((app) => app.name)).toEqual([
+      "@elizaos/app-unlisted-game",
       "@hyperscape/plugin-hyperscape",
       "@elizaos/app-defense-of-the-agents",
       "@elizaos/app-babylon",
     ]);
   });
 
-  it("defaults selection to the first visible app instead of a filtered game", () => {
+  it("defaults selection to the first visible app", () => {
     expect(
       getDefaultAppsCatalogSelection(
         [
@@ -131,6 +132,6 @@ describe("apps catalog helpers", () => {
         ],
         false,
       ),
-    ).toBe("@hyperscape/plugin-hyperscape");
+    ).toBe("@elizaos/app-unlisted-game");
   });
 });

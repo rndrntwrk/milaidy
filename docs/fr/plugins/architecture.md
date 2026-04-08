@@ -29,8 +29,8 @@ export const CORE_PLUGINS: readonly string[] = [
   "@elizaos/plugin-sql",               // database adapter — required
   "@elizaos/plugin-local-embedding",   // local embeddings — required for memory
   "@elizaos/plugin-form",              // form handling for guided user journeys
-  "@elizaos/plugin-knowledge",         // RAG knowledge management — required for knowledge tab
-  "@elizaos/plugin-trajectory-logger", // trajectory logging for debugging and RL training
+  "knowledge",         // RAG knowledge management — required for knowledge tab
+  "trajectories", // trajectory logging for debugging and RL training
   "@elizaos/plugin-agent-orchestrator",// multi-agent orchestration (PTY, SwarmCoordinator)
   "@elizaos/plugin-cron",              // scheduled jobs and automation
   "@elizaos/plugin-shell",             // shell command execution
@@ -41,7 +41,7 @@ export const CORE_PLUGINS: readonly string[] = [
 ];
 ```
 
-> **Remarque :** `@elizaos/plugin-secrets-manager`, `@elizaos/plugin-rolodex`, `@elizaos/plugin-trust`, `@elizaos/plugin-personality` et `@elizaos/plugin-experience` sont importés statiquement pour une résolution rapide mais commentés dans la liste principale. Ils pourraient être réactivés dans une version future. `@elizaos/plugin-todo` a été retiré ; la fonctionnalité todo est désormais gérée par l'API workbench via les tâches runtime.
+> **Remarque :** `@elizaos/plugin-secrets-manager`, `relationships`, `@elizaos/plugin-trust`, `@elizaos/plugin-personality` et `@elizaos/plugin-experience` sont importés statiquement pour une résolution rapide mais commentés dans la liste principale. Ils pourraient être réactivés dans une version future. `@elizaos/plugin-todo` a été retiré ; la fonctionnalité todo est désormais gérée par l'API workbench via les tâches runtime.
 
 <div id="optional-core-plugins">
 

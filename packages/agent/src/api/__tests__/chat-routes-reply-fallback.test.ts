@@ -184,4 +184,19 @@ describe("generateChatResponse fallback recovery", () => {
       "[eliza-api] Recovering from unexecuted action payload",
     );
   });
+
+  it("fails fast when generation exceeds the configured timeout", async () => {
+    const runtime = createRuntimeForChatRouteTests({
+      handleMessage: async () =>
+        await new Promise<never>(() => {
+          // Intentionally never resolves.
+        }),
+    });
+
+    await expect(
+      generateChatResponse(runtime, createUserMessage("hello"), "ChatRouteAgent", {
+        timeoutDuration: 1_000,
+      }),
+    ).rejects.toThrow("Chat generation timed out after 1000ms");
+  });
 });

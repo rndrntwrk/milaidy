@@ -60,8 +60,22 @@ describe("Permissions API E2E", () => {
   let close: () => Promise<void>;
   let tempDir = "";
   let hostsFilePath = "";
+  let stateDir = "";
+  let envBackup: { restore: () => void };
 
   beforeAll(async () => {
+    envBackup = saveEnv(
+      "ELIZA_STATE_DIR",
+      "MILADY_STATE_DIR",
+      "ELIZA_CONFIG_PATH",
+      "MILADY_CONFIG_PATH",
+    );
+    stateDir = await fs.mkdtemp(path.join(os.tmpdir(), "milady-permissions-state-"));
+    process.env.ELIZA_STATE_DIR = stateDir;
+    process.env.MILADY_STATE_DIR = stateDir;
+    delete process.env.ELIZA_CONFIG_PATH;
+    delete process.env.MILADY_CONFIG_PATH;
+
     // Start server without auth token for simpler testing
     const result = await startApiServer({ port: 0 });
     port = result.port;
@@ -90,6 +104,10 @@ describe("Permissions API E2E", () => {
 
   afterAll(async () => {
     await close();
+    envBackup.restore();
+    if (stateDir) {
+      await fs.rm(stateDir, { recursive: true, force: true });
+    }
   });
 
   // ─────────────────────────────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 /**
- * Skills domain methods — skills, catalog, marketplace, apps, Hyperscape,
- * Babylon, custom actions, WhatsApp, agent events.
+ * Skills domain methods — skills, catalog, marketplace, apps, Babylon,
+ * custom actions, WhatsApp, agent events.
  */
 
 import type { CustomActionDef } from "@miladyai/agent/contracts/config";
@@ -40,15 +40,6 @@ import type {
   BabylonWallet,
   CatalogSearchResult,
   CatalogSkill,
-  HyperscapeActionResponse,
-  HyperscapeAgentGoalResponse,
-  HyperscapeAgentThoughtsResponse,
-  HyperscapeEmbeddedAgentControlAction,
-  HyperscapeEmbeddedAgentMutationResponse,
-  HyperscapeEmbeddedAgentsResponse,
-  HyperscapeJsonValue,
-  HyperscapeQuickActionsResponse,
-  HyperscapeScriptedRole,
   InstalledAppInfo,
   InstalledPlugin,
   PluginInstallResult,
@@ -239,35 +230,6 @@ declare module "./client-base" {
     ): Promise<AppSessionActionResult>;
     listRegistryPlugins(): Promise<RegistryPluginItem[]>;
     searchRegistryPlugins(query: string): Promise<RegistryPluginItem[]>;
-    listHyperscapeEmbeddedAgents(): Promise<HyperscapeEmbeddedAgentsResponse>;
-    createHyperscapeEmbeddedAgent(input: {
-      characterId: string;
-      autoStart?: boolean;
-      scriptedRole?: HyperscapeScriptedRole;
-    }): Promise<HyperscapeEmbeddedAgentMutationResponse>;
-    controlHyperscapeEmbeddedAgent(
-      characterId: string,
-      action: HyperscapeEmbeddedAgentControlAction,
-    ): Promise<HyperscapeEmbeddedAgentMutationResponse>;
-    sendHyperscapeEmbeddedAgentCommand(
-      characterId: string,
-      command: string,
-      data?: { [key: string]: HyperscapeJsonValue },
-    ): Promise<HyperscapeActionResponse>;
-    sendHyperscapeAgentMessage(
-      agentId: string,
-      content: string,
-    ): Promise<HyperscapeActionResponse>;
-    getHyperscapeAgentGoal(
-      agentId: string,
-    ): Promise<HyperscapeAgentGoalResponse>;
-    getHyperscapeAgentQuickActions(
-      agentId: string,
-    ): Promise<HyperscapeQuickActionsResponse>;
-    getHyperscapeAgentThoughts(
-      agentId: string,
-      options?: { limit?: number; since?: number },
-    ): Promise<HyperscapeAgentThoughtsResponse>;
     listCustomActions(): Promise<CustomActionDef[]>;
     createCustomAction(
       action: Omit<CustomActionDef, "id" | "createdAt" | "updatedAt">,
@@ -886,98 +848,6 @@ MiladyClient.prototype.searchRegistryPlugins = async function (
   query,
 ) {
   return this.fetch(`/api/apps/plugins/search?q=${encodeURIComponent(query)}`);
-};
-
-MiladyClient.prototype.listHyperscapeEmbeddedAgents = async function (
-  this: MiladyClient,
-) {
-  return this.fetch("/api/apps/hyperscape/embedded-agents");
-};
-
-MiladyClient.prototype.createHyperscapeEmbeddedAgent = async function (
-  this: MiladyClient,
-  input,
-) {
-  return this.fetch("/api/apps/hyperscape/embedded-agents", {
-    method: "POST",
-    body: JSON.stringify(input),
-  });
-};
-
-MiladyClient.prototype.controlHyperscapeEmbeddedAgent = async function (
-  this: MiladyClient,
-  characterId,
-  action,
-) {
-  return this.fetch(
-    `/api/apps/hyperscape/embedded-agents/${encodeURIComponent(characterId)}/${action}`,
-    { method: "POST" },
-  );
-};
-
-MiladyClient.prototype.sendHyperscapeEmbeddedAgentCommand = async function (
-  this: MiladyClient,
-  characterId,
-  command,
-  data?,
-) {
-  return this.fetch(
-    `/api/apps/hyperscape/embedded-agents/${encodeURIComponent(characterId)}/command`,
-    {
-      method: "POST",
-      body: JSON.stringify({ command, data }),
-    },
-  );
-};
-
-MiladyClient.prototype.sendHyperscapeAgentMessage = async function (
-  this: MiladyClient,
-  agentId,
-  content,
-) {
-  return this.fetch(
-    `/api/apps/hyperscape/agents/${encodeURIComponent(agentId)}/message`,
-    {
-      method: "POST",
-      body: JSON.stringify({ content }),
-    },
-  );
-};
-
-MiladyClient.prototype.getHyperscapeAgentGoal = async function (
-  this: MiladyClient,
-  agentId,
-) {
-  return this.fetch(
-    `/api/apps/hyperscape/agents/${encodeURIComponent(agentId)}/goal`,
-  );
-};
-
-MiladyClient.prototype.getHyperscapeAgentQuickActions = async function (
-  this: MiladyClient,
-  agentId,
-) {
-  return this.fetch(
-    `/api/apps/hyperscape/agents/${encodeURIComponent(agentId)}/quick-actions`,
-  );
-};
-
-MiladyClient.prototype.getHyperscapeAgentThoughts = async function (
-  this: MiladyClient,
-  agentId,
-  options,
-) {
-  const params = new URLSearchParams();
-  if (typeof options?.limit === "number" && Number.isFinite(options.limit)) {
-    params.set("limit", String(Math.max(1, Math.trunc(options.limit))));
-  }
-  if (typeof options?.since === "number" && Number.isFinite(options.since)) {
-    params.set("since", String(Math.max(0, Math.trunc(options.since))));
-  }
-  const suffix = params.size > 0 ? `?${params.toString()}` : "";
-  return this.fetch(
-    `/api/apps/hyperscape/agents/${encodeURIComponent(agentId)}/thoughts${suffix}`,
-  );
 };
 
 MiladyClient.prototype.listCustomActions = async function (this: MiladyClient) {

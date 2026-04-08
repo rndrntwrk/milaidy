@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import type { IAgentRuntime } from "@elizaos/core";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { describeIf } from "../../../test/helpers/conditional-tests.ts";
 import { saveEnv } from "../../../test/helpers/test-utils";
 import { ManagedGoogleClientError } from "../src/lifeops/google-managed-client";
 import {
@@ -10,16 +11,7 @@ import {
   LifeOpsRepository,
 } from "../src/lifeops/repository";
 import { LifeOpsService } from "../src/lifeops/service";
-
-let DatabaseSync: typeof import("node:sqlite").DatabaseSync;
-const hasNodeSqlite = await (async () => {
-  try {
-    ({ DatabaseSync } = await import("node:sqlite"));
-    return true;
-  } catch {
-    return false;
-  }
-})();
+import { DatabaseSync, hasSqlite } from "../src/test-utils/sqlite-compat";
 
 type SqlQuery = {
   queryChunks?: Array<{ value?: unknown }>;
@@ -143,7 +135,7 @@ async function seedManagedGoogleGrant(args: {
   );
 }
 
-describe.skipIf(!hasNodeSqlite)("life-ops Google mode preference", () => {
+describeIf(hasSqlite)("life-ops Google mode preference", () => {
   let databasePath = "";
   let envBackup: { restore: () => void };
 

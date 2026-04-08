@@ -1070,7 +1070,7 @@ function AppProviderInner({
     tab,
     setTabRaw,
     uiShellMode,
-    activeGameViewerUrl,
+    hasActiveGameRun: activeGameRunId.trim().length > 0,
     setAppsSubTab,
   });
   const {

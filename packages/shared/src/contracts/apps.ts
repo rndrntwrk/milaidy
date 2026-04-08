@@ -46,6 +46,23 @@ export interface AppViewerAuthMessage {
   followEntity?: string;
 }
 
+export interface AppSessionRecommendation {
+  id: string;
+  label: string;
+  type?: string;
+  reason?: string | null;
+  priority?: number | null;
+  command?: string | null;
+}
+
+export interface AppSessionActivityItem {
+  id: string;
+  type: string;
+  message: string;
+  timestamp?: number | null;
+  severity?: "info" | "warning" | "error";
+}
+
 export interface AppViewerConfig {
   url: string;
   embedParams?: Record<string, string>;
@@ -73,6 +90,8 @@ export interface AppSessionState {
   summary?: string | null;
   goalLabel?: string | null;
   suggestedPrompts?: string[];
+  recommendations?: AppSessionRecommendation[];
+  activity?: AppSessionActivityItem[];
   telemetry?: Record<string, AppSessionJsonValue> | null;
 }
 
@@ -159,6 +178,12 @@ export interface AppLaunchDiagnostic {
   code: string;
   severity: AppLaunchDiagnosticSeverity;
   message: string;
+}
+
+export interface AppLaunchPreparation {
+  diagnostics?: AppLaunchDiagnostic[];
+  launchUrl?: string | null;
+  viewer?: Omit<AppViewerConfig, "authMessage"> | null;
 }
 
 export interface AppLaunchResult {

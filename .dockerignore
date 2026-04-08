@@ -1,6 +1,6 @@
-# Default dockerignore for developer builds and the checked-in full cloud image.
-# Keep workspaces required by deploy/Dockerfile in the build context so Bun can
-# resolve the declared monorepo packages before the image build runs.
+# CI-specific dockerignore for Dockerfile.ci
+# Unlike .dockerignore, this allows dist/ and apps/app/dist/ in the build context
+# because they are pre-built by GitHub Actions before the docker build step.
 
 .git
 .github
@@ -8,13 +8,17 @@
 .devin
 .vscode
 .idea
+.eliza.ci-disabled
 .env
 .env.local
 .env.*.local
-node_modules/
-**/node_modules/
 node_modules/.cache
 apps/app/android
+apps/app/ios
+apps/app/electrobun
+apps/app/screenshots
+apps/app/test-results
+apps/homepage
 apps/home
 apps/landing
 apps/chrome-extension
@@ -26,6 +30,9 @@ install.sh
 install.ps1
 packaging/
 artifacts/
+.docker-home
+.tmp
+.milady
 Dockerfile
 Dockerfile.alpha89
 Dockerfile.fixed

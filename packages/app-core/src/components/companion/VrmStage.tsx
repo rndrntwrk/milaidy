@@ -5,7 +5,14 @@ import {
 } from "@miladyai/app-core/events";
 import { useRenderGuard } from "@miladyai/app-core/hooks";
 import { resolveAppAssetUrl } from "@miladyai/app-core/utils";
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import {
+  memo,
+  type ReactElement,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import type {
   CompanionHalfFramerateMode,
   CompanionVrmPowerMode,
@@ -63,7 +70,7 @@ export const VrmStage = memo(function VrmStage({
   companionVrmPowerMode?: CompanionVrmPowerMode;
   companionHalfFramerateMode?: CompanionHalfFramerateMode;
   companionAnimateWhenHidden?: boolean;
-  viewerComponent?: (props: VrmViewerProps) => JSX.Element;
+  viewerComponent?: (props: VrmViewerProps) => ReactElement;
   t: TranslateFn;
 }) {
   useRenderGuard("VrmStage");

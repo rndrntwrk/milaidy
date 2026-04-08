@@ -336,7 +336,7 @@ La compactación de contexto (resumen del historial más antiguo) es gestionada 
 
 </div>
 
-`@elizaos/plugin-knowledge` proporciona gestión de conocimiento RAG. Se carga al inicio como un plugin central y se integra con el almacén de memoria para recuperar fragmentos de conocimiento por similitud vectorial en cada turno relevante.
+`knowledge` proporciona gestión de conocimiento RAG. Se carga al inicio como un plugin central y se integra con el almacén de memoria para recuperar fragmentos de conocimiento por similitud vectorial en cada turno relevante.
 
 <div id="related-pages">
 

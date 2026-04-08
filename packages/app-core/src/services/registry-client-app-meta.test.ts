@@ -221,14 +221,36 @@ describe("registry-client-app-meta", () => {
       );
     });
 
-    it("applies override for known package @hyperscape/plugin-hyperscape", () => {
-      const result = resolveAppOverride("@hyperscape/plugin-hyperscape", undefined);
-      expect(result).toBeDefined();
-      expect(result?.launchType).toBe("connect");
-      expect(result?.viewer?.embedParams?.surface).toBe("agent-control");
-      expect(result?.uiExtension?.detailPanelId).toBe(
-        "hyperscape-embedded-agent-control",
+    it("does not synthesize standalone metadata for Hyperscape host surfaces", () => {
+      expect(
+        resolveAppOverride("@hyperscape/plugin-hyperscape", undefined),
+      ).toBeUndefined();
+    });
+
+    it("merges host-owned overrides into existing Hyperscape metadata", () => {
+      const existing: RegistryAppMeta = {
+        displayName: "Hyperscape",
+        category: "game",
+        launchType: "connect",
+        launchUrl: "http://localhost:3333",
+        icon: null,
+        capabilities: ["combat", "crafting"],
+        minPlayers: null,
+        maxPlayers: null,
+      };
+      const result = resolveAppOverride(
+        "@hyperscape/plugin-hyperscape",
+        existing,
       );
+      expect(result?.launchType).toBe("connect");
+      expect(result?.capabilities).toEqual(["combat", "crafting"]);
+      expect(result?.uiExtension?.detailPanelId).toBe(
+        "hyperscape-embedded-agents",
+      );
+      expect(result?.session).toEqual({
+        mode: "spectate-and-steer",
+        features: ["commands", "telemetry", "pause", "resume", "suggestions"],
+      });
     });
 
     it("applies override for known package @elizaos/app-2004scape", () => {

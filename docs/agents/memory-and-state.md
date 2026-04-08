@@ -245,7 +245,7 @@ Distinct from compaction, context pruning removes old tool results to reduce tok
 
 ## Knowledge Integration
 
-`@elizaos/plugin-knowledge` provides RAG (Retrieval-Augmented Generation) knowledge management. It is loaded as a core plugin and integrates with the memory system to inject relevant knowledge chunks into agent context based on vector similarity.
+`knowledge` provides RAG (Retrieval-Augmented Generation) knowledge management. It is loaded as a core plugin and integrates with the memory system to inject relevant knowledge chunks into agent context based on vector similarity.
 
 ## Related Pages
 

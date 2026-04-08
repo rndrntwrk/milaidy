@@ -1,7 +1,6 @@
 import { Button, Input } from "@miladyai/ui";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  client,
   type BabylonActivityItem,
   type BabylonAgentGoal,
   type BabylonAgentStatus,
@@ -9,16 +8,17 @@ import {
   type BabylonPredictionMarket,
   type BabylonTeamAgent,
   type BabylonWallet,
+  client,
 } from "../../../api";
 import { useApp } from "../../../state";
 import {
   formatDetailTimestamp,
-  selectLatestRunForApp,
   SurfaceBadge,
   SurfaceCard,
   SurfaceEmptyState,
   SurfaceGrid,
   SurfaceSection,
+  selectLatestRunForApp,
   toneForHealthState,
   toneForStatusText,
   toneForViewerAttachment,
@@ -155,6 +155,7 @@ function summarizeActivity(item: BabylonActivityItem): string {
 export function BabylonOperatorSurface({
   appName,
   variant = "detail",
+  focus = "all",
 }: AppOperatorSurfaceProps) {
   const { appRuns } = useApp();
   const { run, matchingRuns } = useMemo(
@@ -198,7 +199,18 @@ export function BabylonOperatorSurface({
   const surfaceTitle =
     variant === "live"
       ? "Babylon Live Dashboard"
-      : "Babylon Operator Dashboard";
+      : variant === "running"
+        ? "Babylon Run Dashboard"
+        : "Babylon Operator Dashboard";
+  const showDashboard = focus !== "chat";
+  const showChat = focus !== "dashboard";
+  const controlAction = run?.session?.controls?.includes("pause")
+    ? "pause"
+    : run?.session?.controls?.includes("resume")
+      ? "resume"
+      : agentStatus?.autonomous
+        ? "pause"
+        : "resume";
 
   const loadDashboard = useCallback(async () => {
     if (!run) return;
@@ -278,14 +290,13 @@ export function BabylonOperatorSurface({
     if (!run) return;
     setStatusMessage(null);
     try {
-      await client.toggleBabylonAgent(
-        agentStatus?.autonomous ? "pause" : "resume",
-      );
+      const response = await client.controlAppRun(run.runId, controlAction);
       await loadDashboard();
       setStatusMessage(
-        agentStatus?.autonomous
-          ? "Babylon autonomy paused."
-          : "Babylon autonomy resumed.",
+        response.message ??
+          (controlAction === "pause"
+            ? "Babylon autonomy paused."
+            : "Babylon autonomy resumed."),
       );
     } catch (error) {
       setStatusMessage(
@@ -294,7 +305,7 @@ export function BabylonOperatorSurface({
           : "Failed to update Babylon autonomy.",
       );
     }
-  }, [agentStatus?.autonomous, loadDashboard, run]);
+  }, [controlAction, loadDashboard, run]);
 
   const handleSendChat = useCallback(async () => {
     const content = chatInput.trim();
@@ -303,7 +314,7 @@ export function BabylonOperatorSurface({
     setSending(true);
     setStatusMessage(null);
     try {
-      const result = await client.sendBabylonAgentChat(content);
+      const result = await client.sendAppRunMessage(run.runId, content);
       setChatInput("");
       setStatusMessage(result.message ?? "Suggestion sent to Babylon.");
       await loadDashboard();
@@ -326,7 +337,7 @@ export function BabylonOperatorSurface({
       setSending(true);
       setStatusMessage(null);
       try {
-        const result = await client.sendBabylonAgentChat(content);
+        const result = await client.sendAppRunMessage(run.runId, content);
         setStatusMessage(result.message ?? "Suggestion sent to Babylon.");
         await loadDashboard();
       } catch (error) {
@@ -357,7 +368,9 @@ export function BabylonOperatorSurface({
       data-testid={
         variant === "live"
           ? "babylon-live-operator-surface"
-          : "babylon-detail-operator-surface"
+          : variant === "running"
+            ? "babylon-running-operator-surface"
+            : "babylon-detail-operator-surface"
       }
     >
       <div className="flex flex-wrap items-center gap-2">
@@ -378,215 +391,223 @@ export function BabylonOperatorSurface({
         </span>
       </div>
 
-      <SurfaceSection title="Live Status">
-        <SurfaceGrid>
-          <SurfaceCard
-            label="Agent"
-            value={agentStatus?.displayName ?? agentStatus?.name ?? "Waiting"}
-            subtitle={
-              agentStatus
-                ? `${agentStatus.agentStatus ?? "idle"} · ${agentStatus.autonomous ? "autonomous" : "operator-led"}`
-                : "The Babylon agent has not published status yet."
-            }
-          />
-          <SurfaceCard
-            label="Current Focus"
-            value={activeGoal?.description ?? "No active goal recorded."}
-            subtitle={
-              activeGoal
-                ? activeGoal.progress != null
-                  ? `${activeGoal.status} · ${activeGoal.progress.toFixed(0)}%`
-                  : activeGoal.status
-                : undefined
-            }
-          />
-          <SurfaceCard
-            label="Portfolio"
-            value={
-              agentPortfolio
-                ? `${formatCurrency(agentPortfolio.totalAssets)} total assets`
-                : "Portfolio not available yet."
-            }
-            subtitle={
-              agentPortfolio
-                ? `${agentPortfolio.positions} positions · ${formatPnL(agentPortfolio.totalPnL)} total PnL`
-                : undefined
-            }
-          />
-          <SurfaceCard
-            label="Team Coordination"
-            value={
-              teamDashboard.summary?.ownerName ??
-              `${teamDashboard.agents.length} team agents observed`
-            }
-            subtitle={
-              teamTotals
-                ? `${formatCurrency(teamTotals.walletBalance)} wallet · ${teamTotals.openPositions} open positions`
-                : "Team summary is not available yet."
-            }
-          />
-        </SurfaceGrid>
-      </SurfaceSection>
-
-      <SurfaceSection title="Market Watch">
-        <SurfaceCard
-          label="Prediction Markets"
-          value={listPreview(predictionMarkets)}
-        />
-        <div className="grid gap-2 md:grid-cols-3">
-          {recentTrades.slice(0, 3).map((trade) => (
+      {showDashboard ? (
+        <SurfaceSection title="Live Status">
+          <SurfaceGrid>
             <SurfaceCard
-              key={trade.id}
-              label={summarizeActivity(trade)}
-              value={formatDetailTimestamp(trade.timestamp)}
+              label="Agent"
+              value={agentStatus?.displayName ?? agentStatus?.name ?? "Waiting"}
               subtitle={
-                trade.pnl != null ? `PnL ${formatPnL(trade.pnl)}` : undefined
+                agentStatus
+                  ? `${agentStatus.agentStatus ?? "idle"} · ${agentStatus.autonomous ? "autonomous" : "operator-led"}`
+                  : "The Babylon agent has not published status yet."
               }
             />
-          ))}
-          {recentTrades.length === 0 ? (
             <SurfaceCard
-              label="Recent Trades"
-              value="No recent trades recorded."
-            />
-          ) : null}
-        </div>
-      </SurfaceSection>
-
-      <SurfaceSection title="Team & Chat">
-        <div className="grid gap-2 md:grid-cols-2">
-          <SurfaceCard
-            label="Team Conversations"
-            value={
-              teamConversations.length > 0
-                ? teamConversations
-                    .slice(0, 3)
-                    .map((conversation) => conversation.name || "Untitled")
-                    .join(" · ")
-                : "No team conversations yet."
-            }
-            subtitle={
-              teamConversations.length > 0
-                ? `${teamConversations.filter((conversation) => conversation.isActive).length} active`
-                : undefined
-            }
-          />
-          <SurfaceCard
-            label="Operator Channel"
-            value={
-              run.session?.canSendCommands
-                ? "Ready for live suggestions."
-                : "Command bridge reconnecting."
-            }
-            subtitle={formatDetailTimestamp(
-              run.lastHeartbeatAt ?? run.updatedAt,
-            )}
-          />
-        </div>
-        <div className="space-y-2">
-          {agentChatMessages.slice(-3).map((message) => (
-            <div
-              key={message.id}
-              className="rounded-xl border border-border/30 bg-bg/60 px-3 py-2"
-            >
-              <div className="flex items-center gap-2 text-[10px] text-muted">
-                <span className="uppercase">
-                  {message.senderName ?? message.senderId}
-                </span>
-                <span className="ml-auto">
-                  {formatDetailTimestamp(message.createdAt)}
-                </span>
-              </div>
-              <div className="mt-1 whitespace-pre-wrap text-[11px] leading-5 text-txt">
-                {message.content}
-              </div>
-            </div>
-          ))}
-          {agentChatMessages.length === 0 ? (
-            <div className="rounded-xl border border-border/30 bg-bg/60 px-3 py-2 text-[11px] italic text-muted">
-              No agent chat history yet.
-            </div>
-          ) : null}
-        </div>
-      </SurfaceSection>
-
-      <SurfaceSection title="Steering">
-        {run.session?.suggestedPrompts?.length ? (
-          <div className="flex flex-wrap gap-2">
-            {run.session.suggestedPrompts.slice(0, 4).map((prompt) => (
-              <Button
-                key={prompt}
-                type="button"
-                variant="outline"
-                size="sm"
-                className="min-h-10 rounded-xl px-3 shadow-sm"
-                onClick={() => void handleSuggestedPrompt(prompt)}
-              >
-                {prompt}
-              </Button>
-            ))}
-          </div>
-        ) : null}
-        <div className="grid gap-2 md:grid-cols-2">
-          <SurfaceCard
-            label="Autonomy"
-            value={
-              agentStatus?.autonomous
-                ? "Autonomous play is active."
-                : "Agent is paused or operator-led."
-            }
-            subtitle={
-              agentStatus
-                ? `${agentStatus.autonomousTrading ? "Trading" : "Trading paused"} · ${agentStatus.autonomousPosting ? "Posting" : "Posting paused"}`
-                : undefined
-            }
-          />
-          <SurfaceCard
-            label="Wallet"
-            value={
-              wallet ? formatCurrency(wallet.balance) : "Waiting for wallet"
-            }
-            subtitle={
-              wallet
-                ? `${wallet.transactions.length} transactions · trading ${formatCurrency(tradingBalance)}`
-                : undefined
-            }
-          />
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="min-h-10 rounded-xl px-3 shadow-sm"
-            onClick={() => void handleToggleAgent()}
-          >
-            {agentStatus?.autonomous ? "Pause agent" : "Resume agent"}
-          </Button>
-        </div>
-        <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
-          <Input
-            value={chatInput}
-            onChange={(event) => setChatInput(event.target.value)}
-            placeholder="Tell Babylon what to prioritize, avoid, or explain."
-            className="min-h-11 rounded-xl"
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey) {
-                event.preventDefault();
-                void handleSendChat();
+              label="Current Focus"
+              value={activeGoal?.description ?? "No active goal recorded."}
+              subtitle={
+                activeGoal
+                  ? activeGoal.progress != null
+                    ? `${activeGoal.status} · ${activeGoal.progress.toFixed(0)}%`
+                    : activeGoal.status
+                  : undefined
               }
-            }}
+            />
+            <SurfaceCard
+              label="Portfolio"
+              value={
+                agentPortfolio
+                  ? `${formatCurrency(agentPortfolio.totalAssets)} total assets`
+                  : "Portfolio not available yet."
+              }
+              subtitle={
+                agentPortfolio
+                  ? `${agentPortfolio.positions} positions · ${formatPnL(agentPortfolio.totalPnL)} total PnL`
+                  : undefined
+              }
+            />
+            <SurfaceCard
+              label="Team Coordination"
+              value={
+                teamDashboard.summary?.ownerName ??
+                `${teamDashboard.agents.length} team agents observed`
+              }
+              subtitle={
+                teamTotals
+                  ? `${formatCurrency(teamTotals.walletBalance)} wallet · ${teamTotals.openPositions} open positions`
+                  : "Team summary is not available yet."
+              }
+            />
+          </SurfaceGrid>
+        </SurfaceSection>
+      ) : null}
+
+      {showDashboard ? (
+        <SurfaceSection title="Market Watch">
+          <SurfaceCard
+            label="Prediction Markets"
+            value={listPreview(predictionMarkets)}
           />
-          <Button
-            type="button"
-            className="min-h-11 rounded-xl px-4 shadow-sm"
-            onClick={() => void handleSendChat()}
-            disabled={sending || chatInput.trim().length === 0}
-          >
-            {sending ? "Sending" : "Send"}
-          </Button>
-        </div>
-      </SurfaceSection>
+          <div className="grid gap-2 md:grid-cols-3">
+            {recentTrades.slice(0, 3).map((trade) => (
+              <SurfaceCard
+                key={trade.id}
+                label={summarizeActivity(trade)}
+                value={formatDetailTimestamp(trade.timestamp)}
+                subtitle={
+                  trade.pnl != null ? `PnL ${formatPnL(trade.pnl)}` : undefined
+                }
+              />
+            ))}
+            {recentTrades.length === 0 ? (
+              <SurfaceCard
+                label="Recent Trades"
+                value="No recent trades recorded."
+              />
+            ) : null}
+          </div>
+        </SurfaceSection>
+      ) : null}
+
+      {showChat ? (
+        <SurfaceSection title="Team & Chat">
+          <div className="grid gap-2 md:grid-cols-2">
+            <SurfaceCard
+              label="Team Conversations"
+              value={
+                teamConversations.length > 0
+                  ? teamConversations
+                      .slice(0, 3)
+                      .map((conversation) => conversation.name || "Untitled")
+                      .join(" · ")
+                  : "No team conversations yet."
+              }
+              subtitle={
+                teamConversations.length > 0
+                  ? `${teamConversations.filter((conversation) => conversation.isActive).length} active`
+                  : undefined
+              }
+            />
+            <SurfaceCard
+              label="Operator Channel"
+              value={
+                run.session?.canSendCommands
+                  ? "Ready for live suggestions."
+                  : "Command bridge reconnecting."
+              }
+              subtitle={formatDetailTimestamp(
+                run.lastHeartbeatAt ?? run.updatedAt,
+              )}
+            />
+          </div>
+          <div className="space-y-2">
+            {agentChatMessages.slice(-3).map((message) => (
+              <div
+                key={message.id}
+                className="rounded-xl border border-border/30 bg-bg/60 px-3 py-2"
+              >
+                <div className="flex items-center gap-2 text-[10px] text-muted">
+                  <span className="uppercase">
+                    {message.senderName ?? message.senderId}
+                  </span>
+                  <span className="ml-auto">
+                    {formatDetailTimestamp(message.createdAt)}
+                  </span>
+                </div>
+                <div className="mt-1 whitespace-pre-wrap text-[11px] leading-5 text-txt">
+                  {message.content}
+                </div>
+              </div>
+            ))}
+            {agentChatMessages.length === 0 ? (
+              <div className="rounded-xl border border-border/30 bg-bg/60 px-3 py-2 text-[11px] italic text-muted">
+                No agent chat history yet.
+              </div>
+            ) : null}
+          </div>
+        </SurfaceSection>
+      ) : null}
+
+      {showChat ? (
+        <SurfaceSection title="Steering">
+          {run.session?.suggestedPrompts?.length ? (
+            <div className="flex flex-wrap gap-2">
+              {run.session.suggestedPrompts.slice(0, 4).map((prompt) => (
+                <Button
+                  key={prompt}
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="min-h-10 rounded-xl px-3 shadow-sm"
+                  onClick={() => void handleSuggestedPrompt(prompt)}
+                >
+                  {prompt}
+                </Button>
+              ))}
+            </div>
+          ) : null}
+          <div className="grid gap-2 md:grid-cols-2">
+            <SurfaceCard
+              label="Autonomy"
+              value={
+                agentStatus?.autonomous
+                  ? "Autonomous play is active."
+                  : "Agent is paused or operator-led."
+              }
+              subtitle={
+                agentStatus
+                  ? `${agentStatus.autonomousTrading ? "Trading" : "Trading paused"} · ${agentStatus.autonomousPosting ? "Posting" : "Posting paused"}`
+                  : undefined
+              }
+            />
+            <SurfaceCard
+              label="Wallet"
+              value={
+                wallet ? formatCurrency(wallet.balance) : "Waiting for wallet"
+              }
+              subtitle={
+                wallet
+                  ? `${wallet.transactions.length} transactions · trading ${formatCurrency(tradingBalance)}`
+                  : undefined
+              }
+            />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="min-h-10 rounded-xl px-3 shadow-sm"
+              onClick={() => void handleToggleAgent()}
+            >
+              {controlAction === "pause" ? "Pause agent" : "Resume agent"}
+            </Button>
+          </div>
+          <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_auto]">
+            <Input
+              value={chatInput}
+              onChange={(event) => setChatInput(event.target.value)}
+              placeholder="Tell Babylon what to prioritize, avoid, or explain."
+              className="min-h-11 rounded-xl"
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault();
+                  void handleSendChat();
+                }
+              }}
+            />
+            <Button
+              type="button"
+              className="min-h-11 rounded-xl px-4 shadow-sm"
+              onClick={() => void handleSendChat()}
+              disabled={sending || chatInput.trim().length === 0}
+            >
+              {sending ? "Sending" : "Send"}
+            </Button>
+          </div>
+        </SurfaceSection>
+      ) : null}
 
       {statusMessage ? (
         <div className="rounded-2xl border border-border/35 bg-card/70 px-4 py-3 text-[11px] leading-5 text-muted-strong">

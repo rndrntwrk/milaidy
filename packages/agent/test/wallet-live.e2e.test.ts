@@ -15,6 +15,7 @@
  */
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { describeIf } from "../../../test/helpers/conditional-tests.ts";
 import { req } from "../../../test/helpers/http";
 
 // Load .env from the eliza workspace root
@@ -47,7 +48,7 @@ const hasHelius = Boolean(process.env.HELIUS_API_KEY?.trim());
 const canRun = hasEvmKey && hasSolKey && hasAlchemy && hasHelius;
 const WALLET_EXPORT_TOKEN = `wallet-live-export-token-${Date.now()}`;
 
-describe.skipIf(!canRun)("Wallet live E2E — real keys, real APIs", () => {
+describeIf(canRun)("Wallet live E2E — real keys, real APIs", () => {
   let port: number;
   let close: () => Promise<void>;
   let savedExportToken: string | undefined;

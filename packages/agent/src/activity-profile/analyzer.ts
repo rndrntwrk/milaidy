@@ -1,9 +1,3 @@
-/**
- * Pure analysis functions for building user activity profiles from message
- * history, in-app interaction signals, desktop screen hints, and calendar data. No runtime
- * dependencies — fully unit-testable.
- */
-
 import { getLocalDateKey, getZonedDateParts } from "../lifeops/time.js";
 import {
   type ActivitySignalRecord,
@@ -162,16 +156,6 @@ function buildActivitySession(
     normalizedEndHour: endParts.hour + (endDayOrdinal - startDayOrdinal) * 24,
     startDayKey,
   };
-}
-
-function buildActivitySessions(
-  messages: MessageRecord[],
-  timezone: string,
-): ActivitySession[] {
-  return buildActivitySessionsFromTimestamps(
-    messages.map((message) => message.createdAt),
-    timezone,
-  );
 }
 
 function buildActivitySessionsFromTimestamps(

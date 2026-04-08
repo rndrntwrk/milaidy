@@ -36,6 +36,7 @@ export interface RegistryAppMeta {
   minPlayers: number | null;
   maxPlayers: number | null;
   runtimePlugin?: string;
+  bridgeExport?: string;
   uiExtension?: AppUiExtensionConfig;
   viewer?: RegistryAppViewerMeta;
   session?: RegistryAppSessionMeta;

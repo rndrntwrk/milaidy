@@ -301,7 +301,7 @@ Distinta de la compactación, la poda de contexto elimina resultados antiguos de
 
 </div>
 
-`@elizaos/plugin-knowledge` proporciona gestión de conocimiento RAG (Generación Aumentada por Recuperación). Se carga como un plugin principal y se integra con el sistema de memoria para inyectar fragmentos de conocimiento relevantes en el contexto del agente basándose en la similitud vectorial.
+`knowledge` proporciona gestión de conocimiento RAG (Generación Aumentada por Recuperación). Se carga como un plugin principal y se integra con el sistema de memoria para inyectar fragmentos de conocimiento relevantes en el contexto del agente basándose en la similitud vectorial.
 
 <div id="related-pages">
 

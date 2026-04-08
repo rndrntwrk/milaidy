@@ -338,6 +338,9 @@ describe("last native tab persistence", () => {
       saveLastNativeTab("trajectories");
       expect(loadLastNativeTab()).toBe("trajectories");
 
+      saveLastNativeTab("rolodex");
+      expect(loadLastNativeTab()).toBe("rolodex");
+
       saveLastNativeTab("desktop");
       expect(loadLastNativeTab()).toBe("desktop");
     });

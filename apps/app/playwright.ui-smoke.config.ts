@@ -8,6 +8,8 @@ const uiSmokeApiStub = path.join(
   repoRoot,
   "scripts/playwright-ui-smoke-api-stub.mjs",
 );
+const uiSmokeApiPort = Number(process.env.MILADY_UI_SMOKE_API_PORT || "31337");
+const uiSmokePort = Number(process.env.MILADY_UI_SMOKE_PORT || "2138");
 
 export default defineConfig({
   testDir: "./test/ui-smoke",
@@ -20,7 +22,7 @@ export default defineConfig({
   workers: 1,
   reporter: "list",
   use: {
-    baseURL: "http://127.0.0.1:2138",
+    baseURL: `http://127.0.0.1:${uiSmokePort}`,
     trace: "retain-on-failure",
     video: "retain-on-failure",
     screenshot: "only-on-failure",
@@ -35,15 +37,14 @@ export default defineConfig({
     {
       command: `node ${JSON.stringify(uiSmokeApiStub)}`,
       cwd: repoRoot,
-      port: 31337,
+      port: uiSmokeApiPort,
       reuseExistingServer: false,
       timeout: 30_000,
     },
     {
-      command:
-        "bun run build:web && bun run preview -- --host 127.0.0.1 --port 2138",
+      command: `bun run build:web && bun run preview -- --host 127.0.0.1 --port ${uiSmokePort}`,
       cwd: appDir,
-      port: 2138,
+      port: uiSmokePort,
       reuseExistingServer: false,
       timeout: 180_000,
     },

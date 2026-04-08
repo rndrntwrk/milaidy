@@ -1,16 +1,16 @@
 ---
-title: "Knowledge Plugin"
+title: "Knowledge"
 sidebarTitle: "Knowledge"
-description: "RAG system — document ingestion, embedding generation, similarity search, knowledge retrieval, and supported file formats."
+description: "Native RAG system — document ingestion, embedding generation, similarity search, knowledge retrieval, and supported file formats."
 ---
 
-The Knowledge plugin provides a Retrieval-Augmented Generation (RAG) system for Milady agents. It enables agents to retrieve relevant information from a document corpus and inject it into the LLM context.
+The native knowledge feature provides a Retrieval-Augmented Generation (RAG) system for Milady agents. It enables agents to retrieve relevant information from a document corpus and inject it into the LLM context.
 
-**Package:** `@elizaos/plugin-knowledge` (core plugin — always loaded)
+**Runtime Feature:** `knowledge` (enabled by default)
 
 ## Overview
 
-The Knowledge plugin manages the full RAG pipeline:
+The knowledge feature manages the full RAG pipeline:
 
 1. **Ingest** — Documents are chunked and embedded on upload
 2. **Index** — Embeddings are stored in the vector store (backed by the SQL plugin)
@@ -19,7 +19,7 @@ The Knowledge plugin manages the full RAG pipeline:
 
 ## Installation
 
-The Knowledge plugin is loaded automatically. No installation is required.
+Knowledge is enabled automatically in Milady. No installation is required.
 
 ## Supported File Formats
 
@@ -130,7 +130,7 @@ The provider runs with `position: -5` (before most other providers) to ensure kn
 
 ## Actions
 
-The Knowledge plugin registers the following actions:
+The native knowledge feature registers the following actions:
 
 | Action | Description |
 |--------|-------------|

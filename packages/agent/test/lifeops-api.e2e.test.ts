@@ -1,10 +1,10 @@
 import crypto from "node:crypto";
-import { DatabaseSync } from "node:sqlite";
 import type { AgentRuntime, Task, UUID } from "@elizaos/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { req } from "../../../test/helpers/http";
 
 import { startApiServer } from "../src/api/server";
+import { DatabaseSync } from "../src/test-utils/sqlite-compat";
 
 type SqlQuery = {
   queryChunks?: Array<{ value?: unknown }>;

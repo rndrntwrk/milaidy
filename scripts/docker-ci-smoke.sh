@@ -35,6 +35,19 @@ fail() {
   exit 1
 }
 
+find_docker_bin() {
+  local candidate
+  for candidate in "${DOCKER_BIN:-}" "$(command -v docker 2>/dev/null || true)" \
+    /usr/local/bin/docker /opt/homebrew/bin/docker \
+    /Applications/Docker.app/Contents/Resources/bin/docker; do
+    if [[ -n "$candidate" && -x "$candidate" ]]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --tag)
@@ -73,25 +86,31 @@ VERSION_CLEAN="${VERSION#v}"
 SOURCE_SHA="$(git rev-parse HEAD)"
 DOCKER_IMAGE="${DOCKER_IMAGE:-miladyai/agent:${TAG}}"
 CONTAINER_NAME="milady-docker-smoke-${TAG//[^a-zA-Z0-9_.-]/-}"
+mkdir -p "$REPO_ROOT/.tmp/qa"
+SMOKE_ARTIFACT_DIR="$(mktemp -d "$REPO_ROOT/.tmp/qa/docker-ci-smoke-XXXXXX")"
 
 log "Repo root: $REPO_ROOT"
 log "Version: $VERSION"
 log "Image: $DOCKER_IMAGE"
 log "Smoke port: $SMOKE_PORT"
 log "Container port override: $CONTAINER_PORT"
+log "Artifact dir: $SMOKE_ARTIFACT_DIR"
 
-command -v docker >/dev/null 2>&1 || fail "docker is required"
 command -v node >/dev/null 2>&1 || fail "node is required"
 command -v bun >/dev/null 2>&1 || fail "bun is required"
 
-docker info >/dev/null 2>&1 || fail "docker daemon is not available"
+DOCKER_BIN="$(find_docker_bin)" || fail "docker is required"
+
+"$DOCKER_BIN" info >/dev/null 2>&1 || fail "docker daemon is not available"
 
 DOCKERIGNORE_BACKUP="$(mktemp)"
 cp .dockerignore "$DOCKERIGNORE_BACKUP"
 cleanup() {
   set +e
-  if docker ps -a --format '{{.Names}}' | grep -Fxq "$CONTAINER_NAME"; then
-    docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
+  if "$DOCKER_BIN" ps -a --format '{{.Names}}' | grep -Fxq "$CONTAINER_NAME"; then
+    "$DOCKER_BIN" inspect "$CONTAINER_NAME" >"$SMOKE_ARTIFACT_DIR/container-inspect.json" 2>&1 || true
+    "$DOCKER_BIN" logs "$CONTAINER_NAME" >"$SMOKE_ARTIFACT_DIR/container.log" 2>&1 || true
+    "$DOCKER_BIN" rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
   fi
   if [[ -f "$DOCKERIGNORE_BACKUP" ]]; then
     cp "$DOCKERIGNORE_BACKUP" .dockerignore >/dev/null 2>&1 || true
@@ -113,6 +132,11 @@ pushd apps/app >/dev/null
 bun scripts/plugin-build.mjs
 popd >/dev/null
 
+log "Building core workspace"
+pushd eliza/packages/typescript >/dev/null
+bun run build
+popd >/dev/null
+
 log "Building bundled orchestrator workspace"
 pushd plugins/plugin-agent-orchestrator >/dev/null
 bun run build
@@ -132,7 +156,7 @@ log "Preparing CI dockerignore"
 cp .dockerignore.ci .dockerignore
 
 log "Building Docker image"
-docker build \
+"$DOCKER_BIN" build \
   --file Dockerfile.ci \
   --tag "$DOCKER_IMAGE" \
   --build-arg "BUN_VERSION=$BUN_VERSION" \
@@ -147,8 +171,8 @@ if $SKIP_SMOKE; then
 fi
 
 log "Starting container smoke boot"
-docker rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
-docker run -d \
+"$DOCKER_BIN" rm -f "$CONTAINER_NAME" >/dev/null 2>&1 || true
+"$DOCKER_BIN" run -d \
   --name "$CONTAINER_NAME" \
   -e PORT="$CONTAINER_PORT" \
   -e MILADY_DISABLE_LOCAL_EMBEDDINGS=1 \
@@ -179,8 +203,9 @@ probe_ok() {
 
 deadline=$((SECONDS + SMOKE_TIMEOUT_SEC))
 while (( SECONDS < deadline )); do
-  if ! docker ps --format '{{.Names}}' | grep -Fxq "$CONTAINER_NAME"; then
-    docker logs "$CONTAINER_NAME" || true
+  if ! "$DOCKER_BIN" ps --format '{{.Names}}' | grep -Fxq "$CONTAINER_NAME"; then
+    "$DOCKER_BIN" logs "$CONTAINER_NAME" || true
+    log "Preserved failure artifacts in $SMOKE_ARTIFACT_DIR"
     fail "Container exited before smoke probe succeeded"
   fi
 
@@ -199,5 +224,6 @@ while (( SECONDS < deadline )); do
   sleep 5
 done
 
-docker logs "$CONTAINER_NAME" || true
+"$DOCKER_BIN" logs "$CONTAINER_NAME" || true
+log "Preserved timeout artifacts in $SMOKE_ARTIFACT_DIR"
 fail "Timed out waiting for container smoke probe (${SMOKE_TIMEOUT_SEC}s)"

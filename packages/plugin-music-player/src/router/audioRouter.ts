@@ -1,12 +1,17 @@
 import { PassThrough, type Readable } from 'node:stream';
 import { logger } from '@elizaos/core';
+
 /** Minimal VoiceTarget shape — avoids hard dep on @elizaos/plugin-discord. */
 interface VoiceTarget {
   id: string;
   type: string;
   guildId?: string;
   channelId?: string;
+  play?: (stream: Readable, opts?: Record<string, unknown>) => Promise<unknown>;
   playAudio?: (stream: Readable, opts?: Record<string, unknown>) => Promise<unknown>;
+  feed?: (stream: Readable) => Promise<unknown>;
+  stop?: () => Promise<unknown>;
+  stopAudio?: () => Promise<unknown>;
   [key: string]: unknown;
 }
 
@@ -31,7 +36,8 @@ interface ActiveRoute {
   sourceId: string;
   targetIds: string[];
   mode: AudioRoutingMode;
-  streams: Map<string, PassThrough>;  // target ID -> cloned stream
+  sourceStream: Readable;
+  streams: Map<string, PassThrough>; // target ID -> cloned stream
   cleanup: () => void;
 }
 
@@ -84,7 +90,8 @@ export class AudioRouter {
     sourceId: string,
     stream: Readable,
     targetIds: string[],
-    mode?: AudioRoutingMode
+    mode?: AudioRoutingMode,
+    onCleanup?: () => void
   ): Promise<void> {
     const routingMode = mode || this.defaultMode;
     
@@ -109,9 +116,9 @@ export class AudioRouter {
     }
 
     if (routingMode === 'simulcast') {
-      await this.routeSimulcast(sourceId, stream, validTargets);
+      await this.routeSimulcast(sourceId, stream, validTargets, onCleanup);
     } else {
-      await this.routeIndependent(sourceId, stream, validTargets);
+      await this.routeIndependent(sourceId, stream, validTargets, onCleanup);
     }
   }
 
@@ -122,7 +129,8 @@ export class AudioRouter {
   private async routeSimulcast(
     sourceId: string,
     sourceStream: Readable,
-    targets: VoiceTarget[]
+    targets: VoiceTarget[],
+    onCleanup?: () => void
   ): Promise<void> {
     const streams = new Map<string, PassThrough>();
     const playbackPromises: Promise<void>[] = [];
@@ -137,7 +145,7 @@ export class AudioRouter {
 
       // Start playback on target
       playbackPromises.push(
-        target.play(clonedStream).catch(error => {
+        this.startTargetPlayback(target, clonedStream).catch(error => {
           logger.error(`[AudioRouter] Playback failed on ${target.id}: ${error}`);
         })
       );
@@ -149,16 +157,18 @@ export class AudioRouter {
     // Store route state
     const cleanup = () => {
       for (const stream of streams.values()) {
+        sourceStream.unpipe(stream);
         stream.end();
         stream.destroy();
       }
-      sourceStream.unpipe();
+      onCleanup?.();
     };
 
     this.routes.set(sourceId, {
       sourceId,
       targetIds: targets.map(t => t.id),
       mode: 'simulcast',
+      sourceStream,
       streams,
       cleanup,
     });
@@ -174,7 +184,8 @@ export class AudioRouter {
   private async routeIndependent(
     sourceId: string,
     sourceStream: Readable,
-    targets: VoiceTarget[]
+    targets: VoiceTarget[],
+    onCleanup?: () => void
   ): Promise<void> {
     const streams = new Map<string, PassThrough>();
     const playbackPromises: Promise<void>[] = [];
@@ -190,7 +201,7 @@ export class AudioRouter {
 
       // Start playback on target
       playbackPromises.push(
-        target.play(independentStream).catch(error => {
+        this.startTargetPlayback(target, independentStream).catch(error => {
           logger.error(`[AudioRouter] Independent playback failed on ${target.id}: ${error}`);
         })
       );
@@ -202,16 +213,18 @@ export class AudioRouter {
     // Store route state
     const cleanup = () => {
       for (const stream of streams.values()) {
+        sourceStream.unpipe(stream);
         stream.end();
         stream.destroy();
       }
-      sourceStream.unpipe();
+      onCleanup?.();
     };
 
     this.routes.set(sourceId, {
       sourceId,
       targetIds: targets.map(t => t.id),
       mode: 'independent',
+      sourceStream,
       streams,
       cleanup,
     });
@@ -235,7 +248,7 @@ export class AudioRouter {
       const target = this.targetRegistry.get(targetId);
       if (target) {
         try {
-          await target.stop();
+          await this.stopTargetPlayback(target);
         } catch (error) {
           logger.error(`[AudioRouter] Failed to stop ${targetId}: ${error}`);
         }
@@ -292,6 +305,13 @@ export class AudioRouter {
   }
 
   /**
+   * Get all registered routing target IDs
+   */
+  getRegisteredTargetIds(): string[] {
+    return Array.from(this.targetRegistry.keys());
+  }
+
+  /**
    * Check if a source is currently routed
    */
   isRouted(sourceId: string): boolean {
@@ -333,13 +353,13 @@ export class AudioRouter {
 
     // Create new stream for this target
     const newStream = new PassThrough();
-    
-    // TODO: Need to pipe from original source - this is a limitation
-    // For now, just log that this operation needs source stream access
-    logger.warn(`[AudioRouter] Adding target to existing route requires source stream access`);
-    
+
+    route.sourceStream.pipe(newStream);
+    await this.startTargetPlayback(target, newStream);
+
     route.targetIds.push(targetId);
     route.streams.set(targetId, newStream);
+    logger.log(`[AudioRouter] Added target ${targetId} to route ${sourceId}`);
   }
 
   /**
@@ -360,7 +380,7 @@ export class AudioRouter {
     // Stop playback on this target
     const target = this.targetRegistry.get(targetId);
     if (target) {
-      await target.stop();
+      await this.stopTargetPlayback(target);
     }
 
     // Clean up stream
@@ -381,5 +401,33 @@ export class AudioRouter {
       await this.unroute(sourceId);
     }
   }
-}
 
+  private async startTargetPlayback(
+    target: VoiceTarget,
+    stream: Readable
+  ): Promise<void> {
+    if (typeof target.play === 'function') {
+      await target.play(stream);
+      return;
+    }
+    if (typeof target.playAudio === 'function') {
+      await target.playAudio(stream);
+      return;
+    }
+    if (typeof target.feed === 'function') {
+      await target.feed(stream);
+      return;
+    }
+    throw new Error(`Target ${target.id} does not expose play(), playAudio(), or feed()`);
+  }
+
+  private async stopTargetPlayback(target: VoiceTarget): Promise<void> {
+    if (typeof target.stop === 'function') {
+      await target.stop();
+      return;
+    }
+    if (typeof target.stopAudio === 'function') {
+      await target.stopAudio();
+    }
+  }
+}

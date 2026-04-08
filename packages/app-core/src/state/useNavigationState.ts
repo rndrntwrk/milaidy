@@ -20,14 +20,14 @@ import { pathForTab, type Tab } from "../navigation";
 import {
   loadLastNativeTab,
   normalizeUiShellMode,
+  type ShellView,
   saveLastNativeTab,
   saveUiShellMode,
-  type ShellView,
   type TabCommittedDetail,
   type UiShellMode,
 } from "./internal";
 import { NavigationEventHub } from "./navigation-events";
-import { deriveUiShellModeForTab, getTabForShellView } from "./shell-routing";
+import { getTabForShellView } from "./shell-routing";
 
 // ── Hook deps ─────────────────────────────────────────────────────────────
 
@@ -35,15 +35,14 @@ export interface NavigationStateDeps {
   tab: Tab;
   setTabRaw: (t: Tab) => void;
   uiShellMode: UiShellMode;
-  activeGameViewerUrl: string;
+  hasActiveGameRun: boolean;
   setAppsSubTab: Dispatch<SetStateAction<"browse" | "running" | "games">>;
 }
 
 // ── Hook ──────────────────────────────────────────────────────────────────
 
 export function useNavigationState(deps: NavigationStateDeps) {
-  const { tab, setTabRaw, uiShellMode, activeGameViewerUrl, setAppsSubTab } =
-    deps;
+  const { tab, setTabRaw, uiShellMode, hasActiveGameRun, setAppsSubTab } = deps;
 
   const [lastNativeTab, setLastNativeTabState] =
     useState<Tab>(loadLastNativeTab);
@@ -64,7 +63,7 @@ export function useNavigationState(deps: NavigationStateDeps) {
     (newTab: Tab) => {
       setTabRaw(newTab);
       if (newTab === "apps") {
-        setAppsSubTab(activeGameViewerUrl.trim() ? "games" : "browse");
+        setAppsSubTab(hasActiveGameRun ? "games" : "browse");
       }
       const path = pathForTab(newTab);
       try {
@@ -77,7 +76,7 @@ export function useNavigationState(deps: NavigationStateDeps) {
         console.warn("[milady][nav] failed to update browser location", err);
       }
     },
-    [activeGameViewerUrl, setTabRaw, setAppsSubTab],
+    [hasActiveGameRun, setTabRaw, setAppsSubTab],
   );
 
   // ── Shell mode toggles ──────────────────────────────────────────────

@@ -297,6 +297,26 @@ describe("installRuntimePluginLifecycle", () => {
     });
   });
 
+  it("applies catalog contexts to known unscoped actions and providers", async () => {
+    const runtime = createMockRuntime();
+
+    await runtime.registerPlugin({
+      name: "@elizaos/plugin-catalog-demo",
+      description: "catalog demo",
+      actions: [{ name: "SEND_TOKEN" } as never],
+      providers: [{ name: "walletBalance" } as never],
+    });
+
+    expect(runtime.actions[0]).toMatchObject({
+      name: "SEND_TOKEN",
+      contexts: ["wallet"],
+    });
+    expect(runtime.providers[0]).toMatchObject({
+      name: "walletBalance",
+      contexts: ["wallet"],
+    });
+  });
+
   it("rolls back partial plugin registration when init fails", async () => {
     const runtime = createMockRuntime();
     const failingPlugin: Plugin = {

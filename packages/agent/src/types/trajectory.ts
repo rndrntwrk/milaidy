@@ -36,6 +36,7 @@ export interface TrajectoryListItem {
   scenarioId?: string;
   batchId?: string;
   createdAt: string;
+  updatedAt?: string;
   metadata?: Record<string, unknown>;
 }
 

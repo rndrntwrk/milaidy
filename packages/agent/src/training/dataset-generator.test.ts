@@ -121,4 +121,36 @@ describe("dataset generator teacher trajectory logging", () => {
       }),
     );
   });
+
+  it("surfaces OpenAI API failures without logging a successful teacher call", async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: false,
+      status: 429,
+      text: async () => "rate limited",
+    } as Response);
+
+    const teacher = createOpenAITeacher("test-key", runtime);
+
+    await expect(
+      teacher.generate("system prompt", "user prompt"),
+    ).rejects.toThrow("OpenAI API error: 429 rate limited");
+    expect(mockWithStandaloneTrajectory).toHaveBeenCalledTimes(1);
+    expect(mockLogActiveTrajectoryLlmCall).not.toHaveBeenCalled();
+  });
+
+  it("surfaces Anthropic API failures without logging a successful teacher call", async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: false,
+      status: 500,
+      text: async () => "internal error",
+    } as Response);
+
+    const teacher = createAnthropicTeacher("test-key", runtime);
+
+    await expect(
+      teacher.generate("system prompt", "user prompt"),
+    ).rejects.toThrow("Anthropic API error: 500 internal error");
+    expect(mockWithStandaloneTrajectory).toHaveBeenCalledTimes(1);
+    expect(mockLogActiveTrajectoryLlmCall).not.toHaveBeenCalled();
+  });
 });

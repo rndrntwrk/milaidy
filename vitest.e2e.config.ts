@@ -185,15 +185,6 @@ export default defineConfig({
               ),
             },
             {
-              find: "@elizaos/plugin-sql",
-              replacement: path.join(
-                repoRoot,
-                "test",
-                "stubs",
-                "plugin-stub.mjs",
-              ),
-            },
-            {
               find: "@elizaos/plugin-discord",
               replacement: path.join(
                 repoRoot,

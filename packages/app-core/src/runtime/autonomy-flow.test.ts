@@ -10,6 +10,7 @@ import {
   type UUID,
 } from "@elizaos/core";
 import { afterEach, describe, expect, it } from "vitest";
+import { describeIf } from "../../../../test/helpers/conditional-tests.ts";
 
 let hasSqlPlugin = false;
 try {
@@ -292,7 +293,7 @@ async function tryCreateHarness(): Promise<Harness | null> {
   }
 }
 
-describe.skipIf(!hasSqlPlugin)("autonomy flow integration", () => {
+describeIf(hasSqlPlugin)("autonomy flow integration", () => {
   it("bypasses shouldRespond when message is marked autonomous loop tick", async () => {
     const harness = await tryCreateHarness();
     if (!harness) {

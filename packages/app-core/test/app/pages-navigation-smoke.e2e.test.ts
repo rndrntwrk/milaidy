@@ -79,6 +79,8 @@ vi.mock("@miladyai/app-core/components", async () => {
       React.createElement("main", null, `CompanionShell Ready: ${tab}`),
     CompanionView: () =>
       React.createElement("section", null, "CompanionView Ready"),
+    ConnectionLostOverlay: () =>
+      React.createElement("div", null, "ConnectionLostOverlay"),
     ConnectorsPageView: () =>
       React.createElement("section", null, "ConnectorsPageView Ready"),
     ConversationsSidebar: () =>
@@ -148,6 +150,8 @@ vi.mock("@miladyai/app-core/src/app-shell-components", () => ({
     React.createElement("main", null, `CompanionShell Ready: ${tab}`),
   CompanionView: () =>
     React.createElement("section", null, "CompanionView Ready"),
+  ConnectionLostOverlay: () =>
+    React.createElement("div", null, "ConnectionLostOverlay"),
   ConnectionFailedBanner: () =>
     React.createElement("div", null, "ConnectionFailedBanner"),
   ConnectionLostOverlay: () => null,
@@ -208,6 +212,8 @@ vi.mock("../../src/app-shell-components", () => ({
     React.createElement("main", null, `CompanionShell Ready: ${tab}`),
   CompanionView: () =>
     React.createElement("section", null, "CompanionView Ready"),
+  ConnectionLostOverlay: () =>
+    React.createElement("div", null, "ConnectionLostOverlay"),
   ConnectionFailedBanner: () =>
     React.createElement("div", null, "ConnectionFailedBanner"),
   ConnectionLostOverlay: () => null,

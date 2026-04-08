@@ -142,7 +142,9 @@ export function GameViewOverlay() {
     useEmbeddedViewer,
   ]);
 
-  if (!activeGameViewerUrl) return null;
+  if (!activeGameViewerUrl || activeGameRun?.viewerAttachment !== "attached") {
+    return null;
+  }
 
   const style: React.CSSProperties = pos
     ? { left: pos.x, top: pos.y, right: "auto", bottom: "auto" }

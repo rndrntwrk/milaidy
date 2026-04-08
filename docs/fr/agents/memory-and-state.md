@@ -301,7 +301,7 @@ Distinct de la compaction, l'élagage du contexte supprime les anciens résultat
 
 </div>
 
-`@elizaos/plugin-knowledge` fournit la gestion des connaissances RAG (Génération Augmentée par Récupération). Il est chargé en tant que plugin principal et s'intègre au système de mémoire pour injecter des fragments de connaissances pertinents dans le contexte de l'agent en fonction de la similarité vectorielle.
+`knowledge` fournit la gestion des connaissances RAG (Génération Augmentée par Récupération). Il est chargé en tant que plugin principal et s'intègre au système de mémoire pour injecter des fragments de connaissances pertinents dans le contexte de l'agent en fonction de la similarité vectorielle.
 
 <div id="related-pages">
 

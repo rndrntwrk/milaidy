@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, test, vi } from "vitest";
+import { describeIf } from "../../../../test/helpers/conditional-tests.ts";
 import type { ElizaConfig } from "../config/config";
 
 type TrainingServiceLike = new (
@@ -17,7 +18,7 @@ const trainingServiceModuleUrl = new URL(
 const trainingPluginAvailable = existsSync(
   fileURLToPath(trainingServiceModuleUrl),
 );
-const describeTraining = trainingPluginAvailable ? describe : describe.skip;
+const describeTraining = describeIf(trainingPluginAvailable);
 
 let TrainingService: TrainingServiceLike;
 

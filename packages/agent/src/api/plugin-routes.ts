@@ -156,6 +156,11 @@ export interface PluginRouteContext {
   requireCoreManager: (runtime: AgentRuntime | null) => CoreManagerLike;
 }
 
+const pluginsListInFlight = new WeakMap<
+  PluginRouteContext["state"],
+  Promise<PluginEntry[]>
+>();
+
 // ---------------------------------------------------------------------------
 // Route handler
 // ---------------------------------------------------------------------------
@@ -194,46 +199,7 @@ export async function handlePluginRoutes(
     requireCoreManager,
   } = ctx;
 
-  const resolvePluginsSnapshot = async (
-    config: ElizaConfig,
-  ): Promise<ResolvedPlugin[]> => {
-    const { resolvePlugins } = await import("../runtime/plugin-resolver.js");
-    return await resolvePlugins(config, { quiet: true });
-  };
-
-  const resolvePluginsSnapshotSafe = async (
-    config: ElizaConfig,
-    reason: string,
-  ): Promise<ResolvedPlugin[] | undefined> => {
-    try {
-      return await resolvePluginsSnapshot(config);
-    } catch (err) {
-      logger.warn(
-        `[plugin-routes] Failed to resolve plugin snapshot for ${reason}: ${err instanceof Error ? err.message : String(err)}`,
-      );
-      return undefined;
-    }
-  };
-
-  const npmNamePattern =
-    /^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/;
-
-  const validateRegistryPluginPackageName = (
-    pluginName: string,
-  ): string | null => {
-    const trimmedName = pluginName.trim();
-    if (!trimmedName) {
-      return "Request body must include 'name' (plugin package name)";
-    }
-    if (!npmNamePattern.test(trimmedName)) {
-      return "Invalid plugin name format";
-    }
-    return null;
-  };
-
-  // ── GET /api/plugins ────────────────────────────────────────────────────
-  if (method === "GET" && pathname === "/api/plugins") {
-    // Re-read config from disk so we pick up plugins installed since server start.
+  const buildPluginsListSnapshot = async (): Promise<PluginEntry[]> => {
     let freshConfig: ElizaConfig;
     try {
       freshConfig = loadElizaConfig();
@@ -241,7 +207,6 @@ export async function handlePluginRoutes(
       freshConfig = state.config;
     }
 
-    // Merge user-installed plugins into the list (they don't exist in plugins.json)
     const bundledIds = new Set(state.plugins.map((p) => p.id));
     const installedEntries = discoverInstalledPlugins(freshConfig, bundledIds);
     const allPlugins: PluginEntry[] = [...state.plugins, ...installedEntries];
@@ -295,14 +260,10 @@ export async function handlePluginRoutes(
       allPlugins.push(evmDiagnostic);
     }
 
-    // Resolve enabled state from config and loaded state from runtime.
-    // "enabled" = user wants it active (config). "isActive" = actually loaded.
     const configEntries = (
       freshConfig.plugins as Record<string, unknown> | undefined
     )?.entries as Record<string, { enabled?: boolean }> | undefined;
-    const loadedNames = state.runtime
-      ? state.runtime.plugins.map((p) => p.name)
-      : [];
+    const loadedNames = state.runtime ? state.runtime.plugins.map((p) => p.name) : [];
     for (const plugin of allPlugins) {
       const installedMetadata =
         (plugin.npmName ? installedMetadataByName.get(plugin.npmName) : null) ??
@@ -335,22 +296,19 @@ export async function handlePluginRoutes(
           );
         });
       plugin.isActive = isLoaded;
-      // Set enabled from config if available, otherwise from runtime
       const configEntry = configEntries?.[plugin.id];
       if (configEntry && typeof configEntry.enabled === "boolean") {
         plugin.enabled = configEntry.enabled;
       } else {
         plugin.enabled = isLoaded;
       }
-      // Detect installed-but-failed-to-load plugins
       plugin.loadError = undefined;
       if (plugin.enabled && !isLoaded && state.runtime) {
         const installs = freshConfig.plugins?.installs as
           | Record<string, unknown>
           | undefined;
         const packageName = `@elizaos/plugin-${plugin.id}`;
-        const hasInstallRecord =
-          installs?.[packageName] || installs?.[plugin.id];
+        const hasInstallRecord = installs?.[packageName] || installs?.[plugin.id];
         if (hasInstallRecord) {
           plugin.loadError =
             "Plugin installed but failed to load — the package may be missing compiled files.";
@@ -367,7 +325,6 @@ export async function handlePluginRoutes(
       }
     }
 
-    // Always refresh current env values and re-validate
     for (const plugin of allPlugins) {
       for (const param of plugin.parameters) {
         const envValue = process.env[param.key];
@@ -405,21 +362,14 @@ export async function handlePluginRoutes(
       signalAuthExists,
     );
 
-    // Inject per-provider model options into configUiHints for MODEL fields.
-    // Each provider's cache is independent — no cross-population.
-    // Always set type: "select" on MODEL fields so they render as dropdowns,
-    // even when no models are cached yet (empty dropdown prompts user to fetch).
     for (const plugin of allPlugins) {
       const providerModels = readProviderCache(plugin.id)?.models ?? [];
 
       for (const param of plugin.parameters) {
         if (!param.key.toUpperCase().includes("MODEL")) continue;
 
-        // Filter to the category this field expects (chat, embedding, image, etc.)
         const expectedCat = paramKeyToCategory(param.key);
-        const filtered = providerModels.filter(
-          (m) => m.category === expectedCat,
-        );
+        const filtered = providerModels.filter((m) => m.category === expectedCat);
 
         if (!plugin.configUiHints) plugin.configUiHints = {};
         plugin.configUiHints[param.key] = {
@@ -433,6 +383,56 @@ export async function handlePluginRoutes(
       }
     }
 
+    return allPlugins;
+  };
+
+  const resolvePluginsSnapshot = async (
+    config: ElizaConfig,
+  ): Promise<ResolvedPlugin[]> => {
+    const { resolvePlugins } = await import("../runtime/plugin-resolver.js");
+    return await resolvePlugins(config, { quiet: true });
+  };
+
+  const resolvePluginsSnapshotSafe = async (
+    config: ElizaConfig,
+    reason: string,
+  ): Promise<ResolvedPlugin[] | undefined> => {
+    try {
+      return await resolvePluginsSnapshot(config);
+    } catch (err) {
+      logger.warn(
+        `[plugin-routes] Failed to resolve plugin snapshot for ${reason}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return undefined;
+    }
+  };
+
+  const npmNamePattern =
+    /^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/;
+
+  const validateRegistryPluginPackageName = (
+    pluginName: string,
+  ): string | null => {
+    const trimmedName = pluginName.trim();
+    if (!trimmedName) {
+      return "Request body must include 'name' (plugin package name)";
+    }
+    if (!npmNamePattern.test(trimmedName)) {
+      return "Invalid plugin name format";
+    }
+    return null;
+  };
+
+  // ── GET /api/plugins ────────────────────────────────────────────────────
+  if (method === "GET" && pathname === "/api/plugins") {
+    let inFlight = pluginsListInFlight.get(state);
+    if (!inFlight) {
+      inFlight = buildPluginsListSnapshot();
+      pluginsListInFlight.set(state, inFlight);
+    }
+    const allPlugins = await inFlight.finally(() => {
+      pluginsListInFlight.delete(state);
+    });
     json(res, { plugins: allPlugins });
     return true;
   }

@@ -29,6 +29,7 @@ import {
 } from "@elizaos/core";
 import dotenv from "dotenv";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { describeIf } from "../../../test/helpers/conditional-tests.ts";
 import {
   extractPlugin,
   resolveDiscordPluginImportSpecifier,
@@ -103,9 +104,8 @@ const discordModuleProbe = await loadDiscordModule();
 const hasDiscordPlugin = discordPluginProbe?.name === "discord";
 
 // Skip all tests if Discord token is not available
-const describeIfLive =
-  hasDiscordPlugin && runLiveTests ? describe : describe.skip;
-const describeIfPluginAvailable = hasDiscordPlugin ? describe : describe.skip;
+const describeIfLive = describeIf(hasDiscordPlugin && runLiveTests);
+const describeIfPluginAvailable = describeIf(hasDiscordPlugin);
 
 describeIfPluginAvailable("Discord Connector - Setup & Authentication", () => {
   it(

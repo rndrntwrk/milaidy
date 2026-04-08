@@ -3,6 +3,15 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
+const resolvedBunCmd =
+  process.env.BUN && fs.existsSync(process.env.BUN)
+    ? process.env.BUN
+    : process.env.BUN_INSTALL
+      ? path.join(process.env.BUN_INSTALL, "bin", "bun")
+      : "bun";
+const bunCmd = fs.existsSync(resolvedBunCmd) ? resolvedBunCmd : "bun";
+const nodeCmd = process.execPath || "node";
+
 /**
  * Each entry describes a test suite to run in parallel.
  *
@@ -17,35 +26,35 @@ import path from "node:path";
  */
 const runs = [
   {
-    name: "unit",
-    cmd: "bun",
-    args: ["x", "vitest", "run", "--config", "vitest.config.ts"],
-    vitest: true,
-    reportFile: path.join(os.tmpdir(), "milady-vitest-unit-report.json"),
-  },
-  {
     name: "app-unit",
-    cmd: "bun",
-    args: ["x", "vitest", "run"],
+    cmd: nodeCmd,
+    args: [path.join(".", "node_modules", ".bin", "vitest"), "run"],
     vitest: true,
     cwd: "apps/app",
     reportFile: path.join(os.tmpdir(), "milady-vitest-app-unit-report.json"),
   },
   {
+    name: "unit",
+    cmd: bunCmd,
+    args: ["x", "vitest", "run", "--config", "vitest.config.ts"],
+    vitest: true,
+    reportFile: path.join(os.tmpdir(), "milady-vitest-unit-report.json"),
+  },
+  {
     name: "e2e",
-    cmd: "bun",
+    cmd: bunCmd,
     args: ["run", "test:e2e"],
     forceSerial: true,
   },
   {
     name: "startup-e2e",
-    cmd: "bun",
+    cmd: bunCmd,
     args: ["run", "test:startup:e2e"],
     forceSerial: true,
   },
   {
     name: "orchestrator-integration",
-    cmd: "bun",
+    cmd: bunCmd,
     args: ["run", "test:orchestrator:integration"],
     forceSerial: true,
   },
@@ -57,7 +66,7 @@ if (
 ) {
   runs.push({
     name: "ui-playwright",
-    cmd: "bun",
+    cmd: bunCmd,
     args: ["run", "test:ui:playwright"],
     forceSerial: true,
   });
@@ -119,6 +128,19 @@ function sanitiseNodeOptions(nodeOptions) {
     .trim();
 }
 
+function buildChildEnv(baseEnv, cwd) {
+  const nextEnv = { ...baseEnv };
+  for (const key of Object.keys(nextEnv)) {
+    if (key.startsWith("npm_") || key === "INIT_CWD") {
+      delete nextEnv[key];
+    }
+  }
+  if (cwd) {
+    nextEnv.PWD = path.resolve(cwd);
+  }
+  return nextEnv;
+}
+
 const runOnce = (entry, extraArgs = []) =>
   new Promise((resolve) => {
     if (entry.reportFile) {
@@ -150,7 +172,7 @@ const runOnce = (entry, extraArgs = []) =>
       stdio: "inherit",
       ...(entry.cwd ? { cwd: entry.cwd } : {}),
       env: {
-        ...process.env,
+        ...buildChildEnv(process.env, entry.cwd),
         VITEST_GROUP: entry.name,
         MILADY_LIVE_TEST: "0",
         ELIZA_LIVE_TEST: "0",

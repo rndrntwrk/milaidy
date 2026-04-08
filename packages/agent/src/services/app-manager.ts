@@ -15,11 +15,8 @@ import * as path from "node:path";
 import type { IAgentRuntime } from "@elizaos/core";
 import { logger } from "@elizaos/core";
 import {
-  generateWalletKeys,
-  getWalletAddressesWithSteward,
-} from "../api/wallet";
-import {
   type AppLaunchDiagnostic,
+  type AppLaunchPreparation,
   type AppLaunchResult,
   type AppRunCapabilityAvailability,
   type AppRunActionResult,
@@ -44,7 +41,10 @@ import type {
   RegistrySearchResult,
 } from "./plugin-manager-types";
 import { getPluginInfo, getRegistryPlugins } from "./registry-client";
-import { resolveAppOverride } from "./registry-client-app-meta";
+import {
+  mergeAppMeta as mergeRegistryAppMeta,
+  resolveAppOverride,
+} from "./registry-client-app-meta";
 import { scoreEntries, toSearchResults } from "./registry-client-queries.js";
 
 const LOCAL_PLUGINS_DIR = "plugins";
@@ -59,12 +59,6 @@ export type {
 } from "../contracts/apps";
 
 const DEFAULT_VIEWER_SANDBOX = "allow-scripts allow-same-origin allow-popups";
-const HYPERSCAPE_APP_ROUTE_SLUG = "hyperscape";
-const HYPERSCAPE_AUTH_MESSAGE_TYPE = "HYPERSCAPE_AUTH";
-const LOCAL_DEV_HYPERSCAPE_CLIENT_URL = "http://localhost:3333";
-const PRODUCTION_HYPERSCAPE_CLIENT_URL = "https://hyperscape.gg";
-const LOCAL_DEV_HYPERSCAPE_API_BASE_URL = "http://localhost:5555";
-const PRODUCTION_HYPERSCAPE_API_BASE_URL = "https://hyperscape.gg";
 const RS_2004SCAPE_APP_ROUTE_SLUG = "2004scape";
 const RS_2004SCAPE_AUTH_MESSAGE_TYPE = "RS_2004SCAPE_AUTH";
 const DEFAULT_RS_SDK_SERVER_URL = "https://rs-sdk-demo.fly.dev";
@@ -74,11 +68,11 @@ const PRODUCTION_BABYLON_CLIENT_URL = "https://staging.babylon.market";
 const BABYLON_AGENT_SESSION_TOKEN_KEY = "BABYLON_AGENT_SESSION_TOKEN";
 const BABYLON_AGENT_SESSION_EXPIRES_AT_KEY = "BABYLON_AGENT_SESSION_EXPIRES_AT";
 const SAFE_APP_URL_PROTOCOLS = new Set(["http:", "https:"]);
-const ALLOWED_APP_URL_TEMPLATE_KEYS = new Set([
+const SAFE_APP_TEMPLATE_ENV_KEYS = new Set([
+  "BABYLON_CLIENT_URL",
   "BOT_NAME",
   "HYPERSCAPE_CHARACTER_ID",
   "HYPERSCAPE_CLIENT_URL",
-  "BABYLON_CLIENT_URL",
   "RS_SDK_BOT_NAME",
   "RS_SDK_BOT_PASSWORD",
   "RS_SDK_SERVER_URL",
@@ -125,28 +119,10 @@ interface AppManagerOptions {
   stateDir?: string;
 }
 
-interface HyperscapeWalletCandidate {
-  address: string;
-  walletType: "evm" | "solana";
-  source: string;
-}
-
-interface HyperscapeWalletAuthResponse {
-  success?: boolean;
-  authToken?: string;
-  characterId?: string;
-  accountId?: string;
-  error?: string;
-}
-
 function isAppRegistryPlugin(
   plugin: RegistryPluginInfo,
 ): plugin is RegistryAppPlugin {
   return hasAppInterface(plugin);
-}
-
-function isHyperscapeAppName(appName: string): boolean {
-  return packageNameToAppRouteSlug(appName) === HYPERSCAPE_APP_ROUTE_SLUG;
 }
 
 function is2004scapeAppName(appName: string): boolean {
@@ -256,6 +232,54 @@ function mergeLocalRegistryInfo<T extends RegistryPluginInfo>(
   return appInfo;
 }
 
+function deriveAppMetaFromPluginInfo(
+  appInfo: RegistryPluginInfo,
+): RegistryPluginInfo["appMeta"] | undefined {
+  const hasTopLevelAppMeta =
+    appInfo.displayName !== undefined ||
+    appInfo.category !== undefined ||
+    appInfo.launchType !== undefined ||
+    appInfo.launchUrl !== undefined ||
+    appInfo.icon !== undefined ||
+    appInfo.capabilities !== undefined ||
+    appInfo.runtimePlugin !== undefined ||
+    appInfo.uiExtension !== undefined ||
+    appInfo.viewer !== undefined ||
+    appInfo.session !== undefined;
+
+  if (!hasTopLevelAppMeta) {
+    return undefined;
+  }
+
+  return {
+    displayName:
+      appInfo.displayName ?? packageNameToAppDisplayName(appInfo.name),
+    category: appInfo.category ?? "game",
+    launchType: appInfo.launchType ?? "url",
+    launchUrl: appInfo.launchUrl ?? null,
+    icon: appInfo.icon ?? null,
+    capabilities: appInfo.capabilities ?? [],
+    minPlayers: null,
+    maxPlayers: null,
+    runtimePlugin: appInfo.runtimePlugin,
+    uiExtension: appInfo.uiExtension,
+    viewer: appInfo.viewer,
+    session: appInfo.session,
+  };
+}
+
+function resolveEffectiveAppMeta(
+  packageName: string,
+  appInfo: RegistryPluginInfo,
+): RegistryPluginInfo["appMeta"] | undefined {
+  const derivedAppMeta = deriveAppMetaFromPluginInfo(appInfo);
+  const baseAppMeta = mergeRegistryAppMeta(derivedAppMeta, appInfo.appMeta);
+  if (baseAppMeta) {
+    return resolveAppOverride(packageName, baseAppMeta) ?? baseAppMeta;
+  }
+  return resolveAppOverride(packageName, undefined);
+}
+
 function isAutoInstallable(appInfo: RegistryPluginInfo): boolean {
   const supportsRuntime =
     appInfo.supports.v0 || appInfo.supports.v1 || appInfo.supports.v2;
@@ -292,15 +316,6 @@ function isLocalPlugin(appInfo: RegistryPluginInfo): boolean {
 }
 
 function getTemplateFallbackValue(key: string): string | undefined {
-  if (key === "HYPERSCAPE_CLIENT_URL") {
-    const runtimeClientUrl = process.env.HYPERSCAPE_CLIENT_URL?.trim();
-    if (runtimeClientUrl && runtimeClientUrl.length > 0) {
-      return runtimeClientUrl;
-    }
-    return isProductionRuntime()
-      ? PRODUCTION_HYPERSCAPE_CLIENT_URL
-      : LOCAL_DEV_HYPERSCAPE_CLIENT_URL;
-  }
   if (key === "BABYLON_CLIENT_URL") {
     const runtimeClientUrl =
       process.env.BABYLON_CLIENT_URL?.trim() ??
@@ -341,355 +356,12 @@ function resolveSettingLike(
   return undefined;
 }
 
-function isEvmAddress(value: string | null | undefined): value is string {
-  return typeof value === "string" && /^0x[0-9a-fA-F]{40}$/.test(value.trim());
-}
-
-function isLikelySolanaAddress(
-  value: string | null | undefined,
-): value is string {
-  return (
-    typeof value === "string" &&
-    /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(value.trim())
-  );
-}
-
-function readObject(value: unknown): Record<string, unknown> | null {
-  return typeof value === "object" && value !== null
-    ? (value as Record<string, unknown>)
-    : null;
-}
-
-function resolveHyperscapeApiBaseUrl(runtime?: IAgentRuntime | null): string {
-  const runtimeUrl = resolveSettingLike(runtime, "HYPERSCAPE_API_URL");
-  if (runtimeUrl) {
-    return runtimeUrl.replace(/\/+$/, "");
-  }
-  return isProductionRuntime()
-    ? PRODUCTION_HYPERSCAPE_API_BASE_URL
-    : LOCAL_DEV_HYPERSCAPE_API_BASE_URL;
-}
-
 function resolve2004scapeServerUrl(runtime?: IAgentRuntime | null): string {
   const runtimeUrl = resolveSettingLike(runtime, "RS_SDK_SERVER_URL");
   if (runtimeUrl) {
     return runtimeUrl.replace(/\/+$/, "");
   }
   return DEFAULT_RS_SDK_SERVER_URL;
-}
-
-function extractWalletCandidateFromRecord(
-  record: unknown,
-): HyperscapeWalletCandidate | null {
-  const objectRecord = readObject(record);
-  if (!objectRecord) return null;
-
-  const directWalletAddresses = readObject(objectRecord.walletAddresses);
-  const characterRecord = readObject(objectRecord.character);
-  const characterSettings = readObject(characterRecord?.settings);
-  const characterWalletAddresses = readObject(characterRecord?.walletAddresses);
-  const characterSecrets = readObject(characterSettings?.secrets);
-
-  const evmAddressCandidates = [
-    directWalletAddresses?.evm,
-    objectRecord.walletAddress,
-    characterWalletAddresses?.evm,
-    characterRecord?.walletAddress,
-    characterSettings?.evmAddress,
-    characterSecrets?.EVM_PUBLIC_KEY,
-  ];
-  for (const candidate of evmAddressCandidates) {
-    if (typeof candidate === "string" && isEvmAddress(candidate)) {
-      return {
-        address: candidate.trim(),
-        walletType: "evm",
-        source: "runtime-agent-record",
-      };
-    }
-  }
-
-  const solanaAddressCandidates = [
-    directWalletAddresses?.solana,
-    characterWalletAddresses?.solana,
-    characterSettings?.solanaAddress,
-    characterSecrets?.SOLANA_PUBLIC_KEY,
-  ];
-  for (const candidate of solanaAddressCandidates) {
-    if (typeof candidate === "string" && isLikelySolanaAddress(candidate)) {
-      return {
-        address: candidate.trim(),
-        walletType: "solana",
-        source: "runtime-agent-record",
-      };
-    }
-  }
-
-  return null;
-}
-
-async function resolveRuntimeWalletCandidate(
-  runtime: IAgentRuntime | null,
-): Promise<HyperscapeWalletCandidate | null> {
-  if (!runtime) return null;
-
-  const runtimeLike = runtime as IAgentRuntime & {
-    getAgent?: (agentId: IAgentRuntime["agentId"]) => Promise<unknown>;
-  };
-  if (typeof runtimeLike.getAgent === "function") {
-    const agentRecord = await runtimeLike.getAgent(runtime.agentId);
-    const candidate = extractWalletCandidateFromRecord(agentRecord);
-    if (candidate) {
-      return candidate;
-    }
-  }
-
-  const characterRecord = runtime.character as unknown;
-  const characterCandidate = extractWalletCandidateFromRecord({
-    character: characterRecord,
-  });
-  if (characterCandidate) {
-    return {
-      ...characterCandidate,
-      source: "runtime-character",
-    };
-  }
-
-  const managedEvmAddress = resolveSettingLike(
-    runtime,
-    "ELIZA_MANAGED_EVM_ADDRESS",
-  );
-  if (isEvmAddress(managedEvmAddress)) {
-    return {
-      address: managedEvmAddress.trim(),
-      walletType: "evm",
-      source: "runtime-setting",
-    };
-  }
-
-  const managedSolanaAddress = resolveSettingLike(
-    runtime,
-    "ELIZA_MANAGED_SOLANA_ADDRESS",
-  );
-  if (isLikelySolanaAddress(managedSolanaAddress)) {
-    return {
-      address: managedSolanaAddress.trim(),
-      walletType: "solana",
-      source: "runtime-setting",
-    };
-  }
-
-  return null;
-}
-
-async function resolveHyperscapeWalletCandidate(
-  runtime: IAgentRuntime | null,
-): Promise<HyperscapeWalletCandidate | null> {
-  const runtimeWallet = await resolveRuntimeWalletCandidate(runtime);
-  if (runtimeWallet) {
-    return runtimeWallet;
-  }
-
-  const walletAddresses = await getWalletAddressesWithSteward();
-  if (isEvmAddress(walletAddresses.evmAddress)) {
-    return {
-      address: walletAddresses.evmAddress.trim(),
-      walletType: "evm",
-      source: "wallet-env",
-    };
-  }
-  if (isLikelySolanaAddress(walletAddresses.solanaAddress)) {
-    return {
-      address: walletAddresses.solanaAddress.trim(),
-      walletType: "solana",
-      source: "wallet-env",
-    };
-  }
-
-  return null;
-}
-
-function persistRuntimeSecret(
-  runtime: IAgentRuntime | null,
-  key: string,
-  value: string,
-): void {
-  process.env[key] = value;
-  if (!runtime) return;
-
-  runtime.setSetting(key, value, true);
-
-  const character = runtime.character as {
-    settings?: { secrets?: Record<string, string> };
-    secrets?: Record<string, string>;
-  };
-  if (!character.settings) {
-    character.settings = {};
-  }
-  if (!character.settings.secrets) {
-    character.settings.secrets = {};
-  }
-  character.settings.secrets[key] = value;
-  if (!character.secrets) {
-    character.secrets = {};
-  }
-  character.secrets[key] = value;
-}
-
-function provisionRuntimeWalletCandidate(
-  runtime: IAgentRuntime | null,
-): HyperscapeWalletCandidate | null {
-  if (!runtime) {
-    return null;
-  }
-
-  const keys = generateWalletKeys();
-  persistRuntimeSecret(runtime, "EVM_PRIVATE_KEY", keys.evmPrivateKey);
-  persistRuntimeSecret(runtime, "SOLANA_PRIVATE_KEY", keys.solanaPrivateKey);
-
-  return {
-    address: keys.evmAddress,
-    walletType: "evm",
-    source: "runtime-generated",
-  };
-}
-
-function persistHyperscapeCredential(
-  runtime: IAgentRuntime | null,
-  key:
-    | "HYPERSCAPE_AUTH_TOKEN"
-    | "HYPERSCAPE_CHARACTER_ID"
-    | "HYPERSCAPE_ACCOUNT_ID",
-  value: string,
-  secret = false,
-): void {
-  process.env[key] = value;
-  if (!runtime) return;
-
-  runtime.setSetting(key, value, secret);
-
-  const character = runtime.character as {
-    settings?: { secrets?: Record<string, string> };
-    secrets?: Record<string, string>;
-  };
-  if (!character.settings) {
-    character.settings = {};
-  }
-  if (!character.settings.secrets) {
-    character.settings.secrets = {};
-  }
-  character.settings.secrets[key] = value;
-  if (!character.secrets) {
-    character.secrets = {};
-  }
-  character.secrets[key] = value;
-}
-
-async function authenticateHyperscapeWallet(
-  runtime: IAgentRuntime,
-  wallet: HyperscapeWalletCandidate,
-): Promise<{
-  authToken: string;
-  characterId: string;
-  accountId?: string;
-}> {
-  const url = new URL(
-    "/api/agents/wallet-auth",
-    resolveHyperscapeApiBaseUrl(runtime),
-  );
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      walletAddress: wallet.address,
-      walletType: wallet.walletType,
-      agentName: runtime.character?.name || "Agent",
-      agentId: runtime.agentId,
-    }),
-    signal: AbortSignal.timeout(1_500),
-  });
-
-  const text = await response.text();
-  const data =
-    text.trim().length > 0
-      ? (JSON.parse(text) as HyperscapeWalletAuthResponse)
-      : null;
-
-  if (!response.ok) {
-    const detail =
-      data && typeof data.error === "string" && data.error.trim().length > 0
-        ? data.error.trim()
-        : text.trim();
-    throw new Error(
-      detail.length > 0
-        ? `Hyperscape wallet auth failed (${response.status}): ${detail}`
-        : `Hyperscape wallet auth failed with status ${response.status}`,
-    );
-  }
-
-  if (!data?.success || !data.authToken || !data.characterId) {
-    throw new Error("Hyperscape wallet auth returned an invalid response.");
-  }
-
-  return {
-    authToken: data.authToken,
-    characterId: data.characterId,
-    ...(data.accountId ? { accountId: data.accountId } : {}),
-  };
-}
-
-async function prepareHyperscapeLaunch(
-  runtime: IAgentRuntime | null,
-): Promise<AppLaunchDiagnostic[]> {
-  if (!runtime) return [];
-
-  const authToken = resolveSettingLike(runtime, "HYPERSCAPE_AUTH_TOKEN");
-  const characterId = resolveSettingLike(runtime, "HYPERSCAPE_CHARACTER_ID");
-  if (authToken && characterId) {
-    return [];
-  }
-
-  const wallet =
-    (await resolveHyperscapeWalletCandidate(runtime)) ??
-    provisionRuntimeWalletCandidate(runtime);
-  if (!wallet) {
-    return [];
-  }
-
-  try {
-    const result = await authenticateHyperscapeWallet(runtime, wallet);
-    persistHyperscapeCredential(
-      runtime,
-      "HYPERSCAPE_AUTH_TOKEN",
-      result.authToken,
-      true,
-    );
-    persistHyperscapeCredential(
-      runtime,
-      "HYPERSCAPE_CHARACTER_ID",
-      result.characterId,
-    );
-    if (result.accountId) {
-      persistHyperscapeCredential(
-        runtime,
-        "HYPERSCAPE_ACCOUNT_ID",
-        result.accountId,
-      );
-    }
-    return [];
-  } catch (error) {
-    return [
-      {
-        code: "hyperscape-auth-provisioning-failed",
-        severity: "warning",
-        message:
-          error instanceof Error
-            ? error.message
-            : "Hyperscape wallet auth failed.",
-      },
-    ];
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -1080,17 +752,27 @@ async function prepareBabylonLaunch(
   ];
 }
 
-function substituteTemplateVars(raw: string): string {
-  return raw.replace(/\{([A-Z0-9_]+)\}/g, (_full, key: string) => {
-    if (!ALLOWED_APP_URL_TEMPLATE_KEYS.has(key)) {
-      return getTemplateFallbackValue(key) ?? "";
-    }
+function readSafeTemplateEnv(key: string): string | undefined {
+  if (!SAFE_APP_TEMPLATE_ENV_KEYS.has(key)) {
+    return undefined;
+  }
+  const value = process.env[key];
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : undefined;
+}
 
-    const value = process.env[key];
-    if (value && value.trim().length > 0) {
-      return value.trim();
+function substituteTemplateVars(
+  raw: string,
+  options?: { preserveUnknown?: boolean },
+): string {
+  const preserveUnknown = options?.preserveUnknown ?? true;
+  return raw.replace(/\{([A-Z0-9_]+)\}/g, (_full, key: string) => {
+    const value = readSafeTemplateEnv(key) ?? getTemplateFallbackValue(key);
+    if (value !== undefined) {
+      return value;
     }
-    return getTemplateFallbackValue(key) ?? "";
+    return preserveUnknown ? `{${key}}` : "";
   });
 }
 
@@ -1099,9 +781,11 @@ function buildViewerUrl(
   embedParams?: Record<string, string>,
 ): string {
   if (!embedParams || Object.keys(embedParams).length === 0) {
-    return substituteTemplateVars(baseUrl);
+    return substituteTemplateVars(baseUrl, { preserveUnknown: false });
   }
-  const resolvedBaseUrl = substituteTemplateVars(baseUrl);
+  const resolvedBaseUrl = substituteTemplateVars(baseUrl, {
+    preserveUnknown: false,
+  });
   const [beforeHash, hashPartRaw] = resolvedBaseUrl.split("#", 2);
   const [pathPart, queryPartRaw] = beforeHash.split("?", 2);
   const queryParams = new URLSearchParams(queryPartRaw ?? "");
@@ -1124,7 +808,10 @@ function resolveViewerEmbedParams(
   if (!embedParams) return undefined;
   const resolved = Object.fromEntries(
     Object.entries(embedParams)
-      .map(([key, value]) => [key, substituteTemplateVars(value).trim()])
+      .map(([key, value]) => [
+        key,
+        substituteTemplateVars(value, { preserveUnknown: false }).trim(),
+      ])
       .filter(([, value]) => value.length > 0),
   );
   return Object.keys(resolved).length > 0 ? resolved : undefined;
@@ -1150,35 +837,28 @@ function normalizeSafeAppUrl(url: string): string | null {
   }
 }
 
-function buildViewerAuthMessage(
-  appName: string,
-  postMessageAuth: boolean | undefined,
+async function buildViewerAuthMessage(
+  appInfo: RegistryAppPlugin,
+  launchUrl: string | null,
   runtime?: IAgentRuntime | null,
-): AppViewerAuthMessage | undefined {
+): Promise<AppViewerAuthMessage | undefined> {
+  const postMessageAuth = appInfo.viewer?.postMessageAuth;
   if (!postMessageAuth) return undefined;
 
-  if (isHyperscapeAppName(appName)) {
-    const authToken = resolveSettingLike(runtime, "HYPERSCAPE_AUTH_TOKEN");
-    if (!authToken) {
-      return undefined;
-    }
-    const characterId = resolveSettingLike(runtime, "HYPERSCAPE_CHARACTER_ID");
-    const agentId =
-      typeof runtime?.agentId === "string" && runtime.agentId.trim().length > 0
-        ? runtime.agentId
-        : undefined;
-
-    return {
-      type: HYPERSCAPE_AUTH_MESSAGE_TYPE,
-      authToken,
-      agentId,
-      characterId,
-      followEntity: characterId,
-    };
+  const routeModule = await importAppRouteModule(appInfo.name);
+  if (typeof routeModule?.resolveViewerAuthMessage === "function") {
+    return (
+      (await routeModule.resolveViewerAuthMessage({
+        appName: appInfo.name,
+        launchUrl,
+        runtime: runtime ?? null,
+        viewer: null,
+      })) ?? undefined
+    );
   }
 
   // Babylon auth — passes agent credentials to the viewer iframe
-  if (isBabylonAppName(appName)) {
+  if (isBabylonAppName(appInfo.name)) {
     const agentId =
       resolveSettingLike(runtime, "BABYLON_AGENT_ID") ??
       process.env.BABYLON_AGENT_ID?.trim();
@@ -1198,7 +878,7 @@ function buildViewerAuthMessage(
   }
 
   // 2004scape auth - uses auto-provisioned or user-supplied credentials
-  if (is2004scapeAppName(appName)) {
+  if (is2004scapeAppName(appInfo.name)) {
     const username =
       resolveSettingLike(runtime, "RS_SDK_BOT_NAME") ||
       process.env.BOT_NAME?.trim() ||
@@ -1225,17 +905,17 @@ function buildViewerAuthMessage(
   return undefined;
 }
 
-function buildViewerConfig(
+async function buildViewerConfig(
   appInfo: RegistryAppPlugin,
   launchUrl: string | null,
   runtime?: IAgentRuntime | null,
-): AppViewerConfig | null {
+): Promise<AppViewerConfig | null> {
   const viewerInfo = appInfo.viewer;
   if (viewerInfo) {
     const requestedPostMessageAuth = Boolean(viewerInfo.postMessageAuth);
-    const authMessage = buildViewerAuthMessage(
-      appInfo.name,
-      requestedPostMessageAuth,
+    const authMessage = await buildViewerAuthMessage(
+      appInfo,
+      launchUrl,
       runtime,
     );
     const postMessageAuth = requestedPostMessageAuth && Boolean(authMessage);
@@ -1247,11 +927,7 @@ function buildViewerConfig(
     const resolvedEmbedParams = {
       ...(resolveViewerEmbedParams(viewerInfo.embedParams) ?? {}),
     };
-    if (
-      isHyperscapeAppName(appInfo.name) &&
-      authMessage?.followEntity &&
-      !resolvedEmbedParams.followEntity
-    ) {
+    if (authMessage?.followEntity && !resolvedEmbedParams.followEntity) {
       resolvedEmbedParams.followEntity = authMessage.followEntity;
     }
     const finalEmbedParams =
@@ -1305,10 +981,7 @@ function buildAppSession(
       ? runtime.agentId
       : undefined;
   const sessionId =
-    authMessage?.agentId ||
-    runtimeAgentId ||
-    authMessage?.characterId ||
-    resolveSettingLike(runtime, "HYPERSCAPE_CHARACTER_ID");
+    authMessage?.agentId || authMessage?.characterId || runtimeAgentId;
   if (!sessionId) return null;
   const features = new Set(appInfo.session.features ?? []);
   const controls: AppSessionState["controls"] = [];
@@ -1331,11 +1004,8 @@ function buildAppSession(
     status: "connecting",
     displayName: appInfo.displayName ?? appInfo.name,
     agentId: authMessage?.agentId ?? runtimeAgentId,
-    characterId:
-      authMessage?.characterId ??
-      resolveSettingLike(runtime, "HYPERSCAPE_CHARACTER_ID"),
-    followEntity:
-      authMessage?.followEntity ?? authMessage?.characterId ?? undefined,
+    characterId: authMessage?.characterId,
+    followEntity: authMessage?.followEntity ?? undefined,
     canSendCommands,
     controls,
     summary,
@@ -1379,6 +1049,94 @@ async function resolveLaunchSession(
   return buildAppSession(appInfo, viewer?.authMessage, runtime);
 }
 
+async function prepareLaunch(
+  appInfo: RegistryAppPlugin,
+  launchUrl: string | null,
+  runtime: IAgentRuntime | null,
+): Promise<AppLaunchPreparation> {
+  const routeModule = await importAppRouteModule(appInfo.name);
+  if (typeof routeModule?.prepareLaunch === "function") {
+    return (
+      (await routeModule.prepareLaunch({
+        appName: appInfo.name,
+        launchUrl,
+        runtime,
+        viewer: null,
+      })) ?? {}
+    );
+  }
+
+  if (isBabylonAppName(appInfo.name)) {
+    const diagnostics = await prepareBabylonLaunch(runtime);
+    const babylonUrl = resolveBabylonApiBaseUrl(runtime);
+    const agentId = resolveSettingLike(runtime, "BABYLON_AGENT_ID");
+    logger.info(
+      `[app-manager] Babylon launch: url=${babylonUrl} agentId=${agentId ?? "(none)"}`,
+    );
+    return { diagnostics };
+  }
+
+  if (is2004scapeAppName(appInfo.name)) {
+    const rsSdkServerUrl = resolve2004scapeServerUrl(runtime);
+    const serverUp = await is2004scapeServerReachable(rsSdkServerUrl);
+    if (!serverUp) {
+      logger.info(
+        `[app-manager] 2004scape server is not reachable at ${rsSdkServerUrl} — skipping plugin registration to avoid noisy SDK errors`,
+      );
+      return {
+        diagnostics: [
+          {
+            code: "2004scape-server-unreachable",
+            severity: "warning",
+            message: `2004scape game server is not running at ${rsSdkServerUrl}. Start the server and re-launch the app.`,
+          },
+        ],
+      };
+    }
+    return {
+      diagnostics: await prepare2004scapeLaunch(runtime),
+    };
+  }
+
+  return {};
+}
+
+function mergePreparedViewer(
+  base: RegistryAppPlugin["viewer"],
+  override: NonNullable<AppLaunchPreparation["viewer"]>,
+): RegistryAppPlugin["viewer"] {
+  return {
+    ...(base ?? {}),
+    ...override,
+    embedParams: {
+      ...(base?.embedParams ?? {}),
+      ...(override.embedParams ?? {}),
+    },
+  };
+}
+
+function applyLaunchPreparation(
+  appInfo: RegistryAppPlugin,
+  preparation: AppLaunchPreparation,
+): RegistryAppPlugin {
+  const launchUrl =
+    preparation.launchUrl !== undefined
+      ? preparation.launchUrl ?? undefined
+      : appInfo.launchUrl;
+  const viewer =
+    preparation.viewer === undefined
+      ? appInfo.viewer
+      : preparation.viewer === null
+        ? undefined
+        : mergePreparedViewer(appInfo.viewer, preparation.viewer);
+
+  return {
+    ...appInfo,
+    launchUrl,
+    viewer,
+  };
+}
+
 function isRuntimePluginActive(
   appInfo: RegistryAppPlugin,
   runtime: IAgentRuntime | null,
@@ -1397,26 +1155,10 @@ function isRuntimePluginActive(
   );
 }
 
-function hasRuntimeService(
-  runtime: IAgentRuntime | null,
-  serviceType: string,
-): boolean {
-  const runtimeLike = runtime as IAgentRuntime & {
-    hasService?: (candidate: string) => boolean;
-  };
-  return (
-    typeof runtimeLike?.hasService === "function" &&
-    runtimeLike.hasService(serviceType)
-  );
-}
-
 function isRuntimePluginReady(
   appInfo: RegistryAppPlugin,
   runtime: IAgentRuntime | null,
 ): boolean {
-  if (isHyperscapeAppName(appInfo.name)) {
-    return hasRuntimeService(runtime, "hyperscapeService");
-  }
   return isRuntimePluginActive(appInfo, runtime);
 }
 
@@ -1434,56 +1176,6 @@ function getRuntimePluginCandidates(appInfo: RegistryAppPlugin): string[] {
       ),
     ),
   );
-}
-
-function collectHyperscapeLaunchDiagnostics(
-  appInfo: RegistryAppPlugin,
-  viewer: AppViewerConfig | null,
-  session: AppSessionState | null,
-  runtime: IAgentRuntime | null,
-): AppLaunchDiagnostic[] {
-  if (!isHyperscapeAppName(appInfo.name)) {
-    return [];
-  }
-
-  const diagnostics: AppLaunchDiagnostic[] = [];
-  const authToken = resolveSettingLike(runtime, "HYPERSCAPE_AUTH_TOKEN");
-  const characterId = resolveSettingLike(runtime, "HYPERSCAPE_CHARACTER_ID");
-  const requestedIframeAuth = Boolean(appInfo.viewer?.postMessageAuth);
-
-  if (requestedIframeAuth && !viewer?.authMessage) {
-    const missing: string[] = [];
-    if (!authToken) missing.push("HYPERSCAPE_AUTH_TOKEN");
-    if (!characterId) missing.push("HYPERSCAPE_CHARACTER_ID");
-    diagnostics.push({
-      code: "hyperscape-auth-unavailable",
-      severity: "error",
-      message:
-        missing.length > 0
-          ? `Hyperscape auto-sign-in is unavailable because ${missing.join(" and ")} ${missing.length === 1 ? "is" : "are"} not configured for this agent.`
-          : "Hyperscape auto-sign-in is unavailable for this agent.",
-    });
-  }
-
-  if (runtime && !session && !isRuntimePluginReady(appInfo, runtime)) {
-    diagnostics.push({
-      code: "hyperscape-runtime-bridge-inactive",
-      severity: "warning",
-      message:
-        "The Hyperscape runtime bridge is not active in this agent, so Milady cannot attach to a live in-world session yet.",
-    });
-  }
-
-  if (runtime && !session && characterId) {
-    diagnostics.push({
-      code: "hyperscape-session-not-found",
-      severity: "warning",
-      message:
-        "No live Hyperscape session matched this agent. Start or reconnect the Hyperscape agent in-world, then launch again.",
-    });
-  }
-
-  return diagnostics;
 }
 
 function collect2004scapeLaunchDiagnostics(
@@ -1521,19 +1213,26 @@ function collect2004scapeLaunchDiagnostics(
   return diagnostics;
 }
 
-function collectLaunchDiagnostics(
+async function collectLaunchDiagnostics(
   appInfo: RegistryAppPlugin,
   viewer: AppViewerConfig | null,
   session: AppSessionState | null,
+  launchUrl: string | null,
   runtime: IAgentRuntime | null,
-): AppLaunchDiagnostic[] {
-  if (isHyperscapeAppName(appInfo.name)) {
-    return collectHyperscapeLaunchDiagnostics(
-      appInfo,
-      viewer,
-      session,
+): Promise<AppLaunchDiagnostic[]> {
+  const routeModule = await importAppRouteModule(appInfo.name);
+  if (typeof routeModule?.collectLaunchDiagnostics === "function") {
+    const diagnosticViewer =
+      viewer && appInfo.viewer?.postMessageAuth && !viewer.authMessage
+        ? { ...viewer, postMessageAuth: true }
+        : viewer;
+    return routeModule.collectLaunchDiagnostics({
+      appName: appInfo.name,
+      launchUrl,
       runtime,
-    );
+      viewer: diagnosticViewer,
+      session,
+    });
   }
   if (is2004scapeAppName(appInfo.name)) {
     return collect2004scapeLaunchDiagnostics(appInfo, viewer, session, runtime);
@@ -1576,30 +1275,42 @@ async function ensureRuntimePluginRegistered(
   );
 }
 
-async function ensureHyperscapeServiceLoaded(
+async function ensureRuntimeReady(
   appInfo: RegistryAppPlugin,
+  viewer: AppViewerConfig | null,
+  launchUrl: string | null,
   runtime: IAgentRuntime | null,
 ): Promise<void> {
-  if (!runtime || !isHyperscapeAppName(appInfo.name)) {
+  if (!runtime) {
     return;
   }
-
-  const runtimeLike = runtime as IAgentRuntime & {
-    hasService?: (serviceType: string) => boolean;
-    getServiceLoadPromise?: (serviceType: string) => Promise<unknown>;
-  };
-
-  if (
-    typeof runtimeLike.hasService !== "function" ||
-    !runtimeLike.hasService("hyperscapeService")
-  ) {
-    throw new Error(
-      "Hyperscape service was not registered on the agent runtime.",
-    );
+  const routeModule = await importAppRouteModule(appInfo.name);
+  if (typeof routeModule?.ensureRuntimeReady !== "function") {
+    return;
   }
-
-  if (typeof runtimeLike.getServiceLoadPromise === "function") {
-    await runtimeLike.getServiceLoadPromise("hyperscapeService");
+  const ctx = {
+    appName: appInfo.name,
+    launchUrl,
+    runtime,
+    viewer,
+  };
+  try {
+    await routeModule.ensureRuntimeReady(ctx);
+  } catch (error) {
+    const pluginNames = getRuntimePluginCandidates(appInfo);
+    let recovered = false;
+    for (const pluginPackageName of pluginNames) {
+      const plugin = await importAppPlugin(pluginPackageName);
+      if (!plugin) {
+        continue;
+      }
+      await runtime.registerPlugin(plugin);
+      recovered = true;
+    }
+    if (!recovered) {
+      throw error;
+    }
+    await routeModule.ensureRuntimeReady(ctx);
   }
 }
 
@@ -2166,12 +1877,7 @@ export class AppManager {
     // Apply local app overrides (viewer URL, sandbox, embed params, etc.)
     // so displayName / launchType / viewer are populated even when the
     // npm registry has no metadata for this app.
-    if (appInfo.appMeta) {
-      appInfo.appMeta =
-        resolveAppOverride(name, appInfo.appMeta) ?? appInfo.appMeta;
-    } else {
-      appInfo.appMeta = resolveAppOverride(name, undefined);
-    }
+    appInfo.appMeta = resolveEffectiveAppMeta(name, appInfo);
 
     return flattenAppInfo(appInfo);
   }
@@ -2317,12 +2023,7 @@ export class AppManager {
     // Apply local app overrides (viewer URL, sandbox, embed params, etc.)
     // and flatten appMeta onto the top-level fields so launchUrl / viewer
     // are populated even when the npm registry has no metadata for this app.
-    if (appInfo.appMeta) {
-      appInfo.appMeta =
-        resolveAppOverride(name, appInfo.appMeta) ?? appInfo.appMeta;
-    } else {
-      appInfo.appMeta = resolveAppOverride(name, undefined);
-    }
+    appInfo.appMeta = resolveEffectiveAppMeta(name, appInfo);
     appInfo = flattenAppInfo(appInfo);
 
     // The app's plugin is what the agent needs to play the game.
@@ -2379,39 +2080,33 @@ export class AppManager {
       logger.info(`[app-manager] Plugin already installed: ${pluginName}`);
     }
 
-    const launchPreparationDiagnostics: AppLaunchDiagnostic[] = [];
-    if (isHyperscapeAppName(appInfo.name)) {
-      launchPreparationDiagnostics.push(
-        ...(await prepareHyperscapeLaunch(_runtime ?? null)),
+    const initialLaunchUrl = appInfo.launchUrl
+      ? normalizeSafeAppUrl(
+          substituteTemplateVars(appInfo.launchUrl, {
+            preserveUnknown: false,
+          }),
+        )
+      : null;
+    const launchPreparation = await prepareLaunch(
+      appInfo,
+      initialLaunchUrl,
+      _runtime ?? null,
+    );
+    const launchPreparationDiagnostics = launchPreparation.diagnostics ?? [];
+    appInfo = applyLaunchPreparation(appInfo, launchPreparation);
+
+    const resolvedLaunchUrl = appInfo.launchUrl
+      ? substituteTemplateVars(appInfo.launchUrl, {
+          preserveUnknown: false,
+        })
+      : null;
+    const launchUrl = resolvedLaunchUrl
+      ? normalizeSafeAppUrl(resolvedLaunchUrl)
+      : null;
+    if (resolvedLaunchUrl && !launchUrl) {
+      throw new Error(
+        `Refusing to launch app "${appInfo.name}": unsafe launch URL`,
       );
-    }
-    if (isBabylonAppName(appInfo.name)) {
-      launchPreparationDiagnostics.push(
-        ...(await prepareBabylonLaunch(_runtime ?? null)),
-      );
-      const babylonUrl = resolveBabylonApiBaseUrl(_runtime ?? null);
-      const agentId = resolveSettingLike(_runtime, "BABYLON_AGENT_ID");
-      logger.info(
-        `[app-manager] Babylon launch: url=${babylonUrl} agentId=${agentId ?? "(none)"}`,
-      );
-    }
-    if (is2004scapeAppName(appInfo.name)) {
-      const rsSdkServerUrl = resolve2004scapeServerUrl(_runtime ?? null);
-      const serverUp = await is2004scapeServerReachable(rsSdkServerUrl);
-      if (!serverUp) {
-        logger.info(
-          `[app-manager] 2004scape server is not reachable at ${rsSdkServerUrl} — skipping plugin registration to avoid noisy SDK errors`,
-        );
-        launchPreparationDiagnostics.push({
-          code: "2004scape-server-unreachable",
-          severity: "warning",
-          message: `2004scape game server is not running at ${rsSdkServerUrl}. Start the server and re-launch the app.`,
-        });
-      } else {
-        launchPreparationDiagnostics.push(
-          ...(await prepare2004scapeLaunch(_runtime ?? null)),
-        );
-      }
     }
 
     // Skip runtime plugin registration when the target service is unreachable
@@ -2433,27 +2128,22 @@ export class AppManager {
     if (runtimePluginRegistered) {
       pluginInstalled = true;
     }
-    await ensureHyperscapeServiceLoaded(appInfo, _runtime ?? null);
+    const viewer = await buildViewerConfig(appInfo, launchUrl, _runtime);
+    await ensureRuntimeReady(appInfo, viewer, launchUrl, _runtime ?? null);
 
     // Build viewer config from registry app metadata
-    const resolvedLaunchUrl = appInfo.launchUrl
-      ? substituteTemplateVars(appInfo.launchUrl)
-      : null;
-    const launchUrl = resolvedLaunchUrl
-      ? normalizeSafeAppUrl(resolvedLaunchUrl)
-      : null;
-    if (resolvedLaunchUrl && !launchUrl) {
-      throw new Error(
-        `Refusing to launch app "${appInfo.name}": unsafe launch URL`,
-      );
-    }
-    const viewer = buildViewerConfig(appInfo, launchUrl, _runtime);
     const session = _runtime
       ? await resolveLaunchSession(appInfo, viewer, launchUrl, _runtime)
       : buildAppSession(appInfo, viewer?.authMessage, _runtime);
     const diagnostics = [
       ...launchPreparationDiagnostics,
-      ...collectLaunchDiagnostics(appInfo, viewer, session, _runtime ?? null),
+      ...(await collectLaunchDiagnostics(
+        appInfo,
+        viewer,
+        session,
+        launchUrl,
+        _runtime ?? null,
+      )),
     ];
     const existingRun = this.findMatchingRun(name, session, viewer);
     const run = this.storeRun(

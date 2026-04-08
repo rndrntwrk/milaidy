@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { afterAll, describe, expect, it } from "vitest";
+import { describeIf } from "../../../test/helpers/conditional-tests.ts";
 import { req } from "../../../test/helpers/http";
 
 const LIVE_TESTS_ENABLED =
@@ -294,7 +295,7 @@ async function startDesktopStack(
   };
 }
 
-describe.skipIf(!LIVE_DESKTOP_TESTS_ENABLED)(
+describeIf(LIVE_DESKTOP_TESTS_ENABLED)(
   "Live: website blocker desktop orchestrator",
   () => {
     const startedStacks: StartedDesktopStack[] = [];

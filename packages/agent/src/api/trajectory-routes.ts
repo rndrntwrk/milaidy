@@ -9,7 +9,7 @@
  * - Getting trajectory statistics
  * - Enabling/disabling trajectory logging
  *
- * Uses the @elizaos/plugin-trajectory-logger service for data access.
+ * Uses the native trajectories service for data access.
  */
 
 import type http from "node:http";
@@ -428,7 +428,7 @@ function listItemToUIRecord(item: TrajectoryListItem): UITrajectoryRecord {
       ...(item.batchId ? { batchId: item.batchId } : {}),
     },
     createdAt: item.createdAt,
-    updatedAt: item.updatedAt,
+    updatedAt: item.updatedAt ?? item.createdAt,
   };
 }
 

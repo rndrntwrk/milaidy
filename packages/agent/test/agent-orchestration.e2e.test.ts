@@ -29,6 +29,7 @@ import {
 } from "@elizaos/core";
 import dotenv from "dotenv";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { describeIf } from "../../../test/helpers/conditional-tests.ts";
 import { startApiServer } from "../src/api/server";
 import {
   extractPlugin,
@@ -1461,7 +1462,7 @@ describe("Cleanup and Resource Management", () => {
 //  10. INTEGRATION WITH RUNTIME (requires model provider)
 // ===================================================================
 
-describe.skipIf(!hasModelProvider)(
+describeIf(hasModelProvider)(
   "Runtime Integration with Orchestrator",
   () => {
     let runtime: AgentRuntime | null = null;

@@ -80,7 +80,7 @@ Most relevant local plugins:
 - `plugin-google-genai`
 - `plugin-imessage`
 - `plugin-personality`
-- `plugin-rolodex`
+- `relationships`
 - `plugin-scheduling`
 - `plugin-signal`
 - `plugin-telegram`

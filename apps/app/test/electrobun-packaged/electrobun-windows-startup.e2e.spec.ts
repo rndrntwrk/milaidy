@@ -184,100 +184,97 @@ async function killProcess(child: ChildProcess): Promise<void> {
   });
 }
 
-test("packaged Windows app bootstraps the renderer against the external API override", async () => {
-  test.skip(
-    process.platform !== "win32",
-    "Windows startup test is win32-only.",
-  );
-
-  const tempExtractDir = await fs.mkdtemp(
-    path.join(os.tmpdir(), "milady-win-e2e-"),
-  );
-  const userDataDir = await fs.mkdtemp(
-    path.join(os.tmpdir(), "milady-win-userdata-"),
-  );
-  const localUserDataDir = await fs.mkdtemp(
-    path.join(os.tmpdir(), "milady-win-localappdata-"),
-  );
-
-  const executablePath = await resolveWindowsLauncher(tempExtractDir);
-
-  let api: MockApiServer | null = null;
-  let appProcess: ChildProcess | null = null;
-  let processLogs: { stdout: string[]; stderr: string[] } | null = null;
-
-  try {
-    api = await startMockApiServer({ onboardingComplete: true, port: 0 });
-
-    appProcess = spawn(executablePath, [], {
-      cwd: path.dirname(executablePath),
-      env: createPackagedWindowsAppEnv({
-        baseEnv: process.env,
-        apiBase: api.baseUrl,
-        appData: userDataDir,
-        localAppData: localUserDataDir,
-      }),
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    processLogs = collectProcessLogs(appProcess);
-
-    await waitForRendererBootstrap(
-      api,
-      appProcess,
-      process.env.CI ? 180_000 : 90_000,
-      processLogs,
+if (process.platform === "win32") {
+  test("packaged Windows app bootstraps the renderer against the external API override", async () => {
+    const tempExtractDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "milady-win-e2e-"),
+    );
+    const userDataDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "milady-win-userdata-"),
+    );
+    const localUserDataDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "milady-win-localappdata-"),
     );
 
-    await expect
-      .poll(
-        () =>
-          api ? hasPackagedRendererBootstrapRequests(api.requests) : false,
-        {
-          timeout: 30_000,
-          message:
-            "Expected the packaged renderer to reach the external API bootstrap requests",
-        },
-      )
-      .toBe(true);
+    const executablePath = await resolveWindowsLauncher(tempExtractDir);
 
-    await expect
-      .poll(
-        () =>
-          appProcess && appProcess.exitCode === null ? "running" : "exited",
-        {
-          timeout: 15_000,
-          message:
-            "Expected the packaged Windows app to stay alive after bootstrap",
-        },
-      )
-      .toBe("running");
+    let api: MockApiServer | null = null;
+    let appProcess: ChildProcess | null = null;
+    let processLogs: { stdout: string[]; stderr: string[] } | null = null;
 
-    // Keep the process alive long enough to catch immediate post-bootstrap
-    // startup regressions that can happen after the first renderer requests.
-    await new Promise((resolve) => setTimeout(resolve, 8_000));
-    expect(appProcess.exitCode).toBeNull();
+    try {
+      api = await startMockApiServer({ onboardingComplete: true, port: 0 });
 
-    expect(hasPackagedRendererBootstrapRequests(api.requests)).toBe(true);
-    expect(api.requests.length).toBeGreaterThan(0);
+      appProcess = spawn(executablePath, [], {
+        cwd: path.dirname(executablePath),
+        env: createPackagedWindowsAppEnv({
+          baseEnv: process.env,
+          apiBase: api.baseUrl,
+          appData: userDataDir,
+          localAppData: localUserDataDir,
+        }),
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      processLogs = collectProcessLogs(appProcess);
 
-    const stdoutText = processLogs?.stdout.join("") ?? "";
-    const stderrText = processLogs?.stderr.join("") ?? "";
-    expect(
-      `${stdoutText}\n${stderrText}`,
-      `Packaged Windows app logs should not contain fatal startup errors.\n` +
-        `Mock requests:\n${api.requests.join("\n")}\n\n` +
-        `App stdout:\n${stdoutText}\n\nApp stderr:\n${stderrText}`,
-    ).not.toMatch(
-      /Fatal error during startup|startup failure|Cannot find module/i,
-    );
-  } finally {
-    await api?.close().catch(() => undefined);
-    if (appProcess) await killProcess(appProcess);
-    await fs
-      .rm(tempExtractDir, { recursive: true, force: true })
-      .catch(() => undefined);
-    await fs
-      .rm(userDataDir, { recursive: true, force: true })
-      .catch(() => undefined);
-  }
-});
+      await waitForRendererBootstrap(
+        api,
+        appProcess,
+        process.env.CI ? 180_000 : 90_000,
+        processLogs,
+      );
+
+      await expect
+        .poll(
+          () =>
+            api ? hasPackagedRendererBootstrapRequests(api.requests) : false,
+          {
+            timeout: 30_000,
+            message:
+              "Expected the packaged renderer to reach the external API bootstrap requests",
+          },
+        )
+        .toBe(true);
+
+      await expect
+        .poll(
+          () =>
+            appProcess && appProcess.exitCode === null ? "running" : "exited",
+          {
+            timeout: 15_000,
+            message:
+              "Expected the packaged Windows app to stay alive after bootstrap",
+          },
+        )
+        .toBe("running");
+
+      // Keep the process alive long enough to catch immediate post-bootstrap
+      // startup regressions that can happen after the first renderer requests.
+      await new Promise((resolve) => setTimeout(resolve, 8_000));
+      expect(appProcess.exitCode).toBeNull();
+
+      expect(hasPackagedRendererBootstrapRequests(api.requests)).toBe(true);
+      expect(api.requests.length).toBeGreaterThan(0);
+
+      const stdoutText = processLogs?.stdout.join("") ?? "";
+      const stderrText = processLogs?.stderr.join("") ?? "";
+      expect(
+        `${stdoutText}\n${stderrText}`,
+        `Packaged Windows app logs should not contain fatal startup errors.\n` +
+          `Mock requests:\n${api.requests.join("\n")}\n\n` +
+          `App stdout:\n${stdoutText}\n\nApp stderr:\n${stderrText}`,
+      ).not.toMatch(
+        /Fatal error during startup|startup failure|Cannot find module/i,
+      );
+    } finally {
+      await api?.close().catch(() => undefined);
+      if (appProcess) await killProcess(appProcess);
+      await fs
+        .rm(tempExtractDir, { recursive: true, force: true })
+        .catch(() => undefined);
+      await fs
+        .rm(userDataDir, { recursive: true, force: true })
+        .catch(() => undefined);
+    }
+  });
+}

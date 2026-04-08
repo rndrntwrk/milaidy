@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  LOCAL_APP_DEFAULT_SANDBOX,
   resolveAppOverride,
   sanitizeSandbox,
-  LOCAL_APP_DEFAULT_SANDBOX,
 } from "./registry-client-app-meta.js";
 
 vi.mock("@elizaos/core", () => ({
@@ -14,19 +14,20 @@ describe("agent registry-client-app-meta", () => {
     expect(sanitizeSandbox(undefined)).toBe(LOCAL_APP_DEFAULT_SANDBOX);
   });
 
-  it("registers Babylon, Hyperscape, and 2004scape detail panels", () => {
+  it("keeps supplemental Hyperscape host overrides off standalone metadata", () => {
+    expect(
+      resolveAppOverride("@hyperscape/plugin-hyperscape", undefined),
+    ).toBeUndefined();
+  });
+
+  it("registers standalone host-owned detail panels when overrides define app metadata", () => {
     expect(
       resolveAppOverride("@elizaos/app-babylon", undefined)?.uiExtension
         ?.detailPanelId,
     ).toBe("babylon-operator-dashboard");
-    expect(
-      resolveAppOverride("@hyperscape/plugin-hyperscape", undefined)?.uiExtension
-        ?.detailPanelId,
-    ).toBe("hyperscape-embedded-agent-control");
     expect(
       resolveAppOverride("@elizaos/app-2004scape", undefined)?.uiExtension
         ?.detailPanelId,
     ).toBe("2004scape-operator-dashboard");
   });
 });
-

@@ -1,4 +1,5 @@
 import { describe, test, expect } from "vitest";
+import { describeIf } from "../../../../../test/helpers/conditional-tests.ts";
 import { parseKeyValueXml } from "@elizaos/core";
 import { fileURLToPath } from "node:url";
 import { config } from "dotenv";
@@ -40,7 +41,7 @@ try {
   // SDK not available
 }
 
-const integrationDescribe = hasApiKey ? describe : describe.skip;
+const integrationDescribe = describeIf(hasApiKey);
 
 integrationDescribe("TOON trigger extraction integration", () => {
   test(

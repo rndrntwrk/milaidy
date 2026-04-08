@@ -12,6 +12,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   createPackageLink,
+  ensurePluginBuildOutputs,
   ensurePluginDependencyLinks,
   ensurePublishedElizaPackageLinks,
   getElizaPackageLinks,
@@ -250,12 +251,32 @@ describe("getPluginPackageLinks", () => {
         ]),
       );
 
-      // Non-@elizaos scoped packages are excluded from linking
-      const allLinkPaths = getPluginPackageLinks(miladyRoot, pluginsRoot).map(
-        (l: { linkPath: string }) => l.linkPath,
-      );
-      expect(allLinkPaths).not.toEqual(
-        expect.arrayContaining([expect.stringContaining("hyperscape")]),
+      // Scoped plugin repos without a nested typescript package link from the
+      // repo root so non-eliza workspace plugins stay available locally.
+      expect(getPluginPackageLinks(miladyRoot, pluginsRoot)).toEqual(
+        expect.arrayContaining([
+          {
+            linkPath: path.join(
+              miladyRoot,
+              "node_modules/@hyperscape/plugin-hyperscape",
+            ),
+            targetPath: appDir,
+          },
+          {
+            linkPath: path.join(
+              miladyRoot,
+              "apps/app/node_modules/@hyperscape/plugin-hyperscape",
+            ),
+            targetPath: appDir,
+          },
+          {
+            linkPath: path.join(
+              miladyRoot,
+              "apps/home/node_modules/@hyperscape/plugin-hyperscape",
+            ),
+            targetPath: appDir,
+          },
+        ]),
       );
     } finally {
       rmSync(tempRoot, { force: true, recursive: true });
@@ -331,6 +352,60 @@ describe("ensurePluginDependencyLinks", () => {
       expect(realpathSync(path.join(packageDir, "node_modules", "tsup"))).toBe(
         realpathSync(installedDevDependencyDir),
       );
+    } finally {
+      rmSync(tempRoot, { force: true, recursive: true });
+    }
+  });
+});
+
+describe("ensurePluginBuildOutputs", () => {
+  it("builds root-level plugin packages when they expose @elizaos names and lack dist", async () => {
+    const tempRoot = mkdtempSync(
+      path.join(os.tmpdir(), "milady-setup-plugin-builds-"),
+    );
+
+    try {
+      const pluginsRoot = path.join(tempRoot, "plugins");
+      const packageDir = path.join(pluginsRoot, "plugin-coding-agent");
+      mkdirSync(packageDir, { recursive: true });
+      writeFileSync(
+        path.join(packageDir, "package.json"),
+        JSON.stringify({
+          name: "@elizaos/plugin-coding-agent",
+          scripts: {
+            build: "bun run build.ts",
+          },
+        }),
+        "utf8",
+      );
+
+      const calls: Array<{
+        command: string;
+        args: string[];
+        cwd?: string;
+        label?: string;
+      }> = [];
+
+      await ensurePluginBuildOutputs(pluginsRoot, {
+        pathExists: (candidate) => candidate !== path.join(packageDir, "dist"),
+        runCommandImpl: async (command, args, options = {}) => {
+          calls.push({
+            command,
+            args,
+            cwd: options.cwd,
+            label: options.label,
+          });
+        },
+      });
+
+      expect(calls).toEqual([
+        {
+          command: "bun",
+          args: ["run", "build"],
+          cwd: packageDir,
+          label: "bun run build (@elizaos/plugin-coding-agent)",
+        },
+      ]);
     } finally {
       rmSync(tempRoot, { force: true, recursive: true });
     }

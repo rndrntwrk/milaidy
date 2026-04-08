@@ -1,40 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-
-const browserWorkspaceMocks = vi.hoisted(() => ({
-  executeBrowserWorkspaceCommand: vi.fn(),
-  getBrowserWorkspaceMode: vi.fn(() => "web"),
-  listBrowserWorkspaceTabs: vi.fn(),
-}));
-
-const stewardWalletMocks = vi.hoisted(() => ({
-  approveStewardWalletRequest: vi.fn(),
-  getStewardPendingApprovals: vi.fn(),
-  getStewardWalletStatus: vi.fn(),
-  getStewardWalletUnavailableMessage: vi.fn(
-    () =>
-      "Milady agent wallet is unavailable. Configure Steward in Milady wallet settings or set STEWARD_API_URL and Steward credentials.",
-  ),
-  rejectStewardWalletRequest: vi.fn(),
-  signWithStewardWallet: vi.fn(),
-}));
-
-vi.mock("@miladyai/agent/services/browser-workspace", () => ({
-  executeBrowserWorkspaceCommand:
-    browserWorkspaceMocks.executeBrowserWorkspaceCommand,
-  getBrowserWorkspaceMode: browserWorkspaceMocks.getBrowserWorkspaceMode,
-  listBrowserWorkspaceTabs: browserWorkspaceMocks.listBrowserWorkspaceTabs,
-}));
-
-vi.mock("@miladyai/agent/services/steward-wallet", () => ({
-  approveStewardWalletRequest: stewardWalletMocks.approveStewardWalletRequest,
-  getStewardPendingApprovals: stewardWalletMocks.getStewardPendingApprovals,
-  getStewardWalletStatus: stewardWalletMocks.getStewardWalletStatus,
-  getStewardWalletUnavailableMessage:
-    stewardWalletMocks.getStewardWalletUnavailableMessage,
-  rejectStewardWalletRequest: stewardWalletMocks.rejectStewardWalletRequest,
-  signWithStewardWallet: stewardWalletMocks.signWithStewardWallet,
-}));
-
+import * as browserWorkspaceService from "@miladyai/agent/services/browser-workspace";
+import * as stewardWalletService from "@miladyai/agent/services/steward-wallet";
 import { manageMiladyBrowserWorkspaceAction } from "./action";
 import { miladyBrowserWorkspaceProvider } from "./provider";
 import {
@@ -44,25 +10,27 @@ import {
 } from "./wallet-action";
 
 afterEach(() => {
-  vi.clearAllMocks();
+  vi.restoreAllMocks();
 });
 
 describe("@miladyai/plugin-milady-browser", () => {
   it("routes browser subactions through the shared command surface", async () => {
-    browserWorkspaceMocks.executeBrowserWorkspaceCommand.mockResolvedValue({
-      mode: "web",
-      subaction: "open",
-      tab: {
-        id: "btab_web_1",
-        title: "example.com",
-        url: "https://example.com/",
-        partition: "persist:milady-browser",
-        visible: true,
-        createdAt: "2026-04-05T18:45:00.000Z",
-        updatedAt: "2026-04-05T18:45:00.000Z",
-        lastFocusedAt: "2026-04-05T18:45:00.000Z",
-      },
-    });
+    const executeSpy = vi
+      .spyOn(browserWorkspaceService, "executeBrowserWorkspaceCommand")
+      .mockResolvedValue({
+        mode: "web",
+        subaction: "open",
+        tab: {
+          id: "btab_web_1",
+          title: "example.com",
+          url: "https://example.com/",
+          partition: "persist:milady-browser",
+          visible: true,
+          createdAt: "2026-04-05T18:45:00.000Z",
+          updatedAt: "2026-04-05T18:45:00.000Z",
+          lastFocusedAt: "2026-04-05T18:45:00.000Z",
+        },
+      });
     const callback = vi.fn();
 
     const result = await manageMiladyBrowserWorkspaceAction.handler(
@@ -83,7 +51,7 @@ describe("@miladyai/plugin-milady-browser", () => {
       callback,
     );
 
-    expect(browserWorkspaceMocks.executeBrowserWorkspaceCommand).toHaveBeenCalledWith(
+    expect(executeSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         subaction: "open",
         show: true,
@@ -99,7 +67,10 @@ describe("@miladyai/plugin-milady-browser", () => {
   });
 
   it("returns desktop-only eval errors instead of rejecting the action", async () => {
-    browserWorkspaceMocks.executeBrowserWorkspaceCommand.mockRejectedValue(
+    vi.spyOn(
+      browserWorkspaceService,
+      "executeBrowserWorkspaceCommand",
+    ).mockRejectedValue(
       new Error(
         "Milady browser workspace eval is only available in the desktop app.",
       ),
@@ -131,32 +102,34 @@ describe("@miladyai/plugin-milady-browser", () => {
   });
 
   it("supports browser batches through stepsJson on the main action", async () => {
-    browserWorkspaceMocks.executeBrowserWorkspaceCommand.mockResolvedValue({
-      mode: "web",
-      subaction: "batch",
-      steps: [
-        {
-          mode: "web",
-          subaction: "open",
-          tab: {
-            id: "btab_web_1",
-            title: "form",
-            url: "http://127.0.0.1:4010/form",
-            partition: "persist:milady-browser",
-            visible: true,
-            createdAt: "2026-04-05T18:45:00.000Z",
-            updatedAt: "2026-04-05T18:45:00.000Z",
-            lastFocusedAt: "2026-04-05T18:45:00.000Z",
+    const executeSpy = vi
+      .spyOn(browserWorkspaceService, "executeBrowserWorkspaceCommand")
+      .mockResolvedValue({
+        mode: "web",
+        subaction: "batch",
+        steps: [
+          {
+            mode: "web",
+            subaction: "open",
+            tab: {
+              id: "btab_web_1",
+              title: "form",
+              url: "http://127.0.0.1:4010/form",
+              partition: "persist:milady-browser",
+              visible: true,
+              createdAt: "2026-04-05T18:45:00.000Z",
+              updatedAt: "2026-04-05T18:45:00.000Z",
+              lastFocusedAt: "2026-04-05T18:45:00.000Z",
+            },
           },
-        },
-        {
-          mode: "web",
-          subaction: "get",
-          value: "Welcome, Milady",
-        },
-      ],
-      value: "Welcome, Milady",
-    });
+          {
+            mode: "web",
+            subaction: "get",
+            value: "Welcome, Milady",
+          },
+        ],
+        value: "Welcome, Milady",
+      });
 
     const result = await manageMiladyBrowserWorkspaceAction.handler(
       {} as never,
@@ -182,7 +155,7 @@ describe("@miladyai/plugin-milady-browser", () => {
       vi.fn(),
     );
 
-    expect(browserWorkspaceMocks.executeBrowserWorkspaceCommand).toHaveBeenCalledWith(
+    expect(executeSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         subaction: "batch",
         steps: expect.arrayContaining([
@@ -198,16 +171,24 @@ describe("@miladyai/plugin-milady-browser", () => {
   });
 
   it("queues signing requests and routes approve/reject actions", async () => {
-    stewardWalletMocks.signWithStewardWallet.mockResolvedValue({
-      approved: false,
-      pending: true,
-      txId: "tx-1",
-    });
-    stewardWalletMocks.approveStewardWalletRequest.mockResolvedValue({
+    const signSpy = vi
+      .spyOn(stewardWalletService, "signWithStewardWallet")
+      .mockResolvedValue({
+        approved: false,
+        pending: true,
+        txId: "tx-1",
+      });
+    vi.spyOn(
+      stewardWalletService,
+      "approveStewardWalletRequest",
+    ).mockResolvedValue({
       ok: true,
       txHash: "0xapprovedtx1",
     });
-    stewardWalletMocks.rejectStewardWalletRequest.mockResolvedValue({
+    vi.spyOn(
+      stewardWalletService,
+      "rejectStewardWalletRequest",
+    ).mockResolvedValue({
       ok: true,
     });
 
@@ -244,7 +225,7 @@ describe("@miladyai/plugin-milady-browser", () => {
       vi.fn(),
     );
 
-    expect(stewardWalletMocks.signWithStewardWallet).toHaveBeenCalledWith(
+    expect(signSpy).toHaveBeenCalledWith(
       expect.objectContaining({
         chainId: 8453,
         data: "0xdeadbeef",
@@ -267,7 +248,7 @@ describe("@miladyai/plugin-milady-browser", () => {
   });
 
   it("summarizes web tabs and pending wallet approvals in the provider", async () => {
-    browserWorkspaceMocks.listBrowserWorkspaceTabs.mockResolvedValue([
+    vi.spyOn(browserWorkspaceService, "listBrowserWorkspaceTabs").mockResolvedValue([
       {
         id: "btab_web_1",
         title: "example.com",
@@ -279,7 +260,13 @@ describe("@miladyai/plugin-milady-browser", () => {
         lastFocusedAt: "2026-04-05T18:45:00.000Z",
       },
     ]);
-    stewardWalletMocks.getStewardWalletStatus.mockResolvedValue({
+    vi.spyOn(browserWorkspaceService, "getBrowserWorkspaceMode").mockReturnValue(
+      "web",
+    );
+    vi.spyOn(
+      stewardWalletService,
+      "getStewardWalletStatus",
+    ).mockResolvedValue({
       configured: true,
       available: true,
       connected: true,
@@ -289,7 +276,10 @@ describe("@miladyai/plugin-milady-browser", () => {
         solana: null,
       },
     });
-    stewardWalletMocks.getStewardPendingApprovals.mockResolvedValue([
+    vi.spyOn(
+      stewardWalletService,
+      "getStewardPendingApprovals",
+    ).mockResolvedValue([
       {
         queueId: "queue:tx-1",
         requestedAt: "2026-04-05T18:45:00.000Z",

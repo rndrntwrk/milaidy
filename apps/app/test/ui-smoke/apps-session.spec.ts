@@ -12,6 +12,7 @@ type FixtureState = {
   launchRequestName: string | null;
   lastCommand: string | null;
   lastControlAction: string | null;
+  runPollCount: number;
   sessionPollCount: number;
   unexpectedRequests: string[];
   chatMessages?: Array<{
@@ -551,6 +552,7 @@ async function startSessionFixture(
     launchRequestName: null,
     lastCommand: null,
     lastControlAction: null,
+    runPollCount: 0,
     sessionPollCount: 0,
     unexpectedRequests: [],
     sessionState: scenario.sessionState,
@@ -701,6 +703,19 @@ async function startSessionFixture(
         200,
         state.launchRequestName ? [buildRunSummary(req)] : [],
       );
+      return;
+    }
+
+    if (
+      req.method === "GET" &&
+      url.pathname === `/api/apps/runs/${encodeURIComponent(scenario.runId)}`
+    ) {
+      if (!state.launchRequestName) {
+        sendJson(req, res, 404, { error: "Run not found" });
+        return;
+      }
+      state.runPollCount += 1;
+      sendJson(req, res, 200, buildRunSummary(req));
       return;
     }
 
@@ -1377,7 +1392,7 @@ test("apps page launches a Hyperscape session with iframe auth and live session 
       "No app session running",
     );
     await expect(
-      page.getByTestId("app-card--elizaos-app-hyperscape"),
+      page.getByTestId("app-card--hyperscape-plugin-hyperscape"),
     ).toBeVisible();
     await expect(page.getByTestId("apps-detail-panel")).toContainText(
       "Spectate + steer",
@@ -1407,8 +1422,8 @@ test("apps page launches a Hyperscape session with iframe auth and live session 
     );
 
     await expect
-      .poll(() => fixture.state.sessionPollCount, {
-        message: "session state should be polled after launch",
+      .poll(() => fixture.state.runPollCount, {
+        message: "run state should be refreshed after launch",
       })
       .toBeGreaterThan(0);
 
@@ -1427,6 +1442,9 @@ test("apps page launches a Hyperscape session with iframe auth and live session 
       ),
     ).toEqual([]);
   } finally {
+    if (!page.isClosed()) {
+      await page.goto("about:blank");
+    }
     await fixture.close();
   }
 });
@@ -1486,11 +1504,12 @@ test("apps page launches a Babylon session with embedded auth and the live dashb
     const surface = page.getByTestId("babylon-live-operator-surface");
     await expect(surface).toBeVisible();
     await expect(surface.getByText("Babylon Live Dashboard")).toBeVisible();
-    const promptButton = surface.getByRole("button", {
-      name: "protect liquidity",
-    });
-    await expect(promptButton).toBeVisible();
-    await promptButton.click();
+    const chatInput = surface.getByPlaceholder(
+      "Tell Babylon what to prioritize, avoid, or explain.",
+    );
+    await expect(chatInput).toBeVisible();
+    await chatInput.fill("protect liquidity");
+    await surface.getByRole("button", { name: "Send" }).click();
 
     await expect
       .poll(() => fixture.state.lastCommand, {
@@ -1498,6 +1517,9 @@ test("apps page launches a Babylon session with embedded auth and the live dashb
       })
       .toBe("protect liquidity");
   } finally {
+    if (!page.isClosed()) {
+      await page.goto("about:blank");
+    }
     await fixture.close();
   }
 });
@@ -1562,7 +1584,9 @@ test("apps page launches a 2004scape session with auto-login and mobile dashboar
       surface.getByText("Auto-login RS_2004SCAPE_AUTH"),
     ).toBeVisible();
 
-    const promptButton = surface.getByRole("button", {
+    await page.getByTestId("game-mobile-surface-chat").click();
+    const chatSurface = page.getByTestId("2004scape-live-operator-surface");
+    const promptButton = chatSurface.getByRole("button", {
       name: "bank before logging off",
     });
     await expect(promptButton).toBeVisible();
@@ -1574,6 +1598,9 @@ test("apps page launches a 2004scape session with auto-login and mobile dashboar
       })
       .toBe("bank before logging off");
   } finally {
+    if (!page.isClosed()) {
+      await page.goto("about:blank");
+    }
     await fixture.close();
   }
 });
@@ -1634,6 +1661,9 @@ test("apps page launches a Defense session with the spectator shell and live ste
       })
       .toBe("tell the hero to rotate bot");
   } finally {
+    if (!page.isClosed()) {
+      await page.goto("about:blank");
+    }
     await fixture.close();
   }
 });

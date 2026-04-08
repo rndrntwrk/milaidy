@@ -1,5 +1,4 @@
 import crypto from "node:crypto";
-import { DatabaseSync } from "node:sqlite";
 import type { AgentRuntime, Task, UUID } from "@elizaos/core";
 import {
   afterAll,
@@ -13,6 +12,7 @@ import {
 } from "vitest";
 import { startApiServer } from "../src/api/server";
 import { LifeOpsRepository } from "../src/lifeops/repository";
+import { DatabaseSync } from "../src/test-utils/sqlite-compat";
 import { req } from "../../../test/helpers/http";
 import { saveEnv } from "../../../test/helpers/test-utils";
 

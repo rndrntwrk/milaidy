@@ -23,11 +23,22 @@ const {
   mockGetPermissions,
   mockInvokeDesktopBridgeRequest,
   mockSubscribeDesktopBridgeEvent,
-} = vi.hoisted(() => ({
-  mockGetPermissions: vi.fn(),
-  mockInvokeDesktopBridgeRequest: vi.fn(),
-  mockSubscribeDesktopBridgeEvent: vi.fn(),
-}));
+  bridgeMockModule,
+} = vi.hoisted(() => {
+  const mockGetPermissions = vi.fn();
+  const mockInvokeDesktopBridgeRequest = vi.fn();
+  const mockSubscribeDesktopBridgeEvent = vi.fn();
+
+  return {
+    mockGetPermissions,
+    mockInvokeDesktopBridgeRequest,
+    mockSubscribeDesktopBridgeEvent,
+    bridgeMockModule: {
+      invokeDesktopBridgeRequest: mockInvokeDesktopBridgeRequest,
+      subscribeDesktopBridgeEvent: mockSubscribeDesktopBridgeEvent,
+    },
+  };
+});
 
 /** Mirrors `hasRequiredOnboardingPermissions` without importing `platform` (avoids bridge/init). */
 const { hasRequiredOnboardingPermissionsForTest } = vi.hoisted(() => {
@@ -72,11 +83,7 @@ vi.mock("@miladyai/app-core/api", () => ({
   },
 }));
 
-const bridgeMockModule = {
-  invokeDesktopBridgeRequest: mockInvokeDesktopBridgeRequest,
-  subscribeDesktopBridgeEvent: mockSubscribeDesktopBridgeEvent,
-};
-
+vi.mock("../../src/bridge", () => bridgeMockModule);
 vi.mock("../../src/bridge/index.ts", () => bridgeMockModule);
 
 vi.mock("@miladyai/ui", () => ({

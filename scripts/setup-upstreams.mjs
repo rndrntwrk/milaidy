@@ -61,9 +61,9 @@ export const ELIZA_BUILD_STEPS = [
 ];
 
 const PACKAGE_LINK_ROOTS = [
-  ["node_modules", "@elizaos"],
-  ["apps", "app", "node_modules", "@elizaos"],
-  ["apps", "home", "node_modules", "@elizaos"],
+  ["node_modules"],
+  ["apps", "app", "node_modules"],
+  ["apps", "home", "node_modules"],
 ];
 
 function toDisplayPath(targetPath) {
@@ -194,17 +194,23 @@ export function hasInstalledElizaDependencies(
 }
 
 function getPackageLinkEntries(repoRoot, packageName, targetPath) {
-  if (!packageName?.startsWith("@elizaos/")) {
+  if (typeof packageName !== "string" || packageName.length === 0) {
     return [];
   }
 
-  const basename = packageName.slice("@elizaos/".length);
-  if (!basename) {
+  const packageSegments = packageName.startsWith("@")
+    ? packageName.split("/").filter(Boolean)
+    : [packageName];
+
+  if (
+    packageSegments.length === 0 ||
+    (packageName.startsWith("@") && packageSegments.length !== 2)
+  ) {
     return [];
   }
 
   return PACKAGE_LINK_ROOTS.map((segments) => ({
-    linkPath: path.join(repoRoot, ...segments, basename),
+    linkPath: path.join(repoRoot, ...segments, ...packageSegments),
     targetPath,
   }));
 }
@@ -268,8 +274,9 @@ function discoverPluginPackageDirs(pluginsRoot) {
     const rootPackage = readPackageJson(repoDir);
     const rootName = rootPackage?.name;
     const shouldLinkRoot =
-      rootName?.startsWith("@elizaos/app-") ||
-      (rootName?.startsWith("@elizaos/plugin-") && !rootName.endsWith("-root"));
+      typeof rootName === "string" &&
+      rootName.startsWith("@") &&
+      !rootName.endsWith("-root");
 
     if (shouldLinkRoot) {
       packageDirs.push(repoDir);
@@ -713,12 +720,11 @@ async function ensureElizaBuildOutputs(elizaRoot) {
   }
 }
 
-async function ensurePluginBuildOutputs(pluginsRoot) {
+export async function ensurePluginBuildOutputs(
+  pluginsRoot,
+  { pathExists = existsSync, runCommandImpl = runCommand } = {},
+) {
   for (const packageDir of discoverPluginPackageDirs(pluginsRoot)) {
-    if (path.basename(packageDir) !== "typescript") {
-      continue;
-    }
-
     const packageJson = readPackageJson(packageDir);
     if (!packageJson?.name?.startsWith("@elizaos/")) {
       continue;
@@ -726,12 +732,12 @@ async function ensurePluginBuildOutputs(pluginsRoot) {
 
     const hasBuildScript =
       packageJson.scripts && typeof packageJson.scripts.build === "string";
-    if (!hasBuildScript || existsSync(path.join(packageDir, "dist"))) {
+    if (!hasBuildScript || pathExists(path.join(packageDir, "dist"))) {
       continue;
     }
 
     console.log(`[setup-upstreams] Building ${packageJson.name}`);
-    await runCommand("bun", ["run", "build"], {
+    await runCommandImpl("bun", ["run", "build"], {
       cwd: packageDir,
       label: `bun run build (${packageJson.name})`,
     });

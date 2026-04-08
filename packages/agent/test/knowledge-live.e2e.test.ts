@@ -11,6 +11,7 @@
  */
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { describeIf } from "../../../test/helpers/conditional-tests.ts";
 import { req } from "../../../test/helpers/http";
 
 // Load .env from the eliza workspace root
@@ -34,7 +35,7 @@ const canRun = hasLLM && isLiveTest;
 // LIVE: KNOWLEDGE MANAGEMENT FLOW
 // ═══════════════════════════════════════════════════════════════════════════
 
-describe.skipIf(!canRun)("Live: Knowledge management flow", () => {
+describeIf(canRun)("Live: Knowledge management flow", () => {
   let port: number;
   let close: () => Promise<void>;
   let uploadedDocumentId: string | null = null;
@@ -257,7 +258,7 @@ This document is being used to verify that:
 // LIVE: URL IMPORT (without actual YouTube to avoid rate limits)
 // ═══════════════════════════════════════════════════════════════════════════
 
-describe.skipIf(!canRun)("Live: URL import", () => {
+describeIf(canRun)("Live: URL import", () => {
   let port: number;
   let close: () => Promise<void>;
 
@@ -303,7 +304,7 @@ describe.skipIf(!canRun)("Live: URL import", () => {
 // LIVE: KNOWLEDGE PROVIDER SKIP BEHAVIOR
 // ═══════════════════════════════════════════════════════════════════════════
 
-describe.skipIf(!canRun)("Live: Knowledge provider skip behavior", () => {
+describeIf(canRun)("Live: Knowledge provider skip behavior", () => {
   let port: number;
   let close: () => Promise<void>;
 

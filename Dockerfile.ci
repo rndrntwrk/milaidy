@@ -73,14 +73,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 WORKDIR /app
 COPY --from=pruner /app /app
 
-# The build context copies a host-built node_modules tree. Install a Linux
-# esbuild binary outside the workspace package graph and point tsx at it so the
-# runtime never reuses a macOS-only optional dependency.
+# The build context copies a host-built node_modules tree. Install esbuild
+# inside the Linux image so npm resolves the correct platform package for the
+# target architecture instead of reusing a macOS-only optional dependency.
 RUN mkdir -p /tmp/esbuild-linux \
   && cd /tmp/esbuild-linux \
   && npm init -y >/dev/null 2>&1 \
-  && npm install --ignore-scripts "@esbuild/linux-x64@${ESBUILD_VERSION}" >/dev/null 2>&1 \
-  && cp node_modules/@esbuild/linux-x64/bin/esbuild /usr/local/bin/esbuild \
+  && npm install --ignore-scripts "esbuild@${ESBUILD_VERSION}" >/dev/null 2>&1 \
+  && cp node_modules/esbuild/bin/esbuild /usr/local/bin/esbuild \
   && chmod +x /usr/local/bin/esbuild \
   && rm -rf /tmp/esbuild-linux /root/.npm
 

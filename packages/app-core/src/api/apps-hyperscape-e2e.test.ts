@@ -11,6 +11,7 @@
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { describeIf } from "../../../../test/helpers/conditional-tests.ts";
 import { AppManager } from "../services/app-manager";
 import type {
   PluginManagerLike,
@@ -79,16 +80,32 @@ const hasLocalHyperscapePlugin = existsSync(
   new URL("elizaos.plugin.json", hyperscapeLocalPluginUrl),
 );
 
+function clonePluginInfo(plugin: RegistryPluginInfo): RegistryPluginInfo {
+  return structuredClone(plugin);
+}
+
 function createMockPluginManager(
   plugins: RegistryPluginInfo[] = [HYPERSCAPE_LOCAL_PLUGIN],
 ): PluginManagerLike {
-  const pluginMap = new Map(plugins.map((p) => [p.name, p]));
+  const pluginEntries = plugins.map((plugin) => [
+    plugin.name,
+    clonePluginInfo(plugin),
+  ] as const);
+  const pluginMap = new Map(pluginEntries);
 
   return {
-    refreshRegistry: vi.fn(async () => pluginMap),
+    refreshRegistry: vi.fn(
+      async () =>
+        new Map(
+          pluginEntries.map(([name, plugin]) => [name, clonePluginInfo(plugin)]),
+        ),
+    ),
     listInstalledPlugins: vi.fn(async () => []),
     getRegistryPlugin: vi.fn(
-      async (name: string) => pluginMap.get(name) ?? null,
+      async (name: string) => {
+        const plugin = pluginMap.get(name);
+        return plugin ? clonePluginInfo(plugin) : null;
+      },
     ),
     searchRegistry: vi.fn(async (query: string) => {
       const lowerQuery = query.toLowerCase();
@@ -129,7 +146,7 @@ function createMockPluginManager(
   };
 }
 
-describe.skipIf(!hasLocalHyperscapePlugin)("Hyperscape E2E Integration", () => {
+describeIf(hasLocalHyperscapePlugin)("Hyperscape E2E Integration", () => {
   let appManager: AppManager;
   let pluginManager: PluginManagerLike;
   let originalEnv: Record<string, string | undefined>;
@@ -139,11 +156,13 @@ describe.skipIf(!hasLocalHyperscapePlugin)("Hyperscape E2E Integration", () => {
     originalEnv = {
       HYPERSCAPE_CHARACTER_ID: process.env.HYPERSCAPE_CHARACTER_ID,
       HYPERSCAPE_AUTH_TOKEN: process.env.HYPERSCAPE_AUTH_TOKEN,
+      HYPERSCAPE_CLIENT_URL: process.env.HYPERSCAPE_CLIENT_URL,
     };
 
     // Set test credentials for hyperscape authentication
     process.env.HYPERSCAPE_CHARACTER_ID = "test-character-id";
     process.env.HYPERSCAPE_AUTH_TOKEN = "test-auth-token";
+    process.env.HYPERSCAPE_CLIENT_URL = "http://localhost:3333";
 
     appManager = new AppManager();
     pluginManager = createMockPluginManager();

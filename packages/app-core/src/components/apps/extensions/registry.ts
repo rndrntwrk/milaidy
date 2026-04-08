@@ -9,7 +9,7 @@ const DETAIL_EXTENSION_COMPONENTS: Record<string, AppDetailExtensionComponent> =
   {
     "babylon-operator-dashboard": BabylonDetailExtension,
     "defense-agent-control": DefenseAgentsDetailExtension,
-    "hyperscape-embedded-agent-control": HyperscapeDetailExtension,
+    "hyperscape-embedded-agents": HyperscapeDetailExtension,
     "2004scape-operator-dashboard": TwoThousandFourScapeDetailExtension,
   };
 

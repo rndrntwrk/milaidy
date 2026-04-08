@@ -1,6 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import type {
   AgentRuntime,
+  AgentContext,
   Plugin,
   PluginEventRegistration,
   PluginModelRegistration,
@@ -10,6 +11,11 @@ import type {
   ServiceTypeName,
   UUID,
 } from "@elizaos/core";
+import {
+  resolveActionContexts,
+  resolveProviderContexts,
+} from "../training/context-catalog";
+import type { AgentContext as TrainingAgentContext } from "../training/context-types";
 
 type ContextScoped = {
   contexts?: string[];
@@ -45,6 +51,19 @@ type RuntimePluginWithLifecycleHooks = Plugin &
     dispose?: PluginDisposeHook;
     applyConfig?: PluginApplyConfigHook;
   };
+
+function toTrainingContexts(
+  contexts: AgentContext[] | undefined,
+): TrainingAgentContext[] | undefined {
+  if (!Array.isArray(contexts) || contexts.length === 0) {
+    return undefined;
+  }
+
+  return contexts.filter(
+    (context): context is TrainingAgentContext =>
+      typeof context === "string" && context.trim().length > 0,
+  );
+}
 
 type RuntimeServiceRegistrationStatus =
   | "pending"
@@ -173,6 +192,48 @@ function inheritPluginContexts<T extends ContextScoped>(
   return {
     ...component,
     contexts: [...pluginContexts],
+  };
+}
+
+function applyEffectiveActionContexts(
+  action: RuntimeAction,
+  pluginContexts: string[] | undefined,
+): RuntimeAction {
+  const inherited = inheritPluginContexts(action, pluginContexts);
+  if ((inherited.contexts?.length ?? 0) > 0) {
+    return inherited;
+  }
+
+  return {
+    ...inherited,
+    contexts: [
+      ...resolveActionContexts(
+        inherited.name,
+        toTrainingContexts(inherited.contexts),
+        toTrainingContexts(pluginContexts as AgentContext[] | undefined),
+      ),
+    ],
+  };
+}
+
+function applyEffectiveProviderContexts(
+  provider: RuntimeProvider,
+  pluginContexts: string[] | undefined,
+): RuntimeProvider {
+  const inherited = inheritPluginContexts(provider, pluginContexts);
+  if ((inherited.contexts?.length ?? 0) > 0) {
+    return inherited;
+  }
+
+  return {
+    ...inherited,
+    contexts: [
+      ...resolveProviderContexts(
+        inherited.name,
+        toTrainingContexts(inherited.contexts),
+        toTrainingContexts(pluginContexts as AgentContext[] | undefined),
+      ),
+    ],
   };
 }
 
@@ -597,7 +658,10 @@ export function installRuntimePluginLifecycle(runtime: AgentRuntime): void {
     const capture = pluginRegistrationContext.getStore();
     const actionsBefore = runtime.actions.length;
     originalRegisterAction(
-      inheritPluginContexts(action, getPluginContexts(capture?.ownership.plugin)),
+      applyEffectiveActionContexts(
+        action,
+        getPluginContexts(capture?.ownership.plugin),
+      ),
     );
     if (!capture || runtime.actions.length <= actionsBefore) return;
     for (const registeredAction of runtime.actions.slice(actionsBefore)) {
@@ -609,7 +673,10 @@ export function installRuntimePluginLifecycle(runtime: AgentRuntime): void {
     const capture = pluginRegistrationContext.getStore();
     const providersBefore = runtime.providers.length;
     originalRegisterProvider(
-      inheritPluginContexts(provider, getPluginContexts(capture?.ownership.plugin)),
+      applyEffectiveProviderContexts(
+        provider,
+        getPluginContexts(capture?.ownership.plugin),
+      ),
     );
     if (!capture || runtime.providers.length <= providersBefore) return;
     for (const registeredProvider of runtime.providers.slice(providersBefore)) {

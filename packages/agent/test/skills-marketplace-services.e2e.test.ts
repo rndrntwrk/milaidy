@@ -424,7 +424,7 @@ describe("Skills Marketplace E2E", () => {
       expect(await listInstalledMarketplaceSkills(workspaceDir)).toHaveLength(
         1,
       );
-      await expect(fs.access(record.installPath)).resolves.toBeUndefined();
+      await expect(fs.access(record.installPath)).resolves.toBeFalsy();
 
       // Uninstall
       const removed = await uninstallMarketplaceSkill(

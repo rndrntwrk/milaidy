@@ -6,6 +6,8 @@ import { skipTrack } from './actions/skipTrack';
 import { showQueue } from './actions/showQueue';
 import { stopMusic } from './actions/stopMusic';
 import { pauseMusic, resumeMusic } from './actions/pauseResumeMusic';
+import { manageRouting } from './actions/manageRouting';
+import { manageZones } from './actions/manageZones';
 import { musicPlayerRoutes } from './routes';
 import { musicPlayerInstructionsProvider } from './providers/musicPlayerInstructions';
 import { installProcessActionsTransportPatch } from './runtime/processActionsTransportPatch';
@@ -50,6 +52,8 @@ const musicPlayerPlugin: Plugin = {
     resumeMusic,
     stopMusic,
     skipTrack,
+    manageRouting,
+    manageZones,
     playAudio,
     queueMusic,
     showQueue,
@@ -100,4 +104,3 @@ const musicPlayerPlugin: Plugin = {
 };
 
 export default musicPlayerPlugin;
-

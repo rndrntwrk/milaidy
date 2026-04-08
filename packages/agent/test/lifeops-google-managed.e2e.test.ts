@@ -2,7 +2,6 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { DatabaseSync } from "node:sqlite";
 import type { AgentRuntime, Task, UUID } from "@elizaos/core";
 import {
   afterAll,
@@ -18,6 +17,7 @@ import { req } from "../../../test/helpers/http";
 import { saveEnv } from "../../../test/helpers/test-utils";
 import { startApiServer } from "../src/api/server";
 import { LifeOpsRepository } from "../src/lifeops/repository";
+import { DatabaseSync } from "../src/test-utils/sqlite-compat";
 
 type SqlQuery = {
   queryChunks?: Array<{ value?: unknown }>;

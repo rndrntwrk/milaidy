@@ -7,7 +7,7 @@
  *  3. End-to-end conversation flows with real model responses
  *
  * Run:
- *   MILADY_LIVE_TEST=1 npx vitest run packages/agent/test/identity-live.test.ts
+ *   bun run test:live:identity
  *
  * Requires at least one LLM provider API key in env (checked in order):
  *   GROQ_API_KEY, OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_GENERATIVE_AI_API_KEY
@@ -31,6 +31,7 @@ import {
   stringToUuid,
 } from "@elizaos/core";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { describeIf } from "../../../test/helpers/conditional-tests.ts";
 
 // ---------------------------------------------------------------------------
 // Environment gate
@@ -678,7 +679,7 @@ class LiveScenarioRunner {
 const tracker = new AccuracyTracker();
 let llmProvider: LLMProvider | null = null;
 
-describe.skipIf(!LIVE_TESTS_ENABLED)("Live LLM Identity Scenarios", () => {
+describeIf(LIVE_TESTS_ENABLED)("Live LLM Identity Scenarios", () => {
   beforeAll(async () => {
     llmProvider = await detectLLMProvider();
     if (!llmProvider) {

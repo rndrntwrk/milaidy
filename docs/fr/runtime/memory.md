@@ -336,7 +336,7 @@ Le compactage de contexte (résumé de l'historique plus ancien) est géré par 
 
 </div>
 
-`@elizaos/plugin-knowledge` fournit la gestion de connaissances RAG. Il se charge au démarrage en tant que plugin central et s'intègre au stockage de mémoire pour récupérer des fragments de connaissances par similarité vectorielle à chaque tour pertinent.
+`knowledge` fournit la gestion de connaissances RAG. Il se charge au démarrage en tant que plugin central et s'intègre au stockage de mémoire pour récupérer des fragments de connaissances par similarité vectorielle à chaque tour pertinent.
 
 <div id="related-pages">
 

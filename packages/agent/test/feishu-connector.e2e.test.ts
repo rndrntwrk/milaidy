@@ -38,6 +38,7 @@ import {
 } from "@miladyai/app-core/src/test-support/test-helpers";
 import dotenv from "dotenv";
 import { describe, expect, it } from "vitest";
+import { describeIf } from "../../../test/helpers/conditional-tests.ts";
 
 // ---------------------------------------------------------------------------
 // Environment Setup
@@ -63,11 +64,11 @@ const FEISHU_PLUGIN_IMPORT = resolveFeishuPluginImportSpecifier();
 const hasPlugin = FEISHU_PLUGIN_IMPORT !== null;
 
 // Plugin-dependent guards (for tests that import the plugin)
-const describeIfPluginAvailable = hasPlugin ? describe : describe.skip;
+const describeIfPluginAvailable = describeIf(hasPlugin);
 
 // Credential-only guards (for direct API tests that don't need the plugin)
-const describeIfCreds = runLiveTests ? describe : describe.skip;
-const describeIfCredsWrite = runLiveWriteTests ? describe : describe.skip;
+const describeIfCreds = describeIf(runLiveTests);
+const describeIfCredsWrite = describeIf(runLiveWriteTests);
 
 const TEST_TIMEOUT = 30_000;
 const LIVE_WRITE_TIMEOUT = 60_000;
@@ -282,7 +283,7 @@ async function isWorkspaceAvailable(): Promise<boolean> {
 // Resolve synchronously at module load so we can gate the describe block.
 // If the workspace isn't built these will all be skipped visibly.
 const workspaceBuilt = await isWorkspaceAvailable();
-const describeIfWorkspace = workspaceBuilt ? describe : describe.skip;
+const describeIfWorkspace = describeIf(workspaceBuilt);
 
 describeIfWorkspace("Feishu Connector - Integration", () => {
   it("Feishu is mapped in CONNECTOR_PLUGINS", async () => {

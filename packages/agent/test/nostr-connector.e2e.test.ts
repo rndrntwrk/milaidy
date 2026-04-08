@@ -33,6 +33,7 @@ import {
 } from "@miladyai/app-core/src/test-support/test-helpers";
 import dotenv from "dotenv";
 import { describe, expect, it } from "vitest";
+import { describeIf } from "../../../test/helpers/conditional-tests.ts";
 import { sleep } from "../../../test/helpers/test-utils";
 
 // ---------------------------------------------------------------------------
@@ -63,11 +64,11 @@ const NOSTR_PLUGIN_IMPORT = resolveNostrPluginImportSpecifier();
 const hasPlugin = NOSTR_PLUGIN_IMPORT !== null;
 
 // Plugin-dependent tests (need @elizaos/plugin-nostr installed)
-const describeIfPluginAvailable = hasPlugin ? describe : describe.skip;
+const describeIfPluginAvailable = describeIf(hasPlugin);
 
 // API-level live tests (need creds + MILADY_LIVE_TEST=1)
-const describeIfLive = runLiveTests ? describe : describe.skip;
-const describeIfLiveWrite = runLiveWriteTests ? describe : describe.skip;
+const describeIfLive = describeIf(runLiveTests);
+const describeIfLiveWrite = describeIf(runLiveWriteTests);
 
 // Timeouts
 const RATE_LIMIT_DELAY_MS = 500;

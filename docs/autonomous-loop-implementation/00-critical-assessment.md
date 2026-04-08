@@ -100,7 +100,7 @@ Implication: owner/admin semantics are partially present but not complete.
 
 ## 7) Rolodex plugin is listed, not guaranteed active
 
-`plugins.json` includes `@elizaos/plugin-rolodex`, but Milady default plugin loading is auto-detected + allowlist/entries driven. Rolodex is not guaranteed loaded unless configured.
+`plugins.json` includes `relationships`, but Milady default plugin loading is auto-detected + allowlist/entries driven. Rolodex is not guaranteed loaded unless configured.
 
 Implication: trust behavior depending on rolodex requires explicit enable/load policy.
 

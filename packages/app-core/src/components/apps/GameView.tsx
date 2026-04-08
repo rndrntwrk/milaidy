@@ -3,7 +3,7 @@
  *
  * Features:
  * - Full-screen iframe for game client
- * - PostMessage auth for HYPERSCAPE_AUTH / RS_2004SCAPE_AUTH
+ * - PostMessage auth for embedded app viewers
  * - Split-screen mode with agent logs panel
  * - Connection status indicator
  */
@@ -550,10 +550,12 @@ export function GameView() {
   const isElectrobun = isElectrobunRuntime();
   const isCompactLayout = useMediaQuery("(max-width: 1023px)");
   const [stopping, setStopping] = useState(false);
+  const [attachingViewer, setAttachingViewer] = useState(false);
+  const [detachingViewer, setDetachingViewer] = useState(false);
   const [showLogsPanel, setShowLogsPanel] = useState(false);
-  const [mobileSurface, setMobileSurface] = useState<"game" | "dashboard">(
-    "game",
-  );
+  const [mobileSurface, setMobileSurface] = useState<
+    "game" | "dashboard" | "chat"
+  >("game");
   const docVisible = useDocumentVisibility();
   const [connectionStatus, setConnectionStatus] = useState<
     "connecting" | "connected" | "disconnected"
@@ -579,14 +581,34 @@ export function GameView() {
     [activeGameRun],
   );
   const useNativeGameWindow = Boolean(
-    isElectrobun && activeGameViewerUrl && !useEmbeddedViewer,
+    isElectrobun &&
+      activeGameRun?.viewer?.url &&
+      activeGameRun.viewerAttachment === "attached" &&
+      !useEmbeddedViewer,
   );
-  const usesNativeAgentInterface = activeGameApp.includes("hyperscape");
-  const supportsOperatorDashboard = !usesNativeAgentInterface;
   const OperatorSurface = useMemo(
     () => getAppOperatorSurface(activeGameApp),
     [activeGameApp],
   );
+  const hasOperatorSurface = Boolean(OperatorSurface);
+  const openOperatorPanelByDefault =
+    activeGameApp !== "@hyperscape/plugin-hyperscape" &&
+    activeGameApp !== "@elizaos/app-hyperscape";
+  const dashboardPanelEnabled =
+    !hasOperatorSurface || openOperatorPanelByDefault;
+  const hasActiveRun = Boolean(activeGameRun);
+  const hasViewer = Boolean(activeGameRun?.viewer?.url);
+  const viewerAttached = activeGameRun?.viewerAttachment === "attached";
+  const openableUrl =
+    activeGameRun?.viewer?.url?.trim() ||
+    activeGameRun?.launchUrl?.trim() ||
+    "";
+  const canAttachViewer =
+    Boolean(activeGameRun?.viewer?.url) &&
+    activeGameRun?.viewerAttachment === "detached";
+  const canDetachViewer =
+    activeGameRun?.viewerAttachment === "attached" &&
+    (activeGameRun?.supportsViewerDetach ?? true);
 
   const applySessionState = useCallback(
     (nextSession: AppSessionState | null) => {
@@ -669,6 +691,28 @@ export function GameView() {
   );
 
   const refreshSessionState = useCallback(async () => {
+    if (activeGameRunId) {
+      try {
+        const nextRun = await client.getAppRun(activeGameRunId);
+        if (nextRun) {
+          applyRunState(nextRun);
+          setConnectionStatus(
+            nextRun.health.state === "offline" ||
+              nextRun.session?.status === "disconnected"
+              ? "disconnected"
+              : "connected",
+          );
+          return nextRun.session ?? null;
+        }
+      } catch (err) {
+        console.warn("[GameView] Failed to refresh app run state:", err);
+        if (!activeGameApp || !activeGameSession?.sessionId) {
+          setConnectionStatus("disconnected");
+          return sessionState ?? activeGameSession ?? null;
+        }
+      }
+    }
+
     if (!activeGameApp || !activeGameSession?.sessionId) return null;
     try {
       const nextSession = await client.getAppSessionState(
@@ -680,6 +724,10 @@ export function GameView() {
       return nextSession;
     } catch (err) {
       console.warn("[GameView] Failed to refresh app session state:", err);
+      if (activeGameRunId) {
+        setConnectionStatus("disconnected");
+        return sessionState ?? activeGameSession ?? null;
+      }
       applySessionState(
         buildDisconnectedSessionState(sessionState ?? activeGameSession),
       );
@@ -687,9 +735,11 @@ export function GameView() {
       return null;
     }
   }, [
+    activeGameRunId,
     activeGameApp,
     activeGameSession,
     activeGameSession?.sessionId,
+    applyRunState,
     applySessionState,
     sessionState,
   ]);
@@ -699,9 +749,9 @@ export function GameView() {
   }, [activeGameSession, applySessionState]);
 
   useEffect(() => {
-    setShowLogsPanel(supportsOperatorDashboard);
+    setShowLogsPanel(dashboardPanelEnabled);
     setMobileSurface("game");
-  }, [activeGameRunId, supportsOperatorDashboard]);
+  }, [dashboardPanelEnabled]);
 
   useEffect(() => {
     if (!activeGameSession?.sessionId) return;
@@ -1074,8 +1124,18 @@ export function GameView() {
   ]);
 
   const handleOpenInNewTab = useCallback(async () => {
+    if (!openableUrl) {
+      setActionNotice(
+        t("gameview.ViewerUnavailable", {
+          defaultValue: "No viewer or launch URL is available for this run.",
+        }),
+        "error",
+        3200,
+      );
+      return;
+    }
     try {
-      await openExternalUrl(activeGameViewerUrl);
+      await openExternalUrl(openableUrl);
     } catch {
       setActionNotice(
         t("gameview.PopupBlocked", {
@@ -1085,7 +1145,67 @@ export function GameView() {
         3600,
       );
     }
-  }, [activeGameViewerUrl, setActionNotice, t]);
+  }, [openableUrl, setActionNotice, t]);
+
+  const handleAttachViewer = useCallback(async () => {
+    if (!activeGameRun) return;
+    setAttachingViewer(true);
+    try {
+      const result = await client.attachAppRun(activeGameRun.runId);
+      if (result.run) {
+        applyRunState(result.run);
+      }
+      setActionNotice(
+        result.message ||
+          t("gameview.ViewerAttached", {
+            defaultValue: "Viewer attached.",
+          }),
+        "success",
+        2200,
+      );
+    } catch (err) {
+      setActionNotice(
+        t("gameview.ViewerAttachFailed", {
+          defaultValue: "Failed to attach viewer: {{message}}",
+          message: err instanceof Error ? err.message : "error",
+        }),
+        "error",
+        3600,
+      );
+    } finally {
+      setAttachingViewer(false);
+    }
+  }, [activeGameRun, applyRunState, setActionNotice, t]);
+
+  const handleDetachViewer = useCallback(async () => {
+    if (!activeGameRun) return;
+    setDetachingViewer(true);
+    try {
+      const result = await client.detachAppRun(activeGameRun.runId);
+      if (result.run) {
+        applyRunState(result.run);
+      }
+      setActionNotice(
+        result.message ||
+          t("gameview.ViewerDetached", {
+            defaultValue: "Viewer detached.",
+          }),
+        "success",
+        2200,
+      );
+    } catch (err) {
+      setActionNotice(
+        t("gameview.ViewerDetachFailed", {
+          defaultValue: "Failed to detach viewer: {{message}}",
+          message: err instanceof Error ? err.message : "error",
+        }),
+        "error",
+        3600,
+      );
+    } finally {
+      setDetachingViewer(false);
+    }
+  }, [activeGameRun, applyRunState, setActionNotice, t]);
 
   const handleStop = useCallback(async () => {
     if (!activeGameRunId) return;
@@ -1122,7 +1242,7 @@ export function GameView() {
     t,
   ]);
 
-  if (!activeGameViewerUrl) {
+  if (!hasActiveRun) {
     return (
       <div className="flex items-center justify-center py-10 text-muted italic">
         {t("game.noActiveSession")}{" "}
@@ -1337,6 +1457,28 @@ export function GameView() {
           ))}
         </div>
       ) : null}
+      {activeSessionState?.recommendations?.length ? (
+        <div className="border-b border-border px-2 py-2 text-[10px] space-y-1.5">
+          <div className="font-semibold text-txt">
+            {t("gameview.Recommendations", {
+              defaultValue: "Recommendations",
+            })}
+          </div>
+          {activeSessionState.recommendations.slice(0, 3).map((item) => (
+            <div key={item.id} className="space-y-0.5">
+              <div className="text-txt">
+                {item.label}
+                {typeof item.priority === "number" ? (
+                  <span className="ml-1 text-muted">#{item.priority}</span>
+                ) : null}
+              </div>
+              {item.reason ? (
+                <div className="text-muted">{item.reason}</div>
+              ) : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
       {logLoadError ? (
         <div className="border-b border-danger/25 bg-danger/8 px-2 py-1.5 text-[10px] text-danger">
           {t("gameview.LogLoadFailed", {
@@ -1426,6 +1568,36 @@ export function GameView() {
                 </div>
               ),
             )
+        ) : Array.isArray(activeSessionState?.activity) &&
+          activeSessionState.activity.length > 0 ? (
+          activeSessionState.activity
+            .slice()
+            .sort((a, b) => Number(b.timestamp ?? 0) - Number(a.timestamp ?? 0))
+            .slice(0, 30)
+            .map((entry) => (
+              <div
+                key={entry.id}
+                className="py-1 border-b border-border/50 flex flex-col gap-0.5"
+              >
+                <div className="flex items-center gap-1">
+                  <span className="text-muted text-[10px]">
+                    {formatTime(entry.timestamp ?? 0, { fallback: "—" })}
+                  </span>
+                  <span
+                    className={`font-semibold text-[10px] uppercase ${
+                      entry.severity === "error"
+                        ? "text-danger"
+                        : entry.severity === "warning"
+                          ? "text-warn"
+                          : "text-muted"
+                    }`}
+                  >
+                    {entry.type}
+                  </span>
+                </div>
+                <div className="text-txt break-all">{entry.message}</div>
+              </div>
+            ))
         ) : gameLogs.length === 0 ? (
           <div className="text-center py-4 text-muted italic">
             {t("game.noAgentActivity")}
@@ -1482,14 +1654,104 @@ export function GameView() {
       : connectionStatus === "connecting"
         ? "text-warn border-warn"
         : "text-danger border-danger";
+  const activeRunSummary =
+    activeGameRun?.summary ??
+    activeGameRun?.health.message ??
+    activeSessionState?.summary ??
+    null;
+  const operatorSurfaceFocus =
+    isCompactLayout && mobileSurface === "dashboard"
+      ? "dashboard"
+      : isCompactLayout && mobileSurface === "chat"
+        ? "chat"
+        : "all";
+
+  const renderViewerPane = () => {
+    if (!hasViewer) {
+      return (
+        <div className="flex h-full flex-col items-center justify-center gap-3 bg-bg px-6 text-center">
+          <div className="text-sm font-semibold text-txt">
+            {activeGameDisplayName || activeGameApp}
+          </div>
+          <div className="max-w-md text-xs leading-6 text-muted">
+            This run is alive, but it does not currently expose a viewer URL.
+            You can keep steering it from the dashboard and running-runs panel.
+          </div>
+        </div>
+      );
+    }
+
+    if (!viewerAttached) {
+      return (
+        <div className="flex h-full flex-col items-center justify-center gap-3 bg-bg px-6 text-center">
+          <div className="text-sm font-semibold text-txt">Viewer detached</div>
+          <div className="max-w-md text-xs leading-6 text-muted">
+            The autonomous run is still active. Reattach the viewer to resume
+            watching without restarting the session.
+          </div>
+          <div className="flex flex-wrap justify-center gap-2">
+            <Button
+              variant="default"
+              size="sm"
+              onClick={() => void handleAttachViewer()}
+              disabled={attachingViewer}
+            >
+              {attachingViewer ? "Reattaching..." : "Reattach viewer"}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void handleOpenInNewTab()}
+              disabled={!openableUrl}
+            >
+              {t("game.openInNewTab")}
+            </Button>
+          </div>
+        </div>
+      );
+    }
+
+    if (useNativeGameWindow) {
+      return (
+        <div className="w-full h-full flex flex-col items-center justify-center bg-bg text-muted gap-3">
+          {gameWindowId ? (
+            <>
+              <span className="text-sm font-semibold text-txt">
+                {activeGameDisplayName || activeGameApp}
+              </span>
+              <span className="text-xs text-muted">
+                {t("game.openInNativeWindow")}
+              </span>
+            </>
+          ) : (
+            <span className="text-xs italic">{t("game.launching")}</span>
+          )}
+        </div>
+      );
+    }
+
+    return (
+      <iframe
+        ref={iframeRef}
+        src={activeGameViewerUrl}
+        sandbox={activeGameSandbox}
+        allow="fullscreen *"
+        allowFullScreen
+        data-testid="game-view-iframe"
+        className="w-full h-full border-none"
+        title={
+          activeGameDisplayName || t("gameview.Game", { defaultValue: "Game" })
+        }
+      />
+    );
+  };
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      <div className="flex items-center gap-3 px-4 py-2 border-b border-border bg-card">
+      <div className="flex flex-wrap items-center gap-3 px-4 py-2 border-b border-border bg-card">
         <span className="font-bold text-sm">
           {activeGameDisplayName || activeGameApp}
         </span>
-        {/* Connection status indicator */}
         <span
           className={`text-[10px] px-1.5 py-0.5 border ${connectionStatusColor}`}
         >
@@ -1499,30 +1761,22 @@ export function GameView() {
               ? t("game.connecting")
               : t("game.disconnected")}
         </span>
+        <span className="text-[10px] px-1.5 py-0.5 border border-border text-muted">
+          {activeGameRun?.viewerAttachment ?? "unavailable"}
+        </span>
+        <span className="text-[10px] px-1.5 py-0.5 border border-border text-muted">
+          {activeGameRun?.health.state ?? "unknown"}
+        </span>
         {activeGamePostMessageAuth ? (
           <span className="text-[10px] px-1.5 py-0.5 border border-border text-muted">
             {t("gameview.postMessageAuth")}
-          </span>
-        ) : null}
-        {usesNativeAgentInterface ? (
-          <span
-            data-testid="game-native-agent-interface"
-            className="text-[10px] px-1.5 py-0.5 border border-accent/30 bg-accent/10 text-accent"
-            title={t("gameview.NativeAgentInterfaceHint", {
-              defaultValue:
-                "Hyperscape already includes the agent console, timeline, logs, and chat inside the embedded viewer.",
-            })}
-          >
-            {t("gameview.NativeAgentInterface", {
-              defaultValue: "Embedded agent UI",
-            })}
           </span>
         ) : null}
         <span className="flex-1" />
         {activeSessionState?.status ? (
           <span
             data-testid="game-session-status"
-            className="max-w-48 truncate text-[10px] px-1.5 py-0.5 border border-border text-muted"
+            className="max-w-56 truncate text-[10px] px-1.5 py-0.5 border border-border text-muted"
             title={activeSessionState.summary ?? activeSessionState.status}
           >
             {activeSessionState.summary ?? activeSessionState.status}
@@ -1546,7 +1800,7 @@ export function GameView() {
                 : t("gameview.Resume", { defaultValue: "Resume" })}
           </Button>
         ) : null}
-        {supportsOperatorDashboard && !isCompactLayout ? (
+        {dashboardPanelEnabled && !isCompactLayout ? (
           <Button
             variant={showLogsPanel ? "default" : "outline"}
             size="sm"
@@ -1563,29 +1817,54 @@ export function GameView() {
                 })}
           </Button>
         ) : null}
-        {useNativeGameWindow && (
+        {canAttachViewer ? (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs shadow-sm hover:border-accent"
+            onClick={() => void handleAttachViewer()}
+            disabled={attachingViewer}
+          >
+            {attachingViewer ? "Reattaching..." : "Reattach viewer"}
+          </Button>
+        ) : null}
+        {canDetachViewer ? (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-7 text-xs shadow-sm hover:border-accent"
+            onClick={() => void handleDetachViewer()}
+            disabled={detachingViewer}
+          >
+            {detachingViewer ? "Detaching..." : "Detach viewer"}
+          </Button>
+        ) : null}
+        {useNativeGameWindow ? (
           <DesktopGameWindowControls gameWindowId={gameWindowId} />
-        )}
-        <Button
-          variant={gameOverlayEnabled ? "default" : "outline"}
-          size="sm"
-          className="h-7 text-xs shadow-sm hover:border-accent"
-          onClick={() => setState("gameOverlayEnabled", !gameOverlayEnabled)}
-          title={
-            gameOverlayEnabled
-              ? t("game.disableOverlay")
-              : t("game.keepVisible")
-          }
-        >
-          {gameOverlayEnabled ? t("game.unpinOverlay") : t("game.keepOnTop")}
-        </Button>
+        ) : null}
+        {hasViewer ? (
+          <Button
+            variant={gameOverlayEnabled ? "default" : "outline"}
+            size="sm"
+            className="h-7 text-xs shadow-sm hover:border-accent"
+            onClick={() => setState("gameOverlayEnabled", !gameOverlayEnabled)}
+            title={
+              gameOverlayEnabled
+                ? t("game.disableOverlay")
+                : t("game.keepVisible")
+            }
+          >
+            {gameOverlayEnabled ? t("game.unpinOverlay") : t("game.keepOnTop")}
+          </Button>
+        ) : null}
         <Button
           variant="default"
           size="sm"
           className="h-7 text-xs shadow-sm"
           onClick={handleOpenInNewTab}
+          disabled={!openableUrl}
         >
-          {t("game.openInNewTab")}
+          {hasViewer ? t("game.openInNewTab") : "Open launch URL"}
         </Button>
         <Button
           variant="default"
@@ -1608,7 +1887,12 @@ export function GameView() {
           {t("game.backToApps")}
         </Button>
       </div>
-      {supportsOperatorDashboard && isCompactLayout ? (
+      {activeRunSummary ? (
+        <div className="border-b border-border bg-card/70 px-4 py-2 text-[11px] leading-5 text-muted-strong">
+          {activeRunSummary}
+        </div>
+      ) : null}
+      {dashboardPanelEnabled && isCompactLayout ? (
         <div className="flex items-center gap-2 border-b border-border bg-card px-4 py-2">
           <Button
             variant={mobileSurface === "game" ? "default" : "outline"}
@@ -1632,6 +1916,17 @@ export function GameView() {
               defaultValue: "Dashboard",
             })}
           </Button>
+          <Button
+            variant={mobileSurface === "chat" ? "default" : "outline"}
+            size="sm"
+            data-testid="game-mobile-surface-chat"
+            className="h-8 text-xs shadow-sm"
+            onClick={() => setMobileSurface("chat")}
+          >
+            {t("gameview.MobileSurfaceChat", {
+              defaultValue: "Chat",
+            })}
+          </Button>
         </div>
       ) : null}
       <div
@@ -1639,67 +1934,41 @@ export function GameView() {
           isCompactLayout ? "flex flex-col" : "flex"
         }`}
       >
-        {!supportsOperatorDashboard || !isCompactLayout || mobileSurface === "game" ? (
-          <div className="flex-1 min-h-0 relative">
-            {useNativeGameWindow ? (
-              /* Electrobun mode: game runs in an isolated BrowserWindow opened
-                 via game:openWindow RPC. The div below is a placeholder that
-                 fills the same space in the layout while the native window is
-                 positioned by the OS window manager. */
-              <div className="w-full h-full flex flex-col items-center justify-center bg-bg text-muted gap-3">
-                {gameWindowId ? (
-                  <>
-                    <span className="text-sm font-semibold text-txt">
-                      {activeGameDisplayName || activeGameApp}
-                    </span>
-                    <span className="text-xs text-muted">
-                      {t("game.openInNativeWindow")}
-                    </span>
-                  </>
-                ) : (
-                  <span className="text-xs italic">{t("game.launching")}</span>
-                )}
-              </div>
-            ) : (
-              /* Web / dev-server fallback: standard iframe */
-              <iframe
-                ref={iframeRef}
-                src={activeGameViewerUrl}
-                sandbox={activeGameSandbox}
-                allow="fullscreen *"
-                allowFullScreen
-                data-testid="game-view-iframe"
-                className="w-full h-full border-none"
-                title={
-                  activeGameDisplayName ||
-                  t("gameview.Game", { defaultValue: "Game" })
-                }
-              />
-            )}
-          </div>
+        {!dashboardPanelEnabled ||
+        !isCompactLayout ||
+        mobileSurface === "game" ? (
+          <div className="flex-1 min-h-0 relative">{renderViewerPane()}</div>
         ) : null}
-        {showLogsPanel && supportsOperatorDashboard
-          ? isCompactLayout
-            ? mobileSurface === "dashboard"
-              ? OperatorSurface
-                ? (
-                    <div className="h-full overflow-y-auto">
-                      <OperatorSurface
-                        appName={activeGameApp}
-                        variant="live"
-                      />
-                    </div>
-                  )
-                : renderLogsPanel("standalone")
-              : null
-            : OperatorSurface
-              ? (
-                  <div className="w-[30rem] min-h-0 overflow-y-auto border-l border-border bg-card">
-                    <OperatorSurface appName={activeGameApp} variant="live" />
-                  </div>
-                )
-              : renderLogsPanel()
-          : null}
+        {(showLogsPanel && dashboardPanelEnabled) ||
+        (isCompactLayout &&
+          dashboardPanelEnabled &&
+          mobileSurface !== "game") ? (
+          isCompactLayout ? (
+            mobileSurface === "dashboard" || mobileSurface === "chat" ? (
+              hasOperatorSurface && OperatorSurface ? (
+                <div className="h-full overflow-y-auto">
+                  <OperatorSurface
+                    appName={activeGameApp}
+                    variant="live"
+                    focus={operatorSurfaceFocus}
+                  />
+                </div>
+              ) : (
+                renderLogsPanel("standalone")
+              )
+            ) : null
+          ) : hasOperatorSurface && OperatorSurface ? (
+            <div className="w-[30rem] min-h-0 overflow-y-auto border-l border-border bg-card">
+              <OperatorSurface
+                appName={activeGameApp}
+                variant="live"
+                focus="all"
+              />
+            </div>
+          ) : (
+            renderLogsPanel()
+          )
+        ) : null}
       </div>
     </div>
   );

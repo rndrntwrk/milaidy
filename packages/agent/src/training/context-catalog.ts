@@ -12,6 +12,12 @@
 
 import { AGENT_CONTEXTS, type AgentContext } from "./context-types.js";
 
+export type ContextResolutionSource =
+  | "component"
+  | "plugin"
+  | "catalog"
+  | "default";
+
 /** Mapping from action name to its contexts. */
 export const ACTION_CONTEXT_MAP: Record<string, AgentContext[]> = {
   // --- General ---
@@ -23,6 +29,16 @@ export const ACTION_CONTEXT_MAP: Record<string, AgentContext[]> = {
   STATUS: ["general"],
   MODELS: ["general"],
   CONFIGURE: ["general", "system"],
+  SET_USER_NAME: ["social"],
+  PLAY_EMOTE: ["social"],
+  RUN_IN_TERMINAL: ["code", "system"],
+  RESTART_AGENT: ["system"],
+  SEND_ADMIN_MESSAGE: ["social", "system"],
+  LIFE: ["automation"],
+  GO_LIVE: ["media", "social"],
+  GO_OFFLINE: ["media", "social"],
+  SKILL_COMMAND: ["code", "general"],
+  CREATE_TRIGGER_TASK: ["automation"],
 
   // --- Wallet / DeFi ---
   SEND_TOKEN: ["wallet"],
@@ -143,12 +159,132 @@ export const PROVIDER_CONTEXT_MAP: Record<string, AgentContext[]> = {
   // System providers
   agentConfig: ["system"],
   pluginList: ["system"],
+  elizaChannelProfile: ["general"],
+  elizaSessionKey: ["general", "system"],
+  roleBackfill: ["social", "system"],
+  "activity-profile": ["general", "social"],
+  elizaAdminTrust: ["social", "system"],
+  escalationTrigger: ["system", "social"],
+  uiCatalog: ["system"],
+  workspaceContext: ["code", "knowledge"],
+  userName: ["social"],
+  adminPanel: ["social", "system"],
+  elizaDynamicSkills: ["code", "general"],
+  lifeops: ["automation"],
 };
 
 /** All canonical contexts. */
 export const ALL_CONTEXTS: AgentContext[] = [
   ...AGENT_CONTEXTS,
 ];
+
+function sanitizeContexts(
+  contexts?: AgentContext[],
+): AgentContext[] | undefined {
+  if (!Array.isArray(contexts) || contexts.length === 0) {
+    return undefined;
+  }
+
+  const normalized = contexts.filter(
+    (context): context is AgentContext =>
+      typeof context === "string" && context.trim().length > 0,
+  );
+
+  return normalized.length > 0 ? normalized : undefined;
+}
+
+function resolveActionCatalogEntry(actionName: string): AgentContext[] | undefined {
+  return ACTION_CONTEXT_MAP[actionName.toUpperCase()];
+}
+
+function resolveProviderCatalogEntry(
+  providerName: string,
+): AgentContext[] | undefined {
+  return (
+    PROVIDER_CONTEXT_MAP[providerName] ??
+    PROVIDER_CONTEXT_MAP[
+      Object.keys(PROVIDER_CONTEXT_MAP).find(
+        (key) => key.toLowerCase() === providerName.toLowerCase(),
+      ) ?? ""
+    ]
+  );
+}
+
+export function resolveActionContextResolution(
+  actionName: string,
+  actionContexts?: AgentContext[],
+  pluginContexts?: AgentContext[],
+): {
+  contexts: AgentContext[];
+  source: ContextResolutionSource;
+} {
+  const componentContexts = sanitizeContexts(actionContexts);
+  if (componentContexts) {
+    return {
+      contexts: [...componentContexts],
+      source: "component",
+    };
+  }
+
+  const inheritedPluginContexts = sanitizeContexts(pluginContexts);
+  if (inheritedPluginContexts) {
+    return {
+      contexts: [...inheritedPluginContexts],
+      source: "plugin",
+    };
+  }
+
+  const catalogEntry = resolveActionCatalogEntry(actionName);
+  if (catalogEntry) {
+    return {
+      contexts: [...catalogEntry],
+      source: "catalog",
+    };
+  }
+
+  return {
+    contexts: ["general"],
+    source: "default",
+  };
+}
+
+export function resolveProviderContextResolution(
+  providerName: string,
+  providerContexts?: AgentContext[],
+  pluginContexts?: AgentContext[],
+): {
+  contexts: AgentContext[];
+  source: ContextResolutionSource;
+} {
+  const componentContexts = sanitizeContexts(providerContexts);
+  if (componentContexts) {
+    return {
+      contexts: [...componentContexts],
+      source: "component",
+    };
+  }
+
+  const inheritedPluginContexts = sanitizeContexts(pluginContexts);
+  if (inheritedPluginContexts) {
+    return {
+      contexts: [...inheritedPluginContexts],
+      source: "plugin",
+    };
+  }
+
+  const catalogEntry = resolveProviderCatalogEntry(providerName);
+  if (catalogEntry) {
+    return {
+      contexts: [...catalogEntry],
+      source: "catalog",
+    };
+  }
+
+  return {
+    contexts: ["general"],
+    source: "default",
+  };
+}
 
 /**
  * Resolve the effective contexts for an action.
@@ -159,11 +295,11 @@ export function resolveActionContexts(
   actionContexts?: AgentContext[],
   pluginContexts?: AgentContext[],
 ): AgentContext[] {
-  if (actionContexts && actionContexts.length > 0) return actionContexts;
-  if (pluginContexts && pluginContexts.length > 0) return pluginContexts;
-  const catalogEntry = ACTION_CONTEXT_MAP[actionName.toUpperCase()];
-  if (catalogEntry) return catalogEntry;
-  return ["general"];
+  return resolveActionContextResolution(
+    actionName,
+    actionContexts,
+    pluginContexts,
+  ).contexts;
 }
 
 /**
@@ -174,11 +310,11 @@ export function resolveProviderContexts(
   providerContexts?: AgentContext[],
   pluginContexts?: AgentContext[],
 ): AgentContext[] {
-  if (providerContexts && providerContexts.length > 0) return providerContexts;
-  if (pluginContexts && pluginContexts.length > 0) return pluginContexts;
-  const catalogEntry = PROVIDER_CONTEXT_MAP[providerName];
-  if (catalogEntry) return catalogEntry;
-  return ["general"];
+  return resolveProviderContextResolution(
+    providerName,
+    providerContexts,
+    pluginContexts,
+  ).contexts;
 }
 
 /**

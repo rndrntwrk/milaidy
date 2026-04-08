@@ -62,7 +62,7 @@ Many patches overlap (both layers patch the same package). The patches target th
 
 ---
 
-### 1.4 `@elizaos/core` — Client Chat Evaluate Deferral (MEDIUM)
+### 1.4 `@elizaos/core` — Client Chat Evaluate Deferral (MEDIUM, RETIRED)
 
 **Problem:** `runtime.evaluate()` blocks SSE stream close for `client_chat` messages. Evaluator auth errors stall the stream indefinitely.
 
@@ -71,7 +71,7 @@ Many patches overlap (both layers patch the same package). The patches target th
 **Files to patch upstream:**
 - `packages/core/src/basic-capabilities/services/default-message-service.ts`: conditional deferral based on `message.content?.source === "client_chat"`
 
-**Patch source:** `scripts/lib/patch-eliza-core-client-chat-eval.mjs`
+**Status:** Upstreamed in `eliza/packages/typescript/src/services/message.ts`; the standalone postinstall patch was retired.
 
 ---
 
@@ -84,7 +84,7 @@ Many patches overlap (both layers patch the same package). The patches target th
 **Files to patch upstream:**
 - `packages/plugin-sql/src/pg/manager.ts` (or wherever `isValidUUID` is defined): update regex
 
-**Patch files:** `patches/@elizaos%2Fplugin-sql@2.0.0-alpha.17.patch` + inline in `patch-deps.mjs`
+**Status:** Upstreamed and published in `@elizaos/plugin-sql@2.0.0-alpha.19`; the root patch file was retired.
 
 ---
 
@@ -103,7 +103,7 @@ Many patches overlap (both layers patch the same package). The patches target th
 **Files to patch upstream:**
 - `plugin-agent-skills/src/index.ts` (AgentSkillsService.getCatalog method)
 
-**Patch files:** `patches/@elizaos%2Fplugin-agent-skills@2.0.0-alpha.70.patch` + `patchAgentSkillsCatalogFetch()` in `lib/patch-bun-exports.mjs`
+**Status:** Upstreamed and published in `@elizaos/plugin-agent-skills@2.0.0-alpha.71`; the root patch file and postinstall helper were retired.
 
 ---
 
@@ -129,7 +129,7 @@ Many patches overlap (both layers patch the same package). The patches target th
 **Files to patch upstream:**
 - `plugin-coding-agent/package.json`: fix exports field
 
-**Patch files:** `patches/@elizaos%2Fplugin-coding-agent@0.1.0-next.1.patch` + `patchBunExports()` in `lib/patch-bun-exports.mjs`
+**Status:** Upstreamed and published in `@elizaos/plugin-coding-agent@0.1.0-alpha.2`; the root postinstall call was retired.
 
 ---
 
@@ -228,10 +228,7 @@ Several packages are patched by BOTH the .patch file AND the JS postinstall:
 | Package | .patch file | JS postinstall | Notes |
 |---------|-------------|----------------|-------|
 | `@elizaos/core` | Yes (alpha.98) | Yes (5 functions) | .patch covers chat messages; JS covers TTS, retry, evaluate |
-| `@elizaos/plugin-sql` | Yes (alpha.17) | Yes (UUID inline) | Exact same UUID fix in both |
-| `@elizaos/plugin-agent-skills` | Yes (alpha.70) | Yes (catalog fetch) | Exact same 429 fix in both |
 | `@elizaos/plugin-agent-orchestrator` | Yes (0.3.14 + 0.3.16) | Yes (lifecycle) | Same postinstall removal |
-| `@elizaos/plugin-coding-agent` | Yes (0.1.0-next.1) | Yes (bun exports) | Same export fix |
 | `@noble/curves` | Yes (2.0.1) | Yes (extensionless) | Overlapping export fixes |
 | `proper-lockfile` | Yes (4.1.2) | Yes (signal-exit) | Same compat fix |
 

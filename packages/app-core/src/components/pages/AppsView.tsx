@@ -67,6 +67,7 @@ export function AppsView() {
   );
   const currentGameViewerUrl =
     typeof activeGameViewerUrl === "string" ? activeGameViewerUrl.trim() : "";
+  const hasActiveRun = Boolean(activeGameRun);
   const hasCurrentGame =
     currentGameViewerUrl.length > 0 &&
     activeGameRun?.viewerAttachment === "attached";
@@ -311,10 +312,10 @@ export function AppsView() {
   );
 
   const handleOpenCurrentGame = useCallback(() => {
-    if (!hasCurrentGame) return;
+    if (!hasActiveRun) return;
     setState("tab", "apps");
     setState("appsSubTab", "games");
-  }, [hasCurrentGame, setState]);
+  }, [hasActiveRun, setState]);
 
   const handleOpenCurrentGameInNewTab = useCallback(async () => {
     if (!hasCurrentGame) return;
@@ -541,13 +542,13 @@ export function AppsView() {
                 >
                   Running ({sortedRuns.length})
                 </button>
-                {hasCurrentGame ? (
+                {hasActiveRun ? (
                   <button
                     type="button"
                     className="rounded-full border border-ok/35 bg-ok/10 px-3 py-1.5 text-[11px] font-medium text-ok transition-colors hover:bg-ok/15"
                     onClick={handleOpenCurrentGame}
                   >
-                    Live viewer
+                    {hasCurrentGame ? "Live viewer" : "Active run"}
                   </button>
                 ) : null}
               </div>
@@ -558,10 +559,10 @@ export function AppsView() {
               data-testid="apps-session-status-card"
             >
               <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
-                {hasCurrentGame ? "Current live session" : "Session status"}
+                {hasActiveRun ? "Current active run" : "Session status"}
               </div>
               <div className="mt-2 text-sm font-semibold text-txt">
-                {hasCurrentGame
+                {hasActiveRun
                   ? activeGameDisplayName || "Active app session"
                   : sortedRuns.length > 0
                     ? `${sortedRuns.length} run${sortedRuns.length === 1 ? "" : "s"} active`
@@ -569,10 +570,12 @@ export function AppsView() {
               </div>
               <p className="mt-2 text-[12px] leading-6 text-muted-strong">
                 {hasCurrentGame
-                  ? "Jump back into the running app or keep browsing for another world to connect."
-                  : sortedRuns.length > 0
-                    ? "Detach, reattach, or stop background runs without losing the rest of your catalog context."
-                    : "Pick an app to inspect launch details and start a live agent session."}
+                  ? "Jump back into the attached viewer or keep browsing for another world to connect."
+                  : hasActiveRun
+                    ? "The run is still alive even if the viewer is detached or waiting for reattachment."
+                    : sortedRuns.length > 0
+                      ? "Detach, reattach, or stop background runs without losing the rest of your catalog context."
+                      : "Pick an app to inspect launch details and start a live agent session."}
               </p>
               {attentionRuns.length > 0 ? (
                 <div className="mt-3 rounded-xl border border-warn/30 bg-warn/10 px-3 py-2 text-[11px] leading-5 text-warn">

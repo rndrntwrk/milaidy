@@ -6,32 +6,34 @@
  * Memory search/get actions are superseded by plugin-scratchpad.
  */
 
-import type {
-  IAgentRuntime,
-  Plugin,
-  Provider,
-  ProviderResult,
-  ServiceClass,
-} from "@elizaos/core";
+import type { IAgentRuntime, Plugin, ServiceClass } from "@elizaos/core";
 import { AgentEventService } from "@elizaos/core";
 import { emoteAction } from "../actions/emote";
-import { restartAction } from "../actions/restart";
-import { sendMessageAction } from "../actions/send-message";
-import {
-  goLiveAction,
-  goOfflineAction,
-} from "../actions/stream-control";
-import { terminalAction } from "../actions/terminal";
 import { lifeAction } from "../actions/life";
+import { restartAction } from "../actions/restart";
 import { sendAdminMessageAction } from "../actions/send-admin-message";
+import { setUserNameAction } from "../actions/set-user-name";
 import {
-  skillCommandAction,
   addRegisteredSkillSlug,
   clearRegisteredSkillSlugs,
+  skillCommandAction,
 } from "../actions/skill-command";
+import { terminalAction } from "../actions/terminal";
+import {
+  ensureProactiveAgentTask,
+  registerProactiveTaskWorker,
+} from "../activity-profile/proactive-worker";
+import { lateJoinWhitelistEvaluator } from "../evaluators/late-join-whitelist";
+import {
+  ensureLifeOpsSchedulerTask,
+  registerLifeOpsTaskWorker,
+} from "../lifeops/runtime";
+import { activityProfileProvider } from "../providers/activity-profile";
 import { adminPanelProvider } from "../providers/admin-panel";
 import { adminTrustProvider } from "../providers/admin-trust";
-
+import { escalationTriggerProvider } from "../providers/escalation-trigger";
+import { lifeOpsProvider } from "../providers/lifeops";
+import { roleBackfillProvider } from "../providers/role-backfill";
 import { createSessionKeyProvider } from "../providers/session-bridge";
 import {
   getSessionProviders,
@@ -39,27 +41,14 @@ import {
 } from "../providers/session-utils";
 import { createChannelProfileProvider } from "../providers/simple-mode";
 import { createDynamicSkillProvider } from "../providers/skill-provider";
-import { lifeOpsProvider } from "../providers/lifeops";
-import { activityProfileProvider } from "../providers/activity-profile";
 import { uiCatalogProvider } from "../providers/ui-catalog";
 import { createUserNameProvider } from "../providers/user-name";
-import { roleBackfillProvider } from "../providers/role-backfill";
-import { escalationTriggerProvider } from "../providers/escalation-trigger";
-import { lateJoinWhitelistEvaluator } from "../evaluators/late-join-whitelist";
-import { setUserNameAction } from "../actions/set-user-name";
 import { DEFAULT_AGENT_WORKSPACE_DIR } from "../providers/workspace";
 import { createWorkspaceProvider } from "../providers/workspace-provider";
 import { createTriggerTaskAction } from "../triggers/action";
 import { registerTriggerTaskWorker } from "../triggers/runtime";
-import {
-  ensureLifeOpsSchedulerTask,
-  registerLifeOpsTaskWorker,
-} from "../lifeops/runtime";
-import {
-  ensureProactiveAgentTask,
-  registerProactiveTaskWorker,
-} from "../activity-profile/proactive-worker";
-import { loadCustomActions, setCustomActionsRuntime } from "./custom-actions";
+import { AdvancedMemoryStorageService } from "./advanced-memory-storage";
+import { setCustomActionsRuntime } from "./custom-actions";
 
 export type ElizaPluginConfig = {
   workspaceDir?: string;
@@ -99,42 +88,14 @@ export function createElizaPlugin(config?: ElizaPluginConfig): Plugin {
   // the PLAY_EMOTE action is excluded at init time so it never appears in the
   // prompt. Previously this was checked per-request in the emote provider.
 
-  // Custom actions provider — tells the LLM about available custom actions.
-  const customActionsProvider: Provider = {
-    name: "customActions",
-    description: "User-defined custom actions",
-
-    async get(): Promise<ProviderResult> {
-      const customActions = loadCustomActions();
-      if (customActions.length === 0) {
-        // Don't waste tokens telling the LLM there are no custom actions.
-        return { text: "" };
-      }
-
-      const lines = customActions.map((a) => {
-        const params =
-          a.parameters
-            ?.map((p) => `${p.name}${p.required ? " (required)" : ""}`)
-            .join(", ") || "none";
-        return `- **${a.name}**: ${a.description} [params: ${params}]`;
-      });
-
-      return {
-        text: [
-          "## Custom Actions",
-          "",
-          "The following custom actions are available:",
-          ...lines,
-        ].join("\n"),
-      };
-    },
-  };
-
   const plugin: Plugin = {
     name: "eliza",
     description: "Eliza workspace context, session keys, and lifecycle actions",
 
-    services: [AgentEventService as ServiceClass],
+    services: [
+      AdvancedMemoryStorageService as ServiceClass,
+      AgentEventService as ServiceClass,
+    ],
 
     init: async (_pluginConfig, runtime: IAgentRuntime) => {
       registerTriggerTaskWorker(runtime);
@@ -247,14 +208,12 @@ export function createElizaPlugin(config?: ElizaPluginConfig): Plugin {
       uiCatalogProvider,
       roleBackfillProvider,
       escalationTriggerProvider,
-      // customActionsProvider,
     ],
 
     evaluators: [lateJoinWhitelistEvaluator],
 
     actions: [
       restartAction,
-      // sendMessageAction,
       sendAdminMessageAction,
       terminalAction,
       createTriggerTaskAction,

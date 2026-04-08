@@ -47,15 +47,6 @@ export function extractAuthToken(req: http.IncomingMessage): string | null {
 // Token / API auth helpers
 // ---------------------------------------------------------------------------
 
-export function resolveHyperscapeAuthorizationHeader(
-  req: Pick<http.IncomingMessage, "headers">,
-): string | null {
-  void req;
-  const envToken = process.env.HYPERSCAPE_AUTH_TOKEN?.trim();
-  if (!envToken) return null;
-  return /^Bearer\s+/i.test(envToken) ? envToken : `Bearer ${envToken}`;
-}
-
 export function tokenMatches(expected: string, provided: string): boolean {
   const a = Buffer.from(expected, "utf8");
   const b = Buffer.from(provided, "utf8");
@@ -401,7 +392,12 @@ export function resolveWebSocketUpgradeRejection(
 // State dir safety check
 // ---------------------------------------------------------------------------
 
-const RESET_STATE_ALLOWED_SEGMENTS = new Set([".eliza", "eliza"]);
+const RESET_STATE_ALLOWED_SEGMENTS = new Set([
+  ".eliza",
+  "eliza",
+  ".milady",
+  "milady",
+]);
 
 function hasAllowedResetSegment(resolvedState: string): boolean {
   return resolvedState

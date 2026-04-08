@@ -354,7 +354,7 @@ Every published plugin should include an `elizaos.plugin.json` manifest at its p
   ],
   "requiredSecrets": ["WEATHER_API_KEY"],
   "channels": ["chat", "telegram", "discord"],
-  "dependencies": ["@elizaos/plugin-knowledge"]
+  "dependencies": ["knowledge"]
 }
 ```
 

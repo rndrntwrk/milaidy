@@ -37,44 +37,25 @@ interface LocalAppOverride {
   session?: RegistryAppSessionMeta;
 }
 
-const HYPERSCAPE_APP_OVERRIDE: LocalAppOverride = {
-  displayName: "Hyperscape",
-  category: "game",
-  launchType: "connect",
-  launchUrl: "{HYPERSCAPE_CLIENT_URL}",
-  capabilities: [
-    "combat",
-    "skills",
-    "inventory",
-    "banking",
-    "social-chat",
-    "exploration",
-    "crafting",
-  ],
-  runtimePlugin: "@hyperscape/plugin-hyperscape",
-  uiExtension: {
-    detailPanelId: "hyperscape-embedded-agent-control",
-  },
-  viewer: {
-    url: "{HYPERSCAPE_CLIENT_URL}",
-    embedParams: {
-      embedded: "true",
-      mode: "spectator",
-      surface: "agent-control",
-      followEntity: "{HYPERSCAPE_CHARACTER_ID}",
-      hiddenUI: "chat,inventory,minimap,hotbar,stats",
-      quality: "medium",
-    },
-    postMessageAuth: true,
-    sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
-  },
-  session: {
-    mode: "spectate-and-steer",
-    features: ["commands", "telemetry", "pause", "resume", "suggestions"],
-  },
-};
-
 const LOCAL_APP_OVERRIDES: Readonly<Record<string, LocalAppOverride>> = {
+  "@hyperscape/plugin-hyperscape": {
+    uiExtension: {
+      detailPanelId: "hyperscape-embedded-agents",
+    },
+    session: {
+      mode: "spectate-and-steer",
+      features: ["commands", "telemetry", "pause", "resume", "suggestions"],
+    },
+  },
+  "@elizaos/app-hyperscape": {
+    uiExtension: {
+      detailPanelId: "hyperscape-embedded-agents",
+    },
+    session: {
+      mode: "spectate-and-steer",
+      features: ["commands", "telemetry", "pause", "resume", "suggestions"],
+    },
+  },
   "@elizaos/app-babylon": {
     launchType: "url",
     launchUrl: "http://localhost:3000",
@@ -86,8 +67,6 @@ const LOCAL_APP_OVERRIDES: Readonly<Record<string, LocalAppOverride>> = {
       sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
     },
   },
-  "@elizaos/app-hyperscape": HYPERSCAPE_APP_OVERRIDE,
-  "@hyperscape/plugin-hyperscape": HYPERSCAPE_APP_OVERRIDE,
   "@elizaos/app-hyperfy": {
     launchType: "connect",
     launchUrl: "http://localhost:3003",
@@ -206,6 +185,7 @@ export function mergeAppMeta(
     capabilities:
       patch.capabilities.length > 0 ? patch.capabilities : base.capabilities,
     runtimePlugin: patch.runtimePlugin ?? base.runtimePlugin,
+    bridgeExport: patch.bridgeExport ?? base.bridgeExport,
     uiExtension: patch.uiExtension ?? base.uiExtension,
     viewer: mergeViewer(base.viewer, patch.viewer),
     session: mergeSession(base.session, patch.session),
@@ -218,6 +198,18 @@ export function resolveAppOverride(
 ): RegistryAppMeta | undefined {
   const override = LOCAL_APP_OVERRIDES[packageName];
   if (!override) return appMeta;
+  const hasStandaloneMetadata = Object.values({
+    displayName: override.displayName,
+    category: override.category,
+    launchType: override.launchType,
+    launchUrl: override.launchUrl,
+    capabilities: override.capabilities,
+    runtimePlugin: override.runtimePlugin,
+    viewer: override.viewer,
+  }).some((value) => value !== undefined);
+  if (!appMeta && !hasStandaloneMetadata) {
+    return undefined;
+  }
   const base: RegistryAppMeta = appMeta ?? {
     displayName:
       override.displayName ?? packageNameToAppDisplayName(packageName),
@@ -245,6 +237,7 @@ export function resolveAppOverride(
         ? override.capabilities
         : base.capabilities,
     runtimePlugin: override.runtimePlugin ?? base.runtimePlugin,
+    bridgeExport: base.bridgeExport,
     uiExtension: override.uiExtension ?? base.uiExtension,
     viewer: mergeViewer(base.viewer, override.viewer),
     session: mergeSession(base.session, override.session),
