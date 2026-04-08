@@ -555,9 +555,16 @@ async function computeFrameworkState(
   }
 
   // When the user has selected Eliza Cloud as the LLM provider and has a
-  // paired cloud.apiKey, treat Claude/Codex as fully auth-ready — they'll
-  // route through the cloud proxy at spawn time. Eliza Cloud does NOT
-  // proxy Gemini, so cloud mode does not affect Gemini's auth state.
+  // paired cloud.apiKey, treat Claude as fully auth-ready — it will route
+  // through the cloud proxy at spawn time. Eliza Cloud does NOT proxy
+  // Gemini, so cloud mode does not affect Gemini's auth state.
+  //
+  // Codex-through-Eliza-Cloud is intentionally NOT gated on `cloudReady`:
+  // the upstream responses-stream reconciliation (elizaOS/cloud#427) has
+  // not deployed yet, so marking Codex ready in cloud mode would mislead
+  // users into starting a session that hits a runtime failure with no
+  // explanation. Restore `cloudReady ||` on the codexReady line once
+  // cloud#427 + cloud#428 have shipped.
   const llmProvider =
     readMiladyEnvKey("PARALLAX_LLM_PROVIDER") || "subscription";
   const cloudReady =
@@ -567,8 +574,7 @@ async function computeFrameworkState(
   const codexSubscriptionReady = hasCodexSubscriptionAuth();
   const claudeReady =
     cloudReady || claudeSubscriptionReady || hasAnthropicApiCredential();
-  const codexReady =
-    cloudReady || codexSubscriptionReady || hasOpenAIApiCredential();
+  const codexReady = codexSubscriptionReady || hasOpenAIApiCredential();
   const geminiReady = hasGeminiCredential();
   const piReady = hasPiBinary();
 

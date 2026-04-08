@@ -201,14 +201,19 @@ export function getSubscriptionStatus(): Array<{
   ];
   return providers.map((provider) => {
     const stored = loadCredentials(provider);
+    // Read the Claude Code OAuth blob exactly once per provider row.
+    // On macOS this helper shells out to `security` to query the
+    // keychain — calling it twice per poll used to double the cost
+    // of every `GET /api/subscription/status` request.
+    const claudeBlob =
+      provider === "anthropic-subscription" ? readClaudeCodeOAuthBlob() : null;
     let importedClaudeAuth: string | null = null;
     if (provider === "anthropic-subscription") {
-      const blob = readClaudeCodeOAuthBlob();
-      if (blob && blob.accessToken) {
+      if (claudeBlob?.accessToken) {
         // Blob exists with a parsed accessToken — the user has Claude
         // Code installed and authenticated. Expiry is validated
         // below via the `valid` field.
-        importedClaudeAuth = blob.accessToken;
+        importedClaudeAuth = claudeBlob.accessToken;
       } else {
         importedClaudeAuth = readConfiguredAnthropicSetupToken();
       }
@@ -219,10 +224,7 @@ export function getSubscriptionStatus(): Array<{
     // For the Claude blob path, derive expiry from the blob itself
     // so the UI can surface an accurate "valid" state even before a
     // refresh runs.
-    const blobExpiresAt =
-      provider === "anthropic-subscription"
-        ? (readClaudeCodeOAuthBlob()?.expiresAt ?? null)
-        : null;
+    const blobExpiresAt = claudeBlob?.expiresAt ?? null;
     const blobValid =
       blobExpiresAt !== null ? blobExpiresAt > Date.now() : false;
 

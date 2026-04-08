@@ -900,26 +900,10 @@ export async function handleCodingAgentsFallback(
     }
   }
 
-  // POST /api/coding-agents/auth/:agent — trigger CLI auth flow
-  const authMatch = pathname.match(/^\/api\/coding-agents\/auth\/(\w+)$/);
-  if (method === "POST" && authMatch) {
-    const agentType = authMatch[1];
-    try {
-      const { createAdapter } = await import("coding-agent-adapters");
-      const adapter = createAdapter(
-        agentType as import("coding-agent-adapters").AdapterType,
-      );
-      const result = await adapter.triggerAuth();
-      if (!result) {
-        json(res, { error: `No auth flow available for ${agentType}` });
-      } else {
-        json(res, result);
-      }
-    } catch (e) {
-      error(res, `Auth trigger failed: ${e}`, 500);
-    }
-    return true;
-  }
+  // NOTE: POST /api/coding-agents/auth/:agent lives in server.ts's
+  // private `handleCodingAgentsFallback`, which is the copy actually
+  // wired into the request pipeline. Don't re-add it here — the
+  // handlers would drift and only one would run. See PR #1757 review.
 
   // Not handled by fallback
   return false;

@@ -325,28 +325,46 @@ export function CodingAgentSettingsSection() {
     }
   }, [loading, activeTab, availableAgents, prefs.PARALLAX_DEFAULT_AGENT_TYPE]);
 
+  // `setPref` is a pure state updater. It must NOT perform network I/O
+  // inside `setPrefs((prev) => ...)` — React may invoke state updaters
+  // twice in Strict Mode, which would double every auto-save write.
+  // The actual persist is handled by the debounced effect below.
   const setPref = useCallback((key: string, value: string) => {
-    setPrefs((previous) => {
-      const next = { ...previous, [key]: value };
-      // Auto-save: fire and forget.
-      //
-      // Filter out `_`-prefixed synthetic keys that we load from
-      // non-env sources (e.g. `_CLOUD_API_KEY` is loaded from
-      // `config.cloud.apiKey` — see the load effect above). Writing
-      // them back into `config.env` on every keystroke would leak
-      // the cloud API key into the env surface, duplicating it and
-      // creating a second read path that bypasses the cloud.apiKey
-      // contract. These synthetic keys are read-only from the UI's
-      // perspective and must never round-trip through env.
-      const envPatch: Record<string, string> = {};
-      for (const [k, v] of Object.entries(next)) {
-        if (k.startsWith("_")) continue;
-        if (v != null) envPatch[k] = v;
-      }
-      void client.updateConfig({ env: envPatch });
-      return next;
-    });
+    setPrefs((previous) => ({ ...previous, [key]: value }));
   }, []);
+
+  // Debounced auto-save. Coalesces rapid keystrokes (e.g. typing an
+  // API key character-by-character) into a single POST so we don't
+  // persist 40+ partial-key snapshots to `milady.json` and don't
+  // leave the config in a half-written state if one request fails
+  // mid-flight.
+  //
+  // Filter out `_`-prefixed synthetic keys that we load from non-env
+  // sources (e.g. `_CLOUD_API_KEY` is loaded from `config.cloud.apiKey`
+  // — see the load effect above). Writing them back into `config.env`
+  // would leak the cloud API key into the env surface, duplicating it
+  // and creating a second read path that bypasses the `cloud.apiKey`
+  // contract. These synthetic keys are read-only from the UI's
+  // perspective and must never round-trip through env.
+  const autoSaveArmedRef = useRef(false);
+  useEffect(() => {
+    // Skip the first render (initial load from getConfig) so we
+    // don't immediately write the loaded state back.
+    if (loading) return;
+    if (!autoSaveArmedRef.current) {
+      autoSaveArmedRef.current = true;
+      return;
+    }
+    const envPatch: Record<string, string> = {};
+    for (const [k, v] of Object.entries(prefs)) {
+      if (k.startsWith("_")) continue;
+      if (v != null) envPatch[k] = v;
+    }
+    const timer = setTimeout(() => {
+      void client.updateConfig({ env: envPatch });
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [prefs, loading]);
 
   // Reset Aider provider to anthropic if cloud is selected and google was chosen
   useEffect(() => {
