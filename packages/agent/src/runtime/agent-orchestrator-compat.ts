@@ -1247,7 +1247,9 @@ Use lowercase kebab-case slugs: \`hello-world\`, \`iq6900-oracle\`, \`solana-bal
 
 If a build needs a backend (Rust, Node, Python, Go, anything), write the source under \`/home/milady/projects/agent-home/data/apps/<slug>/server/\` and start it bound to **127.0.0.1 only** (never 0.0.0.0). Then add a Next.js route handler at \`/home/milady/projects/agent-home/app/apps/<slug>/api/[...path]/route.ts\` that proxies to it via \`fetch("http://127.0.0.1:<internal-port>/...")\`. The internal port is invisible to the public; only the proxied API route is reachable, under your slug.
 
-Adding a route handler under \`app/\` is a code change Next.js only picks up at build time, so after writing the proxy file you must run \`cd /home/milady/projects/agent-home && npm run build\` and then restart the running next-server (kill the existing process listening on 6900 and re-launch with \`setsid nohup npm start -- -p 6900 -H 0.0.0.0 > server.log 2>&1 < /dev/null & disown\`). Pure static pages under \`data/apps/<slug>/\` do not need a rebuild — they are served at request time by the catch-all route handler.
+Adding a route handler under \`app/\` is a code change Next.js only picks up at build time, so after writing the proxy file you must run \`cd /home/milady/projects/agent-home && npm run build\` and then **restart the systemd-managed service** with \`sudo systemctl restart agent-home\`. The \`milady\` user has passwordless sudo for that command. **Do not** use \`setsid nohup npm start\` or any other manual launcher — it will squat port 6900 and break the systemd unit, which will then crash-loop trying to bind a busy port.
+
+Pure static pages under \`data/apps/<slug>/\` do not need a rebuild — they are served at request time by the catch-all route handler.
 
 ## Reporting
 
