@@ -47,11 +47,9 @@ function createRuntimeMock(tasks: Task[] = []) {
               ...task,
               ...update,
               metadata: {
-                ...((task.metadata as Record<string, unknown> | undefined) ??
-                  {}),
-                ...((update.metadata as Record<string, unknown> | undefined) ??
-                  {}),
-              },
+                ...(task.metadata ?? {}),
+                ...(update.metadata ?? {}),
+              } as Task["metadata"],
             }
           : task,
       );
@@ -136,7 +134,11 @@ describe("lifeops runtime scheduler", () => {
     const result = await worker.execute(
       runtime,
       { now: "2026-04-04T12:00:00.000Z" },
-      { id: "task-1" as UUID, name: LIFEOPS_TASK_NAME },
+      {
+        id: "task-1" as UUID,
+        name: LIFEOPS_TASK_NAME,
+        tags: [...LIFEOPS_TASK_TAGS],
+      },
     );
 
     expect(mockProcessScheduledWork).toHaveBeenCalledWith({

@@ -27,7 +27,7 @@ describe("GoogleManagedClient", () => {
       siteUrl: "https://cloud.example",
     });
 
-    await expect(client.getStatus()).rejects.toEqual(
+    await expect(client.getStatus("owner")).rejects.toEqual(
       expect.objectContaining<Partial<ManagedGoogleClientError>>({
         status: 502,
         message: "upstream exploded",
@@ -53,7 +53,7 @@ describe("GoogleManagedClient", () => {
       siteUrl: "https://cloud.example",
     });
 
-    await expect(client.getStatus()).rejects.toEqual(
+    await expect(client.getStatus("owner")).rejects.toEqual(
       expect.objectContaining<Partial<ManagedGoogleClientError>>({
         status: 401,
         message: "cloud rejected request",
@@ -79,7 +79,7 @@ describe("GoogleManagedClient", () => {
       siteUrl: "https://cloud.example",
     });
 
-    await expect(client.getStatus()).rejects.toEqual(
+    await expect(client.getStatus("owner")).rejects.toEqual(
       expect.objectContaining<Partial<ManagedGoogleClientError>>({
         status: 404,
         message: "404 Not Found",

@@ -74,7 +74,7 @@ describe("normalizePreflightAuth", () => {
       refreshToken: "sk-ant-ort01-secret",
     });
     expect(out).toEqual({ status: "authenticated" });
-    expect((out as Record<string, unknown>).accessToken).toBeUndefined();
-    expect((out as Record<string, unknown>).refreshToken).toBeUndefined();
+    expect((out as unknown as Record<string, unknown>).accessToken).toBeUndefined();
+    expect((out as unknown as Record<string, unknown>).refreshToken).toBeUndefined();
   });
 });

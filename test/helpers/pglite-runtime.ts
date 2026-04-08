@@ -30,10 +30,18 @@ export interface TestRuntimeOptions {
   characterName?: string;
   /** Additional plugins to register (plugin-sql is always included). */
   plugins?: Plugin[];
+  /** Reuse an existing PGLite data directory instead of creating a temp one. */
+  pgliteDir?: string;
+  /**
+   * Remove the PGLite data directory during cleanup.
+   * Defaults to true only when this helper created the directory.
+   */
+  removePgliteDirOnCleanup?: boolean;
 }
 
 export interface TestRuntimeResult {
   runtime: AgentRuntime;
+  pgliteDir: string;
   /** Stops the runtime and removes the temp PGLite directory. */
   cleanup: () => Promise<void>;
 }
@@ -50,9 +58,11 @@ export interface TestRuntimeResult {
 export async function createTestRuntime(
   options?: TestRuntimeOptions,
 ): Promise<TestRuntimeResult> {
-  const pgliteDir = fs.mkdtempSync(
-    path.join(os.tmpdir(), "eliza-test-pglite-"),
-  );
+  const pgliteDir =
+    options?.pgliteDir ??
+    fs.mkdtempSync(path.join(os.tmpdir(), "eliza-test-pglite-"));
+  const removePgliteDirOnCleanup =
+    options?.removePgliteDirOnCleanup ?? options?.pgliteDir === undefined;
 
   const prevPgliteDir = process.env.PGLITE_DATA_DIR;
   process.env.PGLITE_DATA_DIR = pgliteDir;
@@ -86,12 +96,14 @@ export async function createTestRuntime(
     } else {
       delete process.env.PGLITE_DATA_DIR;
     }
-    try {
-      fs.rmSync(pgliteDir, { recursive: true, force: true });
-    } catch {
-      // ignore cleanup errors
+    if (removePgliteDirOnCleanup) {
+      try {
+        fs.rmSync(pgliteDir, { recursive: true, force: true });
+      } catch {
+        // ignore cleanup errors
+      }
     }
   };
 
-  return { runtime, cleanup };
+  return { runtime, pgliteDir, cleanup };
 }

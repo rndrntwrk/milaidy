@@ -48,7 +48,7 @@ import { installPromptOptimizations } from "../prompt-optimization";
 const describeIfEliza = describeIf(hasElizaTestUtils);
 
 describeIfEliza("shouldRespond trajectory logging", () => {
-  let runtime: IAgentRuntime;
+  let runtime: any;
 
   beforeEach(async () => {
     runtime = await createTestRuntime();

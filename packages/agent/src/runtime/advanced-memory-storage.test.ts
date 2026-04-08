@@ -89,6 +89,9 @@ type RuntimeMemoryService = {
 class StubEntityResolutionService extends Service {
   static serviceType = "entity_resolution" as const;
   static links = new Map<UUID, UUID[]>();
+  capabilityDescription =
+    "Stub entity-resolution service for advanced-memory tests";
+  private initialized = false;
 
   static async start(runtime: IAgentRuntime): Promise<Service> {
     const service = new StubEntityResolutionService(runtime);
@@ -119,10 +122,11 @@ class StubEntityResolutionService extends Service {
 }
 
 function createRuntimeWithAdvancedMemory(
-  extraServices: Array<typeof Service> = [],
+  extraServices: NonNullable<Plugin["services"]> = [],
 ): AgentRuntime {
   const integrationPlugin: Plugin = {
     name: "advanced-memory-storage-test",
+    description: "Advanced memory storage test plugin",
     services: [AdvancedMemoryStorageService, ...extraServices],
   };
 

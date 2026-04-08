@@ -143,9 +143,11 @@ function channelMessageSource(
 function allCoordinatorChannels(
   preflight: CoordinatorPreflightResult,
 ): CoordinatorEvalChannel[] {
-  return ["app_chat", ...preflight.supportedConnectors].filter(
-    (channel, index, list) => list.indexOf(channel) === index,
-  );
+  const channels: CoordinatorEvalChannel[] = [
+    "app_chat",
+    ...preflight.supportedConnectors,
+  ];
+  return uniqueChannels(channels);
 }
 
 function getCheck(preflight: CoordinatorPreflightResult, id: string) {
@@ -243,21 +245,23 @@ async function listFilesRecursively(
   while (queue.length > 0 && files.length < limit) {
     const current = queue.shift();
     if (!current) continue;
-    let entries: Awaited<ReturnType<typeof readdir>>;
     try {
-      entries = await readdir(current, { withFileTypes: true });
+      const entries = await readdir(current, {
+        withFileTypes: true,
+        encoding: "utf8",
+      });
+      for (const entry of entries) {
+        if (files.length >= limit) break;
+        const nextPath = path.join(current, entry.name);
+        if (entry.isDirectory()) {
+          if (entry.name === ".git" || entry.name === "node_modules") continue;
+          queue.push(nextPath);
+        } else if (entry.isFile()) {
+          files.push(nextPath);
+        }
+      }
     } catch {
       continue;
-    }
-    for (const entry of entries) {
-      if (files.length >= limit) break;
-      const nextPath = path.join(current, entry.name);
-      if (entry.isDirectory()) {
-        if (entry.name === ".git" || entry.name === "node_modules") continue;
-        queue.push(nextPath);
-      } else if (entry.isFile()) {
-        files.push(nextPath);
-      }
     }
   }
   return files;

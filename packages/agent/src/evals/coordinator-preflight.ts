@@ -47,7 +47,10 @@ type FrameworkAvailability = {
   reason?: string;
 };
 
-const SUPPORTED_CONNECTOR_CHANNELS: CoordinatorEvalChannel[] = [
+const SUPPORTED_CONNECTOR_CHANNELS: Exclude<
+  CoordinatorEvalChannel,
+  "app_chat"
+>[] = [
   "discord",
   "telegram",
   "slack",

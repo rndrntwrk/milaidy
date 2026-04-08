@@ -172,8 +172,8 @@ function normalizeSessionState(value: unknown): AppSessionState | null {
 }
 
 function normalizeSessionJsonValue(value: unknown): AppSessionJsonValue | null {
+  if (value === null) return null;
   if (
-    value === null ||
     typeof value === "string" ||
     typeof value === "number" ||
     typeof value === "boolean"
@@ -388,16 +388,36 @@ function normalizeRun(input: unknown): AppRunSummary | null {
     return null;
   }
 
+  const runId = run.runId;
+  const appName = run.appName;
+  const displayName = run.displayName;
+  const pluginName = run.pluginName;
+  const launchType = run.launchType;
+  const startedAt = run.startedAt;
+  const updatedAt = run.updatedAt;
+  const viewerAttachmentValue = run.viewerAttachment;
   const session = normalizeSessionState(run.session);
   const viewer = normalizeViewerConfig(run.viewer);
   const status =
     typeof run.status === "string"
       ? run.status
-      : session?.status ?? "offline";
-  const summary =
-    typeof run.summary === "string" || run.summary === null
-      ? run.summary
-      : session?.summary ?? null;
+      : typeof session?.status === "string"
+        ? session.status
+        : "offline";
+  const summaryValue = run.summary;
+  let summary: string | null;
+  if (summaryValue === null) {
+    summary = null;
+  } else if (typeof summaryValue === "string") {
+    summary = summaryValue;
+  } else if (
+    typeof session?.summary === "string" ||
+    session?.summary === null
+  ) {
+    summary = session.summary ?? null;
+  } else {
+    summary = null;
+  }
   const recentEvents = normalizeRunEvents(run.recentEvents);
   const supportsBackground =
     typeof run.supportsBackground === "boolean" ? run.supportsBackground : true;
@@ -421,11 +441,11 @@ function normalizeRun(input: unknown): AppRunSummary | null {
       : deriveControlAvailability(session);
   const normalizedHealth = normalizeHealth(run.health, status, summary);
   const baseRun: AppRunSummary = {
-    runId: run.runId,
-    appName: run.appName,
-    displayName: run.displayName,
-    pluginName: run.pluginName,
-    launchType: run.launchType,
+    runId,
+    appName,
+    displayName,
+    pluginName,
+    launchType,
     launchUrl: typeof run.launchUrl === "string" ? run.launchUrl : null,
     viewer,
     session,
@@ -433,23 +453,23 @@ function normalizeRun(input: unknown): AppRunSummary | null {
     agentId,
     status,
     summary,
-    startedAt: run.startedAt,
-    updatedAt: run.updatedAt,
+    startedAt,
+    updatedAt,
     lastHeartbeatAt:
       typeof run.lastHeartbeatAt === "string"
         ? run.lastHeartbeatAt
         : session
-          ? run.updatedAt
+          ? updatedAt
           : null,
     supportsBackground,
     supportsViewerDetach,
     chatAvailability,
     controlAvailability,
     viewerAttachment:
-      run.viewerAttachment === "attached" ||
-      run.viewerAttachment === "detached" ||
-      run.viewerAttachment === "unavailable"
-        ? run.viewerAttachment
+      viewerAttachmentValue === "attached" ||
+      viewerAttachmentValue === "detached" ||
+      viewerAttachmentValue === "unavailable"
+        ? viewerAttachmentValue
         : viewer
           ? "detached"
           : "unavailable",
@@ -457,7 +477,7 @@ function normalizeRun(input: unknown): AppRunSummary | null {
     awaySummary: null,
     health: normalizedHealth,
     healthDetails: {
-      checkedAt: run.updatedAt,
+      checkedAt: updatedAt,
       auth: {
         state: "unknown",
         message: summary,

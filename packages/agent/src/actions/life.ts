@@ -1206,6 +1206,12 @@ export const lifeAction: Action = {
       const resolvedGoal = goalRef
         ? await resolveGoal(service, goalRef, domain)
         : null;
+      const websiteAccessDetails = detailObject(details, "websiteAccess");
+      const websiteAccess =
+        (websiteAccessDetails
+          ? (websiteAccessDetails as unknown as CreateLifeOpsDefinitionRequest["websiteAccess"])
+          : undefined) ?? seed?.websiteAccess;
+
       const created = await service.createDefinition({
         ownership,
         kind,
@@ -1222,10 +1228,7 @@ export const lifeAction: Action = {
           (detailObject(details, "reminderPlan") as
             | CreateLifeOpsDefinitionRequest["reminderPlan"]
             | undefined) ?? seed?.reminderPlan,
-        websiteAccess:
-          (detailObject(details, "websiteAccess") as
-            | CreateLifeOpsDefinitionRequest["websiteAccess"]
-            | undefined) ?? seed?.websiteAccess,
+        websiteAccess,
         goalId: resolvedGoal?.goal.id ?? null,
         source: "chat",
       });

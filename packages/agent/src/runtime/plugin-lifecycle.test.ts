@@ -7,7 +7,7 @@ import {
 
 type RuntimeServiceClass = NonNullable<Plugin["services"]>[number];
 
-type MockRuntime = AgentRuntime & {
+type MockRuntime = Record<string, any> & {
   models: Map<
     string,
     Array<{
@@ -180,9 +180,9 @@ function createMockRuntime(): MockRuntime {
         this.registerDatabaseAdapter(adapter);
       }
     },
-  } as unknown as MockRuntime;
+  } as MockRuntime;
 
-  installRuntimePluginLifecycle(runtime);
+  installRuntimePluginLifecycle(runtime as unknown as AgentRuntime);
   return runtime;
 }
 
@@ -195,7 +195,7 @@ describe("installRuntimePluginLifecycle", () => {
     const applyConfig = vi.fn(async () => undefined);
 
     const sendHandler = vi.fn(async () => undefined);
-    const serviceClass: RuntimeServiceClass = {
+    const serviceClass = {
       serviceType: "demo_service",
       start: vi.fn(async () => ({ stop: serviceStop } as unknown as Service)),
       stopRuntime,
@@ -205,7 +205,7 @@ describe("installRuntimePluginLifecycle", () => {
           sendHandler,
         );
       },
-    };
+    } as unknown as RuntimeServiceClass;
 
     const plugin: Plugin = {
       name: "@elizaos/plugin-demo",
@@ -225,7 +225,7 @@ describe("installRuntimePluginLifecycle", () => {
       ],
       events: {
         "demo:event": [async () => undefined],
-      },
+      } as never,
       services: [serviceClass],
     };
 
@@ -238,7 +238,9 @@ describe("installRuntimePluginLifecycle", () => {
 
     await runtime.registerPlugin(plugin);
 
-    expect(supportsRuntimePluginLifecycle(runtime)).toBe(true);
+    expect(
+      supportsRuntimePluginLifecycle(runtime as unknown as AgentRuntime),
+    ).toBe(true);
     expect(runtime.actions).toHaveLength(1);
     expect(runtime.providers).toHaveLength(1);
     expect(runtime.evaluators).toHaveLength(1);

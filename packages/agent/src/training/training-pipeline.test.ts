@@ -1,4 +1,5 @@
 import { describe, expect, test, vi } from "vitest";
+import type { TrainingSample } from "./dataset-generator";
 
 const mockWithStandaloneTrajectory = vi.fn(
   async (
@@ -25,7 +26,7 @@ const {
   normalizeVertexBaseModel,
 } = await import("./vertex-tuning");
 
-const sample = {
+const sample: TrainingSample = {
   id: "sample-1",
   blueprintId: "bp-1",
   agentName: "Nova",

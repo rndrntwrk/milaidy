@@ -3,6 +3,7 @@ import {
   stringToUuid,
   type AgentRuntime,
   type Content,
+  type ContentValue,
   type UUID,
 } from "@elizaos/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -56,7 +57,7 @@ function createRuntimeForTrajectoryChatTests(
       info: vi.fn(),
       warn: vi.fn(),
       error: vi.fn(),
-    } as AgentRuntime["logger"]);
+    } as unknown as AgentRuntime["logger"]);
 
   return {
     agentId: stringToUuid("chat-route-trajectory-agent"),
@@ -104,7 +105,7 @@ function createRuntimeForTrajectoryChatTests(
 function createTrajectoryMessage(text: string, overrides: {
   source?: string;
   metadata?: Record<string, unknown>;
-  contentMetadata?: Record<string, unknown>;
+  contentMetadata?: Record<string, ContentValue>;
 } = {}) {
   const message = createMessageMemory({
     entityId: stringToUuid("chat-route-trajectory-user"),
@@ -295,12 +296,13 @@ describe("generateChatResponse trajectory runtime behavior", () => {
     mockStartTrajectoryStepInDatabase.mockRejectedValue(
       new Error("grouping write failed"),
     );
+    const warn = vi.fn();
     const runtimeLogger = {
       debug: vi.fn(),
       info: vi.fn(),
-      warn: vi.fn(),
+      warn,
       error: vi.fn(),
-    } as AgentRuntime["logger"];
+    } as unknown as AgentRuntime["logger"];
     const runtime = createRuntimeForTrajectoryChatTests({
       logger: runtimeLogger,
       handleMessage: async () => ({
@@ -326,7 +328,7 @@ describe("generateChatResponse trajectory runtime behavior", () => {
     );
 
     expect(result.text).toBe("Response survives grouping failure");
-    expect(runtimeLogger.warn).toHaveBeenCalledWith(
+    expect(warn).toHaveBeenCalledWith(
       expect.objectContaining({
         err: expect.any(Error),
         src: "eliza-api",
@@ -336,12 +338,13 @@ describe("generateChatResponse trajectory runtime behavior", () => {
   });
 
   it("warns and still returns when MESSAGE_SENT emission fails", async () => {
+    const warn = vi.fn();
     const runtimeLogger = {
       debug: vi.fn(),
       info: vi.fn(),
-      warn: vi.fn(),
+      warn,
       error: vi.fn(),
-    } as AgentRuntime["logger"];
+    } as unknown as AgentRuntime["logger"];
     const runtime = createRuntimeForTrajectoryChatTests({
       logger: runtimeLogger,
       emitEvent: async (event) => {
@@ -371,7 +374,7 @@ describe("generateChatResponse trajectory runtime behavior", () => {
     );
 
     expect(result.text).toBe("Message sent warning still returns text");
-    expect(runtimeLogger.warn).toHaveBeenCalledWith(
+    expect(warn).toHaveBeenCalledWith(
       expect.objectContaining({
         err: expect.any(Error),
         src: "eliza-api",

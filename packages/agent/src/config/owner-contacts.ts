@@ -46,6 +46,15 @@ type RuntimeLike = Pick<
   "getService" | "getEntityById" | "getRoomsForParticipant" | "getMemoriesByRoomIds"
 >;
 
+function getRelationshipsService(
+  runtime: RuntimeLike | null | undefined,
+): RelationshipsServiceLike | null {
+  if (!runtime?.getService) {
+    return null;
+  }
+  return runtime.getService("relationships") as unknown as RelationshipsServiceLike | null;
+}
+
 function ownerContactSourceCandidates(source: string): string[] {
   const trimmed = source.trim();
   if (!trimmed) {
@@ -149,7 +158,7 @@ export async function loadOwnerContactRoutingHints(
   runtime: RuntimeLike | null | undefined,
   ownerContacts: OwnerContactsConfig,
 ): Promise<Record<string, OwnerContactRoutingHint>> {
-  const relationships = runtime?.getService?.("relationships") as RelationshipsServiceLike | null;
+  const relationships = getRelationshipsService(runtime);
   const hints: Record<string, OwnerContactRoutingHint> = {};
   const entries = Object.entries(ownerContacts);
   for (const [source, contact] of entries) {

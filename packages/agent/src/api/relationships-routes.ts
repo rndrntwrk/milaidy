@@ -44,7 +44,7 @@ function getRelationshipsGraphService(
   if (!runtime) {
     return null;
   }
-  return runtime.getService("relationships_graph") as RelationshipsGraphService | null;
+  return runtime.getService("relationships_graph") as unknown as RelationshipsGraphService | null;
 }
 
 export async function handleRelationshipsRoutes(

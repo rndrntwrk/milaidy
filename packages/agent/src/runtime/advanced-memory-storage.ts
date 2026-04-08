@@ -66,12 +66,14 @@ function asRecord(value: unknown): UnknownRecord | null {
 }
 
 function toJsonValue(value: unknown): JsonValue | undefined {
-  if (
-    value === null ||
-    typeof value === "string" ||
-    typeof value === "number" ||
-    typeof value === "boolean"
-  ) {
+  if (value === null) return null;
+  if (typeof value === "string") {
+    return value;
+  }
+  if (typeof value === "number") {
+    return value;
+  }
+  if (typeof value === "boolean") {
     return value;
   }
 
@@ -90,7 +92,7 @@ function toJsonValue(value: unknown): JsonValue | undefined {
       .filter(
         (entry): entry is readonly [string, JsonValue] => entry !== null,
       );
-    return Object.fromEntries(entries);
+    return Object.fromEntries(entries) as JsonRecord;
   }
 
   return undefined;
@@ -98,7 +100,7 @@ function toJsonValue(value: unknown): JsonValue | undefined {
 
 function toJsonRecord(value: unknown): JsonRecord | undefined {
   const jsonValue = toJsonValue(value);
-  return isRecord(jsonValue) ? jsonValue : undefined;
+  return isRecord(jsonValue) ? (jsonValue as JsonRecord) : undefined;
 }
 
 function buildCustomMemoryMetadata(params: {
@@ -237,7 +239,7 @@ export class AdvancedMemoryStorageService
   private async getEntityResolutionService(): Promise<EntityResolutionService | null> {
     const existing = this.runtime.getService(
       "entity_resolution",
-    ) as EntityResolutionService | null;
+    ) as unknown as EntityResolutionService | null;
     if (existing) {
       return existing;
     }
