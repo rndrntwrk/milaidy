@@ -9,7 +9,6 @@ import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { getTrajectoryContext, type AgentRuntime } from "@elizaos/core";
 import { detectRuntimeModel } from "../api/agent-model";
-import { getMiladyTrajectoryStepId } from "./trajectory-step-context";
 
 import {
   compactActionsForIntent,
@@ -67,6 +66,15 @@ const MILADY_ACTION_COMPACTION = (() => {
 const installedRuntimes = new WeakSet<AgentRuntime>();
 const trackedTrajectoryLoggers = new WeakSet<object>();
 const trajectoryLlmLogCounts = new WeakMap<AgentRuntime, Map<string, number>>();
+const TRAJECTORY_CONTEXT_MANAGER_KEY = Symbol.for(
+  "elizaos.trajectoryContextManager",
+);
+
+type GlobalWithTrajectoryContextManager = typeof globalThis & {
+  [TRAJECTORY_CONTEXT_MANAGER_KEY]?: {
+    active: () => { trajectoryStepId?: string } | undefined;
+  };
+};
 
 type TrajectoryLoggerLike = {
   logLlmCall?: (...args: unknown[]) => unknown;
@@ -88,13 +96,24 @@ export function shouldPreserveFullPromptForTrajectoryCapture(): boolean {
   return getActiveTrajectoryStepId() !== null;
 }
 
+function getSharedTrajectoryStepId(): string | null {
+  const stepId = (globalThis as GlobalWithTrajectoryContextManager)[
+    TRAJECTORY_CONTEXT_MANAGER_KEY
+  ]
+    ?.active?.()
+    ?.trajectoryStepId;
+  return typeof stepId === "string" && stepId.trim().length > 0
+    ? stepId.trim()
+    : null;
+}
+
 function getActiveTrajectoryStepId(): string | null {
   const coreStepId = getTrajectoryContext()?.trajectoryStepId;
   if (typeof coreStepId === "string" && coreStepId.trim().length > 0) {
     return coreStepId.trim();
   }
 
-  return getMiladyTrajectoryStepId();
+  return getSharedTrajectoryStepId();
 }
 
 function extractTrajectoryStepIdFromLoggerArgs(args: unknown[]): string | null {

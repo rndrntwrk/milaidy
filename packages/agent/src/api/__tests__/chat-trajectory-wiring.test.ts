@@ -44,20 +44,20 @@ describe("chat trajectory wiring", () => {
 
   it("reads MESSAGE_RECEIVED step ids before wrapping handleMessage", () => {
     const emitIdx = chatRoutesSource.indexOf('emitEvent("MESSAGE_RECEIVED"');
-    const generationReadIdx = chatRoutesSource.indexOf(
-      "readMessageTrajectoryStepId(generationMessage)",
+    const contextReadIdx = chatRoutesSource.indexOf(
+      "const trajectoryStepId = readMessageTrajectoryStepId(message);",
     );
     const wrapperIdx = chatRoutesSource.indexOf(
-      "withMiladyTrajectoryStep(trajectoryStepId",
+      "await runWithTrajectoryContext(trajectoryContext, async () => {",
     );
     const handleIdx = chatRoutesSource.indexOf(
       "runtime.messageService?.handleMessage",
     );
 
-    expect(generationReadIdx).toBeGreaterThan(emitIdx);
-    expect(wrapperIdx).toBeGreaterThan(generationReadIdx);
+    expect(contextReadIdx).toBeGreaterThan(emitIdx);
+    expect(wrapperIdx).toBeGreaterThan(contextReadIdx);
     expect(handleIdx).toBeGreaterThan(wrapperIdx);
-    expect(chatRoutesSource).toContain("readMessageTrajectoryStepId(message)");
+    expect(chatRoutesSource).not.toContain("withMiladyTrajectoryStep(");
   });
 
   it("keeps the trajectory logger in the core plugin list", () => {

@@ -25,7 +25,6 @@ const { cleanupTestRuntime, createTestRuntime } = hasElizaTestUtils
     )
   : { cleanupTestRuntime: undefined, createTestRuntime: undefined };
 import { installPromptOptimizations } from "../prompt-optimization";
-import { installMiladyMessageTrajectoryStepBridge } from "../trajectory-step-context";
 
 // Skip the entire suite when the eliza submodule test utils aren't available
 // (CI runs with submodules: false).
@@ -159,7 +158,6 @@ describeIfEliza("shouldRespond trajectory logging", () => {
     );
 
     installPromptOptimizations(runtime as never);
-    installMiladyMessageTrajectoryStepBridge(runtime as never);
 
     const callback = vi.fn(async (content: Content) => [
       {
@@ -285,7 +283,6 @@ describeIfEliza("shouldRespond trajectory logging", () => {
     );
 
     installPromptOptimizations(runtime as never);
-    installMiladyMessageTrajectoryStepBridge(runtime as never);
 
     const callback = vi.fn(async (content: Content) => [
       {

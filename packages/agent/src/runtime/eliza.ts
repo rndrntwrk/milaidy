@@ -132,7 +132,6 @@ import { detectEmbeddingPreset } from "./embedding-presets";
 import * as pluginAgentOrchestrator from "./agent-orchestrator-compat";
 import { installRuntimePluginLifecycle } from "./plugin-lifecycle";
 import { shouldEnableTrajectoryLoggingByDefault } from "./trajectory-persistence";
-import { installMiladyMessageTrajectoryStepBridge } from "./trajectory-step-context";
 
 type SignalShutdownContext = {
   getRuntime: () => AgentRuntime;
@@ -888,7 +887,6 @@ async function prepareRuntimeForTrajectoryCapture(
   await waitForTrajectoryLoggerService(runtime, context);
   ensureTrajectoryLoggerEnabled(runtime, context);
   await installPromptOptimizationLayer(runtime, context);
-  installMiladyMessageTrajectoryStepBridge(runtime);
 }
 
 // ---------------------------------------------------------------------------

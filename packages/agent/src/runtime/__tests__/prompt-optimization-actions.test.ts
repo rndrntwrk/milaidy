@@ -539,9 +539,11 @@ describe("compactActionsForIntent", () => {
 // ---------------------------------------------------------------------------
 
 import { installPromptOptimizations } from "../prompt-optimization";
-import { withMiladyTrajectoryStep } from "../trajectory-step-context";
 
 describe("installPromptOptimizations", () => {
+  const TRAJECTORY_CONTEXT_MANAGER_KEY = Symbol.for(
+    "elizaos.trajectoryContextManager",
+  );
   // detectRuntimeModel() reads ENV_PROVIDER_SIGNALS (OPENAI_API_KEY, ANTHROPIC_API_KEY, …)
   // and returns a provider label instead of the raw model type when any signal key is set.
   // Clear them here so the mock runtime (no plugins) falls through to "undefined" and
@@ -562,6 +564,9 @@ describe("installPromptOptimizations", () => {
   beforeEach(() => {
     getTrajectoryContextMock.mockReset();
     getTrajectoryContextMock.mockReturnValue(undefined);
+    delete (globalThis as Record<PropertyKey, unknown>)[
+      TRAJECTORY_CONTEXT_MANAGER_KEY
+    ];
     for (const key of PROVIDER_SIGNAL_KEYS) {
       savedProviderEnv[key] = process.env[key];
       delete process.env[key];
@@ -569,6 +574,9 @@ describe("installPromptOptimizations", () => {
   });
 
   afterEach(() => {
+    delete (globalThis as Record<PropertyKey, unknown>)[
+      TRAJECTORY_CONTEXT_MANAGER_KEY
+    ];
     for (const key of PROVIDER_SIGNAL_KEYS) {
       if (savedProviderEnv[key] !== undefined) {
         process.env[key] = savedProviderEnv[key];
@@ -671,7 +679,7 @@ describe("installPromptOptimizations", () => {
     });
   });
 
-  it("falls back to the Milady-local trajectory step context when core context is unavailable", async () => {
+  it("falls back to the shared global trajectory context manager", async () => {
     const loggedCalls: Array<Record<string, unknown>> = [];
     const richLogger = {
       logLlmCall: (params: Record<string, unknown>) => {
@@ -687,23 +695,27 @@ describe("installPromptOptimizations", () => {
       trajectoryLoggersByType: [richLogger],
     });
 
+    (globalThis as Record<PropertyKey, unknown>)[
+      TRAJECTORY_CONTEXT_MANAGER_KEY
+    ] = {
+      active: () => ({ trajectoryStepId: "trajectory-step-global" }),
+    };
+
     installPromptOptimizations(runtime);
 
-    await withMiladyTrajectoryStep("trajectory-step-local", () =>
-      runtime.useModel(
-        "TEXT_LARGE" as unknown as Parameters<typeof runtime.useModel>[0],
-        {
-          prompt: "local trajectory step fallback",
-          system: "local system",
-        } as unknown as Parameters<typeof runtime.useModel>[1],
-      ),
+    await runtime.useModel(
+      "TEXT_LARGE" as unknown as Parameters<typeof runtime.useModel>[0],
+      {
+        prompt: "global trajectory step fallback",
+        system: "global system",
+      } as unknown as Parameters<typeof runtime.useModel>[1],
     );
 
     expect(loggedCalls).toHaveLength(1);
     expect(loggedCalls[0]).toMatchObject({
-      stepId: "trajectory-step-local",
-      systemPrompt: "local system",
-      userPrompt: "local trajectory step fallback",
+      stepId: "trajectory-step-global",
+      systemPrompt: "global system",
+      userPrompt: "global trajectory step fallback",
       response: "mock response",
     });
   });
