@@ -93,17 +93,17 @@ describe("Connector trajectory visibility", () => {
     await db.close();
   });
 
-  it("lists, hydrates, and deletes connector-sourced trajectories through the API", async () => {
-    if (!server) {
-      throw new Error("API server did not start");
-    }
-
+  async function createTrajectory(
+    source: string,
+    prompt: string,
+    response: string,
+  ): Promise<string> {
     const trajectoryId = await trajectoryLogger.startTrajectory(runtime.agentId, {
-      source: "discord",
+      source,
       metadata: {
-        roomId: "connector-room",
-        entityId: "connector-user",
-        messageId: "connector-message",
+        roomId: `${source}-room`,
+        entityId: `${source}-user`,
+        messageId: `${source}-message`,
       },
     });
     const stepId = trajectoryLogger.startStep(trajectoryId, {
@@ -113,13 +113,11 @@ describe("Connector trajectory visibility", () => {
       agentPnL: 0,
       openPositions: 0,
     });
-    const prompt = "hello from the discord connector";
-    const response = "Hello from connector!";
     const startTime = Date.now() - 900;
 
     trajectoryLogger.logLlmCall({
       stepId,
-      callId: "connector-call-1",
+      callId: `${trajectoryId}-call-1`,
       timestamp: startTime + 20,
       model: "test-model",
       systemPrompt:
@@ -141,6 +139,18 @@ describe("Connector trajectory visibility", () => {
       success: true,
     });
     await trajectoryLogger.endTrajectory(trajectoryId, "completed");
+
+    return trajectoryId;
+  }
+
+  it("lists, hydrates, and deletes connector-sourced trajectories through the API", async () => {
+    if (!server) {
+      throw new Error("API server did not start");
+    }
+
+    const prompt = "hello from the discord connector";
+    const response = "Hello from connector!";
+    const trajectoryId = await createTrajectory("discord", prompt, response);
 
     const list = await req(server.port, "GET", "/api/trajectories?limit=20");
     expect(list.status).toBe(200);
@@ -175,6 +185,13 @@ describe("Connector trajectory visibility", () => {
     expect(deleteResponse.status).toBe(200);
     expect(deleteResponse.data.deleted).toBe(1);
 
+    const detailAfterDelete = await req(
+      server.port,
+      "GET",
+      `/api/trajectories/${encodeURIComponent(trajectoryId)}`,
+    );
+    expect(detailAfterDelete.status).toBe(404);
+
     const listAfterDelete = await req(
       server.port,
       "GET",
@@ -186,5 +203,67 @@ describe("Connector trajectory visibility", () => {
           (item: { id?: string }) => item.id === trajectoryId,
         ),
     ).toBe(false);
+  });
+
+  it("supports clear-all and empty delete payloads through the API", async () => {
+    if (!server) {
+      throw new Error("API server did not start");
+    }
+
+    const firstId = await createTrajectory(
+      "discord",
+      "first connector prompt",
+      "first connector response",
+    );
+    const secondId = await createTrajectory(
+      "telegram",
+      "second connector prompt",
+      "second connector response",
+    );
+
+    const emptyDelete = await req(server.port, "DELETE", "/api/trajectories", {});
+    expect(emptyDelete.status).toBe(200);
+    expect(emptyDelete.data.deleted).toBe(0);
+
+    const clearAllResponse = await req(server.port, "DELETE", "/api/trajectories", {
+      clearAll: true,
+    });
+    expect(clearAllResponse.status).toBe(200);
+    expect(clearAllResponse.data.deleted).toBeGreaterThanOrEqual(2);
+
+    const listAfterClear = await req(
+      server.port,
+      "GET",
+      "/api/trajectories?limit=20",
+    );
+    expect(listAfterClear.status).toBe(200);
+    expect(
+      Array.isArray(listAfterClear.data.trajectories) &&
+        listAfterClear.data.trajectories.some(
+          (item: { id?: string }) => item.id === firstId || item.id === secondId,
+        ),
+    ).toBe(false);
+  });
+
+  it("rejects malformed delete payloads with a 400 response", async () => {
+    if (!server) {
+      throw new Error("API server did not start");
+    }
+
+    const response = await fetch(
+      `http://127.0.0.1:${server.port}/api/trajectories`,
+      {
+        method: "DELETE",
+        headers: {
+          "content-type": "application/json",
+        },
+        body: "{",
+      },
+    );
+
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: "Invalid JSON in request body",
+    });
   });
 });

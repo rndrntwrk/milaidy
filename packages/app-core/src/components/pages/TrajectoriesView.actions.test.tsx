@@ -304,4 +304,153 @@ describe("TrajectoriesView actions", () => {
       expect(onSelectTrajectory).toHaveBeenCalledWith(null);
     });
   });
+
+  it("does not delete anything when the confirmation is cancelled", async () => {
+    const setActionNotice = vi.fn();
+    const onSelectTrajectory = vi.fn();
+
+    mockUseApp.mockReturnValue({
+      t,
+      setActionNotice,
+    });
+    mockGetTrajectories.mockResolvedValue({
+      trajectories: [makeTrajectory("traj-1")],
+      total: 1,
+      offset: 0,
+      limit: 50,
+    });
+
+    render(
+      <TrajectoriesView
+        selectedTrajectoryId="traj-1"
+        onSelectTrajectory={onSelectTrajectory}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(mockGetTrajectories).toHaveBeenCalledTimes(1);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete current" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(mockDeleteTrajectories).not.toHaveBeenCalled();
+    expect(onSelectTrajectory).not.toHaveBeenCalled();
+    expect(setActionNotice).not.toHaveBeenCalled();
+  });
+
+  it("surfaces an error notice when deleting the selected trajectory fails", async () => {
+    const setActionNotice = vi.fn();
+    const onSelectTrajectory = vi.fn();
+
+    mockUseApp.mockReturnValue({
+      t,
+      setActionNotice,
+    });
+    mockGetTrajectories.mockResolvedValue({
+      trajectories: [makeTrajectory("traj-1"), makeTrajectory("traj-2")],
+      total: 2,
+      offset: 0,
+      limit: 50,
+    });
+    mockDeleteTrajectories.mockRejectedValue(new Error("delete failed"));
+
+    render(
+      <TrajectoriesView
+        selectedTrajectoryId="traj-1"
+        onSelectTrajectory={onSelectTrajectory}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(mockGetTrajectories).toHaveBeenCalledTimes(1);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Delete current" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+
+    await waitFor(() => {
+      expect(mockDeleteTrajectories).toHaveBeenCalledWith(["traj-1"]);
+      expect(setActionNotice).toHaveBeenCalledWith("delete failed", "error", 4200);
+    });
+    expect(onSelectTrajectory).not.toHaveBeenCalled();
+  });
+
+  it("shows an info notice when clearing all trajectories deletes nothing", async () => {
+    const setActionNotice = vi.fn();
+    const onSelectTrajectory = vi.fn();
+
+    mockUseApp.mockReturnValue({
+      t,
+      setActionNotice,
+    });
+    mockGetTrajectories.mockResolvedValue({
+      trajectories: [makeTrajectory("traj-1")],
+      total: 1,
+      offset: 0,
+      limit: 50,
+    });
+    mockClearAllTrajectories.mockResolvedValue({ deleted: 0 });
+
+    render(
+      <TrajectoriesView
+        selectedTrajectoryId="traj-1"
+        onSelectTrajectory={onSelectTrajectory}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(mockGetTrajectories).toHaveBeenCalledTimes(1);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear all" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+
+    await waitFor(() => {
+      expect(mockClearAllTrajectories).toHaveBeenCalledTimes(1);
+      expect(setActionNotice).toHaveBeenCalledWith(
+        "No trajectory was deleted.",
+        "info",
+        2400,
+      );
+      expect(onSelectTrajectory).toHaveBeenCalledWith(null);
+    });
+  });
+
+  it("surfaces an error notice when clearing all trajectories fails", async () => {
+    const setActionNotice = vi.fn();
+    const onSelectTrajectory = vi.fn();
+
+    mockUseApp.mockReturnValue({
+      t,
+      setActionNotice,
+    });
+    mockGetTrajectories.mockResolvedValue({
+      trajectories: [makeTrajectory("traj-1")],
+      total: 1,
+      offset: 0,
+      limit: 50,
+    });
+    mockClearAllTrajectories.mockRejectedValue(new Error("clear failed"));
+
+    render(
+      <TrajectoriesView
+        selectedTrajectoryId="traj-1"
+        onSelectTrajectory={onSelectTrajectory}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(mockGetTrajectories).toHaveBeenCalledTimes(1);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Clear all" }));
+    fireEvent.click(screen.getByRole("button", { name: "Confirm" }));
+
+    await waitFor(() => {
+      expect(mockClearAllTrajectories).toHaveBeenCalledTimes(1);
+      expect(setActionNotice).toHaveBeenCalledWith("clear failed", "error", 4200);
+    });
+    expect(onSelectTrajectory).not.toHaveBeenCalled();
+  });
 });

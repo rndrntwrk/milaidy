@@ -83,6 +83,19 @@ describe("WhatsApp webhook auth bypass", () => {
     );
   });
 
+  it("surfaces verification failures on the public webhook path", async () => {
+    verifyWebhook.mockReturnValueOnce(null);
+
+    const response = await req(
+      port,
+      "GET",
+      "/api/whatsapp/webhook?hub.mode=subscribe&hub.verify_token=wrong-token&hub.challenge=challenge-123",
+    );
+
+    expect(response.status).toBe(403);
+    expect(response.data.error).toBe("Webhook verification failed");
+  });
+
   it("allows POST webhook delivery without the API token", async () => {
     const payload = {
       object: "whatsapp_business_account",
@@ -99,5 +112,18 @@ describe("WhatsApp webhook auth bypass", () => {
     expect(response.status).toBe(200);
     expect(response.data._raw).toBe("EVENT_RECEIVED");
     expect(handleWebhook).toHaveBeenCalledWith(payload);
+  });
+
+  it("rejects invalid JSON on the public webhook path", async () => {
+    const response = await req(
+      port,
+      "POST",
+      "/api/whatsapp/webhook",
+      '{"object":',
+      "application/json",
+    );
+
+    expect(response.status).toBe(400);
+    expect(response.data.error).toBe("Invalid JSON in request body");
   });
 });
