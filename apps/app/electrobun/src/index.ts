@@ -31,12 +31,12 @@ import {
 import { showBackgroundNoticeOnce } from "./background-notice";
 import { startBrowserWorkspaceBridgeServer } from "./browser-workspace-bridge-server";
 import { readNavigationEventUrl } from "./cloud-auth-window";
+import { scheduleDevtoolsLayoutRefresh } from "./devtools-layout";
 import {
   resolveBootstrapShellRenderer,
   resolveBootstrapViewRenderer,
   resolveMainWindowPartition,
 } from "./main-window-session";
-import { scheduleDevtoolsLayoutRefresh } from "./devtools-layout";
 import {
   buildMainMenuResetApiCandidates,
   pickReachableMenuResetApiBase,

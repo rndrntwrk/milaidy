@@ -27,7 +27,9 @@ describe("scheduleDevtoolsLayoutRefresh", () => {
     }
 
     expect(getFrame).toHaveBeenCalledTimes(1);
-    expect(setFrame).toHaveBeenCalledTimes(DEVTOOLS_LAYOUT_REFRESH_DELAYS_MS.length);
+    expect(setFrame).toHaveBeenCalledTimes(
+      DEVTOOLS_LAYOUT_REFRESH_DELAYS_MS.length,
+    );
     expect(setFrame).toHaveBeenNthCalledWith(1, 10, 20, 1280, 860);
     expect(setFrame).toHaveBeenNthCalledWith(2, 10, 20, 1280, 859);
     expect(setFrame).toHaveBeenNthCalledWith(3, 10, 20, 1280, 860);

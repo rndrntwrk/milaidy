@@ -18,7 +18,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { resolveApiUrl } from "../../utils/asset-url";
-import { useApp } from "../../state";
 
 interface TrackInfo {
   title: string;
@@ -28,9 +27,6 @@ interface TrackInfo {
 }
 
 export function MusicPlayerGlobal() {
-  const { config } = useApp();
-  const isEnabled = config?.plugins?.entries?.["music-player"]?.enabled === true;
-
   const audioRef = useRef<HTMLAudioElement>(null);
   const [track, setTrack] = useState<TrackInfo | null>(null);
   const [minimised, setMinimised] = useState(false);
@@ -43,11 +39,6 @@ export function MusicPlayerGlobal() {
   }, [track]);
 
   useEffect(() => {
-    if (!isEnabled) {
-      setTrack(null);
-      return;
-    }
-
     let alive = true;
 
     const poll = async () => {
@@ -100,7 +91,7 @@ export function MusicPlayerGlobal() {
       alive = false;
       clearInterval(id);
     };
-  }, [isEnabled]);
+  }, []);
 
   // Connect audio element when track identity changes (not on isPaused alone)
   useEffect(() => {

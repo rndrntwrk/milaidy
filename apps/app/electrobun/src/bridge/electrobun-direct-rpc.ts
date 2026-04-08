@@ -11,8 +11,6 @@
  * to renderer code. It mirrors the native Electrobun RPC surface directly:
  * `request.<method>(params)` plus `onMessage(<message>, listener)`.
  */
-
-
 import { Electroview } from "electrobun/view";
 import type { RpcMessageListener } from "../types.js";
 import { ensureElectrobunGlobal } from "./electrobun-stub.js";
@@ -45,21 +43,25 @@ function dispatchMessage(messageName: string, payload: unknown): void {
     // Propagate to boot config so MiladyClient picks up port changes.
     // We modify it directly instead of importing @miladyai/app-core/config
     // to prevent bundling React and the entire UI layer into the preload script.
-    const globalObj = window as any;
     const BOOT_KEY = "__MILADY_APP_BOOT_CONFIG__";
     const storeSym = Symbol.for("milady.app.boot-config");
-    
+    type BootConfigStore = { current?: Record<string, unknown> };
+    const bootWindow = window as Window & {
+      [BOOT_KEY]?: Record<string, unknown>;
+      [key: symbol]: unknown;
+    };
+
     // Get existing config from either the window global or the secret symbol store
-    const store = globalObj[storeSym];
-    const existingConfig = store?.current || globalObj[BOOT_KEY] || {};
-    
+    const store = bootWindow[storeSym] as BootConfigStore | undefined;
+    const existingConfig = store?.current || bootWindow[BOOT_KEY] || {};
+
     const newConfig = {
       ...existingConfig,
       apiBase: apiBaseUpdate.base,
       ...(apiBaseUpdate.token ? { apiToken: apiBaseUpdate.token } : {}),
     };
-    
-    globalObj[BOOT_KEY] = newConfig;
+
+    bootWindow[BOOT_KEY] = newConfig;
     if (store) {
       store.current = newConfig;
     }

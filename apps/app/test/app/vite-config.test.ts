@@ -51,11 +51,10 @@ describe("app vite config", () => {
     );
     const plugins = (loaded?.config.plugins ?? []) as Array<{
       name?: string;
-      transform?: (code: string, id: string) =>
-        | { code: string; map?: unknown }
-        | string
-        | null
-        | undefined;
+      transform?: (
+        code: string,
+        id: string,
+      ) => { code: string; map?: unknown } | string | null | undefined;
     }>;
     const sparkPatch = plugins.find((plugin) => plugin.name === "spark-patch");
 
@@ -71,7 +70,9 @@ describe("app vite config", () => {
 
     const transformed = typeof result === "string" ? result : result?.code;
     expect(transformed).toBeDefined();
-    expect(transformed).not.toContain("sourceMappingURL=worker-CaMzlx2k.js.map");
+    expect(transformed).not.toContain(
+      "sourceMappingURL=worker-CaMzlx2k.js.map",
+    );
   });
 
   it("uses app-local Vite cache dir and ignores Electrobun native build output", async () => {

@@ -296,17 +296,22 @@ export function resolveConfigDir(opts?: {
 }
 
 export function ensureDesktopApiToken(
-  _env: NodeJS.ProcessEnv = process.env,
+  env: NodeJS.ProcessEnv = process.env,
 ): string {
-  return "";
+  const existing = env.MILADY_API_TOKEN || env.ELIZA_API_TOKEN;
+  const token = existing || crypto.randomBytes(16).toString("hex");
+  env.MILADY_API_TOKEN = token;
+  env.ELIZA_API_TOKEN = token;
+  return token;
 }
 
 export function configureDesktopLocalApiAuth(
   env: NodeJS.ProcessEnv = process.env,
 ): string {
+  const token = ensureDesktopApiToken(env);
   env.MILADY_PAIRING_DISABLED = "1";
   env.ELIZA_PAIRING_DISABLED = "1";
-  return "";
+  return token;
 }
 
 function getDesktopApiToken(
