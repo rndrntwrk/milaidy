@@ -1,5 +1,5 @@
-import type { CoordinatorEvalChannel } from "../../packages/agent/src/evals/coordinator-scenarios.js";
 import { runCoordinatorLiveScenarios } from "../../packages/agent/src/evals/coordinator-live-runner.js";
+import type { CoordinatorEvalChannel } from "../../packages/agent/src/evals/coordinator-scenarios.js";
 
 function takeFlag(name: string): string | undefined {
   const index = process.argv.indexOf(name);
@@ -20,16 +20,26 @@ function takeRepeatedFlag(name: string): string[] {
 }
 
 try {
-  const profile = takeFlag("--profile") as "smoke" | "core" | "full" | undefined;
+  const profile = takeFlag("--profile") as
+    | "smoke"
+    | "core"
+    | "full"
+    | undefined;
   const outputRoot = takeFlag("--output");
   const batchId = takeFlag("--batch-id");
   const scenarioIds = [
     ...takeRepeatedFlag("--scenario"),
-    ...(takeFlag("--scenarios")?.split(",").map((value) => value.trim()).filter(Boolean) ?? []),
+    ...(takeFlag("--scenarios")
+      ?.split(",")
+      .map((value) => value.trim())
+      .filter(Boolean) ?? []),
   ];
   const channelValues = [
     ...takeRepeatedFlag("--channel"),
-    ...(takeFlag("--channels")?.split(",").map((value) => value.trim()).filter(Boolean) ?? []),
+    ...(takeFlag("--channels")
+      ?.split(",")
+      .map((value) => value.trim())
+      .filter(Boolean) ?? []),
   ] as CoordinatorEvalChannel[];
 
   const result = await runCoordinatorLiveScenarios({
@@ -53,6 +63,7 @@ try {
         requestedChannels: result.requestedChannels,
         usableChannels: result.usableChannels,
         skippedChannels: result.skippedChannels,
+        channelReadiness: result.preflight.channelReadiness,
         runnableFrameworks: result.runnableFrameworks,
         preflightFailures: result.preflightFailures,
         preflightWarnings: result.preflightWarnings,
@@ -67,7 +78,9 @@ try {
   );
 
   process.exit(
-    failed === 0 && result.preflightHardBlockers.length === 0 && coverageGaps === 0
+    failed === 0 &&
+      result.preflightHardBlockers.length === 0 &&
+      coverageGaps === 0
       ? 0
       : 1,
   );

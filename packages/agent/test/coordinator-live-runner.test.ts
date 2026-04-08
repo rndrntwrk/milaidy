@@ -16,7 +16,10 @@ const supportedConnectors: CoordinatorEvalChannel[] = [
 ];
 
 type MutableTestState = {
-  conversations: Map<string, Array<{ text?: string; content?: { text?: string } }>>;
+  conversations: Map<
+    string,
+    Array<{ text?: string; content?: { text?: string } }>
+  >;
   outputRoot: string;
   preflight: CoordinatorPreflightResult;
   workdir: string;
@@ -35,6 +38,28 @@ function makePreflight(
     configPath: "/tmp/milady.json",
     availableChannels: ["app_chat"],
     supportedConnectors,
+    channelReadiness: [
+      {
+        channel: "app_chat",
+        connectorKeys: [],
+        configured: true,
+        configReady: true,
+        healthStatuses: {},
+        available: true,
+        reason:
+          "App chat is always available when the Milady API is reachable.",
+      },
+      ...supportedConnectors.map((channel) => ({
+        channel,
+        connectorKeys:
+          channel === "telegram" ? ["telegram", "telegramAccount"] : [channel],
+        configured: false,
+        configReady: false,
+        healthStatuses: {},
+        available: false,
+        reason: `Channel ${channel} is not configured in Milady.`,
+      })),
+    ],
     shareCapabilities: [],
     checks: [
       {
@@ -55,7 +80,8 @@ function makePreflight(
       {
         id: "subscription-anthropic",
         status: "pass",
-        summary: "Claude subscription is configured and valid for task-agent use.",
+        summary:
+          "Claude subscription is configured and valid for task-agent use.",
       },
       {
         id: "framework-codex",
@@ -159,7 +185,9 @@ class FakeCoordinatorEvalClient {
       } as T;
     }
 
-    if (route.startsWith("/api/coding-agents/coordinator/threads/thread-1/share")) {
+    if (
+      route.startsWith("/api/coding-agents/coordinator/threads/thread-1/share")
+    ) {
       return {
         threadId: "thread-1",
         shareCapabilities: [],
@@ -228,7 +256,9 @@ describe("coordinator live runner", () => {
     state.outputRoot = await mkdtemp(
       path.join(os.tmpdir(), "coordinator-live-runner-"),
     );
-    state.workdir = await mkdtemp(path.join(os.tmpdir(), "coordinator-workdir-"));
+    state.workdir = await mkdtemp(
+      path.join(os.tmpdir(), "coordinator-workdir-"),
+    );
     await writeFile(path.join(state.workdir, "index.html"), "<h1>hello</h1>\n");
     state.conversations = new Map();
     state.preflight = makePreflight();
@@ -268,7 +298,10 @@ describe("coordinator live runner", () => {
       scenarioIds: [scenarioId],
     });
 
-    expect(result.requestedChannels).toEqual(["app_chat", ...supportedConnectors]);
+    expect(result.requestedChannels).toEqual([
+      "app_chat",
+      ...supportedConnectors,
+    ]);
     expect(result.usableChannels).toEqual(["app_chat"]);
     expect(result.skippedChannels.map((item) => item.channel)).toEqual(
       supportedConnectors,

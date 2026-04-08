@@ -2,11 +2,12 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import type { CoordinatorEvalChannel } from "./coordinator-scenarios.js";
+import { isConnectorConfigured } from "../config/plugin-auto-enable.js";
 import {
   CoordinatorEvalClient,
   resolveCoordinatorEvalBaseUrl,
 } from "./coordinator-eval-client.js";
+import type { CoordinatorEvalChannel } from "./coordinator-scenarios.js";
 
 type PreflightStatus = "pass" | "warn" | "fail";
 
@@ -17,12 +18,23 @@ export interface CoordinatorPreflightCheck {
   details?: Record<string, unknown>;
 }
 
+export interface CoordinatorChannelReadiness {
+  channel: CoordinatorEvalChannel;
+  connectorKeys: string[];
+  configured: boolean;
+  configReady: boolean;
+  healthStatuses: Record<string, string>;
+  available: boolean;
+  reason: string;
+}
+
 export interface CoordinatorPreflightResult {
   ok: boolean;
   baseUrl: string;
   configPath: string;
   availableChannels: CoordinatorEvalChannel[];
   supportedConnectors: CoordinatorEvalChannel[];
+  channelReadiness: CoordinatorChannelReadiness[];
   shareCapabilities: string[];
   checks: CoordinatorPreflightCheck[];
 }
@@ -45,8 +57,23 @@ const SUPPORTED_CONNECTOR_CHANNELS: CoordinatorEvalChannel[] = [
   "wechat",
 ];
 
+const CHANNEL_CONNECTOR_KEYS: Record<
+  Exclude<CoordinatorEvalChannel, "app_chat">,
+  string[]
+> = {
+  discord: ["discord"],
+  telegram: ["telegram", "telegramAccount"],
+  slack: ["slack"],
+  whatsapp: ["whatsapp"],
+  signal: ["signal"],
+  matrix: ["matrix"],
+  wechat: ["wechat"],
+};
+
 function getHomeDir(): string {
-  return process.env.HOME?.trim() || process.env.USERPROFILE?.trim() || os.homedir();
+  return (
+    process.env.HOME?.trim() || process.env.USERPROFILE?.trim() || os.homedir()
+  );
 }
 
 function readJsonFile(filePath: string): Record<string, unknown> | null {
@@ -126,25 +153,110 @@ function detectShareCapabilities(
   return capabilities;
 }
 
-function normalizeConnectors(
+function normalizeConnectorConfig(
   connectors: Record<string, unknown>,
-): CoordinatorEvalChannel[] {
-  const configured = new Set<CoordinatorEvalChannel>(["app_chat"]);
-  for (const connectorName of Object.keys(connectors)) {
-    const normalized = connectorName.trim().toLowerCase();
-    if (normalized === "telegramaccount") {
-      configured.add("telegram");
-      continue;
-    }
-    if (
-      SUPPORTED_CONNECTOR_CHANNELS.includes(
-        normalized as CoordinatorEvalChannel,
-      )
-    ) {
-      configured.add(normalized as CoordinatorEvalChannel);
-    }
+): Record<string, Record<string, unknown>> {
+  const normalized: Record<string, Record<string, unknown>> = {};
+  for (const [key, value] of Object.entries(connectors)) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) continue;
+    normalized[key] = value as Record<string, unknown>;
   }
-  return Array.from(configured);
+  return normalized;
+}
+
+function normalizeConnectorHealth(
+  connectors: Record<string, unknown> | null | undefined,
+): Record<string, string> {
+  const normalized: Record<string, string> = {};
+  if (!connectors) return normalized;
+  for (const [key, value] of Object.entries(connectors)) {
+    if (typeof value !== "string" || !value.trim()) continue;
+    normalized[key] = value.trim();
+  }
+  return normalized;
+}
+
+function connectorKeysForChannel(
+  channel: Exclude<CoordinatorEvalChannel, "app_chat">,
+): string[] {
+  return CHANNEL_CONNECTOR_KEYS[channel];
+}
+
+function buildChannelReadiness(params: {
+  connectorConfig: Record<string, Record<string, unknown>>;
+  connectorHealth: Record<string, string>;
+}): CoordinatorChannelReadiness[] {
+  const readiness: CoordinatorChannelReadiness[] = [
+    {
+      channel: "app_chat",
+      connectorKeys: [],
+      configured: true,
+      configReady: true,
+      healthStatuses: {},
+      available: true,
+      reason: "App chat is always available when the Milady API is reachable.",
+    },
+  ];
+
+  for (const channel of SUPPORTED_CONNECTOR_CHANNELS) {
+    const connectorKeys = connectorKeysForChannel(channel);
+    const configuredKeys = connectorKeys.filter(
+      (key) => params.connectorConfig[key] !== undefined,
+    );
+    const healthStatuses = Object.fromEntries(
+      connectorKeys.flatMap((key) =>
+        typeof params.connectorHealth[key] === "string"
+          ? [[key, params.connectorHealth[key]]]
+          : [],
+      ),
+    );
+    const configReady = configuredKeys.some((key) =>
+      isConnectorConfigured(key, params.connectorConfig[key]),
+    );
+    const available = connectorKeys.some(
+      (key) =>
+        typeof params.connectorHealth[key] === "string" &&
+        params.connectorHealth[key] === "ok" &&
+        params.connectorConfig[key] !== undefined &&
+        isConnectorConfigured(key, params.connectorConfig[key]),
+    );
+
+    let reason: string;
+    if (available) {
+      reason = "Milady reported a live connector runtime for this channel.";
+    } else if (configuredKeys.length === 0) {
+      reason = "This channel is not configured in Milady.";
+    } else if (!configReady) {
+      reason =
+        "This channel is present in config but is missing required credentials or auth state.";
+    } else if (Object.values(healthStatuses).includes("missing")) {
+      reason =
+        "This channel is configured, but the runtime did not load its connector plugin.";
+    } else if (Object.values(healthStatuses).includes("configured")) {
+      reason =
+        "This channel is configured, but Milady has not confirmed a live connector runtime yet.";
+    } else if (Object.values(healthStatuses).includes("unknown")) {
+      reason =
+        "This channel is configured, but the connector health monitor could not classify its runtime state.";
+    } else if (Object.keys(healthStatuses).length === 0) {
+      reason =
+        "This channel is configured, but Milady did not report runtime health for it.";
+    } else {
+      reason = "This channel is not currently available for live evaluation.";
+    }
+
+    readiness.push({
+      channel,
+      connectorKeys,
+      configured: configuredKeys.length > 0,
+      configReady,
+      healthStatuses,
+      available,
+      reason,
+    });
+  }
+
+  return readiness;
 }
 
 export async function runCoordinatorPreflight(options?: {
@@ -187,7 +299,9 @@ export async function runCoordinatorPreflight(options?: {
       : "warn",
     "Local Codex/Claude auth files were inspected.",
     {
-      codexAuthFile: fs.existsSync(path.join(getHomeDir(), ".codex", "auth.json")),
+      codexAuthFile: fs.existsSync(
+        path.join(getHomeDir(), ".codex", "auth.json"),
+      ),
       claudeCredentialsFile: fs.existsSync(
         path.join(getHomeDir(), ".claude", ".credentials.json"),
       ),
@@ -229,6 +343,7 @@ export async function runCoordinatorPreflight(options?: {
       configPath,
       availableChannels: [],
       supportedConnectors: SUPPORTED_CONNECTOR_CHANNELS,
+      channelReadiness: [],
       shareCapabilities,
       checks,
     };
@@ -304,21 +419,54 @@ export async function runCoordinatorPreflight(options?: {
   const connectorsResponse = await client.requestJson<{
     connectors?: Record<string, unknown>;
   }>("/api/connectors");
-  const availableChannels = normalizeConnectors(connectorsResponse.connectors ?? {});
-  const configuredConnectorChannels = availableChannels.filter(
-    (channel) => channel !== "app_chat",
+  const healthResponse = await client.requestJson<{
+    connectors?: Record<string, unknown>;
+  }>("/api/health");
+  const connectorConfig = normalizeConnectorConfig(
+    connectorsResponse.connectors ?? {},
   );
+  const connectorHealth = normalizeConnectorHealth(healthResponse.connectors);
+  const channelReadiness = buildChannelReadiness({
+    connectorConfig,
+    connectorHealth,
+  });
+  const availableChannels = channelReadiness
+    .filter((channel) => channel.available)
+    .map((channel) => channel.channel);
+  const readyConnectorChannels = channelReadiness
+    .filter((channel) => channel.channel !== "app_chat" && channel.available)
+    .map((channel) => channel.channel);
+  const configuredConnectorChannels = channelReadiness
+    .filter((channel) => channel.channel !== "app_chat" && channel.configured)
+    .map((channel) => channel.channel);
   addCheck(
     "connectors",
-    configuredConnectorChannels.length > 0 ? "pass" : "warn",
-    configuredConnectorChannels.length > 0
-      ? "At least one external connector is configured."
-      : "No external connectors are configured; live eval coverage is limited to app chat.",
+    readyConnectorChannels.length > 0
+      ? "pass"
+      : configuredConnectorChannels.length > 0
+        ? "fail"
+        : "warn",
+    readyConnectorChannels.length > 0
+      ? "At least one external connector is live and ready for evaluation."
+      : configuredConnectorChannels.length > 0
+        ? "External connectors are configured, but none are currently live."
+        : "No external connectors are configured; live eval coverage is limited to app chat.",
     {
+      readyChannels: readyConnectorChannels,
       configuredChannels: configuredConnectorChannels,
       supportedConnectorChannels: SUPPORTED_CONNECTOR_CHANNELS,
+      connectorHealth,
     },
   );
+  for (const readiness of channelReadiness) {
+    if (readiness.channel === "app_chat") continue;
+    addCheck(
+      `channel-${readiness.channel}`,
+      readiness.available ? "pass" : readiness.configured ? "fail" : "warn",
+      readiness.reason,
+      readiness as unknown as Record<string, unknown>,
+    );
+  }
 
   return {
     ok: checks.every((check) => check.status !== "fail"),
@@ -326,6 +474,7 @@ export async function runCoordinatorPreflight(options?: {
     configPath,
     availableChannels,
     supportedConnectors: SUPPORTED_CONNECTOR_CHANNELS,
+    channelReadiness,
     shareCapabilities,
     checks,
   };
