@@ -13,11 +13,14 @@ import type {
 /** Minimal state setters needed to apply a content pack. */
 export interface ContentPackApplyDeps {
   setCustomVrmUrl: (url: string) => void;
+  setCustomVrmPreviewUrl: (url: string) => void;
   setCustomBackgroundUrl: (url: string) => void;
   setCustomWorldUrl: (url: string) => void;
   setSelectedVrmIndex: (index: number) => void;
   setOnboardingName: (name: string) => void;
   setOnboardingStyle: (style: string) => void;
+  setCustomCatchphrase: (phrase: string) => void;
+  setCustomVoicePresetId: (id: string) => void;
 }
 
 /**
@@ -32,8 +35,10 @@ export function applyContentPack(
   if (pack.avatarIndex != null && pack.avatarIndex > 0) {
     deps.setSelectedVrmIndex(pack.avatarIndex);
     deps.setCustomVrmUrl("");
+    deps.setCustomVrmPreviewUrl("");
   } else if (pack.vrmUrl) {
     deps.setCustomVrmUrl(pack.vrmUrl);
+    deps.setCustomVrmPreviewUrl(pack.vrmPreviewUrl ?? "");
     deps.setSelectedVrmIndex(0); // 0 = custom VRM
   }
 
@@ -48,6 +53,12 @@ export function applyContentPack(
   // Personality
   if (pack.personality?.name) {
     deps.setOnboardingName(pack.personality.name);
+  }
+  if (pack.personality?.catchphrase) {
+    deps.setCustomCatchphrase(pack.personality.catchphrase);
+  }
+  if (pack.personality?.voicePresetId) {
+    deps.setCustomVoicePresetId(pack.personality.voicePresetId);
   }
   if (pack.avatarIndex != null && pack.avatarIndex > 0 && pack.manifest.id) {
     deps.setOnboardingStyle(pack.manifest.id);

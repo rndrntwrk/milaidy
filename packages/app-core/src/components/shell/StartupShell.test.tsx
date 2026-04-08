@@ -8,14 +8,24 @@ const {
   clientSetTokenMock,
   clearPersistedActiveServerMock,
   discoverGatewayEndpointsMock,
+  loadContentPackFromFilesMock,
+  loadContentPackFromUrlMock,
+  loadPersistedActivePackUrlMock,
   mockUseApp,
+  releaseLoadedContentPackMock,
+  savePersistedActivePackUrlMock,
   savePersistedActiveServerMock,
 } = vi.hoisted(() => ({
   clientSetBaseUrlMock: vi.fn(),
   clientSetTokenMock: vi.fn(),
   clearPersistedActiveServerMock: vi.fn(),
   discoverGatewayEndpointsMock: vi.fn(),
+  loadContentPackFromFilesMock: vi.fn(),
+  loadContentPackFromUrlMock: vi.fn(),
+  loadPersistedActivePackUrlMock: vi.fn(),
   mockUseApp: vi.fn(),
+  releaseLoadedContentPackMock: vi.fn(),
+  savePersistedActivePackUrlMock: vi.fn(),
   savePersistedActiveServerMock: vi.fn(),
 }));
 
@@ -28,6 +38,8 @@ vi.mock("../../api", () => ({
 
 vi.mock("../../state", () => ({
   clearPersistedActiveServer: clearPersistedActiveServerMock,
+  loadPersistedActivePackUrl: loadPersistedActivePackUrlMock,
+  savePersistedActivePackUrl: savePersistedActivePackUrlMock,
   savePersistedActiveServer: savePersistedActiveServerMock,
   useApp: () => mockUseApp(),
 }));
@@ -43,6 +55,73 @@ vi.mock("../../bridge/gateway-discovery", () => ({
     `${gateway.tlsEnabled ? "https" : "http"}://${gateway.host}:${gateway.gatewayPort ?? gateway.port}`,
 }));
 
+vi.mock("../../content-packs", () => ({
+  applyColorScheme: () => vi.fn(),
+  applyContentPack: vi.fn(),
+  loadContentPackFromFiles: loadContentPackFromFilesMock,
+  loadContentPackFromUrl: loadContentPackFromUrlMock,
+  releaseLoadedContentPack: releaseLoadedContentPackMock,
+}));
+
+vi.mock("./SplashContentPacks", () => ({
+  SplashContentPacks: ({
+    packs,
+    onLoadCustomPack,
+    onSelectPack,
+  }: {
+    packs: Array<{ manifest: { id: string; name: string } }>;
+    onLoadCustomPack: () => void;
+    onSelectPack: (pack: { manifest: { id: string; name: string } }) => void;
+  }) => (
+    <div>
+      <button type="button" onClick={onLoadCustomPack}>
+        Load pack
+      </button>
+      {packs.map((pack) => (
+        <button
+          type="button"
+          key={pack.manifest.id}
+          onClick={() => onSelectPack(pack)}
+        >
+          {pack.manifest.name}
+        </button>
+      ))}
+    </div>
+  ),
+}));
+
+vi.mock("./SplashServerChooser", () => ({
+  SplashServerChooser: ({
+    gateways,
+    onConnectGateway,
+    onCreateLocal,
+    onManualConnect,
+  }: {
+    gateways: Array<{ stableId: string; name: string }>;
+    onConnectGateway: (gateway: { stableId: string; name: string }) => void;
+    onCreateLocal: () => void;
+    onManualConnect: () => void;
+  }) => (
+    <div>
+      <button type="button" onClick={onCreateLocal}>
+        Create one
+      </button>
+      <button type="button" onClick={onManualConnect}>
+        Manually connect to one
+      </button>
+      {gateways.map((gateway) => (
+        <button
+          type="button"
+          key={gateway.stableId}
+          onClick={() => onConnectGateway(gateway)}
+        >
+          {gateway.name}
+        </button>
+      ))}
+    </div>
+  ),
+}));
+
 import { StartupShell } from "./StartupShell";
 
 describe("StartupShell", () => {
@@ -51,8 +130,21 @@ describe("StartupShell", () => {
     clientSetTokenMock.mockReset();
     clearPersistedActiveServerMock.mockReset();
     discoverGatewayEndpointsMock.mockReset();
+    loadContentPackFromFilesMock.mockReset();
+    loadContentPackFromUrlMock.mockReset();
+    loadPersistedActivePackUrlMock.mockReset();
     savePersistedActiveServerMock.mockReset();
+    savePersistedActivePackUrlMock.mockReset();
+    releaseLoadedContentPackMock.mockReset();
     discoverGatewayEndpointsMock.mockResolvedValue([]);
+    loadContentPackFromFilesMock.mockRejectedValue(
+      new Error("loadContentPackFromFiles not mocked"),
+    );
+    loadContentPackFromUrlMock.mockRejectedValue(
+      new Error("loadContentPackFromUrl not mocked"),
+    );
+    loadPersistedActivePackUrlMock.mockReturnValue(null);
+    vi.restoreAllMocks();
   });
 
   function mockSplashApp(overrides?: Record<string, unknown>) {
@@ -112,12 +204,7 @@ describe("StartupShell", () => {
     });
     await act(async () => {});
 
-    const buttons =
-      tree?.root.findAll(
-        (node) =>
-          node.type === "button" && typeof node.props.onClick === "function",
-      ) ?? [];
-    const createButton = buttons[0];
+    const createButton = tree?.root.findByProps({ children: "Create one" });
 
     await act(async () => {
       createButton?.props.onClick();
@@ -152,12 +239,7 @@ describe("StartupShell", () => {
     });
     await act(async () => {});
 
-    const buttons =
-      tree?.root.findAll(
-        (node) =>
-          node.type === "button" && typeof node.props.onClick === "function",
-      ) ?? [];
-    const connectButton = buttons[0];
+    const connectButton = tree?.root.findByProps({ children: "Kei" });
 
     await act(async () => {
       connectButton?.props.onClick();
@@ -178,5 +260,72 @@ describe("StartupShell", () => {
       "elizacloud",
     );
     expect(dispatch).toHaveBeenCalledWith({ type: "SPLASH_CONTINUE" });
+  });
+
+  it("falls back to URL loading when directory upload is unsupported", async () => {
+    mockSplashApp();
+    const promptMock = vi
+      .fn()
+      .mockReturnValue("https://example.com/packs/medusa/");
+    vi.stubGlobal("prompt", promptMock);
+    loadContentPackFromUrlMock.mockResolvedValue({
+      manifest: { id: "medusa", name: "Medusa" },
+      colorScheme: undefined,
+      source: { kind: "url", url: "https://example.com/packs/medusa/" },
+    });
+
+    let tree: TestRenderer.ReactTestRenderer | undefined;
+    await act(async () => {
+      tree = TestRenderer.create(<StartupShell />);
+    });
+    await act(async () => {});
+
+    const loadButton = tree?.root.findByProps({ children: "Load pack" });
+    await act(async () => {
+      loadButton?.props.onClick();
+    });
+
+    expect(promptMock).toHaveBeenCalledTimes(1);
+    expect(loadContentPackFromUrlMock).toHaveBeenCalledWith(
+      "https://example.com/packs/medusa/",
+    );
+  });
+
+  it("releases file-backed pack blobs when the active pack is deactivated", async () => {
+    mockSplashApp({ activePackId: "medusa" });
+    const filePack = {
+      manifest: { id: "medusa", name: "Medusa" },
+      colorScheme: undefined,
+      source: { kind: "file", path: "medusa" },
+    };
+    loadContentPackFromFilesMock.mockResolvedValue(filePack);
+
+    let tree: TestRenderer.ReactTestRenderer | undefined;
+    await act(async () => {
+      tree = TestRenderer.create(<StartupShell />);
+    });
+    await act(async () => {});
+
+    const fileInput = tree?.root.findByProps({ type: "file" });
+    await act(async () => {
+      fileInput?.props.onChange({
+        target: {
+          files: [
+            {
+              name: "pack.json",
+              webkitRelativePath: "medusa/pack.json",
+              text: async () => "{}",
+            },
+          ],
+        },
+      });
+    });
+
+    const packButton = tree?.root.findByProps({ children: "Medusa" });
+    await act(async () => {
+      packButton?.props.onClick();
+    });
+
+    expect(releaseLoadedContentPackMock).toHaveBeenCalledWith(filePack);
   });
 });

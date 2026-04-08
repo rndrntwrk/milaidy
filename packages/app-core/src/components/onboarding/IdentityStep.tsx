@@ -16,6 +16,7 @@ import { resolveApiUrl } from "../../utils/asset-url";
 import { PREMADE_VOICES } from "../../voice/types";
 import {
   CharacterRoster,
+  createCustomPackRosterEntry,
   type CharacterRosterEntry,
   resolveRosterEntries,
 } from "../character/CharacterRoster";
@@ -49,13 +50,46 @@ export interface IdentityStepProps {
 export function IdentityStep({
   gateVoicePreviewOnTeleport = true,
 }: IdentityStepProps) {
-  const { onboardingStyle, handleOnboardingNext, setState, t, uiLanguage } =
-    useApp();
+  const {
+    onboardingStyle,
+    handleOnboardingNext,
+    setState,
+    t,
+    uiLanguage,
+    activePackId,
+    customVrmUrl,
+    customVrmPreviewUrl,
+    onboardingName,
+    customCatchphrase,
+    customVoicePresetId,
+  } = useApp();
 
-  const entries = useMemo(
-    () => resolveRosterEntries(getStylePresets(uiLanguage)),
-    [uiLanguage],
-  );
+  const entries = useMemo(() => {
+    const base = resolveRosterEntries(getStylePresets(uiLanguage));
+    if (activePackId && customVrmUrl) {
+      if (!base.some((entry) => entry.id === activePackId)) {
+        base.unshift(
+          createCustomPackRosterEntry({
+            id: activePackId,
+            name: onboardingName || "Custom",
+            previewUrl: customVrmPreviewUrl || undefined,
+            catchphrase: customCatchphrase || undefined,
+            voicePresetId: customVoicePresetId || undefined,
+          }),
+        );
+      }
+    }
+    return base;
+  }, [
+    uiLanguage,
+    activePackId,
+    customCatchphrase,
+    customVoicePresetId,
+    customVrmPreviewUrl,
+    customVrmUrl,
+    onboardingName,
+  ]);
+
   const firstEntry = entries[0];
   const selectedId = onboardingStyle || entries[0]?.id || "";
   const [showImport, setShowImport] = useState(false);
@@ -120,6 +154,10 @@ export function IdentityStep({
           5_000,
         );
         if (staticRes.ok && isCurrentRequest()) {
+          const contentType = staticRes.headers.get("content-type") || "";
+          if (contentType.includes("text/html")) {
+            throw new Error("Intercepted by SPA fallback");
+          }
           const audioBlob = await staticRes.blob();
           if (audioBlob.size && isCurrentRequest()) {
             stopPreviewAudio();
