@@ -23,6 +23,7 @@ import { useBranding } from "../../config/branding";
 import {
   useDocumentVisibility,
   useIntervalWhenDocumentVisible,
+  useMediaQuery,
   useTimeout,
 } from "../../hooks";
 import { useApp } from "../../state";
@@ -547,8 +548,12 @@ export function GameView() {
     t,
   } = useApp();
   const isElectrobun = isElectrobunRuntime();
+  const isCompactLayout = useMediaQuery("(max-width: 1023px)");
   const [stopping, setStopping] = useState(false);
   const [showLogsPanel, setShowLogsPanel] = useState(false);
+  const [mobileSurface, setMobileSurface] = useState<"game" | "dashboard">(
+    "game",
+  );
   const docVisible = useDocumentVisibility();
   const [connectionStatus, setConnectionStatus] = useState<
     "connecting" | "connected" | "disconnected"
@@ -576,6 +581,8 @@ export function GameView() {
   const useNativeGameWindow = Boolean(
     isElectrobun && activeGameViewerUrl && !useEmbeddedViewer,
   );
+  const usesNativeAgentInterface = activeGameApp.includes("hyperscape");
+  const supportsOperatorDashboard = !usesNativeAgentInterface;
 
   const applySessionState = useCallback(
     (nextSession: AppSessionState | null) => {
@@ -686,6 +693,11 @@ export function GameView() {
   useEffect(() => {
     applySessionState(activeGameSession);
   }, [activeGameSession, applySessionState]);
+
+  useEffect(() => {
+    setShowLogsPanel(supportsOperatorDashboard);
+    setMobileSurface("game");
+  }, [activeGameRunId, supportsOperatorDashboard]);
 
   useEffect(() => {
     if (!activeGameSession?.sessionId) return;
@@ -1125,8 +1137,14 @@ export function GameView() {
     );
   }
 
-  const renderLogsPanel = () => (
-    <div className="w-80 border-l border-border bg-card flex flex-col min-h-0">
+  const renderLogsPanel = (layout: "sidebar" | "standalone" = "sidebar") => (
+    <div
+      className={`flex min-h-0 flex-col bg-card ${
+        layout === "sidebar"
+          ? "w-80 border-l border-border"
+          : "h-full border-t border-border"
+      }`}
+    >
       <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
         <span className="font-bold text-xs">{t("game.agentActivity")}</span>
         <span className="flex-1" />
@@ -1510,22 +1528,23 @@ export function GameView() {
                 : t("gameview.Resume", { defaultValue: "Resume" })}
           </Button>
         ) : null}
-        {/* Toggle logs panel */}
-        <Button
-          variant={showLogsPanel ? "default" : "outline"}
-          size="sm"
-          data-testid="game-toggle-logs"
-          className="h-7 text-xs shadow-sm hover:border-accent"
-          onClick={() => setShowLogsPanel(!showLogsPanel)}
-        >
-          {activeGameApp?.includes("babylon")
-            ? showLogsPanel
-              ? "Hide Terminal"
-              : "Terminal"
-            : showLogsPanel
-              ? t("game.hideLogs")
-              : t("game.showLogs")}
-        </Button>
+        {supportsOperatorDashboard && !isCompactLayout ? (
+          <Button
+            variant={showLogsPanel ? "default" : "outline"}
+            size="sm"
+            data-testid="game-toggle-logs"
+            className="h-7 text-xs shadow-sm hover:border-accent"
+            onClick={() => setShowLogsPanel(!showLogsPanel)}
+          >
+            {showLogsPanel
+              ? t("gameview.HideDashboard", {
+                  defaultValue: "Hide dashboard",
+                })
+              : t("gameview.ShowDashboard", {
+                  defaultValue: "Show dashboard",
+                })}
+          </Button>
+        ) : null}
         {useNativeGameWindow && (
           <DesktopGameWindowControls gameWindowId={gameWindowId} />
         )}
@@ -1571,50 +1590,85 @@ export function GameView() {
           {t("game.backToApps")}
         </Button>
       </div>
-      <div className="flex-1 min-h-0 flex">
-        <div className="flex-1 min-h-0 relative">
-          {useNativeGameWindow ? (
-            /* Electrobun mode: game runs in an isolated BrowserWindow opened
-               via game:openWindow RPC. The div below is a placeholder that
-               fills the same space in the layout while the native window is
-               positioned by the OS window manager. */
-            <div className="w-full h-full flex flex-col items-center justify-center bg-bg text-muted gap-3">
-              {gameWindowId ? (
-                <>
-                  <span className="text-sm font-semibold text-txt">
-                    {activeGameDisplayName || activeGameApp}
-                  </span>
-                  <span className="text-xs text-muted">
-                    {t("game.openInNativeWindow")}
-                  </span>
-                </>
-              ) : (
-                <span className="text-xs italic">{t("game.launching")}</span>
-              )}
-            </div>
-          ) : (
-            /* Web / dev-server fallback: standard iframe */
-            <iframe
-              ref={iframeRef}
-              src={activeGameViewerUrl}
-              sandbox={activeGameSandbox}
-              allow="fullscreen *"
-              allowFullScreen
-              data-testid="game-view-iframe"
-              className="w-full h-full border-none"
-              title={
-                activeGameDisplayName ||
-                t("gameview.Game", { defaultValue: "Game" })
-              }
-            />
-          )}
+      {supportsOperatorDashboard && isCompactLayout ? (
+        <div className="flex items-center gap-2 border-b border-border bg-card px-4 py-2">
+          <Button
+            variant={mobileSurface === "game" ? "default" : "outline"}
+            size="sm"
+            data-testid="game-mobile-surface-game"
+            className="h-8 text-xs shadow-sm"
+            onClick={() => setMobileSurface("game")}
+          >
+            {t("gameview.MobileSurfaceGame", {
+              defaultValue: "Game",
+            })}
+          </Button>
+          <Button
+            variant={mobileSurface === "dashboard" ? "default" : "outline"}
+            size="sm"
+            data-testid="game-mobile-surface-dashboard"
+            className="h-8 text-xs shadow-sm"
+            onClick={() => setMobileSurface("dashboard")}
+          >
+            {t("gameview.MobileSurfaceDashboard", {
+              defaultValue: "Dashboard",
+            })}
+          </Button>
         </div>
-        {showLogsPanel &&
-          (activeGameApp?.includes("babylon") ? (
-            <BabylonTerminal appName={activeGameApp} />
-          ) : (
-            renderLogsPanel()
-          ))}
+      ) : null}
+      <div
+        className={`flex-1 min-h-0 ${
+          isCompactLayout ? "flex flex-col" : "flex"
+        }`}
+      >
+        {!supportsOperatorDashboard || !isCompactLayout || mobileSurface === "game" ? (
+          <div className="flex-1 min-h-0 relative">
+            {useNativeGameWindow ? (
+              /* Electrobun mode: game runs in an isolated BrowserWindow opened
+                 via game:openWindow RPC. The div below is a placeholder that
+                 fills the same space in the layout while the native window is
+                 positioned by the OS window manager. */
+              <div className="w-full h-full flex flex-col items-center justify-center bg-bg text-muted gap-3">
+                {gameWindowId ? (
+                  <>
+                    <span className="text-sm font-semibold text-txt">
+                      {activeGameDisplayName || activeGameApp}
+                    </span>
+                    <span className="text-xs text-muted">
+                      {t("game.openInNativeWindow")}
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-xs italic">{t("game.launching")}</span>
+                )}
+              </div>
+            ) : (
+              /* Web / dev-server fallback: standard iframe */
+              <iframe
+                ref={iframeRef}
+                src={activeGameViewerUrl}
+                sandbox={activeGameSandbox}
+                allow="fullscreen *"
+                allowFullScreen
+                data-testid="game-view-iframe"
+                className="w-full h-full border-none"
+                title={
+                  activeGameDisplayName ||
+                  t("gameview.Game", { defaultValue: "Game" })
+                }
+              />
+            )}
+          </div>
+        ) : null}
+        {showLogsPanel && supportsOperatorDashboard
+          ? isCompactLayout
+            ? mobileSurface === "dashboard"
+              ? renderLogsPanel("standalone")
+              : null
+            : activeGameApp?.includes("babylon")
+              ? <BabylonTerminal appName={activeGameApp} />
+              : renderLogsPanel()
+          : null}
       </div>
     </div>
   );

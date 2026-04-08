@@ -85,6 +85,8 @@ const mockGoogleConnector = {
   },
 };
 
+let originalMatchMedia: typeof window.matchMedia | undefined;
+
 vi.mock("@miladyai/app-core/api", () => ({
   client: mockClientFns,
 }));
@@ -325,6 +327,7 @@ describe("AppsView", () => {
     });
     mockClientFns.listInstalledApps.mockResolvedValue([]);
     mockClientFns.listAppRuns.mockResolvedValue([]);
+    originalMatchMedia = window.matchMedia;
   });
 
   const tStub = (
@@ -395,6 +398,17 @@ describe("AppsView", () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    if (originalMatchMedia) {
+      Object.defineProperty(window, "matchMedia", {
+        configurable: true,
+        writable: true,
+        value: originalMatchMedia,
+      });
+    } else {
+      // biome-ignore lint/performance/noDelete: test cleanup for mutable global
+      delete (window as Window & { matchMedia?: typeof window.matchMedia })
+        .matchMedia;
+    }
     delete (window as Window & { __MILADY_ELECTROBUN_RPC__?: unknown })
       .__MILADY_ELECTROBUN_RPC__;
     vi.restoreAllMocks();
@@ -611,6 +625,65 @@ describe("AppsView", () => {
         String(call[0]).includes("requires iframe auth"),
       ),
     ).toBe(false);
+  });
+
+  it("uses the compact app detail flow on small screens", async () => {
+    const ctx = createAppsContext();
+    mockUseApp.mockReturnValue({
+      ...ctx,
+      uiLanguage: "en",
+      t: tStub,
+    });
+
+    Object.defineProperty(window, "matchMedia", {
+      writable: true,
+      configurable: true,
+      value: vi.fn().mockImplementation((query: string) => ({
+        matches: query === "(max-width: 1023px)",
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    });
+
+    const app = createApp("@elizaos/app-2004scape", "2004scape", "Retro MMO", {
+      category: "game",
+      uiExtension: {
+        detailPanelId: "2004scape-operator-dashboard",
+      },
+    });
+    mockClientFns.listApps.mockResolvedValue([app]);
+
+    let tree!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(<AppsView />);
+    });
+    await flush();
+
+    expect(
+      tree.root.findAll(
+        (node) => node.props["data-testid"] === "apps-detail-panel",
+      ).length,
+    ).toBe(0);
+
+    const appCard = findButtonByTitle(tree.root, "Open 2004scape");
+
+    await act(async () => {
+      appCard.props.onClick();
+    });
+    await flush();
+
+    expect(
+      tree.root.findAll(
+        (node) => node.props["data-testid"] === "apps-detail-panel",
+      ).length,
+    ).toBeGreaterThanOrEqual(1);
+    expect(textOf(tree.root)).toContain("appsview.Back");
+    expect(textOf(tree.root)).toContain("2004scape operator surface");
   });
 
   it("prefers a run that needs recovery when the running tab opens", async () => {

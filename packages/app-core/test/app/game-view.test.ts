@@ -38,6 +38,8 @@ type TestWindow = Window & {
   __electrobunWindowId?: number;
 };
 
+let originalMatchMedia: typeof window.matchMedia | undefined;
+
 const { mockClientFns, mockUseApp } = vi.hoisted(() => ({
   mockClientFns: {
     getCodingAgentStatus: vi.fn(async () => null),
@@ -153,10 +155,22 @@ describe("GameView", () => {
     mockClientFns.controlAppSession.mockReset();
     mockClientFns.sendChatRest.mockReset();
     mockUseApp.mockReset();
+    originalMatchMedia = window.matchMedia;
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    if (originalMatchMedia) {
+      Object.defineProperty(window, "matchMedia", {
+        configurable: true,
+        writable: true,
+        value: originalMatchMedia,
+      });
+    } else {
+      // biome-ignore lint/performance/noDelete: test cleanup for mutable global
+      delete (window as Window & { matchMedia?: typeof window.matchMedia })
+        .matchMedia;
+    }
     delete (window as TestWindow).__electrobunWindowId;
     delete (window as TestWindow & { __MILADY_ELECTROBUN_RPC__?: unknown })
       .__MILADY_ELECTROBUN_RPC__;
@@ -744,5 +758,110 @@ describe("GameView", () => {
       "error",
       3200,
     );
+  });
+
+  it("switches between game and dashboard on compact layouts", async () => {
+    Object.defineProperty(window, "matchMedia", {
+      writable: true,
+      configurable: true,
+      value: vi.fn().mockImplementation((query: string) => ({
+        matches: query === "(max-width: 1023px)",
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    });
+
+    const ctx = createContext({
+      activeGameSession: {
+        sessionId: "session-2004scape",
+        appName: "@elizaos/app-2004scape",
+        mode: "spectate-and-steer",
+        status: "running",
+        displayName: "2004scape",
+        canSendCommands: true,
+        controls: ["pause"],
+        summary: "Bot active",
+      },
+    });
+    mockUseApp.mockReturnValue(ctx);
+
+    let tree: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(GameView));
+    });
+    await flush();
+
+    expect(
+      tree?.root.findAll(
+        (node) => node.props["data-testid"] === "game-mobile-surface-dashboard",
+      ).length,
+    ).toBe(1);
+    expect(
+      tree?.root.findAll(
+        (node) => node.props["data-testid"] === "game-view-iframe",
+      ).length,
+    ).toBe(1);
+    expect(
+      tree?.root.findAll(
+        (node) => node.props["data-testid"] === "game-command-input",
+      ).length,
+    ).toBe(0);
+
+    await act(async () => {
+      tree?.root
+        .find(
+          (node) =>
+            node.props["data-testid"] === "game-mobile-surface-dashboard",
+        )
+        .props.onClick();
+    });
+    await flush();
+
+    expect(
+      tree?.root.findAll(
+        (node) => node.props["data-testid"] === "game-view-iframe",
+      ).length,
+    ).toBe(0);
+    expect(
+      tree?.root.findAll(
+        (node) => node.props["data-testid"] === "game-command-input",
+      ).length,
+    ).toBe(1);
+  });
+
+  it("does not render a duplicate dashboard toggle for Hyperscape", async () => {
+    const ctx = createContext({
+      activeGameApp: "@elizaos/app-hyperscape",
+      activeGameDisplayName: "Hyperscape",
+      appRuns: [
+        createRunSummary({
+          appName: "@elizaos/app-hyperscape",
+          displayName: "Hyperscape",
+        }),
+      ],
+    });
+    mockUseApp.mockReturnValue(ctx);
+
+    let tree: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(GameView));
+    });
+    await flush();
+
+    expect(
+      tree?.root.findAll(
+        (node) => node.props["data-testid"] === "game-toggle-logs",
+      ).length,
+    ).toBe(0);
+    expect(
+      tree?.root.findAll(
+        (node) => node.props["data-testid"] === "game-mobile-surface-dashboard",
+      ).length,
+    ).toBe(0);
   });
 });

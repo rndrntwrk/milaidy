@@ -7,6 +7,7 @@
 import { PagePanel } from "@miladyai/ui";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { type AppRunSummary, client, type RegistryAppInfo } from "../../api";
+import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { useApp } from "../../state";
 import { openExternalUrl } from "../../utils";
 import { AppDetailPane } from "../apps/AppDetailPane";
@@ -20,7 +21,6 @@ import {
   getRunAttentionReasons,
   RunningAppsPanel,
 } from "../apps/RunningAppsPanel";
-import { LifeOpsWorkspaceView } from "./LifeOpsWorkspaceView";
 
 export { shouldShowAppInAppsView } from "../apps/helpers";
 
@@ -53,8 +53,10 @@ export function AppsView() {
   const [showActiveOnly, setShowActiveOnly] = useState(false);
   const [selectedAppName, setSelectedAppName] = useState<string | null>(null);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const [showCompactDetail, setShowCompactDetail] = useState(false);
   const [busyApp, setBusyApp] = useState<string | null>(null);
   const [busyRunId, setBusyRunId] = useState<string | null>(null);
+  const isCompactLayout = useMediaQuery("(max-width: 1023px)");
   const activeAppNames = useMemo(
     () => new Set(appRuns.map((run) => run.appName)),
     [appRuns],
@@ -73,6 +75,19 @@ export function AppsView() {
     () => apps.find((app) => app.name === selectedAppName) ?? null,
     [apps, selectedAppName],
   );
+
+  useEffect(() => {
+    if (!isCompactLayout && showCompactDetail) {
+      setShowCompactDetail(false);
+    }
+  }, [isCompactLayout, showCompactDetail]);
+
+  useEffect(() => {
+    if (selectedApp) return;
+    if (showCompactDetail) {
+      setShowCompactDetail(false);
+    }
+  }, [selectedApp, showCompactDetail]);
 
   const selectedAppHasActiveViewer =
     !!selectedApp &&
@@ -465,6 +480,26 @@ export function AppsView() {
     });
   }, [activeAppNames, apps, searchQuery, showActiveOnly]);
 
+  const handleSelectApp = useCallback(
+    (appName: string) => {
+      setSelectedAppName(appName);
+      if (isCompactLayout) {
+        setShowCompactDetail(true);
+      }
+    },
+    [isCompactLayout],
+  );
+
+  const handleBackToCatalog = useCallback(() => {
+    if (isCompactLayout) {
+      setShowCompactDetail(false);
+      return;
+    }
+    setSelectedAppName(null);
+  }, [isCompactLayout]);
+
+  const shouldShowCompactDetail = isCompactLayout && showCompactDetail;
+
   return (
     <div className="device-layout mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-4 lg:px-6">
       <section className="overflow-hidden rounded-[2rem] border border-border/40 bg-card/88 shadow-[0_20px_60px_rgba(0,0,0,0.16)] backdrop-blur-xl">
@@ -555,14 +590,6 @@ export function AppsView() {
           </div>
         </div>
 
-        {appsSubTab === "browse" ? (
-          <div className="p-4 lg:p-5">
-            <PagePanel variant="inset" className="p-4 lg:p-5">
-              <LifeOpsWorkspaceView />
-            </PagePanel>
-          </div>
-        ) : null}
-
         {appsSubTab === "running" ? (
           <div className="p-4 lg:p-5">
             <PagePanel variant="inset" className="p-4 lg:p-5">
@@ -578,50 +605,80 @@ export function AppsView() {
             </PagePanel>
           </div>
         ) : (
-          <div className="grid gap-5 p-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(22rem,0.85fr)] lg:p-5">
-            <PagePanel variant="inset" className="p-4 lg:p-5">
-              <AppsCatalogGrid
-                activeAppNames={activeAppNames}
-                activeGameDisplayName={activeGameDisplayName}
-                error={error}
-                hasCurrentGame={hasCurrentGame}
-                loading={loading}
-                searchQuery={searchQuery}
-                selectedAppName={selectedAppName}
-                showActiveOnly={showActiveOnly}
-                visibleApps={visibleApps}
-                onOpenCurrentGame={handleOpenCurrentGame}
-                onRefresh={() => void loadApps()}
-                onSearchQueryChange={setSearchQuery}
-                onSelectApp={setSelectedAppName}
-                onToggleActiveOnly={() =>
-                  setShowActiveOnly((current) => !current)
-                }
-              />
-            </PagePanel>
+          <div className="p-4 lg:p-5">
+            {shouldShowCompactDetail ? (
+              <PagePanel
+                variant="inset"
+                className="p-4 lg:p-5"
+                data-testid="apps-detail-panel"
+              >
+                {selectedApp ? (
+                  <AppDetailPane
+                    app={selectedApp}
+                    busy={busyApp === selectedApp.name}
+                    compact
+                    hasActiveViewer={selectedAppHasActiveViewer}
+                    isActive={selectedAppIsActive}
+                    onBack={handleBackToCatalog}
+                    onLaunch={() => void handleLaunch(selectedApp)}
+                    onOpenCurrentGame={handleOpenCurrentGame}
+                    onOpenCurrentGameInNewTab={() =>
+                      void handleOpenCurrentGameInNewTab()
+                    }
+                  />
+                ) : (
+                  <AppsEmptyState />
+                )}
+              </PagePanel>
+            ) : (
+              <div className="grid gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(22rem,0.85fr)]">
+                <PagePanel variant="inset" className="p-4 lg:p-5">
+                  <AppsCatalogGrid
+                    activeAppNames={activeAppNames}
+                    activeGameDisplayName={activeGameDisplayName}
+                    error={error}
+                    hasCurrentGame={hasCurrentGame}
+                    loading={loading}
+                    searchQuery={searchQuery}
+                    selectedAppName={selectedAppName}
+                    showActiveOnly={showActiveOnly}
+                    visibleApps={visibleApps}
+                    onOpenCurrentGame={handleOpenCurrentGame}
+                    onRefresh={() => void loadApps()}
+                    onSearchQueryChange={setSearchQuery}
+                    onSelectApp={handleSelectApp}
+                    onToggleActiveOnly={() =>
+                      setShowActiveOnly((current) => !current)
+                    }
+                  />
+                </PagePanel>
 
-            <PagePanel
-              variant="inset"
-              className="p-4 lg:p-5"
-              data-testid="apps-detail-panel"
-            >
-              {selectedApp ? (
-                <AppDetailPane
-                  app={selectedApp}
-                  busy={busyApp === selectedApp.name}
-                  hasActiveViewer={selectedAppHasActiveViewer}
-                  isActive={selectedAppIsActive}
-                  onBack={() => setSelectedAppName(null)}
-                  onLaunch={() => void handleLaunch(selectedApp)}
-                  onOpenCurrentGame={handleOpenCurrentGame}
-                  onOpenCurrentGameInNewTab={() =>
-                    void handleOpenCurrentGameInNewTab()
-                  }
-                />
-              ) : (
-                <AppsEmptyState />
-              )}
-            </PagePanel>
+                {!isCompactLayout ? (
+                  <PagePanel
+                    variant="inset"
+                    className="p-4 lg:p-5"
+                    data-testid="apps-detail-panel"
+                  >
+                    {selectedApp ? (
+                      <AppDetailPane
+                        app={selectedApp}
+                        busy={busyApp === selectedApp.name}
+                        hasActiveViewer={selectedAppHasActiveViewer}
+                        isActive={selectedAppIsActive}
+                        onBack={handleBackToCatalog}
+                        onLaunch={() => void handleLaunch(selectedApp)}
+                        onOpenCurrentGame={handleOpenCurrentGame}
+                        onOpenCurrentGameInNewTab={() =>
+                          void handleOpenCurrentGameInNewTab()
+                        }
+                      />
+                    ) : (
+                      <AppsEmptyState />
+                    )}
+                  </PagePanel>
+                ) : null}
+              </div>
+            )}
           </div>
         )}
       </section>
