@@ -22,11 +22,19 @@ describe("patch-deps runtime hotfixes", () => {
       "patchAgentSkillsLocalFallback",
       "patchAgentSkillsDirectorySlugAsName",
       'patchBunExports(root, "@elizaos/plugin-coding-agent")',
-      "collectWorkspacePluginOverrideDirs",
-      "includeWorkspaceOverrides",
     ]) {
       expect(source).not.toContain(marker);
     }
+  });
+
+  it("retains installed-package discovery for published dependency hotfixes", () => {
+    const source = readFileSync(
+      resolve(process.cwd(), "scripts/patch-deps.mjs"),
+      "utf8",
+    );
+
+    expect(source).toContain("collectInstalledPackageDirs");
+    expect(source).toContain("includeGlobalBunCache: true");
   });
 
   it("contains bigint-buffer native fallback log patch", () => {

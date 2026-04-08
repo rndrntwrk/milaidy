@@ -54,7 +54,15 @@
 
 import { execSync, spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { appendFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readdirSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { createConnection } from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -140,23 +148,17 @@ const screenshotServerOptOut = (() => {
   return v === "0" || v === "false" || v === "no" || v === "off";
 })();
 const screenshotServerEnabled = !screenshotServerOptOut;
-const screenshotPort = process.env.MILADY_SCREENSHOT_SERVER_PORT || "31339";
+const preferredScreenshotPort = Number.parseInt(
+  process.env.MILADY_SCREENSHOT_SERVER_PORT || "31339",
+  10,
+);
+const preferredBrowserWorkspacePort = Number.parseInt(
+  process.env.MILADY_BROWSER_WORKSPACE_PORT || "31340",
+  10,
+);
 const screenshotToken = screenshotServerEnabled
   ? randomBytes(24).toString("hex")
   : "";
-const screenshotEnvElectrobun = screenshotServerEnabled
-  ? {
-      MILADY_DESKTOP_SCREENSHOT_SERVER: "1",
-      MILADY_SCREENSHOT_SERVER_PORT: screenshotPort,
-      MILADY_SCREENSHOT_SERVER_TOKEN: screenshotToken,
-    }
-  : {};
-const screenshotEnvApi = screenshotServerEnabled
-  ? {
-      MILADY_ELECTROBUN_SCREENSHOT_URL: `http://127.0.0.1:${screenshotPort}`,
-      MILADY_SCREENSHOT_SERVER_TOKEN: screenshotToken,
-    }
-  : {};
 
 /** On by default for dev-platform; set MILADY_DESKTOP_DEV_LOG=0 to disable file + API tail. */
 const desktopDevLogOptOut = (() => {
@@ -166,6 +168,117 @@ const desktopDevLogOptOut = (() => {
 const desktopDevLogPath = desktopDevLogOptOut
   ? null
   : path.resolve(repoRoot, ".milady", "desktop-dev-console.log");
+const desktopCefWorkaroundEnv = (() => {
+  if (process.platform !== "darwin") {
+    return null;
+  }
+
+  const explicit = process.env.MILADY_DESKTOP_FORCE_CEF?.trim();
+  if (explicit) {
+    return explicit;
+  }
+
+  return "1";
+})();
+const desktopUnsafeDevtoolsEnv = (() => {
+  if (process.platform !== "darwin") {
+    return null;
+  }
+
+  const explicit = process.env.MILADY_ALLOW_UNSAFE_NATIVE_DEVTOOLS?.trim();
+  if (explicit) {
+    return explicit;
+  }
+
+  return "1";
+})();
+const desktopWhisperOptOut = (() => {
+  const v = process.env.MILADY_DESKTOP_ENSURE_WHISPER?.trim().toLowerCase();
+  return v === "0" || v === "false" || v === "no" || v === "off";
+})();
+
+function ensureBunRootPackageLink(packageName) {
+  const rootNodeModules = path.join(repoRoot, "node_modules");
+  const packageLink = path.join(rootNodeModules, packageName);
+  if (existsSync(packageLink)) {
+    return;
+  }
+
+  const bunModulesDir = path.join(rootNodeModules, ".bun");
+  if (!existsSync(bunModulesDir)) {
+    return;
+  }
+
+  const candidates = readdirSync(bunModulesDir)
+    .filter((entry) => entry.startsWith(`${packageName}@`))
+    .map((entry) =>
+      path.join(bunModulesDir, entry, "node_modules", packageName),
+    )
+    .filter((candidate) => existsSync(path.join(candidate, "package.json")));
+
+  const target = candidates[0];
+  if (!target) {
+    return;
+  }
+
+  mkdirSync(path.dirname(packageLink), { recursive: true });
+  try {
+    symlinkSync(path.relative(rootNodeModules, target), packageLink, "dir");
+    console.log(
+      `[eliza] Restored missing Bun package link: node_modules/${packageName}`,
+    );
+  } catch (error) {
+    if (existsSync(packageLink) && lstatSync(packageLink).isSymbolicLink()) {
+      return;
+    }
+    console.warn(
+      `[eliza] Warning: failed to restore node_modules/${packageName}: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+}
+
+function desktopWhisperAssetsMissing() {
+  if (process.platform === "win32") {
+    return false;
+  }
+  const whisperCppDir = path.join(
+    repoRoot,
+    "node_modules",
+    "whisper-node",
+    "lib",
+    "whisper.cpp",
+  );
+  const whisperBin = path.join(whisperCppDir, "main");
+  const whisperModel = path.join(whisperCppDir, "models", "ggml-base.en.bin");
+  return !existsSync(whisperBin) || !existsSync(whisperModel);
+}
+
+function ensureDesktopWhisperAssets() {
+  if (desktopWhisperOptOut || process.platform === "win32") {
+    return;
+  }
+  if (!desktopWhisperAssetsMissing()) {
+    return;
+  }
+
+  console.log(
+    "\n[eliza] Desktop voice input needs whisper.cpp assets — building them once for Electrobun dev…\n",
+  );
+  try {
+    execSync("bun run build:whisper", {
+      cwd: electrobunDir,
+      stdio: "inherit",
+    });
+  } catch (_error) {
+    console.warn(
+      "[eliza] Warning: failed to build whisper.cpp for desktop voice input. " +
+        "Electrobun mic/STT may stay unavailable until this succeeds.",
+    );
+    console.warn(
+      "[eliza] Retry manually with: (cd apps/app/electrobun && bun run build:whisper)",
+    );
+  }
+}
 
 const rendererDistStale = viteRendererBuildNeeded(appDir, repoRoot);
 const needRendererBuild = forceRenderer || rendererDistStale;
@@ -193,6 +306,20 @@ if (!existsSync(rootDistEntry)) {
   if (!existsSync(distPkg)) {
     mkdirSync(path.dirname(distPkg), { recursive: true });
     writeFileSync(distPkg, `${JSON.stringify({ type: "module" })}\n`);
+  }
+}
+
+ensureBunRootPackageLink("jsdom");
+ensureDesktopWhisperAssets();
+
+async function allocateDistinctLoopbackPort(preferredPort, reservedPorts) {
+  let candidate = preferredPort;
+  while (true) {
+    const allocated = await allocateFirstFreeLoopbackPort(candidate);
+    if (!reservedPorts.has(allocated)) {
+      return allocated;
+    }
+    candidate = allocated + 1;
   }
 }
 
@@ -317,6 +444,39 @@ async function launch() {
   const rendererUrlForShell = viteDevServer
     ? `http://127.0.0.1:${uiDevPort}/`
     : "";
+  const browserWorkspacePort = await allocateDistinctLoopbackPort(
+    preferredBrowserWorkspacePort,
+    new Set([resolvedApiPort, uiDevPort]),
+  );
+  if (browserWorkspacePort !== preferredBrowserWorkspacePort) {
+    console.log(
+      `[eliza] Browser workspace port ${preferredBrowserWorkspacePort} in use — using ${browserWorkspacePort}`,
+    );
+  }
+  const screenshotPort = screenshotServerEnabled
+    ? await allocateDistinctLoopbackPort(
+        preferredScreenshotPort,
+        new Set([resolvedApiPort, uiDevPort, browserWorkspacePort]),
+      )
+    : preferredScreenshotPort;
+  if (screenshotServerEnabled && screenshotPort !== preferredScreenshotPort) {
+    console.log(
+      `[eliza] Screenshot port ${preferredScreenshotPort} in use — using ${screenshotPort}`,
+    );
+  }
+  const screenshotEnvElectrobun = screenshotServerEnabled
+    ? {
+        MILADY_DESKTOP_SCREENSHOT_SERVER: "1",
+        MILADY_SCREENSHOT_SERVER_PORT: String(screenshotPort),
+        MILADY_SCREENSHOT_SERVER_TOKEN: screenshotToken,
+      }
+    : {};
+  const screenshotEnvApi = screenshotServerEnabled
+    ? {
+        MILADY_ELECTROBUN_SCREENSHOT_URL: `http://127.0.0.1:${screenshotPort}`,
+        MILADY_SCREENSHOT_SERVER_TOKEN: screenshotToken,
+      }
+    : {};
 
   if (desktopDevLogPath) {
     mkdirSync(path.dirname(desktopDevLogPath), { recursive: true });
@@ -349,7 +509,7 @@ async function launch() {
     preferredUiPort: preferredUi,
     allocatedUiPort: uiDevPort,
     screenshotServerEnabled,
-    screenshotPort,
+    screenshotPort: String(screenshotPort),
     screenshotTokenRedacted: screenshotServerEnabled ? "set (redacted)" : "—",
     screenshotProxyUrl: `http://127.0.0.1:${screenshotPort}`,
     desktopDevLogPath,
@@ -439,6 +599,7 @@ async function launch() {
           : {}),
       },
     );
+    await waitForPort(Number(apiPort));
   }
 
   if (viteRollupWatch) {
@@ -450,6 +611,14 @@ async function launch() {
   pushChild("electrobun", "bun", ["run", "dev"], electrobunDir, {
     NODE_ENV: "development",
     ELECTROBUN_SKIP_CODESIGN: "1",
+    ...(desktopCefWorkaroundEnv
+      ? { MILADY_DESKTOP_FORCE_CEF: desktopCefWorkaroundEnv }
+      : {}),
+    ...(desktopUnsafeDevtoolsEnv
+      ? {
+          MILADY_ALLOW_UNSAFE_NATIVE_DEVTOOLS: desktopUnsafeDevtoolsEnv,
+        }
+      : {}),
     ...(rendererUrlForShell
       ? { MILADY_RENDERER_URL: rendererUrlForShell }
       : {}),
@@ -463,6 +632,7 @@ async function launch() {
           ELIZA_NAMESPACE: process.env.ELIZA_NAMESPACE ?? "milady",
           MILADY_DESKTOP_API_BASE: `http://127.0.0.1:${apiPort}`,
         }),
+    MILADY_BROWSER_WORKSPACE_PORT: String(browserWorkspacePort),
     ...screenshotEnvElectrobun,
   });
 }

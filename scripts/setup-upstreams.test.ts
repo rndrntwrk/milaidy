@@ -248,10 +248,31 @@ describe("getPluginPackageLinks", () => {
             ),
             targetPath: tsDir,
           },
+        ]),
+      );
+
+      // Scoped plugin repos without a nested typescript package link from the
+      // repo root so non-eliza workspace plugins stay available locally.
+      expect(getPluginPackageLinks(miladyRoot, pluginsRoot)).toEqual(
+        expect.arrayContaining([
           {
             linkPath: path.join(
               miladyRoot,
               "node_modules/@hyperscape/plugin-hyperscape",
+            ),
+            targetPath: appDir,
+          },
+          {
+            linkPath: path.join(
+              miladyRoot,
+              "apps/app/node_modules/@hyperscape/plugin-hyperscape",
+            ),
+            targetPath: appDir,
+          },
+          {
+            linkPath: path.join(
+              miladyRoot,
+              "apps/home/node_modules/@hyperscape/plugin-hyperscape",
             ),
             targetPath: appDir,
           },

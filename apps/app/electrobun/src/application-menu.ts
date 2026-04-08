@@ -311,9 +311,7 @@ export function buildApplicationMenu({
         { label: "Reload", role: "reload" },
         { label: "Force Reload", role: "forceReload" },
         {
-          label: isMac
-            ? "Open Renderer in Browser for Debugging"
-            : "Toggle Developer Tools",
+          label: "Toggle Developer Tools",
           action: "toggle-devtools",
           accelerator: isMac ? "Alt+Command+I" : "Ctrl+Shift+I",
         },

@@ -20,7 +20,8 @@ vi.mock("../../src/app-shell-components", async () => {
     );
 
   return {
-    AdvancedPageView: () => React.createElement("div", null, "AdvancedPageView"),
+    AdvancedPageView: () =>
+      React.createElement("div", null, "AdvancedPageView"),
     AppsPageView: () => React.createElement("div", null, "AppsPageView"),
     AvatarLoader: () => React.createElement("div", null, "AvatarLoader"),
     BugReportModal: () => React.createElement("div", null, "BugReportModal"),
@@ -32,6 +33,7 @@ vi.mock("../../src/app-shell-components", async () => {
       React.createElement("div", null, "ConnectionLostOverlay"),
     ConnectionFailedBanner: () =>
       React.createElement("div", null, "ConnectionFailedBanner"),
+    ConnectionLostOverlay: () => null,
     ConnectorsPageView: () =>
       React.createElement("div", null, "ConnectorsPageView"),
     ConversationsSidebar: () =>
@@ -48,7 +50,8 @@ vi.mock("../../src/app-shell-components", async () => {
     OnboardingWizard: () =>
       React.createElement("div", null, "OnboardingWizard"),
     PairingView: () => React.createElement("div", null, "PairingView"),
-    SaveCommandModal: () => React.createElement("div", null, "SaveCommandModal"),
+    SaveCommandModal: () =>
+      React.createElement("div", null, "SaveCommandModal"),
     SettingsView: () => React.createElement("div", null, "SettingsView"),
     SharedCompanionScene: ({ children }: { children: React.ReactNode }) =>
       React.createElement(React.Fragment, null, children),
@@ -59,8 +62,12 @@ vi.mock("../../src/app-shell-components", async () => {
       const phase = startupCoordinator.phase;
       if (phase === "error") {
         const errState = startupError ?? {
-          reason: (startupCoordinator as { phase: "error"; reason: string }).reason ?? "unknown",
-          message: (startupCoordinator as { phase: "error"; message: string }).message ?? "Unknown error",
+          reason:
+            (startupCoordinator as { phase: "error"; reason: string }).reason ??
+            "unknown",
+          message:
+            (startupCoordinator as { phase: "error"; message: string })
+              .message ?? "Unknown error",
           phase: "starting-backend" as const,
         };
         return React.createElement(StartupFailureViewMock, { error: errState });

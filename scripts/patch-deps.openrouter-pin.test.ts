@@ -17,7 +17,10 @@ describe("OpenRouter plugin dependency pin", () => {
       readFileSync(path.join(root, "package.json"), "utf8"),
     ) as { dependencies: Record<string, string> };
     const v = pkg.dependencies["@elizaos/plugin-openrouter"];
-    expect(v).toBe("workspace:*");
+
+    // Accept either workspace:* (local linked checkout) or an exact pin.
+    // The invariant is that we do not float over broken published releases.
+    expect(v).toMatch(/^(workspace:\*|\d+\.\d+\.\d+.*)$/);
 
     const patchDeps = readFileSync(
       path.join(root, "scripts/patch-deps.mjs"),

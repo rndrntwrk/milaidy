@@ -107,6 +107,12 @@ jobs:
       - name: Install dependencies
         run: bun install --ignore-scripts
 
+      - name: Run postinstall patches
+        run: bun run postinstall
+        env:
+          SKIP_AVATAR_CLONE: "1"
+          MILADY_NO_VISION_DEPS: "1"
+
       - name: Build Capacitor plugins
         run: |
           cd apps/app

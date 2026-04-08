@@ -1442,6 +1442,9 @@ test("apps page launches a Hyperscape session with iframe auth and live session 
       ),
     ).toEqual([]);
   } finally {
+    if (!page.isClosed()) {
+      await page.goto("about:blank");
+    }
     await fixture.close();
   }
 });
@@ -1514,6 +1517,9 @@ test("apps page launches a Babylon session with embedded auth and the live dashb
       })
       .toBe("protect liquidity");
   } finally {
+    if (!page.isClosed()) {
+      await page.goto("about:blank");
+    }
     await fixture.close();
   }
 });
@@ -1592,6 +1598,9 @@ test("apps page launches a 2004scape session with auto-login and mobile dashboar
       })
       .toBe("bank before logging off");
   } finally {
+    if (!page.isClosed()) {
+      await page.goto("about:blank");
+    }
     await fixture.close();
   }
 });
@@ -1652,6 +1661,9 @@ test("apps page launches a Defense session with the spectator shell and live ste
       })
       .toBe("tell the hero to rotate bot");
   } finally {
+    if (!page.isClosed()) {
+      await page.goto("about:blank");
+    }
     await fixture.close();
   }
 });

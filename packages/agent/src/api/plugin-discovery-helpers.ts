@@ -295,7 +295,6 @@ function normalizePluginParameters(
         if (!isPluginParameterDefinition(definition)) {
           return [];
         }
-
         const options = Array.isArray(definition.options)
           ? definition.options.filter(
               (value: unknown): value is string => typeof value === "string",

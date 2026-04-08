@@ -263,8 +263,7 @@ const TRANSLATIONS: Record<string, string> = {
   "flaminaguide.tasks.voice.label": TASK_LABELS.voice,
   "flaminaguide.tasks.provider.description": "Connect your model provider.",
   "flaminaguide.tasks.rpc.description": "Configure RPC access.",
-  "flaminaguide.tasks.permissions.description":
-    "Grant desktop permissions.",
+  "flaminaguide.tasks.permissions.description": "Grant desktop permissions.",
   "flaminaguide.tasks.voice.description": "Pick a voice preset.",
 };
 
@@ -371,6 +370,7 @@ vi.mock("@miladyai/app-core/src/app-shell-components", () => ({
     React.createElement("div", null, "ConnectionLostOverlay"),
   ConnectionFailedBanner: () =>
     React.createElement("div", null, "ConnectionFailedBanner"),
+  ConnectionLostOverlay: () => null,
   ConnectorsPageView: () =>
     React.createElement("div", null, "ConnectorsPageView"),
   ConversationsSidebar: () =>
@@ -445,8 +445,9 @@ vi.mock("@miladyai/app-core/src/app-shell-components", () => ({
     React.createElement("div", null, "SystemWarningBanner"),
 }));
 
-vi.mock("../../src/app-shell-components", () =>
-  import("@miladyai/app-core/src/app-shell-components"),
+vi.mock(
+  "../../src/app-shell-components",
+  () => import("@miladyai/app-core/src/app-shell-components"),
 );
 
 vi.mock("@miladyai/app-core/src/components/shell/Header", () => ({
@@ -456,24 +457,27 @@ vi.mock("@miladyai/app-core/src/components/shell/Header", () => ({
 vi.mock("@miladyai/app-core/src/components/shell/CommandPalette", () => ({
   CommandPalette: () => React.createElement("div", null, "CommandPalette"),
 }));
-vi.mock("@miladyai/app-core/src/components/onboarding/OnboardingWizard", () => ({
-  OnboardingWizard: () => {
-    const state = mockUseApp();
-    return React.createElement(
-      "div",
-      { "data-testid": "onboarding-wizard" },
-      `OnboardingWizard:${state.onboardingStep}`,
-      React.createElement(
-        "button",
-        {
-          onClick: () => state.handleOnboardingNext(),
-          type: "button",
-        },
-        "onboarding-next",
-      ),
-    );
-  },
-}));
+vi.mock(
+  "@miladyai/app-core/src/components/onboarding/OnboardingWizard",
+  () => ({
+    OnboardingWizard: () => {
+      const state = mockUseApp();
+      return React.createElement(
+        "div",
+        { "data-testid": "onboarding-wizard" },
+        `OnboardingWizard:${state.onboardingStep}`,
+        React.createElement(
+          "button",
+          {
+            onClick: () => state.handleOnboardingNext(),
+            type: "button",
+          },
+          "onboarding-next",
+        ),
+      );
+    },
+  }),
+);
 vi.mock("@miladyai/app-core/src/components/companion/EmotePicker", () => ({
   EmotePicker: () => React.createElement("div", null, "EmotePicker"),
 }));
@@ -488,18 +492,27 @@ vi.mock("@miladyai/app-core/src/components/onboarding/PermissionsStep", () => ({
       "permissions-continue",
     ),
 }));
-vi.mock("@miladyai/app-core/src/components/conversations/ConversationsSidebar", () => ({
-  ConversationsSidebar: () =>
-    React.createElement("div", null, "ConversationsSidebar"),
-}));
-vi.mock("@miladyai/app-core/src/components/custom-actions/CustomActionsPanel", () => ({
-  CustomActionsPanel: () =>
-    React.createElement("div", null, "CustomActionsPanel"),
-}));
-vi.mock("@miladyai/app-core/src/components/custom-actions/CustomActionEditor", () => ({
-  CustomActionEditor: () =>
-    React.createElement("div", null, "CustomActionEditor"),
-}));
+vi.mock(
+  "@miladyai/app-core/src/components/conversations/ConversationsSidebar",
+  () => ({
+    ConversationsSidebar: () =>
+      React.createElement("div", null, "ConversationsSidebar"),
+  }),
+);
+vi.mock(
+  "@miladyai/app-core/src/components/custom-actions/CustomActionsPanel",
+  () => ({
+    CustomActionsPanel: () =>
+      React.createElement("div", null, "CustomActionsPanel"),
+  }),
+);
+vi.mock(
+  "@miladyai/app-core/src/components/custom-actions/CustomActionEditor",
+  () => ({
+    CustomActionEditor: () =>
+      React.createElement("div", null, "CustomActionEditor"),
+  }),
+);
 vi.mock("@miladyai/app-core/src/components/pages/AppsPageView", () => ({
   AppsPageView: () => React.createElement("div", null, "AppsPageView"),
 }));
@@ -677,7 +690,9 @@ function createHarnessState(
   overrides?: Partial<AppHarnessState>,
 ): AppHarnessState {
   // Determine coordinator phase from the effective startupStatus (overrides take precedence)
-  const effectiveStatus = (overrides as { startupStatus?: string } | undefined)?.startupStatus ?? "onboarding";
+  const effectiveStatus =
+    (overrides as { startupStatus?: string } | undefined)?.startupStatus ??
+    "onboarding";
   const defaultCoordinator =
     effectiveStatus === "ready"
       ? { phase: "ready" }
@@ -1109,7 +1124,6 @@ describe("Connection step", () => {
   });
 });
 
-
 // ===================================================================
 //  5. Senses step (permissions)
 // ===================================================================
@@ -1219,8 +1233,6 @@ describe("Activate step", () => {
     expect(state.startupStatus).toBe("ready");
     expect(state.tab).toBe("companion");
   });
-
-
 });
 
 // ===================================================================

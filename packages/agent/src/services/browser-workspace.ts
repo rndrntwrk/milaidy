@@ -1,3 +1,6 @@
+import * as fs from "node:fs";
+import * as fsp from "node:fs/promises";
+import * as path from "node:path";
 import { JSDOM } from "jsdom";
 
 const DEFAULT_TIMEOUT_MS = 12_000;
@@ -37,11 +40,13 @@ export type BrowserWorkspaceSubaction =
   | "back"
   | "batch"
   | "check"
+  | "clipboard"
   | "click"
   | "fill"
   | "find"
   | "focus"
   | "forward"
+  | "frame"
   | "get"
   | "hover"
   | "inspect"
@@ -49,16 +54,33 @@ export type BrowserWorkspaceSubaction =
   | "keyup"
   | "keyboardinserttext"
   | "keyboardtype"
+  | "console"
+  | "cookies"
+  | "diff"
   | "press"
+  | "drag"
+  | "errors"
+  | "highlight"
+  | "mouse"
+  | "network"
+  | "pdf"
+  | "profiler"
   | "reload"
   | "scroll"
   | "scrollinto"
   | "select"
+  | "set"
   | "snapshot"
+  | "state"
+  | "storage"
+  | "tab"
+  | "trace"
   | "type"
   | "dblclick"
+  | "upload"
   | "uncheck"
-  | "wait";
+  | "wait"
+  | "window";
 
 export type BrowserWorkspaceGetMode =
   | "attr"
@@ -103,6 +125,57 @@ export type BrowserWorkspaceScrollDirection =
   | "left"
   | "right"
   | "up";
+
+export type BrowserWorkspaceClipboardAction =
+  | "copy"
+  | "paste"
+  | "read"
+  | "write";
+
+export type BrowserWorkspaceMouseAction = "down" | "move" | "up" | "wheel";
+
+export type BrowserWorkspaceMouseButton = "left" | "middle" | "right";
+
+export type BrowserWorkspaceSetAction =
+  | "credentials"
+  | "device"
+  | "geo"
+  | "headers"
+  | "media"
+  | "offline"
+  | "viewport";
+
+export type BrowserWorkspaceCookieAction = "clear" | "get" | "set";
+
+export type BrowserWorkspaceStorageArea = "local" | "session";
+
+export type BrowserWorkspaceStorageAction = "clear" | "get" | "set";
+
+export type BrowserWorkspaceNetworkAction =
+  | "harstart"
+  | "harstop"
+  | "request"
+  | "requests"
+  | "route"
+  | "unroute";
+
+export type BrowserWorkspaceDialogAction = "accept" | "dismiss" | "status";
+
+export type BrowserWorkspaceDiffAction = "screenshot" | "snapshot" | "url";
+
+export type BrowserWorkspaceTraceAction = "start" | "stop";
+
+export type BrowserWorkspaceProfilerAction = "start" | "stop";
+
+export type BrowserWorkspaceStateAction = "load" | "save";
+
+export type BrowserWorkspaceFrameAction = "main" | "select";
+
+export type BrowserWorkspaceTabAction = "close" | "list" | "new" | "switch";
+
+export type BrowserWorkspaceWindowAction = "new";
+
+export type BrowserWorkspaceConsoleAction = "clear" | "list";
 
 export interface BrowserWorkspaceTab {
   id: string;
@@ -157,9 +230,29 @@ export interface BrowserWorkspaceDomElementSummary {
 
 export interface BrowserWorkspaceCommand {
   subaction: BrowserWorkspaceSubaction;
+  operation?: BrowserWorkspaceSubaction | "goto" | "read";
   action?: BrowserWorkspaceFindAction;
+  baselinePath?: string;
+  button?: BrowserWorkspaceMouseButton;
+  clipboardAction?: BrowserWorkspaceClipboardAction;
+  compact?: boolean;
+  consoleAction?: BrowserWorkspaceConsoleAction;
+  cookieAction?: BrowserWorkspaceCookieAction;
+  deltaX?: number;
+  deltaY?: number;
+  device?: string;
+  dialogAction?: BrowserWorkspaceDialogAction;
+  diffAction?: BrowserWorkspaceDiffAction;
+  domain?: string;
   id?: string;
+  entryKey?: string;
+  filePath?: string;
+  files?: string[];
+  frameAction?: BrowserWorkspaceFrameAction;
+  fullPage?: boolean;
+  headers?: Record<string, string>;
   url?: string;
+  secondaryUrl?: string;
   title?: string;
   script?: string;
   show?: boolean;
@@ -173,12 +266,42 @@ export interface BrowserWorkspaceCommand {
   findBy?: BrowserWorkspaceFindBy;
   index?: number;
   key?: string;
+  latitude?: number;
+  longitude?: number;
+  media?: "dark" | "light";
+  method?: string;
+  mouseAction?: BrowserWorkspaceMouseAction;
+  networkAction?: BrowserWorkspaceNetworkAction;
+  offline?: boolean;
+  outputPath?: string;
   getMode?: BrowserWorkspaceGetMode;
   name?: string;
   pixels?: number;
+  profilerAction?: BrowserWorkspaceProfilerAction;
+  promptText?: string;
+  requestId?: string;
+  responseBody?: string;
+  responseHeaders?: Record<string, string>;
+  responseStatus?: number;
   role?: string;
+  scale?: number;
+  setAction?: BrowserWorkspaceSetAction;
   state?: BrowserWorkspaceWaitState;
+  stateAction?: BrowserWorkspaceStateAction;
+  status?: string;
+  storageAction?: BrowserWorkspaceStorageAction;
+  storageArea?: BrowserWorkspaceStorageArea;
+  tabAction?: BrowserWorkspaceTabAction;
   timeoutMs?: number;
+  traceAction?: BrowserWorkspaceTraceAction;
+  windowAction?: BrowserWorkspaceWindowAction;
+  width?: number;
+  x?: number;
+  y?: number;
+  username?: string;
+  password?: string;
+  ms?: number;
+  milliseconds?: number;
   steps?: BrowserWorkspaceCommand[];
 }
 
@@ -192,6 +315,101 @@ export interface BrowserWorkspaceCommandResult {
   elements?: BrowserWorkspaceDomElementSummary[];
   snapshot?: { data: string };
   steps?: BrowserWorkspaceCommandResult[];
+}
+
+interface BrowserWorkspaceConsoleEntry {
+  level: "error" | "info" | "log" | "warn";
+  message: string;
+  timestamp: string;
+}
+
+interface BrowserWorkspaceErrorEntry {
+  message: string;
+  stack: string | null;
+  timestamp: string;
+}
+
+interface BrowserWorkspaceDialogState {
+  defaultValue: string | null;
+  message: string;
+  open: boolean;
+  type: "alert" | "beforeunload" | "confirm" | "prompt";
+}
+
+interface BrowserWorkspaceMouseState {
+  buttons: BrowserWorkspaceMouseButton[];
+  x: number;
+  y: number;
+}
+
+interface BrowserWorkspaceSettingsState {
+  credentials: { password: string; username: string } | null;
+  device: string | null;
+  geo: { latitude: number; longitude: number } | null;
+  headers: Record<string, string>;
+  media: "dark" | "light" | null;
+  offline: boolean;
+  viewport: { height: number; scale: number; width: number } | null;
+}
+
+interface BrowserWorkspaceNetworkRoute {
+  abort: boolean;
+  body: string | null;
+  headers: Record<string, string>;
+  pattern: string;
+  status: number | null;
+}
+
+interface BrowserWorkspaceNetworkRequestRecord {
+  id: string;
+  matchedRoute: string | null;
+  method: string;
+  resourceType: string;
+  responseBody: string | null;
+  responseHeaders: Record<string, string>;
+  status: number | null;
+  timestamp: string;
+  url: string;
+}
+
+interface BrowserWorkspaceTraceRecord {
+  active: boolean;
+  entries: Array<Record<string, unknown>>;
+}
+
+interface BrowserWorkspaceProfilerRecord {
+  active: boolean;
+  entries: Array<Record<string, unknown>>;
+}
+
+interface BrowserWorkspaceHarRecord {
+  active: boolean;
+  entries: BrowserWorkspaceNetworkRequestRecord[];
+  startedAt: string | null;
+}
+
+interface BrowserWorkspaceSnapshotRecord {
+  bodyText: string;
+  title: string;
+  url: string;
+}
+
+interface BrowserWorkspaceRuntimeState {
+  consoleEntries: BrowserWorkspaceConsoleEntry[];
+  currentFrame: string | null;
+  dialog: BrowserWorkspaceDialogState | null;
+  errors: BrowserWorkspaceErrorEntry[];
+  highlightedSelector: string | null;
+  lastScreenshotData: string | null;
+  lastSnapshot: BrowserWorkspaceSnapshotRecord | null;
+  mouse: BrowserWorkspaceMouseState;
+  networkHar: BrowserWorkspaceHarRecord;
+  networkNextRequestId: number;
+  networkRequests: BrowserWorkspaceNetworkRequestRecord[];
+  networkRoutes: BrowserWorkspaceNetworkRoute[];
+  settings: BrowserWorkspaceSettingsState;
+  trace: BrowserWorkspaceTraceRecord;
+  profiler: BrowserWorkspaceProfilerRecord;
 }
 
 interface WebBrowserWorkspaceTabState extends BrowserWorkspaceTab {
@@ -210,6 +428,8 @@ const webWorkspaceState: {
 };
 
 const browserWorkspaceElementRefs = new Map<string, Map<string, string>>();
+const browserWorkspaceRuntimeState = new Map<string, BrowserWorkspaceRuntimeState>();
+let browserWorkspaceClipboardText = "";
 
 function normalizeEnvValue(value: string | undefined): string | null {
   if (typeof value !== "string") {
@@ -225,6 +445,17 @@ function normalizeBrowserWorkspaceText(value: unknown): string {
     .trim();
 }
 
+function parseBrowserWorkspaceNumberLike(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const parsed = Number.parseFloat(value.trim());
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
 function getBrowserWorkspaceTimestamp(): string {
   return new Date().toISOString();
 }
@@ -234,6 +465,92 @@ function getBrowserWorkspaceElementRefStateKey(
   tabId: string,
 ): string {
   return `${mode}:${tabId}`;
+}
+
+function createBrowserWorkspaceRuntimeState(): BrowserWorkspaceRuntimeState {
+  return {
+    consoleEntries: [],
+    currentFrame: null,
+    dialog: null,
+    errors: [],
+    highlightedSelector: null,
+    lastScreenshotData: null,
+    lastSnapshot: null,
+    mouse: { buttons: [], x: 0, y: 0 },
+    networkHar: { active: false, entries: [], startedAt: null },
+    networkNextRequestId: 1,
+    networkRequests: [],
+    networkRoutes: [],
+    settings: {
+      credentials: null,
+      device: null,
+      geo: null,
+      headers: {},
+      media: null,
+      offline: false,
+      viewport: null,
+    },
+    trace: { active: false, entries: [] },
+    profiler: { active: false, entries: [] },
+  };
+}
+
+function getBrowserWorkspaceRuntimeStateKey(
+  mode: BrowserWorkspaceMode,
+  tabId: string,
+): string {
+  return `${mode}:${tabId}`;
+}
+
+function getBrowserWorkspaceRuntimeState(
+  mode: BrowserWorkspaceMode,
+  tabId: string,
+): BrowserWorkspaceRuntimeState {
+  const key = getBrowserWorkspaceRuntimeStateKey(mode, tabId);
+  let state = browserWorkspaceRuntimeState.get(key);
+  if (!state) {
+    state = createBrowserWorkspaceRuntimeState();
+    browserWorkspaceRuntimeState.set(key, state);
+  }
+  return state;
+}
+
+function clearBrowserWorkspaceRuntimeState(
+  mode: BrowserWorkspaceMode,
+  tabId: string,
+): void {
+  browserWorkspaceRuntimeState.delete(getBrowserWorkspaceRuntimeStateKey(mode, tabId));
+}
+
+function resetBrowserWorkspaceRuntimeNavigationState(
+  state: BrowserWorkspaceRuntimeState,
+): void {
+  state.currentFrame = null;
+  state.dialog = null;
+  state.highlightedSelector = null;
+}
+
+function appendBrowserWorkspaceTraceEntry(
+  state: BrowserWorkspaceRuntimeState,
+  entry: Record<string, unknown>,
+): void {
+  if (!state.trace.active) {
+    return;
+  }
+  state.trace.entries.push({ ...entry, timestamp: getBrowserWorkspaceTimestamp() });
+}
+
+function appendBrowserWorkspaceProfilerEntry(
+  state: BrowserWorkspaceRuntimeState,
+  entry: Record<string, unknown>,
+): void {
+  if (!state.profiler.active) {
+    return;
+  }
+  state.profiler.entries.push({
+    ...entry,
+    timestamp: getBrowserWorkspaceTimestamp(),
+  });
 }
 
 function clearBrowserWorkspaceElementRefs(
@@ -1038,6 +1355,37 @@ function getBrowserWorkspaceElementStyles(
   };
 }
 
+function normalizeBrowserWorkspaceCommand(
+  command: BrowserWorkspaceCommand,
+): BrowserWorkspaceCommand {
+  const raw = command as BrowserWorkspaceCommand & Record<string, unknown>;
+  const normalizedSubaction =
+    typeof raw.subaction === "string"
+      ? raw.subaction.trim().toLowerCase()
+      : typeof raw.operation === "string"
+        ? raw.operation.trim().toLowerCase()
+        : "";
+  const subaction =
+    normalizedSubaction === "goto"
+      ? "navigate"
+      : normalizedSubaction === "read"
+        ? "get"
+        : command.subaction;
+  const timeoutMs =
+    parseBrowserWorkspaceNumberLike(command.timeoutMs) ??
+    parseBrowserWorkspaceNumberLike(raw.ms) ??
+    parseBrowserWorkspaceNumberLike(raw.milliseconds);
+
+  return {
+    ...command,
+    subaction,
+    timeoutMs,
+    steps: Array.isArray(command.steps)
+      ? command.steps.map((step) => normalizeBrowserWorkspaceCommand(step))
+      : command.steps,
+  };
+}
+
 function getBrowserWorkspaceElementBox(
   element: Element,
 ): {
@@ -1120,6 +1468,7 @@ async function activateWebBrowserWorkspaceElement(
       throw new Error("Target link does not have an href.");
     }
     const nextUrl = new URL(href, tab.url).toString();
+    clearWebBrowserWorkspaceTabElementRefs(tab.id);
     tab.url = assertBrowserWorkspaceUrl(nextUrl);
     tab.title = inferBrowserWorkspaceTitle(tab.url);
     tab.dom = null;
@@ -1916,6 +2265,18 @@ function createDesktopBrowserWorkspaceCommandScript(
   };
   const waitForCondition = () =>
     new Promise((resolve, reject) => {
+      if (
+        !command.selector &&
+        !command.findBy &&
+        !command.text &&
+        !command.url &&
+        !command.script &&
+        Number.isFinite(Number(command.timeoutMs))
+      ) {
+        const waitedMs = Math.max(0, Number(command.timeoutMs) || 0);
+        setTimeout(() => resolve({ ok: true, waitedMs }), waitedMs);
+        return;
+      }
       const deadline = Date.now() + (Number(command.timeoutMs) || 4000);
       const check = () => {
         try {
@@ -2136,6 +2497,7 @@ async function submitWebBrowserWorkspaceForm(
   if (method === "get") {
     const nextUrl = new URL(submitUrl);
     nextUrl.search = searchParams.toString();
+    clearWebBrowserWorkspaceTabElementRefs(tab.id);
     tab.url = nextUrl.toString();
     tab.title = inferBrowserWorkspaceTitle(tab.url);
     tab.dom = null;
@@ -2167,6 +2529,7 @@ async function submitWebBrowserWorkspaceForm(
     pretendToBeVisual: true,
     url: finalUrl,
   });
+  clearWebBrowserWorkspaceTabElementRefs(tab.id);
   tab.url = finalUrl;
   tab.dom = nextDom;
   tab.loadedUrl = finalUrl;
@@ -2985,6 +3348,7 @@ export async function executeBrowserWorkspaceCommand(
   command: BrowserWorkspaceCommand,
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<BrowserWorkspaceCommandResult> {
+  command = normalizeBrowserWorkspaceCommand(command);
   switch (command.subaction) {
     case "batch": {
       const steps = Array.isArray(command.steps) ? command.steps : [];
@@ -3009,10 +3373,8 @@ export async function executeBrowserWorkspaceCommand(
         tabs: await listBrowserWorkspaceTabs(env),
       };
     case "open":
-      return {
-        mode: getBrowserWorkspaceMode(env),
-        subaction: command.subaction,
-        tab: await openBrowserWorkspaceTab(
+      {
+        const tab = await openBrowserWorkspaceTab(
           {
             partition: command.partition,
             show: command.show,
@@ -3020,12 +3382,19 @@ export async function executeBrowserWorkspaceCommand(
             url: command.url,
           },
           env,
-        ),
-      };
+        );
+        clearBrowserWorkspaceElementRefs(getBrowserWorkspaceMode(env), tab.id);
+        return {
+          mode: getBrowserWorkspaceMode(env),
+          subaction: command.subaction,
+          tab,
+        };
+      }
     case "navigate": {
       const id = isBrowserWorkspaceBridgeConfigured(env)
         ? await resolveDesktopBrowserWorkspaceTargetTabId(command, env)
         : findWebBrowserWorkspaceTargetTabId(command);
+      clearBrowserWorkspaceElementRefs(getBrowserWorkspaceMode(env), id);
       return {
         mode: getBrowserWorkspaceMode(env),
         subaction: command.subaction,
@@ -3062,6 +3431,7 @@ export async function executeBrowserWorkspaceCommand(
       const id = isBrowserWorkspaceBridgeConfigured(env)
         ? await resolveDesktopBrowserWorkspaceTargetTabId(command, env)
         : findWebBrowserWorkspaceTargetTabId(command);
+      clearBrowserWorkspaceElementRefs(getBrowserWorkspaceMode(env), id);
       return {
         mode: getBrowserWorkspaceMode(env),
         subaction: command.subaction,
@@ -3094,6 +3464,8 @@ export async function executeBrowserWorkspaceCommand(
     case "forward":
     case "reload": {
       if (isBrowserWorkspaceBridgeConfigured(env)) {
+        const id = await resolveDesktopBrowserWorkspaceTargetTabId(command, env);
+        clearBrowserWorkspaceElementRefs("desktop", id);
         return executeDesktopBrowserWorkspaceDomCommand(command, env);
       }
 
@@ -3102,6 +3474,7 @@ export async function executeBrowserWorkspaceCommand(
         const tab = getWebBrowserWorkspaceTabState(id);
 
         if (command.subaction === "reload") {
+          clearWebBrowserWorkspaceTabElementRefs(tab.id);
           tab.dom = null;
           tab.loadedUrl = null;
           await loadWebBrowserWorkspaceTabDocument(tab);
@@ -3127,6 +3500,7 @@ export async function executeBrowserWorkspaceCommand(
         tab.historyIndex = nextIndex;
         tab.url = tab.history[nextIndex] ?? tab.url;
         tab.title = inferBrowserWorkspaceTitle(tab.url);
+        clearWebBrowserWorkspaceTabElementRefs(tab.id);
         tab.dom = null;
         tab.loadedUrl = null;
         await loadWebBrowserWorkspaceTabDocument(tab);
@@ -3159,6 +3533,24 @@ export async function executeBrowserWorkspaceCommand(
     case "type":
     case "uncheck":
     case "wait":
+      if (
+        command.subaction === "wait" &&
+        !command.selector &&
+        !command.findBy &&
+        !command.text &&
+        !command.url &&
+        !command.script &&
+        typeof command.timeoutMs === "number" &&
+        Number.isFinite(command.timeoutMs)
+      ) {
+        const waitedMs = Math.max(0, command.timeoutMs);
+        await sleep(waitedMs);
+        return {
+          mode: getBrowserWorkspaceMode(env),
+          subaction: command.subaction,
+          value: { waitedMs },
+        };
+      }
       if (isBrowserWorkspaceBridgeConfigured(env)) {
         return executeDesktopBrowserWorkspaceDomCommand(command, env);
       }

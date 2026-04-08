@@ -1023,16 +1023,25 @@ describe("AppManager", () => {
       });
       expect(result.session?.telemetry).toEqual(
         expect.objectContaining({
-          recentThoughts: [
-            expect.objectContaining({
-              content: "The ruins are the safest high-value route right now.",
-              type: "reasoning",
-            }),
-          ],
+          goalsPaused: false,
+          availableGoalCount: 1,
+          nearbyLocationCount: 1,
+          startedAt: 1_709_999_000_000,
+          lastActivity: 1_710_000_000_000,
           recommendedGoals: [
             expect.objectContaining({
+              id: "goal-0",
+              type: "explore",
               description: "Scout the ruins",
               reason: "The ruins have the highest value loot nearby.",
+            }),
+          ],
+          recentThoughts: [
+            expect.objectContaining({
+              id: "thought-1",
+              type: "reasoning",
+              content: "The ruins are the safest high-value route right now.",
+              timestamp: 1_710_000_000_500,
             }),
           ],
         }),

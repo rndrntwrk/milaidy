@@ -272,6 +272,7 @@ import {
 import { handleProviderSwitchRoutes } from "./provider-switch-routes.js";
 import { handleRegistryRoutes } from "./registry-routes.js";
 import { RegistryService } from "./registry-service.js";
+import { tryHandleMusicPlayerStatusFallback } from "./music-player-route-fallback.js";
 import { tryHandleRuntimePluginRoute } from "./runtime-plugin-routes.js";
 import { handleSandboxRoute } from "./sandbox-routes.js";
 import { hasPersistedOnboardingState } from "./server-helpers.js";
@@ -445,7 +446,10 @@ function wrapPluginManagerWithLocalFallback(
 
   wrapped.installPlugin = async (pluginName, onProgress) => {
     const result = await originalInstall(pluginName, onProgress);
-    if (result.success || !result.error?.includes("not found in the registry")) {
+    if (
+      result.success ||
+      !result.error?.includes("not found in the registry")
+    ) {
       return result;
     }
 
@@ -463,7 +467,8 @@ function wrapPluginManagerWithLocalFallback(
     return {
       success: true,
       pluginName: localInfo.name,
-      version: localInfo.npm.v2Version ?? localInfo.npm.v1Version ?? "workspace",
+      version:
+        localInfo.npm.v2Version ?? localInfo.npm.v1Version ?? "workspace",
       installPath: localInfo.localPath,
       requiresRestart: true,
     };
@@ -4583,6 +4588,18 @@ async function handleCodingAgentsFallback(
     }
   }
 
+  // GET /api/coding-agents — list active PTY sessions (used by getCodingAgentStatus fallback)
+  if (method === "GET" && pathname === "/api/coding-agents") {
+    try {
+      const tasks = await codeTaskService?.getTasks?.();
+      json(res, Array.isArray(tasks) ? tasks : []);
+      return true;
+    } catch {
+      json(res, []);
+      return true;
+    }
+  }
+
   // Not handled by fallback
   return false;
 }
@@ -5440,7 +5457,9 @@ async function handleRequest(
         runtime: state.runtime
           ? {
               getService: (type: string) =>
-                (state.runtime as { getService: (t: string) => unknown }).getService(type),
+                (
+                  state.runtime as { getService: (t: string) => unknown }
+                ).getService(type),
             }
           : undefined,
       },
@@ -5872,6 +5891,22 @@ async function handleRequest(
     return;
   }
   if (
+    !state.runtime &&
+    method === "GET" &&
+    pathname.startsWith("/api/coding-agents")
+  ) {
+    // Return graceful empty responses for all coding-agent polling endpoints
+    // before the runtime is available — prevents 30s timeout → 500 errors.
+    if (pathname === "/api/coding-agents") {
+      json(res, []);
+    } else if (pathname === "/api/coding-agents/scratch") {
+      json(res, []);
+    } else {
+      json(res, {});
+    }
+    return;
+  }
+  if (
     state.runtime &&
     (pathname.startsWith("/api/coding-agents") ||
       pathname.startsWith("/api/workspace") ||
@@ -6169,6 +6204,18 @@ async function handleRequest(
   for (const handler of state.connectorRouteHandlers) {
     const handled = await handler(req, res, pathname, method);
     if (handled) return;
+  }
+
+  // ── Music player compatibility fallback ─────────────────────────────────
+  if (
+    tryHandleMusicPlayerStatusFallback({
+      pathname,
+      method,
+      runtime: state.runtime,
+      res,
+    })
+  ) {
+    return;
   }
 
   // ── Fallback ────────────────────────────────────────────────────────────

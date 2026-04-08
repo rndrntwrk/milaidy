@@ -296,7 +296,10 @@ function parseCommandRecord(
       normalizeWaitState(
         typeof raw.state === "string" ? raw.state : undefined,
       ) ?? undefined,
-    timeoutMs: parseNumberLike(raw.timeoutMs),
+    timeoutMs:
+      parseNumberLike(raw.timeoutMs) ??
+      parseNumberLike(raw.ms) ??
+      parseNumberLike(raw.milliseconds),
     steps: Array.isArray(raw.steps)
       ? raw.steps
           .map((entry) =>
@@ -529,7 +532,10 @@ function parseRequest(
       normalizeWaitState(
         typeof params.state === "string" ? params.state : undefined,
       ) ?? undefined,
-    timeoutMs: parseNumberLike(params.timeoutMs),
+    timeoutMs:
+      parseNumberLike(params.timeoutMs) ??
+      parseNumberLike(params.ms) ??
+      parseNumberLike(params.milliseconds),
     steps,
   };
 }
@@ -542,6 +548,15 @@ function stringifyResult(value: unknown): string {
   } catch {
     return String(value);
   }
+}
+
+function formatBrowserWorkspaceElementLine(
+  element: BrowserWorkspaceCommandResult["elements"] extends Array<infer T>
+    ? T
+    : never,
+): string {
+  const refPrefix = typeof element.ref === "string" ? `${element.ref} ` : "";
+  return `${refPrefix}${element.selector} <${element.tag}> ${element.text || element.value || ""}`.trim();
 }
 
 function formatSingleCommandResult(result: BrowserWorkspaceCommandResult): string {
@@ -597,10 +612,7 @@ function formatSingleCommandResult(result: BrowserWorkspaceCommandResult): strin
             )}.`,
             ...result.elements
               .slice(0, 8)
-              .map(
-                (element) =>
-                  `- ${element.selector} <${element.tag}> ${element.text || element.value || ""}`.trim(),
-              ),
+              .map((element) => `- ${formatBrowserWorkspaceElementLine(element)}`),
           ].join("\n")
         : `Captured a browser DOM snapshot: ${stringifyResult(result.value)}`;
     case "inspect": {
@@ -616,10 +628,7 @@ function formatSingleCommandResult(result: BrowserWorkspaceCommandResult): strin
         head,
         ...result.elements
           .slice(0, 8)
-          .map(
-            (element) =>
-              `- ${element.selector} <${element.tag}> ${element.text || element.value || ""}`.trim(),
-          ),
+          .map((element) => `- ${formatBrowserWorkspaceElementLine(element)}`),
       ].join("\n");
     }
     case "get":
@@ -683,7 +692,7 @@ function formatBrowserWorkspaceCommandResult(
 export const manageMiladyBrowserWorkspaceAction: Action = {
   name: "MANAGE_MILADY_BROWSER_WORKSPACE",
   description:
-    "Use the Milady browser workspace through one main action. Pass a subaction such as list, open, navigate, show, hide, close, inspect, snapshot, screenshot, find, click, dblclick, fill, type, keyboardtype, keyboardinserttext, focus, hover, select, check, uncheck, press, keydown, keyup, scroll, scrollinto, wait, get, back, forward, reload, eval, or batch. Use batch with stepsJson to run a series of browser subactions in order.",
+    "Use the Milady browser workspace through one main action. Pass a subaction such as list, open, navigate, show, hide, close, inspect, snapshot, screenshot, find, click, dblclick, fill, type, keyboardtype, keyboardinserttext, focus, hover, select, check, uncheck, press, keydown, keyup, scroll, scrollinto, wait, get, back, forward, reload, eval, or batch. Use batch with stepsJson to run a series of browser subactions in order. Snapshot and inspect return reusable element refs like @e1 that can be passed back as selector values.",
   similes: [
     "browser command",
     "browser subaction",
@@ -758,7 +767,8 @@ export const manageMiladyBrowserWorkspaceAction: Action = {
     },
     {
       name: "selector",
-      description: "CSS selector for browser element subactions.",
+      description:
+        "CSS selector or reusable snapshot ref like @e1 for browser element subactions.",
       required: false,
       schema: { type: "string" },
     },
@@ -899,7 +909,15 @@ export const manageMiladyBrowserWorkspaceAction: Action = {
     },
     {
       name: "timeoutMs",
-      description: "Optional timeout in milliseconds for wait subactions.",
+      description:
+        "Optional timeout in milliseconds for wait subactions. When no selector/text/url/script condition is provided, wait sleeps for this duration.",
+      required: false,
+      schema: { type: "number" },
+    },
+    {
+      name: "ms",
+      description:
+        "Alias for timeoutMs, useful for timed waits that simply sleep for a number of milliseconds.",
       required: false,
       schema: { type: "number" },
     },

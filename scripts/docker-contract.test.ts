@@ -24,19 +24,6 @@ const EXPECTED_LABEL_KEYS = [
 
 const DOCKERFILES = [
   {
-    name: "Dockerfile",
-    path: path.join(ROOT, "Dockerfile"),
-    expectedBase: "bookworm",
-    expectedCommand: 'CMD ["node", "milady.mjs", "start"]',
-  },
-  {
-    name: "Dockerfile.slim",
-    path: path.join(ROOT, "Dockerfile.slim"),
-    expectedBase: "slim",
-    expectedCommand:
-      'CMD ["node", "--import", "./node_modules/tsx/dist/loader.mjs", "milady.mjs", "start"]',
-  },
-  {
     name: "Dockerfile.ci",
     path: path.join(ROOT, "Dockerfile.ci"),
     expectedBase: "slim",

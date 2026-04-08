@@ -17,8 +17,12 @@ import {
 } from "../training/context-catalog";
 import type { AgentContext as TrainingAgentContext } from "../training/context-types";
 
-type RuntimeAction = NonNullable<Plugin["actions"]>[number];
-type RuntimeProvider = NonNullable<Plugin["providers"]>[number];
+type ContextScoped = {
+  contexts?: string[];
+};
+
+type RuntimeAction = NonNullable<Plugin["actions"]>[number] & ContextScoped;
+type RuntimeProvider = NonNullable<Plugin["providers"]>[number] & ContextScoped;
 type RuntimeEvaluator = NonNullable<Plugin["evaluators"]>[number];
 type RuntimeRoute = NonNullable<Plugin["routes"]>[number];
 type RuntimeServiceClass = NonNullable<Plugin["services"]>[number];
@@ -42,13 +46,11 @@ type PluginApplyConfigHook = (
   runtime: AgentRuntime,
 ) => Promise<void> | void;
 
-type RuntimePluginWithLifecycleHooks = Plugin & {
-  dispose?: PluginDisposeHook;
-  applyConfig?: PluginApplyConfigHook;
-};
-type RuntimePluginWithContexts = Plugin & {
-  contexts?: string[];
-};
+type RuntimePluginWithLifecycleHooks = Plugin &
+  ContextScoped & {
+    dispose?: PluginDisposeHook;
+    applyConfig?: PluginApplyConfigHook;
+  };
 
 function toTrainingContexts(
   contexts: AgentContext[] | undefined,
@@ -175,17 +177,14 @@ function pushUniqueString(items: string[], value: string): void {
 }
 
 function getPluginContexts(plugin: Plugin | undefined): string[] | undefined {
-  const contexts = (plugin as RuntimePluginWithContexts | undefined)?.contexts;
-  return Array.isArray(contexts)
-    ? contexts.filter((value): value is string => typeof value === "string")
-    : undefined;
+  const contexts = (plugin as ContextScoped | undefined)?.contexts;
+  return Array.isArray(contexts) ? contexts : undefined;
 }
 
-function inheritPluginContexts<
-  T extends {
-    contexts?: string[];
-  },
->(component: T, pluginContexts: string[] | undefined): T {
+function inheritPluginContexts<T extends ContextScoped>(
+  component: T,
+  pluginContexts: string[] | undefined,
+): T {
   if (!pluginContexts?.length || (component.contexts?.length ?? 0) > 0) {
     return component;
   }

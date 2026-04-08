@@ -19,6 +19,7 @@ import {
 import { invokeDesktopBridgeRequest, isElectrobunRuntime } from "../../bridge";
 import { useApp } from "../../state";
 import { copyTextToClipboard } from "../../utils/clipboard";
+import { resolveApiUrl } from "../../utils/asset-url";
 import {
   DESKTOP_WORKSPACE_SURFACES,
   type DesktopClickAuditItem,
@@ -210,6 +211,25 @@ export const DESKTOP_WORKSPACE_CLICK_AUDIT: readonly DesktopClickAuditItem[] = [
 const DESKTOP_ACTION_BUTTON_CLASSNAME =
   "min-h-9 justify-start whitespace-normal text-left sm:min-h-10";
 
+function buildDesktopDiagnosticsBundle(options: {
+  diagnosticsText: string;
+  devStackText: string;
+  devConsoleText: string;
+}): string {
+  return [
+    "Desktop Diagnostics",
+    "",
+    "== Runtime Snapshot ==",
+    options.diagnosticsText.trim(),
+    "",
+    "== Desktop Dev Stack ==",
+    options.devStackText.trim(),
+    "",
+    "== Desktop Console Log ==",
+    options.devConsoleText.trim(),
+  ].join("\n");
+}
+
 function renderPathList(
   paths: string[],
   t: (key: string, options?: Record<string, unknown>) => string,
@@ -250,6 +270,13 @@ export function DesktopWorkspaceSection({
   const [clipboardDraft, setClipboardDraft] = useState("");
   const [openPaths, setOpenPaths] = useState<string[]>([]);
   const [savePaths, setSavePaths] = useState<string[]>([]);
+  const [devStackText, setDevStackText] = useState(
+    "Loading desktop dev stack…",
+  );
+  const [devConsoleText, setDevConsoleText] = useState(
+    "Loading desktop console log…",
+  );
+  const [devConsoleFilter, setDevConsoleFilter] = useState("");
   const getSurfaceLabel = useCallback(
     (surfaceId: (typeof DESKTOP_WORKSPACE_SURFACES)[number]["id"]) =>
       t(`desktopworkspacesection.surface.${surfaceId}.label`),
@@ -276,6 +303,65 @@ export function DesktopWorkspaceSection({
   useEffect(() => {
     void refreshSnapshot();
   }, [refreshSnapshot]);
+
+  const refreshDevDiagnostics = useCallback(async () => {
+    if (!desktopRuntime || typeof fetch !== "function") {
+      setDevStackText("Desktop dev stack unavailable.");
+      setDevConsoleText("Desktop console log unavailable.");
+      return;
+    }
+
+    try {
+      const [stackResponse, consoleResponse] = await Promise.all([
+        fetch(resolveApiUrl("/api/dev/stack"), {
+          headers: { Accept: "application/json" },
+        }),
+        fetch(
+          resolveApiUrl("/api/dev/console-log?maxLines=250&maxBytes=200000"),
+          {
+            headers: { Accept: "text/plain" },
+          },
+        ),
+      ]);
+
+      if (stackResponse.ok) {
+        const stackJson = (await stackResponse.json()) as unknown;
+        setDevStackText(JSON.stringify(stackJson, null, 2));
+      } else {
+        setDevStackText(`GET /api/dev/stack → ${stackResponse.status}`);
+      }
+
+      if (consoleResponse.ok) {
+        const consoleText = await consoleResponse.text();
+        setDevConsoleText(
+          consoleText.trim() || "Desktop console log is currently empty.",
+        );
+      } else {
+        setDevConsoleText(
+          `GET /api/dev/console-log → ${consoleResponse.status}`,
+        );
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setDevStackText(`Desktop dev stack error: ${message}`);
+      setDevConsoleText(`Desktop console log error: ${message}`);
+    }
+  }, [desktopRuntime]);
+
+  useEffect(() => {
+    void refreshDevDiagnostics();
+    if (!desktopRuntime) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      void refreshDevDiagnostics();
+    }, 2000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [desktopRuntime, refreshDevDiagnostics]);
 
   const runAction = useCallback(
     async (
@@ -339,6 +425,55 @@ export function DesktopWorkspaceSection({
     ].join("\n");
   }, [snapshot, t]);
 
+  const devConsoleLines = useMemo(
+    () =>
+      devConsoleText
+        .split("\n")
+        .map((line) => line.trimEnd())
+        .filter((line) => line.length > 0),
+    [devConsoleText],
+  );
+
+  const filteredDevConsoleLines = useMemo(() => {
+    const needle = devConsoleFilter.trim().toLowerCase();
+    if (!needle) {
+      return devConsoleLines;
+    }
+    return devConsoleLines.filter((line) =>
+      line.toLowerCase().includes(needle),
+    );
+  }, [devConsoleFilter, devConsoleLines]);
+
+  const filteredDevConsoleText = useMemo(
+    () => filteredDevConsoleLines.join("\n"),
+    [filteredDevConsoleLines],
+  );
+
+  const devConsoleSummary = useMemo(() => {
+    const summarize = (matcher: (line: string) => boolean) =>
+      devConsoleLines.filter(matcher).length;
+    return {
+      total: devConsoleLines.length,
+      errors: summarize((line) => /\b(error|failed|fatal)\b/i.test(line)),
+      warnings: summarize((line) => /\bwarn\b/i.test(line)),
+      rpc: summarize((line) => line.includes("[Renderer:rpc]")),
+      fetch: summarize((line) => line.includes("[Renderer:fetch]")),
+      talkmode: summarize((line) => /talkmode/i.test(line)),
+    };
+  }, [devConsoleLines]);
+
+  const copyDesktopDiagnosticsBundle = useCallback(async () => {
+    await copyTextToClipboard(
+      buildDesktopDiagnosticsBundle({
+        diagnosticsText,
+        devStackText,
+        devConsoleText,
+      }),
+    );
+    setActionMessage("Copied desktop diagnostics bundle.");
+    setActionError(null);
+  }, [diagnosticsText, devConsoleText, devStackText]);
+
   if (!desktopRuntime) {
     return (
       <ContentLayout contentHeader={contentHeader}>
@@ -358,7 +493,10 @@ export function DesktopWorkspaceSection({
           variant="outline"
           size="sm"
           className={DESKTOP_ACTION_BUTTON_CLASSNAME}
-          onClick={() => void refreshSnapshot()}
+          onClick={() => {
+            void refreshSnapshot();
+            void refreshDevDiagnostics();
+          }}
           disabled={loading}
         >
           <RefreshCw
@@ -417,6 +555,46 @@ export function DesktopWorkspaceSection({
 
         <Card>
           <CardHeader>
+            <CardTitle className="text-sm">Desktop Dev Stack</CardTitle>
+            <CardDescription>
+              Live `/api/dev/stack` snapshot for the current desktop session.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className={DESKTOP_ACTION_BUTTON_CLASSNAME}
+                onClick={() => void refreshDevDiagnostics()}
+              >
+                Refresh Desktop Logs
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className={DESKTOP_ACTION_BUTTON_CLASSNAME}
+                onClick={() => void copyTextToClipboard(devStackText)}
+              >
+                Copy Dev Stack
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className={DESKTOP_ACTION_BUTTON_CLASSNAME}
+                onClick={() => void copyDesktopDiagnosticsBundle()}
+              >
+                Copy Full Diagnostics Bundle
+              </Button>
+            </div>
+            <pre className="max-h-72 overflow-auto break-all rounded-xl border border-border bg-bg px-3 py-3 text-[11px] leading-5 text-txt">
+              {devStackText}
+            </pre>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
             <CardTitle className="text-sm">
               {t("desktopworkspacesection.DetachedSurfaces")}
             </CardTitle>
@@ -451,6 +629,62 @@ export function DesktopWorkspaceSection({
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm">Desktop Console Log</CardTitle>
+          <CardDescription>
+            Live tail of `.milady/desktop-dev-console.log`, including renderer
+            console, network failures, RPC failures, and Electrobun/main logs.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className={DESKTOP_ACTION_BUTTON_CLASSNAME}
+              onClick={() => void refreshDevDiagnostics()}
+            >
+              Refresh Console Tail
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className={DESKTOP_ACTION_BUTTON_CLASSNAME}
+              onClick={() =>
+                void copyTextToClipboard(
+                  filteredDevConsoleText || devConsoleText,
+                )
+              }
+            >
+              Copy Visible Console Tail
+            </Button>
+          </div>
+          <div className="flex flex-wrap gap-2 text-xs text-muted">
+            <span>Total: {devConsoleSummary.total}</span>
+            <span>Errors: {devConsoleSummary.errors}</span>
+            <span>Warnings: {devConsoleSummary.warnings}</span>
+            <span>RPC: {devConsoleSummary.rpc}</span>
+            <span>Fetch: {devConsoleSummary.fetch}</span>
+            <span>TalkMode: {devConsoleSummary.talkmode}</span>
+          </div>
+          <Textarea
+            value={devConsoleFilter}
+            onChange={(event) => setDevConsoleFilter(event.target.value)}
+            placeholder="Filter console lines (e.g. rpc, fetch, talkmode, 404)"
+            className="min-h-[4rem] text-xs"
+          />
+          <Textarea
+            value={
+              filteredDevConsoleText ||
+              "No console lines match the current filter."
+            }
+            readOnly
+            className="min-h-[22rem] font-mono text-[11px] leading-5"
+          />
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 xl:grid-cols-2">
         <Card>

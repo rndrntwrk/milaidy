@@ -110,21 +110,11 @@ log "Tag:     ${YELLOW}${IMAGE_NAME}${NC}"
 $DRY_RUN && warn "DRY RUN mode — commands will be shown but not executed"
 
 # ── Select Dockerfile ─────────────────────────────────────────────────────────
-# Preference: Dockerfile.ci (canonical full app image) → legacy full-app fallbacks
 if [[ -f "Dockerfile.ci" ]]; then
   DOCKERFILE="Dockerfile.ci"
-  log "Dockerfile: ${YELLOW}${DOCKERFILE}${NC} (canonical full app image)"
-elif [[ -f "deploy/Dockerfile" ]]; then
-  DOCKERFILE="deploy/Dockerfile"
-  log "Dockerfile: ${YELLOW}${DOCKERFILE}${NC} (legacy standard fallback)"
-elif [[ -f "Dockerfile.alpha89" ]]; then
-  DOCKERFILE="Dockerfile.alpha89"
-  log "Dockerfile: ${YELLOW}${DOCKERFILE}${NC} (alpha89 working copy)"
-elif [[ -f "Dockerfile" ]]; then
-  DOCKERFILE="Dockerfile"
-  log "Dockerfile: ${YELLOW}${DOCKERFILE}${NC} (root)"
+  log "Dockerfile: ${YELLOW}${DOCKERFILE}${NC} (canonical production image)"
 else
-  die "No Dockerfile found. Expected Dockerfile.ci or a legacy deploy/Dockerfile fallback"
+  die "No Dockerfile found. Expected Dockerfile.ci at repo root."
 fi
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

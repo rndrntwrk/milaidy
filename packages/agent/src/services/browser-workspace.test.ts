@@ -443,4 +443,97 @@ describe("browser-workspace service", () => {
     );
     expect(heading.value).toBe("Welcome, Milady");
   });
+
+  it("supports agent-browser-style snapshot refs for follow-up browser commands", async () => {
+    await executeBrowserWorkspaceCommand(
+      {
+        subaction: "open",
+        show: true,
+        url: fixture.formUrl,
+      },
+      {} as NodeJS.ProcessEnv,
+    );
+
+    const snapshot = await executeBrowserWorkspaceCommand(
+      {
+        subaction: "snapshot",
+      },
+      {} as NodeJS.ProcessEnv,
+    );
+
+    const nameRef = snapshot.elements?.find((element) =>
+      element.selector.includes('input[name="name"]'),
+    )?.ref;
+    const planRef = snapshot.elements?.find((element) =>
+      element.selector.includes('select[name="plan"]'),
+    )?.ref;
+    const termsRef = snapshot.elements?.find(
+      (element) =>
+        element.type === "checkbox" ||
+        element.selector.includes('input[name="terms"]'),
+    )?.ref;
+    const continueRef = snapshot.elements?.find((element) =>
+      element.selector.includes('button[type="submit"]'),
+    )?.ref;
+
+    expect(nameRef).toMatch(/^@e\d+$/);
+    expect(planRef).toMatch(/^@e\d+$/);
+    expect(termsRef).toMatch(/^@e\d+$/);
+    expect(continueRef).toMatch(/^@e\d+$/);
+
+    await executeBrowserWorkspaceCommand(
+      {
+        subaction: "fill",
+        selector: nameRef,
+        value: "Milady",
+      },
+      {} as NodeJS.ProcessEnv,
+    );
+    await executeBrowserWorkspaceCommand(
+      {
+        subaction: "select",
+        selector: planRef,
+        value: "pro",
+      },
+      {} as NodeJS.ProcessEnv,
+    );
+    await executeBrowserWorkspaceCommand(
+      {
+        subaction: "check",
+        selector: termsRef,
+      },
+      {} as NodeJS.ProcessEnv,
+    );
+    await executeBrowserWorkspaceCommand(
+      {
+        subaction: "click",
+        selector: continueRef,
+      },
+      {} as NodeJS.ProcessEnv,
+    );
+
+    const heading = await executeBrowserWorkspaceCommand(
+      {
+        subaction: "get",
+        selector: "h1",
+        getMode: "text",
+      },
+      {} as NodeJS.ProcessEnv,
+    );
+    expect(heading.value).toBe("Welcome, Milady");
+  });
+
+  it("supports timed waits without a selector condition", async () => {
+    const startedAt = Date.now();
+    const wait = await executeBrowserWorkspaceCommand(
+      {
+        subaction: "wait",
+        timeoutMs: 30,
+      },
+      {} as NodeJS.ProcessEnv,
+    );
+
+    expect(wait.value).toEqual({ waitedMs: 30 });
+    expect(Date.now() - startedAt).toBeGreaterThanOrEqual(20);
+  });
 });

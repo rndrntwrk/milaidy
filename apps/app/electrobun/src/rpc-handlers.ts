@@ -11,6 +11,7 @@ import fs from "node:fs";
 
 import { Utils } from "electrobun/bun";
 import { setAgentReady } from "./agent-ready-state";
+import { resolveDesktopRuntimeMode } from "./api-base";
 import { showBackgroundNoticeOnce } from "./background-notice";
 import { postCloudDisconnectFromMain } from "./cloud-disconnect-from-main";
 import { getAgentManager } from "./native/agent";
@@ -196,6 +197,51 @@ export function registerRpcHandlers(
         console.error("[RPC] agentCloudDisconnectWithConfirm failed", err);
         throw err;
       }
+    },
+
+    desktopGetRuntimeMode: async () => {
+      const runtimeMode = resolveDesktopRuntimeMode(
+        process.env as Record<string, string | undefined>,
+      );
+      return {
+        mode: runtimeMode.mode,
+        externalApiBase: runtimeMode.externalApi.base,
+        externalApiSource: runtimeMode.externalApi.source,
+      };
+    },
+
+    // ---- Renderer diagnostics ----
+    rendererReportDiagnostic: async (
+      params?: {
+        level?: "log" | "info" | "warn" | "error";
+        source?: string;
+        message?: string;
+        details?: unknown;
+      } | null,
+    ) => {
+      const level = params?.level ?? "log";
+      const source = params?.source ?? "renderer";
+      const message = params?.message?.trim() || "(no message)";
+      const details =
+        typeof params?.details === "undefined"
+          ? ""
+          : ` ${JSON.stringify(params.details)}`;
+      const line = `[Renderer:${source}] ${message}${details}`;
+      switch (level) {
+        case "error":
+          console.error(line);
+          break;
+        case "warn":
+          console.warn(line);
+          break;
+        case "info":
+          console.info(line);
+          break;
+        default:
+          console.log(line);
+          break;
+      }
+      return { ok: true };
     },
 
     // ---- Desktop: Tray ----

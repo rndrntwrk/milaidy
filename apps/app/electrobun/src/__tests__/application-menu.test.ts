@@ -66,7 +66,7 @@ describe("buildApplicationMenu", () => {
 
     expect(macViewLabels).toContain("Reload");
     expect(macViewLabels).toContain("Force Reload");
-    expect(macViewLabels).toContain("Open Renderer in Browser for Debugging");
+    expect(macViewLabels).toContain("Toggle Developer Tools");
     expect(macViewLabels).toContain("Actual Size");
     expect(macViewLabels).toContain("Toggle Full Screen");
     expect(macViewLabels).not.toContain("Show Chat");
@@ -74,6 +74,17 @@ describe("buildApplicationMenu", () => {
     expect(macViewLabels).not.toContain("Show Heartbeats");
 
     expect(winViewLabels).toContain("Toggle Developer Tools");
+  });
+
+  it("keeps native devtools visible on macOS", () => {
+    const macViewLabels = (getMenu("View", false, [], true)?.submenu ?? []).map(
+      (item) => item.label ?? item.type ?? "",
+    );
+
+    expect(macViewLabels).toContain("Toggle Developer Tools");
+    expect(macViewLabels).not.toContain(
+      "Open Renderer in Browser for Debugging",
+    );
   });
 
   it("renders heartbeat monitoring summary in the native menu", () => {

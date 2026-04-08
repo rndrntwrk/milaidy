@@ -401,4 +401,86 @@ describe("Browser workspace API E2E", () => {
     expect(heading.status).toBe(200);
     expect(heading.data.value).toBe("Welcome, Milady");
   });
+
+  it("supports snapshot element refs and timed waits through the real command route", async () => {
+    const open = await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+      subaction: "open",
+      show: true,
+      url: siteFixture.formUrl,
+    });
+    expect(open.status).toBe(200);
+
+    const snapshot = await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+      subaction: "snapshot",
+    });
+    expect(snapshot.status).toBe(200);
+
+    const elements = Array.isArray(snapshot.data.elements) ? snapshot.data.elements : [];
+    const nameRef = elements.find((element) =>
+      String(element.selector).includes('input[name="name"]'),
+    )?.ref;
+    const planRef = elements.find((element) =>
+      String(element.selector).includes('select[name="plan"]'),
+    )?.ref;
+    const termsRef = elements.find(
+      (element) =>
+        String(element.type) === "checkbox" ||
+        String(element.selector).includes('input[name="terms"]'),
+    )?.ref;
+    const continueRef = elements.find((element) =>
+      String(element.selector).includes('button[type="submit"]'),
+    )?.ref;
+
+    expect(nameRef).toEqual(expect.stringMatching(/^@e\d+$/));
+    expect(planRef).toEqual(expect.stringMatching(/^@e\d+$/));
+    expect(termsRef).toEqual(expect.stringMatching(/^@e\d+$/));
+    expect(continueRef).toEqual(expect.stringMatching(/^@e\d+$/));
+
+    expect(
+      await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+        subaction: "fill",
+        selector: nameRef,
+        value: "Milady",
+      }),
+    ).toMatchObject({ status: 200 });
+
+    expect(
+      await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+        subaction: "select",
+        selector: planRef,
+        value: "pro",
+      }),
+    ).toMatchObject({ status: 200 });
+
+    expect(
+      await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+        subaction: "check",
+        selector: termsRef,
+      }),
+    ).toMatchObject({ status: 200 });
+
+    expect(
+      await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+        subaction: "click",
+        selector: continueRef,
+      }),
+    ).toMatchObject({ status: 200 });
+
+    const heading = await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+      subaction: "get",
+      selector: "h1",
+      getMode: "text",
+    });
+    expect(heading.status).toBe(200);
+    expect(heading.data.value).toBe("Welcome, Milady");
+
+    const startedAt = Date.now();
+    const wait = await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+      subaction: "wait",
+      ms: 30,
+    });
+    expect(wait.status).toBe(200);
+    expect(wait.data.value).toEqual({ waitedMs: 30 });
+    expect(Date.now() - startedAt).toBeGreaterThanOrEqual(20);
+  });
 });
