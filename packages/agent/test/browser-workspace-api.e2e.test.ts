@@ -505,4 +505,309 @@ describe("Browser workspace API E2E", () => {
     expect(wait.data.value).toEqual({ waitedMs: 30 });
     expect(Date.now() - startedAt).toBeGreaterThanOrEqual(20);
   });
+
+  it("supports clipboard, upload, drag, frame, tab, and window subactions through the real command route", async () => {
+    expect(
+      await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+        subaction: "open",
+        show: true,
+        url: siteFixture.formUrl,
+      }),
+    ).toMatchObject({ status: 200 });
+
+    expect(
+      await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+        subaction: "clipboard",
+        clipboardAction: "write",
+        value: "API clipboard",
+      }),
+    ).toMatchObject({ status: 200 });
+    expect(
+      await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+        subaction: "clipboard",
+        clipboardAction: "paste",
+        selector: 'input[name="name"]',
+      }),
+    ).toMatchObject({ status: 200 });
+    const pasted = await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+      subaction: "get",
+      selector: 'input[name="name"]',
+      getMode: "value",
+    });
+    expect(pasted.data.value).toBe("API clipboard");
+
+    const upload = await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+      subaction: "upload",
+      selector: 'input[name="attachment"]',
+      files: ["/tmp/api-a.txt"],
+    });
+    expect(upload.status).toBe(200);
+    expect(upload.data.value).toEqual(
+      expect.objectContaining({ files: ["api-a.txt"] }),
+    );
+
+    const drag = await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+      subaction: "drag",
+      selector: '[data-testid="drag-source"]',
+      value: '[data-testid="drop-target"]',
+    });
+    expect(drag.status).toBe(200);
+
+    const frame = await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+      subaction: "frame",
+      frameAction: "select",
+      selector: 'iframe[title="Embedded Frame"]',
+    });
+    expect(frame.status).toBe(200);
+
+    expect(
+      await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+        subaction: "fill",
+        selector: 'input[name="frameName"]',
+        value: "API Frame",
+      }),
+    ).toMatchObject({ status: 200 });
+    const frameValue = await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+      subaction: "get",
+      selector: 'input[name="frameName"]',
+      getMode: "value",
+    });
+    expect(frameValue.data.value).toBe("API Frame");
+
+    expect(
+      await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+        subaction: "frame",
+        frameAction: "main",
+      }),
+    ).toMatchObject({ status: 200 });
+
+    const newTab = await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+      subaction: "tab",
+      tabAction: "new",
+      show: false,
+      url: siteFixture.tasksUrl,
+    });
+    expect(newTab.status).toBe(200);
+
+    const tabs = await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+      subaction: "tab",
+      tabAction: "list",
+    });
+    expect(tabs.data.tabs).toHaveLength(2);
+
+    const win = await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+      subaction: "window",
+      url: siteFixture.formUrl,
+    });
+    expect(win.status).toBe(200);
+    expect(win.data.tab.visible).toBe(true);
+  });
+
+  it("supports settings, cookies/storage, network, dialog, console/errors, diff, trace/profile, state, and pdf through the real command route", async () => {
+    expect(
+      await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+        subaction: "open",
+        show: true,
+        url: siteFixture.formUrl,
+      }),
+    ).toMatchObject({ status: 200 });
+
+    expect(
+      await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+        subaction: "set",
+        setAction: "viewport",
+        width: 820,
+        height: 640,
+        scale: 2,
+      }),
+    ).toMatchObject({ status: 200 });
+    expect(
+      await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+        subaction: "set",
+        setAction: "headers",
+        headers: { "x-milady-api": "yes" },
+      }),
+    ).toMatchObject({ status: 200 });
+    expect(
+      await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+        subaction: "set",
+        setAction: "credentials",
+        username: "api",
+        password: "browser",
+      }),
+    ).toMatchObject({ status: 200 });
+
+    expect(
+      await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+        subaction: "cookies",
+        cookieAction: "set",
+        name: "session",
+        value: "api-cookie",
+      }),
+    ).toMatchObject({ status: 200 });
+    const cookies = await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+      subaction: "cookies",
+    });
+    expect(cookies.data.value).toEqual(
+      expect.objectContaining({ session: "api-cookie" }),
+    );
+
+    expect(
+      await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+        subaction: "storage",
+        storageArea: "local",
+        storageAction: "set",
+        entryKey: "draft",
+        value: "api remember",
+      }),
+    ).toMatchObject({ status: 200 });
+    const stored = await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+      subaction: "storage",
+      storageArea: "local",
+      entryKey: "draft",
+    });
+    expect(stored.data.value).toBe("api remember");
+
+    expect(
+      await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+        subaction: "network",
+        networkAction: "route",
+        url: "**/mocked",
+        responseBody: "api mocked",
+        responseStatus: 202,
+      }),
+    ).toMatchObject({ status: 200 });
+    expect(
+      await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+        subaction: "network",
+        networkAction: "harstart",
+      }),
+    ).toMatchObject({ status: 200 });
+
+    const mocked = await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+      subaction: "eval",
+      script: 'fetch("http://127.0.0.1/mocked").then((response) => response.text())',
+    });
+    expect(mocked.status).toBe(200);
+    expect(mocked.data.value).toBe("api mocked");
+
+    const echoed = await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+      subaction: "eval",
+      script: `fetch(${JSON.stringify(siteFixture.tasksUrl.replace("/tasks", "/echo"))}).then((response) => response.json())`,
+    });
+    expect(echoed.status).toBe(200);
+    expect(echoed.data.value).toEqual(
+      expect.objectContaining({
+        authorization: expect.stringContaining("Basic "),
+        headers: expect.objectContaining({ "x-milady-api": "yes" }),
+      }),
+    );
+
+    expect(
+      await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+        subaction: "eval",
+        script: 'console.log("api-log"); confirm("Ship it?"); "ok"',
+      }),
+    ).toMatchObject({ status: 200 });
+    const dialog = await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+      subaction: "dialog",
+      dialogAction: "status",
+    });
+    expect(dialog.status).toBe(200);
+    expect(dialog.data.value).toEqual(
+      expect.objectContaining({ message: "Ship it?", type: "confirm" }),
+    );
+
+    const consoleEntries = await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+      subaction: "console",
+    });
+    expect(consoleEntries.data.value).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ message: expect.stringContaining("api-log") }),
+      ]),
+    );
+
+    expect(
+      await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+        subaction: "eval",
+        script: 'throw new Error("api-boom")',
+      }),
+    ).toMatchObject({ status: 500 });
+    const errors = await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+      subaction: "errors",
+    });
+    expect(errors.data.value).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ message: expect.stringContaining("api-boom") }),
+      ]),
+    );
+
+    const diff = await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+      subaction: "diff",
+      diffAction: "snapshot",
+    });
+    expect(diff.status).toBe(200);
+    expect(diff.data.value).toEqual(expect.objectContaining({ changed: true }));
+
+    const screenshot = await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+      subaction: "screenshot",
+    });
+    expect(screenshot.status).toBe(200);
+    const screenshotDiff = await req(
+      apiServer.port,
+      "POST",
+      "/api/browser-workspace/command",
+      {
+        subaction: "diff",
+        diffAction: "screenshot",
+      },
+    );
+    expect(screenshotDiff.status).toBe(200);
+
+    const traceFile = path.join(os.tmpdir(), `milady-api-trace-${Date.now()}.json`);
+    const trace = await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+      subaction: "trace",
+      traceAction: "start",
+    });
+    expect(trace.status).toBe(200);
+    const stoppedTrace = await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+      subaction: "trace",
+      traceAction: "stop",
+      filePath: traceFile,
+    });
+    expect(stoppedTrace.status).toBe(200);
+    expect(fs.existsSync(traceFile)).toBe(true);
+
+    const profileFile = path.join(os.tmpdir(), `milady-api-profile-${Date.now()}.json`);
+    expect(
+      await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+        subaction: "profiler",
+        profilerAction: "start",
+      }),
+    ).toMatchObject({ status: 200 });
+    const profile = await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+      subaction: "profiler",
+      profilerAction: "stop",
+      filePath: profileFile,
+    });
+    expect(profile.status).toBe(200);
+    expect(fs.existsSync(profileFile)).toBe(true);
+
+    const stateFile = path.join(os.tmpdir(), `milady-api-state-${Date.now()}.json`);
+    const savedState = await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+      subaction: "state",
+      stateAction: "save",
+      filePath: stateFile,
+    });
+    expect(savedState.status).toBe(200);
+    expect(fs.existsSync(stateFile)).toBe(true);
+
+    const pdfFile = path.join(os.tmpdir(), `milady-api-${Date.now()}.pdf`);
+    const pdf = await req(apiServer.port, "POST", "/api/browser-workspace/command", {
+      subaction: "pdf",
+      filePath: pdfFile,
+    });
+    expect(pdf.status).toBe(200);
+    expect(fs.existsSync(pdfFile)).toBe(true);
+  });
 });
