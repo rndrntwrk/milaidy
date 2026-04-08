@@ -183,6 +183,12 @@ function TaskThreadCard({
         <span>{thread.decisionCount} decisions</span>
         <span>{formatIsoTime(thread.updatedAt)}</span>
       </div>
+      {thread.scenarioId || thread.batchId ? (
+        <div className="flex flex-wrap items-center gap-2 text-[10px] text-muted">
+          {thread.scenarioId ? <span>scenario {thread.scenarioId}</span> : null}
+          {thread.batchId ? <span>batch {thread.batchId}</span> : null}
+        </div>
+      ) : null}
       {thread.summary ? (
         <div className="line-clamp-2 text-[11px] text-txt">
           {thread.summary}

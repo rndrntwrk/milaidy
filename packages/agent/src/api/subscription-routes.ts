@@ -114,7 +114,8 @@ export async function handleSubscriptionRoutes(
   ) {
     const body = await readJsonBody<{ token: string }>(req, res);
     if (!body) return true;
-    if (!body.token || !body.token.startsWith("sk-ant-")) {
+    const trimmedToken = body.token?.trim();
+    if (!trimmedToken || !trimmedToken.startsWith("sk-ant-")) {
       error(res, "Invalid token format — expected sk-ant-oat01-...", 400);
       return true;
     }
@@ -126,7 +127,7 @@ export async function handleSubscriptionRoutes(
       // which use the token legitimately.
       if (!state.config.env) state.config.env = {};
       (state.config.env as Record<string, unknown>).__anthropicSubscriptionToken =
-        body.token.trim();
+        trimmedToken;
       ctx.saveConfig(state.config);
       logger.info(
         "[api] Saved Anthropic setup token for task agents (not applied to runtime — TOS restriction)",

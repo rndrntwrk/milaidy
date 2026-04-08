@@ -6,15 +6,12 @@
  * It bootstraps the CLI: normalizes env, applies profile settings,
  * and delegates to the Commander-based CLI.
  */
+import "./utils/namespace-defaults";
 import process from "node:process";
 import { applyCliProfileEnv, parseCliProfileArgs } from "./cli/profile";
 import { getLogPrefix } from "./utils/log-prefix";
 
 process.title = process.env.APP_CLI_NAME?.trim() || "eliza";
-
-if (!process.env.ELIZA_NAMESPACE) {
-  process.env.ELIZA_NAMESPACE = "milady";
-}
 
 if (process.argv.includes("--no-color")) {
   process.env.NO_COLOR = "1";

@@ -4262,6 +4262,17 @@ async function handleCodingAgentsFallback(
     "CODE_TASK",
   ) as CodeTaskService | null;
 
+  const buildEmptyCoordinatorStatus = () => ({
+    supervisionLevel: "autonomous",
+    taskCount: 0,
+    tasks: [] as Array<Record<string, unknown>>,
+    recentTasks: [] as Array<Record<string, unknown>>,
+    taskThreadCount: 0,
+    taskThreads: [] as Array<Record<string, unknown>>,
+    pendingConfirmations: 0,
+    frameworks: [] as Array<Record<string, unknown>>,
+  });
+
   const toNumber = (value: unknown, fallback = 0): number => {
     const parsed =
       typeof value === "number"
@@ -4367,12 +4378,7 @@ async function handleCodingAgentsFallback(
   ) {
     if (!codeTaskService?.getTasks) {
       // Return empty status if service not available
-      json(res, {
-        supervisionLevel: "autonomous",
-        taskCount: 0,
-        tasks: [],
-        pendingConfirmations: 0,
-      });
+      json(res, buildEmptyCoordinatorStatus());
       return true;
     }
 
@@ -4422,9 +4428,10 @@ async function handleCodingAgentsFallback(
       });
 
       json(res, {
-        supervisionLevel: "autonomous",
+        ...buildEmptyCoordinatorStatus(),
         taskCount: mappedTasks.length,
         tasks: mappedTasks,
+        recentTasks: mappedTasks,
         pendingConfirmations: 0,
       });
       return true;
@@ -5824,7 +5831,11 @@ async function handleRequest(
       supervisionLevel: "autonomous",
       taskCount: 0,
       tasks: [],
+      recentTasks: [],
+      taskThreadCount: 0,
+      taskThreads: [],
       pendingConfirmations: 0,
+      frameworks: [],
     });
     return;
   }
@@ -5888,29 +5899,9 @@ async function handleRequest(
       );
     }
 
-    // Try @elizaos/plugin-coding-agent first (local workspace plugin)
+    // Prefer the local orchestrator compat layer first so Milady's richer
+    // coordinator contract wins over older plugin-coding-agent status routes.
     if (!handled)
-      try {
-        const codingAgentPlugin = await import("@elizaos/plugin-coding-agent");
-        if (codingAgentPlugin.createCodingAgentRouteHandler) {
-          const coordinator = codingAgentPlugin.getCoordinator?.(state.runtime);
-          const handler = codingAgentPlugin.createCodingAgentRouteHandler(
-            state.runtime,
-            coordinator,
-          );
-          handled = await (handler as ConnectorRouteHandler)(
-            req,
-            res,
-            pathname,
-            req.method ?? "GET",
-          );
-        }
-      } catch {
-        // Local plugin not available, try npm plugin
-      }
-
-    // Fallback to @elizaos/plugin-agent-orchestrator (npm)
-    if (!handled) {
       try {
         const orchestratorPlugin =
           agentOrchestratorCompat as OrchestratorPluginFallbackModule;
@@ -5922,10 +5913,31 @@ async function handleRequest(
             state.runtime,
             coordinator,
           );
+          handled = await (handler as ConnectorRouteHandler)(
+            req,
+            res,
+            pathname,
+            req.method ?? "GET",
+          );
+        }
+      } catch {
+        // Compat layer unavailable, try older coding-agent plugin next
+      }
+
+    // Then try the older coding-agent plugin when present.
+    if (!handled) {
+      try {
+        const codingAgentPlugin = await import("@elizaos/plugin-coding-agent");
+        if (codingAgentPlugin.createCodingAgentRouteHandler) {
+          const coordinator = codingAgentPlugin.getCoordinator?.(state.runtime);
+          const handler = codingAgentPlugin.createCodingAgentRouteHandler(
+            state.runtime,
+            coordinator,
+          );
           handled = await handler(req, res, pathname);
         }
       } catch {
-        // Plugin doesn't export these functions - skip routing
+        // Local plugin not available, skip
       }
     }
 

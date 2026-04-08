@@ -406,6 +406,7 @@ async function launch() {
         MILADY_API_PORT: apiPort,
         ELIZA_API_PORT: apiPort,
         ELIZA_PORT: apiPort,
+        MILADY_NAMESPACE: process.env.MILADY_NAMESPACE ?? "milady",
         ELIZA_NAMESPACE: process.env.ELIZA_NAMESPACE ?? "milady",
       },
     );
@@ -426,6 +427,8 @@ async function launch() {
         ELIZA_HEADLESS: "1",
         MILADY_API_PORT: apiPort,
         MILADY_PORT: String(uiDevPort),
+        MILADY_NAMESPACE: process.env.MILADY_NAMESPACE ?? "milady",
+        ELIZA_NAMESPACE: process.env.ELIZA_NAMESPACE ?? "milady",
         ...(rendererUrlForShell
           ? { MILADY_RENDERER_URL: rendererUrlForShell }
           : {}),
@@ -456,6 +459,8 @@ async function launch() {
           MILADY_API_PORT: apiPort,
           ELIZA_API_PORT: apiPort,
           ELIZA_PORT: apiPort,
+          MILADY_NAMESPACE: process.env.MILADY_NAMESPACE ?? "milady",
+          ELIZA_NAMESPACE: process.env.ELIZA_NAMESPACE ?? "milady",
           MILADY_DESKTOP_API_BASE: `http://127.0.0.1:${apiPort}`,
         }),
     ...screenshotEnvElectrobun,

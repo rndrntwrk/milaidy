@@ -1,3 +1,4 @@
+import "../utils/namespace-defaults.js";
 import { createRequire } from "node:module";
 import {
   type AgentRuntime,

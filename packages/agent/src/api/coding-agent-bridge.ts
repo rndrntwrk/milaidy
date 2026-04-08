@@ -575,6 +575,17 @@ export async function handleCodingAgentsFallback(
     "CODE_TASK",
   ) as CodeTaskService | null;
 
+  const buildEmptyCoordinatorStatus = () => ({
+    supervisionLevel: "autonomous",
+    taskCount: 0,
+    tasks: [] as Array<Record<string, unknown>>,
+    recentTasks: [] as Array<Record<string, unknown>>,
+    taskThreadCount: 0,
+    taskThreads: [] as Array<Record<string, unknown>>,
+    pendingConfirmations: 0,
+    frameworks: [] as Array<Record<string, unknown>>,
+  });
+
   const toNumber = (value: unknown, fallback = 0): number => {
     const parsed =
       typeof value === "number"
@@ -680,12 +691,7 @@ export async function handleCodingAgentsFallback(
   ) {
     if (!codeTaskService?.getTasks) {
       // Return empty status if service not available
-      json(res, {
-        supervisionLevel: "autonomous",
-        taskCount: 0,
-        tasks: [],
-        pendingConfirmations: 0,
-      });
+      json(res, buildEmptyCoordinatorStatus());
       return true;
     }
 
@@ -735,9 +741,10 @@ export async function handleCodingAgentsFallback(
       });
 
       json(res, {
-        supervisionLevel: "autonomous",
+        ...buildEmptyCoordinatorStatus(),
         taskCount: mappedTasks.length,
         tasks: mappedTasks,
+        recentTasks: mappedTasks,
         pendingConfirmations: 0,
       });
       return true;

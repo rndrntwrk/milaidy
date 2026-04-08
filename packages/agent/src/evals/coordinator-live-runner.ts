@@ -58,6 +58,21 @@ type TaskThreadDetail = TaskThreadSummary & {
   transcripts?: Array<{ direction: string; content: string }>;
 };
 
+type TaskShareDiscovery = {
+  threadId: string;
+  shareCapabilities?: string[];
+  preferredTarget?: {
+    type: string;
+    value: string;
+    remoteAccessible?: boolean;
+  } | null;
+  targets?: Array<{
+    type: string;
+    value: string;
+    remoteAccessible?: boolean;
+  }>;
+};
+
 export interface CoordinatorScenarioRunCheck {
   id: string;
   passed: boolean;
@@ -91,6 +106,17 @@ export interface RunCoordinatorLiveScenariosOptions {
   scenarioTimeoutMs?: number;
 }
 
+type EvaluatedPreflightIssue = {
+  id: string;
+  summary: string;
+  details?: Record<string, unknown>;
+};
+
+type SkippedChannel = {
+  channel: CoordinatorEvalChannel;
+  reason: string;
+};
+
 function generateBatchId(): string {
   return `coordinator-eval-${new Date().toISOString().replace(/[:.]/g, "-")}`;
 }
@@ -105,6 +131,25 @@ function delay(ms: number): Promise<void> {
 
 function channelMessageSource(channel: CoordinatorEvalChannel): string | undefined {
   return channel === "app_chat" ? "client_chat" : channel;
+}
+
+function allCoordinatorChannels(
+  preflight: CoordinatorPreflightResult,
+): CoordinatorEvalChannel[] {
+  return ["app_chat", ...preflight.supportedConnectors].filter(
+    (channel, index, list) => list.indexOf(channel) === index,
+  );
+}
+
+function getCheck(
+  preflight: CoordinatorPreflightResult,
+  id: string,
+) {
+  return preflight.checks.find((check) => check.id === id);
+}
+
+function uniqueChannels(channels: CoordinatorEvalChannel[]): CoordinatorEvalChannel[] {
+  return channels.filter((channel, index) => channels.indexOf(channel) === index);
 }
 
 function scenarioNeedsTaskThread(scenario: CoordinatorScenario): boolean {
@@ -246,6 +291,99 @@ async function ensureTrajectoryLoggingEnabled(
   });
 }
 
+function evaluatePreflight(params: {
+  preflight: CoordinatorPreflightResult;
+  requestedChannels: CoordinatorEvalChannel[];
+  selectedScenarios: CoordinatorScenario[];
+}): {
+  requestedChannels: CoordinatorEvalChannel[];
+  usableChannels: CoordinatorEvalChannel[];
+  skippedChannels: SkippedChannel[];
+  runnableFrameworks: string[];
+  hardBlockers: EvaluatedPreflightIssue[];
+  recordedFailures: EvaluatedPreflightIssue[];
+  warnings: EvaluatedPreflightIssue[];
+} {
+  const { preflight, requestedChannels, selectedScenarios } = params;
+  const usableChannels = requestedChannels.filter((channel) =>
+    preflight.availableChannels.includes(channel),
+  );
+  const skippedChannels = requestedChannels
+    .filter((channel) => !preflight.availableChannels.includes(channel))
+    .map((channel) => ({
+      channel,
+      reason: `Channel ${channel} is not configured or not currently available in Milady.`,
+    }));
+
+  const runnableFrameworks = ["codex", "claude"].filter(
+    (frameworkId) => getCheck(preflight, `framework-${frameworkId}`)?.status === "pass",
+  );
+  const hardBlockers: EvaluatedPreflightIssue[] = [];
+
+  const apiCheck = getCheck(preflight, "milady-api");
+  if (apiCheck?.status === "fail") {
+    hardBlockers.push({
+      id: apiCheck.id,
+      summary: apiCheck.summary,
+      ...(apiCheck.details ? { details: apiCheck.details } : {}),
+    });
+  }
+
+  if (usableChannels.length === 0) {
+    hardBlockers.push({
+      id: "usable-channels",
+      summary:
+        "None of the requested channels are available for this live batch.",
+      details: {
+        requestedChannels,
+        availableChannels: preflight.availableChannels,
+      },
+    });
+  }
+
+  if (
+    selectedScenarios.some((scenario) => scenarioNeedsTaskThread(scenario)) &&
+    runnableFrameworks.length === 0
+  ) {
+    hardBlockers.push({
+      id: "task-frameworks",
+      summary:
+        "No runnable coordinator task-execution framework is available for scenarios that require live task work.",
+      details: {
+        frameworkChecks: preflight.checks.filter((check) =>
+          check.id.startsWith("framework-"),
+        ),
+      },
+    });
+  }
+
+  const recordedFailures = preflight.checks
+    .filter((check) => check.status === "fail")
+    .filter((check) => !hardBlockers.some((blocker) => blocker.id === check.id))
+    .map((check) => ({
+      id: check.id,
+      summary: check.summary,
+      ...(check.details ? { details: check.details } : {}),
+    }));
+  const warnings = preflight.checks
+    .filter((check) => check.status === "warn")
+    .map((check) => ({
+      id: check.id,
+      summary: check.summary,
+      ...(check.details ? { details: check.details } : {}),
+    }));
+
+  return {
+    requestedChannels,
+    usableChannels,
+    skippedChannels,
+    runnableFrameworks,
+    hardBlockers,
+    recordedFailures,
+    warnings,
+  };
+}
+
 function scenarioOutputDir(
   outputRoot: string,
   batchId: string,
@@ -292,12 +430,33 @@ async function gatherScenarioEvidence(params: {
   const threads = await client.requestJson<TaskThreadSummary[]>(
     `/api/coding-agents/coordinator/threads?includeArchived=true&scenarioId=${encodeURIComponent(scenario.id)}&batchId=${encodeURIComponent(batchId)}&limit=50`,
   );
+  const threadCountResponse = await client.requestJson<{ total: number }>(
+    `/api/coding-agents/coordinator/threads/count?includeArchived=true&scenarioId=${encodeURIComponent(scenario.id)}&batchId=${encodeURIComponent(batchId)}`,
+  );
   const threadDetails: TaskThreadDetail[] = [];
   for (const thread of threads) {
     const detail = await client.requestJson<TaskThreadDetail>(
       `/api/coding-agents/coordinator/threads/${encodeURIComponent(thread.id)}`,
     );
     threadDetails.push(detail);
+  }
+  const shareDetails: TaskShareDiscovery[] = [];
+  if (scenarioNeedsArtifacts(scenario)) {
+    for (const thread of threadDetails) {
+      try {
+        const share = await client.requestJson<TaskShareDiscovery>(
+          `/api/coding-agents/coordinator/threads/${encodeURIComponent(thread.id)}/share`,
+        );
+        shareDetails.push(share);
+      } catch {
+        shareDetails.push({
+          threadId: thread.id,
+          shareCapabilities: [],
+          preferredTarget: null,
+          targets: [],
+        });
+      }
+    }
   }
 
   const messages = await client.listConversationMessages(conversationId);
@@ -330,6 +489,10 @@ async function gatherScenarioEvidence(params: {
   }
 
   const allArtifacts = threadDetails.flatMap((thread) => thread.artifacts ?? []);
+  const transcriptCount = threadDetails.reduce(
+    (sum, thread) => sum + (thread.transcripts?.length ?? 0),
+    0,
+  );
   const responseText = messages
     .map((message) =>
       typeof message.text === "string"
@@ -364,6 +527,24 @@ async function gatherScenarioEvidence(params: {
           : trajectories.some((trajectory) => trajectory.source === channel),
       details: { channel },
     },
+    {
+      id: "db-count-match",
+      passed: (threadCountResponse.total ?? 0) === threadDetails.length,
+      details: {
+        countRoute: threadCountResponse.total ?? 0,
+        listCount: threadDetails.length,
+      },
+    },
+    {
+      id: "thread-batch-filter",
+      passed: threadDetails.every(
+        (thread) =>
+          thread.scenarioId === scenario.id && thread.batchId === batchId,
+      ),
+      details: {
+        threadIds: threadDetails.map((thread) => thread.id),
+      },
+    },
   ];
 
   if (scenarioNeedsTaskThread(scenario)) {
@@ -385,11 +566,26 @@ async function gatherScenarioEvidence(params: {
   if (scenarioNeedsArtifacts(scenario)) {
     checks.push({
       id: "artifacts-or-shareable-response",
-      passed: allArtifacts.length > 0 || responseLooksShareable(responseText),
+      passed:
+        allArtifacts.length > 0 ||
+        shareDetails.some((detail) => (detail.targets?.length ?? 0) > 0) ||
+        responseLooksShareable(responseText),
       details: {
         artifactCount: allArtifacts.length,
+        shareTargets: shareDetails.reduce(
+          (sum, detail) => sum + (detail.targets?.length ?? 0),
+          0,
+        ),
         responsePreview: responseText.slice(0, 300),
       },
+    });
+  }
+
+  if (scenarioNeedsTaskThread(scenario)) {
+    checks.push({
+      id: "transcript-captured",
+      passed: transcriptCount > 0,
+      details: { transcriptCount },
     });
   }
 
@@ -408,8 +604,24 @@ async function gatherScenarioEvidence(params: {
   await client.writeJson(path.join(outputDir, "conversation.json"), messages);
   await client.writeJson(path.join(outputDir, "threads.json"), threadDetails);
   await client.writeJson(path.join(outputDir, "artifacts.json"), allArtifacts);
+  await client.writeJson(path.join(outputDir, "shares.json"), shareDetails);
   await client.writeJson(path.join(outputDir, "changed-files.json"), changedFiles);
   await client.writeJson(path.join(outputDir, "trajectories.json"), trajectories);
+  await client.writeJson(path.join(outputDir, "db-assertions.json"), {
+    scenarioId: scenario.id,
+    batchId,
+    threadCountRoute: threadCountResponse.total ?? 0,
+    threadCountList: threadDetails.length,
+    trajectoryCount: trajectories.length,
+    transcriptCount,
+    groupedThreads: threadDetails.every(
+      (thread) => thread.scenarioId === scenario.id && thread.batchId === batchId,
+    ),
+    groupedTrajectories: trajectories.every(
+      (trajectory) =>
+        trajectory.scenarioId === scenario.id && trajectory.batchId === batchId,
+    ),
+  });
   await client.writeJson(path.join(outputDir, "checks.json"), checks);
 
   return {
@@ -433,6 +645,13 @@ export async function runCoordinatorLiveScenarios(
   baseUrl: string;
   outputRoot: string;
   preflight: CoordinatorPreflightResult;
+  requestedChannels: CoordinatorEvalChannel[];
+  usableChannels: CoordinatorEvalChannel[];
+  skippedChannels: SkippedChannel[];
+  runnableFrameworks: string[];
+  preflightHardBlockers: EvaluatedPreflightIssue[];
+  preflightFailures: EvaluatedPreflightIssue[];
+  preflightWarnings: EvaluatedPreflightIssue[];
   runs: CoordinatorScenarioRunResult[];
 }> {
   const baseUrl = resolveCoordinatorEvalBaseUrl(options.baseUrl);
@@ -440,35 +659,46 @@ export async function runCoordinatorLiveScenarios(
   const batchId = options.batchId?.trim() || generateBatchId();
   const client = new CoordinatorEvalClient(baseUrl);
   const preflight = await runCoordinatorPreflight({ baseUrl });
-  if (!preflight.ok) {
+  const selectedScenarios = listCoordinatorScenarios(options.profile ?? "full")
+    .filter((scenario) =>
+      options.scenarioIds?.length ? options.scenarioIds.includes(scenario.id) : true,
+    );
+  if (selectedScenarios.length === 0) {
+    throw new Error("No coordinator scenarios matched the requested filters.");
+  }
+
+  const requestedChannels = uniqueChannels(
+    options.channels && options.channels.length > 0
+      ? options.channels
+      : allCoordinatorChannels(preflight),
+  );
+  const runs: CoordinatorScenarioRunResult[] = [];
+  await mkdir(path.join(outputRoot, batchId), { recursive: true });
+  await client.writeJson(path.join(outputRoot, batchId, "preflight.json"), preflight);
+  const preflightEvaluation = evaluatePreflight({
+    preflight,
+    requestedChannels,
+    selectedScenarios,
+  });
+  await client.writeJson(
+    path.join(outputRoot, batchId, "preflight-evaluation.json"),
+    {
+      ...preflightEvaluation,
+      selectedScenarioIds: selectedScenarios.map((scenario) => scenario.id),
+    },
+  );
+  if (preflightEvaluation.hardBlockers.length > 0) {
     throw new Error(
-      `Coordinator eval preflight failed: ${preflight.checks
-        .filter((check) => check.status === "fail")
-        .map((check) => `${check.id}: ${check.summary}`)
+      `Coordinator eval preflight failed: ${preflightEvaluation.hardBlockers
+        .map((blocker) => `${blocker.id}: ${blocker.summary}`)
         .join("; ")}`,
     );
   }
 
   await ensureTrajectoryLoggingEnabled(client);
 
-  const selectedScenarios = listCoordinatorScenarios(options.profile ?? "full")
-    .filter((scenario) =>
-      options.scenarioIds?.length ? options.scenarioIds.includes(scenario.id) : true,
-    );
-  const requestedChannels =
-    options.channels && options.channels.length > 0
-      ? options.channels
-      : preflight.availableChannels;
-  const usableChannels = requestedChannels.filter((channel) =>
-    preflight.availableChannels.includes(channel),
-  );
-  const runs: CoordinatorScenarioRunResult[] = [];
-
-  await mkdir(path.join(outputRoot, batchId), { recursive: true });
-  await client.writeJson(path.join(outputRoot, batchId, "preflight.json"), preflight);
-
   for (const scenario of selectedScenarios) {
-    for (const channel of usableChannels) {
+    for (const channel of preflightEvaluation.usableChannels) {
       if (!scenario.channels.includes(channel)) continue;
 
       const conversation = await client.createConversation(
@@ -528,6 +758,13 @@ export async function runCoordinatorLiveScenarios(
     batchId,
     baseUrl,
     outputRoot,
+    requestedChannels: preflightEvaluation.requestedChannels,
+    usableChannels: preflightEvaluation.usableChannels,
+    skippedChannels: preflightEvaluation.skippedChannels,
+    runnableFrameworks: preflightEvaluation.runnableFrameworks,
+    preflightHardBlockers: preflightEvaluation.hardBlockers,
+    preflightFailures: preflightEvaluation.recordedFailures,
+    preflightWarnings: preflightEvaluation.warnings,
     runs,
   });
 
@@ -536,6 +773,13 @@ export async function runCoordinatorLiveScenarios(
     baseUrl,
     outputRoot,
     preflight,
+    requestedChannels: preflightEvaluation.requestedChannels,
+    usableChannels: preflightEvaluation.usableChannels,
+    skippedChannels: preflightEvaluation.skippedChannels,
+    runnableFrameworks: preflightEvaluation.runnableFrameworks,
+    preflightHardBlockers: preflightEvaluation.hardBlockers,
+    preflightFailures: preflightEvaluation.recordedFailures,
+    preflightWarnings: preflightEvaluation.warnings,
     runs,
   };
 }

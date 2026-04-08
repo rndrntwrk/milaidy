@@ -1,6 +1,7 @@
 // Timing: Track when the script starts
 const SCRIPT_START = Date.now();
 
+import "../utils/namespace-defaults.js";
 import { getLogPrefix } from "../utils/log-prefix";
 import { getErrorMessage } from "./embedding-manager-support.js";
 import {

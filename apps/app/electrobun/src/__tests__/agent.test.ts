@@ -852,6 +852,41 @@ describe("AgentManager", () => {
       }
     });
 
+    it("passes the Milady namespace into the child runtime", async () => {
+      const originalMiladyNamespace = process.env.MILADY_NAMESPACE;
+      const originalElizaNamespace = process.env.ELIZA_NAMESPACE;
+      delete process.env.MILADY_NAMESPACE;
+      delete process.env.ELIZA_NAMESPACE;
+
+      try {
+        const mockProc = createMockProcess();
+        mockSpawn.mockReturnValue(mockProc);
+
+        mockFetch.mockResolvedValueOnce(makeHealthyResponse());
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ agents: [{ name: "Milady" }] }),
+        });
+
+        await manager.start();
+
+        const spawnOptions = mockSpawn.mock.calls[0]?.[1];
+        expect(spawnOptions?.env?.MILADY_NAMESPACE).toBe("milady");
+        expect(spawnOptions?.env?.ELIZA_NAMESPACE).toBe("milady");
+      } finally {
+        if (originalMiladyNamespace === undefined) {
+          delete process.env.MILADY_NAMESPACE;
+        } else {
+          process.env.MILADY_NAMESPACE = originalMiladyNamespace;
+        }
+        if (originalElizaNamespace === undefined) {
+          delete process.env.ELIZA_NAMESPACE;
+        } else {
+          process.env.ELIZA_NAMESPACE = originalElizaNamespace;
+        }
+      }
+    });
+
     it("does not inherit ambient NODE_PATH into the child process in dev mode", async () => {
       const originalNodePath = process.env.NODE_PATH;
       process.env.NODE_PATH = "/tmp/hostile-modules";

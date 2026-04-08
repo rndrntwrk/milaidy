@@ -77,6 +77,7 @@ interface PendingConfirmation {
 }
 
 interface TaskSummary {
+  threadId?: string;
   sessionId: string;
   agentType: string;
   label: string;
@@ -95,11 +96,95 @@ interface TaskSummary {
   completionSummary?: string;
 }
 
+interface TaskThreadSummary {
+  id: string;
+  title: string;
+  kind?: string;
+  status: string;
+  scenarioId?: string;
+  batchId?: string;
+  originalRequest?: string;
+  summary?: string;
+  sessionCount?: number;
+  activeSessionCount?: number;
+  latestSessionId?: string;
+  latestSessionLabel?: string;
+  latestWorkdir?: string;
+  latestRepo?: string;
+  latestActivityAt?: number;
+  decisionCount?: number;
+  createdAt?: number;
+  updatedAt?: number;
+  closedAt?: number;
+  archivedAt?: number;
+}
+
+interface TaskArtifactRecord {
+  title: string;
+  artifactType?: string;
+  uri?: string;
+  path?: string;
+}
+
+interface TaskTranscriptEntry {
+  direction: string;
+  content: string;
+}
+
+interface TaskThreadDetail extends TaskThreadSummary {
+  artifacts?: TaskArtifactRecord[];
+  transcripts?: TaskTranscriptEntry[];
+}
+
 interface CoordinatorLike {
   getAllTaskContexts?: () => TaskSummary[];
   getTaskContext?: (sessionId: string) => TaskSummary | undefined;
   getPendingConfirmations?: () => PendingConfirmation[];
   getSupervisionLevel?: () => string;
+  listTaskThreads?: (options?: {
+    includeArchived?: boolean;
+    limit?: number;
+  }) => Promise<TaskThreadSummary[]>;
+  getTaskThread?: (threadId: string) => Promise<TaskThreadDetail | null>;
+  countTaskThreads?: (options?: {
+    includeArchived?: boolean;
+    status?: string;
+    statuses?: string[];
+    kind?: string;
+    roomId?: string;
+    worldId?: string;
+    ownerUserId?: string;
+    scenarioId?: string;
+    batchId?: string;
+    createdAfter?: string;
+    createdBefore?: string;
+    updatedAfter?: string;
+    updatedBefore?: string;
+    latestActivityAfter?: number;
+    latestActivityBefore?: number;
+    hasActiveSession?: boolean;
+    search?: string;
+  }) => Promise<number>;
+  archiveTaskThread?: (threadId: string) => Promise<void>;
+  reopenTaskThread?: (threadId: string) => Promise<void>;
+  pauseTaskThread?: (
+    threadId: string,
+    note?: string,
+  ) => Promise<Record<string, unknown>>;
+  stopTaskThread?: (
+    threadId: string,
+    note?: string,
+  ) => Promise<Record<string, unknown>>;
+  resumeTaskThread?: (
+    threadId: string,
+    instruction?: string,
+    agentType?: string,
+  ) => Promise<Record<string, unknown>>;
+  continueTaskThread?: (
+    threadId: string,
+    instruction: string,
+    agentType?: string,
+  ) => Promise<Record<string, unknown>>;
 }
 
 interface PTYServiceLike {
@@ -381,6 +466,26 @@ function hasPiBinary(): boolean {
   }
 }
 
+function normalizePreflightAdapterId(value: unknown): AdapterId | undefined {
+  if (typeof value !== "string") return undefined;
+  const normalized = value.trim().toLowerCase();
+  switch (normalized) {
+    case "claude":
+    case "claude code":
+      return "claude";
+    case "codex":
+    case "openai codex":
+      return "codex";
+    case "gemini":
+    case "google gemini":
+      return "gemini";
+    case "aider":
+      return "aider";
+    default:
+      return undefined;
+  }
+}
+
 async function computeFrameworkState(
   runtime: IAgentRuntime,
   ptyService?: PTYServiceLike,
@@ -397,13 +502,8 @@ async function computeFrameworkState(
         "aider",
       ]);
       for (const result of results) {
-        const adapter = result.adapter;
-        if (
-          adapter === "claude" ||
-          adapter === "codex" ||
-          adapter === "gemini" ||
-          adapter === "aider"
-        ) {
+        const adapter = normalizePreflightAdapterId(result.adapter);
+        if (adapter) {
           preflightRecords.set(adapter, result);
         }
       }
@@ -607,6 +707,13 @@ function resolveCoordinator(
     "SWARM_COORDINATOR",
   );
   if (fromRuntime) return fromRuntime as CoordinatorLike;
+
+  const ptyService = (runtime as RuntimeWithServices).getService(
+    "PTY_SERVICE",
+  ) as (PTYServiceLike & { coordinator?: unknown }) | undefined;
+  if (ptyService?.coordinator) {
+    return ptyService.coordinator as CoordinatorLike;
+  }
 
   const helper =
     getBaseExport<(runtime: IAgentRuntime) => unknown>("getCoordinator");
@@ -1270,6 +1377,227 @@ function sendJson(
   res.end(JSON.stringify(body));
 }
 
+function sendError(
+  res: http.ServerResponse,
+  message: string,
+  status = 400,
+): void {
+  sendJson(res, { error: message }, status);
+}
+
+async function parseJsonBody(
+  req: http.IncomingMessage,
+): Promise<Record<string, unknown>> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of req) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  const raw = Buffer.concat(chunks).toString("utf8").trim();
+  if (!raw) return {};
+  const parsed = JSON.parse(raw) as unknown;
+  return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+    ? (parsed as Record<string, unknown>)
+    : {};
+}
+
+function parseThreadListOptions(rawUrl: string | undefined): {
+  includeArchived?: boolean;
+  status?: string;
+  statuses?: string[];
+  kind?: string;
+  roomId?: string;
+  worldId?: string;
+  ownerUserId?: string;
+  scenarioId?: string;
+  batchId?: string;
+  createdAfter?: string;
+  createdBefore?: string;
+  updatedAfter?: string;
+  updatedBefore?: string;
+  latestActivityAfter?: number;
+  latestActivityBefore?: number;
+  hasActiveSession?: boolean;
+  search?: string;
+  limit?: number;
+} {
+  const url = new URL(rawUrl ?? "http://localhost/api/coding-agents/coordinator/threads", "http://localhost");
+  const status = url.searchParams.get("status") ?? undefined;
+  const statusesRaw = url.searchParams.get("statuses");
+  const statuses = statusesRaw
+    ?.split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+  const latestActivityAfterRaw = url.searchParams.get("latestActivityAfter");
+  const latestActivityBeforeRaw = url.searchParams.get("latestActivityBefore");
+  const hasActiveSessionRaw = url.searchParams.get("hasActiveSession");
+  const limitRaw = url.searchParams.get("limit");
+
+  return {
+    includeArchived: url.searchParams.get("includeArchived") === "true",
+    status: status ?? undefined,
+    statuses,
+    kind: url.searchParams.get("kind") ?? undefined,
+    roomId: url.searchParams.get("roomId") ?? undefined,
+    worldId: url.searchParams.get("worldId") ?? undefined,
+    ownerUserId: url.searchParams.get("ownerUserId") ?? undefined,
+    scenarioId: url.searchParams.get("scenarioId") ?? undefined,
+    batchId: url.searchParams.get("batchId") ?? undefined,
+    createdAfter: url.searchParams.get("createdAfter") ?? undefined,
+    createdBefore: url.searchParams.get("createdBefore") ?? undefined,
+    updatedAfter: url.searchParams.get("updatedAfter") ?? undefined,
+    updatedBefore: url.searchParams.get("updatedBefore") ?? undefined,
+    latestActivityAfter:
+      latestActivityAfterRaw && Number.isFinite(Number(latestActivityAfterRaw))
+        ? Number(latestActivityAfterRaw)
+        : undefined,
+    latestActivityBefore:
+      latestActivityBeforeRaw &&
+      Number.isFinite(Number(latestActivityBeforeRaw))
+        ? Number(latestActivityBeforeRaw)
+        : undefined,
+    hasActiveSession:
+      hasActiveSessionRaw === null
+        ? undefined
+        : hasActiveSessionRaw === "true",
+    search: url.searchParams.get("search") ?? undefined,
+    limit:
+      limitRaw && Number.isFinite(Number(limitRaw)) ? Number(limitRaw) : undefined,
+  };
+}
+
+const URL_RE = /\bhttps?:\/\/[^\s<>"'`]+/gi;
+
+function detectShareCapabilities(): string[] {
+  const config = readJsonFile(resolveMiladyConfigPath());
+  if (!config || typeof config !== "object" || Array.isArray(config)) {
+    return [];
+  }
+  const gateway =
+    typeof (config as Record<string, unknown>).gateway === "object" &&
+    (config as Record<string, unknown>).gateway
+      ? ((config as Record<string, unknown>).gateway as Record<string, unknown>)
+      : null;
+  const gatewayTailscale =
+    gateway && typeof gateway.tailscale === "object" && gateway.tailscale
+      ? (gateway.tailscale as Record<string, unknown>)
+      : null;
+  const gatewayRemote =
+    gateway && typeof gateway.remote === "object" && gateway.remote
+      ? (gateway.remote as Record<string, unknown>)
+      : null;
+
+  const capabilities: string[] = [];
+  const tailscaleMode =
+    typeof gatewayTailscale?.mode === "string" ? gatewayTailscale.mode : null;
+  if (tailscaleMode && tailscaleMode !== "off") {
+    capabilities.push(`tailscale:${tailscaleMode}`);
+  }
+  if (typeof gatewayRemote?.url === "string" && gatewayRemote.url.trim()) {
+    capabilities.push("gateway-remote-url");
+  }
+  if (
+    typeof gatewayRemote?.sshTarget === "string" &&
+    gatewayRemote.sshTarget.trim()
+  ) {
+    capabilities.push("gateway-remote-ssh");
+  }
+  return capabilities;
+}
+
+function isRemoteAccessibleUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value);
+    const host = parsed.hostname.trim().toLowerCase();
+    return !["localhost", "127.0.0.1", "0.0.0.0"].includes(host);
+  } catch {
+    return false;
+  }
+}
+
+function discoverTaskShareOptions(
+  thread: TaskThreadDetail,
+): {
+  threadId: string;
+  title: string;
+  shareCapabilities: string[];
+  preferredTarget: Record<string, unknown> | null;
+  targets: Array<Record<string, unknown>>;
+} {
+  const targets: Array<Record<string, unknown>> = [];
+  const seen = new Set<string>();
+
+  const pushTarget = (target: Record<string, unknown>) => {
+    const type =
+      typeof target.type === "string" ? target.type : "unknown";
+    const value =
+      typeof target.value === "string" ? target.value : JSON.stringify(target.value);
+    const key = `${type}:${value}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    targets.push(target);
+  };
+
+  for (const artifact of thread.artifacts ?? []) {
+    if (artifact.uri?.trim()) {
+      pushTarget({
+        type: "artifact_uri",
+        label: artifact.title,
+        value: artifact.uri,
+        source: `artifact:${artifact.artifactType ?? "unknown"}`,
+        remoteAccessible: isRemoteAccessibleUrl(artifact.uri),
+      });
+    }
+    if (artifact.path?.trim()) {
+      pushTarget({
+        type: "artifact_path",
+        label: artifact.title,
+        value: artifact.path,
+        source: `artifact:${artifact.artifactType ?? "unknown"}`,
+        remoteAccessible: false,
+      });
+    }
+  }
+
+  const recentTranscript = (thread.transcripts ?? [])
+    .slice(-100)
+    .map((entry) => entry.content)
+    .join("\n");
+  const transcriptUrls = recentTranscript.match(URL_RE) ?? [];
+  for (const value of transcriptUrls) {
+    pushTarget({
+      type: "preview_url",
+      label: "Discovered URL",
+      value,
+      source: "transcript:url",
+      remoteAccessible: isRemoteAccessibleUrl(value),
+    });
+  }
+
+  if (thread.latestWorkdir?.trim()) {
+    pushTarget({
+      type: "workspace",
+      label: "Workspace",
+      value: thread.latestWorkdir,
+      source: "thread:latest-workdir",
+      remoteAccessible: false,
+    });
+  }
+
+  const preferredTarget =
+    targets.find((target) => target.remoteAccessible === true) ??
+    targets.find((target) => target.type === "preview_url") ??
+    targets[0] ??
+    null;
+
+  return {
+    threadId: thread.id,
+    title: thread.title,
+    shareCapabilities: detectShareCapabilities(),
+    preferredTarget,
+    targets,
+  };
+}
+
 async function handleSettingsRoute(
   runtime: IAgentRuntime,
   res: http.ServerResponse,
@@ -1298,6 +1626,12 @@ async function handleCoordinatorStatusRoute(
   const ptyService = getPtyService(runtime);
   const frameworkState = await getFrameworkState(runtime, ptyService);
   const allTasks = uniqueTaskList(coordinator.getAllTaskContexts?.() ?? []);
+  const persistedThreads = coordinator.listTaskThreads
+    ? await coordinator.listTaskThreads({
+        includeArchived: false,
+        limit: 50,
+      })
+    : [];
   const activeTasks = allTasks.filter(
     (task) =>
       task.status !== "completed" &&
@@ -1313,6 +1647,7 @@ async function handleCoordinatorStatusRoute(
     supervisionLevel: coordinator.getSupervisionLevel?.() ?? "autonomous",
     taskCount: activeTasks.length,
     tasks: activeTasks.map((task) => ({
+      threadId: task.threadId,
       sessionId: task.sessionId,
       agentType: task.agentType,
       label: task.label,
@@ -1325,6 +1660,7 @@ async function handleCoordinatorStatusRoute(
       lastActivityAt: task.lastActivityAt,
     })),
     recentTasks: recentTasks.map((task) => ({
+      threadId: task.threadId,
       sessionId: task.sessionId,
       agentType: task.agentType,
       label: task.label,
@@ -1333,6 +1669,29 @@ async function handleCoordinatorStatusRoute(
       completionSummary: task.completionSummary,
       registeredAt: task.registeredAt,
       lastActivityAt: task.lastActivityAt,
+    })),
+    taskThreadCount: persistedThreads.length,
+    taskThreads: persistedThreads.map((thread) => ({
+      id: thread.id,
+      title: thread.title,
+      kind: thread.kind,
+      status: thread.status,
+      scenarioId: thread.scenarioId,
+      batchId: thread.batchId,
+      originalRequest: thread.originalRequest,
+      summary: thread.summary,
+      sessionCount: thread.sessionCount,
+      activeSessionCount: thread.activeSessionCount,
+      latestSessionId: thread.latestSessionId,
+      latestSessionLabel: thread.latestSessionLabel,
+      latestWorkdir: thread.latestWorkdir,
+      latestRepo: thread.latestRepo,
+      latestActivityAt: thread.latestActivityAt,
+      decisionCount: thread.decisionCount,
+      createdAt: thread.createdAt,
+      updatedAt: thread.updatedAt,
+      closedAt: thread.closedAt,
+      archivedAt: thread.archivedAt,
     })),
     pendingConfirmations: coordinator.getPendingConfirmations?.().length ?? 0,
     preferredAgentType: frameworkState.preferred.id,
@@ -1408,6 +1767,146 @@ export function createCodingAgentRouteHandler(
       pathname === "/api/coding-agents/coordinator/status"
     ) {
       return handleCoordinatorStatusRoute(runtime, res);
+    }
+    if (method === "GET" && pathname === "/api/coding-agents/coordinator/threads") {
+      const resolvedCoordinator = resolveCoordinator(runtime);
+      if (!resolvedCoordinator?.listTaskThreads) return false;
+      sendJson(
+        res,
+        await resolvedCoordinator.listTaskThreads(parseThreadListOptions(req.url)),
+      );
+      return true;
+    }
+    if (
+      method === "GET" &&
+      pathname === "/api/coding-agents/coordinator/threads/count"
+    ) {
+      const resolvedCoordinator = resolveCoordinator(runtime);
+      if (!resolvedCoordinator?.countTaskThreads) return false;
+      const options = parseThreadListOptions(req.url);
+      const { limit: _limit, ...countOptions } = options;
+      sendJson(res, {
+        total: await resolvedCoordinator.countTaskThreads(countOptions),
+      });
+      return true;
+    }
+    const threadMatch = pathname.match(
+      /^\/api\/coding-agents\/coordinator\/threads\/([^/]+)$/,
+    );
+    if (method === "GET" && threadMatch) {
+      const resolvedCoordinator = resolveCoordinator(runtime);
+      if (!resolvedCoordinator?.getTaskThread) return false;
+      const thread = await resolvedCoordinator.getTaskThread(threadMatch[1]);
+      if (!thread) {
+        sendError(res, "Task thread not found", 404);
+        return true;
+      }
+      sendJson(res, thread);
+      return true;
+    }
+    const shareMatch = pathname.match(
+      /^\/api\/coding-agents\/coordinator\/threads\/([^/]+)\/share$/,
+    );
+    if (method === "GET" && shareMatch) {
+      const resolvedCoordinator = resolveCoordinator(runtime);
+      if (!resolvedCoordinator?.getTaskThread) return false;
+      const thread = await resolvedCoordinator.getTaskThread(shareMatch[1]);
+      if (!thread) {
+        sendError(res, "Task thread not found", 404);
+        return true;
+      }
+      sendJson(res, discoverTaskShareOptions(thread));
+      return true;
+    }
+    const archiveMatch = pathname.match(
+      /^\/api\/coding-agents\/coordinator\/threads\/([^/]+)\/archive$/,
+    );
+    if (method === "POST" && archiveMatch) {
+      const resolvedCoordinator = resolveCoordinator(runtime);
+      if (!resolvedCoordinator?.archiveTaskThread) return false;
+      await resolvedCoordinator.archiveTaskThread(archiveMatch[1]);
+      sendJson(res, {
+        success: true,
+        threadId: archiveMatch[1],
+        status: "archived",
+      });
+      return true;
+    }
+    const reopenMatch = pathname.match(
+      /^\/api\/coding-agents\/coordinator\/threads\/([^/]+)\/reopen$/,
+    );
+    if (method === "POST" && reopenMatch) {
+      const resolvedCoordinator = resolveCoordinator(runtime);
+      if (!resolvedCoordinator?.reopenTaskThread) return false;
+      await resolvedCoordinator.reopenTaskThread(reopenMatch[1]);
+      sendJson(res, {
+        success: true,
+        threadId: reopenMatch[1],
+        status: "open",
+      });
+      return true;
+    }
+    const controlMatch = pathname.match(
+      /^\/api\/coding-agents\/coordinator\/threads\/([^/]+)\/control$/,
+    );
+    if (method === "POST" && controlMatch) {
+      const resolvedCoordinator = resolveCoordinator(runtime);
+      if (!resolvedCoordinator) return false;
+      const body = await parseJsonBody(req);
+      const action = typeof body.action === "string" ? body.action.trim() : "";
+      const note = typeof body.note === "string" ? body.note : undefined;
+      const instruction =
+        typeof body.instruction === "string" ? body.instruction : undefined;
+      const agentType =
+        typeof body.agentType === "string" ? body.agentType : undefined;
+
+      if (action === "pause" && resolvedCoordinator.pauseTaskThread) {
+        sendJson(res, {
+          success: true,
+          action,
+          ...(await resolvedCoordinator.pauseTaskThread(controlMatch[1], note)),
+        });
+        return true;
+      }
+      if (action === "stop" && resolvedCoordinator.stopTaskThread) {
+        sendJson(res, {
+          success: true,
+          action,
+          ...(await resolvedCoordinator.stopTaskThread(controlMatch[1], note)),
+        });
+        return true;
+      }
+      if (action === "resume" && resolvedCoordinator.resumeTaskThread) {
+        sendJson(res, {
+          success: true,
+          action,
+          ...(await resolvedCoordinator.resumeTaskThread(
+            controlMatch[1],
+            instruction,
+            agentType,
+          )),
+        });
+        return true;
+      }
+      if (action === "continue" && resolvedCoordinator.continueTaskThread) {
+        sendJson(res, {
+          success: true,
+          action,
+          ...(await resolvedCoordinator.continueTaskThread(
+            controlMatch[1],
+            instruction ?? `Continue task thread ${controlMatch[1]}.`,
+            agentType,
+          )),
+        });
+        return true;
+      }
+
+      sendError(
+        res,
+        'Invalid control action. Must be "pause", "stop", "resume", or "continue".',
+        400,
+      );
+      return true;
     }
     return baseHandler ? baseHandler(req, res, pathname, method) : false;
   };

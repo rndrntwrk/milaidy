@@ -242,4 +242,49 @@ describe("collectConnectorEnvVars", () => {
       TELEGRAM_ACCOUNT_SYSTEM_VERSION: "macOS 15",
     });
   });
+
+  it("maps WhatsApp connector auth and policy settings to runtime env keys", () => {
+    const result = collectConnectorEnvVars({
+      connectors: {
+        whatsapp: {
+          authDir: "./auth/whatsapp",
+          dmPolicy: "pairing",
+          groupPolicy: "open",
+          allowFrom: ["+14155550100", "+14155550101"],
+          groupAllowFrom: ["+14155550102"],
+        },
+      },
+    } as ElizaConfig);
+
+    expect(result).toEqual({
+      WHATSAPP_AUTH_DIR: "./auth/whatsapp",
+      WHATSAPP_DM_POLICY: "pairing",
+      WHATSAPP_GROUP_POLICY: "open",
+      WHATSAPP_ALLOW_FROM: "+14155550100,+14155550101",
+      WHATSAPP_GROUP_ALLOW_FROM: "+14155550102",
+    });
+  });
+
+  it("maps the first enabled WhatsApp account authDir for paired-runtime startup", () => {
+    const result = collectConnectorEnvVars({
+      connectors: {
+        whatsapp: {
+          accounts: {
+            disabled: {
+              enabled: false,
+              authDir: "./auth/disabled",
+            },
+            primary: {
+              enabled: true,
+              authDir: "./auth/primary",
+            },
+          },
+        },
+      },
+    } as ElizaConfig);
+
+    expect(result).toEqual({
+      WHATSAPP_AUTH_DIR: "./auth/primary",
+    });
+  });
 });

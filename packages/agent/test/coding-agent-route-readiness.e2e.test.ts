@@ -49,11 +49,15 @@ describe("Coding agent route readiness", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(response.data).toEqual({
+    expect(response.data).toMatchObject({
       supervisionLevel: "autonomous",
       taskCount: 0,
       tasks: [],
+      recentTasks: [],
+      taskThreadCount: 0,
+      taskThreads: [],
       pendingConfirmations: 0,
+      frameworks: [],
     });
   });
 

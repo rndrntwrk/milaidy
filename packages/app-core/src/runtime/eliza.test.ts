@@ -940,6 +940,11 @@ describe("applyConnectorSecretsToEnv", () => {
     "SIGNAL_ACCOUNT_NUMBER",
     "SIGNAL_HTTP_URL",
     "SIGNAL_CLI_PATH",
+    "WHATSAPP_AUTH_DIR",
+    "WHATSAPP_DM_POLICY",
+    "WHATSAPP_GROUP_POLICY",
+    "WHATSAPP_ALLOW_FROM",
+    "WHATSAPP_GROUP_ALLOW_FROM",
     "MSTEAMS_APP_ID",
     "MSTEAMS_APP_PASSWORD",
     "MATTERMOST_BOT_TOKEN",
@@ -1033,6 +1038,26 @@ describe("applyConnectorSecretsToEnv", () => {
     expect(process.env.SIGNAL_ACCOUNT_NUMBER).toBe("+14155551234");
     expect(process.env.SIGNAL_HTTP_URL).toBe("http://localhost:8080");
     expect(process.env.SIGNAL_CLI_PATH).toBe("/usr/bin/signal-cli");
+  });
+
+  it("copies WhatsApp auth and policy settings from config to env", () => {
+    const config = {
+      connectors: {
+        whatsapp: {
+          authDir: "/tmp/whatsapp-auth",
+          dmPolicy: "pairing",
+          groupPolicy: "open",
+          allowFrom: ["+14155550100"],
+          groupAllowFrom: ["+14155550101"],
+        },
+      },
+    } as ElizaConfig;
+    applyConnectorSecretsToEnv(config);
+    expect(process.env.WHATSAPP_AUTH_DIR).toBe("/tmp/whatsapp-auth");
+    expect(process.env.WHATSAPP_DM_POLICY).toBe("pairing");
+    expect(process.env.WHATSAPP_GROUP_POLICY).toBe("open");
+    expect(process.env.WHATSAPP_ALLOW_FROM).toBe("+14155550100");
+    expect(process.env.WHATSAPP_GROUP_ALLOW_FROM).toBe("+14155550101");
   });
 });
 
@@ -1407,7 +1432,13 @@ describe("applyX402ConfigToEnv", () => {
 // ---------------------------------------------------------------------------
 
 describe("applyDatabaseConfigToEnv", () => {
-  const envKeys = ["POSTGRES_URL", "PGLITE_DATA_DIR", "ELIZA_PROFILE"];
+  const envKeys = [
+    "POSTGRES_URL",
+    "PGLITE_DATA_DIR",
+    "ELIZA_PROFILE",
+    "ELIZA_STATE_DIR",
+    "MILADY_STATE_DIR",
+  ];
   const snap = envSnapshot(envKeys);
 
   beforeEach(() => {
@@ -1420,10 +1451,11 @@ describe("applyDatabaseConfigToEnv", () => {
   it("defaults PGLITE_DATA_DIR to the agent workspace when database config is missing", () => {
     applyDatabaseConfigToEnv({} as ElizaConfig);
     expect(process.env.POSTGRES_URL).toBeUndefined();
-    // The state dir name depends on the @miladyai/agent build
-    // (either .eliza in workspace or .eliza in the published npm package).
+    // The state dir name depends on the runtime namespace. In this repo that is
+    // typically Milady's default state dir, but upstream elizaOS builds still
+    // resolve under ~/.eliza.
     expect(process.env.PGLITE_DATA_DIR).toMatch(
-      /\.(eliza|eliza)[/\\]workspace[/\\]\.eliza[/\\]\.elizadb$/,
+      /\.(milady|eliza)[/\\]workspace[/\\]\.eliza[/\\]\.elizadb$/,
     );
   });
 
@@ -1439,6 +1471,16 @@ describe("applyDatabaseConfigToEnv", () => {
     applyDatabaseConfigToEnv(config);
     expect(process.env.PGLITE_DATA_DIR).toBe(
       path.resolve("/tmp/eliza-workspace", ".eliza", ".elizadb"),
+    );
+  });
+
+  it("derives the default PGLite directory from ELIZA_STATE_DIR", () => {
+    process.env.ELIZA_STATE_DIR = "/tmp/isolation-state";
+
+    applyDatabaseConfigToEnv({} as ElizaConfig);
+
+    expect(process.env.PGLITE_DATA_DIR).toBe(
+      path.resolve("/tmp/isolation-state", "workspace", ".eliza", ".elizadb"),
     );
   });
 

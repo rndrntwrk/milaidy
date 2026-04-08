@@ -98,6 +98,60 @@ The inventory covers:
 6. Build a live runner that can target app chat and connector-mode ingress.
 7. Export a run bundle that includes trajectories, task-thread state, artifacts, and changed files.
 
+## Runbook
+
+Preflight:
+
+```bash
+bun run test:coordinator:preflight
+```
+
+Live smoke batch:
+
+```bash
+bun run test:coordinator:live -- --profile smoke
+```
+
+Run a focused scenario against selected channels:
+
+```bash
+bun run test:coordinator:live -- --scenario preview-birthday-site --channels app_chat,discord
+```
+
+The live runner writes output under:
+
+- `.tmp/coordinator-evals/<batchId>/`
+
+Each run directory includes:
+
+- `scenario.json`
+- `responses.json`
+- `conversation.json`
+- `threads.json`
+- `artifacts.json`
+- `shares.json`
+- `changed-files.json`
+- `trajectories.json`
+- `trajectory-export.zip`
+- `db-assertions.json`
+- `checks.json`
+- `verdict.json`
+
+The batch root includes:
+
+- `preflight.json`
+- `manifest.json`
+
+## Database Assertions
+
+The runner confirms durable evidence with explicit DB-facing assertions:
+
+- task-thread count route matches filtered thread listing
+- threads are grouped by `scenarioId` and `batchId`
+- trajectories are grouped by `scenarioId` and `batchId`
+- transcript capture exists for task-execution scenarios
+- artifacts, share targets, or changed files exist when the scenario requires them
+
 ## Risks
 
 - Live provider and connector tests are quota-sensitive.

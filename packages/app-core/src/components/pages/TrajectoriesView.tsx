@@ -55,6 +55,13 @@ const SOURCE_COLORS: Record<string, { bg: string; fg: string }> = {
   orchestrator: { bg: "rgba(168, 85, 247, 0.15)", fg: "rgb(168, 85, 247)" },
 };
 
+function formatTrajectorySourceLabel(trajectory: TrajectoryRecord): string {
+  const parts = [trajectory.source];
+  if (trajectory.scenarioId) parts.push(trajectory.scenarioId);
+  if (trajectory.batchId) parts.push(trajectory.batchId);
+  return parts.join(" • ");
+}
+
 interface TrajectoriesViewProps {
   contentHeader?: ReactNode;
   selectedTrajectoryId?: string | null;
@@ -444,7 +451,7 @@ export function TrajectoriesView({
                       trajectory.createdAt,
                       "smart",
                     )}
-                    sourceLabel={trajectory.source}
+                    sourceLabel={formatTrajectorySourceLabel(trajectory)}
                     sourceColor={sourceColor.fg}
                     statusLabel={trajectory.status}
                     statusColor={statusColor.fg}

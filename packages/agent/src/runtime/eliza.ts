@@ -1397,6 +1397,49 @@ export function applyConnectorSecretsToEnv(config: ElizaConfig): void {
         process.env[envKey] = value;
       }
     }
+
+    if (channelName === "whatsapp") {
+      const allowFrom = configObj.allowFrom;
+      if (Array.isArray(allowFrom) && allowFrom.length > 0) {
+        const normalized = allowFrom
+          .map((value) => String(value).trim())
+          .filter(Boolean);
+        if (normalized.length > 0) {
+          process.env.WHATSAPP_ALLOW_FROM = normalized.join(",");
+        }
+      }
+
+      const groupAllowFrom = configObj.groupAllowFrom;
+      if (Array.isArray(groupAllowFrom) && groupAllowFrom.length > 0) {
+        const normalized = groupAllowFrom
+          .map((value) => String(value).trim())
+          .filter(Boolean);
+        if (normalized.length > 0) {
+          process.env.WHATSAPP_GROUP_ALLOW_FROM = normalized.join(",");
+        }
+      }
+
+      const accounts = configObj.accounts;
+      if (accounts && typeof accounts === "object" && !Array.isArray(accounts)) {
+        const firstEnabledAccount = Object.values(
+          accounts as Record<string, unknown>,
+        ).find((account) => {
+          if (!account || typeof account !== "object" || Array.isArray(account)) {
+            return false;
+          }
+          const candidate = account as Record<string, unknown>;
+          return candidate.enabled !== false && typeof candidate.authDir === "string";
+        }) as Record<string, unknown> | undefined;
+
+        if (
+          firstEnabledAccount &&
+          typeof firstEnabledAccount.authDir === "string" &&
+          firstEnabledAccount.authDir.trim()
+        ) {
+          process.env.WHATSAPP_AUTH_DIR = firstEnabledAccount.authDir.trim();
+        }
+      }
+    }
   }
 }
 
@@ -2525,6 +2568,16 @@ export function buildCharacterFromConfig(config: ElizaConfig): Character {
     "DISCORD_APPLICATION_ID",
     "DISCORD_BOT_TOKEN",
     "TELEGRAM_BOT_TOKEN",
+    "WHATSAPP_ACCESS_TOKEN",
+    "WHATSAPP_PHONE_NUMBER_ID",
+    "WHATSAPP_AUTH_DIR",
+    "WHATSAPP_SESSION_PATH",
+    "WHATSAPP_WEBHOOK_VERIFY_TOKEN",
+    "WHATSAPP_API_VERSION",
+    "WHATSAPP_DM_POLICY",
+    "WHATSAPP_GROUP_POLICY",
+    "WHATSAPP_ALLOW_FROM",
+    "WHATSAPP_GROUP_ALLOW_FROM",
     "TELEGRAM_ACCOUNT_PHONE",
     "TELEGRAM_ACCOUNT_APP_ID",
     "TELEGRAM_ACCOUNT_APP_HASH",

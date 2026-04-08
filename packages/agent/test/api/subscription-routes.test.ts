@@ -87,4 +87,154 @@ describe("handleSubscriptionRoutes", () => {
     expect(handled).toBe(true);
     expect(getStatus()).toBe(500);
   });
+
+  test("POST /api/subscription/anthropic/setup-token trims and persists the token", async () => {
+    const { res, getStatus, getJson } = createMockHttpResponse();
+    const saveConfig = vi.fn();
+    const ctx = buildCtx({
+      method: "POST",
+      pathname: "/api/subscription/anthropic/setup-token",
+      res,
+      saveConfig,
+      readJsonBody: vi.fn(async () => ({ token: "  sk-ant-oat01-test-token  " })),
+      state: {
+        config: {
+          env: {
+            EXISTING_KEY: "existing-value",
+          },
+        },
+      },
+    });
+
+    const handled = await handleSubscriptionRoutes(ctx);
+
+    expect(handled).toBe(true);
+    expect(getStatus()).toBe(200);
+    expect(getJson()).toEqual({ success: true });
+    expect(
+      (ctx.state.config.env as Record<string, unknown>).__anthropicSubscriptionToken,
+    ).toBe("sk-ant-oat01-test-token");
+    expect(
+      (ctx.state.config.env as Record<string, unknown>).EXISTING_KEY,
+    ).toBe("existing-value");
+    expect(saveConfig).toHaveBeenCalledWith(ctx.state.config);
+  });
+
+  test("DELETE /api/subscription/anthropic-subscription clears saved token and invalid runtime route only", async () => {
+    const { res, getStatus, getJson } = createMockHttpResponse();
+    const deleteCredentials = vi.fn();
+    const saveConfig = vi.fn();
+    const ctx = buildCtx({
+      method: "DELETE",
+      pathname: "/api/subscription/anthropic-subscription",
+      res,
+      saveConfig,
+      state: {
+        config: {
+          env: {
+            __anthropicSubscriptionToken: "sk-ant-oat01-delete-me",
+          },
+          agents: {
+            defaults: {
+              subscriptionProvider: "anthropic-subscription",
+            },
+          },
+          serviceRouting: {
+            llmText: {
+              backend: "anthropic-subscription",
+              transport: "direct",
+            },
+            rpc: {
+              backend: "elizacloud",
+              transport: "cloud-proxy",
+              accountId: "elizacloud",
+            },
+          },
+        },
+      },
+      loadSubscriptionAuth: vi.fn(async () => ({
+        getSubscriptionStatus: vi.fn(),
+        startAnthropicLogin: vi.fn(),
+        startCodexLogin: vi.fn(),
+        saveCredentials: vi.fn(),
+        applySubscriptionCredentials: vi.fn(),
+        deleteCredentials,
+      })),
+    });
+
+    const handled = await handleSubscriptionRoutes(ctx);
+
+    expect(handled).toBe(true);
+    expect(getStatus()).toBe(200);
+    expect(getJson()).toEqual({ success: true });
+    expect(deleteCredentials).toHaveBeenCalledWith("anthropic-subscription");
+    expect(
+      (ctx.state.config.env as Record<string, unknown>).__anthropicSubscriptionToken,
+    ).toBeUndefined();
+    expect(ctx.state.config.agents?.defaults?.subscriptionProvider).toBeUndefined();
+    expect(ctx.state.config.serviceRouting).toEqual({
+      rpc: {
+        backend: "elizacloud",
+        transport: "cloud-proxy",
+        accountId: "elizacloud",
+      },
+    });
+    expect(saveConfig).toHaveBeenCalledWith(ctx.state.config);
+  });
+
+  test("DELETE /api/subscription/openai-codex clears only the matching runtime route", async () => {
+    const { res, getStatus, getJson } = createMockHttpResponse();
+    const deleteCredentials = vi.fn();
+    const saveConfig = vi.fn();
+    const ctx = buildCtx({
+      method: "DELETE",
+      pathname: "/api/subscription/openai-codex",
+      res,
+      saveConfig,
+      state: {
+        config: {
+          agents: {
+            defaults: {
+              subscriptionProvider: "openai-codex",
+            },
+          },
+          serviceRouting: {
+            llmText: {
+              backend: "openai-subscription",
+              transport: "direct",
+            },
+            embeddings: {
+              backend: "elizacloud",
+              transport: "cloud-proxy",
+              accountId: "elizacloud",
+            },
+          },
+        },
+      },
+      loadSubscriptionAuth: vi.fn(async () => ({
+        getSubscriptionStatus: vi.fn(),
+        startAnthropicLogin: vi.fn(),
+        startCodexLogin: vi.fn(),
+        saveCredentials: vi.fn(),
+        applySubscriptionCredentials: vi.fn(),
+        deleteCredentials,
+      })),
+    });
+
+    const handled = await handleSubscriptionRoutes(ctx);
+
+    expect(handled).toBe(true);
+    expect(getStatus()).toBe(200);
+    expect(getJson()).toEqual({ success: true });
+    expect(deleteCredentials).toHaveBeenCalledWith("openai-codex");
+    expect(ctx.state.config.agents?.defaults?.subscriptionProvider).toBeUndefined();
+    expect(ctx.state.config.serviceRouting).toEqual({
+      embeddings: {
+        backend: "elizacloud",
+        transport: "cloud-proxy",
+        accountId: "elizacloud",
+      },
+    });
+    expect(saveConfig).toHaveBeenCalledWith(ctx.state.config);
+  });
 });

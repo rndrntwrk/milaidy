@@ -1,3 +1,4 @@
+import "../utils/namespace-defaults.js";
 import fs from "node:fs";
 import http from "node:http";
 import { createRequire } from "node:module";

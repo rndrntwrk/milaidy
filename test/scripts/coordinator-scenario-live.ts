@@ -43,22 +43,34 @@ try {
 
   const passed = result.runs.filter((run) => run.passed).length;
   const failed = result.runs.length - passed;
+  const coverageGaps = result.skippedChannels.length;
   console.log(
     JSON.stringify(
       {
         batchId: result.batchId,
         baseUrl: result.baseUrl,
         outputRoot: result.outputRoot,
+        requestedChannels: result.requestedChannels,
+        usableChannels: result.usableChannels,
+        skippedChannels: result.skippedChannels,
+        runnableFrameworks: result.runnableFrameworks,
+        preflightFailures: result.preflightFailures,
+        preflightWarnings: result.preflightWarnings,
         runCount: result.runs.length,
         passed,
         failed,
+        coverageGaps,
       },
       null,
       2,
     ),
   );
 
-  process.exit(failed === 0 ? 0 : 1);
+  process.exit(
+    failed === 0 && result.preflightHardBlockers.length === 0 && coverageGaps === 0
+      ? 0
+      : 1,
+  );
 } catch (error) {
   console.error("[coordinator-scenario-live] FAIL");
   console.error(error);

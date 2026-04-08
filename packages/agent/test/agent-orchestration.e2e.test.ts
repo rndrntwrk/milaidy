@@ -346,7 +346,11 @@ describe("Task Lifecycle via API", () => {
     expect(status).toBe(200);
     expect(data.supervisionLevel).toBeTypeOf("string");
     expect(Array.isArray(data.tasks)).toBe(true);
+    expect(Array.isArray(data.recentTasks)).toBe(true);
+    expect(typeof data.taskThreadCount).toBe("number");
+    expect(Array.isArray(data.taskThreads)).toBe(true);
     expect(typeof data.pendingConfirmations).toBe("number");
+    expect(Array.isArray(data.frameworks)).toBe(true);
   });
 
   it("GET /api/coding-agents/preflight returns an array after runtime start", async () => {

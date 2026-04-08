@@ -82,6 +82,12 @@ export const CONNECTOR_ENV_MAP: Readonly<
     httpUrl: "SIGNAL_HTTP_URL",
     cliPath: "SIGNAL_CLI_PATH",
   },
+  whatsapp: {
+    authDir: "WHATSAPP_AUTH_DIR",
+    sessionPath: "WHATSAPP_AUTH_DIR",
+    dmPolicy: "WHATSAPP_DM_POLICY",
+    groupPolicy: "WHATSAPP_GROUP_POLICY",
+  },
   msteams: {
     appId: "MSTEAMS_APP_ID",
     appPassword: "MSTEAMS_APP_PASSWORD",
@@ -190,6 +196,49 @@ export function collectConnectorEnvVars(
         continue;
       }
       entries[envKey] = value;
+    }
+
+    if (connectorName === "whatsapp") {
+      const allowFrom = configObj.allowFrom;
+      if (Array.isArray(allowFrom) && allowFrom.length > 0) {
+        const normalized = allowFrom
+          .map((value) => String(value).trim())
+          .filter(Boolean);
+        if (normalized.length > 0) {
+          entries.WHATSAPP_ALLOW_FROM = normalized.join(",");
+        }
+      }
+
+      const groupAllowFrom = configObj.groupAllowFrom;
+      if (Array.isArray(groupAllowFrom) && groupAllowFrom.length > 0) {
+        const normalized = groupAllowFrom
+          .map((value) => String(value).trim())
+          .filter(Boolean);
+        if (normalized.length > 0) {
+          entries.WHATSAPP_GROUP_ALLOW_FROM = normalized.join(",");
+        }
+      }
+
+      const accounts = configObj.accounts;
+      if (accounts && typeof accounts === "object" && !Array.isArray(accounts)) {
+        const firstEnabledAccount = Object.values(
+          accounts as Record<string, unknown>,
+        ).find((account) => {
+          if (!account || typeof account !== "object" || Array.isArray(account)) {
+            return false;
+          }
+          const candidate = account as Record<string, unknown>;
+          return candidate.enabled !== false && typeof candidate.authDir === "string";
+        }) as Record<string, unknown> | undefined;
+
+        if (
+          firstEnabledAccount &&
+          typeof firstEnabledAccount.authDir === "string" &&
+          firstEnabledAccount.authDir.trim()
+        ) {
+          entries.WHATSAPP_AUTH_DIR = firstEnabledAccount.authDir.trim();
+        }
+      }
     }
   }
 

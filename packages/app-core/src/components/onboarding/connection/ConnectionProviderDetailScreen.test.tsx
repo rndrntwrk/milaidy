@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
@@ -54,6 +60,7 @@ function t(key: string): string {
     "onboarding.back": "Back",
     "onboarding.addAnotherProvider": "Add another provider",
     "onboarding.connected": "Connected",
+    "onboarding.configureAiLater": "Set up later",
     "onboarding.continueLimitedSetup": "Continue with limited setup",
     "onboarding.confirm": "Confirm",
     "onboarding.connectAccount": "Connect account",
@@ -240,7 +247,57 @@ describe("ConnectionProviderDetailScreen", () => {
     expect(selectedModel.getAttribute("aria-checked")).toBe("true");
   });
 
-  it("offers add-another-provider and limited-setup actions after Claude subscription connects", async () => {
+  it("trims Claude tokens and lets the user continue with limited setup after saving", async () => {
+    const dispatch = vi.fn();
+    const handleOnboardingNext = vi.fn(async () => {});
+    mockUseApp.mockReturnValue(
+      createState({
+        onboardingProvider: "anthropic-subscription",
+        onboardingOptions: {
+          providers: [
+            {
+              id: "anthropic-subscription",
+              name: "Claude Subscription",
+              description: "Task agents only",
+            },
+          ],
+          openrouterModels: [],
+          piAiModels: [],
+          piAiDefaultModel: "",
+        },
+        onboardingSubscriptionTab: "token",
+        onboardingApiKey: "  sk-ant-oat01-test-token  ",
+        handleOnboardingNext,
+      }),
+    );
+
+    render(<ConnectionProviderDetailScreen dispatch={dispatch} />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Save Claude subscription" }),
+    );
+
+    expect(mockClient.submitAnthropicSetupToken).toHaveBeenCalledWith(
+      "sk-ant-oat01-test-token",
+    );
+    expect(
+      await screen.findByRole("button", { name: "Continue with limited setup" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Add another provider" }),
+    ).toBeTruthy();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Continue with limited setup" }),
+    );
+
+    expect(handleOnboardingNext).toHaveBeenCalledWith({
+      omitRuntimeProvider: true,
+    });
+    expect(dispatch).not.toHaveBeenCalledWith({ type: "clearProvider" });
+  });
+
+  it("lets the user go back to the provider picker after Claude subscription connects", async () => {
     const dispatch = vi.fn();
     mockUseApp.mockReturnValue(
       createState({
@@ -268,17 +325,86 @@ describe("ConnectionProviderDetailScreen", () => {
       screen.getByRole("button", { name: "Save Claude subscription" }),
     );
 
-    expect(mockClient.submitAnthropicSetupToken).toHaveBeenCalledWith(
-      "sk-ant-oat01-test-token",
-    );
-    expect(
-      await screen.findByRole("button", { name: "Add another provider" }),
-    ).toBeTruthy();
+    await screen.findByRole("button", { name: "Add another provider" });
     fireEvent.click(screen.getByRole("button", { name: "Add another provider" }));
 
-    expect(
-      screen.getByRole("button", { name: "Continue with limited setup" }),
-    ).toBeTruthy();
     expect(dispatch).toHaveBeenCalledWith({ type: "clearProvider" });
+  });
+
+  it("shows Claude save errors and keeps limited-setup actions hidden until save succeeds", async () => {
+    mockClient.submitAnthropicSetupToken.mockRejectedValueOnce(
+      new Error("save failed"),
+    );
+    mockUseApp.mockReturnValue(
+      createState({
+        onboardingProvider: "anthropic-subscription",
+        onboardingOptions: {
+          providers: [
+            {
+              id: "anthropic-subscription",
+              name: "Claude Subscription",
+              description: "Task agents only",
+            },
+          ],
+          openrouterModels: [],
+          piAiModels: [],
+          piAiDefaultModel: "",
+        },
+        onboardingSubscriptionTab: "token",
+        onboardingApiKey: "sk-ant-oat01-test-token",
+      }),
+    );
+
+    render(<ConnectionProviderDetailScreen dispatch={vi.fn()} />);
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "Save Claude subscription" }),
+    );
+
+    expect(
+      await screen.findByText("save failed"),
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole("button", { name: "Continue with limited setup" }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Add another provider" }),
+    ).toBeNull();
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Save Claude subscription" }),
+      ).toBeTruthy();
+    });
+  });
+
+  it("lets the user defer Claude setup from the token tab", async () => {
+    const handleOnboardingNext = vi.fn(async () => {});
+    mockUseApp.mockReturnValue(
+      createState({
+        onboardingProvider: "anthropic-subscription",
+        onboardingOptions: {
+          providers: [
+            {
+              id: "anthropic-subscription",
+              name: "Claude Subscription",
+              description: "Task agents only",
+            },
+          ],
+          openrouterModels: [],
+          piAiModels: [],
+          piAiDefaultModel: "",
+        },
+        onboardingSubscriptionTab: "token",
+        onboardingApiKey: "",
+        handleOnboardingNext,
+      }),
+    );
+
+    render(<ConnectionProviderDetailScreen dispatch={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Set up later" }));
+
+    expect(handleOnboardingNext).toHaveBeenCalledWith();
+    expect(mockClient.submitAnthropicSetupToken).not.toHaveBeenCalled();
   });
 });

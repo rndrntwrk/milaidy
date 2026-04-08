@@ -1356,6 +1356,7 @@ if (uiOnly) {
         ...process.env,
         NODE_ENV: "development",
         ...chainEnv,
+        MILADY_NAMESPACE: cliName,
         ELIZA_NAMESPACE: cliName,
         MILADY_API_PORT: String(API_PORT),
         ELIZA_API_PORT: String(API_PORT),

@@ -1225,6 +1225,12 @@ export class AgentManager {
         ELIZA_API_PORT: String(apiPort),
         ELIZA_PORT: String(apiPort),
       };
+      childEnv.MILADY_NAMESPACE =
+        childEnv.MILADY_NAMESPACE?.trim() ||
+        childEnv.ELIZA_NAMESPACE?.trim() ||
+        "milady";
+      childEnv.ELIZA_NAMESPACE =
+        childEnv.ELIZA_NAMESPACE?.trim() || childEnv.MILADY_NAMESPACE;
       delete childEnv.MILADY_PORT;
       delete childEnv.NODE_PATH;
 
