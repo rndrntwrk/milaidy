@@ -34,6 +34,7 @@ env:
   NODE_VERSION: "22"
   LANG: en_US.UTF-8
   LC_ALL: en_US.UTF-8
+  MILADY_SKIP_LOCAL_UPSTREAMS: "1"
 
 jobs:
   prepare:
@@ -111,6 +112,11 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Init non-eliza submodules
+        run: |
+          node scripts/init-submodules.mjs
+          node scripts/disable-local-eliza-workspace.mjs
 
       - name: Install dependencies
         run: bun install --ignore-scripts || bun install --ignore-scripts
@@ -218,6 +224,11 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
+
+      - name: Init non-eliza submodules
+        run: |
+          node scripts/init-submodules.mjs
+          node scripts/disable-local-eliza-workspace.mjs
 
       - name: Install dependencies
         run: bun install --ignore-scripts || bun install --ignore-scripts

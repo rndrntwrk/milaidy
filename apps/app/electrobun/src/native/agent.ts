@@ -31,7 +31,6 @@ import path from "node:path";
 import {
   resolveApiToken,
   resolveDesktopApiPort,
-  setApiToken,
 } from "@miladyai/shared/runtime-env";
 
 import { resolveDesktopRuntimeMode } from "../api-base";
@@ -97,7 +96,7 @@ type BunSubprocess = ReturnType<typeof Bun.spawn>;
 // Constants
 // ---------------------------------------------------------------------------
 
-const HEALTH_POLL_INTERVAL_MS = 500;
+const HEALTH_POLL_INTERVAL_MS = process.platform === "win32" ? 2_000 : 500;
 const SIGTERM_GRACE_MS = 5_000;
 const AGENT_NAME_FETCH_TIMEOUT_MS = 5_000;
 const WINDOWS_ABS_PATH_RE = /^[A-Za-z]:[\\/]/;
@@ -297,29 +296,17 @@ export function resolveConfigDir(opts?: {
 }
 
 export function ensureDesktopApiToken(
-  env: NodeJS.ProcessEnv = process.env,
+  _env: NodeJS.ProcessEnv = process.env,
 ): string {
-  const existing = getDesktopApiToken(env);
-  if (existing) {
-    setApiToken(env, existing);
-    return existing;
-  }
-
-  const generated = crypto.randomBytes(16).toString("hex");
-  setApiToken(env, generated);
-  diagnosticLog(
-    "[Agent] Generated local API token for embedded desktop runtime",
-  );
-  return generated;
+  return "";
 }
 
 export function configureDesktopLocalApiAuth(
   env: NodeJS.ProcessEnv = process.env,
 ): string {
-  const token = ensureDesktopApiToken(env);
   env.MILADY_PAIRING_DISABLED = "1";
   env.ELIZA_PAIRING_DISABLED = "1";
-  return token;
+  return "";
 }
 
 function getDesktopApiToken(
@@ -1230,6 +1217,12 @@ export class AgentManager {
       // Disable local embeddings until upstream fix lands.
       if (process.platform === "win32") {
         childEnv.MILADY_DISABLE_LOCAL_EMBEDDINGS = "1";
+      }
+
+      // Propagate PGlite data dir from parent env so CI/smoke test overrides
+      // (e.g. a short Windows path avoiding MAX_PATH issues) reach the runtime.
+      if (process.env.PGLITE_DATA_DIR) {
+        childEnv.PGLITE_DATA_DIR = process.env.PGLITE_DATA_DIR;
       }
 
       if (nodePaths.length > 0) {

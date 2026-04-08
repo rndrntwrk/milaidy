@@ -61,8 +61,18 @@ describe("release support workflow drift", () => {
     expect(workflow).toContain("git log --date=short --pretty=format");
     expect(workflow).toContain("repos.generateReleaseNotes");
     expect(workflow).toContain("## Full changelog");
-    expect(workflow).toContain("- [ ] PyPI publish");
-    expect(workflow).toContain("- [ ] Cloud app image push to GHCR");
+    expect(workflow).toContain("publish-packages.yml");
+    expect(workflow).toContain("Cloud app Docker image");
+    expect(workflow).toContain("PyPI / Snap / Debian / Flatpak");
+    expect(workflow).toContain("Cloud app Docker image");
+    expect(workflow).toContain(
+      "- 🔄 PyPI / Snap / Debian / Flatpak → publish-packages.yml",
+    );
+    expect(workflow).toContain(
+      "- 🔄 Cloud app Docker image → post-publish push",
+    );
+    expect(workflow).toContain("build-pypi:");
+    expect(workflow).toContain("'PyPI': process.env.R_PYPI");
   });
 
   it("keeps the homepage workflow entrypoint aligned with root package scripts", () => {

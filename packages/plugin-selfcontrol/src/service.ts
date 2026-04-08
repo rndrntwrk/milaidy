@@ -366,6 +366,8 @@ export class SelfControlBlockerService extends Service {
   capabilityDescription =
     "Maintains the local hosts-file website blocker and clears timed blocks when they expire.";
 
+  async stop(): Promise<void> {}
+
   static override async start(
     runtime: IAgentRuntime,
   ): Promise<SelfControlBlockerService> {
