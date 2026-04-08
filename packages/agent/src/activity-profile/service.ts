@@ -1,8 +1,3 @@
-/**
- * ActivityProfileService — orchestrates data fetching, analysis, and
- * persistence for the user activity profile. Uses task metadata for storage.
- */
-
 import type { IAgentRuntime, UUID } from "@elizaos/core";
 import { logger } from "@elizaos/core";
 import { resolveCanonicalOwnerId } from "@miladyai/plugin-roles";
@@ -339,17 +334,6 @@ export async function refreshCurrentState(
 }
 
 // ── Metadata persistence helpers ──────────────────────
-
-export interface ProactiveTaskMetadata {
-  activityProfile?: ActivityProfile;
-  firedActionsLog?: FiredActionsLog;
-  proactiveAgent: {
-    kind: "runtime_runner";
-    version: number;
-  };
-  updateInterval: number;
-  baseInterval: number;
-}
 
 export function readProfileFromMetadata(
   metadata: Record<string, unknown> | null,

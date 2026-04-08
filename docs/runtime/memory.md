@@ -264,7 +264,7 @@ Context compaction (summarisation of older history) is handled by elizaOS core a
 
 ## Knowledge Plugin
 
-`@elizaos/plugin-knowledge` provides RAG knowledge management. It loads on startup as a core plugin and integrates with the memory store to retrieve knowledge chunks by vector similarity on every relevant turn.
+`knowledge` provides RAG knowledge management. It loads on startup as a core plugin and integrates with the memory store to retrieve knowledge chunks by vector similarity on every relevant turn.
 
 ## Related Pages
 

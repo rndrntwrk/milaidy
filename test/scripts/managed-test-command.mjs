@@ -8,6 +8,16 @@ const SIGNAL_EXIT_CODES = {
   SIGTERM: 143,
 };
 
+const REPO_TEST_PROCESS_MARKERS = [
+  "node_modules/.bin/vitest run --config vitest.config.ts",
+  "test/scripts/test-runner.mjs",
+  "test/scripts/test-root-unit.mjs",
+  "bun run test",
+  "bun run test:e2e",
+  "bun run test:startup:e2e",
+  "bun run test:orchestrator:integration",
+];
+
 function isRealNodeExecutable(candidate) {
   if (!candidate || !fs.existsSync(candidate)) {
     return false;
@@ -69,6 +79,62 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function listSystemProcesses() {
+  if (process.platform === "win32") {
+    return [];
+  }
+
+  let output = "";
+  try {
+    output = execFileSync("ps", ["-axo", "pid=,ppid="], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+  } catch {
+    return [];
+  }
+
+  return output
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const match = line.match(/^(\d+)\s+(\d+)$/);
+      if (!match) {
+        return null;
+      }
+      const pid = Number.parseInt(match[1], 10);
+      const ppid = Number.parseInt(match[2], 10);
+      if (!pid || !ppid) {
+        return null;
+      }
+      return { pid, ppid };
+    })
+    .filter((entry) => entry !== null);
+}
+
+function collectDescendantPids(rootPid) {
+  const descendants = [];
+  const queue = [rootPid];
+  const processTable = listSystemProcesses();
+
+  while (queue.length > 0) {
+    const currentPid = queue.shift();
+    if (!currentPid) {
+      continue;
+    }
+    for (const entry of processTable) {
+      if (entry.ppid !== currentPid || descendants.includes(entry.pid)) {
+        continue;
+      }
+      descendants.push(entry.pid);
+      queue.push(entry.pid);
+    }
+  }
+
+  return descendants;
+}
+
 async function waitForExit(pid, timeoutMs) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -78,6 +144,18 @@ async function waitForExit(pid, timeoutMs) {
     await sleep(100);
   }
   return !isPidAlive(pid);
+}
+
+async function waitForProcessesExit(pids, timeoutMs) {
+  const uniquePids = [...new Set(pids.filter((pid) => Number.isInteger(pid) && pid > 0))];
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (uniquePids.every((pid) => !isPidAlive(pid))) {
+      return true;
+    }
+    await sleep(100);
+  }
+  return uniquePids.every((pid) => !isPidAlive(pid));
 }
 
 async function killProcessTree(pid) {
@@ -96,28 +174,37 @@ async function killProcessTree(pid) {
     return;
   }
 
-  try {
-    process.kill(-pid, "SIGTERM");
-  } catch {
+  const descendants = collectDescendantPids(pid);
+  for (const childPid of [...descendants].reverse()) {
     try {
-      process.kill(pid, "SIGTERM");
-    } catch {
-      return;
-    }
-  }
-
-  if (await waitForExit(pid, 5_000)) {
-    return;
-  }
-
-  try {
-    process.kill(-pid, "SIGKILL");
-  } catch {
-    try {
-      process.kill(pid, "SIGKILL");
+      process.kill(childPid, "SIGTERM");
     } catch {
       // Best effort.
     }
+  }
+
+  try {
+    process.kill(pid, "SIGTERM");
+  } catch {
+    return;
+  }
+
+  if (await waitForProcessesExit([pid, ...descendants], 5_000)) {
+    return;
+  }
+
+  for (const childPid of [...descendants].reverse()) {
+    try {
+      process.kill(childPid, "SIGKILL");
+    } catch {
+      // Best effort.
+    }
+  }
+
+  try {
+    process.kill(pid, "SIGKILL");
+  } catch {
+    // Best effort.
   }
 }
 
@@ -143,6 +230,16 @@ function writeLock(lockPath, state) {
 
 function removeLock(lockPath) {
   fs.rmSync(lockPath, { force: true });
+}
+
+function listLockFiles(lockDir) {
+  if (!fs.existsSync(lockDir)) {
+    return [];
+  }
+  return fs
+    .readdirSync(lockDir)
+    .filter((entry) => entry.endsWith(".json"))
+    .map((entry) => path.join(lockDir, entry));
 }
 
 async function cleanupStaleLock(lockPath) {
@@ -171,6 +268,115 @@ async function cleanupStaleLock(lockPath) {
   removeLock(lockPath);
 }
 
+function listRepoProcessTable(repoRoot) {
+  if (process.platform === "win32") {
+    return new Map();
+  }
+
+  let output = "";
+  try {
+    output = execFileSync("ps", ["-axo", "pid=,ppid=,command="], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+  } catch {
+    return new Map();
+  }
+
+  const processTable = new Map();
+  for (const rawLine of output.split("\n")) {
+    const line = rawLine.trim();
+    if (!line) {
+      continue;
+    }
+    const match = line.match(/^(\d+)\s+(\d+)\s+(.+)$/);
+    if (!match) {
+      continue;
+    }
+    const pid = Number.parseInt(match[1], 10);
+    const ppid = Number.parseInt(match[2], 10);
+    const command = match[3] ?? "";
+    if (!pid || !ppid || !command.includes(repoRoot)) {
+      continue;
+    }
+    processTable.set(pid, { pid, ppid, command });
+  }
+  return processTable;
+}
+
+function listRepoTestProcesses(repoRoot) {
+  const processTable = listRepoProcessTable(repoRoot);
+  return [...processTable.values()].filter((entry) =>
+    REPO_TEST_PROCESS_MARKERS.some((marker) => entry.command.includes(marker)),
+  );
+}
+
+function collectProcessLineage(pid, processTable) {
+  const lineage = new Set();
+  let currentPid = pid;
+
+  while (
+    Number.isInteger(currentPid) &&
+    currentPid > 0 &&
+    !lineage.has(currentPid)
+  ) {
+    lineage.add(currentPid);
+    const current = processTable.get(currentPid);
+    if (!current || current.ppid === currentPid) {
+      break;
+    }
+    currentPid = current.ppid;
+  }
+
+  return lineage;
+}
+
+function collectProtectedRepoTestPids(repoRoot) {
+  const lockDir = path.join(repoRoot, ".tmp", "test-runner");
+  const processTable = listRepoProcessTable(repoRoot);
+  const protectedPids = collectProcessLineage(process.pid, processTable);
+
+  for (const lockPath of listLockFiles(lockDir)) {
+    const lockState = readLock(lockPath);
+    if (!lockState) {
+      continue;
+    }
+    for (const candidatePid of [lockState.ownerPid, lockState.childPid]) {
+      const pid = Number.isInteger(candidatePid)
+        ? candidatePid
+        : Number.parseInt(String(candidatePid ?? ""), 10);
+      if (!pid || !isPidAlive(pid)) {
+        continue;
+      }
+      for (const protectedPid of collectProcessLineage(pid, processTable)) {
+        protectedPids.add(protectedPid);
+      }
+    }
+  }
+
+  return protectedPids;
+}
+
+async function cleanupOrphanedRepoTestProcesses(repoRoot) {
+  const candidates = listRepoTestProcesses(repoRoot);
+  const protectedPids = collectProtectedRepoTestPids(repoRoot);
+  const killed = [];
+
+  for (const candidate of candidates) {
+    if (protectedPids.has(candidate.pid)) {
+      continue;
+    }
+    await killProcessTree(candidate.pid);
+    killed.push(candidate);
+  }
+
+  if (killed.length > 0) {
+    console.log(
+      `[test-runner] cleaned ${killed.length} orphaned repo test process${killed.length === 1 ? "" : "es"}`,
+    );
+  }
+}
+
 export async function runManagedTestCommand({
   repoRoot,
   lockName,
@@ -180,7 +386,13 @@ export async function runManagedTestCommand({
   cwd = repoRoot,
   env = buildTestEnv(cwd),
 }) {
-  const lockPath = path.join(repoRoot, ".tmp", "test-runner", `${lockName}.json`);
+  const lockPath = path.join(
+    repoRoot,
+    ".tmp",
+    "test-runner",
+    `${lockName}.json`,
+  );
+  await cleanupOrphanedRepoTestProcesses(repoRoot);
   await cleanupStaleLock(lockPath);
 
   const initialState = {
@@ -196,9 +408,7 @@ export async function runManagedTestCommand({
   writeLock(lockPath, initialState);
 
   const startedAt = Date.now();
-  console.log(
-    `[test-runner] START ${label}: ${[command, ...args].join(" ")}`,
-  );
+  console.log(`[test-runner] START ${label}: ${[command, ...args].join(" ")}`);
 
   let child = null;
   let shuttingDown = false;
@@ -234,7 +444,6 @@ export async function runManagedTestCommand({
         cwd,
         env,
         stdio: "inherit",
-        detached: process.platform !== "win32",
       });
 
       writeLock(lockPath, {
@@ -259,9 +468,7 @@ export async function runManagedTestCommand({
       });
     });
 
-    console.log(
-      `[test-runner] PASS ${label} (${Date.now() - startedAt}ms)`,
-    );
+    console.log(`[test-runner] PASS ${label} (${Date.now() - startedAt}ms)`);
   } finally {
     for (const [signal, handler] of signalHandlers) {
       process.off(signal, handler);

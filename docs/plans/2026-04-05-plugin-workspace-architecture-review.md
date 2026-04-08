@@ -70,7 +70,7 @@ Implication: if `node_modules` points at the right local workspaces during dev a
 - `@elizaos/plugin-elizacloud`
 - `@elizaos/plugin-discord`
 - `@elizaos/plugin-sql`
-- `@elizaos/plugin-trajectory-logger`
+- `trajectories`
 - `@elizaos/plugin-local-embedding`
 - `@elizaos/plugin-agent-skills`
 - `@elizaos/plugin-groq`

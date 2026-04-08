@@ -52,8 +52,8 @@ Core plugins are always loaded and each provides one or more services:
 | `@elizaos/plugin-sql` | Database adapter | PGLite or PostgreSQL persistence; provides `runtime.adapter` |
 | `@elizaos/plugin-local-embedding` | `TEXT_EMBEDDING` handler | Local GGUF embedding model via node-llama-cpp |
 | `@elizaos/plugin-form` | Form service | Structured form packaging for guided user journeys |
-| `@elizaos/plugin-knowledge` | Knowledge service | RAG knowledge indexing and retrieval |
-| `@elizaos/plugin-trajectory-logger` | `trajectory_logger` | Debug and RL training trajectory capture |
+| `knowledge` | Knowledge service | RAG knowledge indexing and retrieval |
+| `trajectories` | `trajectory_logger` | Debug and RL training trajectory capture |
 | `@elizaos/plugin-agent-orchestrator` | Orchestrator service | Multi-agent task coordination and spawning |
 | `@elizaos/plugin-cron` | Cron service | Scheduled job execution |
 | `@elizaos/plugin-shell` | Shell service | Shell command execution with security controls |
@@ -80,7 +80,7 @@ These services are available but not loaded by default — enable via admin pane
 | `@elizaos/plugin-edge-tts` | Text-to-speech (Microsoft Edge TTS) |
 | `@elizaos/plugin-elevenlabs` | ElevenLabs text-to-speech |
 | `@elizaos/plugin-secrets-manager` | Encrypted credential storage (statically imported, may be re-enabled as core) |
-| `@elizaos/plugin-rolodex` | Contact graph, relationship memory (statically imported, may be re-enabled as core) |
+| `relationships` | Contact graph, relationship memory (statically imported, may be re-enabled as core) |
 | `@elizaos/plugin-plugin-manager` | Dynamic plugin install/uninstall at runtime (now a core plugin, always loaded) |
 | `@elizaos/plugin-computeruse` | Computer use automation (requires platform binaries) |
 | `@elizaos/plugin-x402` | x402 HTTP micropayment protocol |

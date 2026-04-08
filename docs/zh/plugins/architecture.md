@@ -29,8 +29,8 @@ export const CORE_PLUGINS: readonly string[] = [
   "@elizaos/plugin-sql",               // database adapter — required
   "@elizaos/plugin-local-embedding",   // local embeddings — required for memory
   "@elizaos/plugin-form",              // form handling for guided user journeys
-  "@elizaos/plugin-knowledge",         // RAG knowledge management — required for knowledge tab
-  "@elizaos/plugin-trajectory-logger", // trajectory logging for debugging and RL training
+  "knowledge",         // RAG knowledge management — required for knowledge tab
+  "trajectories", // trajectory logging for debugging and RL training
   "@elizaos/plugin-agent-orchestrator",// multi-agent orchestration (PTY, SwarmCoordinator)
   "@elizaos/plugin-cron",              // scheduled jobs and automation
   "@elizaos/plugin-shell",             // shell command execution
@@ -41,7 +41,7 @@ export const CORE_PLUGINS: readonly string[] = [
 ];
 ```
 
-> **注意：** `@elizaos/plugin-secrets-manager`、`@elizaos/plugin-rolodex`、`@elizaos/plugin-trust`、`@elizaos/plugin-personality` 和 `@elizaos/plugin-experience` 已静态导入以实现快速解析，但在核心列表中被注释掉了。它们可能会在未来的版本中重新启用。`@elizaos/plugin-todo` 已退役；待办功能现由工作台 API 通过运行时任务处理。
+> **注意：** `@elizaos/plugin-secrets-manager`、`relationships`、`@elizaos/plugin-trust`、`@elizaos/plugin-personality` 和 `@elizaos/plugin-experience` 已静态导入以实现快速解析，但在核心列表中被注释掉了。它们可能会在未来的版本中重新启用。`@elizaos/plugin-todo` 已退役；待办功能现由工作台 API 通过运行时任务处理。
 
 <div id="optional-core-plugins">
 

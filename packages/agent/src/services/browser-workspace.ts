@@ -8,6 +8,7 @@ const DEFAULT_WAIT_INTERVAL_MS = 120;
 const DEFAULT_WEB_PARTITION = "persist:milady-browser";
 const DESKTOP_BRIDGE_UNAVAILABLE_MESSAGE =
   "Milady browser workspace desktop bridge is unavailable.";
+const browserWorkspacePageFetch = globalThis.fetch.bind(globalThis);
 
 /**
  * Simple async mutex to serialise mutations to webWorkspaceState.
@@ -57,6 +58,7 @@ export type BrowserWorkspaceSubaction =
   | "console"
   | "cookies"
   | "diff"
+  | "dialog"
   | "press"
   | "drag"
   | "errors"
@@ -247,10 +249,12 @@ export interface BrowserWorkspaceCommand {
   id?: string;
   entryKey?: string;
   filePath?: string;
+  filter?: string;
   files?: string[];
   frameAction?: BrowserWorkspaceFrameAction;
   fullPage?: boolean;
   headers?: Record<string, string>;
+  height?: number;
   url?: string;
   secondaryUrl?: string;
   title?: string;
@@ -399,6 +403,7 @@ interface BrowserWorkspaceRuntimeState {
   currentFrame: string | null;
   dialog: BrowserWorkspaceDialogState | null;
   errors: BrowserWorkspaceErrorEntry[];
+  frameDoms: Map<string, JSDOM>;
   highlightedSelector: string | null;
   lastScreenshotData: string | null;
   lastSnapshot: BrowserWorkspaceSnapshotRecord | null;
@@ -473,6 +478,7 @@ function createBrowserWorkspaceRuntimeState(): BrowserWorkspaceRuntimeState {
     currentFrame: null,
     dialog: null,
     errors: [],
+    frameDoms: new Map<string, JSDOM>(),
     highlightedSelector: null,
     lastScreenshotData: null,
     lastSnapshot: null,
@@ -527,6 +533,7 @@ function resetBrowserWorkspaceRuntimeNavigationState(
 ): void {
   state.currentFrame = null;
   state.dialog = null;
+  state.frameDoms.clear();
   state.highlightedSelector = null;
 }
 
@@ -718,6 +725,172 @@ function createEmptyWebBrowserWorkspaceDom(url: string): JSDOM {
   );
 }
 
+function applyBrowserWorkspaceDomSettings(
+  dom: JSDOM,
+  state: BrowserWorkspaceRuntimeState,
+): void {
+  const viewport = state.settings.viewport;
+  if (viewport) {
+    Object.defineProperty(dom.window, "innerWidth", {
+      configurable: true,
+      value: viewport.width,
+    });
+    Object.defineProperty(dom.window, "innerHeight", {
+      configurable: true,
+      value: viewport.height,
+    });
+    Object.defineProperty(dom.window, "devicePixelRatio", {
+      configurable: true,
+      value: viewport.scale,
+    });
+  }
+
+  Object.defineProperty(dom.window.navigator, "onLine", {
+    configurable: true,
+    get: () => !state.settings.offline,
+  });
+
+  if (state.settings.device) {
+    Object.defineProperty(dom.window.navigator, "userAgent", {
+      configurable: true,
+      value: `MiladyBrowserWorkspace/${state.settings.device}`,
+    });
+  }
+
+  const matchMedia = (query: string) => {
+    const matches =
+      query.includes("prefers-color-scheme") &&
+      ((state.settings.media === "dark" && query.includes("dark")) ||
+        (state.settings.media === "light" && query.includes("light")));
+    return {
+      addEventListener() {},
+      addListener() {},
+      dispatchEvent() {
+        return true;
+      },
+      matches,
+      media: query,
+      onchange: null,
+      removeEventListener() {},
+      removeListener() {},
+    };
+  };
+  Object.defineProperty(dom.window, "matchMedia", {
+    configurable: true,
+    value: matchMedia,
+  });
+
+  Object.defineProperty(dom.window.navigator, "clipboard", {
+    configurable: true,
+    value: {
+      readText: async () => browserWorkspaceClipboardText,
+      writeText: async (value: string) => {
+        browserWorkspaceClipboardText = String(value ?? "");
+      },
+    },
+  });
+
+  Object.defineProperty(dom.window.navigator, "geolocation", {
+    configurable: true,
+    value: {
+      getCurrentPosition: (success: (position: unknown) => void) => {
+        const coords = state.settings.geo ?? { latitude: 0, longitude: 0 };
+        success({
+          coords: {
+            accuracy: 1,
+            latitude: coords.latitude,
+            longitude: coords.longitude,
+          },
+          timestamp: Date.now(),
+        });
+      },
+    },
+  });
+}
+
+function installBrowserWorkspaceWebRuntime(
+  tab: WebBrowserWorkspaceTabState,
+  dom: JSDOM,
+): void {
+  const state = getBrowserWorkspaceRuntimeState("web", tab.id);
+  applyBrowserWorkspaceDomSettings(dom, state);
+
+  const windowRecord = dom.window as unknown as Record<string, unknown>;
+  windowRecord.__miladyBrowserWorkspaceState = state;
+
+  const consoleTarget = dom.window.console as Console & Record<string, unknown>;
+  if (!consoleTarget.__miladyWrapped) {
+    for (const level of ["log", "info", "warn", "error"] as const) {
+      consoleTarget[level] = (...args: unknown[]) => {
+        state.consoleEntries.push({
+          level,
+          message: args.map((value) => normalizeBrowserWorkspaceText(value)).join(" "),
+          timestamp: getBrowserWorkspaceTimestamp(),
+        });
+        return undefined;
+      };
+    }
+    consoleTarget.__miladyWrapped = true;
+  }
+
+  dom.window.alert = (message?: string) => {
+    state.dialog = {
+      defaultValue: null,
+      message: String(message ?? ""),
+      open: true,
+      type: "alert",
+    };
+  };
+  dom.window.confirm = (message?: string) => {
+    state.dialog = {
+      defaultValue: null,
+      message: String(message ?? ""),
+      open: true,
+      type: "confirm",
+    };
+    return false;
+  };
+  dom.window.prompt = (message?: string, defaultValue?: string) => {
+    state.dialog = {
+      defaultValue: defaultValue ?? null,
+      message: String(message ?? ""),
+      open: true,
+      type: "prompt",
+    };
+    return null;
+  };
+
+  Object.defineProperty(dom.window, "fetch", {
+    configurable: true,
+    value: async (input: RequestInfo | URL, init?: RequestInit) => {
+      const inputUrl =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : typeof (input as Request).url === "string"
+              ? (input as Request).url
+              : String(input);
+      return fetchBrowserWorkspaceTrackedResponse(
+        state,
+        new URL(inputUrl, tab.url).toString(),
+        {
+          ...init,
+          headers:
+            init?.headers ??
+            ((input as Request).headers ? (input as Request).headers : undefined),
+          method:
+            init?.method ??
+            (typeof (input as Request).method === "string"
+              ? (input as Request).method
+              : undefined),
+        },
+        "fetch",
+      );
+    },
+  });
+}
+
 function getWebBrowserWorkspaceTabIndex(tabId: string): number {
   return webWorkspaceState.tabs.findIndex((tab) => tab.id === tabId);
 }
@@ -752,8 +925,28 @@ function createWebBrowserWorkspaceTab(
   const now = getBrowserWorkspaceTimestamp();
   const url = assertBrowserWorkspaceUrl(request.url?.trim() || "about:blank");
   const visible = request.show === true;
+  const id = `btab_${webWorkspaceState.nextId++}`;
+  const dom = url === "about:blank" ? createEmptyWebBrowserWorkspaceDom(url) : null;
+  if (dom) {
+    const bootstrapTab = {
+      id,
+      title: request.title?.trim() || inferBrowserWorkspaceTitle(url),
+      url,
+      partition: request.partition?.trim() || DEFAULT_WEB_PARTITION,
+      visible,
+      createdAt: now,
+      updatedAt: now,
+      lastFocusedAt: visible ? now : null,
+      dom,
+      history: [url],
+      historyIndex: 0,
+      loadedUrl: url,
+    } satisfies WebBrowserWorkspaceTabState;
+    installBrowserWorkspaceWebRuntime(bootstrapTab, dom);
+    return bootstrapTab;
+  }
   return {
-    id: `btab_${webWorkspaceState.nextId++}`,
+    id,
     title: request.title?.trim() || inferBrowserWorkspaceTitle(url),
     url,
     partition: request.partition?.trim() || DEFAULT_WEB_PARTITION,
@@ -761,7 +954,7 @@ function createWebBrowserWorkspaceTab(
     createdAt: now,
     updatedAt: now,
     lastFocusedAt: visible ? now : null,
-    dom: url === "about:blank" ? createEmptyWebBrowserWorkspaceDom(url) : null,
+    dom,
     history: [url],
     historyIndex: 0,
     loadedUrl: url === "about:blank" ? url : null,
@@ -871,6 +1064,70 @@ function collectBrowserWorkspaceInspectElements(
   }
 
   return summaries;
+}
+
+function resolveBrowserWorkspaceIframeDocument(
+  runtime: BrowserWorkspaceRuntimeState,
+  frameElement: Element | null,
+  baseUrl: string,
+): Document | null {
+  if (!frameElement || frameElement.tagName !== "IFRAME") {
+    return null;
+  }
+
+  const iframe = frameElement as HTMLIFrameElement;
+  const srcdoc = iframe.getAttribute("srcdoc");
+  if (srcdoc?.trim()) {
+    const selector = buildBrowserWorkspaceElementSelector(frameElement);
+    const cached = runtime.frameDoms.get(selector);
+    if (cached) {
+      return cached.window.document;
+    }
+    if (
+      iframe.contentDocument &&
+      normalizeBrowserWorkspaceText(iframe.contentDocument.body?.textContent).length > 0
+    ) {
+      return iframe.contentDocument;
+    }
+    const parsed = new JSDOM(srcdoc, {
+      pretendToBeVisual: true,
+      url: baseUrl,
+    });
+    runtime.frameDoms.set(selector, parsed);
+    return parsed.window.document;
+  }
+
+  if (iframe.contentDocument) {
+    return iframe.contentDocument;
+  }
+
+  return null;
+}
+
+function resolveWebBrowserWorkspaceCommandDocument(
+  tab: WebBrowserWorkspaceTabState,
+  dom: JSDOM,
+): { document: Document; frameSelector: string | null } {
+  const state = getBrowserWorkspaceRuntimeState("web", tab.id);
+  const frameSelector = state.currentFrame?.trim() || null;
+  if (!frameSelector) {
+    return { document: dom.window.document, frameSelector: null };
+  }
+
+  const frameElement = resolveBrowserWorkspaceElement(
+    dom.window.document,
+    frameSelector,
+  );
+  const frameDocument = resolveBrowserWorkspaceIframeDocument(
+    state,
+    frameElement,
+    tab.url,
+  );
+  if (!frameDocument) {
+    return { document: dom.window.document, frameSelector: null };
+  }
+
+  return { document: frameDocument, frameSelector };
 }
 
 function getBrowserWorkspaceElementSearchTexts(element: Element): string[] {
@@ -1137,6 +1394,275 @@ function queryAllBrowserWorkspaceSelector(
   }
 }
 
+function browserWorkspacePatternMatches(
+  pattern: string,
+  value: string,
+): boolean {
+  const trimmed = pattern.trim();
+  if (!trimmed) {
+    return false;
+  }
+  if (!trimmed.includes("*")) {
+    return value.includes(trimmed);
+  }
+  let wildcardPattern = "";
+  for (let index = 0; index < trimmed.length; index += 1) {
+    const char = trimmed[index] ?? "";
+    if (char === "*") {
+      const next = trimmed[index + 1];
+      if (next === "*") {
+        wildcardPattern += ".*";
+        index += 1;
+      } else {
+        wildcardPattern += ".*";
+      }
+      continue;
+    }
+    wildcardPattern += char.replace(/[|\\{}()[\]^$+?.]/g, "\\$&");
+  }
+  return new RegExp(`^${wildcardPattern}$`, "i").test(value);
+}
+
+function normalizeBrowserWorkspaceHeaders(
+  headers: Record<string, string> | undefined,
+): Record<string, string> {
+  if (!headers) {
+    return {};
+  }
+  return Object.fromEntries(
+    Object.entries(headers).filter(
+      (entry): entry is [string, string] =>
+        typeof entry[0] === "string" &&
+        entry[0].trim().length > 0 &&
+        typeof entry[1] === "string",
+    ),
+  );
+}
+
+function findBrowserWorkspaceNetworkRoute(
+  state: BrowserWorkspaceRuntimeState,
+  url: string,
+): BrowserWorkspaceNetworkRoute | null {
+  return (
+    [...state.networkRoutes]
+      .reverse()
+      .find((route) => browserWorkspacePatternMatches(route.pattern, url)) ?? null
+  );
+}
+
+function recordBrowserWorkspaceNetworkRequest(
+  state: BrowserWorkspaceRuntimeState,
+  request: Omit<BrowserWorkspaceNetworkRequestRecord, "id" | "timestamp">,
+): BrowserWorkspaceNetworkRequestRecord {
+  const entry: BrowserWorkspaceNetworkRequestRecord = {
+    ...request,
+    id: `req_${state.networkNextRequestId++}`,
+    timestamp: getBrowserWorkspaceTimestamp(),
+  };
+  state.networkRequests.push(entry);
+  if (state.networkHar.active) {
+    state.networkHar.entries.push(entry);
+  }
+  return entry;
+}
+
+async function fetchBrowserWorkspaceTrackedResponse(
+  state: BrowserWorkspaceRuntimeState,
+  url: string,
+  init: RequestInit = {},
+  resourceType: string,
+): Promise<Response> {
+  if (state.settings.offline) {
+    recordBrowserWorkspaceNetworkRequest(state, {
+      matchedRoute: null,
+      method: String(init.method ?? "GET").toUpperCase(),
+      resourceType,
+      responseBody: null,
+      responseHeaders: {},
+      status: 0,
+      url,
+    });
+    throw new Error("Browser workspace is offline.");
+  }
+
+  const route = findBrowserWorkspaceNetworkRoute(state, url);
+  if (route?.abort) {
+    recordBrowserWorkspaceNetworkRequest(state, {
+      matchedRoute: route.pattern,
+      method: String(init.method ?? "GET").toUpperCase(),
+      resourceType,
+      responseBody: null,
+      responseHeaders: route.headers,
+      status: 0,
+      url,
+    });
+    throw new Error(`Browser workspace network route aborted request: ${url}`);
+  }
+
+  if (
+    route &&
+    (route.body !== null || route.status !== null || Object.keys(route.headers).length > 0)
+  ) {
+    const response = new Response(route?.body ?? "", {
+      headers: route?.headers,
+      status: route?.status ?? 200,
+    });
+    recordBrowserWorkspaceNetworkRequest(state, {
+      matchedRoute: route?.pattern ?? null,
+      method: String(init.method ?? "GET").toUpperCase(),
+      resourceType,
+      responseBody: route?.body ?? "",
+      responseHeaders: route?.headers ?? {},
+      status: route?.status ?? 200,
+      url,
+    });
+    return response;
+  }
+
+  const headers = new Headers(init.headers ?? {});
+  for (const [key, value] of Object.entries(state.settings.headers)) {
+    if (!headers.has(key)) {
+      headers.set(key, value);
+    }
+  }
+  if (
+    state.settings.credentials &&
+    !headers.has("Authorization") &&
+    state.settings.credentials.username
+  ) {
+    headers.set(
+      "Authorization",
+      `Basic ${Buffer.from(
+        `${state.settings.credentials.username}:${state.settings.credentials.password}`,
+      ).toString("base64")}`,
+    );
+  }
+
+  const response = await browserWorkspacePageFetch(url, {
+    ...init,
+    headers,
+    redirect: init.redirect ?? "follow",
+    signal: init.signal ?? AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
+  });
+  let responseBody: string | null = null;
+  if (resourceType !== "document") {
+    const clone = response.clone();
+    try {
+      responseBody = await clone.text();
+    } catch {
+      responseBody = null;
+    }
+  }
+  recordBrowserWorkspaceNetworkRequest(state, {
+    matchedRoute: null,
+    method: String(init.method ?? "GET").toUpperCase(),
+    resourceType,
+    responseBody,
+    responseHeaders: Object.fromEntries(response.headers.entries()),
+    status: response.status,
+    url: response.url || url,
+  });
+  return response;
+}
+
+function escapeBrowserWorkspacePdfText(value: string): string {
+  return value.replaceAll("\\", "\\\\").replaceAll("(", "\\(").replaceAll(")", "\\)");
+}
+
+function createBrowserWorkspacePdfBuffer(title: string, bodyText: string): Buffer {
+  const lines = [
+    title.trim() || "Milady Browser Workspace",
+    "",
+    ...bodyText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).slice(0, 32),
+  ];
+  const contentLines = lines.map((line, index) => {
+    const offset = index === 0 ? "50 750 Td" : "0 -18 Td";
+    return `${offset} (${escapeBrowserWorkspacePdfText(line)}) Tj`;
+  });
+  const stream = `BT\n/F1 12 Tf\n${contentLines.join("\n")}\nET`;
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>",
+    `<< /Length ${Buffer.byteLength(stream, "utf8")} >>\nstream\n${stream}\nendstream`,
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+  ];
+  let pdf = "%PDF-1.4\n";
+  const offsets = [0];
+  for (let index = 0; index < objects.length; index += 1) {
+    offsets.push(Buffer.byteLength(pdf, "utf8"));
+    pdf += `${index + 1} 0 obj\n${objects[index]}\nendobj\n`;
+  }
+  const xrefOffset = Buffer.byteLength(pdf, "utf8");
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (let index = 1; index < offsets.length; index += 1) {
+    pdf += `${String(offsets[index]).padStart(10, "0")} 00000 n \n`;
+  }
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+  return Buffer.from(pdf, "utf8");
+}
+
+function createBrowserWorkspaceSyntheticScreenshotData(
+  title: string,
+  url: string,
+  bodyText: string,
+  viewport?: { height: number; width: number },
+): string {
+  const width = viewport?.width ?? 1280;
+  const height = viewport?.height ?? 720;
+  const lines = [
+    title || "Milady Browser Workspace",
+    url,
+    "",
+    ...bodyText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean).slice(0, 18),
+  ];
+  const escapedLines = lines.map((line) =>
+    line
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;"),
+  );
+  const svg = `<?xml version="1.0" encoding="UTF-8"?><svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="100%" height="100%" fill="#faf7f1"/><rect x="24" y="24" width="${width - 48}" height="${height - 48}" rx="18" fill="#ffffff" stroke="#d8d1c4"/><text x="48" y="72" font-family="Menlo, Monaco, monospace" font-size="20" fill="#111111">${escapedLines.map((line, index) => `<tspan x="48" dy="${index === 0 ? 0 : 28}">${line}</tspan>`).join("")}</text></svg>`;
+  return Buffer.from(svg, "utf8").toString("base64");
+}
+
+function createBrowserWorkspaceSnapshotRecord(
+  title: string,
+  url: string,
+  bodyText: string,
+): BrowserWorkspaceSnapshotRecord {
+  return {
+    bodyText: normalizeBrowserWorkspaceText(bodyText),
+    title: normalizeBrowserWorkspaceText(title),
+    url: normalizeBrowserWorkspaceText(url),
+  };
+}
+
+function diffBrowserWorkspaceSnapshots(
+  before: BrowserWorkspaceSnapshotRecord | null,
+  after: BrowserWorkspaceSnapshotRecord,
+): Record<string, unknown> {
+  return {
+    changed:
+      !before ||
+      before.bodyText !== after.bodyText ||
+      before.title !== after.title ||
+      before.url !== after.url,
+    previous: before,
+    current: after,
+  };
+}
+
+async function writeBrowserWorkspaceFile(
+  filePath: string,
+  contents: string | Uint8Array,
+): Promise<string> {
+  const resolved = path.resolve(filePath);
+  await fsp.mkdir(path.dirname(resolved), { recursive: true });
+  await fsp.writeFile(resolved, contents);
+  return resolved;
+}
+
 function resolveBrowserWorkspaceFindElement(
   document: Document,
   command: BrowserWorkspaceCommand,
@@ -1311,7 +1837,13 @@ function resolveBrowserWorkspaceElement(
 
 function ensureBrowserWorkspaceFormControlElement(
   element: Element,
-  subaction: "fill" | "keyboardinserttext" | "keyboardtype" | "select" | "type",
+  subaction:
+    | "clipboard"
+    | "fill"
+    | "keyboardinserttext"
+    | "keyboardtype"
+    | "select"
+    | "type",
 ): HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement {
   if (
     element.tagName === "INPUT" ||
@@ -1602,18 +2134,22 @@ function ensureBrowserWorkspaceDom(
 async function loadWebBrowserWorkspaceTabDocument(
   tab: WebBrowserWorkspaceTabState,
 ): Promise<void> {
+  const state = getBrowserWorkspaceRuntimeState("web", tab.id);
   if (tab.url === "about:blank") {
     tab.dom = createEmptyWebBrowserWorkspaceDom(tab.url);
+    installBrowserWorkspaceWebRuntime(tab, tab.dom);
     tab.loadedUrl = tab.url;
     tab.title = "New Tab";
     tab.updatedAt = getBrowserWorkspaceTimestamp();
     return;
   }
 
-  const response = await fetch(tab.url, {
-    redirect: "follow",
-    signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
-  });
+  const response = await fetchBrowserWorkspaceTrackedResponse(
+    state,
+    tab.url,
+    {},
+    "document",
+  );
   if (!response.ok) {
     throw new Error(
       `Browser workspace web load failed (${response.status}): ${tab.url}`,
@@ -1626,6 +2162,8 @@ async function loadWebBrowserWorkspaceTabDocument(
     pretendToBeVisual: true,
     url: finalUrl,
   });
+  installBrowserWorkspaceWebRuntime(tab, dom);
+  resetBrowserWorkspaceRuntimeNavigationState(state);
 
   tab.dom = dom;
   tab.loadedUrl = finalUrl;
@@ -2483,6 +3021,7 @@ async function submitWebBrowserWorkspaceForm(
   tab: WebBrowserWorkspaceTabState,
   form: HTMLFormElement,
 ): Promise<void> {
+  const state = getBrowserWorkspaceRuntimeState("web", tab.id);
   const dom = ensureBrowserWorkspaceDom(tab);
   const action = form.getAttribute("action")?.trim() || tab.url;
   const method = (form.getAttribute("method")?.trim() || "get").toLowerCase();
@@ -2507,15 +3046,18 @@ async function submitWebBrowserWorkspaceForm(
     return;
   }
 
-  const response = await fetch(submitUrl, {
-    body: searchParams.toString(),
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded; charset=utf-8",
+  const response = await fetchBrowserWorkspaceTrackedResponse(
+    state,
+    submitUrl,
+    {
+      body: searchParams.toString(),
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded; charset=utf-8",
+      },
+      method: method.toUpperCase(),
     },
-    method: method.toUpperCase(),
-    redirect: "follow",
-    signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
-  });
+    "document",
+  );
 
   if (!response.ok) {
     throw new Error(
@@ -2529,6 +3071,8 @@ async function submitWebBrowserWorkspaceForm(
     pretendToBeVisual: true,
     url: finalUrl,
   });
+  installBrowserWorkspaceWebRuntime(tab, nextDom);
+  resetBrowserWorkspaceRuntimeNavigationState(state);
   clearWebBrowserWorkspaceTabElementRefs(tab.id);
   tab.url = finalUrl;
   tab.dom = nextDom;
@@ -2540,6 +3084,697 @@ async function submitWebBrowserWorkspaceForm(
   pushWebBrowserWorkspaceHistory(tab, finalUrl);
 }
 
+function readBrowserWorkspaceStorage(
+  storage: Storage,
+): Record<string, string> {
+  const entries: Record<string, string> = {};
+  for (let index = 0; index < storage.length; index += 1) {
+    const key = storage.key(index);
+    if (!key) {
+      continue;
+    }
+    entries[key] = storage.getItem(key) ?? "";
+  }
+  return entries;
+}
+
+function readBrowserWorkspaceCookies(document: Document): Record<string, string> {
+  const cookieString = document.cookie || "";
+  if (!cookieString.trim()) {
+    return {};
+  }
+  return Object.fromEntries(
+    cookieString
+      .split(/;\s*/)
+      .map((entry) => {
+        const [name, ...rest] = entry.split("=");
+        return [name ?? "", rest.join("=")] as const;
+      })
+      .filter((entry) => entry[0].trim().length > 0),
+  );
+}
+
+function applyBrowserWorkspaceStateToWebDocument(
+  document: Document,
+  snapshot: Record<string, unknown>,
+): void {
+  const localEntries =
+    snapshot.localStorage && typeof snapshot.localStorage === "object"
+      ? (snapshot.localStorage as Record<string, unknown>)
+      : {};
+  const sessionEntries =
+    snapshot.sessionStorage && typeof snapshot.sessionStorage === "object"
+      ? (snapshot.sessionStorage as Record<string, unknown>)
+      : {};
+  const cookies =
+    snapshot.cookies && typeof snapshot.cookies === "object"
+      ? (snapshot.cookies as Record<string, unknown>)
+      : {};
+
+  document.defaultView?.localStorage.clear();
+  for (const [key, value] of Object.entries(localEntries)) {
+    document.defaultView?.localStorage.setItem(key, String(value ?? ""));
+  }
+  document.defaultView?.sessionStorage.clear();
+  for (const [key, value] of Object.entries(sessionEntries)) {
+    document.defaultView?.sessionStorage.setItem(key, String(value ?? ""));
+  }
+  for (const [key, value] of Object.entries(cookies)) {
+    document.cookie = `${key}=${String(value ?? "")}; path=/`;
+  }
+}
+
+async function executeWebBrowserWorkspaceUtilityCommand(
+  command: BrowserWorkspaceCommand,
+): Promise<BrowserWorkspaceCommandResult | null> {
+  return withWebStateLock(async () => {
+    if (
+      ![
+        "clipboard",
+        "console",
+        "cookies",
+        "diff",
+        "dialog",
+        "drag",
+        "errors",
+        "eval",
+        "frame",
+        "highlight",
+        "mouse",
+        "network",
+        "pdf",
+        "screenshot",
+        "set",
+        "state",
+        "storage",
+        "trace",
+        "profiler",
+        "upload",
+      ].includes(command.subaction)
+    ) {
+      return null;
+    }
+
+    const id = findWebBrowserWorkspaceTargetTabId(command);
+    const tab = getWebBrowserWorkspaceTabState(id);
+    const dom = await ensureLoadedWebBrowserWorkspaceTabDocument(tab);
+    const runtime = getBrowserWorkspaceRuntimeState("web", id);
+    const frameContext = resolveWebBrowserWorkspaceCommandDocument(tab, dom);
+    const document = frameContext.document;
+    const resolveTarget = () =>
+      resolveBrowserWorkspaceElement(document, command.selector, command.text, command);
+
+    switch (command.subaction) {
+      case "eval": {
+        if (!command.script?.trim()) {
+          throw new Error("Milady browser workspace eval requires script.");
+        }
+        try {
+          let value: unknown;
+          try {
+            value = new Function(
+              "document",
+              "fetch",
+              "alert",
+              "confirm",
+              "prompt",
+              "window",
+              "location",
+              "navigator",
+              "localStorage",
+              "sessionStorage",
+              "console",
+              `return (${command.script});`,
+            )(
+              document,
+              dom.window.fetch.bind(dom.window),
+              dom.window.alert.bind(dom.window),
+              dom.window.confirm.bind(dom.window),
+              dom.window.prompt.bind(dom.window),
+              dom.window,
+              dom.window.location,
+              dom.window.navigator,
+              dom.window.localStorage,
+              dom.window.sessionStorage,
+              dom.window.console,
+            );
+          } catch {
+            value = new Function(
+              "document",
+              "fetch",
+              "alert",
+              "confirm",
+              "prompt",
+              "window",
+              "location",
+              "navigator",
+              "localStorage",
+              "sessionStorage",
+              "console",
+              command.script,
+            )(
+              document,
+              dom.window.fetch.bind(dom.window),
+              dom.window.alert.bind(dom.window),
+              dom.window.confirm.bind(dom.window),
+              dom.window.prompt.bind(dom.window),
+              dom.window,
+              dom.window.location,
+              dom.window.navigator,
+              dom.window.localStorage,
+              dom.window.sessionStorage,
+              dom.window.console,
+            );
+          }
+          if (
+            value &&
+            typeof value === "object" &&
+            typeof (value as Promise<unknown>).then === "function"
+          ) {
+            value = await (value as Promise<unknown>);
+          }
+          return { mode: "web", subaction: command.subaction, value };
+        } catch (error) {
+          runtime.errors.push({
+            message: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? (error.stack ?? null) : null,
+            timestamp: getBrowserWorkspaceTimestamp(),
+          });
+          throw error;
+        }
+      }
+      case "screenshot": {
+        const data = createBrowserWorkspaceSyntheticScreenshotData(
+          tab.title,
+          tab.url,
+          document.body?.textContent ?? "",
+          runtime.settings.viewport ?? undefined,
+        );
+        runtime.lastScreenshotData = data;
+        if (command.filePath?.trim() || command.outputPath?.trim()) {
+          const targetPath = command.filePath?.trim() || command.outputPath?.trim() || "";
+          await writeBrowserWorkspaceFile(targetPath, Buffer.from(data, "base64"));
+          return {
+            mode: "web",
+            subaction: command.subaction,
+            snapshot: { data },
+            value: { path: path.resolve(targetPath) },
+          };
+        }
+        return { mode: "web", subaction: command.subaction, snapshot: { data } };
+      }
+      case "clipboard": {
+        const action = command.clipboardAction ?? "read";
+        if (action === "read") {
+          return { mode: "web", subaction: command.subaction, value: browserWorkspaceClipboardText };
+        }
+        if (action === "write") {
+          browserWorkspaceClipboardText = command.value ?? command.text ?? "";
+          return { mode: "web", subaction: command.subaction, value: browserWorkspaceClipboardText };
+        }
+        if (action === "copy") {
+          const target = resolveTarget();
+          browserWorkspaceClipboardText =
+            target && "value" in (target as HTMLInputElement)
+              ? String((target as HTMLInputElement).value ?? "")
+              : normalizeBrowserWorkspaceText(target?.textContent ?? document.body?.textContent);
+          return { mode: "web", subaction: command.subaction, value: browserWorkspaceClipboardText };
+        }
+        const target = resolveTarget() ?? document.activeElement;
+        if (
+          target &&
+          (target.tagName === "INPUT" ||
+            target.tagName === "TEXTAREA" ||
+            target.tagName === "SELECT")
+        ) {
+          const control = ensureBrowserWorkspaceFormControlElement(target, "clipboard");
+          setBrowserWorkspaceControlValue(
+            control,
+            `${control.value ?? ""}${browserWorkspaceClipboardText}`,
+          );
+          return {
+            mode: "web",
+            subaction: command.subaction,
+            value: {
+              selector: buildBrowserWorkspaceElementSelector(control),
+              value: control.value,
+            },
+          };
+        }
+        return { mode: "web", subaction: command.subaction, value: browserWorkspaceClipboardText };
+      }
+      case "mouse": {
+        const action = command.mouseAction ?? "move";
+        if (action === "move") {
+          runtime.mouse.x = command.x ?? runtime.mouse.x;
+          runtime.mouse.y = command.y ?? runtime.mouse.y;
+        } else if (action === "down") {
+          const button = command.button ?? "left";
+          runtime.mouse.buttons = Array.from(new Set([...runtime.mouse.buttons, button]));
+        } else if (action === "up") {
+          const button = command.button ?? "left";
+          runtime.mouse.buttons = runtime.mouse.buttons.filter((entry) => entry !== button);
+        } else {
+          return {
+            mode: "web",
+            subaction: command.subaction,
+            value: scrollWebBrowserWorkspaceTarget(
+              dom,
+              resolveTarget(),
+              (command.deltaY ?? 0) < 0 ? "up" : "down",
+              Math.abs(command.deltaY ?? command.pixels ?? 240),
+            ),
+          };
+        }
+        return { mode: "web", subaction: command.subaction, value: runtime.mouse };
+      }
+      case "drag": {
+        const source = resolveTarget();
+        const target = command.value
+          ? resolveBrowserWorkspaceElement(document, command.value)
+          : null;
+        if (!source || !target) {
+          throw new Error("Milady browser workspace drag requires source selector and target selector in value.");
+        }
+        source.setAttribute("data-milady-dragging", "true");
+        target.setAttribute("data-milady-drop-target", "true");
+        return {
+          mode: "web",
+          subaction: command.subaction,
+          value: {
+            source: buildBrowserWorkspaceElementSelector(source),
+            target: buildBrowserWorkspaceElementSelector(target),
+          },
+        };
+      }
+      case "upload": {
+        const target = resolveTarget();
+        if (!target || target.tagName !== "INPUT") {
+          throw new Error("Milady browser workspace upload requires a file input target.");
+        }
+        const files = (command.files ?? []).map((entry) => path.basename(entry));
+        target.setAttribute("data-milady-uploaded-files", files.join(","));
+        return {
+          mode: "web",
+          subaction: command.subaction,
+          value: {
+            files,
+            selector: buildBrowserWorkspaceElementSelector(target),
+          },
+        };
+      }
+      case "set": {
+        const action = command.setAction ?? "viewport";
+        if (action === "viewport") {
+          runtime.settings.viewport = {
+            height: Math.max(1, Math.round(command.height ?? 720)),
+            scale: Math.max(1, Number(command.scale ?? 1)),
+            width: Math.max(1, Math.round(command.width ?? 1280)),
+          };
+        } else if (action === "device") {
+          runtime.settings.device = command.device ?? null;
+        } else if (action === "geo") {
+          runtime.settings.geo =
+            typeof command.latitude === "number" &&
+            typeof command.longitude === "number"
+              ? { latitude: command.latitude, longitude: command.longitude }
+              : null;
+        } else if (action === "offline") {
+          runtime.settings.offline = Boolean(command.offline);
+        } else if (action === "headers") {
+          runtime.settings.headers = normalizeBrowserWorkspaceHeaders(command.headers);
+        } else if (action === "credentials") {
+          runtime.settings.credentials =
+            command.username || command.password
+              ? {
+                  password: command.password ?? "",
+                  username: command.username ?? "",
+                }
+              : null;
+        } else if (action === "media") {
+          runtime.settings.media = command.media ?? null;
+        }
+        applyBrowserWorkspaceDomSettings(dom, runtime);
+        return { mode: "web", subaction: command.subaction, value: runtime.settings };
+      }
+      case "cookies": {
+        const action = command.cookieAction ?? "get";
+        if (action === "clear") {
+          for (const key of Object.keys(readBrowserWorkspaceCookies(document))) {
+            document.cookie = `${key}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
+          }
+          return { mode: "web", subaction: command.subaction, value: { cleared: true } };
+        }
+        if (action === "set") {
+          const cookieName = command.name?.trim() || command.entryKey?.trim();
+          if (!cookieName) {
+            throw new Error("Milady browser workspace cookies set requires name.");
+          }
+          document.cookie = `${cookieName}=${command.value ?? ""}; path=/`;
+        }
+        return {
+          mode: "web",
+          subaction: command.subaction,
+          value: readBrowserWorkspaceCookies(document),
+        };
+      }
+      case "storage": {
+        const area =
+          command.storageArea === "session"
+            ? dom.window.sessionStorage
+            : dom.window.localStorage;
+        const action = command.storageAction ?? "get";
+        if (action === "clear") {
+          area.clear();
+          return { mode: "web", subaction: command.subaction, value: { cleared: true } };
+        }
+        if (action === "set") {
+          const key = command.entryKey?.trim() || command.name?.trim();
+          if (!key) {
+            throw new Error("Milady browser workspace storage set requires entryKey.");
+          }
+          area.setItem(key, command.value ?? "");
+        }
+        if (command.entryKey?.trim() || command.name?.trim()) {
+          const key = command.entryKey?.trim() || command.name?.trim() || "";
+          return { mode: "web", subaction: command.subaction, value: area.getItem(key) };
+        }
+        return { mode: "web", subaction: command.subaction, value: readBrowserWorkspaceStorage(area) };
+      }
+      case "network": {
+        const action = command.networkAction ?? "requests";
+        if (action === "route") {
+          const pattern = command.url?.trim();
+          if (!pattern) {
+            throw new Error("Milady browser workspace network route requires url pattern.");
+          }
+          runtime.networkRoutes.push({
+            abort: Boolean(command.offline),
+            body: command.responseBody ?? null,
+            headers: normalizeBrowserWorkspaceHeaders(command.responseHeaders),
+            pattern,
+            status:
+              typeof command.responseStatus === "number" ? command.responseStatus : null,
+          });
+          return { mode: "web", subaction: command.subaction, value: runtime.networkRoutes };
+        }
+        if (action === "unroute") {
+          runtime.networkRoutes = command.url?.trim()
+            ? runtime.networkRoutes.filter((route) => route.pattern !== command.url?.trim())
+            : [];
+          return { mode: "web", subaction: command.subaction, value: runtime.networkRoutes };
+        }
+        if (action === "request") {
+          const request = runtime.networkRequests.find((entry) => entry.id === command.requestId);
+          return { mode: "web", subaction: command.subaction, value: request ?? null };
+        }
+        if (action === "harstart") {
+          runtime.networkHar = {
+            active: true,
+            entries: [],
+            startedAt: getBrowserWorkspaceTimestamp(),
+          };
+          return { mode: "web", subaction: command.subaction, value: runtime.networkHar };
+        }
+        if (action === "harstop") {
+          runtime.networkHar.active = false;
+          const har = {
+            log: {
+              entries: runtime.networkHar.entries,
+              startedAt: runtime.networkHar.startedAt,
+            },
+          };
+          if (command.filePath?.trim() || command.outputPath?.trim()) {
+            const targetPath = command.filePath?.trim() || command.outputPath?.trim() || "";
+            await writeBrowserWorkspaceFile(targetPath, JSON.stringify(har, null, 2));
+            return {
+              mode: "web",
+              subaction: command.subaction,
+              value: { path: path.resolve(targetPath), ...har },
+            };
+          }
+          return { mode: "web", subaction: command.subaction, value: har };
+        }
+        let requests = [...runtime.networkRequests];
+        if (command.filter?.trim()) {
+          requests = requests.filter((entry) => entry.url.includes(command.filter ?? ""));
+        }
+        if (command.method?.trim()) {
+          requests = requests.filter(
+            (entry) => entry.method.toUpperCase() === command.method?.trim().toUpperCase(),
+          );
+        }
+        if (command.status?.trim()) {
+          const statusFilter = command.status.trim();
+          requests = requests.filter((entry) => {
+            if (entry.status === null) {
+              return false;
+            }
+            if (/^\dxx$/i.test(statusFilter)) {
+              return String(entry.status).startsWith(statusFilter[0] ?? "");
+            }
+            return String(entry.status) === statusFilter;
+          });
+        }
+        return { mode: "web", subaction: command.subaction, value: requests };
+      }
+      case "dialog": {
+        const action = command.dialogAction ?? "status";
+        if (action === "status") {
+          return { mode: "web", subaction: command.subaction, value: runtime.dialog };
+        }
+        if (runtime.dialog) {
+          runtime.dialog.open = false;
+        }
+        const result =
+          action === "accept"
+            ? {
+                accepted: true,
+                dialog: runtime.dialog,
+                promptText: command.promptText ?? command.value ?? null,
+              }
+            : { accepted: false, dialog: runtime.dialog };
+        runtime.dialog = null;
+        return { mode: "web", subaction: command.subaction, value: result };
+      }
+      case "console": {
+        if (command.consoleAction === "clear") {
+          runtime.consoleEntries = [];
+        }
+        return { mode: "web", subaction: command.subaction, value: runtime.consoleEntries };
+      }
+      case "errors": {
+        if (command.consoleAction === "clear") {
+          runtime.errors = [];
+        }
+        return { mode: "web", subaction: command.subaction, value: runtime.errors };
+      }
+      case "highlight": {
+        const target = resolveTarget();
+        if (!target) {
+          throw new Error("Target element was not found.");
+        }
+        target.setAttribute("data-milady-highlight", "true");
+        runtime.highlightedSelector = buildBrowserWorkspaceElementSelector(target);
+        return {
+          mode: "web",
+          subaction: command.subaction,
+          value: { selector: runtime.highlightedSelector },
+        };
+      }
+      case "frame": {
+        const action = command.frameAction ?? "select";
+        if (action === "main") {
+          runtime.currentFrame = null;
+          return { mode: "web", subaction: command.subaction, value: { frame: null } };
+        }
+        const frame = resolveBrowserWorkspaceElement(dom.window.document, command.selector);
+        if (!frame || frame.tagName !== "IFRAME") {
+          throw new Error("Milady browser workspace frame select requires an iframe selector.");
+        }
+        runtime.currentFrame = buildBrowserWorkspaceElementSelector(frame);
+        return {
+          mode: "web",
+          subaction: command.subaction,
+          value: { frame: runtime.currentFrame },
+        };
+      }
+      case "diff": {
+        const snapshot = createBrowserWorkspaceSnapshotRecord(
+          tab.title,
+          tab.url,
+          document.body?.textContent ?? "",
+        );
+        if (command.diffAction === "url") {
+          const leftUrl = command.url?.trim() || tab.url;
+          const rightUrl = command.secondaryUrl?.trim();
+          if (!rightUrl) {
+            throw new Error("Milady browser workspace diff url requires secondaryUrl.");
+          }
+          const left = await fetchBrowserWorkspaceTrackedResponse(runtime, leftUrl, {}, "document");
+          const right = await fetchBrowserWorkspaceTrackedResponse(
+            runtime,
+            rightUrl,
+            {},
+            "document",
+          );
+          const leftSnapshot = createBrowserWorkspaceSnapshotRecord(
+            leftUrl,
+            left.url || leftUrl,
+            await left.text(),
+          );
+          const rightSnapshot = createBrowserWorkspaceSnapshotRecord(
+            rightUrl,
+            right.url || rightUrl,
+            await right.text(),
+          );
+          return {
+            mode: "web",
+            subaction: command.subaction,
+            value: diffBrowserWorkspaceSnapshots(leftSnapshot, rightSnapshot),
+          };
+        }
+        if (command.diffAction === "screenshot") {
+          const currentData =
+            runtime.lastScreenshotData ??
+            createBrowserWorkspaceSyntheticScreenshotData(
+              tab.title,
+              tab.url,
+              document.body?.textContent ?? "",
+              runtime.settings.viewport ?? undefined,
+            );
+          const baseline =
+            command.baselinePath?.trim()
+              ? await fsp.readFile(path.resolve(command.baselinePath.trim()), "base64")
+              : runtime.lastScreenshotData;
+          runtime.lastScreenshotData = currentData;
+          return {
+            mode: "web",
+            subaction: command.subaction,
+            value: {
+              baselineLength: baseline?.length ?? 0,
+              changed: baseline !== currentData,
+              currentLength: currentData.length,
+            },
+          };
+        }
+        const baseline =
+          command.baselinePath?.trim()
+            ? (JSON.parse(
+                await fsp.readFile(path.resolve(command.baselinePath.trim()), "utf8"),
+              ) as BrowserWorkspaceSnapshotRecord)
+            : runtime.lastSnapshot;
+        const diff = diffBrowserWorkspaceSnapshots(baseline, snapshot);
+        runtime.lastSnapshot = snapshot;
+        return { mode: "web", subaction: command.subaction, value: diff };
+      }
+      case "trace": {
+        if (command.traceAction === "stop") {
+          runtime.trace.active = false;
+          const traceValue = { entries: runtime.trace.entries };
+          if (command.filePath?.trim() || command.outputPath?.trim()) {
+            const targetPath = command.filePath?.trim() || command.outputPath?.trim() || "";
+            await writeBrowserWorkspaceFile(targetPath, JSON.stringify(traceValue, null, 2));
+            return {
+              mode: "web",
+              subaction: command.subaction,
+              value: { path: path.resolve(targetPath), ...traceValue },
+            };
+          }
+          return { mode: "web", subaction: command.subaction, value: traceValue };
+        }
+        runtime.trace = { active: true, entries: [] };
+        runtime.trace.entries.push({
+          command: "trace:start",
+          timestamp: getBrowserWorkspaceTimestamp(),
+        });
+        return { mode: "web", subaction: command.subaction, value: { active: true } };
+      }
+      case "profiler": {
+        if (command.profilerAction === "stop") {
+          runtime.profiler.active = false;
+          const profileValue = { entries: runtime.profiler.entries };
+          if (command.filePath?.trim() || command.outputPath?.trim()) {
+            const targetPath = command.filePath?.trim() || command.outputPath?.trim() || "";
+            await writeBrowserWorkspaceFile(targetPath, JSON.stringify(profileValue, null, 2));
+            return {
+              mode: "web",
+              subaction: command.subaction,
+              value: { path: path.resolve(targetPath), ...profileValue },
+            };
+          }
+          return { mode: "web", subaction: command.subaction, value: profileValue };
+        }
+        runtime.profiler = {
+          active: true,
+          entries: [{ command: "profiler:start", timestamp: getBrowserWorkspaceTimestamp() }],
+        };
+        return { mode: "web", subaction: command.subaction, value: { active: true } };
+      }
+      case "state": {
+        if (command.stateAction === "load") {
+          const filePath = command.filePath?.trim() || command.outputPath?.trim();
+          if (!filePath) {
+            throw new Error("Milady browser workspace state load requires filePath.");
+          }
+          const payload = JSON.parse(
+            await fsp.readFile(path.resolve(filePath), "utf8"),
+          ) as Record<string, unknown>;
+          applyBrowserWorkspaceStateToWebDocument(document, payload);
+          if (payload.settings && typeof payload.settings === "object") {
+            runtime.settings = {
+              ...runtime.settings,
+              ...(payload.settings as BrowserWorkspaceSettingsState),
+            };
+            applyBrowserWorkspaceDomSettings(dom, runtime);
+          }
+          browserWorkspaceClipboardText =
+            typeof payload.clipboard === "string"
+              ? payload.clipboard
+              : browserWorkspaceClipboardText;
+          return { mode: "web", subaction: command.subaction, value: { loaded: true } };
+        }
+        const payload = {
+          clipboard: browserWorkspaceClipboardText,
+          cookies: readBrowserWorkspaceCookies(document),
+          localStorage: readBrowserWorkspaceStorage(dom.window.localStorage),
+          sessionStorage: readBrowserWorkspaceStorage(dom.window.sessionStorage),
+          settings: runtime.settings,
+          url: tab.url,
+        };
+        const filePath = command.filePath?.trim() || command.outputPath?.trim();
+        if (filePath) {
+          await writeBrowserWorkspaceFile(filePath, JSON.stringify(payload, null, 2));
+          return {
+            mode: "web",
+            subaction: command.subaction,
+            value: { path: path.resolve(filePath), ...payload },
+          };
+        }
+        return { mode: "web", subaction: command.subaction, value: payload };
+      }
+      case "pdf": {
+        const filePath = command.filePath?.trim() || command.outputPath?.trim();
+        if (!filePath) {
+          throw new Error("Milady browser workspace pdf requires filePath.");
+        }
+        const pdf = createBrowserWorkspacePdfBuffer(
+          tab.title,
+          normalizeBrowserWorkspaceText(document.body?.textContent),
+        );
+        const resolved = await writeBrowserWorkspaceFile(filePath, pdf);
+        return {
+          mode: "web",
+          subaction: command.subaction,
+          value: { path: resolved, size: pdf.byteLength },
+        };
+      }
+      default:
+        return null;
+    }
+  });
+}
+
 async function executeWebBrowserWorkspaceDomCommand(
   command: BrowserWorkspaceCommand,
 ): Promise<BrowserWorkspaceCommandResult> {
@@ -2548,7 +3783,9 @@ async function executeWebBrowserWorkspaceDomCommand(
     command = resolveBrowserWorkspaceCommandElementRefs(command, "web", id);
     const tab = getWebBrowserWorkspaceTabState(id);
     const dom = await ensureLoadedWebBrowserWorkspaceTabDocument(tab);
-    const document = dom.window.document;
+    const runtime = getBrowserWorkspaceRuntimeState("web", id);
+    const frameContext = resolveWebBrowserWorkspaceCommandDocument(tab, dom);
+    const document = frameContext.document;
     const resolveTarget = () =>
       resolveBrowserWorkspaceElement(document, command.selector, command.text, command);
 
@@ -3167,6 +4404,7 @@ export async function openBrowserWorkspaceTab(
   if (!isBrowserWorkspaceBridgeConfigured(env)) {
     return withWebStateLock(() => {
       const tab = createWebBrowserWorkspaceTab(request);
+      getBrowserWorkspaceRuntimeState("web", tab.id);
       clearWebBrowserWorkspaceTabElementRefs(tab.id);
       if (tab.visible) {
         webWorkspaceState.tabs = webWorkspaceState.tabs.map((entry) => ({
@@ -3205,16 +4443,23 @@ export async function navigateBrowserWorkspaceTab(
 
       const existing = webWorkspaceState.tabs[index];
       const updatedAt = getBrowserWorkspaceTimestamp();
+      const state = getBrowserWorkspaceRuntimeState("web", existing.id);
       clearWebBrowserWorkspaceTabElementRefs(existing.id);
       pushWebBrowserWorkspaceHistory(existing, nextUrl);
+      const nextDom =
+        nextUrl === "about:blank" ? createEmptyWebBrowserWorkspaceDom(nextUrl) : null;
       const nextTab: WebBrowserWorkspaceTabState = {
         ...existing,
         title: inferBrowserWorkspaceTitle(nextUrl),
         url: nextUrl,
         updatedAt,
-        dom: nextUrl === "about:blank" ? createEmptyWebBrowserWorkspaceDom(nextUrl) : null,
+        dom: nextDom,
         loadedUrl: nextUrl === "about:blank" ? nextUrl : null,
       };
+      if (nextDom) {
+        installBrowserWorkspaceWebRuntime(nextTab, nextDom);
+      }
+      resetBrowserWorkspaceRuntimeNavigationState(state);
       webWorkspaceState.tabs[index] = nextTab;
       return cloneWebBrowserWorkspaceTabState(nextTab);
     });
@@ -3295,6 +4540,7 @@ export async function closeBrowserWorkspaceTab(
     return withWebStateLock(() => {
       const initialLength = webWorkspaceState.tabs.length;
       clearWebBrowserWorkspaceTabElementRefs(id);
+      clearBrowserWorkspaceRuntimeState("web", id);
       webWorkspaceState.tabs = webWorkspaceState.tabs.filter(
         (tab) => tab.id !== id,
       );
@@ -3432,6 +4678,7 @@ export async function executeBrowserWorkspaceCommand(
         ? await resolveDesktopBrowserWorkspaceTargetTabId(command, env)
         : findWebBrowserWorkspaceTargetTabId(command);
       clearBrowserWorkspaceElementRefs(getBrowserWorkspaceMode(env), id);
+      clearBrowserWorkspaceRuntimeState(getBrowserWorkspaceMode(env), id);
       return {
         mode: getBrowserWorkspaceMode(env),
         subaction: command.subaction,
@@ -3439,6 +4686,9 @@ export async function executeBrowserWorkspaceCommand(
       };
     }
     case "eval": {
+      if (!isBrowserWorkspaceBridgeConfigured(env)) {
+        return (await executeWebBrowserWorkspaceUtilityCommand(command)) as BrowserWorkspaceCommandResult;
+      }
       const id = await resolveDesktopBrowserWorkspaceTargetTabId(command, env);
       return {
         mode: "desktop",
@@ -3453,6 +4703,9 @@ export async function executeBrowserWorkspaceCommand(
       };
     }
     case "screenshot": {
+      if (!isBrowserWorkspaceBridgeConfigured(env)) {
+        return (await executeWebBrowserWorkspaceUtilityCommand(command)) as BrowserWorkspaceCommandResult;
+      }
       const id = await resolveDesktopBrowserWorkspaceTargetTabId(command, env);
       return {
         mode: "desktop",
@@ -3460,6 +4713,102 @@ export async function executeBrowserWorkspaceCommand(
         snapshot: await snapshotBrowserWorkspaceTab(id, env),
       };
     }
+    case "clipboard":
+    case "console":
+    case "cookies":
+    case "diff":
+    case "dialog":
+    case "drag":
+    case "errors":
+    case "frame":
+    case "highlight":
+    case "mouse":
+    case "network":
+    case "pdf":
+    case "profiler":
+    case "set":
+    case "state":
+    case "storage":
+    case "trace":
+    case "upload": {
+      if (!isBrowserWorkspaceBridgeConfigured(env)) {
+        return (await executeWebBrowserWorkspaceUtilityCommand(command)) as BrowserWorkspaceCommandResult;
+      }
+      throw new Error(
+        `Milady browser workspace ${command.subaction} desktop parity is not wired yet.`,
+      );
+    }
+    case "tab": {
+      const action = command.tabAction ?? "list";
+      if (action === "list") {
+        return {
+          mode: getBrowserWorkspaceMode(env),
+          subaction: command.subaction,
+          tabs: await listBrowserWorkspaceTabs(env),
+        };
+      }
+      if (action === "new") {
+        return {
+          mode: getBrowserWorkspaceMode(env),
+          subaction: command.subaction,
+          tab: await openBrowserWorkspaceTab(
+            {
+              partition: command.partition,
+              show: command.show ?? true,
+              title: command.title,
+              url: command.url,
+              width: command.width,
+              height: command.height,
+            },
+            env,
+          ),
+        };
+      }
+      if (action === "switch") {
+        const tabs = await listBrowserWorkspaceTabs(env);
+        const target =
+          command.id?.trim()
+            ? tabs.find((tab) => tab.id === command.id?.trim())
+            : typeof command.index === "number"
+              ? tabs[command.index] ?? null
+              : null;
+        if (!target) {
+          throw new Error("Milady browser workspace tab switch requires a valid id or index.");
+        }
+        return {
+          mode: getBrowserWorkspaceMode(env),
+          subaction: command.subaction,
+          tab: await showBrowserWorkspaceTab(target.id, env),
+        };
+      }
+      const targetId =
+        command.id?.trim() ||
+        (await listBrowserWorkspaceTabs(env))[command.index ?? -1]?.id;
+      if (!targetId) {
+        throw new Error("Milady browser workspace tab close requires a valid id or index.");
+      }
+      return {
+        mode: getBrowserWorkspaceMode(env),
+        subaction: command.subaction,
+        closed: await closeBrowserWorkspaceTab(targetId, env),
+      };
+    }
+    case "window":
+      return {
+        mode: getBrowserWorkspaceMode(env),
+        subaction: command.subaction,
+        tab: await openBrowserWorkspaceTab(
+          {
+            partition: command.partition,
+            show: true,
+            title: command.title,
+            url: command.url,
+            width: command.width,
+            height: command.height,
+          },
+          env,
+        ),
+      };
     case "back":
     case "forward":
     case "reload": {

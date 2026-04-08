@@ -5,7 +5,7 @@
 Two plugins handle identity and trust:
 
 - **plugin-roles** (`packages/plugin-roles/`) — Coarse-grained access control. Who can do what.
-- **plugin-rolodex** (`plugins/plugin-rolodex/typescript/src/`) — Fine-grained identity linking, relationship tracking, and information claims.
+- **relationships** (`eliza/packages/typescript/src/advanced-capabilities/` and `eliza/packages/typescript/src/services/`) — Fine-grained identity linking, relationship tracking, and information claims.
 
 The agent runtime (`packages/agent/src/`) adds an escalation system on top of both.
 
@@ -324,7 +324,7 @@ packages/plugin-roles/src/
   provider.ts       rolesProvider (position 10)
   action.ts         UPDATE_ROLE action
 
-plugins/plugin-rolodex/typescript/src/
+eliza/packages/typescript/src/
   types/index.ts    InformationClaim, EntityLink, ResolutionSignal, ClaimScope, etc.
   utils/
     trustPolicy.ts  getClaimPermissions, createAuditRecord, permission matrix

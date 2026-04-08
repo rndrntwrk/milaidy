@@ -336,7 +336,7 @@ Quantum Memory Daemon 后端支持索引外部文件路径：
 
 </div>
 
-`@elizaos/plugin-knowledge` 提供 RAG 知识管理。它在启动时作为核心插件加载，并与内存存储集成，在每个相关轮次中通过向量相似性检索知识片段。
+`knowledge` 提供 RAG 知识管理。它在启动时作为核心插件加载，并与内存存储集成，在每个相关轮次中通过向量相似性检索知识片段。
 
 <div id="related-pages">
 

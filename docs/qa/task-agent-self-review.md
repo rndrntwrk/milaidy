@@ -23,6 +23,8 @@ These review harnesses exist to close the remaining manual gaps around the task-
     - `MILADY_DISCORD_QA_POST=1 node --import tsx test/scripts/discord-channel-roundtrip-review.ts`
   - Wait for a human reply and then a bot reply:
     - `MILADY_DISCORD_QA_POST=1 MILADY_DISCORD_QA_WAIT_FOR_HUMAN=1 MILADY_DISCORD_QA_EXPECT_BOT_RESPONSE=1 node --import tsx test/scripts/discord-channel-roundtrip-review.ts`
+  - Boot an isolated real Milady runtime with `connectors.discord` enabled, verify local chat, then wait for a literal human -> bot channel roundtrip:
+    - `bun run test:discord:runtime:roundtrip`
   - Optional:
     - `DISCORD_QA_CHANNEL_ID=<channel-id>`
     - `DISCORD_QA_GUILD_NAME="Cozy Devs"`
@@ -43,6 +45,8 @@ All review commands write artifacts under `.tmp/qa/`.
   - per-run stdout/stderr logs and a report summarizing blocked prompts, Claude dialogs, and preserved artifact files
 - `discord-channel-review-*`
   - guild/channel discovery, posted challenge metadata, human reply metadata, bot reply metadata
+- `discord-runtime-roundtrip-*`
+  - isolated runtime config, local chat smoke proof, posted Discord challenge, human reply, bot reply, runtime log path
 - `coordinator-platform-review-*`
   - per-platform smoke command logs and tool availability summary
 
@@ -58,4 +62,5 @@ It runs the coordinator platform review on `ubuntu-latest`, `windows-latest`, an
 
 - Docker container boot still depends on a healthy Docker Desktop daemon on the local host.
 - Literal Discord chat roundtrip still requires a real human message in the chosen channel.
+- The desktop runtime can still look healthy while Discord stays silent if `config.connectors.discord` is missing or disabled; the isolated runtime review catches that directly.
 - Windows/Linux live-provider flows still require a real host or CI run with the required binaries and credentials.

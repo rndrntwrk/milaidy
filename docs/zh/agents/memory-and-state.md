@@ -301,7 +301,7 @@ export type MemoryConfig = {
 
 </div>
 
-`@elizaos/plugin-knowledge` 提供 RAG（检索增强生成）知识管理。它作为核心插件加载，并与内存系统集成，基于向量相似度将相关知识片段注入代理上下文。
+`knowledge` 提供 RAG（检索增强生成）知识管理。它作为核心插件加载，并与内存系统集成，基于向量相似度将相关知识片段注入代理上下文。
 
 <div id="related-pages">
 
