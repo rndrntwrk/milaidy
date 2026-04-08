@@ -1,6 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import fs from "node:fs";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
@@ -34,6 +34,13 @@ type MiladyConfig = {
 	};
 	plugins?: {
 		allow?: string[];
+		installs?: Record<
+			string,
+			{
+				installPath?: string;
+				version?: string;
+			}
+		>;
 		entries?: {
 			discord?: {
 				enabled?: boolean;
@@ -108,18 +115,17 @@ function loadBaseConfig(): MiladyConfig {
 }
 
 function resolveDiscordToken(config: MiladyConfig): string {
-	const fromEnv = process.env.DISCORD_BOT_TOKEN?.trim();
-	if (fromEnv) {
-		return fromEnv;
-	}
-
-	return (
+	const fromConfig =
 		config.connectors?.discord?.token?.trim() ||
 		config.connectors?.discord?.botToken?.trim() ||
 		config.env?.DISCORD_API_TOKEN?.trim() ||
 		config.plugins?.entries?.discord?.config?.DISCORD_API_TOKEN?.trim() ||
-		""
-	);
+		"";
+	if (fromConfig) {
+		return fromConfig;
+	}
+
+	return process.env.DISCORD_BOT_TOKEN?.trim() || "";
 }
 
 function resolveDiscordApplicationId(config: MiladyConfig): string {
@@ -150,7 +156,12 @@ function buildRuntimeConfig(
 	allow.add("@elizaos/plugin-elizacloud");
 
 	return {
-		logging: { level: baseConfig.logging?.level ?? "info" },
+		logging: {
+			level:
+				process.env.MILADY_QA_LOG_LEVEL?.trim() ||
+				baseConfig.logging?.level ||
+				"info",
+		},
 		cloud: baseConfig.cloud,
 		serviceRouting: baseConfig.serviceRouting,
 		linkedAccounts: baseConfig.linkedAccounts,
@@ -159,6 +170,7 @@ function buildRuntimeConfig(
 		plugins: {
 			...(baseConfig.plugins ?? {}),
 			allow: Array.from(allow),
+			installs: baseConfig.plugins?.installs,
 			entries: {
 				...(baseConfig.plugins?.entries ?? {}),
 				discord: {
@@ -302,6 +314,7 @@ async function startRuntime(
 		env: {
 			...process.env,
 			CI: "1",
+			ELIZA_DISABLE_WORKSPACE_PLUGIN_OVERRIDES: "1",
 			ELIZA_SKIP_LOCAL_UPSTREAMS: "1",
 			ELIZA_CONFIG_PATH: configPath,
 			MILADY_SKIP_LOCAL_UPSTREAMS: "1",
@@ -443,8 +456,18 @@ async function main(): Promise<void> {
 		discordApplicationId,
 		cloudApiKey,
 	);
+	console.log(
+		"[discord-runtime-roundtrip-live] runtime_started",
+		JSON.stringify({
+			reportDir: REPORT_DIR,
+			apiPort: runtime.apiPort,
+			configPath: runtime.configPath,
+			logPath: runtime.logPath,
+		}),
+	);
 
 	try {
+		console.log("[discord-runtime-roundtrip-live] resolving_discord_context");
 		const [guild, channel, botUser, health, localChat] = await Promise.all([
 			discordRequest<DiscordGuild>(
 				discordToken,
@@ -469,6 +492,16 @@ async function main(): Promise<void> {
 			),
 			verifyLocalChat(runtime),
 		]);
+		console.log(
+			"[discord-runtime-roundtrip-live] runtime_ready",
+			JSON.stringify({
+				guildId: guild.id,
+				channelId: channel.id,
+				channelName: channel.name,
+				botUserId: botUser.id,
+				apiPort: runtime.apiPort,
+			}),
+		);
 
 		report.guild = guild;
 		report.channel = channel;
@@ -483,6 +516,10 @@ async function main(): Promise<void> {
 		};
 
 		const challengeToken = `MILADY_DISCORD_RUNTIME_QA_${Date.now()}`;
+		console.log(
+			"[discord-runtime-roundtrip-live] posting_challenge",
+			JSON.stringify({ challengeToken, channelId: CHANNEL_ID }),
+		);
 		const posted = await discordRequest<DiscordMessage>(
 			discordToken,
 			`/channels/${CHANNEL_ID}/messages`,
@@ -516,6 +553,10 @@ async function main(): Promise<void> {
 
 		const humanDeadline = Date.now() + TIMEOUT_MS;
 		let humanReply: DiscordMessage | null = null;
+		console.log(
+			"[discord-runtime-roundtrip-live] waiting_for_human",
+			JSON.stringify({ challengeToken, timeoutMs: TIMEOUT_MS }),
+		);
 		while (Date.now() < humanDeadline) {
 			const messages = await discordRequest<DiscordMessage[]>(
 				discordToken,
@@ -549,6 +590,15 @@ async function main(): Promise<void> {
 			content: humanReply.content,
 		};
 		report.status = "waiting_for_bot";
+		console.log(
+			"[discord-runtime-roundtrip-live] waiting_for_bot",
+			JSON.stringify({
+				humanReplyId: humanReply.id,
+				humanAuthor: humanReply.author.username,
+				challengeToken,
+				timeoutMs: TIMEOUT_MS,
+			}),
+		);
 
 		const botDeadline = Date.now() + TIMEOUT_MS;
 		let botReply: DiscordMessage | null = null;

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { runAutonomousCli } from "./cli";
+import { runAutonomousCli } from "./cli/index.js";
 
 runAutonomousCli().catch((error) => {
   console.error(

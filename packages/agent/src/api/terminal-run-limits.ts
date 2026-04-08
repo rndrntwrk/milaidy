@@ -1,4 +1,4 @@
-import { parseClampedInteger } from "../utils/number-parsing";
+import { parseClampedInteger } from "../utils/number-parsing.js";
 
 const TERMINAL_RUN_MAX_CONCURRENT_DEFAULT = 2;
 const TERMINAL_RUN_MAX_CONCURRENT_CAP = 16;

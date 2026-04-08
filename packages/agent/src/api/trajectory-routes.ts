@@ -18,8 +18,8 @@ import {
   readJsonBody as parseJsonBody,
   sendJson,
   sendJsonError,
-} from "./http-helpers";
-import { createZipArchive } from "./zip-utils";
+} from "./http-helpers.js";
+import { createZipArchive } from "./zip-utils.js";
 import {
   enrichTrajectoryLlmCall,
   executeRawSql,
@@ -27,7 +27,7 @@ import {
   saveTrajectory,
   type PersistedStep,
   type PersistedTrajectory,
-} from "../runtime/trajectory-internals";
+} from "../runtime/trajectory-internals.js";
 
 import type {
   Trajectory,
@@ -41,7 +41,7 @@ import type {
   TrajectoryProviderAccess,
   TrajectoryStatus,
   TrajectoryStep,
-} from "../types/trajectory";
+} from "../types/trajectory.js";
 
 export type { TrajectoryExportFormat };
 

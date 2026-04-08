@@ -20,7 +20,7 @@ import {
 
 import type {
   TrajectoryStatus,
-} from "../types/trajectory";
+} from "../types/trajectory.js";
 
 // ---------------------------------------------------------------------------
 // Internal types

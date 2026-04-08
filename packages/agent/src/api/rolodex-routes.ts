@@ -1,5 +1,5 @@
 import type { IAgentRuntime, UUID } from "@elizaos/core";
-import type { RouteRequestContext } from "./route-helpers";
+import type { RouteRequestContext } from "./route-helpers.js";
 
 type RolodexGraphQuery = {
   search?: string | null;

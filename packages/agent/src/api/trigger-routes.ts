@@ -5,8 +5,8 @@ import {
   type Task,
   type UUID,
 } from "@elizaos/core";
-import type { TriggerSummary } from "../triggers/types";
-import type { RouteHelpers, RouteRequestContext } from "./route-helpers";
+import type { TriggerSummary } from "../triggers/types.js";
+import type { RouteHelpers, RouteRequestContext } from "./route-helpers.js";
 
 export type TriggerRouteHelpers = RouteHelpers;
 

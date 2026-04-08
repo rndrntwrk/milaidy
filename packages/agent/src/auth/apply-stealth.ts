@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
-import { installClaudeCodeStealthFetchInterceptor } from "./claude-code-stealth";
+import { installClaudeCodeStealthFetchInterceptor } from "./claude-code-stealth.js";
 
 /**
  * Walk up from `startDir` until we find a directory containing package.json

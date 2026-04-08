@@ -18,21 +18,21 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { logger, type Plugin } from "@elizaos/core";
 
-import { type ElizaConfig, saveElizaConfig } from "../config/config";
+import { type ElizaConfig, saveElizaConfig } from "../config/config.js";
 import {
   type ApplyPluginAutoEnableParams,
   applyPluginAutoEnable,
-} from "../config/plugin-auto-enable";
-import { resolveStateDir, resolveUserPath } from "../config/paths";
-import type { PluginInstallRecord } from "../config/types.eliza";
-import { diagnoseNoAIProvider } from "../services/version-compat";
-import { CORE_PLUGINS, OPTIONAL_CORE_PLUGINS } from "./core-plugins";
+} from "../config/plugin-auto-enable.js";
+import { resolveStateDir, resolveUserPath } from "../config/paths.js";
+import type { PluginInstallRecord } from "../config/types.eliza.js";
+import { diagnoseNoAIProvider } from "../services/version-compat.js";
+import { CORE_PLUGINS, OPTIONAL_CORE_PLUGINS } from "./core-plugins.js";
 import {
   collectPluginNames,
   CHANNEL_PLUGIN_MAP,
   OPTIONAL_PLUGIN_MAP,
   type PluginLoadReasons,
-} from "./plugin-collector";
+} from "./plugin-collector.js";
 import {
   CUSTOM_PLUGINS_DIRNAME,
   EJECTED_PLUGINS_DIRNAME,
@@ -47,7 +47,7 @@ import {
   STATIC_ELIZA_PLUGINS,
   type PluginModuleShape,
   type ResolvedPlugin,
-} from "./eliza";
+} from "./eliza.js";
 
 // ---------------------------------------------------------------------------
 // Helpers (private)

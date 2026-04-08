@@ -95,7 +95,9 @@ function normalizeSubaction(
   }
 }
 
-function normalizeGetMode(value: string | undefined): BrowserWorkspaceGetMode | null {
+function normalizeGetMode(
+  value: string | undefined,
+): BrowserWorkspaceGetMode | null {
   if (!value) return null;
   switch (value.trim().toLowerCase()) {
     case "attr":
@@ -116,7 +118,9 @@ function normalizeGetMode(value: string | undefined): BrowserWorkspaceGetMode | 
   }
 }
 
-function normalizeFindBy(value: string | undefined): BrowserWorkspaceFindBy | null {
+function normalizeFindBy(
+  value: string | undefined,
+): BrowserWorkspaceFindBy | null {
   if (!value) return null;
   switch (value.trim().toLowerCase()) {
     case "alt":
@@ -221,7 +225,9 @@ function parseStringRecordLike(
 
 function parseStringArrayLike(value: unknown): string[] | undefined {
   if (Array.isArray(value)) {
-    const entries = value.filter((entry): entry is string => typeof entry === "string");
+    const entries = value.filter(
+      (entry): entry is string => typeof entry === "string",
+    );
     return entries.length > 0 ? entries : undefined;
   }
   if (typeof value !== "string" || value.trim().length === 0) {
@@ -259,14 +265,11 @@ function parseCommandRecord(
             ? "label"
             : undefined,
     ) ?? undefined;
-  const rawLabel =
-    typeof raw.label === "string" ? raw.label : undefined;
+  const rawLabel = typeof raw.label === "string" ? raw.label : undefined;
   const rawTargetText =
     typeof raw.targetText === "string" ? raw.targetText : undefined;
-  const rawTextValue =
-    typeof raw.text === "string" ? raw.text : undefined;
-  const rawValueValue =
-    typeof raw.value === "string" ? raw.value : undefined;
+  const rawTextValue = typeof raw.text === "string" ? raw.text : undefined;
+  const rawValueValue = typeof raw.value === "string" ? raw.value : undefined;
   const rawOptionValue =
     typeof raw.option === "string" ? raw.option : undefined;
   const usesByLocatorValue =
@@ -307,16 +310,52 @@ function parseCommandRecord(
     inferredWriteValue;
 
   return {
-    action: normalizeFindAction(
-      typeof raw.action === "string" ? raw.action : undefined,
-    ) ?? undefined,
+    action:
+      normalizeFindAction(
+        typeof raw.action === "string" ? raw.action : undefined,
+      ) ?? undefined,
     subaction,
+    baselinePath:
+      typeof raw.baselinePath === "string" ? raw.baselinePath : undefined,
+    button: typeof raw.button === "string" ? raw.button : undefined,
+    clipboardAction:
+      typeof raw.clipboardAction === "string" ? raw.clipboardAction : undefined,
+    consoleAction:
+      typeof raw.consoleAction === "string"
+        ? raw.consoleAction
+        : typeof raw.action === "string" &&
+            ["clear", "list"].includes(raw.action.trim().toLowerCase())
+          ? raw.action.trim().toLowerCase()
+          : undefined,
+    cookieAction:
+      typeof raw.cookieAction === "string" ? raw.cookieAction : undefined,
+    deltaX: parseNumberLike(raw.deltaX),
+    deltaY: parseNumberLike(raw.deltaY),
+    device: typeof raw.device === "string" ? raw.device : undefined,
+    dialogAction:
+      typeof raw.dialogAction === "string" ? raw.dialogAction : undefined,
+    diffAction: typeof raw.diffAction === "string" ? raw.diffAction : undefined,
+    entryKey: typeof raw.entryKey === "string" ? raw.entryKey : undefined,
+    filePath:
+      typeof raw.filePath === "string"
+        ? raw.filePath
+        : typeof raw.path === "string"
+          ? raw.path
+          : undefined,
+    files: parseStringArrayLike(raw.files),
+    filter: typeof raw.filter === "string" ? raw.filter : undefined,
+    frameAction:
+      typeof raw.frameAction === "string" ? raw.frameAction : undefined,
+    headers: parseStringRecordLike(raw.headers),
     id: typeof raw.id === "string" ? raw.id : undefined,
     url: typeof raw.url === "string" ? raw.url : undefined,
+    secondaryUrl:
+      typeof raw.secondaryUrl === "string" ? raw.secondaryUrl : undefined,
     title: typeof raw.title === "string" ? raw.title : undefined,
     script: typeof raw.script === "string" ? raw.script : undefined,
     show: parseBooleanLike(raw.show) ?? parseBooleanLike(raw.visible),
     partition: typeof raw.partition === "string" ? raw.partition : undefined,
+    height: parseNumberLike(raw.height),
     direction:
       normalizeScrollDirection(
         typeof raw.direction === "string" ? raw.direction : undefined,
@@ -334,15 +373,34 @@ function parseCommandRecord(
           ? raw.attr
           : undefined,
     key: typeof raw.key === "string" ? raw.key : undefined,
-    getMode: normalizeGetMode(
-      typeof raw.getMode === "string"
-        ? raw.getMode
-        : typeof raw.mode === "string"
-          ? raw.mode
-          : undefined,
-    ) ?? undefined,
+    latitude: parseNumberLike(raw.latitude),
+    longitude: parseNumberLike(raw.longitude),
+    media: typeof raw.media === "string" ? raw.media : undefined,
+    method: typeof raw.method === "string" ? raw.method : undefined,
+    mouseAction:
+      typeof raw.mouseAction === "string" ? raw.mouseAction : undefined,
+    networkAction:
+      typeof raw.networkAction === "string" ? raw.networkAction : undefined,
+    offline: parseBooleanLike(raw.offline),
+    getMode:
+      normalizeGetMode(
+        typeof raw.getMode === "string"
+          ? raw.getMode
+          : typeof raw.mode === "string"
+            ? raw.mode
+            : undefined,
+      ) ?? undefined,
     name: typeof raw.name === "string" ? raw.name : undefined,
+    outputPath: typeof raw.outputPath === "string" ? raw.outputPath : undefined,
     pixels: parseNumberLike(raw.pixels),
+    profilerAction:
+      typeof raw.profilerAction === "string" ? raw.profilerAction : undefined,
+    promptText: typeof raw.promptText === "string" ? raw.promptText : undefined,
+    requestId: typeof raw.requestId === "string" ? raw.requestId : undefined,
+    responseBody:
+      typeof raw.responseBody === "string" ? raw.responseBody : undefined,
+    responseHeaders: parseStringRecordLike(raw.responseHeaders),
+    responseStatus: parseNumberLike(raw.responseStatus),
     role:
       typeof raw.role === "string"
         ? raw.role
@@ -351,14 +409,33 @@ function parseCommandRecord(
             typeof raw.name === "string"
           ? "button"
           : undefined,
+    scale: parseNumberLike(raw.scale),
+    setAction: typeof raw.setAction === "string" ? raw.setAction : undefined,
     state:
       normalizeWaitState(
         typeof raw.state === "string" ? raw.state : undefined,
       ) ?? undefined,
+    stateAction:
+      typeof raw.stateAction === "string" ? raw.stateAction : undefined,
+    status: typeof raw.status === "string" ? raw.status : undefined,
+    storageAction:
+      typeof raw.storageAction === "string" ? raw.storageAction : undefined,
+    storageArea:
+      typeof raw.storageArea === "string" ? raw.storageArea : undefined,
+    tabAction: typeof raw.tabAction === "string" ? raw.tabAction : undefined,
     timeoutMs:
       parseNumberLike(raw.timeoutMs) ??
       parseNumberLike(raw.ms) ??
       parseNumberLike(raw.milliseconds),
+    traceAction:
+      typeof raw.traceAction === "string" ? raw.traceAction : undefined,
+    width: parseNumberLike(raw.width),
+    windowAction:
+      typeof raw.windowAction === "string" ? raw.windowAction : undefined,
+    x: parseNumberLike(raw.x),
+    y: parseNumberLike(raw.y),
+    username: typeof raw.username === "string" ? raw.username : undefined,
+    password: typeof raw.password === "string" ? raw.password : undefined,
     steps: Array.isArray(raw.steps)
       ? raw.steps
           .map((entry) =>
@@ -371,7 +448,9 @@ function parseCommandRecord(
   };
 }
 
-function parseStepsParam(value: unknown): BrowserWorkspaceCommand[] | undefined {
+function parseStepsParam(
+  value: unknown,
+): BrowserWorkspaceCommand[] | undefined {
   if (Array.isArray(value)) {
     const steps = value
       .map((entry) =>
@@ -428,8 +507,7 @@ function parseRequest(
             ? "label"
             : undefined,
     ) ?? undefined;
-  const rawLabel =
-    typeof params.label === "string" ? params.label : undefined;
+  const rawLabel = typeof params.label === "string" ? params.label : undefined;
   const rawTargetText =
     typeof params.targetText === "string" ? params.targetText : undefined;
   const rawTextValue =
@@ -454,7 +532,9 @@ function parseRequest(
     rawTargetText ??
     (usesByLocatorValue &&
     rawValueValue &&
-    (rawTextValue || rawOptionValue || !writesTextValue.includes(fromParams ?? ""))
+    (rawTextValue ||
+      rawOptionValue ||
+      !writesTextValue.includes(fromParams ?? ""))
       ? rawValueValue
       : rawTextValue);
   const lower = messageText.toLowerCase();
@@ -504,21 +584,112 @@ function parseRequest(
                                           ? "keyboardtype"
                                           : /\binsert text\b/.test(lower)
                                             ? "keyboardinserttext"
-                    : /\bclick\b/.test(lower) &&
-                        (typeof params.selector === "string" ||
-                          typeof params.text === "string")
-                      ? "click"
-                      : /\bfill\b|\benter\b|\btype into\b/.test(lower) &&
-                          (typeof params.selector === "string" ||
-                            typeof params.text === "string")
-                        ? "fill"
-                        : /\bwait\b/.test(lower)
-                          ? "wait"
-                          : /\bget\b|\bread\b|\bextract\b/.test(lower)
-                            ? "get"
-                            : /\beval\b|\bexecute js\b|\brun script\b/.test(lower)
-                              ? "eval"
-                              : null);
+                                            : /\bclick\b/.test(lower) &&
+                                                (typeof params.selector ===
+                                                  "string" ||
+                                                  typeof params.text ===
+                                                    "string")
+                                              ? "click"
+                                              : /\bfill\b|\benter\b|\btype into\b/.test(
+                                                    lower,
+                                                  ) &&
+                                                  (typeof params.selector ===
+                                                    "string" ||
+                                                    typeof params.text ===
+                                                      "string")
+                                                ? "fill"
+                                                : /\bwait\b/.test(lower)
+                                                  ? "wait"
+                                                  : /\bget\b|\bread\b|\bextract\b/.test(
+                                                        lower,
+                                                      )
+                                                    ? "get"
+                                                    : /\bclipboard\b|\bcopy\b|\bpaste\b/.test(
+                                                          lower,
+                                                        )
+                                                      ? "clipboard"
+                                                      : /\bmouse\b|\bwheel\b/.test(
+                                                            lower,
+                                                          )
+                                                        ? "mouse"
+                                                        : /\bdrag\b/.test(lower)
+                                                          ? "drag"
+                                                          : /\bupload\b|\bfile input\b/.test(
+                                                                lower,
+                                                              )
+                                                            ? "upload"
+                                                            : /\bviewport\b|\boffline\b|\bheaders\b|\bcredentials\b|\buser agent\b|\bmedia\b/.test(
+                                                                  lower,
+                                                                )
+                                                              ? "set"
+                                                              : /\bcookies?\b/.test(
+                                                                    lower,
+                                                                  )
+                                                                ? "cookies"
+                                                                : /\bstorage\b|\blocalstorage\b|\bsessionstorage\b/.test(
+                                                                      lower,
+                                                                    )
+                                                                  ? "storage"
+                                                                  : /\bnetwork\b|\broute\b|\bhar\b/.test(
+                                                                        lower,
+                                                                      )
+                                                                    ? "network"
+                                                                    : /\bdialog\b|\bconfirm\b|\bprompt\b|\balert\b/.test(
+                                                                          lower,
+                                                                        )
+                                                                      ? "dialog"
+                                                                      : /\bconsole\b/.test(
+                                                                            lower,
+                                                                          )
+                                                                        ? "console"
+                                                                        : /\berrors?\b/.test(
+                                                                              lower,
+                                                                            )
+                                                                          ? "errors"
+                                                                          : /\bhighlight\b/.test(
+                                                                                lower,
+                                                                              )
+                                                                            ? "highlight"
+                                                                            : /\bdiff\b/.test(
+                                                                                  lower,
+                                                                                )
+                                                                              ? "diff"
+                                                                              : /\btrace\b/.test(
+                                                                                    lower,
+                                                                                  )
+                                                                                ? "trace"
+                                                                                : /\bprofile\b|\bprofiler\b/.test(
+                                                                                      lower,
+                                                                                    )
+                                                                                  ? "profiler"
+                                                                                  : /\bstate\b/.test(
+                                                                                        lower,
+                                                                                      )
+                                                                                    ? "state"
+                                                                                    : /\bframe\b|\biframe\b/.test(
+                                                                                          lower,
+                                                                                        )
+                                                                                      ? "frame"
+                                                                                      : /\bwindow\b/.test(
+                                                                                            lower,
+                                                                                          )
+                                                                                        ? "window"
+                                                                                        : /\bpdf\b/.test(
+                                                                                              lower,
+                                                                                            )
+                                                                                          ? "pdf"
+                                                                                          : /\btab\b/.test(
+                                                                                                lower,
+                                                                                              ) &&
+                                                                                              /\b(new|switch|close)\b/.test(
+                                                                                                lower,
+                                                                                              )
+                                                                                            ? "tab"
+                                                                                            : /\beval\b|\bexecute js\b|\brun script\b/.test(
+                                                                                                  lower,
+                                                                                                )
+                                                                                              ? "eval"
+                                                                                              : null);
 
   if (!inferred) return null;
 
@@ -545,13 +716,51 @@ function parseRequest(
         typeof params.action === "string" ? params.action : undefined,
       ) ?? undefined,
     subaction: inferred,
+    baselinePath:
+      typeof params.baselinePath === "string" ? params.baselinePath : undefined,
+    button: typeof params.button === "string" ? params.button : undefined,
+    clipboardAction:
+      typeof params.clipboardAction === "string"
+        ? params.clipboardAction
+        : undefined,
+    consoleAction:
+      typeof params.consoleAction === "string"
+        ? params.consoleAction
+        : typeof params.action === "string" &&
+            ["clear", "list"].includes(params.action.trim().toLowerCase())
+          ? params.action.trim().toLowerCase()
+          : undefined,
+    cookieAction:
+      typeof params.cookieAction === "string" ? params.cookieAction : undefined,
+    deltaX: parseNumberLike(params.deltaX),
+    deltaY: parseNumberLike(params.deltaY),
+    device: typeof params.device === "string" ? params.device : undefined,
+    dialogAction:
+      typeof params.dialogAction === "string" ? params.dialogAction : undefined,
+    diffAction:
+      typeof params.diffAction === "string" ? params.diffAction : undefined,
     id,
     url,
+    secondaryUrl:
+      typeof params.secondaryUrl === "string" ? params.secondaryUrl : undefined,
     title: typeof params.title === "string" ? params.title : undefined,
     script: typeof params.script === "string" ? params.script : undefined,
     show: parseBooleanLike(params.show) ?? parseBooleanLike(params.visible),
     partition:
       typeof params.partition === "string" ? params.partition : undefined,
+    entryKey: typeof params.entryKey === "string" ? params.entryKey : undefined,
+    filePath:
+      typeof params.filePath === "string"
+        ? params.filePath
+        : typeof params.path === "string"
+          ? params.path
+          : undefined,
+    files: parseStringArrayLike(params.files),
+    filter: typeof params.filter === "string" ? params.filter : undefined,
+    frameAction:
+      typeof params.frameAction === "string" ? params.frameAction : undefined,
+    headers: parseStringRecordLike(params.headers),
+    height: parseNumberLike(params.height),
     direction:
       normalizeScrollDirection(
         typeof params.direction === "string" ? params.direction : undefined,
@@ -569,6 +778,17 @@ function parseRequest(
           ? params.attr
           : undefined,
     key: typeof params.key === "string" ? params.key : undefined,
+    latitude: parseNumberLike(params.latitude),
+    longitude: parseNumberLike(params.longitude),
+    media: typeof params.media === "string" ? params.media : undefined,
+    method: typeof params.method === "string" ? params.method : undefined,
+    mouseAction:
+      typeof params.mouseAction === "string" ? params.mouseAction : undefined,
+    networkAction:
+      typeof params.networkAction === "string"
+        ? params.networkAction
+        : undefined,
+    offline: parseBooleanLike(params.offline),
     getMode:
       normalizeGetMode(
         typeof params.getMode === "string"
@@ -578,7 +798,21 @@ function parseRequest(
             : undefined,
       ) ?? undefined,
     name: typeof params.name === "string" ? params.name : undefined,
+    outputPath:
+      typeof params.outputPath === "string" ? params.outputPath : undefined,
     pixels: parseNumberLike(params.pixels),
+    profilerAction:
+      typeof params.profilerAction === "string"
+        ? params.profilerAction
+        : undefined,
+    promptText:
+      typeof params.promptText === "string" ? params.promptText : undefined,
+    requestId:
+      typeof params.requestId === "string" ? params.requestId : undefined,
+    responseBody:
+      typeof params.responseBody === "string" ? params.responseBody : undefined,
+    responseHeaders: parseStringRecordLike(params.responseHeaders),
+    responseStatus: parseNumberLike(params.responseStatus),
     role:
       typeof params.role === "string"
         ? params.role
@@ -587,14 +821,37 @@ function parseRequest(
             typeof params.name === "string"
           ? "button"
           : undefined,
+    scale: parseNumberLike(params.scale),
+    setAction:
+      typeof params.setAction === "string" ? params.setAction : undefined,
     state:
       normalizeWaitState(
         typeof params.state === "string" ? params.state : undefined,
       ) ?? undefined,
+    stateAction:
+      typeof params.stateAction === "string" ? params.stateAction : undefined,
+    status: typeof params.status === "string" ? params.status : undefined,
+    storageAction:
+      typeof params.storageAction === "string"
+        ? params.storageAction
+        : undefined,
+    storageArea:
+      typeof params.storageArea === "string" ? params.storageArea : undefined,
+    tabAction:
+      typeof params.tabAction === "string" ? params.tabAction : undefined,
     timeoutMs:
       parseNumberLike(params.timeoutMs) ??
       parseNumberLike(params.ms) ??
       parseNumberLike(params.milliseconds),
+    traceAction:
+      typeof params.traceAction === "string" ? params.traceAction : undefined,
+    width: parseNumberLike(params.width),
+    windowAction:
+      typeof params.windowAction === "string" ? params.windowAction : undefined,
+    x: parseNumberLike(params.x),
+    y: parseNumberLike(params.y),
+    username: typeof params.username === "string" ? params.username : undefined,
+    password: typeof params.password === "string" ? params.password : undefined,
     steps,
   };
 }
@@ -618,7 +875,9 @@ function formatBrowserWorkspaceElementLine(
   return `${refPrefix}${element.selector} <${element.tag}> ${element.text || element.value || ""}`.trim();
 }
 
-function formatSingleCommandResult(result: BrowserWorkspaceCommandResult): string {
+function formatSingleCommandResult(
+  result: BrowserWorkspaceCommandResult,
+): string {
   switch (result.subaction) {
     case "list": {
       if (!result.tabs?.length) {
@@ -671,12 +930,16 @@ function formatSingleCommandResult(result: BrowserWorkspaceCommandResult): strin
             )}.`,
             ...result.elements
               .slice(0, 8)
-              .map((element) => `- ${formatBrowserWorkspaceElementLine(element)}`),
+              .map(
+                (element) => `- ${formatBrowserWorkspaceElementLine(element)}`,
+              ),
           ].join("\n")
         : `Captured a browser DOM snapshot: ${stringifyResult(result.value)}`;
     case "inspect": {
       const prefix =
-        result.value && typeof result.value === "object" && !Array.isArray(result.value)
+        result.value &&
+        typeof result.value === "object" &&
+        !Array.isArray(result.value)
           ? (result.value as { title?: string; url?: string })
           : null;
       const head = `Inspected ${prefix?.title ? `${prefix.title} ` : ""}${prefix?.url ? `at ${prefix.url}` : "the current page"}.`;
@@ -719,6 +982,52 @@ function formatSingleCommandResult(result: BrowserWorkspaceCommandResult): strin
     case "scroll":
     case "scrollinto":
       return `Scrolled in the browser: ${stringifyResult(result.value)}`;
+    case "clipboard":
+      return `Updated the browser clipboard: ${stringifyResult(result.value)}`;
+    case "console":
+      return `Read browser console entries: ${stringifyResult(result.value)}`;
+    case "cookies":
+      return `Read browser cookies: ${stringifyResult(result.value)}`;
+    case "diff":
+      return `Compared browser state: ${stringifyResult(result.value)}`;
+    case "dialog":
+      return `Handled browser dialog state: ${stringifyResult(result.value)}`;
+    case "drag":
+      return `Dragged within the browser: ${stringifyResult(result.value)}`;
+    case "errors":
+      return `Read browser errors: ${stringifyResult(result.value)}`;
+    case "frame":
+      return `Changed browser frame context: ${stringifyResult(result.value)}`;
+    case "highlight":
+      return `Highlighted a browser element: ${stringifyResult(result.value)}`;
+    case "mouse":
+      return `Moved the browser mouse: ${stringifyResult(result.value)}`;
+    case "network":
+      return `Updated browser network state: ${stringifyResult(result.value)}`;
+    case "pdf":
+      return `Saved browser PDF output: ${stringifyResult(result.value)}`;
+    case "profiler":
+      return `Updated browser profiling state: ${stringifyResult(result.value)}`;
+    case "set":
+      return `Updated browser settings: ${stringifyResult(result.value)}`;
+    case "state":
+      return `Updated browser session state: ${stringifyResult(result.value)}`;
+    case "storage":
+      return `Read browser storage: ${stringifyResult(result.value)}`;
+    case "tab":
+      return result.closed
+        ? "Closed browser tab through tab controls."
+        : result.tab
+          ? `Updated browser tabs: ${result.tab.id}`
+          : `Read browser tabs: ${stringifyResult(result.tabs ?? result.value)}`;
+    case "trace":
+      return `Updated browser tracing state: ${stringifyResult(result.value)}`;
+    case "upload":
+      return `Uploaded files in the browser: ${stringifyResult(result.value)}`;
+    case "window":
+      return result.tab
+        ? `Opened a new browser window/tab ${result.tab.id} at ${result.tab.url}.`
+        : `Opened a new browser window/tab: ${stringifyResult(result.value)}`;
     case "back":
       return `Moved the browser tab back: ${stringifyResult(result.value)}`;
     case "forward":
@@ -751,7 +1060,7 @@ function formatBrowserWorkspaceCommandResult(
 export const manageMiladyBrowserWorkspaceAction: Action = {
   name: "MANAGE_MILADY_BROWSER_WORKSPACE",
   description:
-    "Use the Milady browser workspace through one main action. Pass a subaction such as list, open, navigate, show, hide, close, inspect, snapshot, screenshot, find, click, dblclick, fill, type, keyboardtype, keyboardinserttext, focus, hover, select, check, uncheck, press, keydown, keyup, scroll, scrollinto, wait, get, back, forward, reload, eval, or batch. Use batch with stepsJson to run a series of browser subactions in order. Snapshot and inspect return reusable element refs like @e1 that can be passed back as selector values.",
+    "Use the Milady browser workspace through one main action. Pass a subaction such as list, open, navigate, show, hide, close, inspect, snapshot, screenshot, find, click, dblclick, fill, type, keyboardtype, keyboardinserttext, focus, hover, select, check, uncheck, press, keydown, keyup, scroll, scrollinto, wait, get, back, forward, reload, eval, batch, clipboard, mouse, drag, upload, set, cookies, storage, network, dialog, console, errors, highlight, diff, trace, profiler, state, frame, tab, window, or pdf. Use batch with stepsJson to run a series of browser subactions in order. Snapshot and inspect return reusable element refs like @e1 that can be passed back as selector values.",
   similes: [
     "browser command",
     "browser subaction",
@@ -763,7 +1072,7 @@ export const manageMiladyBrowserWorkspaceAction: Action = {
     {
       name: "subaction",
       description:
-        "Browser subaction to run: list, open, navigate, show, hide, close, inspect, snapshot, screenshot, find, click, dblclick, fill, type, keyboardtype, keyboardinserttext, focus, hover, select, check, uncheck, press, keydown, keyup, scroll, scrollinto, wait, get, back, forward, reload, eval, or batch.",
+        "Browser subaction to run: list, open, navigate, show, hide, close, inspect, snapshot, screenshot, find, click, dblclick, fill, type, keyboardtype, keyboardinserttext, focus, hover, select, check, uncheck, press, keydown, keyup, scroll, scrollinto, wait, get, back, forward, reload, eval, batch, clipboard, mouse, drag, upload, set, cookies, storage, network, dialog, console, errors, highlight, diff, trace, profiler, state, frame, tab, window, or pdf.",
       required: false,
       schema: {
         type: "string",
@@ -801,6 +1110,26 @@ export const manageMiladyBrowserWorkspaceAction: Action = {
           "reload",
           "eval",
           "batch",
+          "clipboard",
+          "mouse",
+          "drag",
+          "upload",
+          "set",
+          "cookies",
+          "storage",
+          "network",
+          "dialog",
+          "console",
+          "errors",
+          "highlight",
+          "diff",
+          "trace",
+          "profiler",
+          "state",
+          "frame",
+          "tab",
+          "window",
+          "pdf",
         ],
       },
     },
@@ -901,7 +1230,16 @@ export const manageMiladyBrowserWorkspaceAction: Action = {
       required: false,
       schema: {
         type: "string",
-        enum: ["text", "click", "fill", "type", "focus", "hover", "check", "uncheck"],
+        enum: [
+          "text",
+          "click",
+          "fill",
+          "type",
+          "focus",
+          "hover",
+          "check",
+          "uncheck",
+        ],
       },
     },
     {
@@ -962,7 +1300,7 @@ export const manageMiladyBrowserWorkspaceAction: Action = {
     {
       name: "stepsJson",
       description:
-        "JSON array of browser subaction objects for batch mode. Example: [{\"subaction\":\"open\",\"url\":\"https://example.com\",\"show\":true},{\"subaction\":\"inspect\"}]",
+        'JSON array of browser subaction objects for batch mode. Example: [{"subaction":"open","url":"https://example.com","show":true},{"subaction":"inspect"}]',
       required: false,
       schema: { type: "string" },
     },
@@ -982,8 +1320,7 @@ export const manageMiladyBrowserWorkspaceAction: Action = {
     },
     {
       name: "show",
-      description:
-        "Whether a newly opened tab should be visible immediately.",
+      description: "Whether a newly opened tab should be visible immediately.",
       required: false,
       schema: { type: "boolean" },
     },
@@ -998,6 +1335,127 @@ export const manageMiladyBrowserWorkspaceAction: Action = {
       description: "Optional browser partition to use for the tab session.",
       required: false,
       schema: { type: "string" },
+    },
+    {
+      name: "filePath",
+      description:
+        "Optional output/input path for pdf, trace, profiler, state save/load, screenshot output, or HAR capture.",
+      required: false,
+      schema: { type: "string" },
+    },
+    {
+      name: "files",
+      description: "Optional file path array for upload subactions.",
+      required: false,
+      schema: { type: "array", items: { type: "string" } },
+    },
+    {
+      name: "headers",
+      description:
+        "Optional string map for set headers or mocked network response headers.",
+      required: false,
+      schema: { type: "object" },
+    },
+    {
+      name: "clipboardAction",
+      description: "Clipboard mode: read, write, copy, or paste.",
+      required: false,
+      schema: { type: "string", enum: ["read", "write", "copy", "paste"] },
+    },
+    {
+      name: "mouseAction",
+      description: "Mouse mode: move, down, up, or wheel.",
+      required: false,
+      schema: { type: "string", enum: ["move", "down", "up", "wheel"] },
+    },
+    {
+      name: "setAction",
+      description:
+        "Browser settings mode: viewport, device, geo, offline, headers, credentials, or media.",
+      required: false,
+      schema: {
+        type: "string",
+        enum: [
+          "viewport",
+          "device",
+          "geo",
+          "offline",
+          "headers",
+          "credentials",
+          "media",
+        ],
+      },
+    },
+    {
+      name: "storageAction",
+      description: "Storage mode: get, set, or clear.",
+      required: false,
+      schema: { type: "string", enum: ["get", "set", "clear"] },
+    },
+    {
+      name: "storageArea",
+      description: "Storage target: local or session.",
+      required: false,
+      schema: { type: "string", enum: ["local", "session"] },
+    },
+    {
+      name: "networkAction",
+      description:
+        "Network mode: route, unroute, requests, request, harstart, or harstop.",
+      required: false,
+      schema: {
+        type: "string",
+        enum: [
+          "route",
+          "unroute",
+          "requests",
+          "request",
+          "harstart",
+          "harstop",
+        ],
+      },
+    },
+    {
+      name: "dialogAction",
+      description: "Dialog mode: status, accept, or dismiss.",
+      required: false,
+      schema: { type: "string", enum: ["status", "accept", "dismiss"] },
+    },
+    {
+      name: "diffAction",
+      description: "Diff mode: snapshot, screenshot, or url.",
+      required: false,
+      schema: { type: "string", enum: ["snapshot", "screenshot", "url"] },
+    },
+    {
+      name: "traceAction",
+      description: "Trace mode: start or stop.",
+      required: false,
+      schema: { type: "string", enum: ["start", "stop"] },
+    },
+    {
+      name: "profilerAction",
+      description: "Profiler mode: start or stop.",
+      required: false,
+      schema: { type: "string", enum: ["start", "stop"] },
+    },
+    {
+      name: "stateAction",
+      description: "State mode: save or load.",
+      required: false,
+      schema: { type: "string", enum: ["save", "load"] },
+    },
+    {
+      name: "frameAction",
+      description: "Frame mode: select or main.",
+      required: false,
+      schema: { type: "string", enum: ["select", "main"] },
+    },
+    {
+      name: "tabAction",
+      description: "Tab mode: list, new, switch, or close.",
+      required: false,
+      schema: { type: "string", enum: ["list", "new", "switch", "close"] },
     },
   ],
   validate: async (
@@ -1030,7 +1488,8 @@ export const manageMiladyBrowserWorkspaceAction: Action = {
     if (
       request.subaction === "eval" &&
       !(
-        (options?.parameters as Record<string, unknown> | undefined)?.subaction ??
+        (options?.parameters as Record<string, unknown> | undefined)
+          ?.subaction ??
         (options?.parameters as Record<string, unknown> | undefined)?.operation
       )
     ) {
@@ -1040,7 +1499,10 @@ export const manageMiladyBrowserWorkspaceAction: Action = {
       return { success: false, text };
     }
 
-    if (request.subaction === "batch" && (!request.steps || request.steps.length === 0)) {
+    if (
+      request.subaction === "batch" &&
+      (!request.steps || request.steps.length === 0)
+    ) {
       const text =
         "Browser batch mode requires stepsJson with at least one subaction step.";
       await callback?.({ text });
@@ -1069,7 +1531,7 @@ export const manageMiladyBrowserWorkspaceAction: Action = {
       {
         name: "assistant",
         content: {
-          text: "Completed 3 browser subactions.\n- Opened visible browser tab btab_1 at https://example.com/.\n- Inspected Example Domain at https://example.com/.\n- Read from the browser: \"Example Domain\"",
+          text: 'Completed 3 browser subactions.\n- Opened visible browser tab btab_1 at https://example.com/.\n- Inspected Example Domain at https://example.com/.\n- Read from the browser: "Example Domain"',
         },
       },
     ],

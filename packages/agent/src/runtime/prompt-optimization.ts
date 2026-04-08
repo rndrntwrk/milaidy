@@ -8,7 +8,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { getTrajectoryContext, type AgentRuntime } from "@elizaos/core";
-import { detectRuntimeModel } from "../api/agent-model";
+import { detectRuntimeModel } from "../api/agent-model.js";
 
 import {
   compactActionsForIntent,
@@ -16,7 +16,7 @@ import {
   compactConversationHistory,
   compactModelPrompt,
   validateIntentActionMap,
-} from "./prompt-compaction";
+} from "./prompt-compaction.js";
 import {
   enrichTrajectoryLlmCall,
   ensureTrajectoriesTable,
@@ -25,13 +25,13 @@ import {
   saveTrajectory,
   toOptionalNumber,
   toText,
-} from "./trajectory-internals";
+} from "./trajectory-internals.js";
 
 export {
   buildFullParamActionSet,
   compactActionsForIntent,
   detectIntentCategories,
-} from "./prompt-compaction";
+} from "./prompt-compaction.js";
 
 // ---------------------------------------------------------------------------
 // Env-var driven configuration (evaluated once at import time)

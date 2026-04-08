@@ -7,12 +7,12 @@ import {
   settingsDebugCloudSummary,
 } from "@miladyai/shared";
 import JSON5 from "json5";
-import { collectConfigEnvVars, collectConnectorEnvVars } from "./env-vars";
-import { resolveConfigIncludes } from "./includes";
-import { resolveConfigPath, resolveStateDir, resolveUserPath } from "./paths";
-import type { ElizaConfig } from "./types";
+import { collectConfigEnvVars, collectConnectorEnvVars } from "./env-vars.js";
+import { resolveConfigIncludes } from "./includes.js";
+import { resolveConfigPath, resolveStateDir, resolveUserPath } from "./paths.js";
+import type { ElizaConfig } from "./types.js";
 
-export * from "./types";
+export * from "./types.js";
 
 function resolveConfigWritePath(env: NodeJS.ProcessEnv = process.env): string {
   const persistPath =

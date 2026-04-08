@@ -10,7 +10,7 @@ import {
   refreshAnthropicToken as _refreshAnthropicToken,
   loginAnthropic,
 } from "@mariozechner/pi-ai";
-import type { OAuthCredentials } from "./types";
+import type { OAuthCredentials } from "./types.js";
 
 export interface AnthropicFlow {
   authUrl: string;

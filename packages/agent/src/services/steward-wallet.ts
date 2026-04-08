@@ -8,7 +8,7 @@ import type {
   StewardSignResponse,
   StewardStatusResponse,
 } from "@miladyai/shared/contracts/wallet";
-import { getWalletAddresses } from "../api/wallet";
+import { getWalletAddresses } from "../api/wallet.js";
 
 const DEFAULT_TIMEOUT_MS = 12_000;
 const STEWARD_CREDENTIALS_PATH = path.join(

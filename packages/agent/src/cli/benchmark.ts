@@ -322,7 +322,7 @@ export async function runBenchmark(
   }
   process.env.MILADY_HEADLESS = "1";
 
-  const { bootElizaRuntime } = await import("../runtime/eliza");
+  const { bootElizaRuntime } = await import("../runtime/eliza.js");
   let runtime: AgentRuntime;
   try {
     runtime = await bootElizaRuntime();

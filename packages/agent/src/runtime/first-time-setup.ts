@@ -18,16 +18,16 @@
  *
  * @module first-time-setup
  */
-import { type ElizaConfig, saveElizaConfig } from "../config/config";
-import type { AgentConfig } from "../config/types.agents";
-import type { StylePreset } from "../contracts/onboarding";
+import { type ElizaConfig, saveElizaConfig } from "../config/config.js";
+import type { AgentConfig } from "../config/types.agents.js";
+import type { StylePreset } from "../contracts/onboarding.js";
 import {
   buildDefaultElizaCloudServiceRouting,
   buildElizaCloudServiceRoute,
-} from "../contracts/service-routing";
-import { migrateLegacyRuntimeConfig } from "../contracts/onboarding";
-import { getStylePresets } from "../onboarding-presets";
-import { pickRandomNames } from "./onboarding-names";
+} from "../contracts/service-routing.js";
+import { migrateLegacyRuntimeConfig } from "../contracts/onboarding.js";
+import { getStylePresets } from "../onboarding-presets.js";
+import { pickRandomNames } from "./onboarding-names.js";
 
 // ---------------------------------------------------------------------------
 // Helpers (private)
@@ -236,7 +236,7 @@ export async function runFirstTimeSetup(config: ElizaConfig): Promise<ElizaConfi
       "No problem! Starting with local setup. You can switch to cloud anytime with `eliza cloud connect`.",
     );
   } else if (runtimeChoice === "cloud") {
-    const { runCloudOnboarding } = await import("./cloud-onboarding");
+    const { runCloudOnboarding } = await import("./cloud-onboarding.js");
     cloudOnboardingResult = await runCloudOnboarding(
       clack,
       name,
@@ -449,7 +449,7 @@ export async function runFirstTimeSetup(config: ElizaConfig): Promise<ElizaConfi
     // Offer to generate or import wallets for EVM and Solana. Keys are
     // stored in config.env and process.env, making them available to
     // plugins at runtime.
-    const { generateWalletKeys, importWallet } = await import("../api/wallet");
+    const { generateWalletKeys, importWallet } = await import("../api/wallet.js");
 
     // hasEvmKey and hasSolKey are hoisted above the if (!isCloudMode) block
     // so they're also available in the persistence section.

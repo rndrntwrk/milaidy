@@ -1,6 +1,6 @@
 import { createRequire } from "node:module";
 import process from "node:process";
-import { bootElizaRuntime, startEliza } from "../runtime";
+import { bootElizaRuntime, startEliza } from "../runtime/index.js";
 
 function printHelp(): void {
   console.log(`eliza-autonomous
@@ -54,7 +54,7 @@ export async function runAutonomousCli(
   }
 
   if (command === "benchmark") {
-    const { runBenchmark } = await import("./benchmark");
+    const { runBenchmark } = await import("./benchmark.js");
     // Parse benchmark-specific flags from argv
     const opts = {
       task: undefined as string | undefined,

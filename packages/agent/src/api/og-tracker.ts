@@ -10,7 +10,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
-import { resolveStateDir } from "../config/paths";
+import { resolveStateDir } from "../config/paths.js";
 
 const OG_FILENAME = ".og";
 

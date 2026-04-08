@@ -4,7 +4,7 @@ import {
   normalizeOnboardingProviderId,
   resolveDeploymentTargetInConfig,
   resolveServiceRoutingInConfig,
-} from "../contracts/onboarding";
+} from "../contracts/onboarding.js";
 
 const MODEL_PLACEHOLDERS = new Set(["", "n/a", "na", "unknown", "provided"]);
 

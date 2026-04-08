@@ -10,7 +10,7 @@ import {
   loginOpenAICodex,
 } from "@mariozechner/pi-ai";
 import { logger } from "@elizaos/core";
-import type { OAuthCredentials } from "./types";
+import type { OAuthCredentials } from "./types.js";
 
 export interface CodexFlow {
   authUrl: string;

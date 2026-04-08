@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { RouteHelpers, RouteRequestMeta } from "./route-helpers";
+import type { RouteHelpers, RouteRequestMeta } from "./route-helpers.js";
 
 function emptyMerkleRoot(): string {
   return createHash("sha256").update("", "utf8").digest("hex");

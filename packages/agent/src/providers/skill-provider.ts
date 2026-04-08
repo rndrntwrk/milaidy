@@ -315,7 +315,7 @@ const MAX_INSTRUCTION_CHARS = 2000;
 
 // ── Provider ─────────────────────────────────────────────────────────────────
 
-import type { AgentSkillsServiceLike } from "../types/agent-skills";
+import type { AgentSkillsServiceLike } from "../types/agent-skills.js";
 
 export function createDynamicSkillProvider(): Provider {
   let indexCache: BM25Index | null = null;

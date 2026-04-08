@@ -5,7 +5,7 @@ import type {
   IAgentRuntime,
   Memory,
 } from "@elizaos/core";
-import { getSelfControlAccess, SELFCONTROL_ACCESS_ERROR } from "./access";
+import { getSelfControlAccess, SELFCONTROL_ACCESS_ERROR } from "./access.js";
 import {
   extractDurationMinutesFromText,
   extractWebsiteTargetsFromText,
@@ -18,8 +18,8 @@ import {
   requestSelfControlPermission,
   startSelfControlBlock,
   stopSelfControlBlock,
-} from "./selfcontrol";
-import { syncWebsiteBlockerExpiryTask } from "./service";
+} from "./selfcontrol.js";
+import { syncWebsiteBlockerExpiryTask } from "./service.js";
 
 const WEBSITE_BLOCKER_CONTEXT_WINDOW = 16;
 

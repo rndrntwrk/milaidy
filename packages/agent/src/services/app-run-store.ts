@@ -12,8 +12,8 @@ import type {
   AppSessionState,
   AppSessionJsonValue,
   AppViewerConfig,
-} from "../contracts/apps";
-import { resolveStateDir } from "../config/paths";
+} from "../contracts/apps.js";
+import { resolveStateDir } from "../config/paths.js";
 
 const APP_RUN_STORE_VERSION = 2;
 const MAX_RECORDED_RUN_EVENTS = 20;

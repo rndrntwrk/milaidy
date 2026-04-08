@@ -20,8 +20,8 @@ import {
   hasExplicitCanonicalRuntimeConfig,
   migrateLegacyRuntimeConfig,
 } from "@miladyai/shared/contracts/onboarding";
-import type { ElizaConfig } from "../config/config";
-import { CORE_PLUGINS } from "./core-plugins";
+import type { ElizaConfig } from "../config/config.js";
+import { CORE_PLUGINS } from "./core-plugins.js";
 
 // ---------------------------------------------------------------------------
 // Constants

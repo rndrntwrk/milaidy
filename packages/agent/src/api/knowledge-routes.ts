@@ -11,16 +11,16 @@ import type { AgentRuntime, Memory, UUID } from "@elizaos/core";
 import {
   isBlockedPrivateOrLinkLocalIp,
   normalizeHostLike,
-} from "../security/network-policy";
+} from "../security/network-policy.js";
 import {
   parseClampedFloat,
   parsePositiveInteger,
-} from "../utils/number-parsing";
+} from "../utils/number-parsing.js";
 import {
   getKnowledgeService,
   type KnowledgeServiceLike,
-} from "./knowledge-service-loader";
-import type { RouteHelpers, RouteRequestContext } from "./route-helpers";
+} from "./knowledge-service-loader.js";
+import type { RouteHelpers, RouteRequestContext } from "./route-helpers.js";
 
 export type KnowledgeRouteHelpers = RouteHelpers;
 

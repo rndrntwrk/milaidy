@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import path from "node:path";
-import type { WhatsAppPairingEvent } from "../services/whatsapp-pairing";
-import { readJsonBody as parseJsonBody, sendJson } from "./http-helpers";
+import type { WhatsAppPairingEvent } from "../services/whatsapp-pairing.js";
+import { readJsonBody as parseJsonBody, sendJson } from "./http-helpers.js";
 
 export type WhatsAppPairingEventLike = WhatsAppPairingEvent;
 

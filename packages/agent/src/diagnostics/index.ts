@@ -1,1 +1,1 @@
-export * from "./integration-observability";
+export * from "./integration-observability.js";

@@ -32,7 +32,7 @@
  */
 
 import type http from "node:http";
-import type { RouteHelpers, RouteRequestMeta } from "./route-helpers";
+import type { RouteHelpers, RouteRequestMeta } from "./route-helpers.js";
 
 /**
  * Narrow structural type for the IMessageService methods we call from

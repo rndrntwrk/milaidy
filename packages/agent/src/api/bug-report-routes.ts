@@ -1,5 +1,5 @@
 import os from "node:os";
-import type { RouteRequestContext } from "./route-helpers";
+import type { RouteRequestContext } from "./route-helpers.js";
 
 export const DEFAULT_BUG_REPORT_REPO = "milady-ai/milady";
 export const BUG_REPORT_REPO_ENV_KEY = "MILADY_BUG_REPORT_REPO";

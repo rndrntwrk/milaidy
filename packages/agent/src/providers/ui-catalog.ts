@@ -5,7 +5,7 @@ import {
   type Provider,
   type State,
 } from "@elizaos/core";
-import { COMPONENT_CATALOG } from "../shared/ui-catalog-prompt";
+import { COMPONENT_CATALOG } from "../shared/ui-catalog-prompt.js";
 
 // Core components to describe in detail — subset to keep context short.
 const DETAIL_COMPONENTS = new Set([

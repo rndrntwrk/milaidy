@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import * as elizaCore from "@elizaos/core";
-import { resolveStateDir, resolveUserPath } from "../config/paths";
+import { resolveStateDir, resolveUserPath } from "../config/paths.js";
 
 export interface RunCommandResult {
   code: number;

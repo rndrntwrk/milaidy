@@ -49,22 +49,22 @@ const TIMEOUT_MS =
   Math.max(30_000, Number.parseInt(process.env.DISCORD_QA_TIMEOUT_MS ?? "", 10) || 10 * 60_000);
 
 function loadDiscordToken(): string {
-  const fromEnv = process.env.DISCORD_BOT_TOKEN?.trim();
-  if (fromEnv) {
-    return fromEnv;
-  }
-
   const configPath = path.join(os.homedir(), ".milady", "milady.json");
   const parsed = JSON.parse(fs.readFileSync(configPath, "utf8")) as DiscordConfig;
   const fromConfig =
     parsed.env?.DISCORD_API_TOKEN?.trim() ??
     parsed.plugins?.entries?.discord?.config?.DISCORD_API_TOKEN?.trim();
-  if (!fromConfig) {
+  if (fromConfig) {
+    return fromConfig;
+  }
+
+  const fromEnv = process.env.DISCORD_BOT_TOKEN?.trim();
+  if (!fromEnv) {
     throw new Error(
       "DISCORD_BOT_TOKEN is not configured in the environment or ~/.milady/milady.json",
     );
   }
-  return fromConfig;
+  return fromEnv;
 }
 
 async function discordRequest<T>(

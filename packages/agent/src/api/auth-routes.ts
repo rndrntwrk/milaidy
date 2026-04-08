@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { resolveApiToken } from "../config/runtime-env.js";
 import { isCloudProvisionedContainer } from "./cloud-provisioning.js";
-import type { RouteRequestContext } from "./route-helpers";
+import type { RouteRequestContext } from "./route-helpers.js";
 
 function getConfiguredApiToken(): string | undefined {
   return resolveApiToken(process.env) ?? undefined;

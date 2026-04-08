@@ -12,8 +12,8 @@
 import { spawn } from "node:child_process";
 import type { Writable } from "node:stream";
 import { logger } from "@elizaos/core";
-import type { TtsConfig, TtsProvider } from "../config/types.messages";
-import { sanitizeSpeechText } from "../utils/spoken-text";
+import type { TtsConfig, TtsProvider } from "../config/types.messages.js";
+import { sanitizeSpeechText } from "../utils/spoken-text.js";
 
 const TAG = "[TtsStreamBridge]";
 

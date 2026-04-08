@@ -9,19 +9,19 @@ import type {
   EvmChainBalance,
   EvmNft,
   EvmTokenBalance,
-} from "../contracts/wallet";
+} from "../contracts/wallet.js";
 import {
   computeValueUsd,
   type DexTokenMeta,
   fetchDexPrices,
   WRAPPED_NATIVE,
-} from "./wallet-dex-prices";
+} from "./wallet-dex-prices.js";
 import {
   resolveAvalancheRpcUrls,
   resolveBaseRpcUrls,
   resolveBscRpcUrls,
   resolveEthereumRpcUrls,
-} from "./wallet-rpc";
+} from "./wallet-rpc.js";
 
 // ── Constants ─────────────────────────────────────────────────────────
 

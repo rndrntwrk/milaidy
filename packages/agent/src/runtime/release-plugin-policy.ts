@@ -1,4 +1,4 @@
-import { CORE_PLUGINS, OPTIONAL_CORE_PLUGINS } from "./core-plugins";
+import { CORE_PLUGINS, OPTIONAL_CORE_PLUGINS } from "./core-plugins.js";
 
 const BASELINE_RUNTIME_SUPPORT_PACKAGES = [
   "@elizaos/core",

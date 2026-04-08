@@ -1,5 +1,5 @@
 import { type IAgentRuntime, ModelType } from "@elizaos/core";
-import type { TaskExecutor, TaskResult, TaskSpec } from "./task-executor";
+import type { TaskExecutor, TaskResult, TaskSpec } from "./task-executor.js";
 
 const RESEARCH_PATTERNS =
   /\b(research|investigate|analyze|find out|look into|explore|summarize|compare|evaluate|review|study|assess)\b/i;

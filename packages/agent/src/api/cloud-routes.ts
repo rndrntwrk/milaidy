@@ -4,14 +4,14 @@ import {
   isCloudInferenceSelectedInConfig,
   migrateLegacyRuntimeConfig,
 } from "@miladyai/shared/contracts/onboarding";
-import { normalizeCloudSiteUrl } from "../cloud/base-url";
-import { validateCloudBaseUrl } from "../cloud/validate-url";
-import { applyCanonicalOnboardingConfig } from "./provider-switch-config";
+import { normalizeCloudSiteUrl } from "../cloud/base-url.js";
+import { validateCloudBaseUrl } from "../cloud/validate-url.js";
+import { applyCanonicalOnboardingConfig } from "./provider-switch-config.js";
 import {
   readJsonBody as parseJsonBody,
   sendJson,
   sendJsonError,
-} from "./http-helpers";
+} from "./http-helpers.js";
 
 export interface CloudConfigLike {
   cloud?: {

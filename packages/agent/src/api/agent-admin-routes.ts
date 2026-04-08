@@ -1,7 +1,7 @@
 import type { AgentRuntime, UUID } from "@elizaos/core";
 import { getDefaultStylePreset, normalizeCharacterLanguage } from "../onboarding-presets.js";
-import { detectRuntimeModel } from "./agent-model";
-import type { RouteHelpers, RouteRequestMeta } from "./route-helpers";
+import { detectRuntimeModel } from "./agent-model.js";
+import type { RouteHelpers, RouteRequestMeta } from "./route-helpers.js";
 
 type AgentStateStatus =
   | "not_started"
@@ -12,7 +12,7 @@ type AgentStateStatus =
   | "restarting"
   | "error";
 
-import type { AutonomousConfigLike } from "../types/config-like";
+import type { AutonomousConfigLike } from "../types/config-like.js";
 
 function resolveDefaultAgentName(config: AutonomousConfigLike): string {
   const ui = config.ui as { language?: unknown } | undefined;

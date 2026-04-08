@@ -4,9 +4,9 @@ import {
   migrateLegacyRuntimeConfig,
 } from "@miladyai/shared/contracts";
 import { isCloudInferenceSelectedInConfig } from "@miladyai/shared/contracts/onboarding";
-import { resolveCloudApiBaseUrl as resolveCanonicalCloudApiBaseUrl } from "../cloud/base-url";
-import { validateCloudBaseUrl } from "../cloud/validate-url";
-import type { RouteHelpers, RouteRequestMeta } from "./route-helpers";
+import { resolveCloudApiBaseUrl as resolveCanonicalCloudApiBaseUrl } from "../cloud/base-url.js";
+import { validateCloudBaseUrl } from "../cloud/validate-url.js";
+import type { RouteHelpers, RouteRequestMeta } from "./route-helpers.js";
 
 const DEFAULT_CLOUD_API_BASE_URL = "https://www.elizacloud.ai/api/v1";
 const CLOUD_BILLING_URL =

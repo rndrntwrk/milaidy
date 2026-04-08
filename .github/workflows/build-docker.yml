@@ -145,7 +145,23 @@ jobs:
           cd apps/app
           bun scripts/plugin-build.mjs
 
-      # ── 7. Build bundled orchestrator workspace ─────────────────────────────
+      # ── 7. Build runtime workspace packages with source exports ─────────────
+      - name: Build shared workspace
+        run: |
+          cd packages/shared
+          bun run build
+
+      - name: Build selfcontrol workspace
+        run: |
+          cd packages/plugin-selfcontrol
+          bun run build
+
+      - name: Build agent workspace
+        run: |
+          cd packages/agent
+          bun run build:docker-dist
+
+      # ── 8. Build bundled orchestrator workspace ─────────────────────────────
       # The Docker image imports the workspace package via its published
       # dist/index.js export, so clean checkouts must build that package first.
       - name: Build bundled orchestrator workspace
@@ -153,7 +169,7 @@ jobs:
           cd plugins/plugin-agent-orchestrator
           bun run build
 
-      # ── 8. Build runtime (tsdown) ───────────────────────────────────────────
+      # ── 9. Build runtime (tsdown) ───────────────────────────────────────────
       - name: Build runtime (tsdown)
         run: |
           npx tsdown
@@ -161,7 +177,7 @@ jobs:
           # write-build-info.ts may not exist on all branches — soft fail
           node --import tsx scripts/write-build-info.ts 2>/dev/null || true
 
-      # ── 9. Build UI (vite) ──────────────────────────────────────────────────
+      # ── 10. Build UI (vite) ─────────────────────────────────────────────────
       - name: Build UI (vite)
         run: |
           cd apps/app
@@ -171,7 +187,7 @@ jobs:
           VITE_ASSET_BASE_URL: ${{ steps.version.outputs.is_release == 'true' && format('https://raw.githubusercontent.com/milady-ai/milady/{0}/apps/app/public/', steps.version.outputs.version) || '' }}
           NODE_ENV: production
 
-      # ── 9. Determine version ────────────────────────────────────────────────
+      # ── 11. Determine version ───────────────────────────────────────────────
       - name: Determine version
         id: version
         run: |
@@ -210,18 +226,18 @@ jobs:
           echo "Tag latest: ${TAG_LATEST}"
           echo "Source SHA: $(git rev-parse HEAD)"
 
-      # ── 10. Override dockerignore to include pre-built dist/ ────────────────
+      # ── 12. Override dockerignore to include pre-built dist/ ────────────────
       # The repo's .dockerignore excludes dist/ to keep developer Docker builds clean.
       # For CI, dist/ is pre-built by GHA so we need it in the build context.
       # We use .dockerignore.ci (tracked in the repo) instead of the default.
       - name: Set up CI dockerignore
         run: cp .dockerignore.ci .dockerignore
 
-      # ── 11. Set up Docker Buildx ────────────────────────────────────────────
+      # ── 13. Set up Docker Buildx ────────────────────────────────────────────
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # ── 12. Login to GHCR ───────────────────────────────────────────────────
+      # ── 14. Login to GHCR ───────────────────────────────────────────────────
       - name: Login to GHCR
         uses: docker/login-action@v3
         if: ${{ github.event_name == 'push' || inputs.push_image != false }}

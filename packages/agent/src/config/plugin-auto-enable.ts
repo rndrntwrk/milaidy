@@ -1,5 +1,5 @@
-import { SUBSCRIPTION_PROVIDER_MAP } from "../auth/types";
-import type { ElizaConfig } from "./types";
+import { SUBSCRIPTION_PROVIDER_MAP } from "../auth/types.js";
+import type { ElizaConfig } from "./types.js";
 
 export interface ApplyPluginAutoEnableResult {
   config: ElizaConfig;

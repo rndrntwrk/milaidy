@@ -36,7 +36,7 @@
 
 import type http from "node:http";
 import type { AgentRuntime, Memory, Room, UUID } from "@elizaos/core";
-import type { RouteHelpers } from "./route-helpers";
+import type { RouteHelpers } from "./route-helpers.js";
 
 /**
  * Source tags we consider "inbox-worthy". Messages whose content.source

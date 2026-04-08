@@ -8,47 +8,47 @@
 
 import type { IAgentRuntime, Plugin, ServiceClass } from "@elizaos/core";
 import { AgentEventService } from "@elizaos/core";
-import { emoteAction } from "../actions/emote";
-import { lifeAction } from "../actions/life";
-import { restartAction } from "../actions/restart";
-import { sendAdminMessageAction } from "../actions/send-admin-message";
-import { setUserNameAction } from "../actions/set-user-name";
+import { emoteAction } from "../actions/emote.js";
+import { lifeAction } from "../actions/life.js";
+import { restartAction } from "../actions/restart.js";
+import { sendAdminMessageAction } from "../actions/send-admin-message.js";
+import { setUserNameAction } from "../actions/set-user-name.js";
 import {
   addRegisteredSkillSlug,
   clearRegisteredSkillSlugs,
   skillCommandAction,
-} from "../actions/skill-command";
-import { terminalAction } from "../actions/terminal";
+} from "../actions/skill-command.js";
+import { terminalAction } from "../actions/terminal.js";
 import {
   ensureProactiveAgentTask,
   registerProactiveTaskWorker,
-} from "../activity-profile/proactive-worker";
-import { lateJoinWhitelistEvaluator } from "../evaluators/late-join-whitelist";
+} from "../activity-profile/proactive-worker.js";
+import { lateJoinWhitelistEvaluator } from "../evaluators/late-join-whitelist.js";
 import {
   ensureLifeOpsSchedulerTask,
   registerLifeOpsTaskWorker,
-} from "../lifeops/runtime";
-import { activityProfileProvider } from "../providers/activity-profile";
-import { adminPanelProvider } from "../providers/admin-panel";
-import { adminTrustProvider } from "../providers/admin-trust";
-import { escalationTriggerProvider } from "../providers/escalation-trigger";
-import { lifeOpsProvider } from "../providers/lifeops";
-import { roleBackfillProvider } from "../providers/role-backfill";
-import { createSessionKeyProvider } from "../providers/session-bridge";
+} from "../lifeops/runtime.js";
+import { activityProfileProvider } from "../providers/activity-profile.js";
+import { adminPanelProvider } from "../providers/admin-panel.js";
+import { adminTrustProvider } from "../providers/admin-trust.js";
+import { escalationTriggerProvider } from "../providers/escalation-trigger.js";
+import { lifeOpsProvider } from "../providers/lifeops.js";
+import { roleBackfillProvider } from "../providers/role-backfill.js";
+import { createSessionKeyProvider } from "../providers/session-bridge.js";
 import {
   getSessionProviders,
   resolveDefaultSessionStorePath,
-} from "../providers/session-utils";
-import { createChannelProfileProvider } from "../providers/simple-mode";
-import { createDynamicSkillProvider } from "../providers/skill-provider";
-import { uiCatalogProvider } from "../providers/ui-catalog";
-import { createUserNameProvider } from "../providers/user-name";
-import { DEFAULT_AGENT_WORKSPACE_DIR } from "../providers/workspace";
-import { createWorkspaceProvider } from "../providers/workspace-provider";
-import { createTriggerTaskAction } from "../triggers/action";
-import { registerTriggerTaskWorker } from "../triggers/runtime";
-import { AdvancedMemoryStorageService } from "./advanced-memory-storage";
-import { setCustomActionsRuntime } from "./custom-actions";
+} from "../providers/session-utils.js";
+import { createChannelProfileProvider } from "../providers/simple-mode.js";
+import { createDynamicSkillProvider } from "../providers/skill-provider.js";
+import { uiCatalogProvider } from "../providers/ui-catalog.js";
+import { createUserNameProvider } from "../providers/user-name.js";
+import { DEFAULT_AGENT_WORKSPACE_DIR } from "../providers/workspace.js";
+import { createWorkspaceProvider } from "../providers/workspace-provider.js";
+import { createTriggerTaskAction } from "../triggers/action.js";
+import { registerTriggerTaskWorker } from "../triggers/runtime.js";
+import { AdvancedMemoryStorageService } from "./advanced-memory-storage.js";
+import { setCustomActionsRuntime } from "./custom-actions.js";
 
 export type ElizaPluginConfig = {
   workspaceDir?: string;

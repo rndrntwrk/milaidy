@@ -1,1 +1,1 @@
-export * from "./ui-catalog-prompt";
+export * from "./ui-catalog-prompt.js";

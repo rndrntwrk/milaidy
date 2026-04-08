@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { createMockHttpResponse } from "./test-helpers";
+import { createMockHttpResponse } from "./test-helpers.js";
 
 export type RouteBody = Record<string, unknown>;
 

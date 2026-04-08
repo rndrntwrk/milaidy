@@ -7,8 +7,8 @@ import { execSync, spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { ReleaseChannel } from "../config/types.eliza";
-import { CHANNEL_DIST_TAGS } from "./update-checker";
+import type { ReleaseChannel } from "../config/types.eliza.js";
+import { CHANNEL_DIST_TAGS } from "./update-checker.js";
 
 const NPM_PACKAGE_NAME = "elizaos";
 

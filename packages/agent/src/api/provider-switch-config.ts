@@ -2,8 +2,8 @@ import {
   applySubscriptionCredentials,
   deleteCredentials,
 } from "@miladyai/agent/auth";
-import { SUBSCRIPTION_PROVIDER_MAP } from "../auth/types";
-import type { ElizaConfig } from "../config/types.eliza";
+import { SUBSCRIPTION_PROVIDER_MAP } from "../auth/types.js";
+import type { ElizaConfig } from "../config/types.eliza.js";
 import {
   deriveOnboardingCredentialPersistencePlan,
   getOnboardingProviderOption,
@@ -17,19 +17,19 @@ import {
   type OnboardingConnection,
   type OnboardingLlmPersistenceSelection,
   type OnboardingLocalProviderId,
-} from "../contracts/onboarding";
+} from "../contracts/onboarding.js";
 import type {
   DeploymentTargetConfig,
   LinkedAccountsConfig,
   ServiceCapability,
   ServiceRoutingConfig,
-} from "../contracts/service-routing";
+} from "../contracts/service-routing.js";
 import {
   buildDefaultElizaCloudServiceRouting,
   buildElizaCloudServiceRoute,
   normalizeDeploymentTargetConfig,
   normalizeServiceRoutingConfig,
-} from "../contracts/service-routing";
+} from "../contracts/service-routing.js";
 
 type MutableElizaConfig = Partial<ElizaConfig> & {
   cloud?: Record<string, unknown>;

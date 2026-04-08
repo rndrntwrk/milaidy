@@ -17,19 +17,19 @@ import { request as requestHttps } from "node:https";
 import net from "node:net";
 import { Readable } from "node:stream";
 import { type Action, type HandlerOptions, type IAgentRuntime, logger } from "@elizaos/core";
-import { loadElizaConfig } from "../config/config";
+import { loadElizaConfig } from "../config/config.js";
 import {
   resolveApiToken,
   resolveServerOnlyPort,
-} from "../config/runtime-env";
+} from "../config/runtime-env.js";
 import type {
   CustomActionDef,
   CustomActionHandler,
-} from "../config/types.eliza";
+} from "../config/types.eliza.js";
 import {
   isBlockedPrivateOrLinkLocalIp,
   normalizeHostLike,
-} from "../security/network-policy";
+} from "../security/network-policy.js";
 
 /** Cached runtime reference for hot-registration of new actions. */
 let _runtime: IAgentRuntime | null = null;

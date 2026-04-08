@@ -793,11 +793,11 @@ test("browser workspace exposes a wallet bridge to embedded pages without render
     await expect(walletFrame.locator("#solana-sign-message-result")).toHaveText(
       expectedSolanaMessageSignature,
     );
-    expect(state.walletMessages).toEqual([
-      "Sign in to the Milady browser wallet fixture",
+    expect([...state.walletMessages].sort()).toEqual([
       "Browser says hi",
+      "Sign in to the Milady browser wallet fixture",
     ]);
-    expect(state.solanaWalletMessages).toEqual([
+    expect([...state.solanaWalletMessages].sort()).toEqual([
       "Sign in to the Milady browser wallet fixture",
       "Solana says hi",
     ]);

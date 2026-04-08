@@ -14,8 +14,8 @@ import type {
 import {
   resolveActionContexts,
   resolveProviderContexts,
-} from "../training/context-catalog";
-import type { AgentContext as TrainingAgentContext } from "../training/context-types";
+} from "../training/context-catalog.js";
+import type { AgentContext as TrainingAgentContext } from "../training/context-types.js";
 
 type ContextScoped = {
   contexts?: string[];

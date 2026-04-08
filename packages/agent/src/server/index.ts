@@ -1,2 +1,2 @@
-export type { captureEarlyLogs } from "../api/server";
-export { startApiServer } from "../api/server";
+export type { captureEarlyLogs } from "../api/server.js";
+export { startApiServer } from "../api/server.js";

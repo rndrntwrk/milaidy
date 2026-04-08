@@ -11,24 +11,24 @@
 import fs from "node:fs";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { logger } from "@elizaos/core";
-import type { StreamConfig } from "../services/stream-manager";
+import type { StreamConfig } from "../services/stream-manager.js";
 import {
   readRequestBody,
   readRequestBodyBuffer,
   sendJson,
   sendJsonError,
-} from "./http-helpers";
+} from "./http-helpers.js";
 import {
   getHeadlessCaptureConfig,
   readStreamSettings,
   seedOverlayDefaults,
   validateStreamSettings,
   writeStreamSettings,
-} from "./stream-persistence";
-import type { StreamRouteState } from "./stream-route-state";
-import type { StreamingDestination } from "./streaming-types";
+} from "./stream-persistence.js";
+import type { StreamRouteState } from "./stream-route-state.js";
+import type { StreamingDestination } from "./streaming-types.js";
 
-export type { StreamRouteState } from "./stream-route-state";
+export type { StreamRouteState } from "./stream-route-state.js";
 
 // ---------------------------------------------------------------------------
 // MJPEG frame store — shared state for GET /api/stream/screen
@@ -80,7 +80,7 @@ function pushFrameToSubscribers(frame: Buffer): void {
 export type {
   OverlayLayoutData,
   StreamingDestination,
-} from "./streaming-types";
+} from "./streaming-types.js";
 
 /** Resolve the active streaming destination from the registry. */
 export function getActiveDestination(
@@ -320,7 +320,7 @@ async function startStreamPipeline(
 
       try {
         const { startBrowserCapture } = await import(
-          "../services/browser-capture"
+          "../services/browser-capture.js"
         );
         // Browser capture in x11grab mode just opens the browser on the display --
         // we don't need the frame file since FFmpeg captures the display directly.
@@ -372,7 +372,7 @@ async function startStreamPipeline(
       );
 
       const { startBrowserCapture, FRAME_FILE } = await import(
-        "../services/browser-capture"
+        "../services/browser-capture.js"
       );
       try {
         await startBrowserCapture({
@@ -548,7 +548,7 @@ export async function handleStreamRoute(
       // Stop browser capture
       try {
         const { stopBrowserCapture } = await import(
-          "../services/browser-capture"
+          "../services/browser-capture.js"
         );
         await stopBrowserCapture();
       } catch {

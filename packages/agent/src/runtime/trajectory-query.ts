@@ -13,7 +13,7 @@ import {
   extractRows,
   hasRuntimeDb,
   toNumber,
-} from "./trajectory-internals";
+} from "./trajectory-internals.js";
 
 // ---------------------------------------------------------------------------
 // Public read API

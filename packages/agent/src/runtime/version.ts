@@ -1,4 +1,4 @@
-import { resolveElizaVersion } from "../version-resolver";
+import { resolveElizaVersion } from "../version-resolver.js";
 
 // Single source of truth for the current Eliza version.
 // - Embedded/bundled builds: injected define or env var.

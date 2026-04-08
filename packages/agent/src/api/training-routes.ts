@@ -1,10 +1,10 @@
 import type { AgentRuntime } from "@elizaos/core";
-import type { RoleplayExecutionReport } from "../training/roleplay-executor";
-import type { TrajectoryTaskDatasetExport } from "../training/trajectory-task-datasets";
-import { parsePositiveInteger } from "../utils/number-parsing";
-import type { RouteHelpers, RouteRequestContext } from "./route-helpers";
-import { detectAvailableBackends } from "./training-backend-check";
-import type { TrainingServiceLike } from "./training-service-like";
+import type { RoleplayExecutionReport } from "../training/roleplay-executor.js";
+import type { TrajectoryTaskDatasetExport } from "../training/trajectory-task-datasets.js";
+import { parsePositiveInteger } from "../utils/number-parsing.js";
+import type { RouteHelpers, RouteRequestContext } from "./route-helpers.js";
+import { detectAvailableBackends } from "./training-backend-check.js";
+import type { TrainingServiceLike } from "./training-service-like.js";
 
 export type TrainingRouteHelpers = RouteHelpers;
 

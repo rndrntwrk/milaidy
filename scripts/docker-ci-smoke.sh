@@ -132,6 +132,21 @@ pushd apps/app >/dev/null
 bun scripts/plugin-build.mjs
 popd >/dev/null
 
+log "Building shared workspace"
+pushd packages/shared >/dev/null
+bun run build
+popd >/dev/null
+
+log "Building selfcontrol workspace"
+pushd packages/plugin-selfcontrol >/dev/null
+bun run build
+popd >/dev/null
+
+log "Building agent workspace"
+pushd packages/agent >/dev/null
+bun run build:docker-dist
+popd >/dev/null
+
 log "Building core workspace"
 pushd eliza/packages/typescript >/dev/null
 bun run build

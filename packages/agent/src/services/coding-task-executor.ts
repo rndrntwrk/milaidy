@@ -6,7 +6,7 @@ import type {
   Service,
   UUID,
 } from "@elizaos/core";
-import type { TaskExecutor, TaskResult, TaskSpec } from "./task-executor";
+import type { TaskExecutor, TaskResult, TaskSpec } from "./task-executor.js";
 
 const CODING_PATTERNS =
   /\b(build|create|make|scaffold|generate|code|implement|develop|fix|debug|refactor|write)\b/i;

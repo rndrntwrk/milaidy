@@ -1,4 +1,4 @@
-import type { StreamingDestination } from "./streaming-types";
+import type { StreamingDestination } from "./streaming-types.js";
 
 export interface StreamRouteState {
   streamManager: {

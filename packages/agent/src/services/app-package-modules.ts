@@ -11,7 +11,7 @@ import {
   type AppViewerAuthMessage,
   hasAppInterface,
   packageNameToAppRouteSlug,
-} from "../contracts/apps";
+} from "../contracts/apps.js";
 import { getPluginInfo } from "./registry-client.js";
 
 export interface AppLaunchSessionContext {

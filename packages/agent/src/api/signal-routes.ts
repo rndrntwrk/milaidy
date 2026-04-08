@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import path from "node:path";
-import type { SignalPairingEvent } from "../services/signal-pairing";
-import { readJsonBody as parseJsonBody, sendJson } from "./http-helpers";
+import type { SignalPairingEvent } from "../services/signal-pairing.js";
+import { readJsonBody as parseJsonBody, sendJson } from "./http-helpers.js";
 
 export type SignalPairingEventLike = SignalPairingEvent;
 

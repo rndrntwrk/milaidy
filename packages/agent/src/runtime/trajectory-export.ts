@@ -13,4 +13,4 @@ export {
   toArchiveSafeTimestamp,
   stringifyArchiveRow,
   writeCompressedJsonlRows,
-} from "./trajectory-internals";
+} from "./trajectory-internals.js";

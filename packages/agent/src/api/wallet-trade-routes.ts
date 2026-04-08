@@ -1,13 +1,13 @@
 import type { ethers } from "ethers";
-import type { ElizaConfig } from "../config/config";
+import type { ElizaConfig } from "../config/config.js";
 import type {
   BscTradeQuoteResponse,
   BscUnsignedApprovalTx,
   BscUnsignedTradeTx,
-} from "../contracts/wallet";
-import type { RouteRequestContext } from "./route-helpers";
-import type { TradePermissionMode } from "./trade-safety";
-import type { WalletTradeLedgerRecordInput } from "./wallet-trading-profile";
+} from "../contracts/wallet.js";
+import type { RouteRequestContext } from "./route-helpers.js";
+import type { TradePermissionMode } from "./trade-safety.js";
+import type { WalletTradeLedgerRecordInput } from "./wallet-trading-profile.js";
 
 type WalletAddresses = {
   evmAddress: string | null;

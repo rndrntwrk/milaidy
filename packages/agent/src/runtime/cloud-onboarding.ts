@@ -8,13 +8,13 @@
  */
 
 import { logger } from "@elizaos/core";
-import { type CloudLoginResult, cloudLogin } from "../cloud/auth";
-import { normalizeCloudSiteUrl } from "../cloud/base-url";
+import { type CloudLoginResult, cloudLogin } from "../cloud/auth.js";
+import { normalizeCloudSiteUrl } from "../cloud/base-url.js";
 import {
   type CloudAgentCreateParams,
   ElizaCloudClient,
-} from "../cloud/bridge-client";
-import type { StylePreset } from "../contracts/onboarding";
+} from "../cloud/bridge-client.js";
+import type { StylePreset } from "../contracts/onboarding.js";
 
 // ---------------------------------------------------------------------------
 // Types

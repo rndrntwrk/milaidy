@@ -11,6 +11,7 @@ const repoRoot = path.resolve(here, "..", "..");
 const bunCmd = process.env.npm_execpath || process.env.BUN || "bun";
 const nodeCmd = resolveNodeCmd();
 const appRoot = path.join(repoRoot, "apps", "app");
+const unitShardCount = 8;
 
 await runManagedTestCommand({
   repoRoot,
@@ -22,15 +23,23 @@ await runManagedTestCommand({
   env: buildTestEnv(appRoot),
 });
 
-await runManagedTestCommand({
-  repoRoot,
-  lockName: "unit",
-  label: "unit",
-  command: nodeCmd,
-  args: ["./node_modules/.bin/vitest", "run", "--config", "vitest.config.ts"],
-  cwd: repoRoot,
-  env: buildTestEnv(repoRoot),
-});
+for (let shard = 1; shard <= unitShardCount; shard += 1) {
+  await runManagedTestCommand({
+    repoRoot,
+    lockName: `unit-${shard}`,
+    label: `unit ${shard}/${unitShardCount}`,
+    command: nodeCmd,
+    args: [
+      "./node_modules/.bin/vitest",
+      "run",
+      "--config",
+      "vitest.config.ts",
+      `--shard=${shard}/${unitShardCount}`,
+    ],
+    cwd: repoRoot,
+    env: buildTestEnv(repoRoot),
+  });
+}
 
 await runManagedTestCommand({
   repoRoot,

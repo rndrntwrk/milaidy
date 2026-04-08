@@ -1,4 +1,4 @@
-import type { ElizaConfig } from "./types";
+import type { ElizaConfig } from "./types.js";
 
 /**
  * Environment variable keys that must NEVER be synced from config → process.env.

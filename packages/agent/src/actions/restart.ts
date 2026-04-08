@@ -18,7 +18,7 @@
 import crypto from "node:crypto";
 import type { Action, HandlerOptions, Memory, UUID } from "@elizaos/core";
 import { logger } from "@elizaos/core";
-import { requestRestart } from "../runtime/restart";
+import { requestRestart } from "../runtime/restart.js";
 
 /** Small delay (ms) before restarting so the response has time to flush. */
 const SHUTDOWN_DELAY_MS = 1_500;

@@ -20,7 +20,7 @@ import type {
   TrajectoryListResult,
   TrajectoryListItem,
   TrajectoryStatus,
-} from "../types/trajectory";
+} from "../types/trajectory.js";
 
 import {
   type BufferedExchange,
@@ -67,10 +67,10 @@ import {
   resolveTrajectoryArchiveDirectory,
   toArchiveSafeTimestamp,
   writeCompressedJsonlRows,
-} from "./trajectory-internals";
+} from "./trajectory-internals.js";
 
 // Re-export types needed by consumers
-export type { StartStepOptions, CompleteStepOptions } from "./trajectory-internals";
+export type { StartStepOptions, CompleteStepOptions } from "./trajectory-internals.js";
 
 // ---------------------------------------------------------------------------
 // appendLlmCall / appendProviderAccess

@@ -12,12 +12,12 @@ import type {
   PluginManagerLike,
   RegistryPluginInfo,
   RegistrySearchResult,
-} from "../services/plugin-manager-types";
+} from "../services/plugin-manager-types.js";
 import {
   scoreEntries,
   toSearchResults,
 } from "../services/registry-client-queries.js";
-import type { RouteHelpers, RouteRequestMeta } from "./route-helpers";
+import type { RouteHelpers, RouteRequestMeta } from "./route-helpers.js";
 
 export interface AppManagerLike {
   listAvailable: (pluginManager: PluginManagerLike) => Promise<unknown>;

@@ -19,7 +19,7 @@ import type {
   WalletGenerateResult,
   WalletImportResult,
   WalletKeys,
-} from "../contracts/wallet";
+} from "../contracts/wallet.js";
 
 // ── Re-exports from contracts/wallet ──────────────────────────────────
 
@@ -57,7 +57,7 @@ export type {
   WalletTradingProfileResponse,
   WalletTradingProfileSourceFilter,
   WalletTradingProfileWindow,
-} from "../contracts/wallet";
+} from "../contracts/wallet.js";
 
 // ── Re-exports from extracted modules ─────────────────────────────────
 
@@ -72,7 +72,7 @@ export {
   fetchDexPrices,
   fetchDexScreenerPrices,
   WRAPPED_NATIVE,
-} from "./wallet-dex-prices";
+} from "./wallet-dex-prices.js";
 
 export {
   type AnkrTokenAsset,
@@ -80,7 +80,7 @@ export {
   type EvmProviderKeys,
   fetchEvmBalances,
   resolveEvmProviderKeys,
-} from "./wallet-evm-balance";
+} from "./wallet-evm-balance.js";
 
 // ── Constants ─────────────────────────────────────────────────────────
 

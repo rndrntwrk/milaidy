@@ -16,14 +16,14 @@ import {
   type ProviderResult,
   type State,
 } from "@elizaos/core";
-import type { CodingAgentContext } from "../services/coding-agent-context";
+import type { CodingAgentContext } from "../services/coding-agent-context.js";
 import {
   DEFAULT_AGENT_WORKSPACE_DIR,
   filterInitFilesForSession,
   isDefaultBoilerplate,
   loadWorkspaceInitFiles,
   type WorkspaceInitFile,
-} from "./workspace";
+} from "./workspace.js";
 
 const DEFAULT_MAX_CHARS = 20_000;
 /** Hard cap on total workspace context to prevent prompt explosion. */

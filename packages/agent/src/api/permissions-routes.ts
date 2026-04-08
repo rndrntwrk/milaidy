@@ -4,8 +4,8 @@ import {
   openSelfControlPermissionLocation,
   requestSelfControlPermission,
 } from "@miladyai/plugin-selfcontrol/selfcontrol";
-import type { AutonomousConfigLike } from "../types/config-like";
-import type { RouteRequestContext } from "./route-helpers";
+import type { AutonomousConfigLike } from "../types/config-like.js";
+import type { RouteRequestContext } from "./route-helpers.js";
 
 interface PermissionAutonomousConfigLike extends AutonomousConfigLike {
   features?: {

@@ -1,6 +1,6 @@
 import type { AgentRuntime } from "@elizaos/core";
-import { detectRuntimeModel } from "./agent-model";
-import type { RouteHelpers, RouteRequestMeta } from "./route-helpers";
+import { detectRuntimeModel } from "./agent-model.js";
+import type { RouteHelpers, RouteRequestMeta } from "./route-helpers.js";
 
 type AgentStateStatus =
   | "not_started"

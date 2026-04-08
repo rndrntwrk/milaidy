@@ -27,15 +27,15 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 // ---------------------------------------------------------------------------
 // Extracted modules — re-exported for backward compatibility
 // ---------------------------------------------------------------------------
-import { runFirstTimeSetup } from "./first-time-setup";
-import { resolvePlugins } from "./plugin-resolver";
+import { runFirstTimeSetup } from "./first-time-setup.js";
+import { resolvePlugins } from "./plugin-resolver.js";
 
 export {
   CHANNEL_PLUGIN_MAP,
   collectPluginNames,
   OPTIONAL_PLUGIN_MAP,
   PROVIDER_PLUGIN_MAP,
-} from "./plugin-collector";
+} from "./plugin-collector.js";
 
 // resolvePlugins is re-exported via index.ts from ./plugin-resolver
 
@@ -93,42 +93,42 @@ import {
 import {
   debugLogResolvedContext,
   validateRuntimeContext,
-} from "../api/plugin-validation";
+} from "../api/plugin-validation.js";
 import {
   configFileExists,
   type ElizaConfig,
   loadElizaConfig,
-} from "../config/config";
-import { CONNECTOR_ENV_MAP, collectConfigEnvVars } from "../config/env-vars";
-import { resolveStateDir, resolveUserPath } from "../config/paths";
-import { resolveServerOnlyPort } from "../config/runtime-env";
-import type { PluginInstallRecord } from "../config/types.eliza";
+} from "../config/config.js";
+import { CONNECTOR_ENV_MAP, collectConfigEnvVars } from "../config/env-vars.js";
+import { resolveStateDir, resolveUserPath } from "../config/paths.js";
+import { resolveServerOnlyPort } from "../config/runtime-env.js";
+import type { PluginInstallRecord } from "../config/types.eliza.js";
 import {
   createHookEvent,
   type LoadHooksOptions,
   loadHooks,
   triggerHook,
-} from "../hooks/index";
+} from "../hooks/index.js";
 import {
   getDefaultStylePreset,
   normalizeCharacterLanguage,
   resolveStylePresetByAvatarIndex,
   resolveStylePresetById,
   resolveStylePresetByName,
-} from "../onboarding-presets";
+} from "../onboarding-presets.js";
 import {
   ensureAgentWorkspace,
   resolveDefaultAgentWorkspaceDir,
-} from "../providers/workspace";
-import { SandboxAuditLog } from "../security/audit-log";
-import { SandboxManager, type SandboxMode } from "../services/sandbox-manager";
-import * as pluginAgentOrchestrator from "./agent-orchestrator-compat";
-import { CORE_PLUGINS, OPTIONAL_CORE_PLUGINS } from "./core-plugins";
-import { seedBundledKnowledge } from "./default-knowledge";
-import { createElizaPlugin } from "./eliza-plugin";
-import { detectEmbeddingPreset } from "./embedding-presets";
-import { installRuntimePluginLifecycle } from "./plugin-lifecycle";
-import { shouldEnableTrajectoryLoggingByDefault } from "./trajectory-persistence";
+} from "../providers/workspace.js";
+import { SandboxAuditLog } from "../security/audit-log.js";
+import { SandboxManager, type SandboxMode } from "../services/sandbox-manager.js";
+import * as pluginAgentOrchestrator from "./agent-orchestrator-compat.js";
+import { CORE_PLUGINS, OPTIONAL_CORE_PLUGINS } from "./core-plugins.js";
+import { seedBundledKnowledge } from "./default-knowledge.js";
+import { createElizaPlugin } from "./eliza-plugin.js";
+import { detectEmbeddingPreset } from "./embedding-presets.js";
+import { installRuntimePluginLifecycle } from "./plugin-lifecycle.js";
+import { shouldEnableTrajectoryLoggingByDefault } from "./trajectory-persistence.js";
 
 type SignalShutdownContext = {
   getRuntime: () => AgentRuntime;
@@ -2890,7 +2890,7 @@ export async function startEliza(
   opts?: StartElizaOptions,
 ): Promise<AgentRuntime | undefined> {
   // Start buffering logs early so startup messages appear in the UI log viewer
-  const { captureEarlyLogs } = await import("../api/early-logs");
+  const { captureEarlyLogs } = await import("../api/early-logs.js");
   captureEarlyLogs();
 
   // Register log listener for chat mirroring
@@ -2994,7 +2994,7 @@ export async function startEliza(
 
   // 2d-iii. OG tracking code initialization
   try {
-    const { initializeOGCode } = await import("../api/og-tracker");
+    const { initializeOGCode } = await import("../api/og-tracker.js");
     initializeOGCode();
   } catch {
     // Silent — OG tracking is non-critical
@@ -3040,7 +3040,7 @@ export async function startEliza(
   //     Config is NOT rolled back on failure; partial mutations may persist in
   //     the in-memory config but are not saved to disk until explicit save.
   try {
-    const { applySubscriptionCredentials } = await import("../auth/index");
+    const { applySubscriptionCredentials } = await import("../auth/index.js");
     await applySubscriptionCredentials(config);
   } catch (err) {
     logger.warn(
@@ -3756,7 +3756,7 @@ export async function startEliza(
   // desktop app, the API server is always available for the GUI admin
   // surface.
   try {
-    const { startApiServer } = await import("../api/server");
+    const { startApiServer } = await import("../api/server.js");
     const apiPort = resolveServerOnlyPort(process.env);
     const { port: actualApiPort } = await startApiServer({
       port: apiPort,
@@ -3795,7 +3795,7 @@ export async function startEliza(
           // that may have been set up during onboarding.
           try {
             const { applySubscriptionCredentials } = await import(
-              "../auth/index"
+              "../auth/index.js"
             );
             await applySubscriptionCredentials(freshConfig);
           } catch (subErr) {
@@ -4184,7 +4184,7 @@ export async function startInCloudMode(
   agentId: string,
   opts?: StartElizaOptions,
 ): Promise<AgentRuntime | undefined> {
-  const { CloudManager } = await import("../cloud/cloud-manager");
+  const { CloudManager } = await import("../cloud/cloud-manager.js");
 
   const cloudConfig = config.cloud;
   if (!cloudConfig) {

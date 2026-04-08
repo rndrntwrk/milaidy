@@ -8,7 +8,7 @@ import {
   detectBestEngine,
   type ISandboxEngine,
   type SandboxEngineType,
-} from "./sandbox-engine";
+} from "./sandbox-engine.js";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 

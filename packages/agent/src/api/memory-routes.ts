@@ -8,9 +8,9 @@ import {
   stringToUuid,
   type UUID,
 } from "@elizaos/core";
-import { parsePositiveInteger } from "../utils/number-parsing";
-import { getKnowledgeService } from "./knowledge-service-loader";
-import type { RouteRequestContext } from "./route-helpers";
+import { parsePositiveInteger } from "../utils/number-parsing.js";
+import { getKnowledgeService } from "./knowledge-service-loader.js";
+import type { RouteRequestContext } from "./route-helpers.js";
 
 const HASH_MEMORY_SOURCE = "hash_memory";
 const MEMORY_SEARCH_SCAN_LIMIT = 500;

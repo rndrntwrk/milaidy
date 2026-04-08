@@ -1,8 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  BrowserWorkspaceManager,
-  resetBrowserWorkspaceManagerForTesting,
-} from "../browser-workspace";
 
 const windowHandlers: Record<string, () => void> = {};
 const evaluateJavascriptWithResponse = vi.fn();
@@ -27,15 +23,18 @@ const mockWindow = {
 };
 
 vi.mock("electrobun/bun", () => {
-  const BrowserWindow = vi.fn(
-    class BrowserWindowMock {
-      constructor() {
-        Object.assign(this, mockWindow);
-      }
-    },
-  );
+  // biome-ignore lint/complexity/useArrowFunction: constructor mock requires a regular function
+  const BrowserWindow = vi.fn(function () {
+    return { ...mockWindow };
+  });
   return { BrowserWindow };
 });
+
+const { BrowserWorkspaceManager, resetBrowserWorkspaceManagerForTesting } =
+  await import("../browser-workspace");
+type BrowserWorkspaceManagerInstance = InstanceType<
+  typeof BrowserWorkspaceManager
+>;
 
 function resetMocks() {
   vi.clearAllMocks();
@@ -45,7 +44,7 @@ function resetMocks() {
 }
 
 describe("BrowserWorkspaceManager", () => {
-  let manager: BrowserWorkspaceManager;
+  let manager: BrowserWorkspaceManagerInstance;
 
   beforeEach(() => {
     resetMocks();

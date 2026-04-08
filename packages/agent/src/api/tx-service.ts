@@ -8,7 +8,7 @@
 
 import { logger } from "@elizaos/core";
 import { ethers } from "ethers";
-import { createIntegrationTelemetrySpan } from "../diagnostics/integration-observability";
+import { createIntegrationTelemetrySpan } from "../diagnostics/integration-observability.js";
 
 /**
  * Validate that a private key is a valid 32-byte hex string.

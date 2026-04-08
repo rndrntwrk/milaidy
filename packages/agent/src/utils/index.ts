@@ -1,2 +1,2 @@
-export * from "./number-parsing";
-export * from "./spoken-text";
+export * from "./number-parsing.js";
+export * from "./spoken-text.js";

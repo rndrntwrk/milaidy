@@ -1,2 +1,2 @@
-export * from "./audit-log";
-export * from "./network-policy";
+export * from "./audit-log.js";
+export * from "./network-policy.js";

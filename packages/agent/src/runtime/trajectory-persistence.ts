@@ -25,7 +25,7 @@ export {
   computeBySource,
   readOrchestratorTrajectoryContext,
   shouldEnableTrajectoryLoggingByDefault,
-} from "./trajectory-internals";
+} from "./trajectory-internals.js";
 
 // ---------------------------------------------------------------------------
 // Storage — write operations
@@ -40,14 +40,14 @@ export {
   pruneOldTrajectories,
   DatabaseTrajectoryLogger,
   createDatabaseTrajectoryLogger,
-} from "./trajectory-storage";
+} from "./trajectory-storage.js";
 
 // ---------------------------------------------------------------------------
 // Query — read operations
 // ---------------------------------------------------------------------------
 export {
   loadPersistedTrajectoryRows,
-} from "./trajectory-query";
+} from "./trajectory-query.js";
 
 // ---------------------------------------------------------------------------
 // Export — archive operations (available via "./trajectory-export" for

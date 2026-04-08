@@ -15,6 +15,11 @@ FROM node:${NODE_VERSION}-slim AS pruner
 WORKDIR /app
 COPY . .
 
+RUN node scripts/relink-workspace-packages-to-dist.mjs \
+  @miladyai/shared \
+  @miladyai/plugin-selfcontrol \
+  @miladyai/agent
+
 # Patch plugin-agent-skills getCatalogStats crash (alpha.11 vs alpha.66 interface mismatch)
 RUN sed -i 's/const stats = service.getCatalogStats();/const stats = typeof service.getCatalogStats === "function" ? service.getCatalogStats() : { loaded: 0, total: 0, storageType: "unknown" };/g' node_modules/@elizaos/plugin-agent-skills/dist/index.js 2>/dev/null || true
 ARG VERSION_CLEAN

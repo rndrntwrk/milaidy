@@ -11,8 +11,8 @@ import {
   openBrowserWorkspaceTab,
   showBrowserWorkspaceTab,
   snapshotBrowserWorkspaceTab,
-} from "../services/browser-workspace";
-import type { RouteRequestContext } from "./route-helpers";
+} from "../services/browser-workspace.js";
+import type { RouteRequestContext } from "./route-helpers.js";
 
 type OpenBrowserWorkspaceBody = {
   url?: string;

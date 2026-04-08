@@ -31,20 +31,20 @@ import {
   type InstalledAppInfo,
   packageNameToAppDisplayName,
   packageNameToAppRouteSlug,
-} from "../contracts/apps";
-import { importAppPlugin, importAppRouteModule } from "./app-package-modules";
-import { readAppRunStore, writeAppRunStore } from "./app-run-store";
+} from "../contracts/apps.js";
+import { importAppPlugin, importAppRouteModule } from "./app-package-modules.js";
+import { readAppRunStore, writeAppRunStore } from "./app-run-store.js";
 import type {
   InstallProgressLike,
   PluginManagerLike,
   RegistryPluginInfo,
   RegistrySearchResult,
-} from "./plugin-manager-types";
-import { getPluginInfo, getRegistryPlugins } from "./registry-client";
+} from "./plugin-manager-types.js";
+import { getPluginInfo, getRegistryPlugins } from "./registry-client.js";
 import {
   mergeAppMeta as mergeRegistryAppMeta,
   resolveAppOverride,
-} from "./registry-client-app-meta";
+} from "./registry-client-app-meta.js";
 import { scoreEntries, toSearchResults } from "./registry-client-queries.js";
 
 const LOCAL_PLUGINS_DIR = "plugins";
@@ -56,7 +56,7 @@ export type {
   AppStopResult,
   AppViewerAuthMessage,
   InstalledAppInfo,
-} from "../contracts/apps";
+} from "../contracts/apps.js";
 
 const DEFAULT_VIEWER_SANDBOX = "allow-scripts allow-same-origin allow-popups";
 const RS_2004SCAPE_APP_ROUTE_SLUG = "2004scape";

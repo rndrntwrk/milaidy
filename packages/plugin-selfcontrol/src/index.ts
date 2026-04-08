@@ -8,8 +8,8 @@ import {
   selfControlRequestPermissionAction,
   selfControlUnblockWebsitesAction,
   unblockWebsitesAction,
-} from "./action";
-import { selfControlProvider, websiteBlockerProvider } from "./provider";
+} from "./action.js";
+import { selfControlProvider, websiteBlockerProvider } from "./provider.js";
 import {
   getSelfControlPermissionState,
   getSelfControlStatus,
@@ -17,7 +17,7 @@ import {
   requestSelfControlPermission,
   type SelfControlPluginConfig,
   setSelfControlPluginConfig,
-} from "./selfcontrol";
+} from "./selfcontrol.js";
 import {
   clearWebsiteBlockerExpiryTasks,
   executeWebsiteBlockerExpiryTask,
@@ -27,7 +27,7 @@ import {
   WEBSITE_BLOCKER_UNBLOCK_TASK_NAME,
   WEBSITE_BLOCKER_UNBLOCK_TASK_TAGS,
   WebsiteBlockerService,
-} from "./service";
+} from "./service.js";
 
 const selfControlPlugin: Plugin = {
   name: "@miladyai/plugin-selfcontrol",
@@ -67,7 +67,7 @@ export type {
   SelfControlPermissionState,
   SelfControlPluginConfig,
   SelfControlStatus,
-} from "./selfcontrol";
+} from "./selfcontrol.js";
 export {
   blockWebsitesAction,
   clearWebsiteBlockerExpiryTasks,

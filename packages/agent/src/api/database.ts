@@ -18,23 +18,23 @@ import type http from "node:http";
 import net from "node:net";
 import { promisify } from "node:util";
 import { type AgentRuntime, logger } from "@elizaos/core";
-import { loadElizaConfig, saveElizaConfig } from "../config/config";
-import { resolveApiBindHost } from "../config/runtime-env";
+import { loadElizaConfig, saveElizaConfig } from "../config/config.js";
+import { resolveApiBindHost } from "../config/runtime-env.js";
 import type {
   DatabaseConfig,
   DatabaseProviderType,
   PostgresCredentials,
-} from "../config/types.eliza";
+} from "../config/types.eliza.js";
 import {
   isLoopbackHost,
   normalizeHostLike,
   normalizeIpForPolicy,
-} from "../security/network-policy";
+} from "../security/network-policy.js";
 import {
   readJsonBody as parseJsonBody,
   sendJson,
   sendJsonError,
-} from "./http-helpers";
+} from "./http-helpers.js";
 
 // ---------------------------------------------------------------------------
 // Types

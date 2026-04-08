@@ -30,7 +30,7 @@
 
 import { type ChildProcess, execSync, spawn } from "node:child_process";
 import { logger } from "@elizaos/core";
-import { type ITtsStreamBridge, ttsStreamBridge } from "./tts-stream-bridge";
+import { type ITtsStreamBridge, ttsStreamBridge } from "./tts-stream-bridge.js";
 
 const TAG = "[StreamManager]";
 

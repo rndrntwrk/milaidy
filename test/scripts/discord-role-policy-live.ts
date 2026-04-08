@@ -75,22 +75,22 @@ async function waitFor(
 }
 
 function loadDiscordToken(): string {
-	const fromEnv = process.env.DISCORD_BOT_TOKEN?.trim();
-	if (fromEnv) {
-		return fromEnv;
-	}
-
 	const configPath = path.join(os.homedir(), ".milady", "milady.json");
 	const parsed = JSON.parse(fs.readFileSync(configPath, "utf8")) as DiscordConfig;
 	const fromConfig =
 		parsed.env?.DISCORD_API_TOKEN?.trim() ??
 		parsed.plugins?.entries?.discord?.config?.DISCORD_API_TOKEN?.trim();
-	if (!fromConfig) {
+	if (fromConfig) {
+		return fromConfig;
+	}
+
+	const fromEnv = process.env.DISCORD_BOT_TOKEN?.trim();
+	if (!fromEnv) {
 		throw new Error(
 			"DISCORD_BOT_TOKEN is not configured in the environment or ~/.milady/milady.json",
 		);
 	}
-	return fromConfig;
+	return fromEnv;
 }
 
 async function discordRequest<T>(

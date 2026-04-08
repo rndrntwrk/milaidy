@@ -1,9 +1,9 @@
 import type http from "node:http";
 import { logger } from "@elizaos/core";
-import { normalizeCloudSiteUrl } from "../cloud/base-url";
-import { validateCloudBaseUrl } from "../cloud/validate-url";
-import type { CloudProxyConfigLike } from "../types/config-like";
-import { sendJson, sendJsonError } from "./http-helpers";
+import { normalizeCloudSiteUrl } from "../cloud/base-url.js";
+import { validateCloudBaseUrl } from "../cloud/validate-url.js";
+import type { CloudProxyConfigLike } from "../types/config-like.js";
+import { sendJson, sendJsonError } from "./http-helpers.js";
 
 export interface CloudCompatRouteState {
   config: CloudProxyConfigLike;

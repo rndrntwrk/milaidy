@@ -6,7 +6,7 @@ import {
   startSelfControlBlock,
   stopSelfControlBlock,
 } from "@miladyai/plugin-selfcontrol/selfcontrol";
-import type { RouteRequestContext } from "./route-helpers";
+import type { RouteRequestContext } from "./route-helpers.js";
 
 type WebsiteBlockerRequestBody = {
   websites?: string[] | string;

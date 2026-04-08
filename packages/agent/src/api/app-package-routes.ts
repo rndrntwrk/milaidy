@@ -1,8 +1,8 @@
 import {
   type AppRouteModule,
   importAppRouteModule,
-} from "../services/app-package-modules";
-import type { RouteHelpers, RouteRequestMeta } from "./route-helpers";
+} from "../services/app-package-modules.js";
+import type { RouteHelpers, RouteRequestMeta } from "./route-helpers.js";
 
 export interface AppPackageRouteContext
   extends RouteRequestMeta,

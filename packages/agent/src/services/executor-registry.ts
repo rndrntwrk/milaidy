@@ -1,6 +1,6 @@
-import { TaskExecutorRegistry } from "./task-executor";
-import { CodingTaskExecutor } from "./coding-task-executor";
-import { ResearchTaskExecutor } from "./research-task-executor";
+import { TaskExecutorRegistry } from "./task-executor.js";
+import { CodingTaskExecutor } from "./coding-task-executor.js";
+import { ResearchTaskExecutor } from "./research-task-executor.js";
 
 /** Create a registry pre-populated with all built-in executors */
 export function createDefaultExecutorRegistry(): TaskExecutorRegistry {

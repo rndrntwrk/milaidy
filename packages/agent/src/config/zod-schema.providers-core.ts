@@ -3,8 +3,8 @@ import {
   normalizeTelegramCommandDescription,
   normalizeTelegramCommandName,
   resolveTelegramCustomCommands,
-} from "./telegram-custom-commands";
-import { ToolPolicySchema } from "./zod-schema.agent-runtime";
+} from "./telegram-custom-commands.js";
+import { ToolPolicySchema } from "./zod-schema.agent-runtime.js";
 import {
   BlockStreamingChunkSchema,
   BlockStreamingCoalesceSchema,
@@ -19,7 +19,7 @@ import {
   ReplyToModeSchema,
   RetryConfigSchema,
   requireOpenAllowFrom,
-} from "./zod-schema.core";
+} from "./zod-schema.core.js";
 
 const ToolPolicyBySenderSchema = z
   .record(z.string(), ToolPolicySchema)

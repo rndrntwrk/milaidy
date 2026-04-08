@@ -1,6 +1,6 @@
 import type http from "node:http";
-import { parseClampedInteger } from "../utils/number-parsing";
-import type { RouteHelpers, RouteRequestMeta } from "./route-helpers";
+import { parseClampedInteger } from "../utils/number-parsing.js";
+import type { RouteHelpers, RouteRequestMeta } from "./route-helpers.js";
 
 interface LogEntryLike {
   timestamp: number;

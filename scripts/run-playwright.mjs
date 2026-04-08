@@ -1,4 +1,6 @@
 import { spawn } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
 
 const [, , cwd, ...playwrightArgs] = process.argv;
 
@@ -14,12 +16,45 @@ delete env.NO_COLOR;
 delete env.FORCE_COLOR;
 delete env.CLICOLOR_FORCE;
 
-const bunxCommand = process.platform === "win32" ? "bunx.cmd" : "bunx";
-const child = spawn(bunxCommand, ["playwright", ...playwrightArgs], {
-  cwd,
-  env,
-  stdio: "inherit",
-});
+function resolveBunCommand() {
+  const bunFromEnv = process.env.BUN?.trim();
+  if (bunFromEnv && fs.existsSync(bunFromEnv)) {
+    return bunFromEnv;
+  }
+
+  if (
+    typeof process.versions.bun === "string" &&
+    typeof process.execPath === "string" &&
+    process.execPath.length > 0 &&
+    fs.existsSync(process.execPath)
+  ) {
+    return process.execPath;
+  }
+
+  const bunInstallRoot = process.env.BUN_INSTALL?.trim();
+  if (bunInstallRoot) {
+    const bunFromInstall = path.join(
+      bunInstallRoot,
+      "bin",
+      process.platform === "win32" ? "bun.exe" : "bun",
+    );
+    if (fs.existsSync(bunFromInstall)) {
+      return bunFromInstall;
+    }
+  }
+
+  return process.platform === "win32" ? "bun.exe" : "bun";
+}
+
+const child = spawn(
+  resolveBunCommand(),
+  ["x", "playwright", ...playwrightArgs],
+  {
+    cwd,
+    env,
+    stdio: "inherit",
+  },
+);
 
 child.on("exit", (code, signal) => {
   if (signal) {

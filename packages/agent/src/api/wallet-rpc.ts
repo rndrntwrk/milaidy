@@ -2,7 +2,7 @@ import {
   isElizaCloudServiceSelectedInConfig,
   migrateLegacyRuntimeConfig,
 } from "@miladyai/shared/contracts";
-import type { ElizaConfig } from "../config/config";
+import type { ElizaConfig } from "../config/config.js";
 import {
   DEFAULT_WALLET_RPC_SELECTIONS,
   normalizeWalletRpcSelections,
@@ -10,7 +10,7 @@ import {
   type WalletRpcChain,
   type WalletRpcCredentialKey,
   type WalletRpcSelections,
-} from "../contracts/wallet";
+} from "../contracts/wallet.js";
 
 export const DEFAULT_CLOUD_API_BASE_URL = "https://elizacloud.ai/api/v1";
 // Multiple BSC public RPCs so we have working fallbacks when Eliza

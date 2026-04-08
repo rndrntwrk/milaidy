@@ -4,7 +4,7 @@ import type {
   HumanDelayConfig,
   TypingMode,
 } from "@elizaos/core";
-import type { MemorySearchConfig } from "./types.tools";
+import type { MemorySearchConfig } from "./types.tools.js";
 
 // --- Sandbox types (merged from types.sandbox.ts) ---
 

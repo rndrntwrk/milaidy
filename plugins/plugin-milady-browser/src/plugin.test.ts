@@ -1,6 +1,6 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
 import * as browserWorkspaceService from "@miladyai/agent/services/browser-workspace";
 import * as stewardWalletService from "@miladyai/agent/services/steward-wallet";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { manageMiladyBrowserWorkspaceAction } from "./action";
 import { miladyBrowserWorkspaceProvider } from "./provider";
 import {
@@ -170,6 +170,45 @@ describe("@miladyai/plugin-milady-browser", () => {
     });
   });
 
+  it("parses extended browser parity params through the one main browser action", async () => {
+    const executeSpy = vi
+      .spyOn(browserWorkspaceService, "executeBrowserWorkspaceCommand")
+      .mockResolvedValue({
+        mode: "web",
+        subaction: "network",
+        value: [{ pattern: "**/mocked", status: 202 }],
+      });
+
+    const result = await manageMiladyBrowserWorkspaceAction.handler(
+      {} as never,
+      { content: { text: "Route browser requests" } } as never,
+      undefined,
+      {
+        parameters: {
+          subaction: "network",
+          networkAction: "route",
+          url: "**/mocked",
+          responseBody: "mocked",
+          responseHeaders: { "content-type": "text/plain" },
+          responseStatus: 202,
+        },
+      },
+      vi.fn(),
+    );
+
+    expect(executeSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subaction: "network",
+        networkAction: "route",
+        responseBody: "mocked",
+        responseHeaders: { "content-type": "text/plain" },
+        responseStatus: 202,
+        url: "**/mocked",
+      }),
+    );
+    expect(result).toMatchObject({ success: true });
+  });
+
   it("queues signing requests and routes approve/reject actions", async () => {
     const signSpy = vi
       .spyOn(stewardWalletService, "signWithStewardWallet")
@@ -248,7 +287,10 @@ describe("@miladyai/plugin-milady-browser", () => {
   });
 
   it("summarizes web tabs and pending wallet approvals in the provider", async () => {
-    vi.spyOn(browserWorkspaceService, "listBrowserWorkspaceTabs").mockResolvedValue([
+    vi.spyOn(
+      browserWorkspaceService,
+      "listBrowserWorkspaceTabs",
+    ).mockResolvedValue([
       {
         id: "btab_web_1",
         title: "example.com",
@@ -260,13 +302,11 @@ describe("@miladyai/plugin-milady-browser", () => {
         lastFocusedAt: "2026-04-05T18:45:00.000Z",
       },
     ]);
-    vi.spyOn(browserWorkspaceService, "getBrowserWorkspaceMode").mockReturnValue(
-      "web",
-    );
     vi.spyOn(
-      stewardWalletService,
-      "getStewardWalletStatus",
-    ).mockResolvedValue({
+      browserWorkspaceService,
+      "getBrowserWorkspaceMode",
+    ).mockReturnValue("web");
+    vi.spyOn(stewardWalletService, "getStewardWalletStatus").mockResolvedValue({
       configured: true,
       available: true,
       connected: true,

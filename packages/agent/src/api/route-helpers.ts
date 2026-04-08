@@ -1,5 +1,5 @@
 import type http from "node:http";
-import type { ReadJsonBodyOptions } from "./http-helpers";
+import type { ReadJsonBodyOptions } from "./http-helpers.js";
 
 export interface RouteRequestMeta {
   req: http.IncomingMessage;

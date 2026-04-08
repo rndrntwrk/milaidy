@@ -8,14 +8,14 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { logger } from "@elizaos/core";
-import { refreshAnthropicToken } from "./anthropic";
-import { refreshCodexToken } from "./openai-codex";
+import { refreshAnthropicToken } from "./anthropic.js";
+import { refreshCodexToken } from "./openai-codex.js";
 import {
   type OAuthCredentials,
   type StoredCredentials,
   SUBSCRIPTION_PROVIDER_MAP,
   type SubscriptionProvider,
-} from "./types";
+} from "./types.js";
 
 import { execSync } from "node:child_process";
 
