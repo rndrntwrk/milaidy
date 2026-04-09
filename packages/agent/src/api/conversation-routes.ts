@@ -14,7 +14,9 @@
  */
 
 import crypto from "node:crypto";
+import fs from "node:fs";
 import type http from "node:http";
+import path from "node:path";
 import {
   type AgentRuntime,
   ChannelType,
@@ -27,44 +29,39 @@ import {
 } from "@elizaos/core";
 import type { ElizaConfig } from "../config/config.js";
 import { resolveStateDir } from "../config/paths.js";
-import { evictOldestConversation } from "./memory-bounds.js";
-import type { ReadJsonBodyOptions } from "./http-helpers.js";
-import type { RouteRequestContext } from "./route-helpers.js";
-import {
-  type ConversationMeta,
-  resolveAppUserName,
-  persistConversationRoomTitle,
-} from "./server.js";
 import type {
   ChatGenerateOptions,
   ChatGenerationResult,
-  LogEntry,
   ChatImageAttachment,
+  LogEntry,
 } from "./chat-routes.js";
 import {
   generateChatResponse,
   generateConversationTitle,
-  resolveNoResponseFallback,
-  normalizeChatResponseText,
   getChatFailureReply,
   initSse,
+  normalizeChatResponseText,
+  persistAssistantConversationMemory,
+  persistConversationMemory,
+  readChatRequestPayload,
+  resolveNoResponseFallback,
+  writeChatTokenSse,
   writeSse,
   writeSseJson,
-  writeChatTokenSse,
-  readChatRequestPayload,
-  persistConversationMemory,
-  persistAssistantConversationMemory,
 } from "./chat-routes.js";
+import type { ReadJsonBodyOptions } from "./http-helpers.js";
+import { evictOldestConversation } from "./memory-bounds.js";
+import type { RouteRequestContext } from "./route-helpers.js";
 import {
   buildUserMessages,
+  type ConversationMeta,
   getErrorMessage,
   isUuidLike,
-  resolveWalletModeGuidanceReply,
+  persistConversationRoomTitle,
+  resolveAppUserName,
   resolveConversationGreetingText,
+  resolveWalletModeGuidanceReply,
 } from "./server.js";
-
-import fs from "node:fs";
-import path from "node:path";
 
 // ---------------------------------------------------------------------------
 // Deleted-conversations state persistence
@@ -154,7 +151,9 @@ function ensureAdminEntityId(state: ConversationRouteState): UUID {
   if (state.adminEntityId) {
     return state.adminEntityId;
   }
-  const configured = (state.config as any).agents?.defaults?.adminEntityId?.trim();
+  const configured = (
+    state.config as any
+  ).agents?.defaults?.adminEntityId?.trim();
   const nextAdminEntityId =
     configured && isUuidLike(configured)
       ? configured
@@ -359,8 +358,7 @@ async function waitForConversationRestore(
   try {
     const timeout = new Promise<void>((_, reject) =>
       setTimeout(
-        () =>
-          reject(new Error("Conversation restore timed out after 5000ms")),
+        () => reject(new Error("Conversation restore timed out after 5000ms")),
         5000,
       ),
     );
@@ -650,8 +648,13 @@ export async function handleConversationRoutes(
       const messages = memories
         .map((m) => {
           const contentSource = (m.content as Record<string, unknown>)?.source;
+          const content = m.content as Record<string, unknown>;
           const meta = m.metadata as Record<string, unknown> | undefined;
           const entityName = meta?.entityName;
+          const replyToAuthor =
+            meta?.replyToAuthor && typeof meta.replyToAuthor === "object"
+              ? (meta.replyToAuthor as Record<string, unknown>)
+              : null;
           const normalizedSource =
             typeof contentSource === "string" &&
             contentSource.length > 0 &&
@@ -678,6 +681,33 @@ export async function handleConversationRoutes(
               meta.entityAvatarUrl.length > 0
                 ? meta.entityAvatarUrl
                 : undefined,
+            replyToMessageId:
+              typeof content.inReplyTo === "string" &&
+              content.inReplyTo.length > 0
+                ? content.inReplyTo
+                : typeof meta?.replyToMessageId === "string" &&
+                    meta.replyToMessageId.length > 0
+                  ? meta.replyToMessageId
+                  : undefined,
+            replyToSenderName:
+              typeof meta?.replyToSenderName === "string" &&
+              meta.replyToSenderName.length > 0
+                ? meta.replyToSenderName
+                : typeof replyToAuthor?.displayName === "string" &&
+                    replyToAuthor.displayName.length > 0
+                  ? replyToAuthor.displayName
+                  : typeof replyToAuthor?.username === "string" &&
+                      replyToAuthor.username.length > 0
+                    ? replyToAuthor.username
+                    : undefined,
+            replyToSenderUserName:
+              typeof meta?.replyToSenderUserName === "string" &&
+              meta.replyToSenderUserName.length > 0
+                ? meta.replyToSenderUserName
+                : typeof replyToAuthor?.username === "string" &&
+                    replyToAuthor.username.length > 0
+                  ? replyToAuthor.username
+                  : undefined,
           };
         })
         // Drop action-log memories that have no visible text (e.g.
@@ -1130,7 +1160,11 @@ export async function handleConversationRoutes(
     }
 
     try {
-      const greeting = await ensureConversationGreetingStored(state, conv, lang);
+      const greeting = await ensureConversationGreetingStored(
+        state,
+        conv,
+        lang,
+      );
       json(res, {
         text: greeting.text,
         agentName: greeting.agentName,

@@ -99,6 +99,26 @@ function TruncatingConversationTitle({
   );
 }
 
+function ConversationAvatar({
+  avatarUrl,
+  title,
+}: {
+  avatarUrl?: string;
+  title: string;
+}) {
+  if (!avatarUrl) {
+    return null;
+  }
+
+  return (
+    <img
+      src={avatarUrl}
+      alt={`${title} avatar`}
+      className="mt-0.5 h-8 w-8 shrink-0 rounded-full border border-border/35 object-cover shadow-[0_10px_18px_-16px_rgba(15,23,42,0.45)]"
+    />
+  );
+}
+
 export interface ChatConversationItemProps {
   conversation: ChatConversationSummary;
   deleting?: boolean;
@@ -186,10 +206,14 @@ export function ChatConversationItem({
     typeof conversation.source === "string" && conversation.source.trim()
       ? conversation.source
       : null;
+  const showInlineActions = isGameModal;
   const showSourceBadge =
     !isGameModal &&
     conversationSource !== null &&
     conversationSource.trim().toLowerCase() !== "milady";
+  const defaultButtonClassName = `m-0 flex h-auto w-full min-w-0 flex-1 cursor-pointer items-start gap-3 overflow-hidden rounded-none border-0 bg-transparent p-0 text-left hover:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 ${
+    showSourceBadge ? "pr-8" : ""
+  }`;
 
   return (
     <div
@@ -216,7 +240,7 @@ export function ChatConversationItem({
         className={
           isGameModal
             ? "flex h-auto w-full min-w-0 flex-1 cursor-pointer flex-col !items-start !justify-start overflow-hidden rounded-none border-none bg-transparent p-0 !text-left"
-            : "m-0 flex h-auto min-w-0 flex-1 cursor-pointer items-start gap-3 overflow-hidden rounded-none border-0 bg-transparent p-0 text-left"
+            : defaultButtonClassName
         }
         onClick={() => {
           if (suppressClickRef.current) {
@@ -244,6 +268,11 @@ export function ChatConversationItem({
           />
         ) : null}
 
+        <ConversationAvatar
+          avatarUrl={conversation.avatarUrl}
+          title={renderedTitle}
+        />
+
         <div className="min-w-0 flex-1">
           <TruncatingConversationTitle
             displayTitle={renderedTitle}
@@ -263,15 +292,14 @@ export function ChatConversationItem({
             </div>
           ) : null}
         </div>
-        {showSourceBadge && conversationSource !== null ? (
-          <ChatSourceIcon
-            source={conversationSource}
-            className="mt-0.5 ml-auto h-4 w-4 self-start"
-          />
-        ) : null}
       </Button>
+      {showSourceBadge && conversationSource !== null ? (
+        <div className="pointer-events-none absolute right-3.5 top-3.5">
+          <ChatSourceIcon source={conversationSource} className="h-4 w-4" />
+        </div>
+      ) : null}
 
-      {!isConfirmingDelete ? (
+      {showInlineActions && !isConfirmingDelete ? (
         <Button
           size="icon"
           variant={isGameModal ? "ghost" : "surface"}
@@ -292,7 +320,7 @@ export function ChatConversationItem({
         </Button>
       ) : null}
 
-      {!isConfirmingDelete ? (
+      {showInlineActions && !isConfirmingDelete ? (
         <Button
           size="icon"
           variant={isGameModal ? "ghost" : "surfaceDestructive"}

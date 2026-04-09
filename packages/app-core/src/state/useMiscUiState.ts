@@ -28,6 +28,7 @@ import type { GamePostMessageAuthPayload } from "./internal";
  * conversation — the sidebar clears one when selecting the other.
  */
 export interface ActiveInboxChat {
+  avatarUrl?: string;
   id: string;
   source: string;
   title: string;

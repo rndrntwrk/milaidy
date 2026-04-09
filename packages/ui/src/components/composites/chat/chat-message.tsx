@@ -2,6 +2,7 @@ import type * as React from "react";
 
 import {
   type KeyboardEvent,
+  type MouseEvent,
   memo,
   type TouchEvent,
   useCallback,
@@ -15,7 +16,11 @@ import { Button } from "../../ui/button";
 import { Textarea } from "../../ui/textarea";
 import { ChatBubble } from "./chat-bubble";
 import { ChatMessageActions } from "./chat-message-actions";
-import type { ChatMessageData, ChatMessageLabels } from "./chat-types";
+import type {
+  ChatMessageData,
+  ChatMessageLabels,
+  ChatMessageReaction,
+} from "./chat-types";
 
 export interface ChatMessageProps {
   agentName?: string;
@@ -27,7 +32,15 @@ export interface ChatMessageProps {
   onDelete?: (messageId: string) => void;
   onEdit?: (messageId: string, text: string) => Promise<boolean> | boolean;
   onSpeak?: (messageId: string, text: string) => void;
+  replyTarget?: ChatMessageData | null;
+  userMessagesOnRight?: boolean;
 }
+
+export function getChatMessageAnchorId(messageId: string): string {
+  return `chat-message-${messageId}`;
+}
+
+const DISCORD_CUSTOM_EMOJI_RE = /^<(a?):([^:>]+):(\d+)>$/;
 
 function normalizeSenderHandle(handle?: string): string | null {
   if (typeof handle !== "string") return null;
@@ -64,6 +77,114 @@ function senderInitials(label: string): string {
     .map((part) => part[0]?.toUpperCase() ?? "")
     .join("");
   return (initials || label.slice(0, 1).toUpperCase() || "?").slice(0, 2);
+}
+
+function resolveReplySenderDisplayName(
+  message: ChatMessageData,
+  replyTarget?: ChatMessageData | null,
+): string | null {
+  if (replyTarget) {
+    const targetDisplayName = resolveSenderDisplayName(replyTarget);
+    if (targetDisplayName) return targetDisplayName;
+  }
+
+  const replyToSenderName =
+    typeof message.replyToSenderName === "string"
+      ? message.replyToSenderName.trim()
+      : "";
+  if (replyToSenderName) return replyToSenderName;
+
+  return normalizeSenderHandle(message.replyToSenderUserName);
+}
+
+function formatPossessiveLabel(label: string): string {
+  return /s$/i.test(label) ? `${label}'` : `${label}'s`;
+}
+
+function normalizeMessageReactions(
+  reactions: ChatMessageReaction[] | undefined,
+): ChatMessageReaction[] {
+  if (!Array.isArray(reactions)) {
+    return [];
+  }
+  return reactions.filter(
+    (reaction) =>
+      typeof reaction?.emoji === "string" &&
+      reaction.emoji.trim().length > 0 &&
+      typeof reaction.count === "number" &&
+      Number.isFinite(reaction.count) &&
+      reaction.count > 0,
+  );
+}
+
+function parseDiscordCustomEmoji(emoji: string): {
+  animated: boolean;
+  id: string;
+  name: string;
+} | null {
+  const match = emoji.match(DISCORD_CUSTOM_EMOJI_RE);
+  if (!match) return null;
+  return {
+    animated: match[1] === "a",
+    name: match[2],
+    id: match[3],
+  };
+}
+
+function ReactionEmoji({ emoji }: { emoji: string }) {
+  const customEmoji = parseDiscordCustomEmoji(emoji);
+  if (!customEmoji) {
+    return <span className="text-[15px] leading-none">{emoji}</span>;
+  }
+
+  const extension = customEmoji.animated ? "gif" : "png";
+  const src = `https://cdn.discordapp.com/emojis/${customEmoji.id}.${extension}?size=64&quality=lossless`;
+  return (
+    <img
+      src={src}
+      alt={`:${customEmoji.name}:`}
+      className="h-4 w-4 object-contain"
+    />
+  );
+}
+
+function ReactionStrip({
+  alignRight,
+  reactions,
+}: {
+  alignRight: boolean;
+  reactions: ChatMessageReaction[];
+}) {
+  if (reactions.length === 0) {
+    return null;
+  }
+
+  return (
+    <div
+      className={cn(
+        "mt-2 flex flex-wrap gap-1.5",
+        alignRight ? "justify-end" : "justify-start",
+      )}
+    >
+      {reactions.map((reaction) => {
+        const title =
+          Array.isArray(reaction.users) && reaction.users.length > 0
+            ? reaction.users.join(", ")
+            : undefined;
+        return (
+          <span
+            key={`${reaction.emoji}:${reaction.count}`}
+            data-testid="chat-reaction-badge"
+            title={title}
+            className="inline-flex items-center gap-1 rounded-full border border-border/28 bg-bg/70 px-2 py-1 text-[11px] font-medium text-txt-strong shadow-[0_10px_18px_-16px_rgba(15,23,42,0.45)]"
+          >
+            <ReactionEmoji emoji={reaction.emoji} />
+            {reaction.count > 1 ? <span>{reaction.count}</span> : null}
+          </span>
+        );
+      })}
+    </div>
+  );
 }
 
 function SenderAvatar({
@@ -103,6 +224,8 @@ export const ChatMessage = memo(function ChatMessage({
   onSpeak,
   onEdit,
   onDelete,
+  replyTarget = null,
+  userMessagesOnRight = true,
 }: ChatMessageProps) {
   const [copied, setCopied] = useState(false);
   const copiedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -118,6 +241,7 @@ export const ChatMessage = memo(function ChatMessage({
   const articleRef = useRef<HTMLElement | null>(null);
   const editTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   const isUser = message.role === "user";
+  const isRightAligned = isUser ? userMessagesOnRight : !userMessagesOnRight;
   const canEdit =
     isUser &&
     typeof onEdit === "function" &&
@@ -136,10 +260,22 @@ export const ChatMessage = memo(function ChatMessage({
     ? resolveSenderHandle(message, senderDisplayName)
     : null;
   const senderPrimaryLabel = senderDisplayName ?? senderHandle ?? "User";
+  const replyTargetId =
+    typeof message.replyToMessageId === "string"
+      ? message.replyToMessageId.trim()
+      : "";
+  const replySenderLabel = resolveReplySenderDisplayName(message, replyTarget);
+  const replyReferenceLabel = replySenderLabel
+    ? `Reply to ${formatPossessiveLabel(replySenderLabel)} message`
+    : "Reply to an earlier message";
+  const showReplyReference = Boolean(
+    !isEditing && replyTargetId && normalizedSource,
+  );
   const showSenderHeader =
     isUser &&
     !isGrouped &&
     Boolean(senderDisplayName || senderHandle || message.avatarUrl);
+  const visibleReactions = normalizeMessageReactions(message.reactions);
 
   const handleCopy = useCallback(() => {
     onCopy?.(message.text);
@@ -280,12 +416,26 @@ export const ChatMessage = memo(function ChatMessage({
 
   const actionsVisible = showActions;
 
+  const handleReplyReferenceClick = useCallback(
+    (event: MouseEvent<HTMLAnchorElement>) => {
+      if (!replyTargetId || typeof document === "undefined") return;
+      const target = document.getElementById(
+        getChatMessageAnchorId(replyTargetId),
+      );
+      if (!target) return;
+      event.preventDefault();
+      target.scrollIntoView({ behavior: "smooth", block: "center" });
+    },
+    [replyTargetId],
+  );
+
   return (
     <article
       ref={articleRef}
-      className={`flex items-start gap-2 sm:gap-3 ${isUser ? "justify-end" : "justify-start"} ${
-        isGrouped ? "mt-1" : "mt-4"
-      }`}
+      id={getChatMessageAnchorId(message.id)}
+      className={`flex items-start gap-2 sm:gap-3 ${
+        isRightAligned ? "justify-end" : "justify-start"
+      } ${isGrouped ? "mt-1" : "mt-4"}`}
       data-testid="chat-message"
       data-role={message.role}
       onMouseEnter={supportsHover ? () => setShowActions(true) : undefined}
@@ -295,44 +445,88 @@ export const ChatMessage = memo(function ChatMessage({
         isUser && showSenderHeader
           ? senderPrimaryLabel
           : isUser
-            ? "Your"
+            ? userMessagesOnRight
+              ? "Your"
+              : senderPrimaryLabel
             : agentName
       } message`}
     >
       <div
-        className={`max-w-[88%] min-w-0 sm:max-w-[80%] ${isUser ? "mr-1" : ""}`}
+        className={`max-w-[88%] min-w-0 sm:max-w-[80%] ${
+          isRightAligned ? "mr-1" : "ml-1"
+        }`}
       >
         {!isUser && !isGrouped ? (
-          <div className="mb-1 text-[12px] font-semibold text-accent">
+          <div
+            className={cn(
+              "mb-1 text-[12px] font-semibold text-accent",
+              isRightAligned ? "text-right" : "text-left",
+            )}
+          >
             {agentName}
           </div>
         ) : null}
         {showSenderHeader ? (
-          <div className="mb-1 flex items-center justify-end gap-2">
-            <div className="min-w-0 text-right">
-              <div className="truncate text-[12px] font-semibold text-txt-strong">
-                {senderPrimaryLabel}
-              </div>
-              {senderHandle ? (
-                <div className="truncate text-[11px] text-muted">
-                  {senderHandle}
+          <div
+            className={cn(
+              "mb-1 flex items-center gap-2",
+              isRightAligned ? "justify-end" : "justify-start",
+            )}
+          >
+            {isRightAligned ? (
+              <>
+                <div className="min-w-0 text-right">
+                  <div className="truncate text-[12px] font-semibold text-txt-strong">
+                    {senderPrimaryLabel}
+                  </div>
+                  {senderHandle ? (
+                    <div className="truncate text-[11px] text-muted">
+                      {senderHandle}
+                    </div>
+                  ) : null}
                 </div>
-              ) : null}
-            </div>
-            <SenderAvatar
-              avatarUrl={message.avatarUrl}
-              label={senderPrimaryLabel}
-            />
+                <SenderAvatar
+                  avatarUrl={message.avatarUrl}
+                  label={senderPrimaryLabel}
+                />
+              </>
+            ) : (
+              <>
+                <SenderAvatar
+                  avatarUrl={message.avatarUrl}
+                  label={senderPrimaryLabel}
+                />
+                <div className="min-w-0 text-left">
+                  <div className="truncate text-[12px] font-semibold text-txt-strong">
+                    {senderPrimaryLabel}
+                  </div>
+                  {senderHandle ? (
+                    <div className="truncate text-[11px] text-muted">
+                      {senderHandle}
+                    </div>
+                  ) : null}
+                </div>
+              </>
+            )}
           </div>
         ) : null}
         <ChatBubble
           tone={isUser ? "user" : "assistant"}
           source={normalizedSource}
           className={`relative group rounded-[18px] px-4 py-3 text-[15px] leading-[1.7] whitespace-pre-wrap break-words ${
-            isUser ? "rounded-br-[6px]" : "rounded-bl-[6px]"
+            isRightAligned ? "rounded-br-[6px]" : "rounded-bl-[6px]"
           }`}
           style={{ fontFamily: "var(--font-chat)" }}
         >
+          {showReplyReference ? (
+            <a
+              href={`#${getChatMessageAnchorId(replyTargetId)}`}
+              onClick={handleReplyReferenceClick}
+              className="mb-2 block text-xs font-medium text-muted underline decoration-border/60 underline-offset-2 transition-colors hover:text-txt-strong"
+            >
+              {replyReferenceLabel}
+            </a>
+          ) : null}
           {isEditing ? (
             <div className="space-y-3">
               <Textarea
@@ -388,7 +582,7 @@ export const ChatMessage = memo(function ChatMessage({
             <div
               className={cn(
                 "absolute top-0 flex items-center gap-1 transition-opacity duration-200",
-                isUser
+                isRightAligned
                   ? "left-0 -translate-x-full"
                   : "right-0 translate-x-full",
                 actionsVisible
@@ -410,6 +604,10 @@ export const ChatMessage = memo(function ChatMessage({
             </div>
           ) : null}
         </ChatBubble>
+        <ReactionStrip
+          alignRight={isRightAligned}
+          reactions={visibleReactions}
+        />
       </div>
     </article>
   );

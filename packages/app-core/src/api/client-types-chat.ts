@@ -61,6 +61,12 @@ export interface ImageAttachment {
   name: string;
 }
 
+export interface ConversationMessageReaction {
+  emoji: string;
+  count: number;
+  users?: string[];
+}
+
 export interface ConversationMessage {
   id: string;
   role: "user" | "assistant";
@@ -76,6 +82,14 @@ export interface ConversationMessage {
   fromUserName?: string;
   /** Sender avatar URL when the connector can provide one. */
   avatarUrl?: string;
+  /** Internal message id this message replies to, when available. */
+  replyToMessageId?: string;
+  /** Best-effort display name of the replied-to sender. */
+  replyToSenderName?: string;
+  /** Best-effort username/handle of the replied-to sender. */
+  replyToSenderUserName?: string;
+  /** Aggregated reactions attached to this message. */
+  reactions?: ConversationMessageReaction[];
   /** True when the SSE stream was interrupted before receiving a "done" event. */
   interrupted?: boolean;
 }

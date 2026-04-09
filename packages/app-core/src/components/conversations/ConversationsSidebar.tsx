@@ -30,6 +30,7 @@ const INBOX_ID_PREFIX = "inbox:";
 const INBOX_CHATS_REFRESH_MS = 5_000;
 
 interface InboxChatRow {
+  avatarUrl?: string;
   id: string;
   source: string;
   title: string;
@@ -80,6 +81,7 @@ export function ConversationsSidebar({
         if (cancelled) return;
         setInboxChats(
           response.chats.map((chat) => ({
+            avatarUrl: chat.avatarUrl,
             id: chat.id,
             source: chat.source,
             title: chat.title,
@@ -131,6 +133,7 @@ export function ConversationsSidebar({
     const inboxRows = inboxChats.map((chat) => {
       const isoDate = new Date(chat.lastMessageAt).toISOString();
       return {
+        avatarUrl: chat.avatarUrl,
         id: `${INBOX_ID_PREFIX}${chat.id}`,
         title: chat.title,
         source: chat.source,
@@ -301,6 +304,7 @@ export function ConversationsSidebar({
             const chat = inboxChats.find((c) => c.id === roomId);
             if (chat) {
               setState("activeInboxChat", {
+                avatarUrl: chat.avatarUrl,
                 id: chat.id,
                 source: chat.source,
                 title: chat.title,

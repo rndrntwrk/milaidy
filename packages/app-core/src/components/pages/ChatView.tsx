@@ -655,13 +655,20 @@ function InboxChatPanel({
   activeInboxChat,
   variant,
 }: {
-  activeInboxChat: { id: string; source: string; title: string };
+  activeInboxChat: {
+    avatarUrl?: string;
+    id: string;
+    source: string;
+    title: string;
+  };
   variant: ChatViewVariant;
 }) {
   const { agentStatus, characterData, t } = useApp();
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const agentName = characterData?.name || agentStatus?.agentName || "Agent";
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const lastRenderedMessageKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -670,6 +677,7 @@ function InboxChatPanel({
         const response = await client.getInboxMessages({
           limit: 200,
           roomId: activeInboxChat.id,
+          roomSource: activeInboxChat.source,
         });
         if (cancelled) return;
         // Server returns newest first; ChatTranscript expects
@@ -692,6 +700,29 @@ function InboxChatPanel({
     };
   }, [activeInboxChat.id]);
 
+  useLayoutEffect(() => {
+    if (messages.length === 0) return;
+
+    const el = scrollRef.current;
+    if (!el) return;
+
+    const lastMessage = messages[messages.length - 1];
+    const nextKey = `${messages.length}:${lastMessage?.id ?? ""}:${
+      lastMessage?.timestamp ?? 0
+    }`;
+
+    if (lastRenderedMessageKeyRef.current === nextKey) {
+      return;
+    }
+
+    el.scrollTo({
+      top: el.scrollHeight,
+      behavior:
+        lastRenderedMessageKeyRef.current === null ? "instant" : "smooth",
+    });
+    lastRenderedMessageKeyRef.current = nextKey;
+  }, [messages]);
+
   return (
     <section
       className="flex flex-1 min-h-0 min-w-0 flex-col"
@@ -709,9 +740,19 @@ function InboxChatPanel({
         </div>
         {activeInboxChat.source ? (
           <ChatSourceIcon source={activeInboxChat.source} className="h-4 w-4" />
+        ) : activeInboxChat.avatarUrl ? (
+          <img
+            src={activeInboxChat.avatarUrl}
+            alt={`${activeInboxChat.title} avatar`}
+            className="h-8 w-8 shrink-0 rounded-full border border-border/35 object-cover shadow-[0_10px_18px_-16px_rgba(15,23,42,0.45)]"
+          />
         ) : null}
       </div>
-      <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
+      <div
+        ref={scrollRef}
+        data-testid="inbox-chat-scroll"
+        className="flex-1 min-h-0 overflow-y-auto px-5 py-4"
+      >
         {loading && messages.length === 0 ? (
           <div className="flex h-full items-center justify-center text-xs text-muted">
             {t("inboxview.Loading", { defaultValue: "Loading messages…" })}
@@ -727,6 +768,7 @@ function InboxChatPanel({
             variant={variant}
             agentName={agentName}
             messages={messages}
+            userMessagesOnRight={false}
             renderMessageContent={(message) => (
               <MessageContent message={message as ConversationMessage} />
             )}

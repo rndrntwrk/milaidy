@@ -10,7 +10,12 @@ interface ChatViewContextStub {
     state?: string;
   } | null;
   activeConversationId: string | null;
-  activeInboxChat: { id: string; source: string; title: string } | null;
+  activeInboxChat: {
+    avatarUrl?: string;
+    id: string;
+    source: string;
+    title: string;
+  } | null;
   chatInput: string;
   chatSending: boolean;
   chatFirstTokenReceived: boolean;
@@ -186,6 +191,7 @@ describe("ChatView", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
@@ -805,10 +811,18 @@ describe("ChatView", () => {
     expect(String(removeButton.props.className)).toContain("sm:opacity-0");
   });
 
-  it("renders inbox chats with a source icon instead of a textual provider badge", async () => {
+  it("keeps the inbox chat source icon in the header even when the row has an avatar", async () => {
     mockClient.getInboxMessages.mockResolvedValue({
-      count: 1,
+      count: 2,
       messages: [
+        {
+          id: "msg-2",
+          roomId: "room-1",
+          role: "assistant",
+          text: "agent reply",
+          timestamp: 2,
+          source: "discord",
+        },
         {
           id: "msg-1",
           roomId: "room-1",
@@ -826,6 +840,7 @@ describe("ChatView", () => {
       createContext({
         activeConversationId: null,
         activeInboxChat: {
+          avatarUrl: "/avatars/general.png",
           id: "room-1",
           source: "discord",
           title: "General Chat",
@@ -850,6 +865,165 @@ describe("ChatView", () => {
           node.props["data-source"] === "discord",
       ),
     ).toHaveLength(1);
+    expect(
+      root?.findAll(
+        (node) =>
+          node.type === "img" &&
+          node.props.alt === "General Chat avatar" &&
+          node.props.src === "/avatars/general.png",
+      ),
+    ).toHaveLength(0);
+    const chatMessages = root?.findAll(
+      (node) => node.props["data-testid"] === "chat-message",
+    );
+    expect(String(chatMessages?.[0]?.props.className)).toContain(
+      "justify-start",
+    );
+    expect(String(chatMessages?.[1]?.props.className)).toContain("justify-end");
+  });
+
+  it("falls back to the inbox chat source icon when no avatar is available", async () => {
+    mockClient.getInboxMessages.mockResolvedValue({
+      count: 1,
+      messages: [
+        {
+          id: "msg-1",
+          roomId: "room-1",
+          role: "user",
+          text: "hello from discord",
+          timestamp: 1,
+          source: "discord",
+          from: "James",
+          fromUserName: "james",
+        },
+      ],
+    });
+    mockUseApp.mockReturnValue(
+      createContext({
+        activeConversationId: null,
+        activeInboxChat: {
+          id: "room-1",
+          source: "discord",
+          title: "General Chat",
+        },
+      }),
+    );
+
+    let tree: TestRenderer.ReactTestRenderer | undefined;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(ChatView));
+    });
+    await flush();
+
+    const root = tree?.root;
+    expect(
+      root?.findAll(
+        (node) =>
+          node.props["data-testid"] === "chat-source-icon" &&
+          node.props["data-source"] === "discord",
+      ),
+    ).toHaveLength(1);
+    expect(
+      root?.findAll(
+        (node) =>
+          node.type === "img" && node.props.alt === "General Chat avatar",
+      ),
+    ).toHaveLength(0);
+  });
+
+  it("scrolls inbox chats to the bottom on open and when new messages arrive", async () => {
+    vi.useFakeTimers();
+
+    mockClient.getInboxMessages
+      .mockResolvedValueOnce({
+        count: 1,
+        messages: [
+          {
+            id: "msg-1",
+            roomId: "room-1",
+            role: "user",
+            text: "first",
+            timestamp: 1,
+            source: "discord",
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        count: 2,
+        messages: [
+          {
+            id: "msg-2",
+            roomId: "room-1",
+            role: "user",
+            text: "second",
+            timestamp: 2,
+            source: "discord",
+          },
+          {
+            id: "msg-1",
+            roomId: "room-1",
+            role: "user",
+            text: "first",
+            timestamp: 1,
+            source: "discord",
+          },
+        ],
+      });
+    mockUseApp.mockReturnValue(
+      createContext({
+        activeConversationId: null,
+        activeInboxChat: {
+          id: "room-1",
+          source: "discord",
+          title: "General Chat",
+        },
+      }),
+    );
+
+    const scrollTo = vi.fn();
+    const inboxScrollMock = {
+      scrollHeight: 320,
+      scrollTo,
+    };
+
+    let tree: TestRenderer.ReactTestRenderer | undefined;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(ChatView), {
+        createNodeMock: (element) => {
+          const node = element as {
+            type: unknown;
+            props: Record<string, unknown>;
+          };
+          if (
+            node.type === "div" &&
+            node.props["data-testid"] === "inbox-chat-scroll"
+          ) {
+            return inboxScrollMock;
+          }
+          return {};
+        },
+      });
+    });
+    await flush();
+
+    expect(scrollTo).toHaveBeenCalledWith({
+      top: 320,
+      behavior: "instant",
+    });
+
+    inboxScrollMock.scrollHeight = 640;
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_000);
+    });
+    await flush();
+
+    expect(scrollTo).toHaveBeenLastCalledWith({
+      top: 640,
+      behavior: "smooth",
+    });
+
+    tree?.unmount();
   });
 });
 

@@ -2,6 +2,10 @@ import type http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { resolveStateDir } from "../config/paths.js";
+import {
+  getDiscordAvatarCacheDir,
+  getDiscordAvatarCachePath,
+} from "./discord-avatar-cache.js";
 import { readRequestBodyBuffer } from "./http-helpers.js";
 
 // ---------------------------------------------------------------------------
@@ -25,6 +29,65 @@ export async function handleAvatarRoutes(
   ctx: AvatarRouteContext,
 ): Promise<boolean> {
   const { req, res, method, pathname, json, error } = ctx;
+
+  if (
+    (method === "GET" || method === "HEAD") &&
+    pathname.startsWith("/api/avatar/discord/")
+  ) {
+    const encodedFileName = pathname.slice("/api/avatar/discord/".length);
+    const fileName = decodeURIComponent(encodedFileName);
+    if (
+      !fileName ||
+      fileName !== path.basename(fileName) ||
+      !/^[a-zA-Z0-9._-]+$/.test(fileName)
+    ) {
+      error(res, "Invalid Discord avatar path", 400);
+      return true;
+    }
+
+    const filePath = getDiscordAvatarCachePath(fileName);
+    if (
+      path.dirname(filePath) !== getDiscordAvatarCacheDir() ||
+      !filePath.startsWith(getDiscordAvatarCacheDir())
+    ) {
+      error(res, "Invalid Discord avatar path", 400);
+      return true;
+    }
+
+    try {
+      const stat = fs.statSync(filePath);
+      if (!stat.isFile()) {
+        error(res, "Discord avatar not found", 404);
+        return true;
+      }
+      const extension = path.extname(filePath).slice(1).toLowerCase();
+      const mimeType =
+        extension === "jpg" || extension === "jpeg"
+          ? "image/jpeg"
+          : extension === "gif"
+            ? "image/gif"
+            : extension === "webp"
+              ? "image/webp"
+              : "image/png";
+      const headers: Record<string, string | number> = {
+        "Cache-Control": "public, max-age=31536000, immutable",
+        "Content-Length": stat.size,
+        "Content-Type": mimeType,
+      };
+      if (method === "HEAD") {
+        res.writeHead(200, headers);
+        res.end();
+        return true;
+      }
+      const body = fs.readFileSync(filePath);
+      res.writeHead(200, headers);
+      res.end(body);
+      return true;
+    } catch {
+      error(res, "Discord avatar not found", 404);
+      return true;
+    }
+  }
 
   // ── POST /api/avatar/vrm ─────────────────────────────────────────────
   if (method === "POST" && pathname === "/api/avatar/vrm") {

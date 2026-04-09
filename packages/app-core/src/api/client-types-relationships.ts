@@ -67,6 +67,8 @@ export interface RelationshipsGraphEdge {
   id: string;
   sourcePersonId: string;
   targetPersonId: string;
+  sourcePersonName: string;
+  targetPersonName: string;
   relationshipTypes: string[];
   sentiment: string;
   strength: number;

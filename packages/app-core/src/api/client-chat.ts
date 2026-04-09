@@ -92,7 +92,11 @@ declare module "./client-base" {
       text: string,
       channelType?: ConversationChannelType,
       conversationMode?: ConversationMode,
-    ): Promise<{ text: string; agentName: string; noResponseReason?: "ignored" }>;
+    ): Promise<{
+      text: string;
+      agentName: string;
+      noResponseReason?: "ignored";
+    }>;
     sendChatStream(
       text: string,
       onToken: (token: string, accumulatedText?: string) => void,
@@ -133,6 +137,7 @@ declare module "./client-base" {
       limit?: number;
       sources?: string[];
       roomId?: string;
+      roomSource?: string;
     }): Promise<{
       messages: Array<ConversationMessage & { roomId: string; source: string }>;
       count: number;
@@ -156,6 +161,7 @@ declare module "./client-base" {
         id: string;
         source: string;
         title: string;
+        avatarUrl?: string;
         lastMessageText: string;
         lastMessageAt: number;
         messageCount: number;
@@ -655,6 +661,12 @@ MiladyClient.prototype.getInboxMessages = async function (
   if (typeof options?.roomId === "string" && options.roomId.length > 0) {
     params.set("roomId", options.roomId);
   }
+  if (
+    typeof options?.roomSource === "string" &&
+    options.roomSource.length > 0
+  ) {
+    params.set("roomSource", options.roomSource);
+  }
   const query = params.toString();
   const path = query ? `/api/inbox/messages?${query}` : "/api/inbox/messages";
   return this.fetch<{
@@ -682,6 +694,7 @@ MiladyClient.prototype.getInboxChats = async function (
       id: string;
       source: string;
       title: string;
+      avatarUrl?: string;
       lastMessageText: string;
       lastMessageAt: number;
       messageCount: number;

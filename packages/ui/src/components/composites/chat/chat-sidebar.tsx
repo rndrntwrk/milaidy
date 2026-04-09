@@ -28,6 +28,20 @@ function railMonogram(label: string): string {
   return (initials || label.slice(0, 1).toUpperCase() || "?").slice(0, 2);
 }
 
+function renderRailIdentity(conversation: ChatConversationSummary) {
+  if (conversation.avatarUrl) {
+    return (
+      <img
+        src={conversation.avatarUrl}
+        alt={`${conversation.title} avatar`}
+        className="h-8 w-8 rounded-full object-cover"
+      />
+    );
+  }
+
+  return railMonogram(conversation.title);
+}
+
 export interface ChatSidebarProps {
   activeConversationId: string | null;
   confirmDeleteId?: string | null;
@@ -157,7 +171,7 @@ function ChatSidebarRoot({
             onClose?.();
           }}
         >
-          {railMonogram(conversation.title)}
+          {renderRailIdentity(conversation)}
         </SidebarContent.RailItem>
       ))}
       onMobileClose={mobile ? onClose : undefined}

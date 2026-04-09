@@ -713,7 +713,6 @@ function AppRunsWidget(_props: ChatSidebarWidgetProps) {
           <EmptyWidgetState
             icon={<Activity className="h-8 w-8" />}
             title="No games are running"
-            description="Launched agent apps will stay here even when their viewer is detached."
           />
         )
       ) : (

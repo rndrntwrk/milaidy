@@ -36,6 +36,7 @@
 
 import type http from "node:http";
 import type { AgentRuntime, Memory, Room, UUID } from "@elizaos/core";
+import { cacheDiscordAvatarUrl } from "./discord-avatar-cache.js";
 import type { RouteHelpers } from "./route-helpers.js";
 
 /**
@@ -67,6 +68,7 @@ const DEFAULT_INBOX_SOURCES = new Set<string>([
  * 100-message inbox view under realistic usage.
  */
 const MAX_ROOMS_SCANNED = 200;
+const ORPHAN_ROOM_MEMORY_SCAN_LIMIT = 10_000;
 
 /**
  * How many memories we ask the database for per room. We over-fetch
@@ -101,7 +103,45 @@ interface InboxMessage {
   fromUserName?: string;
   /** Sender avatar URL when the connector can provide one. */
   avatarUrl?: string;
+  /** Internal message id this message replies to, when available. */
+  replyToMessageId?: string;
+  /** Best-effort display name of the replied-to sender. */
+  replyToSenderName?: string;
+  /** Best-effort username/handle of the replied-to sender. */
+  replyToSenderUserName?: string;
+  /** Aggregated reactions attached to this message. */
+  reactions?: InboxReaction[];
 }
+
+interface InboxReaction {
+  emoji: string;
+  count: number;
+  users?: string[];
+}
+
+type InboxMessageRecord = InboxMessage & {
+  hasExternalUrl: boolean;
+  hasExplicitSource: boolean;
+  rawDiscordChannelId?: string;
+  rawDiscordMessageId?: string;
+  rawReplyToSenderId?: string;
+  senderEntityId?: string;
+  rawSenderId?: string;
+  responseId?: string;
+};
+
+type DiscordReactionEvent = {
+  action: "add" | "remove";
+  emoji: string;
+  targetMessageId: string;
+  userKey: string;
+  userLabel?: string;
+};
+
+type ReactionAggregateState = {
+  emoji: string;
+  users: Map<string, string | undefined>;
+};
 
 /**
  * Parse and clamp the `limit` query parameter. Defaults to 100, capped
@@ -153,6 +193,24 @@ function extractText(memory: Memory): string {
   return typeof text === "string" ? text : "";
 }
 
+function extractResponseId(memory: Memory): string | undefined {
+  const content = memory.content as { responseId?: unknown } | undefined;
+  const responseId = content?.responseId;
+  if (typeof responseId === "string" && responseId.length > 0) {
+    return responseId;
+  }
+  return undefined;
+}
+
+function extractContentUrl(memory: Memory): string | undefined {
+  const content = memory.content as { url?: unknown } | undefined;
+  const url = content?.url;
+  if (typeof url === "string" && url.length > 0) {
+    return url;
+  }
+  return undefined;
+}
+
 /**
  * Best-effort sender display name from memory.metadata.entityName. The
  * bootstrap plugin stamps this when it builds memories from
@@ -201,20 +259,341 @@ function extractRawSenderId(memory: Memory): string | undefined {
   return undefined;
 }
 
+function extractDiscordChannelId(memory: Memory): string | undefined {
+  const meta = memory.metadata as Record<string, unknown> | undefined;
+  const discordChannelId = meta?.discordChannelId;
+  if (typeof discordChannelId === "string" && discordChannelId.length > 0) {
+    return discordChannelId;
+  }
+  return undefined;
+}
+
+function extractDiscordMessageId(memory: Memory): string | undefined {
+  const meta = memory.metadata as Record<string, unknown> | undefined;
+  const discordMessageId = meta?.discordMessageId;
+  if (typeof discordMessageId === "string" && discordMessageId.length > 0) {
+    return discordMessageId;
+  }
+  return undefined;
+}
+
+function readLooseStringValue(
+  record: Record<string, unknown> | undefined,
+  keys: string[],
+): string | null {
+  if (!record) return null;
+
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value !== "string") {
+      continue;
+    }
+    const trimmed = value.trim();
+    if (trimmed.length > 0) {
+      return trimmed;
+    }
+  }
+
+  return null;
+}
+
+function readRoomSource(room: Room | undefined): string | null {
+  return readLooseStringValue(room as Record<string, unknown> | undefined, [
+    "source",
+  ]);
+}
+
+function readRoomType(room: Room | undefined): string | null {
+  return readLooseStringValue(room as Record<string, unknown> | undefined, [
+    "type",
+    "roomType",
+    "room_type",
+  ]);
+}
+
+function readRoomChannelId(room: Room | undefined): string | undefined {
+  return (
+    readLooseStringValue(room as Record<string, unknown> | undefined, [
+      "channelId",
+      "channel_id",
+    ]) ?? undefined
+  );
+}
+
+function readRoomCreatedAt(room: Room | undefined): number | undefined {
+  const record = room as Record<string, unknown> | undefined;
+  const value = record?.createdAt ?? record?.created_at;
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (value instanceof Date) {
+    return value.getTime();
+  }
+  if (typeof value === "string") {
+    const parsed = Date.parse(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
+}
+
+function normalizeRoomTitle(title: string | null | undefined): string | null {
+  if (typeof title !== "string") return null;
+  const trimmed = title.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function isPlaceholderConversationTitle(title: string | null): boolean {
+  if (!title) return false;
+  const normalized = title.trim().toLowerCase();
+  return (
+    normalized === "default" ||
+    normalized === "new chat" ||
+    normalized === "discord chat"
+  );
+}
+
+function equalsNormalizedTitle(
+  left: string | null,
+  right: string | null,
+): boolean {
+  if (!left || !right) return false;
+  return left.trim().toLowerCase() === right.trim().toLowerCase();
+}
+
+function extractReplyToMessageId(memory: Memory): string | undefined {
+  const content = memory.content as { inReplyTo?: unknown } | undefined;
+  const inReplyTo = content?.inReplyTo;
+  if (typeof inReplyTo === "string" && inReplyTo.length > 0) {
+    return inReplyTo;
+  }
+
+  const meta = memory.metadata as Record<string, unknown> | undefined;
+  const replyToMessageId = meta?.replyToMessageId;
+  if (typeof replyToMessageId === "string" && replyToMessageId.length > 0) {
+    return replyToMessageId;
+  }
+  return undefined;
+}
+
+function extractReplyAuthorRecord(
+  memory: Memory,
+): Record<string, unknown> | null {
+  const meta = memory.metadata as Record<string, unknown> | undefined;
+  const replyToAuthor = meta?.replyToAuthor;
+  if (!replyToAuthor || typeof replyToAuthor !== "object") {
+    return null;
+  }
+  return replyToAuthor as Record<string, unknown>;
+}
+
+function extractReplyToSenderName(memory: Memory): string | undefined {
+  const meta = memory.metadata as Record<string, unknown> | undefined;
+  const replyToSenderName = meta?.replyToSenderName;
+  if (typeof replyToSenderName === "string" && replyToSenderName.length > 0) {
+    return replyToSenderName;
+  }
+
+  const replyAuthor = extractReplyAuthorRecord(memory);
+  const displayName = replyAuthor?.displayName;
+  if (typeof displayName === "string" && displayName.length > 0) {
+    return displayName;
+  }
+  const username = replyAuthor?.username;
+  if (typeof username === "string" && username.length > 0) {
+    return username;
+  }
+  return undefined;
+}
+
+function extractReplyToSenderUserName(memory: Memory): string | undefined {
+  const meta = memory.metadata as Record<string, unknown> | undefined;
+  const replyToSenderUserName = meta?.replyToSenderUserName;
+  if (
+    typeof replyToSenderUserName === "string" &&
+    replyToSenderUserName.length > 0
+  ) {
+    return replyToSenderUserName;
+  }
+
+  const replyAuthor = extractReplyAuthorRecord(memory);
+  const username = replyAuthor?.username;
+  if (typeof username === "string" && username.length > 0) {
+    return username;
+  }
+  return undefined;
+}
+
+function extractReplyToSenderId(memory: Memory): string | undefined {
+  const meta = memory.metadata as Record<string, unknown> | undefined;
+  const replyToSenderId = meta?.replyToSenderId;
+  if (typeof replyToSenderId === "string" && replyToSenderId.length > 0) {
+    return replyToSenderId;
+  }
+
+  const replyAuthor = extractReplyAuthorRecord(memory);
+  const id = replyAuthor?.id;
+  if (typeof id === "string" && id.length > 0) {
+    return id;
+  }
+  return undefined;
+}
+
+const LEGACY_DISCORD_REACTION_RE = /^\*(Added|Removed) <(.+?)> (?:to|from):/i;
+
+function extractDiscordReactionEvent(
+  memory: Memory,
+): DiscordReactionEvent | null {
+  const targetMessageId = extractReplyToMessageId(memory);
+  if (!targetMessageId) {
+    return null;
+  }
+
+  const meta = memory.metadata as Record<string, unknown> | undefined;
+  const reactionMeta =
+    meta?.discordReaction && typeof meta.discordReaction === "object"
+      ? (meta.discordReaction as Record<string, unknown>)
+      : null;
+
+  const structuredAction =
+    reactionMeta?.action === "add" || reactionMeta?.action === "remove"
+      ? reactionMeta.action
+      : null;
+  const structuredEmoji =
+    typeof reactionMeta?.emoji === "string" &&
+    reactionMeta.emoji.trim().length > 0
+      ? reactionMeta.emoji.trim()
+      : null;
+
+  if (structuredAction && structuredEmoji) {
+    return {
+      action: structuredAction,
+      emoji: structuredEmoji,
+      targetMessageId,
+      userKey:
+        memory.entityId ?? memory.id ?? `${targetMessageId}:${structuredEmoji}`,
+      userLabel: extractFrom(memory) ?? extractFromUserName(memory),
+    };
+  }
+
+  const source = extractSource(memory);
+  if (source?.toLowerCase() !== "discord") {
+    return null;
+  }
+
+  const text = extractText(memory).trim();
+  const legacyMatch = text.match(LEGACY_DISCORD_REACTION_RE);
+  if (!legacyMatch) {
+    return null;
+  }
+
+  return {
+    action: legacyMatch[1].toLowerCase() === "added" ? "add" : "remove",
+    emoji: legacyMatch[2].trim(),
+    targetMessageId,
+    userKey:
+      memory.entityId ?? memory.id ?? `${targetMessageId}:${legacyMatch[2]}`,
+    userLabel: extractFrom(memory) ?? extractFromUserName(memory),
+  };
+}
+
+function buildMessageReactionMap(
+  memories: Memory[],
+): Map<string, InboxReaction[]> {
+  const stateByTargetId = new Map<
+    string,
+    Map<string, ReactionAggregateState>
+  >();
+  const chronologicallySortedMemories = [...memories].sort(
+    (left, right) => (left.createdAt ?? 0) - (right.createdAt ?? 0),
+  );
+
+  for (const memory of chronologicallySortedMemories) {
+    const event = extractDiscordReactionEvent(memory);
+    if (!event) {
+      continue;
+    }
+
+    const byEmoji =
+      stateByTargetId.get(event.targetMessageId) ??
+      new Map<string, ReactionAggregateState>();
+    const aggregate = byEmoji.get(event.emoji) ?? {
+      emoji: event.emoji,
+      users: new Map<string, string | undefined>(),
+    };
+
+    if (event.action === "add") {
+      aggregate.users.set(event.userKey, event.userLabel);
+      byEmoji.set(event.emoji, aggregate);
+      stateByTargetId.set(event.targetMessageId, byEmoji);
+      continue;
+    }
+
+    aggregate.users.delete(event.userKey);
+    if (aggregate.users.size === 0) {
+      byEmoji.delete(event.emoji);
+    } else {
+      byEmoji.set(event.emoji, aggregate);
+    }
+
+    if (byEmoji.size === 0) {
+      stateByTargetId.delete(event.targetMessageId);
+    } else {
+      stateByTargetId.set(event.targetMessageId, byEmoji);
+    }
+  }
+
+  const reactionsByTargetId = new Map<string, InboxReaction[]>();
+  for (const [targetMessageId, byEmoji] of stateByTargetId) {
+    const reactions = Array.from(byEmoji.values())
+      .map((aggregate) => {
+        const users = Array.from(aggregate.users.values()).filter(
+          (value): value is string =>
+            typeof value === "string" && value.trim().length > 0,
+        );
+        return {
+          emoji: aggregate.emoji,
+          count: aggregate.users.size,
+          ...(users.length > 0 ? { users } : {}),
+        };
+      })
+      .filter((reaction) => reaction.count > 0);
+    if (reactions.length > 0) {
+      reactionsByTargetId.set(targetMessageId, reactions);
+    }
+  }
+
+  return reactionsByTargetId;
+}
+
 type DiscordUserProfile = {
   avatarUrl?: string;
   displayName?: string;
   username?: string;
 };
 
+type DiscordMessageAuthorProfile = DiscordUserProfile & {
+  rawUserId?: string;
+};
+
+type StoredDiscordEntityProfile = {
+  avatarUrl?: string;
+  displayName?: string;
+  rawUserId?: string;
+  username?: string;
+};
+
 const DISCORD_PROFILE_CACHE_TTL_MS = 5 * 60_000;
-const discordChannelTitleCache = new Map<
+const discordRoomProfileCache = new Map<
   string,
-  { expiresAt: number; value: string | null }
+  { expiresAt: number; value: DiscordRoomProfile | null }
 >();
 const discordUserProfileCache = new Map<
   string,
   { expiresAt: number; value: DiscordUserProfile | null }
+>();
+const discordMessageAuthorProfileCache = new Map<
+  string,
+  { expiresAt: number; value: DiscordMessageAuthorProfile | null }
 >();
 
 function readCachedValue<T>(
@@ -302,6 +681,169 @@ function readDiscordAvatarUrl(user: unknown): string | undefined {
   return undefined;
 }
 
+function readStoredDiscordEntityProfile(
+  entity: unknown,
+): StoredDiscordEntityProfile | null {
+  if (!entity || typeof entity !== "object") {
+    return null;
+  }
+
+  const metadata = (entity as { metadata?: unknown }).metadata;
+  if (!metadata || typeof metadata !== "object") {
+    return null;
+  }
+
+  const record = metadata as Record<string, unknown>;
+  const discord =
+    record.discord && typeof record.discord === "object"
+      ? (record.discord as Record<string, unknown>)
+      : null;
+  const fallback =
+    record.default && typeof record.default === "object"
+      ? (record.default as Record<string, unknown>)
+      : null;
+
+  const displayName =
+    readLooseStringValue(record, ["displayName", "name"]) ??
+    readLooseStringValue(discord ?? undefined, [
+      "displayName",
+      "globalName",
+      "name",
+    ]) ??
+    readLooseStringValue(fallback ?? undefined, ["name"]);
+  const username =
+    readLooseStringValue(record, ["username"]) ??
+    readLooseStringValue(discord ?? undefined, ["username", "userName"]) ??
+    readLooseStringValue(fallback ?? undefined, ["username"]);
+  const avatarUrl =
+    readLooseStringValue(record, ["avatarUrl"]) ??
+    readLooseStringValue(discord ?? undefined, ["avatarUrl"]) ??
+    readLooseStringValue(fallback ?? undefined, ["avatarUrl"]);
+  const rawUserId =
+    readLooseStringValue(discord ?? undefined, ["userId", "id"]) ??
+    readLooseStringValue(record, ["originalId"]);
+
+  if (!displayName && !username && !avatarUrl && !rawUserId) {
+    return null;
+  }
+
+  return {
+    ...(avatarUrl ? { avatarUrl } : {}),
+    ...(displayName ? { displayName } : {}),
+    ...(rawUserId ? { rawUserId } : {}),
+    ...(username ? { username } : {}),
+  };
+}
+
+async function resolveStoredDiscordEntityProfile(
+  runtime: AgentRuntime,
+  entityId: string | undefined,
+): Promise<StoredDiscordEntityProfile | null> {
+  if (!entityId) return null;
+
+  const runtimeWithEntityLookup = runtime as AgentRuntime & {
+    getEntityById?: (id: UUID) => Promise<unknown>;
+  };
+  if (typeof runtimeWithEntityLookup.getEntityById !== "function") {
+    return null;
+  }
+
+  try {
+    const entity = await runtimeWithEntityLookup.getEntityById(
+      entityId as UUID,
+    );
+    return readStoredDiscordEntityProfile(entity);
+  } catch {
+    return null;
+  }
+}
+
+async function cacheInboxDiscordAvatar(
+  runtime: AgentRuntime,
+  avatarUrl: string | undefined,
+  userId?: string,
+): Promise<string | undefined> {
+  return cacheDiscordAvatarUrl(avatarUrl, {
+    fetchImpl: runtime.fetch ?? globalThis.fetch,
+    userId,
+  });
+}
+
+async function resolveDiscordMessageAuthorProfile(
+  runtime: AgentRuntime,
+  channelId: string,
+  messageId: string,
+): Promise<DiscordMessageAuthorProfile | null> {
+  const cacheKey = `${channelId}:${messageId}`;
+  const cached = readCachedValue(discordMessageAuthorProfileCache, cacheKey);
+  if (cached !== undefined) return cached;
+
+  const client = getDiscordClient(runtime);
+  const cachedChannel = client?.channels?.cache?.get?.(channelId);
+  const fetchChannel = client?.channels?.fetch;
+  const channel =
+    cachedChannel ??
+    (typeof fetchChannel === "function"
+      ? await fetchChannel(channelId).catch(() => null)
+      : null);
+
+  const fetchMessage =
+    channel &&
+    typeof channel === "object" &&
+    typeof (channel as { messages?: { fetch?: unknown } }).messages?.fetch ===
+      "function"
+      ? (channel as { messages: { fetch: (id: string) => Promise<unknown> } })
+          .messages.fetch
+      : null;
+  if (!fetchMessage) {
+    discordMessageAuthorProfileCache.set(cacheKey, {
+      expiresAt: Date.now() + DISCORD_PROFILE_CACHE_TTL_MS,
+      value: null,
+    });
+    return null;
+  }
+
+  try {
+    const message = await fetchMessage(messageId);
+    const author =
+      message && typeof message === "object"
+        ? ((message as { author?: unknown }).author ?? null)
+        : null;
+    const member =
+      message && typeof message === "object"
+        ? ((message as { member?: unknown }).member ?? null)
+        : null;
+    const rawUserId =
+      author &&
+      typeof author === "object" &&
+      typeof (author as { id?: unknown }).id === "string"
+        ? (author as { id: string }).id
+        : undefined;
+    const profile: DiscordMessageAuthorProfile = {
+      displayName: readDiscordDisplayName(member ?? author),
+      username:
+        author &&
+        typeof author === "object" &&
+        typeof (author as { username?: unknown }).username === "string"
+          ? (author as { username: string }).username
+          : undefined,
+      avatarUrl: readDiscordAvatarUrl(author),
+      ...(rawUserId ? { rawUserId } : {}),
+    };
+    discordMessageAuthorProfileCache.set(cacheKey, {
+      expiresAt: Date.now() + DISCORD_PROFILE_CACHE_TTL_MS,
+      value: profile,
+    });
+    return profile;
+  } catch {
+    discordMessageAuthorProfileCache.set(cacheKey, {
+      expiresAt: Date.now() + DISCORD_PROFILE_CACHE_TTL_MS,
+      value: null,
+    });
+    return null;
+  }
+}
+
 async function resolveDiscordUserProfile(
   runtime: AgentRuntime,
   userId: string,
@@ -339,14 +881,18 @@ async function resolveDiscordUserProfile(
   }
 }
 
-async function resolveDiscordRoomTitle(
+async function resolveDiscordRoomProfile(
   runtime: AgentRuntime,
   room: Room | undefined,
-): Promise<string | null> {
-  const channelId = typeof room?.channelId === "string" ? room.channelId : "";
+  channelIdHint?: string,
+): Promise<DiscordRoomProfile | null> {
+  const channelId =
+    typeof channelIdHint === "string" && channelIdHint.trim()
+      ? channelIdHint.trim()
+      : (readRoomChannelId(room) ?? "");
   if (!channelId) return null;
 
-  const cached = readCachedValue(discordChannelTitleCache, channelId);
+  const cached = readCachedValue(discordRoomProfileCache, channelId);
   if (cached !== undefined) return cached;
 
   const client = getDiscordClient(runtime);
@@ -359,6 +905,7 @@ async function resolveDiscordRoomTitle(
       : null);
 
   let title: string | null = null;
+  let avatarUrl: string | undefined;
   if (channel && typeof channel === "object") {
     const namedChannel = channel as { name?: unknown };
     if (typeof namedChannel.name === "string" && namedChannel.name.trim()) {
@@ -371,14 +918,22 @@ async function resolveDiscordRoomTitle(
       const recipient =
         record.recipient ?? firstCollectionValue(record.recipients);
       title = readDiscordDisplayName(recipient) ?? null;
+      avatarUrl = readDiscordAvatarUrl(recipient);
     }
   }
 
-  discordChannelTitleCache.set(channelId, {
+  const profile: DiscordRoomProfile = {
+    title,
+    ...(typeof avatarUrl === "string" && avatarUrl.length > 0
+      ? { avatarUrl }
+      : {}),
+  };
+
+  discordRoomProfileCache.set(channelId, {
     expiresAt: Date.now() + DISCORD_PROFILE_CACHE_TTL_MS,
-    value: title,
+    value: profile,
   });
-  return title;
+  return profile;
 }
 
 /**
@@ -425,6 +980,177 @@ async function collectAgentRooms(runtime: AgentRuntime): Promise<Room[]> {
   return runtime.getRoomsByWorlds(worldIds, MAX_ROOMS_SCANNED, 0);
 }
 
+async function loadRelevantRooms(
+  runtime: AgentRuntime,
+  requestedRoomId: UUID | null,
+): Promise<Map<string, Room>> {
+  const roomById = new Map<string, Room>();
+
+  if (requestedRoomId) {
+    const runtimeWithGetRoom = runtime as AgentRuntime & {
+      getRoom?: (roomId: UUID) => Promise<Room | null | undefined>;
+    };
+    if (typeof runtimeWithGetRoom.getRoom === "function") {
+      const room = await runtimeWithGetRoom.getRoom(requestedRoomId);
+      if (room?.id) {
+        roomById.set(room.id, room);
+        return roomById;
+      }
+    }
+  }
+
+  const rooms = await collectAgentRooms(runtime);
+  for (const room of rooms) {
+    if (!room.id) continue;
+    if (requestedRoomId && room.id !== requestedRoomId) continue;
+    roomById.set(room.id, room);
+  }
+
+  return roomById;
+}
+
+function applyInboxChatMemory(
+  accumulator: Map<
+    string,
+    {
+      latestDiscordChannelId?: string;
+      latestDiscordMessageId?: string;
+      source: string;
+      lastMessageText: string;
+      lastMessageAt: number;
+      messageCount: number;
+      latestSenderAvatarUrl?: string;
+      latestSenderEntityId?: string;
+      latestSenderName?: string;
+      latestSenderRawId?: string;
+    }
+  >,
+  memory: Memory,
+  room: Room | undefined,
+  source: string,
+): void {
+  const key = memory.roomId;
+  if (!key) return;
+
+  const text = extractText(memory);
+  if (!text) return;
+
+  const ts = memory.createdAt ?? 0;
+  const senderAvatarUrl = extractFromAvatarUrl(memory);
+  const senderEntityId =
+    typeof memory.entityId === "string" ? memory.entityId : undefined;
+  const senderName =
+    extractFrom(memory) ?? extractFromUserName(memory) ?? undefined;
+  const senderRawId = extractRawSenderId(memory);
+  const discordChannelId =
+    extractDiscordChannelId(memory) ?? readRoomChannelId(room);
+  const discordMessageId = extractDiscordMessageId(memory);
+
+  const existing = accumulator.get(key);
+  if (!existing) {
+    accumulator.set(key, {
+      latestDiscordChannelId: discordChannelId,
+      latestDiscordMessageId: discordMessageId,
+      source,
+      lastMessageText: text.slice(0, INBOX_CHAT_PREVIEW_LENGTH),
+      lastMessageAt: ts,
+      messageCount: 1,
+      latestSenderAvatarUrl: senderAvatarUrl,
+      latestSenderEntityId: senderEntityId,
+      latestSenderName: senderName,
+      latestSenderRawId: senderRawId,
+    });
+    return;
+  }
+
+  existing.messageCount += 1;
+  if (ts > existing.lastMessageAt) {
+    existing.lastMessageAt = ts;
+    existing.lastMessageText = text.slice(0, INBOX_CHAT_PREVIEW_LENGTH);
+    existing.latestSenderAvatarUrl = senderAvatarUrl;
+    existing.latestSenderEntityId = senderEntityId;
+    existing.latestSenderName = senderName;
+    existing.latestSenderRawId = senderRawId;
+    existing.latestDiscordMessageId =
+      discordMessageId ?? existing.latestDiscordMessageId;
+    existing.latestDiscordChannelId =
+      discordChannelId ?? existing.latestDiscordChannelId;
+  } else if (!existing.latestDiscordChannelId && discordChannelId) {
+    existing.latestDiscordChannelId = discordChannelId;
+  } else if (!existing.latestDiscordMessageId && discordMessageId) {
+    existing.latestDiscordMessageId = discordMessageId;
+  }
+}
+
+async function loadLatestRoomMemory(
+  runtime: AgentRuntime,
+  roomId: UUID,
+): Promise<Memory | null> {
+  try {
+    const memories = await runtime.getMemories({
+      tableName: "messages",
+      roomId,
+      count: 10,
+      unique: false,
+    });
+    if (!Array.isArray(memories) || memories.length === 0) {
+      return null;
+    }
+    const candidates = memories
+      .filter((memory) => !extractDiscordReactionEvent(memory))
+      .filter((memory) => extractText(memory).trim().length > 0)
+      .sort((left, right) => (right.createdAt ?? 0) - (left.createdAt ?? 0));
+    return candidates[0] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function augmentRoomsFromRecentMemories(
+  runtime: AgentRuntime,
+  roomById: Map<UUID, Room>,
+  sourceFilter: Set<string>,
+): Promise<void> {
+  if (roomById.size >= MAX_ROOMS_SCANNED) {
+    return;
+  }
+
+  const recentMemories = await runtime.getMemories({
+    agentId: runtime.agentId,
+    count: ORPHAN_ROOM_MEMORY_SCAN_LIMIT,
+    tableName: "messages",
+    unique: false,
+  });
+
+  for (const memory of recentMemories) {
+    if (roomById.size >= MAX_ROOMS_SCANNED) {
+      break;
+    }
+    const roomId = memory.roomId;
+    if (!roomId || roomById.has(roomId)) {
+      continue;
+    }
+
+    const source = extractSource(memory);
+    if (!source || !sourceFilter.has(source.toLowerCase())) {
+      continue;
+    }
+
+    roomById.set(
+      roomId as UUID,
+      {
+        id: roomId as UUID,
+        name: normalizeRoomTitle(extractFrom(memory)) ?? undefined,
+        source,
+        type: "GROUP",
+        room_type: "GROUP",
+        channelId: extractDiscordChannelId(memory) ?? undefined,
+        channel_id: extractDiscordChannelId(memory),
+      } as Room,
+    );
+  }
+}
+
 /**
  * Fetch messages, optionally scoped to a single room. When `roomId`
  * is set the function skips world enumeration entirely and targets
@@ -443,7 +1169,9 @@ async function loadInboxMessages(
   limit: number,
   sourceFilter: Set<string>,
   roomId: UUID | null,
+  roomSourceHint: string | null,
 ): Promise<InboxMessage[]> {
+  const roomById = await loadRelevantRooms(runtime, roomId);
   let memories: Memory[];
   if (roomId) {
     memories = await runtime.getMemories({
@@ -463,10 +1191,38 @@ async function loadInboxMessages(
   }
 
   const agentId = runtime.agentId;
-  const out: Array<InboxMessage & { rawSenderId?: string }> = [];
+  const reactionsByMessageId = buildMessageReactionMap(memories);
+  const roomSourceById = new Map<string, string>();
+
+  for (const [knownRoomId, room] of roomById) {
+    const roomSource = readRoomSource(room);
+    if (!roomSource || !sourceFilter.has(roomSource.toLowerCase())) continue;
+    roomSourceById.set(knownRoomId, roomSource);
+  }
 
   for (const memory of memories) {
     const source = extractSource(memory);
+    if (!source || !sourceFilter.has(source.toLowerCase())) continue;
+    const memoryRoomId = memory.roomId;
+    if (!memoryRoomId || roomSourceById.has(memoryRoomId)) continue;
+    roomSourceById.set(memoryRoomId, source);
+  }
+
+  const out: InboxMessageRecord[] = [];
+
+  for (const memory of memories) {
+    if (extractDiscordReactionEvent(memory)) {
+      continue;
+    }
+
+    const room = roomById.get(memory.roomId ?? "");
+    const explicitSource = extractSource(memory);
+    const source =
+      explicitSource ??
+      roomSourceById.get(memory.roomId ?? "") ??
+      (roomId
+        ? (readRoomSource(room) ?? roomSourceHint ?? undefined)
+        : undefined);
     if (!source || !sourceFilter.has(source.toLowerCase())) continue;
 
     const text = extractText(memory);
@@ -478,41 +1234,206 @@ async function loadInboxMessages(
       text,
       timestamp: memory.createdAt ?? 0,
       source,
+      rawDiscordChannelId:
+        extractDiscordChannelId(memory) ?? readRoomChannelId(room),
+      rawDiscordMessageId: extractDiscordMessageId(memory),
+      responseId: extractResponseId(memory),
       roomId: memory.roomId ?? "",
+      hasExternalUrl: extractContentUrl(memory) !== undefined,
+      hasExplicitSource: explicitSource !== null,
+      reactions: memory.id ? reactionsByMessageId.get(memory.id) : undefined,
       from: extractFrom(memory),
       fromUserName: extractFromUserName(memory),
       avatarUrl: extractFromAvatarUrl(memory),
+      replyToMessageId: extractReplyToMessageId(memory),
+      replyToSenderName: extractReplyToSenderName(memory),
+      replyToSenderUserName: extractReplyToSenderUserName(memory),
+      rawReplyToSenderId: extractReplyToSenderId(memory),
+      senderEntityId:
+        typeof memory.entityId === "string" ? memory.entityId : undefined,
       rawSenderId: extractRawSenderId(memory),
     });
   }
 
+  const deduped = dedupeInboxMessages(out);
+
   // Newest first. The core API doesn't guarantee order across rooms, so
   // we do the merge sort client-side.
-  out.sort((a, b) => b.timestamp - a.timestamp);
-  const ordered = out.slice(0, limit);
+  deduped.sort((a, b) => b.timestamp - a.timestamp);
+  const ordered = deduped.slice(0, limit);
 
   await Promise.all(
     ordered.map(async (message) => {
       if (message.source.toLowerCase() !== "discord") return;
-      if (!message.rawSenderId) return;
-      const profile = await resolveDiscordUserProfile(
+      const storedSenderProfile = await resolveStoredDiscordEntityProfile(
         runtime,
-        message.rawSenderId,
+        message.senderEntityId,
       );
-      if (!profile) return;
-      if (!message.from && profile.displayName) {
-        message.from = profile.displayName;
+      if (!message.from && storedSenderProfile?.displayName) {
+        message.from = storedSenderProfile.displayName;
       }
-      if (!message.fromUserName && profile.username) {
-        message.fromUserName = profile.username;
+      if (!message.fromUserName && storedSenderProfile?.username) {
+        message.fromUserName = storedSenderProfile.username;
       }
-      if (!message.avatarUrl && profile.avatarUrl) {
-        message.avatarUrl = profile.avatarUrl;
+      if (!message.avatarUrl && storedSenderProfile?.avatarUrl) {
+        message.avatarUrl = storedSenderProfile.avatarUrl;
+      }
+
+      const messageAuthorProfile =
+        message.rawDiscordChannelId && message.rawDiscordMessageId
+          ? await resolveDiscordMessageAuthorProfile(
+              runtime,
+              message.rawDiscordChannelId,
+              message.rawDiscordMessageId,
+            )
+          : null;
+      if (!message.from && messageAuthorProfile?.displayName) {
+        message.from = messageAuthorProfile.displayName;
+      }
+      if (!message.fromUserName && messageAuthorProfile?.username) {
+        message.fromUserName = messageAuthorProfile.username;
+      }
+      if (!message.avatarUrl && messageAuthorProfile?.avatarUrl) {
+        message.avatarUrl = messageAuthorProfile.avatarUrl;
+      }
+
+      const rawSenderId =
+        message.rawSenderId ??
+        storedSenderProfile?.rawUserId ??
+        messageAuthorProfile?.rawUserId;
+      if (rawSenderId) {
+        const profile = await resolveDiscordUserProfile(runtime, rawSenderId);
+        if (profile) {
+          if (profile.displayName) {
+            message.from = profile.displayName;
+          }
+          if (profile.username) {
+            message.fromUserName = profile.username;
+          }
+          if (profile.avatarUrl) {
+            message.avatarUrl = profile.avatarUrl;
+          }
+        }
+      }
+      message.avatarUrl = await cacheInboxDiscordAvatar(
+        runtime,
+        message.avatarUrl,
+        rawSenderId,
+      );
+      if (message.rawReplyToSenderId) {
+        const replyProfile = await resolveDiscordUserProfile(
+          runtime,
+          message.rawReplyToSenderId,
+        );
+        if (replyProfile) {
+          if (replyProfile.displayName) {
+            message.replyToSenderName = replyProfile.displayName;
+          }
+          if (replyProfile.username) {
+            message.replyToSenderUserName = replyProfile.username;
+          }
+        }
       }
     }),
   );
 
-  return ordered.map(({ rawSenderId: _rawSenderId, ...message }) => message);
+  return ordered.map(
+    ({
+      hasExternalUrl: _hasExternalUrl,
+      hasExplicitSource: _hasExplicitSource,
+      rawDiscordChannelId: _rawDiscordChannelId,
+      rawDiscordMessageId: _rawDiscordMessageId,
+      rawReplyToSenderId: _rawReplyToSenderId,
+      senderEntityId: _senderEntityId,
+      rawSenderId: _rawSenderId,
+      responseId: _responseId,
+      ...message
+    }) => message,
+  );
+}
+
+function normalizeInboxComparableText(text: string): string {
+  return text.trim().replace(/\s+/g, " ");
+}
+
+function getInboxMessagePreferenceScore(message: InboxMessageRecord): number {
+  let score = 0;
+  if (message.hasExternalUrl) score += 8;
+  if (message.hasExplicitSource) score += 8;
+  if (message.replyToSenderName || message.replyToSenderUserName) score += 4;
+  if (message.rawReplyToSenderId) score += 2;
+  if (message.rawSenderId) score += 1;
+  if (message.avatarUrl) score += 1;
+  return score;
+}
+
+function areLikelyConnectorAssistantDuplicates(
+  left: InboxMessageRecord,
+  right: InboxMessageRecord,
+): boolean {
+  if (left.role !== "assistant" || right.role !== "assistant") {
+    return false;
+  }
+  if (left.roomId !== right.roomId) {
+    return false;
+  }
+  if (
+    normalizeInboxComparableText(left.text) !==
+    normalizeInboxComparableText(right.text)
+  ) {
+    return false;
+  }
+
+  const leftResponseId = left.responseId?.trim() ?? "";
+  const rightResponseId = right.responseId?.trim() ?? "";
+  if (leftResponseId && rightResponseId) {
+    return leftResponseId === rightResponseId;
+  }
+
+  if (left.hasExplicitSource === right.hasExplicitSource) {
+    return false;
+  }
+  if (Math.abs(left.timestamp - right.timestamp) > 15_000) {
+    return false;
+  }
+
+  const leftReplyId = left.replyToMessageId?.trim() ?? "";
+  const rightReplyId = right.replyToMessageId?.trim() ?? "";
+  if (leftReplyId && rightReplyId) {
+    return leftReplyId === rightReplyId;
+  }
+
+  return true;
+}
+
+function dedupeInboxMessages(
+  messages: InboxMessageRecord[],
+): InboxMessageRecord[] {
+  const deduped: InboxMessageRecord[] = [];
+
+  for (const message of messages) {
+    const duplicateIndex = deduped.findIndex((candidate) =>
+      areLikelyConnectorAssistantDuplicates(candidate, message),
+    );
+
+    if (duplicateIndex === -1) {
+      deduped.push(message);
+      continue;
+    }
+
+    const existing = deduped[duplicateIndex];
+    const existingScore = getInboxMessagePreferenceScore(existing);
+    const nextScore = getInboxMessagePreferenceScore(message);
+
+    if (
+      nextScore > existingScore ||
+      (nextScore === existingScore && message.timestamp > existing.timestamp)
+    ) {
+      deduped[duplicateIndex] = message;
+    }
+  }
+
+  return deduped;
 }
 
 /**
@@ -528,6 +1449,8 @@ interface InboxChat {
   source: string;
   /** Display title — contact name for 1:1 chats, group name otherwise. */
   title: string;
+  /** Best-effort avatar URL for direct chats when the connector exposes one. */
+  avatarUrl?: string;
   /** Last message text preview (truncated) so the list row can render it. */
   lastMessageText: string;
   /** Epoch ms of the most recent message in this room. */
@@ -538,6 +1461,11 @@ interface InboxChat {
 
 /** Cap on how many characters of last-message text we return per chat. */
 const INBOX_CHAT_PREVIEW_LENGTH = 140;
+
+type DiscordRoomProfile = {
+  avatarUrl?: string;
+  title: string | null;
+};
 
 /**
  * Walk every agent room, collect the subset that contain connector
@@ -565,6 +1493,8 @@ async function loadInboxChats(
     if (room.id) roomById.set(room.id, room);
   }
 
+  await augmentRoomsFromRecentMemories(runtime, roomById, sourceFilter);
+
   const roomIds = Array.from(roomById.keys());
   if (roomIds.length === 0) return [];
 
@@ -582,70 +1512,208 @@ async function loadInboxChats(
   const accumulator = new Map<
     string,
     {
+      latestDiscordChannelId?: string;
+      latestDiscordMessageId?: string;
       source: string;
       lastMessageText: string;
       lastMessageAt: number;
       messageCount: number;
+      latestSenderAvatarUrl?: string;
+      latestSenderEntityId?: string;
       latestSenderName?: string;
+      latestSenderRawId?: string;
     }
   >();
 
+  const roomSourceById = new Map<string, string>();
+  for (const [knownRoomId, room] of roomById) {
+    const roomSource = readRoomSource(room);
+    if (!roomSource || !sourceFilter.has(roomSource.toLowerCase())) continue;
+    roomSourceById.set(knownRoomId, roomSource);
+  }
   for (const memory of memories) {
     const source = extractSource(memory);
     if (!source || !sourceFilter.has(source.toLowerCase())) continue;
+    const key = memory.roomId;
+    if (!key || roomSourceById.has(key)) continue;
+    roomSourceById.set(key, source);
+  }
 
-    const text = extractText(memory);
-    if (!text) continue;
-
+  for (const memory of memories) {
     const key = memory.roomId;
     if (!key) continue;
-    const ts = memory.createdAt ?? 0;
-    const senderName =
-      extractFrom(memory) ?? extractFromUserName(memory) ?? undefined;
 
-    const existing = accumulator.get(key);
-    if (!existing) {
-      accumulator.set(key, {
-        source,
-        lastMessageText: text.slice(0, INBOX_CHAT_PREVIEW_LENGTH),
-        lastMessageAt: ts,
-        messageCount: 1,
-        latestSenderName: senderName,
-      });
-    } else {
-      existing.messageCount += 1;
-      if (ts > existing.lastMessageAt) {
-        existing.lastMessageAt = ts;
-        existing.lastMessageText = text.slice(0, INBOX_CHAT_PREVIEW_LENGTH);
-        existing.latestSenderName = senderName;
-      }
+    if (extractDiscordReactionEvent(memory)) {
+      continue;
     }
+
+    const room = roomById.get(key as UUID);
+    const source =
+      extractSource(memory) ??
+      roomSourceById.get(key) ??
+      readRoomSource(room) ??
+      undefined;
+    if (!source || !sourceFilter.has(source.toLowerCase())) continue;
+    applyInboxChatMemory(accumulator, memory, room, source);
+  }
+
+  const backfilledRooms = await Promise.all(
+    Array.from(roomById.entries())
+      .filter(([roomIdKey]) => !accumulator.has(roomIdKey))
+      .filter(([, room]) => {
+        const roomSource = readRoomSource(room);
+        return !!roomSource && sourceFilter.has(roomSource.toLowerCase());
+      })
+      .map(async ([roomIdKey, room]) => {
+        const latestMemory = await loadLatestRoomMemory(
+          runtime,
+          roomIdKey as UUID,
+        );
+        return { latestMemory, room, roomIdKey };
+      }),
+  );
+
+  for (const { latestMemory, room, roomIdKey } of backfilledRooms) {
+    if (latestMemory) {
+      const source =
+        extractSource(latestMemory) ?? readRoomSource(room) ?? undefined;
+      if (source && sourceFilter.has(source.toLowerCase())) {
+        applyInboxChatMemory(accumulator, latestMemory, room, source);
+      }
+      continue;
+    }
+
+    const roomSource = readRoomSource(room);
+    if (!roomSource || !sourceFilter.has(roomSource.toLowerCase())) {
+      continue;
+    }
+    accumulator.set(roomIdKey, {
+      latestDiscordChannelId: readRoomChannelId(room),
+      source: roomSource,
+      lastMessageText: "",
+      lastMessageAt: readRoomCreatedAt(room) ?? 0,
+      messageCount: 0,
+    });
   }
 
   const chats: InboxChat[] = [];
   for (const [roomIdKey, entry] of accumulator) {
     const room = roomById.get(roomIdKey as UUID);
-    const liveDiscordTitle =
+    const liveDiscordProfile =
       entry.source.toLowerCase() === "discord"
-        ? await resolveDiscordRoomTitle(runtime, room)
+        ? await resolveDiscordRoomProfile(
+            runtime,
+            room,
+            entry.latestDiscordChannelId,
+          )
         : null;
+    const latestSenderEntityProfile =
+      entry.source.toLowerCase() === "discord"
+        ? await resolveStoredDiscordEntityProfile(
+            runtime,
+            entry.latestSenderEntityId,
+          )
+        : null;
+    const latestMessageAuthorProfile =
+      entry.source.toLowerCase() === "discord" &&
+      entry.latestDiscordChannelId &&
+      entry.latestDiscordMessageId
+        ? await resolveDiscordMessageAuthorProfile(
+            runtime,
+            entry.latestDiscordChannelId,
+            entry.latestDiscordMessageId,
+          )
+        : null;
+    const latestSenderProfile =
+      entry.source.toLowerCase() === "discord" &&
+      (entry.latestSenderRawId ??
+        latestSenderEntityProfile?.rawUserId ??
+        latestMessageAuthorProfile?.rawUserId)
+        ? await resolveDiscordUserProfile(
+            runtime,
+            (entry.latestSenderRawId ??
+              latestSenderEntityProfile?.rawUserId ??
+              latestMessageAuthorProfile?.rawUserId) as string,
+          )
+        : null;
+    const rawStoredTitle = normalizeRoomTitle(room?.name);
+    const roomType = readRoomType(room);
     const storedTitle =
-      typeof room?.name === "string" && room.name.trim()
-        ? room.name.trim()
-        : null;
+      roomType !== "DM" &&
+      (isPlaceholderConversationTitle(rawStoredTitle) ||
+        equalsNormalizedTitle(rawStoredTitle, entry.latestSenderName ?? null) ||
+        equalsNormalizedTitle(
+          rawStoredTitle,
+          latestSenderEntityProfile?.displayName ?? null,
+        ) ||
+        equalsNormalizedTitle(
+          rawStoredTitle,
+          latestMessageAuthorProfile?.displayName ?? null,
+        ) ||
+        equalsNormalizedTitle(
+          rawStoredTitle,
+          latestSenderProfile?.displayName ?? null,
+        ) ||
+        equalsNormalizedTitle(
+          rawStoredTitle,
+          latestSenderEntityProfile?.username ?? null,
+        ) ||
+        equalsNormalizedTitle(
+          rawStoredTitle,
+          latestMessageAuthorProfile?.username ?? null,
+        ) ||
+        equalsNormalizedTitle(
+          rawStoredTitle,
+          latestSenderProfile?.username ?? null,
+        ))
+        ? null
+        : rawStoredTitle;
     const dmFallbackTitle =
-      room?.type === "DM" && entry.latestSenderName
-        ? entry.latestSenderName
+      roomType === "DM" &&
+      (entry.latestSenderName ??
+        latestSenderEntityProfile?.displayName ??
+        latestMessageAuthorProfile?.displayName ??
+        latestSenderProfile?.displayName)
+        ? (entry.latestSenderName ??
+          latestSenderEntityProfile?.displayName ??
+          latestMessageAuthorProfile?.displayName ??
+          latestSenderProfile?.displayName ??
+          null)
         : null;
     const title =
-      liveDiscordTitle ??
+      liveDiscordProfile?.title ??
       storedTitle ??
       dmFallbackTitle ??
       `${entry.source} chat`;
+    const titleMatchesLatestSender =
+      typeof entry.latestSenderName === "string" &&
+      entry.latestSenderName.trim().length > 0 &&
+      entry.latestSenderName.trim().toLowerCase() === title.toLowerCase();
+    const shouldUsePersonAvatar =
+      entry.source.toLowerCase() === "discord"
+        ? true
+        : roomType === "DM" || titleMatchesLatestSender;
+    const resolvedAvatarUrl = shouldUsePersonAvatar
+      ? (liveDiscordProfile?.avatarUrl ??
+        latestSenderEntityProfile?.avatarUrl ??
+        latestMessageAuthorProfile?.avatarUrl ??
+        latestSenderProfile?.avatarUrl ??
+        entry.latestSenderAvatarUrl)
+      : undefined;
     chats.push({
       id: roomIdKey,
       source: entry.source,
       title,
+      avatarUrl:
+        entry.source.toLowerCase() === "discord"
+          ? await cacheInboxDiscordAvatar(
+              runtime,
+              resolvedAvatarUrl,
+              entry.latestSenderRawId ??
+                latestSenderEntityProfile?.rawUserId ??
+                latestMessageAuthorProfile?.rawUserId,
+            )
+          : resolvedAvatarUrl,
       lastMessageText: entry.lastMessageText,
       lastMessageAt: entry.lastMessageAt,
       messageCount: entry.messageCount,
@@ -720,6 +1788,8 @@ export async function handleInboxRoute(
     // for bad ids.
     const roomIdParam = url.searchParams.get("roomId")?.trim() ?? "";
     const roomId = roomIdParam.length > 0 ? (roomIdParam as UUID) : null;
+    const roomSourceParam = url.searchParams.get("roomSource")?.trim() ?? "";
+    const roomSourceHint = roomSourceParam.length > 0 ? roomSourceParam : null;
 
     try {
       const messages = await loadInboxMessages(
@@ -727,6 +1797,7 @@ export async function handleInboxRoute(
         limit,
         sourceFilter,
         roomId,
+        roomSourceHint,
       );
       helpers.json(res, { messages, count: messages.length });
     } catch (err) {

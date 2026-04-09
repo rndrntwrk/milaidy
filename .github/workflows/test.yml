@@ -65,14 +65,11 @@ jobs:
           skip-avatar-clone: "true"
           no-vision-deps: "true"
 
-      # Proto-generated types are gitignored in the eliza submodule and
-      # normally produced by the prebuild script. Unit tests resolve
-      # @elizaos/core from source, so the generated directory must exist.
-      # The buf postinstall (downloads platform binary) is skipped by
-      # --ignore-scripts, so we run it explicitly before buf generate.
+      # Proto-generated types are only needed when the repo-local eliza
+      # workspace is present. Published-only CI disables that checkout.
       - name: Generate protobuf types
         run: |
-          if [ -d eliza/packages/schemas ] && [ ! -d eliza/packages/typescript/src/types/generated ]; then
+          if [ "${MILADY_SKIP_LOCAL_UPSTREAMS:-0}" != "1" ] && [ -f eliza/packages/schemas/buf.gen.yaml ] && [ ! -d eliza/packages/typescript/src/types/generated ]; then
             cd eliza/packages/schemas
             node node_modules/@bufbuild/buf/install.js 2>/dev/null || true
             npx --yes @bufbuild/buf@1.67.0 generate
@@ -112,14 +109,11 @@ jobs:
           skip-avatar-clone: "true"
           no-vision-deps: "true"
 
-      # Proto-generated types are gitignored in the eliza submodule and
-      # normally produced by the prebuild script. Unit tests resolve
-      # @elizaos/core from source, so the generated directory must exist.
-      # The buf postinstall (downloads platform binary) is skipped by
-      # --ignore-scripts, so we run it explicitly before buf generate.
+      # Proto-generated types are only needed when the repo-local eliza
+      # workspace is present. Published-only CI disables that checkout.
       - name: Generate protobuf types
         run: |
-          if [ -d eliza/packages/schemas ] && [ ! -d eliza/packages/typescript/src/types/generated ]; then
+          if [ "${MILADY_SKIP_LOCAL_UPSTREAMS:-0}" != "1" ] && [ -f eliza/packages/schemas/buf.gen.yaml ] && [ ! -d eliza/packages/typescript/src/types/generated ]; then
             cd eliza/packages/schemas
             node node_modules/@bufbuild/buf/install.js 2>/dev/null || true
             npx --yes @bufbuild/buf@1.67.0 generate
@@ -172,13 +166,7 @@ jobs:
           # Published-only CI restores the required non-eliza submodules explicitly.
           submodules: false
 
-      - name: Initialize Windows-safe workspace submodules
-        if: ${{ matrix.os == 'windows-latest' }}
-        shell: bash
-        run: git submodule update --init --depth 1 plugins/plugin-agent-orchestrator
-
       - name: Initialize tracked workspace submodules
-        if: ${{ matrix.os != 'windows-latest' }}
         run: node scripts/init-submodules.mjs
 
       - name: Setup Node.js
@@ -244,13 +232,7 @@ jobs:
           # Published-only CI restores the required non-eliza submodules explicitly.
           submodules: false
 
-      - name: Initialize Windows-safe workspace submodules
-        if: ${{ matrix.os == 'windows-latest' }}
-        shell: bash
-        run: git submodule update --init --depth 1 plugins/plugin-agent-orchestrator
-
       - name: Initialize tracked workspace submodules
-        if: ${{ matrix.os != 'windows-latest' }}
         run: node scripts/init-submodules.mjs
 
       - name: Setup Node.js
@@ -483,14 +465,11 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
           install-command: bun install --frozen-lockfile --ignore-scripts
 
-      # Proto-generated types are gitignored in the eliza submodule and
-      # normally produced by the prebuild script. Unit tests resolve
-      # @elizaos/core from source, so the generated directory must exist.
-      # The buf postinstall (downloads platform binary) is skipped by
-      # --ignore-scripts, so we run it explicitly before buf generate.
+      # Proto-generated types are only needed when the repo-local eliza
+      # workspace is present. Published-only CI disables that checkout.
       - name: Generate protobuf types
         run: |
-          if [ -d eliza/packages/schemas ] && [ ! -d eliza/packages/typescript/src/types/generated ]; then
+          if [ "${MILADY_SKIP_LOCAL_UPSTREAMS:-0}" != "1" ] && [ -f eliza/packages/schemas/buf.gen.yaml ] && [ ! -d eliza/packages/typescript/src/types/generated ]; then
             cd eliza/packages/schemas
             node node_modules/@bufbuild/buf/install.js 2>/dev/null || true
             npx --yes @bufbuild/buf@1.67.0 generate

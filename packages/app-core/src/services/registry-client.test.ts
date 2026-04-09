@@ -957,9 +957,9 @@ describe("registry-client", () => {
 
       const { listApps, getPluginInfo } = await loadModule();
       const apps = await listApps();
-      expect(apps.some((app) => app.name === "@hyperscape/plugin-hyperscape")).toBe(
-        true,
-      );
+      expect(
+        apps.some((app) => app.name === "@hyperscape/plugin-hyperscape"),
+      ).toBe(true);
 
       const hyperscape = apps.find(
         (app) => app.name === "@hyperscape/plugin-hyperscape",

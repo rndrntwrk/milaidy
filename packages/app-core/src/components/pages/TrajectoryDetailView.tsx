@@ -5,14 +5,13 @@
 
 import { client, type TrajectoryDetailResult } from "@miladyai/app-core/api";
 import { useApp } from "@miladyai/app-core/state";
-import { Button, PagePanel, TrajectoryLlmCallCard } from "@miladyai/ui";
+import { PagePanel, TrajectoryLlmCallCard } from "@miladyai/ui";
 import { useCallback, useEffect, useState } from "react";
-import { estimateTokenCost } from "../conversations/conversation-utils";
 import {
   formatTrajectoryDuration,
-  formatTrajectoryTimestamp,
   formatTrajectoryTokenCount,
 } from "../../utils/trajectory-format";
+import { estimateTokenCost } from "../conversations/conversation-utils";
 
 interface TrajectoryDetailViewProps {
   trajectoryId: string;
@@ -136,56 +135,6 @@ export function TrajectoryDetailView({
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-4">
-      <PagePanel variant="surface" className="p-5">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted/70">
-              {t("trajectorydetailview.Trajectory")}
-            </div>
-            <div className="mt-2 text-[1.8rem] font-semibold leading-tight text-txt">
-              {formatTrajectoryTimestamp(trajectory.createdAt, "detailed")}
-            </div>
-          </div>
-          {onBack ? (
-            <Button
-              variant="outline"
-              size="sm"
-              type="button"
-              onClick={onBack}
-              className="h-9 rounded-full px-4 text-[11px]"
-            >
-              {t("onboarding.back")}
-            </Button>
-          ) : null}
-        </div>
-
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {summaryCards.map((card) => (
-            <PagePanel.SummaryCard
-              key={String(card.label)}
-              compact
-              className="px-4 py-4"
-            >
-              <div className="text-[11px] uppercase tracking-[0.14em] text-muted/70">
-                {card.label}
-              </div>
-              <div className="mt-2 text-sm font-semibold text-txt">
-                {card.value}
-              </div>
-            </PagePanel.SummaryCard>
-          ))}
-        </div>
-
-        <div className="mt-4 flex flex-wrap gap-2">
-          <span className="rounded-full border border-border/28 bg-bg/55 px-3 py-1 text-[11px] font-medium text-muted">
-            {t("trajectorydetailview.LlmCalls", { count: llmCalls.length })}
-          </span>
-          <span className="rounded-full border border-border/28 bg-bg/55 px-3 py-1 text-[11px] font-mono text-muted">
-            {trajectory.id}
-          </span>
-        </div>
-      </PagePanel>
-
       {orchestratorData ? (
         <PagePanel variant="section" className="p-5">
           <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted/70">

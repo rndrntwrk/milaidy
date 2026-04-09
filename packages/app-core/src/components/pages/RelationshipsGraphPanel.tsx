@@ -6,42 +6,422 @@ import type {
 
 const GRAPH_WIDTH = 960;
 const GRAPH_HEIGHT = 540;
-const GRAPH_CENTER_X = GRAPH_WIDTH / 2;
-const GRAPH_CENTER_Y = GRAPH_HEIGHT / 2;
-const GRAPH_RADIUS_X = 340;
-const GRAPH_RADIUS_Y = 180;
+const GRAPH_PADDING = 56;
+const MAX_GLOBAL_NODES = 28;
+const MAX_FOCUSED_NODES = 24;
+const MAX_DIRECT_NEIGHBORS = 12;
+const MAX_SECOND_WAVE_NEIGHBORS = 8;
 
 type GraphPosition = {
   x: number;
   y: number;
 };
 
-function nodeRadius(person: RelationshipsPersonSummary): number {
-  return Math.min(58, 26 + person.memberEntityIds.length * 4);
+type VisibleGraph = {
+  people: RelationshipsPersonSummary[];
+  relationships: RelationshipsGraphEdge[];
+  modeLabel: string;
+  truncated: boolean;
+};
+
+function toTimestamp(value?: string): number {
+  if (!value) return 0;
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
-function shortLabel(value: string, maxLength = 20): string {
+function nodeRadius(person: RelationshipsPersonSummary): number {
+  return Math.min(
+    42,
+    16 +
+      Math.sqrt(
+        Math.max(
+          1,
+          person.memberEntityIds.length * 2 + person.relationshipCount * 3,
+        ),
+      ) *
+        4,
+  );
+}
+
+function shortLabel(value: string, maxLength = 18): string {
   return value.length > maxLength ? `${value.slice(0, maxLength - 1)}…` : value;
 }
 
 function edgeColor(edge: RelationshipsGraphEdge): string {
-  if (edge.sentiment === "positive") return "rgba(73, 197, 122, 0.48)";
-  if (edge.sentiment === "negative") return "rgba(239, 68, 68, 0.44)";
-  return "rgba(240, 185, 11, 0.34)";
+  if (edge.sentiment === "positive") return "rgba(73, 197, 122, 0.55)";
+  if (edge.sentiment === "negative") return "rgba(239, 68, 68, 0.5)";
+  return "rgba(240, 185, 11, 0.38)";
+}
+
+function rankPerson(person: RelationshipsPersonSummary): number {
+  return (
+    person.relationshipCount * 10 +
+    person.memberEntityIds.length * 4 +
+    person.factCount * 2 +
+    toTimestamp(person.lastInteractionAt) / 1000000000000
+  );
+}
+
+function sortEdges(edges: RelationshipsGraphEdge[]): RelationshipsGraphEdge[] {
+  return [...edges].sort((left, right) => {
+    const strengthDiff = right.strength - left.strength;
+    if (strengthDiff !== 0) return strengthDiff;
+    const interactionDiff = right.interactionCount - left.interactionCount;
+    if (interactionDiff !== 0) return interactionDiff;
+    return (
+      toTimestamp(right.lastInteractionAt) - toTimestamp(left.lastInteractionAt)
+    );
+  });
+}
+
+function otherEndpoint(edge: RelationshipsGraphEdge, personId: string): string {
+  return edge.sourcePersonId === personId
+    ? edge.targetPersonId
+    : edge.sourcePersonId;
+}
+
+function buildEdgeIndex(
+  edges: RelationshipsGraphEdge[],
+): Map<string, RelationshipsGraphEdge[]> {
+  const index = new Map<string, RelationshipsGraphEdge[]>();
+  for (const edge of edges) {
+    if (!index.has(edge.sourcePersonId)) {
+      index.set(edge.sourcePersonId, []);
+    }
+    if (!index.has(edge.targetPersonId)) {
+      index.set(edge.targetPersonId, []);
+    }
+    index.get(edge.sourcePersonId)?.push(edge);
+    index.get(edge.targetPersonId)?.push(edge);
+  }
+  return index;
+}
+
+function selectVisibleGraph(
+  snapshot: RelationshipsGraphSnapshot,
+  selectedGroupId: string | null,
+): VisibleGraph {
+  if (snapshot.people.length <= MAX_GLOBAL_NODES) {
+    return {
+      people: snapshot.people,
+      relationships: snapshot.relationships,
+      modeLabel: "Loaded relationship graph",
+      truncated: false,
+    };
+  }
+
+  const edgeIndex = buildEdgeIndex(snapshot.relationships);
+  const peopleById = new Map(
+    snapshot.people.map((person) => [person.groupId, person]),
+  );
+  const rankedPeople = [...snapshot.people].sort(
+    (left, right) => rankPerson(right) - rankPerson(left),
+  );
+  const included = new Set<string>();
+
+  if (selectedGroupId && peopleById.has(selectedGroupId)) {
+    included.add(selectedGroupId);
+    const directEdges = sortEdges(edgeIndex.get(selectedGroupId) ?? []);
+    for (const edge of directEdges.slice(0, MAX_DIRECT_NEIGHBORS)) {
+      included.add(otherEndpoint(edge, selectedGroupId));
+    }
+
+    const secondWaveScores = new Map<string, number>();
+    for (const groupId of included) {
+      if (groupId === selectedGroupId) continue;
+      for (const edge of edgeIndex.get(groupId) ?? []) {
+        const neighborId = otherEndpoint(edge, groupId);
+        if (included.has(neighborId)) continue;
+        const score =
+          edge.strength * 6 +
+          Math.log1p(edge.interactionCount) * 2 +
+          (edge.sentiment === "positive" ? 0.75 : 0);
+        secondWaveScores.set(
+          neighborId,
+          (secondWaveScores.get(neighborId) ?? 0) + score,
+        );
+      }
+    }
+
+    const secondWave = Array.from(secondWaveScores.entries())
+      .sort((left, right) => right[1] - left[1])
+      .slice(0, MAX_SECOND_WAVE_NEIGHBORS)
+      .map(([groupId]) => groupId);
+    for (const groupId of secondWave) {
+      included.add(groupId);
+    }
+
+    for (const person of rankedPeople) {
+      if (included.size >= MAX_FOCUSED_NODES) break;
+      included.add(person.groupId);
+    }
+
+    const people = snapshot.people.filter((person) =>
+      included.has(person.groupId),
+    );
+    return {
+      people,
+      relationships: snapshot.relationships.filter(
+        (edge) =>
+          included.has(edge.sourcePersonId) &&
+          included.has(edge.targetPersonId),
+      ),
+      modeLabel: "Selected neighborhood",
+      truncated: people.length < snapshot.people.length,
+    };
+  }
+
+  for (const person of rankedPeople) {
+    if (included.size >= MAX_GLOBAL_NODES) break;
+    included.add(person.groupId);
+  }
+  for (const edge of sortEdges(snapshot.relationships)) {
+    if (included.size >= MAX_GLOBAL_NODES) break;
+    included.add(edge.sourcePersonId);
+    included.add(edge.targetPersonId);
+  }
+
+  const people = snapshot.people.filter((person) =>
+    included.has(person.groupId),
+  );
+  return {
+    people,
+    relationships: snapshot.relationships.filter(
+      (edge) =>
+        included.has(edge.sourcePersonId) && included.has(edge.targetPersonId),
+    ),
+    modeLabel: "Most connected subgraph",
+    truncated: people.length < snapshot.people.length,
+  };
+}
+
+function buildConnectedComponents(
+  people: RelationshipsPersonSummary[],
+  edges: RelationshipsGraphEdge[],
+): string[][] {
+  const adjacency = new Map<string, Set<string>>();
+  for (const person of people) {
+    adjacency.set(person.groupId, new Set());
+  }
+  for (const edge of edges) {
+    adjacency.get(edge.sourcePersonId)?.add(edge.targetPersonId);
+    adjacency.get(edge.targetPersonId)?.add(edge.sourcePersonId);
+  }
+
+  const components: string[][] = [];
+  const visited = new Set<string>();
+  for (const person of people) {
+    if (visited.has(person.groupId)) {
+      continue;
+    }
+    const queue = [person.groupId];
+    const component: string[] = [];
+    visited.add(person.groupId);
+    while (queue.length > 0) {
+      const current = queue.shift();
+      if (!current) continue;
+      component.push(current);
+      for (const neighbor of adjacency.get(current) ?? []) {
+        if (visited.has(neighbor)) continue;
+        visited.add(neighbor);
+        queue.push(neighbor);
+      }
+    }
+    components.push(component);
+  }
+
+  return components.sort((left, right) => right.length - left.length);
+}
+
+function seededUnit(seed: string, salt: number): number {
+  let hash = 2166136261 ^ salt;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash ^= seed.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return ((hash >>> 0) % 1000) / 1000;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function layoutComponent(
+  componentPeople: RelationshipsPersonSummary[],
+  componentEdges: RelationshipsGraphEdge[],
+  center: GraphPosition,
+  cellWidth: number,
+  cellHeight: number,
+): Map<string, GraphPosition> {
+  const positions = new Map<
+    string,
+    GraphPosition & {
+      vx: number;
+      vy: number;
+    }
+  >();
+  if (componentPeople.length === 1) {
+    const person = componentPeople[0];
+    positions.set(person.groupId, { x: center.x, y: center.y, vx: 0, vy: 0 });
+    return new Map(
+      Array.from(positions, ([groupId, position]) => [groupId, position]),
+    );
+  }
+
+  for (const person of componentPeople) {
+    positions.set(person.groupId, {
+      x: center.x + (seededUnit(person.groupId, 1) - 0.5) * cellWidth * 0.5,
+      y: center.y + (seededUnit(person.groupId, 2) - 0.5) * cellHeight * 0.5,
+      vx: 0,
+      vy: 0,
+    });
+  }
+
+  for (let iteration = 0; iteration < 170; iteration += 1) {
+    const forces = new Map<string, { x: number; y: number }>();
+    for (const person of componentPeople) {
+      forces.set(person.groupId, { x: 0, y: 0 });
+    }
+
+    for (
+      let leftIndex = 0;
+      leftIndex < componentPeople.length;
+      leftIndex += 1
+    ) {
+      const left = componentPeople[leftIndex];
+      for (
+        let rightIndex = leftIndex + 1;
+        rightIndex < componentPeople.length;
+        rightIndex += 1
+      ) {
+        const right = componentPeople[rightIndex];
+        const leftPosition = positions.get(left.groupId);
+        const rightPosition = positions.get(right.groupId);
+        const leftForces = forces.get(left.groupId);
+        const rightForces = forces.get(right.groupId);
+        if (!leftPosition || !rightPosition || !leftForces || !rightForces) {
+          continue;
+        }
+
+        const dx = rightPosition.x - leftPosition.x;
+        const dy = rightPosition.y - leftPosition.y;
+        const distance = Math.max(1, Math.hypot(dx, dy));
+        const minimumDistance = nodeRadius(left) + nodeRadius(right) + 24;
+        const repulsion = minimumDistance * minimumDistance * 0.42;
+        const forceMagnitude = repulsion / (distance * distance);
+        const fx = (dx / distance) * forceMagnitude;
+        const fy = (dy / distance) * forceMagnitude;
+
+        leftForces.x -= fx;
+        leftForces.y -= fy;
+        rightForces.x += fx;
+        rightForces.y += fy;
+      }
+    }
+
+    for (const edge of componentEdges) {
+      const sourcePosition = positions.get(edge.sourcePersonId);
+      const targetPosition = positions.get(edge.targetPersonId);
+      const sourceForces = forces.get(edge.sourcePersonId);
+      const targetForces = forces.get(edge.targetPersonId);
+      if (
+        !sourcePosition ||
+        !targetPosition ||
+        !sourceForces ||
+        !targetForces
+      ) {
+        continue;
+      }
+
+      const dx = targetPosition.x - sourcePosition.x;
+      const dy = targetPosition.y - sourcePosition.y;
+      const distance = Math.max(1, Math.hypot(dx, dy));
+      const idealDistance =
+        84 + Math.max(0, componentPeople.length - 6) * 4 - edge.strength * 16;
+      const springStrength = 0.012 + edge.strength * 0.028;
+      const forceMagnitude = (distance - idealDistance) * springStrength;
+      const fx = (dx / distance) * forceMagnitude;
+      const fy = (dy / distance) * forceMagnitude;
+
+      sourceForces.x += fx;
+      sourceForces.y += fy;
+      targetForces.x -= fx;
+      targetForces.y -= fy;
+    }
+
+    for (const person of componentPeople) {
+      const position = positions.get(person.groupId);
+      const force = forces.get(person.groupId);
+      if (!position || !force) {
+        continue;
+      }
+      force.x += (center.x - position.x) * 0.018;
+      force.y += (center.y - position.y) * 0.018;
+
+      position.vx = (position.vx + force.x) * 0.86;
+      position.vy = (position.vy + force.y) * 0.86;
+      position.x = clamp(
+        position.x + position.vx,
+        center.x - cellWidth * 0.42,
+        center.x + cellWidth * 0.42,
+      );
+      position.y = clamp(
+        position.y + position.vy,
+        center.y - cellHeight * 0.4,
+        center.y + cellHeight * 0.4,
+      );
+    }
+  }
+
+  return new Map(
+    Array.from(positions, ([groupId, position]) => [groupId, position]),
+  );
 }
 
 function buildNodePositions(
   people: RelationshipsPersonSummary[],
+  edges: RelationshipsGraphEdge[],
 ): Map<string, GraphPosition> {
+  const components = buildConnectedComponents(people, edges);
+  const peopleById = new Map(people.map((person) => [person.groupId, person]));
+  const componentCount = Math.max(components.length, 1);
+  const columns = Math.ceil(Math.sqrt(componentCount));
+  const rows = Math.ceil(componentCount / columns);
+  const innerWidth = GRAPH_WIDTH - GRAPH_PADDING * 2;
+  const innerHeight = GRAPH_HEIGHT - GRAPH_PADDING * 2;
+  const cellWidth = innerWidth / columns;
+  const cellHeight = innerHeight / rows;
   const positions = new Map<string, GraphPosition>();
-  const total = Math.max(people.length, 1);
 
-  people.forEach((person, index) => {
-    const angle = -Math.PI / 2 + (index / total) * Math.PI * 2;
-    positions.set(person.groupId, {
-      x: GRAPH_CENTER_X + Math.cos(angle) * GRAPH_RADIUS_X,
-      y: GRAPH_CENTER_Y + Math.sin(angle) * GRAPH_RADIUS_Y,
-    });
+  components.forEach((component, index) => {
+    const column = index % columns;
+    const row = Math.floor(index / columns);
+    const center = {
+      x: GRAPH_PADDING + cellWidth * (column + 0.5),
+      y: GRAPH_PADDING + cellHeight * (row + 0.5),
+    };
+    const componentPeople = component
+      .map((groupId) => peopleById.get(groupId))
+      .filter(
+        (person): person is RelationshipsPersonSummary => person !== undefined,
+      );
+    const componentSet = new Set(component);
+    const componentEdges = edges.filter(
+      (edge) =>
+        componentSet.has(edge.sourcePersonId) &&
+        componentSet.has(edge.targetPersonId),
+    );
+    const componentPositions = layoutComponent(
+      componentPeople,
+      componentEdges,
+      center,
+      cellWidth,
+      cellHeight,
+    );
+    for (const [groupId, position] of componentPositions) {
+      positions.set(groupId, position);
+    }
   });
 
   return positions;
@@ -86,14 +466,18 @@ export function RelationshipsGraphPanel({
           No identities match the current filters.
         </div>
         <p className="mt-2 max-w-lg text-sm leading-6 text-muted">
-          The graph will render once the relationships has people, identity links, and
-          relationships to visualize.
+          The graph will render once the relationships has people, identity
+          links, and conversations to visualize.
         </p>
       </div>
     );
   }
 
-  const positions = buildNodePositions(snapshot.people);
+  const visibleGraph = selectVisibleGraph(snapshot, selectedGroupId);
+  const positions = buildNodePositions(
+    visibleGraph.people,
+    visibleGraph.relationships,
+  );
 
   return (
     <div className="space-y-4">
@@ -104,6 +488,12 @@ export function RelationshipsGraphPanel({
           </div>
           <div className="mt-2 text-xl font-semibold text-txt">
             Canonical people and cross-person relationships
+          </div>
+          <div className="mt-2 text-xs text-muted">
+            {visibleGraph.modeLabel}
+            {visibleGraph.truncated
+              ? ` · showing ${visibleGraph.people.length} of ${snapshot.stats.totalPeople}`
+              : null}
           </div>
         </div>
         <GraphLegend />
@@ -117,13 +507,18 @@ export function RelationshipsGraphPanel({
           aria-label="Relationships relationship graph"
         >
           <defs>
-            <radialGradient id="relationships-node-fill" cx="50%" cy="35%" r="70%">
+            <radialGradient
+              id="relationships-node-fill"
+              cx="50%"
+              cy="35%"
+              r="70%"
+            >
               <stop offset="0%" stopColor="rgba(255,240,199,0.92)" />
               <stop offset="100%" stopColor="rgba(240,185,11,0.86)" />
             </radialGradient>
           </defs>
 
-          {snapshot.relationships.map((edge) => {
+          {visibleGraph.relationships.map((edge) => {
             const source = positions.get(edge.sourcePersonId);
             const target = positions.get(edge.targetPersonId);
             if (!source || !target) {
@@ -137,31 +532,30 @@ export function RelationshipsGraphPanel({
                 x2={target.x}
                 y2={target.y}
                 stroke={edgeColor(edge)}
-                strokeWidth={Math.max(1.5, edge.strength * 6)}
+                strokeWidth={Math.max(1.5, edge.strength * 7)}
                 strokeLinecap="round"
+                opacity={0.9}
               />
             );
           })}
 
-          {snapshot.people.map((person) => {
+          {visibleGraph.people.map((person) => {
             const position = positions.get(person.groupId);
             if (!position) {
               return null;
             }
             const radius = nodeRadius(person);
             const selected = selectedGroupId === person.groupId;
-
             return (
-              <>
+              <g key={person.groupId}>
                 <g
-                  key={`${person.groupId}:visual`}
                   transform={`translate(${position.x}, ${position.y})`}
                   className="pointer-events-none"
                 >
                   <circle
-                    r={radius + (selected ? 9 : 0)}
+                    r={radius + (selected ? 10 : 0)}
                     fill={selected ? "rgba(240,185,11,0.12)" : "transparent"}
-                    stroke={selected ? "rgba(240,185,11,0.36)" : "transparent"}
+                    stroke={selected ? "rgba(240,185,11,0.34)" : "transparent"}
                     strokeWidth={selected ? 2 : 0}
                   />
                   <circle
@@ -176,25 +570,25 @@ export function RelationshipsGraphPanel({
                   />
                   <text
                     textAnchor="middle"
-                    y={-4}
-                    className="fill-black text-[13px] font-semibold"
+                    y={-3}
+                    className="fill-black text-[12px] font-semibold"
                   >
-                    {shortLabel(person.displayName, 18)}
+                    {shortLabel(person.displayName, 15)}
                   </text>
                   <text
                     textAnchor="middle"
-                    y={14}
-                    className="fill-black/70 text-[10px] font-medium"
+                    y={12}
+                    className="fill-black/70 text-[9px] font-medium"
                   >
                     {shortLabel(
-                      person.platforms.slice(0, 3).join(" • ") ||
-                        `${person.memberEntityIds.length} identities`,
-                      26,
+                      person.relationshipCount > 0
+                        ? `${person.relationshipCount} links`
+                        : `${person.memberEntityIds.length} identities`,
+                      18,
                     )}
                   </text>
                 </g>
                 <foreignObject
-                  key={`${person.groupId}:button`}
                   x={position.x - radius - 12}
                   y={position.y - radius - 12}
                   width={(radius + 12) * 2}
@@ -207,7 +601,7 @@ export function RelationshipsGraphPanel({
                     aria-label={`Select ${person.displayName}`}
                   />
                 </foreignObject>
-              </>
+              </g>
             );
           })}
         </svg>

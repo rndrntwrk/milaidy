@@ -37,7 +37,9 @@ function toTimestamp(value?: string): number {
   return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
-function sortPeople(people: RelationshipsPersonSummary[]): RelationshipsPersonSummary[] {
+function sortPeople(
+  people: RelationshipsPersonSummary[],
+): RelationshipsPersonSummary[] {
   return [...people].sort((left, right) => {
     const timeDiff =
       toTimestamp(right.lastInteractionAt) -
@@ -56,7 +58,9 @@ function summarizeHandles(person: RelationshipsPersonSummary): string {
   return handles.slice(0, 3).join(", ");
 }
 
-function platformOptions(snapshot: RelationshipsGraphSnapshot | null): string[] {
+function platformOptions(
+  snapshot: RelationshipsGraphSnapshot | null,
+): string[] {
   if (!snapshot) return [];
   return [...new Set(snapshot.people.flatMap((person) => person.platforms))]
     .filter((platform) => platform.trim().length > 0)
@@ -247,29 +251,40 @@ function RelationshipsPanel({ person }: { person: RelationshipsPersonDetail }) {
         </p>
       ) : (
         <div className="mt-4 space-y-3">
-          {person.relationships.map((relationship) => (
-            <div
-              key={relationship.id}
-              className="rounded-[18px] border border-border/24 bg-card/32 px-3.5 py-3"
-            >
-              <div className="flex flex-wrap items-center gap-2">
-                <MetaPill compact>{relationship.strength.toFixed(2)}</MetaPill>
-                <MetaPill compact>{relationship.sentiment}</MetaPill>
-                <MetaPill compact>
-                  {relationship.interactionCount} msgs
-                </MetaPill>
+          {person.relationships.map((relationship) => {
+            const counterpartName =
+              relationship.sourcePersonId === person.groupId
+                ? relationship.targetPersonName
+                : relationship.sourcePersonName;
+            return (
+              <div
+                key={relationship.id}
+                className="rounded-[18px] border border-border/24 bg-card/32 px-3.5 py-3"
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  <MetaPill compact>
+                    {relationship.strength.toFixed(2)}
+                  </MetaPill>
+                  <MetaPill compact>{relationship.sentiment}</MetaPill>
+                  <MetaPill compact>
+                    {relationship.interactionCount} msgs
+                  </MetaPill>
+                </div>
+                <div className="mt-2 text-sm font-semibold text-txt">
+                  {counterpartName}
+                </div>
+                <div className="mt-1 text-xs uppercase tracking-[0.12em] text-muted/70">
+                  {relationship.relationshipTypes.join(" • ") || "unknown"}
+                </div>
+                <div className="mt-2 text-xs text-muted">
+                  Last interaction{" "}
+                  {formatDateTime(relationship.lastInteractionAt, {
+                    fallback: "n/a",
+                  })}
+                </div>
               </div>
-              <div className="mt-2 text-sm font-semibold text-txt">
-                {relationship.relationshipTypes.join(", ") || "unknown"}
-              </div>
-              <div className="mt-2 text-xs text-muted">
-                Last interaction{" "}
-                {formatDateTime(relationship.lastInteractionAt, {
-                  fallback: "n/a",
-                })}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </PagePanel>

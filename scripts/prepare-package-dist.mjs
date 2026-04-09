@@ -1,4 +1,10 @@
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -31,6 +37,7 @@ const packageDir = path.resolve(repoRoot, packageDirArg);
 const packageJsonPath = path.join(packageDir, "package.json");
 const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8"));
 const workspaceVersions = collectWorkspaceVersions(repoRoot);
+const installedPackageVersionCache = new Map();
 
 const publishManifest = {
   ...packageJson,
@@ -156,7 +163,8 @@ function rewriteWorkspaceDeps(section, versions) {
   const rewritten = Object.fromEntries(
     Object.entries(section).map(([name, version]) => {
       if (typeof version === "string" && version.startsWith("workspace:")) {
-        const resolvedVersion = versions.get(name);
+        const resolvedVersion =
+          versions.get(name) ?? getInstalledPackageVersion(name);
         if (!resolvedVersion) {
           throw new Error(
             `no local version found for workspace dependency ${name}`,
@@ -169,6 +177,36 @@ function rewriteWorkspaceDeps(section, versions) {
   );
 
   return rewritten;
+}
+
+function getInstalledPackageVersion(packageName) {
+  if (installedPackageVersionCache.has(packageName)) {
+    return installedPackageVersionCache.get(packageName);
+  }
+
+  const packageJsonPath = path.join(
+    repoRoot,
+    "node_modules",
+    ...packageName.split("/"),
+    "package.json",
+  );
+
+  let version;
+  if (existsSync(packageJsonPath)) {
+    try {
+      const installedPackageJson = JSON.parse(
+        readFileSync(packageJsonPath, "utf8"),
+      );
+      if (typeof installedPackageJson.version === "string") {
+        version = installedPackageJson.version;
+      }
+    } catch {
+      version = undefined;
+    }
+  }
+
+  installedPackageVersionCache.set(packageName, version);
+  return version;
 }
 
 function normalizeWorkspaceVersion(spec, resolvedVersion) {

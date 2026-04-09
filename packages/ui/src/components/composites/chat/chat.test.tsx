@@ -260,6 +260,125 @@ describe("ChatTranscript", () => {
     expect(screen.getByText("Avery")).toBeInTheDocument();
   });
 
+  it("renders reply references as in-chat anchors with natural sender copy", () => {
+    render(
+      <ChatTranscript
+        messages={[
+          {
+            id: "user-1",
+            role: "user",
+            text: "original",
+            source: "discord",
+            from: "Avery",
+          },
+          {
+            id: "user-2",
+            role: "user",
+            text: "follow-up",
+            source: "discord",
+            from: "James",
+            replyToMessageId: "user-1",
+          },
+        ]}
+      />,
+    );
+
+    expect(
+      screen.getByRole("link", { name: "Reply to Avery's message" }),
+    ).toHaveAttribute("href", "#chat-message-user-1");
+  });
+
+  it("converts legacy Discord reference lines into in-chat reply links", () => {
+    render(
+      <ChatTranscript
+        messages={[
+          {
+            id: "11111111-1111-1111-1111-111111111111",
+            role: "user",
+            text: "original",
+            source: "discord",
+            from: "James",
+          },
+          {
+            id: "22222222-2222-2222-2222-222222222222",
+            role: "user",
+            text: [
+              "follow-up",
+              "Referencing MessageID 11111111-1111-1111-1111-111111111111 (discord: 1491683970302218280)",
+            ].join("\n"),
+            source: "discord",
+            from: "Avery",
+            replyToSenderName: "James",
+          },
+        ]}
+      />,
+    );
+
+    expect(
+      screen.getByRole("link", { name: "Reply to James' message" }),
+    ).toHaveAttribute(
+      "href",
+      "#chat-message-11111111-1111-1111-1111-111111111111",
+    );
+    expect(
+      screen.queryByText(/Referencing MessageID/i),
+    ).not.toBeInTheDocument();
+  });
+
+  it("can render inbox transcripts with human senders on the left", () => {
+    render(
+      <ChatTranscript
+        userMessagesOnRight={false}
+        messages={[
+          {
+            id: "user-1",
+            role: "user",
+            text: "hello",
+            source: "discord",
+            from: "James",
+          },
+          {
+            id: "assistant-1",
+            role: "assistant",
+            text: "hi there",
+            source: "discord",
+          },
+        ]}
+      />,
+    );
+
+    const messages = screen.getAllByTestId("chat-message");
+    expect(String(messages[0]?.className)).toContain("justify-start");
+    expect(String(messages[1]?.className)).toContain("justify-end");
+  });
+
+  it("renders aggregated reactions under the original message", () => {
+    render(
+      <ChatTranscript
+        messages={[
+          {
+            id: "user-1",
+            role: "user",
+            text: "nice, glad it clicked",
+            source: "discord",
+            from: "shaw",
+            reactions: [
+              { emoji: "❤️", count: 1, users: ["James"] },
+              { emoji: "🔥", count: 2, users: ["James", "Avery"] },
+            ],
+          },
+        ]}
+      />,
+    );
+
+    const badges = screen.getAllByTestId("chat-reaction-badge");
+    expect(badges).toHaveLength(2);
+    expect(screen.getByText("❤️")).toBeInTheDocument();
+    expect(screen.getByText("🔥")).toBeInTheDocument();
+    expect(screen.getByText("2")).toBeInTheDocument();
+    expect(badges[0]).toHaveAttribute("title", "James");
+  });
+
   it("renders game-modal carryover rows with the preserved markers", () => {
     render(
       <ChatTranscript
@@ -306,6 +425,7 @@ describe("ChatConversationItem", () => {
     render(
       <ChatConversationItem
         conversation={{
+          avatarUrl: "/avatars/general.png",
           id: "conv-1",
           title: "General",
           source: "discord",
@@ -319,6 +439,10 @@ describe("ChatConversationItem", () => {
     expect(screen.getByTestId("chat-source-icon")).toHaveAttribute(
       "data-source",
       "discord",
+    );
+    expect(screen.getByAltText("General avatar")).toHaveAttribute(
+      "src",
+      "/avatars/general.png",
     );
     expect(
       screen.queryByTestId("conversation-source-chip"),
@@ -342,5 +466,22 @@ describe("ChatConversationItem", () => {
     expect(
       screen.queryByTestId("conversation-source-chip"),
     ).not.toBeInTheDocument();
+  });
+
+  it("does not render inline rollover actions for default sidebar rows", () => {
+    render(
+      <ChatConversationItem
+        conversation={{
+          id: "conv-1",
+          title: "Internal",
+          updatedAtLabel: "just now",
+        }}
+        isActive={false}
+        onSelect={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByTestId("conv-rename")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("conv-delete")).not.toBeInTheDocument();
   });
 });

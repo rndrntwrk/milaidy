@@ -1070,7 +1070,6 @@ export function LifeOpsOverviewSidebarWidget(_props: ChatSidebarWidgetProps) {
         <EmptyWidgetState
           icon={<CheckCircle2 className="h-8 w-8" />}
           title={loading ? "Refreshing life ops…" : "No life ops yet"}
-          description="Reminders are driven from LifeOps and scheduled by the queue worker."
         />
       ) : (
         <div className="flex flex-col gap-4">

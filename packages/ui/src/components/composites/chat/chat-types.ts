@@ -51,12 +51,22 @@ export interface ChatAttachmentItem {
   src: string;
 }
 
+export interface ChatMessageReaction {
+  emoji: string;
+  count: number;
+  users?: string[];
+}
+
 export interface ChatMessageData {
   avatarUrl?: string;
   from?: string;
   fromUserName?: string;
   id: string;
   interrupted?: boolean;
+  reactions?: ChatMessageReaction[];
+  replyToMessageId?: string;
+  replyToSenderName?: string;
+  replyToSenderUserName?: string;
   role: string;
   source?: string;
   text: string;
@@ -65,6 +75,7 @@ export interface ChatMessageData {
 export interface ChatMessageLabels extends ChatLabelSet {}
 
 export interface ChatConversationSummary {
+  avatarUrl?: string;
   id: string;
   title: string;
   updatedAtLabel?: string;

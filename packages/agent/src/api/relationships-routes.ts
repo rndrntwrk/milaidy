@@ -1,24 +1,14 @@
 import type { IAgentRuntime, UUID } from "@elizaos/core";
+import {
+  createNativeRelationshipsGraphService,
+  type RelationshipsGraphQuery,
+  type RelationshipsGraphService,
+} from "../services/relationships-graph.js";
 import type { RouteRequestContext } from "./route-helpers.js";
 
-type RelationshipsGraphQuery = {
-  search?: string | null;
-  platform?: string | null;
-  limit?: number;
-  offset?: number;
-};
-
-type RelationshipsGraphService = {
-  getGraphSnapshot: (query?: RelationshipsGraphQuery) => Promise<{
-    people: unknown[];
-    relationships: unknown[];
-    stats: {
-      totalPeople: number;
-      totalRelationships: number;
-      totalIdentities: number;
-    };
-  }>;
-  getPersonDetail: (primaryEntityId: UUID) => Promise<unknown | null>;
+type RelationshipsFeatureRuntime = IAgentRuntime & {
+  enableRelationships?: () => Promise<void>;
+  isRelationshipsEnabled?: () => boolean;
 };
 
 export interface RelationshipsRouteContext extends RouteRequestContext {
@@ -38,13 +28,40 @@ function parseQuery(reqUrl: string | undefined): RelationshipsGraphQuery {
   };
 }
 
-function getRelationshipsGraphService(
+async function getRelationshipsGraphService(
   runtime?: IAgentRuntime | null,
-): RelationshipsGraphService | null {
+): Promise<RelationshipsGraphService | null> {
   if (!runtime) {
     return null;
   }
-  return runtime.getService("relationships_graph") as unknown as RelationshipsGraphService | null;
+
+  const graphService = runtime.getService(
+    "relationships_graph",
+  ) as unknown as RelationshipsGraphService | null;
+  if (graphService) {
+    return graphService;
+  }
+
+  const runtimeWithFeatures = runtime as RelationshipsFeatureRuntime;
+  if (
+    typeof runtimeWithFeatures.isRelationshipsEnabled === "function" &&
+    !runtimeWithFeatures.isRelationshipsEnabled() &&
+    typeof runtimeWithFeatures.enableRelationships === "function"
+  ) {
+    await runtimeWithFeatures.enableRelationships();
+  }
+
+  const relationshipsService = runtime.getService("relationships");
+  if (!relationshipsService) {
+    return null;
+  }
+
+  return createNativeRelationshipsGraphService(
+    runtime,
+    relationshipsService as Parameters<
+      typeof createNativeRelationshipsGraphService
+    >[1],
+  );
 }
 
 export async function handleRelationshipsRoutes(
@@ -64,7 +81,7 @@ export async function handleRelationshipsRoutes(
     return false;
   }
 
-  const relationshipsGraph = getRelationshipsGraphService(runtime);
+  const relationshipsGraph = await getRelationshipsGraphService(runtime);
   if (!relationshipsGraph) {
     error(
       res,
@@ -75,13 +92,17 @@ export async function handleRelationshipsRoutes(
   }
 
   if (pathname === "/api/relationships/graph") {
-    const snapshot = await relationshipsGraph.getGraphSnapshot(parseQuery(req.url));
+    const snapshot = await relationshipsGraph.getGraphSnapshot(
+      parseQuery(req.url),
+    );
     json(res, { data: snapshot }, 200);
     return true;
   }
 
   if (pathname === "/api/relationships/people") {
-    const snapshot = await relationshipsGraph.getGraphSnapshot(parseQuery(req.url));
+    const snapshot = await relationshipsGraph.getGraphSnapshot(
+      parseQuery(req.url),
+    );
     json(
       res,
       {
@@ -101,7 +122,9 @@ export async function handleRelationshipsRoutes(
     return true;
   }
 
-  const detail = await relationshipsGraph.getPersonDetail(primaryEntityId as UUID);
+  const detail = await relationshipsGraph.getPersonDetail(
+    primaryEntityId as UUID,
+  );
   if (!detail) {
     error(res, "Relationships person not found.", 404);
     return true;

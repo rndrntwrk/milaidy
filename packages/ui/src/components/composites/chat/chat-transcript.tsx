@@ -22,6 +22,7 @@ export interface ChatTranscriptProps {
   onSpeak?: (messageId: string, text: string) => void;
   renderMessageContent?: (message: ChatMessageData) => React.ReactNode;
   typingIndicator?: React.ReactNode;
+  userMessagesOnRight?: boolean;
   variant?: ChatVariant;
 }
 
@@ -30,6 +31,54 @@ function renderTranscriptMessageContent(
   renderMessageContent?: (message: ChatMessageData) => React.ReactNode,
 ) {
   return renderMessageContent?.(message) ?? message.text;
+}
+
+const LEGACY_REPLY_REFERENCE_RE =
+  /^Referencing MessageID ([0-9a-f-]{36})(?: \([^)]+\))?(?: in channel .*)?(?: in guild .*)?$/i;
+
+function normalizeTranscriptMessage(message: ChatMessageData): ChatMessageData {
+  const rawText = typeof message.text === "string" ? message.text : "";
+  const lines = rawText.split(/\r?\n/);
+  let extractedReplyToMessageId =
+    typeof message.replyToMessageId === "string" &&
+    message.replyToMessageId.trim().length > 0
+      ? message.replyToMessageId.trim()
+      : "";
+  let removedLegacyReference = false;
+
+  const cleanedLines = lines.filter((line) => {
+    const match = line.trim().match(LEGACY_REPLY_REFERENCE_RE);
+    if (!match) {
+      return true;
+    }
+    if (!extractedReplyToMessageId) {
+      extractedReplyToMessageId = match[1];
+    }
+    removedLegacyReference = true;
+    return false;
+  });
+
+  const cleanedText = removedLegacyReference
+    ? cleanedLines
+        .join("\n")
+        .replace(/\n{3,}/g, "\n\n")
+        .trimEnd()
+    : rawText;
+
+  if (
+    cleanedText === rawText &&
+    extractedReplyToMessageId === (message.replyToMessageId ?? "")
+  ) {
+    return message;
+  }
+
+  return {
+    ...message,
+    text: cleanedText,
+    ...(extractedReplyToMessageId
+      ? { replyToMessageId: extractedReplyToMessageId }
+      : {}),
+  };
 }
 
 function getMessageGroupingKey(message: ChatMessageData): string {
@@ -61,8 +110,11 @@ export const ChatTranscript = memo(function ChatTranscript({
   onSpeak,
   renderMessageContent,
   typingIndicator,
+  userMessagesOnRight = true,
   variant = "default",
 }: ChatTranscriptProps) {
+  const normalizedMessages = messages.map(normalizeTranscriptMessage);
+
   if (variant === "game-modal") {
     return (
       <div className="flex min-h-full w-full flex-col justify-end gap-4 px-1 py-4">
@@ -95,7 +147,7 @@ export const ChatTranscript = memo(function ChatTranscript({
             </div>
           );
         })}
-        {messages.map((message) => {
+        {normalizedMessages.map((message) => {
           const isUser = message.role === "user";
           return (
             <div
@@ -129,8 +181,16 @@ export const ChatTranscript = memo(function ChatTranscript({
 
   return (
     <div className="w-full space-y-1.5">
-      {messages.map((message, index) => {
-        const previousMessage = index > 0 ? messages[index - 1] : null;
+      {normalizedMessages.map((message, index) => {
+        const replyTarget =
+          typeof message.replyToMessageId === "string" &&
+          message.replyToMessageId.length > 0
+            ? (normalizedMessages.find(
+                (candidate) => candidate.id === message.replyToMessageId,
+              ) ?? null)
+            : null;
+        const previousMessage =
+          index > 0 ? normalizedMessages[index - 1] : null;
         const isGrouped =
           previousMessage?.role === message.role &&
           previousMessage != null &&
@@ -148,6 +208,8 @@ export const ChatTranscript = memo(function ChatTranscript({
             onDelete={onDelete}
             onEdit={onEdit}
             onSpeak={onSpeak}
+            replyTarget={replyTarget}
+            userMessagesOnRight={userMessagesOnRight}
           >
             {renderTranscriptMessageContent(message, renderMessageContent)}
           </ChatMessage>

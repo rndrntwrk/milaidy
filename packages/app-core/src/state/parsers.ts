@@ -150,6 +150,10 @@ export function parseConversationMessageEvent(
   const from = value.from;
   const fromUserName = value.fromUserName;
   const avatarUrl = value.avatarUrl;
+  const replyToMessageId = value.replyToMessageId;
+  const replyToSenderName = value.replyToSenderName;
+  const replyToSenderUserName = value.replyToSenderUserName;
+  const reactions = value.reactions;
   if (
     typeof id !== "string" ||
     (role !== "user" && role !== "assistant") ||
@@ -170,6 +174,66 @@ export function parseConversationMessageEvent(
   }
   if (typeof avatarUrl === "string" && avatarUrl.length > 0) {
     parsed.avatarUrl = avatarUrl;
+  }
+  if (typeof replyToMessageId === "string" && replyToMessageId.length > 0) {
+    parsed.replyToMessageId = replyToMessageId;
+  }
+  if (typeof replyToSenderName === "string" && replyToSenderName.length > 0) {
+    parsed.replyToSenderName = replyToSenderName;
+  }
+  if (
+    typeof replyToSenderUserName === "string" &&
+    replyToSenderUserName.length > 0
+  ) {
+    parsed.replyToSenderUserName = replyToSenderUserName;
+  }
+  if (Array.isArray(reactions)) {
+    const parsedReactions = reactions
+      .map((reaction) => {
+        if (!isRecord(reaction)) return null;
+        const emoji = reaction.emoji;
+        const count = reaction.count;
+        const users = reaction.users;
+        if (
+          typeof emoji !== "string" ||
+          emoji.length === 0 ||
+          typeof count !== "number" ||
+          !Number.isFinite(count) ||
+          count <= 0
+        ) {
+          return null;
+        }
+        const parsedReaction: {
+          emoji: string;
+          count: number;
+          users?: string[];
+        } = {
+          emoji,
+          count,
+        };
+        if (Array.isArray(users)) {
+          const parsedUsers = users.filter(
+            (user): user is string =>
+              typeof user === "string" && user.length > 0,
+          );
+          if (parsedUsers.length > 0) {
+            parsedReaction.users = parsedUsers;
+          }
+        }
+        return parsedReaction;
+      })
+      .filter(
+        (
+          reaction,
+        ): reaction is {
+          emoji: string;
+          count: number;
+          users?: string[];
+        } => reaction !== null,
+      );
+    if (parsedReactions.length > 0) {
+      parsed.reactions = parsedReactions;
+    }
   }
   return parsed;
 }

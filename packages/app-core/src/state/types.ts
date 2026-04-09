@@ -592,6 +592,7 @@ export interface AppState {
    * with an active dashboard conversation.
    */
   activeInboxChat: {
+    avatarUrl?: string;
     id: string;
     source: string;
     title: string;
