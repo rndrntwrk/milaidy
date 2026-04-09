@@ -7,8 +7,9 @@ import {
   CHARACTER_DEFINITIONS,
   type CharacterDefinition,
 } from "./onboarding-presets.characters.js";
+import { SHARED_STYLE_RULES } from "./onboarding-presets.shared.js";
 
-export { SHARED_STYLE_RULES } from "./onboarding-presets.shared.js";
+export { SHARED_STYLE_RULES };
 
 const DEFAULT_LANGUAGE: CharacterLanguage = "en";
 
@@ -64,6 +65,16 @@ export function normalizeCharacterLanguage(input: unknown): CharacterLanguage {
   return DEFAULT_LANGUAGE;
 }
 
+function mergeSharedStyleRules(all: readonly string[]): string[] {
+  const merged = [...all];
+  for (const rule of SHARED_STYLE_RULES) {
+    if (!merged.includes(rule)) {
+      merged.push(rule);
+    }
+  }
+  return merged;
+}
+
 function resolveCharacterVariant(
   definition: CharacterDefinition,
   language: CharacterLanguage,
@@ -82,7 +93,7 @@ function resolveCharacterVariant(
     system: addLanguageRule(definition.system, language),
     adjectives: [...definition.adjectives],
     style: {
-      all: [...definition.style.all],
+      all: mergeSharedStyleRules(definition.style.all),
       chat: [...definition.style.chat],
       post: [...definition.style.post],
     },

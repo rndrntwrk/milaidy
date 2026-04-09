@@ -7,6 +7,15 @@ import {
 } from "./context-catalog.js";
 import type { AgentContext } from "./context-types.js";
 
+/** Milady extends elizaOS plugins/actions/providers with optional context hints. */
+type PluginWithContexts = Plugin & { contexts?: unknown };
+type ActionWithContexts = NonNullable<Plugin["actions"]>[number] & {
+  contexts?: unknown;
+};
+type ProviderWithContexts = NonNullable<Plugin["providers"]>[number] & {
+  contexts?: unknown;
+};
+
 type AuditComponentType = "action" | "provider";
 
 export interface ContextAuditEntry {
@@ -59,9 +68,7 @@ export interface ContextAuditReport extends ContextAuditSummary {
   gaps: ContextAuditGap[];
 }
 
-function normalizeContexts(
-  contexts?: readonly string[] | null,
-): AgentContext[] {
+function normalizeContexts(contexts?: unknown): AgentContext[] {
   if (!Array.isArray(contexts)) {
     return [];
   }
@@ -137,12 +144,14 @@ function auditPluginEntries(
 
   for (const plugin of plugins) {
     const pluginName = plugin.name ?? "unknown-plugin";
-    const pluginContexts = normalizeContexts(plugin.contexts);
+    const pluginContexts = normalizeContexts(
+      (plugin as PluginWithContexts).contexts,
+    );
 
     for (const action of plugin.actions ?? []) {
       const resolution = resolveActionContextResolution(
         action.name,
-        normalizeContexts(action.contexts),
+        normalizeContexts((action as ActionWithContexts).contexts),
         pluginContexts,
       );
       const entry: ContextAuditEntry = {
@@ -168,7 +177,7 @@ function auditPluginEntries(
     for (const provider of plugin.providers ?? []) {
       const resolution = resolveProviderContextResolution(
         provider.name,
-        normalizeContexts(provider.contexts),
+        normalizeContexts((provider as ProviderWithContexts).contexts),
         pluginContexts,
       );
       const entry: ContextAuditEntry = {

@@ -41,7 +41,7 @@ describe("getStylePresets", () => {
       ]),
     );
     expect(jin?.postExamples).toContain(
-      "most meetings should be pull requests",
+      "most meetings should be pull requests.",
     );
   });
 });

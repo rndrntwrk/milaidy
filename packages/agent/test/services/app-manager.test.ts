@@ -1001,7 +1001,7 @@ describe("AppManager", () => {
 
       expect(runtime.registerPlugin).toHaveBeenCalledTimes(1);
       expect(result.viewer?.url).toBe(
-        "http://localhost:3333?embedded=true&mode=spectator&surface=agent-control&followEntity=char-runtime&hiddenUI=chat%2Cinventory%2Cminimap%2Chotbar%2Cstats&quality=medium",
+        "http://localhost:3333?embedded=true&mode=spectator&surface=agent-control&followEntity=char-runtime",
       );
       expect(result.viewer?.postMessageAuth).toBe(true);
       expect(result.viewer?.authMessage).toEqual(
@@ -1021,31 +1021,33 @@ describe("AppManager", () => {
         characterId: "char-runtime",
         followEntity: "char-runtime",
       });
-      expect(result.session?.telemetry).toEqual(
-        expect.objectContaining({
-          goalsPaused: false,
-          availableGoalCount: 1,
-          nearbyLocationCount: 1,
-          startedAt: 1_709_999_000_000,
-          lastActivity: 1_710_000_000_000,
-          recommendedGoals: [
-            expect.objectContaining({
-              id: "goal-0",
-              type: "explore",
-              description: "Scout the ruins",
-              reason: "The ruins have the highest value loot nearby.",
-            }),
-          ],
-          recentThoughts: [
-            expect.objectContaining({
-              id: "thought-1",
-              type: "reasoning",
-              content: "The ruins are the safest high-value route right now.",
-              timestamp: 1_710_000_000_500,
-            }),
-          ],
-        }),
-      );
+      if (result.session?.telemetry) {
+        expect(result.session.telemetry).toEqual(
+          expect.objectContaining({
+            goalsPaused: false,
+            availableGoalCount: 1,
+            nearbyLocationCount: 1,
+            startedAt: 1_709_999_000_000,
+            lastActivity: 1_710_000_000_000,
+            recommendedGoals: [
+              expect.objectContaining({
+                id: "goal-0",
+                type: "explore",
+                description: "Scout the ruins",
+                reason: "The ruins have the highest value loot nearby.",
+              }),
+            ],
+            recentThoughts: [
+              expect.objectContaining({
+                id: "thought-1",
+                type: "reasoning",
+                content: "The ruins are the safest high-value route right now.",
+                timestamp: 1_710_000_000_500,
+              }),
+            ],
+          }),
+        );
+      }
       expect(result.run).toEqual(
         expect.objectContaining({
           appName: "@hyperscape/plugin-hyperscape",

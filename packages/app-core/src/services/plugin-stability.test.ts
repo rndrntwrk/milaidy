@@ -12,11 +12,10 @@
  * Issue: #3 — Plugin & Provider Stability
  */
 
-import {
-  trajectoriesPlugin,
-  type Plugin,
-  type Provider,
-  type ProviderResult,
+import type {
+  Plugin,
+  Provider,
+  ProviderResult,
 } from "@elizaos/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { validateRuntimeContext } from "../api/plugin-validation";
@@ -1007,17 +1006,12 @@ describe("Version Skew Detection (issue #10)", () => {
     expect(CORE_PLUGINS).not.toContain("trajectories");
   });
 
-  it("native trajectories export a runtime service from core", () => {
-    expect(trajectoriesPlugin).toBeDefined();
-    expect(Array.isArray(trajectoriesPlugin.services)).toBe(true);
-    expect(trajectoriesPlugin.services?.length ?? 0).toBeGreaterThan(0);
-    const serviceNames = (trajectoriesPlugin.services ?? []).map(
-      (serviceClass) => serviceClass.name,
-    );
-    expect(
-      serviceNames.some((name) => name.startsWith("TrajectoriesService")),
-    ).toBe(true);
+  it("native trajectories are runtime services, not a published core plugin export", () => {
     expect(OPTIONAL_CORE_PLUGINS).not.toContain("trajectories");
+    const coreMod = import("@elizaos/core") as Promise<Record<string, unknown>>;
+    return coreMod.then((mod) => {
+      expect(mod.trajectoriesPlugin).toBeUndefined();
+    });
   });
 });
 

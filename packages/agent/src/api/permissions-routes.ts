@@ -1,4 +1,5 @@
 import type { AgentRuntime } from "@elizaos/core";
+import type { PermissionState } from "@miladyai/shared/contracts/permissions";
 import {
   getSelfControlPermissionState,
   openSelfControlPermissionLocation,
@@ -14,14 +15,6 @@ interface PermissionAutonomousConfigLike extends AutonomousConfigLike {
   plugins?: {
     entries?: Record<string, { enabled?: boolean }>;
   };
-}
-
-interface PermissionState {
-  id: string;
-  status: string;
-  lastChecked: number;
-  canRequest: boolean;
-  reason?: string;
 }
 
 const WEBSITE_BLOCKING_PERMISSION_ID = "website-blocking";

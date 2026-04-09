@@ -9,7 +9,13 @@
     "declaration": false,
     "allowImportingTsExtensions": true,
     "noEmit": true,
-    "baseUrl": "."
+    "baseUrl": ".",
+    "paths": {
+      "@miladyai/shared": ["../shared/src/index.ts"],
+      "@miladyai/shared/*": ["../shared/src/*"],
+      "@miladyai/plugin-roles": ["../plugin-roles/src/index.ts"],
+      "@miladyai/plugin-roles/*": ["../plugin-roles/src/*"]
+    }
   },
   "include": ["src"],
   "exclude": ["src/**/*.test.ts", "src/**/*.test.tsx"]

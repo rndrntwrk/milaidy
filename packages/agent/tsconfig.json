@@ -16,7 +16,9 @@
       "@miladyai/plugin-selfcontrol": ["../plugin-selfcontrol/src/index.ts"],
       "@miladyai/plugin-selfcontrol/*": ["../plugin-selfcontrol/src/*"],
       "@miladyai/plugin-roles": ["../plugin-roles/src/index.ts"],
-      "@miladyai/plugin-roles/*": ["../plugin-roles/src/*"]
+      "@miladyai/plugin-roles/*": ["../plugin-roles/src/*"],
+      "@miladyai/shared": ["../shared/src/index.ts"],
+      "@miladyai/shared/*": ["../shared/src/*"]
     }
   },
   "include": ["src"]
