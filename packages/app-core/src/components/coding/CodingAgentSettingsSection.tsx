@@ -41,6 +41,7 @@ export function CodingAgentSettingsSection() {
   const [authResult, setAuthResult] = useState<AuthResult | null>(null);
 
   useEffect(() => {
+    const controller = new AbortController();
     void (async () => {
       setLoading(true);
       try {
@@ -50,10 +51,14 @@ export function CodingAgentSettingsSection() {
             client.fetchModels("anthropic", false).catch(() => null),
             client.fetchModels("google-genai", false).catch(() => null),
             client.fetchModels("openai", false).catch(() => null),
-            fetch("/api/coding-agents/preflight")
+            fetch("/api/coding-agents/preflight", {
+              signal: controller.signal,
+            })
               .then((response) => (response.ok ? response.json() : null))
               .catch(() => null),
           ]);
+
+        if (controller.signal.aborted) return;
 
         const env = (cfg.env ?? {}) as Record<string, string>;
         const cloud = (cfg.cloud ?? {}) as Record<string, string>;
@@ -140,8 +145,9 @@ export function CodingAgentSettingsSection() {
       } catch {
         // Fall back to built-in defaults when config or model fetches fail.
       }
-      setLoading(false);
+      if (!controller.signal.aborted) setLoading(false);
     })();
+    return () => controller.abort();
   }, []);
 
   const llmProvider = (prefs.PARALLAX_LLM_PROVIDER ||

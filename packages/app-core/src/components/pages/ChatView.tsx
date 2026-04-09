@@ -127,7 +127,8 @@ export function ChatView({
   // ── Coding agent preflight ──────────────────────────────────────
   const [codingAgentsAvailable, setCodingAgentsAvailable] = useState(false);
   useEffect(() => {
-    fetch("/api/coding-agents/preflight")
+    const controller = new AbortController();
+    fetch("/api/coding-agents/preflight", { signal: controller.signal })
       .then((r) => r.json())
       .then((data: { installed?: unknown[]; available?: boolean }) => {
         setCodingAgentsAvailable(
@@ -136,8 +137,9 @@ export function ChatView({
         );
       })
       .catch(() => {
-        /* preflight unavailable — hide code button */
+        /* preflight unavailable or aborted — hide code button */
       });
+    return () => controller.abort();
   }, []);
 
   const handleCreateTask = useCallback(
@@ -324,7 +326,7 @@ export function ChatView({
 
       const readers = imageFiles.map(
         (file) =>
-          new Promise<ImageAttachment>((resolve) => {
+          new Promise<ImageAttachment>((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = () => {
               const result = reader.result as string;
@@ -333,18 +335,25 @@ export function ChatView({
               const data = commaIdx >= 0 ? result.slice(commaIdx + 1) : result;
               resolve({ data, mimeType: file.type, name: file.name });
             };
+            reader.onerror = () =>
+              reject(reader.error ?? new Error("Failed to read file"));
+            reader.onabort = () => reject(new Error("File read aborted"));
             reader.readAsDataURL(file);
           }),
       );
 
-      void Promise.all(readers).then((attachments) => {
-        setChatPendingImages((prev) => {
-          const combined = [...prev, ...attachments];
-          // Mirror the server-side MAX_CHAT_IMAGES=4 limit so the user gets
-          // immediate feedback rather than a 400 after upload.
-          return combined.slice(0, 4);
+      void Promise.all(readers)
+        .then((attachments) => {
+          setChatPendingImages((prev) => {
+            const combined = [...prev, ...attachments];
+            // Mirror the server-side MAX_CHAT_IMAGES=4 limit so the user gets
+            // immediate feedback rather than a 400 after upload.
+            return combined.slice(0, 4);
+          });
+        })
+        .catch((err) => {
+          console.warn("Failed to load image attachments:", err);
         });
-      });
     },
     [setChatPendingImages],
   );
