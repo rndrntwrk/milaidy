@@ -34,6 +34,12 @@ type AppHarnessState = {
   onboardingComplete: boolean;
   tab: string;
   actionNotice: null;
+  backendConnection: {
+    state: "connected" | "disconnected" | "reconnecting" | "failed";
+    reconnectAttempt: number;
+    maxReconnectAttempts: number;
+    showDisconnectedUI: boolean;
+  };
   onboardingStep: OnboardingStep;
   onboardingMode: "basic" | "advanced";
   onboardingActiveGuide: FlaminaGuideTopic | null;
@@ -687,6 +693,12 @@ function createHarnessState(
     onboardingComplete: false,
     tab: "chat",
     actionNotice: null,
+    backendConnection: {
+      state: "disconnected",
+      reconnectAttempt: 0,
+      maxReconnectAttempts: 15,
+      showDisconnectedUI: false,
+    },
     onboardingStep: "identity",
     onboardingMode: "basic",
     onboardingActiveGuide: null,
@@ -908,6 +920,8 @@ function setupMock(state: AppHarnessState) {
       generated: true,
       persisted: false,
     })),
+    relaunchDesktop: vi.fn(async () => {}),
+    retryBackendConnection: vi.fn(),
     retryStartup: vi.fn(),
     startupPhase:
       state.startupStatus === "ready" ? "ready" : "starting-backend",

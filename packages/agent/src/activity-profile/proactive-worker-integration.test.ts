@@ -1,5 +1,6 @@
 import type { IAgentRuntime, Task, UUID } from "@elizaos/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { _resetMissingSendHandlerLogsForTests } from "../services/send-handler-availability.js";
 import type { ActivityProfile } from "./types.js";
 import { emptyBucketCounts } from "./types.js";
 
@@ -66,7 +67,9 @@ import {
 
 const MORNING_NOW = new Date("2026-04-06T07:00:00Z");
 
-function makeProfile(overrides: Partial<ActivityProfile> = {}): ActivityProfile {
+function makeProfile(
+  overrides: Partial<ActivityProfile> = {},
+): ActivityProfile {
   return {
     ownerEntityId: "owner-1",
     analyzedAt: MORNING_NOW.getTime() - 5 * 60 * 1000,
@@ -124,6 +127,7 @@ function createRuntimeMock(tasks: Task[] = []) {
   const state = { tasks: [...tasks] };
   const runtime = {
     agentId: "agent-1" as UUID,
+    sendHandlers: new Map<string, unknown>(),
     getService: vi.fn(() => ({
       getAutonomousRoomId: () => "room-proactive" as UUID,
     })),
@@ -262,6 +266,7 @@ describe("executeProactiveTask", () => {
     vi.clearAllMocks();
     vi.useFakeTimers();
     vi.setSystemTime(MORNING_NOW);
+    _resetMissingSendHandlerLogsForTests();
     mocks.resolveDefaultTimeZone.mockReturnValue("UTC");
     mocks.mockGetOverview.mockResolvedValue({ occurrences: [] });
     mocks.mockGetCalendarFeed.mockResolvedValue({ events: [] });
@@ -478,6 +483,29 @@ describe("executeProactiveTask", () => {
 
     expect(result.nextInterval).toBe(PROACTIVE_TASK_INTERVAL_MS);
     // Profile should still be persisted despite send failure
+    const updated = state.tasks.find((t) => t.id === task.id);
+    const meta = updated?.metadata as Record<string, unknown>;
+    expect(meta.activityProfile).toBeDefined();
+  });
+
+  it("skips client_chat delivery until the in-app send handler is registered", async () => {
+    const profile = makeProfile({
+      lastSeenAt: Date.now() - 60_000,
+      primaryPlatform: "desktop_app",
+      lastSeenPlatform: "desktop_app",
+    });
+    mocks.resolveOwnerEntityId.mockResolvedValue("owner-1");
+    mocks.readProfileFromMetadata.mockReturnValue(profile);
+    mocks.profileNeedsRebuild.mockReturnValue(false);
+    mocks.refreshCurrentState.mockResolvedValue(profile);
+    mocks.loadOwnerContactsConfig.mockReturnValue({});
+
+    const task = makeExistingProactiveTask();
+    const { runtime, state } = createRuntimeMock([task]);
+
+    await executeProactiveTask(runtime);
+
+    expect(vi.mocked(runtime.sendMessageToTarget)).not.toHaveBeenCalled();
     const updated = state.tasks.find((t) => t.id === task.id);
     const meta = updated?.metadata as Record<string, unknown>;
     expect(meta.activityProfile).toBeDefined();

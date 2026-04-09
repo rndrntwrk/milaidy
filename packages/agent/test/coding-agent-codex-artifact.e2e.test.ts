@@ -63,7 +63,6 @@ function runCodexExec(
         "exec",
         "--model",
         "gpt-5.4",
-        "--ephemeral",
         "--full-auto",
         "--skip-git-repo-check",
         "--color",

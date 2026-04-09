@@ -122,12 +122,19 @@ import {
   resolveDefaultAgentWorkspaceDir,
 } from "../providers/workspace.js";
 import { SandboxAuditLog } from "../security/audit-log.js";
-import { SandboxManager, type SandboxMode } from "../services/sandbox-manager.js";
+import {
+  SandboxManager,
+  type SandboxMode,
+} from "../services/sandbox-manager.js";
 import * as pluginAgentOrchestrator from "./agent-orchestrator-compat.js";
 import { CORE_PLUGINS, OPTIONAL_CORE_PLUGINS } from "./core-plugins.js";
 import { seedBundledKnowledge } from "./default-knowledge.js";
 import { createElizaPlugin } from "./eliza-plugin.js";
 import { detectEmbeddingPreset } from "./embedding-presets.js";
+import {
+  runtimeKnowledgeEnabled,
+  runtimeTrajectoriesEnabled,
+} from "./native-runtime-features.js";
 import { installRuntimePluginLifecycle } from "./plugin-lifecycle.js";
 import { shouldEnableTrajectoryLoggingByDefault } from "./trajectory-persistence.js";
 
@@ -747,28 +754,6 @@ export function deduplicatePluginActions(plugins: Plugin[]): void {
       });
     }
   }
-}
-
-/** Optional methods on some elizaOS AgentRuntime builds (not in all type versions). */
-type AgentRuntimeFeatureFlags = {
-  isTrajectoriesEnabled?: () => boolean;
-  isKnowledgeEnabled?: () => boolean;
-};
-
-function runtimeTrajectoriesEnabled(runtime: AgentRuntime): boolean {
-  const runtimeWithFlags = runtime as AgentRuntime & AgentRuntimeFeatureFlags;
-  return (
-    typeof runtimeWithFlags.isTrajectoriesEnabled === "function" &&
-    runtimeWithFlags.isTrajectoriesEnabled()
-  );
-}
-
-function runtimeKnowledgeEnabled(runtime: AgentRuntime): boolean {
-  const runtimeWithFlags = runtime as AgentRuntime & AgentRuntimeFeatureFlags;
-  return (
-    typeof runtimeWithFlags.isKnowledgeEnabled === "function" &&
-    runtimeWithFlags.isKnowledgeEnabled()
-  );
 }
 
 interface TrajectoryLoggerControl {
@@ -2808,7 +2793,9 @@ export function resolveWalletRuntimeSettings(
     | (Record<string, unknown> & { vars?: Record<string, unknown> })
     | undefined;
   const configVars =
-    configEnv?.vars && typeof configEnv.vars === "object" && !Array.isArray(configEnv.vars)
+    configEnv?.vars &&
+    typeof configEnv.vars === "object" &&
+    !Array.isArray(configEnv.vars)
       ? (configEnv.vars as Record<string, unknown>)
       : undefined;
   const getConfigEnvString = (key: string): string | undefined => {
@@ -2822,7 +2809,9 @@ export function resolveWalletRuntimeSettings(
     getConfigEnvString("WALLET_PUBLIC_KEY");
   const derivedSolanaPublicKey =
     trimEnvString(getWalletAddresses().solanaAddress) ??
-    trimEnvString(syncSolanaPublicKeyEnv(getConfigEnvString("SOLANA_PRIVATE_KEY")));
+    trimEnvString(
+      syncSolanaPublicKeyEnv(getConfigEnvString("SOLANA_PRIVATE_KEY")),
+    );
   const solanaPublicKey = explicitSolanaPublicKey ?? derivedSolanaPublicKey;
 
   const settings: Record<string, string> = {};

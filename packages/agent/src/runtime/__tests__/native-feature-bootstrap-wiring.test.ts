@@ -1,10 +1,14 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { CORE_PLUGINS } from "../core-plugins";
 import { describe, expect, it } from "vitest";
+import { CORE_PLUGINS } from "../core-plugins";
 
 const elizaSource = readFileSync(
   path.resolve(import.meta.dirname, "..", "eliza.ts"),
+  "utf-8",
+);
+const nativeRuntimeFeaturesSource = readFileSync(
+  path.resolve(import.meta.dirname, "..", "native-runtime-features.ts"),
   "utf-8",
 );
 const expectedCorePlugins = [
@@ -43,7 +47,7 @@ describe("native feature bootstrap wiring", () => {
   it("skips bundled knowledge seeding when native knowledge is disabled", () => {
     const initBlock =
       elizaSource.match(
-        /const initializeRuntimeServices = async \(\): Promise<void> => \{[\s\S]*?\n  \};/m,
+        /const initializeRuntimeServices = async \(\): Promise<void> => \{[\s\S]*?\n {2}\};/m,
       )?.[0] ?? "";
 
     expect(initBlock).toContain("if (runtimeKnowledgeEnabled(runtime))");
@@ -52,13 +56,16 @@ describe("native feature bootstrap wiring", () => {
   });
 
   it("calls native feature probes with the runtime instance bound", () => {
+    expect(elizaSource).toContain('from "./native-runtime-features.js"');
+
     const trajectoryProbe =
-      elizaSource.match(
+      nativeRuntimeFeaturesSource.match(
         /function runtimeTrajectoriesEnabled\([\s\S]*?\n\}/m,
       )?.[0] ?? "";
     const knowledgeProbe =
-      elizaSource.match(/function runtimeKnowledgeEnabled\([\s\S]*?\n\}/m)?.[0] ??
-      "";
+      nativeRuntimeFeaturesSource.match(
+        /function runtimeKnowledgeEnabled\([\s\S]*?\n\}/m,
+      )?.[0] ?? "";
 
     expect(trajectoryProbe).toContain(
       "runtimeWithFlags.isTrajectoriesEnabled()",

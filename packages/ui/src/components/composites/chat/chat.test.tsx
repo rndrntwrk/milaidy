@@ -204,6 +204,62 @@ describe("ChatTranscript", () => {
     expect(screen.getByText("Again")).toBeInTheDocument();
   });
 
+  it("renders sender identity for external user messages without a source pill", () => {
+    render(
+      <ChatTranscript
+        messages={[
+          {
+            id: "user-1",
+            role: "user",
+            text: "hello there",
+            source: "discord",
+            from: "James",
+            fromUserName: "james_dev",
+            avatarUrl: "/avatars/james.png",
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("James")).toBeInTheDocument();
+    expect(screen.getByText("@james_dev")).toBeInTheDocument();
+    expect(screen.getByAltText("James avatar")).toHaveAttribute(
+      "src",
+      "/avatars/james.png",
+    );
+    expect(
+      screen.queryByTestId("chat-bubble-source-label"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("does not group consecutive user messages from different senders", () => {
+    render(
+      <ChatTranscript
+        messages={[
+          {
+            id: "user-1",
+            role: "user",
+            text: "first",
+            source: "discord",
+            from: "James",
+            fromUserName: "james",
+          },
+          {
+            id: "user-2",
+            role: "user",
+            text: "second",
+            source: "discord",
+            from: "Avery",
+            fromUserName: "avery",
+          },
+        ]}
+      />,
+    );
+
+    expect(screen.getByText("James")).toBeInTheDocument();
+    expect(screen.getByText("Avery")).toBeInTheDocument();
+  });
+
   it("renders game-modal carryover rows with the preserved markers", () => {
     render(
       <ChatTranscript
@@ -244,5 +300,46 @@ describe("ChatConversationItem", () => {
     fireEvent.click(screen.getByTestId("conv-select"));
     expect(onSelect).toHaveBeenCalled();
     expect(screen.getByText("New")).toBeInTheDocument();
+  });
+
+  it("renders connector chats with an icon chip", () => {
+    render(
+      <ChatConversationItem
+        conversation={{
+          id: "conv-1",
+          title: "General",
+          source: "discord",
+          updatedAtLabel: "just now",
+        }}
+        isActive={false}
+        onSelect={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId("conversation-source-chip")).toHaveTextContent(
+      "Discord",
+    );
+    expect(screen.getByTestId("chat-source-icon")).toHaveAttribute(
+      "data-source",
+      "discord",
+    );
+  });
+
+  it("does not render a source chip for internal chats", () => {
+    render(
+      <ChatConversationItem
+        conversation={{
+          id: "conv-1",
+          title: "Internal",
+          updatedAtLabel: "just now",
+        }}
+        isActive={false}
+        onSelect={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.queryByTestId("conversation-source-chip"),
+    ).not.toBeInTheDocument();
   });
 });

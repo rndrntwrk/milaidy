@@ -25,6 +25,7 @@ const AUTH_DIR = path.join(
 
 /** Buffer before expiry to trigger refresh (5 minutes) */
 const REFRESH_BUFFER_MS = 5 * 60 * 1000;
+const invalidClaudeCodeRefreshTokens = new Set<string>();
 
 function ensureAuthDir(): void {
   if (!fs.existsSync(AUTH_DIR)) {
@@ -257,6 +258,11 @@ interface ClaudeCodeCredentialBlob {
   source: string;
 }
 
+function isClaudeCodeInvalidGrantError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return /\binvalid_grant\b/i.test(message);
+}
+
 /**
  * Try to read a Claude Code OAuth credential blob from disk or the macOS
  * keychain. Does NOT validate expiry — that's the caller's job (so it can
@@ -359,6 +365,11 @@ async function importClaudeCodeOAuthToken(): Promise<string | null> {
     return null;
   }
 
+  const refreshTokenCacheKey = `${blob.source}:${blob.refreshToken}`;
+  if (invalidClaudeCodeRefreshTokens.has(refreshTokenCacheKey)) {
+    return null;
+  }
+
   // Try to refresh. Claude Code's persisted access token is often stale even
   // when the user is actively using Claude Code, because Claude Code keeps the
   // live token in memory and only persists the original OAuth grant.
@@ -367,6 +378,13 @@ async function importClaudeCodeOAuthToken(): Promise<string | null> {
     logger.info(`[auth] Refreshed Claude Code OAuth token from ${blob.source}`);
     return refreshed.access;
   } catch (err) {
+    if (isClaudeCodeInvalidGrantError(err)) {
+      invalidClaudeCodeRefreshTokens.add(refreshTokenCacheKey);
+      logger.info(
+        `[auth] Claude Code OAuth refresh token from ${blob.source} is invalid or revoked. Run "claude auth login" to refresh.`,
+      );
+      return null;
+    }
     logger.warn(
       `[auth] Failed to refresh expired Claude Code OAuth token from ${blob.source}: ${String(err)}. Run "claude auth login" to refresh.`,
     );

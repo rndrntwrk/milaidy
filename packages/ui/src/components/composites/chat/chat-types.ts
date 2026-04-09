@@ -52,6 +52,9 @@ export interface ChatAttachmentItem {
 }
 
 export interface ChatMessageData {
+  avatarUrl?: string;
+  from?: string;
+  fromUserName?: string;
   id: string;
   interrupted?: boolean;
   role: string;

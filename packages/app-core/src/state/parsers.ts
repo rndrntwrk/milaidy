@@ -148,6 +148,8 @@ export function parseConversationMessageEvent(
   const timestamp = value.timestamp;
   const source = value.source;
   const from = value.from;
+  const fromUserName = value.fromUserName;
+  const avatarUrl = value.avatarUrl;
   if (
     typeof id !== "string" ||
     (role !== "user" && role !== "assistant") ||
@@ -162,6 +164,12 @@ export function parseConversationMessageEvent(
   }
   if (typeof from === "string" && from.length > 0) {
     parsed.from = from;
+  }
+  if (typeof fromUserName === "string" && fromUserName.length > 0) {
+    parsed.fromUserName = fromUserName;
+  }
+  if (typeof avatarUrl === "string" && avatarUrl.length > 0) {
+    parsed.avatarUrl = avatarUrl;
   }
   return parsed;
 }

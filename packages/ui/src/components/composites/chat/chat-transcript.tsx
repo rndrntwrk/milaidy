@@ -32,6 +32,23 @@ function renderTranscriptMessageContent(
   return renderMessageContent?.(message) ?? message.text;
 }
 
+function getMessageGroupingKey(message: ChatMessageData): string {
+  if (message.role !== "user") {
+    return message.role;
+  }
+
+  const source = message.source?.trim().toLowerCase() ?? "";
+  const senderName = message.from?.trim().toLowerCase() ?? "";
+  const senderHandle = message.fromUserName?.trim().toLowerCase() ?? "";
+  const avatarUrl = message.avatarUrl?.trim() ?? "";
+
+  if (!source && !senderName && !senderHandle && !avatarUrl) {
+    return "user";
+  }
+
+  return `user:${source}|${senderName}|${senderHandle}|${avatarUrl}`;
+}
+
 export const ChatTranscript = memo(function ChatTranscript({
   agentName = "Agent",
   carryoverMessages = [],
@@ -114,7 +131,11 @@ export const ChatTranscript = memo(function ChatTranscript({
     <div className="w-full space-y-1.5">
       {messages.map((message, index) => {
         const previousMessage = index > 0 ? messages[index - 1] : null;
-        const isGrouped = previousMessage?.role === message.role;
+        const isGrouped =
+          previousMessage?.role === message.role &&
+          previousMessage != null &&
+          getMessageGroupingKey(previousMessage) ===
+            getMessageGroupingKey(message);
 
         return (
           <ChatMessage

@@ -652,14 +652,12 @@ export async function handleConversationRoutes(
           const contentSource = (m.content as Record<string, unknown>)?.source;
           const meta = m.metadata as Record<string, unknown> | undefined;
           const entityName = meta?.entityName;
-          // Surface a source tag for every visible message so the UI can render
-          // a consistent channel chip on native dashboard turns as well.
           const normalizedSource =
             typeof contentSource === "string" &&
             contentSource.length > 0 &&
             contentSource !== "client_chat"
               ? contentSource
-              : "milady";
+              : undefined;
           return {
             id: m.id ?? "",
             role: m.entityId === agentId ? "assistant" : "user",
@@ -669,6 +667,16 @@ export async function handleConversationRoutes(
             from:
               typeof entityName === "string" && entityName.length > 0
                 ? entityName
+                : undefined,
+            fromUserName:
+              typeof meta?.entityUserName === "string" &&
+              meta.entityUserName.length > 0
+                ? meta.entityUserName
+                : undefined,
+            avatarUrl:
+              typeof meta?.entityAvatarUrl === "string" &&
+              meta.entityAvatarUrl.length > 0
+                ? meta.entityAvatarUrl
                 : undefined,
           };
         })
@@ -1184,8 +1192,17 @@ export async function handleConversationRoutes(
         state.agentName,
       );
 
-      if (newTitle) {
-        conv.title = newTitle;
+      const fallbackTitle = prompt
+        .replace(/\s+/g, " ")
+        .trim()
+        .split(" ")
+        .slice(0, 5)
+        .join(" ")
+        .trim();
+      const resolvedTitle = newTitle ?? fallbackTitle;
+
+      if (resolvedTitle) {
+        conv.title = resolvedTitle;
         conv.updatedAt = new Date().toISOString();
         await syncConversationRoomTitle(state, conv);
       }

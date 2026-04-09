@@ -18,6 +18,7 @@ import {
   ChatAttachmentStrip,
   ChatComposer,
   ChatComposerShell,
+  ChatSourceIcon,
   ChatThreadLayout,
   ChatTranscript,
   TypingIndicator,
@@ -216,12 +217,11 @@ export function ChatView({
               !msg.text.trim()
             ) && !isRoutineCodingAgentMessage(msg),
         )
-        // Default-tag any message that arrived without a source as
-        // "milady" so dashboard turns render the gold chip symmetric
-        // with connector messages. Live-streamed turns flow through
-        // the SSE path and don't carry the server-side default from
-        // conversation-routes.ts, so we catch them here too.
-        .map((msg) => (msg.source ? msg : { ...msg, source: "milady" })),
+        .map((msg) =>
+          msg.source?.trim().toLowerCase() === "milady"
+            ? { ...msg, source: undefined }
+            : msg,
+        ),
     [chatFirstTokenReceived, chatSending, msgs],
   );
   const {
@@ -658,9 +658,10 @@ function InboxChatPanel({
   activeInboxChat: { id: string; source: string; title: string };
   variant: ChatViewVariant;
 }) {
-  const { t } = useApp();
+  const { agentStatus, characterData, t } = useApp();
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [loading, setLoading] = useState(true);
+  const agentName = characterData?.name || agentStatus?.agentName || "Agent";
 
   useEffect(() => {
     let cancelled = false;
@@ -691,26 +692,29 @@ function InboxChatPanel({
     };
   }, [activeInboxChat.id]);
 
-  const sourceLabel = activeInboxChat.source
-    ? activeInboxChat.source.charAt(0).toUpperCase() +
-      activeInboxChat.source.slice(1)
-    : "Channel";
-
   return (
-    <div
+    <section
       className="flex flex-1 min-h-0 min-w-0 flex-col"
       aria-label={t("inboxview.Title", { defaultValue: "Inbox" })}
     >
-      <div className="flex items-center justify-between border-b border-border/40 px-5 py-3">
+      <div className="flex items-start justify-between gap-4 border-b border-border/40 px-5 py-3">
         <div className="min-w-0">
           <div className="text-sm font-bold text-txt truncate">
             {activeInboxChat.title}
           </div>
           <div className="mt-0.5 text-[11px] text-muted">
-            {sourceLabel} · {messages.length}{" "}
+            {messages.length}{" "}
             {t("inboxview.TotalCountShort", { defaultValue: "messages" })}
           </div>
         </div>
+        {activeInboxChat.source ? (
+          <div className="rounded-full border border-border/35 bg-bg-hover/50 p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+            <ChatSourceIcon
+              source={activeInboxChat.source}
+              className="h-4 w-4"
+            />
+          </div>
+        ) : null}
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
         {loading && messages.length === 0 ? (
@@ -726,6 +730,7 @@ function InboxChatPanel({
         ) : (
           <ChatTranscript
             variant={variant}
+            agentName={agentName}
             messages={messages}
             renderMessageContent={(message) => (
               <MessageContent message={message as ConversationMessage} />
@@ -736,10 +741,9 @@ function InboxChatPanel({
       <div className="border-t border-border/40 bg-bg-hover/40 px-5 py-3 text-[11px] leading-5 text-muted">
         {t("inboxview.ReadOnlyReplyHint", {
           defaultValue:
-            "Read-only view. Reply from the {{source}} app — the connector plugin handles outbound messages.",
-          source: sourceLabel,
+            "Read-only view. Reply from the original app — the connector plugin handles outbound messages.",
         })}
       </div>
-    </div>
+    </section>
   );
 }

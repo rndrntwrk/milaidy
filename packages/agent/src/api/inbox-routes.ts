@@ -97,6 +97,10 @@ interface InboxMessage {
   roomId: string;
   /** Best-effort display name of the sender entity, if available. */
   from?: string;
+  /** Best-effort username/handle of the sender entity, if available. */
+  fromUserName?: string;
+  /** Sender avatar URL when the connector can provide one. */
+  avatarUrl?: string;
 }
 
 /**
@@ -163,6 +167,218 @@ function extractFrom(memory: Memory): string | undefined {
     return entityName;
   }
   return undefined;
+}
+
+function extractFromUserName(memory: Memory): string | undefined {
+  const meta = memory.metadata as Record<string, unknown> | undefined;
+  const entityUserName = meta?.entityUserName;
+  if (typeof entityUserName === "string" && entityUserName.length > 0) {
+    return entityUserName;
+  }
+
+  const username = meta?.username;
+  if (typeof username === "string" && username.length > 0) {
+    return username;
+  }
+  return undefined;
+}
+
+function extractFromAvatarUrl(memory: Memory): string | undefined {
+  const meta = memory.metadata as Record<string, unknown> | undefined;
+  const entityAvatarUrl = meta?.entityAvatarUrl;
+  if (typeof entityAvatarUrl === "string" && entityAvatarUrl.length > 0) {
+    return entityAvatarUrl;
+  }
+  return undefined;
+}
+
+function extractRawSenderId(memory: Memory): string | undefined {
+  const meta = memory.metadata as Record<string, unknown> | undefined;
+  const fromId = meta?.fromId;
+  if (typeof fromId === "string" && fromId.length > 0) {
+    return fromId;
+  }
+  return undefined;
+}
+
+type DiscordUserProfile = {
+  avatarUrl?: string;
+  displayName?: string;
+  username?: string;
+};
+
+const DISCORD_PROFILE_CACHE_TTL_MS = 5 * 60_000;
+const discordChannelTitleCache = new Map<
+  string,
+  { expiresAt: number; value: string | null }
+>();
+const discordUserProfileCache = new Map<
+  string,
+  { expiresAt: number; value: DiscordUserProfile | null }
+>();
+
+function readCachedValue<T>(
+  cache: Map<string, { expiresAt: number; value: T }>,
+  key: string,
+): T | undefined {
+  const entry = cache.get(key);
+  if (!entry) return undefined;
+  if (entry.expiresAt <= Date.now()) {
+    cache.delete(key);
+    return undefined;
+  }
+  return entry.value;
+}
+
+type DiscordClientLike = {
+  channels?: {
+    cache?: { get?: (id: string) => unknown };
+    fetch?: (id: string) => Promise<unknown>;
+  };
+  users?: {
+    fetch?: (id: string) => Promise<unknown>;
+  };
+};
+
+function getDiscordClient(runtime: AgentRuntime): DiscordClientLike | null {
+  const runtimeWithServices = runtime as AgentRuntime & {
+    getService?: (name: string) => unknown;
+  };
+  const service = runtimeWithServices.getService?.("discord") as
+    | { client?: DiscordClientLike | null }
+    | undefined;
+  return service?.client ?? null;
+}
+
+function firstCollectionValue(collection: unknown): unknown {
+  if (!collection || typeof collection !== "object") {
+    return null;
+  }
+  const record = collection as {
+    first?: () => unknown;
+    values?: () => IterableIterator<unknown>;
+  };
+  if (typeof record.first === "function") {
+    return record.first();
+  }
+  if (typeof record.values === "function") {
+    return record.values().next().value ?? null;
+  }
+  return null;
+}
+
+function readDiscordDisplayName(user: unknown): string | undefined {
+  if (!user || typeof user !== "object") return undefined;
+  const record = user as Record<string, unknown>;
+  const globalName = record.globalName;
+  if (typeof globalName === "string" && globalName.trim()) {
+    return globalName.trim();
+  }
+  const displayName = record.displayName;
+  if (typeof displayName === "string" && displayName.trim()) {
+    return displayName.trim();
+  }
+  const username = record.username;
+  if (typeof username === "string" && username.trim()) {
+    return username.trim();
+  }
+  return undefined;
+}
+
+function readDiscordAvatarUrl(user: unknown): string | undefined {
+  if (!user || typeof user !== "object") return undefined;
+  const record = user as {
+    displayAvatarURL?: () => string;
+    avatarURL?: () => string | null;
+  };
+  if (typeof record.displayAvatarURL === "function") {
+    const url = record.displayAvatarURL();
+    if (typeof url === "string" && url.trim()) return url;
+  }
+  if (typeof record.avatarURL === "function") {
+    const url = record.avatarURL();
+    if (typeof url === "string" && url.trim()) return url;
+  }
+  return undefined;
+}
+
+async function resolveDiscordUserProfile(
+  runtime: AgentRuntime,
+  userId: string,
+): Promise<DiscordUserProfile | null> {
+  const cached = readCachedValue(discordUserProfileCache, userId);
+  if (cached !== undefined) return cached;
+
+  const client = getDiscordClient(runtime);
+  const fetchUser = client?.users?.fetch;
+  if (typeof fetchUser !== "function") return null;
+
+  try {
+    const user = await fetchUser(userId);
+    const profile: DiscordUserProfile = {
+      displayName: readDiscordDisplayName(user),
+      username:
+        user &&
+        typeof user === "object" &&
+        typeof (user as { username?: unknown }).username === "string"
+          ? (user as { username: string }).username
+          : undefined,
+      avatarUrl: readDiscordAvatarUrl(user),
+    };
+    discordUserProfileCache.set(userId, {
+      expiresAt: Date.now() + DISCORD_PROFILE_CACHE_TTL_MS,
+      value: profile,
+    });
+    return profile;
+  } catch {
+    discordUserProfileCache.set(userId, {
+      expiresAt: Date.now() + DISCORD_PROFILE_CACHE_TTL_MS,
+      value: null,
+    });
+    return null;
+  }
+}
+
+async function resolveDiscordRoomTitle(
+  runtime: AgentRuntime,
+  room: Room | undefined,
+): Promise<string | null> {
+  const channelId = typeof room?.channelId === "string" ? room.channelId : "";
+  if (!channelId) return null;
+
+  const cached = readCachedValue(discordChannelTitleCache, channelId);
+  if (cached !== undefined) return cached;
+
+  const client = getDiscordClient(runtime);
+  const cachedChannel = client?.channels?.cache?.get?.(channelId);
+  const fetchChannel = client?.channels?.fetch;
+  const channel =
+    cachedChannel ??
+    (typeof fetchChannel === "function"
+      ? await fetchChannel(channelId).catch(() => null)
+      : null);
+
+  let title: string | null = null;
+  if (channel && typeof channel === "object") {
+    const namedChannel = channel as { name?: unknown };
+    if (typeof namedChannel.name === "string" && namedChannel.name.trim()) {
+      title = namedChannel.name.trim();
+    } else {
+      const record = channel as {
+        recipient?: unknown;
+        recipients?: unknown;
+      };
+      const recipient =
+        record.recipient ?? firstCollectionValue(record.recipients);
+      title = readDiscordDisplayName(recipient) ?? null;
+    }
+  }
+
+  discordChannelTitleCache.set(channelId, {
+    expiresAt: Date.now() + DISCORD_PROFILE_CACHE_TTL_MS,
+    value: title,
+  });
+  return title;
 }
 
 /**
@@ -237,8 +453,7 @@ async function loadInboxMessages(
       unique: false,
     });
   } else {
-    let roomIds: UUID[];
-    roomIds = await collectAgentRoomIds(runtime);
+    const roomIds = await collectAgentRoomIds(runtime);
     if (roomIds.length === 0) return [];
     memories = await runtime.getMemoriesByRoomIds({
       tableName: "messages",
@@ -248,7 +463,7 @@ async function loadInboxMessages(
   }
 
   const agentId = runtime.agentId;
-  const out: InboxMessage[] = [];
+  const out: Array<InboxMessage & { rawSenderId?: string }> = [];
 
   for (const memory of memories) {
     const source = extractSource(memory);
@@ -265,13 +480,39 @@ async function loadInboxMessages(
       source,
       roomId: memory.roomId ?? "",
       from: extractFrom(memory),
+      fromUserName: extractFromUserName(memory),
+      avatarUrl: extractFromAvatarUrl(memory),
+      rawSenderId: extractRawSenderId(memory),
     });
   }
 
   // Newest first. The core API doesn't guarantee order across rooms, so
   // we do the merge sort client-side.
   out.sort((a, b) => b.timestamp - a.timestamp);
-  return out.slice(0, limit);
+  const ordered = out.slice(0, limit);
+
+  await Promise.all(
+    ordered.map(async (message) => {
+      if (message.source.toLowerCase() !== "discord") return;
+      if (!message.rawSenderId) return;
+      const profile = await resolveDiscordUserProfile(
+        runtime,
+        message.rawSenderId,
+      );
+      if (!profile) return;
+      if (!message.from && profile.displayName) {
+        message.from = profile.displayName;
+      }
+      if (!message.fromUserName && profile.username) {
+        message.fromUserName = profile.username;
+      }
+      if (!message.avatarUrl && profile.avatarUrl) {
+        message.avatarUrl = profile.avatarUrl;
+      }
+    }),
+  );
+
+  return ordered.map(({ rawSenderId: _rawSenderId, ...message }) => message);
 }
 
 /**
@@ -345,6 +586,7 @@ async function loadInboxChats(
       lastMessageText: string;
       lastMessageAt: number;
       messageCount: number;
+      latestSenderName?: string;
     }
   >();
 
@@ -358,6 +600,8 @@ async function loadInboxChats(
     const key = memory.roomId;
     if (!key) continue;
     const ts = memory.createdAt ?? 0;
+    const senderName =
+      extractFrom(memory) ?? extractFromUserName(memory) ?? undefined;
 
     const existing = accumulator.get(key);
     if (!existing) {
@@ -366,12 +610,14 @@ async function loadInboxChats(
         lastMessageText: text.slice(0, INBOX_CHAT_PREVIEW_LENGTH),
         lastMessageAt: ts,
         messageCount: 1,
+        latestSenderName: senderName,
       });
     } else {
       existing.messageCount += 1;
       if (ts > existing.lastMessageAt) {
         existing.lastMessageAt = ts;
         existing.lastMessageText = text.slice(0, INBOX_CHAT_PREVIEW_LENGTH);
+        existing.latestSenderName = senderName;
       }
     }
   }
@@ -379,14 +625,23 @@ async function loadInboxChats(
   const chats: InboxChat[] = [];
   for (const [roomIdKey, entry] of accumulator) {
     const room = roomById.get(roomIdKey as UUID);
-    // Prefer the room's stored display name (plugins stamp this when
-    // they create the room for a connector thread). Fall back to the
-    // text-derived "source-roomId" form so the list still renders
-    // something rather than an empty row.
+    const liveDiscordTitle =
+      entry.source.toLowerCase() === "discord"
+        ? await resolveDiscordRoomTitle(runtime, room)
+        : null;
+    const storedTitle =
+      typeof room?.name === "string" && room.name.trim()
+        ? room.name.trim()
+        : null;
+    const dmFallbackTitle =
+      room?.type === "DM" && entry.latestSenderName
+        ? entry.latestSenderName
+        : null;
     const title =
-      (typeof room?.name === "string" && room.name.length > 0
-        ? room.name
-        : null) ?? `${entry.source} chat`;
+      liveDiscordTitle ??
+      storedTitle ??
+      dmFallbackTitle ??
+      `${entry.source} chat`;
     chats.push({
       id: roomIdKey,
       source: entry.source,

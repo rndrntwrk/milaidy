@@ -72,6 +72,10 @@ export interface ConversationMessage {
   source?: string;
   /** Username of the sender (e.g. viewer username, discord username). */
   from?: string;
+  /** Connector username/handle when available. */
+  fromUserName?: string;
+  /** Sender avatar URL when the connector can provide one. */
+  avatarUrl?: string;
   /** True when the SSE stream was interrupted before receiving a "done" event. */
   interrupted?: boolean;
 }

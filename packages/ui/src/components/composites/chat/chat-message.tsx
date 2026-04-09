@@ -10,9 +10,10 @@ import {
   useState,
 } from "react";
 
+import { cn } from "../../../lib/utils";
 import { Button } from "../../ui/button";
 import { Textarea } from "../../ui/textarea";
-import { ChatBubble, ChatBubbleSourceLabel } from "./chat-bubble";
+import { ChatBubble } from "./chat-bubble";
 import { ChatMessageActions } from "./chat-message-actions";
 import type { ChatMessageData, ChatMessageLabels } from "./chat-types";
 
@@ -26,6 +27,70 @@ export interface ChatMessageProps {
   onDelete?: (messageId: string) => void;
   onEdit?: (messageId: string, text: string) => Promise<boolean> | boolean;
   onSpeak?: (messageId: string, text: string) => void;
+}
+
+function normalizeSenderHandle(handle?: string): string | null {
+  if (typeof handle !== "string") return null;
+  const trimmed = handle.trim();
+  if (!trimmed) return null;
+  return trimmed.startsWith("@") ? trimmed : `@${trimmed}`;
+}
+
+function resolveSenderDisplayName(message: ChatMessageData): string | null {
+  const from = typeof message.from === "string" ? message.from.trim() : "";
+  if (from) return from;
+  return normalizeSenderHandle(message.fromUserName);
+}
+
+function resolveSenderHandle(
+  message: ChatMessageData,
+  displayName: string | null,
+): string | null {
+  const handle = normalizeSenderHandle(message.fromUserName);
+  if (!handle) return null;
+  if (
+    displayName?.replace(/^@/, "").toLowerCase() ===
+    handle.slice(1).toLowerCase()
+  ) {
+    return null;
+  }
+  return handle;
+}
+
+function senderInitials(label: string): string {
+  const parts = label.trim().split(/\s+/).filter(Boolean);
+  const initials = parts
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("");
+  return (initials || label.slice(0, 1).toUpperCase() || "?").slice(0, 2);
+}
+
+function SenderAvatar({
+  avatarUrl,
+  label,
+}: {
+  avatarUrl?: string;
+  label: string;
+}) {
+  if (avatarUrl) {
+    return (
+      <img
+        src={avatarUrl}
+        alt={`${label} avatar`}
+        className="h-7 w-7 shrink-0 rounded-full border border-border/25 object-cover shadow-[0_10px_18px_-16px_rgba(15,23,42,0.5)]"
+      />
+    );
+  }
+
+  return (
+    <div
+      aria-hidden="true"
+      className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-accent/18 bg-[linear-gradient(180deg,rgba(var(--accent-rgb),0.18),rgba(var(--accent-rgb),0.08))] text-[10px] font-semibold uppercase tracking-[0.08em] text-txt-strong shadow-[0_10px_18px_-16px_rgba(var(--accent-rgb),0.45)]"
+    >
+      {senderInitials(label)}
+    </div>
+  );
 }
 
 export const ChatMessage = memo(function ChatMessage({
@@ -61,6 +126,20 @@ export const ChatMessage = memo(function ChatMessage({
   const canPlay = Boolean(
     !isUser && typeof onSpeak === "function" && message.text.trim(),
   );
+  const normalizedSource =
+    typeof message.source === "string" &&
+    message.source.trim().toLowerCase() !== "milady"
+      ? message.source
+      : undefined;
+  const senderDisplayName = isUser ? resolveSenderDisplayName(message) : null;
+  const senderHandle = isUser
+    ? resolveSenderHandle(message, senderDisplayName)
+    : null;
+  const senderPrimaryLabel = senderDisplayName ?? senderHandle ?? "User";
+  const showSenderHeader =
+    isUser &&
+    !isGrouped &&
+    Boolean(senderDisplayName || senderHandle || message.avatarUrl);
 
   const handleCopy = useCallback(() => {
     onCopy?.(message.text);
@@ -212,7 +291,13 @@ export const ChatMessage = memo(function ChatMessage({
       onMouseEnter={supportsHover ? () => setShowActions(true) : undefined}
       onMouseLeave={supportsHover ? () => setShowActions(false) : undefined}
       onTouchEnd={handleTapReveal}
-      aria-label={`${isUser ? "Your" : agentName} message`}
+      aria-label={`${
+        isUser && showSenderHeader
+          ? senderPrimaryLabel
+          : isUser
+            ? "Your"
+            : agentName
+      } message`}
     >
       <div
         className={`max-w-[88%] min-w-0 sm:max-w-[80%] ${isUser ? "mr-1" : ""}`}
@@ -222,19 +307,27 @@ export const ChatMessage = memo(function ChatMessage({
             {agentName}
           </div>
         ) : null}
-        {/*
-          Source label: only shown for cross-channel messages (iMessage,
-          Telegram, Discord, etc.). Regular dashboard/API messages leave
-          `source` unset or equal to "api"/"client_chat" and render with
-          no label. The server strips "client_chat" before returning so
-          it never reaches this component.
-        */}
-        {message.source ? (
-          <ChatBubbleSourceLabel source={message.source} />
+        {showSenderHeader ? (
+          <div className="mb-1 flex items-center justify-end gap-2">
+            <div className="min-w-0 text-right">
+              <div className="truncate text-[12px] font-semibold text-txt-strong">
+                {senderPrimaryLabel}
+              </div>
+              {senderHandle ? (
+                <div className="truncate text-[11px] text-muted">
+                  {senderHandle}
+                </div>
+              ) : null}
+            </div>
+            <SenderAvatar
+              avatarUrl={message.avatarUrl}
+              label={senderPrimaryLabel}
+            />
+          </div>
         ) : null}
         <ChatBubble
           tone={isUser ? "user" : "assistant"}
-          source={message.source}
+          source={normalizedSource}
           className={`relative group rounded-[18px] px-4 py-3 text-[15px] leading-[1.7] whitespace-pre-wrap break-words ${
             isUser ? "rounded-br-[6px]" : "rounded-bl-[6px]"
           }`}
@@ -293,11 +386,15 @@ export const ChatMessage = memo(function ChatMessage({
 
           {!isEditing ? (
             <div
-              className={`absolute ${
-                isUser ? "left-0 -translate-x-full" : "right-0 translate-x-full"
-              } top-0 flex items-center gap-1 transition-opacity duration-200 ${
-                actionsVisible ? "opacity-100" : "pointer-events-none opacity-0"
-              }`}
+              className={cn(
+                "absolute top-0 flex items-center gap-1 transition-opacity duration-200",
+                isUser
+                  ? "left-0 -translate-x-full"
+                  : "right-0 translate-x-full",
+                actionsVisible
+                  ? "opacity-100"
+                  : "pointer-events-none opacity-0",
+              )}
             >
               <ChatMessageActions
                 canDelete={Boolean(onDelete)}

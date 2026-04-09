@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { _resetMissingSendHandlerLogsForTests } from "./send-handler-availability.js";
 
 // ---------------------------------------------------------------------------
 // Hoisted mocks
@@ -41,6 +42,7 @@ import { EscalationService } from "./escalation.js";
 function makeRuntime(overrides?: Record<string, unknown>) {
   return {
     agentId: "agent-1" as UUID,
+    sendHandlers: new Map<string, unknown>([["client_chat", vi.fn()]]),
     sendMessageToTarget: mockSendMessageToTarget,
     getRoomsForParticipant: mockGetRoomsForParticipant,
     getMemoriesByRoomIds: mockGetMemoriesByRoomIds,
@@ -48,7 +50,10 @@ function makeRuntime(overrides?: Record<string, unknown>) {
   } as never;
 }
 
-function setConfig(escalation?: Record<string, unknown>, ownerContacts?: Record<string, unknown>) {
+function setConfig(
+  escalation?: Record<string, unknown>,
+  ownerContacts?: Record<string, unknown>,
+) {
   mockLoadElizaConfig.mockReturnValue({
     agents: {
       defaults: {
@@ -68,6 +73,7 @@ function setConfig(escalation?: Record<string, unknown>, ownerContacts?: Record<
 describe("EscalationService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    _resetMissingSendHandlerLogsForTests();
     EscalationService._reset();
     mockSendMessageToTarget.mockResolvedValue(undefined);
     mockGetRoomsForParticipant.mockResolvedValue([]);
@@ -147,10 +153,7 @@ describe("EscalationService", () => {
 
   it("falls back to the resolved owner entity for discord escalation", async () => {
     mockResolveOwnerEntityId.mockResolvedValue("owner-discord-uuid");
-    setConfig(
-      { channels: ["discord"], waitMinutes: 5, maxRetries: 1 },
-      {},
-    );
+    setConfig({ channels: ["discord"], waitMinutes: 5, maxRetries: 1 }, {});
 
     const state = await EscalationService.startEscalation(
       makeRuntime(),
@@ -172,6 +175,17 @@ describe("EscalationService", () => {
         }),
       }),
     );
+  });
+
+  it("skips client_chat escalation delivery until the send handler is registered", async () => {
+    const state = await EscalationService.startEscalation(
+      makeRuntime({ sendHandlers: new Map<string, unknown>() }),
+      "test reason",
+      "Something needs attention",
+    );
+
+    expect(state.channelsSent).toEqual([]);
+    expect(mockSendMessageToTarget).not.toHaveBeenCalled();
   });
 
   // -----------------------------------------------------------------------
@@ -449,6 +463,8 @@ describe("EscalationService", () => {
 
   it("resolveEscalation is idempotent", () => {
     // Resolving a non-existent escalation should not throw.
-    expect(() => EscalationService.resolveEscalation("nonexistent")).not.toThrow();
+    expect(() =>
+      EscalationService.resolveEscalation("nonexistent"),
+    ).not.toThrow();
   });
 });

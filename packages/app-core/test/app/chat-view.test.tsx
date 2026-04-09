@@ -2,7 +2,7 @@
 import React from "react";
 import TestRenderer, { act } from "react-test-renderer";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { text, textOf, flush } from "../../../../test/helpers/react-test";
+import { flush, text, textOf } from "../../../../test/helpers/react-test";
 
 interface ChatViewContextStub {
   agentStatus: {
@@ -10,6 +10,7 @@ interface ChatViewContextStub {
     state?: string;
   } | null;
   activeConversationId: string | null;
+  activeInboxChat: { id: string; source: string; title: string } | null;
   chatInput: string;
   chatSending: boolean;
   chatFirstTokenReceived: boolean;
@@ -19,8 +20,12 @@ interface ChatViewContextStub {
     role: "user" | "assistant";
     text: string;
     timestamp: number;
+    from?: string;
+    fromUserName?: string;
+    avatarUrl?: string;
     source?: string;
   }>;
+  characterData?: { name?: string } | null;
   handleChatSend: (channelType?: string) => Promise<void>;
   handleChatStop: () => void;
   setState: (key: string, value: unknown) => void;
@@ -60,6 +65,7 @@ const { mockClient, mockUseApp, mockUseVoiceChat, mockIsDesktopPlatform } =
     mockClient: {
       getCodingAgentStatus: vi.fn(async () => null),
       getConfig: vi.fn().mockResolvedValue({}),
+      getInboxMessages: vi.fn(async () => ({ messages: [], count: 0 })),
     },
     mockUseApp: vi.fn(),
     mockUseVoiceChat: vi.fn(),
@@ -106,11 +112,13 @@ function createContext(
   return {
     agentStatus: { agentName: "Milady", state: "running" },
     activeConversationId: "conv-1",
+    activeInboxChat: null,
     chatInput: "",
     chatSending: false,
     chatFirstTokenReceived: false,
     companionMessageCutoffTs: 0,
     conversationMessages: [],
+    characterData: null,
     handleChatSend: vi.fn(async () => {}),
     handleChatStop: vi.fn(),
     setState: vi.fn(),
@@ -147,6 +155,7 @@ describe("ChatView", () => {
     mockUseVoiceChat.mockReset();
     mockIsDesktopPlatform.mockReset();
     mockClient.getConfig.mockReset();
+    mockClient.getInboxMessages.mockReset();
     Object.defineProperty(window, "dispatchEvent", {
       value: vi.fn(),
       configurable: true,
@@ -172,6 +181,7 @@ describe("ChatView", () => {
       assistantTtsQuality: "standard",
     });
     mockClient.getConfig.mockResolvedValue({});
+    mockClient.getInboxMessages.mockResolvedValue({ messages: [], count: 0 });
     mockIsDesktopPlatform.mockReturnValue(false);
   });
 
@@ -793,6 +803,53 @@ describe("ChatView", () => {
     expect(removeButton.props["aria-label"]).toBe("Remove image receipt.png");
     expect(String(removeButton.props.className)).toContain("opacity-100");
     expect(String(removeButton.props.className)).toContain("sm:opacity-0");
+  });
+
+  it("renders inbox chats with a source icon instead of a textual provider badge", async () => {
+    mockClient.getInboxMessages.mockResolvedValue({
+      count: 1,
+      messages: [
+        {
+          id: "msg-1",
+          roomId: "room-1",
+          role: "user",
+          text: "hello from discord",
+          timestamp: 1,
+          source: "discord",
+          from: "James",
+          fromUserName: "james",
+          avatarUrl: "/avatars/james.png",
+        },
+      ],
+    });
+    mockUseApp.mockReturnValue(
+      createContext({
+        activeConversationId: null,
+        activeInboxChat: {
+          id: "room-1",
+          source: "discord",
+          title: "General Chat",
+        },
+      }),
+    );
+
+    let tree: TestRenderer.ReactTestRenderer | undefined;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(ChatView));
+    });
+    await flush();
+
+    const root = tree?.root;
+    expect(textOf(root)).toContain("General Chat");
+    expect(textOf(root)).toContain("James");
+    expect(textOf(root)).not.toContain("Discord");
+    expect(
+      root?.findAll(
+        (node) =>
+          node.props["data-testid"] === "chat-source-icon" &&
+          node.props["data-source"] === "discord",
+      ),
+    ).toHaveLength(1);
   });
 });
 

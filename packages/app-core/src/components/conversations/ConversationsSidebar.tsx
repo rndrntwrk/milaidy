@@ -115,24 +115,19 @@ export function ConversationsSidebar({
   const [searchQuery, setSearchQuery] = useState("");
 
   const sortedConversations = useMemo(() => {
-    // Normalize dashboard conversations to the sidebar row shape. We
-    // tag these with source "milady" so the ChatConversationItem
-    // primitive renders a gold Milady chip — giving every row in the
-    // unified sidebar a clear channel indicator, so users never have
-    // to guess whether a thread is a native dashboard conversation
-    // or a connector chat.
+    // Native dashboard conversations stay untagged in the sidebar.
+    // Connector chats carry their own source marker; internal chats do
+    // not need a Milady badge.
     const webChatRows = conversations.map((conversation) => ({
       id: conversation.id,
       title: getLocalizedConversationTitle(conversation.title, t),
-      source: "milady",
       updatedAtLabel: formatRelativeTime(conversation.updatedAt, t),
       sortKey: new Date(conversation.updatedAt).getTime(),
     }));
 
-    // Normalize connector chats. The `source` field drives the colored
-    // channel chip rendered by ChatConversationItem — no need to embed
-    // a [Source] prefix in the title since the primitive now has a
-    // real slot for it.
+    // Normalize connector chats. The `source` field drives the icon +
+    // label chip rendered by ChatConversationItem, so titles can stay
+    // focused on the room or contact name.
     const inboxRows = inboxChats.map((chat) => {
       const isoDate = new Date(chat.lastMessageAt).toISOString();
       return {
