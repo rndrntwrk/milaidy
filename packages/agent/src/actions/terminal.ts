@@ -84,7 +84,22 @@ export const terminalAction: Action = {
     "Only use when the user gives a specific command like 'run ls -la' or 'execute npm install'. " +
     "Do NOT use for building projects, creating websites, or multi-step work — use CREATE_TASK instead.",
 
-  validate: async () => true,
+  validate: async (_runtime, message) => {
+    // Only match messages that contain an explicit command the user typed.
+    // Natural-language questions ("what's the price of bitcoin") should go
+    // through CREATE_TASK where the subagent (claude code) has full bash and
+    // will figure out what to run. RUN_IN_TERMINAL is for when the user
+    // literally gives you a command to execute.
+    const text = (message?.content?.text ?? "").trim();
+    if (!text) return false;
+    // Backtick-wrapped command: `df -h`
+    if (/`[^`]+`/.test(text)) return true;
+    // Code-fenced command
+    if (/```/.test(text)) return true;
+    // Explicit "run/execute/start" keyword
+    if (/\b(?:run|execute|start)\s+\S/i.test(text)) return true;
+    return false;
+  },
 
   handler: async (_runtime, _message, _state, options) => {
     const command = getCommand(
