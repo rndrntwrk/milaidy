@@ -31,6 +31,7 @@ export function AppsCatalogGrid({
   onToggleActiveOnly,
 }: AppsCatalogGridProps) {
   const { t } = useApp();
+  const launchLabel = t("appsview.Launch", { defaultValue: "Launch" });
 
   return (
     <div data-testid="apps-catalog-grid">
@@ -90,6 +91,14 @@ export function AppsCatalogGrid({
                 key={app.name}
                 type="button"
                 data-testid={`app-card-${app.name.replace(/[^a-z0-9]+/gi, "-")}`}
+                title={t("appsview.Open", {
+                  name: displayName,
+                  defaultValue: `Open ${displayName}`,
+                })}
+                aria-label={t("appsview.Open", {
+                  name: displayName,
+                  defaultValue: `Open ${displayName}`,
+                })}
                 className="group flex flex-col rounded-2xl border border-border/35 bg-card/72 p-4 text-left transition-all hover:border-accent/25 hover:bg-bg-hover/70"
                 onClick={() => onSelectApp(app.name)}
               >
@@ -121,7 +130,7 @@ export function AppsCatalogGrid({
                       onLaunch(app);
                     }}
                   >
-                    Launch
+                    {launchLabel}
                   </Button>
                 </div>
                 <p className="mt-3 line-clamp-2 text-[12px] leading-5 text-muted-strong">

@@ -80,6 +80,124 @@ const hasLocalHyperscapePlugin = existsSync(
   new URL("elizaos.plugin.json", hyperscapeLocalPluginUrl),
 );
 
+function jsonResponse(payload: unknown, init?: ResponseInit): Response {
+  return new Response(JSON.stringify(payload), {
+    status: init?.status ?? 200,
+    headers: {
+      "content-type": "application/json",
+      ...(init?.headers ?? {}),
+    },
+  });
+}
+
+function createHyperscapeApiFetchMock() {
+  return vi.fn(async (input: string | URL) => {
+    const url = String(input);
+
+    if (url.includes("generated-registry.json")) {
+      return jsonResponse({
+        registry: {
+          [HYPERSCAPE_LOCAL_PLUGIN.name]: {
+            git: {
+              repo: HYPERSCAPE_LOCAL_PLUGIN.gitRepo,
+              v0: { branch: null },
+              v1: { branch: "main" },
+              v2: { branch: "main" },
+            },
+            npm: {
+              repo: HYPERSCAPE_LOCAL_PLUGIN.npm.package,
+              v0: HYPERSCAPE_LOCAL_PLUGIN.npm.v0Version,
+              v1: HYPERSCAPE_LOCAL_PLUGIN.npm.v1Version,
+              v2: HYPERSCAPE_LOCAL_PLUGIN.npm.v2Version,
+            },
+            supports: HYPERSCAPE_LOCAL_PLUGIN.supports,
+            description: HYPERSCAPE_LOCAL_PLUGIN.description,
+            homepage: HYPERSCAPE_LOCAL_PLUGIN.homepage,
+            topics: HYPERSCAPE_LOCAL_PLUGIN.topics,
+            stargazers_count: HYPERSCAPE_LOCAL_PLUGIN.stars,
+            language: HYPERSCAPE_LOCAL_PLUGIN.language,
+            kind: "app",
+            app: {
+              displayName: HYPERSCAPE_LOCAL_PLUGIN.displayName,
+              category: HYPERSCAPE_LOCAL_PLUGIN.category,
+              launchType: HYPERSCAPE_LOCAL_PLUGIN.launchType,
+              launchUrl: HYPERSCAPE_LOCAL_PLUGIN.launchUrl,
+              icon: HYPERSCAPE_LOCAL_PLUGIN.icon,
+              capabilities: HYPERSCAPE_LOCAL_PLUGIN.capabilities,
+              minPlayers: null,
+              maxPlayers: null,
+              runtimePlugin: HYPERSCAPE_LOCAL_PLUGIN.runtimePlugin,
+              bridgeExport: HYPERSCAPE_LOCAL_PLUGIN.bridgeExport,
+              uiExtension: HYPERSCAPE_LOCAL_PLUGIN.uiExtension,
+              viewer: HYPERSCAPE_LOCAL_PLUGIN.viewer,
+              session: HYPERSCAPE_LOCAL_PLUGIN.session,
+            },
+          },
+        },
+      });
+    }
+
+    if (url.endsWith("/index.json")) {
+      return jsonResponse({
+        [HYPERSCAPE_LOCAL_PLUGIN.name]: `github:${HYPERSCAPE_LOCAL_PLUGIN.gitRepo}`,
+      });
+    }
+
+    if (url.endsWith("/api/embedded-agents")) {
+      return jsonResponse({
+        success: true,
+        agents: [
+          {
+            agentId: "agent-123",
+            characterId: "test-character-id",
+            entityId: "test-character-id",
+            name: "Hyperscape",
+            state: "connecting",
+            startedAt: 1_710_000_000_000,
+            lastActivity: 1_710_000_030_000,
+          },
+        ],
+      });
+    }
+
+    if (url.includes("/api/agents/agent-123/goal")) {
+      return jsonResponse({
+        success: true,
+        message: "Connecting session...",
+        goalsPaused: false,
+        availableGoals: [],
+      });
+    }
+
+    if (url.includes("/api/agents/agent-123/quick-actions")) {
+      return jsonResponse({
+        success: true,
+        message: "Connecting session...",
+        quickCommands: [],
+        nearbyLocations: [],
+      });
+    }
+
+    if (url.includes("/api/agents/agent-123/thoughts")) {
+      return jsonResponse(
+        {
+          success: false,
+          error: "thoughts unavailable",
+        },
+        { status: 404 },
+      );
+    }
+
+    return jsonResponse(
+      {
+        success: false,
+        error: `Unhandled Hyperscape test fetch: ${url}`,
+      },
+      { status: 404 },
+    );
+  });
+}
+
 function clonePluginInfo(plugin: RegistryPluginInfo): RegistryPluginInfo {
   return structuredClone(plugin);
 }
@@ -156,13 +274,16 @@ describeIf(hasLocalHyperscapePlugin)("Hyperscape E2E Integration", () => {
     originalEnv = {
       HYPERSCAPE_CHARACTER_ID: process.env.HYPERSCAPE_CHARACTER_ID,
       HYPERSCAPE_AUTH_TOKEN: process.env.HYPERSCAPE_AUTH_TOKEN,
+      HYPERSCAPE_API_URL: process.env.HYPERSCAPE_API_URL,
       HYPERSCAPE_CLIENT_URL: process.env.HYPERSCAPE_CLIENT_URL,
     };
 
     // Set test credentials for hyperscape authentication
     process.env.HYPERSCAPE_CHARACTER_ID = "test-character-id";
     process.env.HYPERSCAPE_AUTH_TOKEN = "test-auth-token";
+    process.env.HYPERSCAPE_API_URL = "http://localhost:3333";
     process.env.HYPERSCAPE_CLIENT_URL = "http://localhost:3333";
+    vi.stubGlobal("fetch", createHyperscapeApiFetchMock());
 
     appManager = new AppManager();
     pluginManager = createMockPluginManager();
@@ -177,6 +298,7 @@ describeIf(hasLocalHyperscapePlugin)("Hyperscape E2E Integration", () => {
         process.env[key] = value;
       }
     }
+    vi.unstubAllGlobals();
   });
 
   describe("App Discovery", () => {

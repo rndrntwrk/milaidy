@@ -1006,11 +1006,15 @@ describe("Version Skew Detection (issue #10)", () => {
     expect(CORE_PLUGINS).not.toContain("trajectories");
   });
 
-  it("native trajectories are runtime services, not a published core plugin export", () => {
+  it("trajectories stays aligned with the core runtime export surface", () => {
     expect(OPTIONAL_CORE_PLUGINS).not.toContain("trajectories");
     const coreMod = import("@elizaos/core") as Promise<Record<string, unknown>>;
     return coreMod.then((mod) => {
-      expect(mod.trajectoriesPlugin).toBeUndefined();
+      expect(mod.trajectoriesPlugin).toEqual(
+        expect.objectContaining({
+          name: "trajectories",
+        }),
+      );
     });
   });
 });

@@ -1,5 +1,4 @@
 import { Button } from "@miladyai/ui";
-import type React from "react";
 import type { RegistryAppInfo } from "../../api";
 import { useApp } from "../../state";
 import { getAppDetailExtension } from "./extensions/registry";
@@ -21,29 +20,6 @@ interface AppDetailPaneProps {
   onOpenCurrentGameInNewTab: () => void;
 }
 
-function Badge({
-  children,
-  tone = "neutral",
-}: {
-  children: React.ReactNode;
-  tone?: "neutral" | "accent" | "success";
-}) {
-  const toneClassName =
-    tone === "success"
-      ? "border-ok/30 bg-ok/10 text-ok"
-      : tone === "accent"
-        ? "border-accent/25 bg-accent/10 text-accent"
-        : "border-border/35 bg-bg-hover/70 text-muted-strong";
-
-  return (
-    <span
-      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.14em] ${toneClassName}`}
-    >
-      {children}
-    </span>
-  );
-}
-
 export function AppDetailPane({
   app,
   busy,
@@ -61,40 +37,48 @@ export function AppDetailPane({
     t("appsview.NoDescriptionAvailable", {
       defaultValue: "No description available.",
     });
+  const backLabel = t("appsview.Back", { defaultValue: "Back" });
   const sessionModeLabel = getAppSessionModeLabel(app);
   const sessionFeatures = getAppSessionFeatureLabels(app);
+  const allTags = [
+    ...sessionFeatures,
+    ...(app.capabilities ?? []),
+  ];
   const launchLabel = busy
     ? t("appsview.Launching", { defaultValue: "Launching..." })
     : t("appsview.Launch", { defaultValue: "Launch" });
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" data-testid="apps-detail-panel">
       <button
         type="button"
         className="text-[12px] font-medium text-muted-strong transition-colors hover:text-txt"
         onClick={onBack}
       >
-        ← Back
+        ← {backLabel}
       </button>
 
-      <div className="flex flex-col gap-4 rounded-2xl border border-border/35 bg-card/72 p-5 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-4">
-          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-border/35 bg-bg/80 text-2xl">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-border/35 bg-bg/80 text-xl">
             {getAppEmoji(app)}
           </div>
           <div>
             <h2 className="text-lg font-semibold text-txt">
               {app.displayName ?? app.name}
             </h2>
-            <div className="mt-1.5 flex flex-wrap gap-1.5">
-              {isActive ? <Badge tone="success">Active</Badge> : null}
+            <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-strong">
+              {isActive ? (
+                <span className="text-ok">Active</span>
+              ) : null}
               {app.category ? (
-                <Badge>
-                  {CATEGORY_LABELS[app.category] ?? app.category}
-                </Badge>
+                <span>{CATEGORY_LABELS[app.category] ?? app.category}</span>
               ) : null}
               {sessionModeLabel ? (
-                <Badge tone="accent">{sessionModeLabel}</Badge>
+                <span className="text-accent">{sessionModeLabel}</span>
+              ) : null}
+              {app.latestVersion ? (
+                <span className="font-mono">v{app.latestVersion}</span>
               ) : null}
             </div>
           </div>
@@ -139,36 +123,18 @@ export function AppDetailPane({
         {description}
       </p>
 
-      <div className="grid gap-2 text-[12px] sm:grid-cols-2 lg:grid-cols-4">
-        {app.launchType ? (
-          <div className="rounded-xl border border-border/30 bg-card/60 px-3 py-2">
-            <span className="text-muted">Launch</span>
-            <span className="ml-2 text-txt">{app.launchType}</span>
-          </div>
-        ) : null}
-        {sessionModeLabel ? (
-          <div className="rounded-xl border border-border/30 bg-card/60 px-3 py-2">
-            <span className="text-muted">Session</span>
-            <span className="ml-2 text-txt">{sessionModeLabel}</span>
-          </div>
-        ) : null}
-        {app.latestVersion ? (
-          <div className="rounded-xl border border-border/30 bg-card/60 px-3 py-2">
-            <span className="text-muted">Version</span>
-            <span className="ml-2 font-mono text-txt">
-              v{app.latestVersion}
+      {allTags.length > 0 ? (
+        <div className="flex flex-wrap gap-1.5">
+          {allTags.map((tag) => (
+            <span
+              key={tag}
+              className="rounded-full border border-border/30 bg-bg-hover/70 px-2 py-0.5 text-[10px] text-muted-strong"
+            >
+              {tag}
             </span>
-          </div>
-        ) : null}
-        {app.launchUrl ? (
-          <div className="overflow-hidden rounded-xl border border-border/30 bg-card/60 px-3 py-2">
-            <span className="text-muted">URL</span>
-            <span className="ml-2 truncate text-muted-strong">
-              {app.launchUrl}
-            </span>
-          </div>
-        ) : null}
-      </div>
+          ))}
+        </div>
+      ) : null}
 
       {app.repository ? (
         <a
@@ -179,31 +145,6 @@ export function AppDetailPane({
         >
           {app.repository}
         </a>
-      ) : null}
-
-      {sessionFeatures.length > 0 || (app.capabilities?.length ?? 0) > 0 ? (
-        <div className="flex flex-wrap gap-1.5">
-          {sessionFeatures.map((feature) => (
-            <Badge key={feature} tone="accent">
-              {feature}
-            </Badge>
-          ))}
-          {(app.capabilities ?? []).map((capability) => (
-            <Badge key={capability}>{capability}</Badge>
-          ))}
-        </div>
-      ) : null}
-
-      {app.viewer ? (
-        <div className="rounded-xl border border-border/30 bg-card/60 p-3 text-[12px]">
-          <div className="mb-1.5 text-[10px] font-medium uppercase tracking-[0.14em] text-muted">
-            Viewer
-          </div>
-          <div className="space-y-1 text-muted-strong">
-            <div className="break-all">{app.viewer.url}</div>
-            {app.viewer.postMessageAuth ? <div>Auth: enabled</div> : null}
-          </div>
-        </div>
       ) : null}
 
       {DetailExtension ? (

@@ -22,6 +22,10 @@
 	path = plugins/plugin-anthropic
 	url = https://github.com/elizaos-plugins/plugin-anthropic.git
 	branch = alpha
+[submodule "plugins/plugin-coding-agent"]
+	path = plugins/plugin-coding-agent
+	url = https://github.com/elizaos-plugins/plugin-coding-agent.git
+	branch = alpha
 [submodule "plugins/plugin-commands"]
 	path = plugins/plugin-commands
 	url = https://github.com/elizaos-plugins/plugin-commands.git

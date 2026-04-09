@@ -1,13 +1,105 @@
-import { Service, type IAgentRuntime, type Memory, type UUID } from "@elizaos/core";
+import { Service, ModelType, type IAgentRuntime } from "@elizaos/core";
 import { BotManager } from "./bot-manager.js";
 import { BotActions } from "../sdk/actions.js";
 import type { BotState, ActionResult, EventLogEntry } from "../sdk/types.js";
 import { startGateway, type GatewayHandle } from "../gateway/index.js";
 import { setCurrentLlmResponse } from "../shared-state.js";
+import { botStateProvider } from "../providers/bot-state.js";
+import { goalsProvider } from "../providers/goals.js";
+import { mapAreaProvider } from "../providers/map-area.js";
+import { worldKnowledgeProvider } from "../providers/world-knowledge.js";
 
 const DEFAULT_GATEWAY_PORT = 18791;
 const DEFAULT_LOOP_INTERVAL_MS = 15_000;
 const MAX_EVENT_LOG = 30;
+
+/** Map user-facing size names to ModelType constants. */
+const MODEL_SIZE_MAP: Record<string, string> = {
+  TEXT_NANO: ModelType.TEXT_NANO,
+  TEXT_MINI: ModelType.TEXT_MINI,
+  TEXT_SMALL: ModelType.TEXT_SMALL,
+  TEXT_LARGE: ModelType.TEXT_LARGE,
+  NANO: ModelType.TEXT_NANO,
+  MINI: ModelType.TEXT_MINI,
+  SMALL: ModelType.TEXT_SMALL,
+  LARGE: ModelType.TEXT_LARGE,
+};
+
+const DEFAULT_MODEL_SIZE = ModelType.TEXT_SMALL;
+
+/** All actions the LLM can choose from. Name → param hint shown in prompt. */
+const ACTION_LIST = [
+  { name: "WALK_TO", params: "<destination>name</destination> OR <x>N</x><z>N</z>" },
+  { name: "OPEN_DOOR", params: "(no params — opens nearest door/gate)" },
+  { name: "TALK_TO_NPC", params: "<npc>name</npc>" },
+  { name: "NAVIGATE_DIALOG", params: "<option>1-based index</option>" },
+  { name: "INTERACT_OBJECT", params: "<object>name</object> <option>action</option>" },
+  { name: "CHOP_TREE", params: "<tree>type (optional)</tree>" },
+  { name: "MINE_ROCK", params: "<rock>type (optional)</rock>" },
+  { name: "FISH", params: "<spot>type (optional)</spot>" },
+  { name: "ATTACK_NPC", params: "<npc>name</npc>" },
+  { name: "EAT_FOOD", params: "(no params — eats first food found)" },
+  { name: "SET_COMBAT_STYLE", params: "<style>0=Atk 1=Str 2=Def 3=Ctrl</style>" },
+  { name: "DROP_ITEM", params: "<item>name</item>" },
+  { name: "PICKUP_ITEM", params: "<item>name</item>" },
+  { name: "EQUIP_ITEM", params: "<item>name</item>" },
+  { name: "UNEQUIP_ITEM", params: "<item>name</item>" },
+  { name: "USE_ITEM", params: "<item>name</item>" },
+  { name: "USE_ITEM_ON_ITEM", params: "<item1>name</item1><item2>name</item2>" },
+  { name: "USE_ITEM_ON_OBJECT", params: "<item>name</item><object>name</object>" },
+  { name: "OPEN_BANK", params: "(no params — finds nearest bank)" },
+  { name: "CLOSE_BANK", params: "(no params)" },
+  { name: "DEPOSIT_ITEM", params: "<item>name</item> <count>N (optional)</count>" },
+  { name: "WITHDRAW_ITEM", params: "<item>name</item> <count>N (optional)</count>" },
+  { name: "OPEN_SHOP", params: "<npc>shopkeeper name</npc>" },
+  { name: "CLOSE_SHOP", params: "(no params)" },
+  { name: "BUY_FROM_SHOP", params: "<item>name</item> <count>N</count>" },
+  { name: "SELL_TO_SHOP", params: "<item>name</item> <count>N</count>" },
+  { name: "BURN_LOGS", params: "(no params — uses tinderbox on logs)" },
+  { name: "COOK_FOOD", params: "<food>raw food name (optional)</food>" },
+  { name: "FLETCH_LOGS", params: "(no params)" },
+  { name: "CRAFT_LEATHER", params: "(no params)" },
+  { name: "SMITH_AT_ANVIL", params: "<item>item to smith (optional)</item>" },
+  { name: "PICKPOCKET_NPC", params: "<npc>name</npc>" },
+  { name: "CAST_SPELL", params: "<spell>spellId</spell> <target>npcNid (optional)</target>" },
+];
+
+/** Map action names from LLM response to dispatch keys. */
+const ACTION_NAME_TO_DISPATCH: Record<string, string> = {
+  WALK_TO: "walkTo",
+  OPEN_DOOR: "openDoor",
+  TALK_TO_NPC: "talkToNpc",
+  NAVIGATE_DIALOG: "navigateDialog",
+  INTERACT_OBJECT: "interactObject",
+  CHOP_TREE: "chopTree",
+  MINE_ROCK: "mineRock",
+  FISH: "fish",
+  ATTACK_NPC: "attackNpc",
+  EAT_FOOD: "eatFood",
+  SET_COMBAT_STYLE: "setCombatStyle",
+  DROP_ITEM: "dropItem",
+  PICKUP_ITEM: "pickupItem",
+  EQUIP_ITEM: "equipItem",
+  UNEQUIP_ITEM: "unequipItem",
+  USE_ITEM: "useItem",
+  USE_ITEM_ON_ITEM: "useItemOnItem",
+  USE_ITEM_ON_OBJECT: "useItemOnObject",
+  OPEN_BANK: "openBank",
+  CLOSE_BANK: "closeBank",
+  DEPOSIT_ITEM: "depositItem",
+  WITHDRAW_ITEM: "withdrawItem",
+  OPEN_SHOP: "openShop",
+  CLOSE_SHOP: "closeShop",
+  BUY_FROM_SHOP: "buyFromShop",
+  SELL_TO_SHOP: "sellToShop",
+  BURN_LOGS: "burnLogs",
+  COOK_FOOD: "cookFood",
+  FLETCH_LOGS: "fletchLogs",
+  CRAFT_LEATHER: "craftLeather",
+  SMITH_AT_ANVIL: "smithAtAnvil",
+  PICKPOCKET_NPC: "pickpocketNpc",
+  CAST_SPELL: "castSpell",
+};
 
 export class RsSdkGameService extends Service {
   static serviceType = "rs_2004scape";
@@ -22,6 +114,7 @@ export class RsSdkGameService extends Service {
   private stepNumber = 0;
   private eventLog: EventLogEntry[] = [];
   private stopped = false;
+  private modelSize: string = DEFAULT_MODEL_SIZE;
 
   static async start(runtime: IAgentRuntime): Promise<Service> {
     const service = new RsSdkGameService(runtime);
@@ -35,6 +128,11 @@ export class RsSdkGameService extends Service {
     const username = this.resolveSetting("RS_SDK_BOT_NAME") ?? this.resolveSetting("BOT_NAME") ?? "";
     const password = this.resolveSetting("RS_SDK_BOT_PASSWORD") ?? this.resolveSetting("BOT_PASSWORD") ?? "";
     const gatewayUrl = this.resolveSetting("RS_SDK_GATEWAY_URL") ?? `ws://localhost:${gatewayPort}`;
+
+    // Configurable model size: TEXT_MINI, TEXT_SMALL (default), TEXT_LARGE, etc.
+    const sizeRaw = (this.resolveSetting("RS_2004SCAPE_MODEL_SIZE") ?? "").toUpperCase();
+    this.modelSize = MODEL_SIZE_MAP[sizeRaw] ?? DEFAULT_MODEL_SIZE;
+    this.log(`Model size: ${this.modelSize}`);
 
     if (!username) {
       this.log("No RS_SDK_BOT_NAME configured — game service will not auto-connect.");
@@ -142,86 +240,177 @@ export class RsSdkGameService extends Service {
     this.loopRunning = true;
 
     try {
-      const state = this.botManager?.getBotState();
-      if (!state?.connected || !state.inGame || !state.player) {
+      const botState = this.botManager?.getBotState();
+      if (!botState?.connected || !botState.inGame || !botState.player) {
         return;
       }
 
       this.stepNumber++;
-      this.log(`Autonomous step ${this.stepNumber}`);
 
-      // Build a prompt for the LLM
-      const stepPrompt = this.buildStepPrompt(state);
+      // 1. Gather provider context
+      const providerContext = await this.gatherProviderContext();
 
-      // Create a memory for the autonomous step
-      const memory: Memory = {
-        id: crypto.randomUUID() as UUID,
-        agentId: this.runtime.agentId,
-        userId: this.runtime.agentId,
-        roomId: this.runtime.agentId,
-        content: {
-          text: stepPrompt,
-          source: "rs_2004scape_game_loop",
-        },
-      };
+      // 2. Build the full prompt
+      const prompt = this.buildPrompt(botState, providerContext);
 
-      // Capture the LLM response for action parameter parsing
-      const originalProcessActions = this.runtime.processActions?.bind(this.runtime);
-      if (originalProcessActions && this.runtime.processActions) {
-        this.runtime.processActions = async (
-          message: Memory,
-          responses: Memory[],
-          state: unknown,
-          callback?: unknown,
-        ) => {
-          // Capture response text before actions process
-          for (const response of responses) {
-            if (response.content?.text) {
-              setCurrentLlmResponse(response.content.text);
-            }
-          }
-          return originalProcessActions(message, responses, state, callback);
-        };
+      // 3. Call the LLM with the configured model size
+      this.log(`Step ${this.stepNumber} — calling ${this.modelSize}`);
+      const response = await this.runtime.useModel(this.modelSize as any, {
+        prompt,
+        maxTokens: 400,
+      });
+
+      if (!response || typeof response !== "string" || response.trim().length === 0) {
+        this.log(`Step ${this.stepNumber} — empty LLM response`);
+        return;
       }
 
-      try {
-        // Send through the full elizaOS pipeline
-        await this.runtime.messageService?.handleMessage(memory, (response) => {
-          if (response.content?.text) {
-            this.log(`LLM response: ${response.content.text.slice(0, 200)}...`);
-          }
-        });
-      } finally {
-        // Restore original processActions
-        if (originalProcessActions) {
-          this.runtime.processActions = originalProcessActions;
-        }
+      this.log(`Step ${this.stepNumber} — LLM: ${response.slice(0, 200)}`);
+
+      // Store for action handlers that might read it
+      setCurrentLlmResponse(response);
+
+      // 4. Parse the chosen action from the response
+      const parsed = this.parseActionFromResponse(response);
+      if (!parsed) {
+        this.log(`Step ${this.stepNumber} — could not parse action from response`);
+        return;
       }
+
+      // 5. Execute the action
+      this.log(`Step ${this.stepNumber} — executing ${parsed.actionType}`);
+      const result = await this.executeAction(parsed.actionType, parsed.params);
+      this.log(`Step ${this.stepNumber} — ${result.action}: ${result.success ? "OK" : "FAIL"} — ${result.message}`);
     } catch (err) {
-      this.log(`Step error: ${err instanceof Error ? err.message : String(err)}`);
+      this.log(`Step ${this.stepNumber} error: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       this.loopRunning = false;
     }
   }
 
-  private buildStepPrompt(state: BotState): string {
+  private async gatherProviderContext(): Promise<string> {
+    const dummy = { content: { text: "" } } as any;
+    const sections: string[] = [];
+
+    try {
+      sections.push(await mapAreaProvider.get(this.runtime, dummy));
+    } catch { /* provider optional */ }
+    try {
+      sections.push(await worldKnowledgeProvider.get(this.runtime, dummy));
+    } catch { /* provider optional */ }
+    try {
+      sections.push(await goalsProvider.get(this.runtime, dummy));
+    } catch { /* provider optional */ }
+    try {
+      sections.push(await botStateProvider.get(this.runtime, dummy));
+    } catch { /* provider optional */ }
+
+    return sections.filter(Boolean).join("\n\n");
+  }
+
+  private buildPrompt(state: BotState, providerContext: string): string {
     const p = state.player!;
+
     const recentActions = this.eventLog
-      .slice(-5)
-      .map((e) => `  ${e.action}: ${e.result.message}`)
+      .slice(-8)
+      .map((e) => `  [${e.result.success ? "OK" : "FAIL"}] ${e.action}: ${e.result.message}`)
       .join("\n");
 
-    return `Autonomous game step ${this.stepNumber}. You are playing 2004scape (RuneScape).
+    const actionListStr = ACTION_LIST
+      .map((a) => `  ${a.name}: ${a.params}`)
+      .join("\n");
 
-Review ALL providers for your current game state, goals, and world knowledge. Then choose ONE action to take.
+    return `You are an autonomous RuneScape bot playing 2004scape. Step ${this.stepNumber}.
+Your name: ${p.name} | Combat: ${p.combatLevel} | HP: ${p.hp}/${p.maxHp} | Position: (${p.worldX}, ${p.worldZ}) | Inventory: ${state.inventory.length}/28
 
-Quick status: ${p.name} at (${p.worldX}, ${p.worldZ}), HP ${p.hp}/${p.maxHp}, inventory ${state.inventory.length}/28
-${state.alerts.length > 0 ? `Alerts: ${state.alerts.map((a) => a.message).join("; ")}` : "No alerts."}
+${providerContext}
 
-Recent actions:
+# Action History (recent)
 ${recentActions || "  (none yet)"}
 
-Choose the best action based on your goals and current situation. Provide parameters in XML format.`;
+# Available Actions
+Choose exactly ONE action. Respond with <action>ACTION_NAME</action> and any required params in XML tags.
+${actionListStr}
+
+# Instructions
+- Follow IMMEDIATE goals first (low HP, full inventory).
+- Do NOT repeat the same failed action. Try something different.
+- If idle or stuck, explore, talk to an NPC, or train a different skill.
+- Keep responses SHORT. Just pick an action and provide params.
+
+Your choice:`;
+  }
+
+  private parseActionFromResponse(
+    response: string,
+  ): { actionType: string; params: Record<string, unknown> } | null {
+    // Try <action>ACTION_NAME</action> format first
+    const actionMatch = response.match(/<action>\s*(\w+)\s*<\/action>/i);
+    let actionName: string | null = actionMatch?.[1]?.toUpperCase() ?? null;
+
+    // Fallback: look for any known action name in the response
+    if (!actionName) {
+      for (const name of Object.keys(ACTION_NAME_TO_DISPATCH)) {
+        if (response.toUpperCase().includes(name)) {
+          actionName = name;
+          break;
+        }
+      }
+    }
+
+    if (!actionName) return null;
+
+    const dispatchKey = ACTION_NAME_TO_DISPATCH[actionName];
+    if (!dispatchKey) return null;
+
+    // Extract XML params
+    const params: Record<string, unknown> = {};
+    const paramRegex = /<(\w+)>([\s\S]*?)<\/\1>/gi;
+    let match: RegExpExecArray | null;
+    while ((match = paramRegex.exec(response)) !== null) {
+      const key = match[1];
+      if (key === "action") continue; // skip the action tag itself
+      const val = match[2].trim();
+      // Try numeric
+      const num = Number(val);
+      params[key] = Number.isFinite(num) && /^\d+$/.test(val) ? num : val;
+    }
+
+    // Map common XML param names to what dispatchAction expects
+    this.mapParamAliases(dispatchKey, params);
+
+    return { actionType: dispatchKey, params };
+  }
+
+  /** Normalize param names from LLM XML to dispatchAction expectations. */
+  private mapParamAliases(
+    actionType: string,
+    params: Record<string, unknown>,
+  ): void {
+    // npc → npcName
+    if (params.npc && !params.npcName) params.npcName = params.npc;
+    // item → itemName
+    if (params.item && !params.itemName) params.itemName = params.item;
+    // object → objectName
+    if (params.object && !params.objectName) params.objectName = params.object;
+    // tree → treeName
+    if (params.tree && !params.treeName) params.treeName = params.tree;
+    // rock → rockName
+    if (params.rock && !params.rockName) params.rockName = params.rock;
+    // spot → spotName
+    if (params.spot && !params.spotName) params.spotName = params.spot;
+    // food → rawFoodName
+    if (params.food && !params.rawFoodName) params.rawFoodName = params.food;
+    // spell → spellId
+    if (params.spell && !params.spellId) params.spellId = params.spell;
+    // target → targetNid
+    if (params.target && !params.targetNid) params.targetNid = params.target;
+    // item1/item2 → itemName1/itemName2
+    if (params.item1 && !params.itemName1) params.itemName1 = params.item1;
+    if (params.item2 && !params.itemName2) params.itemName2 = params.item2;
+    // count defaults
+    if (actionType === "depositItem" && params.count == null) params.count = -1;
+    if (actionType === "withdrawItem" && params.count == null) params.count = 1;
   }
 
   /* ------------------------------------------------------------------ */
