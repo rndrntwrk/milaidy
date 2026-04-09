@@ -3831,12 +3831,13 @@ function wireCodingAgentBridgesNow(st: ServerState): void {
  */
 function wireCodingAgentChatBridge(st: ServerState): boolean {
   if (!st.runtime) return false;
-  const coordinator = getCoordinatorFromRuntime(st.runtime);
-  if (!coordinator?.setChatCallback) return false;
-  coordinator.setChatCallback(async (text: string, source?: string) => {
-    await routeAutonomyTextToUser(st, text, source ?? "coding-agent");
-  });
-  return true;
+  // The coordinator's chat callback sends "done — <originalTask>" messages
+  // that echo the user's input instead of the subagent's actual output.
+  // The direct callback path in registerSessionEvents (coding-task-helpers)
+  // handles task completion replies with real subagent responses. Wiring
+  // the coordinator's chat bridge on top of that causes duplicate and
+  // incorrect messages in discord. Skip it.
+  return false;
 }
 
 /**
@@ -3863,14 +3864,12 @@ function wireCodingAgentWsBridge(st: ServerState): boolean {
  * persisted message in the conversation.
  */
 function wireCodingAgentSwarmSynthesis(st: ServerState): boolean {
-  if (!st.runtime) return false;
-  const coordinator = getCoordinatorFromRuntime(st.runtime);
-  if (!coordinator?.setSwarmCompleteCallback) return false;
-
-  coordinator.setSwarmCompleteCallback((payload) =>
-    handleSwarmSynthesis(st, payload),
-  );
-  return true;
+  // Same rationale as wireCodingAgentChatBridge: the synthesis generates a
+  // response from task metadata (originalTask = user's text), not from the
+  // subagent's actual output. The direct callback in registerSessionEvents
+  // already handles the real response. Skip synthesis to prevent duplicate
+  // and misleading "done — <echo>" messages.
+  return false;
 }
 
 /**
