@@ -37,8 +37,7 @@ interface PTYServiceWithEvents {
     cb: (sessionId: string, event: string, data: unknown) => void,
   ) => () => void;
   sessionMetadata?: Map<string, Record<string, unknown>>;
-  getSession?: (sessionId: string) => { workdir: string } | undefined;
-  getSessionOutput?: (sessionId: string, lines?: number) => Promise<string>;
+  getSession?: (sessionId: string) => { workdir?: string } | undefined;
 }
 
 interface RuntimeWithMessageTarget extends IAgentRuntime {
@@ -66,11 +65,15 @@ export function installTaskProgressStreamer(
   installedRuntimes.add(runtime);
 
   const sessionStartedAt = new Map<string, number>();
+  const sessionWorkdirs = new Map<string, string>();
+  const sessionRooms = new Map<string, { roomId: UUID; channelId: string; source: string }>();
   const heartbeatSent = new Set<string>();
   const finalSent = new Set<string>();
 
   const forgetSession = (sessionId: string): void => {
     sessionStartedAt.delete(sessionId);
+    sessionWorkdirs.delete(sessionId);
+    sessionRooms.delete(sessionId);
     heartbeatSent.delete(sessionId);
     finalSent.delete(sessionId);
   };
@@ -78,6 +81,25 @@ export function installTaskProgressStreamer(
   svc.onSessionEvent((sessionId, event) => {
     if (!sessionStartedAt.has(sessionId)) {
       sessionStartedAt.set(sessionId, Date.now());
+      // Capture workdir + room routing NOW while the session still exists.
+      // Both may be cleaned up before the delayed postFinalReport fires.
+      const sess = svc.getSession?.(sessionId);
+      if (sess?.workdir) sessionWorkdirs.set(sessionId, sess.workdir);
+      const meta = svc.sessionMetadata?.get(sessionId) as SessionMetadata | undefined;
+      if (meta?.roomId) {
+        void (async () => {
+          const room = await (runtime as RuntimeWithMessageTarget)
+            .getRoom(meta.roomId!)
+            .catch(() => null);
+          if (room?.channelId) {
+            sessionRooms.set(sessionId, {
+              roomId: meta.roomId!,
+              channelId: room.channelId,
+              source: meta.source ?? "discord",
+            });
+          }
+        })();
+      }
     }
 
     if (event === "tool_running" && !heartbeatSent.has(sessionId)) {
@@ -89,13 +111,29 @@ export function installTaskProgressStreamer(
         svc,
         sessionId,
         `still working — ${Math.round(elapsed / 1000)}s in, will report when done`,
+        sessionRooms,
       );
       return;
     }
 
     if (event === "task_complete" && !finalSent.has(sessionId)) {
-      finalSent.add(sessionId);
-      void postFinalReport(runtime, svc, sessionId);
+      // task_complete fires after EVERY tool call (when the agent's prompt
+      // reappears), not only after the final response. wait a bit for the
+      // agent to flush its answer to the session jsonl before reading.
+      // if a second task_complete fires within the delay, the finalSent
+      // guard prevents duplicate posts.
+      // Capture both workdir and room info NOW — the stopped event may fire
+      // before the 10s delay and clear the maps via forgetSession.
+      const cachedWorkdir = sessionWorkdirs.get(sessionId);
+      const cachedRoom = sessionRooms.get(sessionId);
+      const snapshotRooms = cachedRoom
+        ? new Map([[sessionId, cachedRoom]])
+        : sessionRooms;
+      setTimeout(() => {
+        if (finalSent.has(sessionId)) return;
+        finalSent.add(sessionId);
+        void postFinalReport(runtime, svc, sessionId, cachedWorkdir, snapshotRooms);
+      }, 10_000);
       return;
     }
 
@@ -106,6 +144,7 @@ export function installTaskProgressStreamer(
         svc,
         sessionId,
         "task agent errored — check logs",
+        sessionRooms,
       );
       return;
     }
@@ -122,12 +161,8 @@ export function installTaskProgressStreamer(
  * no TUI chrome, just the structured output claude code produced.
  */
 async function readLastAssistantText(
-  svc: PTYServiceWithEvents,
-  sessionId: string,
+  workdir: string,
 ): Promise<string | null> {
-  const session = svc.getSession?.(sessionId);
-  const workdir = session?.workdir;
-  if (!workdir) return null;
   // The session jsonl lives under ~/.claude/projects/-<workdir-path-dashed>/
   const home = process.env.HOME ?? "/home/milady";
   // Claude code encodes project paths by replacing both / and . with -.
@@ -141,7 +176,6 @@ async function readLastAssistantText(
   } catch {
     return null;
   }
-  // Find the most recent .jsonl (could be the session or a subagent)
   const jsonls = files.filter((f) => f.endsWith(".jsonl")).sort();
   if (jsonls.length === 0) return null;
   const jsonlPath = path.join(projectDir, jsonls[jsonls.length - 1]);
@@ -177,12 +211,11 @@ async function postFinalReport(
   runtime: IAgentRuntime,
   svc: PTYServiceWithEvents,
   sessionId: string,
+  workdir?: string,
+  roomCache?: Map<string, { roomId: UUID; channelId: string; source: string }>,
 ): Promise<void> {
-  // Read the subagent's clean structured output from its session jsonl.
-  // This is the REAL answer — no ANSI codes, no TUI chrome.
-  const assistantText = await readLastAssistantText(svc, sessionId);
+  const assistantText = workdir ? await readLastAssistantText(workdir) : null;
   if (assistantText) {
-    // Check for a URL line
     const urlLine = assistantText
       .split("\n")
       .find((line) => /^\s*URL:\s*https?:\/\//i.test(line));
@@ -191,11 +224,10 @@ async function postFinalReport(
         ? `${assistantText.slice(0, 1800)}...`
         : assistantText;
     const text = urlLine ? `done — ${urlLine.trim()}` : preview;
-    await postToOriginatingChannel(runtime, svc, sessionId, text);
+    await postToOriginatingChannel(runtime, svc, sessionId, text, roomCache);
     return;
   }
-  // Fallback: couldn't read jsonl
-  await postToOriginatingChannel(runtime, svc, sessionId, "task finished");
+  await postToOriginatingChannel(runtime, svc, sessionId, "task finished", roomCache);
 }
 
 async function postToOriginatingChannel(
@@ -203,22 +235,30 @@ async function postToOriginatingChannel(
   svc: PTYServiceWithEvents,
   sessionId: string,
   text: string,
+  roomCache?: Map<string, { roomId: UUID; channelId: string; source: string }>,
 ): Promise<void> {
-  const meta = svc.sessionMetadata?.get(sessionId) as
-    | SessionMetadata
-    | undefined;
-  if (!meta?.roomId) return;
-  // milady's roomId is an internal UUID; discord's send handler needs the
-  // platform snowflake, which lives on the room record's channelId field.
-  const room = await (runtime as RuntimeWithMessageTarget)
-    .getRoom(meta.roomId)
-    .catch(() => null);
-  const channelId = room?.channelId;
-  if (!channelId) return;
-  const source = meta.source ?? "discord";
+  let roomId: UUID | undefined;
+  let channelId: string | undefined;
+  let source = "discord";
+  const cached = roomCache?.get(sessionId);
+  if (cached) {
+    roomId = cached.roomId;
+    channelId = cached.channelId;
+    source = cached.source;
+  } else {
+    const meta = svc.sessionMetadata?.get(sessionId) as SessionMetadata | undefined;
+    if (!meta?.roomId) return;
+    roomId = meta.roomId;
+    source = meta.source ?? "discord";
+    const room = await (runtime as RuntimeWithMessageTarget)
+      .getRoom(meta.roomId)
+      .catch(() => null);
+    channelId = room?.channelId;
+  }
+  if (!roomId || !channelId) return;
   try {
     await (runtime as RuntimeWithMessageTarget).sendMessageToTarget(
-      { source, roomId: meta.roomId, channelId },
+      { source, roomId, channelId },
       { text, source },
     );
   } catch (err) {
