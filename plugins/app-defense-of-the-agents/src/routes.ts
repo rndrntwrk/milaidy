@@ -1,5 +1,6 @@
 import type { IAgentRuntime } from "@elizaos/core";
 import type {
+  AppLaunchDiagnostic,
   AppLaunchResult,
   AppSessionActionResult,
   AppSessionState,
@@ -29,6 +30,11 @@ const GAME_SEARCH_LIMIT = 5;
 const FETCH_TIMEOUT_MS = 4_000;
 const VIEWER_FETCH_TIMEOUT_MS = 8_000;
 const VIEWER_ROUTE_PATH = "/api/apps/defense-of-the-agents/viewer";
+const VIEWER_FRAME_ANCESTORS_DIRECTIVE =
+  "frame-ancestors 'self' http://localhost:* http://127.0.0.1:* " +
+  "http://[::1]:* http://[0:0:0:0:0:0:0:1]:* https://localhost:* " +
+  "https://127.0.0.1:* https://[::1]:* https://[0:0:0:0:0:0:0:1]:* " +
+  "electrobun: capacitor: capacitor-electron: app: tauri: file:";
 const DEPLOY_MESSAGE_LIMIT = 140;
 const EXPLICIT_MESSAGE_PREFIXES = ["say ", "message ", "announce "];
 const GAME_LOOP_INTERVAL_MS = 30_000;
@@ -198,8 +204,15 @@ interface GameLoopHandle {
   autoPlay: boolean;
 }
 
+interface LaunchFailureInfo {
+  message: string;
+  ts: number;
+}
+
 /** Active game loops keyed by agentId. */
 const activeLoops = new Map<string, GameLoopHandle>();
+const recentLaunchFailures = new Map<string, LaunchFailureInfo>();
+const LAUNCH_FAILURE_TTL_MS = 5 * 60 * 1000;
 
 /** Recent activity ring buffer keyed by agentId — shown in the UI telemetry panel. */
 interface ActivityEntry {
@@ -225,6 +238,27 @@ function pushActivity(agentId: string, action: string, detail: string): void {
 function getRecentActivity(agentId: string | undefined): ActivityEntry[] {
   if (!agentId) return [];
   return recentActivity.get(agentId) ?? [];
+}
+
+function rememberLaunchFailure(agentName: string, message: string): void {
+  recentLaunchFailures.set(agentName, {
+    message,
+    ts: Date.now(),
+  });
+}
+
+function readLaunchFailure(agentName: string): LaunchFailureInfo | null {
+  const failure = recentLaunchFailures.get(agentName);
+  if (!failure) return null;
+  if (Date.now() - failure.ts > LAUNCH_FAILURE_TTL_MS) {
+    recentLaunchFailures.delete(agentName);
+    return null;
+  }
+  return failure;
+}
+
+function clearLaunchFailure(agentName: string): void {
+  recentLaunchFailures.delete(agentName);
 }
 
 /** Optional system event bridge — loaded lazily from plugin-cron. */
@@ -426,7 +460,10 @@ function buildViewerShellInjection(
   agentName: string,
   viewerUrl: string,
 ): string {
-  return `<style id="milady-defense-embedded-style">
+  const viewerBaseUrl = new URL("./", viewerUrl).toString();
+
+  return `<base id="milady-defense-viewer-base" href="${viewerBaseUrl}">
+<style id="milady-defense-embedded-style">
 html, body { background: #000 !important; }
 #landing-overlay,
 #auth-modal,
@@ -512,21 +549,44 @@ html, body { background: #000 !important; }
     "#leaderboard-toggle",
     "#store-toggle",
   ];
+  let observerApplying = false;
+  let observerPending = false;
+  let observerScheduled = false;
 
   const hideNode = (node) => {
     if (!(node instanceof HTMLElement)) {
-      return;
+      return false;
     }
-    node.classList.remove("open");
-    node.classList.add("hidden");
-    node.style.display = "none";
-    node.style.opacity = "0";
-    node.style.pointerEvents = "none";
+    let changed = false;
+    if (node.classList.contains("open")) {
+      node.classList.remove("open");
+      changed = true;
+    }
+    if (!node.classList.contains("hidden")) {
+      node.classList.add("hidden");
+      changed = true;
+    }
+    if (node.style.display !== "none") {
+      node.style.display = "none";
+      changed = true;
+    }
+    if (node.style.opacity !== "0") {
+      node.style.opacity = "0";
+      changed = true;
+    }
+    if (node.style.pointerEvents !== "none") {
+      node.style.pointerEvents = "none";
+      changed = true;
+    }
+    return changed;
   };
 
   const ensureBanner = () => {
-    if (document.getElementById("milady-defense-spectator-banner")) {
-      return;
+    if (
+      document.getElementById("milady-defense-spectator-banner") ||
+      !document.body
+    ) {
+      return false;
     }
 
     const banner = document.createElement("div");
@@ -552,26 +612,64 @@ html, body { background: #000 !important; }
 
     banner.append(title, body, link);
     document.body.appendChild(banner);
+    return true;
+  };
+
+  const scheduleEmbeddedViewerMode = () => {
+    if (observerScheduled) {
+      return;
+    }
+    observerScheduled = true;
+    queueMicrotask(() => {
+      observerScheduled = false;
+      applyEmbeddedViewerMode();
+    });
   };
 
   const applyEmbeddedViewerMode = () => {
-    localStorage.setItem("landing-closed", "1");
-    for (const id of hiddenIds) {
-      hideNode(document.getElementById(id));
+    if (observerApplying) {
+      observerPending = true;
+      return;
     }
-    for (const selector of hiddenSelectors) {
-      hideNode(document.querySelector(selector));
+
+    observerApplying = true;
+    try {
+      localStorage.setItem("landing-closed", "1");
+      for (const id of hiddenIds) {
+        hideNode(document.getElementById(id));
+      }
+      for (const selector of hiddenSelectors) {
+        hideNode(document.querySelector(selector));
+      }
+
+      const scoreboardToggle = document.getElementById("scoreboard-toggle");
+      if (
+        scoreboardToggle instanceof HTMLElement &&
+        scoreboardToggle.style.top !== "18px"
+      ) {
+        scoreboardToggle.style.top = "18px";
+      }
+
+      const scoreboardPanel = document.getElementById("scoreboard-panel");
+      if (
+        scoreboardPanel instanceof HTMLElement &&
+        scoreboardPanel.style.top !== "54px"
+      ) {
+        scoreboardPanel.style.top = "54px";
+      }
+
+      if (document.documentElement.dataset.miladyDefenseViewer !== "embedded") {
+        document.documentElement.dataset.miladyDefenseViewer = "embedded";
+      }
+
+      ensureBanner();
+    } finally {
+      observerApplying = false;
+      if (observerPending) {
+        observerPending = false;
+        scheduleEmbeddedViewerMode();
+      }
     }
-    const scoreboardToggle = document.getElementById("scoreboard-toggle");
-    if (scoreboardToggle instanceof HTMLElement) {
-      scoreboardToggle.style.top = "18px";
-    }
-    const scoreboardPanel = document.getElementById("scoreboard-panel");
-    if (scoreboardPanel instanceof HTMLElement) {
-      scoreboardPanel.style.top = "54px";
-    }
-    document.documentElement.dataset.miladyDefenseViewer = "embedded";
-    ensureBanner();
   };
 
   if (document.readyState === "loading") {
@@ -585,7 +683,7 @@ html, body { background: #000 !important; }
   window.addEventListener("load", applyEmbeddedViewerMode, { once: true });
 
   const observer = new MutationObserver(() => {
-    applyEmbeddedViewerMode();
+    scheduleEmbeddedViewerMode();
   });
   observer.observe(document.documentElement, {
     subtree: true,
@@ -637,11 +735,35 @@ function sendHtmlResponse(res: unknown, html: string): void {
     end: (body?: string) => void;
     setHeader: (name: string, value: string) => void;
     statusCode: number;
+    removeHeader?: (name: string) => void;
+    getHeader?: (name: string) => number | string | string[] | undefined;
   };
   response.statusCode = 200;
   response.setHeader("Cache-Control", "no-store");
   response.setHeader("Content-Type", "text/html; charset=utf-8");
+  applyViewerEmbedHeaders(response);
   response.end(html);
+}
+
+function applyViewerEmbedHeaders(response: {
+  setHeader: (name: string, value: string) => void;
+  removeHeader?: (name: string) => void;
+  getHeader?: (name: string) => number | string | string[] | undefined;
+}): void {
+  response.removeHeader?.("X-Frame-Options");
+  const existingCsp = response.getHeader?.("Content-Security-Policy");
+  const normalizedExisting =
+    typeof existingCsp === "string"
+      ? existingCsp.trim()
+      : Array.isArray(existingCsp)
+        ? existingCsp.join("; ").trim()
+        : "";
+  const nextCsp = /\bframe-ancestors\b/i.test(normalizedExisting)
+    ? normalizedExisting
+    : normalizedExisting.length > 0
+      ? `${normalizedExisting}; ${VIEWER_FRAME_ANCESTORS_DIRECTIVE}`
+      : VIEWER_FRAME_ANCESTORS_DIRECTIVE;
+  response.setHeader("Content-Security-Policy", nextCsp);
 }
 
 async function fetchJson<T>(url: URL, init?: RequestInit): Promise<T> {
@@ -1573,6 +1695,50 @@ function buildSessionState(
   };
 }
 
+function normalizeErrorMessage(error: unknown, fallback: string): string {
+  if (!(error instanceof Error)) {
+    return fallback;
+  }
+  const trimmed = error.message.trim();
+  return trimmed.length > 0 ? trimmed : fallback;
+}
+
+function buildUnavailableSession(
+  ctx: SessionContext,
+  error: unknown,
+): AppSessionState {
+  const message = normalizeErrorMessage(
+    error,
+    "Defense control API is temporarily unavailable.",
+  );
+  const agentId = asRuntimeLike(ctx.runtime)?.agentId;
+  return {
+    sessionId: ctx.agentName,
+    appName: APP_NAME,
+    mode: "spectate-and-steer",
+    status: "degraded",
+    displayName: APP_DISPLAY_NAME,
+    agentId,
+    canSendCommands: false,
+    controls: [],
+    summary: `Defense control API unavailable: ${message}`,
+    goalLabel: "Viewer is available. Retry once the Defense backend responds.",
+    suggestedPrompts: [],
+    telemetry: {
+      apiBaseUrl: ctx.apiBaseUrl,
+      viewerUrl: resolveViewerUrl(ctx.runtime),
+      preferredGameId: ctx.preferredGameId ?? null,
+      autoPlay: isAutoPlayActive(ctx.runtime),
+      startupError: message,
+      recentActivity: getRecentActivity(agentId).map((entry) => ({
+        ts: entry.ts,
+        action: entry.action,
+        detail: entry.detail,
+      })),
+    },
+  };
+}
+
 function normalizeText(value: string): string {
   return value.trim().toLowerCase().replace(/[_-]+/g, " ");
 }
@@ -1794,29 +1960,96 @@ function okResponse(
 export async function resolveLaunchSession(
   ctx: AppLaunchSessionContext,
 ): Promise<AppLaunchResult["session"]> {
-  const session = await readSessionState(ctx.runtime, null, true);
+  const sessionCtx = resolveSessionContext(ctx.runtime, null);
+  try {
+    const session = await readSessionState(ctx.runtime, null, true);
+    clearLaunchFailure(sessionCtx.agentName);
 
-  // Start auto-play game loop on launch
-  if (ctx.runtime && session) {
-    const sessionCtx = resolveSessionContext(ctx.runtime, null);
-    startGameLoop(ctx.runtime, sessionCtx);
+    // Start auto-play game loop on launch
+    if (ctx.runtime && session.canSendCommands) {
+      startGameLoop(ctx.runtime, sessionCtx);
+      const launchAgentId = asRuntimeLike(ctx.runtime)?.agentId;
+      if (launchAgentId) {
+        pushActivity(
+          launchAgentId,
+          "launch",
+          "Game session launched — auto-play started",
+        );
+      }
+    }
+
+    return session;
+  } catch (error) {
+    const degradedSession = buildUnavailableSession(sessionCtx, error);
+    rememberLaunchFailure(
+      sessionCtx.agentName,
+      degradedSession.summary ?? "Defense launch degraded.",
+    );
     const launchAgentId = asRuntimeLike(ctx.runtime)?.agentId;
     if (launchAgentId) {
       pushActivity(
         launchAgentId,
-        "launch",
-        "Game session launched — auto-play started",
+        "launch-error",
+        degradedSession.summary ?? "Defense launch degraded.",
       );
     }
+    return degradedSession;
   }
-
-  return session;
 }
 
 export async function refreshRunSession(
   ctx: AppRunSessionContext,
 ): Promise<AppLaunchResult["session"]> {
-  return readSessionState(ctx.runtime, ctx.session?.sessionId ?? null, false);
+  const sessionCtx = resolveSessionContext(
+    ctx.runtime,
+    ctx.session?.sessionId ?? null,
+  );
+  try {
+    const session = await readSessionState(
+      ctx.runtime,
+      ctx.session?.sessionId ?? null,
+      false,
+    );
+    clearLaunchFailure(sessionCtx.agentName);
+    return session;
+  } catch (error) {
+    const degradedSession = buildUnavailableSession(sessionCtx, error);
+    rememberLaunchFailure(
+      sessionCtx.agentName,
+      degradedSession.summary ?? "Defense refresh degraded.",
+    );
+    return degradedSession;
+  }
+}
+
+export async function collectLaunchDiagnostics(ctx: {
+  runtime: IAgentRuntime | null;
+  session: AppSessionState | null;
+}): Promise<AppLaunchDiagnostic[]> {
+  const agentName = resolveSessionContext(
+    ctx.runtime,
+    ctx.session?.sessionId ?? null,
+  ).agentName;
+  const launchFailure =
+    (ctx.session?.status === "degraded" &&
+    typeof ctx.session.summary === "string" &&
+    ctx.session.summary.trim().length > 0
+      ? {
+          message: ctx.session.summary.trim(),
+        }
+      : null) ?? readLaunchFailure(agentName);
+
+  if (!launchFailure) {
+    return [];
+  }
+
+  return [
+    {
+      code: "defense-control-api-unavailable",
+      severity: "warning",
+      message: launchFailure.message,
+    },
+  ];
 }
 
 export async function handleAppRoutes(ctx: {

@@ -2,6 +2,7 @@ import http from "node:http";
 import path from "node:path";
 import type { IAgentRuntime } from "@elizaos/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { resetInMemoryStateForTests } from "../../../../plugins/app-defense-of-the-agents/src/routes";
 import type {
   PluginManagerLike,
   RegistryPluginInfo,
@@ -301,6 +302,8 @@ describe("Defense of the Agents launch integration", () => {
   const originalAgentName = process.env.DEFENSE_OF_THE_AGENTS_AGENT_NAME;
 
   afterEach(() => {
+    resetInMemoryStateForTests();
+
     if (originalApiUrl !== undefined) {
       process.env.DEFENSE_OF_THE_AGENTS_API_URL = originalApiUrl;
     } else {
@@ -388,5 +391,50 @@ describe("Defense of the Agents launch integration", () => {
     } finally {
       await fixtureServer.close();
     }
+  });
+
+  it("returns a degraded session instead of throwing when the Defense API is unavailable", async () => {
+    registryClientMocks.getPluginInfo.mockResolvedValue({
+      ...DEFENSE_APP_INFO,
+      localPath: APP_LOCAL_PATH,
+    });
+    process.env.DEFENSE_OF_THE_AGENTS_API_URL = "http://127.0.0.1:1";
+    delete process.env.DEFENSE_OF_THE_AGENTS_API_KEY;
+    delete process.env.DEFENSE_OF_THE_AGENTS_GAME_ID;
+    delete process.env.DEFENSE_OF_THE_AGENTS_AGENT_NAME;
+
+    const manager = new AppManager();
+    const runtime = createRuntimeStub();
+    const result = await manager.launch(
+      buildPluginManager(),
+      APP_NAME,
+      undefined,
+      runtime,
+    );
+
+    expect(runtime.registerPlugin).toHaveBeenCalledTimes(1);
+    expect(result.viewer).toEqual(
+      expect.objectContaining({
+        url: "/api/apps/defense-of-the-agents/viewer",
+        postMessageAuth: false,
+      }),
+    );
+    expect(result.session).toEqual(
+      expect.objectContaining({
+        sessionId: "Scout",
+        appName: APP_NAME,
+        status: "degraded",
+        canSendCommands: false,
+      }),
+    );
+    expect(result.session?.summary).toContain(
+      "Defense control API unavailable",
+    );
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "defense-control-api-unavailable",
+        severity: "warning",
+      }),
+    );
   });
 });

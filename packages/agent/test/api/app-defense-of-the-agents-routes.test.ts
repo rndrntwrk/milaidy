@@ -1,12 +1,12 @@
 import http from "node:http";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { resetInMemoryStateForTests } from "../../../../plugins/app-defense-of-the-agents/src/routes";
 import { handleAppPackageRoutes } from "../../src/api/app-package-routes";
 import {
   createMockHttpResponse,
   createMockIncomingMessage,
 } from "../../src/test-support/test-helpers";
-import { resetInMemoryStateForTests } from "../../../../plugins/app-defense-of-the-agents/src/routes";
 
 const DEFENSE_APP_LOCAL_PATH = path.resolve(
   process.cwd(),
@@ -303,6 +303,20 @@ describe("Defense of the Agents app routes", () => {
   test("serves a Milady spectator shell instead of the raw Defense site", async () => {
     const { res } = createMockHttpResponse();
     const chunks: string[] = [];
+    const headers = new Map<string, string>();
+    res.setHeader = ((name: string, value: string) => {
+      headers.set(name.toLowerCase(), value);
+    }) as typeof res.setHeader;
+    (
+      res as typeof res & { getHeader: (name: string) => string | undefined }
+    ).getHeader = ((name: string) => headers.get(name.toLowerCase())) as (
+      name: string,
+    ) => string | undefined;
+    (
+      res as typeof res & { removeHeader: (name: string) => void }
+    ).removeHeader = ((name: string) => {
+      headers.delete(name.toLowerCase());
+    }) as (name: string) => void;
     res.end = ((chunk?: string | Buffer) => {
       chunks.push(chunk ? chunk.toString() : "");
     }) as typeof res.end;
@@ -339,15 +353,29 @@ describe("Defense of the Agents app routes", () => {
     });
 
     expect(handled).toBe(true);
+    expect(headers.get("x-frame-options")).toBeUndefined();
+    expect(headers.get("content-security-policy")).toContain("frame-ancestors");
+    expect(headers.get("content-security-policy")).toContain(
+      "http://127.0.0.1:*",
+    );
 
     const html = chunks.join("");
     expect(html).toContain("milady-defense-embedded-style");
     expect(html).toContain("milady-defense-spectator-banner");
     expect(html).toContain(fixtureServer?.url ?? "");
-    expect(html).toContain('href="' + (fixtureServer?.url ?? "") + '/styles.css"');
-    expect(html).toContain('src="' + (fixtureServer?.url ?? "") + '/hero.png"');
-    expect(html).toContain('url("' + (fixtureServer?.url ?? "") + '/fonts/fixture.woff2")');
+    expect(html).toContain(
+      '<base id="milady-defense-viewer-base" href="' +
+        (fixtureServer?.url ?? "") +
+        '/">',
+    );
+    expect(html).toContain(`href="${fixtureServer?.url ?? ""}/styles.css"`);
+    expect(html).toContain(`src="${fixtureServer?.url ?? ""}/hero.png"`);
+    expect(html).toContain(
+      `url("${fixtureServer?.url ?? ""}/fonts/fixture.woff2")`,
+    );
     expect(html).toContain('const agentName = "Scout"');
+    expect(html).toContain("let observerApplying = false;");
+    expect(html).toContain("scheduleEmbeddedViewerMode");
   });
 
   test("message commands translate into deployments and return a refreshed session", async () => {
@@ -503,7 +531,7 @@ describe("Defense of the Agents app routes", () => {
   });
 
   test("structured JSON deployments are parsed and forwarded", async () => {
-    const { res, getJson, getStatus } = createMockHttpResponse();
+    const { res, getStatus } = createMockHttpResponse();
     const handled = await handleAppPackageRoutes({
       req: createMockIncomingMessage({
         method: "POST",
@@ -548,7 +576,7 @@ describe("Defense of the Agents app routes", () => {
   });
 
   test("recall command is detected from natural language", async () => {
-    const { res, getJson, getStatus } = createMockHttpResponse();
+    const { res, getStatus } = createMockHttpResponse();
     const handled = await handleAppPackageRoutes({
       req: createMockIncomingMessage({
         method: "POST",
@@ -748,7 +776,9 @@ describe("Defense of the Agents strategy functions", async () => {
   } = await import("../../../../plugins/app-defense-of-the-agents/src/routes");
 
   test("scoreStrategy returns 0 for empty metrics", () => {
-    expect(scoreStrategy({ ...DEFAULT_STRATEGY.metrics, ticksTracked: 0 })).toBe(0);
+    expect(
+      scoreStrategy({ ...DEFAULT_STRATEGY.metrics, ticksTracked: 0 }),
+    ).toBe(0);
   });
 
   test("scoreStrategy rewards survival, level gain, and lane control", () => {
@@ -776,12 +806,18 @@ describe("Defense of the Agents strategy functions", async () => {
   });
 
   test("pickAbility selects first matching priority", () => {
-    expect(pickAbility(["fortitude", "fireball"], ["fireball", "fortitude"])).toBe("fireball");
-    expect(pickAbility(["fortitude", "tornado"], ["fireball", "fortitude"])).toBe("fortitude");
+    expect(
+      pickAbility(["fortitude", "fireball"], ["fireball", "fortitude"]),
+    ).toBe("fireball");
+    expect(
+      pickAbility(["fortitude", "tornado"], ["fireball", "fortitude"]),
+    ).toBe("fortitude");
   });
 
   test("pickAbility falls back to first choice when no priority matches", () => {
-    expect(pickAbility(["cleave", "thorns"], ["fireball", "tornado"])).toBe("cleave");
+    expect(pickAbility(["cleave", "thorns"], ["fireball", "tornado"])).toBe(
+      "cleave",
+    );
   });
 
   test("findWeakestAlliedLane returns lane with worst allied differential", () => {
@@ -794,7 +830,10 @@ describe("Defense of the Agents strategy functions", async () => {
         bot: { human: 7, orc: 3, frontline: 15 },
       },
       towers: [],
-      bases: { human: { hp: 1500, maxHp: 1500 }, orc: { hp: 1500, maxHp: 1500 } },
+      bases: {
+        human: { hp: 1500, maxHp: 1500 },
+        orc: { hp: 1500, maxHp: 1500 },
+      },
       heroes: [],
       winner: null,
     };
@@ -805,9 +844,14 @@ describe("Defense of the Agents strategy functions", async () => {
   test("parseStrategyUpdate requires explicit strategy key", () => {
     const current = { ...DEFAULT_STRATEGY };
     // Regular deployment JSON should NOT be parsed as strategy
-    expect(parseStrategyUpdate('{"heroClass":"ranged","heroLane":"bot"}', current)).toBeNull();
+    expect(
+      parseStrategyUpdate('{"heroClass":"ranged","heroLane":"bot"}', current),
+    ).toBeNull();
     // Strategy key required
-    const result = parseStrategyUpdate('{"strategy":{"heroClass":"melee","recallThreshold":0.4}}', current);
+    const result = parseStrategyUpdate(
+      '{"strategy":{"heroClass":"melee","recallThreshold":0.4}}',
+      current,
+    );
     expect(result).not.toBeNull();
     expect(result?.heroClass).toBe("melee");
     expect(result?.recallThreshold).toBe(0.4);
@@ -816,9 +860,15 @@ describe("Defense of the Agents strategy functions", async () => {
 
   test("parseStrategyUpdate clamps recallThreshold to [0, 1]", () => {
     const current = { ...DEFAULT_STRATEGY };
-    const high = parseStrategyUpdate('{"strategy":{"recallThreshold":5}}', current);
+    const high = parseStrategyUpdate(
+      '{"strategy":{"recallThreshold":5}}',
+      current,
+    );
     expect(high?.recallThreshold).toBe(1);
-    const low = parseStrategyUpdate('{"strategy":{"recallThreshold":-1}}', current);
+    const low = parseStrategyUpdate(
+      '{"strategy":{"recallThreshold":-1}}',
+      current,
+    );
     expect(low?.recallThreshold).toBe(0);
   });
 
@@ -879,19 +929,34 @@ describe("Defense of the Agents strategy functions", async () => {
       metrics: { ...DEFAULT_STRATEGY.metrics, ticksTracked: 0, ticksAlive: 0 },
     };
     const hero = {
-      name: "Scout", faction: "human", class: "mage" as const, lane: "mid" as const,
-      hp: 100, maxHp: 200, alive: true, level: 3, xp: 50, xpToNext: 400,
-      abilities: [], abilityChoices: [],
+      name: "Scout",
+      faction: "human",
+      class: "mage" as const,
+      lane: "mid" as const,
+      hp: 100,
+      maxHp: 200,
+      alive: true,
+      level: 3,
+      xp: 50,
+      xpToNext: 400,
+      abilities: [],
+      abilityChoices: [],
     };
     const state = {
-      tick: 100, agents: { human: [], orc: [] },
+      tick: 100,
+      agents: { human: [], orc: [] },
       lanes: {
         top: { human: 3, orc: 5, frontline: -10 },
         mid: { human: 4, orc: 4, frontline: 0 },
         bot: { human: 5, orc: 3, frontline: 10 },
       },
-      towers: [], bases: { human: { hp: 1500, maxHp: 1500 }, orc: { hp: 1500, maxHp: 1500 } },
-      heroes: [hero], winner: null,
+      towers: [],
+      bases: {
+        human: { hp: 1500, maxHp: 1500 },
+        orc: { hp: 1500, maxHp: 1500 },
+      },
+      heroes: [hero],
+      winner: null,
     };
     updateMetrics(strategy, hero, state);
     expect(strategy.metrics.ticksTracked).toBe(1);
@@ -905,19 +970,34 @@ describe("Defense of the Agents strategy functions", async () => {
       metrics: { ...DEFAULT_STRATEGY.metrics, ticksTracked: 0, ticksAlive: 0 },
     };
     const hero = {
-      name: "Scout", faction: "human", class: "mage" as const, lane: "mid" as const,
-      hp: 0, maxHp: 200, alive: false, level: 3, xp: 50, xpToNext: 400,
-      abilities: [], abilityChoices: [],
+      name: "Scout",
+      faction: "human",
+      class: "mage" as const,
+      lane: "mid" as const,
+      hp: 0,
+      maxHp: 200,
+      alive: false,
+      level: 3,
+      xp: 50,
+      xpToNext: 400,
+      abilities: [],
+      abilityChoices: [],
     };
     const state = {
-      tick: 100, agents: { human: [], orc: [] },
+      tick: 100,
+      agents: { human: [], orc: [] },
       lanes: {
         top: { human: 3, orc: 5, frontline: -10 },
         mid: { human: 4, orc: 4, frontline: 0 },
         bot: { human: 5, orc: 3, frontline: 10 },
       },
-      towers: [], bases: { human: { hp: 1500, maxHp: 1500 }, orc: { hp: 1500, maxHp: 1500 } },
-      heroes: [hero], winner: null,
+      towers: [],
+      bases: {
+        human: { hp: 1500, maxHp: 1500 },
+        orc: { hp: 1500, maxHp: 1500 },
+      },
+      heroes: [hero],
+      winner: null,
     };
     updateMetrics(strategy, hero, state);
     expect(strategy.metrics.ticksTracked).toBe(1);
@@ -930,19 +1010,34 @@ describe("Defense of the Agents strategy functions", async () => {
       metrics: { ...DEFAULT_STRATEGY.metrics, abilitiesLearned: 0 },
     };
     const hero = {
-      name: "Scout", faction: "human", class: "mage" as const, lane: "mid" as const,
-      hp: 30, maxHp: 200, alive: true, level: 3, xp: 50, xpToNext: 400,
-      abilities: [], abilityChoices: [],
+      name: "Scout",
+      faction: "human",
+      class: "mage" as const,
+      lane: "mid" as const,
+      hp: 30,
+      maxHp: 200,
+      alive: true,
+      level: 3,
+      xp: 50,
+      xpToNext: 400,
+      abilities: [],
+      abilityChoices: [],
     };
     const state = {
-      tick: 100, agents: { human: [], orc: [] },
+      tick: 100,
+      agents: { human: [], orc: [] },
       lanes: {
         top: { human: 3, orc: 5, frontline: -10 },
         mid: { human: 4, orc: 4, frontline: 0 },
         bot: { human: 5, orc: 3, frontline: 10 },
       },
-      towers: [], bases: { human: { hp: 1500, maxHp: 1500 }, orc: { hp: 1500, maxHp: 1500 } },
-      heroes: [hero], winner: null,
+      towers: [],
+      bases: {
+        human: { hp: 1500, maxHp: 1500 },
+        orc: { hp: 1500, maxHp: 1500 },
+      },
+      heroes: [hero],
+      winner: null,
     };
     updateMetrics(strategy, hero, state, "ability+recall");
     expect(strategy.metrics.abilitiesLearned).toBe(1);
@@ -954,19 +1049,34 @@ describe("Defense of the Agents strategy functions", async () => {
       metrics: { ...DEFAULT_STRATEGY.metrics, abilitiesLearned: 0 },
     };
     const hero = {
-      name: "Scout", faction: "human", class: "mage" as const, lane: "mid" as const,
-      hp: 100, maxHp: 200, alive: true, level: 3, xp: 50, xpToNext: 400,
-      abilities: [], abilityChoices: [],
+      name: "Scout",
+      faction: "human",
+      class: "mage" as const,
+      lane: "mid" as const,
+      hp: 100,
+      maxHp: 200,
+      alive: true,
+      level: 3,
+      xp: 50,
+      xpToNext: 400,
+      abilities: [],
+      abilityChoices: [],
     };
     const state = {
-      tick: 100, agents: { human: [], orc: [] },
+      tick: 100,
+      agents: { human: [], orc: [] },
       lanes: {
         top: { human: 3, orc: 5, frontline: -10 },
         mid: { human: 4, orc: 4, frontline: 0 },
         bot: { human: 5, orc: 3, frontline: 10 },
       },
-      towers: [], bases: { human: { hp: 1500, maxHp: 1500 }, orc: { hp: 1500, maxHp: 1500 } },
-      heroes: [hero], winner: null,
+      towers: [],
+      bases: {
+        human: { hp: 1500, maxHp: 1500 },
+        orc: { hp: 1500, maxHp: 1500 },
+      },
+      heroes: [hero],
+      winner: null,
     };
     updateMetrics(strategy, hero, state, "ability:fireball");
     expect(strategy.metrics.abilitiesLearned).toBe(1);
@@ -982,19 +1092,34 @@ describe("Defense of the Agents strategy functions", async () => {
       metrics: { ...DEFAULT_STRATEGY.metrics, levelStart: 1, levelEnd: 3 },
     };
     const hero = {
-      name: "Scout", faction: "human", class: "mage" as const, lane: "mid" as const,
-      hp: 100, maxHp: 200, alive: true, level: 5, xp: 50, xpToNext: 400,
-      abilities: [], abilityChoices: [],
+      name: "Scout",
+      faction: "human",
+      class: "mage" as const,
+      lane: "mid" as const,
+      hp: 100,
+      maxHp: 200,
+      alive: true,
+      level: 5,
+      xp: 50,
+      xpToNext: 400,
+      abilities: [],
+      abilityChoices: [],
     };
     const state = {
-      tick: 100, agents: { human: [], orc: [] },
+      tick: 100,
+      agents: { human: [], orc: [] },
       lanes: {
         top: { human: 3, orc: 5, frontline: -10 },
         mid: { human: 6, orc: 2, frontline: 15 },
         bot: { human: 5, orc: 3, frontline: 10 },
       },
-      towers: [], bases: { human: { hp: 1500, maxHp: 1500 }, orc: { hp: 1500, maxHp: 1500 } },
-      heroes: [hero], winner: null,
+      towers: [],
+      bases: {
+        human: { hp: 1500, maxHp: 1500 },
+        orc: { hp: 1500, maxHp: 1500 },
+      },
+      heroes: [hero],
+      winner: null,
     };
     updateMetrics(strategy, hero, state);
     expect(strategy.metrics.levelEnd).toBe(5);
