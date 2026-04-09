@@ -11,7 +11,7 @@ import { Z_OVERLAY } from "../../../lib/floating-layers";
 import { Button } from "../../ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../../ui/tooltip";
 import { PagePanel } from "../page-panel";
-import { ChatSourceBadge } from "./chat-source";
+import { ChatSourceIcon } from "./chat-source";
 import type {
   ChatConversationLabels,
   ChatConversationSummary,
@@ -245,9 +245,6 @@ export function ChatConversationItem({
         ) : null}
 
         <div className="min-w-0 flex-1">
-          {showSourceBadge && conversationSource !== null ? (
-            <ChatSourceBadge source={conversationSource} />
-          ) : null}
           <TruncatingConversationTitle
             displayTitle={renderedTitle}
             isActive={isActive}
@@ -266,6 +263,12 @@ export function ChatConversationItem({
             </div>
           ) : null}
         </div>
+        {showSourceBadge && conversationSource !== null ? (
+          <ChatSourceIcon
+            source={conversationSource}
+            className="mt-0.5 ml-auto h-4 w-4 self-start"
+          />
+        ) : null}
       </Button>
 
       {!isConfirmingDelete ? (

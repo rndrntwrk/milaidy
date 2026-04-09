@@ -316,13 +316,14 @@ describe("ChatConversationItem", () => {
       />,
     );
 
-    expect(screen.getByTestId("conversation-source-chip")).toHaveTextContent(
-      "Discord",
-    );
     expect(screen.getByTestId("chat-source-icon")).toHaveAttribute(
       "data-source",
       "discord",
     );
+    expect(
+      screen.queryByTestId("conversation-source-chip"),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Discord")).not.toBeInTheDocument();
   });
 
   it("does not render a source chip for internal chats", () => {

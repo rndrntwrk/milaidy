@@ -708,12 +708,7 @@ function InboxChatPanel({
           </div>
         </div>
         {activeInboxChat.source ? (
-          <div className="rounded-full border border-border/35 bg-bg-hover/50 p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
-            <ChatSourceIcon
-              source={activeInboxChat.source}
-              className="h-4 w-4"
-            />
-          </div>
+          <ChatSourceIcon source={activeInboxChat.source} className="h-4 w-4" />
         ) : null}
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
