@@ -1,8 +1,8 @@
 import fs from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { logger } from "@elizaos/core";
+import { resolveStateDir } from "../config/paths.js";
 import { packageNameToAppDisplayName } from "../contracts/apps.js";
 import {
   mergeAppMeta,
@@ -232,7 +232,9 @@ async function collectWorkspacePackageCandidates(
   try {
     entries = await fs.readdir(searchRoot, { withFileTypes: true });
   } catch (err) {
-    logger.debug(`[registry] could not read workspace dir ${searchRoot}: ${err}`);
+    logger.debug(
+      `[registry] could not read workspace dir ${searchRoot}: ${err}`,
+    );
     return [];
   }
 
@@ -358,8 +360,14 @@ async function discoverLocalWorkspaceApps(): Promise<
 
   for (const workspaceRoot of resolveWorkspaceRoots()) {
     const discoveredRoots = [
-      { root: path.join(workspaceRoot, "plugins"), includeTypescriptChild: true },
-      { root: path.join(workspaceRoot, "packages"), includeTypescriptChild: false },
+      {
+        root: path.join(workspaceRoot, "plugins"),
+        includeTypescriptChild: true,
+      },
+      {
+        root: path.join(workspaceRoot, "packages"),
+        includeTypescriptChild: false,
+      },
       {
         root: path.join(workspaceRoot, "eliza", "packages"),
         includeTypescriptChild: false,
@@ -372,7 +380,9 @@ async function discoverLocalWorkspaceApps(): Promise<
 
     let workspaceEntries: Array<import("node:fs").Dirent> = [];
     try {
-      workspaceEntries = await fs.readdir(workspaceRoot, { withFileTypes: true });
+      workspaceEntries = await fs.readdir(workspaceRoot, {
+        withFileTypes: true,
+      });
     } catch (err) {
       logger.debug(
         `[registry] could not read workspace root ${workspaceRoot}: ${err}`,
@@ -434,8 +444,7 @@ async function discoverLocalWorkspaceApps(): Promise<
     }
   }
 
-  const stateDir =
-    process.env.ELIZA_STATE_DIR?.trim() || path.join(os.homedir(), ".eliza");
+  const stateDir = resolveStateDir();
   const installedBase = path.join(stateDir, "plugins", "installed");
   try {
     const installedEntries = await fs.readdir(installedBase, {
@@ -459,14 +468,18 @@ async function discoverLocalWorkspaceApps(): Promise<
                 pkgDirs.push(path.join(scopeDir, se.name));
               }
             } catch (err) {
-              logger.debug(`[registry] could not read scope dir ${scopeDir}: ${err}`);
+              logger.debug(
+                `[registry] could not read scope dir ${scopeDir}: ${err}`,
+              );
             }
           } else if (nm.isDirectory() || nm.isSymbolicLink()) {
             pkgDirs.push(path.join(nmDir, nm.name));
           }
         }
       } catch (err) {
-        logger.debug(`[registry] could not read node_modules dir ${nmDir}: ${err}`);
+        logger.debug(
+          `[registry] could not read node_modules dir ${nmDir}: ${err}`,
+        );
         continue;
       }
 
@@ -506,7 +519,9 @@ async function discoverNodeModulePlugins(): Promise<
     try {
       entries = await fs.readdir(elizaosDir, { withFileTypes: true });
     } catch (err) {
-      logger.debug(`[registry] could not read @elizaos dir ${elizaosDir}: ${err}`);
+      logger.debug(
+        `[registry] could not read @elizaos dir ${elizaosDir}: ${err}`,
+      );
       continue;
     }
 
