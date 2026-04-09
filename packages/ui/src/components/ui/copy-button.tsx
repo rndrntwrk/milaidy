@@ -28,11 +28,28 @@ export const CopyButton = React.forwardRef<HTMLButtonElement, CopyButtonProps>(
     ref,
   ) => {
     const [copied, setCopied] = React.useState(false);
+    const timerRef = React.useRef<ReturnType<typeof setTimeout>>(null);
+
+    React.useEffect(() => {
+      return () => {
+        if (timerRef.current) clearTimeout(timerRef.current);
+      };
+    }, []);
 
     const handleCopy = React.useCallback(() => {
-      void navigator.clipboard.writeText(value);
-      setCopied(true);
-      setTimeout(() => setCopied(false), feedbackDuration);
+      navigator.clipboard.writeText(value).then(
+        () => {
+          setCopied(true);
+          if (timerRef.current) clearTimeout(timerRef.current);
+          timerRef.current = setTimeout(
+            () => setCopied(false),
+            feedbackDuration,
+          );
+        },
+        () => {
+          /* clipboard write failed — don't show false "copied" feedback */
+        },
+      );
     }, [value, feedbackDuration]);
 
     return (

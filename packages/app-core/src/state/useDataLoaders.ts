@@ -423,7 +423,6 @@ export function useDataLoaders(deps: DataLoadersDeps) {
           setOwnerNameState(persisted);
         }
       })
-      .catch(() => {})
       .catch(() => {});
 
     return () => {
