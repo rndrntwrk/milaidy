@@ -3,6 +3,34 @@ title: Journal des modifications
 description: Nouveautés de Milady — fonctionnalités, améliorations et correctifs.
 ---
 
+<Update label="2026-04-07" description="Diagnostics développeur, migrations PGlite life-ops, scripts workspace, bannières terminal en développement" tags={["Fix", "Update"]}>
+
+<div id="life-ops-safer-migrations-on-pglite">
+## Life-ops : migrations plus sûres sur PGlite
+</div>
+
+Les mises à jour de schéma du sous-système life-ops exécutent désormais les index principaux après les étapes `ALTER TABLE` de propriété, de sorte que les bases de données héritées antérieures aux colonnes `domain` et `subject_*` n'échouent plus lors du `CREATE INDEX`. Les savepoints par migration sont également encapsulés dans une transaction explicite `BEGIN` / `COMMIT` afin que PGlite et Postgres respectent tous deux la sémantique de `SAVEPOINT` lors des mises à jour.
+
+<div id="plugin-resolution-why-optional-plugins-were-requested">
+## Résolution de plugins : pourquoi des plugins optionnels ont été demandés
+</div>
+
+Lorsqu'un plugin optionnel ne peut pas être chargé parce qu'un package ou un checkout browser stagehand est manquant, les journaux de démarrage incluent désormais la première source de configuration ou variable d'environnement qui l'a ajouté à l'ensemble de chargement. Cela transforme une erreur générique "Cannot find module" en un correctif actionnable : supprimez-le de `plugins.allow`, désactivez la variable d'environnement qui l'a activé automatiquement, ou installez le package.
+
+<div id="workspace-tooling-and-repo-hygiene">
+## Outillage workspace et hygiène du dépôt
+</div>
+
+De nouveaux scripts de dépendances workspace (`workspace:deps:sync|check|restore`, `workspace:replace-versions`, `workspace:restore-refs`, `workspace:prepare`) réduisent la chirurgie manuelle de `package.json` lors de la liaison de checkouts locaux elizaOS ou de plugins. Le dépôt ignore désormais aussi `cache/audio/` et `scripts/bin/*` tout en conservant `scripts/bin/.gitkeep` pour que les binaires et caches locaux restent hors de git.
+
+<div id="terminal-dev-banners">
+## Bannières terminal en développement
+</div>
+
+L'orchestrateur, Vite, l'API et Electrobun peuvent désormais afficher des tableaux de paramètres encadrés avec des en-têtes optionnels style figlet et une coloration ANSI adaptée au TTY pendant le développement local. Il s'agit strictement de diagnostics terminal pour les flux de travail de développement, pas d'une modification de l'interface du tableau de bord.
+
+</Update>
+
 <Update label="2026-04-05" description="Chat du tableau de bord : les callbacks d'action remplacent sur place (messages progressifs à la Discord via SSE)" tags={["Update", "Fix"]}>
 
 <div id="action-callbacks-replace-dont-concatenate-dashboard-sse">
