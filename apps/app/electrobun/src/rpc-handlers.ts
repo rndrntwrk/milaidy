@@ -1,4 +1,3 @@
-import fs from "node:fs";
 /**
  * RPC Handler Registration for Electrobun
  *
