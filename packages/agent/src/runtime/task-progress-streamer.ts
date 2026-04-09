@@ -129,12 +129,10 @@ async function readLastAssistantText(
   if (!workdir) return null;
   // The session jsonl lives under ~/.claude/projects/-<workdir-path-dashed>/
   const home = process.env.HOME ?? "/home/milady";
-  // Claude code encodes project paths by replacing / with - and stripping
-  // dots from directory names. /home/milady/.milady/workspaces/abc becomes
-  // -home-milady--milady-workspaces-abc (dot stripped → double dash).
-  const projectKey = workdir
-    .replace(/\./g, "")
-    .replace(/\//g, "-");
+  // Claude code encodes project paths by replacing both / and . with -.
+  // /home/milady/.milady/workspaces/abc → -home-milady--milady-workspaces-abc
+  // (the /. in /.milady becomes -- because both chars map to -).
+  const projectKey = workdir.replace(/[/.]/g, "-");
   const projectDir = path.join(home, ".claude", "projects", projectKey);
   let files: string[];
   try {
