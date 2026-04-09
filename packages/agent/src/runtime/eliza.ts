@@ -756,19 +756,15 @@ type AgentRuntimeFeatureFlags = {
 };
 
 function runtimeTrajectoriesEnabled(runtime: AgentRuntime): boolean {
-  const runtimeWithFlags = runtime as AgentRuntime & AgentRuntimeFeatureFlags;
-  return (
-    typeof runtimeWithFlags.isTrajectoriesEnabled === "function" &&
-    runtimeWithFlags.isTrajectoriesEnabled()
-  );
+  const fn = (runtime as AgentRuntime & AgentRuntimeFeatureFlags)
+    .isTrajectoriesEnabled;
+  return typeof fn === "function" && fn();
 }
 
 function runtimeKnowledgeEnabled(runtime: AgentRuntime): boolean {
-  const runtimeWithFlags = runtime as AgentRuntime & AgentRuntimeFeatureFlags;
-  return (
-    typeof runtimeWithFlags.isKnowledgeEnabled === "function" &&
-    runtimeWithFlags.isKnowledgeEnabled()
-  );
+  const fn = (runtime as AgentRuntime & AgentRuntimeFeatureFlags)
+    .isKnowledgeEnabled;
+  return typeof fn === "function" && fn();
 }
 
 interface TrajectoryLoggerControl {

@@ -1345,7 +1345,6 @@ async function prepareLaunch(
     }
     return preparation;
   }
-
   if (isHyperscapeAppName(appInfo.name)) {
     await prepareHyperscapeWalletAuthFromRuntime(runtime);
     return {};

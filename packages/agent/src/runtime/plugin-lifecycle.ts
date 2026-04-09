@@ -4,7 +4,6 @@ import type {
   AgentRuntime,
   Evaluator,
   Plugin,
-  PluginModelRegistration,
   Provider,
   Route,
   Service,
@@ -42,7 +41,7 @@ type MiladyPluginEventRegistration = {
 
 type MiladyPluginModelRegistration = {
   modelType: string;
-  handler: PluginModelRegistration["handler"];
+  handler: unknown;
   provider: string;
 };
 
