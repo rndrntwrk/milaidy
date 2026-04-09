@@ -1,7 +1,6 @@
 import type http from "node:http";
 import {
   type AgentRuntime,
-  stringToUuid,
   type Task,
   type UUID,
 } from "@elizaos/core";
@@ -196,12 +195,8 @@ export async function handleWorkbenchRoutes(
       }
 
       try {
-        const ownerEntityId =
-          state.adminEntityId ??
-          (stringToUuid(`${state.runtime.agentId}-admin-entity`) as UUID);
-        state.adminEntityId = ownerEntityId;
         lifeops = await new LifeOpsService(state.runtime, {
-          ownerEntityId,
+          ownerEntityId: state.adminEntityId,
         }).getOverview();
         lifeopsAvailable = true;
       } catch {

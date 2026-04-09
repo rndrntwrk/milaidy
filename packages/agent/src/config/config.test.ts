@@ -2,6 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { generateWalletKeys } from "../api/wallet";
 
 let tmpDir: string;
 let tmpConfigPath: string;
@@ -14,6 +15,9 @@ const ENV_KEYS = [
   "DISCORD_API_TOKEN",
   "DISCORD_BOT_TOKEN",
   "OPENAI_API_KEY",
+  "SOLANA_PRIVATE_KEY",
+  "SOLANA_PUBLIC_KEY",
+  "WALLET_PUBLIC_KEY",
 ] as const;
 
 const envBackup = new Map<string, string | undefined>();
@@ -138,5 +142,22 @@ describe("loadElizaConfig", () => {
     });
 
     expect(configFileExists()).toBe(true);
+  });
+
+  it("syncs Solana public key aliases from a persisted private key", () => {
+    process.env.ELIZA_PERSIST_CONFIG_PATH = tmpPersistPath;
+    const keys = generateWalletKeys();
+
+    writeJson(tmpPersistPath, {
+      env: {
+        SOLANA_PRIVATE_KEY: keys.solanaPrivateKey,
+      },
+    });
+
+    loadElizaConfig();
+
+    expect(process.env.SOLANA_PRIVATE_KEY).toBeUndefined();
+    expect(process.env.SOLANA_PUBLIC_KEY).toBe(keys.solanaAddress);
+    expect(process.env.WALLET_PUBLIC_KEY).toBe(keys.solanaAddress);
   });
 });

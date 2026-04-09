@@ -163,6 +163,7 @@
     "test:e2e:coding-agents": "bun run test:orchestrator:integration && bunx vitest run --config vitest.e2e.config.ts packages/agent/test/coding-agent-route-readiness.e2e.test.ts packages/agent/test/coding-agent-codex-artifact.e2e.test.ts packages/agent/test/coding-agent-chat-roundtrip.e2e.test.ts",
     "test:force": "bun scripts/run-node-tsx.mjs test/scripts/test-force.ts",
     "test:orchestrator:integration": "bun scripts/run-node-tsx.mjs test/scripts/orchestrator-task-thread-integration.ts",
+    "test:orchestrator:restart": "bun scripts/run-node-tsx.mjs test/scripts/orchestrator-task-thread-restart.ts",
     "test:orchestrator:live:failover": "bun scripts/run-node-tsx.mjs test/scripts/orchestrator-live-failover.ts",
     "test:orchestrator:live:review": "bun scripts/run-node-tsx.mjs test/scripts/orchestrator-failover-review.ts",
     "test:coordinator:preflight": "bun scripts/run-node-tsx.mjs test/scripts/coordinator-scenario-preflight.ts",

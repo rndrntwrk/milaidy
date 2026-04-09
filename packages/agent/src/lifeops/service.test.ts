@@ -12,6 +12,10 @@ const configMocks = vi.hoisted(() => ({
   loadElizaConfig: vi.fn(),
 }));
 
+const ownerEntityMocks = vi.hoisted(() => ({
+  resolveOwnerEntityId: vi.fn(),
+}));
+
 vi.mock("@miladyai/plugin-selfcontrol/selfcontrol", () => ({
   getSelfControlStatus: selfControlMocks.getSelfControlStatus,
   startSelfControlBlock: selfControlMocks.startSelfControlBlock,
@@ -20,6 +24,10 @@ vi.mock("@miladyai/plugin-selfcontrol/selfcontrol", () => ({
 
 vi.mock("../config/config.js", () => ({
   loadElizaConfig: configMocks.loadElizaConfig,
+}));
+
+vi.mock("../runtime/owner-entity.js", () => ({
+  resolveOwnerEntityId: ownerEntityMocks.resolveOwnerEntityId,
 }));
 
 import { LifeOpsService } from "./service.js";
@@ -80,6 +88,7 @@ describe("LifeOpsService", () => {
       removed: true,
       status: createSelfControlStatus(),
     });
+    ownerEntityMocks.resolveOwnerEntityId.mockResolvedValue(null);
   });
 
   it("dispatches connected runtime reminders through the owner contact", async () => {
@@ -127,6 +136,111 @@ describe("LifeOpsService", () => {
     expect(attempt).toMatchObject({
       outcome: "delivered",
       connectorRef: "runtime:discord:dm-1",
+    });
+  });
+
+  it("falls back to the owner entity when discord has no explicit owner contact", async () => {
+    configMocks.loadElizaConfig.mockReturnValue({
+      agents: {
+        defaults: {
+          ownerContacts: {},
+        },
+      },
+    });
+    const runtime = createRuntime();
+    const service = new LifeOpsService(runtime, {
+      ownerEntityId: "owner-discord-uuid",
+    });
+    (service as unknown as { repository: Record<string, unknown> }).repository = {
+      listChannelPolicies: vi.fn().mockResolvedValue([]),
+      createReminderAttempt: vi.fn().mockResolvedValue(undefined),
+    };
+    (service as unknown as { recordReminderAudit: ReturnType<typeof vi.fn> })
+      .recordReminderAudit = vi.fn().mockResolvedValue(undefined);
+
+    const attempt = await (
+      service as unknown as {
+        dispatchReminderAttempt: (args: Record<string, unknown>) => Promise<Record<string, unknown>>;
+      }
+    ).dispatchReminderAttempt({
+      plan: { id: "plan-owner-fallback" },
+      ownerType: "occurrence",
+      ownerId: "occ-owner-fallback",
+      occurrenceId: "occ-owner-fallback",
+      subjectType: "owner",
+      title: "Brush teeth",
+      channel: "discord",
+      stepIndex: 0,
+      scheduledFor: "2026-04-06T12:00:00.000Z",
+      dueAt: null,
+      urgency: "medium",
+      quietHours: {},
+      acknowledged: false,
+      attemptedAt: "2026-04-06T12:00:00.000Z",
+    });
+
+    expect(runtime.sendMessageToTarget).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: "discord",
+        entityId: "owner-discord-uuid",
+        channelId: null,
+      }),
+      expect.objectContaining({
+        source: "discord",
+      }),
+    );
+    expect(attempt).toMatchObject({
+      outcome: "delivered",
+      connectorRef: "runtime:discord:owner-discord-uuid",
+    });
+  });
+
+  it("does not synthesize a discord runtime target when no real owner entity exists", async () => {
+    configMocks.loadElizaConfig.mockReturnValue({
+      agents: {
+        defaults: {
+          ownerContacts: {},
+        },
+      },
+    });
+    const runtime = createRuntime();
+    const service = new LifeOpsService(runtime);
+    (service as unknown as { repository: Record<string, unknown> }).repository = {
+      listChannelPolicies: vi.fn().mockResolvedValue([]),
+      createReminderAttempt: vi.fn().mockResolvedValue(undefined),
+    };
+    (service as unknown as { recordReminderAudit: ReturnType<typeof vi.fn> })
+      .recordReminderAudit = vi.fn().mockResolvedValue(undefined);
+
+    const attempt = await (
+      service as unknown as {
+        dispatchReminderAttempt: (args: Record<string, unknown>) => Promise<Record<string, unknown>>;
+      }
+    ).dispatchReminderAttempt({
+      plan: { id: "plan-no-owner" },
+      ownerType: "occurrence",
+      ownerId: "occ-no-owner",
+      occurrenceId: "occ-no-owner",
+      subjectType: "owner",
+      title: "Brush teeth",
+      channel: "discord",
+      stepIndex: 0,
+      scheduledFor: "2026-04-06T12:00:00.000Z",
+      dueAt: null,
+      urgency: "medium",
+      quietHours: {},
+      acknowledged: false,
+      attemptedAt: "2026-04-06T12:00:00.000Z",
+    });
+
+    expect(ownerEntityMocks.resolveOwnerEntityId).toHaveBeenCalledWith(runtime);
+    expect(runtime.sendMessageToTarget).not.toHaveBeenCalled();
+    expect(attempt).toMatchObject({
+      outcome: "blocked_connector",
+      connectorRef: null,
+      deliveryMetadata: expect.objectContaining({
+        reason: "unconfigured_channel",
+      }),
     });
   });
 

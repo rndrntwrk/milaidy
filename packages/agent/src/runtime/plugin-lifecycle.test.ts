@@ -334,6 +334,38 @@ describe("installRuntimePluginLifecycle", () => {
     expect(runtime.getPluginOwnership?.("@elizaos/plugin-broken")).toBeNull();
   });
 
+  it("suppresses duplicate action registrations before core emits a warning", async () => {
+    const runtime = createMockRuntime();
+    runtime.actions.push({ name: "SEND_MESSAGE" });
+
+    await runtime.registerPlugin({
+      name: "@elizaos/plugin-duplicate-action",
+      description: "duplicate action demo",
+      actions: [
+        { name: "SEND_MESSAGE" } as never,
+        { name: "UNIQUE_ACTION" } as never,
+      ],
+    });
+
+    expect(runtime.actions.map((action: { name: string }) => action.name)).toEqual(
+      ["SEND_MESSAGE", "UNIQUE_ACTION"],
+    );
+    expect(
+      runtime.getPluginOwnership?.("@elizaos/plugin-duplicate-action")?.actions,
+    ).toEqual([
+      expect.objectContaining({
+        name: "UNIQUE_ACTION",
+      }),
+    ]);
+    expect(runtime.logger.debug).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "SEND_MESSAGE",
+        plugin: "@elizaos/plugin-duplicate-action",
+      }),
+      "Skipping duplicate action before runtime registration",
+    );
+  });
+
   it("refuses to unload adapter plugins without a runtime reload", async () => {
     const runtime = createMockRuntime();
     const adapterPlugin: Plugin = {

@@ -251,6 +251,7 @@ import {
   generateWalletKeys,
   getWalletAddresses,
   importWallet,
+  setSolanaWalletEnv,
   validatePrivateKey,
 } from "./wallet.js";
 import { handleWebsiteBlockerRoutes } from "./website-blocker-routes.js";
@@ -2208,7 +2209,7 @@ function ensureWalletKeysInEnvAndConfig(config: ElizaConfig): boolean {
 
     if (missingSolana) {
       envConfig.SOLANA_PRIVATE_KEY = walletKeys.solanaPrivateKey;
-      process.env.SOLANA_PRIVATE_KEY = walletKeys.solanaPrivateKey;
+      setSolanaWalletEnv(walletKeys.solanaPrivateKey);
       logger.info(
         `[eliza-api] Generated Solana wallet: ${walletKeys.solanaAddress}`,
       );

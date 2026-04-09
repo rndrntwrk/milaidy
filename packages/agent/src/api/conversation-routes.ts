@@ -885,25 +885,35 @@ export async function handleConversationRoutes(
       );
 
       if (!aborted) {
-        const resolvedText = normalizeChatResponseText(
-          result.text,
-          state.logBuffer,
-          runtime,
-        );
-        await persistAssistantConversationMemory(
-          runtime,
-          conv.roomId,
-          resolvedText,
-          channelType,
-          turnStartedAt,
-        );
         conv.updatedAt = new Date().toISOString();
-        writeSseJson(res, {
-          type: "done",
-          fullText: resolvedText,
-          agentName: result.agentName,
-          ...(result.usage ? { estimatedUsage: result.usage } : {}),
-        });
+        if (result.noResponseReason !== "ignored") {
+          const resolvedText = normalizeChatResponseText(
+            result.text,
+            state.logBuffer,
+            runtime,
+          );
+          await persistAssistantConversationMemory(
+            runtime,
+            conv.roomId,
+            resolvedText,
+            channelType,
+            turnStartedAt,
+          );
+          writeSseJson(res, {
+            type: "done",
+            fullText: resolvedText,
+            agentName: result.agentName,
+            ...(result.usage ? { estimatedUsage: result.usage } : {}),
+          });
+        } else {
+          writeSseJson(res, {
+            type: "done",
+            fullText: "",
+            agentName: result.agentName,
+            noResponseReason: "ignored",
+            ...(result.usage ? { estimatedUsage: result.usage } : {}),
+          });
+        }
       }
     } catch (err) {
       if (!aborted) {
@@ -1031,23 +1041,31 @@ export async function handleConversationRoutes(
         },
       );
 
-      const resolvedText = normalizeChatResponseText(
-        result.text,
-        state.logBuffer,
-        runtime,
-      );
-      await persistAssistantConversationMemory(
-        runtime,
-        conv.roomId,
-        resolvedText,
-        channelType,
-        turnStartedAt,
-      );
       conv.updatedAt = new Date().toISOString();
-      json(res, {
-        text: resolvedText,
-        agentName: result.agentName,
-      });
+      if (result.noResponseReason !== "ignored") {
+        const resolvedText = normalizeChatResponseText(
+          result.text,
+          state.logBuffer,
+          runtime,
+        );
+        await persistAssistantConversationMemory(
+          runtime,
+          conv.roomId,
+          resolvedText,
+          channelType,
+          turnStartedAt,
+        );
+        json(res, {
+          text: resolvedText,
+          agentName: result.agentName,
+        });
+      } else {
+        json(res, {
+          text: "",
+          agentName: result.agentName,
+          noResponseReason: "ignored",
+        });
+      }
     } catch (err) {
       logger.warn(
         `[conversations] POST /messages failed: ${err instanceof Error ? err.message : String(err)}`,

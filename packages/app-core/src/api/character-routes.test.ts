@@ -123,6 +123,41 @@ describe("character routes", () => {
     });
   });
 
+  test("renaming character rewrites assistant names in existing message examples", async () => {
+    const result = await invoke({
+      method: "PUT",
+      pathname: "/api/character",
+      body: {
+        name: "Sakuya",
+      },
+    });
+
+    expect(result.status).toBe(200);
+    expect(
+      (state.runtime as { character: Record<string, unknown> }).character
+        .messageExamples,
+    ).toEqual([
+      {
+        examples: [
+          { name: "{{user1}}", content: { text: "hello" } },
+          { name: "Sakuya", content: { text: "hi" } },
+        ],
+      },
+    ]);
+    expect(saveConfig).toHaveBeenCalled();
+    expect(saveConfig.mock.calls.at(-1)?.[0]?.agents?.list?.[0]).toMatchObject({
+      name: "Sakuya",
+      messageExamples: [
+        {
+          examples: [
+            { name: "{{user1}}", content: { text: "hello" } },
+            { name: "Sakuya", content: { text: "hi" } },
+          ],
+        },
+      ],
+    });
+  });
+
   test("updates message examples", async () => {
     const messageExamples = [
       {
@@ -146,6 +181,61 @@ describe("character routes", () => {
       (state.runtime as { character: Record<string, unknown> }).character
         .messageExamples,
     ).toEqual(messageExamples);
+  });
+
+  test("normalizes {{agentName}} placeholders in saved message examples", async () => {
+    const result = await invoke({
+      method: "PUT",
+      pathname: "/api/character",
+      body: {
+        name: "Sakuya",
+        messageExamples: [
+          {
+            examples: [
+              { name: "{{user1}}", content: { text: "hello" } },
+              {
+                name: "{{agentName}}",
+                content: { text: "hi, i'm {{agentName}}" },
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    expect(result.status).toBe(200);
+    expect(result.payload).toMatchObject({
+      ok: true,
+      agentName: "Sakuya",
+      character: {
+        name: "Sakuya",
+        messageExamples: [
+          {
+            examples: [
+              { name: "{{user1}}", content: { text: "hello" } },
+              {
+                name: "Sakuya",
+                content: { text: "hi, i'm Sakuya" },
+              },
+            ],
+          },
+        ],
+      },
+    });
+    expect(
+      (state.runtime as { character: Record<string, unknown> }).character
+        .messageExamples,
+    ).toEqual([
+      {
+        examples: [
+          { name: "{{user1}}", content: { text: "hello" } },
+          {
+            name: "Sakuya",
+            content: { text: "hi, i'm Sakuya" },
+          },
+        ],
+      },
+    ]);
   });
 
   test("persists the full character payload including username across save and reload", async () => {

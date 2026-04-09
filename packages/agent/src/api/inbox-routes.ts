@@ -228,19 +228,24 @@ async function loadInboxMessages(
   sourceFilter: Set<string>,
   roomId: UUID | null,
 ): Promise<InboxMessage[]> {
-  let roomIds: UUID[];
+  let memories: Memory[];
   if (roomId) {
-    roomIds = [roomId];
+    memories = await runtime.getMemories({
+      tableName: "messages",
+      roomId,
+      count: limit * PER_ROOM_OVERFETCH_MULTIPLIER,
+      unique: false,
+    });
   } else {
+    let roomIds: UUID[];
     roomIds = await collectAgentRoomIds(runtime);
     if (roomIds.length === 0) return [];
+    memories = await runtime.getMemoriesByRoomIds({
+      tableName: "messages",
+      roomIds,
+      limit: limit * PER_ROOM_OVERFETCH_MULTIPLIER,
+    });
   }
-
-  const memories = await runtime.getMemoriesByRoomIds({
-    tableName: "messages",
-    roomIds,
-    limit: limit * PER_ROOM_OVERFETCH_MULTIPLIER,
-  });
 
   const agentId = runtime.agentId;
   const out: InboxMessage[] = [];

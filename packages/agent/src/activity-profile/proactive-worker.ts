@@ -2,7 +2,7 @@ import type { IAgentRuntime, Task, TaskMetadata, UUID } from "@elizaos/core";
 import { logger, stringToUuid } from "@elizaos/core";
 import {
   loadOwnerContactsConfig,
-  resolveOwnerContactSource,
+  resolveOwnerContactWithFallback,
 } from "../config/owner-contacts.js";
 import { resolveDefaultTimeZone } from "../lifeops/defaults.js";
 import { LifeOpsService, LifeOpsServiceError } from "../lifeops/service.js";
@@ -88,7 +88,11 @@ export function resolveProactiveOwnerContact(args: {
     };
   }
 
-  const resolved = resolveOwnerContactSource(args.ownerContacts, deliverySource);
+  const resolved = resolveOwnerContactWithFallback({
+    ownerContacts: args.ownerContacts,
+    source: deliverySource,
+    ownerEntityId: args.ownerEntityId,
+  });
   if (resolved) {
     return {
       source: resolved.source,
@@ -96,15 +100,7 @@ export function resolveProactiveOwnerContact(args: {
     };
   }
 
-  const contact = args.ownerContacts[deliverySource];
-  if (!contact) {
-    return null;
-  }
-
-  return {
-    source: deliverySource,
-    contact,
-  };
+  return null;
 }
 
 export async function executeProactiveTask(

@@ -92,7 +92,7 @@ declare module "./client-base" {
       text: string,
       channelType?: ConversationChannelType,
       conversationMode?: ConversationMode,
-    ): Promise<{ text: string; agentName: string }>;
+    ): Promise<{ text: string; agentName: string; noResponseReason?: "ignored" }>;
     sendChatStream(
       text: string,
       onToken: (token: string, accumulatedText?: string) => void,
@@ -103,6 +103,7 @@ declare module "./client-base" {
       text: string;
       agentName: string;
       completed: boolean;
+      noResponseReason?: "ignored";
       usage?: ChatTokenUsage;
     }>;
     listConversations(): Promise<{ conversations: Conversation[] }>;
@@ -177,6 +178,7 @@ declare module "./client-base" {
       text: string;
       agentName: string;
       blocks?: ContentBlock[];
+      noResponseReason?: "ignored";
     }>;
     sendConversationMessageStream(
       id: string,
@@ -191,6 +193,7 @@ declare module "./client-base" {
       text: string;
       agentName: string;
       completed: boolean;
+      noResponseReason?: "ignored";
       usage?: ChatTokenUsage;
     }>;
     requestGreeting(
@@ -718,6 +721,7 @@ MiladyClient.prototype.sendConversationMessage = async function (
     text: string;
     agentName: string;
     blocks?: ContentBlock[];
+    noResponseReason?: "ignored";
   }>(`/api/conversations/${encodeURIComponent(id)}/messages`, {
     method: "POST",
     body: JSON.stringify({
@@ -730,7 +734,10 @@ MiladyClient.prototype.sendConversationMessage = async function (
   });
   return {
     ...response,
-    text: this.normalizeAssistantText(response.text),
+    text:
+      response.noResponseReason === "ignored"
+        ? ""
+        : this.normalizeAssistantText(response.text),
   };
 };
 

@@ -449,7 +449,9 @@ export async function runFirstTimeSetup(config: ElizaConfig): Promise<ElizaConfi
     // Offer to generate or import wallets for EVM and Solana. Keys are
     // stored in config.env and process.env, making them available to
     // plugins at runtime.
-    const { generateWalletKeys, importWallet } = await import("../api/wallet.js");
+    const { generateWalletKeys, importWallet, setSolanaWalletEnv } = await import(
+      "../api/wallet.js"
+    );
 
     // hasEvmKey and hasSolKey are hoisted above the if (!isCloudMode) block
     // so they're also available in the persistence section.
@@ -485,7 +487,7 @@ export async function runFirstTimeSetup(config: ElizaConfig): Promise<ElizaConfi
           clack.log.success(`Generated EVM wallet: ${keys.evmAddress}`);
         }
         if (!hasSolKey) {
-          process.env.SOLANA_PRIVATE_KEY = keys.solanaPrivateKey;
+          setSolanaWalletEnv(keys.solanaPrivateKey);
           clack.log.success(`Generated Solana wallet: ${keys.solanaAddress}`);
         }
       } else if (walletAction === "import") {

@@ -72,6 +72,80 @@ export interface CharacterRouteContext extends RouteRequestContext {
   ) => CharacterValidationResult;
 }
 
+type CharacterMessageExample = {
+  name: string;
+  content: {
+    text: string;
+    actions?: string[];
+  };
+};
+
+type CharacterMessageExampleGroup = {
+  examples: CharacterMessageExample[];
+};
+
+function replaceCharacterNameTokens(value: string, nextName: string): string {
+  return value
+    .replaceAll("{{agentName}}", nextName)
+    .replaceAll("{{name}}", nextName);
+}
+
+function shouldRewriteExampleSpeakerName(
+  speakerName: string,
+  previousName?: string,
+): boolean {
+  const normalized = speakerName.trim().toLowerCase();
+  if (!normalized) return false;
+
+  if (
+    normalized === "{{agentname}}" ||
+    normalized === "{{name}}" ||
+    normalized === "assistant" ||
+    normalized === "agent" ||
+    normalized === "ai" ||
+    normalized === "model"
+  ) {
+    return true;
+  }
+
+  if (previousName?.trim()) {
+    return normalized === previousName.trim().toLowerCase();
+  }
+
+  return false;
+}
+
+function normalizeCharacterMessageExamplesForName(
+  messageExamples: unknown,
+  nextName: string,
+  previousName?: string,
+): CharacterMessageExampleGroup[] | undefined {
+  if (!Array.isArray(messageExamples)) {
+    return undefined;
+  }
+
+  return messageExamples.map((group) => {
+    const examples = Array.isArray(
+      (group as CharacterMessageExampleGroup | null)?.examples,
+    )
+      ? (group as CharacterMessageExampleGroup).examples
+      : [];
+
+    return {
+      examples: examples.map((example) => ({
+        ...example,
+        name: shouldRewriteExampleSpeakerName(example.name, previousName)
+          ? nextName
+          : replaceCharacterNameTokens(example.name, nextName),
+        content: {
+          ...example.content,
+          text: replaceCharacterNameTokens(example.content.text, nextName),
+        },
+      })),
+    };
+  });
+}
+
 function syncRuntimeCharacterToConfig(
   state: CharacterRouteState,
   saveConfig?: (config: CharacterAutonomousConfigLike) => void,
@@ -316,6 +390,15 @@ export async function handleCharacterRoutes(
 
     if (state.runtime) {
       const character = state.runtime.character;
+      const previousCharacterName =
+        typeof character.name === "string" ? character.name : undefined;
+      const nextCharacterName =
+        typeof body.name === "string" && body.name.trim()
+          ? body.name.trim()
+          : typeof character.name === "string" && character.name.trim()
+            ? character.name.trim()
+            : state.agentName;
+
       if (body.name != null) character.name = String(body.name);
       if (body.username != null) character.username = String(body.username);
       if (body.bio != null) {
@@ -334,9 +417,22 @@ export async function handleCharacterRoutes(
         character.style = body.style as NonNullable<typeof character.style>;
       }
       if (body.messageExamples != null) {
-        character.messageExamples = body.messageExamples as NonNullable<
-          typeof character.messageExamples
-        >;
+        character.messageExamples = normalizeCharacterMessageExamplesForName(
+          body.messageExamples,
+          nextCharacterName,
+          previousCharacterName,
+        ) as NonNullable<typeof character.messageExamples>;
+      } else if (body.name != null) {
+        const normalizedExamples = normalizeCharacterMessageExamplesForName(
+          character.messageExamples,
+          nextCharacterName,
+          previousCharacterName,
+        );
+        if (normalizedExamples) {
+          character.messageExamples = normalizedExamples as NonNullable<
+            typeof character.messageExamples
+          >;
+        }
       }
       if (body.postExamples != null) {
         character.postExamples = body.postExamples as string[];
@@ -345,6 +441,7 @@ export async function handleCharacterRoutes(
       // Persist character fields to DB so edits survive restarts
       const charData = {
         name: character.name,
+        username: character.username,
         bio: character.bio,
         system: character.system,
         adjectives: character.adjectives,
@@ -356,9 +453,8 @@ export async function handleCharacterRoutes(
       await state.runtime.updateAgent(state.runtime.agentId, {
         name: character.name,
         metadata: {
-          ...(
-            state.runtime.character as { metadata?: Record<string, unknown> }
-          ).metadata,
+          ...(state.runtime.character as { metadata?: Record<string, unknown> })
+            .metadata,
           character: charData,
         },
       });
@@ -367,7 +463,11 @@ export async function handleCharacterRoutes(
     syncRuntimeCharacterToConfig(state, saveConfig);
 
     if (body.name) state.agentName = String(body.name);
-    json(res, { ok: true, character: body, agentName: state.agentName });
+    json(res, {
+      ok: true,
+      character: state.runtime?.character ?? body,
+      agentName: state.agentName,
+    });
     return true;
   }
 

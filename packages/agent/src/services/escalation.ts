@@ -4,9 +4,10 @@ import { loadElizaConfig } from "../config/config.js";
 import {
   loadOwnerContactRoutingHints,
   loadOwnerContactsConfig,
-  resolveOwnerContactSource,
+  resolveOwnerContactWithFallback,
   type OwnerContactRoutingHint,
 } from "../config/owner-contacts.js";
+import { resolveOwnerEntityId } from "../runtime/owner-entity.js";
 import type {
   EscalationConfig,
   OwnerContactEntry,
@@ -77,12 +78,21 @@ async function sendToChannel(
   text: string,
   ownerContacts: OwnerContactsConfig,
   routingHints: Record<string, OwnerContactRoutingHint>,
+  ownerEntityId: string | null,
 ): Promise<boolean> {
   const hint = routingHints[channel] ?? null;
   const resolvedContact =
-    resolveOwnerContactSource(ownerContacts, channel) ??
+    resolveOwnerContactWithFallback({
+      ownerContacts,
+      source: channel,
+      ownerEntityId,
+    }) ??
     (hint
-      ? resolveOwnerContactSource(ownerContacts, hint.source)
+      ? resolveOwnerContactWithFallback({
+          ownerContacts,
+          source: hint.source,
+          ownerEntityId,
+        })
       : null);
   const contact: OwnerContactEntry | undefined =
     resolvedContact?.contact ??
@@ -132,9 +142,13 @@ async function ownerRespondedSince(
   runtime: IAgentRuntime,
   ownerContacts: OwnerContactsConfig,
   routingHints: Record<string, OwnerContactRoutingHint>,
+  ownerEntityId: string | null,
   sinceTimestamp: number,
 ): Promise<boolean> {
   const entityIds = new Set<string>();
+  if (ownerEntityId) {
+    entityIds.add(ownerEntityId);
+  }
   for (const contact of Object.values(ownerContacts)) {
     if (contact.entityId) entityIds.add(contact.entityId);
   }
@@ -210,6 +224,7 @@ export class EscalationService {
     const channels = resolveChannels(config);
     const ownerContacts = loadOwnerContacts();
     const routingHints = await loadOwnerContactRoutingHints(runtime, ownerContacts);
+    const ownerEntityId = await resolveOwnerEntityId(runtime);
     const waitMs = resolveWaitMs(config);
 
     idCounter += 1;
@@ -237,6 +252,7 @@ export class EscalationService {
         text,
         ownerContacts,
         routingHints,
+        ownerEntityId,
       );
       if (sent) {
         state.channelsSent.push(firstChannel);
@@ -269,6 +285,7 @@ export class EscalationService {
       runtime,
       ownerContacts,
     );
+    const ownerEntityId = await resolveOwnerEntityId(runtime);
     const maxRetries = resolveMaxRetries(config);
     const waitMs = resolveWaitMs(config);
 
@@ -276,6 +293,7 @@ export class EscalationService {
       runtime,
       ownerContacts,
       routingHints,
+      ownerEntityId,
       state.lastSentAt,
     );
 
@@ -304,6 +322,7 @@ export class EscalationService {
         state.text,
         ownerContacts,
         routingHints,
+        ownerEntityId,
       );
       if (sent) {
         state.channelsSent.push(nextChannel);

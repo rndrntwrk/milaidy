@@ -44,4 +44,17 @@ describe("proactive worker routing", () => {
       },
     });
   });
+
+  it("falls back to the owner entity for discord proactive delivery", () => {
+    expect(
+      resolveProactiveOwnerContact({
+        targetPlatform: "discord",
+        ownerEntityId: "owner-discord-uuid",
+        ownerContacts: {},
+      }),
+    ).toEqual({
+      source: "discord",
+      contact: { entityId: "owner-discord-uuid" },
+    });
+  });
 });

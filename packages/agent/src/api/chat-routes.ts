@@ -104,6 +104,7 @@ const CHAT_MAX_BODY_BYTES = 20 * 1024 * 1024; // 20 MB (image-capable)
 export interface ChatGenerationResult {
   text: string;
   agentName: string;
+  noResponseReason?: "ignored";
   usage?: {
     promptTokens: number;
     completionTokens: number;
@@ -272,6 +273,41 @@ export function normalizeChatResponseText(
   }
   if (!isClientVisibleNoResponse(text)) return text;
   return resolveNoResponseFallback(logBuffer, runtime);
+}
+
+function listResponseActions(
+  responseContent: Content | null | undefined,
+): string[] {
+  if (!Array.isArray(responseContent?.actions)) {
+    return [];
+  }
+  return responseContent.actions
+    .map((action) =>
+      typeof action === "string" ? action.trim().toUpperCase() : "",
+    )
+    .filter((action) => action.length > 0);
+}
+
+function isIntentionalNoResponseResult(
+  result:
+    | {
+        didRespond?: boolean;
+        responseContent?: Content | null;
+      }
+    | null
+    | undefined,
+  candidateText: string,
+): boolean {
+  if (!result) return false;
+
+  const actions = listResponseActions(result.responseContent);
+  const hasSilentTerminalAction =
+    actions.length === 1 &&
+    (actions[0] === "IGNORE" || actions[0] === "STOP");
+  const hasNoVisibleText =
+    candidateText.trim().length === 0 || isClientVisibleNoResponse(candidateText);
+
+  return hasNoVisibleText && (result.didRespond === false || hasSilentTerminalAction);
 }
 
 function inferWebsiteBlockFallback(
@@ -1277,10 +1313,19 @@ export async function generateChatResponse(
     }
 
     const noResponseFallback = opts?.resolveNoResponseText?.();
-    const normalizedResponseText = trimWalletProgressPrefix(responseText);
-    const finalText = isClientVisibleNoResponse(normalizedResponseText)
-      ? (noResponseFallback ?? (responseText || "(no response)"))
-      : normalizedResponseText;
+    const normalizedResponseText = trimWalletProgressPrefix(
+      responseText || resultText || "",
+    );
+    const intentionalNoResponse = isIntentionalNoResponseResult(
+      result,
+      normalizedResponseText,
+    );
+    const finalText = intentionalNoResponse
+      ? ""
+      : isClientVisibleNoResponse(normalizedResponseText)
+        ? (noResponseFallback ??
+          (normalizedResponseText || responseText || "(no response)"))
+        : normalizedResponseText;
 
     // Estimate token usage from text lengths (~4 chars per token)
     const promptText = extractCompatTextContent(message.content) ?? "";
@@ -1290,6 +1335,7 @@ export async function generateChatResponse(
     return {
       text: finalText,
       agentName,
+      ...(intentionalNoResponse ? { noResponseReason: "ignored" as const } : {}),
       usage: {
         promptTokens: estPromptTokens,
         completionTokens: estCompletionTokens,

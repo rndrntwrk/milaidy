@@ -30,6 +30,12 @@ export type OwnerContactRoutingHint = {
   resolvedFrom: "config" | "relationships" | "config+relationships";
 };
 
+export type OwnerContactResolution = {
+  source: string;
+  contact: OwnerContactEntry;
+  resolvedFrom: "config" | "owner_entity";
+};
+
 type RelationshipsContactLike = {
   preferences?: {
     preferredCommunicationChannel?: string;
@@ -79,6 +85,13 @@ function canonicalOwnerContactSource(source: string): string {
   return source;
 }
 
+function sourceSupportsOwnerEntityFallback(source: string): boolean {
+  return (
+    source === "client_chat" ||
+    source === "discord"
+  );
+}
+
 export function resolveOwnerContactSource(
   ownerContacts: OwnerContactsConfig,
   source: string | null | undefined,
@@ -94,6 +107,37 @@ export function resolveOwnerContactSource(
     }
   }
   return null;
+}
+
+export function resolveOwnerContactWithFallback(args: {
+  ownerContacts: OwnerContactsConfig;
+  source: string | null | undefined;
+  ownerEntityId: string | null | undefined;
+}): OwnerContactResolution | null {
+  const configured = resolveOwnerContactSource(args.ownerContacts, args.source);
+  if (configured) {
+    return {
+      ...configured,
+      resolvedFrom: "config",
+    };
+  }
+
+  const normalizedSource = normalizeChatSource(args.source);
+  const ownerEntityId =
+    typeof args.ownerEntityId === "string" ? args.ownerEntityId.trim() : "";
+  if (
+    !normalizedSource ||
+    !ownerEntityId ||
+    !sourceSupportsOwnerEntityFallback(normalizedSource)
+  ) {
+    return null;
+  }
+
+  return {
+    source: canonicalOwnerContactSource(normalizedSource),
+    contact: { entityId: ownerEntityId },
+    resolvedFrom: "owner_entity",
+  };
 }
 
 export function loadOwnerContactsConfig(

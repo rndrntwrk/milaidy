@@ -94,6 +94,7 @@ import {
   debugLogResolvedContext,
   validateRuntimeContext,
 } from "../api/plugin-validation.js";
+import { getWalletAddresses, syncSolanaPublicKeyEnv } from "../api/wallet.js";
 import {
   configFileExists,
   type ElizaConfig,
@@ -2774,6 +2775,54 @@ export function resolveVisionModeSetting(
   return undefined;
 }
 
+/** @internal Exported for testing. */
+export function resolveWalletRuntimeSettings(
+  config?: Partial<ElizaConfig>,
+  env: NodeJS.ProcessEnv = process.env,
+): Record<string, string> {
+  const directRpcUrl = trimEnvString(env.SOLANA_RPC_URL);
+  const solanaNoActions = trimEnvString(env.SOLANA_NO_ACTIONS);
+  const configEnv = config?.env as
+    | (Record<string, unknown> & { vars?: Record<string, unknown> })
+    | undefined;
+  const configVars =
+    configEnv?.vars && typeof configEnv.vars === "object" && !Array.isArray(configEnv.vars)
+      ? (configEnv.vars as Record<string, unknown>)
+      : undefined;
+  const getConfigEnvString = (key: string): string | undefined => {
+    const value = configVars?.[key] ?? configEnv?.[key];
+    return typeof value === "string" && value.trim() ? value.trim() : undefined;
+  };
+  const explicitSolanaPublicKey =
+    trimEnvString(env.SOLANA_PUBLIC_KEY) ??
+    trimEnvString(env.WALLET_PUBLIC_KEY) ??
+    getConfigEnvString("SOLANA_PUBLIC_KEY") ??
+    getConfigEnvString("WALLET_PUBLIC_KEY");
+  const derivedSolanaPublicKey =
+    trimEnvString(getWalletAddresses().solanaAddress) ??
+    trimEnvString(syncSolanaPublicKeyEnv(getConfigEnvString("SOLANA_PRIVATE_KEY")));
+  const solanaPublicKey = explicitSolanaPublicKey ?? derivedSolanaPublicKey;
+
+  const settings: Record<string, string> = {};
+
+  if (directRpcUrl) {
+    settings.SOLANA_RPC_URL = directRpcUrl;
+  }
+
+  if (solanaNoActions) {
+    settings.SOLANA_NO_ACTIONS = solanaNoActions;
+  }
+
+  if (!solanaPublicKey) {
+    return settings;
+  }
+
+  settings.SOLANA_PUBLIC_KEY = solanaPublicKey;
+  settings.WALLET_PUBLIC_KEY = solanaPublicKey;
+
+  return settings;
+}
+
 // ---------------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------------
@@ -2973,6 +3022,10 @@ export async function startEliza(
       }
     }
   }
+
+  // Keep the canonical public key env in sync for Solana plugins that still
+  // read process.env directly instead of runtime settings.
+  syncSolanaPublicKeyEnv();
 
   normalizeOpenAiCompatibleProviderConfig(config);
 
@@ -3398,6 +3451,7 @@ export async function startEliza(
       // Forward Eliza config env vars as runtime settings
       ...(preferredProviderId ? { MODEL_PROVIDER: preferredProviderId } : {}),
       ...(visionModeSetting ? { VISION_MODE: visionModeSetting } : {}),
+      ...resolveWalletRuntimeSettings(config),
       ...(typeof config.agents?.defaults?.adminEntityId === "string" &&
       config.agents.defaults.adminEntityId.trim().length > 0
         ? {

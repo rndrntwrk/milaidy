@@ -17,6 +17,7 @@ function createRuntimeForChatRouteTests(options?: {
       onStreamChunk?: (chunk: string, messageId?: string) => Promise<void>;
     },
   ) => Promise<{
+    didRespond?: boolean;
     responseContent?: {
       text?: string;
       actions?: string[];
@@ -200,5 +201,31 @@ describe("generateChatResponse fallback recovery", () => {
         timeoutDuration: 1_000,
       }),
     ).rejects.toThrow("Chat generation timed out after 1000ms");
+  });
+
+  it("treats pure IGNORE outcomes as an intentional no-response", async () => {
+    const runtime = createRuntimeForChatRouteTests({
+      handleMessage: async () => ({
+        didRespond: true,
+        responseContent: {
+          text: "",
+          actions: ["IGNORE"],
+        },
+        responseMessages: [],
+        mode: "actions",
+      }),
+    });
+
+    const result = await generateChatResponse(
+      runtime,
+      createUserMessage("hello"),
+      "ChatRouteAgent",
+      {
+        resolveNoResponseText: () => "Sorry, I'm having a provider issue",
+      },
+    );
+
+    expect(result.text).toBe("");
+    expect(result.noResponseReason).toBe("ignored");
   });
 });

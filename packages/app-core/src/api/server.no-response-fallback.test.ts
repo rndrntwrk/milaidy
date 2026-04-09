@@ -1,7 +1,63 @@
+import http from "node:http";
 import { logger, type AgentRuntime, type UUID } from "@elizaos/core";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { req } from "../../../../test/helpers/http";
 import { startApiServer } from "./server";
+
+function reqSse(
+  port: number,
+  path: string,
+  body: Record<string, unknown>,
+): Promise<{
+  status: number;
+  events: Array<Record<string, unknown>>;
+}> {
+  return new Promise((resolve, reject) => {
+    const payload = JSON.stringify(body);
+    const request = http.request(
+      {
+        hostname: "127.0.0.1",
+        port,
+        path,
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "text/event-stream",
+          "Content-Length": Buffer.byteLength(payload),
+        },
+      },
+      (res) => {
+        const chunks: Buffer[] = [];
+        res.on("data", (chunk: Buffer) => chunks.push(chunk));
+        res.on("end", () => {
+          const raw = Buffer.concat(chunks).toString("utf-8");
+          const events = raw
+            .split("\n\n")
+            .map((block) => block.trim())
+            .filter((block) => block.length > 0)
+            .flatMap((block) =>
+              block
+                .split("\n")
+                .filter((line) => line.startsWith("data:"))
+                .map((line) => line.slice(5).trim())
+                .filter((line) => line.length > 0)
+                .map((line) => {
+                  try {
+                    return JSON.parse(line) as Record<string, unknown>;
+                  } catch {
+                    return {};
+                  }
+                }),
+            );
+          resolve({ status: res.statusCode ?? 0, events });
+        });
+      },
+    );
+    request.on("error", reject);
+    request.write(payload);
+    request.end();
+  });
+}
 
 describe("conversation no-response fallback", () => {
   const originalChatGenerationTimeoutEnv =
@@ -119,6 +175,82 @@ describe("conversation no-response fallback", () => {
       text: "Sorry, I'm having a provider issue",
       agentName: "Reimu",
     });
+  });
+
+  it("returns an empty reply when generation intentionally ignores the message", async () => {
+    updateRuntime(runtime);
+    createMemory.mockClear();
+    getMemories.mockClear();
+    handleMessage.mockResolvedValueOnce({
+      didRespond: false,
+      responseMessages: [],
+      mode: "none",
+    });
+
+    const created = await req(port, "POST", "/api/conversations", {
+      title: "Intentional ignore thread",
+    });
+    expect(created.status).toBe(200);
+    const conversationId = String(
+      (created.data.conversation as { id?: string } | undefined)?.id ?? "",
+    );
+    expect(conversationId).not.toBe("");
+
+    const response = await req(
+      port,
+      "POST",
+      `/api/conversations/${conversationId}/messages`,
+      {
+        text: "sounds good",
+      },
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.data).toMatchObject({
+      text: "",
+      agentName: "Reimu",
+      noResponseReason: "ignored",
+    });
+    expect(createMemory).toHaveBeenCalledTimes(1);
+  });
+
+  it("streams an empty done event when generation intentionally ignores the message", async () => {
+    updateRuntime(runtime);
+    createMemory.mockClear();
+    getMemories.mockClear();
+    handleMessage.mockResolvedValueOnce({
+      didRespond: false,
+      responseMessages: [],
+      mode: "none",
+    });
+
+    const created = await req(port, "POST", "/api/conversations", {
+      title: "Intentional ignore stream thread",
+    });
+    expect(created.status).toBe(200);
+    const conversationId = String(
+      (created.data.conversation as { id?: string } | undefined)?.id ?? "",
+    );
+    expect(conversationId).not.toBe("");
+
+    const response = await reqSse(
+      port,
+      `/api/conversations/${conversationId}/messages/stream`,
+      {
+        text: "sounds good again",
+      },
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.events).toContainEqual(
+      expect.objectContaining({
+        type: "done",
+        fullText: "",
+        agentName: "Reimu",
+        noResponseReason: "ignored",
+      }),
+    );
+    expect(createMemory).toHaveBeenCalledTimes(1);
   });
 
   it("surfaces an Eliza Cloud credits reply when generation fails for insufficient funds", async () => {

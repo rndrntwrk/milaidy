@@ -8,6 +8,7 @@ const mockSendMessageToTarget = vi.hoisted(() => vi.fn());
 const mockGetRoomsForParticipant = vi.hoisted(() => vi.fn());
 const mockGetMemoriesByRoomIds = vi.hoisted(() => vi.fn());
 const mockLoadElizaConfig = vi.hoisted(() => vi.fn());
+const mockResolveOwnerEntityId = vi.hoisted(() => vi.fn());
 
 vi.mock("@elizaos/core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@elizaos/core")>();
@@ -24,6 +25,10 @@ vi.mock("@elizaos/core", async (importOriginal) => {
 
 vi.mock("../config/config.js", () => ({
   loadElizaConfig: mockLoadElizaConfig,
+}));
+
+vi.mock("../runtime/owner-entity.js", () => ({
+  resolveOwnerEntityId: mockResolveOwnerEntityId,
 }));
 
 import type { UUID } from "@elizaos/core";
@@ -67,6 +72,7 @@ describe("EscalationService", () => {
     mockSendMessageToTarget.mockResolvedValue(undefined);
     mockGetRoomsForParticipant.mockResolvedValue([]);
     mockGetMemoriesByRoomIds.mockResolvedValue([]);
+    mockResolveOwnerEntityId.mockResolvedValue(null);
     setConfig();
   });
 
@@ -135,6 +141,35 @@ describe("EscalationService", () => {
     expect(content.metadata).toEqual(
       expect.objectContaining({
         routeSource: "telegram-account",
+      }),
+    );
+  });
+
+  it("falls back to the resolved owner entity for discord escalation", async () => {
+    mockResolveOwnerEntityId.mockResolvedValue("owner-discord-uuid");
+    setConfig(
+      { channels: ["discord"], waitMinutes: 5, maxRetries: 1 },
+      {},
+    );
+
+    const state = await EscalationService.startEscalation(
+      makeRuntime(),
+      "discord fallback",
+      "Check Discord DM routing",
+    );
+
+    expect(state.channelsSent).toEqual(["discord"]);
+    expect(mockSendMessageToTarget).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: "discord",
+        entityId: "owner-discord-uuid",
+      }),
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          routeSource: "discord",
+          routeResolution: "config",
+          routeEndpoint: "owner-discord-uuid",
+        }),
       }),
     );
   });

@@ -15,6 +15,7 @@ import {
   generateWalletForChain,
   getWalletAddresses,
   importWallet,
+  setSolanaWalletEnv,
   validatePrivateKey,
   type WalletBalancesResponse,
   type WalletChain,
@@ -512,7 +513,7 @@ export async function handleWalletRoutes(
 
     if (targetChain === "both" || targetChain === "solana") {
       const result = deps.generateWalletForChain("solana");
-      process.env.SOLANA_PRIVATE_KEY = result.privateKey;
+      setSolanaWalletEnv(result.privateKey);
       (config.env as Record<string, string>).SOLANA_PRIVATE_KEY =
         result.privateKey;
       generated.push({ chain: "solana", address: result.address });

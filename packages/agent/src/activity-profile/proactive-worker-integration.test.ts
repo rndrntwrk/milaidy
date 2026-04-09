@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
   profileNeedsRebuild: vi.fn<() => boolean>(),
   resolveDefaultTimeZone: vi.fn(() => "UTC"),
   loadOwnerContactsConfig: vi.fn(() => ({})),
-  resolveOwnerContactSource: vi.fn(() => null),
+  resolveOwnerContactWithFallback: vi.fn(() => null),
   mockGetOverview: vi.fn(),
   mockGetCalendarFeed: vi.fn(),
   mockListActivitySignals: vi.fn(() => []),
@@ -35,7 +35,7 @@ vi.mock("../lifeops/defaults.js", () => ({
 
 vi.mock("../config/owner-contacts.js", () => ({
   loadOwnerContactsConfig: mocks.loadOwnerContactsConfig,
-  resolveOwnerContactSource: mocks.resolveOwnerContactSource,
+  resolveOwnerContactWithFallback: mocks.resolveOwnerContactWithFallback,
 }));
 
 vi.mock("../lifeops/service.js", () => ({
@@ -341,9 +341,10 @@ describe("executeProactiveTask", () => {
     mocks.loadOwnerContactsConfig.mockReturnValue({
       telegram: { entityId: "owner-tg-entity", channelId: "tg-123" },
     });
-    mocks.resolveOwnerContactSource.mockReturnValue({
+    mocks.resolveOwnerContactWithFallback.mockReturnValue({
       source: "telegram",
       contact: { entityId: "owner-tg-entity", channelId: "tg-123" },
+      resolvedFrom: "config",
     });
 
     const task = makeExistingProactiveTask();
@@ -365,15 +366,14 @@ describe("executeProactiveTask", () => {
   });
 
   it("skips actions scheduled in the future", async () => {
-    // Set both wake and sleep hours far enough ahead that GM and GN
-    // are always in the future regardless of when this test runs.
+    // Keep the owner outside the current effective day so GN is skipped,
+    // and push GM far enough ahead that it remains pending.
     const futureProfile = makeProfile({
-      lastSeenAt: Date.now() - 60_000,
+      lastSeenAt: Date.now() - 25 * 60 * 60 * 1000,
       typicalFirstActiveHour: 23,
       typicalLastActiveHour: 23,
       typicalWakeHour: 23,
       typicalSleepHour: 23,
-      // Disable GN by making wasActiveToday return false
       hasOpenActivityCycle: false,
       isCurrentlyActive: false,
     });
@@ -403,7 +403,7 @@ describe("executeProactiveTask", () => {
     mocks.profileNeedsRebuild.mockReturnValue(false);
     mocks.refreshCurrentState.mockResolvedValue(profile);
     mocks.loadOwnerContactsConfig.mockReturnValue({}); // no contacts at all
-    mocks.resolveOwnerContactSource.mockReturnValue(null);
+    mocks.resolveOwnerContactWithFallback.mockReturnValue(null);
 
     const task = makeExistingProactiveTask();
     const { runtime } = createRuntimeMock([task]);
@@ -411,6 +411,38 @@ describe("executeProactiveTask", () => {
     await executeProactiveTask(runtime);
 
     expect(vi.mocked(runtime.sendMessageToTarget)).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the resolved owner entity for discord delivery", async () => {
+    const profile = makeProfile({
+      lastSeenAt: Date.now() - 60_000,
+      primaryPlatform: "discord",
+    });
+    mocks.resolveOwnerEntityId.mockResolvedValue("owner-discord-uuid");
+    mocks.readProfileFromMetadata.mockReturnValue(profile);
+    mocks.profileNeedsRebuild.mockReturnValue(false);
+    mocks.refreshCurrentState.mockResolvedValue(profile);
+    mocks.loadOwnerContactsConfig.mockReturnValue({});
+    mocks.resolveOwnerContactWithFallback.mockReturnValue({
+      source: "discord",
+      contact: { entityId: "owner-discord-uuid" },
+      resolvedFrom: "owner_entity",
+    });
+
+    const task = makeExistingProactiveTask();
+    const { runtime } = createRuntimeMock([task]);
+
+    await executeProactiveTask(runtime);
+
+    expect(vi.mocked(runtime.sendMessageToTarget)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: "discord",
+        entityId: "owner-discord-uuid",
+      }),
+      expect.objectContaining({
+        source: "discord",
+      }),
+    );
   });
 
   it("survives sendMessageToTarget failures and still persists metadata", async () => {
@@ -424,9 +456,10 @@ describe("executeProactiveTask", () => {
     mocks.loadOwnerContactsConfig.mockReturnValue({
       telegram: { entityId: "owner-tg" },
     });
-    mocks.resolveOwnerContactSource.mockReturnValue({
+    mocks.resolveOwnerContactWithFallback.mockReturnValue({
       source: "telegram",
       contact: { entityId: "owner-tg" },
+      resolvedFrom: "config",
     });
 
     const task = makeExistingProactiveTask();
@@ -469,9 +502,10 @@ describe("executeProactiveTask", () => {
     mocks.loadOwnerContactsConfig.mockReturnValue({
       telegram: { entityId: "owner-tg", channelId: "ch-1" },
     });
-    mocks.resolveOwnerContactSource.mockReturnValue({
+    mocks.resolveOwnerContactWithFallback.mockReturnValue({
       source: "telegram",
       contact: { entityId: "owner-tg", channelId: "ch-1" },
+      resolvedFrom: "config",
     });
 
     // Simulate occurrences due soon

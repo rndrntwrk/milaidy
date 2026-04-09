@@ -1,6 +1,5 @@
 import type { IAgentRuntime, UUID } from "@elizaos/core";
 import { logger } from "@elizaos/core";
-import { resolveCanonicalOwnerId } from "@miladyai/plugin-roles";
 import type { LifeOpsActivitySignal } from "@miladyai/shared/contracts/lifeops";
 import { resolveDefaultTimeZone } from "../lifeops/defaults.js";
 import {
@@ -8,6 +7,8 @@ import {
   type LifeOpsScreenContextSummary,
 } from "../lifeops/screen-context.js";
 import { LifeOpsService } from "../lifeops/service.js";
+import { resolveOwnerEntityId } from "../runtime/owner-entity.js";
+export { resolveOwnerEntityId } from "../runtime/owner-entity.js";
 import {
   analyzeMessages,
   type CalendarEventRecord,
@@ -36,40 +37,6 @@ const ACTIVITY_SIGNALS_WINDOW_LIMIT = 500;
 const CURRENT_ACTIVITY_SIGNAL_LIMIT = 32;
 
 let screenContextSampler: LifeOpsScreenContextSampler | null = null;
-
-// ── Owner resolution ──────────────────────────────────
-
-type WorldMetadataShape = {
-  ownership?: { ownerId?: string };
-};
-
-export async function resolveOwnerEntityId(
-  runtime: IAgentRuntime,
-): Promise<string | null> {
-  const configuredOwnerId = resolveCanonicalOwnerId(runtime);
-  if (configuredOwnerId) {
-    return configuredOwnerId;
-  }
-
-  // Find owner via the agent's rooms → world → ownership metadata
-  try {
-    const roomIds = await runtime.getRoomsForParticipant(runtime.agentId);
-    for (const roomId of roomIds.slice(0, 10)) {
-      try {
-        const room = await runtime.getRoom(roomId);
-        if (!room?.worldId) continue;
-        const world = await runtime.getWorld(room.worldId);
-        const metadata = (world?.metadata ?? {}) as WorldMetadataShape;
-        if (metadata.ownership?.ownerId) {
-          return metadata.ownership.ownerId;
-        }
-      } catch {}
-    }
-  } catch {
-    // Fall through
-  }
-  return null;
-}
 
 export function setScreenContextSamplerForTesting(
   sampler: LifeOpsScreenContextSampler | null,

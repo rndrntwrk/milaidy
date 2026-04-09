@@ -665,8 +665,8 @@ export async function resolvePlugins(
           try {
             mod = await importOfficialPluginFromNodeModules();
           } catch (npmErr) {
-            logger.warn(
-              `[eliza] Node_modules resolution failed for workspace plugin ${pluginName} (${formatError(npmErr)}). Falling back to staged workspace import at ${redactUserSegments(workspaceOverridePath)}.`,
+            logger.info(
+              `[eliza] Node_modules resolution unavailable for workspace plugin ${pluginName} (${formatError(npmErr)}). Using staged workspace import at ${redactUserSegments(workspaceOverridePath)}.`,
             );
             mod = await importPluginModuleFromPath(
               workspaceOverridePath,

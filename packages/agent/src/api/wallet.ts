@@ -8,6 +8,9 @@
  * EVM balance + NFT fetching lives in ./wallet-evm-balance.ts
  */
 import crypto from "node:crypto";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { logger } from "@elizaos/core";
 import { secp256k1 } from "@noble/curves/secp256k1.js";
 import { ethers } from "ethers";
@@ -321,6 +324,30 @@ export function generateWalletForChain(
   };
 }
 
+export function syncSolanaPublicKeyEnv(
+  privateKey = process.env.SOLANA_PRIVATE_KEY,
+): string | null {
+  const trimmed = privateKey?.trim();
+  if (!trimmed || PLACEHOLDER_RE.test(trimmed)) {
+    return null;
+  }
+
+  try {
+    const publicKey = deriveSolanaAddress(trimmed);
+    process.env.SOLANA_PUBLIC_KEY = publicKey;
+    process.env.WALLET_PUBLIC_KEY = publicKey;
+    return publicKey;
+  } catch {
+    return null;
+  }
+}
+
+export function setSolanaWalletEnv(privateKey: string): string | null {
+  const trimmed = privateKey.trim();
+  process.env.SOLANA_PRIVATE_KEY = trimmed;
+  return syncSolanaPublicKeyEnv(trimmed);
+}
+
 /** Validate key, store in process.env. Caller persists to config if needed. */
 export function importWallet(
   chain: WalletChain,
@@ -339,7 +366,7 @@ export function importWallet(
   }
   const v = validateSolanaPrivateKey(trimmed);
   if (!v.valid) return { success: false, chain, address: null, error: v.error };
-  process.env.SOLANA_PRIVATE_KEY = trimmed;
+  setSolanaWalletEnv(trimmed);
   logger.info(`[wallet] Imported Solana wallet: ${v.address}`);
   return { success: true, chain, address: v.address, error: null };
 }
@@ -348,6 +375,55 @@ export function importWallet(
 
 export const STEWARD_EVM_ADDRESS_ENV_KEY = "STEWARD_EVM_ADDRESS";
 export const STEWARD_SOLANA_ADDRESS_ENV_KEY = "STEWARD_SOLANA_ADDRESS";
+const STEWARD_CREDENTIALS_PATH = path.join(
+  os.homedir(),
+  ".milady",
+  "steward-credentials.json",
+);
+
+type PersistedStewardCredentials = {
+  apiUrl?: string;
+  tenantId?: string;
+  agentId?: string;
+  apiKey?: string;
+  agentToken?: string;
+};
+
+function normalizeOptionalString(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function readPersistedStewardCredentials():
+  | {
+      apiUrl: string | null;
+      tenantId: string | null;
+      agentId: string | null;
+      apiKey: string | null;
+      agentToken: string | null;
+    }
+  | null {
+  try {
+    if (!fs.existsSync(STEWARD_CREDENTIALS_PATH)) {
+      return null;
+    }
+    const parsed = JSON.parse(
+      fs.readFileSync(STEWARD_CREDENTIALS_PATH, "utf8"),
+    ) as PersistedStewardCredentials;
+    return {
+      apiUrl: normalizeOptionalString(parsed.apiUrl),
+      tenantId: normalizeOptionalString(parsed.tenantId),
+      agentId: normalizeOptionalString(parsed.agentId),
+      apiKey: normalizeOptionalString(parsed.apiKey),
+      agentToken: normalizeOptionalString(parsed.agentToken),
+    };
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Initialise the steward wallet address cache.
@@ -358,22 +434,30 @@ export const STEWARD_SOLANA_ADDRESS_ENV_KEY = "STEWARD_SOLANA_ADDRESS";
  * `getWalletAddresses()` can use them without hitting the network.
  */
 export async function initStewardWalletCache(): Promise<void> {
-  const stewardApiUrl = process.env.STEWARD_API_URL?.trim();
+  const persisted = readPersistedStewardCredentials();
+  const stewardApiUrl =
+    normalizeOptionalString(process.env.STEWARD_API_URL) ?? persisted?.apiUrl;
   if (!stewardApiUrl) return;
 
   const agentId =
-    process.env.STEWARD_AGENT_ID?.trim() ||
-    process.env.MILADY_STEWARD_AGENT_ID?.trim() ||
-    process.env.ELIZA_STEWARD_AGENT_ID?.trim() ||
+    normalizeOptionalString(process.env.STEWARD_AGENT_ID) ||
+    normalizeOptionalString(process.env.MILADY_STEWARD_AGENT_ID) ||
+    normalizeOptionalString(process.env.ELIZA_STEWARD_AGENT_ID) ||
+    persisted?.agentId ||
     null;
 
   if (!agentId) return;
 
   try {
     const headers: Record<string, string> = { Accept: "application/json" };
-    const bearerToken = process.env.STEWARD_AGENT_TOKEN?.trim();
-    const apiKey = process.env.STEWARD_API_KEY?.trim();
-    const tenantId = process.env.STEWARD_TENANT_ID?.trim();
+    const bearerToken =
+      normalizeOptionalString(process.env.STEWARD_AGENT_TOKEN) ??
+      persisted?.agentToken;
+    const apiKey =
+      normalizeOptionalString(process.env.STEWARD_API_KEY) ?? persisted?.apiKey;
+    const tenantId =
+      normalizeOptionalString(process.env.STEWARD_TENANT_ID) ??
+      persisted?.tenantId;
 
     if (bearerToken) {
       headers.Authorization = `Bearer ${bearerToken}`;
@@ -412,6 +496,22 @@ export async function initStewardWalletCache(): Promise<void> {
     const stewardSolana = agent?.walletAddresses?.solana?.trim() || null;
 
     stewardAddressCache = { evm: stewardEvm, solana: stewardSolana };
+    if (stewardEvm) {
+      process.env[STEWARD_EVM_ADDRESS_ENV_KEY] = stewardEvm;
+    } else {
+      delete process.env[STEWARD_EVM_ADDRESS_ENV_KEY];
+    }
+    if (stewardSolana) {
+      process.env[STEWARD_SOLANA_ADDRESS_ENV_KEY] = stewardSolana;
+      if (!process.env.SOLANA_PUBLIC_KEY?.trim()) {
+        process.env.SOLANA_PUBLIC_KEY = stewardSolana;
+      }
+      if (!process.env.WALLET_PUBLIC_KEY?.trim()) {
+        process.env.WALLET_PUBLIC_KEY = stewardSolana;
+      }
+    } else {
+      delete process.env[STEWARD_SOLANA_ADDRESS_ENV_KEY];
+    }
 
     if (stewardEvm) {
       logger.info(
@@ -424,7 +524,7 @@ export async function initStewardWalletCache(): Promise<void> {
       );
     }
   } catch (err) {
-    logger.warn(`[wallet] Steward wallet cache init failed: ${err}`);
+    logger.debug(`[wallet] Steward wallet cache init unavailable: ${err}`);
   }
 }
 
@@ -441,12 +541,16 @@ export function getWalletAddresses(): WalletAddresses {
   let solanaAddress: string | null = null;
 
   // ── 1. Steward cached addresses (primary) ──────────────────────────
-  const stewardEvm = stewardAddressCache?.evm?.trim();
+  const stewardEvm =
+    stewardAddressCache?.evm?.trim() ??
+    process.env[STEWARD_EVM_ADDRESS_ENV_KEY]?.trim();
   if (stewardEvm && /^0x[0-9a-fA-F]{40}$/.test(stewardEvm)) {
     evmAddress = stewardEvm;
   }
 
-  const stewardSolana = stewardAddressCache?.solana?.trim();
+  const stewardSolana =
+    stewardAddressCache?.solana?.trim() ??
+    process.env[STEWARD_SOLANA_ADDRESS_ENV_KEY]?.trim();
   if (stewardSolana) {
     try {
       const decoded = base58Decode(stewardSolana);

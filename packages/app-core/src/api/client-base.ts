@@ -622,6 +622,7 @@ export class MiladyClient {
     text: string;
     agentName: string;
     completed: boolean;
+    noResponseReason?: "ignored";
     usage?: ChatTokenUsage;
   }> {
     const res = await this.rawRequest(path, {
@@ -650,6 +651,7 @@ export class MiladyClient {
     let fullText = "";
     let doneText: string | null = null;
     let doneAgentName: string | null = null;
+    let doneNoResponseReason: "ignored" | null = null;
     let doneUsage: ChatTokenUsage | undefined;
     let receivedDone = false;
 
@@ -677,6 +679,7 @@ export class MiladyClient {
         fullText?: string;
         agentName?: string;
         message?: string;
+        noResponseReason?: string;
         usage?: {
           promptTokens?: number;
           completionTokens?: number;
@@ -713,6 +716,9 @@ export class MiladyClient {
         if (typeof parsed.fullText === "string") doneText = parsed.fullText;
         if (typeof parsed.agentName === "string" && parsed.agentName.trim()) {
           doneAgentName = parsed.agentName;
+        }
+        if (parsed.noResponseReason === "ignored") {
+          doneNoResponseReason = "ignored";
         }
         if (parsed.usage) {
           doneUsage = {
@@ -778,11 +784,17 @@ export class MiladyClient {
       }
     }
 
-    const resolvedText = this.normalizeAssistantText(doneText ?? fullText);
+    const resolvedText =
+      doneNoResponseReason === "ignored"
+        ? ""
+        : this.normalizeAssistantText(doneText ?? fullText);
     return {
       text: resolvedText,
       agentName: doneAgentName ?? "Milady",
       completed: receivedDone,
+      ...(doneNoResponseReason
+        ? { noResponseReason: doneNoResponseReason }
+        : {}),
       ...(doneUsage ? { usage: doneUsage } : {}),
     };
   }

@@ -7,6 +7,7 @@ import {
   settingsDebugCloudSummary,
 } from "@miladyai/shared";
 import JSON5 from "json5";
+import { syncSolanaPublicKeyEnv } from "../api/wallet.js";
 import { collectConfigEnvVars, collectConnectorEnvVars } from "./env-vars.js";
 import { resolveConfigIncludes } from "./includes.js";
 import { resolveConfigPath, resolveStateDir, resolveUserPath } from "./paths.js";
@@ -25,6 +26,21 @@ function applyConfigEnvToProcessEnv(entries: Record<string, string>): void {
   for (const [key, value] of Object.entries(entries)) {
     process.env[key] = value;
   }
+}
+
+function getConfigEnvString(
+  config: ElizaConfig,
+  key: string,
+): string | undefined {
+  const envConfig = config.env as
+    | (Record<string, unknown> & { vars?: Record<string, unknown> })
+    | undefined;
+  const nestedVars =
+    envConfig?.vars && typeof envConfig.vars === "object" && !Array.isArray(envConfig.vars)
+      ? (envConfig.vars as Record<string, unknown>)
+      : undefined;
+  const value = nestedVars?.[key] ?? envConfig?.[key];
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
 function isPlainObject(
@@ -162,6 +178,9 @@ export function loadElizaConfig(): ElizaConfig {
     process.env.DISCORD_API_TOKEN = discordToken;
     process.env.DISCORD_BOT_TOKEN = discordToken;
   }
+
+  // Keep public-key aliases available when only the private key is configured.
+  syncSolanaPublicKeyEnv(getConfigEnvString(resolved, "SOLANA_PRIVATE_KEY"));
 
   if (isMiladySettingsDebugEnabled()) {
     const cloud = resolved.cloud as Record<string, unknown> | undefined;

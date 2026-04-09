@@ -13,6 +13,7 @@ import { pathToFileURL } from "node:url";
 import { logger, type Plugin } from "@elizaos/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { describeIf } from "../../../../test/helpers/conditional-tests.ts";
+import { generateWalletKeys } from "@miladyai/agent/api/wallet";
 
 // Mock all static plugin star-imports in eliza.ts to avoid ESM resolution
 // failures from heavy transitive dependencies at static-analysis time.
@@ -80,6 +81,7 @@ import {
   resolvePreferredProviderPluginName,
   resolvePrimaryModel,
   resolveVisionModeSetting,
+  resolveWalletRuntimeSettings,
   scanDropInPlugins,
   shouldIgnoreMissingPluginExport,
   shutdownRuntime,
@@ -1911,6 +1913,68 @@ describe("buildCharacterFromConfig", () => {
     const char = buildCharacterFromConfig(config);
 
     expect(char.topics ?? []).toEqual([]);
+  });
+});
+
+describe("resolveWalletRuntimeSettings", () => {
+  const envKeys = [
+    "SOLANA_PRIVATE_KEY",
+    "SOLANA_PUBLIC_KEY",
+    "SOLANA_RPC_URL",
+    "SOLANA_NO_ACTIONS",
+    "WALLET_PUBLIC_KEY",
+  ];
+  const snap = envSnapshot(envKeys);
+
+  beforeEach(() => {
+    snap.save();
+    for (const key of envKeys) delete process.env[key];
+  });
+
+  afterEach(() => snap.restore());
+
+  it("derives a Solana public key from the private key when needed", () => {
+    const keys = generateWalletKeys();
+    process.env.SOLANA_PRIVATE_KEY = keys.solanaPrivateKey;
+
+    expect(resolveWalletRuntimeSettings()).toEqual({
+      SOLANA_PUBLIC_KEY: keys.solanaAddress,
+      WALLET_PUBLIC_KEY: keys.solanaAddress,
+    });
+  });
+
+  it("prefers an explicit public key from env", () => {
+    process.env.SOLANA_PUBLIC_KEY = "explicit-public-key";
+
+    expect(resolveWalletRuntimeSettings()).toEqual({
+      SOLANA_PUBLIC_KEY: "explicit-public-key",
+      WALLET_PUBLIC_KEY: "explicit-public-key",
+    });
+  });
+
+  it("derives a Solana public key from persisted config when the private key stays out of env", () => {
+    const keys = generateWalletKeys();
+
+    expect(
+      resolveWalletRuntimeSettings({
+        env: {
+          SOLANA_PRIVATE_KEY: keys.solanaPrivateKey,
+        },
+      } as ElizaConfig),
+    ).toEqual({
+      SOLANA_PUBLIC_KEY: keys.solanaAddress,
+      WALLET_PUBLIC_KEY: keys.solanaAddress,
+    });
+  });
+
+  it("includes non-secret Solana runtime settings", () => {
+    process.env.SOLANA_RPC_URL = "https://rpc.example.invalid";
+    process.env.SOLANA_NO_ACTIONS = "true";
+
+    expect(resolveWalletRuntimeSettings()).toEqual({
+      SOLANA_NO_ACTIONS: "true",
+      SOLANA_RPC_URL: "https://rpc.example.invalid",
+    });
   });
 });
 

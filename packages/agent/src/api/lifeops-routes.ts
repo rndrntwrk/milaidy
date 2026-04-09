@@ -2,7 +2,6 @@ import type http from "node:http";
 import {
   type AgentRuntime,
   logger,
-  stringToUuid,
   type UUID,
 } from "@elizaos/core";
 import type {
@@ -77,11 +76,9 @@ function getService(ctx: LifeOpsRouteContext): LifeOpsService | null {
     ctx.error(ctx.res, "Agent runtime is not available", 503);
     return null;
   }
-  const ownerEntityId =
-    ctx.state.adminEntityId ??
-    (stringToUuid(`${ctx.state.runtime.agentId}-admin-entity`) as UUID);
-  ctx.state.adminEntityId = ownerEntityId;
-  return new LifeOpsService(ctx.state.runtime, { ownerEntityId });
+  return new LifeOpsService(ctx.state.runtime, {
+    ownerEntityId: ctx.state.adminEntityId,
+  });
 }
 
 function routeOperation(ctx: LifeOpsRouteContext): string {

@@ -138,9 +138,10 @@ import {
 import {
   loadOwnerContactRoutingHints,
   loadOwnerContactsConfig,
-  resolveOwnerContactSource,
+  resolveOwnerContactWithFallback,
   type OwnerContactRoutingHint,
 } from "../config/owner-contacts.js";
+import { resolveOwnerEntityId } from "../runtime/owner-entity.js";
 import { getAgentEventService } from "../runtime/agent-event-service.js";
 import {
   computeNextCronRunAtMs,
@@ -3320,8 +3321,10 @@ function isWebsiteAccessGrantActive(
 
 export class LifeOpsService {
   private readonly repository: LifeOpsRepository;
+  private readonly explicitOwnerEntityIdValue: string | null;
   private readonly ownerEntityIdValue: string;
   private readonly googleManagedClient: GoogleManagedClient;
+  private ownerRoutingEntityIdPromise: Promise<string | null> | null = null;
 
   constructor(
     private readonly runtime: IAgentRuntime,
@@ -3329,9 +3332,10 @@ export class LifeOpsService {
   ) {
     this.repository = new LifeOpsRepository(runtime);
     this.googleManagedClient = new GoogleManagedClient();
+    this.explicitOwnerEntityIdValue =
+      normalizeOptionalString(options.ownerEntityId) ?? null;
     this.ownerEntityIdValue =
-      normalizeOptionalString(options.ownerEntityId) ??
-      defaultOwnerEntityId(runtime);
+      this.explicitOwnerEntityIdValue ?? defaultOwnerEntityId(runtime);
   }
 
   private agentId(): string {
@@ -3340,6 +3344,16 @@ export class LifeOpsService {
 
   private ownerEntityId(): string {
     return this.ownerEntityIdValue;
+  }
+
+  private async ownerRoutingEntityId(): Promise<string | null> {
+    if (this.explicitOwnerEntityIdValue) {
+      return this.explicitOwnerEntityIdValue;
+    }
+    if (!this.ownerRoutingEntityIdPromise) {
+      this.ownerRoutingEntityIdPromise = resolveOwnerEntityId(this.runtime);
+    }
+    return await this.ownerRoutingEntityIdPromise;
   }
 
   private normalizeOwnership(
@@ -4829,6 +4843,7 @@ export class LifeOpsService {
     const hints =
       ownerContactHints ??
       (await loadOwnerContactRoutingHints(this.runtime, ownerContacts));
+    const ownerEntityId = await this.ownerRoutingEntityId();
     const hint =
       hints[configuredSource] ??
       hints[channel] ??
@@ -4844,9 +4859,16 @@ export class LifeOpsService {
         resolvedFrom: "config",
       } satisfies OwnerContactRoutingHint);
     const contactResolution =
-      resolveOwnerContactSource(ownerContacts, hint.source) ??
-      resolveOwnerContactSource(ownerContacts, channel) ??
-      null;
+      resolveOwnerContactWithFallback({
+        ownerContacts,
+        source: hint.source,
+        ownerEntityId,
+      }) ??
+      resolveOwnerContactWithFallback({
+        ownerContacts,
+        source: channel,
+        ownerEntityId,
+      });
     const contact =
       contactResolution?.contact ??
       ownerContacts[hint.source] ??

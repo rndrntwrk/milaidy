@@ -336,9 +336,16 @@ describe("Wallet import", () => {
   let envBackup: { restore: () => void };
 
   beforeEach(() => {
-    envBackup = saveEnv("EVM_PRIVATE_KEY", "SOLANA_PRIVATE_KEY");
+    envBackup = saveEnv(
+      "EVM_PRIVATE_KEY",
+      "SOLANA_PRIVATE_KEY",
+      "SOLANA_PUBLIC_KEY",
+      "WALLET_PUBLIC_KEY",
+    );
     delete process.env.EVM_PRIVATE_KEY;
     delete process.env.SOLANA_PRIVATE_KEY;
+    delete process.env.SOLANA_PUBLIC_KEY;
+    delete process.env.WALLET_PUBLIC_KEY;
   });
 
   afterEach(() => {
@@ -368,6 +375,8 @@ describe("Wallet import", () => {
     expect(result.chain).toBe("solana");
     expect(result.address).toBe(keys.solanaAddress);
     expect(process.env.SOLANA_PRIVATE_KEY).toBe(keys.solanaPrivateKey);
+    expect(process.env.SOLANA_PUBLIC_KEY).toBe(keys.solanaAddress);
+    expect(process.env.WALLET_PUBLIC_KEY).toBe(keys.solanaAddress);
   });
 
   it("rejects an invalid EVM key", () => {
@@ -399,7 +408,12 @@ describe("Secure key storage", () => {
   let envBackup: { restore: () => void };
 
   beforeEach(() => {
-    envBackup = saveEnv("EVM_PRIVATE_KEY", "SOLANA_PRIVATE_KEY");
+    envBackup = saveEnv(
+      "EVM_PRIVATE_KEY",
+      "SOLANA_PRIVATE_KEY",
+      "SOLANA_PUBLIC_KEY",
+      "WALLET_PUBLIC_KEY",
+    );
   });
 
   afterEach(() => {
@@ -473,6 +487,8 @@ describe("Wallet availability for plugins", () => {
     envBackup = saveEnv(
       "EVM_PRIVATE_KEY",
       "SOLANA_PRIVATE_KEY",
+      "SOLANA_PUBLIC_KEY",
+      "WALLET_PUBLIC_KEY",
       "ALCHEMY_API_KEY",
       "HELIUS_API_KEY",
       "BIRDEYE_API_KEY",
@@ -534,7 +550,12 @@ describe("getWalletAddresses — edge cases", () => {
   let envBackup: { restore: () => void };
 
   beforeEach(() => {
-    envBackup = saveEnv("EVM_PRIVATE_KEY", "SOLANA_PRIVATE_KEY");
+    envBackup = saveEnv(
+      "EVM_PRIVATE_KEY",
+      "SOLANA_PRIVATE_KEY",
+      "SOLANA_PUBLIC_KEY",
+      "WALLET_PUBLIC_KEY",
+    );
   });
 
   afterEach(() => {
@@ -645,9 +666,16 @@ describe("importWallet — edge cases", () => {
   let envBackup: { restore: () => void };
 
   beforeEach(() => {
-    envBackup = saveEnv("EVM_PRIVATE_KEY", "SOLANA_PRIVATE_KEY");
+    envBackup = saveEnv(
+      "EVM_PRIVATE_KEY",
+      "SOLANA_PRIVATE_KEY",
+      "SOLANA_PUBLIC_KEY",
+      "WALLET_PUBLIC_KEY",
+    );
     delete process.env.EVM_PRIVATE_KEY;
     delete process.env.SOLANA_PRIVATE_KEY;
+    delete process.env.SOLANA_PUBLIC_KEY;
+    delete process.env.WALLET_PUBLIC_KEY;
   });
 
   afterEach(() => {

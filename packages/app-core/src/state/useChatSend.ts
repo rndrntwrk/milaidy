@@ -534,7 +534,7 @@ export function useChatSend(deps: UseChatSendDeps) {
           turn.metadata,
         );
 
-        if (!data.text.trim()) {
+        if (data.noResponseReason === "ignored" || !data.text.trim()) {
           setConversationMessages((prev) =>
             prev.filter((message) => message.id !== assistantMsgId),
           );
@@ -637,12 +637,17 @@ export function useChatSend(deps: UseChatSendDeps) {
                   text,
                   timestamp: Date.now(),
                 },
-                {
-                  id: `temp-resp-${Date.now()}`,
-                  role: "assistant",
-                  text: retryData.text,
-                  timestamp: Date.now(),
-                },
+                ...(retryData.noResponseReason === "ignored" ||
+                !retryData.text.trim()
+                  ? []
+                  : [
+                      {
+                        id: `temp-resp-${Date.now()}`,
+                        role: "assistant" as const,
+                        text: retryData.text,
+                        timestamp: Date.now(),
+                      },
+                    ]),
               ]),
             );
           } catch {
@@ -876,7 +881,7 @@ export function useChatSend(deps: UseChatSendDeps) {
             conversationMode,
           );
 
-          if (!data.text.trim()) {
+          if (data.noResponseReason === "ignored" || !data.text.trim()) {
             setConversationMessages((prev) =>
               prev.filter((message) => message.id !== assistantMsgId),
             );

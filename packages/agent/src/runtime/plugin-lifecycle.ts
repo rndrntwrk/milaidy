@@ -656,6 +656,28 @@ export function installRuntimePluginLifecycle(runtime: AgentRuntime): void {
 
   runtime.registerAction = ((action: RuntimeAction) => {
     const capture = pluginRegistrationContext.getStore();
+    const actionName =
+      action &&
+      typeof action === "object" &&
+      "name" in action &&
+      typeof action.name === "string"
+        ? action.name
+        : null;
+    if (
+      actionName &&
+      runtime.actions.some((existingAction) => existingAction.name === actionName)
+    ) {
+      runtime.logger.debug?.(
+        {
+          src: "plugin-lifecycle",
+          agentId: runtime.agentId,
+          action: actionName,
+          plugin: capture?.ownership.plugin?.name,
+        },
+        "Skipping duplicate action before runtime registration",
+      );
+      return;
+    }
     const actionsBefore = runtime.actions.length;
     originalRegisterAction(
       applyEffectiveActionContexts(
