@@ -118,11 +118,14 @@ async function postFinalReport(
   svc: PTYServiceWithEvents,
   sessionId: string,
 ): Promise<void> {
-  // Only post the final report when we can extract a concrete URL line from
-  // the session output. Otherwise stay silent — the chat LLM's own reply
-  // path already covers the generic "done" case and we do not want to spam
-  // the channel with two near-identical messages.
-  if (typeof svc.getSessionOutput !== "function") return;
+  // The action handler's callback expires when CREATE_TASK returns (before
+  // the subagent finishes), and the coordinator's chat bridge is suppressed
+  // to prevent the "done — <echo>" bug. So this streamer is the ONLY path
+  // that delivers the subagent's response to discord. Always post something.
+  if (typeof svc.getSessionOutput !== "function") {
+    await postToOriginatingChannel(runtime, svc, sessionId, "task finished");
+    return;
+  }
   let tail: string;
   try {
     tail = await svc.getSessionOutput(sessionId, 1000);
@@ -130,14 +133,37 @@ async function postFinalReport(
     logger.warn(
       `[task-progress-streamer] could not read session output for ${sessionId}: ${err instanceof Error ? err.message : String(err)}`,
     );
+    await postToOriginatingChannel(runtime, svc, sessionId, "task finished");
     return;
   }
+  // Try to find a structured URL line first
   const urlLine = tail
     .split("\n")
     .reverse()
     .find((line) => /^\s*URL:\s*https?:\/\//i.test(line));
-  if (!urlLine) return;
-  await postToOriginatingChannel(runtime, svc, sessionId, `done — ${urlLine.trim()}`);
+  if (urlLine) {
+    await postToOriginatingChannel(runtime, svc, sessionId, `done — ${urlLine.trim()}`);
+    return;
+  }
+  // No URL line — extract the subagent's last meaningful text from the PTY
+  // output. Strip ANSI, empty lines, and claude-code TUI chrome to get the
+  // actual answer.
+  const lines = tail
+    .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "")
+    .split("\n")
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0 && !l.startsWith("❯") && !l.startsWith("─"));
+  const lastChunk = lines.slice(-15).join("\n");
+  const preview =
+    lastChunk.length > 1500
+      ? `${lastChunk.slice(0, 1500)}...`
+      : lastChunk;
+  await postToOriginatingChannel(
+    runtime,
+    svc,
+    sessionId,
+    preview || "task finished",
+  );
 }
 
 async function postToOriginatingChannel(
