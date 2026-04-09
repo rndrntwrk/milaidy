@@ -32,6 +32,7 @@ import { showBackgroundNoticeOnce } from "./background-notice";
 import { startBrowserWorkspaceBridgeServer } from "./browser-workspace-bridge-server";
 import { readNavigationEventUrl } from "./cloud-auth-window";
 import { scheduleDevtoolsLayoutRefresh } from "./devtools-layout";
+import { getFloatingChatManager } from "./floating-chat-window";
 import {
   resolveBootstrapShellRenderer,
   resolveBootstrapViewRenderer,
@@ -1770,6 +1771,16 @@ async function main(): Promise<void> {
     pid: process.pid,
   });
 
+  // Configure the floating chat manager now that the renderer URL is resolved.
+  // This must run after createMainWindow() so rendererUrlPromise is already set.
+  void resolveRendererUrl().then((url) => {
+    let preload = "";
+    try {
+      preload = readResolvedPreloadScript(import.meta.dir);
+    } catch { /* non-fatal */ }
+    getFloatingChatManager().configure(url, preload);
+  });
+
   surfaceWindowManager = new SurfaceWindowManager({
     createWindow: (options) =>
       new BrowserWindow(options) as unknown as ManagedWindowLike,
@@ -1870,6 +1881,11 @@ async function main(): Promise<void> {
         { id: "sep2", type: "separator" },
         { id: "tray-show-window", label: "Show Window", type: "normal" },
         { id: "tray-hide-window", label: "Hide Window", type: "normal" },
+        {
+          id: "tray-floating-chat",
+          label: "Floating Chat",
+          type: "normal",
+        },
         { id: "sep3", type: "separator" },
         { id: "quit", label: "Quit", type: "normal" },
       ],
