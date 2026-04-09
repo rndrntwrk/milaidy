@@ -184,3 +184,4 @@ scripts/bin/yt-dlp_*
 # for inspecting request/response shapes end-to-end. Kept out of git
 # because it's a developer tool, not product code.
 scripts/codex-sniff.ts
+.tmp-live/

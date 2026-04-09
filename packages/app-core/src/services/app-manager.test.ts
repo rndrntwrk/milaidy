@@ -471,6 +471,8 @@ describe("Hyperscape Auto-Provisioning", () => {
     originalEnv = {
       HYPERSCAPE_CHARACTER_ID: process.env.HYPERSCAPE_CHARACTER_ID,
       HYPERSCAPE_AUTH_TOKEN: process.env.HYPERSCAPE_AUTH_TOKEN,
+      HYPERSCAPE_API_URL: process.env.HYPERSCAPE_API_URL,
+      HYPERSCAPE_CLIENT_URL: process.env.HYPERSCAPE_CLIENT_URL,
       HYPERSCAPE_SERVER_URL: process.env.HYPERSCAPE_SERVER_URL,
       SOLANA_PRIVATE_KEY: process.env.SOLANA_PRIVATE_KEY,
       EVM_PRIVATE_KEY: process.env.EVM_PRIVATE_KEY,
@@ -480,6 +482,8 @@ describe("Hyperscape Auto-Provisioning", () => {
     // Clear hyperscape env vars
     delete process.env.HYPERSCAPE_CHARACTER_ID;
     delete process.env.HYPERSCAPE_AUTH_TOKEN;
+    delete process.env.HYPERSCAPE_API_URL;
+    delete process.env.HYPERSCAPE_CLIENT_URL;
     delete process.env.SOLANA_PRIVATE_KEY;
     delete process.env.EVM_PRIVATE_KEY;
 
@@ -496,6 +500,98 @@ describe("Hyperscape Auto-Provisioning", () => {
     appManager = new AppManager();
   });
 
+  function createHyperscapeRegistryPayload() {
+    return {
+      registry: {
+        [HYPERSCAPE_APP_NAME]: {
+          git: { repo: "HyperscapeAI/hyperscape", v0: {}, v1: {}, v2: {} },
+          npm: {
+            repo: HYPERSCAPE_PLUGIN_NAME,
+            v0: null,
+            v1: null,
+            v2: "1.0.0",
+          },
+          supports: { v0: true, v1: false, v2: false },
+          description: "Hyperscape 3D world",
+          topics: ["app"],
+        },
+        [HYPERSCAPE_PLUGIN_NAME]: {
+          git: {
+            repo: "elizaos/plugin-hyperscape",
+            v0: {},
+            v1: {},
+            v2: {},
+          },
+          npm: {
+            repo: HYPERSCAPE_PLUGIN_NAME,
+            v0: null,
+            v1: null,
+            v2: "1.0.0",
+          },
+          supports: { v0: true, v1: false, v2: false },
+          description: "Hyperscape plugin",
+          topics: ["plugin"],
+        },
+      },
+    };
+  }
+
+  function createHyperscapeLaunchFetchMock(options?: {
+    rejectWalletAuth?: boolean;
+  }) {
+    return vi.fn().mockImplementation((input: string | URL) => {
+      const url = String(input);
+      if (
+        url.includes(
+          "raw.githubusercontent.com/elizaos-plugins/registry/next/generated-registry.json",
+        )
+      ) {
+        return Promise.resolve(
+          jsonResponse(createHyperscapeRegistryPayload()),
+        );
+      }
+      if (
+        url.includes(
+          "raw.githubusercontent.com/elizaos-plugins/registry/next/index.json",
+        )
+      ) {
+        return Promise.resolve(jsonResponse({}));
+      }
+      if (url.includes("wallet-auth")) {
+        if (options?.rejectWalletAuth) {
+          return Promise.reject(new Error("ECONNREFUSED"));
+        }
+        return Promise.resolve(
+          jsonResponse({
+            success: true,
+            authToken: "fixture-auth-token",
+            characterId: "fixture-character-id",
+          }),
+        );
+      }
+      if (url.endsWith("/api/embedded-agents")) {
+        return Promise.resolve(
+          jsonResponse({
+            success: true,
+            agents: [],
+          }),
+        );
+      }
+      if (url.includes("/api/agents/mapping/")) {
+        return Promise.resolve(
+          jsonResponse(
+            {
+              success: false,
+              error: "mapping not found",
+            },
+            { status: 404 },
+          ),
+        );
+      }
+      return Promise.reject(new Error(`Unexpected Hyperscape fetch: ${url}`));
+    });
+  }
+
   afterEach(() => {
     // Restore original env vars
     for (const [key, value] of Object.entries(originalEnv)) {
@@ -509,98 +605,34 @@ describe("Hyperscape Auto-Provisioning", () => {
     vi.restoreAllMocks();
   });
 
-  it("throws error when hyperscape auto-provisioning fails and no credentials exist", async () => {
-    // Mock registry to return hyperscape app
-    global.fetch = vi.fn().mockImplementation((url: string) => {
-      if (url.includes("wallet-auth")) {
-        // Simulate server not responding
-        return Promise.reject(new Error("ECONNREFUSED"));
-      }
-      return Promise.resolve({
-        ok: true,
-        json: async () => ({
-          registry: {
-            [HYPERSCAPE_APP_NAME]: {
-              git: { repo: "HyperscapeAI/hyperscape", v0: {}, v1: {}, v2: {} },
-              npm: {
-                repo: HYPERSCAPE_PLUGIN_NAME,
-                v0: null,
-                v1: null,
-                v2: "1.0.0",
-              },
-              supports: { v0: true, v1: false, v2: false },
-              description: "Hyperscape 3D world",
-              topics: ["app"],
-            },
-            [HYPERSCAPE_PLUGIN_NAME]: {
-              git: {
-                repo: "elizaos/plugin-hyperscape",
-                v0: {},
-                v1: {},
-                v2: {},
-              },
-              npm: {
-                repo: HYPERSCAPE_PLUGIN_NAME,
-                v0: null,
-                v1: null,
-                v2: "1.0.0",
-              },
-              supports: { v0: true, v1: false, v2: false },
-              description: "Hyperscape plugin",
-              topics: ["plugin"],
-            },
-          },
-        }),
-      });
-    });
+  it("launches without Hyperscape iframe auth when no credentials or wallet are available", async () => {
+    process.env.HYPERSCAPE_API_URL = "http://localhost:3333";
+    process.env.HYPERSCAPE_CLIENT_URL = "http://localhost:3333";
+    const fetchMock = createHyperscapeLaunchFetchMock({ rejectWalletAuth: true });
+    global.fetch = fetchMock;
 
     // Mock listInstalledPlugins to report the plugin as already installed
     vi.spyOn(pluginManager, "listInstalledPlugins").mockResolvedValue([
       { name: HYPERSCAPE_PLUGIN_NAME, version: "1.0.0" },
     ]);
 
-    // No wallet keys set, auto-provisioning will fail — but launch still
-    // resolves (the plugin is already installed, launch returns status).
     const result = await appManager.launch(pluginManager, HYPERSCAPE_APP_NAME);
     expect(result.pluginInstalled).toBe(true);
+    expect(result.viewer?.authMessage).toBeUndefined();
+    expect(
+      fetchMock.mock.calls.some(([input]) =>
+        String(input).includes("wallet-auth"),
+      ),
+    ).toBe(false);
   });
 
   it("succeeds when hyperscape credentials are pre-configured", async () => {
-    // Pre-set credentials
+    process.env.HYPERSCAPE_API_URL = "http://localhost:3333";
+    process.env.HYPERSCAPE_CLIENT_URL = "http://localhost:3333";
     process.env.HYPERSCAPE_CHARACTER_ID = "test-char-id";
     process.env.HYPERSCAPE_AUTH_TOKEN = "test-auth-token";
-
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        registry: {
-          [HYPERSCAPE_APP_NAME]: {
-            git: { repo: "HyperscapeAI/hyperscape", v0: {}, v1: {}, v2: {} },
-            npm: {
-              repo: HYPERSCAPE_PLUGIN_NAME,
-              v0: null,
-              v1: null,
-              v2: "1.0.0",
-            },
-            supports: { v0: true, v1: false, v2: false },
-            description: "Hyperscape 3D world",
-            topics: ["app"],
-          },
-          [HYPERSCAPE_PLUGIN_NAME]: {
-            git: { repo: "elizaos/plugin-hyperscape", v0: {}, v1: {}, v2: {} },
-            npm: {
-              repo: HYPERSCAPE_PLUGIN_NAME,
-              v0: null,
-              v1: null,
-              v2: "1.0.0",
-            },
-            supports: { v0: true, v1: false, v2: false },
-            description: "Hyperscape plugin",
-            topics: ["plugin"],
-          },
-        },
-      }),
-    });
+    const fetchMock = createHyperscapeLaunchFetchMock({ rejectWalletAuth: true });
+    global.fetch = fetchMock;
 
     // Mock listInstalledPlugins to report the plugin as already installed
     vi.spyOn(pluginManager, "listInstalledPlugins").mockResolvedValue([
@@ -609,49 +641,26 @@ describe("Hyperscape Auto-Provisioning", () => {
 
     const result = await appManager.launch(pluginManager, HYPERSCAPE_APP_NAME);
     expect(result.pluginInstalled).toBe(true);
+    expect(result.viewer?.authMessage).toEqual(
+      expect.objectContaining({
+        authToken: "test-auth-token",
+        characterId: "test-char-id",
+      }),
+    );
+    expect(
+      fetchMock.mock.calls.some(([input]) =>
+        String(input).includes("wallet-auth"),
+      ),
+    ).toBe(false);
   });
 
   it("skips auto-provisioning when credentials already exist", async () => {
-    // Pre-set credentials - auto-provisioning should be skipped
+    process.env.HYPERSCAPE_API_URL = "http://localhost:3333";
+    process.env.HYPERSCAPE_CLIENT_URL = "http://localhost:3333";
     process.env.HYPERSCAPE_CHARACTER_ID = "existing-char-id";
     process.env.HYPERSCAPE_AUTH_TOKEN = "existing-auth-token";
-
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        registry: {
-          [HYPERSCAPE_APP_NAME]: {
-            git: { repo: "HyperscapeAI/hyperscape", v0: {}, v1: {}, v2: {} },
-            npm: {
-              repo: HYPERSCAPE_PLUGIN_NAME,
-              v0: null,
-              v1: null,
-              v2: "1.0.0",
-            },
-            supports: { v0: true, v1: false, v2: false },
-            description: "Hyperscape 3D world",
-            topics: ["app"],
-          },
-          [HYPERSCAPE_PLUGIN_NAME]: {
-            git: {
-              repo: "elizaos/plugin-hyperscape",
-              v0: {},
-              v1: {},
-              v2: {},
-            },
-            npm: {
-              repo: HYPERSCAPE_PLUGIN_NAME,
-              v0: null,
-              v1: null,
-              v2: "1.0.0",
-            },
-            supports: { v0: true, v1: false, v2: false },
-            description: "Hyperscape plugin",
-            topics: ["plugin"],
-          },
-        },
-      }),
-    });
+    const fetchMock = createHyperscapeLaunchFetchMock({ rejectWalletAuth: true });
+    global.fetch = fetchMock;
 
     // Mock listInstalledPlugins to report the plugin as already installed
     vi.spyOn(pluginManager, "listInstalledPlugins").mockResolvedValue([
@@ -660,9 +669,13 @@ describe("Hyperscape Auto-Provisioning", () => {
 
     const result = await appManager.launch(pluginManager, HYPERSCAPE_APP_NAME);
     expect(result.pluginInstalled).toBe(true);
-    // Credentials should remain unchanged (auto-provisioning skipped)
     expect(process.env.HYPERSCAPE_CHARACTER_ID).toBe("existing-char-id");
     expect(process.env.HYPERSCAPE_AUTH_TOKEN).toBe("existing-auth-token");
+    expect(
+      fetchMock.mock.calls.some(([input]) =>
+        String(input).includes("wallet-auth"),
+      ),
+    ).toBe(false);
   });
 });
 

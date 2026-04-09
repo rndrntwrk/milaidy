@@ -7,14 +7,13 @@
 import { PagePanel } from "@miladyai/ui";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { type AppRunSummary, client, type RegistryAppInfo } from "../../api";
-import { useMediaQuery } from "../../hooks/useMediaQuery";
+
 import { useApp } from "../../state";
 import { openExternalUrl } from "../../utils";
 import { AppDetailPane } from "../apps/AppDetailPane";
 import { AppsCatalogGrid } from "../apps/AppsCatalogGrid";
 import {
   filterAppsForCatalog,
-  getDefaultAppsCatalogSelection,
   shouldShowAppInAppsView,
 } from "../apps/helpers";
 import {
@@ -24,22 +23,10 @@ import {
 
 export { shouldShowAppInAppsView } from "../apps/helpers";
 
-function AppsEmptyState() {
-  const { t } = useApp();
-
-  return (
-    <PagePanel.Empty
-      description={t("appsview.EmptyStateDescription")}
-      title={t("appsview.EmptyStateTitle")}
-    />
-  );
-}
-
 export function AppsView() {
   const {
     appRuns,
     activeGameRunId,
-    activeGameDisplayName,
     activeGameViewerUrl,
     appsSubTab,
     setState,
@@ -53,10 +40,8 @@ export function AppsView() {
   const [showActiveOnly, setShowActiveOnly] = useState(false);
   const [selectedAppName, setSelectedAppName] = useState<string | null>(null);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
-  const [showCompactDetail, setShowCompactDetail] = useState(false);
   const [busyApp, setBusyApp] = useState<string | null>(null);
   const [busyRunId, setBusyRunId] = useState<string | null>(null);
-  const isCompactLayout = useMediaQuery("(max-width: 1023px)");
   const activeAppNames = useMemo(
     () => new Set(appRuns.map((run) => run.appName)),
     [appRuns],
@@ -77,19 +62,6 @@ export function AppsView() {
     [apps, selectedAppName],
   );
 
-  useEffect(() => {
-    if (!isCompactLayout && showCompactDetail) {
-      setShowCompactDetail(false);
-    }
-  }, [isCompactLayout, showCompactDetail]);
-
-  useEffect(() => {
-    if (selectedApp) return;
-    if (showCompactDetail) {
-      setShowCompactDetail(false);
-    }
-  }, [selectedApp, showCompactDetail]);
-
   const selectedAppHasActiveViewer =
     !!selectedApp &&
     hasCurrentGame &&
@@ -104,12 +76,6 @@ export function AppsView() {
     () => sortedRuns.filter((run) => getRunAttentionReasons(run).length > 0),
     [sortedRuns],
   );
-  const topAttentionReason = useMemo(() => {
-    const firstAttentionRun = attentionRuns[0];
-    if (!firstAttentionRun) return null;
-    return getRunAttentionReasons(firstAttentionRun)[0] ?? null;
-  }, [attentionRuns]);
-
   const mergeRun = useCallback(
     (run: AppRunSummary) => {
       const nextRuns = [
@@ -150,12 +116,12 @@ export function AppsView() {
       ]);
       setApps(list);
       setSelectedAppName((current) => {
-        if (!current) return getDefaultAppsCatalogSelection(list);
+        if (!current) return null;
         return list.some(
           (app) => app.name === current && shouldShowAppInAppsView(app),
         )
           ? current
-          : getDefaultAppsCatalogSelection(list);
+          : null;
       });
     } catch (err) {
       setError(
@@ -481,210 +447,96 @@ export function AppsView() {
     });
   }, [activeAppNames, apps, searchQuery, showActiveOnly]);
 
-  const handleSelectApp = useCallback(
-    (appName: string) => {
-      setSelectedAppName(appName);
-      if (isCompactLayout) {
-        setShowCompactDetail(true);
-      }
-    },
-    [isCompactLayout],
-  );
+  const handleSelectApp = useCallback((appName: string) => {
+    setSelectedAppName(appName);
+  }, []);
 
   const handleBackToCatalog = useCallback(() => {
-    if (isCompactLayout) {
-      setShowCompactDetail(false);
-      return;
-    }
     setSelectedAppName(null);
-  }, [isCompactLayout]);
-
-  const shouldShowCompactDetail = isCompactLayout && showCompactDetail;
+  }, []);
 
   return (
-    <div className="device-layout mx-auto flex w-full max-w-7xl flex-col gap-5 px-4 py-4 lg:px-6">
-      <section className="overflow-hidden rounded-[2rem] border border-border/40 bg-card/88 shadow-[0_20px_60px_rgba(0,0,0,0.16)] backdrop-blur-xl">
-        <div className="relative overflow-hidden border-b border-border/40 px-5 py-5">
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,205,96,0.18),transparent_45%),linear-gradient(180deg,rgba(255,255,255,0.02),transparent)]" />
-          <div className="relative grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-end">
-            <div>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.22em] text-accent">
-                Agent App Library
-              </div>
-              <h1 className="mt-3 max-w-3xl text-[1.8rem] font-semibold tracking-[-0.02em] text-txt">
-                Watch your agent live and steer it in real time.
-              </h1>
-              <p className="mt-3 max-w-2xl text-[13px] leading-6 text-muted-strong">
-                Launch an app, lock onto the running agent immediately, and keep
-                commands, pause, and telemetry docked beside the world instead
-                of buried in another tool.
-              </p>
-              <div className="mt-4 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  className={`rounded-full border px-3 py-1.5 text-[11px] font-medium transition-colors ${
-                    appsSubTab === "browse"
-                      ? "border-accent/35 bg-accent/10 text-accent"
-                      : "border-border/35 bg-card/72 text-muted-strong hover:border-accent/20 hover:text-txt"
-                  }`}
-                  onClick={() => setState("appsSubTab", "browse")}
-                >
-                  Browse
-                </button>
-                <button
-                  type="button"
-                  className={`rounded-full border px-3 py-1.5 text-[11px] font-medium transition-colors ${
-                    appsSubTab === "running"
-                      ? "border-accent/35 bg-accent/10 text-accent"
-                      : "border-border/35 bg-card/72 text-muted-strong hover:border-accent/20 hover:text-txt"
-                  }`}
-                  onClick={() => setState("appsSubTab", "running")}
-                >
-                  Running ({sortedRuns.length})
-                </button>
-                {hasActiveRun ? (
-                  <button
-                    type="button"
-                    className="rounded-full border border-ok/35 bg-ok/10 px-3 py-1.5 text-[11px] font-medium text-ok transition-colors hover:bg-ok/15"
-                    onClick={handleOpenCurrentGame}
-                  >
-                    {hasCurrentGame ? "Live viewer" : "Active run"}
-                  </button>
-                ) : null}
-              </div>
-            </div>
-
-            <div
-              className="rounded-[1.5rem] border border-border/35 bg-bg/65 px-4 py-4 shadow-sm"
-              data-testid="apps-session-status-card"
+    <div className="device-layout mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-4 lg:px-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-lg font-semibold tracking-[-0.01em] text-txt">
+          Apps
+        </h1>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            className={`rounded-full border px-3 py-1.5 text-[11px] font-medium transition-colors ${
+              appsSubTab === "browse"
+                ? "border-accent/35 bg-accent/10 text-accent"
+                : "border-border/35 bg-card/72 text-muted-strong hover:border-accent/20 hover:text-txt"
+            }`}
+            onClick={() => {
+              setState("appsSubTab", "browse");
+              setSelectedAppName(null);
+            }}
+          >
+            Browse
+          </button>
+          <button
+            type="button"
+            className={`rounded-full border px-3 py-1.5 text-[11px] font-medium transition-colors ${
+              appsSubTab === "running"
+                ? "border-accent/35 bg-accent/10 text-accent"
+                : "border-border/35 bg-card/72 text-muted-strong hover:border-accent/20 hover:text-txt"
+            }`}
+            onClick={() => setState("appsSubTab", "running")}
+          >
+            Running ({sortedRuns.length})
+          </button>
+          {hasActiveRun ? (
+            <button
+              type="button"
+              className="rounded-full border border-ok/35 bg-ok/10 px-3 py-1.5 text-[11px] font-medium text-ok transition-colors hover:bg-ok/15"
+              onClick={handleOpenCurrentGame}
             >
-              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted">
-                {hasActiveRun ? "Current active run" : "Session status"}
-              </div>
-              <div className="mt-2 text-sm font-semibold text-txt">
-                {hasActiveRun
-                  ? activeGameDisplayName || "Active app session"
-                  : sortedRuns.length > 0
-                    ? `${sortedRuns.length} run${sortedRuns.length === 1 ? "" : "s"} active`
-                    : "No app session running"}
-              </div>
-              <p className="mt-2 text-[12px] leading-6 text-muted-strong">
-                {hasCurrentGame
-                  ? "Jump back into the attached viewer or keep browsing for another world to connect."
-                  : hasActiveRun
-                    ? "The run is still alive even if the viewer is detached or waiting for reattachment."
-                    : sortedRuns.length > 0
-                      ? "Detach, reattach, or stop background runs without losing the rest of your catalog context."
-                      : "Pick an app to inspect launch details and start a live agent session."}
-              </p>
-              {attentionRuns.length > 0 ? (
-                <div className="mt-3 rounded-xl border border-warn/30 bg-warn/10 px-3 py-2 text-[11px] leading-5 text-warn">
-                  <div className="font-semibold uppercase tracking-[0.12em]">
-                    Recovery queue
-                  </div>
-                  <div className="mt-1">
-                    {attentionRuns.length} run
-                    {attentionRuns.length === 1 ? "" : "s"} need attention
-                    {topAttentionReason ? `: ${topAttentionReason}` : "."}
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          </div>
+              {hasCurrentGame ? "Live viewer" : "Active run"}
+            </button>
+          ) : null}
         </div>
+      </div>
 
-        {appsSubTab === "running" ? (
-          <div className="p-4 lg:p-5">
-            <PagePanel variant="inset" className="p-4 lg:p-5">
-              <RunningAppsPanel
-                runs={sortedRuns}
-                selectedRunId={selectedRunId}
-                busyRunId={busyRunId}
-                onSelectRun={setSelectedRunId}
-                onOpenRun={(run) => void handleOpenRun(run)}
-                onDetachRun={(run) => void handleDetachRun(run)}
-                onStopRun={(run) => void handleStopRun(run)}
-              />
-            </PagePanel>
-          </div>
-        ) : (
-          <div className="p-4 lg:p-5">
-            {shouldShowCompactDetail ? (
-              <PagePanel
-                variant="inset"
-                className="p-4 lg:p-5"
-                data-testid="apps-detail-panel"
-              >
-                {selectedApp ? (
-                  <AppDetailPane
-                    app={selectedApp}
-                    busy={busyApp === selectedApp.name}
-                    compact
-                    hasActiveViewer={selectedAppHasActiveViewer}
-                    isActive={selectedAppIsActive}
-                    onBack={handleBackToCatalog}
-                    onLaunch={() => void handleLaunch(selectedApp)}
-                    onOpenCurrentGame={handleOpenCurrentGame}
-                    onOpenCurrentGameInNewTab={() =>
-                      void handleOpenCurrentGameInNewTab()
-                    }
-                  />
-                ) : (
-                  <AppsEmptyState />
-                )}
-              </PagePanel>
-            ) : (
-              <div className="grid gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(22rem,0.85fr)]">
-                <PagePanel variant="inset" className="p-4 lg:p-5">
-                  <AppsCatalogGrid
-                    activeAppNames={activeAppNames}
-                    activeGameDisplayName={activeGameDisplayName}
-                    error={error}
-                    hasCurrentGame={hasCurrentGame}
-                    loading={loading}
-                    searchQuery={searchQuery}
-                    selectedAppName={selectedAppName}
-                    showActiveOnly={showActiveOnly}
-                    visibleApps={visibleApps}
-                    onOpenCurrentGame={handleOpenCurrentGame}
-                    onRefresh={() => void loadApps()}
-                    onSearchQueryChange={setSearchQuery}
-                    onSelectApp={handleSelectApp}
-                    onToggleActiveOnly={() =>
-                      setShowActiveOnly((current) => !current)
-                    }
-                  />
-                </PagePanel>
-
-                {!isCompactLayout ? (
-                  <PagePanel
-                    variant="inset"
-                    className="p-4 lg:p-5"
-                    data-testid="apps-detail-panel"
-                  >
-                    {selectedApp ? (
-                      <AppDetailPane
-                        app={selectedApp}
-                        busy={busyApp === selectedApp.name}
-                        hasActiveViewer={selectedAppHasActiveViewer}
-                        isActive={selectedAppIsActive}
-                        onBack={handleBackToCatalog}
-                        onLaunch={() => void handleLaunch(selectedApp)}
-                        onOpenCurrentGame={handleOpenCurrentGame}
-                        onOpenCurrentGameInNewTab={() =>
-                          void handleOpenCurrentGameInNewTab()
-                        }
-                      />
-                    ) : (
-                      <AppsEmptyState />
-                    )}
-                  </PagePanel>
-                ) : null}
-              </div>
-            )}
-          </div>
-        )}
-      </section>
+      {appsSubTab === "running" ? (
+        <PagePanel variant="inset" className="rounded-2xl p-4 lg:p-5">
+          <RunningAppsPanel
+            runs={sortedRuns}
+            selectedRunId={selectedRunId}
+            busyRunId={busyRunId}
+            onSelectRun={setSelectedRunId}
+            onOpenRun={(run) => void handleOpenRun(run)}
+            onDetachRun={(run) => void handleDetachRun(run)}
+            onStopRun={(run) => void handleStopRun(run)}
+          />
+        </PagePanel>
+      ) : selectedApp ? (
+        <AppDetailPane
+          app={selectedApp}
+          busy={busyApp === selectedApp.name}
+          hasActiveViewer={selectedAppHasActiveViewer}
+          isActive={selectedAppIsActive}
+          onBack={handleBackToCatalog}
+          onLaunch={() => void handleLaunch(selectedApp)}
+          onOpenCurrentGame={handleOpenCurrentGame}
+          onOpenCurrentGameInNewTab={() => void handleOpenCurrentGameInNewTab()}
+        />
+      ) : (
+        <AppsCatalogGrid
+          activeAppNames={activeAppNames}
+          error={error}
+          loading={loading}
+          searchQuery={searchQuery}
+          showActiveOnly={showActiveOnly}
+          visibleApps={visibleApps}
+          onLaunch={(app) => void handleLaunch(app)}
+          onRefresh={() => void loadApps()}
+          onSearchQueryChange={setSearchQuery}
+          onSelectApp={handleSelectApp}
+          onToggleActiveOnly={() => setShowActiveOnly((current) => !current)}
+        />
+      )}
     </div>
   );
 }

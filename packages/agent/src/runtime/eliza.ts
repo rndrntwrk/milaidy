@@ -749,6 +749,28 @@ export function deduplicatePluginActions(plugins: Plugin[]): void {
   }
 }
 
+/** Optional methods on some elizaOS AgentRuntime builds (not in all type versions). */
+type AgentRuntimeFeatureFlags = {
+  isTrajectoriesEnabled?: () => boolean;
+  isKnowledgeEnabled?: () => boolean;
+};
+
+function runtimeTrajectoriesEnabled(runtime: AgentRuntime): boolean {
+  const runtimeWithFlags = runtime as AgentRuntime & AgentRuntimeFeatureFlags;
+  return (
+    typeof runtimeWithFlags.isTrajectoriesEnabled === "function" &&
+    runtimeWithFlags.isTrajectoriesEnabled()
+  );
+}
+
+function runtimeKnowledgeEnabled(runtime: AgentRuntime): boolean {
+  const runtimeWithFlags = runtime as AgentRuntime & AgentRuntimeFeatureFlags;
+  return (
+    typeof runtimeWithFlags.isKnowledgeEnabled === "function" &&
+    runtimeWithFlags.isKnowledgeEnabled()
+  );
+}
+
 interface TrajectoryLoggerControl {
   isEnabled?: () => boolean;
   setEnabled?: (enabled: boolean) => void;
@@ -775,7 +797,7 @@ async function waitForTrajectoriesService(
   context: string,
   timeoutMs = 3000,
 ): Promise<void> {
-  if (!runtime.isTrajectoriesEnabled()) {
+  if (!runtimeTrajectoriesEnabled(runtime)) {
     return;
   }
 
@@ -833,7 +855,7 @@ function ensureTrajectoryLoggerEnabled(
   runtime: AgentRuntime,
   context: string,
 ): void {
-  if (!runtime.isTrajectoriesEnabled()) {
+  if (!runtimeTrajectoriesEnabled(runtime)) {
     logger.info(`[eliza] Native trajectories disabled (${context})`);
     return;
   }
@@ -3654,7 +3676,7 @@ export async function startEliza(
     await prepareRuntimeForTrajectoryCapture(runtime, "runtime.initialize()");
 
     try {
-      if (runtime.isKnowledgeEnabled()) {
+      if (runtimeKnowledgeEnabled(runtime)) {
         await seedBundledKnowledge(runtime);
       } else {
         logger.info(

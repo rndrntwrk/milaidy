@@ -35,8 +35,8 @@ describe("native feature bootstrap wiring", () => {
         /function ensureTrajectoryLoggerEnabled\([\s\S]*?\n\}/m,
       )?.[0] ?? "";
 
-    expect(waitBlock).toContain("if (!runtime.isTrajectoriesEnabled())");
-    expect(ensureBlock).toContain("if (!runtime.isTrajectoriesEnabled())");
+    expect(waitBlock).toContain("if (!runtimeTrajectoriesEnabled(runtime))");
+    expect(ensureBlock).toContain("if (!runtimeTrajectoriesEnabled(runtime))");
     expect(ensureBlock).toContain("Native trajectories disabled");
   });
 
@@ -46,8 +46,25 @@ describe("native feature bootstrap wiring", () => {
         /const initializeRuntimeServices = async \(\): Promise<void> => \{[\s\S]*?\n  \};/m,
       )?.[0] ?? "";
 
-    expect(initBlock).toContain("if (runtime.isKnowledgeEnabled())");
+    expect(initBlock).toContain("if (runtimeKnowledgeEnabled(runtime))");
     expect(initBlock).toContain("Native knowledge disabled");
     expect(initBlock).toContain("skipping bundled knowledge seeding");
+  });
+
+  it("calls native feature probes with the runtime instance bound", () => {
+    const trajectoryProbe =
+      elizaSource.match(
+        /function runtimeTrajectoriesEnabled\([\s\S]*?\n\}/m,
+      )?.[0] ?? "";
+    const knowledgeProbe =
+      elizaSource.match(/function runtimeKnowledgeEnabled\([\s\S]*?\n\}/m)?.[0] ??
+      "";
+
+    expect(trajectoryProbe).toContain(
+      "runtimeWithFlags.isTrajectoriesEnabled()",
+    );
+    expect(knowledgeProbe).toContain("runtimeWithFlags.isKnowledgeEnabled()");
+    expect(trajectoryProbe).not.toContain("const fn =");
+    expect(knowledgeProbe).not.toContain("const fn =");
   });
 });

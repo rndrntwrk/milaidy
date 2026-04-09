@@ -667,12 +667,7 @@ export interface ServerState {
   /** System permission states (cached from the desktop bridge). */
   permissionStates?: Record<
     string,
-    {
-      id: string;
-      status: string;
-      lastChecked: number;
-      canRequest: boolean;
-    }
+    import("@miladyai/shared/contracts/permissions").PermissionState
   >;
   /** Whether shell access is enabled (can be toggled in UI). */
   shellEnabled?: boolean;

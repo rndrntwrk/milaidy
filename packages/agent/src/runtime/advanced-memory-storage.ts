@@ -5,9 +5,14 @@ import {
   type MemoryMetadata,
   type MemoryStorageProvider,
   Service,
+  type ServiceTypeName,
   stringToUuid,
   type UUID,
 } from "@elizaos/core";
+
+/** Plugin-registered service; widen core ServiceTypeName for dynamic keys. */
+const ENTITY_RESOLUTION_SERVICE =
+  "entity_resolution" as ServiceTypeName;
 
 type LongTermMemoryRecord = Awaited<
   ReturnType<MemoryStorageProvider["storeLongTermMemory"]>
@@ -238,17 +243,17 @@ export class AdvancedMemoryStorageService
 
   private async getEntityResolutionService(): Promise<EntityResolutionService | null> {
     const existing = this.runtime.getService(
-      "entity_resolution",
+      ENTITY_RESOLUTION_SERVICE,
     ) as unknown as EntityResolutionService | null;
     if (existing) {
       return existing;
     }
-    if (!this.runtime.hasService("entity_resolution")) {
+    if (!this.runtime.hasService(ENTITY_RESOLUTION_SERVICE)) {
       return null;
     }
     try {
       return (await this.runtime.getServiceLoadPromise(
-        "entity_resolution",
+        ENTITY_RESOLUTION_SERVICE,
       )) as unknown as EntityResolutionService;
     } catch {
       return null;

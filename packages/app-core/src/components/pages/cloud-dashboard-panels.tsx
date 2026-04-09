@@ -235,8 +235,25 @@ function DiscordSettingsPanel({
     }
   }, [expanded, config, loadError, fetchConfig]);
 
-  const patch = (partial: CloudCompatDiscordConfig) => {
-    setConfig((prev) => ({ ...prev, ...partial }));
+  const patch = (partial: Partial<CloudCompatDiscordConfig>) => {
+    setConfig((prev) => (prev ? { ...prev, ...partial } : prev));
+    setDirty(true);
+  };
+
+  const patchDm = (
+    partial: Partial<NonNullable<CloudCompatDiscordConfig["dm"]>>,
+  ) => {
+    setConfig((prev) =>
+      prev
+        ? {
+            ...prev,
+            dm: {
+              ...(prev.dm ?? {}),
+              ...partial,
+            },
+          }
+        : prev,
+    );
     setDirty(true);
   };
 
@@ -248,6 +265,41 @@ function DiscordSettingsPanel({
       ...prev,
       actions: { ...prev?.actions, [key]: value },
     }));
+    setDirty(true);
+  };
+
+  const patchIntents = (
+    partial: Partial<NonNullable<CloudCompatDiscordConfig["intents"]>>,
+  ) => {
+    setConfig((prev) =>
+      prev
+        ? {
+            ...prev,
+            intents: {
+              ...(prev.intents ?? {}),
+              ...partial,
+            },
+          }
+        : prev,
+    );
+    setDirty(true);
+  };
+
+  const patchFlagSetting = (
+    key: "execApprovals" | "pluralkit",
+    enabled: boolean,
+  ) => {
+    setConfig((prev) =>
+      prev
+        ? {
+            ...prev,
+            [key]: {
+              ...(prev[key] ?? {}),
+              enabled,
+            },
+          }
+        : prev,
+    );
     setDirty(true);
   };
 
@@ -333,9 +385,7 @@ function DiscordSettingsPanel({
                     </span>
                     <Switch
                       checked={config.dm?.enabled ?? true}
-                      onCheckedChange={(v) =>
-                        patch({ dm: { ...config.dm, enabled: v } })
-                      }
+                      onCheckedChange={(v) => patchDm({ enabled: v })}
                       className="scale-75"
                     />
                   </div>
@@ -348,11 +398,8 @@ function DiscordSettingsPanel({
                     <Select
                       value={config.dm?.policy ?? "pairing"}
                       onValueChange={(v) =>
-                        patch({
-                          dm: {
-                            ...config.dm,
-                            policy: v as "open" | "pairing" | "allowlist",
-                          },
+                        patchDm({
+                          policy: v as "open" | "pairing" | "allowlist",
                         })
                       }
                     >
@@ -374,9 +421,7 @@ function DiscordSettingsPanel({
                     </span>
                     <Switch
                       checked={config.dm?.groupEnabled ?? false}
-                      onCheckedChange={(v) =>
-                        patch({ dm: { ...config.dm, groupEnabled: v } })
-                      }
+                      onCheckedChange={(v) => patchDm({ groupEnabled: v })}
                       className="scale-75"
                     />
                   </div>
@@ -528,11 +573,7 @@ function DiscordSettingsPanel({
                     </span>
                     <Switch
                       checked={config.intents?.presence ?? false}
-                      onCheckedChange={(v) =>
-                        patch({
-                          intents: { ...config.intents, presence: v },
-                        })
-                      }
+                      onCheckedChange={(v) => patchIntents({ presence: v })}
                       className="scale-75"
                     />
                   </div>
@@ -545,9 +586,7 @@ function DiscordSettingsPanel({
                     <Switch
                       checked={config.intents?.guildMembers ?? false}
                       onCheckedChange={(v) =>
-                        patch({
-                          intents: { ...config.intents, guildMembers: v },
-                        })
+                        patchIntents({ guildMembers: v })
                       }
                       className="scale-75"
                     />
@@ -578,7 +617,7 @@ function DiscordSettingsPanel({
                     <Switch
                       checked={config.pluralkit?.enabled ?? false}
                       onCheckedChange={(v) =>
-                        patch({ pluralkit: { enabled: v } })
+                        patchFlagSetting("pluralkit", v)
                       }
                       className="scale-75"
                     />
@@ -592,7 +631,7 @@ function DiscordSettingsPanel({
                     <Switch
                       checked={config.execApprovals?.enabled ?? false}
                       onCheckedChange={(v) =>
-                        patch({ execApprovals: { enabled: v } })
+                        patchFlagSetting("execApprovals", v)
                       }
                       className="scale-75"
                     />

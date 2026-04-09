@@ -9,29 +9,49 @@ import type {
   RegistryPluginInfo,
 } from "../../src/services/plugin-manager-types";
 
-const appPackageModuleMocks = vi.hoisted(() => {
-  const HyperscapeServiceStub = {
-    serviceType: "hyperscapeService",
-  };
+type AppPackageModuleMocks = {
+  importAppPlugin: ReturnType<typeof vi.fn>;
+  importAppRouteModule: ReturnType<typeof vi.fn>;
+};
 
-  return {
-    importAppPlugin: vi.fn(async (packageName: string) => ({
-      name: packageName,
-      services: [HyperscapeServiceStub],
-    })),
-    importAppRouteModule: vi.fn(),
-  };
-});
+type RegistryClientMocks = {
+  getPluginInfo: ReturnType<typeof vi.fn>;
+  getRegistryPlugins: ReturnType<typeof vi.fn>;
+};
 
-const registryClientMocks = vi.hoisted(() => ({
-  getPluginInfo: vi.fn(async () => null),
-  getRegistryPlugins: vi.fn(async () => new Map()),
-}));
+var appPackageModuleMocksSingleton: AppPackageModuleMocks | undefined;
+var registryClientMocksSingleton: RegistryClientMocks | undefined;
 
-vi.mock("../../src/services/app-package-modules", async () => {
-  const actual = await vi.importActual<
-    typeof import("../../src/services/app-package-modules")
-  >("../../src/services/app-package-modules");
+function getAppPackageModuleMocks(): AppPackageModuleMocks {
+  if (!appPackageModuleMocksSingleton) {
+    appPackageModuleMocksSingleton = {
+      importAppPlugin: vi.fn(async (packageName: string) => ({
+        name: packageName,
+        services: [{ serviceType: "hyperscapeService" }],
+      })),
+      importAppRouteModule: vi.fn(),
+    };
+  }
+  return appPackageModuleMocksSingleton;
+}
+
+function getRegistryClientMocks(): RegistryClientMocks {
+  if (!registryClientMocksSingleton) {
+    registryClientMocksSingleton = {
+      getPluginInfo: vi.fn(async () => null),
+      getRegistryPlugins: vi.fn(async () => new Map()),
+    };
+  }
+  return registryClientMocksSingleton;
+}
+
+const appPackageModuleMocks = getAppPackageModuleMocks();
+const registryClientMocks = getRegistryClientMocks();
+
+vi.mock("../../src/services/app-package-modules", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../../src/services/app-package-modules")>();
+  const appPackageModuleMocks = getAppPackageModuleMocks();
   return {
     ...actual,
     importAppPlugin: appPackageModuleMocks.importAppPlugin,
@@ -42,10 +62,13 @@ vi.mock("../../src/services/app-package-modules", async () => {
   };
 });
 
-vi.mock("../../src/services/registry-client", () => ({
-  getPluginInfo: registryClientMocks.getPluginInfo,
-  getRegistryPlugins: registryClientMocks.getRegistryPlugins,
-}));
+vi.mock("../../src/services/registry-client", () => {
+  const registryClientMocks = getRegistryClientMocks();
+  return {
+    getPluginInfo: registryClientMocks.getPluginInfo,
+    getRegistryPlugins: registryClientMocks.getRegistryPlugins,
+  };
+});
 
 import { AppManager } from "../../src/services/app-manager";
 
@@ -103,6 +126,8 @@ const HYPERSCAPE_APP_INFO: RegistryPluginInfo = {
       mode: "spectator",
       surface: "agent-control",
       followEntity: "{HYPERSCAPE_CHARACTER_ID}",
+      hiddenUI: "chat,inventory,minimap,hotbar,stats",
+      quality: "medium",
     },
     postMessageAuth: true,
     sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
@@ -129,6 +154,8 @@ const HYPERSCAPE_APP_INFO: RegistryPluginInfo = {
         mode: "spectator",
         surface: "agent-control",
         followEntity: "{HYPERSCAPE_CHARACTER_ID}",
+        hiddenUI: "chat,inventory,minimap,hotbar,stats",
+        quality: "medium",
       },
       postMessageAuth: true,
       sandbox: "allow-scripts allow-same-origin allow-popups allow-forms",
@@ -1489,9 +1516,110 @@ describe("AppManager", () => {
     );
   });
 
-  it("auto-provisions a local wallet for Hyperscape launch when the runtime has none", async () => {
+  it("persists Hyperscape auth settings on the runtime and attaches a timeout signal", async () => {
+    delete process.env.HYPERSCAPE_AUTH_TOKEN;
+    delete process.env.HYPERSCAPE_CHARACTER_ID;
+    process.env.HYPERSCAPE_API_URL = "https://hyperscape.test";
+    appPackageModuleMocks.importAppRouteModule.mockResolvedValue({});
+
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      expect(init?.signal).toBeInstanceOf(AbortSignal);
+      return new Response(
+        JSON.stringify({
+          success: true,
+          authToken: "fixture-auth-token",
+          characterId: "char-runtime",
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    try {
+      const manager = new AppManager();
+      const runtime = createRuntimeStub({
+        characterName: "Scout",
+        agentRecord: {
+          walletAddresses: {
+            evm: "0x1234567890123456789012345678901234567890",
+          },
+        },
+      }) as IAgentRuntime & {
+        getSetting: (key: string) => string | null;
+      };
+
+      const result = await manager.launch(
+        buildPluginManager([]),
+        "@hyperscape/plugin-hyperscape",
+        undefined,
+        runtime,
+      );
+
+      expect(fetchMock).toHaveBeenCalledOnce();
+      expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
+        "https://hyperscape.test/api/agents/wallet-auth",
+      );
+      expect(runtime.getSetting("HYPERSCAPE_AUTH_TOKEN")).toBe(
+        "fixture-auth-token",
+      );
+      expect(runtime.getSetting("HYPERSCAPE_CHARACTER_ID")).toBe(
+        "char-runtime",
+      );
+      expect(process.env.HYPERSCAPE_AUTH_TOKEN).toBeUndefined();
+      expect(process.env.HYPERSCAPE_CHARACTER_ID).toBeUndefined();
+      expect(result.viewer?.authMessage).toEqual(
+        expect.objectContaining({
+          type: "HYPERSCAPE_AUTH",
+          authToken: "fixture-auth-token",
+          characterId: "char-runtime",
+        }),
+      );
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("derives the Hyperscape wallet address from an existing EVM private key", async () => {
     const fixtureServer = await startHyperscapeFixtureServer();
     process.env.HYPERSCAPE_API_URL = fixtureServer.url;
+    appPackageModuleMocks.importAppRouteModule.mockResolvedValue({});
+
+    try {
+      const privateKey =
+        "0x59c6995e998f97a5a0044976f094538e8d7d8f0d5f7d7d5f5b5c5d5e5f606162";
+      const { deriveEvmAddress } = await import("../../src/api/wallet.js");
+      const runtime = createRuntimeStub({
+        characterName: "Scout",
+        settings: {
+          EVM_PRIVATE_KEY: privateKey,
+        },
+      });
+
+      const manager = new AppManager();
+      await manager.launch(
+        buildPluginManager([]),
+        "@hyperscape/plugin-hyperscape",
+        undefined,
+        runtime,
+      );
+
+      expect(fixtureServer.walletAuthRequests).toHaveLength(1);
+      expect(fixtureServer.walletAuthRequests[0]?.walletType).toBe("evm");
+      expect(fixtureServer.walletAuthRequests[0]?.walletAddress).toBe(
+        deriveEvmAddress(privateKey),
+      );
+    } finally {
+      await fixtureServer.close();
+    }
+  });
+
+  it("does not auto-provision a local wallet for Hyperscape launch when none exists", async () => {
+    const fixtureServer = await startHyperscapeFixtureServer();
+    process.env.HYPERSCAPE_API_URL = fixtureServer.url;
+    appPackageModuleMocks.importAppRouteModule.mockResolvedValue({});
 
     try {
       delete process.env.HYPERSCAPE_AUTH_TOKEN;
@@ -1513,21 +1641,43 @@ describe("AppManager", () => {
         runtime,
       );
 
-      expect(fixtureServer.walletAuthRequests).toHaveLength(1);
-      expect(fixtureServer.walletAuthRequests[0]?.walletType).toBe("evm");
-      expect(fixtureServer.walletAuthRequests[0]?.walletAddress).toMatch(
-        /^0x[0-9a-f]{40}$/i,
-      );
-      expect(result.viewer?.postMessageAuth).toBe(true);
-      expect(result.viewer?.authMessage).toEqual(
-        expect.objectContaining({
-          type: "HYPERSCAPE_AUTH",
-          agentId: "runtime-agent-id",
-          characterId: "char-runtime",
-        }),
-      );
+      expect(fixtureServer.walletAuthRequests).toHaveLength(0);
+      expect(result.viewer?.authMessage).toBeUndefined();
+      expect(runtime.getSetting("HYPERSCAPE_AUTH_TOKEN")).toBeNull();
     } finally {
       await fixtureServer.close();
+    }
+  });
+
+  it("ignores invalid Hyperscape API URLs before issuing wallet auth requests", async () => {
+    process.env.HYPERSCAPE_API_URL = "file:///tmp/not-allowed";
+    appPackageModuleMocks.importAppRouteModule.mockResolvedValue({});
+
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    try {
+      const manager = new AppManager();
+      const runtime = createRuntimeStub({
+        characterName: "Scout",
+        agentRecord: {
+          walletAddresses: {
+            evm: "0x1234567890123456789012345678901234567890",
+          },
+        },
+      });
+
+      const result = await manager.launch(
+        buildPluginManager([]),
+        "@hyperscape/plugin-hyperscape",
+        undefined,
+        runtime,
+      );
+
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(result.viewer?.authMessage).toBeUndefined();
+    } finally {
+      vi.unstubAllGlobals();
     }
   });
 

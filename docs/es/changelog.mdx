@@ -3,6 +3,34 @@ title: Registro de cambios
 description: Novedades en Milady — funcionalidades, mejoras y correcciones.
 ---
 
+<Update label="2026-04-07" description="Diagnósticos para desarrolladores, migraciones PGlite de life-ops, scripts de workspace, banners de terminal en desarrollo" tags={["Fix", "Update"]}>
+
+<div id="life-ops-safer-migrations-on-pglite">
+## Life-ops: migraciones más seguras en PGlite
+</div>
+
+Las actualizaciones de esquema del subsistema life-ops ahora ejecutan los índices principales después de los pasos `ALTER TABLE` de propiedad, de modo que las bases de datos heredadas anteriores a las columnas `domain` y `subject_*` ya no fallan durante `CREATE INDEX`. Los savepoints por migración también se envuelven en una transacción explícita `BEGIN` / `COMMIT` para que tanto PGlite como Postgres respeten la semántica de `SAVEPOINT` durante las actualizaciones.
+
+<div id="plugin-resolution-why-optional-plugins-were-requested">
+## Resolución de plugins: por qué se solicitaron plugins opcionales
+</div>
+
+Cuando un plugin opcional no puede cargarse porque falta un paquete o un checkout de browser stagehand, los registros de inicio ahora incluyen la primera fuente de configuración o variable de entorno que lo añadió al conjunto de carga. Esto convierte un error genérico "Cannot find module" en una corrección accionable: elimínalo de `plugins.allow`, desactiva la variable de entorno que lo habilitó automáticamente, o instala el paquete.
+
+<div id="workspace-tooling-and-repo-hygiene">
+## Herramientas de workspace e higiene del repositorio
+</div>
+
+Nuevos scripts de dependencias de workspace (`workspace:deps:sync|check|restore`, `workspace:replace-versions`, `workspace:restore-refs`, `workspace:prepare`) reducen la cirugía manual de `package.json` al vincular checkouts locales de elizaOS o plugins. El repositorio ahora también ignora `cache/audio/` y `scripts/bin/*` mientras mantiene `scripts/bin/.gitkeep` para que los binarios y cachés locales queden fuera de git.
+
+<div id="terminal-dev-banners">
+## Banners de terminal en desarrollo
+</div>
+
+El orquestador, Vite, la API y Electrobun ahora pueden imprimir tablas de configuración enmarcadas con encabezados opcionales estilo figlet y coloreado ANSI sensible a TTY durante el desarrollo local. Esto es estrictamente diagnóstico de terminal para flujos de trabajo de desarrollo, no un cambio en la interfaz del panel de control.
+
+</Update>
+
 <Update label="2026-04-05" description="Chat del panel: los callbacks de acción reemplazan en el lugar (mensajes progresivos al estilo Discord sobre SSE)" tags={["Update", "Fix"]}>
 
 <div id="action-callbacks-replace-dont-concatenate-dashboard-sse">

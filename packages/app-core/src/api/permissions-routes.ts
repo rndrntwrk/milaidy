@@ -4,15 +4,10 @@ import {
   type PermissionRouteState as AutonomousPermissionRouteState,
   handlePermissionRoutes as handleAutonomousPermissionRoutes,
 } from "@miladyai/agent/api/permissions-routes";
+import type { PermissionState } from "@miladyai/shared/contracts/permissions";
 import type { ElizaConfig } from "../config/config";
 
-export interface PermissionState {
-  id: string;
-  status: string;
-  lastChecked: number;
-  canRequest: boolean;
-  reason?: string;
-}
+export type { PermissionState };
 
 export interface PermissionRouteState {
   runtime: AgentRuntime | null;

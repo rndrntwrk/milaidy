@@ -6,10 +6,15 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { ElizaConfig } from "../src/config/types";
 import {
   collectConnectorEnvVars,
   CONNECTOR_ENV_MAP,
 } from "../src/config/env-vars";
+
+function cfg(x: Record<string, unknown>): ElizaConfig {
+  return x as ElizaConfig;
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -77,33 +82,39 @@ describe("CONNECTOR_ENV_MAP discord entries", () => {
 
 describe("collectConnectorEnvVars discord token resolution", () => {
   it("extracts DISCORD_API_TOKEN from connector.discord.token", () => {
-    const result = collectConnectorEnvVars({
-      connectors: {
-        discord: { token: "test-token-123" },
-      },
-    } as any);
+    const result = collectConnectorEnvVars(
+      cfg({
+        connectors: {
+          discord: { token: "test-token-123" },
+        },
+      }),
+    );
 
     expect(result.DISCORD_API_TOKEN).toBe("test-token-123");
   });
 
   it("extracts DISCORD_API_TOKEN from connector.discord.botToken", () => {
     // botToken is the alias used by cloud provisioning
-    const result = collectConnectorEnvVars({
-      connectors: {
-        discord: { botToken: "bot-token-456" },
-      },
-    } as any);
+    const result = collectConnectorEnvVars(
+      cfg({
+        connectors: {
+          discord: { botToken: "bot-token-456" },
+        },
+      }),
+    );
 
     expect(result.DISCORD_API_TOKEN).toBe("bot-token-456");
   });
 
   it("mirrors token to both DISCORD_API_TOKEN and DISCORD_BOT_TOKEN", () => {
     // The mirror ensures older plugins that read DISCORD_BOT_TOKEN still work
-    const result = collectConnectorEnvVars({
-      connectors: {
-        discord: { token: "mirror-token" },
-      },
-    } as any);
+    const result = collectConnectorEnvVars(
+      cfg({
+        connectors: {
+          discord: { token: "mirror-token" },
+        },
+      }),
+    );
 
     expect(result.DISCORD_API_TOKEN).toBe("mirror-token");
     expect(result.DISCORD_BOT_TOKEN).toBe("mirror-token");
@@ -111,59 +122,64 @@ describe("collectConnectorEnvVars discord token resolution", () => {
 
   it("prefers token over botToken when both are set", () => {
     // The mirror logic uses token first, then botToken as fallback
-    const result = collectConnectorEnvVars({
-      connectors: {
-        discord: { token: "primary-token", botToken: "secondary-token" },
-      },
-    } as any);
+    const result = collectConnectorEnvVars(
+      cfg({
+        connectors: {
+          discord: { token: "primary-token", botToken: "secondary-token" },
+        },
+      }),
+    );
 
-    // The mirror block picks token ("primary-token") first, but then the
-    // generic CONNECTOR_ENV_MAP loop overwrites DISCORD_API_TOKEN with
-    // botToken since both fields map to the same env key. The final value
-    // depends on Object.entries iteration order of the env map.
-    // DISCORD_BOT_TOKEN is only set by the mirror block (uses token || botToken).
-    expect(typeof result.DISCORD_API_TOKEN).toBe("string");
+    expect(result.DISCORD_API_TOKEN).toBe("primary-token");
     expect(result.DISCORD_BOT_TOKEN).toBe("primary-token");
   });
 
   it("falls back to botToken when token is empty", () => {
-    const result = collectConnectorEnvVars({
-      connectors: {
-        discord: { token: "", botToken: "fallback-token" },
-      },
-    } as any);
+    const result = collectConnectorEnvVars(
+      cfg({
+        connectors: {
+          discord: { token: "", botToken: "fallback-token" },
+        },
+      }),
+    );
 
     expect(result.DISCORD_API_TOKEN).toBe("fallback-token");
     expect(result.DISCORD_BOT_TOKEN).toBe("fallback-token");
   });
 
   it("extracts DISCORD_APPLICATION_ID when present", () => {
-    const result = collectConnectorEnvVars({
-      connectors: {
-        discord: { token: "tok", applicationId: "app-id-789" },
-      },
-    } as any);
+    const result = collectConnectorEnvVars(
+      cfg({
+        connectors: {
+          discord: { token: "tok", applicationId: "app-id-789" },
+        },
+      }),
+    );
 
     expect(result.DISCORD_APPLICATION_ID).toBe("app-id-789");
   });
 
   it("omits DISCORD_APPLICATION_ID when not set", () => {
-    const result = collectConnectorEnvVars({
-      connectors: {
-        discord: { token: "tok" },
-      },
-    } as any);
+    const result = collectConnectorEnvVars(
+      cfg({
+        connectors: {
+          discord: { token: "tok" },
+        },
+      }),
+    );
 
     // applicationId not in config → should not appear in env
     expect(result.DISCORD_APPLICATION_ID).toBeUndefined();
   });
 
   it("skips empty/whitespace-only token values", () => {
-    const result = collectConnectorEnvVars({
-      connectors: {
-        discord: { token: "   ", botToken: "   " },
-      },
-    } as any);
+    const result = collectConnectorEnvVars(
+      cfg({
+        connectors: {
+          discord: { token: "   ", botToken: "   " },
+        },
+      }),
+    );
 
     // Both are whitespace → mirror should not fire
     expect(result.DISCORD_API_TOKEN).toBeUndefined();
@@ -171,11 +187,13 @@ describe("collectConnectorEnvVars discord token resolution", () => {
   });
 
   it("skips non-string token values", () => {
-    const result = collectConnectorEnvVars({
-      connectors: {
-        discord: { token: 12345 as any },
-      },
-    } as any);
+    const result = collectConnectorEnvVars(
+      cfg({
+        connectors: {
+          discord: { token: 12345 },
+        },
+      }),
+    );
 
     // Non-string values are silently ignored
     expect(result.DISCORD_API_TOKEN).toBeUndefined();
@@ -198,14 +216,16 @@ describe("cloud-injected env var parity", () => {
 
   it("cloud container with bot token produces valid connector env vars", () => {
     // Simulates: cloud provisioning wrote botToken into the agent config
-    const result = collectConnectorEnvVars({
-      connectors: {
-        discord: {
-          botToken: "cloud-provisioned-bot-token",
-          applicationId: "cloud-app-id",
+    const result = collectConnectorEnvVars(
+      cfg({
+        connectors: {
+          discord: {
+            botToken: "cloud-provisioned-bot-token",
+            applicationId: "cloud-app-id",
+          },
         },
-      },
-    } as any);
+      }),
+    );
 
     // Must produce all env vars the discord plugin needs at startup
     expect(result.DISCORD_API_TOKEN).toBe("cloud-provisioned-bot-token");
@@ -220,15 +240,13 @@ describe("cloud-injected env var parity", () => {
 
 describe("missing discord token handling", () => {
   it("returns empty object when discord connector config is missing", () => {
-    const result = collectConnectorEnvVars({
-      connectors: {},
-    } as any);
+    const result = collectConnectorEnvVars(cfg({ connectors: {} }));
 
     expect(result).toEqual({});
   });
 
   it("returns empty object when connectors key is absent", () => {
-    const result = collectConnectorEnvVars({} as any);
+    const result = collectConnectorEnvVars(cfg({}));
     expect(result).toEqual({});
   });
 
@@ -238,11 +256,13 @@ describe("missing discord token handling", () => {
   });
 
   it("handles discord connector with no token fields gracefully", () => {
-    const result = collectConnectorEnvVars({
-      connectors: {
-        discord: { applicationId: "app-only" },
-      },
-    } as any);
+    const result = collectConnectorEnvVars(
+      cfg({
+        connectors: {
+          discord: { applicationId: "app-only" },
+        },
+      }),
+    );
 
     // No token → no DISCORD_API_TOKEN or DISCORD_BOT_TOKEN
     expect(result.DISCORD_API_TOKEN).toBeUndefined();
@@ -252,21 +272,25 @@ describe("missing discord token handling", () => {
   });
 
   it("handles null connector config without crashing", () => {
-    const result = collectConnectorEnvVars({
-      connectors: {
-        discord: null,
-      },
-    } as any);
+    const result = collectConnectorEnvVars(
+      cfg({
+        connectors: {
+          discord: null,
+        },
+      }),
+    );
 
     expect(result).toEqual({});
   });
 
   it("handles array connector config without crashing", () => {
-    const result = collectConnectorEnvVars({
-      connectors: {
-        discord: ["unexpected"],
-      },
-    } as any);
+    const result = collectConnectorEnvVars(
+      cfg({
+        connectors: {
+          discord: ["unexpected"],
+        },
+      }),
+    );
 
     expect(result).toEqual({});
   });
@@ -279,11 +303,13 @@ describe("missing discord token handling", () => {
 describe("legacy channels key", () => {
   it("reads discord config from channels key (legacy)", () => {
     // Older configs used "channels" instead of "connectors"
-    const result = collectConnectorEnvVars({
-      channels: {
-        discord: { token: "legacy-token" },
-      },
-    } as any);
+    const result = collectConnectorEnvVars(
+      cfg({
+        channels: {
+          discord: { token: "legacy-token" },
+        },
+      }),
+    );
 
     expect(result.DISCORD_API_TOKEN).toBe("legacy-token");
     expect(result.DISCORD_BOT_TOKEN).toBe("legacy-token");

@@ -19,11 +19,6 @@ The four supported games are:
 - `@elizaos/app-babylon`
 - `@elizaos/app-defense-of-the-agents`
 
-Apps we do not want in the user-facing game catalog are already hidden in the curated Apps view, but they are not fully removed from the codebase yet:
-
-- `@elizaos/app-dungeons`
-- `@elizaos/app-agent-town`
-
 ## Product Thesis
 
 This product is a new kind of game interaction:

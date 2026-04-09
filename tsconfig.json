@@ -26,6 +26,8 @@
       "@miladyai/ui": ["./packages/ui/src/index.ts"],
       "@miladyai/ui/*": ["./packages/ui/src/*"],
       "@miladyai/agent/*": ["./packages/agent/src/*"],
+      "@miladyai/shared": ["./packages/shared/src/index.ts"],
+      "@miladyai/shared/*": ["./packages/shared/src/*"],
       "@elizaos/core": [
         "./node_modules/@elizaos/core"
       ]

@@ -342,6 +342,16 @@ describe("cloud discord env var parity", () => {
     } as Record<string, unknown>);
     expect(vars.DISCORD_APPLICATION_ID).toBe("app-id-789");
   });
+
+  it("collectConnectorEnvVars omits discord vars when no token is set", () => {
+    const vars = collectConnectorEnvVars({
+      connectors: { discord: { applicationId: "app-id-789" } },
+    } as Record<string, unknown>);
+    expect(vars.DISCORD_API_TOKEN).toBeUndefined();
+    expect(vars.DISCORD_BOT_TOKEN).toBeUndefined();
+    // applicationId IS still emitted via the regular env map path
+    expect(vars.DISCORD_APPLICATION_ID).toBe("app-id-789");
+  });
 });
 
 describe("connector health monitor coverage parity", () => {

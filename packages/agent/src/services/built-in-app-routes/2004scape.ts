@@ -554,7 +554,10 @@ function rewriteViewerHtml(html: string): string {
     .replace(/url\((["']?)\/(?!\/)/g, `url($1${VIEWER_PROXY_PREFIX}/`);
 }
 
-function buildViewerShellInjection(remoteServerUrl: string): string {
+function buildViewerShellInjection(
+  remoteServerUrl: string,
+  gatewayPort?: number | null,
+): string {
   return `<base id="milady-2004scape-viewer-base" href="${VIEWER_PROXY_PREFIX}/">
 <script id="milady-2004scape-bridge">
 (() => {
@@ -568,6 +571,7 @@ function buildViewerShellInjection(remoteServerUrl: string): string {
   const REMOTE_WS_PROTOCOL = ${JSON.stringify(
     new URL(remoteServerUrl).protocol === "https:" ? "wss:" : "ws:",
   )};
+  const GATEWAY_PORT = ${gatewayPort ? JSON.stringify(gatewayPort) : "null"};
   const DEFAULT_GOAL = "Finish tutorial and start gathering resources.";
   const baseFetch = window.fetch.bind(window);
   const NativeWebSocket = window.WebSocket;
@@ -1034,6 +1038,149 @@ function buildViewerShellInjection(remoteServerUrl: string): string {
     }
     wanderNearby(client);
   };
+  /* ------------------------------------------------------------------ */
+  /*  Gateway WebSocket bridge — connects game client to SDK             */
+  /* ------------------------------------------------------------------ */
+  let gatewayWs = null;
+  let gatewayReconnectTimer = null;
+  let gatewayStateTimer = null;
+  const connectGateway = () => {
+    if (!GATEWAY_PORT || !bridge.sessionId) return;
+    try {
+      const wsUrl = "ws://localhost:" + GATEWAY_PORT + "/ws?username=" + encodeURIComponent(bridge.sessionId);
+      gatewayWs = new NativeWebSocket(wsUrl);
+      gatewayWs.onopen = () => {
+        pushActivity("gateway", "Connected to SDK gateway.");
+        if (gatewayReconnectTimer) { clearTimeout(gatewayReconnectTimer); gatewayReconnectTimer = null; }
+      };
+      gatewayWs.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.type === "sdk_action") {
+            handleSdkAction(msg.action, msg.id);
+          }
+        } catch {}
+      };
+      gatewayWs.onclose = () => {
+        gatewayWs = null;
+        if (!bridge.paused) {
+          gatewayReconnectTimer = setTimeout(connectGateway, 3000);
+        }
+      };
+      gatewayWs.onerror = () => { /* onclose will fire */ };
+    } catch {}
+  };
+  const sendGatewayState = () => {
+    if (!gatewayWs || gatewayWs.readyState !== 1) return;
+    const client = getClient();
+    const state = typeof client?.getBotState === "function" ? client.getBotState() : null;
+    if (!state) return;
+    try {
+      gatewayWs.send(JSON.stringify({ type: "sdk_state", state }));
+    } catch {}
+  };
+  const handleSdkAction = (action, id) => {
+    const client = getClient();
+    if (!client) {
+      sendGatewayAck(id, false, "Game client not available.");
+      return;
+    }
+    let ok = false;
+    let msg = "Action executed.";
+    try {
+      switch (action?.type) {
+        case "walkTo":
+          ok = typeof client.walkTo === "function" && client.walkTo(action.x, action.z);
+          msg = ok ? "Walking to (" + action.x + ", " + action.z + ")." : "Walk failed.";
+          break;
+        case "interactLoc":
+          ok = typeof client.interactLoc === "function" && client.interactLoc(action.x ?? 0, action.z ?? 0, action.locId, action.opIndex ?? 1);
+          break;
+        case "interactNpc":
+          ok = typeof client.interactNpc === "function" && client.interactNpc(action.nid, action.opIndex ?? 1);
+          break;
+        case "attackNpc":
+          ok = typeof client.interactNpc === "function" && client.interactNpc(action.nid, 0);
+          break;
+        case "talkToNpc":
+          ok = typeof client.interactNpc === "function" && client.interactNpc(action.nid, 1);
+          break;
+        case "useInventory":
+          ok = typeof client.useInventoryItem === "function" && client.useInventoryItem(action.slot);
+          break;
+        case "equipItem":
+          ok = typeof client.equipItem === "function" && client.equipItem(action.slot);
+          break;
+        case "unequipItem":
+          ok = typeof client.unequipItem === "function" && client.unequipItem(action.slot);
+          break;
+        case "dropItem":
+          ok = typeof client.dropItem === "function" && client.dropItem(action.slot);
+          break;
+        case "pickupItem":
+          ok = typeof client.pickupGroundItem === "function" && client.pickupGroundItem(action.id, action.x, action.z);
+          break;
+        case "useItemOnItem":
+          ok = typeof client.useItemOnItem === "function" && client.useItemOnItem(action.slot1, action.slot2);
+          break;
+        case "useItemOnLoc":
+          ok = typeof client.useItemOnLoc === "function" && client.useItemOnLoc(action.slot, action.locId);
+          break;
+        case "useItemOnNpc":
+          ok = typeof client.useItemOnNpc === "function" && client.useItemOnNpc(action.slot, action.nid);
+          break;
+        case "dialogOption":
+          ok = typeof client.clickInterfaceOption === "function" && client.clickInterfaceOption(action.option);
+          break;
+        case "openBank":
+          ok = typeof client.openBank === "function" && client.openBank();
+          break;
+        case "closeBank":
+          ok = typeof client.closeBank === "function" && client.closeBank();
+          break;
+        case "depositItem":
+          ok = typeof client.depositItem === "function" && client.depositItem(action.slot, action.count ?? 1);
+          break;
+        case "withdrawItem":
+          ok = typeof client.withdrawItem === "function" && client.withdrawItem(action.slot, action.count ?? 1);
+          break;
+        case "openShop":
+          ok = typeof client.interactNpc === "function" && client.interactNpc(action.nid, 1);
+          break;
+        case "closeShop":
+          ok = typeof client.closeShop === "function" && client.closeShop();
+          break;
+        case "buyItem":
+          ok = typeof client.buyItem === "function" && client.buyItem(action.slot, action.count ?? 1);
+          break;
+        case "sellItem":
+          ok = typeof client.sellItem === "function" && client.sellItem(action.slot, action.count ?? 1);
+          break;
+        case "setCombatStyle":
+          ok = typeof client.setCombatStyle === "function" && client.setCombatStyle(action.style);
+          break;
+        case "castSpell":
+          ok = typeof client.castSpell === "function" && client.castSpell(action.spellId, action.targetNid);
+          break;
+        default:
+          msg = "Unknown action type: " + (action?.type || "null");
+      }
+    } catch (err) {
+      msg = "Action error: " + (err?.message || String(err));
+    }
+    if (ok) { markAction("sdk-action", action.type + " executed."); }
+    sendGatewayAck(id, ok, msg);
+  };
+  const sendGatewayAck = (id, success, message) => {
+    if (!gatewayWs || gatewayWs.readyState !== 1 || !id) return;
+    try {
+      gatewayWs.send(JSON.stringify({ type: "sdk_action_ack", id, success, message }));
+    } catch {}
+  };
+
+  /* ------------------------------------------------------------------ */
+  /*  Timers and event handlers                                          */
+  /* ------------------------------------------------------------------ */
   bridge.readyTimer = window.setInterval(() => {
     if (!bridge.auth) {
       emitReady();
@@ -1047,6 +1194,10 @@ function buildViewerShellInjection(remoteServerUrl: string): string {
   bridge.autoplayTimer = window.setInterval(() => {
     void autoplayTick();
   }, 1200);
+  // Send full game state to the SDK gateway every 500ms
+  if (GATEWAY_PORT) {
+    gatewayStateTimer = window.setInterval(sendGatewayState, 500);
+  }
   emitReady();
   window.addEventListener("message", async (event) => {
     if (event?.data?.type !== AUTH_TYPE) {
@@ -1074,6 +1225,8 @@ function buildViewerShellInjection(remoteServerUrl: string): string {
       }
     }
     await syncBridge();
+    // Connect to SDK gateway after auth
+    if (GATEWAY_PORT) { connectGateway(); }
   });
   window.addEventListener(
     "beforeunload",
@@ -1081,6 +1234,8 @@ function buildViewerShellInjection(remoteServerUrl: string): string {
       window.clearInterval(bridge.readyTimer);
       window.clearInterval(bridge.syncTimer);
       window.clearInterval(bridge.autoplayTimer);
+      if (gatewayStateTimer) window.clearInterval(gatewayStateTimer);
+      if (gatewayWs) { try { gatewayWs.close(); } catch {} }
     },
     { once: true },
   );
@@ -1101,7 +1256,13 @@ async function buildViewerHtml(runtime: IAgentRuntime | null): Promise<string> {
     );
   }
 
-  const injected = buildViewerShellInjection(remoteServerUrl);
+  // Resolve the gateway port from the game service if available
+  const gameService = runtime?.getService?.("rs_2004scape") as
+    | { getGatewayPort(): number | null }
+    | undefined;
+  const gatewayPort = gameService?.getGatewayPort?.() ?? null;
+
+  const injected = buildViewerShellInjection(remoteServerUrl, gatewayPort);
   const rewritten = rewriteViewerHtml(html);
   return rewritten.includes("</head>")
     ? rewritten.replace("</head>", `${injected}</head>`)

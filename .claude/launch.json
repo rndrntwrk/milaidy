@@ -13,7 +13,7 @@
       "runtimeExecutable": "/bin/zsh",
       "runtimeArgs": ["-l", "-c", "npm run dev:ui"],
       "port": 2138,
-      "autoPort": false
+      "autoPort": true
     },
     {
       "name": "home",

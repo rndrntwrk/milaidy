@@ -1,13 +1,14 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import type {
+  Action,
   AgentRuntime,
-  AgentContext,
+  Evaluator,
   Plugin,
-  PluginEventRegistration,
   PluginModelRegistration,
-  PluginOwnership,
-  PluginServiceRegistration,
+  Provider,
+  Route,
   Service,
+  ServiceClass,
   ServiceTypeName,
   UUID,
 } from "@elizaos/core";
@@ -15,7 +16,40 @@ import {
   resolveActionContexts,
   resolveProviderContexts,
 } from "../training/context-catalog.js";
-import type { AgentContext as TrainingAgentContext } from "../training/context-types.js";
+import type { AgentContext } from "../training/context-types.js";
+
+/** elizaOS runtime plugin lifecycle bookkeeping (not exported from @elizaos/core). */
+type MiladyPluginOwnership = {
+  pluginName: string;
+  plugin: Plugin;
+  registeredPlugin: Plugin | null;
+  actions: Action[];
+  providers: Provider[];
+  evaluators: Evaluator[];
+  routes: Route[];
+  events: MiladyPluginEventRegistration[];
+  models: MiladyPluginModelRegistration[];
+  services: MiladyPluginServiceRegistration[];
+  sendHandlerSources: string[];
+  hasAdapter: boolean;
+  registeredAt: number;
+};
+
+type MiladyPluginEventRegistration = {
+  eventName: string;
+  handler: (params: unknown) => Promise<void>;
+};
+
+type MiladyPluginModelRegistration = {
+  modelType: string;
+  handler: PluginModelRegistration["handler"];
+  provider: string;
+};
+
+type MiladyPluginServiceRegistration = {
+  serviceType: ServiceTypeName;
+  serviceClass: ServiceClass;
+};
 
 type ContextScoped = {
   contexts?: string[];
@@ -26,10 +60,10 @@ type RuntimeProvider = NonNullable<Plugin["providers"]>[number] & ContextScoped;
 type RuntimeEvaluator = NonNullable<Plugin["evaluators"]>[number];
 type RuntimeRoute = NonNullable<Plugin["routes"]>[number];
 type RuntimeServiceClass = NonNullable<Plugin["services"]>[number];
-type RuntimeEventHandler = PluginEventRegistration["handler"];
-type RuntimeEventRegistration = PluginEventRegistration;
-type RuntimeModelRegistration = PluginModelRegistration;
-type RuntimeServiceRegistration = PluginServiceRegistration;
+type RuntimeEventHandler = MiladyPluginEventRegistration["handler"];
+type RuntimeEventRegistration = MiladyPluginEventRegistration;
+type RuntimeModelRegistration = MiladyPluginModelRegistration;
+type RuntimeServiceRegistration = MiladyPluginServiceRegistration;
 
 type RuntimeSendHandler = (
   runtime: unknown,
@@ -54,13 +88,13 @@ type RuntimePluginWithLifecycleHooks = Plugin &
 
 function toTrainingContexts(
   contexts: AgentContext[] | undefined,
-): TrainingAgentContext[] | undefined {
+): AgentContext[] | undefined {
   if (!Array.isArray(contexts) || contexts.length === 0) {
     return undefined;
   }
 
   return contexts.filter(
-    (context): context is TrainingAgentContext =>
+    (context): context is AgentContext =>
       typeof context === "string" && context.trim().length > 0,
   );
 }
@@ -92,7 +126,7 @@ type RuntimePluginServiceStartCapture = {
   pluginName: string;
 };
 
-export type RuntimePluginOwnership = PluginOwnership;
+export type RuntimePluginOwnership = MiladyPluginOwnership;
 
 type RuntimeWithPluginLifecycle = AgentRuntime & {
   __elizaPluginLifecycleInstalled?: boolean;
@@ -209,7 +243,7 @@ function applyEffectiveActionContexts(
     contexts: [
       ...resolveActionContexts(
         inherited.name,
-        toTrainingContexts(inherited.contexts),
+        toTrainingContexts(inherited.contexts as AgentContext[] | undefined),
         toTrainingContexts(pluginContexts as AgentContext[] | undefined),
       ),
     ],
@@ -230,7 +264,7 @@ function applyEffectiveProviderContexts(
     contexts: [
       ...resolveProviderContexts(
         inherited.name,
-        toTrainingContexts(inherited.contexts),
+        toTrainingContexts(inherited.contexts as AgentContext[] | undefined),
         toTrainingContexts(pluginContexts as AgentContext[] | undefined),
       ),
     ],

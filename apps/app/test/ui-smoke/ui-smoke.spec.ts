@@ -286,16 +286,6 @@ function createMultiRunFixture(): MultiRunFixture {
           },
         },
       ),
-      buildCatalogApp(
-        "@elizaos/app-dungeons",
-        "Dungeons",
-        "Hidden legacy app that should stay out of the curated catalog.",
-      ),
-      buildCatalogApp(
-        "@elizaos/app-agent-town",
-        "Agent Town",
-        "Hidden legacy app that should stay out of the curated catalog.",
-      ),
     ],
     runs: [
       buildRun(
@@ -622,12 +612,6 @@ test("Apps view shows curated multi-run state for Babylon and 2004scape", async 
   await expect(page.getByTestId("apps-catalog-grid")).toContainText(
     "2004scape",
   );
-  await expect(page.getByRole("button", { name: /Open Dungeons/ })).toHaveCount(
-    0,
-  );
-  await expect(
-    page.getByRole("button", { name: /Open Agent Town/ }),
-  ).toHaveCount(0);
 
   await page.getByRole("button", { name: /Running \(4\)/ }).click();
   await expect(page.getByTestId("apps-session-status-card")).toContainText(

@@ -3,6 +3,34 @@ title: 更新日志
 description: Milady 的最新动态——新功能、改进和修复。
 ---
 
+<Update label="2026-04-07" description="开发者诊断、life-ops PGlite 迁移、workspace 脚本、终端开发横幅" tags={["Fix", "Update"]}>
+
+<div id="life-ops-safer-migrations-on-pglite">
+## Life-ops：PGlite 上更安全的迁移
+</div>
+
+life-ops 子系统的架构升级现在在所有权 `ALTER TABLE` 步骤之后运行核心索引，因此早于 `domain` 和 `subject_*` 列的旧数据库在 `CREATE INDEX` 时不再失败。每次迁移的 savepoint 也被包装在显式的 `BEGIN` / `COMMIT` 事务中，使 PGlite 和 Postgres 在升级期间都遵守 `SAVEPOINT` 语义。
+
+<div id="plugin-resolution-why-optional-plugins-were-requested">
+## 插件解析：为什么请求了可选插件
+</div>
+
+当可选插件因缺少包或 browser stagehand checkout 而无法加载时，启动日志现在会包含将其添加到加载集的第一个配置来源或环境变量。这将通用的 "Cannot find module" 错误转变为可操作的修复：从 `plugins.allow` 中移除它、取消自动启用它的环境变量，或安装该包。
+
+<div id="workspace-tooling-and-repo-hygiene">
+## Workspace 工具和仓库清理
+</div>
+
+新的 workspace 依赖脚本（`workspace:deps:sync|check|restore`、`workspace:replace-versions`、`workspace:restore-refs`、`workspace:prepare`）减少了在链接本地 elizaOS 或插件 checkout 时对 `package.json` 的手动修改。仓库现在还忽略 `cache/audio/` 和 `scripts/bin/*`，同时保留 `scripts/bin/.gitkeep`，使本地二进制文件和缓存不进入 git。
+
+<div id="terminal-dev-banners">
+## 终端开发横幅
+</div>
+
+编排器、Vite、API 和 Electrobun 现在可以在本地开发期间打印带框的设置表格，带有可选的 figlet 风格标题和 TTY 感知的 ANSI 着色。这严格用于开发者工作流的终端诊断，不是仪表盘 UI 的更改。
+
+</Update>
+
 <Update label="2026-04-05" description="仪表盘聊天：操作回调就地替换（类似 Discord 的 SSE 渐进式消息）" tags={["Update", "Fix"]}>
 <div id="action-callbacks-replace-dont-concatenate-dashboard-sse">
 ## 操作回调：替换而非拼接（仪表盘 SSE）

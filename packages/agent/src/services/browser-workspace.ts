@@ -1,6 +1,77 @@
+import { existsSync, readFileSync } from "node:fs";
 import * as fsp from "node:fs/promises";
+import { createRequire } from "node:module";
 import * as path from "node:path";
-import { JSDOM } from "jsdom";
+import { fileURLToPath } from "node:url";
+import type { JSDOM } from "jsdom";
+
+let jsdomCtor: typeof import("jsdom").JSDOM | undefined;
+
+/**
+ * Locate jsdom's package.json on disk, then resolve its declared entry file from there.
+ * Vitest workers run on Node; Node cannot resolve `jsdom` from workspace roots when
+ * Bun hoists deps under node_modules/.bun, but requiring jsdom from its own package
+ * directory still works.
+ */
+function findJsdomPackageJsonPath(): string {
+  const candidatesUnderBase = (base: string): string | undefined => {
+    const rels = [
+      path.join("node_modules", "jsdom", "package.json"),
+      path.join("apps", "app", "node_modules", "jsdom", "package.json"),
+    ];
+    for (const rel of rels) {
+      const full = path.join(base, rel);
+      if (existsSync(full)) {
+        return full;
+      }
+    }
+    return undefined;
+  };
+
+  const walk = (start: string, maxDepth: number): string | undefined => {
+    let dir = start;
+    for (let depth = 0; depth < maxDepth; depth += 1) {
+      const hit = candidatesUnderBase(dir);
+      if (hit) {
+        return hit;
+      }
+      const parent = path.dirname(dir);
+      if (parent === dir) {
+        break;
+      }
+      dir = parent;
+    }
+    return undefined;
+  };
+
+  const fromSource = walk(path.dirname(fileURLToPath(import.meta.url)), 24);
+  if (fromSource) {
+    return fromSource;
+  }
+  const fromCwd = walk(process.cwd(), 16);
+  if (fromCwd) {
+    return fromCwd;
+  }
+
+  throw new Error(
+    "Could not find jsdom on disk (install dependencies: jsdom is listed on @miladyai/agent and apps/app).",
+  );
+}
+
+/** Lazy-load jsdom so importing this module does not require jsdom at parse time (Vitest / server tests). */
+function getJSDOMClass(): typeof import("jsdom").JSDOM {
+  if (!jsdomCtor) {
+    const jsdomPkg = findJsdomPackageJsonPath();
+    const jsdomDir = path.dirname(jsdomPkg);
+    const meta = JSON.parse(readFileSync(jsdomPkg, "utf8")) as { main?: string };
+    const mainRel = (meta.main ?? "./lib/api.js").replace(/^\.\//, "");
+    const entry = path.join(jsdomDir, mainRel);
+    const req = createRequire(jsdomPkg);
+    const mod = req(entry) as { JSDOM: typeof import("jsdom").JSDOM };
+    jsdomCtor = mod.JSDOM;
+  }
+  return jsdomCtor;
+}
 
 const DEFAULT_TIMEOUT_MS = 12_000;
 const DEFAULT_WAIT_INTERVAL_MS = 120;
@@ -737,7 +808,7 @@ function clearWebBrowserWorkspaceTabElementRefs(tabId: string): void {
 }
 
 function createEmptyWebBrowserWorkspaceDom(url: string): JSDOM {
-  return new JSDOM(
+  return new (getJSDOMClass())(
     '<!doctype html><html lang="en"><head><title>New Tab</title></head><body></body></html>',
     {
       pretendToBeVisual: true,
@@ -1120,7 +1191,7 @@ function resolveBrowserWorkspaceIframeDocument(
     ) {
       return iframe.contentDocument;
     }
-    const parsed = new JSDOM(srcdoc, {
+    const parsed = new (getJSDOMClass())(srcdoc, {
       pretendToBeVisual: true,
       url: baseUrl,
     });
@@ -2279,7 +2350,7 @@ async function loadWebBrowserWorkspaceTabDocument(
 
   const html = await response.text();
   const finalUrl = assertBrowserWorkspaceUrl(response.url?.trim() || tab.url);
-  const dom = new JSDOM(html, {
+  const dom = new (getJSDOMClass())(html, {
     pretendToBeVisual: true,
     url: finalUrl,
   });
@@ -3798,7 +3869,7 @@ async function submitWebBrowserWorkspaceForm(
 
   const html = await response.text();
   const finalUrl = assertBrowserWorkspaceUrl(response.url?.trim() || submitUrl);
-  const nextDom = new JSDOM(html, {
+  const nextDom = new (getJSDOMClass())(html, {
     pretendToBeVisual: true,
     url: finalUrl,
   });

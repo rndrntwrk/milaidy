@@ -188,6 +188,15 @@ export function collectConnectorEnvVars(
     }
 
     for (const [configField, envKey] of Object.entries(envMap)) {
+      // Discord token/botToken are handled above with token-first precedence; the
+      // env map maps both fields to DISCORD_API_TOKEN, so applying them here would
+      // let botToken overwrite token.
+      if (
+        connectorName === "discord" &&
+        (configField === "token" || configField === "botToken")
+      ) {
+        continue;
+      }
       const value = configObj[configField];
       if (typeof value !== "string" || !value.trim()) {
         continue;
