@@ -337,28 +337,7 @@ async function resolveCuratedAppInfo(
 ): Promise<RegistryAppPlugin | null> {
   const canonicalName = normalizeMiladyCuratedAppName(name);
   if (!canonicalName) {
-    let appInfo = (await pluginManager.getRegistryPlugin(
-      name,
-    )) as RegistryAppPlugin | null;
-    const localPluginInfo = await getPluginInfo(name);
-
-    if (localPluginInfo) {
-      if (!appInfo) {
-        appInfo = mergeLocalRegistryInfo(
-          cloneRegistryPluginInfo(localPluginInfo as RegistryAppPlugin),
-          localPluginInfo,
-        );
-      } else {
-        mergeLocalRegistryInfo(appInfo, localPluginInfo);
-      }
-    }
-
-    if (!appInfo) {
-      return null;
-    }
-
-    appInfo.appMeta = resolveEffectiveAppMeta(name, appInfo);
-    return flattenAppInfo(appInfo);
+    return null;
   }
 
   const lookupNames = getMiladyCuratedAppLookupNames(name);
@@ -385,7 +364,9 @@ async function resolveCuratedAppInfo(
   }
 
   for (const candidateName of lookupNames) {
-    const localPluginInfo = await getPluginInfo(candidateName);
+    const localPluginInfo = await getPluginInfo(candidateName).catch(
+      () => null,
+    );
     if (!localPluginInfo) {
       continue;
     }
