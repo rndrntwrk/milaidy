@@ -2,15 +2,36 @@ import type {
   AppRunSummary,
   AppViewerAuthMessage,
 } from "../../api/client-types-cloud";
+import { resolveApiUrl } from "../../utils";
 
 function normalizeEmbedFlag(value: string | undefined): boolean {
   return value?.trim().toLowerCase() === "true";
 }
 
+export function resolveEmbeddedViewerUrl(viewerUrl: string): string {
+  const normalized = viewerUrl.trim();
+  if (!normalized) {
+    return normalized;
+  }
+  if (normalized.startsWith("/api/")) {
+    return resolveApiUrl(normalized);
+  }
+  return normalized;
+}
+
 export function resolvePostMessageTargetOrigin(viewerUrl: string): string {
-  if (viewerUrl.startsWith("/")) return window.location.origin;
-  const match = viewerUrl.match(/^https?:\/\/[^/?#]+/i);
-  return match?.[0] ?? "*";
+  const resolvedViewerUrl = resolveEmbeddedViewerUrl(viewerUrl);
+  try {
+    const parsed = resolvedViewerUrl.startsWith("/")
+      ? new URL(resolvedViewerUrl, window.location.origin)
+      : new URL(resolvedViewerUrl);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return "*";
+    }
+    return parsed.origin === "null" ? "*" : parsed.origin;
+  } catch {
+    return "*";
+  }
 }
 
 export function resolveViewerReadyEventType(
@@ -31,7 +52,7 @@ export function buildViewerSessionKey(
   viewerUrl: string,
   payload: AppViewerAuthMessage | null | undefined,
 ): string {
-  return `${viewerUrl}::${JSON.stringify(payload ?? null)}`;
+  return `${resolveEmbeddedViewerUrl(viewerUrl)}::${JSON.stringify(payload ?? null)}`;
 }
 
 export function shouldUseEmbeddedAppViewer(

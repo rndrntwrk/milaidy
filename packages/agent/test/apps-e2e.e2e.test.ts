@@ -977,6 +977,13 @@ describe("Apps E2E", () => {
         },
       );
       expect(response.status).toBe(200);
+      expect(response.headers.get("x-frame-options")).toBeNull();
+      expect(response.headers.get("content-security-policy")).toContain(
+        "frame-ancestors",
+      );
+      expect(response.headers.get("content-security-policy")).toContain(
+        "http://127.0.0.1:*",
+      );
       const html = await response.text();
       expect(html).toContain('id="milady-2004scape-bridge"');
       expect(html).toContain("/api/apps/2004scape/session");

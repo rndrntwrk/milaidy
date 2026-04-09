@@ -24,6 +24,11 @@ const COMMAND_HISTORY_LIMIT = 48;
 const ACTIVITY_LIMIT = 16;
 const VIEWER_SANDBOX =
   "allow-scripts allow-same-origin allow-popups allow-forms";
+const VIEWER_FRAME_ANCESTORS_DIRECTIVE =
+  "frame-ancestors 'self' http://localhost:* http://127.0.0.1:* " +
+  "http://[::1]:* http://[0:0:0:0:0:0:0:1]:* https://localhost:* " +
+  "https://127.0.0.1:* https://[::1]:* https://[0:0:0:0:0:0:0:1]:* " +
+  "electrobun: capacitor: capacitor-electron: app: tauri: file:";
 
 type OperatorIntent =
   | "tutorial"
@@ -1107,7 +1112,25 @@ function sendHtmlResponse(res: http.ServerResponse, html: string): void {
   res.statusCode = 200;
   res.setHeader("Cache-Control", "no-store");
   res.setHeader("Content-Type", "text/html; charset=utf-8");
+  applyViewerEmbedHeaders(res);
   res.end(html);
+}
+
+function applyViewerEmbedHeaders(res: http.ServerResponse): void {
+  res.removeHeader("X-Frame-Options");
+  const existingCsp = res.getHeader("Content-Security-Policy");
+  const normalizedExisting =
+    typeof existingCsp === "string"
+      ? existingCsp.trim()
+      : Array.isArray(existingCsp)
+        ? existingCsp.join("; ").trim()
+        : "";
+  const nextCsp = /\bframe-ancestors\b/i.test(normalizedExisting)
+    ? normalizedExisting
+    : normalizedExisting.length > 0
+      ? `${normalizedExisting}; ${VIEWER_FRAME_ANCESTORS_DIRECTIVE}`
+      : VIEWER_FRAME_ANCESTORS_DIRECTIVE;
+  res.setHeader("Content-Security-Policy", nextCsp);
 }
 
 function filterProxyRequestHeaders(
@@ -1159,6 +1182,9 @@ async function proxyViewerRequest(
     }
     ctx.res.setHeader(key, value);
   });
+  if (upstream.headers.get("content-type")?.includes("text/html")) {
+    applyViewerEmbedHeaders(ctx.res);
+  }
 
   if (!upstream.body) {
     ctx.res.end();

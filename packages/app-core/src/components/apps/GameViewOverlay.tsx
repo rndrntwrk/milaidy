@@ -10,6 +10,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useApp } from "../../state";
 import {
   buildViewerSessionKey,
+  resolveEmbeddedViewerUrl,
   resolvePostMessageTargetOrigin,
   resolveViewerReadyEventType,
   shouldUseEmbeddedAppViewer,
@@ -43,6 +44,10 @@ export function GameViewOverlay() {
   const useEmbeddedViewer = useMemo(
     () => shouldUseEmbeddedAppViewer(activeGameRun),
     [activeGameRun],
+  );
+  const resolvedActiveGameViewerUrl = useMemo(
+    () => resolveEmbeddedViewerUrl(activeGameViewerUrl),
+    [activeGameViewerUrl],
   );
   const postMessageTargetOrigin = useMemo(
     () => resolvePostMessageTargetOrigin(activeGameViewerUrl),
@@ -142,7 +147,10 @@ export function GameViewOverlay() {
     useEmbeddedViewer,
   ]);
 
-  if (!activeGameViewerUrl || activeGameRun?.viewerAttachment !== "attached") {
+  if (
+    !resolvedActiveGameViewerUrl ||
+    activeGameRun?.viewerAttachment !== "attached"
+  ) {
     return null;
   }
 
@@ -214,7 +222,7 @@ export function GameViewOverlay() {
         {/* Iframe */}
         <iframe
           ref={iframeRef}
-          src={activeGameViewerUrl}
+          src={resolvedActiveGameViewerUrl}
           sandbox={activeGameSandbox}
           data-testid="game-view-overlay-iframe"
           className="flex-1 w-full border-none"

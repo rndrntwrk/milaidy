@@ -33,6 +33,7 @@ import { formatTime } from "../../utils/format";
 import { getAppOperatorSurface } from "./surfaces/registry";
 import {
   buildViewerSessionKey,
+  resolveEmbeddedViewerUrl,
   resolvePostMessageTargetOrigin,
   resolveViewerReadyEventType,
   shouldUseEmbeddedAppViewer,
@@ -599,15 +600,21 @@ export function GameView() {
   const openOperatorPanelByDefault =
     activeGameApp !== "@hyperscape/plugin-hyperscape" &&
     activeGameApp !== "@elizaos/app-hyperscape";
+  const resolvedActiveGameViewerUrl = useMemo(
+    () => resolveEmbeddedViewerUrl(activeGameViewerUrl),
+    [activeGameViewerUrl],
+  );
+  const resolvedActiveGameLaunchUrl = useMemo(
+    () => resolveEmbeddedViewerUrl(activeGameRun?.launchUrl ?? ""),
+    [activeGameRun?.launchUrl],
+  );
   const dashboardPanelEnabled =
     !hasOperatorSurface || openOperatorPanelByDefault;
   const hasActiveRun = Boolean(activeGameRun);
   const hasViewer = Boolean(activeGameRun?.viewer?.url);
   const viewerAttached = activeGameRun?.viewerAttachment === "attached";
   const openableUrl =
-    activeGameRun?.viewer?.url?.trim() ||
-    activeGameRun?.launchUrl?.trim() ||
-    "";
+    resolvedActiveGameViewerUrl || resolvedActiveGameLaunchUrl || "";
   const canAttachViewer =
     Boolean(activeGameRun?.viewer?.url) &&
     activeGameRun?.viewerAttachment === "detached";
@@ -1023,7 +1030,7 @@ export function GameView() {
   // Open the game URL in an isolated Electrobun BrowserWindow.
   // Runs whenever the viewer URL or game title changes and we're inside the desktop app.
   useEffect(() => {
-    if (!useNativeGameWindow || !activeGameViewerUrl) return;
+    if (!useNativeGameWindow || !resolvedActiveGameViewerUrl) return;
 
     let cancelled = false;
 
@@ -1031,7 +1038,7 @@ export function GameView() {
       rpcMethod: "gameOpenWindow",
       ipcChannel: "game:openWindow",
       params: {
-        url: activeGameViewerUrl,
+        url: resolvedActiveGameViewerUrl,
         title:
           activeGameDisplayName ||
           activeGameApp ||
@@ -1065,9 +1072,9 @@ export function GameView() {
       }
     };
   }, [
-    activeGameViewerUrl,
     activeGameApp,
     activeGameDisplayName,
+    resolvedActiveGameViewerUrl,
     t,
     useNativeGameWindow,
   ]);
@@ -1759,7 +1766,7 @@ export function GameView() {
     return (
       <iframe
         ref={iframeRef}
-        src={activeGameViewerUrl}
+        src={resolvedActiveGameViewerUrl}
         sandbox={activeGameSandbox}
         allow="fullscreen *"
         allowFullScreen

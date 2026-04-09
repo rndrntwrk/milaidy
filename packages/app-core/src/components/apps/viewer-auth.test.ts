@@ -5,16 +5,16 @@ import type {
   AppRunSummary,
   AppViewerAuthMessage,
 } from "../../api/client-types-cloud";
+import { DEFAULT_BOOT_CONFIG, setBootConfig } from "../../config/boot-config";
 import {
   buildViewerSessionKey,
+  resolveEmbeddedViewerUrl,
   resolvePostMessageTargetOrigin,
   resolveViewerReadyEventType,
   shouldUseEmbeddedAppViewer,
 } from "./viewer-auth";
 
-function createRun(
-  viewer: AppRunSummary["viewer"],
-): AppRunSummary {
+function createRun(viewer: AppRunSummary["viewer"]): AppRunSummary {
   return {
     runId: "run-1",
     appName: "@vendor/plugin-app",
@@ -40,6 +40,7 @@ function createRun(
 
 describe("viewer-auth", () => {
   it("resolves relative and absolute viewer origins correctly", () => {
+    setBootConfig(DEFAULT_BOOT_CONFIG);
     window.history.replaceState({}, "", "/apps");
 
     expect(resolvePostMessageTargetOrigin("/apps/hyperscape")).toBe(
@@ -51,6 +52,23 @@ describe("viewer-auth", () => {
       ),
     ).toBe("https://hyperscape.example");
     expect(resolvePostMessageTargetOrigin("data:text/html,viewer")).toBe("*");
+  });
+
+  it("resolves local app viewer routes through the configured api base", () => {
+    setBootConfig({
+      ...DEFAULT_BOOT_CONFIG,
+      apiBase: "http://127.0.0.1:31337",
+    });
+
+    expect(resolveEmbeddedViewerUrl("/api/apps/2004scape/viewer")).toBe(
+      "http://127.0.0.1:31337/api/apps/2004scape/viewer",
+    );
+    expect(resolvePostMessageTargetOrigin("/api/apps/2004scape/viewer")).toBe(
+      "http://127.0.0.1:31337",
+    );
+    expect(buildViewerSessionKey("/api/apps/2004scape/viewer", null)).toBe(
+      "http://127.0.0.1:31337/api/apps/2004scape/viewer::null",
+    );
   });
 
   it("derives viewer ready event names only from non-empty auth payload types", () => {
@@ -68,15 +86,14 @@ describe("viewer-auth", () => {
   });
 
   it("builds a stable viewer session key from viewer url and auth payload", () => {
+    setBootConfig(DEFAULT_BOOT_CONFIG);
     const payload: AppViewerAuthMessage = {
       type: "HYPERSCAPE_AUTH",
       authToken: "token-1",
       followEntity: "char-123",
     };
 
-    expect(
-      buildViewerSessionKey("https://hyperscape.example", payload),
-    ).toBe(
+    expect(buildViewerSessionKey("https://hyperscape.example", payload)).toBe(
       'https://hyperscape.example::{"type":"HYPERSCAPE_AUTH","authToken":"token-1","followEntity":"char-123"}',
     );
     expect(buildViewerSessionKey("https://hyperscape.example", null)).toBe(
