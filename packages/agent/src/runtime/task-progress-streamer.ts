@@ -125,14 +125,29 @@ export function installTaskProgressStreamer(
       // Capture both workdir and room info NOW — the stopped event may fire
       // before the 10s delay and clear the maps via forgetSession.
       const cachedWorkdir = sessionWorkdirs.get(sessionId);
-      const cachedRoom = sessionRooms.get(sessionId);
-      const snapshotRooms = cachedRoom
-        ? new Map([[sessionId, cachedRoom]])
-        : sessionRooms;
-      setTimeout(() => {
+      setTimeout(async () => {
         if (finalSent.has(sessionId)) return;
         finalSent.add(sessionId);
-        void postFinalReport(runtime, svc, sessionId, cachedWorkdir, snapshotRooms);
+        // Resolve room routing HERE (not at session start) because the
+        // fire-and-forget async lookup at start may not have finished yet.
+        let roomCache = sessionRooms;
+        if (!sessionRooms.has(sessionId)) {
+          const meta = svc.sessionMetadata?.get(sessionId) as SessionMetadata | undefined;
+          if (meta?.roomId) {
+            const room = await (runtime as RuntimeWithMessageTarget)
+              .getRoom(meta.roomId)
+              .catch(() => null);
+            if (room?.channelId) {
+              const resolved = new Map([[sessionId, {
+                roomId: meta.roomId,
+                channelId: room.channelId,
+                source: meta.source ?? "discord",
+              }]]);
+              roomCache = resolved;
+            }
+          }
+        }
+        void postFinalReport(runtime, svc, sessionId, cachedWorkdir, roomCache);
       }, 10_000);
       return;
     }
