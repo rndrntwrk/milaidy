@@ -22,6 +22,9 @@ describe("agent registry-client-app-meta", () => {
 
   it("registers standalone host-owned detail panels when overrides define app metadata", () => {
     expect(
+      resolveAppOverride("@elizaos/app-hyperscape", undefined)?.runtimePlugin,
+    ).toBe("@hyperscape/plugin-hyperscape");
+    expect(
       resolveAppOverride("@elizaos/app-babylon", undefined)?.uiExtension
         ?.detailPanelId,
     ).toBe("babylon-operator-dashboard");

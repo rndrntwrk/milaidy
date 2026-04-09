@@ -206,6 +206,12 @@ export interface InstalledAppInfo {
   installedAt: string;
 }
 
+export interface MiladyCuratedAppDefinition {
+  slug: string;
+  canonicalName: string;
+  aliases: string[];
+}
+
 export interface AppStopResult {
   success: boolean;
   appName: string;
@@ -218,12 +224,75 @@ export interface AppStopResult {
 }
 
 function packageNameToBasename(packageName: string): string {
-  return packageName.trim().replace(/^@[^/]+\//, "").trim();
+  return packageName
+    .trim()
+    .replace(/^@[^/]+\//, "")
+    .trim();
 }
 
-export function packageNameToAppRouteSlug(
-  packageName: string,
-): string | null {
+export const MILADY_CURATED_APP_DEFINITIONS: readonly MiladyCuratedAppDefinition[] =
+  [
+    {
+      slug: "hyperscape",
+      canonicalName: "@hyperscape/plugin-hyperscape",
+      aliases: ["@elizaos/app-hyperscape"],
+    },
+    {
+      slug: "babylon",
+      canonicalName: "@elizaos/app-babylon",
+      aliases: [],
+    },
+    {
+      slug: "2004scape",
+      canonicalName: "@elizaos/app-2004scape",
+      aliases: [],
+    },
+    {
+      slug: "defense-of-the-agents",
+      canonicalName: "@elizaos/app-defense-of-the-agents",
+      aliases: [],
+    },
+  ] as const;
+
+function getMiladyCuratedAppMatchKeys(
+  definition: MiladyCuratedAppDefinition,
+): string[] {
+  const keys = new Set<string>([
+    definition.slug.trim().toLowerCase(),
+    definition.canonicalName.trim().toLowerCase(),
+  ]);
+
+  for (const alias of definition.aliases) {
+    const trimmed = alias.trim().toLowerCase();
+    if (!trimmed) continue;
+    keys.add(trimmed);
+
+    const routeSlug = packageNameToAppRouteSlug(alias)?.trim().toLowerCase();
+    if (routeSlug) {
+      keys.add(routeSlug);
+    }
+  }
+
+  const canonicalRouteSlug = packageNameToAppRouteSlug(definition.canonicalName)
+    ?.trim()
+    .toLowerCase();
+  if (canonicalRouteSlug) {
+    keys.add(canonicalRouteSlug);
+  }
+
+  return Array.from(keys);
+}
+
+const MILADY_CURATED_APP_DEFINITION_BY_KEY = new Map<
+  string,
+  MiladyCuratedAppDefinition
+>(
+  MILADY_CURATED_APP_DEFINITIONS.flatMap((definition) =>
+    getMiladyCuratedAppMatchKeys(definition).map((key) => [key, definition]),
+  ),
+);
+
+export function packageNameToAppRouteSlug(packageName: string): string | null {
   const basename = packageNameToBasename(packageName);
   if (!basename) return null;
 
@@ -248,4 +317,65 @@ export function hasAppInterface(
   value: { kind?: string | null; appMeta?: unknown } | null | undefined,
 ): boolean {
   return Boolean(value && (value.kind === "app" || value.appMeta));
+}
+
+export function getMiladyCuratedAppDefinition(
+  value: string,
+): MiladyCuratedAppDefinition | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  const directMatch = MILADY_CURATED_APP_DEFINITION_BY_KEY.get(
+    trimmed.toLowerCase(),
+  );
+  if (directMatch) {
+    return directMatch;
+  }
+
+  const routeSlug = packageNameToAppRouteSlug(trimmed)?.trim().toLowerCase();
+  if (!routeSlug) {
+    return null;
+  }
+
+  return MILADY_CURATED_APP_DEFINITION_BY_KEY.get(routeSlug) ?? null;
+}
+
+export function normalizeMiladyCuratedAppName(value: string): string | null {
+  return getMiladyCuratedAppDefinition(value)?.canonicalName ?? null;
+}
+
+export function isMiladyCuratedAppName(value: string): boolean {
+  return normalizeMiladyCuratedAppName(value) !== null;
+}
+
+export function getMiladyCuratedAppCatalogOrder(value: string): number {
+  const canonicalName = normalizeMiladyCuratedAppName(value);
+  if (!canonicalName) {
+    return Number.MAX_SAFE_INTEGER;
+  }
+
+  const index = MILADY_CURATED_APP_DEFINITIONS.findIndex(
+    (definition) => definition.canonicalName === canonicalName,
+  );
+  return index >= 0 ? index : Number.MAX_SAFE_INTEGER;
+}
+
+export function getMiladyCuratedAppLookupNames(value: string): string[] {
+  const definition = getMiladyCuratedAppDefinition(value);
+  if (!definition) {
+    const trimmed = value.trim();
+    return trimmed ? [trimmed] : [];
+  }
+
+  return Array.from(
+    new Set([
+      definition.canonicalName,
+      ...definition.aliases,
+      definition.slug,
+      ...definition.aliases
+        .map((alias) => packageNameToAppRouteSlug(alias))
+        .filter((alias): alias is string => Boolean(alias)),
+      packageNameToAppRouteSlug(definition.canonicalName) ?? definition.slug,
+    ]),
+  );
 }

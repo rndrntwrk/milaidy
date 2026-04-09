@@ -48,6 +48,7 @@ const LOCAL_APP_OVERRIDES: Readonly<Record<string, LocalAppOverride>> = {
     },
   },
   "@elizaos/app-hyperscape": {
+    runtimePlugin: "@hyperscape/plugin-hyperscape",
     uiExtension: {
       detailPanelId: "hyperscape-embedded-agents",
     },

@@ -1,5 +1,5 @@
 import type { IAgentRuntime, Task, UUID } from "@elizaos/core";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { ActivityProfile } from "./types.js";
 import { emptyBucketCounts } from "./types.js";
 
@@ -260,11 +260,17 @@ describe("registerProactiveTaskWorker", () => {
 describe("executeProactiveTask", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useFakeTimers();
+    vi.setSystemTime(MORNING_NOW);
     mocks.resolveDefaultTimeZone.mockReturnValue("UTC");
     mocks.mockGetOverview.mockResolvedValue({ occurrences: [] });
     mocks.mockGetCalendarFeed.mockResolvedValue({ events: [] });
     mocks.loadOwnerContactsConfig.mockReturnValue({});
     mocks.readFiredLogFromMetadata.mockReturnValue(null);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("returns nextInterval when no owner is configured", async () => {

@@ -484,7 +484,7 @@ describe("AppsView", () => {
     vi.restoreAllMocks();
   });
 
-  it("shows valid app-capable games in production without a curated allowlist", () => {
+  it("shows only the curated Milady games in production", () => {
     expect(
       shouldShowAppInAppsView(
         createApp("@hyperscape/plugin-hyperscape", "Hyperscape", "Game", {
@@ -521,7 +521,7 @@ describe("AppsView", () => {
         }),
         true,
       ),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it("keeps the same visibility rules in development", () => {
@@ -604,7 +604,10 @@ describe("AppsView", () => {
     await flush();
 
     await act(async () => {
-      findButtonByTitle(tree.root, "Open Defense of the Agents").props.onClick();
+      findButtonByTitle(
+        tree.root,
+        "Open Defense of the Agents",
+      ).props.onClick();
     });
     await flush();
 

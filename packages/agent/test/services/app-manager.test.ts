@@ -50,7 +50,9 @@ const registryClientMocks = getRegistryClientMocks();
 
 vi.mock("../../src/services/app-package-modules", async (importOriginal) => {
   const actual =
-    await importOriginal<typeof import("../../src/services/app-package-modules")>();
+    await importOriginal<
+      typeof import("../../src/services/app-package-modules")
+    >();
   const appPackageModuleMocks = getAppPackageModuleMocks();
   return {
     ...actual,
@@ -232,6 +234,26 @@ const BABYLON_APP_INFO: RegistryPluginInfo = {
     v2Version: "1.0.0",
   },
   supports: { v0: false, v1: true, v2: true },
+};
+
+const HYPERSCAPE_ALIAS_APP_INFO: RegistryPluginInfo = {
+  ...HYPERSCAPE_APP_INFO,
+  name: "@elizaos/app-hyperscape",
+  gitRepo: "elizaos/app-hyperscape",
+  gitUrl: "https://github.com/elizaos/app-hyperscape",
+  npm: {
+    package: "@elizaos/app-hyperscape",
+    v0Version: null,
+    v1Version: "1.0.0",
+    v2Version: "1.0.0",
+  },
+  runtimePlugin: undefined,
+  appMeta: HYPERSCAPE_APP_INFO.appMeta
+    ? {
+        ...HYPERSCAPE_APP_INFO.appMeta,
+        runtimePlugin: "@hyperscape/plugin-hyperscape",
+      }
+    : undefined,
 };
 
 function buildPluginManager(
@@ -1004,6 +1026,114 @@ describe("AppManager", () => {
     ]);
   });
 
+  it("returns only the curated four games and deduplicates Hyperscape aliases", async () => {
+    const defenseAppInfo: RegistryPluginInfo = {
+      name: "@elizaos/app-defense-of-the-agents",
+      gitRepo: "elizaos/app-defense-of-the-agents",
+      gitUrl: "https://github.com/elizaos/app-defense-of-the-agents",
+      displayName: "Defense of the Agents",
+      description: "Defense lane loop",
+      homepage: "https://defense.example",
+      topics: ["game"],
+      stars: 0,
+      language: "TypeScript",
+      kind: "app",
+      category: "game",
+      launchType: "url",
+      launchUrl: "https://defense.example",
+      capabilities: ["strategy"],
+      npm: {
+        package: "@elizaos/app-defense-of-the-agents",
+        v0Version: null,
+        v1Version: "1.0.0",
+        v2Version: "1.0.0",
+      },
+      supports: { v0: false, v1: true, v2: true },
+    };
+    const unsupportedAppInfo: RegistryPluginInfo = {
+      name: "@elizaos/app-hyperfy",
+      gitRepo: "elizaos/app-hyperfy",
+      gitUrl: "https://github.com/elizaos/app-hyperfy",
+      displayName: "Hyperfy",
+      description: "Unsupported world",
+      homepage: "https://hyperfy.example",
+      topics: ["world"],
+      stars: 0,
+      language: "TypeScript",
+      kind: "app",
+      category: "world",
+      launchType: "url",
+      launchUrl: "https://hyperfy.example",
+      capabilities: ["exploration"],
+      npm: {
+        package: "@elizaos/app-hyperfy",
+        v0Version: null,
+        v1Version: "1.0.0",
+        v2Version: "1.0.0",
+      },
+      supports: { v0: false, v1: true, v2: true },
+    };
+
+    registryClientMocks.getRegistryPlugins.mockResolvedValue(
+      new Map<string, RegistryPluginInfo>([
+        [HYPERSCAPE_APP_INFO.name, HYPERSCAPE_APP_INFO],
+        [HYPERSCAPE_ALIAS_APP_INFO.name, HYPERSCAPE_ALIAS_APP_INFO],
+        [BABYLON_APP_INFO.name, BABYLON_APP_INFO],
+        [RS_2004SCAPE_APP_INFO.name, RS_2004SCAPE_APP_INFO],
+        [defenseAppInfo.name, defenseAppInfo],
+        [unsupportedAppInfo.name, unsupportedAppInfo],
+      ]),
+    );
+
+    const pluginManager = buildPluginManager([], null);
+    (
+      pluginManager.refreshRegistry as ReturnType<typeof vi.fn>
+    ).mockResolvedValue(
+      new Map<string, RegistryPluginInfo>([
+        [HYPERSCAPE_ALIAS_APP_INFO.name, HYPERSCAPE_ALIAS_APP_INFO],
+        [BABYLON_APP_INFO.name, BABYLON_APP_INFO],
+        [RS_2004SCAPE_APP_INFO.name, RS_2004SCAPE_APP_INFO],
+        [defenseAppInfo.name, defenseAppInfo],
+        [unsupportedAppInfo.name, unsupportedAppInfo],
+      ]),
+    );
+
+    const manager = new AppManager();
+    const apps = await manager.listAvailable(pluginManager);
+
+    expect(apps.map((app) => app.name)).toEqual([
+      "@hyperscape/plugin-hyperscape",
+      "@elizaos/app-babylon",
+      "@elizaos/app-2004scape",
+      "@elizaos/app-defense-of-the-agents",
+    ]);
+  });
+
+  it("resolves the canonical Hyperscape app info through the alternate package name", async () => {
+    const pluginManager = buildPluginManager([], null);
+    (
+      pluginManager.getRegistryPlugin as ReturnType<typeof vi.fn>
+    ).mockImplementation(async (name: string) =>
+      name === "@elizaos/app-hyperscape" ? HYPERSCAPE_ALIAS_APP_INFO : null,
+    );
+
+    registryClientMocks.getPluginInfo.mockImplementation(
+      async (name: string) =>
+        name === "@elizaos/app-hyperscape" ? HYPERSCAPE_ALIAS_APP_INFO : null,
+    );
+
+    const manager = new AppManager();
+    const info = await manager.getInfo(
+      pluginManager,
+      "@hyperscape/plugin-hyperscape",
+    );
+
+    expect(info).not.toBeNull();
+    expect(info?.name).toBe("@hyperscape/plugin-hyperscape");
+    expect(info?.runtimePlugin).toBe("@hyperscape/plugin-hyperscape");
+    expect(info?.displayName).toBe("Hyperscape");
+  });
+
   it("resolves a live Hyperscape session at launch instead of returning a synthetic pending session", async () => {
     const fixtureServer = await startHyperscapeFixtureServer();
     process.env.HYPERSCAPE_API_URL = fixtureServer.url;
@@ -1030,7 +1160,7 @@ describe("AppManager", () => {
 
       expect(runtime.registerPlugin).toHaveBeenCalledTimes(1);
       expect(result.viewer?.url).toBe(
-        "http://localhost:3333?embedded=true&mode=spectator&surface=agent-control&followEntity=char-runtime",
+        "http://localhost:3333?embedded=true&mode=spectator&surface=agent-control&followEntity=char-runtime&hiddenUI=chat%2Cinventory%2Cminimap%2Chotbar%2Cstats&quality=medium",
       );
       expect(result.viewer?.postMessageAuth).toBe(true);
       expect(result.viewer?.authMessage).toEqual(
@@ -1050,33 +1180,31 @@ describe("AppManager", () => {
         characterId: "char-runtime",
         followEntity: "char-runtime",
       });
-      if (result.session?.telemetry) {
-        expect(result.session.telemetry).toEqual(
-          expect.objectContaining({
-            goalsPaused: false,
-            availableGoalCount: 1,
-            nearbyLocationCount: 1,
-            startedAt: 1_709_999_000_000,
-            lastActivity: 1_710_000_000_000,
-            recommendedGoals: [
-              expect.objectContaining({
-                id: "goal-0",
-                type: "explore",
-                description: "Scout the ruins",
-                reason: "The ruins have the highest value loot nearby.",
-              }),
-            ],
-            recentThoughts: [
-              expect.objectContaining({
-                id: "thought-1",
-                type: "reasoning",
-                content: "The ruins are the safest high-value route right now.",
-                timestamp: 1_710_000_000_500,
-              }),
-            ],
-          }),
-        );
-      }
+      expect(result.session?.telemetry).toEqual(
+        expect.objectContaining({
+          goalsPaused: false,
+          availableGoalCount: 1,
+          nearbyLocationCount: 1,
+          startedAt: 1_709_999_000_000,
+          lastActivity: 1_710_000_000_000,
+          recommendedGoals: [
+            expect.objectContaining({
+              id: "goal-0",
+              type: "explore",
+              description: "Scout the ruins",
+              reason: "The ruins have the highest value loot nearby.",
+            }),
+          ],
+          recentThoughts: [
+            expect.objectContaining({
+              id: "thought-1",
+              type: "reasoning",
+              content: "The ruins are the safest high-value route right now.",
+              timestamp: 1_710_000_000_500,
+            }),
+          ],
+        }),
+      );
       expect(result.run).toEqual(
         expect.objectContaining({
           appName: "@hyperscape/plugin-hyperscape",
@@ -1524,20 +1652,22 @@ describe("AppManager", () => {
     process.env.HYPERSCAPE_API_URL = "https://hyperscape.test";
     appPackageModuleMocks.importAppRouteModule.mockResolvedValue({});
 
-    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
-      expect(init?.signal).toBeInstanceOf(AbortSignal);
-      return new Response(
-        JSON.stringify({
-          success: true,
-          authToken: "fixture-auth-token",
-          characterId: "char-runtime",
-        }),
-        {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        },
-      );
-    });
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, init?: RequestInit) => {
+        expect(init?.signal).toBeInstanceOf(AbortSignal);
+        return new Response(
+          JSON.stringify({
+            success: true,
+            authToken: "fixture-auth-token",
+            characterId: "char-runtime",
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      },
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     try {

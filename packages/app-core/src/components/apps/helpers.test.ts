@@ -37,18 +37,15 @@ function makeApp(
 }
 
 describe("apps catalog helpers", () => {
-  it("shows app-capable games without a host-maintained allowlist", () => {
-    expect(
-      shouldShowAppInAppsView(
-        makeApp({ name: "@elizaos/app-unlisted-game" }),
-        false,
-      ),
-    ).toBe(true);
+  it("shows only the four curated Milady games", () => {
     expect(
       shouldShowAppInAppsView(
         makeApp({ name: "@hyperscape/plugin-hyperscape" }),
         false,
       ),
+    ).toBe(true);
+    expect(
+      shouldShowAppInAppsView(makeApp({ name: "@elizaos/app-babylon" }), false),
     ).toBe(true);
     expect(
       shouldShowAppInAppsView(
@@ -62,6 +59,15 @@ describe("apps catalog helpers", () => {
         false,
       ),
     ).toBe(true);
+    expect(
+      shouldShowAppInAppsView(
+        makeApp({ name: "@elizaos/app-unlisted-game" }),
+        false,
+      ),
+    ).toBe(false);
+    expect(
+      shouldShowAppInAppsView(makeApp({ name: "@elizaos/app-hyperfy" }), false),
+    ).toBe(false);
   });
 
   it("uses the same visibility rules in production", () => {
@@ -82,56 +88,108 @@ describe("apps catalog helpers", () => {
         makeApp({ name: "@elizaos/app-unlisted-game" }),
         true,
       ),
-    ).toBe(true);
+    ).toBe(false);
   });
 
-  it("keeps all valid apps in the catalog", () => {
+  it("keeps only the curated catalog and deduplicates aliases", () => {
     const visibleApps = filterAppsForCatalog(
       [
         makeApp({
-          name: "@elizaos/app-unlisted-game",
-          displayName: "Unlisted Game",
+          name: "@elizaos/app-defense-of-the-agents",
+          displayName: "Defense of the Agents",
+        }),
+        makeApp({
+          name: "@elizaos/app-hyperscape",
+          displayName: "Hyperscape alt",
         }),
         makeApp({
           name: "@hyperscape/plugin-hyperscape",
           displayName: "Hyperscape",
         }),
         makeApp({
-          name: "@elizaos/app-defense-of-the-agents",
-          displayName: "Defense of the Agents",
-        }),
-        makeApp({
           name: "@elizaos/app-babylon",
           displayName: "Babylon",
           category: "platform",
+        }),
+        makeApp({
+          name: "@elizaos/app-unlisted-game",
+          displayName: "Unlisted Game",
         }),
       ],
       { isProd: false },
     );
 
     expect(visibleApps.map((app) => app.name)).toEqual([
-      "@elizaos/app-unlisted-game",
       "@hyperscape/plugin-hyperscape",
-      "@elizaos/app-defense-of-the-agents",
       "@elizaos/app-babylon",
+      "@elizaos/app-defense-of-the-agents",
     ]);
   });
 
-  it("defaults selection to the first visible app", () => {
+  it("defaults selection to the first curated app in catalog order", () => {
     expect(
       getDefaultAppsCatalogSelection(
         [
           makeApp({
-            name: "@elizaos/app-unlisted-game",
-            displayName: "Unlisted Game",
+            name: "@elizaos/app-defense-of-the-agents",
+            displayName: "Defense of the Agents",
           }),
           makeApp({
             name: "@hyperscape/plugin-hyperscape",
             displayName: "Hyperscape",
           }),
+          makeApp({
+            name: "@elizaos/app-babylon",
+            displayName: "Babylon",
+          }),
         ],
         false,
       ),
-    ).toBe("@elizaos/app-unlisted-game");
+    ).toBe("@hyperscape/plugin-hyperscape");
+  });
+
+  it("filters to active curated apps when requested", () => {
+    const visibleApps = filterAppsForCatalog(
+      [
+        makeApp({
+          name: "@hyperscape/plugin-hyperscape",
+          displayName: "Hyperscape",
+        }),
+        makeApp({
+          name: "@elizaos/app-babylon",
+          displayName: "Babylon",
+        }),
+      ],
+      {
+        isProd: false,
+        showActiveOnly: true,
+        activeAppNames: new Set(["@elizaos/app-babylon"]),
+      },
+    );
+
+    expect(visibleApps.map((app) => app.name)).toEqual([
+      "@elizaos/app-babylon",
+    ]);
+  });
+
+  it("keeps the 2004scape entry visible in the curated set", () => {
+    const visibleApps = filterAppsForCatalog(
+      [
+        makeApp({
+          name: "@elizaos/app-defense-of-the-agents",
+          displayName: "Defense of the Agents",
+        }),
+        makeApp({
+          name: "@elizaos/app-2004scape",
+          displayName: "2004scape",
+        }),
+      ],
+      { isProd: false },
+    );
+
+    expect(visibleApps.map((app) => app.name)).toEqual([
+      "@elizaos/app-2004scape",
+      "@elizaos/app-defense-of-the-agents",
+    ]);
   });
 });

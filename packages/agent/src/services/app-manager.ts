@@ -27,8 +27,11 @@ import {
   type AppSessionState,
   type AppStopResult,
   type AppViewerAuthMessage,
+  getMiladyCuratedAppCatalogOrder,
+  getMiladyCuratedAppLookupNames,
   hasAppInterface,
   type InstalledAppInfo,
+  normalizeMiladyCuratedAppName,
   packageNameToAppDisplayName,
   packageNameToAppRouteSlug,
 } from "../contracts/apps.js";
@@ -212,6 +215,227 @@ function flattenAppInfo<T extends RegistryPluginInfo>(appInfo: T): T {
     viewer: resolveDisplayViewerInfo(meta.viewer ?? appInfo.viewer),
     session: meta.session ?? appInfo.session,
   };
+}
+
+function cloneRegistryPluginInfo<T extends RegistryPluginInfo>(appInfo: T): T {
+  return {
+    ...appInfo,
+    topics: [...appInfo.topics],
+    npm: { ...appInfo.npm },
+    git: { ...appInfo.git },
+    supports: { ...appInfo.supports },
+    appMeta: appInfo.appMeta
+      ? {
+          ...appInfo.appMeta,
+          capabilities: [...appInfo.appMeta.capabilities],
+          viewer: appInfo.appMeta.viewer
+            ? {
+                ...appInfo.appMeta.viewer,
+                embedParams: appInfo.appMeta.viewer.embedParams
+                  ? { ...appInfo.appMeta.viewer.embedParams }
+                  : undefined,
+              }
+            : undefined,
+          session: appInfo.appMeta.session
+            ? {
+                ...appInfo.appMeta.session,
+                features: appInfo.appMeta.session.features
+                  ? [...appInfo.appMeta.session.features]
+                  : undefined,
+              }
+            : undefined,
+        }
+      : undefined,
+  };
+}
+
+function canonicalizeCuratedRegistryPlugin<T extends RegistryPluginInfo>(
+  appInfo: T,
+  canonicalName: string,
+): T {
+  if (appInfo.name === canonicalName && appInfo.npm.package === canonicalName) {
+    return cloneRegistryPluginInfo(appInfo);
+  }
+
+  const next = cloneRegistryPluginInfo(appInfo);
+  next.name = canonicalName;
+  next.npm = {
+    ...next.npm,
+    package: canonicalName,
+  };
+  return next;
+}
+
+function mergeCatalogVariant<T extends RegistryPluginInfo>(
+  target: T,
+  candidate: RegistryPluginInfo,
+): T {
+  mergeLocalRegistryInfo(target, candidate);
+  target.stars = Math.max(target.stars, candidate.stars);
+  return target;
+}
+
+function compareCuratedCatalogCandidates(
+  left: RegistryPluginInfo,
+  right: RegistryPluginInfo,
+): number {
+  const orderDiff =
+    getMiladyCuratedAppCatalogOrder(left.name) -
+    getMiladyCuratedAppCatalogOrder(right.name);
+  if (orderDiff !== 0) {
+    return orderDiff;
+  }
+
+  const leftCanonicalName = normalizeMiladyCuratedAppName(left.name);
+  const rightCanonicalName = normalizeMiladyCuratedAppName(right.name);
+  const leftCanonicalPenalty = left.name === leftCanonicalName ? 0 : 1;
+  const rightCanonicalPenalty = right.name === rightCanonicalName ? 0 : 1;
+  if (leftCanonicalPenalty !== rightCanonicalPenalty) {
+    return leftCanonicalPenalty - rightCanonicalPenalty;
+  }
+
+  const leftLocalPenalty = left.localPath ? 0 : 1;
+  const rightLocalPenalty = right.localPath ? 0 : 1;
+  if (leftLocalPenalty !== rightLocalPenalty) {
+    return leftLocalPenalty - rightLocalPenalty;
+  }
+
+  return right.stars - left.stars || left.name.localeCompare(right.name);
+}
+
+function curateCatalogApps(
+  apps: Iterable<RegistryPluginInfo>,
+): RegistryAppPlugin[] {
+  const curated = new Map<string, RegistryAppPlugin>();
+  const candidates = Array.from(apps).sort(compareCuratedCatalogCandidates);
+
+  for (const app of candidates) {
+    const canonicalName = normalizeMiladyCuratedAppName(app.name);
+    if (!canonicalName) {
+      continue;
+    }
+
+    const normalized = canonicalizeCuratedRegistryPlugin(
+      app,
+      canonicalName,
+    ) as RegistryAppPlugin;
+    const existing = curated.get(canonicalName);
+    if (!existing) {
+      curated.set(canonicalName, normalized);
+      continue;
+    }
+
+    mergeCatalogVariant(existing, normalized);
+  }
+
+  return Array.from(curated.values()).sort(compareCuratedCatalogCandidates);
+}
+
+async function resolveCuratedAppInfo(
+  pluginManager: PluginManagerLike,
+  name: string,
+): Promise<RegistryAppPlugin | null> {
+  const canonicalName = normalizeMiladyCuratedAppName(name);
+  if (!canonicalName) {
+    let appInfo = (await pluginManager.getRegistryPlugin(
+      name,
+    )) as RegistryAppPlugin | null;
+    const localPluginInfo = await getPluginInfo(name);
+
+    if (localPluginInfo) {
+      if (!appInfo) {
+        appInfo = mergeLocalRegistryInfo(
+          cloneRegistryPluginInfo(localPluginInfo as RegistryAppPlugin),
+          localPluginInfo,
+        );
+      } else {
+        mergeLocalRegistryInfo(appInfo, localPluginInfo);
+      }
+    }
+
+    if (!appInfo) {
+      return null;
+    }
+
+    appInfo.appMeta = resolveEffectiveAppMeta(name, appInfo);
+    return flattenAppInfo(appInfo);
+  }
+
+  const lookupNames = getMiladyCuratedAppLookupNames(name);
+  let appInfo: RegistryAppPlugin | null = null;
+
+  for (const candidateName of lookupNames) {
+    const remote = (await pluginManager.getRegistryPlugin(
+      candidateName,
+    )) as RegistryAppPlugin | null;
+    if (!remote) {
+      continue;
+    }
+
+    const normalized = canonicalizeCuratedRegistryPlugin(
+      remote,
+      canonicalName,
+    ) as RegistryAppPlugin;
+    if (!appInfo) {
+      appInfo = normalized;
+      continue;
+    }
+
+    mergeCatalogVariant(appInfo, normalized);
+  }
+
+  for (const candidateName of lookupNames) {
+    const localPluginInfo = await getPluginInfo(candidateName);
+    if (!localPluginInfo) {
+      continue;
+    }
+
+    const normalized = canonicalizeCuratedRegistryPlugin(
+      localPluginInfo,
+      canonicalName,
+    ) as RegistryAppPlugin;
+    if (!appInfo) {
+      appInfo = mergeLocalRegistryInfo(normalized, normalized);
+      continue;
+    }
+
+    mergeCatalogVariant(appInfo, normalized);
+  }
+
+  if (!appInfo) {
+    return null;
+  }
+
+  appInfo.appMeta = resolveEffectiveAppMeta(canonicalName, appInfo);
+  return flattenAppInfo(appInfo);
+}
+
+async function resolveNamedAppInfo(
+  pluginManager: PluginManagerLike,
+  name: string,
+): Promise<RegistryAppPlugin | null> {
+  let appInfo = (await pluginManager.getRegistryPlugin(
+    name,
+  )) as RegistryAppPlugin | null;
+  const localPluginInfo = await getPluginInfo(name).catch(() => null);
+
+  if (localPluginInfo) {
+    if (!appInfo) {
+      appInfo = mergeLocalRegistryInfo(
+        cloneRegistryPluginInfo(localPluginInfo) as RegistryAppPlugin,
+        localPluginInfo,
+      );
+    } else {
+      mergeLocalRegistryInfo(appInfo, localPluginInfo);
+    }
+  }
+
+  if (!appInfo) {
+    return null;
+  }
+
+  appInfo.appMeta = resolveEffectiveAppMeta(name, appInfo);
+  return flattenAppInfo(appInfo);
 }
 
 function resolvePluginPackageName(appInfo: RegistryPluginInfo): string {
@@ -1088,8 +1312,7 @@ function buildAppSession(
     (isHyperscapeAppName(appInfo.name)
       ? resolveSettingLike(runtime, "HYPERSCAPE_CHARACTER_ID")
       : undefined);
-  const followEntity =
-    authMessage?.followEntity ?? characterId ?? undefined;
+  const followEntity = authMessage?.followEntity ?? characterId ?? undefined;
 
   return {
     sessionId,
@@ -1420,7 +1643,8 @@ function isRuntimePluginReady(
       getService?: (name: string) => unknown;
     };
     return Boolean(
-      rt.hasService?.("hyperscapeService") || rt.getService?.("hyperscapeService"),
+      rt.hasService?.("hyperscapeService") ||
+        rt.getService?.("hyperscapeService"),
     );
   }
   return true;
@@ -2139,7 +2363,9 @@ export class AppManager {
     } catch {
       // local discovery is best-effort
     }
-    const apps = Array.from(registry.values()).filter(isAppRegistryPlugin);
+    const apps = curateCatalogApps(
+      Array.from(registry.values()).filter(isAppRegistryPlugin),
+    );
     return apps.map(flattenAppInfo);
   }
 
@@ -2148,10 +2374,9 @@ export class AppManager {
     query: string,
     limit = 15,
   ): Promise<RegistrySearchResult[]> {
-    const registry = await pluginManager.refreshRegistry();
-    const appEntries = Array.from(registry.values())
-      .filter(isAppRegistryPlugin)
-      .map(flattenAppInfo);
+    const appEntries = (await this.listAvailable(pluginManager)).map(
+      flattenAppInfo,
+    );
     const results = scoreEntries(
       appEntries,
       query,
@@ -2170,28 +2395,10 @@ export class AppManager {
     pluginManager: PluginManagerLike,
     name: string,
   ): Promise<RegistryPluginInfo | null> {
-    let appInfo = await pluginManager.getRegistryPlugin(name);
-    const localPluginInfo = await getPluginInfo(name);
-
-    if (localPluginInfo) {
-      if (!appInfo) {
-        appInfo = mergeLocalRegistryInfo(
-          { ...localPluginInfo },
-          localPluginInfo,
-        );
-      } else {
-        mergeLocalRegistryInfo(appInfo, localPluginInfo);
-      }
-    }
-
-    if (!appInfo) return null;
-
-    // Apply local app overrides (viewer URL, sandbox, embed params, etc.)
-    // so displayName / launchType / viewer are populated even when the
-    // npm registry has no metadata for this app.
-    appInfo.appMeta = resolveEffectiveAppMeta(name, appInfo);
-
-    return flattenAppInfo(appInfo);
+    return (
+      (await resolveCuratedAppInfo(pluginManager, name)) ??
+      (await resolveNamedAppInfo(pluginManager, name))
+    );
   }
 
   async listRuns(
@@ -2312,37 +2519,12 @@ export class AppManager {
     onProgress?: (progress: InstallProgressLike) => void,
     _runtime?: IAgentRuntime | null,
   ): Promise<AppLaunchResult> {
-    let appInfo = (await pluginManager.getRegistryPlugin(
-      name,
-    )) as RegistryAppPlugin | null;
-    let localPluginInfo: Awaited<ReturnType<typeof getPluginInfo>> | null =
-      null;
-    // Supplement with local registry metadata since the elizaos plugin-manager
-    // service doesn't include our local workspace app discovery.
-    try {
-      localPluginInfo = await getPluginInfo(name);
-      if (localPluginInfo) {
-        if (!appInfo) {
-          appInfo = mergeLocalRegistryInfo(
-            { ...localPluginInfo } as RegistryAppPlugin,
-            localPluginInfo,
-          );
-        } else {
-          mergeLocalRegistryInfo(appInfo, localPluginInfo);
-        }
-      }
-    } catch {
-      // local lookup is best-effort
-    }
+    let appInfo =
+      (await resolveCuratedAppInfo(pluginManager, name)) ??
+      (await resolveNamedAppInfo(pluginManager, name));
     if (!appInfo) {
       throw new Error(`App "${name}" not found in the registry.`);
     }
-
-    // Apply local app overrides (viewer URL, sandbox, embed params, etc.)
-    // and flatten appMeta onto the top-level fields so launchUrl / viewer
-    // are populated even when the npm registry has no metadata for this app.
-    appInfo.appMeta = resolveEffectiveAppMeta(name, appInfo);
-    appInfo = flattenAppInfo(appInfo);
 
     // The app's plugin is what the agent needs to play the game.
     // It's the same npm package name as the app, or a separate plugin ref.
@@ -2350,10 +2532,7 @@ export class AppManager {
       appInfo.runtimePlugin ?? resolvePluginPackageName(appInfo);
 
     // Check if this is a local plugin (already present in plugins/ directory)
-    const isLocal =
-      Boolean(localPluginInfo?.localPath) ||
-      Boolean(appInfo.localPath) ||
-      isLocalPlugin(appInfo);
+    const isLocal = Boolean(appInfo.localPath) || isLocalPlugin(appInfo);
 
     // Check if the plugin is already installed
     const installed = await pluginManager.listInstalledPlugins();

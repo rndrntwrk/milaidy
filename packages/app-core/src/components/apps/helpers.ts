@@ -1,3 +1,8 @@
+import {
+  getMiladyCuratedAppCatalogOrder,
+  isMiladyCuratedAppName,
+  normalizeMiladyCuratedAppName,
+} from "@miladyai/agent/contracts/apps";
 import type { RegistryAppInfo } from "../../api";
 
 export const DEFAULT_VIEWER_SANDBOX =
@@ -33,7 +38,8 @@ interface AppsCatalogFilterOptions {
 export function isCuratedGameApp(
   app: Pick<RegistryAppInfo, "category" | "name">,
 ): boolean {
-  return app.name.trim().length > 0;
+  void app.category;
+  return isMiladyCuratedAppName(app.name);
 }
 
 export function shouldShowAppInAppsView(
@@ -56,8 +62,27 @@ export function filterAppsForCatalog(
   }: AppsCatalogFilterOptions = {},
 ): RegistryAppInfo[] {
   const normalizedSearch = searchQuery.trim().toLowerCase();
+  const seenCanonicalNames = new Set<string>();
+  const sortedApps = [...apps].sort((left, right) => {
+    const orderDiff =
+      getMiladyCuratedAppCatalogOrder(left.name) -
+      getMiladyCuratedAppCatalogOrder(right.name);
+    if (orderDiff !== 0) {
+      return orderDiff;
+    }
 
-  return apps.filter((app) => {
+    const leftCanonicalName = normalizeMiladyCuratedAppName(left.name);
+    const rightCanonicalName = normalizeMiladyCuratedAppName(right.name);
+    const leftCanonicalPenalty = left.name === leftCanonicalName ? 0 : 1;
+    const rightCanonicalPenalty = right.name === rightCanonicalName ? 0 : 1;
+    if (leftCanonicalPenalty !== rightCanonicalPenalty) {
+      return leftCanonicalPenalty - rightCanonicalPenalty;
+    }
+
+    return (right.stars ?? 0) - (left.stars ?? 0);
+  });
+
+  return sortedApps.filter((app) => {
     if (!shouldShowAppInAppsView(app, isProd)) {
       return false;
     }
@@ -72,6 +97,11 @@ export function filterAppsForCatalog(
     if (showActiveOnly && !activeAppNames.has(app.name)) {
       return false;
     }
+    const canonicalName = normalizeMiladyCuratedAppName(app.name) ?? app.name;
+    if (seenCanonicalNames.has(canonicalName)) {
+      return false;
+    }
+    seenCanonicalNames.add(canonicalName);
     return true;
   });
 }

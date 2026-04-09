@@ -227,6 +227,12 @@ describe("registry-client-app-meta", () => {
       ).toBeUndefined();
     });
 
+    it("maps the alternate Hyperscape app package onto the canonical runtime plugin", () => {
+      expect(
+        resolveAppOverride("@elizaos/app-hyperscape", undefined)?.runtimePlugin,
+      ).toBe("@hyperscape/plugin-hyperscape");
+    });
+
     it("merges host-owned overrides into existing Hyperscape metadata", () => {
       const existing: RegistryAppMeta = {
         displayName: "Hyperscape",
