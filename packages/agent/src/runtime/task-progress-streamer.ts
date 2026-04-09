@@ -37,7 +37,7 @@ interface PTYServiceWithEvents {
     cb: (sessionId: string, event: string, data: unknown) => void,
   ) => () => void;
   sessionMetadata?: Map<string, Record<string, unknown>>;
-  sessionWorkdirs?: Map<string, string>;
+  getSession?: (sessionId: string) => { workdir: string } | undefined;
   getSessionOutput?: (sessionId: string, lines?: number) => Promise<string>;
 }
 
@@ -125,7 +125,8 @@ async function readLastAssistantText(
   svc: PTYServiceWithEvents,
   sessionId: string,
 ): Promise<string | null> {
-  const workdir = svc.sessionWorkdirs?.get(sessionId);
+  const session = svc.getSession?.(sessionId);
+  const workdir = session?.workdir;
   if (!workdir) return null;
   // The session jsonl lives under ~/.claude/projects/-<workdir-path-dashed>/
   const home = process.env.HOME ?? "/home/milady";
