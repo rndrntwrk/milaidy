@@ -20,6 +20,8 @@
  * have a discord channel id to write to.
  */
 
+import { promises as fs } from "node:fs";
+import path from "node:path";
 import type { IAgentRuntime, UUID } from "@elizaos/core";
 import { logger } from "@elizaos/core";
 
@@ -35,6 +37,7 @@ interface PTYServiceWithEvents {
     cb: (sessionId: string, event: string, data: unknown) => void,
   ) => () => void;
   sessionMetadata?: Map<string, Record<string, unknown>>;
+  sessionWorkdirs?: Map<string, string>;
   getSessionOutput?: (sessionId: string, lines?: number) => Promise<string>;
 }
 
@@ -113,57 +116,82 @@ export function installTaskProgressStreamer(
   });
 }
 
+/**
+ * Read the last assistant text from the subagent's session jsonl.
+ * This is the CLEAN source of the subagent's response — no ANSI codes,
+ * no TUI chrome, just the structured output claude code produced.
+ */
+async function readLastAssistantText(
+  svc: PTYServiceWithEvents,
+  sessionId: string,
+): Promise<string | null> {
+  const workdir = svc.sessionWorkdirs?.get(sessionId);
+  if (!workdir) return null;
+  // The session jsonl lives under ~/.claude/projects/-<workdir-path-dashed>/
+  const home = process.env.HOME ?? "/home/milady";
+  const projectKey = workdir.replace(/\//g, "-").replace(/^-/, "-");
+  const projectDir = path.join(home, ".claude", "projects", projectKey);
+  let files: string[];
+  try {
+    files = await fs.readdir(projectDir);
+  } catch {
+    return null;
+  }
+  // Find the most recent .jsonl (could be the session or a subagent)
+  const jsonls = files.filter((f) => f.endsWith(".jsonl")).sort();
+  if (jsonls.length === 0) return null;
+  const jsonlPath = path.join(projectDir, jsonls[jsonls.length - 1]);
+  let content: string;
+  try {
+    content = await fs.readFile(jsonlPath, "utf-8");
+  } catch {
+    return null;
+  }
+  // Extract the last assistant text block
+  let lastText = "";
+  for (const line of content.split("\n")) {
+    if (!line.trim()) continue;
+    try {
+      const d = JSON.parse(line) as {
+        message?: { role?: string; content?: Array<{ type?: string; text?: string }> };
+      };
+      if (d.message?.role === "assistant") {
+        for (const c of d.message.content ?? []) {
+          if (c.type === "text" && c.text?.trim()) {
+            lastText = c.text.trim();
+          }
+        }
+      }
+    } catch {
+      continue;
+    }
+  }
+  return lastText || null;
+}
+
 async function postFinalReport(
   runtime: IAgentRuntime,
   svc: PTYServiceWithEvents,
   sessionId: string,
 ): Promise<void> {
-  // The action handler's callback expires when CREATE_TASK returns (before
-  // the subagent finishes), and the coordinator's chat bridge is suppressed
-  // to prevent the "done — <echo>" bug. So this streamer is the ONLY path
-  // that delivers the subagent's response to discord. Always post something.
-  if (typeof svc.getSessionOutput !== "function") {
-    await postToOriginatingChannel(runtime, svc, sessionId, "task finished");
+  // Read the subagent's clean structured output from its session jsonl.
+  // This is the REAL answer — no ANSI codes, no TUI chrome.
+  const assistantText = await readLastAssistantText(svc, sessionId);
+  if (assistantText) {
+    // Check for a URL line
+    const urlLine = assistantText
+      .split("\n")
+      .find((line) => /^\s*URL:\s*https?:\/\//i.test(line));
+    const preview =
+      assistantText.length > 1800
+        ? `${assistantText.slice(0, 1800)}...`
+        : assistantText;
+    const text = urlLine ? `done — ${urlLine.trim()}` : preview;
+    await postToOriginatingChannel(runtime, svc, sessionId, text);
     return;
   }
-  let tail: string;
-  try {
-    tail = await svc.getSessionOutput(sessionId, 1000);
-  } catch (err) {
-    logger.warn(
-      `[task-progress-streamer] could not read session output for ${sessionId}: ${err instanceof Error ? err.message : String(err)}`,
-    );
-    await postToOriginatingChannel(runtime, svc, sessionId, "task finished");
-    return;
-  }
-  // Try to find a structured URL line first
-  const urlLine = tail
-    .split("\n")
-    .reverse()
-    .find((line) => /^\s*URL:\s*https?:\/\//i.test(line));
-  if (urlLine) {
-    await postToOriginatingChannel(runtime, svc, sessionId, `done — ${urlLine.trim()}`);
-    return;
-  }
-  // No URL line — extract the subagent's last meaningful text from the PTY
-  // output. Strip ANSI, empty lines, and claude-code TUI chrome to get the
-  // actual answer.
-  const lines = tail
-    .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "")
-    .split("\n")
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0 && !l.startsWith("❯") && !l.startsWith("─"));
-  const lastChunk = lines.slice(-15).join("\n");
-  const preview =
-    lastChunk.length > 1500
-      ? `${lastChunk.slice(0, 1500)}...`
-      : lastChunk;
-  await postToOriginatingChannel(
-    runtime,
-    svc,
-    sessionId,
-    preview || "task finished",
-  );
+  // Fallback: couldn't read jsonl
+  await postToOriginatingChannel(runtime, svc, sessionId, "task finished");
 }
 
 async function postToOriginatingChannel(
