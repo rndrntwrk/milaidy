@@ -242,9 +242,13 @@ async function main(): Promise<void> {
     );
     const byDef = getMiladyCuratedAppDefinition("scape");
     assertTrue("getMiladyCuratedAppDefinition('scape')", byDef != null);
+    // The curated list grows over time as new apps land on develop. What
+    // this PR actually needs to prove is that `scape` is present — not
+    // that the list is exactly a particular length. Hardcoding a count
+    // here gave a false negative every time an unrelated app was added.
     assertTrue(
-        "curated list still has 5 entries (hyperscape, babylon, 2004scape, defense, scape)",
-        MILADY_CURATED_APP_DEFINITIONS.length === 5,
+        "curated list contains scape",
+        MILADY_CURATED_APP_DEFINITIONS.some((d) => d.slug === "scape"),
     );
 
     if (process.exitCode === 1) {

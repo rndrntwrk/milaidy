@@ -9,7 +9,8 @@
     "runtimePlugin": "@elizaos/app-scape",
     "viewer": {
       "url": "/api/apps/scape/viewer",
-      "sandbox": "allow-scripts allow-same-origin allow-popups allow-forms"
+      "sandbox": "allow-scripts allow-same-origin allow-popups allow-forms",
+      "embedParams": { "embedded": "true" }
     },
     "session": {
       "mode": "spectate-and-steer",
