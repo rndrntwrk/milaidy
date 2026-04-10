@@ -107,7 +107,17 @@ export function installTaskProgressStreamer(
       }
     }
 
-    if (event === "tool_running" && !heartbeatSent.has(sessionId)) {
+    if (
+      event === "tool_running" &&
+      !heartbeatSent.has(sessionId) &&
+      !finalSent.has(sessionId)
+    ) {
+      // Gate on BOTH flags. heartbeatSent prevents multiple heartbeats
+      // per session. finalSent prevents a heartbeat from firing after
+      // the final report has already been posted — without this, late
+      // tool_running events from a lingering subagent (one that didn't
+      // die after task_complete) would post a stale "still working —
+      // Ns in" message minutes after the user already got their answer.
       const elapsed = Date.now() - (sessionStartedAt.get(sessionId) ?? 0);
       if (elapsed < HEARTBEAT_AFTER_MS) return;
       heartbeatSent.add(sessionId);

@@ -3834,10 +3834,19 @@ function wireCodingAgentChatBridge(st: ServerState): boolean {
   // The coordinator's chat callback sends "done — <originalTask>" messages
   // that echo the user's input instead of the subagent's actual output.
   // The direct callback path in registerSessionEvents (coding-task-helpers)
-  // handles task completion replies with real subagent responses. Wiring
-  // the coordinator's chat bridge on top of that causes duplicate and
-  // incorrect messages in discord. Skip it.
-  return false;
+  // handles task completion replies with real subagent responses, and the
+  // task-progress-streamer + jsonl watcher post the clean final text.
+  // Wiring the coordinator's chat bridge on top of that causes duplicate
+  // and incorrect messages in discord. Install a no-op callback so the
+  // upstream wiring check (which requires result.chat to be truthy)
+  // considers wiring complete and doesn't spam "Coordinator wiring
+  // incomplete" warnings.
+  const coordinator = getCoordinatorFromRuntime(st.runtime);
+  if (!coordinator?.setChatCallback) return false;
+  coordinator.setChatCallback(async (_text: string, _source?: string) => {
+    // Deliberately no-op — chat delivery happens elsewhere.
+  });
+  return true;
 }
 
 /**
@@ -3864,12 +3873,18 @@ function wireCodingAgentWsBridge(st: ServerState): boolean {
  * persisted message in the conversation.
  */
 function wireCodingAgentSwarmSynthesis(st: ServerState): boolean {
-  // Same rationale as wireCodingAgentChatBridge: the synthesis generates a
-  // response from task metadata (originalTask = user's text), not from the
-  // subagent's actual output. The direct callback in registerSessionEvents
-  // already handles the real response. Skip synthesis to prevent duplicate
-  // and misleading "done — <echo>" messages.
-  return false;
+  // Same rationale as wireCodingAgentChatBridge: synthesis is generated
+  // from task metadata (originalTask = user's text), not from the
+  // subagent's actual output. The task-progress-streamer + jsonl watcher
+  // deliver the real answer. Install a no-op callback so the upstream
+  // wiring check considers this bridge wired.
+  if (!st.runtime) return false;
+  const coordinator = getCoordinatorFromRuntime(st.runtime);
+  if (!coordinator?.setSwarmCompleteCallback) return false;
+  coordinator.setSwarmCompleteCallback(async () => {
+    // Deliberately no-op — synthesis happens via the streamer instead.
+  });
+  return true;
 }
 
 /**
