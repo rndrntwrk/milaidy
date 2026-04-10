@@ -242,7 +242,21 @@ curl -X POST http://localhost:2138/api/agent/autonomy \
 | `DELETE` | `/api/conversations/:id` | Delete a conversation |
 
 <Info>
-Conversations are scoped to the web-chat interface. Each conversation maps to an elizaOS room with a deterministic world ID.
+Conversations are scoped to the web-chat interface. Each conversation maps to an elizaOS room with a deterministic world ID. Messages from connector channels include additional sender identity fields (`from`, `fromUserName`, `avatarUrl`) when the connector provides them.
+</Info>
+
+---
+
+## Inbox (Unified Messages)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/inbox/messages` | List recent messages across all connector channels in a unified feed |
+| `GET` | `/api/inbox/chats` | List connector chat threads (one row per external chat room) |
+| `GET` | `/api/inbox/sources` | List distinct connector source tags the agent has messages for |
+
+<Info>
+The inbox aggregates messages from every connected platform (iMessage, Telegram, Discord, WhatsApp, WeChat, Slack, Signal, SMS) into a single time-ordered feed. Dashboard web-chat messages are excluded — those are accessible via the [Conversations API](/rest/conversations).
 </Info>
 
 ---

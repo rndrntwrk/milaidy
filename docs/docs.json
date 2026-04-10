@@ -339,6 +339,7 @@
               "rest/onboarding",
               "rest/character",
               "rest/conversations",
+              "rest/inbox",
               "rest/knowledge",
               "rest/wallet",
               "rest/models",

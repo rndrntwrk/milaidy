@@ -89,6 +89,16 @@ Retrieve up to 200 messages for a conversation, sorted oldest first. Messages wi
       "role": "assistant",
       "text": "Hey there! How can I help?",
       "timestamp": 1718000001000
+    },
+    {
+      "id": "uuid",
+      "role": "user",
+      "text": "What's going on in Discord?",
+      "timestamp": 1718000002000,
+      "source": "discord",
+      "from": "Alice",
+      "fromUserName": "alice#1234",
+      "avatarUrl": "https://cdn.discordapp.com/avatars/..."
     }
   ]
 }
@@ -99,7 +109,10 @@ Retrieve up to 200 messages for a conversation, sorted oldest first. Messages wi
 | `messages[].role` | string | `user` or `assistant` |
 | `messages[].text` | string | Message text content |
 | `messages[].timestamp` | number | Unix timestamp (ms) when the message was created |
-| `messages[].source` | string\|undefined | Source identifier (omitted for web-chat messages) |
+| `messages[].source` | string\|undefined | Connector source identifier (e.g. `discord`, `telegram`). Omitted for web-chat messages |
+| `messages[].from` | string\|undefined | Display name of the sender entity, when available |
+| `messages[].fromUserName` | string\|undefined | Username or handle of the sender (e.g. Discord username), when the connector provides one |
+| `messages[].avatarUrl` | string\|undefined | Sender avatar URL when the connector can provide one |
 
 **Errors**
 
@@ -168,7 +181,7 @@ Final event:
 data: {"type":"done","fullText":"Here's what I think...","agentName":"Milady"}
 ```
 
-The conversation title is auto-generated in the background if it is still `"New Chat"`, and a `conversation-updated` WebSocket event is broadcast.
+The conversation title is auto-generated in the background if it is still `"New Chat"`, and a `conversation-updated` WebSocket event is broadcast. If AI title generation fails, the title falls back to the first five words of the user's message.
 
 <Info>
 Action callbacks (e.g. from music playback, wallet flows) use **replace** semantics: each successive callback replaces the callback portion of the message rather than appending. This matches the progressive-message pattern used on Discord and Telegram. See [Action callbacks and SSE streaming](/runtime/action-callback-streaming) for details.
