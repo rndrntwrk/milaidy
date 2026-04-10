@@ -261,8 +261,14 @@ export function collectPluginNames(
   // not an exclusive whitelist that blocks everything else.
   if (allowList && allowList.length > 0) {
     for (const item of allowList) {
+      // Normalize short IDs (e.g. "openai" → "@elizaos/plugin-openai") the
+      // same way plugins.entries does — addToAllowlist() pushes both the
+      // short ID and the full package name, so bare short IDs must be
+      // expanded to avoid importing the raw SDK package (e.g. "openai").
       const pluginName =
-        CHANNEL_PLUGIN_MAP[item] ?? OPTIONAL_PLUGIN_MAP[item] ?? item;
+        CHANNEL_PLUGIN_MAP[item] ??
+        OPTIONAL_PLUGIN_MAP[item] ??
+        (item.includes("/") ? item : `@elizaos/plugin-${item}`);
       pluginsToLoad.add(pluginName);
       track(pluginName, `plugins.allow[${JSON.stringify(item)}]`);
     }
