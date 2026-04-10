@@ -1975,7 +1975,7 @@ export function isRecoverablePgliteInitError(err: unknown): boolean {
 
   if (hasMigrationsSchema) return true;
   if (hasAbort && hasPglite) return true;
-  if (hasRecoverableStorageSignal && (hasPglite || hasSqlite)) return true;
+  if (hasRecoverableStorageSignal) return true;
   return false;
 }
 
@@ -1998,9 +1998,14 @@ export function getPgliteRecoveryAction(
   if (!isRecoverablePgliteInitError(err)) return "none";
 
   const pidStatus = reconcilePglitePidFile(dataDir);
+  const treatPidAsActiveLock =
+    code === pluginSql.PGLITE_ERROR_CODES.ACTIVE_LOCK || isPgliteLockError(err);
   if (
+    treatPidAsActiveLock &&
     pidStatus === "active" ||
+    treatPidAsActiveLock &&
     pidStatus === "active-unconfirmed" ||
+    treatPidAsActiveLock &&
     pidStatus === "check-failed"
   ) {
     return "fail-active-lock";

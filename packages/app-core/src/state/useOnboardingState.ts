@@ -64,8 +64,11 @@ export interface OnboardingState {
   apiKey: string;
   voiceProvider: string;
   voiceApiKey: string;
+  nanoModel: string;
   smallModel: string;
+  mediumModel: string;
   largeModel: string;
+  megaModel: string;
   openRouterModel: string;
   primaryModel: string;
   existingInstallDetected: boolean;
@@ -195,8 +198,11 @@ function createInitialState(cloudOnly?: boolean): OnboardingState {
     apiKey: "",
     voiceProvider: "",
     voiceApiKey: "",
+    nanoModel: "openai/gpt-5.4-nano",
     smallModel: "minimax/minimax-m2.7",
+    mediumModel: "anthropic/claude-sonnet-4.6",
     largeModel: "anthropic/claude-sonnet-4.6",
+    megaModel: "anthropic/claude-sonnet-4.6",
     openRouterModel: "",
     primaryModel: "",
     existingInstallDetected: false,

@@ -27,6 +27,17 @@ type SpawnedProcess = {
   output: string[];
 };
 
+const SERVER_ONLY_RUNTIME_SCRIPT = [
+  'import { startEliza, shutdownRuntime } from "./packages/app-core/src/runtime/eliza.ts";',
+  "const runtime = await startEliza({ serverOnly: true });",
+  'console.log("RUNTIME_READY");',
+  "process.on(\"SIGTERM\", async () => {",
+  '  await shutdownRuntime(runtime, "pglite-fail-fast-e2e");',
+  "  process.exit(0);",
+  "});",
+  "await new Promise(() => {});",
+].join("\n");
+
 async function getFreePort(): Promise<number> {
   return await new Promise((resolve, reject) => {
     const server = net.createServer();
@@ -108,6 +119,31 @@ async function waitForJsonPredicate<T>(
     : new Error(`Timed out waiting for ${url}`);
 }
 
+async function waitForOutput(
+  proc: SpawnedProcess,
+  needle: string,
+  timeoutMs: number = READY_TIMEOUT_MS,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    const output = proc.output.join("");
+    if (output.includes(needle)) {
+      return;
+    }
+    if (proc.child.exitCode != null) {
+      throw new Error(
+        `Child exited before emitting ${needle} (exit=${proc.child.exitCode}):\n${output}`,
+      );
+    }
+    await sleep(250);
+  }
+
+  throw new Error(
+    `Timed out waiting for ${needle}.\n${proc.output.join("")}`,
+  );
+}
+
 function spawnBun(args: string[], env: NodeJS.ProcessEnv): SpawnedProcess {
   const child = spawn("bun", args, {
     cwd: REPO_ROOT,
@@ -126,6 +162,10 @@ function spawnBun(args: string[], env: NodeJS.ProcessEnv): SpawnedProcess {
   return { child, output };
 }
 
+function spawnServerOnlyRuntime(env: NodeJS.ProcessEnv): SpawnedProcess {
+  return spawnBun(["-e", SERVER_ONLY_RUNTIME_SCRIPT], env);
+}
+
 function buildEnv(
   stateDir: string,
   configPath: string,
@@ -133,6 +173,7 @@ function buildEnv(
 ): NodeJS.ProcessEnv {
   return {
     ...process.env,
+    ALLOW_NO_DATABASE: "false",
     DISCORD_API_TOKEN: "",
     DISCORD_BOT_TOKEN: "",
     ELIZA_CONFIG_PATH: configPath,
@@ -225,14 +266,10 @@ describe("PGlite fail-fast e2e", () => {
     cleanups.push(harness.cleanup);
 
     const firstPort = await getFreePort();
-    const firstProc = spawnBun(
-      ["run", "start:eliza"],
+    const firstProc = spawnServerOnlyRuntime(
       buildEnv(harness.stateDir, harness.configPath, firstPort),
     );
-    await waitForJsonPredicate<{ ready?: boolean; runtime?: string }>(
-      `http://127.0.0.1:${firstPort}/api/health`,
-      (value) => value.ready === true && value.runtime === "ok",
-    );
+    await waitForOutput(firstProc, "RUNTIME_READY");
     firstProc.child.kill("SIGTERM");
     await waitForChildExit(firstProc.child, 10_000);
 
@@ -243,14 +280,10 @@ describe("PGlite fail-fast e2e", () => {
     );
 
     const secondPort = await getFreePort();
-    const secondProc = spawnBun(
-      ["run", "start:eliza"],
+    const secondProc = spawnServerOnlyRuntime(
       buildEnv(harness.stateDir, harness.configPath, secondPort),
     );
-    await waitForJsonPredicate<{ ready?: boolean; runtime?: string }>(
-      `http://127.0.0.1:${secondPort}/api/health`,
-      (value) => value.ready === true && value.runtime === "ok",
-    );
+    await waitForOutput(secondProc, "RUNTIME_READY");
     secondProc.child.kill("SIGTERM");
     await waitForChildExit(secondProc.child, 10_000);
 
@@ -265,14 +298,10 @@ describe("PGlite fail-fast e2e", () => {
     cleanups.push(harness.cleanup);
 
     const setupPort = await getFreePort();
-    const setupProc = spawnBun(
-      ["run", "start:eliza"],
+    const setupProc = spawnServerOnlyRuntime(
       buildEnv(harness.stateDir, harness.configPath, setupPort),
     );
-    await waitForJsonPredicate<{ ready?: boolean; runtime?: string }>(
-      `http://127.0.0.1:${setupPort}/api/health`,
-      (value) => value.ready === true && value.runtime === "ok",
-    );
+    await waitForOutput(setupProc, "RUNTIME_READY");
     setupProc.child.kill("SIGTERM");
     await waitForChildExit(setupProc.child, 10_000);
 

@@ -309,8 +309,17 @@ const ServiceRouteSchema = z
       .optional(),
     accountId: z.string().optional(),
     primaryModel: z.string().optional(),
+    nanoModel: z.string().optional(),
     smallModel: z.string().optional(),
+    mediumModel: z.string().optional(),
     largeModel: z.string().optional(),
+    megaModel: z.string().optional(),
+    responseHandlerModel: z.string().optional(),
+    shouldRespondModel: z.string().optional(),
+    actionPlannerModel: z.string().optional(),
+    plannerModel: z.string().optional(),
+    responseModel: z.string().optional(),
+    mediaDescriptionModel: z.string().optional(),
     remoteApiBase: z.string().optional(),
   })
   .strict();

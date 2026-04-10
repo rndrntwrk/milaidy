@@ -29,8 +29,13 @@ export interface BuildOnboardingConnectionArgs {
   onboardingRemoteConnected: boolean;
   onboardingRemoteApiBase: string;
   onboardingRemoteToken: string;
+  onboardingNanoModel: string;
   onboardingSmallModel: string;
+  onboardingMediumModel: string;
   onboardingLargeModel: string;
+  onboardingMegaModel: string;
+  onboardingResponseHandlerModel?: string;
+  onboardingActionPlannerModel?: string;
 }
 
 export interface BuildOnboardingRuntimeConfigResult {
@@ -74,8 +79,13 @@ export function buildOnboardingRuntimeConfig(
   args: BuildOnboardingConnectionArgs,
 ): BuildOnboardingRuntimeConfigResult {
   const serverTarget = resolveArgsServerTarget(args);
+  const nanoModel = trimToUndefined(args.onboardingNanoModel);
   const smallModel = trimToUndefined(args.onboardingSmallModel);
+  const mediumModel = trimToUndefined(args.onboardingMediumModel);
   const largeModel = trimToUndefined(args.onboardingLargeModel);
+  const megaModel = trimToUndefined(args.onboardingMegaModel);
+  const responseHandlerModel = trimToUndefined(args.onboardingResponseHandlerModel ?? "");
+  const actionPlannerModel = trimToUndefined(args.onboardingActionPlannerModel ?? "");
   const linkedAccounts: LinkedAccountsConfig = {};
   const cloudApiKey = trimToUndefined(args.onboardingCloudApiKey);
   if (cloudApiKey) {
@@ -124,8 +134,13 @@ export function buildOnboardingRuntimeConfig(
     shouldConfigureRuntimeProvider
   ) {
     llmTextRoute = buildElizaCloudServiceRoute({
+      nanoModel,
       smallModel,
+      mediumModel,
       largeModel,
+      megaModel,
+      responseHandlerModel,
+      actionPlannerModel,
     });
   } else if (shouldConfigureRuntimeProvider && localProviderId) {
     const primaryModel = resolveOnboardingPrimaryModel({
@@ -164,8 +179,13 @@ export function buildOnboardingRuntimeConfig(
         includeInference:
           shouldConfigureRuntimeProvider &&
           args.onboardingProvider === "elizacloud",
+        nanoModel,
         smallModel,
+        mediumModel,
         largeModel,
+        megaModel,
+        responseHandlerModel,
+        actionPlannerModel,
       }),
     );
   }

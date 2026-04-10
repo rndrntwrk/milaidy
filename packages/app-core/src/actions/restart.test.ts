@@ -51,10 +51,14 @@ describe("RESTART_AGENT action", () => {
     expect(restartAction.similes).toContain("RELOAD");
   });
 
-  it("validate always returns true", async () => {
+  it("validate accepts explicit restart requests", async () => {
     const result = await restartAction.validate(
       {} as Parameters<typeof restartAction.validate>[0],
-      {} as Parameters<typeof restartAction.validate>[1],
+      {
+        content: {
+          text: "please restart the agent",
+        },
+      } as Parameters<typeof restartAction.validate>[1],
       {} as Parameters<typeof restartAction.validate>[2],
     );
     expect(result).toBe(true);

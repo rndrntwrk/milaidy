@@ -25,9 +25,9 @@ apps/app/electron/tsc-out/
 packages/*/src/**/*.d.ts
 !packages/app-core/src/ambient-modules.d.ts
 packages/*/src/**/*.d.ts.map
-# Local ./eliza checkout (paths start with eliza/, so packages/*/ above does not match)
-eliza/packages/*/src/**/*.d.ts
-eliza/packages/*/src/**/*.d.ts.map
+# Local ./eliza checkout — only @elizaos/core typescript sources had stray emit (see eliza/.gitignore)
+eliza/packages/typescript/src/**/*.d.ts
+eliza/packages/typescript/src/**/*.d.ts.map
 src/plugins/**/*.d.ts
 src/plugins/**/*.d.ts.map
 
