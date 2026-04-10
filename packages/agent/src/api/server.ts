@@ -579,15 +579,15 @@ export function resolveConversationGreetingText(
 
   // Prefer explicit UI selections over the loaded character card: users pick a
   // style in onboarding/roster (avatar + preset) while `runtime.character.name`
-  // can still be the default template (e.g. "Chen") until save/restart.
+  // can still reflect the bundled preset name until save/restart.
   const preset =
     resolveStylePresetByAvatarIndex(
       uiConfig?.avatarIndex,
       normalizedLanguage,
     ) ??
     resolveStylePresetById(uiConfig?.presetId, normalizedLanguage) ??
-    resolveStylePresetByName(characterName, normalizedLanguage) ??
-    resolveStylePresetByName(assistantName, normalizedLanguage);
+    resolveStylePresetByName(assistantName, normalizedLanguage) ??
+    resolveStylePresetByName(characterName, normalizedLanguage);
 
   const presetGreeting = pickRandom(preset?.postExamples);
   if (presetGreeting) {
@@ -2138,6 +2138,13 @@ function resolveDefaultAgentName(
   config?: ElizaConfig,
   req?: http.IncomingMessage,
 ): string {
+  const configuredName =
+    config?.ui?.assistant?.name?.trim() ??
+    config?.agents?.list?.[0]?.name?.trim();
+  if (configuredName) {
+    return configuredName;
+  }
+
   return getDefaultStylePreset(resolveConfiguredCharacterLanguage(config, req))
     .name;
 }
@@ -4005,12 +4012,12 @@ async function routeSynthesisToConnector(
     const room = await runtime.getRoom(sourceRoomId as UUID);
     if (!room?.source) return;
     await runtime.sendMessageToTarget(
-      {
+      ({
         source: room.source,
         roomId: room.id,
         channelId: room.channelId ?? room.id,
         serverId: room.serverId,
-      },
+      } as Parameters<typeof runtime.sendMessageToTarget>[0]),
       { text: resultText, source: "swarm_synthesis" },
     );
     logger.info(
@@ -6555,9 +6562,7 @@ export async function startApiServer(opts?: {
         : { phase: "idle", attempt: 0 };
   const agentName = hasRuntime
     ? (opts.runtime?.character.name ?? resolveDefaultAgentName(config))
-    : (config.agents?.list?.[0]?.name ??
-      config.ui?.assistant?.name ??
-      resolveDefaultAgentName(config));
+    : resolveDefaultAgentName(config);
 
   const deletedConversationIds = readDeletedConversationIdsFromState();
 

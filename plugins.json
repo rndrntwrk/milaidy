@@ -5324,43 +5324,6 @@
       "setupGuideUrl": "https://docs.eliza.ai/plugin-setup-guide#tlon-urbit"
     },
     {
-      "id": "todo",
-      "dirName": "plugin-todo",
-      "name": "Todo",
-      "npmName": "@elizaos/plugin-todo",
-      "description": "A todo list. For humans and agents.",
-      "tags": [
-        "todo",
-        "task-management",
-        "multi-language"
-      ],
-      "category": "feature",
-      "envKey": null,
-      "configKeys": [
-        "ENABLE_REMINDERS",
-        "REMINDER_INTERVAL_MS"
-      ],
-      "version": "2.0.0-alpha.4",
-      "pluginParameters": {
-        "ENABLE_REMINDERS": {
-          "type": "boolean",
-          "description": "Enable reminder notifications for todos",
-          "required": false,
-          "sensitive": false,
-          "default": "True"
-        },
-        "REMINDER_INTERVAL_MS": {
-          "type": "number",
-          "description": "Interval in milliseconds between reminder checks",
-          "required": false,
-          "sensitive": false,
-          "default": "30000"
-        }
-      },
-      "homepage": "https://github.com/elizaos-plugins/plugin-todo#readme",
-      "repository": "https://github.com/elizaos-plugins/plugin-todo"
-    },
-    {
       "id": "trust",
       "dirName": "plugin-trust",
       "name": "Trust",

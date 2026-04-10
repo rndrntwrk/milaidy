@@ -41,7 +41,7 @@ export const CORE_PLUGINS: readonly string[] = [
 ];
 ```
 
-> **注意：** `@elizaos/plugin-secrets-manager`、`relationships`、`@elizaos/plugin-trust`、`@elizaos/plugin-personality` 和 `@elizaos/plugin-experience` 已静态导入以实现快速解析，但在核心列表中被注释掉了。它们可能会在未来的版本中重新启用。`@elizaos/plugin-todo` 已退役；待办功能现由工作台 API 通过运行时任务处理。
+> **注意：** `@elizaos/plugin-secrets-manager`、`relationships`、`@elizaos/plugin-trust`、`@elizaos/plugin-personality` 和 `@elizaos/plugin-experience` 已静态导入以实现快速解析，但在核心列表中被注释掉了。它们可能会在未来的版本中重新启用。Milady 不附带 `@elizaos/plugin-todo`；待办功能由工作台 API 与 LifeOps 相关的运行时任务处理。
 
 <div id="optional-core-plugins">
 

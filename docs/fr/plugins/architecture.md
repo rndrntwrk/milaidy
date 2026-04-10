@@ -41,7 +41,7 @@ export const CORE_PLUGINS: readonly string[] = [
 ];
 ```
 
-> **Remarque :** `@elizaos/plugin-secrets-manager`, `relationships`, `@elizaos/plugin-trust`, `@elizaos/plugin-personality` et `@elizaos/plugin-experience` sont importés statiquement pour une résolution rapide mais commentés dans la liste principale. Ils pourraient être réactivés dans une version future. `@elizaos/plugin-todo` a été retiré ; la fonctionnalité todo est désormais gérée par l'API workbench via les tâches runtime.
+> **Remarque :** `@elizaos/plugin-secrets-manager`, `relationships`, `@elizaos/plugin-trust`, `@elizaos/plugin-personality` et `@elizaos/plugin-experience` sont importés statiquement pour une résolution rapide mais commentés dans la liste principale. Ils pourraient être réactivés dans une version future. Milady n'inclut pas `@elizaos/plugin-todo` ; les todos passent par l'API workbench et les tâches runtime liées à LifeOps.
 
 <div id="optional-core-plugins">
 

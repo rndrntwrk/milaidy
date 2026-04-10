@@ -49,6 +49,8 @@ type TripWindowIntent = {
   location: string;
 };
 
+const MIN_CREATE_EVENT_DURATION_MINUTES = 15;
+
 type CalendarActionParams = {
   subaction?: CalendarSubaction;
   intent?: string;
@@ -918,6 +920,56 @@ function inferCreateEventTitle(intent: string): string | undefined {
   return undefined;
 }
 
+function isShortPreparationEvent(intent: string, title: string): boolean {
+  return /\b(get ready|ready for|prep|prepare|packing|pack|leave for|head to|airport|flight|reminder|remind me)\b/i.test(
+    `${intent} ${title}`,
+  );
+}
+
+function resolveCreateEventDurationMinutes(args: {
+  explicitDuration: number | undefined;
+  extractedDuration: number | undefined;
+  intent: string;
+  title: string;
+  hasExplicitEndAt: boolean;
+  hasExplicitWindowPreset: boolean;
+  hasExplicitStartAt: boolean;
+}): number | undefined {
+  const {
+    explicitDuration,
+    extractedDuration,
+    intent,
+    title,
+    hasExplicitEndAt,
+    hasExplicitWindowPreset,
+    hasExplicitStartAt,
+  } = args;
+
+  if (typeof explicitDuration === "number" && Number.isFinite(explicitDuration)) {
+    return explicitDuration > 0 ? explicitDuration : undefined;
+  }
+  if (typeof extractedDuration === "number" && Number.isFinite(extractedDuration)) {
+    if (extractedDuration > 0) {
+      return extractedDuration;
+    }
+    if (
+      isShortPreparationEvent(intent, title) &&
+      (hasExplicitStartAt || hasExplicitWindowPreset)
+    ) {
+      return MIN_CREATE_EVENT_DURATION_MINUTES;
+    }
+    return undefined;
+  }
+  if (
+    !hasExplicitEndAt &&
+    isShortPreparationEvent(intent, title) &&
+    (hasExplicitStartAt || hasExplicitWindowPreset)
+  ) {
+    return MIN_CREATE_EVENT_DURATION_MINUTES;
+  }
+  return undefined;
+}
+
 function resolveRequestedSubaction(args: {
   requestedSubaction: string | undefined;
   inferredSubaction: CalendarSubaction;
@@ -949,9 +1001,7 @@ function resolveRequestedSubaction(args: {
     return tripWindowIntent ? "trip_window" : inferredSubaction;
   }
   if (requestedSubaction === "create_event") {
-    return hasCreateSignals || inferredSubaction === "create_event"
-      ? "create_event"
-      : inferredSubaction;
+    return "create_event";
   }
   if (requestedSubaction === "search_events") {
     return hasSearchSignals || inferredSubaction === "search_events"
@@ -980,6 +1030,8 @@ async function inferCreateEventDetails(
     "Extract calendar event creation fields from the request.",
     "Use recent conversation only as context.",
     "Return XML only. Leave fields empty when unknown.",
+    "If a start time or window is implied but duration is not explicit, infer a reasonable positive duration.",
+    "For short prep or reminder blocks, use at least 15 minutes instead of 0.",
     "",
     "<response>",
     "  <title>event title</title>",
@@ -1393,6 +1445,28 @@ export const calendarAction: Action = {
             : typeof extractedDetails.durationMinutes === "number"
               ? extractedDetails.durationMinutes
               : undefined;
+        const explicitStartAt = detailString(details, "startAt");
+        const explicitEndAt = detailString(details, "endAt");
+        const explicitWindowPreset = detailString(details, "windowPreset");
+        const explicitDuration = detailNumber(details, "durationMinutes");
+        const durationMinutes = resolveCreateEventDurationMinutes({
+          explicitDuration,
+          extractedDuration: Number.isFinite(extractedDuration)
+            ? extractedDuration
+            : undefined,
+          intent,
+          title,
+          hasExplicitEndAt:
+            Boolean(explicitEndAt) ||
+            (typeof extractedDetails.endAt === "string" &&
+              extractedDetails.endAt.trim().length > 0),
+          hasExplicitWindowPreset:
+            Boolean(explicitWindowPreset) || Boolean(extractedWindowPreset),
+          hasExplicitStartAt:
+            Boolean(explicitStartAt) ||
+            (typeof extractedDetails.startAt === "string" &&
+              extractedDetails.startAt.trim().length > 0),
+        });
         const request: CreateLifeOpsCalendarEventRequest = {
           mode: (detailString(details, "mode") as
             | "local"
@@ -1413,21 +1487,18 @@ export const calendarAction: Action = {
               ? extractedDetails.location.trim()
               : undefined),
           startAt:
-            detailString(details, "startAt") ??
+            explicitStartAt ??
             (typeof extractedDetails.startAt === "string"
               ? extractedDetails.startAt.trim()
               : undefined),
           endAt:
-            detailString(details, "endAt") ??
+            explicitEndAt ??
             (typeof extractedDetails.endAt === "string"
               ? extractedDetails.endAt.trim()
               : undefined),
           timeZone: detailString(details, "timeZone") ?? extractedTimeZone,
-          durationMinutes:
-            detailNumber(details, "durationMinutes") ??
-            (Number.isFinite(extractedDuration) ? extractedDuration : undefined),
-          windowPreset: (detailString(details, "windowPreset") ??
-            extractedWindowPreset) as
+          durationMinutes,
+          windowPreset: (explicitWindowPreset ?? extractedWindowPreset) as
             | "tomorrow_morning"
             | "tomorrow_afternoon"
             | "tomorrow_evening"

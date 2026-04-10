@@ -39,14 +39,6 @@ interface PTYServiceWithEvents {
   getSession?: (sessionId: string) => { workdir?: string } | undefined;
 }
 
-interface RuntimeWithMessageTarget extends IAgentRuntime {
-  sendMessageToTarget: (
-    target: { source?: string; roomId?: UUID; channelId?: string },
-    message: { text: string; source?: string },
-  ) => Promise<unknown>;
-  getRoom: (roomId: UUID) => Promise<{ channelId?: string } | null>;
-}
-
 const installedRuntimes = new WeakSet<IAgentRuntime>();
 
 /**
@@ -92,9 +84,7 @@ export function installTaskProgressStreamer(
       const meta = svc.sessionMetadata?.get(sessionId) as SessionMetadata | undefined;
       if (meta?.roomId) {
         void (async () => {
-          const room = await (runtime as RuntimeWithMessageTarget)
-            .getRoom(meta.roomId!)
-            .catch(() => null);
+          const room = await runtime.getRoom(meta.roomId!).catch(() => null);
           if (room?.channelId) {
             sessionRooms.set(sessionId, {
               roomId: meta.roomId!,
@@ -153,9 +143,7 @@ export function installTaskProgressStreamer(
         if (!sessionRooms.has(sessionId)) {
           const meta = svc.sessionMetadata?.get(sessionId) as SessionMetadata | undefined;
           if (meta?.roomId) {
-            const room = await (runtime as RuntimeWithMessageTarget)
-              .getRoom(meta.roomId)
-              .catch(() => null);
+            const room = await runtime.getRoom(meta.roomId).catch(() => null);
             if (room?.channelId) {
               const resolved = new Map([[sessionId, {
                 roomId: meta.roomId,
@@ -270,15 +258,13 @@ async function postToOriginatingChannel(
     if (!meta?.roomId) return;
     roomId = meta.roomId;
     source = meta.source ?? "discord";
-    const room = await (runtime as RuntimeWithMessageTarget)
-      .getRoom(meta.roomId)
-      .catch(() => null);
+    const room = await runtime.getRoom(meta.roomId).catch(() => null);
     channelId = room?.channelId;
   }
   if (!roomId || !channelId) return;
   try {
-    await (runtime as RuntimeWithMessageTarget).sendMessageToTarget(
-      { source, roomId, channelId },
+    await runtime.sendMessageToTarget(
+      ({ source, roomId, channelId } as Parameters<typeof runtime.sendMessageToTarget>[0]),
       { text, source },
     );
   } catch (err) {

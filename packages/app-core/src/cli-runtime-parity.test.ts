@@ -338,6 +338,14 @@ describe("character building parity", () => {
       } as Partial<ElizaConfig> as ElizaConfig).name,
     ).toBe("Reimu");
 
+    // Divergence should prefer the UI-selected assistant name.
+    expect(
+      buildCharacterFromConfig({
+        agents: { list: [{ id: "main", name: "Chen" }] },
+        ui: { assistant: { name: "Eliza" } },
+      } as Partial<ElizaConfig> as ElizaConfig).name,
+    ).toBe("Eliza");
+
     // Default fallback should resolve to the default bundled preset.
     expect(buildCharacterFromConfig({} as ElizaConfig).name).toBe("Chen");
   });

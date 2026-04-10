@@ -28,7 +28,7 @@ const mocks = vi.hoisted(() => {
   }
   return {
     LifeOpsServiceError: _LifeOpsServiceError,
-    checkSenderRole: vi.fn(),
+    checkSenderPrivateAccess: vi.fn(),
     createDefinition: vi.fn(),
     createGoal: vi.fn(),
     updateDefinition: vi.fn(),
@@ -49,7 +49,9 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-vi.mock("@elizaos/core/roles", () => ({ checkSenderRole: mocks.checkSenderRole }));
+vi.mock("@elizaos/core/roles", () => ({
+  checkSenderPrivateAccess: mocks.checkSenderPrivateAccess,
+}));
 
 vi.mock("../lifeops/service.js", () => ({
   LifeOpsServiceError: mocks.LifeOpsServiceError,
@@ -77,7 +79,7 @@ vi.mock("../lifeops/service.js", () => ({
 import { lifeAction } from "./life";
 
 const runtime = { agentId: "agent-1" } as never;
-const adminRole = { entityId: "owner-1", role: "OWNER", isOwner: true, isAdmin: true, canManageRoles: true };
+const privateAccess = { hasPrivateAccess: true };
 
 function send(params: Record<string, unknown>, messageText?: string) {
   return lifeAction.handler?.(
@@ -91,7 +93,7 @@ function send(params: Record<string, unknown>, messageText?: string) {
 describe("LIFE action smoke tests — BRD acceptance criteria", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    mocks.checkSenderRole.mockResolvedValue(adminRole);
+    mocks.checkSenderPrivateAccess.mockResolvedValue(privateAccess);
   });
 
   // ── AC-1: "I need help brushing my teeth twice a day" ──
@@ -298,7 +300,7 @@ describe("LIFE action smoke tests — BRD acceptance criteria", () => {
 describe("LIFE action — robustness scenarios", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    mocks.checkSenderRole.mockResolvedValue(adminRole);
+    mocks.checkSenderPrivateAccess.mockResolvedValue(privateAccess);
   });
 
   it("handles complete → target not found gracefully", async () => {

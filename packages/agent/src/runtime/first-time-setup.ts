@@ -37,7 +37,9 @@ function formatError(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
-type FirstTimeSetupCloudResult = import("./cloud-onboarding").CloudOnboardingResult;
+type FirstTimeSetupCloudResult =
+  import("./cloud-onboarding").CloudOnboardingResult;
+const DEFAULT_ONBOARDING_AGENT_NAME = "Chen";
 
 export function applyFirstTimeSetupTopology(
   config: ElizaConfig,
@@ -157,7 +159,7 @@ export async function runFirstTimeSetup(config: ElizaConfig): Promise<ElizaConfi
   const randomNames = pickRandomNames(4);
 
   const nameChoice = await clack.select({
-    message: "♡♡chen♡♡: hey, quick check, what was my name again?",
+    message: "Hey, quick check, what should I be called?",
     options: [
       ...randomNames.map((n) => ({ value: n, label: n })),
       { value: "_custom_", label: "Custom...", hint: "type your own" },
@@ -171,12 +173,12 @@ export async function runFirstTimeSetup(config: ElizaConfig): Promise<ElizaConfi
   if (nameChoice === "_custom_") {
     const customName = await clack.text({
       message: "OK, what should I be called?",
-      placeholder: "Chen",
+      placeholder: "Choose a name",
     });
 
     if (clack.isCancel(customName)) cancelOnboarding();
 
-    name = customName.trim() || "Chen";
+    name = customName.trim() || DEFAULT_ONBOARDING_AGENT_NAME;
   } else {
     name = nameChoice;
   }

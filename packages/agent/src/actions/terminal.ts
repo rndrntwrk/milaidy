@@ -67,7 +67,7 @@ function getCommand(
   // This fires when the LLM picks RUN_IN_TERMINAL but doesn't include the
   // command parameter (a known TOON parsing gap). Rather than failing silently,
   // infer the command from the message content.
-  const lower = text.toLowerCase();
+  const lower = (text ?? "").toLowerCase();
   const cryptoMatch = lower.match(
     /\b(bitcoin|btc|ethereum|eth|solana|sol)\b/,
   );
@@ -168,4 +168,3 @@ export const terminalAction: Action = {
     },
   ],
 };
-

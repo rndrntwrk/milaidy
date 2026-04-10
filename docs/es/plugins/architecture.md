@@ -41,7 +41,7 @@ export const CORE_PLUGINS: readonly string[] = [
 ];
 ```
 
-> **Nota:** `@elizaos/plugin-secrets-manager`, `relationships`, `@elizaos/plugin-trust`, `@elizaos/plugin-personality` y `@elizaos/plugin-experience` se importan estáticamente para una resolución rápida, pero están comentados en la lista principal. Podrían ser re-habilitados en una versión futura. `@elizaos/plugin-todo` ha sido retirado; la funcionalidad de todos ahora es manejada por la API del workbench a través de tareas del runtime.
+> **Nota:** `@elizaos/plugin-secrets-manager`, `relationships`, `@elizaos/plugin-trust`, `@elizaos/plugin-personality` y `@elizaos/plugin-experience` se importan estáticamente para una resolución rápida, pero están comentados en la lista principal. Podrían ser re-habilitados en una versión futura. Milady no incluye `@elizaos/plugin-todo`; la funcionalidad de todos se gestiona mediante la API del workbench y tareas del runtime relacionadas con LifeOps.
 
 <div id="optional-core-plugins">
 

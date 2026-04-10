@@ -1126,6 +1126,62 @@ describe("calendarAction", () => {
     expect(result?.success).toBe(true);
   });
 
+  it("repairs non-positive extracted durations for prep-style events", async () => {
+    mockGetGoogleConnectorStatus.mockResolvedValue({
+      connected: true,
+      grantedCapabilities: [
+        "google.basic_identity",
+        "google.calendar.read",
+        "google.calendar.write",
+      ],
+    });
+    mockUseModel.mockResolvedValue(
+      "<response><title>Get ready for flight</title><startAt>2026-04-10T19:00:00.000Z</startAt><durationMinutes>0</durationMinutes></response>",
+    );
+    mockCreateCalendarEvent.mockResolvedValue({
+      id: "evt-6",
+      externalId: "ext-6",
+      agentId: "agent-1",
+      provider: "google",
+      side: "owner",
+      calendarId: "primary",
+      title: "Get ready for flight",
+      description: "",
+      location: "",
+      status: "confirmed",
+      startAt: "2026-04-10T19:00:00.000Z",
+      endAt: "2026-04-10T19:15:00.000Z",
+      isAllDay: false,
+      timezone: "UTC",
+      htmlLink: null,
+      conferenceLink: null,
+      organizer: null,
+      attendees: [],
+      metadata: {},
+      syncedAt: "2026-04-10T08:00:00.000Z",
+      updatedAt: "2026-04-10T08:00:00.000Z",
+    });
+
+    const result = await invoke(
+      "i want an event to get ready for flight tomorrow at noon",
+      {
+        subaction: "create_event",
+        details: {},
+      },
+    );
+
+    expect(mockCreateCalendarEvent).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        title: "Get ready for flight",
+        startAt: "2026-04-10T19:00:00.000Z",
+        durationMinutes: 15,
+      }),
+    );
+    expect(result?.success).toBe(true);
+    expect(result?.text).toContain("Created calendar event");
+  });
+
   it("normalizes lowercase detail aliases for create-event fields", async () => {
     mockGetGoogleConnectorStatus.mockResolvedValue({
       connected: true,

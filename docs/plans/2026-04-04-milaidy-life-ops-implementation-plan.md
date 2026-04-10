@@ -7,9 +7,11 @@ Input PRD: `/Users/shawwalters/Downloads/milaidy_prd_v1.docx`
 Detailed architecture options and plugin integration research:
 `docs/plans/2026-04-04-lifeops-architecture-options.md`
 
+> **Update (2026-04-10):** Milady no longer ships `@elizaos/plugin-todo`. Todos use the workbench API and LifeOps-related runtime tasks. Mentions of `plugin-todo` below are historical or comparative unless stated otherwise.
+
 ## 1. Executive summary
 
-The clean implementation path is to build Milaidy's life-ops system in Milady core, not by stretching `@elizaos/plugin-todo` and `@elizaos/plugin-goals` until they become a second product.
+The clean implementation path is to build Milaidy's life-ops system in Milady core, not by stretching `@elizaos/plugin-goals` (and legacy todo surfaces) until they become a second product.
 
 The existing stack already gives us four important foundations:
 
@@ -84,7 +86,6 @@ Most relevant local plugins:
 - `plugin-scheduling`
 - `plugin-signal`
 - `plugin-telegram`
-- `plugin-todo`
 - `plugin-trust`
 - `plugin-twilio`
 - `plugin-webhooks`
@@ -92,7 +93,7 @@ Most relevant local plugins:
 
 Conclusions:
 
-- `plugin-todo` is useful as a compatibility surface for simple todos and reminder UIs, but it is too flat to be the primary data model for occurrences, due windows, progression rules, or escalation.
+- The former `plugin-todo` compatibility surface was too flat to be the primary data model for occurrences, due windows, progression rules, or escalation; Milady has removed that package in favor of workbench/LifeOps flows.
 - `plugin-goals` is too shallow for the PRD's goal-support behavior.
 - `plugin-browser` is directly useful and should be reused for the visible-browser requirement.
 - `plugin-gmail-watch` is not a user OAuth solution. It is a later-stage server-side ingest optimization after account binding exists.

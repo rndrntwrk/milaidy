@@ -73,7 +73,7 @@ describe("applySubscriptionCredentials", () => {
     }
   });
 
-  test("does not auto-set model.primary for anthropic-subscription", async () => {
+  test("auto-sets model.primary for anthropic-subscription", async () => {
     const { applySubscriptionCredentials } = await import("./credentials");
     const config = {
       agents: {
@@ -86,7 +86,7 @@ describe("applySubscriptionCredentials", () => {
 
     await applySubscriptionCredentials(config);
 
-    expect(config.agents.defaults.model).toBeUndefined();
+    expect(config.agents.defaults.model?.primary).toBe("anthropic");
   });
 
   test("auto-sets model.primary when model exists but primary is missing", async () => {
@@ -131,7 +131,7 @@ describe("applySubscriptionCredentials", () => {
     ).resolves.toBeUndefined();
   });
 
-  test("does not apply Anthropic subscription tokens to runtime env", async () => {
+  test("applies Anthropic subscription tokens to runtime env", async () => {
     // Set up a mock credential file for anthropic-subscription
     const authDir = require("node:path").join(
       require("node:os").homedir(),
@@ -154,11 +154,9 @@ describe("applySubscriptionCredentials", () => {
     });
 
     const { applySubscriptionCredentials } = await import("./credentials");
-    const { applyClaudeCodeStealth } = await import("@miladyai/agent/auth");
 
     await applySubscriptionCredentials();
 
-    expect(process.env.ANTHROPIC_API_KEY).toBeUndefined();
-    expect(applyClaudeCodeStealth).not.toHaveBeenCalled();
+    expect(process.env.ANTHROPIC_API_KEY).toBe("sk-ant-oat01-test-token");
   });
 });

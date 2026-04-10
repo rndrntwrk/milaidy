@@ -5,6 +5,8 @@ Owner: Shaw / Milady
 Related plan: `docs/plans/2026-04-04-milaidy-life-ops-implementation-plan.md`
 Input PRD: `/Users/shawwalters/Downloads/milaidy_prd_v1.docx`
 
+> **Update (2026-04-10):** Milady no longer ships `@elizaos/plugin-todo` (see `plugins.json` and root dependencies). Todos use the workbench API and LifeOps-related runtime tasks. Later sections still name `plugin-todo` where they compare integration options against that historical baseline.
+
 ## 1. Research baseline
 
 ### 1.1 Current Milady state
@@ -24,10 +26,10 @@ Input PRD: `/Users/shawwalters/Downloads/milaidy_prd_v1.docx`
 - Workbench already aggregates `lifeops`, but the chat sidebar still renders a generic todo widget and ignores the richer LifeOps payload.
 - Reminder execution exists, but proactive scheduling is still not wired into durable background execution.
 
-### 1.2 Current `plugin-todo` reality
+### 1.2 Former `plugin-todo` baseline (historical)
 
-- Milady actually ships `@elizaos/plugin-todo@2.0.0-alpha.13-milady.0`, not the older upstream snapshot.
-- The shipped package statically loads in `packages/agent/src/runtime/eliza.ts`.
+- Milady previously shipped `@elizaos/plugin-todo@2.0.0-alpha.13-milady.0`, not the older upstream snapshot; that package has since been removed from the product.
+- The package statically loaded from `packages/agent/src/runtime/eliza.ts`.
 - The shipped plugin auto-bootstraps its own `todo` schema namespace and exposes `createTodoDataService`.
 - Its core record model is still `agentId + worldId + roomId + entityId + todo fields`.
 - Its reminder service still runs its own autonomous loop.

@@ -1707,6 +1707,15 @@ describe("buildCharacterFromConfig", () => {
     expect(char.name).toBe("Reimu");
   });
 
+  it("prefers config.ui.assistant.name when it diverges from agents.list", () => {
+    const config = {
+      agents: { list: [{ id: "main", name: "Chen" }] },
+      ui: { assistant: { name: "Eliza" } },
+    } as Partial<ElizaConfig> as ElizaConfig;
+    const char = buildCharacterFromConfig(config);
+    expect(char.name).toBe("Eliza");
+  });
+
   it("defaults to 'Chen' when no name is configured", () => {
     const char = buildCharacterFromConfig({} as ElizaConfig);
     expect(char.name).toBe("Chen");

@@ -210,7 +210,7 @@ type RuntimeWithModelRegistration = AgentRuntime & {
  * `@miladyai/agent` boot calls its own `collectPluginNames` — Milady's wrapper
  * (which adds Edge TTS) is not used. Register the Edge TTS model handler on
  * the live runtime so core streaming voice (`useModel(TEXT_TO_SPEECH)`) works
- * for swarm / #Chen and matches UI TTS expectations.
+ * for swarm / agent chat sessions and matches UI TTS expectations.
  */
 export async function ensureMiladyTextToSpeechHandler(
   runtime: AgentRuntime,

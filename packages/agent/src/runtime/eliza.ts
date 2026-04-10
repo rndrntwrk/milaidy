@@ -2532,7 +2532,11 @@ export function buildCharacterFromConfig(config: ElizaConfig): Character {
     presetId?: string;
   };
   const language = normalizeCharacterLanguage(uiConfig.language);
-  const configuredName = agentEntry?.name ?? uiConfig.assistant?.name;
+  const configuredUiName = uiConfig.assistant?.name?.trim();
+  const configuredAgentName = agentEntry?.name?.trim();
+  // Prefer the UI-level assistant name when it diverges from the bundled
+  // preset entry so renames take effect immediately across prompts/logging.
+  const configuredName = configuredUiName || configuredAgentName;
   const bundledPreset =
     resolveStylePresetById(uiConfig.presetId, language) ??
     resolveStylePresetByAvatarIndex(uiConfig.avatarIndex, language) ??

@@ -311,15 +311,15 @@ export function resolveConversationGreetingText(
 
   // Prefer explicit UI selections over the loaded character card: users pick a
   // style in onboarding/roster (avatar + preset) while `runtime.character.name`
-  // can still be the default template (e.g. "Chen") until save/restart.
+  // can still reflect the bundled preset name until save/restart.
   const preset =
     resolveStylePresetByAvatarIndex(
       uiConfig?.avatarIndex,
       normalizedLanguage,
     ) ??
     resolveStylePresetById(uiConfig?.presetId, normalizedLanguage) ??
-    resolveStylePresetByName(characterName, normalizedLanguage) ??
-    resolveStylePresetByName(assistantName, normalizedLanguage);
+    resolveStylePresetByName(assistantName, normalizedLanguage) ??
+    resolveStylePresetByName(characterName, normalizedLanguage);
 
   const presetGreeting = pickRandom(preset?.postExamples);
   if (presetGreeting) {

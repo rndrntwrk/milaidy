@@ -241,7 +241,7 @@ function buildGeneratePrompt(
   }
 
   if (field === "chatExamples") {
-    return `Given this character:\n${charSummary}\n\nGenerate 3 example chat conversations showing how this character responds. Output strict JSON only, with no markdown fences and no explanation. The JSON must be an array of conversation groups using this exact schema:\n[\n  {\n    "examples": [\n      { "name": "{{user1}}", "content": { "text": "..." } },\n      { "name": "${context.name?.trim() || "{{agentName}}"}", "content": { "text": "..." } }\n    ]\n  }\n]\n\nEach conversation should contain 2-4 turns. Use the "name" field, not "user" or "role". Use content.text strings only.`;
+    return `Given this character:\n${charSummary}\n\nGenerate 3 example chat conversations showing how this character responds. Output strict JSON only, with no markdown fences and no explanation. The JSON must be an array of conversation groups using this exact schema:\n[\n  {\n    "examples": [\n      { "name": "{{user1}}", "content": { "text": "..." } },\n      { "name": "{{agentName}}", "content": { "text": "..." } }\n    ]\n  }\n]\n\nEach conversation should contain 2-4 turns. Use the "name" field, not "user" or "role". Use content.text strings only.`;
   }
 
   const existing =
