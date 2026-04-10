@@ -29,12 +29,16 @@
       "@elizaos/core": [
         "./eliza/packages/typescript/src/index.ts"
       ],
+      "@elizaos/core/roles": [
+        "./packages/agent/src/runtime/roles/src/index.ts"
+      ],
       "@elizaos/core/*": ["./eliza/packages/typescript/src/*"]
     }
   },
   "include": [
     "packages/app-core/src/**/*",
-    "packages/agent/src/external-modules.d.ts"
+    "packages/agent/src/external-modules.d.ts",
+    "packages/agent/src/types/elizaos-action-augments.d.ts"
   ],
   "exclude": [
     "node_modules",

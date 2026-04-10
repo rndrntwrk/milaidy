@@ -7,6 +7,34 @@ declare module "@elizaos/plugin-commands";
 declare module "@elizaos/plugin-secrets-manager";
 declare module "@elizaos/signal-native";
 declare module "qrcode";
+declare module "@elizaos/plugin-cron";
+declare module "@elizaos/plugin-experience";
+declare module "@elizaos/plugin-local-embedding";
+declare module "@elizaos/plugin-ollama";
+declare module "@elizaos/plugin-openai";
+declare module "@elizaos/plugin-personality";
+declare module "@elizaos/plugin-shell";
+declare module "@elizaos/plugin-trust";
+declare module "abitype" {
+  export type TypedData = Record<
+    string,
+    ReadonlyArray<{ name: string; type: string; [key: string]: unknown }>
+  >;
+  export type TypedDataDomain = {
+    name?: string;
+    version?: string;
+    chainId?: bigint | number | undefined;
+    verifyingContract?: `0x${string}` | undefined;
+    salt?: `0x${string}` | undefined;
+  };
+  export type TypedDataToPrimitiveTypes<T extends TypedData> = {
+    [K in keyof T]: unknown;
+  };
+  export type Address = `0x${string}`;
+  export type TypedDataParameter = { name: string; type: string };
+  export type TypedDataType = string;
+}
+
 
 declare module "@elizaos/plugin-plugin-manager" {
   import type { IAgentRuntime, Plugin } from "@elizaos/core";

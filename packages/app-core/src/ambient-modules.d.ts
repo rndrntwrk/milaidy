@@ -24,3 +24,6 @@ declare module "@elizaos/plugin-groq" {
   const groqPlugin: unknown;
   export default groqPlugin;
 }
+
+declare module "@elizaos/plugin-edge-tts";
+declare module "@elizaos/plugin-edge-tts/node";

@@ -51,12 +51,16 @@ export {
   checkSenderPrivateAccess,
   checkSenderRole,
   getConfiguredOwnerEntityIds,
+  getConnectorAdminWhitelist,
   getEntityRole,
   hasConfiguredCanonicalOwner,
+  matchEntityToConnectorAdminWhitelist,
   normalizeRole,
   resolveCanonicalOwnerId,
   resolveCanonicalOwnerIdForMessage,
+  resolveEntityRole,
   resolveWorldForMessage,
+  setConnectorAdminWhitelist,
   setEntityRole,
 } from "./utils";
 
