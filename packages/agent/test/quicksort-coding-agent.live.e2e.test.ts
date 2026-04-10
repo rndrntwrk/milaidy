@@ -262,4 +262,70 @@ describeIf(
     },
     8 * 60_000,
   );
+
+  it(
+    "uses Codex to draft a short markdown document from a natural-language request",
+    async () => {
+      const [preflight] = await service.checkAvailableAgents(["codex"]);
+      expect(preflight?.installed).toBe(true);
+
+      const fileName = "morning-news-brief.md";
+      const filePath = path.join(workdir, fileName);
+      const sentinel = "LIVE_DRAFT_DONE";
+
+      const spawnResult = await spawnAgentAction.handler(
+        runtime as unknown as IAgentRuntime,
+        createMessage({
+          agentType: "codex",
+          workdir,
+          task:
+            `Create ${fileName} in the current directory. ` +
+            "Write a concise markdown document for a user-facing feature brief about a recurring 9am heartbeat that summarizes financial and international news every morning. " +
+            "Include a title, a one-sentence summary, and exactly three bullet points covering what it does, when it runs, and why it is useful. " +
+            `After writing the file, print exactly "${sentinel}". ` +
+            "Do not ask follow-up questions.",
+        }) as never,
+        undefined,
+        {},
+        undefined,
+      );
+
+      expect(spawnResult?.success).toBe(true);
+      expect(typeof spawnResult?.data?.sessionId).toBe("string");
+      const sessionId = String(spawnResult?.data?.sessionId ?? "");
+      expect(sessionId.length).toBeGreaterThan(0);
+
+      await waitFor(async () => {
+        const session = service.getSession(sessionId);
+        if (!session) {
+          throw new Error("session disappeared before completion");
+        }
+        const output = cleanForChat(await service.getSessionOutput(sessionId));
+        if (session.status === "error" || session.status === "stopped") {
+          if (!fs.existsSync(filePath)) {
+            throw new Error(
+              `session ended with status ${session.status}. Output: ${output.slice(-800)}`,
+            );
+          }
+        }
+        if (!fs.existsSync(filePath)) {
+          return false;
+        }
+        const fileText = fs.readFileSync(filePath, "utf8");
+        if (!fileText.includes("#")) {
+          return false;
+        }
+        return output.includes(sentinel);
+      }, 6 * 60_000, 3_000);
+
+      const fileText = fs.readFileSync(filePath, "utf8");
+      expect(fileText).toContain("#");
+      expect(fileText).toMatch(/9(?::00)?\s*a\.?m\.?/i);
+      expect(fileText.toLowerCase()).toContain("financial");
+      expect(fileText.toLowerCase()).toContain("international");
+      expect(fileText.toLowerCase()).toContain("heartbeat");
+      expect((fileText.match(/^- /gm) ?? []).length).toBe(3);
+    },
+    8 * 60_000,
+  );
 });

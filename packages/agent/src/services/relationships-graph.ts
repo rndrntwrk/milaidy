@@ -851,6 +851,7 @@ function buildClusters(
   entityIds: UUID[],
   relationships: Relationship[],
   contexts: Map<UUID, EntityContext>,
+  ownerEntityId?: UUID | null,
 ): ClusterRecord[] {
   const parent = new Map<UUID, UUID>();
   for (const entityId of entityIds) {
@@ -940,6 +941,14 @@ function buildClusters(
 
   return Array.from(grouped.values()).map((memberEntityIds) => {
     const sortedMembers = [...memberEntityIds].sort((left, right) => {
+      if (ownerEntityId) {
+        if (left === ownerEntityId) {
+          return -1;
+        }
+        if (right === ownerEntityId) {
+          return 1;
+        }
+      }
       const scoreDiff = scoreEntity(right) - scoreEntity(left);
       if (scoreDiff !== 0) {
         return scoreDiff;
@@ -1095,6 +1104,9 @@ function buildSummaries(
         preferredProfileHandle(right),
       );
     });
+    for (const profile of sortedProfiles) {
+      platforms.add(normalizeProfileSource(profile.source));
+    }
 
     return {
       groupId: cluster.groupId,
@@ -1815,7 +1827,12 @@ async function buildGraphModel(
       ? await runtime.getRelationships({ entityIds, limit: 10000 })
       : [];
   const factCounts = await countFacts(runtime, entityIds);
-  const clustersList = buildClusters(entityIds, relationships, entityContexts);
+  const clustersList = buildClusters(
+    entityIds,
+    relationships,
+    entityContexts,
+    ownerEntityId,
+  );
   const clusters = new Map(
     clustersList.map((cluster) => [cluster.groupId, cluster]),
   );

@@ -65,9 +65,11 @@ const WEAK_CONFIRMATION_PATTERN =
 const CALENDAR_SUBJECT_PATTERN =
   /\b(calendar|schedule|event|events|flight|flights|fly|travel|trip|return|meeting|appointment)\b/;
 const FOLLOW_UP_PATTERN =
-  /\b(today|tomorrow|tonight|this week|next week|the week after|week after next|this month|next month|find it|look it up|check again|try to find)\b/i;
+  /\b(today|tomorrow|tonight|this week|next week|the week after|week after next|this month|next month|find it|look it up|check again|try to find|try again|retry)\b/i;
 const PARAMETER_DOC_NOISE_PATTERN =
-  /\b(?:actions?|params?|parameters?|query\?:string|subaction\?:string|details\?:object|required parameter|supported keys include|match against titles|structured calendar arguments)\b/i;
+  /\b(?:actions?|params?|parameters?|query\?:string|subaction\?:string|details\?:object|required parameter|supported keys include|may include:|match against titles|structured calendar arguments|structured data when needed|boolean when)\b|\b\w+\?:\w+\b/i;
+const WEAK_CALENDAR_QUERY_PATTERN =
+  /^(?:again|retry|try again|check again|find it|look it up|it|that|them|those|this)$/i;
 const CALENDAR_DETAIL_ALIASES = {
   calendarId: ["calendarid", "calendar_id"],
   timeMin: ["timemin", "time_min"],
@@ -128,9 +130,18 @@ function normalizeCalendarSearchQueryValue(
     return undefined;
   }
 
+  if (PARAMETER_DOC_NOISE_PATTERN.test(value)) {
+    return undefined;
+  }
+
   const cleaned = normalizeText(value)
     .replace(/\b(?:actions?|params?|parameters?)\b[:;]*/g, "")
     .replace(/\b\w+\?:\w+(?:\s+\[[^\]]+\])?\s*-\s*/g, " ")
+    .replace(
+      /\b(?:search|find|look(?:ing)? for|show me|check)\s+(?:my\s+)?(?:calendar|schedule)\s+for\b/g,
+      "",
+    )
+    .replace(/\b(?:search|find|look(?:ing)? for|show me|check)\b/g, "")
     .replace(/\b(?:on|in) my calendar\b/g, "")
     .replace(
       /\b(?:today|tomorrow|tonight|this week(?:end)?|next week(?:end)?|week after(?: next)?|this month|next month|this year|next year)\b/g,
@@ -148,6 +159,7 @@ function normalizeCalendarSearchQueryValue(
   if (
     !cleaned ||
     ["calendar", "schedule", "event", "events"].includes(cleaned) ||
+    WEAK_CALENDAR_QUERY_PATTERN.test(cleaned) ||
     PARAMETER_DOC_NOISE_PATTERN.test(cleaned)
   ) {
     return undefined;
@@ -251,6 +263,9 @@ function scoreIntentCandidate(value: string): number {
   if (WEAK_CONFIRMATION_PATTERN.test(normalized)) {
     score -= 200;
   }
+  if (PARAMETER_DOC_NOISE_PATTERN.test(normalized)) {
+    score -= 500;
+  }
   if (/\b(calendar|schedule|event|events)\b/.test(normalized)) {
     score += 10;
   }
@@ -278,16 +293,68 @@ function scoreIntentCandidate(value: string): number {
   return score;
 }
 
+function looksLikeCalendarResultSummary(value: string): boolean {
+  const trimmed = value.trim();
+  return (
+    /^(?:events? (?:today|tomorrow)|found \d+ calendar event|no calendar events matched|i couldn't find any upcoming calendar events|your matching (?:flight|calendar event) is|next event:|here's what's on your calendar while you're in)/i.test(
+      trimmed,
+    ) || /^- \*\*/.test(trimmed)
+  );
+}
+
+function looksLikeNarrativeCalendarQuery(value: string): boolean {
+  const normalized = normalizeText(value);
+  if (!normalized) {
+    return false;
+  }
+
+  return (
+    /\b(?:tell me if|let me know if|whether|can you|could you|would you|do i have|are there|what(?:'s| is) on|what(?: event| events)? do i have|when do i|try to find)\b/.test(
+      normalized,
+    ) &&
+    /\b(?:calendar|schedule|event|events|flight|flights|travel|trip|appointment|meeting|hotel|stay|return)\b/.test(
+      normalized,
+    )
+  );
+}
+
 function resolveCalendarIntent(
   paramsIntent: string | undefined,
   message: Parameters<typeof messageText>[0],
   state: State | undefined,
 ): string {
+  const normalizeFollowUpConstraint = (value: string) => {
+    const cleaned = value
+      .trim()
+      .replace(
+        /^(?:yes|yeah|yep|yup|ok|okay|sure|please|please do|do it|go ahead|sounds good)\b[\s,.-]*/i,
+        "",
+      )
+      .replace(/^(?:and\s+|also\s+)/i, "")
+      .replace(
+        /^(?:what about|how about|and the|also the|or the|only the|just the)\s+/i,
+        "",
+      )
+      .trim();
+    if (
+      /^(?:try\s+(?:it|again|that)|retry|do\s+(?:it\s+)?again|one\s+more\s+time|proceed|go for it)$/i.test(
+        cleaned,
+      )
+    ) {
+      return "";
+    }
+    return cleaned;
+  };
   const currentMessageText = messageText(message).trim();
   const normalizedCurrentMessage = normalizeText(currentMessageText);
+  const isRefinement =
+    /^(?:what about|how about|and the|also the|or the|only the|just the)\b/i.test(
+      normalizedCurrentMessage,
+    );
   if (
     currentMessageText &&
-    CALENDAR_SUBJECT_PATTERN.test(normalizedCurrentMessage)
+    CALENDAR_SUBJECT_PATTERN.test(normalizedCurrentMessage) &&
+    !isRefinement
   ) {
     return currentMessageText;
   }
@@ -295,15 +362,29 @@ function resolveCalendarIntent(
   if (
     currentMessageText &&
     (WEAK_CONFIRMATION_PATTERN.test(normalizedCurrentMessage) ||
-      FOLLOW_UP_PATTERN.test(normalizedCurrentMessage))
+      FOLLOW_UP_PATTERN.test(normalizedCurrentMessage) ||
+      isRefinement)
   ) {
-    const recentRelevantIntent = [...stateTextCandidates(state)]
-      .reverse()
-      .find((candidate) =>
-        CALENDAR_SUBJECT_PATTERN.test(normalizeText(candidate)),
-      );
+    const followUpCandidates = stateTextCandidates(state).filter(
+      (candidate) =>
+        CALENDAR_SUBJECT_PATTERN.test(normalizeText(candidate)) &&
+        !looksLikeCalendarResultSummary(candidate) &&
+        normalizeText(candidate) !== normalizedCurrentMessage,
+    );
+    const recentRelevantIntent =
+      followUpCandidates.length > 0
+        ? followUpCandidates.reduce((best, current) =>
+            scoreIntentCandidate(current) >= scoreIntentCandidate(best)
+              ? current
+              : best,
+          )
+        : undefined;
     if (recentRelevantIntent) {
-      return recentRelevantIntent;
+      const followUpConstraint =
+        normalizeFollowUpConstraint(currentMessageText);
+      return followUpConstraint
+        ? `${recentRelevantIntent} ${followUpConstraint}`.trim()
+        : recentRelevantIntent;
     }
   }
 
@@ -774,18 +855,77 @@ function sanitizeCalendarQuery(
     raw.includes("match against titles") ||
     raw.includes("structured calendar arguments")
   ) {
-    return inferCalendarSearchQuery(intent);
+    return undefined;
   }
-  const cleaned =
-    inferCalendarSearchQuery(query) ?? normalizeCalendarSearchQueryValue(query);
+  const cleaned = normalizeCalendarSearchQueryValue(query);
   if (
     !cleaned ||
     PARAMETER_DOC_NOISE_PATTERN.test(cleaned) ||
+    WEAK_CALENDAR_QUERY_PATTERN.test(cleaned) ||
     cleaned.length > 160
   ) {
-    return inferCalendarSearchQuery(intent);
+    return undefined;
+  }
+  const inferred = inferCalendarSearchQuery(intent);
+  if (
+    inferred &&
+    looksLikeNarrativeCalendarQuery(cleaned) &&
+    normalizeText(inferred) !== normalizeText(cleaned)
+  ) {
+    return undefined;
   }
   return cleaned;
+}
+
+function scoreCalendarQueryCandidate(query: string, intent: string): number {
+  const normalized = normalizeText(query);
+  if (!normalized) {
+    return Number.NEGATIVE_INFINITY;
+  }
+
+  let score = 0;
+  if (PARAMETER_DOC_NOISE_PATTERN.test(normalized)) {
+    score -= 500;
+  }
+  if (looksLikeNarrativeCalendarQuery(normalized)) {
+    score -= 120;
+  }
+  if (WEAK_CALENDAR_QUERY_PATTERN.test(normalized)) {
+    score -= 120;
+  }
+
+  const tokens = tokenizeForSearch(normalized);
+  if (tokens.length <= 4) {
+    score += 12;
+  } else if (tokens.length >= 8) {
+    score -= 15;
+  }
+
+  const inferredQueries = inferCalendarSearchQueries(intent).map((value) =>
+    normalizeText(value),
+  );
+  if (inferredQueries.includes(normalized)) {
+    score += 60;
+  }
+  for (const inferredQuery of inferredQueries) {
+    if (!inferredQuery) {
+      continue;
+    }
+    if (normalized.includes(inferredQuery) || inferredQuery.includes(normalized)) {
+      score += 18;
+    }
+    const inferredTokens = new Set(tokenizeForSearch(inferredQuery));
+    score += tokens.filter((token) => inferredTokens.has(token)).length * 8;
+  }
+
+  if (
+    /\b(flight|flights|travel|trip|return|back|home)\b/.test(normalizeText(intent)) &&
+    /\b(flight|flights|travel|trip|return|back|home)\b/.test(normalized)
+  ) {
+    score += 12;
+  }
+
+  return score;
 }
 
 function eventDateSearchTerms(event: LifeOpsCalendarEvent): Set<string> {
@@ -839,6 +979,7 @@ async function extractCalendarSearchQueriesWithLlm(
   const prompt = [
     "Extract up to 3 short calendar search queries for a calendar event lookup.",
     "Use the current request plus recent conversation context.",
+    "If the current request is vague or a follow-up, recover the subject from recent conversation and apply the new constraint from the current request.",
     "Focus on people, places, flights, itinerary, appointments, and explicit dates.",
     "If the request is about a date, include a date query like april 12 or 2026-04-12.",
     "Return XML only with query1, query2, and query3. Leave fields empty when not useful.",
@@ -890,8 +1031,18 @@ async function resolveCalendarSearchQueries(
   explicitQueries: Array<string | undefined>,
   intent: string,
 ): Promise<string[]> {
-  const providedQueries = dedupeCalendarQueries(explicitQueries);
-  if (providedQueries.length > 0) {
+  const providedQueries = dedupeCalendarQueries(
+    explicitQueries.map((query) => sanitizeCalendarQuery(query, intent)),
+  );
+  if (
+    providedQueries.length > 0 &&
+    providedQueries.every(
+      (query) =>
+        !looksLikeNarrativeCalendarQuery(query) &&
+        !WEAK_CALENDAR_QUERY_PATTERN.test(query) &&
+        !PARAMETER_DOC_NOISE_PATTERN.test(query),
+    )
+  ) {
     return providedQueries;
   }
 
@@ -902,12 +1053,19 @@ async function resolveCalendarSearchQueries(
     state,
     intent,
   );
-  // Sanitize fallback queries — LLM extraction can produce parameter-doc
-  // noise that the explicit-query path already strips.
-  const sanitized = [...heuristicQueries, ...llmQueries].map((query) =>
-    sanitizeCalendarQuery(query, intent),
+  const stateQueries = stateTextCandidates(state)
+    .reverse()
+    .flatMap((candidate) => inferCalendarSearchQueries(candidate));
+  const candidates = dedupeCalendarQueries(
+    [...providedQueries, ...llmQueries, ...heuristicQueries, ...stateQueries].map(
+      (query) => sanitizeCalendarQuery(query, intent),
+    ),
   );
-  return dedupeCalendarQueries(sanitized);
+  return [...candidates].sort(
+    (left, right) =>
+      scoreCalendarQueryCandidate(right, intent) -
+      scoreCalendarQueryCandidate(left, intent),
+  );
 }
 
 function inferCreateEventTitle(intent: string): string | undefined {
@@ -1033,7 +1191,8 @@ async function inferCreateEventDetails(
   const currentMessage = messageText(message).trim();
   const prompt = [
     "Extract calendar event creation fields from the request.",
-    "Use recent conversation only as context.",
+    "Use the current request plus recent conversation context.",
+    "If the current request is a follow-up, recover the event subject from recent conversation and apply new timing or location constraints from the current request.",
     "Return XML only. Leave fields empty when unknown.",
     "If a start time or window is implied but duration is not explicit, infer a reasonable positive duration.",
     "For short prep or reminder blocks, use at least 15 minutes instead of 0.",

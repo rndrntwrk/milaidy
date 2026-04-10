@@ -600,6 +600,78 @@ describe("calendarAction", () => {
     expect(result?.text).not.toContain("Fairfield");
   });
 
+  it("combines recent calendar context with a 'what about next week' refinement", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-09T22:53:00-07:00"));
+    mockGetCalendarFeed.mockResolvedValue({
+      calendarId: "primary",
+      events: [
+        {
+          id: "evt-return",
+          externalId: "ext-return",
+          agentId: "agent-1",
+          provider: "google",
+          side: "owner",
+          calendarId: "primary",
+          title: "Flight to San Francisco (WN 2287)",
+          description: "return to SFO",
+          location: "Denver DEN",
+          status: "confirmed",
+          startAt: "2026-04-18T20:10:00.000Z",
+          endAt: "2026-04-18T22:55:00.000Z",
+          isAllDay: false,
+          timezone: "UTC",
+          htmlLink: null,
+          conferenceLink: null,
+          organizer: null,
+          attendees: [],
+          metadata: {},
+          syncedAt: "2026-04-09T16:00:00.000Z",
+          updatedAt: "2026-04-09T16:00:00.000Z",
+        },
+      ],
+      source: "synced",
+      timeMin: "2026-04-16T07:00:00.000Z",
+      timeMax: "2026-04-23T07:00:00.000Z",
+      syncedAt: "2026-04-10T05:53:00.000Z",
+    });
+
+    const result = await calendarAction.handler?.(
+      runtime,
+      msg("what about next week?"),
+      {
+        values: {
+          recentMessages:
+            "user: do i have any flights this week?\nassistant: Found 1 calendar event for \"flight\" this week:\n- **Flight to Denver (WN 3677)** (Apr 11, 2:25 PM)\nuser: what about next week?",
+        },
+        data: {},
+      } as never,
+      {
+        parameters: {
+          subaction: "feed",
+          details: {
+            timeZone: "America/Los_Angeles",
+          },
+        },
+      } as never,
+    );
+
+    expect(mockGetCalendarFeed).toHaveBeenCalledWith(
+      expect.any(URL),
+      expect.objectContaining({
+        timeZone: "America/Los_Angeles",
+        timeMin: "2026-04-16T07:00:00.000Z",
+        timeMax: "2026-04-23T07:00:00.000Z",
+      }),
+    );
+    expect(result?.success).toBe(true);
+    expect(result?.text).toContain("Flight to San Francisco");
+    expect(result?.text).not.toContain("Flight to Denver");
+    expect(result?.data).toMatchObject({
+      query: "flight",
+    });
+  });
+
   it("keeps schedule questions in feed mode instead of inferring create_event", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-09T22:53:00-07:00"));
@@ -981,6 +1053,84 @@ describe("calendarAction", () => {
     expect(result?.text).toContain("Flight to San Francisco");
     expect(result?.text).not.toContain("keyword query for search_events");
     expect(result?.text).not.toContain("supported keys include");
+  });
+
+  it("ignores narrative calendar query params and falls back to the inferred search query", async () => {
+    mockGetCalendarFeed.mockResolvedValue({
+      calendarId: "primary",
+      events: [
+        {
+          id: "evt-flight",
+          externalId: "ext-flight",
+          agentId: "agent-1",
+          provider: "google",
+          side: "owner",
+          calendarId: "primary",
+          title: "Flight to Denver (WN 3677)",
+          description: "",
+          location: "San Francisco SFO",
+          status: "confirmed",
+          startAt: "2026-04-11T21:25:00.000Z",
+          endAt: "2026-04-12T00:05:00.000Z",
+          isAllDay: false,
+          timezone: "UTC",
+          htmlLink: null,
+          conferenceLink: null,
+          organizer: null,
+          attendees: [],
+          metadata: {},
+          syncedAt: "2026-04-09T16:00:00.000Z",
+          updatedAt: "2026-04-09T16:00:00.000Z",
+        },
+        {
+          id: "evt-dentist",
+          externalId: "ext-dentist",
+          agentId: "agent-1",
+          provider: "google",
+          side: "owner",
+          calendarId: "primary",
+          title: "Dentist appointment",
+          description: "",
+          location: "Main St Dental",
+          status: "confirmed",
+          startAt: "2026-04-12T18:00:00.000Z",
+          endAt: "2026-04-12T19:00:00.000Z",
+          isAllDay: false,
+          timezone: "UTC",
+          htmlLink: null,
+          conferenceLink: null,
+          organizer: null,
+          attendees: [],
+          metadata: {},
+          syncedAt: "2026-04-09T16:00:00.000Z",
+          updatedAt: "2026-04-09T16:00:00.000Z",
+        },
+      ],
+      source: "synced",
+      timeMin: "2026-04-09T00:00:00.000Z",
+      timeMax: "2026-05-09T00:00:00.000Z",
+      syncedAt: "2026-04-09T16:00:00.000Z",
+    });
+
+    const result = await calendarAction.handler?.(
+      runtime,
+      msg("can you search my calendar and tell me if i have any flights to denver?"),
+      {} as never,
+      {
+        parameters: {
+          subaction: "search_events",
+          query:
+            "can you search my calendar and tell me if i have any flights to denver?",
+        },
+      } as never,
+    );
+
+    expect(result?.success).toBe(true);
+    expect(result?.text).toContain("Flight to Denver");
+    expect(result?.text).not.toContain("Dentist appointment");
+    expect(result?.data).toMatchObject({
+      query: "flight denver",
+    });
   });
 
   it("only emits one grounded callback payload for a calendar answer", async () => {

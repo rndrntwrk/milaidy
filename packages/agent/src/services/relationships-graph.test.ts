@@ -328,6 +328,11 @@ describe("relationships-graph", () => {
     expect(owner).toMatchObject({
       displayName: "shawmakesmagic",
       isOwner: true,
+      platforms: expect.arrayContaining([
+        "client_chat",
+        "discord",
+        "elizacloud",
+      ]),
     });
     expect(owner?.profiles).toEqual(
       expect.arrayContaining([
@@ -345,6 +350,100 @@ describe("relationships-graph", () => {
           source: "elizacloud",
           userId: "ec-user-123",
           canonical: true,
+        }),
+      ]),
+    );
+  });
+
+  it("prefers the canonical owner when a stale connector identity is clustered into the same person", async () => {
+    const ownerEntityId = "owner-live" as UUID;
+    const staleDiscordEntityId = "owner-discord-legacy" as UUID;
+    const teammateEntityId = "person-teammate-2" as UUID;
+    const { runtime } = createGraphRuntime({
+      entities: [
+        {
+          agentId: "agent-1" as UUID,
+          id: ownerEntityId,
+          names: ["shaw"],
+          metadata: {
+            discord: {
+              id: "498273781589213185",
+              userId: "498273781589213185",
+              username: "shawmakesmagic",
+              globalName: "Shaw",
+            },
+          },
+        } as Entity,
+        {
+          agentId: "agent-1" as UUID,
+          id: staleDiscordEntityId,
+          names: ["shawmakesmagic"],
+          metadata: {
+            discord: {
+              id: "498273781589213185",
+              userId: "498273781589213185",
+              username: "shawmakesmagic",
+              globalName: "Shaw",
+            },
+          },
+        } as Entity,
+        {
+          agentId: "agent-1" as UUID,
+          id: teammateEntityId,
+          names: ["teammate"],
+          metadata: {},
+        } as Entity,
+      ],
+      messages: [
+        {
+          id: "message-owner-live-1" as UUID,
+          entityId: ownerEntityId,
+          roomId,
+          content: { text: "owner ping" },
+          createdAt: 40,
+        },
+        {
+          id: "message-owner-live-2" as UUID,
+          entityId: teammateEntityId,
+          roomId,
+          content: { text: "reply", inReplyTo: "message-owner-live-1" as UUID },
+          createdAt: 41,
+        },
+      ],
+      settings: {
+        ELIZA_ADMIN_ENTITY_ID: ownerEntityId,
+      },
+    });
+    const relationshipsService = createRelationshipsService([]);
+
+    const service = createNativeRelationshipsGraphService(
+      runtime,
+      relationshipsService,
+    );
+
+    const snapshot = await service.getGraphSnapshot();
+    const owner = snapshot.people.find((person) => person.isOwner);
+
+    expect(owner).toMatchObject({
+      primaryEntityId: ownerEntityId,
+      groupId: ownerEntityId,
+      memberEntityIds: expect.arrayContaining([
+        ownerEntityId,
+        staleDiscordEntityId,
+      ]),
+      platforms: expect.arrayContaining(["client_chat", "discord"]),
+    });
+    expect(owner?.profiles).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          source: "client_chat",
+          userId: ownerEntityId,
+          canonical: true,
+        }),
+        expect.objectContaining({
+          source: "discord",
+          userId: "498273781589213185",
+          handle: "shawmakesmagic",
         }),
       ]),
     );

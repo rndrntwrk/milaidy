@@ -64,6 +64,8 @@ const FOLLOW_UP_PATTERN =
   /\b(today|yesterday|this week|last week|last few weeks|past few weeks|next week|last month|search again|check again|look again|try again|try it|retry|from them|from him|from her|unread|important|reply needed|needs response|read it|read that|read them|what does it say|what's in it|show me the email)\b/i;
 const PARAMETER_DOC_NOISE_PATTERN =
   /\b(?:actions?|params?|parameters?|required parameter|structured gmail arguments|supported keys include|may include:|structured data when needed|boolean when)\b|\b\w+\?:\w+\b/i;
+const WEAK_GMAIL_QUERY_PATTERN =
+  /^(?:again|retry|try again|search again|check again|look again|it|that|them|those|this)$/i;
 const GMAIL_READ_PATTERN =
   /\b(read|open|show(?: me)?|what does (?:it|that|this) say|what(?:'s| is) in (?:it|that|this)|full (?:email|message)|message body)\b/i;
 const GMAIL_DETAIL_ALIASES = {
@@ -359,6 +361,7 @@ function normalizeGmailSearchQueryValue(
       "my mail",
       "my gmail",
     ].includes(cleaned) ||
+    WEAK_GMAIL_QUERY_PATTERN.test(cleaned) ||
     looksLikeNarrativeEmailQuery(cleaned) ||
     PARAMETER_DOC_NOISE_PATTERN.test(cleaned)
   ) {
@@ -751,7 +754,7 @@ function sanitizeGmailQuery(
     raw.includes("supported keys include") ||
     raw.includes("structured gmail arguments")
   ) {
-    return inferGmailSearchQuery(intent);
+    return undefined;
   }
   const cleaned = normalizeGmailSearchQueryValue(query);
   if (
@@ -759,7 +762,7 @@ function sanitizeGmailQuery(
     cleaned.length > 200 ||
     ["query", "search query", "gmail query"].includes(cleaned)
   ) {
-    return inferGmailSearchQuery(intent);
+    return undefined;
   }
   const inferred = inferGmailSearchQuery(intent);
   if (
@@ -769,7 +772,7 @@ function sanitizeGmailQuery(
       cleaned,
     )
   ) {
-    return inferred;
+    return undefined;
   }
   return cleaned;
 }
@@ -785,6 +788,9 @@ function scoreGmailQueryCandidate(query: string, intent: string): number {
     score -= 500;
   }
   if (looksLikeNarrativeEmailQuery(normalized)) {
+    score -= 120;
+  }
+  if (WEAK_GMAIL_QUERY_PATTERN.test(normalized)) {
     score -= 120;
   }
   if (
@@ -923,6 +929,21 @@ async function resolveGmailSearchQueries(
   explicitQueries: Array<string | undefined>,
   intent: string,
 ): Promise<string[]> {
+  const providedQueries = dedupeQueries(
+    explicitQueries.map((query) => sanitizeGmailQuery(query, intent)),
+  );
+  if (
+    providedQueries.length > 0 &&
+    providedQueries.every(
+      (query) =>
+        !looksLikeNarrativeEmailQuery(query) &&
+        !WEAK_GMAIL_QUERY_PATTERN.test(query) &&
+        !PARAMETER_DOC_NOISE_PATTERN.test(query),
+    )
+  ) {
+    return providedQueries;
+  }
+
   const llmQueries = await extractGmailSearchQueriesWithLlm(
     runtime,
     message,
@@ -934,7 +955,7 @@ async function resolveGmailSearchQueries(
     .reverse()
     .flatMap((candidate) => inferGmailSearchQueries(candidate));
   const candidates = dedupeQueries(
-    [...explicitQueries, ...llmQueries, ...heuristicQueries, ...stateQueries].map(
+    [...providedQueries, ...llmQueries, ...heuristicQueries, ...stateQueries].map(
       (query) => sanitizeGmailQuery(query, intent),
     ),
   );
