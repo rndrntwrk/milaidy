@@ -145,6 +145,53 @@ describe("calendarAction", () => {
     expect(result?.text).toContain("Team sync");
   });
 
+  it("repairs a bad requested subaction with an LLM calendar plan", async () => {
+    mockUseModel.mockResolvedValue(
+      '{"subaction":"search_events","queries":["dentist appointment"]}',
+    );
+    mockGetCalendarFeed.mockResolvedValue({
+      calendarId: "primary",
+      events: [
+        {
+          id: "evt-dentist",
+          externalId: "ext-dentist",
+          agentId: "agent-1",
+          provider: "google",
+          side: "owner",
+          calendarId: "primary",
+          title: "Dentist appointment",
+          description: "Routine cleaning",
+          location: "Market Street Dental",
+          status: "confirmed",
+          startAt: "2026-04-12T17:00:00.000Z",
+          endAt: "2026-04-12T18:00:00.000Z",
+          isAllDay: false,
+          timezone: "UTC",
+          htmlLink: null,
+          conferenceLink: null,
+          organizer: null,
+          attendees: [],
+          metadata: {},
+          syncedAt: "2026-04-09T16:00:00.000Z",
+          updatedAt: "2026-04-09T16:00:00.000Z",
+        },
+      ],
+      source: "cache",
+      timeMin: "2026-04-09T00:00:00.000Z",
+      timeMax: "2026-05-09T00:00:00.000Z",
+      syncedAt: "2026-04-09T16:00:00.000Z",
+    });
+
+    const result = await invoke("what am i doing about the dentist", {
+      subaction: "feed",
+    });
+
+    expect(mockUseModel).toHaveBeenCalled();
+    expect(mockGetCalendarFeed).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({ success: true });
+    expect(result?.text).toContain("Dentist appointment");
+  });
+
   it("uses timezone-aware tomorrow windows and replies through the action callback", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-09T22:53:00-07:00"));
@@ -438,8 +485,10 @@ describe("calendarAction", () => {
     expect(result?.text).not.toContain("Workout");
     expect(result?.data).toMatchObject({
       query: "april 12",
-      queries: ["april 12", "dentist"],
     });
+    expect(result?.data?.queries).toEqual(
+      expect.arrayContaining(["april 12", "dentist"]),
+    );
   });
 
   it("recovers a flight search from recent conversation on confirmation turns", async () => {
@@ -1133,6 +1182,89 @@ describe("calendarAction", () => {
     });
   });
 
+  it("falls back to an LLM-extracted calendar query when a non-English params.query is just the echoed request", async () => {
+    mockUseModel.mockResolvedValue(
+      '{"subaction":"search_events","queries":["flight denver"]}',
+    );
+    mockGetCalendarFeed.mockResolvedValue({
+      calendarId: "primary",
+      events: [
+        {
+          id: "evt-flight",
+          externalId: "ext-flight",
+          agentId: "agent-1",
+          provider: "google",
+          side: "owner",
+          calendarId: "primary",
+          title: "Flight to Denver (WN 3677)",
+          description: "",
+          location: "San Francisco SFO",
+          status: "confirmed",
+          startAt: "2026-04-11T21:25:00.000Z",
+          endAt: "2026-04-12T00:05:00.000Z",
+          isAllDay: false,
+          timezone: "UTC",
+          htmlLink: null,
+          conferenceLink: null,
+          organizer: null,
+          attendees: [],
+          metadata: {},
+          syncedAt: "2026-04-09T16:00:00.000Z",
+          updatedAt: "2026-04-09T16:00:00.000Z",
+        },
+        {
+          id: "evt-dentist",
+          externalId: "ext-dentist",
+          agentId: "agent-1",
+          provider: "google",
+          side: "owner",
+          calendarId: "primary",
+          title: "Dentist appointment",
+          description: "",
+          location: "Main St Dental",
+          status: "confirmed",
+          startAt: "2026-04-12T18:00:00.000Z",
+          endAt: "2026-04-12T19:00:00.000Z",
+          isAllDay: false,
+          timezone: "UTC",
+          htmlLink: null,
+          conferenceLink: null,
+          organizer: null,
+          attendees: [],
+          metadata: {},
+          syncedAt: "2026-04-09T16:00:00.000Z",
+          updatedAt: "2026-04-09T16:00:00.000Z",
+        },
+      ],
+      source: "synced",
+      timeMin: "2026-04-09T00:00:00.000Z",
+      timeMax: "2026-05-09T00:00:00.000Z",
+      syncedAt: "2026-04-09T16:00:00.000Z",
+    });
+
+    const request =
+      "puedes buscar en mi calendario y decirme si tengo un vuelo a denver";
+    const result = await calendarAction.handler?.(
+      runtime,
+      msg(request),
+      {} as never,
+      {
+        parameters: {
+          subaction: "search_events",
+          query: request,
+        },
+      } as never,
+    );
+
+    expect(mockUseModel).toHaveBeenCalled();
+    expect(result?.success).toBe(true);
+    expect(result?.text).toContain("Flight to Denver");
+    expect(result?.text).not.toContain("Dentist appointment");
+    expect(result?.data).toMatchObject({
+      query: "flight denver",
+    });
+  });
+
   it("only emits one grounded callback payload for a calendar answer", async () => {
     mockGetCalendarFeed.mockResolvedValue({
       calendarId: "primary",
@@ -1178,6 +1310,54 @@ describe("calendarAction", () => {
         source: "action",
       }),
     );
+  });
+
+  it("routes a non-English create request through the calendar LLM plan", async () => {
+    mockUseModel.mockImplementation(async (_modelType, params) => {
+      const prompt = String(params?.prompt ?? "");
+      if (prompt.includes("Plan the calendar action for this request.")) {
+        return '{"subaction":"create_event","title":"Cita con el dentista"}';
+      }
+      if (prompt.includes("Extract calendar event creation fields from the request.")) {
+        return "<response><title>Cita con el dentista</title><startAt>2026-04-10T22:00:00.000Z</startAt><endAt>2026-04-10T23:00:00.000Z</endAt><location>Main St Dental</location></response>";
+      }
+      return "<response></response>";
+    });
+    mockCreateCalendarEvent.mockResolvedValue({
+      id: "evt-spanish-create",
+      externalId: "ext-spanish-create",
+      agentId: "agent-1",
+      provider: "google",
+      side: "owner",
+      calendarId: "primary",
+      title: "Cita con el dentista",
+      description: "",
+      location: "Main St Dental",
+      status: "confirmed",
+      startAt: "2026-04-10T22:00:00.000Z",
+      endAt: "2026-04-10T23:00:00.000Z",
+      isAllDay: false,
+      timezone: "UTC",
+      htmlLink: null,
+      conferenceLink: null,
+      organizer: null,
+      attendees: [],
+      metadata: {},
+      syncedAt: "2026-04-09T16:00:00.000Z",
+      updatedAt: "2026-04-09T16:00:00.000Z",
+    });
+
+    const result = await invoke("mañana agrega una cita con el dentista a las 3pm");
+
+    expect(mockCreateCalendarEvent).toHaveBeenCalledWith(
+      expect.any(URL),
+      expect.objectContaining({
+        title: "Cita con el dentista",
+        location: "Main St Dental",
+      }),
+    );
+    expect(result?.success).toBe(true);
+    expect(result?.text).toContain("Created calendar event");
   });
 
   it("creates events when calendar write is granted", async () => {
@@ -1267,7 +1447,7 @@ describe("calendarAction", () => {
       details: {},
     });
 
-    expect(mockUseModel).toHaveBeenCalledTimes(1);
+    expect(mockUseModel).toHaveBeenCalledTimes(2);
     expect(mockCreateCalendarEvent).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({

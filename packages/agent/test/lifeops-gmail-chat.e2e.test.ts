@@ -215,7 +215,20 @@ describe("life-ops gmail chat transcripts", () => {
       "lifeops-gmail-chat-client";
     runtime = createLifeOpsChatTestRuntime({
       agentId: AGENT_ID,
-      useModel: async () => "<response></response>",
+      useModel: async (_modelType: unknown, params?: { prompt?: string }) => {
+        const prompt = String(params?.prompt ?? "");
+        const promptLower = prompt.toLowerCase();
+        if (prompt.includes("Plan the Gmail action for this request.")) {
+          if (
+            promptLower.includes("suran me escribió") ||
+            promptLower.includes("suran me escribio")
+          ) {
+            return '{"subaction":"search","queries":["from:suran"]}';
+          }
+          return '{"subaction":null,"queries":[]}';
+        }
+        return "<response></response>";
+      },
       handleTurn: async ({ runtime: runtimeArg, message, state }) => {
         const result = await gmailAction.handler?.(
           runtimeArg,
@@ -425,6 +438,21 @@ describe("life-ops gmail chat transcripts", () => {
 
     const result = await postConversationMessage(port, conversationId, {
       text: "did suran email me",
+      source: "discord",
+    });
+    expect(result.status).toBe(200);
+    const text = String(result.data.text ?? "");
+    expect(text).toContain("Suran");
+  });
+
+  it("finds suran's email from a non-English Gmail question", async () => {
+    const { conversationId } = await createConversation(port, {
+      includeGreeting: false,
+      title: "Non-English Gmail sender search",
+    });
+
+    const result = await postConversationMessage(port, conversationId, {
+      text: "puedes buscar en mi correo y decirme si suran me escribió",
       source: "discord",
     });
     expect(result.status).toBe(200);

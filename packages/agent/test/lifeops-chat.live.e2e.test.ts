@@ -1282,6 +1282,11 @@ describeIf(LIVE_CHAT_SUITE_ENABLED)(
           },
           {
             userRequest:
+              "can you search my email and tell me if anyone named suran emailed me",
+            requiredFragments: ["gmail_action", "suran"],
+          },
+          {
+            userRequest:
               "look for all emails sent to me from suran in the last few weeks",
             requiredFragments: ["gmail_action", "suran"],
           },

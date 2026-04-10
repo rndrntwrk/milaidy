@@ -1,4 +1,4 @@
-import { logger, Service } from "@elizaos/core";
+import { logger, Service, type IAgentRuntime } from "@elizaos/core";
 import { loadElizaConfig, saveElizaConfig, type ElizaConfig } from "../config/config.js";
 
 export const CHARACTER_PERSISTENCE_SERVICE = "milady_character_persistence";
@@ -166,6 +166,12 @@ function buildPersistedCharacterData(character: RuntimeCharacterLike): Record<st
 
 export class MiladyCharacterPersistenceService extends Service {
   static serviceType = CHARACTER_PERSISTENCE_SERVICE;
+
+  static async start(
+    runtime: IAgentRuntime,
+  ): Promise<MiladyCharacterPersistenceService> {
+    return new MiladyCharacterPersistenceService(runtime);
+  }
 
   capabilityDescription =
     "Persists runtime character changes to Milady config and agent storage";

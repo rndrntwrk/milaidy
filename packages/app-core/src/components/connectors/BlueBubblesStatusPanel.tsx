@@ -3,7 +3,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { client } from "../../api";
 import { useApp } from "../../state";
 
-type BlueBubblesStatus = Awaited<ReturnType<typeof client.getBlueBubblesStatus>>;
+type BlueBubblesStatus = Awaited<
+  ReturnType<typeof client.getBlueBubblesStatus>
+>;
 
 function resolveWebhookTarget(status: BlueBubblesStatus | null): string | null {
   if (!status?.webhookPath) {
@@ -17,7 +19,8 @@ function resolveWebhookTarget(status: BlueBubblesStatus | null): string | null {
 
   if (
     typeof window !== "undefined" &&
-    (window.location.protocol === "http:" || window.location.protocol === "https:")
+    (window.location.protocol === "http:" ||
+      window.location.protocol === "https:")
   ) {
     return new URL(status.webhookPath, window.location.origin).toString();
   }
@@ -56,9 +59,7 @@ export function BlueBubblesStatusPanel() {
 
   return (
     <PagePanel.Notice
-      tone={
-        error ? "danger" : status?.connected ? "accent" : "default"
-      }
+      tone={error ? "danger" : status?.connected ? "accent" : "default"}
       className="mt-4"
       actions={
         <Button

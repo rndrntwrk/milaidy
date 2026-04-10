@@ -8,6 +8,7 @@ import type {
   UUID,
 } from "@elizaos/core";
 import { logger, ModelType } from "@elizaos/core";
+import { formatSpeakerLabel } from "../providers/conversation-utils.js";
 import { hasAdminAccess } from "../security/access.js";
 
 type SearchConversationsParams = {
@@ -33,10 +34,7 @@ function formatResultsWithLineNumbers(
     const roomRecord = room as (Room & { name?: string; source?: string }) | null;
     const platform = roomRecord?.source ?? roomRecord?.type ?? "chat";
     const roomName = roomRecord?.name ?? (mem.roomId as string)?.slice(0, 8) ?? "?";
-    const speaker =
-      mem.entityId === runtime.agentId
-        ? (runtime.character?.name ?? "agent")
-        : "user";
+    const speaker = formatSpeakerLabel(runtime, mem);
     const ts = mem.createdAt
       ? new Date(mem.createdAt).toISOString().slice(0, 19)
       : "";

@@ -1,4 +1,66 @@
-import type { Room } from "@elizaos/core";
+import type { IAgentRuntime, Memory, Room } from "@elizaos/core";
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function readString(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function normalizeName(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function formatExternalSpeakerLabel(
+  displayName: string | undefined,
+  userName: string | undefined,
+  source: string | undefined,
+): string {
+  if (displayName && userName && normalizeName(displayName) !== normalizeName(userName)) {
+    if (source === "discord") {
+      return `${displayName} (discord username: ${userName})`;
+    }
+    return `${displayName} (username: ${userName})`;
+  }
+  return displayName ?? userName ?? "user";
+}
+
+export function formatSpeakerLabel(
+  runtime: IAgentRuntime,
+  memory: Memory,
+): string {
+  if (memory.entityId === runtime.agentId) {
+    return runtime.character?.name ?? "agent";
+  }
+
+  const metadata = asRecord(memory.metadata);
+  const content = asRecord(memory.content);
+  const defaultMetadata = asRecord(metadata?.default);
+  const source = readString(content?.source);
+  const sourceMetadata = source ? asRecord(metadata?.[source]) : null;
+
+  const displayName =
+    readString(metadata?.entityName) ??
+    readString(metadata?.displayName) ??
+    readString(sourceMetadata?.displayName) ??
+    readString(sourceMetadata?.name) ??
+    readString(defaultMetadata?.name) ??
+    readString(metadata?.name);
+  const userName =
+    readString(metadata?.entityUserName) ??
+    readString(sourceMetadata?.userName) ??
+    readString(sourceMetadata?.username) ??
+    readString(defaultMetadata?.username) ??
+    readString(metadata?.userName) ??
+    readString(metadata?.username);
+
+  return formatExternalSpeakerLabel(displayName, userName, source);
+}
 
 /**
  * Format a Room into a "[source] name" tag for display in provider output.

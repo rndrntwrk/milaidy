@@ -1449,11 +1449,8 @@ describe("applyDatabaseConfigToEnv", () => {
   it("defaults PGLITE_DATA_DIR to the agent workspace when database config is missing", () => {
     applyDatabaseConfigToEnv({} as ElizaConfig);
     expect(process.env.POSTGRES_URL).toBeUndefined();
-    // The state dir name depends on the runtime namespace. In this repo that is
-    // typically Milady's default state dir, but upstream elizaOS builds still
-    // resolve under ~/.eliza.
-    expect(process.env.PGLITE_DATA_DIR).toMatch(
-      /\.(milady|eliza)[/\\]workspace[/\\]\.eliza[/\\]\.elizadb$/,
+    expect(process.env.PGLITE_DATA_DIR).toBe(
+      path.resolve(process.cwd(), ".eliza", ".elizadb"),
     );
   });
 

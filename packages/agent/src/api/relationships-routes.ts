@@ -234,10 +234,21 @@ export async function handleRelationshipsRoutes(
     const limit = limitParam
       ? Math.min(Number.parseInt(limitParam, 10), 100)
       : 50;
+    const offsetParam = activityUrl.searchParams.get("offset");
+    const offset = offsetParam
+      ? Math.max(0, Number.parseInt(offsetParam, 10))
+      : 0;
 
     json(
       res,
-      { activity: activity.slice(0, limit), count: activity.length },
+      {
+        activity: activity.slice(offset, offset + limit),
+        total: activity.length,
+        count: Math.min(limit, activity.length - offset),
+        offset,
+        limit,
+        hasMore: offset + limit < activity.length,
+      },
       200,
     );
     return true;

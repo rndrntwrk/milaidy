@@ -1803,8 +1803,8 @@ export function applyCloudConfigToEnv(config: ElizaConfig): void {
  * When the provider is "postgres", we build a connection string from the
  * credentials (or use the explicit `connectionString` field) and set
  * `POSTGRES_URL`. When the provider is "pglite" (the default), we set
- * `PGLITE_DATA_DIR` to either the configured value or a stable workspace
- * default (`~/.eliza/workspace/.eliza/.elizadb`) and remove any stale
+ * `PGLITE_DATA_DIR` to either the configured value or the resolved default
+ * workspace (`<workspace>/.eliza/.elizadb`) and remove any stale
  * `POSTGRES_URL`.
  */
 /** @internal Exported for testing. */
@@ -3843,7 +3843,19 @@ export async function startEliza(
     await runtime.initialize();
     await prepareRuntimeForTrajectoryCapture(runtime, "runtime.initialize()");
 
-    // 8a. Register lightweight conversation-proximity evaluator.
+    // 8a. Apply role gating to wallet plugins (EVM, Solana) — admin-only actions.
+    try {
+      const { applyPluginRoleGating } = await import(
+        "./plugin-role-gating.js"
+      );
+      applyPluginRoleGating(runtime.plugins ?? []);
+    } catch (err) {
+      logger.debug(
+        `[eliza] Plugin role gating skipped: ${formatError(err)}`,
+      );
+    }
+
+    // 8b. Register lightweight conversation-proximity evaluator.
     // Updates relationship strength when people post near each other in a room.
     // No LLM calls — deterministic, runs on every message.
     try {

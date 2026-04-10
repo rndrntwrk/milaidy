@@ -657,12 +657,10 @@ function ConnectorPluginCard({
             )}
             {connectorSetupPanel}
           </div>
+        ) : supportsConnectorSetupPanel ? (
+          connectorSetupPanel
         ) : (
-          supportsConnectorSetupPanel ? (
-            connectorSetupPanel
-          ) : (
-            <div className="text-sm text-muted">{noConfigurationNeededLabel}</div>
-          )
+          <div className="text-sm text-muted">{noConfigurationNeededLabel}</div>
         )}
 
         {plugin.validationErrors && plugin.validationErrors.length > 0 && (

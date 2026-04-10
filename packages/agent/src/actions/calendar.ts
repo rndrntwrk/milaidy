@@ -7,7 +7,11 @@ import type {
   Memory,
   State,
 } from "@elizaos/core";
-import { ModelType, parseKeyValueXml } from "@elizaos/core";
+import {
+  ModelType,
+  parseJSONObjectFromText,
+  parseKeyValueXml,
+} from "@elizaos/core";
 import type {
   CreateLifeOpsCalendarEventAttendee,
   CreateLifeOpsCalendarEventRequest,
@@ -49,6 +53,13 @@ type TripWindowIntent = {
   location: string;
 };
 
+type CalendarLlmPlan = {
+  subaction: CalendarSubaction | null;
+  queries: string[];
+  title?: string;
+  tripLocation?: string;
+};
+
 const MIN_CREATE_EVENT_DURATION_MINUTES = 15;
 
 type CalendarActionParams = {
@@ -83,12 +94,39 @@ const CALENDAR_DETAIL_ALIASES = {
   windowPreset: ["windowpreset", "window_preset"],
 } as const;
 
+function normalizeCalendarSubaction(
+  value: unknown,
+): CalendarSubaction | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const normalized = value.trim().toLowerCase();
+  switch (normalized) {
+    case "feed":
+    case "next_event":
+    case "search_events":
+    case "create_event":
+    case "trip_window":
+      return normalized;
+    default:
+      return null;
+  }
+}
+
 function normalizeText(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
 function normalizeLookupKey(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function wordCount(value: string): number {
+  const normalized = normalizeText(value);
+  if (!normalized) {
+    return 0;
+  }
+  return normalized.split(" ").filter(Boolean).length;
 }
 
 function tokenize(value: string): string[] {
@@ -296,7 +334,7 @@ function scoreIntentCandidate(value: string): number {
 function looksLikeCalendarResultSummary(value: string): boolean {
   const trimmed = value.trim();
   return (
-    /^(?:events? (?:today|tomorrow)|found \d+ calendar event|no calendar events matched|i couldn't find any upcoming calendar events|your matching (?:flight|calendar event) is|next event:|here's what's on your calendar while you're in)/i.test(
+    /^(?:events\b|no events\b|found \d+ calendar event|no calendar events matched|i couldn't find any upcoming calendar events|your matching (?:flight|calendar event) is|next event:|here's what's on your calendar while you're in)/i.test(
       trimmed,
     ) || /^- \*\*/.test(trimmed)
   );
@@ -315,6 +353,30 @@ function looksLikeNarrativeCalendarQuery(value: string): boolean {
     /\b(?:calendar|schedule|event|events|flight|flights|travel|trip|appointment|meeting|hotel|stay|return)\b/.test(
       normalized,
     )
+  );
+}
+
+function looksLikeLiteralRequestEcho(
+  query: string,
+  intent: string,
+): boolean {
+  const normalizedQuery = normalizeText(query);
+  const normalizedIntent = normalizeText(intent);
+  const questionLike = /[?¿]/.test(query);
+  if (!normalizedQuery || !normalizedIntent) {
+    return false;
+  }
+  if (normalizedQuery === normalizedIntent) {
+    return (
+      questionLike ||
+      wordCount(normalizedQuery) >= 10 ||
+      normalizedQuery.length >= 80
+    );
+  }
+  return (
+    (normalizedQuery.includes(normalizedIntent) ||
+      normalizedIntent.includes(normalizedQuery)) &&
+    (questionLike || normalizedQuery.length >= 96)
   );
 }
 
@@ -862,6 +924,7 @@ function sanitizeCalendarQuery(
     !cleaned ||
     PARAMETER_DOC_NOISE_PATTERN.test(cleaned) ||
     WEAK_CALENDAR_QUERY_PATTERN.test(cleaned) ||
+    looksLikeLiteralRequestEcho(cleaned, intent) ||
     cleaned.length > 160
   ) {
     return undefined;
@@ -888,6 +951,9 @@ function scoreCalendarQueryCandidate(query: string, intent: string): number {
     score -= 500;
   }
   if (looksLikeNarrativeCalendarQuery(normalized)) {
+    score -= 120;
+  }
+  if (looksLikeLiteralRequestEcho(query, intent)) {
     score -= 120;
   }
   if (WEAK_CALENDAR_QUERY_PATTERN.test(normalized)) {
@@ -974,21 +1040,45 @@ async function extractCalendarSearchQueriesWithLlm(
   state: State | undefined,
   intent: string,
 ): Promise<string[]> {
+  return (await extractCalendarPlanWithLlm(runtime, message, state, intent)).queries;
+}
+
+async function extractCalendarPlanWithLlm(
+  runtime: IAgentRuntime,
+  message: Memory,
+  state: State | undefined,
+  intent: string,
+): Promise<CalendarLlmPlan> {
   const recentConversation = stateTextCandidates(state).slice(-8).join("\n");
   const currentMessage = messageText(message).trim();
   const prompt = [
-    "Extract up to 3 short calendar search queries for a calendar event lookup.",
+    "Plan the calendar action for this request.",
+    "The user may speak in any language.",
     "Use the current request plus recent conversation context.",
     "If the current request is vague or a follow-up, recover the subject from recent conversation and apply the new constraint from the current request.",
+    "You MUST always return a subaction — never return null. Pick the closest match even if uncertain.",
+    "",
+    "Subactions and when to use each:",
+    "  feed — view today's, tomorrow's, or this week's schedule (e.g. 'what's on my calendar', 'what do I have today', 'this week's agenda')",
+    "  next_event — check the next upcoming event only (e.g. 'what's my next meeting', 'when is my next appointment')",
+    "  search_events — find events by title, attendee, location, or date range (e.g. 'find my flight', 'when is the dentist', 'meetings with John')",
+    "  create_event — schedule a new event (e.g. 'schedule a meeting tomorrow at 3pm', 'add lunch with Sarah on Friday')",
+    "  trip_window — query what's happening during a trip or stay in a specific place (e.g. 'what's happening while I'm in Denver', 'my Tokyo itinerary')",
+    "",
+    "For search_events or trip_window, extract up to 3 short search queries.",
+    "Preserve names, places, and keywords in their original language or script when useful.",
+    "Convert time constraints into concise searchable dates or windows even if the user phrases them in another language.",
     "Focus on people, places, flights, itinerary, appointments, and explicit dates.",
     "If the request is about a date, include a date query like april 12 or 2026-04-12.",
-    "Return XML only with query1, query2, and query3. Leave fields empty when not useful.",
+    "If the request asks what is happening while the user is in a place, use trip_window and include tripLocation.",
     "",
-    "<response>",
-    "  <query1>primary search query</query1>",
-    "  <query2>secondary search query</query2>",
-    "  <query3>tertiary search query</query3>",
-    "</response>",
+    "Examples:",
+    '  "what\'s on my calendar tomorrow" → {"subaction":"feed","queries":[],"title":null,"tripLocation":null}',
+    '  "schedule a meeting with Alex at 3pm" → {"subaction":"create_event","queries":[],"title":"Meeting with Alex","tripLocation":null}',
+    '  "find my return flight" → {"subaction":"search_events","queries":["return flight"],"title":null,"tripLocation":null}',
+    '  "what do I have while I\'m in Tokyo" → {"subaction":"trip_window","queries":["tokyo"],"title":null,"tripLocation":"Tokyo"}',
+    "",
+    'Return JSON only in this shape: {"subaction":"search_events","queries":["denver return flight"],"title":null,"tripLocation":null}',
     "",
     `Current request: ${JSON.stringify(currentMessage)}`,
     `Resolved intent: ${JSON.stringify(intent)}`,
@@ -1007,21 +1097,49 @@ async function extractCalendarSearchQueriesWithLlm(
         src: "action:calendar",
         error: error instanceof Error ? error.message : String(error),
       },
-      "Calendar query extraction model call failed",
+      "Calendar action planning model call failed",
     );
-    return [];
+    return {
+      subaction: null,
+      queries: [],
+    };
   }
 
-  const parsed = parseKeyValueXml<Record<string, unknown>>(rawResponse);
+  const parsed =
+    parseJSONObjectFromText(rawResponse) ??
+    parseKeyValueXml<Record<string, unknown>>(rawResponse);
   if (!parsed) {
-    return [];
+    return {
+      subaction: null,
+      queries: [],
+    };
   }
 
-  return dedupeCalendarQueries([
-    typeof parsed.query1 === "string" ? parsed.query1 : undefined,
-    typeof parsed.query2 === "string" ? parsed.query2 : undefined,
-    typeof parsed.query3 === "string" ? parsed.query3 : undefined,
-  ]);
+  const tripLocation =
+    typeof parsed.tripLocation === "string" &&
+    parsed.tripLocation.trim().length > 0
+      ? parsed.tripLocation.trim()
+      : undefined;
+  return {
+    subaction: normalizeCalendarSubaction(parsed.subaction),
+    queries: dedupeCalendarQueries([
+      typeof parsed.query === "string" ? parsed.query : undefined,
+      ...(Array.isArray(parsed.queries)
+        ? parsed.queries.map((value) =>
+            typeof value === "string" ? value : undefined,
+          )
+        : []),
+      typeof parsed.query1 === "string" ? parsed.query1 : undefined,
+      typeof parsed.query2 === "string" ? parsed.query2 : undefined,
+      typeof parsed.query3 === "string" ? parsed.query3 : undefined,
+      tripLocation,
+    ]),
+    title:
+      typeof parsed.title === "string" && parsed.title.trim().length > 0
+        ? parsed.title.trim()
+        : undefined,
+    tripLocation,
+  };
 }
 
 async function resolveCalendarSearchQueries(
@@ -1030,6 +1148,7 @@ async function resolveCalendarSearchQueries(
   state: State | undefined,
   explicitQueries: Array<string | undefined>,
   intent: string,
+  llmPlan?: CalendarLlmPlan,
 ): Promise<string[]> {
   const providedQueries = dedupeCalendarQueries(
     explicitQueries.map((query) => sanitizeCalendarQuery(query, intent)),
@@ -1039,6 +1158,7 @@ async function resolveCalendarSearchQueries(
     providedQueries.every(
       (query) =>
         !looksLikeNarrativeCalendarQuery(query) &&
+        !looksLikeLiteralRequestEcho(query, intent) &&
         !WEAK_CALENDAR_QUERY_PATTERN.test(query) &&
         !PARAMETER_DOC_NOISE_PATTERN.test(query),
     )
@@ -1047,12 +1167,15 @@ async function resolveCalendarSearchQueries(
   }
 
   const heuristicQueries = inferCalendarSearchQueries(intent);
-  const llmQueries = await extractCalendarSearchQueriesWithLlm(
-    runtime,
-    message,
-    state,
-    intent,
-  );
+  const llmQueries =
+    llmPlan && llmPlan.queries.length > 0
+      ? llmPlan.queries
+      : await extractCalendarSearchQueriesWithLlm(
+          runtime,
+          message,
+          state,
+          intent,
+        );
   const stateQueries = stateTextCandidates(state)
     .reverse()
     .flatMap((candidate) => inferCalendarSearchQueries(candidate));
@@ -1133,53 +1256,6 @@ function resolveCreateEventDurationMinutes(args: {
   return undefined;
 }
 
-function resolveRequestedSubaction(args: {
-  requestedSubaction: string | undefined;
-  inferredSubaction: CalendarSubaction;
-  tripWindowIntent: TripWindowIntent | null;
-  hasSearchSignals: boolean;
-  hasCreateSignals: boolean;
-}): CalendarSubaction {
-  const {
-    requestedSubaction,
-    inferredSubaction,
-    tripWindowIntent,
-    hasSearchSignals,
-    hasCreateSignals,
-  } = args;
-  if (tripWindowIntent) {
-    return "trip_window";
-  }
-  if (
-    requestedSubaction !== "feed" &&
-    requestedSubaction !== "next_event" &&
-    requestedSubaction !== "search_events" &&
-    requestedSubaction !== "create_event" &&
-    requestedSubaction !== "trip_window"
-  ) {
-    return inferredSubaction;
-  }
-
-  if (requestedSubaction === "trip_window") {
-    return tripWindowIntent ? "trip_window" : inferredSubaction;
-  }
-  if (requestedSubaction === "create_event") {
-    return "create_event";
-  }
-  if (requestedSubaction === "search_events") {
-    return hasSearchSignals || inferredSubaction === "search_events"
-      ? "search_events"
-      : inferredSubaction;
-  }
-  if (requestedSubaction === "next_event") {
-    return inferredSubaction === "next_event" &&
-      !hasSearchSignals &&
-      !hasCreateSignals
-      ? "next_event"
-      : inferredSubaction;
-  }
-  return inferredSubaction === "feed" ? "feed" : inferredSubaction;
-}
 
 async function inferCreateEventDetails(
   runtime: IAgentRuntime,
@@ -1191,8 +1267,10 @@ async function inferCreateEventDetails(
   const currentMessage = messageText(message).trim();
   const prompt = [
     "Extract calendar event creation fields from the request.",
+    "The user may speak in any language.",
     "Use the current request plus recent conversation context.",
     "If the current request is a follow-up, recover the event subject from recent conversation and apply new timing or location constraints from the current request.",
+    "Preserve names and places in their original language or script when useful.",
     "Return XML only. Leave fields empty when unknown.",
     "If a start time or window is implied but duration is not explicit, infer a reasonable positive duration.",
     "For short prep or reminder blocks, use at least 15 minutes instead of 0.",
@@ -1475,7 +1553,13 @@ export const calendarAction: Action = {
     "CHECK_SCHEDULE",
   ],
   description:
-    "Use Google Calendar through LifeOps for anything about calendar, schedule, itinerary, flights, travel plans, meetings, appointments, or upcoming events. Prefer this over LIFE for calendar work, and let this action provide the final grounded reply instead of pairing it with a speculative REPLY.",
+    "Interact with Google Calendar through LifeOps. " +
+    "USE this action for: viewing today's or this week's schedule; checking the next upcoming event; " +
+    "searching events by title, attendee, location, or date range; creating new calendar events; " +
+    "querying travel itineraries, flights, hotel stays, and trip windows. " +
+    "DO NOT use this action for email inbox work, drafting or sending emails — use GMAIL_ACTION instead. " +
+    "DO NOT use this action for personal habits, goals, routines, or reminders — use LIFE instead. " +
+    "This action provides the final grounded reply; do not pair it with a speculative REPLY action.",
   validate: async (runtime, message) => {
     return hasLifeOpsAccess(runtime, message);
   },
@@ -1495,6 +1579,20 @@ export const calendarAction: Action = {
     const params = rawParams ?? ({} as CalendarActionParams);
     const intent = resolveCalendarIntent(params.intent, message, state);
     const details = normalizeCalendarDetails(params.details);
+    const shouldPlanWithLlm =
+      !params.subaction ||
+      (!params.query &&
+        (params.queries?.length ?? 0) === 0 &&
+        !detailString(details, "query") &&
+        (detailArray(details, "queries")?.length ?? 0) === 0 &&
+        !params.title &&
+        !detailString(details, "title"));
+    const llmPlan = shouldPlanWithLlm
+      ? await extractCalendarPlanWithLlm(runtime, message, state, intent)
+      : {
+          subaction: null,
+          queries: [],
+        };
     const heuristicQuery = inferCalendarSearchQuery(intent);
     const inferredQuery = sanitizeCalendarQuery(
       params.query ?? detailString(details, "query"),
@@ -1502,6 +1600,7 @@ export const calendarAction: Action = {
     );
     const inferredQueries = dedupeCalendarQueries([
       inferredQuery,
+      ...llmPlan.queries,
       ...(params.queries ?? []),
       ...(detailArray(details, "queries")?.map((value) =>
         typeof value === "string" ? value : undefined,
@@ -1510,29 +1609,32 @@ export const calendarAction: Action = {
     const explicitTitle =
       (typeof params.title === "string" && params.title.trim().length > 0
         ? params.title.trim()
-        : undefined) ?? detailString(details, "title");
+        : undefined) ??
+      detailString(details, "title") ??
+      llmPlan.title;
     const inferredTitle = explicitTitle ?? inferCreateEventTitle(intent);
-    const hasSearchSignals = inferredQueries.length > 0;
-    const hasCreateSignals = Boolean(
-      inferredTitle ||
-        detailString(details, "startAt") ||
-        detailString(details, "endAt") ||
-        detailNumber(details, "durationMinutes") ||
-        detailString(details, "windowPreset"),
-    );
-    const inferredSubaction = inferCalendarSubaction(
-      normalizeText(intent),
-      details,
-      inferredQuery ?? heuristicQuery,
-    );
-    const tripWindowIntent = inferTripWindowIntent(intent);
-    const subaction = resolveRequestedSubaction({
-      requestedSubaction: params.subaction,
-      inferredSubaction,
-      tripWindowIntent,
-      hasSearchSignals,
-      hasCreateSignals,
-    });
+    const tripWindowIntent =
+      llmPlan.tripLocation && llmPlan.tripLocation.trim().length > 0
+        ? { location: llmPlan.tripLocation.trim() }
+        : inferTripWindowIntent(intent);
+    let subaction: CalendarSubaction;
+    if (tripWindowIntent) {
+      subaction = "trip_window";
+    } else if (params.subaction) {
+      subaction = params.subaction as CalendarSubaction;
+    } else if (llmPlan.subaction) {
+      subaction = llmPlan.subaction;
+    } else {
+      runtime.logger?.warn?.(
+        { src: "action:calendar", intent },
+        "Calendar LLM plan returned no subaction; falling back to regex inference",
+      );
+      subaction = inferCalendarSubaction(
+        normalizeText(intent),
+        details,
+        inferredQuery ?? heuristicQuery,
+      );
+    }
     const service = new LifeOpsService(runtime);
     const respond = async <T extends Record<string, unknown> | undefined>(
       payload: { success: boolean; text: string; data?: T },
@@ -1744,6 +1846,7 @@ export const calendarAction: Action = {
             ...inferredQueries,
           ],
           intent,
+          llmPlan,
         );
         const query = searchQueries[0];
         if (!query || searchQueries.length === 0) {

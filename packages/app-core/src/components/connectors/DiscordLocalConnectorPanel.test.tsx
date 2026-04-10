@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { mockClient, mockUseApp } = vi.hoisted(() => ({
@@ -26,7 +32,10 @@ vi.mock("../../state", () => ({
 
 import { DiscordLocalConnectorPanel } from "./DiscordLocalConnectorPanel";
 
-function translate(key: string, vars?: { defaultValue?: string; count?: number }) {
+function translate(
+  key: string,
+  vars?: { defaultValue?: string; count?: number },
+) {
   if (typeof vars?.count === "number" && vars?.defaultValue) {
     return vars.defaultValue.replace("{{count}}", String(vars.count));
   }
@@ -66,13 +75,17 @@ describe("DiscordLocalConnectorPanel", () => {
       lastError: null,
       ipcPath: "/tmp/discord-ipc-0",
     });
-    mockClient.disconnectDiscordLocal.mockReset().mockResolvedValue({ ok: true });
+    mockClient.disconnectDiscordLocal
+      .mockReset()
+      .mockResolvedValue({ ok: true });
     mockClient.listDiscordLocalGuilds.mockReset().mockResolvedValue({
       guilds: [{ id: "guild-1", name: "Milady HQ" }],
       count: 1,
     });
     mockClient.listDiscordLocalChannels.mockReset().mockResolvedValue({
-      channels: [{ id: "channel-1", guild_id: "guild-1", type: 0, name: "general" }],
+      channels: [
+        { id: "channel-1", guild_id: "guild-1", type: 0, name: "general" },
+      ],
       count: 1,
     });
     mockClient.saveDiscordLocalSubscriptions.mockReset().mockResolvedValue({

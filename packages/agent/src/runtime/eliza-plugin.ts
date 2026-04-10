@@ -21,13 +21,13 @@ import { restartAction } from "../actions/restart.js";
 import { searchConversationsAction } from "../actions/search-conversations.js";
 import { sendAdminMessageAction } from "../actions/send-admin-message.js";
 import { setUserNameAction } from "../actions/set-user-name.js";
-import { webSearchAction } from "../actions/web-search.js";
 import {
   addRegisteredSkillSlug,
   clearRegisteredSkillSlugs,
   skillCommandAction,
 } from "../actions/skill-command.js";
 import { terminalAction } from "../actions/terminal.ts";
+import { webSearchAction } from "../actions/web-search.js";
 import {
   ensureProactiveAgentTask,
   registerProactiveTaskWorker,
@@ -55,7 +55,7 @@ import { createChannelProfileProvider } from "../providers/simple-mode.js";
 import { createDynamicSkillProvider } from "../providers/skill-provider.js";
 import { uiCatalogProvider } from "../providers/ui-catalog.js";
 import { createUserNameProvider } from "../providers/user-name.js";
-import { DEFAULT_AGENT_WORKSPACE_DIR } from "../providers/workspace.js";
+import { resolveDefaultAgentWorkspaceDir } from "../providers/workspace.js";
 import { createWorkspaceProvider } from "../providers/workspace-provider.js";
 import { MiladyCharacterPersistenceService } from "../services/character-persistence.js";
 import { createTriggerTaskAction } from "../triggers/action.js";
@@ -70,7 +70,8 @@ export type ElizaPluginConfig = {
 };
 
 export function createElizaPlugin(config?: ElizaPluginConfig): Plugin {
-  const workspaceDir = config?.workspaceDir ?? DEFAULT_AGENT_WORKSPACE_DIR;
+  const workspaceDir =
+    config?.workspaceDir ?? resolveDefaultAgentWorkspaceDir();
   const agentId = config?.agentId ?? "main";
   const sessionStorePath =
     config?.sessionStorePath ?? resolveDefaultSessionStorePath(agentId);

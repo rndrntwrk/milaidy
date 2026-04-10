@@ -324,11 +324,17 @@ describe("life-ops calendar chat transcripts", () => {
       agentId: AGENT_ID,
       useModel: async (_modelType: unknown, params?: { prompt?: string }) => {
         const prompt = String(params?.prompt ?? "");
+        const promptLower = prompt.toLowerCase();
+        if (prompt.includes("Plan the calendar action for this request.")) {
+          if (promptLower.includes("vuelo a denver")) {
+            return '{"subaction":"search_events","queries":["flight denver"]}';
+          }
+          return '{"subaction":null,"queries":[]}';
+        }
         if (prompt.includes("Extract calendar event creation fields")) {
           return "<response><title>Dentist appointment</title><windowPreset>tomorrow_afternoon</windowPreset><durationMinutes>60</durationMinutes></response>";
         }
         if (prompt.includes("Extract up to 3 short calendar search queries")) {
-          const promptLower = prompt.toLowerCase();
           if (promptLower.includes("april")) {
             return "<response><query1>april 12</query1><query2></query2><query3></query3></response>";
           }
@@ -410,6 +416,49 @@ describe("life-ops calendar chat transcripts", () => {
     );
   });
 
+  it("handles natural-language calendar search phrasing without treating it as a literal query", async () => {
+    const { conversationId } = await createConversation(port, {
+      includeGreeting: false,
+      title: "LifeOps calendar natural-language query transcript",
+    });
+
+    const response = await postConversationMessage(port, conversationId, {
+      text: "can you search my calendar and tell me if i have any flights to denver?",
+      source: "discord",
+    });
+
+    expect(response.status).toBe(200);
+    expect(String(response.data.text ?? "")).toContain(
+      "Flight to Denver (WN 3677)",
+    );
+    expect(String(response.data.text ?? "")).not.toContain(
+      "Dentist appointment",
+    );
+    expect(String(response.data.text ?? "")).not.toContain(
+      "tell me if i have any flights to denver",
+    );
+  });
+
+  it("handles a non-English calendar search question", async () => {
+    const { conversationId } = await createConversation(port, {
+      includeGreeting: false,
+      title: "LifeOps calendar non-English query transcript",
+    });
+
+    const response = await postConversationMessage(port, conversationId, {
+      text: "puedes buscar en mi calendario y decirme si tengo un vuelo a denver",
+      source: "discord",
+    });
+
+    expect(response.status).toBe(200);
+    expect(String(response.data.text ?? "")).toContain(
+      "Flight to Denver (WN 3677)",
+    );
+    expect(String(response.data.text ?? "")).not.toContain(
+      "Dentist appointment",
+    );
+  });
+
   it("handles the Discord flight transcript across confirmation and vague follow-up turns", async () => {
     const { conversationId } = await createConversation(port, {
       includeGreeting: false,
@@ -471,6 +520,37 @@ describe("life-ops calendar chat transcripts", () => {
     expect(String(wideSearch.data.text ?? "")).not.toContain("Launching");
     expect(String(wideSearch.data.text ?? "")).not.toContain("Spawned");
     expect(String(wideSearch.data.text ?? "")).not.toContain("scratch/");
+  });
+
+  it("merges the recent conversation with a 'what about next week' follow-up", async () => {
+    const { conversationId } = await createConversation(port, {
+      includeGreeting: false,
+      title: "LifeOps calendar next-week refinement transcript",
+    });
+
+    const flightsThisWeek = await postConversationMessage(port, conversationId, {
+      text: "do i have any flights this week?",
+      source: "discord",
+    });
+    expect(flightsThisWeek.status).toBe(200);
+    expect(String(flightsThisWeek.data.text ?? "")).toContain(
+      "Flight to Denver (WN 3677)",
+    );
+    expect(String(flightsThisWeek.data.text ?? "")).not.toContain(
+      "Flight to San Francisco (WN 2287)",
+    );
+
+    const nextWeek = await postConversationMessage(port, conversationId, {
+      text: "what about next week?",
+      source: "discord",
+    });
+    expect(nextWeek.status).toBe(200);
+    expect(String(nextWeek.data.text ?? "")).toContain(
+      "Flight to San Francisco (WN 2287)",
+    );
+    expect(String(nextWeek.data.text ?? "")).not.toContain(
+      "Flight to Denver (WN 3677)",
+    );
   });
 
   it("answers exact month-day schedule questions through the chat transcript", async () => {

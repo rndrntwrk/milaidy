@@ -8,6 +8,7 @@ import type {
   UUID,
 } from "@elizaos/core";
 import { logger } from "@elizaos/core";
+import { formatSpeakerLabel } from "../providers/conversation-utils.js";
 import { hasAdminAccess } from "../security/access.js";
 
 type ReadChannelParams = {
@@ -29,10 +30,7 @@ function formatMessagesWithLineNumbers(
   const lines: string[] = [];
   for (let i = 0; i < memories.length; i++) {
     const mem = memories[i];
-    const speaker =
-      mem.entityId === runtime.agentId
-        ? (runtime.character?.name ?? "agent")
-        : "user";
+    const speaker = formatSpeakerLabel(runtime, mem);
     const ts = mem.createdAt
       ? new Date(mem.createdAt).toISOString().slice(0, 19)
       : "";

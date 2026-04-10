@@ -1890,13 +1890,43 @@ async function buildGraphModel(
   };
 }
 
+/** TTL cache for the expensive graph model build. */
+const MODEL_CACHE_TTL_MS = 30_000; // 30 seconds
+
+type CachedModel = Awaited<ReturnType<typeof buildGraphModel>>;
+type ModelCache = { model: CachedModel; timestamp: number };
+
 export function createNativeRelationshipsGraphService(
   runtime: IAgentRuntime,
   relationshipsService: RelationshipsServiceLike,
 ): RelationshipsGraphService {
+  let modelCache: ModelCache | null = null;
+  let modelBuildPromise: Promise<CachedModel> | null = null;
+
+  async function getCachedModel(): Promise<CachedModel> {
+    const now = Date.now();
+    if (modelCache && now - modelCache.timestamp < MODEL_CACHE_TTL_MS) {
+      return modelCache.model;
+    }
+    // Deduplicate concurrent builds.
+    if (!modelBuildPromise) {
+      modelBuildPromise = buildGraphModel(runtime, relationshipsService)
+        .then((model) => {
+          modelCache = { model, timestamp: Date.now() };
+          modelBuildPromise = null;
+          return model;
+        })
+        .catch((err) => {
+          modelBuildPromise = null;
+          throw err;
+        });
+    }
+    return modelBuildPromise;
+  }
+
   return {
     async getGraphSnapshot(query = {}): Promise<RelationshipsGraphSnapshot> {
-      const model = await buildGraphModel(runtime, relationshipsService);
+      const model = await getCachedModel();
       const relevantGraph = filterGraphByRelevance(
         model.summaries,
         model.edges,
@@ -1949,7 +1979,7 @@ export function createNativeRelationshipsGraphService(
     async getPersonDetail(
       primaryEntityId: UUID,
     ): Promise<RelationshipsPersonDetail | null> {
-      const model = await buildGraphModel(runtime, relationshipsService);
+      const model = await getCachedModel();
       const relevantGraph = filterGraphByRelevance(
         model.summaries,
         model.edges,

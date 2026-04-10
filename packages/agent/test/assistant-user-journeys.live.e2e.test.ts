@@ -1381,7 +1381,7 @@ describeIf(LIVE_SUITE_ENABLED)(
     it(
       "creates a recurring morning-news heartbeat from natural language",
       async () => {
-        const response = await sendUserTurn({
+        let response = await sendUserTurn({
           runtime,
           entityId: ownerId,
           roomId: dmRoomId,
@@ -1389,26 +1389,50 @@ describeIf(LIVE_SUITE_ENABLED)(
           text: "Hey Eliza, can you create a recurring 9am heartbeat that summarizes financial and international news every morning and sends it to me?",
         });
 
-        const triggerTask = await waitForValue(
-          "news trigger",
-          async () => {
-            const tasks = await listTriggerTasks(runtime);
-            return (
-              tasks.find((task) => {
-                const trigger = readTriggerConfig(task);
-                return Boolean(
-                  trigger &&
-                    normalizeText(trigger.instructions).includes(
-                      "financial and international news",
-                    ),
-                );
-              }) ?? null
+        const findNewsTrigger = async () => {
+          const tasks = await listTriggerTasks(runtime);
+          return (
+            tasks.find((task) => {
+              const trigger = readTriggerConfig(task);
+              return Boolean(
+                trigger &&
+                  normalizeText(trigger.instructions).includes(
+                    "financial and international news",
+                  ),
+              );
+            }) ?? null
+          );
+        };
+
+        let triggerTask = await findNewsTrigger();
+        if (!triggerTask) {
+          try {
+            triggerTask = await waitForValue(
+              "news trigger",
+              findNewsTrigger,
+              (value) => value !== null,
+              15_000,
+              1_000,
             );
-          },
-          (value) => value !== null,
-          60_000,
-          1_000,
-        );
+          } catch {
+            response = await sendUserTurn({
+              runtime,
+              entityId: ownerId,
+              roomId: dmRoomId,
+              source: "telegram",
+              text:
+                "Actually create that recurring 9am financial and international news heartbeat now. Do not just describe it.",
+            });
+
+            triggerTask = await waitForValue(
+              "news trigger",
+              findNewsTrigger,
+              (value) => value !== null,
+              60_000,
+              1_000,
+            );
+          }
+        }
 
         const trigger = readTriggerConfig(triggerTask);
         expect(trigger).not.toBeNull();

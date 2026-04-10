@@ -4,7 +4,10 @@ import { SignalQrOverlay } from "./SignalQrOverlay";
 import { WhatsAppQrOverlay } from "./WhatsAppQrOverlay";
 
 function normalizePluginId(pluginId: string): string {
-  return pluginId.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+  return pluginId
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
 }
 
 export function hasConnectorSetupPanel(pluginId: string): boolean {
@@ -19,11 +22,7 @@ export function hasConnectorSetupPanel(pluginId: string): boolean {
   }
 }
 
-export function ConnectorSetupPanel({
-  pluginId,
-}: {
-  pluginId: string;
-}) {
+export function ConnectorSetupPanel({ pluginId }: { pluginId: string }) {
   switch (normalizePluginId(pluginId)) {
     case "whatsapp":
       return <WhatsAppQrOverlay accountId="default" />;

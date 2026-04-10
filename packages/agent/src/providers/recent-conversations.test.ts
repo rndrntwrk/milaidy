@@ -61,7 +61,11 @@ describe("recentConversationsProvider", () => {
           id: "m1",
           roomId: "room-1",
           entityId: "user-1",
-          content: { text: "hey there" },
+          content: { text: "hey there", source: "discord" },
+          metadata: {
+            entityName: "Shaw",
+            entityUserName: "shawmakesmagic",
+          },
           createdAt: Date.now() - 30_000,
         },
         {
@@ -90,6 +94,9 @@ describe("recentConversationsProvider", () => {
     expect(result.text).toContain("[discord]");
     expect(result.text).toContain("hey there");
     expect(result.text).toContain("hello!");
+    expect(result.text).toContain(
+      "Shaw (discord username: shawmakesmagic): hey there",
+    );
     expect(result.values).toHaveProperty("recentConversationCount", 2);
   });
 

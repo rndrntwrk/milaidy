@@ -94,7 +94,11 @@ describe("readChannelAction", () => {
           id: "m1",
           roomId: "room-123",
           entityId: "user-1",
-          content: { text: "hello world" },
+          content: { text: "hello world", source: "discord" },
+          metadata: {
+            entityName: "Shaw",
+            entityUserName: "shawmakesmagic",
+          },
           createdAt: Date.now() - 60_000,
         },
         {
@@ -118,6 +122,7 @@ describe("readChannelAction", () => {
     expect(result.text).toContain("general");
     expect(result.text).toContain("hello world");
     expect(result.text).toContain("hi there");
+    expect(result.text).toContain("Shaw (discord username: shawmakesmagic)");
     expect(result.text).toContain("scratchpad");
     // Line numbers present
     expect(result.text).toContain("  1 |");

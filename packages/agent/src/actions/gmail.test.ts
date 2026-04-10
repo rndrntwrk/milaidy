@@ -322,6 +322,63 @@ describe("gmailAction", () => {
     expect(result?.text).toContain("OneBlade receipt");
   });
 
+  it("repairs a bad requested subaction with an LLM Gmail plan", async () => {
+    mockUseModel.mockResolvedValue(
+      '{"subaction":"search","queries":["from:suran"],"replyNeededOnly":false}',
+    );
+    mockGetGmailSearch.mockResolvedValue({
+      query: "from:suran",
+      messages: [
+        {
+          id: "msg-llm-plan-suran",
+          externalId: "ext-llm-plan-suran",
+          threadId: "thread-llm-plan-suran",
+          agentId: "agent-1",
+          provider: "google",
+          side: "owner",
+          subject: "Checking in",
+          from: "Suran Lee",
+          fromEmail: "suran@example.com",
+          replyTo: "suran@example.com",
+          to: ["shawmakesmagic@gmail.com"],
+          cc: [],
+          snippet: "Wanted to follow up",
+          receivedAt: "2026-04-08T16:00:00.000Z",
+          isUnread: true,
+          isImportant: false,
+          likelyReplyNeeded: true,
+          triageScore: 66,
+          triageReason: "search hit",
+          labels: ["INBOX", "UNREAD"],
+          htmlLink: "https://mail.google.com/mail/u/0/#all/thread-llm-plan-suran",
+          metadata: {},
+          syncedAt: "2026-04-08T16:00:00.000Z",
+          updatedAt: "2026-04-08T16:00:00.000Z",
+        },
+      ],
+      source: "cache",
+      syncedAt: "2026-04-09T16:00:00.000Z",
+      summary: {
+        totalCount: 1,
+        unreadCount: 1,
+        importantCount: 0,
+        replyNeededCount: 1,
+      },
+    });
+
+    const result = await invoke("i'm wondering whether suran emailed me", {
+      subaction: "triage",
+    });
+
+    expect(mockUseModel).toHaveBeenCalled();
+    expect(mockGetGmailSearch).toHaveBeenCalledWith(
+      expect.any(URL),
+      expect.objectContaining({ query: "from:suran" }),
+    );
+    expect(result).toMatchObject({ success: true });
+    expect(result?.text).toContain("Suran Lee");
+  });
+
   it("sends grounded Gmail results through the action callback", async () => {
     const callback = vi.fn(async () => []);
     mockGetGmailSearch.mockResolvedValue({
@@ -1255,6 +1312,36 @@ describe("gmailAction", () => {
       }),
     );
     expect(result?.success).toBe(true);
+  });
+
+  it("falls back to an LLM-extracted Gmail query when a non-English params.query is just the echoed request", async () => {
+    mockUseModel.mockResolvedValue(
+      '{"subaction":"search","queries":["from:suran"]}',
+    );
+    mockGetGmailSearch.mockResolvedValue(
+      searchResult({
+        query: "from:suran",
+        from: "Suran Goonatilake",
+        subject: "Checking in",
+      }),
+    );
+
+    const request =
+      "puedes buscar en mi correo y decirme si suran me escribió";
+    const result = await invokeWith(request, request, {
+      subaction: "search",
+      query: request,
+    });
+
+    expect(mockUseModel).toHaveBeenCalled();
+    expect(mockGetGmailSearch).toHaveBeenCalledWith(
+      expect.any(URL),
+      expect.objectContaining({
+        query: "from:suran",
+      }),
+    );
+    expect(result?.success).toBe(true);
+    expect(result?.text).toContain("Checking in");
   });
 
   it("does not extract garbage sender names from noise text", async () => {

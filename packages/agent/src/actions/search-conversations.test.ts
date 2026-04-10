@@ -72,7 +72,11 @@ describe("searchConversationsAction", () => {
           id: "m1",
           roomId: "room-1",
           entityId: "user-1",
-          content: { text: "let's order pizza" },
+          content: { text: "let's order pizza", source: "discord" },
+          metadata: {
+            entityName: "Shaw",
+            entityUserName: "shawmakesmagic",
+          },
           createdAt: Date.now() - 60_000,
         },
         {
@@ -103,6 +107,7 @@ describe("searchConversationsAction", () => {
     expect(result.text).toContain("food-chat");
     expect(result.text).toContain("  1 |");
     expect(result.text).toContain("  2 |");
+    expect(result.text).toContain("Shaw (discord username: shawmakesmagic)");
     expect(result.text).toContain("scratchpad");
   });
 

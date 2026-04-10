@@ -44,9 +44,7 @@ describe("BlueBubblesStatusPanel", () => {
       expect(mockClient.getBlueBubblesStatus).toHaveBeenCalledOnce(),
     );
 
-    expect(
-      await screen.findByText("BlueBubbles is connected."),
-    ).toBeTruthy();
+    expect(await screen.findByText("BlueBubbles is connected.")).toBeTruthy();
     expect(
       screen.getByText("http://127.0.0.1:31337/webhooks/bluebubbles"),
     ).toBeTruthy();

@@ -1035,7 +1035,9 @@ MiladyClient.prototype.getSignalStatus = async function (
   this: MiladyClient,
   accountId = "default",
 ) {
-  return this.fetch(`/api/signal/status?accountId=${encodeURIComponent(accountId)}`);
+  return this.fetch(
+    `/api/signal/status?accountId=${encodeURIComponent(accountId)}`,
+  );
 };
 
 MiladyClient.prototype.startSignalPairing = async function (

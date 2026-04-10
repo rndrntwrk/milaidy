@@ -195,8 +195,7 @@ export function SignalQrOverlay({
             </li>
             <li>
               {t("signalqroverlay.OpenLinkedDevices", {
-                defaultValue:
-                  "Open Signal settings and choose Linked Devices.",
+                defaultValue: "Open Signal settings and choose Linked Devices.",
               })}
             </li>
             <li>

@@ -8,7 +8,11 @@ import type {
   UUID,
 } from "@elizaos/core";
 import { logger, ModelType } from "@elizaos/core";
-import { formatRelativeTimestamp, roomSourceTag } from "./conversation-utils.js";
+import {
+  formatRelativeTimestamp,
+  formatSpeakerLabel,
+  roomSourceTag,
+} from "./conversation-utils.js";
 
 const MAX_RELEVANT_RESULTS = 10;
 const MATCH_THRESHOLD = 0.7;
@@ -98,10 +102,7 @@ export const relevantConversationsProvider: Provider = {
         const room = roomCache.get(mem.roomId as string) ?? null;
         const tag = roomSourceTag(room);
         const ts = formatRelativeTimestamp(mem.createdAt);
-        const speaker =
-          mem.entityId === runtime.agentId
-            ? (runtime.character?.name ?? "agent")
-            : "user";
+        const speaker = formatSpeakerLabel(runtime, mem);
         const msgText = (mem.content.text ?? "").slice(0, 200);
         lines.push(`${tag} (${ts}) ${speaker}: ${msgText}`);
       }

@@ -112,4 +112,10 @@ describe("MiladyCharacterPersistenceService", () => {
       },
     });
   });
+
+  it("implements the required static start method", async () => {
+    const service = await MiladyCharacterPersistenceService.start(runtime);
+
+    expect(service).toBeInstanceOf(MiladyCharacterPersistenceService);
+  });
 });

@@ -30,7 +30,9 @@ function channelLabel(channel: DiscordLocalChannel): string {
     return channel.recipients
       .map(
         (recipient) =>
-          recipient.global_name?.trim() || recipient.username?.trim() || recipient.id,
+          recipient.global_name?.trim() ||
+          recipient.username?.trim() ||
+          recipient.id,
       )
       .join(", ");
   }
@@ -42,7 +44,9 @@ function currentUserLabel(status: DiscordLocalStatus | null): string | null {
   if (!currentUser) {
     return null;
   }
-  return currentUser.global_name?.trim() || currentUser.username?.trim() || null;
+  return (
+    currentUser.global_name?.trim() || currentUser.username?.trim() || null
+  );
 }
 
 export function DiscordLocalConnectorPanel() {
@@ -200,9 +204,8 @@ export function DiscordLocalConnectorPanel() {
     setError(null);
     setSaveMessage(null);
     try {
-      const response = await client.saveDiscordLocalSubscriptions(
-        selectedChannelIds,
-      );
+      const response =
+        await client.saveDiscordLocalSubscriptions(selectedChannelIds);
       setStatus((current) =>
         current
           ? {
@@ -231,9 +234,7 @@ export function DiscordLocalConnectorPanel() {
 
   return (
     <PagePanel.Notice
-      tone={
-        error ? "danger" : status?.authenticated ? "accent" : "default"
-      }
+      tone={error ? "danger" : status?.authenticated ? "accent" : "default"}
       className="mt-4"
     >
       <div className="space-y-3 text-xs">
@@ -261,7 +262,9 @@ export function DiscordLocalConnectorPanel() {
               defaultValue: "Discord IPC socket",
             })}
             :{" "}
-            <code className="text-[11px] text-muted-strong">{status.ipcPath}</code>
+            <code className="text-[11px] text-muted-strong">
+              {status.ipcPath}
+            </code>
           </div>
         ) : null}
 

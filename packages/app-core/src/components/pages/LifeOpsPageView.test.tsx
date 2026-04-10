@@ -7,22 +7,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flush, text } from "../../../../../test/helpers/react-test";
 import { LIFEOPS_GITHUB_POST_MESSAGE_TYPE } from "../../platform";
 
-const { mockClient, mockOpenExternalUrl, mockUseApp, mockPopupClose } = vi.hoisted(() => ({
-  mockClient: {
-    createCloudCompatAgentManagedGithubOauth: vi.fn(),
-    disconnectCloudCompatAgentManagedGithub: vi.fn(),
-    disconnectCloudOauthConnection: vi.fn(),
-    getCloudCompatAgentManagedGithub: vi.fn(),
-    getCloudCompatAgents: vi.fn(),
-    getLifeOpsOverview: vi.fn(),
-    initiateCloudOauth: vi.fn(),
-    linkCloudCompatAgentManagedGithub: vi.fn(),
-    listCloudOauthConnections: vi.fn(),
-  },
-  mockOpenExternalUrl: vi.fn(),
-  mockUseApp: vi.fn(),
-  mockPopupClose: vi.fn(),
-}));
+const { mockClient, mockOpenExternalUrl, mockUseApp, mockPopupClose } =
+  vi.hoisted(() => ({
+    mockClient: {
+      createCloudCompatAgentManagedGithubOauth: vi.fn(),
+      disconnectCloudCompatAgentManagedGithub: vi.fn(),
+      disconnectCloudOauthConnection: vi.fn(),
+      getCloudCompatAgentManagedGithub: vi.fn(),
+      getCloudCompatAgents: vi.fn(),
+      getLifeOpsOverview: vi.fn(),
+      initiateCloudOauth: vi.fn(),
+      linkCloudCompatAgentManagedGithub: vi.fn(),
+      listCloudOauthConnections: vi.fn(),
+    },
+    mockOpenExternalUrl: vi.fn(),
+    mockUseApp: vi.fn(),
+    mockPopupClose: vi.fn(),
+  }));
 
 const mockPopup = {
   location: { href: "" },

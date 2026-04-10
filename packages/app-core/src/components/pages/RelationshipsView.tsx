@@ -22,6 +22,7 @@ import {
   useCallback,
   useDeferredValue,
   useEffect,
+  useRef,
   useState,
 } from "react";
 import { useApp } from "../../state";
@@ -120,7 +121,13 @@ function profilePrimaryValue(
   );
 }
 
-function PersonSummaryCard({ person }: { person: RelationshipsPersonDetail }) {
+function PersonSummaryCard({
+  person,
+  onViewMemories,
+}: {
+  person: RelationshipsPersonDetail;
+  onViewMemories?: (entityIds: string[]) => void;
+}) {
   const contacts = topContacts(person);
   const hasProfiles = person.profiles.length > 0;
 
@@ -142,13 +149,24 @@ function PersonSummaryCard({ person }: { person: RelationshipsPersonDetail }) {
                 : "No alternate aliases have been confirmed yet."}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {person.isOwner ? <MetaPill compact>Owner</MetaPill> : null}
           <MetaPill compact>
             {person.memberEntityIds.length} identities
           </MetaPill>
           <MetaPill compact>{person.factCount} facts</MetaPill>
           <MetaPill compact>{person.relationshipCount} links</MetaPill>
+          {onViewMemories ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="ml-1 h-7 rounded-full px-3 text-[10px] font-semibold tracking-[0.12em]"
+              onClick={() => onViewMemories(person.memberEntityIds)}
+            >
+              View memories
+            </Button>
+          ) : null}
         </div>
       </div>
 
@@ -515,7 +533,7 @@ export function RelationshipsView({
 }: {
   contentHeader?: ReactNode;
 } = {}) {
-  const { t } = useApp();
+  const { t, setTab } = useApp();
   const [search, setSearch] = useState("");
   const [platform, setPlatform] = useState<string>("all");
   const [graphLoading, setGraphLoading] = useState(true);
@@ -525,6 +543,8 @@ export function RelationshipsView({
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [detail, setDetail] = useState<RelationshipsPersonDetail | null>(null);
+  // Keep previous detail visible while loading a new person (optimistic transition).
+  const prevDetail = useRef<RelationshipsPersonDetail | null>(null);
   const deferredSearch = useDeferredValue(search);
 
   const loadGraph = useCallback(async (query: RelationshipsGraphQuery) => {
@@ -573,13 +593,23 @@ export function RelationshipsView({
     }
   }, [graph, selectedPersonId]);
 
+  // Keep a live ref to `detail` so the effect can snapshot it without
+  // adding it to the dependency array (which would re-trigger the fetch).
+  const detailRef = useRef(detail);
+  detailRef.current = detail;
+
   useEffect(() => {
     if (!selectedPersonId) {
+      prevDetail.current = null;
       setDetail(null);
       return;
     }
 
     let cancelled = false;
+    // Stash the current detail so we can keep showing it during load.
+    if (detailRef.current) {
+      prevDetail.current = detailRef.current;
+    }
     setDetailLoading(true);
     setDetailError(null);
 
@@ -588,14 +618,16 @@ export function RelationshipsView({
       .then((person) => {
         if (!cancelled) {
           setDetail(person);
+          prevDetail.current = null;
         }
       })
-      .catch((error) => {
+      .catch((err) => {
         if (!cancelled) {
           setDetail(null);
+          prevDetail.current = null;
           setDetailError(
-            error instanceof Error
-              ? error.message
+            err instanceof Error
+              ? err.message
               : "Failed to load the selected person.",
           );
         }
@@ -617,6 +649,9 @@ export function RelationshipsView({
       (person) => person.primaryEntityId === selectedPersonId,
     ) ?? null;
   const selectedGroupId = selectedSummary?.groupId ?? null;
+  // Show the previous person while the new one loads (optimistic transition).
+  const displayDetail = detail ?? (detailLoading ? prevDetail.current : null);
+  const isStaleDetail = detailLoading && !detail && prevDetail.current !== null;
 
   const sidebar = (
     <Sidebar testId="relationships-sidebar">
@@ -667,7 +702,7 @@ export function RelationshipsView({
                 type="button"
                 size="sm"
                 variant="outline"
-                className={TOOLBAR_BUTTON_BASE}
+                className={`${TOOLBAR_BUTTON_BASE} ${platform === "all" ? "border-accent/40 bg-accent/14 text-txt" : ""}`}
                 onClick={() => setPlatform("all")}
               >
                 All
@@ -678,7 +713,7 @@ export function RelationshipsView({
                   type="button"
                   size="sm"
                   variant="outline"
-                  className={TOOLBAR_BUTTON_BASE}
+                  className={`${TOOLBAR_BUTTON_BASE} ${platform === entry ? "border-accent/40 bg-accent/14 text-txt" : ""}`}
                   onClick={() => setPlatform(entry)}
                 >
                   {entry}
@@ -790,8 +825,19 @@ export function RelationshipsView({
                 />
               </PagePanel>
 
-              {detail ? (
-                <PersonSummaryCard person={detail} />
+              {displayDetail ? (
+                <div
+                  className={
+                    isStaleDetail
+                      ? "pointer-events-none opacity-50 transition-opacity duration-200"
+                      : "transition-opacity duration-200"
+                  }
+                >
+                  <PersonSummaryCard
+                    person={displayDetail}
+                    onViewMemories={() => setTab("memories")}
+                  />
+                </div>
               ) : detailLoading ? (
                 <PagePanel.Loading heading="Loading person detail…" />
               ) : (
@@ -803,12 +849,14 @@ export function RelationshipsView({
               )}
             </div>
 
-            {detail ? (
-              <div className="grid gap-4 xl:grid-cols-2">
-                <FactsPanel person={detail} />
-                <RelationshipsPanel person={detail} />
+            {displayDetail ? (
+              <div
+                className={`grid gap-4 xl:grid-cols-2 ${isStaleDetail ? "pointer-events-none opacity-50 transition-opacity duration-200" : "transition-opacity duration-200"}`}
+              >
+                <FactsPanel person={displayDetail} />
+                <RelationshipsPanel person={displayDetail} />
                 <div className="xl:col-span-2">
-                  <ConversationsPanel person={detail} />
+                  <ConversationsPanel person={displayDetail} />
                 </div>
               </div>
             ) : null}

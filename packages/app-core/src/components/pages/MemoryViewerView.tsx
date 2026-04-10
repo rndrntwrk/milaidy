@@ -425,7 +425,7 @@ export function MemoryViewerView({
 }: {
   contentHeader?: ReactNode;
 } = {}) {
-  const { t } = useApp();
+  const { t, setTab } = useApp();
   const [viewMode, setViewMode] = useState<ViewMode>("feed");
   const [typeFilter, setTypeFilter] = useState<string | null>(null);
   const [stats, setStats] = useState<MemoryStatsResponse | null>(null);
@@ -581,15 +581,24 @@ export function MemoryViewerView({
         </SidebarContent.SectionLabel>
 
         {selectedPersonId ? (
-          <div className="mt-2 px-1">
+          <div className="mt-2 flex gap-1.5 px-1">
             <Button
               type="button"
               size="sm"
               variant="ghost"
-              className="w-full text-[11px]"
+              className="flex-1 text-[11px]"
               onClick={handleClearPerson}
             >
-              Show all memories
+              Show all
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="flex-1 text-[11px]"
+              onClick={() => setTab("relationships")}
+            >
+              Relationships
             </Button>
           </div>
         ) : null}
