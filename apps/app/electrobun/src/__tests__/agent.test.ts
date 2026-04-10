@@ -1,3 +1,5 @@
+import path from "node:path";
+
 import { DEFAULT_DESKTOP_API_PORT } from "@miladyai/shared/runtime-env";
 import {
   afterEach,
@@ -71,9 +73,16 @@ vi.mock("../native/loopback-port", () => ({
 const mockSpawn = vi.fn();
 const mockSleep = vi.fn(() => Promise.resolve());
 
-// Bun global is non-configurable on globalThis but Bun.spawn and Bun.sleep are writable; assign directly.
-(Bun as unknown as { spawn: unknown }).spawn = mockSpawn;
-(Bun as unknown as { sleep: unknown }).sleep = mockSleep;
+type BunLike = { spawn: unknown; sleep: unknown };
+
+function bunGlobal(): BunLike {
+  const globalState = globalThis as typeof globalThis & { Bun?: BunLike };
+  globalState.Bun ??= { spawn: vi.fn(), sleep: vi.fn(() => Promise.resolve()) };
+  return globalState.Bun;
+}
+
+bunGlobal().spawn = mockSpawn;
+bunGlobal().sleep = mockSleep;
 
 // Mock fetch for health checks
 const mockFetch = vi.fn();
@@ -456,7 +465,9 @@ describe("AgentManager", () => {
         prefix: "../../escape\\..\\report bundle",
       });
 
-      expect(bundle.directory).toContain("/bug-reports/escape-report-bundle-");
+      expect(bundle.directory).toContain(
+        `${path.sep}bug-reports${path.sep}escape-report-bundle-`,
+      );
       expect(bundle.directory).not.toContain("../");
       expect(bundle.directory).not.toContain("..\\");
     });
@@ -905,7 +916,9 @@ describe("AgentManager", () => {
 
         const spawnOptions = mockSpawn.mock.calls[0]?.[1];
         expect(spawnOptions?.env?.NODE_PATH).toBe(
-          "/mock/milady-dist/node_modules:/mock/node_modules",
+          ["/mock/milady-dist/node_modules", "/mock/node_modules"].join(
+            path.delimiter,
+          ),
         );
       } finally {
         if (originalNodePath === undefined) {

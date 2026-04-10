@@ -27,6 +27,25 @@ function readJson(filePath: string) {
 }
 
 describe("startup trace", () => {
+  const darwinBundlePath = path.join("/Applications", "Milady-canary.app");
+  const darwinExecPath = path.join(
+    darwinBundlePath,
+    "Contents",
+    "MacOS",
+    "launcher",
+  );
+  const darwinBootstrapPath = path.join(
+    darwinBundlePath,
+    "Contents",
+    "Resources",
+    "startup-session.json",
+  );
+  const winBundlePath = path.join(
+    "/Users/test/AppData/Local/com.miladyai.milady/canary/self-extraction",
+    "Milady-canary",
+  );
+  const winExecPath = path.join(winBundlePath, "bin", "launcher.exe");
+  const winBootstrapPath = path.join(winBundlePath, "startup-session.json");
   let tempDir: string;
 
   beforeEach(() => {
@@ -46,7 +65,7 @@ describe("startup trace", () => {
       "main_start",
       {
         pid: 123,
-        exec_path: "/Applications/Milady-canary.app/Contents/MacOS/launcher",
+        exec_path: darwinExecPath,
       },
       env,
     );
@@ -56,7 +75,7 @@ describe("startup trace", () => {
     expect(state.session_id).toBe("session-a");
     expect(state.phase).toBe("main_start");
     expect(state.pid).toBe(123);
-    expect(state.bundle_path).toBe("/Applications/Milady-canary.app");
+    expect(state.bundle_path).toBe(darwinBundlePath);
 
     const events = fs
       .readFileSync(env.MILADY_STARTUP_EVENTS_FILE as string, "utf8")
@@ -187,21 +206,11 @@ describe("startup trace", () => {
   });
 
   it("derives bundle-local bootstrap sidecars from packaged launcher paths", () => {
-    expect(
-      resolveStartupTraceBootstrapFile(
-        "/Applications/Milady-canary.app/Contents/MacOS/launcher",
-        "darwin",
-      ),
-    ).toBe(
-      "/Applications/Milady-canary.app/Contents/Resources/startup-session.json",
+    expect(resolveStartupTraceBootstrapFile(darwinExecPath, "darwin")).toBe(
+      darwinBootstrapPath,
     );
-    expect(
-      resolveStartupTraceBootstrapFile(
-        "/Users/test/AppData/Local/com.miladyai.milady/canary/self-extraction/Milady-canary/bin/launcher.exe",
-        "win32",
-      ),
-    ).toBe(
-      "/Users/test/AppData/Local/com.miladyai.milady/canary/self-extraction/Milady-canary/startup-session.json",
+    expect(resolveStartupTraceBootstrapFile(winExecPath, "win32")).toBe(
+      winBootstrapPath,
     );
   });
 

@@ -12,6 +12,7 @@ const DEFAULT_REPO_ROOT = path.resolve(__dirname, "..");
 
 export const repoSetupSteps = [
   "scripts/init-submodules.mjs",
+  "scripts/patch-workspace-plugins.mjs",
   "scripts/patch-deps.mjs",
   "scripts/setup-upstreams.mjs",
   "scripts/ensure-bundled-workspaces.mjs",

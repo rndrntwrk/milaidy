@@ -109,7 +109,10 @@ describe("roleBackfillProvider", () => {
 
     await roleBackfillProvider.get(runtime, makeMessage(), {} as never);
 
-    expect(getUpdateWorld(runtime)).not.toHaveBeenCalled();
+    expect(getUpdateWorld(runtime)).toHaveBeenCalledOnce();
+    const call = getUpdateWorld(runtime).mock.calls[0][0];
+    expect(call.metadata.roles[OWNER_ID]).toBe("OWNER");
+    expect(call.metadata.roleSources[OWNER_ID]).toBe("owner");
   });
 
   it("returns empty when room has no worldId", async () => {

@@ -69,7 +69,7 @@ jobs:
       # workspace is present. Published-only CI disables that checkout.
       - name: Generate protobuf types
         run: |
-          if [ "${MILADY_SKIP_LOCAL_UPSTREAMS:-0}" != "1" ] && [ -f eliza/packages/schemas/buf.gen.yaml ] && [ ! -d eliza/packages/typescript/src/types/generated ]; then
+          if [ "${MILADY_SKIP_LOCAL_UPSTREAMS:-0}" != "1" ] && [ -d eliza/packages/schemas ] && [ -f eliza/packages/schemas/buf.gen.yaml ] && [ ! -d eliza/packages/typescript/src/types/generated ]; then
             cd eliza/packages/schemas
             node node_modules/@bufbuild/buf/install.js 2>/dev/null || true
             npx --yes @bufbuild/buf@1.67.0 generate
@@ -113,7 +113,7 @@ jobs:
       # workspace is present. Published-only CI disables that checkout.
       - name: Generate protobuf types
         run: |
-          if [ "${MILADY_SKIP_LOCAL_UPSTREAMS:-0}" != "1" ] && [ -f eliza/packages/schemas/buf.gen.yaml ] && [ ! -d eliza/packages/typescript/src/types/generated ]; then
+          if [ "${MILADY_SKIP_LOCAL_UPSTREAMS:-0}" != "1" ] && [ -d eliza/packages/schemas ] && [ -f eliza/packages/schemas/buf.gen.yaml ] && [ ! -d eliza/packages/typescript/src/types/generated ]; then
             cd eliza/packages/schemas
             node node_modules/@bufbuild/buf/install.js 2>/dev/null || true
             npx --yes @bufbuild/buf@1.67.0 generate
@@ -469,7 +469,7 @@ jobs:
       # workspace is present. Published-only CI disables that checkout.
       - name: Generate protobuf types
         run: |
-          if [ "${MILADY_SKIP_LOCAL_UPSTREAMS:-0}" != "1" ] && [ -f eliza/packages/schemas/buf.gen.yaml ] && [ ! -d eliza/packages/typescript/src/types/generated ]; then
+          if [ "${MILADY_SKIP_LOCAL_UPSTREAMS:-0}" != "1" ] && [ -d eliza/packages/schemas ] && [ -f eliza/packages/schemas/buf.gen.yaml ] && [ ! -d eliza/packages/typescript/src/types/generated ]; then
             cd eliza/packages/schemas
             node node_modules/@bufbuild/buf/install.js 2>/dev/null || true
             npx --yes @bufbuild/buf@1.67.0 generate

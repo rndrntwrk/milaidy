@@ -111,6 +111,7 @@ describe("life-ops gmail triage", () => {
   beforeAll(async () => {
     envBackup = saveEnv(
       "ELIZA_STATE_DIR",
+      "MILADY_STATE_DIR",
       "MILADY_GOOGLE_OAUTH_DESKTOP_CLIENT_ID",
       "ELIZA_GOOGLE_OAUTH_DESKTOP_CLIENT_ID",
       "MILADY_GOOGLE_OAUTH_WEB_CLIENT_ID",
@@ -122,6 +123,7 @@ describe("life-ops gmail triage", () => {
     );
     stateDir = await fs.mkdtemp(path.join(os.tmpdir(), "lifeops-gmail-"));
     process.env.ELIZA_STATE_DIR = stateDir;
+    process.env.MILADY_STATE_DIR = stateDir;
     runtime = createRuntimeForGmailTests();
 
     const server = await startApiServer({

@@ -607,11 +607,18 @@ vi.mock("../native/desktop", async () => {
 });
 
 function stubBunGlobal(): void {
+  const globalState = globalThis as typeof globalThis & {
+    Bun?: { spawn: unknown; sleep: unknown };
+  };
+  globalState.Bun ??= {
+    spawn: vi.fn(),
+    sleep: vi.fn(() => Promise.resolve()),
+  };
   // Bun global is non-configurable on globalThis but Bun.spawn and Bun.sleep
   // are writable data properties, so direct assignment works.
   // Bun.version is non-writable/non-configurable — tests that read it will see
   // the real runtime version, which is acceptable since no test asserts its value.
-  (Bun as unknown as { spawn: unknown }).spawn = vi.fn(() => ({
+  globalState.Bun.spawn = vi.fn(() => ({
     exited: Promise.resolve(0),
     stdout: new ReadableStream({
       start(c) {
@@ -627,7 +634,7 @@ function stubBunGlobal(): void {
     pid: 12345,
     kill: vi.fn(),
   }));
-  (Bun as unknown as { sleep: unknown }).sleep = vi.fn(() => Promise.resolve());
+  globalState.Bun.sleep = vi.fn(() => Promise.resolve());
 }
 
 stubBunGlobal();

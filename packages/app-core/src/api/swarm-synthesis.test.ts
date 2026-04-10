@@ -1,5 +1,4 @@
 import type { AgentRuntime } from "@elizaos/core";
-import { ModelType } from "@elizaos/core";
 import { handleSwarmSynthesis } from "@miladyai/agent/api/server";
 import { describe, expect, it, vi } from "vitest";
 
@@ -26,7 +25,7 @@ function makePayload(
 }
 
 describe("handleSwarmSynthesis", () => {
-  it("routes LLM synthesis to user on success", async () => {
+  it("routes deterministic synthesis to user on success", async () => {
     const useModel = vi
       .fn()
       .mockResolvedValue("All tasks completed successfully!");
@@ -35,44 +34,74 @@ describe("handleSwarmSynthesis", () => {
 
     await handleSwarmSynthesis(st, makePayload(), routeMessage);
 
-    expect(useModel).toHaveBeenCalledWith(ModelType.TEXT_SMALL, {
-      prompt: expect.stringContaining("task-agent swarm"),
-      maxTokens: 2048,
-      temperature: 0.7,
-    });
+    expect(useModel).not.toHaveBeenCalled();
     expect(routeMessage).toHaveBeenCalledWith(
-      "All tasks completed successfully!",
+      "done — Bug fixed in main.ts",
       "swarm_synthesis",
     );
   });
 
-  it("does not route when LLM returns empty string", async () => {
+  it("falls back to the original task text when completion summary is missing", async () => {
     const useModel = vi.fn().mockResolvedValue("   ");
     const st = { runtime: { useModel, getService: vi.fn().mockReturnValue(null) } as AgentRuntime };
     const routeMessage = vi.fn();
 
-    await handleSwarmSynthesis(st, makePayload(), routeMessage);
+    await handleSwarmSynthesis(
+      st,
+      makePayload({
+        tasks: [
+          {
+            sessionId: "s1",
+            label: "Agent 1",
+            agentType: "claude",
+            originalTask: "Fix the bug",
+            status: "completed",
+            completionSummary: "",
+          },
+        ],
+      }),
+      routeMessage,
+    );
 
-    expect(useModel).toHaveBeenCalled();
-    expect(routeMessage).not.toHaveBeenCalled();
+    expect(useModel).not.toHaveBeenCalled();
+    expect(routeMessage).toHaveBeenCalledWith("done — Fix the bug", "swarm_synthesis");
   });
 
-  it("falls back to generic message when LLM throws", async () => {
+  it("formats multi-task synthesis without using the LLM", async () => {
     const useModel = vi.fn().mockRejectedValue(new Error("LLM unavailable"));
     const st = { runtime: { useModel, getService: vi.fn().mockReturnValue(null) } as AgentRuntime };
     const routeMessage = vi.fn();
 
     const payload = makePayload({
+      tasks: [
+        {
+          sessionId: "s1",
+          label: "Agent 1",
+          agentType: "claude",
+          originalTask: "Fix the bug",
+          status: "completed",
+          completionSummary: "Bug fixed in main.ts",
+        },
+        {
+          sessionId: "s2",
+          label: "Agent 2",
+          agentType: "codex",
+          originalTask: "Update docs",
+          status: "stopped",
+          completionSummary: "Docs updated in README.md",
+        },
+      ],
+      total: 2,
       completed: 2,
-      stopped: 1,
+      stopped: 0,
       errored: 0,
-      total: 3,
     });
     await handleSwarmSynthesis(st, payload, routeMessage);
 
+    expect(useModel).not.toHaveBeenCalled();
     expect(routeMessage).toHaveBeenCalledWith(
-      "All 3 task agents finished (2 completed, 1 stopped). Review their work when you're ready.",
-      "coding-agent",
+      "done — 2 tasks:\n• Bug fixed in main.ts\n• Docs updated in README.md",
+      "swarm_synthesis",
     );
   });
 

@@ -1,3 +1,5 @@
+import path from "node:path";
+
 import { describe, expect, it } from "vitest";
 import {
   BACKGROUND_NOTICE_MARKER_FILE,
@@ -8,22 +10,24 @@ import {
 } from "../background-notice";
 
 describe("background notice", () => {
+  const userDataDir = path.join("/tmp", "milady");
+  const otherDataDir = path.join("/tmp", "other");
+  const markerPath = path.join(userDataDir, BACKGROUND_NOTICE_MARKER_FILE);
+
   it("resolves the marker path under the userData directory", () => {
-    expect(resolveBackgroundNoticeMarkerPath("/tmp/milady")).toBe(
-      `/tmp/milady/${BACKGROUND_NOTICE_MARKER_FILE}`,
-    );
+    expect(resolveBackgroundNoticeMarkerPath(userDataDir)).toBe(markerPath);
   });
 
   it("reports whether the background notice marker already exists", () => {
-    const seenPaths = new Set([`/tmp/milady/${BACKGROUND_NOTICE_MARKER_FILE}`]);
+    const seenPaths = new Set([markerPath]);
     const fileSystem = {
       existsSync: (filePath: string) => seenPaths.has(filePath),
       mkdirSync: () => {},
       writeFileSync: () => {},
     };
 
-    expect(hasSeenBackgroundNotice(fileSystem, "/tmp/milady")).toBe(true);
-    expect(hasSeenBackgroundNotice(fileSystem, "/tmp/other")).toBe(false);
+    expect(hasSeenBackgroundNotice(fileSystem, userDataDir)).toBe(true);
+    expect(hasSeenBackgroundNotice(fileSystem, otherDataDir)).toBe(false);
   });
 
   it("writes the marker file when the background notice is shown", () => {
@@ -52,18 +56,18 @@ describe("background notice", () => {
       },
     };
 
-    const markerPath = markBackgroundNoticeSeen(fileSystem, "/tmp/milady");
+    const createdMarkerPath = markBackgroundNoticeSeen(fileSystem, userDataDir);
 
-    expect(markerPath).toBe(`/tmp/milady/${BACKGROUND_NOTICE_MARKER_FILE}`);
+    expect(createdMarkerPath).toBe(markerPath);
     expect(mkdirCalls).toEqual([
       {
-        dirPath: "/tmp/milady",
+        dirPath: userDataDir,
         recursive: true,
       },
     ]);
     expect(writeCalls).toEqual([
       {
-        filePath: `/tmp/milady/${BACKGROUND_NOTICE_MARKER_FILE}`,
+        filePath: markerPath,
         data: '{"seen":true}\n',
         encoding: "utf8",
       },
@@ -84,7 +88,7 @@ describe("background notice", () => {
     expect(
       showBackgroundNoticeOnce({
         fileSystem,
-        userDataDir: "/tmp/milady",
+        userDataDir,
         showNotification: (options) => {
           notifications.push(options);
         },
@@ -93,7 +97,7 @@ describe("background notice", () => {
     expect(
       showBackgroundNoticeOnce({
         fileSystem,
-        userDataDir: "/tmp/milady",
+        userDataDir,
         showNotification: (options) => {
           notifications.push(options);
         },

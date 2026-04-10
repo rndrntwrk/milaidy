@@ -87,10 +87,11 @@ async function runSkillSecurityScan(
       if (entry.name === "node_modules") continue;
       const fullPath = pathMod.join(dir, entry.name);
       const relPath = pathMod.relative(skillDir, fullPath);
+      const stats = await fsPromises.lstat(fullPath);
 
-      if (entry.isDirectory()) {
+      if (stats.isDirectory()) {
         await walk(fullPath);
-      } else if (entry.isFile()) {
+      } else if (stats.isFile()) {
         scannedFiles++;
         const ext = pathMod.extname(entry.name).toLowerCase();
         if (BINARY_EXTENSIONS.has(ext)) {
@@ -101,14 +102,16 @@ async function runSkillSecurityScan(
             message: `Binary executable file detected (${ext})`,
           });
         }
-      } else if (entry.isSymbolicLink()) {
-        const resolved = await fsPromises.realpath(fullPath).catch(() => "");
-        if (resolved && !resolved.startsWith(skillDir + pathMod.sep)) {
+      } else if (stats.isSymbolicLink()) {
+        const resolved = await fsPromises.realpath(fullPath).catch(() => null);
+        if (!resolved || !resolved.startsWith(skillDir + pathMod.sep)) {
           manifestFindings.push({
             ruleId: "symlink-escape",
             severity: "critical",
             file: relPath,
-            message: `Symbolic link points outside skill directory`,
+            message: resolved
+              ? "Symbolic link points outside skill directory"
+              : "Symbolic link could not be resolved safely",
           });
         }
       }
@@ -205,7 +208,8 @@ export interface InstallSkillInput {
 }
 
 function stateDirBase(): string {
-  const base = process.env.ELIZA_STATE_DIR?.trim();
+  const base =
+    process.env.MILADY_STATE_DIR?.trim() || process.env.ELIZA_STATE_DIR?.trim();
   return base || path.join(os.homedir(), ".eliza");
 }
 

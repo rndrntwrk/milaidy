@@ -467,7 +467,7 @@ export function RelationshipsGraphPanel({
         </div>
         <p className="mt-2 max-w-lg text-sm leading-6 text-muted">
           The graph will render once the relationships has people, identity
-          links, and conversations to visualize.
+          links, and relationships to visualize.
         </p>
       </div>
     );

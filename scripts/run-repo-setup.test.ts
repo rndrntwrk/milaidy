@@ -15,6 +15,7 @@ describe("repoSetupSteps", () => {
   it("keeps repo setup order explicit", () => {
     expect(repoSetupSteps).toEqual([
       "scripts/init-submodules.mjs",
+      "scripts/patch-workspace-plugins.mjs",
       "scripts/patch-deps.mjs",
       "scripts/setup-upstreams.mjs",
       "scripts/ensure-bundled-workspaces.mjs",

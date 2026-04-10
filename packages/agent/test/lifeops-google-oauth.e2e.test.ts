@@ -14,6 +14,7 @@ import {
   vi,
 } from "vitest";
 import { startApiServer } from "../src/api/server";
+import { resolveOAuthDir } from "../src/config/paths";
 import { req } from "../../../test/helpers/http";
 import { saveEnv } from "../../../test/helpers/test-utils";
 import { DatabaseSync } from "../src/test-utils/sqlite-compat";
@@ -106,6 +107,7 @@ describe("life-ops Google OAuth foundation", () => {
   beforeAll(async () => {
     envBackup = saveEnv(
       "ELIZA_STATE_DIR",
+      "MILADY_STATE_DIR",
       "MILADY_GOOGLE_OAUTH_DESKTOP_CLIENT_ID",
       "ELIZA_GOOGLE_OAUTH_DESKTOP_CLIENT_ID",
       "MILADY_GOOGLE_OAUTH_WEB_CLIENT_ID",
@@ -117,6 +119,7 @@ describe("life-ops Google OAuth foundation", () => {
     );
     stateDir = await fs.mkdtemp(path.join(os.tmpdir(), "lifeops-google-oauth-"));
     process.env.ELIZA_STATE_DIR = stateDir;
+    process.env.MILADY_STATE_DIR = stateDir;
 
     const server = await startApiServer({
       port: 0,
@@ -273,7 +276,7 @@ describe("life-ops Google OAuth foundation", () => {
 
     const grant = statusRes.data.grant as Record<string, unknown>;
     const tokenRef = String(grant.tokenRef);
-    const tokenPath = path.join(stateDir, "credentials", "lifeops", "google", tokenRef);
+    const tokenPath = path.join(resolveOAuthDir(process.env, stateDir), "lifeops", "google", tokenRef);
     const storedToken = JSON.parse(await fs.readFile(tokenPath, "utf-8")) as {
       refreshToken: string;
       accessToken: string;
@@ -382,8 +385,7 @@ describe("life-ops Google OAuth foundation", () => {
 
     const grant = statusRes.data.grant as Record<string, unknown>;
     const tokenPath = path.join(
-      stateDir,
-      "credentials",
+      resolveOAuthDir(process.env, stateDir),
       "lifeops",
       "google",
       String(grant.tokenRef),

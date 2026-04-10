@@ -9,6 +9,7 @@
 
 import type { Memory, State, UUID } from "@elizaos/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { updateRoleAction } from "../runtime/roles/src/action";
 
 // ---------------------------------------------------------------------------
 // Hoist mocks — roles helpers we intercept to drive real logic
@@ -17,18 +18,22 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   mockGetEntityRole,
+  mockGetLiveEntityMetadataFromMessage,
   mockHasConfiguredCanonicalOwner,
   mockResolveWorldForMessage,
   mockResolveCanonicalOwnerId,
+  mockResolveEntityRole,
   mockSetEntityRole,
   mockNormalizeRole,
   mockCanModifyRole,
   mockCheckSenderRole,
 } = vi.hoisted(() => ({
   mockGetEntityRole: vi.fn(),
+  mockGetLiveEntityMetadataFromMessage: vi.fn(),
   mockHasConfiguredCanonicalOwner: vi.fn(),
   mockResolveWorldForMessage: vi.fn(),
   mockResolveCanonicalOwnerId: vi.fn(),
+  mockResolveEntityRole: vi.fn(),
   mockSetEntityRole: vi.fn(),
   mockNormalizeRole: vi.fn(),
   mockCanModifyRole: vi.fn(),
@@ -37,9 +42,11 @@ const {
 
 vi.mock("@elizaos/core/roles", () => ({
   getEntityRole: mockGetEntityRole,
+  getLiveEntityMetadataFromMessage: mockGetLiveEntityMetadataFromMessage,
   hasConfiguredCanonicalOwner: mockHasConfiguredCanonicalOwner,
   resolveWorldForMessage: mockResolveWorldForMessage,
   resolveCanonicalOwnerId: mockResolveCanonicalOwnerId,
+  resolveEntityRole: mockResolveEntityRole,
   setEntityRole: mockSetEntityRole,
   normalizeRole: mockNormalizeRole,
   canModifyRole: mockCanModifyRole,
@@ -75,6 +82,7 @@ type MockWorld = {
 
 type MockEntity = {
   id: UUID;
+  names?: string[];
   metadata: Record<string, unknown>;
 };
 
@@ -110,6 +118,10 @@ function createMockRuntime(opts: {
       return opts.entities.get(id) ?? null;
     }),
 
+    getEntitiesForRoom: vi.fn(async (_roomId: UUID) => {
+      return [...opts.entities.values()];
+    }),
+
     getRoom: vi.fn(async (id: UUID) => {
       return opts.rooms.get(id) ?? null;
     }),
@@ -117,6 +129,8 @@ function createMockRuntime(opts: {
     getRoomsForParticipant: vi.fn(async (_entityId: UUID) => {
       return [...opts.rooms.values()].map((r) => r.id);
     }),
+
+    getSetting: vi.fn(() => null),
 
     /** Expose tracked calls for assertion */
     _updateWorldCalls: updateWorldCalls,
@@ -143,6 +157,22 @@ function makeMessage(entityId: UUID, roomId: UUID = ROOM_ID): Memory {
     entityId,
     roomId,
     content: { text: "hello" },
+  } as Memory;
+}
+
+function makeRoleCommandMessage(
+  entityId: UUID,
+  text: string,
+  roomId: UUID = ROOM_ID,
+  metadata?: Record<string, unknown>,
+): Memory {
+  return {
+    entityId,
+    roomId,
+    content: {
+      text,
+      ...(metadata ? { metadata } : {}),
+    },
   } as Memory;
 }
 
@@ -260,6 +290,30 @@ function wireCheckSenderRole(
   );
 }
 
+function wireGetLiveEntityMetadataFromMessage() {
+  mockGetLiveEntityMetadataFromMessage.mockImplementation((message: Memory) => {
+    const metadata = message.content.metadata as Record<string, unknown> | undefined;
+    const bridgeSender = metadata?.bridgeSender as
+      | { metadata?: Record<string, unknown> }
+      | undefined;
+    return bridgeSender?.metadata;
+  });
+}
+
+function wireResolveEntityRole(worlds: Map<UUID, MockWorld>, rooms: Map<UUID, MockRoom>) {
+  mockResolveEntityRole.mockImplementation(
+    async (
+      _runtime: unknown,
+      _world: unknown,
+      metadata: RolesMetadata | undefined,
+      entityId: string,
+    ) => {
+      const roles = metadata?.roles ?? {};
+      return roles[entityId] ?? "NONE";
+    },
+  );
+}
+
 function wireCanonicalOwnerResolver(worlds: Map<UUID, MockWorld>) {
   mockHasConfiguredCanonicalOwner.mockReturnValue(false);
   mockResolveCanonicalOwnerId.mockImplementation(
@@ -297,16 +351,19 @@ function createScaffolding(overrides?: {
 
   entities.set(OWNER_ENTITY, {
     id: OWNER_ENTITY,
+    names: ["owner"],
     metadata: { discord: { userId: "discord-owner-111" } },
   });
 
   entities.set(ADMIN_ENTITY, {
     id: ADMIN_ENTITY,
+    names: ["admin"],
     metadata: { discord: { userId: "discord-admin-222" } },
   });
 
   entities.set(NOBODY_ENTITY, {
     id: NOBODY_ENTITY,
+    names: ["nobody"],
     metadata: { discord: { userId: "discord-nobody-333" } },
   });
 
@@ -319,8 +376,10 @@ function createScaffolding(overrides?: {
     worlds.set(w.id, { ...w });
   });
   wireNormalizeRole();
+  wireGetLiveEntityMetadataFromMessage();
   wireCanModifyRole();
   wireCheckSenderRole(worlds, rooms);
+  wireResolveEntityRole(worlds, rooms);
   wireCanonicalOwnerResolver(worlds);
 
   // Config
@@ -895,6 +954,60 @@ describe("roles e2e", () => {
 
       const world = worlds.get(WORLD_ID);
       expect(world?.metadata.roles?.[NOBODY_ENTITY]).toBeUndefined();
+    });
+
+    it("late-join promoted ADMIN can immediately use UPDATE_ROLE in the same world", async () => {
+      const { runtime, worlds } = createScaffolding({
+        connectorAdmins: { discord: ["discord-admin-222"] },
+      });
+
+      await lateJoinWhitelistEvaluator.handler(
+        runtime as never,
+        makeMessage(ADMIN_ENTITY),
+        {} as State,
+      );
+
+      const callback = vi.fn();
+      const result = await updateRoleAction.handler(
+        runtime as never,
+        makeRoleCommandMessage(ADMIN_ENTITY, "/role @nobody USER"),
+        {} as never,
+        undefined,
+        callback,
+      );
+
+      expect(result).toEqual(expect.objectContaining({ success: true }));
+      expect(worlds.get(WORLD_ID)?.metadata.roles?.[ADMIN_ENTITY]).toBe(
+        "ADMIN",
+      );
+      expect(worlds.get(WORLD_ID)?.metadata.roles?.[NOBODY_ENTITY]).toBe(
+        "USER",
+      );
+    });
+
+    it("outsiders cannot spoof admin rights with untrusted content metadata", async () => {
+      const { runtime, worlds } = createScaffolding({
+        connectorAdmins: { discord: ["discord-admin-222"] },
+      });
+
+      const callback = vi.fn();
+      const result = await updateRoleAction.handler(
+        runtime as never,
+        makeRoleCommandMessage(NOBODY_ENTITY, "/role @admin USER", ROOM_ID, {
+          discord: { userId: "discord-admin-222", username: "admin" },
+        }),
+        {} as never,
+        undefined,
+        callback,
+      );
+
+      expect(result).toEqual(expect.objectContaining({ success: false }));
+      expect(worlds.get(WORLD_ID)?.metadata.roles?.[ADMIN_ENTITY]).toBeUndefined();
+      expect(callback).toHaveBeenCalledWith(
+        expect.objectContaining({
+          text: expect.stringContaining("don't have permission"),
+        }),
+      );
     });
   });
 });

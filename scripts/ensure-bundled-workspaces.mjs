@@ -22,6 +22,24 @@ export const BUNDLED_WORKSPACE_BUILDS = [
     ),
     args: ["run", "build"],
   },
+  {
+    label: "@elizaos/plugin-agent-skills",
+    cwd: path.join("plugins", "plugin-agent-skills", "typescript"),
+    manifest: path.join(
+      "plugins",
+      "plugin-agent-skills",
+      "typescript",
+      "package.json",
+    ),
+    artifact: path.join(
+      "plugins",
+      "plugin-agent-skills",
+      "typescript",
+      "dist",
+      "index.js",
+    ),
+    args: ["run", "build"],
+  },
 ];
 
 function runCommand(command, args, { cwd, env = process.env, label } = {}) {
