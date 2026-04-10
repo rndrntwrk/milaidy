@@ -1073,12 +1073,19 @@ export async function extractCalendarPlanWithLlm(
     "If the request asks what is happening while the user is in a place, use trip_window and include tripLocation.",
     "",
     "Examples:",
-    '  "what\'s on my calendar tomorrow" → {"subaction":"feed","queries":[],"title":null,"tripLocation":null}',
-    '  "schedule a meeting with Alex at 3pm" → {"subaction":"create_event","queries":[],"title":"Meeting with Alex","tripLocation":null}',
-    '  "find my return flight" → {"subaction":"search_events","queries":["return flight"],"title":null,"tripLocation":null}',
-    '  "what do I have while I\'m in Tokyo" → {"subaction":"trip_window","queries":["tokyo"],"title":null,"tripLocation":"Tokyo"}',
+    '  "what\'s on my calendar tomorrow" → subaction: feed',
+    '  "schedule a meeting with Alex at 3pm" → subaction: create_event, title: Meeting with Alex',
+    '  "find my return flight" → subaction: search_events, queries: return flight',
+    '  "what do I have while I\'m in Tokyo" → subaction: trip_window, queries: tokyo, tripLocation: Tokyo',
     "",
-    'Return JSON only in this shape: {"subaction":"search_events","queries":["denver return flight"],"title":null,"tripLocation":null}',
+    "TOON only. Return exactly one TOON document. No prose before or after it. No <think>.",
+    "Use || to separate multiple queries.",
+    "",
+    "Example:",
+    "subaction: search_events",
+    "queries: denver return flight",
+    "title:",
+    "tripLocation:",
     "",
     `Current request: ${JSON.stringify(currentMessage)}`,
     `Resolved intent: ${JSON.stringify(intent)}`,
@@ -1106,8 +1113,8 @@ export async function extractCalendarPlanWithLlm(
   }
 
   const parsed =
-    parseJSONObjectFromText(rawResponse) ??
-    parseKeyValueXml<Record<string, unknown>>(rawResponse);
+    parseKeyValueXml<Record<string, unknown>>(rawResponse) ??
+    parseJSONObjectFromText(rawResponse);
   if (!parsed) {
     return {
       subaction: null,

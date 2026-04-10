@@ -1,5 +1,5 @@
 import type { IAgentRuntime, Memory, State } from "@elizaos/core";
-import { ModelType, parseJSONObjectFromText } from "@elizaos/core";
+import { ModelType, parseJSONObjectFromText, parseKeyValueXml } from "@elizaos/core";
 
 export const LIFE_OPERATION_VALUES = [
   "create_definition",
@@ -153,13 +153,16 @@ export async function extractLifeOperationWithLlm(args: {
     "  query_overview — broad status summary (e.g. 'what's active', 'show me everything', 'overview')",
     "",
     "Examples:",
-    '  "I brushed my teeth" → {"operation":"complete_occurrence","confidence":0.95}',
-    '  "less reminders please" → {"operation":"set_reminder_preference","confidence":0.9}',
-    '  "remind me to take vitamins every morning" → {"operation":"create_definition","confidence":0.95}',
-    '  "how am I doing on my reading goal" → {"operation":"review_goal","confidence":0.9}',
+    '  "I brushed my teeth" → operation: complete_occurrence, confidence: 0.95',
+    '  "less reminders please" → operation: set_reminder_preference, confidence: 0.9',
+    '  "remind me to take vitamins every morning" → operation: create_definition, confidence: 0.95',
+    '  "how am I doing on my reading goal" → operation: review_goal, confidence: 0.9',
     "",
-    "Return JSON only in this shape:",
-    '{"operation":"create_definition","confidence":0.0}',
+    "TOON only. Return exactly one TOON document. No prose before or after it. No <think>.",
+    "",
+    "Example:",
+    "operation: create_definition",
+    "confidence: 0.0",
     "",
     `Allowed operations: ${LIFE_OPERATION_VALUES.join(", ")}`,
     `Current request: ${JSON.stringify(currentMessage)}`,
@@ -182,7 +185,9 @@ export async function extractLifeOperationWithLlm(args: {
     return { operation: null, confidence: null };
   }
 
-  const parsed = parseJSONObjectFromText(rawResponse);
+  const parsed =
+    parseKeyValueXml<Record<string, unknown>>(rawResponse) ??
+    parseJSONObjectFromText(rawResponse);
   if (!parsed) {
     return { operation: null, confidence: null };
   }

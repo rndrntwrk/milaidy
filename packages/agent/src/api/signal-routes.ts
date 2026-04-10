@@ -109,7 +109,7 @@ export async function handleSignalRoute(
           };
           // Auto-populate owner contact so LifeOps can deliver reminders
           const phoneNumber =
-            (event as Record<string, unknown>).phoneNumber as
+            (event as unknown as Record<string, unknown>).phoneNumber as
               | string
               | undefined;
           setOwnerContact(

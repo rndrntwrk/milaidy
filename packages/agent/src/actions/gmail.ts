@@ -1039,12 +1039,19 @@ export async function extractGmailPlanWithLlm(
     "Set replyNeededOnly to true only when the request is specifically about emails that need a reply.",
     "",
     "Examples:",
-    '  "who emailed me today" → {"subaction":"search","queries":["newer_than:1d"],"messageId":null,"replyNeededOnly":false}',
-    '  "draft a reply to John" → {"subaction":"draft_reply","queries":[],"messageId":null,"replyNeededOnly":false}',
-    '  "check my inbox" → {"subaction":"triage","queries":[],"messageId":null,"replyNeededOnly":false}',
-    '  "any emails from Sarah about the report" → {"subaction":"search","queries":["from:sarah subject:report"],"messageId":null,"replyNeededOnly":false}',
+    '  "who emailed me today" → subaction: search, queries: newer_than:1d',
+    '  "draft a reply to John" → subaction: draft_reply',
+    '  "check my inbox" → subaction: triage',
+    '  "any emails from Sarah about the report" → subaction: search, queries: from:sarah subject:report',
     "",
-    'Return JSON only in this shape: {"subaction":"search","queries":["from:suran newer_than:21d"],"messageId":null,"replyNeededOnly":false}',
+    "TOON only. Return exactly one TOON document. No prose before or after it. No <think>.",
+    "Use || to separate multiple queries.",
+    "",
+    "Example:",
+    "subaction: search",
+    "queries: from:suran newer_than:21d",
+    "messageId:",
+    "replyNeededOnly: false",
     "",
     `Current request: ${JSON.stringify(currentMessage)}`,
     `Resolved intent: ${JSON.stringify(intent)}`,
@@ -1072,8 +1079,8 @@ export async function extractGmailPlanWithLlm(
   }
 
   const parsed =
-    parseJSONObjectFromText(rawResponse) ??
-    parseKeyValueXml<Record<string, unknown>>(rawResponse);
+    parseKeyValueXml<Record<string, unknown>>(rawResponse) ??
+    parseJSONObjectFromText(rawResponse);
   if (!parsed) {
     return {
       subaction: null,
