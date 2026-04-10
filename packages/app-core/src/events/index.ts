@@ -29,6 +29,8 @@ export const VOICE_CONFIG_UPDATED_EVENT = "eliza:voice-config-updated" as const;
 export const CHAT_AVATAR_VOICE_EVENT = "eliza:chat-avatar-voice" as const;
 export const CHAT_AVATAR_FACE_FRAME_EVENT =
   "eliza:chat-avatar-face-frame" as const;
+export const LIFEOPS_GOOGLE_CONNECTOR_REFRESH_EVENT =
+  "eliza:lifeops-google-connector-refresh" as const;
 export const APP_EMOTE_EVENT = "eliza:app-emote" as const;
 /** After `/api/cloud/status` — chat voice reloads config so cloud-backed TTS mode matches the server snapshot. */
 export const ELIZA_CLOUD_STATUS_UPDATED_EVENT =
@@ -70,6 +72,21 @@ export interface ChatAvatarVoiceEventDetail {
 
 export type ChatAvatarFaceFrameEventDetail = AvatarFaceFrame;
 
+export interface LifeOpsGoogleConnectorRefreshDetail {
+  origin?: string;
+  side?: "owner" | "agent";
+  mode?: "local" | "remote" | "cloud_managed";
+  source?:
+    | "callback"
+    | "connect"
+    | "disconnect"
+    | "mode_change"
+    | "refresh"
+    | "focus"
+    | "visibility"
+    | "resume";
+}
+
 export type ElizaDocumentEventName =
   | typeof COMMAND_PALETTE_EVENT
   | typeof EMOTE_PICKER_EVENT
@@ -86,6 +103,7 @@ export type ElizaWindowEventName =
   | typeof VOICE_CONFIG_UPDATED_EVENT
   | typeof CHAT_AVATAR_VOICE_EVENT
   | typeof CHAT_AVATAR_FACE_FRAME_EVENT
+  | typeof LIFEOPS_GOOGLE_CONNECTOR_REFRESH_EVENT
   | typeof APP_EMOTE_EVENT
   | typeof ELIZA_CLOUD_STATUS_UPDATED_EVENT
   | typeof VRM_TELEPORT_COMPLETE_EVENT
@@ -122,6 +140,12 @@ export function dispatchChatAvatarFaceFrameEvent(
   detail: ChatAvatarFaceFrameEventDetail,
 ): void {
   dispatchWindowEvent(CHAT_AVATAR_FACE_FRAME_EVENT, detail);
+}
+
+export function dispatchLifeOpsGoogleConnectorRefresh(
+  detail: LifeOpsGoogleConnectorRefreshDetail,
+): void {
+  dispatchWindowEvent(LIFEOPS_GOOGLE_CONNECTOR_REFRESH_EVENT, detail);
 }
 
 export function dispatchElizaCloudStatusUpdated(

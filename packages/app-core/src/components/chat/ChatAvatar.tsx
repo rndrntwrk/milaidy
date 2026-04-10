@@ -15,12 +15,12 @@ import {
   getVrmUrl,
   useApp,
 } from "@miladyai/app-core/state";
+import { useAvatarSpeechCapabilities } from "@miladyai/app-core/hooks";
 import { resolveAppAssetUrl } from "@miladyai/app-core/utils";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { AvatarLoader } from "./AvatarLoader";
-import { useAvatarSpeechCapabilities } from "../hooks";
-import type { VrmEngine, VrmEngineState } from "./avatar/VrmEngine";
-import { VrmViewer } from "./avatar/VrmViewer";
+import { AvatarLoader } from "../character/AvatarLoader";
+import type { VrmEngine, VrmEngineState } from "../avatar/VrmEngine";
+import { VrmViewer } from "../avatar/VrmViewer";
 
 export type ChatAvatarProps = Record<string, never>;
 

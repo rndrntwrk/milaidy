@@ -19,8 +19,8 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { paramsToSchema } from "../PluginsView";
-import { ConfigRenderer, defaultRegistry } from "../../config/config-renderer";
+import { paramsToSchema } from "../pages/PluginsView";
+import { ConfigRenderer, defaultRegistry } from "../config-ui/config-renderer";
 import {
   OPERATOR_ACTION_BUTTON_BASE_CLASSNAME,
   OPERATOR_ACTION_BUTTON_TONE_CLASSNAME,

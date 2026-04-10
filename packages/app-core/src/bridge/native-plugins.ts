@@ -82,6 +82,79 @@ export interface TalkModePermissionStatus {
   speechRecognition?: "granted" | "denied" | "prompt" | "not_supported";
 }
 
+export interface MobileSignalsSleepSnapshot {
+  available: boolean;
+  isSleeping: boolean;
+  asleepAt: number | null;
+  awakeAt: number | null;
+  durationMinutes: number | null;
+  stage?: string | null;
+}
+
+export interface MobileSignalsBiometricSnapshot {
+  sampleAt: number | null;
+  heartRateBpm: number | null;
+  restingHeartRateBpm: number | null;
+  heartRateVariabilityMs: number | null;
+  respiratoryRate: number | null;
+  bloodOxygenPercent: number | null;
+}
+
+export interface MobileSignalsPermissionSnapshot {
+  sleep?: boolean;
+  biometrics?: boolean;
+}
+
+export interface MobileSignalsSignal {
+  source: string;
+  platform: string;
+  state: string;
+  observedAt: number;
+  idleState?: string | null;
+  idleTimeSeconds?: number | null;
+  onBattery?: boolean | null;
+  metadata?: Record<string, unknown>;
+  healthSource?: string;
+  permissions?: MobileSignalsPermissionSnapshot;
+  sleep?: MobileSignalsSleepSnapshot;
+  biometrics?: MobileSignalsBiometricSnapshot;
+  warnings?: string[];
+}
+
+export type MobileSignalsSnapshot = MobileSignalsSignal;
+export type MobileSignalsHealthSnapshot = MobileSignalsSignal;
+
+export interface MobileSignalsPermissionStatus {
+  status: "granted" | "denied" | "prompt";
+  canRequest: boolean;
+  permissions?: MobileSignalsPermissionSnapshot;
+}
+
+export interface MobileSignalsSnapshotResult {
+  supported: boolean;
+  snapshot: MobileSignalsSnapshot | null;
+  healthSnapshot: MobileSignalsHealthSnapshot | null;
+}
+
+export interface MobileSignalsStartResult extends MobileSignalsSnapshotResult {
+  enabled: boolean;
+  platform?: string;
+}
+
+export interface MobileSignalsPluginLike extends NativePlugin {
+  checkPermissions(): Promise<MobileSignalsPermissionStatus>;
+  requestPermissions(): Promise<MobileSignalsPermissionStatus>;
+  addListener(
+    eventName: "signal",
+    listenerFunc: (signal: MobileSignalsSignal) => void,
+  ): Promise<PluginListenerHandle>;
+  getSnapshot(): Promise<MobileSignalsSnapshotResult>;
+  startMonitoring(options?: {
+    emitInitial?: boolean;
+  }): Promise<MobileSignalsStartResult>;
+  stopMonitoring(): Promise<unknown>;
+}
+
 export interface TalkModePluginLike extends NativePlugin {
   addListener(
     eventName: "transcript",
@@ -136,6 +209,10 @@ export function getSwabblePlugin(): SwabblePluginLike {
 
 export function getTalkModePlugin(): TalkModePluginLike {
   return getNativePlugin<TalkModePluginLike>("TalkMode");
+}
+
+export function getMobileSignalsPlugin(): MobileSignalsPluginLike {
+  return getNativePlugin<MobileSignalsPluginLike>("MobileSignals");
 }
 
 export function getCameraPlugin(): GenericNativePlugin {

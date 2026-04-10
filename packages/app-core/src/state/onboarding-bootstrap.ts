@@ -122,3 +122,18 @@ export function deriveDetectedProviderPrefill(
 
   return null;
 }
+
+export function resolveStartupWithoutRestoredConnection(args: {
+  hadPersistedOnboardingCompletion: boolean;
+}):
+  | { kind: "show-onboarding" }
+  | { kind: "startup-error"; error: string } {
+  if (args.hadPersistedOnboardingCompletion) {
+    return {
+      kind: "startup-error",
+      error:
+        "The previous agent connection could not be restored. Reconnect or restart onboarding.",
+    };
+  }
+  return { kind: "show-onboarding" };
+}

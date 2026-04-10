@@ -34,6 +34,7 @@
     "./contracts/content-pack": "./src/contracts/content-pack.ts",
     "./contracts/lifeops": "./src/contracts/lifeops.ts",
     "./contracts/wallet": "./src/contracts/wallet.ts",
+    "./roles": "./src/roles.ts",
     "./config": "./src/config/types.ts",
     "./awareness": "./src/awareness/index.ts",
     "./restart": "./src/restart.ts",

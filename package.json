@@ -40,7 +40,6 @@
     "eliza/packages/*",
     "packages/app-core",
     "packages/plugin-555stream",
-    "packages/plugin-wechat",
     "packages/ui",
     "packages/vrm-utils",
     "packages/shared",

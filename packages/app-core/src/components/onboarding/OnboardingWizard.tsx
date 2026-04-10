@@ -18,18 +18,18 @@ import {
 } from "@miladyai/app-core/state";
 import { resolveAppAssetUrl } from "@miladyai/app-core/utils";
 import { useEffect, useState } from "react";
-import { useAvatarSpeechCapabilities } from "../hooks";
-import { useBranding } from "../config/branding";
-import { COMPANION_ENABLED } from "../navigation";
-import { VrmStage } from "./companion/VrmStage";
-import { ActivateStep } from "./onboarding/ActivateStep";
-import { CloudLoginStep } from "./onboarding/CloudLoginStep";
-import { ConnectionStep } from "./onboarding/ConnectionStep";
-import { IdentityStep } from "./onboarding/IdentityStep";
-import { OnboardingPanel } from "./onboarding/OnboardingPanel";
-import { OnboardingStepNav } from "./onboarding/OnboardingStepNav";
-import { PermissionsStep } from "./onboarding/PermissionsStep";
-import { VoiceProviderStep } from "./onboarding/VoiceProviderStep";
+import { useAvatarSpeechCapabilities } from "../../hooks";
+import { useBranding } from "../../config/branding";
+import { COMPANION_ENABLED } from "../../navigation";
+import { VrmStage } from "../companion/VrmStage";
+import { ActivateStep } from "./ActivateStep";
+import { CloudLoginStep } from "./CloudLoginStep";
+import { ConnectionStep } from "./ConnectionStep";
+import { IdentityStep } from "./IdentityStep";
+import { OnboardingPanel } from "./OnboardingPanel";
+import { OnboardingStepNav } from "./OnboardingStepNav";
+import { PermissionsStep } from "./PermissionsStep";
+import { VoiceProviderStep } from "./VoiceProviderStep";
 
 const FORCE_VRM =
   typeof window !== "undefined" &&

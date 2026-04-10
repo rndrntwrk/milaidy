@@ -1,10 +1,10 @@
 import { Button, Input } from "@miladyai/ui";
 import { Menu, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { client, type EmoteInfo } from "../api";
-import { EMOTE_PICKER_EVENT } from "../events";
-import { useApp } from "../state";
-import { playAppEmote, stopAppEmote } from "../utils/app-emote-runtime";
+import { client, type EmoteInfo } from "../../api";
+import { EMOTE_PICKER_EVENT } from "../../events";
+import { useApp } from "../../state";
+import { playAppEmote, stopAppEmote } from "../../utils/app-emote-runtime";
 
 // Types
 interface EmoteItem {

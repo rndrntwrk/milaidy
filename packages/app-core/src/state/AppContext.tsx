@@ -105,7 +105,7 @@ import {
   normalizeSlashCommandName,
 } from "../chat";
 import { mapServerTasksToSessions } from "../coding";
-import { replaceNameTokens } from "../components/character-editor-helpers";
+import { replaceNameTokens } from "../components/character/character-editor-helpers";
 import { getBootConfig, setBootConfig } from "../config/boot-config";
 import { BrandingContext, DEFAULT_BRANDING } from "../config/branding";
 import {
@@ -8008,6 +8008,109 @@ function AppProviderInner({
     ],
   );
 
+  const stableStartupCoordinator = useMemo(() => {
+    const phase: import("./startup-coordinator").StartupState["phase"] =
+      startupError
+        ? "error"
+        : authRequired
+          ? "pairing-required"
+          : !onboardingComplete && !onboardingLoading
+            ? "onboarding-required"
+            : startupPhase === "initializing-agent"
+              ? "starting-runtime"
+              : startupPhase === "ready"
+                ? "ready"
+                : "polling-backend";
+
+    const state: import("./startup-coordinator").StartupState =
+      phase === "error"
+        ? {
+            phase: "error",
+            reason: startupError?.reason ?? "backend-unreachable",
+            message:
+              startupError?.message ??
+              "An unexpected error occurred during startup.",
+            timedOut:
+              startupError?.reason === "backend-timeout" ||
+              startupError?.reason === "agent-timeout",
+          }
+        : phase === "pairing-required"
+          ? { phase: "pairing-required" }
+          : phase === "onboarding-required"
+            ? {
+                phase: "onboarding-required",
+                serverReachable: backendConnection.state === "connected",
+              }
+            : phase === "starting-runtime"
+              ? { phase: "starting-runtime", attempts: 0 }
+              : phase === "ready"
+                ? { phase: "ready" }
+                : {
+                    phase: "polling-backend",
+                    target: "embedded-local",
+                    attempts: backendConnection.reconnectAttempt,
+                  };
+
+    const dispatch = (event: import("./startup-coordinator").StartupEvent) => {
+      switch (event.type) {
+        case "RETRY":
+        case "RESET":
+          retryStartup();
+          return;
+        case "PAIRING_SUCCESS":
+          setAuthRequired(false);
+          retryStartup();
+          return;
+        case "ONBOARDING_COMPLETE":
+        case "SPLASH_CLOUD_SKIP":
+          setOnboardingLoading(false);
+          setOnboardingComplete(true);
+          return;
+        default:
+          return;
+      }
+    };
+
+    return {
+      state,
+      dispatch,
+      retry: retryStartup,
+      reset: retryStartup,
+      pairingSuccess: () => {
+        setAuthRequired(false);
+        retryStartup();
+      },
+      onboardingComplete: () => {
+        setOnboardingLoading(false);
+        setOnboardingComplete(true);
+      },
+      policy: {
+        supportsLocalRuntime: true,
+        backendTimeoutMs: getBackendStartupTimeoutMs(),
+        agentReadyTimeoutMs: getAgentReadyTimeoutMs(),
+        probeForExistingInstall: true,
+        defaultTarget: "embedded-local",
+      },
+      legacyPhase: startupPhase,
+      loading: phase !== "ready",
+      terminal: phase === "error",
+      target: state.phase === "polling-backend" ? state.target : null,
+      phase,
+    } as import("./useStartupCoordinator").StartupCoordinatorHandle;
+  }, [
+    authRequired,
+    backendConnection.reconnectAttempt,
+    backendConnection.state,
+    onboardingComplete,
+    onboardingLoading,
+    retryStartup,
+    setAuthRequired,
+    setOnboardingComplete,
+    setOnboardingLoading,
+    startupError,
+    startupPhase,
+  ]);
+
   const value: AppContextValue = {
     // Translations
     t,
@@ -8027,6 +8130,7 @@ function AppProviderInner({
     onboardingHandoffPhase,
     onboardingHandoffError,
     startupPhase,
+    startupCoordinator: stableStartupCoordinator,
     startupStatus,
     startupError,
     authRequired,

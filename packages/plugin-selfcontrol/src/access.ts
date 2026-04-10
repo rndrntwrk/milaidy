@@ -1,5 +1,5 @@
 import type { IAgentRuntime, Memory } from "@elizaos/core";
-import { checkSenderRole } from "@elizaos/core/roles";
+import { checkSenderRole } from "@miladyai/shared/roles";
 
 export const SELFCONTROL_ACCESS_ERROR =
   "Website blocking is restricted to OWNER and ADMIN users.";

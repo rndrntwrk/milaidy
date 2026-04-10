@@ -3,19 +3,19 @@ import { useApp } from "@miladyai/app-core/state";
 import { Button } from "@miladyai/ui";
 import { memo, useCallback, useEffect, useMemo, useState, type SVGProps } from "react";
 import { ChatModalView } from "./ChatModalView";
-import { useCompanionSceneStatus } from "./companion-scene-status-context";
-import { CompanionHeader } from "./companion/CompanionHeader";
-import { HEADER_BUTTON_STYLE } from "./companion/ShellHeaderControls";
+import { useCompanionSceneStatus } from "../companion/companion-scene-status-context";
+import { CompanionHeader } from "../companion/CompanionHeader";
+import { HEADER_BUTTON_STYLE } from "../shell/ShellHeaderControls";
 import {
   CompanionSceneHost,
   useSharedCompanionScene,
-} from "./companion/CompanionSceneHost";
-import { InferenceCloudAlertButton } from "./companion/InferenceCloudAlertButton";
-import { resolveCompanionInferenceNotice } from "./companion/resolve-companion-inference-notice";
-import { CompanionGoLiveModal } from "./operator/CompanionGoLiveModal";
-import { CompanionStageOperatorOverlay } from "./operator/CompanionStageOperatorOverlay";
-import { useCompanionStageOperator } from "./operator/useCompanionStageOperator";
-import { PtyConsoleSidePanel } from "./PtyConsoleSidePanel";
+} from "../companion/CompanionSceneHost";
+import { InferenceCloudAlertButton } from "../companion/InferenceCloudAlertButton";
+import { resolveCompanionInferenceNotice } from "../companion/resolve-companion-inference-notice";
+import { CompanionGoLiveModal } from "../operator/CompanionGoLiveModal";
+import { CompanionStageOperatorOverlay } from "../operator/CompanionStageOperatorOverlay";
+import { useCompanionStageOperator } from "../operator/useCompanionStageOperator";
+import { PtyConsoleSidePanel } from "../coding/PtyConsoleSidePanel";
 
 const COMPANION_UI_REVEAL_FALLBACK_MS = 1400;
 const COMPANION_DOCK_HEIGHT = "min(42vh, 24rem)";
