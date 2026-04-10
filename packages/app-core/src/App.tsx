@@ -13,7 +13,7 @@ import {
   DrawerSheetTitle,
   ErrorBoundary,
 } from "@miladyai/ui";
-import { type ReactNode, useCallback, useEffect, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import {
   AdvancedPageView,
   AppsPageView,
@@ -182,7 +182,7 @@ function ViewRouter({
       case "skills":
       case "fine-tuning":
       case "trajectories":
-      case "relationships":
+      case "rolodex":
       case "runtime":
       case "database":
       case "desktop":
@@ -285,13 +285,13 @@ export function App() {
     tab === "skills" ||
     tab === "fine-tuning" ||
     tab === "trajectories" ||
-    tab === "relationships" ||
+    tab === "rolodex" ||
     tab === "runtime" ||
     tab === "database" ||
     tab === "desktop" ||
     tab === "logs";
   const unreadCount = unreadConversations?.size ?? 0;
-  const mobileChatControls = isChatMobileLayout ? (
+  const mobileChatControls = useMemo(() => isChatMobileLayout ? (
     <div className="flex items-center gap-2 w-max">
       <Button
         variant="outline"
@@ -328,7 +328,7 @@ export function App() {
         )}
       </Button>
     </div>
-  ) : undefined;
+  ) : undefined, [isChatMobileLayout, mobileConversationsOpen, unreadCount, setMobileConversationsOpen, t]);
 
   // Keep hook order stable across onboarding/auth state transitions.
   // Otherwise React can throw when onboarding completes and the main shell mounts.
@@ -448,32 +448,10 @@ export function App() {
     }
   }, [startupCoordinator.phase, startupError, startupCoordinator.retry]);
 
-  // Pop-out mode — render only StreamView, skip startup gates.
-  // Platform init is skipped in main.tsx; AppProvider hydrates WS in background.
-  if (isPopout) {
-    return (
-      <div className="flex flex-col h-screen w-screen font-body text-txt bg-bg overflow-hidden">
-        <StreamView />
-      </div>
-    );
-  }
-
-  // StartupCoordinator gate — the coordinator is the sole startup authority.
-  // Non-ready phases are handled by StartupShell (which renders the appropriate
-  // view for each coordinator phase: loading, pairing, onboarding, or error).
-  if (startupCoordinator.phase !== "ready") {
-    return (
-      <BugReportProvider value={bugReport}>
-        <StartupShell />
-        <BugReportModal />
-      </BugReportProvider>
-    );
-  }
-
-  // Coordinator is at "ready" — the app shell renders. No legacy onboarding
-  // overlays — the coordinator handled all of that before reaching ready.
-
-  const shellContent = companionShellVisible ? (
+  // shellContent is memoized before early returns to satisfy the Rules of Hooks.
+  // Deps are local state/callbacks — not high-frequency AppContext fields like
+  // ptySessions/agentStatus — so CompanionSceneHost stays stable across polls.
+  const shellContent = useMemo(() => companionShellVisible ? (
     <CompanionShell tab={effectiveTab} actionNotice={actionNotice} />
   ) : tab === "stream" ? (
     <div
@@ -692,7 +670,67 @@ export function App() {
         <ViewRouter />
       </main>
     </div>
-  );
+  ), [
+    companionShellVisible,
+    effectiveTab,
+    actionNotice,
+    tab,
+    isChat,
+    isHeartbeats,
+    isConnectors,
+    isKnowledge,
+    isSettingsPage,
+    isWallets,
+    isAdvancedPage,
+    characterSceneVisible,
+    isChatMobileLayout,
+    mobileConversationsOpen,
+    mobileChatControls,
+    tasksEventsPanelOpen,
+    handleDeferredTaskOpen,
+    activityEvents,
+    clearActivityEvents,
+    customActionsPanelOpen,
+    settingsInitialSection,
+    switchShellView,
+    uiLanguage,
+    setUiLanguage,
+    uiTheme,
+    setUiTheme,
+    chatAgentVoiceMuted,
+    setState,
+    t,
+    setMobileConversationsOpen,
+    setTasksEventsPanelOpen,
+    setCustomActionsPanelOpen,
+    setEditingAction,
+    setCustomActionsEditorOpen,
+  ]);
+
+  // Pop-out mode — render only StreamView, skip startup gates.
+  // Platform init is skipped in main.tsx; AppProvider hydrates WS in background.
+  if (isPopout) {
+    return (
+      <div className="flex flex-col h-screen w-screen font-body text-txt bg-bg overflow-hidden">
+        <StreamView />
+      </div>
+    );
+  }
+
+  // StartupCoordinator gate — the coordinator is the sole startup authority.
+  // Non-ready phases are handled by StartupShell (which renders the appropriate
+  // view for each coordinator phase: loading, pairing, onboarding, or error).
+  if (startupCoordinator.phase !== "ready") {
+    return (
+      <BugReportProvider value={bugReport}>
+        <StartupShell />
+        <BugReportModal />
+      </BugReportProvider>
+    );
+  }
+
+  // Coordinator is at "ready" — the app shell renders. No legacy onboarding
+  // overlays — the coordinator handled all of that before reaching ready.
 
   const appShell = COMPANION_ENABLED ? (
     <SharedCompanionScene

@@ -38,7 +38,7 @@ describe("register.setup helpers", () => {
   it("uses ELIZA_STATE_DIR without adding a second .eliza segment", () => {
     expect(
       toPosix(resolveConfigPath({ ELIZA_STATE_DIR: "/tmp/profile/.eliza" })),
-    ).toBe("/tmp/profile/.eliza/eliza.json");
+    ).toBe("/tmp/profile/.eliza/milady.json");
   });
 
   it("returns an empty object when the config is missing or invalid", () => {

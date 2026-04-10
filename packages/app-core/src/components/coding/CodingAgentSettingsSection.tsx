@@ -25,7 +25,7 @@ import { LlmProviderSection } from "./LlmProviderSection";
 import { ModelConfigSection } from "./ModelConfigSection";
 
 export function CodingAgentSettingsSection() {
-  const { t } = useApp();
+  const { t, elizaCloudConnected } = useApp();
 
   const [activeTab, setActiveTab] = useState<AgentTab | null>(null);
   const [loading, setLoading] = useState(true);
@@ -150,8 +150,15 @@ export function CodingAgentSettingsSection() {
     return () => controller.abort();
   }, []);
 
-  const llmProvider = (prefs.PARALLAX_LLM_PROVIDER ||
+  // If the user previously chose "cloud" but Eliza Cloud has since been
+  // disconnected, fall back to "subscription" rather than leaving the
+  // selector pointed at an unusable provider.
+  const rawLlmProvider = (prefs.PARALLAX_LLM_PROVIDER ||
     "subscription") as LlmProvider;
+  const llmProvider: LlmProvider =
+    rawLlmProvider === "cloud" && !elizaCloudConnected
+      ? "subscription"
+      : rawLlmProvider;
   const isCloud = llmProvider === "cloud";
 
   const installedAgents = AGENT_TABS.filter(

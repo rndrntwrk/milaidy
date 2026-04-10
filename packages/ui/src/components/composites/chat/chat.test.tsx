@@ -129,6 +129,18 @@ describe("ChatComposerShell", () => {
     );
   });
 
+  it("renders optional before slot above the composer in the default shell", () => {
+    render(
+      <ChatComposerShell before={<div>Before slot</div>}>
+        <div>Composer</div>
+      </ChatComposerShell>,
+    );
+
+    expect(screen.getByText("Before slot")).toBeInTheDocument();
+    const shell = screen.getByText("Composer").closest(".border-t");
+    expect(shell?.textContent).toMatch(/Before slot/);
+  });
+
   it("preserves the companion dock shell markers", () => {
     render(
       <ChatComposerShell variant="game-modal" before={<div>Before</div>}>

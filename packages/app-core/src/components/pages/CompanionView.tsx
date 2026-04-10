@@ -1,5 +1,5 @@
 import { useRenderGuard } from "@miladyai/app-core/hooks";
-import { useApp } from "@miladyai/app-core/state";
+import { useApp, usePtySessions } from "@miladyai/app-core/state";
 import { Button } from "@miladyai/ui";
 import { PanelLeftOpen } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
@@ -14,6 +14,29 @@ import { PtyConsoleSidePanel } from "../coding/PtyConsoleSidePanel";
 
 const COMPANION_UI_REVEAL_FALLBACK_MS = 1400;
 const COMPANION_DOCK_HEIGHT = "min(42vh, 24rem)";
+
+/**
+ * Isolated wrapper for the PTY side panel so that CompanionViewOverlay doesn't
+ * need to subscribe to ptySessions (which polls every 5 s) for a panel that is
+ * only visible when the user has explicitly clicked a session.
+ */
+const CompanionPtyPanel = memo(function CompanionPtyPanel({
+  sessionId,
+  onClose,
+}: {
+  sessionId: string;
+  onClose: () => void;
+}) {
+  const { ptySessions } = usePtySessions();
+  if (ptySessions.length === 0) return null;
+  return (
+    <PtyConsoleSidePanel
+      activeSessionId={sessionId}
+      sessions={ptySessions}
+      onClose={onClose}
+    />
+  );
+});
 
 /**
  * Inner overlay that subscribes to useApp() for frequently-changing data
@@ -38,7 +61,6 @@ const CompanionViewOverlay = memo(function CompanionViewOverlay() {
     elizaCloudEnabled,
     handleNewConversation,
     navigation,
-    ptySessions,
     setState,
     setTab,
     switchShellView,
@@ -49,6 +71,16 @@ const CompanionViewOverlay = memo(function CompanionViewOverlay() {
     string | null
   >(null);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const handleSidebarClose = useCallback(() => setHistoryOpen(false), []);
+  const handlePtySessionClick = useCallback(
+    (id: string) =>
+      setPtySidePanelSessionId((prev) => (prev === id ? null : id)),
+    [],
+  );
+  const handlePtyPanelClose = useCallback(
+    () => setPtySidePanelSessionId(null),
+    [],
+  );
   const { avatarReady: sceneAvatarReady, teleportKey } =
     useCompanionSceneStatus();
 
@@ -176,22 +208,20 @@ const CompanionViewOverlay = memo(function CompanionViewOverlay() {
             <ChatModalView
               variant="companion-dock"
               showSidebar={historyOpen}
-              onSidebarClose={() => setHistoryOpen(false)}
-              onPtySessionClick={(id) =>
-                setPtySidePanelSessionId((prev) => (prev === id ? null : id))
-              }
+              onSidebarClose={handleSidebarClose}
+              onPtySessionClick={handlePtySessionClick}
             />
           </div>
         </div>
       )}
 
-      {/* PTY console side panel */}
-      {ptySidePanelSessionId && ptySessions.length > 0 && (
+      {/* PTY console side panel — rendered in a child so ptySessions subscription
+          doesn't live in CompanionViewOverlay and cause re-renders on every poll. */}
+      {ptySidePanelSessionId && (
         <div className="pointer-events-auto">
-          <PtyConsoleSidePanel
-            activeSessionId={ptySidePanelSessionId}
-            sessions={ptySessions}
-            onClose={() => setPtySidePanelSessionId(null)}
+          <CompanionPtyPanel
+            sessionId={ptySidePanelSessionId}
+            onClose={handlePtyPanelClose}
           />
         </div>
       )}

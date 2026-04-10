@@ -24,6 +24,7 @@ import {
   type WebsiteBlockerPermissionResult,
   type WebsiteBlockerStatusResult,
 } from "../bridge/native-plugins";
+import { TERMINAL_STATUSES } from "../coding";
 import { MiladyClient } from "./client-base";
 import type {
   AgentAutomationMode,
@@ -75,6 +76,12 @@ import {
   mapPtySessionsToCodingAgentSessions,
   mapTaskThreadsToCodingAgentSessions,
 } from "./client-types";
+
+type RolodexGraphQuery = RelationshipsGraphQuery;
+type RolodexGraphSnapshot = RelationshipsGraphSnapshot;
+type RolodexGraphStats = RelationshipsGraphStats;
+type RolodexPersonDetail = RelationshipsPersonDetail;
+type RolodexPersonSummary = RelationshipsPersonSummary;
 
 // ---------------------------------------------------------------------------
 // Module-level helpers
@@ -357,6 +364,12 @@ declare module "./client-base" {
       stats: RelationshipsGraphStats;
     }>;
     getRelationshipsPerson(id: string): Promise<RelationshipsPersonDetail>;
+    getRolodexGraph(query?: RolodexGraphQuery): Promise<RolodexGraphSnapshot>;
+    getRolodexPeople(query?: RolodexGraphQuery): Promise<{
+      people: RolodexPersonSummary[];
+      stats: RolodexGraphStats;
+    }>;
+    getRolodexPerson(id: string): Promise<RolodexPersonDetail>;
     getCharacter(): Promise<{
       character: CharacterData;
       agentName: string;
@@ -1505,6 +1518,27 @@ MiladyClient.prototype.getRelationshipsPerson = async function (
   return response.data;
 };
 
+MiladyClient.prototype.getRolodexGraph = async function (
+  this: MiladyClient,
+  query,
+) {
+  return this.getRelationshipsGraph(query);
+};
+
+MiladyClient.prototype.getRolodexPeople = async function (
+  this: MiladyClient,
+  query,
+) {
+  return this.getRelationshipsPeople(query);
+};
+
+MiladyClient.prototype.getRolodexPerson = async function (
+  this: MiladyClient,
+  id,
+) {
+  return this.getRelationshipsPerson(id);
+};
+
 MiladyClient.prototype.getCharacter = async function (this: MiladyClient) {
   return this.fetch("/api/character");
 };
@@ -1730,9 +1764,7 @@ MiladyClient.prototype.getCodingAgentStatus = async function (
     ) {
       status.tasks = mapTaskThreadsToCodingAgentSessions(
         status.taskThreads,
-      ).filter(
-        (task) => task.status !== "completed" && task.status !== "error",
-      );
+      ).filter((task) => !TERMINAL_STATUSES.has(task.status));
       status.taskCount = status.tasks.length;
     }
     if (status && !status.tasks) {

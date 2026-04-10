@@ -223,6 +223,63 @@ describe("ensureOwnerRole via init()", () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 describe("applyConnectorAdminWhitelists via init()", () => {
+  it("loads connectorAdmins from runtime settings when init config is empty", async () => {
+    const world: MockWorld = {
+      id: "w1",
+      metadata: { ownership: { ownerId: "o1" }, roles: { o1: "OWNER" } },
+    };
+    const runtime = createInitRuntime({
+      worlds: [world],
+      worldRooms: { w1: [{ id: "r1", worldId: "w1" }] },
+      roomEntities: {
+        r1: [
+          { id: "o1", names: ["Shaw"], metadata: {} },
+          {
+            id: "dc-user",
+            names: ["Alice"],
+            metadata: { discord: { userId: "123456789" } },
+          },
+        ],
+      },
+      settings: {
+        ELIZA_ROLES_CONNECTOR_ADMINS_JSON: JSON.stringify({
+          discord: ["123456789"],
+        }),
+      },
+    });
+
+    await getPluginInit()?.({}, runtime);
+    expect(world.metadata.roles?.["dc-user"]).toBe("ADMIN");
+    expect(world.metadata.roleSources?.["dc-user"]).toBe("connector_admin");
+  });
+
+  it("ignores malformed connectorAdmins runtime settings gracefully", async () => {
+    const world: MockWorld = {
+      id: "w1",
+      metadata: { ownership: { ownerId: "o1" }, roles: { o1: "OWNER" } },
+    };
+    const runtime = createInitRuntime({
+      worlds: [world],
+      worldRooms: { w1: [{ id: "r1", worldId: "w1" }] },
+      roomEntities: {
+        r1: [
+          { id: "o1", names: ["Shaw"], metadata: {} },
+          {
+            id: "dc-user",
+            names: ["Alice"],
+            metadata: { discord: { userId: "123456789" } },
+          },
+        ],
+      },
+      settings: {
+        ELIZA_ROLES_CONNECTOR_ADMINS_JSON: "{not-json",
+      },
+    });
+
+    await expect(getPluginInit()?.({}, runtime)).resolves.toBeUndefined();
+    expect(world.metadata.roles?.["dc-user"]).toBeUndefined();
+  });
+
   it("promotes whitelisted discord user to ADMIN", async () => {
     const world: MockWorld = {
       id: "w1",

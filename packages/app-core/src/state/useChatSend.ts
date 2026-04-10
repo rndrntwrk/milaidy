@@ -56,7 +56,8 @@ export interface UseChatSendDeps {
   chatMode: ConversationMode;
   conversations: Conversation[];
   activeConversationId: string | null;
-  ptySessions: CodingAgentSession[];
+  /** Stable ref whose .current mirrors the latest ptySessions array. */
+  ptySessionsRef: MutableRefObject<CodingAgentSession[]>;
 
   // Setters
   setChatInput: (v: string) => void;
@@ -121,7 +122,7 @@ export function useChatSend(deps: UseChatSendDeps) {
     chatMode,
     conversations,
     activeConversationId,
-    ptySessions,
+    ptySessionsRef,
     setChatInput,
     setChatSending,
     setChatFirstTokenReceived,
@@ -534,7 +535,7 @@ export function useChatSend(deps: UseChatSendDeps) {
           turn.metadata,
         );
 
-        if (data.noResponseReason === "ignored" || !data.text.trim()) {
+        if (!data.text.trim()) {
           setConversationMessages((prev) =>
             prev.filter((message) => message.id !== assistantMsgId),
           );
@@ -637,17 +638,12 @@ export function useChatSend(deps: UseChatSendDeps) {
                   text,
                   timestamp: Date.now(),
                 },
-                ...(retryData.noResponseReason === "ignored" ||
-                !retryData.text.trim()
-                  ? []
-                  : [
-                      {
-                        id: `temp-resp-${Date.now()}`,
-                        role: "assistant" as const,
-                        text: retryData.text,
-                        timestamp: Date.now(),
-                      },
-                    ]),
+                {
+                  id: `temp-resp-${Date.now()}`,
+                  role: "assistant",
+                  text: retryData.text,
+                  timestamp: Date.now(),
+                },
               ]),
             );
           } catch {
@@ -881,7 +877,7 @@ export function useChatSend(deps: UseChatSendDeps) {
             conversationMode,
           );
 
-          if (data.noResponseReason === "ignored" || !data.text.trim()) {
+          if (!data.text.trim()) {
             setConversationMessages((prev) =>
               prev.filter((message) => message.id !== assistantMsgId),
             );
@@ -971,11 +967,13 @@ export function useChatSend(deps: UseChatSendDeps) {
   const handleChatStop = useCallback(() => {
     interruptActiveChatPipeline();
 
-    // Also stop any active PTY sessions — the user wants everything to halt
-    for (const session of ptySessions) {
+    // Also stop any active PTY sessions — the user wants everything to halt.
+    // Read from the ref so this callback stays stable even as ptySessions polls.
+    for (const session of ptySessionsRef.current) {
       client.stopCodingAgent(session.sessionId).catch(() => {});
     }
-  }, [interruptActiveChatPipeline, ptySessions]);
+  // ptySessionsRef is a stable ref object — only include the ref itself, not .current
+  }, [interruptActiveChatPipeline, ptySessionsRef]);
 
   const handleChatRetry = useCallback(
     (assistantMsgId: string) => {

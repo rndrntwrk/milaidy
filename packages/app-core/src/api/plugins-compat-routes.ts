@@ -484,7 +484,23 @@ function buildPluginParamDefs(
     return [];
   }
 
-  return Object.entries(parameters).map(([key, definition]) => {
+  // Drop generic fallback model keys (SMALL_MODEL, LARGE_MODEL, IMAGE_MODEL,
+  // EMBEDDING_MODEL) when a provider-prefixed equivalent (e.g.
+  // GOOGLE_SMALL_MODEL) is also declared. Plugins like @elizaos/plugin-google-genai
+  // declare both — surfacing both creates confusing duplicate fields in the UI.
+  const allKeys = Object.keys(parameters);
+  const GENERIC_FALLBACK_SUFFIXES = [
+    "SMALL_MODEL",
+    "LARGE_MODEL",
+    "IMAGE_MODEL",
+    "EMBEDDING_MODEL",
+  ];
+  const filteredEntries = Object.entries(parameters).filter(([key]) => {
+    if (!GENERIC_FALLBACK_SUFFIXES.includes(key)) return true;
+    return !allKeys.some((other) => other !== key && other.endsWith(`_${key}`));
+  });
+
+  return filteredEntries.map(([key, definition]) => {
     const envValue = process.env[key]?.trim() || undefined;
     const savedValue = savedValues?.[key];
     const effectiveValue =

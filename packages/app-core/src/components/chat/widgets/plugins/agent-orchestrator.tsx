@@ -19,7 +19,7 @@ import {
 import { client } from "../../../../api";
 import { TERMINAL_STATUSES } from "../../../../coding";
 import type { ActivityEvent } from "../../../../hooks/useActivityEvents";
-import { useApp } from "../../../../state";
+import { useApp, usePtySessions } from "../../../../state";
 import { getRunAttentionReasons } from "../../../apps/RunningAppsPanel";
 import { PULSE_STATUSES, STATUS_DOT } from "../../../coding/pty-status-dots";
 import { EmptyWidgetState, WidgetSection } from "../shared";
@@ -121,6 +121,12 @@ function TaskItemsContent({ sessions }: { sessions: CodingAgentSession[] }) {
   );
 }
 
+function stripAnsi(str: string): string {
+  return str
+    .replace(/\x1b(?:\[[0-9;?]*[A-Za-z]|\][^\x07]*\x07|[()][0-9A-Za-z])/g, "")
+    .trim();
+}
+
 function formatIsoTime(value?: string | null): string {
   if (!value) return "unknown";
   const date = new Date(value);
@@ -148,57 +154,80 @@ function TaskThreadCard({
   thread,
   selected,
   onSelect,
+  detail,
+  detailLoading,
+  busy,
+  onDelete,
+  onReopen,
 }: {
   thread: CodingAgentTaskThread;
   selected: boolean;
   onSelect: (threadId: string) => void;
+  detail?: CodingAgentTaskThreadDetail | null;
+  detailLoading?: boolean;
+  busy?: boolean;
+  onDelete?: () => void;
+  onReopen?: () => void;
 }) {
   return (
-    <button
-      type="button"
-      onClick={() => onSelect(thread.id)}
-      className={`flex w-full flex-col gap-1 rounded-lg border p-3 text-left transition-colors ${
+    <div
+      className={`flex flex-col rounded-lg border transition-colors ${
         selected
           ? "border-accent/50 bg-bg-hover/70"
-          : "border-border/50 bg-bg-accent/30 hover:bg-bg-hover/40"
+          : "border-border/50 bg-bg-accent/30"
       }`}
     >
-      <div className="flex items-start gap-2">
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-xs font-semibold text-txt">
-            {thread.title}
+      <button
+        type="button"
+        onClick={() => onSelect(thread.id)}
+        className="flex w-full flex-col gap-1 p-3 text-left hover:bg-bg-hover/30"
+      >
+        <div className="flex items-start gap-2">
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-xs font-semibold text-txt">
+              {thread.title}
+            </div>
+            <div className="mt-0.5 truncate text-[11px] text-muted">
+              {thread.originalRequest}
+            </div>
           </div>
-          <div className="mt-0.5 truncate text-[11px] text-muted">
-            {thread.originalRequest}
-          </div>
+          <Badge
+            variant="secondary"
+            className={`shrink-0 text-[9px] ${
+              THREAD_STATUS_BADGE[thread.status] ?? "bg-muted/20 text-muted"
+            }`}
+          >
+            {formatThreadStatus(thread.status)}
+          </Badge>
         </div>
-        <Badge
-          variant="secondary"
-          className={`shrink-0 text-[9px] ${
-            THREAD_STATUS_BADGE[thread.status] ?? "bg-muted/20 text-muted"
-          }`}
-        >
-          {formatThreadStatus(thread.status)}
-        </Badge>
-      </div>
-      <div className="flex items-center gap-3 text-[10px] text-muted">
-        <span>{thread.kind}</span>
-        <span>{thread.sessionCount} sessions</span>
-        <span>{thread.decisionCount} decisions</span>
-        <span>{formatIsoTime(thread.updatedAt)}</span>
-      </div>
-      {thread.scenarioId || thread.batchId ? (
-        <div className="flex flex-wrap items-center gap-2 text-[10px] text-muted">
-          {thread.scenarioId ? <span>scenario {thread.scenarioId}</span> : null}
-          {thread.batchId ? <span>batch {thread.batchId}</span> : null}
+        <div className="flex items-center gap-3 text-[10px] text-muted">
+          <span>{thread.kind}</span>
+          <span>{thread.sessionCount} sessions</span>
+          <span>{thread.decisionCount} decisions</span>
+          <span>{formatIsoTime(thread.updatedAt)}</span>
+        </div>
+        {thread.summary ? (
+          <div className="line-clamp-2 text-[11px] text-txt">
+            {thread.summary}
+          </div>
+        ) : null}
+      </button>
+
+      {selected ? (
+        <div className="border-t border-border/40 px-3 pb-3 pt-2.5">
+          {!detail && detailLoading ? (
+            <div className="text-[11px] text-muted">Loading...</div>
+          ) : detail ? (
+            <ThreadDetailContent
+              detail={detail}
+              busy={busy ?? false}
+              onDelete={onDelete ?? (() => {})}
+              onReopen={onReopen ?? (() => {})}
+            />
+          ) : null}
         </div>
       ) : null}
-      {thread.summary ? (
-        <div className="line-clamp-2 text-[11px] text-txt">
-          {thread.summary}
-        </div>
-      ) : null}
-    </button>
+    </div>
   );
 }
 
@@ -238,7 +267,10 @@ function ProviderRoutingPanel({ status }: { status: CodingAgentStatus }) {
         </div>
         {status.preferredAgentType ? (
           <Badge variant="secondary" className="bg-ok/15 text-[9px] text-ok">
-            Preferred: {status.preferredAgentType}
+            {status.preferredAgentReason === "user selected"
+              ? "Selected"
+              : "Preferred"}
+            : {status.preferredAgentType}
           </Badge>
         ) : null}
         <Badge
@@ -287,96 +319,63 @@ function ProviderRoutingPanel({ status }: { status: CodingAgentStatus }) {
   );
 }
 
-function TaskThreadDetailPanel({
+/**
+ * Detail content rendered inline inside an expanded TaskThreadCard.
+ * Does NOT repeat the title, status, or summary — those live in the card header.
+ */
+function ThreadDetailContent({
   detail,
-  onArchive,
-  onReopen,
   busy,
+  onDelete,
+  onReopen,
 }: {
   detail: CodingAgentTaskThreadDetail;
-  onArchive: () => void;
-  onReopen: () => void;
   busy: boolean;
+  onDelete: () => void;
+  onReopen: () => void;
 }) {
-  const latestTranscripts = detail.transcripts.slice(-8).reverse();
-  const latestEvents = detail.events.slice(-6).reverse();
-  const latestDecisions = detail.decisions.slice(-6).reverse();
-  const latestArtifacts = detail.artifacts.slice(-6).reverse();
-  const pendingDecisions = detail.pendingDecisions.slice(-4).reverse();
+  const latestTranscripts = (detail.transcripts ?? [])
+    .filter((e) => e.direction === "stdin" || e.direction === "system")
+    .slice(-8)
+    .reverse();
+  const latestEvents = (detail.events ?? []).slice(-6).reverse();
+  const latestDecisions = (detail.decisions ?? []).slice(-6).reverse();
+  const latestArtifacts = (detail.artifacts ?? []).slice(-6).reverse();
+  const pendingDecisions = (detail.pendingDecisions ?? []).slice(-4).reverse();
 
   return (
-    <div className="flex flex-col gap-2.5">
-      <div className="rounded-lg border border-border/50 bg-bg-accent/20 p-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <div className="text-sm font-semibold text-txt">{detail.title}</div>
-            <div className="mt-1 text-[11px] text-muted">
-              {detail.originalRequest}
-            </div>
-          </div>
-          <Badge
-            variant="secondary"
-            className={`shrink-0 text-[9px] ${
-              THREAD_STATUS_BADGE[detail.status] ?? "bg-muted/20 text-muted"
-            }`}
-          >
-            {formatThreadStatus(detail.status)}
-          </Badge>
-        </div>
-        <div className="mt-2 flex flex-wrap gap-3 text-[10px] text-muted">
-          <span>{detail.kind}</span>
-          <span>{detail.sessions.length} sessions</span>
-          <span>{detail.artifacts.length} artifacts</span>
-          <span>{detail.transcripts.length} transcript entries</span>
-        </div>
-        {detail.acceptanceCriteria && detail.acceptanceCriteria.length > 0 ? (
-          <div className="mt-3">
-            <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
-              Acceptance
-            </div>
-            <div className="space-y-1">
-              {detail.acceptanceCriteria.map((criterion) => (
-                <div
-                  key={`${detail.id}-criterion-${criterion}`}
-                  className="text-[11px] text-txt"
-                >
-                  {criterion}
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
-        <div className="mt-3 flex gap-2">
-          {detail.status === "archived" ? (
-            <Button
-              variant="secondary"
-              size="sm"
-              disabled={busy}
-              onClick={onReopen}
-              className="h-7 px-2 text-[11px]"
-            >
-              Reopen
-            </Button>
-          ) : (
-            <Button
-              variant="secondary"
-              size="sm"
-              disabled={busy}
-              onClick={onArchive}
-              className="h-7 px-2 text-[11px]"
-            >
-              Archive
-            </Button>
-          )}
-        </div>
+    <div className="flex flex-col gap-2">
+      {/* Stats row — detail-level counts */}
+      <div className="flex flex-wrap gap-3 text-[10px] text-muted">
+        <span>{(detail.sessions ?? []).length} sessions</span>
+        <span>{(detail.artifacts ?? []).length} artifacts</span>
+        <span>{(detail.transcripts ?? []).length} transcript entries</span>
       </div>
 
+      {detail.acceptanceCriteria && detail.acceptanceCriteria.length > 0 ? (
+        <div>
+          <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
+            Acceptance
+          </div>
+          <div className="space-y-0.5">
+            {detail.acceptanceCriteria.map((criterion) => (
+              <div
+                key={`${detail.id}-criterion-${criterion}`}
+                className="text-[11px] text-txt"
+              >
+                {criterion}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       <DetailList title="Sessions">
-        {detail.sessions.length === 0 ? (
+        {(detail.sessions ?? []).length === 0 ? (
           <div className="text-[11px] text-muted">No sessions recorded.</div>
         ) : (
           <div className="space-y-1.5">
-            {detail.sessions
+            {(detail.sessions ?? [])
               .slice(-4)
               .reverse()
               .map((session) => (
@@ -397,10 +396,8 @@ function TaskThreadDetailPanel({
         )}
       </DetailList>
 
-      <DetailList title="Pending User Input">
-        {pendingDecisions.length === 0 ? (
-          <div className="text-[11px] text-muted">No pending user input.</div>
-        ) : (
+      {pendingDecisions.length > 0 ? (
+        <DetailList title="Pending User Input">
           <div className="space-y-1.5">
             {pendingDecisions.map((decision) => (
               <div
@@ -417,15 +414,11 @@ function TaskThreadDetailPanel({
               </div>
             ))}
           </div>
-        )}
-      </DetailList>
+        </DetailList>
+      ) : null}
 
-      <DetailList title="Artifacts">
-        {latestArtifacts.length === 0 ? (
-          <div className="text-[11px] text-muted">
-            No artifacts recorded yet.
-          </div>
-        ) : (
+      {latestArtifacts.length > 0 ? (
+        <DetailList title="Artifacts">
           <div className="space-y-1.5">
             {latestArtifacts.map((artifact) => (
               <div key={artifact.id} className="text-[11px] text-txt">
@@ -437,15 +430,11 @@ function TaskThreadDetailPanel({
               </div>
             ))}
           </div>
-        )}
-      </DetailList>
+        </DetailList>
+      ) : null}
 
-      <DetailList title="Coordinator Decisions">
-        {latestDecisions.length === 0 ? (
-          <div className="text-[11px] text-muted">
-            No decisions recorded yet.
-          </div>
-        ) : (
+      {latestDecisions.length > 0 ? (
+        <DetailList title="Coordinator Decisions">
           <div className="space-y-1.5">
             {latestDecisions.map((decision) => (
               <div key={decision.id} className="text-[11px] text-txt">
@@ -458,13 +447,11 @@ function TaskThreadDetailPanel({
               </div>
             ))}
           </div>
-        )}
-      </DetailList>
+        </DetailList>
+      ) : null}
 
-      <DetailList title="Events">
-        {latestEvents.length === 0 ? (
-          <div className="text-[11px] text-muted">No events recorded yet.</div>
-        ) : (
+      {latestEvents.length > 0 ? (
+        <DetailList title="Events">
           <div className="space-y-1.5">
             {latestEvents.map((event) => (
               <div key={event.id} className="text-[11px] text-txt">
@@ -476,32 +463,58 @@ function TaskThreadDetailPanel({
               </div>
             ))}
           </div>
-        )}
-      </DetailList>
+        </DetailList>
+      ) : null}
 
-      <DetailList title="Transcript">
-        {latestTranscripts.length === 0 ? (
-          <div className="text-[11px] text-muted">
-            No transcript captured yet.
-          </div>
-        ) : (
-          <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
-            {latestTranscripts.map((entry) => (
-              <div
-                key={entry.id}
-                className="rounded border border-border/40 bg-bg-hover/40 p-2"
-              >
-                <div className="mb-1 text-[10px] uppercase tracking-[0.08em] text-muted">
-                  {entry.direction} · {relativeTime(entry.timestamp)}
+
+      {latestTranscripts.length > 0 ? (
+        <DetailList title="Messages">
+          <div className="max-h-40 space-y-2 overflow-y-auto pr-1">
+            {latestTranscripts.map((entry) => {
+              const text = stripAnsi(entry.content);
+              if (!text) return null;
+              return (
+                <div
+                  key={entry.id}
+                  className="rounded border border-border/40 bg-bg-hover/40 p-2"
+                >
+                  <div className="mb-1 text-[10px] uppercase tracking-[0.08em] text-muted">
+                    {entry.direction === "stdin" ? "prompt" : "system"} ·{" "}
+                    {relativeTime(entry.timestamp)}
+                  </div>
+                  <pre className="whitespace-pre-wrap break-words font-mono text-[10px] text-txt">
+                    {text}
+                  </pre>
                 </div>
-                <pre className="whitespace-pre-wrap break-words font-mono text-[10px] text-txt">
-                  {entry.content}
-                </pre>
-              </div>
-            ))}
+              );
+            })}
           </div>
+        </DetailList>
+      ) : null}
+
+      <div className="flex gap-2 pt-1">
+        {detail.status === "archived" ? (
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={busy}
+            onClick={onReopen}
+            className="h-7 px-2 text-[11px]"
+          >
+            Reopen
+          </Button>
+        ) : (
+          <Button
+            variant="secondary"
+            size="sm"
+            disabled={busy}
+            onClick={onDelete}
+            className="h-7 px-2 text-[11px] text-danger hover:bg-danger/10"
+          >
+            Delete
+          </Button>
         )}
-      </DetailList>
+      </div>
     </div>
   );
 }
@@ -774,7 +787,8 @@ function AppRunsWidget(_props: ChatSidebarWidgetProps) {
 }
 
 function OrchestratorTasksWidget(_props: ChatSidebarWidgetProps) {
-  const { ptySessions, t } = useApp();
+  const { t } = useApp();
+  const { ptySessions } = usePtySessions();
   const activeSessions = useMemo(
     () =>
       (ptySessions ?? []).filter(
@@ -820,10 +834,12 @@ function OrchestratorTasksWidget(_props: ChatSidebarWidgetProps) {
         setThreads(nextThreads);
         setStatus(nextStatus);
         setSelectedThreadId((current) => {
-          if (current && nextThreads.some((thread) => thread.id === current)) {
-            return current;
-          }
-          return nextThreads[0]?.id ?? null;
+          // If the user explicitly collapsed (null), keep it collapsed.
+          // Only drop the selection if the selected thread no longer exists.
+          if (current === null) return null;
+          if (nextThreads.some((thread) => thread.id === current)) return current;
+          // Selected thread disappeared (deleted/filtered) — collapse.
+          return null;
         });
       } catch (error) {
         if (cancelled) return;
@@ -893,21 +909,15 @@ function OrchestratorTasksWidget(_props: ChatSidebarWidgetProps) {
     };
   }, [selectedThreadId, selectedThreadSummary?.updatedAt]);
 
-  const handleArchiveToggle = async () => {
+  const handleDelete = async () => {
     if (!selectedThread) return;
     setMutating(true);
     setMutationError(null);
     try {
-      if (selectedThread.status === "archived") {
-        await client.reopenCodingAgentTaskThread(selectedThread.id);
-        setShowArchived(false);
-      } else {
-        await client.archiveCodingAgentTaskThread(selectedThread.id);
-        setShowArchived(true);
-      }
+      await client.archiveCodingAgentTaskThread(selectedThread.id);
       const [nextThreads, nextStatus] = await Promise.all([
         client.listCodingAgentTaskThreads({
-          includeArchived: selectedThread.status !== "archived",
+          includeArchived: showArchived,
           search: deferredSearch || undefined,
           limit: 30,
         }),
@@ -922,8 +932,40 @@ function OrchestratorTasksWidget(_props: ChatSidebarWidgetProps) {
     } catch (error) {
       setMutationError(
         error instanceof Error
-          ? `Failed to update task thread: ${error.message}`
-          : "Failed to update task thread.",
+          ? `Failed to delete task: ${error.message}`
+          : "Failed to delete task.",
+      );
+    } finally {
+      setMutating(false);
+    }
+  };
+
+  const handleReopen = async () => {
+    if (!selectedThread) return;
+    setMutating(true);
+    setMutationError(null);
+    try {
+      await client.reopenCodingAgentTaskThread(selectedThread.id);
+      const [nextThreads, nextStatus] = await Promise.all([
+        client.listCodingAgentTaskThreads({
+          includeArchived: false,
+          search: deferredSearch || undefined,
+          limit: 30,
+        }),
+        client.getCodingAgentStatus(),
+      ]);
+      setLoadError(null);
+      setDetailError(null);
+      setMutationError(null);
+      setThreads(nextThreads);
+      setStatus(nextStatus);
+      setShowArchived(false);
+      setSelectedThreadId(nextThreads[0]?.id ?? null);
+    } catch (error) {
+      setMutationError(
+        error instanceof Error
+          ? `Failed to reopen task: ${error.message}`
+          : "Failed to reopen task.",
       );
     } finally {
       setMutating(false);
@@ -972,30 +1014,30 @@ function OrchestratorTasksWidget(_props: ChatSidebarWidgetProps) {
       {threads.length > 0 ? (
         <div className="flex flex-col gap-2.5">
           {status ? <ProviderRoutingPanel status={status} /> : null}
-          <div className="flex max-h-56 flex-col gap-2 overflow-y-auto pr-1">
+          {detailError ? (
+            <div className="rounded-md border border-danger/30 bg-danger/10 px-2 py-1.5 text-[11px] text-danger">
+              Failed to load task detail: {detailError}
+            </div>
+          ) : null}
+          <div className="flex flex-col gap-2">
             {threads.map((thread) => (
               <TaskThreadCard
                 key={thread.id}
                 thread={thread}
                 selected={thread.id === selectedThreadId}
-                onSelect={setSelectedThreadId}
+                onSelect={(id) =>
+                  setSelectedThreadId((current) =>
+                    current === id ? null : id,
+                  )
+                }
+                detail={thread.id === selectedThreadId ? selectedThread : null}
+                detailLoading={loading}
+                busy={mutating}
+                onDelete={handleDelete}
+                onReopen={handleReopen}
               />
             ))}
           </div>
-          {selectedThread ? (
-            <TaskThreadDetailPanel
-              detail={selectedThread}
-              busy={mutating}
-              onArchive={handleArchiveToggle}
-              onReopen={handleArchiveToggle}
-            />
-          ) : detailError ? (
-            <div className="text-[11px] text-danger">
-              Failed to load task detail: {detailError}
-            </div>
-          ) : loading ? (
-            <div className="text-[11px] text-muted">Loading task detail...</div>
-          ) : null}
         </div>
       ) : loading ? (
         <div className="text-[11px] text-muted">Loading tasks...</div>

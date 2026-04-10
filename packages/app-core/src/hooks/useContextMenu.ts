@@ -14,6 +14,7 @@ import {
   loadSavedCustomCommands,
   type SavedCustomCommand,
 } from "../chat";
+import { useChatInputRef } from "../state/ChatComposerContext";
 import { useApp } from "../state/useApp";
 
 export type CustomCommand = SavedCustomCommand;
@@ -49,7 +50,10 @@ function getSelectedText(target: EventTarget | null): string {
 }
 
 export function useContextMenu(): ContextMenuState {
-  const { setState, chatInput, handleChatSend, setActionNotice } = useApp();
+  const { setState, handleChatSend, setActionNotice } = useApp();
+  // useChatInputRef() returns a stable MutableRefObject — subscribing to it never
+  // causes re-renders, so App.tsx (which calls this hook) stays quiet while typing.
+  const chatInputRef = useChatInputRef();
   const desktopRuntime = isElectrobunRuntime();
 
   const [saveCommandModalOpen, setSaveCommandModalOpen] = useState(false);
@@ -85,7 +89,7 @@ export function useContextMenu(): ContextMenuState {
       const command = payload as { text: string } | undefined;
       if (!command?.text) return;
       const quoted = `> ${command.text}\n\n`;
-      setState("chatInput", quoted + chatInput);
+      setState("chatInput", quoted + chatInputRef.current);
     };
 
     const unsubscribers = [
@@ -116,7 +120,9 @@ export function useContextMenu(): ContextMenuState {
         unsubscribe();
       }
     };
-  }, [setState, chatInput, handleChatSend]);
+  // chatInputRef is a stable ref object — no need to include it in deps.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: chatInputRef is stable
+  }, [setState, handleChatSend]);
 
   useEffect(() => {
     if (!desktopRuntime || typeof window === "undefined") {

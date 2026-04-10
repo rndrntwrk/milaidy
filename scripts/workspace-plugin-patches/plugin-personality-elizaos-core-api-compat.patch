@@ -1,19 +1,17 @@
 From 389ad828117b9de97885bcf5471a2eff71bfcbff Mon Sep 17 00:00:00 2001
 From: dutch <dutchiono@gmail.com>
 Date: Thu, 9 Apr 2026 11:45:20 -0400
-Subject: [PATCH] fix: update zod records and metadata types for @elizaos/core
+Subject: [PATCH] fix: update zod records and settings type cast for @elizaos/core
  compat
 
 z.record() now requires explicit key schema as first argument (Zod v4 compat).
-MetadataValue does not accept nested plain objects directly - stringify
-evolutionData to store as a string value. CharacterSettings spread cast via
-typeof to preserve the correct mapped type.
+CharacterSettings spread cast via typeof to preserve the correct mapped type.
 
 Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
 ---
- typescript/src/evaluators/character-evolution.ts  | 6 +++---
+ typescript/src/evaluators/character-evolution.ts  | 2 +-
  typescript/src/services/character-file-manager.ts | 4 ++--
- 2 files changed, 5 insertions(+), 5 deletions(-)
+ 2 files changed, 3 insertions(+), 3 deletions(-)
 
 diff --git a/typescript/src/evaluators/character-evolution.ts b/typescript/src/evaluators/character-evolution.ts
 index e40892a..1f46d6f 100644
@@ -28,20 +26,6 @@ index e40892a..1f46d6f 100644
        .optional()
        .describe("New setting values to add"),
    }),
-@@ -301,11 +301,11 @@ Return JSON analysis with specific, measurable reasoning for any suggested modif
-             evaluatorName: "character-evolution",
-             timestamp: Date.now(),
-             confidence: evolution.confidence,
--            evolutionData: {
-+            evolutionData: JSON.stringify({
-               shouldModify: evolution.shouldModify,
-               gradualChange: evolution.gradualChange,
-               modifications: evolution.modifications,
--            },
-+            }),
-           },
-         },
-         "character_evolution"
 diff --git a/typescript/src/services/character-file-manager.ts b/typescript/src/services/character-file-manager.ts
 index c182242..b2a488c 100644
 --- a/typescript/src/services/character-file-manager.ts
@@ -66,4 +50,3 @@ index c182242..b2a488c 100644
        // Update runtime character
 -- 
 2.52.0.windows.1
-

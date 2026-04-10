@@ -13,7 +13,7 @@ import type {
 import { client } from "@miladyai/app-core/api";
 import { isRoutineCodingAgentMessage } from "@miladyai/app-core/chat";
 import { useChatAvatarVoiceBridge } from "@miladyai/app-core/hooks";
-import { getVrmPreviewUrl, useApp } from "@miladyai/app-core/state";
+import { getVrmPreviewUrl, useApp, useChatComposer, usePtySessions } from "@miladyai/app-core/state";
 import {
   ChatAttachmentStrip,
   ChatComposer,
@@ -36,6 +36,7 @@ import {
 } from "react";
 import { AgentActivityBox } from "../chat/AgentActivityBox";
 import { MessageContent } from "../chat/MessageContent";
+import { CodingAgentControlChip } from "../coding/CodingAgentControlChip";
 import { PtyConsoleDrawer } from "../coding/PtyConsoleDrawer";
 import {
   useChatVoiceController,
@@ -65,8 +66,6 @@ export function ChatView({
     activeConversationId,
     activeInboxChat,
     characterData,
-    chatInput: rawChatInput,
-    chatSending,
     chatFirstTokenReceived,
     companionMessageCutoffTs,
     conversationMessages,
@@ -82,13 +81,17 @@ export function ChatView({
     shareIngestNotice: rawShareIngestNotice,
     chatAgentVoiceMuted: agentVoiceMuted,
     selectedVrmIndex,
-    chatPendingImages: rawChatPendingImages,
-    setChatPendingImages,
     uiLanguage,
-    ptySessions,
     sendChatText,
     t: appTranslate,
   } = useApp();
+  const { ptySessions } = usePtySessions();
+  const {
+    chatInput: rawChatInput,
+    chatSending,
+    chatPendingImages: rawChatPendingImages,
+    setChatPendingImages,
+  } = useChatComposer();
   const droppedFiles = Array.isArray(rawDroppedFiles) ? rawDroppedFiles : [];
   const chatInput = typeof rawChatInput === "string" ? rawChatInput : "";
   const shareIngestNotice =
@@ -219,11 +222,12 @@ export function ChatView({
               !msg.text.trim()
             ) && !isRoutineCodingAgentMessage(msg),
         )
-        .map((msg) =>
-          msg.source?.trim().toLowerCase() === "milady"
-            ? { ...msg, source: undefined }
-            : msg,
-        ),
+        // Default-tag any message that arrived without a source as
+        // "milady" so dashboard turns render the gold chip symmetric
+        // with connector messages. Live-streamed turns flow through
+        // the SSE path and don't carry the server-side default from
+        // conversation-routes.ts, so we catch them here too.
+        .map((msg) => (msg.source ? msg : { ...msg, source: "milady" })),
     [chatFirstTokenReceived, chatSending, msgs],
   );
   const {
@@ -523,13 +527,17 @@ export function ChatView({
       variant="game-modal"
       shellRef={composerRef}
       before={
-        <AgentActivityBox
-          sessions={ptySessions}
-          onSessionClick={
-            onPtySessionClick ??
-            ((id) => setPtyDrawerSessionId((prev) => (prev === id ? null : id)))
-          }
-        />
+        <>
+          <CodingAgentControlChip />
+          <AgentActivityBox
+            sessions={ptySessions}
+            onSessionClick={
+              onPtySessionClick ??
+              ((id) =>
+                setPtyDrawerSessionId((prev) => (prev === id ? null : id)))
+            }
+          />
+        </>
       }
     >
       <ChatComposer
@@ -568,7 +576,7 @@ export function ChatView({
       />
     </ChatComposerShell>
   ) : (
-    <ChatComposerShell variant="default">
+    <ChatComposerShell variant="default" before={<CodingAgentControlChip />}>
       <ChatComposer
         variant="default"
         textareaRef={textareaRef}
@@ -674,10 +682,9 @@ function InboxChatPanel({
   };
   variant: ChatViewVariant;
 }) {
-  const { agentStatus, characterData, t } = useApp();
+  const { t } = useApp();
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
   const [loading, setLoading] = useState(true);
-  const agentName = characterData?.name || agentStatus?.agentName || "Agent";
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastRenderedMessageKeyRef = useRef<string | null>(null);
 
@@ -734,12 +741,17 @@ function InboxChatPanel({
     lastRenderedMessageKeyRef.current = nextKey;
   }, [messages]);
 
+  const sourceLabel = activeInboxChat.source
+    ? activeInboxChat.source.charAt(0).toUpperCase() +
+      activeInboxChat.source.slice(1)
+    : "Channel";
+
   return (
-    <section
+    <div
       className="flex flex-1 min-h-0 min-w-0 flex-col"
       aria-label={t("inboxview.Title", { defaultValue: "Inbox" })}
     >
-      <div className="flex items-start justify-between gap-4 border-b border-border/40 px-5 py-3">
+      <div className="flex items-center justify-between border-b border-border/40 px-5 py-3">
         <div className="min-w-0">
           <div className="text-sm font-bold text-txt truncate">
             {activeInboxChat.title}
@@ -780,7 +792,6 @@ function InboxChatPanel({
         ) : (
           <ChatTranscript
             variant={variant}
-            agentName={agentName}
             messages={messages}
             userMessagesOnRight={false}
             renderMessageContent={(message) => (
@@ -792,9 +803,10 @@ function InboxChatPanel({
       <div className="border-t border-border/40 bg-bg-hover/40 px-5 py-3 text-[11px] leading-5 text-muted">
         {t("inboxview.ReadOnlyReplyHint", {
           defaultValue:
-            "Read-only view. Reply from the original app — the connector plugin handles outbound messages.",
+            "Read-only view. Reply from the {{source}} app — the connector plugin handles outbound messages.",
+          source: sourceLabel,
         })}
       </div>
-    </section>
+    </div>
   );
 }

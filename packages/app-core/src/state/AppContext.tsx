@@ -74,6 +74,8 @@ import {
   computeAgentDeadlineExtensions,
   getAgentReadyTimeoutMs,
 } from "./agent-startup-timing";
+import { ChatComposerCtx, ChatInputRefCtx } from "./ChatComposerContext";
+import { PtySessionsCtx } from "./PtySessionsContext";
 import { CompanionSceneConfigCtx } from "./CompanionSceneConfigContext";
 import {
   AGENT_TRANSFER_MIN_PASSWORD_LENGTH,
@@ -509,19 +511,26 @@ function AppProviderInner({
     autonomousLatestEventIdRef,
     autonomousRunHealthByRunIdRef,
     autonomousReplayInFlightRef,
+    addUnread,
   } = chatState;
-  // addUnread / removeUnread wrappers for old setUnreadConversations patterns
+  // addUnread / removeUnread wrappers for old setUnreadConversations patterns.
+  // Read current unreadConversations through a ref so this callback stays
+  // stable across renders — otherwise it cascades into handleChatClear /
+  // handleSelectConversation / handleDeleteConversation and busts the
+  // AppContext value memo on every keystroke.
+  const unreadConversationsRef = useRef(unreadConversations);
+  unreadConversationsRef.current = unreadConversations;
   const setUnreadConversations = useCallback(
     (v: Set<string> | ((prev: Set<string>) => Set<string>)) => {
       if (typeof v === "function") {
-        const nextVal = v(chatState.state.unreadConversations);
+        const nextVal = v(unreadConversationsRef.current);
         // Sync back through dispatch
-        for (const id of nextVal) chatState.addUnread(id);
+        for (const id of nextVal) addUnread(id);
       } else {
         // Direct set not supported through reducer — use add/remove
       }
     },
-    [chatState],
+    [addUnread],
   );
 
   // --- Triggers (extracted to useTriggersState) ---
@@ -1017,6 +1026,13 @@ function AppProviderInner({
 
   // ── Vincent state (extracted to useVincentState) ──────────────────
   const vincentHook = useVincentState({ setActionNotice, t });
+  const {
+    vincentConnected,
+    vincentLoginBusy,
+    vincentLoginError,
+    handleVincentLogin,
+    handleVincentDisconnect,
+  } = vincentHook;
   const {
     elizaCloudEnabled,
     setElizaCloudEnabled,
@@ -1567,6 +1583,11 @@ function AppProviderInner({
     });
   }, [setBackendConnection]);
 
+  // Passed to the startup coordinator so the PTY poll interval can skip API
+  // calls when no sessions are active.
+  const hasPtySessionsRef = useRef(ptySessions.length > 0);
+  hasPtySessionsRef.current = ptySessions.length > 0;
+
   // ── StartupCoordinator (sole startup authority) ──────────────────────
   // Called after all dependency hooks so every setter/callback is available.
   const startupCoordinator = useStartupCoordinator({
@@ -1618,6 +1639,7 @@ function AppProviderInner({
     setCustomBackgroundUrl,
     setWalletAddresses,
     setPtySessions,
+    hasPtySessionsRef,
     setTab,
     setTabRaw,
     setConversationMessages,
@@ -1639,6 +1661,17 @@ function AppProviderInner({
   coordinatorResetRef.current = startupCoordinator.reset;
   coordinatorOnboardingCompleteRef.current =
     startupCoordinator.onboardingComplete;
+
+  // Memoize the coordinator handle so that unrelated re-renders (e.g. chatInput
+  // keystrokes) don't produce a new object reference and bust the value useMemo below.
+  // The coordinator's computed fields (legacyPhase, loading, terminal, target, phase)
+  // all derive from its reducer state, so state is the only dep we need.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: coordinator fields all derive from state
+  const stableStartupCoordinator = useMemo(
+    () => startupCoordinator,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [startupCoordinator.state],
+  );
 
   // When agent transitions to "running", send a greeting if conversation is empty
   useEffect(() => {
@@ -1738,7 +1771,30 @@ function AppProviderInner({
     ],
   );
 
-  const value: AppContextValue = {
+  // chatInput/chatSending/chatPendingImages live in ChatComposerContext so that
+  // keystrokes don't cascade through AppContext to all subscribers.
+  const composerValue = useMemo(
+    () => ({ chatInput, chatSending, chatPendingImages, setChatInput, setChatPendingImages }),
+    [chatInput, chatSending, chatPendingImages, setChatInput, setChatPendingImages],
+  );
+
+  // ptySessions lives in PtySessionsContext so the 5-second poll doesn't
+  // cascade through AppContext to all subscribers.
+  const ptySessionsValue = useMemo(
+    () => ({ ptySessions }),
+    [ptySessions],
+  );
+
+  // The AppContext value is memoized and does NOT include chatInput/chatSending/
+  // chatPendingImages (in ChatComposerCtx) or ptySessions (in PtySessionsCtx).
+  // autonomousEvents/autonomousLatestEventId/autonomousRunHealthByRunId are also
+  // excluded — they update on every heartbeat WS event but no component reads them
+  // directly from useApp(). Excluding them prevents heartbeat events from re-rendering
+  // all AppContext subscribers (CompanionViewOverlay, App, etc.).
+  // NOTE: this dep array must stay in sync with the fields in the value object.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const value: AppContextValue = useMemo(
+    () => ({
     // Translations
     t,
     // State
@@ -1758,7 +1814,7 @@ function AppProviderInner({
     startupStatus,
     startupError,
     // StartupCoordinator — the sole startup authority
-    startupCoordinator,
+    startupCoordinator: stableStartupCoordinator,
     authRequired,
     actionNotice,
     lifecycleBusy,
@@ -1773,6 +1829,7 @@ function AppProviderInner({
     pairingCodeInput,
     pairingError,
     pairingBusy,
+    // chatInput/chatSending/chatPendingImages are stale here — read via useChatComposer()
     chatInput,
     chatSending,
     chatFirstTokenReceived,
@@ -2106,11 +2163,11 @@ function AppProviderInner({
     handleCloudLogin,
     handleCloudDisconnect,
     handleCloudOnboardingFinish,
-    vincentConnected: vincentHook.vincentConnected,
-    vincentLoginBusy: vincentHook.vincentLoginBusy,
-    vincentLoginError: vincentHook.vincentLoginError,
-    handleVincentLogin: vincentHook.handleVincentLogin,
-    handleVincentDisconnect: vincentHook.handleVincentDisconnect,
+    vincentConnected,
+    vincentLoginBusy,
+    vincentLoginError,
+    handleVincentLogin,
+    handleVincentDisconnect,
     loadUpdateStatus,
     handleChannelChange,
     checkExtensionStatus,
@@ -2122,7 +2179,109 @@ function AppProviderInner({
     setActionNotice,
     setState,
     copyToClipboard,
-  };
+  }),
+  // biome-ignore lint/correctness/useExhaustiveDependencies: several fields are intentionally excluded from deps — see comments in the dep array below. chatInput/chatSending/chatPendingImages are provided fresh via ChatComposerCtx; ptySessions via PtySessionsCtx; autonomousEvents/autonomousLatestEventId/autonomousRunHealthByRunId are unused by components and excluded to prevent heartbeat WS events from re-rendering all AppContext subscribers.
+  // prettier-ignore
+  [
+    t, tab, uiShellMode, uiLanguage, uiTheme, companionVrmPowerMode,
+    companionAnimateWhenHidden, companionHalfFramerateMode, connected, agentStatus,
+    onboardingComplete, onboardingUiRevealNonce, onboardingLoading, startupPhase,
+    startupStatus, startupError, stableStartupCoordinator, authRequired, actionNotice,
+    lifecycleBusy, lifecycleAction, pendingRestart, pendingRestartReasons,
+    restartBannerDismissed, backendConnection, backendDisconnectedBannerDismissed,
+    pairingEnabled, pairingExpiresAt, pairingCodeInput, pairingError, pairingBusy,
+    chatFirstTokenReceived, chatLastUsage, chatAvatarVisible, chatAgentVoiceMuted,
+    chatMode, chatAvatarSpeaking, conversations, activeConversationId,
+    companionMessageCutoffTs, conversationMessages,
+    // NOTE: autonomousEvents, autonomousLatestEventId, autonomousRunHealthByRunId intentionally EXCLUDED
+    // — they update on every heartbeat WS event but no component reads them from useApp().
+    // NOTE: ptySessions intentionally EXCLUDED — provided fresh via PtySessionsCtx.
+    unreadConversations, triggers, triggersLoaded, triggersLoading, triggersSaving,
+    triggerRunsById, triggerHealth, triggerError, plugins, pluginFilter,
+    pluginStatusFilter, pluginSearch, pluginSettingsOpen, pluginAdvancedOpen,
+    pluginSaving, pluginSaveSuccess, skills, skillsSubTab, skillCreateFormOpen,
+    skillCreateName, skillCreateDescription, skillCreating, skillReviewReport,
+    skillReviewId, skillReviewLoading, skillToggleAction, skillsMarketplaceQuery,
+    skillsMarketplaceResults, skillsMarketplaceError, skillsMarketplaceLoading,
+    skillsMarketplaceAction, skillsMarketplaceManualGithubUrl, logs, logSources,
+    logTags, logTagFilter, logLevelFilter, logSourceFilter, logLoadError,
+    walletAddresses, walletConfig, walletBalances, walletNfts, walletLoading,
+    walletNftsLoading, inventoryView, walletExportData, walletExportVisible,
+    walletApiKeySaving, inventorySort, inventorySortDirection, inventoryChainFilters,
+    walletError, registryStatus, registryLoading, registryRegistering, registryError,
+    dropStatus, dropLoading, mintInProgress, mintResult, mintError, mintShiny,
+    whitelistStatus, whitelistLoading, characterData, characterLoading,
+    characterSaving, characterSaveSuccess, characterSaveError, characterDraft,
+    selectedVrmIndex, customVrmUrl, customVrmPreviewUrl, customBackgroundUrl,
+    customCatchphrase, customVoicePresetId, activePackId, customWorldUrl,
+    elizaCloudEnabled, elizaCloudVoiceProxyAvailable, elizaCloudConnected,
+    elizaCloudHasPersistedKey, elizaCloudCredits, elizaCloudCreditsLow,
+    elizaCloudCreditsCritical, elizaCloudAuthRejected, elizaCloudCreditsError,
+    elizaCloudTopUpUrl, elizaCloudUserId, elizaCloudStatusReason, ownerName,
+    cloudDashboardView, elizaCloudLoginBusy, elizaCloudLoginError,
+    elizaCloudDisconnecting, updateStatus, updateLoading, updateChannelSaving,
+    extensionStatus, extensionChecking, storePlugins, storeSearch, storeFilter,
+    storeLoading, storeInstalling, storeUninstalling, storeError, storeDetailPlugin,
+    storeSubTab, catalogSkills, catalogTotal, catalogPage, catalogTotalPages,
+    catalogSort, catalogSearch, catalogLoading, catalogError, catalogDetailSkill,
+    catalogInstalling, catalogUninstalling, workbenchLoading, workbench,
+    workbenchTasksAvailable, workbenchTriggersAvailable, workbenchTodosAvailable,
+    exportBusy, exportPassword, exportIncludeLogs, exportError, exportSuccess,
+    importBusy, importPassword, importFile, importError, importSuccess,
+    onboardingStep, onboardingMode, onboardingActiveGuide, onboardingDeferredTasks,
+    postOnboardingChecklistDismissed, onboardingOptions, onboardingName,
+    onboardingOwnerName, onboardingStyle, onboardingServerTarget,
+    onboardingCloudApiKey, onboardingSmallModel, onboardingLargeModel,
+    onboardingProvider, onboardingApiKey, onboardingVoiceProvider,
+    onboardingVoiceApiKey, onboardingExistingInstallDetected,
+    onboardingDetectedProviders, onboardingRemoteApiBase, onboardingRemoteToken,
+    onboardingRemoteConnecting, onboardingRemoteError, onboardingRemoteConnected,
+    onboardingOpenRouterModel, onboardingPrimaryModel, onboardingTelegramToken,
+    onboardingDiscordToken, onboardingWhatsAppSessionPath, onboardingTwilioAccountSid,
+    onboardingTwilioAuthToken, onboardingTwilioPhoneNumber, onboardingBlooioApiKey,
+    onboardingBlooioPhoneNumber, onboardingGithubToken, onboardingSubscriptionTab,
+    onboardingElizaCloudTab, onboardingSelectedChains, onboardingRpcSelections,
+    onboardingRpcKeys, onboardingAvatar, commandPaletteOpen, commandQuery,
+    commandActiveIndex, closeCommandPalette, emotePickerOpen, mcpConfiguredServers,
+    mcpServerStatuses, mcpMarketplaceQuery, mcpMarketplaceResults,
+    mcpMarketplaceLoading, mcpAction, mcpAddingServer, mcpAddingResult,
+    mcpEnvInputs, mcpHeaderInputs, droppedFiles, shareIngestNotice, appRuns,
+    activeGameRunId, activeGameApp, activeGameDisplayName, activeGameViewerUrl,
+    activeGameSandbox, activeGamePostMessageAuth, activeGameSession,
+    gameOverlayEnabled, activeInboxChat, appsSubTab, agentSubTab, pluginsSubTab,
+    databaseSubTab, configRaw, configText, activeGamePostMessagePayload, systemWarnings,
+    setTab, setUiShellMode, switchUiShellMode, switchShellView, navigation,
+    setUiLanguage, setUiTheme, setCompanionVrmPowerMode, setCompanionAnimateWhenHidden,
+    setCompanionHalfFramerateMode, handleStart, handleStop, handleRestart, handleReset,
+    handleResetAppliedFromMain, retryStartup, dismissRestartBanner, showRestartBanner,
+    triggerRestart, relaunchDesktop, dismissBackendDisconnectedBanner,
+    retryBackendConnection, restartBackend, dismissSystemWarning, handleChatSend,
+    handleChatStop, handleChatRetry, handleChatEdit, handleChatClear,
+    handleStartDraftConversation, handleNewConversation, handleSelectConversation,
+    handleDeleteConversation, handleRenameConversation, suggestConversationTitle,
+    sendActionMessage, sendChatText, loadTriggers, ensureTriggersLoaded,
+    createTrigger, updateTrigger, deleteTrigger, runTriggerNow, loadTriggerRuns,
+    loadTriggerHealth, handlePairingSubmit, loadPlugins, ensurePluginsLoaded,
+    handlePluginToggle, handlePluginConfigSave, loadSkills, refreshSkills,
+    handleSkillToggle, handleCreateSkill, handleOpenSkill, handleDeleteSkill,
+    handleReviewSkill, handleAcknowledgeSkill, searchSkillsMarketplace,
+    installSkillFromMarketplace, uninstallMarketplaceSkill, installSkillFromGithubUrl,
+    loadLogs, loadInventory, loadBalances, loadNfts, executeBscTrade,
+    executeBscTransfer, getBscTradePreflight, getBscTradeQuote, getBscTradeTxStatus,
+    getStewardStatus, getStewardHistory, getStewardPending, approveStewardTx,
+    rejectStewardTx, loadWalletTradingProfile, handleWalletApiKeySave, handleExportKeys,
+    loadRegistryStatus, registerOnChain, syncRegistryProfile, loadDropStatus,
+    mintFromDrop, loadWhitelistStatus, loadCharacter, handleSaveCharacter,
+    handleCharacterFieldInput, handleCharacterArrayInput, handleCharacterStyleInput,
+    handleCharacterMessageExamplesInput, handleOnboardingNext, handleOnboardingBack,
+    handleOnboardingJumpToStep, goToOnboardingStep, handleOnboardingRemoteConnect,
+    handleOnboardingUseLocalBackend, handleCloudLogin, handleCloudDisconnect,
+    handleCloudOnboardingFinish, vincentConnected, vincentLoginBusy, vincentLoginError,
+    handleVincentLogin, handleVincentDisconnect, loadUpdateStatus, handleChannelChange,
+    checkExtensionStatus, openEmotePicker, closeEmotePicker, loadWorkbench,
+    handleAgentExport, handleAgentImport, setActionNotice, setState, copyToClipboard,
+  ],
+  );
 
   const mergedBranding = useMemo(
     () => ({ ...DEFAULT_BRANDING, ...brandingOverride }),
@@ -2132,11 +2291,17 @@ function AppProviderInner({
   return (
     <BrandingContext.Provider value={mergedBranding}>
       <CompanionSceneConfigCtx.Provider value={companionSceneConfig}>
-        <AppContext.Provider value={value}>
-          {children}
-          <ConfirmDialog {...modalProps} />
-          <PromptDialog {...promptModalProps} />
-        </AppContext.Provider>
+        <PtySessionsCtx.Provider value={ptySessionsValue}>
+          <ChatInputRefCtx.Provider value={chatInputRef}>
+            <ChatComposerCtx.Provider value={composerValue}>
+              <AppContext.Provider value={value}>
+                {children}
+                <ConfirmDialog {...modalProps} />
+                <PromptDialog {...promptModalProps} />
+              </AppContext.Provider>
+            </ChatComposerCtx.Provider>
+          </ChatInputRefCtx.Provider>
+        </PtySessionsCtx.Provider>
       </CompanionSceneConfigCtx.Provider>
     </BrandingContext.Provider>
   );

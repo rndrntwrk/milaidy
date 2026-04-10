@@ -6,7 +6,7 @@
  * and feeds it data from React state.
  */
 
-import { useApp } from "@miladyai/app-core/state";
+import { useApp, usePtySessions } from "@miladyai/app-core/state";
 import { useCallback, useEffect, useRef } from "react";
 import type { SceneOverlayManager } from "../avatar/SceneOverlayManager";
 import type {
@@ -36,7 +36,8 @@ function findOverlayManager(): SceneOverlayManager | null {
  * overlay manager. Render this at the app level, outside CompanionSceneHost.
  */
 export function SceneOverlayDataBridge(): null {
-  const { conversationMessages, agentStatus, ptySessions, triggers } = useApp();
+  const { conversationMessages, agentStatus, triggers } = useApp();
+  const { ptySessions } = usePtySessions();
   const managerRef = useRef<SceneOverlayManager | null>(null);
 
   // Lazily resolve the overlay manager on each effect run

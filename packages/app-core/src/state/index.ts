@@ -1,4 +1,6 @@
 export * from "./AppContext";
+export * from "./ChatComposerContext";
+export * from "./PtySessionsContext";
 export * from "./CompanionSceneConfigContext";
 export * from "./parsers";
 export * from "./persistence";

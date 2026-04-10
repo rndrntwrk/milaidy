@@ -67,6 +67,7 @@ export function ChatComposerShell({
       }}
       {...props}
     >
+      {before}
       {children}
     </div>
   );
