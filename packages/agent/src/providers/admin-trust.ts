@@ -8,7 +8,7 @@ import type {
 import {
   checkSenderRole,
   resolveCanonicalOwnerIdForMessage,
-} from "@elizaos/core/roles";
+} from "../runtime/roles.js";
 import { hasAdminAccess } from "../security/access.js";
 
 export const adminTrustProvider: Provider = createAdminTrustProvider();

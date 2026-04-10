@@ -50,7 +50,7 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-vi.mock("@elizaos/core/roles", () => ({
+vi.mock("../runtime/roles.js", () => ({
   checkSenderPrivateAccess: mocks.checkSenderPrivateAccess,
   resolveCanonicalOwnerIdForMessage: mocks.resolveCanonicalOwnerIdForMessage,
 }));

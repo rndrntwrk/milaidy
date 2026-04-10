@@ -1,5 +1,5 @@
 import type { IAgentRuntime, Memory } from "@elizaos/core";
-import * as roles from "@elizaos/core/roles";
+import * as roles from "../runtime/roles.js";
 
 type AccessContext = {
   runtime: IAgentRuntime & { agentId: string };

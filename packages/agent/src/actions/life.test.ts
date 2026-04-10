@@ -47,7 +47,7 @@ const {
   mockGetGoogleConnectorStatus: vi.fn(),
 }));
 
-vi.mock("@elizaos/core/roles", () => ({
+vi.mock("../runtime/roles.js", () => ({
   checkSenderPrivateAccess: mockCheckSenderPrivateAccess,
   resolveCanonicalOwnerIdForMessage: mockResolveCanonicalOwnerIdForMessage,
 }));

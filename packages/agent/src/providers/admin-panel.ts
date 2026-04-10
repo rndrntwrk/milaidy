@@ -6,7 +6,7 @@ import type {
   State,
   UUID,
 } from "@elizaos/core";
-import { resolveCanonicalOwnerIdForMessage } from "@elizaos/core/roles";
+import { resolveCanonicalOwnerIdForMessage } from "../runtime/roles.js";
 import { hasAdminAccess } from "../security/access.js";
 
 /** Maximum total characters for the provider text output. */

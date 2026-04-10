@@ -23,7 +23,7 @@ vi.mock("../services/escalation.js", () => ({
   },
 }));
 
-vi.mock("@elizaos/core/roles", () => ({
+vi.mock("../runtime/roles.js", () => ({
   resolveCanonicalOwnerIdForMessage: mockResolveCanonicalOwnerIdForMessage,
 }));
 

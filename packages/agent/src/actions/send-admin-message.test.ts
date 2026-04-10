@@ -14,7 +14,7 @@ const {
   mockGetWorld: vi.fn(),
 }));
 
-vi.mock("@elizaos/core/roles", () => ({
+vi.mock("../runtime/roles.js", () => ({
   checkSenderRole: mockCheckSenderRole,
   resolveCanonicalOwnerIdForMessage: mockResolveCanonicalOwnerIdForMessage,
 }));
