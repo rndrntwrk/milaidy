@@ -932,13 +932,13 @@ export function mapTaskThreadsToCodingAgentSessions(
         ? ("error" as const)
         : thread.status === "done"
           ? ("completed" as const)
-          : thread.status === "validating"
-            ? ("tool_running" as const)
-            : thread.status === "blocked" ||
-                thread.status === "waiting_on_user" ||
-                thread.status === "interrupted"
-              ? ("blocked" as const)
-              : ("active" as const),
+          : thread.status === "interrupted"
+            ? ("stopped" as const)
+            : thread.status === "validating"
+              ? ("tool_running" as const)
+              : thread.status === "blocked" || thread.status === "waiting_on_user"
+                ? ("blocked" as const)
+                : ("active" as const),
     decisionCount: thread.decisionCount,
     autoResolvedCount: 0,
     lastActivity:

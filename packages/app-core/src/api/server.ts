@@ -820,9 +820,17 @@ async function handleMiladyCompatRoute(
       // Include serviceRouting: { llmText: null } so the upstream's in-memory
       // serviceRouting (derived from legacy cloud.enabled=true at load time) is
       // cleared — without it, the loopback save re-persists the cloud-proxy route.
+      // Also include linkedAccounts.elizacloud.status="unlinked" so the
+      // upstream's in-memory state.config (which still has the old "linked"
+      // status from load time) does not overwrite the canonical unlinked
+      // state on the next saveElizaConfig — that overwrite was the source
+      // of the auto-reconnect bug after restart.
       const disconnectPatch = {
         cloud: { enabled: false, apiKey: null },
         serviceRouting: { llmText: null },
+        linkedAccounts: {
+          elizacloud: { status: "unlinked", source: "api-key" },
+        },
       };
       if (isMiladySettingsDebugEnabled()) {
         logger.debug(

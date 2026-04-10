@@ -562,13 +562,19 @@ export function useChatCallbacks(deps: UseChatCallbacksDeps) {
 
   // ── Send sub-hook ───────────────────────────────────────────────────
 
+  // Stable ref so handleChatStop doesn't get a new reference on every 5-second
+  // ptySessions poll. The ref is updated here (synchronously, before useChatSend
+  // runs) so it always reflects the latest sessions at call-time.
+  const ptySessionsRef = useRef(ptySessions);
+  ptySessionsRef.current = ptySessions;
+
   const send = useChatSend({
     t,
     uiLanguage,
     chatMode,
     conversations,
     activeConversationId,
-    ptySessions,
+    ptySessionsRef,
     setChatInput,
     setChatSending,
     setChatFirstTokenReceived,

@@ -74,6 +74,8 @@ export interface ReadyPhaseDeps {
       | CodingAgentSession[]
       | ((prev: CodingAgentSession[]) => CodingAgentSession[]),
   ) => void;
+  /** Ref whose .current is true when there are active PTY sessions. */
+  hasPtySessionsRef: React.MutableRefObject<boolean>;
   setTabRaw: (t: Tab) => void;
   setConversationMessages: (
     v:
@@ -247,7 +249,12 @@ export function bindReadyPhase(
   };
   hydratePty();
   let ptyHydratedViaWs = false;
-  ptyPollInterval = setInterval(hydratePty, 5_000);
+  // Only re-poll when sessions are active — avoids unnecessary 5-second API
+  // calls during idle. WS events handle session discovery; ws-reconnected and
+  // visibility-change handlers trigger an unconditional hydrate on recovery.
+  ptyPollInterval = setInterval(() => {
+    if (depsRef.current?.hasPtySessionsRef.current) hydratePty();
+  }, 5_000);
 
   client.connectWs();
 

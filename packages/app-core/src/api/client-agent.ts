@@ -45,11 +45,11 @@ import type {
   PluginInfo,
   PluginMutationResult,
   RawPtySession,
-  RelationshipsGraphQuery,
-  RelationshipsGraphSnapshot,
-  RelationshipsGraphStats,
-  RelationshipsPersonDetail,
-  RelationshipsPersonSummary,
+  RolodexGraphQuery,
+  RolodexGraphSnapshot,
+  RolodexGraphStats,
+  RolodexPersonDetail,
+  RolodexPersonSummary,
   RuntimeDebugSnapshot,
   SecretInfo,
   SecurityAuditFilter,
@@ -75,6 +75,7 @@ import {
   mapPtySessionsToCodingAgentSessions,
   mapTaskThreadsToCodingAgentSessions,
 } from "./client-types";
+import { TERMINAL_STATUSES } from "../coding";
 
 // ---------------------------------------------------------------------------
 // Module-level helpers
@@ -349,12 +350,12 @@ declare module "./client-base" {
       fromSeq?: number;
     }): Promise<AgentEventsResponse>;
     getExtensionStatus(): Promise<ExtensionStatus>;
-    getRelationshipsGraph(query?: RelationshipsGraphQuery): Promise<RelationshipsGraphSnapshot>;
-    getRelationshipsPeople(query?: RelationshipsGraphQuery): Promise<{
-      people: RelationshipsPersonSummary[];
-      stats: RelationshipsGraphStats;
+    getRolodexGraph(query?: RolodexGraphQuery): Promise<RolodexGraphSnapshot>;
+    getRolodexPeople(query?: RolodexGraphQuery): Promise<{
+      people: RolodexPersonSummary[];
+      stats: RolodexGraphStats;
     }>;
-    getRelationshipsPerson(id: string): Promise<RelationshipsPersonDetail>;
+    getRolodexPerson(id: string): Promise<RolodexPersonDetail>;
     getCharacter(): Promise<{
       character: CharacterData;
       agentName: string;
@@ -1453,7 +1454,7 @@ MiladyClient.prototype.getExtensionStatus = async function (
   return this.fetch("/api/extension/status");
 };
 
-MiladyClient.prototype.getRelationshipsGraph = async function (
+MiladyClient.prototype.getRolodexGraph = async function (
   this: MiladyClient,
   query,
 ) {
@@ -1465,13 +1466,13 @@ MiladyClient.prototype.getRelationshipsGraph = async function (
   if (typeof query?.offset === "number")
     params.set("offset", String(query.offset));
   const qs = params.toString();
-  const response = await this.fetch<{ data: RelationshipsGraphSnapshot }>(
-    `/api/relationships/graph${qs ? `?${qs}` : ""}`,
+  const response = await this.fetch<{ data: RolodexGraphSnapshot }>(
+    `/api/rolodex/graph${qs ? `?${qs}` : ""}`,
   );
   return response.data;
 };
 
-MiladyClient.prototype.getRelationshipsPeople = async function (
+MiladyClient.prototype.getRolodexPeople = async function (
   this: MiladyClient,
   query,
 ) {
@@ -1484,21 +1485,21 @@ MiladyClient.prototype.getRelationshipsPeople = async function (
     params.set("offset", String(query.offset));
   const qs = params.toString();
   const response = await this.fetch<{
-    data: RelationshipsPersonSummary[];
-    stats: RelationshipsGraphStats;
-  }>(`/api/relationships/people${qs ? `?${qs}` : ""}`);
+    data: RolodexPersonSummary[];
+    stats: RolodexGraphStats;
+  }>(`/api/rolodex/people${qs ? `?${qs}` : ""}`);
   return {
     people: response.data,
     stats: response.stats,
   };
 };
 
-MiladyClient.prototype.getRelationshipsPerson = async function (
+MiladyClient.prototype.getRolodexPerson = async function (
   this: MiladyClient,
   id,
 ) {
-  const response = await this.fetch<{ data: RelationshipsPersonDetail }>(
-    `/api/relationships/people/${encodeURIComponent(id)}`,
+  const response = await this.fetch<{ data: RolodexPersonDetail }>(
+    `/api/rolodex/people/${encodeURIComponent(id)}`,
   );
   return response.data;
 };
@@ -1728,9 +1729,7 @@ MiladyClient.prototype.getCodingAgentStatus = async function (
     ) {
       status.tasks = mapTaskThreadsToCodingAgentSessions(
         status.taskThreads,
-      ).filter(
-        (task) => task.status !== "completed" && task.status !== "error",
-      );
+      ).filter((task) => !TERMINAL_STATUSES.has(task.status));
       status.taskCount = status.tasks.length;
     }
     if (status && !status.tasks) {
