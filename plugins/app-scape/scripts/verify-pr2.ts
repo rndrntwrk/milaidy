@@ -137,11 +137,18 @@ async function main(): Promise<void> {
         "response Content-Type is text/html",
         (res.getHeader("Content-Type") ?? "").includes("text/html"),
     );
+    // The viewer intentionally does NOT opt into cross-origin isolation.
+    // The xRSPS client *wants* SharedArrayBuffer, but require-corp blocks
+    // any iframe whose origin doesn't send Cross-Origin-Resource-Policy —
+    // and the live Sevalla deployment at scape-client-2sqyc.kinsta.page
+    // doesn't. With COEP on, WebKit silently blocks the iframe and the
+    // "xRSPS client is not reachable" fallback trips. Until infra adds
+    // CORP headers upstream, manual play requires no COOP/COEP/CORP here.
     assertTrue(
-        "response sets cross-origin isolation headers",
-        res.getHeader("Cross-Origin-Opener-Policy") === "same-origin" &&
-            res.getHeader("Cross-Origin-Embedder-Policy") === "require-corp" &&
-            res.getHeader("Cross-Origin-Resource-Policy") === "same-origin",
+        "response does NOT opt into cross-origin isolation",
+        res.getHeader("Cross-Origin-Opener-Policy") === undefined &&
+            res.getHeader("Cross-Origin-Embedder-Policy") === undefined &&
+            res.getHeader("Cross-Origin-Resource-Policy") === undefined,
     );
     assertTrue(
         "response CSP includes frame-ancestors",

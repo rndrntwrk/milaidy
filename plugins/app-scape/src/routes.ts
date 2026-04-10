@@ -3,10 +3,21 @@ import type { IAgentRuntime } from "@elizaos/core";
 import type {
   AppLaunchDiagnostic,
   AppLaunchResult,
+  AppSessionActivityItem,
+  AppSessionJsonValue,
   AppSessionState,
 } from "@miladyai/shared/contracts/apps";
 import { decode, encode } from "@toon-format/toon";
 
+import type { JournalGoal, JournalMemory } from "./journal/types.js";
+import type {
+  PerceptionGroundItem,
+  PerceptionInventoryItem,
+  PerceptionNpc,
+  PerceptionPlayer,
+  PerceptionSkill,
+  PerceptionSnapshot,
+} from "./sdk/types.js";
 import type { ScapeGameService } from "./services/game-service.js";
 
 /**
@@ -520,6 +531,204 @@ function getScapeService(
   return (service as unknown as ScapeGameService | null) ?? null;
 }
 
+// ---------------------------------------------------------------------------
+// Telemetry extraction — feeds the ScapeOperatorSurface in the milady UI
+// ---------------------------------------------------------------------------
+
+/** Chebyshev distance on the OSRS tile grid. `null` means unknown. */
+function tileDistance(
+  from: { x: number; z: number } | null | undefined,
+  to: { x: number; z: number } | null | undefined,
+): number | null {
+  if (!from || !to) return null;
+  return Math.max(Math.abs(from.x - to.x), Math.abs(from.z - to.z));
+}
+
+function mapSelf(
+  snapshot: PerceptionSnapshot | null,
+): Record<string, AppSessionJsonValue> | null {
+  if (!snapshot?.self) return null;
+  const self = snapshot.self;
+  return {
+    name: self.name,
+    combatLevel: self.combatLevel,
+    hp: self.hp,
+    maxHp: self.maxHp,
+    level: self.level,
+    runEnergy: self.runEnergy,
+    inCombat: self.inCombat,
+    position: { x: self.x, z: self.z },
+    tick: snapshot.tick,
+  };
+}
+
+function mapSkills(
+  snapshot: PerceptionSnapshot | null,
+  limit: number,
+): AppSessionJsonValue[] {
+  const skills = snapshot?.skills ?? [];
+  // Pick the skills most likely to be interesting to an operator at a
+  // glance: Hitpoints, combat stats, then everything else by level desc.
+  const PRIORITY: ReadonlyArray<string> = [
+    "Hitpoints",
+    "Attack",
+    "Strength",
+    "Defence",
+    "Ranged",
+    "Magic",
+    "Prayer",
+  ];
+  const byPriority = (a: PerceptionSkill, b: PerceptionSkill): number => {
+    const ai = PRIORITY.indexOf(a.name);
+    const bi = PRIORITY.indexOf(b.name);
+    if (ai !== -1 || bi !== -1) {
+      return (
+        (ai === -1 ? PRIORITY.length : ai) - (bi === -1 ? PRIORITY.length : bi)
+      );
+    }
+    return b.level - a.level;
+  };
+  return skills
+    .slice()
+    .sort(byPriority)
+    .slice(0, limit)
+    .map((skill) => ({
+      id: skill.id,
+      name: skill.name,
+      level: skill.level,
+      baseLevel: skill.baseLevel,
+      xp: skill.xp,
+    }));
+}
+
+function mapInventory(
+  snapshot: PerceptionSnapshot | null,
+  limit: number,
+): AppSessionJsonValue[] {
+  const items: PerceptionInventoryItem[] = snapshot?.inventory ?? [];
+  return items.slice(0, limit).map((item) => ({
+    slot: item.slot,
+    itemId: item.itemId,
+    name: item.name,
+    count: item.count,
+  }));
+}
+
+function mapNearbyNpcs(
+  snapshot: PerceptionSnapshot | null,
+  limit: number,
+): AppSessionJsonValue[] {
+  const self = snapshot?.self;
+  const npcs: PerceptionNpc[] = snapshot?.nearbyNpcs ?? [];
+  return npcs
+    .slice()
+    .map((npc): { npc: PerceptionNpc; distance: number | null } => ({
+      npc,
+      distance: tileDistance(self, npc),
+    }))
+    .sort((a, b) => {
+      const ad = a.distance ?? Number.POSITIVE_INFINITY;
+      const bd = b.distance ?? Number.POSITIVE_INFINITY;
+      return ad - bd;
+    })
+    .slice(0, limit)
+    .map(({ npc, distance }) => ({
+      id: npc.id,
+      defId: npc.defId,
+      name: npc.name,
+      combatLevel: npc.combatLevel ?? null,
+      hp: npc.hp ?? null,
+      position: { x: npc.x, z: npc.z },
+      distance,
+    }));
+}
+
+function mapNearbyPlayers(
+  snapshot: PerceptionSnapshot | null,
+  limit: number,
+): AppSessionJsonValue[] {
+  const self = snapshot?.self;
+  const players: PerceptionPlayer[] = snapshot?.nearbyPlayers ?? [];
+  return players
+    .slice()
+    .map((player) => ({ player, distance: tileDistance(self, player) }))
+    .sort((a, b) => {
+      const ad = a.distance ?? Number.POSITIVE_INFINITY;
+      const bd = b.distance ?? Number.POSITIVE_INFINITY;
+      return ad - bd;
+    })
+    .slice(0, limit)
+    .map(({ player, distance }) => ({
+      id: player.id,
+      name: player.name,
+      combatLevel: player.combatLevel,
+      position: { x: player.x, z: player.z },
+      distance,
+    }));
+}
+
+function mapNearbyItems(
+  snapshot: PerceptionSnapshot | null,
+  limit: number,
+): AppSessionJsonValue[] {
+  const self = snapshot?.self;
+  const items: PerceptionGroundItem[] = snapshot?.nearbyGroundItems ?? [];
+  return items
+    .slice()
+    .map((item) => ({ item, distance: tileDistance(self, item) }))
+    .sort((a, b) => {
+      const ad = a.distance ?? Number.POSITIVE_INFINITY;
+      const bd = b.distance ?? Number.POSITIVE_INFINITY;
+      return ad - bd;
+    })
+    .slice(0, limit)
+    .map(({ item, distance }) => ({
+      itemId: item.itemId,
+      name: item.name,
+      count: item.count,
+      position: { x: item.x, z: item.z },
+      distance,
+    }));
+}
+
+function mapGoal(
+  goal: JournalGoal | null,
+): Record<string, AppSessionJsonValue> | null {
+  if (!goal) return null;
+  return {
+    id: goal.id,
+    title: goal.title,
+    notes: goal.notes ?? null,
+    status: goal.status,
+    source: goal.source,
+    progress: goal.progress ?? null,
+    createdAt: goal.createdAt,
+    updatedAt: goal.updatedAt,
+  };
+}
+
+function mapJournalMemories(
+  memories: JournalMemory[] | null,
+  limit: number,
+): AppSessionJsonValue[] {
+  if (!memories) return [];
+  // Memories are stored newest-last — reverse for "most recent first".
+  return memories
+    .slice(-limit)
+    .reverse()
+    .map((memory) => ({
+      id: memory.id,
+      kind: memory.kind,
+      text: memory.text,
+      weight: memory.weight ?? null,
+      timestamp: memory.timestamp,
+      position:
+        typeof memory.x === "number" && typeof memory.z === "number"
+          ? { x: memory.x, z: memory.z }
+          : null,
+    }));
+}
+
 function buildScapeSessionState(
   runtime: IAgentRuntime | null,
 ): AppSessionState {
@@ -528,12 +737,74 @@ function buildScapeSessionState(
   const service = getScapeService(runtime);
   const paused = service?.isPausedByOperator?.() === true;
   const operatorGoal = service?.getOperatorGoal?.() ?? "";
+  const connectionStatus = service?.getStatus?.() ?? "idle";
+  const perception = service?.getPerception?.() ?? null;
+  const journalService = service?.getJournalService?.() ?? null;
+  const journalState = journalService?.getState?.() ?? null;
+  const activeGoal = journalService?.getActiveGoal?.() ?? null;
+  const eventLog = service?.getRecentEventLog?.(16) ?? [];
+
+  // Activity feed — the milady run pane shows this as a timeline next
+  // to the viewer. Each autonomous step emits an entry via
+  // `pushEventLog`; we surface the latest 16 newest-first so the
+  // operator can watch the agent's decisions land.
+  const activity: AppSessionActivityItem[] = eventLog
+    .slice()
+    .reverse()
+    .map((entry, index) => ({
+      id: `scape-step-${entry.stepNumber}-${index}`,
+      type: entry.action,
+      message: entry.message,
+      severity: entry.success ? "info" : "warning",
+      timestamp: null,
+    }));
+
+  // Telemetry — structured JSON consumed by ScapeOperatorSurface in
+  // packages/app-core. Keep nesting shallow and keys stable; the
+  // surface pulls by name and tolerates missing fields.
+  const telemetry: Record<string, AppSessionJsonValue> = {
+    clientUrl,
+    connectionStatus,
+    pausedByOperator: paused,
+    operatorGoal: operatorGoal.length > 0 ? operatorGoal : null,
+    activeGoal: mapGoal(activeGoal),
+    journal: {
+      sessionCount: journalState?.sessionCount ?? 0,
+      memoryCount: journalState?.memories?.length ?? 0,
+      recent: mapJournalMemories(journalState?.memories ?? null, 8),
+    },
+    agent: mapSelf(perception),
+    skills: mapSkills(perception, 7),
+    inventory: mapInventory(perception, 12),
+    nearby: {
+      npcs: mapNearbyNpcs(perception, 6),
+      players: mapNearbyPlayers(perception, 6),
+      items: mapNearbyItems(perception, 6),
+    },
+  };
+
+  // `status` drives the Apps UI health banner. Map the bot-SDK
+  // connection state (idle | connecting | auth-pending | spawn-pending |
+  // connected | reconnecting | closed | failed) onto the small set the UI
+  // understands.
+  const runtimeStatus: string = paused
+    ? "paused"
+    : connectionStatus === "connected"
+      ? "ready"
+      : connectionStatus === "connecting" ||
+          connectionStatus === "auth-pending" ||
+          connectionStatus === "spawn-pending" ||
+          connectionStatus === "reconnecting"
+        ? "connecting"
+        : connectionStatus === "failed" || connectionStatus === "closed"
+          ? "error"
+          : "ready";
 
   return {
     sessionId,
     appName: APP_NAME,
     mode: "spectate-and-steer",
-    status: paused ? "paused" : service ? "ready" : "ready",
+    status: runtimeStatus,
     displayName: APP_DISPLAY_NAME,
     summary:
       operatorGoal.length > 0
@@ -551,8 +822,8 @@ function buildScapeSessionState(
       "Head to the Varrock west bank and deposit everything.",
     ],
     recommendations: [],
-    activity: [],
-    telemetry: null,
+    activity,
+    telemetry,
   };
 }
 
