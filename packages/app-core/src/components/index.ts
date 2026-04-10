@@ -79,6 +79,7 @@ export * from "./pages/ElizaCloudDashboard";
 export * from "./pages/HeartbeatsView";
 export * from "./pages/InventoryView";
 export * from "./pages/KnowledgeView";
+export * from "./pages/LifeOpsPageView";
 export * from "./pages/LogsPageView";
 export * from "./pages/LogsView";
 export * from "./pages/MediaGalleryView";

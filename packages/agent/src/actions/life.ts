@@ -618,6 +618,28 @@ function latestDeferredLifeDraft(state: State | undefined): DeferredLifeDraft | 
   return messageDrafts.length > 0 ? messageDrafts[messageDrafts.length - 1] : null;
 }
 
+function looksLikeDeferredLifeConfirmation(text: string): boolean {
+  const normalized = text.trim().toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+
+  if (
+    /\b(no|nope|nah|don't|do not|wait|hold on|change|edit|update|rename|instead|actually)\b/.test(
+      normalized,
+    )
+  ) {
+    return false;
+  }
+
+  return /^(?:yes|yeah|yep|yup|ok|okay|sure|confirm|confirmed|go ahead|do it|please do|sounds good)\b/.test(
+    normalized,
+  )
+    || /\b(?:save|create)\s+(?:it|that|this|them|the goal|the habit|the routine|the task)\b/.test(
+      normalized,
+    );
+}
+
 function shouldReuseDeferredLifeDraft(args: {
   currentText: string;
   details: Record<string, unknown> | undefined;
@@ -635,11 +657,14 @@ function shouldReuseDeferredLifeDraft(args: {
     return true;
   }
 
-  if (!args.explicitAction || args.paramsIntent?.trim()) {
+  if (args.paramsIntent?.trim()) {
     return false;
   }
 
-  if (ACTION_TO_OPERATION[args.explicitAction] !== args.draft.operation) {
+  if (
+    args.explicitAction &&
+    ACTION_TO_OPERATION[args.explicitAction] !== args.draft.operation
+  ) {
     return false;
   }
 
@@ -648,7 +673,12 @@ function shouldReuseDeferredLifeDraft(args: {
   }
 
   const words = args.currentText.trim().split(/\s+/).filter(Boolean);
-  return words.length > 0 && words.length <= 4 && !hasCadenceHint(args.currentText.toLowerCase());
+  return (
+    words.length > 0 &&
+    words.length <= 6 &&
+    !hasCadenceHint(args.currentText.toLowerCase()) &&
+    looksLikeDeferredLifeConfirmation(args.currentText)
+  );
 }
 
 async function resolveGoal(

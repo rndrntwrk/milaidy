@@ -902,7 +902,12 @@ async function resolveCalendarSearchQueries(
     state,
     intent,
   );
-  return dedupeCalendarQueries([...heuristicQueries, ...llmQueries]);
+  // Sanitize fallback queries — LLM extraction can produce parameter-doc
+  // noise that the explicit-query path already strips.
+  const sanitized = [...heuristicQueries, ...llmQueries].map((query) =>
+    sanitizeCalendarQuery(query, intent),
+  );
+  return dedupeCalendarQueries(sanitized);
 }
 
 function inferCreateEventTitle(intent: string): string | undefined {
@@ -1312,7 +1317,6 @@ export const calendarAction: Action = {
   ],
   description:
     "Use Google Calendar through LifeOps for anything about calendar, schedule, itinerary, flights, travel plans, meetings, appointments, or upcoming events. Prefer this over LIFE for calendar work, and let this action provide the final grounded reply instead of pairing it with a speculative REPLY.",
-  suppressPostActionContinuation: true,
   validate: async (runtime, message) => {
     return hasLifeOpsAccess(runtime, message);
   },

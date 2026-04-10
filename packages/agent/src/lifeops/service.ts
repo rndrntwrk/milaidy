@@ -8802,7 +8802,7 @@ export class LifeOpsService {
         ? grant.identity.email.trim().toLowerCase()
         : null;
 
-    if (resolveGoogleExecutionTarget(grant) === "cloud") {
+    const searchRecentMessages = async (): Promise<LifeOpsGmailSearchFeed> => {
       const scanLimit = Math.max(maxResults, DEFAULT_GMAIL_SEARCH_SCAN_LIMIT);
       const preservedCachedMessages = forceSync
         ? await this.repository.listGmailMessages(
@@ -8846,13 +8846,88 @@ export class LifeOpsService {
           replyNeededOnly,
         });
       }
+      const limitedMessages = messages.slice(0, maxResults);
       return {
         query,
-        messages: messages.slice(0, maxResults),
+        messages: limitedMessages,
         source: triage.source,
         syncedAt: triage.syncedAt,
-        summary: summarizeGmailSearch(messages.slice(0, maxResults)),
+        summary: summarizeGmailSearch(limitedMessages),
       };
+    };
+
+    if (resolveGoogleExecutionTarget(grant) === "cloud") {
+      let managedError: ManagedGoogleClientError | null = null;
+      try {
+        const managedSearch = await this.googleManagedClient.getGmailSearch({
+          side: effectiveSide,
+          query,
+          maxResults,
+        });
+        const messages = filterGmailMessagesBySearch({
+          messages: managedSearch.messages.map((message) =>
+            materializeGmailMessageSummary({
+              agentId: this.agentId(),
+              side: effectiveSide,
+              message,
+              syncedAt: managedSearch.syncedAt,
+            }),
+          ),
+          query,
+          replyNeededOnly,
+        });
+        for (const message of messages) {
+          await this.repository.upsertGmailMessage(message, effectiveSide);
+        }
+        await this.repository.upsertGmailSyncState(
+          createLifeOpsGmailSyncState({
+            agentId: this.agentId(),
+            provider: "google",
+            side: effectiveSide,
+            mailbox: GOOGLE_GMAIL_MAILBOX,
+            maxResults,
+            syncedAt: managedSearch.syncedAt,
+          }),
+        );
+        if (messages.length > 0) {
+          return {
+            query,
+            messages,
+            source: "synced",
+            syncedAt: managedSearch.syncedAt,
+            summary: summarizeGmailSearch(messages),
+          };
+        }
+      } catch (error) {
+        if (error instanceof ManagedGoogleClientError) {
+          managedError = error;
+        } else {
+          throw error;
+        }
+      }
+
+      const fallback = await searchRecentMessages();
+      if (fallback.messages.length > 0) {
+        return fallback;
+      }
+      if (
+        managedError &&
+        (managedError.status === 401 || managedError.status === 409)
+      ) {
+        fail(managedError.status, managedError.message);
+      }
+      return fallback;
+    }
+
+    if (!hasGoogleGmailBodyReadScope(grant)) {
+      const fallback = await searchRecentMessages();
+      if (fallback.messages.length > 0) {
+        return fallback;
+      }
+      fail(
+        409,
+        "This Google connection only has Gmail metadata access. Reconnect Google to grant Gmail read access so Milady can search your full mailbox.",
+      );
     }
 
     const accessToken = (
@@ -8940,7 +9015,10 @@ export class LifeOpsService {
     }
 
     const grant = await this.requireGoogleGmailGrant(requestUrl, mode, side);
-    if (!hasGoogleGmailBodyReadScope(grant)) {
+    if (
+      resolveGoogleExecutionTarget(grant) !== "cloud" &&
+      !hasGoogleGmailBodyReadScope(grant)
+    ) {
       fail(
         409,
         "This Google connection only has Gmail metadata access. Reconnect Google to grant Gmail read access so Milady can read email bodies.",

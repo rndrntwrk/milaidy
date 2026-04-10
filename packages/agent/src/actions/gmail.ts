@@ -59,11 +59,11 @@ type GmailActionParams = {
 const WEAK_CONFIRMATION_PATTERN =
   /^(?:yes|yeah|yep|yup|ok|okay|sure|please|please do|do it|go ahead|sounds good|mm-?hmm|mhm|uh-?huh)$/i;
 const GMAIL_SUBJECT_PATTERN =
-  /\b(email|emails|gmail|mail|inbox|reply|replies|respond|response|messages?|sender|subject|unread|important)\b/;
+  /\b(email|emails|gmail|mail|inbox|reply|replies|respond|response|messages?|sender|subject|unread|important|search|find)\b/;
 const FOLLOW_UP_PATTERN =
-  /\b(today|yesterday|this week|last week|last few weeks|past few weeks|next week|last month|search again|check again|look again|from them|from him|from her|unread|important|reply needed|needs response|read it|read that|read them|what does it say|what's in it|show me the email)\b/i;
+  /\b(today|yesterday|this week|last week|last few weeks|past few weeks|next week|last month|search again|check again|look again|try again|try it|retry|from them|from him|from her|unread|important|reply needed|needs response|read it|read that|read them|what does it say|what's in it|show me the email)\b/i;
 const PARAMETER_DOC_NOISE_PATTERN =
-  /\b(?:actions?|params?|parameters?|query\?:string|queries\?:string|details\?:object|required parameter|structured gmail arguments|supported keys include)\b/i;
+  /\b(?:actions?|params?|parameters?|required parameter|structured gmail arguments|supported keys include|may include:|structured data when needed|boolean when)\b|\b\w+\?:\w+\b/i;
 const GMAIL_READ_PATTERN =
   /\b(read|open|show(?: me)?|what does (?:it|that|this) say|what(?:'s| is) in (?:it|that|this)|full (?:email|message)|message body)\b/i;
 const GMAIL_DETAIL_ALIASES = {
@@ -164,6 +164,9 @@ function scoreGmailIntentCandidate(value: string): number {
   if (WEAK_CONFIRMATION_PATTERN.test(normalized)) {
     score -= 200;
   }
+  if (PARAMETER_DOC_NOISE_PATTERN.test(normalized)) {
+    score -= 500;
+  }
   if (GMAIL_SUBJECT_PATTERN.test(normalized)) {
     score += 16;
   }
@@ -188,8 +191,11 @@ function scoreGmailIntentCandidate(value: string): number {
 }
 
 function looksLikeGmailResultSummary(value: string): boolean {
-  return /^(?:email inbox:|found \d+ email|no email matched|emails that likely need a reply|no emails look)/i.test(
-    value.trim(),
+  const trimmed = value.trim();
+  return (
+    /^(?:email inbox:|found \d+ email|no (?:email|gmail message) matched|emails that likely need a reply|no emails look|no important emails|i (?:couldn't|could not) find)/i.test(
+      trimmed,
+    ) || /^- \*\*/.test(trimmed)
   );
 }
 
@@ -198,21 +204,36 @@ function resolveGmailIntent(
   message: Memory,
   state: State | undefined,
 ): string {
-  const normalizeFollowUpConstraint = (value: string) =>
-    value
+  const normalizeFollowUpConstraint = (value: string) => {
+    const cleaned = value
       .trim()
       .replace(
         /^(?:yes|yeah|yep|yup|ok|okay|sure|please|please do|do it|go ahead|sounds good)\b[\s,.-]*/i,
         "",
       )
       .replace(/^(?:and\s+|also\s+)/i, "")
+      .replace(/^(?:what about|how about|and the|also the|or the|only the|just the)\s+/i, "")
       .replace(/^from\s+(the\s+)?(last|past|previous|this|next)\b/i, "$1$2")
       .trim();
+    if (
+      /^(?:try\s+(?:it|again|that)|retry|do\s+(?:it\s+)?again|one\s+more\s+time|proceed|go for it)$/i.test(
+        cleaned,
+      )
+    ) {
+      return "";
+    }
+    return cleaned;
+  };
   const currentMessageText = messageText(message).trim();
   const normalizedCurrentMessage = normalizeText(currentMessageText);
+  const isRefinement =
+    /^(?:what about|how about|and the|also the|or the|only the|just the)\b/i.test(
+      normalizedCurrentMessage,
+    );
   if (
     currentMessageText &&
-    GMAIL_SUBJECT_PATTERN.test(normalizedCurrentMessage)
+    GMAIL_SUBJECT_PATTERN.test(normalizedCurrentMessage) &&
+    !isRefinement
   ) {
     return currentMessageText;
   }
@@ -222,13 +243,21 @@ function resolveGmailIntent(
     (WEAK_CONFIRMATION_PATTERN.test(normalizedCurrentMessage) ||
       FOLLOW_UP_PATTERN.test(normalizedCurrentMessage))
   ) {
-    const recentRelevantIntent = [...stateTextCandidates(state)]
-      .reverse()
-      .find(
-        (candidate) =>
-          GMAIL_SUBJECT_PATTERN.test(normalizeText(candidate)) &&
-          !looksLikeGmailResultSummary(candidate),
-      );
+    const followUpCandidates = stateTextCandidates(state).filter(
+      (candidate) =>
+        GMAIL_SUBJECT_PATTERN.test(normalizeText(candidate)) &&
+        !looksLikeGmailResultSummary(candidate) &&
+        normalizeText(candidate) !== normalizedCurrentMessage,
+    );
+    const recentRelevantIntent =
+      followUpCandidates.length > 0
+        ? followUpCandidates.reduce((best, current) =>
+            scoreGmailIntentCandidate(current) >=
+            scoreGmailIntentCandidate(best)
+              ? current
+              : best,
+          )
+        : undefined;
     if (recentRelevantIntent) {
       const followUpConstraint =
         normalizeFollowUpConstraint(currentMessageText);
@@ -294,6 +323,10 @@ function normalizeGmailSearchQueryValue(
     return undefined;
   }
 
+  if (PARAMETER_DOC_NOISE_PATTERN.test(value)) {
+    return undefined;
+  }
+
   const cleaned = normalizeText(value)
     .replace(/\b(?:actions?|params?|parameters?)\b[:;]*/g, "")
     .replace(/\b\w+\?:\w+(?:\s+\[[^\]]+\])?\s*-\s*/g, " ")
@@ -326,6 +359,7 @@ function normalizeGmailSearchQueryValue(
       "my mail",
       "my gmail",
     ].includes(cleaned) ||
+    looksLikeNarrativeEmailQuery(cleaned) ||
     PARAMETER_DOC_NOISE_PATTERN.test(cleaned)
   ) {
     return undefined;
@@ -383,7 +417,7 @@ function trimSenderQualifierTail(value: string): string {
       /\b(?:that|which)\s+(?:contain(?:s|ing)?|mention(?:s|ed|ing)?|match(?:es|ing)?|has|have)\b.*$/i,
       "",
     )
-    .replace(/\b(?:about|with)\b.*$/i, "")
+    .replace(/\b(?:what\s+about|about|with)\b.*$/i, "")
     .replace(
       /\b(?:in|within|over|during|for)\s+(?:the\s+)?(?:last|past|previous|this|next)\b.*$/i,
       "",
@@ -393,6 +427,21 @@ function trimSenderQualifierTail(value: string): string {
       "",
     )
     .trim();
+}
+
+function looksLikeNarrativeEmailQuery(value: string): boolean {
+  const normalized = normalizeText(value);
+  if (!normalized) {
+    return false;
+  }
+  return (
+    /\b(?:tell me if|let me know if|whether|did|has|what did|any(?:one|body)|someone|named)\b/.test(
+      normalized,
+    ) &&
+    /\b(?:email(?:ed)?|mail(?:ed)?|send|sent|message(?:d)?|write|wrote)\b/.test(
+      normalized,
+    )
+  );
 }
 
 function inferSenderSearchCandidate(value: string): string | undefined {
@@ -414,10 +463,16 @@ function inferSenderSearchCandidate(value: string): string | undefined {
   }
 
   const patterns = [
+    /\b(?:any(?:one|body)|someone)\s+named\s+(.+?)\s+(?:email(?:ed)?|mail(?:ed)?|send|sent|message(?:d)?|write|wrote)\b/i,
+    /\bnamed\s+(.+?)\s+(?:email(?:ed)?|mail(?:ed)?|send|sent|message(?:d)?|write|wrote)\b/i,
     /\b(?:email|emails|message|messages|mail)\s+(?:sent\s+to\s+me\s+)?from\s+(.+)$/i,
     /\bfrom\s+(.+)$/i,
     /\bsender(?:\s+(?:is|matches?|named))?\s+(.+)$/i,
     /\b(?:first\s+name|last\s+name|name)\s+is\s+(.+)$/i,
+    /\b(?:email|emails|message|messages?|mail)\s+(\S+(?:\s+\S+)?)\s+sent(?:\s+to)?\s+me\b/i,
+    /\bdid\s+(\S+(?:\s+\S+)?)\s+(?:email(?:ed)?|send|sent|mail(?:ed)?|write|wrote|message(?:d)?)\b/i,
+    /\bhas\s+(\S+(?:\s+\S+)?)\s+(?:email(?:ed)?|send|sent|mail(?:ed)?|message(?:d)?|write|wrote)\b/i,
+    /\bwhat\s+did\s+(\S+(?:\s+\S+)?)\s+(?:send|sent|email(?:ed)?|mail(?:ed)?|write|wrote)\b/i,
   ];
   for (const pattern of patterns) {
     const match = trimmed.match(pattern);
@@ -570,6 +625,14 @@ function inferGmailSubaction(
     return "search";
   }
   if (
+    /\b(?:did|has)\s+\S+\s+(?:email(?:ed)?|send|sent|mail(?:ed)?|messaged?)\b/.test(
+      intent,
+    ) ||
+    /\bwhat\s+did\s+\S+\s+(?:send|email|mail)\b/.test(intent)
+  ) {
+    return "search";
+  }
+  if (
     /\b(send|reply now|email them back|send this)\b/.test(intent) &&
     detailArray(details, "items")
   ) {
@@ -698,7 +761,76 @@ function sanitizeGmailQuery(
   ) {
     return inferGmailSearchQuery(intent);
   }
+  const inferred = inferGmailSearchQuery(intent);
+  if (
+    inferred &&
+    looksLikeNarrativeEmailQuery(cleaned) &&
+    !/\b(?:from|subject|to|cc|label|labels|in|is|newer_than|older_than|after|before):/i.test(
+      cleaned,
+    )
+  ) {
+    return inferred;
+  }
   return cleaned;
+}
+
+function scoreGmailQueryCandidate(query: string, intent: string): number {
+  const normalized = normalizeText(query);
+  if (!normalized) {
+    return Number.NEGATIVE_INFINITY;
+  }
+
+  let score = 0;
+  if (PARAMETER_DOC_NOISE_PATTERN.test(normalized)) {
+    score -= 500;
+  }
+  if (looksLikeNarrativeEmailQuery(normalized)) {
+    score -= 120;
+  }
+  if (
+    /\b(?:from|subject|to|cc|label|labels|in|is|newer_than|older_than|after|before):/i.test(
+      query,
+    )
+  ) {
+    score += 50;
+  }
+
+  const tokens = tokenizeGmailSearchQuery(query);
+  if (tokens.length <= 3) {
+    score += 12;
+  } else if (tokens.length >= 7) {
+    score -= 15;
+  }
+
+  const inferred = inferGmailSearchQuery(intent);
+  if (inferred && normalizeText(inferred) === normalized) {
+    score += 60;
+  }
+
+  const sender = inferSenderSearchCandidate(intent);
+  if (sender && normalized.includes(normalizeText(sender))) {
+    score += 18;
+  }
+
+  const keyword = inferKeywordSearchCandidate(intent);
+  if (keyword && normalized.includes(normalizeText(keyword))) {
+    score += 12;
+  }
+
+  const temporal = inferTemporalSearchOperator(intent);
+  if (temporal && normalized.includes(normalizeText(temporal))) {
+    score += 8;
+  }
+
+  const unreadOrImportant = inferUnreadOrImportanceOperator(intent);
+  if (
+    unreadOrImportant &&
+    normalized.includes(normalizeText(unreadOrImportant))
+  ) {
+    score += 8;
+  }
+
+  return score;
 }
 
 function inferGmailSearchQueries(intent: string): string[] {
@@ -791,24 +923,26 @@ async function resolveGmailSearchQueries(
   explicitQueries: Array<string | undefined>,
   intent: string,
 ): Promise<string[]> {
-  const providedQueries = dedupeQueries(
-    explicitQueries.map((query) => sanitizeGmailQuery(query, intent)),
-  );
-  if (providedQueries.length > 0) {
-    return providedQueries;
-  }
-
-  const heuristicQueries = inferGmailSearchQueries(intent);
   const llmQueries = await extractGmailSearchQueriesWithLlm(
     runtime,
     message,
     state,
     intent,
   );
+  const heuristicQueries = inferGmailSearchQueries(intent);
   const stateQueries = stateTextCandidates(state)
     .reverse()
     .flatMap((candidate) => inferGmailSearchQueries(candidate));
-  return dedupeQueries([...llmQueries, ...heuristicQueries, ...stateQueries]);
+  const candidates = dedupeQueries(
+    [...explicitQueries, ...llmQueries, ...heuristicQueries, ...stateQueries].map(
+      (query) => sanitizeGmailQuery(query, intent),
+    ),
+  );
+  return [...candidates].sort(
+    (left, right) =>
+      scoreGmailQueryCandidate(right, intent) -
+      scoreGmailQueryCandidate(left, intent),
+  );
 }
 
 function buildGmailSearchPlan(args: { intent: string; queries: string[] }): {

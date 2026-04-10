@@ -49,7 +49,8 @@ vi.mock("../../utils/api-request", () => ({
 
 vi.mock("../../utils/asset-url", () => ({
   resolveApiUrl: (url: string) => `http://localhost${url}`,
-  resolveAppAssetUrl: (url: string) => `http://localhost/${url.replace(/^\/+/, "")}`,
+  resolveAppAssetUrl: (url: string) =>
+    `http://localhost/${url.replace(/^\/+/, "")}`,
 }));
 
 vi.mock("../../voice/types", () => ({

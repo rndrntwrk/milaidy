@@ -128,6 +128,7 @@ import {
 } from "../services/sandbox-manager.js";
 import { CORE_PLUGINS, OPTIONAL_CORE_PLUGINS } from "./core-plugins.js";
 import { seedBundledKnowledge } from "./default-knowledge.js";
+import discordLocalPlugin from "./discord-local-plugin.js";
 import { createElizaPlugin } from "./eliza-plugin.js";
 import { detectEmbeddingPreset } from "./embedding-presets.js";
 import {
@@ -247,6 +248,7 @@ export const STATIC_ELIZA_PLUGINS: Record<string, unknown> = {
   "@elizaos/plugin-elizacloud": pluginElizacloud,
   "@elizaos/plugin-trust": pluginTrust,
   "@miladyai/plugin-selfcontrol": pluginSelfControl,
+  "@miladyai/plugin-discord-local": discordLocalPlugin,
   "@elizaos/plugin-personality": pluginPersonality,
   "@elizaos/plugin-experience": pluginExperience,
 };
@@ -3840,6 +3842,48 @@ export async function startEliza(
     assertPersistentDatabaseRequired(runtime);
     await runtime.initialize();
     await prepareRuntimeForTrajectoryCapture(runtime, "runtime.initialize()");
+
+    // 8a. Register lightweight conversation-proximity evaluator.
+    // Updates relationship strength when people post near each other in a room.
+    // No LLM calls — deterministic, runs on every message.
+    try {
+      const { updateProximityRelationships } = await import(
+        "../services/conversation-proximity.js"
+      );
+      await runtime.registerPlugin({
+        name: "milady-conversation-proximity",
+        description:
+          "Lightweight relationship updates from conversation co-occurrence",
+        evaluators: [
+          {
+            name: "CONVERSATION_PROXIMITY",
+            description:
+              "Update relationship strength for co-participants in a room",
+            similes: [],
+            alwaysRun: true,
+            examples: [],
+            validate: async (_runtime, message) => {
+              // Run for any message with text from a real user (not the agent).
+              const text = (message.content as { text?: string })?.text;
+              return (
+                Boolean(text) && message.entityId !== _runtime.agentId
+              );
+            },
+            handler: async (_runtime, message) => {
+              await updateProximityRelationships(_runtime, message);
+              return undefined;
+            },
+          },
+        ],
+      });
+      logger.info(
+        "[eliza] ✓ conversation-proximity evaluator registered",
+      );
+    } catch (err) {
+      logger.debug(
+        `[eliza] Conversation-proximity evaluator skipped: ${formatError(err)}`,
+      );
+    }
 
     try {
       if (runtimeKnowledgeEnabled(runtime)) {

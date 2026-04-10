@@ -56,8 +56,13 @@ import type {
   McpRegistryServerDetail,
   McpServerConfig,
   McpServerStatus,
+  MemoryBrowseQuery,
+  MemoryBrowseResponse,
+  MemoryFeedQuery,
+  MemoryFeedResponse,
   MemoryRememberResponse,
   MemorySearchResponse,
+  MemoryStatsResponse,
   QueryResult,
   QuickContextResponse,
   SelectLifeOpsGoogleConnectorPreferenceRequest,
@@ -158,8 +163,10 @@ declare module "./client-base" {
      */
     getInboxChats(options?: { sources?: string[] }): Promise<{
       chats: Array<{
+        canSend?: boolean;
         id: string;
         source: string;
+        transportSource?: string;
         /** Owning server/world id when the connector exposes one. */
         worldId?: string;
         /** User-facing server/world label for selectors and section headers. */
@@ -171,6 +178,15 @@ declare module "./client-base" {
         messageCount: number;
       }>;
       count: number;
+    }>;
+    sendInboxMessage(data: {
+      roomId: string;
+      source: string;
+      text: string;
+      replyToMessageId?: string;
+    }): Promise<{
+      ok: boolean;
+      message?: ConversationMessage & { roomId: string; source: string };
     }>;
     truncateConversationMessages(
       id: string,
@@ -266,6 +282,13 @@ declare module "./client-base" {
       query: string,
       options?: { limit?: number },
     ): Promise<QuickContextResponse>;
+    getMemoryFeed(query?: MemoryFeedQuery): Promise<MemoryFeedResponse>;
+    browseMemories(query?: MemoryBrowseQuery): Promise<MemoryBrowseResponse>;
+    getMemoriesByEntity(
+      entityId: string,
+      query?: MemoryBrowseQuery,
+    ): Promise<MemoryBrowseResponse>;
+    getMemoryStats(): Promise<MemoryStatsResponse>;
     getMcpConfig(): Promise<{ servers: Record<string, McpServerConfig> }>;
     getMcpStatus(): Promise<{ servers: McpServerStatus[] }>;
     searchMcpMarketplace(
@@ -695,8 +718,10 @@ MiladyClient.prototype.getInboxChats = async function (
   const path = query ? `/api/inbox/chats?${query}` : "/api/inbox/chats";
   return this.fetch<{
     chats: Array<{
+      canSend?: boolean;
       id: string;
       source: string;
+      transportSource?: string;
       /** Owning server/world id when the connector exposes one. */
       worldId?: string;
       /** User-facing server/world label for selectors and section headers. */
@@ -709,6 +734,19 @@ MiladyClient.prototype.getInboxChats = async function (
     }>;
     count: number;
   }>(path);
+};
+
+MiladyClient.prototype.sendInboxMessage = async function (
+  this: MiladyClient,
+  data,
+) {
+  return this.fetch<{
+    ok: boolean;
+    message?: ConversationMessage & { roomId: string; source: string };
+  }>("/api/inbox/messages", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
 };
 
 MiladyClient.prototype.truncateConversationMessages = async function (
@@ -940,6 +978,60 @@ MiladyClient.prototype.quickContext = async function (
   const params = new URLSearchParams({ q: query });
   if (options?.limit !== undefined) params.set("limit", String(options.limit));
   return this.fetch(`/api/context/quick?${params}`);
+};
+
+MiladyClient.prototype.getMemoryFeed = async function (
+  this: MiladyClient,
+  query?,
+) {
+  const params = new URLSearchParams();
+  if (query?.type) params.set("type", query.type);
+  if (typeof query?.limit === "number")
+    params.set("limit", String(query.limit));
+  if (typeof query?.before === "number")
+    params.set("before", String(query.before));
+  const qs = params.toString();
+  return this.fetch(`/api/memories/feed${qs ? `?${qs}` : ""}`);
+};
+
+MiladyClient.prototype.browseMemories = async function (
+  this: MiladyClient,
+  query?,
+) {
+  const params = new URLSearchParams();
+  if (query?.type) params.set("type", query.type);
+  if (query?.entityId) params.set("entityId", query.entityId);
+  if (query?.roomId) params.set("roomId", query.roomId);
+  if (query?.q) params.set("q", query.q);
+  if (typeof query?.limit === "number")
+    params.set("limit", String(query.limit));
+  if (typeof query?.offset === "number")
+    params.set("offset", String(query.offset));
+  const qs = params.toString();
+  return this.fetch(`/api/memories/browse${qs ? `?${qs}` : ""}`);
+};
+
+MiladyClient.prototype.getMemoriesByEntity = async function (
+  this: MiladyClient,
+  entityId,
+  query?,
+) {
+  const params = new URLSearchParams();
+  if (query?.type) params.set("type", query.type);
+  if (typeof query?.limit === "number")
+    params.set("limit", String(query.limit));
+  if (typeof query?.offset === "number")
+    params.set("offset", String(query.offset));
+  if (query?.entityIds && query.entityIds.length > 0)
+    params.set("entityIds", query.entityIds.join(","));
+  const qs = params.toString();
+  return this.fetch(
+    `/api/memories/by-entity/${encodeURIComponent(entityId)}${qs ? `?${qs}` : ""}`,
+  );
+};
+
+MiladyClient.prototype.getMemoryStats = async function (this: MiladyClient) {
+  return this.fetch("/api/memories/stats");
 };
 
 MiladyClient.prototype.getMcpConfig = async function (this: MiladyClient) {

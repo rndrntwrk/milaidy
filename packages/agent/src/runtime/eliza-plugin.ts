@@ -10,9 +10,15 @@ import type { IAgentRuntime, Plugin, ServiceClass } from "@elizaos/core";
 import { AgentEventService } from "@elizaos/core";
 import { calendarAction } from "../actions/calendar.js";
 import { emoteAction } from "../actions/emote.js";
+import {
+  readEntityAction,
+  searchEntityAction,
+} from "../actions/entity-actions.js";
 import { gmailAction } from "../actions/gmail.js";
 import { lifeAction } from "../actions/life.js";
+import { readChannelAction } from "../actions/read-channel.js";
 import { restartAction } from "../actions/restart.js";
+import { searchConversationsAction } from "../actions/search-conversations.js";
 import { sendAdminMessageAction } from "../actions/send-admin-message.js";
 import { setUserNameAction } from "../actions/set-user-name.js";
 import { webSearchAction } from "../actions/web-search.js";
@@ -36,7 +42,10 @@ import { adminPanelProvider } from "../providers/admin-panel.js";
 import { adminTrustProvider } from "../providers/admin-trust.js";
 import { escalationTriggerProvider } from "../providers/escalation-trigger.js";
 import { lifeOpsProvider } from "../providers/lifeops.js";
+import { recentConversationsProvider } from "../providers/recent-conversations.js";
+import { relevantConversationsProvider } from "../providers/relevant-conversations.js";
 import { roleBackfillProvider } from "../providers/role-backfill.js";
+import { rolodexProvider } from "../providers/rolodex.js";
 import { createSessionKeyProvider } from "../providers/session-bridge.js";
 import {
   getSessionProviders,
@@ -48,6 +57,7 @@ import { uiCatalogProvider } from "../providers/ui-catalog.js";
 import { createUserNameProvider } from "../providers/user-name.js";
 import { DEFAULT_AGENT_WORKSPACE_DIR } from "../providers/workspace.js";
 import { createWorkspaceProvider } from "../providers/workspace-provider.js";
+import { MiladyCharacterPersistenceService } from "../services/character-persistence.js";
 import { createTriggerTaskAction } from "../triggers/action.js";
 import { registerTriggerTaskWorker } from "../triggers/runtime.js";
 import { setCustomActionsRuntime } from "./custom-actions.js";
@@ -94,7 +104,10 @@ export function createElizaPlugin(config?: ElizaPluginConfig): Plugin {
     name: "eliza",
     description: "Eliza workspace context, session keys, and lifecycle actions",
 
-    services: [AgentEventService as ServiceClass],
+    services: [
+      AgentEventService as ServiceClass,
+      MiladyCharacterPersistenceService as ServiceClass,
+    ],
 
     init: async (_pluginConfig, runtime: IAgentRuntime) => {
       registerTriggerTaskWorker(runtime);
@@ -204,6 +217,10 @@ export function createElizaPlugin(config?: ElizaPluginConfig): Plugin {
     providers: [
       ...baseProviders,
 
+      recentConversationsProvider,
+      relevantConversationsProvider,
+      rolodexProvider,
+
       uiCatalogProvider,
       roleBackfillProvider,
       escalationTriggerProvider,
@@ -223,6 +240,10 @@ export function createElizaPlugin(config?: ElizaPluginConfig): Plugin {
       setUserNameAction,
       skillCommandAction,
       webSearchAction,
+      readChannelAction,
+      searchConversationsAction,
+      searchEntityAction,
+      readEntityAction,
     ],
   };
 

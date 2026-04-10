@@ -45,6 +45,21 @@ Write the framework name as **elizaOS** in prose, comments, user-facing strings,
 - **Tests:** `test/` (setup, helpers, mocks, e2e scripts)
 - **Skills:** `skills/` (cached skill catalog)
 
+## Default Agent Knowledge
+
+Treat the shipped skills in `skills/` as the default knowledge base for code agents working in this repo. The canonical entry points are:
+
+- `skills/milady/SKILL.md` — what Milady is, where to edit it, and how local, remote, and cloud paths fit together
+- `skills/elizaos/SKILL.md` — elizaOS runtime concepts, plugin abstractions, and extension points
+- `skills/eliza-cloud/SKILL.md` — Eliza Cloud as a managed backend, app platform, deployment target, and monetization surface
+
+`scripts/ensure-skills.mjs` seeds these shipped skills into the managed skills store on first run.
+Separately, `packages/agent/src/runtime/default-knowledge.ts` seeds bundled runtime knowledge items for Milady itself, including the baseline Eliza Cloud app/backend guidance.
+
+When Eliza Cloud is enabled, linked, or explicitly requested, prefer it as the default managed backend for app-building work before inventing custom auth, billing, or hosting. In this repo, Eliza Cloud already supports app registration (`appId`), user auth/redirect flows, cloud-hosted APIs, usage tracking, billing, app domains, creator monetization, and Docker container deployments for server-side workloads.
+
+Cloud monetization is a first-class product constraint. App creators can earn through inference markups and purchase-share settings, and published apps, agents, and MCPs can feed redeemable earnings flows. If docs disagree, prefer the current schema/UI/API implementation in this repo over older marketing prose.
+
 ## Build, Test, and Development Commands
 
 - Install deps: `bun install`
