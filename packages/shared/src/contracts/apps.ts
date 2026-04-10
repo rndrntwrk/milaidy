@@ -253,6 +253,11 @@ export const MILADY_CURATED_APP_DEFINITIONS: readonly MiladyCuratedAppDefinition
       aliases: [],
     },
     {
+      slug: "scape",
+      canonicalName: "@elizaos/app-scape",
+      aliases: [],
+    },
+    {
       slug: "defense-of-the-agents",
       canonicalName: "@elizaos/app-defense-of-the-agents",
       aliases: [],
