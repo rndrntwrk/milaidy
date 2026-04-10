@@ -91,15 +91,18 @@ export function installClaudeJsonlCompletionWatcher(
   installedRuntimes.add(runtime);
 
   const pollers = new Map<string, Poller>();
-
-  const startIfMissing = (sessionId: string): void => {
-    if (pollers.has(sessionId)) return;
-    const workdir = svc.getSession?.(sessionId)?.workdir;
-    if (!workdir) return;
-    const poller = new Poller(svc, sessionId, workdir);
-    pollers.set(sessionId, poller);
-    poller.start();
-  };
+  // Sessions that have already emitted a task_complete (real hook OR
+  // our synthetic jsonl emission). Tracked at installer scope so the
+  // gate survives across Poller instance teardowns.
+  //
+  // Without this, every new onSessionEvent for a session that already
+  // fired would call startIfMissing() which would create a fresh Poller
+  // (no entry in the `pollers` map after a previous stop). The new
+  // Poller's own `fired` flag is false, so on its next tick it re-reads
+  // the jsonl (still containing the assistant end_turn line) and emits
+  // task_complete a second time. We observed this producing 3+ fires
+  // per session in testing.
+  const firedSessions = new Set<string>();
 
   const stop = (sessionId: string): void => {
     const poller = pollers.get(sessionId);
@@ -108,27 +111,50 @@ export function installClaudeJsonlCompletionWatcher(
     pollers.delete(sessionId);
   };
 
+  const markFiredAndStop = (sessionId: string): void => {
+    firedSessions.add(sessionId);
+    stop(sessionId);
+  };
+
+  const startIfMissing = (sessionId: string): void => {
+    if (firedSessions.has(sessionId)) return;
+    if (pollers.has(sessionId)) return;
+    const workdir = svc.getSession?.(sessionId)?.workdir;
+    if (!workdir) return;
+    const poller = new Poller(svc, sessionId, workdir, markFiredAndStop);
+    pollers.set(sessionId, poller);
+    poller.start();
+  };
+
   svc.onSessionEvent((sessionId, event) => {
     // Any first event for a sessionId is our cue to start polling. We
-    // deliberately do NOT gate on a particular event type — the jsonl may
-    // be written before the first PTY event arrives, and we want the
-    // poller alive as early as possible.
+    // deliberately do NOT gate on a particular event type — the jsonl
+    // may be written before the first PTY event arrives, and we want
+    // the poller alive as early as possible. startIfMissing is itself
+    // gated on firedSessions, so late events for already-fired sessions
+    // are no-ops rather than spawning zombie pollers.
     startIfMissing(sessionId);
 
     if (event === "stopped" || event === "error") {
       stop(sessionId);
     }
     if (event === "task_complete") {
-      // Hook path already fired — no need for jsonl fallback. Shut down
-      // the poller to avoid a later duplicate synthetic emission.
-      stop(sessionId);
+      // A real hook-based task_complete arrived — or we emitted our own
+      // synthetic one. Either way, mark the session as fired so any
+      // subsequent events can't spawn a new poller and re-fire, and
+      // shut down any live poller for this session.
+      markFiredAndStop(sessionId);
     }
   });
 }
 
 /**
- * One poller per session. Owns its own interval, its own `fired` guard,
- * and its own cached file size so it only re-reads when the jsonl grows.
+ * One poller per session. Owns its own interval and its own cached file
+ * size so it only re-reads when the jsonl grows. The per-instance `fired`
+ * flag guards against re-entry within a single poller's lifetime; the
+ * installer-level `firedSessions` Set (passed in via `onFired`) guards
+ * against re-entry across successive poller instances for the same
+ * sessionId.
  */
 class Poller {
   private timer: ReturnType<typeof setInterval> | null = null;
@@ -139,6 +165,7 @@ class Poller {
     private readonly svc: PTYServiceWithEvents,
     private readonly sessionId: string,
     private readonly workdir: string,
+    private readonly onFired: (sessionId: string) => void,
   ) {}
 
   start(): void {
@@ -178,7 +205,11 @@ class Poller {
     if (!done) return;
 
     this.fired = true;
-    this.stop();
+    // onFired adds to firedSessions and stops this poller. Call it
+    // BEFORE emitting task_complete so the subsequent onSessionEvent
+    // callback (triggered by our own emission) sees firedSessions
+    // already populated and doesn't start a new poller.
+    this.onFired(this.sessionId);
     logger.info(
       `[claude-jsonl-watcher] detected end_turn for ${this.sessionId} — emitting synthetic task_complete (${done.text.length} chars)`,
     );
