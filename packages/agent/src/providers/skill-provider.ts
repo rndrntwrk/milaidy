@@ -19,6 +19,7 @@ import type {
   ProviderResult,
   State,
 } from "@elizaos/core";
+import { hasAdminAccess } from "../security/access.js";
 
 // ── Stopwords ────────────────────────────────────────────────────────────────
 
@@ -332,6 +333,10 @@ export function createDynamicSkillProvider(): Provider {
       message: Memory,
       state: State,
     ): Promise<ProviderResult> {
+      if (!(await hasAdminAccess(runtime, message))) {
+        return { text: "", values: {}, data: {} };
+      }
+
       const service = runtime.getService(
         "AGENT_SKILLS_SERVICE",
       ) as unknown as AgentSkillsServiceLike | null;

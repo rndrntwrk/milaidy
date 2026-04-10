@@ -16,6 +16,7 @@ import {
   type ProviderResult,
   type State,
 } from "@elizaos/core";
+import { hasAdminAccess } from "../security/access.js";
 import type { CodingAgentContext } from "../services/coding-agent-context.js";
 import {
   DEFAULT_AGENT_WORKSPACE_DIR,
@@ -182,6 +183,16 @@ export function createWorkspaceProvider(options?: {
           data: {
             workspaceDir: dir,
             skipped: "voice_channel",
+          },
+        };
+      }
+
+      if (!(await hasAdminAccess(_runtime, message))) {
+        return {
+          text: "",
+          data: {
+            workspaceDir: dir,
+            skipped: "role_gate",
           },
         };
       }

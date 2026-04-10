@@ -721,6 +721,41 @@ async function startRendererServer(): Promise<string> {
     return script + html;
   }
 
+  const resolveRendererCacheControl = (
+    pathname: string,
+    mimeExt: string,
+  ): string => {
+    if (pathname.startsWith("/assets/")) {
+      return "public, max-age=31536000, immutable";
+    }
+    if (
+      mimeExt === ".vrm" ||
+      pathname.endsWith(".vrm.gz") ||
+      pathname.startsWith("/vrms/previews/") ||
+      pathname.startsWith("/vrms/backgrounds/") ||
+      [
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".gif",
+        ".webp",
+        ".avif",
+        ".svg",
+        ".mp3",
+        ".wav",
+        ".ogg",
+        ".m4a",
+        ".aac",
+        ".flac",
+        ".glb",
+        ".spz",
+      ].includes(mimeExt)
+    ) {
+      return "public, max-age=86400";
+    }
+    return "public, max-age=0, must-revalidate";
+  };
+
   Bun.serve({
     port,
     hostname: "127.0.0.1",
@@ -741,6 +776,7 @@ async function startRendererServer(): Promise<string> {
             headers: {
               "Content-Type": "text/html; charset=utf-8",
               "Access-Control-Allow-Origin": "*",
+              "Cache-Control": "public, max-age=0, must-revalidate",
             },
           });
         }
@@ -748,6 +784,10 @@ async function startRendererServer(): Promise<string> {
         const headers: Record<string, string> = {
           "Content-Type": mimeTypes[mimeExt] ?? "application/octet-stream",
           "Access-Control-Allow-Origin": "*",
+          "Cache-Control": resolveRendererCacheControl(
+            new URL(req.url).pathname,
+            mimeExt,
+          ),
         };
 
         if (isGzipped) {

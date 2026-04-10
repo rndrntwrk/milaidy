@@ -2,28 +2,37 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   mockCheckSenderPrivateAccess,
+  mockResolveCanonicalOwnerIdForMessage,
   mockGetGoogleConnectorStatus,
   mockGetGmailTriage,
   mockGetGmailNeedsResponse,
   mockGetGmailSearch,
+  mockReadGmailMessage,
   mockCreateGmailReplyDraft,
   mockCreateGmailBatchReplyDrafts,
   mockSendGmailReply,
   mockSendGmailReplies,
+  mockUseModel,
+  mockLoggerWarn,
 } = vi.hoisted(() => ({
   mockCheckSenderPrivateAccess: vi.fn(),
+  mockResolveCanonicalOwnerIdForMessage: vi.fn(),
   mockGetGoogleConnectorStatus: vi.fn(),
   mockGetGmailTriage: vi.fn(),
   mockGetGmailNeedsResponse: vi.fn(),
   mockGetGmailSearch: vi.fn(),
+  mockReadGmailMessage: vi.fn(),
   mockCreateGmailReplyDraft: vi.fn(),
   mockCreateGmailBatchReplyDrafts: vi.fn(),
   mockSendGmailReply: vi.fn(),
   mockSendGmailReplies: vi.fn(),
+  mockUseModel: vi.fn(),
+  mockLoggerWarn: vi.fn(),
 }));
 
 vi.mock("@elizaos/core/roles", () => ({
   checkSenderPrivateAccess: mockCheckSenderPrivateAccess,
+  resolveCanonicalOwnerIdForMessage: mockResolveCanonicalOwnerIdForMessage,
 }));
 
 vi.mock("../lifeops/service.js", () => ({
@@ -32,17 +41,30 @@ vi.mock("../lifeops/service.js", () => ({
     getGmailTriage = mockGetGmailTriage;
     getGmailNeedsResponse = mockGetGmailNeedsResponse;
     getGmailSearch = mockGetGmailSearch;
+    readGmailMessage = mockReadGmailMessage;
     createGmailReplyDraft = mockCreateGmailReplyDraft;
     createGmailBatchReplyDrafts = mockCreateGmailBatchReplyDrafts;
     sendGmailReply = mockSendGmailReply;
     sendGmailReplies = mockSendGmailReplies;
   },
-  LifeOpsServiceError: class extends Error {},
+  LifeOpsServiceError: class extends Error {
+    status: number;
+    constructor(status: number, message: string) {
+      super(message);
+      this.status = status;
+    }
+  },
 }));
 
 import { gmailAction } from "./gmail";
 
-const runtime = { agentId: "agent-1" } as never;
+const runtime = {
+  agentId: "agent-1",
+  useModel: mockUseModel,
+  logger: {
+    warn: mockLoggerWarn,
+  },
+} as never;
 
 function msg(text: string, source = "client_chat") {
   return {
@@ -52,22 +74,30 @@ function msg(text: string, source = "client_chat") {
 }
 
 function invoke(intent: string, extra: Record<string, unknown> = {}) {
-  const { subaction, query, messageId, bodyText, details } = extra;
-  return gmailAction.handler?.(runtime, msg(intent), {} as never, {
-    parameters: {
-      subaction,
-      intent,
-      query,
-      messageId,
-      bodyText,
-      details,
-    },
-  } as never);
+  const { subaction, query, queries, messageId, bodyText, details, state } =
+    extra;
+  return gmailAction.handler?.(
+    runtime,
+    msg(intent),
+    (state ?? {}) as never,
+    {
+      parameters: {
+        subaction,
+        intent,
+        query,
+        queries,
+        messageId,
+        bodyText,
+        details,
+      },
+    } as never,
+  );
 }
 
 describe("gmailAction", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    mockUseModel.mockResolvedValue("<response></response>");
     mockCheckSenderPrivateAccess.mockResolvedValue({
       entityId: "owner-1",
       role: "OWNER",
@@ -78,6 +108,7 @@ describe("gmailAction", () => {
       accessRole: "OWNER",
       accessSource: "owner",
     });
+    mockResolveCanonicalOwnerIdForMessage.mockResolvedValue("owner-1");
     mockGetGoogleConnectorStatus.mockResolvedValue({
       connected: true,
       grantedCapabilities: [
@@ -180,7 +211,10 @@ describe("gmailAction", () => {
 
     const valid = await gmailAction.validate?.(
       runtime,
-      { entityId: "mod-1", content: { source: "discord", text: "what emails need a reply" } } as never,
+      {
+        entityId: "mod-1",
+        content: { source: "discord", text: "what emails need a reply" },
+      } as never,
       {} as never,
     );
 
@@ -288,6 +322,71 @@ describe("gmailAction", () => {
     expect(result?.text).toContain("OneBlade receipt");
   });
 
+  it("sends grounded Gmail results through the action callback", async () => {
+    const callback = vi.fn(async () => []);
+    mockGetGmailSearch.mockResolvedValue({
+      query: "from:suran newer_than:21d",
+      messages: [
+        {
+          id: "msg-suran-recent",
+          externalId: "ext-suran-recent",
+          threadId: "thread-suran-recent",
+          agentId: "agent-1",
+          provider: "google",
+          side: "owner",
+          subject: "Checking in",
+          from: "Suran Goonatilake",
+          fromEmail: "suran@example.com",
+          replyTo: "suran@example.com",
+          to: ["shawmakesmagic@gmail.com"],
+          cc: [],
+          snippet: "Wanted to follow up on the last few weeks.",
+          receivedAt: "2026-04-08T16:00:00.000Z",
+          isUnread: true,
+          isImportant: true,
+          likelyReplyNeeded: true,
+          triageScore: 72,
+          triageReason: "search hit",
+          labels: ["INBOX", "UNREAD"],
+          htmlLink: "https://mail.google.com/mail/u/0/#all/thread-suran-recent",
+          metadata: {},
+          syncedAt: "2026-04-08T16:00:00.000Z",
+          updatedAt: "2026-04-08T16:00:00.000Z",
+        },
+      ],
+      source: "cache",
+      syncedAt: "2026-04-09T16:00:00.000Z",
+      summary: {
+        totalCount: 1,
+        unreadCount: 1,
+        importantCount: 1,
+        replyNeededCount: 1,
+      },
+    });
+
+    const result = await gmailAction.handler?.(
+      runtime,
+      msg("check my emails from suran again"),
+      {} as never,
+      {
+        parameters: {
+          subaction: "search",
+          query: "from:suran newer_than:21d",
+        },
+      } as never,
+      callback,
+    );
+
+    expect(gmailAction.suppressPostActionContinuation).toBe(true);
+    expect(result?.success).toBe(true);
+    expect(callback).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "GMAIL_ACTION",
+        source: "action",
+      }),
+    );
+  });
+
   it("broadens sender searches before giving up", async () => {
     mockGetGmailSearch
       .mockResolvedValueOnce({
@@ -358,7 +457,222 @@ describe("gmailAction", () => {
     );
     expect(result?.success).toBe(true);
     expect(result?.text).toContain("Suran Lee");
-    expect(result?.text).toContain('for "suran"');
+    expect(result?.text).toContain('sender "suran"');
+  });
+
+  it("infers sender and timeframe queries for natural Gmail search phrasing", async () => {
+    mockGetGmailSearch
+      .mockResolvedValueOnce({
+        query: "from:suran newer_than:21d",
+        messages: [],
+        source: "cache",
+        syncedAt: "2026-04-09T16:00:00.000Z",
+        summary: {
+          totalCount: 0,
+          unreadCount: 0,
+          importantCount: 0,
+          replyNeededCount: 0,
+        },
+      })
+      .mockResolvedValueOnce({
+        query: "suran newer_than:21d",
+        messages: [
+          {
+            id: "msg-suran-window",
+            externalId: "ext-suran-window",
+            threadId: "thread-suran-window",
+            agentId: "agent-1",
+            provider: "google",
+            side: "owner",
+            subject: "Follow-up from Suran",
+            from: "Suran Lee",
+            fromEmail: "suran@example.com",
+            replyTo: "suran@example.com",
+            to: ["shawmakesmagic@gmail.com"],
+            cc: [],
+            snippet: "Checking in over the last couple weeks",
+            receivedAt: "2026-04-08T16:00:00.000Z",
+            isUnread: true,
+            isImportant: false,
+            likelyReplyNeeded: true,
+            triageScore: 70,
+            triageReason: "search hit",
+            labels: ["INBOX", "UNREAD"],
+            htmlLink:
+              "https://mail.google.com/mail/u/0/#all/thread-suran-window",
+            metadata: {},
+            syncedAt: "2026-04-08T16:00:00.000Z",
+            updatedAt: "2026-04-08T16:00:00.000Z",
+          },
+        ],
+        source: "cache",
+        syncedAt: "2026-04-09T16:00:00.000Z",
+        summary: {
+          totalCount: 1,
+          unreadCount: 1,
+          importantCount: 0,
+          replyNeededCount: 1,
+        },
+      });
+
+    const result = await invoke(
+      "look for all emails sent to me from suran in the last few weeks",
+      {
+        subaction: "search",
+      },
+    );
+
+    expect(mockGetGmailSearch).toHaveBeenNthCalledWith(
+      1,
+      expect.any(URL),
+      expect.objectContaining({ query: "from:suran newer_than:21d" }),
+    );
+    expect(mockGetGmailSearch).toHaveBeenNthCalledWith(
+      2,
+      expect.any(URL),
+      expect.objectContaining({ query: "suran newer_than:21d" }),
+    );
+    expect(result?.success).toBe(true);
+    expect(result?.text).toContain("Suran Lee");
+    expect(result?.text).toContain("last 21 days");
+  });
+
+  it("extracts better Gmail search queries from recent conversation when no usable query is provided", async () => {
+    mockUseModel.mockResolvedValue(
+      "<response><query1>from:suran newer_than:21d</query1><query2>suran newer_than:21d</query2><query3></query3></response>",
+    );
+    mockGetGmailSearch.mockResolvedValue({
+      query: "from:suran newer_than:21d",
+      messages: [
+        {
+          id: "msg-llm-suran",
+          externalId: "ext-llm-suran",
+          threadId: "thread-llm-suran",
+          agentId: "agent-1",
+          provider: "google",
+          side: "owner",
+          subject: "Suran follow-up",
+          from: "Suran Lee",
+          fromEmail: "suran@example.com",
+          replyTo: "suran@example.com",
+          to: ["shawmakesmagic@gmail.com"],
+          cc: [],
+          snippet: "Wanted to follow up",
+          receivedAt: "2026-04-08T16:00:00.000Z",
+          isUnread: false,
+          isImportant: false,
+          likelyReplyNeeded: true,
+          triageScore: 60,
+          triageReason: "search hit",
+          labels: ["INBOX"],
+          htmlLink: "https://mail.google.com/mail/u/0/#all/thread-llm-suran",
+          metadata: {},
+          syncedAt: "2026-04-08T16:00:00.000Z",
+          updatedAt: "2026-04-08T16:00:00.000Z",
+        },
+      ],
+      source: "cache",
+      syncedAt: "2026-04-09T16:00:00.000Z",
+      summary: {
+        totalCount: 1,
+        unreadCount: 0,
+        importantCount: 0,
+        replyNeededCount: 1,
+      },
+    });
+
+    const result = await invoke("search again", {
+      subaction: "search",
+      state: {
+        values: {
+          recentMessages:
+            "user: can you search my inbox\nassistant: sure\nuser: it was from Suran Lee in the last few weeks",
+        },
+      },
+    });
+
+    expect(mockUseModel).toHaveBeenCalledTimes(1);
+    expect(mockGetGmailSearch).toHaveBeenCalledWith(
+      expect.any(URL),
+      expect.objectContaining({ query: "from:suran newer_than:21d" }),
+    );
+    expect(result?.success).toBe(true);
+    expect(result?.text).toContain("Suran Lee");
+  });
+
+  it("reads the body of a matched email from follow-up context", async () => {
+    mockUseModel.mockResolvedValue(
+      "<response><query1>from:suran newer_than:21d</query1><query2>suran newer_than:21d</query2><query3></query3></response>",
+    );
+    mockReadGmailMessage.mockResolvedValue({
+      query: "from:suran newer_than:21d",
+      message: {
+        id: "life-gmail-suran",
+        externalId: "msg-suran",
+        threadId: "thread-suran",
+        agentId: "agent-1",
+        provider: "google",
+        side: "owner",
+        subject: "Suran follow-up",
+        from: "Suran Lee",
+        fromEmail: "suran@example.com",
+        replyTo: "suran@example.com",
+        to: ["shawmakesmagic@gmail.com"],
+        cc: [],
+        snippet: "Wanted to follow up",
+        receivedAt: "2026-04-08T16:00:00.000Z",
+        isUnread: false,
+        isImportant: false,
+        likelyReplyNeeded: true,
+        triageScore: 60,
+        triageReason: "search hit",
+        labels: ["INBOX"],
+        htmlLink: "https://mail.google.com/mail/u/0/#all/thread-suran",
+        metadata: {},
+        syncedAt: "2026-04-08T16:00:00.000Z",
+        updatedAt: "2026-04-08T16:00:00.000Z",
+      },
+      bodyText: "Wanted to follow up on the last few weeks.",
+      source: "synced",
+      syncedAt: "2026-04-09T16:00:00.000Z",
+    });
+
+    const result = await invoke("yeah, can you read it to me?", {
+      state: {
+        values: {
+          recentMessages:
+            "user: can you search my inbox\nassistant: sure\nuser: it was from Suran Lee in the last few weeks",
+        },
+      },
+    });
+
+    expect(mockReadGmailMessage).toHaveBeenCalledWith(
+      expect.any(URL),
+      expect.objectContaining({ query: "from:suran newer_than:21d" }),
+    );
+    expect(result?.success).toBe(true);
+    expect(result?.text).toContain("Suran follow-up");
+    expect(result?.text).toContain(
+      "Wanted to follow up on the last few weeks.",
+    );
+  });
+
+  it("returns a grounded rate-limit error when Gmail search is throttled", async () => {
+    mockGetGmailSearch.mockRejectedValueOnce(
+      new (await import("../lifeops/service.js")).LifeOpsServiceError(
+        429,
+        "Too many requests",
+      ),
+    );
+
+    const result = await invoke("find email from suran", {
+      subaction: "search",
+    });
+
+    expect(result).toMatchObject({
+      success: false,
+      text: expect.stringContaining("Gmail search hit an upstream rate limit"),
+    });
   });
 
   it("creates a single reply draft", async () => {

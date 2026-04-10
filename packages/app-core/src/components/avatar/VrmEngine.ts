@@ -484,7 +484,7 @@ async function decompressGzipBuffer(buffer: ArrayBuffer): Promise<ArrayBuffer> {
  * or cloned across instances.  Re-parsing from an ArrayBuffer is fast (<200ms)
  * and avoids an entire class of WebGL state bugs.
  *
- * LRU eviction keeps memory bounded (default: 4 entries ≈ 40-80 MB).
+ * LRU eviction keeps memory bounded (default: 8 entries ≈ 80-160 MB).
  * ──────────────────────────────────────────────────────────────────────────── */
 
 interface VrmBufferCacheEntry {
@@ -495,7 +495,14 @@ interface VrmBufferCacheEntry {
 }
 
 const vrmBufferCache = new Map<string, VrmBufferCacheEntry>();
-const VRM_BUFFER_CACHE_MAX = 4;
+const VRM_BUFFER_CACHE_MAX = 8;
+
+/**
+ * In-flight prefetch promises keyed by URL. Prevents duplicate concurrent
+ * downloads when `loadGltfAsset` runs while a prefetch for the same URL is
+ * still in progress.
+ */
+const vrmPrefetchInflight = new Map<string, Promise<void>>();
 
 function touchVrmCacheEntry(url: string, buffer: ArrayBuffer): void {
   vrmBufferCache.set(url, { buffer, lastUsed: performance.now() });
@@ -515,12 +522,52 @@ function touchVrmCacheEntry(url: string, buffer: ArrayBuffer): void {
   }
 }
 
+/**
+ * Prefetch a VRM file into the in-memory buffer cache without parsing it.
+ * Fire-and-forget: silently swallows errors since prefetch is best-effort.
+ * Calling this when the character tab opens means the buffer is ready before
+ * the user clicks a character, turning a ~3-8 s cold fetch into a <200 ms
+ * re-parse from cache.
+ */
+export async function prefetchVrmToCache(url: string): Promise<void> {
+  if (vrmBufferCache.has(url)) return; // already warm
+
+  // If a prefetch for this URL is already in flight, join it instead of
+  // starting a duplicate download.
+  const existing = vrmPrefetchInflight.get(url);
+  if (existing) return existing;
+
+  const work = (async () => {
+    try {
+      const response = await fetch(url, { cache: "force-cache" });
+      if (!response.ok) return;
+      let buffer = await response.arrayBuffer();
+      if (isGzipBuffer(buffer)) buffer = await decompressGzipBuffer(buffer);
+      touchVrmCacheEntry(url, buffer);
+    } catch {
+      // Prefetch is best-effort — network errors are silently ignored.
+    } finally {
+      vrmPrefetchInflight.delete(url);
+    }
+  })();
+
+  vrmPrefetchInflight.set(url, work);
+  return work;
+}
+
 async function loadGltfAsset(
   loader: GLTFLoader,
   url: string,
   onProgress?: (progress: number) => void,
 ): Promise<Awaited<ReturnType<GLTFLoader["loadAsync"]>>> {
   let buffer: ArrayBuffer;
+
+  // If a prefetch for this URL is in flight, await it so we hit the
+  // in-memory cache instead of starting a duplicate network request.
+  const inflight = vrmPrefetchInflight.get(url);
+  if (inflight) {
+    await inflight;
+  }
 
   const cached = vrmBufferCache.get(url);
   if (cached) {
@@ -530,8 +577,8 @@ async function loadGltfAsset(
     touchVrmCacheEntry(url, cached.buffer);
     onProgress?.(1);
   } else {
-    // Cache miss — fetch from network.
-    const response = await fetch(url);
+    // Cache miss — fetch from network/browser cache.
+    const response = await fetch(url, { cache: "force-cache" });
     if (!response.ok) {
       throw new Error(`Failed to fetch VRM asset: ${response.status}`);
     }

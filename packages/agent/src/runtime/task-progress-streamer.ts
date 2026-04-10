@@ -58,7 +58,15 @@ export function installTaskProgressStreamer(
 
   const sessionStartedAt = new Map<string, number>();
   const sessionWorkdirs = new Map<string, string>();
-  const sessionRooms = new Map<string, { roomId: UUID; channelId: string; source: string }>();
+  const sessionRooms = new Map<
+    string,
+    {
+      roomId: UUID;
+      channelId: string;
+      source: string;
+      serverId?: string;
+    }
+  >();
   const heartbeatSent = new Set<string>();
   const finalSent = new Set<string>();
 
@@ -91,6 +99,7 @@ export function installTaskProgressStreamer(
               roomId: meta.roomId!,
               channelId: room.channelId ?? room.id,
               source: room.source,
+              serverId: room.serverId,
             });
           }
         })();
@@ -143,13 +152,26 @@ export function installTaskProgressStreamer(
         let roomCache = sessionRooms;
         if (!sessionRooms.has(sessionId)) {
           const meta = svc.sessionMetadata?.get(sessionId) as SessionMetadata | undefined;
-          if (meta?.roomId) {
-            const room = await runtime.getRoom(meta.roomId).catch(() => null);
-            if (room?.channelId) {
+          let roomId = meta?.roomId;
+          if (!roomId && meta?.threadId) {
+            const coordinator = runtime.getService("SWARM_COORDINATOR") as
+              | { getTaskThread?: (threadId: string) => Promise<{ roomId?: UUID | null } | null> }
+              | undefined;
+            const thread = await coordinator?.getTaskThread?.(meta.threadId).catch(
+              () => null,
+            );
+            if (thread?.roomId) {
+              roomId = thread.roomId;
+            }
+          }
+          if (roomId) {
+            const room = await runtime.getRoom(roomId).catch(() => null);
+            if (room?.source) {
               const resolved = new Map([[sessionId, {
-                roomId: meta.roomId,
-                channelId: room.channelId,
-                source: meta.source ?? "discord",
+                roomId,
+                channelId: room.channelId ?? room.id,
+                source: room.source,
+                serverId: room.serverId,
               }]]);
               roomCache = resolved;
             }
@@ -224,7 +246,10 @@ async function postFinalReport(
   svc: PTYServiceWithEvents,
   sessionId: string,
   workdir?: string,
-  roomCache?: Map<string, { roomId: UUID; channelId: string; source: string }>,
+  roomCache?: Map<
+    string,
+    { roomId: UUID; channelId: string; source: string; serverId?: string }
+  >,
 ): Promise<void> {
   const entry = workdir
     ? await readLatestAssistantFromWorkdir(workdir)
@@ -282,7 +307,10 @@ async function postToOriginatingChannel(
   svc: PTYServiceWithEvents,
   sessionId: string,
   text: string,
-  roomCache?: Map<string, { roomId: UUID; channelId: string; source: string }>,
+  roomCache?: Map<
+    string,
+    { roomId: UUID; channelId: string; source: string; serverId?: string }
+  >,
 ): Promise<void> {
   let roomId: UUID | undefined;
   let channelId: string | undefined;
@@ -293,6 +321,7 @@ async function postToOriginatingChannel(
     roomId = cached.roomId;
     channelId = cached.channelId;
     source = cached.source;
+    serverId = cached.serverId;
   } else {
     const meta = svc.sessionMetadata?.get(sessionId) as SessionMetadata | undefined;
     if (meta?.roomId) {

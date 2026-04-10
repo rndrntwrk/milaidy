@@ -856,6 +856,7 @@ function AppProviderInner({
     setOnboardingRpcSelections,
     setOnboardingRpcKeys,
     setOnboardingAvatar,
+    setOnboardingCloudProvisionedContainer,
     setPostOnboardingChecklistDismissed,
     setOnboardingDeferredTasks,
   } = useOnboardingCompat(onboarding);
@@ -1498,6 +1499,7 @@ function AppProviderInner({
         databaseSubTab: setDatabaseSubTab,
         configRaw: setConfigRaw,
         configText: setConfigText,
+        onboardingComplete: setOnboardingComplete,
       };
       const setter = setterMap[key];
       if (setter) setter(value);
@@ -1547,6 +1549,7 @@ function AppProviderInner({
       setOnboardingTwilioAuthToken,
       setOnboardingTwilioPhoneNumber,
       setOnboardingWhatsAppSessionPath,
+      setOnboardingComplete,
       setStartupError,
       setTabRaw,
     ],
@@ -1621,6 +1624,7 @@ function AppProviderInner({
     setOnboardingRemoteToken,
     setOnboardingSmallModel,
     setOnboardingLargeModel,
+    setOnboardingCloudProvisionedContainer,
     applyDetectedProviders,
     hydrateInitialConversationState,
     loadWorkbench,

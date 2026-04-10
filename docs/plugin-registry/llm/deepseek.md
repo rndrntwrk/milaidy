@@ -58,8 +58,7 @@ DeepSeek-V3 is a mixture-of-experts model with 671B parameters (37B active). Dee
 | elizaOS Model Type | DeepSeek Model |
 |-------------------|---------------|
 | `TEXT_SMALL` | `deepseek-chat` |
-| `TEXT_LARGE` | `deepseek-chat` |
-| `TEXT_REASONING_LARGE` | `deepseek-reasoner` |
+| `TEXT_LARGE` | `deepseek-chat` or `deepseek-reasoner` (configure the large slot) |
 
 ## Features
 
@@ -73,15 +72,12 @@ DeepSeek-V3 is a mixture-of-experts model with 671B parameters (37B active). Dee
 
 ## DeepSeek-R1 Reasoning
 
-The `deepseek-reasoner` model produces a `<think>` block containing its reasoning chain before the final answer. Milady exposes this through the standard reasoning model type:
+The `deepseek-reasoner` model produces a `<think>` block containing its reasoning chain before the final answer. Configure the **large** text slot to `deepseek-reasoner`, then use `TEXT_LARGE`:
 
 ```typescript
-const response = await runtime.useModel("TEXT_REASONING_LARGE", {
+const response = await runtime.useModel("TEXT_LARGE", {
   prompt: "Prove that there are infinitely many prime numbers.",
 });
-
-console.log(response.reasoning); // The <think> chain
-console.log(response.text);      // The final answer
 ```
 
 ## Local DeepSeek via Ollama

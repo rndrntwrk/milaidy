@@ -17,6 +17,7 @@ import {
   type State,
   type UUID,
 } from "@elizaos/core";
+import { loadElizaConfig, saveElizaConfig } from "../../../config/config.js";
 import type { RoleName } from "./types";
 import {
   canModifyRole,
@@ -36,6 +37,76 @@ const MAX_USERNAME_LENGTH = 64;
 
 /** Role names accepted in commands. MEMBER/NONE map to GUEST for backwards compat. */
 const ROLE_PATTERN = "OWNER|ADMIN|USER|GUEST|MEMBER|NONE";
+const CANONICAL_OWNER_SETTING_KEY = "ELIZA_ADMIN_ENTITY_ID";
+const RECENT_ROOM_MESSAGE_LIMIT = 100;
+const AMBIGUOUS_MATCH_SCORE_GAP = 10;
+const MIN_CONFIDENT_MATCH_SCORE = 70;
+
+type ParsedRoleCommand =
+  | { kind: "role"; targetName: string; newRole: RoleName }
+  | { kind: "boss"; targetName: string; newRole: "OWNER" };
+
+type RelationshipsContactLike = {
+  entityId: UUID;
+  categories?: string[];
+  customFields?: Record<string, unknown>;
+};
+
+type RelationshipAnalyticsLike = {
+  strength: number;
+  interactionCount: number;
+  sharedConversationWindows?: number;
+  lastInteractionAt?: string;
+};
+
+type RelationshipsServiceLike = {
+  searchContacts?: (criteria: {
+    categories?: string[];
+    tags?: string[];
+    searchTerm?: string;
+    privacyLevel?: string;
+  }) => Promise<RelationshipsContactLike[]>;
+  getContact?: (entityId: UUID) => Promise<RelationshipsContactLike | null>;
+  analyzeRelationship?: (
+    sourceEntityId: UUID,
+    targetEntityId: UUID,
+  ) => Promise<RelationshipAnalyticsLike | null>;
+};
+
+type CandidateRecord = {
+  entityId: UUID;
+  names: string[];
+  aliases: string[];
+  inCurrentRoom: boolean;
+  spokeRecentlyInRoom: boolean;
+  lastRoomActivityAt?: number;
+  contact: RelationshipsContactLike | null;
+  analytics: RelationshipAnalyticsLike | null;
+};
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function asString(value: unknown): string | null {
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : null;
+}
+
+function normalizeEntityLookupName(raw: string): string | null {
+  const normalized = raw
+    .trim()
+    .replace(/^@+/, "")
+    .replace(/[.!?,;:]+$/g, "")
+    .trim();
+  if (!normalized || normalized.length > MAX_USERNAME_LENGTH) {
+    return null;
+  }
+  return normalized;
+}
 
 /**
  * Normalize a role string from user input to a valid assignable RoleName.
@@ -55,12 +126,13 @@ function normalizeInputRole(raw: string): RoleName {
  *  - `role username USER`
  *  - `make @username admin`
  *  - `set @username role GUEST`
+ *  - `nubs is your boss`
  *
  * Returns null if the message doesn't look like a role command.
  */
 function parseRoleCommand(
   text: string,
-): { targetName: string; newRole: RoleName } | null {
+): ParsedRoleCommand | null {
   if (!text) return null;
   const trimmed = text.trim();
 
@@ -74,9 +146,13 @@ function parseRoleCommand(
   );
   const slashMatch = trimmed.match(slashRe);
   if (slashMatch) {
-    const name = slashMatch[1];
-    if (name.length > MAX_USERNAME_LENGTH) return null;
-    return { targetName: name, newRole: normalizeInputRole(slashMatch[2]) };
+    const name = normalizeEntityLookupName(slashMatch[1]);
+    if (!name) return null;
+    return {
+      kind: "role",
+      targetName: name,
+      newRole: normalizeInputRole(slashMatch[2]),
+    };
   }
 
   // Pattern: make @name admin/owner/user/guest
@@ -86,9 +162,13 @@ function parseRoleCommand(
   );
   const makeMatch = trimmed.match(makeRe);
   if (makeMatch) {
-    const name = makeMatch[1];
-    if (name.length > MAX_USERNAME_LENGTH) return null;
-    return { targetName: name, newRole: normalizeInputRole(makeMatch[2]) };
+    const name = normalizeEntityLookupName(makeMatch[1]);
+    if (!name) return null;
+    return {
+      kind: "role",
+      targetName: name,
+      newRole: normalizeInputRole(makeMatch[2]),
+    };
   }
 
   // Pattern: set @name role ADMIN
@@ -98,61 +178,463 @@ function parseRoleCommand(
   );
   const setMatch = trimmed.match(setRe);
   if (setMatch) {
-    const name = setMatch[1];
-    if (name.length > MAX_USERNAME_LENGTH) return null;
-    return { targetName: name, newRole: normalizeInputRole(setMatch[2]) };
+    const name = normalizeEntityLookupName(setMatch[1]);
+    if (!name) return null;
+    return {
+      kind: "role",
+      targetName: name,
+      newRole: normalizeInputRole(setMatch[2]),
+    };
+  }
+
+  const bossMatch = trimmed.match(/^@?(.+?)\s+is\s+your\s+boss[.!?]*$/i);
+  if (bossMatch) {
+    const name = normalizeEntityLookupName(bossMatch[1]);
+    if (!name) return null;
+    return {
+      kind: "boss",
+      targetName: name,
+      newRole: "OWNER",
+    };
   }
 
   return null;
 }
 
-/**
- * Find an entity in the room by name/username.
- * Searches entity names and metadata for a match.
- */
-async function findEntityByName(
-  runtime: IAgentRuntime,
-  roomId: UUID,
-  targetName: string,
-): Promise<UUID | null> {
-  const lower = targetName.toLowerCase();
-  try {
-    const entities = await runtime.getEntitiesForRoom(roomId);
-    for (const entity of entities) {
-      if (!entity?.id) continue;
-      const entityId = entity.id as UUID;
+function extractCustomFieldStrings(
+  customFields: Record<string, unknown> | undefined,
+  keys: string[],
+): string[] {
+  if (!customFields) {
+    return [];
+  }
 
-      // Check names array
-      if (entity.names?.some((n: string) => n.toLowerCase() === lower)) {
-        return entityId;
-      }
-
-      // Check metadata username/name fields
-      const meta = entity.metadata as Record<
-        string,
-        Record<string, unknown> | undefined
-      >;
-      if (meta) {
-        for (const source of Object.values(meta)) {
-          if (
-            typeof source === "object" &&
-            source !== null &&
-            ((typeof source.username === "string" &&
-              source.username.toLowerCase() === lower) ||
-              (typeof source.userName === "string" &&
-                source.userName.toLowerCase() === lower) ||
-              (typeof source.name === "string" &&
-                source.name.toLowerCase() === lower))
-          ) {
-            return entityId;
-          }
+  const values = new Set<string>();
+  for (const key of keys) {
+    const rawValue = customFields[key];
+    if (typeof rawValue === "string" && rawValue.trim().length > 0) {
+      values.add(rawValue.trim());
+      continue;
+    }
+    if (Array.isArray(rawValue)) {
+      for (const entry of rawValue) {
+        if (typeof entry === "string" && entry.trim().length > 0) {
+          values.add(entry.trim());
         }
       }
     }
-  } catch (err) {
-    logger.warn(`[roles] Failed to search entities: ${err}`);
   }
-  return null;
+
+  return [...values];
+}
+
+function getRelationshipsService(
+  runtime: IAgentRuntime,
+): RelationshipsServiceLike | null {
+  if (typeof runtime.getService !== "function") {
+    return null;
+  }
+
+  return runtime.getService("relationships") as RelationshipsServiceLike | null;
+}
+
+function collectCandidateNames(args: {
+  names?: string[];
+  metadata?: Record<string, unknown>;
+  contact?: RelationshipsContactLike | null;
+}): { names: string[]; aliases: string[] } {
+  const names = new Set<string>();
+  const aliases = new Set<string>();
+
+  for (const name of args.names ?? []) {
+    if (typeof name === "string" && name.trim().length > 0) {
+      names.add(name.trim());
+    }
+  }
+
+  const metadata = asRecord(args.metadata);
+  if (metadata) {
+    for (const source of Object.values(metadata)) {
+      const sourceRecord = asRecord(source);
+      if (!sourceRecord) {
+        continue;
+      }
+      for (const key of [
+        "username",
+        "userName",
+        "name",
+        "displayName",
+        "handle",
+        "screenName",
+      ]) {
+        const value = asString(sourceRecord[key]);
+        if (value) {
+          aliases.add(value);
+        }
+      }
+    }
+  }
+
+  const contactFields = args.contact?.customFields as
+    | Record<string, unknown>
+    | undefined;
+  for (const value of extractCustomFieldStrings(contactFields, [
+    "displayName",
+    "preferredName",
+    "nickname",
+    "nicknames",
+    "alias",
+    "aliases",
+    "username",
+    "usernames",
+    "handle",
+    "handles",
+  ])) {
+    aliases.add(value);
+  }
+
+  return {
+    names: [...names],
+    aliases: [...aliases],
+  };
+}
+
+function normalizeComparisonValue(value: string): string {
+  return value.trim().replace(/^@+/, "").replace(/\s+/g, " ").toLowerCase();
+}
+
+function scoreCandidateNameMatch(
+  targetName: string,
+  candidate: CandidateRecord,
+): { nameScore: number; matchedValue: string | null } {
+  const target = normalizeComparisonValue(targetName);
+  const values = [...candidate.names, ...candidate.aliases];
+  let bestScore = 0;
+  let matchedValue: string | null = null;
+
+  for (const rawValue of values) {
+    const value = normalizeComparisonValue(rawValue);
+    if (!value) {
+      continue;
+    }
+
+    let score = 0;
+    if (value === target) {
+      score = 100;
+    } else if (value.split(/\s+/).includes(target)) {
+      score = 88;
+    } else if (value.startsWith(target) || target.startsWith(value)) {
+      score = 80;
+    } else if (value.includes(target) || target.includes(value)) {
+      score = 68;
+    }
+
+    if (score > bestScore) {
+      bestScore = score;
+      matchedValue = rawValue;
+    }
+  }
+
+  return { nameScore: bestScore, matchedValue };
+}
+
+async function getRecentRoomActivity(
+  runtime: IAgentRuntime,
+  roomId: UUID,
+): Promise<Map<UUID, number>> {
+  const activity = new Map<UUID, number>();
+  if (typeof runtime.getMemoriesByRoomIds !== "function") {
+    return activity;
+  }
+
+  try {
+    const memories = await runtime.getMemoriesByRoomIds({
+      tableName: "messages",
+      roomIds: [roomId],
+      limit: RECENT_ROOM_MESSAGE_LIMIT,
+    });
+    for (const memory of memories) {
+      if (!memory?.entityId || typeof memory.createdAt !== "number") {
+        continue;
+      }
+      const previous = activity.get(memory.entityId as UUID) ?? 0;
+      if (memory.createdAt > previous) {
+        activity.set(memory.entityId as UUID, memory.createdAt);
+      }
+    }
+  } catch (error) {
+    logger.warn(`[roles] Failed to read recent room activity: ${error}`);
+  }
+
+  return activity;
+}
+
+async function resolveRoleTargetEntity(args: {
+  runtime: IAgentRuntime;
+  roomId: UUID;
+  requesterEntityId: UUID;
+  targetName: string;
+}): Promise<{
+  entityId: UUID | null;
+  error?: string;
+}> {
+  const { runtime, roomId, requesterEntityId, targetName } = args;
+  const candidateMap = new Map<UUID, CandidateRecord>();
+  const relationships = getRelationshipsService(runtime);
+  const recentRoomActivity = await getRecentRoomActivity(runtime, roomId);
+
+  const upsertCandidate = async (
+    entityId: UUID,
+    options?: {
+      names?: string[];
+      metadata?: Record<string, unknown>;
+      inCurrentRoom?: boolean;
+      contact?: RelationshipsContactLike | null;
+    },
+  ) => {
+    let candidate = candidateMap.get(entityId);
+    if (!candidate) {
+      let entity: {
+        names?: string[];
+        metadata?: Record<string, unknown>;
+      } | null =
+        options?.names && options?.metadata
+          ? { names: options.names, metadata: options.metadata }
+          : null;
+      if (!entity && typeof runtime.getEntityById === "function") {
+        entity = await runtime.getEntityById(entityId);
+      }
+      const contact =
+        options?.contact ??
+        (relationships && typeof relationships.getContact === "function"
+          ? await relationships.getContact(entityId)
+          : null);
+      const identifiers = collectCandidateNames({
+        names: entity?.names,
+        metadata: entity?.metadata as Record<string, unknown> | undefined,
+        contact,
+      });
+      candidate = {
+        entityId,
+        names: identifiers.names,
+        aliases: identifiers.aliases,
+        inCurrentRoom: Boolean(options?.inCurrentRoom),
+        spokeRecentlyInRoom: recentRoomActivity.has(entityId),
+        lastRoomActivityAt: recentRoomActivity.get(entityId),
+        contact,
+        analytics: null,
+      };
+      candidateMap.set(entityId, candidate);
+      return;
+    }
+
+    if (options?.inCurrentRoom) {
+      candidate.inCurrentRoom = true;
+    }
+    if (!candidate.contact && options?.contact) {
+      candidate.contact = options.contact;
+    }
+  };
+
+  try {
+    const roomEntities = await runtime.getEntitiesForRoom(roomId);
+    for (const entity of roomEntities) {
+      if (!entity?.id) continue;
+      await upsertCandidate(entity.id as UUID, {
+        names: entity.names as string[] | undefined,
+        metadata: entity.metadata as Record<string, unknown> | undefined,
+        inCurrentRoom: true,
+      });
+    }
+  } catch (error) {
+    logger.warn(`[roles] Failed to load room entities: ${error}`);
+  }
+
+  for (const entityId of recentRoomActivity.keys()) {
+    await upsertCandidate(entityId, { inCurrentRoom: false });
+  }
+
+  if (relationships && typeof relationships.searchContacts === "function") {
+    try {
+      const contacts = await relationships.searchContacts({
+        searchTerm: targetName,
+      });
+      for (const contact of contacts) {
+        if (!contact?.entityId) continue;
+        await upsertCandidate(contact.entityId, {
+          contact,
+        });
+      }
+    } catch (error) {
+      logger.warn(`[roles] Failed to search rolodex contacts: ${error}`);
+    }
+  }
+
+  const scoredCandidates = await Promise.all(
+    [...candidateMap.values()].map(async (candidate) => {
+      if (
+        relationships &&
+        typeof relationships.analyzeRelationship === "function" &&
+        candidate.entityId !== requesterEntityId
+      ) {
+        try {
+          candidate.analytics = await relationships.analyzeRelationship(
+            requesterEntityId,
+            candidate.entityId,
+          );
+        } catch (error) {
+          logger.warn(
+            `[roles] Failed to analyze relationship for candidate ${candidate.entityId}: ${error}`,
+          );
+        }
+      }
+
+      const { nameScore } = scoreCandidateNameMatch(targetName, candidate);
+      if (nameScore === 0) {
+        return null;
+      }
+
+      let score = nameScore;
+      if (candidate.inCurrentRoom) {
+        score += 14;
+      }
+      if (candidate.spokeRecentlyInRoom) {
+        score += 12;
+      }
+      if (candidate.contact) {
+        score += 6;
+      }
+      if (candidate.analytics) {
+        score += Math.round(candidate.analytics.strength / 5);
+        score += Math.min(
+          (candidate.analytics.sharedConversationWindows ?? 0) * 8,
+          24,
+        );
+        const lastInteractionAt = candidate.analytics.lastInteractionAt;
+        if (lastInteractionAt) {
+          const ageMs = Date.now() - new Date(lastInteractionAt).getTime();
+          if (ageMs <= 1000 * 60 * 60 * 24) {
+            score += 12;
+          } else if (ageMs <= 1000 * 60 * 60 * 24 * 7) {
+            score += 8;
+          } else if (ageMs <= 1000 * 60 * 60 * 24 * 30) {
+            score += 4;
+          }
+        }
+      }
+
+      return { candidate, score, nameScore };
+    }),
+  );
+
+  const ranked = scoredCandidates
+    .filter((entry): entry is NonNullable<typeof entry> => entry !== null)
+    .sort((left, right) => right.score - left.score);
+
+  if (ranked.length === 0) {
+    return {
+      entityId: null,
+      error: `Could not find user "${targetName}" in this room or rolodex.`,
+    };
+  }
+
+  const best = ranked[0];
+  const second = ranked[1];
+  if (
+    best.score < MIN_CONFIDENT_MATCH_SCORE ||
+    (second && best.score - second.score < AMBIGUOUS_MATCH_SCORE_GAP)
+  ) {
+    return {
+      entityId: null,
+      error: `I found multiple possible matches for "${targetName}". Please use a more specific name or handle.`,
+    };
+  }
+
+  return { entityId: best.candidate.entityId };
+}
+
+function persistCanonicalOwnerConfig(targetEntityId: string): void {
+  const config = loadElizaConfig();
+  if (!config.agents || typeof config.agents !== "object") {
+    (config as Record<string, unknown>).agents = {};
+  }
+  const agents = config.agents as Record<string, unknown>;
+  const defaults =
+    agents.defaults && typeof agents.defaults === "object"
+      ? (agents.defaults as Record<string, unknown>)
+      : {};
+  defaults.adminEntityId = targetEntityId;
+  agents.defaults = defaults;
+  saveElizaConfig(config);
+}
+
+async function transferCanonicalOwner(args: {
+  runtime: IAgentRuntime;
+  message: Memory;
+  newOwnerId: UUID;
+  currentOwnerId: string | null;
+  actingOwnerId: UUID;
+}): Promise<void> {
+  const { runtime, message, newOwnerId, currentOwnerId, actingOwnerId } = args;
+  if (typeof runtime.setSetting === "function") {
+    runtime.setSetting(CANONICAL_OWNER_SETTING_KEY, newOwnerId);
+  }
+  try {
+    persistCanonicalOwnerConfig(newOwnerId);
+  } catch (error) {
+    logger.warn(`[roles] Failed to persist canonical owner config: ${error}`);
+  }
+
+  const currentWorld = await resolveWorldForMessage(runtime, message);
+  let worlds =
+    currentWorld?.world
+      ? [currentWorld.world]
+      : [];
+  if (typeof runtime.getAllWorlds === "function") {
+    try {
+      worlds = await runtime.getAllWorlds();
+    } catch (error) {
+      logger.warn(`[roles] Failed to load all worlds for owner transfer: ${error}`);
+    }
+  }
+
+  for (const world of worlds) {
+    if (!world?.id) continue;
+    const metadata = ((world.metadata ?? {}) as Record<string, unknown>) as {
+      ownership?: { ownerId?: string };
+      roles?: Record<string, RoleName>;
+      roleSources?: Record<string, "owner" | "manual" | "connector_admin">;
+    };
+    metadata.ownership ??= {};
+    metadata.roles ??= {};
+    metadata.roleSources ??= {};
+    metadata.ownership.ownerId = newOwnerId;
+    metadata.roles[newOwnerId] = "OWNER";
+    metadata.roleSources[newOwnerId] = "owner";
+
+    for (const [entityId, role] of Object.entries(metadata.roles)) {
+      if (entityId === newOwnerId || normalizeRole(role) !== "OWNER") {
+        continue;
+      }
+
+      if (
+        entityId === currentOwnerId ||
+        entityId === actingOwnerId
+      ) {
+        metadata.roles[entityId] = "ADMIN";
+        metadata.roleSources[entityId] = "manual";
+        continue;
+      }
+
+      delete metadata.roles[entityId];
+      delete metadata.roleSources[entityId];
+    }
+
+    (world as { metadata: typeof metadata }).metadata = metadata;
+    await runtime.updateWorld(
+      world as Parameters<IAgentRuntime["updateWorld"]>[0],
+    );
+  }
 }
 
 export const updateRoleAction: Action = {
@@ -227,15 +709,26 @@ export const updateRoleAction: Action = {
       return { success: false };
     }
 
+    if (parsed.kind === "boss" && requesterRole !== "OWNER") {
+      await callback?.({
+        text: "Only the current OWNER can assign a new boss.",
+      });
+      return { success: false };
+    }
+
     // Find target entity
-    const targetEntityId = await findEntityByName(
+    const targetResolution = await resolveRoleTargetEntity({
       runtime,
-      message.roomId,
+      roomId: message.roomId,
+      requesterEntityId: message.entityId,
       targetName,
-    );
+    });
+    const targetEntityId = targetResolution.entityId;
     if (!targetEntityId) {
       await callback?.({
-        text: `Could not find user "${targetName}" in this room.`,
+        text:
+          targetResolution.error ??
+          `Could not find user "${targetName}" in this room.`,
       });
       return { success: false };
     }
@@ -248,7 +741,6 @@ export const updateRoleAction: Action = {
       return { success: false };
     }
 
-    // Permission check
     const targetCurrentRole = await resolveEntityRole(
       runtime,
       world,
@@ -256,6 +748,38 @@ export const updateRoleAction: Action = {
       targetEntityId,
     );
 
+    if (parsed.kind === "boss") {
+      const currentOwnerId = resolveCanonicalOwnerId(runtime, metadata);
+      await transferCanonicalOwner({
+        runtime,
+        message,
+        newOwnerId: targetEntityId,
+        currentOwnerId,
+        actingOwnerId: message.entityId,
+      });
+
+      logger.info(
+        `[roles] ${message.entityId} transferred canonical ownership to ${targetEntityId} (${targetName})`,
+      );
+
+      await callback?.({
+        text: `Updated boss to **${targetName}**.`,
+      });
+
+      return {
+        success: true,
+        data: {
+          targetEntityId,
+          targetName,
+          previousRole: targetCurrentRole,
+          newRole,
+          assignedBy: message.entityId,
+          transferKind: "boss",
+        },
+      };
+    }
+
+    // Permission check
     if (newRole === "OWNER") {
       const canonicalOwnerId = resolveCanonicalOwnerId(runtime, metadata);
       if (!canonicalOwnerId || targetEntityId !== canonicalOwnerId) {

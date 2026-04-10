@@ -20,6 +20,7 @@ import type {
 } from "@elizaos/core";
 import { logger } from "@elizaos/core";
 import { resolveCanonicalOwnerIdForMessage } from "@elizaos/core/roles";
+import { hasAdminAccess } from "../security/access.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -194,12 +195,17 @@ export function createEscalationTriggerProvider(): Provider {
       _state: State,
     ): Promise<ProviderResult> {
       const triggers: Trigger[] = [];
+      const isAdminViewer = await hasAdminAccess(runtime, message);
 
-      await Promise.all([
-        checkActiveEscalation(triggers),
-        checkOwnerInactivity(runtime, message, triggers),
-        checkPendingVerifications(runtime, message, triggers),
-      ]);
+      if (isAdminViewer) {
+        await Promise.all([
+          checkActiveEscalation(triggers),
+          checkOwnerInactivity(runtime, message, triggers),
+          checkPendingVerifications(runtime, message, triggers),
+        ]);
+      } else {
+        await checkPendingVerifications(runtime, message, triggers);
+      }
 
       if (triggers.length === 0) {
         return EMPTY;

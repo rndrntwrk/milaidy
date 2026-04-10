@@ -10,6 +10,7 @@
  */
 
 import type { Action, HandlerOptions, State } from "@elizaos/core";
+import { hasOwnerAccess } from "../security/access.js";
 
 const API_PORT = process.env.API_PORT || process.env.SERVER_PORT || "2138";
 const OWNER_NAME_MAX_LENGTH = 60;
@@ -55,9 +56,10 @@ export const setUserNameAction: Action = {
     "Use this when the user tells you their name or asks you to call them something. " +
     "This is a silent side action that does not produce chat text on its own.",
 
-  validate: async (_runtime, message, state) => {
+  validate: async (runtime, message, state) => {
     const content = message.content as Record<string, unknown> | undefined;
     if (content?.source !== "client_chat") return false;
+    if (!(await hasOwnerAccess(runtime, message))) return false;
 
     const currentName = await fetchOwnerName();
     if (currentName) {
@@ -67,7 +69,15 @@ export const setUserNameAction: Action = {
     return true;
   },
 
-  handler: async (_runtime, _message, _state, options) => {
+  handler: async (runtime, _message, _state, options) => {
+    if (!(await hasOwnerAccess(runtime, _message))) {
+      return {
+        text: "",
+        success: false,
+        data: { error: "PERMISSION_DENIED" },
+      };
+    }
+
     const params = (options as HandlerOptions | undefined)?.parameters as
       | { name?: string }
       | undefined;

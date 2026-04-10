@@ -231,6 +231,7 @@ export async function handleMiscRoutes(
       command?: string;
       clientId?: unknown;
       terminalToken?: string;
+      captureOutput?: boolean;
     }>(req, res);
     if (!body) return true;
 
@@ -293,7 +294,12 @@ export async function handleMiscRoutes(
       return true;
     }
 
-    json(res, { ok: true });
+    const captureOutput = body.captureOutput === true;
+    const MAX_CAPTURE_BYTES = 128 * 1024;
+
+    if (!captureOutput) {
+      json(res, { ok: true });
+    }
 
     const { spawn } = await import("node:child_process");
     const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -314,6 +320,31 @@ export async function handleMiscRoutes(
 
     ctx.setActiveTerminalRunCount(1);
     let finalized = false;
+    let timedOut = false;
+    let stdout = "";
+    let stderr = "";
+    let truncated = false;
+
+    const appendOutput = (
+      current: string,
+      chunkText: string,
+    ): string => {
+      if (!captureOutput || truncated || !chunkText) {
+        return current;
+      }
+      const remaining = MAX_CAPTURE_BYTES - Buffer.byteLength(current, "utf8");
+      if (remaining <= 0) {
+        truncated = true;
+        return current;
+      }
+      const chunkBytes = Buffer.byteLength(chunkText, "utf8");
+      if (chunkBytes <= remaining) {
+        return current + chunkText;
+      }
+      truncated = true;
+      return current + Buffer.from(chunkText, "utf8").subarray(0, remaining).toString("utf8");
+    };
+
     const finalize = () => {
       if (finalized) return;
       finalized = true;
@@ -323,6 +354,7 @@ export async function handleMiscRoutes(
 
     const timeoutHandle = setTimeout(() => {
       if (proc.killed) return;
+      timedOut = true;
       proc.kill("SIGTERM");
       emitTerminalEvent({
         type: "terminal-output",
@@ -337,20 +369,24 @@ export async function handleMiscRoutes(
     }, maxDurationMs);
 
     proc.stdout?.on("data", (chunk: Buffer) => {
+      const text = chunk.toString("utf-8");
+      stdout = appendOutput(stdout, text);
       emitTerminalEvent({
         type: "terminal-output",
         runId,
         event: "stdout",
-        data: chunk.toString("utf-8"),
+        data: text,
       });
     });
 
     proc.stderr?.on("data", (chunk: Buffer) => {
+      const text = chunk.toString("utf-8");
+      stderr = appendOutput(stderr, text);
       emitTerminalEvent({
         type: "terminal-output",
         runId,
         event: "stderr",
-        data: chunk.toString("utf-8"),
+        data: text,
       });
     });
 
@@ -362,6 +398,19 @@ export async function handleMiscRoutes(
         event: "exit",
         code: code ?? 1,
       });
+      if (captureOutput) {
+        json(res, {
+          ok: true,
+          runId,
+          command,
+          exitCode: code ?? 1,
+          stdout,
+          stderr,
+          timedOut,
+          truncated,
+          maxDurationMs,
+        });
+      }
     });
 
     proc.on("error", (err: Error) => {
@@ -372,6 +421,9 @@ export async function handleMiscRoutes(
         event: "error",
         data: err.message,
       });
+      if (captureOutput) {
+        error(res, err.message, 500);
+      }
     });
 
     return true;

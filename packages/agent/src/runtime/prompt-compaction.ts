@@ -132,7 +132,7 @@ export const INTENT_ACTION_MAP: Record<string, Set<string>> = {
     "SEND_TO_AGENT",
     "STOP_AGENT",
   ]),
-  terminal: new Set(["RUN_IN_TERMINAL", "RESTART_AGENT"]),
+  terminal: new Set(["SHELL_COMMAND", "RESTART_AGENT"]),
   issues: new Set(["MANAGE_ISSUES"]),
   emote: new Set(["PLAY_EMOTE"]),
   plugin_ui: new Set(["RESTART_AGENT"]),

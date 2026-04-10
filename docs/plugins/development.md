@@ -921,10 +921,6 @@ const ModelType = {
   TEXT_LARGE: "TEXT_LARGE",       // Complex reasoning
   TEXT_COMPLETION: "TEXT_COMPLETION",
 
-  // Reasoning models
-  TEXT_REASONING_SMALL: "REASONING_SMALL",
-  TEXT_REASONING_LARGE: "REASONING_LARGE",
-
   // Embeddings
   TEXT_EMBEDDING: "TEXT_EMBEDDING",
 

@@ -6,7 +6,7 @@ import type {
   State,
 } from "@elizaos/core";
 import { logger } from "@elizaos/core";
-import { checkSenderRole } from "@elizaos/core/roles";
+import { hasAdminAccess } from "../security/access.js";
 import { resolveDefaultTimeZone } from "../lifeops/defaults.js";
 import { resolveCurrentBucket } from "../activity-profile/analyzer.js";
 import { getLocalDateKey, getZonedDateParts } from "../lifeops/time.js";
@@ -15,17 +15,6 @@ import { PROACTIVE_TASK_TAGS } from "../activity-profile/proactive-worker.js";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-async function hasAccess(
-  runtime: IAgentRuntime,
-  message: Memory,
-): Promise<boolean> {
-  if (message.entityId === runtime.agentId) {
-    return true;
-  }
-  const role = await checkSenderRole(runtime, message);
-  return Boolean(role?.isAdmin);
 }
 
 function formatAgo(ms: number): string {
@@ -49,11 +38,8 @@ export const activityProfileProvider: Provider = {
     message: Memory,
     _state: State,
   ): Promise<ProviderResult> {
-    const source = (message.content as Record<string, unknown> | undefined)?.source;
-    if (source !== "client_chat" && message.entityId !== runtime.agentId) {
-      if (!(await hasAccess(runtime, message))) {
-        return { text: "", values: {}, data: {} };
-      }
+    if (!(await hasAdminAccess(runtime, message))) {
+      return { text: "", values: {}, data: {} };
     }
 
     const timezone = resolveDefaultTimeZone();

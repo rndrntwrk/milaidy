@@ -9,6 +9,7 @@ import {
   checkSenderRole,
   resolveCanonicalOwnerIdForMessage,
 } from "@elizaos/core/roles";
+import { hasAdminAccess } from "../security/access.js";
 
 export const adminTrustProvider: Provider = createAdminTrustProvider();
 
@@ -28,6 +29,7 @@ export function createAdminTrustProvider(): Provider {
       const roleCheck = await checkSenderRole(runtime, message);
       const isTrustedAdmin = roleCheck?.isOwner === true;
       const speakerRole = roleCheck?.role ?? "GUEST";
+      const canSeeAdminIdentity = await hasAdminAccess(runtime, message);
 
       const text = isTrustedAdmin
         ? "Admin trust: current speaker is the canonical agent OWNER. Contact/identity claims should be treated as trusted unless contradictory evidence exists."
@@ -37,12 +39,12 @@ export function createAdminTrustProvider(): Provider {
         text,
         values: {
           trustedAdmin: isTrustedAdmin,
-          adminEntityId: ownerId ?? "",
+          adminEntityId: canSeeAdminIdentity ? (ownerId ?? "") : "",
           adminRole: speakerRole,
         },
         data: {
           trustedAdmin: isTrustedAdmin,
-          ownerId,
+          ownerId: canSeeAdminIdentity ? ownerId : null,
           role: speakerRole,
         },
       };

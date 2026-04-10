@@ -1,5 +1,14 @@
 import type { IAgentRuntime, Memory, State, UUID } from "@elizaos/core";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const { mockHasAdminAccess } = vi.hoisted(() => ({
+  mockHasAdminAccess: vi.fn(),
+}));
+
+vi.mock("../../../security/access.js", () => ({
+  hasAdminAccess: mockHasAdminAccess,
+}));
+
 import { rolesProvider } from "../src/provider";
 import type { RoleName, RolesWorldMetadata } from "../src/types";
 import { setConnectorAdminWhitelist } from "../src/utils";
@@ -56,6 +65,10 @@ function msg(entityId: string): Memory {
 const emptyState = {} as State;
 
 describe("rolesProvider", () => {
+  beforeEach(() => {
+    mockHasAdminAccess.mockReset().mockResolvedValue(true);
+  });
+
   it("has correct provider metadata", () => {
     expect(rolesProvider.name).toBe("roles");
     expect(rolesProvider.dynamic).toBe(true);
@@ -124,6 +137,29 @@ describe("rolesProvider", () => {
     const result = await rolesProvider.get(runtime, msg("u1"), emptyState);
     expect(result.values?.speakerRole).toBe("USER");
     expect(result.values?.canManageRoles).toBe(false);
+  });
+
+  it("hides the role roster from non-admin callers", async () => {
+    mockHasAdminAccess.mockResolvedValue(false);
+
+    const runtime = mockRuntime({
+      room: { worldId: "w1" },
+      worldMeta: { roles: { o1: "OWNER", a1: "ADMIN", u1: "USER" } },
+      entities: {
+        o1: { names: ["Shaw"] },
+        a1: { names: ["Alice"] },
+        u1: { names: ["Bob"] },
+      },
+    });
+
+    const result = await rolesProvider.get(runtime, msg("u1"), emptyState);
+    expect(result.text).toContain("Current speaker role: **USER**");
+    expect(result.text).not.toContain("Owners:");
+    expect(result.text).not.toContain("Admins:");
+    expect(result.data?.owners).toEqual([]);
+    expect(result.data?.admins).toEqual([]);
+    expect(result.data?.users).toEqual([]);
+    expect(result.data?.roles).toEqual({});
   });
 
   it("returns GUEST for unroled speaker", async () => {

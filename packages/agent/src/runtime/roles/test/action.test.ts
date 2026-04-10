@@ -1,5 +1,26 @@
 import type { IAgentRuntime, Memory, UUID } from "@elizaos/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const { loadElizaConfigMock, saveElizaConfigMock, configState } = vi.hoisted(
+  () => {
+    const configState: Record<string, unknown> = {};
+    return {
+      configState,
+      loadElizaConfigMock: vi.fn(() => configState),
+      saveElizaConfigMock: vi.fn((nextConfig: Record<string, unknown>) => {
+        const snapshot = structuredClone(nextConfig);
+        Object.keys(configState).forEach((key) => delete configState[key]);
+        Object.assign(configState, snapshot);
+      }),
+    };
+  },
+);
+
+vi.mock("../../../config/config.js", () => ({
+  loadElizaConfig: loadElizaConfigMock,
+  saveElizaConfig: saveElizaConfigMock,
+}));
+
 import { updateRoleAction } from "../src/action";
 import type { RoleName, RolesWorldMetadata } from "../src/types";
 import { setConnectorAdminWhitelist } from "../src/utils";
@@ -29,6 +50,11 @@ function createMockRuntime(
     { names: string[]; metadata?: Record<string, Record<string, string>> }
   > = {},
   settings?: Record<string, string | boolean | number | null>,
+  options?: {
+    worlds?: Array<ReturnType<typeof createMockWorld>>;
+    roomMemories?: Memory[];
+    services?: Record<string, unknown>;
+  },
 ): IAgentRuntime {
   const settingsStore = { ...(settings ?? {}) };
   // getEntitiesForRoom returns entity objects (per linter fix)
@@ -41,6 +67,7 @@ function createMockRuntime(
     agentId: "agent-uuid" as UUID,
     getRoom: vi.fn().mockResolvedValue({ worldId: world.id }),
     getWorld: vi.fn().mockResolvedValue(world),
+    getAllWorlds: vi.fn().mockResolvedValue(options?.worlds ?? [world]),
     updateWorld: vi.fn().mockResolvedValue(undefined),
     getEntitiesForRoom: vi.fn().mockResolvedValue(entityObjects),
     getEntityById: vi.fn().mockImplementation(async (id: string) => {
@@ -48,6 +75,10 @@ function createMockRuntime(
       if (!e) return null;
       return { id, names: e.names, metadata: e.metadata ?? {} };
     }),
+    getMemoriesByRoomIds: vi.fn().mockResolvedValue(options?.roomMemories ?? []),
+    getService: vi
+      .fn()
+      .mockImplementation((name: string) => options?.services?.[name] ?? null),
     getSetting: vi.fn().mockImplementation((key: string) => {
       return settingsStore[key] ?? null;
     }),
@@ -209,6 +240,17 @@ describe("updateRoleAction.validate", () => {
     });
   });
 
+  describe("boss format", () => {
+    it("accepts natural-language boss assignment", async () => {
+      expect(
+        await updateRoleAction.validate(
+          runtime,
+          createMessage("e1", "nubs is your boss"),
+        ),
+      ).toBe(true);
+    });
+  });
+
   describe("rejection cases", () => {
     it("rejects empty string", async () => {
       expect(
@@ -344,6 +386,9 @@ describe("updateRoleAction.handler", () => {
   let callback: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
+    Object.keys(configState).forEach((key) => delete configState[key]);
+    loadElizaConfigMock.mockClear();
+    saveElizaConfigMock.mockClear();
     world = createMockWorld("world-1", ownerId);
     runtime = createMockRuntime(world, {
       [ownerId]: { names: ["Shaw"] },
@@ -570,6 +615,138 @@ describe("updateRoleAction.handler", () => {
     expect(result).toEqual(expect.objectContaining({ success: true }));
   });
 
+  it("OWNER can transfer boss using a natural-language command", async () => {
+    runtime = createMockRuntime(world, {
+      [ownerId]: { names: ["Shaw"] },
+      [targetId]: {
+        names: ["nubs"],
+        metadata: { discord: { username: "nubs" } },
+      },
+    });
+
+    const result = await updateRoleAction.handler(
+      runtime,
+      createMessage(ownerId, "nubs is your boss"),
+      EMPTY_STATE,
+      undefined,
+      callback,
+    );
+
+    expect(result).toEqual(expect.objectContaining({ success: true }));
+    expect(world.metadata.ownership?.ownerId).toBe(targetId);
+    expect(world.metadata.roles?.[targetId]).toBe("OWNER");
+    expect(world.metadata.roles?.[ownerId]).toBe("ADMIN");
+    expect(runtime.setSetting).toHaveBeenCalledWith(
+      "ELIZA_ADMIN_ENTITY_ID",
+      targetId,
+    );
+    expect(saveElizaConfigMock).toHaveBeenCalledTimes(1);
+    expect((configState.agents as Record<string, unknown>).defaults).toEqual(
+      expect.objectContaining({
+        adminEntityId: targetId,
+      }),
+    );
+  });
+
+  it("uses recent room speakers to resolve a boss target not currently in the room entity list", async () => {
+    const relationships = {
+      analyzeRelationship: vi.fn().mockResolvedValue({
+        strength: 82,
+        interactionCount: 9,
+        sharedConversationWindows: 2,
+        lastInteractionAt: new Date().toISOString(),
+      }),
+      searchContacts: vi.fn().mockResolvedValue([]),
+      getContact: vi.fn().mockResolvedValue(null),
+    };
+    runtime = createMockRuntime(
+      world,
+      {
+        [ownerId]: { names: ["Shaw"] },
+        [targetId]: {
+          names: ["nubs"],
+          metadata: { discord: { username: "nubs" } },
+        },
+      },
+      undefined,
+      {
+        roomMemories: [
+          {
+            id: "recent-message-1" as UUID,
+            roomId: "room-1" as UUID,
+            entityId: targetId as UUID,
+            createdAt: Date.now() - 1000,
+            content: { text: "checking in" },
+          } as Memory,
+        ],
+        services: { relationships },
+      },
+    );
+    (
+      runtime.getEntitiesForRoom as unknown as ReturnType<typeof vi.fn>
+    ).mockResolvedValue([{ id: ownerId as UUID, names: ["Shaw"], metadata: {} }]);
+
+    const result = await updateRoleAction.handler(
+      runtime,
+      createMessage(ownerId, "nubs is your boss"),
+      EMPTY_STATE,
+      undefined,
+      callback,
+    );
+
+    expect(result).toEqual(expect.objectContaining({ success: true }));
+    expect(world.metadata.ownership?.ownerId).toBe(targetId);
+  });
+
+  it("uses rolodex strength to resolve a boss target outside the current room", async () => {
+    const relationships = {
+      analyzeRelationship: vi.fn().mockResolvedValue({
+        strength: 91,
+        interactionCount: 14,
+        sharedConversationWindows: 3,
+        lastInteractionAt: new Date().toISOString(),
+      }),
+      searchContacts: vi.fn().mockResolvedValue([
+        {
+          entityId: targetId as UUID,
+          customFields: { displayName: "Nubs" },
+        },
+      ]),
+      getContact: vi.fn().mockResolvedValue({
+        entityId: targetId as UUID,
+        customFields: { displayName: "Nubs" },
+      }),
+    };
+    runtime = createMockRuntime(
+      world,
+      {
+        [ownerId]: { names: ["Shaw"] },
+        [targetId]: {
+          names: ["Nubs Prime"],
+          metadata: { discord: { username: "nubs" } },
+        },
+      },
+      undefined,
+      {
+        services: { relationships },
+      },
+    );
+    (
+      runtime.getEntitiesForRoom as unknown as ReturnType<typeof vi.fn>
+    ).mockResolvedValue([{ id: ownerId as UUID, names: ["Shaw"], metadata: {} }]);
+
+    const result = await updateRoleAction.handler(
+      runtime,
+      createMessage(ownerId, "nubs is your boss"),
+      EMPTY_STATE,
+      undefined,
+      callback,
+    );
+
+    expect(result).toEqual(expect.objectContaining({ success: true }));
+    expect(world.metadata.ownership?.ownerId).toBe(targetId);
+  });
+
   it("returns previousRole and newRole in result data", async () => {
     setWorldRole(world, targetId, "ADMIN");
     const result = await updateRoleAction.handler(
@@ -704,6 +881,29 @@ describe("updateRoleAction.handler", () => {
       callback,
     );
     expect(result).toEqual(expect.objectContaining({ success: false }));
+  });
+
+  it("rejects ADMIN trying to assign a new boss", async () => {
+    const adminId = "admin-uuid";
+    setWorldRole(world, adminId, "ADMIN");
+    runtime = createMockRuntime(world, {
+      [ownerId]: { names: ["Shaw"] },
+      [adminId]: { names: ["mod"] },
+      [targetId]: { names: ["nubs"] },
+    });
+    const result = await updateRoleAction.handler(
+      runtime,
+      createMessage(adminId, "nubs is your boss"),
+      EMPTY_STATE,
+      undefined,
+      callback,
+    );
+    expect(result).toEqual(expect.objectContaining({ success: false }));
+    expect(callback).toHaveBeenCalledWith(
+      expect.objectContaining({
+        text: expect.stringContaining("Only the current OWNER"),
+      }),
+    );
   });
 
   it("rejects ADMIN trying to demote another ADMIN", async () => {

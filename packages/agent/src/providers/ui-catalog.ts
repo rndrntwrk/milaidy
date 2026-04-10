@@ -5,6 +5,7 @@ import {
   type Provider,
   type State,
 } from "@elizaos/core";
+import { hasAdminAccess } from "../security/access.js";
 import { COMPONENT_CATALOG } from "../shared/ui-catalog-prompt.js";
 
 // Core components to describe in detail — subset to keep context short.
@@ -65,13 +66,17 @@ export const uiCatalogProvider: Provider = {
     "credentials",
     "secret",
   ],
-  get: async (_runtime: IAgentRuntime, message: Memory, _state: State) => {
+  get: async (runtime: IAgentRuntime, message: Memory, _state: State) => {
     const channelType = message.content?.channelType;
     const isAllowedChannel =
       channelType === ChannelType.DM ||
       channelType === ChannelType.API ||
       !channelType;
     if (!isAllowedChannel) {
+      return { text: "" };
+    }
+
+    if (!(await hasAdminAccess(runtime, message))) {
       return { text: "" };
     }
 

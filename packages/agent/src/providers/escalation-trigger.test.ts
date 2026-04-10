@@ -13,6 +13,10 @@ const { mockResolveCanonicalOwnerIdForMessage } = vi.hoisted(() => ({
   mockResolveCanonicalOwnerIdForMessage: vi.fn(),
 }));
 
+const { mockHasAdminAccess } = vi.hoisted(() => ({
+  mockHasAdminAccess: vi.fn(),
+}));
+
 vi.mock("../services/escalation.js", () => ({
   EscalationService: {
     getActiveEscalationSync: mockGetActiveEscalationSync,
@@ -21,6 +25,10 @@ vi.mock("../services/escalation.js", () => ({
 
 vi.mock("@elizaos/core/roles", () => ({
   resolveCanonicalOwnerIdForMessage: mockResolveCanonicalOwnerIdForMessage,
+}));
+
+vi.mock("../security/access.js", () => ({
+  hasAdminAccess: mockHasAdminAccess,
 }));
 
 import { createEscalationTriggerProvider } from "./escalation-trigger";
@@ -75,6 +83,8 @@ describe("escalationTriggerProvider", () => {
     mockGetActiveEscalationSync.mockReturnValue(null);
     mockResolveCanonicalOwnerIdForMessage.mockReset();
     mockResolveCanonicalOwnerIdForMessage.mockResolvedValue(OWNER_ID);
+    mockHasAdminAccess.mockReset();
+    mockHasAdminAccess.mockResolvedValue(true);
   });
 
   it("has correct metadata", () => {
@@ -84,6 +94,19 @@ describe("escalationTriggerProvider", () => {
   });
 
   it("returns empty when no triggers are detected", async () => {
+    const result = await provider.get(
+      makeRuntime(),
+      makeMessage(),
+      {} as never,
+    );
+
+    expect(result.text).toBe("");
+    expect(result.values).toEqual({ hasEscalationTriggers: false });
+  });
+
+  it("returns empty for non-admin callers", async () => {
+    mockHasAdminAccess.mockResolvedValue(false);
+
     const result = await provider.get(
       makeRuntime(),
       makeMessage(),

@@ -6,6 +6,7 @@
 import { getVrmPreviewUrl } from "@miladyai/app-core/state";
 import type { StylePreset } from "@miladyai/shared/contracts/onboarding";
 import { Button } from "@miladyai/ui";
+import { useEffect, useState } from "react";
 import { useApp } from "../../state";
 
 /* ── Shared constants ─────────────────────────────────────────────────── */
@@ -101,6 +102,19 @@ export function CharacterRoster({
 }: CharacterRosterProps) {
   const { t } = useApp();
   const useWhiteBorders = variant === "onboarding";
+  const [loadedImages, setLoadedImages] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    setLoadedImages((previous) => {
+      const next: Record<string, boolean> = {};
+      for (const entry of entries) {
+        if (previous[entry.id]) {
+          next[entry.id] = true;
+        }
+      }
+      return next;
+    });
+  }, [entries]);
 
   if (entries.length === 0) {
     return (
@@ -123,8 +137,9 @@ export function CharacterRoster({
       className="flex flex-nowrap items-end justify-center gap-0 w-full max-w-[min(100%,900px)] px-4 box-border max-[600px]:!grid max-[600px]:!grid-cols-4 max-[600px]:gap-y-6 max-[600px]:gap-x-0 max-[600px]:px-[2.35rem] max-[600px]:pb-6 max-[600px]:max-w-full max-[600px]:w-full"
       data-testid={`${testIdPrefix}-roster-grid`}
     >
-      {entries.map((entry) => {
+      {entries.map((entry, index) => {
         const isSelected = selectedId === entry.id;
+        const imageLoaded = loadedImages[entry.id] === true;
 
         return (
           <Button
@@ -167,6 +182,12 @@ export function CharacterRoster({
                     style={{ clipPath: SLANT_CLIP }}
                   />
                 )}
+                {!imageLoaded && (
+                  <div
+                    aria-hidden="true"
+                    className="absolute inset-0 animate-pulse bg-[linear-gradient(110deg,rgba(255,255,255,0.08)_8%,rgba(255,255,255,0.18)_18%,rgba(255,255,255,0.08)_33%)] bg-[length:200%_100%]"
+                  />
+                )}
                 <img
                   src={
                     entry.previewUrl ??
@@ -176,7 +197,22 @@ export function CharacterRoster({
                   }
                   alt={entry.name}
                   draggable={false}
-                  className={`h-full w-full object-cover transition-transform duration-300 ease-out${isSelected ? " scale-[1.04]" : ""}`}
+                  loading={index < 4 ? "eager" : "lazy"}
+                  fetchPriority={index < 4 ? "high" : "auto"}
+                  decoding="async"
+                  onLoad={() =>
+                    setLoadedImages((previous) => ({
+                      ...previous,
+                      [entry.id]: true,
+                    }))
+                  }
+                  onError={() =>
+                    setLoadedImages((previous) => ({
+                      ...previous,
+                      [entry.id]: true,
+                    }))
+                  }
+                  className={`h-full w-full object-cover transition-[opacity,transform] duration-300 ease-out ${imageLoaded ? "opacity-100" : "opacity-0"}${isSelected ? " scale-[1.04]" : ""}`}
                 />
                 <div className="absolute inset-x-0 bottom-0">
                   <div

@@ -106,6 +106,63 @@ const DEFAULT_MEMORY_ALT_FILENAME = "memory.md";
 const WORKSPACE_TEMPLATES: Record<string, string> = {
   [DEFAULT_AGENTS_FILENAME]: `# Agents
 
+## Memory
+- Write important things to USER.md (facts about your person)
+- Write your own reflections to MEMORY.md (what you've learned, patterns you notice)
+- These files persist across conversations. Use them.
+- If you learn something new about your person, write it down immediately.
+
+## Personality
+Your personality, voice, and identity are defined in your character file
+(the system prompt). Edit that from the dashboard or settings, not here.
+`,
+  [DEFAULT_TOOLS_FILENAME]: `# Tools
+
+Tools are provided by your enabled plugins and invoked automatically.
+Check the connectors page in your dashboard to enable Discord, Telegram,
+and other integrations.
+`,
+  [DEFAULT_IDENTITY_FILENAME]: `# Identity
+
+Your personality and voice are defined in your character file (system prompt).
+Edit your character from the dashboard to change who you are.
+
+This file is for any additional context you want to maintain about yourself
+that goes beyond the character definition — things you've decided, preferences
+you've developed, or aspects of your identity that emerged over time.
+`,
+  [DEFAULT_USER_FILENAME]: `# User
+
+Your person. Learn about them over time and update this file.
+
+Nothing here yet — you just met. Pay attention and fill this in naturally.
+`,
+  [DEFAULT_HEARTBEAT_FILENAME]: `# Heartbeat
+
+Periodic check-in. Use this space for reminders, recurring checks,
+or things you want to follow up on during your next heartbeat cycle.
+`,
+  [DEFAULT_INIT_FILENAME]: `# Init
+
+Your workspace. These files are your runtime context:
+
+- **USER.md** — What you know about your person (fill this in over time)
+- **MEMORY.md** — Long-term memory (lessons, patterns, insights)
+- **AGENTS.md** — Operational notes and memory guidelines
+- **IDENTITY.md** — Emergent identity notes (your character file is the source of truth)
+- **TOOLS.md** — Available tools and plugins
+- **HEARTBEAT.md** — Reminders and periodic checks
+
+Your personality is defined in your character file (system prompt), editable
+from the dashboard. These workspace files are for runtime context that you
+build up over time through conversations.
+`,
+};
+
+const LEGACY_WORKSPACE_TEMPLATES: Partial<Record<string, string[]>> = {
+  [DEFAULT_AGENTS_FILENAME]: [
+    `# Agents
+
 You are an autonomous AI agent powered by elizaOS.
 
 ## Capabilities
@@ -122,7 +179,9 @@ You are an autonomous AI agent powered by elizaOS.
 - Use tools when they would help accomplish the user's goal
 - Respect the user's preferences and communication style
 `,
-  [DEFAULT_TOOLS_FILENAME]: `# Tools
+  ],
+  [DEFAULT_TOOLS_FILENAME]: [
+    `# Tools
 
 Available tools and capabilities for the agent.
 
@@ -138,57 +197,7 @@ Tools are invoked automatically when the agent determines
 they would help accomplish the user's goal. No manual
 configuration is required.
 `,
-  [DEFAULT_IDENTITY_FILENAME]: `# Identity
-
-Your character and personality settings.
-
-Customize this file to define your agent's personality,
-tone, and behavior style.
-`,
-  [DEFAULT_USER_FILENAME]: `# User
-
-User context and preferences.
-
-This file stores information about the user to help
-personalize interactions.
-`,
-  [DEFAULT_HEARTBEAT_FILENAME]: `# Heartbeat
-
-The heartbeat system enables autonomous agent behavior.
-
-## Scheduling
-
-When autonomy is enabled, the agent periodically evaluates
-whether to take proactive actions based on its goals,
-pending tasks, and environmental changes.
-
-## Triggers
-
-- Scheduled intervals (configurable)
-- External events from connected channels
-- System notifications and alerts
-`,
-  [DEFAULT_INIT_FILENAME]: `# Init
-
-Initial workspace setup for a new agent.
-
-## Getting Started
-
-This workspace was automatically created for your agent.
-You can customize it by editing the markdown files in this
-directory:
-
-- **AGENTS.md** — Agent behavior and capabilities
-- **TOOLS.md** — Available tools and plugins
-- **IDENTITY.md** — Character and personality
-- **USER.md** — User context and preferences
-- **HEARTBEAT.md** — Autonomous behavior settings
-
-## Configuration
-
-Agent configuration is managed through \`~/.eliza/eliza.json\`
-or the Eliza Control UI.
-`,
+  ],
 };
 
 export type WorkspaceInitFileName =
@@ -208,16 +217,29 @@ export type WorkspaceInitFile = {
   missing: boolean;
 };
 
+function normalizeBoilerplateText(value: string): string {
+  return value
+    .replace(/\r\n?/g, "\n")
+    .trim()
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .toLowerCase();
+}
+
 /**
  * Returns true if the file content matches the built-in boilerplate template.
  * Used to skip injecting generic placeholder docs into the prompt.
  */
 export function isDefaultBoilerplate(name: string, content: string): boolean {
-  const template = WORKSPACE_TEMPLATES[name];
-  if (!template) return false;
-  // Case-insensitive comparison — on-disk files may use different casing for the
-  // product name (e.g. ELIZAOS) than the current template.
-  return content.trim().toLowerCase() === template.trim().toLowerCase();
+  const templates = [
+    WORKSPACE_TEMPLATES[name],
+    ...(LEGACY_WORKSPACE_TEMPLATES[name] ?? []),
+  ].filter((template): template is string => typeof template === "string");
+  if (templates.length === 0) return false;
+  const normalizedContent = normalizeBoilerplateText(content);
+  return templates.some(
+    (template) => normalizeBoilerplateText(template) === normalizedContent,
+  );
 }
 
 type ElizaCoreWorkspaceHelpers = {

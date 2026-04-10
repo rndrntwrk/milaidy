@@ -16,6 +16,8 @@ beforeEach(() => {
   delete process.env.MILADY_CLOUD_PROVISIONED;
   delete process.env.ELIZA_CLOUD_PROVISIONED;
   delete process.env.STEWARD_AGENT_TOKEN;
+  delete process.env.ELIZAOS_CLOUD_ENABLED;
+  delete process.env.ELIZAOS_CLOUD_API_KEY;
 });
 
 afterEach(() => {
@@ -102,6 +104,23 @@ describe("auth-routes", () => {
       process.env.MILADY_CLOUD_PROVISIONED = "1";
       process.env.STEWARD_AGENT_TOKEN = "steward-token";
       process.env.ELIZA_API_TOKEN = "test-token-secret";
+
+      const ctx = buildCtx("GET", "/api/auth/status");
+      await handleAuthRoutes(ctx);
+      const payload = (ctx.json as ReturnType<typeof vi.fn>).mock.calls[0][1];
+
+      expect(payload).toEqual({
+        required: false,
+        pairingEnabled: false,
+        expiresAt: null,
+      });
+    });
+
+    test("suppresses local auth for cloud API-key provisioned containers", async () => {
+      process.env.MILADY_CLOUD_PROVISIONED = "1";
+      process.env.ELIZAOS_CLOUD_ENABLED = "true";
+      process.env.ELIZAOS_CLOUD_API_KEY = "eliza_test_key";
+      delete process.env.ELIZA_API_TOKEN;
 
       const ctx = buildCtx("GET", "/api/auth/status");
       await handleAuthRoutes(ctx);

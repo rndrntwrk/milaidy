@@ -71,7 +71,7 @@ All media actions use the configured provider (Eliza Cloud by default, or FAL/Op
 |--------|-------------|
 | `PLAY_EMOTE` | Play an emote animation on the avatar. Looks up the emote in the catalog and POSTs to the local API. |
 | `INSTALL_PLUGIN` | Install a plugin from the registry via `POST /api/plugins/install`. Auto-restarts to load it. |
-| `RUN_IN_TERMINAL` | Execute a shell command via `POST /api/terminal/run`. Output is broadcast via WebSocket. |
+| `SHELL_COMMAND` | Execute a shell command via `POST /api/terminal/run`. Output is broadcast via WebSocket. |
 | `LOG_LEVEL` | Set the per-room log level for the current session (`trace`, `debug`, `info`, `warn`, `error`). |
 
 ## Custom Actions

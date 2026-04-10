@@ -1627,7 +1627,7 @@ describe("useOnboardingCallbacks", () => {
     expect(setTab).toHaveBeenCalledWith("chat");
   });
 
-  it("completes Eliza Cloud onboarding without queuing Google setup work", async () => {
+  it("completes connected Eliza Cloud onboarding without provisioning a sandbox", async () => {
     const submitOnboarding = vi.fn().mockResolvedValue(undefined);
     const provisionCloudSandbox = vi.fn().mockResolvedValue(undefined);
     const addDeferredOnboardingTask = vi.fn();
@@ -1702,7 +1702,8 @@ describe("useOnboardingCallbacks", () => {
       await result.current.callbacks.handleOnboardingFinish();
     });
 
-    expect(provisionCloudSandbox).toHaveBeenCalledTimes(1);
+    expect(provisionCloudSandbox).not.toHaveBeenCalled();
+    expect(submitOnboarding).toHaveBeenCalledTimes(1);
     expect(addDeferredOnboardingTask).not.toHaveBeenCalled();
     expect(setOnboardingComplete).toHaveBeenCalledWith(true);
     expect(setTab).toHaveBeenCalledWith("chat");
@@ -1826,7 +1827,7 @@ describe("useOnboardingCallbacks", () => {
           uiLanguage: "en",
           selectedVrmIndex: 1,
           walletConfig: {},
-          elizaCloudConnected: true,
+          elizaCloudConnected: false,
           setActionNotice: vi.fn(),
           retryStartup: vi.fn(),
           forceLocalBootstrapRef: { current: false },
@@ -1860,6 +1861,7 @@ describe("useOnboardingCallbacks", () => {
       await result.current.callbacks.handleOnboardingFinish();
     });
 
+    expect(provisionCloudSandbox).toHaveBeenCalledTimes(1);
     expect(submitOnboarding).toHaveBeenCalledTimes(1);
     expect(logSpy).toHaveBeenCalledWith(
       "[Sandbox] provisioning: warming sandbox",

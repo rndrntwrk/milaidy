@@ -15,12 +15,13 @@ import { lifeAction } from "../actions/life.js";
 import { restartAction } from "../actions/restart.js";
 import { sendAdminMessageAction } from "../actions/send-admin-message.js";
 import { setUserNameAction } from "../actions/set-user-name.js";
+import { webSearchAction } from "../actions/web-search.js";
 import {
   addRegisteredSkillSlug,
   clearRegisteredSkillSlugs,
   skillCommandAction,
 } from "../actions/skill-command.js";
-import { terminalAction } from "../actions/terminal.js";
+import { terminalAction } from "../actions/terminal.ts";
 import {
   ensureProactiveAgentTask,
   registerProactiveTaskWorker,
@@ -221,6 +222,7 @@ export function createElizaPlugin(config?: ElizaPluginConfig): Plugin {
       lifeAction,
       setUserNameAction,
       skillCommandAction,
+      webSearchAction,
     ],
   };
 

@@ -12,6 +12,7 @@ import {
   stringToUuid,
   type UUID,
 } from "@elizaos/core";
+import { hasOwnerAccess } from "../security/access.js";
 import { parsePositiveInteger } from "../utils/number-parsing.js";
 import {
   getTriggerLimit,
@@ -132,6 +133,7 @@ export const createTriggerTaskAction: Action = {
     "Create an autonomous trigger task that executes on a schedule (interval, once, or cron). Use when the user wants to schedule, automate, or create a recurring/timed task, trigger, or heartbeat.",
   validate: async (runtime, message) => {
     if (!triggersFeatureEnabled(runtime)) return false;
+    if (!(await hasOwnerAccess(runtime, message))) return false;
 
     // Permissive keyword check across the current message AND recent
     // conversation so that confirmations like "yes" still match when the
@@ -178,6 +180,14 @@ export const createTriggerTaskAction: Action = {
       return {
         success: false,
         text: "Triggers are disabled by configuration.",
+      };
+    }
+
+    if (!(await hasOwnerAccess(runtime, message))) {
+      return {
+        success: false,
+        text:
+          "Permission denied: only the owner may create autonomous trigger tasks.",
       };
     }
 

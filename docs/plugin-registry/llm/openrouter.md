@@ -102,7 +102,6 @@ Browse all models at [openrouter.ai/models](https://openrouter.ai/models).
 |-------------------|------------------------|
 | `TEXT_SMALL` | `anthropic/claude-haiku-4` |
 | `TEXT_LARGE` | `anthropic/claude-sonnet-4-5` |
-| `TEXT_REASONING_LARGE` | `anthropic/claude-opus-4` |
 
 ## Features
 

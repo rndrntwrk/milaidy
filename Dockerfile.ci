@@ -38,6 +38,14 @@ RUN if [ -n "${VERSION_CLEAN}" ]; then \
   "; \
   fi
 
+# Remove unbuilt orchestrator (desktop-only, crashes tsx if dist/ missing)
+RUN rm -rf \
+  node_modules/@elizaos/plugin-agent-orchestrator \
+  node_modules/.bun/@elizaos+plugin-agent-orchestrator@* \
+  packages/agent/node_modules/@elizaos/plugin-agent-orchestrator \
+  plugins/plugin-agent-orchestrator \
+  2>/dev/null || true
+
 # Safe pruning only (GPU binaries + obvious dead weight)
 RUN rm -rf \
   node_modules/.bun/@node-llama-cpp+linux-x64-cuda-ext@* \
@@ -73,7 +81,7 @@ LABEL org.opencontainers.image.title="${OCI_TITLE}" \
       org.opencontainers.image.version="${VERSION_CLEAN}" \
       org.opencontainers.image.revision="${REVISION}" \
       org.opencontainers.image.licenses="${OCI_LICENSES}"
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl ffmpeg libopus0 \
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl ffmpeg libopus-dev \
   && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=pruner /app /app
@@ -91,6 +99,9 @@ RUN mkdir -p /tmp/esbuild-linux \
 
 ENV NODE_ENV=production
 ENV ESBUILD_BINARY_PATH=/usr/local/bin/esbuild
+# Bake the cloud image version so the version-resolver picks it up at runtime
+# (takes priority over package.json patching which can be fragile)
+ENV ELIZA_BUNDLED_VERSION=${VERSION_CLEAN}
 # MILADY_PORT is the canonical name; ELIZA_PORT kept for backward compat
 ENV MILADY_PORT=2138
 ENV ELIZA_PORT=${MILADY_PORT}

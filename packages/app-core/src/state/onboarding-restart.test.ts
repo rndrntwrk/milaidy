@@ -6,7 +6,7 @@ describe("restartAgentAfterOnboarding", () => {
     const status = {
       state: "running",
       agentName: "Momo",
-      model: "moonshotai/kimi-k2-0905",
+      model: "anthropic/claude-sonnet-4.6",
       startedAt: 123,
       uptime: 456,
     } as const;

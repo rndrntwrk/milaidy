@@ -93,8 +93,6 @@ export OPENAI_API_KEY=sk-...
 |-------------------|-------------|
 | `TEXT_SMALL` | `gpt-4o-mini` |
 | `TEXT_LARGE` | `gpt-4o` |
-| `TEXT_REASONING_SMALL` | `o1-mini` |
-| `TEXT_REASONING_LARGE` | `o1` |
 | `TEXT_EMBEDDING` | `text-embedding-3-small` |
 | `IMAGE` | `dall-e-3` |
 | `TRANSCRIPTION` | `whisper-1` |

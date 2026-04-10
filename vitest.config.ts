@@ -95,6 +95,17 @@ export default defineConfig({
         ),
       },
       {
+        // App-core unit tests mock this plugin, but the specifier still has to
+        // resolve during module graph construction under the root Vitest config.
+        find: "@miladyai/capacitor-agent",
+        replacement: path.join(
+          repoRoot,
+          "test",
+          "stubs",
+          "empty-module.mjs",
+        ),
+      },
+      {
         find: "milady/plugin-sdk",
         replacement: path.join(repoRoot, "src", "plugin-sdk", "index.ts"),
       },

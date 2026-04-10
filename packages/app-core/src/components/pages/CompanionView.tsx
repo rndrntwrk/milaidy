@@ -112,8 +112,11 @@ const CompanionViewOverlay = memo(function CompanionViewOverlay() {
   );
 
   useEffect(() => {
-    setState("chatMode", "simple");
-  }, [setState]);
+    setState(
+      "chatMode",
+      elizaCloudEnabled || elizaCloudConnected ? "power" : "simple",
+    );
+  }, [elizaCloudConnected, elizaCloudEnabled, setState]);
 
   const hasInterruptedAssistant = useMemo(
     () =>

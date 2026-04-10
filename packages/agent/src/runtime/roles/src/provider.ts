@@ -12,6 +12,7 @@ import {
   type State,
   type UUID,
 } from "@elizaos/core";
+import { hasAdminAccess } from "../../../security/access.js";
 import type { RoleName, RolesWorldMetadata } from "./types";
 import {
   getEntityRole,
@@ -62,6 +63,7 @@ export const rolesProvider: Provider = {
     const storedSpeakerRole = getEntityRole(metadata, message.entityId);
     const roles = { ...(metadata.roles ?? {}) };
     const canonicalOwnerId = resolveCanonicalOwnerId(runtime, metadata);
+    const canSeeRoleRoster = await hasAdminAccess(runtime, message);
 
     if (hasConfiguredCanonicalOwner(runtime) && canonicalOwnerId) {
       for (const [entityId, role] of Object.entries(roles)) {
@@ -115,19 +117,19 @@ export const rolesProvider: Provider = {
       return results;
     };
 
-    const ownerNames = await resolveNames(owners);
-    const adminNames = await resolveNames(admins);
-    const userNames = await resolveNames(users);
+    const ownerNames = canSeeRoleRoster ? await resolveNames(owners) : [];
+    const adminNames = canSeeRoleRoster ? await resolveNames(admins) : [];
+    const userNames = canSeeRoleRoster ? await resolveNames(users) : [];
 
     let text = `## Roles\n`;
     text += `Current speaker role: **${speakerRole}**\n`;
-    if (ownerNames.length > 0) {
+    if (canSeeRoleRoster && ownerNames.length > 0) {
       text += `Owners: ${ownerNames.join(", ")}\n`;
     }
-    if (adminNames.length > 0) {
+    if (canSeeRoleRoster && adminNames.length > 0) {
       text += `Admins: ${adminNames.join(", ")}\n`;
     }
-    if (userNames.length > 0) {
+    if (canSeeRoleRoster && userNames.length > 0) {
       text += `Users: ${userNames.join(", ")}\n`;
     }
 
@@ -142,17 +144,17 @@ export const rolesProvider: Provider = {
       values: {
         speakerRole,
         canManageRoles: canManage,
-        ownerCount: owners.length,
-        adminCount: admins.length,
-        userCount: users.length,
+        ownerCount: canSeeRoleRoster ? owners.length : 0,
+        adminCount: canSeeRoleRoster ? admins.length : 0,
+        userCount: canSeeRoleRoster ? users.length : 0,
       },
       data: {
         speakerRole,
         canManageRoles: canManage,
-        owners,
-        admins,
-        users,
-        roles,
+        owners: canSeeRoleRoster ? owners : [],
+        admins: canSeeRoleRoster ? admins : [],
+        users: canSeeRoleRoster ? users : [],
+        roles: canSeeRoleRoster ? roles : {},
       },
     };
   },

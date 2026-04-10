@@ -1,13 +1,9 @@
-import type {
-  Action,
-  Memory,
-  ProviderDataRecord,
-} from "@elizaos/core";
-import { checkSenderPrivateAccess } from "@elizaos/core/roles";
+import type { Action, Memory, ProviderDataRecord } from "@elizaos/core";
 import type {
   LifeOpsCalendarEvent,
   LifeOpsCalendarFeed,
   LifeOpsGmailBatchReplyDraftsFeed,
+  LifeOpsGmailMessageSummary,
   LifeOpsGmailNeedsResponseFeed,
   LifeOpsGmailReplyDraft,
   LifeOpsGmailSearchFeed,
@@ -17,6 +13,7 @@ import type {
   LifeOpsOverview,
 } from "@miladyai/shared/contracts/lifeops";
 import type { LifeOpsService } from "../lifeops/service.js";
+import { hasPrivateAccess } from "../security/access.js";
 
 export const INTERNAL_URL = new URL("http://127.0.0.1/");
 
@@ -39,11 +36,7 @@ export async function hasLifeOpsAccess(
   runtime: Parameters<NonNullable<Action["validate"]>>[0],
   message: Memory,
 ): Promise<boolean> {
-  if (message.entityId === runtime.agentId) {
-    return true;
-  }
-  const access = await checkSenderPrivateAccess(runtime, message);
-  return access?.hasPrivateAccess === true;
+  return hasPrivateAccess(runtime, message);
 }
 
 export function detailString(
@@ -291,13 +284,81 @@ export function formatEmailNeedsResponse(
 }
 
 function describeEmailSearchQuery(query: string): string {
-  const fromMatch = query.match(/^from:(.+)$/i);
-  if (!fromMatch) {
+  const parts = query
+    .trim()
+    .split(/\s+/)
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+  if (parts.length === 0) {
     return `"${query}"`;
   }
-  const sender = fromMatch[1].trim().replace(/^"|"$/g, "");
-  return `sender "${sender}"`;
+
+  const sender = parts
+    .find((part) => /^from:/i.test(part))
+    ?.replace(/^from:/i, "")
+    .replace(/^"|"$/g, "");
+  const newerThan = parts
+    .find((part) => /^newer_than:/i.test(part))
+    ?.replace(/^newer_than:/i, "");
+  const before = parts
+    .find((part) => /^before:/i.test(part))
+    ?.replace(/^before:/i, "");
+  const after = parts
+    .find((part) => /^after:/i.test(part))
+    ?.replace(/^after:/i, "");
+  const isUnread = parts.some((part) => /^is:unread$/i.test(part));
+  const isImportant = parts.some((part) => /^is:important$/i.test(part));
+  const keywords = parts.filter(
+    (part) =>
+      !/^(from|newer_than|before|after|is):/i.test(part) &&
+      part.trim().length > 0,
+  );
+
+  const descriptions: string[] = [];
+  const formatRelativeWindow = (value: string) => {
+    const match = value.match(/^(\d+)([dmy])$/i);
+    if (!match) {
+      return value;
+    }
+    const unit =
+      match[2].toLowerCase() === "d"
+        ? "day"
+        : match[2].toLowerCase() === "m"
+          ? "month"
+          : "year";
+    const amount = Number(match[1]);
+    return `${amount} ${unit}${amount === 1 ? "" : "s"}`;
+  };
+  if (sender) {
+    descriptions.push(`sender "${sender}"`);
+  }
+  if (keywords.length > 0) {
+    descriptions.push(`matching "${keywords.join(" ")}"`);
+  }
+  if (newerThan) {
+    descriptions.push(`from the last ${formatRelativeWindow(newerThan)}`);
+  }
+  if (after) {
+    descriptions.push(`after ${after}`);
+  }
+  if (before) {
+    descriptions.push(`before ${before}`);
+  }
+  if (isUnread) {
+    descriptions.push("that are unread");
+  }
+  if (isImportant) {
+    descriptions.push("that are marked important");
+  }
+
+  return descriptions.length > 0 ? descriptions.join(" ") : `"${query}"`;
 }
+
+type LifeOpsGmailReadResultLike = {
+  query: string | null;
+  message: LifeOpsGmailMessageSummary;
+  bodyText: string;
+};
 
 export function formatEmailSearch(feed: LifeOpsGmailSearchFeed): string {
   const queryDescription = describeEmailSearchQuery(feed.query);
@@ -325,6 +386,32 @@ export function formatEmailSearch(feed: LifeOpsGmailSearchFeed): string {
     }
   }
   return lines.join("\n");
+}
+
+export function formatEmailRead(result: LifeOpsGmailReadResultLike): string {
+  const from = result.message.from || result.message.fromEmail || "unknown";
+  const bodyText = result.bodyText.trim();
+  const maxChars = 2_500;
+  const truncated = bodyText.length > maxChars;
+  const preview = truncated
+    ? `${bodyText.slice(0, maxChars).trimEnd()}\n\n[truncated]`
+    : bodyText;
+  const lines = [
+    `**${result.message.subject}** from ${from} · ${formatRelativeTime(result.message.receivedAt)}`,
+  ];
+  if (result.query) {
+    lines.push(`Resolved from ${describeEmailSearchQuery(result.query)}.`);
+  }
+  if (preview.length > 0) {
+    lines.push(preview);
+  } else if (result.message.snippet) {
+    lines.push(
+      `No readable body was available. Snippet: ${result.message.snippet}`,
+    );
+  } else {
+    lines.push("No readable body was available for that email.");
+  }
+  return lines.join("\n\n");
 }
 
 export function formatGmailReplyDraft(draft: LifeOpsGmailReplyDraft): string {
@@ -357,7 +444,9 @@ export function formatGmailBatchReplyDrafts(
     `Drafted ${batch.summary.totalCount} Gmail repl${batch.summary.totalCount === 1 ? "y" : "ies"}.`,
   ];
   for (const draft of batch.drafts.slice(0, 5)) {
-    lines.push(`- **${draft.subject}** → ${draft.to.join(", ") || "reply recipients"}`);
+    lines.push(
+      `- **${draft.subject}** → ${draft.to.join(", ") || "reply recipients"}`,
+    );
   }
   if (batch.summary.requiresConfirmationCount > 0) {
     lines.push(

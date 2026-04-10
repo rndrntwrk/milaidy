@@ -6,13 +6,15 @@
  */
 
 import fs from "node:fs";
-import http from "node:http";
+import type http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { logger } from "@elizaos/core";
+import { resolveApiToken } from "../config/runtime-env.js";
+import { isCloudProvisionedContainer } from "./cloud-provisioning.js";
+import { sendJsonError } from "./http-helpers.js";
 import { getOrReadCachedFile } from "./memory-bounds.js";
 import { findOwnPackageRoot } from "./server-helpers.js";
-import { sendJsonError } from "./http-helpers.js";
 
 // ---------------------------------------------------------------------------
 // MIME types
@@ -136,17 +138,24 @@ function getCachedFile(filePath: string, mtimeMs: number): Buffer {
 export function injectApiBaseIntoHtml(
   html: Buffer,
   externalBase?: string | null,
+  opts?: { apiToken?: string | null },
 ): Buffer {
   const trimmedBase = externalBase?.trim();
-  if (!trimmedBase) return html;
+  const trimmedToken = opts?.apiToken?.trim();
+  if (!trimmedBase && !trimmedToken) return html;
 
   const headCloseTag = "</head>";
   const headCloseIndex = html.indexOf(headCloseTag);
   if (headCloseIndex < 0) return html;
 
-  const injection = Buffer.from(
-    `<script>window.__ELIZA_API_BASE__=${JSON.stringify(trimmedBase)};</script>`,
-  );
+  const parts: string[] = [];
+  if (trimmedBase) {
+    parts.push(`window.__ELIZA_API_BASE__=${JSON.stringify(trimmedBase)};`);
+  }
+  if (trimmedToken) {
+    parts.push(`window.__ELIZA_API_TOKEN__=${JSON.stringify(trimmedToken)};`);
+  }
+  const injection = Buffer.from(`<script>${parts.join("")}</script>`);
 
   return Buffer.concat([
     html.subarray(0, headCloseIndex),
@@ -193,9 +202,31 @@ export function serveStaticUi(
     if (stat.isFile()) {
       const ext = path.extname(candidatePath).toLowerCase();
       const body = getCachedFile(candidatePath, stat.mtimeMs);
+      const isPreviewOrBinaryAsset =
+        relativePath.startsWith("vrms/previews/") ||
+        relativePath.startsWith("vrms/backgrounds/") ||
+        [
+          ".png",
+          ".jpg",
+          ".jpeg",
+          ".gif",
+          ".webp",
+          ".avif",
+          ".svg",
+          ".mp3",
+          ".wav",
+          ".ogg",
+          ".m4a",
+          ".aac",
+          ".flac",
+          ".glb",
+          ".spz",
+        ].includes(ext);
       const cacheControl = relativePath.startsWith("assets/")
         ? "public, max-age=31536000, immutable"
-        : ext === ".vrm" || relativePath.endsWith(".vrm.gz")
+        : ext === ".vrm" ||
+            relativePath.endsWith(".vrm.gz") ||
+            isPreviewOrBinaryAsset
           ? "public, max-age=86400"
           : "public, max-age=0, must-revalidate";
       sendStaticResponse(
@@ -224,11 +255,16 @@ export function serveStaticUi(
   if (!uiIndexHtml) return false;
 
   // When served behind a reverse proxy that rewrites the app under a path prefix,
-  // inject the
-  // API base so the UI client sends requests to the correct path prefix.
+  // inject the API base so the UI client sends requests to the correct path prefix.
+  // For cloud-provisioned containers, also inject the API token so the browser
+  // client can authenticate without requiring a pairing flow.
+  const cloudToken = isCloudProvisionedContainer()
+    ? resolveApiToken(process.env)
+    : null;
   const html = injectApiBaseIntoHtml(
     uiIndexHtml,
     process.env.ELIZA_EXTERNAL_BASE_URL,
+    cloudToken ? { apiToken: cloudToken } : undefined,
   );
 
   sendStaticResponse(

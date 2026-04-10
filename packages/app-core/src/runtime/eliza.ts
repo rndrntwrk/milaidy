@@ -1,5 +1,8 @@
 import "../utils/namespace-defaults.js";
 import { createRequire } from "node:module";
+import path from "node:path";
+import process from "node:process";
+import { pathToFileURL } from "node:url";
 import {
   type AgentRuntime,
   AutonomyService,
@@ -66,6 +69,8 @@ const INTERNAL_CHANNEL_PLUGIN_OVERRIDES = {
 const AGENT_ORCHESTRATOR_PLUGIN = "@elizaos/plugin-agent-orchestrator";
 const EDGE_TTS_PLUGIN = "@elizaos/plugin-edge-tts";
 const require = createRequire(import.meta.url);
+const DIRECT_HELP_FLAGS = new Set(["-h", "--help", "help"]);
+const DIRECT_VERSION_FLAGS = new Set(["-v", "-V", "--version", "version"]);
 
 export function isMiladyEdgeTtsDisabled(
   config: Parameters<typeof upstreamCollectPluginNames>[0],
@@ -937,5 +942,50 @@ export async function startEliza(
     return runtime ? await repairRuntimeAfterBoot(runtime) : runtime;
   } finally {
     syncElizaEnvToMilady();
+  }
+}
+
+function isDirectRuntimeRun(): boolean {
+  const scriptArg = process.argv[1];
+  if (!scriptArg) {
+    return false;
+  }
+  return import.meta.url === pathToFileURL(path.resolve(scriptArg)).href;
+}
+
+function printDirectRuntimeHelp(): void {
+  console.log(`milady runtime
+
+Usage:
+  bun packages/app-core/src/runtime/eliza.ts
+  bun run start:eliza
+
+Flags:
+  --help, -h       Show this help
+  --version, -v    Show the app-core package version
+
+For full CLI help, run:
+  bun run milady --help`);
+}
+
+function printDirectRuntimeVersion(): void {
+  const pkg = require("../../package.json") as { version?: string };
+  console.log(pkg.version ?? "unknown");
+}
+
+if (isDirectRuntimeRun()) {
+  const command = process.argv[2];
+  if (DIRECT_HELP_FLAGS.has(command ?? "")) {
+    printDirectRuntimeHelp();
+  } else if (DIRECT_VERSION_FLAGS.has(command ?? "")) {
+    printDirectRuntimeVersion();
+  } else {
+    startEliza().catch((err) => {
+      console.error(
+        "[milady] Fatal error:",
+        err instanceof Error ? (err.stack ?? err.message) : err,
+      );
+      process.exit(1);
+    });
   }
 }

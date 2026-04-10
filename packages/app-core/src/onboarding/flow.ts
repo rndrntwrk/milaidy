@@ -79,6 +79,33 @@ export function getOnboardingNavMetas(
   return [...ONBOARDING_STEPS];
 }
 
+export function shouldSkipConnectionStepsForCloudProvisionedContainer(args: {
+  currentStep: OnboardingStep;
+  cloudProvisionedContainer: boolean;
+}): boolean {
+  return args.cloudProvisionedContainer && args.currentStep === "identity";
+}
+
+export function shouldUseCloudOnboardingFastTrack(args: {
+  cloudProvisionedContainer: boolean;
+  elizaCloudConnected: boolean;
+  onboardingRunMode: "local" | "cloud" | "";
+  onboardingProvider: string;
+}): boolean {
+  if (args.cloudProvisionedContainer) {
+    return true;
+  }
+
+  return (
+    args.elizaCloudConnected &&
+    !(
+      args.onboardingRunMode === "local" &&
+      args.onboardingProvider &&
+      args.onboardingProvider !== "elizacloud"
+    )
+  );
+}
+
 /** Flamina companion guide topic for advanced onboarding mode, or null. */
 export function getFlaminaTopicForOnboardingStep(
   step: OnboardingStep,

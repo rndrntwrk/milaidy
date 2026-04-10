@@ -29,6 +29,7 @@ const mocks = vi.hoisted(() => {
   return {
     LifeOpsServiceError: _LifeOpsServiceError,
     checkSenderPrivateAccess: vi.fn(),
+    resolveCanonicalOwnerIdForMessage: vi.fn(),
     createDefinition: vi.fn(),
     createGoal: vi.fn(),
     updateDefinition: vi.fn(),
@@ -51,6 +52,7 @@ const mocks = vi.hoisted(() => {
 
 vi.mock("@elizaos/core/roles", () => ({
   checkSenderPrivateAccess: mocks.checkSenderPrivateAccess,
+  resolveCanonicalOwnerIdForMessage: mocks.resolveCanonicalOwnerIdForMessage,
 }));
 
 vi.mock("../lifeops/service.js", () => ({

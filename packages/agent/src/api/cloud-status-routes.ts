@@ -7,6 +7,7 @@ import { isCloudInferenceSelectedInConfig } from "@miladyai/shared/contracts/onb
 import { resolveCloudApiBaseUrl as resolveCanonicalCloudApiBaseUrl } from "../cloud/base-url.js";
 import { validateCloudBaseUrl } from "../cloud/validate-url.js";
 import type { RouteHelpers, RouteRequestMeta } from "./route-helpers.js";
+import { resolveCloudApiKey } from "./wallet-rpc.js";
 
 const DEFAULT_CLOUD_API_BASE_URL = "https://www.elizacloud.ai/api/v1";
 const CLOUD_BILLING_URL =
@@ -100,7 +101,8 @@ export async function handleCloudStatusRoutes(
       config as Record<string, unknown>,
       "tts",
     );
-    const hasApiKey = Boolean(config.cloud?.apiKey?.trim());
+    const configApiKey = resolveCloudApiKey(config);
+    const hasApiKey = Boolean(configApiKey);
     const cloudAuth = runtime
       ? runtime.getService<Service & CloudAuthIdentityService>("CLOUD_AUTH")
       : null;
@@ -151,7 +153,7 @@ export async function handleCloudStatusRoutes(
     const cloudAuth = runtime
       ? runtime.getService<Service & CloudAuthCreditsService>("CLOUD_AUTH")
       : null;
-    const configApiKey = config.cloud?.apiKey?.trim();
+    const configApiKey = resolveCloudApiKey(config);
 
     if (!cloudAuth || !cloudAuth.isAuthenticated()) {
       if (!configApiKey) {

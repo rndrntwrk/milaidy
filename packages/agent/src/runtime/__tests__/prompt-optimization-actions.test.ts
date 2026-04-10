@@ -93,7 +93,7 @@ const SAMPLE_ACTIONS_BLOCK = `<actions>
     </params>
   </action>
   <action>
-    <name>RUN_IN_TERMINAL</name>
+    <name>SHELL_COMMAND</name>
     <description>Run a shell command in the terminal.</description>
     <params>
       <param>
@@ -319,14 +319,14 @@ describe("buildFullParamActionSet", () => {
 
   it("coding intent implies terminal + issues", () => {
     const actions = buildFullParamActionSet(["coding"]);
-    expect(actions.has("RUN_IN_TERMINAL")).toBe(true);
+    expect(actions.has("SHELL_COMMAND")).toBe(true);
     expect(actions.has("RESTART_AGENT")).toBe(true);
     expect(actions.has("MANAGE_ISSUES")).toBe(true);
   });
 
   it("terminal intent only includes terminal actions", () => {
     const actions = buildFullParamActionSet(["terminal"]);
-    expect(actions.has("RUN_IN_TERMINAL")).toBe(true);
+    expect(actions.has("SHELL_COMMAND")).toBe(true);
     expect(actions.has("RESTART_AGENT")).toBe(true);
     expect(actions.has("CREATE_TASK")).toBe(false);
     expect(actions.has("PLAY_EMOTE")).toBe(false);
@@ -340,7 +340,7 @@ describe("buildFullParamActionSet", () => {
 
   it("multiple intents combine their action sets", () => {
     const actions = buildFullParamActionSet(["terminal", "emote"]);
-    expect(actions.has("RUN_IN_TERMINAL")).toBe(true);
+    expect(actions.has("SHELL_COMMAND")).toBe(true);
     expect(actions.has("PLAY_EMOTE")).toBe(true);
   });
 });
@@ -361,7 +361,7 @@ describe("validateIntentActionMap", () => {
         "LIST_AGENTS",
         "SEND_TO_AGENT",
         "STOP_AGENT",
-        "RUN_IN_TERMINAL",
+        "SHELL_COMMAND",
         "RESTART_AGENT",
         "MANAGE_ISSUES",
         "PLAY_EMOTE",
@@ -384,10 +384,10 @@ describe("compactActionsForIntent", () => {
     const prompt = buildPrompt("Run npm install");
     const result = compactActionsForIntent(prompt);
 
-    // RUN_IN_TERMINAL should keep <params>
-    expect(result).toContain("<name>RUN_IN_TERMINAL</name>");
+    // SHELL_COMMAND should keep <params>
+    expect(result).toContain("<name>SHELL_COMMAND</name>");
     expect(result).toMatch(
-      /RUN_IN_TERMINAL[\s\S]*?<params>[\s\S]*?command[\s\S]*?<\/params>/,
+      /SHELL_COMMAND[\s\S]*?<params>[\s\S]*?command[\s\S]*?<\/params>/,
     );
 
     // CREATE_TASK should NOT have <params> (not terminal intent)
@@ -423,9 +423,9 @@ describe("compactActionsForIntent", () => {
       /MANAGE_ISSUES[\s\S]*?<params>[\s\S]*?operation[\s\S]*?<\/params>/,
     );
 
-    // RUN_IN_TERMINAL should keep <params> (coding implies terminal)
+    // SHELL_COMMAND should keep <params> (coding implies terminal)
     expect(result).toMatch(
-      /RUN_IN_TERMINAL[\s\S]*?<params>[\s\S]*?command[\s\S]*?<\/params>/,
+      /SHELL_COMMAND[\s\S]*?<params>[\s\S]*?command[\s\S]*?<\/params>/,
     );
 
     // PLAY_EMOTE should NOT have <params>
@@ -455,7 +455,7 @@ describe("compactActionsForIntent", () => {
       "IGNORE",
       "CREATE_TASK",
       "MANAGE_ISSUES",
-      "RUN_IN_TERMINAL",
+      "SHELL_COMMAND",
       "PLAY_EMOTE",
       "FINALIZE_WORKSPACE",
     ]) {

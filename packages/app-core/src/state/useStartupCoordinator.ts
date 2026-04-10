@@ -15,8 +15,6 @@
  */
 
 import { useCallback, useEffect, useReducer, useRef } from "react";
-import { client } from "../api";
-import { detectExistingOnboardingConnection } from "./onboarding-bootstrap";
 import { loadPersistedOnboardingComplete } from "./persistence";
 import {
   INITIAL_STARTUP_STATE,
@@ -120,6 +118,7 @@ export function useStartupCoordinator(
   }, [legacyPhase, depsReady]);
 
   // ── Phase: splash — auto-skip for returning users, mark loaded for new users
+  // Fresh installs stay on splash until the user explicitly continues.
   useEffect(() => {
     if (state.phase !== "splash") return;
     if (!depsReady) return;
@@ -128,22 +127,7 @@ export function useStartupCoordinator(
       dispatch({ type: "SPLASH_CONTINUE" });
       return;
     }
-
-    // No localStorage evidence — probe the backend for headless/VPS setups
-    // where config was set via files without going through UI onboarding.
-    const cancelled = { current: false };
-    detectExistingOnboardingConnection({ client, timeoutMs: 3_500 })
-      .then((result) => {
-        if (cancelled.current) return;
-        dispatch({ type: result ? "SPLASH_CONTINUE" : "SPLASH_LOADED" });
-      })
-      .catch(() => {
-        if (!cancelled.current) dispatch({ type: "SPLASH_LOADED" });
-      });
-
-    return () => {
-      cancelled.current = true;
-    };
+    dispatch({ type: "SPLASH_LOADED" });
   }, [state.phase, depsReady]);
 
   // ── Phase: restoring-session ────────────────────────────────────

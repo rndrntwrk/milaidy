@@ -52,7 +52,7 @@ export function getModelOptions(): {
         id: "anthropic/claude-haiku-4.5",
         name: "Claude Haiku 4.5",
         provider: "Anthropic",
-        description: "Fast Claude model.",
+        description: "Fast Claude for lightweight tasks.",
       },
       // Google
       {
@@ -67,22 +67,9 @@ export function getModelOptions(): {
         provider: "Google",
         description: "Fast and smart.",
       },
-      {
-        id: "google/gemini-2.0-flash",
-        name: "Gemini 2.0 Flash",
-        provider: "Google",
-        description: "Multimodal flash model.",
-      },
-      // Moonshot AI
-      {
-        id: "moonshotai/kimi-k2-turbo",
-        name: "Kimi K2 Turbo",
-        provider: "Moonshot AI",
-        description: "Extra speed.",
-      },
       // DeepSeek
       {
-        id: "deepseek/deepseek-v3.2-exp",
+        id: "deepseek/deepseek-v3.2",
         name: "DeepSeek V3.2",
         provider: "DeepSeek",
         description: "Open and powerful.",
@@ -93,6 +80,19 @@ export function getModelOptions(): {
         name: "GLM 5.1",
         provider: "Z.AI",
         description: "Latest GLM reasoning model.",
+      },
+      // MiniMax
+      {
+        id: "minimax/minimax-m2.7",
+        name: "MiniMax M2.7",
+        provider: "MiniMax",
+        description: "Fast reasoning with strong value.",
+      },
+      {
+        id: "minimax/minimax-m2.1-lightning",
+        name: "MiniMax M2.1 Lightning",
+        provider: "MiniMax",
+        description: "Lowest-latency MiniMax option.",
       },
     ],
     large: [
@@ -122,12 +122,6 @@ export function getModelOptions(): {
         provider: "OpenAI",
         description: "Highest-precision GPT-5.4 variant.",
       },
-      {
-        id: "openai/gpt-4o",
-        name: "GPT-4o",
-        provider: "OpenAI",
-        description: "Flagship multimodal model.",
-      },
       // Google
       {
         id: "google/gemini-3-pro-preview",
@@ -140,13 +134,6 @@ export function getModelOptions(): {
         name: "Gemini 2.5 Pro",
         provider: "Google",
         description: "Strong multimodal reasoning.",
-      },
-      // Moonshot AI
-      {
-        id: "moonshotai/kimi-k2-0905",
-        name: "Kimi K2",
-        provider: "Moonshot AI",
-        description: "Fast and capable.",
       },
       // DeepSeek
       {
@@ -161,6 +148,13 @@ export function getModelOptions(): {
         name: "GLM 5.1",
         provider: "Z.AI",
         description: "Latest GLM model for reasoning and coding.",
+      },
+      // MiniMax
+      {
+        id: "minimax/minimax-m2.7",
+        name: "MiniMax M2.7",
+        provider: "MiniMax",
+        description: "Strong value for advanced reasoning.",
       },
     ],
   };

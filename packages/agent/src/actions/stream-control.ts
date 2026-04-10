@@ -7,6 +7,7 @@
  */
 
 import type { Action } from "@elizaos/core";
+import { hasOwnerAccess } from "../security/access.js";
 
 const API_PORT = process.env.API_PORT || process.env.SERVER_PORT || "2138";
 const BASE = `http://127.0.0.1:${API_PORT}`;
@@ -44,9 +45,16 @@ export const goLiveAction: Action = {
   ],
   description:
     "Start the live stream, broadcasting to the active destination (Twitch, YouTube, etc.).",
-  validate: async () => true,
+  validate: async (runtime, message) => hasOwnerAccess(runtime, message),
 
-  handler: async () => {
+  handler: async (runtime, message) => {
+    if (!(await hasOwnerAccess(runtime, message))) {
+      return {
+        text: "Permission denied: only the owner may control the live stream.",
+        success: false,
+      };
+    }
+
     try {
       const result = await apiPost("/api/stream/live");
       if (!result.ok) {
@@ -80,9 +88,16 @@ export const goOfflineAction: Action = {
   name: "GO_OFFLINE",
   similes: ["STOP_STREAM", "END_STREAM", "END_BROADCAST", "STOP_BROADCASTING"],
   description: "Stop the live stream and go offline.",
-  validate: async () => true,
+  validate: async (runtime, message) => hasOwnerAccess(runtime, message),
 
-  handler: async () => {
+  handler: async (runtime, message) => {
+    if (!(await hasOwnerAccess(runtime, message))) {
+      return {
+        text: "Permission denied: only the owner may control the live stream.",
+        success: false,
+      };
+    }
+
     try {
       const result = await apiPost("/api/stream/offline");
       if (!result.ok) {
@@ -101,4 +116,3 @@ export const goOfflineAction: Action = {
   },
   parameters: [],
 };
-

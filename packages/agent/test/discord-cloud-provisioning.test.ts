@@ -87,7 +87,7 @@ describe("cloud container with DISCORD_API_TOKEN", () => {
     expect(changes.some((c) => c.includes("discord"))).toBe(true);
   });
 
-  it("cloud provisioning does not change connector auto-enable behavior", () => {
+  it("edge-tts auto-enables alongside discord in cloud-provisioned containers", () => {
     const config = {
       plugins: {},
       connectors: {
@@ -101,12 +101,10 @@ describe("cloud container with DISCORD_API_TOKEN", () => {
     });
 
     expect(updatedConfig.plugins?.allow).toContain("@elizaos/plugin-discord");
-    expect(updatedConfig.plugins?.allow ?? []).not.toContain(
-      "@elizaos/plugin-edge-tts",
-    );
+    expect(updatedConfig.plugins?.allow).toContain("@elizaos/plugin-edge-tts");
   });
 
-  it("ELIZA_CLOUD_PROVISIONED does not inject edge-tts into the allow list", () => {
+  it("ELIZA_CLOUD_PROVISIONED also auto-enables edge-tts", () => {
     const config = { plugins: {}, connectors: {} };
 
     const { config: updatedConfig } = applyPluginAutoEnable({
@@ -114,9 +112,7 @@ describe("cloud container with DISCORD_API_TOKEN", () => {
       env: { ELIZA_CLOUD_PROVISIONED: "1" },
     });
 
-    expect(updatedConfig.plugins?.allow ?? []).not.toContain(
-      "@elizaos/plugin-edge-tts",
-    );
+    expect(updatedConfig.plugins?.allow).toContain("@elizaos/plugin-edge-tts");
   });
 
   it("token format validation warns on suspiciously short tokens", () => {
@@ -210,13 +206,11 @@ describe("cloud container without discord token", () => {
       env: { MILADY_CLOUD_PROVISIONED: "1" },
     });
 
-    // Cloud provisioning alone does not inject connector or TTS plugins here.
+    // Cloud provisioning alone should only add the voice plugin, not discord.
     expect(updatedConfig.plugins?.allow ?? []).not.toContain(
       "@elizaos/plugin-discord",
     );
-    expect(updatedConfig.plugins?.allow ?? []).not.toContain(
-      "@elizaos/plugin-edge-tts",
-    );
+    expect(updatedConfig.plugins?.allow).toContain("@elizaos/plugin-edge-tts");
   });
 
   it("isConnectorConfigured returns false for empty discord config", () => {
@@ -362,9 +356,7 @@ describe("full cloud provisioning simulation", () => {
       env: { MILADY_CLOUD_PROVISIONED: "1" },
     });
     expect(enabledConfig.plugins?.allow).toContain("@elizaos/plugin-discord");
-    expect(enabledConfig.plugins?.allow ?? []).not.toContain(
-      "@elizaos/plugin-edge-tts",
-    );
+    expect(enabledConfig.plugins?.allow).toContain("@elizaos/plugin-edge-tts");
 
     // Step 3: Validate config
     const discordParams: PluginParamInfo[] = [

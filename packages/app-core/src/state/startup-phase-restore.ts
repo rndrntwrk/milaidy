@@ -157,7 +157,13 @@ export async function runRestoringSession(
         ...ONBOARDING_PROVIDER_CATALOG,
       ] as OnboardingOptions["providers"],
       cloudProviders: [],
-      models: { small: [], large: [] },
+      models: {
+        nano: [],
+        small: [],
+        medium: [],
+        large: [],
+        mega: [],
+      } as OnboardingOptions["models"],
       inventoryProviders: [],
       sharedStyleRules: "",
     });

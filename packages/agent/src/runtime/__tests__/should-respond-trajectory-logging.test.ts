@@ -167,7 +167,13 @@ describeIfEliza("shouldRespond trajectory logging", () => {
         params: unknown,
       ) => {
         if (modelType === "RESPONSE_HANDLER" || modelType === ModelType.TEXT_SMALL) {
-          return "<response><name>TestAgent</name><reasoning>Ambiguous group chat needs a decision</reasoning><action>RESPOND</action></response>";
+          return [
+            "name: TestAgent",
+            "reasoning: Ambiguous group chat needs a decision",
+            "speak_up: 90",
+            "hold_back: 10",
+            "action: RESPOND",
+          ].join("\n");
         }
 
         const responseText =
@@ -236,7 +242,7 @@ describeIfEliza("shouldRespond trajectory logging", () => {
     ).toBe(true);
     expect(
       loggedCalls.some((call) =>
-        String(call.response ?? "").includes("<action>RESPOND</action>"),
+        String(call.response ?? "").includes("action: RESPOND"),
       ),
     ).toBe(true);
     expect(
@@ -277,7 +283,13 @@ describeIfEliza("shouldRespond trajectory logging", () => {
         params: unknown,
       ) => {
         if (modelType === "RESPONSE_HANDLER" || modelType === ModelType.TEXT_SMALL) {
-          return "<response><name>TestAgent</name><reasoning>Connector group chat needs a decision</reasoning><action>RESPOND</action></response>";
+          return [
+            "name: TestAgent",
+            "reasoning: Connector group chat needs a decision",
+            "speak_up: 92",
+            "hold_back: 8",
+            "action: RESPOND",
+          ].join("\n");
         }
 
         const responseText =

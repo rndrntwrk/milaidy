@@ -30,8 +30,8 @@ export type ServiceRouteConfig = {
   accountId?: string;
   primaryModel?: string;
   nanoModel?: string;
-  miniModel?: string;
   smallModel?: string;
+  mediumModel?: string;
   largeModel?: string;
   megaModel?: string;
   remoteApiBase?: string;
@@ -88,8 +88,8 @@ export const SERVICE_CAPABILITIES = [
 
 export function buildElizaCloudServiceRoute(args: {
   nanoModel?: string;
-  miniModel?: string;
   smallModel?: string;
+  mediumModel?: string;
   largeModel?: string;
   megaModel?: string;
   responseHandlerModel?: string;
@@ -102,8 +102,8 @@ export function buildElizaCloudServiceRoute(args: {
   return {
     ...ELIZA_CLOUD_ROUTE_BASE,
     ...(args.nanoModel ? { nanoModel: args.nanoModel } : {}),
-    ...(args.miniModel ? { miniModel: args.miniModel } : {}),
     ...(args.smallModel ? { smallModel: args.smallModel } : {}),
+    ...(args.mediumModel ? { mediumModel: args.mediumModel } : {}),
     ...(args.largeModel ? { largeModel: args.largeModel } : {}),
     ...(args.megaModel ? { megaModel: args.megaModel } : {}),
     ...(args.responseHandlerModel
@@ -127,8 +127,8 @@ export function buildDefaultElizaCloudServiceRouting(args: {
   base?: ServiceRoutingConfig | null;
   includeInference?: boolean;
   nanoModel?: string;
-  miniModel?: string;
   smallModel?: string;
+  mediumModel?: string;
   largeModel?: string;
   megaModel?: string;
   responseHandlerModel?: string;
@@ -147,8 +147,8 @@ export function buildDefaultElizaCloudServiceRouting(args: {
   if (args.includeInference) {
     next.llmText ??= buildElizaCloudServiceRoute({
       nanoModel: args.nanoModel,
-      miniModel: args.miniModel,
       smallModel: args.smallModel,
+      mediumModel: args.mediumModel,
       largeModel: args.largeModel,
       megaModel: args.megaModel,
       responseHandlerModel: args.responseHandlerModel,
@@ -269,8 +269,8 @@ export function normalizeServiceRouteConfig(
   const accountId = readTrimmedString(route, "accountId");
   const primaryModel = readTrimmedString(route, "primaryModel");
   const nanoModel = readTrimmedString(route, "nanoModel");
-  const miniModel = readTrimmedString(route, "miniModel");
   const smallModel = readTrimmedString(route, "smallModel");
+  const mediumModel = readTrimmedString(route, "mediumModel");
   const largeModel = readTrimmedString(route, "largeModel");
   const megaModel = readTrimmedString(route, "megaModel");
   const responseHandlerModel = readTrimmedString(route, "responseHandlerModel");
@@ -290,8 +290,8 @@ export function normalizeServiceRouteConfig(
     !accountId &&
     !primaryModel &&
     !nanoModel &&
-    !miniModel &&
     !smallModel &&
+    !mediumModel &&
     !largeModel &&
     !megaModel &&
     !responseHandlerModel &&
@@ -311,8 +311,8 @@ export function normalizeServiceRouteConfig(
     ...(accountId ? { accountId } : {}),
     ...(primaryModel ? { primaryModel } : {}),
     ...(nanoModel ? { nanoModel } : {}),
-    ...(miniModel ? { miniModel } : {}),
     ...(smallModel ? { smallModel } : {}),
+    ...(mediumModel ? { mediumModel } : {}),
     ...(largeModel ? { largeModel } : {}),
     ...(megaModel ? { megaModel } : {}),
     ...(responseHandlerModel ? { responseHandlerModel } : {}),

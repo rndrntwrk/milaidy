@@ -232,10 +232,6 @@ export const mockPlugin: Plugin = {
       mockTextModel(runtime, params),
     [ModelType.TEXT_LARGE]: async (runtime, params) =>
       mockTextModel(runtime, params),
-    [ModelType.TEXT_REASONING_SMALL]: async (runtime, params) =>
-      mockTextModel(runtime, params),
-    [ModelType.TEXT_REASONING_LARGE]: async (runtime, params) =>
-      mockTextModel(runtime, params),
     [ModelType.TEXT_COMPLETION]: async (runtime, params) =>
       mockTextModel(runtime, params),
     [ModelType.OBJECT_SMALL]: async (runtime, params) =>

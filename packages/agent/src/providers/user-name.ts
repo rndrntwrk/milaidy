@@ -14,6 +14,7 @@ import type {
   ProviderResult,
   State,
 } from "@elizaos/core";
+import { hasOwnerAccess } from "../security/access.js";
 
 const API_PORT = process.env.API_PORT || process.env.SERVER_PORT || "2138";
 
@@ -42,12 +43,16 @@ export function createUserNameProvider(): Provider {
     dynamic: true,
 
     async get(
-      _runtime: IAgentRuntime,
+      runtime: IAgentRuntime,
       message: Memory,
       _state: State,
     ): Promise<ProviderResult> {
       const content = message.content as Record<string, unknown> | undefined;
       if (content?.source !== "client_chat") {
+        return { text: "" };
+      }
+
+      if (!(await hasOwnerAccess(runtime, message))) {
         return { text: "" };
       }
 

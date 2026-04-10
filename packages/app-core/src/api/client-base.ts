@@ -331,7 +331,12 @@ export class MiladyClient {
   // --- WebSocket ---
 
   connectWs(): void {
-    if (this.ws?.readyState === WebSocket.OPEN) return;
+    if (
+      this.ws?.readyState === WebSocket.OPEN ||
+      this.ws?.readyState === WebSocket.CONNECTING
+    ) {
+      return;
+    }
 
     let host: string;
     let wsProtocol: "ws:" | "wss:";

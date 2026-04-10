@@ -10,6 +10,8 @@ describe("isCloudProvisionedContainer", () => {
     delete process.env.MILADY_API_TOKEN;
     delete process.env.ELIZA_API_TOKEN;
     delete process.env.STEWARD_AGENT_TOKEN;
+    delete process.env.ELIZAOS_CLOUD_ENABLED;
+    delete process.env.ELIZAOS_CLOUD_API_KEY;
   });
 
   afterEach(() => {
@@ -27,10 +29,10 @@ describe("isCloudProvisionedContainer", () => {
     expect(isCloudProvisionedContainer()).toBe(true);
   });
 
-  it("returns false for cloud-provisioned containers without a steward token", () => {
+  it("returns true for cloud-provisioned containers with a compat API token", () => {
     process.env.ELIZA_CLOUD_PROVISIONED = "1";
     process.env.ELIZA_API_TOKEN = "api-token";
-    expect(isCloudProvisionedContainer()).toBe(false);
+    expect(isCloudProvisionedContainer()).toBe(true);
   });
 
   it("returns false when only the cloud flag is set", () => {
@@ -43,5 +45,18 @@ describe("isCloudProvisionedContainer", () => {
     process.env.STEWARD_AGENT_TOKEN = "   ";
     process.env.MILADY_API_TOKEN = "";
     expect(isCloudProvisionedContainer()).toBe(false);
+  });
+
+  it("accepts mixed Milady/Eliza flag+token combinations", () => {
+    process.env.MILADY_CLOUD_PROVISIONED = "1";
+    process.env.ELIZA_API_TOKEN = "api-token";
+    expect(isCloudProvisionedContainer()).toBe(true);
+  });
+
+  it("returns true for cloud-provisioned containers with cloud API key provisioning", () => {
+    process.env.MILADY_CLOUD_PROVISIONED = "1";
+    process.env.ELIZAOS_CLOUD_ENABLED = "true";
+    process.env.ELIZAOS_CLOUD_API_KEY = "eliza_test_key";
+    expect(isCloudProvisionedContainer()).toBe(true);
   });
 });

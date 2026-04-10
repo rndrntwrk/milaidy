@@ -8,10 +8,8 @@ import type {
   UUID,
 } from "@elizaos/core";
 import { logger, stringToUuid } from "@elizaos/core";
-import {
-  checkSenderRole,
-  resolveCanonicalOwnerIdForMessage,
-} from "@elizaos/core/roles";
+import { resolveCanonicalOwnerIdForMessage } from "@elizaos/core/roles";
+import { hasAdminAccess } from "../security/access.js";
 
 type MessageTransportService = {
   sendDirectMessage?: (
@@ -112,20 +110,6 @@ async function handleAdminMessage(
 }
 
 /**
- * Checks whether the caller is the agent itself or an admin/owner.
- */
-async function hasAdminAccess(
-  runtime: IAgentRuntime,
-  message: Memory,
-): Promise<boolean> {
-  if (message.entityId === runtime.agentId) {
-    return true;
-  }
-  const role = await checkSenderRole(runtime, message);
-  return Boolean(role?.isAdmin);
-}
-
-/**
  * Detect whether the params indicate an admin/owner target.
  */
 function isAdminTarget(params: SendMessageParams): boolean {
@@ -158,9 +142,19 @@ export const sendMessageAction: Action = {
     "Supports urgency levels for admin messages (normal, important, urgent). " +
     "Urgent admin messages trigger multi-channel escalation.",
 
-  validate: async () => true,
+  validate: async (runtime, message) => hasAdminAccess(runtime, message),
 
   handler: async (runtime, message, _state, options) => {
+    if (!(await hasAdminAccess(runtime, message))) {
+      return {
+        text:
+          "Permission denied: only the owner or admins may send routed messages.",
+        success: false,
+        values: { success: false, error: "PERMISSION_DENIED" },
+        data: { actionName: "SEND_MESSAGE" },
+      };
+    }
+
     const params = ((options as HandlerOptions | undefined)?.parameters ??
       {}) as SendMessageParams;
     const { targetType, source, target, text, urgency } = params;

@@ -30,6 +30,17 @@ interface GoogleGmailMetadataHeader {
   value?: string;
 }
 
+interface GoogleGmailBody {
+  data?: string;
+}
+
+interface GoogleGmailPayload {
+  headers?: GoogleGmailMetadataHeader[];
+  mimeType?: string;
+  body?: GoogleGmailBody;
+  parts?: GoogleGmailPayload[];
+}
+
 interface GoogleGmailMetadataResponse {
   id?: string;
   threadId?: string;
@@ -38,9 +49,7 @@ interface GoogleGmailMetadataResponse {
   internalDate?: string;
   historyId?: string;
   sizeEstimate?: number;
-  payload?: {
-    headers?: GoogleGmailMetadataHeader[];
-  };
+  payload?: GoogleGmailPayload;
 }
 
 export interface SyncedGoogleGmailMessageSummary
@@ -48,6 +57,11 @@ export interface SyncedGoogleGmailMessageSummary
     LifeOpsGmailMessageSummary,
     "id" | "agentId" | "provider" | "side" | "syncedAt" | "updatedAt"
   > {}
+
+export interface SyncedGoogleGmailMessageDetail {
+  message: SyncedGoogleGmailMessageSummary;
+  bodyText: string;
+}
 
 function readGoogleGmailErrorPrefix(status: number): string {
   return `Google Gmail request failed with ${status}`;
@@ -178,6 +192,85 @@ function normalizeReplySubject(subject: string): string {
 
 function normalizeSnippet(value: string | undefined): string {
   return value?.replace(/\s+/g, " ").trim() || "";
+}
+
+function decodeGmailBodyData(value: string): string {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const paddingLength = (4 - (normalized.length % 4)) % 4;
+  const padded = normalized + "=".repeat(paddingLength);
+  return Buffer.from(padded, "base64").toString("utf-8");
+}
+
+function decodeHtmlEntities(value: string): string {
+  return value
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'");
+}
+
+function htmlToPlainText(value: string): string {
+  return decodeHtmlEntities(
+    value
+      .replace(/<style[\s\S]*?<\/style>/gi, " ")
+      .replace(/<script[\s\S]*?<\/script>/gi, " ")
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/(?:p|div|section|article|li|tr|table|h[1-6])>/gi, "\n")
+      .replace(/<(?:li)[^>]*>/gi, "- ")
+      .replace(/<[^>]+>/g, " "),
+  )
+    .replace(/\r/g, "")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+}
+
+function extractGoogleGmailBodyByMime(
+  payload: GoogleGmailPayload | undefined,
+  mimeType: "text/plain" | "text/html",
+): string {
+  if (!payload) {
+    return "";
+  }
+
+  const directBody = payload.body?.data;
+  if (payload.mimeType === mimeType && typeof directBody === "string") {
+    const decoded = decodeGmailBodyData(directBody);
+    return mimeType === "text/html" ? htmlToPlainText(decoded) : decoded.trim();
+  }
+
+  for (const part of payload.parts ?? []) {
+    const nested = extractGoogleGmailBodyByMime(part, mimeType);
+    if (nested) {
+      return nested;
+    }
+  }
+
+  return "";
+}
+
+function extractGoogleGmailBody(
+  payload: GoogleGmailPayload | undefined,
+): string {
+  const plainText = extractGoogleGmailBodyByMime(payload, "text/plain");
+  if (plainText) {
+    return plainText;
+  }
+  const htmlText = extractGoogleGmailBodyByMime(payload, "text/html");
+  if (htmlText) {
+    return htmlText;
+  }
+  const directBody = payload?.body?.data;
+  if (typeof directBody === "string") {
+    const decoded = decodeGmailBodyData(directBody);
+    return payload?.mimeType === "text/html"
+      ? htmlToPlainText(decoded)
+      : decoded.trim();
+  }
+  return "";
 }
 
 function deriveHtmlLink(threadId: string): string {
@@ -399,6 +492,39 @@ export async function fetchGoogleGmailMessage(args: {
   }
   const parsed = (await response.json()) as GoogleGmailMetadataResponse;
   return normalizeGoogleGmailMessage(parsed, args.selfEmail ?? null);
+}
+
+export async function fetchGoogleGmailMessageDetail(args: {
+  accessToken: string;
+  selfEmail?: string | null;
+  messageId: string;
+}): Promise<SyncedGoogleGmailMessageDetail | null> {
+  const params = new URLSearchParams({
+    format: "full",
+  });
+  const response = await fetch(
+    `${GOOGLE_GMAIL_MESSAGES_ENDPOINT}/${encodeURIComponent(args.messageId)}?${params.toString()}`,
+    {
+      headers: {
+        Authorization: `Bearer ${args.accessToken}`,
+      },
+    },
+  );
+  if (!response.ok) {
+    throw new GoogleApiError(
+      response.status,
+      await readGoogleGmailError(response),
+    );
+  }
+  const parsed = (await response.json()) as GoogleGmailMetadataResponse;
+  const message = normalizeGoogleGmailMessage(parsed, args.selfEmail ?? null);
+  if (!message) {
+    return null;
+  }
+  return {
+    message,
+    bodyText: extractGoogleGmailBody(parsed.payload).trim() || message.snippet,
+  };
 }
 
 async function fetchGoogleGmailMessages(args: {

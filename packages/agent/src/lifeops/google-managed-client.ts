@@ -64,6 +64,11 @@ export interface ManagedGoogleGmailTriageResponse {
   syncedAt: string;
 }
 
+export interface ManagedGoogleGmailReadResponse {
+  message: SyncedGoogleGmailMessageSummary;
+  bodyText: string;
+}
+
 export interface ManagedGoogleReplySendRequest {
   side?: LifeOpsConnectorSide;
   to: string[];
@@ -98,7 +103,9 @@ function readConfigCloudSettings(): {
           ? normalizeApiKey(cloud.apiKey)
           : null,
       baseUrl:
-        cloud && typeof cloud.baseUrl === "string" && cloud.baseUrl.trim().length
+        cloud &&
+        typeof cloud.baseUrl === "string" &&
+        cloud.baseUrl.trim().length
           ? cloud.baseUrl.trim()
           : null,
     };
@@ -307,6 +314,22 @@ export class GoogleManagedClient {
     });
     return this.request<ManagedGoogleGmailTriageResponse>(
       `milady/google/gmail/triage?${query.toString()}`,
+      {
+        method: "GET",
+      },
+    );
+  }
+
+  async readGmailMessage(args: {
+    side: LifeOpsConnectorSide;
+    messageId: string;
+  }): Promise<ManagedGoogleGmailReadResponse> {
+    const query = new URLSearchParams({
+      side: args.side,
+      messageId: args.messageId,
+    });
+    return this.request<ManagedGoogleGmailReadResponse>(
+      `milady/google/gmail/read?${query.toString()}`,
       {
         method: "GET",
       },

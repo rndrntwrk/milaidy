@@ -125,6 +125,7 @@ export function StartupShell() {
     t,
   } = useApp();
   const phase = startupCoordinator.phase;
+  const cloudSkipProbeStartedRef = useRef(false);
   const [discoveryLoading, setDiscoveryLoading] = useState(false);
   const [discoveredGateways, setDiscoveredGateways] = useState<
     GatewayDiscoveryEndpoint[]
@@ -342,6 +343,60 @@ export function StartupShell() {
     return token.length > 0;
   }, [cloudApiKey, elizaCloudConnected]);
 
+  // ── Cloud onboarding skip ──────────────────────────────────────
+  // Fallback: if a cloud-provisioned container still reaches onboarding-required
+  // (e.g. splash probe didn't fire SPLASH_CLOUD_SKIP), re-check the server here
+  // and fast-forward past onboarding.
+  //
+  // IMPORTANT: deps must NOT include the unstable `startupCoordinator` object
+  // reference. Including it caused the probe to be cancelled on every re-render
+  // (OnboardingWizard triggers many state updates), killing the in-flight fetch.
+  // We use a ref to access the coordinator's dispatch function instead.
+  const coordinatorDispatchRef = useRef(startupCoordinator.dispatch);
+  coordinatorDispatchRef.current = startupCoordinator.dispatch;
+  const coordinatorStateRef = useRef(startupCoordinator.state);
+  coordinatorStateRef.current = startupCoordinator.state;
+
+  useEffect(() => {
+    if (phase !== "onboarding-required") {
+      cloudSkipProbeStartedRef.current = false;
+      return;
+    }
+
+    const coordState = coordinatorStateRef.current;
+    if (
+      coordState.phase !== "onboarding-required" ||
+      coordState.serverReachable ||
+      cloudSkipProbeStartedRef.current
+    ) {
+      return;
+    }
+
+    cloudSkipProbeStartedRef.current = true;
+    let cancelled = false;
+
+    void client
+      .getOnboardingStatus()
+      .then((status) => {
+        if (cancelled || !status.cloudProvisioned) {
+          return;
+        }
+        console.log(
+          "[milady][startup] Cloud-provisioned container detected at onboarding — skipping wizard",
+        );
+        setState("onboardingComplete", true);
+        coordinatorDispatchRef.current({ type: "ONBOARDING_COMPLETE" });
+      })
+      .catch(() => {
+        cloudSkipProbeStartedRef.current = false;
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [phase, setState]);
+
+  // ── Gateway discovery ──────────────────────────────────────────
   useEffect(() => {
     if (!canPickPackDirectory) {
       return;

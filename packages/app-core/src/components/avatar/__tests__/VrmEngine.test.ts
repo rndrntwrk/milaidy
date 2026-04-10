@@ -1670,6 +1670,7 @@ describe("VrmEngine", () => {
 
       expect(hoisted.fetchMock).toHaveBeenCalledWith(
         "http://example.com/model.vrm.gz",
+        { cache: "force-cache" },
       );
       expect(pipeThroughSpy).toHaveBeenCalledTimes(1);
       expect(responseArrayBuffer).toHaveBeenCalledTimes(1);

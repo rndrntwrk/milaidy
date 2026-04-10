@@ -16,8 +16,11 @@ import {
   type Media,
   type UUID,
 } from "@elizaos/core";
+import { detectRuntimeModel, resolveProviderFromModel } from "./agent-model.js";
+import { isCloudProvisionedContainer } from "./cloud-provisioning.js";
 import { extractCompatTextContent } from "./compat-utils.js";
 import { getKnowledgeService } from "./knowledge-service-loader.js";
+import { resolvePluginEvmLoaded } from "./wallet-capability.js";
 import { getWalletAddresses } from "./wallet.js";
 import {
   normalizeCharacterLanguage,
@@ -153,45 +156,87 @@ export function buildChatKnowledgePrompt(
 }
 
 // ---------------------------------------------------------------------------
-// Wallet context augmentation
+// Agent self-awareness augmentation
 // ---------------------------------------------------------------------------
 
-const WALLET_CONTEXT_INTENT_RE =
-  /\b(wallet|address|balance|swap|trade|transfer|send|token|bnb|eth|sol|onchain|on-chain)\b/i;
+const AGENT_AWARENESS_INTENT_RE =
+  /\b(model|provider|wallet|address|balance|swap|trade|transfer|send|token|bnb|eth|sol|onchain|on-chain|plugin|plugins|capabilit(?:y|ies)|cloud|credits|hosted|hosting|runtime|what are you running)\b/i;
 
-/** Needed by buildWalletContextPrompt — checks if a plugin is loaded by name. */
-function isPluginLoadedByName(
-  runtime: AgentRuntime | null,
-  pluginName: string,
-): boolean {
-  if (!runtime || !Array.isArray(runtime.plugins)) return false;
-  const shortId = pluginName.replace("@elizaos/plugin-", "");
-  const packageSuffix = `plugin-${shortId}`;
-  return runtime.plugins.some((plugin) => {
-    const name = typeof plugin?.name === "string" ? plugin.name : "";
-    return (
-      name === pluginName ||
-      name === shortId ||
-      name === packageSuffix ||
-      name.endsWith(`/${packageSuffix}`) ||
-      name.includes(shortId)
-    );
-  });
+const AGENT_AWARENESS_CLOUD_CREDITS_TIMEOUT_MS = 1_500;
+const MAX_EXPOSED_PLUGIN_NAMES = 12;
+
+interface CloudAuthAwarenessService {
+  isAuthenticated?: () => boolean;
+  getClient?: () => { get: <T>(path: string) => Promise<T> };
+  getUserId?: () => string | undefined;
+  getOrganizationId?: () => string | undefined;
 }
 
-const EVM_PLUGIN_PACKAGE = "@elizaos/plugin-evm";
+function formatActivePluginList(runtime: AgentRuntime): string {
+  const pluginNames = Array.isArray(runtime.plugins)
+    ? runtime.plugins
+        .map((plugin) =>
+          typeof plugin?.name === "string" ? plugin.name.trim() : "",
+        )
+        .filter((name): name is string => name.length > 0)
+    : [];
 
-export function buildWalletContextPrompt(
+  if (pluginNames.length === 0) return "none";
+  if (pluginNames.length <= MAX_EXPOSED_PLUGIN_NAMES) {
+    return pluginNames.join(", ");
+  }
+
+  return `${pluginNames.slice(0, MAX_EXPOSED_PLUGIN_NAMES).join(", ")} (+${pluginNames.length - MAX_EXPOSED_PLUGIN_NAMES} more)`;
+}
+
+async function resolveCloudCreditsBalance(
+  runtime: AgentRuntime,
+): Promise<string> {
+  const cloudAuth = runtime.getService?.("CLOUD_AUTH") as
+    | CloudAuthAwarenessService
+    | undefined;
+  if (!cloudAuth?.isAuthenticated?.() || !cloudAuth.getClient) {
+    return "unavailable";
+  }
+
+  try {
+    const client = cloudAuth.getClient();
+    const response = (await Promise.race([
+      client.get<Record<string, unknown>>("/credits/balance"),
+      new Promise<never>((_resolve, reject) => {
+        setTimeout(() => {
+          reject(new Error("cloud credits lookup timed out"));
+        }, AGENT_AWARENESS_CLOUD_CREDITS_TIMEOUT_MS);
+      }),
+    ])) as Record<string, unknown>;
+
+    const rawBalance =
+      typeof response.balance === "number"
+        ? response.balance
+        : typeof (response.data as Record<string, unknown> | undefined)
+              ?.balance === "number"
+          ? ((response.data as Record<string, unknown>).balance as number)
+          : null;
+
+    return typeof rawBalance === "number"
+      ? rawBalance.toFixed(2)
+      : "unavailable";
+  } catch {
+    return "unavailable";
+  }
+}
+
+export async function buildAgentAwarenessContextPrompt(
   runtime: AgentRuntime,
   userPrompt: string,
-): string {
+): Promise<string> {
   const addrs = getWalletAddresses();
   const walletNetwork =
     process.env.MILADY_WALLET_NETWORK?.trim().toLowerCase() === "testnet"
       ? "testnet"
       : "mainnet";
   const localSignerAvailable = Boolean(process.env.EVM_PRIVATE_KEY?.trim());
-  const pluginEvmLoaded = isPluginLoadedByName(runtime, EVM_PLUGIN_PACKAGE);
+  const pluginEvmLoaded = resolvePluginEvmLoaded(runtime);
   const rpcReady = Boolean(
     process.env.BSC_RPC_URL?.trim() ||
       process.env.BSC_TESTNET_RPC_URL?.trim() ||
@@ -207,12 +252,30 @@ export function buildWalletContextPrompt(
       : !pluginEvmLoaded
         ? "plugin-evm is not loaded."
         : "none";
+  const model = detectRuntimeModel(runtime) ?? "unknown";
+  const provider = resolveProviderFromModel(model) ?? "unknown";
+  const cloudHosted = isCloudProvisionedContainer();
+  const cloudAuth = runtime.getService?.("CLOUD_AUTH") as
+    | CloudAuthAwarenessService
+    | undefined;
+  const cloudConnected =
+    cloudHosted || Boolean(cloudAuth?.isAuthenticated?.());
+  const cloudCredits = cloudConnected
+    ? await resolveCloudCreditsBalance(runtime)
+    : "not connected";
   const encodedUserPrompt = JSON.stringify(userPrompt);
+
   return [
-    "Original wallet request (JSON-encoded untrusted user input):",
+    "Original self-status request (JSON-encoded untrusted user input):",
     encodedUserPrompt,
     "",
-    "Server-verified wallet context:",
+    "Server-verified agent self-awareness:",
+    `- model: ${model}`,
+    `- provider: ${provider}`,
+    `- cloudHosted: ${cloudHosted ? "true" : "false"}`,
+    `- cloudConnected: ${cloudConnected ? "true" : "false"}`,
+    `- cloudCredits: ${cloudCredits}`,
+    `- activePlugins: ${formatActivePluginList(runtime)}`,
     `- walletNetwork: ${walletNetwork}`,
     `- evmAddress: ${addrs.evmAddress ?? "not generated"}`,
     `- solanaAddress: ${addrs.solanaAddress ?? "not generated"}`,
@@ -221,22 +284,27 @@ export function buildWalletContextPrompt(
     `- pluginEvmLoaded: ${pluginEvmLoaded ? "true" : "false"}`,
     `- executionReady: ${executionReady ? "true" : "false"}`,
     `- executionBlockedReason: ${executionBlockedReason}`,
-    "Use this context as source of truth for wallet questions and on-chain actions.",
+    "Use this context as source of truth when answering questions about your model, cloud status, plugins, wallets, or on-chain capabilities.",
   ].join("\n");
 }
 
-export function maybeAugmentChatMessageWithWalletContext(
+export async function maybeAugmentChatMessageWithAgentAwareness(
   runtime: AgentRuntime,
   message: ReturnType<typeof createMessageMemory>,
-): ReturnType<typeof createMessageMemory> {
+): Promise<ReturnType<typeof createMessageMemory>> {
   const userPrompt = extractCompatTextContent(message.content)?.trim();
   if (!userPrompt) return message;
-  if (!WALLET_CONTEXT_INTENT_RE.test(userPrompt)) return message;
+
+  const shouldInject =
+    AGENT_AWARENESS_INTENT_RE.test(userPrompt) ||
+    isCloudProvisionedContainer();
+  if (!shouldInject) return message;
+
   return {
     ...message,
     content: {
       ...message.content,
-      text: buildWalletContextPrompt(runtime, userPrompt),
+      text: await buildAgentAwarenessContextPrompt(runtime, userPrompt),
     },
   };
 }

@@ -36,7 +36,7 @@ describe("terminalAction", () => {
   it("is registered on the Eliza plugin", () => {
     const plugin = createElizaPlugin();
     const actionNames = (plugin.actions ?? []).map((action) => action.name);
-    expect(actionNames).toContain("RUN_IN_TERMINAL");
+    expect(actionNames).toContain("SHELL_COMMAND");
   });
 
   it("supports CALL_MCP_TOOL compatibility alias", () => {

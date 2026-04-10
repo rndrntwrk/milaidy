@@ -1377,6 +1377,7 @@ export const calendarAction: Action = {
       await callback?.({
         text: payload.text,
         source: "action",
+        action: "CALENDAR_ACTION",
       });
       return payload;
     };

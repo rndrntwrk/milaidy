@@ -111,7 +111,7 @@ export ANTHROPIC_API_KEY=sk-ant-...
 Claude 3.7 Sonnet and Claude Opus 4 (`claude-opus-4-20250514`) support extended thinking — a mode where the model reasons step-by-step before answering. This is particularly effective for complex reasoning, math, and multi-step planning.
 
 ```typescript
-const response = await runtime.useModel("TEXT_REASONING_LARGE", {
+const response = await runtime.useModel("TEXT_LARGE", {
   prompt: "Design a database schema for a multi-tenant SaaS application.",
   thinking: { type: "enabled", budgetTokens: 10000 },
 });

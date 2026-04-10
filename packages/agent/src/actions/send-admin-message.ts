@@ -6,10 +6,8 @@ import type {
   UUID,
 } from "@elizaos/core";
 import { logger, stringToUuid } from "@elizaos/core";
-import {
-  checkSenderRole,
-  resolveCanonicalOwnerIdForMessage,
-} from "@elizaos/core/roles";
+import { resolveCanonicalOwnerIdForMessage } from "@elizaos/core/roles";
+import { hasAdminAccess } from "../security/access.js";
 
 type SendAdminMessageParams = {
   text?: string;
@@ -38,20 +36,6 @@ async function resolveAdminEntityId(
   // and lifeops service defaultOwnerEntityId)
   const agentName = runtime.character?.name ?? runtime.agentId;
   return stringToUuid(`${agentName}-admin-entity`) as UUID;
-}
-
-/**
- * Checks whether the caller is the agent itself or an admin/owner.
- */
-async function hasAdminAccess(
-  runtime: IAgentRuntime,
-  message: Memory,
-): Promise<boolean> {
-  if (message.entityId === runtime.agentId) {
-    return true;
-  }
-  const role = await checkSenderRole(runtime, message);
-  return Boolean(role?.isAdmin);
 }
 
 export const sendAdminMessageAction: Action = {

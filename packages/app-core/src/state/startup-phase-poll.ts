@@ -49,6 +49,7 @@ export interface PollingBackendDeps {
   setOnboardingRemoteToken: (v: string) => void;
   setOnboardingSmallModel: (v: string) => void;
   setOnboardingLargeModel: (v: string) => void;
+  setOnboardingCloudProvisionedContainer: (v: boolean) => void;
   setPairingEnabled: (v: boolean) => void;
   setPairingExpiresAt: (v: number | null) => void;
   applyDetectedProviders: (
@@ -189,13 +190,20 @@ export async function runPollingBackend(
         dispatch({ type: "BACKEND_AUTH_REQUIRED" });
         return;
       }
-      const { complete } = await client.getOnboardingStatus();
+      const onboardingStatusRes = await client.getOnboardingStatus();
+      const { complete, cloudProvisioned } = onboardingStatusRes;
+      console.log("[milady][startup] onboarding status response:", JSON.stringify(onboardingStatusRes));
       if (cancelled.current) return;
+      deps.setOnboardingCloudProvisionedContainer(Boolean(cloudProvisioned));
       let sessionComplete =
         complete ||
         deps.onboardingCompletionCommittedRef.current ||
         (ctx?.shouldPreserveCompletedOnboarding ?? false);
 
+      // Preserve backend-complete installs even when this browser has no prior
+      // local state (for example headless/VPS setups or a fresh visit to a
+      // cloud-provisioned container). Only clear the optimistic completion
+      // flag when the backend itself still reports onboarding as incomplete.
       if (
         sessionComplete &&
         !complete &&
@@ -219,6 +227,7 @@ export async function runPollingBackend(
         console.warn(
           "[milady][startup:init] Preserving completed onboarding despite incomplete backend onboarding status.",
         );
+      console.log("[milady][startup] sessionComplete:", sessionComplete, "complete:", complete, "cloudProvisioned:", cloudProvisioned, "persistedConnection:", !!ctx?.persistedActiveServer, "hadPrior:", !!ctx?.hadPriorOnboarding);
       deps.setOnboardingComplete(sessionComplete);
 
       if (!sessionComplete) {
@@ -303,6 +312,7 @@ export async function runPollingBackend(
         }
         return;
       }
+      console.log("[milady][startup] dispatching BACKEND_REACHED onboardingComplete=true");
       dispatch({ type: "BACKEND_REACHED", onboardingComplete: true });
       return;
     } catch (err) {

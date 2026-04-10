@@ -3,6 +3,7 @@ import { classifyIntent } from "./life";
 
 const {
   mockCheckSenderPrivateAccess,
+  mockResolveCanonicalOwnerIdForMessage,
   mockListDefinitions,
   mockListGoals,
   mockGetOverview,
@@ -24,6 +25,7 @@ const {
   mockGetGoogleConnectorStatus,
 } = vi.hoisted(() => ({
   mockCheckSenderPrivateAccess: vi.fn(),
+  mockResolveCanonicalOwnerIdForMessage: vi.fn(),
   mockListDefinitions: vi.fn(),
   mockListGoals: vi.fn(),
   mockGetOverview: vi.fn(),
@@ -47,6 +49,7 @@ const {
 
 vi.mock("@elizaos/core/roles", () => ({
   checkSenderPrivateAccess: mockCheckSenderPrivateAccess,
+  resolveCanonicalOwnerIdForMessage: mockResolveCanonicalOwnerIdForMessage,
 }));
 
 vi.mock("../lifeops/service.js", () => ({

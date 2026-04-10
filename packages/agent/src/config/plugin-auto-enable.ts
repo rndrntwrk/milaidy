@@ -128,7 +128,7 @@ const FEATURE_PLUGINS: Record<string, string> = {
   cron: "@elizaos/plugin-cron",
   shell: "@elizaos/plugin-shell",
   imageGen: "@elizaos/plugin-image-generation",
-  tts: "@elizaos/plugin-tts",
+  tts: "@elizaos/plugin-edge-tts",
   stt: "@elizaos/plugin-stt",
   agentSkills: "@elizaos/plugin-agent-skills",
   // directives: "@elizaos/plugin-directives", // not yet ready — package doesn't exist
@@ -151,6 +151,30 @@ const FEATURE_PLUGINS: Record<string, string> = {
   claudeCodeWorkbench: "@elizaos/plugin-claude-code-workbench",
   rs2004scape: "@miladyai/plugin-2004scape",
 };
+
+const EVM_PLUGIN_PACKAGE = "@elizaos/plugin-evm";
+const EVM_PLUGIN_SHORT_ID = "evm";
+
+const STEWARD_ELIZA_PLUGIN_PACKAGE = "@stwd/eliza-plugin";
+const STEWARD_ELIZA_PLUGIN_SHORT_ID = "stwd-eliza-plugin";
+
+function resolveEvmAutoEnableReason(
+  env: NodeJS.ProcessEnv,
+): string | null {
+  if (env.EVM_PRIVATE_KEY?.trim()) {
+    return "env: EVM_PRIVATE_KEY";
+  }
+
+  const cloudProvisioned =
+    env.MILADY_CLOUD_PROVISIONED === "1" ||
+    env.ELIZA_CLOUD_PROVISIONED === "1";
+
+  if (cloudProvisioned && env.STEWARD_AGENT_TOKEN?.trim()) {
+    return "cloud-provisioned Steward wallet";
+  }
+
+  return null;
+}
 
 export function isConnectorConfigured(
   connectorName: string,
@@ -270,17 +294,18 @@ function addToAllowlist(
   changes: string[],
   reason: string,
 ): void {
-  if (!allow.includes(pluginName) && !allow.includes(shortId)) {
-    // Push the FULL package name (not the short id). `collectPluginNames`
-    // in plugin-collector.ts resolves allow-list entries through
-    // `CHANNEL_PLUGIN_MAP[item] ?? OPTIONAL_PLUGIN_MAP[item] ?? item` —
-    // when a short id isn't in either map (e.g. "anthropic",
-    // "elizacloud", wallet plugins before the OPTIONAL_PLUGIN_MAP fix)
-    // it falls through to `item` as-is and `import("anthropic")` fails.
-    // Storing the package name makes the fall-through a no-op and also
-    // lets `collectPluginNames` treat it as a direct package reference
-    // regardless of whether a short-id mapping exists.
+  let added = false;
+  if (!allow.includes(shortId)) {
+    allow.push(shortId);
+    added = true;
+  }
+  if (pluginName !== shortId && !allow.includes(pluginName)) {
+    // Keep the fully qualified package too so older collector paths and
+    // external config consumers still work when they expect package names.
     allow.push(pluginName);
+    added = true;
+  }
+  if (added) {
     changes.push(`Auto-enabled plugin: ${pluginName} (${reason})`);
   }
 }
@@ -432,6 +457,49 @@ export function applyPluginAutoEnable(
       pluginId,
       changes,
       `env: ${envKey}`,
+    );
+  }
+
+  const evmAutoEnableReason = resolveEvmAutoEnableReason(env);
+  if (
+    evmAutoEnableReason &&
+    pluginsConfig.entries[EVM_PLUGIN_SHORT_ID]?.enabled !== false
+  ) {
+    addToAllowlist(
+      pluginsConfig.allow,
+      EVM_PLUGIN_PACKAGE,
+      EVM_PLUGIN_SHORT_ID,
+      changes,
+      evmAutoEnableReason,
+    );
+  }
+
+  // Auto-enable @stwd/eliza-plugin when Steward API is configured.
+  // This mirrors the desktop (app-core) path and ensures cloud containers get
+  // StewardService + STEWARD_TRANSFER action registered with the runtime.
+  if (
+    env.STEWARD_API_URL?.trim() &&
+    pluginsConfig.entries[STEWARD_ELIZA_PLUGIN_SHORT_ID]?.enabled !== false
+  ) {
+    addToAllowlist(
+      pluginsConfig.allow,
+      STEWARD_ELIZA_PLUGIN_PACKAGE,
+      STEWARD_ELIZA_PLUGIN_SHORT_ID,
+      changes,
+      "env: STEWARD_API_URL",
+    );
+  }
+
+  const cloudProvisioned =
+    env.MILADY_CLOUD_PROVISIONED === "1" ||
+    env.ELIZA_CLOUD_PROVISIONED === "1";
+  if (cloudProvisioned && pluginsConfig.entries["edge-tts"]?.enabled !== false) {
+    addToAllowlist(
+      pluginsConfig.allow,
+      "@elizaos/plugin-edge-tts",
+      "edge-tts",
+      changes,
+      "cloud-provisioned voice output",
     );
   }
 

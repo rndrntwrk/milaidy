@@ -5,6 +5,14 @@
  * `api/server.ts` and `runtime/eliza.ts`.
  */
 
+/**
+ * Plugins that depend on PTY/native workspace tooling.
+ * Keep them out of cloud images where those binaries are intentionally absent.
+ */
+export const DESKTOP_ONLY_PLUGINS: readonly string[] = [
+  "@elizaos/plugin-agent-orchestrator",
+];
+
 /** Core plugins that should always be loaded. collectPluginNames() seeds from this list only. */
 export const CORE_PLUGINS: readonly string[] = [
   "@elizaos/plugin-sql", // database adapter — required

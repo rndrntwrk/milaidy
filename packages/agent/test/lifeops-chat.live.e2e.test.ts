@@ -1,10 +1,10 @@
 import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, expect, it } from "vitest";
 import { describeIf } from "../../../test/helpers/conditional-tests.ts";
 import {
   createConversation,
@@ -18,6 +18,7 @@ const LIVE_CHAT_TESTS_ENABLED = process.env.MILADY_LIVE_CHAT_TEST === "1";
 const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..", "..");
 const ENV_PATH = path.join(REPO_ROOT, ".env");
 const LIVE_CHAT_TEST_TIMEOUT_MS = 300_000;
+const LIVE_RUNTIME_BOOT_TIMEOUT_MS = 60_000;
 
 try {
   const { config } = await import("dotenv");
@@ -29,6 +30,7 @@ try {
 const LIVE_PROVIDER_CANDIDATES = [
   {
     name: "groq",
+    plugin: "@elizaos/plugin-groq",
     keys: ["GROQ_API_KEY"],
     predicate: () =>
       /groq/i.test(process.env.OPENAI_BASE_URL ?? "") ||
@@ -36,35 +38,50 @@ const LIVE_PROVIDER_CANDIDATES = [
   },
   {
     name: "openai",
+    plugin: "@elizaos/plugin-openai",
     keys: ["OPENAI_API_KEY"],
-    predicate: () => !/groq/i.test(process.env.OPENAI_BASE_URL ?? ""),
+    predicate: () => true,
   },
   {
     name: "groq",
+    plugin: "@elizaos/plugin-groq",
     keys: ["GROQ_API_KEY"],
     predicate: () => true,
   },
   {
     name: "openrouter",
+    plugin: "@elizaos/plugin-openrouter",
     keys: ["OPENROUTER_API_KEY"],
     predicate: () => true,
   },
   {
     name: "google",
+    plugin: "@elizaos/plugin-google-genai",
     keys: ["GOOGLE_GENERATIVE_AI_API_KEY", "GOOGLE_API_KEY"],
     predicate: () => true,
   },
   {
     name: "anthropic",
+    plugin: "@elizaos/plugin-anthropic",
     keys: ["ANTHROPIC_API_KEY"],
     predicate: () => true,
   },
 ] as const;
 
-function selectLiveProvider(): {
+async function canImportLiveProviderPlugin(pluginName: string): Promise<boolean> {
+  try {
+    await import(pluginName);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function selectLiveProvider(): Promise<{
   name: string;
   env: Record<string, string>;
-} | null {
+  plugin: string;
+} | null> {
   for (const candidate of LIVE_PROVIDER_CANDIDATES) {
     if (!candidate.predicate()) {
       continue;
@@ -77,9 +94,16 @@ function selectLiveProvider(): {
       }
     }
     if (Object.keys(env).length > 0) {
+      if (!(await canImportLiveProviderPlugin(candidate.plugin))) {
+        continue;
+      }
+      if (candidate.name === "openai") {
+        env.OPENAI_BASE_URL = "";
+      }
       return {
         name: candidate.name,
         env,
+        plugin: candidate.plugin,
       };
     }
   }
@@ -87,34 +111,17 @@ function selectLiveProvider(): {
   return null;
 }
 
-const selectedLiveProvider = selectLiveProvider();
-
-function resolveSelectedProviderPlugin(): string | null {
-  switch (selectedLiveProvider?.name) {
-    case "groq":
-      return "@elizaos/plugin-groq";
-    case "openai":
-      return "@elizaos/plugin-openai";
-    case "openrouter":
-      return "@elizaos/plugin-openrouter";
-    case "google":
-      return "@elizaos/plugin-google-genai";
-    case "anthropic":
-      return "@elizaos/plugin-anthropic";
-    default:
-      return null;
-  }
-}
-
-const selectedLiveProviderPlugin = resolveSelectedProviderPlugin();
+const selectedLiveProvider = await selectLiveProvider();
+const selectedLiveProviderPlugin = selectedLiveProvider?.plugin ?? null;
+const LIVE_CHAT_SUITE_ENABLED =
+  LIVE_TESTS_ENABLED &&
+  LIVE_CHAT_TESTS_ENABLED &&
+  selectedLiveProvider !== null &&
+  selectedLiveProviderPlugin !== null;
 
 const liveSetupWarnings = [
-  !LIVE_TESTS_ENABLED
-    ? "set MILADY_LIVE_TEST=1 or ELIZA_LIVE_TEST=1"
-    : null,
-  !LIVE_CHAT_TESTS_ENABLED
-    ? "set MILADY_LIVE_CHAT_TEST=1"
-    : null,
+  !LIVE_TESTS_ENABLED ? "set MILADY_LIVE_TEST=1 or ELIZA_LIVE_TEST=1" : null,
+  !LIVE_CHAT_TESTS_ENABLED ? "set MILADY_LIVE_CHAT_TEST=1" : null,
   !selectedLiveProvider
     ? "provide a live provider key such as OPENAI_API_KEY, GROQ_API_KEY, OPENROUTER_API_KEY, GOOGLE_API_KEY, GOOGLE_GENERATIVE_AI_API_KEY, or ANTHROPIC_API_KEY"
     : null,
@@ -134,6 +141,26 @@ type StartedRuntime = {
   getLogTail: () => string;
   port: number;
 };
+
+async function loadBaseLiveConfig(): Promise<Record<string, unknown>> {
+  const configuredPath =
+    process.env.MILADY_CONFIG_PATH?.trim() ||
+    process.env.ELIZA_CONFIG_PATH?.trim() ||
+    path.join(os.homedir(), ".milady", "milady.json");
+
+  if (!configuredPath) {
+    return {};
+  }
+
+  try {
+    const raw = await readFile(configuredPath, "utf8");
+    const { default: JSON5 } = await import("json5");
+    const parsed = JSON5.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
 
 async function getFreePort(): Promise<number> {
   return await new Promise((resolve, reject) => {
@@ -188,7 +215,7 @@ async function waitForChildExit(
 async function waitForJsonPredicate<T>(
   url: string,
   predicate: (value: T) => boolean,
-  timeoutMs: number = 150_000,
+  timeoutMs: number = LIVE_RUNTIME_BOOT_TIMEOUT_MS,
 ): Promise<T> {
   const deadline = Date.now() + timeoutMs;
   let lastError: unknown = null;
@@ -229,15 +256,54 @@ async function waitForTrajectoryCall(
   };
 }> {
   const deadline = Date.now() + timeoutMs;
-  const normalizedExpected = normalizePromptText(expectedUserPrompt);
+  const normalizedCandidates = [
+    expectedUserPrompt,
+    ...Array.from(
+      expectedUserPrompt.matchAll(/"([^"]{4,})"/g),
+      (match) => match[1] ?? "",
+    ),
+    ...expectedUserPrompt
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length >= 12),
+  ]
+    .map((candidate) => normalizePromptText(candidate))
+    .filter((candidate, index, all) => candidate.length > 0 && all.indexOf(candidate) === index);
 
   while (Date.now() < deadline) {
-    const list = await req(port, "GET", "/api/trajectories?limit=20");
-    const trajectories = Array.isArray(list.data.trajectories)
-      ? (list.data.trajectories as Array<{ id?: string }>)
-      : [];
+    const trajectoryMap = new Map<string, { id?: string }>();
+    const searchQueries = normalizedCandidates.slice(0, 4);
+    for (const searchQuery of searchQueries) {
+      const list = await req(
+        port,
+        "GET",
+        `/api/trajectories?limit=100&search=${encodeURIComponent(searchQuery)}`,
+      );
+      const trajectories = Array.isArray(list.data.trajectories)
+        ? (list.data.trajectories as Array<{ id?: string }>)
+        : [];
+      for (const trajectory of trajectories) {
+        const trajectoryId = String(trajectory.id ?? "");
+        if (trajectoryId) {
+          trajectoryMap.set(trajectoryId, trajectory);
+        }
+      }
+    }
 
-    for (const trajectory of trajectories) {
+    if (trajectoryMap.size === 0) {
+      const list = await req(port, "GET", "/api/trajectories?limit=100");
+      const trajectories = Array.isArray(list.data.trajectories)
+        ? (list.data.trajectories as Array<{ id?: string }>)
+        : [];
+      for (const trajectory of trajectories) {
+        const trajectoryId = String(trajectory.id ?? "");
+        if (trajectoryId) {
+          trajectoryMap.set(trajectoryId, trajectory);
+        }
+      }
+    }
+
+    for (const trajectory of trajectoryMap.values()) {
       const trajectoryId = String(trajectory.id ?? "");
       if (!trajectoryId) continue;
 
@@ -254,19 +320,20 @@ async function waitForTrajectoryCall(
           }>)
         : [];
 
-      const match = llmCalls.find(
-        (call) => {
-          const normalizedActual = normalizePromptText(
-            String(call.userPrompt ?? ""),
-          );
-          return (
-            normalizedActual.length > 0 &&
-            (normalizedActual === normalizedExpected ||
-              normalizedActual.includes(normalizedExpected) ||
-              normalizedExpected.includes(normalizedActual))
-          );
-        },
-      );
+      const match = llmCalls.find((call) => {
+        const normalizedActual = normalizePromptText(
+          String(call.userPrompt ?? ""),
+        );
+        return (
+          normalizedActual.length > 0 &&
+          normalizedCandidates.some(
+            (normalizedCandidate) =>
+              normalizedActual === normalizedCandidate ||
+              normalizedActual.includes(normalizedCandidate) ||
+              normalizedCandidate.includes(normalizedActual),
+          )
+        );
+      });
       if (match) {
         return { trajectoryId, llmCall: match };
       }
@@ -280,8 +347,11 @@ async function waitForTrajectoryCall(
   );
 }
 
-async function waitForLiveRuntimeBootstrap(port: number): Promise<void> {
-  const deadline = Date.now() + 120_000;
+async function waitForLiveRuntimeBootstrap(
+  port: number,
+  timeoutMs: number = LIVE_RUNTIME_BOOT_TIMEOUT_MS,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
   let lastError: unknown = null;
 
   while (Date.now() < deadline) {
@@ -335,7 +405,8 @@ async function waitForDefinitionByTitle(
   );
 
   const match = response.definitions?.find(
-    (entry) => entry.definition?.title === title && (predicate?.(entry) ?? true),
+    (entry) =>
+      entry.definition?.title === title && (predicate?.(entry) ?? true),
   );
   if (!match) {
     throw new Error(`Timed out waiting for ${title} definition`);
@@ -387,22 +458,56 @@ async function postLiveConversationMessage(
 }
 
 async function startLiveRuntime(): Promise<StartedRuntime> {
-  const tempRoot = await mkdtemp(path.join(os.tmpdir(), "milady-lifeops-live-"));
+  const tempRoot = await mkdtemp(
+    path.join(os.tmpdir(), "milady-lifeops-live-"),
+  );
   const stateDir = path.join(tempRoot, "state");
   const configPath = path.join(tempRoot, "eliza.json");
   const apiPort = await getFreePort();
   const logs: string[] = [];
+  const baseConfig = await loadBaseLiveConfig();
+  const basePlugins =
+    baseConfig.plugins &&
+    typeof baseConfig.plugins === "object" &&
+    Array.isArray((baseConfig.plugins as { allow?: unknown }).allow)
+      ? ((baseConfig.plugins as { allow?: unknown }).allow as unknown[])
+          .filter((entry): entry is string => typeof entry === "string")
+      : [];
+  const assistantConfig =
+    baseConfig.ui &&
+    typeof baseConfig.ui === "object" &&
+    (baseConfig.ui as { assistant?: unknown }).assistant &&
+    typeof (baseConfig.ui as { assistant?: unknown }).assistant === "object"
+      ? ((baseConfig.ui as { assistant?: unknown }).assistant as Record<
+          string,
+          unknown
+        >)
+      : {};
 
   await mkdir(stateDir, { recursive: true });
   await writeFile(
     configPath,
     `${JSON.stringify(
       {
+        ...baseConfig,
         logging: { level: "info" },
+        ui: {
+          assistant: {
+            ...assistantConfig,
+            name:
+              typeof assistantConfig.name === "string" &&
+              assistantConfig.name.trim().length > 0
+                ? assistantConfig.name
+                : "Chen",
+          },
+        },
         plugins: {
-          allow: [selectedLiveProviderPlugin].filter(
+          ...(baseConfig.plugins && typeof baseConfig.plugins === "object"
+            ? (baseConfig.plugins as Record<string, unknown>)
+            : {}),
+          allow: [...new Set([...basePlugins, selectedLiveProviderPlugin].filter(
             (entry): entry is string => typeof entry === "string",
-          ),
+          ))],
         },
       },
       null,
@@ -424,6 +529,7 @@ async function startLiveRuntime(): Promise<StartedRuntime> {
       MILADY_API_PORT: String(apiPort),
       ELIZA_DISABLE_LOCAL_EMBEDDINGS: "1",
       MILADY_DISABLE_LOCAL_EMBEDDINGS: "1",
+      ALLOW_NO_DATABASE: "",
       DISCORD_API_TOKEN: "",
       DISCORD_BOT_TOKEN: "",
       TELEGRAM_BOT_TOKEN: "",
@@ -440,10 +546,12 @@ async function startLiveRuntime(): Promise<StartedRuntime> {
     await waitForJsonPredicate<{ ready?: boolean; runtime?: string }>(
       `http://127.0.0.1:${apiPort}/api/health`,
       (value) => value.ready === true && value.runtime === "ok",
+      LIVE_RUNTIME_BOOT_TIMEOUT_MS,
     );
     await waitForJsonPredicate<{ trajectories?: unknown[] }>(
       `http://127.0.0.1:${apiPort}/api/trajectories?limit=1`,
       (value) => Array.isArray(value.trajectories),
+      LIVE_RUNTIME_BOOT_TIMEOUT_MS,
     );
     await waitForJsonPredicate<{
       occurrences?: unknown[];
@@ -454,8 +562,9 @@ async function startLiveRuntime(): Promise<StartedRuntime> {
         Array.isArray(value.occurrences) &&
         !!value.summary &&
         typeof value.summary === "object",
+      LIVE_RUNTIME_BOOT_TIMEOUT_MS,
     );
-    await waitForLiveRuntimeBootstrap(apiPort);
+    await waitForLiveRuntimeBootstrap(apiPort, LIVE_RUNTIME_BOOT_TIMEOUT_MS);
   } catch (error) {
     const logTail = logs.join("").slice(-8_000);
     if (child.exitCode == null) {
@@ -545,241 +654,466 @@ function buildCalendarRoutingPrompt(userRequest: string): string {
   ].join("\n");
 }
 
-describeIf(
-  !(
-    LIVE_TESTS_ENABLED &&
-    LIVE_CHAT_TESTS_ENABLED &&
-    selectedLiveProvider &&
-    selectedLiveProviderPlugin
-  ),
-)("Live: LifeOps seeded brush-teeth chat roundtrip", () => {
-  let runtime: StartedRuntime | undefined;
+function buildGmailRoutingPrompt(userRequest: string): string {
+  return [
+    `Handle this like a normal user request: "${userRequest}"`,
+    "Treat inbox triage, sender searches, email-from lookups, and email search/filter requests as Gmail work.",
+    "Use GMAIL_ACTION if you need an action.",
+    "Prefer passing a concrete Gmail search query or reply-needed filter when the request already names a sender, sender email, unread status, subject, or keywords.",
+    "Do not use CREATE_TASK, SPAWN_AGENT, SEND_TO_AGENT, or LIST_AGENTS for this.",
+  ].join("\n");
+}
 
-  beforeAll(async () => {
-    runtime = await startLiveRuntime();
-    await waitForLiveRuntimeBootstrap(runtime.port);
-  }, 120_000);
+function normalizePlannerResponseText(text: string): string {
+  return text.toLowerCase().replace(/\s+/g, " ").trim();
+}
 
-  afterAll(async () => {
-    if (runtime) {
-      await runtime.close();
-    }
-  });
+function expectPlannerResponseToContainAll(
+  plannerResponse: string,
+  fragments: string[],
+): void {
+  const normalized = normalizePlannerResponseText(plannerResponse);
+  for (const fragment of fragments) {
+    expect(normalized).toContain(fragment.toLowerCase());
+  }
+}
 
-  it("creates the seeded brush-teeth routine through chat and records a real trajectory", async () => {
-    const liveRuntime = runtime!;
-    const { conversationId } = await createConversation(liveRuntime.port, {
-      title: "Live LifeOps",
+function expectPlannerResponseToContainAny(
+  plannerResponse: string,
+  fragments: string[],
+): void {
+  const normalized = normalizePlannerResponseText(plannerResponse);
+  expect(
+    fragments.some((fragment) => normalized.includes(fragment.toLowerCase())),
+  ).toBe(true);
+}
+
+function requireStartedRuntime(
+  runtime: StartedRuntime | undefined,
+): StartedRuntime {
+  if (!runtime) {
+    throw new Error("Live runtime was not started.");
+  }
+  return runtime;
+}
+
+describeIf(LIVE_CHAT_SUITE_ENABLED)(
+  "Live: LifeOps seeded brush-teeth chat roundtrip",
+  () => {
+    let runtime: StartedRuntime | undefined;
+
+    beforeAll(async () => {
+      runtime = await startLiveRuntime();
+    }, LIVE_RUNTIME_BOOT_TIMEOUT_MS + 30_000);
+
+    afterAll(async () => {
+      if (runtime) {
+        await runtime.close();
+      }
     });
 
-    const prompt = buildLifeActionPrompt(
-      "Use LifeOps now.",
-      "create",
-      "Actually create a routine named Brush teeth that happens every morning and every night. Do not just give advice.",
-      "Brush teeth",
-    );
-    const responseText = await postLiveConversationMessage(
-      liveRuntime,
-      conversationId,
-      prompt,
-      "brush-teeth creation",
-    );
-    assertNoProviderIssue("brush-teeth creation", responseText, liveRuntime);
-    expect(responseText.trim().length).toBeGreaterThan(0);
+    it(
+      "creates the seeded brush-teeth routine through chat and records a real trajectory",
+      async () => {
+        const liveRuntime = requireStartedRuntime(runtime);
+        const { conversationId } = await createConversation(liveRuntime.port, {
+          title: "Live LifeOps",
+        });
 
-    const trajectory = await waitForTrajectoryCall(liveRuntime.port, prompt);
-    expect(trajectory.trajectoryId.length).toBeGreaterThan(0);
-    expect(String(trajectory.llmCall.response ?? "").length).toBeGreaterThan(0);
+        const prompt = buildLifeActionPrompt(
+          "Use LifeOps now.",
+          "create",
+          "Actually create a routine named Brush teeth that happens every morning and every night. Do not just give advice.",
+          "Brush teeth",
+        );
+        const responseText = await postLiveConversationMessage(
+          liveRuntime,
+          conversationId,
+          prompt,
+          "brush-teeth creation",
+        );
+        assertNoProviderIssue(
+          "brush-teeth creation",
+          responseText,
+          liveRuntime,
+        );
+        expect(responseText.trim().length).toBeGreaterThan(0);
 
-    const brushTeeth = await waitForDefinitionByTitle(
-      liveRuntime.port,
-      "Brush teeth",
-      (entry) =>
-        (entry.definition?.cadence as { kind?: string } | undefined)?.kind ===
-        "times_per_day",
+        const trajectory = await waitForTrajectoryCall(
+          liveRuntime.port,
+          prompt,
+        );
+        expect(trajectory.trajectoryId.length).toBeGreaterThan(0);
+        expect(
+          String(trajectory.llmCall.response ?? "").length,
+        ).toBeGreaterThan(0);
+
+        const brushTeeth = await waitForDefinitionByTitle(
+          liveRuntime.port,
+          "Brush teeth",
+          (entry) =>
+            (entry.definition?.cadence as { kind?: string } | undefined)
+              ?.kind === "times_per_day",
+        );
+        expect(brushTeeth).toBeDefined();
+        expect(brushTeeth.definition?.cadence).toMatchObject({
+          kind: "times_per_day",
+          slots: expect.arrayContaining([
+            expect.objectContaining({ minuteOfDay: 8 * 60, label: "Morning" }),
+            expect.objectContaining({ minuteOfDay: 21 * 60, label: "Night" }),
+          ]),
+        });
+        expect(brushTeeth.reminderPlan?.id ?? null).not.toBeNull();
+      },
+      LIVE_CHAT_TEST_TIMEOUT_MS,
     );
-    expect(brushTeeth).toBeDefined();
-    expect(brushTeeth.definition?.cadence).toMatchObject({
-      kind: "times_per_day",
-      slots: expect.arrayContaining([
-        expect.objectContaining({ minuteOfDay: 8 * 60, label: "Morning" }),
-        expect.objectContaining({ minuteOfDay: 21 * 60, label: "Night" }),
-      ]),
-    });
-    expect(brushTeeth.reminderPlan?.id ?? null).not.toBeNull();
-  }, LIVE_CHAT_TEST_TIMEOUT_MS);
 
-  it("creates a blocker-aware workout habit through chat and stores earned-access policy", async () => {
-    const liveRuntime = runtime!;
-    const { conversationId } = await createConversation(liveRuntime.port, {
-      title: "Live LifeOps Workout",
-    });
+    it(
+      "creates a blocker-aware workout habit through chat and stores earned-access policy",
+      async () => {
+        const liveRuntime = requireStartedRuntime(runtime);
+        const { conversationId } = await createConversation(liveRuntime.port, {
+          title: "Live LifeOps Workout",
+        });
 
-    const prompt = buildLifeActionPrompt(
-      "Use LifeOps now.",
-      "create",
-      "Actually create a habit named Workout that happens every afternoon, blocks X, Instagram, and Hacker News until I complete it, and then unlocks them for 60 minutes. Do not just give advice.",
-      "Workout",
+        const prompt = buildLifeActionPrompt(
+          "Use LifeOps now.",
+          "create",
+          "Actually create a habit named Workout that happens every afternoon, blocks X, Instagram, and Hacker News until I complete it, and then unlocks them for 60 minutes. Do not just give advice.",
+          "Workout",
+        );
+        const responseText = await postLiveConversationMessage(
+          liveRuntime,
+          conversationId,
+          prompt,
+          "workout creation",
+        );
+        assertNoProviderIssue("workout creation", responseText, liveRuntime);
+        expect(responseText.trim().length).toBeGreaterThan(0);
+
+        const trajectory = await waitForTrajectoryCall(
+          liveRuntime.port,
+          prompt,
+        );
+        expect(trajectory.trajectoryId.length).toBeGreaterThan(0);
+        expect(
+          String(trajectory.llmCall.response ?? "").length,
+        ).toBeGreaterThan(0);
+
+        const workout = await waitForDefinitionByTitle(
+          liveRuntime.port,
+          "Workout",
+          (entry) =>
+            (
+              entry.definition?.websiteAccess as
+                | { unlockMode?: string }
+                | undefined
+            )?.unlockMode === "fixed_duration",
+        );
+        expect(workout.definition?.cadence).toMatchObject({
+          kind: "daily",
+          windows: expect.arrayContaining(["afternoon"]),
+        });
+        expect(workout.definition?.websiteAccess).toMatchObject({
+          unlockMode: "fixed_duration",
+          unlockDurationMinutes: 60,
+          websites: expect.arrayContaining([
+            "x.com",
+            "twitter.com",
+            "instagram.com",
+            "news.ycombinator.com",
+          ]),
+        });
+        expect(workout.reminderPlan?.id ?? null).not.toBeNull();
+      },
+      LIVE_CHAT_TEST_TIMEOUT_MS,
     );
-    const responseText = await postLiveConversationMessage(
-      liveRuntime,
-      conversationId,
-      prompt,
-      "workout creation",
-    );
-    assertNoProviderIssue("workout creation", responseText, liveRuntime);
-    expect(responseText.trim().length).toBeGreaterThan(0);
 
-    const trajectory = await waitForTrajectoryCall(liveRuntime.port, prompt);
-    expect(trajectory.trajectoryId.length).toBeGreaterThan(0);
-    expect(String(trajectory.llmCall.response ?? "").length).toBeGreaterThan(0);
+    it(
+      "creates a meal-window vitamin routine through chat",
+      async () => {
+        const liveRuntime = requireStartedRuntime(runtime);
+        const { conversationId } = await createConversation(liveRuntime.port, {
+          title: "Live LifeOps Vitamins",
+        });
 
-    const workout = await waitForDefinitionByTitle(
-      liveRuntime.port,
-      "Workout",
-      (entry) =>
-        (entry.definition?.websiteAccess as { unlockMode?: string } | undefined)
-          ?.unlockMode === "fixed_duration",
-    );
-    expect(workout.definition?.cadence).toMatchObject({
-      kind: "daily",
-      windows: expect.arrayContaining(["afternoon"]),
-    });
-    expect(workout.definition?.websiteAccess).toMatchObject({
-      unlockMode: "fixed_duration",
-      unlockDurationMinutes: 60,
-      websites: expect.arrayContaining([
-        "x.com",
-        "twitter.com",
-        "instagram.com",
-        "news.ycombinator.com",
-      ]),
-    });
-    expect(workout.reminderPlan?.id ?? null).not.toBeNull();
-  }, LIVE_CHAT_TEST_TIMEOUT_MS);
+        const prompt = buildLifeActionPrompt(
+          "Use LifeOps now.",
+          "create",
+          "Actually create a routine named Take vitamins that reminds me to take them with lunch every day. Do not just give advice.",
+          "Take vitamins",
+        );
+        const responseText = await postLiveConversationMessage(
+          liveRuntime,
+          conversationId,
+          prompt,
+          "vitamins creation",
+        );
+        assertNoProviderIssue("vitamins creation", responseText, liveRuntime);
+        expect(responseText.trim().length).toBeGreaterThan(0);
 
-  it("creates a meal-window vitamin routine through chat", async () => {
-    const liveRuntime = runtime!;
-    const { conversationId } = await createConversation(liveRuntime.port, {
-      title: "Live LifeOps Vitamins",
-    });
+        const trajectory = await waitForTrajectoryCall(
+          liveRuntime.port,
+          prompt,
+        );
+        expect(trajectory.trajectoryId.length).toBeGreaterThan(0);
+        expect(
+          String(trajectory.llmCall.response ?? "").length,
+        ).toBeGreaterThan(0);
 
-    const prompt = buildLifeActionPrompt(
-      "Use LifeOps now.",
-      "create",
-      "Actually create a routine named Take vitamins that reminds me to take them with lunch every day. Do not just give advice.",
-      "Take vitamins",
+        const vitamins = await waitForDefinitionByTitle(
+          liveRuntime.port,
+          "Take vitamins",
+        );
+        expect(vitamins.definition?.cadence).toMatchObject({
+          kind: "daily",
+          windows: expect.arrayContaining(["afternoon"]),
+        });
+        expect(vitamins.reminderPlan?.id ?? null).not.toBeNull();
+      },
+      LIVE_CHAT_TEST_TIMEOUT_MS,
     );
-    const responseText = await postLiveConversationMessage(
-      liveRuntime,
-      conversationId,
-      prompt,
-      "vitamins creation",
-    );
-    assertNoProviderIssue("vitamins creation", responseText, liveRuntime);
-    expect(responseText.trim().length).toBeGreaterThan(0);
 
-    const trajectory = await waitForTrajectoryCall(liveRuntime.port, prompt);
-    expect(trajectory.trajectoryId.length).toBeGreaterThan(0);
-    expect(String(trajectory.llmCall.response ?? "").length).toBeGreaterThan(0);
+    it(
+      "adjusts reminder intensity through chat and persists the preference",
+      async () => {
+        const liveRuntime = requireStartedRuntime(runtime);
+        const { conversationId } = await createConversation(liveRuntime.port, {
+          title: "Live LifeOps Reminder Preference",
+        });
 
-    const vitamins = await waitForDefinitionByTitle(
-      liveRuntime.port,
-      "Take vitamins",
-    );
-    expect(vitamins.definition?.cadence).toMatchObject({
-      kind: "daily",
-      windows: expect.arrayContaining(["afternoon"]),
-    });
-    expect(vitamins.reminderPlan?.id ?? null).not.toBeNull();
-  }, LIVE_CHAT_TEST_TIMEOUT_MS);
+        const createPrompt = buildLifeActionPrompt(
+          "Use LifeOps now.",
+          "create",
+          "Actually create a habit named Drink water that reminds me throughout the day. Do not just give advice.",
+          "Drink water",
+        );
+        const createResponseText = await postLiveConversationMessage(
+          liveRuntime,
+          conversationId,
+          createPrompt,
+          "water creation",
+        );
+        assertNoProviderIssue(
+          "water creation",
+          createResponseText,
+          liveRuntime,
+        );
 
-  it("adjusts reminder intensity through chat and persists the preference", async () => {
-    const liveRuntime = runtime!;
-    const { conversationId } = await createConversation(liveRuntime.port, {
-      title: "Live LifeOps Reminder Preference",
-    });
+        const drinkWater = await waitForDefinitionByTitle(
+          liveRuntime.port,
+          "Drink water",
+        );
+        const definitionId = String(drinkWater.definition?.id ?? "");
+        expect(definitionId.length).toBeGreaterThan(0);
 
-    const createPrompt = buildLifeActionPrompt(
-      "Use LifeOps now.",
-      "create",
-      "Actually create a habit named Drink water that reminds me throughout the day. Do not just give advice.",
-      "Drink water",
-    );
-    const createResponseText = await postLiveConversationMessage(
-      liveRuntime,
-      conversationId,
-      createPrompt,
-      "water creation",
-    );
-    assertNoProviderIssue("water creation", createResponseText, liveRuntime);
+        const preferencePrompt = buildLifeActionPrompt(
+          "Use LifeOps now.",
+          "reminder_preference",
+          "Actually remind me less about Drink water. Do not just explain the setting.",
+          "Drink water",
+        );
+        const responseText = await postLiveConversationMessage(
+          liveRuntime,
+          conversationId,
+          preferencePrompt,
+          "reminder preference update",
+        );
+        assertNoProviderIssue(
+          "reminder preference update",
+          responseText,
+          liveRuntime,
+        );
+        expect(responseText.trim().length).toBeGreaterThan(0);
 
-    const drinkWater = await waitForDefinitionByTitle(
-      liveRuntime.port,
-      "Drink water",
-    );
-    const definitionId = String(drinkWater.definition?.id ?? "");
-    expect(definitionId.length).toBeGreaterThan(0);
+        const trajectory = await waitForTrajectoryCall(
+          liveRuntime.port,
+          preferencePrompt,
+        );
+        expect(trajectory.trajectoryId.length).toBeGreaterThan(0);
+        expect(
+          String(trajectory.llmCall.response ?? "").length,
+        ).toBeGreaterThan(0);
 
-    const preferencePrompt = buildLifeActionPrompt(
-      "Use LifeOps now.",
-      "reminder_preference",
-      "Actually remind me less about Drink water. Do not just explain the setting.",
-      "Drink water",
+        const preference = await req(
+          liveRuntime.port,
+          "GET",
+          `/api/lifeops/reminder-preferences?definitionId=${encodeURIComponent(definitionId)}`,
+        );
+        expect(preference.status).toBe(200);
+        expect(
+          (preference.data.effective as Record<string, unknown>).intensity,
+        ).toBe("minimal");
+      },
+      LIVE_CHAT_TEST_TIMEOUT_MS,
     );
-    const responseText = await postLiveConversationMessage(
-      liveRuntime,
-      conversationId,
-      preferencePrompt,
-      "reminder preference update",
-    );
-    assertNoProviderIssue(
-      "reminder preference update",
-      responseText,
-      liveRuntime,
-    );
-    expect(responseText.trim().length).toBeGreaterThan(0);
 
-    const trajectory = await waitForTrajectoryCall(
-      liveRuntime.port,
-      preferencePrompt,
-    );
-    expect(trajectory.trajectoryId.length).toBeGreaterThan(0);
-    expect(String(trajectory.llmCall.response ?? "").length).toBeGreaterThan(0);
+    it(
+      "routes itinerary questions toward CALENDAR_ACTION instead of task agents",
+      async () => {
+        const liveRuntime = requireStartedRuntime(runtime);
+        const { conversationId } = await createConversation(liveRuntime.port, {
+          title: "Live LifeOps Calendar Routing",
+        });
 
-    const preference = await req(
-      liveRuntime.port,
-      "GET",
-      `/api/lifeops/reminder-preferences?definitionId=${encodeURIComponent(definitionId)}`,
-    );
-    expect(preference.status).toBe(200);
-    expect(
-      (preference.data.effective as Record<string, unknown>).intensity,
-    ).toBe("minimal");
-  }, LIVE_CHAT_TEST_TIMEOUT_MS);
+        const prompt = buildCalendarRoutingPrompt(
+          "hey when do i fly back from denver",
+        );
+        const responseText = await postLiveConversationMessage(
+          liveRuntime,
+          conversationId,
+          prompt,
+          "calendar routing",
+        );
+        assertNoProviderIssue("calendar routing", responseText, liveRuntime);
+        expect(responseText).not.toMatch(/no active task agents/i);
+        expect(responseText).not.toMatch(
+          /create_task|spawn_agent|send_to_agent/i,
+        );
 
-  it("routes itinerary questions toward CALENDAR_ACTION instead of task agents", async () => {
-    const liveRuntime = runtime!;
-    const { conversationId } = await createConversation(liveRuntime.port, {
-      title: "Live LifeOps Calendar Routing",
-    });
-
-    const prompt = buildCalendarRoutingPrompt(
-      "hey when do i fly back from denver",
+        const trajectory = await waitForTrajectoryCall(
+          liveRuntime.port,
+          prompt,
+        );
+        const plannerResponse = String(trajectory.llmCall.response ?? "");
+        expect(plannerResponse).toMatch(/CALENDAR_ACTION/i);
+        expect(plannerResponse).not.toMatch(
+          /CREATE_TASK|SPAWN_AGENT|SEND_TO_AGENT|LIST_AGENTS/i,
+        );
+      },
+      LIVE_CHAT_TEST_TIMEOUT_MS,
     );
-    const responseText = await postLiveConversationMessage(
-      liveRuntime,
-      conversationId,
-      prompt,
-      "calendar routing",
-    );
-    assertNoProviderIssue("calendar routing", responseText, liveRuntime);
-    expect(responseText).not.toMatch(/no active task agents/i);
-    expect(responseText).not.toMatch(/create_task|spawn_agent|send_to_agent/i);
 
-    const trajectory = await waitForTrajectoryCall(liveRuntime.port, prompt);
-    const plannerResponse = String(trajectory.llmCall.response ?? "");
-    expect(plannerResponse).toMatch(/CALENDAR_ACTION/i);
-    expect(plannerResponse).not.toMatch(/CREATE_TASK|SPAWN_AGENT|SEND_TO_AGENT|LIST_AGENTS/i);
-  }, LIVE_CHAT_TEST_TIMEOUT_MS);
-});
+    it(
+      "routes sender-style Gmail searches toward GMAIL_ACTION across name and address variants",
+      async () => {
+        const liveRuntime = requireStartedRuntime(runtime);
+        const cases = [
+          {
+            userRequest: "find the email from suran",
+            requiredFragments: ["gmail_action", "suran"],
+          },
+          {
+            userRequest: "look for any email from suran@example.com",
+            requiredFragments: ["gmail_action", "suran@example.com"],
+          },
+          {
+            userRequest: "search my inbox for messages from Suran Lee",
+            requiredFragments: ["gmail_action", "suran lee"],
+          },
+          {
+            userRequest:
+              "look for all emails sent to me from suran in the last few weeks",
+            requiredFragments: ["gmail_action", "suran"],
+          },
+          {
+            userRequest: "show all unread emails from alex@example.com",
+            requiredFragments: ["gmail_action", "alex@example.com", "unread"],
+          },
+        ] as const;
+
+        for (const testCase of cases) {
+          const { conversationId } = await createConversation(
+            liveRuntime.port,
+            {
+              title: `Live Gmail Routing ${testCase.userRequest}`,
+            },
+          );
+          const prompt = buildGmailRoutingPrompt(testCase.userRequest);
+          const responseText = await postLiveConversationMessage(
+            liveRuntime,
+            conversationId,
+            prompt,
+            `gmail sender routing: ${testCase.userRequest}`,
+          );
+          assertNoProviderIssue(
+            `gmail sender routing: ${testCase.userRequest}`,
+            responseText,
+            liveRuntime,
+          );
+
+          const trajectory = await waitForTrajectoryCall(
+            liveRuntime.port,
+            prompt,
+          );
+          const plannerResponse = String(trajectory.llmCall.response ?? "");
+          expectPlannerResponseToContainAll(
+            plannerResponse,
+            testCase.requiredFragments,
+          );
+          expect(plannerResponse).not.toMatch(
+            /CREATE_TASK|SPAWN_AGENT|SEND_TO_AGENT|LIST_AGENTS/i,
+          );
+        }
+      },
+      LIVE_CHAT_TEST_TIMEOUT_MS,
+    );
+
+    it(
+      "routes broad Gmail filters toward GMAIL_ACTION and preserves the key search terms",
+      async () => {
+        const liveRuntime = requireStartedRuntime(runtime);
+        const cases = [
+          {
+            userRequest: "find emails that contain invoice",
+            requiredFragments: ["gmail_action", "invoice"],
+          },
+          {
+            userRequest: "find all emails from alex that contain venue",
+            requiredFragments: ["gmail_action", "alex", "venue"],
+          },
+          {
+            userRequest:
+              "show me all messages where the subject mentions agenda",
+            requiredFragments: ["gmail_action", "agenda"],
+          },
+          {
+            userRequest: "which emails need a reply about venue",
+            requiredFragments: ["gmail_action", "venue"],
+            anyFragments: ["replyneededonly", "reply needed", "needs_response"],
+          },
+        ] as const;
+
+        for (const testCase of cases) {
+          const { conversationId } = await createConversation(
+            liveRuntime.port,
+            {
+              title: `Live Gmail Filters ${testCase.userRequest}`,
+            },
+          );
+          const prompt = buildGmailRoutingPrompt(testCase.userRequest);
+          const responseText = await postLiveConversationMessage(
+            liveRuntime,
+            conversationId,
+            prompt,
+            `gmail filter routing: ${testCase.userRequest}`,
+          );
+          assertNoProviderIssue(
+            `gmail filter routing: ${testCase.userRequest}`,
+            responseText,
+            liveRuntime,
+          );
+
+          const trajectory = await waitForTrajectoryCall(
+            liveRuntime.port,
+            prompt,
+          );
+          const plannerResponse = String(trajectory.llmCall.response ?? "");
+          expectPlannerResponseToContainAll(
+            plannerResponse,
+            testCase.requiredFragments,
+          );
+          if ("anyFragments" in testCase) {
+            expectPlannerResponseToContainAny(plannerResponse, [
+              ...testCase.anyFragments,
+            ]);
+          }
+          expect(plannerResponse).not.toMatch(
+            /CREATE_TASK|SPAWN_AGENT|SEND_TO_AGENT|LIST_AGENTS/i,
+          );
+        }
+      },
+      LIVE_CHAT_TEST_TIMEOUT_MS,
+    );
+  },
+);

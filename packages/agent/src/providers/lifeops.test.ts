@@ -2,12 +2,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   mockCheckSenderPrivateAccess,
+  mockResolveCanonicalOwnerIdForMessage,
   mockGetOverview,
   mockGetGoogleConnectorStatus,
   mockGetNextCalendarEventContext,
   mockGetGmailTriage,
 } = vi.hoisted(() => ({
   mockCheckSenderPrivateAccess: vi.fn(),
+  mockResolveCanonicalOwnerIdForMessage: vi.fn(),
   mockGetOverview: vi.fn(),
   mockGetGoogleConnectorStatus: vi.fn(),
   mockGetNextCalendarEventContext: vi.fn(),
@@ -16,6 +18,7 @@ const {
 
 vi.mock("@elizaos/core/roles", () => ({
   checkSenderPrivateAccess: mockCheckSenderPrivateAccess,
+  resolveCanonicalOwnerIdForMessage: mockResolveCanonicalOwnerIdForMessage,
 }));
 
 vi.mock("../lifeops/service.js", () => ({
@@ -61,6 +64,7 @@ function baseOverview() {
 describe("lifeOpsProvider", () => {
   beforeEach(() => {
     mockCheckSenderPrivateAccess.mockReset();
+    mockResolveCanonicalOwnerIdForMessage.mockReset();
     mockGetOverview.mockReset();
     mockGetGoogleConnectorStatus.mockReset();
     mockGetNextCalendarEventContext.mockReset();
@@ -75,6 +79,7 @@ describe("lifeOpsProvider", () => {
       accessRole: "OWNER",
       accessSource: "owner",
     });
+    mockResolveCanonicalOwnerIdForMessage.mockResolvedValue(null);
     mockGetOverview.mockResolvedValue(baseOverview());
     // Default: Google not connected
     mockGetGoogleConnectorStatus.mockRejectedValue(new Error("not configured"));

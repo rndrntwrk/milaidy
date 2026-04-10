@@ -126,7 +126,6 @@ import {
   SandboxManager,
   type SandboxMode,
 } from "../services/sandbox-manager.js";
-import * as pluginAgentOrchestrator from "./agent-orchestrator-compat.js";
 import { CORE_PLUGINS, OPTIONAL_CORE_PLUGINS } from "./core-plugins.js";
 import { seedBundledKnowledge } from "./default-knowledge.js";
 import { createElizaPlugin } from "./eliza-plugin.js";
@@ -137,6 +136,18 @@ import {
 } from "./native-runtime-features.js";
 import { installRuntimePluginLifecycle } from "./plugin-lifecycle.js";
 import { shouldEnableTrajectoryLoggingByDefault } from "./trajectory-persistence.js";
+
+const require = createRequire(import.meta.url);
+// Keep the orchestrator plugin behind a runtime require of the local compat
+// wrapper. A static ESM import here causes tsdown/rolldown to inline the
+// workspace-linked plugin source and emit a broken synthetic `default2`
+// re-export in cloud bundles.
+let pluginAgentOrchestrator: unknown = null;
+try {
+  pluginAgentOrchestrator = require("./agent-orchestrator-compat");
+} catch {
+  pluginAgentOrchestrator = null;
+}
 
 type SignalShutdownContext = {
   getRuntime: () => AgentRuntime;
@@ -221,7 +232,9 @@ export const STATIC_ELIZA_PLUGINS: Record<string, unknown> = {
   "@elizaos/plugin-local-embedding": pluginLocalEmbedding,
   "@elizaos/plugin-secrets-manager": pluginSecretsManager,
   "@elizaos/plugin-form": pluginForm,
-  "@elizaos/plugin-agent-orchestrator": pluginAgentOrchestrator,
+  ...(pluginAgentOrchestrator
+    ? { "@elizaos/plugin-agent-orchestrator": pluginAgentOrchestrator }
+    : {}),
   "@elizaos/plugin-cron": pluginCron,
   "@elizaos/plugin-shell": pluginShell,
   "@elizaos/plugin-plugin-manager": pluginPluginManager,
@@ -1589,14 +1602,18 @@ export async function autoFetchCloudGithubToken(
 export function applyCloudConfigToEnv(config: ElizaConfig): void {
   migrateLegacyRuntimeConfig(config as Record<string, unknown>);
   const cloud = config.cloud;
-  if (!cloud) return;
+
+  const isCloudContainer =
+    process.env.MILADY_CLOUD_PROVISIONED === "1" ||
+    process.env.ELIZA_CLOUD_PROVISIONED === "1";
+  if (!cloud && !isCloudContainer) return;
   const topology = resolveElizaCloudTopology(config as Record<string, unknown>);
 
   // Cloud inference is selected from the canonical onboarding connection, not
   // just from raw cloud flags. This keeps linked cloud auth from re-enabling
   // Eliza Cloud after the user has switched to a local or remote provider.
-  const effectivelyEnabled = topology.services.inference;
-  const shouldLoadCloudPlugin = topology.shouldLoadPlugin;
+  const effectivelyEnabled = topology.services.inference || isCloudContainer;
+  const shouldLoadCloudPlugin = topology.shouldLoadPlugin || isCloudContainer;
 
   const setCloudUsageEnv = (key: string, enabled: boolean): void => {
     if (enabled) {
@@ -1607,14 +1624,17 @@ export function applyCloudConfigToEnv(config: ElizaConfig): void {
   };
 
   if (isMiladySettingsDebugEnabled()) {
-    const c = cloud as Record<string, unknown>;
+    const c = (cloud ?? {}) as Record<string, unknown>;
     logger.debug(
-      `[milady][settings][runtime] applyCloudConfigToEnv inference=${effectivelyEnabled} shouldLoadPlugin=${shouldLoadCloudPlugin} cloud=${JSON.stringify(settingsDebugCloudSummary(c))}`,
+      `[milady][settings][runtime] applyCloudConfigToEnv inference=${effectivelyEnabled} shouldLoadPlugin=${shouldLoadCloudPlugin} isCloudContainer=${isCloudContainer} cloud=${JSON.stringify(settingsDebugCloudSummary(c))}`,
     );
   }
 
-  setCloudUsageEnv("ELIZAOS_CLOUD_USE_INFERENCE", topology.services.inference);
-  setCloudUsageEnv("ELIZAOS_CLOUD_USE_TTS", topology.services.tts);
+  setCloudUsageEnv("ELIZAOS_CLOUD_USE_INFERENCE", effectivelyEnabled);
+  setCloudUsageEnv(
+    "ELIZAOS_CLOUD_USE_TTS",
+    topology.services.tts || isCloudContainer,
+  );
   setCloudUsageEnv("ELIZAOS_CLOUD_USE_MEDIA", topology.services.media);
   setCloudUsageEnv(
     "ELIZAOS_CLOUD_USE_EMBEDDINGS",
@@ -1630,7 +1650,7 @@ export function applyCloudConfigToEnv(config: ElizaConfig): void {
 
   if (shouldLoadCloudPlugin) {
     logger.info(
-      `[eliza] Cloud config: inference=${topology.services.inference}, runtime=${topology.runtime}, hasApiKey=${Boolean(cloud.apiKey)}, baseUrl=${cloud.baseUrl ?? "(default)"}`,
+      `[eliza] Cloud config: inference=${topology.services.inference}, runtime=${topology.runtime}, hasApiKey=${Boolean(cloud?.apiKey || process.env.ELIZAOS_CLOUD_API_KEY)}, baseUrl=${cloud?.baseUrl ?? "(default)"}, isCloudContainer=${isCloudContainer}`,
     );
     // Only propagate the API key when cloud is enabled AND it is a real
     // credential — never set the literal "[REDACTED]" placeholder (which can
@@ -1639,15 +1659,15 @@ export function applyCloudConfigToEnv(config: ElizaConfig): void {
     // in process.env still auto-loads @elizaos/plugin-elizacloud and steals
     // TEXT_LARGE even if the JSON says cloud is off.
     const isRealApiKey =
-      cloud.apiKey && cloud.apiKey.trim().toUpperCase() !== "[REDACTED]";
+      cloud?.apiKey && cloud.apiKey.trim().toUpperCase() !== "[REDACTED]";
     if (isRealApiKey) {
       process.env.ELIZAOS_CLOUD_API_KEY = cloud.apiKey;
-    } else {
+    } else if (!isCloudContainer) {
       delete process.env.ELIZAOS_CLOUD_API_KEY;
     }
-    if (cloud.baseUrl) {
+    if (cloud?.baseUrl) {
       process.env.ELIZAOS_CLOUD_BASE_URL = cloud.baseUrl;
-    } else {
+    } else if (!isCloudContainer) {
       delete process.env.ELIZAOS_CLOUD_BASE_URL;
     }
   } else {
@@ -1666,8 +1686,8 @@ export function applyCloudConfigToEnv(config: ElizaConfig): void {
   const models = (config as Record<string, unknown>).models as
     | { small?: string; large?: string }
     | undefined;
-  if (topology.services.inference) {
-    const small = models?.small || "openai/gpt-5.4-mini";
+  if (effectivelyEnabled) {
+    const small = models?.small || "minimax/minimax-m2.7";
     const large = models?.large || "anthropic/claude-sonnet-4.6";
     process.env.SMALL_MODEL = small;
     process.env.LARGE_MODEL = large;
@@ -1802,22 +1822,8 @@ type PglitePidFileStatus =
 type PgliteRecoveryAction =
   | "none"
   | "retry-without-reset"
-  | "reset-data-dir"
-  | "fail-active-lock";
-
-function allowDestructivePgliteRecovery(): boolean {
-  const raw =
-    process.env.MILADY_PGLITE_AUTO_RESET ?? process.env.ELIZA_PGLITE_AUTO_RESET;
-  const normalized = String(raw ?? "")
-    .trim()
-    .toLowerCase();
-  return (
-    normalized === "true" ||
-    normalized === "1" ||
-    normalized === "yes" ||
-    normalized === "on"
-  );
-}
+  | "fail-active-lock"
+  | "fail-manual-reset";
 
 function reconcilePglitePidFile(dataDir: string): PglitePidFileStatus {
   const pidPath = path.join(dataDir, "postmaster.pid");
@@ -1933,6 +1939,15 @@ function isPgliteLockError(err: unknown): boolean {
 
 /** @internal Exported for testing. */
 export function isRecoverablePgliteInitError(err: unknown): boolean {
+  const code = pluginSql.getPgliteErrorCode(err);
+  if (
+    code === pluginSql.PGLITE_ERROR_CODES.ACTIVE_LOCK ||
+    code === pluginSql.PGLITE_ERROR_CODES.CORRUPT_DATA ||
+    code === pluginSql.PGLITE_ERROR_CODES.MANUAL_RESET_REQUIRED
+  ) {
+    return true;
+  }
+
   const haystack = collectErrorMessages(err).join("\n").toLowerCase();
   if (!haystack) return false;
 
@@ -1952,6 +1967,10 @@ export function isRecoverablePgliteInitError(err: unknown): boolean {
     "checkpoint failed",
     "checksum mismatch",
     "corrupt",
+    "could not read blocks",
+    "read only ",
+    "unreachable code should not be executed",
+    "_pgl_backend",
   ].some((needle) => haystack.includes(needle));
 
   if (hasMigrationsSchema) return true;
@@ -1965,10 +1984,18 @@ export function getPgliteRecoveryAction(
   err: unknown,
   dataDir: string,
 ): PgliteRecoveryAction {
-  if (!isRecoverablePgliteInitError(err)) return "none";
-  if (!isPgliteLockError(err)) {
-    return allowDestructivePgliteRecovery() ? "reset-data-dir" : "none";
+  const code = pluginSql.getPgliteErrorCode(err);
+  if (code === pluginSql.PGLITE_ERROR_CODES.ACTIVE_LOCK) {
+    return "fail-active-lock";
   }
+  if (
+    code === pluginSql.PGLITE_ERROR_CODES.CORRUPT_DATA ||
+    code === pluginSql.PGLITE_ERROR_CODES.MANUAL_RESET_REQUIRED
+  ) {
+    return "fail-manual-reset";
+  }
+
+  if (!isRecoverablePgliteInitError(err)) return "none";
 
   const pidStatus = reconcilePglitePidFile(dataDir);
   if (
@@ -1981,13 +2008,62 @@ export function getPgliteRecoveryAction(
   if (pidStatus === "cleared-stale" || pidStatus === "cleared-malformed") {
     return "retry-without-reset";
   }
-  return allowDestructivePgliteRecovery() ? "reset-data-dir" : "none";
+  return "fail-manual-reset";
 }
 
 function createActivePgliteLockError(dataDir: string, err: unknown): Error {
-  return new Error(
-    `PGLite data dir is already in use at ${dataDir}. Close the other Eliza process or set a different PGLITE_DATA_DIR before retrying.`,
-    { cause: err },
+  if (
+    pluginSql.getPgliteErrorCode(err) === pluginSql.PGLITE_ERROR_CODES.ACTIVE_LOCK &&
+    err instanceof Error
+  ) {
+    return err;
+  }
+  return pluginSql.createPgliteInitError(
+    pluginSql.PGLITE_ERROR_CODES.ACTIVE_LOCK,
+    `PGLite data dir is already in use at ${dataDir}. Close the other Milady or Eliza process, or set a different PGLITE_DATA_DIR before retrying.`,
+    { cause: err, dataDir },
+  );
+}
+
+function formatPgliteFailure(err: unknown): string {
+  return collectErrorMessages(err)[0] ?? formatError(err);
+}
+
+function createManualResetRequiredPgliteError(
+  dataDir: string,
+  err: unknown,
+): Error {
+  if (
+    pluginSql.getPgliteErrorCode(err) ===
+      pluginSql.PGLITE_ERROR_CODES.MANUAL_RESET_REQUIRED &&
+    err instanceof Error
+  ) {
+    return err;
+  }
+
+  const errorText = formatPgliteFailure(err);
+  const cause =
+    pluginSql.getPgliteErrorCode(err) === pluginSql.PGLITE_ERROR_CODES.CORRUPT_DATA
+      ? err
+      : pluginSql.createPgliteInitError(
+          pluginSql.PGLITE_ERROR_CODES.CORRUPT_DATA,
+          `PGlite data dir at ${dataDir} appears corrupt or unreadable: ${errorText}`,
+          { cause: err, dataDir },
+        );
+
+  return pluginSql.createPgliteInitError(
+    pluginSql.PGLITE_ERROR_CODES.MANUAL_RESET_REQUIRED,
+    `PGlite initialization failed for ${dataDir}: ${errorText}. Stop Milady, then rename or delete only this directory before retrying: ${dataDir}`,
+    { cause, dataDir },
+  );
+}
+
+export function isFatalPgliteStartupError(err: unknown): boolean {
+  const code = pluginSql.getPgliteErrorCode(err);
+  return (
+    code === pluginSql.PGLITE_ERROR_CODES.ACTIVE_LOCK ||
+    code === pluginSql.PGLITE_ERROR_CODES.CORRUPT_DATA ||
+    code === pluginSql.PGLITE_ERROR_CODES.MANUAL_RESET_REQUIRED
   );
 }
 
@@ -1998,35 +2074,6 @@ function resolveActivePgliteDataDir(config: ElizaConfig): string | null {
   const configured = process.env.PGLITE_DATA_DIR?.trim();
   const dataDir = configured || resolveDefaultPgliteDataDir(config);
   return resolveUserPath(dataDir);
-}
-
-async function resetPgliteDataDir(dataDir: string): Promise<void> {
-  const normalized = path.resolve(dataDir);
-  const root = path.parse(normalized).root;
-  if (normalized === root) {
-    throw new Error(`Refusing to reset unsafe PGLite path: ${normalized}`);
-  }
-
-  const stamp = new Date()
-    .toISOString()
-    .replace(/[-:]/g, "")
-    .replace(/\..*$/, "")
-    .replace("T", "-");
-  const backupDir = `${normalized}.corrupt-${stamp}`;
-
-  if (existsSync(normalized)) {
-    try {
-      await fs.rename(normalized, backupDir);
-      logger.warn(`[eliza] Backed up existing PGLite data dir to ${backupDir}`);
-    } catch (err) {
-      logger.warn(
-        `[eliza] Failed to back up PGLite data dir (${formatError(err)}); deleting ${normalized} instead`,
-      );
-      await fs.rm(normalized, { recursive: true, force: true });
-    }
-  }
-
-  await fs.mkdir(normalized, { recursive: true });
 }
 
 /** Call whichever init method the adapter exposes (.init or .initialize). */
@@ -2062,24 +2109,17 @@ async function initializeDatabaseAdapter(
     if (recoveryAction === "fail-active-lock") {
       throw createActivePgliteLockError(pgliteDataDir, err);
     }
-
-    if (recoveryAction === "retry-without-reset") {
-      logger.warn(
-        `[eliza] PGLite init failed (${formatError(err)}). Cleared a stale PGLite lock in ${pgliteDataDir} and retrying without resetting data.`,
-      );
-    } else {
-      logger.warn(
-        `[eliza] PGLite init failed (${formatError(err)}). Resetting local DB at ${pgliteDataDir} and retrying once.`,
-      );
-      await resetPgliteDataDir(pgliteDataDir);
-      process.env.PGLITE_DATA_DIR = pgliteDataDir;
+    if (recoveryAction === "fail-manual-reset") {
+      throw createManualResetRequiredPgliteError(pgliteDataDir, err);
     }
+
+    logger.warn(
+      `[eliza] PGLite init failed (${formatError(err)}). Cleared a stale PGLite lock in ${pgliteDataDir} and retrying without resetting data.`,
+    );
 
     await callAdapterInit(runtime.adapter);
     logger.info(
-      recoveryAction === "retry-without-reset"
-        ? "[eliza] Database adapter recovered after clearing a stale PGLite lock"
-        : "[eliza] Database adapter recovered after resetting PGLite data",
+      "[eliza] Database adapter recovered after clearing a stale PGLite lock",
     );
   }
 
@@ -2524,18 +2564,13 @@ async function registerSqlPluginWithRecovery(
     if (recoveryAction === "fail-active-lock") {
       throw createActivePgliteLockError(pgliteDataDir, registerError);
     }
-
-    if (recoveryAction === "retry-without-reset") {
-      logger.warn(
-        `[eliza] SQL plugin registration failed (${formatError(registerError)}). Cleared a stale PGLite lock in ${pgliteDataDir} and retrying without resetting data.`,
-      );
-    } else {
-      logger.warn(
-        `[eliza] SQL plugin registration failed (${formatError(registerError)}). Resetting local PGLite DB at ${pgliteDataDir} and retrying once.`,
-      );
-      await resetPgliteDataDir(pgliteDataDir);
-      process.env.PGLITE_DATA_DIR = pgliteDataDir;
+    if (recoveryAction === "fail-manual-reset") {
+      throw createManualResetRequiredPgliteError(pgliteDataDir, registerError);
     }
+
+    logger.warn(
+      `[eliza] SQL plugin registration failed (${formatError(registerError)}). Cleared a stale PGLite lock in ${pgliteDataDir} and retrying without resetting data.`,
+    );
 
     try {
       await runtime.registerPlugin(sqlPlugin.plugin);
@@ -3717,6 +3752,17 @@ export async function startEliza(
   };
 
   const initializeRuntimeServices = async (): Promise<void> => {
+    try {
+      const { stewardEvmPreBoot } = await import(
+        "../services/steward-evm-bridge.js"
+      );
+      await stewardEvmPreBoot(runtime);
+    } catch (err) {
+      logger.debug(
+        `[eliza] Steward EVM pre-boot skipped: ${formatError(err)}`,
+      );
+    }
+
     // 8. Initialize the runtime (registers remaining plugins, starts services)
     assertPersistentDatabaseRequired(runtime);
     await runtime.initialize();
@@ -3733,6 +3779,28 @@ export async function startEliza(
     } catch (err) {
       logger.warn(
         `[eliza] Failed to seed bundled knowledge: ${formatError(err)}`,
+      );
+    }
+
+    try {
+      const { stewardEvmPostBoot } = await import(
+        "../services/steward-evm-bridge.js"
+      );
+      await stewardEvmPostBoot(runtime);
+    } catch (err) {
+      logger.debug(
+        `[eliza] Steward EVM post-boot skipped: ${formatError(err)}`,
+      );
+    }
+
+    try {
+      const { installAnthropicWebSearch } = await import(
+        "./web-search-tools.js"
+      );
+      installAnthropicWebSearch(runtime);
+    } catch (err) {
+      logger.debug(
+        `[eliza] Anthropic web search setup skipped: ${formatError(err)}`,
       );
     }
 
@@ -3800,21 +3868,17 @@ export async function startEliza(
     if (recoveryAction === "fail-active-lock") {
       throw createActivePgliteLockError(pgliteDataDir, err);
     }
+    if (recoveryAction === "fail-manual-reset") {
+      throw createManualResetRequiredPgliteError(pgliteDataDir, err);
+    }
 
     logger.warn(
-      recoveryAction === "retry-without-reset"
-        ? `[eliza] Runtime migrations failed (${formatError(err)}). Cleared a stale PGLite lock in ${pgliteDataDir} and retrying startup once without resetting data.`
-        : `[eliza] Runtime migrations failed (${formatError(err)}). Resetting local PGLite DB at ${pgliteDataDir} and retrying startup once.`,
+      `[eliza] Runtime migrations failed (${formatError(err)}). Cleared a stale PGLite lock in ${pgliteDataDir} and retrying startup once without resetting data.`,
     );
     try {
       await shutdownRuntime(runtime, "PGLite recovery");
     } catch {
       // Ignore cleanup errors — retry creates a fresh runtime anyway.
-    }
-
-    if (recoveryAction === "reset-data-dir") {
-      await resetPgliteDataDir(pgliteDataDir);
-      process.env.PGLITE_DATA_DIR = pgliteDataDir;
     }
 
     return await startEliza({
@@ -4038,11 +4102,29 @@ export async function startEliza(
           }
 
           assertPersistentDatabaseRequired(newRuntime);
+          try {
+            const { stewardEvmPreBoot: preBootHR } = await import(
+              "../services/steward-evm-bridge.js"
+            );
+            await preBootHR(newRuntime);
+          } catch {
+            // non-fatal
+          }
+          assertPersistentDatabaseRequired(newRuntime);
           await newRuntime.initialize();
           await prepareRuntimeForTrajectoryCapture(
             newRuntime,
             "hot-reload runtime.initialize()",
           );
+
+          try {
+            const { stewardEvmPostBoot: postBootHR } = await import(
+              "../services/steward-evm-bridge.js"
+            );
+            await postBootHR(newRuntime);
+          } catch {
+            // non-fatal
+          }
 
           // Ensure AutonomyService survives hot-reload (respects ENABLE_AUTONOMY)
           const hotReloadAutonomyEnabled =
@@ -4415,11 +4497,7 @@ const isDirectRun = (() => {
   const scriptArg = process.argv[1];
   if (!scriptArg) return false;
   const normalised = path.resolve(scriptArg);
-  // Exact match against this module's file URL
-  if (import.meta.url === pathToFileURL(normalised).href) return true;
-  // Fallback: match the specific filename (handles tsx rewriting)
-  const base = path.basename(normalised);
-  return base === "eliza.ts" || base === "eliza";
+  return import.meta.url === pathToFileURL(normalised).href;
 })();
 
 if (isDirectRun) {

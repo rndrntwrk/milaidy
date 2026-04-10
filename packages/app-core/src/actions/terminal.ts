@@ -1,1 +1,1 @@
-export * from "@miladyai/agent/actions/terminal";
+export * from "../../../agent/src/actions/terminal.ts";

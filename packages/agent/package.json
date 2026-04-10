@@ -137,6 +137,7 @@
     "@elizaos/plugin-plugin-manager": "workspace:*",
     "@elizaos/plugin-secrets-manager": "workspace:*",
     "@elizaos/plugin-shell": "workspace:*",
+    "@elizaos/plugin-scratchpad": "workspace:*",
     "@elizaos/plugin-solana": "1.2.6",
     "@elizaos/plugin-sql": "workspace:*",
     "@elizaos/plugin-trust": "workspace:*",
@@ -161,7 +162,8 @@
     "puppeteer-core": "^24.37.5",
     "qrcode": "^1.5.4",
     "ws": "^8.19.0",
-    "zod": "^4.3.6"
+    "zod": "^4.3.6",
+    "viem": "^2.21.0"
   },
   "peerDependencies": {
     "@elizaos/signal-native": "*"

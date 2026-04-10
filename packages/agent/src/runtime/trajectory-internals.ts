@@ -1642,8 +1642,28 @@ export async function writeCompressedJsonlRows(
   await once(outStream, "finish");
 }
 
-export function shouldEnableTrajectoryLoggingByDefault(): boolean {
-  const explicit = toOptionalBoolean(process.env.ENABLE_TRAJECTORIES);
+function isCloudProvisionedContainer(
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  return (
+    env.MILADY_CLOUD_PROVISIONED === "1" ||
+    env.ELIZA_CLOUD_PROVISIONED === "1"
+  );
+}
+
+export function shouldEnableTrajectoryLoggingByDefault(
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  if (isCloudProvisionedContainer(env)) {
+    return true;
+  }
+
+  const explicit = toOptionalBoolean(
+    env.ENABLE_TRAJECTORIES ??
+      env.MILADY_TRAJECTORY_LOGGING ??
+      env.TRAJECTORY_LOGGING_ENABLED ??
+      env.ELIZA_TRAJECTORY_LOGGING,
+  );
   if (explicit !== undefined) return explicit;
 
   // Trajectory capture underpins debugging, export, and training workflows.

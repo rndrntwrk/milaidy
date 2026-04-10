@@ -2,6 +2,7 @@ import { type IAgentRuntime, ModelType } from "@elizaos/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const runtimeMocks = vi.hoisted(() => ({
+  hasOwnerAccess: vi.fn(),
   getTriggerLimit: vi.fn(),
   listTriggerTasks: vi.fn(),
   readTriggerConfig: vi.fn(),
@@ -29,10 +30,15 @@ vi.mock("./scheduling", () => ({
   normalizeText: (v: string) => v.trim().replace(/\s+/g, " "),
 }));
 
+vi.mock("../security/access.js", () => ({
+  hasOwnerAccess: runtimeMocks.hasOwnerAccess,
+}));
+
 import { createTriggerTaskAction } from "./action";
 
 describe("createTriggerTaskAction", () => {
   beforeEach(() => {
+    runtimeMocks.hasOwnerAccess.mockReset().mockResolvedValue(true);
     runtimeMocks.getTriggerLimit.mockReset().mockReturnValue(3);
     runtimeMocks.listTriggerTasks.mockReset().mockResolvedValue([]);
     runtimeMocks.readTriggerConfig.mockReset().mockReturnValue(null);
@@ -95,6 +101,41 @@ describe("createTriggerTaskAction", () => {
         count: 6,
       }),
     );
+  });
+
+  it("rejects trigger creation for non-owner callers during validation", async () => {
+    runtimeMocks.hasOwnerAccess.mockResolvedValue(false);
+
+    const runtime = {
+      getMemories: vi.fn(),
+    } as unknown as IAgentRuntime;
+
+    const result = await createTriggerTaskAction.validate(runtime, {
+      content: { text: "schedule a report every hour" },
+      roomId: "room-1",
+    } as never);
+
+    expect(result).toBe(false);
+    expect(runtime.getMemories).not.toHaveBeenCalled();
+  });
+
+  it("denies non-owner callers in the handler", async () => {
+    runtimeMocks.hasOwnerAccess.mockResolvedValue(false);
+
+    const runtime = {
+      agentId: "agent-1",
+    } as unknown as IAgentRuntime;
+
+    const result = await createTriggerTaskAction.handler(runtime, {
+      content: { text: "schedule a report every hour" },
+      roomId: "room-1",
+      entityId: "user-1",
+    } as never);
+
+    expect(result).toMatchObject({
+      success: false,
+      text: expect.stringContaining("only the owner"),
+    });
   });
 
   it("serializes the user request as inert JSON before sending it to the extractor model", async () => {

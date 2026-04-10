@@ -93,11 +93,9 @@ const ACTION_LIST = [
 
 const MODEL_SIZE_MAP: Record<string, string> = {
     TEXT_NANO: ModelType.TEXT_NANO,
-    TEXT_MINI: ModelType.TEXT_MINI,
     TEXT_SMALL: ModelType.TEXT_SMALL,
     TEXT_LARGE: ModelType.TEXT_LARGE,
     NANO: ModelType.TEXT_NANO,
-    MINI: ModelType.TEXT_MINI,
     SMALL: ModelType.TEXT_SMALL,
     LARGE: ModelType.TEXT_LARGE,
 };

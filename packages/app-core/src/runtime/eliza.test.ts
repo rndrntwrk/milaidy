@@ -1617,6 +1617,26 @@ describe("isRecoverablePgliteInitError", () => {
       false,
     );
   });
+
+  it("returns true for read failures from corrupted file-backed data", () => {
+    expect(
+      isRecoverablePgliteInitError(
+        new Error(
+          'could not read blocks 0..0 in file "global/1213": read only 1 of 8192 bytes',
+        ),
+      ),
+    ).toBe(true);
+  });
+
+  it("returns true for wasm traps from corrupted pglite data", () => {
+    expect(
+      isRecoverablePgliteInitError(
+        new Error(
+          "Unreachable code should not be executed (evaluating 'this.mod._pgl_backend()')",
+        ),
+      ),
+    ).toBe(true);
+  });
 });
 
 describe("shutdownRuntime", () => {
@@ -3329,26 +3349,12 @@ describe("cleanStalePglitePid", () => {
 
 describe("getPgliteRecoveryAction", () => {
   let tmpDir: string;
-  const originalMiladyAutoReset = process.env.MILADY_PGLITE_AUTO_RESET;
-  const originalElizaAutoReset = process.env.ELIZA_PGLITE_AUTO_RESET;
 
   beforeEach(async () => {
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pglite-recovery-test-"));
-    delete process.env.MILADY_PGLITE_AUTO_RESET;
-    delete process.env.ELIZA_PGLITE_AUTO_RESET;
   });
 
   afterEach(async () => {
-    if (originalMiladyAutoReset === undefined) {
-      delete process.env.MILADY_PGLITE_AUTO_RESET;
-    } else {
-      process.env.MILADY_PGLITE_AUTO_RESET = originalMiladyAutoReset;
-    }
-    if (originalElizaAutoReset === undefined) {
-      delete process.env.ELIZA_PGLITE_AUTO_RESET;
-    } else {
-      process.env.ELIZA_PGLITE_AUTO_RESET = originalElizaAutoReset;
-    }
     await fs.rm(tmpDir, { recursive: true, force: true });
   });
 
@@ -3416,18 +3422,38 @@ describe("getPgliteRecoveryAction", () => {
       tmpDir,
     );
 
-    expect(action).toBe("none");
+    expect(action).toBe("fail-manual-reset");
   });
 
-  it("allows destructive reset only with explicit opt-in", async () => {
-    process.env.MILADY_PGLITE_AUTO_RESET = "true";
-
+  it("fails fast for corrupt read errors with no pid cleanup path", () => {
     const action = getPgliteRecoveryAction(
-      new Error("PGlite adapter crashed: database disk image is malformed"),
+      new Error(
+        'could not read blocks 0..0 in file "global/1213": read only 1 of 8192 bytes',
+      ),
       tmpDir,
     );
 
-    expect(action).toBe("reset-data-dir");
+    expect(action).toBe("fail-manual-reset");
+  });
+
+  it("retries without reset when abort errors coincide with a malformed pid file", async () => {
+    const pidPath = path.join(tmpDir, "postmaster.pid");
+    await fs.writeFile(pidPath, "-42\n/tmp/pglite\n5432\n");
+
+    const action = getPgliteRecoveryAction(
+      new Error("PGlite adapter crashed", {
+        cause: new Error("Aborted(). Build with -sASSERTIONS for more info."),
+      }),
+      tmpDir,
+    );
+
+    const exists = await fs
+      .access(pidPath)
+      .then(() => true)
+      .catch(() => false);
+
+    expect(action).toBe("retry-without-reset");
+    expect(exists).toBe(false);
   });
 
   it("returns none for unrelated startup errors", () => {

@@ -28,6 +28,8 @@ import {
   getFlaminaTopicForOnboardingStep,
   resolveOnboardingNextStep,
   resolveOnboardingPreviousStep,
+  shouldSkipConnectionStepsForCloudProvisionedContainer,
+  shouldUseCloudOnboardingFastTrack,
 } from "../onboarding/flow";
 import { buildOnboardingRuntimeConfig } from "../onboarding-config";
 import { PREMADE_VOICES } from "../voice/types";
@@ -243,9 +245,11 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
     uiLanguage,
     selectedVrmIndex,
     walletConfig,
+    elizaCloudConnected,
     setActionNotice,
     retryStartup,
     forceLocalBootstrapRef,
+    addDeferredOnboardingTask,
     client,
   } = deps;
 
@@ -273,6 +277,7 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
       remote: onboardingRemote,
       rpcSelections: onboardingRpcSelections,
       rpcKeys: onboardingRpcKeys,
+      cloudProvisionedContainer,
     },
     completionCommittedRef: onboardingCompletionCommittedRef,
   } = onboarding;
@@ -323,6 +328,70 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
       if (!onboardingOptions) return;
 
       try {
+        const onboardingRunMode =
+          onboardingMode === "elizacloudonly"
+            ? "cloud"
+            : onboardingMode === "basic" || onboardingMode === "advanced"
+              ? "local"
+              : "";
+        const useCloudFastTrack = shouldUseCloudOnboardingFastTrack({
+          cloudProvisionedContainer,
+          elizaCloudConnected,
+          onboardingRunMode,
+          onboardingProvider,
+        });
+
+        if (useCloudFastTrack) {
+          const style = resolveSelectedOnboardingStyle({
+            styles: onboardingOptions.styles,
+            onboardingStyle,
+            selectedVrmIndex,
+            uiLanguage,
+          });
+          const defaultName =
+            style.name ?? getDefaultStylePreset(uiLanguage).name;
+
+          await client.submitOnboarding({
+            name: onboardingName || defaultName,
+            bio: style?.bio ?? ["An autonomous AI agent."],
+            systemPrompt:
+              style?.system?.replace(
+                /\{\{name\}\}/g,
+                onboardingName || defaultName,
+              ) ??
+              `You are ${onboardingName || defaultName}, an autonomous AI agent powered by elizaOS.`,
+            style: style?.style,
+            adjectives: style?.adjectives,
+            postExamples: style?.postExamples,
+            messageExamples: style?.messageExamples,
+            topics: style?.topics,
+            avatarIndex: style?.avatarIndex ?? 1,
+            language: uiLanguage,
+            presetId: style?.id ?? "chen",
+            runMode: "cloud",
+            cloudProvider: "elizacloud",
+            smallModel: onboardingSmallModel,
+            largeModel: onboardingLargeModel,
+          } as unknown as Parameters<typeof client.submitOnboarding>[0]);
+          try {
+            await persistOnboardingStyleVoice({
+              style,
+              voiceProvider: onboardingVoiceProvider,
+              voiceApiKey: onboardingVoiceApiKey,
+              cloudTtsSelected: true,
+              clientRef: client,
+            });
+          } catch (err) {
+            console.warn(
+              "[onboarding] Failed to persist cloud voice preset",
+              err,
+            );
+          }
+
+          completeOnboarding();
+          return;
+        }
+
         const style = resolveSelectedOnboardingStyle({
           styles: onboardingOptions.styles,
           onboardingStyle,
@@ -535,6 +604,9 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
       onboardingRpcSelections,
       onboardingRpcKeys,
       walletConfig,
+      onboardingMode,
+      elizaCloudConnected,
+      cloudProvisionedContainer,
       completeOnboarding,
       client,
       setActionNotice,
@@ -603,6 +675,20 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
 
   const advanceOnboarding = useCallback(
     async (options?: OnboardingNextOptions) => {
+      if (
+        shouldSkipConnectionStepsForCloudProvisionedContainer({
+          currentStep: onboardingStep,
+          cloudProvisionedContainer,
+        })
+      ) {
+        await handleOnboardingFinish(options);
+        return;
+      }
+
+      if (onboardingStep === "providers" && options?.allowPermissionBypass) {
+        if (options.skipTask) addDeferredOnboardingTask(options.skipTask);
+      }
+
       const nextStep = resolveOnboardingNextStep(onboardingStep);
 
       if (!nextStep) {
@@ -626,6 +712,8 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
       onboardingStep,
       setOnboardingStep,
       setOnboardingActiveGuide,
+      cloudProvisionedContainer,
+      addDeferredOnboardingTask,
     ],
   );
 

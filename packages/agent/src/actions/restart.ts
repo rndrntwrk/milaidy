@@ -18,10 +18,19 @@
 import crypto from "node:crypto";
 import type { Action, HandlerOptions, Memory, UUID } from "@elizaos/core";
 import { logger } from "@elizaos/core";
+import { hasOwnerAccess } from "../security/access.js";
 import { requestRestart } from "../runtime/restart.js";
 
 /** Small delay (ms) before restarting so the response has time to flush. */
 const SHUTDOWN_DELAY_MS = 1_500;
+
+function isExplicitRestartRequest(message: Memory | undefined): boolean {
+  const userText = (message?.content?.text ?? "").toLowerCase();
+  return (
+    /\b(restart|reboot|reload|refresh|respawn)\b/i.test(userText) ||
+    userText.startsWith("/restart")
+  );
+}
 
 export const restartAction: Action = {
   name: "RESTART_AGENT",
@@ -41,21 +50,27 @@ export const restartAction: Action = {
     "Restart the agent process. This stops the runtime, rebuilds if source " +
     "files changed, and relaunches — picking up new code, config, or plugins.",
 
-  validate: async (_runtime, _message, _state) => {
-    // Always valid — the registered handler decides how (or whether) to restart.
-    return true;
+  validate: async (runtime, message, _state) => {
+    if (!(await hasOwnerAccess(runtime, message))) {
+      return false;
+    }
+
+    return isExplicitRestartRequest(message);
   },
 
   handler: async (runtime, message, _state, options) => {
+    if (!(await hasOwnerAccess(runtime, message))) {
+      return {
+        success: false,
+        text: "Permission denied: only the owner may restart the agent.",
+      };
+    }
+
     // Guard: only restart when the user explicitly asked. The runtime
     // doesn't call validate before handler, and the LLM can fuzzy-match
     // RESTART_AGENT from action loops or stray text fragments. Without
     // this guard the agent can self-restart mid-task.
-    const userText = (message?.content?.text ?? "").toLowerCase();
-    const askedForRestart =
-      /\b(restart|reboot|reload|refresh|respawn)\b/i.test(userText) ||
-      userText.startsWith("/restart");
-    if (!askedForRestart) {
+    if (!isExplicitRestartRequest(message)) {
       return { success: false, text: "" };
     }
 

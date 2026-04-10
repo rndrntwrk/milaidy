@@ -6,10 +6,8 @@ import type {
   State,
   UUID,
 } from "@elizaos/core";
-import {
-  checkSenderRole,
-  resolveCanonicalOwnerIdForMessage,
-} from "@elizaos/core/roles";
+import { resolveCanonicalOwnerIdForMessage } from "@elizaos/core/roles";
+import { hasAdminAccess } from "../security/access.js";
 
 /** Maximum total characters for the provider text output. */
 const MAX_TEXT_LENGTH = 2000;
@@ -19,20 +17,6 @@ const MESSAGES_PER_ROOM = 10;
 
 /** Maximum client_chat rooms to scan (most recent activity wins). */
 const MAX_ROOMS = 3;
-
-/**
- * Returns true when the caller is the agent itself or an admin/owner.
- */
-async function hasAdminPanelAccess(
-  runtime: IAgentRuntime,
-  message: Memory,
-): Promise<boolean> {
-  if (message.entityId === runtime.agentId) {
-    return true;
-  }
-  const role = await checkSenderRole(runtime, message);
-  return Boolean(role?.isAdmin);
-}
 
 /**
  * Fetch recent messages from the owner's client_chat rooms.
@@ -113,7 +97,7 @@ export function createAdminPanelProvider(): Provider {
         data: { messageCount: 0 },
       };
 
-      if (!(await hasAdminPanelAccess(runtime, message))) {
+      if (!(await hasAdminAccess(runtime, message))) {
         return empty;
       }
 

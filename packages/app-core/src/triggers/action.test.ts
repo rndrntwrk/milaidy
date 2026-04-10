@@ -65,7 +65,10 @@ describe("createTriggerTaskAction", () => {
           getAutonomousRoomId: () =>
             "00000000-0000-0000-0000-000000000304" as UUID,
         }) as { getAutonomousRoomId: () => UUID },
-      getSetting: () => undefined,
+      getSetting: (key: string) =>
+        key === "ELIZA_ADMIN_ENTITY_ID"
+          ? ("00000000-0000-0000-0000-000000000302" as UUID)
+          : undefined,
     };
     runtime = runtimePartial as IAgentRuntime;
   });

@@ -13,7 +13,6 @@ import {
   resolveCompatApiToken,
 } from "../../utils/api-request";
 import { resolveApiUrl } from "../../utils/asset-url";
-import { PREMADE_VOICES } from "../../voice/types";
 import {
   CharacterRoster,
   createCustomPackRosterEntry,
@@ -21,13 +20,15 @@ import {
   resolveRosterEntries,
 } from "../character/CharacterRoster";
 import { resolveCharacterGreetingAnimation } from "../character/character-greeting";
+import {
+  preloadOnboardingCharacterAssets,
+} from "./onboarding-asset-preload";
 import { buildPreviewTtsRequestPlans } from "./identity-preview-tts";
+import { PREMADE_VOICES } from "../../voice/types";
 
 import {
   OnboardingStepHeader,
-  onboardingBodyTextShadowStyle,
   onboardingFooterClass,
-  onboardingLinkActionClass,
   onboardingPrimaryActionClass,
   onboardingPrimaryActionTextShadowStyle,
   onboardingSecondaryActionClass,
@@ -92,22 +93,22 @@ export function IdentityStep({
 
   const firstEntry = entries[0];
   const selectedId = onboardingStyle || entries[0]?.id || "";
+  const selectedEntry =
+    entries.find((entry) => entry.id === selectedId) ?? firstEntry ?? null;
   const [showImport, setShowImport] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importPassword, setImportPassword] = useState("");
   const [importBusy, setImportBusy] = useState(false);
-  const [importError, setImportError] = useState<string | null>(null);
-  const [importSuccess, setImportSuccess] = useState<string | null>(null);
+  const [_importError, setImportError] = useState<string | null>(null);
+  const [_importSuccess, setImportSuccess] = useState<string | null>(null);
   const importBusyRef = useRef(false);
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
   const previewObjectUrlRef = useRef<string | null>(null);
-  const previewAbortControllerRef = useRef<AbortController | null>(null);
   const previewRequestIdRef = useRef(0);
+  const previewAbortControllerRef = useRef<AbortController | null>(null);
   const pendingPreviewEntryRef = useRef<CharacterRosterEntry | null>(null);
 
   const stopPreviewAudio = useCallback(() => {
-    previewAbortControllerRef.current?.abort();
-    previewAbortControllerRef.current = null;
     if (previewAudioRef.current) {
       previewAudioRef.current.pause();
       previewAudioRef.current = null;
@@ -282,6 +283,12 @@ export function IdentityStep({
     ],
   );
   // Fresh onboarding (no pre-existing selection): auto-select first character.
+  useEffect(() => {
+    preloadOnboardingCharacterAssets(entries, {
+      voiceEntry: selectedEntry,
+    });
+  }, [entries, selectedEntry]);
+
   useEffect(() => {
     if (!onboardingStyle && firstEntry) {
       handleSelect(firstEntry, true);
@@ -503,7 +510,6 @@ export function IdentityStep({
       </div>
     );
   }
-  const selected = entries.find((e) => e.id === selectedId);
 
   return (
     <div

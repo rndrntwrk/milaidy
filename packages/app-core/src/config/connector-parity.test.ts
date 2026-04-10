@@ -255,7 +255,7 @@ describe("discord cloud auto-enable scenarios", () => {
     );
   });
 
-  it("cloud mode does not add edge-tts to connector auto-enable", () => {
+  it("edge-tts auto-enables alongside discord in cloud mode", () => {
     const { config } = applyPluginAutoEnable({
       config: {
         plugins: {},
@@ -264,9 +264,7 @@ describe("discord cloud auto-enable scenarios", () => {
       env: { MILADY_CLOUD_PROVISIONED: "1" },
     });
     expect(config.plugins?.allow).toContain("@elizaos/plugin-discord");
-    expect(config.plugins?.allow ?? []).not.toContain(
-      "@elizaos/plugin-edge-tts",
-    );
+    expect(config.plugins?.allow).toContain("@elizaos/plugin-edge-tts");
   });
 
   it("edge-tts does NOT auto-enable without cloud provisioning flag", () => {
@@ -284,7 +282,7 @@ describe("discord cloud auto-enable scenarios", () => {
     );
   });
 
-  it("edge-tts plugin entry does not affect connector auto-enable in cloud mode", () => {
+  it("edge-tts can still be disabled via explicit plugin entry in cloud mode", () => {
     const { config } = applyPluginAutoEnable({
       config: {
         plugins: {

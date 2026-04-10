@@ -642,6 +642,176 @@ describe("life-ops gmail triage", () => {
     expect(emptyRes.data.messages).toEqual([]);
   });
 
+  it("matches sender, address, subject, and broad Gmail filters across operator and free-text queries", async () => {
+    await connectGoogle(
+      ["google.gmail.triage"],
+      [
+        "openid",
+        "email",
+        "profile",
+        "https://www.googleapis.com/auth/gmail.metadata",
+      ],
+    );
+
+    const nowMs = Date.now();
+    fetchMock.mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (
+        url.startsWith(
+          "https://gmail.googleapis.com/gmail/v1/users/me/messages?",
+        )
+      ) {
+        return new Response(
+          JSON.stringify({
+            messages: [
+              { id: "msg-suran", threadId: "thread-suran" },
+              { id: "msg-alex", threadId: "thread-alex" },
+              { id: "msg-auto", threadId: "thread-auto" },
+            ],
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      if (url.includes("/gmail/v1/users/me/messages/msg-suran?")) {
+        return new Response(
+          JSON.stringify({
+            id: "msg-suran",
+            threadId: "thread-suran",
+            labelIds: ["UNREAD", "CATEGORY_PERSONAL"],
+            snippet: "Here is the agenda for tonight.",
+            internalDate: String(nowMs - 12 * 60_000),
+            payload: {
+              headers: [
+                { name: "Subject", value: "Dinner agenda" },
+                { name: "From", value: "Suran Lee <suran@example.com>" },
+                { name: "To", value: "agent@example.com" },
+                { name: "Cc", value: "ops@example.com" },
+                { name: "Message-Id", value: "<suran@example.com>" },
+              ],
+            },
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      if (url.includes("/gmail/v1/users/me/messages/msg-alex?")) {
+        return new Response(
+          JSON.stringify({
+            id: "msg-alex",
+            threadId: "thread-alex",
+            labelIds: ["INBOX", "IMPORTANT"],
+            snippet: "Invoice attached for the venue rental.",
+            internalDate: String(nowMs - 30 * 60_000),
+            payload: {
+              headers: [
+                { name: "Subject", value: "Venue invoice" },
+                { name: "From", value: "Alex Stone <alex@example.com>" },
+                { name: "To", value: "agent@example.com" },
+                { name: "Message-Id", value: "<alex@example.com>" },
+              ],
+            },
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      if (url.includes("/gmail/v1/users/me/messages/msg-auto?")) {
+        return new Response(
+          JSON.stringify({
+            id: "msg-auto",
+            threadId: "thread-auto",
+            labelIds: ["INBOX", "CATEGORY_UPDATES"],
+            snippet: "Automated build summary.",
+            internalDate: String(nowMs - 6 * 60_000),
+            payload: {
+              headers: [
+                { name: "Subject", value: "Weekly build digest" },
+                { name: "From", value: "CI Bot <noreply@example.com>" },
+                { name: "To", value: "agent@example.com" },
+                { name: "Auto-Submitted", value: "auto-generated" },
+                { name: "Message-Id", value: "<auto@example.com>" },
+              ],
+            },
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    const cases = [
+      {
+        query: "from:suran",
+        expectedSubjects: ["Dinner agenda"],
+      },
+      {
+        query: "from:suran@example.com",
+        expectedSubjects: ["Dinner agenda"],
+      },
+      {
+        query: 'from:"suran lee"',
+        expectedSubjects: ["Dinner agenda"],
+      },
+      {
+        query: "subject:agenda",
+        expectedSubjects: ["Dinner agenda"],
+      },
+      {
+        query: "cc:ops@example.com",
+        expectedSubjects: ["Dinner agenda"],
+      },
+      {
+        query: "suran agenda",
+        expectedSubjects: ["Dinner agenda"],
+      },
+      {
+        query: "from:alex@example.com venue",
+        expectedSubjects: ["Venue invoice"],
+      },
+      {
+        query: "invoice",
+        expectedSubjects: ["Venue invoice"],
+      },
+      {
+        query: "label:CATEGORY_PERSONAL",
+        expectedSubjects: ["Dinner agenda"],
+      },
+      {
+        query: "is:unread from:suran",
+        expectedSubjects: ["Dinner agenda"],
+      },
+      {
+        query: "in:anywhere from:suran",
+        expectedSubjects: ["Dinner agenda"],
+      },
+    ] as const;
+
+    for (const testCase of cases) {
+      const response = await req(
+        port,
+        "GET",
+        `/api/lifeops/gmail/search?query=${encodeURIComponent(testCase.query)}&maxResults=10`,
+      );
+      expect(response.status).toBe(200);
+      expect(response.data.query).toBe(testCase.query);
+      expect(
+        (response.data.messages as Array<Record<string, unknown>>).map(
+          (message) => String(message.subject),
+        ),
+      ).toEqual(testCase.expectedSubjects);
+    }
+  });
+
   it("creates batch Gmail reply drafts and sends confirmed batch follow-ups", async () => {
     await connectGoogle(
       ["google.gmail.triage", "google.gmail.send"],

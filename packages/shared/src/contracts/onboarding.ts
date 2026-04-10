@@ -415,8 +415,8 @@ export type OnboardingLocalProviderId = Exclude<
 
 interface OnboardingCloudModelPreferences {
   nanoModel?: string;
-  miniModel?: string;
   smallModel?: string;
+  mediumModel?: string;
   largeModel?: string;
   megaModel?: string;
   responseHandlerModel?: string;
@@ -432,8 +432,8 @@ function pickOnboardingCloudModelPreferences(
 ): OnboardingCloudModelPreferences {
   return {
     ...(value.nanoModel ? { nanoModel: value.nanoModel } : {}),
-    ...(value.miniModel ? { miniModel: value.miniModel } : {}),
     ...(value.smallModel ? { smallModel: value.smallModel } : {}),
+    ...(value.mediumModel ? { mediumModel: value.mediumModel } : {}),
     ...(value.largeModel ? { largeModel: value.largeModel } : {}),
     ...(value.megaModel ? { megaModel: value.megaModel } : {}),
     ...(value.responseHandlerModel
@@ -462,8 +462,8 @@ function readOnboardingCloudModelPreferences(
 
   return pickOnboardingCloudModelPreferences({
     nanoModel: readConfigString(source, "nanoModel"),
-    miniModel: readConfigString(source, "miniModel"),
     smallModel: readConfigString(source, "smallModel"),
+    mediumModel: readConfigString(source, "mediumModel"),
     largeModel: readConfigString(source, "largeModel"),
     megaModel: readConfigString(source, "megaModel"),
     responseHandlerModel: readConfigString(source, "responseHandlerModel"),
@@ -509,8 +509,11 @@ export interface OnboardingOptions {
   providers: ProviderOption[];
   cloudProviders: CloudProviderOption[];
   models: {
+    nano: ModelOption[];
     small: ModelOption[];
+    medium: ModelOption[];
     large: ModelOption[];
+    mega: ModelOption[];
   };
   openrouterModels?: OpenRouterModelOption[];
   piAiModels?: PiAiModelOption[];
@@ -877,8 +880,8 @@ export function hasExplicitCanonicalRuntimeConfig(
 
 function buildElizaCloudTextRoute(args: {
   nanoModel?: string;
-  miniModel?: string;
   smallModel?: string;
+  mediumModel?: string;
   largeModel?: string;
   megaModel?: string;
   responseHandlerModel?: string;
@@ -1485,8 +1488,11 @@ export function inferCompatibilityOnboardingConnection(
     readConfigString(cloud, "provider"),
   );
   const cloudApiKey = normalizeSecretString(cloud?.apiKey);
+  const nanoModel = readConfigString(models, "nano");
   const smallModel = readConfigString(models, "small");
+  const mediumModel = readConfigString(models, "medium");
   const largeModel = readConfigString(models, "large");
+  const megaModel = readConfigString(models, "mega");
   const cloudExplicitlyDisabled = cloud?.enabled === false;
 
   if (
@@ -1494,15 +1500,21 @@ export function inferCompatibilityOnboardingConnection(
     (cloud?.enabled === true ||
       cloudProvider === "elizacloud" ||
       readConfigString(cloud, "inferenceMode") === "cloud" ||
+      nanoModel ||
       smallModel ||
-      largeModel)
+      mediumModel ||
+      largeModel ||
+      megaModel)
   ) {
     return {
       kind: "cloud-managed",
       cloudProvider: "elizacloud",
       apiKey: cloudApiKey,
+      nanoModel,
       smallModel,
+      mediumModel,
       largeModel,
+      megaModel,
     };
   }
 
@@ -1546,15 +1558,21 @@ function inferLegacyCloudInferenceSelection(
     readConfigString(cloud, "provider"),
   );
   const models = asConfigRecord(config?.models);
+  const nanoModel = readConfigString(models, "nano");
   const smallModel = readConfigString(models, "small");
+  const mediumModel = readConfigString(models, "medium");
   const largeModel = readConfigString(models, "large");
+  const megaModel = readConfigString(models, "mega");
 
   return Boolean(
     cloud?.enabled === true ||
       cloudProvider === "elizacloud" ||
       inferenceMode === "cloud" ||
+      nanoModel ||
       smallModel ||
-      largeModel,
+      mediumModel ||
+      largeModel ||
+      megaModel,
   );
 }
 

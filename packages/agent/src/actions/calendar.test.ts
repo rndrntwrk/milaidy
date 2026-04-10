@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   mockCheckSenderPrivateAccess,
+  mockResolveCanonicalOwnerIdForMessage,
   mockGetGoogleConnectorStatus,
   mockGetCalendarFeed,
   mockGetNextCalendarEventContext,
@@ -9,6 +10,7 @@ const {
   mockUseModel,
 } = vi.hoisted(() => ({
   mockCheckSenderPrivateAccess: vi.fn(),
+  mockResolveCanonicalOwnerIdForMessage: vi.fn(),
   mockGetGoogleConnectorStatus: vi.fn(),
   mockGetCalendarFeed: vi.fn(),
   mockGetNextCalendarEventContext: vi.fn(),
@@ -18,6 +20,7 @@ const {
 
 vi.mock("@elizaos/core/roles", () => ({
   checkSenderPrivateAccess: mockCheckSenderPrivateAccess,
+  resolveCanonicalOwnerIdForMessage: mockResolveCanonicalOwnerIdForMessage,
 }));
 
 vi.mock("../lifeops/service.js", () => ({
@@ -70,6 +73,7 @@ function invoke(
 describe("calendarAction", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    mockResolveCanonicalOwnerIdForMessage.mockResolvedValue(null);
     mockCheckSenderPrivateAccess.mockResolvedValue({
       entityId: "owner-1",
       role: "OWNER",

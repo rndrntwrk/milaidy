@@ -102,14 +102,14 @@ export function resolveMiladyAssetBaseUrls({
     releaseTag,
     appAssetBaseUrl:
       explicitAppBase ||
-      buildRawGitHubAssetBase({
+      buildJsDelivrAssetBase({
         repository,
         releaseTag,
         assetRoot: "apps/app/public",
       }),
     homepageAssetBaseUrl:
       explicitHomepageBase ||
-      buildRawGitHubAssetBase({
+      buildJsDelivrAssetBase({
         repository,
         releaseTag,
         assetRoot: HOMEPAGE_ASSET_ROOT,

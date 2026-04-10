@@ -108,6 +108,9 @@ export function useOnboardingCompat({
         value: Record<string, string>,
       ) => void,
       setOnboardingAvatar: bindField("avatar") as (value: number) => void,
+      setOnboardingCloudProvisionedContainer: bindField(
+        "cloudProvisionedContainer",
+      ) as (value: boolean) => void,
       setPostOnboardingChecklistDismissed: (value: boolean): void => {
         dispatch({ type: "SET_POST_CHECKLIST_DISMISSED", value });
       },

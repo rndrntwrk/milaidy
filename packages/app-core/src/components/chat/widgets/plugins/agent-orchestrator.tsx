@@ -138,6 +138,35 @@ function formatThreadStatus(status: string): string {
   return status.replace(/_/g, " ");
 }
 
+function getWorkspaceChangesSummary(
+  metadata: Record<string, unknown>,
+): { files: string[]; total: number } | null {
+  const raw = metadata.workspaceChanges;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return null;
+  }
+  const workspaceChanges = raw as {
+    changedFiles?: unknown;
+    totalChangedFiles?: unknown;
+  };
+  const changedFiles = Array.isArray(workspaceChanges.changedFiles)
+    ? workspaceChanges.changedFiles.filter(
+        (value): value is string => typeof value === "string",
+      )
+    : [];
+  const total =
+    typeof workspaceChanges.totalChangedFiles === "number"
+      ? workspaceChanges.totalChangedFiles
+      : changedFiles.length;
+  if (total <= 0 || changedFiles.length === 0) {
+    return null;
+  }
+  return {
+    files: changedFiles,
+    total,
+  };
+}
+
 const THREAD_STATUS_BADGE: Record<string, string> = {
   open: "bg-muted/20 text-muted",
   active: "bg-ok/20 text-ok",
@@ -390,6 +419,18 @@ function ThreadDetailContent({
                     {session.status} ·{" "}
                     {session.workdir || session.repo || "no workspace"}
                   </div>
+                  {getWorkspaceChangesSummary(session.metadata) ? (
+                    <div className="text-muted">
+                      {(() => {
+                        const summary = getWorkspaceChangesSummary(session.metadata);
+                        if (!summary) return null;
+                        const preview = summary.files.slice(0, 3).join(", ");
+                        return summary.total > 3
+                          ? `${summary.total} changed files: ${preview}, +${summary.total - 3} more`
+                          : `${summary.total} changed files: ${preview}`;
+                      })()}
+                    </div>
+                  ) : null}
                 </div>
               ))}
           </div>

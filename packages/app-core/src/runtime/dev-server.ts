@@ -3,11 +3,11 @@ const SCRIPT_START = Date.now();
 
 import "../utils/namespace-defaults.js";
 import { getLogPrefix } from "../utils/log-prefix";
-import { getErrorMessage } from "./embedding-manager-support.js";
 import {
   formatUncaughtError,
   shouldIgnoreUnhandledRejection,
 } from "./error-handlers.js";
+import { resolveRuntimeBootstrapFailure } from "./runtime-bootstrap-policy.js";
 
 console.log(`${getLogPrefix()} Script starting...`);
 
@@ -89,14 +89,6 @@ let runtimeBootAttempt = 0;
 let runtimeBootInProgress = false;
 let runtimeBootTimer: ReturnType<typeof setTimeout> | null = null;
 let runtimeBootFirstFailureAt: number | null = null;
-const RUNTIME_BOOT_ERROR_ATTEMPT_THRESHOLD = 3;
-const RUNTIME_BOOT_ERROR_DURATION_MS = 2 * 60_000;
-
-function nextRetryDelayMs(attempt: number): number {
-  // 1s, 2s, 4s, 8s, 16s, then cap at 30s.
-  const raw = 1000 * 2 ** Math.max(0, Math.min(attempt - 1, 5));
-  return Math.min(30_000, raw);
-}
 
 function clearRuntimeBootTimer(): void {
   if (runtimeBootTimer) {
@@ -170,22 +162,30 @@ async function bootstrapRuntime(reason: string): Promise<void> {
     if (!runtimeBootFirstFailureAt) {
       runtimeBootFirstFailureAt = now;
     }
-    const delayMs = nextRetryDelayMs(runtimeBootAttempt);
-    const shouldMarkError =
-      runtimeBootAttempt >= RUNTIME_BOOT_ERROR_ATTEMPT_THRESHOLD ||
-      now - runtimeBootFirstFailureAt >= RUNTIME_BOOT_ERROR_DURATION_MS;
-    apiUpdateStartup?.({
-      phase: shouldMarkError ? "runtime-error" : "runtime-retry",
+    const failure = resolveRuntimeBootstrapFailure({
       attempt: runtimeBootAttempt,
-      lastError: getErrorMessage(err),
-      lastErrorAt: now,
-      nextRetryAt: now + delayMs,
-      state: shouldMarkError ? "error" : "starting",
+      err,
+      firstFailureAt: runtimeBootFirstFailureAt,
+      now,
     });
-    logger.error(
-      `${getLogPrefix()} Runtime bootstrap failed (${getErrorMessage(err)}). Retrying in ${Math.round(delayMs / 1000)}s${shouldMarkError ? " (UI state set to error)" : ""}`,
-    );
-    scheduleRuntimeBootstrap(delayMs, "retry");
+    apiUpdateStartup?.({
+      phase: failure.phase,
+      attempt: runtimeBootAttempt,
+      lastError: failure.lastError,
+      lastErrorAt: now,
+      nextRetryAt: failure.nextRetryAt,
+      state: failure.state,
+    });
+    if (failure.shouldRetry && failure.delayMs !== undefined) {
+      logger.error(
+        `${getLogPrefix()} Runtime bootstrap failed (${failure.lastError}). Retrying in ${Math.round(failure.delayMs / 1000)}s${failure.state === "error" ? " (UI state set to error)" : ""}`,
+      );
+      scheduleRuntimeBootstrap(failure.delayMs, "retry");
+    } else {
+      logger.error(
+        `${getLogPrefix()} Runtime bootstrap failed (${failure.lastError}). Startup halted until the PGlite issue is fixed.`,
+      );
+    }
   } finally {
     runtimeBootInProgress = false;
   }
