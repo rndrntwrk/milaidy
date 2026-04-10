@@ -270,8 +270,11 @@ function clearCloudModelSelections(config: MutableElizaConfig): void {
   if (!models) {
     return;
   }
+  delete models.nano;
   delete models.small;
+  delete models.medium;
   delete models.large;
+  delete models.mega;
   if (Object.keys(models).length === 0) {
     delete config.models;
   }
@@ -468,11 +471,38 @@ function toOnboardingConnectionFromSelection(
       ...(trimToUndefined(selection.apiKey)
         ? { apiKey: trimToUndefined(selection.apiKey) }
         : {}),
+      ...(trimToUndefined(selection.nanoModel)
+        ? { nanoModel: trimToUndefined(selection.nanoModel) }
+        : {}),
       ...(trimToUndefined(selection.smallModel)
         ? { smallModel: trimToUndefined(selection.smallModel) }
         : {}),
+      ...(trimToUndefined(selection.mediumModel)
+        ? { mediumModel: trimToUndefined(selection.mediumModel) }
+        : {}),
       ...(trimToUndefined(selection.largeModel)
         ? { largeModel: trimToUndefined(selection.largeModel) }
+        : {}),
+      ...(trimToUndefined(selection.megaModel)
+        ? { megaModel: trimToUndefined(selection.megaModel) }
+        : {}),
+      ...(trimToUndefined(selection.responseHandlerModel)
+        ? { responseHandlerModel: trimToUndefined(selection.responseHandlerModel) }
+        : {}),
+      ...(trimToUndefined(selection.shouldRespondModel)
+        ? { shouldRespondModel: trimToUndefined(selection.shouldRespondModel) }
+        : {}),
+      ...(trimToUndefined(selection.actionPlannerModel)
+        ? { actionPlannerModel: trimToUndefined(selection.actionPlannerModel) }
+        : {}),
+      ...(trimToUndefined(selection.plannerModel)
+        ? { plannerModel: trimToUndefined(selection.plannerModel) }
+        : {}),
+      ...(trimToUndefined(selection.responseModel)
+        ? { responseModel: trimToUndefined(selection.responseModel) }
+        : {}),
+      ...(trimToUndefined(selection.mediaDescriptionModel)
+        ? { mediaDescriptionModel: trimToUndefined(selection.mediaDescriptionModel) }
         : {}),
     };
   }
@@ -592,8 +622,11 @@ export function clearPersistedOnboardingConfig(
 
   const models = asRecord(config.models);
   if (models) {
+    delete models.nano;
     delete models.small;
+    delete models.medium;
     delete models.large;
+    delete models.mega;
     if (Object.keys(models).length === 0) {
       delete config.models;
     }
@@ -645,6 +678,15 @@ export function clearPersistedOnboardingConfig(
 
   delete process.env.ELIZAOS_CLOUD_API_KEY;
   delete process.env.ELIZAOS_CLOUD_ENABLED;
+  delete process.env.ELIZAOS_CLOUD_NANO_MODEL;
+  delete process.env.ELIZAOS_CLOUD_MEDIUM_MODEL;
+  delete process.env.ELIZAOS_CLOUD_SMALL_MODEL;
+  delete process.env.ELIZAOS_CLOUD_LARGE_MODEL;
+  delete process.env.ELIZAOS_CLOUD_MEGA_MODEL;
+  delete process.env.ELIZAOS_CLOUD_RESPONSE_HANDLER_MODEL;
+  delete process.env.ELIZAOS_CLOUD_SHOULD_RESPOND_MODEL;
+  delete process.env.ELIZAOS_CLOUD_ACTION_PLANNER_MODEL;
+  delete process.env.ELIZAOS_CLOUD_PLANNER_MODEL;
   deleteCredentials("anthropic-subscription");
   deleteCredentials("openai-codex");
 }
@@ -687,6 +729,7 @@ export async function applyOnboardingConnectionConfig(
 
   if (normalizedConnection.kind === "cloud-managed") {
     clearRemoteProviderConfig(config);
+    clearCloudModelSelections(config);
 
     const cloud = ensureCloud(config);
     const models = ensureModels(config);
@@ -695,19 +738,37 @@ export async function applyOnboardingConnectionConfig(
       cloud.apiKey = apiKey;
       process.env.ELIZAOS_CLOUD_API_KEY = apiKey;
     }
+    if (normalizedConnection.nanoModel) {
+      models.nano = normalizedConnection.nanoModel;
+    }
     if (normalizedConnection.smallModel) {
       models.small = normalizedConnection.smallModel;
     }
+    if (normalizedConnection.mediumModel) {
+      models.medium = normalizedConnection.mediumModel;
+    }
     if (normalizedConnection.largeModel) {
       models.large = normalizedConnection.largeModel;
+    }
+    if (normalizedConnection.megaModel) {
+      models.mega = normalizedConnection.megaModel;
     }
 
     const serviceRouting = buildDefaultElizaCloudServiceRouting({
       base: {
         ...(config.serviceRouting ?? {}),
         llmText: buildElizaCloudServiceRoute({
+          nanoModel: normalizedConnection.nanoModel,
           smallModel: normalizedConnection.smallModel,
+          mediumModel: normalizedConnection.mediumModel,
           largeModel: normalizedConnection.largeModel,
+          megaModel: normalizedConnection.megaModel,
+          responseHandlerModel: normalizedConnection.responseHandlerModel,
+          shouldRespondModel: normalizedConnection.shouldRespondModel,
+          actionPlannerModel: normalizedConnection.actionPlannerModel,
+          plannerModel: normalizedConnection.plannerModel,
+          responseModel: normalizedConnection.responseModel,
+          mediaDescriptionModel: normalizedConnection.mediaDescriptionModel,
         }),
       },
     });
@@ -735,8 +796,15 @@ export async function applyOnboardingConnectionConfig(
   delete process.env.ELIZAOS_CLOUD_ENABLED;
   delete process.env.ELIZAOS_CLOUD_API_KEY;
   delete process.env.ELIZAOS_CLOUD_BASE_URL;
+  delete process.env.ELIZAOS_CLOUD_NANO_MODEL;
+  delete process.env.ELIZAOS_CLOUD_MEDIUM_MODEL;
   delete process.env.ELIZAOS_CLOUD_SMALL_MODEL;
   delete process.env.ELIZAOS_CLOUD_LARGE_MODEL;
+  delete process.env.ELIZAOS_CLOUD_MEGA_MODEL;
+  delete process.env.ELIZAOS_CLOUD_RESPONSE_HANDLER_MODEL;
+  delete process.env.ELIZAOS_CLOUD_SHOULD_RESPOND_MODEL;
+  delete process.env.ELIZAOS_CLOUD_ACTION_PLANNER_MODEL;
+  delete process.env.ELIZAOS_CLOUD_PLANNER_MODEL;
 
   if (normalizedConnection.kind === "remote-provider") {
     clearSubscriptionProviderConfig(config);

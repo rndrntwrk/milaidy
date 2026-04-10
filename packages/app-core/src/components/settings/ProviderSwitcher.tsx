@@ -6,6 +6,7 @@
  */
 
 import { resolveServiceRoutingInConfig } from "@miladyai/shared/contracts/onboarding";
+import { buildElizaCloudServiceRoute } from "@miladyai/shared/contracts/service-routing";
 import {
   Button,
   Input,
@@ -43,6 +44,9 @@ const SUBSCRIPTION_PROVIDER_LABEL_FALLBACKS: Record<
   "anthropic-subscription": "Claude Subscription",
   "openai-subscription": "ChatGPT Subscription",
 };
+
+const DEFAULT_RESPONSE_HANDLER_MODEL = "__DEFAULT_RESPONSE_HANDLER__";
+const DEFAULT_ACTION_PLANNER_MODEL = "__DEFAULT_ACTION_PLANNER__";
 
 interface PluginInfo {
   id: string;
@@ -152,8 +156,16 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
   const [modelOptions, setModelOptions] = useState<
     OnboardingOptions["models"] | null
   >(null);
+  const [currentNanoModel, setCurrentNanoModel] = useState("");
   const [currentSmallModel, setCurrentSmallModel] = useState("");
+  const [currentMediumModel, setCurrentMediumModel] = useState("");
   const [currentLargeModel, setCurrentLargeModel] = useState("");
+  const [currentMegaModel, setCurrentMegaModel] = useState("");
+  const [currentResponseHandlerModel, setCurrentResponseHandlerModel] =
+    useState(DEFAULT_RESPONSE_HANDLER_MODEL);
+  const [currentActionPlannerModel, setCurrentActionPlannerModel] = useState(
+    DEFAULT_ACTION_PLANNER_MODEL,
+  );
   const [modelSaving, setModelSaving] = useState(false);
   const [modelSaveSuccess, setModelSaveSuccess] = useState(false);
 
@@ -230,7 +242,13 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
     void (async () => {
       try {
         const opts = await client.getOnboardingOptions();
-        setModelOptions(opts.models);
+        setModelOptions({
+          nano: opts.models?.nano ?? [],
+          small: opts.models?.small ?? [],
+          medium: opts.models?.medium ?? [],
+          large: opts.models?.large ?? [],
+          mega: opts.models?.mega ?? [],
+        });
         setPiAiModelOptions(opts.piAiModels ?? []);
         setPiAiDefaultModelSpec(
           typeof opts.piAiDefaultModel === "string"
@@ -249,8 +267,11 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
         const providerId = getOnboardingProviderOption(llmText?.backend)?.id;
         const elizaCloudEnabledCfg =
           llmText?.transport === "cloud-proxy" && providerId === "elizacloud";
-        const defaultSmall = "moonshotai/kimi-k2-turbo";
+        const defaultNano = "openai/gpt-5.4-nano";
+        const defaultSmall = "minimax/minimax-m2.7";
+        const defaultMedium = "anthropic/claude-sonnet-4.6";
         const defaultLarge = "moonshotai/kimi-k2-0905";
+        const defaultMega = "anthropic/claude-sonnet-4.6";
 
         // Environment variables — needed both for model fallback and pi-ai
         const env = cfg.env as Record<string, unknown> | undefined;
@@ -259,19 +280,49 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
         // Fall back to SMALL_MODEL / LARGE_MODEL env vars when cfg.models
         // is empty.  Local providers (e.g. Ollama) store the active model
         // names as env vars rather than in cfg.models.
+        const envNano = typeof vars.NANO_MODEL === "string" ? vars.NANO_MODEL : "";
         const envSmall =
           typeof vars.SMALL_MODEL === "string" ? vars.SMALL_MODEL : "";
+        const envMedium =
+          typeof vars.MEDIUM_MODEL === "string" ? vars.MEDIUM_MODEL : "";
         const envLarge =
           typeof vars.LARGE_MODEL === "string" ? vars.LARGE_MODEL : "";
+        const envMega = typeof vars.MEGA_MODEL === "string" ? vars.MEGA_MODEL : "";
+        setCurrentNanoModel(
+          models?.nano ||
+            llmText?.nanoModel ||
+            envNano ||
+            (elizaCloudEnabledCfg ? defaultNano : ""),
+        );
         setCurrentSmallModel(
           models?.small ||
+            llmText?.smallModel ||
             envSmall ||
             (elizaCloudEnabledCfg ? defaultSmall : ""),
         );
+        setCurrentMediumModel(
+          models?.medium ||
+            llmText?.mediumModel ||
+            envMedium ||
+            (elizaCloudEnabledCfg ? defaultMedium : ""),
+        );
         setCurrentLargeModel(
           models?.large ||
+            llmText?.largeModel ||
             envLarge ||
             (elizaCloudEnabledCfg ? defaultLarge : ""),
+        );
+        setCurrentMegaModel(
+          models?.mega ||
+            llmText?.megaModel ||
+            envMega ||
+            (elizaCloudEnabledCfg ? defaultMega : ""),
+        );
+        setCurrentResponseHandlerModel(
+          llmText?.responseHandlerModel || DEFAULT_RESPONSE_HANDLER_MODEL,
+        );
+        setCurrentActionPlannerModel(
+          llmText?.actionPlannerModel || DEFAULT_ACTION_PLANNER_MODEL,
         );
         syncSelectionFromConfig(cfg as Record<string, unknown>);
         if (!(llmText?.transport === "direct" && providerId === "pi-ai")) {
@@ -673,55 +724,180 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
 
               {modelOptions &&
                 (() => {
+                  const nanoOptions = modelOptions.nano ?? [];
+                  const smallOptions = modelOptions.small ?? [];
+                  const mediumOptions = modelOptions.medium ?? [];
+                  const largeOptions = modelOptions.large ?? [];
+                  const megaOptions = modelOptions.mega ?? [];
+                  const allModelChoices = Array.from(
+                    new Map(
+                      [
+                        ...nanoOptions,
+                        ...smallOptions,
+                        ...mediumOptions,
+                        ...largeOptions,
+                        ...megaOptions,
+                      ].map((model) => [model.id, model]),
+                    ).values(),
+                  );
                   const modelSchema = {
                     type: "object" as const,
                     properties: {
+                      nano: {
+                        type: "string",
+                        enum: nanoOptions.map((m) => m.id),
+                        description: "Fastest, cheapest text tier.",
+                      },
                       small: {
                         type: "string",
-                        enum: modelOptions.small.map((m) => m.id),
-                        description: t(
-                          "providerswitcher.smallModelDescription",
-                        ),
+                        enum: smallOptions.map((m) => m.id),
+                        description: "Default lightweight text tier.",
+                      },
+                      medium: {
+                        type: "string",
+                        enum: mediumOptions.map((m) => m.id),
+                        description: "Planning tier. Falls back to small.",
                       },
                       large: {
                         type: "string",
-                        enum: modelOptions.large.map((m) => m.id),
-                        description: t(
-                          "providerswitcher.largeModelDescription",
-                        ),
+                        enum: largeOptions.map((m) => m.id),
+                        description: "Primary high-capability text tier.",
+                      },
+                      mega: {
+                        type: "string",
+                        enum: megaOptions.map((m) => m.id),
+                        description: "Future top tier. Falls back to large.",
+                      },
+                      responseHandler: {
+                        type: "string",
+                        enum: [
+                          DEFAULT_RESPONSE_HANDLER_MODEL,
+                          ...allModelChoices.map((m) => m.id),
+                        ],
+                        description:
+                          "Should-respond / response-handler override. Defaults to nano.",
+                      },
+                      actionPlanner: {
+                        type: "string",
+                        enum: [
+                          DEFAULT_ACTION_PLANNER_MODEL,
+                          ...allModelChoices.map((m) => m.id),
+                        ],
+                        description:
+                          "Planning override. Defaults to medium.",
                       },
                     },
                     required: [] as string[],
                   };
                   const modelHints: Record<string, ConfigUiHint> = {
-                    small: {
-                      label: t("providerswitcher.smallModelLabel"),
+                    nano: {
+                      label: "Nano Model",
                       width: "half",
-                      options: modelOptions.small.map((m) => ({
+                      options: nanoOptions.map((m) => ({
+                        value: m.id,
+                        label: m.name,
+                        description: `${m.provider} — ${m.description}`,
+                      })),
+                    },
+                    small: {
+                      label: "Small Model",
+                      width: "half",
+                      options: smallOptions.map((m) => ({
+                        value: m.id,
+                        label: m.name,
+                        description: `${m.provider} — ${m.description}`,
+                      })),
+                    },
+                    medium: {
+                      label: "Medium Model",
+                      width: "half",
+                      options: mediumOptions.map((m) => ({
                         value: m.id,
                         label: m.name,
                         description: `${m.provider} — ${m.description}`,
                       })),
                     },
                     large: {
-                      label: t("providerswitcher.largeModelLabel"),
+                      label: "Large Model",
                       width: "half",
-                      options: modelOptions.large.map((m) => ({
+                      options: largeOptions.map((m) => ({
                         value: m.id,
                         label: m.name,
                         description: `${m.provider} — ${m.description}`,
                       })),
                     },
+                    mega: {
+                      label: "Mega Model",
+                      width: "half",
+                      options: megaOptions.map((m) => ({
+                        value: m.id,
+                        label: m.name,
+                        description: `${m.provider} — ${m.description}`,
+                      })),
+                    },
+                    responseHandler: {
+                      label: "Response Handler",
+                      width: "half",
+                      options: [
+                        {
+                          value: DEFAULT_RESPONSE_HANDLER_MODEL,
+                          label: "Default (Nano)",
+                          description: "Use the nano tier unless explicitly overridden.",
+                        },
+                        ...allModelChoices.map((m) => ({
+                          value: m.id,
+                          label: m.name,
+                          description: `${m.provider} — ${m.description}`,
+                        })),
+                      ],
+                    },
+                    actionPlanner: {
+                      label: "Action Planner",
+                      width: "half",
+                      options: [
+                        {
+                          value: DEFAULT_ACTION_PLANNER_MODEL,
+                          label: "Default (Medium)",
+                          description:
+                            "Use the medium tier unless explicitly overridden.",
+                        },
+                        ...allModelChoices.map((m) => ({
+                          value: m.id,
+                          label: m.name,
+                          description: `${m.provider} — ${m.description}`,
+                        })),
+                      ],
+                    },
                   };
                   const modelValues: Record<string, unknown> = {};
                   const modelSetKeys = new Set<string>();
+                  if (currentNanoModel) {
+                    modelValues.nano = currentNanoModel;
+                    modelSetKeys.add("nano");
+                  }
                   if (currentSmallModel) {
                     modelValues.small = currentSmallModel;
                     modelSetKeys.add("small");
                   }
+                  if (currentMediumModel) {
+                    modelValues.medium = currentMediumModel;
+                    modelSetKeys.add("medium");
+                  }
                   if (currentLargeModel) {
                     modelValues.large = currentLargeModel;
                     modelSetKeys.add("large");
+                  }
+                  if (currentMegaModel) {
+                    modelValues.mega = currentMegaModel;
+                    modelSetKeys.add("mega");
+                  }
+                  if (currentResponseHandlerModel) {
+                    modelValues.responseHandler = currentResponseHandlerModel;
+                    modelSetKeys.add("responseHandler");
+                  }
+                  if (currentActionPlannerModel) {
+                    modelValues.actionPlanner = currentActionPlannerModel;
+                    modelSetKeys.add("actionPlanner");
                   }
 
                   return (
@@ -733,17 +909,100 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
                       registry={defaultRegistry}
                       onChange={(key, value) => {
                         const val = String(value);
+                        const nextNano =
+                          key === "nano" ? val : currentNanoModel;
                         const nextSmall =
                           key === "small" ? val : currentSmallModel;
+                        const nextMedium =
+                          key === "medium" ? val : currentMediumModel;
                         const nextLarge =
                           key === "large" ? val : currentLargeModel;
+                        const nextMega =
+                          key === "mega" ? val : currentMegaModel;
+                        const nextResponseHandler =
+                          key === "responseHandler"
+                            ? val
+                            : currentResponseHandlerModel;
+                        const nextActionPlanner =
+                          key === "actionPlanner"
+                            ? val
+                            : currentActionPlannerModel;
+                        if (key === "nano") setCurrentNanoModel(val);
                         if (key === "small") setCurrentSmallModel(val);
+                        if (key === "medium") setCurrentMediumModel(val);
                         if (key === "large") setCurrentLargeModel(val);
-                        const updated = { small: nextSmall, large: nextLarge };
+                        if (key === "mega") setCurrentMegaModel(val);
+                        if (key === "responseHandler")
+                          setCurrentResponseHandlerModel(val);
+                        if (key === "actionPlanner")
+                          setCurrentActionPlannerModel(val);
                         void (async () => {
                           setModelSaving(true);
                           try {
-                            await client.updateConfig({ models: updated });
+                            const cfg = (await client.getConfig()) as Record<
+                              string,
+                              unknown
+                            >;
+                            const existingRouting =
+                              resolveServiceRoutingInConfig(cfg)?.llmText;
+                            const models = {
+                              nano: nextNano,
+                              small: nextSmall,
+                              medium: nextMedium,
+                              large: nextLarge,
+                              mega: nextMega,
+                            };
+                            const llmText = buildElizaCloudServiceRoute({
+                              nanoModel: nextNano,
+                              smallModel: nextSmall,
+                              mediumModel: nextMedium,
+                              largeModel: nextLarge,
+                              megaModel: nextMega,
+                              ...(nextResponseHandler !==
+                              DEFAULT_RESPONSE_HANDLER_MODEL
+                                ? {
+                                    responseHandlerModel: nextResponseHandler,
+                                  }
+                                : {}),
+                              ...(nextActionPlanner !==
+                              DEFAULT_ACTION_PLANNER_MODEL
+                                ? {
+                                    actionPlannerModel: nextActionPlanner,
+                                  }
+                                : {}),
+                              ...(existingRouting?.shouldRespondModel
+                                ? {
+                                    shouldRespondModel:
+                                      existingRouting.shouldRespondModel,
+                                  }
+                                : {}),
+                              ...(existingRouting?.plannerModel
+                                ? {
+                                    plannerModel: existingRouting.plannerModel,
+                                  }
+                                : {}),
+                              ...(existingRouting?.responseModel
+                                ? {
+                                    responseModel: existingRouting.responseModel,
+                                  }
+                                : {}),
+                              ...(existingRouting?.mediaDescriptionModel
+                                ? {
+                                    mediaDescriptionModel:
+                                      existingRouting.mediaDescriptionModel,
+                                  }
+                                : {}),
+                            });
+                            await client.updateConfig({
+                              models,
+                              serviceRouting: {
+                                ...(((cfg.serviceRouting as Record<
+                                  string,
+                                  unknown
+                                > | null) ?? {}) as Record<string, unknown>),
+                                llmText,
+                              },
+                            });
                             setModelSaveSuccess(true);
                             setTimeout(() => setModelSaveSuccess(false), 2000);
                             await client.restartAgent();

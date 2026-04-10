@@ -82,8 +82,8 @@ export interface VertexModelPreferencePatch {
   ownerId?: string;
   modelPreferences: {
     nanoModel?: string;
-    miniModel?: string;
     smallModel?: string;
+    mediumModel?: string;
     largeModel?: string;
     megaModel?: string;
     responseHandlerModel?: string;

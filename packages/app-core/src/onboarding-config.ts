@@ -29,11 +29,11 @@ export interface BuildOnboardingConnectionArgs {
   onboardingRemoteConnected: boolean;
   onboardingRemoteApiBase: string;
   onboardingRemoteToken: string;
-  onboardingNanoModel: string;
-  onboardingSmallModel: string;
-  onboardingMediumModel: string;
-  onboardingLargeModel: string;
-  onboardingMegaModel: string;
+  onboardingNanoModel?: string;
+  onboardingSmallModel?: string;
+  onboardingMediumModel?: string;
+  onboardingLargeModel?: string;
+  onboardingMegaModel?: string;
   onboardingResponseHandlerModel?: string;
   onboardingActionPlannerModel?: string;
 }
@@ -46,7 +46,10 @@ export interface BuildOnboardingRuntimeConfigResult {
   needsProviderSetup: boolean;
 }
 
-function trimToUndefined(value: string): string | undefined {
+function trimToUndefined(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
 }
@@ -111,7 +114,7 @@ export function buildOnboardingRuntimeConfig(
       ? {
           runtime: "remote",
           provider: "remote",
-          remoteApiBase: args.onboardingRemoteApiBase.trim(),
+          remoteApiBase: trimToUndefined(args.onboardingRemoteApiBase) ?? "",
           ...(trimToUndefined(args.onboardingRemoteToken)
             ? { remoteAccessToken: trimToUndefined(args.onboardingRemoteToken) }
             : {}),
@@ -153,7 +156,7 @@ export function buildOnboardingRuntimeConfig(
         ? {
             backend: localProviderId,
             transport: "remote",
-            remoteApiBase: args.onboardingRemoteApiBase.trim(),
+            remoteApiBase: trimToUndefined(args.onboardingRemoteApiBase) ?? "",
             ...(primaryModel ? { primaryModel } : {}),
           }
         : {

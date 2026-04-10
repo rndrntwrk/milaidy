@@ -227,13 +227,13 @@ describe("SearchableSelectInner portal contract", () => {
 describe("ProviderSwitcher model option wiring", () => {
   it("passes hint.options with value, label, and description for small models", () => {
     expect(providerSwitcherSource).toMatch(
-      /small:\s*\{[\s\S]*?options:\s*modelOptions\.small\.map/,
+      /small:\s*\{[\s\S]*?options:\s*smallOptions\.map/,
     );
   });
 
   it("passes hint.options with value, label, and description for large models", () => {
     expect(providerSwitcherSource).toMatch(
-      /large:\s*\{[\s\S]*?options:\s*modelOptions\.large\.map/,
+      /large:\s*\{[\s\S]*?options:\s*largeOptions\.map/,
     );
   });
 

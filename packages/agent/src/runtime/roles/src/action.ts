@@ -37,14 +37,26 @@ const MAX_USERNAME_LENGTH = 64;
 
 /** Role names accepted in commands. MEMBER/NONE map to GUEST for backwards compat. */
 const ROLE_PATTERN = "OWNER|ADMIN|USER|GUEST|MEMBER|NONE";
+const ROLE_ALIAS_PATTERN = "OWNER|ADMIN|USER|GUEST|MEMBER|NONE|MOD|MODERATOR";
 const CANONICAL_OWNER_SETTING_KEY = "ELIZA_ADMIN_ENTITY_ID";
 const RECENT_ROOM_MESSAGE_LIMIT = 100;
 const AMBIGUOUS_MATCH_SCORE_GAP = 10;
 const MIN_CONFIDENT_MATCH_SCORE = 70;
+const ROLE_CONTEXT_MESSAGE_COUNT = 6;
 
 type ParsedRoleCommand =
-  | { kind: "role"; targetName: string; newRole: RoleName }
-  | { kind: "boss"; targetName: string; newRole: "OWNER" };
+  | {
+      kind: "role";
+      targetName: string;
+      newRole: RoleName;
+      confidence: "direct" | "confirm";
+    }
+  | {
+      kind: "boss";
+      targetName: string;
+      newRole: "OWNER";
+      confidence: "direct" | "confirm";
+    };
 
 type RelationshipsContactLike = {
   entityId: UUID;
@@ -115,6 +127,7 @@ function normalizeEntityLookupName(raw: string): string | null {
 function normalizeInputRole(raw: string): RoleName {
   const upper = raw.toUpperCase();
   if (upper === "MEMBER" || upper === "NONE") return "GUEST";
+  if (upper === "MOD" || upper === "MODERATOR") return "ADMIN";
   return normalizeRole(upper);
 }
 
@@ -141,7 +154,7 @@ function parseRoleCommand(
 
   // Pattern: /role @name ROLE  or  role @name ROLE
   const slashRe = new RegExp(
-    `^\\/?\\s*role\\s+@?(\\S+)\\s+(${ROLE_PATTERN})\\s*$`,
+    `^\\/?\\s*role\\s+@?(.+?)\\s+(${ROLE_ALIAS_PATTERN})\\s*$`,
     "i",
   );
   const slashMatch = trimmed.match(slashRe);
@@ -152,12 +165,13 @@ function parseRoleCommand(
       kind: "role",
       targetName: name,
       newRole: normalizeInputRole(slashMatch[2]),
+      confidence: "direct",
     };
   }
 
   // Pattern: make @name admin/owner/user/guest
   const makeRe = new RegExp(
-    `^make\\s+@?(\\S+)\\s+(?:an?\\s+)?(${ROLE_PATTERN})\\s*$`,
+    `^make\\s+@?(.+?)\\s+(?:an?\\s+)?(${ROLE_ALIAS_PATTERN})\\s*$`,
     "i",
   );
   const makeMatch = trimmed.match(makeRe);
@@ -168,12 +182,13 @@ function parseRoleCommand(
       kind: "role",
       targetName: name,
       newRole: normalizeInputRole(makeMatch[2]),
+      confidence: "direct",
     };
   }
 
   // Pattern: set @name role ADMIN
   const setRe = new RegExp(
-    `^set\\s+@?(\\S+)\\s+(?:role\\s+)?(${ROLE_PATTERN})\\s*$`,
+    `^set\\s+@?(.+?)\\s+(?:role\\s+)?(${ROLE_ALIAS_PATTERN})\\s*$`,
     "i",
   );
   const setMatch = trimmed.match(setRe);
@@ -184,6 +199,23 @@ function parseRoleCommand(
       kind: "role",
       targetName: name,
       newRole: normalizeInputRole(setMatch[2]),
+      confidence: "direct",
+    };
+  }
+
+  const directRequestRe = new RegExp(
+    `^(?:(?:can|could|would|will)\\s+you\\s+(?:please\\s+)?|(?:please|pls|plz|yo|hey)\\s+)?(?:make|set|give|promote|bump)\\s+@?(.+?)\\s+(?:to\\s+)?(?:an?\\s+)?(${ROLE_ALIAS_PATTERN})[.!?]*$`,
+    "i",
+  );
+  const directRequestMatch = trimmed.match(directRequestRe);
+  if (directRequestMatch) {
+    const name = normalizeEntityLookupName(directRequestMatch[1]);
+    if (!name) return null;
+    return {
+      kind: "role",
+      targetName: name,
+      newRole: normalizeInputRole(directRequestMatch[2]),
+      confidence: "direct",
     };
   }
 
@@ -195,10 +227,128 @@ function parseRoleCommand(
       kind: "boss",
       targetName: name,
       newRole: "OWNER",
+      confidence: "direct",
+    };
+  }
+
+  const softAssignmentRe = new RegExp(
+    `^(?:i\\s+(?:think|reckon|figure)\\s+)?@?(.+?)\\s+(?:should(?:\\s+(?:probably|prolly|probs))?\\s+be|needs\\s+to\\s+be|oughta?\\s+be|feels\\s+like\\s+they\\s+should\\s+be)\\s+(?:an?\\s+)?(${ROLE_ALIAS_PATTERN})[.!?]*$`,
+    "i",
+  );
+  const softAssignmentMatch = trimmed.match(softAssignmentRe);
+  if (softAssignmentMatch) {
+    const name = normalizeEntityLookupName(softAssignmentMatch[1]);
+    if (!name) return null;
+    return {
+      kind: "role",
+      targetName: name,
+      newRole: normalizeInputRole(softAssignmentMatch[2]),
+      confidence: "confirm",
+    };
+  }
+
+  const canGetRoleRe = new RegExp(
+    `^can\\s+@?(.+?)\\s+get\\s+(?:an?\\s+)?(${ROLE_ALIAS_PATTERN})[.!?]*$`,
+    "i",
+  );
+  const canGetRoleMatch = trimmed.match(canGetRoleRe);
+  if (canGetRoleMatch) {
+    const name = normalizeEntityLookupName(canGetRoleMatch[1]);
+    if (!name) return null;
+    return {
+      kind: "role",
+      targetName: name,
+      newRole: normalizeInputRole(canGetRoleMatch[2]),
+      confidence: "confirm",
+    };
+  }
+
+  const tentativeBossMatch = trimmed.match(
+    /^(?:i\s+(?:think|guess|figure)\s+)?@?(.+?)\s+is\s+your\s+boss[.!?]*$/i,
+  );
+  if (tentativeBossMatch) {
+    const name = normalizeEntityLookupName(tentativeBossMatch[1]);
+    if (!name) return null;
+    return {
+      kind: "boss",
+      targetName: name,
+      newRole: "OWNER",
+      confidence: "confirm",
     };
   }
 
   return null;
+}
+
+function isAffirmativeRoleReply(text: string): boolean {
+  return /^(?:yes|yeah|yep|sure|ok(?:ay)?|do it|go ahead|please do|pls do|sounds good|that'?s right|correct|make it so)[.!?]*$/i.test(
+    text.trim(),
+  );
+}
+
+function isNegativeRoleReply(text: string): boolean {
+  return /^(?:no|nah|nope|not yet|don'?t|do not|leave it|hold off|never mind|nvm|cancel that)[.!?]*$/i.test(
+    text.trim(),
+  );
+}
+
+async function getRecentConversationMessages(
+  runtime: IAgentRuntime,
+  roomId: UUID,
+): Promise<Memory[]> {
+  if (typeof runtime.getMemories === "function") {
+    try {
+      return await runtime.getMemories({
+        tableName: "messages",
+        roomId,
+        count: ROLE_CONTEXT_MESSAGE_COUNT,
+      });
+    } catch {
+      // Fall back below.
+    }
+  }
+
+  if (typeof runtime.getMemoriesByRoomIds === "function") {
+    try {
+      return await runtime.getMemoriesByRoomIds({
+        tableName: "messages",
+        roomIds: [roomId],
+        limit: ROLE_CONTEXT_MESSAGE_COUNT,
+      });
+    } catch {
+      return [];
+    }
+  }
+
+  return [];
+}
+
+async function findPendingRoleIntent(
+  runtime: IAgentRuntime,
+  message: Memory,
+): Promise<ParsedRoleCommand | null> {
+  const recentMessages = await getRecentConversationMessages(runtime, message.roomId);
+  const sameUserMessages = recentMessages
+    .filter((memory) => memory?.entityId === message.entityId)
+    .reverse();
+
+  for (const memory of sameUserMessages) {
+    const text = typeof memory.content?.text === "string" ? memory.content.text : "";
+    const parsed = parseRoleCommand(text);
+    if (parsed?.confidence === "confirm") {
+      return parsed;
+    }
+  }
+
+  return null;
+}
+
+function buildRoleConfirmationPrompt(intent: ParsedRoleCommand): string {
+  if (intent.kind === "boss") {
+    return `Do you want me to make ${intent.targetName} the canonical boss/OWNER for the agent? Reply yes to confirm.`;
+  }
+
+  return `Do you want me to update ${intent.targetName} to **${intent.newRole}**? Reply yes to confirm.`;
 }
 
 function extractCustomFieldStrings(

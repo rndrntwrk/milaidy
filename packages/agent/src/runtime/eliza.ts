@@ -1162,8 +1162,15 @@ export function isEnvKeyAllowedForForwarding(key: string): boolean {
     upper === "ELIZAOS_CLOUD_API_KEY" ||
     upper === "ELIZAOS_CLOUD_ENABLED" ||
     upper === "ELIZAOS_CLOUD_BASE_URL" ||
+    upper === "ELIZAOS_CLOUD_NANO_MODEL" ||
+    upper === "ELIZAOS_CLOUD_MEDIUM_MODEL" ||
     upper === "ELIZAOS_CLOUD_SMALL_MODEL" ||
-    upper === "ELIZAOS_CLOUD_LARGE_MODEL"
+    upper === "ELIZAOS_CLOUD_LARGE_MODEL" ||
+    upper === "ELIZAOS_CLOUD_MEGA_MODEL" ||
+    upper === "ELIZAOS_CLOUD_RESPONSE_HANDLER_MODEL" ||
+    upper === "ELIZAOS_CLOUD_SHOULD_RESPOND_MODEL" ||
+    upper === "ELIZAOS_CLOUD_ACTION_PLANNER_MODEL" ||
+    upper === "ELIZAOS_CLOUD_PLANNER_MODEL"
   )
     return false;
   return true;
@@ -1195,8 +1202,15 @@ function isElizaCloudManagedProcessEnvKey(key: string): boolean {
     upper === "ELIZAOS_CLOUD_API_KEY" ||
     upper === "ELIZAOS_CLOUD_ENABLED" ||
     upper === "ELIZAOS_CLOUD_BASE_URL" ||
+    upper === "ELIZAOS_CLOUD_NANO_MODEL" ||
+    upper === "ELIZAOS_CLOUD_MEDIUM_MODEL" ||
     upper === "ELIZAOS_CLOUD_SMALL_MODEL" ||
-    upper === "ELIZAOS_CLOUD_LARGE_MODEL"
+    upper === "ELIZAOS_CLOUD_LARGE_MODEL" ||
+    upper === "ELIZAOS_CLOUD_MEGA_MODEL" ||
+    upper === "ELIZAOS_CLOUD_RESPONSE_HANDLER_MODEL" ||
+    upper === "ELIZAOS_CLOUD_SHOULD_RESPOND_MODEL" ||
+    upper === "ELIZAOS_CLOUD_ACTION_PLANNER_MODEL" ||
+    upper === "ELIZAOS_CLOUD_PLANNER_MODEL"
   );
 }
 
@@ -1671,8 +1685,15 @@ export function applyCloudConfigToEnv(config: ElizaConfig): void {
       delete process.env.ELIZAOS_CLOUD_BASE_URL;
     }
   } else {
+    delete process.env.ELIZAOS_CLOUD_NANO_MODEL;
+    delete process.env.ELIZAOS_CLOUD_MEDIUM_MODEL;
     delete process.env.ELIZAOS_CLOUD_SMALL_MODEL;
     delete process.env.ELIZAOS_CLOUD_LARGE_MODEL;
+    delete process.env.ELIZAOS_CLOUD_MEGA_MODEL;
+    delete process.env.ELIZAOS_CLOUD_RESPONSE_HANDLER_MODEL;
+    delete process.env.ELIZAOS_CLOUD_SHOULD_RESPOND_MODEL;
+    delete process.env.ELIZAOS_CLOUD_ACTION_PLANNER_MODEL;
+    delete process.env.ELIZAOS_CLOUD_PLANNER_MODEL;
     delete process.env.ELIZAOS_CLOUD_API_KEY;
     delete process.env.ELIZAOS_CLOUD_BASE_URL;
   }
@@ -1683,23 +1704,70 @@ export function applyCloudConfigToEnv(config: ElizaConfig): void {
   // user's own keys handle models.
   // If the user chose a subscription provider, treat that as "byok" unless
   // they explicitly set inferenceMode to "cloud".
+  const llmText = resolveServiceRoutingInConfig(config as Record<string, unknown>)
+    ?.llmText;
   const models = (config as Record<string, unknown>).models as
-    | { small?: string; large?: string }
+    | {
+        nano?: string;
+        small?: string;
+        medium?: string;
+        large?: string;
+        mega?: string;
+      }
     | undefined;
   if (effectivelyEnabled) {
-    const small = models?.small || "minimax/minimax-m2.7";
-    const large = models?.large || "anthropic/claude-sonnet-4.6";
+    const nano = llmText?.nanoModel || models?.nano || "openai/gpt-5.4-nano";
+    const small = llmText?.smallModel || models?.small || "minimax/minimax-m2.7";
+    const medium =
+      llmText?.mediumModel || models?.medium || small;
+    const large =
+      llmText?.largeModel || models?.large || "anthropic/claude-sonnet-4.6";
+    const mega = llmText?.megaModel || models?.mega || large;
+    const responseHandlerModel =
+      llmText?.responseHandlerModel || llmText?.shouldRespondModel;
+    const actionPlannerModel =
+      llmText?.actionPlannerModel || llmText?.plannerModel;
     process.env.SMALL_MODEL = small;
+    process.env.NANO_MODEL = nano;
+    process.env.MEDIUM_MODEL = medium;
     process.env.LARGE_MODEL = large;
+    process.env.MEGA_MODEL = mega;
+    if (responseHandlerModel) {
+      process.env.ELIZAOS_CLOUD_RESPONSE_HANDLER_MODEL = responseHandlerModel;
+      process.env.ELIZAOS_CLOUD_SHOULD_RESPOND_MODEL = responseHandlerModel;
+    } else {
+      delete process.env.ELIZAOS_CLOUD_RESPONSE_HANDLER_MODEL;
+      delete process.env.ELIZAOS_CLOUD_SHOULD_RESPOND_MODEL;
+    }
+    if (actionPlannerModel) {
+      process.env.ELIZAOS_CLOUD_ACTION_PLANNER_MODEL = actionPlannerModel;
+      process.env.ELIZAOS_CLOUD_PLANNER_MODEL = actionPlannerModel;
+    } else {
+      delete process.env.ELIZAOS_CLOUD_ACTION_PLANNER_MODEL;
+      delete process.env.ELIZAOS_CLOUD_PLANNER_MODEL;
+    }
+    process.env.ELIZAOS_CLOUD_NANO_MODEL = nano;
+    process.env.ELIZAOS_CLOUD_MEDIUM_MODEL = medium;
     process.env.ELIZAOS_CLOUD_SMALL_MODEL = small;
     process.env.ELIZAOS_CLOUD_LARGE_MODEL = large;
+    process.env.ELIZAOS_CLOUD_MEGA_MODEL = mega;
   } else if (shouldLoadCloudPlugin) {
     // Cloud plugin may still be active for non-inference services; keep model
     // routing local by clearing the cloud model aliases.
+    delete process.env.ELIZAOS_CLOUD_NANO_MODEL;
+    delete process.env.ELIZAOS_CLOUD_MEDIUM_MODEL;
     delete process.env.ELIZAOS_CLOUD_SMALL_MODEL;
     delete process.env.ELIZAOS_CLOUD_LARGE_MODEL;
+    delete process.env.ELIZAOS_CLOUD_MEGA_MODEL;
+    delete process.env.ELIZAOS_CLOUD_RESPONSE_HANDLER_MODEL;
+    delete process.env.ELIZAOS_CLOUD_SHOULD_RESPOND_MODEL;
+    delete process.env.ELIZAOS_CLOUD_ACTION_PLANNER_MODEL;
+    delete process.env.ELIZAOS_CLOUD_PLANNER_MODEL;
+    delete process.env.NANO_MODEL;
+    delete process.env.MEDIUM_MODEL;
     delete process.env.SMALL_MODEL;
     delete process.env.LARGE_MODEL;
+    delete process.env.MEGA_MODEL;
   }
 
   // Propagate per-service disable flags so downstream code can check them

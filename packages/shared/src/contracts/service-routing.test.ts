@@ -35,8 +35,8 @@ describe("service routing", () => {
           backend: "elizacloud",
           transport: "cloud-proxy",
           nanoModel: "google/gemini-2.5-flash-lite-nano-ft",
-          miniModel: "google/gemini-2.5-flash-lite-mini-ft",
           smallModel: "google/gemini-2.5-flash-lite",
+          mediumModel: "google/gemini-2.5-flash-ft-medium",
           largeModel: "google/gemini-2.5-flash",
           megaModel: "google/gemini-2.5-pro-ft",
           shouldRespondModel: "google/gemini-2.5-flash-lite-ft-should",
@@ -49,8 +49,8 @@ describe("service routing", () => {
         backend: "elizacloud",
         transport: "cloud-proxy",
         nanoModel: "google/gemini-2.5-flash-lite-nano-ft",
-        miniModel: "google/gemini-2.5-flash-lite-mini-ft",
         smallModel: "google/gemini-2.5-flash-lite",
+        mediumModel: "google/gemini-2.5-flash-ft-medium",
         largeModel: "google/gemini-2.5-flash",
         megaModel: "google/gemini-2.5-pro-ft",
         shouldRespondModel: "google/gemini-2.5-flash-lite-ft-should",
@@ -64,8 +64,8 @@ describe("service routing", () => {
     expect(
       buildElizaCloudServiceRoute({
         nanoModel: "google/gemini-2.5-flash-lite-nano-ft",
-        miniModel: "google/gemini-2.5-flash-lite-mini-ft",
         smallModel: "google/gemini-2.5-flash-lite",
+        mediumModel: "google/gemini-2.5-flash-ft-medium",
         largeModel: "google/gemini-2.5-flash",
         megaModel: "google/gemini-2.5-pro-ft",
         shouldRespondModel: "google/gemini-2.5-flash-lite-ft-should",
@@ -78,8 +78,8 @@ describe("service routing", () => {
       transport: "cloud-proxy",
       accountId: "elizacloud",
       nanoModel: "google/gemini-2.5-flash-lite-nano-ft",
-      miniModel: "google/gemini-2.5-flash-lite-mini-ft",
       smallModel: "google/gemini-2.5-flash-lite",
+      mediumModel: "google/gemini-2.5-flash-ft-medium",
       largeModel: "google/gemini-2.5-flash",
       megaModel: "google/gemini-2.5-pro-ft",
       shouldRespondModel: "google/gemini-2.5-flash-lite-ft-should",
@@ -93,13 +93,13 @@ describe("service routing", () => {
     expect(
       buildDefaultElizaCloudServiceRouting({
         includeInference: true,
-        miniModel: "google/gemini-2.5-flash-lite-mini-ft",
+        mediumModel: "google/gemini-2.5-flash-ft-medium",
         shouldRespondModel: "google/gemini-2.5-flash-lite-ft-should",
         plannerModel: "google/gemini-2.5-flash-ft-plan",
       }),
     ).toMatchObject({
       llmText: {
-        miniModel: "google/gemini-2.5-flash-lite-mini-ft",
+        mediumModel: "google/gemini-2.5-flash-ft-medium",
         shouldRespondModel: "google/gemini-2.5-flash-lite-ft-should",
         plannerModel: "google/gemini-2.5-flash-ft-plan",
       },

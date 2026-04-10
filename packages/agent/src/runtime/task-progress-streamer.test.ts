@@ -71,9 +71,7 @@ describe("installTaskProgressStreamer", () => {
     installTaskProgressStreamer(runtime as never, pty as never);
 
     emitSessionEvent("s-1", "task_complete", {});
-    vi.advanceTimersByTime(10_000);
-    await Promise.resolve();
-    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(10_000);
 
     expect(runtime.getTaskThread).toHaveBeenCalledWith("thread-1");
     expect(runtime.sendMessageToTarget).toHaveBeenCalledWith(

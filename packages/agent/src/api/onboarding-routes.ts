@@ -350,8 +350,11 @@ export async function handleOnboardingRoutes(
       "provider",
       "providerApiKey",
       "primaryModel",
+      "nanoModel",
       "smallModel",
+      "mediumModel",
       "largeModel",
+      "megaModel",
     ].some((key) => Object.hasOwn(body, key));
     if (hasLegacyOnboardingFields) {
       error(
@@ -552,12 +555,23 @@ export async function handleOnboardingRoutes(
       });
 
       delete process.env.ELIZAOS_CLOUD_ENABLED;
+      delete process.env.ELIZAOS_CLOUD_NANO_MODEL;
+      delete process.env.ELIZAOS_CLOUD_MEDIUM_MODEL;
       delete process.env.ELIZAOS_CLOUD_SMALL_MODEL;
       delete process.env.ELIZAOS_CLOUD_LARGE_MODEL;
+      delete process.env.ELIZAOS_CLOUD_MEGA_MODEL;
+      delete process.env.ELIZAOS_CLOUD_RESPONSE_HANDLER_MODEL;
+      delete process.env.ELIZAOS_CLOUD_SHOULD_RESPOND_MODEL;
+      delete process.env.ELIZAOS_CLOUD_ACTION_PLANNER_MODEL;
+      delete process.env.ELIZAOS_CLOUD_PLANNER_MODEL;
 
       if (config.models && typeof config.models === "object") {
+        const legacyModels = config.models as Record<string, unknown>;
+        delete legacyModels.nano;
         delete config.models.small;
+        delete legacyModels.medium;
         delete config.models.large;
+        delete legacyModels.mega;
       }
 
       if (

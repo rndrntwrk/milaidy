@@ -509,11 +509,11 @@ export interface OnboardingOptions {
   providers: ProviderOption[];
   cloudProviders: CloudProviderOption[];
   models: {
-    nano: ModelOption[];
-    small: ModelOption[];
-    medium: ModelOption[];
-    large: ModelOption[];
-    mega: ModelOption[];
+    nano?: ModelOption[];
+    small?: ModelOption[];
+    medium?: ModelOption[];
+    large?: ModelOption[];
+    mega?: ModelOption[];
   };
   openrouterModels?: OpenRouterModelOption[];
   piAiModels?: PiAiModelOption[];

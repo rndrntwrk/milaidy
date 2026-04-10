@@ -120,7 +120,15 @@ export function detectRuntimeModel(
   }
 
   if (llmText?.transport === "cloud-proxy" && backend === "elizacloud") {
-    return llmText.largeModel ?? llmText.smallModel ?? backend;
+    return (
+      llmText.responseModel ??
+      llmText.largeModel ??
+      llmText.megaModel ??
+      llmText.mediumModel ??
+      llmText.smallModel ??
+      llmText.nanoModel ??
+      backend
+    );
   }
 
   const configModel = normalizeModelSpec(

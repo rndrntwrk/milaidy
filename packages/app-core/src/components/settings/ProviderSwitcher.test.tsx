@@ -610,12 +610,22 @@ describe("ProviderSwitcher subscription selection behavior", () => {
       await Promise.resolve();
     });
 
-    expect(mockUpdateConfig).toHaveBeenCalledWith({
-      models: {
-        small: "cloud-small-2",
-        large: "cloud-large-1",
-      },
-    });
+    expect(mockUpdateConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        models: expect.objectContaining({
+          small: "cloud-small-2",
+          large: "cloud-large-1",
+        }),
+        serviceRouting: expect.objectContaining({
+          llmText: expect.objectContaining({
+            backend: "elizacloud",
+            transport: "cloud-proxy",
+            smallModel: "cloud-small-2",
+            largeModel: "cloud-large-1",
+          }),
+        }),
+      }),
+    );
     expect(mockRestartAgent).toHaveBeenCalledTimes(1);
   });
 

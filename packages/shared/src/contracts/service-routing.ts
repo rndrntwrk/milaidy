@@ -269,7 +269,6 @@ export function normalizeServiceRouteConfig(
   const accountId = readTrimmedString(route, "accountId");
   const primaryModel = readTrimmedString(route, "primaryModel");
   const nanoModel = readTrimmedString(route, "nanoModel");
-  const miniModel = readTrimmedString(route, "miniModel");
   const smallModel = readTrimmedString(route, "smallModel");
   const mediumModel = readTrimmedString(route, "mediumModel");
   const largeModel = readTrimmedString(route, "largeModel");
@@ -291,7 +290,6 @@ export function normalizeServiceRouteConfig(
     !accountId &&
     !primaryModel &&
     !nanoModel &&
-    !miniModel &&
     !smallModel &&
     !mediumModel &&
     !largeModel &&
@@ -313,7 +311,6 @@ export function normalizeServiceRouteConfig(
     ...(accountId ? { accountId } : {}),
     ...(primaryModel ? { primaryModel } : {}),
     ...(nanoModel ? { nanoModel } : {}),
-    ...(miniModel ? { miniModel } : {}),
     ...(smallModel ? { smallModel } : {}),
     ...(mediumModel ? { mediumModel } : {}),
     ...(largeModel ? { largeModel } : {}),
