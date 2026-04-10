@@ -72,6 +72,26 @@ describe("getSelfControlAccess", () => {
     });
   });
 
+  it("allows an explicitly stored ADMIN role", async () => {
+    const runtime = createRuntimeMock({
+      room: { worldId: "world-1" },
+      world: {
+        id: "world-1",
+        metadata: {
+          ownership: { ownerId: "owner-1" },
+          roles: { "admin-1": "ADMIN" },
+        },
+      },
+    });
+
+    await expect(
+      getSelfControlAccess(runtime, createMessage("admin-1")),
+    ).resolves.toEqual({
+      allowed: true,
+      role: "ADMIN",
+    });
+  });
+
   it("allows a Discord sender whose connector identity matches the stored owner entity", async () => {
     const runtime = createRuntimeMock({
       room: { worldId: "world-1" },
@@ -134,6 +154,36 @@ describe("getSelfControlAccess", () => {
 
     await expect(
       getSelfControlAccess(runtime, createMessage("telegram-shadow")),
+    ).resolves.toEqual({
+      allowed: true,
+      role: "OWNER",
+    });
+  });
+
+  it("allows a sender whose identity link points at the canonical owner", async () => {
+    const runtime = createRuntimeMock({
+      room: { worldId: "world-1" },
+      world: {
+        id: "world-1",
+        metadata: {
+          ownership: { ownerId: "app-owner" },
+          roles: {},
+        },
+      },
+      relationships: [
+        {
+          id: "rel-1" as UUID,
+          sourceEntityId: "shadow-owner" as UUID,
+          targetEntityId: "app-owner" as UUID,
+          agentId: "agent-1" as UUID,
+          tags: ["identity_link"],
+          metadata: { status: "confirmed" },
+        } as Relationship,
+      ],
+    });
+
+    await expect(
+      getSelfControlAccess(runtime, createMessage("shadow-owner")),
     ).resolves.toEqual({
       allowed: true,
       role: "OWNER",
