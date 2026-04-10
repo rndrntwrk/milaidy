@@ -185,6 +185,57 @@ describe("Telegram connector UI", () => {
 
       expect(hasRedDot).toBe(true);
     });
+
+    it("shows ready status when all params are optional and none are set", async () => {
+      // Regression: plugins like music-player where every param is optional
+      // should show "Ready" even when no optional params are filled in.
+      mockUseApp.mockReturnValue(
+        baseContext({
+          parameters: [
+            {
+              key: "MUSIC_PLAYER_VOLUME",
+              type: "string",
+              description: "Default volume",
+              required: false,
+              sensitive: false,
+              currentValue: null,
+              isSet: false,
+            },
+            {
+              key: "MUSIC_PLAYER_OUTPUT",
+              type: "string",
+              description: "Output device",
+              required: false,
+              sensitive: false,
+              currentValue: null,
+              isSet: false,
+            },
+          ],
+        }),
+      );
+
+      let tree: TestRenderer.ReactTestRenderer;
+      await act(async () => {
+        tree = TestRenderer.create(React.createElement(PluginsView));
+      });
+
+      const statusDots = tree!.root.findAll(
+        (node) =>
+          typeof node.props.className === "string" &&
+          node.props.className.includes("rounded-full") &&
+          node.props.className.includes("shadow-[0_0_10px"),
+      );
+
+      const hasGreenDot = statusDots.some((dot) =>
+        dot.props.className.includes("bg-ok"),
+      );
+      const hasRedDot = statusDots.some((dot) =>
+        dot.props.className.includes("bg-destructive"),
+      );
+
+      expect(hasGreenDot).toBe(true);
+      expect(hasRedDot).toBe(false);
+    });
   });
 
   describe("useTelegramChatMode toggle state", () => {
