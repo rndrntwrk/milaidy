@@ -11,6 +11,7 @@ import type { UiLanguage } from "@miladyai/app-core/i18n";
 import { normalizeLanguage } from "@miladyai/app-core/i18n";
 import {
   applyUiTheme,
+  getDefaultBundledVrmIndex,
   getVrmPreviewUrl,
   getVrmUrl,
   useApp,
@@ -70,7 +71,8 @@ export function OnboardingWizard() {
     setState("uiLanguage", normalizeLanguage(lang));
 
   // Use same VRM resolution logic as CompanionView for character unification
-  const safeSelectedVrmIndex = selectedVrmIndex > 0 ? selectedVrmIndex : 1;
+  const safeSelectedVrmIndex =
+    selectedVrmIndex > 0 ? selectedVrmIndex : getDefaultBundledVrmIndex();
   const vrmPath =
     selectedVrmIndex === 0 && customVrmUrl
       ? customVrmUrl
@@ -78,7 +80,7 @@ export function OnboardingWizard() {
   const fallbackPreview =
     selectedVrmIndex > 0
       ? getVrmPreviewUrl(safeSelectedVrmIndex)
-      : getVrmPreviewUrl(1);
+      : getVrmPreviewUrl(getDefaultBundledVrmIndex());
   const worldUrl = resolveAppAssetUrl("worlds/companion-day.spz");
 
   useEffect(() => {

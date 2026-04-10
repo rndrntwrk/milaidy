@@ -14,7 +14,11 @@ import type {
   CompanionHalfFramerateMode,
   CompanionVrmPowerMode,
 } from "../../state/types";
-import { getVrmCount, getVrmUrl } from "../../state/vrm";
+import {
+  getDefaultBundledVrmIndex,
+  getVrmCount,
+  getVrmUrl,
+} from "../../state/vrm";
 import {
   type CameraProfile,
   type InteractionMode,
@@ -29,13 +33,13 @@ import {
 
 /** Resolved lazily — boot config may not be set at module-load time (bundled builds). */
 function getDefaultVrmPath(): string {
-  return getVrmUrl(1);
+  return getVrmUrl(getDefaultBundledVrmIndex());
 }
 
 export type VrmViewerProps = {
   /** When false the loaded scene stays resident but the render loop is paused */
   active?: boolean;
-  /** Path to the VRM file to load (default: bundled Miwaifus #1) */
+  /** Path to the VRM file to load (default: current bundled default avatar) */
   vrmPath?: string;
   /** Enable drag-rotate + wheel/pinch zoom camera controls */
   interactive?: boolean;

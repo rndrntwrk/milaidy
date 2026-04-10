@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@miladyai/app-core/state", () => ({
   useApp: () => ({ t: (k: string) => k }),
+  getVrmCount: vi.fn(() => 4),
   getVrmPreviewUrl: vi.fn(() => "preview.png"),
   getVrmTitle: vi.fn(() => "Avatar"),
   VRM_COUNT: 4,

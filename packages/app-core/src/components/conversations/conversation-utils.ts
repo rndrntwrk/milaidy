@@ -1,4 +1,4 @@
-import { VRM_COUNT } from "../../state";
+import { getVrmCount } from "../../state";
 
 export function getLocalizedConversationTitle(
   title: string | undefined | null,
@@ -48,11 +48,12 @@ export function formatRelativeTime(
 }
 
 export function avatarIndexFromConversationId(id: string): number {
+  const count = Math.max(getVrmCount(), 1);
   let hash = 0;
   for (let i = 0; i < id.length; i += 1) {
     hash = (hash * 31 + id.charCodeAt(i)) | 0;
   }
-  const normalized = Math.abs(hash) % VRM_COUNT;
+  const normalized = Math.abs(hash) % count;
   return normalized + 1;
 }
 

@@ -20,6 +20,7 @@ const { mockUseApp, mockVrmStage, mockLanguageDropdown } = vi.hoisted(() => ({
 }));
 
 vi.mock("@miladyai/app-core/state", () => ({
+  getDefaultBundledVrmIndex: () => 9,
   getVrmPreviewUrl: () => "/vrms/previews/eliza-1.png",
   getVrmUrl: () => "/vrms/eliza-1.vrm.gz",
   applyUiTheme: vi.fn(),
