@@ -338,6 +338,17 @@ export class ScapeGameService extends Service {
   }
 
   /**
+   * Expose the recent event log for operator surfaces. The log is a
+   * bounded in-memory ring of step outcomes the autonomous loop has
+   * recorded via `pushEventLog`. The newest entries are at the end;
+   * callers generally want them reversed for display.
+   */
+  getRecentEventLog(limit = 16): EventLogEntry[] {
+    if (limit <= 0) return [];
+    return this.eventLog.slice(-limit);
+  }
+
+  /**
    * Apply an operator message coming through the session-scoped
    * route `/api/apps/scape/session/:id/message`. This is the path
    * the milady Apps UI uses for run-steering. We recognize a couple
