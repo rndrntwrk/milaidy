@@ -182,7 +182,7 @@ export async function fetchGmailMessages(
     const status = await service.getGoogleConnectorStatus(INTERNAL_URL);
     if (!status.connected) return [];
     const capabilities = status.grantedCapabilities ?? [];
-    if (!capabilities.includes("gmail_read")) return [];
+    if (!capabilities.includes("google.gmail.triage")) return [];
 
     // Fetch triage feed
     const triageFeed = await service.getGmailTriage(INTERNAL_URL);
@@ -193,19 +193,18 @@ export async function fetchGmailMessages(
 
     const results: InboundMessage[] = [];
     for (const msg of triageFeed.messages.slice(0, limit)) {
-      const receivedMs =
-        typeof msg.receivedAt === "number"
-          ? msg.receivedAt
-          : Date.parse(String(msg.receivedAt));
+      const receivedMs = Date.parse(String(msg.receivedAt));
       if (sinceMs > 0 && receivedMs < sinceMs) continue;
 
       const from = msg.from || msg.fromEmail || "Unknown sender";
-      const gmailLink = msg.messageId
-        ? `https://mail.google.com/mail/u/0/#inbox/${msg.messageId}`
-        : undefined;
+      const gmailLink =
+        msg.htmlLink ??
+        (msg.externalId
+          ? `https://mail.google.com/mail/u/0/#inbox/${msg.externalId}`
+          : undefined);
 
       results.push({
-        id: msg.messageId || `gmail-${Date.now()}-${results.length}`,
+        id: msg.id || `gmail-${Date.now()}-${results.length}`,
         source: "gmail",
         senderName: from,
         channelName: `Email from ${from}`,
@@ -213,8 +212,8 @@ export async function fetchGmailMessages(
         text: msg.snippet || msg.subject || "",
         snippet: (msg.snippet || msg.subject || "").slice(0, SNIPPET_MAX_LENGTH),
         timestamp: receivedMs,
-        deepLink: gmailLink,
-        gmailMessageId: msg.messageId,
+        deepLink: gmailLink ?? undefined,
+        gmailMessageId: msg.externalId || msg.id,
         gmailIsImportant: msg.isImportant ?? false,
         gmailLikelyReplyNeeded: msg.likelyReplyNeeded ?? false,
       });

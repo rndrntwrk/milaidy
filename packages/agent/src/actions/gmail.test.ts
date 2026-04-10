@@ -1304,6 +1304,39 @@ describe("gmailAction", () => {
     expect(result?.success).toBe(true);
   });
 
+  it("follow-up resolves from timestamped runtime format", async () => {
+    mockGetGmailSearch.mockResolvedValue(
+      searchResult({
+        query: "from:suran is:unread",
+        from: "Suran Goonatilake",
+        subject: "New proposal",
+      }),
+    );
+
+    const result = await invokeWith(
+      "what about unread ones?",
+      "what about unread ones?",
+      {
+        state: {
+          values: {
+            agentName: "Sakuya",
+            recentMessages: [
+              "14:23 (3 min ago) [entity-abc] Shaw: find emails from suran",
+              "14:24 (2 min ago) [entity-xyz] Sakuya: Found 3 emails for sender suran.",
+            ].join("\n"),
+          },
+        },
+      },
+    );
+
+    expect(mockGetGmailSearch).toHaveBeenCalled();
+    const searchCall = mockGetGmailSearch.mock.calls[0];
+    const query = (searchCall[1] as { query: string }).query;
+    expect(query).toMatch(/suran/i);
+    expect(query).toContain("is:unread");
+    expect(result?.success).toBe(true);
+  });
+
   // --- Parameter documentation noise rejection ---
 
   it("rejects LIFE action parameter doc noise in params.intent", async () => {

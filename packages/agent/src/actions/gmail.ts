@@ -169,13 +169,8 @@ function parseStateLine(line: string): { role: string; text: string } {
   return { role: "", text: trimmed };
 }
 
-/** Known agent/system role names that should never be treated as user intents. */
-const AGENT_ROLE_NAMES = new Set([
-  "assistant",
-  "system",
-  "chen",
-  "eliza",
-]);
+/** Baseline role names that should never be treated as user intents. */
+const SYSTEM_ROLE_NAMES = new Set(["assistant", "system"]);
 
 function splitStateTextCandidates(value: string): string[] {
   return value
@@ -188,6 +183,8 @@ function splitStateTextCandidates(value: string): string[] {
  * Extract only user-authored messages from state.
  * Handles both simple "user: X" and timestamped "HH:MM (...) [id] Name: X" formats.
  * Filters out agent responses, system messages, and continuation lines (snippets, body text).
+ * Uses state.values.agentName (set by the elizaOS character provider) to dynamically
+ * identify agent messages regardless of the character's name.
  */
 function userIntentsFromState(state: State | undefined): string[] {
   if (!state || typeof state !== "object") return [];
@@ -203,12 +200,19 @@ function userIntentsFromState(state: State | undefined): string[] {
         ? stateRecord.text
         : "";
   if (!raw) return [];
+
+  // Build exclusion set: baseline system roles + the agent's own character name
+  const agentName =
+    typeof values?.agentName === "string" ? values.agentName.toLowerCase() : "";
+  const excludedRoles = new Set(SYSTEM_ROLE_NAMES);
+  if (agentName) excludedRoles.add(agentName);
+
   return raw
     .split(/\n+/)
     .filter((line) => {
       const { role } = parseStateLine(line);
       // Must have a role prefix (not a continuation line) and not be an agent role
-      return role.length > 0 && !AGENT_ROLE_NAMES.has(role);
+      return role.length > 0 && !excludedRoles.has(role);
     })
     .map((line) => parseStateLine(line).text)
     .filter((text) => text.length > 0);
