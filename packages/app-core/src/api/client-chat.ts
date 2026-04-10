@@ -14,7 +14,9 @@ import { MiladyClient } from "./client-base";
 import type {
   ApiError,
   ChatTokenUsage,
+  CompleteLifeOpsBrowserSessionRequest,
   CompleteLifeOpsOccurrenceRequest,
+  ConfirmLifeOpsBrowserSessionRequest,
   ConnectionTestResult,
   ContentBlock,
   Conversation,
@@ -23,6 +25,7 @@ import type {
   ConversationMessage,
   ConversationMode,
   CreateConversationOptions,
+  CreateLifeOpsBrowserSessionRequest,
   CreateLifeOpsCalendarEventRequest,
   CreateLifeOpsDefinitionRequest,
   CreateLifeOpsGmailReplyDraftRequest,
@@ -40,6 +43,11 @@ import type {
   KnowledgeSearchResponse,
   KnowledgeStats,
   KnowledgeUploadResult,
+  LifeOpsBrowserCompanionStatus,
+  LifeOpsBrowserPageContext,
+  LifeOpsBrowserSession,
+  LifeOpsBrowserSettings,
+  LifeOpsBrowserTabSummary,
   LifeOpsCalendarFeed,
   LifeOpsDefinitionRecord,
   LifeOpsGmailReplyDraft,
@@ -72,6 +80,7 @@ import type {
   SnoozeLifeOpsOccurrenceRequest,
   StartLifeOpsGoogleConnectorRequest,
   StartLifeOpsGoogleConnectorResponse,
+  SyncLifeOpsBrowserStateRequest,
   TableInfo,
   TableRowsResponse,
   TrajectoryConfig,
@@ -80,6 +89,7 @@ import type {
   TrajectoryListOptions,
   TrajectoryListResult,
   TrajectoryStats,
+  UpdateLifeOpsBrowserSettingsRequest,
   UpdateLifeOpsDefinitionRequest,
   UpdateLifeOpsGoalRequest,
   WorkbenchOverview,
@@ -313,6 +323,39 @@ declare module "./client-base" {
       }
     >;
     getLifeOpsOverview(): Promise<LifeOpsOverview>;
+    getLifeOpsBrowserSettings(): Promise<{ settings: LifeOpsBrowserSettings }>;
+    updateLifeOpsBrowserSettings(
+      data: UpdateLifeOpsBrowserSettingsRequest,
+    ): Promise<{ settings: LifeOpsBrowserSettings }>;
+    listLifeOpsBrowserCompanions(): Promise<{
+      companions: LifeOpsBrowserCompanionStatus[];
+    }>;
+    listLifeOpsBrowserTabs(): Promise<{ tabs: LifeOpsBrowserTabSummary[] }>;
+    getLifeOpsBrowserCurrentPage(): Promise<{
+      page: LifeOpsBrowserPageContext | null;
+    }>;
+    syncLifeOpsBrowserState(data: SyncLifeOpsBrowserStateRequest): Promise<{
+      companion: LifeOpsBrowserCompanionStatus;
+      tabs: LifeOpsBrowserTabSummary[];
+      currentPage: LifeOpsBrowserPageContext | null;
+    }>;
+    listLifeOpsBrowserSessions(): Promise<{
+      sessions: LifeOpsBrowserSession[];
+    }>;
+    getLifeOpsBrowserSession(
+      sessionId: string,
+    ): Promise<{ session: LifeOpsBrowserSession }>;
+    createLifeOpsBrowserSession(
+      data: CreateLifeOpsBrowserSessionRequest,
+    ): Promise<{ session: LifeOpsBrowserSession }>;
+    confirmLifeOpsBrowserSession(
+      sessionId: string,
+      data: ConfirmLifeOpsBrowserSessionRequest,
+    ): Promise<{ session: LifeOpsBrowserSession }>;
+    completeLifeOpsBrowserSession(
+      sessionId: string,
+      data: CompleteLifeOpsBrowserSessionRequest,
+    ): Promise<{ session: LifeOpsBrowserSession }>;
     captureLifeOpsActivitySignal(
       data: CaptureLifeOpsActivitySignalRequest,
     ): Promise<{ signal: LifeOpsActivitySignal }>;
@@ -1104,6 +1147,103 @@ MiladyClient.prototype.getLifeOpsOverview = async function (
   this: MiladyClient,
 ) {
   return this.fetch("/api/lifeops/overview");
+};
+
+MiladyClient.prototype.getLifeOpsBrowserSettings = async function (
+  this: MiladyClient,
+) {
+  return this.fetch("/api/lifeops/browser/settings");
+};
+
+MiladyClient.prototype.updateLifeOpsBrowserSettings = async function (
+  this: MiladyClient,
+  data,
+) {
+  return this.fetch("/api/lifeops/browser/settings", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+};
+
+MiladyClient.prototype.listLifeOpsBrowserCompanions = async function (
+  this: MiladyClient,
+) {
+  return this.fetch("/api/lifeops/browser/companions");
+};
+
+MiladyClient.prototype.listLifeOpsBrowserTabs = async function (
+  this: MiladyClient,
+) {
+  return this.fetch("/api/lifeops/browser/tabs");
+};
+
+MiladyClient.prototype.getLifeOpsBrowserCurrentPage = async function (
+  this: MiladyClient,
+) {
+  return this.fetch("/api/lifeops/browser/current-page");
+};
+
+MiladyClient.prototype.syncLifeOpsBrowserState = async function (
+  this: MiladyClient,
+  data,
+) {
+  return this.fetch("/api/lifeops/browser/sync", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+};
+
+MiladyClient.prototype.listLifeOpsBrowserSessions = async function (
+  this: MiladyClient,
+) {
+  return this.fetch("/api/lifeops/browser/sessions");
+};
+
+MiladyClient.prototype.getLifeOpsBrowserSession = async function (
+  this: MiladyClient,
+  sessionId,
+) {
+  return this.fetch(
+    `/api/lifeops/browser/sessions/${encodeURIComponent(sessionId)}`,
+  );
+};
+
+MiladyClient.prototype.createLifeOpsBrowserSession = async function (
+  this: MiladyClient,
+  data,
+) {
+  return this.fetch("/api/lifeops/browser/sessions", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+};
+
+MiladyClient.prototype.confirmLifeOpsBrowserSession = async function (
+  this: MiladyClient,
+  sessionId,
+  data,
+) {
+  return this.fetch(
+    `/api/lifeops/browser/sessions/${encodeURIComponent(sessionId)}/confirm`,
+    {
+      method: "POST",
+      body: JSON.stringify(data),
+    },
+  );
+};
+
+MiladyClient.prototype.completeLifeOpsBrowserSession = async function (
+  this: MiladyClient,
+  sessionId,
+  data,
+) {
+  return this.fetch(
+    `/api/lifeops/browser/sessions/${encodeURIComponent(sessionId)}/complete`,
+    {
+      method: "POST",
+      body: JSON.stringify(data),
+    },
+  );
 };
 
 MiladyClient.prototype.captureLifeOpsActivitySignal = async function (
