@@ -377,6 +377,61 @@ describe("gmailAction", () => {
     expect(result?.text).toContain("Suran Lee");
   });
 
+  it("parses TOON response with || delimited queries from LLM plan", async () => {
+    mockUseModel.mockResolvedValue(
+      "subaction: search\nqueries: from:suran newer_than:21d || subject:report\nreplyNeededOnly: false",
+    );
+    mockGetGmailSearch.mockResolvedValue({
+      query: "from:suran newer_than:21d",
+      messages: [
+        {
+          id: "msg-toon",
+          externalId: "ext-toon",
+          threadId: "thread-toon",
+          agentId: "agent-1",
+          provider: "google",
+          side: "owner",
+          subject: "Report",
+          from: "Suran Lee",
+          fromEmail: "suran@example.com",
+          replyTo: "suran@example.com",
+          to: ["shawmakesmagic@gmail.com"],
+          cc: [],
+          snippet: "Here is the report",
+          receivedAt: "2026-04-08T16:00:00.000Z",
+          isUnread: false,
+          isImportant: false,
+          likelyReplyNeeded: false,
+          triageScore: 50,
+          triageReason: "search hit",
+          labels: ["INBOX"],
+          htmlLink: "https://mail.google.com/mail/u/0/#all/thread-toon",
+          metadata: {},
+          syncedAt: "2026-04-08T16:00:00.000Z",
+          updatedAt: "2026-04-08T16:00:00.000Z",
+        },
+      ],
+      source: "cache",
+      syncedAt: "2026-04-09T16:00:00.000Z",
+      summary: {
+        totalCount: 1,
+        unreadCount: 0,
+        importantCount: 0,
+        replyNeededCount: 0,
+      },
+    });
+
+    const result = await invoke("find emails from suran about the report");
+
+    expect(mockUseModel).toHaveBeenCalled();
+    // The || delimiter should produce two separate queries
+    expect(mockGetGmailSearch).toHaveBeenCalledWith(
+      expect.any(URL),
+      expect.objectContaining({ query: expect.stringContaining("suran") }),
+    );
+    expect(result).toMatchObject({ success: true });
+  });
+
   it("sends grounded Gmail results through the action callback", async () => {
     const callback = vi.fn(async () => []);
     mockGetGmailSearch.mockResolvedValue({

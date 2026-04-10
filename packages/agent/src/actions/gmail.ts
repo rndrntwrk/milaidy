@@ -142,21 +142,53 @@ function quoteQueryValue(value: string): string {
   return /\s/.test(value) ? `"${value}"` : value;
 }
 
+/**
+ * Strip the elizaOS runtime timestamp + entity prefix from a state line.
+ * Handles both formats:
+ *   Simple:      "user: find emails from suran"
+ *   Timestamped: "14:23 (3 min ago) [entity-id] Shaw: find emails from suran"
+ * Returns { role, text } where role is the name/role prefix.
+ */
+function parseStateLine(line: string): { role: string; text: string } {
+  const trimmed = line.trim();
+  // Timestamped format: "HH:MM (relative) [entity-id] Name: text"
+  const tsMatch = trimmed.match(
+    /^\d{1,2}:\d{2}\s+\([^)]+\)\s+\[[^\]]+\]\s+(\S+)\s*:\s*(.*)/,
+  );
+  if (tsMatch) {
+    return { role: tsMatch[1].toLowerCase(), text: tsMatch[2].trim() };
+  }
+  // Simple format: "role: text"
+  const simpleMatch = trimmed.match(
+    /^(user|assistant|system|owner|admin|\S+)\s*:\s*(.*)/i,
+  );
+  if (simpleMatch) {
+    return { role: simpleMatch[1].toLowerCase(), text: simpleMatch[2].trim() };
+  }
+  // Continuation line (no prefix) — snippet, body text, etc.
+  return { role: "", text: trimmed };
+}
+
+/** Known agent/system role names that should never be treated as user intents. */
+const AGENT_ROLE_NAMES = new Set([
+  "assistant",
+  "system",
+  "chen",
+  "eliza",
+]);
+
 function splitStateTextCandidates(value: string): string[] {
   return value
     .split(/\n+/)
-    .map((line) =>
-      line
-        .replace(
-          /^(?:user|assistant|system|owner|admin|shaw|chen|eliza)\s*:\s*/i,
-          "",
-        )
-        .trim(),
-    )
-    .filter((line) => line.length > 0);
+    .map((line) => parseStateLine(line).text)
+    .filter((text) => text.length > 0);
 }
 
-/** Extract only user-authored messages from state (ignores assistant responses, snippets, etc.). */
+/**
+ * Extract only user-authored messages from state.
+ * Handles both simple "user: X" and timestamped "HH:MM (...) [id] Name: X" formats.
+ * Filters out agent responses, system messages, and continuation lines (snippets, body text).
+ */
 function userIntentsFromState(state: State | undefined): string[] {
   if (!state || typeof state !== "object") return [];
   const stateRecord = state as Record<string, unknown>;
@@ -173,14 +205,13 @@ function userIntentsFromState(state: State | undefined): string[] {
   if (!raw) return [];
   return raw
     .split(/\n+/)
-    .filter((line) => /^user\s*:/i.test(line.trim()))
-    .map((line) =>
-      line
-        .trim()
-        .replace(/^user\s*:\s*/i, "")
-        .trim(),
-    )
-    .filter((line) => line.length > 0);
+    .filter((line) => {
+      const { role } = parseStateLine(line);
+      // Must have a role prefix (not a continuation line) and not be an agent role
+      return role.length > 0 && !AGENT_ROLE_NAMES.has(role);
+    })
+    .map((line) => parseStateLine(line).text)
+    .filter((text) => text.length > 0);
 }
 
 function stateTextCandidates(state: State | undefined): string[] {
@@ -1088,19 +1119,31 @@ export async function extractGmailPlanWithLlm(
     };
   }
 
+  // Extract queries from multiple possible shapes:
+  // - TOON string: "from:john || subject:report" (split on ||)
+  // - TOON single: "from:john" (no delimiter)
+  // - JSON array: ["from:john", "subject:report"]
+  // - Numbered fallbacks: query1, query2, query3
+  const rawQueries: Array<string | undefined> = [];
+  if (typeof parsed.queries === "string" && parsed.queries.trim().length > 0) {
+    // TOON path: split on || delimiter
+    for (const q of parsed.queries.split(/\s*\|\|\s*/)) {
+      if (q.trim().length > 0) rawQueries.push(q.trim());
+    }
+  } else if (Array.isArray(parsed.queries)) {
+    // JSON path: array of strings
+    for (const value of parsed.queries) {
+      if (typeof value === "string") rawQueries.push(value);
+    }
+  }
+  if (typeof parsed.query === "string") rawQueries.push(parsed.query);
+  if (typeof parsed.query1 === "string") rawQueries.push(parsed.query1);
+  if (typeof parsed.query2 === "string") rawQueries.push(parsed.query2);
+  if (typeof parsed.query3 === "string") rawQueries.push(parsed.query3);
+
   return {
     subaction: normalizeGmailSubaction(parsed.subaction),
-    queries: dedupeQueries([
-      typeof parsed.query === "string" ? parsed.query : undefined,
-      ...(Array.isArray(parsed.queries)
-        ? parsed.queries.map((value) =>
-            typeof value === "string" ? value : undefined,
-          )
-        : []),
-      typeof parsed.query1 === "string" ? parsed.query1 : undefined,
-      typeof parsed.query2 === "string" ? parsed.query2 : undefined,
-      typeof parsed.query3 === "string" ? parsed.query3 : undefined,
-    ]),
+    queries: dedupeQueries(rawQueries),
     messageId:
       typeof parsed.messageId === "string" && parsed.messageId.trim().length > 0
         ? parsed.messageId.trim()

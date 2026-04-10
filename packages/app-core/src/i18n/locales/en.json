@@ -1427,7 +1427,7 @@
   "nav.settings": "Settings",
   "nav.social": "Connectors",
   "nav.stream": "Stream",
-  "nav.wallets": "Wallets",
+  "nav.inventory": "Inventory",
   "notice.elizaCloudAuthRejected": "Eliza Cloud rejected your API key, so model calls will fail. Open Settings → Cloud and sign in again or paste a new key from elizacloud.ai.",
   "onboarding.allConfigured": "You can adjust settings anytime.",
   "onboarding.almostThere": "Almost there!",

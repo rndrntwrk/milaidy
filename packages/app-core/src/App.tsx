@@ -148,7 +148,7 @@ function ViewRouter() {
             <CharacterEditor />
           </TabScrollView>
         );
-      case "wallets":
+      case "inventory":
         return (
           <TabScrollView>
             <InventoryView />
@@ -271,7 +271,7 @@ export function App() {
 
   const isCompanionTab = tab === "companion";
   const isChat = tab === "chat";
-  const isWallets = tab === "wallets";
+  const isWallets = tab === "inventory";
   const isConnectors = tab === "connectors";
   const isHeartbeats = tab === "triggers";
   const isKnowledge = tab === "knowledge";
