@@ -75,7 +75,12 @@ export function installTaskProgressStreamer(
     sessionWorkdirs.delete(sessionId);
     sessionRooms.delete(sessionId);
     heartbeatSent.delete(sessionId);
-    finalSent.delete(sessionId);
+    // NOTE: do NOT clear finalSent here. finalSent is a "we already posted the
+    // final report for this session" gate and must survive the stopped event,
+    // which can fire between task_complete and the 10s postFinalReport delay.
+    // Clearing it here would allow a late-arriving duplicate task_complete to
+    // schedule a second post. finalSent grows by one per session — bounded by
+    // real bot lifetime, acceptable.
   };
 
   svc.onSessionEvent((sessionId, event) => {
@@ -117,17 +122,22 @@ export function installTaskProgressStreamer(
     }
 
     if (event === "task_complete" && !finalSent.has(sessionId)) {
+      // Mark as final IMMEDIATELY at schedule time (not inside the setTimeout
+      // callback) so any additional task_complete events fired before the 10s
+      // timer resolves cannot schedule a second post. task_complete fires
+      // once per prompt-reappearance; if the subagent prints multiple
+      // prompts in quick succession we only want one discord message.
+      finalSent.add(sessionId);
+      logger.info(
+        `[task-progress-streamer] scheduling final report for ${sessionId}`,
+      );
       // task_complete fires after EVERY tool call (when the agent's prompt
       // reappears), not only after the final response. wait a bit for the
       // agent to flush its answer to the session jsonl before reading.
-      // if a second task_complete fires within the delay, the finalSent
-      // guard prevents duplicate posts.
       // Capture both workdir and room info NOW — the stopped event may fire
       // before the 10s delay and clear the maps via forgetSession.
       const cachedWorkdir = sessionWorkdirs.get(sessionId);
       setTimeout(async () => {
-        if (finalSent.has(sessionId)) return;
-        finalSent.add(sessionId);
         // Resolve room routing HERE (not at session start) because the
         // fire-and-forget async lookup at start may not have finished yet.
         let roomCache = sessionRooms;
@@ -147,6 +157,9 @@ export function installTaskProgressStreamer(
             }
           }
         }
+        logger.info(
+          `[task-progress-streamer] dispatching final report for ${sessionId}`,
+        );
         void postFinalReport(runtime, svc, sessionId, cachedWorkdir, roomCache);
       }, 10_000);
       return;
@@ -234,15 +247,47 @@ async function postFinalReport(
     const urlLine = assistantText
       .split("\n")
       .find((line) => /^\s*URL:\s*https?:\/\//i.test(line));
-    const preview =
-      assistantText.length > 1800
-        ? `${assistantText.slice(0, 1800)}...`
-        : assistantText;
-    const text = urlLine ? `done — ${urlLine.trim()}` : preview;
-    await postToOriginatingChannel(runtime, svc, sessionId, text, roomCache);
+    // If the subagent reported a URL, collapse the whole response to just
+    // "done — URL: ..." — that's the agent-home pattern contract.
+    // Otherwise send the full assistant text, chunked to fit discord's 2000
+    // char message limit.
+    const chunks = urlLine
+      ? [`done — ${urlLine.trim()}`]
+      : chunkForDiscord(assistantText, 1900);
+    for (const chunk of chunks) {
+      await postToOriginatingChannel(runtime, svc, sessionId, chunk, roomCache);
+    }
     return;
   }
   await postToOriginatingChannel(runtime, svc, sessionId, "task finished", roomCache);
+}
+
+/**
+ * Split `text` into chunks no larger than `max` characters, preferring to
+ * break at paragraph boundaries (\n\n), then line boundaries (\n), then
+ * word boundaries (space). Discord's hard limit per message is 2000 chars —
+ * callers should pass 1900 or lower to leave headroom for formatting.
+ *
+ * Exported for tests.
+ */
+export function chunkForDiscord(text: string, max: number): string[] {
+  if (text.length <= max) return [text];
+  const out: string[] = [];
+  let remaining = text;
+  while (remaining.length > max) {
+    // Only accept a split point if it's past the halfway mark — otherwise
+    // we'd create tiny sliver chunks. Fall back to harder cut points (or a
+    // brute-force slice) when no good boundary is available.
+    const half = Math.floor(max / 2);
+    let cut = remaining.lastIndexOf("\n\n", max);
+    if (cut < half) cut = remaining.lastIndexOf("\n", max);
+    if (cut < half) cut = remaining.lastIndexOf(" ", max);
+    if (cut < half) cut = max;
+    out.push(remaining.slice(0, cut).trimEnd());
+    remaining = remaining.slice(cut).trimStart();
+  }
+  if (remaining) out.push(remaining);
+  return out;
 }
 
 async function postToOriginatingChannel(

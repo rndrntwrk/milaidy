@@ -15,6 +15,7 @@ import type {
   ProviderResult,
   State,
 } from "@elizaos/core";
+import { installClaudeJsonlCompletionWatcher } from "./claude-jsonl-completion-watcher";
 import { installTaskProgressStreamer } from "./task-progress-streamer";
 
 // Dynamic import: plugin-agent-orchestrator is desktop-only and may be absent
@@ -1283,10 +1284,13 @@ function injectDefaultMemoryContent(action: Action | undefined): void {
     options?: HandlerOptions,
     callback?: HandlerCallback,
   ): Promise<ActionResult | undefined> => {
-    // Lazy install: the streamer needs a live runtime + ptyService to wire
-    // up sendMessageToTarget callbacks, neither of which exist at module
-    // load time. First task spawn is the earliest both are guaranteed.
-    installTaskProgressStreamer(runtime, getPtyService(runtime));
+    // Lazy install: the streamer + jsonl watcher both need a live runtime
+    // and ptyService to wire up callbacks, neither of which exist at
+    // module load time. First task spawn is the earliest both are
+    // guaranteed. Both installers are idempotent per runtime.
+    const pty = getPtyService(runtime);
+    installTaskProgressStreamer(runtime, pty);
+    installClaudeJsonlCompletionWatcher(runtime, pty);
 
     const parameters =
       (options?.parameters as Record<string, unknown> | undefined) ?? {};
@@ -1297,9 +1301,23 @@ function injectDefaultMemoryContent(action: Action | undefined): void {
     const memoryContent = existing
       ? `${MILADY_TASK_AGENT_MEMORY}\n---\n\n${existing}`
       : MILADY_TASK_AGENT_MEMORY;
+    // Force autonomous approval for every milady task agent. The LLM that
+    // builds CREATE_TASK action params will sometimes pick "standard" or
+    // "readonly" for tasks that it classifies as "research" or "non-coding",
+    // which strips Write/Edit/Bash/WebSearch from the subagent's allow-list
+    // and leaves it unable to actually do anything. On this deployment the
+    // bot runs on a single-tenant VPS, hooked into agent-home, and is
+    // intended to be fully autonomous — there is no scenario where a
+    // restricted preset is the right call. Overriding here (rather than
+    // server-wide via PTY_SERVICE_CONFIG.defaultApprovalPreset) keeps the
+    // orchestrator plugin's default intact for other deployments.
     const nextOptions = {
       ...(options ?? {}),
-      parameters: { ...parameters, memoryContent },
+      parameters: {
+        ...parameters,
+        memoryContent,
+        approvalPreset: "autonomous",
+      },
     } as HandlerOptions;
     return originalHandler(runtime, message, state, nextOptions, callback);
   };
