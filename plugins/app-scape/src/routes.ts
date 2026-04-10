@@ -308,12 +308,24 @@ function applyViewerEmbedHeaders(response: MutableResponse): void {
       : VIEWER_FRAME_ANCESTORS_DIRECTIVE;
   response.setHeader("Content-Security-Policy", nextCsp);
 
-  // xRSPS client uses wasm threads.js + SharedArrayBuffer; these
-  // headers opt the page into cross-origin isolation, which the
-  // iframe's WebWorkers need.
-  response.setHeader("Cross-Origin-Opener-Policy", "same-origin");
-  response.setHeader("Cross-Origin-Embedder-Policy", "require-corp");
-  response.setHeader("Cross-Origin-Resource-Policy", "same-origin");
+  // The xRSPS React client *wants* SharedArrayBuffer (wasm threads), which
+  // requires the page be cross-origin-isolated via COOP+COEP. But
+  // cross-origin isolation also requires every cross-origin resource the
+  // page loads — including this iframe's src — to opt in via a
+  // `Cross-Origin-Resource-Policy` header. The live Sevalla deployment at
+  // https://scape-client-2sqyc.kinsta.page does NOT send CORP headers
+  // (only `access-control-allow-origin: *`), so setting
+  // `Cross-Origin-Embedder-Policy: require-corp` causes WebKit to silently
+  // refuse to load the iframe and the page's 5-second fallback trips —
+  // breaking the PR's "click and play" primary flow.
+  //
+  // Until the Sevalla bucket is configured to emit
+  // `Cross-Origin-Resource-Policy: cross-origin` (or the
+  // `Cross-Origin-Embedder-Policy: require-corp` equivalent), we cannot
+  // opt this page into cross-origin isolation without breaking manual
+  // play. Leave these headers off for now; if/when xRSPS features that
+  // need SharedArrayBuffer ship, the fix is an infra change upstream,
+  // not a header change here.
 }
 
 function sendHtmlResponse(res: unknown, html: string): void {

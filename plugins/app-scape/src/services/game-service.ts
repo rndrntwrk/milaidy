@@ -94,19 +94,25 @@ const ACTION_LIST = [
 
 type ScapeModelSize =
   | typeof ModelType.TEXT_NANO
-  | typeof ModelType.TEXT_MINI
   | typeof ModelType.TEXT_SMALL
+  | typeof ModelType.TEXT_MEDIUM
   | typeof ModelType.TEXT_LARGE;
 
 const MODEL_SIZE_MAP: Record<string, ScapeModelSize> = {
   TEXT_NANO: ModelType.TEXT_NANO,
-  TEXT_MINI: ModelType.TEXT_MINI,
   TEXT_SMALL: ModelType.TEXT_SMALL,
+  TEXT_MEDIUM: ModelType.TEXT_MEDIUM,
   TEXT_LARGE: ModelType.TEXT_LARGE,
   NANO: ModelType.TEXT_NANO,
-  MINI: ModelType.TEXT_MINI,
   SMALL: ModelType.TEXT_SMALL,
+  MEDIUM: ModelType.TEXT_MEDIUM,
   LARGE: ModelType.TEXT_LARGE,
+  // Back-compat: `@elizaos/core`'s ModelType has no MINI tier (the real
+  // progression is NANO → SMALL → MEDIUM → LARGE → MEGA). Earlier docs
+  // advertised a MINI option that silently fell through to TEXT_SMALL at
+  // runtime; preserve that behavior so existing configs keep working.
+  MINI: ModelType.TEXT_SMALL,
+  TEXT_MINI: ModelType.TEXT_SMALL,
 };
 
 interface EventLogEntry {

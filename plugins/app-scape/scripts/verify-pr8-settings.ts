@@ -100,9 +100,16 @@ function main(): void {
         "SCAPE_BOT_SDK_TOKEN is required",
         requiredKeys.has("SCAPE_BOT_SDK_TOKEN"),
     );
+    // SCAPE_AGENT_PASSWORD is intentionally optional now — the plugin
+    // auto-generates and persists a fresh identity at
+    // ~/.milady/scape-agent-identity.json on first launch. This field
+    // only needs to be set when pinning to a pre-existing account, and
+    // agent-identity.ts logs a loud WARN if the operator sets it (the
+    // value lands on disk in plaintext). Per the PR body: "The
+    // parameter is no longer `required: true`".
     assertTrue(
-        "SCAPE_AGENT_PASSWORD is required",
-        requiredKeys.has("SCAPE_AGENT_PASSWORD"),
+        "SCAPE_AGENT_PASSWORD is optional (auto-generated when unset)",
+        !requiredKeys.has("SCAPE_AGENT_PASSWORD"),
     );
     assertTrue(
         "SCAPE_CLIENT_URL is NOT required",
