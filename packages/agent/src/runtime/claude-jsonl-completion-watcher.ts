@@ -49,14 +49,6 @@ import { logger } from "@elizaos/core";
 
 const POLL_INTERVAL_MS = 1_000;
 
-interface AssistantLine {
-  message?: {
-    role?: string;
-    stop_reason?: string;
-    content?: Array<{ type?: string; text?: string }>;
-  };
-}
-
 interface PTYServiceWithEvents {
   onSessionEvent: (
     cb: (sessionId: string, event: string, data: unknown) => void,
@@ -201,8 +193,8 @@ class Poller {
       return;
     }
 
-    const done = findLatestEndTurn(content);
-    if (!done) return;
+    const entry = readLatestAssistantEntry(content);
+    if (!entry || !entry.isEndTurn) return;
 
     this.fired = true;
     // onFired adds to firedSessions and stops this poller. Call it
@@ -211,13 +203,13 @@ class Poller {
     // already populated and doesn't start a new poller.
     this.onFired(this.sessionId);
     logger.info(
-      `[claude-jsonl-watcher] detected end_turn for ${this.sessionId} — emitting synthetic task_complete (${done.text.length} chars)`,
+      `[claude-jsonl-watcher] detected end_turn for ${this.sessionId} — emitting synthetic task_complete (${entry.text.length} chars)`,
     );
     // Route through the same handleHookEvent pathway the real hook uses,
     // so downstream consumers receive an identical event shape and the
     // existing dedup guards apply transparently.
     this.svc.handleHookEvent?.(this.sessionId, "task_complete", {
-      response: done.text,
+      response: entry.text,
       source: "jsonl-watcher",
     });
   }
@@ -252,43 +244,69 @@ export async function findLatestJsonl(
 }
 
 /**
- * Scan a jsonl string for the latest assistant line with
- * `stop_reason === "end_turn"` and return its extracted text. Returns null
- * if the latest assistant message does not have `end_turn` (meaning the
- * agent is still in a tool_use turn or has not yet produced any assistant
- * output), or if no assistant message exists at all.
+ * Scan a claude code session jsonl string tail-first for the latest
+ * assistant message, returning its extracted text plus whether the turn
+ * has finished (`stop_reason === "end_turn"`).
  *
- * Walks the file tail-first for efficiency and to handle the rare case of
- * replayed / edited sessions where an earlier assistant message might have
- * had `end_turn` that was superseded by later activity.
+ * - Returns `null` if no assistant message exists at all.
+ * - Returns `{ text, isEndTurn: false }` when the latest assistant turn is
+ *   still in progress (`tool_use`, `max_tokens` mid-batch, etc.) — the
+ *   streamer uses this shape to post intermediate text without waiting.
+ * - Returns `{ text, isEndTurn: true }` when the latest assistant turn is
+ *   finished — the watcher uses this to fire a synthetic `task_complete`.
  *
- * Exported for tests.
+ * Exported so both the completion watcher and task-progress-streamer can
+ * share one jsonl parser.
  */
-export function findLatestEndTurn(
+export function readLatestAssistantEntry(
   content: string,
-): { text: string; stopReason: string } | null {
+): { text: string; isEndTurn: boolean } | null {
   const lines = content.split("\n");
   for (let i = lines.length - 1; i >= 0; i--) {
     const line = lines[i].trim();
     if (!line) continue;
-    let parsed: AssistantLine;
+    let msg:
+      | {
+          role?: string;
+          stop_reason?: string;
+          content?: Array<{ type?: string; text?: string }>;
+        }
+      | undefined;
     try {
-      parsed = JSON.parse(line) as AssistantLine;
+      msg = (JSON.parse(line) as { message?: typeof msg }).message;
     } catch {
       continue;
     }
-    const msg = parsed.message;
     if (!msg || msg.role !== "assistant") continue;
-    // Latest assistant line wins — if its stop_reason isn't end_turn, the
-    // agent is still working (tool_use, max_tokens mid-batch, etc.).
-    if (msg.stop_reason !== "end_turn") return null;
     let text = "";
     for (const c of msg.content ?? []) {
       if (c.type === "text" && typeof c.text === "string" && c.text.trim()) {
         text = c.text.trim();
       }
     }
-    return { text, stopReason: "end_turn" };
+    return { text, isEndTurn: msg.stop_reason === "end_turn" };
   }
   return null;
+}
+
+/**
+ * Convenience wrapper: locate the latest session jsonl for `workdir` and
+ * return the extracted assistant entry, or `null` if no file or no
+ * assistant message exists yet.
+ *
+ * Used by the task-progress-streamer and the completion watcher so they
+ * share one implementation of "read the latest claude assistant turn".
+ */
+export async function readLatestAssistantFromWorkdir(
+  workdir: string,
+): Promise<{ text: string; isEndTurn: boolean } | null> {
+  const jsonlPath = await findLatestJsonl(workdir);
+  if (!jsonlPath) return null;
+  let content: string;
+  try {
+    content = await fs.readFile(jsonlPath, "utf-8");
+  } catch {
+    return null;
+  }
+  return readLatestAssistantEntry(content);
 }

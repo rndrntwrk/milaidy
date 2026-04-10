@@ -20,10 +20,9 @@
  * have a discord channel id to write to.
  */
 
-import { promises as fs } from "node:fs";
-import path from "node:path";
 import type { IAgentRuntime, UUID } from "@elizaos/core";
 import { logger } from "@elizaos/core";
+import { readLatestAssistantFromWorkdir } from "./claude-jsonl-completion-watcher";
 
 const HEARTBEAT_AFTER_MS = 45_000;
 
@@ -193,58 +192,6 @@ export function installTaskProgressStreamer(
   });
 }
 
-/**
- * Read the last assistant text from the subagent's session jsonl.
- * This is the CLEAN source of the subagent's response — no ANSI codes,
- * no TUI chrome, just the structured output claude code produced.
- */
-async function readLastAssistantText(
-  workdir: string,
-): Promise<string | null> {
-  // The session jsonl lives under ~/.claude/projects/-<workdir-path-dashed>/
-  const home = process.env.HOME ?? "/home/milady";
-  // Claude code encodes project paths by replacing both / and . with -.
-  // /home/milady/.milady/workspaces/abc → -home-milady--milady-workspaces-abc
-  // (the /. in /.milady becomes -- because both chars map to -).
-  const projectKey = workdir.replace(/[/.]/g, "-");
-  const projectDir = path.join(home, ".claude", "projects", projectKey);
-  let files: string[];
-  try {
-    files = await fs.readdir(projectDir);
-  } catch {
-    return null;
-  }
-  const jsonls = files.filter((f) => f.endsWith(".jsonl")).sort();
-  if (jsonls.length === 0) return null;
-  const jsonlPath = path.join(projectDir, jsonls[jsonls.length - 1]);
-  let content: string;
-  try {
-    content = await fs.readFile(jsonlPath, "utf-8");
-  } catch {
-    return null;
-  }
-  // Extract the last assistant text block
-  let lastText = "";
-  for (const line of content.split("\n")) {
-    if (!line.trim()) continue;
-    try {
-      const d = JSON.parse(line) as {
-        message?: { role?: string; content?: Array<{ type?: string; text?: string }> };
-      };
-      if (d.message?.role === "assistant") {
-        for (const c of d.message.content ?? []) {
-          if (c.type === "text" && c.text?.trim()) {
-            lastText = c.text.trim();
-          }
-        }
-      }
-    } catch {
-      continue;
-    }
-  }
-  return lastText || null;
-}
-
 async function postFinalReport(
   runtime: IAgentRuntime,
   svc: PTYServiceWithEvents,
@@ -252,7 +199,10 @@ async function postFinalReport(
   workdir?: string,
   roomCache?: Map<string, { roomId: UUID; channelId: string; source: string }>,
 ): Promise<void> {
-  const assistantText = workdir ? await readLastAssistantText(workdir) : null;
+  const entry = workdir
+    ? await readLatestAssistantFromWorkdir(workdir)
+    : null;
+  const assistantText = entry?.text ?? null;
   if (assistantText) {
     const urlLine = assistantText
       .split("\n")
