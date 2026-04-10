@@ -233,6 +233,11 @@ function packageNameToBasename(packageName: string): string {
 export const MILADY_CURATED_APP_DEFINITIONS: readonly MiladyCuratedAppDefinition[] =
   [
     {
+      slug: "companion",
+      canonicalName: "@miladyai/app-companion",
+      aliases: [],
+    },
+    {
       slug: "hyperscape",
       canonicalName: "@hyperscape/plugin-hyperscape",
       aliases: ["@elizaos/app-hyperscape"],
@@ -251,6 +256,16 @@ export const MILADY_CURATED_APP_DEFINITIONS: readonly MiladyCuratedAppDefinition
       slug: "defense-of-the-agents",
       canonicalName: "@elizaos/app-defense-of-the-agents",
       aliases: [],
+    },
+    {
+      slug: "vincent",
+      canonicalName: "@miladyai/app-vincent",
+      aliases: [],
+    },
+    {
+      slug: "shopify",
+      canonicalName: "@elizaos/app-shopify",
+      aliases: ["@elizaos/plugin-shopify"],
     },
   ] as const;
 

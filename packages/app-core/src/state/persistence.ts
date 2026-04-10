@@ -132,7 +132,7 @@ export function saveCompanionVrmPowerMode(mode: CompanionVrmPowerMode): void {
 
 const COMPANION_ANIMATE_WHEN_HIDDEN_KEY = "eliza:companion-animate-when-hidden";
 
-/** When true, keep the VRM loop running when the document is hidden; world/splat is dropped. */
+/** When true, keep the VRM loop running when the document is hidden; 3D environment is hidden. */
 export function loadCompanionAnimateWhenHidden(): boolean {
   try {
     return localStorage.getItem(COMPANION_ANIMATE_WHEN_HIDDEN_KEY) === "1";
@@ -407,7 +407,7 @@ function normalizeLastNativeTab(tab: unknown): Tab {
     case "chat":
     case "stream":
     case "apps":
-    case "wallets":
+    case "inventory":
     case "knowledge":
     case "connectors":
     case "triggers":
