@@ -1,4 +1,3 @@
-import fs from "node:fs";
 /**
  * RPC Handler Registration for Electrobun
  *
@@ -14,6 +13,7 @@ import { setAgentReady } from "./agent-ready-state";
 import { resolveDesktopRuntimeMode } from "./api-base";
 import { showBackgroundNoticeOnce } from "./background-notice";
 import { postCloudDisconnectFromMain } from "./cloud-disconnect-from-main";
+import { getFloatingChatManager } from "./floating-chat-window";
 import { getAgentManager } from "./native/agent";
 import { getCameraManager } from "./native/camera";
 import { getCanvasManager } from "./native/canvas";
@@ -22,6 +22,9 @@ import {
   scanProviderCredentials,
 } from "./native/credentials";
 import { getDesktopManager } from "./native/desktop";
+import { getEditorBridge } from "./native/editor-bridge";
+import type { NativeEditorId } from "./native/editor-bridge";
+import { getFileWatcher } from "./native/file-watcher";
 import { getGatewayDiscovery } from "./native/gateway";
 import { getGpuWindowManager } from "./native/gpu-window";
 import { getLocationManager } from "./native/location";
@@ -104,6 +107,9 @@ export function registerRpcHandlers(
   const camera = getCameraManager();
   const canvas = getCanvasManager();
   const desktop = getDesktopManager();
+  const editorBridge = getEditorBridge();
+  const fileWatcher = getFileWatcher();
+  const floatingChat = getFloatingChatManager();
   const gateway = getGatewayDiscovery();
   const gpuWindow = getGpuWindowManager();
   const location = getLocationManager();
@@ -763,6 +769,68 @@ export function registerRpcHandlers(
       }
       return resetSteward();
     },
+
+    // ---- Native Editor Bridge ----
+    editorBridgeListEditors: async () => ({
+      editors: editorBridge.listInstalledEditors(),
+    }),
+    editorBridgeOpenInEditor: async (params: {
+      editorId: NativeEditorId;
+      workspacePath: string;
+    }) => {
+      const session = editorBridge.openInEditor(
+        params.editorId,
+        params.workspacePath,
+      );
+      sendToWebview("editorBridge:sessionChanged", session);
+      return session;
+    },
+    editorBridgeGetSession: async () => editorBridge.getActiveEditorSession(),
+    editorBridgeClearSession: async () => {
+      editorBridge.clearActiveEditorSession();
+      sendToWebview("editorBridge:sessionChanged", null);
+    },
+
+    // ---- Workspace File Watcher ----
+    fileWatcherStart: async (params: { watchPath: string }) => {
+      const watchId = fileWatcher.startWatch(params.watchPath, (event) => {
+        sendToWebview("fileWatcher:fileChanged", event);
+      });
+      return { watchId };
+    },
+    fileWatcherStop: async (params: { watchId: string }) => ({
+      stopped: fileWatcher.stopWatch(params.watchId),
+    }),
+    fileWatcherStopAll: async () => {
+      fileWatcher.stopAll();
+    },
+    fileWatcherList: async () => ({ watches: fileWatcher.listWatches() }),
+    fileWatcherGetStatus: async (params: { watchId: string }) =>
+      fileWatcher.getWatch(params.watchId),
+
+    // ---- Floating Chat Window ----
+    floatingChatOpen: async (
+      params: { contextId?: string; x?: number; y?: number } | undefined,
+    ) => {
+      return floatingChat.open(params ?? {});
+    },
+    floatingChatShow: async () => {
+      floatingChat.show();
+      return floatingChat.getStatus();
+    },
+    floatingChatHide: async () => {
+      floatingChat.hide();
+      return floatingChat.getStatus();
+    },
+    floatingChatClose: async () => {
+      floatingChat.close();
+      return floatingChat.getStatus();
+    },
+    floatingChatSetContext: async (params: { contextId: string | null }) => {
+      floatingChat.setContextId(params.contextId);
+      return floatingChat.getStatus();
+    },
+    floatingChatGetStatus: async () => floatingChat.getStatus(),
   });
 
   console.log("[RPC] All handlers registered");

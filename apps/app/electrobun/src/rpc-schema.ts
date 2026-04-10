@@ -285,6 +285,59 @@ export interface ScreenSource {
   appIcon?: string;
 }
 
+// -- Native Editor Bridge --
+export type NativeEditorId =
+  | "vscode"
+  | "cursor"
+  | "windsurf"
+  | "antigravity"
+  | "zed"
+  | "sublime";
+
+export interface NativeEditorInfo {
+  id: NativeEditorId;
+  label: string;
+  installed: boolean;
+  command: string;
+}
+
+export interface EditorSession {
+  editorId: NativeEditorId;
+  workspacePath: string;
+  startedAt: number;
+}
+
+// -- Workspace File Watcher --
+export type FileChangeEventType =
+  | "created"
+  | "modified"
+  | "deleted"
+  | "renamed";
+
+export interface FileChangeEvent {
+  watchId: string;
+  type: FileChangeEventType;
+  filePath: string;
+  relativePath: string;
+  timestamp: number;
+}
+
+export interface WatchStatus {
+  watchId: string;
+  watchPath: string;
+  active: boolean;
+  startedAt: number;
+  eventCount: number;
+}
+
+// -- Floating Chat Window --
+export interface FloatingChatStatus {
+  open: boolean;
+  visible: boolean;
+  contextId: string | null;
+  bounds: WindowBounds | null;
+}
+
 // -- TalkMode --
 export type TalkModeState =
   | "idle"
@@ -1065,6 +1118,72 @@ export type MiladyRPCSchema = {
         response: { views: GpuViewInfo[] };
       };
 
+      // ---- Native Editor Bridge ----
+      editorBridgeListEditors: {
+        params: undefined;
+        response: { editors: NativeEditorInfo[] };
+      };
+      editorBridgeOpenInEditor: {
+        params: { editorId: NativeEditorId; workspacePath: string };
+        response: EditorSession;
+      };
+      editorBridgeGetSession: {
+        params: undefined;
+        response: EditorSession | null;
+      };
+      editorBridgeClearSession: {
+        params: undefined;
+        response: undefined;
+      };
+
+      // ---- Workspace File Watcher ----
+      fileWatcherStart: {
+        params: { watchPath: string };
+        response: { watchId: string };
+      };
+      fileWatcherStop: {
+        params: { watchId: string };
+        response: { stopped: boolean };
+      };
+      fileWatcherStopAll: {
+        params: undefined;
+        response: undefined;
+      };
+      fileWatcherList: {
+        params: undefined;
+        response: { watches: WatchStatus[] };
+      };
+      fileWatcherGetStatus: {
+        params: { watchId: string };
+        response: WatchStatus | null;
+      };
+
+      // ---- Floating Chat Window ----
+      floatingChatOpen: {
+        params: { contextId?: string; x?: number; y?: number };
+        response: FloatingChatStatus;
+      };
+      floatingChatShow: {
+        params: undefined;
+        response: FloatingChatStatus;
+      };
+      floatingChatHide: {
+        params: undefined;
+        response: FloatingChatStatus;
+      };
+      floatingChatClose: {
+        params: undefined;
+        response: FloatingChatStatus;
+      };
+      floatingChatSetContext: {
+        params: { contextId: string | null };
+        response: FloatingChatStatus;
+      };
+      floatingChatGetStatus: {
+        params: undefined;
+        response: FloatingChatStatus;
+      };
+
       // ---- Steward Sidecar ----
       stewardGetStatus: {
         params: undefined;
@@ -1182,6 +1301,15 @@ export type MiladyRPCSchema = {
       contextMenuCreateSkill: { text: string };
       contextMenuQuoteInChat: { text: string };
       contextMenuSaveAsCommand: { text: string };
+
+      // Workspace file change push events
+      workspaceFileChanged: FileChangeEvent;
+
+      // Editor bridge push events
+      editorSessionChanged: EditorSession | null;
+
+      // Floating chat push events
+      floatingChatStatusChanged: FloatingChatStatus;
 
       // API Base injection
       apiBaseUpdate: { base: string; token?: string };
@@ -1459,6 +1587,27 @@ export const CHANNEL_TO_RPC_METHOD: Record<string, string> = {
   "steward:start": "stewardStart",
   "steward:restart": "stewardRestart",
   "steward:reset": "stewardReset",
+
+  // Native Editor Bridge
+  "editorBridge:listEditors": "editorBridgeListEditors",
+  "editorBridge:openInEditor": "editorBridgeOpenInEditor",
+  "editorBridge:getSession": "editorBridgeGetSession",
+  "editorBridge:clearSession": "editorBridgeClearSession",
+
+  // Workspace File Watcher
+  "fileWatcher:start": "fileWatcherStart",
+  "fileWatcher:stop": "fileWatcherStop",
+  "fileWatcher:stopAll": "fileWatcherStopAll",
+  "fileWatcher:list": "fileWatcherList",
+  "fileWatcher:getStatus": "fileWatcherGetStatus",
+
+  // Floating Chat Window
+  "floatingChat:open": "floatingChatOpen",
+  "floatingChat:show": "floatingChatShow",
+  "floatingChat:hide": "floatingChatHide",
+  "floatingChat:close": "floatingChatClose",
+  "floatingChat:setContext": "floatingChatSetContext",
+  "floatingChat:getStatus": "floatingChatGetStatus",
 };
 
 /**
@@ -1507,6 +1656,15 @@ export const PUSH_CHANNEL_TO_RPC_MESSAGE: Record<string, string> = {
 
   // WebGPU browser support
   "webgpu:browserStatus": "webGpuBrowserStatus",
+
+  // Workspace file watcher
+  "fileWatcher:fileChanged": "workspaceFileChanged",
+
+  // Editor bridge
+  "editorBridge:sessionChanged": "editorSessionChanged",
+
+  // Floating chat
+  "floatingChat:statusChanged": "floatingChatStatusChanged",
 };
 
 /**
