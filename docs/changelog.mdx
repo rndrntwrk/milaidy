@@ -3,6 +3,47 @@ title: Changelog
 description: What's new in Milady — features, improvements, and fixes.
 ---
 
+<Update label="2026-04-10" description="Week of April 10; Eliza Cloud for coding agents, contacts view, content pack picker, Discord cloud settings, connection overlay" tags={["Feature", "Update", "Fix"]}>
+
+## Eliza Cloud as a provider for coding agents
+
+[Coding agents](/guides/coding-swarms) (Claude Code, Codex, Aider) can now use Eliza Cloud as their LLM provider. Select "Eliza Cloud" in the coding agents settings, pair your cloud API key, and your coding sessions route through the cloud — no per-agent API keys required. The settings UI reflects per-agent auth readiness so you can see at a glance which agents are ready to use. An improved terminal color palette also makes Codex output easier to read.
+
+## Contacts view
+
+A new Contacts tab in the Advanced section gives you a visual map of your agent's relationships. Browse contacts with search and filtering, see relationship strength and trust levels, and view an identity cluster graph that shows how your agent's connections relate to each other. The contacts system is now built into the core runtime — no separate plugin required.
+
+## Content pack picker
+
+The [onboarding](/guides/beginners-development-guide) identity step and character editor now include a content pack browser. Choose from available themed packs to customize your agent's startup experience, backgrounds, and branding directly during setup or from the character editor at any time.
+
+## Discord cloud settings
+
+Cloud-deployed agents now expose a full Discord configuration panel in the [cloud dashboard](/guides/cloud). Configure DM policies, guild behavior, action toggles (reactions, stickers, polls, threads), message formatting, and privileged intents — all without editing config files.
+
+## Connection lost overlay
+
+When your agent's backend becomes unreachable, the dashboard now shows a clear full-screen overlay instead of silently failing. The overlay indicates the connection is lost and updates automatically when the backend comes back.
+
+## Updates
+
+- **Chat source indicators simplified** — Cross-channel source labels in the sidebar and inbox now use compact icons instead of full text badges, reducing visual clutter while still showing which platform each message came from.
+- **Connector identity and delivery checks** — Messages from connectors now include richer identity metadata and delivery status, making it easier to track cross-platform message routing in the [inbox](/guides/connectors).
+- **Trajectory scenario grouping** — The [trajectory view](/advanced/trajectories) now groups related LLM calls into named scenarios with history filters, making it easier to review and compare agent behavior across sessions.
+- **Advanced memory storage** — Your agent can now persist structured memories beyond the default conversation history. This enables richer context recall across sessions and is available through the agent configuration.
+- **Cloud voice support hardened** — Cloud containers now ship with native audio encoding dependencies, so Discord voice and TTS work reliably without additional setup. When voice dependencies are missing, the system degrades gracefully with a clear error instead of crashing.
+- **Knowledge plugin auto-configuration** — The knowledge plugin now auto-enables when API keys or a cloud provider are available, and auto-detects your text provider and model from your existing configuration. No manual setup needed to start using [knowledge](/guides/knowledge).
+
+## Bug fixes
+
+- Fixed the games catalog in the [apps view](/dashboard/apps) showing removed or unavailable apps — the registry now filters them out
+- Fixed game views causing excessive polling requests that could slow down the dashboard
+- Fixed onboarding character presets not loading correctly after a configuration update
+- Fixed the music player status endpoint returning errors before the agent runtime finished starting
+- Fixed coding agent settings silently dropping saved API keys when the save request failed — errors are now shown inline
+
+</Update>
+
 <Update label="2026-04-08" description="Week of April 8; auto-restart after plugin install, onboarding skip, EVM opt-in, stability fixes" tags={["Update", "Fix"]}>
 
 ## Auto-restart after plugin install
