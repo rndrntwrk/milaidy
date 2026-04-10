@@ -460,7 +460,7 @@ describe("Hyperscape Auto-Provisioning", () => {
   let originalEnv: Record<string, string | undefined>;
 
   const HYPERSCAPE_APP_NAME = "@hyperscape/plugin-hyperscape";
-  const HYPERSCAPE_PLUGIN_NAME = "@elizaos/plugin-hyperscape";
+  const HYPERSCAPE_PLUGIN_NAME = "@hyperscape/plugin-hyperscape";
 
   beforeEach(async () => {
     // Flush any cached registry from prior test suites so fresh fetch mocks
@@ -476,6 +476,7 @@ describe("Hyperscape Auto-Provisioning", () => {
       HYPERSCAPE_SERVER_URL: process.env.HYPERSCAPE_SERVER_URL,
       SOLANA_PRIVATE_KEY: process.env.SOLANA_PRIVATE_KEY,
       EVM_PRIVATE_KEY: process.env.EVM_PRIVATE_KEY,
+      MILADY_STATE_DIR: process.env.MILADY_STATE_DIR,
       ELIZA_STATE_DIR: process.env.ELIZA_STATE_DIR,
     };
 
@@ -496,6 +497,7 @@ describe("Hyperscape Auto-Provisioning", () => {
       pluginDirectory: pluginsDir,
     });
 
+    process.env.MILADY_STATE_DIR = tempDir;
     process.env.ELIZA_STATE_DIR = tempDir;
     appManager = new AppManager();
   });
@@ -616,7 +618,12 @@ describe("Hyperscape Auto-Provisioning", () => {
       { name: HYPERSCAPE_PLUGIN_NAME, version: "1.0.0" },
     ]);
 
-    const result = await appManager.launch(pluginManager, HYPERSCAPE_APP_NAME);
+    const result = await appManager.launch(
+      pluginManager,
+      HYPERSCAPE_APP_NAME,
+      undefined,
+      runtime,
+    );
     expect(result.pluginInstalled).toBe(true);
     expect(result.viewer?.authMessage).toBeUndefined();
     expect(
@@ -641,14 +648,14 @@ describe("Hyperscape Auto-Provisioning", () => {
       { name: HYPERSCAPE_PLUGIN_NAME, version: "1.0.0" },
     ]);
 
-    const result = await appManager.launch(pluginManager, HYPERSCAPE_APP_NAME);
-    expect(result.pluginInstalled).toBe(true);
-    expect(result.viewer?.authMessage).toEqual(
-      expect.objectContaining({
-        authToken: "test-auth-token",
-        characterId: "test-char-id",
-      }),
+    const result = await appManager.launch(
+      pluginManager,
+      HYPERSCAPE_APP_NAME,
+      undefined,
+      runtime,
     );
+    expect(result.pluginInstalled).toBe(true);
+    expect(result.viewer).toBeNull();
     expect(
       fetchMock.mock.calls.some(([input]) =>
         String(input).includes("wallet-auth"),

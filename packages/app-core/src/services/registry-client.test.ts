@@ -299,15 +299,19 @@ beforeEach(async () => {
 
   tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "eliza-reg-test-"));
   savedEnv = {
-    // The upstream autonomous package uses ELIZA_* env vars
+    // The runtime now prefers MILADY_* and falls back to ELIZA_*.
+    MILADY_STATE_DIR: process.env.MILADY_STATE_DIR,
+    MILADY_WORKSPACE_ROOT: process.env.MILADY_WORKSPACE_ROOT,
     ELIZA_STATE_DIR: process.env.ELIZA_STATE_DIR,
     ELIZA_WORKSPACE_ROOT: process.env.ELIZA_WORKSPACE_ROOT,
   };
-  // Point the file cache at our temp dir (set both eliza and eliza variants
-  // so tests pass regardless of which source is resolved via vitest aliases)
+  // Point cache/workspace discovery at an isolated temp root regardless of
+  // which namespace the resolved source prefers.
+  process.env.MILADY_STATE_DIR = tmpDir;
   process.env.ELIZA_STATE_DIR = tmpDir;
   const isolatedWorkspaceRoot = path.join(tmpDir, "workspace-empty");
   await fs.mkdir(isolatedWorkspaceRoot, { recursive: true });
+  process.env.MILADY_WORKSPACE_ROOT = isolatedWorkspaceRoot;
   process.env.ELIZA_WORKSPACE_ROOT = isolatedWorkspaceRoot;
 
   // Mock global fetch
@@ -316,8 +320,8 @@ beforeEach(async () => {
 
 afterEach(async () => {
   vi.unstubAllGlobals();
-  process.env.ELIZA_STATE_DIR = savedEnv.ELIZA_STATE_DIR;
-  process.env.ELIZA_WORKSPACE_ROOT = savedEnv.ELIZA_WORKSPACE_ROOT;
+  process.env.MILADY_STATE_DIR = savedEnv.MILADY_STATE_DIR;
+  process.env.MILADY_WORKSPACE_ROOT = savedEnv.MILADY_WORKSPACE_ROOT;
   process.env.ELIZA_STATE_DIR = savedEnv.ELIZA_STATE_DIR;
   process.env.ELIZA_WORKSPACE_ROOT = savedEnv.ELIZA_WORKSPACE_ROOT;
   await removeDirWithRetries(tmpDir);
