@@ -29,6 +29,7 @@ const HEARTBEAT_AFTER_MS = 45_000;
 interface SessionMetadata {
   roomId?: UUID;
   source?: string;
+  threadId?: string;
 }
 
 interface PTYServiceWithEvents {
@@ -74,7 +75,7 @@ export function installTaskProgressStreamer(
     // real bot lifetime, acceptable.
   };
 
-  svc.onSessionEvent((sessionId, event) => {
+  svc.onSessionEvent((sessionId, event, data) => {
     if (!sessionStartedAt.has(sessionId)) {
       sessionStartedAt.set(sessionId, Date.now());
       // Capture workdir + room routing NOW while the session still exists.
@@ -85,11 +86,11 @@ export function installTaskProgressStreamer(
       if (meta?.roomId) {
         void (async () => {
           const room = await runtime.getRoom(meta.roomId!).catch(() => null);
-          if (room?.channelId) {
+          if (room?.source) {
             sessionRooms.set(sessionId, {
               roomId: meta.roomId!,
-              channelId: room.channelId,
-              source: meta.source ?? "discord",
+              channelId: room.channelId ?? room.id,
+              source: room.source,
             });
           }
         })();
@@ -162,13 +163,51 @@ export function installTaskProgressStreamer(
       return;
     }
 
+    if (event === "login_required" && !finalSent.has(sessionId)) {
+      finalSent.add(sessionId);
+      const login = data as { instructions?: string; url?: string } | undefined;
+      const message = [
+        "task agent needs a provider login before it can continue",
+        login?.instructions?.trim() ?? "",
+        login?.url ? `Login link: ${login.url}` : "",
+      ]
+        .filter(Boolean)
+        .join(". ");
+      void postToOriginatingChannel(
+        runtime,
+        svc,
+        sessionId,
+        message,
+        sessionRooms,
+      );
+      return;
+    }
+
     if (event === "error" && !finalSent.has(sessionId)) {
       finalSent.add(sessionId);
       void postToOriginatingChannel(
         runtime,
         svc,
         sessionId,
-        "task agent errored — check logs",
+        (() => {
+          const message =
+            (data as { message?: string } | undefined)?.message?.trim() ?? "";
+          return message
+            ? `task agent errored: ${message}`
+            : "task agent errored — check logs";
+        })(),
+        sessionRooms,
+      );
+      return;
+    }
+
+    if (event === "stopped" && !finalSent.has(sessionId)) {
+      finalSent.add(sessionId);
+      void postToOriginatingChannel(
+        runtime,
+        svc,
+        sessionId,
+        "task agent stopped before completion",
         sessionRooms,
       );
       return;
@@ -247,7 +286,8 @@ async function postToOriginatingChannel(
 ): Promise<void> {
   let roomId: UUID | undefined;
   let channelId: string | undefined;
-  let source = "discord";
+  let source: string | undefined;
+  let serverId: string | undefined;
   const cached = roomCache?.get(sessionId);
   if (cached) {
     roomId = cached.roomId;
@@ -255,16 +295,34 @@ async function postToOriginatingChannel(
     source = cached.source;
   } else {
     const meta = svc.sessionMetadata?.get(sessionId) as SessionMetadata | undefined;
-    if (!meta?.roomId) return;
-    roomId = meta.roomId;
-    source = meta.source ?? "discord";
-    const room = await runtime.getRoom(meta.roomId).catch(() => null);
-    channelId = room?.channelId;
+    if (meta?.roomId) {
+      roomId = meta.roomId;
+    } else if (meta?.threadId) {
+      const coordinator = runtime.getService("SWARM_COORDINATOR") as
+        | { getTaskThread?: (threadId: string) => Promise<{ roomId?: UUID | null } | null> }
+        | undefined;
+      const thread = await coordinator?.getTaskThread?.(meta.threadId).catch(
+        () => null,
+      );
+      if (thread?.roomId) {
+        roomId = thread.roomId;
+      }
+    }
+    if (!roomId) return;
+    const room = await runtime.getRoom(roomId).catch(() => null);
+    source = room?.source ?? meta?.source;
+    channelId = room?.channelId ?? room?.id ?? roomId;
+    serverId = room?.serverId;
   }
-  if (!roomId || !channelId) return;
+  if (!roomId || !channelId || !source) return;
   try {
     await runtime.sendMessageToTarget(
-      ({ source, roomId, channelId } as Parameters<typeof runtime.sendMessageToTarget>[0]),
+      ({
+        source,
+        roomId,
+        channelId,
+        serverId,
+      } as Parameters<typeof runtime.sendMessageToTarget>[0]),
       { text, source },
     );
   } catch (err) {
