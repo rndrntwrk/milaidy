@@ -12,7 +12,10 @@ import { ChevronRight } from "lucide-react";
 import { type ReactNode, type RefCallback, useState } from "react";
 import { type CloudCompatAgent, client, type PluginInfo } from "../../api";
 import { useApp } from "../../state";
-import { WhatsAppQrOverlay } from "../connectors/WhatsAppQrOverlay";
+import {
+  ConnectorSetupPanel,
+  hasConnectorSetupPanel,
+} from "../connectors/ConnectorSetupPanel";
 import {
   buildManagedDiscordSettingsReturnUrl,
   resolveManagedDiscordAgentChoice,
@@ -487,6 +490,8 @@ function ConnectorPluginCard({
       </div>
     </div>
   );
+  const connectorSetupPanel = <ConnectorSetupPanel pluginId={plugin.id} />;
+  const supportsConnectorSetupPanel = hasConnectorSetupPanel(plugin.id);
 
   return (
     <div key={plugin.id} data-testid={`connector-section-${plugin.id}`}>
@@ -650,12 +655,14 @@ function ConnectorPluginCard({
                 onParamChange={handleParamChange}
               />
             )}
-            {plugin.id === "whatsapp" && (
-              <WhatsAppQrOverlay accountId="default" />
-            )}
+            {connectorSetupPanel}
           </div>
         ) : (
-          <div className="text-sm text-muted">{noConfigurationNeededLabel}</div>
+          supportsConnectorSetupPanel ? (
+            connectorSetupPanel
+          ) : (
+            <div className="text-sm text-muted">{noConfigurationNeededLabel}</div>
+          )
         )}
 
         {plugin.validationErrors && plugin.validationErrors.length > 0 && (

@@ -556,6 +556,18 @@ export class DiscordLocalService extends Service {
     const normalized = [...new Set(channelIds.map((entry) => entry.trim()).filter(Boolean))];
     config.messageChannelIds = normalized;
 
+    for (const channelId of [...this.subscribedChannelIds]) {
+      if (normalized.includes(channelId)) {
+        continue;
+      }
+      await this.sendRpcCommand(
+        "UNSUBSCRIBE",
+        { channel_id: channelId },
+        "MESSAGE_CREATE",
+      );
+      this.subscribedChannelIds.delete(channelId);
+    }
+
     for (const channelId of normalized) {
       if (this.subscribedChannelIds.has(channelId)) {
         continue;
@@ -564,7 +576,7 @@ export class DiscordLocalService extends Service {
       this.subscribedChannelIds.add(channelId);
     }
 
-    return [...this.subscribedChannelIds];
+    return [...normalized];
   }
 
   async getChannel(channelId: string): Promise<DiscordLocalChannel | null> {

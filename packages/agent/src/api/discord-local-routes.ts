@@ -180,9 +180,13 @@ export async function handleDiscordLocalRoute(
     }
 
     const channelIds = Array.isArray(body.channelIds)
-      ? body.channelIds
-          .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
-          .filter((entry) => entry.length > 0)
+      ? Array.from(
+          new Set(
+            body.channelIds
+              .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
+              .filter((entry) => entry.length > 0),
+          ),
+        )
       : [];
 
     try {
