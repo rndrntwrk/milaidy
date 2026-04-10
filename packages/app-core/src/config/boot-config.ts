@@ -18,6 +18,7 @@ export interface BundledVrmAsset {
   title: string;
   slug: string;
   speechCapabilities?: AvatarSpeechCapabilities;
+  cameraDistanceScale?: number;
 }
 
 /** Lightweight character catalog data passed from the host app. */

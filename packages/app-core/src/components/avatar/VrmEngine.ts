@@ -2101,7 +2101,7 @@ export class VrmEngine {
     );
   }
 
-  async loadVrmFromUrl(url: string, name?: string): Promise<void> {
+  async loadVrmFromUrl(url: string, name?: string, cameraDistanceScale = 1): Promise<void> {
     await this.whenReady();
     if (!this.scene) throw new Error("VrmEngine not initialized");
     if (!this.camera) throw new Error("VrmEngine not initialized");
@@ -2187,6 +2187,8 @@ export class VrmEngine {
           this.baseCameraPosition,
           (c) =>
             this.cameraManager.applyInteractionMode(c, this.interactionMode),
+          false,
+          cameraDistanceScale,
         );
       }
     }

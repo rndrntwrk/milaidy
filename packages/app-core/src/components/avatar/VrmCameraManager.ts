@@ -42,6 +42,7 @@ export class VrmCameraManager {
     baseCameraPosition: THREE.Vector3,
     applyInteractionMode: (controls: OrbitControls) => void,
     skipControlUpdate = false,
+    cameraDistanceScale = 1,
   ): void {
     this.normalizeAvatarToStage(vrm, cameraProfile);
     vrm.scene.updateMatrixWorld(true);
@@ -54,6 +55,7 @@ export class VrmCameraManager {
       controls,
       cameraProfile,
       lookAtTarget,
+      cameraDistanceScale,
     );
     camera.updateProjectionMatrix();
     baseCameraPosition.copy(camera.position);
@@ -112,6 +114,7 @@ export class VrmCameraManager {
     controls: OrbitControls | null,
     cameraProfile: CameraProfile,
     lookAtTarget: THREE.Vector3,
+    cameraDistanceScale = 1,
   ): void {
     const bounds = new THREE.Box3().setFromObject(vrm.scene);
     if (bounds.isEmpty()) return;
@@ -150,7 +153,7 @@ export class VrmCameraManager {
 
     if (cameraProfile === "companion") {
       lookAtY = neckY;
-      distance = Math.max(9.6, fitDistance * 1.35);
+      distance = Math.max(9.6, fitDistance * 1.35) * cameraDistanceScale;
       cameraY = neckY + Math.min(size.y * 0.1, 0.18);
     } else {
       lookAtY = THREE.MathUtils.clamp(
@@ -158,7 +161,7 @@ export class VrmCameraManager {
         bounds.min.y + size.y * 0.38,
         bounds.max.y - size.y * 0.16,
       );
-      distance = Math.max(5.6, fitDistance * 1.02);
+      distance = Math.max(5.6, fitDistance * 1.02) * cameraDistanceScale;
       cameraY = lookAtY + Math.min(size.y * 0.12, 0.24);
     }
 

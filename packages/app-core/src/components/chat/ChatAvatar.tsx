@@ -10,6 +10,7 @@ import {
   STOP_EMOTE_EVENT,
 } from "@miladyai/app-core/events";
 import {
+  getCameraDistanceScale,
   getDefaultBundledVrmIndex,
   getVrmPreviewUrl,
   getVrmUrl,
@@ -130,6 +131,7 @@ export function ChatAvatar(_props: ChatAvatarProps) {
           >
             <VrmViewer
               vrmPath={vrmPath}
+              cameraDistanceScale={getCameraDistanceScale(selectedVrmIndex || getDefaultBundledVrmIndex())}
               speechMotionPath={avatarSpeech.capabilities.speechMotionPath ?? null}
               speechCapabilities={avatarSpeech.capabilities}
               avatarSpeechKey={avatarSpeech.avatarKey}

@@ -69,6 +69,15 @@ export function getVrmUrl(index: number): string {
   return resolveAppAssetUrl(`vrms/${slug}.vrm.gz`);
 }
 
+/** Per-avatar camera distance multiplier (default 1). */
+export function getCameraDistanceScale(index: number): number {
+  const assets = getAssets();
+  if (assets.length === 0) return 1;
+  const n = normalizeAvatarIndex(index);
+  const safe = n > 0 ? n : getDefaultBundledVrmIndex();
+  return assets[safe - 1]?.cameraDistanceScale ?? 1;
+}
+
 /** Resolve a bundled VRM index (1–N) to its preview thumbnail URL. */
 export function getVrmPreviewUrl(index: number): string {
   const assets = getAssets();
