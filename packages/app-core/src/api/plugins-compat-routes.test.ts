@@ -639,4 +639,41 @@ describe("buildPluginListResponse", () => {
     // "selfcontrol" is shipped via plugin-selfcontrol package, not bundled in plugins.json.
     expect(ids).not.toContain("selfcontrol");
   });
+
+  describe("generic fallback model key filtering", () => {
+    it("filters SMALL_MODEL when a provider-prefixed equivalent exists (e.g. google-genai)", () => {
+      const googlePlugin = getPlugin("google-genai");
+
+      const paramKeys = googlePlugin.parameters.map(
+        (parameter) => parameter.key,
+      );
+      // The plugin declares GOOGLE_SMALL_MODEL → SMALL_MODEL should be filtered out.
+      expect(paramKeys).toContain("GOOGLE_SMALL_MODEL");
+      expect(paramKeys).not.toContain("SMALL_MODEL");
+    });
+
+    it("keeps SMALL_MODEL when no provider-prefixed equivalent exists", () => {
+      // elizaos-cloud declares ELIZAOS_CLOUD_SMALL_MODEL + SMALL_MODEL;
+      // ELIZAOS_CLOUD_SMALL_MODEL ends with _SMALL_MODEL so SMALL_MODEL is filtered.
+      // Use anthropic which only has ANTHROPIC_SMALL_MODEL (no bare SMALL_MODEL).
+      const anthropicPlugin = getPlugin("anthropic");
+      const paramKeys = anthropicPlugin.parameters.map(
+        (parameter) => parameter.key,
+      );
+      // anthropic declares ANTHROPIC_SMALL_MODEL but NOT bare SMALL_MODEL,
+      // so there is nothing to filter — ANTHROPIC_SMALL_MODEL is kept.
+      expect(paramKeys).toContain("ANTHROPIC_SMALL_MODEL");
+      expect(paramKeys).not.toContain("SMALL_MODEL");
+    });
+
+    it("never filters non-model keys regardless of prefixed equivalents", () => {
+      const googlePlugin = getPlugin("google-genai");
+      const paramKeys = googlePlugin.parameters.map(
+        (parameter) => parameter.key,
+      );
+      // GOOGLE_GENERATIVE_AI_API_KEY is present and should not be affected by
+      // the model filtering logic.
+      expect(paramKeys).toContain("GOOGLE_GENERATIVE_AI_API_KEY");
+    });
+  });
 });

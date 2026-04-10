@@ -171,6 +171,17 @@ describe("server cloud disconnect", () => {
         hasApiKey: false,
         reason: "not_authenticated",
       });
+
+      // Verify that the persisted config includes linkedAccounts.elizacloud.status === "unlinked"
+      const persistedRaw = await fs.readFile(
+        path.join(tempDir, "eliza.json"),
+        "utf-8",
+      );
+      const persisted = JSON.parse(persistedRaw) as Record<string, unknown>;
+      const linkedAccounts = persisted.linkedAccounts as
+        | Record<string, Record<string, unknown>>
+        | undefined;
+      expect(linkedAccounts?.elizacloud?.status).toBe("unlinked");
     } finally {
       await server.close();
       await cleanupTempDir(tempDir);
