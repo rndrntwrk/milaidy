@@ -7,7 +7,10 @@ import {
   resolveLinkedAccountsInConfig,
   resolveServiceRoutingInConfig,
 } from "@miladyai/shared/contracts";
-import type { BuildOnboardingConnectionArgs } from "../onboarding-config";
+import type {
+  BuildOnboardingConnectionArgs,
+  OnboardingConnectionConfigCompat,
+} from "../onboarding-config";
 import { asRecord } from "./config-readers";
 import type { OnboardingStep } from "./types";
 
@@ -129,4 +132,44 @@ export function deriveOnboardingResumeFieldsFromConfig(
   }
 
   return fields;
+}
+
+function deriveCompatModeFields(
+  onboardingServerTarget: Partial<BuildOnboardingConnectionArgs>["onboardingServerTarget"],
+): Pick<
+  OnboardingConnectionConfigCompat,
+  "onboardingRunMode" | "onboardingCloudProvider"
+> {
+  if (onboardingServerTarget === "remote") {
+    return { onboardingRunMode: "cloud", onboardingCloudProvider: "remote" };
+  }
+  if (onboardingServerTarget === "elizacloud") {
+    return {
+      onboardingRunMode: "cloud",
+      onboardingCloudProvider: "elizacloud",
+    };
+  }
+  if (onboardingServerTarget === "local") {
+    return { onboardingRunMode: "local", onboardingCloudProvider: "" };
+  }
+  return { onboardingRunMode: "", onboardingCloudProvider: "" };
+}
+
+export function deriveOnboardingResumeConnection(
+  config: Record<string, unknown> | null | undefined,
+): OnboardingConnectionConfigCompat | null {
+  const fields = deriveOnboardingResumeFieldsFromConfig(config);
+  if (!hasPartialOnboardingConnectionConfig(config) && !fields.onboardingProvider) {
+    return null;
+  }
+  return {
+    ...fields,
+    ...deriveCompatModeFields(fields.onboardingServerTarget),
+  };
+}
+
+export function deriveOnboardingResumeFields(
+  connection: OnboardingConnectionConfigCompat | null | undefined,
+): OnboardingConnectionConfigCompat {
+  return connection ?? {};
 }

@@ -20,9 +20,9 @@ import {
   OPERATOR_SELECT_SHELL_CLASSNAME,
   OperatorPill,
   OperatorSectionHeader,
-} from "./operator/OperatorPrimitives";
-import { IS_POPOUT } from "./stream/helpers";
-import { StatusBar } from "./stream/StatusBar";
+} from "../operator/OperatorPrimitives";
+import { IS_POPOUT } from "../stream/helpers";
+import { StatusBar } from "../stream/StatusBar";
 
 export function StreamView({ inModal }: { inModal?: boolean } = {}) {
   const { agentStatus, setActionNotice, t } = useApp();

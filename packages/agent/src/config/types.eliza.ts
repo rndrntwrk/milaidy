@@ -1,5 +1,5 @@
 import type { SessionConfig, SessionSendPolicyConfig } from "@elizaos/core";
-import type { RolesConfig } from "@elizaos/core/roles";
+import type { RolesConfig } from "@miladyai/shared/roles";
 import type {
   CustomActionDef,
   DatabaseProviderType,

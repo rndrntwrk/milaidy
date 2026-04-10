@@ -8,6 +8,8 @@ export {
   resolveOnboardingPreviousStep,
 } from "../onboarding/flow";
 export {
+  deriveOnboardingResumeConnection,
+  deriveOnboardingResumeFields,
   deriveOnboardingResumeFieldsFromConfig,
   hasPartialOnboardingConnectionConfig,
   inferOnboardingResumeStep,
@@ -33,6 +35,7 @@ export {
 export {
   applyUiTheme,
   clearAvatarIndex,
+  clearPersistedConnectionMode,
   clearPersistedActiveServer,
   createPersistedActiveServer,
   clearPersistedOnboardingStep,
@@ -46,6 +49,7 @@ export {
   loadCompanionMessageCutoffTs,
   loadCompanionVrmPowerMode,
   loadLastNativeTab,
+  loadPersistedConnectionMode,
   loadPersistedActiveServer,
   loadPersistedOnboardingComplete,
   loadPersistedOnboardingStep,
@@ -67,6 +71,7 @@ export {
   saveCompanionMessageCutoffTs,
   saveCompanionVrmPowerMode,
   saveLastNativeTab,
+  savePersistedConnectionMode,
   saveOnboardingStep,
   savePersistedActiveServer,
   savePersistedOnboardingComplete,
@@ -99,6 +104,7 @@ export {
   type NavigationEventsApi,
   ONBOARDING_PERMISSION_LABELS,
   ONBOARDING_STEPS,
+  type OnboardingHandoffPhase,
   type OnboardingMode,
   type OnboardingNextOptions,
   type OnboardingStep,

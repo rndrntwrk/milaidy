@@ -25,7 +25,7 @@ import {
   matchEntityToConnectorAdminWhitelist,
   resolveWorldForMessage,
   setEntityRole,
-} from "@elizaos/core/roles";
+} from "@miladyai/shared/roles";
 import { loadElizaConfig } from "../config/config.js";
 
 /**

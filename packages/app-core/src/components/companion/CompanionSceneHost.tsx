@@ -31,6 +31,8 @@ import { CompanionSceneStatusContext } from "./companion-scene-status-context";
 import { SharedCompanionSceneContext } from "./shared-companion-scene-context";
 import { VrmStage } from "./VrmStage";
 
+export { useSharedCompanionScene } from "./shared-companion-scene-context";
+
 const COMPANION_ZOOM_WHEEL_SENSITIVITY = 1 / 720;
 const COMPANION_ZOOM_PINCH_SENSITIVITY = 2.35;
 const COMPANION_ZOOM_STORAGE_KEY = "milady.companion.zoom.v1";

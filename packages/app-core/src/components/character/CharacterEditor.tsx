@@ -8,25 +8,25 @@
 import type { StylePreset } from "@miladyai/shared/contracts/onboarding";
 import { getStylePresets } from "@miladyai/shared/onboarding-presets";
 import { Button, Input, Textarea, ThemedSelect } from "@miladyai/ui";
-import { client } from "../api/client";
+import { client } from "../../api/client";
 import {
   APP_EMOTE_EVENT,
   dispatchWindowEvent,
   VOICE_CONFIG_UPDATED_EVENT,
-} from "../events/index";
+} from "../../events/index";
 import {
   useAvatarSpeechCapabilities,
   useAvatarVoicePublisher,
   useVoiceChat,
-} from "../hooks";
-import { useApp } from "../state/useApp";
-import { normalizeCharacterMessageExamples } from "../utils/character-message-examples";
+} from "../../hooks";
+import { useApp } from "../../state/useApp";
+import { normalizeCharacterMessageExamples } from "../../utils/character-message-examples";
 import {
   EDGE_BACKUP_VOICES,
   hasConfiguredApiKey,
   PREMADE_VOICES,
   sanitizeApiKey,
-} from "../voice/types";
+} from "../../voice/types";
 import {
   CharacterRoster,
   type CharacterRosterEntry,

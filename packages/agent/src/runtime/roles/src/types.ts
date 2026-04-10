@@ -5,5 +5,5 @@ export type {
   RoleGrantSource,
   RoleName,
   RolesWorldMetadata,
-} from "@elizaos/core/roles";
-export { ROLE_RANK } from "@elizaos/core/roles";
+} from "@miladyai/shared/roles";
+export { ROLE_RANK } from "@miladyai/shared/roles";

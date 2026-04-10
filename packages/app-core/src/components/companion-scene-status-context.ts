@@ -1,5 +1,1 @@
-export {
-  type CompanionSceneStatus,
-  CompanionSceneStatusContext,
-  useCompanionSceneStatus,
-} from "./companion/companion-scene-status-context";
+export * from "./companion/companion-scene-status-context";

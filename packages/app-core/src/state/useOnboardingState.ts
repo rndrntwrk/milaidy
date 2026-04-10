@@ -338,8 +338,14 @@ export interface OnboardingStateHook {
 
   /** Tracks whether onboarding completion has been committed this session. */
   completionCommittedRef: React.RefObject<boolean>;
+  /** Legacy AppContext compatibility: finish lock during onboarding handoff. */
+  finishBusyRef: React.RefObject<boolean>;
+  /** Legacy AppContext compatibility: resume connection snapshot. */
+  resumeConnectionRef: React.RefObject<Record<string, unknown> | null>;
   /** Force local bootstrap ref. */
   forceLocalBootstrapRef: React.RefObject<boolean>;
+  /** Legacy AppContext compatibility: save lock during onboarding handoff. */
+  finishSavingRef: React.RefObject<boolean>;
 }
 
 export function useOnboardingState(cloudOnly?: boolean): OnboardingStateHook {
@@ -348,7 +354,10 @@ export function useOnboardingState(cloudOnly?: boolean): OnboardingStateHook {
   );
 
   const completionCommittedRef = useRef(false);
+  const finishBusyRef = useRef(false);
+  const resumeConnectionRef = useRef<Record<string, unknown> | null>(null);
   const forceLocalBootstrapRef = useRef(false);
+  const finishSavingRef = useRef(false);
 
   const setStep = useCallback((step: OnboardingStep) => {
     dispatch({ type: "SET_STEP", step });
@@ -414,7 +423,10 @@ export function useOnboardingState(cloudOnly?: boolean): OnboardingStateHook {
     setRemoteStatus,
     setDetectedProviders,
     completionCommittedRef,
+    finishBusyRef,
+    resumeConnectionRef,
     forceLocalBootstrapRef,
+    finishSavingRef,
   };
 }
 

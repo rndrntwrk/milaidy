@@ -15,7 +15,7 @@ import {
 import {
   findPrimaryEnvKey,
   readBundledPluginPackageMetadata,
-} from "@miladyai/agent/api/server";
+} from "@miladyai/agent/api/plugin-discovery-helpers";
 import {
   ensureCompatApiAuthorized,
   ensureCompatSensitiveRouteAuthorized,

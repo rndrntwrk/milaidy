@@ -16,6 +16,24 @@ import {
 } from "@miladyai/shared/contracts/service-routing";
 import { type OnboardingServerTarget } from "./onboarding/server-target";
 
+export interface BuildOnboardingConnectionCompatArgs {
+  onboardingServerTarget?: OnboardingServerTarget;
+  onboardingRunMode?: "local" | "cloud" | "";
+  onboardingCloudProvider?: string;
+  onboardingCloudApiKey?: string;
+  onboardingProvider: string;
+  onboardingApiKey: string;
+  onboardingVoiceProvider: string;
+  onboardingVoiceApiKey: string;
+  onboardingPrimaryModel: string;
+  onboardingOpenRouterModel: string;
+  onboardingRemoteConnected: boolean;
+  onboardingRemoteApiBase: string;
+  onboardingRemoteToken: string;
+  onboardingSmallModel?: string;
+  onboardingLargeModel?: string;
+}
+
 export interface BuildOnboardingConnectionArgs {
   onboardingServerTarget?: OnboardingServerTarget;
   onboardingCloudApiKey: string;
@@ -46,6 +64,12 @@ export interface BuildOnboardingRuntimeConfigResult {
   needsProviderSetup: boolean;
 }
 
+export interface OnboardingConnectionConfigCompat
+  extends Partial<BuildOnboardingConnectionArgs> {
+  onboardingRunMode?: "local" | "cloud" | "";
+  onboardingCloudProvider?: string;
+}
+
 function trimToUndefined(value: unknown): string | undefined {
   if (typeof value !== "string") {
     return undefined;
@@ -65,6 +89,26 @@ function resolveArgsServerTarget(
   args: Pick<BuildOnboardingConnectionArgs, "onboardingServerTarget">,
 ): OnboardingServerTarget {
   return args.onboardingServerTarget ?? "";
+}
+
+function resolveCompatServerTarget(
+  args: BuildOnboardingConnectionCompatArgs,
+): OnboardingServerTarget {
+  if (args.onboardingServerTarget) {
+    return args.onboardingServerTarget;
+  }
+  if (args.onboardingRunMode === "cloud") {
+    if (args.onboardingCloudProvider === "remote") {
+      return "remote";
+    }
+    if (args.onboardingCloudProvider === "elizacloud") {
+      return "elizacloud";
+    }
+  }
+  if (args.onboardingRunMode === "local" || !args.onboardingRunMode) {
+    return "local";
+  }
+  return "";
 }
 
 export function resolveOnboardingPrimaryModel(args: {
@@ -223,4 +267,45 @@ export function buildOnboardingRuntimeConfig(
     credentialInputs: hasCredentialInputs ? credentialInputs : undefined,
     needsProviderSetup: !serviceRouting.llmText,
   };
+}
+
+export function buildOnboardingConnectionConfig(
+  args: BuildOnboardingConnectionCompatArgs,
+): OnboardingConnectionConfigCompat | null {
+  const onboardingServerTarget = resolveCompatServerTarget(args);
+  const connection: OnboardingConnectionConfigCompat = {
+    onboardingRunMode: args.onboardingRunMode ?? "",
+    onboardingCloudProvider: args.onboardingCloudProvider ?? "",
+    onboardingServerTarget,
+    onboardingCloudApiKey: args.onboardingCloudApiKey ?? "",
+    onboardingProvider: args.onboardingProvider,
+    onboardingApiKey: args.onboardingApiKey,
+    onboardingVoiceProvider: args.onboardingVoiceProvider,
+    onboardingVoiceApiKey: args.onboardingVoiceApiKey,
+    onboardingPrimaryModel: args.onboardingPrimaryModel,
+    onboardingOpenRouterModel: args.onboardingOpenRouterModel,
+    onboardingRemoteConnected: args.onboardingRemoteConnected,
+    onboardingRemoteApiBase: args.onboardingRemoteApiBase,
+    onboardingRemoteToken: args.onboardingRemoteToken,
+    onboardingSmallModel: args.onboardingSmallModel,
+    onboardingLargeModel: args.onboardingLargeModel,
+  };
+
+  const hasMeaningfulValue = Object.entries(connection).some(([key, value]) => {
+    if (key === "onboardingRunMode") {
+      return value === "local" || value === "cloud";
+    }
+    if (key === "onboardingCloudProvider" || key === "onboardingServerTarget") {
+      return typeof value === "string" && value.length > 0;
+    }
+    if (typeof value === "string") {
+      return value.trim().length > 0;
+    }
+    if (typeof value === "boolean") {
+      return value;
+    }
+    return value != null;
+  });
+
+  return hasMeaningfulValue ? connection : null;
 }

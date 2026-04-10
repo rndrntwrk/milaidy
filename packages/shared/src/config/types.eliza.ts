@@ -1,5 +1,5 @@
 import type { SessionConfig, SessionSendPolicyConfig } from "@elizaos/core";
-import type { RolesConfig } from "@elizaos/core/roles";
+import type { RolesConfig } from "../roles";
 import type {
   CustomActionDef,
   DatabaseProviderType,
@@ -177,7 +177,7 @@ export type KnowledgeConfig = {
   docsPath?: string;
 };
 
-export type { RolesConfig } from "@elizaos/core/roles";
+export type { RolesConfig } from "../roles";
 
 // --- Models types (merged from types.models.ts) ---
 

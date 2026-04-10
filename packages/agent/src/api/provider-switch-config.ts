@@ -40,6 +40,8 @@ type MutableElizaConfig = Partial<ElizaConfig> & {
   serviceRouting?: ServiceRoutingConfig;
 };
 
+const REDACTED_SECRET = "REDACTED";
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -52,6 +54,80 @@ function trimToUndefined(value: string | null | undefined): string | undefined {
   }
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function normalizeSecret(
+  value: string | null | undefined,
+  existing?: string,
+): string | undefined {
+  const trimmed = trimToUndefined(value);
+  if (!trimmed || trimmed.toUpperCase() === REDACTED_SECRET) {
+    return existing;
+  }
+  return trimmed;
+}
+
+function readString(
+  source: Record<string, unknown> | null | undefined,
+  key: string,
+): string | undefined {
+  const value = source?.[key];
+  return trimToUndefined(typeof value === "string" ? value : undefined);
+}
+
+function readEnvString(
+  config: Record<string, unknown> | null | undefined,
+  key: string,
+): string | undefined {
+  const env = asRecord(config?.env);
+  const vars = asRecord(env?.vars);
+  return readString(vars, key) ?? readString(env, key);
+}
+
+function resolveConfiguredLocalProvider(
+  config: Record<string, unknown> | null | undefined,
+): OnboardingLocalProviderId | null {
+  const agents = asRecord(config?.agents);
+  const defaults = asRecord(agents?.defaults);
+  const storedSubscriptionProvider = normalizeOnboardingProviderId(
+    readString(defaults, "subscriptionProvider"),
+  );
+
+  if (
+    storedSubscriptionProvider &&
+    storedSubscriptionProvider !== "elizacloud"
+  ) {
+    return storedSubscriptionProvider;
+  }
+
+  const piAiEnabled = readEnvString(config, "ELIZA_USE_PI_AI");
+  if (piAiEnabled && piAiEnabled !== "0" && piAiEnabled !== "false") {
+    return "pi-ai";
+  }
+
+  const localProvider = (
+    [
+      "anthropic",
+      "deepseek",
+      "gemini",
+      "grok",
+      "groq",
+      "mistral",
+      "ollama",
+      "openai",
+      "openrouter",
+      "pi-ai",
+      "together",
+      "zai",
+    ] as const satisfies readonly OnboardingLocalProviderId[]
+  ).find((providerId) => {
+    const providerOption = getOnboardingProviderOption(providerId);
+    return providerOption?.envKey
+      ? Boolean(readEnvString(config, providerOption.envKey))
+      : false;
+  });
+
+  return localProvider ?? null;
 }
 
 function ensureEnv(config: MutableElizaConfig): Record<string, unknown> {
@@ -713,6 +789,72 @@ export function createProviderSwitchConnection(args: {
     provider,
     apiKey: trimToUndefined(args.apiKey),
     primaryModel: trimToUndefined(args.primaryModel),
+  };
+}
+
+export function resolveExistingOnboardingConnection(
+  config: Record<string, unknown> | null | undefined,
+): OnboardingConnection | null {
+  const cloud = asRecord(config?.cloud);
+  const models = asRecord(config?.models);
+  const agentDefaults = asRecord(asRecord(config?.agents)?.defaults);
+  const agentModel = asRecord(agentDefaults?.model);
+  const remoteApiBase = readString(cloud, "remoteApiBase");
+  const remoteAccessToken = normalizeSecret(
+    readString(cloud, "remoteAccessToken"),
+  );
+  const localProvider = resolveConfiguredLocalProvider(config);
+  const primaryModel = readString(agentModel, "primary");
+  const localProviderOption = getOnboardingProviderOption(localProvider);
+  const localApiKey =
+    localProviderOption?.envKey != null
+      ? normalizeSecret(readEnvString(config, localProviderOption.envKey))
+      : undefined;
+
+  if (remoteApiBase || remoteAccessToken) {
+    return {
+      kind: "remote-provider",
+      remoteApiBase: remoteApiBase ?? "",
+      remoteAccessToken,
+      provider: localProvider ?? undefined,
+      apiKey: localApiKey,
+      primaryModel,
+    };
+  }
+
+  const cloudProvider = normalizeOnboardingProviderId(
+    readString(cloud, "provider"),
+  );
+  const cloudApiKey = normalizeSecret(readString(cloud, "apiKey"));
+  const smallModel = readString(models, "small");
+  const largeModel = readString(models, "large");
+
+  if (
+    cloud?.enabled === true ||
+    cloudProvider === "elizacloud" ||
+    readString(cloud, "inferenceMode") === "cloud" ||
+    cloudApiKey ||
+    smallModel ||
+    largeModel
+  ) {
+    return {
+      kind: "cloud-managed",
+      cloudProvider: "elizacloud",
+      apiKey: cloudApiKey,
+      smallModel,
+      largeModel,
+    };
+  }
+
+  if (!localProvider) {
+    return null;
+  }
+
+  return {
+    kind: "local-provider",
+    provider: localProvider,
+    apiKey: localApiKey,
+    primaryModel,
   };
 }
 

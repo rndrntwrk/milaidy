@@ -285,6 +285,76 @@ const UI_LANGUAGE_STORAGE_KEY = "eliza:ui-language";
 const UI_SHELL_MODE_STORAGE_KEY = "eliza:ui-shell-mode";
 const LAST_NATIVE_TAB_STORAGE_KEY = "eliza:last-native-tab";
 const ONBOARDING_STEP_STORAGE_KEY = "eliza:onboarding:step";
+const CONNECTION_MODE_STORAGE_KEY = "eliza:onboarding:connection-mode";
+
+export interface PersistedConnectionMode {
+  runMode: "local" | "cloud" | "remote";
+  cloudApiBase?: string;
+  cloudAuthToken?: string;
+  remoteApiBase?: string;
+  remoteAccessToken?: string;
+}
+
+function normalizePersistedConnectionMode(
+  value: unknown,
+): PersistedConnectionMode | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+  const record = value as Record<string, unknown>;
+  const runMode = record.runMode;
+  if (runMode !== "local" && runMode !== "cloud" && runMode !== "remote") {
+    return null;
+  }
+  const result: PersistedConnectionMode = { runMode };
+  if (typeof record.cloudApiBase === "string" && record.cloudApiBase.trim()) {
+    result.cloudApiBase = record.cloudApiBase.trim();
+  }
+  if (
+    typeof record.cloudAuthToken === "string" &&
+    record.cloudAuthToken.trim()
+  ) {
+    result.cloudAuthToken = record.cloudAuthToken.trim();
+  }
+  if (typeof record.remoteApiBase === "string" && record.remoteApiBase.trim()) {
+    result.remoteApiBase = record.remoteApiBase.trim();
+  }
+  if (
+    typeof record.remoteAccessToken === "string" &&
+    record.remoteAccessToken.trim()
+  ) {
+    result.remoteAccessToken = record.remoteAccessToken.trim();
+  }
+  return result;
+}
+
+export function loadPersistedConnectionMode(): PersistedConnectionMode | null {
+  return tryLocalStorage(() => {
+    const raw = localStorage.getItem(CONNECTION_MODE_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return normalizePersistedConnectionMode(parsed);
+  }, null);
+}
+
+export function savePersistedConnectionMode(
+  value: PersistedConnectionMode,
+): void {
+  tryLocalStorage(() => {
+    const normalized = normalizePersistedConnectionMode(value);
+    if (!normalized) return;
+    localStorage.setItem(
+      CONNECTION_MODE_STORAGE_KEY,
+      JSON.stringify(normalized),
+    );
+  }, undefined);
+}
+
+export function clearPersistedConnectionMode(): void {
+  tryLocalStorage(() => {
+    localStorage.removeItem(CONNECTION_MODE_STORAGE_KEY);
+  }, undefined);
+}
 
 function normalizeOnboardingStep(value: unknown): OnboardingStep | null {
   switch (value) {
