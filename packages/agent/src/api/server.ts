@@ -26,7 +26,6 @@ import {
   createMessageMemory,
   logger,
   type Media,
-  ModelType,
   stringToUuid,
   type UUID
 } from "@elizaos/core";
@@ -3813,6 +3812,7 @@ function getCoordinatorFromRuntime(runtime: AgentRuntime): {
       errored: number;
     }) => Promise<void>,
   ) => void;
+  sourceRoomId?: string | null;
 } | null {
   const coordinator = runtime.getService("SWARM_COORDINATOR");
   if (coordinator) {
@@ -3843,10 +3843,20 @@ function wireCodingAgentBridgesNow(st: ServerState): void {
  */
 function wireCodingAgentChatBridge(st: ServerState): boolean {
   if (!st.runtime) return false;
+  // The coordinator's chat callback sends "done — <originalTask>" messages
+  // that echo the user's input instead of the subagent's actual output.
+  // The direct callback path in registerSessionEvents (coding-task-helpers)
+  // handles task completion replies with real subagent responses, and the
+  // task-progress-streamer + jsonl watcher post the clean final text.
+  // Wiring the coordinator's chat bridge on top of that causes duplicate
+  // and incorrect messages in discord. Install a no-op callback so the
+  // upstream wiring check (which requires result.chat to be truthy)
+  // considers wiring complete and doesn't spam "Coordinator wiring
+  // incomplete" warnings.
   const coordinator = getCoordinatorFromRuntime(st.runtime);
   if (!coordinator?.setChatCallback) return false;
-  coordinator.setChatCallback(async (text: string, source?: string) => {
-    await routeAutonomyTextToUser(st, text, source ?? "coding-agent");
+  coordinator.setChatCallback(async (_text: string, _source?: string) => {
+    // Deliberately no-op — chat delivery happens elsewhere.
   });
   return true;
 }
@@ -3875,13 +3885,17 @@ function wireCodingAgentWsBridge(st: ServerState): boolean {
  * persisted message in the conversation.
  */
 function wireCodingAgentSwarmSynthesis(st: ServerState): boolean {
+  // Same rationale as wireCodingAgentChatBridge: synthesis is generated
+  // from task metadata (originalTask = user's text), not from the
+  // subagent's actual output. The task-progress-streamer + jsonl watcher
+  // deliver the real answer. Install a no-op callback so the upstream
+  // wiring check considers this bridge wired.
   if (!st.runtime) return false;
   const coordinator = getCoordinatorFromRuntime(st.runtime);
   if (!coordinator?.setSwarmCompleteCallback) return false;
-
-  coordinator.setSwarmCompleteCallback((payload) =>
-    handleSwarmSynthesis(st, payload),
-  );
+  coordinator.setSwarmCompleteCallback(async () => {
+    // Deliberately no-op — synthesis happens via the streamer instead.
+  });
   return true;
 }
 
@@ -3924,46 +3938,86 @@ export async function handleSwarmSynthesis(
     `[swarm-synthesis] Generating synthesis for ${payload.total} tasks (${payload.completed} completed, ${payload.stopped} stopped, ${payload.errored} errored)`,
   );
 
-  const taskLines = payload.tasks
-    .map(
-      (t) =>
-        `- [${t.status.toUpperCase()}] "${t.label}" (${t.agentType})\n  Task: ${t.originalTask}\n  Result: ${t.completionSummary || "No summary available"}`,
-    )
-    .join("\n\n");
+  const resultText = await buildSynthesisResultText(payload);
+  logger.info("[swarm-synthesis] Synthesis generated, routing to user");
+  await routeMessage(resultText, "swarm_synthesis");
+  await routeSynthesisToConnector(runtime, resultText);
+}
 
-  const prompt =
-    `You are summarizing the results of a task-agent swarm for the user. ` +
-    `${payload.total} agents were dispatched. ${payload.completed} completed, ` +
-    `${payload.stopped} stopped, ${payload.errored} errored.\n\n` +
-    `Here are the individual task results:\n\n${taskLines}\n\n` +
-    `Write a concise, conversational summary of what was accomplished. ` +
-    `Highlight key outcomes (PRs created, issues found, research results). ` +
-    `If any tasks failed or stopped, mention what went wrong. ` +
-    `Keep your personality — be warm and helpful but brief.`;
+/**
+ * Build the user-facing result message from swarm task data.
+ * For port-bound tasks, verifies the server is actually listening.
+ * No LLM call required — task data already has what we need.
+ */
+async function buildSynthesisResultText(payload: {
+  tasks: Array<{
+    originalTask: string;
+    completionSummary: string;
+    status: string;
+  }>;
+  total: number;
+}): Promise<string> {
+  const parts = await Promise.all(payload.tasks.map(buildTaskResultLine));
+  return parts.length === 1
+    ? `done — ${parts[0]}`
+    : `done — ${payload.total} tasks:\n${parts.map((p) => `• ${p}`).join("\n")}`;
+}
 
+async function buildTaskResultLine(task: {
+  originalTask: string;
+  completionSummary: string;
+}): Promise<string> {
+  if (task.completionSummary) return task.completionSummary;
+  const portMatch = task.originalTask.match(/port\s+(\d+)/i);
+  const port = portMatch?.[1];
+  if (!port) return task.originalTask;
+  if (await isPortServing(port)) {
+    const host = process.env.MILADY_PUBLIC_HOST ?? "localhost";
+    return `built and serving at http://${host}:${port}`;
+  }
+  return `built the files but server isn't running on port ${port} yet`;
+}
+
+async function isPortServing(port: string): Promise<boolean> {
   try {
-    const synthesis = await runtime.useModel(ModelType.TEXT_SMALL, {
-      prompt,
-      maxTokens: 2048,
-      temperature: 0.7,
+    const res = await fetch(`http://localhost:${port}/`, {
+      signal: AbortSignal.timeout(2000),
     });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
 
-    if (synthesis?.trim()) {
-      logger.info("[swarm-synthesis] Synthesis generated, routing to user");
-      await routeMessage(synthesis.trim(), "swarm_synthesis");
-    } else {
-      logger.warn("[swarm-synthesis] LLM returned empty synthesis");
-    }
-  } catch (err) {
-    logger.error(`[swarm-synthesis] LLM call failed: ${err}`);
-    const parts: string[] = [];
-    if (payload.completed > 0) parts.push(`${payload.completed} completed`);
-    if (payload.stopped > 0) parts.push(`${payload.stopped} stopped`);
-    if (payload.errored > 0) parts.push(`${payload.errored} errored`);
-    await routeMessage(
-      `All ${payload.total} task agents finished (${parts.join(", ")}). Review their work when you're ready.`,
-      "coding-agent",
+/**
+ * Route the synthesis text to the user's platform (Discord, Telegram, etc.)
+ * via the runtime's registered send handler. Uses the source room ID stored
+ * on the coordinator when the task was created.
+ */
+async function routeSynthesisToConnector(
+  runtime: AgentRuntime,
+  resultText: string,
+): Promise<void> {
+  const coordinator = getCoordinatorFromRuntime(runtime);
+  const sourceRoomId = coordinator?.sourceRoomId;
+  if (!sourceRoomId) return;
+  try {
+    const room = await runtime.getRoom(sourceRoomId as UUID);
+    if (!room?.source) return;
+    await runtime.sendMessageToTarget(
+      {
+        source: room.source,
+        roomId: room.id,
+        channelId: room.channelId ?? room.id,
+        serverId: room.serverId,
+      },
+      { text: resultText, source: "swarm_synthesis" },
     );
+    logger.info(
+      `[swarm-synthesis] Routed result to ${room.source} room ${room.id}`,
+    );
+  } catch (err) {
+    logger.debug(`[swarm-synthesis] Connector routing failed: ${err}`);
   }
 }
 

@@ -616,3 +616,126 @@ function patchElizaCoreNodeTypes() {
   }
 }
 patchElizaCoreNodeTypes();
+
+// ---------------------------------------------------------------------------
+// MILADY FORK PATCHES
+//
+// These two patches address upstream alpha API drift that breaks the agent
+// runtime on our fork. Both are surgical edits to the compiled node_modules
+// dist files, idempotent across reruns, and logged so you can see them
+// happening at postinstall time.
+// ---------------------------------------------------------------------------
+
+/**
+ * Patch @elizaos/plugin-sql countMemories to accept both the old positional
+ * signature `(roomId, unique, tableName)` AND the new object signature
+ * `({roomIds, unique, tableName})`.
+ *
+ * Why: upstream @elizaos/core@2.0.0-alpha.113+ calls `adapter.countMemories`
+ * with an object `{ roomIds, unique, tableName }`, but
+ * @elizaos/plugin-sql@2.0.0-alpha.17 still defines the method with the old
+ * positional signature. When core passes an object, plugin-sql receives
+ * `roomId = {...}` and `tableName = ""` (default), then throws
+ * "tableName is required" on every chat message and completely breaks the
+ * /v1/chat/completions endpoint plus every message the bot tries to send.
+ *
+ * Until plugin-sql is updated upstream to match core's new interface, we
+ * rewrite the method prologue to detect and destructure the object form.
+ */
+function patchPluginSqlCountMemoriesSignature() {
+  const dirs = [
+    ...collectInstalledPackageDirs("@elizaos/plugin-sql", {
+      includeGlobalBunCache: true,
+    }),
+    resolve(root, "plugins/plugin-sql/typescript"),
+  ];
+  const needle =
+    'async countMemories(roomId, unique3 = true, tableName = "") {';
+  const replacement =
+    'async countMemories(roomIdOrParams, unique3 = true, tableName = "") { let roomId = roomIdOrParams; if (typeof roomIdOrParams === "object" && roomIdOrParams !== null && !Array.isArray(roomIdOrParams)) { const p = roomIdOrParams; tableName = p.tableName ?? tableName; unique3 = p.unique !== undefined ? p.unique : unique3; roomId = (p.roomIds && p.roomIds[0]) ?? p.roomId; }';
+  let patched = 0;
+  for (const pkgDir of dirs) {
+    const file = resolve(pkgDir, "dist/node/index.node.js");
+    if (!existsSync(file)) continue;
+    try {
+      const content = readFileSync(file, "utf8");
+      if (!content.includes(needle)) continue; // already patched or signature changed
+      writeFileSync(file, content.replace(needle, replacement));
+      patched++;
+    } catch {
+      // Best-effort — ignore patch failures.
+    }
+  }
+  if (patched > 0) {
+    console.log(
+      `[patch-deps] Patched ${patched} @elizaos/plugin-sql countMemories signature (milady fork, object-style support)`,
+    );
+  }
+}
+patchPluginSqlCountMemoriesSignature();
+
+/**
+ * Patch @elizaos/core MemoryService.requireStorage() to return a no-op
+ * stub when no MemoryStorageProvider is registered, instead of throwing.
+ *
+ * Why: upstream @elizaos/core@2.0.0-alpha.113+ introduced an
+ * advanced-memory plugin that expects a "memoryStorage" service to be
+ * registered by a database plugin. @elizaos/plugin-sql@2.0.0-alpha.17
+ * hasn't been updated to provide one. When any api path composes state
+ * or runs evaluators, MemoryService.requireStorage() throws
+ * "MemoryStorageProvider not available", which breaks the
+ * /v1/chat/completions endpoint and several providers.
+ *
+ * Until plugin-sql catches up, we replace requireStorage() with a shim
+ * that returns an in-memory no-op provider. Advanced-memory features
+ * (long-term memory, session summaries) gracefully degrade to no-ops
+ * instead of crashing the whole message pipeline.
+ */
+function patchElizaCoreMemoryStorageStub() {
+  const dirs = collectInstalledPackageDirs("@elizaos/core", {
+    includeGlobalBunCache: true,
+  });
+  const needle = `requireStorage() {
+      if (!this.storage) {
+        throw new Error("MemoryStorageProvider not available. Register a memoryStorage service from your database plugin.");
+      }
+      return this.storage;
+    }`;
+  const replacement = `requireStorage() {
+      if (!this.storage) {
+        // milady patch: return a no-op stub so advanced-memory gracefully
+        // degrades when no database plugin provides memoryStorage. Without
+        // this the api layer throws on every chat message.
+        return {
+          storeLongTermMemory: async (m) => ({ ...m, id: "stub-" + Date.now(), createdAt: Date.now(), updatedAt: Date.now(), accessCount: 0 }),
+          getLongTermMemories: async () => [],
+          updateLongTermMemory: async () => {},
+          deleteLongTermMemory: async () => {},
+          storeSessionSummary: async (s) => ({ ...s, id: "stub-" + Date.now(), createdAt: Date.now(), updatedAt: Date.now() }),
+          getCurrentSessionSummary: async () => null,
+          updateSessionSummary: async () => {},
+          getSessionSummaries: async () => [],
+        };
+      }
+      return this.storage;
+    }`;
+  let patched = 0;
+  for (const pkgDir of dirs) {
+    const file = resolve(pkgDir, "dist/node/index.node.js");
+    if (!existsSync(file)) continue;
+    try {
+      const content = readFileSync(file, "utf8");
+      if (!content.includes(needle)) continue; // already patched or text drifted
+      writeFileSync(file, content.replace(needle, replacement));
+      patched++;
+    } catch {
+      // Best-effort — ignore patch failures.
+    }
+  }
+  if (patched > 0) {
+    console.log(
+      `[patch-deps] Patched ${patched} @elizaos/core MemoryService.requireStorage stub (milady fork, graceful degradation)`,
+    );
+  }
+}
+patchElizaCoreMemoryStorageStub();

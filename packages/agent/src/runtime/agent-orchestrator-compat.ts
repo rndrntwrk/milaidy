@@ -15,6 +15,8 @@ import type {
   ProviderResult,
   State,
 } from "@elizaos/core";
+import { installClaudeJsonlCompletionWatcher } from "./claude-jsonl-completion-watcher";
+import { installTaskProgressStreamer } from "./task-progress-streamer";
 
 // Dynamic import: plugin-agent-orchestrator is desktop-only and may be absent
 // in Docker, cloud, or headless environments.
@@ -1239,6 +1241,112 @@ function injectPreferredAgentType(action: Action | undefined): void {
   };
 }
 
+/**
+ * Milady deployment-specific memory content for spawned task agents.
+ *
+ * Lives here (not in the shared plugin) because the agent-home pattern below
+ * is a milady convention — other deployments of plugin-agent-orchestrator
+ * will write their own contract the same way via their own compat layer.
+ */
+const MILADY_TASK_AGENT_MEMORY = `# Milady — Agent Home
+
+You live inside one Next.js app called **agent-home**, which is the public face of Milady's VPS. Every "app", page, demo, or experiment you build becomes a new entry inside that one project. There are no other public servers, no per-build ports, no separate hosting. Anyone visiting https://milady.nubs.site sees you and everything you have ever built.
+
+## Where things go
+
+The agent-home project lives at \`/home/milady/projects/agent-home\` and is already running on \`127.0.0.1:6900\`, fronted by Traefik + Cloudflare for the public domain. **Do not start any other web servers.** Do not run \`python -m http.server\`. Do not bind any new ports. The home is already up.
+
+To create a new "app", write into:
+- \`/home/milady/projects/agent-home/data/apps/<slug>/index.html\` — the page itself
+- \`/home/milady/projects/agent-home/data/apps/<slug>/style.css\` (optional) — relative paths work because the canonical URL has a trailing slash
+- \`/home/milady/projects/agent-home/data/apps/<slug>/<anything>.{png,svg,js,...}\` (optional) — assets, served by the same catch-all
+- \`/home/milady/projects/agent-home/data/apps/<slug>/meta.json\` — \`{ "description": "one-line summary shown on the home index" }\`
+
+A catch-all route handler at \`app/apps/[...path]/route.ts\` serves anything you write into \`data/apps/\` at request time. **No rebuild, no restart needed** — your file appears immediately. The home page (\`/\`) lists every directory in \`data/apps/\` automatically.
+
+## Slug naming
+
+Use lowercase kebab-case slugs: \`hello-world\`, \`iq6900-oracle\`, \`solana-balance-checker\`. No spaces, no underscores at the start (those are reserved for internal smoke tests).
+
+## Backends, when you need them
+
+If a build needs a backend (Rust, Node, Python, Go, anything), write the source under \`/home/milady/projects/agent-home/data/apps/<slug>/server/\` and start it bound to **127.0.0.1 only** (never 0.0.0.0). Then add a Next.js route handler at \`/home/milady/projects/agent-home/app/apps/<slug>/api/[...path]/route.ts\` that proxies to it via \`fetch("http://127.0.0.1:<internal-port>/...")\`. The internal port is invisible to the public; only the proxied API route is reachable, under your slug.
+
+Adding a route handler under \`app/\` is a code change Next.js only picks up at build time, so after writing the proxy file you must run \`cd /home/milady/projects/agent-home && npm run build\` and then **restart the systemd-managed service** with \`sudo systemctl restart agent-home\`. The \`milady\` user has passwordless sudo for that command. **Do not** use \`setsid nohup npm start\` or any other manual launcher — it will squat port 6900 and break the systemd unit, which will then crash-loop trying to bind a busy port.
+
+Pure static pages under \`data/apps/<slug>/\` do not need a rebuild — they are served at request time by the catch-all route handler.
+
+## Reporting
+
+When you finish, end your response with one line in this exact format so the parent agent can quote it verbatim:
+
+    URL: https://milady.nubs.site/apps/<slug>/
+
+Always include the trailing slash. Always use the domain, never an IP, never a port number.
+
+## Hard rules
+
+1. **Never** start a web server on a new port. The home is already running on 6900.
+2. **Never** write into \`public/\` of the agent-home project — Next.js bakes \`public/\` at build time and your files would not appear. Always use \`data/apps/<slug>/\`.
+3. **Only** the following directories are yours to write into: \`data/apps/<slug>/\` (your slug, freely) and \`app/apps/<slug>/\` (your slug, only when you need an API proxy route handler). **Never** touch \`next.config.ts\`, \`package.json\`, the home page, the layout, the catch-all route, or any other path outside your slug.
+4. **Always** verify your work by curling \`http://127.0.0.1:6900/apps/<slug>/\` (the local URL) before reporting done. The body should contain your content, not a 404. If you added an API proxy, also curl \`http://127.0.0.1:6900/apps/<slug>/api/<path>\` to confirm the proxy works after the rebuild.
+5. **Always** report the public URL with the trailing slash.
+`;
+
+/**
+ * Wraps an orchestrator action so every invocation carries Milady's default
+ * task-agent memory content. Existing caller-supplied memoryContent is
+ * preserved and appended after the defaults.
+ */
+function injectDefaultMemoryContent(action: Action | undefined): void {
+  if (!action?.handler) return;
+  const originalHandler = action.handler.bind(action);
+  action.handler = async (
+    runtime: IAgentRuntime,
+    message: Memory,
+    state?: State,
+    options?: HandlerOptions,
+    callback?: HandlerCallback,
+  ): Promise<ActionResult | undefined> => {
+    // Lazy install: the streamer + jsonl watcher both need a live runtime
+    // and ptyService to wire up callbacks, neither of which exist at
+    // module load time. First task spawn is the earliest both are
+    // guaranteed. Both installers are idempotent per runtime.
+    const pty = getPtyService(runtime);
+    installTaskProgressStreamer(runtime, pty);
+    installClaudeJsonlCompletionWatcher(runtime, pty);
+
+    const parameters =
+      (options?.parameters as Record<string, unknown> | undefined) ?? {};
+    const existing =
+      typeof parameters.memoryContent === "string"
+        ? parameters.memoryContent
+        : undefined;
+    const memoryContent = existing
+      ? `${MILADY_TASK_AGENT_MEMORY}\n---\n\n${existing}`
+      : MILADY_TASK_AGENT_MEMORY;
+    // Force autonomous approval for every milady task agent. The LLM that
+    // builds CREATE_TASK action params will sometimes pick "standard" or
+    // "readonly" for tasks that it classifies as "research" or "non-coding",
+    // which strips Write/Edit/Bash/WebSearch from the subagent's allow-list
+    // and leaves it unable to actually do anything. On this deployment the
+    // bot runs on a single-tenant VPS, hooked into agent-home, and is
+    // intended to be fully autonomous — there is no scenario where a
+    // restricted preset is the right call. Overriding here (rather than
+    // server-wide via PTY_SERVICE_CONFIG.defaultApprovalPreset) keeps the
+    // orchestrator plugin's default intact for other deployments.
+    const nextOptions = {
+      ...(options ?? {}),
+      parameters: {
+        ...parameters,
+        memoryContent,
+        approvalPreset: "autonomous",
+      },
+    } as HandlerOptions;
+    return originalHandler(runtime, message, state, nextOptions, callback);
+  };
+}
+
 function installListAgentsHandler(action: Action | undefined): void {
   if (!action) return;
   action.handler = async (
@@ -1248,6 +1356,20 @@ function installListAgentsHandler(action: Action | undefined): void {
     _options?: HandlerOptions,
     callback?: HandlerCallback,
   ): Promise<ActionResult | undefined> => {
+    // Only respond to explicit slash commands. The runtime can pick this
+    // action via fuzzy matching during action loops or coordinator events
+    // even when the user never asked for status. Without this guard, the
+    // bot spams the channel with "Active task agents" updates.
+    const userText = (_message?.content?.text ?? "").trim();
+    if (
+      !userText.startsWith("/subagents") &&
+      !userText.startsWith("/sub") &&
+      !userText.startsWith("/agents") &&
+      !userText.startsWith("/sessions")
+    ) {
+      return { success: false, text: "" };
+    }
+
     const ptyService = getPtyService(runtime);
     if (!ptyService) {
       if (callback) {
@@ -1460,6 +1582,8 @@ function patchPluginSurface(): void {
   }
 
   injectPreferredAgentType(baseActionMap.get("SPAWN_AGENT"));
+  injectDefaultMemoryContent(baseActionMap.get("CREATE_TASK"));
+  injectDefaultMemoryContent(baseActionMap.get("SPAWN_AGENT"));
   installListAgentsHandler(baseActionMap.get("LIST_AGENTS"));
 
   basePlugin.providers = [

@@ -63,6 +63,30 @@ function getCommand(
     }
   }
 
+  // Last resort: generate a reasonable command from the user's intent.
+  // This fires when the LLM picks RUN_IN_TERMINAL but doesn't include the
+  // command parameter (a known TOON parsing gap). Rather than failing silently,
+  // infer the command from the message content.
+  const lower = text.toLowerCase();
+  const cryptoMatch = lower.match(
+    /\b(bitcoin|btc|ethereum|eth|solana|sol)\b/,
+  );
+  if (cryptoMatch) {
+    const ids: Record<string, string> = {
+      bitcoin: "bitcoin", btc: "bitcoin",
+      ethereum: "ethereum", eth: "ethereum",
+      solana: "solana", sol: "solana",
+    };
+    const id = ids[cryptoMatch[1]];
+    if (id) {
+      return `curl -s "https://api.coingecko.com/api/v3/simple/price?ids=${id}&vs_currencies=usd&include_24hr_change=true"`;
+    }
+  }
+  if (/\b(?:disk|space|storage)\b/i.test(lower)) return "df -h /home/milady";
+  if (/\b(?:uptime|load)\b/i.test(lower)) return "uptime";
+  if (/\b(?:memory|ram)\b/i.test(lower)) return "free -h";
+  if (/\b(?:process|top|memory.*usage)\b/i.test(lower)) return "ps aux --sort=-rss | head -15";
+
   return undefined;
 }
 
@@ -80,11 +104,23 @@ export const terminalAction: Action = {
   ],
 
   description:
-    "Run a shell command in the user's terminal. Use this when the user asks " +
-    "you to run a command, execute a script, install packages, or perform " +
-    "any terminal operation. Output is shown in real time.",
+    "Run a single explicit shell command that the user provided directly. " +
+    "Only use when the user gives a specific command like 'run ls -la' or 'execute npm install'. " +
+    "Do NOT use for building projects, creating websites, or multi-step work — use CREATE_TASK instead.",
 
-  validate: async () => true,
+  validate: async (_runtime, message) => {
+    const text = (message?.content?.text ?? "").trim();
+    if (!text) return false;
+    // Backtick-wrapped command
+    if (/`[^`]+`/.test(text)) return true;
+    // Code-fenced command
+    if (/```/.test(text)) return true;
+    // Explicit "run/execute" keyword
+    if (/\b(?:run|execute)\s+\S/i.test(text)) return true;
+    // Data lookups that need a real command (price, disk, uptime, curl)
+    if (/\b(?:price|worth|cost|balance|disk|uptime|status|check|curl|fetch|tail|head|log)\b/i.test(text)) return true;
+    return false;
+  },
 
   handler: async (_runtime, _message, _state, options) => {
     const command = getCommand(
