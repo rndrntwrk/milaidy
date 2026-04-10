@@ -164,6 +164,7 @@ const MILADY_VRM_ASSETS = MILADY_STYLE_PRESETS.slice()
     speechCapabilities: resolveDefaultSpeechCapabilitiesForAvatarIndex(
       p.avatarIndex,
     ),
+    ...(p.avatarIndex === 9 ? { cameraDistanceScale: 1.3 } : {}),
   }));
 
 const miladyBootConfig: AppBootConfig = {

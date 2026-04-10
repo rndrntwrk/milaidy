@@ -119,6 +119,7 @@ export {
 export { AppContext, useApp } from "./useApp";
 export {
   DEFAULT_BUNDLED_VRM_INDEX,
+  getCameraDistanceScale,
   getDefaultBundledVrmIndex,
   getCompanionBackgroundUrl,
   getVrmBackgroundUrl,

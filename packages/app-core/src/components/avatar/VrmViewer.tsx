@@ -16,6 +16,7 @@ import type {
   CompanionVrmPowerMode,
 } from "../../state/types";
 import {
+  getCameraDistanceScale,
   getDefaultBundledVrmIndex,
   getVrmCount,
   getVrmUrl,
@@ -55,6 +56,8 @@ export type VrmViewerProps = {
   speechMotionPath?: string | null;
   /** Per-avatar speech capability contract for advanced face driving. */
   speechCapabilities?: AvatarSpeechCapabilities | null;
+  /** Per-avatar camera distance multiplier (default 1). Values > 1 zoom out. */
+  cameraDistanceScale?: number;
   /** User Settings: quality / balanced / efficiency for VRM power policy. */
   companionVrmPowerMode?: CompanionVrmPowerMode;
   /** When to apply ~half display FPS (independent of DPR/shadows/Spark). */
@@ -132,7 +135,7 @@ async function captureVrmPreviews(options?: {
 
     console.log(`[captureVrmPreviews] Loading VRM ${i}/${count}: ${slug}...`);
     try {
-      await engine.loadVrmFromUrl(vrmUrl, slug);
+      await engine.loadVrmFromUrl(vrmUrl, slug, getCameraDistanceScale(i));
       // Let the idle animation settle
       await new Promise((resolve) => setTimeout(resolve, 500));
 
@@ -542,6 +545,7 @@ export function VrmViewer(props: VrmViewerProps) {
         await engine.loadVrmFromUrl(
           vrmUrl,
           vrmUrl.split("/").pop() ?? "avatar.vrm",
+          props.cameraDistanceScale ?? 1,
         );
         if (!mountedRef.current || abortController.signal.aborted) return;
         onSpeechCapabilitiesDetectedRef.current?.(

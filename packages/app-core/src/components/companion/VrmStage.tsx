@@ -53,6 +53,7 @@ export const VrmStage = memo(function VrmStage({
   companionVrmPowerMode = "balanced",
   companionHalfFramerateMode = "when_saving_power",
   companionAnimateWhenHidden = false,
+  cameraDistanceScale,
   viewerComponent: ViewerComponent = VrmViewer,
   t,
 }: {
@@ -69,6 +70,7 @@ export const VrmStage = memo(function VrmStage({
   companionVrmPowerMode?: CompanionVrmPowerMode;
   companionHalfFramerateMode?: CompanionHalfFramerateMode;
   companionAnimateWhenHidden?: boolean;
+  cameraDistanceScale?: number;
   viewerComponent?: (props: VrmViewerProps) => ReactElement;
   t: TranslateFn;
 }) {
@@ -273,6 +275,7 @@ export const VrmStage = memo(function VrmStage({
           vrmPath={vrmPath}
           worldUrl={worldUrl}
           cameraProfile={cameraProfile}
+          cameraDistanceScale={cameraDistanceScale}
           companionVrmPowerMode={companionVrmPowerMode}
           companionHalfFramerateMode={companionHalfFramerateMode}
           companionAnimateWhenHidden={companionAnimateWhenHidden}

@@ -11,6 +11,7 @@ import type { UiLanguage } from "@miladyai/app-core/i18n";
 import { normalizeLanguage } from "@miladyai/app-core/i18n";
 import {
   applyUiTheme,
+  getCameraDistanceScale,
   getDefaultBundledVrmIndex,
   getVrmPreviewUrl,
   getVrmUrl,
@@ -191,6 +192,7 @@ export function OnboardingWizard() {
           avatarSpeechKey={avatarSpeech.avatarKey}
           fallbackPreviewUrl={fallbackPreview}
           cameraProfile="companion"
+          cameraDistanceScale={getCameraDistanceScale(safeSelectedVrmIndex)}
           initialCompanionZoomNormalized={1}
           onRevealStart={() => setRevealStarted((prev) => (prev ? prev : true))}
           onSpeechCapabilitiesDetected={avatarSpeech.saveDetectedCapabilities}

@@ -4,6 +4,7 @@ import {
 } from "@miladyai/app-core/events";
 import { useRenderGuard } from "@miladyai/app-core/hooks";
 import {
+  getCameraDistanceScale,
   getVrmPreviewUrl,
   getVrmUrl,
   useCompanionSceneConfig,
@@ -642,6 +643,7 @@ function CompanionSceneSurface({
             worldUrl={worldUrl}
             fallbackPreviewUrl={fallbackPreviewUrl}
             cameraProfile="companion"
+            cameraDistanceScale={getCameraDistanceScale(safeSelectedVrmIndex)}
             companionVrmPowerMode={companionVrmPowerMode}
             companionHalfFramerateMode={companionHalfFramerateMode}
             companionAnimateWhenHidden={companionAnimateWhenHidden}
