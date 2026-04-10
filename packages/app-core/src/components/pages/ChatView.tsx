@@ -760,7 +760,7 @@ function InboxChatPanel({
             {activeInboxChat.worldLabel
               ? `${activeInboxChat.worldLabel} • `
               : ""}
-            {messages.length}{" "}
+            {sourceLabel} · {messages.length}{" "}
             {t("inboxview.TotalCountShort", { defaultValue: "messages" })}
           </div>
         </div>
