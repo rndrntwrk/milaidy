@@ -56,7 +56,7 @@ describe("dataset generator teacher trajectory logging", () => {
         source: "training",
         metadata: {
           provider: "openai",
-          model: "gpt-5",
+          model: "gpt-5.4",
           purpose: "teacher",
         },
       },
@@ -65,7 +65,7 @@ describe("dataset generator teacher trajectory logging", () => {
     expect(mockLogActiveTrajectoryLlmCall).toHaveBeenCalledWith(
       runtime,
       expect.objectContaining({
-        model: "openai/gpt-5",
+        model: "openai/gpt-5.4",
         modelVersion: "gpt-5-2026-04-01",
         systemPrompt: "system prompt",
         userPrompt: "user prompt",

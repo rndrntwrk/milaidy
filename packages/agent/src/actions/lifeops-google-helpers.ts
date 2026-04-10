@@ -16,7 +16,7 @@ import type {
   LifeOpsNextCalendarEventContext,
   LifeOpsOverview,
 } from "@miladyai/shared/contracts/lifeops";
-import { LifeOpsService } from "../lifeops/service.js";
+import type { LifeOpsService } from "../lifeops/service.js";
 
 export const INTERNAL_URL = new URL("http://127.0.0.1/");
 
@@ -290,12 +290,22 @@ export function formatEmailNeedsResponse(
   return lines.join("\n");
 }
 
+function describeEmailSearchQuery(query: string): string {
+  const fromMatch = query.match(/^from:(.+)$/i);
+  if (!fromMatch) {
+    return `"${query}"`;
+  }
+  const sender = fromMatch[1].trim().replace(/^"|"$/g, "");
+  return `sender "${sender}"`;
+}
+
 export function formatEmailSearch(feed: LifeOpsGmailSearchFeed): string {
+  const queryDescription = describeEmailSearchQuery(feed.query);
   if (feed.messages.length === 0) {
-    return `No email matched "${feed.query}".`;
+    return `No email matched ${queryDescription}.`;
   }
   const lines = [
-    `Found ${feed.summary.totalCount} email${feed.summary.totalCount === 1 ? "" : "s"} for "${feed.query}".`,
+    `Found ${feed.summary.totalCount} email${feed.summary.totalCount === 1 ? "" : "s"} for ${queryDescription}.`,
   ];
   for (const message of feed.messages.slice(0, 8)) {
     const badges: string[] = [];

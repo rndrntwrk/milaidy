@@ -48,6 +48,118 @@ function normalizeText(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
+function stripMatchingQuotes(value: string): string {
+  const trimmed = value.trim();
+  if (
+    trimmed.length >= 2 &&
+    ((trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+      (trimmed.startsWith("'") && trimmed.endsWith("'")))
+  ) {
+    return trimmed.slice(1, -1).trim();
+  }
+  return trimmed;
+}
+
+function trimTrailingPunctuation(value: string): string {
+  return value.replace(/[.?!,;:]+$/g, "").trim();
+}
+
+function quoteQueryValue(value: string): string {
+  return /\s/.test(value) ? `"${value}"` : value;
+}
+
+function dedupeQueries(values: Array<string | undefined>): string[] {
+  const queries: string[] = [];
+  const seen = new Set<string>();
+  for (const value of values) {
+    if (!value) {
+      continue;
+    }
+    const query = value.trim();
+    if (query.length === 0) {
+      continue;
+    }
+    const key = query.toLowerCase();
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    queries.push(query);
+  }
+  return queries;
+}
+
+function tokenizeGmailSearchQuery(value: string): string[] {
+  const tokens: string[] = [];
+  let current = "";
+  let inQuotes = false;
+  for (const char of value.trim()) {
+    if (char === '"') {
+      inQuotes = !inQuotes;
+      current += char;
+      continue;
+    }
+    if (!inQuotes && /\s/.test(char)) {
+      if (current.length > 0) {
+        tokens.push(current);
+        current = "";
+      }
+      continue;
+    }
+    current += char;
+  }
+  if (current.length > 0) {
+    tokens.push(current);
+  }
+  return tokens;
+}
+
+function normalizeSearchFragment(value: string | undefined): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const trimmed = trimTrailingPunctuation(value.trim());
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function inferSenderSearchCandidate(value: string): string | undefined {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return undefined;
+  }
+
+  const operatorToken = tokenizeGmailSearchQuery(trimmed).find((token) =>
+    /^from:/i.test(token),
+  );
+  if (operatorToken) {
+    const candidate = normalizeSearchFragment(
+      stripMatchingQuotes(operatorToken.slice(5)),
+    );
+    if (candidate) {
+      return candidate;
+    }
+  }
+
+  const patterns = [
+    /\b(?:email|emails|message|messages)\s+from\s+(.+)$/i,
+    /\bsender(?:\s+(?:is|matches?|named))?\s+(.+)$/i,
+    /\b(?:first\s+name|last\s+name|name)\s+is\s+(.+)$/i,
+  ];
+  for (const pattern of patterns) {
+    const match = trimmed.match(pattern);
+    const candidate = normalizeSearchFragment(stripMatchingQuotes(match?.[1] ?? ""));
+    if (candidate) {
+      return candidate;
+    }
+  }
+  return undefined;
+}
+
+function inferSenderSearchQuery(value: string): string | undefined {
+  const sender = inferSenderSearchCandidate(value);
+  return sender ? `from:${quoteQueryValue(sender)}` : undefined;
+}
+
 function inferGmailSubaction(
   intent: string,
   details: Record<string, unknown> | undefined,
@@ -110,8 +222,54 @@ function inferGmailSearchQuery(intent: string): string | undefined {
   const match = intent.match(
     /\b(?:search(?: for)?|find|look(?:ing)? for)\s+(.+)$/i,
   );
-  const query = match?.[1]?.trim();
-  return query && query.length > 0 ? query : undefined;
+  const query = normalizeSearchFragment(match?.[1]);
+  if (query) {
+    return query;
+  }
+  return inferSenderSearchQuery(intent);
+}
+
+function buildGmailSearchPlan(args: {
+  intent: string;
+  query?: string;
+}): {
+  queries: string[];
+  displayQuery: string;
+} | null {
+  const requestedQuery =
+    normalizeSearchFragment(args.query) ??
+    inferGmailSearchQuery(args.intent) ??
+    normalizeSearchFragment(inferSenderSearchCandidate(args.intent));
+  if (!requestedQuery) {
+    return null;
+  }
+
+  const senderCandidate =
+    inferSenderSearchCandidate(args.query ?? "") ??
+    inferSenderSearchCandidate(args.intent) ??
+    (/^from:/i.test(requestedQuery)
+      ? normalizeSearchFragment(stripMatchingQuotes(requestedQuery.slice(5)))
+      : undefined);
+  const senderQuery = senderCandidate
+    ? `from:${quoteQueryValue(senderCandidate)}`
+    : undefined;
+  const senderOnlyRequest =
+    Boolean(senderCandidate) &&
+    requestedQuery.toLowerCase() !== senderCandidate?.toLowerCase() &&
+    requestedQuery.toLowerCase() !== senderQuery?.toLowerCase();
+
+  const queries = dedupeQueries([
+    senderQuery,
+    senderOnlyRequest ? undefined : requestedQuery,
+    senderCandidate,
+  ]);
+  if (queries.length === 0) {
+    return null;
+  }
+  return {
+    queries,
+    displayQuery: senderCandidate ?? requestedQuery,
+  };
 }
 
 function normalizeBatchSendItems(
@@ -243,17 +401,21 @@ export const gmailAction: Action = {
       }
 
       if (subaction === "search") {
-        const query =
+        const requestedQuery =
           params.query ??
           detailString(details, "query") ??
           inferGmailSearchQuery(intent);
-        if (!query) {
+        const searchPlan = buildGmailSearchPlan({
+          intent,
+          query: requestedQuery,
+        });
+        if (!searchPlan) {
           return {
             success: false,
             text: "GMAIL_ACTION search needs a query.",
           };
         }
-        const feed = await service.getGmailSearch(INTERNAL_URL, {
+        const requestBase = {
           mode: (detailString(details, "mode") as
             | "local"
             | "remote"
@@ -262,13 +424,32 @@ export const gmailAction: Action = {
           side: (detailString(details, "side") as "owner" | "agent" | undefined),
           forceSync: detailBoolean(details, "forceSync"),
           maxResults: detailNumber(details, "maxResults") ?? 10,
-          query,
           replyNeededOnly: detailBoolean(details, "replyNeededOnly"),
+        };
+        let feed = await service.getGmailSearch(INTERNAL_URL, {
+          ...requestBase,
+          query: searchPlan.queries[0] ?? searchPlan.displayQuery,
         });
+        for (const query of searchPlan.queries.slice(1)) {
+          if (feed.messages.length > 0) {
+            break;
+          }
+          feed = await service.getGmailSearch(INTERNAL_URL, {
+            ...requestBase,
+            query,
+          });
+        }
+        const displayFeed =
+          feed.query === searchPlan.displayQuery
+            ? feed
+            : {
+                ...feed,
+                query: searchPlan.displayQuery,
+              };
         return {
           success: true,
-          text: formatEmailSearch(feed),
-          data: toActionData(feed),
+          text: formatEmailSearch(displayFeed),
+          data: toActionData(displayFeed),
         };
       }
 

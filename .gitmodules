@@ -58,6 +58,10 @@
 	path = plugins/plugin-google-genai
 	url = https://github.com/elizaos-plugins/plugin-google-genai.git
 	branch = alpha
+[submodule "plugins/plugin-groq"]
+	path = plugins/plugin-groq
+	url = https://github.com/elizaos-plugins/plugin-groq.git
+	branch = alpha
 [submodule "plugins/plugin-local-embedding"]
 	path = plugins/plugin-local-embedding
 	url = https://github.com/elizaos-plugins/plugin-local-embedding.git
@@ -97,6 +101,10 @@
 [submodule "plugins/plugin-shell"]
 	path = plugins/plugin-shell
 	url = https://github.com/elizaos-plugins/plugin-shell.git
+	branch = alpha
+[submodule "plugins/plugin-scratchpad"]
+	path = plugins/plugin-scratchpad
+	url = https://github.com/elizaos-plugins/plugin-scratchpad.git
 	branch = alpha
 [submodule "plugins/plugin-sql"]
 	path = plugins/plugin-sql

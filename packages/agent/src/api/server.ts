@@ -3788,7 +3788,15 @@ export async function routeAutonomyTextToUser(
  */
 function getCoordinatorFromRuntime(runtime: AgentRuntime): {
   setChatCallback?: (
-    cb: (text: string, source?: string) => Promise<void>,
+    cb: (
+      text: string,
+      source?: string,
+      routing?: {
+        sessionId?: string;
+        threadId?: string;
+        roomId?: string | null;
+      },
+    ) => Promise<void>,
   ) => void;
   setWsBroadcast?: (cb: (event: SwarmEvent) => void) => void;
   setAgentDecisionCallback?: (
@@ -3807,6 +3815,9 @@ function getCoordinatorFromRuntime(runtime: AgentRuntime): {
       errored: number;
     }) => Promise<void>,
   ) => void;
+  getTaskThread?: (
+    threadId: string,
+  ) => Promise<{ roomId?: string | null } | null>;
   sourceRoomId?: string | null;
 } | null {
   const coordinator = runtime.getService("SWARM_COORDINATOR");
@@ -3843,11 +3854,20 @@ function wireCodingAgentChatBridge(st: ServerState): boolean {
   const hasPtyService = Boolean(st.runtime.getService("PTY_SERVICE"));
   if (hasPtyService) {
     // In the real task-agent stack the PTY progress streamer + jsonl watcher
-    // already deliver the useful user-facing updates. Leaving the coordinator
-    // callback live on top of that causes duplicate "done — <originalTask>"
-    // messages that just echo the user's prompt.
-    coordinator.setChatCallback(async (_text: string, _source?: string) => {
-      // Deliberately no-op — chat delivery happens elsewhere.
+    // already deliver the success path. Keep generic coordinator chatter
+    // suppressed, but still route task-specific issue messages when the
+    // coordinator includes per-task routing metadata.
+    coordinator.setChatCallback(async (text, source, routing) => {
+      if (!routing) return;
+      const delivered = await routeTaskAgentTextToConnector(
+        st,
+        text,
+        source ?? "coding-agent",
+        routing,
+      );
+      if (!delivered) {
+        await routeAutonomyTextToUser(st, text, source ?? "coding-agent");
+      }
     });
     return true;
   }
@@ -3858,6 +3878,45 @@ function wireCodingAgentChatBridge(st: ServerState): boolean {
   coordinator.setChatCallback(async (text: string, source?: string) => {
     await routeAutonomyTextToUser(st, text, source ?? "coding-agent");
   });
+  return true;
+}
+
+export async function routeTaskAgentTextToConnector(
+  st: { runtime: AgentRuntime | null },
+  text: string,
+  source: string,
+  routing?: {
+    sessionId?: string;
+    threadId?: string;
+    roomId?: string | null;
+  },
+): Promise<boolean> {
+  const runtime = st.runtime;
+  if (!runtime || !routing) return false;
+
+  let roomId = routing.roomId ?? null;
+  if (!roomId && routing.threadId) {
+    const coordinator = getCoordinatorFromRuntime(runtime);
+    const thread = await coordinator?.getTaskThread?.(routing.threadId);
+    roomId =
+      thread && typeof thread.roomId === "string" && thread.roomId.trim().length > 0
+        ? thread.roomId
+        : null;
+  }
+  if (!roomId) return false;
+
+  const room = await runtime.getRoom(roomId as UUID).catch(() => null);
+  if (!room?.source) return false;
+
+  await runtime.sendMessageToTarget(
+    ({
+      source: room.source,
+      roomId: room.id,
+      channelId: room.channelId ?? room.id,
+      serverId: room.serverId,
+    } as Parameters<typeof runtime.sendMessageToTarget>[0]),
+    { text, source },
+  );
   return true;
 }
 

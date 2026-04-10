@@ -212,7 +212,7 @@ describe("onboarding hosting reset", () => {
         probe.setState("onboardingStep", "identity");
         probe.setState("onboardingServerTarget", "elizacloud");
         probe.setState("onboardingProvider", "openai");
-        probe.setState("onboardingPrimaryModel", "gpt-5");
+        probe.setState("onboardingPrimaryModel", "gpt-5.4");
       });
 
       await act(async () => {
@@ -223,7 +223,7 @@ describe("onboarding hosting reset", () => {
         onboardingStep: "providers",
         onboardingServerTarget: "elizacloud",
         onboardingProvider: "openai",
-        onboardingPrimaryModel: "gpt-5",
+        onboardingPrimaryModel: "gpt-5.4",
       });
     } finally {
       await act(async () => {

@@ -82,7 +82,7 @@ describe("cost estimation", () => {
     // from conversation-utils. Verify the models it needs to handle.
     const models = [
       "gpt-4o",
-      "gpt-5",
+      "gpt-5.4",
       "claude-4",
       "claude-3.5-sonnet",
       "gemini-2.5-pro",

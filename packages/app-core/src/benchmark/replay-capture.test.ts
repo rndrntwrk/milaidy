@@ -41,7 +41,7 @@ describe("normalizeParallaxCapture", () => {
           ts: 1_771_000_003_000,
           source: "agent-alpha",
           event: "llm",
-          model: "gpt-5-mini",
+          model: "gpt-5.4-mini",
           prompt: "analyze files",
           response: "found targets",
           prompt_tokens: 120,
@@ -68,7 +68,7 @@ describe("normalizeParallaxCapture", () => {
       input: { cmd: "rg --files" },
     });
     expect(parsed.events[2].llm).toMatchObject({
-      model: "gpt-5-mini",
+      model: "gpt-5.4-mini",
       prompt_tokens: 120,
       completion_tokens: 45,
     });

@@ -109,18 +109,6 @@ export function getModelOptions(): {
         provider: "Anthropic",
         description: "Most capable Claude model.",
       },
-      {
-        id: "anthropic/claude-opus-4.5",
-        name: "Claude Opus 4.5",
-        provider: "Anthropic",
-        description: "Previous-generation flagship Claude.",
-      },
-      {
-        id: "anthropic/claude-sonnet-4.5",
-        name: "Claude Sonnet 4.5",
-        provider: "Anthropic",
-        description: "Previous-generation balanced Claude.",
-      },
       // OpenAI
       {
         id: "openai/gpt-5.4",

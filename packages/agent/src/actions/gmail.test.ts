@@ -288,6 +288,79 @@ describe("gmailAction", () => {
     expect(result?.text).toContain("OneBlade receipt");
   });
 
+  it("broadens sender searches before giving up", async () => {
+    mockGetGmailSearch
+      .mockResolvedValueOnce({
+        query: "from:suran",
+        messages: [],
+        source: "cache",
+        syncedAt: "2026-04-09T16:00:00.000Z",
+        summary: {
+          totalCount: 0,
+          unreadCount: 0,
+          importantCount: 0,
+          replyNeededCount: 0,
+        },
+      })
+      .mockResolvedValueOnce({
+        query: "suran",
+        messages: [
+          {
+            id: "msg-suran",
+            externalId: "ext-suran",
+            threadId: "thread-suran",
+            agentId: "agent-1",
+            provider: "google",
+            side: "owner",
+            subject: "Checking in",
+            from: "Suran Lee",
+            fromEmail: "suran@example.com",
+            replyTo: "suran@example.com",
+            to: ["shawmakesmagic@gmail.com"],
+            cc: [],
+            snippet: "Wanted to follow up on our last note",
+            receivedAt: "2026-04-08T16:00:00.000Z",
+            isUnread: true,
+            isImportant: false,
+            likelyReplyNeeded: true,
+            triageScore: 63,
+            triageReason: "search hit",
+            labels: ["INBOX"],
+            htmlLink: "https://mail.google.com/mail/u/0/#all/thread-suran",
+            metadata: {},
+            syncedAt: "2026-04-08T16:00:00.000Z",
+            updatedAt: "2026-04-08T16:00:00.000Z",
+          },
+        ],
+        source: "cache",
+        syncedAt: "2026-04-09T16:00:00.000Z",
+        summary: {
+          totalCount: 1,
+          unreadCount: 1,
+          importantCount: 0,
+          replyNeededCount: 1,
+        },
+      });
+
+    const result = await invoke("find an email from suran", {
+      subaction: "search",
+    });
+
+    expect(mockGetGmailSearch).toHaveBeenNthCalledWith(
+      1,
+      expect.any(URL),
+      expect.objectContaining({ query: "from:suran" }),
+    );
+    expect(mockGetGmailSearch).toHaveBeenNthCalledWith(
+      2,
+      expect.any(URL),
+      expect.objectContaining({ query: "suran" }),
+    );
+    expect(result?.success).toBe(true);
+    expect(result?.text).toContain("Suran Lee");
+    expect(result?.text).toContain('for "suran"');
+  });
+
   it("creates a single reply draft", async () => {
     mockCreateGmailReplyDraft.mockResolvedValue({
       messageId: "msg-3",

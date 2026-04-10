@@ -75,11 +75,11 @@ describe("applyCloudConfigToEnv — cloud credential persistence", () => {
   it("uses custom model names from config when set", () => {
     const config = {
       cloud: { enabled: true, apiKey: "ck-test" },
-      models: { small: "google/gemini-2.5-flash", large: "openai/gpt-5" },
+      models: { small: "google/gemini-2.5-flash", large: "openai/gpt-5.4" },
     } as ElizaConfig;
     applyCloudConfigToEnv(config);
     expect(process.env.SMALL_MODEL).toBe("google/gemini-2.5-flash");
-    expect(process.env.LARGE_MODEL).toBe("openai/gpt-5");
+    expect(process.env.LARGE_MODEL).toBe("openai/gpt-5.4");
   });
 
   it("does nothing when cloud config is absent", () => {

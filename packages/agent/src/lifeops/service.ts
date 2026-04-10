@@ -234,6 +234,8 @@ const GOOGLE_GMAIL_CACHE_TTL_MS = 5 * 60 * 1000;
 const GOOGLE_PRIMARY_CALENDAR_ID = "primary";
 const GOOGLE_GMAIL_MAILBOX = "me";
 const DEFAULT_GMAIL_TRIAGE_MAX_RESULTS = 12;
+const DEFAULT_GMAIL_SEARCH_SCAN_LIMIT = 50;
+const DEFAULT_GMAIL_SEARCH_CACHE_SCAN_LIMIT = 200;
 const DEFAULT_REMINDER_PROCESS_LIMIT = 24;
 const DEFAULT_WORKFLOW_PROCESS_LIMIT = 12;
 const GOAL_REVIEW_LOOKBACK_DAYS = 7;
@@ -1641,7 +1643,7 @@ function normalizeGmailSearchQueryMatches(
   query: string,
   message: LifeOpsGmailMessageSummary,
 ): boolean {
-  const haystack = [
+  const all = [
     message.subject,
     message.from,
     message.fromEmail ?? "",
@@ -1653,25 +1655,96 @@ function normalizeGmailSearchQueryMatches(
   ]
     .join(" ")
     .toLowerCase();
-  const terms = query
-    .toLowerCase()
-    .match(/"[^"]+"|\S+/g)
-    ?.map((term) => term.replace(/^"|"$/g, "").trim())
-    .filter((term) => term.length > 0) ?? [];
-  if (terms.length === 0) {
+  const sender = [message.from, message.fromEmail ?? "", message.replyTo ?? ""]
+    .join(" ")
+    .toLowerCase();
+  const subject = message.subject.toLowerCase();
+  const to = message.to.join(" ").toLowerCase();
+  const cc = message.cc.join(" ").toLowerCase();
+  const labels = message.labels.join(" ").toLowerCase();
+  const tokens: string[] = [];
+  let current = "";
+  let inQuotes = false;
+  for (const char of query.trim()) {
+    if (char === '"') {
+      inQuotes = !inQuotes;
+      current += char;
+      continue;
+    }
+    if (!inQuotes && /\s/.test(char)) {
+      if (current.length > 0) {
+        tokens.push(current);
+        current = "";
+      }
+      continue;
+    }
+    current += char;
+  }
+  if (current.length > 0) {
+    tokens.push(current);
+  }
+  if (tokens.length === 0) {
     return false;
   }
-  return terms.every((term) => haystack.includes(term));
+  return tokens.every((token) => {
+    const normalizedToken = token.trim();
+    if (normalizedToken.length === 0) {
+      return true;
+    }
+    const operatorMatch = normalizedToken.match(/^([a-z]+):(.*)$/i);
+    const rawValue = operatorMatch ? operatorMatch[2] : normalizedToken;
+    const value = rawValue.replace(/^"|"$/g, "").trim().toLowerCase();
+    if (value.length === 0) {
+      return true;
+    }
+
+    if (!operatorMatch) {
+      return all.includes(value);
+    }
+
+    const operator = operatorMatch[1].toLowerCase();
+    switch (operator) {
+      case "from":
+        return sender.includes(value);
+      case "subject":
+        return subject.includes(value);
+      case "to":
+        return to.includes(value);
+      case "cc":
+        return cc.includes(value);
+      case "label":
+      case "labels":
+        return labels.includes(value);
+      case "in":
+        return value === "anywhere" ? true : labels.includes(value);
+      case "is":
+        if (value === "unread") {
+          return message.isUnread;
+        }
+        if (value === "read") {
+          return !message.isUnread;
+        }
+        if (value === "important") {
+          return message.isImportant;
+        }
+        return all.includes(value);
+      default:
+        return all.includes(value);
+    }
+  });
 }
 
 function filterGmailMessagesBySearch(args: {
   messages: LifeOpsGmailMessageSummary[];
-  query: string;
+  query?: string;
   replyNeededOnly?: boolean;
 }): LifeOpsGmailMessageSummary[] {
-  const filtered = args.messages.filter((message) =>
-    normalizeGmailSearchQueryMatches(args.query, message),
-  );
+  const query = normalizeOptionalString(args.query);
+  const filtered = query
+    ? args.messages.filter((message) =>
+        normalizeGmailSearchQueryMatches(query, message),
+      )
+    : args.messages;
   const replyNeededOnly = args.replyNeededOnly === true;
   return filtered
     .filter((message) => !replyNeededOnly || message.likelyReplyNeeded)
@@ -8598,27 +8671,43 @@ export class LifeOpsService {
         : null;
 
     if (resolveGoogleExecutionTarget(grant) === "cloud") {
+      const scanLimit = Math.max(maxResults, DEFAULT_GMAIL_SEARCH_SCAN_LIMIT);
       const triage = await this.getGmailTriage(
         requestUrl,
         {
           mode,
           side: effectiveSide,
           forceSync,
-          maxResults,
+          maxResults: scanLimit,
         },
         now,
       );
-      const messages = filterGmailMessagesBySearch({
+      let messages = filterGmailMessagesBySearch({
         messages: triage.messages,
         query,
         replyNeededOnly,
       });
+      if (messages.length === 0) {
+        const cachedMessages = await this.repository.listGmailMessages(
+          this.agentId(),
+          "google",
+          {
+            maxResults: DEFAULT_GMAIL_SEARCH_CACHE_SCAN_LIMIT,
+          },
+          effectiveSide,
+        );
+        messages = filterGmailMessagesBySearch({
+          messages: cachedMessages,
+          query,
+          replyNeededOnly,
+        });
+      }
       return {
         query,
-        messages,
+        messages: messages.slice(0, maxResults),
         source: triage.source,
         syncedAt: triage.syncedAt,
-        summary: summarizeGmailSearch(messages),
+        summary: summarizeGmailSearch(messages.slice(0, maxResults)),
       };
     }
 
@@ -8643,7 +8732,6 @@ export class LifeOpsService {
           syncedAt,
         }),
       ),
-      query,
       replyNeededOnly,
     });
     for (const message of messages) {

@@ -2002,14 +2002,14 @@ describe("resolvePrimaryModel", () => {
 
   it("returns the primary model when configured", () => {
     const config = {
-      agents: { defaults: { model: { primary: "gpt-5" } } },
+      agents: { defaults: { model: { primary: "gpt-5.4" } } },
     } as ElizaConfig;
-    expect(resolvePrimaryModel(config)).toBe("gpt-5");
+    expect(resolvePrimaryModel(config)).toBe("gpt-5.4");
   });
 
   it("returns undefined when model has no primary", () => {
     const config = {
-      agents: { defaults: { model: { fallbacks: ["gpt-5-mini"] } } },
+      agents: { defaults: { model: { fallbacks: ["gpt-5.4-mini"] } } },
     } as Partial<ElizaConfig> as ElizaConfig;
     expect(resolvePrimaryModel(config)).toBeUndefined();
   });

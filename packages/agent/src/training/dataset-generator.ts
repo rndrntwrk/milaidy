@@ -306,7 +306,7 @@ export function createOpenAITeacher(
   runtime?: IAgentRuntime,
 ): TeacherModel {
   return {
-    name: "openai/gpt-5",
+    name: "openai/gpt-5.4",
     async generate(systemPrompt: string, userPrompt: string): Promise<string> {
       return await withStandaloneTrajectory(
         runtime,
@@ -314,7 +314,7 @@ export function createOpenAITeacher(
           source: "training",
           metadata: {
             provider: "openai",
-            model: "gpt-5",
+            model: "gpt-5.4",
             purpose: "teacher",
           },
         },
@@ -329,7 +329,7 @@ export function createOpenAITeacher(
                 authorization: `Bearer ${apiKey}`,
               },
               body: JSON.stringify({
-                model: "gpt-5",
+                model: "gpt-5.4",
                 messages: [
                   { role: "system", content: systemPrompt },
                   { role: "user", content: userPrompt },
@@ -355,7 +355,7 @@ export function createOpenAITeacher(
           const text = data.choices[0]?.message?.content ?? "";
           logTeacherCall({
             runtime,
-            model: "openai/gpt-5",
+            model: "openai/gpt-5.4",
             modelVersion: data.model,
             systemPrompt,
             userPrompt,

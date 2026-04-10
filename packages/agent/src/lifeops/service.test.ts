@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import type { IAgentRuntime, UUID } from "@elizaos/core";
+import type { LifeOpsGmailMessageSummary } from "@miladyai/shared/contracts/lifeops";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const selfControlMocks = vi.hoisted(() => ({
@@ -60,6 +61,38 @@ function createSelfControlStatus(
     platform: process.platform,
     supportsElevationPrompt: true,
     elevationPromptMethod: "osascript" as const,
+    ...overrides,
+  };
+}
+
+function createGmailMessage(
+  overrides: Partial<LifeOpsGmailMessageSummary> = {},
+): LifeOpsGmailMessageSummary {
+  return {
+    id: "gmail-msg-1",
+    externalId: "external-gmail-msg-1",
+    threadId: "gmail-thread-1",
+    agentId: "agent-lifeops",
+    provider: "google",
+    side: "owner",
+    subject: "Checking in",
+    from: "Suran Lee",
+    fromEmail: "suran@example.com",
+    replyTo: "suran@example.com",
+    to: ["owner@example.com"],
+    cc: [],
+    snippet: "Wanted to follow up.",
+    receivedAt: "2026-04-09T16:00:00.000Z",
+    isUnread: true,
+    isImportant: false,
+    likelyReplyNeeded: true,
+    triageScore: 64,
+    triageReason: "search hit",
+    labels: ["CATEGORY_PERSONAL"],
+    htmlLink: "https://mail.google.com/mail/u/0/#all/gmail-thread-1",
+    metadata: {},
+    syncedAt: "2026-04-09T16:00:00.000Z",
+    updatedAt: "2026-04-09T16:00:00.000Z",
     ...overrides,
   };
 }
@@ -249,6 +282,70 @@ describe("LifeOpsService", () => {
       outcome: "delivered",
       connectorRef: "runtime:discord:owner-fallback-uuid",
     });
+  });
+
+  it("matches sender searches against cached Gmail messages in cloud mode", async () => {
+    const runtime = createRuntime();
+    const service = new LifeOpsService(runtime);
+    const getGmailTriage = vi.fn().mockResolvedValue({
+      messages: [],
+      source: "cache",
+      syncedAt: "2026-04-09T16:00:00.000Z",
+      summary: {
+        unreadCount: 0,
+        importantNewCount: 0,
+        likelyReplyNeededCount: 0,
+      },
+    });
+    const listGmailMessages = vi
+      .fn()
+      .mockResolvedValue([createGmailMessage()]);
+
+    (
+      service as unknown as {
+        requireGoogleGmailGrant: ReturnType<typeof vi.fn>;
+      }
+    ).requireGoogleGmailGrant = vi.fn().mockResolvedValue({
+      provider: "google",
+      side: "owner",
+      mode: "cloud_managed",
+      executionTarget: "cloud",
+      identity: {
+        email: "owner@example.com",
+      },
+    });
+    (
+      service as unknown as {
+        getGmailTriage: ReturnType<typeof vi.fn>;
+      }
+    ).getGmailTriage = getGmailTriage;
+    (service as unknown as { repository: Record<string, unknown> }).repository = {
+      listGmailMessages,
+    };
+
+    const feed = await service.getGmailSearch(new URL("http://127.0.0.1/"), {
+      mode: "cloud_managed",
+      query: "from:suran",
+      maxResults: 10,
+    });
+
+    expect(getGmailTriage).toHaveBeenCalledWith(
+      expect.any(URL),
+      expect.objectContaining({
+        mode: "cloud_managed",
+        side: "owner",
+        maxResults: 50,
+      }),
+      expect.any(Date),
+    );
+    expect(listGmailMessages).toHaveBeenCalledWith(
+      "agent-lifeops",
+      "google",
+      { maxResults: 200 },
+      "owner",
+    );
+    expect(feed.messages).toHaveLength(1);
+    expect(feed.messages[0]?.from).toBe("Suran Lee");
   });
 
   it("uses relationships routing hints to resolve the selected reminder endpoint and history", async () => {
