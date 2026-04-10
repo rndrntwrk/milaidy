@@ -71,10 +71,6 @@ function fileExistsAny(candidates: string[]): boolean {
   return candidates.some((candidate) => fs.existsSync(candidate));
 }
 
-function shellEscape(value: string): string {
-  return `'${value.replace(/'/g, `'\\''`)}'`;
-}
-
 function isRealNodeExecutable(candidate: string | undefined): boolean {
   if (!candidate || !fs.existsSync(candidate)) {
     return false;
@@ -128,14 +124,7 @@ function runCliEntry(
   timeout: number = 90_000,
 ): string {
   const nodeExec = resolveNodeExec();
-  const command = [
-    shellEscape(nodeExec),
-    "--import",
-    "tsx",
-    shellEscape(cliEntryPath),
-    ...args.map(shellEscape),
-  ].join(" ");
-  return execFileSync("sh", ["-lc", command], {
+  return execFileSync(nodeExec, ["--import", "tsx", cliEntryPath, ...args], {
     cwd: repoRoot,
     timeout,
     encoding: "utf-8",

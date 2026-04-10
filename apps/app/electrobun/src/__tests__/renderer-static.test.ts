@@ -1,9 +1,12 @@
+import path from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import { resolveRendererAsset } from "../renderer-static";
 
 describe("resolveRendererAsset", () => {
-  const rendererDir = "/tmp/renderer";
+  const rendererDir = path.join("/tmp", "renderer");
+  const indexPath = path.join(rendererDir, "index.html");
 
   function resolve(paths: Record<string, "file" | "dir">, urlPath: string) {
     return resolveRendererAsset({
@@ -19,14 +22,14 @@ describe("resolveRendererAsset", () => {
   it("serves precompressed assets when the plain file is missing", () => {
     const result = resolve(
       {
-        "/tmp/renderer/index.html": "file",
-        "/tmp/renderer/animations/idle.glb.gz": "file",
+        [indexPath]: "file",
+        [path.join(rendererDir, "animations", "idle.glb.gz")]: "file",
       },
       "/animations/idle.glb",
     );
 
     expect(result).toEqual({
-      filePath: "/tmp/renderer/animations/idle.glb.gz",
+      filePath: path.join(rendererDir, "animations", "idle.glb.gz"),
       isGzipped: true,
       mimeExt: ".glb",
     });
@@ -35,14 +38,14 @@ describe("resolveRendererAsset", () => {
   it("falls back to plain assets when packaged wrappers drop the .gz suffix", () => {
     const result = resolve(
       {
-        "/tmp/renderer/index.html": "file",
-        "/tmp/renderer/vrms/milady-1.vrm": "file",
+        [indexPath]: "file",
+        [path.join(rendererDir, "vrms", "milady-1.vrm")]: "file",
       },
       "/vrms/milady-1.vrm.gz",
     );
 
     expect(result).toEqual({
-      filePath: "/tmp/renderer/vrms/milady-1.vrm",
+      filePath: path.join(rendererDir, "vrms", "milady-1.vrm"),
       isGzipped: false,
       mimeExt: ".vrm",
     });
@@ -51,13 +54,13 @@ describe("resolveRendererAsset", () => {
   it("falls back to index.html for traversal attempts", () => {
     const result = resolve(
       {
-        "/tmp/renderer/index.html": "file",
+        [indexPath]: "file",
       },
       "/../../etc/passwd",
     );
 
     expect(result).toEqual({
-      filePath: "/tmp/renderer/index.html",
+      filePath: indexPath,
       isGzipped: false,
       mimeExt: ".html",
     });

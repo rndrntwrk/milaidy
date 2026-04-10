@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import os from "node:os";
+import path from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -14,7 +15,7 @@ vi.mock("node:fs", () => {
 });
 
 vi.mock("node:os", () => {
-  const homedir = vi.fn(() => "/Users/test");
+  const homedir = vi.fn(() => path.join("/Users", "test"));
   return {
     default: { homedir },
     homedir,
@@ -34,6 +35,12 @@ type SpawnResult = {
 };
 
 type BunLike = { spawn: unknown };
+
+const TEST_HOME_DIR = path.join("/Users", "test");
+
+function homePath(...parts: string[]): string {
+  return path.join(TEST_HOME_DIR, ...parts);
+}
 
 function bunGlobal(): BunLike {
   const globalState = globalThis as typeof globalThis & { Bun?: BunLike };
@@ -106,7 +113,7 @@ describe("scanProviderCredentials", () => {
     mockReadFileSync.mockImplementation(
       (filePath) => files[String(filePath)] ?? "",
     );
-    mockHomedir.mockReturnValue("/Users/test");
+    mockHomedir.mockReturnValue(TEST_HOME_DIR);
 
     mockSpawn = vi.fn((cmd: string[]) => {
       if (cmd[0] === "which") {
@@ -137,7 +144,7 @@ describe("scanProviderCredentials", () => {
 
   it("returns openai-subscription from Codex ChatGPT auth and preserves auth mode", async () => {
     setPlatform("linux");
-    files["/Users/test/.codex/auth.json"] = JSON.stringify({
+    files[homePath(".codex", "auth.json")] = JSON.stringify({
       OPENAI_API_KEY: "sk-openai",
       auth_mode: "chatgpt",
     });
@@ -164,7 +171,7 @@ describe("scanProviderCredentials", () => {
 
   it("returns anthropic from claude credentials file with oauth mode", async () => {
     setPlatform("linux");
-    files["/Users/test/.claude/.credentials.json"] = JSON.stringify({
+    files[homePath(".claude", ".credentials.json")] = JSON.stringify({
       claudeAiOauth: { accessToken: "claude-oauth-token" },
     });
     installedClis.add("claude");
@@ -190,10 +197,10 @@ describe("scanProviderCredentials", () => {
 
   it("prefers file credentials over keychain and env values", async () => {
     setPlatform("darwin");
-    files["/Users/test/.codex/auth.json"] = JSON.stringify({
+    files[homePath(".codex", "auth.json")] = JSON.stringify({
       OPENAI_API_KEY: "file-openai",
     });
-    files["/Users/test/.claude/.credentials.json"] = JSON.stringify({
+    files[homePath(".claude", ".credentials.json")] = JSON.stringify({
       claudeAiOauth: { accessToken: "file-anthropic" },
     });
     installedClis.add("codex");
@@ -403,8 +410,8 @@ describe("scanProviderCredentials", () => {
 
   it("swallows malformed json and returns an empty result when no fallbacks exist", async () => {
     setPlatform("linux");
-    files["/Users/test/.codex/auth.json"] = "{bad-json";
-    files["/Users/test/.claude/.credentials.json"] = "{bad-json";
+    files[homePath(".codex", "auth.json")] = "{bad-json";
+    files[homePath(".claude", ".credentials.json")] = "{bad-json";
 
     await expect(scanProviderCredentials()).resolves.toEqual([]);
     expect(mockSpawn).not.toHaveBeenCalled();
@@ -432,7 +439,7 @@ describe("scanAndValidateProviderCredentials", () => {
     mockReadFileSync.mockImplementation(
       (filePath) => files[String(filePath)] ?? "",
     );
-    mockHomedir.mockReturnValue("/Users/test");
+    mockHomedir.mockReturnValue(TEST_HOME_DIR);
     mockSpawn = vi.fn((cmd: string[]) => {
       if (cmd[0] === "which")
         return makeSpawnResult(installedClis.has(cmd[1] ?? "") ? 0 : 1);
@@ -453,7 +460,7 @@ describe("scanAndValidateProviderCredentials", () => {
   });
 
   it("valid key returns status 'valid'", async () => {
-    files["/Users/test/.codex/auth.json"] = JSON.stringify({
+    files[homePath(".codex", "auth.json")] = JSON.stringify({
       OPENAI_API_KEY: "sk-test",
     });
     mockFetch.mockResolvedValue({ ok: true, status: 200 });
@@ -463,7 +470,7 @@ describe("scanAndValidateProviderCredentials", () => {
   });
 
   it("401 response returns status 'invalid' with statusDetail", async () => {
-    files["/Users/test/.codex/auth.json"] = JSON.stringify({
+    files[homePath(".codex", "auth.json")] = JSON.stringify({
       OPENAI_API_KEY: "sk-bad",
     });
     mockFetch.mockResolvedValue({ ok: false, status: 401 });
@@ -480,7 +487,7 @@ describe("scanAndValidateProviderCredentials", () => {
   });
 
   it("network error returns status 'error' with message", async () => {
-    files["/Users/test/.codex/auth.json"] = JSON.stringify({
+    files[homePath(".codex", "auth.json")] = JSON.stringify({
       OPENAI_API_KEY: "sk-test",
     });
     mockFetch.mockRejectedValue(new Error("fetch failed"));
@@ -490,7 +497,7 @@ describe("scanAndValidateProviderCredentials", () => {
   });
 
   it("OAuth token skips validation and returns 'unchecked'", async () => {
-    files["/Users/test/.claude/.credentials.json"] = JSON.stringify({
+    files[homePath(".claude", ".credentials.json")] = JSON.stringify({
       claudeAiOauth: { accessToken: "oauth-token" },
     });
     const providers = await scanAndValidateProviderCredentials();
@@ -500,7 +507,7 @@ describe("scanAndValidateProviderCredentials", () => {
 
   it("unknown provider returns 'unchecked'", async () => {
     vi.stubEnv("OPENAI_API_KEY", "");
-    files["/Users/test/.codex/auth.json"] = JSON.stringify({
+    files[homePath(".codex", "auth.json")] = JSON.stringify({
       OPENAI_API_KEY: "sk-test",
     });
     mockFetch.mockResolvedValue({ ok: true, status: 200 });
@@ -511,7 +518,7 @@ describe("scanAndValidateProviderCredentials", () => {
   });
 
   it("HTTP 500 returns status 'error' with detail", async () => {
-    files["/Users/test/.codex/auth.json"] = JSON.stringify({
+    files[homePath(".codex", "auth.json")] = JSON.stringify({
       OPENAI_API_KEY: "sk-test",
     });
     mockFetch.mockResolvedValue({ ok: false, status: 500 });
@@ -521,7 +528,7 @@ describe("scanAndValidateProviderCredentials", () => {
   });
 
   it("provider without apiKey returns 'unchecked'", async () => {
-    files["/Users/test/.codex/auth.json"] = JSON.stringify({
+    files[homePath(".codex", "auth.json")] = JSON.stringify({
       OPENAI_API_KEY: "sk-key",
     });
     mockFetch.mockResolvedValue({ ok: true, status: 200 });
@@ -552,7 +559,7 @@ describe("scanProviderCredentials — env var detection", () => {
     mockReadFileSync.mockImplementation(
       (filePath) => files[String(filePath)] ?? "",
     );
-    mockHomedir.mockReturnValue("/Users/test");
+    mockHomedir.mockReturnValue(TEST_HOME_DIR);
     mockSpawn = vi.fn((cmd: string[]) => {
       if (cmd[0] === "which") return makeSpawnResult(1);
       throw new Error(`unexpected spawn: ${cmd.join(" ")}`);
@@ -699,7 +706,7 @@ describe("scanAndValidateProviderCredentials — endpoint validation", () => {
     mockReadFileSync.mockImplementation(
       (filePath) => files[String(filePath)] ?? "",
     );
-    mockHomedir.mockReturnValue("/Users/test");
+    mockHomedir.mockReturnValue(TEST_HOME_DIR);
     mockSpawn = vi.fn((cmd: string[]) => {
       if (cmd[0] === "which") return makeSpawnResult(1);
       throw new Error(`unexpected spawn: ${cmd.join(" ")}`);
@@ -800,7 +807,7 @@ describe("scanAndValidateProviderCredentials — integration", () => {
     mockReadFileSync.mockImplementation(
       (filePath) => files[String(filePath)] ?? "",
     );
-    mockHomedir.mockReturnValue("/Users/test");
+    mockHomedir.mockReturnValue(TEST_HOME_DIR);
     mockSpawn = vi.fn((cmd: string[]) => {
       if (cmd[0] === "which") return makeSpawnResult(1);
       throw new Error(`unexpected spawn: ${cmd.join(" ")}`);

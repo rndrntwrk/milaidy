@@ -12,6 +12,7 @@ import {
 } from "vitest";
 import { startApiServer } from "@miladyai/agent/api/server";
 import type { OAuthCredentials } from "@miladyai/agent/auth";
+import { resolveConfigPath } from "../src/config/paths";
 import { req } from "../../../test/helpers/http";
 import { saveEnv } from "../../../test/helpers/test-utils";
 
@@ -67,6 +68,7 @@ describe("subscription auth routes (e2e contract)", () => {
   beforeAll(async () => {
     envBackup = saveEnv(
       "ELIZA_STATE_DIR",
+      "MILADY_STATE_DIR",
       "ELIZA_CONFIG_PATH",
       "ELIZA_API_TOKEN",
       "ELIZA_PAIRING_DISABLED",
@@ -75,6 +77,7 @@ describe("subscription auth routes (e2e contract)", () => {
 
     stateDir = await fs.mkdtemp(path.join(os.tmpdir(), "eliza-subscription-"));
     process.env.ELIZA_STATE_DIR = stateDir;
+    process.env.MILADY_STATE_DIR = stateDir;
     delete process.env.ELIZA_CONFIG_PATH;
     delete process.env.ELIZA_API_TOKEN;
     delete process.env.ELIZA_PAIRING_DISABLED;
@@ -177,7 +180,7 @@ describe("subscription auth routes (e2e contract)", () => {
       expect(setupRes.data.success).toBe(true);
       expect(process.env.ANTHROPIC_API_KEY).toBeUndefined();
 
-      const configPath = path.join(stateDir, "eliza.json");
+      const configPath = resolveConfigPath(process.env, stateDir);
       const rawConfig = await fs.readFile(configPath, "utf-8");
       const parsed = JSON.parse(rawConfig) as { env?: Record<string, string> };
       expect(parsed.env?.__anthropicSubscriptionToken).toBe(token);
@@ -206,7 +209,7 @@ describe("subscription auth routes (e2e contract)", () => {
       expect(res.data.success).toBe(true);
       expect(process.env.ANTHROPIC_API_KEY).toBeUndefined();
 
-      const configPath = path.join(stateDir, "eliza.json");
+      const configPath = resolveConfigPath(process.env, stateDir);
       const rawConfig = await fs.readFile(configPath, "utf-8");
       const parsed = JSON.parse(rawConfig) as { env?: Record<string, string> };
       expect(parsed.env?.__anthropicSubscriptionToken).toBe(

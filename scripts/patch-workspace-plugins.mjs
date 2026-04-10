@@ -15,7 +15,7 @@
  * Remove a patch file once the corresponding elizaos-plugins PR is merged and
  * the milady submodule pointer is bumped past it.
  */
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -44,8 +44,8 @@ export function resolvePluginDir(patchFile, { rootDir = root } = {}) {
   return null;
 }
 
-function exec(cmd, cwd) {
-  return execSync(cmd, {
+function exec(cmd, args, cwd) {
+  return execFileSync(cmd, args, {
     cwd,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
@@ -64,7 +64,7 @@ function applyPatch(patchPath, pluginDir) {
 
   // Check if patch is already applied
   try {
-    exec(`git apply --check --reverse "${patchPath}"`, pluginDir);
+    exec("git", ["apply", "--check", "--reverse", patchPath], pluginDir);
     console.log(
       `[patch-workspace-plugins] ${patchName}: already applied, skipping`,
     );
@@ -75,7 +75,7 @@ function applyPatch(patchPath, pluginDir) {
 
   // Check if patch applies cleanly
   try {
-    exec(`git apply --check "${patchPath}"`, pluginDir);
+    exec("git", ["apply", "--check", patchPath], pluginDir);
   } catch (checkErr) {
     const msg = checkErr.stderr || checkErr.stdout || String(checkErr);
     console.warn(
@@ -86,7 +86,7 @@ function applyPatch(patchPath, pluginDir) {
 
   // Apply the patch
   try {
-    exec(`git apply "${patchPath}"`, pluginDir);
+    exec("git", ["apply", patchPath], pluginDir);
     console.log(`[patch-workspace-plugins] ${patchName}: applied successfully`);
     return "applied";
   } catch (applyErr) {

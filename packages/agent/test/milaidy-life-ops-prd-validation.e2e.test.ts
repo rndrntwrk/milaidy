@@ -14,6 +14,7 @@ import type { AgentRuntime, Task, UUID } from "@elizaos/core";
 import { describe, expect, it, vi } from "vitest";
 import { describeIf, itIf } from "../../../test/helpers/conditional-tests.ts";
 import { startApiServer } from "../src/api/server";
+import { resolveOAuthDir } from "../src/config/paths";
 import { LifeOpsRepository } from "../src/lifeops/repository";
 import { LifeOpsService } from "../src/lifeops/service";
 import { DatabaseSync } from "../src/test-utils/sqlite-compat";
@@ -439,6 +440,7 @@ async function withGoogleOAuthApiServer<T>(
 ): Promise<T> {
   const envBackup = saveEnv(
     "ELIZA_STATE_DIR",
+    "MILADY_STATE_DIR",
     "MILADY_GOOGLE_OAUTH_DESKTOP_CLIENT_ID",
     "ELIZA_GOOGLE_OAUTH_DESKTOP_CLIENT_ID",
     "MILADY_GOOGLE_OAUTH_WEB_CLIENT_ID",
@@ -455,6 +457,7 @@ async function withGoogleOAuthApiServer<T>(
   vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
 
   process.env.ELIZA_STATE_DIR = stateDir;
+  process.env.MILADY_STATE_DIR = stateDir;
   for (const [key, value] of Object.entries(env)) {
     process.env[key] = value;
   }
@@ -540,11 +543,12 @@ async function readJsonFile<T>(filePath: string): Promise<T> {
 async function withLiveLifeOpsApiServer<T>(
   fn: (args: LiveServerContext) => Promise<T>,
 ): Promise<T> {
-  const envBackup = saveEnv("ELIZA_STATE_DIR");
+  const envBackup = saveEnv("ELIZA_STATE_DIR", "MILADY_STATE_DIR");
   const stateDir = await fs.mkdtemp(
     path.join(os.tmpdir(), "milaidy-prd-live-lifeops-"),
   );
   process.env.ELIZA_STATE_DIR = stateDir;
+  process.env.MILADY_STATE_DIR = stateDir;
 
   const runtime = createApiRuntime(
     `milaidy-prd-live-${crypto.randomUUID().slice(0, 8)}`,
@@ -700,8 +704,7 @@ async function connectLiveGoogle(args: {
 
   const grant = statusRes.data.grant as Record<string, unknown>;
   const tokenPath = path.join(
-    args.stateDir,
-    "credentials",
+    resolveOAuthDir(process.env, args.stateDir),
     "lifeops",
     "google",
     String(grant.tokenRef ?? ""),
