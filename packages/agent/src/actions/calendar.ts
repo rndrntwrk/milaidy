@@ -53,7 +53,7 @@ type TripWindowIntent = {
   location: string;
 };
 
-type CalendarLlmPlan = {
+export type CalendarLlmPlan = {
   subaction: CalendarSubaction | null;
   queries: string[];
   title?: string;
@@ -1043,7 +1043,7 @@ async function extractCalendarSearchQueriesWithLlm(
   return (await extractCalendarPlanWithLlm(runtime, message, state, intent)).queries;
 }
 
-async function extractCalendarPlanWithLlm(
+export async function extractCalendarPlanWithLlm(
   runtime: IAgentRuntime,
   message: Memory,
   state: State | undefined,

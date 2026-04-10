@@ -1,6 +1,8 @@
 import { BlueBubblesStatusPanel } from "./BlueBubblesStatusPanel";
 import { DiscordLocalConnectorPanel } from "./DiscordLocalConnectorPanel";
+import { IMessageStatusPanel } from "./IMessageStatusPanel";
 import { SignalQrOverlay } from "./SignalQrOverlay";
+import { TelegramBotSetupPanel } from "./TelegramBotSetupPanel";
 import { WhatsAppQrOverlay } from "./WhatsAppQrOverlay";
 
 function normalizePluginId(pluginId: string): string {
@@ -16,6 +18,8 @@ export function hasConnectorSetupPanel(pluginId: string): boolean {
     case "signal":
     case "discordlocal":
     case "bluebubbles":
+    case "imessage":
+    case "telegram":
       return true;
     default:
       return false;
@@ -32,6 +36,10 @@ export function ConnectorSetupPanel({ pluginId }: { pluginId: string }) {
       return <DiscordLocalConnectorPanel />;
     case "bluebubbles":
       return <BlueBubblesStatusPanel />;
+    case "imessage":
+      return <IMessageStatusPanel />;
+    case "telegram":
+      return <TelegramBotSetupPanel />;
     default:
       return null;
   }

@@ -50,7 +50,7 @@ type GmailSubaction =
   | "send_reply"
   | "send_batch_replies";
 
-type GmailLlmPlan = {
+export type GmailLlmPlan = {
   subaction: GmailSubaction | null;
   queries: string[];
   messageId?: string;
@@ -1002,7 +1002,7 @@ async function extractGmailSearchQueriesWithLlm(
   return (await extractGmailPlanWithLlm(runtime, message, state, intent)).queries;
 }
 
-async function extractGmailPlanWithLlm(
+export async function extractGmailPlanWithLlm(
   runtime: IAgentRuntime,
   message: Memory,
   state: State | undefined,

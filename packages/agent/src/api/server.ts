@@ -264,6 +264,8 @@ import {
   setSolanaWalletEnv,
   validatePrivateKey,
 } from "./wallet.js";
+import { handleCloudRelayRoute } from "./cloud-relay-routes.js";
+import { handleTelegramSetupRoute } from "./telegram-setup-routes.js";
 import {
   applyWhatsAppQrOverride,
   handleWhatsAppRoute,
@@ -5638,7 +5640,57 @@ async function handleRequest(
     if (handled) return;
   }
 
-  // ── Signal routes (/api/signal/*) ─────────────────────────────────────
+  // ── Cloud relay status (/api/cloud/relay-status) ──────────────────────
+  if (pathname === "/api/cloud/relay-status") {
+    const handled = await handleCloudRelayRoute(
+      req,
+      res,
+      pathname,
+      method,
+      {
+        runtime: state.runtime
+          ? {
+              getService: (type: string) =>
+                (
+                  state.runtime as { getService: (t: string) => unknown }
+                ).getService(type),
+            }
+          : undefined,
+      },
+      { json, error, readJsonBody },
+    );
+    if (handled) return;
+  }
+
+  // ── Telegram setup routes (/api/telegram-setup/*) ─────────────────────
+  if (pathname.startsWith("/api/telegram-setup")) {
+    const handled = await handleTelegramSetupRoute(
+      req,
+      res,
+      pathname,
+      method,
+      {
+        config: state.config,
+        saveConfig: () => saveElizaConfig(state.config),
+        runtime: state.runtime
+          ? {
+              getService: (type: string) =>
+                (
+                  state.runtime as { getService: (t: string) => unknown }
+                ).getService(type),
+              getSetting: (key: string) =>
+                (
+                  state.runtime as { getSetting: (k: string) => string | undefined }
+                ).getSetting(key),
+            }
+          : undefined,
+      },
+      { json, error, readJsonBody },
+    );
+    if (handled) return;
+  }
+
+  // ── Discord Local routes (/api/discord-local/*) ──────────────────────
   if (pathname.startsWith("/api/discord-local")) {
     const handled = await handleDiscordLocalRoute(
       req,

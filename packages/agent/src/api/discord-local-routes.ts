@@ -4,6 +4,7 @@ import type { ConnectorConfig } from "../config/types.eliza.js";
 import {
   DISCORD_LOCAL_SERVICE_NAME,
 } from "../runtime/discord-local-plugin.js";
+import { setOwnerContact } from "./owner-contact-helpers.js";
 import type { RouteHelpers } from "./route-helpers.js";
 
 interface DiscordLocalServiceLike {
@@ -199,6 +200,16 @@ export async function handleDiscordLocalRoute(
         enabled: connectorConfig.enabled !== false,
         messageChannelIds: subscribedChannelIds,
       });
+      // Auto-populate owner contact so LifeOps can deliver reminders
+      if (subscribedChannelIds.length > 0) {
+        setOwnerContact(
+          state.config as Parameters<typeof setOwnerContact>[0],
+          {
+            source: "discord",
+            channelId: subscribedChannelIds[0],
+          },
+        );
+      }
       helpers.json(res, { subscribedChannelIds });
     } catch (error) {
       helpers.error(

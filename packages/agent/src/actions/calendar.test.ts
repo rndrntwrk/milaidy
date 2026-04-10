@@ -559,9 +559,7 @@ describe("calendarAction", () => {
         data: {},
       } as never,
       {
-        parameters: {
-          subaction: "feed",
-        },
+        parameters: {},
       } as never,
     );
 
@@ -638,9 +636,7 @@ describe("calendarAction", () => {
         data: {},
       } as never,
       {
-        parameters: {
-          subaction: "feed",
-        },
+        parameters: {},
       } as never,
     );
 
@@ -697,7 +693,6 @@ describe("calendarAction", () => {
       } as never,
       {
         parameters: {
-          subaction: "feed",
           details: {
             timeZone: "America/Los_Angeles",
           },
@@ -1012,9 +1007,7 @@ describe("calendarAction", () => {
         data: {},
       } as never,
       {
-        parameters: {
-          subaction: "feed",
-        },
+        parameters: {},
       } as never,
     );
 
@@ -1575,7 +1568,7 @@ describe("calendarAction", () => {
     expect(result?.success).toBe(true);
   });
 
-  it("repairs a bad requested subaction to next_event when the intent is clearly next-event", async () => {
+  it("routes to next_event when the intent is clearly next-event", async () => {
     mockGetNextCalendarEventContext.mockResolvedValue({
       event: {
         id: "evt-next",
@@ -1612,9 +1605,7 @@ describe("calendarAction", () => {
       linkedMail: [],
     });
 
-    const result = await invoke("what's my next meeting", {
-      subaction: "search_events",
-    });
+    const result = await invoke("what's my next meeting");
 
     expect(mockGetNextCalendarEventContext).toHaveBeenCalledTimes(1);
     expect(mockGetCalendarFeed).not.toHaveBeenCalled();

@@ -322,7 +322,7 @@ describe("gmailAction", () => {
     expect(result?.text).toContain("OneBlade receipt");
   });
 
-  it("repairs a bad requested subaction with an LLM Gmail plan", async () => {
+  it("uses LLM plan subaction when no explicit subaction is provided", async () => {
     mockUseModel.mockResolvedValue(
       '{"subaction":"search","queries":["from:suran"],"replyNeededOnly":false}',
     );
@@ -366,9 +366,7 @@ describe("gmailAction", () => {
       },
     });
 
-    const result = await invoke("i'm wondering whether suran emailed me", {
-      subaction: "triage",
-    });
+    const result = await invoke("i'm wondering whether suran emailed me");
 
     expect(mockUseModel).toHaveBeenCalled();
     expect(mockGetGmailSearch).toHaveBeenCalledWith(
