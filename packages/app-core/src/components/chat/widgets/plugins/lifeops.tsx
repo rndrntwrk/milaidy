@@ -65,6 +65,20 @@ function sideLabel(side: LifeOpsConnectorSide): string {
   return side === "owner" ? "Owner" : "Agent";
 }
 
+function formatGoogleConnectorError(message: string | null): string | null {
+  if (!message) {
+    return null;
+  }
+  const normalized = message.trim().toLowerCase();
+  if (
+    normalized.includes("google connector needs re-authentication") ||
+    normalized.includes("insufficient authentication scopes")
+  ) {
+    return "Reconnect Google to refresh calendar and Gmail permissions.";
+  }
+  return message;
+}
+
 function formatEventTime(
   event: LifeOpsCalendarEvent,
   timeZone: string,
@@ -345,8 +359,9 @@ export function GoogleSidebarWidget(_props: ChatSidebarWidgetProps) {
     dataStatus?.connected === true && capabilities.has("google.gmail.triage");
   const calendarEvents = calendarFeed?.events ?? [];
   const gmailMessages = gmailFeed?.messages ?? [];
-  const connectorError =
-    ownerConnector.error ?? agentConnector.error ?? feedError ?? null;
+  const connectorError = formatGoogleConnectorError(
+    ownerConnector.error ?? agentConnector.error ?? feedError ?? null,
+  );
 
   if (connectedConnectors.length === 0) {
     return null;
@@ -376,7 +391,7 @@ export function GoogleSidebarWidget(_props: ChatSidebarWidgetProps) {
               title={`Calendar (${sideLabel(dataStatus?.side ?? "owner")})`}
               count={calendarEvents.length}
             />
-            {calendarEvents.length === 0 ? (
+            {connectorError ? null : calendarEvents.length === 0 ? (
               <div className="px-0.5 text-[11px] text-muted">
                 No upcoming events
               </div>
@@ -404,7 +419,7 @@ export function GoogleSidebarWidget(_props: ChatSidebarWidgetProps) {
                 gmailMessages.length
               }
             />
-            {gmailMessages.length === 0 ? (
+            {connectorError ? null : gmailMessages.length === 0 ? (
               <div className="px-0.5 text-[11px] text-muted">
                 No priority mail
               </div>

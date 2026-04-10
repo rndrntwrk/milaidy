@@ -14,7 +14,7 @@ const {
   mockGetWorld: vi.fn(),
 }));
 
-vi.mock("@miladyai/plugin-roles", () => ({
+vi.mock("@elizaos/core/roles", () => ({
   checkSenderRole: mockCheckSenderRole,
   resolveCanonicalOwnerIdForMessage: mockResolveCanonicalOwnerIdForMessage,
 }));

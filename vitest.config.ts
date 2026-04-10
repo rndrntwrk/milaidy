@@ -16,6 +16,14 @@ import {
 
 const repoRoot = path.dirname(fileURLToPath(import.meta.url));
 const elizaCoreEntry = getElizaCoreEntry(repoRoot);
+const elizaCoreRolesEntry = path.join(
+  repoRoot,
+  "eliza",
+  "packages",
+  "typescript",
+  "src",
+  "roles.ts",
+);
 const autonomousSourceRoot = getAutonomousSourceRoot(repoRoot);
 const appCoreSourceRoot = getAppCoreSourceRoot(repoRoot);
 const packageManifest = JSON.parse(
@@ -95,6 +103,10 @@ export default defineConfig({
       // export quirks.
       ...(elizaCoreEntry
         ? [
+            {
+              find: "@elizaos/core/roles",
+              replacement: elizaCoreRolesEntry,
+            },
             {
               find: "@elizaos/core",
               replacement: elizaCoreEntry,
@@ -234,26 +246,6 @@ export default defineConfig({
         ),
       },
       {
-        find: /^@miladyai\/plugin-roles\/(.*)/,
-        replacement: path.join(
-          repoRoot,
-          "packages",
-          "plugin-roles",
-          "src",
-          "$1",
-        ),
-      },
-      {
-        find: "@miladyai/plugin-roles",
-        replacement: path.join(
-          repoRoot,
-          "packages",
-          "plugin-roles",
-          "src",
-          "index.ts",
-        ),
-      },
-      {
         find: /^@miladyai\/shared\/(.*)/,
         replacement: path.join(repoRoot, "packages", "shared", "src", "$1"),
       },
@@ -290,7 +282,7 @@ export default defineConfig({
       "packages/app-core/src/**/*.test.ts",
       "packages/shared/src/**/*.test.ts",
       "packages/app-core/src/**/*.test.tsx",
-      "packages/plugin-roles/test/**/*.test.ts",
+      "packages/agent/src/runtime/roles/test/**/*.test.ts",
       "packages/plugin-selfcontrol/src/**/*.test.ts",
       "packages/plugin-wechat/src/**/*.test.ts",
       "packages/plugin-music-player/src/**/*.test.ts",

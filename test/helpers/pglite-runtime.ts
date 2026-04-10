@@ -23,7 +23,6 @@ import os from "node:os";
 import path from "node:path";
 import type { Plugin } from "@elizaos/core";
 import { AgentRuntime, createCharacter, logger } from "@elizaos/core";
-import { default as pluginSql } from "@elizaos/plugin-sql";
 
 export interface TestRuntimeOptions {
   /** Name for the test agent character. Defaults to "TestAgent". */
@@ -78,6 +77,7 @@ export async function createTestRuntime(
     enableAutonomy: false,
   });
 
+  const { default: pluginSql } = await import("@elizaos/plugin-sql");
   await runtime.registerPlugin(pluginSql);
   for (const plugin of options?.plugins ?? []) {
     await runtime.registerPlugin(plugin);

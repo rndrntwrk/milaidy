@@ -115,7 +115,7 @@ export function useLifeOpsActivitySignals(enabled = true): void {
       isApiError(error) &&
       error.kind === "http" &&
       error.status === 503 &&
-      /agent runtime is not available/i.test(error.message);
+      error.path === "/api/lifeops/activity-signals";
 
     const reportCaptureError = (error: unknown): void => {
       if (

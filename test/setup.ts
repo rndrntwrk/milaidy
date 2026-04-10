@@ -1,5 +1,6 @@
 import Module from "node:module";
 import { afterAll, afterEach, vi } from "vitest";
+import * as testRenderer from "react-test-renderer";
 import {
   createMockStorage,
   hasStorageApi,
@@ -292,3 +293,72 @@ afterEach(() => {
   // Reset module mocks to prevent vi.mock() pollution across test files.
   vi.restoreAllMocks();
 });
+
+// Provide a safe default node mock for react-test-renderer portals and host nodes.
+const defaultCreateNodeMock = (element: any) => {
+  if (typeof element?.type !== "string") {
+    return null;
+  }
+
+  const node: any = {
+    children: [],
+    style: {},
+    appendChild: (child: any) => {
+      node.children.push(child);
+    },
+    removeChild: (child: any) => {
+      const index = node.children.indexOf(child);
+      if (index >= 0) {
+        node.children.splice(index, 1);
+      }
+    },
+    insertBefore: (child: any, before: any) => {
+      const index = node.children.indexOf(before);
+      if (index === -1) {
+        node.children.push(child);
+      } else {
+        node.children.splice(index, 0, child);
+      }
+    },
+    removeAttribute: () => {},
+    setAttribute: () => {},
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    focus: () => {},
+    getBoundingClientRect: () => ({
+      x: 0,
+      y: 0,
+      width: 0,
+      height: 0,
+      top: 0,
+      right: 0,
+      bottom: 0,
+      left: 0,
+    }),
+    querySelector: () => null,
+    querySelectorAll: () => [],
+  };
+
+  return node;
+};
+
+const originalCreate = (testRenderer as any).create;
+const createDescriptor =
+  typeof testRenderer === "object" && testRenderer !== null
+    ? Object.getOwnPropertyDescriptor(testRenderer, "create")
+    : undefined;
+if (
+  typeof originalCreate === "function" &&
+  (createDescriptor?.writable === true || createDescriptor?.set)
+) {
+  Reflect.set(testRenderer as object, "create", (children: any, options: any = {}) => {
+    if (!options.createNodeMock) {
+      options = {
+        ...options,
+        createNodeMock: defaultCreateNodeMock,
+      };
+    }
+
+    return originalCreate.call(testRenderer, children, options);
+  });
+}

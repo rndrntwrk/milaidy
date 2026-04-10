@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   createSpanMock,
+  loggerInfoMock,
   loggerWarnMock,
   loggerErrorMock,
   serviceGetGoogleStatusMock,
@@ -10,6 +11,7 @@ const {
   spanFailureMock,
 } = vi.hoisted(() => ({
   createSpanMock: vi.fn(),
+  loggerInfoMock: vi.fn(),
   loggerWarnMock: vi.fn(),
   loggerErrorMock: vi.fn(),
   serviceGetGoogleStatusMock: vi.fn(),
@@ -19,7 +21,7 @@ const {
 
 vi.mock("@elizaos/core", () => ({
   logger: {
-    info: vi.fn(),
+    info: loggerInfoMock,
     warn: loggerWarnMock,
     error: loggerErrorMock,
     debug: vi.fn(),
@@ -82,6 +84,7 @@ function createContext(
 describe("life-ops route observability", () => {
   beforeEach(() => {
     createSpanMock.mockReset();
+    loggerInfoMock.mockReset();
     loggerWarnMock.mockReset();
     loggerErrorMock.mockReset();
     serviceGetGoogleStatusMock.mockReset();
@@ -163,7 +166,7 @@ describe("life-ops route observability", () => {
         errorKind: "runtime_unavailable",
       }),
     );
-    expect(loggerWarnMock).toHaveBeenCalledWith(
+    expect(loggerInfoMock).toHaveBeenCalledWith(
       expect.objectContaining({
         boundary: "lifeops",
         operation: "GET /api/lifeops/connectors/google/status",
@@ -195,7 +198,7 @@ describe("life-ops route observability", () => {
         errorKind: "lifeops_storage_unavailable",
       }),
     );
-    expect(loggerWarnMock).toHaveBeenCalledWith(
+    expect(loggerInfoMock).toHaveBeenCalledWith(
       expect.objectContaining({
         boundary: "lifeops",
         operation: "GET /api/lifeops/connectors/google/status",

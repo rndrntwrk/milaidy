@@ -9,7 +9,7 @@ import type {
 import {
   checkSenderRole,
   resolveCanonicalOwnerIdForMessage,
-} from "@miladyai/plugin-roles";
+} from "@elizaos/core/roles";
 
 /** Maximum total characters for the provider text output. */
 const MAX_TEXT_LENGTH = 2000;

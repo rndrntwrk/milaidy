@@ -21,12 +21,17 @@ const expectedCorePlugins = [
   "@elizaos/plugin-agent-skills",
   "@elizaos/plugin-commands",
   "@elizaos/plugin-plugin-manager",
-  "@miladyai/plugin-roles",
 ];
 
 describe("native feature bootstrap wiring", () => {
   it("keeps the explicit core plugin list aligned with the native bootstrap contract", () => {
     expect(CORE_PLUGINS).toEqual(expectedCorePlugins);
+  });
+
+  it("bootstraps the internal roles capability outside the core plugin package list", () => {
+    expect(elizaSource).toContain('import rolesPlugin from "./roles/src/index.js"');
+    expect(elizaSource).toContain("Pre-registering internal roles capability");
+    expect(elizaSource).not.toContain("pluginRoles");
   });
 
   it("guards trajectory bootstrap behind the native trajectories toggle", () => {

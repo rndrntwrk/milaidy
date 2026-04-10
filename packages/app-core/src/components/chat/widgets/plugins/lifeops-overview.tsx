@@ -21,6 +21,7 @@ import {
 import type { PropsWithChildren, ReactElement } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { client } from "../../../../api";
+import { isApiError } from "../../../../api/client-types-core";
 import { useApp } from "../../../../state";
 import { EmptyWidgetState, WidgetSection } from "../shared";
 import type {
@@ -48,6 +49,27 @@ const SNOOZE_PRESETS: Array<{ preset: SnoozePreset; label: string }> = [
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function isLifeOpsRuntimeReady(args: {
+  startupPhase?: string | null;
+  agentState?: string | null;
+  backendState?: string | null;
+}): boolean {
+  return (
+    args.startupPhase === "ready" &&
+    args.agentState === "running" &&
+    args.backendState === "connected"
+  );
+}
+
+function isTransientLifeOpsAvailabilityError(cause: unknown): boolean {
+  return (
+    isApiError(cause) &&
+    cause.kind === "http" &&
+    cause.status === 503 &&
+    cause.path === "/api/lifeops/overview"
+  );
 }
 
 function formatDateTime(value: string | null): string | null {
@@ -809,7 +831,7 @@ function AgentOpsSection({
 }
 
 export function LifeOpsOverviewSidebarWidget(_props: ChatSidebarWidgetProps) {
-  const { workbench } = useApp();
+  const { workbench, agentStatus, backendConnection, startupPhase } = useApp();
   const [overview, setOverview] = useState<LifeOpsOverview | null>(
     workbench?.lifeops ?? null,
   );
@@ -827,6 +849,11 @@ export function LifeOpsOverviewSidebarWidget(_props: ChatSidebarWidgetProps) {
   const [goalReviews, setGoalReviews] = useState<
     Record<string, LifeOpsGoalReview>
   >({});
+  const runtimeReady = isLifeOpsRuntimeReady({
+    startupPhase,
+    agentState: agentStatus?.state ?? null,
+    backendState: backendConnection?.state ?? null,
+  });
 
   useEffect(() => {
     if (workbench?.lifeops) {
@@ -835,6 +862,10 @@ export function LifeOpsOverviewSidebarWidget(_props: ChatSidebarWidgetProps) {
   }, [workbench?.lifeops]);
 
   const loadOverview = useCallback(async (silent = false) => {
+    if (!runtimeReady) {
+      setLoading(false);
+      return;
+    }
     if (!silent) {
       setLoading(true);
     }
@@ -842,15 +873,25 @@ export function LifeOpsOverviewSidebarWidget(_props: ChatSidebarWidgetProps) {
     setOverview(nextOverview);
     setError(null);
     setLoading(false);
-  }, []);
+  }, [runtimeReady]);
 
   useEffect(() => {
+    if (!runtimeReady) {
+      setLoading(false);
+      setError(null);
+      return;
+    }
     let active = true;
 
     void (async () => {
       try {
         await loadOverview(Boolean(workbench?.lifeops));
       } catch (cause) {
+        if (isTransientLifeOpsAvailabilityError(cause)) {
+          setError(null);
+          setLoading(false);
+          return;
+        }
         const message =
           cause instanceof Error && cause.message.trim().length > 0
             ? cause.message.trim()
@@ -871,6 +912,10 @@ export function LifeOpsOverviewSidebarWidget(_props: ChatSidebarWidgetProps) {
         try {
           await loadOverview(true);
         } catch (cause) {
+          if (isTransientLifeOpsAvailabilityError(cause)) {
+            setError(null);
+            return;
+          }
           const message =
             cause instanceof Error && cause.message.trim().length > 0
               ? cause.message.trim()
@@ -884,7 +929,7 @@ export function LifeOpsOverviewSidebarWidget(_props: ChatSidebarWidgetProps) {
       active = false;
       window.clearInterval(intervalId);
     };
-  }, [loadOverview, workbench?.lifeops]);
+  }, [loadOverview, runtimeReady, workbench?.lifeops]);
 
   const onOccurrenceAction = useCallback(
     async (occurrenceId: string, action: OccurrenceAction) => {

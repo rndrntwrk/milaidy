@@ -992,17 +992,6 @@ export default defineConfig({
           "packages/plugin-selfcontrol/src/index.ts",
         ),
       },
-      {
-        find: /^@miladyai\/plugin-roles\/(.*)/,
-        replacement: path.resolve(miladyRoot, "packages/plugin-roles/src/$1"),
-      },
-      {
-        find: /^@miladyai\/plugin-roles$/,
-        replacement: path.resolve(
-          miladyRoot,
-          "packages/plugin-roles/src/index.ts",
-        ),
-      },
       // Force local @miladyai/app-core when workspace-linked (prevents stale
       // bun cache copies from overriding the symlinked local source).
       ...(() => {

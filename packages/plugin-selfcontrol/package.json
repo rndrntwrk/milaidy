@@ -34,7 +34,6 @@
   },
   "dependencies": {
     "@elizaos/core": "workspace:*",
-    "@miladyai/plugin-roles": "github:milady-ai/plugin-roles#5b00c49",
     "@miladyai/shared": "workspace:*"
   },
   "devDependencies": {

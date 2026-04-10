@@ -7,7 +7,7 @@ import {
   LIFEOPS_GOOGLE_CONNECTOR_REFRESH_EVENT,
 } from "../events";
 
-const { mockClient, mockOpenExternalUrl } = vi.hoisted(() => ({
+const { mockClient, mockOpenExternalUrl, mockUseApp } = vi.hoisted(() => ({
   mockClient: {
     disconnectGoogleLifeOpsConnector: vi.fn(),
     getBaseUrl: vi.fn(),
@@ -16,6 +16,7 @@ const { mockClient, mockOpenExternalUrl } = vi.hoisted(() => ({
     startGoogleLifeOpsConnector: vi.fn(),
   },
   mockOpenExternalUrl: vi.fn(async () => {}),
+  mockUseApp: vi.fn(),
 }));
 
 vi.mock("../api", () => ({
@@ -24,6 +25,10 @@ vi.mock("../api", () => ({
 
 vi.mock("../utils", () => ({
   openExternalUrl: (...args: unknown[]) => mockOpenExternalUrl(...args),
+}));
+
+vi.mock("../state", () => ({
+  useApp: () => mockUseApp(),
 }));
 
 import type {
@@ -68,6 +73,11 @@ describe("useGoogleLifeOpsConnector", () => {
     mockClient.selectGoogleLifeOpsConnectorMode.mockReset();
     mockClient.startGoogleLifeOpsConnector.mockReset();
     mockOpenExternalUrl.mockReset();
+    mockUseApp.mockReset().mockReturnValue({
+      startupPhase: "ready",
+      agentStatus: { state: "running" },
+      backendConnection: { state: "connected" },
+    });
     mockClient.getBaseUrl.mockReturnValue("http://127.0.0.1:3000");
   });
 
@@ -93,6 +103,22 @@ describe("useGoogleLifeOpsConnector", () => {
       "owner",
     );
     expect(result.current.modeOptions).toEqual(["cloud_managed", "local"]);
+  });
+
+  it("does not poll connector status before the runtime is ready", async () => {
+    mockUseApp.mockReturnValue({
+      startupPhase: "starting-backend",
+      agentStatus: { state: "starting" },
+      backendConnection: { state: "reconnecting" },
+    });
+
+    renderHook(() => useGoogleLifeOpsConnector({ pollIntervalMs: 60_000 }));
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mockClient.getGoogleLifeOpsConnectorStatus).not.toHaveBeenCalled();
   });
 
   it("previews local mode when it is not yet available to persist", async () => {
@@ -183,6 +209,13 @@ describe("useGoogleLifeOpsConnector", () => {
     });
 
     expect(mockClient.startGoogleLifeOpsConnector).toHaveBeenCalledWith({
+      capabilities: [
+        "google.basic_identity",
+        "google.calendar.read",
+        "google.calendar.write",
+        "google.gmail.triage",
+        "google.gmail.send",
+      ],
       mode: "local",
       side: "owner",
     });
@@ -226,6 +259,13 @@ describe("useGoogleLifeOpsConnector", () => {
     });
 
     expect(mockClient.startGoogleLifeOpsConnector).toHaveBeenCalledWith({
+      capabilities: [
+        "google.basic_identity",
+        "google.calendar.read",
+        "google.calendar.write",
+        "google.gmail.triage",
+        "google.gmail.send",
+      ],
       mode: "cloud_managed",
       redirectUrl:
         "http://127.0.0.1:3000/api/lifeops/connectors/google/success?side=agent&mode=cloud_managed",
@@ -234,6 +274,126 @@ describe("useGoogleLifeOpsConnector", () => {
     expect(mockOpenExternalUrl).toHaveBeenCalledWith(
       "https://accounts.google.com/o/oauth2/v2/auth?client_id=managed-client",
     );
+  });
+
+  it("prefers cloud-managed connect when the current local mode is missing config", async () => {
+    mockClient.getGoogleLifeOpsConnectorStatus.mockResolvedValue(
+      buildStatus("owner", {
+        mode: "local",
+        defaultMode: "cloud_managed",
+        availableModes: ["cloud_managed", "local"],
+        configured: false,
+        connected: false,
+        reason: "config_missing",
+      }),
+    );
+    mockClient.startGoogleLifeOpsConnector.mockResolvedValue({
+      provider: "google",
+      side: "owner",
+      mode: "cloud_managed" as LifeOpsConnectorMode,
+      requestedCapabilities: [
+        "google.basic_identity",
+        "google.calendar.read",
+        "google.calendar.write",
+        "google.gmail.triage",
+        "google.gmail.send",
+      ],
+      redirectUri:
+        "http://127.0.0.1:3000/api/lifeops/connectors/google/success?side=owner&mode=cloud_managed",
+      authUrl:
+        "https://accounts.google.com/o/oauth2/v2/auth?client_id=managed-client",
+    });
+
+    const { result } = renderHook(() =>
+      useGoogleLifeOpsConnector({
+        pollIntervalMs: 60_000,
+        side: "owner",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(result.current.status?.reason).toBe("config_missing"),
+    );
+
+    await act(async () => {
+      await result.current.connect();
+    });
+
+    expect(mockClient.startGoogleLifeOpsConnector).toHaveBeenCalledWith({
+      capabilities: [
+        "google.basic_identity",
+        "google.calendar.read",
+        "google.calendar.write",
+        "google.gmail.triage",
+        "google.gmail.send",
+      ],
+      mode: "cloud_managed",
+      redirectUrl:
+        "http://127.0.0.1:3000/api/lifeops/connectors/google/success?side=owner&mode=cloud_managed",
+      side: "owner",
+    });
+  });
+
+  it("requests the full LifeOps Google capability set when reconnecting", async () => {
+    mockClient.getGoogleLifeOpsConnectorStatus.mockResolvedValue(
+      buildStatus("owner", {
+        mode: "cloud_managed",
+        defaultMode: "cloud_managed",
+        availableModes: ["cloud_managed", "local"],
+        connected: true,
+        reason: "needs_reauth",
+        grantedCapabilities: [
+          "google.basic_identity",
+          "google.calendar.read",
+          "google.gmail.triage",
+        ],
+      }),
+    );
+    mockClient.startGoogleLifeOpsConnector.mockResolvedValue({
+      provider: "google",
+      side: "owner",
+      mode: "cloud_managed" as LifeOpsConnectorMode,
+      requestedCapabilities: [
+        "google.basic_identity",
+        "google.calendar.read",
+        "google.calendar.write",
+        "google.gmail.triage",
+        "google.gmail.send",
+      ],
+      redirectUri:
+        "http://127.0.0.1:3000/api/lifeops/connectors/google/success?side=owner&mode=cloud_managed",
+      authUrl:
+        "https://accounts.google.com/o/oauth2/v2/auth?client_id=managed-client",
+    });
+
+    const { result } = renderHook(() =>
+      useGoogleLifeOpsConnector({
+        pollIntervalMs: 60_000,
+        side: "owner",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(result.current.status?.reason).toBe("needs_reauth"),
+    );
+
+    await act(async () => {
+      await result.current.connect();
+    });
+
+    expect(mockClient.startGoogleLifeOpsConnector).toHaveBeenCalledWith({
+      capabilities: [
+        "google.basic_identity",
+        "google.calendar.read",
+        "google.calendar.write",
+        "google.gmail.triage",
+        "google.gmail.send",
+      ],
+      mode: "cloud_managed",
+      redirectUrl:
+        "http://127.0.0.1:3000/api/lifeops/connectors/google/success?side=owner&mode=cloud_managed",
+      side: "owner",
+    });
   });
 
   it("does not keep polling disconnected status when polling while disconnected is disabled", async () => {

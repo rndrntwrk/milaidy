@@ -34,6 +34,23 @@ vi.mock("@miladyai/ui", async () => {
       ...props
     }: React.ComponentProps<"button">) =>
       React.createElement("button", { ...props, onClick }, children),
+    Select: ({ children }: { children?: React.ReactNode }) =>
+      React.createElement(React.Fragment, null, children),
+    SelectTrigger: ({
+      children,
+      ...props
+    }: React.ComponentProps<"button">) =>
+      React.createElement("button", { type: "button", ...props }, children),
+    SelectValue: ({ children }: { children?: React.ReactNode }) =>
+      React.createElement(React.Fragment, null, children),
+    SelectContent: ({ children }: { children?: React.ReactNode }) =>
+      React.createElement(React.Fragment, null, children),
+    SelectItem: ({
+      children,
+      value,
+      ...props
+    }: React.ComponentProps<"option"> & { value: string }) =>
+      React.createElement("option", { ...props, value }, children),
   };
 });
 
@@ -207,7 +224,7 @@ describe("ConversationsSidebar", () => {
     });
 
     const content = JSON.stringify(tree.toJSON());
-    expect(content).toContain("conversations.none");
+    expect(content).toContain("No Milady chats yet");
     expect(content).toContain("conversations.chats");
   });
 

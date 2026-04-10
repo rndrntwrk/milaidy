@@ -19,7 +19,7 @@ vi.mock("../services/escalation.js", () => ({
   },
 }));
 
-vi.mock("@miladyai/plugin-roles", () => ({
+vi.mock("@elizaos/core/roles", () => ({
   resolveCanonicalOwnerIdForMessage: mockResolveCanonicalOwnerIdForMessage,
 }));
 

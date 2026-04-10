@@ -17,6 +17,7 @@ import {
 } from "./service";
 import { LifeOpsScreenContextSampler } from "../lifeops/screen-context";
 import { LifeOpsService } from "../lifeops/service";
+import { resolveFallbackOwnerEntityId } from "../runtime/owner-entity.js";
 import { DatabaseSync, hasSqlite } from "../test-utils/sqlite-compat";
 
 const NOW = new Date("2026-04-06T07:00:00Z");
@@ -417,7 +418,7 @@ describe("resolveOwnerEntityId", () => {
     expect(result).toBe("owner-abc");
   });
 
-  it("returns null when no rooms exist", async () => {
+  it("falls back to the canonical owner when no rooms exist", async () => {
     const runtime = {
       agentId: "agent-1",
       character: {},
@@ -425,10 +426,10 @@ describe("resolveOwnerEntityId", () => {
     } as unknown as IAgentRuntime;
 
     const result = await resolveOwnerEntityId(runtime);
-    expect(result).toBeNull();
+    expect(result).toBe(resolveFallbackOwnerEntityId(runtime));
   });
 
-  it("returns null when world has no ownership", async () => {
+  it("falls back to the canonical owner when world has no ownership", async () => {
     const runtime = {
       agentId: "agent-1",
       character: {},
@@ -438,7 +439,7 @@ describe("resolveOwnerEntityId", () => {
     } as unknown as IAgentRuntime;
 
     const result = await resolveOwnerEntityId(runtime);
-    expect(result).toBeNull();
+    expect(result).toBe(resolveFallbackOwnerEntityId(runtime));
   });
 
   it("survives room-level errors and continues checking", async () => {

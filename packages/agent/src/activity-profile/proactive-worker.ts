@@ -5,11 +5,8 @@ import {
   resolveOwnerContactWithFallback,
 } from "../config/owner-contacts.js";
 import { resolveDefaultTimeZone } from "../lifeops/defaults.js";
+import { getAgentEventService } from "../runtime/agent-event-service.js";
 import { LifeOpsService, LifeOpsServiceError } from "../lifeops/service.js";
-import {
-  hasRuntimeSendHandler,
-  logMissingSendHandlerOnce,
-} from "../services/send-handler-availability.js";
 import { resolveEffectiveDayKey } from "./analyzer.js";
 import {
   type CalendarEventSlim,
@@ -233,11 +230,15 @@ export async function executeProactiveTask(
       }
 
       try {
-        if (
-          resolvedTarget.source === "client_chat" &&
-          !hasRuntimeSendHandler(runtime, resolvedTarget.source)
-        ) {
-          logMissingSendHandlerOnce("proactive", resolvedTarget.source);
+        if (resolvedTarget.source === "client_chat") {
+          if (emitProactiveAssistantEvent(runtime, action)) {
+            firedLog = recordFiredAction(firedLog, todayStr, action);
+            logger.info(`[proactive] Emitted ${action.kind} as assistant event`);
+            continue;
+          }
+          logger.warn(
+            `[proactive] AGENT_EVENT emit unavailable for ${action.kind}; skipping in-app proactive delivery`,
+          );
           continue;
         }
 
@@ -248,7 +249,7 @@ export async function executeProactiveTask(
             channelId: contact.channelId,
             roomId: contact.roomId as UUID | undefined,
           } as Parameters<typeof runtime.sendMessageToTarget>[0],
-          { text: action.contextSummary, source: resolvedTarget.source },
+          buildProactiveDeliveryContent(action, resolvedTarget.source),
         );
         firedLog = recordFiredAction(firedLog, todayStr, action);
         logger.info(
@@ -347,21 +348,86 @@ function recordFiredAction(
   todayStr: string,
   action: ProactiveAction,
 ): FiredActionsLog {
-  const current: FiredActionsLog = log ?? {
-    date: todayStr,
-    nudgedOccurrenceIds: [],
-    nudgedCalendarEventIds: [],
+  const current: FiredActionsLog = {
+    date: log?.date ?? todayStr,
+    gmFiredAt: log?.gmFiredAt,
+    gnFiredAt: log?.gnFiredAt,
+    nudgedOccurrenceIds: [...(log?.nudgedOccurrenceIds ?? [])],
+    nudgedCalendarEventIds: [...(log?.nudgedCalendarEventIds ?? [])],
   };
 
   if (action.kind === "gm") {
     current.gmFiredAt = Date.now();
   } else if (action.kind === "gn") {
     current.gnFiredAt = Date.now();
-  } else if (action.kind === "pre_activity_nudge" && action.occurrenceId) {
-    current.nudgedOccurrenceIds.push(action.occurrenceId);
+  } else if (action.kind === "pre_activity_nudge") {
+    if (
+      action.occurrenceId &&
+      !current.nudgedOccurrenceIds.includes(action.occurrenceId)
+    ) {
+      current.nudgedOccurrenceIds.push(action.occurrenceId);
+    }
+    if (
+      action.calendarEventId &&
+      !current.nudgedCalendarEventIds.includes(action.calendarEventId)
+    ) {
+      current.nudgedCalendarEventIds.push(action.calendarEventId);
+    }
   }
 
   return current;
+}
+
+function buildProactiveDeliveryContent(
+  action: ProactiveAction,
+  deliverySource: string,
+): { text: string; source: string } {
+  const text = action.messageText.trim() || action.contextSummary.trim();
+  return { text, source: deliverySource };
+}
+
+function emitProactiveAssistantEvent(
+  runtime: IAgentRuntime,
+  action: ProactiveAction,
+): boolean {
+  const eventService = getAgentEventService(runtime) as {
+    emit?: (event: {
+      runId: string;
+      stream: string;
+      data: Record<string, unknown>;
+      agentId?: string;
+    }) => void;
+  } | null;
+  if (!eventService?.emit) {
+    return false;
+  }
+
+  const text = action.messageText.trim() || action.contextSummary.trim();
+  eventService.emit({
+    runId: crypto.randomUUID(),
+    stream: "assistant",
+    agentId: runtime.agentId,
+    data: {
+      text,
+      source: resolveProactiveAssistantEventSource(action),
+      kind: action.kind,
+      scheduledFor: action.scheduledFor,
+      targetPlatform: action.targetPlatform,
+      occurrenceId: action.occurrenceId,
+      calendarEventId: action.calendarEventId,
+    },
+  });
+  return true;
+}
+
+function resolveProactiveAssistantEventSource(action: ProactiveAction): string {
+  if (action.kind === "gm") {
+    return "proactive-gm";
+  }
+  if (action.kind === "gn") {
+    return "proactive-gn";
+  }
+  return "proactive-nudge";
 }
 
 export function registerProactiveTaskWorker(runtime: IAgentRuntime): void {

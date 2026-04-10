@@ -35,7 +35,7 @@ import { stringToUuid } from "@elizaos/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // ---------------------------------------------------------------------------
-// Hoisted mocks — intercept plugin-roles to drive real logic against our
+// Hoisted mocks — intercept roles helpers to drive real logic against our
 // stateful stores (same pattern as roles-e2e.test.ts)
 // ---------------------------------------------------------------------------
 
@@ -59,7 +59,7 @@ const {
   mockCheckSenderRole: vi.fn(),
 }));
 
-vi.mock("@miladyai/plugin-roles", () => ({
+vi.mock("@elizaos/core/roles", () => ({
   getEntityRole: mockGetEntityRole,
   hasConfiguredCanonicalOwner: mockHasConfiguredCanonicalOwner,
   resolveWorldForMessage: mockResolveWorldForMessage,
@@ -381,7 +381,7 @@ class ScenarioRunner {
       type: "GROUP" as never,
     } as Room);
 
-    // Wire up plugin-roles mocks
+    // Wire up roles mocks
     this.wirePluginRolesMocks();
 
     // Default config
@@ -552,14 +552,8 @@ class ScenarioRunner {
           escalation: config.escalation ?? {},
         },
       },
-      plugins: {
-        entries: {
-          "@miladyai/plugin-roles": {
-            config: {
-              connectorAdmins: config.connectorAdmins ?? {},
-            },
-          },
-        },
+      roles: {
+        connectorAdmins: config.connectorAdmins ?? {},
       },
     });
   }
@@ -984,7 +978,7 @@ class ScenarioRunner {
   }
 
   // -----------------------------------------------------------------------
-  // Private: wire up plugin-roles mocks
+  // Private: wire up roles mocks
   // -----------------------------------------------------------------------
 
   private wirePluginRolesMocks(): void {

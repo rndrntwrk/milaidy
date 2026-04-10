@@ -7,7 +7,7 @@ const { mockCheckSenderRole, mockResolveCanonicalOwnerIdForMessage } =
     mockResolveCanonicalOwnerIdForMessage: vi.fn(),
   }));
 
-vi.mock("@miladyai/plugin-roles", () => ({
+vi.mock("@elizaos/core/roles", () => ({
   checkSenderRole: mockCheckSenderRole,
   resolveCanonicalOwnerIdForMessage: mockResolveCanonicalOwnerIdForMessage,
 }));
@@ -112,7 +112,7 @@ describe("adminPanelProvider", () => {
       getSetting: vi
         .fn()
         .mockImplementation((key: string) =>
-          key === "MILADY_ADMIN_ENTITY_ID" ? OWNER_ID : null,
+          key === "ELIZA_ADMIN_ENTITY_ID" ? OWNER_ID : null,
         ),
       getMemoriesByRoomIds: vi.fn().mockResolvedValue([
         {

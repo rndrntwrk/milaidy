@@ -243,6 +243,13 @@ const MemorySchema = z
   .strict()
   .optional();
 
+const RolesSchema = z
+  .object({
+    connectorAdmins: z.record(z.string(), z.array(z.string())).optional(),
+  })
+  .strict()
+  .optional();
+
 // --- Character schema ---
 
 const MessageExampleContentSchema = z
@@ -802,6 +809,7 @@ export const ElizaSchema = z
       .strict()
       .optional(),
     memory: MemorySchema,
+    roles: RolesSchema,
     embedding: z
       .object({
         model: z.string().optional(),

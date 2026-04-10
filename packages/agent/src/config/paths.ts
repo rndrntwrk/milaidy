@@ -22,7 +22,9 @@ export function getElizaNamespace(
     "MILADY_NAMESPACE",
     "ELIZA_NAMESPACE",
   ]);
-  return override && override.length > 0 ? override : "eliza";
+  // Milady-branded entrypoints should resolve the Milady state/config paths
+  // even when a caller forgot to seed namespace env vars before loading config.
+  return override && override.length > 0 ? override : "milady";
 }
 
 function stateDir(

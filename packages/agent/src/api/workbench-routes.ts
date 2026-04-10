@@ -36,10 +36,6 @@ interface WorkbenchTodoView {
 export const WORKBENCH_BOOTSTRAP_TODO_NAME =
   "Get the user's name and understand what they need help with";
 
-const WORKBENCH_BOOTSTRAP_TODO_KEY = "user-name-and-help";
-const WORKBENCH_BOOTSTRAP_TODO_SOURCE = "workbench-bootstrap";
-const WORKBENCH_BOOTSTRAP_TODO_TAG = "bootstrap";
-
 export interface WorkbenchRouteContext {
   req: http.IncomingMessage;
   res: http.ServerResponse;
@@ -72,64 +68,6 @@ export interface WorkbenchRouteContext {
   ) => string | null;
   taskToTriggerSummary: (task: Task) => TriggerSummary | null;
   listTriggerTasks: (runtime: AgentRuntime) => Promise<Task[]>;
-}
-
-interface EnsureWorkbenchBootstrapTodoOptions {
-  ctx: Pick<
-    WorkbenchRouteContext,
-    "normalizeTags" | "toWorkbenchTodo"
-  >;
-  runtime: AgentRuntime;
-  todos: WorkbenchTodoView[];
-}
-
-export async function ensureWorkbenchBootstrapTodo({
-  ctx,
-  runtime,
-  todos,
-}: EnsureWorkbenchBootstrapTodoOptions): Promise<WorkbenchTodoView | null> {
-  if (todos.length > 0) {
-    return null;
-  }
-
-  const name = WORKBENCH_BOOTSTRAP_TODO_NAME;
-  const description = WORKBENCH_BOOTSTRAP_TODO_NAME;
-
-  try {
-    const taskId = await runtime.createTask({
-      name,
-      description,
-      tags: ctx.normalizeTags(
-        [WORKBENCH_BOOTSTRAP_TODO_TAG],
-        [WORKBENCH_TODO_TAG, "todo"],
-      ),
-      metadata: {
-        isCompleted: false,
-        workbenchTodo: {
-          bootstrapKey: WORKBENCH_BOOTSTRAP_TODO_KEY,
-          description,
-          isCompleted: false,
-          isUrgent: false,
-          priority: null,
-          source: WORKBENCH_BOOTSTRAP_TODO_SOURCE,
-          type: "task",
-        },
-      },
-    });
-    const createdTask = await runtime.getTask(taskId);
-    return createdTask ? ctx.toWorkbenchTodo(createdTask) : null;
-  } catch (err) {
-    runtime.logger?.warn(
-      {
-        src: "eliza-api",
-        err,
-        agentId: runtime.agentId,
-        operation: "todos.bootstrap.create",
-      },
-      "[eliza-api] Failed to create bootstrap todo",
-    );
-    return null;
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -182,16 +120,6 @@ export async function handleWorkbenchRoutes(
       } catch {
         tasksAvailable = false;
         todosAvailable = false;
-      }
-
-      const bootstrapTodo = await ensureWorkbenchBootstrapTodo({
-        ctx,
-        runtime: state.runtime,
-        todos,
-      });
-      if (bootstrapTodo) {
-        todos.push(bootstrapTodo);
-        todosAvailable = true;
       }
 
       try {
@@ -400,15 +328,6 @@ export async function handleWorkbenchRoutes(
       .map((task) => ctx.toWorkbenchTodo(task))
       .filter((todo): todo is WorkbenchTodoView => todo !== null)
       .sort((a, b) => a.name.localeCompare(b.name));
-    const bootstrapTodo = await ensureWorkbenchBootstrapTodo({
-      ctx,
-      runtime: state.runtime,
-      todos,
-    });
-    if (bootstrapTodo) {
-      todos.push(bootstrapTodo);
-      todos.sort((a, b) => a.name.localeCompare(b.name));
-    }
     json(res, { todos });
     return true;
   }

@@ -142,7 +142,6 @@
     "@elizaos/plugin-trust": "workspace:*",
     "@hapi/boom": "^10.0.1",
     "@mariozechner/pi-ai": "0.52.12",
-    "@miladyai/plugin-roles": "github:milady-ai/plugin-roles#5b00c49",
     "@miladyai/plugin-2004scape": "workspace:*",
     "@miladyai/plugin-selfcontrol": "workspace:*",
     "@miladyai/plugin-wechat": "github:milady-ai/plugin-wechat",

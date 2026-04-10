@@ -5,11 +5,11 @@ import type {
   ProviderResult,
   State,
 } from "@elizaos/core";
-import { checkSenderRole } from "@miladyai/plugin-roles";
 import type {
   LifeOpsGmailTriageSummary,
   LifeOpsNextCalendarEventContext,
 } from "@miladyai/shared/contracts/lifeops";
+import { hasLifeOpsAccess } from "../actions/lifeops-google-helpers.js";
 import { LifeOpsService } from "../lifeops/service.js";
 
 const INTERNAL_URL = new URL("http://127.0.0.1/");
@@ -69,21 +69,10 @@ function summarizeGmailTriage(summary: LifeOpsGmailTriageSummary): string[] {
   return [`Inbox: ${parts.join(", ")}`];
 }
 
-async function hasLifeOpsAccess(
-  runtime: IAgentRuntime,
-  message: Memory,
-): Promise<boolean> {
-  if (message.entityId === runtime.agentId) {
-    return true;
-  }
-  const role = await checkSenderRole(runtime, message);
-  return Boolean(role?.isAdmin);
-}
-
 export const lifeOpsProvider: Provider = {
   name: "lifeops",
   description:
-    "Owner/admin and agent only. Provides the current LifeOps overview, upcoming calendar event, and email triage summary. Explains how to use LIFE for managing tasks, habits, goals, calendar, email, and reminders.",
+    "Owner, explicitly granted users, and the agent only. Provides the current LifeOps overview, upcoming calendar event, and email triage summary. Use LIFE for habits, reminders, and goals. Use CALENDAR_ACTION for Google Calendar reads/search/create-event tasks. Use GMAIL_ACTION for Gmail triage, search, draft, and send flows. Available in private owner or granted conversations, including Discord.",
   dynamic: true,
   position: 12,
   async get(
@@ -91,13 +80,6 @@ export const lifeOpsProvider: Provider = {
     message: Memory,
     _state: State,
   ): Promise<ProviderResult> {
-    const source = (message.content as Record<string, unknown> | undefined)?.source;
-    if (
-      source !== "client_chat" &&
-      message.entityId !== runtime.agentId
-    ) {
-      return { text: "", values: {}, data: {} };
-    }
     if (!(await hasLifeOpsAccess(runtime, message))) {
       return { text: "", values: {}, data: {} };
     }
@@ -145,8 +127,10 @@ export const lifeOpsProvider: Provider = {
     return {
       text: [
         "## Life Ops",
-        "Use LIFE when the user wants to create, manage, complete, or query their tasks, habits, goals, calendar, email, or reminders.",
-        "Owner life-ops are private to the owner/admin and the agent. Agent ops are internal and should stay separated unless explicitly requested.",
+        "Use LIFE when the user wants to create, manage, complete, or query tasks, habits, goals, reminders, escalation, or routines.",
+        "Use CALENDAR_ACTION for calendar questions, event search, next-event context, and creating Google Calendar events.",
+        "Use GMAIL_ACTION for inbox triage, emails needing a reply, Gmail search, reply drafts, and confirmed send flows.",
+        "Owner life-ops are private to the owner, explicitly granted users, and the agent. Agent ops are internal and should stay separated unless explicitly requested.",
         formatCount("Owner open occurrences", overview.owner.summary.activeOccurrenceCount),
         formatCount("Owner active goals", overview.owner.summary.activeGoalCount),
         formatCount("Owner live reminders", overview.owner.summary.activeReminderCount),

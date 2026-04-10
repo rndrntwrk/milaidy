@@ -56,6 +56,10 @@ const EVENT_TYPE_COLORS: Record<string, string> = {
   escalation: "bg-warn/20 text-warn",
   error: "bg-danger/20 text-danger",
   "proactive-message": "bg-accent/20 text-accent",
+  reminder: "bg-warn/20 text-warn",
+  workflow: "bg-ok/20 text-ok",
+  "check-in": "bg-accent/20 text-accent",
+  nudge: "bg-accent/20 text-accent",
 };
 
 function TaskCard({ session }: { session: CodingAgentSession }) {

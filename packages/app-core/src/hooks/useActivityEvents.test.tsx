@@ -83,6 +83,23 @@ describe("useActivityEvents", () => {
     });
 
     act(() => {
+      wsMocks.handlers.get("agent_event")?.({
+        type: "agent_event",
+        stream: "assistant",
+        payload: {
+          source: "lifeops-reminder",
+          text: "Reminder: Stay at Fairfield by Marriott Inn & Suites Boulder.",
+        },
+      });
+    });
+
+    expect(latestState?.events).toHaveLength(3);
+    expect(latestState?.events[0]).toMatchObject({
+      eventType: "reminder",
+      summary: "Reminder: Stay at Fairfield by Marriott Inn & Suites Boulder.",
+    });
+
+    act(() => {
       latestState?.clearEvents();
     });
 
@@ -98,6 +115,7 @@ describe("useActivityEvents", () => {
     expect(
       wsMocks.unsubscribers.get("proactive-message"),
     ).toHaveBeenCalledTimes(1);
+    expect(wsMocks.unsubscribers.get("agent_event")).toHaveBeenCalledTimes(1);
   });
 
   it("caps the ring buffer at 200 entries", () => {

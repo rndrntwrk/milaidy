@@ -128,7 +128,7 @@ describe("getSelfControlAccess", () => {
         },
       },
       settings: {
-        MILADY_ADMIN_ENTITY_ID: "app-owner",
+        ELIZA_ADMIN_ENTITY_ID: "app-owner",
       },
     });
 
@@ -172,7 +172,7 @@ describe("getSelfControlAccess", () => {
         },
       },
       settings: {
-        MILADY_ADMIN_ENTITY_ID: "app-owner",
+        ELIZA_ADMIN_ENTITY_ID: "app-owner",
       },
     });
 

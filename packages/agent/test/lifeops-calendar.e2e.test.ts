@@ -358,6 +358,62 @@ describe("life-ops calendar sync", () => {
     }
   });
 
+  it("keeps a requested tomorrow window from leaking prior-day all-day events", async () => {
+    await connectGoogleCalendar();
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          items: [
+            {
+              id: "event-today-dentist",
+              status: "confirmed",
+              summary: "Dentist appointment",
+              start: {
+                date: "2026-04-09",
+                timeZone: "America/Los_Angeles",
+              },
+              end: {
+                date: "2026-04-10",
+                timeZone: "America/Los_Angeles",
+              },
+            },
+            {
+              id: "event-tomorrow-flight",
+              status: "confirmed",
+              summary: "Flight to Denver (WN 3677)",
+              location: "San Francisco SFO",
+              start: {
+                dateTime: "2026-04-10T14:25:00-07:00",
+                timeZone: "America/Los_Angeles",
+              },
+              end: {
+                dateTime: "2026-04-10T17:05:00-06:00",
+                timeZone: "America/Los_Angeles",
+              },
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      ),
+    );
+
+    const tomorrowWindowRes = await req(
+      port,
+      "GET",
+      "/api/lifeops/calendar/feed?timeZone=America%2FLos_Angeles&timeMin=2026-04-10T07%3A00%3A00.000Z&timeMax=2026-04-11T07%3A00%3A00.000Z",
+    );
+    expect(tomorrowWindowRes.status).toBe(200);
+    expect(tomorrowWindowRes.data.events).toHaveLength(1);
+    expect(tomorrowWindowRes.data.events[0]).toMatchObject({
+      title: "Flight to Denver (WN 3677)",
+      location: "San Francisco SFO",
+    });
+  });
+
   it("builds next-event context from the earliest upcoming calendar event", async () => {
     await connectGoogleCalendar();
 

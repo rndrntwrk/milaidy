@@ -1,7 +1,7 @@
 /**
  * Late-join whitelist evaluator.
  *
- * Problem: plugin-roles' `applyConnectorAdminWhitelists()` only runs at boot.
+ * Problem: the roles bootstrap only runs at startup.
  * Entities that join AFTER init are never auto-promoted.
  *
  * Solution: This evaluator runs on each message. If the sender has no role
@@ -21,10 +21,9 @@ import {
   type UUID,
 } from "@elizaos/core";
 import {
-  getEntityRole,
   resolveWorldForMessage,
   setEntityRole,
-} from "@miladyai/plugin-roles";
+} from "@elizaos/core/roles";
 import { loadElizaConfig } from "../config/config.js";
 
 /** Connector metadata fields checked for whitelist matching. */
@@ -37,11 +36,7 @@ const MATCH_FIELDS = ["userId", "id", "username", "userName"] as const;
 function loadConnectorAdminWhitelist(): Record<string, string[]> {
   try {
     const cfg = loadElizaConfig();
-    const rolesEntry = cfg.plugins?.entries?.["@miladyai/plugin-roles"];
-    const config = rolesEntry?.config as
-      | { connectorAdmins?: Record<string, string[]> }
-      | undefined;
-    return config?.connectorAdmins ?? {};
+    return cfg.roles?.connectorAdmins ?? {};
   } catch {
     return {};
   }
@@ -98,8 +93,7 @@ export const lateJoinWhitelistEvaluator: Evaluator = {
     const resolved = await resolveWorldForMessage(runtime, message);
     if (!resolved) return false;
 
-    const role = getEntityRole(resolved.metadata, message.entityId);
-    return (role as string) === "NONE";
+    return typeof resolved.metadata.roles?.[message.entityId] !== "string";
   },
 
   handler: async (runtime: IAgentRuntime, message: Memory, _state?: State) => {
@@ -116,7 +110,13 @@ export const lateJoinWhitelistEvaluator: Evaluator = {
     );
     if (!matched) return undefined;
 
-    await setEntityRole(runtime, message, message.entityId as string, "ADMIN");
+    await setEntityRole(
+      runtime,
+      message,
+      message.entityId as string,
+      "ADMIN",
+      "connector_admin",
+    );
     logger.info(
       `[roles] Late-join: promoted entity ${message.entityId} to ADMIN (whitelist match)`,
     );

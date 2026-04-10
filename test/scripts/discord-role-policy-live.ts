@@ -6,6 +6,7 @@ import {
 	asUUID,
 	ChannelType,
 	createUniqueUuid,
+	setConnectorAdminWhitelist,
 	type AgentRuntime,
 	type Entity,
 	type IAgentRuntime,
@@ -18,7 +19,6 @@ import { createTestRuntime } from "../helpers/pglite-runtime";
 import { PTYService } from "../../plugins/plugin-agent-orchestrator/src/services/pty-service.js";
 import { startCodingTaskAction } from "../../plugins/plugin-agent-orchestrator/src/actions/start-coding-task.js";
 import { sendToAgentAction } from "../../plugins/plugin-agent-orchestrator/src/actions/send-to-agent.js";
-import { setConnectorAdminWhitelist } from "../../packages/plugin-roles/src/utils.js";
 
 type DiscordConfig = {
 	env?: {

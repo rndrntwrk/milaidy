@@ -16,6 +16,7 @@ import type {
 
 export const TRIGGER_TASK_NAME = "TRIGGER_DISPATCH" as const;
 export const TRIGGER_TASK_TAGS = ["queue", "repeat", "trigger"] as const;
+const HEARTBEAT_TASK_TAGS = ["queue", "repeat", "heartbeat"] as const;
 
 const DEFAULT_MAX_ACTIVE_TRIGGERS = 100;
 
@@ -423,17 +424,33 @@ export async function listTriggerTasks(
   runtime: IAgentRuntime,
 ): Promise<Task[]> {
   if (!triggersFeatureEnabled(runtime)) return [];
-  // Query by the "repeat" tag alone rather than the full TRIGGER_TASK_TAGS
-  // set. The core SQL adapter uses ARRAY-contains semantics (AND), so the
-  // tighter query would miss connector-owned heartbeat tasks that tag with
-  // ["queue","repeat","<connector>"] instead of ["queue","repeat","trigger"].
-  // Milady surfaces both — user-created triggers and plugin-owned system
-  // heartbeats — in the Heartbeats view, so we enumerate the wider set here
-  // and let taskToTriggerSummary classify each one.
-  return runtime.getTasks({
-    tags: ["repeat"],
-    agentIds: [runtime.agentId],
-  });
+  const agentIds = [runtime.agentId];
+  const [triggerTasks, heartbeatTasks] = await Promise.all([
+    runtime.getTasks({
+      agentIds,
+      tags: ["repeat", "trigger"],
+    }),
+    runtime.getTasks({
+      agentIds,
+      tags: ["repeat", "heartbeat"],
+    }),
+  ]);
+
+  const merged = new Map<string, Task>();
+  for (const task of [...triggerTasks, ...heartbeatTasks]) {
+    const key =
+      task.id ??
+      `${task.name ?? ""}:${task.description ?? ""}:${(task.tags ?? []).join(",")}`;
+    if (!merged.has(key)) {
+      merged.set(key, task);
+    }
+  }
+  return [...merged.values()];
+}
+
+function isExplicitHeartbeatTask(task: Task): boolean {
+  const tags = task.tags ?? [];
+  return HEARTBEAT_TASK_TAGS.every((tag) => tags.includes(tag));
 }
 
 /**
@@ -460,15 +477,10 @@ function deriveSystemHeartbeatName(task: Task): string {
 }
 
 /**
- * Synthesize a read-only TriggerSummary for a plugin-owned repeat task
- * that Milady's trigger schema doesn't fully own. Connector plugins
- * (plugin-imessage, plugin-telegram, etc.) register health-probe tasks
- * through the core task system with tags like ["queue","repeat",
- * "imessage"] — they're legitimate recurring tasks the user should be
- * able to see and inspect, but they don't carry the user-authored
- * `metadata.trigger` payload that taskToTriggerSummary normally keys
- * on. We fabricate a minimal summary from the task's own fields so
- * they appear in the Heartbeats UI as "system" entries.
+ * Synthesize a read-only TriggerSummary for an explicit heartbeat task
+ * that Milady's trigger schema doesn't fully own. This is narrower than
+ * "any repeat task": internal queue drains and runtime schedulers should
+ * stay out of the Heartbeats UI even though they also use repeat tasks.
  */
 function synthesizeSystemHeartbeatSummary(task: Task): TriggerSummary | null {
   if (!task.id) return null;
@@ -528,10 +540,11 @@ export function taskToTriggerSummary(task: Task): TriggerSummary | null {
     };
   }
 
-  // Plugin-owned repeat task without user-authored trigger metadata —
-  // surface it as a read-only system heartbeat so it shows up in the
-  // Heartbeats list instead of silently disappearing.
-  return synthesizeSystemHeartbeatSummary(task);
+  if (isExplicitHeartbeatTask(task)) {
+    return synthesizeSystemHeartbeatSummary(task);
+  }
+
+  return null;
 }
 
 export async function getTriggerHealthSnapshot(

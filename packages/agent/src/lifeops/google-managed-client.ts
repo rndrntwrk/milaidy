@@ -9,6 +9,7 @@ import {
   normalizeCloudSiteUrl,
   resolveCloudApiBaseUrl,
 } from "../cloud/base-url.js";
+import { loadElizaConfig } from "../config/config.js";
 import type { SyncedGoogleCalendarEvent } from "./google-calendar.js";
 import type { SyncedGoogleGmailMessageSummary } from "./google-gmail.js";
 
@@ -75,7 +76,38 @@ export interface ManagedGoogleReplySendRequest {
 
 function normalizeApiKey(value: string | undefined): string | null {
   const trimmed = value?.trim();
-  return trimmed && trimmed.length > 0 ? trimmed : null;
+  if (!trimmed || trimmed.length === 0) {
+    return null;
+  }
+  return trimmed.toUpperCase() === "[REDACTED]" ? null : trimmed;
+}
+
+function readConfigCloudSettings(): {
+  apiKey: string | null;
+  baseUrl: string | null;
+} {
+  try {
+    const config = loadElizaConfig();
+    const cloud =
+      config.cloud && typeof config.cloud === "object"
+        ? (config.cloud as Record<string, unknown>)
+        : null;
+    return {
+      apiKey:
+        cloud && typeof cloud.apiKey === "string"
+          ? normalizeApiKey(cloud.apiKey)
+          : null,
+      baseUrl:
+        cloud && typeof cloud.baseUrl === "string" && cloud.baseUrl.trim().length
+          ? cloud.baseUrl.trim()
+          : null,
+    };
+  } catch {
+    return {
+      apiKey: null,
+      baseUrl: null,
+    };
+  }
 }
 
 function buildTimeoutSignal(timeoutMs: number): AbortSignal {
@@ -112,9 +144,12 @@ async function readJsonResponse<T>(response: Response): Promise<T> {
 }
 
 export function resolveManagedGoogleCloudConfig(): ResolvedManagedGoogleCloudConfig {
-  const apiKey = normalizeApiKey(process.env.ELIZAOS_CLOUD_API_KEY);
-  const siteUrl = normalizeCloudSiteUrl(process.env.ELIZAOS_CLOUD_BASE_URL);
-  const apiBaseUrl = resolveCloudApiBaseUrl(process.env.ELIZAOS_CLOUD_BASE_URL);
+  const configCloud = readConfigCloudSettings();
+  const apiKey =
+    configCloud.apiKey ?? normalizeApiKey(process.env.ELIZAOS_CLOUD_API_KEY);
+  const baseUrl = configCloud.baseUrl ?? process.env.ELIZAOS_CLOUD_BASE_URL;
+  const siteUrl = normalizeCloudSiteUrl(baseUrl);
+  const apiBaseUrl = resolveCloudApiBaseUrl(baseUrl);
 
   return {
     configured: Boolean(apiKey),
@@ -125,21 +160,32 @@ export function resolveManagedGoogleCloudConfig(): ResolvedManagedGoogleCloudCon
 }
 
 export class GoogleManagedClient {
-  constructor(private readonly config = resolveManagedGoogleCloudConfig()) {}
+  constructor(
+    private readonly configSource:
+      | ResolvedManagedGoogleCloudConfig
+      | (() => ResolvedManagedGoogleCloudConfig) = resolveManagedGoogleCloudConfig,
+  ) {}
+
+  private getConfig(): ResolvedManagedGoogleCloudConfig {
+    return typeof this.configSource === "function"
+      ? this.configSource()
+      : this.configSource;
+  }
 
   get configured(): boolean {
-    return this.config.configured;
+    return this.getConfig().configured;
   }
 
   private requireConfig(): ResolvedManagedGoogleCloudConfig & {
     apiKey: string;
   } {
-    if (!this.config.apiKey) {
-      throw new Error("Eliza Cloud is not connected.");
+    const config = this.getConfig();
+    if (!config.apiKey) {
+      throw new ManagedGoogleClientError(409, "Eliza Cloud is not connected.");
     }
     return {
-      ...this.config,
-      apiKey: this.config.apiKey,
+      ...config,
+      apiKey: config.apiKey,
     };
   }
 

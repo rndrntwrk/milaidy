@@ -398,7 +398,7 @@ describe("updateRoleAction.handler", () => {
         },
       },
       {
-        MILADY_ADMIN_ENTITY_ID: ownerId,
+        ELIZA_ADMIN_ENTITY_ID: ownerId,
       },
     );
 

@@ -61,6 +61,34 @@ describe("managed cloud Discord client helpers", () => {
     );
   });
 
+  it("POSTs gateway-agent bootstrap requests to the managed Discord route", async () => {
+    const client = new MiladyClient("http://localhost:2138", "token");
+    await client.ensureCloudCompatManagedDiscordAgent();
+
+    const [url, init] = fetchMock.mock.calls[0] as [
+      RequestInfo | URL,
+      RequestInit,
+    ];
+    expect(String(url)).toBe(
+      "http://localhost:2138/api/cloud/v1/milady/discord/gateway-agent",
+    );
+    expect(init?.method).toBe("POST");
+  });
+
+  it("POSTs managed Discord gateway provision requests to the cloud provision route", async () => {
+    const client = new MiladyClient("http://localhost:2138", "token");
+    await client.provisionCloudCompatAgent("agent-1");
+
+    const [url, init] = fetchMock.mock.calls[0] as [
+      RequestInfo | URL,
+      RequestInit,
+    ];
+    expect(String(url)).toBe(
+      "http://localhost:2138/api/cloud/v1/milady/agents/agent-1/provision",
+    );
+    expect(init?.method).toBe("POST");
+  });
+
   it("DELETEs managed Discord connections from the cloud agent route", async () => {
     const client = new MiladyClient("http://localhost:2138", "token");
     await client.disconnectCloudCompatAgentManagedDiscord("agent-1");

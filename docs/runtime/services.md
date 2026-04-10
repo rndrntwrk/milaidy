@@ -60,7 +60,7 @@ Core plugins are always loaded and each provides one or more services:
 | `@elizaos/plugin-agent-skills` | `AGENT_SKILLS_SERVICE` | Skill catalog loading and execution |
 | `@elizaos/plugin-commands` | Commands service | Slash command handling (skills auto-register as /commands) |
 | `@elizaos/plugin-plugin-manager` | Plugin manager service | Dynamic plugin install/uninstall at runtime |
-| `@miladyai/plugin-roles` | Roles service | Role-based access control (OWNER/ADMIN/NONE) |
+| `roles` | Roles service | Role-based access control (OWNER/ADMIN/NONE) |
 
 ## Optional Core Services
 

@@ -11,10 +11,10 @@
     "noEmit": true,
     "baseUrl": ".",
     "paths": {
+      "@elizaos/core": ["../../eliza/packages/typescript/src/index.node.ts"],
+      "@elizaos/core/*": ["../../eliza/packages/typescript/src/*"],
       "@miladyai/shared": ["../shared/src/index.ts"],
-      "@miladyai/shared/*": ["../shared/src/*"],
-      "@miladyai/plugin-roles": ["../plugin-roles/src/index.ts"],
-      "@miladyai/plugin-roles/*": ["../plugin-roles/src/*"]
+      "@miladyai/shared/*": ["../shared/src/*"]
     }
   },
   "include": ["src"],

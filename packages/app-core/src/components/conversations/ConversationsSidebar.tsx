@@ -1,28 +1,42 @@
 import {
-  ChatSidebar,
+  Button,
+  ChatConversationItem,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  NewActionButton,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+  Sidebar,
+  SidebarCollapsedActionButton,
+  SidebarContent,
+  SidebarHeader,
+  SidebarPanel,
+  SidebarScrollRegion,
   TooltipProvider,
 } from "@miladyai/ui";
+import { Plus } from "lucide-react";
 import type React from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 
 import { client } from "../../api";
 import { useApp } from "../../state";
 import { ConversationRenameDialog } from "./ConversationRenameDialog";
 import {
-  formatRelativeTime,
-  getLocalizedConversationTitle,
-} from "./conversation-utils";
+  ALL_WORLDS_SCOPE,
+  buildConversationsSidebarModel,
+  type ConversationsSidebarRow,
+  MILADY_SOURCE_SCOPE,
+} from "./conversation-sidebar-model";
 
 /**
  * Id namespace for inbox-chat entries merged into the sidebar list.
- * ChatSidebar's onSelect returns a flat string id; we prefix connector
- * chats with this so the select handler can route them to the inbox
- * state slot instead of handleSelectConversation. Dashboard
- * conversation ids stay bare (they're UUIDs, so no collision risk).
+ * Sidebar selection uses a flat string id; connector chats carry a
+ * prefix so we can distinguish them from dashboard conversation UUIDs.
  */
 const INBOX_ID_PREFIX = "inbox:";
 
@@ -32,10 +46,11 @@ const INBOX_CHATS_REFRESH_MS = 5_000;
 interface InboxChatRow {
   avatarUrl?: string;
   id: string;
+  lastMessageAt: number;
   source: string;
   title: string;
-  lastMessageText: string;
-  lastMessageAt: number;
+  worldId?: string;
+  worldLabel: string;
 }
 
 type ConversationsSidebarVariant = "default" | "game-modal";
@@ -44,6 +59,37 @@ interface ConversationsSidebarProps {
   mobile?: boolean;
   onClose?: () => void;
   variant?: ConversationsSidebarVariant;
+}
+
+function railMonogram(label: string): string {
+  const words = label.trim().split(/\s+/).filter(Boolean);
+  const initials = words
+    .slice(0, 2)
+    .map((word) => word[0]?.toUpperCase() ?? "")
+    .join("");
+  return (initials || label.slice(0, 1).toUpperCase() || "?").slice(0, 2);
+}
+
+function renderRailIdentity(row: ConversationsSidebarRow) {
+  if (row.avatarUrl) {
+    return (
+      <img
+        src={row.avatarUrl}
+        alt={`${row.title} avatar`}
+        className="h-8 w-8 rounded-full object-cover"
+      />
+    );
+  }
+
+  return railMonogram(row.title);
+}
+
+function rowListId(row: ConversationsSidebarRow): string {
+  return row.kind === "inbox" ? `${INBOX_ID_PREFIX}${row.id}` : row.id;
+}
+
+function selectLabel(option: { count: number; label: string }) {
+  return `${option.label} (${option.count})`;
 }
 
 export function ConversationsSidebar({
@@ -63,45 +109,7 @@ export function ConversationsSidebar({
     t,
   } = useApp();
 
-  // ── Inbox chats (connector threads) ─────────────────────────────────
-  //
-  // Fetch the list of connector chat threads in parallel with the
-  // existing web-chat conversations and merge them into one list. The
-  // existing ChatSidebar primitive takes a flat `conversations` prop,
-  // so we prefix connector-chat ids with "inbox:" to tell them apart
-  // in onSelect. Dashboard conversation ids are raw UUIDs, so there's
-  // no collision.
   const [inboxChats, setInboxChats] = useState<InboxChatRow[]>([]);
-
-  useEffect(() => {
-    let cancelled = false;
-    const load = async () => {
-      try {
-        const response = await client.getInboxChats();
-        if (cancelled) return;
-        setInboxChats(
-          response.chats.map((chat) => ({
-            avatarUrl: chat.avatarUrl,
-            id: chat.id,
-            source: chat.source,
-            title: chat.title,
-            lastMessageText: chat.lastMessageText,
-            lastMessageAt: chat.lastMessageAt,
-          })),
-        );
-      } catch {
-        // Network blips shouldn't blank the list — keep the last
-        // successful snapshot and let the next poll refresh it.
-      }
-    };
-    void load();
-    const timer = window.setInterval(load, INBOX_CHATS_REFRESH_MS);
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
-  }, []);
-
   const [renameTarget, setRenameTarget] = useState<{
     id: string;
     title: string;
@@ -115,50 +123,70 @@ export function ConversationsSidebar({
   const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
   const menuAnchorRef = useRef<HTMLDivElement>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const deferredSearchQuery = useDeferredValue(searchQuery);
+  const [sourceScope, setSourceScope] = useState(MILADY_SOURCE_SCOPE);
+  const [worldScope, setWorldScope] = useState(ALL_WORLDS_SCOPE);
 
-  const sortedConversations = useMemo(() => {
-    // Native dashboard conversations stay untagged in the sidebar.
-    // Connector chats carry their own source marker; internal chats do
-    // not need a Milady badge.
-    const webChatRows = conversations.map((conversation) => ({
-      id: conversation.id,
-      title: getLocalizedConversationTitle(conversation.title, t),
-      updatedAtLabel: formatRelativeTime(conversation.updatedAt, t),
-      sortKey: new Date(conversation.updatedAt).getTime(),
-    }));
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const response = await client.getInboxChats();
+        if (cancelled) return;
+        setInboxChats(
+          response.chats.map((chat) => ({
+            avatarUrl: chat.avatarUrl,
+            id: chat.id,
+            lastMessageAt: chat.lastMessageAt,
+            source: chat.source,
+            title: chat.title,
+            worldId: chat.worldId,
+            worldLabel: chat.worldLabel,
+          })),
+        );
+      } catch {
+        // Keep the last successful snapshot on transient failures.
+      }
+    };
+    void load();
+    const timer = window.setInterval(load, INBOX_CHATS_REFRESH_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, []);
 
-    // Normalize connector chats. The `source` field drives the icon +
-    // label chip rendered by ChatConversationItem, so titles can stay
-    // focused on the room or contact name.
-    const inboxRows = inboxChats.map((chat) => {
-      const isoDate = new Date(chat.lastMessageAt).toISOString();
-      return {
-        avatarUrl: chat.avatarUrl,
-        id: `${INBOX_ID_PREFIX}${chat.id}`,
-        title: chat.title,
-        source: chat.source,
-        updatedAtLabel: formatRelativeTime(isoDate, t),
-        sortKey: chat.lastMessageAt,
-      };
-    });
+  const sidebarModel = useMemo(
+    () =>
+      buildConversationsSidebarModel({
+        conversations,
+        inboxChats,
+        searchQuery: deferredSearchQuery,
+        sourceScope,
+        t,
+        worldScope,
+      }),
+    [
+      conversations,
+      deferredSearchQuery,
+      inboxChats,
+      sourceScope,
+      t,
+      worldScope,
+    ],
+  );
 
-    // Merge and sort by most-recent-activity across both sources so
-    // the sidebar is a single time-ordered feed.
-    return [...webChatRows, ...inboxRows]
-      .sort((a, b) => b.sortKey - a.sortKey)
-      .map(({ sortKey: _sortKey, ...row }) => row);
-  }, [conversations, inboxChats, t]);
-  const normalizedSearchQuery = searchQuery.trim().toLowerCase();
-
-  const visibleConversations = useMemo(() => {
-    if (!normalizedSearchQuery) {
-      return sortedConversations;
+  useEffect(() => {
+    if (sourceScope !== sidebarModel.sourceScope) {
+      setSourceScope(sidebarModel.sourceScope);
     }
+  }, [sidebarModel.sourceScope, sourceScope]);
 
-    return sortedConversations.filter((conversation) =>
-      conversation.title.toLowerCase().includes(normalizedSearchQuery),
-    );
-  }, [normalizedSearchQuery, sortedConversations]);
+  useEffect(() => {
+    if (worldScope !== sidebarModel.worldScope) {
+      setWorldScope(sidebarModel.worldScope);
+    }
+  }, [sidebarModel.worldScope, worldScope]);
 
   const openRenameDialog = (conversation: { id: string; title: string }) => {
     setConfirmDeleteId(null);
@@ -192,6 +220,69 @@ export function ConversationsSidebar({
       setConfirmDeleteId((current) => (current === id ? null : current));
     }
   };
+
+  const handleRowSelect = (row: ConversationsSidebarRow) => {
+    setConfirmDeleteId(null);
+    setMenuConversation(null);
+
+    if (row.kind === "inbox") {
+      setState("activeInboxChat", {
+        avatarUrl: row.avatarUrl,
+        id: row.id,
+        source: row.source ?? "",
+        title: row.title,
+        worldId: row.worldId,
+        worldLabel: row.worldLabel,
+      });
+    } else {
+      setState("activeInboxChat", null);
+      void handleSelectConversation(row.id);
+    }
+
+    onClose?.();
+  };
+
+  const isGameModal = variant === "game-modal";
+  const newChatAction = isGameModal ? (
+    <Button
+      variant="outline"
+      className="h-11 w-full rounded-xl border-[color:var(--onboarding-accent-border)] bg-[color:var(--onboarding-accent-bg)] px-3 py-2 text-sm font-medium text-[color:var(--onboarding-text-strong)] shadow-[0_12px_28px_rgba(0,0,0,0.18)] hover:border-[color:var(--onboarding-accent-border-hover)] hover:bg-[color:var(--onboarding-accent-bg-hover)] active:scale-[0.98]"
+      onClick={() => {
+        setSourceScope(MILADY_SOURCE_SCOPE);
+        setWorldScope(ALL_WORLDS_SCOPE);
+        handleNewConversation();
+        onClose?.();
+      }}
+    >
+      {t("conversations.newChat")}
+    </Button>
+  ) : (
+    <NewActionButton
+      onClick={() => {
+        setSourceScope(MILADY_SOURCE_SCOPE);
+        setWorldScope(ALL_WORLDS_SCOPE);
+        handleNewConversation();
+        onClose?.();
+      }}
+    >
+      {t("conversations.newChat")}
+    </NewActionButton>
+  );
+
+  const activeListId = activeInboxChat
+    ? `${INBOX_ID_PREFIX}${activeInboxChat.id}`
+    : activeConversationId;
+  const emptyStateLabel = searchQuery.trim()
+    ? t("conversations.noMatchingChats", {
+        defaultValue: "No matching chats",
+      })
+    : sidebarModel.sourceScope === MILADY_SOURCE_SCOPE
+      ? t("conversations.noneMilady", {
+          defaultValue: "No Milady chats yet",
+        })
+      : t("conversations.noneConnectors", {
+          defaultValue: "No chats in this view",
+        });
 
   return (
     <TooltipProvider delayDuration={280} skipDelayDuration={120}>
@@ -257,99 +348,244 @@ export function ConversationsSidebar({
         ) : null}
       </DropdownMenu>
 
-      <ChatSidebar
-        conversations={visibleConversations}
-        activeConversationId={
-          activeInboxChat
-            ? `${INBOX_ID_PREFIX}${activeInboxChat.id}`
-            : activeConversationId
+      <Sidebar
+        testId="conversations-sidebar"
+        variant={mobile ? "mobile" : isGameModal ? "game-modal" : "default"}
+        collapsible={!mobile && !isGameModal}
+        contentIdentity={
+          mobile ? "chat-mobile" : isGameModal ? "chat-modal" : "chat"
         }
-        confirmDeleteId={confirmDeleteId}
-        deletingId={deletingId}
-        unreadConversations={unreadConversations}
-        mobile={mobile}
-        variant={variant}
-        labels={{
-          chats: t("conversations.chats"),
-          clearSearch: t("common.clear", { defaultValue: "Clear" }),
-          closePanel: t("conversations.closePanel"),
-          delete: t("conversations.delete"),
-          deleteConfirm: t("conversations.deleteConfirm"),
-          deleteNo: t("conversations.deleteNo"),
-          deleteYes: t("conversations.deleteYes"),
-          expandChatsPanel: t("aria.expandChatsPanel"),
-          newChat: t("conversations.newChat"),
-          none: t("conversations.none"),
-          noMatchingChats: t("conversations.noMatchingChats", {
-            defaultValue: "No matching chats",
-          }),
-          rename: t("conversations.rename"),
-          searchChats: t("conversations.searchChats", {
-            defaultValue: "Search chats",
-          }),
-        }}
-        onCreate={() => {
-          handleNewConversation();
-          onClose?.();
-        }}
-        onSelect={(id) => {
-          setConfirmDeleteId(null);
-          setMenuConversation(null);
-          // Connector-chat rows carry an "inbox:" prefix on their id.
-          // Route them through the activeInboxChat slot so ChatView
-          // can swap its main panel out for a read-only inbox view of
-          // that room. Dashboard conversations take the existing path.
-          if (id.startsWith(INBOX_ID_PREFIX)) {
-            const roomId = id.slice(INBOX_ID_PREFIX.length);
-            const chat = inboxChats.find((c) => c.id === roomId);
-            if (chat) {
-              setState("activeInboxChat", {
-                avatarUrl: chat.avatarUrl,
-                id: chat.id,
-                source: chat.source,
-                title: chat.title,
-              });
+        collapseButtonTestId="chat-sidebar-collapse-toggle"
+        expandButtonTestId="chat-sidebar-expand-toggle"
+        collapseButtonAriaLabel={t("conversations.closePanel")}
+        expandButtonAriaLabel={t("aria.expandChatsPanel")}
+        header={
+          <SidebarHeader
+            search={{
+              value: searchQuery,
+              onChange: (event) => setSearchQuery(event.target.value),
+              onClear: () => setSearchQuery(""),
+              placeholder: t("conversations.searchChats", {
+                defaultValue: "Search chats",
+              }),
+              "aria-label": t("conversations.searchChats", {
+                defaultValue: "Search chats",
+              }),
+              clearLabel: t("common.clear", { defaultValue: "Clear" }),
+              autoComplete: "off",
+              spellCheck: false,
+            }}
+          />
+        }
+        collapsedRailAction={
+          <SidebarCollapsedActionButton
+            aria-label={t("conversations.newChat")}
+            onClick={() => {
+              setSourceScope(MILADY_SOURCE_SCOPE);
+              setWorldScope(ALL_WORLDS_SCOPE);
+              handleNewConversation();
+              onClose?.();
+            }}
+          >
+            <Plus className="h-4 w-4" />
+          </SidebarCollapsedActionButton>
+        }
+        collapsedRailItems={sidebarModel.rows.map((row) => (
+          <SidebarContent.RailItem
+            key={rowListId(row)}
+            aria-label={row.title}
+            title={row.title}
+            active={rowListId(row) === activeListId}
+            indicatorTone={
+              row.kind === "conversation" && unreadConversations.has(row.id)
+                ? "accent"
+                : undefined
             }
-          } else {
-            setState("activeInboxChat", null);
-            void handleSelectConversation(id);
-          }
-          onClose?.();
-        }}
-        onConfirmDelete={(id) => {
-          // Inbox chats are read-only views of connector memory — the
-          // sidebar can't delete them. Silently drop the request
-          // rather than throwing a 4xx at the server.
-          if (id.startsWith(INBOX_ID_PREFIX)) {
-            setConfirmDeleteId(null);
-            return;
-          }
-          void handleConfirmDelete(id);
-        }}
-        onCancelDelete={() => setConfirmDeleteId(null)}
-        onRequestDeleteConfirm={(id) => {
-          if (id.startsWith(INBOX_ID_PREFIX)) return;
-          setMenuConversation(null);
-          setRenameTarget(null);
-          setConfirmDeleteId(id);
-        }}
-        onRequestRename={(conversation) => {
-          if (conversation.id.startsWith(INBOX_ID_PREFIX)) return;
-          openRenameDialog(conversation);
-        }}
-        onOpenActions={(event, conversation) => {
-          if (conversation.id.startsWith(INBOX_ID_PREFIX)) {
-            event.preventDefault();
-            event.stopPropagation();
-            return;
-          }
-          openActionsMenu(event, conversation);
-        }}
-        onSearchChange={(event) => setSearchQuery(event.target.value)}
-        onSearchClear={() => setSearchQuery("")}
-        onClose={onClose}
-        searchValue={searchQuery}
-      />
+            onClick={() => handleRowSelect(row)}
+          >
+            {renderRailIdentity(row)}
+          </SidebarContent.RailItem>
+        ))}
+        onMobileClose={mobile ? onClose : undefined}
+        mobileCloseLabel={t("conversations.closePanel")}
+        mobileTitle={
+          mobile ? (
+            <SidebarContent.SectionLabel>
+              {t("conversations.chats")}
+            </SidebarContent.SectionLabel>
+          ) : undefined
+        }
+        mobileMeta={mobile ? String(sidebarModel.rows.length) : undefined}
+        data-no-window-drag=""
+        aria-label={t("conversations.chats")}
+      >
+        <SidebarScrollRegion variant={isGameModal ? "game-modal" : "default"}>
+          <SidebarPanel variant={isGameModal ? "game-modal" : "default"}>
+            <div className="mb-3">{newChatAction}</div>
+
+            <div className="mb-3 grid gap-2">
+              <div
+                className={
+                  sidebarModel.showWorldFilter
+                    ? "grid gap-2 sm:grid-cols-2"
+                    : "grid gap-2"
+                }
+              >
+                <div className="grid gap-1">
+                  <span className="px-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">
+                    {t("conversations.filterScope", {
+                      defaultValue: "Source",
+                    })}
+                  </span>
+                  <Select
+                    value={sidebarModel.sourceScope}
+                    onValueChange={(value) => {
+                      setSourceScope(value);
+                      setWorldScope(ALL_WORLDS_SCOPE);
+                    }}
+                  >
+                    <SelectTrigger
+                      className="h-10 rounded-2xl border-border/45 bg-card/55 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
+                      aria-label={t("conversations.filterScope", {
+                        defaultValue: "Source",
+                      })}
+                    >
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {sidebarModel.sourceOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {selectLabel(option)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {sidebarModel.showWorldFilter ? (
+                  <div className="grid gap-1">
+                    <span className="px-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">
+                      {t("conversations.filterWorld", {
+                        defaultValue: "Server / world",
+                      })}
+                    </span>
+                    <Select
+                      value={sidebarModel.worldScope}
+                      onValueChange={setWorldScope}
+                    >
+                      <SelectTrigger
+                        className="h-10 rounded-2xl border-border/45 bg-card/55 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
+                        aria-label={t("conversations.filterWorld", {
+                          defaultValue: "Server / world",
+                        })}
+                      >
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {sidebarModel.worldOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {selectLabel(option)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
+            {sidebarModel.sections.length === 0 ? (
+              <SidebarContent.EmptyState
+                variant={isGameModal ? "game-modal" : "default"}
+                className={
+                  !isGameModal ? "border-border/50 bg-bg/35" : undefined
+                }
+              >
+                {emptyStateLabel}
+              </SidebarContent.EmptyState>
+            ) : (
+              <div className="space-y-4">
+                {sidebarModel.sections.map((section) => (
+                  <section key={section.key} className="space-y-2">
+                    <SidebarContent.SectionHeader meta={String(section.count)}>
+                      <SidebarContent.SectionLabel>
+                        {section.label}
+                      </SidebarContent.SectionLabel>
+                    </SidebarContent.SectionHeader>
+
+                    <div className="space-y-2">
+                      {section.rows.map((row) => {
+                        const conversationId = rowListId(row);
+                        return (
+                          <ChatConversationItem
+                            key={conversationId}
+                            conversation={{
+                              avatarUrl: row.avatarUrl,
+                              id: conversationId,
+                              ...(row.source ? { source: row.source } : {}),
+                              title: row.title,
+                              updatedAtLabel: row.updatedAtLabel,
+                            }}
+                            deleting={deletingId === row.id}
+                            isActive={conversationId === activeListId}
+                            isConfirmingDelete={
+                              row.kind === "conversation" &&
+                              confirmDeleteId === row.id
+                            }
+                            isUnread={
+                              row.kind === "conversation" &&
+                              unreadConversations.has(row.id)
+                            }
+                            labels={{
+                              delete: t("conversations.delete"),
+                              deleteConfirm: t("conversations.deleteConfirm"),
+                              deleteNo: t("conversations.deleteNo"),
+                              deleteYes: t("conversations.deleteYes"),
+                              rename: t("conversations.rename"),
+                            }}
+                            mobile={mobile}
+                            onCancelDelete={() => setConfirmDeleteId(null)}
+                            onConfirmDelete={() => {
+                              if (row.kind === "inbox") return;
+                              void handleConfirmDelete(row.id);
+                            }}
+                            onOpenActions={(event) => {
+                              if (row.kind === "inbox") {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                return;
+                              }
+                              openActionsMenu(event, {
+                                id: row.id,
+                                title: row.title,
+                              });
+                            }}
+                            onRequestDeleteConfirm={() => {
+                              if (row.kind === "inbox") return;
+                              setMenuConversation(null);
+                              setRenameTarget(null);
+                              setConfirmDeleteId(row.id);
+                            }}
+                            onRequestRename={() => {
+                              if (row.kind === "inbox") return;
+                              openRenameDialog({
+                                id: row.id,
+                                title: row.title,
+                              });
+                            }}
+                            onSelect={() => handleRowSelect(row)}
+                            variant={variant}
+                          />
+                        );
+                      })}
+                    </div>
+                  </section>
+                ))}
+              </div>
+            )}
+          </SidebarPanel>
+        </SidebarScrollRegion>
+      </Sidebar>
     </TooltipProvider>
   );
 }

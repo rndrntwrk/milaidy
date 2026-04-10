@@ -3,14 +3,17 @@ import type {
   LifeOpsConnectorSide,
   LifeOpsGoogleConnectorStatus,
 } from "@miladyai/shared/contracts/lifeops";
+import { LIFEOPS_GOOGLE_CAPABILITIES } from "@miladyai/shared/contracts/lifeops";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { client } from "../api";
+import { isApiError } from "../api/client-types-core";
 import {
   APP_RESUME_EVENT,
   dispatchLifeOpsGoogleConnectorRefresh,
   LIFEOPS_GOOGLE_CONNECTOR_REFRESH_EVENT,
   type LifeOpsGoogleConnectorRefreshDetail,
 } from "../events";
+import { useApp } from "../state";
 import { openExternalUrl } from "../utils";
 
 const DEFAULT_GOOGLE_CONNECTOR_POLL_INTERVAL_MS = 15_000;
@@ -22,6 +25,27 @@ const GOOGLE_CONNECTOR_STORAGE_KEY = "milady:lifeops:google-connector-refresh";
 const GOOGLE_CONNECTOR_BROADCAST_CHANNEL = "milady:lifeops:google-connector";
 const GOOGLE_CONNECTOR_MESSAGE_TYPE = "lifeops-google-connector-refresh";
 let googleConnectorHookInstanceSeed = 0;
+
+function isLifeOpsRuntimeReady(args: {
+  startupPhase?: string | null;
+  agentState?: string | null;
+  backendState?: string | null;
+}): boolean {
+  return (
+    args.startupPhase === "ready" &&
+    args.agentState === "running" &&
+    args.backendState === "connected"
+  );
+}
+
+function isTransientLifeOpsAvailabilityError(cause: unknown): boolean {
+  return (
+    isApiError(cause) &&
+    cause.kind === "http" &&
+    cause.status === 503 &&
+    cause.path.startsWith("/api/lifeops/connectors/google/status")
+  );
+}
 
 function formatConnectorError(cause: unknown, fallback: string): string {
   if (cause instanceof Error && cause.message.trim().length > 0) {
@@ -54,6 +78,25 @@ function resolveVisibleModes(
     ...(status?.availableModes ?? []),
     ...DEFAULT_VISIBLE_GOOGLE_MODES,
   ]);
+}
+
+function resolveConnectMode(
+  status: LifeOpsGoogleConnectorStatus | null,
+  selectedMode: LifeOpsConnectorMode | null,
+): LifeOpsConnectorMode {
+  if (
+    status?.reason === "config_missing" &&
+    (selectedMode ?? status.mode) === "local" &&
+    (status.availableModes ?? []).includes("cloud_managed")
+  ) {
+    return "cloud_managed";
+  }
+  return (
+    selectedMode ??
+    status?.mode ??
+    status?.defaultMode ??
+    "cloud_managed"
+  );
 }
 
 function resolveSuccessRedirectUrl(
@@ -144,6 +187,7 @@ export interface UseGoogleLifeOpsConnectorOptions {
 export function useGoogleLifeOpsConnector(
   options: UseGoogleLifeOpsConnectorOptions = {},
 ) {
+  const { agentStatus, backendConnection, startupPhase } = useApp();
   const pollIntervalMs =
     options.pollIntervalMs ?? DEFAULT_GOOGLE_CONNECTOR_POLL_INTERVAL_MS;
   const pollWhileDisconnected = options.pollWhileDisconnected ?? true;
@@ -161,6 +205,11 @@ export function useGoogleLifeOpsConnector(
   const [loading, setLoading] = useState(true);
   const [actionPending, setActionPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const runtimeReady = isLifeOpsRuntimeReady({
+    startupPhase,
+    agentState: agentStatus?.state ?? null,
+    backendState: backendConnection?.state ?? null,
+  });
 
   const refresh = useCallback(
     async ({
@@ -170,6 +219,11 @@ export function useGoogleLifeOpsConnector(
       silent?: boolean;
       mode?: LifeOpsConnectorMode | null;
     } = {}) => {
+      if (!runtimeReady) {
+        setError(null);
+        setLoading(false);
+        return;
+      }
       if (!silent) {
         setLoading(true);
       }
@@ -186,6 +240,10 @@ export function useGoogleLifeOpsConnector(
         setStatus(nextStatus);
         setError(null);
       } catch (cause) {
+        if (isTransientLifeOpsAvailabilityError(cause)) {
+          setError(null);
+          return;
+        }
         setError(
           formatConnectorError(
             cause,
@@ -196,14 +254,21 @@ export function useGoogleLifeOpsConnector(
         setLoading(false);
       }
     },
-    [side],
+    [runtimeReady, side],
   );
 
   useEffect(() => {
+    if (!runtimeReady) {
+      setLoading(false);
+      return;
+    }
     void refresh();
-  }, [refresh]);
+  }, [refresh, runtimeReady]);
 
   useEffect(() => {
+    if (!runtimeReady) {
+      return;
+    }
     if (pollIntervalMs <= 0) {
       return;
     }
@@ -217,7 +282,13 @@ export function useGoogleLifeOpsConnector(
     return () => {
       globalThis.clearInterval(intervalId);
     };
-  }, [pollIntervalMs, pollWhileDisconnected, refresh, status?.connected]);
+  }, [
+    pollIntervalMs,
+    pollWhileDisconnected,
+    refresh,
+    runtimeReady,
+    status?.connected,
+  ]);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -234,6 +305,9 @@ export function useGoogleLifeOpsConnector(
     const refreshSilently = (
       detail?: LifeOpsGoogleConnectorRefreshDetail | null,
     ) => {
+      if (!runtimeReady) {
+        return;
+      }
       if (detail?.origin === instanceIdRef.current) {
         return;
       }
@@ -342,7 +416,7 @@ export function useGoogleLifeOpsConnector(
       broadcastChannel?.removeEventListener("message", handleBroadcastMessage);
       broadcastChannel?.close();
     };
-  }, [refresh, side]);
+  }, [refresh, runtimeReady, side]);
 
   const selectMode = useCallback(
     async (mode: LifeOpsConnectorMode) => {
@@ -375,14 +449,16 @@ export function useGoogleLifeOpsConnector(
   const connect = useCallback(async () => {
     try {
       setActionPending(true);
+      const requestedCapabilities = [...LIFEOPS_GOOGLE_CAPABILITIES];
+      const connectMode = resolveConnectMode(status ?? null, selectedModeRef.current);
       const result = await client.startGoogleLifeOpsConnector({
+        capabilities: requestedCapabilities,
         redirectUrl:
-          (selectedModeRef.current ?? status?.mode ?? status?.defaultMode) ===
-          "cloud_managed"
+          connectMode === "cloud_managed"
             ? resolveSuccessRedirectUrl(side)
             : undefined,
         side,
-        mode: selectedModeRef.current ?? status?.mode ?? status?.defaultMode,
+        mode: connectMode,
       });
       await openExternalUrl(result.authUrl);
       setError(null);

@@ -1,5 +1,6 @@
 import type http from "node:http";
 import { Readable } from "node:stream";
+import type { ReadableStream as NodeReadableStream } from "node:stream/web";
 import type { IAgentRuntime } from "@elizaos/core";
 import type {
   AppLaunchPreparation,
@@ -57,6 +58,12 @@ type BridgeCommand =
       type: "say";
       text: string;
     };
+
+type BridgeCommandInput =
+  | { type: "pause" | "resume" | "skip-tutorial" }
+  | { type: "set-goal"; goal: string }
+  | { type: "set-intent"; intent: OperatorIntent }
+  | { type: "say"; text: string };
 
 interface RecentActivityEntry {
   id: string;
@@ -161,7 +168,7 @@ function toJsonValue(
     typeof value === "number" ||
     typeof value === "boolean"
   ) {
-    return value;
+    return value as AppSessionJsonValue;
   }
   if (Array.isArray(value)) {
     const next = value
@@ -327,14 +334,24 @@ function appendActivity(
 
 function enqueueCommand(
   record: SessionRecord,
-  command: Omit<BridgeCommand, "seq">,
+  command: BridgeCommandInput,
 ): BridgeCommand {
-  const next = {
+  const next: BridgeCommand = {
     ...command,
     seq: record.nextSeq++,
-  } as BridgeCommand;
+  };
   record.commands = [...record.commands, next].slice(-COMMAND_HISTORY_LIMIT);
   return next;
+}
+
+function readGatewayPort(service: unknown): number | null {
+  const candidate = service as
+    | { getGatewayPort?: () => number | null }
+    | null
+    | undefined;
+  return typeof candidate?.getGatewayPort === "function"
+    ? candidate.getGatewayPort() ?? null
+    : null;
 }
 
 function resolveTutorialActive(record: SessionRecord): {
@@ -1257,10 +1274,9 @@ async function buildViewerHtml(runtime: IAgentRuntime | null): Promise<string> {
   }
 
   // Resolve the gateway port from the game service if available
-  const gameService = runtime?.getService?.("rs_2004scape") as
-    | { getGatewayPort(): number | null }
-    | undefined;
-  const gatewayPort = gameService?.getGatewayPort?.() ?? null;
+  const gatewayPort = readGatewayPort(
+    runtime?.getService?.("rs_2004scape"),
+  );
 
   const injected = buildViewerShellInjection(remoteServerUrl, gatewayPort);
   const rewritten = rewriteViewerHtml(html);
@@ -1352,9 +1368,9 @@ async function proxyViewerRequest(
     return true;
   }
 
-  Readable.fromWeb(upstream.body as unknown as ReadableStream<Uint8Array>).pipe(
-    ctx.res,
-  );
+  Readable.fromWeb(
+    upstream.body as unknown as NodeReadableStream<Uint8Array>,
+  ).pipe(ctx.res);
   return true;
 }
 
@@ -1439,9 +1455,10 @@ function applyControlAction(
 function resolveLaunchRecord(
   ctx: AppLaunchSessionContext | AppRunSessionContext,
 ): SessionRecord | null {
+  const sessionState = "session" in ctx ? ctx.session : null;
   const sessionId = normalizeSessionId(
     ctx.viewer?.authMessage?.authToken ??
-      ctx.session?.sessionId ??
+      sessionState?.sessionId ??
       ctx.viewer?.authMessage?.characterId ??
       ctx.runtime?.agentId ??
       null,

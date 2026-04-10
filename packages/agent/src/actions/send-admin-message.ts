@@ -9,7 +9,7 @@ import { logger, stringToUuid } from "@elizaos/core";
 import {
   checkSenderRole,
   resolveCanonicalOwnerIdForMessage,
-} from "@miladyai/plugin-roles";
+} from "@elizaos/core/roles";
 
 type SendAdminMessageParams = {
   text?: string;

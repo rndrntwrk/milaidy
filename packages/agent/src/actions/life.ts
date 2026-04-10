@@ -1,29 +1,23 @@
 import type {
   Action,
+  ActionResult,
   HandlerOptions,
-  Memory,
-  ProviderDataRecord,
+  IAgentRuntime,
+  State,
 } from "@elizaos/core";
 import {
   extractDurationMinutesFromText,
   extractWebsiteTargetsFromText,
   normalizeWebsiteTargets,
 } from "@miladyai/plugin-selfcontrol/selfcontrol";
-import { checkSenderRole } from "@miladyai/plugin-roles";
 import type {
   CreateLifeOpsDefinitionRequest,
   CreateLifeOpsGoalRequest,
   LifeOpsCadence,
-  LifeOpsCalendarEvent,
-  LifeOpsCalendarFeed,
   LifeOpsDailySlot,
   LifeOpsDefinitionRecord,
   LifeOpsDomain,
-  LifeOpsGmailTriageFeed,
   LifeOpsGoalRecord,
-  LifeOpsGoogleConnectorStatus,
-  LifeOpsNextCalendarEventContext,
-  LifeOpsOverview,
   LifeOpsReminderIntensity,
   LifeOpsReminderStep,
   SetLifeOpsReminderPreferenceRequest,
@@ -32,6 +26,26 @@ import type {
 } from "@miladyai/shared/contracts/lifeops";
 import { LIFEOPS_REMINDER_INTENSITIES } from "@miladyai/shared/contracts/lifeops";
 import { LifeOpsService, LifeOpsServiceError } from "../lifeops/service.js";
+import {
+  calendarReadUnavailableMessage,
+  dayRange,
+  detailArray,
+  detailBoolean,
+  detailNumber,
+  detailObject,
+  detailString,
+  formatCalendarFeed,
+  formatEmailTriage,
+  formatNextEventContext,
+  formatOverview,
+  gmailReadUnavailableMessage,
+  getGoogleCapabilityStatus,
+  hasLifeOpsAccess,
+  INTERNAL_URL,
+  messageText,
+  toActionData,
+  weekRange,
+} from "./lifeops-google-helpers.js";
 
 // ── Types ─────────────────────────────────────────────
 
@@ -110,7 +124,189 @@ type LifeDefinitionSeed = {
   websiteAccess?: CreateLifeOpsDefinitionRequest["websiteAccess"];
 };
 
-const INTERNAL_URL = new URL("http://127.0.0.1/");
+const CADENCE_HINT_RE =
+  /\b(?:every day|daily|weekly|monthly|each day|every week|every month|every mornings?|every afternoons?|every evenings?|every nights?|mornings?|afternoons?|evenings?|nights?|twice a day|(?:\w+|\d+)\s*(?:x|times?)\s*(?:a|per)\s*day|per day|per week|throughout the day|with lunch|with breakfast|with dinner|every\s+\d+\s*(?:hours?|minutes?))\b/i;
+const GENERIC_DERIVED_TITLE_RE =
+  /^(?:new\s+)?(?:habit|routine|task|goal|life goal|thing|item|something|anything|stuff|plan|reminder|todo|to do|achieve|achieve a|achieve an)$/i;
+const DERIVED_TITLE_STOPWORDS = new Set([
+  "a",
+  "about",
+  "actually",
+  "add",
+  "am",
+  "an",
+  "and",
+  "anything",
+  "are",
+  "as",
+  "at",
+  "be",
+  "been",
+  "being",
+  "by",
+  "can",
+  "called",
+  "could",
+  "create",
+  "did",
+  "do",
+  "does",
+  "doing",
+  "done",
+  "for",
+  "goal",
+  "goals",
+  "had",
+  "happen",
+  "happens",
+  "has",
+  "have",
+  "help",
+  "habit",
+  "i",
+  "im",
+  "i'm",
+  "item",
+  "its",
+  "it",
+  "just",
+  "life",
+  "make",
+  "manage",
+  "me",
+  "mine",
+  "more",
+  "my",
+  "need",
+  "new",
+  "named",
+  "of",
+  "on",
+  "ops",
+  "our",
+  "ours",
+  "plan",
+  "please",
+  "really",
+  "reminder",
+  "routine",
+  "save",
+  "set",
+  "setup",
+  "something",
+  "start",
+  "stuff",
+  "task",
+  "that",
+  "the",
+  "them",
+  "then",
+  "thing",
+  "this",
+  "to",
+  "todo",
+  "titled",
+  "track",
+  "until",
+  "up",
+  "want",
+  "we",
+  "were",
+  "with",
+  "would",
+  "you",
+  "your",
+]);
+const DERIVED_TITLE_CADENCE_TOKENS = new Set([
+  "afternoon",
+  "afternoons",
+  "breakfast",
+  "daily",
+  "day",
+  "days",
+  "dinner",
+  "each",
+  "evening",
+  "evenings",
+  "every",
+  "hour",
+  "hours",
+  "lunch",
+  "minute",
+  "minutes",
+  "monthly",
+  "morning",
+  "mornings",
+  "night",
+  "nights",
+  "once",
+  "per",
+  "throughout",
+  "time",
+  "times",
+  "today",
+  "tomorrow",
+  "twice",
+  "week",
+  "weeks",
+  "weekly",
+  "with",
+  "x",
+  "year",
+  "years",
+]);
+const GENERIC_DERIVED_TOKENS = new Set([
+  "achieve",
+  "achieving",
+  "better",
+  "goal",
+  "habit",
+  "improve",
+  "item",
+  "plan",
+  "reminder",
+  "routine",
+  "something",
+  "stuff",
+  "task",
+  "thing",
+  "todo",
+]);
+
+type DerivedIntentSegment = {
+  hasQuantity: boolean;
+  text: string;
+};
+
+type DeferredLifeDefinitionDraft = {
+  intent: string;
+  operation: "create_definition";
+  request: {
+    cadence: LifeOpsCadence;
+    description?: string;
+    goalRef?: string;
+    kind: CreateLifeOpsDefinitionRequest["kind"];
+    priority?: number;
+    progressionRule?: CreateLifeOpsDefinitionRequest["progressionRule"];
+    reminderPlan?: CreateLifeOpsDefinitionRequest["reminderPlan"];
+    title: string;
+    websiteAccess?: CreateLifeOpsDefinitionRequest["websiteAccess"];
+  };
+};
+
+type DeferredLifeGoalDraft = {
+  intent: string;
+  operation: "create_goal";
+  request: {
+    cadence?: CreateLifeOpsGoalRequest["cadence"];
+    description?: string;
+    successCriteria?: CreateLifeOpsGoalRequest["successCriteria"];
+    supportStrategy?: CreateLifeOpsGoalRequest["supportStrategy"];
+    title: string;
+  };
+};
+
+type DeferredLifeDraft = DeferredLifeDefinitionDraft | DeferredLifeGoalDraft;
 
 // ── Intent classifier ─────────────────────────────────
 
@@ -149,10 +345,6 @@ export function classifyIntent(intent: string): LifeOperation {
     return "delete_definition";
   }
 
-  if (looksLikeDefinitionCreateIntent(lower)) {
-    return "create_definition";
-  }
-
   // Completion — "I did it", "mark brushing done", "finished my workout", "I brushed my teeth"
   if (looksLikeCompletionReport(lower)) return "complete_occurrence";
 
@@ -172,25 +364,26 @@ export function classifyIntent(intent: string): LifeOperation {
   if (/\b(emails?|inbox|mail|messages?|gmail|respond to|important.*(need|should|must))\b/.test(lower)) return "query_email";
   if (/\b(overview|summary|what'?s active|status|what do i have|show me everything)\b/.test(lower)) return "query_overview";
 
-  // Create goal — "I want to", "my goal is", "life goal"
-  if (/\b(goal|life goal|want to .{5,}|aspir|aim to|commit to)\b/.test(lower)) return "create_goal";
+  if (looksLikeDefinitionCreateIntent(lower)) {
+    return "create_definition";
+  }
+
+  if (looksLikeGoalCreateIntent(lower)) return "create_goal";
 
   // Default: create a task/habit/routine
   return "create_definition";
 }
 
 function looksLikeDefinitionCreateIntent(lower: string): boolean {
-  if (/\b(goal|my goal is|i want to|aspir|aim to|commit to)\b/.test(lower)) {
-    return false;
-  }
-  return (
-    /\b(create|add|set up|setup|start tracking|track|help me|need help|habit named|routine named|task named|remind me to)\b/.test(
-      lower,
-    ) &&
-    /\b(every|daily|weekly|monthly|morning|night|afternoon|evening|twice a day|times a day|throughout the day|with lunch|with breakfast|with dinner|blocks?|unlock|until)\b/.test(
-      lower,
-    )
-  );
+  return hasCadenceHint(lower);
+}
+
+function looksLikeGoalCreateIntent(lower: string): boolean {
+  return /\bgoals?\b/.test(lower) && !hasCadenceHint(lower);
+}
+
+function hasCadenceHint(lower: string): boolean {
+  return CADENCE_HINT_RE.test(lower);
 }
 
 function looksLikeCompletionReport(lower: string): boolean {
@@ -256,29 +449,6 @@ function inferReminderIntensityFromIntent(
 
 // ── Helpers ───────────────────────────────────────────
 
-function toActionData<T extends object>(data: T): ProviderDataRecord {
-  return data as unknown as ProviderDataRecord;
-}
-
-function messageSource(message: Memory): string | null {
-  const source = (message.content as Record<string, unknown> | undefined)?.source;
-  return typeof source === "string" ? source : null;
-}
-
-function messageText(message: Memory): string {
-  const text = (message.content as Record<string, unknown> | undefined)?.text;
-  return typeof text === "string" ? text : "";
-}
-
-async function hasLifeOpsAccess(
-  runtime: Parameters<NonNullable<Action["validate"]>>[0],
-  message: Memory,
-): Promise<boolean> {
-  if (message.entityId === runtime.agentId) return true;
-  const role = await checkSenderRole(runtime, message);
-  return Boolean(role?.isAdmin);
-}
-
 function requestedOwnership(domain?: LifeOpsDomain) {
   if (domain === "agent_ops") {
     return { domain: "agent_ops" as const, subjectType: "agent" as const };
@@ -286,8 +456,12 @@ function requestedOwnership(domain?: LifeOpsDomain) {
   return { domain: "user_lifeops" as const, subjectType: "owner" as const };
 }
 
-function normalizeTitle(value: string): string {
+function normalizeIntentText(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function normalizeTitle(value: string): string {
+  return normalizeIntentText(value);
 }
 
 function matchByTitle<T extends { definition?: { title: string }; goal?: { title: string } }>(
@@ -300,6 +474,181 @@ function matchByTitle<T extends { definition?: { title: string }; goal?: { title
     entries.find((e) => normalizeTitle(e.definition?.title ?? e.goal?.title ?? "").includes(normalized)) ??
     null
   );
+}
+
+function coerceDeferredLifeDraft(value: unknown): DeferredLifeDraft | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  const operation = record.operation;
+  const intent =
+    typeof record.intent === "string" ? record.intent.trim() : "";
+  const request =
+    record.request && typeof record.request === "object"
+      ? (record.request as Record<string, unknown>)
+      : null;
+
+  if (!request || !intent) {
+    return null;
+  }
+
+  const title = typeof request.title === "string" ? request.title.trim() : "";
+  if (!title) {
+    return null;
+  }
+
+  if (operation === "create_definition") {
+    const kind =
+      typeof request.kind === "string"
+        ? (request.kind as CreateLifeOpsDefinitionRequest["kind"])
+        : null;
+    const cadence = request.cadence as LifeOpsCadence | undefined;
+    if (!kind || !cadence) {
+      return null;
+    }
+    return {
+      intent,
+      operation,
+      request: {
+        cadence,
+        description:
+          typeof request.description === "string"
+            ? request.description
+            : undefined,
+        goalRef:
+          typeof request.goalRef === "string" ? request.goalRef : undefined,
+        kind,
+        priority:
+          typeof request.priority === "number" ? request.priority : undefined,
+        progressionRule:
+          request.progressionRule as CreateLifeOpsDefinitionRequest["progressionRule"],
+        reminderPlan:
+          request.reminderPlan as CreateLifeOpsDefinitionRequest["reminderPlan"],
+        title,
+        websiteAccess:
+          request.websiteAccess as CreateLifeOpsDefinitionRequest["websiteAccess"],
+      },
+    };
+  }
+
+  if (operation === "create_goal") {
+    return {
+      intent,
+      operation,
+      request: {
+        cadence: request.cadence as CreateLifeOpsGoalRequest["cadence"],
+        description:
+          typeof request.description === "string"
+            ? request.description
+            : undefined,
+        successCriteria:
+          request.successCriteria as CreateLifeOpsGoalRequest["successCriteria"],
+        supportStrategy:
+          request.supportStrategy as CreateLifeOpsGoalRequest["supportStrategy"],
+        title,
+      },
+    };
+  }
+
+  return null;
+}
+
+function stateActionResults(state: State | undefined): ActionResult[] {
+  if (!state || typeof state !== "object") {
+    return [];
+  }
+  const stateRecord = state as Record<string, unknown>;
+  const data =
+    stateRecord.data && typeof stateRecord.data === "object"
+      ? (stateRecord.data as Record<string, unknown>)
+      : undefined;
+  return Array.isArray(data?.actionResults)
+    ? (data.actionResults as ActionResult[])
+    : [];
+}
+
+function stateMessageDrafts(state: State | undefined): DeferredLifeDraft[] {
+  if (!state || typeof state !== "object") {
+    return [];
+  }
+
+  const stateRecord = state as Record<string, unknown>;
+  const recentMessagesData =
+    stateRecord.recentMessagesData ?? stateRecord.recentMessages;
+  if (!Array.isArray(recentMessagesData)) {
+    return [];
+  }
+
+  const drafts: DeferredLifeDraft[] = [];
+  for (const item of recentMessagesData) {
+    if (!item || typeof item !== "object") {
+      continue;
+    }
+    const content = (item as Record<string, unknown>).content;
+    if (!content || typeof content !== "object") {
+      continue;
+    }
+    const contentRecord = content as Record<string, unknown>;
+    const candidate =
+      coerceDeferredLifeDraft(contentRecord.lifeDraft) ??
+      coerceDeferredLifeDraft(
+        contentRecord.data && typeof contentRecord.data === "object"
+          ? (contentRecord.data as Record<string, unknown>).lifeDraft
+          : undefined,
+      );
+    if (candidate) {
+      drafts.push(candidate);
+    }
+  }
+
+  return drafts;
+}
+
+function latestDeferredLifeDraft(state: State | undefined): DeferredLifeDraft | null {
+  for (const result of [...stateActionResults(state)].reverse()) {
+    const candidate = coerceDeferredLifeDraft(result.data?.lifeDraft);
+    if (candidate) {
+      return candidate;
+    }
+  }
+
+  const messageDrafts = stateMessageDrafts(state);
+  return messageDrafts.length > 0 ? messageDrafts[messageDrafts.length - 1] : null;
+}
+
+function shouldReuseDeferredLifeDraft(args: {
+  currentText: string;
+  details: Record<string, unknown> | undefined;
+  draft: DeferredLifeDraft | null;
+  explicitAction: LifeAction | undefined;
+  paramsIntent: string | undefined;
+  target: string | undefined;
+  title: string | undefined;
+}): boolean {
+  if (!args.draft) {
+    return false;
+  }
+
+  if (detailBoolean(args.details, "confirmed") === true) {
+    return true;
+  }
+
+  if (!args.explicitAction || args.paramsIntent?.trim()) {
+    return false;
+  }
+
+  if (ACTION_TO_OPERATION[args.explicitAction] !== args.draft.operation) {
+    return false;
+  }
+
+  if (args.title || args.target) {
+    return false;
+  }
+
+  const words = args.currentText.trim().split(/\s+/).filter(Boolean);
+  return words.length > 0 && words.length <= 4 && !hasCadenceHint(args.currentText.toLowerCase());
 }
 
 async function resolveGoal(
@@ -398,165 +747,6 @@ function summarizeCadence(cadence: LifeOpsCadence): string {
 }
 
 // ── Calendar/email formatters ─────────────────────────
-
-function formatEventTime(event: LifeOpsCalendarEvent): string {
-  if (event.isAllDay) return "all day";
-  const fmt: Intl.DateTimeFormatOptions = { hour: "numeric", minute: "2-digit" };
-  return `${new Date(event.startAt).toLocaleTimeString(undefined, fmt)} – ${new Date(event.endAt).toLocaleTimeString(undefined, fmt)}`;
-}
-
-function formatRelativeMinutes(minutes: number): string {
-  if (minutes <= 0) return "now";
-  if (minutes < 60) return `in ${Math.round(minutes)} min`;
-  const h = Math.floor(minutes / 60);
-  const m = Math.round(minutes % 60);
-  return m === 0 ? `in ${h}h` : `in ${h}h ${m}m`;
-}
-
-function formatRelativeTime(isoDate: string): string {
-  const diff = Date.now() - Date.parse(isoDate);
-  const minutes = Math.floor(diff / 60_000);
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
-}
-
-function formatCalendarFeed(feed: LifeOpsCalendarFeed, label: string): string {
-  if (feed.events.length === 0) return `No events ${label}.`;
-  const lines: string[] = [`Events ${label}:`];
-  for (const event of feed.events) {
-    const time = formatEventTime(event);
-    const parts = [`- **${event.title}** (${time})`];
-    if (event.location) parts.push(`  Location: ${event.location}`);
-    if (event.attendees.length > 0) {
-      const names = event.attendees.slice(0, 4).map((a) => a.displayName || a.email || "unknown").join(", ");
-      const suffix = event.attendees.length > 4 ? ` +${event.attendees.length - 4} more` : "";
-      parts.push(`  With: ${names}${suffix}`);
-    }
-    if (event.conferenceLink) parts.push(`  Video: ${event.conferenceLink}`);
-    lines.push(parts.join("\n"));
-  }
-  return lines.join("\n");
-}
-
-function formatNextEventContext(ctx: LifeOpsNextCalendarEventContext): string {
-  if (!ctx.event) return "No upcoming events on your calendar.";
-  const event = ctx.event;
-  const lines = [`**Next event: ${event.title}** (${formatEventTime(event)})`];
-  if (ctx.startsInMinutes !== null) lines[0] += ` — ${formatRelativeMinutes(ctx.startsInMinutes)}`;
-  if (ctx.location) lines.push(`Location: ${ctx.location}`);
-  if (ctx.conferenceLink) lines.push(`Video link: ${ctx.conferenceLink}`);
-  if (ctx.attendeeNames.length > 0) lines.push(`Attendees: ${ctx.attendeeNames.join(", ")}`);
-  if (ctx.preparationChecklist.length > 0) {
-    lines.push("Preparation:");
-    for (const item of ctx.preparationChecklist) lines.push(`- ${item}`);
-  }
-  if (ctx.linkedMail.length > 0) {
-    lines.push("Related emails:");
-    for (const mail of ctx.linkedMail.slice(0, 3))
-      lines.push(`- "${mail.subject}" from ${mail.from} (${mail.snippet?.slice(0, 60) ?? ""})`);
-  }
-  return lines.join("\n");
-}
-
-function formatEmailTriage(feed: LifeOpsGmailTriageFeed): string {
-  if (feed.messages.length === 0) return "No important emails right now.";
-  const { summary } = feed;
-  const parts: string[] = [];
-  if (summary.unreadCount > 0) parts.push(`${summary.unreadCount} unread`);
-  if (summary.importantNewCount > 0) parts.push(`${summary.importantNewCount} important`);
-  if (summary.likelyReplyNeededCount > 0) parts.push(`${summary.likelyReplyNeededCount} likely need a reply`);
-  const lines = [parts.length > 0 ? `Email inbox: ${parts.join(", ")}.` : "Email inbox:"];
-  for (const msg of feed.messages.slice(0, 8)) {
-    const badges: string[] = [];
-    if (msg.isImportant) badges.push("important");
-    if (msg.likelyReplyNeeded) badges.push("reply needed");
-    const badgeStr = badges.length > 0 ? ` [${badges.join(", ")}]` : "";
-    const from = msg.from || msg.fromEmail || "unknown";
-    lines.push(`- **${msg.subject}**${badgeStr}`);
-    lines.push(`  From: ${from} · ${formatRelativeTime(msg.receivedAt)}`);
-    if (msg.snippet) lines.push(`  ${msg.snippet.slice(0, 100)}`);
-  }
-  return lines.join("\n");
-}
-
-function formatOverview(overview: LifeOpsOverview): string {
-  const s = overview.owner.summary;
-  const lines = [
-    "Life Ops overview:",
-    `- ${s.activeOccurrenceCount} active items (${s.overdueOccurrenceCount} overdue, ${s.snoozedOccurrenceCount} snoozed)`,
-    `- ${s.activeGoalCount} active goals`,
-    `- ${s.activeReminderCount} pending reminders`,
-  ];
-  if (overview.owner.occurrences.length > 0) {
-    lines.push("\nCurrent items:");
-    for (const occ of overview.owner.occurrences.slice(0, 5)) {
-      const state = occ.state !== "visible" ? ` (${occ.state})` : "";
-      lines.push(`- ${occ.title}${state}`);
-    }
-  }
-  if (overview.owner.goals.length > 0) {
-    lines.push("\nActive goals:");
-    for (const goal of overview.owner.goals.slice(0, 3)) lines.push(`- ${goal.title} (${goal.status})`);
-  }
-  return lines.join("\n");
-}
-
-function dayRange(offset: number) {
-  const base = new Date();
-  base.setHours(0, 0, 0, 0);
-  const start = new Date(base.getTime() + offset * 86_400_000);
-  return { timeMin: start.toISOString(), timeMax: new Date(start.getTime() + 86_400_000).toISOString() };
-}
-
-function weekRange() {
-  const base = new Date();
-  base.setHours(0, 0, 0, 0);
-  return { timeMin: base.toISOString(), timeMax: new Date(base.getTime() + 7 * 86_400_000).toISOString() };
-}
-
-async function isGoogleConnected(service: LifeOpsService): Promise<{
-  connected: boolean; hasCalendar: boolean; hasGmail: boolean;
-}> {
-  let status: LifeOpsGoogleConnectorStatus;
-  try { status = await service.getGoogleConnectorStatus(INTERNAL_URL); }
-  catch { return { connected: false, hasCalendar: false, hasGmail: false }; }
-  const caps = status.grantedCapabilities ?? [];
-  return {
-    connected: status.connected,
-    hasCalendar: caps.some((c) => c.startsWith("google.calendar")),
-    hasGmail: caps.some((c) => c.startsWith("google.gmail")),
-  };
-}
-
-// ── Details extractors ────────────────────────────────
-
-function detailString(details: Record<string, unknown> | undefined, key: string): string | undefined {
-  const v = details?.[key];
-  return typeof v === "string" && v.trim().length > 0 ? v.trim() : undefined;
-}
-
-function detailNumber(details: Record<string, unknown> | undefined, key: string): number | undefined {
-  const v = details?.[key];
-  return typeof v === "number" && Number.isFinite(v) ? v : undefined;
-}
-
-function detailBoolean(details: Record<string, unknown> | undefined, key: string): boolean | undefined {
-  const v = details?.[key];
-  return typeof v === "boolean" ? v : undefined;
-}
-
-function detailObject(details: Record<string, unknown> | undefined, key: string): Record<string, unknown> | undefined {
-  const v = details?.[key];
-  return v && typeof v === "object" && !Array.isArray(v) ? v as Record<string, unknown> : undefined;
-}
-
-function detailArray(details: Record<string, unknown> | undefined, key: string): unknown[] | undefined {
-  const v = details?.[key];
-  return Array.isArray(v) ? v : undefined;
-}
 
 function slugifyValue(value: string): string {
   return value
@@ -704,10 +894,10 @@ function extractIntentWindows(
 ): Array<"morning" | "afternoon" | "evening" | "night"> {
   const lower = intent.toLowerCase();
   const windows: Array<"morning" | "afternoon" | "evening" | "night"> = [];
-  if (/\bmorning\b/.test(lower)) windows.push("morning");
-  if (/\bafternoon\b/.test(lower)) windows.push("afternoon");
-  if (/\bevening\b/.test(lower)) windows.push("evening");
-  if (/\bnight\b/.test(lower)) windows.push("night");
+  if (/\bmornings?\b/.test(lower)) windows.push("morning");
+  if (/\bafternoons?\b/.test(lower)) windows.push("afternoon");
+  if (/\bevenings?\b/.test(lower)) windows.push("evening");
+  if (/\bnights?\b/.test(lower)) windows.push("night");
   return windows;
 }
 
@@ -927,17 +1117,198 @@ function inferSeedCadenceFromIntent(
   }
 
   if (
-    /\b(daily|every day|each day|every morning|every afternoon|every evening|every night)\b/.test(
+    /\b(daily|every day|each day|every mornings?|every afternoons?|every evenings?|every nights?|mornings?|afternoons?|evenings?|nights?)\b/.test(
       lower,
     )
   ) {
     return {
       kind: "daily",
-      windows: effectiveWindows,
+      windows: effectiveWindows.length > 0 ? effectiveWindows : ["morning"],
     };
   }
 
   return null;
+}
+
+function sentenceCase(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return "";
+  }
+  return trimmed.charAt(0).toUpperCase() + trimmed.slice(1);
+}
+
+function titleCase(value: string): string {
+  return value
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+function trimWords(value: string, maxWords: number): string {
+  const words = value.trim().split(/\s+/).filter(Boolean);
+  return words.slice(0, maxWords).join(" ");
+}
+
+function extractQuotedTitle(intent: string): string | null {
+  const matches = [...intent.matchAll(/["“]([^"”]+)["”]/g)];
+  const title = matches[matches.length - 1]?.[1]?.trim() ?? "";
+  return title.length > 0 ? sentenceCase(title) : null;
+}
+
+function tokenizeDerivedSegment(raw: string): string[] {
+  const tokens = raw.match(/[a-z0-9][a-z0-9'-]*/gi) ?? [];
+  return tokens
+    .map((token) => token.trim())
+    .filter((token) => token.length > 0)
+    .filter((token) => {
+      const lower = token.toLowerCase();
+      return (
+        !DERIVED_TITLE_STOPWORDS.has(lower) &&
+        !DERIVED_TITLE_CADENCE_TOKENS.has(lower)
+      );
+    });
+}
+
+function isGenericDerivedSegment(tokens: string[]): boolean {
+  if (tokens.length === 0) {
+    return true;
+  }
+  const normalized = tokens.join(" ").toLowerCase();
+  if (GENERIC_DERIVED_TITLE_RE.test(normalized)) {
+    return true;
+  }
+  return tokens.every((token) => GENERIC_DERIVED_TOKENS.has(token.toLowerCase()));
+}
+
+function isAuxiliaryDerivedSegment(raw: string): boolean {
+  const lower = raw.toLowerCase();
+  return /\b(?:block|blocks|blocked|blocking|lock|locks|locked|locking|unlock|unlocks|unlocked|unlocking|until i|do not just|don't just)\b/.test(
+    lower,
+  );
+}
+
+function normalizeDerivedSegment(raw: string): string {
+  if (isAuxiliaryDerivedSegment(raw)) {
+    return "";
+  }
+  const tokens = tokenizeDerivedSegment(raw);
+  if (
+    !tokens.some((token) => /[a-z]/i.test(token)) ||
+    isGenericDerivedSegment(tokens)
+  ) {
+    return "";
+  }
+  return trimWords(tokens.join(" ").toLowerCase(), 6);
+}
+
+function deriveIntentSegments(intent: string): DerivedIntentSegment[] {
+  const rawSegments = intent
+    .split(/[.!?]/)
+    .flatMap((part) => part.split(/\s+(?:and|&)\s+|,/i))
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+
+  const segments: DerivedIntentSegment[] = [];
+  const seen = new Set<string>();
+  for (const raw of rawSegments) {
+    const text = normalizeDerivedSegment(raw);
+    if (!text || seen.has(text)) {
+      continue;
+    }
+    seen.add(text);
+    segments.push({
+      text,
+      hasQuantity: /\b\d+\b/.test(raw),
+    });
+  }
+  return segments;
+}
+
+function deriveDefinitionTitle(intent: string): string | null {
+  const explicitTitle = extractQuotedTitle(intent);
+  if (explicitTitle) {
+    return explicitTitle;
+  }
+
+  const segments = deriveIntentSegments(intent).sort(
+    (left, right) =>
+      Number(right.hasQuantity) - Number(left.hasQuantity) ||
+      right.text.length - left.text.length,
+  );
+  if (segments.length === 0) {
+    return null;
+  }
+  if (segments.length === 1) {
+    return titleCase(segments[0].text);
+  }
+  return segments.slice(0, 2).map((segment) => titleCase(segment.text)).join(" + ");
+}
+
+function deriveGoalTitle(intent: string): string | null {
+  const explicitTitle = extractQuotedTitle(intent);
+  if (explicitTitle) {
+    return explicitTitle;
+  }
+
+  const segments = deriveIntentSegments(intent).sort(
+    (left, right) => right.text.length - left.text.length,
+  );
+  if (segments.length === 0) {
+    return null;
+  }
+  return titleCase(trimWords(segments[0].text, 8));
+}
+
+function deriveDefinitionDescription(
+  intent: string,
+  title: string,
+): string | undefined {
+  const cleaned = intent
+    .replace(/[.?!]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!cleaned) {
+    return undefined;
+  }
+  if (normalizeTitle(cleaned) === normalizeTitle(title)) {
+    return undefined;
+  }
+  return sentenceCase(trimWords(cleaned, 18));
+}
+
+function hasSpecificDerivedDefinitionDetails(intent: string): boolean {
+  const segments = deriveIntentSegments(intent);
+  return segments.some((segment) => segment.hasQuantity);
+}
+
+function shouldPreferDerivedDefinitionOverSeed(
+  intent: string,
+  seed: LifeDefinitionSeed | null,
+  derivedTitle: string | null,
+): boolean {
+  if (!derivedTitle) {
+    return false;
+  }
+  if (!seed) {
+    return true;
+  }
+  if (normalizeTitle(seed.title) === normalizeTitle(derivedTitle)) {
+    return false;
+  }
+  return hasSpecificDerivedDefinitionDetails(intent);
+}
+
+function shouldRequireLifeCreateConfirmation(args: {
+  confirmed: boolean;
+  messageSource: string | undefined;
+}): boolean {
+  if (args.messageSource === "autonomy") {
+    return false;
+  }
+  return !args.confirmed;
 }
 
 function inferLifeDefinitionSeed(intent: string): LifeDefinitionSeed | null {
@@ -1135,8 +1506,6 @@ export const lifeAction: Action = {
   similes: [
     "MANAGE_LIFEOPS",
     "QUERY_LIFEOPS",
-    "CHECK_CALENDAR",
-    "CHECK_EMAIL",
     "CREATE_TASK",
     "CREATE_HABIT",
     "CREATE_GOAL",
@@ -1146,43 +1515,75 @@ export const lifeAction: Action = {
     "SET_REMINDER_INTENSITY",
   ],
   description:
-    "Manage the user's personal routines, habits, goals, calendar, and email. Use this for: creating/editing/deleting tasks, habits, routines, and goals; completing, snoozing, or skipping items; checking calendar or email; reviewing goal progress; setting up phone/SMS escalation; and adjusting reminder intensity.",
+    "Manage the user's personal routines, habits, goals, reminders, and escalation settings. Use this for: creating/editing/deleting tasks, habits, routines, and goals; completing, snoozing, or skipping items; reviewing goal progress; setting up phone/SMS escalation; and adjusting reminder intensity. Use CALENDAR_ACTION and GMAIL_ACTION for Google Calendar and Gmail workflows.",
   validate: async (runtime, message) => {
-    const source = messageSource(message);
-    return (
-      (source === "client_chat" || message.entityId === runtime.agentId) &&
-      (await hasLifeOpsAccess(runtime, message))
-    );
+    return hasLifeOpsAccess(runtime, message);
   },
-  handler: async (runtime, message, _state, options) => {
+  handler: async (runtime, message, state, options) => {
     if (!(await hasLifeOpsAccess(runtime, message))) {
-      return { success: false, text: "Life management is restricted to the owner and the agent." };
+      return {
+        success: false,
+        text: "Life management is restricted to the owner, explicitly granted users, and the agent.",
+      };
     }
 
     const rawParams = (options as HandlerOptions | undefined)?.parameters as LifeParams | undefined;
     const params = rawParams ?? {} as LifeParams;
-    const intent = params.intent?.trim() || messageText(message).trim();
+    const currentText = messageText(message).trim();
+    const details = params.details;
+    const deferredDraft = latestDeferredLifeDraft(state);
+    const reuseDeferredDraft = shouldReuseDeferredLifeDraft({
+      currentText,
+      details,
+      draft: deferredDraft,
+      explicitAction: params.action,
+      paramsIntent: params.intent,
+      target: params.target,
+      title: params.title,
+    });
+    const intent = reuseDeferredDraft
+      ? (deferredDraft?.intent ?? "")
+      : params.intent?.trim() ?? currentText;
     if (!intent) {
       return { success: false, text: "LIFE requires an intent describing what to do." };
     }
 
-    const explicitAction = params.action && ACTION_TO_OPERATION[params.action];
-    const operation = explicitAction ?? classifyIntent(intent);
+    const explicitOperation = params.action && ACTION_TO_OPERATION[params.action];
+    const operation =
+      reuseDeferredDraft && deferredDraft
+        ? deferredDraft.operation
+        : explicitOperation ?? classifyIntent(intent);
     const service = new LifeOpsService(runtime);
-    const details = params.details;
     const domain = detailString(details, "domain") as LifeOpsDomain | undefined;
     const ownership = requestedOwnership(domain);
-    const chatText = messageText(message).trim();
+    const chatText = intent;
     const inferredSeed = inferLifeDefinitionSeed(intent);
     const targetName = params.target ?? params.title ?? inferredSeed?.title;
+    const createConfirmed =
+      reuseDeferredDraft || detailBoolean(details, "confirmed") === true;
 
     try {
     const createDefinition = async () => {
+      const deferredDefinitionDraft =
+        reuseDeferredDraft && deferredDraft?.operation === "create_definition"
+          ? deferredDraft
+          : null;
       const seed = inferredSeed;
-      const title = params.title ?? seed?.title;
+      const derivedTitle = deriveDefinitionTitle(intent);
+      const preferDerivedDefinition = shouldPreferDerivedDefinitionOverSeed(
+        intent,
+        seed ?? null,
+        derivedTitle,
+      );
+      const title =
+        deferredDefinitionDraft?.request.title ??
+        params.title ??
+        (preferDerivedDefinition ? derivedTitle : seed?.title ?? derivedTitle);
       const cadence =
+        deferredDefinitionDraft?.request.cadence ??
         (detailObject(details, "cadence") as LifeOpsCadence | undefined) ??
-        seed?.cadence;
+        (preferDerivedDefinition ? undefined : seed?.cadence) ??
+        inferSeedCadenceFromIntent(intent, ["morning"]);
       if (!title) {
         return {
           success: false as const,
@@ -1196,39 +1597,86 @@ export const lifeAction: Action = {
         };
       }
       const kind =
+        deferredDefinitionDraft?.request.kind ??
         (detailString(details, "kind") as
           | CreateLifeOpsDefinitionRequest["kind"]
           | undefined) ??
         seed?.kind ??
         "habit";
-      const goalRef =
-        detailString(details, "goalId") ?? detailString(details, "goalTitle");
-      const resolvedGoal = goalRef
-        ? await resolveGoal(service, goalRef, domain)
+      const definitionDraft: DeferredLifeDefinitionDraft =
+        deferredDefinitionDraft ?? {
+          intent,
+          operation: "create_definition",
+          request: {
+            cadence,
+            description:
+              detailString(details, "description") ??
+              (preferDerivedDefinition
+                ? deriveDefinitionDescription(intent, title)
+                : seed?.description),
+            goalRef:
+              detailString(details, "goalId") ??
+              detailString(details, "goalTitle") ??
+              undefined,
+            kind,
+            priority: detailNumber(details, "priority"),
+            progressionRule: detailObject(
+              details,
+              "progressionRule",
+            ) as CreateLifeOpsDefinitionRequest["progressionRule"],
+            reminderPlan:
+              (detailObject(details, "reminderPlan") as
+                | CreateLifeOpsDefinitionRequest["reminderPlan"]
+                | undefined) ??
+              (preferDerivedDefinition
+                ? buildDefaultReminderPlan(`${title} reminder`)
+                : seed?.reminderPlan),
+            title,
+            websiteAccess:
+              (detailObject(details, "websiteAccess") as unknown as
+                | CreateLifeOpsDefinitionRequest["websiteAccess"]
+                | undefined) ?? seed?.websiteAccess,
+          },
+        };
+      if (
+        shouldRequireLifeCreateConfirmation({
+          confirmed: createConfirmed,
+          messageSource:
+            typeof message.content?.source === "string"
+              ? message.content.source
+              : undefined,
+        })
+      ) {
+        return {
+          success: true as const,
+          text: `I can save this as a ${definitionDraft.request.kind} named "${definitionDraft.request.title}" that happens ${summarizeCadence(definitionDraft.request.cadence)}. Confirm and I'll save it, or tell me what to change.`,
+          data: {
+            actionName: "LIFE",
+            deferred: true,
+            lifeDraft: definitionDraft,
+            preview: {
+              cadence: definitionDraft.request.cadence,
+              kind: definitionDraft.request.kind,
+              title: definitionDraft.request.title,
+            },
+          },
+        };
+      }
+      const resolvedGoal = definitionDraft.request.goalRef
+        ? await resolveGoal(service, definitionDraft.request.goalRef, domain)
         : null;
-      const websiteAccessDetails = detailObject(details, "websiteAccess");
-      const websiteAccess =
-        (websiteAccessDetails
-          ? (websiteAccessDetails as unknown as CreateLifeOpsDefinitionRequest["websiteAccess"])
-          : undefined) ?? seed?.websiteAccess;
 
       const created = await service.createDefinition({
         ownership,
-        kind,
-        title,
-        description: detailString(details, "description") ?? seed?.description,
-        originalIntent: chatText || title,
-        cadence,
-        priority: detailNumber(details, "priority"),
-        progressionRule: detailObject(
-          details,
-          "progressionRule",
-        ) as CreateLifeOpsDefinitionRequest["progressionRule"],
-        reminderPlan:
-          (detailObject(details, "reminderPlan") as
-            | CreateLifeOpsDefinitionRequest["reminderPlan"]
-            | undefined) ?? seed?.reminderPlan,
-        websiteAccess,
+        kind: definitionDraft.request.kind,
+        title: definitionDraft.request.title,
+        description: definitionDraft.request.description,
+        originalIntent: definitionDraft.intent || definitionDraft.request.title,
+        cadence: definitionDraft.request.cadence,
+        priority: definitionDraft.request.priority,
+        progressionRule: definitionDraft.request.progressionRule,
+        reminderPlan: definitionDraft.request.reminderPlan,
+        websiteAccess: definitionDraft.request.websiteAccess,
         goalId: resolvedGoal?.goal.id ?? null,
         source: "chat",
       });
@@ -1242,9 +1690,12 @@ export const lifeAction: Action = {
     // ── Queries ─────────────────────────────────────
 
     if (operation === "query_calendar_today" || operation === "query_calendar_next") {
-      const google = await isGoogleConnected(service);
-      if (!google.connected || !google.hasCalendar) {
-        return { success: false, text: "Google Calendar is not connected. Connect Google in the settings to check your calendar." };
+      const google = await getGoogleCapabilityStatus(service);
+      if (!google.hasCalendarRead) {
+        return {
+          success: false,
+          text: calendarReadUnavailableMessage(google),
+        };
       }
       if (operation === "query_calendar_next") {
         const ctx = await service.getNextCalendarEventContext(INTERNAL_URL);
@@ -1262,9 +1713,12 @@ export const lifeAction: Action = {
     }
 
     if (operation === "query_email") {
-      const google = await isGoogleConnected(service);
-      if (!google.connected || !google.hasGmail) {
-        return { success: false, text: "Gmail is not connected. Connect Google with Gmail access in the settings to check your email." };
+      const google = await getGoogleCapabilityStatus(service);
+      if (!google.hasGmailTriage) {
+        return {
+          success: false,
+          text: gmailReadUnavailableMessage(google),
+        };
       }
       const limit = detailNumber(details, "limit") ?? 10;
       const feed = await service.getGmailTriage(INTERNAL_URL, { maxResults: limit });
@@ -1283,16 +1737,60 @@ export const lifeAction: Action = {
     }
 
     if (operation === "create_goal") {
-      const title = params.title;
+      const deferredGoalDraft =
+        reuseDeferredDraft && deferredDraft?.operation === "create_goal"
+          ? deferredDraft
+          : null;
+      const title =
+        deferredGoalDraft?.request.title ??
+        params.title ??
+        deriveGoalTitle(intent);
       if (!title) return { success: false, text: "I need a name for this goal. What are you trying to achieve?" };
+      const goalDraft: DeferredLifeGoalDraft =
+        deferredGoalDraft ?? {
+          intent,
+          operation: "create_goal",
+          request: {
+            cadence: detailObject(details, "cadence"),
+            description: detailString(details, "description"),
+            successCriteria: detailObject(details, "successCriteria"),
+            supportStrategy: detailObject(details, "supportStrategy"),
+            title,
+          },
+        };
+      if (
+        shouldRequireLifeCreateConfirmation({
+          confirmed: createConfirmed,
+          messageSource:
+            typeof message.content?.source === "string"
+              ? message.content.source
+              : undefined,
+        })
+      ) {
+        return {
+          success: true,
+          text: `I can save this goal as "${goalDraft.request.title}". Confirm and I'll save it, or tell me what to change.`,
+          data: {
+            actionName: "LIFE",
+            deferred: true,
+            lifeDraft: goalDraft,
+            preview: {
+              title: goalDraft.request.title,
+            },
+          },
+        };
+      }
       const created = await service.createGoal({
         ownership,
-        title,
-        description: detailString(details, "description"),
-        cadence: detailObject(details, "cadence"),
-        supportStrategy: detailObject(details, "supportStrategy"),
-        successCriteria: detailObject(details, "successCriteria"),
-        metadata: { source: "chat", originalIntent: chatText || title },
+        title: goalDraft.request.title,
+        description: goalDraft.request.description,
+        cadence: goalDraft.request.cadence,
+        supportStrategy: goalDraft.request.supportStrategy,
+        successCriteria: goalDraft.request.successCriteria,
+        metadata: {
+          source: "chat",
+          originalIntent: goalDraft.intent || goalDraft.request.title,
+        },
       });
       return { success: true, text: `Saved goal "${created.goal.title}".`, data: toActionData(created) };
     }
@@ -1465,7 +1963,7 @@ export const lifeAction: Action = {
       name: "action",
       description:
         "What kind of life operation to perform.",
-      required: true,
+      required: false,
       schema: {
         type: "string" as const,
         enum: [
@@ -1493,7 +1991,7 @@ export const lifeAction: Action = {
       name: "intent",
       description:
         'Natural language description of what to do. Examples: "create a daily brushing habit for morning and night", "snooze brushing for 30 minutes", "what\'s on my calendar today".',
-      required: true,
+      required: false,
       schema: { type: "string" as const },
     },
     {
@@ -1511,7 +2009,7 @@ export const lifeAction: Action = {
     {
       name: "details",
       description:
-        "Structured data when needed. May include: cadence (schedule object), kind (task/habit/routine), description, priority, progressionRule, reminderPlan, preset (snooze preset like 15m/30m/1h/tonight/tomorrow_morning), minutes (snooze minutes), phoneNumber, allowSms, allowVoice, steps (escalation steps array), goalId, goalTitle, supportStrategy, successCriteria, note, limit, domain (user_lifeops/agent_ops), or reminder preference targeting.",
+        "Structured data when needed. May include: cadence (schedule object), kind (task/habit/routine), description, priority, progressionRule, reminderPlan, confirmed (boolean when the user explicitly approves a previewed create), preset (snooze preset like 15m/30m/1h/tonight/tomorrow_morning), minutes (snooze minutes), phoneNumber, allowSms, allowVoice, steps (escalation steps array), goalId, goalTitle, supportStrategy, successCriteria, note, limit, domain (user_lifeops/agent_ops), or reminder preference targeting.",
       required: false,
       schema: { type: "object" as const },
     },

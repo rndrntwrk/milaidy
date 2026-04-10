@@ -7,6 +7,16 @@ const packageRoot = path.dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   resolve: {
     alias: {
+      "@elizaos/core/roles": path.join(
+        packageRoot,
+        "..",
+        "..",
+        "eliza",
+        "packages",
+        "typescript",
+        "src",
+        "roles.ts",
+      ),
       "@elizaos/core": path.join(
         packageRoot,
         "..",

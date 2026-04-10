@@ -4,6 +4,7 @@ const GOOGLE_REAUTH_PATTERNS = [
   "token has been expired or revoked",
   "needs re-authentication",
   "needs reauthentication",
+  "insufficient authentication scopes",
 ] as const;
 
 const GOOGLE_ADMIN_POLICY_PATTERNS = [

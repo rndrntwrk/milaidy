@@ -143,7 +143,7 @@ async function runRoute(
   });
   const service = getService(ctx);
   if (!service) {
-    logger.warn(
+    logger.info(
       {
         boundary: "lifeops",
         operation,
@@ -183,7 +183,7 @@ async function runRoute(
     }
     if (isRetryableLifeOpsStorageError(error)) {
       const message = "Life Ops storage is still initializing. Refresh in a moment.";
-      logger.warn(
+      logger.info(
         {
           boundary: "lifeops",
           operation,

@@ -81,11 +81,25 @@ function emitEvent(
   event: IntegrationObservabilityEvent,
 ): void {
   const line = `${EVENT_PREFIX} ${JSON.stringify(event)}`;
-  if (event.outcome === "success") {
+  if (
+    event.outcome === "success" ||
+    isExpectedTransientFailure(event)
+  ) {
     sink.info(line);
     return;
   }
   sink.warn(line);
+}
+
+function isExpectedTransientFailure(
+  event: IntegrationObservabilityEvent,
+): boolean {
+  return (
+    event.outcome === "failure" &&
+    event.boundary === "lifeops" &&
+    (event.errorKind === "runtime_unavailable" ||
+      event.errorKind === "lifeops_storage_unavailable")
+  );
 }
 
 export function createIntegrationTelemetrySpan(

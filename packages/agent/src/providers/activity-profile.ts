@@ -6,7 +6,7 @@ import type {
   State,
 } from "@elizaos/core";
 import { logger } from "@elizaos/core";
-import { checkSenderRole } from "@miladyai/plugin-roles";
+import { checkSenderRole } from "@elizaos/core/roles";
 import { resolveDefaultTimeZone } from "../lifeops/defaults.js";
 import { resolveCurrentBucket } from "../activity-profile/analyzer.js";
 import { getLocalDateKey, getZonedDateParts } from "../lifeops/time.js";

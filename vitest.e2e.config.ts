@@ -10,6 +10,14 @@ import {
 
 const repoRoot = path.dirname(fileURLToPath(import.meta.url));
 const elizaCoreEntry = getElizaCoreEntry(repoRoot);
+const elizaCoreRolesEntry = path.join(
+  repoRoot,
+  "eliza",
+  "packages",
+  "typescript",
+  "src",
+  "roles.ts",
+);
 const autonomousSourceRoot = getAutonomousSourceRoot(repoRoot);
 const appCoreSourceRoot = getAppCoreSourceRoot(repoRoot);
 
@@ -23,6 +31,10 @@ export default defineConfig({
       },
       ...(elizaCoreEntry
         ? [
+            {
+              find: "@elizaos/core/roles",
+              replacement: elizaCoreRolesEntry,
+            },
             {
               find: "@elizaos/core",
               replacement: elizaCoreEntry,
@@ -85,26 +97,6 @@ export default defineConfig({
           repoRoot,
           "packages",
           "plugin-selfcontrol",
-          "src",
-          "index.ts",
-        ),
-      },
-      {
-        find: /^@miladyai\/plugin-roles\/(.*)/,
-        replacement: path.join(
-          repoRoot,
-          "packages",
-          "plugin-roles",
-          "src",
-          "$1",
-        ),
-      },
-      {
-        find: "@miladyai/plugin-roles",
-        replacement: path.join(
-          repoRoot,
-          "packages",
-          "plugin-roles",
           "src",
           "index.ts",
         ),

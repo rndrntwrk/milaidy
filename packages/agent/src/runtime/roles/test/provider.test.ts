@@ -88,7 +88,7 @@ describe("rolesProvider", () => {
         roles: { "discord-guild-owner": "OWNER", "owner-app": "OWNER" },
       },
       settings: {
-        MILADY_ADMIN_ENTITY_ID: "owner-app",
+        ELIZA_ADMIN_ENTITY_ID: "owner-app",
       },
       entities: {
         "owner-app": { names: ["Shaw"] },

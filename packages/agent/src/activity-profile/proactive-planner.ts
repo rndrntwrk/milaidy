@@ -7,10 +7,7 @@
  */
 
 import { getLocalDateKey, getZonedDateParts } from "../lifeops/time.js";
-import {
-  resolveEffectiveDayKey,
-  wasActiveToday,
-} from "./analyzer.js";
+import { resolveEffectiveDayKey, wasActiveToday } from "./analyzer.js";
 import type {
   ActivityProfile,
   FiredActionsLog,
@@ -79,11 +76,16 @@ export function planGm(
   }
 
   // User inactive for 48h+ — don't be annoying
-  if (profile.lastSeenAt > 0 && currentTime.getTime() - profile.lastSeenAt > INACTIVITY_SKIP_MS) {
+  if (
+    profile.lastSeenAt > 0 &&
+    currentTime.getTime() - profile.lastSeenAt > INACTIVITY_SKIP_MS
+  ) {
     return makeSkipped("gm", currentTime, profile, "user inactive for 48h+");
   }
 
-  const localDateKey = getLocalDateKey(getZonedDateParts(currentTime, timezone));
+  const localDateKey = getLocalDateKey(
+    getZonedDateParts(currentTime, timezone),
+  );
   if (resolveEffectiveDayKey(profile, timezone, currentTime) !== localDateKey) {
     return null;
   }
@@ -103,7 +105,8 @@ export function planGm(
 
   // Upcoming occurrences due in the morning
   const morningOccurrences = occurrences.filter((occ) => {
-    if (!occ.dueAt || occ.state === "completed" || occ.state === "skipped") return false;
+    if (!occ.dueAt || occ.state === "completed" || occ.state === "skipped")
+      return false;
     const dueMs = new Date(occ.dueAt).getTime();
     const dueParts = getZonedDateParts(new Date(occ.dueAt), timezone);
     return dueMs >= currentTime.getTime() && dueParts.hour < 12;
@@ -115,7 +118,11 @@ export function planGm(
   }
 
   // Today's calendar events
-  const todayEvents = getTodayNonAllDayEvents(calendarEvents, timezone, currentTime);
+  const todayEvents = getTodayNonAllDayEvents(
+    calendarEvents,
+    timezone,
+    currentTime,
+  );
   if (todayEvents.length > 0) {
     const first = todayEvents[0];
     const firstParts = getZonedDateParts(new Date(first.startAt), timezone);
@@ -124,15 +131,15 @@ export function planGm(
     );
   }
 
-  const contextSummary = contextParts.length > 0
-    ? `gm context: ${contextParts.join(" | ")}`
-    : "gm";
+  const contextSummary =
+    contextParts.length > 0 ? `gm context: ${contextParts.join(" | ")}` : "gm";
 
   return {
     kind: "gm",
     scheduledFor: gmTime,
     targetPlatform: selectTargetPlatform(profile, false),
     contextSummary,
+    messageText: buildGmMessage(contextParts),
     status: "pending",
   };
 }
@@ -169,6 +176,7 @@ export function planGn(
     scheduledFor: gnTime,
     targetPlatform: selectTargetPlatform(profile, true),
     contextSummary: "gn",
+    messageText: "Good night.",
     status: "pending",
   };
 }
@@ -196,17 +204,26 @@ export function planNudges(
 
   // Nudge for upcoming occurrences
   for (const occ of occurrences) {
-    if (!occ.dueAt || occ.state === "completed" || occ.state === "skipped") continue;
+    if (!occ.dueAt || occ.state === "completed" || occ.state === "skipped")
+      continue;
     if (nudgedIds.has(occ.id)) continue;
 
     const dueMs = new Date(occ.dueAt).getTime();
     if (dueMs > horizonMs || dueMs < currentTime.getTime()) continue;
 
     // Find any calendar event starting right after this occurrence
-    const nearbyEvent = findNearbyCalendarEvent(calendarEvents, dueMs, timezone, currentTime);
+    const nearbyEvent = findNearbyCalendarEvent(
+      calendarEvents,
+      dueMs,
+      timezone,
+      currentTime,
+    );
     const contextParts = [occ.title];
     if (nearbyEvent) {
-      const eventParts = getZonedDateParts(new Date(nearbyEvent.startAt), timezone);
+      const eventParts = getZonedDateParts(
+        new Date(nearbyEvent.startAt),
+        timezone,
+      );
       contextParts.push(
         `before your ${eventParts.hour}:${String(eventParts.minute).padStart(2, "0")} ${nearbyEvent.summary}`,
       );
@@ -217,6 +234,7 @@ export function planNudges(
       scheduledFor: dueMs - leadMs,
       targetPlatform: selectTargetPlatform(profile, true),
       contextSummary: contextParts.join(" — "),
+      messageText: contextParts.join(" — "),
       occurrenceId: occ.id,
       status: "pending",
     });
@@ -235,6 +253,8 @@ export function planNudges(
       scheduledFor: startMs - leadMs,
       targetPlatform: selectTargetPlatform(profile, true),
       contextSummary: event.summary,
+      messageText: event.summary,
+      calendarEventId: event.id,
       status: "pending",
     });
   }
@@ -282,7 +302,8 @@ export function planDowntimeNudges(
     .map((occ) => {
       const dueMs = new Date(occ.dueAt as string).getTime();
       const overdueMs = Math.max(currentTime.getTime() - dueMs, 0);
-      const dueSoonMinutes = Math.max(dueMs - currentTime.getTime(), 0) / 60_000;
+      const dueSoonMinutes =
+        Math.max(dueMs - currentTime.getTime(), 0) / 60_000;
       return {
         occ,
         score:
@@ -304,6 +325,7 @@ export function planDowntimeNudges(
       scheduledFor: currentTime.getTime(),
       targetPlatform: selectTargetPlatform(profile, true),
       contextSummary: buildDowntimeContext(selected.occ, currentTime),
+      messageText: buildDowntimeContext(selected.occ, currentTime),
       occurrenceId: selected.occ.id,
       status: "pending",
     },
@@ -333,8 +355,11 @@ function resolveGmHour(
   // Priority 1: calendar — 30 min before first event
   const todayEvents = getTodayNonAllDayEvents(calendarEvents, timezone, now);
   if (todayEvents.length > 0) {
-    const firstParts = getZonedDateParts(new Date(todayEvents[0].startAt), timezone);
-    const leadHour = firstParts.hour - (GM_LEAD_MINUTES / 60);
+    const firstParts = getZonedDateParts(
+      new Date(todayEvents[0].startAt),
+      timezone,
+    );
+    const leadHour = firstParts.hour - GM_LEAD_MINUTES / 60;
     if (leadHour >= 5) return Math.floor(leadHour);
   }
 
@@ -346,13 +371,13 @@ function resolveGmHour(
 
   // Priority 3: message histogram — 30 min before typical first active hour
   if (profile.typicalFirstActiveHour !== null) {
-    const leadHour = profile.typicalFirstActiveHour - (GM_LEAD_MINUTES / 60);
+    const leadHour = profile.typicalFirstActiveHour - GM_LEAD_MINUTES / 60;
     if (leadHour >= 5) return Math.floor(leadHour);
   }
 
   // Priority 4: calendar-derived first event hour
   if (profile.typicalFirstEventHour !== null) {
-    const leadHour = profile.typicalFirstEventHour - (GM_LEAD_MINUTES / 60);
+    const leadHour = profile.typicalFirstEventHour - GM_LEAD_MINUTES / 60;
     if (leadHour >= 5) return Math.floor(leadHour);
   }
 
@@ -361,10 +386,26 @@ function resolveGmHour(
 
 function resolveGnHour(profile: ActivityProfile): number {
   if (profile.typicalLastActiveHour !== null) {
-    const lagHour = profile.typicalLastActiveHour + (GN_LAG_MINUTES / 60);
+    const lagHour = profile.typicalLastActiveHour + GN_LAG_MINUTES / 60;
     return Math.min(Math.ceil(lagHour), 23);
   }
   return DEFAULT_GN_HOUR;
+}
+
+function buildGmMessage(contextParts: string[]): string {
+  if (contextParts.length === 0) {
+    return "Good morning.";
+  }
+
+  const normalizedParts = contextParts
+    .map((part) => capitalizeSentence(part))
+    .filter((part) => part.length > 0);
+
+  if (normalizedParts.length === 0) {
+    return "Good morning.";
+  }
+
+  return `Good morning. ${normalizedParts.join(". ")}.`;
 }
 
 function isOneOffOccurrence(occurrence: OccurrenceSlim): boolean {
@@ -382,10 +423,7 @@ function occurrencePriorityScore(occurrence: OccurrenceSlim): number {
   return Math.min(priority, 10) * 5;
 }
 
-function buildDowntimeContext(
-  occurrence: OccurrenceSlim,
-  now: Date,
-): string {
+function buildDowntimeContext(occurrence: OccurrenceSlim, now: Date): string {
   if (!occurrence.dueAt) {
     return `Downtime suggestion: ${occurrence.title}`;
   }
@@ -400,6 +438,14 @@ function buildDowntimeContext(
     0,
   );
   return `Downtime suggestion: ${occurrence.title} (due in ${minutesUntilDue}m)`;
+}
+
+function capitalizeSentence(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return "";
+  }
+  return trimmed[0].toUpperCase() + trimmed.slice(1);
 }
 
 function isBusyDay(
@@ -417,10 +463,7 @@ function isBusyDay(
     return true;
   }
 
-  if (
-    profile.avgWeekdayMeetings !== null &&
-    profile.avgWeekdayMeetings >= 4
-  ) {
+  if (profile.avgWeekdayMeetings !== null && profile.avgWeekdayMeetings >= 4) {
     return true;
   }
 
@@ -467,7 +510,9 @@ function getTodayNonAllDayEvents(
         startParts.day === todayParts.day
       );
     })
-    .sort((a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime());
+    .sort(
+      (a, b) => new Date(a.startAt).getTime() - new Date(b.startAt).getTime(),
+    );
 }
 
 function findNearbyCalendarEvent(
@@ -487,7 +532,11 @@ function findNearbyCalendarEvent(
   return null;
 }
 
-function localHourToEpoch(hour: number, timezone: string, referenceDate: Date): number {
+function localHourToEpoch(
+  hour: number,
+  timezone: string,
+  referenceDate: Date,
+): number {
   // Build an ISO string for today at the target hour in the given timezone,
   // then convert to epoch ms. We approximate by getting today's date parts
   // and computing offset from midnight.
@@ -510,6 +559,7 @@ function makeSkipped(
     scheduledFor: now.getTime(),
     targetPlatform: profile.primaryPlatform ?? "client_chat",
     contextSummary: "",
+    messageText: "",
     status: "skipped",
     skipReason: reason,
   };

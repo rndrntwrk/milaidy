@@ -356,6 +356,35 @@ describe("App", () => {
     expect(panel.props["data-open"]).toBe("true");
   });
 
+  it("disables lifeops activity signals until the backend connection is live", async () => {
+    useAppMock.mockImplementation(() => ({
+      onboardingLoading: false,
+      startupPhase: "ready",
+      startupError: null,
+      startupCoordinator: { phase: "ready" },
+      authRequired: false,
+      onboardingComplete: true,
+      retryStartup: vi.fn(),
+      tab: "chat",
+      setTab: vi.fn(),
+      actionNotice: null,
+      uiShellMode: "native",
+      agentStatus: { state: "running" },
+      backendConnection: { state: "reconnecting" },
+      unreadConversations: new Set(),
+      activeGameViewerUrl: null,
+      gameOverlayEnabled: false,
+      t: (key: string, options?: { defaultValue?: string }) =>
+        options?.defaultValue ?? key,
+    }));
+
+    await act(async () => {
+      TestRenderer.create(React.createElement(App));
+    });
+
+    expect(useLifeOpsActivitySignalsMock).toHaveBeenCalledWith(false);
+  });
+
   it("shows the connection-lost overlay when backend reconnect attempts are exhausted", async () => {
     useAppMock.mockImplementation(() => ({
       onboardingLoading: false,

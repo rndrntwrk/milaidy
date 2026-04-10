@@ -6,9 +6,9 @@
 import type { DatabaseProviderType } from "@miladyai/agent/contracts/config";
 import type {
   CaptureLifeOpsActivitySignalRequest,
+  LifeOpsActivitySignal,
   LifeOpsConnectorMode,
   LifeOpsConnectorSide,
-  LifeOpsActivitySignal,
 } from "@miladyai/shared/contracts/lifeops";
 import { MiladyClient } from "./client-base";
 import type {
@@ -160,6 +160,10 @@ declare module "./client-base" {
       chats: Array<{
         id: string;
         source: string;
+        /** Owning server/world id when the connector exposes one. */
+        worldId?: string;
+        /** User-facing server/world label for selectors and section headers. */
+        worldLabel: string;
         title: string;
         avatarUrl?: string;
         lastMessageText: string;
@@ -693,6 +697,10 @@ MiladyClient.prototype.getInboxChats = async function (
     chats: Array<{
       id: string;
       source: string;
+      /** Owning server/world id when the connector exposes one. */
+      worldId?: string;
+      /** User-facing server/world label for selectors and section headers. */
+      worldLabel: string;
       title: string;
       avatarUrl?: string;
       lastMessageText: string;

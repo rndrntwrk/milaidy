@@ -195,7 +195,7 @@ describe("LifeOpsService", () => {
     });
   });
 
-  it("does not synthesize a discord runtime target when no real owner entity exists", async () => {
+  it("falls back to the resolved owner entity when no explicit owner contact exists", async () => {
     configMocks.loadElizaConfig.mockReturnValue({
       agents: {
         defaults: {
@@ -203,6 +203,7 @@ describe("LifeOpsService", () => {
         },
       },
     });
+    ownerEntityMocks.resolveOwnerEntityId.mockResolvedValue("owner-fallback-uuid");
     const runtime = createRuntime();
     const service = new LifeOpsService(runtime);
     (service as unknown as { repository: Record<string, unknown> }).repository = {
@@ -234,13 +235,19 @@ describe("LifeOpsService", () => {
     });
 
     expect(ownerEntityMocks.resolveOwnerEntityId).toHaveBeenCalledWith(runtime);
-    expect(runtime.sendMessageToTarget).not.toHaveBeenCalled();
-    expect(attempt).toMatchObject({
-      outcome: "blocked_connector",
-      connectorRef: null,
-      deliveryMetadata: expect.objectContaining({
-        reason: "unconfigured_channel",
+    expect(runtime.sendMessageToTarget).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: "discord",
+        entityId: "owner-fallback-uuid",
+        channelId: null,
       }),
+      expect.objectContaining({
+        source: "discord",
+      }),
+    );
+    expect(attempt).toMatchObject({
+      outcome: "delivered",
+      connectorRef: "runtime:discord:owner-fallback-uuid",
     });
   });
 

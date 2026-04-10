@@ -715,6 +715,22 @@ function googleGrantHasAuthFailureMetadata(
   );
 }
 
+function normalizedStringSet(values: readonly string[]): string[] {
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))].sort();
+}
+
+function sameNormalizedStringSet(
+  left: readonly string[],
+  right: readonly string[],
+): boolean {
+  const leftValues = normalizedStringSet(left);
+  const rightValues = normalizedStringSet(right);
+  if (leftValues.length !== rightValues.length) {
+    return false;
+  }
+  return leftValues.every((value, index) => value === rightValues[index]);
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -1285,7 +1301,7 @@ function normalizeCalendarId(value: unknown): string {
 }
 
 function normalizeCalendarTimeZone(value: unknown): string {
-  return normalizeValidTimeZone(value, "timeZone", "UTC");
+  return normalizeValidTimeZone(value, "timeZone", resolveDefaultTimeZone());
 }
 
 function resolveCalendarWindow(args: {
@@ -3862,11 +3878,29 @@ export class LifeOpsService {
       existingGrant?.preferredByAgent ??
       (currentGoogleGrants.length === 0 ||
         !currentGoogleGrants.some((grant) => grant.preferredByAgent));
+    const existingLinkedAt =
+      typeof existingGrant?.metadata.linkedAt === "string" &&
+      existingGrant.metadata.linkedAt.trim().length > 0
+        ? existingGrant.metadata.linkedAt
+        : null;
+    const cloudRelinked =
+      typeof status.linkedAt === "string" &&
+      status.linkedAt.trim().length > 0 &&
+      status.linkedAt !== existingLinkedAt;
+    const preserveAuthFailure =
+      existingGrant?.metadata.authState === "needs_reauth" &&
+      !cloudRelinked &&
+      existingGrant.cloudConnectionId === status.connectionId &&
+      sameNormalizedStringSet(existingGrant.grantedScopes, status.grantedScopes) &&
+      sameNormalizedStringSet(
+        normalizeGrantCapabilities(existingGrant.capabilities),
+        status.grantedCapabilities,
+      );
     const clearedMetadata = clearGoogleGrantAuthFailureMetadata(
       existingGrant?.metadata ?? {},
     );
     const baseMetadata = {
-      ...clearedMetadata,
+      ...(preserveAuthFailure ? { ...(existingGrant?.metadata ?? {}) } : clearedMetadata),
       expiresAt: status.expiresAt,
       hasRefreshToken: status.hasRefreshToken,
       linkedAt: status.linkedAt,
@@ -3885,13 +3919,22 @@ export class LifeOpsService {
           preferredByAgent,
           cloudConnectionId: status.connectionId,
           metadata:
-            status.reason === "needs_reauth"
+            status.reason === "needs_reauth" || preserveAuthFailure
               ? {
                   ...baseMetadata,
                   authState: "needs_reauth",
                   lastAuthError:
-                    "Managed Google connection needs re-authentication.",
-                  lastAuthErrorAt: nowIso,
+                    preserveAuthFailure &&
+                    typeof existingGrant?.metadata.lastAuthError === "string" &&
+                    existingGrant.metadata.lastAuthError.trim().length > 0
+                      ? existingGrant.metadata.lastAuthError
+                      : "Managed Google connection needs re-authentication.",
+                  lastAuthErrorAt:
+                    preserveAuthFailure &&
+                    typeof existingGrant?.metadata.lastAuthErrorAt === "string" &&
+                    existingGrant.metadata.lastAuthErrorAt.trim().length > 0
+                      ? existingGrant.metadata.lastAuthErrorAt
+                      : nowIso,
                 }
               : baseMetadata,
           lastRefreshAt: nowIso,
@@ -3932,7 +3975,11 @@ export class LifeOpsService {
           statusCode: error.status,
           authState: grant.metadata.authState ?? null,
         });
-        if (error.status === 401) {
+        const needsReauth = googleErrorRequiresReauth(
+          error.status,
+          error.message,
+        );
+        if (needsReauth) {
           await this.markGoogleGrantNeedsReauth(grant, error.message);
           fail(
             401,
@@ -9722,6 +9769,8 @@ export class LifeOpsService {
         side,
       );
       const grant = mirroredGrant ?? resolvedGrant ?? null;
+      const forcedNeedsReauth =
+        grant?.metadata.authState === "needs_reauth" || false;
       return {
         provider: "google",
         side,
@@ -9731,8 +9780,8 @@ export class LifeOpsService {
         executionTarget: "cloud",
         sourceOfTruth: "cloud_connection",
         configured: managedStatus.configured,
-        connected: managedStatus.connected,
-        reason: managedStatus.reason,
+        connected: managedStatus.connected && !forcedNeedsReauth,
+        reason: forcedNeedsReauth ? "needs_reauth" : managedStatus.reason,
         preferredByAgent: grant?.preferredByAgent ?? false,
         cloudConnectionId: managedStatus.connectionId,
         identity: managedStatus.identity,

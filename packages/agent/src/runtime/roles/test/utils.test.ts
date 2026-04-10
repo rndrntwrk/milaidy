@@ -10,6 +10,7 @@ import type { RoleName, RolesWorldMetadata } from "../src/types";
 import { ROLE_RANK } from "../src/types";
 import {
   canModifyRole,
+  checkSenderPrivateAccess,
   checkSenderRole,
   getConfiguredOwnerEntityIds,
   getEntityRole,
@@ -496,8 +497,8 @@ describe("canonical owner settings", () => {
   it("collects the configured adminEntityId and owner contact entity ids", () => {
     const runtime = mockRuntime({
       settings: {
-        MILADY_ADMIN_ENTITY_ID: "owner-canonical",
-        MILADY_OWNER_CONTACTS_JSON: JSON.stringify({
+        ELIZA_ADMIN_ENTITY_ID: "owner-canonical",
+        ELIZA_OWNER_CONTACTS_JSON: JSON.stringify({
           client_chat: { entityId: "owner-canonical" },
           discord: { entityId: "owner-canonical" },
           telegram: { entityId: "owner-shadow" },
@@ -515,7 +516,7 @@ describe("canonical owner settings", () => {
   it("prefers the configured canonical owner over world ownership metadata", () => {
     const runtime = mockRuntime({
       settings: {
-        MILADY_ADMIN_ENTITY_ID: "owner-canonical",
+        ELIZA_ADMIN_ENTITY_ID: "owner-canonical",
       },
     });
 
@@ -530,7 +531,7 @@ describe("canonical owner settings", () => {
     const runtime = mockRuntime({
       room: null,
       settings: {
-        MILADY_ADMIN_ENTITY_ID: "owner-canonical",
+        ELIZA_ADMIN_ENTITY_ID: "owner-canonical",
       },
     });
 
@@ -686,7 +687,7 @@ describe("checkSenderRole", () => {
         },
       },
       settings: {
-        MILADY_ADMIN_ENTITY_ID: "app-owner",
+        ELIZA_ADMIN_ENTITY_ID: "app-owner",
       },
     });
 
@@ -806,7 +807,7 @@ describe("checkSenderRole", () => {
         },
       },
       settings: {
-        MILADY_ADMIN_ENTITY_ID: "owner-app",
+        ELIZA_ADMIN_ENTITY_ID: "owner-app",
       },
       relationships: [
         {
@@ -826,6 +827,113 @@ describe("checkSenderRole", () => {
       isOwner: true,
       isAdmin: true,
       canManageRoles: true,
+    });
+  });
+});
+
+describe("checkSenderPrivateAccess", () => {
+  it("allows the canonical owner", async () => {
+    const runtime = mockRuntime({
+      room: { worldId: "w1" },
+      world: {
+        id: "w1",
+        metadata: { ownership: { ownerId: "owner-1" }, roles: {} },
+      },
+    });
+
+    await expect(checkSenderPrivateAccess(runtime, msg("owner-1"))).resolves.toEqual({
+      entityId: "owner-1",
+      role: "OWNER",
+      isOwner: true,
+      isAdmin: true,
+      canManageRoles: true,
+      hasPrivateAccess: true,
+      accessRole: "OWNER",
+      accessSource: "owner",
+    });
+  });
+
+  it("allows a direct manual grant", async () => {
+    const runtime = mockRuntime({
+      room: { worldId: "w1" },
+      world: {
+        id: "w1",
+        metadata: {
+          roles: { teammate: "USER" },
+          roleSources: { teammate: "manual" },
+        },
+      },
+    });
+
+    await expect(checkSenderPrivateAccess(runtime, msg("teammate"))).resolves.toEqual({
+      entityId: "teammate",
+      role: "USER",
+      isOwner: false,
+      isAdmin: false,
+      canManageRoles: false,
+      hasPrivateAccess: true,
+      accessRole: "USER",
+      accessSource: "manual",
+    });
+  });
+
+  it("allows a confirmed linked identity to inherit a manual grant", async () => {
+    const runtime = mockRuntime({
+      room: { worldId: "w1" },
+      world: {
+        id: "w1",
+        metadata: {
+          roles: { teammate: "ADMIN" },
+          roleSources: { teammate: "manual" },
+        },
+      },
+      relationships: [
+        {
+          id: "rel-1" as UUID,
+          sourceEntityId: "discord-teammate" as UUID,
+          targetEntityId: "teammate" as UUID,
+          agentId: "agent-1" as UUID,
+          tags: ["identity_link"],
+          metadata: { status: "confirmed" },
+        } as Relationship,
+      ],
+    });
+
+    await expect(
+      checkSenderPrivateAccess(runtime, msg("discord-teammate")),
+    ).resolves.toEqual({
+      entityId: "discord-teammate",
+      role: "GUEST",
+      isOwner: false,
+      isAdmin: false,
+      canManageRoles: false,
+      hasPrivateAccess: true,
+      accessRole: "ADMIN",
+      accessSource: "linked_manual",
+    });
+  });
+
+  it("does not grant private access to connector-admin bootstrap alone", async () => {
+    const runtime = mockRuntime({
+      room: { worldId: "w1" },
+      world: {
+        id: "w1",
+        metadata: {
+          roles: { helper: "ADMIN" },
+          roleSources: { helper: "connector_admin" },
+        },
+      },
+    });
+
+    await expect(checkSenderPrivateAccess(runtime, msg("helper"))).resolves.toEqual({
+      entityId: "helper",
+      role: "ADMIN",
+      isOwner: false,
+      isAdmin: true,
+      canManageRoles: true,
+      hasPrivateAccess: false,
+      accessRole: null,
+      accessSource: null,
     });
   });
 });
@@ -875,13 +983,17 @@ describe("setEntityRole", () => {
     const result = await setEntityRole(runtime, msg("e1"), "e2", "ADMIN");
     expect(result).toEqual({ e1: "OWNER", e2: "ADMIN" });
     expect(updateWorld).toHaveBeenCalledTimes(1);
+    expect(worldObj.metadata.roleSources).toEqual({ e2: "manual" });
   });
 
   it("sets GUEST role (stays in map unlike old NONE behavior)", async () => {
     const updateWorld = vi.fn().mockResolvedValue(undefined);
     const worldObj = {
       id: "w1",
-      metadata: { roles: { e1: "OWNER" as RoleName, e2: "ADMIN" as RoleName } },
+      metadata: {
+        roles: { e1: "OWNER" as RoleName, e2: "ADMIN" as RoleName },
+        roleSources: { e2: "manual" as const },
+      },
     };
     const runtime = mockRuntime({
       room: { worldId: "w1" },
@@ -890,6 +1002,7 @@ describe("setEntityRole", () => {
     });
     const result = await setEntityRole(runtime, msg("e1"), "e2", "GUEST");
     expect(result).toEqual({ e1: "OWNER", e2: "GUEST" });
+    expect(worldObj.metadata.roleSources).toEqual({});
   });
 
   it("throws when world can't be resolved", async () => {
@@ -908,5 +1021,6 @@ describe("setEntityRole", () => {
     });
     const result = await setEntityRole(runtime, msg("e1"), "e2", "USER");
     expect(result).toEqual({ e2: "USER" });
+    expect(worldObj.metadata.roleSources).toEqual({ e2: "manual" });
   });
 });

@@ -3712,6 +3712,14 @@ const _WORKBENCH_TODO_TAG = WORKBENCH_TODO_TAG;
  * Stores the message as a Memory in the conversation room and broadcasts
  * a `proactive-message` WS event to the frontend.
  */
+const CHAT_SUPPRESSED_AUTONOMY_SOURCES = new Set([
+  "lifeops-reminder",
+  "lifeops-workflow",
+  "proactive-gm",
+  "proactive-gn",
+  "proactive-nudge",
+]);
+
 export async function routeAutonomyTextToUser(
   state: ServerState,
   responseText: string,
@@ -3737,6 +3745,10 @@ export async function routeAutonomyTextToUser(
     conv = sorted[0];
   }
   if (!conv) return; // No conversations exist yet
+
+  if (CHAT_SUPPRESSED_AUTONOMY_SOURCES.has(source)) {
+    return;
+  }
 
   // Ephemeral sources: broadcast to UI but don't persist to DB.
   // Coding-agent status updates and coordinator decisions are transient —

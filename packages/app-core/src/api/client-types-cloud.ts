@@ -180,6 +180,31 @@ export interface CloudCompatAgentStatus {
   databaseStatus: string;
 }
 
+export interface CloudCompatAgentProvisionResponse {
+  success: boolean;
+  created?: boolean;
+  alreadyInProgress?: boolean;
+  message?: string;
+  error?: string;
+  requiredBalance?: number;
+  currentBalance?: number;
+  data?: {
+    id?: string;
+    agentId?: string;
+    agentName?: string;
+    status?: string;
+    jobId?: string;
+    bridgeUrl?: string | null;
+    healthUrl?: string | null;
+    estimatedCompletionAt?: string | null;
+  };
+  polling?: {
+    endpoint?: string;
+    intervalMs?: number;
+    expectedDurationMs?: number;
+  };
+}
+
 export interface CloudCompatManagedDiscordStatus {
   applicationId: string | null;
   configured: boolean;
@@ -190,6 +215,7 @@ export interface CloudCompatManagedDiscordStatus {
   adminDiscordUserId: string | null;
   adminDiscordUsername: string | null;
   adminDiscordDisplayName: string | null;
+  adminDiscordAvatarUrl: string | null;
   adminElizaUserId: string | null;
   botNickname: string | null;
   connectedAt: string | null;

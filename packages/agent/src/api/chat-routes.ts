@@ -975,6 +975,7 @@ export async function generateChatResponse(
               },
               {
                 timeoutDuration: generationTimeoutMs,
+                keepExistingResponses: true,
                 onStreamChunk: opts?.onChunk
                   ? async (chunk: string) => {
                       if (generationTimedOut || opts?.isAborted?.()) {

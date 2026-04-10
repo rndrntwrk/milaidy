@@ -1,12 +1,36 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   GoogleManagedClient,
+  resolveManagedGoogleCloudConfig,
   type ManagedGoogleClientError,
 } from "./google-managed-client";
 
 describe("GoogleManagedClient", () => {
+  let envBackup: Record<string, string | undefined>;
+
+  beforeEach(() => {
+    envBackup = {
+      MILADY_CONFIG_PATH: process.env.MILADY_CONFIG_PATH,
+      ELIZAOS_CLOUD_API_KEY: process.env.ELIZAOS_CLOUD_API_KEY,
+      ELIZAOS_CLOUD_BASE_URL: process.env.ELIZAOS_CLOUD_BASE_URL,
+    };
+    delete process.env.MILADY_CONFIG_PATH;
+    delete process.env.ELIZAOS_CLOUD_API_KEY;
+    delete process.env.ELIZAOS_CLOUD_BASE_URL;
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
+    for (const [key, value] of Object.entries(envBackup)) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
   });
 
   it("surfaces plain-text upstream errors without reusing the response body", async () => {
@@ -83,6 +107,51 @@ describe("GoogleManagedClient", () => {
       expect.objectContaining<Partial<ManagedGoogleClientError>>({
         status: 404,
         message: "404 Not Found",
+      }),
+    );
+  });
+
+  it("reads the cloud api key from milady.json when env is scrubbed", async () => {
+    const tempDir = await fs.mkdtemp(
+      path.join(os.tmpdir(), "google-managed-client-"),
+    );
+    const configPath = path.join(tempDir, "milady.json");
+    await fs.writeFile(
+      configPath,
+      JSON.stringify({
+        cloud: {
+          apiKey: "ck-from-config",
+          baseUrl: "https://cloud-from-config.example",
+        },
+      }),
+      "utf8",
+    );
+    process.env.MILADY_CONFIG_PATH = configPath;
+
+    const resolved = resolveManagedGoogleCloudConfig();
+
+    expect(resolved).toMatchObject({
+      configured: true,
+      apiKey: "ck-from-config",
+      apiBaseUrl: "https://cloud-from-config.example/api/v1",
+      siteUrl: "https://cloud-from-config.example",
+    });
+
+    await fs.rm(tempDir, { recursive: true, force: true });
+  });
+
+  it("raises a handled connector error when cloud is not configured", async () => {
+    const client = new GoogleManagedClient({
+      configured: false,
+      apiKey: null,
+      apiBaseUrl: "https://cloud.example/api/v1",
+      siteUrl: "https://cloud.example",
+    });
+
+    await expect(client.getStatus("owner")).rejects.toEqual(
+      expect.objectContaining<Partial<ManagedGoogleClientError>>({
+        status: 409,
+        message: "Eliza Cloud is not connected.",
       }),
     );
   });

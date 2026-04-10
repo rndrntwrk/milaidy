@@ -2,9 +2,9 @@
 
 ## Overview
 
-Two plugins handle identity and trust:
+Two runtime capabilities handle identity and trust:
 
-- **plugin-roles** (`packages/plugin-roles/`) — Coarse-grained access control. Who can do what.
+- **roles** (`packages/agent/src/runtime/roles/` and `eliza/packages/typescript/src/roles.ts`) — Coarse-grained access control. Who can do what.
 - **relationships** (`eliza/packages/typescript/src/advanced-capabilities/` and `eliza/packages/typescript/src/services/`) — Fine-grained identity linking, relationship tracking, and information claims.
 
 The agent runtime (`packages/agent/src/`) adds an escalation system on top of both.
@@ -35,7 +35,7 @@ Roles live in world metadata: `world.metadata.roles[entityId] = "OWNER"`.
 ### Key API
 
 ```typescript
-// packages/plugin-roles/src/utils.ts
+// eliza/packages/typescript/src/roles.ts
 checkSenderRole(runtime, message) → { entityId, role, isOwner, isAdmin, canManageRoles }
 resolveEntityRole(runtime, entity, worldId) → RoleName
 canModifyRole(assignerRole, currentRole, targetRole) → boolean
@@ -317,7 +317,7 @@ User message arrives
 ## 10. File Map
 
 ```
-packages/plugin-roles/src/
+packages/agent/src/runtime/roles/src/
   index.ts          Plugin entry, bootstrap (owner sync, admin whitelist)
   types.ts          RoleName, RolesWorldMetadata, ConnectorAdminWhitelist
   utils.ts          checkSenderRole, resolveEntityRole, canModifyRole

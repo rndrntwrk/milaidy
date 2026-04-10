@@ -1,21 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
-  mockCheckSenderRole,
+  mockCheckSenderPrivateAccess,
   mockGetOverview,
   mockGetGoogleConnectorStatus,
   mockGetNextCalendarEventContext,
   mockGetGmailTriage,
 } = vi.hoisted(() => ({
-  mockCheckSenderRole: vi.fn(),
+  mockCheckSenderPrivateAccess: vi.fn(),
   mockGetOverview: vi.fn(),
   mockGetGoogleConnectorStatus: vi.fn(),
   mockGetNextCalendarEventContext: vi.fn(),
   mockGetGmailTriage: vi.fn(),
 }));
 
-vi.mock("@miladyai/plugin-roles", () => ({
-  checkSenderRole: mockCheckSenderRole,
+vi.mock("@elizaos/core/roles", () => ({
+  checkSenderPrivateAccess: mockCheckSenderPrivateAccess,
 }));
 
 vi.mock("../lifeops/service.js", () => ({
@@ -60,17 +60,20 @@ function baseOverview() {
 
 describe("lifeOpsProvider", () => {
   beforeEach(() => {
-    mockCheckSenderRole.mockReset();
+    mockCheckSenderPrivateAccess.mockReset();
     mockGetOverview.mockReset();
     mockGetGoogleConnectorStatus.mockReset();
     mockGetNextCalendarEventContext.mockReset();
     mockGetGmailTriage.mockReset();
-    mockCheckSenderRole.mockResolvedValue({
+    mockCheckSenderPrivateAccess.mockResolvedValue({
       entityId: "owner-1",
       role: "OWNER",
       isOwner: true,
       isAdmin: true,
       canManageRoles: true,
+      hasPrivateAccess: true,
+      accessRole: "OWNER",
+      accessSource: "owner",
     });
     mockGetOverview.mockResolvedValue(baseOverview());
     // Default: Google not connected
@@ -78,12 +81,15 @@ describe("lifeOpsProvider", () => {
   });
 
   it("returns empty output for non-admin callers", async () => {
-    mockCheckSenderRole.mockResolvedValue({
+    mockCheckSenderPrivateAccess.mockResolvedValue({
       entityId: "user-1",
       role: "USER",
       isOwner: false,
       isAdmin: false,
       canManageRoles: false,
+      hasPrivateAccess: false,
+      accessRole: null,
+      accessSource: null,
     });
 
     const result = await lifeOpsProvider.get(
@@ -126,6 +132,55 @@ describe("lifeOpsProvider", () => {
       ownerOpenOccurrences: 1,
       ownerActiveGoals: 1,
       agentOpenOccurrences: 1,
+    });
+  });
+
+  it("summarizes lifeops for owner on discord", async () => {
+    const result = await lifeOpsProvider.get(
+      { agentId: "agent-1" } as never,
+      {
+        entityId: "owner-1",
+        content: {
+          source: "discord",
+          text: "do i have any flights this week",
+        },
+      } as never,
+      {} as never,
+    );
+
+    expect(result.text).toContain("CALENDAR_ACTION");
+    expect(result.text).toContain("Owner open occurrences: 1");
+    expect(result.text).toContain("Pay rent");
+  });
+
+  it("hides lifeops from connector-admin callers without an explicit grant", async () => {
+    mockCheckSenderPrivateAccess.mockResolvedValue({
+      entityId: "helper-1",
+      role: "ADMIN",
+      isOwner: false,
+      isAdmin: true,
+      canManageRoles: true,
+      hasPrivateAccess: false,
+      accessRole: null,
+      accessSource: null,
+    });
+
+    const result = await lifeOpsProvider.get(
+      { agentId: "agent-1" } as never,
+      {
+        entityId: "helper-1",
+        content: {
+          source: "discord",
+          text: "what's on Shaw's calendar",
+        },
+      } as never,
+      {} as never,
+    );
+
+    expect(result).toEqual({
+      text: "",
+      values: {},
+      data: {},
     });
   });
 

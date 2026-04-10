@@ -660,6 +660,8 @@ function InboxChatPanel({
     id: string;
     source: string;
     title: string;
+    worldId?: string;
+    worldLabel?: string;
   };
   variant: ChatViewVariant;
 }) {
@@ -698,7 +700,7 @@ function InboxChatPanel({
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [activeInboxChat.id]);
+  }, [activeInboxChat.id, activeInboxChat.source]);
 
   useLayoutEffect(() => {
     if (messages.length === 0) return;
@@ -734,6 +736,9 @@ function InboxChatPanel({
             {activeInboxChat.title}
           </div>
           <div className="mt-0.5 text-[11px] text-muted">
+            {activeInboxChat.worldLabel
+              ? `${activeInboxChat.worldLabel} • `
+              : ""}
             {messages.length}{" "}
             {t("inboxview.TotalCountShort", { defaultValue: "messages" })}
           </div>

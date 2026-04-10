@@ -29,6 +29,8 @@ export type RelationshipsIdentityHandle = {
   entityId: UUID;
   platform: string;
   handle: string;
+  status?: string | null;
+  verified?: boolean | null;
 };
 
 export type RelationshipsIdentitySummary = {
@@ -193,6 +195,7 @@ type ConversationGraphBuildResult = {
 const KNOWN_PLATFORM_KEYS = [
   "discord",
   "telegram",
+  "x",
   "twitter",
   "github",
   "bluesky",
@@ -233,11 +236,49 @@ function asNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+function asBoolean(value: unknown): boolean | null {
+  return typeof value === "boolean" ? value : null;
+}
+
 function pushUnique(target: string[], value: string | null | undefined): void {
   if (!value || target.includes(value)) {
     return;
   }
   target.push(value);
+}
+
+function normalizePlatform(platform: string): string {
+  const normalized = platform.trim().toLowerCase();
+  if (normalized === "x") {
+    return "twitter";
+  }
+  if (normalized === "telegram-account" || normalized === "telegramaccount") {
+    return "telegram";
+  }
+  return normalized;
+}
+
+function normalizeIdentityHandle(platform: string, handle: string): string {
+  const normalizedPlatform = normalizePlatform(platform);
+  let normalizedHandle = handle.trim().toLowerCase();
+  if (
+    normalizedPlatform !== "email" &&
+    normalizedPlatform !== "phone" &&
+    normalizedPlatform !== "website"
+  ) {
+    normalizedHandle = normalizedHandle.replace(/^@+/, "");
+  }
+  if (normalizedPlatform === "website") {
+    normalizedHandle = normalizedHandle.replace(/\/+$/, "");
+  }
+  return normalizedHandle;
+}
+
+function normalizedIdentityKey(platform: string, handle: string): string {
+  return `${normalizePlatform(platform)}:${normalizeIdentityHandle(
+    platform,
+    handle,
+  )}`;
 }
 
 function uniqueSorted(values: Iterable<string>): string[] {
@@ -357,21 +398,35 @@ function collectIdentityHandles(
     ? metadata?.identityClaims
     : [];
 
-  const addHandle = (platformValue: unknown, handleValue: unknown) => {
+  const addHandle = (
+    platformValue: unknown,
+    handleValue: unknown,
+    options?: { status?: unknown; verified?: unknown },
+  ) => {
     const platform = asString(platformValue);
     const handle = asString(handleValue);
     if (!platform || !handle) {
       return;
     }
-    const key = `${platform}:${handle}`;
+    const normalizedPlatform = normalizePlatform(platform);
+    const key = normalizedIdentityKey(normalizedPlatform, handle);
     if (!handles.has(key)) {
-      handles.set(key, { entityId, platform, handle });
+      handles.set(key, {
+        entityId,
+        platform: normalizedPlatform,
+        handle: handle.trim(),
+        status: asString(options?.status),
+        verified: asBoolean(options?.verified),
+      });
     }
   };
 
   for (const identity of rawPlatformIdentities) {
     const record = asRecord(identity);
-    addHandle(record?.platform, record?.handle);
+    addHandle(record?.platform, record?.handle, {
+      status: record?.status,
+      verified: record?.verified,
+    });
   }
 
   for (const claim of rawClaims) {
@@ -379,7 +434,10 @@ function collectIdentityHandles(
     if (asString(record?.status) === "rejected") {
       continue;
     }
-    addHandle(record?.platform, record?.handle);
+    addHandle(record?.platform, record?.handle, {
+      status: record?.status,
+      verified: record?.verified,
+    });
   }
 
   for (const platform of KNOWN_PLATFORM_KEYS) {
@@ -388,7 +446,7 @@ function collectIdentityHandles(
       continue;
     }
     addHandle(
-      platform,
+      normalizePlatform(platform),
       platformMetadata.handle ??
         platformMetadata.username ??
         platformMetadata.userName ??
@@ -399,6 +457,94 @@ function collectIdentityHandles(
         platformMetadata.website ??
         platformMetadata.id,
     );
+  }
+
+  return Array.from(handles.values());
+}
+
+function extractContactAliases(
+  customFields: Record<string, unknown> | undefined,
+): string[] {
+  return extractCustomFieldStrings(customFields, [
+    "displayName",
+    "preferredName",
+    "nickname",
+    "nicknames",
+    "alias",
+    "aliases",
+    "username",
+    "usernames",
+    "handle",
+    "handles",
+  ]);
+}
+
+function preferredContactLabel(
+  contact: RelationshipsContactLike | null,
+): string | null {
+  return (
+    extractContactAliases(contact?.customFields)?.find(
+      (value) => value.trim().length > 0,
+    ) ?? null
+  );
+}
+
+function extractContactIdentityHandles(
+  entityId: UUID,
+  customFields: Record<string, unknown> | undefined,
+): RelationshipsIdentityHandle[] {
+  if (!customFields) {
+    return [];
+  }
+
+  const handles = new Map<string, RelationshipsIdentityHandle>();
+  const addHandle = (platform: string, value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return;
+    }
+    const normalizedPlatform = normalizePlatform(platform);
+    const key = normalizedIdentityKey(normalizedPlatform, trimmed);
+    if (!handles.has(key)) {
+      handles.set(key, {
+        entityId,
+        platform: normalizedPlatform,
+        handle: trimmed,
+      });
+    }
+  };
+
+  const platformFieldPrefixes: Record<string, string[]> = {
+    twitter: ["twitter", "x"],
+    github: ["github"],
+    discord: ["discord"],
+    telegram: ["telegram", "telegramAccount", "telegram-account"],
+    bluesky: ["bluesky"],
+    instagram: ["instagram"],
+    linkedin: ["linkedin"],
+    youtube: ["youtube"],
+    reddit: ["reddit"],
+    farcaster: ["farcaster"],
+    lens: ["lens"],
+    nostr: ["nostr"],
+    warpcast: ["warpcast"],
+    signal: ["signal"],
+  };
+
+  for (const [platform, prefixes] of Object.entries(platformFieldPrefixes)) {
+    const keys = prefixes.flatMap((prefix) => [
+      `${prefix}Handle`,
+      `${prefix}handle`,
+      `${prefix}Username`,
+      `${prefix}username`,
+      `${prefix}UserName`,
+      `${prefix}userName`,
+      `${prefix}ScreenName`,
+      `${prefix}screenName`,
+    ]);
+    for (const value of extractCustomFieldStrings(customFields, keys)) {
+      addHandle(platform, value);
+    }
   }
 
   return Array.from(handles.values());
@@ -430,7 +576,17 @@ function buildEntityContext(
   entity: Entity | null,
   contact: RelationshipsContactLike | null,
 ): EntityContext {
-  const handles = collectIdentityHandles(entityId, entity);
+  const mergedHandles = new Map<string, RelationshipsIdentityHandle>();
+  for (const handle of [
+    ...collectIdentityHandles(entityId, entity),
+    ...extractContactIdentityHandles(entityId, contact?.customFields),
+  ]) {
+    mergedHandles.set(normalizedIdentityKey(handle.platform, handle.handle), {
+      ...handle,
+      platform: normalizePlatform(handle.platform),
+    });
+  }
+  const handles = Array.from(mergedHandles.values());
   const emails = handles
     .filter((handle) => handle.platform === "email")
     .map((handle) => handle.handle);
@@ -572,6 +728,34 @@ function buildClusters(
     }
   }
 
+  const entityIdsByHandle = new Map<string, Set<UUID>>();
+  for (const entityId of entityIds) {
+    const context = contexts.get(entityId);
+    if (!context) {
+      continue;
+    }
+    for (const handle of context.handles) {
+      if (CONTACT_PLATFORM_SET.has(handle.platform)) {
+        continue;
+      }
+      const key = normalizedIdentityKey(handle.platform, handle.handle);
+      const members = entityIdsByHandle.get(key) ?? new Set<UUID>();
+      members.add(entityId);
+      entityIdsByHandle.set(key, members);
+    }
+  }
+
+  for (const members of entityIdsByHandle.values()) {
+    const ids = Array.from(members.values());
+    if (ids.length < 2) {
+      continue;
+    }
+    const anchor = ids[0];
+    for (const entityId of ids.slice(1)) {
+      union(anchor, entityId);
+    }
+  }
+
   const grouped = new Map<UUID, UUID[]>();
   for (const entityId of entityIds) {
     const root = find(entityId);
@@ -663,6 +847,11 @@ function buildSummaries(
       for (const name of names) {
         aliases.add(name);
       }
+      for (const alias of extractContactAliases(
+        context.contact?.customFields,
+      )) {
+        aliases.add(alias);
+      }
       for (const platform of context.platforms) {
         platforms.add(platform);
       }
@@ -702,6 +891,7 @@ function buildSummaries(
 
     const primaryContext = contexts.get(cluster.primaryEntityId);
     const displayName =
+      preferredContactLabel(primaryContext?.contact ?? null) ??
       entityNames(primaryContext?.entity ?? null)[0] ??
       identities.find((identity) => identity.names[0])?.names[0] ??
       identities.find((identity) => identity.handles[0])?.handles[0]?.handle ??
@@ -1152,6 +1342,8 @@ function matchesQuery(
 
   const haystack = [
     summary.displayName,
+    summary.primaryEntityId,
+    ...summary.memberEntityIds,
     ...summary.aliases,
     ...summary.platforms,
     ...summary.emails,

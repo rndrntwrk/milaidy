@@ -90,9 +90,9 @@ describe("readNavigationEventUrl", () => {
     );
     expect(
       readNavigationEventUrl({
-        url: "https://www.elizacloud.ai/dashboard/eliza",
+        url: "https://www.elizacloud.ai/dashboard/milady",
       }),
-    ).toBe("https://www.elizacloud.ai/dashboard/eliza");
+    ).toBe("https://www.elizacloud.ai/dashboard/milady");
     expect(
       readNavigationEventUrl({
         data: { detail: "https://www.elizacloud.ai/__milady_close_window__" },
@@ -217,12 +217,12 @@ describe("CloudAuthWindowManager", () => {
     });
 
     expect(manager.open("https://www.elizacloud.ai/login")).toBe(true);
-    expect(manager.open("https://www.elizacloud.ai/dashboard/eliza")).toBe(
+    expect(manager.open("https://www.elizacloud.ai/dashboard/milady")).toBe(
       true,
     );
 
     expect(window.loadedUrls).toEqual([
-      "https://www.elizacloud.ai/dashboard/eliza",
+      "https://www.elizacloud.ai/dashboard/milady",
     ]);
     expect(window.focusCount).toBe(1);
   });
@@ -240,7 +240,7 @@ describe("CloudAuthWindowManager", () => {
     expect(manager.open("https://www.elizacloud.ai/login")).toBe(true);
     created[0].close();
 
-    expect(manager.open("https://www.elizacloud.ai/dashboard/eliza")).toBe(
+    expect(manager.open("https://www.elizacloud.ai/dashboard/milady")).toBe(
       true,
     );
     expect(created).toHaveLength(2);

@@ -9,7 +9,10 @@ export type TimeBucket =
   | "NIGHT" // 21-1
   | "LATE_NIGHT"; // 1-5
 
-export const TIME_BUCKET_RANGES: Record<TimeBucket, { start: number; end: number }> = {
+export const TIME_BUCKET_RANGES: Record<
+  TimeBucket,
+  { start: number; end: number }
+> = {
   EARLY_MORNING: { start: 5, end: 7 },
   MORNING: { start: 7, end: 10 },
   MIDDAY: { start: 10, end: 14 },
@@ -104,7 +107,13 @@ export interface ActivityProfile {
   currentActivityCycleStartedAt: number | null;
   currentActivityCycleLocalDate: string | null;
   effectiveDayKey: string;
-  screenContextFocus: "work" | "leisure" | "transition" | "idle" | "unknown" | null;
+  screenContextFocus:
+    | "work"
+    | "leisure"
+    | "transition"
+    | "idle"
+    | "unknown"
+    | null;
   screenContextSource: "disabled" | "browser-capture" | "vision" | null;
   screenContextSampledAt: number | null;
   screenContextConfidence: number | null;
@@ -118,7 +127,9 @@ export interface ProactiveAction {
   scheduledFor: number;
   targetPlatform: string;
   contextSummary: string;
+  messageText: string;
   occurrenceId?: string;
+  calendarEventId?: string;
   status: "pending" | "fired" | "skipped";
   skipReason?: string;
 }

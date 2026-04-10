@@ -251,7 +251,6 @@
     "@miladyai/app-core": "workspace:*",
     "@miladyai/css-color-cjs": "npm:@asamuzakjp/css-color@4.1.2",
     "@miladyai/plugin-selfcontrol": "workspace:*",
-    "@miladyai/plugin-roles": "github:milady-ai/plugin-roles#5b00c49c4b7cd6f1cf27cde2cd6f6b40a5d38f77",
     "@noble/curves": "^2.0.1",
     "@opinion-labs/opinion-clob-sdk": "0.5.2",
     "@pixiv/three-vrm": "^3.5.1",

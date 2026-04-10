@@ -21,16 +21,15 @@
         "./packages/plugin-selfcontrol/src/index.ts"
       ],
       "@miladyai/plugin-selfcontrol/*": ["./packages/plugin-selfcontrol/src/*"],
-      "@miladyai/plugin-roles": ["./packages/plugin-roles/src/index.ts"],
-      "@miladyai/plugin-roles/*": ["./packages/plugin-roles/src/*"],
       "@miladyai/ui": ["./packages/ui/src/index.ts"],
       "@miladyai/ui/*": ["./packages/ui/src/*"],
       "@miladyai/agent/*": ["./packages/agent/src/*"],
       "@miladyai/shared": ["./packages/shared/src/index.ts"],
       "@miladyai/shared/*": ["./packages/shared/src/*"],
       "@elizaos/core": [
-        "./node_modules/@elizaos/core"
-      ]
+        "./eliza/packages/typescript/src/index.ts"
+      ],
+      "@elizaos/core/*": ["./eliza/packages/typescript/src/*"]
     }
   },
   "include": [

@@ -480,6 +480,12 @@
   "conversations.renameDialogSuggesting": "Sugerindo…",
   "conversations.renameDialogTitle": "Renomear tópico do chat",
   "conversations.searchChats": "Buscar chats",
+  "conversations.filterScope": "Fonte",
+  "conversations.filterWorld": "Servidor / mundo",
+  "conversations.scopeMilady": "Milady",
+  "conversations.scopeAllConnectors": "Todos os conectores",
+  "conversations.scopeUnknownWorld": "Mundo desconhecido",
+  "conversations.scopeAllWorlds": "Todos os mundos",
   "customactioneditor.Add": "+ Adicionar",
   "customactioneditor.AddParameter": "+ Adicionar parâmetro",
   "customactioneditor.AliasesOptional": "Aliases (opcional)",
@@ -1679,6 +1685,7 @@
   "pluginsview.ManagedDiscordNeedsAgent": "Deploy a cloud agent first, then connect managed Discord from the Cloud agents screen.",
   "pluginsview.ManagedDiscordRequiresCloud": "Connect Eliza Cloud first, then you can use managed Discord OAuth.",
   "pluginsview.ManagedDiscordSelectAgent": "Select a cloud agent",
+  "pluginsview.ManagedDiscordGatewayProvisionFailed": "Falha ao iniciar o gateway compartilhado do Discord do Milady no Eliza Cloud.",
   "pluginsview.NeedsSetup": "Precisa de configuração",
   "pluginsview.NoConfigNeeded": "Sem configuração necessária",
   "pluginsview.NoConfigurationNeeded": "Nenhuma configuração necessária.",
@@ -2412,5 +2419,7 @@
   "whatsappqroverlay.Tap": "Tocar",
   "whatsappqroverlay.TryAgain": "Tente novamente",
   "whatsappqroverlay.UsesAnUnofficialW": "Usa uma API não oficial do WhatsApp. Use um número de telefone dedicado.",
-  "whatsappqroverlay.andSelect": "e selecione"
+  "whatsappqroverlay.andSelect": "e selecione",
+  "conversations.noneMilady": "Ainda não há conversas",
+  "conversations.noneConnectors": "Ainda não há conversas"
 }

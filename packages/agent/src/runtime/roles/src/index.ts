@@ -1,5 +1,5 @@
 /**
- * plugin-roles — Role-based access control for elizaOS.
+ * Internal runtime roles capability.
  *
  * Provides OWNER / ADMIN / USER / GUEST role hierarchy with:
  * - Auto-assignment of OWNER to the app user (world owner)
@@ -7,8 +7,8 @@
  * - /role command for live role management
  * - Provider that injects role context for action/provider gating
  *
- * Config (milady.json):
- *   plugins.entries["@miladyai/plugin-roles"].config.connectorAdmins = {
+ * Runtime config lives at:
+ *   roles.connectorAdmins = {
  *     "discord": ["discordUserId1", "discordUserId2"],
  *     "telegram": ["telegramUserId1"]
  *   }
@@ -17,7 +17,7 @@
 import { type IAgentRuntime, logger, type Plugin } from "@elizaos/core";
 import { updateRoleAction } from "./action";
 import { rolesProvider } from "./provider";
-import type { RolesPluginConfig, RolesWorldMetadata } from "./types";
+import type { RolesConfig, RolesWorldMetadata } from "./types";
 import {
   hasConfiguredCanonicalOwner,
   matchEntityToConnectorAdminWhitelist,
@@ -27,9 +27,10 @@ import {
 } from "./utils";
 
 const BOOTSTRAP_RETRY_TIMERS_KEY = Symbol.for(
-  "@miladyai/plugin-roles.bootstrapRetries",
+  "@elizaos/runtime.roles.bootstrapRetries",
 );
 const BOOTSTRAP_RETRY_LIMIT = 3;
+const CONNECTOR_ADMINS_SETTING_KEY = "ELIZA_ROLES_CONNECTOR_ADMINS_JSON";
 
 type RuntimeWithBootstrapRetries = IAgentRuntime & {
   [BOOTSTRAP_RETRY_TIMERS_KEY]?: Map<string, ReturnType<typeof setTimeout>>;
@@ -39,14 +40,16 @@ export { updateRoleAction } from "./action";
 export { rolesProvider } from "./provider";
 export type {
   ConnectorAdminWhitelist,
+  RoleGrantSource,
   RoleCheckResult,
   RoleName,
-  RolesPluginConfig,
+  RolesConfig,
   RolesWorldMetadata,
 } from "./types";
 export { ROLE_RANK } from "./types";
 export {
   canModifyRole,
+  checkSenderPrivateAccess,
   checkSenderRole,
   getConfiguredOwnerEntityIds,
   getEntityRole,
@@ -138,6 +141,7 @@ async function ensureOwnerRole(runtime: IAgentRuntime): Promise<boolean> {
         let changed = false;
 
         metadata.ownership ??= {};
+        metadata.roleSources ??= {};
         if (metadata.ownership.ownerId !== ownerId) {
           metadata.ownership.ownerId = ownerId;
           changed = true;
@@ -148,11 +152,16 @@ async function ensureOwnerRole(runtime: IAgentRuntime): Promise<boolean> {
           metadata.roles[ownerId] = "OWNER";
           changed = true;
         }
+        if (metadata.roleSources[ownerId] !== "owner") {
+          metadata.roleSources[ownerId] = "owner";
+          changed = true;
+        }
 
         if (hasConfiguredCanonicalOwner(runtime)) {
           for (const [entityId, role] of Object.entries(metadata.roles)) {
             if (entityId !== ownerId && normalizeRole(role) === "OWNER") {
               delete metadata.roles[entityId];
+              delete metadata.roleSources?.[entityId];
               changed = true;
             }
           }
@@ -198,6 +207,7 @@ async function applyConnectorAdminWhitelists(
 
       await updateWorldMetadata(runtime, world.id, async (metadata) => {
         if (!metadata.roles) metadata.roles = {};
+        metadata.roleSources ??= {};
         let updated = false;
 
         for (const room of rooms) {
@@ -216,6 +226,7 @@ async function applyConnectorAdminWhitelists(
 
             if (matched) {
               metadata.roles[entityId] = "ADMIN";
+              metadata.roleSources[entityId] = "connector_admin";
               updated = true;
               logger.info(
                 `[roles] Auto-promoted whitelisted entity ${entityId} to ADMIN`,
@@ -236,8 +247,36 @@ async function applyConnectorAdminWhitelists(
   }
 }
 
+function loadConnectorAdminsConfig(
+  pluginConfig: Record<string, unknown> | undefined,
+  runtime: IAgentRuntime,
+): RolesConfig {
+  const directConfig = pluginConfig as RolesConfig | undefined;
+  if (directConfig?.connectorAdmins) {
+    return directConfig;
+  }
+
+  const raw =
+    typeof runtime.getSetting === "function"
+      ? runtime.getSetting(CONNECTOR_ADMINS_SETTING_KEY)
+      : undefined;
+  if (typeof raw !== "string" || raw.trim().length === 0) {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    return { connectorAdmins: parsed as RolesConfig["connectorAdmins"] };
+  } catch (error) {
+    logger.warn(
+      `[roles] Failed to parse ${CONNECTOR_ADMINS_SETTING_KEY}: ${String(error)}`,
+    );
+    return {};
+  }
+}
+
 const rolesPlugin: Plugin = {
-  name: "@miladyai/plugin-roles",
+  name: "roles",
   description:
     "Role-based access control — OWNER/ADMIN/USER/GUEST hierarchy with " +
     "connector whitelisting and /role command.",
@@ -246,8 +285,8 @@ const rolesPlugin: Plugin = {
   actions: [updateRoleAction],
 
   async init(pluginConfig: Record<string, unknown>, runtime: IAgentRuntime) {
-    logger.info("[roles] Initializing plugin-roles");
-    const config = pluginConfig as RolesPluginConfig | undefined;
+    logger.info("[roles] Initializing roles");
+    const config = loadConnectorAdminsConfig(pluginConfig, runtime);
 
     // Step 1: Ensure world owners have OWNER role
     const ownerBootstrapOk = await ensureOwnerRole(runtime);
@@ -274,7 +313,7 @@ const rolesPlugin: Plugin = {
       setConnectorAdminWhitelist(runtime, undefined);
     }
 
-    logger.info("[roles] Plugin-roles initialized");
+    logger.info("[roles] Roles initialized");
   },
 };
 

@@ -30,7 +30,7 @@ const unitShards = [
   {
     label: "unit:plugins",
     patterns: [
-      "packages/plugin-roles/test",
+      "packages/agent/src/runtime/roles/test",
       "packages/plugin-selfcontrol/src",
       "packages/plugin-wechat/src",
       "packages/plugin-music-player/src",

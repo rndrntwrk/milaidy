@@ -15,12 +15,13 @@ import type {
   CloudBillingSettingsUpdateRequest,
   CloudBillingSummary,
   CloudCompatAgent,
-  CloudCompatDiscordConfig,
-  CloudCompatManagedDiscordStatus,
-  CloudCompatManagedGithubStatus,
+  CloudCompatAgentProvisionResponse,
   CloudCompatAgentStatus,
+  CloudCompatDiscordConfig,
   CloudCompatJob,
   CloudCompatLaunchResult,
+  CloudCompatManagedDiscordStatus,
+  CloudCompatManagedGithubStatus,
   CloudCredits,
   CloudLoginPollResponse,
   CloudLoginResponse,
@@ -94,6 +95,16 @@ declare module "./client-base" {
         message: string;
       };
     }>;
+    ensureCloudCompatManagedDiscordAgent(): Promise<{
+      success: boolean;
+      data: {
+        agent: CloudCompatAgent;
+        created: boolean;
+      };
+    }>;
+    provisionCloudCompatAgent(
+      agentId: string,
+    ): Promise<CloudCompatAgentProvisionResponse>;
     getCloudCompatAgent(agentId: string): Promise<{
       success: boolean;
       data: CloudCompatAgent;
@@ -391,6 +402,25 @@ MiladyClient.prototype.createCloudCompatAgent = async function (
     method: "POST",
     body: JSON.stringify(opts),
   });
+};
+
+MiladyClient.prototype.ensureCloudCompatManagedDiscordAgent = async function (
+  this: MiladyClient,
+) {
+  return this.fetch("/api/cloud/v1/milady/discord/gateway-agent", {
+    method: "POST",
+  });
+};
+
+MiladyClient.prototype.provisionCloudCompatAgent = async function (
+  this: MiladyClient,
+  agentId,
+) {
+  return this.fetch(
+    `/api/cloud/v1/milady/agents/${encodeURIComponent(agentId)}/provision`,
+    { method: "POST" },
+    { allowNonOk: true },
+  );
 };
 
 MiladyClient.prototype.getCloudCompatAgent = async function (

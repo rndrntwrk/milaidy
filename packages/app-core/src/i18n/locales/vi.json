@@ -480,6 +480,12 @@
   "conversations.renameDialogSuggesting": "Đang gợi ý…",
   "conversations.renameDialogTitle": "Đổi chủ đề cuộc trò chuyện",
   "conversations.searchChats": "Tìm kiếm chat",
+  "conversations.filterScope": "Nguồn",
+  "conversations.filterWorld": "Máy chủ / thế giới",
+  "conversations.scopeMilady": "Milady",
+  "conversations.scopeAllConnectors": "Tất cả trình kết nối",
+  "conversations.scopeUnknownWorld": "Thế giới chưa xác định",
+  "conversations.scopeAllWorlds": "Tất cả thế giới",
   "customactioneditor.Add": "+ Thêm",
   "customactioneditor.AddParameter": "+ Thêm tham số",
   "customactioneditor.AliasesOptional": "Bí danh (tuỳ chọn)",
@@ -1679,6 +1685,7 @@
   "pluginsview.ManagedDiscordNeedsAgent": "Deploy a cloud agent first, then connect managed Discord from the Cloud agents screen.",
   "pluginsview.ManagedDiscordRequiresCloud": "Connect Eliza Cloud first, then you can use managed Discord OAuth.",
   "pluginsview.ManagedDiscordSelectAgent": "Select a cloud agent",
+  "pluginsview.ManagedDiscordGatewayProvisionFailed": "Không thể khởi động cổng Discord Milady dùng chung trong Eliza Cloud.",
   "pluginsview.NeedsSetup": "Cần thiết lập",
   "pluginsview.NoConfigNeeded": "Không cần cấu hình",
   "pluginsview.NoConfigurationNeeded": "Không cần cấu hình.",
@@ -2412,5 +2419,7 @@
   "whatsappqroverlay.Tap": "Chạm",
   "whatsappqroverlay.TryAgain": "Thử lại",
   "whatsappqroverlay.UsesAnUnofficialW": "Dùng API WhatsApp không chính thức. Hãy dùng số riêng.",
-  "whatsappqroverlay.andSelect": "và chọn"
+  "whatsappqroverlay.andSelect": "và chọn",
+  "conversations.noneMilady": "Chưa có cuộc trò chuyện",
+  "conversations.noneConnectors": "Chưa có cuộc trò chuyện"
 }

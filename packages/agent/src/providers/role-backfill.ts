@@ -1,7 +1,7 @@
 /**
  * World creation role backfill provider.
  *
- * Problem: When a new connector creates a new world AFTER plugin-roles init,
+ * Problem: When a new connector creates a new world after roles bootstrap,
  * the owner's role is not set in that world because `ensureOwnerRole()` only
  * runs at boot.
  *
@@ -25,13 +25,15 @@ import {
 import {
   hasConfiguredCanonicalOwner,
   normalizeRole,
+  type RoleGrantSource,
   type RoleName,
   resolveCanonicalOwnerId,
-} from "@miladyai/plugin-roles";
+} from "@elizaos/core/roles";
 
 type RolesWorldMetadata = {
   ownership?: { ownerId?: string };
   roles?: Record<string, RoleName>;
+  roleSources?: Record<string, RoleGrantSource>;
 };
 
 const EMPTY: ProviderResult = {
@@ -43,7 +45,7 @@ const EMPTY: ProviderResult = {
 export const roleBackfillProvider: Provider = {
   name: "roleBackfill",
   description:
-    "Lazily backfills OWNER role for new worlds created after plugin-roles init.",
+    "Lazily backfills OWNER role for new worlds created after roles bootstrap.",
   dynamic: true,
   // High position number = runs after the main roles provider (position 10).
   position: 11,
@@ -65,8 +67,10 @@ export const roleBackfillProvider: Provider = {
       if (!ownerId) return EMPTY;
 
       const roles = metadata.roles ?? {};
+      const roleSources = metadata.roleSources ?? {};
       const currentOwnerRole = normalizeRole(roles[ownerId]);
       const needsOwnershipSync = metadata.ownership?.ownerId !== ownerId;
+      const needsOwnerSourceSync = roleSources[ownerId] !== "owner";
       const configuredOwner = hasConfiguredCanonicalOwner(runtime);
       const hasStaleOwners = configuredOwner
         ? Object.entries(roles).some(
@@ -79,6 +83,7 @@ export const roleBackfillProvider: Provider = {
       if (
         currentOwnerRole === "OWNER" &&
         !needsOwnershipSync &&
+        !needsOwnerSourceSync &&
         !hasStaleOwners
       ) {
         return EMPTY;
@@ -87,16 +92,19 @@ export const roleBackfillProvider: Provider = {
       // Backfill: set OWNER role for the world owner
       metadata.ownership = { ...(metadata.ownership ?? {}), ownerId };
       roles[ownerId] = "OWNER";
+      roleSources[ownerId] = "owner";
       if (configuredOwner) {
         for (const [entityId, role] of Object.entries(roles)) {
           if (entityId !== ownerId && normalizeRole(role) === "OWNER") {
             delete roles[entityId];
+            delete roleSources[entityId];
           }
         }
       }
       const updatedMetadata = {
         ...metadata,
         roles,
+        roleSources,
       };
 
       await runtime.updateWorld({

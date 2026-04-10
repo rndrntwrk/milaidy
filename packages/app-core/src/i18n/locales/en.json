@@ -452,6 +452,12 @@
   "conversations.renameDialogSuggesting": "Suggesting…",
   "conversations.renameDialogTitle": "Rename chat topic",
   "conversations.searchChats": "Search chats",
+  "conversations.filterScope": "Source",
+  "conversations.filterWorld": "Server / world",
+  "conversations.scopeMilady": "Milady",
+  "conversations.scopeAllConnectors": "All connectors",
+  "conversations.scopeUnknownWorld": "Unknown world",
+  "conversations.scopeAllWorlds": "All worlds",
   "customactioneditor.Add": "+ Add",
   "customactioneditor.AddParameter": "+ Add Parameter",
   "customactioneditor.AliasesOptional": "Aliases (optional)",
@@ -1698,6 +1704,7 @@
   "pluginsview.ManagedDiscordNeedsAgent": "Deploy a cloud agent first, then connect managed Discord from the Cloud agents screen.",
   "pluginsview.ManagedDiscordRequiresCloud": "Connect Eliza Cloud first, then you can use managed Discord OAuth.",
   "pluginsview.ManagedDiscordSelectAgent": "Select a cloud agent",
+  "pluginsview.ManagedDiscordGatewayProvisionFailed": "Failed to start the shared Milady Discord gateway in Eliza Cloud.",
   "pluginsview.OpenElizaCloud": "Open Eliza Cloud",
   "pluginsview.UseManagedDiscord": "Use managed Discord",
   "pluginsview.SetupGuide": "Setup guide",
@@ -2412,5 +2419,7 @@
   "connectionlostoverlay.ConnectionLostBody": "Milady can’t talk to the local backend anymore. Restart the app or retry the connection once the server is back.",
   "connectionlostoverlay.AttemptsExhausted": "Realtime reconnect attempts exhausted: {{attempts}}.",
   "connectionlostoverlay.Restarting": "Restarting...",
-  "connectionlostoverlay.Restart": "Restart"
+  "connectionlostoverlay.Restart": "Restart",
+  "conversations.noneMilady": "No conversations yet",
+  "conversations.noneConnectors": "No conversations yet"
 }

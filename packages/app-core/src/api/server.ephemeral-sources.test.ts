@@ -70,6 +70,18 @@ describe("routeAutonomyTextToUser — ephemeral source filtering", () => {
     expect(state.broadcastWs).toHaveBeenCalledTimes(1);
   });
 
+  it("suppresses lifeops reminder messages entirely", async () => {
+    const state = makeState();
+    await routeAutonomyTextToUser(
+      state,
+      "Reminder: Stay at Fairfield by Marriott Inn & Suites Boulder.",
+      "lifeops-reminder",
+    );
+
+    expect(state.runtime?.createMemory).not.toHaveBeenCalled();
+    expect(state.broadcastWs).not.toHaveBeenCalled();
+  });
+
   it("persists client_chat messages", async () => {
     const state = makeState();
     await routeAutonomyTextToUser(state, "user said hi", "client_chat");

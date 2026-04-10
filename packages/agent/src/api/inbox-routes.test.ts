@@ -20,7 +20,9 @@ function createMemory(memory: Partial<Memory>): Memory {
   } as Memory;
 }
 
-function createHelpers(json: ReturnType<typeof vi.fn>): RouteHelpers {
+type JsonRouteHelperMock = ReturnType<typeof vi.fn> & RouteHelpers["json"];
+
+function createHelpers(json: JsonRouteHelperMock): RouteHelpers {
   return {
     json,
     error: vi.fn(),
@@ -97,7 +99,7 @@ describe("handleInboxRoute", () => {
         .mockResolvedValue([shadowAssistantMemory, connectorAssistantMemory]),
       getService: vi.fn().mockReturnValue(undefined),
     } as any;
-    const json = vi.fn();
+    const json = vi.fn() as JsonRouteHelperMock;
     const handled = await handleInboxRoute(
       {
         url: `/api/inbox/messages?roomId=${roomId}&roomSource=discord&sources=discord`,
@@ -151,7 +153,7 @@ describe("handleInboxRoute", () => {
       getMemories: vi.fn().mockResolvedValue([shadowAssistantMemory]),
       getService: vi.fn().mockReturnValue(undefined),
     } as any;
-    const json = vi.fn();
+    const json = vi.fn() as JsonRouteHelperMock;
     await handleInboxRoute(
       {
         url: `/api/inbox/messages?roomId=${roomId}&roomSource=discord&sources=discord`,
@@ -251,6 +253,129 @@ describe("handleInboxRoute", () => {
         text: "of course",
       }),
     ]);
+  });
+
+  it("hides unsent Discord planner memories when the same turn produced real callback messages", async () => {
+    const roomId = "room-1";
+    const agentId = "agent-1";
+    const inboundMessageId = "user-message";
+    const runtime = {
+      agentId,
+      getAllWorlds: vi.fn().mockResolvedValue([]),
+      getMemories: vi.fn().mockResolvedValue([
+        createMemory({
+          id: inboundMessageId,
+          agentId,
+          entityId: "user-1",
+          roomId,
+          createdAt: 1_000,
+          content: {
+            text: "hey @remilio nubilio @eliza can you guys work together",
+            source: "discord",
+          },
+          metadata: {
+            entityName: "shaw",
+          },
+        }),
+        createMemory({
+          id: "planner-shadow",
+          agentId,
+          entityId: agentId,
+          roomId,
+          createdAt: 1_100,
+          content: {
+            text: "on it - two agents, two angles: one tearing lifeops apart, one building the playbook to get it live. they'll post the reports when ready.",
+            inReplyTo: inboundMessageId,
+          },
+        }),
+        createMemory({
+          id: "discord-launching",
+          agentId,
+          entityId: agentId,
+          roomId,
+          createdAt: 1_200,
+          content: {
+            text: "Launching 2 agents...",
+            source: "discord",
+            inReplyTo: inboundMessageId,
+            url: "https://discord.test/channels/1/2/launching",
+          },
+        }),
+        createMemory({
+          id: "discord-spawn-1",
+          agentId,
+          entityId: agentId,
+          roomId,
+          createdAt: 1_300,
+          content: {
+            text: '[1/2] Spawned claude agent as "lifeops-review-1"',
+            source: "discord",
+            inReplyTo: inboundMessageId,
+            url: "https://discord.test/channels/1/2/spawn-1",
+          },
+        }),
+        createMemory({
+          id: "discord-summary",
+          agentId,
+          entityId: agentId,
+          roomId,
+          createdAt: 1_400,
+          content: {
+            text: 'Launched 2/2 agents:\n- "lifeops-review-1" (claude) [session: pty-1]\n- "lifeops-review-2" (claude) [session: pty-2]',
+            source: "discord",
+            inReplyTo: inboundMessageId,
+            url: "https://discord.test/channels/1/2/summary",
+          },
+        }),
+      ]),
+      getService: vi.fn().mockReturnValue(undefined),
+    } as any;
+    const json = vi.fn();
+
+    await handleInboxRoute(
+      {
+        url: `/api/inbox/messages?roomId=${roomId}&roomSource=discord&sources=discord`,
+      } as http.IncomingMessage,
+      {} as http.ServerResponse,
+      "/api/inbox/messages",
+      "GET",
+      { runtime },
+      createHelpers(json),
+    );
+
+    const payload = json.mock.calls[0]?.[1] as {
+      count: number;
+      messages: Array<{ id: string; source: string; text: string }>;
+    };
+
+    expect(payload.messages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: inboundMessageId,
+          source: "discord",
+        }),
+        expect.objectContaining({
+          id: "discord-launching",
+          source: "discord",
+          text: "Launching 2 agents...",
+        }),
+        expect.objectContaining({
+          id: "discord-spawn-1",
+          source: "discord",
+        }),
+        expect.objectContaining({
+          id: "discord-summary",
+          source: "discord",
+        }),
+      ]),
+    );
+    expect(payload.messages).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "planner-shadow",
+        }),
+      ]),
+    );
   });
 
   it("collapses Discord reaction memories into reactions on the target message", async () => {
@@ -509,7 +634,9 @@ describe("handleInboxRoute", () => {
     const agentId = "agent-1";
     const runtime = {
       agentId,
-      getAllWorlds: vi.fn().mockResolvedValue([{ id: "world-1" }]),
+      getAllWorlds: vi
+        .fn()
+        .mockResolvedValue([{ id: "world-1", name: "Milady Guild" }]),
       getRoomsByWorlds: vi.fn().mockResolvedValue([
         {
           id: roomId,
@@ -517,6 +644,7 @@ describe("handleInboxRoute", () => {
           channel_id: "channel-1",
           name: "default",
           room_type: "GROUP",
+          worldId: "world-1",
         },
       ]),
       getMemoriesByRoomIds: vi.fn().mockResolvedValue([
@@ -579,6 +707,8 @@ describe("handleInboxRoute", () => {
         avatarUrl?: string;
         source: string;
         title: string;
+        worldId?: string;
+        worldLabel: string;
       }>;
       count: number;
     };
@@ -587,6 +717,8 @@ describe("handleInboxRoute", () => {
       expect.objectContaining({
         source: "discord",
         title: "milady",
+        worldId: "world-1",
+        worldLabel: "Milady Guild",
         avatarUrl: expect.stringMatching(/^\/api\/avatar\/discord\//),
       }),
     ]);

@@ -88,20 +88,20 @@ describe("resolveManagedDiscordAgentChoice", () => {
     });
   });
 
-  it("returns direct when exactly one cloud agent is available", () => {
+  it("returns bootstrap when exactly one non-gateway cloud agent is available", () => {
     const agent = createCloudCompatAgent({
       agent_id: "agent-1",
       agent_name: "Milady",
     });
 
     expect(resolveManagedDiscordAgentChoice([agent])).toEqual({
-      mode: "direct",
-      agent,
-      selectedAgentId: "agent-1",
+      mode: "bootstrap",
+      agent: null,
+      selectedAgentId: null,
     });
   });
 
-  it("returns picker when multiple cloud agents are available", () => {
+  it("returns bootstrap when only non-gateway cloud agents are available", () => {
     const agents = [
       createCloudCompatAgent({
         agent_id: "agent-1",
@@ -113,10 +113,66 @@ describe("resolveManagedDiscordAgentChoice", () => {
       }),
     ];
 
-    expect(resolveManagedDiscordAgentChoice(agents)).toMatchObject({
+    expect(resolveManagedDiscordAgentChoice(agents)).toEqual({
+      mode: "bootstrap",
+      agent: null,
+      selectedAgentId: null,
+    });
+  });
+
+  it("prefers the shared managed Discord gateway agent when one exists", () => {
+    const gatewayAgent = createCloudCompatAgent({
+      agent_id: "agent-gateway",
+      agent_name: "Milady Discord Gateway",
+      agent_config: {
+        __miladyManagedDiscordGateway: {
+          mode: "shared-gateway",
+          createdAt: "2026-04-09T00:00:00.000Z",
+        },
+      },
+    });
+    const regularAgent = createCloudCompatAgent({
+      agent_id: "agent-2",
+      agent_name: "Milady Main",
+    });
+
+    expect(
+      resolveManagedDiscordAgentChoice([regularAgent, gatewayAgent]),
+    ).toEqual({
+      mode: "direct",
+      agent: gatewayAgent,
+      selectedAgentId: "agent-gateway",
+    });
+  });
+
+  it("defaults the picker to a gateway agent when multiple gateways exist", () => {
+    const gatewayA = createCloudCompatAgent({
+      agent_id: "agent-gateway-a",
+      agent_name: "Milady Discord Gateway",
+      agent_config: {
+        __miladyManagedDiscordGateway: {
+          mode: "shared-gateway",
+          createdAt: "2026-04-09T00:00:00.000Z",
+        },
+      },
+    });
+    const gatewayB = createCloudCompatAgent({
+      agent_id: "agent-gateway-b",
+      agent_name: "Milady Discord Gateway",
+      agent_config: {
+        __miladyManagedDiscordGateway: {
+          mode: "shared-gateway",
+          createdAt: "2026-04-09T00:00:01.000Z",
+        },
+      },
+    });
+
+    expect(
+      resolveManagedDiscordAgentChoice([gatewayA, gatewayB]),
+    ).toMatchObject({
       mode: "picker",
       agent: null,
-      selectedAgentId: "agent-1",
+      selectedAgentId: "agent-gateway-a",
     });
   });
 });

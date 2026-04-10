@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import rolesPlugin, {
   canModifyRole,
+  checkSenderPrivateAccess,
   checkSenderRole,
   getEntityRole,
   normalizeRole,
@@ -14,14 +15,14 @@ import type {
   ConnectorAdminWhitelist,
   RoleCheckResult,
   RoleName,
-  RolesPluginConfig,
+  RolesConfig,
   RolesWorldMetadata,
 } from "../src/index";
 
 describe("exports", () => {
   it("default export is the plugin object", () => {
     expect(rolesPlugin).toBeDefined();
-    expect(rolesPlugin.name).toBe("@miladyai/plugin-roles");
+    expect(rolesPlugin.name).toBe("roles");
     expect(typeof rolesPlugin.init).toBe("function");
     expect(Array.isArray(rolesPlugin.providers)).toBe(true);
     expect(Array.isArray(rolesPlugin.actions)).toBe(true);
@@ -29,6 +30,7 @@ describe("exports", () => {
 
   it("named exports are functions", () => {
     expect(typeof canModifyRole).toBe("function");
+    expect(typeof checkSenderPrivateAccess).toBe("function");
     expect(typeof checkSenderRole).toBe("function");
     expect(typeof getEntityRole).toBe("function");
     expect(typeof normalizeRole).toBe("function");
@@ -51,7 +53,7 @@ describe("exports", () => {
   it("type exports compile", () => {
     const _role: RoleName = "USER";
     const _meta: RolesWorldMetadata = { roles: {} };
-    const _config: RolesPluginConfig = { connectorAdmins: { discord: [] } };
+    const _config: RolesConfig = { connectorAdmins: { discord: [] } };
     const _whitelist: ConnectorAdminWhitelist = { telegram: ["123"] };
     expect(true).toBe(true);
   });

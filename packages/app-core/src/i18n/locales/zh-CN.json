@@ -480,6 +480,12 @@
   "conversations.renameDialogSuggesting": "正在建议…",
   "conversations.renameDialogTitle": "重命名聊天主题",
   "conversations.searchChats": "搜索聊天",
+  "conversations.filterScope": "来源",
+  "conversations.filterWorld": "服务器 / 世界",
+  "conversations.scopeMilady": "Milady",
+  "conversations.scopeAllConnectors": "所有连接器",
+  "conversations.scopeUnknownWorld": "未知世界",
+  "conversations.scopeAllWorlds": "所有世界",
   "customactioneditor.Add": "+ 添加",
   "customactioneditor.AddParameter": "+ 添加参数",
   "customactioneditor.AliasesOptional": "别名（可选）",
@@ -1679,6 +1685,7 @@
   "pluginsview.ManagedDiscordNeedsAgent": "Deploy a cloud agent first, then connect managed Discord from the Cloud agents screen.",
   "pluginsview.ManagedDiscordRequiresCloud": "Connect Eliza Cloud first, then you can use managed Discord OAuth.",
   "pluginsview.ManagedDiscordSelectAgent": "Select a cloud agent",
+  "pluginsview.ManagedDiscordGatewayProvisionFailed": "无法在 Eliza Cloud 中启动共享的 Milady Discord 网关。",
   "pluginsview.NeedsSetup": "需要设置",
   "pluginsview.NoConfigNeeded": "无需配置",
   "pluginsview.NoConfigurationNeeded": "无需配置。",
@@ -2412,5 +2419,7 @@
   "whatsappqroverlay.Tap": "轻敲",
   "whatsappqroverlay.TryAgain": "再试一次",
   "whatsappqroverlay.UsesAnUnofficialW": "使用非官方 WhatsApp API。使用专用电话号码。",
-  "whatsappqroverlay.andSelect": "并选择"
+  "whatsappqroverlay.andSelect": "并选择",
+  "conversations.noneMilady": "还没有会话",
+  "conversations.noneConnectors": "还没有会话"
 }

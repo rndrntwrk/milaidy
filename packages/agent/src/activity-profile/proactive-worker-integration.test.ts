@@ -1,7 +1,6 @@
 import type { IAgentRuntime, Task, UUID } from "@elizaos/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { _resetMissingSendHandlerLogsForTests } from "../services/send-handler-availability.js";
-import type { ActivityProfile } from "./types.js";
+import type { ActivityProfile, FiredActionsLog } from "./types.js";
 import { emptyBucketCounts } from "./types.js";
 
 // ── Hoisted mocks ─────────────────────────────────────
@@ -125,12 +124,21 @@ function makeProfile(
 function createRuntimeMock(tasks: Task[] = []) {
   const workerRegistry = new Map<string, unknown>();
   const state = { tasks: [...tasks] };
+  const eventService = {
+    emit: vi.fn(),
+    subscribe: vi.fn(() => vi.fn()),
+    subscribeHeartbeat: vi.fn(() => vi.fn()),
+  };
   const runtime = {
     agentId: "agent-1" as UUID,
-    sendHandlers: new Map<string, unknown>(),
-    getService: vi.fn(() => ({
-      getAutonomousRoomId: () => "room-proactive" as UUID,
-    })),
+    getService: vi.fn((serviceType: string) => {
+      if (serviceType === "agent_event" || serviceType === "AGENT_EVENT") {
+        return eventService;
+      }
+      return {
+        getAutonomousRoomId: () => "room-proactive" as UUID,
+      };
+    }),
     getTasks: vi.fn(async () => [...state.tasks]),
     createTask: vi.fn(async (task: Task) => {
       const id = (task.id ?? "proactive-task-id") as UUID;
@@ -157,7 +165,7 @@ function createRuntimeMock(tasks: Task[] = []) {
     getTaskWorker: vi.fn((name: string) => workerRegistry.get(name)),
   } as unknown as IAgentRuntime;
 
-  return { runtime, workerRegistry, state };
+  return { runtime, workerRegistry, state, eventService };
 }
 
 function makeExistingProactiveTask(
@@ -176,6 +184,38 @@ function makeExistingProactiveTask(
       ...metadata,
     },
   };
+}
+
+function configureTelegramDelivery(): void {
+  mocks.loadOwnerContactsConfig.mockReturnValue({
+    telegram: { entityId: "owner-tg", channelId: "ch-1" },
+  });
+  mocks.resolveOwnerContactWithFallback.mockReturnValue({
+    source: "telegram",
+    contact: { entityId: "owner-tg", channelId: "ch-1" },
+    resolvedFrom: "config",
+  });
+}
+
+function getPersistedMetadata(
+  state: { tasks: Task[] },
+  taskId: UUID,
+): Record<string, unknown> {
+  const updatedTask = state.tasks.find((task) => task.id === taskId);
+  expect(updatedTask).toBeDefined();
+  return (updatedTask?.metadata ?? {}) as Record<string, unknown>;
+}
+
+function getPersistedFiredLog(
+  state: { tasks: Task[] },
+  taskId: UUID,
+): FiredActionsLog {
+  return getPersistedMetadata(state, taskId).firedActionsLog as FiredActionsLog;
+}
+
+function requireTaskId(task: Task): UUID {
+  expect(task.id).toBeDefined();
+  return task.id as UUID;
 }
 
 // ── ensureProactiveAgentTask ──────────────────────────
@@ -266,7 +306,6 @@ describe("executeProactiveTask", () => {
     vi.clearAllMocks();
     vi.useFakeTimers();
     vi.setSystemTime(MORNING_NOW);
-    _resetMissingSendHandlerLogsForTests();
     mocks.resolveDefaultTimeZone.mockReturnValue("UTC");
     mocks.mockGetOverview.mockResolvedValue({ occurrences: [] });
     mocks.mockGetCalendarFeed.mockResolvedValue({ events: [] });
@@ -339,41 +378,234 @@ describe("executeProactiveTask", () => {
     expect(mocks.buildActivityProfile).not.toHaveBeenCalled();
   });
 
-  it("sends GM when due and records it in firedLog", async () => {
+  it("sends GM when due and records gmFiredAt", async () => {
     const profile = makeProfile({
       lastSeenAt: Date.now() - 60_000,
       typicalFirstActiveHour: 8,
-      typicalWakeHour: 7,
+      typicalWakeHour: 8,
     });
     mocks.resolveOwnerEntityId.mockResolvedValue("owner-1");
     mocks.readProfileFromMetadata.mockReturnValue(profile);
     mocks.profileNeedsRebuild.mockReturnValue(false);
     mocks.refreshCurrentState.mockResolvedValue(profile);
-    mocks.loadOwnerContactsConfig.mockReturnValue({
-      telegram: { entityId: "owner-tg-entity", channelId: "tg-123" },
-    });
-    mocks.resolveOwnerContactWithFallback.mockReturnValue({
-      source: "telegram",
-      contact: { entityId: "owner-tg-entity", channelId: "tg-123" },
-      resolvedFrom: "config",
-    });
+    configureTelegramDelivery();
 
     const task = makeExistingProactiveTask();
+    const taskId = requireTaskId(task);
     const { runtime, state } = createRuntimeMock([task]);
 
     await executeProactiveTask(runtime);
 
     const sendSpy = vi.mocked(runtime.sendMessageToTarget);
-    // GM might fire depending on time — check persisted metadata for fired log
-    const updated = state.tasks.find((t) => t.id === task.id);
-    const meta = updated?.metadata as Record<string, unknown>;
-    expect(meta.activityProfile).toBeDefined();
-    // firedLog should be persisted (may or may not have gmFiredAt depending on scheduling)
-    if (sendSpy.mock.calls.length > 0) {
-      const firedLog = meta.firedActionsLog as Record<string, unknown>;
-      expect(firedLog).toBeDefined();
-      expect(firedLog.date).toBeDefined();
-    }
+    expect(sendSpy).toHaveBeenCalledTimes(1);
+    expect(sendSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: "telegram",
+        entityId: "owner-tg",
+        channelId: "ch-1",
+      }),
+      expect.objectContaining({
+        text: "Good morning.",
+        source: "telegram",
+      }),
+    );
+    expect(getPersistedMetadata(state, taskId).activityProfile).toBeDefined();
+    expect(getPersistedFiredLog(state, taskId)).toMatchObject({
+      date: "2026-04-06",
+      nudgedOccurrenceIds: [],
+      nudgedCalendarEventIds: [],
+    });
+    expect(getPersistedFiredLog(state, taskId).gmFiredAt).toEqual(
+      MORNING_NOW.getTime(),
+    );
+  });
+
+  it("sends GN when due and records gnFiredAt", async () => {
+    const profile = makeProfile({
+      lastSeenAt: Date.now() - 60_000,
+      typicalWakeHour: 23,
+      typicalFirstActiveHour: 23,
+      typicalLastActiveHour: 6,
+    });
+    mocks.resolveOwnerEntityId.mockResolvedValue("owner-1");
+    mocks.readProfileFromMetadata.mockReturnValue(profile);
+    mocks.profileNeedsRebuild.mockReturnValue(false);
+    mocks.refreshCurrentState.mockResolvedValue(profile);
+    configureTelegramDelivery();
+
+    const task = makeExistingProactiveTask();
+    const taskId = requireTaskId(task);
+    const { runtime, state } = createRuntimeMock([task]);
+
+    await executeProactiveTask(runtime);
+
+    expect(vi.mocked(runtime.sendMessageToTarget)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(runtime.sendMessageToTarget)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: "telegram",
+      }),
+      expect.objectContaining({
+        text: "Good night.",
+        source: "telegram",
+      }),
+    );
+    expect(getPersistedFiredLog(state, taskId)).toMatchObject({
+      date: "2026-04-06",
+      nudgedOccurrenceIds: [],
+      nudgedCalendarEventIds: [],
+    });
+    expect(getPersistedFiredLog(state, taskId).gnFiredAt).toEqual(
+      MORNING_NOW.getTime(),
+    );
+  });
+
+  it("emits GN to client_chat as assistant activity and records gnFiredAt", async () => {
+    const profile = makeProfile({
+      lastSeenAt: Date.now() - 60_000,
+      primaryPlatform: "desktop_app",
+      lastSeenPlatform: "desktop_app",
+      typicalWakeHour: 23,
+      typicalFirstActiveHour: 23,
+      typicalLastActiveHour: 6,
+    });
+    mocks.resolveOwnerEntityId.mockResolvedValue("owner-1");
+    mocks.readProfileFromMetadata.mockReturnValue(profile);
+    mocks.profileNeedsRebuild.mockReturnValue(false);
+    mocks.refreshCurrentState.mockResolvedValue(profile);
+    mocks.loadOwnerContactsConfig.mockReturnValue({});
+
+    const task = makeExistingProactiveTask();
+    const taskId = requireTaskId(task);
+    const { runtime, state, eventService } = createRuntimeMock([task]);
+
+    await executeProactiveTask(runtime);
+
+    expect(vi.mocked(runtime.sendMessageToTarget)).not.toHaveBeenCalled();
+    expect(eventService.emit).toHaveBeenCalledTimes(1);
+    expect(eventService.emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        stream: "assistant",
+        agentId: "agent-1",
+        data: expect.objectContaining({
+          text: "Good night.",
+          source: "proactive-gn",
+          kind: "gn",
+          targetPlatform: "desktop_app",
+        }),
+      }),
+    );
+    expect(getPersistedFiredLog(state, taskId)).toMatchObject({
+      date: "2026-04-06",
+      nudgedOccurrenceIds: [],
+      nudgedCalendarEventIds: [],
+    });
+    expect(getPersistedFiredLog(state, taskId).gnFiredAt).toEqual(
+      MORNING_NOW.getTime(),
+    );
+  });
+
+  it("records occurrence nudges after sending them", async () => {
+    const profile = makeProfile({
+      lastSeenAt: Date.parse("2026-04-05T08:00:00Z"),
+      typicalWakeHour: 23,
+      typicalFirstActiveHour: 23,
+      typicalLastActiveHour: 23,
+      hasOpenActivityCycle: false,
+      isCurrentlyActive: false,
+      currentActivityCycleStartedAt: null,
+      currentActivityCycleLocalDate: "2026-04-05",
+    });
+    mocks.resolveOwnerEntityId.mockResolvedValue("owner-1");
+    mocks.readProfileFromMetadata.mockReturnValue(profile);
+    mocks.profileNeedsRebuild.mockReturnValue(false);
+    mocks.refreshCurrentState.mockResolvedValue(profile);
+    configureTelegramDelivery();
+    mocks.mockGetOverview.mockResolvedValue({
+      occurrences: [
+        {
+          id: "brush-am",
+          title: "Brush teeth",
+          dueAt: new Date(Date.now() + 20 * 60_000).toISOString(),
+          state: "upcoming",
+          definitionKind: "habit",
+          cadence: { kind: "daily" },
+          priority: 5,
+        },
+      ],
+    });
+
+    const task = makeExistingProactiveTask();
+    const taskId = requireTaskId(task);
+    const { runtime, state } = createRuntimeMock([task]);
+
+    await executeProactiveTask(runtime);
+
+    expect(vi.mocked(runtime.sendMessageToTarget)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(runtime.sendMessageToTarget)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: "telegram",
+      }),
+      expect.objectContaining({
+        text: "Brush teeth",
+        source: "telegram",
+      }),
+    );
+    expect(getPersistedFiredLog(state, taskId)).toMatchObject({
+      date: "2026-04-06",
+      nudgedOccurrenceIds: ["brush-am"],
+      nudgedCalendarEventIds: [],
+    });
+  });
+
+  it("records calendar-event nudges after sending them", async () => {
+    const profile = makeProfile({
+      lastSeenAt: Date.parse("2026-04-03T08:00:00Z"),
+      typicalWakeHour: 23,
+      typicalFirstActiveHour: 23,
+      typicalLastActiveHour: 23,
+      hasOpenActivityCycle: false,
+      isCurrentlyActive: false,
+      currentActivityCycleStartedAt: null,
+      currentActivityCycleLocalDate: "2026-04-05",
+    });
+    mocks.resolveOwnerEntityId.mockResolvedValue("owner-1");
+    mocks.readProfileFromMetadata.mockReturnValue(profile);
+    mocks.profileNeedsRebuild.mockReturnValue(false);
+    mocks.refreshCurrentState.mockResolvedValue(profile);
+    configureTelegramDelivery();
+    mocks.mockGetCalendarFeed.mockResolvedValue({
+      events: [
+        {
+          id: "cal-standup",
+          title: "Standup",
+          startAt: new Date(Date.now() + 20 * 60_000).toISOString(),
+          endAt: new Date(Date.now() + 50 * 60_000).toISOString(),
+          isAllDay: false,
+        },
+      ],
+    });
+
+    const task = makeExistingProactiveTask();
+    const taskId = requireTaskId(task);
+    const { runtime, state } = createRuntimeMock([task]);
+
+    await executeProactiveTask(runtime);
+
+    expect(vi.mocked(runtime.sendMessageToTarget)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(runtime.sendMessageToTarget)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: "telegram",
+      }),
+      expect.objectContaining({
+        text: "Standup",
+        source: "telegram",
+      }),
+    );
+    expect(getPersistedFiredLog(state, taskId)).toMatchObject({
+      date: "2026-04-06",
+      nudgedOccurrenceIds: [],
+      nudgedCalendarEventIds: ["cal-standup"],
+    });
   });
 
   it("skips actions scheduled in the future", async () => {
@@ -488,7 +720,7 @@ describe("executeProactiveTask", () => {
     expect(meta.activityProfile).toBeDefined();
   });
 
-  it("skips client_chat delivery until the in-app send handler is registered", async () => {
+  it("emits client_chat proactive activity without relying on a send handler", async () => {
     const profile = makeProfile({
       lastSeenAt: Date.now() - 60_000,
       primaryPlatform: "desktop_app",
@@ -501,11 +733,12 @@ describe("executeProactiveTask", () => {
     mocks.loadOwnerContactsConfig.mockReturnValue({});
 
     const task = makeExistingProactiveTask();
-    const { runtime, state } = createRuntimeMock([task]);
+    const { runtime, state, eventService } = createRuntimeMock([task]);
 
     await executeProactiveTask(runtime);
 
     expect(vi.mocked(runtime.sendMessageToTarget)).not.toHaveBeenCalled();
+    expect(eventService.emit).toHaveBeenCalledTimes(1);
     const updated = state.tasks.find((t) => t.id === task.id);
     const meta = updated?.metadata as Record<string, unknown>;
     expect(meta.activityProfile).toBeDefined();

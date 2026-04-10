@@ -536,6 +536,15 @@ function buildLifeActionPrompt(
   ].join("\n");
 }
 
+function buildCalendarRoutingPrompt(userRequest: string): string {
+  return [
+    `Handle this like a normal user request: "${userRequest}"`,
+    "Treat itinerary, flights, travel, calendar, and schedule questions as calendar work.",
+    "Use CALENDAR_ACTION if you need an action.",
+    "Do not use CREATE_TASK, SPAWN_AGENT, SEND_TO_AGENT, or LIST_AGENTS for this.",
+  ].join("\n");
+}
+
 describeIf(
   !(
     LIVE_TESTS_ENABLED &&
@@ -747,5 +756,30 @@ describeIf(
     expect(
       (preference.data.effective as Record<string, unknown>).intensity,
     ).toBe("minimal");
+  }, LIVE_CHAT_TEST_TIMEOUT_MS);
+
+  it("routes itinerary questions toward CALENDAR_ACTION instead of task agents", async () => {
+    const liveRuntime = runtime!;
+    const { conversationId } = await createConversation(liveRuntime.port, {
+      title: "Live LifeOps Calendar Routing",
+    });
+
+    const prompt = buildCalendarRoutingPrompt(
+      "hey when do i fly back from denver",
+    );
+    const responseText = await postLiveConversationMessage(
+      liveRuntime,
+      conversationId,
+      prompt,
+      "calendar routing",
+    );
+    assertNoProviderIssue("calendar routing", responseText, liveRuntime);
+    expect(responseText).not.toMatch(/no active task agents/i);
+    expect(responseText).not.toMatch(/create_task|spawn_agent|send_to_agent/i);
+
+    const trajectory = await waitForTrajectoryCall(liveRuntime.port, prompt);
+    const plannerResponse = String(trajectory.llmCall.response ?? "");
+    expect(plannerResponse).toMatch(/CALENDAR_ACTION/i);
+    expect(plannerResponse).not.toMatch(/CREATE_TASK|SPAWN_AGENT|SEND_TO_AGENT|LIST_AGENTS/i);
   }, LIVE_CHAT_TEST_TIMEOUT_MS);
 });

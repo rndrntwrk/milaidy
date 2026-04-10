@@ -96,7 +96,7 @@ These parts are real and reusable:
   Anthropic and Codex OAuth/browser-login flows are real.
 - `packages/agent/src/auth/credentials.ts`
   Subscription tokens can be applied into runtime env and Claude Code token import already exists.
-- `packages/plugin-roles/src/action.ts` and `packages/plugin-roles/src/provider.ts`
+- `packages/agent/src/runtime/roles/src/action.ts` and `packages/agent/src/runtime/roles/src/provider.ts`
   Role assignment and role context injection are real.
 - `packages/agent/src/api/trajectory-routes.ts` and `docs/rest/trajectories.md`
   Trajectory inspection/export infrastructure is real.
@@ -164,7 +164,7 @@ Result:
 
 #### F. Role system is generic, not orchestration-policy aware
 
-- `plugin-roles` supports role assignment and prompt context.
+- The runtime roles capability supports role assignment and prompt context.
 - It does not define policies like:
   - who may invoke coding agents in Discord
   - who may spend Claude/Codex subscription budget
@@ -429,7 +429,7 @@ Responsibilities:
   - spend provider budgets
   - access certain connectors
 
-This should build on `plugin-roles`, not replace it.
+This should build on the runtime roles capability, not replace it.
 
 ### 7.2 Data Flow
 
@@ -474,7 +474,7 @@ Key files:
 - `packages/agent/src/api/server.ts`
 - `packages/agent/src/services/*task*`
 - `packages/app-core/src/components/chat/**`
-- `packages/plugin-roles/**`
+- `packages/agent/src/runtime/roles/**`
 
 ### 8.2 Durable State Audit
 

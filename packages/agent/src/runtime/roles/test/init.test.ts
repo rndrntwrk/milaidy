@@ -57,7 +57,7 @@ function createInitRuntime(opts: {
 
 describe("plugin shape", () => {
   it("has correct name", () => {
-    expect(rolesPlugin.name).toBe("@miladyai/plugin-roles");
+    expect(rolesPlugin.name).toBe("roles");
   });
   it("has a provider", () => {
     expect(rolesPlugin.providers).toHaveLength(1);
@@ -98,7 +98,8 @@ describe("ensureOwnerRole via init()", () => {
     };
     const runtime = createInitRuntime({ worlds: [world] });
     await getPluginInit()?.({}, runtime);
-    expect(runtime.updateWorld).not.toHaveBeenCalled();
+    expect(runtime.updateWorld).toHaveBeenCalledTimes(1);
+    expect(world.metadata.roleSources?.["user-1"]).toBe("owner");
   });
 
   it("skips worlds without ownership", async () => {
@@ -143,7 +144,7 @@ describe("ensureOwnerRole via init()", () => {
     const runtime = createInitRuntime({
       worlds: [world],
       settings: {
-        MILADY_ADMIN_ENTITY_ID: "owner-canonical",
+        ELIZA_ADMIN_ENTITY_ID: "owner-canonical",
       },
     });
 
@@ -303,8 +304,10 @@ describe("applyConnectorAdminWhitelists via init()", () => {
       { connectorAdmins: { discord: ["wl-id"] } },
       runtime,
     );
-    // Should not have updated — entity already has a role
-    expect(runtime.updateWorld).not.toHaveBeenCalled();
+    expect(runtime.updateWorld).toHaveBeenCalledTimes(1);
+    expect(world.metadata.roles?.existing).toBe("USER");
+    expect(world.metadata.roleSources?.existing).toBeUndefined();
+    expect(world.metadata.roleSources?.o1).toBe("owner");
   });
 
   it("skips when whitelist is empty", async () => {
@@ -314,7 +317,8 @@ describe("applyConnectorAdminWhitelists via init()", () => {
     };
     const runtime = createInitRuntime({ worlds: [world] });
     await getPluginInit()?.({ connectorAdmins: { discord: [] } }, runtime);
-    expect(runtime.updateWorld).not.toHaveBeenCalled();
+    expect(runtime.updateWorld).toHaveBeenCalledTimes(1);
+    expect(world.metadata.roleSources?.o1).toBe("owner");
   });
 
   it("does not match entity to wrong connector", async () => {

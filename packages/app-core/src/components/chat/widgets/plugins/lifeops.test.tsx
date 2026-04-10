@@ -269,4 +269,64 @@ describe("GoogleSidebarWidget", () => {
       maxResults: 3,
     });
   });
+
+  it("shows a reconnect message instead of empty calendar state when Google scopes are invalid", async () => {
+    const ownerConnector = buildController("owner", {
+      status: buildStatus("owner", {
+        connected: true,
+        reason: "connected",
+        preferredByAgent: true,
+        cloudConnectionId: "managed-owner",
+        identity: {
+          name: "Shaw",
+          email: "shawmakesmagic@gmail.com",
+        },
+        grantedCapabilities: ["google.basic_identity", "google.calendar.read"],
+        grantedScopes: [
+          "openid",
+          "email",
+          "profile",
+          "https://www.googleapis.com/auth/calendar.readonly",
+        ],
+        expiresAt: "2026-04-05T00:00:00.000Z",
+        hasRefreshToken: true,
+      }),
+    });
+    mockUseGoogleLifeOpsConnector.mockImplementation(
+      (options?: { side?: LifeOpsConnectorSide }) =>
+        options?.side === "agent"
+          ? buildController("agent")
+          : ownerConnector,
+    );
+    mockClient.getLifeOpsCalendarFeed.mockRejectedValue(
+      new Error(
+        "Google connector needs re-authentication: Request had insufficient authentication scopes.",
+      ),
+    );
+    mockClient.getLifeOpsGmailTriage.mockResolvedValue({
+      messages: [],
+      source: "cache",
+      syncedAt: "2026-04-04T17:32:00.000Z",
+      summary: {
+        unreadCount: 0,
+        importantNewCount: 0,
+        likelyReplyNeededCount: 0,
+      },
+    });
+
+    let renderer!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(
+        React.createElement(GoogleSidebarWidget, {
+          events: [],
+          clearEvents: () => {},
+        }),
+      );
+    });
+
+    const text = flattenText(renderer.root);
+    expect(text).toContain("Reconnect Google to refresh calendar and Gmail permissions.");
+    expect(text).not.toContain("No upcoming events");
+    expect(text).not.toContain("No priority mail");
+  });
 });

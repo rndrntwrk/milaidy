@@ -215,6 +215,8 @@ export function App() {
     uiTheme,
     setUiTheme,
     chatAgentVoiceMuted,
+    agentStatus,
+    backendConnection,
     unreadConversations,
     activeGameViewerUrl,
     gameOverlayEnabled,
@@ -243,10 +245,14 @@ export function App() {
     COMPANION_ENABLED &&
     startupCoordinator.phase === "ready" &&
     (companionShellVisible || characterSceneVisible);
+  const lifeOpsSignalsEnabled =
+    startupCoordinator.phase === "ready" &&
+    agentStatus?.state === "running" &&
+    backendConnection?.state === "connected";
   const contextMenu = useContextMenu();
 
   useStreamPopoutNavigation(setTab);
-  useLifeOpsActivitySignals(startupCoordinator.phase === "ready");
+  useLifeOpsActivitySignals(lifeOpsSignalsEnabled);
 
   const [customActionsPanelOpen, setCustomActionsPanelOpen] = useState(false);
   const [customActionsEditorOpen, setCustomActionsEditorOpen] = useState(false);

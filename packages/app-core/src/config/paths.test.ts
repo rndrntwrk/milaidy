@@ -50,34 +50,37 @@ describe("state + config path candidates", () => {
     );
   });
 
-  it("returns only eliza.json in .eliza directory", () => {
+  it("prefers milady.json and keeps the legacy eliza.json candidate", () => {
     const home = "/home/test";
     const candidates = resolveDefaultConfigCandidates(
       {} as NodeJS.ProcessEnv,
       () => home,
     );
-    const expected = [path.join(home, ".eliza", "eliza.json")];
+    const expected = [
+      path.join(home, ".milady", "milady.json"),
+      path.join(home, ".eliza", "eliza.json"),
+    ];
     expect(candidates).toEqual(expected);
   });
 
-  it("defaults to ~/.eliza when no env override", () => {
+  it("defaults to ~/.milady when no env override", () => {
     const home = "/home/test";
     const resolved = resolveStateDir({} as NodeJS.ProcessEnv, () => home);
-    expect(resolved).toBe(path.join(home, ".eliza"));
+    expect(resolved).toBe(path.join(home, ".milady"));
   });
 
-  it("config path defaults to eliza.json in state dir", () => {
+  it("config path defaults to milady.json in state dir", () => {
     const home = "/home/test";
     const state = resolveStateDir({} as NodeJS.ProcessEnv, () => home);
     const resolved = resolveConfigPath({} as NodeJS.ProcessEnv, state);
-    expect(resolved).toBe(path.join(home, ".eliza", "eliza.json"));
+    expect(resolved).toBe(path.join(home, ".milady", "milady.json"));
   });
 
   it("respects state dir overrides", () => {
     const overrideDir = "/custom/override";
     const env = { ELIZA_STATE_DIR: overrideDir } as NodeJS.ProcessEnv;
     const resolved = resolveConfigPath(env, overrideDir);
-    expect(resolved).toBe(path.join(overrideDir, "eliza.json"));
+    expect(resolved).toBe(path.join(overrideDir, "milady.json"));
   });
 });
 
@@ -142,7 +145,7 @@ describe("resolveConfigPath", () => {
     const home = "/home/test";
     const state = resolveStateDir(env, () => home);
     const result = resolveConfigPath(env, state);
-    expect(result).toBe(path.join(home, ".eliza", "eliza.json"));
+    expect(result).toBe(path.join(home, ".milady", "milady.json"));
   });
 });
 
@@ -157,6 +160,7 @@ describe("resolveDefaultConfigCandidates", () => {
     const env = { ELIZA_STATE_DIR: "/custom/state" } as NodeJS.ProcessEnv;
     const candidates = resolveDefaultConfigCandidates(env, () => "/home/test");
     expect(candidates).toEqual([
+      path.join(path.resolve("/custom/state"), "milady.json"),
       path.join(path.resolve("/custom/state"), "eliza.json"),
     ]);
   });
@@ -168,6 +172,9 @@ describe("resolveDefaultConfigCandidates", () => {
     } as NodeJS.ProcessEnv;
     const home = "/home/test";
     const candidates = resolveDefaultConfigCandidates(env, () => home);
-    expect(candidates).toEqual([path.join(home, ".eliza", "eliza.json")]);
+    expect(candidates).toEqual([
+      path.join(home, ".milady", "milady.json"),
+      path.join(home, ".eliza", "eliza.json"),
+    ]);
   });
 });

@@ -11,7 +11,7 @@ const {
   mockResolveCanonicalOwnerId: vi.fn(),
 }));
 
-vi.mock("@miladyai/plugin-roles", () => ({
+vi.mock("@elizaos/core/roles", () => ({
   hasConfiguredCanonicalOwner: mockHasConfiguredCanonicalOwner,
   normalizeRole: mockNormalizeRole,
   resolveCanonicalOwnerId: mockResolveCanonicalOwnerId,

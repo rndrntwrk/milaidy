@@ -2,17 +2,15 @@ import type http from "node:http";
 import type { AgentRuntime } from "@elizaos/core";
 import { describe, expect, it, vi } from "vitest";
 import {
-  ensureWorkbenchBootstrapTodo,
   handleWorkbenchRoutes,
-  WORKBENCH_BOOTSTRAP_TODO_NAME,
   type WorkbenchRouteContext,
 } from "./workbench-routes";
 
-function createBootstrapTodoView(id = "bootstrap-todo") {
+function createTodoView(id = "todo-123") {
   return {
     id,
-    name: WORKBENCH_BOOTSTRAP_TODO_NAME,
-    description: WORKBENCH_BOOTSTRAP_TODO_NAME,
+    name: "Follow up",
+    description: "Call the user back",
     priority: null,
     isUrgent: false,
     type: "task",
@@ -23,33 +21,13 @@ function createBootstrapTodoView(id = "bootstrap-todo") {
   };
 }
 
-describe("workbench bootstrap todo", () => {
-  it("seeds a runtime bootstrap todo from GET /api/workbench/todos when the workbench is empty", async () => {
+describe("workbench todo routes", () => {
+  it("keeps GET /api/workbench/todos read-only when the list is empty", async () => {
     const json = vi.fn();
     const error = vi.fn();
-    const bootstrapTodo = createBootstrapTodoView();
-    const createdTask = {
-      id: bootstrapTodo.id,
-      name: bootstrapTodo.name,
-      description: bootstrapTodo.description,
-      tags: ["workbench-todo", "todo", "bootstrap"],
-      metadata: {
-        isCompleted: false,
-        workbenchTodo: {
-          description: bootstrapTodo.description,
-          isCompleted: false,
-          isUrgent: false,
-          priority: null,
-          source: "workbench-bootstrap",
-          type: "task",
-        },
-      },
-    };
     const runtime = {
       agentId: "agent-1",
       getTasks: vi.fn().mockResolvedValue([]),
-      getTask: vi.fn().mockResolvedValue(createdTask),
-      createTask: vi.fn().mockResolvedValue(bootstrapTodo.id),
       getService: vi.fn().mockReturnValue(null),
       logger: { warn: vi.fn() },
     };
@@ -68,7 +46,7 @@ describe("workbench bootstrap todo", () => {
       error,
       readJsonBody: vi.fn(),
       toWorkbenchTask: vi.fn(),
-      toWorkbenchTodo: vi.fn().mockReturnValue(bootstrapTodo),
+      toWorkbenchTodo: vi.fn().mockReturnValue(null),
       normalizeTags: vi
         .fn()
         .mockImplementation((value: unknown, required: string[] = []) => [
@@ -84,66 +62,11 @@ describe("workbench bootstrap todo", () => {
       listTriggerTasks: vi.fn(),
     } as unknown as WorkbenchRouteContext);
 
-    expect(runtime.createTask).toHaveBeenCalledWith(
-      expect.objectContaining({
-        name: WORKBENCH_BOOTSTRAP_TODO_NAME,
-        description: WORKBENCH_BOOTSTRAP_TODO_NAME,
-      }),
-    );
     expect(json).toHaveBeenCalledWith(expect.anything(), {
-      todos: [bootstrapTodo],
-    });
-    expect(error).not.toHaveBeenCalled();
-  });
-
-  it("creates a runtime workbench todo when the bootstrap item is missing", async () => {
-    const bootstrapTodo = createBootstrapTodoView("runtime-bootstrap");
-    const createdTask = {
-      id: bootstrapTodo.id,
-      name: bootstrapTodo.name,
-      description: bootstrapTodo.description,
-      tags: ["workbench-todo", "todo", "bootstrap"],
-      metadata: {
-        isCompleted: false,
-        workbenchTodo: {
-          description: bootstrapTodo.description,
-          isCompleted: false,
-          isUrgent: false,
-          priority: null,
-          source: "workbench-bootstrap",
-          type: "task",
-        },
-      },
-    };
-    const runtime = {
-      agentId: "agent-1",
-      getTask: vi.fn().mockResolvedValue(createdTask),
-      createTask: vi.fn().mockResolvedValue(bootstrapTodo.id),
-      getService: vi.fn().mockReturnValue(null),
-      logger: { warn: vi.fn() },
-    };
-
-    const result = await ensureWorkbenchBootstrapTodo({
-      ctx: {
-        normalizeTags: vi
-          .fn()
-          .mockImplementation((value: unknown, required: string[] = []) => [
-            ...required,
-            ...(Array.isArray(value) ? value : []),
-          ]),
-        toWorkbenchTodo: vi.fn().mockReturnValue(bootstrapTodo),
-      },
-      runtime: runtime as unknown as AgentRuntime,
       todos: [],
     });
-
-    expect(runtime.createTask).toHaveBeenCalledWith(
-      expect.objectContaining({
-        name: WORKBENCH_BOOTSTRAP_TODO_NAME,
-        description: WORKBENCH_BOOTSTRAP_TODO_NAME,
-      }),
-    );
-    expect(result).toEqual(bootstrapTodo);
+    expect(runtime.getTasks).toHaveBeenCalledTimes(1);
+    expect(error).not.toHaveBeenCalled();
   });
 
   it("marks runtime-backed todos completed through POST /api/workbench/todos/:id/complete", async () => {
@@ -190,7 +113,7 @@ describe("workbench bootstrap todo", () => {
       toWorkbenchTask: vi.fn(),
       toWorkbenchTodo: vi
         .fn()
-        .mockReturnValue(createBootstrapTodoView("todo-123")),
+        .mockReturnValue(createTodoView("todo-123")),
       normalizeTags: vi.fn(),
       readTaskMetadata,
       readTaskCompleted: vi.fn(),

@@ -259,6 +259,9 @@ describe("LifeOpsOverviewSidebarWidget", () => {
     mockClient.reviewLifeOpsGoal.mockReset();
 
     mockUseApp.mockReturnValue({
+      startupPhase: "ready",
+      agentStatus: { state: "running" },
+      backendConnection: { state: "connected" },
       workbench: {
         lifeops: overview,
       },
@@ -381,6 +384,29 @@ describe("LifeOpsOverviewSidebarWidget", () => {
     expect(text).toContain("agent ops");
     expect(text).toContain("keep plugin mirrors healthy");
     expect(text).toContain("reminders are driven from lifeops");
+  });
+
+  it("does not request overview while the runtime is still starting", async () => {
+    mockUseApp.mockReturnValue({
+      startupPhase: "starting-backend",
+      agentStatus: { state: "starting" },
+      backendConnection: { state: "reconnecting" },
+      workbench: {
+        lifeops: createOverview(),
+      },
+    });
+
+    await act(async () => {
+      TestRenderer.create(
+        React.createElement(LifeOpsOverviewSidebarWidget, {
+          events: [],
+          clearEvents: () => {},
+        }),
+      );
+      await Promise.resolve();
+    });
+
+    expect(mockClient.getLifeOpsOverview).not.toHaveBeenCalled();
   });
 
   it("runs occurrence completion and refreshes the overview", async () => {

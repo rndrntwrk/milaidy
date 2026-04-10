@@ -480,6 +480,12 @@
   "conversations.renameDialogSuggesting": "Nagmumungkahi…",
   "conversations.renameDialogTitle": "Palitan ang paksa ng chat",
   "conversations.searchChats": "Maghanap ng mga chat",
+  "conversations.filterScope": "Pinagmulan",
+  "conversations.filterWorld": "Server / mundo",
+  "conversations.scopeMilady": "Milady",
+  "conversations.scopeAllConnectors": "Lahat ng connector",
+  "conversations.scopeUnknownWorld": "Hindi kilalang mundo",
+  "conversations.scopeAllWorlds": "Lahat ng mundo",
   "customactioneditor.Add": "+ Dagdagan",
   "customactioneditor.AddParameter": "+ Magdagdag ng Parameter",
   "customactioneditor.AliasesOptional": "Mga Alias (opsyonal)",
@@ -1679,6 +1685,7 @@
   "pluginsview.ManagedDiscordNeedsAgent": "Deploy a cloud agent first, then connect managed Discord from the Cloud agents screen.",
   "pluginsview.ManagedDiscordRequiresCloud": "Connect Eliza Cloud first, then you can use managed Discord OAuth.",
   "pluginsview.ManagedDiscordSelectAgent": "Select a cloud agent",
+  "pluginsview.ManagedDiscordGatewayProvisionFailed": "Hindi masimulan ang shared Milady Discord gateway sa Eliza Cloud.",
   "pluginsview.NeedsSetup": "Kailangan ng setup",
   "pluginsview.NoConfigNeeded": "Hindi kailangan ng config",
   "pluginsview.NoConfigurationNeeded": "Walang kinakailangang configuration.",
@@ -2412,5 +2419,7 @@
   "whatsappqroverlay.Tap": "I-tap ang",
   "whatsappqroverlay.TryAgain": "Subukan Muli",
   "whatsappqroverlay.UsesAnUnofficialW": "Gumagamit ng unofficial WhatsApp API. Gumamit ng dedicated phone number.",
-  "whatsappqroverlay.andSelect": "at piliin ang"
+  "whatsappqroverlay.andSelect": "at piliin ang",
+  "conversations.noneMilady": "Wala pang usapan",
+  "conversations.noneConnectors": "Wala pang usapan"
 }

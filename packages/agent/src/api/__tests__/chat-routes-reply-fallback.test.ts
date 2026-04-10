@@ -15,6 +15,8 @@ function createRuntimeForChatRouteTests(options?: {
     onResponse: (content: Content) => Promise<object[]>,
     messageOptions?: {
       onStreamChunk?: (chunk: string, messageId?: string) => Promise<void>;
+      timeoutDuration?: number;
+      keepExistingResponses?: boolean;
     },
   ) => Promise<{
     didRespond?: boolean;
@@ -55,6 +57,8 @@ function createRuntimeForChatRouteTests(options?: {
         onResponse: (content: Content) => Promise<object[]>,
         messageOptions?: {
           onStreamChunk?: (chunk: string, messageId?: string) => Promise<void>;
+          timeoutDuration?: number;
+          keepExistingResponses?: boolean;
         },
       ) =>
         options?.handleMessage?.(
@@ -227,5 +231,39 @@ describe("generateChatResponse fallback recovery", () => {
 
     expect(result.text).toBe("");
     expect(result.noResponseReason).toBe("ignored");
+  });
+
+  it("opts chat generations into keeping superseded responses", async () => {
+    let receivedOptions:
+      | {
+          onStreamChunk?: (chunk: string, messageId?: string) => Promise<void>;
+          timeoutDuration?: number;
+          keepExistingResponses?: boolean;
+        }
+      | undefined;
+
+    const runtime = createRuntimeForChatRouteTests({
+      handleMessage: async (_runtime, _message, _onResponse, messageOptions) => {
+        receivedOptions = messageOptions;
+        return {
+          didRespond: true,
+          responseContent: {
+            text: "Hello world",
+            actions: ["REPLY"],
+          },
+          responseMessages: [],
+          mode: "simple",
+        };
+      },
+    });
+
+    const result = await generateChatResponse(
+      runtime,
+      createUserMessage("hello"),
+      "ChatRouteAgent",
+    );
+
+    expect(result.text).toBe("Hello world");
+    expect(receivedOptions?.keepExistingResponses).toBe(true);
   });
 });

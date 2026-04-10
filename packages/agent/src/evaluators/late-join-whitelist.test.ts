@@ -1,15 +1,13 @@
 import type { Memory, State, UUID } from "@elizaos/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockGetEntityRole, mockResolveWorldForMessage, mockSetEntityRole } =
+const { mockResolveWorldForMessage, mockSetEntityRole } =
   vi.hoisted(() => ({
-    mockGetEntityRole: vi.fn(),
     mockResolveWorldForMessage: vi.fn(),
     mockSetEntityRole: vi.fn(),
   }));
 
-vi.mock("@miladyai/plugin-roles", () => ({
-  getEntityRole: mockGetEntityRole,
+vi.mock("@elizaos/core/roles", () => ({
   resolveWorldForMessage: mockResolveWorldForMessage,
   setEntityRole: mockSetEntityRole,
 }));
@@ -54,7 +52,6 @@ describe("lateJoinWhitelistEvaluator", () => {
       world: { id: WORLD_ID, metadata: WORLD_METADATA },
       metadata: WORLD_METADATA,
     });
-    mockGetEntityRole.mockReturnValue("NONE");
     mockLoadElizaConfig.mockReturnValue({});
   });
 
@@ -64,8 +61,11 @@ describe("lateJoinWhitelistEvaluator", () => {
   });
 
   describe("validate", () => {
-    it("returns true when entity has NONE role", async () => {
-      mockGetEntityRole.mockReturnValue("NONE");
+    it("returns true when entity has no stored role", async () => {
+      mockResolveWorldForMessage.mockResolvedValue({
+        world: { id: WORLD_ID, metadata: { roles: {} } },
+        metadata: { roles: {} },
+      });
       const result = await lateJoinWhitelistEvaluator.validate(
         makeRuntime(),
         makeMessage(),
@@ -74,7 +74,10 @@ describe("lateJoinWhitelistEvaluator", () => {
     });
 
     it("returns false when entity is already ADMIN", async () => {
-      mockGetEntityRole.mockReturnValue("ADMIN");
+      mockResolveWorldForMessage.mockResolvedValue({
+        world: { id: WORLD_ID, metadata: { roles: { [ENTITY_ID]: "ADMIN" } } },
+        metadata: { roles: { [ENTITY_ID]: "ADMIN" } },
+      });
       const result = await lateJoinWhitelistEvaluator.validate(
         makeRuntime(),
         makeMessage(),
@@ -83,7 +86,10 @@ describe("lateJoinWhitelistEvaluator", () => {
     });
 
     it("returns false when entity is already OWNER", async () => {
-      mockGetEntityRole.mockReturnValue("OWNER");
+      mockResolveWorldForMessage.mockResolvedValue({
+        world: { id: WORLD_ID, metadata: { roles: { [ENTITY_ID]: "OWNER" } } },
+        metadata: { roles: { [ENTITY_ID]: "OWNER" } },
+      });
       const result = await lateJoinWhitelistEvaluator.validate(
         makeRuntime(),
         makeMessage(),
@@ -104,15 +110,9 @@ describe("lateJoinWhitelistEvaluator", () => {
   describe("handler", () => {
     it("promotes entity matching discord whitelist", async () => {
       mockLoadElizaConfig.mockReturnValue({
-        plugins: {
-          entries: {
-            "@miladyai/plugin-roles": {
-              config: {
-                connectorAdmins: {
-                  discord: ["discord-user-123"],
-                },
-              },
-            },
+        roles: {
+          connectorAdmins: {
+            discord: ["discord-user-123"],
           },
         },
       });
@@ -137,20 +137,15 @@ describe("lateJoinWhitelistEvaluator", () => {
         expect.objectContaining({ entityId: ENTITY_ID }),
         ENTITY_ID,
         "ADMIN",
+        "connector_admin",
       );
     });
 
     it("promotes entity matching telegram username", async () => {
       mockLoadElizaConfig.mockReturnValue({
-        plugins: {
-          entries: {
-            "@miladyai/plugin-roles": {
-              config: {
-                connectorAdmins: {
-                  telegram: ["tg_alice"],
-                },
-              },
-            },
+        roles: {
+          connectorAdmins: {
+            telegram: ["tg_alice"],
           },
         },
       });
@@ -175,20 +170,15 @@ describe("lateJoinWhitelistEvaluator", () => {
         expect.objectContaining({ entityId: ENTITY_ID }),
         ENTITY_ID,
         "ADMIN",
+        "connector_admin",
       );
     });
 
     it("does nothing when entity does not match whitelist", async () => {
       mockLoadElizaConfig.mockReturnValue({
-        plugins: {
-          entries: {
-            "@miladyai/plugin-roles": {
-              config: {
-                connectorAdmins: {
-                  discord: ["discord-user-999"],
-                },
-              },
-            },
+        roles: {
+          connectorAdmins: {
+            discord: ["discord-user-999"],
           },
         },
       });
@@ -232,12 +222,8 @@ describe("lateJoinWhitelistEvaluator", () => {
 
     it("does nothing when entity is not found", async () => {
       mockLoadElizaConfig.mockReturnValue({
-        plugins: {
-          entries: {
-            "@miladyai/plugin-roles": {
-              config: { connectorAdmins: { discord: ["anyone"] } },
-            },
-          },
+        roles: {
+          connectorAdmins: { discord: ["anyone"] },
         },
       });
 

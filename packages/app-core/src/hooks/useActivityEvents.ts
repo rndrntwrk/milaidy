@@ -23,8 +23,46 @@ function makeEventId(): string {
   return `evt-${nextEventId}-${Date.now()}`;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function summarizeAssistantActivityEvent(data: Record<string, unknown>): {
+  eventType: string;
+  summary: string;
+} | null {
+  if (data.type !== "agent_event" || data.stream !== "assistant") {
+    return null;
+  }
+  const payload = isRecord(data.payload) ? data.payload : null;
+  if (!payload) {
+    return null;
+  }
+
+  const source = typeof payload.source === "string" ? payload.source : "";
+  const text =
+    typeof payload.text === "string" ? payload.text.trim().slice(0, 120) : "";
+  if (!text) {
+    return null;
+  }
+
+  switch (source) {
+    case "lifeops-reminder":
+      return { eventType: "reminder", summary: text };
+    case "lifeops-workflow":
+      return { eventType: "workflow", summary: text };
+    case "proactive-gm":
+    case "proactive-gn":
+      return { eventType: "check-in", summary: text };
+    case "proactive-nudge":
+      return { eventType: "nudge", summary: text };
+    default:
+      return null;
+  }
+}
+
 /**
- * Subscribe to "pty-session-event" and "proactive-message" WS events,
+ * Subscribe to task/proactive websocket events plus assistant activity events,
  * returning a capped list of recent activity entries.
  */
 export function useActivityEvents() {
@@ -92,9 +130,25 @@ export function useActivityEvents() {
       },
     );
 
+    const unbindAgent = client.onWsEvent(
+      "agent_event",
+      (data: Record<string, unknown>) => {
+        const activity = summarizeAssistantActivityEvent(data);
+        if (!activity) {
+          return;
+        }
+        pushEvent({
+          timestamp: Date.now(),
+          eventType: activity.eventType,
+          summary: activity.summary,
+        });
+      },
+    );
+
     return () => {
       unbindPty();
       unbindProactive();
+      unbindAgent();
     };
   }, [pushEvent]);
 

@@ -19,7 +19,26 @@ describe("trigger routes", () => {
           getTargetRoomId: () => "00000000-0000-0000-0000-000000000201" as UUID,
         }) as { getAutonomousRoomId: () => UUID; getTargetRoomId: () => UUID },
       createMemory: async () => undefined,
-      getTasks: async () => tasks,
+      getTasks: async (filter?: {
+        tags?: string[];
+        agentIds?: UUID[];
+      }) =>
+        tasks.filter((task) => {
+          if (
+            filter?.agentIds?.length &&
+            task.agentId &&
+            !filter.agentIds.includes(task.agentId as UUID)
+          ) {
+            return false;
+          }
+          if (filter?.tags?.length) {
+            const taskTags = task.tags ?? [];
+            if (!filter.tags.every((tag) => taskTags.includes(tag))) {
+              return false;
+            }
+          }
+          return true;
+        }),
       getTask: async (taskId: UUID) =>
         tasks.find((task) => task.id === taskId) ?? null,
       createTask: async (task) => {
@@ -120,6 +139,68 @@ describe("trigger routes", () => {
     const triggers =
       (listResult.payload as { triggers?: object[] }).triggers ?? [];
     expect(triggers.length).toBe(1);
+  });
+
+  test("does not list internal repeat workers as heartbeats", async () => {
+    tasks = [
+      {
+        id: "00000000-0000-0000-0000-000000000101" as UUID,
+        agentId: runtime.agentId,
+        name: "TRIGGER_DISPATCH",
+        description: "User trigger",
+        tags: ["queue", "repeat", "trigger"],
+        metadata: {
+          trigger: {
+            version: 1,
+            triggerId: "00000000-0000-0000-0000-000000000301" as UUID,
+            displayName: "Daily Digest",
+            instructions: "Summarize activity",
+            triggerType: "interval",
+            enabled: true,
+            wakeMode: "inject_now",
+            createdBy: "tester",
+            intervalMs: 60_000,
+            runCount: 0,
+          },
+        },
+      } as Task,
+      {
+        id: "00000000-0000-0000-0000-000000000102" as UUID,
+        agentId: runtime.agentId,
+        name: "HEARTBEAT",
+        description: "Periodic heartbeat",
+        tags: ["heartbeat", "queue", "repeat"],
+        metadata: {
+          updateInterval: 30 * 60 * 1000,
+          updatedAt: Date.now(),
+        },
+      } as Task,
+      {
+        id: "00000000-0000-0000-0000-000000000103" as UUID,
+        agentId: runtime.agentId,
+        name: "EMBEDDING_DRAIN",
+        description: "Internal queue drain",
+        tags: ["queue", "repeat"],
+        metadata: {
+          updateInterval: 1000,
+          updatedAt: Date.now(),
+        },
+      } as Task,
+    ];
+
+    const listResult = await invoke({
+      method: "GET",
+      pathname: "/api/triggers",
+    });
+
+    expect(listResult.status).toBe(200);
+    const triggers = (
+      listResult.payload as { triggers?: Array<{ displayName: string }> }
+    ).triggers;
+    expect(triggers).toEqual([
+      expect.objectContaining({ displayName: "Daily Digest" }),
+      expect.objectContaining({ displayName: "Heartbeat" }),
+    ]);
   });
 
   test("creates disabled triggers without requiring an active schedule", async () => {

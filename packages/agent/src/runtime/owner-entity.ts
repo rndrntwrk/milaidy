@@ -1,9 +1,16 @@
-import type { IAgentRuntime } from "@elizaos/core";
-import { resolveCanonicalOwnerId } from "@miladyai/plugin-roles";
+import { stringToUuid, type IAgentRuntime } from "@elizaos/core";
+import { resolveCanonicalOwnerId } from "@elizaos/core/roles";
 
 type WorldMetadataShape = {
   ownership?: { ownerId?: string };
 };
+
+export function resolveFallbackOwnerEntityId(
+  runtime: Pick<IAgentRuntime, "agentId" | "character">,
+): string {
+  const agentName = runtime.character?.name?.trim() || runtime.agentId;
+  return stringToUuid(`${agentName}-admin-entity`);
+}
 
 export async function resolveOwnerEntityId(
   runtime: IAgentRuntime,
@@ -30,5 +37,5 @@ export async function resolveOwnerEntityId(
     }
   } catch {}
 
-  return null;
+  return resolveFallbackOwnerEntityId(runtime);
 }

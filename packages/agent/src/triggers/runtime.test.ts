@@ -3,7 +3,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TRIGGER_SCHEMA_VERSION } from "./types";
 import {
   executeTriggerTask,
+  listTriggerTasks,
   registerTriggerTaskWorker,
+  taskToTriggerSummary,
   type TriggerExecutionResult,
 } from "./runtime";
 
@@ -115,5 +117,47 @@ describe("trigger runtime", () => {
     expect(result.taskDeleted).toBe(true);
     expect(result.runRecord?.status).toBe("success");
     expect(result.trigger?.displayName).toBe("Test Trigger");
+  });
+
+  it("lists only user triggers and explicit heartbeat tasks", async () => {
+    const triggerTask = createTriggerTask({ triggerType: "interval" });
+    const heartbeatTask = {
+      id: stringToUuid("task:heartbeat"),
+      name: "HEARTBEAT",
+      description: "Periodic agent heartbeat",
+      tags: ["heartbeat", "queue", "repeat"],
+      metadata: {
+        updateInterval: 30 * 60 * 1000,
+        updatedAt: Date.now(),
+      },
+    } as Task;
+    const runtime = {
+      agentId: stringToUuid("agent:test"),
+      getSetting: vi.fn(() => undefined),
+      getTasks: vi.fn(async ({ tags }: { tags?: string[] }) => {
+        if (tags?.includes("trigger")) return [triggerTask];
+        if (tags?.includes("heartbeat")) return [heartbeatTask];
+        return [];
+      }),
+    } as unknown as IAgentRuntime;
+
+    const tasks = await listTriggerTasks(runtime);
+
+    expect(tasks).toEqual([triggerTask, heartbeatTask]);
+  });
+
+  it("does not synthesize internal repeat workers as visible heartbeats", () => {
+    const internalTask = {
+      id: stringToUuid("task:embedding"),
+      name: "EMBEDDING_DRAIN",
+      description: "Internal queue drain",
+      tags: ["queue", "repeat"],
+      metadata: {
+        updateInterval: 1000,
+        updatedAt: Date.now(),
+      },
+    } as Task;
+
+    expect(taskToTriggerSummary(internalTask)).toBeNull();
   });
 });

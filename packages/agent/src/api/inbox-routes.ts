@@ -35,7 +35,7 @@
  */
 
 import type http from "node:http";
-import type { AgentRuntime, Memory, Room, UUID } from "@elizaos/core";
+import type { AgentRuntime, Memory, Room, UUID, World } from "@elizaos/core";
 import { cacheDiscordAvatarUrl } from "./discord-avatar-cache.js";
 import type { RouteHelpers } from "./route-helpers.js";
 
@@ -297,14 +297,36 @@ function readLooseStringValue(
   return null;
 }
 
+function asLooseRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object"
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
 function readRoomSource(room: Room | undefined): string | null {
-  return readLooseStringValue(room as Record<string, unknown> | undefined, [
-    "source",
-  ]);
+  return readLooseStringValue(asLooseRecord(room), ["source"]);
+}
+
+function readRoomWorldId(room: Room | undefined): string | undefined {
+  return (
+    readLooseStringValue(asLooseRecord(room), ["worldId", "world_id"]) ??
+    undefined
+  );
+}
+
+function readRoomServerId(room: Room | undefined): string | undefined {
+  return (
+    readLooseStringValue(asLooseRecord(room), [
+      "serverId",
+      "server_id",
+      "messageServerId",
+      "message_server_id",
+    ]) ?? undefined
+  );
 }
 
 function readRoomType(room: Room | undefined): string | null {
-  return readLooseStringValue(room as Record<string, unknown> | undefined, [
+  return readLooseStringValue(asLooseRecord(room), [
     "type",
     "roomType",
     "room_type",
@@ -313,15 +335,13 @@ function readRoomType(room: Room | undefined): string | null {
 
 function readRoomChannelId(room: Room | undefined): string | undefined {
   return (
-    readLooseStringValue(room as Record<string, unknown> | undefined, [
-      "channelId",
-      "channel_id",
-    ]) ?? undefined
+    readLooseStringValue(asLooseRecord(room), ["channelId", "channel_id"]) ??
+    undefined
   );
 }
 
 function readRoomCreatedAt(room: Room | undefined): number | undefined {
-  const record = room as Record<string, unknown> | undefined;
+  const record = asLooseRecord(room);
   const value = record?.createdAt ?? record?.created_at;
   if (typeof value === "number" && Number.isFinite(value)) {
     return value;
@@ -334,6 +354,21 @@ function readRoomCreatedAt(room: Room | undefined): number | undefined {
     return Number.isFinite(parsed) ? parsed : undefined;
   }
   return undefined;
+}
+
+function readWorldName(world: World | undefined): string | null {
+  return readLooseStringValue(asLooseRecord(world), ["name"]);
+}
+
+function readWorldServerId(world: World | undefined): string | undefined {
+  return (
+    readLooseStringValue(asLooseRecord(world), [
+      "messageServerId",
+      "message_server_id",
+      "serverId",
+      "server_id",
+    ]) ?? undefined
+  );
 }
 
 function normalizeRoomTitle(title: string | null | undefined): string | null {
@@ -965,19 +1000,63 @@ async function collectAgentRoomIds(runtime: AgentRuntime): Promise<UUID[]> {
   return roomIds;
 }
 
+async function collectAgentWorlds(
+  runtime: AgentRuntime,
+): Promise<Map<UUID, World>> {
+  const worlds = await runtime.getAllWorlds();
+  const worldsById = new Map<UUID, World>();
+  for (const world of worlds) {
+    if (!world.id) continue;
+    worldsById.set(world.id, world);
+  }
+  return worldsById;
+}
+
 /**
  * Collect every room owned by the agent (bounded by MAX_ROOMS_SCANNED)
  * as full Room objects rather than just ids. Used by the chats
  * aggregator which needs each room's name + world for display.
  */
 async function collectAgentRooms(runtime: AgentRuntime): Promise<Room[]> {
-  const worlds = await runtime.getAllWorlds();
-  if (worlds.length === 0) return [];
-  const worldIds = worlds
-    .map((w) => w.id)
-    .filter((id): id is UUID => typeof id === "string");
+  const worldsById = await collectAgentWorlds(runtime);
+  if (worldsById.size === 0) return [];
+  const worldIds = Array.from(worldsById.keys()).filter(
+    (id): id is UUID => typeof id === "string",
+  );
   if (worldIds.length === 0) return [];
   return runtime.getRoomsByWorlds(worldIds, MAX_ROOMS_SCANNED, 0);
+}
+
+function resolveInboxWorldLabel(
+  room: Room | undefined,
+  world: World | undefined,
+): string {
+  const namedWorld = readWorldName(world);
+  if (namedWorld) {
+    return namedWorld;
+  }
+
+  const roomServerId = readRoomServerId(room);
+  if (roomServerId) {
+    return roomServerId;
+  }
+
+  const worldServerId = readWorldServerId(world);
+  if (worldServerId) {
+    return worldServerId;
+  }
+
+  const roomType = readRoomType(room)?.trim().toUpperCase();
+  if (roomType === "DM") {
+    return "Direct messages";
+  }
+
+  const worldId = readRoomWorldId(room);
+  if (worldId) {
+    return worldId;
+  }
+
+  return "Unknown world";
 }
 
 async function loadRelevantRooms(
@@ -1367,6 +1446,75 @@ function getInboxMessagePreferenceScore(message: InboxMessageRecord): number {
   return score;
 }
 
+function isConnectorVisibleDiscordAssistantMessage(
+  message: InboxMessageRecord,
+): boolean {
+  return (
+    message.source.toLowerCase() === "discord" &&
+    message.role === "assistant" &&
+    (message.hasExplicitSource || message.hasExternalUrl)
+  );
+}
+
+function isImplicitDiscordAssistantShadow(
+  message: InboxMessageRecord,
+): boolean {
+  return (
+    message.source.toLowerCase() === "discord" &&
+    message.role === "assistant" &&
+    !message.hasExplicitSource &&
+    !message.hasExternalUrl
+  );
+}
+
+function buildDiscordReplyKey(message: InboxMessageRecord): string | null {
+  const replyToMessageId = message.replyToMessageId?.trim();
+  if (!replyToMessageId) {
+    return null;
+  }
+  return `${message.roomId}\u0000${replyToMessageId}`;
+}
+
+function suppressUnsentDiscordAssistantShadows(
+  messages: InboxMessageRecord[],
+): InboxMessageRecord[] {
+  const latestVisibleReplyByKey = new Map<string, number>();
+
+  for (const message of messages) {
+    if (!isConnectorVisibleDiscordAssistantMessage(message)) {
+      continue;
+    }
+
+    const replyKey = buildDiscordReplyKey(message);
+    if (!replyKey) {
+      continue;
+    }
+
+    const existingTimestamp = latestVisibleReplyByKey.get(replyKey) ?? 0;
+    if (message.timestamp >= existingTimestamp) {
+      latestVisibleReplyByKey.set(replyKey, message.timestamp);
+    }
+  }
+
+  return messages.filter((message) => {
+    if (!isImplicitDiscordAssistantShadow(message)) {
+      return true;
+    }
+
+    const replyKey = buildDiscordReplyKey(message);
+    if (!replyKey) {
+      return true;
+    }
+
+    const latestVisibleTimestamp = latestVisibleReplyByKey.get(replyKey);
+    if (latestVisibleTimestamp === undefined) {
+      return true;
+    }
+
+    return message.timestamp > latestVisibleTimestamp;
+  });
+}
+
 function areLikelyConnectorAssistantDuplicates(
   left: InboxMessageRecord,
   right: InboxMessageRecord,
@@ -1409,9 +1557,10 @@ function areLikelyConnectorAssistantDuplicates(
 function dedupeInboxMessages(
   messages: InboxMessageRecord[],
 ): InboxMessageRecord[] {
+  const filteredMessages = suppressUnsentDiscordAssistantShadows(messages);
   const deduped: InboxMessageRecord[] = [];
 
-  for (const message of messages) {
+  for (const message of filteredMessages) {
     const duplicateIndex = deduped.findIndex((candidate) =>
       areLikelyConnectorAssistantDuplicates(candidate, message),
     );
@@ -1447,6 +1596,10 @@ interface InboxChat {
   id: string;
   /** Connector tag (imessage, telegram, …) for source badging. */
   source: string;
+  /** Owning world/server id when this room belongs to one. */
+  worldId?: string;
+  /** User-facing world/server label for filters and grouped headers. */
+  worldLabel: string;
   /** Display title — contact name for 1:1 chats, group name otherwise. */
   title: string;
   /** Best-effort avatar URL for direct chats when the connector exposes one. */
@@ -1482,7 +1635,15 @@ async function loadInboxChats(
   runtime: AgentRuntime,
   sourceFilter: Set<string>,
 ): Promise<InboxChat[]> {
-  const rooms = await collectAgentRooms(runtime);
+  const worldsById = await collectAgentWorlds(runtime);
+  const rooms =
+    worldsById.size > 0
+      ? await runtime.getRoomsByWorlds(
+          Array.from(worldsById.keys()),
+          MAX_ROOMS_SCANNED,
+          0,
+        )
+      : [];
   if (rooms.length === 0) return [];
 
   // Build an id → Room lookup so the memory reducer can fill in the
@@ -1599,6 +1760,8 @@ async function loadInboxChats(
   const chats: InboxChat[] = [];
   for (const [roomIdKey, entry] of accumulator) {
     const room = roomById.get(roomIdKey as UUID);
+    const worldId = readRoomWorldId(room);
+    const world = worldId ? worldsById.get(worldId as UUID) : undefined;
     const liveDiscordProfile =
       entry.source.toLowerCase() === "discord"
         ? await resolveDiscordRoomProfile(
@@ -1703,6 +1866,8 @@ async function loadInboxChats(
     chats.push({
       id: roomIdKey,
       source: entry.source,
+      ...(worldId ? { worldId } : {}),
+      worldLabel: resolveInboxWorldLabel(room, world),
       title,
       avatarUrl:
         entry.source.toLowerCase() === "discord"

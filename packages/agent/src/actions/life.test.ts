@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { classifyIntent } from "./life";
 
 const {
-  mockCheckSenderRole,
+  mockCheckSenderPrivateAccess,
   mockListDefinitions,
   mockListGoals,
   mockGetOverview,
@@ -23,7 +23,7 @@ const {
   mockGetGmailTriage,
   mockGetGoogleConnectorStatus,
 } = vi.hoisted(() => ({
-  mockCheckSenderRole: vi.fn(),
+  mockCheckSenderPrivateAccess: vi.fn(),
   mockListDefinitions: vi.fn(),
   mockListGoals: vi.fn(),
   mockGetOverview: vi.fn(),
@@ -45,9 +45,19 @@ const {
   mockGetGoogleConnectorStatus: vi.fn(),
 }));
 
-vi.mock("@miladyai/plugin-roles", () => ({ checkSenderRole: mockCheckSenderRole }));
+vi.mock("@elizaos/core/roles", () => ({
+  checkSenderPrivateAccess: mockCheckSenderPrivateAccess,
+}));
 
 vi.mock("../lifeops/service.js", () => ({
+  LifeOpsServiceError: class LifeOpsServiceError extends Error {
+    status: number;
+    constructor(status: number, message: string) {
+      super(message);
+      this.status = status;
+      this.name = "LifeOpsServiceError";
+    }
+  },
   LifeOpsService: class {
     listDefinitions = mockListDefinitions;
     listGoals = mockListGoals;
@@ -75,8 +85,8 @@ import { lifeAction } from "./life";
 
 const runtime = { agentId: "agent-1" } as never;
 
-function msg(text: string) {
-  return { entityId: "owner-1", content: { source: "client_chat", text } } as never;
+function msg(text: string, source = "client_chat") {
+  return { entityId: "owner-1", content: { source, text } } as never;
 }
 
 function invoke(intent: string, extra: Record<string, unknown> = {}) {
@@ -136,7 +146,7 @@ describe("classifyIntent", () => {
     ["modify the stretching routine", "update_definition"],
     ["update my fitness goal", "update_goal"],
     ["adjust my calling mom goal", "update_goal"],
-    ["I want to call my mom every week", "create_goal"],
+    ["I want to call my mom every week", "create_definition"],
     ["my goal is to stay healthy", "create_goal"],
     ["brush teeth twice a day", "create_definition"],
     ["remind me to take vitamins every morning", "create_definition"],
@@ -193,7 +203,7 @@ describe("classifyIntent edge cases", () => {
       "Actually create a habit named Workout that happens every afternoon, blocks X until I complete it, and then unlocks it for 60 minutes.",
       "create_definition",
     ],
-    ["I want to call my mom every week. Help me actually do it.", "create_goal"],
+    ["I want to call my mom every week. Help me actually do it.", "create_definition"],
     ["What's on my calendar today?", "query_calendar_today"],
     ["Do I have anything important I need to respond to?", "query_email"],
     ["Text me if I ignore this, and call me if it's right before the event", "configure_escalation"],
@@ -209,8 +219,9 @@ describe("classifyIntent edge cases", () => {
 describe("lifeAction", () => {
   beforeEach(() => {
     vi.resetAllMocks();
-    mockCheckSenderRole.mockResolvedValue({
+    mockCheckSenderPrivateAccess.mockResolvedValue({
       entityId: "owner-1", role: "OWNER", isOwner: true, isAdmin: true, canManageRoles: true,
+      hasPrivateAccess: true, accessRole: "OWNER", accessSource: "owner",
     });
     mockListDefinitions.mockResolvedValue([]);
     mockListGoals.mockResolvedValue([]);
@@ -226,7 +237,16 @@ describe("lifeAction", () => {
   // ── Access control ────────────────────────────────
 
   it("rejects non-admin callers", async () => {
-    mockCheckSenderRole.mockResolvedValue({ entityId: "u1", role: "USER", isOwner: false, isAdmin: false, canManageRoles: false });
+    mockCheckSenderPrivateAccess.mockResolvedValue({
+      entityId: "u1",
+      role: "USER",
+      isOwner: false,
+      isAdmin: false,
+      canManageRoles: false,
+      hasPrivateAccess: false,
+      accessRole: null,
+      accessSource: null,
+    });
     const valid = await lifeAction.validate?.(runtime, msg("test"), {} as never);
     expect(valid).toBe(false);
   });
@@ -238,6 +258,36 @@ describe("lifeAction", () => {
     expect(valid).toBe(true);
   });
 
+  it("allows owner access from discord", async () => {
+    const valid = await lifeAction.validate?.(
+      runtime,
+      msg("what's on my calendar today", "discord"),
+      {} as never,
+    );
+    expect(valid).toBe(true);
+  });
+
+  it("allows explicitly granted users from discord", async () => {
+    mockCheckSenderPrivateAccess.mockResolvedValue({
+      entityId: "teammate-1",
+      role: "USER",
+      isOwner: false,
+      isAdmin: false,
+      canManageRoles: false,
+      hasPrivateAccess: true,
+      accessRole: "USER",
+      accessSource: "manual",
+    });
+
+    const valid = await lifeAction.validate?.(
+      runtime,
+      { entityId: "teammate-1", content: { source: "discord", text: "what's due today" } } as never,
+      {} as never,
+    );
+
+    expect(valid).toBe(true);
+  });
+
   it("requires intent parameter when message text is also empty", async () => {
     const result = await lifeAction.handler?.(runtime, msg(""), {} as never, { parameters: {} } as never);
     expect(result).toMatchObject({ success: false, text: expect.stringContaining("intent") });
@@ -245,9 +295,9 @@ describe("lifeAction", () => {
 
   it("falls back to message text when intent param is missing", async () => {
     // With no intent param but message text "test", handler uses message text as intent
-    // "test" classifies as create_definition, fails because no title
+    // "test" classifies as create_definition and now fails on missing cadence first.
     const result = await lifeAction.handler?.(runtime, msg("test"), {} as never, { parameters: {} } as never);
-    expect(result).toMatchObject({ success: false, text: expect.stringContaining("name") });
+    expect(result).toMatchObject({ success: false, text: expect.stringContaining("schedule") });
   });
 
   // ── create_definition ─────────────────────────────
@@ -261,10 +311,86 @@ describe("lifeAction", () => {
     const result = await invoke("brush teeth twice a day", {
       action: "create",
       title: "Brush teeth",
-      details: { cadence: { kind: "daily", windows: ["morning", "night"] }, kind: "habit" },
+      details: { cadence: { kind: "daily", windows: ["morning", "night"] }, kind: "habit", confirmed: true },
     });
     expect(mockCreateDefinition).toHaveBeenCalledWith(expect.objectContaining({ title: "Brush teeth", kind: "habit" }));
     expect(result).toMatchObject({ success: true, text: expect.stringContaining("Brush teeth") });
+  });
+
+  it("previews an ambiguous recurring habit request instead of saving immediately", async () => {
+    mockListGoals.mockResolvedValue([]);
+
+    const result = await invoke(
+      "I want to work out every day. 10 pushups and 10 situps.",
+    );
+
+    expect(mockCreateDefinition).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      success: true,
+      text: expect.stringContaining("Confirm and I'll save it"),
+      data: expect.objectContaining({
+        deferred: true,
+        lifeDraft: expect.objectContaining({
+          operation: "create_definition",
+          request: expect.objectContaining({
+            title: "10 Pushups + 10 Situps",
+          }),
+        }),
+      }),
+    });
+  });
+
+  it("executes a previewed create request when the user confirms on the next turn", async () => {
+    mockListGoals.mockResolvedValue([]);
+    mockCreateDefinition.mockResolvedValue({
+      definition: {
+        id: "d-follow-up",
+        title: "10 Pushups + 10 Situps",
+        cadence: { kind: "daily", windows: ["morning"] },
+      },
+      reminderPlan: null,
+    });
+
+    const result = await lifeAction.handler?.(
+      runtime,
+      {
+        entityId: "owner-1",
+        content: { source: "client_chat", text: "yes" },
+      } as never,
+      {
+        data: {
+          actionResults: [
+            {
+              success: true,
+              data: {
+                lifeDraft: {
+                  intent: "I want to work out every day. 10 pushups and 10 situps.",
+                  operation: "create_definition",
+                  request: {
+                    cadence: { kind: "daily", windows: ["morning"] },
+                    kind: "habit",
+                    title: "10 Pushups + 10 Situps",
+                  },
+                },
+              },
+              text: 'I can save this as a habit named "10 Pushups + 10 Situps" that happens daily in morning. Confirm and I\'ll save it, or tell me what to change.',
+            },
+          ],
+        },
+      } as never,
+      { parameters: { action: "create" } } as never,
+    );
+
+    expect(mockCreateDefinition).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "10 Pushups + 10 Situps",
+        cadence: expect.objectContaining({ kind: "daily" }),
+      }),
+    );
+    expect(result).toMatchObject({
+      success: true,
+      text: expect.stringContaining("Saved"),
+    });
   });
 
   it("updates the global reminder preference from natural language", async () => {
@@ -355,6 +481,7 @@ describe("lifeAction", () => {
 
     const result = await invoke("help me brush my teeth twice a day, morning and night", {
       action: "create",
+      details: { confirmed: true },
     });
 
     expect(mockCreateDefinition).toHaveBeenCalledWith(
@@ -391,6 +518,7 @@ describe("lifeAction", () => {
 
     const result = await invoke("remind me to drink water throughout the day", {
       action: "create",
+      details: { confirmed: true },
     });
 
     expect(mockCreateDefinition).toHaveBeenCalledWith(
@@ -418,6 +546,8 @@ describe("lifeAction", () => {
 
     const result = await invoke("brush teeth at 8am and 10:30pm", {
       action: "create",
+      title: "Brush teeth",
+      details: { confirmed: true },
     });
 
     expect(mockCreateDefinition).toHaveBeenCalledWith(
@@ -450,7 +580,14 @@ describe("lifeAction", () => {
 
     const result = await invoke(
       "add a workout habit and block X, Hacker News, Instagram, and Google News until I work out, then unlock them for 90 minutes",
-      { action: "create" },
+      {
+        action: "create",
+        title: "Workout",
+        details: {
+          cadence: { kind: "daily", windows: ["afternoon"] },
+          confirmed: true,
+        },
+      },
     );
 
     expect(mockCreateDefinition).toHaveBeenCalledWith(
@@ -484,7 +621,7 @@ describe("lifeAction", () => {
 
     const result = await invoke(
       "help me brush my teeth morning and night and unlock X until I say done",
-      { action: "create" },
+      { action: "create", details: { confirmed: true } },
     );
 
     expect(mockCreateDefinition).toHaveBeenCalledWith(
@@ -508,6 +645,7 @@ describe("lifeAction", () => {
 
     const result = await invoke("remind me to take vitamins with lunch", {
       action: "create",
+      details: { confirmed: true },
     });
 
     expect(mockCreateDefinition).toHaveBeenCalledWith(
@@ -534,6 +672,7 @@ describe("lifeAction", () => {
 
     const result = await invoke("remind me to shave twice a week", {
       action: "create",
+      details: { confirmed: true },
     });
 
     expect(mockCreateDefinition).toHaveBeenCalledWith(
@@ -553,7 +692,7 @@ describe("lifeAction", () => {
   });
 
   it("requires title for create", async () => {
-    const result = await invoke("create a new habit", { action: "create", details: { cadence: { kind: "daily", windows: ["morning"] } } });
+    const result = await invoke("create a new habit", { action: "create", details: { cadence: { kind: "daily", windows: ["morning"] }, confirmed: true } });
     expect(result).toMatchObject({ success: false, text: expect.stringContaining("name") });
   });
 
@@ -566,10 +705,10 @@ describe("lifeAction", () => {
 
   it("creates a goal", async () => {
     mockCreateGoal.mockResolvedValue({ goal: { id: "g1", title: "Call Mom weekly" }, links: [] });
-    const result = await invoke("I want to call my mom every week", {
+    const result = await invoke("Actually create a goal called Call Mom weekly", {
       action: "create_goal",
       title: "Call Mom weekly",
-      details: { supportStrategy: { approach: "weekly_nudge" } },
+      details: { supportStrategy: { approach: "weekly_nudge" }, confirmed: true },
     });
     expect(mockCreateGoal).toHaveBeenCalledWith(expect.objectContaining({ title: "Call Mom weekly" }));
     expect(result).toMatchObject({ success: true, text: expect.stringContaining("Call Mom weekly") });
@@ -664,20 +803,12 @@ describe("lifeAction", () => {
     expect(result).toMatchObject({ success: true });
   });
 
-  it("recovers missing completion targets into creation when the intent is clearly a new habit", async () => {
+  it("recovers missing completion targets into a create preview when the intent is clearly a new habit", async () => {
     mockGetOverview.mockResolvedValue({
       owner: { occurrences: [] },
       agentOps: { occurrences: [] },
     });
     mockListGoals.mockResolvedValue([]);
-    mockCreateDefinition.mockResolvedValue({
-      definition: {
-        id: "d-workout-recovered",
-        title: "Workout",
-        cadence: { kind: "daily", windows: ["afternoon"] },
-      },
-      reminderPlan: { id: "rp-workout-recovered" },
-    });
 
     const result = await invoke(
       "Actually create a habit named Workout that happens every afternoon, blocks X, Instagram, and Hacker News until I complete it, and then unlocks them for 60 minutes. Do not just give advice.",
@@ -685,28 +816,32 @@ describe("lifeAction", () => {
     );
 
     expect(mockCompleteOccurrence).not.toHaveBeenCalled();
-    expect(mockCreateDefinition).toHaveBeenCalledWith(
-      expect.objectContaining({
-        title: "Workout",
-        cadence: expect.objectContaining({
-          kind: "daily",
-          windows: ["afternoon"],
-        }),
-        websiteAccess: expect.objectContaining({
-          unlockMode: "fixed_duration",
-          unlockDurationMinutes: 60,
-          websites: expect.arrayContaining([
-            "x.com",
-            "twitter.com",
-            "instagram.com",
-            "news.ycombinator.com",
-          ]),
-        }),
-      }),
-    );
+    expect(mockCreateDefinition).not.toHaveBeenCalled();
     expect(result).toMatchObject({
       success: true,
-      text: expect.stringContaining("Workout"),
+      text: expect.stringContaining("Confirm and I'll save it"),
+      data: expect.objectContaining({
+        deferred: true,
+        lifeDraft: expect.objectContaining({
+          request: expect.objectContaining({
+            title: "Workout",
+            cadence: expect.objectContaining({
+              kind: "daily",
+              windows: ["afternoon"],
+            }),
+            websiteAccess: expect.objectContaining({
+              unlockMode: "fixed_duration",
+              unlockDurationMinutes: 60,
+              websites: expect.arrayContaining([
+                "x.com",
+                "twitter.com",
+                "instagram.com",
+                "news.ycombinator.com",
+              ]),
+            }),
+          }),
+        }),
+      }),
     });
   });
 
@@ -810,6 +945,21 @@ describe("lifeAction", () => {
     expect(result).toMatchObject({ success: true, text: expect.stringContaining("Standup") });
   });
 
+  it("uses message text when life params are omitted", async () => {
+    mockGetGoogleConnectorStatus.mockResolvedValue({ connected: true, grantedCapabilities: ["google.calendar.read"] });
+    mockGetCalendarFeed.mockResolvedValue({
+      calendarId: "primary", events: [],
+      source: "cache", timeMin: "", timeMax: "", syncedAt: null,
+    });
+    const result = await lifeAction.handler?.(
+      runtime,
+      msg("what's on my calendar today"),
+      {} as never,
+      { parameters: {} } as never,
+    );
+    expect(result).toMatchObject({ success: true, text: expect.stringContaining("today") });
+  });
+
   it("returns next event context", async () => {
     mockGetGoogleConnectorStatus.mockResolvedValue({ connected: true, grantedCapabilities: ["google.calendar.read"] });
     mockGetNextCalendarEventContext.mockResolvedValue({
@@ -842,7 +992,7 @@ describe("lifeAction", () => {
   it("rejects email when Gmail not connected", async () => {
     mockGetGoogleConnectorStatus.mockResolvedValue({ connected: true, grantedCapabilities: ["google.calendar.read"] });
     const result = await invoke("check my inbox", { action: "email" });
-    expect(result).toMatchObject({ success: false, text: expect.stringContaining("Gmail is not connected") });
+    expect(result).toMatchObject({ success: false, text: expect.stringContaining("Reconnect Google") });
   });
 
   // ── Overview ──────────────────────────────────────

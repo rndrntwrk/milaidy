@@ -226,7 +226,6 @@ jobs:
       tag: ${{ needs.build-and-test.outputs.nightly_tag }}
       draft: false
       publish_release: false
-      publish_docker: false
     secrets: inherit
 
   # ── Publish to npm ──────────────────────────────────────────────────────

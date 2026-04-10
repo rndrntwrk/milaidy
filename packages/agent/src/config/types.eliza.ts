@@ -1,4 +1,5 @@
 import type { SessionConfig, SessionSendPolicyConfig } from "@elizaos/core";
+import type { RolesConfig } from "@elizaos/core/roles";
 import type {
   CustomActionDef,
   DatabaseProviderType,
@@ -175,6 +176,8 @@ export type KnowledgeConfig = {
   /** Docs directory path used for enrichment context. */
   docsPath?: string;
 };
+
+export type { RolesConfig } from "@elizaos/core/roles";
 
 // --- Models types (merged from types.models.ts) ---
 
@@ -728,6 +731,7 @@ export type ElizaConfig = {
     presetId?: string;
   };
   knowledge?: KnowledgeConfig;
+  roles?: RolesConfig;
   skills?: SkillsConfig;
   plugins?: PluginsConfig;
   models?: ModelsConfig;

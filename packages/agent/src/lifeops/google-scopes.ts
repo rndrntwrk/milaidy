@@ -22,8 +22,7 @@ const GOOGLE_CAPABILITY_SCOPE_MAP: Record<LifeOpsGoogleCapability, string[]> = {
 };
 
 export const DEFAULT_GOOGLE_CONNECTOR_CAPABILITIES: LifeOpsGoogleCapability[] = [
-  "google.basic_identity",
-  "google.calendar.read",
+  ...LIFEOPS_GOOGLE_CAPABILITIES,
 ];
 
 export function normalizeGoogleCapabilities(

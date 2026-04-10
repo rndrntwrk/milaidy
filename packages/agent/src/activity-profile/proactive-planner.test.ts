@@ -1,19 +1,21 @@
 import { describe, expect, it } from "vitest";
 import {
-  planGm,
-  planGn,
-  planDowntimeNudges,
-  planNudges,
-  selectTargetPlatform,
   type CalendarEventSlim,
   type OccurrenceSlim,
+  planDowntimeNudges,
+  planGm,
+  planGn,
+  planNudges,
+  selectTargetPlatform,
 } from "./proactive-planner";
 import type { ActivityProfile, FiredActionsLog } from "./types";
 import { emptyBucketCounts } from "./types";
 
 // ── Test helpers ──────────────────────────────────────
 
-function makeProfile(overrides: Partial<ActivityProfile> = {}): ActivityProfile {
+function makeProfile(
+  overrides: Partial<ActivityProfile> = {},
+): ActivityProfile {
   return {
     ownerEntityId: "owner-1",
     analyzedAt: Date.now(),
@@ -79,7 +81,12 @@ const NOW = new Date("2026-04-06T07:00:00Z");
 const NOW_MS = NOW.getTime();
 
 function makeCalendarEvents(
-  entries: Array<{ hourStart: number; hourEnd: number; summary?: string; allDay?: boolean }>,
+  entries: Array<{
+    hourStart: number;
+    hourEnd: number;
+    summary?: string;
+    allDay?: boolean;
+  }>,
 ): CalendarEventSlim[] {
   return entries.map((e, i) => ({
     id: `cal-${i}`,
@@ -91,7 +98,12 @@ function makeCalendarEvents(
 }
 
 function makeOccurrences(
-  entries: Array<{ id?: string; title: string; dueHour: number; state?: string }>,
+  entries: Array<{
+    id?: string;
+    title: string;
+    dueHour: number;
+    state?: string;
+  }>,
 ): OccurrenceSlim[] {
   return entries.map((e, i) => ({
     id: e.id ?? `occ-${i}`,
@@ -115,11 +127,20 @@ function makeOneOffOccurrence(
   };
 }
 
+function requireValue<T>(value: T | null | undefined): T {
+  expect(value).toBeDefined();
+  expect(value).not.toBeNull();
+  return value as T;
+}
+
 // ── selectTargetPlatform ──────────────────────────────
 
 describe("selectTargetPlatform", () => {
   it("returns lastSeenPlatform when preferCurrent and user is active", () => {
-    const profile = makeProfile({ lastSeenPlatform: "discord", isCurrentlyActive: true });
+    const profile = makeProfile({
+      lastSeenPlatform: "discord",
+      isCurrentlyActive: true,
+    });
     expect(selectTargetPlatform(profile, true)).toBe("discord");
   });
 
@@ -129,12 +150,18 @@ describe("selectTargetPlatform", () => {
   });
 
   it("returns primaryPlatform when preferCurrent is false", () => {
-    const profile = makeProfile({ lastSeenPlatform: "discord", isCurrentlyActive: true });
+    const profile = makeProfile({
+      lastSeenPlatform: "discord",
+      isCurrentlyActive: true,
+    });
     expect(selectTargetPlatform(profile, false)).toBe("telegram");
   });
 
   it("falls back to client_chat when no primaryPlatform", () => {
-    const profile = makeProfile({ primaryPlatform: null, isCurrentlyActive: false });
+    const profile = makeProfile({
+      primaryPlatform: null,
+      isCurrentlyActive: false,
+    });
     expect(selectTargetPlatform(profile, false)).toBe("client_chat");
   });
 });
@@ -146,13 +173,15 @@ describe("planGm", () => {
     const profile = makeProfile({ lastSeenAt: NOW_MS - 60_000 });
     const events = makeCalendarEvents([{ hourStart: 9, hourEnd: 10 }]);
     const action = planGm(profile, [], events, null, TZ, NOW);
+    const gmAction = requireValue(action);
 
-    expect(action).not.toBeNull();
-    expect(action!.kind).toBe("gm");
-    expect(action!.targetPlatform).toBe("telegram");
-    expect(action!.contextSummary).toContain("1 meeting today");
-    expect(action!.contextSummary).toContain("first at 9:00");
-    expect(action!.status).toBe("pending");
+    expect(gmAction.kind).toBe("gm");
+    expect(gmAction.targetPlatform).toBe("telegram");
+    expect(gmAction.contextSummary).toContain("1 meeting today");
+    expect(gmAction.contextSummary).toContain("first at 9:00");
+    expect(gmAction.messageText).toContain("Good morning.");
+    expect(gmAction.messageText).toContain("1 meeting today");
+    expect(gmAction.status).toBe("pending");
   });
 
   it("skips GM while the user is asleep", () => {
@@ -170,9 +199,9 @@ describe("planGm", () => {
     const profile = makeProfile({ lastSeenAt: NOW_MS - 60_000 });
     const occs = makeOccurrences([{ title: "Brush teeth", dueHour: 8 }]);
     const action = planGm(profile, occs, [], null, TZ, NOW);
+    const gmAction = requireValue(action);
 
-    expect(action).not.toBeNull();
-    expect(action!.contextSummary).toContain("Brush teeth");
+    expect(gmAction.contextSummary).toContain("Brush teeth");
   });
 
   it("returns null if GM already fired today", () => {
@@ -190,10 +219,10 @@ describe("planGm", () => {
   it("returns skipped action if user inactive for 48h+", () => {
     const profile = makeProfile({ lastSeenAt: NOW_MS - 49 * 60 * 60 * 1000 });
     const action = planGm(profile, [], [], null, TZ, NOW);
+    const skippedAction = requireValue(action);
 
-    expect(action).not.toBeNull();
-    expect(action!.status).toBe("skipped");
-    expect(action!.skipReason).toContain("48h");
+    expect(skippedAction.status).toBe("skipped");
+    expect(skippedAction.skipReason).toContain("48h");
   });
 
   it("returns null if past 11 AM cutoff", () => {
@@ -210,10 +239,10 @@ describe("planGm", () => {
     });
     const events = makeCalendarEvents([{ hourStart: 9, hourEnd: 10 }]);
     const action = planGm(profile, [], events, null, TZ, NOW);
+    const gmAction = requireValue(action);
 
-    expect(action).not.toBeNull();
     // GM should be at 8:30 (9:00 - 30min), epoch for 08:30 UTC on 2026-04-06
-    const scheduledDate = new Date(action!.scheduledFor);
+    const scheduledDate = new Date(gmAction.scheduledFor);
     // resolveGmHour floors (9 - 0.5 = 8.5 → 8), then localHourToEpoch snaps to hour
     expect(scheduledDate.getUTCHours()).toBe(8);
     expect(scheduledDate.getUTCMinutes()).toBe(0);
@@ -227,10 +256,10 @@ describe("planGm", () => {
       hasCalendarData: false,
     });
     const action = planGm(profile, [], [], null, TZ, NOW);
+    const gmAction = requireValue(action);
 
-    expect(action).not.toBeNull();
     // 9:00 - 30 min = 8:30, floor to hour 8
-    const scheduledDate = new Date(action!.scheduledFor);
+    const scheduledDate = new Date(gmAction.scheduledFor);
     expect(scheduledDate.getUTCHours()).toBe(8);
   });
 
@@ -242,9 +271,9 @@ describe("planGm", () => {
       typicalFirstEventHour: null,
     });
     const action = planGm(profile, [], [], null, TZ, NOW);
+    const gmAction = requireValue(action);
 
-    expect(action).not.toBeNull();
-    const scheduledDate = new Date(action!.scheduledFor);
+    const scheduledDate = new Date(gmAction.scheduledFor);
     expect(scheduledDate.getUTCHours()).toBe(8);
   });
 
@@ -269,10 +298,11 @@ describe("planGn", () => {
   it("returns a GN action when user was active today", () => {
     const profile = makeProfile({ lastSeenAt: NOW_MS - 60_000 });
     const action = planGn(profile, null, TZ, NOW);
+    const gnAction = requireValue(action);
 
-    expect(action).not.toBeNull();
-    expect(action!.kind).toBe("gn");
-    expect(action!.status).toBe("pending");
+    expect(gnAction.kind).toBe("gn");
+    expect(gnAction.messageText).toBe("Good night.");
+    expect(gnAction.status).toBe("pending");
   });
 
   it("uses lastSeenPlatform when user is currently active", () => {
@@ -282,7 +312,8 @@ describe("planGn", () => {
       isCurrentlyActive: true,
     });
     const action = planGn(profile, null, TZ, NOW);
-    expect(action!.targetPlatform).toBe("discord");
+    const gnAction = requireValue(action);
+    expect(gnAction.targetPlatform).toBe("discord");
   });
 
   it("returns null if GN already fired today", () => {
@@ -312,7 +343,8 @@ describe("planGn", () => {
       typicalLastActiveHour: 21,
     });
     const action = planGn(profile, null, TZ, NOW);
-    const scheduledDate = new Date(action!.scheduledFor);
+    const gnAction = requireValue(action);
+    const scheduledDate = new Date(gnAction.scheduledFor);
     // 21 + 0.5 = 21.5, ceil = 22
     expect(scheduledDate.getUTCHours()).toBe(22);
   });
@@ -323,7 +355,8 @@ describe("planGn", () => {
       typicalLastActiveHour: null,
     });
     const action = planGn(profile, null, TZ, NOW);
-    const scheduledDate = new Date(action!.scheduledFor);
+    const gnAction = requireValue(action);
+    const scheduledDate = new Date(gnAction.scheduledFor);
     expect(scheduledDate.getUTCHours()).toBe(22);
   });
 });
@@ -334,7 +367,9 @@ describe("planNudges", () => {
   it("creates nudge for occurrence due within horizon", () => {
     // NOW is 07:00, occurrence due at 07:30
     const profile = makeProfile({ lastSeenAt: NOW_MS - 60_000 });
-    const occs = makeOccurrences([{ title: "Brush teeth", dueHour: 7, state: "upcoming" }]);
+    const occs = makeOccurrences([
+      { title: "Brush teeth", dueHour: 7, state: "upcoming" },
+    ]);
     // Adjust dueAt to 07:30
     occs[0].dueAt = "2026-04-06T07:30:00Z";
 
@@ -351,25 +386,37 @@ describe("planNudges", () => {
     const occs = makeOccurrences([{ title: "Brush teeth", dueHour: 7 }]);
     occs[0].dueAt = "2026-04-06T07:20:00Z";
     // Standup at 07:30, within 45-min horizon AND within 1 hour of brush occurrence
-    const events: CalendarEventSlim[] = [{
-      id: "cal-0",
-      summary: "Standup",
-      startAt: "2026-04-06T07:30:00Z",
-      endAt: "2026-04-06T08:00:00Z",
-      isAllDay: false,
-    }];
+    const events: CalendarEventSlim[] = [
+      {
+        id: "cal-0",
+        summary: "Standup",
+        startAt: "2026-04-06T07:30:00Z",
+        endAt: "2026-04-06T08:00:00Z",
+        isAllDay: false,
+      },
+    ];
 
     const actions = planNudges(profile, occs, events, null, TZ, NOW);
 
     expect(actions).toHaveLength(2); // 1 occurrence nudge + 1 calendar nudge
-    const occNudge = actions.find((a) => a.occurrenceId === "occ-0");
-    expect(occNudge!.contextSummary).toContain("Brush teeth");
-    expect(occNudge!.contextSummary).toContain("Standup");
+    const occNudge = requireValue(
+      actions.find((action) => action.occurrenceId === "occ-0"),
+    );
+    const calendarNudge = actions.find((a) => a.calendarEventId === "cal-0");
+    expect(occNudge.contextSummary).toContain("Brush teeth");
+    expect(occNudge.contextSummary).toContain("Standup");
+    expect(calendarNudge).toMatchObject({
+      kind: "pre_activity_nudge",
+      calendarEventId: "cal-0",
+      contextSummary: "Standup",
+    });
   });
 
   it("skips already-nudged occurrences", () => {
     const profile = makeProfile({ lastSeenAt: NOW_MS - 60_000 });
-    const occs = makeOccurrences([{ id: "occ-99", title: "Brush teeth", dueHour: 7 }]);
+    const occs = makeOccurrences([
+      { id: "occ-99", title: "Brush teeth", dueHour: 7 },
+    ]);
     occs[0].dueAt = "2026-04-06T07:30:00Z";
 
     const firedToday: FiredActionsLog = {
@@ -384,7 +431,9 @@ describe("planNudges", () => {
 
   it("skips completed occurrences", () => {
     const profile = makeProfile({ lastSeenAt: NOW_MS - 60_000 });
-    const occs = makeOccurrences([{ title: "Brush teeth", dueHour: 7, state: "completed" }]);
+    const occs = makeOccurrences([
+      { title: "Brush teeth", dueHour: 7, state: "completed" },
+    ]);
     occs[0].dueAt = "2026-04-06T07:30:00Z";
 
     const actions = planNudges(profile, occs, [], null, TZ, NOW);
@@ -407,6 +456,22 @@ describe("planNudges", () => {
     ]);
 
     const actions = planNudges(profile, [], events, null, TZ, NOW);
+    expect(actions).toHaveLength(0);
+  });
+
+  it("skips already-nudged calendar events", () => {
+    const profile = makeProfile({ lastSeenAt: NOW_MS - 60_000 });
+    const events = makeCalendarEvents([
+      { hourStart: 7, hourEnd: 8, summary: "Standup" },
+    ]);
+
+    const firedToday: FiredActionsLog = {
+      date: "2026-04-06",
+      nudgedOccurrenceIds: [],
+      nudgedCalendarEventIds: ["cal-0"],
+    };
+
+    const actions = planNudges(profile, [], events, firedToday, TZ, NOW);
     expect(actions).toHaveLength(0);
   });
 
@@ -531,20 +596,28 @@ describe("brushing teeth scenario", () => {
 
   it("GM fires at 6:30 with brush teeth + standup context", () => {
     const gm = planGm(profile, brushOccs, calEvents, null, TZ, morningNow);
+    const gmAction = requireValue(gm);
 
-    expect(gm).not.toBeNull();
-    expect(gm!.kind).toBe("gm");
-    expect(gm!.contextSummary).toContain("Brush teeth (morning)");
-    expect(gm!.contextSummary).toContain("1 meeting today");
-    expect(gm!.targetPlatform).toBe("telegram");
+    expect(gmAction.kind).toBe("gm");
+    expect(gmAction.contextSummary).toContain("Brush teeth (morning)");
+    expect(gmAction.contextSummary).toContain("1 meeting today");
+    expect(gmAction.targetPlatform).toBe("telegram");
   });
 
   it("morning nudge fires for brush teeth before standup", () => {
-    const nudges = planNudges(profile, brushOccs, calEvents, null, TZ, morningNow);
+    const nudges = planNudges(
+      profile,
+      brushOccs,
+      calEvents,
+      null,
+      TZ,
+      morningNow,
+    );
 
-    const brushNudge = nudges.find((n) => n.occurrenceId === "brush-am");
-    expect(brushNudge).toBeDefined();
-    expect(brushNudge!.contextSummary).toContain("Brush teeth (morning)");
+    const brushNudge = requireValue(
+      nudges.find((nudge) => nudge.occurrenceId === "brush-am"),
+    );
+    expect(brushNudge.contextSummary).toContain("Brush teeth (morning)");
     // Standup at 9:00 is within 1 hour of brush at 7:00
   });
 
@@ -556,10 +629,10 @@ describe("brushing teeth scenario", () => {
     });
 
     const gn = planGn(eveningProfile, null, TZ, eveningNow);
+    const gnAction = requireValue(gn);
 
-    expect(gn).not.toBeNull();
-    expect(gn!.kind).toBe("gn");
-    expect(gn!.targetPlatform).toBe("telegram");
+    expect(gnAction.kind).toBe("gn");
+    expect(gnAction.targetPlatform).toBe("telegram");
   });
 
   it("evening nudge fires for brush teeth", () => {
@@ -568,10 +641,18 @@ describe("brushing teeth scenario", () => {
       lastSeenAt: eveningNow.getTime() - 5 * 60 * 1000,
     });
 
-    const nudges = planNudges(eveningProfile, brushOccs, [], null, TZ, eveningNow);
+    const nudges = planNudges(
+      eveningProfile,
+      brushOccs,
+      [],
+      null,
+      TZ,
+      eveningNow,
+    );
 
-    const brushNudge = nudges.find((n) => n.occurrenceId === "brush-pm");
-    expect(brushNudge).toBeDefined();
-    expect(brushNudge!.contextSummary).toContain("Brush teeth (night)");
+    const brushNudge = requireValue(
+      nudges.find((nudge) => nudge.occurrenceId === "brush-pm"),
+    );
+    expect(brushNudge.contextSummary).toContain("Brush teeth (night)");
   });
 });

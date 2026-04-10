@@ -480,6 +480,12 @@
   "conversations.renameDialogSuggesting": "제안 중…",
   "conversations.renameDialogTitle": "채팅 주제 이름 바꾸기",
   "conversations.searchChats": "채팅 검색",
+  "conversations.filterScope": "소스",
+  "conversations.filterWorld": "서버 / 월드",
+  "conversations.scopeMilady": "Milady",
+  "conversations.scopeAllConnectors": "모든 커넥터",
+  "conversations.scopeUnknownWorld": "알 수 없는 월드",
+  "conversations.scopeAllWorlds": "모든 월드",
   "customactioneditor.Add": "+ 추가",
   "customactioneditor.AddParameter": "+ 매개변수 추가",
   "customactioneditor.AliasesOptional": "별칭(선택 사항)",
@@ -1679,6 +1685,7 @@
   "pluginsview.ManagedDiscordNeedsAgent": "Deploy a cloud agent first, then connect managed Discord from the Cloud agents screen.",
   "pluginsview.ManagedDiscordRequiresCloud": "Connect Eliza Cloud first, then you can use managed Discord OAuth.",
   "pluginsview.ManagedDiscordSelectAgent": "Select a cloud agent",
+  "pluginsview.ManagedDiscordGatewayProvisionFailed": "Eliza Cloud에서 공유 Milady Discord 게이트웨이를 시작하지 못했습니다.",
   "pluginsview.NeedsSetup": "설정 필요",
   "pluginsview.NoConfigNeeded": "설정 필요 없음",
   "pluginsview.NoConfigurationNeeded": "구성이 필요하지 않습니다.",
@@ -2412,5 +2419,7 @@
   "whatsappqroverlay.Tap": "탭",
   "whatsappqroverlay.TryAgain": "다시 시도",
   "whatsappqroverlay.UsesAnUnofficialW": "비공식 WhatsApp API를 사용합니다. 전용 전화번호를 사용하세요.",
-  "whatsappqroverlay.andSelect": "그리고 선택"
+  "whatsappqroverlay.andSelect": "그리고 선택",
+  "conversations.noneMilady": "아직 대화가 없습니다.",
+  "conversations.noneConnectors": "아직 대화가 없습니다."
 }

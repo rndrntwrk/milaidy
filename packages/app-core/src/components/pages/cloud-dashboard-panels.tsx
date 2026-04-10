@@ -989,12 +989,21 @@ export function AgentDetailSidebar({
                       defaultValue: "Admin lock",
                     })}
                   </span>
-                  <span className="text-xs text-txt-strong">
-                    {discordAdminLabel
-                      ? `@${discordAdminLabel}`
-                      : t("elizaclouddashboard.WhoeverLinksBecomesAdmin", {
-                          defaultValue: "Whoever completes setup becomes admin",
-                        })}
+                  <span className="flex items-center gap-2 text-xs text-txt-strong">
+                    {managedDiscord?.adminDiscordAvatarUrl ? (
+                      <img
+                        src={managedDiscord.adminDiscordAvatarUrl}
+                        alt={discordAdminLabel ? `@${discordAdminLabel}` : "Discord owner"}
+                        className="h-5 w-5 rounded-full border border-border/40 object-cover"
+                      />
+                    ) : null}
+                    <span>
+                      {discordAdminLabel
+                        ? `@${discordAdminLabel}`
+                        : t("elizaclouddashboard.WhoeverLinksBecomesAdmin", {
+                            defaultValue: "Whoever completes setup becomes admin",
+                          })}
+                    </span>
                   </span>
                 </div>
               </div>

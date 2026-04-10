@@ -76,7 +76,7 @@ import * as pluginSecretsManager from "@elizaos/plugin-secrets-manager";
 import * as pluginShell from "@elizaos/plugin-shell";
 import * as pluginSql from "@elizaos/plugin-sql";
 import * as pluginTrust from "@elizaos/plugin-trust";
-import * as pluginRoles from "@miladyai/plugin-roles";
+import rolesPlugin from "./roles/src/index.js";
 import * as pluginSelfControl from "@miladyai/plugin-selfcontrol";
 import {
   isMiladySettingsDebugEnabled,
@@ -234,7 +234,6 @@ export const STATIC_ELIZA_PLUGINS: Record<string, unknown> = {
   "@elizaos/plugin-elizacloud": pluginElizacloud,
   "@elizaos/plugin-trust": pluginTrust,
   "@miladyai/plugin-selfcontrol": pluginSelfControl,
-  "@miladyai/plugin-roles": pluginRoles,
   "@elizaos/plugin-personality": pluginPersonality,
   "@elizaos/plugin-experience": pluginExperience,
 };
@@ -3466,13 +3465,20 @@ export async function startEliza(
       ...(typeof config.agents?.defaults?.adminEntityId === "string" &&
       config.agents.defaults.adminEntityId.trim().length > 0
         ? {
-            MILADY_ADMIN_ENTITY_ID: config.agents.defaults.adminEntityId.trim(),
+            ELIZA_ADMIN_ENTITY_ID: config.agents.defaults.adminEntityId.trim(),
           }
         : {}),
       ...(config.agents?.defaults?.ownerContacts
         ? {
-            MILADY_OWNER_CONTACTS_JSON: JSON.stringify(
+            ELIZA_OWNER_CONTACTS_JSON: JSON.stringify(
               config.agents.defaults.ownerContacts,
+            ),
+          }
+        : {}),
+      ...(config.roles?.connectorAdmins
+        ? {
+            ELIZA_ROLES_CONNECTOR_ADMINS_JSON: JSON.stringify(
+              config.roles.connectorAdmins,
             ),
           }
         : {}),
@@ -3549,6 +3555,16 @@ export async function startEliza(
   //     Each registerPlugin() call runs the plugin's init() before proceeding
   //     to the next, guaranteeing that cross-plugin getService() calls resolve.
   {
+    try {
+      logger.info("[eliza] Pre-registering internal roles capability...");
+      await runtime.registerPlugin(rolesPlugin);
+      logger.info("[eliza] ✓ internal roles capability pre-registered");
+    } catch (err) {
+      logger.warn(
+        `[eliza] Internal roles capability pre-registration failed: ${formatError(err)}`,
+      );
+    }
+
     const alreadyPreRegistered = new Set([
       "@elizaos/plugin-sql",
       "@elizaos/plugin-local-embedding",
@@ -3953,6 +3969,14 @@ export async function startEliza(
 
           // Pre-register remaining core plugins sequentially (same as startup)
           {
+            try {
+              await newRuntime.registerPlugin(rolesPlugin);
+            } catch (err) {
+              logger.warn(
+                `[eliza] Hot-reload: internal roles capability pre-registration failed: ${formatError(err)}`,
+              );
+            }
+
             const alreadyPreRegistered = new Set([
               "@elizaos/plugin-sql",
               "@elizaos/plugin-local-embedding",

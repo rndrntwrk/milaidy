@@ -19,7 +19,7 @@ import type {
   UUID,
 } from "@elizaos/core";
 import { logger } from "@elizaos/core";
-import { resolveCanonicalOwnerIdForMessage } from "@miladyai/plugin-roles";
+import { resolveCanonicalOwnerIdForMessage } from "@elizaos/core/roles";
 
 // ---------------------------------------------------------------------------
 // Types
