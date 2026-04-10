@@ -40,14 +40,14 @@ describe("detectRuntimeModel", () => {
         name: "Eliza",
         settings: {
           model: {
-            primary: "openai/gpt-5.2",
+            primary: "openai/gpt-5.4",
           },
         },
       } as AgentRuntime["character"],
       plugins: [{ name: "moonshot-kimi" }] as AgentRuntime["plugins"],
     });
 
-    expect(detectRuntimeModel(runtime)).toBe("openai/gpt-5.2");
+    expect(detectRuntimeModel(runtime)).toBe("openai/gpt-5.4");
   });
 
   it("prefers canonical direct routing over config defaults and plugin hints", () => {
@@ -64,12 +64,12 @@ describe("detectRuntimeModel", () => {
           llmText: {
             backend: "openrouter",
             transport: "direct",
-            primaryModel: "openai/gpt-5.2",
+            primaryModel: "openai/gpt-5.4",
           },
         },
         agents: { defaults: { model: { primary: "anthropic" } } },
       }),
-    ).toBe("openai/gpt-5.2");
+    ).toBe("openai/gpt-5.4");
   });
 
   it("falls back to the selected local provider id when no primaryModel is set", () => {
@@ -127,12 +127,12 @@ describe("detectRuntimeModel", () => {
             backend: "elizacloud",
             transport: "cloud-proxy",
             accountId: "elizacloud",
-            smallModel: "openai/gpt-5-mini",
-            largeModel: "anthropic/claude-sonnet-4.5",
+            smallModel: "openai/gpt-5.4-mini",
+            largeModel: "anthropic/claude-sonnet-4.6",
           },
         },
       }),
-    ).toBe("anthropic/claude-sonnet-4.5");
+    ).toBe("anthropic/claude-sonnet-4.6");
   });
 
   it("falls back to config model.primary when no explicit connection exists", () => {
@@ -143,10 +143,10 @@ describe("detectRuntimeModel", () => {
       ] as AgentRuntime["plugins"],
     });
     const config = {
-      agents: { defaults: { model: { primary: "openai/gpt-5.2" } } },
+      agents: { defaults: { model: { primary: "openai/gpt-5.4" } } },
     };
 
-    expect(detectRuntimeModel(runtime, config)).toBe("openai/gpt-5.2");
+    expect(detectRuntimeModel(runtime, config)).toBe("openai/gpt-5.4");
   });
 
   it("falls back to plugin scanning when config model.primary is absent", () => {

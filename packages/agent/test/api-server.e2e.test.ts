@@ -5054,7 +5054,7 @@ describe("API Server E2E (no runtime)", () => {
           llmText: {
             backend: "openai",
             transport: "direct",
-            primaryModel: "openai/gpt-5.2",
+            primaryModel: "openai/gpt-5.4",
           },
         },
         credentialInputs: {
@@ -5087,7 +5087,7 @@ describe("API Server E2E (no runtime)", () => {
         llmText: {
           backend: "openai",
           transport: "direct",
-          primaryModel: "openai/gpt-5.2",
+          primaryModel: "openai/gpt-5.4",
         },
       });
       expect(data.connection).toBeUndefined();

@@ -605,7 +605,7 @@ describe("Hyperscape Auto-Provisioning", () => {
     vi.restoreAllMocks();
   });
 
-  it("launches without Hyperscape iframe auth when no credentials or wallet are available", async () => {
+  it("degrades the Hyperscape viewer when wallet-auth provisioning fails", async () => {
     process.env.HYPERSCAPE_API_URL = "http://localhost:3333";
     process.env.HYPERSCAPE_CLIENT_URL = "http://localhost:3333";
     const fetchMock = createHyperscapeLaunchFetchMock({
@@ -625,15 +625,16 @@ describe("Hyperscape Auto-Provisioning", () => {
       runtime,
     );
     expect(result.pluginInstalled).toBe(true);
+    expect(result.viewer?.postMessageAuth).toBe(false);
     expect(result.viewer?.authMessage).toBeUndefined();
     expect(
       fetchMock.mock.calls.some(([input]) =>
         String(input).includes("wallet-auth"),
       ),
-    ).toBe(false);
+    ).toBe(true);
   });
 
-  it("succeeds when hyperscape credentials are pre-configured", async () => {
+  it("uses pre-configured Hyperscape credentials without re-running wallet auth", async () => {
     process.env.HYPERSCAPE_API_URL = "http://localhost:3333";
     process.env.HYPERSCAPE_CLIENT_URL = "http://localhost:3333";
     process.env.HYPERSCAPE_CHARACTER_ID = "test-char-id";
@@ -655,7 +656,18 @@ describe("Hyperscape Auto-Provisioning", () => {
       runtime,
     );
     expect(result.pluginInstalled).toBe(true);
-    expect(result.viewer).toBeNull();
+    expect(result.viewer).toEqual(
+      expect.objectContaining({
+        postMessageAuth: true,
+        authMessage: {
+          type: "HYPERSCAPE_AUTH",
+          authToken: "test-auth-token",
+          agentId: "fake-agent-id",
+          characterId: "test-char-id",
+          followEntity: "test-char-id",
+        },
+      }),
+    );
     expect(
       fetchMock.mock.calls.some(([input]) =>
         String(input).includes("wallet-auth"),

@@ -23,7 +23,6 @@ import {
   matchEntityToConnectorAdminWhitelist,
   normalizeRole,
   resolveCanonicalOwnerId,
-  setConnectorAdminWhitelist,
 } from "./utils";
 
 const BOOTSTRAP_RETRY_TIMERS_KEY = Symbol.for(
@@ -127,7 +126,10 @@ function scheduleBootstrapRetry(
  * Ensure the world owner has OWNER role in metadata.
  * Called on plugin init — guarantees the app-local user is always OWNER.
  */
-async function ensureOwnerRole(runtime: IAgentRuntime): Promise<boolean> {
+async function ensureOwnerRole(
+  runtime: IAgentRuntime,
+  opts?: { pruneConnectorAdmins?: boolean },
+): Promise<boolean> {
   try {
     const worlds = await runtime.getAllWorlds();
 
@@ -167,6 +169,18 @@ async function ensureOwnerRole(runtime: IAgentRuntime): Promise<boolean> {
           }
         }
 
+        if (opts?.pruneConnectorAdmins) {
+          for (const [entityId, source] of Object.entries(metadata.roleSources)) {
+            if (source !== "connector_admin") continue;
+            delete metadata.roleSources[entityId];
+            delete metadata.roles[entityId];
+            changed = true;
+            logger.info(
+              `[roles] Cleared connector-admin grant ${entityId} because no whitelist is configured`,
+            );
+          }
+        }
+
         if (changed) {
           logger.info(
             `[roles] Synced canonical OWNER ${ownerId} in world ${world.id}`,
@@ -187,15 +201,13 @@ async function ensureOwnerRole(runtime: IAgentRuntime): Promise<boolean> {
 
 /**
  * Apply connector admin whitelists from config.
- * Scans worlds for entities matching whitelisted IDs and promotes them to ADMIN.
+ * Scans worlds for entities matching whitelisted IDs, promotes them to ADMIN,
+ * and removes stale connector_admin grants that no longer match.
  */
 async function applyConnectorAdminWhitelists(
   runtime: IAgentRuntime,
   whitelist: Record<string, string[]>,
 ): Promise<boolean> {
-  const hasWhitelist = Object.values(whitelist).some((ids) => ids.length > 0);
-  if (!hasWhitelist) return true;
-
   try {
     const worlds = await runtime.getAllWorlds();
 
@@ -203,12 +215,12 @@ async function applyConnectorAdminWhitelists(
       if (!world.id) continue;
 
       const rooms = await runtime.getRooms(world.id);
-      if (rooms.length === 0) continue;
 
       await updateWorldMetadata(runtime, world.id, async (metadata) => {
         if (!metadata.roles) metadata.roles = {};
         metadata.roleSources ??= {};
         let updated = false;
+        const matchedEntityIds = new Set<string>();
 
         for (const room of rooms) {
           const entities = await runtime.getEntitiesForRoom(room.id);
@@ -225,6 +237,19 @@ async function applyConnectorAdminWhitelists(
             );
 
             if (matched) {
+              matchedEntityIds.add(entityId);
+
+              if (
+                metadata.roleSources[entityId] === "connector_admin" &&
+                normalizeRole(metadata.roles[entityId]) === "ADMIN"
+              ) {
+                continue;
+              }
+
+              if (typeof metadata.roles[entityId] === "string") {
+                continue;
+              }
+
               metadata.roles[entityId] = "ADMIN";
               metadata.roleSources[entityId] = "connector_admin";
               updated = true;
@@ -233,6 +258,18 @@ async function applyConnectorAdminWhitelists(
               );
             }
           }
+        }
+
+        for (const [entityId, source] of Object.entries(metadata.roleSources)) {
+          if (source !== "connector_admin") continue;
+          if (matchedEntityIds.has(entityId)) continue;
+
+          delete metadata.roleSources[entityId];
+          delete metadata.roles[entityId];
+          updated = true;
+          logger.info(
+            `[roles] Revoked stale connector-admin role for entity ${entityId}`,
+          );
         }
 
         return updated;
@@ -287,19 +324,25 @@ const rolesPlugin: Plugin = {
   async init(pluginConfig: Record<string, unknown>, runtime: IAgentRuntime) {
     logger.info("[roles] Initializing roles");
     const config = loadConnectorAdminsConfig(pluginConfig, runtime);
+    const connectorAdmins = config?.connectorAdmins ?? {};
+    const hasConnectorAdmins = Object.values(connectorAdmins).some(
+      (ids) => ids.length > 0,
+    );
 
     // Step 1: Ensure world owners have OWNER role
-    const ownerBootstrapOk = await ensureOwnerRole(runtime);
+    const ownerBootstrapOk = await ensureOwnerRole(runtime, {
+      pruneConnectorAdmins: !hasConnectorAdmins,
+    });
     if (!ownerBootstrapOk) {
       scheduleBootstrapRetry(runtime, "Owner role bootstrap", () =>
-        ensureOwnerRole(runtime),
+        ensureOwnerRole(runtime, {
+          pruneConnectorAdmins: !hasConnectorAdmins,
+        }),
       );
     }
 
     // Step 2: Apply connector admin whitelists if configured
-    const connectorAdmins = config?.connectorAdmins;
-    if (connectorAdmins) {
-      setConnectorAdminWhitelist(runtime, connectorAdmins);
+    if (hasConnectorAdmins) {
       const adminBootstrapOk = await applyConnectorAdminWhitelists(
         runtime,
         connectorAdmins,
@@ -309,8 +352,6 @@ const rolesPlugin: Plugin = {
           applyConnectorAdminWhitelists(runtime, connectorAdmins),
         );
       }
-    } else {
-      setConnectorAdminWhitelist(runtime, undefined);
     }
 
     logger.info("[roles] Roles initialized");

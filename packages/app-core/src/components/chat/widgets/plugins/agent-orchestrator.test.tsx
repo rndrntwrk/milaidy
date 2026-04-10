@@ -19,6 +19,11 @@ vi.mock("../../../../api", () => ({
 
 vi.mock("../../../../state", () => ({
   useApp: vi.fn(),
+  usePtySessions: () => ({
+    ptySessions:
+      ((mockUseApp() as { ptySessions?: unknown[] } | undefined)?.ptySessions ??
+        []) as unknown[],
+  }),
 }));
 
 vi.mock("@miladyai/ui", () => ({
@@ -248,6 +253,19 @@ function findButtonByText(
   return matches[0];
 }
 
+function clickButton(
+  tree: TestRenderer.ReactTestRenderer | null,
+  labelFragment: string,
+): void {
+  const button = requireTree(tree).root.findAll(
+    (node) => node.type === "button" && textOf(node).includes(labelFragment),
+  )[0];
+  if (!button) {
+    throw new Error(`Button containing "${labelFragment}" not found`);
+  }
+  button.props.onClick();
+}
+
 async function flush(): Promise<void> {
   await act(async () => {
     await Promise.resolve();
@@ -312,6 +330,10 @@ describe("agent orchestrator tasks widget", () => {
       );
     });
 
+    await act(async () => {
+      clickButton(requireTree(tree), "Task Alpha");
+    });
+
     await waitFor(
       () => textOf(requireTree(tree).root).includes("Validation report"),
       "expected persisted task detail to render",
@@ -323,7 +345,7 @@ describe("agent orchestrator tasks widget", () => {
     );
 
     await act(async () => {
-      await findButtonByText(requireTree(tree).root, "Archive").props.onClick();
+      await findButtonByText(requireTree(tree).root, "Delete").props.onClick();
     });
 
     await waitFor(
@@ -334,7 +356,7 @@ describe("agent orchestrator tasks widget", () => {
       "thread-1",
     );
     expect(mockClient.listCodingAgentTaskThreads).toHaveBeenLastCalledWith({
-      includeArchived: true,
+      includeArchived: false,
       search: undefined,
       limit: 30,
     });
@@ -392,6 +414,15 @@ describe("agent orchestrator tasks widget", () => {
       "expected provider routing panel to render",
     );
 
+    await act(async () => {
+      clickButton(requireTree(tree), "Task Alpha");
+    });
+
+    await waitFor(
+      () => textOf(requireTree(tree).root).includes("Approve the production deploy?"),
+      "expected pending user input detail to render",
+    );
+
     expect(textOf(requireTree(tree).root)).toContain("Preferred: codex");
     expect(textOf(requireTree(tree).root)).toContain("Pending approvals: 1");
     expect(textOf(requireTree(tree).root)).toContain(
@@ -417,23 +448,27 @@ describe("agent orchestrator tasks widget", () => {
       );
     });
 
+    await act(async () => {
+      clickButton(requireTree(tree), "Task Alpha");
+    });
+
     await waitFor(
       () => textOf(requireTree(tree).root).includes("Validation report"),
       "expected task detail before archive mutation",
     );
 
     await act(async () => {
-      await findButtonByText(requireTree(tree).root, "Archive").props.onClick();
+      await findButtonByText(requireTree(tree).root, "Delete").props.onClick();
     });
 
     await waitFor(
       () =>
-        textOf(requireTree(tree).root).includes("Failed to update task thread"),
+        textOf(requireTree(tree).root).includes("Failed to delete task"),
       "expected archive mutation error to render",
     );
 
     expect(textOf(requireTree(tree).root)).toContain(
-      "Failed to update task thread: archive failed",
+      "Failed to delete task: archive failed",
     );
     expect(mockClient.listCodingAgentTaskThreads).toHaveBeenCalledTimes(1);
   });
@@ -458,13 +493,21 @@ describe("agent orchestrator tasks widget", () => {
       );
     });
 
+    await act(async () => {
+      clickButton(requireTree(tree), "Task Alpha");
+    });
+
     await waitFor(
-      () => textOf(requireTree(tree).root).includes("Archive"),
+      () => textOf(requireTree(tree).root).includes("Delete"),
       "expected open task detail to render",
     );
 
     await act(async () => {
       findButtonByText(requireTree(tree).root, "Show Archive").props.onClick();
+    });
+
+    await act(async () => {
+      clickButton(requireTree(tree), "Archived Task");
     });
 
     await waitFor(
@@ -560,6 +603,10 @@ describe("agent orchestrator tasks widget", () => {
       tree = TestRenderer.create(
         <TasksWidget events={[]} clearEvents={vi.fn()} />,
       );
+    });
+
+    await act(async () => {
+      clickButton(requireTree(tree), "Task Alpha");
     });
 
     await waitFor(
@@ -694,21 +741,18 @@ describe("agent orchestrator tasks widget", () => {
       );
     });
 
+    await act(async () => {
+      clickButton(requireTree(tree), "Task Alpha");
+    });
+
     await waitFor(
-      () =>
-        textOf(requireTree(tree).root).includes("No artifacts recorded yet."),
-      "expected empty detail placeholders to render",
+      () => textOf(requireTree(tree).root).includes("0 artifacts"),
+      "expected empty detail stats to render",
     );
 
-    expect(textOf(requireTree(tree).root)).toContain(
-      "No artifacts recorded yet.",
-    );
-    expect(textOf(requireTree(tree).root)).toContain(
-      "No decisions recorded yet.",
-    );
-    expect(textOf(requireTree(tree).root)).toContain(
-      "No transcript captured yet.",
-    );
+    expect(textOf(requireTree(tree).root)).toContain("0 artifacts");
+    expect(textOf(requireTree(tree).root)).toContain("0 transcript entries");
+    expect(textOf(requireTree(tree).root)).not.toContain("Validation report");
 
     mockClient.listCodingAgentTaskThreads.mockResolvedValue([]);
     await act(async () => {

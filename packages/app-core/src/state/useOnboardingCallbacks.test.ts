@@ -1212,7 +1212,7 @@ describe("useOnboardingCallbacks", () => {
       result.current.onboarding.setField("provider", "openai");
       result.current.onboarding.setField("cloudApiKey", "ck-linked");
       result.current.onboarding.setField("apiKey", "sk-openai-test");
-      result.current.onboarding.setField("primaryModel", "openai/gpt-5.2");
+      result.current.onboarding.setField("primaryModel", "openai/gpt-5.4");
       result.current.onboarding.setField(
         "remoteApiBase",
         "https://ren.example.com",
@@ -1244,7 +1244,7 @@ describe("useOnboardingCallbacks", () => {
             backend: "openai",
             transport: "remote",
             remoteApiBase: "https://ren.example.com",
-            primaryModel: "openai/gpt-5.2",
+            primaryModel: "openai/gpt-5.4",
           },
         },
         credentialInputs: {

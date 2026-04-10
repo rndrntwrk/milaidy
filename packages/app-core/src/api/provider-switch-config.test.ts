@@ -252,8 +252,8 @@ describe("applyOnboardingConnectionConfig", () => {
         runtime: "cloud",
       },
       models: {
-        small: "openai/gpt-5-mini",
-        large: "anthropic/claude-sonnet-4.5",
+        small: "openai/gpt-5.4-mini",
+        large: "anthropic/claude-sonnet-4.6",
       },
     } as Partial<ElizaConfig>;
 
@@ -261,7 +261,7 @@ describe("applyOnboardingConnectionConfig", () => {
       kind: "local-provider",
       provider: "openrouter",
       apiKey: "sk-or-test",
-      primaryModel: "openai/gpt-5-mini",
+      primaryModel: "openai/gpt-5.4-mini",
     });
 
     expect(config.connection).toBeUndefined();
@@ -278,14 +278,14 @@ describe("applyOnboardingConnectionConfig", () => {
       llmText: {
         backend: "openrouter",
         transport: "direct",
-        primaryModel: "openai/gpt-5-mini",
+        primaryModel: "openai/gpt-5.4-mini",
       },
     });
     expect(config.models).toBeUndefined();
     expect((config.env as Record<string, string>).OPENROUTER_API_KEY).toBe(
       "sk-or-test",
     );
-    expect(config.agents?.defaults?.model?.primary).toBe("openai/gpt-5-mini");
+    expect(config.agents?.defaults?.model?.primary).toBe("openai/gpt-5.4-mini");
   });
 
   it("persists sanitized cloud-managed selection and runtime config", async () => {
@@ -295,7 +295,7 @@ describe("applyOnboardingConnectionConfig", () => {
       kind: "cloud-managed",
       cloudProvider: "elizacloud",
       apiKey: "ck-cloud-key",
-      smallModel: "openai/gpt-5-mini",
+      smallModel: "openai/gpt-5.4-mini",
       largeModel: "moonshotai/kimi-k2-0905",
     });
 
@@ -314,7 +314,7 @@ describe("applyOnboardingConnectionConfig", () => {
         backend: "elizacloud",
         transport: "cloud-proxy",
         accountId: "elizacloud",
-        smallModel: "openai/gpt-5-mini",
+        smallModel: "openai/gpt-5.4-mini",
         largeModel: "moonshotai/kimi-k2-0905",
       },
       tts: {
@@ -339,7 +339,7 @@ describe("applyOnboardingConnectionConfig", () => {
       },
     });
     expect(config.models).toEqual({
-      small: "openai/gpt-5-mini",
+      small: "openai/gpt-5.4-mini",
       large: "moonshotai/kimi-k2-0905",
     });
   });
@@ -383,8 +383,8 @@ describe("clearPersistedOnboardingConfig", () => {
         apiKey: "ck-cloud",
       },
       models: {
-        small: "openai/gpt-5-mini",
-        large: "anthropic/claude-sonnet-4.5",
+        small: "openai/gpt-5.4-mini",
+        large: "anthropic/claude-sonnet-4.6",
       },
       agents: {
         defaults: {

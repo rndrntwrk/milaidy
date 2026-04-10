@@ -403,7 +403,7 @@ describe("ProviderSwitcher provider dropdown default", () => {
       agents: {
         defaults: {
           model: {
-            primary: "openai/gpt-5.2",
+            primary: "openai/gpt-5.4",
           },
         },
       },

@@ -1,4 +1,5 @@
 import type { Memory, State, UUID } from "@elizaos/core";
+import { setConnectorAdminWhitelist } from "@elizaos/core/roles";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { lateJoinWhitelistEvaluator } from "../evaluators/late-join-whitelist";
 import { roleBackfillProvider } from "../providers/role-backfill";
@@ -47,6 +48,7 @@ function createRuntime(opts: {
   entities: Map<UUID, MockEntity>;
   rooms: Map<UUID, MockRoom>;
 }) {
+  const settings = new Map<string, string | boolean | number | null>();
   return {
     agentId: "agent-test" as UUID,
     getRoom: vi.fn(async (id: UUID) => opts.rooms.get(id) ?? null),
@@ -58,7 +60,14 @@ function createRuntime(opts: {
     getEntitiesForRoom: vi.fn(async (_roomId: UUID) => [...opts.entities.values()]),
     getRoomsForParticipant: vi.fn(async (_entityId: UUID) => [...opts.rooms.keys()]),
     getRelationships: vi.fn(async () => []),
-    getSetting: vi.fn(() => null),
+    getSetting: vi.fn((key: string) => settings.get(key) ?? null),
+    setSetting: vi.fn((key: string, value: unknown) => {
+      if (value === null || value === undefined) {
+        settings.delete(key);
+        return;
+      }
+      settings.set(key, value as string | boolean | number | null);
+    }),
   } as never;
 }
 
@@ -212,6 +221,24 @@ describe("roles command e2e", () => {
       expect.objectContaining({
         text: expect.stringContaining("don't have permission"),
       }),
+    );
+  });
+
+  it("promotes late-join admins from the runtime whitelist even without config-file state", async () => {
+    const { runtime, worlds } = createScaffolding();
+    setConnectorAdminWhitelist(runtime, {
+      discord: ["discord-admin-222"],
+    });
+
+    await lateJoinWhitelistEvaluator.handler(
+      runtime,
+      makeMessage(ADMIN_ENTITY, "hello from admin"),
+      {} as State,
+    );
+
+    expect(worlds.get(WORLD_A)?.metadata.roles?.[ADMIN_ENTITY]).toBe("ADMIN");
+    expect(worlds.get(WORLD_A)?.metadata.roleSources?.[ADMIN_ENTITY]).toBe(
+      "connector_admin",
     );
   });
 

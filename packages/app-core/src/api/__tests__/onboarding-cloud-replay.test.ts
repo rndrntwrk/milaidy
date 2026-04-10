@@ -79,7 +79,7 @@ describe("deriveCompatOnboardingReplayBody", () => {
         llmText: {
           backend: "openai",
           transport: "direct",
-          primaryModel: "openai/gpt-5.2",
+          primaryModel: "openai/gpt-5.4",
         },
       },
       credentialInputs: {
@@ -102,7 +102,7 @@ describe("deriveCompatOnboardingReplayBody", () => {
         kind: "local-provider",
         provider: "openrouter",
         apiKey: "sk-test-openrouter",
-        primaryModel: "openai/gpt-5-mini",
+        primaryModel: "openai/gpt-5.4-mini",
       },
       providerApiKey: "sk-test-openrouter",
     };
@@ -134,7 +134,7 @@ describe("deriveCompatOnboardingReplayBody", () => {
         llmText: {
           backend: "openrouter",
           transport: "direct",
-          primaryModel: "openai/gpt-5-mini",
+          primaryModel: "openai/gpt-5.4-mini",
         },
       },
     };
@@ -152,7 +152,7 @@ describe("deriveCompatOnboardingReplayBody", () => {
         llmText: {
           backend: "openrouter",
           transport: "direct",
-          primaryModel: "openai/gpt-5-mini",
+          primaryModel: "openai/gpt-5.4-mini",
         },
       },
     });

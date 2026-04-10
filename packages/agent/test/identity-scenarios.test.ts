@@ -40,8 +40,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // ---------------------------------------------------------------------------
 
 const {
+  mockGetConnectorAdminWhitelist,
   mockGetEntityRole,
   mockHasConfiguredCanonicalOwner,
+  mockMatchEntityToConnectorAdminWhitelist,
   mockResolveWorldForMessage,
   mockResolveCanonicalOwnerId,
   mockResolveCanonicalOwnerIdForMessage,
@@ -49,8 +51,10 @@ const {
   mockNormalizeRole,
   mockCheckSenderRole,
 } = vi.hoisted(() => ({
+  mockGetConnectorAdminWhitelist: vi.fn(),
   mockGetEntityRole: vi.fn(),
   mockHasConfiguredCanonicalOwner: vi.fn(),
+  mockMatchEntityToConnectorAdminWhitelist: vi.fn(),
   mockResolveWorldForMessage: vi.fn(),
   mockResolveCanonicalOwnerId: vi.fn(),
   mockResolveCanonicalOwnerIdForMessage: vi.fn(),
@@ -60,8 +64,11 @@ const {
 }));
 
 vi.mock("@elizaos/core/roles", () => ({
+  getConnectorAdminWhitelist: mockGetConnectorAdminWhitelist,
   getEntityRole: mockGetEntityRole,
   hasConfiguredCanonicalOwner: mockHasConfiguredCanonicalOwner,
+  matchEntityToConnectorAdminWhitelist:
+    mockMatchEntityToConnectorAdminWhitelist,
   resolveWorldForMessage: mockResolveWorldForMessage,
   resolveCanonicalOwnerId: mockResolveCanonicalOwnerId,
   resolveCanonicalOwnerIdForMessage: mockResolveCanonicalOwnerIdForMessage,
@@ -111,6 +118,7 @@ import { EscalationService } from "../src/services/escalation";
 type RolesMetadata = {
   ownership?: { ownerId?: string };
   roles?: Record<string, string>;
+  roleSources?: Record<string, string>;
 };
 
 /**
@@ -1036,19 +1044,56 @@ class ScenarioRunner {
         message: Memory,
         targetEntityId: string,
         newRole: string,
+        source = "manual",
       ) => {
         const room = this.rooms.get(message.roomId);
         if (!room?.worldId) return {};
         const world = this.worlds.get(room.worldId as string);
         if (!world) return {};
         const roles = world.metadata.roles ?? {};
+        const roleSources = world.metadata.roleSources ?? {};
         if (newRole === "NONE") {
           delete roles[targetEntityId];
+          delete roleSources[targetEntityId];
         } else {
           roles[targetEntityId] = newRole;
+          roleSources[targetEntityId] = source;
         }
         world.metadata.roles = roles;
+        world.metadata.roleSources = roleSources;
         return { ...roles };
+      },
+    );
+
+    mockGetConnectorAdminWhitelist.mockReturnValue({});
+    mockMatchEntityToConnectorAdminWhitelist.mockImplementation(
+      (
+        entityMetadata: Record<string, unknown> | undefined | null,
+        whitelist: Record<string, string[]>,
+      ) => {
+        if (!entityMetadata) {
+          return null;
+        }
+
+        for (const [connector, platformIds] of Object.entries(whitelist)) {
+          if (!platformIds?.length) continue;
+
+          const connectorMetadata = entityMetadata[connector] as
+            | Record<string, unknown>
+            | undefined;
+          if (!connectorMetadata || typeof connectorMetadata !== "object") {
+            continue;
+          }
+
+          for (const field of ["userId", "id", "username", "userName"] as const) {
+            const value = connectorMetadata[field];
+            if (typeof value === "string" && platformIds.includes(value)) {
+              return { connector, matchedValue: value, matchedField: field };
+            }
+          }
+        }
+
+        return null;
       },
     );
 

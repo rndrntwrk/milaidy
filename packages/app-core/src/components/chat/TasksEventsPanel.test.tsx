@@ -26,6 +26,7 @@ vi.mock("@miladyai/ui", () => ({
 
 vi.mock("../../state", () => ({
   useApp: () => mockUseApp(),
+  usePtySessions: () => ({ ptySessions: [] }),
 }));
 
 vi.mock("../../api", () => ({
@@ -350,7 +351,7 @@ describe("TasksEventsPanel", () => {
       .toLowerCase()
       .replace(/\s+/g, " ")
       .trim();
-    expect(mockClient.getLifeOpsOverview.mock.calls.length).toBeGreaterThan(0);
+    expect(mockClient.getLifeOpsOverview).not.toHaveBeenCalled();
     expect(text).toContain("life ops");
     expect(text).toContain("take medication");
     expect(text).toContain("twice daily");

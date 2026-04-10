@@ -30,6 +30,7 @@ function createMockRuntime(
   > = {},
   settings?: Record<string, string | boolean | number | null>,
 ): IAgentRuntime {
+  const settingsStore = { ...(settings ?? {}) };
   // getEntitiesForRoom returns entity objects (per linter fix)
   const entityObjects = Object.entries(entities).map(([id, e]) => ({
     id: id as UUID,
@@ -48,7 +49,14 @@ function createMockRuntime(
       return { id, names: e.names, metadata: e.metadata ?? {} };
     }),
     getSetting: vi.fn().mockImplementation((key: string) => {
-      return settings?.[key] ?? null;
+      return settingsStore[key] ?? null;
+    }),
+    setSetting: vi.fn().mockImplementation((key: string, value: unknown) => {
+      if (value === null || value === undefined) {
+        delete settingsStore[key];
+        return;
+      }
+      settingsStore[key] = value as string | boolean | number | null;
     }),
   } as unknown as IAgentRuntime;
 }
@@ -437,7 +445,7 @@ describe("updateRoleAction.handler", () => {
     expect(world.metadata.roles?.[targetId]).toBe("USER");
   });
 
-  it("connector-whitelisted requester can manage roles from live bridge metadata without persisting themselves", async () => {
+  it("does not trust bridge sender metadata from message content", async () => {
     const discordAdminId = "discord-admin-uuid";
     runtime = createMockRuntime(world, {
       [ownerId]: { names: ["Shaw"] },
@@ -460,9 +468,14 @@ describe("updateRoleAction.handler", () => {
       callback,
     );
 
-    expect(result).toEqual(expect.objectContaining({ success: true }));
-    expect(world.metadata.roles?.[targetId]).toBe("USER");
+    expect(result).toEqual(expect.objectContaining({ success: false }));
+    expect(world.metadata.roles?.[targetId]).toBeUndefined();
     expect(world.metadata.roles?.[discordAdminId]).toBeUndefined();
+    expect(callback).toHaveBeenCalledWith(
+      expect.objectContaining({
+        text: expect.stringContaining("don't have permission"),
+      }),
+    );
   });
 
   it("ADMIN promotes GUEST to ADMIN", async () => {
@@ -488,6 +501,10 @@ describe("updateRoleAction.handler", () => {
     const adminId = "admin-uuid";
     setWorldRole(world, adminId, "ADMIN");
     setWorldRole(world, targetId, "USER");
+    world.metadata.roleSources = {
+      [adminId]: "manual",
+      [targetId]: "manual",
+    };
     runtime = createMockRuntime(world, {
       [ownerId]: { names: ["Shaw"] },
       [adminId]: { names: ["mod"] },
@@ -502,6 +519,7 @@ describe("updateRoleAction.handler", () => {
     );
     expect(result).toEqual(expect.objectContaining({ success: true }));
     expect(world.metadata.roles?.[targetId]).toBe("GUEST");
+    expect(world.metadata.roleSources?.[targetId]).toBeUndefined();
   });
 
   it("legacy MEMBER alias sets to GUEST", async () => {

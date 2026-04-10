@@ -91,7 +91,7 @@ describe("POST /api/onboarding compat replay", () => {
           runtime: "cloud",
         },
         models: {
-          small: "openai/gpt-5-mini",
+          small: "openai/gpt-5.4-mini",
           large: "moonshotai/kimi-k2-0905",
         },
       }),
@@ -186,7 +186,7 @@ describe("POST /api/onboarding compat replay", () => {
           llmText: {
             backend: "openrouter",
             transport: "direct",
-            primaryModel: "openai/gpt-5-mini",
+            primaryModel: "openai/gpt-5.4-mini",
           },
         },
         credentialInputs: {
@@ -210,7 +210,7 @@ describe("POST /api/onboarding compat replay", () => {
       const model = (defaults?.model ?? {}) as Record<string, unknown>;
 
       expect(env.OPENROUTER_API_KEY).toBe("sk-or-test-key");
-      expect(model.primary).toBe("openai/gpt-5-mini");
+      expect(model.primary).toBe("openai/gpt-5.4-mini");
     } finally {
       await server.close();
       await cleanupTempDir(tempDir);

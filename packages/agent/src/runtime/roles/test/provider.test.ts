@@ -14,6 +14,7 @@ function mockRuntime(opts: {
   updateWorld?: ReturnType<typeof vi.fn>;
   settings?: Record<string, string | boolean | number | null>;
 }): IAgentRuntime {
+  const settingsStore = { ...(opts.settings ?? {}) };
   return {
     getRoom: vi.fn().mockResolvedValue(opts.room ?? null),
     getWorld: vi
@@ -32,7 +33,14 @@ function mockRuntime(opts: {
       return { id, names: e.names, metadata: e.metadata ?? {} };
     }),
     getSetting: vi.fn().mockImplementation((key: string) => {
-      return opts.settings?.[key] ?? null;
+      return settingsStore[key] ?? null;
+    }),
+    setSetting: vi.fn().mockImplementation((key: string, value: unknown) => {
+      if (value === null || value === undefined) {
+        delete settingsStore[key];
+        return;
+      }
+      settingsStore[key] = value as string | boolean | number | null;
     }),
   } as unknown as IAgentRuntime;
 }

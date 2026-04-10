@@ -151,6 +151,7 @@ describe("tab groups", () => {
       "fine-tuning",
       "trajectories",
       "relationships",
+      "rolodex",
       "runtime",
       "database",
       "logs",

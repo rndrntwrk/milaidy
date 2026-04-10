@@ -16,8 +16,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // ---------------------------------------------------------------------------
 
 const {
+  mockGetConnectorAdminWhitelist,
   mockGetEntityRole,
   mockHasConfiguredCanonicalOwner,
+  mockMatchEntityToConnectorAdminWhitelist,
   mockResolveWorldForMessage,
   mockResolveCanonicalOwnerId,
   mockSetEntityRole,
@@ -25,8 +27,10 @@ const {
   mockCanModifyRole,
   mockCheckSenderRole,
 } = vi.hoisted(() => ({
+  mockGetConnectorAdminWhitelist: vi.fn(),
   mockGetEntityRole: vi.fn(),
   mockHasConfiguredCanonicalOwner: vi.fn(),
+  mockMatchEntityToConnectorAdminWhitelist: vi.fn(),
   mockResolveWorldForMessage: vi.fn(),
   mockResolveCanonicalOwnerId: vi.fn(),
   mockSetEntityRole: vi.fn(),
@@ -36,8 +40,11 @@ const {
 }));
 
 vi.mock("@elizaos/core/roles", () => ({
+  getConnectorAdminWhitelist: mockGetConnectorAdminWhitelist,
   getEntityRole: mockGetEntityRole,
   hasConfiguredCanonicalOwner: mockHasConfiguredCanonicalOwner,
+  matchEntityToConnectorAdminWhitelist:
+    mockMatchEntityToConnectorAdminWhitelist,
   resolveWorldForMessage: mockResolveWorldForMessage,
   resolveCanonicalOwnerId: mockResolveCanonicalOwnerId,
   setEntityRole: mockSetEntityRole,
@@ -277,6 +284,42 @@ function wireCanonicalOwnerResolver(worlds: Map<UUID, MockWorld>) {
   );
 }
 
+function wireConnectorAdminWhitelistMatcher() {
+  mockGetConnectorAdminWhitelist.mockReturnValue({});
+  mockMatchEntityToConnectorAdminWhitelist.mockImplementation(
+    (
+      entityMetadata: Record<string, unknown> | undefined | null,
+      whitelist: Record<string, string[]>,
+    ) => {
+      if (!entityMetadata) {
+        return null;
+      }
+
+      for (const [connector, platformIds] of Object.entries(whitelist)) {
+        if (!platformIds?.length) {
+          continue;
+        }
+
+        const connectorMetadata = entityMetadata[connector] as
+          | Record<string, unknown>
+          | undefined;
+        if (!connectorMetadata || typeof connectorMetadata !== "object") {
+          continue;
+        }
+
+        for (const field of ["userId", "id", "username", "userName"] as const) {
+          const value = connectorMetadata[field];
+          if (typeof value === "string" && platformIds.includes(value)) {
+            return { connector, matchedValue: value };
+          }
+        }
+      }
+
+      return null;
+    },
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Default scaffolding factory
 // ---------------------------------------------------------------------------
@@ -332,6 +375,7 @@ function createScaffolding(overrides?: {
   wireCanModifyRole();
   wireCheckSenderRole(worlds, rooms);
   wireCanonicalOwnerResolver(worlds);
+  wireConnectorAdminWhitelistMatcher();
 
   // Config
   const adminWhitelist = overrides?.connectorAdmins ?? {};

@@ -407,7 +407,7 @@ describe("trajectory routes", () => {
             llmCalls: [
               {
                 callId: "detail-call-1",
-                model: "gpt-5.2",
+                model: "gpt-5.4",
                 userPrompt: "trajectory prompt",
                 response: "trajectory response",
                 timestamp: startedAt + 150,

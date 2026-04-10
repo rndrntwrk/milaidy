@@ -97,7 +97,7 @@ describe("onboarding provider catalog", () => {
           llmText: {
             backend: "openrouter",
             transport: "direct",
-            primaryModel: "openai/gpt-5-mini",
+            primaryModel: "openai/gpt-5.4-mini",
           },
         },
         cloud: {
@@ -115,7 +115,7 @@ describe("onboarding provider catalog", () => {
     ).toEqual({
       kind: "local-provider",
       provider: "openrouter",
-      primaryModel: "openai/gpt-5-mini",
+      primaryModel: "openai/gpt-5.4-mini",
     });
   });
 
@@ -125,8 +125,8 @@ describe("onboarding provider catalog", () => {
         connection: {
           kind: "cloud-managed",
           cloudProvider: "elizacloud",
-          smallModel: "openai/gpt-5-mini",
-          largeModel: "anthropic/claude-sonnet-4.5",
+          smallModel: "openai/gpt-5.4-mini",
+          largeModel: "anthropic/claude-sonnet-4.6",
         },
         deploymentTarget: {
           runtime: "cloud",
@@ -136,14 +136,14 @@ describe("onboarding provider catalog", () => {
           llmText: {
             backend: "openai",
             transport: "direct",
-            primaryModel: "openai/gpt-5.2",
+            primaryModel: "openai/gpt-5.4",
           },
         },
       }),
     ).toEqual({
       kind: "local-provider",
       provider: "openai",
-      primaryModel: "openai/gpt-5.2",
+      primaryModel: "openai/gpt-5.4",
     });
   });
 
@@ -196,8 +196,8 @@ describe("onboarding provider catalog", () => {
           inferenceMode: "cloud",
         },
         models: {
-          small: "openai/gpt-5-mini",
-          large: "anthropic/claude-sonnet-4.5",
+          small: "openai/gpt-5.4-mini",
+          large: "anthropic/claude-sonnet-4.6",
         },
       }),
     ).toBe(false);
@@ -210,8 +210,8 @@ describe("onboarding provider catalog", () => {
         inferenceMode: "cloud",
       },
       models: {
-        small: "openai/gpt-5-mini",
-        large: "anthropic/claude-sonnet-4.5",
+        small: "openai/gpt-5.4-mini",
+        large: "anthropic/claude-sonnet-4.6",
       },
     });
 
@@ -219,8 +219,8 @@ describe("onboarding provider catalog", () => {
       llmText: {
         backend: "elizacloud",
         transport: "cloud-proxy",
-        smallModel: "openai/gpt-5-mini",
-        largeModel: "anthropic/claude-sonnet-4.5",
+        smallModel: "openai/gpt-5.4-mini",
+        largeModel: "anthropic/claude-sonnet-4.6",
       },
     });
     expect(migrated.cloud).toBeUndefined();
@@ -318,8 +318,8 @@ describe("onboarding provider catalog", () => {
           backend: "elizacloud",
           transport: "cloud-proxy",
           accountId: "elizacloud",
-          smallModel: "openai/gpt-5-mini",
-          largeModel: "anthropic/claude-sonnet-4.5",
+          smallModel: "openai/gpt-5.4-mini",
+          largeModel: "anthropic/claude-sonnet-4.6",
         },
       },
     };
@@ -329,8 +329,8 @@ describe("onboarding provider catalog", () => {
         backend: "elizacloud",
         transport: "cloud-proxy",
         accountId: "elizacloud",
-        smallModel: "openai/gpt-5-mini",
-        largeModel: "anthropic/claude-sonnet-4.5",
+        smallModel: "openai/gpt-5.4-mini",
+        largeModel: "anthropic/claude-sonnet-4.6",
       },
     });
     expect(isElizaCloudServiceSelectedInConfig(config, "media")).toBe(false);
@@ -421,8 +421,8 @@ describe("onboarding provider catalog", () => {
       isOnboardingConnectionComplete({
         kind: "cloud-managed",
         cloudProvider: "elizacloud",
-        smallModel: "openai/gpt-5-mini",
-        largeModel: "anthropic/claude-sonnet-4.5",
+        smallModel: "openai/gpt-5.4-mini",
+        largeModel: "anthropic/claude-sonnet-4.6",
       }),
     ).toBe(true);
 
@@ -431,8 +431,8 @@ describe("onboarding provider catalog", () => {
         kind: "cloud-managed",
         cloudProvider: "elizacloud",
         apiKey: "ck-ready",
-        smallModel: "openai/gpt-5-mini",
-        largeModel: "anthropic/claude-sonnet-4.5",
+        smallModel: "openai/gpt-5.4-mini",
+        largeModel: "anthropic/claude-sonnet-4.6",
       }),
     ).toBe(true);
 

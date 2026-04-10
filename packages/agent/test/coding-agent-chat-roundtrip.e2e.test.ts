@@ -245,7 +245,7 @@ describe("Coding agent chat roundtrip", () => {
     }
   });
 
-  it("turns a chat message into a coding-agent task event and proactive update", async () => {
+  it("turns a chat message into a coding-agent task event and returns the assistant response", async () => {
     const createConversation = await req(
       server?.port ?? 0,
       "POST",
@@ -277,14 +277,6 @@ describe("Coding agent chat roundtrip", () => {
         message.type === "pty-session-event" &&
         message.eventType === "task_registered",
     );
-    const waitForProactive = waitForWsMessage(
-      ws as WebSocket,
-      (message) =>
-        message.type === "proactive-message" &&
-        message.conversationId === conversationId &&
-        ((message.message as Record<string, unknown> | undefined)
-          ?.source as string) === "coding-agent",
-    );
 
     const chatResponse = await req(
       server?.port ?? 0,
@@ -308,11 +300,6 @@ describe("Coding agent chat roundtrip", () => {
     expect(taskData.label).toBe("scratch/html-tetris");
     expect(taskData.originalTask).toBe(taskPrompt);
     expect(String(taskData.workdir ?? "")).toContain("/tmp/session-");
-
-    const proactive = await waitForProactive;
-    const proactiveMessage = proactive.message as Record<string, unknown>;
-    expect(proactiveMessage.source).toBe("coding-agent");
-    expect(String(proactiveMessage.text ?? "")).toContain(taskPrompt);
 
     const messagesResponse = await req(
       server?.port ?? 0,

@@ -161,7 +161,7 @@ describe("checkConfigFile", () => {
     });
     expect(result.status).toBe("warn");
     expect(toPosix(result.detail ?? "")).toContain(
-      "/tmp/eliza-profile/eliza.json",
+      "/tmp/eliza-profile/milady.json",
     );
   });
 });

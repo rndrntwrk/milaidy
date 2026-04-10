@@ -32,6 +32,17 @@ const { mockClient, mockUseApp, mockUseVoiceChat } = vi.hoisted(() => ({
 
 vi.mock("@miladyai/app-core/state", () => ({
   useApp: () => mockUseApp(),
+  useChatComposer: () => {
+    const context = mockUseApp();
+    return {
+      chatInput: context.chatInput ?? "",
+      chatSending: context.chatSending ?? false,
+      chatPendingImages: context.chatPendingImages ?? [],
+      setChatInput: vi.fn(),
+      setChatPendingImages: context.setChatPendingImages ?? vi.fn(),
+    };
+  },
+  usePtySessions: () => ({ ptySessions: [] }),
   getVrmPreviewUrl: () => null,
 }));
 
@@ -138,7 +149,14 @@ interface ChatViewContextStub {
   droppedFiles: string[];
   shareIngestNotice: string;
   selectedVrmIndex: number;
-  chatPendingImages: string[];
+  chatPendingImages: Array<{ data: string; mimeType: string; name: string }>;
+  setChatPendingImages: (
+    updater:
+      | Array<{ data: string; mimeType: string; name: string }>
+      | ((
+          prev: Array<{ data: string; mimeType: string; name: string }>,
+        ) => Array<{ data: string; mimeType: string; name: string }>),
+  ) => void;
 }
 
 function createContext(
@@ -159,6 +177,7 @@ function createContext(
     shareIngestNotice: "",
     selectedVrmIndex: 0,
     chatPendingImages: [],
+    setChatPendingImages: vi.fn(),
     ...overrides,
     uiLanguage: "en" as const,
     t: translateTest,

@@ -21,58 +21,37 @@ import {
   type UUID,
 } from "@elizaos/core";
 import {
+  getConnectorAdminWhitelist,
+  matchEntityToConnectorAdminWhitelist,
   resolveWorldForMessage,
   setEntityRole,
 } from "@elizaos/core/roles";
 import { loadElizaConfig } from "../config/config.js";
 
-/** Connector metadata fields checked for whitelist matching. */
-const MATCH_FIELDS = ["userId", "id", "username", "userName"] as const;
-
 /**
  * Load the connectorAdmins whitelist from milady.json.
  * Returns an empty object if not configured.
  */
-function loadConnectorAdminWhitelist(): Record<string, string[]> {
+function hasWhitelistEntries(whitelist: Record<string, string[]>): boolean {
+  return Object.values(whitelist).some((ids) => ids.length > 0);
+}
+
+function loadConnectorAdminWhitelist(
+  runtime: IAgentRuntime,
+): Record<string, string[]> {
+  // Prefer the runtime copy populated during roles init so env/runtime settings
+  // and config-file deployments behave the same way for late joiners.
+  const runtimeWhitelist = getConnectorAdminWhitelist(runtime);
+  if (hasWhitelistEntries(runtimeWhitelist)) {
+    return runtimeWhitelist;
+  }
+
   try {
     const cfg = loadElizaConfig();
     return cfg.roles?.connectorAdmins ?? {};
   } catch {
     return {};
   }
-}
-
-/**
- * Check if an entity matches any entry in the connector admin whitelist.
- *
- * Iterates connector keys in the whitelist and checks the entity's
- * per-connector metadata for matching userId/id/username/userName fields.
- */
-function matchEntityToWhitelist(
-  entityMetadata: Record<string, unknown> | undefined | null,
-  whitelist: Record<string, string[]>,
-): boolean {
-  if (!entityMetadata) return false;
-
-  const platformMetadata = entityMetadata as Record<
-    string,
-    Record<string, unknown> | undefined
-  >;
-
-  for (const [connector, platformIds] of Object.entries(whitelist)) {
-    if (!platformIds || platformIds.length === 0) continue;
-    const connectorMeta = platformMetadata[connector];
-    if (!connectorMeta || typeof connectorMeta !== "object") continue;
-
-    for (const field of MATCH_FIELDS) {
-      const value = connectorMeta[field];
-      if (typeof value === "string" && platformIds.includes(value)) {
-        return true;
-      }
-    }
-  }
-
-  return false;
 }
 
 export const lateJoinWhitelistEvaluator: Evaluator = {
@@ -97,14 +76,13 @@ export const lateJoinWhitelistEvaluator: Evaluator = {
   },
 
   handler: async (runtime: IAgentRuntime, message: Memory, _state?: State) => {
-    const whitelist = loadConnectorAdminWhitelist();
-    const hasWhitelist = Object.values(whitelist).some((ids) => ids.length > 0);
-    if (!hasWhitelist) return undefined;
+    const whitelist = loadConnectorAdminWhitelist(runtime);
+    if (!hasWhitelistEntries(whitelist)) return undefined;
 
     const entity = await runtime.getEntityById(message.entityId as UUID);
     if (!entity) return undefined;
 
-    const matched = matchEntityToWhitelist(
+    const matched = matchEntityToConnectorAdminWhitelist(
       entity.metadata as Record<string, unknown> | undefined,
       whitelist,
     );

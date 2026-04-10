@@ -571,8 +571,8 @@ function isLikelyOpenAiTextModel(value: string | undefined): boolean {
  * Normalize known-bad provider compatibility shims before plugin resolution.
  *
  * A common failure mode is routing the OpenAI plugin through Groq's
- * OpenAI-compatible base URL while leaving OpenAI defaults (`gpt-5`,
- * `gpt-5-mini`) in place. Structured XML/object generation then fails during
+ * OpenAI-compatible base URL while leaving OpenAI defaults (`gpt-5.4`,
+ * `gpt-5.4-mini`) in place. Structured XML/object generation then fails during
  * message handling because Groq does not serve those model IDs.
  *
  * When we can confidently detect that state, rewrite the effective runtime
@@ -1132,6 +1132,7 @@ export function shouldIgnoreMissingPluginExport(pluginName: string): boolean {
  */
 export function isEnvKeyAllowedForForwarding(key: string): boolean {
   const upper = key.toUpperCase();
+  if (upper === "ALLOW_NO_DATABASE") return false;
   // Block blockchain private keys
   if (upper.includes("PRIVATE_KEY")) return false;
   if (upper.startsWith("EVM_") || upper.startsWith("SOLANA_")) return false;
@@ -1153,6 +1154,26 @@ export function isEnvKeyAllowedForForwarding(key: string): boolean {
   )
     return false;
   return true;
+}
+
+function assertPersistentDatabaseRequired(
+  runtime: Pick<AgentRuntime, "getSetting" | "agentId">,
+): void {
+  const raw =
+    runtime.getSetting("ALLOW_NO_DATABASE") ?? process.env.ALLOW_NO_DATABASE;
+  const normalized = String(raw ?? "")
+    .trim()
+    .toLowerCase();
+  if (
+    normalized === "true" ||
+    normalized === "1" ||
+    normalized === "yes" ||
+    normalized === "on"
+  ) {
+    throw new Error(
+      `Milady requires persistent database storage and does not permit ALLOW_NO_DATABASE (agent ${runtime.agentId}). Remove ALLOW_NO_DATABASE from config/env and use @elizaos/plugin-sql.`,
+    );
+  }
 }
 
 function isElizaCloudManagedProcessEnvKey(key: string): boolean {
@@ -1636,7 +1657,7 @@ export function applyCloudConfigToEnv(config: ElizaConfig): void {
     delete process.env.ELIZAOS_CLOUD_BASE_URL;
   }
 
-  // Propagate model names so the cloud plugin picks them up.  Falls back to
+  // Propagate model names so the cloud plugin picks them up. Falls back to
   // sensible defaults when cloud is enabled but no explicit selection exists.
   // Skip when inferenceMode is "byok"/"local" or services.inference is off —
   // user's own keys handle models.
@@ -1646,8 +1667,8 @@ export function applyCloudConfigToEnv(config: ElizaConfig): void {
     | { small?: string; large?: string }
     | undefined;
   if (topology.services.inference) {
-    const small = models?.small || "openai/gpt-5-mini";
-    const large = models?.large || "anthropic/claude-sonnet-4.5";
+    const small = models?.small || "openai/gpt-5.4-mini";
+    const large = models?.large || "anthropic/claude-sonnet-4.6";
     process.env.SMALL_MODEL = small;
     process.env.LARGE_MODEL = large;
     process.env.ELIZAOS_CLOUD_SMALL_MODEL = small;
@@ -1763,8 +1784,8 @@ export function applyDatabaseConfigToEnv(config: ElizaConfig): void {
       );
 
       // Remove stale postmaster.pid left by a crashed process. Without this,
-      // PGlite sees the lock and either fails or triggers the destructive
-      // resetPgliteDataDir path, wiping all conversation history.
+      // PGlite sees the lock and either fails or, with explicit destructive
+      // recovery enabled, triggers the resetPgliteDataDir path.
       cleanStalePglitePid(dataDir);
     }
   }
@@ -1783,6 +1804,20 @@ type PgliteRecoveryAction =
   | "retry-without-reset"
   | "reset-data-dir"
   | "fail-active-lock";
+
+function allowDestructivePgliteRecovery(): boolean {
+  const raw =
+    process.env.MILADY_PGLITE_AUTO_RESET ?? process.env.ELIZA_PGLITE_AUTO_RESET;
+  const normalized = String(raw ?? "")
+    .trim()
+    .toLowerCase();
+  return (
+    normalized === "true" ||
+    normalized === "1" ||
+    normalized === "yes" ||
+    normalized === "on"
+  );
+}
 
 function reconcilePglitePidFile(dataDir: string): PglitePidFileStatus {
   const pidPath = path.join(dataDir, "postmaster.pid");
@@ -1931,7 +1966,9 @@ export function getPgliteRecoveryAction(
   dataDir: string,
 ): PgliteRecoveryAction {
   if (!isRecoverablePgliteInitError(err)) return "none";
-  if (!isPgliteLockError(err)) return "reset-data-dir";
+  if (!isPgliteLockError(err)) {
+    return allowDestructivePgliteRecovery() ? "reset-data-dir" : "none";
+  }
 
   const pidStatus = reconcilePglitePidFile(dataDir);
   if (
@@ -1944,7 +1981,7 @@ export function getPgliteRecoveryAction(
   if (pidStatus === "cleared-stale" || pidStatus === "cleared-malformed") {
     return "retry-without-reset";
   }
-  return "reset-data-dir";
+  return allowDestructivePgliteRecovery() ? "reset-data-dir" : "none";
 }
 
 function createActivePgliteLockError(dataDir: string, err: unknown): Error {
@@ -3681,6 +3718,7 @@ export async function startEliza(
 
   const initializeRuntimeServices = async (): Promise<void> => {
     // 8. Initialize the runtime (registers remaining plugins, starts services)
+    assertPersistentDatabaseRequired(runtime);
     await runtime.initialize();
     await prepareRuntimeForTrajectoryCapture(runtime, "runtime.initialize()");
 
@@ -3999,6 +4037,7 @@ export async function startEliza(
             }
           }
 
+          assertPersistentDatabaseRequired(newRuntime);
           await newRuntime.initialize();
           await prepareRuntimeForTrajectoryCapture(
             newRuntime,

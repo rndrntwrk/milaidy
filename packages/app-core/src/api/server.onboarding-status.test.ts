@@ -268,8 +268,8 @@ describe("GET /api/onboarding/status", () => {
           apiKey: "eliza_test_finished_cloud_setup",
         },
         models: {
-          small: "openai/gpt-5-mini",
-          large: "anthropic/claude-sonnet-4.5",
+          small: "openai/gpt-5.4-mini",
+          large: "anthropic/claude-sonnet-4.6",
         },
       }),
     );

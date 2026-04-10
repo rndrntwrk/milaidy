@@ -378,6 +378,58 @@ describe("applyConnectorAdminWhitelists via init()", () => {
     expect(world.metadata.roleSources?.o1).toBe("owner");
   });
 
+  it("removes stale connector_admin grants when whitelist is empty", async () => {
+    const world: MockWorld = {
+      id: "w1",
+      metadata: {
+        ownership: { ownerId: "o1" },
+        roles: { o1: "OWNER", stale: "ADMIN" },
+        roleSources: { o1: "owner", stale: "connector_admin" },
+      },
+    };
+    const runtime = createInitRuntime({ worlds: [world] });
+
+    await getPluginInit()?.({}, runtime);
+
+    expect(world.metadata.roles?.stale).toBeUndefined();
+    expect(world.metadata.roleSources?.stale).toBeUndefined();
+  });
+
+  it("reconciles connector_admin grants when the whitelist changes", async () => {
+    const world: MockWorld = {
+      id: "w1",
+      metadata: {
+        ownership: { ownerId: "o1" },
+        roles: { o1: "OWNER", stale: "ADMIN" },
+        roleSources: { o1: "owner", stale: "connector_admin" },
+      },
+    };
+    const runtime = createInitRuntime({
+      worlds: [world],
+      worldRooms: { w1: [{ id: "r1", worldId: "w1" }] },
+      roomEntities: {
+        r1: [
+          { id: "o1", names: ["Shaw"], metadata: {} },
+          {
+            id: "fresh",
+            names: ["Fresh"],
+            metadata: { discord: { userId: "fresh-admin" } },
+          },
+        ],
+      },
+    });
+
+    await getPluginInit()?.(
+      { connectorAdmins: { discord: ["fresh-admin"] } },
+      runtime,
+    );
+
+    expect(world.metadata.roles?.stale).toBeUndefined();
+    expect(world.metadata.roleSources?.stale).toBeUndefined();
+    expect(world.metadata.roles?.fresh).toBe("ADMIN");
+    expect(world.metadata.roleSources?.fresh).toBe("connector_admin");
+  });
+
   it("does not match entity to wrong connector", async () => {
     const world: MockWorld = {
       id: "w1",

@@ -58,6 +58,17 @@ const {
 
 vi.mock("@miladyai/app-core/state", () => ({
   useApp: () => mockUseApp(),
+  useChatComposer: () => {
+    const context = mockUseApp();
+    return {
+      chatInput: context.chatInput ?? "",
+      chatSending: context.chatSending ?? false,
+      chatPendingImages: context.chatPendingImages ?? [],
+      setChatInput: vi.fn(),
+      setChatPendingImages: context.setChatPendingImages ?? vi.fn(),
+    };
+  },
+  usePtySessions: () => ({ ptySessions: [] }),
   getVrmPreviewUrl: () => null,
 }));
 

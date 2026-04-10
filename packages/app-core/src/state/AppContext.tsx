@@ -2181,7 +2181,7 @@ function AppProviderInner({
     setState,
     copyToClipboard,
   }),
-  // biome-ignore lint/correctness/useExhaustiveDependencies: several fields are intentionally excluded from deps — see comments in the dep array below. chatInput/chatSending/chatPendingImages are provided fresh via ChatComposerCtx; ptySessions via PtySessionsCtx; autonomousEvents/autonomousLatestEventId/autonomousRunHealthByRunId are unused by components and excluded to prevent heartbeat WS events from re-rendering all AppContext subscribers.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: several fields are intentionally excluded from deps — see comments in the dep array below. chatInput/chatSending/chatPendingImages are provided fresh via ChatComposerCtx; ptySessions via PtySessionsCtx.
   // prettier-ignore
   [
     t, tab, uiShellMode, uiLanguage, uiTheme, companionVrmPowerMode,
@@ -2194,8 +2194,7 @@ function AppProviderInner({
     chatFirstTokenReceived, chatLastUsage, chatAvatarVisible, chatAgentVoiceMuted,
     chatMode, chatAvatarSpeaking, conversations, activeConversationId,
     companionMessageCutoffTs, conversationMessages,
-    // NOTE: autonomousEvents, autonomousLatestEventId, autonomousRunHealthByRunId intentionally EXCLUDED
-    // — they update on every heartbeat WS event but no component reads them from useApp().
+    autonomousEvents, autonomousLatestEventId, autonomousRunHealthByRunId,
     // NOTE: ptySessions intentionally EXCLUDED — provided fresh via PtySessionsCtx.
     unreadConversations, triggers, triggersLoaded, triggersLoading, triggersSaving,
     triggerRunsById, triggerHealth, triggerError, plugins, pluginFilter,

@@ -8,6 +8,7 @@
  * Called once during app startup after the BrowserView is created.
  */
 
+import * as fs from "node:fs";
 import { Utils } from "electrobun/bun";
 import { setAgentReady } from "./agent-ready-state";
 import { resolveDesktopRuntimeMode } from "./api-base";

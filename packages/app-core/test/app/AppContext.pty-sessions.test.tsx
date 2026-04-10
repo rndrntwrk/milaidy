@@ -129,9 +129,9 @@ describe("mapServerTasksToSessions — field mapping", () => {
 });
 
 describe("TERMINAL_STATUSES constant", () => {
-  it("contains exactly completed, stopped, error", () => {
+  it("contains exactly completed, stopped, interrupted, error", () => {
     expect(TERMINAL_STATUSES).toEqual(
-      new Set(["completed", "stopped", "error"]),
+      new Set(["completed", "stopped", "interrupted", "error"]),
     );
   });
 

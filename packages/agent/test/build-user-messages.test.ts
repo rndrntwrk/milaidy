@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { buildUserMessages } from "../src/api/server";
 
 describe("buildUserMessages", () => {
-  it("copies eval metadata onto both the content payload and top-level message metadata", () => {
+  it("keeps caller metadata on content payloads without promoting it to top-level message metadata", () => {
     const metadata = {
       scenarioId: "B001",
       batchId: "batch-test",
@@ -27,17 +27,13 @@ describe("buildUserMessages", () => {
 
     expect(userMessage.content.source).toBe("discord");
     expect(userMessage.content.metadata).toMatchObject(metadata);
-    expect(userMessage.metadata).toMatchObject({
-      scenarioId: "B001",
-      batchId: "batch-test",
-      connectorName: "discord",
-    });
+    expect(userMessage.metadata?.scenarioId).toBeUndefined();
+    expect(userMessage.metadata?.batchId).toBeUndefined();
+    expect(userMessage.metadata?.connectorName).toBeUndefined();
 
     expect(messageToStore.content.metadata).toMatchObject(metadata);
-    expect(messageToStore.metadata).toMatchObject({
-      scenarioId: "B001",
-      batchId: "batch-test",
-      connectorName: "discord",
-    });
+    expect(messageToStore.metadata?.scenarioId).toBeUndefined();
+    expect(messageToStore.metadata?.batchId).toBeUndefined();
+    expect(messageToStore.metadata?.connectorName).toBeUndefined();
   });
 });

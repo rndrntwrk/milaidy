@@ -162,7 +162,7 @@ describe("POST /api/provider/switch", () => {
     it("persists an explicit primaryModel override for the active provider", async () => {
       const { status } = await req(port, "POST", "/api/provider/switch", {
         provider: "openrouter",
-        primaryModel: "openai/gpt-5.2",
+        primaryModel: "openai/gpt-5.4",
       });
       expect(status).toBe(200);
 
@@ -170,10 +170,10 @@ describe("POST /api/provider/switch", () => {
       expectCanonicalProviderSelection(
         configRes.data,
         "openrouter",
-        "openai/gpt-5.2",
+        "openai/gpt-5.4",
       );
       expect(configRes.data.agents.defaults.model.primary).toBe(
-        "openai/gpt-5.2",
+        "openai/gpt-5.4",
       );
     });
 

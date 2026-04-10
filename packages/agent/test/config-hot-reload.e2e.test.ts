@@ -114,7 +114,7 @@ describe("config updates", () => {
         llmText: {
           backend: "openrouter",
           transport: "direct",
-          primaryModel: "openai/gpt-5-mini",
+          primaryModel: "openai/gpt-5.4-mini",
         },
       },
     });
@@ -124,7 +124,7 @@ describe("config updates", () => {
     expect(data.serviceRouting?.llmText).toEqual({
       backend: "openrouter",
       transport: "direct",
-      primaryModel: "openai/gpt-5-mini",
+      primaryModel: "openai/gpt-5.4-mini",
     });
     expect(data.connection).toBeUndefined();
   });
@@ -146,8 +146,8 @@ describe("config updates", () => {
           backend: "elizacloud",
           transport: "cloud-proxy",
           accountId: "elizacloud",
-          smallModel: "openai/gpt-5-mini",
-          largeModel: "anthropic/claude-sonnet-4.5",
+          smallModel: "openai/gpt-5.4-mini",
+          largeModel: "anthropic/claude-sonnet-4.6",
         },
       },
     });
@@ -162,8 +162,8 @@ describe("config updates", () => {
       backend: "elizacloud",
       transport: "cloud-proxy",
       accountId: "elizacloud",
-      smallModel: "openai/gpt-5-mini",
-      largeModel: "anthropic/claude-sonnet-4.5",
+      smallModel: "openai/gpt-5.4-mini",
+      largeModel: "anthropic/claude-sonnet-4.6",
     });
     expect(data.connection).toBeUndefined();
   });

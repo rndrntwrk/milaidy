@@ -11,9 +11,9 @@ import os from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { logger, type Plugin } from "@elizaos/core";
+import { generateWalletKeys } from "@miladyai/agent/api/wallet";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { describeIf } from "../../../../test/helpers/conditional-tests.ts";
-import { generateWalletKeys } from "@miladyai/agent/api/wallet";
 
 // Mock all static plugin star-imports in eliza.ts to avoid ESM resolution
 // failures from heavy transitive dependencies at static-analysis time.
@@ -1243,16 +1243,16 @@ describe("applyCloudConfigToEnv", () => {
           backend: "elizacloud",
           transport: "cloud-proxy",
           accountId: "elizacloud",
-          smallModel: "openai/gpt-5-mini",
-          largeModel: "anthropic/claude-sonnet-4.5",
+          smallModel: "openai/gpt-5.4-mini",
+          largeModel: "anthropic/claude-sonnet-4.6",
         },
       },
       cloud: {
         apiKey: "ck-123",
       },
       models: {
-        small: "openai/gpt-5-mini",
-        large: "anthropic/claude-sonnet-4.5",
+        small: "openai/gpt-5.4-mini",
+        large: "anthropic/claude-sonnet-4.6",
       },
     } as ElizaConfig;
 
@@ -2022,11 +2022,11 @@ describe("resolvePreferredProviderId", () => {
         llmText: {
           backend: "openrouter",
           transport: "direct",
-          primaryModel: "openai/gpt-5.2",
+          primaryModel: "openai/gpt-5.4",
         },
       },
       agents: {
-        defaults: { model: { primary: "anthropic/claude-sonnet-4.5" } },
+        defaults: { model: { primary: "anthropic/claude-sonnet-4.6" } },
       },
     } as Partial<ElizaConfig> as ElizaConfig;
 
@@ -2038,7 +2038,7 @@ describe("resolvePreferredProviderId", () => {
 
   it("derives the provider from explicit model selections when no canonical route is stored", () => {
     const config = {
-      agents: { defaults: { model: { primary: "openai/gpt-5.2" } } },
+      agents: { defaults: { model: { primary: "openai/gpt-5.4" } } },
     } as Partial<ElizaConfig> as ElizaConfig;
 
     expect(resolvePreferredProviderId(config)).toBe("openai");
@@ -2079,7 +2079,7 @@ describe("resolvePreferredProviderId", () => {
           backend: "openrouter",
           transport: "remote",
           remoteApiBase: "https://remote.example/api",
-          primaryModel: "openai/gpt-5.2",
+          primaryModel: "openai/gpt-5.4",
         },
       },
     } as Partial<ElizaConfig> as ElizaConfig;
@@ -3329,12 +3329,26 @@ describe("cleanStalePglitePid", () => {
 
 describe("getPgliteRecoveryAction", () => {
   let tmpDir: string;
+  const originalMiladyAutoReset = process.env.MILADY_PGLITE_AUTO_RESET;
+  const originalElizaAutoReset = process.env.ELIZA_PGLITE_AUTO_RESET;
 
   beforeEach(async () => {
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "pglite-recovery-test-"));
+    delete process.env.MILADY_PGLITE_AUTO_RESET;
+    delete process.env.ELIZA_PGLITE_AUTO_RESET;
   });
 
   afterEach(async () => {
+    if (originalMiladyAutoReset === undefined) {
+      delete process.env.MILADY_PGLITE_AUTO_RESET;
+    } else {
+      process.env.MILADY_PGLITE_AUTO_RESET = originalMiladyAutoReset;
+    }
+    if (originalElizaAutoReset === undefined) {
+      delete process.env.ELIZA_PGLITE_AUTO_RESET;
+    } else {
+      process.env.ELIZA_PGLITE_AUTO_RESET = originalElizaAutoReset;
+    }
     await fs.rm(tmpDir, { recursive: true, force: true });
   });
 
@@ -3393,9 +3407,20 @@ describe("getPgliteRecoveryAction", () => {
     }
   });
 
-  it("still resets for corruption errors even when a pid file exists", async () => {
+  it("preserves the data dir for corruption errors by default", async () => {
     const pidPath = path.join(tmpDir, "postmaster.pid");
     await fs.writeFile(pidPath, `${process.pid}\n/tmp/pglite\n5432\n`);
+
+    const action = getPgliteRecoveryAction(
+      new Error("PGlite adapter crashed: database disk image is malformed"),
+      tmpDir,
+    );
+
+    expect(action).toBe("none");
+  });
+
+  it("allows destructive reset only with explicit opt-in", async () => {
+    process.env.MILADY_PGLITE_AUTO_RESET = "true";
 
     const action = getPgliteRecoveryAction(
       new Error("PGlite adapter crashed: database disk image is malformed"),

@@ -17,7 +17,7 @@ import {
   type State,
   type UUID,
 } from "@elizaos/core";
-import type { RoleName, RolesWorldMetadata } from "./types";
+import type { RoleName } from "./types";
 import {
   canModifyRole,
   getLiveEntityMetadataFromMessage,
@@ -25,6 +25,7 @@ import {
   resolveCanonicalOwnerId,
   resolveEntityRole,
   resolveWorldForMessage,
+  setEntityRole,
 } from "./utils";
 
 /** Maximum length for message text we'll attempt to parse. */
@@ -290,13 +291,8 @@ export const updateRoleAction: Action = {
       return { success: false };
     }
 
-    // Apply the role change
-    if (!metadata.roles) metadata.roles = {};
-    metadata.roles[targetEntityId] = newRole;
-    (world as { metadata: RolesWorldMetadata }).metadata = metadata;
-    await runtime.updateWorld(
-      world as Parameters<IAgentRuntime["updateWorld"]>[0],
-    );
+    // Apply the role change via the shared helper so roleSources stays in sync.
+    await setEntityRole(runtime, message, targetEntityId, newRole);
 
     logger.info(
       `[roles] ${message.entityId} set ${targetEntityId} (${targetName}) to ${newRole}`,

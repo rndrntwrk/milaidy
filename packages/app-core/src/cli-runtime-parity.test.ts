@@ -410,14 +410,8 @@ describe("config path consistency across modes", () => {
 
     // Normalize for cross-platform: backslashes → slashes, strip Windows drive prefix
     const norm = (p: string) => p.replace(/\\/g, "/").replace(/^[A-Z]:/i, "");
-    // The upstream autonomous package uses ".eliza" / "eliza.json" naming.
-    // When the local eliza workspace is present (vitest alias), we get the
-    // upstream names; when running against the npm-published eliza fork we
-    // get ".eliza" / "eliza.json".  Accept either.
-    expect(norm(configPath)).toMatch(
-      /^\/mock\/home\/\.(eliza|eliza)\/(eliza|eliza)\.json$/,
-    );
-    expect(norm(stateDir)).toMatch(/^\/mock\/home\/\.(eliza|eliza)$/);
+    expect(norm(configPath)).toBe("/mock/home/.milady/milady.json");
+    expect(norm(stateDir)).toBe("/mock/home/.milady");
   });
 
   it("state dir override env var is respected consistently", async () => {
@@ -425,9 +419,6 @@ describe("config path consistency across modes", () => {
       "@miladyai/agent/config/paths"
     );
 
-    // The upstream autonomous package checks ELIZA_STATE_DIR; the eliza
-    // fork checks ELIZA_STATE_DIR.  Set both so the test passes regardless
-    // of which source is resolved.
     const env = {
       ELIZA_STATE_DIR: "/custom/state",
     } as NodeJS.ProcessEnv;
@@ -438,7 +429,7 @@ describe("config path consistency across modes", () => {
     // Normalize for cross-platform: backslashes → slashes, strip Windows drive prefix
     const norm = (p: string) => p.replace(/\\/g, "/").replace(/^[A-Z]:/i, "");
     expect(norm(stateDir)).toBe("/custom/state");
-    expect(norm(configPath)).toMatch(/^\/custom\/state\/(eliza|eliza)\.json$/);
+    expect(norm(configPath)).toBe("/custom/state/milady.json");
   });
 });
 

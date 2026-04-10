@@ -41,6 +41,7 @@ function mockRuntime(opts: {
   relationships?: Relationship[];
   settings?: Record<string, string | boolean | number | null>;
 }): IAgentRuntime {
+  const settingsStore = { ...(opts.settings ?? {}) };
   return {
     getRoom: vi.fn().mockResolvedValue(opts.room ?? null),
     getWorld: vi.fn().mockResolvedValue(opts.world ?? null),
@@ -56,7 +57,14 @@ function mockRuntime(opts: {
     }),
     getRelationships: vi.fn().mockResolvedValue(opts.relationships ?? []),
     getSetting: vi.fn().mockImplementation((key: string) => {
-      return opts.settings?.[key] ?? null;
+      return settingsStore[key] ?? null;
+    }),
+    setSetting: vi.fn().mockImplementation((key: string, value: unknown) => {
+      if (value === null || value === undefined) {
+        delete settingsStore[key];
+        return;
+      }
+      settingsStore[key] = value as string | boolean | number | null;
     }),
   } as unknown as IAgentRuntime;
 }
@@ -204,6 +212,7 @@ describe("matchEntityToConnectorAdminWhitelist", () => {
       ),
     ).toEqual({
       connector: "discord",
+      matchedField: "userId",
       matchedValue: "123456789",
     });
   });
@@ -391,7 +400,7 @@ describe("resolveEntityRole", () => {
     expect(updateWorld).not.toHaveBeenCalled();
   });
 
-  it("caches connector-admin matches after the first lookup", async () => {
+  it("revalidates connector-admin matches against entity metadata on each lookup", async () => {
     const runtime = mockRuntime({
       room: { worldId: "w1" },
       world: { id: "w1", metadata: { roles: {} } },
@@ -416,7 +425,73 @@ describe("resolveEntityRole", () => {
       "speaker",
     );
 
-    expect(runtime.getEntityById).toHaveBeenCalledTimes(1);
+    expect(runtime.getEntityById).toHaveBeenCalledTimes(2);
+  });
+
+  it("drops username-only whitelist matches after the username changes", async () => {
+    const runtime = mockRuntime({
+      room: { worldId: "w1" },
+      world: { id: "w1", metadata: { roles: {} } },
+      entities: {
+        speaker: {
+          metadata: { telegram: { username: "tg_alice" } },
+        },
+      },
+    });
+    setConnectorAdminWhitelist(runtime, { telegram: ["tg_alice"] });
+
+    await expect(
+      resolveEntityRole(
+        runtime,
+        { id: "w1", metadata: { roles: {} } },
+        { roles: {} },
+        "speaker",
+      ),
+    ).resolves.toBe("ADMIN");
+
+    runtime.getEntityById = vi.fn().mockResolvedValue({
+      id: "speaker",
+      metadata: { telegram: { username: "tg_bob" } },
+    }) as unknown as IAgentRuntime["getEntityById"];
+
+    await expect(
+      resolveEntityRole(
+        runtime,
+        { id: "w1", metadata: { roles: {} } },
+        { roles: {} },
+        "speaker",
+      ),
+    ).resolves.toBe("GUEST");
+  });
+
+  it("does not honor stale connector_admin grants after whitelist removal", async () => {
+    const world = {
+      id: "w1",
+      metadata: {
+        roles: { helper: "ADMIN" },
+        roleSources: { helper: "connector_admin" },
+      } as RolesWorldMetadata,
+    };
+    const runtime = mockRuntime({
+      room: { worldId: "w1" },
+      world,
+      entities: {
+        helper: {
+          metadata: { discord: { userId: "discord-admin-1" } },
+        },
+      },
+    });
+    setConnectorAdminWhitelist(runtime, { discord: ["discord-admin-1"] });
+
+    await expect(
+      resolveEntityRole(runtime, world, world.metadata, "helper"),
+    ).resolves.toBe("ADMIN");
+
+    setConnectorAdminWhitelist(runtime, undefined);
+
+    await expect(
+      resolveEntityRole(runtime, world, world.metadata, "helper"),
+    ).resolves.toBe("GUEST");
   });
 });
 
@@ -452,7 +527,7 @@ describe("resolveEntityRole", () => {
 });
 
 describe("getLiveEntityMetadataFromMessage", () => {
-  it("extracts bridge sender metadata from message metadata", () => {
+  it("ignores bridge sender metadata embedded in content metadata", () => {
     expect(
       getLiveEntityMetadataFromMessage(
         msg("speaker", "room-1", {
@@ -464,9 +539,7 @@ describe("getLiveEntityMetadataFromMessage", () => {
           },
         }),
       ),
-    ).toEqual({
-      discord: { userId: "discord-user-1", username: "owner" },
-    });
+    ).toBeUndefined();
   });
 
   it("returns undefined when bridge sender metadata is absent", () => {
@@ -635,12 +708,10 @@ describe("checkSenderRole", () => {
     expect(
       await checkSenderRole(
         runtime,
-        msg("unknown", "room-1", {
-          bridgeSender: {
-            metadata: {
-              discord: { userId: "discord-admin-2", username: "owner" },
-            },
-          },
+        msg("unknown", "room-1", undefined, {
+          fromId: "discord-admin-2",
+          discordServerId: "guild-1",
+          entityName: "owner",
         }),
       ),
     ).toEqual({
@@ -923,7 +994,13 @@ describe("checkSenderPrivateAccess", () => {
           roleSources: { helper: "connector_admin" },
         },
       },
+      entities: {
+        helper: {
+          metadata: { discord: { userId: "discord-helper-1" } },
+        },
+      },
     });
+    setConnectorAdminWhitelist(runtime, { discord: ["discord-helper-1"] });
 
     await expect(checkSenderPrivateAccess(runtime, msg("helper"))).resolves.toEqual({
       entityId: "helper",

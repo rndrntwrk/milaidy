@@ -88,7 +88,7 @@ describe("PUT /api/config canonical provider routing", () => {
         connection: {
           kind: "cloud-managed",
           cloudProvider: "elizacloud",
-          smallModel: "openai/gpt-5-mini",
+          smallModel: "openai/gpt-5.4-mini",
           largeModel: "moonshotai/kimi-k2-0905",
         },
         deploymentTarget: {
@@ -106,7 +106,7 @@ describe("PUT /api/config canonical provider routing", () => {
             backend: "elizacloud",
             transport: "cloud-proxy",
             accountId: "elizacloud",
-            smallModel: "openai/gpt-5-mini",
+            smallModel: "openai/gpt-5.4-mini",
             largeModel: "moonshotai/kimi-k2-0905",
           },
         },
@@ -129,7 +129,7 @@ describe("PUT /api/config canonical provider routing", () => {
             llmText: {
               backend: "openrouter",
               transport: "direct",
-              primaryModel: "openai/gpt-5-mini",
+              primaryModel: "openai/gpt-5.4-mini",
             },
           },
         },
@@ -158,7 +158,7 @@ describe("PUT /api/config canonical provider routing", () => {
       ).toEqual({
         backend: "openrouter",
         transport: "direct",
-        primaryModel: "openai/gpt-5-mini",
+        primaryModel: "openai/gpt-5.4-mini",
       });
       expect(config.connection).toBeUndefined();
     } finally {
@@ -194,7 +194,7 @@ describe("PUT /api/config canonical provider routing", () => {
           connection: {
             kind: "cloud-managed",
             cloudProvider: "elizacloud",
-            smallModel: "openai/gpt-5-mini",
+            smallModel: "openai/gpt-5.4-mini",
             largeModel: "moonshotai/kimi-k2-0905",
           },
           deploymentTarget: {
@@ -205,7 +205,7 @@ describe("PUT /api/config canonical provider routing", () => {
             llmText: {
               backend: "openrouter",
               transport: "direct",
-              primaryModel: "openai/gpt-5-mini",
+              primaryModel: "openai/gpt-5.4-mini",
             },
           },
         },

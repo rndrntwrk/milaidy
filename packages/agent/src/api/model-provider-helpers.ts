@@ -30,10 +30,16 @@ export function getModelOptions(): {
     small: [
       // OpenAI
       {
-        id: "openai/gpt-5-mini",
-        name: "GPT-5 Mini",
+        id: "openai/gpt-5.4-mini",
+        name: "GPT-5.4 Mini",
         provider: "OpenAI",
-        description: "Fast and affordable.",
+        description: "Latest high-volume OpenAI mini model.",
+      },
+      {
+        id: "openai/gpt-5.4-nano",
+        name: "GPT-5.4 Nano",
+        provider: "OpenAI",
+        description: "Cheapest GPT-5.4 tier.",
       },
       {
         id: "openai/gpt-4o-mini",
@@ -43,10 +49,10 @@ export function getModelOptions(): {
       },
       // Anthropic
       {
-        id: "anthropic/claude-sonnet-4",
-        name: "Claude Sonnet 4",
+        id: "anthropic/claude-haiku-4.5",
+        name: "Claude Haiku 4.5",
         provider: "Anthropic",
-        description: "Balanced speed and capability.",
+        description: "Fast Claude model.",
       },
       // Google
       {
@@ -81,39 +87,52 @@ export function getModelOptions(): {
         provider: "DeepSeek",
         description: "Open and powerful.",
       },
+      // Z.AI
+      {
+        id: "zai/glm-5.1",
+        name: "GLM 5.1",
+        provider: "Z.AI",
+        description: "Latest GLM reasoning model.",
+      },
     ],
     large: [
       // Anthropic
       {
-        id: "anthropic/claude-sonnet-4.5",
-        name: "Claude Sonnet 4.5",
+        id: "anthropic/claude-sonnet-4.6",
+        name: "Claude Sonnet 4.6",
         provider: "Anthropic",
         description: "Newest Claude. Excellent reasoning.",
+      },
+      {
+        id: "anthropic/claude-opus-4.6",
+        name: "Claude Opus 4.6",
+        provider: "Anthropic",
+        description: "Most capable Claude model.",
       },
       {
         id: "anthropic/claude-opus-4.5",
         name: "Claude Opus 4.5",
         provider: "Anthropic",
-        description: "Most capable Claude model.",
+        description: "Previous-generation flagship Claude.",
       },
       {
-        id: "anthropic/claude-opus-4.1",
-        name: "Claude Opus 4.1",
+        id: "anthropic/claude-sonnet-4.5",
+        name: "Claude Sonnet 4.5",
         provider: "Anthropic",
-        description: "Deep reasoning powerhouse.",
-      },
-      {
-        id: "anthropic/claude-sonnet-4",
-        name: "Claude Sonnet 4",
-        provider: "Anthropic",
-        description: "Balanced performance.",
+        description: "Previous-generation balanced Claude.",
       },
       // OpenAI
       {
-        id: "openai/gpt-5",
-        name: "GPT-5",
+        id: "openai/gpt-5.4",
+        name: "GPT-5.4",
         provider: "OpenAI",
-        description: "Most capable OpenAI model.",
+        description: "Flagship OpenAI model for coding and reasoning.",
+      },
+      {
+        id: "openai/gpt-5.4-pro",
+        name: "GPT-5.4 Pro",
+        provider: "OpenAI",
+        description: "Highest-precision GPT-5.4 variant.",
       },
       {
         id: "openai/gpt-4o",
@@ -147,6 +166,13 @@ export function getModelOptions(): {
         name: "DeepSeek R1",
         provider: "DeepSeek",
         description: "Reasoning model.",
+      },
+      // Z.AI
+      {
+        id: "zai/glm-5.1",
+        name: "GLM 5.1",
+        provider: "Z.AI",
+        description: "Latest GLM model for reasoning and coding.",
       },
     ],
   };
@@ -681,4 +707,3 @@ export function getInventoryProviderOptions(): Array<{
     },
   ];
 }
-

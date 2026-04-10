@@ -438,4 +438,30 @@ describe("buildUserMessages", () => {
     expect(att.title).toBe("photo.png");
     expect(att).not.toHaveProperty("_data");
   });
+
+  it("keeps caller metadata in content.metadata only", () => {
+    const metadata = {
+      discord: { userId: "spoofed-admin" },
+      bridgeSender: {
+        metadata: {
+          discord: { userId: "spoofed-admin" },
+        },
+      },
+      eval: { scenarioId: "scenario-1" },
+    };
+
+    const { userMessage, messageToStore } = buildUserMessages({
+      ...baseParams,
+      images: undefined,
+      metadata,
+      messageSource: "discord",
+    });
+
+    expect(userMessage.content.metadata).toEqual(metadata);
+    expect(messageToStore.content.metadata).toEqual(metadata);
+    expect(userMessage.metadata).not.toHaveProperty("discord");
+    expect(userMessage.metadata).not.toHaveProperty("bridgeSender");
+    expect(messageToStore.metadata).not.toHaveProperty("discord");
+    expect(messageToStore.metadata).not.toHaveProperty("bridgeSender");
+  });
 });

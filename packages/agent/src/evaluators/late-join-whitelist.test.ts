@@ -1,13 +1,23 @@
 import type { Memory, State, UUID } from "@elizaos/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { mockResolveWorldForMessage, mockSetEntityRole } =
+const {
+  mockGetConnectorAdminWhitelist,
+  mockMatchEntityToConnectorAdminWhitelist,
+  mockResolveWorldForMessage,
+  mockSetEntityRole,
+} =
   vi.hoisted(() => ({
+    mockGetConnectorAdminWhitelist: vi.fn(),
+    mockMatchEntityToConnectorAdminWhitelist: vi.fn(),
     mockResolveWorldForMessage: vi.fn(),
     mockSetEntityRole: vi.fn(),
   }));
 
 vi.mock("@elizaos/core/roles", () => ({
+  getConnectorAdminWhitelist: mockGetConnectorAdminWhitelist,
+  matchEntityToConnectorAdminWhitelist:
+    mockMatchEntityToConnectorAdminWhitelist,
   resolveWorldForMessage: mockResolveWorldForMessage,
   setEntityRole: mockSetEntityRole,
 }));
@@ -48,6 +58,8 @@ const WORLD_METADATA = { roles: {} };
 describe("lateJoinWhitelistEvaluator", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetConnectorAdminWhitelist.mockReturnValue({});
+    mockMatchEntityToConnectorAdminWhitelist.mockReturnValue(null);
     mockResolveWorldForMessage.mockResolvedValue({
       world: { id: WORLD_ID, metadata: WORLD_METADATA },
       metadata: WORLD_METADATA,
@@ -116,6 +128,10 @@ describe("lateJoinWhitelistEvaluator", () => {
           },
         },
       });
+      mockMatchEntityToConnectorAdminWhitelist.mockReturnValue({
+        connector: "discord",
+        matchedValue: "discord-user-123",
+      });
 
       const runtime = makeRuntime({
         getEntityById: vi.fn().mockResolvedValue({
@@ -148,6 +164,10 @@ describe("lateJoinWhitelistEvaluator", () => {
             telegram: ["tg_alice"],
           },
         },
+      });
+      mockMatchEntityToConnectorAdminWhitelist.mockReturnValue({
+        connector: "telegram",
+        matchedValue: "tg_alice",
       });
 
       const runtime = makeRuntime({
@@ -191,6 +211,7 @@ describe("lateJoinWhitelistEvaluator", () => {
           },
         }),
       });
+      mockMatchEntityToConnectorAdminWhitelist.mockReturnValue(null);
 
       await lateJoinWhitelistEvaluator.handler(
         runtime,
@@ -226,6 +247,10 @@ describe("lateJoinWhitelistEvaluator", () => {
           connectorAdmins: { discord: ["anyone"] },
         },
       });
+      mockMatchEntityToConnectorAdminWhitelist.mockReturnValue({
+        connector: "discord",
+        matchedValue: "anyone",
+      });
 
       const runtime = makeRuntime({
         getEntityById: vi.fn().mockResolvedValue(null),
@@ -244,6 +269,10 @@ describe("lateJoinWhitelistEvaluator", () => {
       mockLoadElizaConfig.mockImplementation(() => {
         throw new Error("config not found");
       });
+      mockMatchEntityToConnectorAdminWhitelist.mockReturnValue({
+        connector: "discord",
+        matchedValue: "discord-user-123",
+      });
 
       const runtime = makeRuntime({
         getEntityById: vi.fn().mockResolvedValue({
@@ -260,6 +289,40 @@ describe("lateJoinWhitelistEvaluator", () => {
       );
 
       expect(mockSetEntityRole).not.toHaveBeenCalled();
+    });
+
+    it("prefers the runtime whitelist when plugin init already populated it", async () => {
+      mockGetConnectorAdminWhitelist.mockReturnValue({
+        discord: ["discord-user-123"],
+      });
+      mockMatchEntityToConnectorAdminWhitelist.mockReturnValue({
+        connector: "discord",
+        matchedValue: "discord-user-123",
+      });
+
+      const runtime = makeRuntime({
+        getEntityById: vi.fn().mockResolvedValue({
+          id: ENTITY_ID,
+          metadata: {
+            discord: { userId: "discord-user-123" },
+          },
+        }),
+      });
+
+      await lateJoinWhitelistEvaluator.handler(
+        runtime,
+        makeMessage(),
+        {} as State,
+      );
+
+      expect(mockLoadElizaConfig).not.toHaveBeenCalled();
+      expect(mockSetEntityRole).toHaveBeenCalledWith(
+        runtime,
+        expect.objectContaining({ entityId: ENTITY_ID }),
+        ENTITY_ID,
+        "ADMIN",
+        "connector_admin",
+      );
     });
   });
 });

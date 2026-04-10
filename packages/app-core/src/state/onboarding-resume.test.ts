@@ -113,8 +113,8 @@ describe("deriveOnboardingResumeFieldsFromConfig", () => {
           llmText: {
             backend: "elizacloud",
             transport: "cloud-proxy",
-            smallModel: "openai/gpt-5-mini",
-            largeModel: "anthropic/claude-sonnet-4.5",
+            smallModel: "openai/gpt-5.4-mini",
+            largeModel: "anthropic/claude-sonnet-4.6",
           },
         },
         cloud: {
@@ -133,8 +133,8 @@ describe("deriveOnboardingResumeFieldsFromConfig", () => {
       onboardingRemoteConnected: false,
       onboardingRemoteApiBase: "",
       onboardingRemoteToken: "",
-      onboardingSmallModel: "openai/gpt-5-mini",
-      onboardingLargeModel: "anthropic/claude-sonnet-4.5",
+      onboardingSmallModel: "openai/gpt-5.4-mini",
+      onboardingLargeModel: "anthropic/claude-sonnet-4.6",
     });
   });
 
@@ -149,7 +149,7 @@ describe("deriveOnboardingResumeFieldsFromConfig", () => {
           llmText: {
             backend: "openrouter",
             transport: "direct",
-            primaryModel: "openai/gpt-5-mini",
+            primaryModel: "openai/gpt-5.4-mini",
           },
         },
         env: {
@@ -166,7 +166,7 @@ describe("deriveOnboardingResumeFieldsFromConfig", () => {
       onboardingVoiceProvider: "",
       onboardingVoiceApiKey: "",
       onboardingPrimaryModel: "",
-      onboardingOpenRouterModel: "openai/gpt-5-mini",
+      onboardingOpenRouterModel: "openai/gpt-5.4-mini",
       onboardingRemoteConnected: false,
       onboardingRemoteApiBase: "",
       onboardingRemoteToken: "",

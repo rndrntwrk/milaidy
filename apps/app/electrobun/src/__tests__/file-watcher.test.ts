@@ -11,9 +11,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // Mocks
 // ---------------------------------------------------------------------------
 
-const mockWatcher = {
-  close: vi.fn(),
-};
+const { mockWatcher } = vi.hoisted(() => ({
+  mockWatcher: {
+    close: vi.fn(),
+  },
+}));
 
 vi.mock("node:fs", () => ({
   default: {

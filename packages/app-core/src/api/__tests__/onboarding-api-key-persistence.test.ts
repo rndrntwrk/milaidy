@@ -118,7 +118,7 @@ describe("extractAndPersistOnboardingApiKey", () => {
         llmText: {
           backend: "openai",
           transport: "direct",
-          primaryModel: "openai/gpt-5.2",
+          primaryModel: "openai/gpt-5.4",
         },
       },
       credentialInputs: {
@@ -141,7 +141,7 @@ describe("extractAndPersistOnboardingApiKey", () => {
       llmText: {
         backend: "openai",
         transport: "direct",
-        primaryModel: "openai/gpt-5.2",
+        primaryModel: "openai/gpt-5.4",
       },
     });
   });

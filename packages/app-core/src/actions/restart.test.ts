@@ -22,6 +22,9 @@ function mockMessage() {
   return {
     roomId: "room-test-id",
     worldId: "world-test-id",
+    content: {
+      text: "please restart the agent",
+    },
   } as Parameters<typeof restartAction.handler>[1];
 }
 

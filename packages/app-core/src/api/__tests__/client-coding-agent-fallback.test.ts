@@ -228,7 +228,7 @@ describe("mapTaskThreadsToCodingAgentSessions", () => {
       expect.objectContaining({
         sessionId: "session-1",
         label: "Fix coordinator persistence",
-        status: "blocked",
+        status: "stopped",
         lastActivity: "Interrupted - reopen or resume this task",
         workdir: "/tmp/work",
       }),

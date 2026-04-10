@@ -242,8 +242,8 @@ describe("Cloud config → env var propagation", () => {
       cloud: { enabled: true, apiKey: "ck-x" },
     } as ElizaConfig;
     applyCloudConfigToEnv(config);
-    expect(process.env.SMALL_MODEL).toBe("openai/gpt-5-mini");
-    expect(process.env.LARGE_MODEL).toBe("anthropic/claude-sonnet-4.5");
+    expect(process.env.SMALL_MODEL).toBe("openai/gpt-5.4-mini");
+    expect(process.env.LARGE_MODEL).toBe("anthropic/claude-sonnet-4.6");
   });
 
   it("uses explicit model names from config", () => {
@@ -811,7 +811,7 @@ function resolveLiveOpenAiModelId(): string {
     process.env.OPENAI_SMALL_MODEL?.trim() ||
     process.env.SMALL_MODEL?.trim() ||
     liveConfig.models?.small?.trim() ||
-    "openai/gpt-5-mini";
+    "openai/gpt-5.4-mini";
   return configured.startsWith("openai/")
     ? configured.slice("openai/".length)
     : configured;
@@ -879,7 +879,7 @@ describeIf(isLive)("Live model calls (requires real API keys)", () => {
       });
       try {
         const result = await generateText({
-          model: openai.chat("openai/gpt-5-mini"),
+          model: openai.chat("openai/gpt-5.4-mini"),
           prompt: "Reply with exactly: CLOUD_TEST_OK",
           maxTokens: 20,
         });

@@ -1422,51 +1422,39 @@ export function buildUserMessages(params: {
   const source = messageSource?.trim() || "client_chat";
   const { attachments, compactAttachments } = buildChatAttachments(images);
   const id = crypto.randomUUID() as UUID;
-  const mergeMessageMetadata = (message: MessageMemory): MessageMemory =>
-    metadata
-      ? ({
-          ...message,
-          metadata: {
-            ...message.metadata,
-            ...metadata,
-          },
-        } as MessageMemory)
-      : message;
+  // Keep caller metadata inside content.metadata only. Top-level Memory.metadata
+  // is treated as trusted transport/runtime context in a few paths.
   // In-memory message carries _data/_mimeType so action handlers can upload.
-  const userMessage = mergeMessageMetadata(
-    createMessageMemory({
-      id,
-      entityId: userId,
-      agentId,
-      roomId,
-      content: {
-        text: prompt,
-        source,
-        channelType,
-        ...(conversationMode ? { conversationMode } : {}),
-        ...(attachments?.length ? { attachments } : {}),
-        ...(metadata ? { metadata } : {}),
-      } as Content & { text: string },
-    }),
-  );
+  const userMessage = createMessageMemory({
+    id,
+    entityId: userId,
+    agentId,
+    roomId,
+    content: {
+      text: prompt,
+      source,
+      channelType,
+      ...(conversationMode ? { conversationMode } : {}),
+      ...(attachments?.length ? { attachments } : {}),
+      ...(metadata ? { metadata } : {}),
+    } as Content & { text: string },
+  });
   // Persisted message: compact placeholder URL, no raw bytes in DB.
   const messageToStore = compactAttachments?.length
-    ? mergeMessageMetadata(
-        createMessageMemory({
-          id,
-          entityId: userId,
-          agentId,
-          roomId,
-          content: {
-            text: prompt,
-            source,
-            channelType,
-            ...(conversationMode ? { conversationMode } : {}),
-            attachments: compactAttachments,
-            ...(metadata ? { metadata } : {}),
-          } as Content & { text: string },
-        }),
-      )
+    ? createMessageMemory({
+        id,
+        entityId: userId,
+        agentId,
+        roomId,
+        content: {
+          text: prompt,
+          source,
+          channelType,
+          ...(conversationMode ? { conversationMode } : {}),
+          attachments: compactAttachments,
+          ...(metadata ? { metadata } : {}),
+        } as Content & { text: string },
+      })
     : userMessage;
   return { userMessage, messageToStore };
 }
@@ -3850,20 +3838,25 @@ function wireCodingAgentBridgesNow(st: ServerState): void {
  */
 function wireCodingAgentChatBridge(st: ServerState): boolean {
   if (!st.runtime) return false;
-  // The coordinator's chat callback sends "done — <originalTask>" messages
-  // that echo the user's input instead of the subagent's actual output.
-  // The direct callback path in registerSessionEvents (coding-task-helpers)
-  // handles task completion replies with real subagent responses, and the
-  // task-progress-streamer + jsonl watcher post the clean final text.
-  // Wiring the coordinator's chat bridge on top of that causes duplicate
-  // and incorrect messages in discord. Install a no-op callback so the
-  // upstream wiring check (which requires result.chat to be truthy)
-  // considers wiring complete and doesn't spam "Coordinator wiring
-  // incomplete" warnings.
   const coordinator = getCoordinatorFromRuntime(st.runtime);
   if (!coordinator?.setChatCallback) return false;
-  coordinator.setChatCallback(async (_text: string, _source?: string) => {
-    // Deliberately no-op — chat delivery happens elsewhere.
+  const hasPtyService = Boolean(st.runtime.getService("PTY_SERVICE"));
+  if (hasPtyService) {
+    // In the real task-agent stack the PTY progress streamer + jsonl watcher
+    // already deliver the useful user-facing updates. Leaving the coordinator
+    // callback live on top of that causes duplicate "done — <originalTask>"
+    // messages that just echo the user's prompt.
+    coordinator.setChatCallback(async (_text: string, _source?: string) => {
+      // Deliberately no-op — chat delivery happens elsewhere.
+    });
+    return true;
+  }
+
+  // Minimal runtimes used by tests and lightweight embeddings do not install
+  // the PTY progress bridge, so the coordinator callback is the only path
+  // that can surface coding-agent updates back into chat.
+  coordinator.setChatCallback(async (text: string, source?: string) => {
+    await routeAutonomyTextToUser(st, text, source ?? "coding-agent");
   });
   return true;
 }

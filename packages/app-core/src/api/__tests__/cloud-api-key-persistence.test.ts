@@ -131,7 +131,7 @@ describe("cloud API key persistence through onboarding", () => {
             backend: "elizacloud",
             transport: "cloud-proxy",
             accountId: "elizacloud",
-            smallModel: "openai/gpt-5-mini",
+            smallModel: "openai/gpt-5.4-mini",
             largeModel: "moonshotai/kimi-k2-0905",
           },
         },
@@ -150,7 +150,7 @@ describe("cloud API key persistence through onboarding", () => {
           transport: "cloud-proxy",
         },
       });
-      expect(saved.models.small).toBe("openai/gpt-5-mini");
+      expect(saved.models.small).toBe("openai/gpt-5.4-mini");
       expect(saved.models.large).toBe("moonshotai/kimi-k2-0905");
     });
   });
@@ -209,7 +209,7 @@ describe("cloud API key persistence through onboarding", () => {
             backend: "elizacloud",
             transport: "cloud-proxy",
             accountId: "elizacloud",
-            smallModel: "openai/gpt-5-mini",
+            smallModel: "openai/gpt-5.4-mini",
             largeModel: "moonshotai/kimi-k2-0905",
           },
         },

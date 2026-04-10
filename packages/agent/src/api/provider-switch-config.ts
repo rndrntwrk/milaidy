@@ -431,9 +431,9 @@ const PROVIDER_DEFAULT_MODELS: Record<
   },
   openai: {
     smallKey: "OPENAI_SMALL_MODEL",
-    smallVal: "gpt-5-mini",
+    smallVal: "gpt-5.4-mini",
     largeKey: "OPENAI_LARGE_MODEL",
-    largeVal: "gpt-5",
+    largeVal: "gpt-5.4",
   },
   google: {
     smallKey: "GOOGLE_SMALL_MODEL",
