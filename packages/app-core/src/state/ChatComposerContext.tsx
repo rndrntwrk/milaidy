@@ -8,14 +8,21 @@
  * composer and its direct consumers re-render.
  */
 
-import { createContext, useContext, type MutableRefObject } from "react";
+import {
+  createContext,
+  type Dispatch,
+  type RefObject,
+  type SetStateAction,
+  useContext,
+} from "react";
+import type { ImageAttachment } from "../api";
 
 export interface ChatComposerValue {
   chatInput: string;
   chatSending: boolean;
-  chatPendingImages: string[];
-  setChatInput: (v: string | ((prev: string) => string)) => void;
-  setChatPendingImages: (v: string[] | ((prev: string[]) => string[])) => void;
+  chatPendingImages: ImageAttachment[];
+  setChatInput: (v: string) => void;
+  setChatPendingImages: Dispatch<SetStateAction<ImageAttachment[]>>;
 }
 
 const DEFAULT_COMPOSER: ChatComposerValue = {
@@ -26,19 +33,20 @@ const DEFAULT_COMPOSER: ChatComposerValue = {
   setChatPendingImages: () => {},
 };
 
-export const ChatComposerCtx = createContext<ChatComposerValue>(DEFAULT_COMPOSER);
+export const ChatComposerCtx =
+  createContext<ChatComposerValue>(DEFAULT_COMPOSER);
 
 /**
- * Stable ref to the chat <textarea> / <input> element, so that
- * helpers like useContextMenu can call .focus() without subscribing
- * to every keystroke re-render.
+ * Stable ref to the current draft text (mirrors chat input state) so helpers
+ * like useContextMenu can append quoted text without subscribing to every
+ * keystroke re-render.
  */
-export const ChatInputRefCtx = createContext<MutableRefObject<HTMLTextAreaElement | null> | null>(null);
+export const ChatInputRefCtx = createContext<RefObject<string> | null>(null);
 
 export function useChatComposer(): ChatComposerValue {
   return useContext(ChatComposerCtx);
 }
 
-export function useChatInputRef(): MutableRefObject<HTMLTextAreaElement | null> | null {
+export function useChatInputRef(): RefObject<string> | null {
   return useContext(ChatInputRefCtx);
 }

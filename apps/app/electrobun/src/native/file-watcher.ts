@@ -21,7 +21,11 @@ import path from "node:path";
 // Types
 // ---------------------------------------------------------------------------
 
-export type FileChangeEventType = "created" | "modified" | "deleted" | "renamed";
+export type FileChangeEventType =
+  | "created"
+  | "modified"
+  | "deleted"
+  | "renamed";
 
 export interface FileChangeEvent {
   watchId: string;

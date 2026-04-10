@@ -1777,7 +1777,9 @@ async function main(): Promise<void> {
     let preload = "";
     try {
       preload = readResolvedPreloadScript(import.meta.dir);
-    } catch { /* non-fatal */ }
+    } catch {
+      /* non-fatal */
+    }
     getFloatingChatManager().configure(url, preload);
   });
 

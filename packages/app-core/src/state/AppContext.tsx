@@ -513,6 +513,7 @@ function AppProviderInner({
     autonomousReplayInFlightRef,
     addUnread,
   } = chatState;
+  const chatComposerTextareaRef = useRef<HTMLTextAreaElement | null>(null);
   // addUnread / removeUnread wrappers for old setUnreadConversations patterns.
   // Read current unreadConversations through a ref so this callback stays
   // stable across renders — otherwise it cascades into handleChatClear /

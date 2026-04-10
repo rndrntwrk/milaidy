@@ -23,8 +23,8 @@ vi.mock("node:fs", () => ({
 }));
 
 import fs from "node:fs";
-import { getFileWatcher } from "../native/file-watcher";
 import type { FileChangeEvent } from "../native/file-watcher";
+import { getFileWatcher } from "../native/file-watcher";
 
 const mockFs = vi.mocked(fs, true);
 
@@ -199,7 +199,7 @@ describe("fileWatcher change event emission", () => {
     null;
 
   it("calls send callback with a FileChangeEvent after debounce", async () => {
-    mockFs.existsSync.mockImplementation((p) => {
+    mockFs.existsSync.mockImplementation((_p) => {
       // Workspace path exists, and the changed file also exists (= modified)
       return true;
     });

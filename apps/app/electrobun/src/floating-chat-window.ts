@@ -65,7 +65,12 @@ class FloatingChatWindowManager {
   private window: FloatingBrowserWindow | null = null;
   private contextId: string | null = null;
   private isVisible = false;
-  private lastBounds: { x: number; y: number; width: number; height: number } | null = null;
+  private lastBounds: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } | null = null;
   private rendererUrl = "";
   private preloadPath = "";
 
@@ -82,7 +87,11 @@ class FloatingChatWindowManager {
    * Opens (or shows) the floating chat window.
    * If a window already exists it is focused; otherwise a new one is created.
    */
-  open(options?: { contextId?: string; x?: number; y?: number }): FloatingChatStatus {
+  open(options?: {
+    contextId?: string;
+    x?: number;
+    y?: number;
+  }): FloatingChatStatus {
     if (options?.contextId) {
       this.contextId = options.contextId;
     }
@@ -93,7 +102,9 @@ class FloatingChatWindowManager {
     }
 
     if (!this.rendererUrl) {
-      throw new Error("FloatingChatWindowManager is not configured — call configure() first");
+      throw new Error(
+        "FloatingChatWindowManager is not configured — call configure() first",
+      );
     }
 
     const pos = this.lastBounds
@@ -135,7 +146,9 @@ class FloatingChatWindowManager {
         const { x: wx, y: wy } = win.getPosition();
         const { width: ww, height: wh } = win.getSize();
         this.lastBounds = { x: wx, y: wy, width: ww, height: wh };
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
       this.window = null;
       this.isVisible = false;
     });
@@ -150,7 +163,9 @@ class FloatingChatWindowManager {
       this.window.show();
       this.window.focus();
       this.isVisible = true;
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   /** Hides the floating chat window without closing it. */
@@ -158,13 +173,18 @@ class FloatingChatWindowManager {
     if (!this.window) return;
     try {
       // Electrobun uses minimize() as a hide fallback when hide() is absent.
-      if (typeof (this.window as unknown as { hide?: () => void }).hide === "function") {
+      if (
+        typeof (this.window as unknown as { hide?: () => void }).hide ===
+        "function"
+      ) {
         (this.window as unknown as { hide: () => void }).hide();
       } else {
         this.window.minimize();
       }
       this.isVisible = false;
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   /** Closes and destroys the floating chat window. */
@@ -175,7 +195,9 @@ class FloatingChatWindowManager {
       const { width, height } = this.window.getSize();
       this.lastBounds = { x, y, width, height };
       this.window.close();
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
     this.window = null;
     this.isVisible = false;
   }
@@ -214,4 +236,3 @@ export function getFloatingChatManager(): FloatingChatWindowManager {
   }
   return _manager;
 }
-

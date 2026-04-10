@@ -22,8 +22,8 @@ import {
   scanProviderCredentials,
 } from "./native/credentials";
 import { getDesktopManager } from "./native/desktop";
-import { getEditorBridge } from "./native/editor-bridge";
 import type { NativeEditorId } from "./native/editor-bridge";
+import { getEditorBridge } from "./native/editor-bridge";
 import { getFileWatcher } from "./native/file-watcher";
 import { getGatewayDiscovery } from "./native/gateway";
 import { getGpuWindowManager } from "./native/gpu-window";

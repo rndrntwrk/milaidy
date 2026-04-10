@@ -18,14 +18,18 @@ type AgentStateStatus =
 import type { AutonomousConfigLike } from "../types/config-like.js";
 
 function resolveDefaultAgentName(config: AutonomousConfigLike): string {
+  const ui = config.ui as
+    | { assistant?: { name?: string }; language?: string }
+    | undefined;
+  const agents = config.agents as
+    | { list?: Array<{ name?: string }> }
+    | undefined;
   const configuredName =
-    config.ui?.assistant?.name?.trim() ??
-    config.agents?.list?.[0]?.name?.trim();
+    ui?.assistant?.name?.trim() ?? agents?.list?.[0]?.name?.trim();
   if (configuredName) {
     return configuredName;
   }
 
-  const ui = config.ui as { language?: unknown } | undefined;
   return getDefaultStylePreset(normalizeCharacterLanguage(ui?.language)).name;
 }
 

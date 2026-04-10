@@ -186,7 +186,7 @@ export interface ChatStateHook {
   dispatch: React.Dispatch<ChatAction>;
 
   // Persistence-aware setters (inline save, no useEffect needed)
-  setChatInput: (v: string) => void;
+  setChatInput: (v: string | ((prev: string) => string)) => void;
   setChatSending: (v: boolean) => void;
   setChatFirstTokenReceived: (v: boolean) => void;
   setChatLastUsage: (v: ChatTurnUsage | null) => void;
@@ -266,10 +266,14 @@ export function useChatState(): ChatStateHook {
 
   // ── Persistence-aware setters ──
 
-  const setChatInput = useCallback((v: string) => {
-    chatInputRef.current = v;
-    dispatch({ type: "SET_CHAT_INPUT", value: v });
-  }, []);
+  const setChatInput = useCallback(
+    (v: string | ((prev: string) => string)) => {
+      const next = typeof v === "function" ? v(chatInputRef.current) : v;
+      chatInputRef.current = next;
+      dispatch({ type: "SET_CHAT_INPUT", value: next });
+    },
+    [],
+  );
   const setChatSending = useCallback(
     (v: boolean) => dispatch({ type: "SET_CHAT_SENDING", value: v }),
     [],

@@ -5809,7 +5809,9 @@ async function handleRequest(
       readJsonBody,
       json,
       error,
-      saveConfig: saveElizaConfig,
+      saveConfig: (config) => {
+        saveElizaConfig(config as ElizaConfig);
+      },
       scheduleRuntimeRestart,
     })
   ) {

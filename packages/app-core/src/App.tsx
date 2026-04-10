@@ -182,7 +182,7 @@ function ViewRouter({
       case "skills":
       case "fine-tuning":
       case "trajectories":
-      case "rolodex":
+      case "relationships":
       case "runtime":
       case "database":
       case "desktop":
@@ -285,7 +285,7 @@ export function App() {
     tab === "skills" ||
     tab === "fine-tuning" ||
     tab === "trajectories" ||
-    tab === "rolodex" ||
+    tab === "relationships" ||
     tab === "runtime" ||
     tab === "database" ||
     tab === "desktop" ||

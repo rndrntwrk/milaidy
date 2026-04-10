@@ -148,16 +148,11 @@ const EDITOR_SPECS: EditorSpec[] = [
     label: "Sublime Text",
     command: "subl",
     candidates: {
-      darwin: ["/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl"],
-      linux: ["/usr/bin/subl", "/usr/local/bin/subl"],
-      win32: [
-        path.join(
-          "C:",
-          "Program Files",
-          "Sublime Text",
-          "subl.exe",
-        ),
+      darwin: [
+        "/Applications/Sublime Text.app/Contents/SharedSupport/bin/subl",
       ],
+      linux: ["/usr/bin/subl", "/usr/local/bin/subl"],
+      win32: [path.join("C:", "Program Files", "Sublime Text", "subl.exe")],
     },
   },
 ];
@@ -192,15 +187,30 @@ function isCommandOnPath(cmd: string): boolean {
 
 function detectEditor(spec: EditorSpec): NativeEditorInfo {
   if (isCommandOnPath(spec.command)) {
-    return { id: spec.id, label: spec.label, installed: true, command: spec.command };
+    return {
+      id: spec.id,
+      label: spec.label,
+      installed: true,
+      command: spec.command,
+    };
   }
   const platform = process.platform as NodeJS.Platform;
   const candidates = spec.candidates?.[platform] ?? [];
   const resolved = candidates.find((p) => isExecutable(p));
   if (resolved) {
-    return { id: spec.id, label: spec.label, installed: true, command: resolved };
+    return {
+      id: spec.id,
+      label: spec.label,
+      installed: true,
+      command: resolved,
+    };
   }
-  return { id: spec.id, label: spec.label, installed: false, command: spec.command };
+  return {
+    id: spec.id,
+    label: spec.label,
+    installed: false,
+    command: spec.command,
+  };
 }
 
 // ---------------------------------------------------------------------------

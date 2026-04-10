@@ -46,6 +46,7 @@ export type Tab =
   | "fine-tuning"
   | "trajectories"
   | "relationships"
+  | "rolodex"
   | "voice"
   | "runtime"
   | "database"
@@ -126,6 +127,7 @@ export const ALL_TAB_GROUPS: TabGroup[] = [
       "fine-tuning",
       "trajectories",
       "relationships",
+      "rolodex",
       "runtime",
       "database",
       "logs",
@@ -162,6 +164,7 @@ const TAB_PATHS: Record<Tab, string> = {
   "fine-tuning": "/fine-tuning",
   trajectories: "/trajectories",
   relationships: "/relationships",
+  rolodex: "/rolodex",
   voice: "/voice",
   runtime: "/runtime",
   database: "/database",
@@ -291,6 +294,8 @@ export function titleForTab(tab: Tab): string {
       return "Trajectories";
     case "relationships":
       return "Relationships";
+    case "rolodex":
+      return "Rolodex";
     case "voice":
       return "Voice";
     case "runtime":

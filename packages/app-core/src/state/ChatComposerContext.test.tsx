@@ -1,14 +1,14 @@
 // @vitest-environment jsdom
 
-import React from "react";
 import { renderHook } from "@testing-library/react";
+import type React from "react";
 import { describe, expect, it } from "vitest";
 import {
   ChatComposerCtx,
+  type ChatComposerValue,
   ChatInputRefCtx,
   useChatComposer,
   useChatInputRef,
-  type ChatComposerValue,
 } from "./ChatComposerContext";
 
 describe("ChatComposerContext", () => {
@@ -27,7 +27,10 @@ describe("ChatComposerContext", () => {
       const customValue: ChatComposerValue = {
         chatInput: "hello world",
         chatSending: true,
-        chatPendingImages: ["img1.png", "img2.png"],
+        chatPendingImages: [
+          { data: "", mimeType: "image/png", name: "img1.png" },
+          { data: "", mimeType: "image/png", name: "img2.png" },
+        ],
         setChatInput: () => {},
         setChatPendingImages: () => {},
       };
@@ -43,8 +46,8 @@ describe("ChatComposerContext", () => {
       expect(result.current.chatInput).toBe("hello world");
       expect(result.current.chatSending).toBe(true);
       expect(result.current.chatPendingImages).toEqual([
-        "img1.png",
-        "img2.png",
+        { data: "", mimeType: "image/png", name: "img1.png" },
+        { data: "", mimeType: "image/png", name: "img2.png" },
       ]);
     });
   });
@@ -57,7 +60,7 @@ describe("ChatComposerContext", () => {
     });
 
     it("returns the provided ref when wrapped in ChatInputRefCtx.Provider", () => {
-      const ref = { current: null } as React.MutableRefObject<HTMLTextAreaElement | null>;
+      const ref: React.RefObject<string> = { current: "draft" };
 
       const wrapper = ({ children }: { children: React.ReactNode }) => (
         <ChatInputRefCtx.Provider value={ref}>

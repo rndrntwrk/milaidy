@@ -89,7 +89,8 @@ export function useContextMenu(): ContextMenuState {
       const command = payload as { text: string } | undefined;
       if (!command?.text) return;
       const quoted = `> ${command.text}\n\n`;
-      setState("chatInput", quoted + chatInputRef.current);
+      const existing = chatInputRef?.current ?? "";
+      setState("chatInput", quoted + existing);
     };
 
     const unsubscribers = [
@@ -120,9 +121,7 @@ export function useContextMenu(): ContextMenuState {
         unsubscribe();
       }
     };
-  // chatInputRef is a stable ref object — no need to include it in deps.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: chatInputRef is stable
-  }, [setState, handleChatSend]);
+  }, [setState, handleChatSend, chatInputRef]);
 
   useEffect(() => {
     if (!desktopRuntime || typeof window === "undefined") {
