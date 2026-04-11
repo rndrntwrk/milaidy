@@ -61,7 +61,6 @@ import {
 } from "@elizaos/core";
 import * as pluginAgentSkills from "@elizaos/plugin-agent-skills";
 import * as pluginAnthropic from "@elizaos/plugin-anthropic";
-import * as pluginCron from "@elizaos/plugin-cron";
 import * as pluginElizacloud from "@elizaos/plugin-elizacloud";
 import * as pluginExperience from "@elizaos/plugin-experience";
 import * as pluginForm from "@elizaos/plugin-form";
@@ -157,6 +156,15 @@ try {
 } catch {
   pluginCommands = null;
 }
+// Keep plugin-cron behind a guarded runtime require for the same reason. Some
+// published alpha builds resolve through package.json but are missing the
+// shipped dist/index.js entry, which breaks CLI bootstrap before help/version.
+let pluginCron: unknown = null;
+try {
+  pluginCron = require("@elizaos/plugin-cron");
+} catch {
+  pluginCron = null;
+}
 
 type SignalShutdownContext = {
   getRuntime: () => AgentRuntime;
@@ -244,13 +252,11 @@ export const STATIC_ELIZA_PLUGINS: Record<string, unknown> = {
   ...(pluginAgentOrchestrator
     ? { "@elizaos/plugin-agent-orchestrator": pluginAgentOrchestrator }
     : {}),
-  "@elizaos/plugin-cron": pluginCron,
+  ...(pluginCron ? { "@elizaos/plugin-cron": pluginCron } : {}),
   "@elizaos/plugin-shell": pluginShell,
   "@elizaos/plugin-plugin-manager": pluginPluginManager,
   "@elizaos/plugin-agent-skills": pluginAgentSkills,
-  ...(pluginCommands
-    ? { "@elizaos/plugin-commands": pluginCommands }
-    : {}),
+  ...(pluginCommands ? { "@elizaos/plugin-commands": pluginCommands } : {}),
   "@elizaos/plugin-pdf": pluginPdf,
   "@elizaos/plugin-openai": pluginOpenai,
   "@elizaos/plugin-anthropic": pluginAnthropic,

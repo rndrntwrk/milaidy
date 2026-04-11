@@ -97,7 +97,10 @@ describe("CI workflow drift", () => {
     ).toBe(6);
     expect(workflow).not.toContain("install-command: bun install\n");
     expect(
-      countOccurrences(workflow, "install-command: bun install --ignore-scripts"),
+      countOccurrences(
+        workflow,
+        "install-command: bun install --ignore-scripts",
+      ),
     ).toBeGreaterThanOrEqual(4);
     // removed: submodules: false means the lockfile naturally
     // diverges from checked-in state (missing submodule workspaces).

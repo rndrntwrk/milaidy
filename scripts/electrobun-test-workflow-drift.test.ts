@@ -32,17 +32,15 @@ describe("Electrobun test workflow drift", () => {
     );
   });
 
-  it("does not rerun postinstall in jobs that already use plain bun install", () => {
+  it("uses the shared setup action without reintroducing double postinstall", () => {
     const workflow = fs.readFileSync(WORKFLOW_PATH, "utf8");
 
     expect(workflow).toContain(
       "name: Setup workspace dependencies\n        uses: ./.github/actions/setup-bun-workspace",
     );
-    expect(workflow).toContain("install-command: bun install");
-    expect(workflow).toContain('run-postinstall: "false"');
-    expect(workflow).not.toContain(
-      'install-command: bun install\n          run-postinstall: "true"',
-    );
+    expect(workflow).toContain("install-command: bun install --ignore-scripts");
+    expect(workflow).not.toContain("run-postinstall:");
+    expect(workflow).not.toContain("install-command: bun install\n");
   });
 
   it("skips avatar clone and vision deps in pure test jobs", () => {

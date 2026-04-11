@@ -30,7 +30,9 @@ describe("native feature bootstrap wiring", () => {
   });
 
   it("bootstraps the internal roles capability outside the core plugin package list", () => {
-    expect(elizaSource).toContain('import rolesPlugin from "./roles/src/index.js"');
+    expect(elizaSource).toContain(
+      'import rolesPlugin from "./roles/src/index.js"',
+    );
     expect(elizaSource).toContain("Pre-registering internal roles capability");
     expect(elizaSource).not.toContain("pluginRoles");
   });
@@ -42,9 +44,17 @@ describe("native feature bootstrap wiring", () => {
     expect(elizaSource).toContain(
       'pluginCommands = require("@elizaos/plugin-commands");',
     );
-    expect(elizaSource).toContain(
-      '"@elizaos/plugin-commands": pluginCommands',
+    expect(elizaSource).toContain('"@elizaos/plugin-commands": pluginCommands');
+  });
+
+  it("guards plugin-cron bootstrap behind a runtime require", () => {
+    expect(elizaSource).not.toContain(
+      'import * as pluginCron from "@elizaos/plugin-cron";',
     );
+    expect(elizaSource).toContain(
+      'pluginCron = require("@elizaos/plugin-cron");',
+    );
+    expect(elizaSource).toContain('"@elizaos/plugin-cron": pluginCron');
   });
 
   it("guards trajectory bootstrap behind the native trajectories toggle", () => {
