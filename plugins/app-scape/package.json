@@ -38,10 +38,10 @@
       },
       "SCAPE_BOT_SDK_URL": {
         "type": "string",
-        "description": "WebSocket URL of the xRSPS bot-SDK endpoint. Default points at localhost for dev.",
+        "description": "WebSocket URL of the xRSPS bot-SDK endpoint. Defaults to the production 'scape deployment at wss://scape-96cxt.sevalla.app/botsdk (same host as the main game, path-routed, TLS-terminated by Sevalla's ingress). Override to ws://127.0.0.1:8080/botsdk for local dev against the shared-HTTP topology, or ws://127.0.0.1:43595 for legacy standalone BOT_SDK_PORT.",
         "required": false,
         "sensitive": false,
-        "default": "ws://127.0.0.1:43595"
+        "default": "wss://scape-96cxt.sevalla.app/botsdk"
       },
       "SCAPE_CLIENT_URL": {
         "type": "string",

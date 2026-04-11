@@ -37,7 +37,19 @@ import { loadOrGenerateAgentIdentity } from "./agent-identity.js";
 import { BotManager, type BotManagerConfig } from "./bot-manager.js";
 import { JournalService } from "./journal-service.js";
 
-const DEFAULT_BOT_SDK_URL = "ws://127.0.0.1:43595";
+/**
+ * Default URL for the xRSPS bot-SDK endpoint. Points at the live
+ * production deployment on Sevalla — the same HTTP server that
+ * serves the main game WebSocket routes /botsdk upgrades into
+ * the bot-SDK TOON endpoint. TLS is terminated by Sevalla's
+ * ingress, so the URL is wss:// and no insecure opt-in is needed.
+ *
+ * Override via SCAPE_BOT_SDK_URL character secret or process env
+ * to target a local dev xRSPS instance, e.g.
+ *   ws://127.0.0.1:8080/botsdk   (shared-HTTP topology)
+ *   ws://127.0.0.1:43595         (legacy standalone BOT_SDK_PORT)
+ */
+const DEFAULT_BOT_SDK_URL = "wss://scape-96cxt.sevalla.app/botsdk";
 const _DEFAULT_AGENT_NAME = "scape-agent";
 const DEFAULT_CONTROLLER: "hybrid" = "hybrid";
 const DEFAULT_LOOP_INTERVAL_MS = 15_000;
