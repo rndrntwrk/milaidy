@@ -3,23 +3,25 @@ import {
   buildTriggerConfig,
   buildTriggerMetadata,
   DISABLED_TRIGGER_INTERVAL_MS,
+  normalizeTriggerDraft,
+} from "../../../agent/src/triggers/scheduling.js";
+import {
   executeTriggerTask,
   getTriggerHealthSnapshot,
   getTriggerLimit,
   listTriggerTasks,
-  normalizeTriggerDraft,
   readTriggerConfig,
   readTriggerRuns,
   TRIGGER_TASK_NAME,
   TRIGGER_TASK_TAGS,
   taskToTriggerSummary,
   triggersFeatureEnabled,
-} from "@miladyai/agent";
+} from "../../../agent/src/triggers/runtime.js";
 import type { RouteHelpers, RouteRequestContext } from "@miladyai/agent/api";
 import {
   type TriggerRouteContext as AutonomousTriggerRouteContext,
   handleTriggerRoutes as handleAutonomousTriggerRoutes,
-} from "@miladyai/agent/api/trigger-routes";
+} from "../../../agent/src/api/trigger-routes.js";
 
 export type TriggerRouteHelpers = RouteHelpers;
 

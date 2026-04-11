@@ -8,11 +8,11 @@ import {
   getLifeOpsBrowserCompanionPackageStatus,
   queryAuditFeed,
   subscribeAuditFeed,
-} from "@miladyai/agent";
+} from "../../../agent/src/security/audit-log.js";
 import {
   type DiagnosticsRouteContext as AutonomousDiagnosticsRouteContext,
   handleDiagnosticsRoutes as handleAutonomousDiagnosticsRoutes,
-} from "@miladyai/agent/api/diagnostics-routes";
+} from "../../../agent/src/api/diagnostics-routes.js";
 
 type DiagnosticsRouteContext = Omit<
   AutonomousDiagnosticsRouteContext,

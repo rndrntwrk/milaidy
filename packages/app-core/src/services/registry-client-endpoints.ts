@@ -4,8 +4,8 @@ import { logger } from "@elizaos/core";
 import {
   isBlockedPrivateOrLinkLocalIp,
   normalizeHostLike,
-} from "@miladyai/agent";
-import type { RegistryEndpoint } from "@miladyai/agent/config";
+} from "../../../agent/src/security/network-policy.js";
+import type { RegistryEndpoint } from "../../../agent/src/config/types.eliza.js";
 import type { RegistryPluginInfo } from "./registry-client-types.js";
 
 const BLOCKED_REGISTRY_HOST_LITERALS = new Set([

@@ -6,7 +6,7 @@
  * **ElevenLabs** voice and model ids; the cloud runs ElevenLabs server-side.
  */
 import type http from "node:http";
-import { sanitizeSpeechText } from "@miladyai/agent";
+import { sanitizeSpeechText } from "../../../agent/src/utils/spoken-text.js";
 import { isElizaCloudServiceSelectedInConfig } from "@miladyai/shared/contracts";
 import { loadElizaConfig } from "../config/config";
 import {
