@@ -11,6 +11,8 @@ import { resolveApiToken } from "@miladyai/shared/runtime-env";
 import { isLoopbackRemoteAddress } from "./compat-route-shared";
 import { sendJsonError } from "./response";
 
+const AUTH_DISABLED_VALUES = new Set(["1", "true", "yes", "on"]);
+
 /**
  * Normalise a potentially multi-valued HTTP header into a single string.
  * Returns `null` when the header is absent or empty.
@@ -28,6 +30,15 @@ export function extractHeaderValue(
  */
 export function getCompatApiToken(): string | null {
   return resolveApiToken(process.env);
+}
+
+export function isCompatApiAuthDisabled(): boolean {
+  const raw =
+    process.env.MILADY_AUTH_DISABLED ??
+    process.env.MILAIDY_AUTH_DISABLED ??
+    process.env.ELIZA_AUTH_DISABLED ??
+    process.env.API_AUTH_DISABLED;
+  return raw ? AUTH_DISABLED_VALUES.has(raw.trim().toLowerCase()) : false;
 }
 
 /** Timing-safe token comparison (constant-time regardless of input length). */
@@ -127,6 +138,8 @@ export function ensureCompatApiAuthorized(
   req: Pick<http.IncomingMessage, "headers" | "socket">,
   res: http.ServerResponse,
 ): boolean {
+  if (isCompatApiAuthDisabled()) return true;
+
   const expectedToken = getCompatApiToken();
   if (!expectedToken) return true;
 

@@ -4,6 +4,7 @@ import { loadElizaConfig } from "@miladyai/agent/config/config";
 import {
   ensureCompatApiAuthorized,
   getCompatApiToken,
+  isCompatApiAuthDisabled,
   tokenMatches,
 } from "./auth";
 import {
@@ -47,6 +48,7 @@ if (typeof pairingSweepTimer === "object" && "unref" in pairingSweepTimer) {
 function pairingEnabled(): boolean {
   return (
     Boolean(getCompatApiToken()) &&
+    !isCompatApiAuthDisabled() &&
     process.env.MILADY_PAIRING_DISABLED !== "1" &&
     process.env.ELIZA_PAIRING_DISABLED !== "1"
   );
@@ -147,7 +149,8 @@ export async function handleAuthPairingCompatRoutes(
       });
       return true;
     }
-    const required = Boolean(getCompatApiToken());
+    const required =
+      Boolean(getCompatApiToken()) && !isCompatApiAuthDisabled();
     const enabled = pairingEnabled();
     if (enabled) {
       ensurePairingCode();

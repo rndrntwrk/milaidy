@@ -2,8 +2,11 @@ import type http from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
 import { createEnvSandbox } from "../test-support/test-helpers.js";
 import {
+  _resetAuthRateLimiter,
+  ensureCompatApiAuthorized,
   ensureCompatSensitiveRouteAuthorized,
   getProvidedApiToken,
+  isCompatApiAuthDisabled,
   tokenMatches,
 } from "./auth";
 
@@ -11,6 +14,16 @@ function mockReq(
   headers: http.IncomingHttpHeaders = {},
 ): Pick<http.IncomingMessage, "headers"> {
   return { headers };
+}
+
+function mockSocketReq(
+  headers: http.IncomingHttpHeaders = {},
+  remoteAddress = "203.0.113.10",
+): Pick<http.IncomingMessage, "headers" | "socket"> {
+  return {
+    headers,
+    socket: { remoteAddress } as http.IncomingMessage["socket"],
+  };
 }
 
 function mockRes(): {
@@ -65,11 +78,78 @@ describe("tokenMatches — timing-safe comparison", () => {
   });
 });
 
+describe("ensureCompatApiAuthorized — auth disabled flag", () => {
+  const env = createEnvSandbox([
+    "MILADY_API_TOKEN",
+    "ELIZA_API_TOKEN",
+    "MILADY_AUTH_DISABLED",
+    "MILAIDY_AUTH_DISABLED",
+    "ELIZA_AUTH_DISABLED",
+    "API_AUTH_DISABLED",
+  ]);
+
+  afterEach(() => {
+    _resetAuthRateLimiter();
+    env.restore();
+  });
+
+  it("allows unauthenticated requests when canonical Milady auth is disabled", () => {
+    env.clear();
+    process.env.MILADY_API_TOKEN = "secret-token";
+    process.env.MILADY_AUTH_DISABLED = "1";
+
+    const res = mockRes();
+    const result = ensureCompatApiAuthorized(
+      mockSocketReq(),
+      res as never,
+    );
+
+    expect(isCompatApiAuthDisabled()).toBe(true);
+    expect(result).toBe(true);
+    expect(res.ended).toBe(false);
+  });
+
+  it("allows unauthenticated requests when deployed Milaidy auth is disabled", () => {
+    env.clear();
+    process.env.MILADY_API_TOKEN = "secret-token";
+    process.env.MILAIDY_AUTH_DISABLED = "true";
+
+    const res = mockRes();
+    const result = ensureCompatApiAuthorized(
+      mockSocketReq(),
+      res as never,
+    );
+
+    expect(isCompatApiAuthDisabled()).toBe(true);
+    expect(result).toBe(true);
+    expect(res.ended).toBe(false);
+  });
+
+  it("still rejects unauthenticated requests when a token exists and auth is enabled", () => {
+    env.clear();
+    process.env.MILADY_API_TOKEN = "secret-token";
+
+    const res = mockRes();
+    const result = ensureCompatApiAuthorized(
+      mockSocketReq(),
+      res as never,
+    );
+
+    expect(isCompatApiAuthDisabled()).toBe(false);
+    expect(result).toBe(false);
+    expect(res.statusCode).toBe(401);
+  });
+});
+
 describe("ensureCompatSensitiveRouteAuthorized — dev mode", () => {
   const env = createEnvSandbox([
     "NODE_ENV",
     "MILADY_API_TOKEN",
     "ELIZA_API_TOKEN",
+    "MILADY_AUTH_DISABLED",
+    "MILAIDY_AUTH_DISABLED",
+    "ELIZA_AUTH_DISABLED",
+    "API_AUTH_DISABLED",
     "MILADY_DEV_AUTH_BYPASS",
   ]);
 

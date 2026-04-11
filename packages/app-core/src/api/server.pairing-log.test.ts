@@ -30,6 +30,8 @@ describe("pairing code logging", () => {
     "ELIZA_API_TOKEN",
     "MILADY_API_TOKEN",
     "ELIZA_PAIRING_DISABLED",
+    "MILADY_AUTH_DISABLED",
+    "MILAIDY_AUTH_DISABLED",
   ] as const;
 
   const savedEnv = new Map<string, string | undefined>();
@@ -86,6 +88,37 @@ describe("pairing code logging", () => {
       ).toBe(true);
     } finally {
       warnSpy.mockRestore();
+      await server.close();
+      await cleanupTempDir(tempDir);
+    }
+  });
+
+  it("does not require pairing when deployed auth is disabled", async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "milady-pairing-"));
+    process.env.ELIZA_STATE_DIR = tempDir;
+    process.env.MILADY_STATE_DIR = tempDir;
+    process.env.ELIZA_API_TOKEN = "pairing-log-test-token";
+    process.env.MILADY_API_TOKEN = "pairing-log-test-token";
+    process.env.MILAIDY_AUTH_DISABLED = "1";
+
+    await fs.writeFile(
+      path.join(tempDir, "eliza.json"),
+      JSON.stringify({ logging: { level: "error" } }),
+    );
+
+    const server = await startApiServer({ port: 0 });
+
+    try {
+      const { status, data } = await req(
+        server.port,
+        "GET",
+        "/api/auth/status",
+      );
+      expect(status).toBe(200);
+      expect(data.required).toBe(false);
+      expect(data.pairingEnabled).toBe(false);
+      expect(data.expiresAt).toBeNull();
+    } finally {
       await server.close();
       await cleanupTempDir(tempDir);
     }
