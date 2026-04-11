@@ -3109,6 +3109,7 @@ const pairingAttempts = new Map<string, { count: number; resetAt: number }>();
 
 function pairingEnabled(): boolean {
   return (
+    !isApiAuthDisabled() &&
     Boolean(getConfiguredApiToken()) &&
     process.env.ELIZA_PAIRING_DISABLED !== "1"
   );
@@ -3221,7 +3222,19 @@ function tokenMatches(expected: string, provided: string): boolean {
   return crypto.timingSafeEqual(a, b);
 }
 
+const AUTH_DISABLED_VALUES = new Set(["1", "true", "yes", "on"]);
+
+function isApiAuthDisabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  const raw =
+    env.MILADY_AUTH_DISABLED ??
+    env.MILAIDY_AUTH_DISABLED ??
+    env.ELIZA_AUTH_DISABLED ??
+    env.API_AUTH_DISABLED;
+  return raw ? AUTH_DISABLED_VALUES.has(raw.trim().toLowerCase()) : false;
+}
+
 function getConfiguredApiToken(): string | undefined {
+  if (isApiAuthDisabled()) return undefined;
   return resolveApiToken(process.env) ?? undefined;
 }
 
@@ -3268,6 +3281,9 @@ function isLoopbackBindHost(host: string): boolean {
 
 export function ensureApiTokenForBindHost(host: string): void {
   const { disableAutoApiToken } = resolveApiSecurityConfig(process.env);
+  if (isApiAuthDisabled()) {
+    return;
+  }
 
   const token = getConfiguredApiToken();
   if (token) return;
@@ -3302,6 +3318,8 @@ export function ensureApiTokenForBindHost(host: string): void {
 }
 
 export function isAuthorized(req: http.IncomingMessage): boolean {
+  if (isApiAuthDisabled()) return true;
+
   const expected = getConfiguredApiToken();
   if (!expected) return !isCloudProvisionedContainer();
   const provided = extractAuthToken(req);
@@ -4861,7 +4879,12 @@ async function handleRequest(
   }
   const pathname = url.pathname;
   const isAuthEndpoint = pathname.startsWith("/api/auth/");
-  const isHealthEndpoint = method === "GET" && pathname === "/api/health";
+  const isHealthEndpoint =
+    method === "GET" &&
+    (pathname === "/api/health" ||
+      pathname === "/health" ||
+      pathname === "/health/live" ||
+      pathname === "/health/ready");
   const isCloudProvisioned = isCloudProvisionedContainer();
   const isCloudOnboardingStatusEndpoint =
     method === "GET" &&
@@ -4975,7 +4998,7 @@ async function handleRequest(
   // Serve dashboard static assets before the auth gates. serveStaticUi already
   // refuses /api/, /v1/, and /ws paths, so API endpoints remain protected
   // while steward-managed containers can still reach the built-in dashboard.
-  if (method === "GET" || method === "HEAD") {
+  if ((method === "GET" || method === "HEAD") && !isHealthEndpoint) {
     if (serveStaticUi(req, res, pathname)) return;
   }
 

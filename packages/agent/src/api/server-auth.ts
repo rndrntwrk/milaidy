@@ -54,7 +54,21 @@ export function tokenMatches(expected: string, provided: string): boolean {
   return crypto.timingSafeEqual(a, b);
 }
 
+const AUTH_DISABLED_VALUES = new Set(["1", "true", "yes", "on"]);
+
+export function isApiAuthDisabled(
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  const raw =
+    env.MILADY_AUTH_DISABLED ??
+    env.MILAIDY_AUTH_DISABLED ??
+    env.ELIZA_AUTH_DISABLED ??
+    env.API_AUTH_DISABLED;
+  return raw ? AUTH_DISABLED_VALUES.has(raw.trim().toLowerCase()) : false;
+}
+
 export function getConfiguredApiToken(): string | undefined {
+  if (isApiAuthDisabled()) return undefined;
   return resolveApiToken(process.env) ?? undefined;
 }
 
@@ -100,6 +114,10 @@ export function isLoopbackBindHost(host: string): boolean {
 }
 
 export function ensureApiTokenForBindHost(host: string): void {
+  if (isApiAuthDisabled()) {
+    return;
+  }
+
   if (resolveApiSecurityConfig(process.env).disableAutoApiToken) {
     return;
   }
@@ -128,6 +146,8 @@ export function ensureApiTokenForBindHost(host: string): void {
 }
 
 export function isAuthorized(req: http.IncomingMessage): boolean {
+  if (isApiAuthDisabled()) return true;
+
   const expected = getConfiguredApiToken();
   if (!expected) return !isCloudProvisionedContainer();
   const provided = extractAuthToken(req);
