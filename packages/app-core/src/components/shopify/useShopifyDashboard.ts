@@ -39,11 +39,7 @@ export interface ShopifyOrder {
   email: string;
   totalPrice: string;
   currencyCode: string;
-  fulfillmentStatus:
-    | "FULFILLED"
-    | "UNFULFILLED"
-    | "PARTIALLY_FULFILLED"
-    | null;
+  fulfillmentStatus: "FULFILLED" | "UNFULFILLED" | "PARTIALLY_FULFILLED" | null;
   financialStatus: "PAID" | "PENDING" | "REFUNDED" | "PARTIALLY_REFUNDED";
   createdAt: string;
   lineItemCount: number;
@@ -179,8 +175,9 @@ export function useShopifyDashboard(): UseShopifyDashboardReturn {
   const [productSearch, setProductSearch] = useState("");
 
   // -- Orders
-  const [ordersData, setOrdersData] =
-    useState<ShopifyOrdersResponse | null>(null);
+  const [ordersData, setOrdersData] = useState<ShopifyOrdersResponse | null>(
+    null,
+  );
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [ordersError, setOrdersError] = useState<string | null>(null);
   const [orderStatusFilter, setOrderStatusFilter] = useState("any");
@@ -265,7 +262,12 @@ export function useShopifyDashboard(): UseShopifyDashboardReturn {
       .then((data) => {
         if (cancelled) return;
         setProductsData(
-          data ?? { products: [], total: 0, page: productsPage, pageSize: PAGE_SIZE },
+          data ?? {
+            products: [],
+            total: 0,
+            page: productsPage,
+            pageSize: PAGE_SIZE,
+          },
         );
       })
       .catch((err: unknown) => {

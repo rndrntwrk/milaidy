@@ -126,9 +126,7 @@ export function VincentAppView({ exitToApps, t }: OverlayAppContext) {
       <div className="chat-native-scrollbar flex-1 overflow-y-auto px-4 py-4 sm:px-6">
         <div className="mx-auto max-w-3xl space-y-4">
           {/* Error banner */}
-          {error && (
-            <PagePanel.Notice tone="danger">{error}</PagePanel.Notice>
-          )}
+          {error && <PagePanel.Notice tone="danger">{error}</PagePanel.Notice>}
 
           {/* Initial loading state */}
           {loading && !vincentConnected && stewardStatus === null && (
@@ -139,10 +137,7 @@ export function VincentAppView({ exitToApps, t }: OverlayAppContext) {
           )}
 
           {/* Connection card — always visible */}
-          <VincentConnectionCard
-            setActionNotice={setActionNotice}
-            t={t}
-          />
+          <VincentConnectionCard setActionNotice={setActionNotice} t={t} />
 
           {/* Cards below only render when connected */}
           {vincentConnected && (

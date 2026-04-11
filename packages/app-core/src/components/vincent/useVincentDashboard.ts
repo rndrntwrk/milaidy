@@ -166,7 +166,8 @@ export function useVincentDashboard(): VincentDashboardState {
         // the Promise.resolve fallback already matches that shape.
         const records = Array.isArray(h)
           ? (h as StewardTxRecord[])
-          : (h as { records: StewardTxRecord[]; total: number }).records ?? [];
+          : ((h as { records: StewardTxRecord[]; total: number }).records ??
+            []);
         const total = Array.isArray(h)
           ? records.length
           : ((h as { total: number }).total ?? 0);
@@ -203,7 +204,10 @@ export function useVincentDashboard(): VincentDashboardState {
       intervalRef.current = null;
     }
     if (vincentConnected) {
-      intervalRef.current = setInterval(() => void fetchAll(), POLL_INTERVAL_MS);
+      intervalRef.current = setInterval(
+        () => void fetchAll(),
+        POLL_INTERVAL_MS,
+      );
     }
     return () => {
       if (intervalRef.current) {

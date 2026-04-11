@@ -25,12 +25,14 @@ function FulfillmentBadge({
       "bg-yellow-500/15 text-yellow-400 border border-yellow-500/20",
   } satisfies Record<NonNullable<ShopifyOrder["fulfillmentStatus"]>, string>;
 
-  const labels: Record<NonNullable<ShopifyOrder["fulfillmentStatus"]>, string> =
-    {
-      FULFILLED: "Fulfilled",
-      UNFULFILLED: "Unfulfilled",
-      PARTIALLY_FULFILLED: "Partial",
-    };
+  const labels: Record<
+    NonNullable<ShopifyOrder["fulfillmentStatus"]>,
+    string
+  > = {
+    FULFILLED: "Fulfilled",
+    UNFULFILLED: "Unfulfilled",
+    PARTIALLY_FULFILLED: "Partial",
+  };
 
   return (
     <span
@@ -50,8 +52,7 @@ function FinancialBadge({
     PAID: "bg-green-500/15 text-green-400 border border-green-500/20",
     PENDING: "bg-yellow-500/15 text-yellow-400 border border-yellow-500/20",
     REFUNDED: "bg-red-500/15 text-red-400 border border-red-500/20",
-    PARTIALLY_REFUNDED:
-      "bg-red-500/15 text-red-400 border border-red-500/20",
+    PARTIALLY_REFUNDED: "bg-red-500/15 text-red-400 border border-red-500/20",
   } satisfies Record<ShopifyOrder["financialStatus"], string>;
 
   const labels: Record<ShopifyOrder["financialStatus"], string> = {
@@ -208,9 +209,9 @@ export function OrdersPanel({
   statusFilter,
   onStatusFilterChange,
 }: OrdersPanelProps) {
-  const activeTab = (ORDER_TABS.some((t) => t.value === statusFilter)
-    ? statusFilter
-    : "any") as OrderTab;
+  const activeTab = (
+    ORDER_TABS.some((t) => t.value === statusFilter) ? statusFilter : "any"
+  ) as OrderTab;
 
   return (
     <div className="space-y-3">
