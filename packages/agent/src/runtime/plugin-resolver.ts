@@ -653,8 +653,19 @@ async function stagePluginImportRoot(params: {
  * Resolve a statically-imported @elizaos plugin by name.
  * Returns the module if found in STATIC_ELIZA_PLUGINS, otherwise null.
  */
-function resolveStaticElizaPlugin(pluginName: string): unknown | null {
-  return STATIC_ELIZA_PLUGINS[pluginName] ?? null;
+type StaticPluginModuleLoader = () => Promise<unknown>;
+
+async function resolveStaticElizaPlugin(
+  pluginName: string,
+): Promise<unknown | null> {
+  const pluginEntry = STATIC_ELIZA_PLUGINS[pluginName];
+  if (!pluginEntry) {
+    return null;
+  }
+  if (typeof pluginEntry === "function") {
+    return await (pluginEntry as StaticPluginModuleLoader)();
+  }
+  return pluginEntry;
 }
 
 // ---------------------------------------------------------------------------

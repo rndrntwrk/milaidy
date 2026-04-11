@@ -164,15 +164,6 @@ try {
 } catch {
   pluginCron = null;
 }
-// Keep plugin-elizacloud behind a guarded runtime require as well. Some
-// published alpha builds advertise dist/node/index.node.js but do not ship
-// that ESM entry, which breaks CLI bootstrap in published-only CI.
-let pluginElizacloud: unknown = null;
-try {
-  pluginElizacloud = require("@elizaos/plugin-elizacloud");
-} catch {
-  pluginElizacloud = null;
-}
 // Keep plugin-experience behind a guarded runtime require too. Some published
 // alpha builds advertise dist/node/index.node.js without shipping that entry,
 // which breaks CLI and runtime startup in published-only CI.
@@ -288,7 +279,12 @@ function registerSignalShutdownHandlers(context: SignalShutdownContext): void {
  * ship a smaller baseline bundle. Those plugins fall through to dynamic
  * import() and can be installed later via the plugin installer.
  */
-export const STATIC_ELIZA_PLUGINS: Record<string, unknown> = {
+type StaticPluginModuleLoader = () => Promise<unknown>;
+
+export const STATIC_ELIZA_PLUGINS: Record<
+  string,
+  unknown | StaticPluginModuleLoader
+> = {
   "@elizaos/plugin-sql": pluginSql,
   "@elizaos/plugin-local-embedding": pluginLocalEmbedding,
   "@elizaos/plugin-secrets-manager": pluginSecretsManager,
@@ -305,9 +301,9 @@ export const STATIC_ELIZA_PLUGINS: Record<string, unknown> = {
   ...(pluginOpenai ? { "@elizaos/plugin-openai": pluginOpenai } : {}),
   "@elizaos/plugin-anthropic": pluginAnthropic,
   ...(pluginOllama ? { "@elizaos/plugin-ollama": pluginOllama } : {}),
-  ...(pluginElizacloud
-    ? { "@elizaos/plugin-elizacloud": pluginElizacloud }
-    : {}),
+  // Bun parses static imports eagerly, so keep the cloud plugin behind a
+  // deferred loader until it is actually enabled.
+  "@elizaos/plugin-elizacloud": () => import("@elizaos/plugin-elizacloud"),
   "@elizaos/plugin-trust": pluginTrust,
   "@miladyai/plugin-selfcontrol": pluginSelfControl,
   "@miladyai/plugin-discord-local": discordLocalPlugin,
@@ -1404,6 +1400,7 @@ export function ensureBrowserServerLink(): boolean {
 // ---------------------------------------------------------------------------
 // Plugin resolution
 // ---------------------------------------------------------------------------
+
 
 /** @internal Exported for testing. */
 export function repairBrokenInstallRecord(
