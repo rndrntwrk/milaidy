@@ -10,6 +10,7 @@ const ANY_TYPE_PATTERN = /:\s*any\b|<\s*any\s*>|\bas\s+any\b/;
 // against Markdown, YAML, JSON, shell scripts, or other non-source files where
 // the literal strings may legitimately appear in prose or configuration.
 const SOURCE_CODE_EXTENSIONS = /\.(?:m|c)?[jt]sx?$/i;
+const DEFAULT_MAX_BUFFER = 16 * 1024 * 1024;
 
 export function isSourceCode(file) {
   return SOURCE_CODE_EXTENSIONS.test(file);
@@ -78,6 +79,7 @@ function runCommand(command, options = {}) {
       ok: true,
       stdout: execSync(command, {
         encoding: "utf8",
+        maxBuffer: DEFAULT_MAX_BUFFER,
         stdio: ["pipe", "pipe", "pipe"],
         ...options,
       }),
@@ -95,6 +97,7 @@ function runCommandArgs(command, args, options = {}) {
       ok: true,
       stdout: execFileSync(command, args, {
         encoding: "utf8",
+        maxBuffer: DEFAULT_MAX_BUFFER,
         stdio: ["pipe", "pipe", "pipe"],
         ...options,
       }),
