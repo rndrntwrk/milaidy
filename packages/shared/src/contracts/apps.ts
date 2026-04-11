@@ -267,6 +267,11 @@ export const MILADY_CURATED_APP_DEFINITIONS: readonly MiladyCuratedAppDefinition
       canonicalName: "@elizaos/app-shopify",
       aliases: ["@elizaos/plugin-shopify"],
     },
+    {
+      slug: "clawville",
+      canonicalName: "@clawville/app-clawville",
+      aliases: [],
+    },
   ] as const;
 
 function getMiladyCuratedAppMatchKeys(
