@@ -31,11 +31,26 @@ modules:
   - name: nodejs
     buildsystem: simple
     build-commands:
-      - install -Dm755 bin/node /app/bin/node
-      - install -Dm755 bin/npm /app/bin/npm
-      - install -Dm755 bin/npx /app/bin/npx
+      # Copy `lib` and `include` FIRST so the npm/npx symlinks in `bin`
+      # point at files that actually exist under /app when they're
+      # copied preserving symlink semantics.
       - cp -r lib /app/lib
       - cp -r include /app/include
+      # `bin/node` is a real file; use `install` so it's executable
+      # and placed with explicit permissions.
+      - install -Dm755 bin/node /app/bin/node
+      # `bin/npm` and `bin/npx` in the nodejs tarball are relative
+      # symlinks pointing at `../lib/node_modules/npm/bin/npm-cli.js`
+      # and `../lib/node_modules/npm/bin/npx-cli.js`. Using
+      # `install -Dm755` DEREFERENCES the symlink and writes the
+      # target JS file as `/app/bin/npm`, which then fails at runtime
+      # with `Cannot find module '../lib/cli.js'` because the relative
+      # require no longer resolves from `/app/bin/`. Use `cp -P` (POSIX
+      # "don't follow symbolic links") to preserve the symlink so
+      # /app/bin/npm → /app/lib/node_modules/npm/bin/npm-cli.js resolves
+      # the same way it does in the upstream tarball.
+      - cp -P bin/npm /app/bin/npm
+      - cp -P bin/npx /app/bin/npx
     sources:
       - type: archive
         url: https://nodejs.org/dist/v22.12.0/node-v22.12.0-linux-x64.tar.xz
