@@ -4,6 +4,7 @@ import {
   classificationFromInputs,
   isTestExempt,
   scanDiffTextForBlockedPatterns,
+  shouldRunTargetedRegressionTests,
   splitRunnableTestFiles,
 } from "./pre-review-local.mjs";
 
@@ -163,5 +164,25 @@ describe("buildRepoTestCommand", () => {
     ).toBe(
       "bunx vitest run --config vitest.unit.config.ts packages/app-core/src/services/plugin-stability.test.ts scripts/ci-workflow-audit.test.ts",
     );
+  });
+});
+
+describe("shouldRunTargetedRegressionTests", () => {
+  it("skips duplicate targeted test runs on detached GitHub merge refs", () => {
+    expect(
+      shouldRunTargetedRegressionTests({
+        branch: "HEAD (detached)",
+        env: { GITHUB_ACTIONS: "true" },
+      }),
+    ).toBe(false);
+  });
+
+  it("keeps targeted test runs enabled outside GitHub merge refs", () => {
+    expect(
+      shouldRunTargetedRegressionTests({
+        branch: "feat/app-scape",
+        env: {},
+      }),
+    ).toBe(true);
   });
 });

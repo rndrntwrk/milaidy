@@ -253,6 +253,13 @@ export function buildRepoTestCommand(repoTests) {
   return `bunx vitest run --config vitest.unit.config.ts ${repoTests.join(" ")}`;
 }
 
+export function shouldRunTargetedRegressionTests({
+  branch,
+  env = process.env,
+} = {}) {
+  return !(env.GITHUB_ACTIONS === "true" && branch === "HEAD (detached)");
+}
+
 export function splitRunnableTestFiles(testFiles) {
   const repoTests = [];
   const homepageTests = [];
@@ -322,6 +329,7 @@ export function runChecks() {
     branch,
     message: commitMessage,
   });
+  const shouldRunTargetedTests = shouldRunTargetedRegressionTests({ branch });
   const scope = scopeVerdictFor(classification);
 
   const changed = collectChangedFiles(base);
@@ -406,7 +414,7 @@ export function runChecks() {
         checklist.push(
           "Run tests that validate the exact behavior change and check them in.",
         );
-      } else {
+      } else if (shouldRunTargetedTests) {
         const { repoTests, repoE2eTests, homepageTests } =
           splitRunnableTestFiles(runnableTestFiles);
         const testCommands = [];
@@ -440,6 +448,10 @@ export function runChecks() {
             break;
           }
         }
+      } else {
+        checklist.push(
+          "Changed tests detected; dedicated CI test lanes will validate them for merge refs.",
+        );
       }
     }
   }
