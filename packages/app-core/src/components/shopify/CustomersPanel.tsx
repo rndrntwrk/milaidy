@@ -23,7 +23,9 @@ function CustomerRow({ customer }: { customer: ShopifyCustomer }) {
 
       {/* Name + email */}
       <div className="min-w-0 flex-1">
-        <div className="truncate text-sm font-semibold text-txt">{fullName}</div>
+        <div className="truncate text-sm font-semibold text-txt">
+          {fullName}
+        </div>
         <div className="mt-0.5 truncate text-[11px] text-muted">
           {customer.email}
         </div>

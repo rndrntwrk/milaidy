@@ -27,14 +27,16 @@ export function getConnectorModes(
         {
           id: "bot",
           label: "Bot Token",
-          description: "Use your own Discord bot with a token from the Developer Portal",
+          description:
+            "Use your own Discord bot with a token from the Developer Portal",
         },
         ...(cloud
           ? [
               {
                 id: "managed",
                 label: "Managed (Eliza Cloud)",
-                description: "Use a shared Milady gateway bot via Eliza Cloud OAuth",
+                description:
+                  "Use a shared Milady gateway bot via Eliza Cloud OAuth",
               },
             ]
           : []),
@@ -50,7 +52,8 @@ export function getConnectorModes(
         {
           id: "account",
           label: "Personal Account",
-          description: "Use your own Telegram account (requires app credentials from my.telegram.org)",
+          description:
+            "Use your own Telegram account (requires app credentials from my.telegram.org)",
         },
       ];
 
@@ -73,7 +76,8 @@ export function getConnectorModes(
         {
           id: "business",
           label: "Business Cloud API",
-          description: "Use WhatsApp Business API with access token and phone number ID",
+          description:
+            "Use WhatsApp Business API with access token and phone number ID",
         },
       ];
 
@@ -82,19 +86,22 @@ export function getConnectorModes(
         {
           id: "direct",
           label: "Direct (chat.db)",
-          description: "Read iMessage database directly on this Mac. Requires Full Disk Access.",
+          description:
+            "Read iMessage database directly on this Mac. Requires Full Disk Access.",
         },
         {
           id: "bluebubbles",
           label: "BlueBubbles",
-          description: "Bridge via BlueBubbles server app. Works locally or over network.",
+          description:
+            "Bridge via BlueBubbles server app. Works locally or over network.",
         },
         ...(cloud
           ? [
               {
                 id: "blooio",
                 label: "Blooio (Cloud)",
-                description: "Cloud-based iMessage/SMS gateway. No Mac needed on the server.",
+                description:
+                  "Cloud-based iMessage/SMS gateway. No Mac needed on the server.",
               },
             ]
           : []),
@@ -117,7 +124,11 @@ export function modeToSetupPluginId(
     telegram: { bot: "telegram", account: "telegram" },
     signal: { qr: "signal" },
     whatsapp: { qr: "whatsapp", business: "whatsapp" },
-    imessage: { direct: "imessage", bluebubbles: "bluebubbles", blooio: "blooio" },
+    imessage: {
+      direct: "imessage",
+      bluebubbles: "bluebubbles",
+      blooio: "blooio",
+    },
   };
   return map[connectorId]?.[modeId] ?? null;
 }

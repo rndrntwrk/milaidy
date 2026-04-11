@@ -61,7 +61,9 @@ export function VincentConnectionCard({
           <div className="min-w-0">
             <div className="text-sm font-semibold text-txt">
               {vincentConnected
-                ? t("vincent.connected", { defaultValue: "Connected to Vincent" })
+                ? t("vincent.connected", {
+                    defaultValue: "Connected to Vincent",
+                  })
                 : t("vincent.disconnected", {
                     defaultValue: "Not connected to Vincent",
                   })}

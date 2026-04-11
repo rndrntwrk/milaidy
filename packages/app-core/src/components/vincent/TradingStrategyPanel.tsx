@@ -6,13 +6,7 @@
  */
 
 import { Button, StatusBadge } from "@miladyai/ui";
-import {
-  Activity,
-  Pause,
-  Play,
-  RefreshCw,
-  Settings2,
-} from "lucide-react";
+import { Activity, Pause, Play, RefreshCw, Settings2 } from "lucide-react";
 import { useCallback, useState } from "react";
 import type { VincentStrategy } from "./useVincentDashboard";
 
@@ -51,9 +45,9 @@ export function TradingStrategyPanel({
   onStrategyChange,
   setActionNotice,
 }: TradingStrategyPanelProps) {
-  const [actionInFlight, setActionInFlight] = useState<
-    "start" | "stop" | null
-  >(null);
+  const [actionInFlight, setActionInFlight] = useState<"start" | "stop" | null>(
+    null,
+  );
 
   const handleStart = useCallback(async () => {
     setActionInFlight("start");
@@ -106,10 +100,7 @@ export function TradingStrategyPanel({
         </div>
         <div className="flex items-center gap-2">
           {strategyName && (
-            <StatusBadge
-              label={STRATEGY_LABELS[strategyName]}
-              tone="muted"
-            />
+            <StatusBadge label={STRATEGY_LABELS[strategyName]} tone="muted" />
           )}
           {strategy !== null && (
             <StatusBadge
