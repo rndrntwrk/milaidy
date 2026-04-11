@@ -150,7 +150,7 @@ describe("Electrobun release workflow drift", () => {
     expect(workflow).toContain("needs: [prepare, validate-release]");
     expect(workflow).toContain(
       // biome-ignore lint/suspicious/noTemplateCurlyInString: GitHub Actions expression
-      "runs-on: ${{ vars.RUNNER_UBUNTU || (github.repository_owner == 'milady-ai' && 'blacksmith-4vcpu-ubuntu-2404' || 'ubuntu-latest') }}",
+      "runs-on: ${{ vars.RUNNER_UBUNTU || 'ubuntu-24.04' }}",
     );
   });
 
@@ -301,7 +301,7 @@ describe("Electrobun release workflow drift", () => {
     );
     expect(workflow).toContain(
       // biome-ignore lint/suspicious/noTemplateCurlyInString: GitHub Actions expression
-      "runner: ${{ vars.RUNNER_WINDOWS || (github.repository_owner == 'milady-ai' && 'blacksmith-4vcpu-windows-2025' || 'windows-2025') }}",
+      "runner: ${{ vars.RUNNER_WINDOWS || 'windows-2025' }}",
     );
     expect(workflow).not.toContain(
       'Join-Path $PWD "apps/app/electrobun/node_modules/electrobun"',
