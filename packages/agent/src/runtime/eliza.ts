@@ -61,7 +61,6 @@ import {
 } from "@elizaos/core";
 import * as pluginAgentSkills from "@elizaos/plugin-agent-skills";
 import * as pluginAnthropic from "@elizaos/plugin-anthropic";
-import * as pluginElizacloud from "@elizaos/plugin-elizacloud";
 import * as pluginExperience from "@elizaos/plugin-experience";
 import * as pluginForm from "@elizaos/plugin-form";
 import * as pluginLocalEmbedding from "@elizaos/plugin-local-embedding";
@@ -165,6 +164,15 @@ try {
 } catch {
   pluginCron = null;
 }
+// Keep plugin-elizacloud behind a guarded runtime require as well. Some
+// published alpha builds advertise dist/node/index.node.js but do not ship
+// that ESM entry, which breaks CLI bootstrap in published-only CI.
+let pluginElizacloud: unknown = null;
+try {
+  pluginElizacloud = require("@elizaos/plugin-elizacloud");
+} catch {
+  pluginElizacloud = null;
+}
 
 type SignalShutdownContext = {
   getRuntime: () => AgentRuntime;
@@ -261,7 +269,9 @@ export const STATIC_ELIZA_PLUGINS: Record<string, unknown> = {
   "@elizaos/plugin-openai": pluginOpenai,
   "@elizaos/plugin-anthropic": pluginAnthropic,
   "@elizaos/plugin-ollama": pluginOllama,
-  "@elizaos/plugin-elizacloud": pluginElizacloud,
+  ...(pluginElizacloud
+    ? { "@elizaos/plugin-elizacloud": pluginElizacloud }
+    : {}),
   "@elizaos/plugin-trust": pluginTrust,
   "@miladyai/plugin-selfcontrol": pluginSelfControl,
   "@miladyai/plugin-discord-local": discordLocalPlugin,

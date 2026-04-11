@@ -57,6 +57,18 @@ describe("native feature bootstrap wiring", () => {
     expect(elizaSource).toContain('"@elizaos/plugin-cron": pluginCron');
   });
 
+  it("guards plugin-elizacloud bootstrap behind a runtime require", () => {
+    expect(elizaSource).not.toContain(
+      'import * as pluginElizacloud from "@elizaos/plugin-elizacloud";',
+    );
+    expect(elizaSource).toContain(
+      'pluginElizacloud = require("@elizaos/plugin-elizacloud");',
+    );
+    expect(elizaSource).toContain(
+      '"@elizaos/plugin-elizacloud": pluginElizacloud',
+    );
+  });
+
   it("guards trajectory bootstrap behind the native trajectories toggle", () => {
     const waitBlock =
       elizaSource.match(
