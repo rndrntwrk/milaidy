@@ -30,6 +30,7 @@ import {
   patchBrokenElizaCoreRuntimeDists,
   patchCodexFolderApprovalPromptCompat,
   patchElectrobunWindowsTar,
+  patchElizaCoreRolesSubpath,
   patchExtensionlessJsExports,
   patchNobleHashesCompat,
   patchProperLockfileSignalExitCompat,
@@ -63,6 +64,7 @@ patchPtyManagerEsmDirnameCompat(root);
 patchPtyManagerCursorPositionCompat(root);
 patchCodexFolderApprovalPromptCompat(root);
 patchBrokenElizaCoreRuntimeDists(root);
+patchElizaCoreRolesSubpath(root);
 pruneNestedElizaPluginCoreCopies(root);
 try {
   patchAutonomousMiladyOnboardingPresets(root);
