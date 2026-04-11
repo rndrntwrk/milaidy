@@ -6,16 +6,72 @@ const root = process.cwd();
 const replacements = [
   {
     needle:
-      'String.raw`\\b[A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD)',
+      "String.raw`\\b[A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD)\\b\\s*[=:]\\s*([\"']?)([^\\s\"'\\\\]+)\\1`",
     replacement:
-      `\t"\\\\b[A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD)\\\\b\\\\s*[=:]\\\\s*([\\"']?)([^\\\\s\\"'\\\\\\\\]+)\\\\1",`,
+      `"\\\\b[A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD)\\\\b\\\\s*[=:]\\\\s*([\\"']?)([^\\\\s\\"'\\\\\\\\]+)\\\\1"`,
   },
   {
-    needle: 'String.raw`--(?:api[-_]?key|token|secret|password|passwd)',
+    needle:
+      "String.raw`--(?:api[-_]?key|token|secret|password|passwd)\\s+([\"']?)([^\\s\"']+)\\1`",
     replacement:
-      `\t"--(?:api[-_]?key|token|secret|password|passwd)\\\\s+([\\"']?)([^\\\\s\\"']+)\\\\1",`,
+      `"--(?:api[-_]?key|token|secret|password|passwd)\\\\s+([\\"']?)([^\\\\s\\"']+)\\\\1"`,
   },
 ];
+
+const SOURCE_EXTENSIONS = new Set([".js", ".cjs", ".mjs", ".ts"]);
+
+function walkFiles(dir, targets) {
+  if (!existsSync(dir)) {
+    return;
+  }
+
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const next = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      walkFiles(next, targets);
+      continue;
+    }
+    if (entry.isFile() && SOURCE_EXTENSIONS.has(path.extname(entry.name))) {
+      targets.add(next);
+    }
+  }
+}
+
+function collectPackageTargets(packageRoot, targets) {
+  walkFiles(path.join(packageRoot, "dist"), targets);
+  walkFiles(path.join(packageRoot, "src/security"), targets);
+}
+
+function collectNodeModuleTargets(targets) {
+  const directScopeDir = path.join(root, "node_modules/@elizaos");
+  if (existsSync(directScopeDir)) {
+    for (const entry of readdirSync(directScopeDir, { withFileTypes: true })) {
+      if (entry.isDirectory()) {
+        collectPackageTargets(path.join(directScopeDir, entry.name), targets);
+      }
+    }
+  }
+
+  const pnpmDir = path.join(root, "node_modules/.pnpm");
+  if (!existsSync(pnpmDir)) {
+    return;
+  }
+
+  for (const entry of readdirSync(pnpmDir, { withFileTypes: true })) {
+    if (!entry.isDirectory() || !entry.name.startsWith("@elizaos+")) {
+      continue;
+    }
+    const scopeDir = path.join(pnpmDir, entry.name, "node_modules/@elizaos");
+    if (!existsSync(scopeDir)) {
+      continue;
+    }
+    for (const scopedEntry of readdirSync(scopeDir, { withFileTypes: true })) {
+      if (scopedEntry.isDirectory()) {
+        collectPackageTargets(path.join(scopeDir, scopedEntry.name), targets);
+      }
+    }
+  }
+}
 
 function patchFile(filePath) {
   if (!existsSync(filePath)) {
@@ -23,17 +79,10 @@ function patchFile(filePath) {
   }
 
   const original = readFileSync(filePath, "utf8");
-  const next = original
-    .split("\n")
-    .map((line) => {
-      for (const { needle, replacement } of replacements) {
-        if (line.includes(needle)) {
-          return replacement;
-        }
-      }
-      return line;
-    })
-    .join("\n");
+  let next = original;
+  for (const { needle, replacement } of replacements) {
+    next = next.split(needle).join(replacement);
+  }
 
   if (next === original) {
     return false;
@@ -49,21 +98,7 @@ const targets = new Set([
   path.join(root, "node_modules/@elizaos/core/src/security/redact.ts"),
 ]);
 
-const pnpmDir = path.join(root, "node_modules/.pnpm");
-if (existsSync(pnpmDir)) {
-  for (const entry of readdirSync(pnpmDir)) {
-    if (!entry.startsWith("@elizaos+core@")) {
-      continue;
-    }
-    targets.add(
-      path.join(
-        pnpmDir,
-        entry,
-        "node_modules/@elizaos/core/src/security/redact.ts",
-      ),
-    );
-  }
-}
+collectNodeModuleTargets(targets);
 
 let patched = 0;
 for (const target of targets) {
