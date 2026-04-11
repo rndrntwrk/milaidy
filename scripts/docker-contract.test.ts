@@ -138,6 +138,7 @@ describe("Docker contract", () => {
       // biome-ignore lint/suspicious/noTemplateCurlyInString: shell variable assertion
       '-p "${SMOKE_PORT}:${CONTAINER_PORT}"',
     );
+    expect(smokeScript).toContain("--connect-timeout 1 --max-time 3");
     expect(smokeScript).toContain(
       "pushd plugins/plugin-agent-orchestrator >/dev/null",
     );

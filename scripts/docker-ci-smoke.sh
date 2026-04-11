@@ -202,7 +202,7 @@ probe_ok() {
   local url="$1"
   local out="$2"
   local code
-  code="$(curl -sS -o "$out" -w '%{http_code}' "$url" || true)"
+  code="$(curl -sS --connect-timeout 1 --max-time 3 -o "$out" -w '%{http_code}' "$url" || true)"
   case "$code" in
     200)
       return 0
