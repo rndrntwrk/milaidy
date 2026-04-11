@@ -112,51 +112,63 @@ parts:
       # Skip building upstream plugins from source — use npm-published packages
       export MILADY_SKIP_LOCAL_UPSTREAMS=1
 
-      # Strip workspace entries that reference git submodule directories
-      # (plugins/*, eliza/*) which are not available inside the snap build.
-      # Also remove workspace:* dependency refs that point to those packages
-      # and bundleDependencies referencing them.
+      # Use the shared disable-local-eliza-workspace script so snap and
+      # every other SKIP_LOCAL_UPSTREAMS CI path are consistent. The
+      # script strips `eliza/packages/*` from workspaces, rewrites
+      # `@elizaos/core: workspace:*` to the pinned registry version
+      # across every workspace package.json, and cleans the root
+      # `overrides` block so `bun install` and `bun pm pack` produce a
+      # conflict-free lockfile. Snapcraft runs inside a multipass VM
+      # that does NOT inherit `GITHUB_ACTIONS=true`, so we set the
+      # force flag here to opt into the destructive mutation path.
+      MILADY_DISABLE_LOCAL_UPSTREAMS=force node scripts/disable-local-eliza-workspace.mjs
+
+      # Remove plugin source directories so tsc/build does not attempt
+      # to compile them (their deps like coding-agent-adapters are
+      # absent from the snap sandbox). The workspace rewrite above
+      # already remapped `@elizaos/plugin-*: workspace:*` → registry
+      # pins for the ones that need them at build time, so removing
+      # the on-disk plugin sources is safe.
       node -e '
         const fs = require("fs");
         const path = require("path");
-
-        function stripSubmoduleRefs(pkgPath) {
-          if (!fs.existsSync(pkgPath)) return;
-          const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
-          // Strip workspace entries for submodule dirs
-          if (pkg.workspaces) {
-            pkg.workspaces = pkg.workspaces.filter(w =>
-              !w.startsWith("plugins/") && !w.startsWith("eliza/")
-            );
-          }
-          // Remove workspace:* deps that resolve to submodule packages
-          for (const section of ["dependencies", "devDependencies", "optionalDependencies"]) {
-            if (!pkg[section]) continue;
-            for (const [k, v] of Object.entries(pkg[section])) {
-              if (v === "workspace:*" && k === "@elizaos/plugin-agent-orchestrator") {
-                delete pkg[section][k];
-              }
-            }
-          }
-          // Clean bundleDependencies
-          if (Array.isArray(pkg.bundleDependencies)) {
-            pkg.bundleDependencies = pkg.bundleDependencies.filter(
-              d => d !== "@elizaos/plugin-agent-orchestrator"
-            );
-          }
-          fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + "\n");
-        }
-
-        stripSubmoduleRefs("package.json");
-        stripSubmoduleRefs("packages/agent/package.json");
-
-        // Remove plugin source directories so tsc/build does not attempt
-        // to compile them (their deps like coding-agent-adapters are absent).
+        if (!fs.existsSync("plugins")) process.exit(0);
         for (const dir of fs.readdirSync("plugins").filter(d =>
           fs.statSync(path.join("plugins", d)).isDirectory()
         )) {
           fs.rmSync(path.join("plugins", dir), { recursive: true, force: true });
         }
+      '
+
+      # Also drop any remaining `workspace:*` entries from root /
+      # packages/agent — these are the non-`@elizaos/core` plugin
+      # workspace refs (plugin-agent-orchestrator, etc.) that the
+      # shared script intentionally leaves alone because they do
+      # resolve cleanly on a normal CI checkout. In the snap sandbox
+      # those resolutions fail because we just removed the plugin
+      # source dirs, so strip them here.
+      node -e '
+        const fs = require("fs");
+        function stripWorkspaceDeps(pkgPath) {
+          if (!fs.existsSync(pkgPath)) return;
+          const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+          for (const section of ["dependencies", "devDependencies", "optionalDependencies"]) {
+            if (!pkg[section]) continue;
+            for (const [k, v] of Object.entries(pkg[section])) {
+              if (typeof v === "string" && v.startsWith("workspace:")) {
+                delete pkg[section][k];
+              }
+            }
+          }
+          if (Array.isArray(pkg.bundleDependencies)) {
+            pkg.bundleDependencies = pkg.bundleDependencies.filter(
+              d => !d.startsWith("@elizaos/") && !d.startsWith("@miladyai/")
+            );
+          }
+          fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + "\n");
+        }
+        stripWorkspaceDeps("package.json");
+        stripWorkspaceDeps("packages/agent/package.json");
       '
 
       # Install dependencies — skip postinstall to avoid ensure-bundled-workspaces

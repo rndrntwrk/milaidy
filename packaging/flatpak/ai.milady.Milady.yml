@@ -114,5 +114,12 @@ modules:
         path: ai.milady.Milady.metainfo.xml
       - type: file
         path: milady-wrapper.sh
+      # Flatpak's `type: dir` source copies the *contents* of `path`
+      # into the build working directory, not the directory itself. So
+      # without `dest: icons`, the files would land at `128x128/...`
+      # and the `install icons/128x128/...` commands above would fail
+      # with "No such file or directory". Preserve the `icons/`
+      # subdirectory so the install paths match.
       - type: dir
         path: icons
+        dest: icons
