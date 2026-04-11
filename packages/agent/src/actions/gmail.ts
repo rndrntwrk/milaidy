@@ -1268,9 +1268,21 @@ function normalizeBatchSendItems(
 // dist-tag's exported type — the published type hasn't caught up yet
 // so tsc rejects the property when compiled against node_modules on CI
 // (local resolves via paths map to the newer eliza/ source and accepts
-// it natively). `satisfies Action` on a widened intersection lets the
-// property live without weakening the rest of the shape.
-export const gmailAction = {
+// it natively).
+//
+// We used to end this declaration with
+// `} satisfies Action & { suppressPostActionContinuation?: boolean }`,
+// but `satisfies` keeps the inferred literal type on the `const`. When
+// the Docker CI Smoke build walks `packages/agent` with
+// `declaration: true`, TypeScript tries to emit a portable `.d.ts`
+// and fails with TS2742 because the inferred literal transitively
+// references `@bufbuild/protobuf` types that are not in this package's
+// direct dependency graph. An explicit type annotation on the binding
+// makes `gmailAction` widen to the declared type, so tsc only has to
+// emit the (portable) declared shape in the `.d.ts`.
+export const gmailAction: Action & {
+  suppressPostActionContinuation?: boolean;
+} = {
   name: "GMAIL_ACTION",
   similes: [
     "GMAIL",
@@ -1852,4 +1864,4 @@ export const gmailAction = {
       },
     ],
   ] as ActionExample[][],
-} satisfies Action & { suppressPostActionContinuation?: boolean };
+};
