@@ -27,20 +27,25 @@ build time. It connects to:
 account on the login screen, play. No env vars required on the
 milady side.
 
-**Caveat — no bot-SDK on production yet.** The autonomous LLM loop
-(the agent that plays for you) requires the xRSPS server's
-bot-SDK endpoint, which the public deployment does NOT currently
-expose. The plugin's `ScapeGameService` will log
-`SCAPE_BOT_SDK_TOKEN not set` and skip the autonomous loop, but
-the viewer iframe still works so you (or anyone else) can log in
-and play manually. To run the autonomous loop, point the plugin
-at a local xRSPS dev stack — see the "Dev loop" section below.
+**Bot-SDK is live on production.** The autonomous LLM loop connects
+to `wss://scape-96cxt.sevalla.app/botsdk` by default — the same host
+as the main game server, path-routed over the shared HTTP server on
+port 8080, with TLS terminated by Sevalla's ingress. All you need is
+`SCAPE_BOT_SDK_TOKEN` set to the shared secret (matching the server's
+`BOT_SDK_TOKEN` env var) and the autonomous agent will spawn and
+start playing. Without the token the viewer still works for manual
+play but the loop stays idle.
 
 ## What you need (dev loop only)
 
+Only required if you want to point the plugin at a **local** xRSPS
+dev stack instead of the production deployment.
+
 1. **xRSPS running locally**, with the bot-SDK endpoint enabled:
    - `BOT_SDK_TOKEN` set in the environment
-   - Port 43595 reachable from wherever the milady runtime runs
+   - The main game HTTP server (default port 8080) reachable from
+     wherever milady runs — the bot-SDK is routed on the same port
+     at path `/botsdk`
 2. **The React client running** locally (default
    `http://localhost:3000`)
 3. **milady runtime** with this plugin installed (it already is if
@@ -57,7 +62,7 @@ The plugin reads settings from:
 | Variable                   | Default                                           | Purpose                                                                                              |
 |----------------------------|---------------------------------------------------|------------------------------------------------------------------------------------------------------|
 | `SCAPE_CLIENT_URL`         | `https://scape-client-2sqyc.kinsta.page`         | URL the viewer iframe points at. Defaults to the live 'scape deployment; override to `http://localhost:3000` for local dev. |
-| `SCAPE_BOT_SDK_URL`        | `ws://127.0.0.1:43595`                           | WebSocket URL of the xRSPS bot-SDK endpoint. Local-dev only; no public bot-SDK endpoint yet.         |
+| `SCAPE_BOT_SDK_URL`        | `wss://scape-96cxt.sevalla.app/botsdk`           | WebSocket URL of the xRSPS bot-SDK endpoint. Defaults to the live Sevalla deployment (shared HTTP server, path-routed at `/botsdk`, TLS by ingress). Override to `ws://127.0.0.1:8080/botsdk` for local dev. |
 | `SCAPE_BOT_SDK_TOKEN`      | *(unset → autonomous loop disabled)*             | Must match the xRSPS server's `BOT_SDK_TOKEN`. Without it the viewer still works for manual play.   |
 | `SCAPE_AGENT_NAME`         | `scape-agent`                                     | In-game display name for the agent. Used as the account username (scrypt-auth).                    |
 | `SCAPE_AGENT_PASSWORD`     | *(unset → auto-generated + persisted to disk)*   | Plaintext password for the agent's account. Auto-registers on first spawn.                         |
@@ -71,11 +76,15 @@ The plugin reads settings from:
 If you just want to click **'scape** in the milady apps grid and
 land in the game, you don't need to set anything. The plugin
 defaults to the production deployment URL, so the viewer iframe
-will load the hosted client directly. Register an account on
-the login screen (xRSPS scrypts your password and stores it in
-an ephemeral file on the server — note that accounts are wiped
-on every server redeploy until Sevalla-backed Postgres persistence
-lands) and play.
+will load the hosted client directly. Register an account on the
+login screen (xRSPS scrypts your password and writes it to a
+Sevalla-managed Postgres database, so accounts persist across
+server redeploys) and play.
+
+To enable the autonomous agent loop on top of the viewer, set
+`SCAPE_BOT_SDK_TOKEN` to the xRSPS server's `BOT_SDK_TOKEN`
+shared secret. Everything else defaults correctly to the live
+deployment.
 
 Skip the rest of this section unless you want to run a local
 dev stack.
@@ -101,6 +110,7 @@ watch all three tabs with `Ctrl-A` + arrow keys.
 # Terminal 2 — milady
 cd ~/milady
 export SCAPE_CLIENT_URL=http://localhost:3000
+export SCAPE_BOT_SDK_URL=ws://127.0.0.1:8080/botsdk
 export SCAPE_BOT_SDK_TOKEN=dev-secret
 export SCAPE_AGENT_PASSWORD=my-dev-password
 bun run dev  # or however you start milady
@@ -123,12 +133,17 @@ it a high-priority goal.
 ### 1. Deploy xRSPS with TLS
 
 Follow `xrsps-typescript/docs/deployment.md` for the Caddy reverse
-proxy setup. Your xRSPS server ends up at `wss://game.yourdomain.com`
-(binary client) and optionally a second subdomain for the bot-SDK.
+proxy setup. Your xRSPS server ends up at `wss://game.yourdomain.com`.
+The bot-SDK shares the main HTTP server and is routed by URL path
+at `/botsdk`, so the same host/port handles both the binary game
+protocol and the TOON agent protocol — TLS is terminated once at
+the ingress.
 
-**Important**: the bot-SDK endpoint is separate from the main game
-port and should be firewalled to only the milady runtime host. Do
-NOT expose 43595 to the public internet.
+**Important**: the bot-SDK is gated on `BOT_SDK_TOKEN` (if the env
+var is unset the endpoint is disabled entirely). Anyone who learns
+the token can spawn agents into your world — treat it like a root
+password. Rotate it via the xRSPS app env-var panel and trigger a
+restart deploy to take effect.
 
 ### 2. Host the React client
 
@@ -143,7 +158,7 @@ In your milady character's secrets or the milady runtime env:
 
 ```bash
 SCAPE_CLIENT_URL=https://game-client.yourdomain.com
-SCAPE_BOT_SDK_URL=wss://game.yourdomain.com:43595
+SCAPE_BOT_SDK_URL=wss://game.yourdomain.com/botsdk
 SCAPE_BOT_SDK_TOKEN=<same secret as xrsps BOT_SDK_TOKEN>
 SCAPE_AGENT_NAME=your-agent-name
 SCAPE_AGENT_PASSWORD=<strong password, ≥12 chars>

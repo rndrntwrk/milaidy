@@ -144,8 +144,8 @@ function main(): void {
     console.log("\n[6] defaults are preserved");
     const urlParam = scape.parameters.find((p) => p.key === "SCAPE_BOT_SDK_URL");
     assertTrue(
-        `SCAPE_BOT_SDK_URL default = "ws://127.0.0.1:43595" (got "${urlParam?.default}")`,
-        urlParam?.default === "ws://127.0.0.1:43595",
+        `SCAPE_BOT_SDK_URL default = "wss://scape-96cxt.sevalla.app/botsdk" (got "${urlParam?.default}")`,
+        urlParam?.default === "wss://scape-96cxt.sevalla.app/botsdk",
     );
     const clientParam = scape.parameters.find((p) => p.key === "SCAPE_CLIENT_URL");
     assertTrue(
