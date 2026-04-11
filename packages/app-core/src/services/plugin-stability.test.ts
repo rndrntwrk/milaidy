@@ -1004,8 +1004,7 @@ describe("Version Skew Detection (issue #10)", () => {
 
   it("trajectories stays aligned with the core runtime export surface", () => {
     expect(OPTIONAL_CORE_PLUGINS).not.toContain("trajectories");
-    const coreMod =
-      vi.importActual<Record<string, unknown>>("@elizaos/core");
+    const coreMod = vi.importActual<Record<string, unknown>>("@elizaos/core");
     return coreMod.then((mod) => {
       expect(mod.trajectoriesPlugin).toEqual(
         expect.objectContaining({
