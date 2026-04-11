@@ -1,7 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
-import {
-  DiscordLocalService,
-} from "../src/runtime/discord-local-plugin";
+import { DiscordLocalService } from "../src/runtime/discord-local-plugin";
+
+// The Discord local connector wraps the macOS Discord.app RPC, and
+// `DiscordLocalService.requireConfig()` throws
+// `Discord local connector currently supports macOS only` on any non-
+// darwin platform — which is the correct production behavior. Skip
+// this unit test on CI runners that aren't macOS so we don't trip
+// that guard when all we want to exercise is the
+// subscribe/unsubscribe bookkeeping with mocked RPC calls.
+const describeDarwinOnly =
+  process.platform === "darwin" ? describe : describe.skip;
 
 function createRuntime() {
   const settings: Record<string, string> = {
@@ -17,7 +25,7 @@ function createRuntime() {
   } as unknown;
 }
 
-describe("DiscordLocalService.subscribeChannelMessages", () => {
+describeDarwinOnly("DiscordLocalService.subscribeChannelMessages", () => {
   it("unsubscribes channels removed from the selection before subscribing new ones", async () => {
     const service = new DiscordLocalService(createRuntime() as never);
     const sendRpcCommand = vi.fn(async () => ({}));
