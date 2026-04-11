@@ -23,12 +23,17 @@ vi.mock("node:fs", () => ({
   },
 }));
 
-// Mock Bun.spawn (used in openInEditor to launch the editor detached)
+// Mock Bun.spawn (used in openInEditor to launch the editor detached).
+// This test file runs under vitest (Node runtime, not Bun), so the `Bun`
+// global does not exist. Assigning to `Bun.spawn` directly would throw
+// `ReferenceError: Bun is not defined` at file load time. Attach a fake
+// `Bun` object to `globalThis` so the production code path that calls
+// `Bun.spawn(...)` resolves to our mock without needing the real runtime.
 const mockBunSpawn = vi.fn(() => ({
   unref: vi.fn(),
   exited: Promise.resolve(0),
 }));
-(Bun as unknown as { spawn: unknown }).spawn = mockBunSpawn;
+(globalThis as { Bun?: { spawn: unknown } }).Bun = { spawn: mockBunSpawn };
 
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
