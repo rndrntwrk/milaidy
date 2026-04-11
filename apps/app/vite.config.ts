@@ -27,6 +27,44 @@ const _require = createRequire(import.meta.url);
 const here = path.dirname(fileURLToPath(import.meta.url));
 const miladyRoot = path.resolve(here, "../..");
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function buildWorkspaceExportAliases(
+  packageName: string,
+  packageJsonPath: string,
+): Array<{ find: RegExp; replacement: string }> {
+  const packageDir = path.dirname(packageJsonPath);
+  const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf8")) as {
+    exports?: Record<string, string | Record<string, unknown>>;
+  };
+
+  const aliases: Array<{ find: RegExp; replacement: string }> = [];
+
+  for (const [key, value] of Object.entries(packageJson.exports || {})) {
+    if (typeof value !== "string") continue;
+
+    const aliasKey =
+      key === "." ? packageName : `${packageName}/${key.replace(/^\.\//, "")}`;
+    const replacement = path.resolve(packageDir, value);
+
+    aliases.push({
+      find: new RegExp(`^${escapeRegExp(aliasKey)}$`),
+      replacement,
+    });
+
+    if (!aliasKey.endsWith(".js") && !aliasKey.endsWith(".css")) {
+      aliases.push({
+        find: new RegExp(`^${escapeRegExp(aliasKey)}\\.js$`),
+        replacement,
+      });
+    }
+  }
+
+  return aliases;
+}
+
 /**
  * Pinned @elizaos/core from the repo root (must match the agent/runtime lock).
  */
@@ -904,34 +942,15 @@ export default defineConfig({
           miladyRoot,
           "packages/app-core/package.json",
         );
-        const appCorePkgDir = path.dirname(appCorePkgPath);
-        const appCorePkg = JSON.parse(fs.readFileSync(appCorePkgPath, "utf8"));
+        const sharedPkgPath = path.resolve(
+          miladyRoot,
+          "packages/shared/package.json",
+        );
 
-        const generatedAliases = [];
-
-        for (const [key, value] of Object.entries(appCorePkg.exports || {})) {
-          if (typeof value === "string") {
-            const aliasKey =
-              key === "."
-                ? "@miladyai/app-core"
-                : `@miladyai/app-core/${key.replace(/^\.\//, "")}`;
-            // If the package exports something ending with .js instead of .ts, we check for .ts locally
-            // But the exports in app-core point directly to .ts, .tsx, .css, so we can just resolve it
-            const targetPath = path.resolve(appCorePkgDir, value);
-
-            generatedAliases.push({
-              find: new RegExp(`^${aliasKey}$`),
-              replacement: targetPath,
-            });
-            // Also map .js extension for users importing it as .js
-            if (!aliasKey.endsWith(".js") && !aliasKey.endsWith(".css")) {
-              generatedAliases.push({
-                find: new RegExp(`^${aliasKey}\\.js$`),
-                replacement: targetPath,
-              });
-            }
-          }
-        }
+        const generatedAliases = [
+          ...buildWorkspaceExportAliases("@miladyai/app-core", appCorePkgPath),
+          ...buildWorkspaceExportAliases("@miladyai/shared", sharedPkgPath),
+        ];
 
         const uiSource = path.resolve(miladyRoot, "packages/ui/src");
         const _autonomousSource = path.resolve(
