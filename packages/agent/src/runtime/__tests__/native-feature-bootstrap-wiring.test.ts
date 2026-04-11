@@ -35,6 +35,18 @@ describe("native feature bootstrap wiring", () => {
     expect(elizaSource).not.toContain("pluginRoles");
   });
 
+  it("guards plugin-commands bootstrap behind a runtime require", () => {
+    expect(elizaSource).not.toContain(
+      'import * as pluginCommands from "@elizaos/plugin-commands";',
+    );
+    expect(elizaSource).toContain(
+      'pluginCommands = require("@elizaos/plugin-commands");',
+    );
+    expect(elizaSource).toContain(
+      '"@elizaos/plugin-commands": pluginCommands',
+    );
+  });
+
   it("guards trajectory bootstrap behind the native trajectories toggle", () => {
     const waitBlock =
       elizaSource.match(

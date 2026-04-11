@@ -61,7 +61,6 @@ import {
 } from "@elizaos/core";
 import * as pluginAgentSkills from "@elizaos/plugin-agent-skills";
 import * as pluginAnthropic from "@elizaos/plugin-anthropic";
-import * as pluginCommands from "@elizaos/plugin-commands";
 import * as pluginCron from "@elizaos/plugin-cron";
 import * as pluginElizacloud from "@elizaos/plugin-elizacloud";
 import * as pluginExperience from "@elizaos/plugin-experience";
@@ -148,6 +147,15 @@ try {
   pluginAgentOrchestrator = require("./agent-orchestrator-compat");
 } catch {
   pluginAgentOrchestrator = null;
+}
+// Keep plugin-commands behind a guarded runtime require. Some published alpha
+// builds advertise dist/index.js without actually shipping it, and a static
+// ESM import here makes the CLI fail before it can print --help/--version.
+let pluginCommands: unknown = null;
+try {
+  pluginCommands = require("@elizaos/plugin-commands");
+} catch {
+  pluginCommands = null;
 }
 
 type SignalShutdownContext = {
@@ -240,7 +248,9 @@ export const STATIC_ELIZA_PLUGINS: Record<string, unknown> = {
   "@elizaos/plugin-shell": pluginShell,
   "@elizaos/plugin-plugin-manager": pluginPluginManager,
   "@elizaos/plugin-agent-skills": pluginAgentSkills,
-  "@elizaos/plugin-commands": pluginCommands,
+  ...(pluginCommands
+    ? { "@elizaos/plugin-commands": pluginCommands }
+    : {}),
   "@elizaos/plugin-pdf": pluginPdf,
   "@elizaos/plugin-openai": pluginOpenai,
   "@elizaos/plugin-anthropic": pluginAnthropic,
