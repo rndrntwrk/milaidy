@@ -82,7 +82,11 @@ function runCommand(command, args, { cwd, env = process.env, label } = {}) {
  * submodule was updated with new source but the stale dist from a prior
  * version still exists on disk.
  */
-function isArtifactStale(manifestPath, artifactPath, { pathExists = existsSync, stat = statSync } = {}) {
+function isArtifactStale(
+  manifestPath,
+  artifactPath,
+  { pathExists = existsSync, stat = statSync } = {},
+) {
   if (!pathExists(artifactPath)) return true;
   try {
     const srcMtime = stat(manifestPath).mtimeMs;
@@ -111,7 +115,10 @@ export async function ensureBundledWorkspaceBuilds(
       continue;
     }
 
-    const stale = isArtifactStale(manifestPath, artifactPath, { pathExists, stat });
+    const stale = isArtifactStale(manifestPath, artifactPath, {
+      pathExists,
+      stat,
+    });
     if (!stale) {
       continue;
     }

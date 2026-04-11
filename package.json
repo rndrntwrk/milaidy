@@ -317,7 +317,7 @@
     "@elizaos/plugin-sql": "workspace:*",
     "@elizaos/plugin-telegram": "2.0.0-alpha.12",
     "@elizaos/config": "1.7.3-alpha.4",
-    "@elizaos/core": "2.0.0-alpha.115",
+    "@elizaos/core": "2.0.0-alpha.124",
     "drizzle-orm": "0.45.1",
     "ai": "6.0.30",
     "@stwd/sdk": "^0.3.0",
