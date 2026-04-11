@@ -74,7 +74,7 @@ export async function handleBlueBubblesRoute(
     helpers.json(res, {
       available: true,
       connected: service.isConnected(),
-      webhookPath: service.getWebhookPath(),
+      webhookPath,
     });
     return true;
   }

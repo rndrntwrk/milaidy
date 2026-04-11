@@ -42,6 +42,13 @@ export interface SignalPairingEvent {
   error?: string;
 }
 
+export interface SignalPairingSnapshot {
+  status: SignalPairingStatus;
+  qrDataUrl: string | null;
+  phoneNumber: string | null;
+  error: string | null;
+}
+
 export interface SignalPairingOptions {
   authDir: string;
   accountId: string;
@@ -55,10 +62,21 @@ interface QrCodeModule {
   ) => Promise<string>;
 }
 
+export function classifySignalPairingErrorStatus(
+  errorMessage: string,
+): SignalPairingStatus {
+  return /(timed?\s*out|timeout|expired)/i.test(errorMessage)
+    ? "timeout"
+    : "error";
+}
+
 export class SignalPairingSession {
   private status: SignalPairingStatus = "idle";
   private options: SignalPairingOptions;
   private aborted = false;
+  private qrDataUrl: string | null = null;
+  private phoneNumber: string | null = null;
+  private lastError: string | null = null;
 
   constructor(options: SignalPairingOptions) {
     this.options = options;
@@ -66,6 +84,9 @@ export class SignalPairingSession {
 
   async start(): Promise<void> {
     this.aborted = false;
+    this.qrDataUrl = null;
+    this.phoneNumber = null;
+    this.lastError = null;
     this.setStatus("initializing");
 
     let native: typeof import("@elizaos/signal-native");
@@ -102,6 +123,8 @@ export class SignalPairingSession {
         color: { dark: "#000000", light: "#ffffff" },
       });
 
+      this.qrDataUrl = qrDataUrl;
+      this.lastError = null;
       this.setStatus("waiting_for_qr");
       this.options.onEvent({
         type: "signal-qr",
@@ -122,17 +145,22 @@ export class SignalPairingSession {
         const profile = await native.getProfile(this.options.authDir);
         uuid = profile.uuid;
         phoneNumber = profile.phoneNumber ?? "";
-      } catch {
-        // Profile fetch is non-critical.
+      } catch (error) {
+        console.warn(
+          `${LOG_PREFIX} Failed to read Signal profile after linking: ${String(error)}`,
+        );
       }
 
+      this.qrDataUrl = null;
+      this.phoneNumber = phoneNumber || null;
+      this.lastError = null;
       this.setStatus("connected");
       this.options.onEvent({
         type: "signal-status",
         accountId: this.options.accountId,
         status: "connected",
         uuid,
-        phoneNumber,
+        phoneNumber: this.phoneNumber ?? undefined,
       });
 
       console.info(
@@ -144,11 +172,14 @@ export class SignalPairingSession {
       const errMsg = String(err);
       console.error(`${LOG_PREFIX} Linking failed:`, errMsg);
 
-      this.setStatus("error");
+      this.qrDataUrl = null;
+      this.lastError = errMsg;
+      const status = classifySignalPairingErrorStatus(errMsg);
+      this.setStatus(status);
       this.options.onEvent({
         type: "signal-status",
         accountId: this.options.accountId,
-        status: "error",
+        status,
         error: errMsg,
       });
     }
@@ -160,6 +191,15 @@ export class SignalPairingSession {
 
   getStatus(): SignalPairingStatus {
     return this.status;
+  }
+
+  getSnapshot(): SignalPairingSnapshot {
+    return {
+      status: this.status,
+      qrDataUrl: this.qrDataUrl,
+      phoneNumber: this.phoneNumber,
+      error: this.lastError,
+    };
   }
 
   private setStatus(status: SignalPairingStatus): void {

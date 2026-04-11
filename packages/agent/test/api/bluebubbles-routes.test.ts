@@ -1,12 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
-import type {
-  BlueBubblesRouteState,
-} from "../../src/api/bluebubbles-routes";
+import type { BlueBubblesRouteState } from "../../src/api/bluebubbles-routes";
 import {
   handleBlueBubblesRoute,
   resolveBlueBubblesWebhookPath,
 } from "../../src/api/bluebubbles-routes";
-import { readJsonBody, sendJson, sendJsonError } from "../../src/api/http-helpers";
+import {
+  readJsonBody,
+  sendJson,
+  sendJsonError,
+} from "../../src/api/http-helpers";
 import {
   createMockHttpResponse,
   createMockIncomingMessage,
@@ -61,6 +63,44 @@ describe("BlueBubbles routes", () => {
     expect(getJson()).toMatchObject({
       available: false,
       connected: false,
+      webhookPath: "/webhooks/bluebubbles",
+    });
+  });
+
+  it("reports the resolved webhook path even when the service path is blank", async () => {
+    const req = createMockIncomingMessage({
+      method: "GET",
+      url: "/api/bluebubbles/status",
+      headers: { host: "localhost:2138" },
+    });
+    const { res, getStatus, getJson } = createMockHttpResponse<{
+      available: boolean;
+      connected: boolean;
+      webhookPath: string;
+    }>();
+
+    const handled = await handleBlueBubblesRoute(
+      req,
+      res,
+      "/api/bluebubbles/status",
+      "GET",
+      buildState({
+        runtime: {
+          getService: () => ({
+            isConnected: vi.fn(() => true),
+            getWebhookPath: vi.fn(() => " "),
+            handleWebhook: vi.fn(),
+          }),
+        },
+      }),
+      helpers,
+    );
+
+    expect(handled).toBe(true);
+    expect(getStatus()).toBe(200);
+    expect(getJson()).toMatchObject({
+      available: true,
+      connected: true,
       webhookPath: "/webhooks/bluebubbles",
     });
   });

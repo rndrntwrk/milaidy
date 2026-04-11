@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  classifySignalPairingErrorStatus,
   type SignalPairingEvent,
   SignalPairingSession,
   sanitizeAccountId,
@@ -60,11 +61,32 @@ describe("signal-pairing", () => {
 
     it("starts in idle state", () => {
       expect(session.getStatus()).toBe("idle");
+      expect(session.getSnapshot()).toEqual({
+        status: "idle",
+        qrDataUrl: null,
+        phoneNumber: null,
+        error: null,
+      });
     });
 
     it("stop() is safe before start()", () => {
       expect(() => session.stop()).not.toThrow();
       expect(events).toHaveLength(0);
+    });
+  });
+
+  describe("classifySignalPairingErrorStatus", () => {
+    it("maps timeout-like failures to timeout", () => {
+      expect(
+        classifySignalPairingErrorStatus("Provisioning link timed out"),
+      ).toBe("timeout");
+      expect(
+        classifySignalPairingErrorStatus("QR code expired before scan"),
+      ).toBe("timeout");
+    });
+
+    it("maps other failures to error", () => {
+      expect(classifySignalPairingErrorStatus("network refused")).toBe("error");
     });
   });
 });

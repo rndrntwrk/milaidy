@@ -278,6 +278,9 @@ declare module "./client-base" {
       status: string;
       authExists: boolean;
       serviceConnected: boolean;
+      qrDataUrl: string | null;
+      phoneNumber: string | null;
+      error: string | null;
     }>;
     startSignalPairing(accountId?: string): Promise<{
       ok: boolean;
