@@ -1,7 +1,7 @@
 import {
   applySubscriptionCredentials,
   deleteCredentials,
-} from "@miladyai/agent/auth";
+} from "../auth/index.js";
 import { SUBSCRIPTION_PROVIDER_MAP } from "../auth/types.js";
 import type { ElizaConfig } from "../config/types.eliza.js";
 import {
