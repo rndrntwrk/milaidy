@@ -24,6 +24,9 @@ android {
 
 repositories {
     google()
+    maven {
+        url = uri(rootProject.ext.mavenCentralMirrorUrl)
+    }
     mavenCentral()
 }
 

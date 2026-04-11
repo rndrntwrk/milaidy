@@ -14,6 +14,28 @@ const SNAPCRAFT_PATH = path.resolve(
   __dirname,
   "../packaging/snap/snapcraft.yaml",
 );
+const ANDROID_GRADLE_FILES = [
+  path.resolve(__dirname, "../apps/app/android/build.gradle"),
+  path.resolve(__dirname, "../apps/app/plugins/agent/android/build.gradle"),
+  path.resolve(__dirname, "../apps/app/plugins/camera/android/build.gradle"),
+  path.resolve(__dirname, "../apps/app/plugins/canvas/android/build.gradle"),
+  path.resolve(__dirname, "../apps/app/plugins/gateway/android/build.gradle"),
+  path.resolve(__dirname, "../apps/app/plugins/location/android/build.gradle"),
+  path.resolve(
+    __dirname,
+    "../apps/app/plugins/mobile-signals/android/build.gradle",
+  ),
+  path.resolve(
+    __dirname,
+    "../apps/app/plugins/screencapture/android/build.gradle",
+  ),
+  path.resolve(__dirname, "../apps/app/plugins/swabble/android/build.gradle"),
+  path.resolve(__dirname, "../apps/app/plugins/talkmode/android/build.gradle"),
+  path.resolve(
+    __dirname,
+    "../apps/app/plugins/websiteblocker/android/build.gradle",
+  ),
+];
 
 function readWorkflow(name: string): string {
   return fs.readFileSync(path.join(WORKFLOWS_DIR, name), "utf-8");
@@ -104,6 +126,33 @@ describe("CI workflow audit regressions", () => {
 
     expect(script).toContain('pod repo add-cdn trunk "${TRUNK_REPO_URL}"');
     expect(script).toContain('pod repo add trunk "${TRUNK_REPO_URL}"');
+  });
+
+  it("android gradle files keep the Maven Central mirror ahead of mavenCentral()", () => {
+    const rootGradle = fs.readFileSync(ANDROID_GRADLE_FILES[0], "utf-8");
+    expect(rootGradle).toContain(
+      "https://maven-central.storage-download.googleapis.com/maven2/",
+    );
+    expect(rootGradle).toContain(
+      "url = uri('https://maven-central.storage-download.googleapis.com/maven2/')",
+    );
+    expect(
+      rootGradle.indexOf(
+        "url = uri('https://maven-central.storage-download.googleapis.com/maven2/')",
+      ),
+    ).toBeLessThan(rootGradle.indexOf("mavenCentral()"));
+    expect(rootGradle).toContain(
+      "mavenCentralMirrorUrl = miladyMavenCentralMirrorUrl",
+    );
+
+    for (const file of ANDROID_GRADLE_FILES.slice(1)) {
+      const content = fs.readFileSync(file, "utf-8");
+      expect(content).toContain("uri(rootProject.ext.mavenCentralMirrorUrl)");
+      expect(content).toMatch(/mavenCentral\(\)/);
+      expect(
+        content.indexOf("uri(rootProject.ext.mavenCentralMirrorUrl)"),
+      ).toBeLessThan(content.indexOf("mavenCentral()"));
+    }
   });
 
   it("snap packaging strips removed workspace refs and invalidates the stale Bun lockfile", () => {
