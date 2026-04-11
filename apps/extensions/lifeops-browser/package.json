@@ -6,6 +6,8 @@
   "scripts": {
     "build": "bun scripts/build.mjs chrome",
     "build:chrome": "bun scripts/build.mjs chrome",
-    "build:safari-webextension": "bun scripts/build.mjs safari"
+    "build:safari-webextension": "bun scripts/build.mjs safari",
+    "package:chrome": "bun scripts/package-chrome.mjs",
+    "package:safari": "bun scripts/package-safari.mjs"
   }
 }
