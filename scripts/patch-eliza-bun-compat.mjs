@@ -8,12 +8,12 @@ const replacements = [
     needle:
       'String.raw`\\b[A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD)',
     replacement:
-      '\t"\\\\b[A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD)\\\\b\\\\s*[=:]\\\\s*(["\\\']?)([^\\\\s"\'\\\\\\\\]+)\\\\1",',
+      `\t"\\\\b[A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD)\\\\b\\\\s*[=:]\\\\s*([\\"']?)([^\\\\s\\"'\\\\\\\\]+)\\\\1",`,
   },
   {
     needle: 'String.raw`--(?:api[-_]?key|token|secret|password|passwd)',
     replacement:
-      '\t"--(?:api[-_]?key|token|secret|password|passwd)\\\\s+(["\\\']?)([^\\\\s"\']+)\\\\1",',
+      `\t"--(?:api[-_]?key|token|secret|password|passwd)\\\\s+([\\"']?)([^\\\\s\\"']+)\\\\1",`,
   },
 ];
 
