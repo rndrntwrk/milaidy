@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
@@ -10,7 +11,10 @@ import {
 
 const repoRoot = path.dirname(fileURLToPath(import.meta.url));
 const elizaCoreEntry = getElizaCoreEntry(repoRoot);
-const elizaCoreRolesEntry = path.join(
+// See vitest.config.ts for the rationale — the shim is the canonical
+// runtime resolution for `@elizaos/core/roles` when the repo-local eliza
+// checkout is absent (CI published-only mode).
+const elizaCoreRolesSource = path.join(
   repoRoot,
   "eliza",
   "packages",
@@ -18,6 +22,9 @@ const elizaCoreRolesEntry = path.join(
   "src",
   "roles.ts",
 );
+const elizaCoreRolesEntry = fs.existsSync(elizaCoreRolesSource)
+  ? elizaCoreRolesSource
+  : path.join(repoRoot, "scripts", "lib", "elizaos-core-roles-shim.js");
 const autonomousSourceRoot = getAutonomousSourceRoot(repoRoot);
 const appCoreSourceRoot = getAppCoreSourceRoot(repoRoot);
 
@@ -29,12 +36,18 @@ export default defineConfig({
         find: "milady/plugin-sdk",
         replacement: path.join(repoRoot, "src", "plugin-sdk", "index.ts"),
       },
+      // The `@elizaos/core/roles` alias is always applied — the shim
+      // fallback in `scripts/lib/elizaos-core-roles-shim.js` is always
+      // present, even when the local eliza checkout is absent (CI
+      // published-only mode). Without this, vitest tries to resolve
+      // the subpath via Node's normal package.json `exports` lookup
+      // and fails with `ERR_MODULE_NOT_FOUND`.
+      {
+        find: "@elizaos/core/roles",
+        replacement: elizaCoreRolesEntry,
+      },
       ...(elizaCoreEntry
         ? [
-            {
-              find: "@elizaos/core/roles",
-              replacement: elizaCoreRolesEntry,
-            },
             {
               find: "@elizaos/core",
               replacement: elizaCoreEntry,
