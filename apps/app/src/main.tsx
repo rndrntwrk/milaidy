@@ -57,7 +57,7 @@ import { applyUiTheme, loadUiTheme } from "@miladyai/app-core/state";
 import { Agent } from "@miladyai/capacitor-agent";
 import { Desktop } from "@miladyai/capacitor-desktop";
 import { StrictMode } from "react";
-import { createRoot } from "react-dom/client";
+import { createRoot, type Root } from "react-dom/client";
 import { MILADY_ENV_ALIASES } from "./brand-env";
 import { MILADY_CHARACTER_CATALOG } from "./character-catalog";
 import { shouldUseCloudOnlyBranding } from "./cloud-only";
@@ -118,6 +118,8 @@ declare global {
     __MILADY_SHARE_QUEUE__?: ShareTargetPayload[];
     __MILADY_CHARACTER_EDITOR__?: typeof CharacterEditor;
     __MILADY_API_BASE__?: string;
+    __MILADY_REACT_ROOT__?: Root;
+    __MILADY_APP_BOOT_PROMISE__?: Promise<void>;
   }
 }
 
@@ -431,7 +433,10 @@ function mountReactApp(): void {
   const rootEl = document.getElementById("root");
   if (!rootEl) throw new Error("Root element #root not found");
 
-  createRoot(rootEl).render(
+  const root = window.__MILADY_REACT_ROOT__ ?? createRoot(rootEl);
+  window.__MILADY_REACT_ROOT__ = root;
+
+  root.render(
     <ErrorBoundary>
       <StrictMode>
         <AppProvider branding={MILADY_BRANDING}>
@@ -515,7 +520,7 @@ function applyStoredDetachedShellTheme(): void {
   applyUiTheme(loadUiTheme());
 }
 
-async function main(): Promise<void> {
+async function runMain(): Promise<void> {
   setupPlatformStyles();
 
   try {
@@ -545,6 +550,19 @@ async function main(): Promise<void> {
 
   mountReactApp();
   await initializePlatform();
+}
+
+function main(): Promise<void> {
+  if (window.__MILADY_APP_BOOT_PROMISE__) {
+    return window.__MILADY_APP_BOOT_PROMISE__;
+  }
+
+  const bootPromise = runMain().catch((err) => {
+    delete window.__MILADY_APP_BOOT_PROMISE__;
+    throw err;
+  });
+  window.__MILADY_APP_BOOT_PROMISE__ = bootPromise;
+  return bootPromise;
 }
 
 if (document.readyState === "loading") {
