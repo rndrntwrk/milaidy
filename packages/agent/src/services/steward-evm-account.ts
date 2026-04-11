@@ -26,9 +26,9 @@ import type {
   Hex,
   SignableMessage,
   TransactionSerializable,
+  TypedData,
   TypedDataDefinition,
 } from "viem";
-import type { TypedData } from "abitype";
 import { toAccount } from "viem/accounts";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
