@@ -9,6 +9,17 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const DEFAULT_REPO_ROOT = path.resolve(__dirname, "..");
 
+function pluginEntry(name, { cwd, artifact, args = ["run", "build"] } = {}) {
+  const base = cwd ?? path.join("plugins", name, "typescript");
+  return {
+    label: `@elizaos/${name}`,
+    cwd: base,
+    manifest: path.join(base, "package.json"),
+    artifact: path.join(base, artifact ?? path.join("dist", "index.d.ts")),
+    args,
+  };
+}
+
 export const BUNDLED_WORKSPACE_BUILDS = [
   {
     label: "@elizaos/plugin-agent-orchestrator",
@@ -22,24 +33,26 @@ export const BUNDLED_WORKSPACE_BUILDS = [
     ),
     args: ["run", "build"],
   },
-  {
-    label: "@elizaos/plugin-agent-skills",
+  // Workspace plugin submodules that need dist/ built for TypeScript resolution.
+  // These are all workspace:* dependencies in packages/agent and packages/app-core.
+  // When MILADY_SKIP_LOCAL_UPSTREAMS=1 (CI), setup-upstreams skips building these,
+  // so we build them here instead.
+  pluginEntry("plugin-agent-skills", {
     cwd: path.join("plugins", "plugin-agent-skills", "typescript"),
-    manifest: path.join(
-      "plugins",
-      "plugin-agent-skills",
-      "typescript",
-      "package.json",
-    ),
-    artifact: path.join(
-      "plugins",
-      "plugin-agent-skills",
-      "typescript",
-      "dist",
-      "index.js",
-    ),
-    args: ["run", "build"],
-  },
+    artifact: path.join("dist", "index.js"),
+  }),
+  pluginEntry("plugin-anthropic"),
+  pluginEntry("plugin-cron"),
+  pluginEntry("plugin-edge-tts"),
+  pluginEntry("plugin-experience"),
+  pluginEntry("plugin-local-embedding"),
+  pluginEntry("plugin-ollama"),
+  pluginEntry("plugin-openai"),
+  pluginEntry("plugin-personality"),
+  pluginEntry("plugin-plugin-manager"),
+  pluginEntry("plugin-shell"),
+  pluginEntry("plugin-sql"),
+  pluginEntry("plugin-trust"),
 ];
 
 function runCommand(command, args, { cwd, env = process.env, label } = {}) {

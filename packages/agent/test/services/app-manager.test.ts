@@ -1134,21 +1134,7 @@ describe("AppManager", () => {
     expect(info?.displayName).toBe("Hyperscape");
   });
 
-  // This test asserts on `session.telemetry` populated from the
-  // Hyperscape fixture server (goals, thoughts, quick-actions,
-  // nearby locations). The live-telemetry path depends on a
-  // Hyperscape app-route module (`resolveLaunchSession`) that lives
-  // in the external `@hyperscape/plugin-hyperscape` repo and is not
-  // checked out in this repo's CI. Without it, `app-manager.ts` falls
-  // through to `buildAppSession`, which returns a session with
-  // `telemetry: undefined` — so the assertion at line 1183 fails.
-  // The feature was introduced by commit 9ed880257 ("Finish
-  // Hyperscape launch auto-provisioning") but the consuming route
-  // module never landed in this repo. Skip until it does.
-  // TODO(hyperscape): re-enable once the external plugin-hyperscape
-  // repo ships a `resolveLaunchSession` implementation that produces
-  // the telemetry shape this test asserts on.
-  it.skip("resolves a live Hyperscape session at launch instead of returning a synthetic pending session", async () => {
+  it("resolves a live Hyperscape session at launch instead of returning a synthetic pending session", async () => {
     const fixtureServer = await startHyperscapeFixtureServer();
     process.env.HYPERSCAPE_API_URL = fixtureServer.url;
 
