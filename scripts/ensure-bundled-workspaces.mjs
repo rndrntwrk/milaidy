@@ -9,17 +9,6 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const DEFAULT_REPO_ROOT = path.resolve(__dirname, "..");
 
-function pluginEntry(name, { cwd, artifact, args = ["run", "build"] } = {}) {
-  const base = cwd ?? path.join("plugins", name, "typescript");
-  return {
-    label: `@elizaos/${name}`,
-    cwd: base,
-    manifest: path.join(base, "package.json"),
-    artifact: path.join(base, artifact ?? path.join("dist", "index.d.ts")),
-    args,
-  };
-}
-
 export const BUNDLED_WORKSPACE_BUILDS = [
   {
     label: "@elizaos/plugin-agent-orchestrator",
@@ -33,26 +22,45 @@ export const BUNDLED_WORKSPACE_BUILDS = [
     ),
     args: ["run", "build"],
   },
-  // Workspace plugin submodules that need dist/ built for TypeScript resolution.
-  // These are all workspace:* dependencies in packages/agent and packages/app-core.
-  // When MILADY_SKIP_LOCAL_UPSTREAMS=1 (CI), setup-upstreams skips building these,
-  // so we build them here instead.
-  pluginEntry("plugin-agent-skills", {
+  {
+    label: "@elizaos/plugin-agent-skills",
     cwd: path.join("plugins", "plugin-agent-skills", "typescript"),
-    artifact: path.join("dist", "index.js"),
-  }),
-  pluginEntry("plugin-anthropic"),
-  pluginEntry("plugin-cron"),
-  pluginEntry("plugin-edge-tts"),
-  pluginEntry("plugin-experience"),
-  pluginEntry("plugin-local-embedding"),
-  pluginEntry("plugin-ollama"),
-  pluginEntry("plugin-openai"),
-  pluginEntry("plugin-personality"),
-  pluginEntry("plugin-plugin-manager"),
-  pluginEntry("plugin-shell"),
-  pluginEntry("plugin-sql"),
-  pluginEntry("plugin-trust"),
+    manifest: path.join(
+      "plugins",
+      "plugin-agent-skills",
+      "typescript",
+      "package.json",
+    ),
+    artifact: path.join(
+      "plugins",
+      "plugin-agent-skills",
+      "typescript",
+      "dist",
+      "index.js",
+    ),
+    args: ["run", "build"],
+  },
+  // NOTE: earlier revisions of this file (cherry-picked from the
+  // unmerged commit eb4846c50) tried to build 12 more workspace
+  // plugins — plugin-anthropic, plugin-cron, plugin-edge-tts,
+  // plugin-experience, plugin-local-embedding, plugin-ollama,
+  // plugin-openai, plugin-personality, plugin-plugin-manager,
+  // plugin-shell, plugin-sql, plugin-trust — so that their `dist/`
+  // declarations would be available for TypeScript resolution when
+  // `MILADY_SKIP_LOCAL_UPSTREAMS=1`. In practice at least one of
+  // those plugins (plugin-anthropic) has a pre-existing
+  // `ModelType.TEXT_MEDIUM` compat bug against the current
+  // `@elizaos/core`, which makes the postinstall fail as soon as
+  // the anthropic build is attempted:
+  //
+  //   Error: index.ts(170,43): error TS2339: Property 'TEXT_MEDIUM'
+  //   does not exist on type '{...}'.
+  //
+  // Nothing we ship here consumes those plugins at build-time from
+  // source, so building them is a footgun. Keep only the two
+  // historically-bundled builds (plugin-agent-orchestrator and
+  // plugin-agent-skills) that actually need to be on disk for
+  // downstream packaging to work.
 ];
 
 function runCommand(command, args, { cwd, env = process.env, label } = {}) {
