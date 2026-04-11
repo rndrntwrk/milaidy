@@ -108,6 +108,36 @@ export default mergeConfig(
             "coding-agent-module.ts",
           ),
         },
+        {
+          // `@elizaos-plugins/client-telegram-account`'s package.json
+          // `main`/`module`/`exports` all point at `dist/index.js`,
+          // and CI (SKIP_LOCAL_UPSTREAMS=1) never builds that dist. So
+          // the package fails to resolve even though tests do
+          // `vi.mock(...)` it — vitest still has to resolve the path
+          // before it can install the mock. Alias to the plugin stub
+          // so resolution succeeds without needing a built artifact.
+          find: "@elizaos-plugins/client-telegram-account",
+          replacement: path.join(repoRoot, "test", "stubs", "plugin-stub.mjs"),
+        },
+        {
+          // `@elizaos/plugin-plugin-manager` is a real dependency in
+          // `packages/app-core/src/services/app-manager.test.ts` — the
+          // test does `new PluginManagerService(...)` and then
+          // `vi.spyOn(...)` on its instance methods. The published
+          // npm dist is not built under SKIP_LOCAL_UPSTREAMS, and
+          // pointing at the submodule source pulls in `fs-extra` and
+          // other transitive deps that aren't installed at the repo
+          // root for unit tests. Alias to a local stub that exports
+          // the same shape the test relies on (spy-stubbable methods,
+          // a `pluginRegistry` namespace with `resetRegistryCache`).
+          find: "@elizaos/plugin-plugin-manager",
+          replacement: path.join(
+            repoRoot,
+            "test",
+            "stubs",
+            "plugin-plugin-manager-module.ts",
+          ),
+        },
       ],
     },
     test: {
