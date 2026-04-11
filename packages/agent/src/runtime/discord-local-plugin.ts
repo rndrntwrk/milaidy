@@ -1027,6 +1027,14 @@ export class DiscordLocalService extends Service {
       message.author?.username ||
       `Discord ${channelId}`;
 
+    // `roomName` is accepted by the local `./eliza` source but not by
+    // the npm alpha dist-tag of `@elizaos/core`. Cast around the
+    // excess-property check so the call works under both resolutions;
+    // the runtime itself reads `roomName` in both versions, the type
+    // just lags in the published package.
+    type EnsureConnectionArg = Parameters<
+      typeof this.runtime.ensureConnection
+    >[0] & { roomName?: string };
     await this.runtime.ensureConnection({
       entityId,
       roomId,
@@ -1043,7 +1051,7 @@ export class DiscordLocalService extends Service {
         discordChannelId: channelId,
         ...(guildId ? { discordServerId: guildId } : {}),
       },
-    });
+    } as EnsureConnectionArg);
 
     const attachments: Media[] = (message.attachments ?? []).flatMap(
       (attachment) => {

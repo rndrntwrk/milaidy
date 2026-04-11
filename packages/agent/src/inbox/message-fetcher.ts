@@ -140,7 +140,7 @@ export async function fetchChatMessages(
       });
 
     results.push({
-      id: memory.id,
+      id: memory.id ?? `memory-${Date.now()}-${results.length}`,
       source,
       roomId: memory.roomId,
       entityId: memory.entityId,
