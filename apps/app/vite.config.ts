@@ -47,7 +47,34 @@ function buildWorkspaceExportAliases(
 
     const aliasKey =
       key === "." ? packageName : `${packageName}/${key.replace(/^\.\//, "")}`;
+    const wildcardCount = (aliasKey.match(/\*/g) || []).length;
     const replacement = path.resolve(packageDir, value);
+
+    if (wildcardCount > 0) {
+      let captureIndex = 0;
+      const aliasPattern = escapeRegExp(aliasKey).replace(
+        /\\\*/g,
+        () => `(.+)`,
+      );
+      const wildcardReplacement = replacement.replace(
+        /\*/g,
+        () => `$${++captureIndex}`,
+      );
+
+      aliases.push({
+        find: new RegExp(`^${aliasPattern}$`),
+        replacement: wildcardReplacement,
+      });
+
+      if (!aliasKey.endsWith(".js") && !aliasKey.endsWith(".css")) {
+        aliases.push({
+          find: new RegExp(`^${aliasPattern}\\.js$`),
+          replacement: wildcardReplacement,
+        });
+      }
+
+      continue;
+    }
 
     aliases.push({
       find: new RegExp(`^${escapeRegExp(aliasKey)}$`),
@@ -942,6 +969,10 @@ export default defineConfig({
           miladyRoot,
           "packages/app-core/package.json",
         );
+        const agentPkgPath = path.resolve(
+          miladyRoot,
+          "packages/agent/package.json",
+        );
         const sharedPkgPath = path.resolve(
           miladyRoot,
           "packages/shared/package.json",
@@ -949,6 +980,7 @@ export default defineConfig({
 
         const generatedAliases = [
           ...buildWorkspaceExportAliases("@miladyai/app-core", appCorePkgPath),
+          ...buildWorkspaceExportAliases("@miladyai/agent", agentPkgPath),
           ...buildWorkspaceExportAliases("@miladyai/shared", sharedPkgPath),
         ];
 
