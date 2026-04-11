@@ -1097,8 +1097,29 @@ export function patchHttpCreateServerForMiladyCompat(
         syncCompatConfigFiles();
       });
 
+      const pathname = new URL(req.url ?? "/", "http://localhost").pathname;
+      if (
+        req.method === "GET" &&
+        (pathname === "/health" ||
+          pathname === "/health/live" ||
+          pathname === "/health/ready")
+      ) {
+        const ready = Boolean(state?.current);
+        const isReadyRoute = pathname === "/health/ready";
+        sendJsonResponse(
+          res,
+          isReadyRoute && !ready ? 503 : 200,
+          {
+            ok: isReadyRoute ? ready : true,
+            ready,
+            agentState: ready ? "running" : "starting",
+            uptime: Math.floor(process.uptime()),
+          },
+        );
+        return;
+      }
+
       if (state) {
-        const pathname = new URL(req.url ?? "/", "http://localhost").pathname;
         if (
           pathname.startsWith("/api/database") ||
           pathname.startsWith("/api/trajectories")
