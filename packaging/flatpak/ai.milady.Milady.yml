@@ -25,6 +25,19 @@ finish-args:
 
 build-options:
   no-debuginfo: true
+  # Allow network access during the build phase so `npm install -g
+  # miladyai` (and any transitive Node.js downloads) can reach the
+  # registry. By default flatpak-builder sandboxes away network access
+  # during `build`, which caused our CI to fail with:
+  #   npm error request to https://registry.npmjs.org/miladyai failed,
+  #   reason: getaddrinfo EAI_AGAIN registry.npmjs.org
+  # Flathub's own submission pipeline does NOT allow this — see the
+  # long-form comment on the `milady` module below for the switch to
+  # offline sources (flatpak-node-generator) before attempting a
+  # Flathub submission. Local and self-hosted CI builds use the
+  # network flag.
+  build-args:
+    - --share=network
 
 modules:
   # ── Node.js 22 LTS ───────────────────────────────────────────────────
