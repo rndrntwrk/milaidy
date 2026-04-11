@@ -1,6 +1,7 @@
 import { BlueBubblesStatusPanel } from "./BlueBubblesStatusPanel";
 import { DiscordLocalConnectorPanel } from "./DiscordLocalConnectorPanel";
 import { IMessageStatusPanel } from "./IMessageStatusPanel";
+import { LifeOpsBrowserSetupPanel } from "./LifeOpsBrowserSetupPanel";
 import { SignalQrOverlay } from "./SignalQrOverlay";
 import { TelegramBotSetupPanel } from "./TelegramBotSetupPanel";
 import { WhatsAppQrOverlay } from "./WhatsAppQrOverlay";
@@ -13,7 +14,11 @@ function normalizePluginId(pluginId: string): string {
 }
 
 export function hasConnectorSetupPanel(pluginId: string): boolean {
-  switch (normalizePluginId(pluginId)) {
+  const normalized = normalizePluginId(pluginId);
+  if (normalized.includes("lifeopsbrowser")) {
+    return true;
+  }
+  switch (normalized) {
     case "whatsapp":
     case "signal":
     case "discordlocal":
@@ -27,7 +32,11 @@ export function hasConnectorSetupPanel(pluginId: string): boolean {
 }
 
 export function ConnectorSetupPanel({ pluginId }: { pluginId: string }) {
-  switch (normalizePluginId(pluginId)) {
+  const normalized = normalizePluginId(pluginId);
+  if (normalized.includes("lifeopsbrowser")) {
+    return <LifeOpsBrowserSetupPanel />;
+  }
+  switch (normalized) {
     case "whatsapp":
       return <WhatsAppQrOverlay accountId="default" />;
     case "signal":

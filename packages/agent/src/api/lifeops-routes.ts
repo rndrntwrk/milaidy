@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import type http from "node:http";
 import { type AgentRuntime, logger, type UUID } from "@elizaos/core";
 import type {
@@ -46,6 +47,11 @@ import { createIntegrationTelemetrySpan } from "../diagnostics/integration-obser
 import { LifeOpsService, LifeOpsServiceError } from "../lifeops/service.js";
 import { isRetryableLifeOpsStorageError } from "../lifeops/sql.js";
 import type { ReadJsonBodyOptions } from "./http-helpers.js";
+import {
+  buildLifeOpsBrowserCompanionPackage,
+  getLifeOpsBrowserCompanionDownloadFile,
+  getLifeOpsBrowserCompanionPackageStatus,
+} from "./lifeops-browser-packaging.js";
 
 export interface LifeOpsRouteContext {
   req: http.IncomingMessage;
@@ -1043,6 +1049,12 @@ export async function handleLifeOpsRoutes(
     });
   }
 
+  if (method === "GET" && pathname === "/api/lifeops/browser/packages") {
+    return runRoute(ctx, async () => {
+      json(res, { status: getLifeOpsBrowserCompanionPackageStatus() });
+    });
+  }
+
   if (
     method === "POST" &&
     pathname === "/api/lifeops/browser/companions/sync"
@@ -1068,6 +1080,59 @@ export async function handleLifeOpsRoutes(
   if (method === "GET" && pathname === "/api/lifeops/browser/tabs") {
     return runRoute(ctx, async (service) => {
       json(res, { tabs: await service.listBrowserTabs() });
+    });
+  }
+
+  const browserPackageBuildMatch = pathname.match(
+    /^\/api\/lifeops\/browser\/packages\/([^/]+)\/build$/,
+  );
+  if (method === "POST" && browserPackageBuildMatch) {
+    const browser = decodePathComponent(
+      browserPackageBuildMatch[1],
+      res,
+      "browser package target",
+    );
+    if (!browser) return true;
+    if (browser !== "chrome" && browser !== "safari") {
+      ctx.error(res, "browser must be chrome or safari", 400);
+      return true;
+    }
+    return runRoute(ctx, async () => {
+      json(res, {
+        status: await buildLifeOpsBrowserCompanionPackage(browser),
+      });
+    });
+  }
+
+  const browserPackageDownloadMatch = pathname.match(
+    /^\/api\/lifeops\/browser\/packages\/([^/]+)\/download$/,
+  );
+  if (method === "GET" && browserPackageDownloadMatch) {
+    const browser = decodePathComponent(
+      browserPackageDownloadMatch[1],
+      res,
+      "browser package target",
+    );
+    if (!browser) return true;
+    if (browser !== "chrome" && browser !== "safari") {
+      ctx.error(res, "browser must be chrome or safari", 400);
+      return true;
+    }
+    return runRoute(ctx, async () => {
+      const artifact = getLifeOpsBrowserCompanionDownloadFile(browser);
+      res.statusCode = 200;
+      res.setHeader("Content-Type", artifact.contentType);
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename="${artifact.filename}"`,
+      );
+      await new Promise<void>((resolve, reject) => {
+        const stream = fs.createReadStream(artifact.path);
+        stream.on("error", reject);
+        res.on("error", reject);
+        stream.on("end", resolve);
+        stream.pipe(res);
+      });
     });
   }
 

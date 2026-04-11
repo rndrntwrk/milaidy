@@ -765,6 +765,15 @@ export interface LifeOpsBrowserCompanionSyncResponse {
   session: LifeOpsBrowserSession | null;
 }
 
+export interface LifeOpsBrowserCompanionPackageStatus {
+  extensionPath: string | null;
+  chromeBuildPath: string | null;
+  chromePackagePath: string | null;
+  safariWebExtensionPath: string | null;
+  safariAppPath: string | null;
+  safariPackagePath: string | null;
+}
+
 export interface LifeOpsWorkflowActionBase {
   id?: string;
   resultKey?: string;

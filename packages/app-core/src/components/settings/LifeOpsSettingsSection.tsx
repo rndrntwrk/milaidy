@@ -22,6 +22,7 @@ import { useMemo } from "react";
 import { client } from "../../api";
 import { useGoogleLifeOpsConnector } from "../../hooks";
 import { useApp } from "../../state";
+import { LifeOpsBrowserSetupPanel } from "../connectors/LifeOpsBrowserSetupPanel";
 
 function modeLabel(mode: LifeOpsConnectorMode): string {
   switch (mode) {
@@ -457,6 +458,7 @@ export function LifeOpsSettingsSection() {
           />
         </CardContent>
       </Card>
+      <LifeOpsBrowserSetupPanel />
     </div>
   );
 }

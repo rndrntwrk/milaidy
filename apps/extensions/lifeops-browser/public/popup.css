@@ -1,10 +1,6 @@
 :root {
   color-scheme: light;
-  font-family:
-    "SF Pro Text",
-    "Inter",
-    system-ui,
-    sans-serif;
+  font-family: "SF Pro Text", "Inter", system-ui, sans-serif;
   background:
     radial-gradient(circle at top left, #d6f5e8, transparent 42%),
     linear-gradient(180deg, #f9f6ef 0%, #efe8d9 100%);
@@ -87,6 +83,47 @@ input {
   color: #1f2a1f;
 }
 
+select {
+  height: 38px;
+  border: 1px solid rgba(40, 68, 49, 0.16);
+  border-radius: 10px;
+  padding: 0 12px;
+  background: rgba(255, 255, 255, 0.88);
+  color: #1f2a1f;
+}
+
+textarea {
+  border: 1px solid rgba(40, 68, 49, 0.16);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.88);
+  color: #1f2a1f;
+  resize: vertical;
+  font: inherit;
+}
+
+.import-card {
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid rgba(38, 68, 50, 0.12);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.7);
+  display: grid;
+  gap: 10px;
+}
+
+.import-copy h2 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.import-copy p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #5c695e;
+}
+
 .actions {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
@@ -106,6 +143,11 @@ button {
 button.primary {
   background: #1d6b47;
   color: #f6fff9;
+}
+
+button.secondary {
+  background: #dce6df;
+  color: #233326;
 }
 
 button.danger {

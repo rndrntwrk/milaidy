@@ -25,6 +25,13 @@
           <input id="apiBaseUrl" type="url" placeholder="http://127.0.0.1:31337" />
         </label>
         <label>
+          <span>Browser</span>
+          <select id="browser" disabled>
+            <option value="chrome">Chrome</option>
+            <option value="safari">Safari</option>
+          </select>
+        </label>
+        <label>
           <span>Companion ID</span>
           <input id="companionId" type="text" placeholder="UUID from LifeOps pairing" />
         </label>
@@ -44,6 +51,19 @@
           <span>Companion Label</span>
           <input id="label" type="text" placeholder="LifeOps Browser chrome Default" />
         </label>
+      </section>
+
+      <section class="import-card">
+        <div class="import-copy">
+          <h2>Pairing JSON</h2>
+          <p>Paste the JSON copied from LifeOps, then import it to fill and save this browser profile.</p>
+        </div>
+        <textarea
+          id="pairingJson"
+          rows="7"
+          placeholder='{"apiBaseUrl":"http://127.0.0.1:31337","companionId":"...","pairingToken":"...","browser":"chrome"}'
+        ></textarea>
+        <button id="import" class="secondary" type="button">Import Pairing JSON</button>
       </section>
 
       <footer class="actions">
