@@ -12,6 +12,7 @@ import type {
   CompleteLifeOpsBrowserSessionRequest,
   CompleteLifeOpsOccurrenceRequest,
   ConfirmLifeOpsBrowserSessionRequest,
+  CreateLifeOpsBrowserCompanionPairingRequest,
   CreateLifeOpsBrowserSessionRequest,
   CreateLifeOpsCalendarEventRequest,
   CreateLifeOpsDefinitionRequest,
@@ -29,7 +30,9 @@ import type {
   LifeOpsAuditEvent,
   LifeOpsAuditEventType,
   LifeOpsBrowserAction,
+  LifeOpsBrowserCompanionPairingResponse,
   LifeOpsBrowserCompanionStatus,
+  LifeOpsBrowserCompanionSyncResponse,
   LifeOpsBrowserKind,
   LifeOpsBrowserPageContext,
   LifeOpsBrowserPermissionState,
@@ -107,6 +110,7 @@ import type {
   StartLifeOpsGoogleConnectorRequest,
   StartLifeOpsGoogleConnectorResponse,
   SyncLifeOpsBrowserStateRequest,
+  UpdateLifeOpsBrowserSessionProgressRequest,
   UpdateLifeOpsBrowserSettingsRequest,
   UpdateLifeOpsDefinitionRequest,
   UpdateLifeOpsGoalRequest,
@@ -3590,6 +3594,42 @@ function createBrowserSessionActions(
   }));
 }
 
+function hashBrowserCompanionPairingToken(token: string): string {
+  return crypto
+    .createHash("sha256")
+    .update(requireNonEmptyString(token, "pairingToken"))
+    .digest("hex");
+}
+
+function browserSessionMatchesCompanion(
+  session: LifeOpsBrowserSession,
+  companion: LifeOpsBrowserCompanionStatus,
+): boolean {
+  if (session.browser && session.browser !== companion.browser) {
+    return false;
+  }
+  if (session.companionId && session.companionId !== companion.id) {
+    return false;
+  }
+  if (session.profileId && session.profileId !== companion.profileId) {
+    return false;
+  }
+  return true;
+}
+
+function normalizeBrowserSessionActionIndex(
+  value: unknown,
+  maxActions: number,
+): number {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
+    fail(400, "currentActionIndex must be a non-negative integer");
+  }
+  if (maxActions <= 0) {
+    return 0;
+  }
+  return Math.min(value, maxActions - 1);
+}
+
 function resolveAwaitingBrowserActionId(
   actions: LifeOpsBrowserAction[],
 ): string | null {
@@ -6672,6 +6712,88 @@ export class LifeOpsService {
     return session;
   }
 
+  private async requireBrowserCompanion(
+    companionId: string,
+    pairingToken: string,
+  ): Promise<LifeOpsBrowserCompanionStatus> {
+    const credential = await this.repository.getBrowserCompanionCredential(
+      this.agentId(),
+      requireNonEmptyString(companionId, "companionId"),
+    );
+    if (!credential?.pairingTokenHash) {
+      fail(401, "browser companion pairing is invalid");
+    }
+    if (
+      credential.pairingTokenHash !==
+      hashBrowserCompanionPairingToken(pairingToken)
+    ) {
+      fail(401, "browser companion pairing is invalid");
+    }
+    return credential.companion;
+  }
+
+  private async claimQueuedBrowserSession(
+    companion: LifeOpsBrowserCompanionStatus,
+  ): Promise<LifeOpsBrowserSession | null> {
+    const claimable = (await this.listBrowserSessions())
+      .filter(
+        (session) =>
+          session.status === "queued" &&
+          browserSessionMatchesCompanion(session, companion),
+      )
+      .sort((left, right) => {
+        const leftMs = Date.parse(left.createdAt);
+        const rightMs = Date.parse(right.createdAt);
+        if (
+          Number.isFinite(leftMs) &&
+          Number.isFinite(rightMs) &&
+          leftMs !== rightMs
+        ) {
+          return leftMs - rightMs;
+        }
+        return left.createdAt.localeCompare(right.createdAt);
+      })[0];
+    if (!claimable) {
+      return null;
+    }
+    const nowIso = new Date().toISOString();
+    const nextSession: LifeOpsBrowserSession = {
+      ...claimable,
+      status: "running",
+      metadata: mergeMetadata(claimable.metadata, {
+        claimedAt: nowIso,
+        claimedByCompanionId: companion.id,
+      }),
+      updatedAt: nowIso,
+    };
+    await this.repository.updateBrowserSession(nextSession);
+    await this.recordBrowserAudit(
+      "browser_session_updated",
+      nextSession.id,
+      "browser session claimed by companion",
+      {
+        companionId: companion.id,
+        browser: companion.browser,
+        profileId: companion.profileId,
+      },
+      {
+        status: nextSession.status,
+      },
+    );
+    return nextSession;
+  }
+
+  private async requireBrowserSessionForCompanion(
+    companion: LifeOpsBrowserCompanionStatus,
+    sessionId: string,
+  ): Promise<LifeOpsBrowserSession> {
+    const session = await this.getBrowserSession(sessionId);
+    if (!browserSessionMatchesCompanion(session, companion)) {
+      fail(403, "browser session does not belong to this browser companion");
+    }
+    return session;
+  }
+
   async listDefinitions(): Promise<LifeOpsDefinitionRecord[]> {
     const definitions = await this.repository.listDefinitions(this.agentId());
     const plans = await this.repository.listReminderPlansForOwners(
@@ -9316,6 +9438,101 @@ export class LifeOpsService {
     };
   }
 
+  async createBrowserCompanionPairing(
+    request: CreateLifeOpsBrowserCompanionPairingRequest,
+  ): Promise<LifeOpsBrowserCompanionPairingResponse> {
+    const browser = normalizeEnumValue(
+      request.browser,
+      "browser",
+      LIFEOPS_BROWSER_KINDS,
+    );
+    const profileId = requireNonEmptyString(request.profileId, "profileId");
+    const currentCompanion = await this.repository.getBrowserCompanionByProfile(
+      this.agentId(),
+      browser,
+      profileId,
+    );
+    const profileLabel =
+      normalizeOptionalString(request.profileLabel) ??
+      currentCompanion?.profileLabel ??
+      profileId;
+    const label =
+      normalizeOptionalString(request.label) ??
+      currentCompanion?.label ??
+      `LifeOps Browser ${browser} ${profileLabel}`;
+    const companion = this.buildBrowserCompanion(
+      {
+        browser,
+        profileId,
+        profileLabel,
+        label,
+        extensionVersion: request.extensionVersion ?? null,
+        connectionState: currentCompanion?.connectionState ?? "disconnected",
+        permissions:
+          currentCompanion?.permissions ?? DEFAULT_BROWSER_PERMISSION_STATE,
+        lastSeenAt: currentCompanion?.lastSeenAt ?? null,
+        metadata: request.metadata ?? currentCompanion?.metadata ?? {},
+      },
+      currentCompanion,
+    );
+    await this.repository.upsertBrowserCompanion(companion);
+    const pairingToken = `lobr_${crypto.randomBytes(24).toString("base64url")}`;
+    const nowIso = new Date().toISOString();
+    await this.repository.updateBrowserCompanionPairingToken(
+      this.agentId(),
+      companion.id,
+      hashBrowserCompanionPairingToken(pairingToken),
+      nowIso,
+      nowIso,
+    );
+    return {
+      companion: {
+        ...companion,
+        pairedAt: nowIso,
+        updatedAt: nowIso,
+      },
+      pairingToken,
+    };
+  }
+
+  async syncBrowserCompanion(
+    companionId: string,
+    pairingToken: string,
+    request: SyncLifeOpsBrowserStateRequest,
+  ): Promise<LifeOpsBrowserCompanionSyncResponse> {
+    const companion = await this.requireBrowserCompanion(
+      companionId,
+      pairingToken,
+    );
+    const companionInput = requireRecord(request.companion, "companion");
+    const browser = normalizeEnumValue(
+      companionInput.browser,
+      "companion.browser",
+      LIFEOPS_BROWSER_KINDS,
+    );
+    const profileId = requireNonEmptyString(
+      companionInput.profileId,
+      "companion.profileId",
+    );
+    if (browser !== companion.browser || profileId !== companion.profileId) {
+      fail(403, "browser companion payload does not match the paired profile");
+    }
+    const state = await this.syncBrowserState(request);
+    const settings = await this.getBrowserSettings();
+    const session =
+      settings.enabled &&
+      settings.trackingMode !== "off" &&
+      !this.isBrowserPaused(settings) &&
+      settings.allowBrowserControl
+        ? await this.claimQueuedBrowserSession(state.companion)
+        : null;
+    return {
+      ...state,
+      settings,
+      session,
+    };
+  }
+
   async listBrowserSessions(): Promise<LifeOpsBrowserSession[]> {
     return this.repository.listBrowserSessions(this.agentId());
   }
@@ -9438,6 +9655,74 @@ export class LifeOpsService {
       },
     );
     return nextSession;
+  }
+
+  async updateBrowserSessionProgressFromCompanion(
+    companionId: string,
+    pairingToken: string,
+    sessionId: string,
+    request: UpdateLifeOpsBrowserSessionProgressRequest,
+  ): Promise<LifeOpsBrowserSession> {
+    const companion = await this.requireBrowserCompanion(
+      companionId,
+      pairingToken,
+    );
+    const session = await this.requireBrowserSessionForCompanion(
+      companion,
+      sessionId,
+    );
+    if (
+      session.status !== "queued" &&
+      session.status !== "running" &&
+      session.status !== "awaiting_confirmation"
+    ) {
+      fail(
+        409,
+        `browser session cannot update progress from status ${session.status}`,
+      );
+    }
+    const nextSession: LifeOpsBrowserSession = {
+      ...session,
+      status: "running",
+      currentActionIndex:
+        request.currentActionIndex === undefined
+          ? session.currentActionIndex
+          : normalizeBrowserSessionActionIndex(
+              request.currentActionIndex,
+              session.actions.length,
+            ),
+      result:
+        request.result === undefined
+          ? session.result
+          : {
+              ...session.result,
+              ...requireRecord(request.result, "result"),
+            },
+      metadata:
+        request.metadata === undefined
+          ? session.metadata
+          : mergeMetadata(
+              session.metadata,
+              requireRecord(request.metadata, "metadata"),
+            ),
+      updatedAt: new Date().toISOString(),
+    };
+    await this.repository.updateBrowserSession(nextSession);
+    return nextSession;
+  }
+
+  async completeBrowserSessionFromCompanion(
+    companionId: string,
+    pairingToken: string,
+    sessionId: string,
+    request: CompleteLifeOpsBrowserSessionRequest,
+  ): Promise<LifeOpsBrowserSession> {
+    const companion = await this.requireBrowserCompanion(
+      companionId,
+      pairingToken,
+    );
+    await this.requireBrowserSessionForCompanion(companion, sessionId);
+    return this.completeBrowserSession(sessionId, request);
   }
 
   async getXConnectorStatus(

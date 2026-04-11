@@ -3033,13 +3033,31 @@ export function resolveCorsOrigin(origin?: string): string | null {
   return null;
 }
 
+function isBrowserCompanionExtensionOrigin(origin: string | undefined): boolean {
+  if (!origin) {
+    return false;
+  }
+  const trimmed = origin.trim();
+  return (
+    /^chrome-extension:\/\/[a-z]{32}$/i.test(trimmed) ||
+    /^moz-extension:\/\/[0-9a-f-]+$/i.test(trimmed) ||
+    /^safari-web-extension:\/\/[A-Za-z0-9.-]+$/i.test(trimmed)
+  );
+}
+
 function applyCors(
   req: http.IncomingMessage,
   res: http.ServerResponse,
+  pathname: string,
 ): boolean {
   const origin =
     typeof req.headers.origin === "string" ? req.headers.origin : undefined;
-  const allowed = resolveCorsOrigin(origin);
+  const allowBrowserCompanionOrigin =
+    pathname.startsWith("/api/lifeops/browser/companions/") &&
+    isBrowserCompanionExtensionOrigin(origin);
+  const allowed = allowBrowserCompanionOrigin
+    ? origin?.trim() ?? null
+    : resolveCorsOrigin(origin);
 
   if (origin && !allowed) return false;
 
@@ -3052,7 +3070,7 @@ function applyCors(
     );
     res.setHeader(
       "Access-Control-Allow-Headers",
-      "Content-Type, Authorization, X-Eliza-Token, X-Api-Key, X-Eliza-Export-Token, X-Eliza-Client-Id, X-Eliza-Terminal-Token, X-Eliza-UI-Language",
+      "Content-Type, Authorization, X-Eliza-Token, X-Api-Key, X-Eliza-Export-Token, X-Eliza-Client-Id, X-Eliza-Terminal-Token, X-Eliza-UI-Language, X-Milady-Browser-Companion-Id",
     );
   }
 
@@ -4917,7 +4935,7 @@ async function handleRequest(
     return;
   }
 
-  if (!applyCors(req, res)) {
+  if (!applyCors(req, res, pathname)) {
     json(res, { error: "Origin not allowed" }, 403);
     return;
   }
@@ -4938,6 +4956,7 @@ async function handleRequest(
     !isCloudOnboardingStatusEndpoint &&
     !isWhatsAppWebhookEndpoint &&
     !isBlueBubblesWebhookEndpoint &&
+    !pathname.startsWith("/api/lifeops/browser/companions/") &&
     !isAuthorized(req)
   ) {
     json(res, { error: "Unauthorized" }, 401);
@@ -4952,6 +4971,7 @@ async function handleRequest(
     !isCloudOnboardingStatusEndpoint &&
     !isWhatsAppWebhookEndpoint &&
     !isBlueBubblesWebhookEndpoint &&
+    !pathname.startsWith("/api/lifeops/browser/companions/") &&
     !isAuthorized(req)
   ) {
     json(res, { error: "Unauthorized" }, 401);

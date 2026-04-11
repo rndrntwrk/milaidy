@@ -42,6 +42,11 @@ import {
   toText,
 } from "./sql.js";
 
+type BrowserCompanionCredential = {
+  companion: LifeOpsBrowserCompanionStatus;
+  pairingTokenHash: string | null;
+};
+
 const schemaReady = new WeakSet<object>();
 const schemaInitializing = new WeakMap<object, Promise<void>>();
 const LIFEOPS_SCHEMA_RETRY_DELAY_MS = 150;
@@ -728,6 +733,17 @@ function parseBrowserCompanion(
   };
 }
 
+function parseBrowserCompanionCredential(
+  row: Record<string, unknown>,
+): BrowserCompanionCredential {
+  return {
+    companion: parseBrowserCompanion(row),
+    pairingTokenHash: row.pairing_token_hash
+      ? toText(row.pairing_token_hash)
+      : null,
+  };
+}
+
 function parseBrowserTabSummary(
   row: Record<string, unknown>,
 ): LifeOpsBrowserTabSummary {
@@ -1050,6 +1066,7 @@ async function runLifeOpsSchemaSetup(
       permissions_json TEXT NOT NULL DEFAULT '{}',
       last_seen_at TEXT,
       paired_at TEXT,
+      pairing_token_hash TEXT,
       metadata_json TEXT NOT NULL DEFAULT '{}',
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
@@ -1390,6 +1407,20 @@ async function runLifeOpsSchemaSetup(
     await executeRawSql(
       runtime,
       `ALTER TABLE life_browser_sessions ADD COLUMN ${column.name} ${column.definition}`,
+    );
+  }
+
+  const browserCompanionColumns = [
+    { name: "pairing_token_hash", definition: "TEXT" },
+  ] as const;
+  const existingBrowserCompanionColumns = new Set(
+    await listTableColumns(runtime, "life_browser_companions"),
+  );
+  for (const column of browserCompanionColumns) {
+    if (existingBrowserCompanionColumns.has(column.name)) continue;
+    await executeRawSql(
+      runtime,
+      `ALTER TABLE life_browser_companions ADD COLUMN ${column.name} ${column.definition}`,
     );
   }
 
@@ -3579,6 +3610,23 @@ export class LifeOpsRepository {
     return row ? parseBrowserCompanion(row) : null;
   }
 
+  async getBrowserCompanionCredential(
+    agentId: string,
+    companionId: string,
+  ): Promise<BrowserCompanionCredential | null> {
+    await this.ensureReady();
+    const rows = await executeRawSql(
+      this.runtime,
+      `SELECT *
+         FROM life_browser_companions
+        WHERE agent_id = ${sqlQuote(agentId)}
+          AND id = ${sqlQuote(companionId)}
+        LIMIT 1`,
+    );
+    const row = rows[0];
+    return row ? parseBrowserCompanionCredential(row) : null;
+  }
+
   async upsertBrowserCompanion(
     companion: LifeOpsBrowserCompanionStatus,
   ): Promise<void> {
@@ -3615,6 +3663,25 @@ export class LifeOpsRepository {
         paired_at = COALESCE(life_browser_companions.paired_at, excluded.paired_at),
         metadata_json = excluded.metadata_json,
         updated_at = excluded.updated_at`,
+    );
+  }
+
+  async updateBrowserCompanionPairingToken(
+    agentId: string,
+    companionId: string,
+    pairingTokenHash: string,
+    pairedAt: string,
+    updatedAt: string,
+  ): Promise<void> {
+    await this.ensureReady();
+    await executeRawSql(
+      this.runtime,
+      `UPDATE life_browser_companions
+          SET pairing_token_hash = ${sqlQuote(pairingTokenHash)},
+              paired_at = ${sqlQuote(pairedAt)},
+              updated_at = ${sqlQuote(updatedAt)}
+        WHERE agent_id = ${sqlQuote(agentId)}
+          AND id = ${sqlQuote(companionId)}`,
     );
   }
 
