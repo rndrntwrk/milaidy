@@ -452,19 +452,25 @@ describe("AppManager Integration", () => {
   });
 });
 
-// The Hyperscape Auto-Provisioning tests exercise a partially-
-// implemented launch flow that depends on `PluginManagerService`'s
-// internal registry lookups (e.g. `refreshRegistry` → fetch →
-// `resolveNamedAppInfo`). When unit tests run with the
+// The Hyperscape Auto-Provisioning tests drive the full
+// `appManager.launch()` flow through `PluginManagerService`'s
+// internal registry lookups — specifically, they mock `global.fetch`
+// to return a Hyperscape registry payload from
+// `raw.githubusercontent.com/elizaos-plugins/registry/next/
+// generated-registry.json` and expect the real plugin-manager to
+// fetch that and resolve `@hyperscape/plugin-hyperscape` in the
+// registry cache. Unit tests run against the
 // `@elizaos/plugin-plugin-manager` test stub (see
-// `test/stubs/plugin-plugin-manager-module.ts`), the stub's registry
-// methods return empty results, so `appManager.launch(...,
-// "@hyperscape/plugin-hyperscape")` ends up throwing "App not found in
-// the registry" before the auto-provisioning code path is reached.
-// Skip until the Hyperscape feature ships a real route module and the
-// stub can be replaced with an in-test registry fake.
-// TODO(hyperscape): re-enable once the `@elizaos/app-hyperscape`
-// route module is merged from the external plugin-hyperscape repo.
+// `test/stubs/plugin-plugin-manager-module.ts`) because the real
+// package's `dist/` isn't built under SKIP_LOCAL_UPSTREAMS, and the
+// stub returns empty registry results by design (fs-extra and the
+// plugin's own transitive deps would otherwise fail to resolve).
+// So `appManager.launch(..., "@hyperscape/plugin-hyperscape")`
+// throws `App "@hyperscape/plugin-hyperscape" not found in the
+// registry.` before the auto-provisioning path is reached.
+// Re-enable when the stub grows a configurable registry backend or
+// the real plugin-plugin-manager dist is available under
+// SKIP_LOCAL_UPSTREAMS.
 describe.skip("Hyperscape Auto-Provisioning", () => {
   let appManager: AppManager;
   let pluginManager: PluginManagerService;
