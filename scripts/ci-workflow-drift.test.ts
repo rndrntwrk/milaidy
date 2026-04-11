@@ -95,8 +95,10 @@ describe("CI workflow drift", () => {
     expect(
       countOccurrences(workflow, "uses: ./.github/actions/setup-bun-workspace"),
     ).toBe(6);
-    expect(workflow).toContain('run-postinstall: "false"');
-    expect(workflow).toContain("install-command: bun install");
+    expect(workflow).not.toContain("install-command: bun install\n");
+    expect(
+      countOccurrences(workflow, "install-command: bun install --ignore-scripts"),
+    ).toBeGreaterThanOrEqual(4);
     // removed: submodules: false means the lockfile naturally
     // diverges from checked-in state (missing submodule workspaces).
     expect(workflow).toContain("bun install --ignore-scripts");
