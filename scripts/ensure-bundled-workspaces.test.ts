@@ -122,7 +122,7 @@ describe("ensureBundledWorkspaceBuilds", () => {
 
     expect(workspace).toBeDefined();
     expect(workspace?.args).toEqual([
-      "../../../../scripts/build-bundled-agent-skills-artifact.mjs",
+      "../../../scripts/build-bundled-agent-skills-artifact.mjs",
     ]);
   });
 });
