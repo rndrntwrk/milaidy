@@ -17,8 +17,8 @@ function readWorkflow(name: string): string {
 describe("CI workflow audit regressions", () => {
   it("electrobun workflows keep expected Bun pins", () => {
     const expectedPins: Record<string, string> = {
-      "release-electrobun.yml": "1.3.9",
-      "test-electrobun-release.yml": "1.3.9",
+      "release-electrobun.yml": "1.3.11",
+      "test-electrobun-release.yml": "1.3.11",
     };
     for (const [f, expected] of Object.entries(expectedPins)) {
       const content = readWorkflow(f);
