@@ -4,12 +4,22 @@ import { spawnSync } from "node:child_process";
 
 const root = process.cwd();
 const schemasDir = path.join(root, "eliza/packages/schemas");
-const generatedAgentPath = path.join(
-  root,
-  "eliza/packages/typescript/src/types/generated/eliza/v1/agent_pb.js",
-);
+const generatedAgentCandidates = [
+  path.join(
+    root,
+    "eliza/packages/typescript/src/types/generated/eliza/v1/agent_pb.ts",
+  ),
+  path.join(
+    root,
+    "eliza/packages/typescript/src/types/generated/eliza/v1/agent_pb.js",
+  ),
+];
 
-if (existsSync(generatedAgentPath)) {
+function hasGeneratedAgentType() {
+  return generatedAgentCandidates.some((candidate) => existsSync(candidate));
+}
+
+if (hasGeneratedAgentType()) {
   console.log("[ensure-eliza-generated-types] generated TS protos already present");
   process.exit(0);
 }
@@ -34,9 +44,9 @@ if (result.status !== 0) {
   process.exit(result.status ?? 1);
 }
 
-if (!existsSync(generatedAgentPath)) {
+if (!hasGeneratedAgentType()) {
   console.error(
-    "[ensure-eliza-generated-types] buf generate completed but agent_pb.js is still missing",
+    "[ensure-eliza-generated-types] buf generate completed but agent_pb.{ts,js} is still missing",
   );
   process.exit(1);
 }
