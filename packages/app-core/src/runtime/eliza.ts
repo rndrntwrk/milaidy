@@ -29,7 +29,6 @@ import {
   CHANNEL_PLUGIN_MAP as upstreamChannelPluginMap,
   collectPluginNames as upstreamCollectPluginNames,
   configureLocalEmbeddingPlugin as upstreamConfigureLocalEmbeddingPlugin,
-  shutdownRuntime as upstreamShutdownRuntime,
   startEliza as upstreamStartEliza,
 } from "@miladyai/agent/runtime/eliza";
 import { getLastFailedPluginNames } from "@miladyai/agent/runtime/plugin-resolver";
@@ -112,9 +111,6 @@ export const CHANNEL_PLUGIN_MAP = {
   ...upstreamChannelPluginMap,
   ...INTERNAL_CHANNEL_PLUGIN_OVERRIDES,
 };
-
-/** Guards against registering signal handlers more than once. */
-let signalHandlersRegistered = false;
 
 interface EntityLike {
   id: string;
@@ -1065,106 +1061,13 @@ export async function startEliza(
     }
 
     if (options?.serverOnly) {
-      let currentRuntime =
+      const runtime =
         (await upstreamStartEliza({
           ...options,
           headless: true,
-          serverOnly: false,
+          serverOnly: true,
         })) ?? undefined;
-
-      currentRuntime = currentRuntime
-        ? await repairRuntimeAfterBoot(currentRuntime)
-        : currentRuntime;
-
-      if (!currentRuntime) {
-        return currentRuntime;
-      }
-
-      const { startApiServer } = await import("../api/server");
-      const apiPort = resolveServerOnlyPort(process.env);
-      const { port: actualApiPort } = await startApiServer({
-        port: apiPort,
-        runtime: currentRuntime,
-        onRestart: async () => {
-          if (!currentRuntime) {
-            return null;
-          }
-
-          await upstreamShutdownRuntime(
-            currentRuntime,
-            "milady server-only restart",
-          );
-
-          const restarted =
-            (await upstreamStartEliza({
-              ...options,
-              headless: true,
-              serverOnly: false,
-            })) ?? undefined;
-
-          currentRuntime = restarted
-            ? await repairRuntimeAfterBoot(restarted)
-            : undefined;
-
-          return currentRuntime ?? null;
-        },
-      });
-
-      // WHY: `startApiServer` may bind a different port than requested (busy
-      // socket, upstream policy). Shells, scripts, and follow-up code reading
-      // env must match the real listener or health checks and user-facing URLs
-      // disagree with `GET /api/health`.
-      syncResolvedApiPort(process.env, actualApiPort, {
-        overwriteUiPort: true,
-      });
-      // Invalidate cached CORS port set so the new port is allowed.
-      try {
-        const { invalidateCorsAllowedPorts } = await import(
-          "../api/server-cors.js"
-        );
-        invalidateCorsAllowedPorts();
-      } catch {}
-
-      logger.info(
-        `[milady] API server listening on http://localhost:${actualApiPort}`,
-      );
-      console.log(`[milady] Control UI: http://localhost:${actualApiPort}`);
-      console.log("[milady] Server running. Press Ctrl+C to stop.");
-
-      const keepAlive = setInterval(() => {}, 1 << 30);
-      let isCleaningUp = false;
-      const cleanup = async () => {
-        if (isCleaningUp) {
-          return;
-        }
-        isCleaningUp = true;
-        clearInterval(keepAlive);
-        // Force exit if graceful shutdown hangs for more than 10 seconds.
-        const forceExitTimer = setTimeout(() => {
-          logger.warn("[milady] Shutdown timed out after 10s — forcing exit");
-          process.exit(1);
-        }, 10_000);
-        forceExitTimer.unref?.();
-        // Stop Telegram bot if running (previously registered via separate process.once handlers)
-        if (_miladyTelegramBot) {
-          try {
-            _miladyTelegramBot.stop("SIGINT");
-          } catch {
-            /* ignore */
-          }
-        }
-        if (currentRuntime) {
-          await upstreamShutdownRuntime(currentRuntime, "server-only shutdown");
-        }
-        process.exit(0);
-      };
-
-      if (!signalHandlersRegistered) {
-        signalHandlersRegistered = true;
-        process.on("SIGINT", () => void cleanup());
-        process.on("SIGTERM", () => void cleanup());
-      }
-      return currentRuntime;
+      return runtime ? await repairRuntimeAfterBoot(runtime) : runtime;
     }
 
     const runtime = await upstreamStartEliza(options);
