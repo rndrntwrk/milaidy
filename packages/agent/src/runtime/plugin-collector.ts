@@ -114,6 +114,8 @@ export const OPTIONAL_PLUGIN_MAP: Readonly<Record<string, string>> = {
   browser: "@elizaos/plugin-browser",
   "milady-browser": "@miladyai/plugin-milady-browser",
   miladyBrowser: "@miladyai/plugin-milady-browser",
+  "lifeops-browser": "@miladyai/plugin-lifeops-browser",
+  lifeopsBrowser: "@miladyai/plugin-lifeops-browser",
   vision: "@elizaos/plugin-vision",
   elizacloud: "@elizaos/plugin-elizacloud",
   selfcontrol: "@miladyai/plugin-selfcontrol",
