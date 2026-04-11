@@ -75,9 +75,14 @@ jobs:
         working-directory: apps/app
         run: bun scripts/build.mjs
 
+      - name: Prepare CocoaPods trunk repo
+        run: bash scripts/prepare-ios-cocoapods.sh
+        env:
+          LANG: en_US.UTF-8
+
       - name: Capacitor sync iOS
         working-directory: apps/app
-        run: bunx cap sync ios
+        run: bun run cap:sync:ios
         env:
           LANG: en_US.UTF-8
 

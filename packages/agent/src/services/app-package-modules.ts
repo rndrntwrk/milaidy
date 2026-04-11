@@ -465,14 +465,6 @@ export async function importAppRouteModule(
   const packageName = resolved?.packageName ?? null;
   const label = packageName ?? appIdentifier;
 
-  const builtInModule = await importBuiltInAppRouteModule(
-    appIdentifier,
-    packageName,
-  );
-  if (builtInModule) {
-    return builtInModule;
-  }
-
   try {
     const localModule = await importLocalAppRouteModule(appIdentifier);
     if (localModule) {
@@ -484,6 +476,14 @@ export async function importAppRouteModule(
         err instanceof Error ? err.message : String(err)
       }`,
     );
+  }
+
+  const builtInModule = await importBuiltInAppRouteModule(
+    appIdentifier,
+    packageName,
+  );
+  if (builtInModule) {
+    return builtInModule;
   }
 
   if (!packageName) {

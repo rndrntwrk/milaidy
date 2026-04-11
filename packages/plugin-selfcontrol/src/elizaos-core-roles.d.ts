@@ -9,7 +9,14 @@
  */
 
 declare module "@elizaos/core/roles" {
+  import type { IAgentRuntime, Memory } from "@elizaos/core";
+
   export type RoleName = "OWNER" | "ADMIN" | "USER" | "GUEST";
-  // biome-ignore lint/suspicious/noExplicitAny: structural any shim for a divergent upstream module
-  export function checkSenderRole(...args: any[]): any;
+  export function checkSenderRole(
+    runtime: IAgentRuntime,
+    message: Memory,
+  ): Promise<{
+    role: RoleName;
+    isAdmin: boolean;
+  } | null>;
 }

@@ -39,6 +39,8 @@ declare module "@elizaos/plugin-trust";
 // `@elizaos/core` publishes the full `/roles` subpath, this block can
 // be deleted and the paths map will take over again.
 declare module "@elizaos/core/roles" {
+  import type { IAgentRuntime, Memory, UUID } from "@elizaos/core";
+
   export type RoleName = "OWNER" | "ADMIN" | "USER" | "GUEST";
   export type RoleGrantSource = "owner" | "manual" | "connector_admin";
   export const ROLE_RANK: Record<RoleName, number>;
@@ -46,61 +48,116 @@ declare module "@elizaos/core/roles" {
   // Minimal shapes that preserve the fields consumer code actually
   // reads — anything else is `unknown`-compatible via index signature.
   export interface RolesWorldMetadata {
+    ownership?: {
+      ownerId?: string;
+    };
     roles?: Record<string, RoleName>;
     roleSources?: Record<string, RoleGrantSource>;
-    // biome-ignore lint/suspicious/noExplicitAny: structural any shim for a divergent upstream module
-    [key: string]: any;
+    [key: string]: unknown;
   }
   export type ConnectorAdminWhitelist = Record<string, string[]>;
   export interface RolesConfig {
     connectorAdmins?: ConnectorAdminWhitelist;
-    // biome-ignore lint/suspicious/noExplicitAny: structural any shim for a divergent upstream module
-    [key: string]: any;
+    [key: string]: unknown;
   }
   export interface RoleCheckResult {
-    role?: RoleName;
+    entityId: UUID;
+    role: RoleName;
+    isOwner?: boolean;
+    isAdmin?: boolean;
+    canManageRoles?: boolean;
     source?: RoleGrantSource;
-    // biome-ignore lint/suspicious/noExplicitAny: structural any shim for a divergent upstream module
-    [key: string]: any;
+    [key: string]: unknown;
   }
-  // biome-ignore lint/suspicious/noExplicitAny: structural any shim for a divergent upstream module
-  export type ServerOwnershipState = any;
+  export interface PrivateAccessCheckResult extends RoleCheckResult {
+    canAccessPrivateWorld?: boolean;
+    worldId?: UUID;
+  }
+  export type WorldRoleResolution = {
+    world: Awaited<ReturnType<IAgentRuntime["getWorld"]>>;
+    metadata: RolesWorldMetadata;
+  };
+  export type ConnectorAdminMatch = {
+    connector: string;
+    matchedValue: string;
+  };
+  export type ServerOwnershipState = RolesWorldMetadata | null;
 
-  // biome-ignore lint/suspicious/noExplicitAny: structural any shim for a divergent upstream module
-  export function checkSenderRole(...args: any[]): any;
-  // biome-ignore lint/suspicious/noExplicitAny: structural any shim for a divergent upstream module
-  export function checkSenderPrivateAccess(...args: any[]): any;
-  // biome-ignore lint/suspicious/noExplicitAny: structural any shim for a divergent upstream module
-  export function canModifyRole(...args: any[]): any;
-  // biome-ignore lint/suspicious/noExplicitAny: structural any shim for a divergent upstream module
-  export function getConfiguredOwnerEntityIds(...args: any[]): string[];
-  // biome-ignore lint/suspicious/noExplicitAny: structural any shim for a divergent upstream module
-  export function getConnectorAdminWhitelist(...args: any[]): any;
-  // biome-ignore lint/suspicious/noExplicitAny: structural any shim for a divergent upstream module
-  export function getEntityRole(...args: any[]): any;
-  // biome-ignore lint/suspicious/noExplicitAny: structural any shim for a divergent upstream module
-  export function getLiveEntityMetadataFromMessage(...args: any[]): any;
-  // biome-ignore lint/suspicious/noExplicitAny: structural any shim for a divergent upstream module
-  export function getUserServerRole(...args: any[]): Promise<any>;
-  // biome-ignore lint/suspicious/noExplicitAny: structural any shim for a divergent upstream module
-  export function findWorldsForOwner(...args: any[]): Promise<any>;
-  // biome-ignore lint/suspicious/noExplicitAny: structural any shim for a divergent upstream module
-  export function hasConfiguredCanonicalOwner(...args: any[]): boolean;
-  // biome-ignore lint/suspicious/noExplicitAny: structural any shim for a divergent upstream module
-  export function matchEntityToConnectorAdminWhitelist(...args: any[]): any;
+  export function checkSenderRole(
+    runtime: IAgentRuntime,
+    message: Memory,
+  ): Promise<RoleCheckResult | null>;
+  export function checkSenderPrivateAccess(
+    runtime: IAgentRuntime,
+    message: Memory,
+  ): Promise<PrivateAccessCheckResult | null>;
+  export function canModifyRole(
+    actorRole: RoleName,
+    targetCurrentRole: RoleName,
+    newRole: RoleName,
+  ): boolean;
+  export function getConfiguredOwnerEntityIds(
+    runtime: IAgentRuntime,
+  ): string[];
+  export function getConnectorAdminWhitelist(
+    runtime: IAgentRuntime,
+  ): ConnectorAdminWhitelist;
+  export function getEntityRole(
+    metadata: RolesWorldMetadata | undefined,
+    entityId: string,
+  ): RoleName;
+  export function getLiveEntityMetadataFromMessage(
+    message: Memory,
+  ): Record<string, unknown> | undefined;
+  export function getUserServerRole(
+    runtime: IAgentRuntime,
+    entityId: string,
+    serverId: string,
+  ): Promise<RoleName | "NONE">;
+  export function findWorldsForOwner(
+    runtime: IAgentRuntime,
+    entityId: string,
+  ): Promise<Array<Awaited<ReturnType<IAgentRuntime["getAllWorlds"]>>[number]> | null>;
+  export function hasConfiguredCanonicalOwner(
+    runtime: IAgentRuntime,
+  ): boolean;
+  export function matchEntityToConnectorAdminWhitelist(
+    entityMetadata: Record<string, unknown> | null | undefined,
+    whitelist: ConnectorAdminWhitelist | Record<string, unknown> | undefined,
+  ): ConnectorAdminMatch | null;
   export function normalizeRole(raw: unknown): RoleName;
-  // biome-ignore lint/suspicious/noExplicitAny: structural any shim for a divergent upstream module
-  export function setEntityRole(...args: any[]): any;
-  // biome-ignore lint/suspicious/noExplicitAny: structural any shim for a divergent upstream module
-  export function resolveCanonicalOwnerId(...args: any[]): any;
-  // biome-ignore lint/suspicious/noExplicitAny: structural any shim for a divergent upstream module
-  export function resolveCanonicalOwnerIdForMessage(...args: any[]): Promise<any>;
-  // biome-ignore lint/suspicious/noExplicitAny: structural any shim for a divergent upstream module
-  export function resolveEntityRole(...args: any[]): Promise<any>;
-  // biome-ignore lint/suspicious/noExplicitAny: structural any shim for a divergent upstream module
-  export function resolveWorldForMessage(...args: any[]): Promise<any>;
-  // biome-ignore lint/suspicious/noExplicitAny: structural any shim for a divergent upstream module
-  export function setConnectorAdminWhitelist(...args: any[]): any;
+  export function setEntityRole(
+    runtime: IAgentRuntime,
+    message: Memory,
+    targetEntityId: string,
+    newRole: RoleName,
+    source?: RoleGrantSource,
+  ): Promise<Record<string, RoleName>>;
+  export function resolveCanonicalOwnerId(
+    runtime: IAgentRuntime,
+    metadata?: RolesWorldMetadata,
+  ): string | null;
+  export function resolveCanonicalOwnerIdForMessage(
+    runtime: IAgentRuntime,
+    message: Memory,
+  ): Promise<string | null>;
+  export function resolveEntityRole(
+    runtime: IAgentRuntime,
+    world: Awaited<ReturnType<IAgentRuntime["getWorld"]>>,
+    metadata: RolesWorldMetadata | undefined,
+    entityId: string,
+    options?: {
+      liveEntityMetadata?: Record<string, unknown> | null;
+    },
+  ): Promise<RoleName>;
+  export function resolveWorldForMessage(
+    runtime: IAgentRuntime,
+    message: Memory,
+  ): Promise<WorldRoleResolution | null>;
+  export function setConnectorAdminWhitelist(
+    runtime: IAgentRuntime,
+    whitelist: ConnectorAdminWhitelist | Record<string, unknown> | undefined,
+  ): void;
 }
 
 

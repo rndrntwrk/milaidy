@@ -9,6 +9,11 @@ import { describe, expect, it } from "vitest";
 
 const WORKFLOWS_DIR = path.resolve(__dirname, "../.github/workflows");
 const ACTIONS_DIR = path.resolve(__dirname, "../.github/actions");
+const SCRIPTS_DIR = path.resolve(__dirname, "../scripts");
+const SNAPCRAFT_PATH = path.resolve(
+  __dirname,
+  "../packaging/snap/snapcraft.yaml",
+);
 
 function readWorkflow(name: string): string {
   return fs.readFileSync(path.join(WORKFLOWS_DIR, name), "utf-8");
@@ -79,6 +84,25 @@ describe("CI workflow audit regressions", () => {
     expect(
       fs.existsSync(path.join(ACTIONS_DIR, "setup-bun-workspace/action.yml")),
     ).toBe(true);
+  });
+
+  it("iOS smoke workflow primes CocoaPods before capacitor sync", () => {
+    const content = readWorkflow("mobile-build-smoke.yml");
+    expect(
+      fs.existsSync(path.join(SCRIPTS_DIR, "prepare-ios-cocoapods.sh")),
+    ).toBe(true);
+    expect(content).toContain("name: Prepare CocoaPods trunk repo");
+    expect(content).toContain("run: bash scripts/prepare-ios-cocoapods.sh");
+    expect(content).toContain("run: bun run cap:sync:ios");
+  });
+
+  it("snap packaging strips workspace refs that point at removed plugin workspaces", () => {
+    const content = fs.readFileSync(SNAPCRAFT_PATH, "utf-8");
+    expect(content).toContain("const availableWorkspaceNames = new Set()");
+    expect(content).toContain("dependencySections");
+    expect(content).toContain("pkg.overrides");
+    expect(content).toContain("!availableWorkspaceNames.has(k)");
+    expect(content).toContain("for (const pkgPath of packageJsonPaths)");
   });
 
   it("agent-fix-ci.yml and agent-implement.yml exist with trust scoring", () => {

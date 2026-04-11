@@ -33,7 +33,7 @@ describe("ensureBundledWorkspaceBuilds", () => {
 
       expect(runner).toHaveBeenCalledWith(
         "bun",
-        ["run", "build"],
+        workspace.args,
         expect.objectContaining({
           cwd: workspaceDir,
         }),
@@ -105,7 +105,7 @@ describe("ensureBundledWorkspaceBuilds", () => {
 
       expect(runner).toHaveBeenCalledWith(
         "bun",
-        ["run", "build"],
+        workspace.args,
         expect.objectContaining({
           cwd: workspaceDir,
         }),

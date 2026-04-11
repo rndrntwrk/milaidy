@@ -13,7 +13,7 @@
  */
 
 import type { Plugin, Provider, ProviderResult } from "@elizaos/core";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { validateRuntimeContext } from "../api/plugin-validation";
 import { CONNECTOR_PLUGINS } from "../config/plugin-auto-enable";
 import type { ElizaConfig } from "../config/types.eliza";
@@ -1004,7 +1004,8 @@ describe("Version Skew Detection (issue #10)", () => {
 
   it("trajectories stays aligned with the core runtime export surface", () => {
     expect(OPTIONAL_CORE_PLUGINS).not.toContain("trajectories");
-    const coreMod = import("@elizaos/core") as Promise<Record<string, unknown>>;
+    const coreMod =
+      vi.importActual<Record<string, unknown>>("@elizaos/core");
     return coreMod.then((mod) => {
       expect(mod.trajectoriesPlugin).toEqual(
         expect.objectContaining({

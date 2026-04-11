@@ -23,7 +23,6 @@ declare module "@elizaos/core/roles" {
   export type ConnectorAdminWhitelist = Record<string, string[]>;
   export interface RolesConfig {
     connectorAdmins?: ConnectorAdminWhitelist;
-    // biome-ignore lint/suspicious/noExplicitAny: structural any shim for a divergent upstream module
-    [key: string]: any;
+    [key: string]: unknown;
   }
 }

@@ -20,7 +20,7 @@ export const BUNDLED_WORKSPACE_BUILDS = [
       "dist",
       "index.js",
     ),
-    args: ["run", "build"],
+    args: ["../../scripts/build-bundled-orchestrator-artifact.mjs"],
   },
   {
     label: "@elizaos/plugin-agent-skills",

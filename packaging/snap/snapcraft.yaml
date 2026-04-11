@@ -140,35 +140,100 @@ parts:
         }
       '
 
-      # Also drop any remaining `workspace:*` entries from root /
-      # packages/agent — these are the non-`@elizaos/core` plugin
-      # workspace refs (plugin-agent-orchestrator, etc.) that the
-      # shared script intentionally leaves alone because they do
-      # resolve cleanly on a normal CI checkout. In the snap sandbox
-      # those resolutions fail because we just removed the plugin
-      # source dirs, so strip them here.
+      # Also drop any remaining `workspace:*` entries that point at
+      # plugin workspaces we just removed. This has to scan every
+      # surviving package.json, not just the root + packages/agent,
+      # because package-level devDependencies such as app-core's
+      # plugin-agent-skills/plugin-plugin-manager refs also participate
+      # in Bun's workspace resolution.
       node -e '
         const fs = require("fs");
+        const path = require("path");
+        const repoRoot = process.cwd();
+        const packageJsonPaths = [path.join(repoRoot, "package.json")];
+        const availableWorkspaceNames = new Set();
+        const dependencySections = [
+          "dependencies",
+          "devDependencies",
+          "peerDependencies",
+          "optionalDependencies",
+        ];
+
+        function walk(dir) {
+          if (!fs.existsSync(dir)) return;
+          for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+            if (entry.name === "node_modules" || entry.name.startsWith(".git")) {
+              continue;
+            }
+            const entryPath = path.join(dir, entry.name);
+            if (entry.isDirectory()) {
+              walk(entryPath);
+              continue;
+            }
+            if (entry.isFile() && entry.name === "package.json") {
+              packageJsonPaths.push(entryPath);
+            }
+          }
+        }
+
+        for (const dir of ["apps", "packages", "deploy"]) {
+          walk(path.join(repoRoot, dir));
+        }
+
+        for (const pkgPath of packageJsonPaths) {
+          try {
+            const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+            if (typeof pkg.name === "string" && pkg.name.length > 0) {
+              availableWorkspaceNames.add(pkg.name);
+            }
+          } catch {}
+        }
+
         function stripWorkspaceDeps(pkgPath) {
           if (!fs.existsSync(pkgPath)) return;
           const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
-          for (const section of ["dependencies", "devDependencies", "optionalDependencies"]) {
+          let mutated = false;
+          for (const section of dependencySections) {
             if (!pkg[section]) continue;
             for (const [k, v] of Object.entries(pkg[section])) {
-              if (typeof v === "string" && v.startsWith("workspace:")) {
+              if (
+                typeof v === "string" &&
+                v.startsWith("workspace:") &&
+                !availableWorkspaceNames.has(k)
+              ) {
                 delete pkg[section][k];
+                mutated = true;
               }
+            }
+          }
+          if (pkg.overrides && typeof pkg.overrides === "object") {
+            for (const [k, v] of Object.entries(pkg.overrides)) {
+              if (
+                typeof v === "string" &&
+                v.startsWith("workspace:") &&
+                !availableWorkspaceNames.has(k)
+              ) {
+                delete pkg.overrides[k];
+                mutated = true;
+              }
+            }
+            if (Object.keys(pkg.overrides).length === 0) {
+              delete pkg.overrides;
             }
           }
           if (Array.isArray(pkg.bundleDependencies)) {
             pkg.bundleDependencies = pkg.bundleDependencies.filter(
-              d => !d.startsWith("@elizaos/") && !d.startsWith("@miladyai/")
+              d => availableWorkspaceNames.has(d)
             );
+            mutated = true;
           }
-          fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + "\n");
+          if (mutated) {
+            fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + "\n");
+          }
         }
-        stripWorkspaceDeps("package.json");
-        stripWorkspaceDeps("packages/agent/package.json");
+        for (const pkgPath of packageJsonPaths) {
+          stripWorkspaceDeps(pkgPath);
+        }
       '
 
       # Install dependencies — skip postinstall to avoid ensure-bundled-workspaces

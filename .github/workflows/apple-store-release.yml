@@ -153,9 +153,16 @@ jobs:
             exit 1
           fi
 
+      - name: Prepare CocoaPods trunk repo
+        run: bash scripts/prepare-ios-cocoapods.sh
+        env:
+          LANG: en_US.UTF-8
+
       - name: Sync Capacitor iOS
         working-directory: apps/app
         run: bun run cap:sync:ios
+        env:
+          LANG: en_US.UTF-8
 
       - name: Update Xcode project version
         working-directory: apps/app/ios/App/App.xcodeproj
