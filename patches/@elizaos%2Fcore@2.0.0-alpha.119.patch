@@ -1,0 +1,18 @@
+diff --git a/src/security/redact.ts b/src/security/redact.ts
+index 74cfd9e..2d85497 100644
+--- a/src/security/redact.ts
++++ b/src/security/redact.ts
+@@ -31,11 +31,11 @@ const MIN_SECRET_LENGTH = 8;
+  */
+ const DEFAULT_REDACT_PATTERNS: string[] = [
+ 	// ENV-style assignments.
+-	String.raw`\b[A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD)\b\s*[=:]\s*(["']?)([^\s"'\\]+)\1`,
++	"\\b[A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|PASSWD)\\b\\s*[=:]\\s*([\"']?)([^\\s\"'\\\\]+)\\1",
+ 	// JSON fields.
+ 	String.raw`"(?:apiKey|token|secret|password|passwd|accessToken|refreshToken)"\s*:\s*"([^"]+)"`,
+ 	// CLI flags.
+-	String.raw`--(?:api[-_]?key|token|secret|password|passwd)\s+(["']?)([^\s"']+)\1`,
++	"--(?:api[-_]?key|token|secret|password|passwd)\\s+([\"']?)([^\\s\"']+)\\1",
+ 	// Authorization headers.
+ 	String.raw`Authorization\s*[:=]\s*Bearer\s+([A-Za-z0-9._\-+=]+)`,
+ 	String.raw`\bBearer\s+([A-Za-z0-9._\-+=]{18,})\b`,

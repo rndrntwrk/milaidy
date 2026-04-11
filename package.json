@@ -343,6 +343,7 @@
     "esbuild": "0.28.0"
   },
   "patchedDependencies": {
+    "@elizaos/core@2.0.0-alpha.119": "patches/@elizaos%2Fcore@2.0.0-alpha.119.patch",
     "@noble/curves@2.0.1": "patches/@noble%2Fcurves@2.0.1.patch",
     "proper-lockfile@4.1.2": "patches/proper-lockfile@4.1.2.patch",
     "@pixiv/three-vrm@3.5.1": "patches/@pixiv%2Fthree-vrm@3.5.1.patch"
