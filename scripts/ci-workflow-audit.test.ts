@@ -106,13 +106,15 @@ describe("CI workflow audit regressions", () => {
     expect(script).toContain('pod repo add trunk "${TRUNK_REPO_URL}"');
   });
 
-  it("snap packaging strips workspace refs that point at removed plugin workspaces", () => {
+  it("snap packaging strips removed workspace refs and invalidates the stale Bun lockfile", () => {
     const content = fs.readFileSync(SNAPCRAFT_PATH, "utf-8");
     expect(content).toContain("const availableWorkspaceNames = new Set()");
     expect(content).toContain("dependencySections");
     expect(content).toContain("pkg.overrides");
     expect(content).toContain("!availableWorkspaceNames.has(k)");
     expect(content).toContain("for (const pkgPath of packageJsonPaths)");
+    expect(content).toContain('entry !== "deploy/cloud-agent-template"');
+    expect(content).toContain("rm -f bun.lock");
   });
 
   it("agent-fix-ci.yml and agent-implement.yml exist with trust scoring", () => {

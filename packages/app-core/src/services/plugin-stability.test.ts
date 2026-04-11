@@ -1006,6 +1006,14 @@ describe("Version Skew Detection (issue #10)", () => {
     expect(OPTIONAL_CORE_PLUGINS).not.toContain("trajectories");
     const coreMod = vi.importActual<Record<string, unknown>>("@elizaos/core");
     return coreMod.then((mod) => {
+      // The published alpha used under SKIP_LOCAL_UPSTREAMS can lag the
+      // repo-local core export surface. In both cases, trajectories must
+      // stay out of OPTIONAL_CORE_PLUGINS.
+      if (mod.trajectoriesPlugin === undefined) {
+        expect(mod.trajectoriesPlugin).toBeUndefined();
+        return;
+      }
+
       expect(mod.trajectoriesPlugin).toEqual(
         expect.objectContaining({
           name: "trajectories",

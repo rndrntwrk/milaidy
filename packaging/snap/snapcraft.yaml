@@ -236,6 +236,30 @@ parts:
         }
       '
 
+      # The cloud-agent template is a release helper workspace, not a
+      # snap runtime dependency. Keeping it in the workspace graph
+      # pulls the published @elizaos/plugin-sql package, whose current
+      # alpha manifest self-pins an unavailable alpha.114 build.
+      node -e '
+        const fs = require("fs");
+        const pkgPath = "package.json";
+        const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+        if (Array.isArray(pkg.workspaces)) {
+          const next = pkg.workspaces.filter(
+            (entry) => entry !== "deploy/cloud-agent-template"
+          );
+          if (next.length !== pkg.workspaces.length) {
+            pkg.workspaces = next;
+            fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + "\n");
+          }
+        }
+      '
+
+      # The committed lockfile still references repo-local workspace
+      # paths that no longer exist after the destructive rewrite
+      # above. Force Bun to resolve against the patched manifests.
+      rm -f bun.lock
+
       # Install dependencies — skip postinstall to avoid ensure-bundled-workspaces
       # trying to build the (now-removed) plugin-agent-orchestrator from source.
       bun install --ignore-scripts
