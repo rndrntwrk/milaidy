@@ -14,6 +14,8 @@ declare module "qrcode";
 // static imports in runtime/eliza.ts. Declaring them here as `any`
 // keeps tsc happy on both CI and local (setup-upstreams won) state.
 declare module "@elizaos/plugin-cron";
+declare module "@elizaos/plugin-edge-tts";
+declare module "@elizaos/plugin-edge-tts/node";
 declare module "@elizaos/plugin-experience";
 declare module "@elizaos/plugin-local-embedding";
 declare module "@elizaos/plugin-ollama";

@@ -1263,7 +1263,14 @@ function normalizeBatchSendItems(
   return normalized.length > 0 ? normalized : undefined;
 }
 
-export const gmailAction: Action = {
+// `suppressPostActionContinuation` is a local feature flag the runtime
+// reads via a wider Action shape than the npm `@elizaos/core@alpha`
+// dist-tag's exported type — the published type hasn't caught up yet
+// so tsc rejects the property when compiled against node_modules on CI
+// (local resolves via paths map to the newer eliza/ source and accepts
+// it natively). `satisfies Action` on a widened intersection lets the
+// property live without weakening the rest of the shape.
+export const gmailAction = {
   name: "GMAIL_ACTION",
   similes: [
     "GMAIL",
@@ -1845,4 +1852,4 @@ export const gmailAction: Action = {
       },
     ],
   ] as ActionExample[][],
-};
+} satisfies Action & { suppressPostActionContinuation?: boolean };
