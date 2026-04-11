@@ -114,4 +114,15 @@ describe("ensureBundledWorkspaceBuilds", () => {
       rmSync(repoRoot, { recursive: true, force: true });
     }
   });
+
+  it("keeps plugin-agent-skills on the dedicated JS-only bundled build path", () => {
+    const workspace = BUNDLED_WORKSPACE_BUILDS.find(
+      ({ label }) => label === "@elizaos/plugin-agent-skills",
+    );
+
+    expect(workspace).toBeDefined();
+    expect(workspace?.args).toEqual([
+      "../../../../scripts/build-bundled-agent-skills-artifact.mjs",
+    ]);
+  });
 });

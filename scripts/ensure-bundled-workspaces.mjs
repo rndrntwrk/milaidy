@@ -38,7 +38,7 @@ export const BUNDLED_WORKSPACE_BUILDS = [
       "dist",
       "index.js",
     ),
-    args: ["run", "build"],
+    args: ["../../../../scripts/build-bundled-agent-skills-artifact.mjs"],
   },
   // NOTE: earlier revisions of this file (cherry-picked from the
   // unmerged commit eb4846c50) tried to build 12 more workspace
