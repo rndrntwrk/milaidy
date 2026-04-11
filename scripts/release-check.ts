@@ -40,7 +40,7 @@ const homepageReleaseDataPathCandidates = [
   "apps/web/src/generated/release-data.ts",
 ] as const;
 const requiredWorkflowSnippets = [
-  'BUN_VERSION: "1.3.9"',
+  'BUN_VERSION: "1.3.11"',
   "workflow_call:",
   "name: Validate Release Inputs",
   "Manual branch dispatches must provide inputs.tag; refusing to derive a release tag from package.json.",
@@ -207,7 +207,7 @@ const requiredElectrobunPrWorkflowSnippets = [
   "workflow_dispatch:",
   "permissions:",
   "contents: read",
-  'BUN_VERSION: "1.3.9"',
+  'BUN_VERSION: "1.3.11"',
   "name: Release Workflow Contract",
   "bun install --ignore-scripts",
   "bun run postinstall",
