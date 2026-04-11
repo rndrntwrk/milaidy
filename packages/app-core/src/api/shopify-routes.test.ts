@@ -55,7 +55,8 @@ function fakeReq(
     url,
     headers: { host: "127.0.0.1:31337" },
     on(event: string, cb: (...args: unknown[]) => void) {
-      (listeners[event] ??= []).push(cb);
+      if (!listeners[event]) listeners[event] = [];
+      listeners[event].push(cb);
       return this;
     },
   } as unknown as http.IncomingMessage;
@@ -108,10 +109,10 @@ function shopifyOk(data: unknown): Response {
 
 /** Build a Shopify GraphQL error response */
 function shopifyErr(message: string): Response {
-  return new Response(
-    JSON.stringify({ errors: [{ message }] }),
-    { status: 200, headers: { "content-type": "application/json" } },
-  );
+  return new Response(JSON.stringify({ errors: [{ message }] }), {
+    status: 200,
+    headers: { "content-type": "application/json" },
+  });
 }
 
 // ── Setup / teardown ──────────────────────────────────────────────────────
@@ -134,7 +135,12 @@ describe("handleShopifyRoute", () => {
     const req = fakeReq("GET", "/api/shopify/status");
     const { res, captured } = fakeRes();
 
-    const handled = await handleShopifyRoute(req, res, "/api/shopify/status", "GET");
+    const handled = await handleShopifyRoute(
+      req,
+      res,
+      "/api/shopify/status",
+      "GET",
+    );
 
     expect(handled).toBe(true);
     expect(captured.statusCode).toBe(200);
@@ -164,7 +170,12 @@ describe("handleShopifyRoute", () => {
 
     const req = fakeReq("GET", "/api/shopify/status");
     const { res, captured } = fakeRes();
-    const handled = await handleShopifyRoute(req, res, "/api/shopify/status", "GET");
+    const handled = await handleShopifyRoute(
+      req,
+      res,
+      "/api/shopify/status",
+      "GET",
+    );
 
     expect(handled).toBe(true);
     expect(captured.statusCode).toBe(200);
@@ -194,7 +205,12 @@ describe("handleShopifyRoute", () => {
   it("GET /api/shopify/products returns 404 when not configured", async () => {
     const req = fakeReq("GET", "/api/shopify/products?page=1&limit=20&q=");
     const { res, captured } = fakeRes();
-    const handled = await handleShopifyRoute(req, res, "/api/shopify/products", "GET");
+    const handled = await handleShopifyRoute(
+      req,
+      res,
+      "/api/shopify/products",
+      "GET",
+    );
 
     expect(handled).toBe(true);
     expect(captured.statusCode).toBe(404);
@@ -234,7 +250,12 @@ describe("handleShopifyRoute", () => {
 
     const req = fakeReq("GET", "/api/shopify/products?page=1&limit=20&q=");
     const { res, captured } = fakeRes();
-    const handled = await handleShopifyRoute(req, res, "/api/shopify/products", "GET");
+    const handled = await handleShopifyRoute(
+      req,
+      res,
+      "/api/shopify/products",
+      "GET",
+    );
 
     expect(handled).toBe(true);
     expect(captured.statusCode).toBe(200);
@@ -250,9 +271,18 @@ describe("handleShopifyRoute", () => {
     process.env.SHOPIFY_STORE_DOMAIN = "test.myshopify.com";
     process.env.SHOPIFY_ACCESS_TOKEN = "shpat_test";
 
-    const req = fakeReq("POST", "/api/shopify/products", JSON.stringify({ vendor: "Acme" }));
+    const req = fakeReq(
+      "POST",
+      "/api/shopify/products",
+      JSON.stringify({ vendor: "Acme" }),
+    );
     const { res, captured } = fakeRes();
-    const handled = await handleShopifyRoute(req, res, "/api/shopify/products", "POST");
+    const handled = await handleShopifyRoute(
+      req,
+      res,
+      "/api/shopify/products",
+      "POST",
+    );
 
     expect(handled).toBe(true);
     expect(captured.statusCode).toBe(400);
@@ -289,7 +319,12 @@ describe("handleShopifyRoute", () => {
       JSON.stringify({ title: "New Widget", vendor: "Acme" }),
     );
     const { res, captured } = fakeRes();
-    const handled = await handleShopifyRoute(req, res, "/api/shopify/products", "POST");
+    const handled = await handleShopifyRoute(
+      req,
+      res,
+      "/api/shopify/products",
+      "POST",
+    );
 
     expect(handled).toBe(true);
     expect(captured.statusCode).toBe(201);
@@ -315,7 +350,9 @@ describe("handleShopifyRoute", () => {
                 createdAt: "2026-01-01T00:00:00Z",
                 displayFinancialStatus: "PAID",
                 displayFulfillmentStatus: "UNFULFILLED",
-                totalPriceSet: { shopMoney: { amount: "29.99", currencyCode: "USD" } },
+                totalPriceSet: {
+                  shopMoney: { amount: "29.99", currencyCode: "USD" },
+                },
                 lineItems: { edges: [{ node: { id: "x" } }] },
               },
             },
@@ -327,7 +364,12 @@ describe("handleShopifyRoute", () => {
 
     const req = fakeReq("GET", "/api/shopify/orders?status=any&limit=20");
     const { res, captured } = fakeRes();
-    const handled = await handleShopifyRoute(req, res, "/api/shopify/orders", "GET");
+    const handled = await handleShopifyRoute(
+      req,
+      res,
+      "/api/shopify/orders",
+      "GET",
+    );
 
     expect(handled).toBe(true);
     expect(captured.statusCode).toBe(200);
@@ -386,7 +428,12 @@ describe("handleShopifyRoute", () => {
 
     const req = fakeReq("GET", "/api/shopify/inventory");
     const { res, captured } = fakeRes();
-    const handled = await handleShopifyRoute(req, res, "/api/shopify/inventory", "GET");
+    const handled = await handleShopifyRoute(
+      req,
+      res,
+      "/api/shopify/inventory",
+      "GET",
+    );
 
     expect(handled).toBe(true);
     expect(captured.statusCode).toBe(200);
@@ -402,7 +449,8 @@ describe("handleShopifyRoute", () => {
     process.env.SHOPIFY_STORE_DOMAIN = "test.myshopify.com";
     process.env.SHOPIFY_ACCESS_TOKEN = "shpat_test";
 
-    const pathname = "/api/shopify/inventory/gid://shopify/InventoryItem/1/adjust";
+    const pathname =
+      "/api/shopify/inventory/gid://shopify/InventoryItem/1/adjust";
     const req = fakeReq("POST", pathname, JSON.stringify({ delta: 0 }));
     const { res, captured } = fakeRes();
     const handled = await handleShopifyRoute(req, res, pathname, "POST");
@@ -430,7 +478,10 @@ describe("handleShopifyRoute", () => {
               {
                 node: {
                   id: "gid://shopify/InventoryLevel/1",
-                  location: { id: "gid://shopify/Location/1", name: "Main Warehouse" },
+                  location: {
+                    id: "gid://shopify/Location/1",
+                    name: "Main Warehouse",
+                  },
                 },
               },
             ],
@@ -489,7 +540,12 @@ describe("handleShopifyRoute", () => {
 
     const req = fakeReq("GET", "/api/shopify/customers?limit=20");
     const { res, captured } = fakeRes();
-    const handled = await handleShopifyRoute(req, res, "/api/shopify/customers", "GET");
+    const handled = await handleShopifyRoute(
+      req,
+      res,
+      "/api/shopify/customers",
+      "GET",
+    );
 
     expect(handled).toBe(true);
     expect(captured.statusCode).toBe(200);
@@ -508,7 +564,12 @@ describe("handleShopifyRoute", () => {
 
     const req = fakeReq("GET", "/api/shopify/unknown");
     const { res, captured } = fakeRes();
-    const handled = await handleShopifyRoute(req, res, "/api/shopify/unknown", "GET");
+    const handled = await handleShopifyRoute(
+      req,
+      res,
+      "/api/shopify/unknown",
+      "GET",
+    );
 
     expect(handled).toBe(false);
     expect(captured.headersSent).toBe(false);
@@ -523,7 +584,12 @@ describe("handleShopifyRoute", () => {
 
     const req = fakeReq("GET", "/api/shopify/orders?status=any&limit=20");
     const { res, captured } = fakeRes();
-    const handled = await handleShopifyRoute(req, res, "/api/shopify/orders", "GET");
+    const handled = await handleShopifyRoute(
+      req,
+      res,
+      "/api/shopify/orders",
+      "GET",
+    );
 
     expect(handled).toBe(true);
     expect(captured.statusCode).toBe(500);

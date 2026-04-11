@@ -148,7 +148,10 @@ async function handleListProducts(
 ): Promise<void> {
   const url = new URL(req.url ?? "/", "http://localhost");
   const page = Math.max(1, Number(url.searchParams.get("page") ?? "1"));
-  const limit = Math.min(50, Math.max(1, Number(url.searchParams.get("limit") ?? "20")));
+  const limit = Math.min(
+    50,
+    Math.max(1, Number(url.searchParams.get("limit") ?? "20")),
+  );
   const q = url.searchParams.get("q")?.trim() || null;
 
   // Shopify uses cursor-based pagination. We fetch up to page*limit items
@@ -172,7 +175,10 @@ async function handleListProducts(
   };
 
   const data = await shopifyGql<{
-    products: { edges: { node: ProductNode }[]; pageInfo: { hasNextPage: boolean } };
+    products: {
+      edges: { node: ProductNode }[];
+      pageInfo: { hasNextPage: boolean };
+    };
     productsCount: { count: number };
   }>(
     cfg,
@@ -229,7 +235,12 @@ async function handleCreateProduct(
   cfg: ShopifyClientConfig,
 ): Promise<void> {
   const raw = await readBody(req).catch(() => "");
-  let body: { title?: string; vendor?: string; productType?: string; price?: string } = {};
+  let body: {
+    title?: string;
+    vendor?: string;
+    productType?: string;
+    price?: string;
+  } = {};
   try {
     body = JSON.parse(raw);
   } catch {
@@ -312,10 +323,13 @@ async function handleListOrders(
 ): Promise<void> {
   const url = new URL(req.url ?? "/", "http://localhost");
   const status = url.searchParams.get("status") ?? "any";
-  const limit = Math.min(50, Math.max(1, Number(url.searchParams.get("limit") ?? "20")));
+  const limit = Math.min(
+    50,
+    Math.max(1, Number(url.searchParams.get("limit") ?? "20")),
+  );
 
   // Build Shopify query string for financial/fulfillment status filters
-  let queryParts: string[] = [];
+  const queryParts: string[] = [];
   if (status && status !== "any") {
     // status may be a financial status like PAID, PENDING, etc.
     queryParts.push(`financial_status:${status.toLowerCase()}`);
@@ -466,7 +480,8 @@ async function handleListInventory(
             id: variant.inventoryItem.id,
             sku: variant.sku ?? "",
             productTitle: pe.node.title,
-            variantTitle: variant.title === "Default Title" ? "" : variant.title,
+            variantTitle:
+              variant.title === "Default Title" ? "" : variant.title,
             locationName: le.node.location.name,
             available: le.node.available,
             incoming: 0, // Shopify GraphQL does not expose incoming stock directly
@@ -511,7 +526,9 @@ async function handleAdjustInventory(
     inventoryItem: {
       id: string;
       inventoryLevels: {
-        edges: { node: { id: string; location: { id: string; name: string } } }[];
+        edges: {
+          node: { id: string; location: { id: string; name: string } };
+        }[];
       };
     } | null;
   }>(
@@ -534,7 +551,11 @@ async function handleAdjustInventory(
 
   const levels = itemData.inventoryItem.inventoryLevels.edges;
   if (levels.length === 0) {
-    sendJsonError(res, 422, "No inventory levels found for this item — item may not be tracked");
+    sendJsonError(
+      res,
+      422,
+      "No inventory levels found for this item — item may not be tracked",
+    );
     return;
   }
 
@@ -574,7 +595,10 @@ async function handleListCustomers(
 ): Promise<void> {
   const url = new URL(req.url ?? "/", "http://localhost");
   const q = url.searchParams.get("q")?.trim() || null;
-  const limit = Math.min(50, Math.max(1, Number(url.searchParams.get("limit") ?? "20")));
+  const limit = Math.min(
+    50,
+    Math.max(1, Number(url.searchParams.get("limit") ?? "20")),
+  );
 
   type CustomerNode = {
     id: string;
@@ -643,7 +667,11 @@ export async function handleShopifyRoute(
     const cfg = getConfig();
     if (!cfg) {
       // Return 404 so the UI treats it as "not connected" (fetchJson returns null on 404)
-      sendJsonError(res, 404, "Shopify not configured (SHOPIFY_STORE_DOMAIN / SHOPIFY_ACCESS_TOKEN not set)");
+      sendJsonError(
+        res,
+        404,
+        "Shopify not configured (SHOPIFY_STORE_DOMAIN / SHOPIFY_ACCESS_TOKEN not set)",
+      );
       return true;
     }
 
