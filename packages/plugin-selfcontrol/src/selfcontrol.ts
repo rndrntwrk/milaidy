@@ -6,10 +6,38 @@ import path from "node:path";
 import { domainToASCII } from "node:url";
 import { promisify } from "node:util";
 import type { HandlerOptions, Memory } from "@elizaos/core";
-import type {
-  PermissionState,
-  PermissionStatus,
-} from "@miladyai/shared/contracts/permissions";
+
+// Inlined from `@miladyai/shared/contracts/permissions` to avoid a
+// cross-package `tsc --build` rootDir violation. When plugin-selfcontrol
+// is built with `rootDir: ./src` and `declaration: true`, TypeScript
+// resolves the tsconfig `paths` entry for `@miladyai/shared/*` to the
+// source file in `packages/shared/src/contracts/permissions.ts` and
+// drags it into the source graph, which then fails with
+// `File '.../permissions.ts' is not under 'rootDir'`. Keeping a local
+// mirror of the two types we actually use keeps the build self-
+// contained. If these drift from the shared contract, the agent runtime
+// will surface the mismatch at its own compile step where shared is an
+// in-graph source module rather than a cross-project import.
+type PermissionStatus =
+  | "granted"
+  | "denied"
+  | "not-determined"
+  | "restricted"
+  | "not-applicable";
+
+interface PermissionState {
+  id:
+    | "accessibility"
+    | "screen-recording"
+    | "microphone"
+    | "camera"
+    | "shell"
+    | "website-blocking";
+  status: PermissionStatus;
+  lastChecked: number;
+  canRequest: boolean;
+  reason?: string;
+}
 
 const BLOCK_START_MARKER = "# >>> milady-selfcontrol >>>";
 const BLOCK_END_MARKER = "# <<< milady-selfcontrol <<<";
