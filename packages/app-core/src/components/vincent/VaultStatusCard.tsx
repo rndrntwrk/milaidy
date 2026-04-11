@@ -94,8 +94,7 @@ export function VaultStatusCard({
     null;
 
   // Resolve health from either source
-  const health =
-    vaultStatus?.vaultHealth ?? stewardStatus?.vaultHealth ?? null;
+  const health = vaultStatus?.vaultHealth ?? stewardStatus?.vaultHealth ?? null;
 
   const healthTone =
     health === "ok"
@@ -137,11 +136,7 @@ export function VaultStatusCard({
           <span className="text-sm font-semibold text-txt">Vault Status</span>
         </div>
         {health && (
-          <StatusBadge
-            label={healthLabel}
-            tone={healthTone}
-            withDot
-          />
+          <StatusBadge label={healthLabel} tone={healthTone} withDot />
         )}
       </div>
 
