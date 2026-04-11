@@ -23,4 +23,8 @@ if [ -e "${TRUNK_REPO_DIR}" ]; then
 fi
 
 echo "Adding CocoaPods trunk repo from ${TRUNK_REPO_URL}"
-pod repo add trunk "${TRUNK_REPO_URL}"
+if pod repo add-cdn --help >/dev/null 2>&1; then
+  pod repo add-cdn trunk "${TRUNK_REPO_URL}"
+else
+  pod repo add trunk "${TRUNK_REPO_URL}"
+fi

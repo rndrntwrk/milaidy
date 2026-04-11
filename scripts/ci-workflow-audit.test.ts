@@ -96,6 +96,16 @@ describe("CI workflow audit regressions", () => {
     expect(content).toContain("run: bun run cap:sync:ios");
   });
 
+  it("iOS CocoaPods helper uses the CDN-aware trunk bootstrap", () => {
+    const script = fs.readFileSync(
+      path.join(SCRIPTS_DIR, "prepare-ios-cocoapods.sh"),
+      "utf-8",
+    );
+
+    expect(script).toContain('pod repo add-cdn trunk "${TRUNK_REPO_URL}"');
+    expect(script).toContain('pod repo add trunk "${TRUNK_REPO_URL}"');
+  });
+
   it("snap packaging strips workspace refs that point at removed plugin workspaces", () => {
     const content = fs.readFileSync(SNAPCRAFT_PATH, "utf-8");
     expect(content).toContain("const availableWorkspaceNames = new Set()");
