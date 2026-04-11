@@ -18,6 +18,18 @@ const replacements = [
   },
 ];
 
+const PI_AI_HTTP_PROXY_BLOCK_PATTERN =
+  /if \(typeof process !== "undefined" && process\.versions\?\.node(?: && !process\.versions\?\.bun)?\) \{[\s\S]*?\n\}\nexport \{\};/;
+const PI_AI_HTTP_PROXY_CANONICAL_BLOCK = `if (typeof process !== "undefined" && process.versions?.node && !process.versions?.bun) {
+    import("undici").then((m) => {
+        const { EnvHttpProxyAgent, setGlobalDispatcher } = m;
+        if (typeof EnvHttpProxyAgent === "function" && typeof setGlobalDispatcher === "function") {
+            setGlobalDispatcher(new EnvHttpProxyAgent());
+        }
+    });
+}
+export {};`;
+
 const SOURCE_EXTENSIONS = new Set([".js", ".cjs", ".mjs", ".ts"]);
 
 function walkFiles(dir, targets) {
@@ -53,22 +65,62 @@ function collectNodeModuleTargets(targets) {
   }
 
   const pnpmDir = path.join(root, "node_modules/.pnpm");
-  if (!existsSync(pnpmDir)) {
-    return;
+  if (existsSync(pnpmDir)) {
+    for (const entry of readdirSync(pnpmDir, { withFileTypes: true })) {
+      if (!entry.isDirectory() || !entry.name.startsWith("@elizaos+")) {
+        continue;
+      }
+      const scopeDir = path.join(pnpmDir, entry.name, "node_modules/@elizaos");
+      if (!existsSync(scopeDir)) {
+        continue;
+      }
+      for (const scopedEntry of readdirSync(scopeDir, { withFileTypes: true })) {
+        if (scopedEntry.isDirectory()) {
+          collectPackageTargets(path.join(scopeDir, scopedEntry.name), targets);
+        }
+      }
+    }
   }
 
-  for (const entry of readdirSync(pnpmDir, { withFileTypes: true })) {
-    if (!entry.isDirectory() || !entry.name.startsWith("@elizaos+")) {
-      continue;
-    }
-    const scopeDir = path.join(pnpmDir, entry.name, "node_modules/@elizaos");
-    if (!existsSync(scopeDir)) {
-      continue;
-    }
-    for (const scopedEntry of readdirSync(scopeDir, { withFileTypes: true })) {
-      if (scopedEntry.isDirectory()) {
-        collectPackageTargets(path.join(scopeDir, scopedEntry.name), targets);
+  const directPiAiPath = path.join(
+    root,
+    "node_modules/@mariozechner/pi-ai/dist/utils/http-proxy.js",
+  );
+  if (existsSync(directPiAiPath)) {
+    targets.add(directPiAiPath);
+  }
+
+  const bunDir = path.join(root, "node_modules/.bun");
+  if (existsSync(bunDir)) {
+    for (const entry of readdirSync(bunDir, { withFileTypes: true })) {
+      if (!entry.isDirectory() || !entry.name.startsWith("@mariozechner+pi-ai@")) {
+        continue;
       }
+      targets.add(
+        path.join(
+          bunDir,
+          entry.name,
+          "node_modules/@mariozechner/pi-ai/dist/utils/http-proxy.js",
+        ),
+      );
+    }
+  }
+
+  if (existsSync(pnpmDir)) {
+    for (const entry of readdirSync(pnpmDir, { withFileTypes: true })) {
+      if (
+        !entry.isDirectory() ||
+        !entry.name.startsWith("@mariozechner+pi-ai@")
+      ) {
+        continue;
+      }
+      targets.add(
+        path.join(
+          pnpmDir,
+          entry.name,
+          "node_modules/@mariozechner/pi-ai/dist/utils/http-proxy.js",
+        ),
+      );
     }
   }
 }
@@ -82,6 +134,13 @@ function patchFile(filePath) {
   let next = original;
   for (const { needle, replacement } of replacements) {
     next = next.split(needle).join(replacement);
+  }
+
+  if (filePath.endsWith("/dist/utils/http-proxy.js")) {
+    next = next.replace(
+      PI_AI_HTTP_PROXY_BLOCK_PATTERN,
+      `${PI_AI_HTTP_PROXY_CANONICAL_BLOCK}`,
+    );
   }
 
   if (next === original) {
