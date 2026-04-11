@@ -50,7 +50,16 @@ const skipLocalUpstreams =
   process.env.MILADY_SKIP_LOCAL_UPSTREAMS === "1" ||
   process.env.ELIZA_SKIP_LOCAL_UPSTREAMS === "1";
 
-if (!skipLocalUpstreams || process.env.GITHUB_ACTIONS !== "true") {
+// Gate: run in GitHub Actions automatically, and also run in any
+// packaging sandbox that explicitly sets `MILADY_DISABLE_LOCAL_UPSTREAMS
+// =force`. Snapcraft builds inside a multipass VM that does NOT inherit
+// `GITHUB_ACTIONS=true`, so snapcraft.yaml sets the force flag directly
+// when it calls this script. Never run without `SKIP_LOCAL_UPSTREAMS`
+// — we must not mutate `package.json` on a normal local dev checkout.
+const runningInCi = process.env.GITHUB_ACTIONS === "true";
+const forced = process.env.MILADY_DISABLE_LOCAL_UPSTREAMS === "force";
+
+if (!skipLocalUpstreams || (!runningInCi && !forced)) {
   process.exit(0);
 }
 
