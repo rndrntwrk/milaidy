@@ -403,9 +403,15 @@ export async function handleHealthRoutes(
     return true;
   }
 
-  // ── GET /api/health ──────────────────────────────────────────────────────
+  const isApiHealthRoute = method === "GET" && pathname === "/api/health";
+  const isLiveHealthRoute =
+    method === "GET" &&
+    (pathname === "/health/live" || pathname === "/health");
+  const isReadyHealthRoute = method === "GET" && pathname === "/health/ready";
+
+  // ── GET /api/health + kube-friendly health aliases ──────────────────────
   // Structured health check endpoint returning subsystem status.
-  if (method === "GET" && pathname === "/api/health") {
+  if (isApiHealthRoute || isLiveHealthRoute || isReadyHealthRoute) {
     const runtime = state.runtime;
     const uptime = state.startedAt
       ? Math.floor((Date.now() - state.startedAt) / 1000)
@@ -443,7 +449,7 @@ export async function handleHealthRoutes(
     const ready =
       state.agentState !== "starting" && state.agentState !== "restarting";
 
-    json(res, {
+    const payload = {
       ready,
       runtime: runtime ? "ok" : "not_initialized",
       database: runtime ? "ok" : "unknown",
@@ -456,7 +462,37 @@ export async function handleHealthRoutes(
       uptime,
       agentState: state.agentState,
       startup: state.startup,
-    });
+    };
+
+    if (isApiHealthRoute) {
+      json(res, payload);
+      return true;
+    }
+
+    if (isLiveHealthRoute) {
+      json(
+        res,
+        {
+          ok: true,
+          ready,
+          agentState: state.agentState,
+          uptime,
+        },
+        200,
+      );
+      return true;
+    }
+
+    json(
+      res,
+      {
+        ok: ready,
+        ready,
+        agentState: state.agentState,
+        uptime,
+      },
+      ready ? 200 : 503,
+    );
     return true;
   }
 

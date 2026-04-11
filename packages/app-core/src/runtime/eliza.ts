@@ -1174,6 +1174,47 @@ export async function startEliza(
   }
 }
 
+function isEnabledFlag(value: string | undefined): boolean {
+  const normalized = value?.trim().toLowerCase();
+  return (
+    normalized === "1" ||
+    normalized === "true" ||
+    normalized === "yes" ||
+    normalized === "on"
+  );
+}
+
+export function shouldUseLegacyDirectRuntimeServerOnlyCompat(
+  env: NodeJS.ProcessEnv = process.env,
+): boolean {
+  if (env.NODE_ENV !== "production") {
+    return false;
+  }
+  if (!env.PORT && !env.MILAIDY_PORT) {
+    return false;
+  }
+  if (
+    isEnabledFlag(env.MILAIDY_DIRECT_RUNTIME_INTERACTIVE) ||
+    isEnabledFlag(env.ELIZA_DIRECT_RUNTIME_INTERACTIVE)
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function normalizeLegacyDirectRuntimePorts(
+  env: NodeJS.ProcessEnv = process.env,
+): void {
+  const resolvedPort = env.MILAIDY_PORT?.trim() || env.PORT?.trim();
+  if (!resolvedPort) {
+    return;
+  }
+  env.MILAIDY_PORT = resolvedPort;
+  env.MILAIDY_API_PORT = env.MILAIDY_API_PORT?.trim() || resolvedPort;
+  env.ELIZA_PORT = env.ELIZA_PORT?.trim() || resolvedPort;
+  env.ELIZA_API_PORT = env.ELIZA_API_PORT?.trim() || resolvedPort;
+}
+
 function isDirectRuntimeRun(): boolean {
   const scriptArg = process.argv[1];
   if (!scriptArg) {
@@ -1209,7 +1250,17 @@ if (isDirectRuntimeRun()) {
   } else if (DIRECT_VERSION_FLAGS.has(command ?? "")) {
     printDirectRuntimeVersion();
   } else {
-    startEliza().catch((err) => {
+    const directStartOptions =
+      shouldUseLegacyDirectRuntimeServerOnlyCompat(process.env)
+        ? (() => {
+            normalizeLegacyDirectRuntimePorts(process.env);
+            console.log(
+              `[milady] start:eliza detected a production container; forcing server-only mode on port ${process.env.MILAIDY_PORT}`,
+            );
+            return { serverOnly: true } satisfies StartElizaOptionsExt;
+          })()
+        : undefined;
+    startEliza(directStartOptions).catch((err) => {
       console.error(
         "[milady] Fatal error:",
         err instanceof Error ? (err.stack ?? err.message) : err,

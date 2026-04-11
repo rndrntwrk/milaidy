@@ -84,6 +84,7 @@ import {
   resolveVisionModeSetting,
   resolveWalletRuntimeSettings,
   scanDropInPlugins,
+  shouldUseLegacyDirectRuntimeServerOnlyCompat,
   shouldIgnoreMissingPluginExport,
   shutdownRuntime,
 } from "./eliza";
@@ -873,6 +874,57 @@ describe("collectPluginNames", () => {
     expect(names.has("@elizaos/plugin-whatsapp")).toBe(true);
     expect(names.has("@miladyai/plugin-signal")).toBe(false);
     expect(names.has("@miladyai/plugin-whatsapp")).toBe(false);
+  });
+});
+
+describe("shouldUseLegacyDirectRuntimeServerOnlyCompat", () => {
+  const snap = envSnapshot([
+    "NODE_ENV",
+    "PORT",
+    "MILAIDY_PORT",
+    "MILAIDY_DIRECT_RUNTIME_INTERACTIVE",
+    "ELIZA_DIRECT_RUNTIME_INTERACTIVE",
+  ]);
+
+  beforeEach(() => {
+    snap.save();
+    delete process.env.NODE_ENV;
+    delete process.env.PORT;
+    delete process.env.MILAIDY_PORT;
+    delete process.env.MILAIDY_DIRECT_RUNTIME_INTERACTIVE;
+    delete process.env.ELIZA_DIRECT_RUNTIME_INTERACTIVE;
+  });
+
+  afterEach(() => {
+    snap.restore();
+  });
+
+  it("forces server-only mode for production direct-runtime container boots", () => {
+    process.env.NODE_ENV = "production";
+    process.env.PORT = "3000";
+
+    expect(shouldUseLegacyDirectRuntimeServerOnlyCompat(process.env)).toBe(
+      true,
+    );
+  });
+
+  it("does not force server-only mode for non-production direct runtime boots", () => {
+    process.env.NODE_ENV = "development";
+    process.env.PORT = "3000";
+
+    expect(shouldUseLegacyDirectRuntimeServerOnlyCompat(process.env)).toBe(
+      false,
+    );
+  });
+
+  it("allows an explicit interactive override", () => {
+    process.env.NODE_ENV = "production";
+    process.env.MILAIDY_PORT = "3000";
+    process.env.MILAIDY_DIRECT_RUNTIME_INTERACTIVE = "1";
+
+    expect(shouldUseLegacyDirectRuntimeServerOnlyCompat(process.env)).toBe(
+      false,
+    );
   });
 });
 

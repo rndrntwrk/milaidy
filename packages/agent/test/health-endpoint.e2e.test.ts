@@ -55,4 +55,22 @@ describe("GET /api/health", () => {
     expect(typeof plugins.loaded).toBe("number");
     expect(typeof plugins.failed).toBe("number");
   });
+
+  it("exposes /health/live for container liveness probes", async () => {
+    const { status, data } = await req(port, "GET", "/health/live");
+    expect(status).toBe(200);
+    expect(data).toMatchObject({ ok: true, ready: true });
+  });
+
+  it("exposes /health/ready for container readiness probes", async () => {
+    const { status, data } = await req(port, "GET", "/health/ready");
+    expect(status).toBe(200);
+    expect(data).toMatchObject({ ok: true, ready: true });
+  });
+
+  it("keeps /health as a liveness alias", async () => {
+    const { status, data } = await req(port, "GET", "/health");
+    expect(status).toBe(200);
+    expect(data).toMatchObject({ ok: true });
+  });
 });
