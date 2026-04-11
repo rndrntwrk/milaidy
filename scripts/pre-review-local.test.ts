@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildRepoTestCommand,
   classificationFromInputs,
   isTestExempt,
   scanDiffTextForBlockedPatterns,
@@ -149,5 +150,18 @@ describe("splitRunnableTestFiles", () => {
       "scripts/pre-review-local.test.ts",
     ]);
     expect(repoTests).toContain("scripts/pre-review-local.test.ts");
+  });
+});
+
+describe("buildRepoTestCommand", () => {
+  it("pins repo test runs to the unit Vitest config", () => {
+    expect(
+      buildRepoTestCommand([
+        "packages/app-core/src/services/plugin-stability.test.ts",
+        "scripts/ci-workflow-audit.test.ts",
+      ]),
+    ).toBe(
+      "bunx vitest run --config vitest.unit.config.ts packages/app-core/src/services/plugin-stability.test.ts scripts/ci-workflow-audit.test.ts",
+    );
   });
 });

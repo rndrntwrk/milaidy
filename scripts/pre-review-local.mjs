@@ -246,6 +246,10 @@ export function resolveRunnableTestFiles(testFiles, cwd = process.cwd()) {
   return testFiles.filter((file) => existsSync(path.resolve(cwd, file)));
 }
 
+export function buildRepoTestCommand(repoTests) {
+  return `bunx vitest run --config vitest.unit.config.ts ${repoTests.join(" ")}`;
+}
+
 export function splitRunnableTestFiles(testFiles) {
   const repoTests = [];
   const homepageTests = [];
@@ -405,7 +409,7 @@ export function runChecks() {
         const testCommands = [];
 
         if (repoTests.length > 0) {
-          testCommands.push(`bunx vitest run ${repoTests.join(" ")}`);
+          testCommands.push(buildRepoTestCommand(repoTests));
         }
 
         if (repoE2eTests.length > 0) {

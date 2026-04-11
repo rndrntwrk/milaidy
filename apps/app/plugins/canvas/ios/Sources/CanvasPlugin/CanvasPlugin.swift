@@ -1095,6 +1095,7 @@ public class MiladyCanvasPlugin: CAPPlugin, CAPBridgedPlugin {
 
     // MARK: - Web View Management
 
+    @MainActor
     @discardableResult
     private func ensureWebView(for canvas: ManagedCanvas) -> WKWebView {
         if let existing = canvas.webView { return existing }
