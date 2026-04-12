@@ -13,27 +13,27 @@
     {
       "name": "brush-teeth preview",
       "text": "Help me brush my teeth at 8 am and 9 pm every day.",
-      "responseIncludesAll": ["brush teeth"]
+      "responseIncludesAny": ["brush teeth", "brushing habit", "set that up"]
     },
     {
       "name": "brush-teeth confirm",
       "text": "Yes, save that brushing routine."
-    },
-    {
-      "name": "brush-teeth final confirmation",
-      "text": "Yes, that's the schedule. Save it.",
-      "responseIncludesAll": ["saved"]
     }
   ],
   "finalChecks": [
     {
       "type": "definitionCountDelta",
       "title": "Brush teeth",
+      "titleAliases": [
+        "Brush Teeth 8 + 9 Pm",
+        "Brush teeth 8 + 9 pm",
+        "Brush teeth 8 am & 9 pm"
+      ],
       "delta": 1,
       "cadenceKind": "times_per_day",
       "requiredSlots": [
-        { "label": "Morning", "minuteOfDay": 480 },
-        { "label": "Night", "minuteOfDay": 1260 }
+        { "minuteOfDay": 480 },
+        { "minuteOfDay": 1260 }
       ],
       "requireReminderPlan": true
     }

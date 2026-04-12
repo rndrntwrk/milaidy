@@ -328,9 +328,9 @@ export async function handleTelegramAccountRoute(
     }
 
     try {
-      await state.telegramAccountAuthSession.submit(body);
+      await state.telegramAccountAuthSession!.submit(body);
       const resolved =
-        state.telegramAccountAuthSession.getResolvedConnectorConfig();
+        state.telegramAccountAuthSession!.getResolvedConnectorConfig();
       if (resolved) {
         Object.assign(ensureConnectorBlock(state), resolved);
         state.saveConfig();

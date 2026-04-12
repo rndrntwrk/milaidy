@@ -245,8 +245,8 @@ function BrowserCompanionRow({
   busy: boolean;
   pairing: LifeOpsBrowserCompanionPairingResponse | null;
   onInstall: (browser: LifeOpsBrowserKind) => Promise<void>;
-  onBuild: (browser: LifeOpsBrowserKind) => Promise<void>;
-  onCreatePairing: (browser: LifeOpsBrowserKind) => Promise<void>;
+  onBuild: (browser: LifeOpsBrowserKind) => Promise<unknown>;
+  onCreatePairing: (browser: LifeOpsBrowserKind) => Promise<unknown>;
   onCopyPairing: (browser: LifeOpsBrowserKind) => Promise<void>;
   onDownload: (browser: LifeOpsBrowserKind) => Promise<void>;
   onOpenPath: (path: string, revealOnly?: boolean) => Promise<void>;

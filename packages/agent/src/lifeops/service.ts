@@ -6801,8 +6801,11 @@ export class LifeOpsService {
       requireNonEmptyString(companionId, "companionId"),
     );
     if (!credential?.pairingTokenHash) {
+      if (!credential) {
+        fail(401, "browser companion pairing is invalid");
+      }
       const pendingPairingTokenHashes =
-        credential?.pendingPairingTokenHashes ?? [];
+        credential.pendingPairingTokenHashes ?? [];
       const pairingTokenHash = hashBrowserCompanionPairingToken(pairingToken);
       if (!pendingPairingTokenHashes.includes(pairingTokenHash)) {
         fail(401, "browser companion pairing is invalid");

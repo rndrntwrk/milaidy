@@ -242,7 +242,7 @@ function readPersistedConnectorConfig(
     appHash,
     deviceModel,
     systemVersion,
-    enabled: record.enabled !== false,
+    enabled: (record.enabled !== false) as true,
   };
 }
 

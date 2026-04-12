@@ -53,6 +53,7 @@ export type ScenarioTurn = {
 type DefinitionCountDeltaCheck = {
   type: "definitionCountDelta";
   title: string;
+  titleAliases?: string[];
   delta: number;
   cadenceKind?: string;
   requiredWindows?: string[];
@@ -68,12 +69,14 @@ type DefinitionCountDeltaCheck = {
 type ReminderIntensityCheck = {
   type: "reminderIntensity";
   title: string;
+  titleAliases?: string[];
   expected: string;
 };
 
 type GoalCountDeltaCheck = {
   type: "goalCountDelta";
   title: string;
+  titleAliases?: string[];
   delta: number;
   expectedStatus?: string;
   expectedReviewState?: string;
@@ -173,12 +176,23 @@ function assertExcludes(label: string, text: string, fragments?: string[]): void
 function definitionMatchesTitle(
   entry: LifeOpsDefinitionEntry,
   title: string,
+  titleAliases: string[] = [],
 ): boolean {
-  return normalizeText(String(entry.definition?.title ?? "")) === normalizeText(title);
+  const normalizedTitle = normalizeText(String(entry.definition?.title ?? ""));
+  return [title, ...titleAliases].some(
+    (candidate) => normalizedTitle === normalizeText(candidate),
+  );
 }
 
-function goalMatchesTitle(entry: LifeOpsGoalEntry, title: string): boolean {
-  return normalizeText(String(entry.goal?.title ?? "")) === normalizeText(title);
+function goalMatchesTitle(
+  entry: LifeOpsGoalEntry,
+  title: string,
+  titleAliases: string[] = [],
+): boolean {
+  const normalizedTitle = normalizeText(String(entry.goal?.title ?? ""));
+  return [title, ...titleAliases].some(
+    (candidate) => normalizedTitle === normalizeText(candidate),
+  );
 }
 
 function renderTurnText(turn: ScenarioTurn): string {
@@ -244,17 +258,31 @@ async function collectScenarioBaseline(
 
   const definitionCounts = new Map<string, number>();
   for (const title of definitionTitles) {
+    const matchingChecks = (scenario.finalChecks ?? []).filter(
+      (check): check is DefinitionCountDeltaCheck | ReminderIntensityCheck =>
+        (check.type === "definitionCountDelta" ||
+          check.type === "reminderIntensity") &&
+        check.title === title,
+    );
+    const titleAliases = matchingChecks.flatMap((check) => check.titleAliases ?? []);
     definitionCounts.set(
       title,
-      definitions.filter((entry) => definitionMatchesTitle(entry, title)).length,
+      definitions.filter((entry) =>
+        definitionMatchesTitle(entry, title, titleAliases),
+      ).length,
     );
   }
 
   const goalCounts = new Map<string, number>();
   for (const title of goalTitles) {
+    const matchingChecks = (scenario.finalChecks ?? []).filter(
+      (check): check is GoalCountDeltaCheck =>
+        check.type === "goalCountDelta" && check.title === title,
+    );
+    const titleAliases = matchingChecks.flatMap((check) => check.titleAliases ?? []);
     goalCounts.set(
       title,
-      goals.filter((entry) => goalMatchesTitle(entry, title)).length,
+      goals.filter((entry) => goalMatchesTitle(entry, title, titleAliases)).length,
     );
   }
 
@@ -275,7 +303,7 @@ async function validateFinalChecks(args: {
     try {
       if (check.type === "definitionCountDelta") {
         const matches = definitions.filter((entry) =>
-          definitionMatchesTitle(entry, check.title),
+          definitionMatchesTitle(entry, check.title, check.titleAliases),
         );
         const beforeCount = args.baseline.definitionCounts.get(check.title) ?? 0;
         const delta = matches.length - beforeCount;
@@ -387,7 +415,7 @@ async function validateFinalChecks(args: {
         }
       } else if (check.type === "reminderIntensity") {
         const matches = definitions.filter((entry) =>
-          definitionMatchesTitle(entry, check.title),
+          definitionMatchesTitle(entry, check.title, check.titleAliases),
         );
         const latest = matches[matches.length - 1];
         const definitionId = String(latest?.definition?.id ?? "");
@@ -405,7 +433,9 @@ async function validateFinalChecks(args: {
           );
         }
       } else if (check.type === "goalCountDelta") {
-        const matches = goals.filter((entry) => goalMatchesTitle(entry, check.title));
+        const matches = goals.filter((entry) =>
+          goalMatchesTitle(entry, check.title, check.titleAliases),
+        );
         const beforeCount = args.baseline.goalCounts.get(check.title) ?? 0;
         const delta = matches.length - beforeCount;
         if (delta !== check.delta) {

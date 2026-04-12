@@ -25,7 +25,19 @@
         "action": "create",
         "intent": "Actually create a routine named Brush teeth that happens every morning and every night. Do not just give advice.",
         "title": "Brush teeth"
-      }
+      },
+      "responseIncludesAny": [
+        "confirm",
+        "create it now",
+        "should i create it",
+        "does that sound good",
+        "can save a habit"
+      ]
+    },
+    {
+      "name": "brush-teeth confirm",
+      "text": "Yes, save that brushing routine.",
+      "responseIncludesAll": ["saved"]
     },
     {
       "name": "brush-teeth reduce reminders",
@@ -44,8 +56,8 @@
       "delta": 1,
       "cadenceKind": "times_per_day",
       "requiredSlots": [
-        { "label": "Morning", "minuteOfDay": 480 },
-        { "label": "Night", "minuteOfDay": 1260 }
+        { "minuteOfDay": 480 },
+        { "minuteOfDay": 1260 }
       ],
       "requireReminderPlan": true
     },

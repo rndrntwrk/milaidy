@@ -89,7 +89,9 @@ async function main(): Promise<void> {
     selectedProvider,
   });
 
-  const failed = report.scenarios.filter((scenario) => scenario.status === "failed");
+  const failed = report.scenarios.filter(
+    (scenario) => scenario.status === "failed",
+  );
   console.log(
     `[lifeops-scenarios] provider=${report.providerName} total=${report.totalCount} failed=${report.failedCount} report=${reportPath}`,
   );

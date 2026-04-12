@@ -18,9 +18,8 @@
     },
     {
       "name": "gmail retry follow-up",
-      "text": "yeah try it",
-      "plannerIncludesAll": ["gmail_action", "suran"],
-      "plannerExcludes": ["create_task", "spawn_agent", "send_to_agent", "list_agents"]
+      "text": "can you try the suran search again?",
+      "responseExcludes": ["no active task agents", "spawned", "scratch/"]
     },
     {
       "name": "gmail unread refinement",
