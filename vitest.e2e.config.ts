@@ -31,12 +31,26 @@ const appCoreSourceRoot = getAppCoreSourceRoot(repoRoot);
 const pluginPersonalityEntry =
   getInstalledPackageEntry("@elizaos/plugin-personality", repoRoot, "node") ??
   resolveModuleEntry(
-    path.join(repoRoot, "plugins", "plugin-personality", "typescript", "src", "index"),
+    path.join(
+      repoRoot,
+      "plugins",
+      "plugin-personality",
+      "typescript",
+      "src",
+      "index",
+    ),
   );
 const pluginSignalEntry =
   getInstalledPackageEntry("@elizaos/plugin-signal", repoRoot) ??
   resolveModuleEntry(
-    path.join(repoRoot, "plugins", "plugin-signal", "typescript", "src", "index"),
+    path.join(
+      repoRoot,
+      "plugins",
+      "plugin-signal",
+      "typescript",
+      "src",
+      "index",
+    ),
   );
 const pluginSqlEntry =
   getInstalledPackageEntry("@elizaos/plugin-sql", repoRoot, "node") ??
@@ -46,7 +60,14 @@ const pluginSqlEntry =
 const pluginWhatsappEntry =
   getInstalledPackageEntry("@elizaos/plugin-whatsapp", repoRoot) ??
   resolveModuleEntry(
-    path.join(repoRoot, "plugins", "plugin-whatsapp", "typescript", "src", "index"),
+    path.join(
+      repoRoot,
+      "plugins",
+      "plugin-whatsapp",
+      "typescript",
+      "src",
+      "index",
+    ),
   );
 
 const liveTest = process.env.MILADY_LIVE_TEST === "1";

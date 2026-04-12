@@ -12,7 +12,9 @@ import type {
   CompleteLifeOpsBrowserSessionRequest,
   CompleteLifeOpsOccurrenceRequest,
   ConfirmLifeOpsBrowserSessionRequest,
+  CreateLifeOpsBrowserCompanionPairingRequest,
   CreateLifeOpsBrowserSessionRequest,
+  CreateLifeOpsCalendarEventAttendee,
   CreateLifeOpsCalendarEventRequest,
   CreateLifeOpsDefinitionRequest,
   CreateLifeOpsGmailBatchReplyDraftsRequest,
@@ -29,7 +31,9 @@ import type {
   LifeOpsAuditEvent,
   LifeOpsAuditEventType,
   LifeOpsBrowserAction,
+  LifeOpsBrowserCompanionPairingResponse,
   LifeOpsBrowserCompanionStatus,
+  LifeOpsBrowserCompanionSyncResponse,
   LifeOpsBrowserKind,
   LifeOpsBrowserPageContext,
   LifeOpsBrowserPermissionState,
@@ -107,6 +111,7 @@ import type {
   StartLifeOpsGoogleConnectorRequest,
   StartLifeOpsGoogleConnectorResponse,
   SyncLifeOpsBrowserStateRequest,
+  UpdateLifeOpsBrowserSessionProgressRequest,
   UpdateLifeOpsBrowserSettingsRequest,
   UpdateLifeOpsDefinitionRequest,
   UpdateLifeOpsGoalRequest,
@@ -174,7 +179,9 @@ import {
 } from "./google-api-error.js";
 import {
   createGoogleCalendarEvent,
+  deleteGoogleCalendarEvent,
   fetchGoogleCalendarEvents,
+  updateGoogleCalendarEvent,
 } from "./google-calendar.js";
 import {
   resolveGoogleAvailableModes,
@@ -189,6 +196,7 @@ import {
   fetchGoogleGmailTriageMessages,
   type SyncedGoogleGmailMessageDetail,
   type SyncedGoogleGmailMessageSummary,
+  sendGoogleGmailMessage,
   sendGoogleGmailReply,
 } from "./google-gmail.js";
 import {
@@ -255,6 +263,7 @@ const GOOGLE_GMAIL_CACHE_TTL_MS = 5 * 60 * 1000;
 const GOOGLE_PRIMARY_CALENDAR_ID = "primary";
 const GOOGLE_GMAIL_MAILBOX = "me";
 const DEFAULT_GMAIL_TRIAGE_MAX_RESULTS = 12;
+const DEFAULT_NEXT_EVENT_LOOKAHEAD_DAYS = 30;
 const DEFAULT_GMAIL_SEARCH_SCAN_LIMIT = 50;
 const DEFAULT_GMAIL_SEARCH_CACHE_SCAN_LIMIT = 200;
 const DEFAULT_REMINDER_PROCESS_LIMIT = 24;
@@ -1422,39 +1431,45 @@ function resolveCalendarWindow(args: {
   };
 }
 
-function buildCalendarLookaheadWindow(
-  now: Date,
-  timeZone: string,
-  daysAhead: number,
-): { timeMin: string; timeMax: string } {
-  const zonedNow = getZonedDateParts(now, timeZone);
-  const windowStart = buildUtcDateFromLocalParts(timeZone, {
-    year: zonedNow.year,
-    month: zonedNow.month,
-    day: zonedNow.day,
-    hour: 0,
-    minute: 0,
-    second: 0,
+function resolveNextCalendarEventWindow(args: {
+  now: Date;
+  timeZone: string;
+  requestedTimeMin?: string;
+  requestedTimeMax?: string;
+  lookaheadDays?: number;
+}): { timeMin: string; timeMax: string } {
+  const explicitWindow = resolveCalendarWindow({
+    now: args.now,
+    timeZone: args.timeZone,
+    requestedTimeMin: args.requestedTimeMin,
+    requestedTimeMax: args.requestedTimeMax,
   });
-  const endDay = addDaysToLocalDate(
+
+  if (args.requestedTimeMin || args.requestedTimeMax) {
+    return explicitWindow;
+  }
+
+  const zonedNow = getZonedDateParts(args.now, args.timeZone);
+  const endDate = addDaysToLocalDate(
     {
       year: zonedNow.year,
       month: zonedNow.month,
       day: zonedNow.day,
     },
-    Math.max(1, daysAhead),
+    args.lookaheadDays ?? DEFAULT_NEXT_EVENT_LOOKAHEAD_DAYS,
   );
-  const windowEnd = buildUtcDateFromLocalParts(timeZone, {
-    year: endDay.year,
-    month: endDay.month,
-    day: endDay.day,
+  const timeMax = buildUtcDateFromLocalParts(args.timeZone, {
+    year: endDate.year,
+    month: endDate.month,
+    day: endDate.day,
     hour: 0,
     minute: 0,
     second: 0,
-  });
+  }).toISOString();
+
   return {
-    timeMin: windowStart.toISOString(),
-    timeMax: windowEnd.toISOString(),
+    timeMin: explicitWindow.timeMin,
+    timeMax,
   };
 }
 
@@ -3626,6 +3641,42 @@ function createBrowserSessionActions(
   }));
 }
 
+function hashBrowserCompanionPairingToken(token: string): string {
+  return crypto
+    .createHash("sha256")
+    .update(requireNonEmptyString(token, "pairingToken"))
+    .digest("hex");
+}
+
+function browserSessionMatchesCompanion(
+  session: LifeOpsBrowserSession,
+  companion: LifeOpsBrowserCompanionStatus,
+): boolean {
+  if (session.browser && session.browser !== companion.browser) {
+    return false;
+  }
+  if (session.companionId && session.companionId !== companion.id) {
+    return false;
+  }
+  if (session.profileId && session.profileId !== companion.profileId) {
+    return false;
+  }
+  return true;
+}
+
+function normalizeBrowserSessionActionIndex(
+  value: unknown,
+  maxActions: number,
+): number {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
+    fail(400, "currentActionIndex must be a non-negative integer");
+  }
+  if (maxActions <= 0) {
+    return 0;
+  }
+  return Math.min(value, maxActions - 1);
+}
+
 function resolveAwaitingBrowserActionId(
   actions: LifeOpsBrowserAction[],
 ): string | null {
@@ -5037,8 +5088,9 @@ export class LifeOpsService {
     eventType:
       | "gmail_triage_synced"
       | "gmail_reply_drafted"
-      | "gmail_reply_sent",
-    ownerId: string,
+      | "gmail_reply_sent"
+      | "gmail_message_sent",
+    ownerId: string | null,
     reason: string,
     inputs: Record<string, unknown>,
     decision: Record<string, unknown>,
@@ -5048,8 +5100,11 @@ export class LifeOpsService {
         agentId: this.agentId(),
         eventType,
         ownerType:
-          eventType === "gmail_triage_synced" ? "connector" : "gmail_message",
-        ownerId,
+          eventType === "gmail_triage_synced" ||
+          eventType === "gmail_message_sent"
+            ? "connector"
+            : "gmail_message",
+        ownerId: ownerId ?? this.agentId(),
         reason,
         inputs,
         decision,
@@ -5157,11 +5212,15 @@ export class LifeOpsService {
     reason: string,
     inputs: Record<string, unknown>,
     decision: Record<string, unknown>,
+    eventType:
+      | "calendar_event_created"
+      | "calendar_event_updated"
+      | "calendar_event_deleted" = "calendar_event_created",
   ): Promise<void> {
     await this.repository.createAuditEvent(
       createLifeOpsAuditEvent({
         agentId: this.agentId(),
-        eventType: "calendar_event_created",
+        eventType,
         ownerType: "calendar_event",
         ownerId,
         reason,
@@ -6705,6 +6764,88 @@ export class LifeOpsService {
         actionCount: session.actions.length,
       },
     );
+    return session;
+  }
+
+  private async requireBrowserCompanion(
+    companionId: string,
+    pairingToken: string,
+  ): Promise<LifeOpsBrowserCompanionStatus> {
+    const credential = await this.repository.getBrowserCompanionCredential(
+      this.agentId(),
+      requireNonEmptyString(companionId, "companionId"),
+    );
+    if (!credential?.pairingTokenHash) {
+      fail(401, "browser companion pairing is invalid");
+    }
+    if (
+      credential.pairingTokenHash !==
+      hashBrowserCompanionPairingToken(pairingToken)
+    ) {
+      fail(401, "browser companion pairing is invalid");
+    }
+    return credential.companion;
+  }
+
+  private async claimQueuedBrowserSession(
+    companion: LifeOpsBrowserCompanionStatus,
+  ): Promise<LifeOpsBrowserSession | null> {
+    const claimable = (await this.listBrowserSessions())
+      .filter(
+        (session) =>
+          session.status === "queued" &&
+          browserSessionMatchesCompanion(session, companion),
+      )
+      .sort((left, right) => {
+        const leftMs = Date.parse(left.createdAt);
+        const rightMs = Date.parse(right.createdAt);
+        if (
+          Number.isFinite(leftMs) &&
+          Number.isFinite(rightMs) &&
+          leftMs !== rightMs
+        ) {
+          return leftMs - rightMs;
+        }
+        return left.createdAt.localeCompare(right.createdAt);
+      })[0];
+    if (!claimable) {
+      return null;
+    }
+    const nowIso = new Date().toISOString();
+    const nextSession: LifeOpsBrowserSession = {
+      ...claimable,
+      status: "running",
+      metadata: mergeMetadata(claimable.metadata, {
+        claimedAt: nowIso,
+        claimedByCompanionId: companion.id,
+      }),
+      updatedAt: nowIso,
+    };
+    await this.repository.updateBrowserSession(nextSession);
+    await this.recordBrowserAudit(
+      "browser_session_updated",
+      nextSession.id,
+      "browser session claimed by companion",
+      {
+        companionId: companion.id,
+        browser: companion.browser,
+        profileId: companion.profileId,
+      },
+      {
+        status: nextSession.status,
+      },
+    );
+    return nextSession;
+  }
+
+  private async requireBrowserSessionForCompanion(
+    companion: LifeOpsBrowserCompanionStatus,
+    sessionId: string,
+  ): Promise<LifeOpsBrowserSession> {
+    const session = await this.getBrowserSession(sessionId);
+    if (!browserSessionMatchesCompanion(session, companion)) {
+      fail(403, "browser session does not belong to this browser companion");
+    }
     return session;
   }
 
@@ -9352,6 +9493,101 @@ export class LifeOpsService {
     };
   }
 
+  async createBrowserCompanionPairing(
+    request: CreateLifeOpsBrowserCompanionPairingRequest,
+  ): Promise<LifeOpsBrowserCompanionPairingResponse> {
+    const browser = normalizeEnumValue(
+      request.browser,
+      "browser",
+      LIFEOPS_BROWSER_KINDS,
+    );
+    const profileId = requireNonEmptyString(request.profileId, "profileId");
+    const currentCompanion = await this.repository.getBrowserCompanionByProfile(
+      this.agentId(),
+      browser,
+      profileId,
+    );
+    const profileLabel =
+      normalizeOptionalString(request.profileLabel) ??
+      currentCompanion?.profileLabel ??
+      profileId;
+    const label =
+      normalizeOptionalString(request.label) ??
+      currentCompanion?.label ??
+      `LifeOps Browser ${browser} ${profileLabel}`;
+    const companion = this.buildBrowserCompanion(
+      {
+        browser,
+        profileId,
+        profileLabel,
+        label,
+        extensionVersion: request.extensionVersion ?? null,
+        connectionState: currentCompanion?.connectionState ?? "disconnected",
+        permissions:
+          currentCompanion?.permissions ?? DEFAULT_BROWSER_PERMISSION_STATE,
+        lastSeenAt: currentCompanion?.lastSeenAt ?? null,
+        metadata: request.metadata ?? currentCompanion?.metadata ?? {},
+      },
+      currentCompanion,
+    );
+    await this.repository.upsertBrowserCompanion(companion);
+    const pairingToken = `lobr_${crypto.randomBytes(24).toString("base64url")}`;
+    const nowIso = new Date().toISOString();
+    await this.repository.updateBrowserCompanionPairingToken(
+      this.agentId(),
+      companion.id,
+      hashBrowserCompanionPairingToken(pairingToken),
+      nowIso,
+      nowIso,
+    );
+    return {
+      companion: {
+        ...companion,
+        pairedAt: nowIso,
+        updatedAt: nowIso,
+      },
+      pairingToken,
+    };
+  }
+
+  async syncBrowserCompanion(
+    companionId: string,
+    pairingToken: string,
+    request: SyncLifeOpsBrowserStateRequest,
+  ): Promise<LifeOpsBrowserCompanionSyncResponse> {
+    const companion = await this.requireBrowserCompanion(
+      companionId,
+      pairingToken,
+    );
+    const companionInput = requireRecord(request.companion, "companion");
+    const browser = normalizeEnumValue(
+      companionInput.browser,
+      "companion.browser",
+      LIFEOPS_BROWSER_KINDS,
+    );
+    const profileId = requireNonEmptyString(
+      companionInput.profileId,
+      "companion.profileId",
+    );
+    if (browser !== companion.browser || profileId !== companion.profileId) {
+      fail(403, "browser companion payload does not match the paired profile");
+    }
+    const state = await this.syncBrowserState(request);
+    const settings = await this.getBrowserSettings();
+    const session =
+      settings.enabled &&
+      settings.trackingMode !== "off" &&
+      !this.isBrowserPaused(settings) &&
+      settings.allowBrowserControl
+        ? await this.claimQueuedBrowserSession(state.companion)
+        : null;
+    return {
+      ...state,
+      settings,
+      session,
+    };
+  }
+
   async listBrowserSessions(): Promise<LifeOpsBrowserSession[]> {
     return this.repository.listBrowserSessions(this.agentId());
   }
@@ -9474,6 +9710,74 @@ export class LifeOpsService {
       },
     );
     return nextSession;
+  }
+
+  async updateBrowserSessionProgressFromCompanion(
+    companionId: string,
+    pairingToken: string,
+    sessionId: string,
+    request: UpdateLifeOpsBrowserSessionProgressRequest,
+  ): Promise<LifeOpsBrowserSession> {
+    const companion = await this.requireBrowserCompanion(
+      companionId,
+      pairingToken,
+    );
+    const session = await this.requireBrowserSessionForCompanion(
+      companion,
+      sessionId,
+    );
+    if (
+      session.status !== "queued" &&
+      session.status !== "running" &&
+      session.status !== "awaiting_confirmation"
+    ) {
+      fail(
+        409,
+        `browser session cannot update progress from status ${session.status}`,
+      );
+    }
+    const nextSession: LifeOpsBrowserSession = {
+      ...session,
+      status: "running",
+      currentActionIndex:
+        request.currentActionIndex === undefined
+          ? session.currentActionIndex
+          : normalizeBrowserSessionActionIndex(
+              request.currentActionIndex,
+              session.actions.length,
+            ),
+      result:
+        request.result === undefined
+          ? session.result
+          : {
+              ...session.result,
+              ...requireRecord(request.result, "result"),
+            },
+      metadata:
+        request.metadata === undefined
+          ? session.metadata
+          : mergeMetadata(
+              session.metadata,
+              requireRecord(request.metadata, "metadata"),
+            ),
+      updatedAt: new Date().toISOString(),
+    };
+    await this.repository.updateBrowserSession(nextSession);
+    return nextSession;
+  }
+
+  async completeBrowserSessionFromCompanion(
+    companionId: string,
+    pairingToken: string,
+    sessionId: string,
+    request: CompleteLifeOpsBrowserSessionRequest,
+  ): Promise<LifeOpsBrowserSession> {
+    const companion = await this.requireBrowserCompanion(
+      companionId,
+      pairingToken,
+    );
+    await this.requireBrowserSessionForCompanion(companion, sessionId);
+    return this.completeBrowserSession(sessionId, request);
   }
 
   async getXConnectorStatus(
@@ -10391,6 +10695,204 @@ export class LifeOpsService {
       : this.withGoogleGrantOperation(grant, createEvent);
   }
 
+  async updateCalendarEvent(
+    requestUrl: URL,
+    request: {
+      mode?: LifeOpsConnectorMode | null;
+      side?: LifeOpsConnectorSide | null;
+      calendarId?: string | null;
+      eventId: string;
+      title?: string;
+      description?: string;
+      location?: string;
+      startAt?: string;
+      endAt?: string;
+      timeZone?: string;
+      attendees?: CreateLifeOpsCalendarEventAttendee[] | null;
+    },
+  ): Promise<LifeOpsCalendarEvent> {
+    const mode = normalizeOptionalConnectorMode(request.mode, "mode");
+    const side = normalizeOptionalConnectorSide(request.side, "side");
+    const calendarId = normalizeCalendarId(request.calendarId);
+    const externalEventId = requireNonEmptyString(request.eventId, "eventId");
+
+    const grant = await this.requireGoogleCalendarWriteGrant(
+      requestUrl,
+      mode,
+      side,
+    );
+    const updateEvent = async () => {
+      if (resolveGoogleExecutionTarget(grant) === "cloud") {
+        fail(
+          501,
+          "Calendar update is not supported through the cloud-managed Google connector yet.",
+        );
+      }
+      const accessToken = (
+        await ensureFreshGoogleAccessToken(
+          grant.tokenRef ??
+            fail(409, "Google Calendar token reference is missing."),
+        )
+      ).accessToken;
+
+      // Google's PATCH semantics: if you send `start.dateTime` you must
+      // also send `end.dateTime`, otherwise the API rejects the call as
+      // "Bad Request" because the event would have inconsistent bounds.
+      // Auto-derive a one-hour endAt from startAt (or vice versa) so a
+      // caller that only knows the new start time still gets a successful
+      // patch instead of a confusing 400.
+      const ONE_HOUR_MS = 60 * 60 * 1000;
+      let normalizedStartAt = request.startAt;
+      let normalizedEndAt = request.endAt;
+      if (normalizedStartAt && !normalizedEndAt) {
+        normalizedEndAt = new Date(
+          new Date(normalizedStartAt).getTime() + ONE_HOUR_MS,
+        ).toISOString();
+      } else if (normalizedEndAt && !normalizedStartAt) {
+        normalizedStartAt = new Date(
+          new Date(normalizedEndAt).getTime() - ONE_HOUR_MS,
+        ).toISOString();
+      }
+
+      const updated = await updateGoogleCalendarEvent({
+        accessToken,
+        calendarId: calendarId ?? undefined,
+        eventId: externalEventId,
+        title: request.title,
+        description: request.description,
+        location: request.location,
+        startAt: normalizedStartAt,
+        endAt: normalizedEndAt,
+        timeZone: request.timeZone,
+        attendees: request.attendees
+          ? normalizeCalendarAttendees(request.attendees)
+          : undefined,
+      });
+      const syncedAt = new Date().toISOString();
+      const event: LifeOpsCalendarEvent = {
+        id: createCalendarEventId(
+          this.agentId(),
+          "google",
+          grant.side,
+          updated.calendarId,
+          updated.externalId,
+        ),
+        agentId: this.agentId(),
+        provider: "google",
+        side: grant.side,
+        ...updated,
+        syncedAt,
+        updatedAt: syncedAt,
+      };
+      await this.repository.upsertCalendarEvent(event, grant.side);
+      await this.syncCalendarReminderPlans([event]);
+      await this.clearGoogleGrantAuthFailure(grant);
+      await this.recordCalendarEventAudit(
+        event.id,
+        "calendar event updated",
+        {
+          calendarId: calendarId ?? "primary",
+          mode: grant.mode,
+          patched: Object.fromEntries(
+            Object.entries({
+              title: request.title,
+              description: request.description,
+              location: request.location,
+              startAt: request.startAt,
+              endAt: request.endAt,
+              timeZone: request.timeZone,
+            }).filter(([, value]) => value !== undefined),
+          ),
+        },
+        {
+          externalId: event.externalId,
+          htmlLink: event.htmlLink,
+        },
+        "calendar_event_updated",
+      );
+      return event;
+    };
+
+    return resolveGoogleExecutionTarget(grant) === "cloud"
+      ? this.runManagedGoogleOperation(grant, updateEvent)
+      : this.withGoogleGrantOperation(grant, updateEvent);
+  }
+
+  async deleteCalendarEvent(
+    requestUrl: URL,
+    request: {
+      mode?: LifeOpsConnectorMode | null;
+      side?: LifeOpsConnectorSide | null;
+      calendarId?: string | null;
+      eventId: string;
+    },
+  ): Promise<void> {
+    const mode = normalizeOptionalConnectorMode(request.mode, "mode");
+    const side = normalizeOptionalConnectorSide(request.side, "side");
+    const calendarId = normalizeCalendarId(request.calendarId);
+    const externalEventId = requireNonEmptyString(request.eventId, "eventId");
+
+    const grant = await this.requireGoogleCalendarWriteGrant(
+      requestUrl,
+      mode,
+      side,
+    );
+    const deleteEvent = async () => {
+      // Cloud-managed Google delete is not yet exposed by the managed client;
+      // local execution path is the only supported route here. Refuse loudly
+      // rather than silently no-op so the caller doesn't think the event was
+      // removed when it wasn't.
+      if (resolveGoogleExecutionTarget(grant) === "cloud") {
+        fail(
+          501,
+          "Calendar delete is not supported through the cloud-managed Google connector yet.",
+        );
+      }
+      const accessToken = (
+        await ensureFreshGoogleAccessToken(
+          grant.tokenRef ??
+            fail(409, "Google Calendar token reference is missing."),
+        )
+      ).accessToken;
+      await deleteGoogleCalendarEvent({
+        accessToken,
+        calendarId: calendarId ?? undefined,
+        eventId: externalEventId,
+      });
+      // Best-effort: drop the local cached row so subsequent feed reads
+      // don't show a phantom event. Ignore failures here — the source of
+      // truth (Google) has already accepted the delete.
+      try {
+        await this.repository.deleteCalendarEventByExternalId(
+          this.agentId(),
+          "google",
+          calendarId ?? "primary",
+          externalEventId,
+          grant.side,
+        );
+      } catch {
+        // intentionally swallowed: local cache mirror, not authoritative
+      }
+      await this.clearGoogleGrantAuthFailure(grant);
+      await this.recordCalendarEventAudit(
+        externalEventId,
+        "calendar event deleted",
+        {
+          calendarId: calendarId ?? "primary",
+          mode: grant.mode,
+        },
+        {
+          externalId: externalEventId,
+        },
+        "calendar_event_deleted",
+      );
+    };
+
+    return resolveGoogleExecutionTarget(grant) === "cloud"
+      ? this.runManagedGoogleOperation(grant, deleteEvent)
+      : this.withGoogleGrantOperation(grant, deleteEvent);
+  }
+
   async getNextCalendarEventContext(
     requestUrl: URL,
     request: GetLifeOpsCalendarFeedRequest = {},
@@ -10398,14 +10900,20 @@ export class LifeOpsService {
   ): Promise<LifeOpsNextCalendarEventContext> {
     const mode = normalizeOptionalConnectorMode(request.mode, "mode");
     const timeZone = normalizeCalendarTimeZone(request.timeZone);
-    const feedRequest =
-      request.timeMin || request.timeMax
-        ? request
-        : {
-            ...request,
-            ...buildCalendarLookaheadWindow(now, timeZone, 30),
-          };
-    const feed = await this.getCalendarFeed(requestUrl, feedRequest, now);
+    const feed = await this.getCalendarFeed(
+      requestUrl,
+      {
+        ...request,
+        timeZone,
+        ...resolveNextCalendarEventWindow({
+          now,
+          timeZone,
+          requestedTimeMin: request.timeMin,
+          requestedTimeMax: request.timeMax,
+        }),
+      },
+      now,
+    );
     const nextEvent =
       feed.events.find((event) => Date.parse(event.endAt) > now.getTime()) ??
       null;
@@ -10439,11 +10947,11 @@ export class LifeOpsService {
       linkedMailState = "cache";
       if (linkedMail.length === 0) {
         try {
-          const triage = await this.getGmailTriage(
-            requestUrl,
-            {
-              mode,
-              side: status.grant.side,
+        const triage = await this.getGmailTriage(
+          requestUrl,
+          {
+            mode,
+            side: status.grant.side,
               maxResults: DEFAULT_GMAIL_TRIAGE_MAX_RESULTS,
             },
             now,
@@ -10736,6 +11244,87 @@ export class LifeOpsService {
       },
       {
         subject: request.subject ?? message.subject,
+        sent: true,
+      },
+    );
+    return { ok: true };
+  }
+
+  async sendGmailMessage(
+    requestUrl: URL,
+    request: {
+      mode?: LifeOpsConnectorMode | null;
+      side?: LifeOpsConnectorSide | null;
+      to: string[];
+      cc?: string[] | null;
+      bcc?: string[] | null;
+      subject: string;
+      bodyText: string;
+      confirmSend?: boolean | null;
+    },
+  ): Promise<{ ok: true }> {
+    const mode = normalizeOptionalConnectorMode(request.mode, "mode");
+    const side = normalizeOptionalConnectorSide(request.side, "side");
+    const confirmSend =
+      normalizeOptionalBoolean(request.confirmSend, "confirmSend") ?? false;
+    if (!confirmSend) {
+      fail(409, "Gmail send requires explicit confirmation.");
+    }
+    const to = normalizeOptionalStringArray(request.to, "to") ?? [];
+    if (to.length === 0) {
+      fail(400, "to must include at least one recipient.");
+    }
+    const cc = normalizeOptionalStringArray(request.cc, "cc") ?? [];
+    const bcc = normalizeOptionalStringArray(request.bcc, "bcc") ?? [];
+    const subject = requireNonEmptyString(request.subject, "subject");
+    const bodyText = normalizeGmailReplyBody(request.bodyText);
+
+    const grant = await this.requireGoogleGmailSendGrant(
+      requestUrl,
+      mode,
+      side,
+    );
+    const sendMessage = async () => {
+      // Cloud-managed gmail send for new messages isn't exposed by the
+      // managed client yet — refuse loudly so callers don't think the
+      // message was sent when it wasn't.
+      if (resolveGoogleExecutionTarget(grant) === "cloud") {
+        fail(
+          501,
+          "Gmail compose-and-send is not supported through the cloud-managed connector yet.",
+        );
+      }
+      await sendGoogleGmailMessage({
+        accessToken: (
+          await ensureFreshGoogleAccessToken(
+            grant.tokenRef ??
+              fail(409, "Google Gmail token reference is missing."),
+          )
+        ).accessToken,
+        to,
+        cc,
+        bcc,
+        subject,
+        bodyText,
+      });
+    };
+
+    await (resolveGoogleExecutionTarget(grant) === "cloud"
+      ? this.runManagedGoogleOperation(grant, sendMessage)
+      : this.withGoogleGrantOperation(grant, sendMessage));
+
+    await this.recordGmailAudit(
+      "gmail_message_sent",
+      null,
+      "gmail compose-and-send completed",
+      {
+        to,
+        cc: cc.length > 0 ? cc : null,
+        bcc: bcc.length > 0 ? bcc : null,
+        confirmSend,
+      },
+      {
+        subject,
         sent: true,
       },
     );

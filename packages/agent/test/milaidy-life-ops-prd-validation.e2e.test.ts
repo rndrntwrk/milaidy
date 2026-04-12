@@ -6,20 +6,20 @@
  * stays in-repo without forcing external credentials in normal CI.
  */
 
+import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import crypto from "node:crypto";
 import type { AgentRuntime, Task, UUID } from "@elizaos/core";
 import { describe, expect, it, vi } from "vitest";
 import { describeIf, itIf } from "../../../test/helpers/conditional-tests.ts";
+import { req } from "../../../test/helpers/http";
+import { saveEnv, sleep } from "../../../test/helpers/test-utils";
 import { startApiServer } from "../src/api/server";
 import { resolveOAuthDir } from "../src/config/paths";
 import { LifeOpsRepository } from "../src/lifeops/repository";
 import { LifeOpsService } from "../src/lifeops/service";
 import { DatabaseSync } from "../src/test-utils/sqlite-compat";
-import { req } from "../../../test/helpers/http";
-import { saveEnv, sleep } from "../../../test/helpers/test-utils";
 
 const envPath = path.resolve(import.meta.dirname, "..", "..", "..", ".env");
 try {

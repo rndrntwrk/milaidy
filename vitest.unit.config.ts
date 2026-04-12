@@ -55,6 +55,22 @@ export default mergeConfig(
           find: "@elizaos/core/roles",
           replacement: elizaCoreRolesEntry,
         },
+        ...(useLocalElizaCore
+          ? [
+              {
+                find: "@elizaos/core/testing",
+                replacement: path.join(
+                  repoRoot,
+                  "eliza",
+                  "packages",
+                  "typescript",
+                  "src",
+                  "testing",
+                  "index.ts",
+                ),
+              },
+            ]
+          : []),
         ...((useLocalElizaCore
           ? elizaCoreSource
           : elizaCoreEntry) != null

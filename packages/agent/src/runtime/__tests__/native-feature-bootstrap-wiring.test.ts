@@ -80,7 +80,6 @@ describe("native feature bootstrap wiring", () => {
     );
     expect(elizaSource).toContain('"@elizaos/plugin-shell": pluginShell');
   });
-
   it("guards plugin-cron bootstrap behind a runtime require", () => {
     expect(elizaSource).not.toContain(
       'import * as pluginCron from "@elizaos/plugin-cron";',
@@ -146,7 +145,6 @@ describe("native feature bootstrap wiring", () => {
       '"@elizaos/plugin-personality": pluginPersonality',
     );
   });
-
   it("guards trajectory bootstrap behind the native trajectories toggle", () => {
     const waitBlock =
       elizaSource.match(
@@ -191,5 +189,10 @@ describe("native feature bootstrap wiring", () => {
     expect(knowledgeProbe).toContain("runtimeWithFlags.isKnowledgeEnabled()");
     expect(trajectoryProbe).not.toContain("const fn =");
     expect(knowledgeProbe).not.toContain("const fn =");
+  });
+
+  it("forwards connector env vars into runtime settings", () => {
+    expect(elizaSource).toContain("collectConnectorEnvVars");
+    expect(elizaSource).toContain("...collectConnectorEnvVars(config)");
   });
 });

@@ -1,0 +1,41 @@
+{
+  "id": "brush-teeth-basic",
+  "title": "Brush teeth basic save flow",
+  "domain": "tasks",
+  "rooms": [
+    {
+      "id": "main",
+      "source": "telegram",
+      "title": "LifeOps Brush Teeth Basic"
+    }
+  ],
+  "turns": [
+    {
+      "name": "brush-teeth preview",
+      "text": "Help me brush my teeth at 8 am and 9 pm every day.",
+      "responseIncludesAll": ["brush teeth"]
+    },
+    {
+      "name": "brush-teeth confirm",
+      "text": "Yes, save that brushing routine."
+    },
+    {
+      "name": "brush-teeth final confirmation",
+      "text": "Yes, that's the schedule. Save it.",
+      "responseIncludesAll": ["saved"]
+    }
+  ],
+  "finalChecks": [
+    {
+      "type": "definitionCountDelta",
+      "title": "Brush teeth",
+      "delta": 1,
+      "cadenceKind": "times_per_day",
+      "requiredSlots": [
+        { "label": "Morning", "minuteOfDay": 480 },
+        { "label": "Night", "minuteOfDay": 1260 }
+      ],
+      "requireReminderPlan": true
+    }
+  ]
+}

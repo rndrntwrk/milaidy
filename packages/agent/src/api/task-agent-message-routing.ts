@@ -46,12 +46,11 @@ function inferTaskAgentRoutingFromMessage(
   }
 
   const loginLabelMatch = text.match(/^"([^"]+)" needs a provider login\b/);
-  const matchingTask =
-    loginLabelMatch?.[1]
-      ? taskContexts.filter((task) => task.label === loginLabelMatch[1])
-      : taskContexts.length === 1
-        ? taskContexts
-        : [];
+  const matchingTask = loginLabelMatch?.[1]
+    ? taskContexts.filter((task) => task.label === loginLabelMatch[1])
+    : taskContexts.length === 1
+      ? taskContexts
+      : [];
 
   if (matchingTask.length !== 1) {
     return undefined;
@@ -78,7 +77,9 @@ export async function routeTaskAgentTextToConnector(
   } satisfies TaskAgentChatRouting;
 
   if (!resolvedRouting.threadId && resolvedRouting.sessionId) {
-    const taskContext = coordinator?.getTaskContext?.(resolvedRouting.sessionId);
+    const taskContext = coordinator?.getTaskContext?.(
+      resolvedRouting.sessionId,
+    );
     if (taskContext?.threadId) {
       resolvedRouting.threadId = taskContext.threadId;
     }
@@ -88,7 +89,9 @@ export async function routeTaskAgentTextToConnector(
   if (!roomId && resolvedRouting.threadId) {
     const thread = await coordinator?.getTaskThread?.(resolvedRouting.threadId);
     roomId =
-      thread && typeof thread.roomId === "string" && thread.roomId.trim().length > 0
+      thread &&
+      typeof thread.roomId === "string" &&
+      thread.roomId.trim().length > 0
         ? thread.roomId
         : null;
   }
@@ -98,12 +101,12 @@ export async function routeTaskAgentTextToConnector(
   if (!room?.source) return false;
 
   await runtime.sendMessageToTarget(
-    ({
+    {
       source: room.source,
       roomId: room.id,
       channelId: room.channelId ?? room.id,
       serverId: room.serverId ?? undefined,
-    } as Parameters<RoutingRuntime["sendMessageToTarget"]>[0]),
+    } as Parameters<RoutingRuntime["sendMessageToTarget"]>[0],
     { text, source },
   );
   return true;

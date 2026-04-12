@@ -91,32 +91,31 @@ function serializeBrowserActionResponse(response: {
 async function startLocalSiteFixture(): Promise<LocalSiteFixture> {
   const server = http.createServer((req, res) => {
     const url = new URL(req.url ?? "/", "http://127.0.0.1");
-	    const page =
-	      url.pathname === "/tasks"
-	        ? {
-	            title: "Tasks Fixture",
-	            body: "<h1>Tasks Fixture</h1><p>Agent task board</p>",
-	          }
-	        : url.pathname === "/welcome"
-	          ? {
-	              title: "Welcome Fixture",
-	              body: `<h1>Welcome, ${url.searchParams.get("name") || "Anonymous"}</h1><p>Agent browser workspace welcome page</p>`,
-	            }
-	          : url.pathname === "/form"
-	            ? {
-	                title: "Browser Form Fixture",
-	                body:
-	                  '<h1>Browser Form Fixture</h1><form action="/welcome" method="get"><label>Agent name<input name="name" value="" /></label><label>Plan<select name="plan"><option value="basic">Basic</option><option value="pro">Pro</option></select></label><label><input type="checkbox" name="terms" value="yes" />Accept terms</label><button type="submit">Continue</button></form>',
-	              }
-	        : url.pathname === "/notes"
-	          ? {
-	              title: "Notes Fixture",
-	              body: "<h1>Notes Fixture</h1><p>Agent notes page</p>",
+    const page =
+      url.pathname === "/tasks"
+        ? {
+            title: "Tasks Fixture",
+            body: "<h1>Tasks Fixture</h1><p>Agent task board</p>",
+          }
+        : url.pathname === "/welcome"
+          ? {
+              title: "Welcome Fixture",
+              body: `<h1>Welcome, ${url.searchParams.get("name") || "Anonymous"}</h1><p>Agent browser workspace welcome page</p>`,
             }
-          : {
-              title: "Counter Fixture",
-              body: "<h1>Counter Fixture</h1><p>Agent browser workspace counter</p>",
-            };
+          : url.pathname === "/form"
+            ? {
+                title: "Browser Form Fixture",
+                body: '<h1>Browser Form Fixture</h1><form action="/welcome" method="get"><label>Agent name<input name="name" value="" /></label><label>Plan<select name="plan"><option value="basic">Basic</option><option value="pro">Pro</option></select></label><label><input type="checkbox" name="terms" value="yes" />Accept terms</label><button type="submit">Continue</button></form>',
+              }
+            : url.pathname === "/notes"
+              ? {
+                  title: "Notes Fixture",
+                  body: "<h1>Notes Fixture</h1><p>Agent notes page</p>",
+                }
+              : {
+                  title: "Counter Fixture",
+                  body: "<h1>Counter Fixture</h1><p>Agent browser workspace counter</p>",
+                };
 
     res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
     res.end(
@@ -131,13 +130,13 @@ async function startLocalSiteFixture(): Promise<LocalSiteFixture> {
   const address = server.address() as AddressInfo;
   const baseUrl = `http://127.0.0.1:${address.port}`;
 
-	  return {
-	    counterUrl: `${baseUrl}/counter`,
-	    formUrl: `${baseUrl}/form`,
-	    welcomeUrl: `${baseUrl}/welcome?name=Milady`,
-	    tasksUrl: `${baseUrl}/tasks`,
-	    notesUrl: `${baseUrl}/notes`,
-	    close: () =>
+  return {
+    counterUrl: `${baseUrl}/counter`,
+    formUrl: `${baseUrl}/form`,
+    welcomeUrl: `${baseUrl}/welcome?name=Milady`,
+    tasksUrl: `${baseUrl}/tasks`,
+    notesUrl: `${baseUrl}/notes`,
+    close: () =>
       new Promise<void>((resolve, reject) => {
         server.close((error) => {
           if (error) {
@@ -521,9 +520,13 @@ describe("Browser workspace agent chat E2E", () => {
       title: "Browser agent form task",
     });
 
-    const response = await postConversationMessage(apiServer.port, conversationId, {
-      text: "Open the form, fill the name, choose the pro plan, accept terms, submit it, and tell me the heading.",
-    });
+    const response = await postConversationMessage(
+      apiServer.port,
+      conversationId,
+      {
+        text: "Open the form, fill the name, choose the pro plan, accept terms, submit it, and tell me the heading.",
+      },
+    );
 
     expect(response.status).toBe(200);
     expect(response.data.text).toEqual(

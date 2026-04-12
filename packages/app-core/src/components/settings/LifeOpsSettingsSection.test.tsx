@@ -34,6 +34,11 @@ vi.mock("../../state", () => ({
   }),
 }));
 
+vi.mock("../connectors/LifeOpsBrowserSetupPanel", () => ({
+  LifeOpsBrowserSetupPanel: () =>
+    React.createElement("div", null, "lifeops-browser-setup-panel"),
+}));
+
 vi.mock("@miladyai/ui", () => {
   const passthrough = ({
     children,
@@ -56,10 +61,15 @@ vi.mock("@miladyai/ui", () => {
 
 vi.mock("lucide-react", () => ({
   CalendarDays: () => React.createElement("span", null, "calendar"),
+  Copy: () => React.createElement("span", null, "copy"),
+  Download: () => React.createElement("span", null, "download"),
+  FolderOpen: () => React.createElement("span", null, "folder"),
   Mail: () => React.createElement("span", null, "mail"),
+  Package: () => React.createElement("span", null, "package"),
   Plug2: () => React.createElement("span", null, "plug"),
   RefreshCw: () => React.createElement("span", null, "refresh"),
   ShieldCheck: () => React.createElement("span", null, "shield"),
+  Sparkles: () => React.createElement("span", null, "sparkles"),
 }));
 
 import { LifeOpsSettingsSection } from "./LifeOpsSettingsSection";
@@ -175,6 +185,7 @@ describe("LifeOpsSettingsSection", () => {
     });
     expect(text).toContain("Owner setup");
     expect(text).toContain("Agent setup");
+    expect(text).toContain("lifeops-browser-setup-panel");
     expect(text).toContain("Local desktop OAuth");
     expect(text).toContain("MILADY_GOOGLE_OAUTH_DESKTOP_CLIENT_ID");
     expect(text).toContain(

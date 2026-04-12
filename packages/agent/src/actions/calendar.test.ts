@@ -283,6 +283,38 @@ describe("calendarAction", () => {
     expect(mockCreateCalendarEvent).not.toHaveBeenCalled();
   });
 
+  it("resolves weekday-only requests like 'on monday' to the correct local day window", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-11T22:19:00-06:00"));
+    mockGetCalendarFeed.mockResolvedValue({
+      calendarId: "primary",
+      events: [],
+      source: "cache",
+      timeMin: "2026-04-13T06:00:00.000Z",
+      timeMax: "2026-04-14T06:00:00.000Z",
+      syncedAt: "2026-04-12T04:19:00.000Z",
+    });
+
+    const result = await invoke("hey eliza, what do i have going on on monday?", {
+      details: {
+        timeZone: "America/Denver",
+      },
+    });
+
+    expect(mockGetCalendarFeed).toHaveBeenCalledWith(
+      expect.any(URL),
+      expect.objectContaining({
+        timeZone: "America/Denver",
+        timeMin: "2026-04-13T06:00:00.000Z",
+        timeMax: "2026-04-14T06:00:00.000Z",
+      }),
+    );
+    expect(result).toMatchObject({
+      success: true,
+    });
+    expect(result?.text).toMatch(/No events on monday/i);
+  });
+
   it("uses message text when intent param is omitted", async () => {
     mockGetCalendarFeed.mockResolvedValue({
       calendarId: "primary",
