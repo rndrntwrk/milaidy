@@ -1584,6 +1584,7 @@
   "onboarding.openLoginPageInBrowserDesc": "계속하려면 브라우저에서 로그인 페이지를 여세요.",
   "onboarding.openThisLinkToLogIn": "로그인하려면 이 링크를 여세요:",
   "onboarding.passwordMinError": "비밀번호는 최소 4자 이상이어야 합니다.",
+  "onboarding.paste": "붙여넣기",
   "onboarding.pasteAuthCode": "인증 코드 붙여넣기...",
   "onboarding.piCredentialsHint": "~/.pi/agent/auth.json의 자격 증명을 사용합니다.",
   "onboarding.piDropdownHint": " 드롭다운에서 선택하거나 사용자 정의 모델을 선택하세요.",

@@ -1584,6 +1584,7 @@
   "onboarding.openLoginPageInBrowserDesc": "Open the login page in your browser to continue.",
   "onboarding.openThisLinkToLogIn": "Open this link to log in:",
   "onboarding.passwordMinError": "Password must be at least 4 characters.",
+  "onboarding.paste": "Paste",
   "onboarding.pasteAuthCode": "Paste authorization code...",
   "onboarding.piCredentialsHint": "Uses credentials from ~/.pi/agent/auth.json.",
   "onboarding.piDropdownHint": " Pick from the dropdown or choose a custom model.",

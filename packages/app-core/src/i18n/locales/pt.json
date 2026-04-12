@@ -1584,6 +1584,7 @@
   "onboarding.openLoginPageInBrowserDesc": "Abra a página de login no navegador para continuar.",
   "onboarding.openThisLinkToLogIn": "Abra este link para fazer login:",
   "onboarding.passwordMinError": "A senha deve ter pelo menos 4 caracteres.",
+  "onboarding.paste": "Colar",
   "onboarding.pasteAuthCode": "Colar código de autorização...",
   "onboarding.piCredentialsHint": "Usa credenciais de ~/.pi/agent/auth.json.",
   "onboarding.piDropdownHint": " Escolha do menu suspenso ou um modelo personalizado.",

@@ -1584,6 +1584,7 @@
   "onboarding.openLoginPageInBrowserDesc": "Mở trang đăng nhập trong trình duyệt để tiếp tục.",
   "onboarding.openThisLinkToLogIn": "Mở liên kết này để đăng nhập:",
   "onboarding.passwordMinError": "Mật khẩu ít nhất 4 ký tự.",
+  "onboarding.paste": "Dán",
   "onboarding.pasteAuthCode": "Dán mã xác thực...",
   "onboarding.piCredentialsHint": "Dùng credentials từ ~/.pi/agent/auth.json.",
   "onboarding.piDropdownHint": " Chọn từ dropdown hoặc chọn model tuỳ chỉnh.",

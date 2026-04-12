@@ -1584,6 +1584,7 @@
   "onboarding.openLoginPageInBrowserDesc": "在浏览器中打开登录页面以继续。",
   "onboarding.openThisLinkToLogIn": "打开此链接登录：",
   "onboarding.passwordMinError": "密码至少需要 4 个字符。",
+  "onboarding.paste": "粘贴",
   "onboarding.pasteAuthCode": "粘贴授权码...",
   "onboarding.piCredentialsHint": "使用 ~/.pi/agent/auth.json 中的凭证。",
   "onboarding.piDropdownHint": " 从下拉列表中选择或自定义模型。",

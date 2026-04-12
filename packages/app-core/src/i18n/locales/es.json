@@ -1584,6 +1584,7 @@
   "onboarding.openLoginPageInBrowserDesc": "Abre la página de inicio de sesión en tu navegador para continuar.",
   "onboarding.openThisLinkToLogIn": "Abra este enlace para iniciar sesión:",
   "onboarding.passwordMinError": "La contraseña debe tener al menos 4 caracteres.",
+  "onboarding.paste": "Pegar",
   "onboarding.pasteAuthCode": "Pegar código de autorización...",
   "onboarding.piCredentialsHint": "Usa credenciales de ~/.pi/agent/auth.json.",
   "onboarding.piDropdownHint": " Elige del menú desplegable o un modelo personalizado.",

@@ -1584,6 +1584,7 @@
   "onboarding.openLoginPageInBrowserDesc": "Buksan ang login page sa iyong browser para magpatuloy.",
   "onboarding.openThisLinkToLogIn": "Buksan ang link na ito para mag-log in:",
   "onboarding.passwordMinError": "Ang password ay dapat hindi bababa sa 4 na karakter.",
+  "onboarding.paste": "I-paste",
   "onboarding.pasteAuthCode": "I-paste ang authorization code...",
   "onboarding.piCredentialsHint": "Gumagamit ng credentials mula sa ~/.pi/agent/auth.json.",
   "onboarding.piDropdownHint": " Pumili mula sa dropdown o pumili ng custom model.",

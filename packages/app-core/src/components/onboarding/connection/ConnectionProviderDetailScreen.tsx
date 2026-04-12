@@ -16,6 +16,7 @@ import type {
   ProviderOption,
 } from "../../../api";
 import { client } from "../../../api";
+import { getElectrobunRendererRpc } from "../../../bridge/electrobun-rpc";
 import { useBranding } from "../../../config";
 import {
   type ConnectionEvent,
@@ -789,20 +790,56 @@ export function ConnectionProviderDetailScreen({
                 messageTone="danger"
               >
                 {({ describedBy, invalid }) => (
-                  <Input
-                    id="anthropic-auth-code"
-                    ref={anthropicCodeRef}
-                    type="text"
-                    aria-describedby={describedBy}
-                    aria-invalid={invalid}
-                    className={`${onboardingInputClassName} text-center`}
-                    placeholder={t("onboarding.pasteAuthCode")}
-                    value={anthropicCode}
-                    onChange={(e) => {
-                      setAnthropicCode(e.target.value);
-                      setAnthropicError("");
-                    }}
-                  />
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id="anthropic-auth-code"
+                      ref={anthropicCodeRef}
+                      type="text"
+                      aria-describedby={describedBy}
+                      aria-invalid={invalid}
+                      className={`${onboardingInputClassName} text-center flex-1`}
+                      placeholder={t("onboarding.pasteAuthCode")}
+                      value={anthropicCode}
+                      onChange={(e) => {
+                        setAnthropicCode(e.target.value);
+                        setAnthropicError("");
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="shrink-0 text-xs px-3"
+                      onClick={async () => {
+                        try {
+                          // Try native Electrobun clipboard (no permission prompt)
+                          const rpc = getElectrobunRendererRpc();
+                          if (rpc?.request?.desktopReadFromClipboard) {
+                            const result =
+                              await rpc.request.desktopReadFromClipboard();
+                            const nativeText = (
+                              result as { text?: string }
+                            )?.text;
+                            if (nativeText) {
+                              setAnthropicCode(nativeText.trim());
+                              setAnthropicError("");
+                              return;
+                            }
+                          }
+                          // Fallback: browser clipboard API (web mode)
+                          const text =
+                            await navigator.clipboard.readText();
+                          if (text) {
+                            setAnthropicCode(text.trim());
+                            setAnthropicError("");
+                          }
+                        } catch {
+                          // Clipboard unavailable
+                        }
+                      }}
+                    >
+                      {t("onboarding.paste")}
+                    </Button>
+                  </div>
                 )}
               </OnboardingField>
               <Button
