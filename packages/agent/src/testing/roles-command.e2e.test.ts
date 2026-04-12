@@ -1,9 +1,8 @@
 import type { Memory, State, UUID } from "@elizaos/core";
-import { setConnectorAdminWhitelist } from "@elizaos/core/roles";
+import { setConnectorAdminWhitelist, updateRoleAction } from "../runtime/roles.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { lateJoinWhitelistEvaluator } from "../evaluators/late-join-whitelist";
 import { roleBackfillProvider } from "../providers/role-backfill";
-import { updateRoleAction } from "../runtime/roles/src/action";
 
 const { mockLoadElizaConfig } = vi.hoisted(() => ({
   mockLoadElizaConfig: vi.fn(),

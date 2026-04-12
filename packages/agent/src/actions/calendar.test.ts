@@ -32,7 +32,7 @@ const {
   },
 }));
 
-vi.mock("@elizaos/core/roles", () => ({
+vi.mock("../runtime/roles.js", () => ({
   checkSenderPrivateAccess: mockCheckSenderPrivateAccess,
   resolveCanonicalOwnerIdForMessage: mockResolveCanonicalOwnerIdForMessage,
 }));

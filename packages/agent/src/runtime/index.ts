@@ -6,6 +6,7 @@ export { resolvePlugins } from "./plugin-resolver.js";
 export * from "./embedding-presets.js";
 export * from "./onboarding-names.js";
 export * from "./release-plugin-policy.js";
+export * from "./roles.js";
 export * from "./restart.js";
 export * from "./trajectory-persistence.js";
 export * from "./version.js";

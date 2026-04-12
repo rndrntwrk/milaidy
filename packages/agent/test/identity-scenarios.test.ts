@@ -63,7 +63,7 @@ const {
   mockCheckSenderRole: vi.fn(),
 }));
 
-vi.mock("@elizaos/core/roles", () => ({
+vi.mock("../src/runtime/roles.js", () => ({
   getConnectorAdminWhitelist: mockGetConnectorAdminWhitelist,
   getEntityRole: mockGetEntityRole,
   hasConfiguredCanonicalOwner: mockHasConfiguredCanonicalOwner,

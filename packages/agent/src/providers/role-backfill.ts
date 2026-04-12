@@ -28,7 +28,7 @@ import {
   type RoleGrantSource,
   type RoleName,
   resolveCanonicalOwnerId,
-} from "@elizaos/core/roles";
+} from "../runtime/roles.js";
 
 type RolesWorldMetadata = {
   ownership?: { ownerId?: string };
