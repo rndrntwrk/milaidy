@@ -54,6 +54,9 @@ const ROOTS = [
 ];
 
 const MOCK_PATTERNS = [
+  { id: "bun.mock", regex: /(?<![\w.])mock\s*\(/g },
+  { id: "bun.mock.module", regex: /\bmock\.module\s*\(/g },
+  { id: "bun.spyOn", regex: /\bspyOn\s*\(/g },
   { id: "vi.mock", regex: /\bvi\.mock\s*\(/g },
   { id: "jest.mock", regex: /\bjest\.mock\s*\(/g },
   { id: "vi.fn", regex: /\bvi\.fn\s*\(/g },

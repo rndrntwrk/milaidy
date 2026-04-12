@@ -11,6 +11,14 @@ import { LifeOpsService } from "../src/lifeops/service";
 
 const AGENT_ID = "lifeops-life-chat-agent";
 
+function matchesPromptRequest(prompt: string, request: string): boolean {
+  const escaped = request.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(
+    `(?:Current request|Resolved intent|User request):\\s*${JSON.stringify(request).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`,
+    "i",
+  ).test(prompt) || new RegExp(escaped, "i").test(prompt);
+}
+
 function extractPromptFallback(prompt: string): string | null {
   const match = prompt.match(
     /Canonical fallback:\s*("(?:[^"\\]|\\.)*")/m,
@@ -75,6 +83,40 @@ function createRuntimeForLifeChatTests(): AgentRuntime {
             missing: ["title", "schedule"],
           });
         }
+        if (
+          matchesPromptRequest(
+            prompt,
+            "Help me remember to brush my teeth in the morning and at night.",
+          ) ||
+          matchesPromptRequest(
+            prompt,
+            "Please remind me to drink water throughout the day.",
+          ) ||
+          matchesPromptRequest(
+            prompt,
+            "please set a reminder for april 17 2026 at 8pm pst to hug my wife",
+          )
+        ) {
+          return JSON.stringify({
+            operation: "create_definition",
+            confidence: 0.95,
+            shouldAct: true,
+            missing: [],
+          });
+        }
+        if (
+          matchesPromptRequest(
+            prompt,
+            "I want a goal called Stabilize sleep schedule.",
+          )
+        ) {
+          return JSON.stringify({
+            operation: "create_goal",
+            confidence: 0.95,
+            shouldAct: true,
+            missing: [],
+          });
+        }
         return "<response></response>";
       }
       if (prompt.includes("Plan the next step for a LifeOps create_definition request.")) {
@@ -93,6 +135,75 @@ function createRuntimeForLifeChatTests(): AgentRuntime {
             timesPerDay: null,
             priority: null,
             durationMinutes: null,
+          });
+        }
+        if (
+          matchesPromptRequest(
+            prompt,
+            "Help me remember to brush my teeth in the morning and at night.",
+          )
+        ) {
+          return JSON.stringify({
+            mode: "create",
+            response: null,
+            requestKind: "reminder",
+            title: "Brush teeth",
+            description: null,
+            cadenceKind: "daily",
+            windows: ["morning", "night"],
+            weekdays: null,
+            timeOfDay: null,
+            timeZone: null,
+            everyMinutes: null,
+            timesPerDay: null,
+            priority: null,
+            durationMinutes: 5,
+          });
+        }
+        if (
+          matchesPromptRequest(
+            prompt,
+            "Please remind me to drink water throughout the day.",
+          )
+        ) {
+          return JSON.stringify({
+            mode: "create",
+            response: null,
+            requestKind: "reminder",
+            title: "Drink water",
+            description: null,
+            cadenceKind: "daily",
+            windows: ["morning", "afternoon", "evening"],
+            weekdays: null,
+            timeOfDay: null,
+            timeZone: null,
+            everyMinutes: null,
+            timesPerDay: null,
+            priority: null,
+            durationMinutes: null,
+          });
+        }
+        if (
+          matchesPromptRequest(
+            prompt,
+            "please set a reminder for april 17 2026 at 8pm pst to hug my wife",
+          )
+        ) {
+          return JSON.stringify({
+            mode: "create",
+            response: null,
+            requestKind: "reminder",
+            title: "Hug my wife",
+            description: null,
+            cadenceKind: "once",
+            windows: null,
+            weekdays: null,
+            timeOfDay: "20:00",
+            timeZone: "America/Los_Angeles",
+            everyMinutes: null,
+            timesPerDay: null,
+            priority: null,
+            durationMinutes: 30,
           });
         }
         return "<response></response>";
