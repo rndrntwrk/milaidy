@@ -23,6 +23,18 @@ const IGNORE_DIRS = new Set([
 ]);
 
 const TEST_FILE_PATTERN = /\.(?:test|spec)\.[cm]?[jt]sx?$/;
+const TEST_SUPPORT_FILE_NAMES = new Set([
+  "test-utils.ts",
+  "test-utils.tsx",
+  "test-helpers.ts",
+  "test-helpers.tsx",
+  "route-test-helpers.ts",
+  "route-test-helpers.tsx",
+  "test-preload.ts",
+  "test-preload.tsx",
+  "preload.ts",
+  "preload.tsx",
+]);
 const CONFIG_FILE_PATTERN =
   /(?:^|\/)(?:package\.json|vitest(?:\.[^/]+)?\.config\.[cm]?[jt]s|playwright(?:\.[^/]+)?\.config\.[cm]?[jt]s|bunfig\.toml|test\/setup\.[cm]?[jt]s)$/;
 const MOCK_DIR_NAMES = new Set([
@@ -93,9 +105,10 @@ function relativeToRepo(filePath) {
   return path.relative(repoRoot, filePath).replaceAll(path.sep, "/");
 }
 
-function isLiveTestFile(relPath) {
+function isLiveTestFile(rootId, relPath) {
   const fileName = path.basename(relPath);
-  return [
+  if (
+    [
     ".live.test.",
     "-live.test.",
     ".live.e2e.test.",
@@ -104,7 +117,29 @@ function isLiveTestFile(relPath) {
     "-real.test.",
     ".real.e2e.test.",
     "-real.e2e.test.",
-  ].some((marker) => fileName.includes(marker));
+    ].some((marker) => fileName.includes(marker))
+  ) {
+    return true;
+  }
+
+  if (rootId === "cloud" && relPath.startsWith("cloud/packages/tests/e2e/")) {
+    return true;
+  }
+
+  return false;
+}
+
+function isTestSupportFile(relPath) {
+  if (TEST_FILE_PATTERN.test(relPath)) {
+    return false;
+  }
+
+  const fileName = path.basename(relPath);
+  if (!TEST_SUPPORT_FILE_NAMES.has(fileName)) {
+    return false;
+  }
+
+  return /(?:^|\/)(?:__tests__|tests?|test-support)\//.test(relPath);
 }
 
 function createCounter(patterns) {
@@ -198,9 +233,11 @@ async function analyzeRoot(root) {
   const testFiles = [];
   const liveFiles = [];
   const mockedFiles = [];
+  const mockedSupportFiles = [];
   const configStubRefs = [];
   const harnessBlockers = [];
   const mockIndicatorTotals = createCounter(MOCK_PATTERNS);
+  const supportMockIndicatorTotals = createCounter(MOCK_PATTERNS);
   const stubIndicatorTotals = createCounter(STUB_PATTERNS);
   const harnessBlockerTotals = createCounter(HARNESS_BLOCKER_PATTERNS);
 
@@ -208,7 +245,7 @@ async function analyzeRoot(root) {
     const { absPath, relPath } = file;
     if (TEST_FILE_PATTERN.test(relPath)) {
       testFiles.push(relPath);
-      if (isLiveTestFile(relPath)) {
+      if (isLiveTestFile(root.id, relPath)) {
         liveFiles.push(relPath);
       }
 
@@ -222,6 +259,22 @@ async function analyzeRoot(root) {
         });
         for (const [id, count] of Object.entries(counts)) {
           mockIndicatorTotals[id] += count;
+        }
+      }
+      continue;
+    }
+
+    if (isTestSupportFile(relPath)) {
+      const text = await fs.readFile(absPath, "utf8");
+      const counts = countMatches(text, MOCK_PATTERNS);
+      if (hasAnyCount(counts)) {
+        mockedSupportFiles.push({
+          file: relPath,
+          counts,
+          totalIndicators: sumCounts(counts),
+        });
+        for (const [id, count] of Object.entries(counts)) {
+          supportMockIndicatorTotals[id] += count;
         }
       }
       continue;
@@ -262,6 +315,11 @@ async function analyzeRoot(root) {
       b.totalIndicators - a.totalIndicators || a.file.localeCompare(b.file)
     );
   });
+  mockedSupportFiles.sort((a, b) => {
+    return (
+      b.totalIndicators - a.totalIndicators || a.file.localeCompare(b.file)
+    );
+  });
   configStubRefs.sort((a, b) => {
     return (
       b.totalIndicators - a.totalIndicators || a.file.localeCompare(b.file)
@@ -279,6 +337,11 @@ async function analyzeRoot(root) {
   if (mockedFiles.length > 0) {
     violations.push(
       `${root.id}: ${mockedFiles.length} test files use explicit mock APIs`,
+    );
+  }
+  if (mockedSupportFiles.length > 0) {
+    violations.push(
+      `${root.id}: ${mockedSupportFiles.length} test support files use explicit mock APIs`,
     );
   }
   if (configStubRefs.length > 0) {
@@ -306,15 +369,18 @@ async function analyzeRoot(root) {
     liveTestFiles: liveFiles.length,
     nonLiveTestFiles: nonLiveTestCount,
     mockedTestFiles: mockedFiles.length,
+    mockedSupportFiles: mockedSupportFiles.length,
     mockDirectories: mockDirs,
     configStubReferences: configStubRefs,
     harnessBlockers,
     mockIndicatorTotals,
+    supportMockIndicatorTotals,
     stubIndicatorTotals,
     harnessBlockerTotals,
     liveScripts,
     exampleLiveFiles: takeExamples(liveFiles),
     exampleMockedFiles: takeExamples(mockedFiles),
+    exampleMockedSupportFiles: takeExamples(mockedSupportFiles),
     violations,
   };
 }
@@ -348,6 +414,17 @@ function renderHumanReport(report) {
     if (root.exampleMockedFiles.length > 0) {
       lines.push("sample mocked files:");
       for (const entry of root.exampleMockedFiles) {
+        const indicators = Object.entries(entry.counts)
+          .filter(([, count]) => count > 0)
+          .map(([id, count]) => `${id}:${count}`)
+          .join(", ");
+        lines.push(`  - ${entry.file} (${indicators})`);
+      }
+    }
+
+    if (root.exampleMockedSupportFiles.length > 0) {
+      lines.push("sample mocked support files:");
+      for (const entry of root.exampleMockedSupportFiles) {
         const indicators = Object.entries(entry.counts)
           .filter(([, count]) => count > 0)
           .map(([id, count]) => `${id}:${count}`)
@@ -397,7 +474,7 @@ function renderHumanReport(report) {
 
   lines.push("[totals]");
   lines.push(
-    `tests=${report.totals.totalTestFiles} live=${report.totals.liveTestFiles} non_live=${report.totals.nonLiveTestFiles} mocked=${report.totals.mockedTestFiles} mock_dirs=${report.totals.mockDirectories} stub_refs=${report.totals.configStubReferences} harness_blockers=${report.totals.harnessBlockers}`,
+    `tests=${report.totals.totalTestFiles} live=${report.totals.liveTestFiles} non_live=${report.totals.nonLiveTestFiles} mocked=${report.totals.mockedTestFiles} mocked_support=${report.totals.mockedSupportFiles} mock_dirs=${report.totals.mockDirectories} stub_refs=${report.totals.configStubReferences} harness_blockers=${report.totals.harnessBlockers}`,
   );
   if (report.violations.length > 0) {
     lines.push("repo violations:");
@@ -420,6 +497,7 @@ const totals = roots.reduce(
     accumulator.liveTestFiles += root.liveTestFiles;
     accumulator.nonLiveTestFiles += root.nonLiveTestFiles;
     accumulator.mockedTestFiles += root.mockedTestFiles;
+    accumulator.mockedSupportFiles += root.mockedSupportFiles;
     accumulator.mockDirectories += root.mockDirectories.length;
     accumulator.configStubReferences += root.configStubReferences.length;
     accumulator.harnessBlockers += root.harnessBlockers.length;
@@ -430,6 +508,7 @@ const totals = roots.reduce(
     liveTestFiles: 0,
     nonLiveTestFiles: 0,
     mockedTestFiles: 0,
+    mockedSupportFiles: 0,
     mockDirectories: 0,
     configStubReferences: 0,
     harnessBlockers: 0,

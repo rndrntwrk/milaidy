@@ -101,7 +101,7 @@ describe("patch-deps runtime hotfixes", () => {
     );
 
     expect(source).toContain("patchGroqSdkVersion");
-    expect(source).toContain("@elizaos+plugin-groq@");
+    expect(source).toContain("plugin-groq uses workspace:*");
     expect(source).toContain("@ai-sdk/groq");
   });
 });

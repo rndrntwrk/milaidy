@@ -401,6 +401,18 @@ export function useCloudState({
                 // Non-fatal: credits/billing will fail but core chat works
               });
             }
+
+            if (isElectrobunRuntime()) {
+              void invokeDesktopBridgeRequestWithTimeout({
+                rpcMethod: "agentRestart",
+                ipcChannel: "agent:restart",
+                params: undefined,
+                timeoutMs: 15_000,
+              }).catch(() => {});
+            } else {
+              void fetch("/api/agent/restart", { method: "POST" }).catch(() => {});
+            }
+
             void loadWalletConfig();
             // Skip the immediate pollCloudCredits() call after login.
             // The backend persists the linked-account state asynchronously,

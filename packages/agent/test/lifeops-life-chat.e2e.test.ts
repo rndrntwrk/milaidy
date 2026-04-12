@@ -12,11 +12,10 @@ import { LifeOpsService } from "../src/lifeops/service";
 const AGENT_ID = "lifeops-life-chat-agent";
 
 function matchesPromptRequest(prompt: string, request: string): boolean {
-  const escaped = request.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return new RegExp(
     `(?:Current request|Resolved intent|User request):\\s*${JSON.stringify(request).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`,
     "i",
-  ).test(prompt) || new RegExp(escaped, "i").test(prompt);
+  ).test(prompt);
 }
 
 function extractPromptFallback(prompt: string): string | null {
@@ -67,6 +66,7 @@ function createRuntimeForLifeChatTests(): AgentRuntime {
     agentId: AGENT_ID,
     useModel: async (_modelType: unknown, params?: { prompt?: string }) => {
       const prompt = String(params?.prompt ?? "");
+      console.log("MOCK LLM CALLED WITH PROMPT START ===\n" + prompt.slice(0, 100) + "...\n" + prompt.slice(-100) + "\n=== MOCK LLM PROMPT END");
       const isVagueTodoRequest =
         /Current request:\s*"lol yeah\. can you help me add a todo for my life\?"/i.test(
           prompt,
@@ -99,6 +99,19 @@ function createRuntimeForLifeChatTests(): AgentRuntime {
         ) {
           return JSON.stringify({
             operation: "create_definition",
+            confidence: 0.95,
+            shouldAct: true,
+            missing: [],
+          });
+        }
+        if (
+          matchesPromptRequest(
+            prompt,
+            "remind me less about drink water",
+          )
+        ) {
+          return JSON.stringify({
+            operation: "set_reminder_preference",
             confidence: 0.95,
             shouldAct: true,
             missing: [],

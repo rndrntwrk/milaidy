@@ -1,5 +1,5 @@
 import type { IAgentRuntime, State } from "@elizaos/core";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   buildExtractionPrompt,
   extractTaskCreatePlanWithLlm,
@@ -12,15 +12,15 @@ function makeRuntime(
   const responses = Array.isArray(modelResponse)
     ? modelResponse
     : [modelResponse ?? ""];
-  const useModel = vi.fn();
-
-  for (const response of responses) {
+  let index = 0;
+  const useModel = async () => {
+    const response = responses[Math.min(index, responses.length - 1)] ?? "";
+    index += 1;
     if (response instanceof Error) {
-      useModel.mockRejectedValueOnce(response);
-    } else {
-      useModel.mockResolvedValueOnce(response);
+      throw response;
     }
-  }
+    return response;
+  };
 
   return { useModel } as unknown as IAgentRuntime;
 }
