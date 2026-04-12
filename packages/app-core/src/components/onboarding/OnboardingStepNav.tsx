@@ -67,10 +67,9 @@ export function OnboardingStepNav() {
               "onboarding-step-name text-sm tracking-[0.08em] font-medium drop-shadow-[0_1px_6px_rgba(3,5,10,0.42)] transition-all duration-500";
             if (isDone) {
               nameClass +=
-                " text-[var(--onboarding-nav-link,rgba(207,175,90,0.85))] group-hover:text-[var(--onboarding-nav-link-hover,#f2d27a)]";
+                " text-[var(--onboarding-nav-link,rgba(207,175,90,0.85))] group-hover:text-[var(--onboarding-nav-link-hover,#d4a017)]";
             } else if (isActive) {
-              nameClass +=
-                " text-[var(--onboarding-nav-text-primary,#e8e8ec)] font-semibold";
+              nameClass += " text-accent font-semibold";
             } else {
               nameClass += " text-[var(--onboarding-nav-text-subtle,#a1a1aa)]";
             }
@@ -80,7 +79,7 @@ export function OnboardingStepNav() {
               "onboarding-step-sub text-sm tracking-[0.05em] drop-shadow-[0_1px_6px_rgba(3,5,10,0.3)] transition-all duration-500";
             if (isDone) {
               subClass +=
-                " text-[var(--onboarding-nav-text-subtle,#a1a1aa)] group-hover:text-[var(--onboarding-nav-text-primary,#e8e8ec)]";
+                " text-[var(--onboarding-nav-text-subtle,#a1a1aa)] group-hover:text-[#d4a017]";
             } else if (isActive) {
               subClass += " text-accent";
             } else {

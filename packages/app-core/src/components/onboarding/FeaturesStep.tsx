@@ -9,6 +9,7 @@
  */
 
 import { Button } from "@miladyai/ui";
+import { OnboardingSecondaryActionButton } from "./onboarding-step-chrome";
 import { useCallback, useMemo } from "react";
 import { useApp } from "../../state";
 import { FeatureCard, type FeatureStatus } from "./features/FeatureCard";
@@ -90,6 +91,7 @@ export function FeaturesStep() {
     onboardingFeatureOAuthPending,
     setState,
     handleOnboardingNext,
+    handleOnboardingBack,
     t,
   } = useApp();
 
@@ -227,17 +229,18 @@ export function FeaturesStep() {
       </div>
 
       {/* Actions */}
-      <div className="flex items-center justify-between pt-2">
-        <button
-          type="button"
-          onClick={handleSkip}
-          style={{ fontFamily: MONO_FONT }}
-          className="text-2xs uppercase text-black/50 hover:text-black underline"
-        >
-          {t("onboarding.features.skip", { defaultValue: "Skip for now" })}
-        </button>
+      <div className="flex flex-col gap-2 pt-2">
+        <div className="flex items-center justify-between">
+          <button
+            type="button"
+            onClick={handleSkip}
+            style={{ fontFamily: MONO_FONT }}
+            className="text-2xs uppercase text-black/50 hover:text-black underline"
+          >
+            {t("onboarding.features.skip", { defaultValue: "Skip for now" })}
+          </button>
 
-        <Button
+          <Button
           type="button"
           variant="default"
           className="border-2 border-black bg-black px-6 py-2 text-[#ffe600] font-semibold shadow-md hover:bg-[#ffe600] hover:text-black"
@@ -249,6 +252,13 @@ export function FeaturesStep() {
                 defaultValue: "Continue without features",
               })}
         </Button>
+        </div>
+        <OnboardingSecondaryActionButton
+          onClick={handleOnboardingBack}
+          className="self-start"
+        >
+          {t("onboarding.back")}
+        </OnboardingSecondaryActionButton>
       </div>
     </div>
   );
