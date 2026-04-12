@@ -751,8 +751,6 @@ function AppProviderInner({
       onboardingComplete,
       onboardingUiRevealNonce,
       onboardingLoading,
-      onboardingHandoffPhase,
-      onboardingHandoffError,
       startupPhase,
       startupError,
       startupRetryNonce,
@@ -849,7 +847,6 @@ function AppProviderInner({
       chatInput,
       chatSending,
       chatFirstTokenReceived,
-      chatAwaitingGreeting,
       chatLastUsage,
       chatAvatarVisible,
       chatAgentVoiceMuted,
@@ -1557,69 +1554,6 @@ function AppProviderInner({
   // --- Confirm Modal ---
   const { modalProps } = useConfirm();
   const { prompt: promptModal, modalProps: promptModalProps } = usePrompt();
-
-  // --- Wallet / Inventory / Registry / Drop / Whitelist (extracted to useWalletState) ---
-  // Placed after characterHook (characterDraft) and promptModal — both are required params.
-  const walletHook = useWalletState({
-    setActionNotice,
-    promptModal,
-    agentName: agentStatus?.agentName,
-    characterName: characterDraft?.name,
-  });
-  const {
-    state: {
-      browserEnabled,
-      walletEnabled,
-      walletAddresses,
-      walletConfig,
-      walletBalances,
-      walletNfts,
-      walletLoading,
-      walletNftsLoading,
-      inventoryView,
-      walletExportData,
-      walletExportVisible,
-      walletApiKeySaving,
-      inventorySort,
-      inventorySortDirection,
-      inventoryChainFilters,
-      walletError,
-      registryStatus,
-      registryLoading,
-      registryRegistering,
-      registryError,
-      dropStatus,
-      dropLoading,
-      mintInProgress,
-      mintResult,
-      mintError,
-      mintShiny,
-      whitelistStatus,
-      whitelistLoading,
-    },
-    setBrowserEnabled,
-    setWalletEnabled,
-    setWalletAddresses,
-    setInventoryView,
-    setInventorySort,
-    setInventorySortDirection,
-    setInventoryChainFilters,
-    setWalletError,
-    setRegistryError,
-    setMintResult,
-    setMintError,
-    loadWalletConfig,
-    loadBalances,
-    loadNfts,
-    handleWalletApiKeySave,
-    handleExportKeys,
-    loadRegistryStatus,
-    registerOnChain,
-    syncRegistryProfile,
-    loadDropStatus,
-    mintFromDrop,
-    loadWhitelistStatus,
-  } = walletHook;
 
   // setActionNotice is now provided by useLifecycleState
 
@@ -6646,22 +6580,6 @@ function AppProviderInner({
       setImportBusy(false);
     }
   }, [importBusy, importFile, importPassword]);
-
-  // ── Emote picker ────────────────────────────────────────────────────
-
-  const closeCommandPalette = useCallback(() => {
-    _setCommandPaletteOpen(false);
-    setCommandQuery("");
-    setCommandActiveIndex(0);
-  }, []);
-
-  const openEmotePicker = useCallback(() => {
-    setEmotePickerOpen(true);
-  }, []);
-
-  const closeEmotePicker = useCallback(() => {
-    setEmotePickerOpen(false);
-  }, []);
 
   const applyDetectedProviders = useCallback(
     (detected: Awaited<ReturnType<typeof scanProviderCredentials>>) => {
