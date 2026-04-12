@@ -87,6 +87,7 @@ runs:
     - name: Disable repo-local eliza workspace
       if: ${{ inputs.disable-local-eliza-workspace == 'true' }}
       shell: bash
+      # Jobs that rewrite the workspace graph under MILADY_SKIP_LOCAL_UPSTREAMS=1 must also override install-command to --no-frozen-lockfile because this step regenerates bun.lock for the rewritten workspace shape.
       run: node scripts/disable-local-eliza-workspace.mjs
 
     - name: Install dependencies

@@ -1,6 +1,4 @@
 import crypto from "node:crypto";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { PGlite } from "@electric-sql/pglite";
 import {
   type AgentRuntime,
@@ -9,17 +7,16 @@ import {
   ModelType,
   runWithTrajectoryContext,
   trajectoriesPlugin,
-  type TrajectoriesService as TrajectoriesServiceType,
   type UUID,
 } from "@elizaos/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { getInstalledPackageNamedExport } from "../../../test/eliza-package-paths";
 import {
   createConversation,
   postConversationMessage,
   req,
 } from "../../../test/helpers/http";
 import { startApiServer } from "../src/api/server";
+import { DatabaseTrajectoryLogger } from "../src/runtime/trajectory-storage";
 
 type SqlQuery = {
   queryChunks?: Array<{ value?: unknown }>;
@@ -45,25 +42,6 @@ function extractSqlText(query: SqlQuery): string {
       return String(value ?? "");
     })
     .join("");
-}
-
-const repoRoot = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "..",
-  "..",
-  "..",
-);
-
-async function loadTrajectoriesServiceCtor(): Promise<
-  new (
-    runtime: AgentRuntime,
-  ) => TrajectoriesServiceType
-> {
-  return getInstalledPackageNamedExport<
-    new (
-      runtime: AgentRuntime,
-    ) => TrajectoriesServiceType
-  >("@elizaos/core", "TrajectoriesService", repoRoot, "node");
 }
 
 async function waitForTrajectoryCall(
@@ -116,7 +94,7 @@ async function waitForTrajectoryCall(
 
 describe("Trajectory logger chat roundtrip", () => {
   let runtime: TestRuntime;
-  let trajectoryLogger: TrajectoriesServiceType;
+  let trajectoryLogger: DatabaseTrajectoryLogger;
   let db: PGlite;
   let server: { port: number; close: () => Promise<void> } | null = null;
 
@@ -307,8 +285,7 @@ describe("Trajectory logger chat roundtrip", () => {
       }
     };
 
-    const TrajectoriesServiceCtor = await loadTrajectoriesServiceCtor();
-    trajectoryLogger = new TrajectoriesServiceCtor(runtime);
+    trajectoryLogger = new DatabaseTrajectoryLogger(runtime);
     await trajectoryLogger.initialize();
 
     server = await startApiServer({ port: 0, runtime });
@@ -370,7 +347,7 @@ describe("Trajectory logger chat roundtrip", () => {
       unknown
     >;
     expect(trajectory.id).toBe(detail.trajectoryId);
-    expect(trajectory.source).toBe("client_chat");
+    expect(trajectory.source).toBe("chat");
     expect(trajectory.status).toBe("completed");
     expect(typeof trajectory.endTime).toBe("number");
   });

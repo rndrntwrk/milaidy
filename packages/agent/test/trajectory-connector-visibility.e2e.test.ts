@@ -1,14 +1,11 @@
 import { PGlite } from "@electric-sql/pglite";
 import type {
   AgentRuntime,
-  TrajectoriesService as TrajectoriesServiceType,
 } from "@elizaos/core";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { getInstalledPackageNamedExport } from "../../../test/eliza-package-paths";
 import { req } from "../../../test/helpers/http";
 import { startApiServer } from "../src/api/server";
+import { DatabaseTrajectoryLogger } from "../src/runtime/trajectory-storage";
 
 type SqlQuery = {
   queryChunks?: Array<{ value?: unknown }>;
@@ -36,29 +33,10 @@ function extractSqlText(query: SqlQuery): string {
     .join("");
 }
 
-const repoRoot = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "..",
-  "..",
-  "..",
-);
-
-async function loadTrajectoriesServiceCtor(): Promise<
-  new (
-    runtime: AgentRuntime,
-  ) => TrajectoriesServiceType
-> {
-  return getInstalledPackageNamedExport<
-    new (
-      runtime: AgentRuntime,
-    ) => TrajectoriesServiceType
-  >("@elizaos/core", "TrajectoriesService", repoRoot, "node");
-}
-
 describe("Connector trajectory visibility", () => {
   let db: PGlite;
   let runtime: TestRuntime;
-  let trajectoryLogger: TrajectoriesServiceType;
+  let trajectoryLogger: DatabaseTrajectoryLogger;
   let server: { port: number; close: () => Promise<void> } | null = null;
 
   beforeAll(async () => {
@@ -97,8 +75,7 @@ describe("Connector trajectory visibility", () => {
       getServicesByType: () => [],
     } as TestRuntime;
 
-    const TrajectoriesServiceCtor = await loadTrajectoriesServiceCtor();
-    trajectoryLogger = new TrajectoriesServiceCtor(runtime);
+    trajectoryLogger = new DatabaseTrajectoryLogger(runtime);
     await trajectoryLogger.initialize();
 
     runtime.getService = ((serviceType: string) =>
@@ -161,12 +138,6 @@ describe("Connector trajectory visibility", () => {
       latencyMs: 5,
       promptTokens: Math.ceil(prompt.length / 4),
       completionTokens: Math.ceil(response.length / 4),
-    });
-    trajectoryLogger.completeStep(trajectoryId, stepId, {
-      actionType: "RESPOND",
-      actionName: "RESPOND",
-      parameters: {},
-      success: true,
     });
     await trajectoryLogger.endTrajectory(trajectoryId, "completed");
 
