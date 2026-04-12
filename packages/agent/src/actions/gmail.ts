@@ -1358,12 +1358,16 @@ export const gmailAction: Action = {
     "SEARCH_EMAIL",
     "DRAFT_EMAIL_REPLY",
     "SEND_EMAIL_REPLY",
+    "SEND_EMAIL",
+    "COMPOSE_EMAIL",
+    "EMAIL_SOMEONE",
   ],
   description:
     "Interact with Gmail through LifeOps. " +
     "USE this action for: inbox triage and unread summaries; searching emails by sender, subject, keyword, date, or label; " +
     "reading full email bodies by message ID; checking which emails need a reply; " +
-    "drafting reply text for one or more emails; sending confirmed replies. " +
+    "drafting reply text for one or more emails; sending confirmed replies; " +
+    "composing and sending brand-new outbound emails to any address (e.g. 'send an email to X', 'email X about Y'). " +
     "DO NOT use this action for calendar events, meetings, or scheduling — use CALENDAR_ACTION instead. " +
     "DO NOT use this action for personal habits, goals, routines, or reminders — use LIFE instead. " +
     "This action provides the final grounded reply; do not pair it with a speculative REPLY action.",
@@ -1818,12 +1822,20 @@ export const gmailAction: Action = {
         const subjectMatch =
           rawText.match(
             /\bsubject(?:\s+is|\s*[:=]|\s+of)?\s+["“]([^"”]+)["”]/i,
-          ) ?? rawText.match(/\bsubject\s+["“]([^"”]+)["”]/i);
+          ) ??
+          rawText.match(/\bsubject\s+[“”]([^””]+)[“”]/i) ??
+          rawText.match(
+            /\bsubject\s+(?:should\s+(?:say|be|read)|says?)\s+(.+?)(?=\s+(?:and\s+)?(?:the\s+)?body\b|\s*$)/i,
+          );
         const subjectFromIntent = subjectMatch?.[1]?.trim();
         const bodyMatch =
           rawText.match(
-            /\bbody(?:\s+is|\s*[:=]|\s+of)?\s+["“]([^"”]+)["”]/i,
-          ) ?? rawText.match(/\bbody\s+["“]([^"”]+)["”]/i);
+            /\bbody(?:\s+is|\s*[:=]|\s+of)?\s+[“”]([^””]+)[“”]/i,
+          ) ??
+          rawText.match(/\bbody\s+[“”]([^””]+)[“”]/i) ??
+          rawText.match(
+            /\bbody\s+(?:should\s+(?:say|be|include|contain|have)|says?)\s+(.+?)$/i,
+          );
         const bodyFromIntent = bodyMatch?.[1]?.trim();
 
         const to =
@@ -1845,7 +1857,7 @@ export const gmailAction: Action = {
           if (!bodyText) missing.push("body text");
           return respond({
             success: false,
-            text: `i need ${missing.join(", ")} to compose that email. format: 'email <addr> with subject "X" and body "Y"'.`,
+            text: `can't send that yet — i'm missing the ${missing.join(" and ")}. try something like: "send an email to name@example.com, subject should say X and body should say Y"`,
           });
         }
         const result = await service.sendGmailMessage(INTERNAL_URL, {
