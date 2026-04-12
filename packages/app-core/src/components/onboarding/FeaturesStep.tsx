@@ -34,7 +34,8 @@ const FEATURES: FeatureDef[] = [
     nameKey: "onboarding.features.telegram.name",
     nameDefault: "Telegram",
     descKey: "onboarding.features.telegram.desc",
-    descDefault: "Message your agent on Telegram. Fully managed via Eliza Cloud.",
+    descDefault:
+      "Message your agent on Telegram. Fully managed via Eliza Cloud.",
     managed: true,
     cloudOnly: true,
   },
@@ -65,8 +66,7 @@ const FEATURES: FeatureDef[] = [
     nameKey: "onboarding.features.browser.name",
     nameDefault: "Browser",
     descKey: "onboarding.features.browser.desc",
-    descDefault:
-      "Pair with the LifeOps browser extension for web automation.",
+    descDefault: "Pair with the LifeOps browser extension for web automation.",
     managed: false,
     cloudOnly: false,
   },

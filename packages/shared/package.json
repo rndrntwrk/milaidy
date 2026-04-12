@@ -41,6 +41,7 @@
     "./awareness": "./src/awareness/index.ts",
     "./restart": "./src/restart.ts",
     "./spoken-text": "./src/spoken-text.ts",
+    "./validation-keywords": "./src/validation-keywords.ts",
     "./onboarding-presets": "./src/onboarding-presets.ts",
     "./dev-settings-table": "./src/dev-settings-table.ts",
     "./dev-settings-banner-style": "./src/dev-settings-banner-style.ts",

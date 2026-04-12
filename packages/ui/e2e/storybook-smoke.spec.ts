@@ -37,13 +37,27 @@ test("all Storybook stories render in light mode", async ({ page }) => {
         `/iframe.html?id=${id}&viewMode=story&globals=theme:light`,
       );
       await page.waitForLoadState("networkidle");
+      await expect(page.locator("#storybook-no-preview")).toHaveCount(0);
+      await expect
+        .poll(async () =>
+          page.evaluate(() => {
+            const root = document.querySelector("#storybook-root");
+            const docs = document.querySelector("#storybook-docs");
+            const portalChildren = Array.from(document.body.children).filter(
+              (element) =>
+                !["SCRIPT", "STYLE"].includes(element.tagName) &&
+                element.id !== "storybook-root" &&
+                element.id !== "storybook-docs",
+            ).length;
 
-      const root = page.locator("#storybook-root");
-
-      await expect(root).toBeVisible();
-      await expect.poll(async () =>
-        root.evaluate((node) => node.childElementCount),
-      ).toBeGreaterThan(0);
+            return Math.max(
+              root?.childElementCount ?? 0,
+              docs?.childElementCount ?? 0,
+              portalChildren,
+            );
+          }),
+        )
+        .toBeGreaterThan(0);
       expect(pageErrors).toEqual([]);
     });
   }

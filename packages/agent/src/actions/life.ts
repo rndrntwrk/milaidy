@@ -1446,7 +1446,8 @@ type LifeReplyScenario =
   | "snoozed_occurrence"
   | "set_reminder_preference"
   | "captured_phone"
-  | "configured_escalation";
+  | "configured_escalation"
+  | "service_error";
 
 function extractNaturalTimePhrase(intent: string): string | null {
   const normalized = normalizeLifeInputText(intent).toLowerCase();
@@ -2093,10 +2094,6 @@ function buildOneOffDueAtFromMinuteOfDay(args: {
   return candidate.toISOString();
 }
 
-function deriveAlarmLikeDefaults(intent: string): {
-  title: string;
-  cadence?: LifeOpsCadence;
-} | null;
 function deriveAlarmLikeDefaults(
   intent: string,
   timeZone?: string,
@@ -2128,10 +2125,6 @@ function deriveAlarmLikeDefaults(
   };
 }
 
-function deriveReminderLikeDefaults(intent: string): {
-  title: string;
-  cadence?: LifeOpsCadence;
-} | null;
 function deriveReminderLikeDefaults(
   intent: string,
   timeZone?: string,
@@ -3674,8 +3667,8 @@ export const lifeAction: Action = {
           const llmPlan = await extractTaskCreatePlanWithLlm({
             runtime,
             intent,
-            state,
-            message,
+            state: state ?? undefined,
+            message: message ?? undefined,
           });
           const explicitCadenceDetail = normalizeCadenceDetail(
             detailObject(details, "cadence"),
@@ -3713,7 +3706,7 @@ export const lifeAction: Action = {
                 ) ?? extractLifeTimeZoneFromText(intent);
               const llmCadence = buildCadenceFromLlmParams(llmPlan, {
                 intent,
-                timeZone: llmCadenceTimeZone,
+                timeZone: llmCadenceTimeZone ?? undefined,
               });
               if (llmCadence) {
                 cadence = llmCadence.cadence;
@@ -3741,7 +3734,7 @@ export const lifeAction: Action = {
         const timedDefaults = deriveTimedRequestDefaults({
           intent,
           requestKind: timedRequestKind,
-          timeZone: resolvedTimeZone,
+          timeZone: resolvedTimeZone ?? undefined,
         });
         if (timedDefaults) {
           if (!title) {

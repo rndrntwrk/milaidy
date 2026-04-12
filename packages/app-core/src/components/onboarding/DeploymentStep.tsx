@@ -80,7 +80,7 @@ export function DeploymentStep() {
   } = useApp();
 
   const [subView, setSubView] = useState<SubView>("chooser");
-  const [discoveryLoading, setDiscoveryLoading] = useState(false);
+  const [_discoveryLoading, setDiscoveryLoading] = useState(false);
   const [discoveredGateways, setDiscoveredGateways] = useState<
     GatewayDiscoveryEndpoint[]
   >([]);
@@ -101,7 +101,7 @@ export function DeploymentStep() {
 
   const showCreateLocal = shouldShowLocalDeploymentOption({
     isDesktop: isDesktopPlatform(),
-    isDevelopment: import.meta.env.DEV,
+    isDevelopment: Boolean(import.meta.env.DEV),
   });
 
   // ── Gateway discovery ──────────────────────────────────────────────
@@ -156,9 +156,7 @@ export function DeploymentStep() {
         }
       } catch (err) {
         if (cancelled) return;
-        setError(
-          err instanceof Error ? err.message : "Failed to load agents",
-        );
+        setError(err instanceof Error ? err.message : "Failed to load agents");
         setCloudStage("agent-list");
       }
     })();
@@ -309,9 +307,7 @@ export function DeploymentStep() {
         }
       }, 2500);
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to create agent",
-      );
+      setError(err instanceof Error ? err.message : "Failed to create agent");
       setCloudStage("agent-list");
     }
   }, [newAgentName, connectToAgent]);
@@ -345,7 +341,13 @@ export function DeploymentStep() {
     setState("onboardingServerTarget", "remote");
     startupCoordinator.dispatch({ type: "SPLASH_CONTINUE" });
     handleOnboardingNext();
-  }, [remoteUrl, remoteToken, setState, startupCoordinator, handleOnboardingNext]);
+  }, [
+    remoteUrl,
+    remoteToken,
+    setState,
+    startupCoordinator,
+    handleOnboardingNext,
+  ]);
 
   // ── Render: chooser ────────────────────────────────────────────────
   if (subView === "chooser") {
@@ -753,7 +755,9 @@ function StepContainer({ children }: { children: React.ReactNode }) {
 
 function StepHeader({
   t,
-}: { t: (key: string, values?: Record<string, unknown>) => string }) {
+}: {
+  t: (key: string, values?: Record<string, unknown>) => string;
+}) {
   return (
     <div>
       <h2

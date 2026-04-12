@@ -617,7 +617,7 @@ export async function handleOnboardingRoutes(
         config.connectors[connectorName] = {
           ...(currentConnector ?? {}),
           ...nextConnector,
-        };
+        } as import("../config/types.eliza.js").ConnectorConfig;
       }
     }
     if (
@@ -705,7 +705,7 @@ export async function handleOnboardingRoutes(
       config.features = {
         ...(asRecord(config.features) ?? {}),
         ...explicitFeatures,
-      };
+      } as NonNullable<ElizaConfig["features"]>;
     }
 
     // ── Inventory / RPC providers ─────────────────────────────────────────

@@ -93,5 +93,6 @@ describe("rolodexProvider", () => {
     expect(rolodexProvider.name).toBe("rolodex");
     expect(rolodexProvider.dynamic).toBe(true);
     expect(rolodexProvider.position).toBe(7);
+    expect(rolodexProvider.relevanceKeywords).toContain("联系人");
   });
 });

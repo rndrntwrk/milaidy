@@ -5,6 +5,9 @@
     "**/dist/**",
     "**/build/**",
     "**/.vite/**",
+    "**/test-results/**",
+    "**/.playwright-artifacts*/**",
+    "**/*.spec.ts-snapshots/**",
     "node_modules/**",
     "test/contracts/lib/**"
   ],

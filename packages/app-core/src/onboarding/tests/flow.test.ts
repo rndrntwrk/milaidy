@@ -117,14 +117,14 @@ describe("onboarding flow", () => {
 
   describe("shouldSkipFeaturesStep", () => {
     it("keeps the features step for remote targets so local capabilities still land", () => {
-      expect(
-        shouldSkipFeaturesStep({ onboardingServerTarget: "remote" }),
-      ).toBe(false);
+      expect(shouldSkipFeaturesStep({ onboardingServerTarget: "remote" })).toBe(
+        false,
+      );
     });
     it("also keeps the features step for local and cloud targets", () => {
-      expect(
-        shouldSkipFeaturesStep({ onboardingServerTarget: "local" }),
-      ).toBe(false);
+      expect(shouldSkipFeaturesStep({ onboardingServerTarget: "local" })).toBe(
+        false,
+      );
       expect(
         shouldSkipFeaturesStep({ onboardingServerTarget: "elizacloud" }),
       ).toBe(false);

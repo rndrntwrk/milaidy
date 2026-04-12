@@ -18,17 +18,34 @@
 import crypto from "node:crypto";
 import type { Action, HandlerOptions, Memory, UUID } from "@elizaos/core";
 import { logger } from "@elizaos/core";
+import {
+  getValidationKeywordTerms,
+  textIncludesKeywordTerm,
+} from "@miladyai/shared/validation-keywords";
 import { hasOwnerAccess } from "../security/access.js";
 import { requestRestart } from "../runtime/restart.js";
 
 /** Small delay (ms) before restarting so the response has time to flush. */
 const SHUTDOWN_DELAY_MS = 1_500;
+const RESTART_REQUEST_TERMS = getValidationKeywordTerms(
+  "action.restart.request",
+  {
+    includeAllLocales: true,
+  },
+);
 
 function isExplicitRestartRequest(message: Memory | undefined): boolean {
-  const userText = (message?.content?.text ?? "").toLowerCase();
-  return (
-    /\b(restart|reboot|reload|refresh|respawn)\b/i.test(userText) ||
-    userText.startsWith("/restart")
+  const userText = (message?.content?.text ?? "").trim();
+  if (!userText) {
+    return false;
+  }
+
+  if (userText.toLowerCase().startsWith("/restart")) {
+    return true;
+  }
+
+  return RESTART_REQUEST_TERMS.some((term) =>
+    textIncludesKeywordTerm(userText, term),
   );
 }
 

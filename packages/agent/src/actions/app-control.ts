@@ -14,43 +14,102 @@
 
 import type { Action, Memory } from "@elizaos/core";
 import { logger } from "@elizaos/core";
+import {
+  getValidationKeywordTerms,
+  normalizeKeywordMatchText,
+  textIncludesKeywordTerm,
+} from "@miladyai/shared/validation-keywords";
 import { resolveServerOnlyPort } from "../config/runtime-env.js";
 import { hasOwnerAccess } from "../security/access.js";
+
+const LAUNCH_APP_TERMS = getValidationKeywordTerms(
+  "action.appControl.launchVerb",
+  {
+    includeAllLocales: true,
+  },
+);
+const STOP_APP_TERMS = getValidationKeywordTerms("action.appControl.stopVerb", {
+  includeAllLocales: true,
+});
+const GENERIC_APP_TARGET_TERMS = getValidationKeywordTerms(
+  "action.appControl.genericTarget",
+  {
+    includeAllLocales: true,
+  },
+);
+const KNOWN_APP_TERMS = getValidationKeywordTerms("action.appControl.knownApp", {
+  includeAllLocales: true,
+});
+const ALL_APP_TARGET_TERMS = [
+  ...GENERIC_APP_TARGET_TERMS,
+  ...KNOWN_APP_TERMS,
+];
 
 function getApiBase(): string {
   const port = resolveServerOnlyPort(process.env);
   return `http://localhost:${port}`;
 }
 
-function extractAppName(message: Memory | undefined): string | null {
-  const text = (message?.content?.text ?? "").trim();
+function escapePattern(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
-  // Try to extract from patterns like "launch shopify", "open vincent",
-  // "start shopify app", "stop the vincent app"
-  const launchMatch = text.match(
-    /\b(?:launch|open|start|run|show)\s+(?:the\s+)?([a-z0-9_-]+)/i,
-  );
-  if (launchMatch) return launchMatch[1].toLowerCase();
+function containsKeywordTerm(text: string, terms: readonly string[]): boolean {
+  return terms.some((term) => textIncludesKeywordTerm(text, term));
+}
 
-  const stopMatch = text.match(
-    /\b(?:stop|close|shut\s*down|kill|quit|exit)\s+(?:the\s+)?([a-z0-9_-]+)/i,
-  );
-  if (stopMatch) return stopMatch[1].toLowerCase();
+function extractTargetAfterTerms(
+  text: string,
+  terms: readonly string[],
+): string | null {
+  const sortedTerms = [...terms].sort((left, right) => right.length - left.length);
+  for (const term of sortedTerms) {
+    const pattern = new RegExp(
+      `${escapePattern(term).replace(/\\ /g, "\\s*")}\\s*([\\p{L}\\p{N}_-]+)`,
+      "iu",
+    );
+    const match = text.match(pattern);
+    const candidate = match?.[1]?.trim();
+    if (!candidate) {
+      continue;
+    }
+
+    const normalizedCandidate = normalizeKeywordMatchText(candidate);
+    if (
+      GENERIC_APP_TARGET_TERMS.some(
+        (target) => normalizeKeywordMatchText(target) === normalizedCandidate,
+      )
+    ) {
+      return null;
+    }
+
+    return candidate.toLowerCase();
+  }
 
   return null;
 }
 
+function extractAppName(message: Memory | undefined): string | null {
+  const text = (message?.content?.text ?? "").trim();
+  return (
+    extractTargetAfterTerms(text, LAUNCH_APP_TERMS) ??
+    extractTargetAfterTerms(text, STOP_APP_TERMS)
+  );
+}
+
 function isLaunchRequest(message: Memory | undefined): boolean {
-  const text = (message?.content?.text ?? "").toLowerCase();
-  return /\b(launch|open|start|run|show)\s+.*(app|shopify|vincent|companion|hyperscape|babylon)/i.test(
-    text,
+  const text = (message?.content?.text ?? "").trim();
+  return (
+    containsKeywordTerm(text, LAUNCH_APP_TERMS) &&
+    containsKeywordTerm(text, ALL_APP_TARGET_TERMS)
   );
 }
 
 function isStopRequest(message: Memory | undefined): boolean {
-  const text = (message?.content?.text ?? "").toLowerCase();
-  return /\b(stop|close|shut\s*down|kill|quit|exit)\s+.*(app|shopify|vincent|companion|hyperscape|babylon)/i.test(
-    text,
+  const text = (message?.content?.text ?? "").trim();
+  return (
+    containsKeywordTerm(text, STOP_APP_TERMS) &&
+    containsKeywordTerm(text, ALL_APP_TARGET_TERMS)
   );
 }
 

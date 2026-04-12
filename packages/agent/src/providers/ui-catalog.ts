@@ -5,6 +5,7 @@ import {
   type Provider,
   type State,
 } from "@elizaos/core";
+import { getValidationKeywordTerms } from "@miladyai/shared/validation-keywords";
 import { hasAdminAccess } from "../security/access.js";
 import { COMPONENT_CATALOG } from "../shared/ui-catalog-prompt.js";
 
@@ -30,42 +31,9 @@ const DETAIL_COMPONENTS = new Set([
 export const uiCatalogProvider: Provider = {
   name: "uiCatalog",
   dynamic: true,
-  relevanceKeywords: [
-    "plugin",
-    "plugins",
-    "install",
-    "setup",
-    "set up",
-    "configure",
-    "config",
-    "enable",
-    "disable",
-    "activate",
-    "connect",
-    "integration",
-    "help me",
-    "how do i",
-    "how to",
-    "show me",
-    "dashboard",
-    "form",
-    "table",
-    "chart",
-    "metrics",
-    "ui",
-    "interface",
-    "polymarket",
-    "discord",
-    "openai",
-    "anthropic",
-    "telegram",
-    "twitch",
-    "youtube",
-    "twitter",
-    "api key",
-    "credentials",
-    "secret",
-  ],
+  relevanceKeywords: getValidationKeywordTerms("provider.uiCatalog.relevance", {
+    includeAllLocales: true,
+  }),
   get: async (runtime: IAgentRuntime, message: Memory, _state: State) => {
     const channelType = message.content?.channelType;
     const isAllowedChannel =

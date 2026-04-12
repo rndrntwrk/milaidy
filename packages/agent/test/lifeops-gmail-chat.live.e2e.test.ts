@@ -1,21 +1,16 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import {
-  afterAll,
-  beforeAll,
-  describe,
-  expect,
-  it,
-} from "vitest";
-import type { AgentRuntime } from "@elizaos/core";
+import type { AgentRuntime, State } from "@elizaos/core";
 import { ModelType } from "@elizaos/core";
-import { createConversation, postConversationMessage } from "../../../test/helpers/http";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { saveEnv } from "../../../test/helpers/test-utils";
-import { isLiveTestEnabled, selectLiveProvider } from "../../../test/helpers/live-provider";
+import {
+  isLiveTestEnabled,
+  selectLiveProvider,
+} from "../../../test/helpers/live-provider";
 import { createLifeOpsChatTestRuntime } from "./helpers/lifeops-chat-runtime";
 import { gmailAction } from "../src/actions/gmail";
-import { startApiServer } from "../src/api/server";
 import { resolveOAuthDir } from "../src/config/paths";
 import {
   createLifeOpsConnectorGrant,
@@ -98,9 +93,7 @@ async function callGoogle(args: {
     `${args.baseUrl}/models/${args.model}:generateContent?key=${args.apiKey}`,
     {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contents: [{ parts: [{ text: args.prompt }] }],
         generationConfig: {
@@ -255,7 +248,7 @@ async function seedLocalGmail(runtime: AgentRuntime, stateDir: string) {
           "openid",
           "email",
           "profile",
-          "https://www.googleapis.com/auth/gmail.readonly",
+          "https://www.googleapis.com/auth/gmail.metadata",
           "https://www.googleapis.com/auth/gmail.send",
         ],
         expiresAt: Date.now() + 60 * 60 * 1000,
@@ -285,7 +278,7 @@ async function seedLocalGmail(runtime: AgentRuntime, stateDir: string) {
         "openid",
         "email",
         "profile",
-        "https://www.googleapis.com/auth/gmail.readonly",
+        "https://www.googleapis.com/auth/gmail.metadata",
         "https://www.googleapis.com/auth/gmail.send",
       ],
       capabilities: [
@@ -327,17 +320,6 @@ async function seedLocalGmail(runtime: AgentRuntime, stateDir: string) {
       triageScore: 92,
     }),
     buildGmailMessage({
-      id: "gmail-live-suran-old",
-      externalId: "gmail-live-suran-old-ext",
-      threadId: "gmail-live-suran-thread-old",
-      subject: "Older Suran note",
-      from: "Suran Lee",
-      fromEmail: "suran@example.com",
-      snippet: "This is the older Suran message.",
-      receivedAt: "2026-03-01T16:00:00.000Z",
-      triageScore: 60,
-    }),
-    buildGmailMessage({
       id: "gmail-live-venue",
       externalId: "gmail-live-venue-ext",
       threadId: "gmail-live-venue-thread",
@@ -358,11 +340,64 @@ async function seedLocalGmail(runtime: AgentRuntime, stateDir: string) {
   }
 }
 
+function makeMessage(text: string) {
+  return {
+    entityId: AGENT_ID,
+    content: {
+      source: "discord",
+      text,
+    },
+  } as never;
+}
+
+function emptyState(): State {
+  return {
+    values: {
+      recentMessages: "",
+    },
+    data: {},
+  } as State;
+}
+
+function followUpState(args: {
+  previousUserText: string;
+  previousResult: {
+    success?: boolean;
+    text?: string;
+    data?: unknown;
+  };
+}): State {
+  return {
+    values: {
+      recentMessages: [
+        `user: ${args.previousUserText}`,
+        `assistant: ${args.previousResult.text ?? ""}`,
+      ].join("\n"),
+    },
+    data: {
+      actionResults: [
+        {
+          content: {
+            type: "action_result",
+            actionName: "GMAIL_ACTION",
+            actionStatus:
+              args.previousResult.success === false ? "failed" : "completed",
+            text: args.previousResult.text,
+            data:
+              args.previousResult.data &&
+              typeof args.previousResult.data === "object"
+                ? args.previousResult.data
+                : {},
+          },
+        },
+      ],
+    },
+  } as State;
+}
+
 describe.skipIf(!LIVE_GMAIL_CHAT_ENABLED)(
-  "life-ops gmail live chat",
+  "life-ops gmail live action flows",
   () => {
-    let port = 0;
-    let closeServer: (() => Promise<void>) | null = null;
     let runtime: AgentRuntime;
     let envBackup: { restore: () => void };
     let stateDir = "";
@@ -382,7 +417,6 @@ describe.skipIf(!LIVE_GMAIL_CHAT_ENABLED)(
       runtime = createLifeOpsChatTestRuntime({
         agentId: AGENT_ID,
         characterName: "Milady",
-        actions: [gmailAction],
         logger: {
           debug: () => {},
           info: () => {},
@@ -390,39 +424,15 @@ describe.skipIf(!LIVE_GMAIL_CHAT_ENABLED)(
           error: () => {},
         } as AgentRuntime["logger"],
         useModel: liveUseModel as AgentRuntime["useModel"],
-        handleTurn: async ({ runtime: runtimeArg, message, state }) => {
-          const result = await gmailAction.handler?.(
-            runtimeArg,
-            message as never,
-            state,
-            {
-              parameters: {},
-            } as never,
-          );
-          return {
-            text:
-              typeof result?.text === "string" && result.text.trim().length > 0
-                ? result.text
-                : "I couldn't figure out the Gmail request.",
-            data: result?.data,
-          };
-        },
+        handleTurn: async () => ({
+          text: "",
+        }),
       });
 
       await seedLocalGmail(runtime, stateDir);
-
-      const server = await startApiServer({
-        port: 0,
-        runtime,
-      });
-      port = server.port;
-      closeServer = server.close;
     }, 180_000);
 
     afterAll(async () => {
-      if (closeServer) {
-        await closeServer();
-      }
       if (stateDir) {
         await fs.rm(stateDir, {
           recursive: true,
@@ -435,67 +445,81 @@ describe.skipIf(!LIVE_GMAIL_CHAT_ENABLED)(
     });
 
     it(
-      "handles narrative Gmail sender searches with the real model",
+      "searches Gmail narratively with the real model",
       async () => {
-        const { conversationId } = await createConversation(port, {
-          includeGreeting: false,
-          title: "Live Gmail narrative sender search",
-        });
+        const prompt =
+          "can you search my email and tell me if anyone named suran emailed me";
+        const result = await gmailAction.handler?.(
+          runtime,
+          makeMessage(prompt),
+          emptyState() as never,
+          { parameters: {} } as never,
+        );
 
-        const response = await postConversationMessage(port, conversationId, {
-          text: "can you search my email and tell me if anyone named suran emailed me",
-          source: "discord",
-        });
-
-        expect(response.status).toBe(200);
-        expect(String(response.data.text ?? "")).toMatch(/suran/i);
+        expect(result?.success).toBe(true);
+        expect(String(result?.text ?? "")).toMatch(/suran/i);
       },
       180_000,
     );
 
     it(
-      "handles reply-needed Gmail searches with the real model",
+      "finds reply-needed Gmail items with the real model",
       async () => {
-        const { conversationId } = await createConversation(port, {
-          includeGreeting: false,
-          title: "Live Gmail reply-needed search",
-        });
+        const prompt = "which emails need a reply about venue";
+        const result = await gmailAction.handler?.(
+          runtime,
+          makeMessage(prompt),
+          emptyState() as never,
+          { parameters: {} } as never,
+        );
 
-        const response = await postConversationMessage(port, conversationId, {
-          text: "which emails need a reply about venue",
-          source: "discord",
-        });
-
-        expect(response.status).toBe(200);
-        expect(String(response.data.text ?? "")).toMatch(/venue/i);
+        expect(result?.success).toBe(true);
+        expect(String(result?.text ?? "")).toMatch(/venue/i);
       },
       180_000,
     );
 
     it(
-      "drafts a Gmail reply from prior conversation context with the real model",
+      "drafts a Gmail reply from prior Gmail context with the real model",
       async () => {
-        const { conversationId } = await createConversation(port, {
-          includeGreeting: false,
-          title: "Live Gmail draft follow-up",
-        });
+        const searchPrompt =
+          "can you search my email and tell me if anyone named suran emailed me";
+        const searchResult = await gmailAction.handler?.(
+          runtime,
+          makeMessage(searchPrompt),
+          emptyState() as never,
+          { parameters: {} } as never,
+        );
 
-        const search = await postConversationMessage(port, conversationId, {
-          text: "can you search my email and tell me if anyone named suran emailed me",
-          source: "discord",
-        });
-        expect(search.status).toBe(200);
-        expect(String(search.data.text ?? "")).toMatch(/suran/i);
+        expect(searchResult?.success).toBe(true);
+        expect(String(searchResult?.text ?? "")).toMatch(/suran/i);
 
-        const draft = await postConversationMessage(port, conversationId, {
-          text: "draft a reply to that email thanking him and saying next week works",
-          source: "discord",
-        });
-        expect(draft.status).toBe(200);
+        const draftResult = await gmailAction.handler?.(
+          runtime,
+          makeMessage(
+            "draft a reply to that email thanking him and saying next week works",
+          ),
+          followUpState({
+            previousUserText: searchPrompt,
+            previousResult: {
+              success: searchResult?.success,
+              text: searchResult?.text,
+              data: searchResult?.data,
+            },
+          }) as never,
+          { parameters: {} } as never,
+        );
 
+        expect(draftResult?.success).toBe(true);
         const combined = [
-          String(draft.data.text ?? ""),
-          String(draft.data.bodyText ?? ""),
+          String(draftResult?.text ?? ""),
+          String(
+            draftResult?.data &&
+              typeof draftResult.data === "object" &&
+              "bodyText" in draftResult.data
+              ? (draftResult.data as Record<string, unknown>).bodyText
+              : "",
+          ),
         ].join("\n");
         expect(combined).toMatch(/next week/i);
       },

@@ -5533,14 +5533,13 @@ export class LifeOpsService {
       ? readNativeAppleReminderMetadata(args.definition.metadata)
       : null;
     const previousReminderId = previousMetadata?.reminderId ?? null;
-    const shouldSyncNext =
-      args.definition !== null &&
-      nextMetadata !== null &&
-      args.definition.subjectType === "owner" &&
-      args.definition.domain === "user_lifeops" &&
-      args.definition.cadence.kind === "once";
-
-    if (!shouldSyncNext) {
+    if (
+      args.definition === null ||
+      nextMetadata === null ||
+      args.definition.subjectType !== "owner" ||
+      args.definition.domain !== "user_lifeops" ||
+      args.definition.cadence.kind !== "once"
+    ) {
       if (previousReminderId) {
         const deleteResult =
           await deleteNativeAppleReminderLikeItem(previousReminderId);
@@ -5565,13 +5564,18 @@ export class LifeOpsService {
 
     const definition = args.definition;
     const nativeMetadata = nextMetadata;
+    const cadence =
+      definition.cadence.kind === "once" ? definition.cadence : null;
+    if (!cadence) {
+      return definition;
+    }
     const reminderId = nativeMetadata.reminderId ?? previousReminderId;
     if (reminderId) {
       const updateResult = await updateNativeAppleReminderLikeItem({
         reminderId,
         kind: nativeMetadata.kind,
         title: definition.title,
-        dueAt: definition.cadence.dueAt,
+        dueAt: cadence.dueAt,
         notes: definition.description,
         originalIntent: definition.originalIntent,
       });
@@ -5598,7 +5602,7 @@ export class LifeOpsService {
     const createResult = await createNativeAppleReminderLikeItem({
       kind: nativeMetadata.kind,
       title: definition.title,
-      dueAt: definition.cadence.dueAt,
+      dueAt: cadence.dueAt,
       notes: definition.description,
       originalIntent: definition.originalIntent,
     });
@@ -11387,6 +11391,14 @@ export class LifeOpsService {
         },
         now,
       );
+      if (search.messages.length > 1) {
+        fail(
+          409,
+          `Multiple Gmail messages matched ${JSON.stringify(
+            query,
+          )}. Provide a messageId or narrow the query.`,
+        );
+      }
       selectedMessage = search.messages[0] ?? null;
       if (!selectedMessage) {
         fail(404, `No Gmail message matched ${JSON.stringify(query)}.`);

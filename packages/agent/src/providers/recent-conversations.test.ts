@@ -128,5 +128,6 @@ describe("recentConversationsProvider", () => {
     expect(recentConversationsProvider.name).toBe("recent-conversations");
     expect(recentConversationsProvider.dynamic).toBe(true);
     expect(recentConversationsProvider.position).toBe(5);
+    expect(recentConversationsProvider.relevanceKeywords).toContain("最近");
   });
 });

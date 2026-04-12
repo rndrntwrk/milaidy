@@ -91,16 +91,12 @@ export function extractExplicitTimeZoneFromText(
   }
 
   let match: RegExpExecArray | null;
-  for (const pattern of [new RegExp(IANA_TIME_ZONE_PATTERN), ALIAS_TIME_ZONE_PATTERN]) {
-    if (pattern.global) {
-      pattern.lastIndex = 0;
-      while ((match = pattern.exec(value)) !== null) {
-        const normalized = normalizeExplicitTimeZoneToken(match[1] ?? match[0]);
-        if (normalized) {
-          return normalized;
-        }
-      }
-      continue;
+  const ianaPattern = new RegExp(IANA_TIME_ZONE_PATTERN);
+  ianaPattern.lastIndex = 0;
+  while ((match = ianaPattern.exec(value)) !== null) {
+    const normalized = normalizeExplicitTimeZoneToken(match[1] ?? match[0]);
+    if (normalized) {
+      return normalized;
     }
   }
 
@@ -108,7 +104,9 @@ export function extractExplicitTimeZoneFromText(
   for (const alias of Object.keys(TIME_ZONE_ALIASES).sort(
     (left, right) => right.length - left.length,
   )) {
-    const escapedAlias = alias.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const escapedAlias = alias
+      .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+      .replace(/\\ /g, "\\s+");
     const aliasPattern = new RegExp(`(^|\\s)${escapedAlias}(?=\\s|$)`, "i");
     if (aliasPattern.test(lower)) {
       const normalized = normalizeExplicitTimeZoneToken(alias);

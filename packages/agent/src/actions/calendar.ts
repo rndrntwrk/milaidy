@@ -4031,10 +4031,9 @@ export const calendarAction: Action = {
               ? targets.length === 1
                 ? `deleted "${deleteResults[0].title}".`
                 : `deleted ${okCount} matching events.`
-              : `deleted ${okCount}, failed ${failCount}: ${deleteResults
-                  .filter((r) => !r.ok)
-                  .map((r) => r.error)
-                  .join("; ")}`;
+              : okCount === 0
+                ? `I couldn't delete those ${deleteResults.length} matching events. Try again in a bit or tell me which one to remove.`
+                : `Deleted ${okCount} matching event${okCount === 1 ? "" : "s"}, but ${failCount} failed. Tell me which one to remove if you want me to retry individually.`;
           return respond({
             success: failCount === 0,
             text: await renderReply("deleted_event", summary, {

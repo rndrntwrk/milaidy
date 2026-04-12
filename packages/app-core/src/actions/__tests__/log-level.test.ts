@@ -61,6 +61,14 @@ describe("logLevelAction", () => {
     ).resolves.toBe(true);
   });
 
+  it("validate accepts localized log level commands", async () => {
+    mockMessage.content.text = "pon el nivel de log en depuración";
+
+    await expect(
+      logLevelAction.validate(mockRuntime as never, mockMessage as never),
+    ).resolves.toBe(true);
+  });
+
   it("validate rejects unrelated messages that merely mention errors", async () => {
     mockMessage.content.text = "I hit an error while syncing";
 
@@ -87,6 +95,21 @@ describe("logLevelAction", () => {
         action: "LOG_LEVEL_FAILED",
       }),
     );
+  });
+
+  it("maps localized levels back to canonical runtime levels", async () => {
+    mockMessage.content.text = "pon el nivel de log en depuración";
+
+    const result = await logLevelAction.handler(
+      mockRuntime,
+      mockMessage,
+      undefined,
+      undefined,
+      mockCallback,
+    );
+
+    expect(result.success).toBe(true);
+    expect(mockRuntime.logLevelOverrides.get("test-room-id")).toBe("debug");
   });
 
   it("should not match partial words when extracting levels", async () => {

@@ -1,20 +1,20 @@
 import {
   normalizeOnboardingProviderId,
-  requiresAdditionalRuntimeProvider,
   type OnboardingCredentialInputs,
   type OnboardingLocalProviderId,
+  requiresAdditionalRuntimeProvider,
 } from "@miladyai/shared/contracts/onboarding";
 import type {
   DeploymentTargetConfig,
-  ServiceRouteConfig,
   LinkedAccountsConfig,
+  ServiceRouteConfig,
   ServiceRoutingConfig,
 } from "@miladyai/shared/contracts/service-routing";
 import {
   buildDefaultElizaCloudServiceRouting,
   buildElizaCloudServiceRoute,
 } from "@miladyai/shared/contracts/service-routing";
-import { type OnboardingServerTarget } from "./onboarding/server-target";
+import type { OnboardingServerTarget } from "./onboarding/server-target";
 
 export interface BuildOnboardingConnectionArgs {
   onboardingServerTarget?: OnboardingServerTarget;

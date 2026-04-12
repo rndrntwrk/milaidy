@@ -452,6 +452,7 @@ describe("extractTaskCreatePlanWithLlm", () => {
       windows: null,
       weekdays: null,
       timeOfDay: null,
+      timeZone: null,
       everyMinutes: null,
       timesPerDay: null,
       priority: null,

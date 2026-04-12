@@ -8,6 +8,7 @@ import type {
   UUID,
 } from "@elizaos/core";
 import { logger, ModelType } from "@elizaos/core";
+import { getValidationKeywordTerms } from "@miladyai/shared/validation-keywords";
 import {
   formatRelativeTimestamp,
   formatSpeakerLabel,
@@ -23,16 +24,12 @@ export const relevantConversationsProvider: Provider = {
     "Semantically relevant conversation snippets from across all platforms, re-ranked by similarity to the current message.",
   dynamic: true,
   position: 6,
-  relevanceKeywords: [
-    "search",
-    "find",
-    "remember",
-    "who said",
-    "conversation about",
-    "discussed",
-    "talked about",
-    "mentioned",
-  ],
+  relevanceKeywords: getValidationKeywordTerms(
+    "provider.relevantConversations.relevance",
+    {
+      includeAllLocales: true,
+    },
+  ),
 
   async get(
     runtime: IAgentRuntime,
