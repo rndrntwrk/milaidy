@@ -244,7 +244,7 @@ export function OrdersPanel({
           ))}
         </div>
       ) : orders.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 rounded-[18px] border border-border/20 bg-card/20 py-12 text-center">
+        <div className="flex flex-col items-center gap-3 rounded-2xl border border-border/20 bg-card/20 py-12 text-center">
           <ShoppingCart className="h-8 w-8 text-muted/40" />
           <div className="text-sm text-muted">
             {activeTab === "unfulfilled"
