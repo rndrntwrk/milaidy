@@ -12,14 +12,14 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
+  disableLocalElizaWorkspace,
   ELIZA_WORKSPACE_GLOB,
   PLUGIN_TYPESCRIPT_WORKSPACE_GLOB,
-  disableLocalElizaWorkspace,
 } from "./disable-local-eliza-workspace.mjs";
 
 function writeJson(filePath: string, value: unknown) {
   mkdirSync(path.dirname(filePath), { recursive: true });
-  writeFileSync(filePath, JSON.stringify(value, null, 2) + "\n", "utf8");
+  writeFileSync(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
 }
 
 describe("disableLocalElizaWorkspace", () => {

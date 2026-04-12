@@ -74,6 +74,7 @@ describe("release orchestrator distribution workflow drift", () => {
     expect(workflow).toContain("workflow_call:");
     expect(workflow).not.toContain("release:\n    types: [published]");
     expect(workflow).toContain(
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: intentional GitHub Actions expression syntax in assertion string
       "MILADY_RELEASE_TAG: ${{ inputs.release_version }}",
     );
   });

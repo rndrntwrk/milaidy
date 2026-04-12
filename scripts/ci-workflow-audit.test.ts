@@ -124,7 +124,9 @@ describe("CI workflow audit regressions", () => {
       "utf-8",
     );
 
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: intentional shell variable syntax in assertion string
     expect(script).toContain('pod repo add-cdn trunk "${TRUNK_REPO_URL}"');
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: intentional shell variable syntax in assertion string
     expect(script).toContain('pod repo add trunk "${TRUNK_REPO_URL}"');
   });
 
