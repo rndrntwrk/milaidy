@@ -15,6 +15,9 @@
 import http from "node:http";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { req } from "../../../../test/helpers/http";
+import { canBindLoopback } from "../../../../test/helpers/loopback";
+
+const describeLoopback = describe.skipIf(!(await canBindLoopback()));
 
 function createCloudTestServer(): Promise<{
   port: number;
@@ -137,7 +140,7 @@ function createCloudTestServer(): Promise<{
   });
 }
 
-describe("Cloud API", () => {
+describeLoopback("Cloud API", () => {
   let port: number;
   let close: () => Promise<void>;
   let getState: () => {

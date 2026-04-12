@@ -2,15 +2,6 @@ import net from "node:net";
 
 let loopbackAvailabilityPromise: Promise<boolean> | null = null;
 
-function isLoopbackPermissionError(error: unknown): boolean {
-  if (!error || typeof error !== "object") {
-    return false;
-  }
-  const code =
-    "code" in error && typeof error.code === "string" ? error.code : "";
-  return code === "EPERM" || code === "EACCES";
-}
-
 export function canBindLoopback(): Promise<boolean> {
   if (loopbackAvailabilityPromise) {
     return loopbackAvailabilityPromise;
@@ -29,8 +20,8 @@ export function canBindLoopback(): Promise<boolean> {
       resolve(value);
     };
 
-    server.once("error", (error) => {
-      finish(!isLoopbackPermissionError(error) ? false : false);
+    server.once("error", () => {
+      finish(false);
     });
 
     server.listen(0, "127.0.0.1", () => {
