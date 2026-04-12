@@ -399,13 +399,11 @@ describeIf(LIVE_TESTS_ENABLED)(
       expect(hosts).toContain("x.com");
       expect(hosts).toContain("twitter.com");
 
-      const statusResponse = await req(
-        runtime.port,
-        "GET",
-        "/api/website-blocker",
-      );
-      expect(statusResponse.status).toBe(200);
-      expect(statusResponse.data).toMatchObject({
+      const statusResponse = await waitForWebsiteBlockStatus(runtime, [
+        "x.com",
+        "twitter.com",
+      ]);
+      expect(statusResponse).toMatchObject({
         active: true,
         engine: "hosts-file",
         requiresElevation: false,
