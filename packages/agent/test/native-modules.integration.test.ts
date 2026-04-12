@@ -288,6 +288,12 @@ const hasPtyDeps = !!allDeps["node-pty"] || !!allDeps["pty-manager"];
 const hasEmbeddingDeps =
   !!allDeps["node-llama-cpp"] || !!allDeps["whisper-node"];
 
+function skipWhenNoOptionalCoverage(enabled: boolean, label: string): void {
+  if (!enabled) {
+    it.skip(`${label} not installed in this environment`, () => {});
+  }
+}
+
 const electrobunPkgPath = (() => {
   const localPath = path.join(
     packageRoot,
@@ -354,6 +360,8 @@ const elizaTsPath =
 
 describe("Native Module Installation Verification", () => {
   describe("TensorFlow.js", () => {
+    skipWhenNoOptionalCoverage(hasTfjsNode || hasTfjsCore, "TensorFlow.js");
+
     itIf(hasTfjsNode)("@tensorflow/tfjs-node is installed", async () => {
       const packagePath = findPackagePath("@tensorflow", "tfjs-node");
       expect(fs.existsSync(packagePath!)).toBe(true);
@@ -377,6 +385,11 @@ describe("Native Module Installation Verification", () => {
   });
 
   describe("TensorFlow Models", () => {
+    skipWhenNoOptionalCoverage(
+      hasCocoSsd || hasMobilenet || hasPoseDetection,
+      "TensorFlow models",
+    );
+
     itIf(hasCocoSsd)("@tensorflow-models/coco-ssd is installed", () => {
       const packagePath = findPackagePath("@tensorflow-models", "coco-ssd");
       expect(fs.existsSync(packagePath!)).toBe(true);
@@ -480,6 +493,8 @@ describe("Native Module Installation Verification", () => {
   });
 
   describe("Face-API.js", () => {
+    skipWhenNoOptionalCoverage(hasFaceApi, "face-api.js");
+
     itIf(hasFaceApi)("face-api.js is installed", () => {
       const packagePath = findPackagePath("face-api.js");
       expect(fs.existsSync(packagePath!)).toBe(true);
@@ -492,6 +507,8 @@ describe("Native Module Installation Verification", () => {
   });
 
   describe("Tesseract.js OCR", () => {
+    skipWhenNoOptionalCoverage(hasTesseract, "tesseract.js");
+
     itIf(hasTesseract)("tesseract.js is installed", () => {
       const packagePath = findPackagePath("tesseract.js");
       expect(fs.existsSync(packagePath!)).toBe(true);
@@ -505,6 +522,8 @@ describe("Native Module Installation Verification", () => {
 });
 
 describe("Plugin-Vision Availability", () => {
+  skipWhenNoOptionalCoverage(hasPluginVision, "plugin-vision");
+
   itIf(hasPluginVision)("@elizaos/plugin-vision is installed", () => {
     const packagePath = findPackagePath("@elizaos", "plugin-vision");
     expect(fs.existsSync(packagePath!)).toBe(true);

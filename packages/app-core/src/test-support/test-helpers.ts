@@ -4,7 +4,6 @@ import type http from "node:http";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { vi } from "vitest";
 
 /**
  * Test helper utilities shared across unit tests.
@@ -493,7 +492,7 @@ export function createMockIncomingMessage({
   req.method = method;
   req.url = url;
   req.headers = headers;
-  req.destroy = vi.fn();
+  req.destroy = () => {};
 
   const chunks: Buffer[] = [];
 

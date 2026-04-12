@@ -23,7 +23,7 @@ const bridgeStubPath = path.join(
 
 /**
  * Custom Vite plugin that redirects @miladyai/app-core/bridge imports to
- * the test stub before Vite's built-in resolver tries to resolve through
+ * the test shim before Vite's built-in resolver tries to resolve through
  * the package's exports map (which may reference native bindings that are
  * unavailable in the test environment).
  */
@@ -49,7 +49,7 @@ export default defineConfig({
   resolve: {
     alias: [
       {
-        // Stub the broken @lookingglass/webxr ESM chain for tests
+        // Redirect the broken @lookingglass/webxr ESM chain for tests
         find: /^@lookingglass\/.*/,
         replacement: path.join(
           here,
@@ -57,7 +57,7 @@ export default defineConfig({
           "..",
           "test",
           "stubs",
-          "lookingglass-webxr.ts",
+          "lookingglass-webxr-shim.ts",
         ),
       },
       {
@@ -171,7 +171,12 @@ export default defineConfig({
     setupFiles: [path.join(here, "test/setup.ts")],
     environment: "node",
     alias: {
-      "@elizaos/skills": path.join(here, "test/__mocks__/elizaos-skills.ts"),
+      "@elizaos/skills": path.join(
+        here,
+        "test",
+        "doubles",
+        "elizaos-skills.ts",
+      ),
       "@miladyai/capacitor-gateway": path.join(
         here,
         "plugins/gateway/src/index.ts",

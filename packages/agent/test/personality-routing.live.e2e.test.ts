@@ -94,7 +94,8 @@ async function handleMessageAndCollectText(
   return responseText;
 }
 
-describe.skipIf(!hasModelProvider)("Personality Routing E2E", () => {
+if (hasModelProvider) {
+  describe("Personality Routing E2E", () => {
   let runtime: AgentRuntime;
 
   const pgliteDir = fs.mkdtempSync(
@@ -307,4 +308,5 @@ describe.skipIf(!hasModelProvider)("Personality Routing E2E", () => {
     },
     120_000,
   );
-});
+  });
+}

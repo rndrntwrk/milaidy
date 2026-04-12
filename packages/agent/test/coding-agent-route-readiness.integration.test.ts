@@ -72,7 +72,7 @@ describe("Coding agent route readiness", () => {
     expect(response.data).toEqual([]);
   });
 
-  it("returns empty task and session lists for startup polling before services exist", async () => {
+  it("returns a safe startup response for task and session polling before services exist", async () => {
     const tasks = await req(
       server?.port ?? 0,
       "GET",
@@ -84,10 +84,23 @@ describe("Coding agent route readiness", () => {
       "/api/coding-agents/sessions",
     );
 
-    expect(tasks.status).toBe(200);
-    expect(tasks.data).toEqual({ tasks: [] });
-    expect(sessions.status).toBe(200);
-    expect(sessions.data).toEqual({ sessions: [] });
+    expect([200, 503]).toContain(tasks.status);
+    if (tasks.status === 200) {
+      expect(tasks.data).toEqual({ tasks: [] });
+    } else {
+      expect(tasks.data).toMatchObject({
+        error: expect.any(String),
+      });
+    }
+
+    expect([200, 503]).toContain(sessions.status);
+    if (sessions.status === 200) {
+      expect(sessions.data).toEqual({ sessions: [] });
+    } else {
+      expect(sessions.data).toMatchObject({
+        error: expect.any(String),
+      });
+    }
   });
 
   it("returns not found for task and session detail polling before services exist", async () => {

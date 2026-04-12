@@ -9,10 +9,7 @@ export function describeIf(condition: boolean): DescribeFn {
     return describe;
   }
 
-  return ((name: string) =>
-    describe(String(name), () => {
-      it("is gated by environment prerequisites", () => {});
-    })) as unknown as DescribeFn;
+  return ((_: string, __?: () => void) => {}) as unknown as DescribeFn;
 }
 
 export function itIf(condition: boolean): ItFn {
@@ -20,8 +17,7 @@ export function itIf(condition: boolean): ItFn {
     return it;
   }
 
-  return ((name: string) =>
-    it(String(name), () => {})) as unknown as ItFn;
+  return ((_: string, __?: () => void) => {}) as unknown as ItFn;
 }
 
 export function testIf(condition: boolean): TestFn {
@@ -29,6 +25,5 @@ export function testIf(condition: boolean): TestFn {
     return test;
   }
 
-  return ((name: string) =>
-    test(String(name), () => {})) as unknown as TestFn;
+  return ((_: string, __?: () => void) => {}) as unknown as TestFn;
 }

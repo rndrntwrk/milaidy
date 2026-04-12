@@ -161,6 +161,8 @@ export type LifeOpsOverviewRecord = {
   agentOps?: Record<string, unknown>;
 };
 
+const ELIZA_CLOUD_OPENAI_BASE_URL = "https://elizacloud.ai/api/v1";
+
 function resolveLiveProviderModelEnv(
   providerName: LiveProviderName,
 ): Record<string, string> {
@@ -215,6 +217,13 @@ function looksLikeGroqApiKey(value: string | undefined): boolean {
 }
 
 export async function selectLifeOpsLiveProvider(): Promise<SelectedLiveProvider | null> {
+  const baseConfig = await loadBaseLiveConfig();
+  const configuredCloudApiKey =
+    baseConfig.cloud &&
+    typeof baseConfig.cloud === "object" &&
+    typeof (baseConfig.cloud as { apiKey?: unknown }).apiKey === "string"
+      ? ((baseConfig.cloud as { apiKey?: string }).apiKey ?? "").trim()
+      : "";
   const openAiCompatProvider = detectOpenAiCompatibleBaseUrlProvider(
     process.env.OPENAI_BASE_URL?.trim(),
   );
@@ -281,6 +290,22 @@ export async function selectLifeOpsLiveProvider(): Promise<SelectedLiveProvider 
     };
   }
 
+  if (
+    configuredCloudApiKey &&
+    (!LIVE_PROVIDER_OVERRIDE || LIVE_PROVIDER_OVERRIDE === "openai") &&
+    (await canImportLiveProviderPlugin("@elizaos/plugin-openai"))
+  ) {
+    return {
+      name: "openai",
+      env: {
+        OPENAI_API_KEY: configuredCloudApiKey,
+        OPENAI_BASE_URL: ELIZA_CLOUD_OPENAI_BASE_URL,
+        ...resolveLiveProviderModelEnv("openai"),
+      },
+      plugin: "@elizaos/plugin-openai",
+    };
+  }
+
   return null;
 }
 
@@ -291,7 +316,7 @@ export function getLifeOpsLiveSetupWarnings(
     !LIVE_TESTS_ENABLED ? "set MILADY_LIVE_TEST=1 or ELIZA_LIVE_TEST=1" : null,
     !LIVE_CHAT_TESTS_ENABLED ? "set MILADY_LIVE_CHAT_TEST=1" : null,
     !selectedProvider
-      ? "provide a live provider key such as OPENAI_API_KEY, OPENROUTER_API_KEY, GOOGLE_API_KEY, ANTHROPIC_API_KEY, or GROQ_API_KEY"
+      ? "provide a live provider key such as OPENAI_API_KEY, OPENROUTER_API_KEY, GOOGLE_API_KEY, ANTHROPIC_API_KEY, or GROQ_API_KEY, or configure cloud.apiKey in the Milady config"
       : null,
   ].filter((entry): entry is string => Boolean(entry));
 }

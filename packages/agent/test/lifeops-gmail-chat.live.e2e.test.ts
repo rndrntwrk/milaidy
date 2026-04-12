@@ -391,9 +391,8 @@ function followUpState(args: {
   } as State;
 }
 
-describe.skipIf(!LIVE_GMAIL_CHAT_ENABLED)(
-  "life-ops gmail live action flows",
-  () => {
+if (LIVE_GMAIL_CHAT_ENABLED) {
+  describe("life-ops gmail live action flows", () => {
     let runtime: AgentRuntime;
     let envBackup: { restore: () => void };
     let stateDir = "";
@@ -509,5 +508,5 @@ describe.skipIf(!LIVE_GMAIL_CHAT_ENABLED)(
       ].join("\n");
       expect(combined).toMatch(/next week/i);
     }, 180_000);
-  },
-);
+  });
+}

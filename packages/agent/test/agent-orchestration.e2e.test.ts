@@ -223,8 +223,8 @@ interface AgentOrchestratorService {
 // ===================================================================
 
 describe("Agent Orchestrator Plugin Loading", () => {
-  // Note: In e2e tests, the orchestrator plugin is stubbed via vitest.e2e.config.ts
-  // These tests verify the stub exports work correctly for API integration
+  // The e2e config resolves the orchestrator package to the real local package
+  // entry when it is present in this checkout.
 
   function resolveInstalledOrchestratorEntry(): string | null {
     const candidates = [
@@ -242,7 +242,6 @@ describe("Agent Orchestrator Plugin Loading", () => {
   }
 
   it("orchestrator module can be imported", async () => {
-    // The module is stubbed in e2e tests, but should still be importable
     const mod = await import("@elizaos/plugin-agent-orchestrator");
     expect(mod).toBeDefined();
   });

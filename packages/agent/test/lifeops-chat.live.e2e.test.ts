@@ -11,6 +11,7 @@ import {
   postConversationMessage,
   req,
 } from "../../../test/helpers/http";
+import { loadElizaConfig } from "../src/config/config";
 
 const LIVE_TESTS_ENABLED =
   process.env.MILADY_LIVE_TEST === "1" || process.env.ELIZA_LIVE_TEST === "1";
@@ -82,6 +83,12 @@ const LIVE_PROVIDER_PLUGIN_NAMES = new Set(
   LIVE_PROVIDER_CANDIDATES.map((candidate) => candidate.plugin),
 );
 const LIVE_CLOUD_ENV_PREFIXES = ["ELIZAOS_CLOUD_", "ELIZA_CLOUD_"] as const;
+const ELIZA_CLOUD_OPENAI_BASE_URL = "https://elizacloud.ai/api/v1";
+const liveConfig = loadElizaConfig();
+const configuredCloudApiKey =
+  typeof liveConfig.cloud?.apiKey === "string"
+    ? liveConfig.cloud.apiKey.trim()
+    : "";
 
 const LIVE_PROVIDER_CHEAP_MODELS = {
   anthropic: {
@@ -235,6 +242,22 @@ async function selectLiveProvider(): Promise<{
     }
   }
 
+  if (
+    configuredCloudApiKey &&
+    (!LIVE_PROVIDER_OVERRIDE || LIVE_PROVIDER_OVERRIDE === "openai") &&
+    (await canImportLiveProviderPlugin("@elizaos/plugin-openai"))
+  ) {
+    return {
+      name: "openai",
+      env: {
+        OPENAI_API_KEY: configuredCloudApiKey,
+        OPENAI_BASE_URL: ELIZA_CLOUD_OPENAI_BASE_URL,
+        ...resolveLiveProviderModelEnv("openai"),
+      },
+      plugin: "@elizaos/plugin-openai",
+    };
+  }
+
   return null;
 }
 
@@ -250,7 +273,7 @@ const liveSetupWarnings = [
   !LIVE_TESTS_ENABLED ? "set MILADY_LIVE_TEST=1 or ELIZA_LIVE_TEST=1" : null,
   !LIVE_CHAT_TESTS_ENABLED ? "set MILADY_LIVE_CHAT_TEST=1" : null,
   !selectedLiveProvider
-    ? "provide a live provider key such as OPENAI_API_KEY, GROQ_API_KEY, OPENROUTER_API_KEY, GOOGLE_API_KEY, GOOGLE_GENERATIVE_AI_API_KEY, or ANTHROPIC_API_KEY"
+    ? "provide a live provider key such as OPENAI_API_KEY, GROQ_API_KEY, OPENROUTER_API_KEY, GOOGLE_API_KEY, GOOGLE_GENERATIVE_AI_API_KEY, or ANTHROPIC_API_KEY, or configure cloud.apiKey in the Milady config"
     : null,
   !selectedLiveProviderPlugin
     ? "the selected provider did not map to a known plugin package"

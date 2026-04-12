@@ -1,11 +1,9 @@
 /**
- * Shared browser API mock helpers for test setup files.
+ * Shared browser API helpers for test setup files.
  *
- * Used by both test/setup.ts and apps/app/test/setup.ts to avoid
- * duplicating Storage, Canvas2D, and console error suppression logic.
+ * Used by both test/setup.ts and apps/app/test/setup.ts to avoid duplicating
+ * Storage, Canvas2D, and console error suppression logic.
  */
-
-import { vi } from "vitest";
 
 const CANVAS_PATCH_MARK = Symbol.for("milady.test.canvasMocksInstalled");
 const CONSOLE_PATCH_MARK = Symbol.for("milady.test.consoleErrorPatched");
@@ -15,26 +13,29 @@ const MEDIA_PATCH_MARK = Symbol.for("milady.test.mediaMocksInstalled");
 const AUDIO_PATCH_MARK = Symbol.for("milady.test.audioMocksInstalled");
 
 /**
- * Create an in-memory Storage mock backed by a Map.
- * Wraps methods in vi.fn() so tests can assert on storage calls.
+ * Create an in-memory Storage implementation backed by a Map.
  */
-export function createMockStorage(): Storage {
+export function createMemoryStorage(): Storage {
   const store = new Map<string, string>();
   return {
-    getItem: vi.fn((key: string) => store.get(key) ?? null),
-    setItem: vi.fn((key: string, value: string) => {
+    getItem(key: string) {
+      return store.get(key) ?? null;
+    },
+    setItem(key: string, value: string) {
       store.set(key, value);
-    }),
-    removeItem: vi.fn((key: string) => {
+    },
+    removeItem(key: string) {
       store.delete(key);
-    }),
-    clear: vi.fn(() => {
+    },
+    clear() {
       store.clear();
-    }),
+    },
     get length() {
       return store.size;
     },
-    key: vi.fn((index: number) => [...store.keys()][index] ?? null),
+    key(index: number) {
+      return [...store.keys()][index] ?? null;
+    },
   } as Storage;
 }
 
@@ -51,42 +52,51 @@ export function hasStorageApi(value: unknown): value is Storage {
 }
 
 /**
- * Create a Canvas 2D rendering context mock with vi.fn() stubs
- * for all commonly-used methods.
+ * Create a Canvas 2D rendering context shim for the common operations used in tests.
  */
 export function createCanvas2DContext(): CanvasRenderingContext2D {
   return {
-    fillRect: vi.fn(),
-    clearRect: vi.fn(),
-    getImageData: vi.fn(() => ({
+    fillRect() {},
+    clearRect() {},
+    getImageData() {
+      return {
       data: new Uint8ClampedArray(0),
       width: 0,
       height: 0,
-    })),
-    putImageData: vi.fn(),
-    drawImage: vi.fn(),
-    beginPath: vi.fn(),
-    closePath: vi.fn(),
-    moveTo: vi.fn(),
-    lineTo: vi.fn(),
-    stroke: vi.fn(),
-    fill: vi.fn(),
-    arc: vi.fn(),
-    rect: vi.fn(),
-    save: vi.fn(),
-    restore: vi.fn(),
-    translate: vi.fn(),
-    rotate: vi.fn(),
-    scale: vi.fn(),
-    transform: vi.fn(),
-    setTransform: vi.fn(),
-    resetTransform: vi.fn(),
-    fillText: vi.fn(),
-    strokeText: vi.fn(),
-    measureText: vi.fn(() => ({ width: 0 })),
-    createLinearGradient: vi.fn(() => ({ addColorStop: vi.fn() })),
-    createRadialGradient: vi.fn(() => ({ addColorStop: vi.fn() })),
-    createPattern: vi.fn(() => null),
+      };
+    },
+    putImageData() {},
+    drawImage() {},
+    beginPath() {},
+    closePath() {},
+    moveTo() {},
+    lineTo() {},
+    stroke() {},
+    fill() {},
+    arc() {},
+    rect() {},
+    save() {},
+    restore() {},
+    translate() {},
+    rotate() {},
+    scale() {},
+    transform() {},
+    setTransform() {},
+    resetTransform() {},
+    fillText() {},
+    strokeText() {},
+    measureText() {
+      return { width: 0 };
+    },
+    createLinearGradient() {
+      return { addColorStop() {} };
+    },
+    createRadialGradient() {
+      return { addColorStop() {} };
+    },
+    createPattern() {
+      return null;
+    },
     canvas:
       typeof document !== "undefined"
         ? document.createElement("canvas")
@@ -99,9 +109,9 @@ export function createCanvas2DContext(): CanvasRenderingContext2D {
 }
 
 /**
- * Install canvas mocks on HTMLCanvasElement.prototype if available.
+ * Install canvas shims on HTMLCanvasElement.prototype if available.
  */
-export function installCanvasMocks(): void {
+export function installCanvasShims(): void {
   if (typeof globalThis.HTMLCanvasElement === "undefined") return;
   const prototype = globalThis.HTMLCanvasElement
     .prototype as HTMLCanvasElement["prototype"] & {
@@ -110,15 +120,17 @@ export function installCanvasMocks(): void {
   if (prototype[CANVAS_PATCH_MARK]) return;
 
   Object.defineProperty(prototype, "getContext", {
-    value: vi.fn((contextType: string) =>
-      contextType === "2d" ? createCanvas2DContext() : null,
-    ),
+    value(contextType: string) {
+      return contextType === "2d" ? createCanvas2DContext() : null;
+    },
     writable: true,
     configurable: true,
   });
 
   Object.defineProperty(prototype, "toDataURL", {
-    value: vi.fn(() => "data:image/png;base64,dGVzdA=="),
+    value() {
+      return "data:image/png;base64,dGVzdA==";
+    },
     writable: true,
     configurable: true,
   });
@@ -127,10 +139,10 @@ export function installCanvasMocks(): void {
 }
 
 /**
- * Install HTMLMediaElement and Audio mocks to avoid jsdom "Not implemented"
- * warnings when tests exercise preview/playback flows.
+ * Install HTMLMediaElement and Audio shims to avoid jsdom "Not implemented"
+ * warnings when tests exercise preview or playback flows.
  */
-export function installMediaElementMocks(): void {
+export function installMediaElementShims(): void {
   if (typeof globalThis.HTMLMediaElement === "undefined") return;
 
   const prototype = globalThis.HTMLMediaElement.prototype as
@@ -139,17 +151,19 @@ export function installMediaElementMocks(): void {
     };
   if (!prototype[MEDIA_PATCH_MARK]) {
     Object.defineProperty(prototype, "load", {
-      value: vi.fn(),
+      value() {},
       writable: true,
       configurable: true,
     });
     Object.defineProperty(prototype, "play", {
-      value: vi.fn(() => Promise.resolve()),
+      value() {
+        return Promise.resolve();
+      },
       writable: true,
       configurable: true,
     });
     Object.defineProperty(prototype, "pause", {
-      value: vi.fn(),
+      value() {},
       writable: true,
       configurable: true,
     });
@@ -164,19 +178,19 @@ export function installMediaElementMocks(): void {
   if (typeof document === "undefined") return;
   if (globalObject.Audio?.[AUDIO_PATCH_MARK]) return;
 
-  const MockAudio = vi.fn(function MockAudio(src?: string) {
+  const AudioShim = function AudioShim(src?: string) {
     const audio = document.createElement("audio");
     if (typeof src === "string") {
       audio.src = src;
     }
     return audio;
-  }) as unknown as typeof Audio & {
+  } as unknown as typeof Audio & {
     [AUDIO_PATCH_MARK]?: boolean;
   };
-  MockAudio[AUDIO_PATCH_MARK] = true;
+  AudioShim[AUDIO_PATCH_MARK] = true;
 
   Object.defineProperty(globalObject, "Audio", {
-    value: MockAudio,
+    value: AudioShim,
     writable: true,
     configurable: true,
   });

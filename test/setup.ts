@@ -2,7 +2,7 @@ import Module from "node:module";
 import * as testRenderer from "react-test-renderer";
 import { afterAll, afterEach, vi } from "vitest";
 import {
-  createMockStorage,
+  createMemoryStorage,
   hasStorageApi,
   suppressReactTestConsoleErrors,
 } from "./helpers/browser-mocks";
@@ -136,7 +136,7 @@ function ensureStorage(
   if (hasStorageApi(existing)) {
     return existing;
   }
-  const storage = fallback ?? createMockStorage();
+  const storage = fallback ?? createMemoryStorage();
   Object.defineProperty(target, key, {
     value: storage,
     writable: true,

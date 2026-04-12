@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from "vitest";
 import {
-  installCanvasMocks,
+  installCanvasShims,
   suppressReactTestConsoleErrors,
 } from "../test/helpers/browser-mocks";
 
@@ -20,11 +20,11 @@ describe("browser-mocks", () => {
   });
 
   it("installs canvas mocks only once per environment", () => {
-    installCanvasMocks();
+    installCanvasShims();
     const firstGetContext = HTMLCanvasElement.prototype.getContext;
     const firstToDataURL = HTMLCanvasElement.prototype.toDataURL;
 
-    installCanvasMocks();
+    installCanvasShims();
 
     expect(HTMLCanvasElement.prototype.getContext).toBe(firstGetContext);
     expect(HTMLCanvasElement.prototype.toDataURL).toBe(firstToDataURL);

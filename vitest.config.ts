@@ -71,14 +71,19 @@ const elizaPluginAliases = workspacePluginPackageNames.flatMap(
     return aliases;
   },
 );
-// Stub @elizaos/plugin-* packages whose npm tarball has a broken or missing
+// Fallback for @elizaos/plugin-* packages whose npm tarball has a broken or missing
 // entry point (e.g. dist/index.js absent). Without this, vi.mock() factory
 // calls still fail because vitest cannot resolve the module specifier.
 const unresolvedPluginStubs = workspacePluginPackageNames
   .filter((name) => !resolvedPluginNames.has(name))
   .map((name) => ({
     find: name,
-    replacement: path.join(repoRoot, "test", "stubs", "plugin-stub.mjs"),
+    replacement: path.join(
+      repoRoot,
+      "test",
+      "stubs",
+      "plugin-fallback-module.mjs",
+    ),
   }));
 const isCI = process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
 const isWindows = process.platform === "win32";
@@ -93,14 +98,14 @@ export default defineConfig({
         // The @lookingglass/webxr package has a broken ESM import chain
         // (extensionless relative import of @lookingglass/webxr-polyfill/src/api/index)
         // that crashes under Node's strict ESM resolver used by vitest.
-        // Stub all @lookingglass/* imports so tests that transitively import
+        // Redirect all @lookingglass/* imports so tests that transitively import
         // VrmEngine.ts don't fail at module resolution time.
         find: /^@lookingglass\/.*/,
         replacement: path.join(
           repoRoot,
           "test",
           "stubs",
-          "lookingglass-webxr.ts",
+          "lookingglass-webxr-shim.ts",
         ),
       },
       {
@@ -111,7 +116,7 @@ export default defineConfig({
           repoRoot,
           "test",
           "stubs",
-          "empty-module.mjs",
+          "module-fallback.mjs",
         ),
       },
       {
@@ -133,7 +138,7 @@ export default defineConfig({
       // and `unresolvedPluginStubs` entries. Vitest's alias resolver
       // takes the first match, so if `@elizaos/plugin-plugin-manager`
       // ends up in `unresolvedPluginStubs` first (pointing at
-      // `plugin-stub.mjs`), our specific stub below never runs and
+      // the generic plugin fallback), our specific stub below never runs and
       // tests get a stub whose default export doesn't expose the
       // `PluginManagerService` class.
       {
@@ -145,10 +150,15 @@ export default defineConfig({
         // imports the runtime agent loader trips on this package at
         // resolve time — even `vi.mock(...)` calls fail, because
         // vitest still has to resolve the specifier before installing
-        // the mock. Alias to the generic plugin stub so resolution
+        // the mock. Alias to the generic plugin fallback so resolution
         // always succeeds.
         find: "@elizaos-plugins/client-telegram-account",
-        replacement: path.join(repoRoot, "test", "stubs", "plugin-stub.mjs"),
+        replacement: path.join(
+          repoRoot,
+          "test",
+          "stubs",
+          "plugin-fallback-module.mjs",
+        ),
       },
       {
         // `@elizaos/plugin-plugin-manager` is a real test dependency
@@ -160,8 +170,7 @@ export default defineConfig({
         // installed at the repo root. Alias to a local stub that
         // provides the class shape the tests need (spy-stubbable
         // methods + a `pluginRegistry` namespace with
-        // `resetRegistryCache`). See
-        // `test/stubs/plugin-plugin-manager-module.ts`.
+        // `resetRegistryCache`). See the local fallback module for details.
         find: "@elizaos/plugin-plugin-manager",
         replacement: path.join(
           repoRoot,
@@ -213,7 +222,7 @@ export default defineConfig({
                 repoRoot,
                 "test",
                 "stubs",
-                "empty-module.mjs",
+                "module-fallback.mjs",
               ),
             },
             {
@@ -222,7 +231,7 @@ export default defineConfig({
                 repoRoot,
                 "test",
                 "stubs",
-                "empty-module.mjs",
+                "module-fallback.mjs",
               ),
             },
           ]),
@@ -292,7 +301,7 @@ export default defineConfig({
                 repoRoot,
                 "test",
                 "stubs",
-                "plugin-stub.mjs",
+                "plugin-fallback-module.mjs",
               ),
             },
           ]),

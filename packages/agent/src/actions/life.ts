@@ -3984,7 +3984,7 @@ export const lifeAction: Action & {
         },
       };
     }
-    const operation =
+    let operation =
       (forceCreateExecution ? "create_definition" : operationPlan.operation) ??
       classifyIntent(intent);
     const service = new LifeOpsService(runtime);
@@ -3992,7 +3992,23 @@ export const lifeAction: Action & {
     const ownership = requestedOwnership(domain);
     const chatText = intent;
     const inferredSeed = inferLifeDefinitionSeed(intent);
-    const targetName = params.target ?? params.title ?? inferredSeed?.title;
+    let targetName = params.target ?? params.title ?? inferredSeed?.title;
+    const inferredReminderIntensity = inferReminderIntensityFromIntent(intent);
+    if (
+      inferredReminderIntensity &&
+      (operation === "create_definition" || operation === "update_definition")
+    ) {
+      const reminderPreferenceTarget = await resolveDefinitionFromIntent(
+        service,
+        targetName,
+        intent,
+        domain,
+      );
+      if (reminderPreferenceTarget) {
+        operation = "set_reminder_preference";
+        targetName = reminderPreferenceTarget.definition.title;
+      }
+    }
     const createConfirmed =
       deferredDraftReuseMode === "confirm" ||
       detailBoolean(details, "confirmed") === true;
