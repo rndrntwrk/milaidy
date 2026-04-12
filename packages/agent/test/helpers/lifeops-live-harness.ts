@@ -12,10 +12,6 @@ import {
 
 export const LIVE_TESTS_ENABLED =
   process.env.MILADY_LIVE_TEST === "1" || process.env.ELIZA_LIVE_TEST === "1";
-export const LIVE_CHAT_TESTS_ENABLED =
-  process.env.MILADY_LIVE_CHAT_TEST === "1";
-export const LIVE_SCENARIO_TESTS_ENABLED =
-  process.env.MILADY_LIVE_SCENARIO_TEST === "1";
 export const LIVE_PROVIDER_OVERRIDE =
   process.env.MILADY_LIVE_PROVIDER?.trim().toLowerCase() ?? "";
 export const LIVE_CHAT_TEST_TIMEOUT_MS = 300_000;
@@ -315,7 +311,6 @@ export function getLifeOpsLiveSetupWarnings(
 ): string[] {
   return [
     !LIVE_TESTS_ENABLED ? "set MILADY_LIVE_TEST=1 or ELIZA_LIVE_TEST=1" : null,
-    !LIVE_CHAT_TESTS_ENABLED ? "set MILADY_LIVE_CHAT_TEST=1" : null,
     !selectedProvider
       ? "provide a live provider key such as OPENAI_API_KEY, OPENROUTER_API_KEY, GOOGLE_API_KEY, ANTHROPIC_API_KEY, or GROQ_API_KEY, or configure cloud.apiKey in the Milady config"
       : null,
@@ -512,6 +507,7 @@ export async function startLifeOpsLiveRuntime(options?: {
     path.join(os.tmpdir(), "milady-lifeops-live-"),
   );
   const stateDir = path.join(tempRoot, "state");
+  const pgliteDir = path.join(tempRoot, "pglite");
   const configPath = path.join(tempRoot, "eliza.json");
   const apiPort = await getFreePort();
   const logs: string[] = [];
@@ -556,6 +552,7 @@ export async function startLifeOpsLiveRuntime(options?: {
       : {};
 
   await mkdir(stateDir, { recursive: true });
+  await mkdir(pgliteDir, { recursive: true });
   await writeFile(
     configPath,
     `${JSON.stringify(
@@ -624,6 +621,7 @@ export async function startLifeOpsLiveRuntime(options?: {
       MILADY_CONFIG_PATH: configPath,
       ELIZA_STATE_DIR: stateDir,
       MILADY_STATE_DIR: stateDir,
+      PGLITE_DATA_DIR: pgliteDir,
       ELIZA_PORT: String(apiPort),
       MILADY_API_PORT: String(apiPort),
       ALLOW_NO_DATABASE: "",
@@ -1093,41 +1091,4 @@ export async function getReminderPreference(
     );
   }
   return response.data;
-}
-
-function escapeXml(text: string): string {
-  return text
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&apos;");
-}
-
-export function buildLifeActionPrompt(
-  summary: string,
-  action: string,
-  intent: string,
-  title?: string,
-): string {
-  const params = [
-    `    <action>${escapeXml(action)}</action>`,
-    `    <intent>${escapeXml(intent)}</intent>`,
-    ...(title ? [`    <title>${escapeXml(title)}</title>`] : []),
-  ].join("\n");
-
-  return [
-    summary,
-    "Reply with exactly this assistant message and no extra text:",
-    "Assistant:",
-    "<actions>",
-    "  <action>REPLY</action>",
-    "  <action>LIFE</action>",
-    "</actions>",
-    "<params>",
-    "  <LIFE>",
-    params,
-    "  </LIFE>",
-    "</params>",
-  ].join("\n");
 }

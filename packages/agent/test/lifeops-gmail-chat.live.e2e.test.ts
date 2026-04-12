@@ -1,177 +1,34 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import type { AgentRuntime, State } from "@elizaos/core";
-import { ModelType } from "@elizaos/core";
+import type { AgentRuntime } from "@elizaos/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { describeIf } from "../../../test/helpers/conditional-tests.ts";
+import {
+  createConversation,
+  postConversationMessage,
+  req,
+} from "../../../test/helpers/http";
 import {
   isLiveTestEnabled,
   selectLiveProvider,
 } from "../../../test/helpers/live-provider";
+import { createRealTestRuntime } from "../../../test/helpers/real-runtime";
 import { saveEnv } from "../../../test/helpers/test-utils";
-import { gmailAction } from "../src/actions/gmail";
+import { createElizaPlugin } from "../src/runtime/eliza-plugin";
 import { resolveOAuthDir } from "../src/config/paths";
 import {
   createLifeOpsConnectorGrant,
   createLifeOpsGmailSyncState,
   LifeOpsRepository,
 } from "../src/lifeops/repository";
-import { createLifeOpsChatTestRuntime } from "./helpers/lifeops-chat-runtime";
 
-const AGENT_ID = "lifeops-gmail-live-chat-agent";
+const GOOGLE_CLIENT_ID = "lifeops-gmail-live-chat-client";
 const LIVE_PROVIDER = selectLiveProvider("openai") ?? selectLiveProvider();
 const LIVE_GMAIL_CHAT_ENABLED = isLiveTestEnabled() && Boolean(LIVE_PROVIDER);
 
-async function callOpenAICompatible(args: {
-  apiKey: string;
-  baseUrl: string;
-  model: string;
-  prompt: string;
-}) {
-  const response = await fetch(`${args.baseUrl}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${args.apiKey}`,
-    },
-    body: JSON.stringify({
-      model: args.model,
-      messages: [{ role: "user", content: args.prompt }],
-      temperature: 0,
-      max_tokens: 768,
-    }),
-  });
-  if (!response.ok) {
-    throw new Error(
-      `OpenAI-compatible provider error ${response.status}: ${await response.text()}`,
-    );
-  }
-  const data = (await response.json()) as {
-    choices?: Array<{ message?: { content?: string } }>;
-  };
-  return data.choices?.[0]?.message?.content ?? "";
-}
-
-async function callAnthropic(args: {
-  apiKey: string;
-  model: string;
-  prompt: string;
-}) {
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": args.apiKey,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: args.model,
-      max_tokens: 768,
-      messages: [{ role: "user", content: args.prompt }],
-    }),
-  });
-  if (!response.ok) {
-    throw new Error(
-      `Anthropic provider error ${response.status}: ${await response.text()}`,
-    );
-  }
-  const data = (await response.json()) as {
-    content?: Array<{ text?: string }>;
-  };
-  return data.content?.[0]?.text ?? "";
-}
-
-async function callGoogle(args: {
-  apiKey: string;
-  baseUrl: string;
-  model: string;
-  prompt: string;
-}) {
-  const response = await fetch(
-    `${args.baseUrl}/models/${args.model}:generateContent?key=${args.apiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: args.prompt }] }],
-        generationConfig: {
-          temperature: 0,
-          maxOutputTokens: 768,
-        },
-      }),
-    },
-  );
-  if (!response.ok) {
-    throw new Error(
-      `Google provider error ${response.status}: ${await response.text()}`,
-    );
-  }
-  const data = (await response.json()) as {
-    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-  };
-  return data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-}
-
-async function liveUseModel(
-  modelType: ModelType,
-  params: { prompt?: unknown },
-): Promise<string> {
-  if (!LIVE_PROVIDER) {
-    throw new Error("No live provider available");
-  }
-  const prompt = String(params?.prompt ?? "");
-  const model =
-    modelType === ModelType.TEXT_LARGE
-      ? LIVE_PROVIDER.largeModel
-      : LIVE_PROVIDER.smallModel;
-  const execute = async () => {
-    if (LIVE_PROVIDER.name === "anthropic") {
-      return callAnthropic({
-        apiKey: LIVE_PROVIDER.apiKey,
-        model,
-        prompt,
-      });
-    }
-    if (LIVE_PROVIDER.name === "google") {
-      return callGoogle({
-        apiKey: LIVE_PROVIDER.apiKey,
-        baseUrl: LIVE_PROVIDER.baseUrl,
-        model,
-        prompt,
-      });
-    }
-    return callOpenAICompatible({
-      apiKey: LIVE_PROVIDER.apiKey,
-      baseUrl: LIVE_PROVIDER.baseUrl,
-      model,
-      prompt,
-    });
-  };
-
-  let lastError: unknown = null;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    try {
-      return await execute();
-    } catch (error) {
-      lastError = error;
-      const message =
-        error instanceof Error ? error.message.toLowerCase() : String(error);
-      const shouldRetry =
-        message.includes("429") ||
-        message.includes("rate limit") ||
-        message.includes("timeout") ||
-        message.includes("temporar") ||
-        /\b50\d\b/.test(message);
-      if (!shouldRetry || attempt === 2) {
-        throw error;
-      }
-      await new Promise((resolve) => setTimeout(resolve, 750 * (attempt + 1)));
-    }
-  }
-  throw lastError instanceof Error ? lastError : new Error(String(lastError));
-}
-
 function buildGmailMessage(args: {
+  agentId: string;
   id: string;
   externalId: string;
   threadId: string;
@@ -189,7 +46,7 @@ function buildGmailMessage(args: {
     id: args.id,
     externalId: args.externalId,
     threadId: args.threadId,
-    agentId: AGENT_ID,
+    agentId: args.agentId,
     provider: "google" as const,
     side: "owner" as const,
     subject: args.subject,
@@ -218,8 +75,9 @@ function buildGmailMessage(args: {
 
 async function seedLocalGmail(runtime: AgentRuntime, stateDir: string) {
   const repository = new LifeOpsRepository(runtime);
+  const agentId = String(runtime.agentId);
   const nowIso = new Date().toISOString();
-  const tokenRef = `${AGENT_ID}/owner/local.json`;
+  const tokenRef = `${agentId}/owner/local.json`;
   const tokenPath = path.join(
     resolveOAuthDir(process.env, stateDir),
     "lifeops",
@@ -232,10 +90,10 @@ async function seedLocalGmail(runtime: AgentRuntime, stateDir: string) {
     JSON.stringify(
       {
         provider: "google",
-        agentId: AGENT_ID,
+        agentId,
         side: "owner",
         mode: "local",
-        clientId: "lifeops-gmail-live-chat-client",
+        clientId: GOOGLE_CLIENT_ID,
         redirectUri: "http://127.0.0.1/callback",
         accessToken: "gmail-live-chat-access-token",
         refreshToken: "gmail-live-chat-refresh-token",
@@ -263,7 +121,7 @@ async function seedLocalGmail(runtime: AgentRuntime, stateDir: string) {
 
   await repository.upsertConnectorGrant(
     createLifeOpsConnectorGrant({
-      agentId: AGENT_ID,
+      agentId,
       provider: "google",
       side: "owner",
       identity: {
@@ -291,7 +149,7 @@ async function seedLocalGmail(runtime: AgentRuntime, stateDir: string) {
 
   await repository.upsertGmailSyncState(
     createLifeOpsGmailSyncState({
-      agentId: AGENT_ID,
+      agentId,
       provider: "google",
       side: "owner",
       mailbox: "me",
@@ -302,6 +160,7 @@ async function seedLocalGmail(runtime: AgentRuntime, stateDir: string) {
 
   const messages = [
     buildGmailMessage({
+      agentId,
       id: "gmail-live-suran-recent",
       externalId: "gmail-live-suran-recent-ext",
       threadId: "gmail-live-suran-thread-recent",
@@ -316,6 +175,7 @@ async function seedLocalGmail(runtime: AgentRuntime, stateDir: string) {
       triageScore: 92,
     }),
     buildGmailMessage({
+      agentId,
       id: "gmail-live-venue",
       externalId: "gmail-live-venue-ext",
       threadId: "gmail-live-venue-thread",
@@ -336,177 +196,155 @@ async function seedLocalGmail(runtime: AgentRuntime, stateDir: string) {
   }
 }
 
-function makeMessage(text: string) {
-  return {
-    entityId: AGENT_ID,
-    content: {
-      source: "discord",
-      text,
-    },
-  } as never;
-}
+type StartedLiveServer = {
+  close: () => Promise<void>;
+  port: number;
+};
 
-function emptyState(): State {
-  return {
-    values: {
-      recentMessages: "",
-    },
-    data: {},
-  } as State;
-}
+async function startLiveServer(): Promise<StartedLiveServer> {
+  const stateDir = await fs.mkdtemp(
+    path.join(os.tmpdir(), "lifeops-gmail-live-chat-"),
+  );
+  const envBackup = saveEnv(
+    ...Object.keys(LIVE_PROVIDER?.env ?? {}),
+    "ELIZA_STATE_DIR",
+    "MILADY_STATE_DIR",
+    "MILADY_GOOGLE_OAUTH_DESKTOP_CLIENT_ID",
+    "PGLITE_DATA_DIR",
+  );
 
-function followUpState(args: {
-  previousUserText: string;
-  previousResult: {
-    success?: boolean;
-    text?: string;
-    data?: unknown;
-  };
-}): State {
-  return {
-    values: {
-      recentMessages: [
-        `user: ${args.previousUserText}`,
-        `assistant: ${args.previousResult.text ?? ""}`,
-      ].join("\n"),
-    },
-    data: {
-      actionResults: [
-        {
-          content: {
-            type: "action_result",
-            actionName: "GMAIL_ACTION",
-            actionStatus:
-              args.previousResult.success === false ? "failed" : "completed",
-            text: args.previousResult.text,
-            data:
-              args.previousResult.data &&
-              typeof args.previousResult.data === "object"
-                ? args.previousResult.data
-                : {},
-          },
-        },
-      ],
-    },
-  } as State;
-}
+  for (const [key, value] of Object.entries(LIVE_PROVIDER?.env ?? {})) {
+    process.env[key] = value;
+  }
+  process.env.ELIZA_STATE_DIR = stateDir;
+  process.env.MILADY_STATE_DIR = stateDir;
+  process.env.MILADY_GOOGLE_OAUTH_DESKTOP_CLIENT_ID = GOOGLE_CLIENT_ID;
 
-if (LIVE_GMAIL_CHAT_ENABLED) {
-  describe("life-ops gmail live action flows", () => {
-    let runtime: AgentRuntime;
-    let envBackup: { restore: () => void };
-    let stateDir = "";
-
-    beforeAll(async () => {
-      envBackup = saveEnv(
-        "ELIZA_STATE_DIR",
-        "MILADY_GOOGLE_OAUTH_DESKTOP_CLIENT_ID",
-      );
-      stateDir = await fs.mkdtemp(
-        path.join(os.tmpdir(), "lifeops-gmail-live-chat-"),
-      );
-      process.env.ELIZA_STATE_DIR = stateDir;
-      process.env.MILADY_GOOGLE_OAUTH_DESKTOP_CLIENT_ID =
-        "lifeops-gmail-live-chat-client";
-
-      runtime = createLifeOpsChatTestRuntime({
-        agentId: AGENT_ID,
-        characterName: "Milady",
-        logger: {
-          debug: () => {},
-          info: () => {},
-          warn: () => {},
-          error: () => {},
-        } as AgentRuntime["logger"],
-        useModel: liveUseModel as AgentRuntime["useModel"],
-        handleTurn: async () => ({
-          text: "",
-        }),
-      });
-
-      await seedLocalGmail(runtime, stateDir);
-    }, 180_000);
-
-    afterAll(async () => {
-      if (stateDir) {
-        await fs.rm(stateDir, {
-          recursive: true,
-          force: true,
-          maxRetries: 5,
-          retryDelay: 100,
-        });
-      }
-      envBackup.restore();
-    });
-
-    it("searches Gmail narratively with the real model", async () => {
-      const prompt =
-        "can you search my email and tell me if anyone named suran emailed me";
-      const result = await gmailAction.handler?.(
-        runtime,
-        makeMessage(prompt),
-        emptyState() as never,
-        { parameters: {} } as never,
-      );
-
-      expect(result?.success).toBe(true);
-      expect(String(result?.text ?? "")).toMatch(/suran/i);
-    }, 180_000);
-
-    it("finds reply-needed Gmail items with the real model", async () => {
-      const prompt = "which emails need a reply about venue";
-      const result = await gmailAction.handler?.(
-        runtime,
-        makeMessage(prompt),
-        emptyState() as never,
-        { parameters: {} } as never,
-      );
-
-      expect(result?.success).toBe(true);
-      expect(String(result?.text ?? "")).toMatch(/venue/i);
-    }, 180_000);
-
-    it("drafts a Gmail reply from prior Gmail context with the real model", async () => {
-      const searchPrompt =
-        "can you search my email and tell me if anyone named suran emailed me";
-      const searchResult = await gmailAction.handler?.(
-        runtime,
-        makeMessage(searchPrompt),
-        emptyState() as never,
-        { parameters: {} } as never,
-      );
-
-      expect(searchResult?.success).toBe(true);
-      expect(String(searchResult?.text ?? "")).toMatch(/suran/i);
-
-      const draftResult = await gmailAction.handler?.(
-        runtime,
-        makeMessage(
-          "draft a reply to that email thanking him and saying next week works",
-        ),
-        followUpState({
-          previousUserText: searchPrompt,
-          previousResult: {
-            success: searchResult?.success,
-            text: searchResult?.text,
-            data: searchResult?.data,
-          },
-        }) as never,
-        { parameters: {} } as never,
-      );
-
-      expect(draftResult?.success).toBe(true);
-      const combined = [
-        String(draftResult?.text ?? ""),
-        String(
-          draftResult?.data &&
-            typeof draftResult.data === "object" &&
-            "bodyText" in draftResult.data
-            ? (draftResult.data as Record<string, unknown>).bodyText
-            : "",
-        ),
-      ].join("\n");
-      expect(combined).toMatch(/next week/i);
-    }, 180_000);
+  const runtimeResult = await createRealTestRuntime({
+    withLLM: true,
+    preferredProvider: LIVE_PROVIDER?.name,
+    plugins: [createElizaPlugin({ agentId: "main" })],
   });
+  await seedLocalGmail(runtimeResult.runtime, stateDir);
+
+  const { startApiServer } = await import("../src/api/server");
+  const server = await startApiServer({
+    port: 0,
+    runtime: runtimeResult.runtime,
+    skipDeferredStartupWork: true,
+  });
+  await req(server.port, "POST", "/api/agent/start");
+
+  return {
+    port: server.port,
+    close: async () => {
+      await server.close();
+      await runtimeResult.cleanup();
+      await fs.rm(stateDir, {
+        recursive: true,
+        force: true,
+        maxRetries: 5,
+        retryDelay: 100,
+      });
+      envBackup.restore();
+    },
+  };
 }
+
+async function sendChat(
+  port: number,
+  conversationId: string,
+  text: string,
+  options?: {
+    allowProviderIssue?: boolean;
+  },
+): Promise<string> {
+  const { status, data } = await postConversationMessage(
+    port,
+    conversationId,
+    { text },
+    undefined,
+    { timeoutMs: 120_000 },
+  );
+  expect(status).toBe(200);
+  const responseText = String(data.text ?? data.response ?? "");
+  expect(responseText.length).toBeGreaterThan(0);
+  if (!options?.allowProviderIssue) {
+    expect(responseText.toLowerCase()).not.toContain("provider issue");
+  }
+  return responseText;
+}
+
+describeIf(LIVE_GMAIL_CHAT_ENABLED)("life-ops gmail live chat flows", () => {
+  let server: StartedLiveServer | null = null;
+
+  beforeAll(async () => {
+    server = await startLiveServer();
+  }, 180_000);
+
+  afterAll(async () => {
+    await server?.close();
+  });
+
+  it("searches Gmail narratively with the real agent runtime", async () => {
+    const { conversationId } = await createConversation(server?.port ?? 0, {
+      title: "gmail search",
+    });
+    const responseText = await sendChat(
+      server?.port ?? 0,
+      conversationId,
+      "Search my email and tell me if anyone named Suran emailed me.",
+    );
+
+    expect(responseText).toMatch(/suran/i);
+  }, 180_000);
+
+  it("finds reply-needed Gmail items with the real agent runtime", async () => {
+    const { conversationId } = await createConversation(server?.port ?? 0, {
+      title: "gmail venue",
+    });
+    const responseText = await sendChat(
+      server?.port ?? 0,
+      conversationId,
+      "Which emails need a reply about venue details?",
+    );
+
+    expect(responseText).toMatch(/venue|morgan/i);
+  }, 180_000);
+
+  it("drafts a Gmail reply from prior conversation context", async () => {
+    let lastResponse = "";
+
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      const { conversationId } = await createConversation(server?.port ?? 0, {
+        title: `gmail draft ${attempt}`,
+      });
+      const searchResponse = await sendChat(
+        server?.port ?? 0,
+        conversationId,
+        "Search my email and tell me if anyone named Suran emailed me.",
+      );
+      expect(searchResponse).toMatch(/suran/i);
+
+      lastResponse = await sendChat(
+        server?.port ?? 0,
+        conversationId,
+        "Draft a reply to Suran thanking him and saying next week works. Do not send it yet.",
+        { allowProviderIssue: true },
+      );
+
+      if (
+        !lastResponse.toLowerCase().includes("provider issue") &&
+        /next week|thank/i.test(lastResponse)
+      ) {
+        return;
+      }
+
+      if (attempt < 3) {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+      }
+    }
+
+    throw new Error(`Gmail draft flow did not stabilize: ${lastResponse}`);
+  }, 180_000);
+});

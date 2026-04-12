@@ -10,7 +10,6 @@ import type {
 } from "./lifeops-live-harness.ts";
 import {
   assertNoProviderIssue,
-  buildLifeActionPrompt,
   getReminderPreference,
   listDefinitionEntries,
   listGoalEntries,
@@ -24,13 +23,6 @@ import {
   waitForTrajectoryCall,
 } from "./lifeops-live-harness.ts";
 
-export type LifeActionPromptSpec = {
-  action: string;
-  intent: string;
-  summary: string;
-  title?: string;
-};
-
 export type ScenarioRoom = {
   id: string;
   source?: string;
@@ -42,7 +34,6 @@ export type ScenarioTurn = {
   room?: string;
   source?: string;
   text?: string;
-  lifeActionPrompt?: LifeActionPromptSpec;
   apiRequest?: {
     method: "GET" | "POST";
     path: string;
@@ -343,15 +334,6 @@ function renderTurnText(turn: ScenarioTurn): string {
   if (typeof turn.text === "string" && turn.text.trim().length > 0) {
     return turn.text;
   }
-  if (turn.lifeActionPrompt) {
-    const prompt = turn.lifeActionPrompt;
-    return buildLifeActionPrompt(
-      prompt.summary,
-      prompt.action,
-      prompt.intent,
-      prompt.title,
-    );
-  }
   throw new Error(`Scenario turn "${turn.name}" did not provide text.`);
 }
 
@@ -533,9 +515,14 @@ async function createScenarioRooms(
 
   const created = new Map<string, { conversationId: string; source: string }>();
   for (const room of rooms) {
-    const conversation = await createConversation(runtime.port, {
-      title: room.title ?? `${scenario.title} (${room.id})`,
-    }, undefined, { timeoutMs: LIVE_ROOM_CREATION_TIMEOUT_MS });
+    const conversation = await createConversation(
+      runtime.port,
+      {
+        title: room.title ?? `${scenario.title} (${room.id})`,
+      },
+      undefined,
+      { timeoutMs: LIVE_ROOM_CREATION_TIMEOUT_MS },
+    );
     created.set(room.id, {
       conversationId: conversation.conversationId,
       source: room.source ?? "discord",

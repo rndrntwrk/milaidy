@@ -1,5 +1,55 @@
-import { logger } from '@elizaos/core';
-import { retryWithBackoff } from '../utils/retry';
+import { logger } from "@elizaos/core";
+import { type RetryableError, retryWithBackoff } from "../utils/retry";
+
+type GeniusHttpError = Error &
+  RetryableError & {
+    response?: {
+      status?: number;
+      statusText?: string;
+      headers?: Headers;
+    };
+  };
+
+interface GeniusSearchHit {
+  result: {
+    id: number;
+    title: string;
+    primary_artist: {
+      name: string;
+    };
+    url: string;
+  };
+}
+
+interface GeniusSearchResponse {
+  response?: {
+    hits?: GeniusSearchHit[];
+  };
+}
+
+interface GeniusSongResponse {
+  response?: {
+    song?: {
+      title: string;
+      primary_artist: {
+        name: string;
+      };
+      url: string;
+    };
+  };
+}
+
+function buildGeniusHttpError(response: Response): GeniusHttpError {
+  const error = new Error(
+    `Genius API error: ${response.status} ${response.statusText}`,
+  ) as GeniusHttpError;
+  error.response = {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers,
+  };
+  return error;
+}
 
 /**
  * Client for Genius API
@@ -8,14 +58,14 @@ import { retryWithBackoff } from '../utils/retry';
  * Documentation: https://docs.genius.com/
  */
 export class GeniusClient {
-  private readonly baseUrl = 'https://api.genius.com';
+  private readonly baseUrl = "https://api.genius.com";
   private readonly apiKey: string;
   private lastRequestTime = 0;
   private readonly minRequestInterval = 200; // 200ms = 5 requests per second (conservative)
 
   constructor(apiKey: string) {
     if (!apiKey) {
-      throw new Error('Genius API key is required');
+      throw new Error("Genius API key is required");
     }
     this.apiKey = apiKey;
   }
@@ -28,7 +78,7 @@ export class GeniusClient {
     const timeSinceLastRequest = now - this.lastRequestTime;
     if (timeSinceLastRequest < this.minRequestInterval) {
       await new Promise((resolve) =>
-        setTimeout(resolve, this.minRequestInterval - timeSinceLastRequest)
+        setTimeout(resolve, this.minRequestInterval - timeSinceLastRequest),
       );
     }
     this.lastRequestTime = Date.now();
@@ -37,37 +87,40 @@ export class GeniusClient {
   /**
    * Search for a song
    */
-  async searchSong(query: string): Promise<Array<{ id: number; title: string; artist: string; url: string }> | null> {
+  async searchSong(query: string): Promise<Array<{
+    id: number;
+    title: string;
+    artist: string;
+    url: string;
+  }> | null> {
     await this.rateLimit();
 
     return retryWithBackoff(async () => {
       const url = `${this.baseUrl}/search?q=${encodeURIComponent(query)}`;
       const response = await fetch(url, {
         headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
-          'User-Agent': 'ElizaOS-MusicInfo/1.0.0',
-          'Accept': 'application/json',
+          Authorization: `Bearer ${this.apiKey}`,
+          "User-Agent": "ElizaOS-MusicInfo/1.0.0",
+          Accept: "application/json",
         },
       });
 
       if (!response.ok) {
         if (response.status === 401) {
           // Don't retry on authentication errors
-          logger.warn('Genius API: Invalid API key');
+          logger.warn("Genius API: Invalid API key");
           return null;
         }
-        const error: any = new Error(`Genius API error: ${response.status} ${response.statusText}`);
-        error.response = { status: response.status, statusText: response.statusText };
-        throw error;
+        throw buildGeniusHttpError(response);
       }
 
-      const data = await response.json();
+      const data = (await response.json()) as GeniusSearchResponse;
       if (!data.response?.hits) {
         return null;
       }
 
       return data.response.hits
-        .map((hit: any) => ({
+        .map((hit) => ({
           id: hit.result.id,
           title: hit.result.title,
           artist: hit.result.primary_artist.name,
@@ -85,26 +138,29 @@ export class GeniusClient {
    * Note: Genius API doesn't directly provide lyrics, but we can get the URL
    * For actual lyrics, we'd need to scrape the page (which requires separate implementation)
    */
-  async getSongInfo(songId: number): Promise<{ title: string; artist: string; url: string; lyricsUrl: string } | null> {
+  async getSongInfo(songId: number): Promise<{
+    title: string;
+    artist: string;
+    url: string;
+    lyricsUrl: string;
+  } | null> {
     await this.rateLimit();
 
     return retryWithBackoff(async () => {
       const url = `${this.baseUrl}/songs/${songId}`;
       const response = await fetch(url, {
         headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
-          'User-Agent': 'ElizaOS-MusicInfo/1.0.0',
-          'Accept': 'application/json',
+          Authorization: `Bearer ${this.apiKey}`,
+          "User-Agent": "ElizaOS-MusicInfo/1.0.0",
+          Accept: "application/json",
         },
       });
 
       if (!response.ok) {
-        const error: any = new Error(`Genius API error: ${response.status} ${response.statusText}`);
-        error.response = { status: response.status, statusText: response.statusText };
-        throw error;
+        throw buildGeniusHttpError(response);
       }
 
-      const data = await response.json();
+      const data = (await response.json()) as GeniusSongResponse;
       if (!data.response?.song) {
         return null;
       }
@@ -125,11 +181,14 @@ export class GeniusClient {
   /**
    * Get lyrics for a track (searches first, then gets song info)
    */
-  async getLyrics(trackName: string, artistName?: string): Promise<string | null> {
+  async getLyrics(
+    trackName: string,
+    artistName?: string,
+  ): Promise<string | null> {
     try {
       const query = artistName ? `${trackName} ${artistName}` : trackName;
       const searchResults = await this.searchSong(query);
-      
+
       if (!searchResults || searchResults.length === 0) {
         return null;
       }
@@ -141,7 +200,10 @@ export class GeniusClient {
 
       for (const result of searchResults) {
         if (result.title.toLowerCase().includes(trackLower)) {
-          if (!artistLower || result.artist.toLowerCase().includes(artistLower)) {
+          if (
+            !artistLower ||
+            result.artist.toLowerCase().includes(artistLower)
+          ) {
             songId = result.id;
             break;
           }
@@ -177,25 +239,31 @@ export class GeniusClient {
    * Validate API key by making a test request
    */
   async validateApiKey(): Promise<boolean> {
-    return retryWithBackoff(async () => {
-      await this.rateLimit();
-      const url = `${this.baseUrl}/account`;
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
-          'User-Agent': 'ElizaOS-MusicInfo/1.0.0',
-          'Accept': 'application/json',
-        },
-      });
-      return response.ok;
-    }, {
-      maxRetries: 2, // Fewer retries for validation
-      retryableErrors: (error: any) => {
-        // Only retry on network errors, not auth errors
-        return error?.code === 'ECONNRESET' || error?.code === 'ETIMEDOUT' || error?.code === 'ENOTFOUND' ||
-               (error?.response?.status >= 500 && error?.response?.status < 600);
+    return retryWithBackoff(
+      async () => {
+        await this.rateLimit();
+        const url = `${this.baseUrl}/account`;
+        const response = await fetch(url, {
+          headers: {
+            Authorization: `Bearer ${this.apiKey}`,
+            "User-Agent": "ElizaOS-MusicInfo/1.0.0",
+            Accept: "application/json",
+          },
+        });
+        return response.ok;
       },
-    }).catch(() => false);
+      {
+        maxRetries: 2, // Fewer retries for validation
+        retryableErrors: (error: RetryableError) => {
+          // Only retry on network errors, not auth errors
+          return (
+            error?.code === "ECONNRESET" ||
+            error?.code === "ETIMEDOUT" ||
+            error?.code === "ENOTFOUND" ||
+            (error?.response?.status >= 500 && error?.response?.status < 600)
+          );
+        },
+      },
+    ).catch(() => false);
   }
 }
-

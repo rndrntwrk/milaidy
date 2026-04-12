@@ -1,5 +1,5 @@
-import { logger } from '@elizaos/core';
-import { retryWithBackoff } from '../utils/retry';
+import { logger } from "@elizaos/core";
+import { retryWithBackoff } from "../utils/retry";
 
 /**
  * Client for TheAudioDB API
@@ -8,14 +8,14 @@ import { retryWithBackoff } from '../utils/retry';
  * Documentation: https://www.theaudiodb.com/api_guide.php
  */
 export class TheAudioDbClient {
-  private readonly baseUrl = 'https://theaudiodb.com/api/v1/json';
+  private readonly baseUrl = "https://theaudiodb.com/api/v1/json";
   private readonly apiKey: string;
   private lastRequestTime = 0;
   private readonly minRequestInterval = 100; // 100ms = 10 requests per second (conservative)
 
   constructor(apiKey: string) {
     if (!apiKey) {
-      throw new Error('TheAudioDB API key is required');
+      throw new Error("TheAudioDB API key is required");
     }
     this.apiKey = apiKey;
   }
@@ -28,7 +28,7 @@ export class TheAudioDbClient {
     const timeSinceLastRequest = now - this.lastRequestTime;
     if (timeSinceLastRequest < this.minRequestInterval) {
       await new Promise((resolve) =>
-        setTimeout(resolve, this.minRequestInterval - timeSinceLastRequest)
+        setTimeout(resolve, this.minRequestInterval - timeSinceLastRequest),
       );
     }
     this.lastRequestTime = Date.now();
@@ -51,13 +51,18 @@ export class TheAudioDbClient {
       const url = `${this.baseUrl}/${this.apiKey}/search.php?s=${encodeURIComponent(artistName)}`;
       const response = await fetch(url, {
         headers: {
-          'Accept': 'application/json',
+          Accept: "application/json",
         },
       });
 
       if (!response.ok) {
-        const error: any = new Error(`TheAudioDB API error: ${response.status} ${response.statusText}`);
-        error.response = { status: response.status, statusText: response.statusText };
+        const error: any = new Error(
+          `TheAudioDB API error: ${response.status} ${response.statusText}`,
+        );
+        error.response = {
+          status: response.status,
+          statusText: response.statusText,
+        };
         throw error;
       }
 
@@ -95,28 +100,37 @@ export class TheAudioDbClient {
 
       // Use the first result (most likely match)
       const artist = artists[0];
-      
+
       // Get detailed artist info
       await this.rateLimit();
       const detailUrl = `${this.baseUrl}/${this.apiKey}/artist.php?i=${artist.idArtist}`;
-      
+
       const detailData = await retryWithBackoff(async () => {
         const detailResponse = await fetch(detailUrl, {
           headers: {
-            'Accept': 'application/json',
+            Accept: "application/json",
           },
         });
 
         if (!detailResponse.ok) {
-          const error: any = new Error(`TheAudioDB API error: ${detailResponse.status} ${detailResponse.statusText}`);
-          error.response = { status: detailResponse.status, statusText: detailResponse.statusText };
+          const error: any = new Error(
+            `TheAudioDB API error: ${detailResponse.status} ${detailResponse.statusText}`,
+          );
+          error.response = {
+            status: detailResponse.status,
+            statusText: detailResponse.statusText,
+          };
           throw error;
         }
 
         return await detailResponse.json();
       }).catch(() => null);
 
-      if (!detailData || !detailData.artists || detailData.artists.length === 0) {
+      if (
+        !detailData ||
+        !detailData.artists ||
+        detailData.artists.length === 0
+      ) {
         // Return basic info if detail request fails
         return {
           strArtist: artist.strArtist,
@@ -148,7 +162,10 @@ export class TheAudioDbClient {
   /**
    * Search for an album
    */
-  async searchAlbum(albumName: string, artistName?: string): Promise<Array<{
+  async searchAlbum(
+    albumName: string,
+    artistName?: string,
+  ): Promise<Array<{
     idAlbum: string;
     strAlbum: string;
     strArtist: string;
@@ -167,13 +184,18 @@ export class TheAudioDbClient {
 
       const response = await fetch(url, {
         headers: {
-          'Accept': 'application/json',
+          Accept: "application/json",
         },
       });
 
       if (!response.ok) {
-        const error: any = new Error(`TheAudioDB API error: ${response.status} ${response.statusText}`);
-        error.response = { status: response.status, statusText: response.statusText };
+        const error: any = new Error(
+          `TheAudioDB API error: ${response.status} ${response.statusText}`,
+        );
+        error.response = {
+          status: response.status,
+          statusText: response.statusText,
+        };
         throw error;
       }
 
@@ -192,7 +214,10 @@ export class TheAudioDbClient {
   /**
    * Get album information including high-quality artwork
    */
-  async getAlbumInfo(albumName: string, artistName?: string): Promise<{
+  async getAlbumInfo(
+    albumName: string,
+    artistName?: string,
+  ): Promise<{
     strAlbum: string;
     strArtist: string;
     strAlbumThumb: string;
@@ -209,21 +234,26 @@ export class TheAudioDbClient {
 
       // Use the first result (most likely match)
       const album = albums[0];
-      
+
       // Get detailed album info
       await this.rateLimit();
       const detailUrl = `${this.baseUrl}/${this.apiKey}/album.php?m=${album.idAlbum}`;
-      
+
       const detailData = await retryWithBackoff(async () => {
         const detailResponse = await fetch(detailUrl, {
           headers: {
-            'Accept': 'application/json',
+            Accept: "application/json",
           },
         });
 
         if (!detailResponse.ok) {
-          const error: any = new Error(`TheAudioDB API error: ${detailResponse.status} ${detailResponse.statusText}`);
-          error.response = { status: detailResponse.status, statusText: detailResponse.statusText };
+          const error: any = new Error(
+            `TheAudioDB API error: ${detailResponse.status} ${detailResponse.statusText}`,
+          );
+          error.response = {
+            status: detailResponse.status,
+            statusText: detailResponse.statusText,
+          };
           throw error;
         }
 
@@ -260,24 +290,30 @@ export class TheAudioDbClient {
    * Validate API key by making a test request
    */
   async validateApiKey(): Promise<boolean> {
-    return retryWithBackoff(async () => {
-      await this.rateLimit();
-      // Test with a well-known artist
-      const url = `${this.baseUrl}/${this.apiKey}/search.php?s=The Beatles`;
-      const response = await fetch(url, {
-        headers: {
-          'Accept': 'application/json',
-        },
-      });
-      return response.ok;
-    }, {
-      maxRetries: 2, // Fewer retries for validation
-      retryableErrors: (error: any) => {
-        // Only retry on network errors, not auth errors
-        return error?.code === 'ECONNRESET' || error?.code === 'ETIMEDOUT' || error?.code === 'ENOTFOUND' ||
-               (error?.response?.status >= 500 && error?.response?.status < 600);
+    return retryWithBackoff(
+      async () => {
+        await this.rateLimit();
+        // Test with a well-known artist
+        const url = `${this.baseUrl}/${this.apiKey}/search.php?s=The Beatles`;
+        const response = await fetch(url, {
+          headers: {
+            Accept: "application/json",
+          },
+        });
+        return response.ok;
       },
-    }).catch(() => false);
+      {
+        maxRetries: 2, // Fewer retries for validation
+        retryableErrors: (error: any) => {
+          // Only retry on network errors, not auth errors
+          return (
+            error?.code === "ECONNRESET" ||
+            error?.code === "ETIMEDOUT" ||
+            error?.code === "ENOTFOUND" ||
+            (error?.response?.status >= 500 && error?.response?.status < 600)
+          );
+        },
+      },
+    ).catch(() => false);
   }
 }
-

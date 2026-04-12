@@ -698,7 +698,7 @@ describeIf(LIVE_SUITE_ENABLED)(
       ).toBeNull();
 
       const createPrompt =
-        "Can you turn that into a real recurring Brush teeth routine for me? I want it in the morning around 8am and again at night around 9pm, but please preview it before you save anything.";
+        "Please make that into a routine named Brush teeth with reminders around 8am and 9pm. Just preview the plan for now and do not save it yet.";
       const previewResponse = await sendUserTurn({
         runtime,
         entityId: ownerId,
@@ -742,7 +742,7 @@ describeIf(LIVE_SUITE_ENABLED)(
       expect(brushTeeth?.reminderPlan?.id ?? null).not.toBeNull();
 
       const preferencePrompt =
-        "Keep the Brush teeth routine, but make the reminders minimal from now on.";
+        "Now turn the Brush teeth reminder intensity down to minimal.";
       const preferenceResponse = await sendUserTurn({
         runtime,
         entityId: ownerId,

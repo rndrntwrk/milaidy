@@ -1,6 +1,6 @@
-import { logger } from '@elizaos/core';
-import type { TrackInfo, ArtistInfo, AlbumInfo } from '../types';
-import { retryWithBackoff } from '../utils/retry';
+import { logger } from "@elizaos/core";
+import type { AlbumInfo, ArtistInfo, TrackInfo } from "../types";
+import { retryWithBackoff } from "../utils/retry";
 
 /**
  * Client for Last.fm API
@@ -8,14 +8,14 @@ import { retryWithBackoff } from '../utils/retry';
  * Rate limit: 5 requests per second
  */
 export class LastFmClient {
-  private readonly baseUrl = 'https://ws.audioscrobbler.com/2.0';
+  private readonly baseUrl = "https://ws.audioscrobbler.com/2.0";
   private readonly apiKey: string;
   private lastRequestTime = 0;
   private readonly minRequestInterval = 200; // 200ms = 5 requests per second
 
   constructor(apiKey: string) {
     if (!apiKey) {
-      throw new Error('Last.fm API key is required');
+      throw new Error("Last.fm API key is required");
     }
     this.apiKey = apiKey;
   }
@@ -28,7 +28,7 @@ export class LastFmClient {
     const timeSinceLastRequest = now - this.lastRequestTime;
     if (timeSinceLastRequest < this.minRequestInterval) {
       await new Promise((resolve) =>
-        setTimeout(resolve, this.minRequestInterval - timeSinceLastRequest)
+        setTimeout(resolve, this.minRequestInterval - timeSinceLastRequest),
       );
     }
     this.lastRequestTime = Date.now();
@@ -37,24 +37,32 @@ export class LastFmClient {
   /**
    * Get track information
    */
-  async getTrackInfo(trackName: string, artistName: string): Promise<TrackInfo | null> {
+  async getTrackInfo(
+    trackName: string,
+    artistName: string,
+  ): Promise<TrackInfo | null> {
     await this.rateLimit();
 
     return retryWithBackoff(async () => {
       const params = new URLSearchParams({
-        method: 'track.getInfo',
+        method: "track.getInfo",
         api_key: this.apiKey,
         track: trackName,
         artist: artistName,
-        format: 'json',
+        format: "json",
       });
 
       const url = `${this.baseUrl}/?${params.toString()}`;
       const response = await fetch(url);
 
       if (!response.ok) {
-        const error: any = new Error(`Last.fm API error: ${response.status} ${response.statusText}`);
-        error.response = { status: response.status, statusText: response.statusText };
+        const error: any = new Error(
+          `Last.fm API error: ${response.status} ${response.statusText}`,
+        );
+        error.response = {
+          status: response.status,
+          statusText: response.statusText,
+        };
         throw error;
       }
 
@@ -74,11 +82,13 @@ export class LastFmClient {
         title: track.name,
         artist: track.artist?.name || artistName,
         album: track.album?.title,
-        duration: track.duration ? Math.floor(parseInt(track.duration, 10) / 1000) : undefined,
+        duration: track.duration
+          ? Math.floor(parseInt(track.duration, 10) / 1000)
+          : undefined,
         tags: track.toptags?.tag?.map((tag: any) => tag.name) || [],
         url: track.url,
         description: track.wiki?.content
-          ? track.wiki.content.substring(0, 500).replace(/<[^>]*>/g, '')
+          ? track.wiki.content.substring(0, 500).replace(/<[^>]*>/g, "")
           : undefined,
       };
 
@@ -97,18 +107,23 @@ export class LastFmClient {
 
     return retryWithBackoff(async () => {
       const params = new URLSearchParams({
-        method: 'artist.getInfo',
+        method: "artist.getInfo",
         api_key: this.apiKey,
         artist: artistName,
-        format: 'json',
+        format: "json",
       });
 
       const url = `${this.baseUrl}/?${params.toString()}`;
       const response = await fetch(url);
 
       if (!response.ok) {
-        const error: any = new Error(`Last.fm API error: ${response.status} ${response.statusText}`);
-        error.response = { status: response.status, statusText: response.statusText };
+        const error: any = new Error(
+          `Last.fm API error: ${response.status} ${response.statusText}`,
+        );
+        error.response = {
+          status: response.status,
+          statusText: response.statusText,
+        };
         throw error;
       }
 
@@ -123,17 +138,22 @@ export class LastFmClient {
         name: artist.name,
         genres: artist.tags?.tag?.map((tag: any) => tag.name) || [],
         bio: artist.bio?.content
-          ? artist.bio.content.substring(0, 1000).replace(/<[^>]*>/g, '')
+          ? artist.bio.content.substring(0, 1000).replace(/<[^>]*>/g, "")
           : undefined,
-        image: artist.image?.find((img: any) => img.size === 'large')?.['#text'],
+        image: artist.image?.find((img: any) => img.size === "large")?.[
+          "#text"
+        ],
         similarArtists: artist.similar?.artist?.map((a: any) => a.name) || [],
-        topTracks: artist.toptracks?.track?.map((track: any) => track.name) || [],
+        topTracks:
+          artist.toptracks?.track?.map((track: any) => track.name) || [],
         albums: artist.albums?.album?.map((album: any) => album.name) || [],
       };
 
       return artistInfo;
     }).catch((error) => {
-      logger.error(`Error fetching Last.fm artist info after retries: ${error}`);
+      logger.error(
+        `Error fetching Last.fm artist info after retries: ${error}`,
+      );
       return null;
     });
   }
@@ -141,24 +161,32 @@ export class LastFmClient {
   /**
    * Get album information
    */
-  async getAlbumInfo(albumName: string, artistName: string): Promise<AlbumInfo | null> {
+  async getAlbumInfo(
+    albumName: string,
+    artistName: string,
+  ): Promise<AlbumInfo | null> {
     await this.rateLimit();
 
     return retryWithBackoff(async () => {
       const params = new URLSearchParams({
-        method: 'album.getInfo',
+        method: "album.getInfo",
         api_key: this.apiKey,
         album: albumName,
         artist: artistName,
-        format: 'json',
+        format: "json",
       });
 
       const url = `${this.baseUrl}/?${params.toString()}`;
       const response = await fetch(url);
 
       if (!response.ok) {
-        const error: any = new Error(`Last.fm API error: ${response.status} ${response.statusText}`);
-        error.response = { status: response.status, statusText: response.statusText };
+        const error: any = new Error(
+          `Last.fm API error: ${response.status} ${response.statusText}`,
+        );
+        error.response = {
+          status: response.status,
+          statusText: response.statusText,
+        };
         throw error;
       }
 
@@ -172,12 +200,16 @@ export class LastFmClient {
       const albumInfo: AlbumInfo = {
         title: album.name,
         artist: album.artist || artistName,
-        year: album.wiki?.published ? parseInt(album.wiki.published.substring(0, 4), 10) : undefined,
+        year: album.wiki?.published
+          ? parseInt(album.wiki.published.substring(0, 4), 10)
+          : undefined,
         genre: album.tags?.tag?.map((tag: any) => tag.name) || [],
         tracks: album.tracks?.track?.map((track: any) => track.name) || [],
-        coverArt: album.image?.find((img: any) => img.size === 'large')?.['#text'],
+        coverArt: album.image?.find((img: any) => img.size === "large")?.[
+          "#text"
+        ],
         description: album.wiki?.content
-          ? album.wiki.content.substring(0, 500).replace(/<[^>]*>/g, '')
+          ? album.wiki.content.substring(0, 500).replace(/<[^>]*>/g, "")
           : undefined,
       };
 
@@ -188,4 +220,3 @@ export class LastFmClient {
     });
   }
 }
-

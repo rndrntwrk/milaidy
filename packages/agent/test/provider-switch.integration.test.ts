@@ -12,7 +12,10 @@ import path from "node:path";
 import type { AgentRuntime, UUID } from "@elizaos/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { req } from "../../../test/helpers/http";
+import { canBindLoopback } from "../../../test/helpers/loopback";
 import { startApiServer } from "../src/api/server";
+
+const describeLoopback = describe.skipIf(!(await canBindLoopback()));
 
 type ProviderSwitchConfigSnapshot = {
   connection?: unknown;
@@ -82,7 +85,7 @@ function createRuntimeMock(name: string, model: string): AgentRuntime {
   } as unknown as AgentRuntime;
 }
 
-describe("POST /api/provider/switch", () => {
+describeLoopback("POST /api/provider/switch", () => {
   let port: number;
   let close: () => Promise<void>;
   let tempDir: string;

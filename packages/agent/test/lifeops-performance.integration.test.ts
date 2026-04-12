@@ -6,6 +6,9 @@ import { LifeOpsRepository } from "../src/lifeops/repository";
 import { LifeOpsService } from "../src/lifeops/service";
 import { DatabaseSync } from "../src/test-utils/sqlite-compat";
 import { req } from "../../../test/helpers/http";
+import { canBindLoopback } from "../../../test/helpers/loopback";
+
+const describeLoopback = describe.skipIf(!(await canBindLoopback()));
 
 type SqlQuery = {
   queryChunks?: Array<{ value?: unknown }>;
@@ -114,7 +117,7 @@ async function createReminderDefinitionBatch(
   );
 }
 
-describe("life-ops performance", () => {
+describeLoopback("life-ops performance", () => {
   let port = 0;
   let closeServer: (() => Promise<void>) | null = null;
   let runtime: AgentRuntime;

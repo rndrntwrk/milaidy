@@ -13,7 +13,10 @@
  */
 import http from "node:http";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { canBindLoopback } from "../../../test/helpers/loopback";
 import { startApiServer } from "../src/api/server";
+
+const describeLoopback = describe.skipIf(!(await canBindLoopback()));
 
 // ---------------------------------------------------------------------------
 // HTTP helpers
@@ -107,7 +110,7 @@ function binaryReq(
 // Tests
 // ---------------------------------------------------------------------------
 
-describe("Agent Export/Import API (no runtime)", () => {
+describeLoopback("Agent Export/Import API (no runtime)", () => {
   let port: number;
   let close: () => Promise<void>;
 

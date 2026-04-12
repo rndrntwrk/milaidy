@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -40,11 +41,10 @@ const CHROME_PATH =
   process.env.MILADY_CHROME_PATH ??
   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const LIVE_TESTS_ENABLED = process.env.MILADY_LIVE_TEST === "1";
-const LIVE_BROWSER_SUITE_ENABLED =
-  process.env.MILADY_LIVE_BROWSER_SUITE === "1";
+const CHROME_AVAILABLE = existsSync(CHROME_PATH);
 const CAN_RUN =
   LIVE_TESTS_ENABLED &&
-  LIVE_BROWSER_SUITE_ENABLED &&
+  CHROME_AVAILABLE &&
   GROQ_API_KEY.length > 0 &&
   ELEVENLABS_API_KEY.length > 0;
 const PROFILE_FILTER = new Set(
@@ -382,9 +382,8 @@ describeIf(CAN_RUN)("Live QA checklist", () => {
           async () => {
             const docs = await listKnowledgeDocuments();
             return (
-              docs.find(
-                (document) =>
-                  knowledgeDocumentNames.includes(document.filename),
+              docs.find((document) =>
+                knowledgeDocumentNames.includes(document.filename),
               ) ?? null
             );
           },
@@ -393,12 +392,18 @@ describeIf(CAN_RUN)("Live QA checklist", () => {
         );
 
         expect(knowledgeDocumentNames).toContain(uploadedDocument.filename);
-        await waitFor(async () => {
-          const text = await page.evaluate(() => document.body.innerText ?? "");
-          return knowledgeDocumentNames.some((name) => text.includes(name))
-            ? true
-            : null;
-        }, 120_000, 1000);
+        await waitFor(
+          async () => {
+            const text = await page.evaluate(
+              () => document.body.innerText ?? "",
+            );
+            return knowledgeDocumentNames.some((name) => text.includes(name))
+              ? true
+              : null;
+          },
+          120_000,
+          1000,
+        );
 
         await waitFor(
           async () => {
@@ -484,6 +489,8 @@ describeIf(CAN_RUN)("Live QA checklist", () => {
 
         logQaStep(profile, "smoke tabs");
         await smokeTabs(page, profile);
+        logQaStep(profile, "wallet rpc provider roundtrip");
+        await qaWalletRpcRoundtrip(page, profile);
         logQaStep(profile, "verify character switch dance emote and voice");
         await qaCharacterSwitchAndDance(page, profile);
 
@@ -738,6 +745,66 @@ async function smokeTabs(page: Page, profile: Profile) {
     await tab.waitForReady();
     await saveScreenshot(page, profile, `tab-${tab.name}`);
   }
+}
+
+async function qaWalletRpcRoundtrip(page: Page, profile: Profile) {
+  const expectedSelections = {
+    evm: "infura",
+    bsc: "nodereal",
+    solana: "helius-birdeye",
+  } as const;
+
+  await navigate(page, `${UI_URL}/wallets`);
+  await waitForText(page, "Tokens", 30_000);
+  await clickSelector(page, '[data-testid="wallet-rpc-popup"]');
+  await waitForText(page, "Custom RPC", 30_000);
+  await clickByText(page, "Custom RPC");
+  await waitForText(page, "Custom RPC Providers", 30_000);
+  await clickByText(page, "Testnet");
+  await clickByText(page, "Infura");
+  await clickByText(page, "NodeReal");
+  await clickByText(page, "Helius + Birdeye");
+  await clickByText(page, "Save");
+
+  const savedConfig = await waitFor(
+    async () => {
+      const config = await apiJson<{
+        selectedRpcProviders?: {
+          evm?: string | null;
+          bsc?: string | null;
+          solana?: string | null;
+        };
+        walletNetwork?: string | null;
+      }>("/api/wallet/config");
+
+      if (
+        config.walletNetwork !== "testnet" ||
+        config.selectedRpcProviders?.evm !== expectedSelections.evm ||
+        config.selectedRpcProviders?.bsc !== expectedSelections.bsc ||
+        config.selectedRpcProviders?.solana !== expectedSelections.solana
+      ) {
+        return null;
+      }
+
+      return config;
+    },
+    45_000,
+    1000,
+  );
+
+  expect(savedConfig.walletNetwork).toBe("testnet");
+  expect(savedConfig.selectedRpcProviders).toMatchObject(expectedSelections);
+
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await navigate(page, `${UI_URL}/wallets`);
+  await waitForText(page, "Tokens", 30_000);
+  await clickSelector(page, '[data-testid="wallet-rpc-popup"]');
+  await waitForText(page, "Custom RPC Providers", 30_000);
+  await waitForText(page, "Infura API Key", 30_000);
+  await waitForText(page, "NodeReal BSC RPC URL", 30_000);
+  await waitForText(page, "Helius API Key", 30_000);
+  await waitForText(page, "Birdeye API Key", 30_000);
+  await saveScreenshot(page, profile, "wallet-rpc-roundtrip");
 }
 
 async function installQaInstrumentation(page: Page) {

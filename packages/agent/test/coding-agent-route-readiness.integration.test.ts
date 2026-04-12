@@ -8,7 +8,10 @@
 import type { AgentRuntime } from "@elizaos/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { req } from "../../../test/helpers/http";
+import { canBindLoopback } from "../../../test/helpers/loopback";
 import { startApiServer } from "../src/api/server";
+
+const describeLoopback = describe.skipIf(!(await canBindLoopback()));
 
 function createRuntimeWithoutCodingAgentServices(): AgentRuntime {
   return {
@@ -22,7 +25,7 @@ function createRuntimeWithoutCodingAgentServices(): AgentRuntime {
   } as unknown as AgentRuntime;
 }
 
-describe("Coding agent route readiness", () => {
+describeLoopback("Coding agent route readiness", () => {
   let server: {
     port: number;
     close: () => Promise<void>;

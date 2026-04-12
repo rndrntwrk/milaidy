@@ -1,122 +1,176 @@
 /**
  * Live E2E tests for API auth + LLM + wallet integration.
  *
- * These tests use REAL API keys for LLM providers and exercise the full
- * authenticated flow end-to-end: auth → onboarding → agent start → chat
- * → wallet operations → agent stop.
- *
- * Required env vars (loaded from repo root .env):
- *   OPENAI_API_KEY or ANTHROPIC_API_KEY or GROQ_API_KEY — at least one
- *   EVM_PRIVATE_KEY — for wallet operations
- *   SOLANA_PRIVATE_KEY — for wallet operations (optional; uses SOLANA_API_KEY fallback)
- *
- * Run:
- *   MILADY_LIVE_TEST=1 npx vitest run -c vitest.e2e.config.ts packages/agent/test/api-auth-live.e2e.test.ts
+ * These tests exercise the real authenticated flow end-to-end:
+ * auth -> onboarding -> agent start -> chat -> wallet operations -> agent stop.
  */
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { describeIf } from "../../../test/helpers/conditional-tests.ts";
 import {
+  isLiveTestEnabled,
+  selectLiveProvider,
+} from "../../../test/helpers/live-provider";
+import { createRealTestRuntime } from "../../../test/helpers/real-runtime";
+import { saveEnv } from "../../../test/helpers/test-utils";
+import {
   createConversation,
   postConversationMessage,
   req,
 } from "../../../test/helpers/http";
+import { createElizaPlugin } from "../src/runtime/eliza-plugin";
 
-// Load .env from the eliza workspace root
 const envPath = path.resolve(import.meta.dirname, "..", "..", "..", ".env");
 try {
   const { config } = await import("dotenv");
   config({ path: envPath });
 } catch {
-  // dotenv may not be available — keys must be in process.env already
+  // dotenv may not be available; keys must already be in process.env.
 }
 
-// Normalize Solana key name
-if (!process.env.SOLANA_PRIVATE_KEY && process.env.SOLANA_API_KEY) {
-  process.env.SOLANA_PRIVATE_KEY = process.env.SOLANA_API_KEY;
+const LIVE_PROVIDER = selectLiveProvider("openai") ?? selectLiveProvider();
+const CAN_RUN = isLiveTestEnabled() && Boolean(LIVE_PROVIDER);
+
+type StartedLiveServer = {
+  close: () => Promise<void>;
+  port: number;
+};
+
+async function ensureWalletKeys(): Promise<void> {
+  if (!process.env.SOLANA_PRIVATE_KEY && process.env.SOLANA_API_KEY) {
+    process.env.SOLANA_PRIVATE_KEY = process.env.SOLANA_API_KEY;
+  }
+  if (
+    process.env.EVM_PRIVATE_KEY &&
+    !process.env.EVM_PRIVATE_KEY.startsWith("0x")
+  ) {
+    process.env.EVM_PRIVATE_KEY = `0x${process.env.EVM_PRIVATE_KEY}`;
+  }
+
+  const { deriveEvmAddress, deriveSolanaAddress, generateWalletKeys } =
+    await import("../src/api/wallet");
+
+  let generatedKeys: {
+    evmPrivateKey: string;
+    solanaPrivateKey: string;
+  } | null = null;
+
+  try {
+    if (process.env.EVM_PRIVATE_KEY?.trim()) {
+      deriveEvmAddress(process.env.EVM_PRIVATE_KEY);
+    } else {
+      throw new Error("missing EVM key");
+    }
+  } catch {
+    generatedKeys ??= generateWalletKeys();
+    process.env.EVM_PRIVATE_KEY = generatedKeys.evmPrivateKey;
+  }
+
+  try {
+    if (process.env.SOLANA_PRIVATE_KEY?.trim()) {
+      deriveSolanaAddress(process.env.SOLANA_PRIVATE_KEY);
+    } else {
+      throw new Error("missing Solana key");
+    }
+  } catch {
+    generatedKeys ??= generateWalletKeys();
+    process.env.SOLANA_PRIVATE_KEY = generatedKeys.solanaPrivateKey;
+  }
 }
-// Normalize EVM key prefix
-if (
-  process.env.EVM_PRIVATE_KEY &&
-  !process.env.EVM_PRIVATE_KEY.startsWith("0x")
-) {
-  process.env.EVM_PRIVATE_KEY = `0x${process.env.EVM_PRIVATE_KEY}`;
+
+async function startLiveServer(args: {
+  apiToken: string;
+  exportToken?: string;
+}): Promise<{ restore: () => Promise<void>; server: StartedLiveServer }> {
+  const envBackup = saveEnv(
+    ...Object.keys(LIVE_PROVIDER?.env ?? {}),
+    "ELIZA_API_TOKEN",
+    "ELIZA_WALLET_EXPORT_TOKEN",
+    "ELIZA_PAIRING_DISABLED",
+    "ELIZA_API_BIND",
+    "EVM_PRIVATE_KEY",
+    "SOLANA_PRIVATE_KEY",
+    "SOLANA_API_KEY",
+    "PGLITE_DATA_DIR",
+  );
+
+  for (const [key, value] of Object.entries(LIVE_PROVIDER?.env ?? {})) {
+    process.env[key] = value;
+  }
+  process.env.ELIZA_API_TOKEN = args.apiToken;
+  if (args.exportToken) {
+    process.env.ELIZA_WALLET_EXPORT_TOKEN = args.exportToken;
+  } else {
+    delete process.env.ELIZA_WALLET_EXPORT_TOKEN;
+  }
+  delete process.env.ELIZA_PAIRING_DISABLED;
+
+  await ensureWalletKeys();
+
+  const runtimeResult = await createRealTestRuntime({
+    withLLM: true,
+    preferredProvider: LIVE_PROVIDER?.name,
+    plugins: [createElizaPlugin({ agentId: "main" })],
+  });
+  const { startApiServer } = await import("../src/api/server");
+  const server = await startApiServer({
+    port: 0,
+    runtime: runtimeResult.runtime,
+    skipDeferredStartupWork: true,
+  });
+
+  return {
+    server,
+    restore: async () => {
+      await server.close();
+      await runtimeResult.cleanup();
+      envBackup.restore();
+    },
+  };
 }
 
-const hasLLM =
-  Boolean(process.env.OPENAI_API_KEY?.trim()) ||
-  Boolean(process.env.ANTHROPIC_API_KEY?.trim()) ||
-  Boolean(process.env.GROQ_API_KEY?.trim());
-const hasEvmKey = Boolean(process.env.EVM_PRIVATE_KEY?.trim());
-const _hasSolKey = Boolean(process.env.SOLANA_PRIVATE_KEY?.trim());
-const canRun = hasLLM && hasEvmKey;
-
-// ═══════════════════════════════════════════════════════════════════════════
-// 1. LIVE: AUTHENTICATED FULL FLOW (Auth + Onboarding + Wallet + LLM Chat)
-// ═══════════════════════════════════════════════════════════════════════════
-
-describeIf(canRun)(
+describeIf(CAN_RUN)(
   "Live: Authenticated full flow (LLM + wallet + auth)",
   () => {
     const API_TOKEN = `live-e2e-test-token-${Date.now()}`;
     const EXPORT_TOKEN = `live-wallet-export-token-${Date.now()}`;
-    let port: number;
-    let close: () => Promise<void>;
-    const savedEnv: Record<string, string | undefined> = {};
+    let server: StartedLiveServer | null = null;
+    let restore: (() => Promise<void>) | null = null;
 
     const authHeaders = { Authorization: `Bearer ${API_TOKEN}` };
 
     beforeAll(async () => {
-      // Save env
-      const envKeys = [
-        "ELIZA_API_TOKEN",
-        "ELIZA_WALLET_EXPORT_TOKEN",
-        "ELIZA_PAIRING_DISABLED",
-        "ELIZA_API_BIND",
-      ];
-      for (const key of envKeys) {
-        savedEnv[key] = process.env[key];
-      }
-
-      // Configure auth
-      process.env.ELIZA_API_TOKEN = API_TOKEN;
-      process.env.ELIZA_WALLET_EXPORT_TOKEN = EXPORT_TOKEN;
-      delete process.env.ELIZA_PAIRING_DISABLED;
-
-      const { startApiServer } = await import("../src/api/server");
-      const server = await startApiServer({ port: 0 });
-      port = server.port;
-      close = server.close;
-    }, 30_000);
+      const started = await startLiveServer({
+        apiToken: API_TOKEN,
+        exportToken: EXPORT_TOKEN,
+      });
+      server = started.server;
+      restore = started.restore;
+    }, 120_000);
 
     afterAll(async () => {
-      await close();
-      for (const [key, val] of Object.entries(savedEnv)) {
-        if (val === undefined) delete process.env[key];
-        else process.env[key] = val;
-      }
+      await restore?.();
     });
 
-    // ── Step 1: Auth check ─────────────────────────────────────────────────
-
     it("step 1: auth status reports required + pairing enabled", async () => {
-      const { status, data } = await req(port, "GET", "/api/auth/status");
+      const { status, data } = await req(
+        server?.port ?? 0,
+        "GET",
+        "/api/auth/status",
+      );
       expect(status).toBe(200);
       expect(data.required).toBe(true);
       expect(data.pairingEnabled).toBe(true);
-      console.log("  Auth required: true, pairing: true");
     });
 
     it("step 2: unauthenticated requests are blocked", async () => {
-      const { status } = await req(port, "GET", "/api/status");
+      const { status } = await req(server?.port ?? 0, "GET", "/api/status");
       expect(status).toBe(401);
     });
 
-    // ── Step 3: Authenticated status ───────────────────────────────────────
-
     it("step 3: authenticated status works", async () => {
       const { status, data } = await req(
-        port,
+        server?.port ?? 0,
         "GET",
         "/api/status",
         undefined,
@@ -124,14 +178,11 @@ describeIf(canRun)(
       );
       expect(status).toBe(200);
       expect(typeof data.agentName).toBe("string");
-      console.log(`  Agent: ${data.agentName}, state: ${data.state}`);
     });
-
-    // ── Step 4: Wallet operations with auth ────────────────────────────────
 
     it("step 4: wallet addresses via auth", async () => {
       const { status, data } = await req(
-        port,
+        server?.port ?? 0,
         "GET",
         "/api/wallet/addresses",
         undefined,
@@ -142,16 +193,11 @@ describeIf(canRun)(
       const addr = data.evmAddress as string;
       expect(addr.startsWith("0x")).toBe(true);
       expect(addr.length).toBe(42);
-      console.log(`  EVM address: ${addr}`);
-
-      if (data.solanaAddress) {
-        console.log(`  Solana address: ${data.solanaAddress}`);
-      }
     });
 
     it("step 5: wallet config via auth", async () => {
       const { status, data } = await req(
-        port,
+        server?.port ?? 0,
         "GET",
         "/api/wallet/config",
         undefined,
@@ -159,14 +205,13 @@ describeIf(canRun)(
       );
       expect(status).toBe(200);
       expect(Array.isArray(data.evmChains)).toBe(true);
-      expect(typeof data.alchemyKeySet).toBe("boolean");
+      expect(typeof data.evmBalanceReady).toBe("boolean");
+      expect(typeof data.walletSource).toBe("string");
     });
-
-    // ── Step 6: Onboarding with auth ──────────────────────────────────────
 
     it("step 6: onboarding with auth", async () => {
       const { status, data } = await req(
-        port,
+        server?.port ?? 0,
         "POST",
         "/api/onboarding",
         {
@@ -178,14 +223,11 @@ describeIf(canRun)(
       );
       expect(status).toBe(200);
       expect(data.ok).toBe(true);
-      console.log("  Onboarding complete");
     });
-
-    // ── Step 7: Agent lifecycle with auth ──────────────────────────────────
 
     it("step 7: agent start with auth", async () => {
       const { status, data } = await req(
-        port,
+        server?.port ?? 0,
         "POST",
         "/api/agent/start",
         undefined,
@@ -195,64 +237,45 @@ describeIf(canRun)(
       expect(data.ok ?? data.state).toBeTruthy();
 
       const { data: statusData } = await req(
-        port,
+        server?.port ?? 0,
         "GET",
         "/api/status",
         undefined,
         authHeaders,
       );
       expect(statusData.state).toBe("paused");
-      console.log("  Agent started");
     });
 
-    // ── Step 8: Chat with auth (requires live LLM runtime) ─────────────────
-    // Chat requires a full elizaOS runtime with model plugins. When the server
-    // is started via startApiServer() without a runtime, the agent "runs" in
-    // a lightweight state-machine mode and chat returns 503. We verify auth
-    // is enforced (no 401) and accept 200 or 503 depending on runtime.
-
-    it("step 8: chat with auth (auth enforced, LLM optional)", async () => {
+    it("step 8: chat with auth uses the real runtime", async () => {
       const { conversationId } = await createConversation(
-        port,
+        server?.port ?? 0,
         { title: "Auth chat" },
         authHeaders,
       );
 
-      // Without auth → 401
       const { status: noAuth } = await postConversationMessage(
-        port,
+        server?.port ?? 0,
         conversationId,
-        {
-          text: "hello",
-        },
+        { text: "hello" },
       );
       expect(noAuth).toBe(401);
 
-      // With auth → 200 (runtime loaded) or 503 (no runtime)
       const { status, data } = await postConversationMessage(
-        port,
+        server?.port ?? 0,
         conversationId,
-        { text: "Say 'auth-ok' and nothing else." },
+        { text: "Say auth-ok and nothing else." },
         authHeaders,
+        { timeoutMs: 120_000 },
       );
-      expect([200, 503]).toContain(status);
-
-      if (status === 200) {
-        const text = (data.text ?? data.response ?? "") as string;
-        expect(text.length).toBeGreaterThan(0);
-        console.log(`  Chat response: "${text.slice(0, 100)}"`);
-      } else {
-        console.log(
-          "  Chat: 503 (no runtime loaded — auth correctly enforced)",
-        );
-      }
-    }, 60_000);
-
-    // ── Step 9: Wallet generate + export with auth ─────────────────────────
+      expect(status).toBe(200);
+      const text = String(data.text ?? data.response ?? "");
+      expect(text.length).toBeGreaterThan(0);
+      expect(text.toLowerCase()).toContain("auth");
+    }, 120_000);
 
     it("step 9: wallet generate + export round-trip with auth", async () => {
       const { status: genStatus, data: genData } = await req(
-        port,
+        server?.port ?? 0,
         "POST",
         "/api/wallet/generate",
         { chain: "evm" },
@@ -262,47 +285,41 @@ describeIf(canRun)(
       expect(genData.ok).toBe(true);
 
       const wallets = genData.wallets as Array<{
-        chain: string;
         address: string;
+        chain: string;
       }>;
-      expect(wallets.length).toBe(1);
+      expect(wallets).toHaveLength(1);
       expect(wallets[0].chain).toBe("evm");
-      const newAddr = wallets[0].address;
 
-      // Verify addresses endpoint reflects the new key
       const { data: addrs } = await req(
-        port,
+        server?.port ?? 0,
         "GET",
         "/api/wallet/addresses",
         undefined,
         authHeaders,
       );
       expect((addrs.evmAddress as string).toLowerCase()).toBe(
-        newAddr.toLowerCase(),
+        wallets[0].address.toLowerCase(),
       );
 
-      // Export and verify
       const { data: exported } = await req(
-        port,
+        server?.port ?? 0,
         "POST",
         "/api/wallet/export",
         { confirm: true, exportToken: EXPORT_TOKEN },
         authHeaders,
       );
       const evm = exported.evm as {
-        privateKey: string;
         address: string | null;
+        privateKey: string;
       };
-      expect(evm.address?.toLowerCase()).toBe(newAddr.toLowerCase());
+      expect(evm.address?.toLowerCase()).toBe(wallets[0].address.toLowerCase());
       expect(evm.privateKey.startsWith("0x")).toBe(true);
-      console.log(`  Generated + exported EVM wallet: ${newAddr}`);
     });
-
-    // ── Step 10: Agent stop with auth ──────────────────────────────────────
 
     it("step 10: agent stop with auth", async () => {
       const { status, data } = await req(
-        port,
+        server?.port ?? 0,
         "POST",
         "/api/agent/stop",
         undefined,
@@ -312,186 +329,171 @@ describeIf(canRun)(
       expect(data.ok).toBe(true);
 
       const { data: statusData } = await req(
-        port,
+        server?.port ?? 0,
         "GET",
         "/api/status",
         undefined,
         authHeaders,
       );
       expect(statusData.state).toBe("stopped");
-      console.log("  Agent stopped");
     });
   },
 );
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 2. LIVE: TOKEN HEADER VARIANTS WITH LLM
-// ═══════════════════════════════════════════════════════════════════════════
-
-describeIf(canRun)("Live: Token header variants with LLM", () => {
+describeIf(CAN_RUN)("Live: Token header variants with LLM", () => {
   const API_TOKEN = `header-variant-token-${Date.now()}`;
-  let port: number;
-  let close: () => Promise<void>;
+  let server: StartedLiveServer | null = null;
+  let restore: (() => Promise<void>) | null = null;
 
   beforeAll(async () => {
-    process.env.ELIZA_API_TOKEN = API_TOKEN;
-    const { startApiServer } = await import("../src/api/server");
-    const server = await startApiServer({ port: 0 });
-    port = server.port;
-    close = server.close;
-  }, 30_000);
+    const started = await startLiveServer({ apiToken: API_TOKEN });
+    server = started.server;
+    restore = started.restore;
+  }, 120_000);
 
   afterAll(async () => {
-    await close();
-    delete process.env.ELIZA_API_TOKEN;
+    await restore?.();
   });
 
-  it("Bearer token works for chat (auth enforced)", async () => {
-    // Ensure agent is running
-    await req(port, "POST", "/api/agent/start", undefined, {
+  it("Bearer token works for chat", async () => {
+    await req(server?.port ?? 0, "POST", "/api/agent/start", undefined, {
       Authorization: `Bearer ${API_TOKEN}`,
     });
 
     const { conversationId } = await createConversation(
-      port,
+      server?.port ?? 0,
       { title: "Header variants" },
-      {
-        Authorization: `Bearer ${API_TOKEN}`,
-      },
+      { Authorization: `Bearer ${API_TOKEN}` },
     );
 
-    // Without auth → 401
     const { status: noAuth } = await postConversationMessage(
-      port,
+      server?.port ?? 0,
       conversationId,
       { text: "hello" },
     );
     expect(noAuth).toBe(401);
 
-    // With auth → 200 or 503 (no runtime in lightweight server mode)
     const { status, data } = await postConversationMessage(
-      port,
+      server?.port ?? 0,
       conversationId,
       { text: "Say hello" },
       { Authorization: `Bearer ${API_TOKEN}` },
+      { timeoutMs: 120_000 },
     );
-    expect([200, 503]).toContain(status);
+    expect(status).toBe(200);
+    expect(String(data.text ?? data.response ?? "")).toBeTruthy();
 
-    if (status === 200) {
-      expect((data.text ?? data.response ?? "") as string).toBeTruthy();
-    }
-
-    await req(port, "POST", "/api/agent/stop", undefined, {
+    await req(server?.port ?? 0, "POST", "/api/agent/stop", undefined, {
       Authorization: `Bearer ${API_TOKEN}`,
     });
-  }, 60_000);
+  }, 120_000);
 
   it("X-Eliza-Token works for status", async () => {
-    const { status } = await req(port, "GET", "/api/status", undefined, {
-      "X-Eliza-Token": API_TOKEN,
-    });
+    const { status } = await req(
+      server?.port ?? 0,
+      "GET",
+      "/api/status",
+      undefined,
+      {
+        "X-Eliza-Token": API_TOKEN,
+      },
+    );
     expect(status).toBe(200);
   });
 
   it("X-Api-Key works for status", async () => {
-    const { status } = await req(port, "GET", "/api/status", undefined, {
-      "X-Api-Key": API_TOKEN,
-    });
+    const { status } = await req(
+      server?.port ?? 0,
+      "GET",
+      "/api/status",
+      undefined,
+      {
+        "X-Api-Key": API_TOKEN,
+      },
+    );
     expect(status).toBe(200);
   });
 });
 
-// ═══════════════════════════════════════════════════════════════════════════
-// 3. LIVE: AUTH + CORS + WALLET COMBINED
-// ═══════════════════════════════════════════════════════════════════════════
-
-describeIf(canRun)("Live: Auth + CORS + wallet combined", () => {
+describeIf(CAN_RUN)("Live: Auth + CORS + wallet combined", () => {
   const API_TOKEN = `combined-test-token-${Date.now()}`;
   const EXPORT_TOKEN = `combined-wallet-export-token-${Date.now()}`;
-  let port: number;
-  let close: () => Promise<void>;
-  let savedExportToken: string | undefined;
+  let server: StartedLiveServer | null = null;
+  let restore: (() => Promise<void>) | null = null;
 
   beforeAll(async () => {
-    savedExportToken = process.env.ELIZA_WALLET_EXPORT_TOKEN;
-    process.env.ELIZA_API_TOKEN = API_TOKEN;
-    process.env.ELIZA_WALLET_EXPORT_TOKEN = EXPORT_TOKEN;
-    const { startApiServer } = await import("../src/api/server");
-    const server = await startApiServer({ port: 0 });
-    port = server.port;
-    close = server.close;
-  }, 30_000);
+    const started = await startLiveServer({
+      apiToken: API_TOKEN,
+      exportToken: EXPORT_TOKEN,
+    });
+    server = started.server;
+    restore = started.restore;
+  }, 120_000);
 
   afterAll(async () => {
-    await close();
-    delete process.env.ELIZA_API_TOKEN;
-    if (savedExportToken === undefined) {
-      delete process.env.ELIZA_WALLET_EXPORT_TOKEN;
-    } else {
-      process.env.ELIZA_WALLET_EXPORT_TOKEN = savedExportToken;
-    }
+    await restore?.();
   });
 
   it("localhost origin + auth = wallet operations work", async () => {
-    const h = {
+    const headers = {
       Authorization: `Bearer ${API_TOKEN}`,
-      Origin: `http://localhost:${port}`,
+      Origin: `http://localhost:${server?.port ?? 0}`,
     };
 
     const { status, data } = await req(
-      port,
+      server?.port ?? 0,
       "GET",
       "/api/wallet/addresses",
       undefined,
-      h,
+      headers,
     );
     expect(status).toBe(200);
     expect(data.evmAddress).toBeTruthy();
   });
 
   it("external origin blocked even with valid auth", async () => {
-    const h = {
-      Authorization: `Bearer ${API_TOKEN}`,
-      Origin: "https://attacker.example.com",
-    };
-
     const { status } = await req(
-      port,
+      server?.port ?? 0,
       "GET",
       "/api/wallet/addresses",
       undefined,
-      h,
+      {
+        Authorization: `Bearer ${API_TOKEN}`,
+        Origin: "https://attacker.example.com",
+      },
     );
     expect(status).toBe(403);
   });
 
-  it("wallet import + export through auth works with live keys", async () => {
+  it("wallet import + export through auth works with real keys", async () => {
     const auth = { Authorization: `Bearer ${API_TOKEN}` };
+    const importedKey = process.env.EVM_PRIVATE_KEY;
 
-    // Import the live EVM key
     const { status: importStatus, data: importData } = await req(
-      port,
+      server?.port ?? 0,
       "POST",
       "/api/wallet/import",
       {
         chain: "evm",
-        privateKey: process.env.EVM_PRIVATE_KEY,
+        privateKey: importedKey,
       },
       auth,
     );
     expect(importStatus).toBe(200);
     expect(importData.ok).toBe(true);
 
-    // Export and verify round-trip
     const { data: exported } = await req(
-      port,
+      server?.port ?? 0,
       "POST",
       "/api/wallet/export",
       { confirm: true, exportToken: EXPORT_TOKEN },
       auth,
     );
-    const evm = exported.evm as { privateKey: string; address: string | null };
-    expect(evm.privateKey).toBe(process.env.EVM_PRIVATE_KEY);
+    const evm = exported.evm as {
+      address: string | null;
+      privateKey: string;
+    };
+    expect(evm.privateKey).toBe(importedKey);
     expect(evm.address).toBe(importData.address);
   });
 });

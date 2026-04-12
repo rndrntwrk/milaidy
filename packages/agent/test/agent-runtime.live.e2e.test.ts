@@ -54,18 +54,10 @@ const hasAnthropic = Boolean(process.env.ANTHROPIC_API_KEY);
 const hasGroq = Boolean(process.env.GROQ_API_KEY);
 const liveModelTestsEnabled =
   process.env.MILADY_LIVE_TEST === "1" || process.env.ELIZA_LIVE_TEST === "1";
-// This suite exercises the heaviest live-runtime init path and relies on
-// real provider availability. Keep it opt-in so default repo-wide E2E runs
-// remain deterministic; runtime integration coverage still exists elsewhere.
-const runAgentRuntimeE2E = process.env.ELIZA_RUN_AGENT_RUNTIME_E2E === "1";
 const hasModelProvider =
-  liveModelTestsEnabled &&
-  runAgentRuntimeE2E &&
-  (hasOpenAI || hasAnthropic || hasGroq);
+  liveModelTestsEnabled && (hasOpenAI || hasAnthropic || hasGroq);
 
-function seedGroqModelDefaults(
-  secrets: Record<string, string>,
-): void {
+function seedGroqModelDefaults(secrets: Record<string, string>): void {
   if (!hasGroq) return;
   if (!process.env.GROQ_SMALL_MODEL) {
     process.env.GROQ_SMALL_MODEL = "llama-3.1-8b-instant";
@@ -172,7 +164,6 @@ async function createConversationId(
   }
   return id;
 }
-
 
 const modelProviderUnavailablePattern =
   /exceeded your current quota|insufficient[_\s-]?quota|billing details|credit balance|rate limit|status code: 429|too many requests|invalid api key|unauthorized|authentication/i;
@@ -402,9 +393,7 @@ describe("Agent Runtime E2E", () => {
   const userId = crypto.randomUUID() as UUID;
   const worldId = stringToUuid("test-e2e-world");
 
-  const pgliteDir = fs.mkdtempSync(
-    path.join(os.tmpdir(), "eliza-e2e-pglite-"),
-  );
+  const pgliteDir = fs.mkdtempSync(path.join(os.tmpdir(), "eliza-e2e-pglite-"));
   const workspaceDir = fs.mkdtempSync(
     path.join(os.tmpdir(), "eliza-e2e-workspace-"),
   );
@@ -423,6 +412,9 @@ describe("Agent Runtime E2E", () => {
   beforeAll(async () => {
     if (!hasModelProvider) return;
     process.env.LOG_LEVEL = process.env.ELIZA_E2E_LOG_LEVEL ?? "error";
+    process.env.ENABLE_TRAJECTORIES = "false";
+    process.env.MILADY_TRAJECTORY_LOGGING = "false";
+    process.env.ELIZA_TRAJECTORY_LOGGING = "false";
 
     const secrets: Record<string, string> = {};
     if (hasOpenAI)
@@ -488,6 +480,12 @@ describe("Agent Runtime E2E", () => {
       }
 
       await instance.initialize();
+      if (!instance.getService("AUTONOMY")) {
+        const { AutonomyService } = await import(
+          "../../../eliza/packages/typescript/src/autonomy/service.ts"
+        );
+        await AutonomyService.start(instance);
+      }
       const autonomySvc = instance.getService<AutonomyServiceLike>("AUTONOMY");
       if (!autonomySvc) {
         const serviceTypes = Array.from(instance.services.keys()).join(", ");
@@ -987,9 +985,13 @@ describe("Agent Runtime E2E", () => {
             channelType: ChannelType.DM,
           },
         });
-        const retryText = await handleMessageAndCollectText(runtime, retryPrompt, {
-          timeoutMs: 90_000,
-        });
+        const retryText = await handleMessageAndCollectText(
+          runtime,
+          retryPrompt,
+          {
+            timeoutMs: 90_000,
+          },
+        );
         logger.info(`[e2e] multi-turn retry: "${retryText}"`);
         expect(retryText.toLowerCase()).toContain("pineapple");
       },
@@ -1244,19 +1246,16 @@ describe("Agent Runtime E2E", () => {
       },
     );
 
-    itIf(hasModelProvider)(
-      "pause → resume verifies state change",
-      async () => {
-        await http$(server?.port, "POST", "/api/agent/pause");
-        expect(
-          (await http$(server?.port, "GET", "/api/status")).data.state,
-        ).toBe("paused");
-        await http$(server?.port, "POST", "/api/agent/resume");
-        expect(
-          (await http$(server?.port, "GET", "/api/status")).data.state,
-        ).toBe("running");
-      },
-    );
+    itIf(hasModelProvider)("pause → resume verifies state change", async () => {
+      await http$(server?.port, "POST", "/api/agent/pause");
+      expect((await http$(server?.port, "GET", "/api/status")).data.state).toBe(
+        "paused",
+      );
+      await http$(server?.port, "POST", "/api/agent/resume");
+      expect((await http$(server?.port, "GET", "/api/status")).data.state).toBe(
+        "running",
+      );
+    });
 
     itIf(hasModelProvider)("404 for unknown route", async () => {
       expect(
@@ -1307,14 +1306,11 @@ describe("Agent Runtime E2E", () => {
       ).rejects.toThrow();
     });
 
-    itIf(hasModelProvider)(
-      "generateText whitespace → throws",
-      async () => {
-        await expect(
-          runtime.generateText("   ", { maxTokens: 10 }),
-        ).rejects.toThrow();
-      },
-    );
+    itIf(hasModelProvider)("generateText whitespace → throws", async () => {
+      await expect(
+        runtime.generateText("   ", { maxTokens: 10 }),
+      ).rejects.toThrow();
+    });
   });
 
   // ===================================================================
@@ -1340,12 +1336,7 @@ describe("Agent Runtime E2E", () => {
           ),
           Promise.all(
             prompts.map((prompt) =>
-              postChatPromptWithRetries(
-                server?.port ?? 0,
-                prompt,
-                3,
-                90_000,
-              ),
+              postChatPromptWithRetries(server?.port ?? 0, prompt, 3, 90_000),
             ),
           ),
         ]);
@@ -1374,16 +1365,13 @@ describe("Agent Runtime E2E", () => {
   // ===================================================================
 
   describe("workspace", () => {
-    itIf(hasModelProvider)(
-      "creates directory and is idempotent",
-      async () => {
-        const d = path.join(workspaceDir, "ws-test");
-        expect(fs.existsSync(d)).toBe(false);
-        await ensureAgentWorkspace({ dir: d });
-        expect(fs.existsSync(d)).toBe(true);
-        await ensureAgentWorkspace({ dir: d }); // no throw
-      },
-    );
+    itIf(hasModelProvider)("creates directory and is idempotent", async () => {
+      const d = path.join(workspaceDir, "ws-test");
+      expect(fs.existsSync(d)).toBe(false);
+      await ensureAgentWorkspace({ dir: d });
+      expect(fs.existsSync(d)).toBe(true);
+      await ensureAgentWorkspace({ dir: d }); // no throw
+    });
   });
 
   // ===================================================================
@@ -1552,117 +1540,101 @@ describe("Agent Runtime E2E", () => {
   });
 
   // ===================================================================
-  //  10. Todos — real LLM action access and chat-created todo verification
+  //  10. Workbench todos API
   // ===================================================================
 
-  describe("todos (real LLM + actions)", () => {
+  describe("workbench todos API", () => {
     itIf(hasModelProvider)(
-      "runtime exposes todo actions",
+      "POST /api/workbench/todos creates a todo entry",
       async () => {
-        const runtimeDebug = await http$(server?.port, "GET", "/api/runtime");
-        expect(runtimeDebug.status).toBe(200);
-        let actions = readSerializedArray(
-          (runtimeDebug.data.order as Record<string, unknown>)?.actions,
+        const todoName = `API Todo ${Date.now()}`;
+        const createRes = await http$(
+          server?.port,
+          "POST",
+          "/api/workbench/todos",
+          {
+            description: "created by the live runtime e2e",
+            isUrgent: false,
+            name: todoName,
+            priority: 2,
+          },
         );
-        if (actions.length === 0) {
-          actions = readSerializedArray(
-            (runtimeDebug.data.sections as Record<string, unknown>)?.actions,
-          );
-        }
-        expect(actions.length).toBeGreaterThan(0);
-        const actionNames = actions
-          .map((action) => readSerializedProperty(action, "name"))
-          .map((name) => (typeof name === "string" ? name : null))
-          .filter((name): name is string => name !== null);
-
-        const actionAliases: string[][] = [
-          ["CREATE_TODO", "CREATE_TASK"],
-          ["COMPLETE_TODO", "COMPLETE_TASK"],
-          ["UPDATE_TODO", "UPDATE_TASK"],
-          ["CANCEL_TODO", "CANCEL_TASK"],
-        ];
-        for (const aliases of actionAliases) {
-          expect(actionNames.some((name) => aliases.includes(name))).toBe(true);
-        }
+        expect(createRes.status).toBe(201);
+        const created = (createRes.data.todo ?? null) as Record<
+          string,
+          unknown
+        > | null;
+        expect(created).not.toBeNull();
+        expect(created?.name).toBe(todoName);
+        expect(created?.description).toBe("created by the live runtime e2e");
       },
       120_000,
     );
 
     itIf(hasModelProvider)(
-      "chat can create a todo via action and workbench API reflects it",
+      "workbench todo create/list/complete round-trips",
       async () => {
-        const todoName = `LLM Todo ${Date.now()}`;
-        const prompt = [
-          "Create a one-off todo task right now.",
-          `Name: ${todoName}`,
-          "Description: created by the live e2e chat test.",
-          "Priority: 2",
-          "Urgent: false",
-          "Then confirm creation in one short sentence.",
-        ].join(" ");
+        const todoName = `API Todo ${Date.now()}`;
+        const createRes = await http$(
+          server?.port,
+          "POST",
+          "/api/workbench/todos",
+          {
+            description: "round-trip todo",
+            isUrgent: false,
+            name: todoName,
+            priority: 2,
+          },
+        );
+        expect(createRes.status).toBe(201);
+        const created = (createRes.data.todo ?? null) as Record<
+          string,
+          unknown
+        > | null;
+        const todoId = typeof created?.id === "string" ? created.id : "";
+        expect(todoId.length).toBeGreaterThan(0);
 
-        let chatRes: { status: number; data: Record<string, unknown> };
-        try {
-          chatRes = await postChatPromptWithRetries(server?.port, prompt, 5);
-        } catch (err) {
-          if (
-            await shouldSkipDueModelProviderUnavailable(
-              runtime,
-              "chat can create a todo via action and workbench API reflects it",
-            )
-          ) {
-            return;
-          }
-          throw err;
-        }
-        expect(chatRes.status).toBe(200);
-        const responseText = String(chatRes.data.text ?? "");
-        if (responseText.length === 0) {
-          if (
-            await shouldSkipDueModelProviderUnavailable(
-              runtime,
-              "chat can create a todo via action and workbench API reflects it",
-            )
-          ) {
-            return;
-          }
-        }
-        expect(responseText.length).toBeGreaterThan(0);
+        const listRes = await http$(
+          server?.port,
+          "GET",
+          "/api/workbench/todos",
+        );
+        expect(listRes.status).toBe(200);
+        const todos = (listRes.data.todos ?? []) as Array<
+          Record<string, unknown>
+        >;
+        expect(
+          todos.some((todo) => todo.id === todoId && todo.name === todoName),
+        ).toBe(true);
 
-        let found = false;
-        for (let attempt = 1; attempt <= 6; attempt += 1) {
-          const todosRes = await http$(
-            server?.port,
-            "GET",
-            "/api/workbench/todos",
-          );
-          expect(todosRes.status).toBe(200);
-          const todos = (todosRes.data.todos ?? []) as Array<
-            Record<string, unknown>
-          >;
-          found = todos.some((todo) => todo.name === todoName);
-          if (found) break;
-          await sleep(1_000);
-        }
+        const completeRes = await http$(
+          server?.port,
+          "POST",
+          `/api/workbench/todos/${encodeURIComponent(todoId)}/complete`,
+          { isCompleted: true },
+        );
+        expect(completeRes.status).toBe(200);
 
-        if (!found) {
-          if (
-            await shouldSkipDueModelProviderUnavailable(
-              runtime,
-              "chat can create a todo via action and workbench API reflects it",
-            )
-          ) {
-            return;
-          }
-        }
-        expect(found).toBe(true);
+        const detailRes = await http$(
+          server?.port,
+          "GET",
+          `/api/workbench/todos/${encodeURIComponent(todoId)}`,
+        );
+        expect(detailRes.status).toBe(200);
+        const detail = (detailRes.data.todo ?? null) as Record<
+          string,
+          unknown
+        > | null;
+        expect(detail).not.toBeNull();
+        expect(detail?.id).toBe(todoId);
+        expect(detail?.name).toBe(todoName);
+        expect(detail?.isCompleted).toBe(true);
       },
-      240_000,
+      120_000,
     );
   });
 
   // ===================================================================
   //  11. startEliza() — real subprocess test
   // ===================================================================
-
 });

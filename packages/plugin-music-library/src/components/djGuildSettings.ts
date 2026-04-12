@@ -1,6 +1,16 @@
-import { type IAgentRuntime, type UUID, logger, createUniqueUuid } from '@elizaos/core';
-import { v4 } from 'uuid';
-import { requireRoomContext } from './storageContext';
+import {
+  createUniqueUuid,
+  type IAgentRuntime,
+  logger,
+  type UUID,
+} from "@elizaos/core";
+import { v4 } from "uuid";
+import {
+  createStoredField,
+  getStoredField,
+  mergeStoredField,
+} from "./componentData";
+import { requireRoomContext } from "./storageContext";
 
 /**
  * Per-Guild DJ Settings
@@ -8,44 +18,44 @@ import { requireRoomContext } from './storageContext';
  */
 export interface DJGuildSettings {
   // Autonomy & Behavior
-  autonomyLevel?: 'MANUAL' | 'BALANCED' | 'AUTONOMOUS' | 'RADIO';
+  autonomyLevel?: "MANUAL" | "BALANCED" | "AUTONOMOUS" | "RADIO";
   enabled: boolean; // DJ features enabled for this guild
-  
+
   // Auto-Fill Configuration
   autoFillEnabled: boolean;
   autoFillThreshold?: number; // Number of tracks to trigger auto-fill
   timeBasedProgramming: boolean;
   repetitionControlEnabled: boolean;
-  
+
   // DJ Commentary
   introsEnabled: boolean;
   commentaryEnabled: boolean;
   useLLMForCommentary: boolean;
   jokesSetting: boolean;
-  
+
   // Automatic Events
   autoTriviaEnabled: boolean;
   autoTriviaMinTracks?: number;
   autoTriviaMinMinutes?: number;
-  
+
   autoJokesEnabled: boolean;
   autoJokesMinTracks?: number;
   autoJokesMinMinutes?: number;
-  
+
   autoRecapEnabled: boolean;
   autoRecapMinTracks?: number;
   autoRecapMinMinutes?: number;
-  
+
   // Radio Station Info
   stationName?: string;
   stationDescription?: string;
-  
+
   // Advanced
   listenerTrackingEnabled: boolean;
-  audioQuality?: 'high' | 'medium' | 'low';
+  audioQuality?: "high" | "medium" | "low";
   crossFadeEnabled: boolean;
   crossFadeDuration?: number; // milliseconds
-  
+
   // Metadata
   createdAt: number;
   updatedAt: number;
@@ -57,7 +67,7 @@ export interface DJGuildSettings {
  * Default guild settings
  */
 export const DEFAULT_GUILD_SETTINGS: DJGuildSettings = {
-  autonomyLevel: 'BALANCED',
+  autonomyLevel: "BALANCED",
   enabled: true,
   autoFillEnabled: true,
   autoFillThreshold: 3,
@@ -77,18 +87,24 @@ export const DEFAULT_GUILD_SETTINGS: DJGuildSettings = {
   autoRecapMinTracks: 4,
   autoRecapMinMinutes: 15,
   listenerTrackingEnabled: true,
-  audioQuality: 'high',
+  audioQuality: "high",
   crossFadeEnabled: true,
   crossFadeDuration: 3000,
   createdAt: Date.now(),
   updatedAt: Date.now(),
 };
 
-const DJ_GUILD_SETTINGS_COMPONENT_TYPE = 'dj_guild_settings';
-const DJ_GUILD_SETTINGS_ENTITY_PREFIX = 'dj-guild-settings';
+const DJ_GUILD_SETTINGS_COMPONENT_TYPE = "dj_guild_settings";
+const DJ_GUILD_SETTINGS_ENTITY_PREFIX = "dj-guild-settings";
 
-function getDJGuildSettingsEntityId(runtime: IAgentRuntime, roomId: UUID): UUID {
-  return createUniqueUuid(runtime, `${DJ_GUILD_SETTINGS_ENTITY_PREFIX}-${roomId}`);
+function getDJGuildSettingsEntityId(
+  runtime: IAgentRuntime,
+  roomId: UUID,
+): UUID {
+  return createUniqueUuid(
+    runtime,
+    `${DJ_GUILD_SETTINGS_ENTITY_PREFIX}-${roomId}`,
+  );
 }
 
 /**
@@ -96,16 +112,25 @@ function getDJGuildSettingsEntityId(runtime: IAgentRuntime, roomId: UUID): UUID 
  */
 export async function getDJGuildSettings(
   runtime: IAgentRuntime,
-  roomId: UUID
+  roomId: UUID,
 ): Promise<DJGuildSettings> {
   const entityId = getDJGuildSettingsEntityId(runtime, roomId);
-  const component = await runtime.getComponent(entityId, DJ_GUILD_SETTINGS_COMPONENT_TYPE, undefined, runtime.agentId);
-  
-  if (!component || !component.data.settings) {
+  const component = await runtime.getComponent(
+    entityId,
+    DJ_GUILD_SETTINGS_COMPONENT_TYPE,
+    undefined,
+    runtime.agentId,
+  );
+
+  const storedSettings = getStoredField<DJGuildSettings>(component, "settings");
+  if (!storedSettings) {
     return DEFAULT_GUILD_SETTINGS;
   }
-  
-  return { ...DEFAULT_GUILD_SETTINGS, ...(component.data.settings as DJGuildSettings) };
+
+  return {
+    ...DEFAULT_GUILD_SETTINGS,
+    ...storedSettings,
+  };
 }
 
 /**
@@ -115,39 +140,49 @@ export async function setDJGuildSettings(
   runtime: IAgentRuntime,
   roomId: UUID,
   settings: Partial<DJGuildSettings>,
-  modifiedBy?: UUID
+  modifiedBy?: UUID,
 ): Promise<void> {
   try {
     const entityId = getDJGuildSettingsEntityId(runtime, roomId);
-    const existingComponent = await runtime.getComponent(entityId, DJ_GUILD_SETTINGS_COMPONENT_TYPE, undefined, runtime.agentId);
-    
-    const currentSettings = existingComponent?.data.settings 
-      ? { ...DEFAULT_GUILD_SETTINGS, ...(existingComponent.data.settings as DJGuildSettings) }
+    const existingComponent = await runtime.getComponent(
+      entityId,
+      DJ_GUILD_SETTINGS_COMPONENT_TYPE,
+      undefined,
+      runtime.agentId,
+    );
+
+    const storedSettings = getStoredField<DJGuildSettings>(
+      existingComponent,
+      "settings",
+    );
+    const currentSettings = storedSettings
+      ? { ...DEFAULT_GUILD_SETTINGS, ...storedSettings }
       : DEFAULT_GUILD_SETTINGS;
-    
-    const newSettings: DJGuildSettings = { 
-      ...currentSettings, 
+
+    const newSettings: DJGuildSettings = {
+      ...currentSettings,
       ...settings,
       updatedAt: Date.now(),
       lastModifiedBy: modifiedBy || runtime.agentId,
     };
-    
+
     if (existingComponent) {
       // Update existing component
       await runtime.updateComponent({
         ...existingComponent,
-        data: {
-          ...existingComponent.data,
-          settings: newSettings,
-        },
+        data: mergeStoredField(existingComponent, "settings", newSettings),
       });
     } else {
       // Create new component
-      const roomContext = await requireRoomContext(runtime, roomId, 'DJ Guild Settings');
-      
+      const roomContext = await requireRoomContext(
+        runtime,
+        roomId,
+        "DJ Guild Settings",
+      );
+
       newSettings.createdAt = Date.now();
       newSettings.createdBy = modifiedBy || runtime.agentId;
-      
+
       await runtime.createComponent({
         id: v4() as UUID,
         entityId,
@@ -157,12 +192,10 @@ export async function setDJGuildSettings(
         sourceEntityId: runtime.agentId,
         type: DJ_GUILD_SETTINGS_COMPONENT_TYPE,
         createdAt: Date.now(),
-        data: {
-          settings: newSettings,
-        },
+        data: createStoredField("settings", newSettings),
       });
     }
-    
+
     logger.info(`Updated DJ guild settings for room ${roomId}`);
   } catch (error) {
     logger.error(`Error setting DJ guild settings: ${error}`);
@@ -176,7 +209,7 @@ export async function setDJGuildSettings(
 export async function resetDJGuildSettings(
   runtime: IAgentRuntime,
   roomId: UUID,
-  modifiedBy?: UUID
+  modifiedBy?: UUID,
 ): Promise<void> {
   await setDJGuildSettings(runtime, roomId, DEFAULT_GUILD_SETTINGS, modifiedBy);
 }
@@ -188,7 +221,7 @@ export async function toggleDJ(
   runtime: IAgentRuntime,
   roomId: UUID,
   enabled: boolean,
-  modifiedBy?: UUID
+  modifiedBy?: UUID,
 ): Promise<void> {
   await setDJGuildSettings(runtime, roomId, { enabled }, modifiedBy);
 }
@@ -199,20 +232,24 @@ export async function toggleDJ(
 export async function setAutonomyLevel(
   runtime: IAgentRuntime,
   roomId: UUID,
-  level: 'MANUAL' | 'BALANCED' | 'AUTONOMOUS' | 'RADIO',
-  modifiedBy?: UUID
+  level: "MANUAL" | "BALANCED" | "AUTONOMOUS" | "RADIO",
+  modifiedBy?: UUID,
 ): Promise<void> {
-  await setDJGuildSettings(runtime, roomId, { autonomyLevel: level }, modifiedBy);
+  await setDJGuildSettings(
+    runtime,
+    roomId,
+    { autonomyLevel: level },
+    modifiedBy,
+  );
 }
 
 /**
  * Get all configured guilds
  */
 export async function getAllConfiguredGuilds(
-  _runtime: IAgentRuntime
+  _runtime: IAgentRuntime,
 ): Promise<Array<{ roomId: UUID; settings: DJGuildSettings }>> {
-  // This would require a database query to find all components of type DJ_GUILD_SETTINGS_COMPONENT_TYPE
-  // For now, return empty array as this would need to be implemented at the runtime level
-  logger.warn('getAllConfiguredGuilds not fully implemented - requires runtime-level query support');
-  return [];
+  throw new Error(
+    "[DJ Guild Settings] getAllConfiguredGuilds requires runtime-level component indexing support",
+  );
 }

@@ -1,101 +1,102 @@
 /**
- * Live E2E tests for Knowledge plugin integration.
+ * Live E2E tests for knowledge integration.
  *
- * These tests use REAL API keys for LLM providers and exercise the full
- * knowledge management flow end-to-end: upload → search → retrieve via RAG → delete.
- *
- * Required env vars (loaded from repo root .env):
- *   OPENAI_API_KEY or ANTHROPIC_API_KEY — for embeddings and LLM
- *
- * Run: MILADY_LIVE_TEST=1 npx vitest run -c vitest.e2e.config.ts test/knowledge-live.e2e.test.ts
+ * These tests use a real runtime, real embeddings, and a real LLM-backed
+ * chat route for retrieval.
  */
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { describeIf } from "../../../test/helpers/conditional-tests.ts";
-import { req } from "../../../test/helpers/http";
+import {
+  createConversation,
+  postConversationMessage,
+  req,
+} from "../../../test/helpers/http";
+import {
+  isLiveTestEnabled,
+  selectLiveProvider,
+} from "../../../test/helpers/live-provider";
+import { createRealTestRuntime } from "../../../test/helpers/real-runtime";
+import { createElizaPlugin } from "../src/runtime/eliza-plugin";
 
-// Load .env from the eliza workspace root
 const envPath = path.resolve(import.meta.dirname, "..", "..", "..", ".env");
 try {
   const { config } = await import("dotenv");
   config({ path: envPath });
 } catch {
-  // dotenv may not be available — keys must be in process.env already
+  // dotenv may not be available.
 }
 
-const hasLLM =
-  Boolean(process.env.OPENAI_API_KEY?.trim()) ||
-  Boolean(process.env.ANTHROPIC_API_KEY?.trim()) ||
-  Boolean(process.env.GROQ_API_KEY?.trim());
-const isLiveTest =
-  process.env.MILADY_LIVE_TEST === "1" || process.env.ELIZA_LIVE_TEST === "1";
-const knowledgeSuiteEnabled =
-  process.env.MILADY_LIVE_KNOWLEDGE_TEST === "1";
-const canRun = hasLLM && isLiveTest && knowledgeSuiteEnabled;
+const LIVE_PROVIDER = selectLiveProvider("openai") ?? selectLiveProvider();
+const CAN_RUN = isLiveTestEnabled() && Boolean(LIVE_PROVIDER);
+const KNOWLEDGE_CODEWORD = "VELVET-MOON-4821";
 
-// ═══════════════════════════════════════════════════════════════════════════
-// LIVE: KNOWLEDGE MANAGEMENT FLOW
-// ═══════════════════════════════════════════════════════════════════════════
+type StartedKnowledgeServer = {
+  close: () => Promise<void>;
+  port: number;
+};
 
-describeIf(canRun)("Live: Knowledge management flow", () => {
-  let port: number;
-  let close: () => Promise<void>;
+async function startKnowledgeServer(): Promise<StartedKnowledgeServer> {
+  const runtimeResult = await createRealTestRuntime({
+    withLLM: true,
+    preferredProvider: LIVE_PROVIDER?.name,
+    plugins: [createElizaPlugin({ agentId: "main" })],
+  });
+  const { startApiServer } = await import("../src/api/server");
+  const server = await startApiServer({
+    port: 0,
+    runtime: runtimeResult.runtime,
+    skipDeferredStartupWork: true,
+  });
+  await req(server.port, "POST", "/api/agent/start");
+
+  return {
+    port: server.port,
+    close: async () => {
+      await server.close();
+      await runtimeResult.cleanup();
+    },
+  };
+}
+
+describeIf(CAN_RUN)("Live: Knowledge management flow", () => {
+  let server: StartedKnowledgeServer | null = null;
   let uploadedDocumentId: string | null = null;
 
   beforeAll(async () => {
-    const { startApiServer } = await import("../src/api/server");
-    const server = await startApiServer({ port: 0 });
-    port = server.port;
-    close = server.close;
-  }, 30_000);
+    server = await startKnowledgeServer();
+  }, 120_000);
 
   afterAll(async () => {
-    await close();
+    await server?.close();
   });
 
-  // ── Step 1: Get initial stats ──────────────────────────────────────────
   it("step 1: gets knowledge stats", async () => {
-    const { status, data } = await req(port, "GET", "/api/knowledge/stats");
+    const { status, data } = await req(
+      server?.port ?? 0,
+      "GET",
+      "/api/knowledge/stats",
+    );
     expect(status).toBe(200);
     expect(typeof data.documentCount).toBe("number");
     expect(typeof data.fragmentCount).toBe("number");
     expect(typeof data.agentId).toBe("string");
-    console.log(
-      `  Stats: ${data.documentCount} docs, ${data.fragmentCount} fragments`,
-    );
   });
 
-  // ── Step 2: Upload a text document ─────────────────────────────────────
   it("step 2: uploads a text document", async () => {
     const testContent = `
 # Test Knowledge Document
 
-This is a test document for the Eliza knowledge management system.
+The deployment codeword is ${KNOWLEDGE_CODEWORD}.
 
-## Section 1: Introduction
+This document verifies that knowledge upload, semantic search, and chat
+retrieval all use the real runtime path.
 
-The knowledge management system allows users to upload documents that can be
-retrieved via RAG (Retrieval Augmented Generation) when the agent needs
-relevant information to answer questions.
-
-## Section 2: Features
-
-- Document upload (text, markdown, PDF, DOCX)
-- URL import with YouTube auto-transcription
-- Semantic search with similarity scoring
-- Fragment-based retrieval for precise context
-
-## Section 3: Testing
-
-This document is being used to verify that:
-1. Documents can be uploaded via the API
-2. Content is properly chunked into fragments
-3. Search returns relevant results
-4. RAG retrieval works in chat context
+RAG retrieval should answer questions about this codeword from the document.
     `.trim();
 
     const { status, data } = await req(
-      port,
+      server?.port ?? 0,
       "POST",
       "/api/knowledge/documents",
       {
@@ -110,131 +111,109 @@ This document is being used to verify that:
     expect(typeof data.documentId).toBe("string");
     expect(typeof data.fragmentCount).toBe("number");
     expect(data.fragmentCount).toBeGreaterThan(0);
-
     uploadedDocumentId = data.documentId as string;
-    console.log(
-      `  Uploaded: ${uploadedDocumentId} (${data.fragmentCount} fragments)`,
-    );
   });
 
-  // ── Step 3: List documents includes the uploaded doc ───────────────────
-  it("step 3: lists documents including uploaded doc", async () => {
-    const { status, data } = await req(port, "GET", "/api/knowledge/documents");
+  it("step 3: lists documents including the uploaded doc", async () => {
+    const { status, data } = await req(
+      server?.port ?? 0,
+      "GET",
+      "/api/knowledge/documents",
+    );
     expect(status).toBe(200);
     expect(Array.isArray(data.documents)).toBe(true);
 
-    const docs = data.documents as Array<{ id: string; filename: string }>;
-    const uploadedDoc = docs.find((d) => d.id === uploadedDocumentId);
-    expect(uploadedDoc).toBeDefined();
-    expect(uploadedDoc?.filename).toBe("test-knowledge-doc.md");
-
-    console.log(`  Found ${docs.length} documents`);
+    const docs = data.documents as Array<{ filename: string; id: string }>;
+    const uploadedDoc = docs.find((entry) => entry.id === uploadedDocumentId);
+    expect(uploadedDoc?.filename).toContain("test-knowledge-doc");
   });
 
-  // ── Step 4: Get document details ───────────────────────────────────────
   it("step 4: gets document details", async () => {
-    expect(uploadedDocumentId).toBeTruthy();
-    if (!uploadedDocumentId) throw new Error("uploadedDocumentId missing");
-
     const { status, data } = await req(
-      port,
+      server?.port ?? 0,
       "GET",
-      `/api/knowledge/documents/${encodeURIComponent(uploadedDocumentId)}`,
+      `/api/knowledge/documents/${encodeURIComponent(uploadedDocumentId ?? "")}`,
     );
 
     expect(status).toBe(200);
     expect(data.document).toBeDefined();
-
     const doc = data.document as {
-      id: string;
-      filename: string;
       contentType: string;
+      filename: string;
+      id: string;
     };
     expect(doc.id).toBe(uploadedDocumentId);
-    expect(doc.filename).toBe("test-knowledge-doc.md");
+    expect(doc.filename).toContain("test-knowledge-doc");
     expect(doc.contentType).toBe("text/markdown");
-
-    console.log(`  Document: ${doc.filename} (${doc.contentType})`);
   });
 
-  // ── Step 5: Get document fragments ─────────────────────────────────────
   it("step 5: gets document fragments", async () => {
-    expect(uploadedDocumentId).toBeTruthy();
-    if (!uploadedDocumentId) throw new Error("uploadedDocumentId missing");
-
     const { status, data } = await req(
-      port,
+      server?.port ?? 0,
       "GET",
-      `/api/knowledge/fragments/${encodeURIComponent(uploadedDocumentId)}`,
+      `/api/knowledge/fragments/${encodeURIComponent(uploadedDocumentId ?? "")}`,
     );
 
     expect(status).toBe(200);
     expect(data.documentId).toBe(uploadedDocumentId);
     expect(Array.isArray(data.fragments)).toBe(true);
 
-    const fragments = data.fragments as Array<{ id: string; text: string }>;
+    const fragments = data.fragments as Array<{ text: string }>;
     expect(fragments.length).toBeGreaterThan(0);
-
-    // Verify fragments contain expected content
-    const hasIntroduction = fragments.some((f) =>
-      f.text.toLowerCase().includes("introduction"),
-    );
-    expect(hasIntroduction).toBe(true);
-
-    console.log(`  Found ${fragments.length} fragments`);
+    expect(
+      fragments.some((fragment) => fragment.text.includes(KNOWLEDGE_CODEWORD)),
+    ).toBe(true);
   });
 
-  // ── Step 6: Search knowledge ───────────────────────────────────────────
   it("step 6: searches knowledge with semantic matching", async () => {
     const { status, data } = await req(
-      port,
+      server?.port ?? 0,
       "GET",
-      "/api/knowledge/search?q=RAG%20retrieval%20documents&threshold=0.2&limit=5",
+      "/api/knowledge/search?q=deployment%20codeword&threshold=0.2&limit=5",
     );
 
     expect(status).toBe(200);
-    expect(data.query).toBe("RAG retrieval documents");
     expect(Array.isArray(data.results)).toBe(true);
-
     const results = data.results as Array<{
-      id: string;
-      text: string;
       similarity: number;
+      text: string;
     }>;
-
-    if (results.length > 0) {
-      // Results should be sorted by similarity (descending)
-      for (let i = 1; i < results.length; i++) {
-        expect(results[i].similarity).toBeLessThanOrEqual(
-          results[i - 1].similarity,
-        );
-      }
-
-      // At least one result should mention RAG or retrieval
-      const hasRelevantResult = results.some(
-        (r) =>
-          r.text.toLowerCase().includes("rag") ||
-          r.text.toLowerCase().includes("retrieval"),
+    expect(results.length).toBeGreaterThan(0);
+    expect(
+      results.some((result) => result.text.includes(KNOWLEDGE_CODEWORD)),
+    ).toBe(true);
+    for (let index = 1; index < results.length; index += 1) {
+      expect(results[index].similarity).toBeLessThanOrEqual(
+        results[index - 1].similarity,
       );
-      expect(hasRelevantResult).toBe(true);
-
-      console.log(
-        `  Found ${results.length} results, top similarity: ${results[0]?.similarity?.toFixed(3)}`,
-      );
-    } else {
-      console.log("  No search results (embeddings may not be configured)");
     }
   });
 
-  // ── Step 7: Delete document ────────────────────────────────────────────
-  it("step 7: deletes document and fragments", async () => {
-    expect(uploadedDocumentId).toBeTruthy();
-    if (!uploadedDocumentId) throw new Error("uploadedDocumentId missing");
+  it("step 7: chat retrieves the uploaded knowledge through the real runtime", async () => {
+    const { conversationId } = await createConversation(server?.port ?? 0, {
+      title: "Knowledge retrieval",
+    });
+    const { status, data } = await postConversationMessage(
+      server?.port ?? 0,
+      conversationId,
+      {
+        text: "What is the deployment codeword from the uploaded knowledge document? Reply with just the codeword.",
+      },
+      undefined,
+      { timeoutMs: 120_000 },
+    );
 
+    expect(status).toBe(200);
+    const text = String(data.text ?? data.response ?? "");
+    expect(text.length).toBeGreaterThan(0);
+    expect(text).toContain(KNOWLEDGE_CODEWORD);
+  }, 120_000);
+
+  it("step 8: deletes document and fragments", async () => {
     const { status, data } = await req(
-      port,
+      server?.port ?? 0,
       "DELETE",
-      `/api/knowledge/documents/${encodeURIComponent(uploadedDocumentId)}`,
+      `/api/knowledge/documents/${encodeURIComponent(uploadedDocumentId ?? "")}`,
     );
 
     expect(status).toBe(200);
@@ -242,114 +221,91 @@ This document is being used to verify that:
     expect(typeof data.deletedFragments).toBe("number");
     expect(data.deletedFragments).toBeGreaterThan(0);
 
-    console.log(`  Deleted document and ${data.deletedFragments} fragments`);
-
-    // Verify document is no longer listed
     const { data: listData } = await req(
-      port,
+      server?.port ?? 0,
       "GET",
       "/api/knowledge/documents",
     );
     const docs = listData.documents as Array<{ id: string }>;
-    const stillExists = docs.some((d) => d.id === uploadedDocumentId);
-    expect(stillExists).toBe(false);
+    expect(docs.some((doc) => doc.id === uploadedDocumentId)).toBe(false);
   });
 });
 
-// ═══════════════════════════════════════════════════════════════════════════
-// LIVE: URL IMPORT (without actual YouTube to avoid rate limits)
-// ═══════════════════════════════════════════════════════════════════════════
-
-describeIf(canRun)("Live: URL import", () => {
-  let port: number;
-  let close: () => Promise<void>;
+describeIf(CAN_RUN)("Live: URL import validation", () => {
+  let server: StartedKnowledgeServer | null = null;
 
   beforeAll(async () => {
-    const { startApiServer } = await import("../src/api/server");
-    const server = await startApiServer({ port: 0 });
-    port = server.port;
-    close = server.close;
-  }, 30_000);
+    server = await startKnowledgeServer();
+  }, 120_000);
 
   afterAll(async () => {
-    await close();
+    await server?.close();
   });
 
   it("validates URL format", async () => {
     const { status, data } = await req(
-      port,
+      server?.port ?? 0,
       "POST",
       "/api/knowledge/documents/url",
       {
         url: "not-a-valid-url",
       },
     );
-
     expect(status).toBe(400);
     expect(data.error).toContain("Invalid URL");
   });
 
   it("handles missing URL", async () => {
     const { status, data } = await req(
-      port,
+      server?.port ?? 0,
       "POST",
       "/api/knowledge/documents/url",
       {},
     );
-
     expect(status).toBe(400);
     expect(data.error).toContain("url is required");
   });
 });
 
-// ═══════════════════════════════════════════════════════════════════════════
-// LIVE: KNOWLEDGE PROVIDER SKIP BEHAVIOR
-// ═══════════════════════════════════════════════════════════════════════════
-
-describeIf(canRun)("Live: Knowledge provider skip behavior", () => {
-  let port: number;
-  let close: () => Promise<void>;
+describeIf(CAN_RUN)("Live: empty knowledge base behavior", () => {
+  let server: StartedKnowledgeServer | null = null;
 
   beforeAll(async () => {
-    const { startApiServer } = await import("../src/api/server");
-    const server = await startApiServer({ port: 0 });
-    port = server.port;
-    close = server.close;
-  }, 30_000);
+    server = await startKnowledgeServer();
+  }, 120_000);
 
   afterAll(async () => {
-    await close();
+    await server?.close();
   });
 
   it("knowledge stats work when empty", async () => {
-    // First delete all documents to ensure empty state
     const { data: listData } = await req(
-      port,
+      server?.port ?? 0,
       "GET",
       "/api/knowledge/documents",
     );
     const docs = listData.documents as Array<{ id: string }>;
-
     for (const doc of docs) {
       await req(
-        port,
+        server?.port ?? 0,
         "DELETE",
         `/api/knowledge/documents/${encodeURIComponent(doc.id)}`,
       );
     }
 
-    // Now verify stats show zero
-    const { status, data } = await req(port, "GET", "/api/knowledge/stats");
+    const { status, data } = await req(
+      server?.port ?? 0,
+      "GET",
+      "/api/knowledge/stats",
+    );
     expect(status).toBe(200);
     expect(data.documentCount).toBe(0);
     expect(data.fragmentCount).toBe(0);
-
-    console.log("  Knowledge stats work with empty knowledge base");
   });
 
-  it("search returns empty array when no documents", async () => {
+  it("search returns an empty array when no documents exist", async () => {
     const { status, data } = await req(
-      port,
+      server?.port ?? 0,
       "GET",
       "/api/knowledge/search?q=test%20query&threshold=0.3",
     );
@@ -357,7 +313,5 @@ describeIf(canRun)("Live: Knowledge provider skip behavior", () => {
     expect(status).toBe(200);
     expect(Array.isArray(data.results)).toBe(true);
     expect(data.results).toHaveLength(0);
-
-    console.log("  Search returns empty array with no documents");
   });
 });

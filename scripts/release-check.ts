@@ -37,7 +37,7 @@ const autonomousElizaPathCandidates = [
   "packages/agent/src/runtime/eliza.ts",
 ] as const;
 const homepageReleaseDataPathCandidates = [
-  "apps/web/src/generated/release-data.ts",
+  "apps/homepage/src/generated/release-data.ts",
 ] as const;
 const requiredWorkflowSnippets = [
   'BUN_VERSION: "1.3.11"',
@@ -1259,16 +1259,16 @@ function assertHomepageReleaseDataUsesCurrentAssetRoot() {
     process.exit(1);
   }
 
-  if (!releaseDataSource.includes("/apps/web/public/")) {
+  if (!releaseDataSource.includes("/apps/homepage/public/")) {
     console.error(
-      "release-check: generated homepage release data must point homepageAssetBaseUrl at /apps/web/public/.",
+      "release-check: generated homepage release data must point homepageAssetBaseUrl at /apps/homepage/public/.",
     );
     process.exit(1);
   }
 
-  if (releaseDataSource.includes("/apps/homepage/public/")) {
+  if (releaseDataSource.includes("/apps/web/public/")) {
     console.error(
-      "release-check: generated homepage release data still points at legacy /apps/homepage/public/. Regenerate it with node scripts/write-homepage-release-data.mjs.",
+      "release-check: generated homepage release data still points at legacy /apps/web/public/. Regenerate it with node scripts/write-homepage-release-data.mjs.",
     );
     process.exit(1);
   }

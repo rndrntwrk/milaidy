@@ -383,16 +383,75 @@ const VALID_REMINDER_INTENSITIES = new Set([
   "high_priority_only",
 ]);
 
+export interface ExtractedReminderIntensityPlan {
+  intensity:
+    | "minimal"
+    | "normal"
+    | "persistent"
+    | "high_priority_only"
+    | "unknown";
+}
+
+const EMPTY_REMINDER_INTENSITY_PLAN: ExtractedReminderIntensityPlan = {
+  intensity: "unknown",
+};
+
+function parseReminderIntensityPlan(
+  raw: string,
+): ExtractedReminderIntensityPlan | null {
+  const normalized = raw.trim().toLowerCase();
+  if (VALID_REMINDER_INTENSITIES.has(normalized)) {
+    return {
+      intensity: normalized as Exclude<
+        ExtractedReminderIntensityPlan["intensity"],
+        "unknown"
+      >,
+    };
+  }
+
+  const parsed = parseJSONObjectFromText(raw);
+  if (!parsed || typeof parsed.intensity !== "string") {
+    return null;
+  }
+  const parsedIntensity = parsed.intensity.trim().toLowerCase();
+  if (!VALID_REMINDER_INTENSITIES.has(parsedIntensity)) {
+    return null;
+  }
+  return {
+    intensity: parsedIntensity as Exclude<
+      ExtractedReminderIntensityPlan["intensity"],
+      "unknown"
+    >,
+  };
+}
+
+function buildReminderIntensityRepairPrompt(args: {
+  intent: string;
+  rawResponse: string;
+}): string {
+  return [
+    "Your last reply for the LifeOps reminder-intensity extractor was invalid.",
+    'Return ONLY valid JSON like {"intensity":"minimal"}.',
+    'Allowed intensity values: "minimal", "normal", "persistent", "high_priority_only".',
+    "",
+    `User said: ${JSON.stringify(args.intent)}`,
+    `Previous invalid output: ${JSON.stringify(args.rawResponse)}`,
+  ].join("\n");
+}
+
 /**
  * Ask a small text model to classify the user's intent into a reminder
- * intensity value.  Returns null when the model is unavailable, throws,
- * or returns an unrecognised value — callers should fall back to regex.
+ * intensity value. Returns an explicit "unknown" result when the model is
+ * unavailable or the response is invalid so callers do not need regex
+ * fallbacks.
  */
 export async function extractReminderIntensityWithLlm(args: {
   runtime: IAgentRuntime;
   intent: string;
-}): Promise<"minimal" | "normal" | "persistent" | "high_priority_only" | null> {
-  if (typeof args.runtime.useModel !== "function") return null;
+}): Promise<ExtractedReminderIntensityPlan> {
+  if (typeof args.runtime.useModel !== "function") {
+    return { ...EMPTY_REMINDER_INTENSITY_PLAN };
+  }
 
   const prompt = [
     "The user is requesting a change to their reminder frequency.",
@@ -402,7 +461,7 @@ export async function extractReminderIntensityWithLlm(args: {
     "- persistent: user wants more/frequent reminders",
     "- high_priority_only: user wants to pause or mute most reminders",
     "",
-    "Return ONLY the value. No JSON, no prose.",
+    'Return ONLY valid JSON like {"intensity":"minimal"}. No prose.',
     "",
     `User said: ${JSON.stringify(args.intent)}`,
   ].join("\n");
@@ -411,12 +470,26 @@ export async function extractReminderIntensityWithLlm(args: {
     const result = await args.runtime.useModel(ModelType.TEXT_SMALL, {
       prompt,
     });
-    const raw = typeof result === "string" ? result.trim().toLowerCase() : "";
-    return VALID_REMINDER_INTENSITIES.has(raw)
-      ? (raw as "minimal" | "normal" | "persistent" | "high_priority_only")
-      : null;
+    const raw = typeof result === "string" ? result : "";
+    const parsed = parseReminderIntensityPlan(raw);
+    if (parsed) {
+      return parsed;
+    }
+
+    const repairResult = await args.runtime.useModel(ModelType.TEXT_SMALL, {
+      prompt: buildReminderIntensityRepairPrompt({
+        intent: args.intent,
+        rawResponse: raw,
+      }),
+    });
+    const repairedRaw = typeof repairResult === "string" ? repairResult : "";
+    return (
+      parseReminderIntensityPlan(repairedRaw) ?? {
+        ...EMPTY_REMINDER_INTENSITY_PLAN,
+      }
+    );
   } catch {
-    return null;
+    return { ...EMPTY_REMINDER_INTENSITY_PLAN };
   }
 }
 

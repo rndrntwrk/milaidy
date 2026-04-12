@@ -411,6 +411,14 @@ function buildGmailCharacterVoiceContext(runtime: IAgentRuntime): string {
   return sections.join("\n\n");
 }
 
+function shouldUseCanonicalGmailReplyFallback(scenario: string): boolean {
+  return (
+    scenario === "access_denied" ||
+    scenario === "gmail_read_unavailable" ||
+    scenario === "gmail_send_unavailable"
+  );
+}
+
 async function renderGmailActionReply(args: {
   runtime: IAgentRuntime;
   message: Memory;
@@ -421,6 +429,9 @@ async function renderGmailActionReply(args: {
   context?: Record<string, unknown>;
 }): Promise<string> {
   const { runtime, message, state, intent, scenario, fallback, context } = args;
+  if (shouldUseCanonicalGmailReplyFallback(scenario)) {
+    return fallback;
+  }
   if (typeof runtime.useModel !== "function") {
     return fallback;
   }

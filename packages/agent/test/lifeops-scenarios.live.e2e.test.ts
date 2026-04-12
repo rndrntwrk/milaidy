@@ -3,8 +3,6 @@ import { describeIf } from "../../../test/helpers/conditional-tests.ts";
 import type { StartedLifeOpsLiveRuntime } from "./helpers/lifeops-live-harness.ts";
 import {
   getLifeOpsLiveSetupWarnings,
-  LIVE_CHAT_TESTS_ENABLED,
-  LIVE_SCENARIO_TESTS_ENABLED,
   LIVE_TESTS_ENABLED,
   selectLifeOpsLiveProvider,
   startLifeOpsLiveRuntime,
@@ -16,16 +14,13 @@ import {
 
 const selectedLiveProvider = await selectLifeOpsLiveProvider();
 const LIVE_SCENARIO_SUITE_ENABLED =
-  LIVE_TESTS_ENABLED &&
-  LIVE_CHAT_TESTS_ENABLED &&
-  LIVE_SCENARIO_TESTS_ENABLED &&
-  selectedLiveProvider !== null;
+  LIVE_TESTS_ENABLED && selectedLiveProvider !== null;
 const SHARED_RUNTIME_ENABLED =
   process.env.MILADY_LIVE_SCENARIO_SHARED_RUNTIME === "1";
 
 if (!LIVE_SCENARIO_SUITE_ENABLED) {
   console.info(
-    `[lifeops-scenarios-live] suite skipped until setup is complete: ${getLifeOpsLiveSetupWarnings(selectedLiveProvider).join(" | ")}${!LIVE_SCENARIO_TESTS_ENABLED ? " | set MILADY_LIVE_SCENARIO_TEST=1" : ""}`,
+    `[lifeops-scenarios-live] suite skipped until setup is complete: ${getLifeOpsLiveSetupWarnings(selectedLiveProvider).join(" | ")}`,
   );
 }
 

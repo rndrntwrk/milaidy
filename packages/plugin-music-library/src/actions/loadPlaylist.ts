@@ -1,58 +1,84 @@
 import {
   type Action,
   type ActionExample,
+  type ActionResult,
+  ChannelType,
   type HandlerCallback,
   type IAgentRuntime,
+  logger,
   type Memory,
   type State,
-  logger,
   type UUID,
-  ChannelType,
-} from '@elizaos/core';
-import type { MusicLibraryService } from '../services/musicLibraryService';
+} from "@elizaos/core";
+import type { MusicLibraryService } from "../services/musicLibraryService";
 
-const MUSIC_SERVICE_NAME = 'music';
-const MUSIC_LIBRARY_SERVICE_NAME = 'musicLibrary';
+interface MusicQueueService {
+  addTrack(
+    guildId: string,
+    track: {
+      url: string;
+      title: string;
+      duration?: number;
+      requestedBy: UUID;
+    },
+  ): Promise<void>;
+}
+
+const MUSIC_SERVICE_NAME = "music";
+const MUSIC_LIBRARY_SERVICE_NAME = "musicLibrary";
 
 export const loadPlaylist: Action = {
-  name: 'LOAD_PLAYLIST',
-  similes: ['PLAY_PLAYLIST', 'LOAD_QUEUE', 'RESTORE_PLAYLIST', 'PLAY_SAVED_PLAYLIST'],
-  description: 'Load a saved playlist and add all tracks to the queue. Works best in DMs to avoid flooding group chats.',
-  validate: async (_runtime: IAgentRuntime, message: Memory, _state?: State) => {
-    if (message.content.source !== 'discord') {
+  name: "LOAD_PLAYLIST",
+  similes: [
+    "PLAY_PLAYLIST",
+    "LOAD_QUEUE",
+    "RESTORE_PLAYLIST",
+    "PLAY_SAVED_PLAYLIST",
+  ],
+  description:
+    "Load a saved playlist and add all tracks to the queue. Works best in DMs to avoid flooding group chats.",
+  validate: async (
+    _runtime: IAgentRuntime,
+    message: Memory,
+    _state?: State,
+  ) => {
+    if (message.content.source !== "discord") {
       return false;
     }
-    
-    // Prefer DMs, but allow in any channel
+
     return true;
   },
   handler: async (
     runtime: IAgentRuntime,
     message: Memory,
     state?: State,
-    _options?: any,
-    callback?: HandlerCallback
-  ) => {
+    _options?: Record<string, unknown>,
+    callback?: HandlerCallback,
+  ): Promise<ActionResult | undefined> => {
     if (!callback) {
-      return;
+      return { success: false, error: "Missing callback" };
     }
 
-    const musicService = runtime.getService(MUSIC_SERVICE_NAME) as any;
+    const musicService = runtime.getService(
+      MUSIC_SERVICE_NAME,
+    ) as MusicQueueService | null;
     if (!musicService) {
       await callback({
-        text: 'Music service is not available.',
+        text: "Music service is not available.",
         source: message.content.source,
       });
-      return;
+      return { success: false, error: "Music service unavailable" };
     }
 
-    const musicLibrary = runtime.getService(MUSIC_LIBRARY_SERVICE_NAME) as MusicLibraryService | null;
+    const musicLibrary = runtime.getService(
+      MUSIC_LIBRARY_SERVICE_NAME,
+    ) as MusicLibraryService | null;
     if (!musicLibrary) {
       await callback({
-        text: 'Music library service is not available.',
+        text: "Music library service is not available.",
         source: message.content.source,
       });
-      return;
+      return { success: false, error: "Music library service unavailable" };
     }
 
     const room = state?.data?.room || (await runtime.getRoom(message.roomId));
@@ -60,24 +86,22 @@ export const loadPlaylist: Action = {
 
     if (!currentServerId) {
       await callback({
-        text: 'I could not determine which server you are in.',
+        text: "I could not determine which server you are in.",
         source: message.content.source,
       });
-      return;
+      return { success: false, error: "Missing server id" };
     }
 
-    // Get user entity ID
     const userId = message.entityId as UUID;
     if (!userId) {
       await callback({
-        text: 'I could not determine your user ID.',
+        text: "I could not determine your user ID.",
         source: message.content.source,
       });
-      return;
+      return { success: false, error: "Missing user id" };
     }
 
     try {
-      // Get all playlists for the user
       const playlists = await musicLibrary.loadPlaylists(userId);
 
       if (playlists.length === 0) {
@@ -85,90 +109,89 @@ export const loadPlaylist: Action = {
           text: "You don't have any saved playlists. Save a queue first using 'save playlist'.",
           source: message.content.source,
         });
-        return;
+        return { success: false, error: "No playlists available" };
       }
 
-      // Extract playlist name from message (if provided)
-      const messageText = message.content.text || '';
+      const messageText = message.content.text || "";
       let playlistName: string | undefined;
-      
-      // Try to match playlist name in various formats
-      const nameMatch = messageText.match(/(?:load|play|restore).*?playlist.*?(?:named|called)?\s*["']?([^"']+)["']?/i);
+
+      const nameMatch = messageText.match(
+        /(?:load|play|restore).*?playlist.*?(?:named|called)?\s*["']?([^"']+)["']?/i,
+      );
       if (nameMatch) {
         playlistName = nameMatch[1]?.trim();
       } else {
-        // Try to find a quoted string
         const quotedMatch = messageText.match(/["']([^"']+)["']/);
         if (quotedMatch) {
           playlistName = quotedMatch[1]?.trim();
         }
       }
 
-      let selectedPlaylist;
+      let selectedPlaylist:
+        | Awaited<ReturnType<MusicLibraryService["loadPlaylists"]>>[number]
+        | undefined;
       if (playlistName) {
-        // Find playlist by name (case-insensitive)
         selectedPlaylist = playlists.find(
-          (p) => p.name.toLowerCase() === playlistName!.toLowerCase()
+          (playlist) =>
+            playlist.name.toLowerCase() === playlistName.toLowerCase(),
         );
         if (!selectedPlaylist) {
           await callback({
-            text: `I couldn't find a playlist named "${playlistName}". Your playlists: ${playlists.map((p) => `"${p.name}"`).join(', ')}`,
+            text: `I couldn't find a playlist named "${playlistName}". Your playlists: ${playlists.map((p) => `"${p.name}"`).join(", ")}`,
             source: message.content.source,
           });
-          return;
+          return { success: false, error: "Playlist not found" };
         }
       } else {
-        // If no name specified, use the most recent playlist
-        selectedPlaylist = playlists.sort((a, b) => b.updatedAt - a.updatedAt)[0];
+        selectedPlaylist = [...playlists].sort(
+          (a, b) => b.updatedAt - a.updatedAt,
+        )[0];
       }
 
-      // Add all tracks from playlist to queue
-      let addedCount = 0;
       for (const track of selectedPlaylist.tracks) {
-        try {
-          await musicService.addTrack(currentServerId, {
-            url: track.url,
-            title: track.title,
-            duration: track.duration,
-            requestedBy: userId,
-          });
-          addedCount++;
-        } catch (error) {
-          logger.error(`Error adding track ${track.url} to queue: ${error}`);
-        }
+        await musicService.addTrack(currentServerId, {
+          url: track.url,
+          title: track.title,
+          duration: track.duration,
+          requestedBy: userId,
+        });
       }
 
-      const room = state?.data?.room || (await runtime.getRoom(message.roomId));
       const isDM = room?.type === ChannelType.DM;
-      
-      let responseText = `Loaded playlist "${selectedPlaylist.name}" and added ${addedCount} track${addedCount !== 1 ? 's' : ''} to the queue.`;
-      
+      const addedCount = selectedPlaylist.tracks.length;
+      let responseText = `Loaded playlist "${selectedPlaylist.name}" and added ${addedCount} track${addedCount !== 1 ? "s" : ""} to the queue.`;
+
       if (!isDM) {
-        responseText += ` 💡 Tip: You can manage playlists in DMs to keep group chats clean! Just send me a DM.`;
+        responseText +=
+          " Tip: You can manage playlists in DMs to keep group chats clean.";
       }
 
       await callback({
         text: responseText,
         source: message.content.source,
       });
+      return { success: true, text: responseText };
     } catch (error) {
-      logger.error(`Error loading playlist: ${error}`);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      logger.error("Error loading playlist:", errorMessage);
       await callback({
-        text: 'I encountered an error while loading the playlist. Please try again.',
+        text: `I encountered an error while loading the playlist. ${errorMessage}`,
         source: message.content.source,
       });
+      return { success: false, error: errorMessage };
     }
   },
   examples: [
     [
       {
-        name: '{{name1}}',
+        name: "{{name1}}",
         content: {
-          text: 'load my playlist',
+          text: "load my playlist",
         },
       },
       {
-        name: '{{agentName}}',
+        name: "{{agentName}}",
         content: {
           text: 'Loaded playlist "My Favorites" and added 5 tracks to the queue.',
         },
@@ -176,13 +199,13 @@ export const loadPlaylist: Action = {
     ],
     [
       {
-        name: '{{name1}}',
+        name: "{{name1}}",
         content: {
           text: 'play playlist "Workout Mix"',
         },
       },
       {
-        name: '{{agentName}}',
+        name: "{{agentName}}",
         content: {
           text: 'Loaded playlist "Workout Mix" and added 10 tracks to the queue.',
         },
@@ -192,4 +215,3 @@ export const loadPlaylist: Action = {
 };
 
 export default loadPlaylist;
-

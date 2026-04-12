@@ -1,40 +1,41 @@
-import type { IAgentRuntime, Memory, Provider, State } from '@elizaos/core';
+import type { IAgentRuntime, Memory, Provider, State } from "@elizaos/core";
 
 /**
  * Provider that injects music-info system instructions into the agent's context
  * This explains all music metadata and research capabilities
  */
 export const musicInfoInstructionsProvider: Provider = {
-    name: 'MUSIC_INFO_INSTRUCTIONS',
-    description: 'Provides comprehensive music metadata and research capabilities documentation',
-    position: 5, // Early position for capability awareness
+  name: "MUSIC_INFO_INSTRUCTIONS",
+  description:
+    "Provides comprehensive music metadata and research capabilities documentation",
+  position: 5, // Early position for capability awareness
 
-    get: async (runtime: IAgentRuntime, message: Memory, _state: State) => {
-        const messageText = (message.content?.text || '').toLowerCase();
+  get: async (runtime: IAgentRuntime, message: Memory, _state: State) => {
+    const messageText = (message.content?.text || "").toLowerCase();
 
-        // PERFORMANCE: Only provide instructions when user needs help or asks about music info
-        const needsInstructions = 
-            messageText.includes('help') ||
-            messageText.includes('what can you tell me about') ||
-            messageText.includes('tell me about') ||
-            messageText.includes('information about') ||
-            messageText.includes('info about') ||
-            messageText.includes('who is') ||
-            messageText.includes('who are') ||
-            messageText.includes('what is') ||
-            messageText.includes('artist info') ||
-            messageText.includes('song info') ||
-            messageText.includes('album info') ||
-            messageText.includes('music info') ||
-            messageText.includes('capabilities') ||
-            messageText.includes('features') ||
-            messageText.includes('what do you know');
+    // PERFORMANCE: Only provide instructions when user needs help or asks about music info
+    const needsInstructions =
+      messageText.includes("help") ||
+      messageText.includes("what can you tell me about") ||
+      messageText.includes("tell me about") ||
+      messageText.includes("information about") ||
+      messageText.includes("info about") ||
+      messageText.includes("who is") ||
+      messageText.includes("who are") ||
+      messageText.includes("what is") ||
+      messageText.includes("artist info") ||
+      messageText.includes("song info") ||
+      messageText.includes("album info") ||
+      messageText.includes("music info") ||
+      messageText.includes("capabilities") ||
+      messageText.includes("features") ||
+      messageText.includes("what do you know");
 
-        if (!needsInstructions) {
-            return { text: '', data: {}, values: {} };
-        }
+    if (!needsInstructions) {
+      return { text: "", data: {}, values: {} };
+    }
 
-        const instructions = `# Music Information & Research System
+    const instructions = `# Music Information & Research System
 
 ## What I Can Tell You About Music
 
@@ -145,8 +146,8 @@ I understand complex music queries:
 ### Caching & Performance
 - All lookups are cached for 1 hour
 - Repeated queries are instant (< 10ms)
-- Multiple sources tried in parallel for best results
-- Automatic fallback if sources unavailable
+- Queries use the configured authoritative service path for the requested data
+- Missing or unavailable sources fail closed instead of silently degrading
 - Rate limiting and retry logic built-in
 - Service health monitoring
 
@@ -171,12 +172,12 @@ After songs finish, I can share:
 
 Check which music services are available:
 - **MusicBrainz**: Always available (no API key needed)
-- **Last.fm**: ${runtime.getSetting('LASTFM_API_KEY') ? '✅ Configured' : '❌ Not configured'}
-- **Genius**: ${runtime.getSetting('GENIUS_API_KEY') ? '✅ Configured' : '❌ Not configured'}
-- **TheAudioDB**: ${runtime.getSetting('THEAUDIODB_API_KEY') ? '✅ Configured' : '❌ Not configured'}
+- **Last.fm**: ${runtime.getSetting("LASTFM_API_KEY") ? "✅ Configured" : "❌ Not configured"}
+- **Genius**: ${runtime.getSetting("GENIUS_API_KEY") ? "✅ Configured" : "❌ Not configured"}
+- **TheAudioDB**: ${runtime.getSetting("THEAUDIODB_API_KEY") ? "✅ Configured" : "❌ Not configured"}
 - **Wikipedia**: ✅ Always available
 
-${!runtime.getSetting('LASTFM_API_KEY') && !runtime.getSetting('GENIUS_API_KEY') ? '\n💡 **Tip**: Configure API keys for enhanced features (Last.fm, Genius, TheAudioDB)' : ''}
+${!runtime.getSetting("LASTFM_API_KEY") && !runtime.getSetting("GENIUS_API_KEY") ? "\n💡 **Tip**: Configure API keys for enhanced features (Last.fm, Genius, TheAudioDB)" : ""}
 
 ## How to Use
 
@@ -247,25 +248,24 @@ I provide music info automatically when:
 Remember: I'm always listening for music references in conversation and will provide relevant information when helpful!
 `;
 
-        return {
-            text: instructions,
-            data: {
-                musicBrainzConfigured: true,
-                lastFmConfigured: !!runtime.getSetting('LASTFM_API_KEY'),
-                geniusConfigured: !!runtime.getSetting('GENIUS_API_KEY'),
-                theAudioDbConfigured: !!runtime.getSetting('THEAUDIODB_API_KEY'),
-                wikipediaConfigured: true,
-                source: 'musicInfoInstructions',
-            },
-            values: {
-                hasMusicInfoCapabilities: true,
-                supportsMultipleSources: true,
-                supportsCaching: true,
-                supportsEntityDetection: true,
-            },
-        };
-    },
+    return {
+      text: instructions,
+      data: {
+        musicBrainzConfigured: true,
+        lastFmConfigured: !!runtime.getSetting("LASTFM_API_KEY"),
+        geniusConfigured: !!runtime.getSetting("GENIUS_API_KEY"),
+        theAudioDbConfigured: !!runtime.getSetting("THEAUDIODB_API_KEY"),
+        wikipediaConfigured: true,
+        source: "musicInfoInstructions",
+      },
+      values: {
+        hasMusicInfoCapabilities: true,
+        supportsMultipleSources: true,
+        supportsCaching: true,
+        supportsEntityDetection: true,
+      },
+    };
+  },
 };
 
 export default musicInfoInstructionsProvider;
-

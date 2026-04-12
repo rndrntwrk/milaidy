@@ -20,18 +20,13 @@
     },
     {
       "name": "brush-teeth create from context",
-      "lifeActionPrompt": {
-        "summary": "Continue the same conversation. The user already explained that mornings are chaotic and they keep forgetting to brush their teeth before work.",
-        "action": "create",
-        "intent": "Actually create a routine named Brush teeth that happens every morning and every night. Do not just give advice.",
-        "title": "Brush teeth"
-      },
+      "text": "Please make that into a routine named Brush teeth with reminders around 8am and 9pm. Just preview the plan for now and do not save it yet.",
       "responseIncludesAny": [
-        "confirm",
-        "create it now",
-        "should i create it",
-        "does that sound good",
-        "can save a habit"
+        "routine preview",
+        "preview",
+        "save it when you're ready",
+        "let me know if you'd like to tweak",
+        "let me know if you want to tweak"
       ]
     },
     {
@@ -41,12 +36,7 @@
     },
     {
       "name": "brush-teeth reduce reminders",
-      "lifeActionPrompt": {
-        "summary": "Continue the same conversation.",
-        "action": "reminder_preference",
-        "intent": "Actually remind me less about Brush teeth. Do not just explain the setting.",
-        "title": "Brush teeth"
-      }
+      "text": "Now turn the Brush teeth reminder intensity down to minimal."
     }
   ],
   "finalChecks": [
@@ -55,10 +45,7 @@
       "title": "Brush teeth",
       "delta": 1,
       "cadenceKind": "times_per_day",
-      "requiredSlots": [
-        { "minuteOfDay": 480 },
-        { "minuteOfDay": 1260 }
-      ],
+      "requiredSlots": [{ "minuteOfDay": 480 }, { "minuteOfDay": 1260 }],
       "requireReminderPlan": true
     },
     {

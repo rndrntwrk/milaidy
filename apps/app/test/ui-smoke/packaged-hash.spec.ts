@@ -1,31 +1,62 @@
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { pathToFileURL } from "node:url";
 import { expect, test } from "@playwright/test";
-import {
-  expectNoOnboardingRedirect,
-  expectRootReady,
-  installDefaultAppMocks,
-  seedAppStorage,
-} from "./helpers";
+import { startMockApiServer, type MockApiServer } from "../electrobun-packaged/mock-api";
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const distIndex = path.resolve(here, "../../dist/index.html");
+const DIST_INDEX = path.resolve(import.meta.dirname, "..", "..", "dist", "index.html");
+const DIST_INDEX_URL = pathToFileURL(DIST_INDEX).href;
 
-test.beforeEach(async ({ page }) => {
-  await installDefaultAppMocks(page);
-  await seedAppStorage(page);
-});
+const STORAGE = {
+  "eliza:onboarding-complete": "1",
+  "eliza:onboarding:step": "activate",
+  "eliza:ui-shell-mode": "native",
+  "milady:active-server": JSON.stringify({
+    id: "local:embedded",
+    kind: "local",
+    label: "This device",
+  }),
+};
 
-if (fs.existsSync(distIndex)) {
-  test("dist exists and file URL hash routing loads settings", async ({
+let apiServer: MockApiServer | null = null;
+
+test.describe("packaged file:// hash routing", () => {
+  test.skip(!fs.existsSync(DIST_INDEX), "apps/app/dist/index.html is required");
+
+  test.beforeAll(async () => {
+    apiServer = await startMockApiServer({ onboardingComplete: true });
+  });
+
+  test.afterAll(async () => {
+    await apiServer?.close();
+  });
+
+  test.beforeEach(async ({ page }) => {
+    const apiBase = apiServer?.baseUrl ?? "http://127.0.0.1:31337";
+    await page.addInitScript(
+      ({ apiBaseUrl, storage }) => {
+        window.__MILADY_API_BASE__ = apiBaseUrl;
+        for (const [key, value] of Object.entries(storage)) {
+          localStorage.setItem(key, value);
+        }
+      },
+      { apiBaseUrl: apiBase, storage: STORAGE },
+    );
+  });
+
+  test("loads chat and settings routes under file:// with hash parity", async ({
     page,
   }) => {
-    const target = `${pathToFileURL(distIndex).href}#/settings`;
-    await page.goto(target, { waitUntil: "domcontentloaded" });
-    await expectRootReady(page);
-    await expectNoOnboardingRedirect(page);
+    await page.goto(`${DIST_INDEX_URL}#/chat`, {
+      waitUntil: "domcontentloaded",
+    });
+    await expect(page).toHaveURL(/#\/chat$/);
+    await expect(page.getByTestId("chat-composer-textarea")).toBeVisible();
 
-    expect(new URL(page.url()).protocol).toBe("file:");
+    await page.goto(`${DIST_INDEX_URL}#/settings`, {
+      waitUntil: "domcontentloaded",
+    });
+    await expect(page).toHaveURL(/#\/settings$/);
+    await expect(page.getByTestId("settings-shell")).toBeVisible();
   });
-}
+});

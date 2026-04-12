@@ -11,6 +11,9 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
 import { startApiServer } from "../src/api/server";
 import { req } from "../../../test/helpers/http";
+import { canBindLoopback } from "../../../test/helpers/loopback";
+
+const describeLoopback = describe.skipIf(!(await canBindLoopback()));
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -79,7 +82,7 @@ function waitForWsMessage(
 // Tests
 // ---------------------------------------------------------------------------
 
-describe("Deferred restart E2E", () => {
+describeLoopback("Deferred restart E2E", () => {
   let port: number;
   let close: () => Promise<void>;
 
@@ -221,7 +224,7 @@ describe("Deferred restart E2E", () => {
 // Test with onRestart handler — proves restart clears pending reasons
 // ---------------------------------------------------------------------------
 
-describe("Deferred restart E2E (with restart handler)", () => {
+describeLoopback("Deferred restart E2E (with restart handler)", () => {
   let port: number;
   let close: () => Promise<void>;
   let restartCallCount: number;

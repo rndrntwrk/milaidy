@@ -23,10 +23,7 @@
     "build:dist": "rm -rf dist && tsc -p tsconfig.build.json && node ../../scripts/prepare-package-dist.mjs packages/ui",
     "pack:dry-run": "cd dist && npm pack --dry-run",
     "storybook": "storybook dev -p 6006",
-    "build-storybook": "storybook build",
-    "test:ui": "vitest run --config vitest.config.ts",
-    "test:visual": "playwright test",
-    "test:visual:update": "playwright test --update-snapshots"
+    "build-storybook": "storybook build"
   },
   "exports": {
     ".": "./src/index.ts",

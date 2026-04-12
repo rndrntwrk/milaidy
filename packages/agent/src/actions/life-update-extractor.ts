@@ -20,6 +20,17 @@ export interface ExtractedUpdateFields {
   description: string | null;
 }
 
+const EMPTY_UPDATE_FIELDS: ExtractedUpdateFields = {
+  title: null,
+  cadenceKind: null,
+  windows: null,
+  weekdays: null,
+  timeOfDay: null,
+  everyMinutes: null,
+  priority: null,
+  description: null,
+};
+
 function parseTimeOfDay(value: string): string | null {
   const normalized = value.trim().toLowerCase();
   const hhmmMatch = normalized.match(/\b(\d{1,2}):(\d{2})\b/);
@@ -62,9 +73,101 @@ function parseTimeOfDay(value: string): string | null {
   return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }
 
-function extractHeuristicUpdateFields(_intent: string): ExtractedUpdateFields | null {
-  // LLM extraction is the primary path; heuristic regex removed for i18n.
-  return null;
+function validateTitle(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function validateCadenceKind(value: unknown): string | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const normalized = value.trim().toLowerCase();
+  return VALID_CADENCE_KINDS.has(normalized) ? normalized : null;
+}
+
+function validateWindows(value: unknown): string[] | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+  const normalized = value
+    .filter((item: unknown) => typeof item === "string")
+    .map((item) => item.trim())
+    .filter((item) => item.length > 0);
+  return normalized.length > 0 ? normalized : null;
+}
+
+function validateWeekdays(value: unknown): number[] | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+  const normalized = value.filter(
+    (item: unknown) =>
+      typeof item === "number" &&
+      Number.isInteger(item) &&
+      item >= 0 &&
+      item <= 6,
+  );
+  return normalized.length > 0 ? normalized : null;
+}
+
+function validatePositiveNumber(value: unknown): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    return null;
+  }
+  return value;
+}
+
+function validatePriority(value: unknown): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return null;
+  }
+  return Math.max(1, Math.min(5, Math.round(value)));
+}
+
+function buildUpdateFields(
+  parsed: Record<string, unknown>,
+): ExtractedUpdateFields {
+  return {
+    title: validateTitle(parsed.title),
+    cadenceKind: validateCadenceKind(parsed.cadenceKind),
+    windows: validateWindows(parsed.windows),
+    weekdays: validateWeekdays(parsed.weekdays),
+    timeOfDay:
+      typeof parsed.timeOfDay === "string"
+        ? parseTimeOfDay(parsed.timeOfDay)
+        : null,
+    everyMinutes: validatePositiveNumber(parsed.everyMinutes),
+    priority: validatePriority(parsed.priority),
+    description: validateTitle(parsed.description),
+  };
+}
+
+function buildRepairPrompt(args: {
+  intent: string;
+  currentTitle: string;
+  currentCadenceKind: string;
+  currentWindows: string[];
+  rawResponse: string;
+}): string {
+  return [
+    "Your last reply for the LifeOps update extractor was invalid.",
+    "Return ONLY valid JSON with exactly these fields:",
+    "title, cadenceKind, windows, weekdays, timeOfDay, everyMinutes, priority, description",
+    "",
+    "Use null for any field the user did not ask to change.",
+    "cadenceKind must be one of: once, daily, weekly, times_per_day, interval.",
+    'timeOfDay must be HH:MM 24h format like "06:00" when present.',
+    "",
+    `Current task: ${JSON.stringify(args.currentTitle)}`,
+    `Current cadence kind: ${JSON.stringify(args.currentCadenceKind)}`,
+    `Current windows: ${JSON.stringify(args.currentWindows)}`,
+    `User request: ${JSON.stringify(args.intent)}`,
+    `Previous invalid output: ${JSON.stringify(args.rawResponse)}`,
+  ].join("\n");
 }
 
 /**
@@ -72,7 +175,8 @@ function extractHeuristicUpdateFields(_intent: string): ExtractedUpdateFields | 
  * structured fields (e.g. "change my workout to 6am"), this function asks
  * a large text model to extract which fields the user actually wants to change.
  *
- * Returns null when the model is unavailable or the response is unparseable.
+ * Returns an explicit empty update object when the model is unavailable or the
+ * response is unparseable, so callers do not need heuristic fallbacks.
  */
 export async function extractUpdateFieldsWithLlm(args: {
   runtime: IAgentRuntime;
@@ -80,11 +184,12 @@ export async function extractUpdateFieldsWithLlm(args: {
   currentTitle: string;
   currentCadenceKind: string;
   currentWindows: string[];
-}): Promise<ExtractedUpdateFields | null> {
+}): Promise<ExtractedUpdateFields> {
   const { runtime, intent, currentTitle, currentCadenceKind, currentWindows } =
     args;
-  const heuristic = extractHeuristicUpdateFields(intent);
-  if (typeof runtime.useModel !== "function") return heuristic;
+  if (typeof runtime.useModel !== "function") {
+    return { ...EMPTY_UPDATE_FIELDS };
+  }
 
   const prompt = [
     "The user wants to update an existing task/habit. Extract ONLY the fields they want to change.",
@@ -117,48 +222,25 @@ export async function extractUpdateFieldsWithLlm(args: {
     const result = await runtime.useModel(ModelType.TEXT_LARGE, { prompt });
     const raw = typeof result === "string" ? result : "";
     const parsed = parseJSONObjectFromText(raw);
-    if (!parsed) return heuristic;
+    if (parsed) {
+      return buildUpdateFields(parsed);
+    }
 
-    const extracted = {
-      title:
-        typeof parsed.title === "string" && parsed.title.trim()
-          ? parsed.title.trim()
-          : null,
-      cadenceKind:
-        typeof parsed.cadenceKind === "string" &&
-        VALID_CADENCE_KINDS.has(parsed.cadenceKind)
-          ? parsed.cadenceKind
-          : null,
-      windows: Array.isArray(parsed.windows)
-        ? parsed.windows.filter((w: unknown) => typeof w === "string")
-        : null,
-      weekdays: Array.isArray(parsed.weekdays)
-        ? parsed.weekdays.filter((d: unknown) => typeof d === "number")
-        : null,
-      timeOfDay:
-        typeof parsed.timeOfDay === "string" ? parsed.timeOfDay.trim() : null,
-      everyMinutes:
-        typeof parsed.everyMinutes === "number" ? parsed.everyMinutes : null,
-      priority:
-        typeof parsed.priority === "number"
-          ? Math.max(1, Math.min(5, parsed.priority))
-          : null,
-      description:
-        typeof parsed.description === "string" && parsed.description.trim()
-          ? parsed.description.trim()
-          : null,
-    };
-    return {
-      title: extracted.title ?? heuristic?.title ?? null,
-      cadenceKind: extracted.cadenceKind ?? heuristic?.cadenceKind ?? null,
-      windows: extracted.windows ?? heuristic?.windows ?? null,
-      weekdays: extracted.weekdays ?? heuristic?.weekdays ?? null,
-      timeOfDay: extracted.timeOfDay ?? heuristic?.timeOfDay ?? null,
-      everyMinutes: extracted.everyMinutes ?? heuristic?.everyMinutes ?? null,
-      priority: extracted.priority ?? heuristic?.priority ?? null,
-      description: extracted.description ?? heuristic?.description ?? null,
-    };
+    const repairResult = await runtime.useModel(ModelType.TEXT_LARGE, {
+      prompt: buildRepairPrompt({
+        intent,
+        currentTitle,
+        currentCadenceKind,
+        currentWindows,
+        rawResponse: raw,
+      }),
+    });
+    const repairedRaw = typeof repairResult === "string" ? repairResult : "";
+    const repairedParsed = parseJSONObjectFromText(repairedRaw);
+    return repairedParsed
+      ? buildUpdateFields(repairedParsed)
+      : { ...EMPTY_UPDATE_FIELDS };
   } catch {
-    return heuristic;
+    return { ...EMPTY_UPDATE_FIELDS };
   }
 }

@@ -6,7 +6,10 @@ import type { AgentRuntime, Content, UUID } from "@elizaos/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
 import { req } from "../../../test/helpers/http";
+import { canBindLoopback } from "../../../test/helpers/loopback";
 import { startApiServer } from "../src/api/server";
+
+const describeLoopback = describe.skipIf(!(await canBindLoopback()));
 
 function waitForWsMessage(
   ws: WebSocket,
@@ -182,7 +185,7 @@ function createRuntimeForCodingAgentChatRoundtrip(
   return runtimeSubset as unknown as AgentRuntime;
 }
 
-describe("Coding agent chat roundtrip", () => {
+describeLoopback("Coding agent chat roundtrip", () => {
   let server: { port: number; close: () => Promise<void> } | null = null;
   let ws: WebSocket | null = null;
   let tempStateDir = "";

@@ -353,7 +353,7 @@ Impact:
 
 Current search result:
 
-- zero `LifeOps` references in `apps/web/src`
+- zero `LifeOps` references in `apps/homepage/src`
 - zero `LifeOps` references in `apps/app/src`
 - zero `LifeOps` references in `apps/app/electrobun/src` outside backend plumbing and generic RPC surfaces
 

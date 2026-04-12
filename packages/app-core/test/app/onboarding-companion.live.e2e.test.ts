@@ -370,6 +370,63 @@ async function newLivePage(
   return { context, page };
 }
 
+async function verifyWalletRpcRoundtrip(
+  stack: StartedStack,
+  page: Page,
+): Promise<void> {
+  const expectedSelections = {
+    evm: "infura",
+    bsc: "nodereal",
+    solana: "helius-birdeye",
+  } as const;
+
+  await page.goto(`${stack.uiBase}/wallets`, { waitUntil: "domcontentloaded" });
+  await waitForVisibleText(page, ["Tokens"]);
+
+  const walletRpcButton = page.getByTestId("wallet-rpc-popup");
+  await walletRpcButton.waitFor({ state: "visible", timeout: READY_TIMEOUT_MS });
+  await walletRpcButton.click({ force: true, timeout: READY_TIMEOUT_MS });
+
+  await waitForVisibleText(page, [/^Custom RPC$/i, /Custom RPC Providers/i]);
+  await clickVisibleText(page, [/^Custom RPC$/i]);
+  await waitForVisibleText(page, [/Custom RPC Providers/i]);
+  await clickVisibleText(page, [/^Testnet$/i]);
+  await clickVisibleText(page, [/^Infura$/i]);
+  await clickVisibleText(page, [/^NodeReal$/i]);
+  await clickVisibleText(page, [/^Helius \+ Birdeye$/i]);
+  await clickVisibleText(page, [/^Save$/i]);
+
+  const savedConfig = await waitForJsonPredicate<{
+    selectedRpcProviders?: {
+      evm?: string | null;
+      bsc?: string | null;
+      solana?: string | null;
+    };
+    walletNetwork?: string | null;
+  }>(
+    `${stack.apiBase}/api/wallet/config`,
+    (config) =>
+      config.walletNetwork === "testnet" &&
+      config.selectedRpcProviders?.evm === expectedSelections.evm &&
+      config.selectedRpcProviders?.bsc === expectedSelections.bsc &&
+      config.selectedRpcProviders?.solana === expectedSelections.solana,
+    READY_TIMEOUT_MS,
+  );
+
+  expect(savedConfig.walletNetwork).toBe("testnet");
+  expect(savedConfig.selectedRpcProviders).toMatchObject(expectedSelections);
+
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await waitForVisibleText(page, ["Tokens"]);
+  await walletRpcButton.waitFor({ state: "visible", timeout: READY_TIMEOUT_MS });
+  await walletRpcButton.click({ force: true, timeout: READY_TIMEOUT_MS });
+  await waitForVisibleText(page, [/Custom RPC Providers/i]);
+  await waitForVisibleText(page, ["Infura API Key"]);
+  await waitForVisibleText(page, ["NodeReal BSC RPC URL"]);
+  await waitForVisibleText(page, ["Helius API Key"]);
+  await waitForVisibleText(page, ["Birdeye API Key"]);
+}
+
 describeLive("real onboarding handoff to companion mode", () => {
   let canUseOllama = false;
   let stack: StartedStack | null = null;
@@ -400,14 +457,11 @@ describeLive("real onboarding handoff to companion mode", () => {
       try {
         await page.goto(stack.uiBase, { waitUntil: "domcontentloaded" });
 
-        await waitForVisibleText(page, [/Log in with Eliza Cloud/i, /^Skip$/i]);
-        await clickVisibleText(page, [/^Skip$/i, /^Continue Offline$/i]);
+        await waitForVisibleText(page, [/Create Local Agent/i, /^Continue$/i]);
+        await clickVisibleText(page, [/Create Local Agent/i, /^Get Started$/i]);
 
-        await waitForVisibleText(page, [/Continue/i, /Chen/i]);
+        await waitForVisibleText(page, [/^Continue$/i, /Chen/i]);
         await clickVisibleText(page, [/Continue/i]);
-
-        await waitForVisibleText(page, [/Where should .* run\?/i, /^Local$/i]);
-        await clickVisibleText(page, [/^Local$/i]);
 
         await waitForVisibleText(page, [/Choose your AI provider/i, /Ollama/i]);
         await clickVisibleText(page, [/Ollama/i]);
@@ -415,26 +469,8 @@ describeLive("real onboarding handoff to companion mode", () => {
         await waitForVisibleText(page, [/Local models/i, /Confirm/i]);
         await clickVisibleText(page, [/Confirm/i]);
 
-        await waitForVisibleText(page, [
-          /Choose your preferred voice provider/i,
-          /^Skip$/i,
-        ]);
-        await clickVisibleText(page, [/^Skip$/i, /^Next$/i]);
-
-        await waitForVisibleText(page, [/Browser Permissions/i, /Continue/i]);
-        await clickVisibleText(page, [/Skip for now/i, /Continue/i]);
-
-        await waitForVisibleText(page, [/Setup is complete/i, /^Enter$/i]);
-        await page.screenshot({
-          path: path.join(SCREENSHOT_DIR, "onboarding-live-activate-ready.png"),
-          timeout: READY_TIMEOUT_MS,
-        });
-        const enterButton = await waitForTestIdEnabled(
-          page,
-          "onboarding-activate-enter",
-          READY_TIMEOUT_MS,
-        );
-        await enterButton.click({ force: true, timeout: READY_TIMEOUT_MS });
+        await waitForVisibleText(page, [/Enable features/i, /Skip for now/i]);
+        await clickVisibleText(page, [/Skip for now/i, /Continue without features/i]);
 
         await page.waitForURL(/\/companion(?:$|[?#/])/, {
           timeout: READY_TIMEOUT_MS,
@@ -480,6 +516,8 @@ describeLive("real onboarding handoff to companion mode", () => {
           READY_TIMEOUT_MS,
         );
         expect(onboardingStatus.complete).toBe(true);
+
+        await verifyWalletRpcRoundtrip(stack, page);
       } finally {
         await context.close();
       }

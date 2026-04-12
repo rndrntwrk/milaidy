@@ -366,7 +366,7 @@ Minimum required surfaces:
 
 Suggested directory:
 
-- `apps/web/src/lifeops/` or equivalent app package path
+- `apps/homepage/src/lifeops/` or equivalent app package path
 
 Important point:
 

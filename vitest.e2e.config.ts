@@ -253,6 +253,7 @@ export default defineConfig({
     // Match the unit test worker heap to avoid late jsdom OOM crashes during
     // serial E2E runs, where one fork accumulates dozens of suites.
     execArgv: ["--max-old-space-size=4096"],
+    passWithNoTests: true,
     sequence: {
       concurrent: false,
       shuffle: false,

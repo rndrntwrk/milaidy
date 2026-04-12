@@ -7,11 +7,6 @@ import type {
   State,
 } from "@elizaos/core";
 import { ModelType, parseJSONObjectFromText } from "@elizaos/core";
-import {
-  extractDurationMinutesFromText,
-  extractWebsiteTargetsFromText,
-  normalizeWebsiteTargets,
-} from "@miladyai/plugin-selfcontrol/selfcontrol";
 import type {
   CreateLifeOpsDefinitionRequest,
   CreateLifeOpsGoalRequest,
@@ -54,12 +49,8 @@ import {
 import {
   extractReminderIntensityWithLlm,
   extractTaskCreatePlanWithLlm,
-  extractUnlockModeWithLlm,
 } from "./life-param-extractor.js";
-import {
-  recentConversationTexts,
-  recentConversationTextsFromState,
-} from "./life-recent-context.js";
+import { recentConversationTexts } from "./life-recent-context.js";
 import { extractUpdateFieldsWithLlm } from "./life-update-extractor.js";
 import {
   calendarReadUnavailableMessage,
@@ -224,15 +215,6 @@ type LifeParams = {
   title?: string;
   target?: string;
   details?: Record<string, unknown>;
-};
-
-type LifeDefinitionSeed = {
-  title: string;
-  kind: CreateLifeOpsDefinitionRequest["kind"];
-  cadence: LifeOpsCadence;
-  description?: string;
-  reminderPlan?: CreateLifeOpsDefinitionRequest["reminderPlan"];
-  websiteAccess?: CreateLifeOpsDefinitionRequest["websiteAccess"];
 };
 
 // CADENCE_HINT_RE removed — cadence detection uses i18n LIFE_CADENCE_TERMS
@@ -511,8 +493,7 @@ export function classifyIntent(intent: string): LifeOperation {
   }
 
   // Email query
-  if (textMatchesAnyTerm(intent, LIFE_EMAIL_QUERY_TERMS))
-    return "query_email";
+  if (textMatchesAnyTerm(intent, LIFE_EMAIL_QUERY_TERMS)) return "query_email";
 
   // Overview
   if (textMatchesAnyTerm(intent, LIFE_OVERVIEW_TERMS)) return "query_overview";
@@ -600,34 +581,10 @@ function shouldForceLifeCreateExecution(args: {
     return true;
   }
 
-  if (inferLifeDefinitionSeed(args.intent)) {
-    return true;
-  }
-
   if (normalizeCadenceDetail(detailObject(args.details, "cadence"))) {
     return true;
   }
-
-  const derivedTitle = deriveDefinitionTitle(args.intent);
-  if (
-    derivedTitle &&
-    scoreDefinitionTitleQuality(derivedTitle) > 0 &&
-    looksLikeDefinitionCreateIntent(args.intent)
-  ) {
-    return true;
-  }
-
-  const timedRequestKind = resolveTimedRequestKind({
-    intent: args.intent,
-    llmRequestKind: null,
-    recentWindow: [],
-  });
-  const timedDefaults = deriveTimedRequestDefaults({
-    intent: args.intent,
-    requestKind: timedRequestKind,
-    timeZone: extractLifeTimeZoneFromText(args.intent) ?? undefined,
-  });
-  return Boolean(timedDefaults?.title || timedDefaults?.cadence);
+  return false;
 }
 
 function looksLikeCompletionReport(text: string): boolean {
@@ -640,58 +597,6 @@ function looksLikeCompletionReport(text: string): boolean {
     return false;
   }
   return textMatchesAnyTerm(text, LIFE_COMPLETE_TERMS);
-}
-
-function shouldRecoverMissingOccurrenceAsCreate(
-  intent: string,
-  seed: LifeDefinitionSeed | undefined,
-): boolean {
-  if (!seed) {
-    return false;
-  }
-  const lower = intent.toLowerCase();
-  return (
-    looksLikeDefinitionCreateIntent(lower) && !looksLikeCompletionReport(intent)
-  );
-}
-
-function inferReminderIntensityFromIntent(
-  intent: string,
-): LifeOpsReminderIntensity | null {
-  // LLM extraction (extractReminderIntensityWithLlm) is the primary path.
-  // This is a best-effort English fallback for when the LLM is unavailable.
-  // Intent is already classified as set_reminder_preference via i18n;
-  // this only determines the specific intensity level.
-  const lower = intent.toLowerCase();
-  if (
-    /\b(stop reminding me|don't remind me|pause reminders?|mute reminders?|high priority only|only high priority)\b/.test(
-      lower,
-    )
-  ) {
-    return "high_priority_only";
-  }
-  if (
-    /\b(resume reminders?|start reminding me again|turn reminders? back on|normal reminders?)\b/.test(
-      lower,
-    )
-  ) {
-    return "normal";
-  }
-  if (
-    /\b(less|fewer|lower)\s+reminders?\b/.test(lower) ||
-    /\bremind.*\b(less|fewer|lower)\b/.test(lower) ||
-    /\b(less|fewer|lower)\b/.test(lower)
-  ) {
-    return "minimal";
-  }
-  if (
-    /\bmore reminders?\b/.test(lower) ||
-    /\bremind.*\bmore\b/.test(lower) ||
-    /\bmore persistent\b/.test(lower)
-  ) {
-    return "persistent";
-  }
-  return null;
 }
 
 // ── Helpers ───────────────────────────────────────────
@@ -1430,10 +1335,7 @@ function deriveOccurrenceTargetFromIntent(
         /^(?:please\s+)?(?:snooze|postpone|push\b.*\bback|remind me later about)\s+/i,
         "",
       )
-      .replace(
-        /\bfor\s+\d+\s*(?:minutes?|hours?)\b.*$/i,
-        "",
-      )
+      .replace(/\bfor\s+\d+\s*(?:minutes?|hours?)\b.*$/i, "")
       .replace(/\b(?:until|til)\b.+$/i, "")
       .trim();
   } else if (operation === "skip_occurrence") {
@@ -1461,7 +1363,11 @@ async function resolveOccurrenceWithIntentFallback(args: {
   intent: string;
   operation: LifeOperation;
 }): Promise<OccurrenceResult> {
-  const direct = await resolveOccurrence(args.service, args.target, args.domain);
+  const direct = await resolveOccurrence(
+    args.service,
+    args.target,
+    args.domain,
+  );
   if (direct.match || direct.ambiguousCandidates.length > 0) {
     return direct;
   }
@@ -1753,243 +1659,6 @@ function buildLifeServiceErrorFallback(
 
 // ── Calendar/email formatters ─────────────────────────
 
-function slugifyValue(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 48);
-}
-
-function parseNumberWord(token: string): number | null {
-  switch (token.trim().toLowerCase()) {
-    case "one":
-    case "once":
-      return 1;
-    case "two":
-    case "twice":
-      return 2;
-    case "three":
-      return 3;
-    case "four":
-      return 4;
-    case "five":
-      return 5;
-    case "six":
-      return 6;
-    case "seven":
-      return 7;
-    default: {
-      const parsed = Number.parseInt(token, 10);
-      return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-    }
-  }
-}
-
-function weekdaysForFrequency(count: number): number[] {
-  if (count <= 1) return [1];
-  if (count === 2) return [1, 4];
-  if (count === 3) return [1, 3, 5];
-  if (count === 4) return [1, 2, 4, 6];
-  if (count === 5) return [1, 2, 3, 4, 5];
-  if (count === 6) return [0, 1, 2, 3, 4, 5];
-  return [0, 1, 2, 3, 4, 5, 6];
-}
-
-function inferWebsiteTargetsFromIntent(intent: string): string[] {
-  const lower = intent.toLowerCase();
-  const normalized = new Set(
-    normalizeWebsiteTargets(extractWebsiteTargetsFromText(intent)),
-  );
-  const blockContext =
-    /\b(blocks?|blocked|blocking|unlocks?|unblock|locked|locks?|focus|self ?control)\b/.test(
-      lower,
-    );
-  if (!blockContext) {
-    return [...normalized];
-  }
-  if (/\b(?:x|twitter)\b/.test(lower)) {
-    normalized.add("x.com");
-    normalized.add("twitter.com");
-  }
-  if (/\bfacebook\b/.test(lower)) {
-    normalized.add("facebook.com");
-  }
-  if (/\binstagram\b/.test(lower)) {
-    normalized.add("instagram.com");
-  }
-  if (/\bgoogle news\b/.test(lower)) {
-    normalized.add("news.google.com");
-  }
-  if (/\bhacker news\b/.test(lower)) {
-    normalized.add("news.ycombinator.com");
-  }
-  if (/\by combinator\b|\byc\b/.test(lower)) {
-    normalized.add("ycombinator.com");
-  }
-  return [...normalized].sort();
-}
-
-const UNLOCK_UNTIL_DONE_TERMS = [
-  "until i say done",
-  "until i say i'm done",
-  "until i say im done",
-  "until i'm done",
-  "until im done",
-  "until i say stop",
-  "until i lock it again",
-  "until i lock again",
-  "until i relock",
-  "until i re-lock",
-] as const;
-
-function inferWebsiteAccessPolicyFromIntent(
-  intent: string,
-  title: string,
-): CreateLifeOpsDefinitionRequest["websiteAccess"] | undefined {
-  const lower = intent.toLowerCase();
-  if (
-    !/\b(blocks?|blocked|blocking|unlocks?|unblock|locked|locks?|focus|self ?control)\b/.test(
-      lower,
-    )
-  ) {
-    return undefined;
-  }
-
-  const websites = inferWebsiteTargetsFromIntent(intent);
-  if (websites.length === 0) {
-    return undefined;
-  }
-
-  const manualUnlock = UNLOCK_UNTIL_DONE_TERMS.some((t) =>
-    textIncludesKeywordTerm(lower, t),
-  );
-  const callbackMatch = lower.match(
-    /\b(?:unlock|unblock)\b.*\buntil ([a-z0-9][a-z0-9\s_-]{1,40}?) (?:happens|is done|is over|completes|finishes|ends)\b/,
-  );
-  const explicitUnlockDuration =
-    /\b(?:unlock|unblock)\b/.test(lower) || /\bfor a while\b/.test(lower)
-      ? extractDurationMinutesFromText(intent)
-      : null;
-
-  const groupKey = `earned-access-${slugifyValue(websites.join("-")) || slugifyValue(title) || "web"}`;
-  if (manualUnlock) {
-    return {
-      groupKey,
-      websites,
-      unlockMode: "until_manual_lock",
-      reason: `Earn access to ${websites.join(", ")} after completing ${title}.`,
-    };
-  }
-  if (callbackMatch?.[1]) {
-    const callbackKey = slugifyValue(callbackMatch[1]);
-    if (callbackKey) {
-      return {
-        groupKey,
-        websites,
-        unlockMode: "until_callback",
-        callbackKey,
-        reason: `Earn access to ${websites.join(", ")} after completing ${title}.`,
-      };
-    }
-  }
-  return {
-    groupKey,
-    websites,
-    unlockMode: "fixed_duration",
-    unlockDurationMinutes:
-      explicitUnlockDuration && explicitUnlockDuration > 0
-        ? explicitUnlockDuration
-        : 60,
-    reason: `Earn access to ${websites.join(", ")} after completing ${title}.`,
-  };
-}
-
-// ── i18n time-window terms ──────────────────────────
-const WINDOW_MORNING_TERMS = [
-  "morning", "mornings", "wake up", "wake-up", "breakfast", "before work",
-  "早上", "起床", "早餐", "上班前",
-  "아침", "기상", "아침식사", "출근 전",
-  "mañana", "desayuno", "antes del trabajo",
-  "manhã", "café da manhã", "cafe da manha", "antes do trabalho",
-  "sáng", "buổi sáng", "trước khi làm",
-  "umaga", "bago magtrabaho",
-] as const;
-
-const WINDOW_AFTERNOON_TERMS = [
-  "afternoon", "afternoons", "lunch", "after lunch", "midday", "mid-day", "during the day",
-  "下午", "午餐", "中午",
-  "오후", "점심", "낮",
-  "tarde", "almuerzo", "después del almuerzo",
-  "tarde", "almoço", "depois do almoço",
-  "chiều", "buổi trưa", "sau bữa trưa",
-  "hapon", "tanghalian",
-] as const;
-
-const WINDOW_EVENING_TERMS = [
-  "evening", "evenings", "after work", "dinner",
-  "傍晚", "下班后", "晚餐",
-  "저녁", "퇴근 후", "저녁식사",
-  "noche", "después del trabajo", "cena",
-  "noite", "depois do trabalho", "jantar",
-  "tối", "sau giờ làm", "bữa tối",
-  "gabi", "pagkatapos magtrabaho", "hapunan",
-] as const;
-
-const WINDOW_NIGHT_TERMS = [
-  "night", "nights", "bedtime", "before bed", "before sleep", "before i sleep",
-  "before going to bed", "before i go to bed",
-  "夜晚", "睡前", "睡觉前",
-  "밤", "취침", "자기 전",
-  "noche", "antes de dormir", "hora de dormir",
-  "noite", "antes de dormir", "hora de dormir",
-  "đêm", "trước khi ngủ",
-  "gabi", "bago matulog",
-] as const;
-
-function extractIntentWindows(
-  intent: string,
-): Array<"morning" | "afternoon" | "evening" | "night"> {
-  const lower = intent.toLowerCase();
-  const windows: Array<"morning" | "afternoon" | "evening" | "night"> = [];
-  if (textMatchesAnyTerm(lower, WINDOW_MORNING_TERMS)) windows.push("morning");
-  if (textMatchesAnyTerm(lower, WINDOW_AFTERNOON_TERMS)) windows.push("afternoon");
-  if (textMatchesAnyTerm(lower, WINDOW_EVENING_TERMS)) windows.push("evening");
-  if (textMatchesAnyTerm(lower, WINDOW_NIGHT_TERMS)) windows.push("night");
-  return windows;
-}
-
-function extractIntentWeekdays(intent: string): number[] {
-  const lower = intent.toLowerCase();
-  if (/\bweekdays?\b|\bworkdays?\b/.test(lower)) {
-    return [1, 2, 3, 4, 5];
-  }
-  if (/\bweekends?\b/.test(lower)) {
-    return [0, 6];
-  }
-  const matches = [
-    ...lower.matchAll(
-      /\b(?:every|each)\s+(sun(?:day)?|mon(?:day)?|tue(?:s(?:day)?)?|wed(?:nesday)?|thu(?:r(?:s(?:day)?)?)?|fri(?:day)?|sat(?:urday)?)\b/g,
-    ),
-  ]
-    .map((match) => {
-      const weekdayToken = match[1]?.toLowerCase() ?? "";
-      if (weekdayToken.startsWith("sun")) return 0;
-      if (weekdayToken.startsWith("mon")) return 1;
-      if (weekdayToken.startsWith("tue")) return 2;
-      if (weekdayToken.startsWith("wed")) return 3;
-      if (weekdayToken.startsWith("thu")) return 4;
-      if (weekdayToken.startsWith("fri")) return 5;
-      if (weekdayToken.startsWith("sat")) return 6;
-      return null;
-    })
-    .filter(
-      (weekday): weekday is 0 | 1 | 2 | 3 | 4 | 5 | 6 => weekday !== null,
-    );
-  return [...new Set(matches)];
-}
-
 const DEFAULT_WINDOW_SLOT_TIMES: Record<
   "morning" | "afternoon" | "evening" | "night",
   { minuteOfDay: number; durationMinutes: number; label: string }
@@ -2166,43 +1835,6 @@ function parseTimeOfDayToken(token: string): number | null {
   return parseClockToken(normalized);
 }
 
-// ── i18n alarm / reminder terms ─────────────────────
-const ALARM_TERMS = [
-  "alarm", "wake me up", "wake-up", "wake up",
-  "闹钟", "叫我起床",
-  "알람", "깨워줘",
-  "alarma", "despiértame", "despiertame",
-  "alarme", "me acorde", "me acordar",
-  "báo thức", "đánh thức tôi",
-  "alarma", "gisingin mo ako",
-] as const;
-
-const REMINDER_TERMS_LOCAL = [
-  "remind me", "remind", "reminder", "set a reminder", "set reminder",
-  "create a reminder", "create reminder", "nudge me", "ping me",
-  "提醒我", "提醒", "设置提醒",
-  "알려줘", "리마인더", "알림 설정",
-  "recuérdame", "recordatorio", "crear recordatorio",
-  "lembre-me", "lembrete", "criar lembrete",
-  "nhắc tôi", "nhắc nhở", "đặt nhắc nhở",
-  "ipaalala", "paalala",
-] as const;
-
-function looksLikeAlarmRequest(intent: string): boolean {
-  const lower = normalizeLifeInputText(intent).toLowerCase();
-  return textMatchesAnyTerm(lower, ALARM_TERMS);
-}
-
-function looksLikeReminderRequest(intent: string): boolean {
-  const lower = normalizeLifeInputText(intent).toLowerCase();
-  return textMatchesAnyTerm(lower, REMINDER_TERMS_LOCAL);
-}
-
-function resolveAlarmTitle(intent: string): string {
-  const lower = normalizeLifeInputText(intent).toLowerCase();
-  return /\bwake(?:-|\s)?up\b|\bwake me up\b/.test(lower) ? "Wake up" : "Alarm";
-}
-
 function resolveAlarmDayOffset(intent: string): number | null {
   const lower = normalizeLifeInputText(intent).toLowerCase();
   if (/\btomorrow\b/.test(lower)) return 1;
@@ -2259,117 +1891,6 @@ function buildOneOffDueAtFromMinuteOfDay(args: {
   }
 
   return candidate.toISOString();
-}
-
-function deriveAlarmLikeDefaults(
-  intent: string,
-  timeZone?: string,
-): {
-  title: string;
-  cadence?: LifeOpsCadence;
-} | null {
-  if (!looksLikeAlarmRequest(intent)) {
-    return null;
-  }
-
-  const slots = extractExplicitDailySlots(intent);
-  const slot = slots[0] ?? null;
-
-  return {
-    title: resolveAlarmTitle(intent),
-    cadence:
-      slot && !hasCadenceHint(intent)
-        ? {
-            kind: "once",
-            dueAt: buildOneOffDueAtFromMinuteOfDay({
-              intent,
-              minuteOfDay: slot.minuteOfDay,
-              timeZone,
-            }),
-          }
-        : undefined,
-  };
-}
-
-function deriveReminderLikeDefaults(
-  intent: string,
-  timeZone?: string,
-): {
-  title: string;
-  cadence?: LifeOpsCadence;
-} | null {
-  if (!looksLikeReminderRequest(intent)) {
-    return null;
-  }
-
-  const slots = extractExplicitDailySlots(intent);
-  const slot = slots[0] ?? null;
-
-  return {
-    title: "Reminder",
-    cadence:
-      slot && !hasCadenceHint(intent)
-        ? {
-            kind: "once",
-            dueAt: buildOneOffDueAtFromMinuteOfDay({
-              intent,
-              minuteOfDay: slot.minuteOfDay,
-              timeZone,
-            }),
-          }
-        : undefined,
-  };
-}
-
-function resolveTimedRequestKind(args: {
-  intent: string;
-  llmRequestKind: NativeAppleReminderLikeKind | null;
-  recentWindow?: string[];
-}): NativeAppleReminderLikeKind | null {
-  if (args.llmRequestKind) {
-    return args.llmRequestKind;
-  }
-  if (looksLikeAlarmRequest(args.intent)) {
-    return "alarm";
-  }
-  if (looksLikeReminderRequest(args.intent)) {
-    return "reminder";
-  }
-  const normalizedIntent = normalizeLifeInputText(args.intent).toLowerCase();
-  const isShortTimedFollowup =
-    normalizedIntent.length <= 32 &&
-    (/\b(\d{1,2}(?::\d{2})?\s*(?:am|pm)|noon|midnight)\b/.test(
-      normalizedIntent,
-    ) ||
-      /\b(today|tomorrow|tonight)\b/.test(normalizedIntent));
-  if (isShortTimedFollowup) {
-    for (const text of [...(args.recentWindow ?? [])].reverse()) {
-      if (looksLikeAlarmRequest(text)) {
-        return "alarm";
-      }
-      if (looksLikeReminderRequest(text)) {
-        return "reminder";
-      }
-    }
-  }
-  return null;
-}
-
-function deriveTimedRequestDefaults(args: {
-  intent: string;
-  requestKind: NativeAppleReminderLikeKind | null;
-  timeZone?: string;
-}): {
-  title: string;
-  cadence?: LifeOpsCadence;
-} | null {
-  if (args.requestKind === "alarm") {
-    return deriveAlarmLikeDefaults(args.intent, args.timeZone);
-  }
-  if (args.requestKind === "reminder") {
-    return deriveReminderLikeDefaults(args.intent, args.timeZone);
-  }
-  return null;
 }
 
 function parseExplicitLocalDateForLifeRequest(
@@ -3104,120 +2625,6 @@ function buildDefaultReminderPlan(
   };
 }
 
-function inferSeedCadenceFromIntent(
-  intent: string,
-  fallbackWindows: Array<"morning" | "afternoon" | "evening" | "night">,
-): LifeOpsCadence | null {
-  const lower = intent.toLowerCase();
-  const windows = extractIntentWindows(intent);
-  const effectiveWindows = windows.length > 0 ? windows : fallbackWindows;
-  const explicitWeekdays = extractIntentWeekdays(intent);
-  const weeklyMatch =
-    lower.match(
-      /\b(one|two|three|four|five|six|seven|\d+)\s*(?:x|times?)\s*(?:a|per)\s*week\b/,
-    ) ?? lower.match(/\b(once|twice)\s+a\s+week\b/);
-  if (explicitWeekdays.length > 0) {
-    return {
-      kind: "weekly",
-      weekdays: explicitWeekdays,
-      windows: effectiveWindows.length > 0 ? effectiveWindows : ["morning"],
-    };
-  }
-  if (weeklyMatch?.[1]) {
-    const count = parseNumberWord(weeklyMatch[1]);
-    if (count) {
-      return {
-        kind: "weekly",
-        weekdays: weekdaysForFrequency(count),
-        windows: effectiveWindows.length > 0 ? effectiveWindows : ["morning"],
-      };
-    }
-  }
-  if (/\bweekly\b/.test(lower)) {
-    return {
-      kind: "weekly",
-      weekdays: [1],
-      windows: effectiveWindows.length > 0 ? effectiveWindows : ["morning"],
-    };
-  }
-
-  const explicitSlots = extractExplicitDailySlots(intent);
-  if (explicitSlots.length > 0) {
-    return {
-      kind: "times_per_day",
-      slots: explicitSlots,
-      visibilityLeadMinutes: 90,
-      visibilityLagMinutes: 180,
-    };
-  }
-
-  const intervalMatch = lower.match(/\bevery\s+(\d+)\s*(hours?|minutes?)\b/);
-  if (intervalMatch) {
-    const value = Number(intervalMatch[1]);
-    const unit = intervalMatch[2];
-    if (Number.isFinite(value) && value > 0) {
-      return {
-        kind: "interval",
-        everyMinutes: /minute/.test(unit) ? value : value * 60,
-        windows:
-          effectiveWindows.length > 0
-            ? effectiveWindows
-            : ["morning", "afternoon", "evening"],
-      };
-    }
-  }
-
-  const timesPerDayMatch =
-    lower.match(
-      /\b(one|two|three|four|five|six|\d+)\s*(?:x|times?)\s*(?:(?:a|per)\s*day|daily)\b/,
-    ) ??
-    lower.match(/\b(once|twice)\s+(?:a\s+day|daily)\b/);
-  if (timesPerDayMatch?.[1]) {
-    const count = parseNumberWord(timesPerDayMatch[1]);
-    if (count) {
-      const slots =
-        effectiveWindows.length >= count
-          ? buildSlotsFromWindows(effectiveWindows.slice(0, count))
-          : buildDistributedDailySlots(count);
-      return {
-        kind: "times_per_day",
-        slots,
-        visibilityLeadMinutes: 90,
-        visibilityLagMinutes: 180,
-      };
-    }
-  }
-
-  if (
-    /\b(morning and night|night and morning|twice a day|two times a day|2x (a|per) day)\b/.test(
-      lower,
-    ) ||
-    windows.length >= 2
-  ) {
-    return {
-      kind: "times_per_day",
-      slots: buildSlotsFromWindows(
-        effectiveWindows.length > 0 ? effectiveWindows : ["morning", "night"],
-      ),
-      visibilityLeadMinutes: 90,
-      visibilityLagMinutes: 180,
-    };
-  }
-
-  if (
-    /\b(daily|every day|each day|every mornings?|every afternoons?|every evenings?|every nights?|mornings?|afternoons?|evenings?|nights?)\b/.test(
-      lower,
-    )
-  ) {
-    return {
-      kind: "daily",
-      windows: effectiveWindows.length > 0 ? effectiveWindows : ["morning"],
-    };
-  }
-
-  return null;
-}
-
 function sentenceCase(value: string): string {
   const trimmed = value.trim();
   if (!trimmed) {
@@ -3336,34 +2743,6 @@ function deriveIntentSegments(intent: string): DerivedIntentSegment[] {
   return segments;
 }
 
-function deriveDefinitionTitle(intent: string): string | null {
-  const explicitTitle = extractQuotedTitle(intent);
-  if (explicitTitle) {
-    return explicitTitle;
-  }
-
-  const scheduledReminderMatch = intent.match(
-    /\b(?:set (?:a )?reminder|create (?:a )?reminder|remind(?: me)?)\b.*?\bfor\b.+?\bto\s+(.+)$/i,
-  );
-  if (scheduledReminderMatch?.[1]) {
-    return titleCase(trimWords(scheduledReminderMatch[1], 8));
-  }
-
-  const segments = deriveIntentSegments(intent).sort(
-    (left, right) => Number(right.hasQuantity) - Number(left.hasQuantity),
-  );
-  if (segments.length === 0) {
-    return null;
-  }
-  if (segments.length === 1) {
-    return titleCase(segments[0].text);
-  }
-  return segments
-    .slice(0, 2)
-    .map((segment) => titleCase(segment.text))
-    .join(" + ");
-}
-
 function deriveGoalTitle(intent: string): string | null {
   const explicitTitle = extractQuotedTitle(intent);
   if (explicitTitle) {
@@ -3377,42 +2756,6 @@ function deriveGoalTitle(intent: string): string | null {
     return null;
   }
   return titleCase(trimWords(segments[0].text, 8));
-}
-
-function deriveDefinitionDescription(
-  intent: string,
-  title: string,
-): string | undefined {
-  const cleaned = intent.replace(/[.?!]/g, " ").replace(/\s+/g, " ").trim();
-  if (!cleaned) {
-    return undefined;
-  }
-  if (normalizeTitle(cleaned) === normalizeTitle(title)) {
-    return undefined;
-  }
-  return sentenceCase(trimWords(cleaned, 18));
-}
-
-function hasSpecificDerivedDefinitionDetails(intent: string): boolean {
-  const segments = deriveIntentSegments(intent);
-  return segments.some((segment) => segment.hasQuantity);
-}
-
-function shouldPreferDerivedDefinitionOverSeed(
-  intent: string,
-  seed: LifeDefinitionSeed | null,
-  derivedTitle: string | null,
-): boolean {
-  if (!derivedTitle) {
-    return false;
-  }
-  if (!seed) {
-    return true;
-  }
-  if (normalizeTitle(seed.title) === normalizeTitle(derivedTitle)) {
-    return false;
-  }
-  return hasSpecificDerivedDefinitionDetails(intent);
 }
 
 function scoreDefinitionTitleQuality(value: string | null | undefined): number {
@@ -3515,280 +2858,6 @@ function shouldRequireLifeCreateConfirmation(args: {
     return false;
   }
   return !args.confirmed;
-}
-
-// ── i18n seed term arrays ────────────────────────────
-// Each entry feeds `textMatchesAnyTerm` (word-boundary for ASCII, substring
-// for CJK/non-ASCII).  Include morphological variants because the matcher
-// does not stem.
-const SEED_TERMS = {
-  brush_teeth: [
-    "brush teeth",
-    "brush my teeth",
-    "brushing teeth",
-    "brushing my teeth",
-    "brushed teeth",
-    "brushed my teeth",
-    "cepillar dientes",
-    "cepillarme dientes",
-    "cepillarse dientes",
-    "cepillarte dientes",
-    "cepillando dientes",
-    "cepillado dientes",
-    "刷牙",
-    "양치",
-    "escovar dentes",
-    "đánh răng",
-    "magsipilyo",
-  ],
-  workout: [
-    "workout",
-    "work out",
-    "exercise",
-    "gym",
-    "lifting",
-    "run",
-    "running",
-    "ejercicio",
-    "锻炼",
-    "健身",
-    "운동",
-    "exercício",
-    "tập thể dục",
-    "ehersisyo",
-  ],
-  invisalign: ["invisalign"],
-  hydration: [
-    "drink water",
-    "drank water",
-    "hydrate",
-    "hydrating",
-    "hydrated",
-    "hydration",
-    "water intake",
-    "beber agua",
-    "喝水",
-    "물 마시기",
-    "beber água",
-    "uống nước",
-    "uminom ng tubig",
-  ],
-  stretch: [
-    "stretch",
-    "stretching",
-    "stretched",
-    "yoga",
-    "estirar",
-    "拉伸",
-    "伸展",
-    "스트레칭",
-    "alongamento",
-    "giãn cơ",
-  ],
-  vitamins: [
-    "vitamin",
-    "vitamins",
-    "supplement",
-    "vitamina",
-    "维生素",
-    "비타민",
-  ],
-  shower: [
-    "shower",
-    "showering",
-    "ducha",
-    "淋浴",
-    "洗澡",
-    "샤워",
-    "banho",
-    "tắm",
-    "maligo",
-  ],
-  shave: [
-    "shave",
-    "shaving",
-    "shaved",
-    "afeitar",
-    "刮胡子",
-    "면도",
-    "barbear",
-    "cạo râu",
-    "mag-ahit",
-  ],
-} as const;
-
-function inferLifeDefinitionSeed(intent: string): LifeDefinitionSeed | null {
-  const lower = intent.toLowerCase();
-
-  if (textMatchesAnyTerm(lower, SEED_TERMS.brush_teeth)) {
-    const title = "Brush teeth";
-    return {
-      title,
-      kind: "habit",
-      cadence: inferSeedCadenceFromIntent(intent, ["morning", "night"]) ?? {
-        kind: "times_per_day",
-        slots: buildSlotsFromWindows(["morning", "night"]),
-        visibilityLeadMinutes: 90,
-        visibilityLagMinutes: 240,
-      },
-      description: "Brush your teeth in the morning and again at night.",
-      reminderPlan: buildDefaultReminderPlan("Tooth brushing reminder"),
-      websiteAccess: inferWebsiteAccessPolicyFromIntent(intent, title),
-    };
-  }
-
-  if (textMatchesAnyTerm(lower, SEED_TERMS.workout)) {
-    const title = "Workout";
-    return {
-      title,
-      kind: "habit",
-      cadence: inferSeedCadenceFromIntent(intent, ["afternoon", "evening"]) ?? {
-        kind: "daily",
-        windows: ["afternoon"],
-        visibilityLeadMinutes: 120,
-        visibilityLagMinutes: 240,
-      },
-      description:
-        "Exercise in the afternoon and keep your training streak alive.",
-      reminderPlan: buildDefaultReminderPlan("Workout reminder"),
-      websiteAccess: inferWebsiteAccessPolicyFromIntent(intent, title),
-    };
-  }
-
-  if (textMatchesAnyTerm(lower, SEED_TERMS.invisalign)) {
-    const title = "Keep Invisalign in";
-    return {
-      title,
-      kind: "habit",
-      cadence: inferSeedCadenceFromIntent(intent, [
-        "morning",
-        "afternoon",
-        "evening",
-      ]) ?? {
-        kind: "interval",
-        everyMinutes: 240,
-        windows: ["morning", "afternoon", "evening"],
-        startMinuteOfDay: 9 * 60,
-        maxOccurrencesPerDay: 4,
-        visibilityLeadMinutes: 15,
-        visibilityLagMinutes: 60,
-      },
-      description: "Check throughout the day that your Invisalign is back in.",
-      reminderPlan: buildDefaultReminderPlan("Invisalign reminder"),
-      websiteAccess: inferWebsiteAccessPolicyFromIntent(intent, title),
-    };
-  }
-
-  if (textMatchesAnyTerm(lower, SEED_TERMS.hydration)) {
-    const title = "Drink water";
-    return {
-      title,
-      kind: "habit",
-      cadence: inferSeedCadenceFromIntent(intent, [
-        "morning",
-        "afternoon",
-        "evening",
-      ]) ?? {
-        kind: "interval",
-        everyMinutes: 180,
-        windows: ["morning", "afternoon", "evening"],
-        startMinuteOfDay: 9 * 60,
-        maxOccurrencesPerDay: 4,
-        visibilityLeadMinutes: 15,
-        visibilityLagMinutes: 90,
-      },
-      description: "Hydrate regularly across the day.",
-      reminderPlan: buildDefaultReminderPlan("Water reminder"),
-      websiteAccess: inferWebsiteAccessPolicyFromIntent(intent, title),
-    };
-  }
-
-  if (textMatchesAnyTerm(lower, SEED_TERMS.stretch)) {
-    const title = "Stretch";
-    return {
-      title,
-      kind: "habit",
-      cadence: inferSeedCadenceFromIntent(intent, ["afternoon", "evening"]) ?? {
-        kind: "interval",
-        everyMinutes: 360,
-        windows: ["afternoon", "evening"],
-        startMinuteOfDay: 12 * 60,
-        maxOccurrencesPerDay: 2,
-        visibilityLeadMinutes: 15,
-        visibilityLagMinutes: 120,
-      },
-      description: "Take one or two stretch breaks during the day.",
-      reminderPlan: buildDefaultReminderPlan("Stretch reminder"),
-      websiteAccess: inferWebsiteAccessPolicyFromIntent(intent, title),
-    };
-  }
-
-  if (textMatchesAnyTerm(lower, SEED_TERMS.vitamins)) {
-    const title = "Take vitamins";
-    const mealWindows =
-      /\bbreakfast\b/.test(lower) || /\bmorning\b/.test(lower)
-        ? (["morning"] as const)
-        : /\blunch\b/.test(lower)
-          ? (["afternoon"] as const)
-          : /\bdinner\b/.test(lower) || /\bnight\b/.test(lower)
-            ? (["night"] as const)
-            : (["morning"] as const);
-    const normalizedMealWindows = [...mealWindows] as Array<
-      "morning" | "afternoon" | "evening" | "night"
-    >;
-    return {
-      title,
-      kind: "habit",
-      cadence: inferSeedCadenceFromIntent(intent, normalizedMealWindows) ?? {
-        kind: "daily",
-        windows: normalizedMealWindows,
-        visibilityLeadMinutes: 60,
-        visibilityLagMinutes: 180,
-      },
-      description:
-        "Take your vitamins with a meal at the right part of the day.",
-      reminderPlan: buildDefaultReminderPlan("Vitamin reminder"),
-      websiteAccess: inferWebsiteAccessPolicyFromIntent(intent, title),
-    };
-  }
-
-  if (textMatchesAnyTerm(lower, SEED_TERMS.shower)) {
-    const title = "Shower";
-    return {
-      title,
-      kind: "habit",
-      cadence: inferSeedCadenceFromIntent(intent, ["morning", "night"]) ?? {
-        kind: "weekly",
-        weekdays: [1, 3, 6],
-        windows: ["morning", "night"],
-        visibilityLeadMinutes: 120,
-        visibilityLagMinutes: 360,
-      },
-      description: "Stay on top of your weekly shower cadence.",
-      reminderPlan: buildDefaultReminderPlan("Shower reminder"),
-      websiteAccess: inferWebsiteAccessPolicyFromIntent(intent, title),
-    };
-  }
-
-  if (textMatchesAnyTerm(lower, SEED_TERMS.shave)) {
-    const title = "Shave";
-    return {
-      title,
-      kind: "habit",
-      cadence: inferSeedCadenceFromIntent(intent, ["morning"]) ?? {
-        kind: "weekly",
-        weekdays: [2, 5],
-        windows: ["morning"],
-        visibilityLeadMinutes: 120,
-        visibilityLagMinutes: 360,
-      },
-      description: "Keep your shaving cadence on track through the week.",
-      reminderPlan: buildDefaultReminderPlan("Shave reminder"),
-      websiteAccess: inferWebsiteAccessPolicyFromIntent(intent, title),
-    };
-  }
-
-  return null;
 }
 
 function describeReminderIntensity(
@@ -3984,38 +3053,17 @@ export const lifeAction: Action & {
         },
       };
     }
-    let operation =
+    const operation =
       (forceCreateExecution ? "create_definition" : operationPlan.operation) ??
       classifyIntent(intent);
     const service = new LifeOpsService(runtime);
     const domain = detailString(details, "domain") as LifeOpsDomain | undefined;
     const ownership = requestedOwnership(domain);
     const chatText = intent;
-    const inferredSeed = inferLifeDefinitionSeed(intent);
-    let targetName = params.target ?? params.title ?? inferredSeed?.title;
-    const inferredReminderIntensity = inferReminderIntensityFromIntent(intent);
-    if (
-      inferredReminderIntensity &&
-      (operation === "create_definition" || operation === "update_definition")
-    ) {
-      const reminderPreferenceTarget = await resolveDefinitionFromIntent(
-        service,
-        targetName,
-        intent,
-        domain,
-      );
-      if (reminderPreferenceTarget) {
-        operation = "set_reminder_preference";
-        targetName = reminderPreferenceTarget.definition.title;
-      }
-    }
+    const targetName = params.target ?? params.title;
     const createConfirmed =
       deferredDraftReuseMode === "confirm" ||
       detailBoolean(details, "confirmed") === true;
-    const recentTimedContextWindow = recentConversationTextsFromState(
-      state ?? undefined,
-      6,
-    );
 
     try {
       const createDefinition = async () => {
@@ -4026,45 +3074,17 @@ export const lifeAction: Action & {
         const editingDeferredDefinitionDraft =
           deferredDraftReuseMode === "edit" &&
           deferredDefinitionDraft?.operation === "create_definition";
-        const seed = inferredSeed;
-        const derivedTitle = deriveDefinitionTitle(intent);
-        const allowDerivedTitleOverride =
-          !editingDeferredDefinitionDraft ||
-          hasSpecificDerivedDefinitionDetails(intent) ||
-          extractQuotedTitle(intent) !== null ||
-          seed !== null;
-        const preferDerivedDefinition = shouldPreferDerivedDefinitionOverSeed(
-          intent,
-          seed ?? null,
-          derivedTitle,
+        const explicitCadenceDetail = normalizeCadenceDetail(
+          detailObject(details, "cadence"),
         );
-        // ── Regex-based derivation (primary path) ──────────
         const fallbackTitle = deferredDefinitionDraft?.request.title ?? null;
         let title: string | null = editingDeferredDefinitionDraft
-          ? (params.title ??
-            (allowDerivedTitleOverride
-              ? preferDerivedDefinition
-                ? derivedTitle
-                : (seed?.title ?? derivedTitle)
-              : null) ??
-            fallbackTitle)
-          : (fallbackTitle ??
-            params.title ??
-            (preferDerivedDefinition
-              ? derivedTitle
-              : (seed?.title ?? derivedTitle)));
+          ? (params.title ?? fallbackTitle)
+          : (fallbackTitle ?? params.title ?? null);
         const fallbackCadence = deferredDefinitionDraft?.request.cadence;
         let cadence: LifeOpsCadence | undefined = editingDeferredDefinitionDraft
-          ? (normalizeCadenceDetail(detailObject(details, "cadence")) ??
-            (preferDerivedDefinition ? undefined : seed?.cadence) ??
-            inferSeedCadenceFromIntent(intent, ["morning"]) ??
-            fallbackCadence ??
-            undefined)
-          : (fallbackCadence ??
-            normalizeCadenceDetail(detailObject(details, "cadence")) ??
-            (preferDerivedDefinition ? undefined : seed?.cadence) ??
-            inferSeedCadenceFromIntent(intent, ["morning"]) ??
-            undefined);
+          ? (explicitCadenceDetail ?? fallbackCadence ?? undefined)
+          : (fallbackCadence ?? explicitCadenceDetail ?? undefined);
         let windowPolicy:
           | CreateLifeOpsDefinitionRequest["windowPolicy"]
           | undefined = editingDeferredDefinitionDraft
@@ -4085,11 +3105,10 @@ export const lifeAction: Action & {
         // sources so the planner only fills genuine gaps.
         const hadExplicitCadence = Boolean(
           (editingDeferredDefinitionDraft
-            ? (normalizeCadenceDetail(detailObject(details, "cadence")) ??
-              (preferDerivedDefinition ? undefined : seed?.cadence))
+            ? (explicitCadenceDetail ??
+              deferredDefinitionDraft?.request.cadence)
             : deferredDefinitionDraft?.request.cadence) ??
-            normalizeCadenceDetail(detailObject(details, "cadence")) ??
-            (preferDerivedDefinition ? undefined : seed?.cadence),
+            explicitCadenceDetail,
         );
         const hadExplicitTitle = Boolean(
           (editingDeferredDefinitionDraft
@@ -4113,14 +3132,10 @@ export const lifeAction: Action & {
             state: state ?? undefined,
             message: message ?? undefined,
           });
-          const explicitCadenceDetail = normalizeCadenceDetail(
-            detailObject(details, "cadence"),
-          );
           const shouldHonorPlannerResponse =
             llmPlan?.mode === "respond" &&
             Boolean(llmPlan.response) &&
             !editingDeferredDefinitionDraft &&
-            !seed &&
             !params.title &&
             !explicitCadenceDetail &&
             !detailString(details, "description") &&
@@ -4135,20 +3150,14 @@ export const lifeAction: Action & {
           }
           if (llmPlan) {
             llmRequestKind = llmPlan.requestKind;
-            const preferredPlannerTitle =
-              derivedTitle && hasSpecificDerivedDefinitionDetails(intent)
-                ? derivedTitle
-                : preferDerivedDefinition || !seed
-                  ? llmPlan.title
-                  : seed.title;
             if (
               !hadExplicitTitle &&
               shouldAdoptPlannerTitle({
                 currentTitle: title,
-                plannerTitle: preferredPlannerTitle,
+                plannerTitle: llmPlan.title,
               })
             ) {
-              title = preferredPlannerTitle;
+              title = llmPlan.title;
             }
             if (
               (editingDeferredDefinitionDraft || !hadExplicitCadence) &&
@@ -4191,37 +3200,12 @@ export const lifeAction: Action & {
               deferredDefinitionDraft?.request.timezone ??
               windowPolicy?.timezone,
           ) ?? extractLifeTimeZoneFromText(intent);
-        const timedRequestKind = resolveTimedRequestKind({
-          intent,
-          llmRequestKind,
-          recentWindow: recentTimedContextWindow,
-        });
-        const timedDefaults = deriveTimedRequestDefaults({
-          intent,
-          requestKind: timedRequestKind,
-          timeZone: resolvedTimeZone ?? undefined,
-        });
-        if (timedDefaults) {
-          if (!title) {
-            title = timedDefaults.title;
-          }
-          const inferredSingleSlotCadence =
-            cadence?.kind === "times_per_day" && cadence.slots.length === 1;
-          if (
-            (!cadence || inferredSingleSlotCadence) &&
-            timedDefaults.cadence
-          ) {
-            cadence = timedDefaults.cadence;
-            if (inferredSingleSlotCadence) {
-              windowPolicy = undefined;
-            }
-          }
-        }
+        const timedRequestKind = llmRequestKind;
         const nativeAppleMetadata =
           timedRequestKind && cadence?.kind === "once"
             ? buildNativeAppleReminderMetadata({
                 kind: timedRequestKind,
-                source: llmRequestKind ? "llm" : "heuristic",
+                source: "llm",
               })
             : undefined;
         const definitionMetadata = editingDeferredDefinitionDraft
@@ -4270,14 +3254,13 @@ export const lifeAction: Action & {
         }
         const kind =
           (editingDeferredDefinitionDraft
-            ? ((detailString(details, "kind") as
+            ? (detailString(details, "kind") as
                 | CreateLifeOpsDefinitionRequest["kind"]
-                | undefined) ?? seed?.kind)
+                | undefined)
             : deferredDefinitionDraft?.request.kind) ??
           (detailString(details, "kind") as
             | CreateLifeOpsDefinitionRequest["kind"]
             | undefined) ??
-          seed?.kind ??
           "habit";
         const definitionDraft: DeferredLifeDefinitionDraft = {
           intent,
@@ -4292,10 +3275,7 @@ export const lifeAction: Action & {
               llmDescription ??
               (editingDeferredDefinitionDraft
                 ? deferredDefinitionDraft?.request.description
-                : undefined) ??
-              (preferDerivedDefinition
-                ? deriveDefinitionDescription(intent, title)
-                : seed?.description),
+                : undefined),
             goalRef:
               detailString(details, "goalId") ??
               detailString(details, "goalTitle") ??
@@ -4317,9 +3297,7 @@ export const lifeAction: Action & {
                 | CreateLifeOpsDefinitionRequest["reminderPlan"]
                 | undefined) ??
               deferredDefinitionDraft?.request.reminderPlan ??
-              (preferDerivedDefinition
-                ? buildDefaultReminderPlan(`${title} reminder`)
-                : seed?.reminderPlan),
+              buildDefaultReminderPlan(`${title} reminder`),
             timezone:
               extractLifeTimeZoneFromText(intent) ??
               normalizeLifeTimeZoneToken(llmPlan?.timeZone) ??
@@ -4334,37 +3312,9 @@ export const lifeAction: Action & {
             websiteAccess:
               (detailObject(details, "websiteAccess") as unknown as
                 | CreateLifeOpsDefinitionRequest["websiteAccess"]
-                | undefined) ??
-              deferredDefinitionDraft?.request.websiteAccess ??
-              seed?.websiteAccess,
+                | undefined) ?? deferredDefinitionDraft?.request.websiteAccess,
           },
         };
-        // ── LLM unlock-mode refinement ───────────────────
-        // When the seed/regex produced a websiteAccess policy and no
-        // explicit details override was present, let the LLM try to
-        // classify the unlock mode more accurately.
-        if (
-          definitionDraft.request.websiteAccess &&
-          !detailObject(details, "websiteAccess") &&
-          !deferredDefinitionDraft?.request.websiteAccess
-        ) {
-          const llmUnlock = await extractUnlockModeWithLlm({
-            runtime,
-            intent,
-          });
-          if (llmUnlock) {
-            definitionDraft.request.websiteAccess = {
-              ...definitionDraft.request.websiteAccess,
-              unlockMode: llmUnlock.mode,
-              ...(llmUnlock.callbackKey !== undefined && {
-                callbackKey: llmUnlock.callbackKey,
-              }),
-              ...(llmUnlock.durationMinutes !== undefined && {
-                unlockDurationMinutes: llmUnlock.durationMinutes,
-              }),
-            };
-          }
-        }
         if (
           shouldRequireLifeCreateConfirmation({
             confirmed: createConfirmed,
@@ -4832,14 +3782,6 @@ export const lifeAction: Action & {
               text: `Multiple items match — which one?\n${ambiguousCandidates.map((t) => `  - ${t}`).join("\n")}`,
             };
           }
-          if (
-            shouldRecoverMissingOccurrenceAsCreate(
-              intent,
-              inferredSeed ?? undefined,
-            )
-          ) {
-            return await createDefinition();
-          }
           return {
             success: false,
             text: "I could not find that active item to complete.",
@@ -4982,15 +3924,17 @@ export const lifeAction: Action & {
       }
 
       if (operation === "set_reminder_preference") {
-        const intensity =
-          (await extractReminderIntensityWithLlm({ runtime, intent })) ??
-          inferReminderIntensityFromIntent(intent);
-        if (!intensity) {
+        const reminderIntensityPlan = await extractReminderIntensityWithLlm({
+          runtime,
+          intent,
+        });
+        if (reminderIntensityPlan.intensity === "unknown") {
           return {
             success: false,
             text: "I need to know whether you want reminders minimal, normal, persistent, or high priority only.",
           };
         }
+        const intensity = reminderIntensityPlan.intensity;
         const target = await resolveDefinitionFromIntent(
           service,
           targetName,
@@ -5265,7 +4209,7 @@ export const lifeAction: Action & {
       {
         name: "{{agentName}}",
         content: {
-          text: 'I can set up a weekday-after-lunch Invisalign habit. Confirm and I\'ll save it.',
+          text: "I can set up a weekday-after-lunch Invisalign habit. Confirm and I'll save it.",
           actions: ["LIFE"],
         },
       },

@@ -1,12 +1,19 @@
-import { Service, type IAgentRuntime, logger, ModelType } from '@elizaos/core';
+import { type IAgentRuntime, logger, ModelType, Service } from "@elizaos/core";
 
-const MUSIC_ENTITY_DETECTION_SERVICE_NAME = 'musicEntityDetection';
+const MUSIC_ENTITY_DETECTION_SERVICE_NAME = "musicEntityDetection";
 
 export interface DetectedMusicEntity {
-  type: 'artist' | 'album' | 'song';
+  type: "artist" | "album" | "song";
   name: string;
   confidence: number; // 0-1
   context?: string; // Surrounding text
+}
+
+interface RawDetectedMusicEntity {
+  type?: unknown;
+  name?: unknown;
+  confidence?: unknown;
+  context?: unknown;
 }
 
 /**
@@ -15,17 +22,21 @@ export interface DetectedMusicEntity {
  */
 export class MusicEntityDetectionService extends Service {
   static serviceType: string = MUSIC_ENTITY_DETECTION_SERVICE_NAME;
-  capabilityDescription = 'Detects music entity names (artists, albums, songs) from text using LLM';
+  capabilityDescription =
+    "Detects music entity names (artists, albums, songs) from text using LLM";
 
-  private cache: Map<string, { entities: DetectedMusicEntity[]; timestamp: number }> = new Map();
+  private cache: Map<
+    string,
+    { entities: DetectedMusicEntity[]; timestamp: number }
+  > = new Map();
   private readonly CACHE_TTL = 3600000; // 1 hour in milliseconds
 
-  constructor(runtime?: IAgentRuntime) {
-    super(runtime);
-  }
-
-  static async start(runtime: IAgentRuntime): Promise<MusicEntityDetectionService> {
-    logger.debug(`Starting MusicEntityDetectionService for agent ${runtime.character.name}`);
+  static async start(
+    runtime: IAgentRuntime,
+  ): Promise<MusicEntityDetectionService> {
+    logger.debug(
+      `Starting MusicEntityDetectionService for agent ${runtime.character.name}`,
+    );
     return new MusicEntityDetectionService(runtime);
   }
 
@@ -49,7 +60,7 @@ export class MusicEntityDetectionService extends Service {
     }
 
     if (!this.runtime) {
-      throw new Error('MusicEntityDetectionService requires a runtime');
+      throw new Error("MusicEntityDetectionService requires a runtime");
     }
 
     try {
@@ -86,25 +97,37 @@ IMPORTANT: Only return valid JSON. Do not include any explanation or text outsid
       // Parse JSON response
       let entities: DetectedMusicEntity[] = [];
       try {
-        const cleaned = (response as string).trim();
+        const cleaned = String(response).trim();
+        let parsedEntities: RawDetectedMusicEntity[] = [];
         // Try to extract JSON array from response
         const jsonMatch = cleaned.match(/\[[\s\S]*\]/);
         if (jsonMatch) {
-          entities = JSON.parse(jsonMatch[0]);
+          parsedEntities = JSON.parse(jsonMatch[0]) as RawDetectedMusicEntity[];
         } else {
           // Try parsing the whole response
-          entities = JSON.parse(cleaned);
+          parsedEntities = JSON.parse(cleaned) as RawDetectedMusicEntity[];
         }
 
         // Validate and filter entities
         const urlPattern = /^https?:\/\//i;
-        entities = entities
-          .filter((e: any) => {
+        entities = parsedEntities
+          .filter((e: RawDetectedMusicEntity) => {
             // Basic validation
-            if (!e || typeof e !== 'object') return false;
-            if (!['artist', 'album', 'song'].includes(e.type)) return false;
-            if (typeof e.name !== 'string' || e.name.trim().length === 0) return false;
-            if (typeof e.confidence !== 'number' || e.confidence < 0 || e.confidence > 1) return false;
+            if (!e || typeof e !== "object") return false;
+            if (
+              typeof e.type !== "string" ||
+              !["artist", "album", "song"].includes(e.type)
+            ) {
+              return false;
+            }
+            if (typeof e.name !== "string" || e.name.trim().length === 0)
+              return false;
+            if (
+              typeof e.confidence !== "number" ||
+              e.confidence < 0 ||
+              e.confidence > 1
+            )
+              return false;
 
             // Filter out URLs
             if (urlPattern.test(e.name)) {
@@ -113,17 +136,24 @@ IMPORTANT: Only return valid JSON. Do not include any explanation or text outsid
 
             return true;
           })
-          .map((e: any) => ({
-            type: e.type,
-            name: e.name.trim(),
-            confidence: e.confidence,
-            context: e.context?.trim(),
-          }))
+          .map((e: RawDetectedMusicEntity): DetectedMusicEntity => {
+            const context =
+              typeof e.context === "string" ? e.context.trim() : undefined;
+
+            return {
+              type: e.type as DetectedMusicEntity["type"],
+              name: (e.name as string).trim(),
+              confidence: e.confidence as number,
+              context,
+            };
+          })
           .filter((e: DetectedMusicEntity) => e.confidence > 0.3); // Filter low confidence
       } catch (parseError) {
         throw new Error(
           `Failed to parse music entity detection response: ${
-            parseError instanceof Error ? parseError.message : String(parseError)
+            parseError instanceof Error
+              ? parseError.message
+              : String(parseError)
           }`,
         );
       }

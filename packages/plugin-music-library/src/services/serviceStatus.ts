@@ -3,10 +3,10 @@
  */
 
 export enum ServiceStatus {
-  ACTIVE = 'active',
-  DEGRADED = 'degraded', // Available but experiencing issues
-  UNAVAILABLE = 'unavailable',
-  NOT_CONFIGURED = 'not_configured',
+  ACTIVE = "active",
+  DEGRADED = "degraded", // Available but experiencing issues
+  UNAVAILABLE = "unavailable",
+  NOT_CONFIGURED = "not_configured",
 }
 
 export interface ServiceHealth {
@@ -23,4 +23,3 @@ export interface MusicInfoServiceStatus {
   theAudioDb: ServiceHealth;
   wikipedia: ServiceHealth;
 }
-

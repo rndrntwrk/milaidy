@@ -3,7 +3,7 @@ import process from "node:process";
 export const MILADY_GITHUB_REPOSITORY = "milady-ai/milady";
 const CDN_ORIGIN = "https://cdn.jsdelivr.net/gh";
 const RAW_GITHUB_ORIGIN = "https://raw.githubusercontent.com";
-const HOMEPAGE_ASSET_ROOT = "apps/web/public";
+const HOMEPAGE_ASSET_ROOT = "apps/homepage/public";
 
 function normalizeReleaseTag(value) {
   const normalized = value?.trim();

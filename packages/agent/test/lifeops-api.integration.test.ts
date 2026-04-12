@@ -2,9 +2,12 @@ import crypto from "node:crypto";
 import type { AgentRuntime, Task, UUID } from "@elizaos/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { req } from "../../../test/helpers/http";
+import { canBindLoopback } from "../../../test/helpers/loopback";
 
 import { startApiServer } from "../src/api/server";
 import { DatabaseSync } from "../src/test-utils/sqlite-compat";
+
+const describeLoopback = describe.skipIf(!(await canBindLoopback()));
 
 type SqlQuery = {
   queryChunks?: Array<{ value?: unknown }>;
@@ -80,7 +83,7 @@ function createRuntimeForLifeOpsApiTests(): AgentRuntime {
   return runtimeSubset as unknown as AgentRuntime;
 }
 
-describe("Life-ops API E2E", () => {
+describeLoopback("Life-ops API E2E", () => {
   describe("without runtime", () => {
     let port: number;
     let close: () => Promise<void>;

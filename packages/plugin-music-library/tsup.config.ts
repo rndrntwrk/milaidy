@@ -1,19 +1,13 @@
-import { defineConfig } from 'tsup';
+import { defineConfig } from "tsup";
 
 export default defineConfig({
-  entry: ['src/index.ts'],
-  outDir: 'dist',
-  tsconfig: './tsconfig.build.json',
+  entry: ["src/index.ts"],
+  outDir: "dist",
+  tsconfig: "./tsconfig.build.json",
   sourcemap: true,
   clean: true,
-  format: ['esm'],
+  format: ["esm"],
   // Upstream sources are not strict against current @elizaos/core types; ship JS only.
   dts: false,
-  external: [
-    'dotenv',
-    'fs',
-    'path',
-    '@distube/ytdl-core',
-  ],
+  external: ["dotenv", "fs", "path"],
 });
-

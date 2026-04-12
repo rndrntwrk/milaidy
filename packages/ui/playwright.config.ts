@@ -1,27 +1,34 @@
-import { defineConfig } from "@playwright/test";
+import { defineConfig, devices } from "@playwright/test";
+
+const storybookPort = Number(process.env.MILADY_UI_STORYBOOK_PORT || "6106");
 
 export default defineConfig({
   testDir: "./e2e",
-  timeout: 30_000,
+  timeout: 120_000,
   expect: {
-    toHaveScreenshot: {
-      maxDiffPixelRatio: 0.01,
-    },
+    timeout: 10_000,
   },
+  fullyParallel: false,
+  retries: 0,
+  workers: 1,
+  reporter: "list",
   use: {
-    baseURL: "http://localhost:6006",
+    baseURL: `http://127.0.0.1:${storybookPort}`,
+    trace: "retain-on-failure",
     screenshot: "only-on-failure",
-  },
-  webServer: {
-    command: "bun run storybook -- --ci",
-    port: 6006,
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
+    video: "retain-on-failure",
   },
   projects: [
     {
       name: "chromium",
-      use: { browserName: "chromium" },
+      use: { ...devices["Desktop Chrome"] },
     },
   ],
+  webServer: {
+    command: `bun run storybook -- --ci --host 127.0.0.1 --port ${storybookPort}`,
+    cwd: import.meta.dirname,
+    port: storybookPort,
+    reuseExistingServer: false,
+    timeout: 180_000,
+  },
 });

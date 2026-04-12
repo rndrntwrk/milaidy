@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import type { AgentRuntime, Task, UUID } from "@elizaos/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { req } from "../../../test/helpers/http";
+import { canBindLoopback } from "../../../test/helpers/loopback";
 import { startApiServer } from "../src/api/server";
 import { DatabaseSync } from "../src/test-utils/sqlite-compat";
 import {
@@ -9,6 +10,8 @@ import {
   LIFEOPS_TASK_NAME,
   registerLifeOpsTaskWorker,
 } from "../src/lifeops/runtime";
+
+const describeLoopback = describe.skipIf(!(await canBindLoopback()));
 
 type SqlQuery = {
   queryChunks?: Array<{ value?: unknown }>;
@@ -154,7 +157,7 @@ function createRuntimeForSchedulerTests() {
   };
 }
 
-describe("LifeOps scheduler E2E", () => {
+describeLoopback("LifeOps scheduler E2E", () => {
   let port: number;
   let close: () => Promise<void>;
   let runtimeFixture: ReturnType<typeof createRuntimeForSchedulerTests>;
