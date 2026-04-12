@@ -337,8 +337,6 @@ export class MusicQueue extends EventEmitter {
   ): Promise<Readable | null> {
     let stream: Readable | null = null;
     let lastErrorMessage: string | null = null;
-    let encounteredAgeRestriction = false;
-
     // Try cache first if available
     if (this.audioCache) {
       // First try with exact cache key (title-based)
@@ -360,7 +358,7 @@ export class MusicQueue extends EventEmitter {
       }
     }
 
-    // If still not cached, download using unified fallback chain
+    // If still not cached, download using the canonical stream path
     if (!stream) {
       try {
         const streamResult = await createAudioStream(track.url);
@@ -383,90 +381,6 @@ export class MusicQueue extends EventEmitter {
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         lastErrorMessage = errorMessage;
-        const errorLower = errorMessage.toLowerCase();
-
-        // Check if it's an age verification/restriction error
-        const isAgeRestricted =
-          errorLower.includes('age verification') ||
-          errorLower.includes('restricted in your region') ||
-          errorLower.includes('sign in to confirm') ||
-          errorLower.includes('not a bot') ||
-          errorLower.includes('requires authentication') ||
-          (errorLower.includes('exited with code 0') && errorLower.includes('no data'));
-        if (isAgeRestricted) {
-          encounteredAgeRestriction = true;
-        }
-
-        // If age restricted and we have a track title, try to find alternative version
-        if (isAgeRestricted && track.title && track.title !== 'Unknown Title' && this.runtime) {
-          try {
-            logger.info(`Age restriction detected for ${track.title}, searching for alternative version...`);
-
-            // Emit event to notify user
-            this.emit('track:age-restricted', track);
-
-            // Search YouTube for alternative version
-            const youtubeSearchService = this.runtime.getService('youtubeSearch') as any;
-            if (youtubeSearchService && youtubeSearchService.search) {
-              const searchQuery = track.title;
-              logger.debug(`Searching YouTube for alternative: ${searchQuery}`);
-
-              const searchResults = await youtubeSearchService.search(searchQuery, { limit: 5 });
-
-              if (searchResults && searchResults.length > 0) {
-                const alternative =
-                  this.selectBestAlternativeTrack(searchResults, {
-                    title: track.title,
-                    url: track.url,
-                    duration: track.duration,
-                  }) ||
-                  searchResults.find((result: any) => result.url !== track.url);
-
-                if (alternative) {
-                  logger.info(`Found alternative version: ${alternative.title} at ${alternative.url}`);
-
-                  // Update track with new URL
-                  track.url = alternative.url;
-                  if (alternative.title) {
-                    track.title = alternative.title;
-                  }
-                  if (alternative.duration) {
-                    track.duration = alternative.duration;
-                  }
-
-                  // Retry with new URL using unified fallback chain
-                  try {
-                    const retryResult = await createAudioStream(track.url);
-                    stream = retryResult.stream;
-                    logger.info(
-                      `✅ Successfully using alternative version: ${track.title} (via ${retryResult.source})`
-                    );
-
-                    // Cache the alternative version
-                    if (shouldCache && this.audioCache && stream) {
-                      const cacheKey = {
-                        song: track.title,
-                        quality: 'high' as const,
-                        url: track.url,
-                      };
-                      this.audioCache.downloadAndCache(cacheKey, track.url).catch((err) => {
-                        logger.debug(`Background caching failed: ${err}`);
-                      });
-                    }
-                  } catch (retryError) {
-                    logger.error(`Alternative version also failed: ${retryError}`);
-                    // Fall through to return null
-                  }
-                }
-              }
-            }
-          } catch (searchError) {
-            logger.error(`Error searching for alternative version: ${searchError}`);
-            // Fall through to return null
-          }
-        }
-
-        // If still no stream, return null (caller will handle)
         if (!stream) {
           logger.error(`Error creating stream for ${track.url}: ${errorMessage}`);
         }
@@ -474,12 +388,7 @@ export class MusicQueue extends EventEmitter {
     }
 
     if (!stream && notifyOnFailure) {
-      const fallbackReason =
-        lastErrorMessage ||
-        (encounteredAgeRestriction
-          ? 'Video requires age verification or login'
-          : 'No playable source found');
-      this.emit('track:error', track, fallbackReason);
+      this.emit('track:error', track, lastErrorMessage || 'No playable source found');
     }
 
     return stream;
@@ -891,4 +800,3 @@ export class MusicQueue extends EventEmitter {
     }
   }
 }
-
