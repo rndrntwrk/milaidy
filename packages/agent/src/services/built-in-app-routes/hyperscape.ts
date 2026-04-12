@@ -183,7 +183,7 @@ function buildSession(
 
   const controls: AppSessionState["controls"] = isRunning
     ? ["pause"]
-    : ["pause", "resume"];
+    : ["resume"];
 
   const goalLabel = goal?.description ?? null;
   const suggestedPrompts = quickCommands
