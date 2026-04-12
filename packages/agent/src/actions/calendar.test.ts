@@ -1,4 +1,3 @@
-import { ModelType } from "@elizaos/core";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
@@ -9,6 +8,7 @@ const {
   mockGetNextCalendarEventContext,
   mockCreateCalendarEvent,
   mockUpdateCalendarEvent,
+  mockDeleteCalendarEvent,
   mockUseModel,
   MockLifeOpsServiceError,
 } = vi.hoisted(() => ({
@@ -19,6 +19,7 @@ const {
   mockGetNextCalendarEventContext: vi.fn(),
   mockCreateCalendarEvent: vi.fn(),
   mockUpdateCalendarEvent: vi.fn(),
+  mockDeleteCalendarEvent: vi.fn(),
   mockUseModel: vi.fn(),
   MockLifeOpsServiceError: class extends Error {
     status: number;
@@ -43,6 +44,7 @@ vi.mock("../lifeops/service.js", () => ({
     getNextCalendarEventContext = mockGetNextCalendarEventContext;
     createCalendarEvent = mockCreateCalendarEvent;
     updateCalendarEvent = mockUpdateCalendarEvent;
+    deleteCalendarEvent = mockDeleteCalendarEvent;
   },
   LifeOpsServiceError: MockLifeOpsServiceError,
 }));
@@ -66,7 +68,9 @@ function getRuntime() {
 
 const stubRuntime = {
   agentId: "agent-1",
-  useModel: () => { throw new Error("useModel not available in stub"); },
+  useModel: () => {
+    throw new Error("useModel not available in stub");
+  },
   logger: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} },
 } as never;
 
@@ -2621,7 +2625,9 @@ describe("calendarAction", () => {
       async (_modelType, params: { prompt?: string }) => {
         const prompt = String(params?.prompt ?? "");
         if (
-          prompt.includes("Extract calendar event update fields from the request.")
+          prompt.includes(
+            "Extract calendar event update fields from the request.",
+          )
         ) {
           expect(prompt).toContain("Current timezone: Asia/Tokyo");
           expect(prompt).toContain("Tokyo dinner");
@@ -2702,6 +2708,144 @@ describe("calendarAction", () => {
       }),
     );
     expect(result?.success).toBe(true);
+  });
+
+  it("asks for clarification instead of updating the first colliding title match", async () => {
+    mockGetCalendarFeed.mockResolvedValue({
+      calendarId: "primary",
+      events: [
+        {
+          id: "evt-dentist-1",
+          externalId: "ext-dentist-1",
+          agentId: "agent-1",
+          provider: "google",
+          side: "owner",
+          calendarId: "primary",
+          title: "Dentist appointment",
+          description: "",
+          location: "Main St",
+          status: "confirmed",
+          startAt: "2026-04-12T17:00:00.000Z",
+          endAt: "2026-04-12T18:00:00.000Z",
+          isAllDay: false,
+          timezone: "UTC",
+          htmlLink: null,
+          conferenceLink: null,
+          organizer: null,
+          attendees: [],
+          metadata: {},
+          syncedAt: "2026-04-09T16:00:00.000Z",
+          updatedAt: "2026-04-09T16:00:00.000Z",
+        },
+        {
+          id: "evt-dentist-2",
+          externalId: "ext-dentist-2",
+          agentId: "agent-1",
+          provider: "google",
+          side: "owner",
+          calendarId: "primary",
+          title: "Dentist appointment follow-up",
+          description: "",
+          location: "Main St",
+          status: "confirmed",
+          startAt: "2026-04-13T17:00:00.000Z",
+          endAt: "2026-04-13T18:00:00.000Z",
+          isAllDay: false,
+          timezone: "UTC",
+          htmlLink: null,
+          conferenceLink: null,
+          organizer: null,
+          attendees: [],
+          metadata: {},
+          syncedAt: "2026-04-09T16:00:00.000Z",
+          updatedAt: "2026-04-09T16:00:00.000Z",
+        },
+      ],
+      source: "cache",
+      timeMin: "2026-04-09T00:00:00.000Z",
+      timeMax: "2026-05-09T00:00:00.000Z",
+      syncedAt: "2026-04-09T16:00:00.000Z",
+    });
+
+    const result = await invoke("move dentist appointment to 8pm", {
+      subaction: "update_event",
+      title: "Dentist appointment",
+      details: {},
+    });
+
+    expect(mockUpdateCalendarEvent).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ success: false });
+    expect(result?.text).toContain("multiple events");
+    expect(result?.text).toContain("Dentist appointment");
+  });
+
+  it("asks for clarification instead of deleting the first colliding title match", async () => {
+    mockGetCalendarFeed.mockResolvedValue({
+      calendarId: "primary",
+      events: [
+        {
+          id: "evt-flight-1",
+          externalId: "ext-flight-1",
+          agentId: "agent-1",
+          provider: "google",
+          side: "owner",
+          calendarId: "primary",
+          title: "Flight to LA",
+          description: "",
+          location: "JFK",
+          status: "confirmed",
+          startAt: "2026-04-12T17:00:00.000Z",
+          endAt: "2026-04-12T18:00:00.000Z",
+          isAllDay: false,
+          timezone: "UTC",
+          htmlLink: null,
+          conferenceLink: null,
+          organizer: null,
+          attendees: [],
+          metadata: {},
+          syncedAt: "2026-04-09T16:00:00.000Z",
+          updatedAt: "2026-04-09T16:00:00.000Z",
+        },
+        {
+          id: "evt-flight-2",
+          externalId: "ext-flight-2",
+          agentId: "agent-1",
+          provider: "google",
+          side: "owner",
+          calendarId: "primary",
+          title: "Flight to LA return",
+          description: "",
+          location: "LAX",
+          status: "confirmed",
+          startAt: "2026-04-15T17:00:00.000Z",
+          endAt: "2026-04-15T18:00:00.000Z",
+          isAllDay: false,
+          timezone: "UTC",
+          htmlLink: null,
+          conferenceLink: null,
+          organizer: null,
+          attendees: [],
+          metadata: {},
+          syncedAt: "2026-04-09T16:00:00.000Z",
+          updatedAt: "2026-04-09T16:00:00.000Z",
+        },
+      ],
+      source: "cache",
+      timeMin: "2026-04-09T00:00:00.000Z",
+      timeMax: "2026-05-09T00:00:00.000Z",
+      syncedAt: "2026-04-09T16:00:00.000Z",
+    });
+
+    const result = await invoke("delete flight to la", {
+      subaction: "delete_event",
+      title: "Flight to LA",
+      details: {},
+    });
+
+    expect(mockDeleteCalendarEvent).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ success: false });
+    expect(result?.text).toContain("multiple events");
+    expect(result?.text).toContain("Flight to LA");
   });
 
   it("routes to next_event when the intent is clearly next-event", async () => {

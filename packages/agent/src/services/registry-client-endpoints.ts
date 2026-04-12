@@ -15,6 +15,14 @@ const BLOCKED_REGISTRY_HOST_LITERALS = new Set([
   "0.0.0.0",
   "169.254.169.254",
 ]);
+const REGISTRY_ENDPOINT_FETCH_TIMEOUT_MS = 2_500;
+
+function createRegistryEndpointFetchInit(): RequestInit {
+  return {
+    redirect: "error",
+    signal: AbortSignal.timeout(REGISTRY_ENDPOINT_FETCH_TIMEOUT_MS),
+  };
+}
 
 export function normaliseEndpointUrl(url: string): string {
   return url.replace(/\/+$/, "");
@@ -165,7 +173,7 @@ async function fetchSingleEndpoint(
       }
     }
 
-    const resp = await fetch(url, { redirect: "error" });
+    const resp = await fetch(url, createRegistryEndpointFetchInit());
     if (!resp.ok) {
       logger.warn(
         `[registry-client] Endpoint "${label}" (${url}): ${resp.status} ${resp.statusText}`,

@@ -1,16 +1,15 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { WorkspaceLayout } from "../index";
+
+import { PageLayout } from "../index";
 import {
   fullLayoutArgs,
   LayoutStoryContent,
-  LayoutStoryFooter,
   LayoutStoryFrame,
-  LayoutStoryHeader,
 } from "./layout-story-fixtures";
 
 const meta = {
-  title: "Layouts/WorkspaceLayout",
-  component: WorkspaceLayout,
+  title: "Layouts/PageLayout",
+  component: PageLayout,
   tags: ["autodocs"],
   parameters: {
     layout: "fullscreen",
@@ -23,12 +22,12 @@ const meta = {
   },
   render: (args) => (
     <LayoutStoryFrame>
-      <WorkspaceLayout {...args}>
+      <PageLayout {...args}>
         <LayoutStoryContent />
-      </WorkspaceLayout>
+      </PageLayout>
     </LayoutStoryFrame>
   ),
-} satisfies Meta<typeof WorkspaceLayout>;
+} satisfies Meta<typeof PageLayout>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
@@ -47,24 +46,10 @@ export const MobilePortrait: Story = {
   },
 };
 
-export const MobileLandscape: Story = {
-  args: fullLayoutArgs,
-  parameters: {
-    viewport: { defaultViewport: "mobileLandscape" },
-  },
-};
-
-export const IPadPortrait: Story = {
-  args: fullLayoutArgs,
-  parameters: {
-    viewport: { defaultViewport: "ipadPortrait" },
-  },
-};
-
-export const SinglePane: Story = {
+export const WithoutFooter: Story = {
   args: {
-    contentHeader: <LayoutStoryHeader />,
-    footer: <LayoutStoryFooter />,
+    contentHeader: fullLayoutArgs.contentHeader,
+    sidebar: fullLayoutArgs.sidebar,
   },
   parameters: {
     viewport: { defaultViewport: "desktopWide" },

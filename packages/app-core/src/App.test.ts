@@ -392,6 +392,22 @@ describe("App", () => {
       expect(
         renderer.root.findAllByProps({ "data-testid": "CharacterEditor" }),
       ).toHaveLength(1);
+      expect(
+        renderer.root.findAll(
+          (node) =>
+            node.type === "main" &&
+            typeof node.props.className === "string" &&
+            node.props.className.includes("px-3 xl:px-5 py-4 xl:py-6"),
+        ),
+      ).toHaveLength(0);
+      expect(
+        renderer.root.findAll(
+          (node) =>
+            node.type === "div" &&
+            node.props["data-shell-scroll-region"] === "true" &&
+            node.findAllByProps({ "data-testid": "CharacterEditor" }).length > 0,
+        ),
+      ).toHaveLength(0);
     }
   });
 

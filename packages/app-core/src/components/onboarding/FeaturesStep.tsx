@@ -1,7 +1,7 @@
 /**
  * FeaturesStep — fourth onboarding step for enabling connectors and capabilities.
  *
- * Managed connectors (Telegram, Discord, Phone) use Eliza Cloud OAuth — shown only
+ * Managed connectors (Telegram, Discord) use Eliza Cloud OAuth — shown only
  * when cloud is connected or the server target is elizacloud.
  * Local features (Crypto, Browser) are always available.
  *
@@ -50,17 +50,6 @@ const FEATURES: FeatureDef[] = [
     cloudOnly: true,
   },
   {
-    id: "phone",
-    icon: "\uD83D\uDCDE",
-    nameKey: "onboarding.features.phone.name",
-    nameDefault: "Phone",
-    descKey: "onboarding.features.phone.desc",
-    descDefault:
-      "Get a cloud phone number for your agent. SMS and voice via Eliza Cloud.",
-    managed: true,
-    cloudOnly: true,
-  },
-  {
     id: "crypto",
     icon: "\u26D3\uFE0F",
     nameKey: "onboarding.features.crypto.name",
@@ -86,7 +75,6 @@ const FEATURES: FeatureDef[] = [
 const FEATURE_STATE_KEYS: Record<string, string> = {
   telegram: "onboardingFeatureTelegram",
   discord: "onboardingFeatureDiscord",
-  phone: "onboardingFeaturePhone",
   crypto: "onboardingFeatureCrypto",
   browser: "onboardingFeatureBrowser",
 };
@@ -97,7 +85,6 @@ export function FeaturesStep() {
     onboardingServerTarget,
     onboardingFeatureTelegram,
     onboardingFeatureDiscord,
-    onboardingFeaturePhone,
     onboardingFeatureCrypto,
     onboardingFeatureBrowser,
     onboardingFeatureOAuthPending,
@@ -113,14 +100,12 @@ export function FeaturesStep() {
     () => ({
       telegram: onboardingFeatureTelegram,
       discord: onboardingFeatureDiscord,
-      phone: onboardingFeaturePhone,
       crypto: onboardingFeatureCrypto,
       browser: onboardingFeatureBrowser,
     }),
     [
       onboardingFeatureTelegram,
       onboardingFeatureDiscord,
-      onboardingFeaturePhone,
       onboardingFeatureCrypto,
       onboardingFeatureBrowser,
     ],

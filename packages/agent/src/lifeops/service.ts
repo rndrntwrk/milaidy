@@ -5,7 +5,6 @@ import {
   ModelType,
   stringToUuid,
 } from "@elizaos/core";
-import { registerEscalationChannel } from "../services/escalation.js";
 import {
   getSelfControlStatus,
   startSelfControlBlock,
@@ -160,6 +159,7 @@ import {
   LIFEOPS_WORKFLOW_TRIGGER_TYPES,
   LIFEOPS_X_CAPABILITIES,
 } from "@miladyai/shared/contracts/lifeops";
+import { readProfileFromMetadata } from "../activity-profile/service.js";
 import {
   loadOwnerContactRoutingHints,
   loadOwnerContactsConfig,
@@ -168,8 +168,11 @@ import {
 } from "../config/owner-contacts.js";
 import { getAgentEventService } from "../runtime/agent-event-service.js";
 import { resolveOwnerEntityId } from "../runtime/owner-entity.js";
-import { readProfileFromMetadata } from "../activity-profile/service.js";
-import type { ActivityProfile } from "../activity-profile/types.js";
+import { registerEscalationChannel } from "../services/escalation.js";
+import {
+  computeNextCronRunAtMs,
+  parseCronExpression,
+} from "../triggers/scheduling.js";
 import {
   buildNativeAppleReminderMetadata,
   createNativeAppleReminderLikeItem,
@@ -177,10 +180,6 @@ import {
   readNativeAppleReminderMetadata,
   updateNativeAppleReminderLikeItem,
 } from "./apple-reminders.js";
-import {
-  computeNextCronRunAtMs,
-  parseCronExpression,
-} from "../triggers/scheduling.js";
 import {
   computeAdaptiveWindowPolicy,
   DEFAULT_REMINDER_STEPS,
@@ -190,10 +189,6 @@ import {
   windowPolicyMatchesDefaults,
 } from "./defaults.js";
 import { materializeDefinitionOccurrences } from "./engine.js";
-import {
-  ROUTINE_SEED_TEMPLATES,
-  type RoutineSeedTemplate,
-} from "./seed-routines.js";
 import {
   GoogleApiError,
   googleErrorLooksLikeAdminPolicyBlock,
@@ -263,6 +258,10 @@ import {
   LifeOpsRepository,
   type LifeOpsWebsiteAccessGrant,
 } from "./repository.js";
+import {
+  ROUTINE_SEED_TEMPLATES,
+  type RoutineSeedTemplate,
+} from "./seed-routines.js";
 import {
   addDaysToLocalDate,
   addMinutes,
@@ -2278,7 +2277,6 @@ function buildGmailReplyDraft(args: {
   sendAllowed: boolean;
   bodyText: string;
 }): LifeOpsGmailReplyDraft {
-
   const recipient = args.message.replyTo ?? args.message.fromEmail ?? null;
   if (!recipient) {
     fail(409, "The selected Gmail message has no replyable sender.");
@@ -11704,7 +11702,8 @@ export class LifeOpsService {
         "This is a send-ready email reply, not a chat response.",
         "",
         "Character voice:",
-        buildReminderVoiceContext(this.runtime) || "No extra character context.",
+        buildReminderVoiceContext(this.runtime) ||
+          "No extra character context.",
         "",
         "Recent conversation:",
         recentConversation.length > 0
@@ -11910,96 +11909,110 @@ export class LifeOpsService {
       side,
     );
     const updateEvent = async () => {
-      if (resolveGoogleExecutionTarget(grant) === "cloud") {
-        fail(
-          501,
-          "Calendar update is not supported through the cloud-managed Google connector yet.",
-        );
-      }
-      const accessToken = (
-        await ensureFreshGoogleAccessToken(
-          grant.tokenRef ??
-            fail(409, "Google Calendar token reference is missing."),
-        )
-      ).accessToken;
+      const normalizedAttendees = request.attendees
+        ? normalizeCalendarAttendees(request.attendees)
+        : undefined;
+      const materializedUpdated =
+        resolveGoogleExecutionTarget(grant) === "cloud"
+          ? (
+              await this.googleManagedClient.updateCalendarEvent({
+                side: grant.side,
+                calendarId,
+                eventId: externalEventId,
+                title: request.title,
+                description: request.description,
+                location: request.location,
+                startAt: request.startAt,
+                endAt: request.endAt,
+                timeZone: request.timeZone,
+                attendees: normalizedAttendees,
+              })
+            ).event
+          : await (async () => {
+              const accessToken = (
+                await ensureFreshGoogleAccessToken(
+                  grant.tokenRef ??
+                    fail(409, "Google Calendar token reference is missing."),
+                )
+              ).accessToken;
 
-      // Google's PATCH semantics: if you send `start.dateTime` you must
-      // also send `end.dateTime`, otherwise the API rejects the call as
-      // "Bad Request" because the event would have inconsistent bounds.
-      // When the caller only supplies one bound or omits the timezone,
-      // load the current event so we can preserve both the existing
-      // timezone and duration instead of guessing.
-      const ONE_HOUR_MS = 60 * 60 * 1000;
-      const needsExistingEventContext =
-        Boolean(request.startAt || request.endAt) &&
-        (!request.timeZone || !request.startAt || !request.endAt);
-      const existingEvent = needsExistingEventContext
-        ? await fetchGoogleCalendarEvent({
-            accessToken,
-            calendarId: calendarId ?? undefined,
-            eventId: externalEventId,
-          })
-        : null;
-      const normalizedTimeZone = normalizeCalendarTimeZone(
-        request.timeZone ?? existingEvent?.timezone ?? undefined,
-      );
-      let normalizedStartAt = normalizeCalendarDateTimeInTimeZone(
-        request.startAt,
-        "startAt",
-        normalizedTimeZone,
-      );
-      let normalizedEndAt = normalizeCalendarDateTimeInTimeZone(
-        request.endAt,
-        "endAt",
-        normalizedTimeZone,
-      );
-      const existingDurationMs =
-        existingEvent &&
-        Number.isFinite(Date.parse(existingEvent.startAt)) &&
-        Number.isFinite(Date.parse(existingEvent.endAt))
-          ? Date.parse(existingEvent.endAt) - Date.parse(existingEvent.startAt)
-          : Number.NaN;
-      const fallbackDurationMs =
-        Number.isFinite(existingDurationMs) && existingDurationMs > 0
-          ? existingDurationMs
-          : ONE_HOUR_MS;
-      if (normalizedStartAt && !normalizedEndAt) {
-        normalizedEndAt = new Date(
-          new Date(normalizedStartAt).getTime() + fallbackDurationMs,
-        ).toISOString();
-      } else if (normalizedEndAt && !normalizedStartAt) {
-        normalizedStartAt = new Date(
-          new Date(normalizedEndAt).getTime() - fallbackDurationMs,
-        ).toISOString();
-      }
+              // Google's PATCH semantics: if you send `start.dateTime` you must
+              // also send `end.dateTime`, otherwise the API rejects the call as
+              // "Bad Request" because the event would have inconsistent bounds.
+              // When the caller only supplies one bound or omits the timezone,
+              // load the current event so we can preserve both the existing
+              // timezone and duration instead of guessing.
+              const ONE_HOUR_MS = 60 * 60 * 1000;
+              const needsExistingEventContext =
+                Boolean(request.startAt || request.endAt) &&
+                (!request.timeZone || !request.startAt || !request.endAt);
+              const existingEvent = needsExistingEventContext
+                ? await fetchGoogleCalendarEvent({
+                    accessToken,
+                    calendarId: calendarId ?? undefined,
+                    eventId: externalEventId,
+                  })
+                : null;
+              const normalizedTimeZone = normalizeCalendarTimeZone(
+                request.timeZone ?? existingEvent?.timezone ?? undefined,
+              );
+              let normalizedStartAt = normalizeCalendarDateTimeInTimeZone(
+                request.startAt,
+                "startAt",
+                normalizedTimeZone,
+              );
+              let normalizedEndAt = normalizeCalendarDateTimeInTimeZone(
+                request.endAt,
+                "endAt",
+                normalizedTimeZone,
+              );
+              const existingDurationMs =
+                existingEvent &&
+                Number.isFinite(Date.parse(existingEvent.startAt)) &&
+                Number.isFinite(Date.parse(existingEvent.endAt))
+                  ? Date.parse(existingEvent.endAt) -
+                    Date.parse(existingEvent.startAt)
+                  : Number.NaN;
+              const fallbackDurationMs =
+                Number.isFinite(existingDurationMs) && existingDurationMs > 0
+                  ? existingDurationMs
+                  : ONE_HOUR_MS;
+              if (normalizedStartAt && !normalizedEndAt) {
+                normalizedEndAt = new Date(
+                  new Date(normalizedStartAt).getTime() + fallbackDurationMs,
+                ).toISOString();
+              } else if (normalizedEndAt && !normalizedStartAt) {
+                normalizedStartAt = new Date(
+                  new Date(normalizedEndAt).getTime() - fallbackDurationMs,
+                ).toISOString();
+              }
 
-      const updated = await updateGoogleCalendarEvent({
-        accessToken,
-        calendarId: calendarId ?? undefined,
-        eventId: externalEventId,
-        title: request.title,
-        description: request.description,
-        location: request.location,
-        startAt: normalizedStartAt,
-        endAt: normalizedEndAt,
-        timeZone: normalizedTimeZone,
-        attendees: request.attendees
-          ? normalizeCalendarAttendees(request.attendees)
-          : undefined,
-      });
+              return updateGoogleCalendarEvent({
+                accessToken,
+                calendarId: calendarId ?? undefined,
+                eventId: externalEventId,
+                title: request.title,
+                description: request.description,
+                location: request.location,
+                startAt: normalizedStartAt,
+                endAt: normalizedEndAt,
+                timeZone: normalizedTimeZone,
+                attendees: normalizedAttendees,
+              });
+            })();
       const syncedAt = new Date().toISOString();
       const event: LifeOpsCalendarEvent = {
         id: createCalendarEventId(
           this.agentId(),
           "google",
           grant.side,
-          updated.calendarId,
-          updated.externalId,
+          materializedUpdated.calendarId,
+          materializedUpdated.externalId,
         ),
         agentId: this.agentId(),
         provider: "google",
         side: grant.side,
-        ...updated,
+        ...materializedUpdated,
         syncedAt,
         updatedAt: syncedAt,
       };
@@ -12057,27 +12070,25 @@ export class LifeOpsService {
       side,
     );
     const deleteEvent = async () => {
-      // Cloud-managed Google delete is not yet exposed by the managed client;
-      // local execution path is the only supported route here. Refuse loudly
-      // rather than silently no-op so the caller doesn't think the event was
-      // removed when it wasn't.
       if (resolveGoogleExecutionTarget(grant) === "cloud") {
-        fail(
-          501,
-          "Calendar delete is not supported through the cloud-managed Google connector yet.",
-        );
+        await this.googleManagedClient.deleteCalendarEvent({
+          side: grant.side,
+          calendarId,
+          eventId: externalEventId,
+        });
+      } else {
+        const accessToken = (
+          await ensureFreshGoogleAccessToken(
+            grant.tokenRef ??
+              fail(409, "Google Calendar token reference is missing."),
+          )
+        ).accessToken;
+        await deleteGoogleCalendarEvent({
+          accessToken,
+          calendarId: calendarId ?? undefined,
+          eventId: externalEventId,
+        });
       }
-      const accessToken = (
-        await ensureFreshGoogleAccessToken(
-          grant.tokenRef ??
-            fail(409, "Google Calendar token reference is missing."),
-        )
-      ).accessToken;
-      await deleteGoogleCalendarEvent({
-        accessToken,
-        calendarId: calendarId ?? undefined,
-        eventId: externalEventId,
-      });
       // Best-effort: drop the local cached row so subsequent feed reads
       // don't show a phantom event. Ignore failures here — the source of
       // truth (Google) has already accepted the delete.

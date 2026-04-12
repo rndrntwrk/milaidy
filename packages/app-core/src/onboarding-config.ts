@@ -49,7 +49,6 @@ export interface OnboardingFeatureSetup {
   connectors: {
     telegram?: { managed: boolean };
     discord?: { managed: boolean };
-    phone?: { managed: boolean };
   };
   capabilities: {
     crypto?: boolean;
@@ -240,7 +239,6 @@ export function buildOnboardingRuntimeConfig(
   const hasFeatures =
     args.onboardingFeatureTelegram ||
     args.onboardingFeatureDiscord ||
-    args.onboardingFeaturePhone ||
     args.onboardingFeatureCrypto ||
     args.onboardingFeatureBrowser;
 
@@ -252,9 +250,6 @@ export function buildOnboardingRuntimeConfig(
             : {}),
           ...(args.onboardingFeatureDiscord
             ? { discord: { managed: true } }
-            : {}),
-          ...(args.onboardingFeaturePhone
-            ? { phone: { managed: true } }
             : {}),
         },
         capabilities: {

@@ -24,6 +24,7 @@ import {
 import { isDesktopPlatform } from "../../platform/init";
 import {
   addAgentProfile,
+  clearPersistedActiveServer,
   savePersistedActiveServer,
   useApp,
 } from "../../state";
@@ -170,6 +171,9 @@ export function DeploymentStep() {
   // ── Handlers: chooser ──────────────────────────────────────────────
 
   const handleCreateLocal = useCallback(() => {
+    client.setBaseUrl(null);
+    client.setToken(null);
+    clearPersistedActiveServer();
     setState("onboardingServerTarget", "local");
     // Dispatch SPLASH_CONTINUE to start the local agent runtime
     startupCoordinator.dispatch({ type: "SPLASH_CONTINUE" });
@@ -180,6 +184,7 @@ export function DeploymentStep() {
     (gateway: GatewayDiscoveryEndpoint) => {
       const apiBase = gatewayEndpointToApiBase(gateway);
       client.setBaseUrl(apiBase);
+      client.setToken(null);
       savePersistedActiveServer({
         id: `gateway:${gateway.stableId}`,
         kind: "remote",
@@ -324,6 +329,7 @@ export function DeploymentStep() {
 
     client.setBaseUrl(url);
     const token = remoteToken.trim() || undefined;
+    client.setToken(token ?? null);
     savePersistedActiveServer({
       id: `remote:${url}`,
       kind: "remote",

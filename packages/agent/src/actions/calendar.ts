@@ -1,7 +1,7 @@
 import type {
   Action,
-  ActionResult,
   ActionExample,
+  ActionResult,
   HandlerCallback,
   HandlerOptions,
   IAgentRuntime,
@@ -32,6 +32,7 @@ import {
   collectKeywordTermMatchesForKey,
   hasContextSignalSyncForKey,
 } from "./context-signal.js";
+import { recentConversationTexts as collectRecentConversationTexts } from "./life-recent-context.js";
 import {
   calendarReadUnavailableMessage,
   calendarWriteUnavailableMessage,
@@ -48,7 +49,6 @@ import {
   messageText,
   toActionData,
 } from "./lifeops-google-helpers.js";
-import { recentConversationTexts as collectRecentConversationTexts } from "./life-recent-context.js";
 
 type CalendarSubaction =
   | "feed"
@@ -2084,7 +2084,7 @@ export async function extractCalendarPlanWithLlm(
     "When shouldAct=false, provide a short natural response that asks only for what is missing.",
     "",
     "Return a JSON object with exactly these fields:",
-    '  subaction: one of the allowed subactions below, or null when this should be reply-only/no-op',
+    "  subaction: one of the allowed subactions below, or null when this should be reply-only/no-op",
     "  shouldAct: boolean",
     "  response: short natural-language reply when shouldAct is false, otherwise empty or null",
     "  queries: array or ||-delimited string of up to 3 search queries",
@@ -2887,7 +2887,9 @@ function scoreCalendarEvent(
   if (/\b(return|back|home)\b/.test(normalizedQuery)) {
     if (/\b(return|back|home)\b/.test(`${title} ${description}`)) {
       score += 24;
-    } else if (/\b(flight|travel|trip)\b/.test(`${title} ${description} ${location}`)) {
+    } else if (
+      /\b(flight|travel|trip)\b/.test(`${title} ${description} ${location}`)
+    ) {
       score -= 36;
     }
   }

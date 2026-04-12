@@ -542,8 +542,10 @@ describe("useOnboardingCallbacks", () => {
 
   it("finishes onboarding when next is invoked from the last step", async () => {
     const submitOnboarding = vi.fn().mockResolvedValue(undefined);
+    const setBrowserEnabled = vi.fn();
     const setOnboardingComplete = vi.fn();
     const setTab = vi.fn();
+    const setWalletEnabled = vi.fn();
 
     const { result } = renderHook(() => {
       const onboarding = useOnboardingState();
@@ -567,6 +569,7 @@ describe("useOnboardingCallbacks", () => {
           setOnboardingRemoteError: vi.fn(),
           setOnboardingRemoteConnected: vi.fn(),
           setPostOnboardingChecklistDismissed: vi.fn(),
+          setBrowserEnabled,
           setOnboardingComplete,
           coordinatorOnboardingCompleteRef: { current: null },
           initialTabSetRef: { current: false },
@@ -579,6 +582,7 @@ describe("useOnboardingCallbacks", () => {
           elizaCloudConnected: false,
           setActionNotice: vi.fn(),
           retryStartup: vi.fn(),
+          setWalletEnabled,
           forceLocalBootstrapRef: { current: false },
           client: {
             getAuthStatus: vi.fn().mockResolvedValue({
@@ -607,6 +611,7 @@ describe("useOnboardingCallbacks", () => {
       result.current.onboarding.setField("serverTarget", "local");
       result.current.onboarding.setField("provider", "openai");
       result.current.onboarding.setField("apiKey", "sk-openai-test");
+      result.current.onboarding.setField("featureCrypto", true);
       result.current.onboarding.setField("featureDiscord", true);
       result.current.onboarding.setField("featureBrowser", true);
       result.current.onboarding.setStep("features");
@@ -632,6 +637,8 @@ describe("useOnboardingCallbacks", () => {
         },
       }),
     );
+    expect(setWalletEnabled).toHaveBeenCalledWith(true);
+    expect(setBrowserEnabled).toHaveBeenCalledWith(true);
     expect(setOnboardingComplete).toHaveBeenCalledWith(true);
     expect(setTab).toHaveBeenCalledWith("chat");
   });

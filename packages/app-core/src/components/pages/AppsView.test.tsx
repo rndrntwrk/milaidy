@@ -1200,6 +1200,32 @@ describe("AppsView", () => {
     expect(mockClientFns.listApps).toHaveBeenCalledTimes(2);
   });
 
+  it("renders the catalog even when app run refresh is still pending", async () => {
+    const ctx = createAppsContext();
+    mockUseApp.mockReturnValue({
+      ...ctx,
+      uiLanguage: "en",
+      t: tStub,
+    });
+    const app = createApp("@elizaos/app-babylon", "Babylon", "Wallet");
+    mockClientFns.listApps.mockResolvedValue([app]);
+    mockClientFns.listAppRuns.mockImplementation(
+      () => new Promise(() => undefined),
+    );
+
+    let tree!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      tree = TestRenderer.create(React.createElement(AppsView));
+    });
+    await flush();
+
+    expect(
+      tree.root.findAll(
+        (node) => node.type === "button" && node.props.title === "Babylon",
+      ).length,
+    ).toBe(1);
+  });
+
   it("renders the browse catalog in named sections", async () => {
     const ctx = createAppsContext();
     mockUseApp.mockReturnValue({

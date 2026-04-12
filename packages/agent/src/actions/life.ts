@@ -1804,11 +1804,42 @@ function extractIntentWindows(
 ): Array<"morning" | "afternoon" | "evening" | "night"> {
   const lower = intent.toLowerCase();
   const windows: Array<"morning" | "afternoon" | "evening" | "night"> = [];
-  if (/\bmornings?\b/.test(lower)) windows.push("morning");
-  if (/\bafternoons?\b/.test(lower)) windows.push("afternoon");
-  if (/\bevenings?\b/.test(lower)) windows.push("evening");
-  if (/\bnights?\b/.test(lower)) windows.push("night");
+  if (
+    /\bmornings?\b|\bwake(?:\s|-)?up\b|\bbreakfast\b|\bbefore (?:work|i start work|starting work)\b/.test(
+      lower,
+    )
+  ) {
+    windows.push("morning");
+  }
+  if (
+    /\bafternoons?\b|\blunch\b|\bafter lunch\b|\bmid(?:\s|-)?day\b|\bduring the day\b/.test(
+      lower,
+    )
+  ) {
+    windows.push("afternoon");
+  }
+  if (/\bevenings?\b|\bafter work\b|\bdinner\b/.test(lower)) {
+    windows.push("evening");
+  }
+  if (
+    /\bnights?\b|\bbedtime\b|\bbefore bed\b|\bbefore sleep\b|\bbefore i sleep\b|\bbefore (?:going to bed|i go to bed)\b/.test(
+      lower,
+    )
+  ) {
+    windows.push("night");
+  }
   return windows;
+}
+
+function extractIntentWeekdays(intent: string): number[] {
+  const lower = intent.toLowerCase();
+  if (/\bweekdays?\b|\bworkdays?\b/.test(lower)) {
+    return [1, 2, 3, 4, 5];
+  }
+  if (/\bweekends?\b/.test(lower)) {
+    return [0, 6];
+  }
+  return [];
 }
 
 const DEFAULT_WINDOW_SLOT_TIMES: Record<
@@ -2274,7 +2305,12 @@ function parseExplicitLocalDateForLifeRequest(
 
   const qualifier = weekdayMatch[1]?.toLowerCase() ?? "";
   const currentWeekday = new Date(
-    Date.UTC(localToday.year, Math.max(0, localToday.month - 1), localToday.day, 12),
+    Date.UTC(
+      localToday.year,
+      Math.max(0, localToday.month - 1),
+      localToday.day,
+      12,
+    ),
   ).getUTCDay();
   let delta = (targetWeekday - currentWeekday + 7) % 7;
   if (qualifier === "next") {
@@ -2859,10 +2895,18 @@ function inferSeedCadenceFromIntent(
   const lower = intent.toLowerCase();
   const windows = extractIntentWindows(intent);
   const effectiveWindows = windows.length > 0 ? windows : fallbackWindows;
+  const explicitWeekdays = extractIntentWeekdays(intent);
   const weeklyMatch =
     lower.match(
       /\b(one|two|three|four|five|six|seven|\d+)\s*(?:x|times?)\s*(?:a|per)\s*week\b/,
     ) ?? lower.match(/\b(once|twice)\s+a\s+week\b/);
+  if (explicitWeekdays.length > 0) {
+    return {
+      kind: "weekly",
+      weekdays: explicitWeekdays,
+      windows: effectiveWindows.length > 0 ? effectiveWindows : ["morning"],
+    };
+  }
   if (weeklyMatch?.[1]) {
     const count = parseNumberWord(weeklyMatch[1]);
     if (count) {
@@ -3821,8 +3865,7 @@ export const lifeAction: Action = {
             timezone:
               extractLifeTimeZoneFromText(intent) ??
               normalizeLifeTimeZoneToken(
-                resolvedTimeZone ??
-                  deferredDefinitionDraft?.request.timezone,
+                resolvedTimeZone ?? deferredDefinitionDraft?.request.timezone,
               ) ??
               resolvedTimeZone ??
               deferredDefinitionDraft?.request.timezone,

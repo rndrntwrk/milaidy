@@ -1,7 +1,7 @@
 import type {
   Action,
-  ActionResult,
   ActionExample,
+  ActionResult,
   HandlerCallback,
   HandlerOptions,
   IAgentRuntime,
@@ -20,8 +20,10 @@ import type {
   SendLifeOpsGmailBatchReplyRequest,
   SendLifeOpsGmailReplyRequest,
 } from "@miladyai/shared/contracts/lifeops";
-import { LifeOpsService, LifeOpsServiceError } from "../lifeops/service.js";
 import { resolveDefaultTimeZone } from "../lifeops/defaults.js";
+import { LifeOpsService, LifeOpsServiceError } from "../lifeops/service.js";
+import { hasContextSignalForKey } from "./context-signal.js";
+import { recentConversationTexts as collectRecentConversationTexts } from "./life-recent-context.js";
 import {
   detailArray,
   detailBoolean,
@@ -41,8 +43,6 @@ import {
   messageText,
   toActionData,
 } from "./lifeops-google-helpers.js";
-import { hasContextSignalForKey } from "./context-signal.js";
-import { recentConversationTexts as collectRecentConversationTexts } from "./life-recent-context.js";
 
 type GmailSubaction =
   | "triage"
@@ -108,6 +108,22 @@ type GmailMessageTargetContext = {
   from?: string;
   query?: string;
 };
+
+type GmailSearchFeed = Awaited<ReturnType<LifeOpsService["getGmailSearch"]>>;
+
+type GmailTargetResolution =
+  | {
+      kind: "resolved";
+      target: GmailMessageTargetContext;
+    }
+  | {
+      kind: "ambiguous";
+      feed: GmailSearchFeed;
+      displayQuery: string;
+    }
+  | {
+      kind: "missing";
+    };
 
 type GmailActionParams = {
   subaction?: GmailSubaction;
@@ -206,9 +222,7 @@ function normalizePlannerStringArray(value: unknown): string[] | undefined {
     );
   }
   if (typeof value === "string") {
-    return dedupeQueries(
-      value.split(/\s*\|\|\s*/).map((item) => item.trim()),
-    );
+    return dedupeQueries(value.split(/\s*\|\|\s*/).map((item) => item.trim()));
   }
   return undefined;
 }
@@ -250,6 +264,10 @@ function buildGmailServiceErrorFallback(error: LifeOpsServiceError): string {
   return "I couldn't finish that Gmail action yet. Tell me what message you want and what you want me to do with it.";
 }
 
+function buildGmailTargetDisambiguationFallback(feed: GmailSearchFeed): string {
+  return `${formatEmailSearch(feed)}\nTell me which email you mean by sender, subject, or message id.`;
+}
+
 function normalizeGmailReplyText(raw: string): string {
   return raw
     .trim()
@@ -276,9 +294,7 @@ function looksLikeStructuredGmailReply(raw: string): boolean {
   );
 }
 
-function buildGmailCharacterVoiceContext(
-  runtime: IAgentRuntime,
-): string {
+function buildGmailCharacterVoiceContext(runtime: IAgentRuntime): string {
   const character = runtime.character;
   if (!character || typeof character !== "object") {
     return "";
@@ -291,17 +307,24 @@ function buildGmailCharacterVoiceContext(
     sections.push(`System:\n${character.system.trim()}`);
   }
   const bio = Array.isArray(character.bio)
-    ? character.bio.filter((entry): entry is string => typeof entry === "string")
+    ? character.bio.filter(
+        (entry): entry is string => typeof entry === "string",
+      )
     : typeof character.bio === "string"
       ? [character.bio]
       : [];
   if (bio.length > 0) {
-    sections.push(`Bio:\n${bio.map((entry) => `- ${entry.trim()}`).join("\n")}`);
+    sections.push(
+      `Bio:\n${bio.map((entry) => `- ${entry.trim()}`).join("\n")}`,
+    );
   }
   const style = [
     ...(Array.isArray(character.style?.all) ? character.style.all : []),
     ...(Array.isArray(character.style?.chat) ? character.style.chat : []),
-  ].filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0);
+  ].filter(
+    (entry): entry is string =>
+      typeof entry === "string" && entry.trim().length > 0,
+  );
   if (style.length > 0) {
     sections.push(
       `Style:\n${style.map((entry) => `- ${entry.trim()}`).join("\n")}`,
@@ -536,7 +559,9 @@ function coerceGmailMessageTargetContext(
   };
 }
 
-function gmailStateDataRecords(state: State | undefined): Record<string, unknown>[] {
+function gmailStateDataRecords(
+  state: State | undefined,
+): Record<string, unknown>[] {
   const records: Record<string, unknown>[] = [];
 
   for (const result of gmailStateActionResults(state)) {
@@ -1167,16 +1192,20 @@ async function resolveGmailTargetMessage(args: {
   explicitQueryArray: string[];
   paramsQuery?: string;
   llmPlan: GmailLlmPlan;
-}): Promise<GmailMessageTargetContext | null> {
+}): Promise<GmailTargetResolution> {
   const resolvedQueries = resolveGmailSearchQueries(
-    [...args.explicitQueryArray, args.paramsQuery, detailString(args.details, "query")],
+    [
+      ...args.explicitQueryArray,
+      args.paramsQuery,
+      detailString(args.details, "query"),
+    ],
     args.llmPlan,
   );
   const searchPlan = buildGmailSearchPlan({
     queries: resolvedQueries,
   });
   if (!searchPlan) {
-    return null;
+    return { kind: "missing" };
   }
 
   const requestBase = {
@@ -1199,19 +1228,38 @@ async function resolveGmailTargetMessage(args: {
       ...requestBase,
       query,
     });
-    const message = feed.messages[0];
-    if (!message) {
+    if (feed.messages.length === 0) {
       continue;
     }
-    return {
-      messageId: message.id,
-      subject: message.subject,
-      from: message.from,
-      query: searchPlan.displayQuery,
-    };
+    const displayFeed =
+      feed.query === searchPlan.displayQuery
+        ? feed
+        : {
+            ...feed,
+            query: searchPlan.displayQuery,
+          };
+    if (feed.messages.length > 1) {
+      return {
+        kind: "ambiguous",
+        feed: displayFeed,
+        displayQuery: searchPlan.displayQuery,
+      };
+    }
+    const message = feed.messages[0];
+    return message
+      ? {
+          kind: "resolved",
+          target: {
+            messageId: message.id,
+            subject: message.subject,
+            from: message.from,
+            query: searchPlan.displayQuery,
+          },
+        }
+      : { kind: "missing" };
   }
 
-  return null;
+  return { kind: "missing" };
 }
 
 function normalizeBatchSendItems(
@@ -1394,7 +1442,8 @@ export const gmailAction: Action = {
         (normalizeStringArray(details?.bcc)?.length ?? 0) > 0 ||
         detailString(details, "subject"),
     );
-    let subaction: GmailSubaction | null = explicitSubaction ?? llmPlan.subaction;
+    let subaction: GmailSubaction | null =
+      explicitSubaction ?? llmPlan.subaction;
 
     const composeRecipients =
       normalizeStringArray(details?.to) ??
@@ -1490,7 +1539,11 @@ export const gmailAction: Action = {
       });
     }
 
-    if (!subaction && !composeRecoveryActivated && !hasExplicitGmailExecutionInput) {
+    if (
+      !subaction &&
+      !composeRecoveryActivated &&
+      !hasExplicitGmailExecutionInput
+    ) {
       const fallback =
         composeRecoveryPlan?.response ??
         llmPlan.response ??
@@ -1703,14 +1756,14 @@ export const gmailAction: Action = {
           });
         }
 
-        const resolvedQueries = resolveGmailSearchQueries(
-          [...explicitQueryArray, params.query, detailString(details, "query")],
+        const resolvedTarget = await resolveGmailTargetMessage({
+          service,
+          details,
+          explicitQueryArray,
+          paramsQuery: params.query,
           llmPlan,
-        );
-        const searchPlan = buildGmailSearchPlan({
-          queries: resolvedQueries,
         });
-        if (!searchPlan) {
+        if (resolvedTarget.kind === "missing") {
           return respond({
             success: false,
             text: await renderReply(
@@ -1722,8 +1775,19 @@ export const gmailAction: Action = {
             ),
           });
         }
-
-        const requestBase = {
+        if (resolvedTarget.kind === "ambiguous") {
+          const fallback = buildGmailTargetDisambiguationFallback(
+            resolvedTarget.feed,
+          );
+          return respond({
+            success: false,
+            text: await renderReply("clarify_read_target", fallback, {
+              query: resolvedTarget.displayQuery,
+              messages: resolvedTarget.feed.messages,
+            }),
+          });
+        }
+        const result = await service.readGmailMessage(INTERNAL_URL, {
           mode: detailString(details, "mode") as
             | "local"
             | "remote"
@@ -1731,53 +1795,12 @@ export const gmailAction: Action = {
             | undefined,
           side: detailString(details, "side") as "owner" | "agent" | undefined,
           forceSync: detailBoolean(details, "forceSync"),
-          maxResults: detailNumber(details, "maxResults") ?? 10,
-          replyNeededOnly:
-            detailBoolean(details, "replyNeededOnly") ??
-            llmPlan.replyNeededOnly ??
-            false,
+          messageId: resolvedTarget.target.messageId,
+        });
+        const displayResult = {
+          ...result,
+          query: resolvedTarget.target.query ?? result.query,
         };
-
-        let result: Awaited<
-          ReturnType<LifeOpsService["readGmailMessage"]>
-        > | null = null;
-        let lastReadError: LifeOpsServiceError | null = null;
-
-        for (const query of searchPlan.queries) {
-          try {
-            result = await service.readGmailMessage(INTERNAL_URL, {
-              ...requestBase,
-              query,
-            });
-            break;
-          } catch (error) {
-            if (error instanceof LifeOpsServiceError && error.status === 404) {
-              lastReadError = error;
-              continue;
-            }
-            throw error;
-          }
-        }
-
-        if (!result) {
-          const fallback =
-            lastReadError?.message ??
-            `I couldn't find an email to read for ${searchPlan.displayQuery}.`;
-          return respond({
-            success: false,
-            text: await renderReply("read_not_found", fallback, {
-              query: searchPlan.displayQuery,
-            }),
-          });
-        }
-
-        const displayResult =
-          result.query === searchPlan.displayQuery
-            ? result
-            : {
-                ...result,
-                query: searchPlan.displayQuery,
-              };
         const fallback = formatEmailRead(displayResult);
         return respond({
           success: true,
@@ -1803,7 +1826,22 @@ export const gmailAction: Action = {
             paramsQuery: params.query,
             llmPlan,
           });
-          messageId = resolvedTarget?.messageId;
+          if (resolvedTarget.kind === "ambiguous") {
+            const fallback = buildGmailTargetDisambiguationFallback(
+              resolvedTarget.feed,
+            );
+            return respond({
+              success: false,
+              text: await renderReply("clarify_draft_reply_target", fallback, {
+                query: resolvedTarget.displayQuery,
+                messages: resolvedTarget.feed.messages,
+              }),
+            });
+          }
+          messageId =
+            resolvedTarget.kind === "resolved"
+              ? resolvedTarget.target.messageId
+              : undefined;
           if (!messageId) {
             return respond({
               success: false,
@@ -1921,7 +1959,22 @@ export const gmailAction: Action = {
             paramsQuery: params.query,
             llmPlan,
           });
-          messageId = resolvedTarget?.messageId;
+          if (resolvedTarget.kind === "ambiguous") {
+            const fallback = buildGmailTargetDisambiguationFallback(
+              resolvedTarget.feed,
+            );
+            return respond({
+              success: false,
+              text: await renderReply("clarify_send_reply", fallback, {
+                query: resolvedTarget.displayQuery,
+                messages: resolvedTarget.feed.messages,
+              }),
+            });
+          }
+          messageId =
+            resolvedTarget.kind === "resolved"
+              ? resolvedTarget.target.messageId
+              : undefined;
         }
         const bodyText =
           params.bodyText ??
@@ -1953,7 +2006,8 @@ export const gmailAction: Action = {
           side: detailString(details, "side") as "owner" | "agent" | undefined,
           messageId,
           bodyText,
-          subject: detailString(details, "subject") ?? latestReplyDraft?.subject,
+          subject:
+            detailString(details, "subject") ?? latestReplyDraft?.subject,
           to: normalizeStringArray(details?.to) ?? latestReplyDraft?.to,
           cc: normalizeStringArray(details?.cc) ?? latestReplyDraft?.cc,
           confirmSend: detailBoolean(details, "confirmSend") ?? true,

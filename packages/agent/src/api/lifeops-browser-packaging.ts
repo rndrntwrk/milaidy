@@ -331,8 +331,13 @@ function readReleaseManifest(
   }
 }
 
-function resolveReleaseManifest(
+export function resolveLifeOpsBrowserReleaseManifest(
   artifactsDir: string | null,
+  options?: {
+    allowSynthesis?: boolean;
+    version?: string;
+    env?: NodeJS.ProcessEnv;
+  },
 ): LifeOpsBrowserCompanionReleaseManifest | null {
   if (artifactsDir) {
     const releaseManifest = readReleaseManifest(artifactsDir);
@@ -340,8 +345,12 @@ function resolveReleaseManifest(
       return releaseManifest;
     }
   }
+  if (!options?.allowSynthesis) {
+    return null;
+  }
   return buildLifeOpsBrowserReleaseManifestForVersion(
-    resolveMiladyReleaseVersion(),
+    options.version ?? resolveMiladyReleaseVersion(),
+    options.env,
   );
 }
 
@@ -394,7 +403,9 @@ export function getLifeOpsBrowserCompanionPackageStatus(): LifeOpsBrowserCompani
       safariWebExtensionPath: null,
       safariAppPath: null,
       safariPackagePath: null,
-      releaseManifest: resolveReleaseManifest(null),
+      releaseManifest: resolveLifeOpsBrowserReleaseManifest(null, {
+        allowSynthesis: true,
+      }),
     };
   }
 
@@ -412,7 +423,7 @@ export function getLifeOpsBrowserCompanionPackageStatus(): LifeOpsBrowserCompani
     safariPackagePath: existingPath(
       path.join(artifactsDir, "lifeops-browser-safari.zip"),
     ),
-    releaseManifest: resolveReleaseManifest(artifactsDir),
+    releaseManifest: resolveLifeOpsBrowserReleaseManifest(artifactsDir),
   };
 }
 

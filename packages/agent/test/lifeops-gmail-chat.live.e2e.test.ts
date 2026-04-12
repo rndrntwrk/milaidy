@@ -1,3 +1,6 @@
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import {
   afterAll,
   beforeAll,
@@ -6,12 +9,14 @@ import {
   it,
 } from "vitest";
 import type { AgentRuntime } from "@elizaos/core";
+import { ModelType } from "@elizaos/core";
 import { createConversation, postConversationMessage } from "../../../test/helpers/http";
-import { createRealTestRuntime } from "../../../test/helpers/real-runtime";
+import { saveEnv } from "../../../test/helpers/test-utils";
 import { isLiveTestEnabled, selectLiveProvider } from "../../../test/helpers/live-provider";
 import { createLifeOpsChatTestRuntime } from "./helpers/lifeops-chat-runtime";
 import { gmailAction } from "../src/actions/gmail";
 import { startApiServer } from "../src/api/server";
+import { resolveOAuthDir } from "../src/config/paths";
 import {
   createLifeOpsConnectorGrant,
   createLifeOpsGmailSyncState,
@@ -19,8 +24,163 @@ import {
 } from "../src/lifeops/repository";
 
 const AGENT_ID = "lifeops-gmail-live-chat-agent";
+const LIVE_PROVIDER =
+  selectLiveProvider("openai") ?? selectLiveProvider();
 const LIVE_GMAIL_CHAT_ENABLED =
-  isLiveTestEnabled() && Boolean(selectLiveProvider());
+  isLiveTestEnabled() && Boolean(LIVE_PROVIDER);
+
+async function callOpenAICompatible(args: {
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+  prompt: string;
+}) {
+  const response = await fetch(`${args.baseUrl}/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${args.apiKey}`,
+    },
+    body: JSON.stringify({
+      model: args.model,
+      messages: [{ role: "user", content: args.prompt }],
+      temperature: 0,
+      max_tokens: 768,
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(
+      `OpenAI-compatible provider error ${response.status}: ${await response.text()}`,
+    );
+  }
+  const data = (await response.json()) as {
+    choices?: Array<{ message?: { content?: string } }>;
+  };
+  return data.choices?.[0]?.message?.content ?? "";
+}
+
+async function callAnthropic(args: {
+  apiKey: string;
+  model: string;
+  prompt: string;
+}) {
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": args.apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: args.model,
+      max_tokens: 768,
+      messages: [{ role: "user", content: args.prompt }],
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(
+      `Anthropic provider error ${response.status}: ${await response.text()}`,
+    );
+  }
+  const data = (await response.json()) as {
+    content?: Array<{ text?: string }>;
+  };
+  return data.content?.[0]?.text ?? "";
+}
+
+async function callGoogle(args: {
+  apiKey: string;
+  baseUrl: string;
+  model: string;
+  prompt: string;
+}) {
+  const response = await fetch(
+    `${args.baseUrl}/models/${args.model}:generateContent?key=${args.apiKey}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: args.prompt }] }],
+        generationConfig: {
+          temperature: 0,
+          maxOutputTokens: 768,
+        },
+      }),
+    },
+  );
+  if (!response.ok) {
+    throw new Error(
+      `Google provider error ${response.status}: ${await response.text()}`,
+    );
+  }
+  const data = (await response.json()) as {
+    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+  };
+  return data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+}
+
+async function liveUseModel(
+  modelType: ModelType,
+  params: { prompt?: unknown },
+): Promise<string> {
+  if (!LIVE_PROVIDER) {
+    throw new Error("No live provider available");
+  }
+  const prompt = String(params?.prompt ?? "");
+  const model =
+    modelType === ModelType.TEXT_LARGE
+      ? LIVE_PROVIDER.largeModel
+      : LIVE_PROVIDER.smallModel;
+  const execute = async () => {
+    if (LIVE_PROVIDER.name === "anthropic") {
+      return callAnthropic({
+        apiKey: LIVE_PROVIDER.apiKey,
+        model,
+        prompt,
+      });
+    }
+    if (LIVE_PROVIDER.name === "google") {
+      return callGoogle({
+        apiKey: LIVE_PROVIDER.apiKey,
+        baseUrl: LIVE_PROVIDER.baseUrl,
+        model,
+        prompt,
+      });
+    }
+    return callOpenAICompatible({
+      apiKey: LIVE_PROVIDER.apiKey,
+      baseUrl: LIVE_PROVIDER.baseUrl,
+      model,
+      prompt,
+    });
+  };
+
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await execute();
+    } catch (error) {
+      lastError = error;
+      const message =
+        error instanceof Error ? error.message.toLowerCase() : String(error);
+      const shouldRetry =
+        message.includes("429") ||
+        message.includes("rate limit") ||
+        message.includes("timeout") ||
+        message.includes("temporar") ||
+        /\b50\d\b/.test(message);
+      if (!shouldRetry || attempt === 2) {
+        throw error;
+      }
+      await new Promise((resolve) =>
+        setTimeout(resolve, 750 * (attempt + 1)),
+      );
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error(String(lastError));
+}
 
 function buildGmailMessage(args: {
   id: string;
@@ -67,9 +227,50 @@ function buildGmailMessage(args: {
   };
 }
 
-async function seedLocalGmail(runtime: AgentRuntime) {
+async function seedLocalGmail(runtime: AgentRuntime, stateDir: string) {
   const repository = new LifeOpsRepository(runtime);
   const nowIso = new Date().toISOString();
+  const tokenRef = `${AGENT_ID}/owner/local.json`;
+  const tokenPath = path.join(
+    resolveOAuthDir(process.env, stateDir),
+    "lifeops",
+    "google",
+    tokenRef,
+  );
+  await fs.mkdir(path.dirname(tokenPath), { recursive: true, mode: 0o700 });
+  await fs.writeFile(
+    tokenPath,
+    JSON.stringify(
+      {
+        provider: "google",
+        agentId: AGENT_ID,
+        side: "owner",
+        mode: "local",
+        clientId: "lifeops-gmail-live-chat-client",
+        redirectUri: "http://127.0.0.1/callback",
+        accessToken: "gmail-live-chat-access-token",
+        refreshToken: "gmail-live-chat-refresh-token",
+        tokenType: "Bearer",
+        grantedScopes: [
+          "openid",
+          "email",
+          "profile",
+          "https://www.googleapis.com/auth/gmail.readonly",
+          "https://www.googleapis.com/auth/gmail.send",
+        ],
+        expiresAt: Date.now() + 60 * 60 * 1000,
+        refreshTokenExpiresAt: null,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      },
+      null,
+      2,
+    ),
+    {
+      encoding: "utf-8",
+      mode: 0o600,
+    },
+  );
 
   await repository.upsertConnectorGrant(
     createLifeOpsConnectorGrant({
@@ -92,7 +293,7 @@ async function seedLocalGmail(runtime: AgentRuntime) {
         "google.gmail.triage",
         "google.gmail.send",
       ],
-      tokenRef: null,
+      tokenRef,
       mode: "local",
       metadata: {},
       lastRefreshAt: nowIso,
@@ -163,22 +364,32 @@ describe.skipIf(!LIVE_GMAIL_CHAT_ENABLED)(
     let port = 0;
     let closeServer: (() => Promise<void>) | null = null;
     let runtime: AgentRuntime;
-    let llmRuntime:
-      | Awaited<ReturnType<typeof createRealTestRuntime>>["runtime"]
-      | null = null;
-    let llmRuntimeCleanup: (() => Promise<void>) | null = null;
+    let envBackup: { restore: () => void };
+    let stateDir = "";
 
     beforeAll(async () => {
-      const result = await createRealTestRuntime({ withLLM: true });
-      llmRuntime = result.runtime;
-      llmRuntimeCleanup = result.cleanup;
+      envBackup = saveEnv(
+        "ELIZA_STATE_DIR",
+        "MILADY_GOOGLE_OAUTH_DESKTOP_CLIENT_ID",
+      );
+      stateDir = await fs.mkdtemp(
+        path.join(os.tmpdir(), "lifeops-gmail-live-chat-"),
+      );
+      process.env.ELIZA_STATE_DIR = stateDir;
+      process.env.MILADY_GOOGLE_OAUTH_DESKTOP_CLIENT_ID =
+        "lifeops-gmail-live-chat-client";
 
       runtime = createLifeOpsChatTestRuntime({
         agentId: AGENT_ID,
         characterName: "Milady",
         actions: [gmailAction],
-        logger: llmRuntime.logger,
-        useModel: llmRuntime.useModel.bind(llmRuntime),
+        logger: {
+          debug: () => {},
+          info: () => {},
+          warn: () => {},
+          error: () => {},
+        } as AgentRuntime["logger"],
+        useModel: liveUseModel as AgentRuntime["useModel"],
         handleTurn: async ({ runtime: runtimeArg, message, state }) => {
           const result = await gmailAction.handler?.(
             runtimeArg,
@@ -198,7 +409,7 @@ describe.skipIf(!LIVE_GMAIL_CHAT_ENABLED)(
         },
       });
 
-      await seedLocalGmail(runtime);
+      await seedLocalGmail(runtime, stateDir);
 
       const server = await startApiServer({
         port: 0,
@@ -212,11 +423,15 @@ describe.skipIf(!LIVE_GMAIL_CHAT_ENABLED)(
       if (closeServer) {
         await closeServer();
       }
-      if (llmRuntimeCleanup) {
-        await llmRuntimeCleanup();
+      if (stateDir) {
+        await fs.rm(stateDir, {
+          recursive: true,
+          force: true,
+          maxRetries: 5,
+          retryDelay: 100,
+        });
       }
-      llmRuntime = null;
-      llmRuntimeCleanup = null;
+      envBackup.restore();
     });
 
     it(
@@ -266,7 +481,7 @@ describe.skipIf(!LIVE_GMAIL_CHAT_ENABLED)(
         });
 
         const search = await postConversationMessage(port, conversationId, {
-          text: "find emails from suran",
+          text: "can you search my email and tell me if anyone named suran emailed me",
           source: "discord",
         });
         expect(search.status).toBe(200);

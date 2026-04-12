@@ -1,5 +1,22 @@
-import { describe, expect, it } from "vitest";
-import { buildLifeOpsBrowserReleaseManifestForVersion } from "./lifeops-browser-packaging.js";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, describe, expect, it } from "vitest";
+import {
+  buildLifeOpsBrowserReleaseManifestForVersion,
+  resolveLifeOpsBrowserReleaseManifest,
+} from "./lifeops-browser-packaging.js";
+
+const tempDirs: string[] = [];
+
+afterEach(() => {
+  while (tempDirs.length > 0) {
+    const dir = tempDirs.pop();
+    if (dir) {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  }
+});
 
 describe("lifeops browser packaging", () => {
   it("builds a portable GitHub release manifest from the current version", () => {
@@ -56,6 +73,78 @@ describe("lifeops browser packaging", () => {
     expect(manifest?.safari.installKind).toBe("apple_app_store");
     expect(manifest?.safari.installUrl).toBe(
       "https://apps.apple.com/us/app/lifeops-browser/id1234567890",
+    );
+  });
+
+  it("only synthesizes release install metadata when explicitly allowed", () => {
+    expect(
+      resolveLifeOpsBrowserReleaseManifest("/definitely-missing-artifacts"),
+    ).toBeNull();
+
+    const synthesized = resolveLifeOpsBrowserReleaseManifest(null, {
+      allowSynthesis: true,
+      version: "2.0.0",
+    });
+    expect(synthesized?.chrome.installKind).toBe("github_release");
+    expect(synthesized?.chrome.installUrl).toBe(
+      "https://github.com/milady-ai/milady/releases/download/v2.0.0/lifeops-browser-chrome-v2.0.0.zip",
+    );
+  });
+
+  it("prefers an on-disk release manifest over synthesized metadata", () => {
+    const tempDir = fs.mkdtempSync(
+      path.join(os.tmpdir(), "lifeops-browser-manifest-"),
+    );
+    tempDirs.push(tempDir);
+    const manifestPath = path.join(
+      tempDir,
+      "lifeops-browser-release-manifest.json",
+    );
+    fs.writeFileSync(
+      manifestPath,
+      JSON.stringify({
+        schema: "lifeops_browser_release_v2",
+        releaseTag: "v9.9.9",
+        releaseVersion: "9.9.9",
+        repository: "milady-ai/milady",
+        releasePageUrl:
+          "https://github.com/milady-ai/milady/releases/tag/v9.9.9",
+        chromeVersion: "9.9.9.60000",
+        chromeVersionName: "9.9.9",
+        safariMarketingVersion: "9.9.9",
+        safariBuildVersion: "909099000",
+        chrome: {
+          installKind: "github_release",
+          installUrl: "https://example.com/lifeops-browser-chrome-v9.9.9.zip",
+          storeListingUrl: null,
+          asset: {
+            fileName: "lifeops-browser-chrome-v9.9.9.zip",
+            downloadUrl:
+              "https://example.com/lifeops-browser-chrome-v9.9.9.zip",
+          },
+        },
+        safari: {
+          installKind: "github_release",
+          installUrl: "https://example.com/lifeops-browser-safari-v9.9.9.zip",
+          storeListingUrl: null,
+          asset: {
+            fileName: "lifeops-browser-safari-v9.9.9.zip",
+            downloadUrl:
+              "https://example.com/lifeops-browser-safari-v9.9.9.zip",
+          },
+        },
+        generatedAt: "2026-04-12T00:00:00.000Z",
+      }),
+    );
+
+    const manifest = resolveLifeOpsBrowserReleaseManifest(tempDir, {
+      allowSynthesis: true,
+      version: "2.0.0",
+    });
+
+    expect(manifest?.releaseVersion).toBe("9.9.9");
+    expect(manifest?.chrome.installUrl).toBe(
+      "https://example.com/lifeops-browser-chrome-v9.9.9.zip",
     );
   });
 });

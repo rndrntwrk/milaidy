@@ -359,4 +359,81 @@ describe("GoogleManagedClient", () => {
     expect(body.endAt).toBe("2026-04-12T10:00:00");
     expect(body.timeZone).toBe("America/Los_Angeles");
   });
+
+  it("calls the managed calendar update endpoint and normalizes UTC instants when a timezone is supplied", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ event: {} }), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }),
+    );
+
+    const client = new GoogleManagedClient({
+      configured: true,
+      apiKey: "test-key",
+      apiBaseUrl: "https://cloud.example/api/v1",
+      siteUrl: "https://cloud.example",
+    });
+
+    await client.updateCalendarEvent({
+      side: "owner",
+      calendarId: "primary",
+      eventId: "event-1",
+      startAt: "2026-04-12T16:00:00.000Z",
+      endAt: "2026-04-12T17:00:00.000Z",
+      timeZone: "America/Los_Angeles",
+    });
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        href: "https://cloud.example/api/v1/milady/google/calendar/events/event-1",
+      }),
+      expect.objectContaining({
+        method: "PATCH",
+      }),
+    );
+    const body = JSON.parse(fetchSpy.mock.calls[0][1]?.body as string);
+    expect(body).toEqual({
+      side: "owner",
+      calendarId: "primary",
+      startAt: "2026-04-12T09:00:00-07:00",
+      endAt: "2026-04-12T10:00:00-07:00",
+      timeZone: "America/Los_Angeles",
+    });
+  });
+
+  it("calls the managed calendar delete endpoint with side and calendar query params", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }),
+    );
+
+    const client = new GoogleManagedClient({
+      configured: true,
+      apiKey: "test-key",
+      apiBaseUrl: "https://cloud.example/api/v1",
+      siteUrl: "https://cloud.example",
+    });
+
+    await client.deleteCalendarEvent({
+      side: "agent",
+      calendarId: "team",
+      eventId: "event-1",
+    });
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        href: "https://cloud.example/api/v1/milady/google/calendar/events/event-1?side=agent&calendarId=team",
+      }),
+      expect.objectContaining({
+        method: "DELETE",
+      }),
+    );
+  });
 });

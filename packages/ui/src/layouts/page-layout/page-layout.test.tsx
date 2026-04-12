@@ -1,72 +1,21 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import type { SidebarProps } from "../../components/composites/sidebar";
+import {
+  disableTestRenderer,
+  enableTestRenderer,
+  installMatchMedia,
+  SidebarProbe,
+} from "../layout-test-utils";
 import { PageLayout } from "./page-layout";
-
-function installMatchMedia(matches: boolean) {
-  const listeners = new Set<(event: MediaQueryListEvent) => void>();
-
-  Object.defineProperty(window, "matchMedia", {
-    configurable: true,
-    writable: true,
-    value: vi.fn().mockImplementation(() => ({
-      matches,
-      media: "(min-width: 768px)",
-      onchange: null,
-      addEventListener: (
-        _: string,
-        listener: (event: MediaQueryListEvent) => void,
-      ) => {
-        listeners.add(listener);
-      },
-      removeEventListener: (
-        _: string,
-        listener: (event: MediaQueryListEvent) => void,
-      ) => {
-        listeners.delete(listener);
-      },
-      addListener: (listener: (event: MediaQueryListEvent) => void) => {
-        listeners.add(listener);
-      },
-      removeListener: (listener: (event: MediaQueryListEvent) => void) => {
-        listeners.delete(listener);
-      },
-      dispatchEvent: () => true,
-    })),
-  });
-
-  return listeners;
-}
-
-function SidebarProbe({
-  collapsible,
-  mobileTitle,
-  onMobileClose,
-  testId = "sidebar-probe",
-  variant,
-}: SidebarProps) {
-  return (
-    <aside data-testid={testId}>
-      <div>{`variant:${variant ?? "unset"}`}</div>
-      <div>{`collapsible:${String(collapsible)}`}</div>
-      <div>{mobileTitle ?? "Browse"}</div>
-      {onMobileClose ? (
-        <button type="button" onClick={onMobileClose}>
-          Close sidebar
-        </button>
-      ) : null}
-    </aside>
-  );
-}
 
 describe("PageLayout", () => {
   beforeEach(() => {
-    (globalThis as Record<string, unknown>).__TEST_RENDERER__ = true;
+    enableTestRenderer();
   });
 
   afterEach(() => {
-    delete (globalThis as Record<string, unknown>).__TEST_RENDERER__;
+    disableTestRenderer();
   });
 
   it("enables the collapsible desktop sidebar by default", () => {
