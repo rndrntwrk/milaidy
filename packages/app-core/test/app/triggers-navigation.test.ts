@@ -88,7 +88,7 @@ describe("navigation", () => {
     expect(pathForTab("inventory")).toBe("/inventory");
     expect(tabFromPath("/inventory")).toBe("inventory");
     expect(tabFromPath("/wallets")).toBe("inventory");
-    expect(titleForTab("inventory")).toBe("Inventory");
+    expect(titleForTab("inventory")).toBe("Wallet");
   });
 
   test("Apps group includes apps entry plus all tool tabs", () => {
@@ -97,11 +97,12 @@ describe("navigation", () => {
     expect(apps?.tabs).toEqual(["apps", ...APPS_TOOL_TABS]);
   });
 
-  test("keeps inventory/knowledge/character as top-level groups, connectors in settings, and heartbeats in the main nav", () => {
+  test("keeps wallet/character as top-level groups, connectors in settings, and heartbeats in the main nav", () => {
     const labels = ALL_TAB_GROUPS.map((group) => group.label);
     expect(labels).toContain("Character");
-    expect(labels).toContain("Inventory");
-    expect(labels).toContain("Knowledge");
+    expect(labels).toContain("Wallet");
+    // Knowledge merged into Character — no standalone group
+    expect(labels).not.toContain("Knowledge");
     // Connectors merged into Settings — no standalone group
     expect(labels).not.toContain("Connectors");
     expect(labels).toContain("Heartbeats");

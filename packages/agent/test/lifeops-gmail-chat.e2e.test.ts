@@ -29,6 +29,20 @@ const AGENT_ID = "lifeops-gmail-chat-agent";
 const GOOGLE_GMAIL_MESSAGES_ENDPOINT =
   "https://gmail.googleapis.com/gmail/v1/users/me/messages";
 
+function extractPromptFallback(prompt: string): string | null {
+  const match = prompt.match(
+    /Canonical fallback:\s*("(?:[^"\\]|\\.)*")/m,
+  );
+  if (!match) {
+    return null;
+  }
+  try {
+    return JSON.parse(match[1]) as string;
+  } catch {
+    return null;
+  }
+}
+
 function buildMetadataMessage(args: {
   id: string;
   threadId: string;
@@ -226,6 +240,9 @@ describe("life-ops gmail chat transcripts", () => {
             return '{"subaction":"search","queries":["from:suran"]}';
           }
           return '{"subaction":null,"queries":[]}';
+        }
+        if (prompt.includes("Write the assistant's user-facing reply for a Gmail interaction.")) {
+          return extractPromptFallback(prompt) ?? "";
         }
         return "<response></response>";
       },

@@ -4,6 +4,7 @@ import type { ConnectorConfig } from "../config/types.eliza.js";
 import {
   DISCORD_LOCAL_SERVICE_NAME,
 } from "../runtime/discord-local-plugin.js";
+import { registerEscalationChannel } from "../services/escalation.js";
 import { setOwnerContact } from "./owner-contact-helpers.js";
 import type { RouteHelpers } from "./route-helpers.js";
 
@@ -209,6 +210,9 @@ export async function handleDiscordLocalRoute(
             channelId: subscribedChannelIds[0],
           },
         );
+        // Add Discord to the escalation channel list so it is reachable
+        // without the user explicitly configuring escalation.
+        registerEscalationChannel("discord");
       }
       helpers.json(res, { subscribedChannelIds });
     } catch (error) {

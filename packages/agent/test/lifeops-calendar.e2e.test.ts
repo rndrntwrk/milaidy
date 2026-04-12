@@ -1,7 +1,7 @@
+import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import crypto from "node:crypto";
 import type { AgentRuntime, Task, UUID } from "@elizaos/core";
 import {
   afterAll,
@@ -13,12 +13,12 @@ import {
   it,
   vi,
 } from "vitest";
+import { req } from "../../../test/helpers/http";
+import { saveEnv } from "../../../test/helpers/test-utils";
 import { startApiServer } from "../src/api/server";
 import { resolveOAuthDir } from "../src/config/paths";
 import { LifeOpsRepository } from "../src/lifeops/repository";
 import { DatabaseSync } from "../src/test-utils/sqlite-compat";
-import { req } from "../../../test/helpers/http";
-import { saveEnv } from "../../../test/helpers/test-utils";
 
 type SqlQuery = {
   queryChunks?: Array<{ value?: unknown }>;
@@ -758,11 +758,11 @@ describe("life-ops calendar sync", () => {
       expect(JSON.parse(String(init?.body ?? "{}"))).toMatchObject({
         summary: "Coffee with Mira",
         start: {
-          dateTime: "2026-04-05T21:00:00.000Z",
+          dateTime: "2026-04-05T14:00:00-07:00",
           timeZone: "America/Los_Angeles",
         },
         end: {
-          dateTime: "2026-04-05T22:30:00.000Z",
+          dateTime: "2026-04-05T15:30:00-07:00",
           timeZone: "America/Los_Angeles",
         },
       });
@@ -818,6 +818,72 @@ describe("life-ops calendar sync", () => {
       title: "Coffee with Mira",
       startAt: "2026-04-05T21:00:00.000Z",
       endAt: "2026-04-05T22:30:00.000Z",
+    });
+  });
+
+  it("interprets timezone-less local create datetimes in the requested calendar timezone", async () => {
+    await connectGoogleCalendar(
+      ["google.calendar.write"],
+      [
+        "openid",
+        "email",
+        "profile",
+        "https://www.googleapis.com/auth/calendar.events",
+      ],
+    );
+
+    fetchMock.mockImplementation(async (input, init) => {
+      const url = typeof input === "string" ? input : input.toString();
+      expect(url).toBe(
+        "https://www.googleapis.com/calendar/v3/calendars/primary/events",
+      );
+      expect(init?.method).toBe("POST");
+      expect(JSON.parse(String(init?.body ?? "{}"))).toMatchObject({
+        summary: "Give my wife a hug",
+        start: {
+          dateTime: "2026-04-17T20:00:00-06:00",
+          timeZone: "America/Denver",
+        },
+        end: {
+          dateTime: "2026-04-17T20:15:00-06:00",
+          timeZone: "America/Denver",
+        },
+      });
+
+      return new Response(
+        JSON.stringify({
+          id: "created-event-2",
+          status: "confirmed",
+          summary: "Give my wife a hug",
+          htmlLink: "https://calendar.google.com/event?eid=created-2",
+          start: {
+            dateTime: "2026-04-17T20:00:00-06:00",
+            timeZone: "America/Denver",
+          },
+          end: {
+            dateTime: "2026-04-17T20:15:00-06:00",
+            timeZone: "America/Denver",
+          },
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        },
+      );
+    });
+
+    const createRes = await req(port, "POST", "/api/lifeops/calendar/events", {
+      title: "Give my wife a hug",
+      startAt: "2026-04-17T20:00:00",
+      endAt: "2026-04-17T20:15:00",
+      timeZone: "America/Denver",
+    });
+    expect(createRes.status).toBe(201);
+    expect(createRes.data.event).toMatchObject({
+      title: "Give my wife a hug",
+      startAt: "2026-04-18T02:00:00.000Z",
+      endAt: "2026-04-18T02:15:00.000Z",
+      timezone: "America/Denver",
     });
   });
 });

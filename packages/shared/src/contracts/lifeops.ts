@@ -247,6 +247,7 @@ export const LIFEOPS_AUDIT_EVENT_TYPES = [
   "browser_session_created",
   "browser_session_updated",
   "x_post_sent",
+  "seeding_offered",
 ] as const;
 export type LifeOpsAuditEventType = (typeof LIFEOPS_AUDIT_EVENT_TYPES)[number];
 
@@ -824,6 +825,8 @@ export interface LifeOpsWorkflowActionPlan {
 
 export const LIFEOPS_REMINDER_ATTEMPT_OUTCOMES = [
   "delivered",
+  "delivered_read",
+  "delivered_unread",
   "blocked_policy",
   "blocked_quiet_hours",
   "blocked_urgency",

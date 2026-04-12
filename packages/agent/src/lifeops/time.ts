@@ -44,7 +44,10 @@ function getOffsetFormatter(timeZone: string): Intl.DateTimeFormat {
   return formatter;
 }
 
-export function getZonedDateParts(date: Date, timeZone: string): ZonedDateParts {
+export function getZonedDateParts(
+  date: Date,
+  timeZone: string,
+): ZonedDateParts {
   const parts = getZonedFormatter(timeZone).formatToParts(date);
   const read = (type: Intl.DateTimeFormatPartTypes) => {
     const part = parts.find((candidate) => candidate.type === type)?.value;
@@ -76,6 +79,18 @@ export function getTimeZoneOffsetMinutes(date: Date, timeZone: string): number {
   const hours = Number(match[2]);
   const minutes = Number(match[3] ?? "0");
   return sign * (hours * 60 + minutes);
+}
+
+function formatOffsetToken(offsetMinutes: number): string {
+  const sign = offsetMinutes >= 0 ? "+" : "-";
+  const absolute = Math.abs(offsetMinutes);
+  const hours = Math.trunc(absolute / 60)
+    .toString()
+    .padStart(2, "0");
+  const minutes = Math.trunc(absolute % 60)
+    .toString()
+    .padStart(2, "0");
+  return `${sign}${hours}:${minutes}`;
 }
 
 function localPartsToEpochMs(parts: ZonedDateParts): number {
@@ -110,12 +125,43 @@ export function buildUtcDateFromLocalParts(
   return candidate;
 }
 
+export function formatInstantAsRfc3339InTimeZone(
+  value: Date | string,
+  timeZone: string,
+): string {
+  const date = value instanceof Date ? value : new Date(value);
+  if (!Number.isFinite(date.getTime())) {
+    throw new Error(
+      `invalid datetime for timezone conversion: ${String(value)}`,
+    );
+  }
+  const parts = getZonedDateParts(date, timeZone);
+  const offset = getTimeZoneOffsetMinutes(date, timeZone);
+  return (
+    [
+      `${parts.year.toString().padStart(4, "0")}-${parts.month
+        .toString()
+        .padStart(2, "0")}-${parts.day.toString().padStart(2, "0")}`,
+      `${parts.hour.toString().padStart(2, "0")}:${parts.minute
+        .toString()
+        .padStart(2, "0")}:${parts.second.toString().padStart(2, "0")}`,
+    ].join("T") + formatOffsetToken(offset)
+  );
+}
+
 export function addDaysToLocalDate(
   dateOnly: Pick<ZonedDateParts, "year" | "month" | "day">,
   dayDelta: number,
 ): Pick<ZonedDateParts, "year" | "month" | "day"> {
   const utcDate = new Date(
-    Date.UTC(dateOnly.year, dateOnly.month - 1, dateOnly.day + dayDelta, 12, 0, 0),
+    Date.UTC(
+      dateOnly.year,
+      dateOnly.month - 1,
+      dateOnly.day + dayDelta,
+      12,
+      0,
+      0,
+    ),
   );
   return {
     year: utcDate.getUTCFullYear(),

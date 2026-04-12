@@ -546,6 +546,22 @@ export function saveWalletEnabled(value: boolean): void {
   }, undefined);
 }
 
+/* ── Browser enabled persistence ────────────────────────────────────── */
+const BROWSER_ENABLED_KEY = "eliza:browser:enabled";
+
+export function loadBrowserEnabled(): boolean {
+  return tryLocalStorage(() => {
+    const stored = localStorage.getItem(BROWSER_ENABLED_KEY);
+    return stored === null ? true : stored === "true";
+  }, true);
+}
+
+export function saveBrowserEnabled(value: boolean): void {
+  tryLocalStorage(() => {
+    localStorage.setItem(BROWSER_ENABLED_KEY, String(value));
+  }, undefined);
+}
+
 /* ── Chat UI persistence ──────────────────────────────────────────────── */
 const CHAT_AVATAR_VISIBLE_KEY = "eliza:chat:avatarVisible";
 const CHAT_VOICE_MUTED_KEY = "eliza:chat:voiceMuted";

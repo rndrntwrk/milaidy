@@ -91,6 +91,7 @@ export interface ReadyPhaseDeps {
     v: Conversation[] | ((prev: Conversation[]) => Conversation[]),
   ) => void;
   appendAutonomousEvent: (event: StreamEventEnvelope) => void;
+  notifyAssistantEvent: (event: StreamEventEnvelope) => void;
   notifyHeartbeatEvent: (event: StreamEventEnvelope) => void;
   loadPlugins: () => Promise<void>;
   pollCloudCredits: () => void;
@@ -120,6 +121,22 @@ function normalizeAppEmoteEvent(
     loop: data.loop === true,
     showOverlay: data.showOverlay !== false,
   };
+}
+
+function shouldNotifyDesktopForAssistantEvent(
+  event: StreamEventEnvelope,
+): boolean {
+  if (event.type !== "agent_event" || event.stream !== "assistant") {
+    return false;
+  }
+  const payload =
+    event.payload && typeof event.payload === "object"
+      ? (event.payload as Record<string, unknown>)
+      : null;
+  if (!payload) {
+    return false;
+  }
+  return payload.source === "lifeops-reminder";
 }
 
 function getNavigationPathFromWindow(): string {
@@ -389,7 +406,12 @@ export function bindReadyPhase(
     "agent_event",
     (data: Record<string, unknown>) => {
       const e = parseStreamEventEnvelopeEvent(data);
-      if (e) depsRef.current?.appendAutonomousEvent(e);
+      if (e) {
+        depsRef.current?.appendAutonomousEvent(e);
+        if (shouldNotifyDesktopForAssistantEvent(e)) {
+          depsRef.current?.notifyAssistantEvent(e);
+        }
+      }
     },
   );
   const unbindHb = client.onWsEvent(

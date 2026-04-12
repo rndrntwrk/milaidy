@@ -10,9 +10,11 @@ import type {
   LifeOpsGmailTriageFeed,
   LifeOpsGoogleConnectorStatus,
   LifeOpsNextCalendarEventContext,
+  LifeOpsOccurrenceView,
   LifeOpsOverview,
 } from "@miladyai/shared/contracts/lifeops";
 import type { LifeOpsService } from "../lifeops/service.js";
+import { getLocalDateKey, getZonedDateParts } from "../lifeops/time.js";
 import { hasPrivateAccess } from "../security/access.js";
 
 export const INTERNAL_URL = new URL("http://127.0.0.1/");
@@ -139,27 +141,80 @@ export function futureRange(days: number) {
   };
 }
 
+function formatCalendarDatePart(
+  date: Date,
+  timeZone: string | undefined,
+  options: Intl.DateTimeFormatOptions,
+): string {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    ...options,
+  }).format(date);
+}
+
+function getCalendarYearForDisplay(date: Date, timeZone?: string): number {
+  return Number(
+    formatCalendarDatePart(date, timeZone, {
+      year: "numeric",
+    }),
+  );
+}
+
+export function formatCalendarEventDateTime(
+  event: Pick<LifeOpsCalendarEvent, "startAt" | "timezone">,
+  options?: {
+    includeYear?: boolean;
+    includeTimeZoneName?: boolean;
+    numericDate?: boolean;
+  },
+): string {
+  const start = new Date(event.startAt);
+  const timeZone = event.timezone || undefined;
+  const currentYear = getCalendarYearForDisplay(new Date(), timeZone);
+  const eventYear = getCalendarYearForDisplay(start, timeZone);
+  const includeYear = options?.includeYear ?? eventYear !== currentYear;
+  const month = options?.numericDate ? "numeric" : "short";
+  const datePart = formatCalendarDatePart(start, timeZone, {
+    month,
+    day: "numeric",
+    ...(includeYear ? { year: "numeric" } : {}),
+  });
+  const timePart = formatCalendarDatePart(start, timeZone, {
+    hour: "numeric",
+    minute: "2-digit",
+    ...(options?.includeTimeZoneName ? { timeZoneName: "short" } : {}),
+  });
+  return `${datePart}, ${timePart}`;
+}
+
 function formatEventTime(event: LifeOpsCalendarEvent): string {
   if (event.isAllDay) {
     return "all day";
   }
   const start = new Date(event.startAt);
   const end = new Date(event.endAt);
-  const timeFormat: Intl.DateTimeFormatOptions = {
-    hour: "numeric",
-    minute: "2-digit",
-  };
   // Always include the date so a list of multiple events doesn't show
   // identical-looking time-only entries with no way to tell which day
   // they belong to. Year is included only when the event is in a year
   // other than the current one to keep the common case readable.
-  const now = new Date();
-  const includeYear = start.getFullYear() !== now.getFullYear();
-  const dateFormat: Intl.DateTimeFormatOptions = includeYear
-    ? { month: "short", day: "numeric", year: "numeric" }
-    : { month: "short", day: "numeric" };
-  const datePart = start.toLocaleDateString(undefined, dateFormat);
-  return `${datePart}, ${start.toLocaleTimeString(undefined, timeFormat)} – ${end.toLocaleTimeString(undefined, timeFormat)}`;
+  const timeZone = event.timezone || undefined;
+  const currentYear = getCalendarYearForDisplay(new Date(), timeZone);
+  const eventYear = getCalendarYearForDisplay(start, timeZone);
+  const includeYear = eventYear !== currentYear;
+  const datePart = formatCalendarDatePart(start, timeZone, {
+    month: "short",
+    day: "numeric",
+    ...(includeYear ? { year: "numeric" } : {}),
+  });
+  const startTime = formatCalendarDatePart(start, timeZone, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  const endTime = formatCalendarDatePart(end, timeZone, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  return `${datePart}, ${startTime} – ${endTime}`;
 }
 
 export function formatRelativeMinutes(minutes: number): string {
@@ -293,9 +348,7 @@ export function formatEmailTriage(feed: LifeOpsGmailTriageFeed): string {
     const badgeText = badges.length > 0 ? ` [${badges.join(", ")}]` : "";
     const sender = formatEmailSender(message.from, message.fromEmail);
     lines.push(`- **${message.subject}**${badgeText}`);
-    lines.push(
-      `  From: ${sender} · ${formatRelativeTime(message.receivedAt)}`,
-    );
+    lines.push(`  From: ${sender} · ${formatRelativeTime(message.receivedAt)}`);
     if (message.snippet) {
       lines.push(`  ${truncateForPreview(message.snippet, 100)}`);
     }
@@ -430,10 +483,7 @@ export function formatEmailSearch(feed: LifeOpsGmailSearchFeed): string {
 }
 
 export function formatEmailRead(result: LifeOpsGmailReadResultLike): string {
-  const from = formatEmailSender(
-    result.message.from,
-    result.message.fromEmail,
-  );
+  const from = formatEmailSender(result.message.from, result.message.fromEmail);
   const bodyText = result.bodyText.trim();
   const maxChars = 2_500;
   const truncated = bodyText.length > maxChars;
@@ -523,6 +573,72 @@ export function formatOverview(overview: LifeOpsOverview): string {
     }
   }
   return lines.join("\n");
+}
+
+const REMAINING_TODAY_QUERY_RE =
+  /\b(?:what'?s still left(?: for today)?|what do i still need to do today|anything else .*?(?:get done|finish).*?today|what life ops tasks are still left for today|what remains today|what(?:'s| is) left today)\b/i;
+
+function looksLikeRemainingTodayOverviewQuery(query: string): boolean {
+  return REMAINING_TODAY_QUERY_RE.test(query);
+}
+
+function overviewAnchorIso(occurrence: LifeOpsOccurrenceView): string {
+  return (
+    occurrence.snoozedUntil ??
+    occurrence.dueAt ??
+    occurrence.scheduledAt ??
+    occurrence.relevanceStartAt
+  );
+}
+
+function isRelevantToToday(
+  occurrence: LifeOpsOccurrenceView,
+  now: Date,
+): boolean {
+  const timeZone =
+    typeof occurrence.timezone === "string" && occurrence.timezone.trim()
+      ? occurrence.timezone.trim()
+      : "UTC";
+  const anchor = new Date(overviewAnchorIso(occurrence));
+  if (!Number.isFinite(anchor.getTime())) {
+    return true;
+  }
+  const todayKey = getLocalDateKey(getZonedDateParts(now, timeZone));
+  const anchorKey = getLocalDateKey(getZonedDateParts(anchor, timeZone));
+  return anchorKey <= todayKey;
+}
+
+function formatHumanList(items: string[]): string {
+  if (items.length === 0) return "";
+  if (items.length === 1) return items[0] || "";
+  return new Intl.ListFormat("en", {
+    style: "long",
+    type: "conjunction",
+  }).format(items);
+}
+
+export function formatOverviewForQuery(
+  overview: LifeOpsOverview,
+  query: string,
+  now = new Date(),
+): string {
+  if (!looksLikeRemainingTodayOverviewQuery(query)) {
+    return formatOverview(overview);
+  }
+  const remainingToday = overview.owner.occurrences.filter((occurrence) =>
+    isRelevantToToday(occurrence, now),
+  );
+  if (remainingToday.length === 0) {
+    return "You don't have any LifeOps tasks left for today.";
+  }
+  const labels = remainingToday
+    .slice(0, 5)
+    .map((occurrence) => occurrence.title);
+  const noun = remainingToday.length === 1 ? "task" : "tasks";
+  if (remainingToday.length <= labels.length) {
+    return `You have ${remainingToday.length} LifeOps ${noun} left for today: ${formatHumanList(labels)}.`;
+  }
+  return `You have ${remainingToday.length} LifeOps ${noun} left for today. Next up: ${formatHumanList(labels)}, plus ${remainingToday.length - labels.length} more.`;
 }
 
 export type GoogleCapabilityStatus = {

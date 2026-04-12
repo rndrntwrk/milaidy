@@ -12,14 +12,21 @@ import {
 
 export const LIVE_TESTS_ENABLED =
   process.env.MILADY_LIVE_TEST === "1" || process.env.ELIZA_LIVE_TEST === "1";
-export const LIVE_CHAT_TESTS_ENABLED = process.env.MILADY_LIVE_CHAT_TEST === "1";
+export const LIVE_CHAT_TESTS_ENABLED =
+  process.env.MILADY_LIVE_CHAT_TEST === "1";
 export const LIVE_SCENARIO_TESTS_ENABLED =
   process.env.MILADY_LIVE_SCENARIO_TEST === "1";
 export const LIVE_PROVIDER_OVERRIDE =
   process.env.MILADY_LIVE_PROVIDER?.trim().toLowerCase() ?? "";
 export const LIVE_CHAT_TEST_TIMEOUT_MS = 300_000;
 export const LIVE_RUNTIME_BOOT_TIMEOUT_MS = 180_000;
-export const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..", "..", "..");
+export const REPO_ROOT = path.resolve(
+  import.meta.dirname,
+  "..",
+  "..",
+  "..",
+  "..",
+);
 const ENV_PATH = path.join(REPO_ROOT, ".env");
 
 try {
@@ -141,6 +148,15 @@ export type LifeOpsGoalEntry = {
   goal?: Record<string, unknown>;
 };
 
+export type LifeOpsOverviewRecord = {
+  occurrences?: Array<Record<string, unknown>>;
+  reminders?: Array<Record<string, unknown>>;
+  goals?: Array<Record<string, unknown>>;
+  summary?: Record<string, unknown>;
+  owner?: Record<string, unknown>;
+  agentOps?: Record<string, unknown>;
+};
+
 function resolveLiveProviderModelEnv(
   providerName: LiveProviderName,
 ): Record<string, string> {
@@ -160,7 +176,9 @@ function resolveLiveProviderModelEnv(
   };
 }
 
-async function canImportLiveProviderPlugin(pluginName: string): Promise<boolean> {
+async function canImportLiveProviderPlugin(
+  pluginName: string,
+): Promise<boolean> {
   try {
     await import(pluginName);
     return true;
@@ -457,8 +475,9 @@ export async function startLifeOpsLiveRuntime(options?: {
     baseConfig.plugins &&
     typeof baseConfig.plugins === "object" &&
     Array.isArray((baseConfig.plugins as { allow?: unknown }).allow)
-      ? ((baseConfig.plugins as { allow?: unknown }).allow as unknown[])
-          .filter((entry): entry is string => typeof entry === "string")
+      ? ((baseConfig.plugins as { allow?: unknown }).allow as unknown[]).filter(
+          (entry): entry is string => typeof entry === "string",
+        )
       : [];
   const basePluginsWithoutProviders = basePlugins.filter(
     (entry) => !LIVE_PROVIDER_PLUGIN_NAMES.has(entry),
@@ -649,11 +668,15 @@ export async function postLiveConversationMessage(
   let lastError: unknown = null;
 
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
-    const response = await postConversationMessage(runtime.port, conversationId, {
-      text,
-      mode: "power",
-      ...(source ? { source } : {}),
-    });
+    const response = await postConversationMessage(
+      runtime.port,
+      conversationId,
+      {
+        text,
+        mode: "power",
+        ...(source ? { source } : {}),
+      },
+    );
     const responseText = String(response.data.text ?? "");
 
     if (response.status === 200 && !/provider issue/i.test(responseText)) {
@@ -816,7 +839,9 @@ export async function listDefinitionEntries(
     : [];
 }
 
-export async function listGoalEntries(port: number): Promise<LifeOpsGoalEntry[]> {
+export async function listGoalEntries(
+  port: number,
+): Promise<LifeOpsGoalEntry[]> {
   const response = await req(port, "GET", "/api/lifeops/goals");
   if (response.status !== 200) {
     throw new Error(
@@ -826,6 +851,59 @@ export async function listGoalEntries(port: number): Promise<LifeOpsGoalEntry[]>
   return Array.isArray(response.data.goals)
     ? (response.data.goals as LifeOpsGoalEntry[])
     : [];
+}
+
+export async function getLifeOpsOverview(
+  port: number,
+): Promise<LifeOpsOverviewRecord> {
+  const response = await req(port, "GET", "/api/lifeops/overview");
+  if (response.status !== 200) {
+    throw new Error(
+      `Failed to load LifeOps overview (${response.status}): ${JSON.stringify(response.data)}`,
+    );
+  }
+  return response.data as LifeOpsOverviewRecord;
+}
+
+export async function resolveDefinitionIdByTitle(
+  port: number,
+  title: string,
+): Promise<string> {
+  const definitions = await listDefinitionEntries(port);
+  const normalizedTitle = normalizeLiveText(title);
+  const match = definitions.find(
+    (entry) =>
+      normalizeLiveText(String(entry.definition?.title ?? "")) ===
+      normalizedTitle,
+  );
+  const definitionId = String(match?.definition?.id ?? "");
+  if (!definitionId) {
+    throw new Error(
+      `Could not resolve LifeOps definition id for title "${title}"`,
+    );
+  }
+  return definitionId;
+}
+
+export async function resolveOccurrenceIdByTitle(
+  port: number,
+  title: string,
+): Promise<string> {
+  const overview = await getLifeOpsOverview(port);
+  const occurrences = Array.isArray(overview.occurrences)
+    ? overview.occurrences
+    : [];
+  const normalizedTitle = normalizeLiveText(title);
+  const match = occurrences.find(
+    (entry) => normalizeLiveText(String(entry.title ?? "")) === normalizedTitle,
+  );
+  const occurrenceId = String(match?.id ?? "");
+  if (!occurrenceId) {
+    throw new Error(
+      `Could not resolve LifeOps occurrence id for title "${title}"`,
+    );
+  }
+  return occurrenceId;
 }
 
 export async function waitForDefinitionByTitle(

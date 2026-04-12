@@ -313,12 +313,12 @@ describe("LIFE action — robustness scenarios", () => {
 
   it("handles create without title gracefully", async () => {
     const result = await send({ action: "create", intent: "add something", details: { cadence: { kind: "daily", windows: ["morning"] }, confirmed: true } });
-    expect(result).toMatchObject({ success: false, text: expect.stringContaining("name") });
+    expect(result).toMatchObject({ success: false, text: expect.stringMatching(/call|name/i) });
   });
 
   it("handles create without cadence gracefully", async () => {
     const result = await send({ action: "create", intent: "add pushups", title: "Pushups" });
-    expect(result).toMatchObject({ success: false, text: expect.stringContaining("schedule") });
+    expect(result).toMatchObject({ success: false, text: expect.stringMatching(/when|schedule/i) });
   });
 
   it("handles Google not connected for calendar gracefully", async () => {
@@ -334,12 +334,12 @@ describe("LIFE action — robustness scenarios", () => {
 
   it("handles empty intent gracefully", async () => {
     const result = await send({ action: "overview", intent: "" }, "");
-    expect(result).toMatchObject({ success: false, text: expect.stringContaining("intent") });
+    expect(result).toMatchObject({ success: false, text: expect.stringMatching(/tell me|intent/i) });
   });
 
   it("handles missing action + intent (double fallback)", async () => {
     const result = await send({ intent: "asdfghjkl gibberish" });
-    expect(result).toMatchObject({ success: false, text: expect.stringContaining("schedule") });
+    expect(result).toMatchObject({ success: false, text: expect.stringMatching(/when|schedule/i) });
   });
 
   it("catches LifeOpsServiceError and returns user-friendly message instead of provider issue", async () => {
@@ -352,7 +352,7 @@ describe("LIFE action — robustness scenarios", () => {
       action: "create",
       intent: "Actually create a habit",
       title: "Test habit",
-      details: { kind: "habit", cadence: { kind: "invalid" }, confirmed: true },
+      details: { kind: "habit", cadence: { kind: "daily", windows: ["morning"] }, confirmed: true },
     });
 
     expect(result).toMatchObject({ success: false, text: expect.stringContaining("cadence.kind must be") });

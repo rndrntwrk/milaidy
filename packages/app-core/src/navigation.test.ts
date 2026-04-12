@@ -195,6 +195,15 @@ describe("tab groups", () => {
     expect(getTabGroups(true).map((group) => group.label)).toContain("Stream");
   });
 
+  it("drops the browser group when browser is disabled", () => {
+    expect(
+      getTabGroups(false, true, false).map((group) => group.label),
+    ).not.toContain("Browser");
+    expect(
+      getTabGroups(false, true, true).map((group) => group.label),
+    ).toContain("Browser");
+  });
+
   it("shows Heartbeats in the visible top-level groups", () => {
     expect(getTabGroups(false).map((group) => group.label)).toContain(
       "Heartbeats",

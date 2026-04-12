@@ -35,6 +35,7 @@ const buildResult = await Bun.build({
     path.join(extensionRoot, "entrypoints", "background.ts"),
     path.join(extensionRoot, "entrypoints", "content.ts"),
     path.join(extensionRoot, "entrypoints", "popup.ts"),
+    path.join(extensionRoot, "entrypoints", "blocked.ts"),
   ],
   outdir: distDir,
   target: "browser",
@@ -58,6 +59,10 @@ await fs.copyFile(
   path.join(publicDir, "popup.css"),
   path.join(distDir, "popup.css"),
 );
+await fs.copyFile(
+  path.join(publicDir, "blocked.html"),
+  path.join(distDir, "blocked.html"),
+);
 
 const iconSources = [
   ["icon16.png", path.join(iosPublicDir, "favicon-16x16.png")],
@@ -76,7 +81,15 @@ const manifest = {
   version_name: release.raw,
   description:
     "LifeOps personal-browser relay for syncing the current page and executing owner-approved browser sessions.",
-  permissions: ["tabs", "storage", "scripting", "alarms", "activeTab"],
+  permissions: [
+    "tabs",
+    "storage",
+    "scripting",
+    "alarms",
+    "activeTab",
+    "declarativeNetRequest",
+    "declarativeNetRequestWithHostAccess",
+  ],
   host_permissions: ["<all_urls>"],
   background: {
     service_worker: "background.js",

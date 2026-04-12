@@ -365,6 +365,9 @@ export interface AppState {
   logSourceFilter: string;
   logLoadError: string | null;
 
+  // Capabilities (feature toggles)
+  browserEnabled: boolean;
+
   // Wallet / Inventory
   walletEnabled: boolean;
   walletAddresses: WalletAddresses | null;

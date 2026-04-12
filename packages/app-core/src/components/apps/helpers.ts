@@ -2,6 +2,7 @@ import {
   getMiladyCuratedAppCatalogOrder,
   isMiladyCuratedAppName,
   normalizeMiladyCuratedAppName,
+  packageNameToAppRouteSlug,
 } from "@miladyai/agent/contracts/apps";
 import type { RegistryAppInfo } from "../../api";
 import {
@@ -25,7 +26,7 @@ export type AppCatalogSectionKey =
   | "games"
   | "developerUtilities"
   | "companions"
-  | "business"
+  | "finance"
   | "lifeManagement"
   | "other";
 
@@ -35,18 +36,18 @@ export const APP_CATALOG_SECTION_LABELS: Record<AppCatalogSectionKey, string> =
     games: "Games",
     developerUtilities: "Developer Utilities",
     companions: "Companions",
-    business: "Business",
+    finance: "Finance",
     lifeManagement: "Life Management",
     other: "Other",
   };
 
 const APP_CATALOG_SECTION_ORDER: readonly AppCatalogSectionKey[] = [
   "favorites",
+  "companions",
+  "finance",
+  "lifeManagement",
   "games",
   "developerUtilities",
-  "companions",
-  "business",
-  "lifeManagement",
   "other",
 ];
 
@@ -185,11 +186,12 @@ export function getAppCatalogSectionKey(
   const canonicalName = normalizeMiladyCuratedAppName(app.name) ?? app.name;
   switch (canonicalName) {
     case "@miladyai/app-companion":
-    case "@miladyai/app-vincent":
       return "companions";
-    case "@elizaos/app-babylon":
+    case "@miladyai/app-vincent":
     case "@elizaos/app-shopify":
-      return "business";
+      return "finance";
+    case "@elizaos/app-babylon":
+      return "games";
     case "@hyperscape/plugin-hyperscape":
     case "@elizaos/app-2004scape":
     case "@elizaos/app-scape":
@@ -209,7 +211,7 @@ export function getAppCatalogSectionKey(
     return "companions";
   }
   if (normalizedCategory === "platform") {
-    return "business";
+    return "finance";
   }
 
   const searchBlob = [
@@ -236,7 +238,7 @@ export function getAppCatalogSectionKey(
       searchBlob,
     )
   ) {
-    return "business";
+    return "finance";
   }
   if (
     /debug|viewer|plugin|skill|memory|trajectory|runtime|database|log|sql/.test(
@@ -300,7 +302,7 @@ export function getAppEmoji(app: RegistryAppInfo): string {
   if (sectionKey === "games") return "🎮";
   if (sectionKey === "developerUtilities") return "🛠️";
   if (sectionKey === "companions") return "💬";
-  if (sectionKey === "business") return "💼";
+  if (sectionKey === "finance") return "💰";
   if (sectionKey === "lifeManagement") return "🗓️";
   return "📦";
 }
@@ -319,4 +321,35 @@ export function getAppSessionFeatureLabels(
   return (app.session?.features ?? []).map(
     (feature) => SESSION_FEATURE_LABELS[feature] ?? feature,
   );
+}
+
+/* ── App URL slugs ──────────────────────────────────────────────────── */
+
+/**
+ * Derive a URL slug from an app's package name.
+ *
+ * Uses the existing `packageNameToAppRouteSlug` for scoped packages
+ * (`@scope/app-foo` → `foo`, `@scope/plugin-bar` → `bar`).
+ * Falls back to a sanitised form of the raw name.
+ */
+export function getAppSlug(appName: string): string {
+  const slug = packageNameToAppRouteSlug(appName);
+  if (slug) return slug;
+  // Fallback: strip leading scope, common prefixes, then sanitise
+  return appName
+    .replace(/^@[^/]+\//, "")
+    .replace(/^(app|plugin)-/, "")
+    .replace(/[^a-z0-9-]/gi, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .toLowerCase() || appName;
+}
+
+/** Find an app by its URL slug. */
+export function findAppBySlug(
+  apps: readonly RegistryAppInfo[],
+  slug: string,
+): RegistryAppInfo | undefined {
+  const normalizedSlug = slug.toLowerCase();
+  return apps.find((app) => getAppSlug(app.name).toLowerCase() === normalizedSlug);
 }

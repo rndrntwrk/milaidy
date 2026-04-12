@@ -6,26 +6,26 @@
  */
 
 import { type MutableRefObject, useCallback, useEffect, useRef } from "react";
+import type {
+  CodingAgentSession,
+  Conversation,
+  OnboardingOptions,
+} from "../api";
 import {
   type AgentStatus,
-  type ConversationChannelType,
   type ConversationMessage,
   type ConversationMode,
-  type ImageAttachment,
-  type StreamEventEnvelope,
   client,
+  type ImageAttachment,
 } from "../api";
-import type { AppState } from "./internal";
-import {
-  loadActiveConversationId,
-  type LoadConversationMessagesResult,
-} from "./internal";
-import type { LifecycleAction, UiShellMode } from "./internal";
-import type { Tab } from "../navigation";
-import type { CodingAgentSession } from "../api";
+import { type Tab, tabFromPath } from "../navigation";
 import { isMiladyTtsDebugEnabled } from "../utils/milady-tts-debug";
+import type { AppState, LifecycleAction, UiShellMode } from "./internal";
+import {
+  type LoadConversationMessagesResult,
+  loadActiveConversationId,
+} from "./internal";
 import type { OnboardingMode, OnboardingStep } from "./types";
-import type { Conversation, OnboardingOptions } from "../api";
 
 import { useChatLifecycle } from "./useChatLifecycle";
 import { useChatSend } from "./useChatSend";
@@ -117,6 +117,18 @@ function shouldStartFreshCompanionConversation(
     }
     return now - message.timestamp > COMPANION_STALE_THREAD_MAX_AGE_MS;
   });
+}
+
+function getNavigationPathFromWindow(): string {
+  if (typeof window === "undefined") return "/";
+  if (window.location.protocol === "file:") {
+    return window.location.hash.replace(/^#/, "") || "/";
+  }
+  return window.location.pathname || "/";
+}
+
+function shouldAutoCreateInitialConversation(): boolean {
+  return tabFromPath(getNavigationPathFromWindow()) === "chat";
 }
 
 // ── Deps interface ──────────────────────────────────────────────────
@@ -452,6 +464,7 @@ export function useChatCallbacks(deps: UseChatCallbacksDeps) {
     ],
   );
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: greetingFiredRef is intentionally read from the ref at call time
   const requestGreetingWhenRunning = useCallback(
     async (convId: string | null): Promise<void> => {
       if (!convId || greetingFiredRef.current) {
@@ -545,7 +558,60 @@ export function useChatCallbacks(deps: UseChatCallbacksDeps) {
       setConversationMessages([]);
       setActiveConversationId(null);
       activeConversationIdRef.current = null;
-      return null;
+      setConversations([]);
+
+      if (!shouldAutoCreateInitialConversation()) {
+        return null;
+      }
+
+      traceMiladyGreeting("hydrate:auto_create_initial_conversation");
+      try {
+        const { conversation, greeting: inlineGreeting } =
+          await client.createConversation(undefined, {
+            bootstrapGreeting: true,
+            lang: uiLanguage,
+          });
+
+        if (!isCurrentHydration()) {
+          return null;
+        }
+
+        setConversations([conversation]);
+        setActiveConversationId(conversation.id);
+        activeConversationIdRef.current = conversation.id;
+        client.sendWsMessage({
+          type: "active-conversation",
+          conversationId: conversation.id,
+        });
+
+        const greetingText = inlineGreeting?.text?.trim() || "";
+        if (greetingText) {
+          const nextMessages: ConversationMessage[] = [
+            {
+              id: `greeting-${Date.now()}`,
+              role: "assistant",
+              text: greetingText,
+              timestamp: Date.now(),
+              source: "agent_greeting",
+            },
+          ];
+          greetingFiredRef.current = true;
+          conversationMessagesRef.current = nextMessages;
+          setConversationMessages(nextMessages);
+          return null;
+        }
+
+        return conversation.id;
+      } catch (err) {
+        if (!isCurrentHydration()) {
+          return null;
+        }
+        console.warn(
+          "[milady][chat:init] failed to create initial conversation",
+          err,
+        );
+        return null;
+      }
     } catch (err) {
       console.warn("[milady][chat:init] failed to hydrate conversations", err);
       return null;
@@ -555,6 +621,7 @@ export function useChatCallbacks(deps: UseChatCallbacksDeps) {
     conversationHydrationEpochRef,
     conversationMessagesRef,
     greetingFiredRef,
+    uiLanguage,
     setActiveConversationId,
     setConversationMessages,
     setConversations,

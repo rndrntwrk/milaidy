@@ -9,6 +9,7 @@ const mockSendMessageToTarget = vi.hoisted(() => vi.fn());
 const mockGetRoomsForParticipant = vi.hoisted(() => vi.fn());
 const mockGetMemoriesByRoomIds = vi.hoisted(() => vi.fn());
 const mockLoadElizaConfig = vi.hoisted(() => vi.fn());
+const mockSaveElizaConfig = vi.hoisted(() => vi.fn());
 const mockResolveOwnerEntityId = vi.hoisted(() => vi.fn());
 
 vi.mock("@elizaos/core", async (importOriginal) => {
@@ -26,6 +27,7 @@ vi.mock("@elizaos/core", async (importOriginal) => {
 
 vi.mock("../config/config.js", () => ({
   loadElizaConfig: mockLoadElizaConfig,
+  saveElizaConfig: mockSaveElizaConfig,
 }));
 
 vi.mock("../runtime/owner-entity.js", () => ({
@@ -33,7 +35,7 @@ vi.mock("../runtime/owner-entity.js", () => ({
 }));
 
 import type { UUID } from "@elizaos/core";
-import { EscalationService } from "./escalation.js";
+import { EscalationService, registerEscalationChannel } from "./escalation.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -451,7 +453,7 @@ describe("EscalationService", () => {
       "hello",
     );
 
-    EscalationService.resolveEscalation(state.id);
+    await EscalationService.resolveEscalation(state.id);
 
     expect(state.resolved).toBe(true);
     expect(state.resolvedAt).toBeTypeOf("number");
@@ -461,10 +463,108 @@ describe("EscalationService", () => {
     expect(active).toBeNull();
   });
 
-  it("resolveEscalation is idempotent", () => {
+  it("resolveEscalation is idempotent", async () => {
     // Resolving a non-existent escalation should not throw.
-    expect(() =>
+    await expect(
       EscalationService.resolveEscalation("nonexistent"),
-    ).not.toThrow();
+    ).resolves.not.toThrow();
+  });
+
+  // -----------------------------------------------------------------------
+  // registerEscalationChannel
+  // -----------------------------------------------------------------------
+
+  describe("registerEscalationChannel", () => {
+    it("appends a new channel after client_chat and persists config", () => {
+      const cfg = { agents: { defaults: { escalation: {} } } };
+      mockLoadElizaConfig.mockReturnValue(cfg);
+
+      const result = registerEscalationChannel("telegram");
+
+      expect(result).toBe(true);
+      expect(cfg.agents.defaults.escalation).toEqual({
+        channels: ["client_chat", "telegram"],
+      });
+      expect(mockSaveElizaConfig).toHaveBeenCalledWith(cfg);
+    });
+
+    it("preserves existing channels and appends the new one", () => {
+      const cfg = {
+        agents: {
+          defaults: {
+            escalation: { channels: ["client_chat", "signal"] },
+          },
+        },
+      };
+      mockLoadElizaConfig.mockReturnValue(cfg);
+
+      const result = registerEscalationChannel("discord");
+
+      expect(result).toBe(true);
+      expect(cfg.agents.defaults.escalation.channels).toEqual([
+        "client_chat",
+        "signal",
+        "discord",
+      ]);
+    });
+
+    it("returns false when channel is already registered", () => {
+      const cfg = {
+        agents: {
+          defaults: {
+            escalation: { channels: ["client_chat", "telegram"] },
+          },
+        },
+      };
+      mockLoadElizaConfig.mockReturnValue(cfg);
+
+      const result = registerEscalationChannel("telegram");
+
+      expect(result).toBe(false);
+      expect(mockSaveElizaConfig).not.toHaveBeenCalled();
+    });
+
+    it("normalizes channel name to lowercase", () => {
+      const cfg = { agents: { defaults: { escalation: {} } } };
+      mockLoadElizaConfig.mockReturnValue(cfg);
+
+      registerEscalationChannel("  Telegram  ");
+
+      expect(cfg.agents.defaults.escalation).toEqual({
+        channels: ["client_chat", "telegram"],
+      });
+    });
+
+    it("returns false for empty or whitespace-only channel names", () => {
+      expect(registerEscalationChannel("")).toBe(false);
+      expect(registerEscalationChannel("   ")).toBe(false);
+      expect(mockSaveElizaConfig).not.toHaveBeenCalled();
+    });
+
+    it("bootstraps the full config path when agents.defaults.escalation is missing", () => {
+      const cfg = {};
+      mockLoadElizaConfig.mockReturnValue(cfg);
+
+      const result = registerEscalationChannel("sms");
+
+      expect(result).toBe(true);
+      expect(mockSaveElizaConfig).toHaveBeenCalled();
+      const saved = mockSaveElizaConfig.mock.calls[0][0];
+      expect(saved.agents.defaults.escalation.channels).toEqual([
+        "client_chat",
+        "sms",
+      ]);
+    });
+
+    it("returns false and does not throw when loadElizaConfig throws", () => {
+      mockLoadElizaConfig.mockImplementation(() => {
+        throw new Error("config read error");
+      });
+
+      const result = registerEscalationChannel("voice");
+
+      expect(result).toBe(false);
+      expect(mockSaveElizaConfig).not.toHaveBeenCalled();
+    });
   });
 });

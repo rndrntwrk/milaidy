@@ -10,7 +10,7 @@
  * @module actions/emote
  */
 
-import type { Action, HandlerOptions } from "@elizaos/core";
+import type { Action, HandlerOptions, Memory } from "@elizaos/core";
 import { AGENT_EMOTE_BY_ID, AGENT_EMOTE_CATALOG } from "../emotes/catalog.js";
 
 /** API port for posting emote requests. */
@@ -39,9 +39,9 @@ export const emoteAction: Action = {
     "before, after, or alongside other actions in the same turn " +
     "(for example with REPLY, SEND_MESSAGE, or stream actions).",
 
-  validate: async (_runtime, _message, _state) => {
-    // Always valid — the handler will check if the emote exists.
-    return true;
+  validate: async (_runtime, message, _state) => {
+    const source = (message?.content as Record<string, unknown>)?.source;
+    return source === "client_chat";
   },
 
   handler: async (_runtime, _message, _state, options) => {

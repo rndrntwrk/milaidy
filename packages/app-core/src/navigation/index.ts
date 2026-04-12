@@ -4,7 +4,6 @@
 
 import type { LucideIcon } from "lucide-react";
 import {
-  Brain,
   Clock3,
   Gamepad2,
   MessageSquare,
@@ -135,16 +134,18 @@ export const ALL_TAB_GROUPS: TabGroup[] = [
   },
 ];
 
-/** Compute visible tab groups. Pass streamEnabled/walletEnabled explicitly for React reactivity. */
+/** Compute visible tab groups. Pass feature flags explicitly for React reactivity. */
 export function getTabGroups(
   streamEnabled = STREAM_ENABLED,
   walletEnabled = true,
+  browserEnabled = true,
 ): TabGroup[] {
   return ALL_TAB_GROUPS.filter(
     (g) =>
       (APPS_ENABLED || g.label !== "Apps") &&
       (streamEnabled || g.label !== "Stream") &&
-      (walletEnabled || g.label !== "Wallet"),
+      (walletEnabled || g.label !== "Wallet") &&
+      (browserEnabled || g.label !== "Browser"),
   );
 }
 
@@ -241,9 +242,14 @@ export function tabFromPath(pathname: string, basePath = ""): Tab | null {
     return "chat";
   }
   // Apps disabled in production builds — redirect to chat
-  if (!APPS_ENABLED && (normalized === "/apps" || normalized === "/game")) {
+  if (
+    !APPS_ENABLED &&
+    (normalized === "/apps" || normalized.startsWith("/apps/") || normalized === "/game")
+  ) {
     return "chat";
   }
+  // /apps/<slug> resolves to the apps tab (slug handled by AppsView)
+  if (normalized.startsWith("/apps/")) return "apps";
   // Stream tab (always enabled)
   // Check current paths first, then legacy redirects
   return PATH_TO_TAB.get(normalized) ?? LEGACY_PATHS[normalized] ?? null;
@@ -265,6 +271,20 @@ function normalizePath(p: string): string {
   if (normalized.length > 1 && normalized.endsWith("/"))
     normalized = normalized.slice(0, -1);
   return normalized;
+}
+
+/**
+ * Extract an app slug from a `/apps/<slug>` path.
+ * Returns `null` when the path doesn't contain a slug segment.
+ */
+export function getAppSlugFromPath(
+  pathname: string,
+  basePath = "",
+): string | null {
+  const normalized = normalizePathForLookup(pathname, basePath);
+  if (!normalized.startsWith("/apps/")) return null;
+  const slug = normalized.slice("/apps/".length);
+  return slug || null;
 }
 
 export function titleForTab(tab: Tab): string {

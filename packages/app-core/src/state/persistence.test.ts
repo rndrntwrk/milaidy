@@ -150,10 +150,17 @@ describe("theme persistence", () => {
     let attributeWrites = 0;
     let addCalls = 0;
     let removeCalls = 0;
+    const styleProperties: Record<string, string> = {};
     const root = {
       dataset: {},
       style: {
         colorScheme: "",
+        setProperty: (name: string, value: string) => {
+          styleProperties[name] = value;
+        },
+        removeProperty: (name: string) => {
+          delete styleProperties[name];
+        },
       },
       classList: {
         add: (value: string) => {
@@ -177,6 +184,10 @@ describe("theme persistence", () => {
 
     (globalThis as Record<string, unknown>).document = {
       documentElement: root,
+      getElementById: () => null,
+      createElement: () => ({ setAttribute: () => {} }),
+      head: { appendChild: () => {}, querySelectorAll: () => [] },
+      querySelectorAll: () => [],
     };
 
     try {

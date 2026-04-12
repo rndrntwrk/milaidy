@@ -26,6 +26,20 @@ import {
 const AGENT_ID = "lifeops-calendar-chat-agent";
 const TEST_TIME_ZONE = "America/Los_Angeles";
 
+function extractPromptFallback(prompt: string): string | null {
+  const match = prompt.match(
+    /Canonical fallback:\s*("(?:[^"\\]|\\.)*")/m,
+  );
+  if (!match) {
+    return null;
+  }
+  try {
+    return JSON.parse(match[1]) as string;
+  } catch {
+    return null;
+  }
+}
+
 function localDayAtOffset(daysFromToday: number): {
   year: number;
   month: number;
@@ -333,9 +347,22 @@ describe("life-ops calendar chat transcripts", () => {
       useModel: async (_modelType: unknown, params?: { prompt?: string }) => {
         const prompt = String(params?.prompt ?? "");
         const promptLower = prompt.toLowerCase();
+        const currentRequestMatch = prompt.match(
+          /<current_request>\n([\s\S]*?)\n<\/current_request>/,
+        );
+        const currentRequest = currentRequestMatch?.[1]?.trim().toLowerCase() ?? "";
         if (prompt.includes("Plan the calendar action for this request.")) {
-          if (promptLower.includes("vuelo a denver")) {
+          if (currentRequest.includes("vuelo a denver")) {
             return '{"subaction":"search_events","queries":["flight denver"]}';
+          }
+          if (
+            currentRequest.includes("when do i fly back from denver") ||
+            currentRequest.includes("when is my return flight to san francisco")
+          ) {
+            return '{"subaction":"search_events","queries":["flight to san francisco","return to sfo","return flight"]}';
+          }
+          if (currentRequest.includes("probably next week")) {
+            return '{"subaction":"search_events","queries":["flight to san francisco next week","return to sfo next week","return flight next week"]}';
           }
           return '{"subaction":null,"queries":[]}';
         }
@@ -347,6 +374,24 @@ describe("life-ops calendar chat transcripts", () => {
             return "<response><query1>april 12</query1><query2></query2><query3></query3></response>";
           }
           return "<response><query1></query1><query2></query2><query3></query3></response>";
+        }
+        if (
+          prompt.includes(
+            "Decide which candidate calendar events directly match the user's request.",
+          )
+        ) {
+          if (
+            promptLower.includes("fly back from denver") ||
+            promptLower.includes("probably next week")
+          ) {
+            return "matchIds: evt-return-flight";
+          }
+          if (promptLower.includes("flights this week")) {
+            return "matchIds: evt-outbound-flight";
+          }
+        }
+        if (prompt.includes("Write the assistant's user-facing reply for a calendar interaction.")) {
+          return extractPromptFallback(prompt) ?? "";
         }
         return "<response></response>";
       },
@@ -496,7 +541,7 @@ describe("life-ops calendar chat transcripts", () => {
     expect(String(confirmation.data.text ?? "")).not.toContain("Fairfield");
 
     const returnFlight = await postConversationMessage(port, conversationId, {
-      text: "when do i fly back from denver?",
+      text: "when is my return flight to san francisco?",
       source: "discord",
     });
     expect(returnFlight.status).toBe(200);

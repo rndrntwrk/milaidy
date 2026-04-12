@@ -243,6 +243,30 @@ describe("collectConnectorEnvVars", () => {
     });
   });
 
+  it("maps BlueBubbles auto-start settings to plugin env keys", () => {
+    const result = collectConnectorEnvVars({
+      connectors: {
+        bluebubbles: {
+          serverUrl: "http://localhost:1234",
+          password: "secret",
+          autoStartCommand: "open",
+          autoStartArgs: ["-a", "BlueBubbles"],
+          autoStartCwd: "/Applications",
+          autoStartWaitMs: 12000,
+        },
+      },
+    } as ElizaConfig);
+
+    expect(result).toEqual({
+      BLUEBUBBLES_SERVER_URL: "http://localhost:1234",
+      BLUEBUBBLES_PASSWORD: "secret",
+      BLUEBUBBLES_AUTOSTART_COMMAND: "open",
+      BLUEBUBBLES_AUTOSTART_ARGS: "-a,BlueBubbles",
+      BLUEBUBBLES_AUTOSTART_CWD: "/Applications",
+      BLUEBUBBLES_AUTOSTART_WAIT_MS: "12000",
+    });
+  });
+
   it("maps imessage connector runtime settings to plugin env keys", () => {
     const result = collectConnectorEnvVars({
       connectors: {

@@ -123,13 +123,14 @@ export interface ActivityProfile {
 }
 
 export interface ProactiveAction {
-  kind: "gm" | "gn" | "pre_activity_nudge";
+  kind: "gm" | "gn" | "pre_activity_nudge" | "goal_check_in" | "onboarding_seed";
   scheduledFor: number;
   targetPlatform: string;
   contextSummary: string;
   messageText: string;
   occurrenceId?: string;
   calendarEventId?: string;
+  goalId?: string;
   status: "pending" | "fired" | "skipped";
   skipReason?: string;
 }
@@ -140,4 +141,6 @@ export interface FiredActionsLog {
   gnFiredAt?: number;
   nudgedOccurrenceIds: string[];
   nudgedCalendarEventIds: string[];
+  checkedGoalIds?: string[];
+  seedingOfferedAt?: number;
 }

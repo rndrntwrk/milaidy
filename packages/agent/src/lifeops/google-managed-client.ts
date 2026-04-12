@@ -93,12 +93,13 @@ interface GenericOAuthInitiateResponse {
   };
 }
 
-const DEFAULT_MANAGED_GOOGLE_CAPABILITIES: readonly LifeOpsGoogleCapability[] = [
-  "google.basic_identity",
-  "google.calendar.read",
-  "google.gmail.triage",
-  "google.gmail.send",
-] as const;
+const DEFAULT_MANAGED_GOOGLE_CAPABILITIES: readonly LifeOpsGoogleCapability[] =
+  [
+    "google.basic_identity",
+    "google.calendar.read",
+    "google.gmail.triage",
+    "google.gmail.send",
+  ] as const;
 
 function normalizeManagedGoogleCapabilities(
   capabilities?: readonly LifeOpsGoogleCapability[],

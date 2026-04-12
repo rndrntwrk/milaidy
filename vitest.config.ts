@@ -298,6 +298,7 @@ export default defineConfig({
       "packages/plugin-wechat/src/**/*.test.ts",
       "packages/plugin-music-player/src/**/*.test.ts",
       "plugins/plugin-discord/typescript/__tests__/identity.test.ts",
+      "plugins/plugin-discord/typescript/__tests__/slash-command-roles.test.ts",
       "src/**/*.test.ts",
       "scripts/**/*.test.ts",
       "apps/app/electrobun/src/**/*.test.ts",

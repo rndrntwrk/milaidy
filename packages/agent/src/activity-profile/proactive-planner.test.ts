@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   type CalendarEventSlim,
+  type GoalSlim,
   type OccurrenceSlim,
   planDowntimeNudges,
   planGm,
   planGn,
+  planGoalCheckIns,
   planNudges,
   selectTargetPlatform,
 } from "./proactive-planner";
@@ -202,6 +204,26 @@ describe("planGm", () => {
     const gmAction = requireValue(action);
 
     expect(gmAction.contextSummary).toContain("Brush teeth");
+  });
+
+  it("ignores passive hotel stays in GM calendar context", () => {
+    const profile = makeProfile({ lastSeenAt: NOW_MS - 60_000 });
+    const events: CalendarEventSlim[] = [
+      {
+        id: "cal-hotel",
+        summary: "Stay at Fairfield Inn in Boulder",
+        startAt: "2026-04-06T09:00:00Z",
+        endAt: "2026-04-06T19:00:00Z",
+        isAllDay: false,
+        description: "Hotel check-in",
+      },
+    ];
+
+    const action = planGm(profile, [], events, null, TZ, NOW);
+    const gmAction = requireValue(action);
+
+    expect(gmAction.contextSummary).toBe("gm");
+    expect(gmAction.messageText).toBe("Good morning.");
   });
 
   it("returns null if GM already fired today", () => {
@@ -459,6 +481,45 @@ describe("planNudges", () => {
     expect(actions).toHaveLength(0);
   });
 
+  it("skips passive hotel stays even when they are timed events", () => {
+    const profile = makeProfile({ lastSeenAt: NOW_MS - 60_000 });
+    const events: CalendarEventSlim[] = [
+      {
+        id: "cal-hotel",
+        summary: "Stay at Fairfield Inn in Boulder",
+        startAt: "2026-04-06T07:30:00Z",
+        endAt: "2026-04-06T19:00:00Z",
+        isAllDay: false,
+        description: "Hotel check-in",
+        location: "Fairfield Inn Boulder",
+      },
+    ];
+
+    const actions = planNudges(profile, [], events, null, TZ, NOW);
+    expect(actions).toHaveLength(0);
+  });
+
+  it("still nudges short social plans with people", () => {
+    const profile = makeProfile({ lastSeenAt: NOW_MS - 60_000 });
+    const events: CalendarEventSlim[] = [
+      {
+        id: "cal-dinner",
+        summary: "Dinner with Sam",
+        startAt: "2026-04-06T07:30:00Z",
+        endAt: "2026-04-06T08:30:00Z",
+        isAllDay: false,
+      },
+    ];
+
+    const actions = planNudges(profile, [], events, null, TZ, NOW);
+    expect(actions).toHaveLength(1);
+    expect(actions[0]).toMatchObject({
+      kind: "pre_activity_nudge",
+      calendarEventId: "cal-dinner",
+      contextSummary: "Dinner with Sam",
+    });
+  });
+
   it("skips already-nudged calendar events", () => {
     const profile = makeProfile({ lastSeenAt: NOW_MS - 60_000 });
     const events = makeCalendarEvents([
@@ -654,5 +715,197 @@ describe("brushing teeth scenario", () => {
       nudges.find((nudge) => nudge.occurrenceId === "brush-pm"),
     );
     expect(brushNudge.contextSummary).toContain("Brush teeth (night)");
+  });
+});
+
+// ── planGoalCheckIns ─────────────────────────────────
+
+function makeGoal(overrides: Partial<GoalSlim> & { title: string }): GoalSlim {
+  return {
+    id:
+      overrides.id ??
+      `goal-${overrides.title.toLowerCase().replace(/\s/g, "-")}`,
+    title: overrides.title,
+    status: overrides.status ?? "active",
+    linkedDefinitionCount: overrides.linkedDefinitionCount ?? 2,
+    recentCompletionRate: overrides.recentCompletionRate ?? 0.8,
+    lastReviewedAt: overrides.lastReviewedAt ?? null,
+  };
+}
+
+describe("planGoalCheckIns", () => {
+  it("returns a check-in for an active goal not reviewed recently", () => {
+    const profile = makeProfile({ lastSeenAt: NOW_MS - 60_000 });
+    const goals = [
+      makeGoal({ title: "Exercise daily", recentCompletionRate: 0.7 }),
+    ];
+
+    const actions = planGoalCheckIns(profile, goals, null, TZ, NOW);
+
+    expect(actions).toHaveLength(1);
+    expect(actions[0].kind).toBe("goal_check_in");
+    expect(actions[0].goalId).toBe("goal-exercise-daily");
+    expect(actions[0].messageText).toContain("Exercise daily");
+    expect(actions[0].status).toBe("pending");
+  });
+
+  it("skips goals that were reviewed less than 3 days ago", () => {
+    const profile = makeProfile({ lastSeenAt: NOW_MS - 60_000 });
+    const recentReview = new Date(
+      NOW.getTime() - 2 * 24 * 60 * 60 * 1000,
+    ).toISOString();
+    const goals = [
+      makeGoal({ title: "Exercise daily", lastReviewedAt: recentReview }),
+    ];
+
+    const actions = planGoalCheckIns(profile, goals, null, TZ, NOW);
+
+    expect(actions).toHaveLength(0);
+  });
+
+  it("allows goals reviewed 3+ days ago", () => {
+    const profile = makeProfile({ lastSeenAt: NOW_MS - 60_000 });
+    const staleReview = new Date(
+      NOW.getTime() - 4 * 24 * 60 * 60 * 1000,
+    ).toISOString();
+    const goals = [
+      makeGoal({ title: "Exercise daily", lastReviewedAt: staleReview }),
+    ];
+
+    const actions = planGoalCheckIns(profile, goals, null, TZ, NOW);
+
+    expect(actions).toHaveLength(1);
+    expect(actions[0].goalId).toBe("goal-exercise-daily");
+  });
+
+  it("skips paused goals", () => {
+    const profile = makeProfile({ lastSeenAt: NOW_MS - 60_000 });
+    const goals = [makeGoal({ title: "Exercise daily", status: "paused" })];
+
+    const actions = planGoalCheckIns(profile, goals, null, TZ, NOW);
+
+    expect(actions).toHaveLength(0);
+  });
+
+  it("skips goals already checked in today", () => {
+    const profile = makeProfile({ lastSeenAt: NOW_MS - 60_000 });
+    const goals = [makeGoal({ title: "Exercise daily", id: "goal-1" })];
+    const firedToday: FiredActionsLog = {
+      date: "2026-04-06",
+      nudgedOccurrenceIds: [],
+      nudgedCalendarEventIds: [],
+      checkedGoalIds: ["goal-1"],
+    };
+
+    const actions = planGoalCheckIns(profile, goals, firedToday, TZ, NOW);
+
+    expect(actions).toHaveLength(0);
+  });
+
+  it("returns empty while user is sleeping", () => {
+    const profile = makeProfile({ isCurrentlySleeping: true });
+    const goals = [makeGoal({ title: "Exercise daily" })];
+
+    const actions = planGoalCheckIns(profile, goals, null, TZ, NOW);
+
+    expect(actions).toHaveLength(0);
+  });
+
+  it("prioritizes goals with no supporting tasks over struggling goals", () => {
+    const profile = makeProfile({ lastSeenAt: NOW_MS - 60_000 });
+    const goals = [
+      makeGoal({
+        title: "Learn guitar",
+        id: "struggling",
+        recentCompletionRate: 0.3,
+        linkedDefinitionCount: 3,
+      }),
+      makeGoal({
+        title: "Write novel",
+        id: "no-tasks",
+        recentCompletionRate: 0,
+        linkedDefinitionCount: 0,
+      }),
+    ];
+
+    const actions = planGoalCheckIns(profile, goals, null, TZ, NOW);
+
+    expect(actions).toHaveLength(1);
+    expect(actions[0].goalId).toBe("no-tasks");
+    expect(actions[0].contextSummary).toContain("no supporting tasks");
+    expect(actions[0].messageText).toContain("doesn't have any linked tasks");
+  });
+
+  it("prioritizes struggling goals over on-track goals", () => {
+    const profile = makeProfile({ lastSeenAt: NOW_MS - 60_000 });
+    const goals = [
+      makeGoal({
+        title: "Exercise daily",
+        id: "on-track",
+        recentCompletionRate: 0.9,
+        linkedDefinitionCount: 2,
+      }),
+      makeGoal({
+        title: "Learn guitar",
+        id: "struggling",
+        recentCompletionRate: 0.2,
+        linkedDefinitionCount: 3,
+      }),
+    ];
+
+    const actions = planGoalCheckIns(profile, goals, null, TZ, NOW);
+
+    expect(actions).toHaveLength(1);
+    expect(actions[0].goalId).toBe("struggling");
+    expect(actions[0].contextSummary).toContain("completion at 20%");
+  });
+
+  it("returns at most one goal check-in per cycle", () => {
+    const profile = makeProfile({ lastSeenAt: NOW_MS - 60_000 });
+    const goals = [
+      makeGoal({ title: "Goal A", id: "a" }),
+      makeGoal({ title: "Goal B", id: "b" }),
+      makeGoal({ title: "Goal C", id: "c" }),
+    ];
+
+    const actions = planGoalCheckIns(profile, goals, null, TZ, NOW);
+
+    expect(actions).toHaveLength(1);
+  });
+
+  it("generates correct message for on-track goals", () => {
+    const profile = makeProfile({ lastSeenAt: NOW_MS - 60_000 });
+    const goals = [
+      makeGoal({
+        title: "Daily meditation",
+        recentCompletionRate: 0.85,
+        linkedDefinitionCount: 1,
+      }),
+    ];
+
+    const actions = planGoalCheckIns(profile, goals, null, TZ, NOW);
+
+    expect(actions).toHaveLength(1);
+    expect(actions[0].contextSummary).toContain("on track at 85%");
+    expect(actions[0].messageText).toContain("is going well");
+    expect(actions[0].messageText).toContain("85% completion");
+  });
+
+  it("generates correct message for struggling goals", () => {
+    const profile = makeProfile({ lastSeenAt: NOW_MS - 60_000 });
+    const goals = [
+      makeGoal({
+        title: "Read 30 minutes",
+        recentCompletionRate: 0.25,
+        linkedDefinitionCount: 1,
+      }),
+    ];
+
+    const actions = planGoalCheckIns(profile, goals, null, TZ, NOW);
+
+    expect(actions).toHaveLength(1);
+    expect(actions[0].contextSummary).toContain("completion at 25%");
+    expect(actions[0].messageText).toContain("25% completion this week");
+    expect(actions[0].messageText).toContain("getting in the way");
   });
 });

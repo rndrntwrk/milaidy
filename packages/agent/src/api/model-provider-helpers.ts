@@ -44,209 +44,144 @@ export function getModelOptions(): {
 } {
   // All models available via Eliza Cloud (Vercel AI Gateway).
   // IDs use "provider/model" format to match the cloud API routing.
+  // Every tier exposes the full catalog so users can assign any model to any slot.
+  const allModels = [
+    // Anthropic
+    {
+      id: "anthropic/claude-opus-4.6",
+      name: "Claude Opus 4.6",
+      provider: "Anthropic",
+      description: "Most capable Claude model.",
+    },
+    {
+      id: "anthropic/claude-sonnet-4.6",
+      name: "Claude Sonnet 4.6",
+      provider: "Anthropic",
+      description: "Strong planning and reasoning.",
+    },
+    {
+      id: "anthropic/claude-haiku-4.5",
+      name: "Claude Haiku 4.5",
+      provider: "Anthropic",
+      description: "Fast Claude for lightweight tasks.",
+    },
+    // OpenAI
+    {
+      id: "openai/gpt-5.4-pro",
+      name: "GPT-5.4 Pro",
+      provider: "OpenAI",
+      description: "Highest-precision GPT-5.4 variant.",
+    },
+    {
+      id: "openai/gpt-5.4",
+      name: "GPT-5.4",
+      provider: "OpenAI",
+      description: "Flagship OpenAI model for coding and reasoning.",
+    },
+    {
+      id: "openai/gpt-5.4-mini",
+      name: "GPT-5.4 Mini",
+      provider: "OpenAI",
+      description: "High-volume OpenAI mini model.",
+    },
+    {
+      id: "openai/gpt-5.4-nano",
+      name: "GPT-5.4 Nano",
+      provider: "OpenAI",
+      description: "Cheapest GPT-5.4 tier for fast routing and gating.",
+    },
+    // Google
+    {
+      id: "google/gemini-3.1-pro-preview",
+      name: "Gemini 3.1 Pro Preview",
+      provider: "Google",
+      description: "Most capable Gemini. 1M context, advanced reasoning.",
+    },
+    {
+      id: "google/gemini-2.5-pro",
+      name: "Gemini 2.5 Pro",
+      provider: "Google",
+      description: "Stable multimodal reasoning.",
+    },
+    {
+      id: "google/gemini-3-flash",
+      name: "Gemini 3 Flash",
+      provider: "Google",
+      description: "Fast next-gen Gemini.",
+    },
+    {
+      id: "google/gemini-3.1-flash-lite-preview",
+      name: "Gemini 3.1 Flash Lite Preview",
+      provider: "Google",
+      description: "Fastest Gemini tier.",
+    },
+    // DeepSeek
+    {
+      id: "deepseek/deepseek-r1",
+      name: "DeepSeek R1",
+      provider: "DeepSeek",
+      description: "Reasoning model.",
+    },
+    {
+      id: "deepseek/deepseek-v3.2",
+      name: "DeepSeek V3.2",
+      provider: "DeepSeek",
+      description: "Open and powerful.",
+    },
+    // Moonshot
+    {
+      id: "moonshotai/kimi-k2.5",
+      name: "Kimi K2.5",
+      provider: "Moonshot",
+      description: "Multimodal agentic model from Moonshot AI.",
+    },
+    // Z.AI
+    {
+      id: "zai/glm-5.1",
+      name: "GLM 5.1",
+      provider: "Z.AI",
+      description: "Latest GLM reasoning model.",
+    },
+    // MiniMax
+    {
+      id: "minimax/minimax-m2.7",
+      name: "MiniMax M2.7",
+      provider: "MiniMax",
+      description: "Fast reasoning with strong value.",
+    },
+    {
+      id: "minimax/minimax-m2.5-lightning",
+      name: "MiniMax M2.5 Lightning",
+      provider: "MiniMax",
+      description: "Lowest-latency MiniMax option.",
+    },
+    // Groq
+    {
+      id: "groq/llama-4-scout",
+      name: "Llama 4 Scout",
+      provider: "Groq",
+      description: "Latest Llama on Groq inference.",
+    },
+    {
+      id: "groq/llama-3.3-70b",
+      name: "Llama 3.3 70B",
+      provider: "Groq",
+      description: "Strong open-weight model on Groq.",
+    },
+    {
+      id: "groq/llama-3.1-8b-instant",
+      name: "Llama 3.1 8B Instant",
+      provider: "Groq",
+      description: "Low-latency Groq nano option.",
+    },
+  ];
+
   return {
-    nano: [
-      {
-        id: "openai/gpt-5.4-nano",
-        name: "GPT-5.4 Nano",
-        provider: "OpenAI",
-        description: "Cheapest GPT-5.4 tier for fast routing and gating.",
-      },
-      {
-        id: "google/gemini-2.5-flash-lite",
-        name: "Gemini 2.5 Flash Lite",
-        provider: "Google",
-        description: "Fastest Gemini tier.",
-      },
-      {
-        id: "anthropic/claude-haiku-4.5",
-        name: "Claude Haiku 4.5",
-        provider: "Anthropic",
-        description: "Fast Claude for lightweight tasks.",
-      },
-      {
-        id: "groq/llama-3.1-8b-instant",
-        name: "Llama 3.1 8B Instant",
-        provider: "Groq",
-        description: "Low-latency Groq nano-class option.",
-      },
-    ],
-    small: [
-      // OpenAI
-      {
-        id: "openai/gpt-5.4-mini",
-        name: "GPT-5.4 Mini",
-        provider: "OpenAI",
-        description: "Latest high-volume OpenAI mini model.",
-      },
-      {
-        id: "openai/gpt-5.4-nano",
-        name: "GPT-5.4 Nano",
-        provider: "OpenAI",
-        description: "Cheapest GPT-5.4 tier.",
-      },
-      {
-        id: "openai/gpt-4o-mini",
-        name: "GPT-4o Mini",
-        provider: "OpenAI",
-        description: "Compact multimodal model.",
-      },
-      // Anthropic
-      {
-        id: "anthropic/claude-haiku-4.5",
-        name: "Claude Haiku 4.5",
-        provider: "Anthropic",
-        description: "Fast Claude for lightweight tasks.",
-      },
-      // Google
-      {
-        id: "google/gemini-2.5-flash-lite",
-        name: "Gemini 2.5 Flash Lite",
-        provider: "Google",
-        description: "Fastest option.",
-      },
-      {
-        id: "google/gemini-2.5-flash",
-        name: "Gemini 2.5 Flash",
-        provider: "Google",
-        description: "Fast and smart.",
-      },
-      // DeepSeek
-      {
-        id: "deepseek/deepseek-v3.2",
-        name: "DeepSeek V3.2",
-        provider: "DeepSeek",
-        description: "Open and powerful.",
-      },
-      // Z.AI
-      {
-        id: "zai/glm-5.1",
-        name: "GLM 5.1",
-        provider: "Z.AI",
-        description: "Latest GLM reasoning model.",
-      },
-      // MiniMax
-      {
-        id: "minimax/minimax-m2.7",
-        name: "MiniMax M2.7",
-        provider: "MiniMax",
-        description: "Fast reasoning with strong value.",
-      },
-      {
-        id: "minimax/minimax-m2.1-lightning",
-        name: "MiniMax M2.1 Lightning",
-        provider: "MiniMax",
-        description: "Lowest-latency MiniMax option.",
-      },
-    ],
-    medium: [
-      {
-        id: "openai/gpt-5.4",
-        name: "GPT-5.4",
-        provider: "OpenAI",
-        description: "Balanced GPT-5.4 tier for planning and synthesis.",
-      },
-      {
-        id: "anthropic/claude-sonnet-4.6",
-        name: "Claude Sonnet 4.6",
-        provider: "Anthropic",
-        description: "Strong planning and reasoning default.",
-      },
-      {
-        id: "google/gemini-2.5-pro",
-        name: "Gemini 2.5 Pro",
-        provider: "Google",
-        description: "Capable multimodal reasoning.",
-      },
-      {
-        id: "minimax/minimax-m2.7",
-        name: "MiniMax M2.7",
-        provider: "MiniMax",
-        description: "Strong value for planning workloads.",
-      },
-    ],
-    large: [
-      // Anthropic
-      {
-        id: "anthropic/claude-sonnet-4.6",
-        name: "Claude Sonnet 4.6",
-        provider: "Anthropic",
-        description: "Newest Claude. Excellent reasoning.",
-      },
-      {
-        id: "anthropic/claude-opus-4.6",
-        name: "Claude Opus 4.6",
-        provider: "Anthropic",
-        description: "Most capable Claude model.",
-      },
-      // OpenAI
-      {
-        id: "openai/gpt-5.4",
-        name: "GPT-5.4",
-        provider: "OpenAI",
-        description: "Flagship OpenAI model for coding and reasoning.",
-      },
-      {
-        id: "openai/gpt-5.4-pro",
-        name: "GPT-5.4 Pro",
-        provider: "OpenAI",
-        description: "Highest-precision GPT-5.4 variant.",
-      },
-      // Google
-      {
-        id: "google/gemini-3-pro-preview",
-        name: "Gemini 3 Pro Preview",
-        provider: "Google",
-        description: "Advanced reasoning.",
-      },
-      {
-        id: "google/gemini-2.5-pro",
-        name: "Gemini 2.5 Pro",
-        provider: "Google",
-        description: "Strong multimodal reasoning.",
-      },
-      // DeepSeek
-      {
-        id: "deepseek/deepseek-r1",
-        name: "DeepSeek R1",
-        provider: "DeepSeek",
-        description: "Reasoning model.",
-      },
-      // Z.AI
-      {
-        id: "zai/glm-5.1",
-        name: "GLM 5.1",
-        provider: "Z.AI",
-        description: "Latest GLM model for reasoning and coding.",
-      },
-      // MiniMax
-      {
-        id: "minimax/minimax-m2.7",
-        name: "MiniMax M2.7",
-        provider: "MiniMax",
-        description: "Strong value for advanced reasoning.",
-      },
-    ],
-    mega: [
-      {
-        id: "anthropic/claude-opus-4.6",
-        name: "Claude Opus 4.6",
-        provider: "Anthropic",
-        description: "Highest-capability available tier today.",
-      },
-      {
-        id: "openai/gpt-5.4-pro",
-        name: "GPT-5.4 Pro",
-        provider: "OpenAI",
-        description: "Highest-precision GPT-5.4 variant.",
-      },
-      {
-        id: "google/gemini-3-pro-preview",
-        name: "Gemini 3 Pro Preview",
-        provider: "Google",
-        description: "Largest Gemini option currently exposed.",
-      },
-    ],
+    nano: allModels,
+    small: allModels,
+    medium: allModels,
+    large: allModels,
+    mega: allModels,
   };
 }
 
@@ -634,7 +569,10 @@ export async function getOrFetchProvider(
       "https://ai-gateway.vercel.sh/v1";
   }
 
-  // Listing models doesn't require an API key — fetch from all providers
+  // Skip remote providers that need an API key when none is configured
+  const keylessProviders = new Set(["ollama", "vercel-ai-gateway"]);
+  if (!keyValue && !keylessProviders.has(providerId)) return [];
+
   const models = await fetchProviderModels(providerId, keyValue ?? "", baseUrl);
   if (models.length > 0) {
     writeProviderCache({

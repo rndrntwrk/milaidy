@@ -124,6 +124,8 @@ vi.mock("@miladyai/app-core/src/app-shell-components", () => ({
   AppsPageView: () =>
     React.createElement("section", null, "AppsPageView Ready"),
   AvatarLoader: () => React.createElement("div", null, "AvatarLoader"),
+  BrowserWorkspaceView: () =>
+    React.createElement("section", null, "BrowserWorkspaceView Ready"),
   BugReportModal: () => React.createElement("div", null, "BugReportModal"),
   CharacterEditor: () =>
     React.createElement("section", null, "CharacterView Ready"),
@@ -143,6 +145,12 @@ vi.mock("@miladyai/app-core/src/app-shell-components", () => ({
     React.createElement("aside", null, "CustomActionEditor"),
   CustomActionsPanel: () =>
     React.createElement("aside", null, "CustomActionsPanel"),
+  DatabasePageView: () =>
+    React.createElement("section", null, "DatabasePageView Ready"),
+  DesktopWorkspaceSection: () =>
+    React.createElement("section", null, "DesktopWorkspaceSection Ready"),
+  FineTuningView: () =>
+    React.createElement("section", null, "FineTuningView Ready"),
   GameViewOverlay: () => React.createElement("div", null, "GameViewOverlay"),
   Header: () => React.createElement("header", null, "Header"),
   HeartbeatsDesktopShell: () =>
@@ -153,17 +161,33 @@ vi.mock("@miladyai/app-core/src/app-shell-components", () => ({
     React.createElement("section", null, "InventoryView Ready"),
   KnowledgeView: () =>
     React.createElement("section", null, "KnowledgeView Ready"),
+  LifeOpsPageView: () =>
+    React.createElement("section", null, "LifeOpsPageView Ready"),
+  LogsPageView: () =>
+    React.createElement("section", null, "LogsPageView Ready"),
+  MemoryViewerView: () =>
+    React.createElement("section", null, "MemoryViewerView Ready"),
   OnboardingWizard: () => React.createElement("div", null, "OnboardingWizard"),
   PairingView: () => React.createElement("div", null, "PairingView"),
+  PluginsPageView: () =>
+    React.createElement("section", null, "PluginsPageView Ready"),
+  RelationshipsView: () =>
+    React.createElement("section", null, "RelationshipsView Ready"),
+  RuntimeView: () =>
+    React.createElement("section", null, "RuntimeView Ready"),
   SaveCommandModal: () => React.createElement("div", null, "SaveCommandModal"),
   SettingsView: () =>
     React.createElement("section", null, "SettingsView Ready"),
   ShellOverlays: () => null,
+  SkillsView: () => React.createElement("section", null, "SkillsView Ready"),
   StartupFailureView: ({ error }: { error: { message: string } }) =>
     React.createElement("div", null, error.message),
+  StartupShell: () => React.createElement("div", null, "StartupShell"),
   StreamView: () => React.createElement("section", null, "StreamView Ready"),
   SystemWarningBanner: () =>
     React.createElement("div", null, "SystemWarningBanner"),
+  TrajectoriesView: () =>
+    React.createElement("section", null, "TrajectoriesView Ready"),
 }));
 
 vi.mock("@miladyai/app-core/src/components/shell/Header", () => ({
@@ -242,8 +266,10 @@ vi.mock("@miladyai/app-core/src/components/pages/CompanionView", () => ({
     React.createElement("section", null, "CompanionView Ready"),
 }));
 
-// Side-effect import mock for companion app self-registration
+// Side-effect import mocks for overlay app self-registration
 vi.mock("@miladyai/app-core/src/components/companion/companion-app", () => ({}));
+vi.mock("@miladyai/app-core/src/components/vincent/vincent-app", () => ({}));
+vi.mock("@miladyai/app-core/src/components/shopify/shopify-app", () => ({}));
 
 vi.mock(
   "@miladyai/app-core/src/components/apps/overlay-app-registry",
@@ -343,6 +369,34 @@ vi.mock("@miladyai/app-core/src/components/pages/TrajectoryDetailView", () => ({
     React.createElement("section", null, "TrajectoryDetailView Ready"),
 }));
 
+vi.mock("@miladyai/app-core/bridge", async () => {
+  const actual = await vi.importActual<
+    typeof import("@miladyai/app-core/bridge")
+  >("@miladyai/app-core/bridge");
+  return {
+    ...actual,
+    subscribeDesktopBridgeEvent: vi.fn(() => () => undefined),
+  };
+});
+
+vi.mock("@miladyai/app-core/src/components/chat/TasksEventsPanel", () => ({
+  TasksEventsPanel: () => React.createElement("div", null, "TasksEventsPanel"),
+}));
+
+vi.mock("@miladyai/app-core/src/components/cloud/FlaminaGuide", () => ({
+  DeferredSetupChecklist: () =>
+    React.createElement("div", null, "DeferredSetupChecklist"),
+}));
+
+vi.mock("@miladyai/app-core/src/components/music/MusicPlayerGlobal", () => ({
+  MusicPlayerGlobal: () =>
+    React.createElement("div", null, "MusicPlayerGlobal"),
+}));
+
+vi.mock("@miladyai/app-core/src/hooks/useActivityEvents", () => ({
+  useActivityEvents: () => ({ events: [], clearEvents: vi.fn() }),
+}));
+
 vi.mock("@miladyai/app-core/hooks", async () => {
   const actual = await vi.importActual<
     typeof import("@miladyai/app-core/hooks")
@@ -355,6 +409,19 @@ vi.mock("@miladyai/app-core/hooks", async () => {
       confirmSaveCommand: noop,
       closeSaveCommandModal: noop,
     }),
+    useStreamPopoutNavigation: vi.fn(),
+    useLifeOpsActivitySignals: vi.fn(),
+    useBugReportState: vi.fn(() => ({
+      open: false,
+      setOpen: noop,
+      title: "",
+      setTitle: noop,
+      description: "",
+      setDescription: noop,
+      submit: noop,
+    })),
+    BugReportProvider: ({ children }: { children: React.ReactNode }) =>
+      React.createElement(React.Fragment, null, children),
   };
 });
 
@@ -385,7 +452,8 @@ function tFn(k: string): string {
     "nav.companion": "Companion",
     "nav.stream": "Stream",
     "nav.character": "Character",
-    "nav.inventory": "Inventory",
+    "nav.inventory": "Wallet",
+    "nav.wallet": "Wallet",
     "nav.knowledge": "Knowledge",
     "nav.social": "Connectors",
     "nav.apps": "Apps",
@@ -412,11 +480,15 @@ function makeState(overrides?: Partial<HarnessState>): HarnessState {
     onboardingComplete: true,
     tab: "chat",
     actionNotice: null,
+    favoriteApps: [],
     plugins: [],
     conversations: [],
     elizaCloudCredits: null,
     uiShellMode: "native",
+    uiTheme: "dark",
     activeOverlayApp: null,
+    backendConnection: { state: "connected" },
+    setState: vi.fn(),
     setUiShellMode: vi.fn((mode: "native" | "companion") => {
       state.uiShellMode = mode;
       state.tab = mode === "companion" ? "companion" : "chat";
@@ -509,33 +581,32 @@ function expectShellForTab(text: string, tab: Tab): void {
         return "SettingsView Ready";
       case "stream":
         return "StreamView Ready";
-      case "advanced":
       case "plugins":
+        return "PluginsPageView Ready";
       case "skills":
-      case "actions":
+        return "SkillsView Ready";
+      case "advanced":
       case "fine-tuning":
+        return "FineTuningView Ready";
       case "trajectories":
+        return "TrajectoriesView Ready";
       case "runtime":
+        return "RuntimeView Ready";
       case "database":
+        return "DatabasePageView Ready";
       case "logs":
-      case "security":
-        return "AdvancedPageView Ready";
+        return "LogsPageView Ready";
       default:
         return "ChatView Ready";
     }
   })();
 
   expect(text).toContain(expectedToken);
-  if (
-    tab === "companion" ||
-    tab === "character" ||
-    tab === "character-select"
-  ) {
+  if (tab === "companion") {
+    // Companion shell has no Header — it renders the overlay app directly.
     expect(text).not.toContain("Header");
-  } else if (tab === "character" || tab === "character-select") {
-    expect(text).not.toContain("Header");
-    expect(text).toContain("Save");
   } else {
+    // All other tabs (including character) are in the native shell with Header.
     expect(text).toContain("Header");
   }
   expectValidContent(text);

@@ -12,6 +12,8 @@ export interface TwilioDeliveryResult {
   status: number | null;
   sid?: string;
   error?: string;
+  /** Number of retries attempted before the final result (0 = first attempt succeeded or failed permanently). */
+  retryCount?: number;
 }
 
 function encodeBasicAuth(accountSid: string, authToken: string): string {
@@ -38,6 +40,21 @@ export function readTwilioCredentialsFromEnv(
   };
 }
 
+/** Maximum number of retries for transient (5xx / network) failures. */
+const MAX_RETRIES = 2;
+/** Base delay in ms for exponential backoff between retries. */
+const BASE_DELAY_MS = 1_000;
+
+/** Returns true when a failed result represents a transient error worth retrying. */
+function isTransientFailure(result: TwilioDeliveryResult): boolean {
+  // 4xx errors are permanent (auth, bad number, etc.) — never retry.
+  if (result.status !== null && result.status >= 400 && result.status < 500) {
+    return false;
+  }
+  // 5xx or network error (status === null) — retry.
+  return true;
+}
+
 async function sendTwilioRequest(args: {
   credentials: TwilioCredentials;
   path: string;
@@ -46,79 +63,111 @@ async function sendTwilioRequest(args: {
   const { credentials, path, payload } = args;
   const url = `https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(credentials.accountSid)}${path}`;
   const operation = twilioOperation(path);
-  const span = createIntegrationTelemetrySpan({
-    boundary: "lifeops",
-    operation,
-    timeoutMs: 12_000,
-  });
-  try {
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        Authorization: `Basic ${encodeBasicAuth(
-          credentials.accountSid,
-          credentials.authToken,
-        )}`,
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-      body: payload.toString(),
-      signal: AbortSignal.timeout(12_000),
-    });
-    const data = (await response.json().catch(() => ({}))) as {
-      sid?: string;
-      message?: string;
-      code?: number;
-    };
-    if (!response.ok) {
-      const errorMessage = data.message ?? `HTTP ${response.status}`;
+
+  let lastResult: TwilioDeliveryResult | null = null;
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    if (attempt > 0) {
+      const delayMs = BASE_DELAY_MS * 2 ** (attempt - 1);
       logger.warn(
         {
           boundary: "lifeops",
           integration: "twilio",
           operation,
-          statusCode: response.status,
+          attempt,
+          delayMs,
         },
-        `[lifeops] Twilio request failed: ${errorMessage}`,
+        `[lifeops] Twilio request retry ${attempt}/${MAX_RETRIES} after ${delayMs}ms`,
       );
-      span.failure({
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+
+    const span = createIntegrationTelemetrySpan({
+      boundary: "lifeops",
+      operation,
+      timeoutMs: 12_000,
+    });
+
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          Authorization: `Basic ${encodeBasicAuth(
+            credentials.accountSid,
+            credentials.authToken,
+          )}`,
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: payload.toString(),
+        signal: AbortSignal.timeout(12_000),
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        sid?: string;
+        message?: string;
+        code?: number;
+      };
+      if (!response.ok) {
+        const errorMsg = data.message ?? `HTTP ${response.status}`;
+        logger.warn(
+          {
+            boundary: "lifeops",
+            integration: "twilio",
+            operation,
+            statusCode: response.status,
+          },
+          `[lifeops] Twilio request failed: ${errorMsg}`,
+        );
+        span.failure({
+          statusCode: response.status,
+          errorKind: "http_error",
+        });
+        lastResult = {
+          ok: false,
+          status: response.status,
+          error: errorMsg,
+          retryCount: attempt,
+        };
+        if (!isTransientFailure(lastResult)) {
+          return lastResult;
+        }
+        continue;
+      }
+      span.success({
         statusCode: response.status,
-        errorKind: "http_error",
       });
       return {
-        ok: false,
+        ok: true,
         status: response.status,
-        error: errorMessage,
+        sid: data.sid,
+        retryCount: attempt,
+      };
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      logger.error(
+        {
+          boundary: "lifeops",
+          integration: "twilio",
+          operation,
+          err: error instanceof Error ? error : undefined,
+        },
+        `[lifeops] Twilio request failed: ${errorMsg}`,
+      );
+      span.failure({
+        error,
+        errorKind: "network_error",
+      });
+      lastResult = {
+        ok: false,
+        status: null,
+        error: errorMsg,
+        retryCount: attempt,
       };
     }
-    span.success({
-      statusCode: response.status,
-    });
-    return {
-      ok: true,
-      status: response.status,
-      sid: data.sid,
-    };
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    logger.error(
-      {
-        boundary: "lifeops",
-        integration: "twilio",
-        operation,
-        err: error instanceof Error ? error : undefined,
-      },
-      `[lifeops] Twilio request failed: ${errorMessage}`,
-    );
-    span.failure({
-      error,
-      errorKind: "network_error",
-    });
-    return {
-      ok: false,
-      status: null,
-      error: errorMessage,
-    };
   }
+
+  // All attempts exhausted — return last failure.
+  // Safety: lastResult is always set after at least one loop iteration.
+  return lastResult as TwilioDeliveryResult;
 }
 
 export async function sendTwilioSms(args: {
@@ -138,6 +187,16 @@ export async function sendTwilioSms(args: {
   });
 }
 
+/** Escape special XML characters to prevent TwiML injection. */
+function escapeXml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
 export async function sendTwilioVoiceCall(args: {
   credentials: TwilioCredentials;
   to: string;
@@ -150,7 +209,7 @@ export async function sendTwilioVoiceCall(args: {
     payload: new URLSearchParams({
       To: to,
       From: credentials.fromPhoneNumber,
-      Twiml: `<Response><Say>${message}</Say></Response>`,
+      Twiml: `<Response><Say>${escapeXml(message)}</Say></Response>`,
     }),
   });
 }

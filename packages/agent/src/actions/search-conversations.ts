@@ -5,11 +5,35 @@ import type {
   IAgentRuntime,
   Memory,
   Room,
+  State,
   UUID,
 } from "@elizaos/core";
 import { logger, ModelType } from "@elizaos/core";
 import { formatSpeakerLabel } from "../providers/conversation-utils.js";
 import { hasAdminAccess } from "../security/access.js";
+import { hasContextSignalSync } from "./context-signal.js";
+
+const SEARCH_CONVERSATIONS_STRONG_TERMS = [
+  "search conversations",
+  "search chats",
+  "search messages",
+  "find messages",
+  "find conversation",
+] as const;
+
+const SEARCH_CONVERSATIONS_WEAK_TERMS = [
+  "search",
+  "find",
+  "recall",
+  "remember",
+  "said",
+  "mentioned",
+  "talked about",
+  "discussed",
+  "earlier",
+  "previously",
+  "conversation",
+] as const;
 
 type SearchConversationsParams = {
   query?: string;
@@ -60,7 +84,16 @@ export const searchConversationsAction: Action = {
     "Uses semantic search to find relevant messages. " +
     "Results include line numbers for copying to scratchpad.",
 
-  validate: async (runtime, message) => hasAdminAccess(runtime, message),
+  validate: async (runtime, message, state) => {
+    if (!(await hasAdminAccess(runtime, message))) return false;
+    return hasContextSignalSync(
+      message,
+      state,
+      SEARCH_CONVERSATIONS_STRONG_TERMS,
+      SEARCH_CONVERSATIONS_WEAK_TERMS,
+      2,
+    );
+  },
 
   handler: async (runtime, message, _state, options) => {
     if (!(await hasAdminAccess(runtime, message))) {

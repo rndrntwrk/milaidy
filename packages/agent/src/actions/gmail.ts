@@ -1,5 +1,6 @@
 import type {
   Action,
+  ActionResult,
   ActionExample,
   HandlerCallback,
   HandlerOptions,
@@ -19,8 +20,10 @@ import type {
   SendLifeOpsGmailBatchReplyRequest,
   SendLifeOpsGmailReplyRequest,
 } from "@miladyai/shared/contracts/lifeops";
+import { resolveContextWindow } from "./lifeops-extraction-config.js";
 import { LifeOpsService, LifeOpsServiceError } from "../lifeops/service.js";
 import { resolveDefaultTimeZone } from "../lifeops/defaults.js";
+import { hasContextSignal } from "./context-signal.js";
 import {
   detailArray,
   detailBoolean,
@@ -40,6 +43,7 @@ import {
   messageText,
   toActionData,
 } from "./lifeops-google-helpers.js";
+import { recentConversationTexts as collectRecentConversationTexts } from "./life-recent-context.js";
 
 type GmailSubaction =
   | "triage"
@@ -57,6 +61,13 @@ export type GmailLlmPlan = {
   queries: string[];
   messageId?: string;
   replyNeededOnly?: boolean;
+  response?: string;
+  shouldAct?: boolean | null;
+  to?: string[];
+  cc?: string[];
+  bcc?: string[];
+  subject?: string;
+  bodyText?: string;
 };
 
 type GmailActionParams = {
@@ -88,6 +99,59 @@ const GMAIL_DETAIL_ALIASES = {
   messageIds: ["messageids", "message_ids"],
 } as const;
 
+// ── Gmail context-signal keywords ────────────────────────────────────────
+// Mirrors the calendar pattern: strong terms need 1 match, weak terms need 2.
+
+const GMAIL_STRONG_TERMS = [
+  "email",
+  "emails",
+  "e-mail",
+  "gmail",
+  "inbox",
+  "compose",
+  "draft",
+  "drafts",
+  "unread",
+  "starred",
+  "reply all",
+  "forward email",
+  "email thread",
+  "mail",
+] as const;
+
+const GMAIL_WEAK_TERMS = [
+  "send",
+  "reply",
+  "respond",
+  "message",
+  "sender",
+  "subject",
+  "attach",
+  "attachment",
+  "cc",
+  "bcc",
+  "from",
+  "forward",
+  "search",
+  "important",
+] as const;
+
+async function hasGmailContextSignal(
+  runtime: Parameters<typeof hasContextSignal>[0],
+  message: Memory,
+  state: State | undefined,
+): Promise<boolean> {
+  return hasContextSignal(
+    runtime,
+    message,
+    state,
+    GMAIL_STRONG_TERMS,
+    GMAIL_WEAK_TERMS,
+    2,
+    8,
+  );
+}
+
 function normalizeGmailSubaction(value: unknown): GmailSubaction | null {
   if (typeof value !== "string") {
     return null;
@@ -106,6 +170,146 @@ function normalizeGmailSubaction(value: unknown): GmailSubaction | null {
       return normalized;
     default:
       return null;
+  }
+}
+
+function normalizeShouldAct(value: unknown): boolean | null {
+  if (typeof value === "boolean") {
+    return value;
+  }
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "true") {
+      return true;
+    }
+    if (normalized === "false") {
+      return false;
+    }
+  }
+  return null;
+}
+
+function normalizePlannerResponse(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function normalizePlannerString(value: unknown): string | undefined {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function normalizePlannerStringArray(value: unknown): string[] | undefined {
+  if (Array.isArray(value)) {
+    return dedupeQueries(
+      value.map((item) => (typeof item === "string" ? item.trim() : "")),
+    );
+  }
+  const single = normalizePlannerString(value);
+  return single ? [single] : undefined;
+}
+
+function buildGmailReplyOnlyFallback(subaction: GmailSubaction | null): string {
+  switch (subaction) {
+    case "search":
+      return "What email do you want me to search for?";
+    case "read":
+      return "Which email do you want me to read?";
+    case "draft_reply":
+    case "draft_batch_replies":
+      return "Which email do you want me to draft a reply for?";
+    case "send_reply":
+    case "send_batch_replies":
+    case "send_message":
+      return "What exactly do you want me to send in Gmail?";
+    case "needs_response":
+      return "Do you want emails that need a reply, or something else in Gmail?";
+    default:
+      return "What do you want to do in Gmail — check inbox, search, read, or draft a reply?";
+  }
+}
+
+function normalizeGmailReplyText(raw: string): string {
+  return raw
+    .trim()
+    .replace(/^["'`]+|["'`]+$/g, "")
+    .trim();
+}
+
+function looksLikeStructuredGmailReply(raw: string): boolean {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return true;
+  }
+  if (/^<[^>]+>/.test(trimmed)) {
+    return true;
+  }
+  if (
+    parseJSONObjectFromText(trimmed) ||
+    parseKeyValueXml<Record<string, unknown>>(trimmed)
+  ) {
+    return true;
+  }
+  return /^(?:subaction|shouldAct|response|queries|messageId|replyNeededOnly)\s*:/m.test(
+    trimmed,
+  );
+}
+
+async function renderGmailActionReply(args: {
+  runtime: IAgentRuntime;
+  message: Memory;
+  state: State | undefined;
+  intent: string;
+  scenario: string;
+  fallback: string;
+  context?: Record<string, unknown>;
+}): Promise<string> {
+  const { runtime, message, state, intent, scenario, fallback, context } = args;
+  if (typeof runtime.useModel !== "function") {
+    return fallback;
+  }
+
+  const recentConversation = await collectRecentConversationTexts({
+    runtime,
+    message,
+    state,
+    limit: 12,
+  });
+  const prompt = [
+    "Write the assistant's user-facing reply for a Gmail interaction.",
+    "Be natural, brief, and grounded in the provided context.",
+    "Mirror the user's tone lightly without parodying them.",
+    "Mirror the user's wording for time windows, urgency, and reply intent when possible.",
+    "Never mention internal schema, tool names, or JSON field names.",
+    "Preserve all concrete email facts from the context and canonical fallback.",
+    "If asking a clarifying question, ask only for the missing information.",
+    "If this is reply-only or a clarification, do not pretend you already searched, drafted, or sent something.",
+    "Return only the reply text.",
+    "",
+    `Scenario: ${scenario}`,
+    `Current user message: ${JSON.stringify(messageText(message))}`,
+    `Resolved intent: ${JSON.stringify(intent)}`,
+    `Recent conversation: ${JSON.stringify(recentConversation.join("\n"))}`,
+    `Structured context: ${JSON.stringify(context ?? {})}`,
+    `Canonical fallback: ${JSON.stringify(fallback)}`,
+  ].join("\n");
+
+  try {
+    const result = await runtime.useModel(ModelType.TEXT_LARGE, { prompt });
+    const raw = typeof result === "string" ? result : "";
+    if (looksLikeStructuredGmailReply(raw)) {
+      return fallback;
+    }
+    const text = normalizeGmailReplyText(raw);
+    return text || fallback;
+  } catch {
+    return fallback;
   }
 }
 
@@ -345,7 +549,10 @@ function resolveGmailIntent(
         "",
       )
       .replace(/^(?:and\s+|also\s+)/i, "")
-      .replace(/^(?:what about|how about|and the|also the|or the|only the|just the)\s+/i, "")
+      .replace(
+        /^(?:what about|how about|and the|also the|or the|only the|just the)\s+/i,
+        "",
+      )
       .replace(/^from\s+(the\s+)?(last|past|previous|this|next)\b/i, "$1$2")
       .trim();
     if (
@@ -571,10 +778,7 @@ function looksLikeNarrativeEmailQuery(value: string): boolean {
   );
 }
 
-function looksLikeLiteralRequestEcho(
-  query: string,
-  intent: string,
-): boolean {
+function looksLikeLiteralRequestEcho(query: string, intent: string): boolean {
   const normalizedQuery = normalizeText(query);
   const normalizedIntent = normalizeText(intent);
   const questionLike = /[?¿]/.test(query);
@@ -891,7 +1095,6 @@ function inferGmailSubaction(
   return "triage";
 }
 
-
 function normalizeStringArray(value: unknown): string[] | undefined {
   if (!Array.isArray(value)) {
     return undefined;
@@ -1121,7 +1324,8 @@ async function extractGmailSearchQueriesWithLlm(
   state: State | undefined,
   intent: string,
 ): Promise<string[]> {
-  return (await extractGmailPlanWithLlm(runtime, message, state, intent)).queries;
+  return (await extractGmailPlanWithLlm(runtime, message, state, intent))
+    .queries;
 }
 
 export async function extractGmailPlanWithLlm(
@@ -1130,7 +1334,9 @@ export async function extractGmailPlanWithLlm(
   state: State | undefined,
   intent: string,
 ): Promise<GmailLlmPlan> {
-  const recentConversation = planningConversationLines(state).slice(-8).join("\n");
+  const recentConversation = planningConversationLines(state)
+    .slice(-resolveContextWindow())
+    .join("\n");
   const currentMessage = messageText(message).trim();
   const timeZone = resolveDefaultTimeZone();
   const now = new Date();
@@ -1145,7 +1351,22 @@ export async function extractGmailPlanWithLlm(
     "The user may speak in any language.",
     "Use the current request plus recent conversation context.",
     "If the current request is vague or a follow-up, recover the subject from recent conversation and apply the new constraint from the current request.",
-    "You MUST always return a subaction — never return null. Pick the closest match even if uncertain.",
+    "You are allowed to decide that the assistant should reply naturally without acting yet.",
+    "Set shouldAct=false when the user is vague, only acknowledging, brainstorming, or asking for email help without enough specifics to safely act.",
+    "When shouldAct=false, provide a short natural response that asks only for what is missing.",
+    "",
+    "Return a JSON object with exactly these fields:",
+    "  subaction: one of the allowed subactions below, or null when this should be reply-only/no-op",
+    "  shouldAct: boolean",
+    "  response: short natural-language reply when shouldAct is false, otherwise empty or null",
+    "  queries: array or ||-delimited string of up to 3 Gmail search queries",
+    "  messageId: optional Gmail message id",
+    "  replyNeededOnly: optional boolean",
+    "  to: optional array of recipient email addresses when subaction is send_message",
+    "  cc: optional array of cc email addresses when subaction is send_message",
+    "  bcc: optional array of bcc email addresses when subaction is send_message",
+    "  subject: optional subject line when subaction is send_message",
+    "  bodyText: optional email body when subaction is send_message",
     "",
     "Subactions and when to use each:",
     "  triage — general inbox overview, unread count, email summary (e.g. 'check my inbox', 'any new emails')",
@@ -1156,9 +1377,11 @@ export async function extractGmailPlanWithLlm(
     "  draft_batch_replies — compose replies to multiple emails at once (e.g. 'draft replies to all of those', 'respond to each one')",
     "  send_reply — send a confirmed reply to an email (e.g. 'send that reply', 'email them back now')",
     "  send_batch_replies — send confirmed replies to multiple emails (e.g. 'send all those replies')",
+    "  send_message — compose and send a brand-new outbound email (e.g. 'send an email to zo@iqlabs.dev, subject hello, body how are you doing today?')",
     "",
     "For search or read, extract up to 3 short Gmail-compatible queries using Gmail search operators.",
     "Return Gmail operators in Gmail syntax even if the user speaks another language, and preserve names, addresses, and subject keywords in their original language or script when useful.",
+    "For send_message, preserve the exact recipient addresses and keep the user's intended subject/body wording as close as possible.",
     "",
     "Gmail search operators reference:",
     "  from:name  to:name  cc:name  subject:word  has:attachment  is:unread  is:starred  is:important",
@@ -1170,19 +1393,14 @@ export async function extractGmailPlanWithLlm(
     "Set replyNeededOnly to true only when the request is specifically about emails that need a reply.",
     "",
     "Examples:",
-    '  "who emailed me today" → subaction: search, queries: newer_than:1d',
-    '  "draft a reply to John" → subaction: draft_reply',
-    '  "check my inbox" → subaction: triage',
-    '  "any emails from Sarah about the report" → subaction: search, queries: from:sarah subject:report',
+    '  "who emailed me today" → {"subaction":"search","shouldAct":true,"response":null,"queries":["newer_than:1d"]}',
+    '  "draft a reply to John" → {"subaction":"draft_reply","shouldAct":true,"response":null}',
+    '  "check my inbox" → {"subaction":"triage","shouldAct":true,"response":null}',
+    '  "any emails from Sarah about the report" → {"subaction":"search","shouldAct":true,"response":null,"queries":["from:sarah subject:report"]}',
+    '  "send an email to zo@iqlabs.dev, subject hello anon, body how are you doing today?" → {"subaction":"send_message","shouldAct":true,"response":null,"queries":[],"to":["zo@iqlabs.dev"],"subject":"hello anon","bodyText":"how are you doing today?"}',
+    '  "can you help me with my email?" → {"subaction":null,"shouldAct":false,"response":"What do you want to do in Gmail — check inbox, search, read, or draft a reply?","queries":[]}',
     "",
-    "TOON only. Return exactly one TOON document. No prose before or after it. No <think>.",
-    "Use || to separate multiple queries.",
-    "",
-    "Example:",
-    "subaction: search",
-    "queries: from:suran newer_than:21d",
-    "messageId:",
-    "replyNeededOnly: false",
+    "Return ONLY valid JSON. No prose. No markdown. No XML. No <think>.",
     "",
     `Current timezone: ${timeZone}`,
     `Current local datetime: ${localNow}`,
@@ -1209,6 +1427,7 @@ export async function extractGmailPlanWithLlm(
     return {
       subaction: null,
       queries: [],
+      shouldAct: null,
     };
   }
 
@@ -1219,6 +1438,7 @@ export async function extractGmailPlanWithLlm(
     return {
       subaction: null,
       queries: [],
+      shouldAct: null,
     };
   }
 
@@ -1247,11 +1467,18 @@ export async function extractGmailPlanWithLlm(
   return {
     subaction: normalizeGmailSubaction(parsed.subaction),
     queries: dedupeQueries(rawQueries),
+    response: normalizePlannerResponse(parsed.response),
+    shouldAct: normalizeShouldAct(parsed.shouldAct),
     messageId:
       typeof parsed.messageId === "string" && parsed.messageId.trim().length > 0
         ? parsed.messageId.trim()
         : undefined,
     replyNeededOnly: normalizeOptionalBoolean(parsed.replyNeededOnly),
+    to: normalizePlannerStringArray(parsed.to ?? parsed.recipients),
+    cc: normalizePlannerStringArray(parsed.cc),
+    bcc: normalizePlannerStringArray(parsed.bcc),
+    subject: normalizePlannerString(parsed.subject),
+    bodyText: normalizePlannerString(parsed.bodyText ?? parsed.body),
   };
 }
 
@@ -1269,20 +1496,18 @@ async function resolveGmailSearchQueries(
   const llmQueries =
     llmPlan && llmPlan.queries.length > 0
       ? llmPlan.queries
-      : await extractGmailSearchQueriesWithLlm(
-          runtime,
-          message,
-          state,
-          intent,
-        );
+      : await extractGmailSearchQueriesWithLlm(runtime, message, state, intent);
   const heuristicQueries = inferGmailSearchQueries(intent);
   const stateQueries = stateTextCandidates(state)
     .reverse()
     .flatMap((candidate) => inferGmailSearchQueries(candidate));
   const candidates = dedupeQueries(
-    [...providedQueries, ...llmQueries, ...heuristicQueries, ...stateQueries].map(
-      (query) => sanitizeGmailQuery(query, intent),
-    ),
+    [
+      ...providedQueries,
+      ...llmQueries,
+      ...heuristicQueries,
+      ...stateQueries,
+    ].map((query) => sanitizeGmailQuery(query, intent)),
   );
   return [...candidates].sort(
     (left, right) =>
@@ -1368,8 +1593,9 @@ export const gmailAction: Action = {
     "DO NOT use this action for personal habits, goals, routines, or reminders — use LIFE instead. " +
     "This action provides the final grounded reply; do not pair it with a speculative REPLY action.",
   suppressPostActionContinuation: true,
-  validate: async (runtime, message) => {
-    return hasLifeOpsAccess(runtime, message);
+  validate: async (runtime, message, state) => {
+    if (!(await hasLifeOpsAccess(runtime, message))) return false;
+    return hasGmailContextSignal(runtime, message, state);
   },
   handler: async (
     runtime,
@@ -1392,13 +1618,35 @@ export const gmailAction: Action = {
     const details = normalizeGmailDetails(params.details);
     const intent = resolveGmailIntent(params.intent?.trim(), message, state);
     const normalizedIntent = normalizeText(intent);
-    const llmPlan = await extractGmailPlanWithLlm(runtime, message, state, intent);
+    const llmPlan = await extractGmailPlanWithLlm(
+      runtime,
+      message,
+      state,
+      intent,
+    );
     const llmSubaction = llmPlan.subaction;
     const explicitSubaction = params.subaction;
     const preferExplicitSubaction = shouldTrustExplicitGmailSubaction(
       explicitSubaction,
       params,
       details,
+    );
+    const explicitQueryArray = [
+      ...(params.queries ?? []),
+      ...(normalizeStringArray(details?.queries) ?? []),
+    ];
+    const hasExplicitGmailExecutionInput = Boolean(
+      params.subaction ||
+        params.query ||
+        explicitQueryArray.length > 0 ||
+        params.messageId ||
+        detailString(details, "messageId") ||
+        params.bodyText ||
+        detailString(details, "bodyText") ||
+        (normalizeStringArray(details?.to)?.length ?? 0) > 0 ||
+        (normalizeStringArray(details?.cc)?.length ?? 0) > 0 ||
+        (normalizeStringArray(details?.bcc)?.length ?? 0) > 0 ||
+        detailString(details, "subject"),
     );
     let subaction: GmailSubaction;
     if (llmSubaction && !preferExplicitSubaction) {
@@ -1414,6 +1662,47 @@ export const gmailAction: Action = {
       );
       subaction = inferGmailSubaction(normalizedIntent, details, params);
     }
+
+    // Guard: if the LLM chose triage but the plan contains search-specific
+    // queries (from:, subject:, newer_than:, etc.) or the intent clearly
+    // targets a sender/time window, override to search.  Triage only fetches
+    // the latest N emails and silently discards query constraints, so routing
+    // a targeted request there loses the user's filter.
+    if (subaction === "triage" && llmPlan.queries.length > 0) {
+      const hasSearchOperator = llmPlan.queries.some((q) =>
+        /\b(?:from|to|subject|newer_than|older_than|after|before|label|has|is):/i.test(
+          q,
+        ),
+      );
+      if (hasSearchOperator) {
+        runtime.logger?.info?.(
+          {
+            src: "action:gmail",
+            originalSubaction: "triage",
+            queries: llmPlan.queries,
+          },
+          "Overriding triage → search: LLM queries contain search operators",
+        );
+        subaction = "search";
+      }
+    }
+    if (
+      subaction === "triage" &&
+      /\b(?:from|about|subject|after|before|last\s+\w+)\b/i.test(
+        normalizedIntent,
+      ) &&
+      !/^(?:check|triage|inbox|unread|new emails?)\s*$/i.test(normalizedIntent)
+    ) {
+      runtime.logger?.info?.(
+        {
+          src: "action:gmail",
+          originalSubaction: "triage",
+          intent: intent.slice(0, 200),
+        },
+        "Overriding triage → search: intent contains search-specific terms",
+      );
+      subaction = "search";
+    }
     runtime.logger?.debug?.(
       {
         src: "action:gmail",
@@ -1428,19 +1717,14 @@ export const gmailAction: Action = {
         },
         detailKeys: details ? Object.keys(details) : [],
         detailToType: typeof details?.to,
-        detailSubject: typeof details?.subject === "string"
-          ? details.subject
-          : undefined,
+        detailSubject:
+          typeof details?.subject === "string" ? details.subject : undefined,
       },
       "gmail action dispatch",
     );
-    const explicitQueryArray = [
-      ...(params.queries ?? []),
-      ...(normalizeStringArray(details?.queries) ?? []),
-    ];
     const service = new LifeOpsService(runtime);
     const respond = async <
-      T extends Record<string, unknown> | undefined,
+      T extends NonNullable<ActionResult["data"]> | undefined,
     >(payload: {
       success: boolean;
       text: string;
@@ -1453,6 +1737,38 @@ export const gmailAction: Action = {
       });
       return payload;
     };
+    const renderReply = (
+      scenario: string,
+      fallback: string,
+      context?: Record<string, unknown>,
+    ) =>
+      renderGmailActionReply({
+        runtime,
+        message,
+        state,
+        intent,
+        scenario,
+        fallback,
+        context,
+      });
+
+    if (llmPlan.shouldAct === false && !hasExplicitGmailExecutionInput) {
+      const fallback =
+        llmPlan.response ?? buildGmailReplyOnlyFallback(llmPlan.subaction);
+      return respond({
+        success: true,
+        text: await renderReply("reply_only", fallback, {
+          llmPlan,
+          suggestedSubaction: llmPlan.subaction,
+        }),
+        data: {
+          noop: true,
+          ...(llmPlan.subaction
+            ? { suggestedSubaction: llmPlan.subaction }
+            : {}),
+        },
+      });
+    }
 
     try {
       const google = await getGoogleCapabilityStatus(service);
@@ -1486,9 +1802,13 @@ export const gmailAction: Action = {
           forceSync: detailBoolean(details, "forceSync"),
           maxResults: detailNumber(details, "maxResults") ?? 10,
         });
+        const fallback = formatEmailTriage(feed);
         return respond({
           success: true,
-          text: formatEmailTriage(feed),
+          text: await renderReply("triage_results", fallback, {
+            summary: feed.summary,
+            messages: feed.messages,
+          }),
           data: toActionData(feed),
         });
       }
@@ -1504,9 +1824,13 @@ export const gmailAction: Action = {
           forceSync: detailBoolean(details, "forceSync"),
           maxResults: detailNumber(details, "maxResults") ?? 10,
         });
+        const fallback = formatEmailNeedsResponse(feed);
         return respond({
           success: true,
-          text: formatEmailNeedsResponse(feed),
+          text: await renderReply("needs_response_results", fallback, {
+            summary: feed.summary,
+            messages: feed.messages,
+          }),
           data: toActionData(feed),
         });
       }
@@ -1527,7 +1851,13 @@ export const gmailAction: Action = {
         if (!searchPlan) {
           return respond({
             success: false,
-            text: "I need a sender, subject, keyword, or email search target to run that Gmail search.",
+            text: await renderReply(
+              "clarify_search_target",
+              "I need a sender, subject, keyword, or email search target to run that Gmail search.",
+              {
+                missing: ["search target"],
+              },
+            ),
           });
         }
         const requestBase = {
@@ -1566,9 +1896,13 @@ export const gmailAction: Action = {
                 ...feed,
                 query: searchPlan.displayQuery,
               };
+        const fallback = formatEmailSearch(displayFeed);
         return respond({
           success: true,
-          text: formatEmailSearch(displayFeed),
+          text: await renderReply("search_results", fallback, {
+            query: displayFeed.query,
+            messages: displayFeed.messages,
+          }),
           data: toActionData(displayFeed),
         });
       }
@@ -1592,9 +1926,12 @@ export const gmailAction: Action = {
             forceSync: detailBoolean(details, "forceSync"),
             messageId,
           });
+          const fallback = formatEmailRead(result);
           return respond({
             success: true,
-            text: formatEmailRead(result),
+            text: await renderReply("read_result", fallback, {
+              message: result,
+            }),
             data: toActionData(result),
           });
         }
@@ -1614,7 +1951,13 @@ export const gmailAction: Action = {
         if (!searchPlan) {
           return respond({
             success: false,
-            text: "I need to know which email to read. Give me a sender, subject, keyword, or specific message id.",
+            text: await renderReply(
+              "clarify_read_target",
+              "I need to know which email to read. Give me a sender, subject, keyword, or specific message id.",
+              {
+                missing: ["message target"],
+              },
+            ),
           });
         }
 
@@ -1657,11 +2000,14 @@ export const gmailAction: Action = {
         }
 
         if (!result) {
+          const fallback =
+            lastReadError?.message ??
+            `I couldn't find an email to read for ${searchPlan.displayQuery}.`;
           return respond({
             success: false,
-            text:
-              lastReadError?.message ??
-              `I couldn't find an email to read for ${searchPlan.displayQuery}.`,
+            text: await renderReply("read_not_found", fallback, {
+              query: searchPlan.displayQuery,
+            }),
           });
         }
 
@@ -1672,9 +2018,12 @@ export const gmailAction: Action = {
                 ...result,
                 query: searchPlan.displayQuery,
               };
+        const fallback = formatEmailRead(displayResult);
         return respond({
           success: true,
-          text: formatEmailRead(displayResult),
+          text: await renderReply("read_result", fallback, {
+            message: displayResult,
+          }),
           data: toActionData(displayResult),
         });
       }
@@ -1685,7 +2034,13 @@ export const gmailAction: Action = {
         if (!messageId) {
           return respond({
             success: false,
-            text: "GMAIL_ACTION draft_reply needs a messageId.",
+            text: await renderReply(
+              "clarify_draft_reply_target",
+              "Which email do you want me to draft a reply for?",
+              {
+                missing: ["messageId"],
+              },
+            ),
           });
         }
         const draft = await service.createGmailReplyDraft(INTERNAL_URL, {
@@ -1710,9 +2065,12 @@ export const gmailAction: Action = {
             "includeQuotedOriginal",
           ),
         } satisfies CreateLifeOpsGmailReplyDraftRequest);
+        const fallback = formatGmailReplyDraft(draft);
         return respond({
           success: true,
-          text: formatGmailReplyDraft(draft),
+          text: await renderReply("draft_reply", fallback, {
+            draft,
+          }),
           data: toActionData(draft),
         });
       }
@@ -1768,9 +2126,12 @@ export const gmailAction: Action = {
           INTERNAL_URL,
           request,
         );
+        const fallback = formatGmailBatchReplyDrafts(batch);
         return respond({
           success: true,
-          text: formatGmailBatchReplyDrafts(batch),
+          text: await renderReply("draft_batch_replies", fallback, {
+            batch,
+          }),
           data: toActionData(batch),
         });
       }
@@ -1782,7 +2143,16 @@ export const gmailAction: Action = {
         if (!messageId || !bodyText) {
           return respond({
             success: false,
-            text: "GMAIL_ACTION send_reply needs both messageId and bodyText.",
+            text: await renderReply(
+              "clarify_send_reply",
+              "I need both the email you're replying to and the reply text before I can send it.",
+              {
+                missing: [
+                  ...(!messageId ? ["messageId"] : []),
+                  ...(!bodyText ? ["bodyText"] : []),
+                ],
+              },
+            ),
           });
         }
         const result = await service.sendGmailReply(INTERNAL_URL, {
@@ -1799,53 +2169,38 @@ export const gmailAction: Action = {
           cc: normalizeStringArray(details?.cc),
           confirmSend: detailBoolean(details, "confirmSend") ?? true,
         } satisfies SendLifeOpsGmailReplyRequest);
+        const fallback = "Gmail reply sent.";
         return respond({
           success: true,
-          text: "Gmail reply sent.",
+          text: await renderReply("sent_reply", fallback, {
+            result,
+            messageId,
+          }),
           data: toActionData(result),
         });
       }
 
       if (subaction === "send_message") {
-        // Parse "email <addr> with subject "X" and body "Y"" patterns
-        // directly from the user message. The chat LLM almost never puts
-        // these into structured details.* fields — it just rewrites the
-        // intent. Without a literal-text parser the action would always
-        // fail validation for natural-language compose requests.
-        const rawText = messageText(message);
-        const emailRegex = /\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b/g;
-        const recipientsFromIntent = rawText.match(emailRegex) ?? [];
-        const subjectMatch =
-          rawText.match(
-            /\bsubject(?:\s+is|\s*[:=]|\s+of)?\s+["“]([^"”]+)["”]/i,
-          ) ?? rawText.match(/\bsubject\s+["“]([^"”]+)["”]/i);
-        const subjectFromIntent = subjectMatch?.[1]?.trim();
-        const bodyMatch =
-          rawText.match(
-            /\bbody(?:\s+is|\s*[:=]|\s+of)?\s+["“]([^"”]+)["”]/i,
-          ) ?? rawText.match(/\bbody\s+["“]([^"”]+)["”]/i);
-        const bodyFromIntent = bodyMatch?.[1]?.trim();
-
-        const to =
-          normalizeStringArray(details?.to) ??
-          (recipientsFromIntent.length > 0 ? recipientsFromIntent : []);
-        const subject =
-          detailString(details, "subject") ??
-          subjectFromIntent ??
-          undefined;
+        const to = normalizeStringArray(details?.to) ?? llmPlan.to ?? [];
+        const cc = normalizeStringArray(details?.cc) ?? llmPlan.cc;
+        const bcc = normalizeStringArray(details?.bcc) ?? llmPlan.bcc;
+        const subject = detailString(details, "subject") ?? llmPlan.subject;
         const bodyText =
           params.bodyText ??
           detailString(details, "bodyText") ??
-          bodyFromIntent;
+          llmPlan.bodyText;
 
         if (to.length === 0 || !subject || !bodyText) {
           const missing: string[] = [];
           if (to.length === 0) missing.push("recipient address");
           if (!subject) missing.push("subject");
           if (!bodyText) missing.push("body text");
+          const fallback = `I need ${missing.join(", ")} to compose that email. Try: send an email to name@example.com, subject should say hello, and body should say how are you doing today?`;
           return respond({
             success: false,
-            text: `i need ${missing.join(", ")} to compose that email. format: 'email <addr> with subject "X" and body "Y"'.`,
+            text: await renderReply("clarify_send_message", fallback, {
+              missing,
+            }),
           });
         }
         const result = await service.sendGmailMessage(INTERNAL_URL, {
@@ -1856,15 +2211,20 @@ export const gmailAction: Action = {
             | undefined,
           side: detailString(details, "side") as "owner" | "agent" | undefined,
           to,
-          cc: normalizeStringArray(details?.cc),
-          bcc: normalizeStringArray(details?.bcc),
+          cc,
+          bcc,
           subject,
           bodyText,
           confirmSend: detailBoolean(details, "confirmSend") ?? true,
         });
+        const fallback = `sent to ${to.join(", ")}.`;
         return respond({
           success: true,
-          text: `sent to ${to.join(", ")}.`,
+          text: await renderReply("sent_message", fallback, {
+            result,
+            to,
+            subject,
+          }),
           data: toActionData(result),
         });
       }
@@ -1873,7 +2233,13 @@ export const gmailAction: Action = {
       if (!items) {
         return respond({
           success: false,
-          text: "GMAIL_ACTION send_batch_replies needs an items array with messageId and bodyText for each reply.",
+          text: await renderReply(
+            "clarify_send_batch_replies",
+            "I need the list of replies to send, with each email and its reply text.",
+            {
+              missing: ["items"],
+            },
+          ),
         });
       }
       const result = await service.sendGmailReplies(INTERNAL_URL, {
@@ -1886,9 +2252,12 @@ export const gmailAction: Action = {
         confirmSend: detailBoolean(details, "confirmSend") ?? true,
         items,
       } satisfies SendLifeOpsGmailBatchReplyRequest);
+      const fallback = `Sent ${result.sentCount} Gmail repl${result.sentCount === 1 ? "y" : "ies"}.`;
       return respond({
         success: true,
-        text: `Sent ${result.sentCount} Gmail repl${result.sentCount === 1 ? "y" : "ies"}.`,
+        text: await renderReply("sent_batch_replies", fallback, {
+          result,
+        }),
         data: toActionData(result),
       });
     } catch (error) {

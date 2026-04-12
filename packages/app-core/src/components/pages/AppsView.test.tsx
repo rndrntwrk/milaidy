@@ -1231,6 +1231,9 @@ describe("AppsView", () => {
       createApp("@elizaos/app-babylon", "Babylon", "Market watch", {
         category: "platform",
       }),
+      createApp("@miladyai/app-vincent", "Vincent", "Sales dashboard", {
+        category: "utility",
+      }),
       createApp("@miladyai/app-companion", "Companion", "Chat with Milady", {
         category: "world",
       }),
@@ -1243,7 +1246,7 @@ describe("AppsView", () => {
     await flush();
 
     expect(textOf(tree.root)).toContain("Games");
-    expect(textOf(tree.root)).toContain("Business");
+    expect(textOf(tree.root)).toContain("Finance");
     expect(textOf(tree.root)).toContain("Life Management");
     expect(textOf(tree.root)).toContain("Companions");
     expect(

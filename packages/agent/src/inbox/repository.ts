@@ -179,7 +179,7 @@ function parseTriageExample(row: Record<string, unknown>): TriageExample {
     snippet: toText(row.snippet),
     classification: toText(row.classification) as TriageClassification,
     ownerAction: toText(row.owner_action) as OwnerAction,
-    ownerClassification: toText(row.owner_classification) as TriageClassification | null || null,
+    ownerClassification: (toText(row.owner_classification) || null) as TriageClassification | null,
     contextJson,
     createdAt: toText(row.created_at),
   };
@@ -346,6 +346,19 @@ export class InboxTriageRepository {
        LIMIT 1`,
     );
     return rows.length > 0 ? parseTriageEntry(rows[0]) : null;
+  }
+
+  async getBySourceMessageIds(sourceMessageIds: string[]): Promise<Set<string>> {
+    if (sourceMessageIds.length === 0) return new Set();
+    await this.ready();
+    const inClause = sourceMessageIds.map((id) => sqlText(id)).join(", ");
+    const rows = await executeRawSql(
+      this.runtime,
+      `SELECT source_message_id FROM inbox_triage_entries
+       WHERE agent_id = ${sqlText(this.agentId)}
+         AND source_message_id IN (${inClause})`,
+    );
+    return new Set(rows.map((r) => toText(r.source_message_id)));
   }
 
   async markResolved(

@@ -64,10 +64,12 @@ function buildCtx(
   pathname: string,
   body?: Record<string, unknown>,
   runtime?: IAgentRuntime,
+  /** Full URL including query params; falls back to pathname when omitted */
+  fullUrl?: string,
 ): WebsiteBlockerRouteContext {
   const { res } = createMockHttpResponse();
   return {
-    req: createMockIncomingMessage({ method, url: pathname }),
+    req: createMockIncomingMessage({ method, url: fullUrl ?? pathname }),
     res,
     method,
     pathname,
@@ -217,5 +219,91 @@ describe("website-blocker-routes", () => {
     expect(fs.readFileSync(hostsFilePath, "utf8")).toBe(
       "127.0.0.1 localhost\n",
     );
+  });
+
+  test("GET /api/website-blocker?host= returns blocked:false when no block is active", async () => {
+    const ctx = buildCtx(
+      "GET",
+      "/api/website-blocker",
+      undefined,
+      undefined,
+      "/api/website-blocker?host=x.com",
+    );
+
+    const handled = await handleWebsiteBlockerRoutes(ctx);
+
+    expect(handled).toBe(true);
+    const payload = (ctx.json as ReturnType<typeof vi.fn>).mock.calls[0][1];
+    expect(payload).toMatchObject({
+      blocked: false,
+      host: "x.com",
+      groupKey: null,
+      requiredTasks: [],
+      websites: [],
+    });
+  });
+
+  test("GET /api/website-blocker?host= returns blocked:true when the host is blocked", async () => {
+    await handleWebsiteBlockerRoutes(
+      buildCtx("PUT", "/api/website-blocker", {
+        text: "Block x.com and twitter.com until I say so",
+      }),
+    );
+    resetSelfControlStatusCache();
+
+    const ctx = buildCtx(
+      "GET",
+      "/api/website-blocker",
+      undefined,
+      undefined,
+      "/api/website-blocker?host=x.com",
+    );
+    const handled = await handleWebsiteBlockerRoutes(ctx);
+
+    expect(handled).toBe(true);
+    const payload = (ctx.json as ReturnType<typeof vi.fn>).mock.calls[0][1];
+    expect(payload).toMatchObject({
+      blocked: true,
+      host: "x.com",
+      websites: ["x.com", "twitter.com"],
+    });
+  });
+
+  test("GET /api/website-blocker?host= returns blocked:false for unblocked host", async () => {
+    await handleWebsiteBlockerRoutes(
+      buildCtx("PUT", "/api/website-blocker", {
+        text: "Block x.com until I say so",
+      }),
+    );
+    resetSelfControlStatusCache();
+
+    const ctx = buildCtx(
+      "GET",
+      "/api/website-blocker",
+      undefined,
+      undefined,
+      "/api/website-blocker?host=example.com",
+    );
+    const handled = await handleWebsiteBlockerRoutes(ctx);
+
+    expect(handled).toBe(true);
+    const payload = (ctx.json as ReturnType<typeof vi.fn>).mock.calls[0][1];
+    expect(payload).toMatchObject({
+      blocked: false,
+      host: "example.com",
+    });
+  });
+
+  test("GET /api/website-blocker without ?host= returns plain status", async () => {
+    const ctx = buildCtx("GET", "/api/website-blocker");
+
+    const handled = await handleWebsiteBlockerRoutes(ctx);
+
+    expect(handled).toBe(true);
+    const payload = (ctx.json as ReturnType<typeof vi.fn>).mock.calls[0][1];
+    // Plain status response, not the host-specific shape
+    expect(payload).toHaveProperty("available");
+    expect(payload).toHaveProperty("engine");
+    expect(payload).not.toHaveProperty("requiredTasks");
   });
 });

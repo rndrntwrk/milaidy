@@ -103,7 +103,15 @@ export async function fetchChatMessages(
     roomMap.set(room.id, room);
   }
 
-  // 6. Normalise into InboundMessage[]
+  // 6. Build room-based index for thread context (avoids O(n^2) filter)
+  const messagesByRoom = new Map<string, typeof filtered>();
+  for (const m of filtered) {
+    const arr = messagesByRoom.get(m.roomId) ?? [];
+    arr.push(m);
+    messagesByRoom.set(m.roomId, arr);
+  }
+
+  // 7. Normalise into InboundMessage[]
   const results: InboundMessage[] = [];
   for (const memory of filtered.slice(0, limit)) {
     const room = roomMap.get(memory.roomId);
@@ -126,10 +134,10 @@ export async function fetchChatMessages(
     });
 
     // Gather recent thread context (up to THREAD_CONTEXT_LIMIT previous messages)
-    const threadMessages = filtered
+    const roomMessages = messagesByRoom.get(memory.roomId) ?? [];
+    const threadMessages = roomMessages
       .filter(
         (m) =>
-          m.roomId === memory.roomId &&
           m.id !== memory.id &&
           (m.createdAt ?? 0) <= (memory.createdAt ?? 0),
       )

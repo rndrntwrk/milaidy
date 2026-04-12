@@ -107,8 +107,8 @@ vi.mock("@miladyai/app-core/api", () => ({
   SkillScanReportSummary: {},
 }));
 
-import { flush } from "../../../../test/helpers/react-test";
 import { AppProvider, useApp } from "@miladyai/app-core/state";
+import { flush } from "../../../../test/helpers/react-test";
 
 type StartupSnapshot = {
   onboardingLoading: boolean;
@@ -352,7 +352,56 @@ describe("startup conversation restore", () => {
     });
   });
 
-  it("does not create an empty conversation when there is nothing to restore", async () => {
+  it("creates a new conversation on /chat when there is nothing to restore", async () => {
+    let latest: StartupSnapshot | null = null;
+    let tree!: TestRenderer.ReactTestRenderer;
+
+    await act(async () => {
+      tree = TestRenderer.create(
+        React.createElement(
+          AppProvider,
+          null,
+          React.createElement(Probe, {
+            onChange: (snapshot) => {
+              latest = snapshot;
+            },
+          }),
+        ),
+      );
+    });
+
+    await waitFor(() => {
+      expect(latest?.startupPhase).toBe("ready");
+      expect(latest?.onboardingLoading).toBe(false);
+    });
+
+    expect(latest?.activeConversationId).toBe("conv-created");
+    expect(latest?.conversationIds).toEqual(["conv-created"]);
+    expect(mockClient.createConversation).toHaveBeenCalledWith(undefined, {
+      bootstrapGreeting: true,
+      lang: expect.any(String),
+    });
+    expect(mockClient.requestGreeting).toHaveBeenCalledWith(
+      "conv-created",
+      expect.any(String),
+    );
+    expect(mockClient.getConversationMessages).not.toHaveBeenCalledWith(
+      "conv-created",
+    );
+    expect(mockClient.sendWsMessage).toHaveBeenCalledWith({
+      type: "active-conversation",
+      conversationId: "conv-created",
+    });
+    expect(mockClient.connectWs).toHaveBeenCalled();
+
+    await act(async () => {
+      tree.unmount();
+    });
+  });
+
+  it("does not create a conversation on non-chat routes when there is nothing to restore", async () => {
+    window.history.replaceState({}, "", "/settings");
+
     let latest: StartupSnapshot | null = null;
     let tree!: TestRenderer.ReactTestRenderer;
 
@@ -379,10 +428,6 @@ describe("startup conversation restore", () => {
     expect(latest?.conversationIds).toEqual([]);
     expect(mockClient.createConversation).not.toHaveBeenCalled();
     expect(mockClient.requestGreeting).not.toHaveBeenCalled();
-    expect(mockClient.sendWsMessage).not.toHaveBeenCalledWith(
-      expect.objectContaining({ type: "active-conversation" }),
-    );
-    expect(mockClient.connectWs).toHaveBeenCalled();
 
     await act(async () => {
       tree.unmount();

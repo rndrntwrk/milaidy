@@ -10,20 +10,31 @@ function joinUrl(baseUrl: string, path: string): string {
   return `${baseUrl.replace(/\/+$/, "")}${path}`;
 }
 
-async function readError(response: Response): Promise<string> {
+export class RelayApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = "RelayApiError";
+  }
+}
+
+async function throwApiError(response: Response): never {
+  let message: string;
   try {
     const payload = (await response.json()) as {
       error?: string;
       message?: string;
     };
-    return (
+    message =
       payload.error ??
       payload.message ??
-      `${response.status} ${response.statusText}`
-    );
+      `${response.status} ${response.statusText}`;
   } catch {
-    return `${response.status} ${response.statusText}`;
+    message = `${response.status} ${response.statusText}`;
   }
+  throw new RelayApiError(message, response.status);
 }
 
 export class LifeOpsBrowserRelayClient {
@@ -49,7 +60,7 @@ export class LifeOpsBrowserRelayClient {
       },
     );
     if (!response.ok) {
-      throw new Error(await readError(response));
+      await throwApiError(response);
     }
     return (await response.json()) as LifeOpsBrowserCompanionSyncResponse;
   }
@@ -70,7 +81,7 @@ export class LifeOpsBrowserRelayClient {
       },
     );
     if (!response.ok) {
-      throw new Error(await readError(response));
+      await throwApiError(response);
     }
   }
 
@@ -90,7 +101,7 @@ export class LifeOpsBrowserRelayClient {
       },
     );
     if (!response.ok) {
-      throw new Error(await readError(response));
+      await throwApiError(response);
     }
   }
 }

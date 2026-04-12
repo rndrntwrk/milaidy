@@ -33,6 +33,7 @@ function createRuntimeForChatRouteTests(options?: {
     validate?: (...args: unknown[]) => unknown;
     handler?: (...args: unknown[]) => unknown;
   }>;
+  getActionResults?: (messageId: UUID) => unknown[];
   logger?: AgentRuntime["logger"];
 }): AgentRuntime {
   const runtimeLogger =
@@ -87,6 +88,9 @@ function createRuntimeForChatRouteTests(options?: {
     deleteRoom: async () => {},
     getCache: async () => null,
     setCache: async () => {},
+    getActionResults:
+      options?.getActionResults ??
+      (() => [] as unknown[]),
     actions: options?.actions ?? [],
     logger: runtimeLogger,
   } as unknown as AgentRuntime;
@@ -94,6 +98,7 @@ function createRuntimeForChatRouteTests(options?: {
 
 function createUserMessage(text: string) {
   return createMessageMemory({
+    id: stringToUuid(`chat-route-message:${text}`),
     entityId: stringToUuid("chat-route-user"),
     roomId: stringToUuid("chat-route-room"),
     content: {
@@ -220,6 +225,56 @@ describe("generateChatResponse fallback recovery", () => {
 
     expect(result.text).toBe("I updated that preference.");
     expect(result.usedActionCallbacks).toBe(true);
+  });
+
+  it("does not re-run a grounded action when runtime action results show it already executed", async () => {
+    const warn = vi.fn();
+    const lifeHandler = vi.fn(async () => ({
+      success: true,
+      text: 'I can save this as a habit named "20 Situps + Pushups" that happens daily in morning, night. Confirm and I\'ll save it, or tell me what to change.',
+    }));
+    const runtime = createRuntimeForChatRouteTests({
+      logger: {
+        debug: vi.fn(),
+        info: vi.fn(),
+        warn,
+        error: vi.fn(),
+      } as unknown as AgentRuntime["logger"],
+      handleMessage: async () => ({
+        didRespond: true,
+        responseContent: {
+          text: 'I can save this as a habit named "20 Situps + Pushups" that happens daily in morning, night. Confirm and I\'ll save it, or tell me what to change.',
+          actions: ["CREATE_HABIT"],
+        },
+        responseMessages: [],
+      }),
+      getActionResults: () => [{ data: { actionName: "LIFE" } }],
+      actions: [
+        {
+          name: "LIFE",
+          similes: ["CREATE_HABIT"],
+          validate: async () => true,
+          handler: lifeHandler,
+        },
+      ],
+    });
+
+    const result = await generateChatResponse(
+      runtime,
+      createUserMessage(
+        "i want to do 20 situps and pushups every morning and night",
+      ),
+      "ChatRouteAgent",
+    );
+
+    expect(result.text).toContain('I can save this as a habit named "20 Situps + Pushups"');
+    expect(lifeHandler).not.toHaveBeenCalled();
+    const warnedMessages = warn.mock.calls.map((args) =>
+      String(args[1] ?? args[0] ?? ""),
+    );
+    expect(warnedMessages).not.toContain(
+      "[eliza-api] Recovering from unexecuted action payload",
+    );
   });
 
   it("fails fast when generation exceeds the configured timeout", async () => {

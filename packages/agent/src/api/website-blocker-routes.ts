@@ -1,4 +1,5 @@
 import type { IAgentRuntime, Memory } from "@elizaos/core";
+import { logger } from "@elizaos/core";
 import { syncWebsiteBlockerExpiryTask } from "@miladyai/plugin-selfcontrol";
 import {
   getSelfControlStatus,
@@ -6,6 +7,10 @@ import {
   startSelfControlBlock,
   stopSelfControlBlock,
 } from "@miladyai/plugin-selfcontrol/selfcontrol";
+import type {
+  LifeOpsOccurrence,
+  LifeOpsTaskDefinition,
+} from "@miladyai/shared/contracts/lifeops";
 import type { RouteRequestContext } from "./route-helpers.js";
 
 type WebsiteBlockerRequestBody = {
@@ -53,6 +58,80 @@ function buildBlockRequest(
   );
 }
 
+interface RequiredTaskInfo {
+  id: string;
+  title: string;
+  completed: boolean;
+}
+
+interface WebsiteBlockerHostResponse {
+  blocked: boolean;
+  host: string;
+  groupKey: string | null;
+  requiredTasks: RequiredTaskInfo[];
+  websites: string[];
+}
+
+/**
+ * Lazy-import the LifeOps repository to resolve which definitions gate
+ * access to a specific host and whether their current occurrences are
+ * completed. The import is dynamic so the route file does not create a
+ * hard dependency on the LifeOps database tables existing.
+ */
+async function resolveRequiredTasksForHost(
+  runtime: IAgentRuntime,
+  host: string,
+): Promise<{ groupKey: string | null; requiredTasks: RequiredTaskInfo[] }> {
+  // Dynamic import avoids a hard compile-time dependency on the LifeOps
+  // repository module, which may not be present in all deployments.
+  const { LifeOpsRepository } = await import("../lifeops/repository.js");
+  const repo = new LifeOpsRepository(runtime);
+
+  const agentId = String(runtime.agentId);
+  const definitions: LifeOpsTaskDefinition[] =
+    await repo.listActiveDefinitions(agentId);
+
+  const matchingDefinitions = definitions.filter(
+    (definition) =>
+      definition.websiteAccess &&
+      definition.websiteAccess.websites.some(
+        (website) => website.toLowerCase() === host,
+      ),
+  );
+
+  if (matchingDefinitions.length === 0) {
+    return { groupKey: null, requiredTasks: [] };
+  }
+
+  const groupKey = matchingDefinitions[0].websiteAccess?.groupKey ?? null;
+  const requiredTasks: RequiredTaskInfo[] = [];
+
+  for (const definition of matchingDefinitions) {
+    const occurrences: LifeOpsOccurrence[] =
+      await repo.listOccurrencesForDefinition(agentId, definition.id);
+
+    // Find the most recent non-expired occurrence to check completion status
+    const currentOccurrence = occurrences
+      .filter(
+        (occurrence) =>
+          occurrence.state !== "expired" && occurrence.state !== "muted",
+      )
+      .sort((left, right) => {
+        const leftTime = Date.parse(left.relevanceStartAt);
+        const rightTime = Date.parse(right.relevanceStartAt);
+        return rightTime - leftTime;
+      })[0];
+
+    requiredTasks.push({
+      id: currentOccurrence?.id ?? definition.id,
+      title: definition.title,
+      completed: currentOccurrence?.state === "completed",
+    });
+  }
+
+  return { groupKey, requiredTasks };
+}
+
 export async function handleWebsiteBlockerRoutes(
   ctx: WebsiteBlockerRouteContext,
 ): Promise<boolean> {
@@ -67,7 +146,45 @@ export async function handleWebsiteBlockerRoutes(
   }
 
   if (method === "GET") {
-    json(res, await getSelfControlStatus());
+    const url = new URL(req.url ?? "/", "http://localhost");
+    const queriedHost = url.searchParams.get("host")?.trim().toLowerCase();
+
+    if (!queriedHost) {
+      json(res, await getSelfControlStatus());
+      return true;
+    }
+
+    const status = await getSelfControlStatus();
+    const hostBlocked =
+      status.active &&
+      status.websites.some(
+        (website) => website.toLowerCase() === queriedHost,
+      );
+
+    const result: WebsiteBlockerHostResponse = {
+      blocked: hostBlocked,
+      host: queriedHost,
+      groupKey: null,
+      requiredTasks: [],
+      websites: status.active ? status.websites : [],
+    };
+
+    if (hostBlocked && runtime) {
+      try {
+        const tasks = await resolveRequiredTasksForHost(
+          runtime,
+          queriedHost,
+        );
+        result.requiredTasks = tasks.requiredTasks;
+        result.groupKey = tasks.groupKey;
+      } catch (err) {
+        logger.warn(
+          `[website-blocker] Failed to resolve required tasks for host ${queriedHost}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+
+    json(res, result);
     return true;
   }
 

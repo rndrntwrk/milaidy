@@ -167,6 +167,8 @@ export type CustomActionDef = {
   parameters: Array<{ name: string; description: string; required: boolean }>;
   handler: CustomActionHandler;
   enabled: boolean;
+  /** Minimum elizaOS role required to invoke this action (OWNER > ADMIN > USER > GUEST). */
+  requiredRole?: "OWNER" | "ADMIN" | "USER" | "GUEST";
   createdAt: string;
   updatedAt: string;
 };

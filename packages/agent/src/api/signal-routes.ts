@@ -5,6 +5,7 @@ import type {
   SignalPairingSnapshot,
   SignalPairingStatus,
 } from "../services/signal-pairing.js";
+import { registerEscalationChannel } from "../services/escalation.js";
 import { readJsonBody as parseJsonBody, sendJson } from "./http-helpers.js";
 import { setOwnerContact } from "./owner-contact-helpers.js";
 
@@ -171,6 +172,9 @@ export async function handleSignalRoute(
               channelId: phoneNumber ?? undefined,
             },
           );
+          // Add Signal to the escalation channel list so it is reachable
+          // without the user explicitly configuring escalation.
+          registerEscalationChannel("signal");
           try {
             state.saveConfig();
           } catch (error) {

@@ -3,10 +3,37 @@ import type {
   HandlerOptions,
   IAgentRuntime,
   Memory,
+  State,
   UUID,
 } from "@elizaos/core";
 import { logger } from "@elizaos/core";
 import { hasAdminAccess } from "../security/access.js";
+import { hasContextSignalSync } from "./context-signal.js";
+
+const ENTITY_STRONG_TERMS = [
+  "search entity",
+  "find person",
+  "lookup user",
+  "search contacts",
+  "search rolodex",
+  "who is",
+  "contact details",
+  "view person",
+  "get contact",
+] as const;
+
+const ENTITY_WEAK_TERMS = [
+  "person",
+  "contact",
+  "entity",
+  "user",
+  "lookup",
+  "who",
+  "profile",
+  "identity",
+  "rolodex",
+  "details",
+] as const;
 import type {
   RelationshipsGraphService,
   RelationshipsPersonDetail,
@@ -160,7 +187,10 @@ export const searchEntityAction: Action = {
     "Returns matching contacts with their cross-platform identities. " +
     "Results include line numbers for copying to scratchpad.",
 
-  validate: async (runtime, message) => hasAdminAccess(runtime, message),
+  validate: async (runtime, message, state) => {
+    if (!(await hasAdminAccess(runtime, message))) return false;
+    return hasContextSignalSync(message, state, ENTITY_STRONG_TERMS, ENTITY_WEAK_TERMS, 2);
+  },
 
   handler: async (runtime, message, _state, options) => {
     if (!(await hasAdminAccess(runtime, message))) {
@@ -304,7 +334,10 @@ export const readEntityAction: Action = {
     "Look up by entity ID (from SEARCH_ENTITY results) or by name. " +
     "Full output can be saved to scratchpad.",
 
-  validate: async (runtime, message) => hasAdminAccess(runtime, message),
+  validate: async (runtime, message, state) => {
+    if (!(await hasAdminAccess(runtime, message))) return false;
+    return hasContextSignalSync(message, state, ENTITY_STRONG_TERMS, ENTITY_WEAK_TERMS, 2);
+  },
 
   handler: async (runtime, message, _state, options) => {
     if (!(await hasAdminAccess(runtime, message))) {

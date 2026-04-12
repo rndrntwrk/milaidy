@@ -13,6 +13,10 @@ export const BlueBubblesConfigSchema = z.object({
 	serverUrl: z.string().url("Server URL must be a valid URL"),
 	password: z.string().min(1, "Password is required"),
 	webhookPath: z.string().optional().default("/webhooks/bluebubbles"),
+	autoStartCommand: z.string().optional(),
+	autoStartArgs: z.array(z.string()).optional().default([]),
+	autoStartCwd: z.string().optional(),
+	autoStartWaitMs: z.number().int().nonnegative().optional().default(15000),
 	dmPolicy: DmPolicySchema.optional().default("pairing"),
 	groupPolicy: GroupPolicySchema.optional().default("allowlist"),
 	allowFrom: z.array(z.string()).optional().default([]),
@@ -55,6 +59,8 @@ export function getConfigFromRuntime(
 
 	const allowFromRaw = getStringSetting("BLUEBUBBLES_ALLOW_FROM");
 	const groupAllowFromRaw = getStringSetting("BLUEBUBBLES_GROUP_ALLOW_FROM");
+	const autoStartArgsRaw = getStringSetting("BLUEBUBBLES_AUTOSTART_ARGS");
+	const autoStartWaitMsRaw = getStringSetting("BLUEBUBBLES_AUTOSTART_WAIT_MS");
 
 	const parseAllowList = (raw: string | undefined): string[] => {
 		if (!raw) return [];
@@ -64,11 +70,51 @@ export function getConfigFromRuntime(
 			.filter(Boolean);
 	};
 
+	const parseStringList = (raw: string | undefined): string[] => {
+		if (!raw) return [];
+		const trimmed = raw.trim();
+		if (!trimmed) return [];
+
+		if (trimmed.startsWith("[")) {
+			try {
+				const parsed = JSON.parse(trimmed);
+				if (Array.isArray(parsed)) {
+					return parsed
+						.map((entry) => (typeof entry === "string" ? entry.trim() : ""))
+						.filter(Boolean);
+				}
+			} catch {
+				// Fall back to comma-separated parsing below.
+			}
+		}
+
+		return trimmed
+			.split(",")
+			.map((s: string) => s.trim())
+			.filter(Boolean);
+	};
+
+	const parseNonNegativeInt = (
+		raw: string | undefined,
+		fallback: number,
+	): number => {
+		if (!raw) return fallback;
+		const parsed = Number.parseInt(raw, 10);
+		if (!Number.isFinite(parsed) || parsed < 0) {
+			return fallback;
+		}
+		return parsed;
+	};
+
 	return {
 		serverUrl,
 		password,
 		webhookPath:
 			getStringSetting("BLUEBUBBLES_WEBHOOK_PATH") ?? "/webhooks/bluebubbles",
+		autoStartCommand: getStringSetting("BLUEBUBBLES_AUTOSTART_COMMAND"),
+		autoStartArgs: parseStringList(autoStartArgsRaw),
+		autoStartCwd: getStringSetting("BLUEBUBBLES_AUTOSTART_CWD"),
+		autoStartWaitMs: parseNonNegativeInt(autoStartWaitMsRaw, 15000),
 		dmPolicy:
 			(getStringSetting("BLUEBUBBLES_DM_POLICY") as DmPolicy) ?? "pairing",
 		groupPolicy:

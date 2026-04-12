@@ -4,8 +4,8 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   GoogleManagedClient,
-  resolveManagedGoogleCloudConfig,
   type ManagedGoogleClientError,
+  resolveManagedGoogleCloudConfig,
 } from "./google-managed-client";
 
 describe("GoogleManagedClient", () => {
@@ -158,12 +158,15 @@ describe("GoogleManagedClient", () => {
 
   it("calls the managed Gmail search endpoint with the encoded query", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ messages: [], syncedAt: "2026-04-10T00:00:00.000Z" }), {
-        status: 200,
-        headers: {
-          "Content-Type": "application/json",
+      new Response(
+        JSON.stringify({ messages: [], syncedAt: "2026-04-10T00:00:00.000Z" }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
         },
-      }),
+      ),
     );
 
     const client = new GoogleManagedClient({
@@ -248,5 +251,37 @@ describe("GoogleManagedClient", () => {
       redirectUri: "https://milady.example/callback",
       authUrl: "https://accounts.google.com/o/oauth2/v2/auth?state=test",
     });
+  });
+
+  it("forwards managed calendar create requests without reinterpreting UTC instants", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ event: {} }), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }),
+    );
+
+    const client = new GoogleManagedClient({
+      configured: true,
+      apiKey: "test-key",
+      apiBaseUrl: "https://cloud.example/api/v1",
+      siteUrl: "https://cloud.example",
+    });
+
+    await client.createCalendarEvent({
+      side: "owner",
+      title: "Coffee",
+      startAt: "2026-04-12T16:00:00.000Z",
+      endAt: "2026-04-12T17:00:00.000Z",
+      timeZone: "America/Los_Angeles",
+    });
+
+    expect(fetchSpy).toHaveBeenCalledOnce();
+    const body = JSON.parse(fetchSpy.mock.calls[0][1]?.body as string);
+    expect(body.startAt).toBe("2026-04-12T16:00:00.000Z");
+    expect(body.endAt).toBe("2026-04-12T17:00:00.000Z");
+    expect(body.timeZone).toBe("America/Los_Angeles");
   });
 });
