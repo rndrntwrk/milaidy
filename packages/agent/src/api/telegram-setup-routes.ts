@@ -13,6 +13,7 @@
  */
 
 import type http from "node:http";
+import { registerEscalationChannel } from "../services/escalation.js";
 import { setOwnerContact } from "./owner-contact-helpers.js";
 import type { RouteHelpers } from "./route-helpers.js";
 
@@ -111,6 +112,9 @@ export async function handleTelegramSetupRoute(
           channelId: String(bot.id),
         },
       );
+      // Add Telegram to the escalation channel list so it is reachable
+      // without the user explicitly configuring escalation.
+      registerEscalationChannel("telegram");
 
       state.saveConfig();
 

@@ -5,6 +5,7 @@
 import type React from "react";
 import { useEffect } from "react";
 import { useApp } from "../../state";
+import { getAppSlug } from "../apps/helpers";
 import { GameView } from "../apps/GameView";
 import { AppsView } from "./AppsView";
 
@@ -19,8 +20,35 @@ export function AppsPageView({
   appsView?: AppsPageViewRenderer;
   gameView?: AppsPageViewRenderer;
 } = {}) {
-  const { appsSubTab, activeGameRunId, setState } = useApp();
+  const { appRuns, appsSubTab, activeGameRunId, setState } = useApp();
   const hasActiveGame = activeGameRunId.trim().length > 0;
+  const activeGameRun = hasActiveGame
+    ? appRuns.find((run) => run.runId === activeGameRunId)
+    : undefined;
+
+  // When the game view is active (including after refresh where sessionStorage
+  // restores activeGameRunId + appsSubTab="games"), make sure the URL reflects
+  // the app slug so bookmarks and further refreshes work.
+  useEffect(() => {
+    if (appsSubTab !== "games" || !activeGameRun) return;
+    const slug = getAppSlug(activeGameRun.appName);
+    try {
+      const currentPath =
+        window.location.protocol === "file:"
+          ? window.location.hash.replace(/^#/, "") || "/"
+          : window.location.pathname;
+      const expected = `/apps/${slug}`;
+      if (currentPath !== expected) {
+        if (window.location.protocol === "file:") {
+          window.location.hash = expected;
+        } else {
+          window.history.replaceState(null, "", expected);
+        }
+      }
+    } catch {
+      /* sandboxed */
+    }
+  }, [appsSubTab, activeGameRun]);
 
   useEffect(() => {
     if (appsSubTab === "games" && !hasActiveGame) {

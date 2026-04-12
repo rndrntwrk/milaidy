@@ -21,8 +21,8 @@ Goal: Extend LifeOps beyond message-history inference so reminders can react to 
 ### Implementation TODOs
 - identify existing desktop/native APIs already available in Milady or Electrobun for idle/activity state
 - add a normalized activity-event model that the activity-profile service can read
-- update [packages/agent/src/activity-profile/service.ts](/Users/shawwalters/eliza-workspace/milady/packages/agent/src/activity-profile/service.ts) to merge desktop activity with message-derived activity
-- update [packages/agent/src/activity-profile/analyzer.ts](/Users/shawwalters/eliza-workspace/milady/packages/agent/src/activity-profile/analyzer.ts) so effective-day and current-activity logic can use non-chat signals
+- update [packages/agent/src/activity-profile/service.ts](../../packages/agent/src/activity-profile/service.ts) to merge desktop activity with message-derived activity
+- update [packages/agent/src/activity-profile/analyzer.ts](../../packages/agent/src/activity-profile/analyzer.ts) so effective-day and current-activity logic can use non-chat signals
 - expose signal state to LifeOps reminder routing and proactive planning
 - add integration tests proving reminders prefer real active periods over stale chat-only inference
 
@@ -367,7 +367,7 @@ Goal: Close gaps where real UI code exists but executed test coverage is thin.
 - any new mobile consent/settings surfaces
 
 ### Implementation TODOs
-- add executed tests for [packages/app-core/src/components/settings/WebsiteBlockerSettingsCard.tsx](/Users/shawwalters/eliza-workspace/milady/packages/app-core/src/components/settings/WebsiteBlockerSettingsCard.tsx)
+- add executed tests for [packages/app-core/src/components/settings/WebsiteBlockerSettingsCard.tsx](../../packages/app-core/src/components/settings/WebsiteBlockerSettingsCard.tsx)
 - keep new LifeOps UI surfaces covered from the start
 
 ### Acceptance Criteria

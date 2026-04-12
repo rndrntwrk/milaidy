@@ -90,6 +90,10 @@ type RawWindows = {
 
 type RawAlarms = {
   create?: (name: string, alarmInfo?: Record<string, unknown>) => void;
+  clear?: (
+    name: string,
+    callback?: Callback<boolean>,
+  ) => Promise<boolean> | undefined;
   onAlarm?: {
     addListener: (listener: (alarm: { name?: string }) => void) => void;
   };
@@ -119,14 +123,43 @@ type RawPermissions = {
     | undefined;
 };
 
+type RawDeclarativeNetRequestRule = {
+  id: number;
+  priority: number;
+  action: {
+    type: string;
+    redirect?: { url: string };
+  };
+  condition: {
+    urlFilter?: string;
+    resourceTypes?: string[];
+  };
+};
+
+type RawDeclarativeNetRequest = {
+  getDynamicRules?: (
+    callback?: Callback<RawDeclarativeNetRequestRule[]>,
+  ) => Promise<RawDeclarativeNetRequestRule[]> | undefined;
+  updateDynamicRules?: (
+    options: {
+      removeRuleIds?: number[];
+      addRules?: RawDeclarativeNetRequestRule[];
+    },
+    callback?: Callback<void>,
+  ) => Promise<void> | void;
+};
+
 type RawApi = {
-  runtime?: RawRuntime;
+  runtime?: RawRuntime & {
+    getURL?: (path: string) => string;
+  };
   storage?: { local?: RawStorageArea };
   tabs?: RawTabs;
   windows?: RawWindows;
   alarms?: RawAlarms;
   extension?: RawExtension;
   permissions?: RawPermissions;
+  declarativeNetRequest?: RawDeclarativeNetRequest;
 };
 
 export type ExtensionTab = {
@@ -352,6 +385,10 @@ export function createAlarm(name: string, periodInMinutes: number): void {
   getRawApi().alarms?.create?.(name, { periodInMinutes });
 }
 
+export function clearAlarm(name: string): void {
+  getRawApi().alarms?.clear?.(name);
+}
+
 export function addAlarmListener(
   listener: (alarm: { name?: string }) => void,
 ): void {
@@ -405,5 +442,40 @@ export async function focusWindow(windowId: number): Promise<void> {
   }
   await invokeAsync<unknown>((callback) =>
     windows.update?.(windowId, { focused: true }, callback),
+  );
+}
+
+export function getExtensionUrl(path: string): string {
+  const runtime = getRawApi().runtime;
+  if (!runtime?.getURL) {
+    return path;
+  }
+  return runtime.getURL(path);
+}
+
+export type DeclarativeNetRequestRule = RawDeclarativeNetRequestRule;
+
+export async function getDynamicRules(): Promise<
+  RawDeclarativeNetRequestRule[]
+> {
+  const dnr = getRawApi().declarativeNetRequest;
+  if (!dnr?.getDynamicRules) {
+    return [];
+  }
+  return await invokeAsync<RawDeclarativeNetRequestRule[]>((callback) =>
+    dnr.getDynamicRules?.(callback),
+  );
+}
+
+export async function updateDynamicRules(options: {
+  removeRuleIds?: number[];
+  addRules?: RawDeclarativeNetRequestRule[];
+}): Promise<void> {
+  const dnr = getRawApi().declarativeNetRequest;
+  if (!dnr?.updateDynamicRules) {
+    return;
+  }
+  await invokeAsync<void>((callback) =>
+    dnr.updateDynamicRules?.(options, callback),
   );
 }

@@ -9,25 +9,12 @@
  * Non-loading phases (error, pairing, onboarding) delegate to their views.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { client } from "../../api";
-import {
-  discoverGatewayEndpoints,
-  type GatewayDiscoveryEndpoint,
-  gatewayEndpointToApiBase,
-} from "../../bridge/gateway-discovery";
-import { isDesktopPlatform } from "../../platform/init";
-import {
-  addAgentProfile,
-  clearPersistedActiveServer,
-  savePersistedActiveServer,
-  useApp,
-} from "../../state";
+import { useApp } from "../../state";
 import type { StartupErrorState } from "../../state/types";
 import { OnboardingWizard } from "../onboarding/OnboardingWizard";
 import { PairingView } from "./PairingView";
-import { SplashCloudAgents } from "./SplashCloudAgents";
-import { SplashServerChooser } from "./SplashServerChooser";
 import { StartupFailureView } from "./StartupFailureView";
 
 const FONT = "'Courier New', 'Courier', 'Monaco', monospace";
@@ -65,29 +52,10 @@ export function StartupShell() {
     startupError,
     retryStartup,
     setState,
-    goToOnboardingStep,
     t,
   } = useApp();
   const phase = startupCoordinator.phase;
   const cloudSkipProbeStartedRef = useRef(false);
-  const [discoveryLoading, setDiscoveryLoading] = useState(false);
-  const [discoveredGateways, setDiscoveredGateways] = useState<
-    GatewayDiscoveryEndpoint[]
-  >([]);
-  const [splashSubView, setSplashSubView] = useState<"chooser" | "cloud">(
-    () => {
-      if (typeof window === "undefined") return "chooser";
-      const params = new URLSearchParams(window.location.search);
-      if (params.get("action") === "cloud-agents") {
-        params.delete("action");
-        const qs = params.toString();
-        const url = window.location.pathname + (qs ? `?${qs}` : "");
-        window.history.replaceState({}, "", url);
-        return "cloud";
-      }
-      return "chooser";
-    },
-  );
   const isSplash = phase === "splash";
   const splashLoaded = isSplash
     ? (startupCoordinator.state as { loaded?: boolean }).loaded
@@ -146,94 +114,14 @@ export function StartupShell() {
     };
   }, [phase, setState]);
 
-  // ── Gateway discovery ──────────────────────────────────────────
+  // ── Auto-continue splash ──────────────────────────────────────
+  // The deployment chooser now lives inside OnboardingWizard (DeploymentStep).
+  // The splash phase becomes a pure loading screen that auto-advances.
   useEffect(() => {
-    if (!isSplash || !splashLoaded) {
-      return;
+    if (isSplash && splashLoaded) {
+      startupCoordinator.dispatch({ type: "SPLASH_CONTINUE" });
     }
-
-    let cancelled = false;
-    setDiscoveryLoading(true);
-    void discoverGatewayEndpoints({ timeoutMs: 1500 })
-      .then((gateways) => {
-        if (!cancelled) {
-          setDiscoveredGateways(gateways);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setDiscoveryLoading(false);
-        }
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isSplash, splashLoaded]);
-
-  const continueToOnboarding = useCallback(() => {
-    startupCoordinator.dispatch({ type: "SPLASH_CONTINUE" });
-  }, [startupCoordinator]);
-
-  const clearClientConnectionIntent = useCallback(() => {
-    client.setToken(null);
-    client.setBaseUrl(null);
-  }, []);
-
-  const seedSplashTarget = useCallback(
-    (target: "local" | "remote" | "elizacloud", remoteApiBase?: string) => {
-      clearClientConnectionIntent();
-      clearPersistedActiveServer();
-      goToOnboardingStep("identity");
-      setState("onboardingProvider", "");
-      setState("onboardingApiKey", "");
-      setState("onboardingPrimaryModel", "");
-      setState("onboardingRemoteToken", "");
-      setState("onboardingServerTarget", target);
-
-      if (target === "local") {
-        setState("onboardingRemoteConnected", false);
-        setState("onboardingRemoteApiBase", "");
-        return;
-      }
-
-      setState("onboardingRemoteConnected", Boolean(remoteApiBase));
-      setState("onboardingRemoteApiBase", remoteApiBase ?? "");
-    },
-    [clearClientConnectionIntent, goToOnboardingStep, setState],
-  );
-
-  const handleCreateLocal = useCallback(() => {
-    addAgentProfile({ kind: "local", label: "Local Agent" });
-    seedSplashTarget("local");
-    continueToOnboarding();
-  }, [continueToOnboarding, seedSplashTarget]);
-
-  const handleManualConnect = useCallback(() => {
-    seedSplashTarget("remote");
-    continueToOnboarding();
-  }, [continueToOnboarding, seedSplashTarget]);
-
-  const handleManageCloudAgents = useCallback(() => {
-    setSplashSubView("cloud");
-  }, []);
-
-  const handleConnectGateway = useCallback(
-    (gateway: GatewayDiscoveryEndpoint) => {
-      const remoteApiBase = gatewayEndpointToApiBase(gateway);
-      clearClientConnectionIntent();
-      const label = gateway.name.trim() || remoteApiBase;
-      savePersistedActiveServer({
-        id: `remote:${gateway.stableId}`,
-        kind: "remote",
-        label,
-        apiBase: remoteApiBase,
-      });
-      addAgentProfile({ kind: "remote", label, apiBase: remoteApiBase });
-      continueToOnboarding();
-    },
-    [clearClientConnectionIntent, continueToOnboarding],
-  );
+  }, [isSplash, splashLoaded, startupCoordinator]);
 
   // Error — delegate
   if (phase === "error") {
@@ -275,61 +163,29 @@ export function StartupShell() {
         className="relative z-10 flex flex-col items-center gap-5 px-6 text-center w-full"
         style={{ maxWidth: 360 }}
       >
-        {/* Retro segmented progress bar */}
-        {!isSplash && (
-          <div className="w-full mt-2">
-            <div className="h-5 w-full border-2 border-black/70 bg-black/5 overflow-hidden">
+        {/* Retro segmented progress bar — splash auto-continues to onboarding */}
+        <div className="w-full mt-2">
+          <div className="h-5 w-full border-2 border-black/70 bg-black/5 overflow-hidden">
+            <div
+              className="h-full bg-black/70 transition-all duration-700 ease-out"
+              style={{ width: `${progress}%` }}
+            >
               <div
-                className="h-full bg-black/70 transition-all duration-700 ease-out"
-                style={{ width: `${progress}%` }}
-              >
-                <div
-                  className="h-full w-full"
-                  style={{
-                    backgroundImage:
-                      "repeating-linear-gradient(90deg, transparent, transparent 6px, rgba(255,230,0,0.5) 6px, rgba(255,230,0,0.5) 8px)",
-                  }}
-                />
-              </div>
+                className="h-full w-full"
+                style={{
+                  backgroundImage:
+                    "repeating-linear-gradient(90deg, transparent, transparent 6px, rgba(255,230,0,0.5) 6px, rgba(255,230,0,0.5) 8px)",
+                }}
+              />
             </div>
-            <p
-              style={{ fontFamily: FONT }}
-              className="mt-2 text-[8px] text-black/50 uppercase animate-pulse"
-            >
-              {t(phaseToStatusKey(phase))}
-            </p>
           </div>
-        )}
-
-        {/* Server chooser or cloud agent manager — only on splash phase */}
-        {isSplash &&
-          (!splashLoaded ? (
-            <button
-              type="button"
-              disabled
-              style={{ fontFamily: FONT }}
-              className="mt-3 border-2 border-black bg-black px-5 py-2.5 text-[9px] uppercase text-[#ffe600] hover:bg-black/80 disabled:opacity-30 disabled:cursor-wait transition-all"
-            >
-              {t("startupshell.Loading", { defaultValue: "Loading..." })}
-            </button>
-          ) : splashSubView === "cloud" ? (
-            <SplashCloudAgents
-              t={t}
-              onBack={() => setSplashSubView("chooser")}
-              dispatchStartup={startupCoordinator.dispatch}
-            />
-          ) : (
-            <SplashServerChooser
-              discoveryLoading={discoveryLoading}
-              gateways={discoveredGateways}
-              showCreateLocal={isDesktopPlatform()}
-              t={t}
-              onCreateLocal={handleCreateLocal}
-              onManualConnect={handleManualConnect}
-              onManageCloudAgents={handleManageCloudAgents}
-              onConnectGateway={handleConnectGateway}
-            />
-          ))}
+          <p
+            style={{ fontFamily: FONT }}
+            className="mt-2 text-[8px] text-black/50 uppercase animate-pulse"
+          >
+            {t(phaseToStatusKey(phase))}
+          </p>
+        </div>
       </div>
     </div>
   );

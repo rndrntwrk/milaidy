@@ -9,6 +9,10 @@ export interface BlueBubblesConfig {
 	serverUrl: string;
 	password: string;
 	webhookPath?: string;
+	autoStartCommand?: string;
+	autoStartArgs?: string[];
+	autoStartCwd?: string;
+	autoStartWaitMs?: number;
 	dmPolicy?: DmPolicy;
 	groupPolicy?: GroupPolicy;
 	allowFrom?: string[];

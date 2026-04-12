@@ -28,7 +28,7 @@ vi.mock("../../../config/branding", () => ({
   useBranding: () => ({ cloudOnly: false }),
 }));
 
-vi.mock("../../../onboarding/flow", () => ({
+vi.mock("../../onboarding/flow", () => ({
   getOnboardingNavMetas: () => [
     {
       id: "identity",

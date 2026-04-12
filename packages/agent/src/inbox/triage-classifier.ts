@@ -1,5 +1,5 @@
 import type { IAgentRuntime } from "@elizaos/core";
-import { ModelType, logger, parseJSONObjectFromText } from "@elizaos/core";
+import { ModelType, logger } from "@elizaos/core";
 import type {
   InboundMessage,
   InboxTriageConfig,
@@ -43,12 +43,6 @@ export function applyTriageRules(
     if (matchesRule(pattern, text, senderId, channelName, source)) {
       return "notify";
     }
-  }
-
-  // Gmail signals as hints (boost urgency, don't override)
-  if (message.gmailIsImportant || message.gmailLikelyReplyNeeded) {
-    // Don't return classification — let LLM decide, but these are passed as hints
-    return null;
   }
 
   return null;

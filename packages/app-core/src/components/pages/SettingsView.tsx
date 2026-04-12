@@ -34,6 +34,7 @@ import {
   useState,
 } from "react";
 import { useApp } from "../../state";
+import { WidgetHost } from "../../widgets";
 import { CodingAgentSettingsSection } from "../coding/CodingAgentSettingsSection";
 import { MediaSettingsSection } from "../settings/MediaSettingsSection";
 import { PermissionsSection } from "../settings/PermissionsSection";
@@ -133,10 +134,10 @@ const SETTINGS_SECTIONS: SettingsSectionDef[] = [
     ],
   },
   {
-    id: "wallet",
-    label: "settings.sections.wallet.label",
-    description: "settings.sections.wallet.desc",
-    keywords: ["wallet", "crypto", "inventory", "token", "nft", "chain"],
+    id: "capabilities",
+    label: "settings.sections.capabilities.label",
+    description: "settings.sections.capabilities.desc",
+    keywords: ["capabilities", "wallet", "browser", "enable", "disable", "feature"],
   },
   {
     id: "permissions",
@@ -237,32 +238,56 @@ const SettingsSection = forwardRef<HTMLElement, SettingsSectionProps>(
   },
 );
 
-/* ── Wallet Section ──────────────────────────────────────────────────── */
+/* ── Capabilities Section ────────────────────────────────────────────── */
 
-function WalletSection() {
-  const { walletEnabled, setState, t } = useApp();
+function CapabilitiesSection() {
+  const { walletEnabled, browserEnabled, setState, t } = useApp();
   return (
-    <div className="flex items-center justify-between gap-4">
-      <div>
-        <div className="font-medium text-sm">
-          {t("settings.sections.wallet.enableLabel", {
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <div className="font-medium text-sm">
+            {t("settings.sections.capabilities.walletLabel", {
+              defaultValue: "Enable Wallet",
+            })}
+          </div>
+          <div className="text-xs text-muted">
+            {t("settings.sections.wallet.enableHint", {
+              defaultValue:
+                "Show the Wallet tab for managing crypto wallets and token balances",
+            })}
+          </div>
+        </div>
+        <Switch
+          checked={walletEnabled}
+          onCheckedChange={(checked) => setState("walletEnabled", !!checked)}
+          aria-label={t("settings.sections.capabilities.walletLabel", {
             defaultValue: "Enable Wallet",
           })}
-        </div>
-        <div className="text-xs text-muted">
-          {t("settings.sections.wallet.enableHint", {
-            defaultValue:
-              "Show the Wallet tab for managing crypto wallets and token balances",
-          })}
-        </div>
+        />
       </div>
-      <Switch
-        checked={walletEnabled}
-        onCheckedChange={(checked) => setState("walletEnabled", !!checked)}
-        aria-label={t("settings.sections.wallet.enableLabel", {
-          defaultValue: "Enable Wallet",
-        })}
-      />
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <div className="font-medium text-sm">
+            {t("settings.sections.capabilities.browserLabel", {
+              defaultValue: "Enable Browser",
+            })}
+          </div>
+          <div className="text-xs text-muted">
+            {t("settings.sections.capabilities.browserHint", {
+              defaultValue:
+                "Show the Browser tab for agent-controlled web browsing",
+            })}
+          </div>
+        </div>
+        <Switch
+          checked={browserEnabled}
+          onCheckedChange={(checked) => setState("browserEnabled", !!checked)}
+          aria-label={t("settings.sections.capabilities.browserLabel", {
+            defaultValue: "Enable Browser",
+          })}
+        />
+      </div>
     </div>
   );
 }
@@ -857,18 +882,18 @@ export function SettingsView({
         </SettingsSection>
       )}
 
-      {visibleSectionIds.has("wallet") && (
+      {visibleSectionIds.has("capabilities") && (
         <SettingsSection
-          id="wallet"
-          title={t("settings.sections.wallet.label", {
-            defaultValue: "Wallet",
+          id="capabilities"
+          title={t("settings.sections.capabilities.label", {
+            defaultValue: "Capabilities",
           })}
-          description={t("settings.sections.wallet.desc", {
-            defaultValue: "Crypto wallet and token management",
+          description={t("settings.sections.capabilities.desc", {
+            defaultValue: "Enable or disable agent capabilities",
           })}
-          ref={registerContentItem("wallet")}
+          ref={registerContentItem("capabilities")}
         >
-          <WalletSection />
+          <CapabilitiesSection />
         </SettingsSection>
       )}
 
@@ -937,6 +962,7 @@ export function SettingsView({
     >
       <div ref={shellRef} className={`w-full ${SETTINGS_SECTION_STACK_CLASS}`}>
         {sectionsContent}
+        <WidgetHost slot="settings" className="mt-6" />
       </div>
     </PageLayout>
   );

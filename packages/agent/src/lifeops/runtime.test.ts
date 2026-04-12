@@ -19,18 +19,23 @@ import {
   ensureLifeOpsSchedulerTask,
   executeLifeOpsSchedulerTask,
   LIFEOPS_TASK_INTERVAL_MS,
+  LIFEOPS_TASK_JITTER_MS,
   LIFEOPS_TASK_NAME,
   LIFEOPS_TASK_TAGS,
   registerLifeOpsTaskWorker,
+  resolveLifeOpsTaskIntervalMs,
 } from "./runtime.js";
 
-function createRuntimeMock(tasks: Task[] = []) {
+function createRuntimeMock(
+  tasks: Task[] = [],
+  agentId = "agent-lifeops" as UUID,
+) {
   const workerRegistry = new Map<string, unknown>();
   const state = {
     tasks: [...tasks],
   };
   const runtime = {
-    agentId: "agent-lifeops" as UUID,
+    agentId,
     getService: vi.fn(() => ({
       getAutonomousRoomId: () => "room-lifeops" as UUID,
     })),
@@ -76,6 +81,19 @@ describe("lifeops runtime scheduler", () => {
     });
   });
 
+  it("derives stable per-agent jitter within the expected bounds", () => {
+    const first = resolveLifeOpsTaskIntervalMs("agent-lifeops" as UUID);
+    const second = resolveLifeOpsTaskIntervalMs("agent-lifeops" as UUID);
+    const other = resolveLifeOpsTaskIntervalMs("agent-lifeops-2" as UUID);
+
+    expect(first).toBe(second);
+    expect(first).toBeGreaterThanOrEqual(LIFEOPS_TASK_INTERVAL_MS);
+    expect(first).toBeLessThanOrEqual(
+      LIFEOPS_TASK_INTERVAL_MS + LIFEOPS_TASK_JITTER_MS,
+    );
+    expect(other).not.toBe(first);
+  });
+
   it("creates the persistent scheduler task when missing", async () => {
     const { runtime, state } = createRuntimeMock();
 
@@ -86,8 +104,8 @@ describe("lifeops runtime scheduler", () => {
     expect(state.tasks[0]?.name).toBe(LIFEOPS_TASK_NAME);
     expect(state.tasks[0]?.tags).toEqual([...LIFEOPS_TASK_TAGS]);
     expect(state.tasks[0]?.metadata).toMatchObject({
-      updateInterval: LIFEOPS_TASK_INTERVAL_MS,
-      baseInterval: LIFEOPS_TASK_INTERVAL_MS,
+      updateInterval: resolveLifeOpsTaskIntervalMs(runtime.agentId),
+      baseInterval: resolveLifeOpsTaskIntervalMs(runtime.agentId),
       blocking: true,
       lifeopsScheduler: {
         kind: "runtime_runner",
@@ -144,7 +162,9 @@ describe("lifeops runtime scheduler", () => {
     expect(mockProcessScheduledWork).toHaveBeenCalledWith({
       now: "2026-04-04T12:00:00.000Z",
     });
-    expect(result.nextInterval).toBe(LIFEOPS_TASK_INTERVAL_MS);
+    expect(result.nextInterval).toBe(
+      resolveLifeOpsTaskIntervalMs(runtime.agentId),
+    );
   });
 
   it("supports direct scheduler execution", async () => {
@@ -157,7 +177,9 @@ describe("lifeops runtime scheduler", () => {
     expect(mockProcessScheduledWork).toHaveBeenCalledWith({
       now: "2026-04-04T13:00:00.000Z",
     });
-    expect(result).toEqual({ nextInterval: LIFEOPS_TASK_INTERVAL_MS });
+    expect(result).toEqual({
+      nextInterval: resolveLifeOpsTaskIntervalMs(runtime.agentId),
+    });
   });
 
   describe("waitForDbReady (via ensureLifeOpsSchedulerTask)", () => {

@@ -76,6 +76,7 @@ export function Header({
     setTab,
     setState,
     plugins,
+    browserEnabled,
     walletEnabled,
     loadDropStatus,
     uiLanguage,
@@ -116,8 +117,8 @@ export function Header({
     [plugins],
   );
   const tabGroups = useMemo(
-    () => getTabGroups(streamingEnabled, walletEnabled),
-    [streamingEnabled, walletEnabled],
+    () => getTabGroups(streamingEnabled, walletEnabled, browserEnabled),
+    [streamingEnabled, walletEnabled, browserEnabled],
   );
   const activeTabGroup = useMemo(
     () =>

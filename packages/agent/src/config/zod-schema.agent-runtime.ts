@@ -607,6 +607,45 @@ export const EscalationSchema = z
   .strict()
   .optional();
 
+// --- Inbox triage ---
+
+const InboxAutoReplySchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    confidenceThreshold: z.number().min(0).max(1).optional(),
+    senderWhitelist: z.array(z.string()).optional(),
+    channelWhitelist: z.array(z.string()).optional(),
+    maxAutoRepliesPerHour: z.number().int().min(0).optional(),
+  })
+  .strict()
+  .optional();
+
+const InboxTriageRulesSchema = z
+  .object({
+    alwaysUrgent: z.array(z.string()).optional(),
+    alwaysIgnore: z.array(z.string()).optional(),
+    alwaysNotify: z.array(z.string()).optional(),
+  })
+  .strict()
+  .optional();
+
+export const InboxTriageConfigSchema = z
+  .object({
+    enabled: z.boolean().optional(),
+    triageCron: z.string().optional(),
+    digestCron: z.string().optional(),
+    digestTimezone: z.string().optional(),
+    channels: z.array(z.string()).optional(),
+    prioritySenders: z.array(z.string()).optional(),
+    priorityChannels: z.array(z.string()).optional(),
+    autoReply: InboxAutoReplySchema,
+    triageRules: InboxTriageRulesSchema,
+    digestDeliveryChannel: z.string().optional(),
+    retentionDays: z.number().int().min(1).optional(),
+  })
+  .strict()
+  .optional();
+
 export const AgentDefaultsSchema = z
   .object({
     model: z
@@ -800,6 +839,7 @@ export const AgentDefaultsSchema = z
       })
       .strict()
       .optional(),
+    inboxTriage: InboxTriageConfigSchema,
   })
   .strict()
   .optional();

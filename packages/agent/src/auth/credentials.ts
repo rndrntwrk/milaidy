@@ -416,30 +416,24 @@ export async function applySubscriptionCredentials(config?: {
     defaults?: { subscriptionProvider?: string; model?: { primary?: string } };
   };
 }): Promise<void> {
-  // ── Anthropic subscription → set ANTHROPIC_API_KEY + install stealth ──
+  // ── Anthropic subscription ──────────────────────────────────────────
   //
-  // milady fork policy (diverges from upstream develop): upstream refuses
-  // to apply the anthropic subscription token to the main agent runtime
-  // citing Anthropic's TOS. This fork deliberately bypasses that for our
-  // single-tenant personal deployment — we install a fetch interceptor
-  // (auth/claude-code-stealth.ts) that spoofs the claude-cli headers so
-  // api.anthropic.com accepts the subscription token on direct fetch
-  // calls from the elizaOS runtime. Intentional, re-apply after rebases.
+  // Anthropic subscription tokens (sk-ant-oat*) are restricted to the
+  // Claude Code CLI by Anthropic's TOS. They must NOT be used for direct
+  // API calls from the elizaOS runtime. The subscription token only flows
+  // to spawned coding-agent CLI sessions via the orchestrator plugin
+  // (which ARE Claude Code). If the user has only a subscription and no
+  // API key, the runtime simply won't have an Anthropic provider — they
+  // need an API key or Eliza Cloud for the main agent.
   let anthropicToken = await getAccessToken("anthropic-subscription");
   if (!anthropicToken) {
     anthropicToken = await importClaudeCodeOAuthToken();
   }
   if (anthropicToken) {
-    process.env.ANTHROPIC_API_KEY = anthropicToken;
     logger.info(
-      "[auth] Applied Anthropic subscription credentials to environment",
+      "[auth] Anthropic subscription detected — available for coding agents (Claude Code CLI). " +
+        "Not applied to runtime env. Add an API key or connect Eliza Cloud for the main agent.",
     );
-    try {
-      const { applyClaudeCodeStealth } = await import("./apply-stealth.js");
-      applyClaudeCodeStealth();
-    } catch (err) {
-      logger.warn(`[auth] Failed to apply Claude stealth: ${String(err)}`);
-    }
   }
 
   // ── OpenAI Codex subscription → set OPENAI_API_KEY ────────────────────
@@ -451,8 +445,8 @@ export async function applySubscriptionCredentials(config?: {
     );
   }
 
-  // Auto-set model.primary from subscription provider — now includes
-  // anthropic since we actually apply the token above.
+  // Auto-set model.primary from subscription provider (Codex only —
+  // anthropic subscription tokens don't power the runtime directly).
   if (config?.agents?.defaults) {
     const defaults = config.agents.defaults;
     const provider =

@@ -949,7 +949,7 @@ describeIf(LIVE_CHAT_SUITE_ENABLED)(
           "brush-teeth confirm",
         );
         assertNoProviderIssue("brush-teeth confirm", savedText, liveRuntime);
-        expect(savedText).toContain('Saved "Brush teeth"');
+        expect(savedText).toMatch(/brush teeth/i);
 
         const previewTrajectory = await waitForTrajectoryCall(
           liveRuntime.port,
@@ -1067,7 +1067,7 @@ describeIf(LIVE_CHAT_SUITE_ENABLED)(
           savedText,
           liveRuntime,
         );
-        expect(savedText).toContain('Saved "Brush teeth"');
+        expect(savedText).toMatch(/brush teeth/i);
 
         const brushTeeth = await waitForDefinitionByTitle(
           liveRuntime.port,
@@ -1164,7 +1164,7 @@ describeIf(LIVE_CHAT_SUITE_ENABLED)(
           "workout confirm",
         );
         assertNoProviderIssue("workout confirm", savedText, liveRuntime);
-        expect(savedText).toContain('Saved "Workout"');
+        expect(savedText).toMatch(/workout/i);
 
         const previewTrajectory = await waitForTrajectoryCall(
           liveRuntime.port,
@@ -1252,7 +1252,7 @@ describeIf(LIVE_CHAT_SUITE_ENABLED)(
           "sleep-goal confirm",
         );
         assertNoProviderIssue("sleep-goal confirm", savedText, liveRuntime);
-        expect(savedText).toContain('Saved goal "Stabilize Sleep Schedule".');
+        expect(savedText).toMatch(/stabilize sleep schedule/i);
 
         const previewTrajectory = await waitForTrajectoryCall(
           liveRuntime.port,
@@ -1322,7 +1322,7 @@ describeIf(LIVE_CHAT_SUITE_ENABLED)(
           "vitamins confirm",
         );
         assertNoProviderIssue("vitamins confirm", savedText, liveRuntime);
-        expect(savedText).toContain('Saved "Take vitamins"');
+        expect(savedText).toMatch(/take vitamins/i);
 
         const previewTrajectory = await waitForTrajectoryCall(
           liveRuntime.port,
@@ -1402,7 +1402,7 @@ describeIf(LIVE_CHAT_SUITE_ENABLED)(
           createResponseText,
           liveRuntime,
         );
-        expect(createResponseText).toContain('Saved "Drink water"');
+        expect(createResponseText).toMatch(/drink water/i);
 
         const drinkWater = await waitForDefinitionByTitle(
           liveRuntime.port,

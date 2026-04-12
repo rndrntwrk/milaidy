@@ -3,16 +3,19 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const {
   mockHasOwnerAccess,
   mockHasAdminAccess,
+  mockHasRoleAccess,
   mockRequestRestart,
 } = vi.hoisted(() => ({
   mockHasOwnerAccess: vi.fn(),
   mockHasAdminAccess: vi.fn(),
+  mockHasRoleAccess: vi.fn(),
   mockRequestRestart: vi.fn(),
 }));
 
 vi.mock("../security/access.js", () => ({
   hasOwnerAccess: mockHasOwnerAccess,
   hasAdminAccess: mockHasAdminAccess,
+  hasRoleAccess: mockHasRoleAccess,
 }));
 
 vi.mock("../runtime/restart.js", () => ({
@@ -39,6 +42,7 @@ describe("action role gating", () => {
     vi.stubGlobal("fetch", vi.fn());
     mockHasOwnerAccess.mockReset().mockResolvedValue(true);
     mockHasAdminAccess.mockReset().mockResolvedValue(true);
+    mockHasRoleAccess.mockReset().mockResolvedValue(true);
     mockRequestRestart.mockReset();
     clearRegisteredSkillSlugs();
   });
@@ -228,7 +232,7 @@ describe("action role gating", () => {
 
   it("requires admin access for slash skill commands", async () => {
     addRegisteredSkillSlug("github");
-    mockHasAdminAccess.mockResolvedValue(false);
+    mockHasRoleAccess.mockResolvedValue(false);
 
     const valid = await skillCommandAction.validate?.(
       { agentId: "agent-1" } as never,

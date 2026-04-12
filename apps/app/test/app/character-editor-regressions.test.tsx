@@ -81,8 +81,15 @@ vi.mock("@miladyai/ui", () => {
   return {
     ConfirmDialog: DummyComponent,
     ErrorBoundary: DummyComponent,
+    PageLayout: DummyComponent,
+    PagePanel: DummyComponent,
     PromptDialog: DummyComponent,
     SaveFooter: DummyComponent,
+    Sidebar: DummyComponent,
+    SidebarContent: DummyComponent,
+    SidebarHeader: DummyComponent,
+    SidebarPanel: DummyComponent,
+    SidebarScrollRegion: DummyComponent,
     Skeleton: DummyComponent,
     SkeletonCard: DummyComponent,
     SkeletonChat: DummyComponent,
@@ -158,6 +165,17 @@ vi.mock("@miladyai/app-core/components/character/CharacterRoster", () => {
         },
       },
     ],
+  };
+});
+
+vi.mock("@miladyai/app-core/components/pages/KnowledgeView", () => {
+  const ReactMock = require("react");
+  return {
+    KnowledgeView: (props: Record<string, unknown>) =>
+      ReactMock.createElement("div", {
+        "data-testid": "knowledge-view-stub",
+        ...props,
+      }),
   };
 });
 
@@ -302,7 +320,7 @@ describe("CharacterEditor regressions", () => {
 
     const identityBtn = root.find(
       (node: TestRenderer.ReactTestInstance) =>
-        node.type === "button" && node.children.includes("Character"),
+        node.type === "button" && node.children.includes("Personality"),
     );
     await act(async () => {
       identityBtn.props.onClick();

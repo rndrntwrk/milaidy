@@ -313,6 +313,9 @@ describe("TasksEventsPanel", () => {
       ],
       t: (key: string, options?: { defaultValue?: string }) =>
         options?.defaultValue ?? key,
+      favoriteApps: [],
+      setState: vi.fn(),
+      setActionNotice: vi.fn(),
       workbench: {
         todos: [],
         lifeops: overview,
@@ -370,6 +373,9 @@ describe("TasksEventsPanel", () => {
       ptySessions: [],
       t: (key: string, options?: { defaultValue?: string }) =>
         options?.defaultValue ?? key,
+      favoriteApps: [],
+      setState: vi.fn(),
+      setActionNotice: vi.fn(),
       workbench: {
         todos: [],
         lifeops: null,
@@ -443,6 +449,9 @@ describe("TasksEventsPanel", () => {
       ptySessions: [],
       t: (key: string, options?: { defaultValue?: string }) =>
         options?.defaultValue ?? key,
+      favoriteApps: [],
+      setState: vi.fn(),
+      setActionNotice: vi.fn(),
       workbench: {
         todos: [],
         lifeops: {

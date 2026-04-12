@@ -317,6 +317,11 @@ vi.mock("../../src/components/settings/VoiceConfigView", () => ({
   VoiceConfigView: () => React.createElement("div", null, "VoiceConfigView"),
 }));
 
+vi.mock("../../src/components/pages/ConnectorsPageView", () => ({
+  ConnectorsPageView: () =>
+    React.createElement("div", null, "ConnectorsPageView"),
+}));
+
 import { SettingsView } from "../../src/components/pages/SettingsView";
 
 function createUIHarnessState(): AppHarnessState {

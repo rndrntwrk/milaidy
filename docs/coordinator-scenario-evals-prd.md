@@ -67,7 +67,7 @@ A scenario passes when Milady can prove execution with durable state:
 
 The executable catalog lives in:
 
-- [packages/agent/src/evals/coordinator-scenarios.ts](/Users/shawwalters/eliza-workspace/milady/packages/agent/src/evals/coordinator-scenarios.ts)
+- [packages/agent/src/evals/coordinator-scenarios.ts](../packages/agent/src/evals/coordinator-scenarios.ts)
 
 The inventory covers:
 

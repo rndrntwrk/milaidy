@@ -7,11 +7,12 @@ import {
   resolveLifeOpsBrowserReleaseVersion,
 } from "./release-version.mjs";
 
-const extensionRoot = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "..",
-);
+const browserKind = process.argv[2] === "safari" ? "safari" : "chrome";
+const extensionRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const distDir = path.join(extensionRoot, "dist", browserKind);
 const publicDir = path.join(extensionRoot, "public");
+const release = resolveLifeOpsBrowserReleaseVersion();
+const extensionVersion = buildChromeExtensionVersion(release);
 
 export function resolveLifeOpsBrowserIconSources(root = extensionRoot) {
   const appPublicDir = path.resolve(root, "..", "..", "app", "public");
@@ -22,18 +23,14 @@ export function resolveLifeOpsBrowserIconSources(root = extensionRoot) {
   ];
 }
 
-export async function buildLifeOpsBrowserExtension(
-  browserKind = process.argv[2] === "safari" ? "safari" : "chrome",
-) {
-  const distDir = path.join(extensionRoot, "dist", browserKind);
-  const release = resolveLifeOpsBrowserReleaseVersion();
-  const extensionVersion = buildChromeExtensionVersion(release);
+export async function buildLifeOpsBrowserExtension(kind = browserKind) {
+  const outputDir = path.join(extensionRoot, "dist", kind);
 
-  await fs.rm(distDir, { recursive: true, force: true });
-  await fs.mkdir(distDir, { recursive: true });
+  await fs.rm(outputDir, { recursive: true, force: true });
+  await fs.mkdir(outputDir, { recursive: true });
 
   const define = {
-    __LIFEOPS_BROWSER_KIND__: JSON.stringify(browserKind),
+    __LIFEOPS_BROWSER_KIND__: JSON.stringify(kind),
   };
 
   const buildResult = await Bun.build({
@@ -41,8 +38,9 @@ export async function buildLifeOpsBrowserExtension(
       path.join(extensionRoot, "entrypoints", "background.ts"),
       path.join(extensionRoot, "entrypoints", "content.ts"),
       path.join(extensionRoot, "entrypoints", "popup.ts"),
+      path.join(extensionRoot, "entrypoints", "blocked.ts"),
     ],
-    outdir: distDir,
+    outdir: outputDir,
     target: "browser",
     format: "iife",
     sourcemap: "external",
@@ -58,15 +56,19 @@ export async function buildLifeOpsBrowserExtension(
 
   await fs.copyFile(
     path.join(publicDir, "popup.html"),
-    path.join(distDir, "popup.html"),
+    path.join(outputDir, "popup.html"),
   );
   await fs.copyFile(
     path.join(publicDir, "popup.css"),
-    path.join(distDir, "popup.css"),
+    path.join(outputDir, "popup.css"),
+  );
+  await fs.copyFile(
+    path.join(publicDir, "blocked.html"),
+    path.join(outputDir, "blocked.html"),
   );
 
   for (const [fileName, sourcePath] of resolveLifeOpsBrowserIconSources()) {
-    await fs.copyFile(sourcePath, path.join(distDir, fileName));
+    await fs.copyFile(sourcePath, path.join(outputDir, fileName));
   }
 
   const manifest = {
@@ -76,7 +78,15 @@ export async function buildLifeOpsBrowserExtension(
     version_name: release.raw,
     description:
       "LifeOps personal-browser relay for syncing the current page and executing owner-approved browser sessions.",
-    permissions: ["tabs", "storage", "scripting", "alarms", "activeTab"],
+    permissions: [
+      "tabs",
+      "storage",
+      "scripting",
+      "alarms",
+      "activeTab",
+      "declarativeNetRequest",
+      "declarativeNetRequestWithHostAccess",
+    ],
     host_permissions: ["<all_urls>"],
     background: {
       service_worker: "background.js",
@@ -98,7 +108,7 @@ export async function buildLifeOpsBrowserExtension(
       128: "icon128.png",
     },
     browser_specific_settings:
-      browserKind === "safari"
+      kind === "safari"
         ? {
             safari: {
               strict_min_version: "17.0",
@@ -108,12 +118,12 @@ export async function buildLifeOpsBrowserExtension(
   };
 
   await fs.writeFile(
-    path.join(distDir, "manifest.json"),
+    path.join(outputDir, "manifest.json"),
     `${JSON.stringify(manifest, null, 2)}\n`,
   );
 
   console.log(
-    `Built LifeOps Browser extension ${release.raw} (${extensionVersion}) to ${distDir}`,
+    `Built LifeOps Browser extension ${release.raw} (${extensionVersion}) to ${outputDir}`,
   );
 }
 

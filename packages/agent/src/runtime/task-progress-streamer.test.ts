@@ -63,7 +63,13 @@ describe("installTaskProgressStreamer", () => {
   });
 
   async function flushFinalReportDelay() {
-    await vi.advanceTimersByTimeAsync(10_000);
+    vi.advanceTimersByTime(10_000);
+    // The setTimeout callback chains multiple async operations (getTaskThread,
+    // getRoom, readLatestAssistantFromWorkdir, sendMessageToTarget) so we need
+    // enough microtask ticks for all of them to resolve.
+    for (let i = 0; i < 10; i++) {
+      await Promise.resolve();
+    }
   }
 
   it("routes delayed final reports back through the originating room", async () => {

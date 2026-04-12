@@ -736,4 +736,57 @@ describe("AppContext autonomy replay", () => {
       renderer.unmount();
     });
   });
+
+  it("pushes native notifications for LifeOps reminder assistant events", async () => {
+    let renderer!: TestRenderer.ReactTestRenderer;
+    await act(async () => {
+      renderer = TestRenderer.create(
+        React.createElement(
+          AppProvider,
+          null,
+          React.createElement(Probe, {
+            onReady: () => undefined,
+          }),
+        ),
+      );
+    });
+
+    await flush();
+    await flush();
+    await waitFor(() => {
+      expect(wsHandlers.has("agent_event")).toBe(true);
+    });
+
+    await act(async () => {
+      emitWs("agent_event", {
+        type: "agent_event",
+        eventId: "lifeops-reminder-1",
+        ts: Date.now(),
+        runId: "run-reminder",
+        seq: 1,
+        stream: "assistant",
+        payload: {
+          source: "lifeops-reminder",
+          text: "Reminder: Alarm. Due 4/12/2026, 7:00:00 AM.",
+        },
+      });
+    });
+
+    await waitFor(() => {
+      expect(invokeDesktopBridgeRequestMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          rpcMethod: "desktopShowNotification",
+          ipcChannel: "desktop:showNotification",
+          params: expect.objectContaining({
+            title: "Reminder",
+            body: "Reminder: Alarm. Due 4/12/2026, 7:00:00 AM.",
+          }),
+        }),
+      );
+    });
+
+    await act(async () => {
+      renderer.unmount();
+    });
+  });
 });

@@ -72,7 +72,7 @@ function summarizeGmailTriage(summary: LifeOpsGmailTriageSummary): string[] {
 export const lifeOpsProvider: Provider = {
   name: "lifeops",
   description:
-    "Owner, explicitly granted users, and the agent only. Provides the current LifeOps overview, upcoming calendar event, and email triage summary. Use LIFE for habits, reminders, and goals. Use CALENDAR_ACTION for Google Calendar reads/search/create-event tasks. Use GMAIL_ACTION for Gmail triage, search, draft, and send flows. Available in private owner or granted conversations, including Discord.",
+    "Owner, explicitly granted users, and the agent only. Provides the current LifeOps overview, upcoming calendar event, and email triage summary. Use LIFE for habits, reminders, alarms, and goals. Use CALENDAR_ACTION for Google Calendar reads/search/create-event tasks. Use GMAIL_ACTION for Gmail triage, search, draft, and send flows. Available in private owner or granted conversations, including Discord.",
   dynamic: true,
   position: 12,
   async get(
@@ -127,7 +127,7 @@ export const lifeOpsProvider: Provider = {
     return {
       text: [
         "## Life Ops",
-        "Use LIFE when the user wants to create, manage, complete, or query tasks, habits, goals, reminders, escalation, or routines.",
+        "Use LIFE when the user wants to create, manage, complete, or query tasks, habits, goals, reminders, alarms, escalation, or routines.",
         "Use CALENDAR_ACTION for calendar questions, event search, next-event context, and creating Google Calendar events.",
         "Use GMAIL_ACTION for inbox triage, emails needing a reply, Gmail search, reply drafts, and confirmed send flows.",
         "Owner life-ops are private to the owner, explicitly granted users, and the agent. Agent ops are internal and should stay separated unless explicitly requested.",

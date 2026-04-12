@@ -167,6 +167,85 @@ function isExecutableFallbackAction(action: { name: string }): boolean {
   return !NON_EXECUTABLE_FALLBACK_ACTIONS.has(action.name);
 }
 
+function normalizeActionName(value: unknown): string {
+  return typeof value === "string" ? value.trim().toUpperCase() : "";
+}
+
+function buildRuntimeActionNameLookup(runtime: AgentRuntime): Map<string, string> {
+  const lookup = new Map<string, string>();
+  const runtimeActions = Array.isArray(
+    (runtime as { actions?: unknown[] }).actions,
+  )
+    ? ((runtime as { actions: unknown[] }).actions as Array<{
+        name?: unknown;
+        similes?: unknown;
+      }>)
+    : [];
+
+  for (const action of runtimeActions) {
+    const canonicalName = normalizeActionName(action?.name);
+    if (!canonicalName) {
+      continue;
+    }
+    lookup.set(canonicalName, canonicalName);
+    if (!Array.isArray(action?.similes)) {
+      continue;
+    }
+    for (const alias of action.similes) {
+      const normalizedAlias = normalizeActionName(alias);
+      if (normalizedAlias) {
+        lookup.set(normalizedAlias, canonicalName);
+      }
+    }
+  }
+
+  return lookup;
+}
+
+function listExecutedRuntimeActions(
+  runtime: AgentRuntime,
+  messageId: UUID | undefined,
+): Set<string> {
+  if (!messageId) {
+    return new Set();
+  }
+
+  const getActionResults = (
+    runtime as {
+      getActionResults?: (id: UUID) => unknown[];
+    }
+  ).getActionResults;
+  if (typeof getActionResults !== "function") {
+    return new Set();
+  }
+
+  try {
+    return new Set(
+      getActionResults(messageId)
+        .map((result) => {
+          if (typeof result === "string") {
+            return normalizeActionName(result);
+          }
+          if (!result || typeof result !== "object") {
+            return "";
+          }
+          const record = result as Record<string, unknown>;
+          if (typeof record.actionName === "string") {
+            return normalizeActionName(record.actionName);
+          }
+          const data =
+            record.data && typeof record.data === "object"
+              ? (record.data as Record<string, unknown>)
+              : null;
+          return normalizeActionName(data?.actionName);
+        })
+        .filter((name) => name.length > 0),
+    );
+  } catch {
+    return new Set();
+  }
+}
+
 function hasWebsiteBlockingPermissionIntent(text: string): boolean {
   return (
     WEBSITE_BLOCK_PERMISSION_RE.test(text) &&
@@ -1151,6 +1230,11 @@ export async function generateChatResponse(
               rawActionsPayload,
               modelText,
             );
+            const actionNameLookup = buildRuntimeActionNameLookup(runtime);
+            const executedRuntimeActions = listExecutedRuntimeActions(
+              runtime,
+              typeof message.id === "string" ? message.id : undefined,
+            );
             const userText = String(
               extractCompatTextContent(message.content) ?? "",
             );
@@ -1287,7 +1371,15 @@ export async function generateChatResponse(
             // Only run fallback execution when the core did NOT dispatch actions itself.
             const coreHandledActions = resultRecord.mode === "actions";
             const executableFallbackActions = fallbackActionsToRun.filter(
-              isExecutableFallbackAction,
+              (action) => {
+                if (!isExecutableFallbackAction(action)) {
+                  return false;
+                }
+                const canonicalName =
+                  actionNameLookup.get(normalizeActionName(action.name)) ??
+                  normalizeActionName(action.name);
+                return !executedRuntimeActions.has(canonicalName);
+              },
             );
             if (
               actionCallbacksSeen === 0 &&

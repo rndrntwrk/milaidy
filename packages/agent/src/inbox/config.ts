@@ -9,15 +9,37 @@ export function loadInboxTriageConfig(): InboxTriageConfig {
   try {
     const cfg = loadElizaConfig();
     const raw = cfg.agents?.defaults?.inboxTriage as
-      | InboxTriageConfig
+      | Partial<InboxTriageConfig>
       | undefined;
     if (raw && typeof raw === "object") {
-      return { ...DEFAULT_CONFIG, ...raw };
+      return deepMergeConfig(DEFAULT_CONFIG, raw);
     }
   } catch {
     // Config loading failed; use defaults
   }
   return { ...DEFAULT_CONFIG };
+}
+
+/**
+ * Deep-merge user overrides onto defaults so nested objects (autoReply,
+ * triageRules) keep their default fields when the user only sets a subset.
+ */
+function deepMergeConfig(
+  defaults: InboxTriageConfig,
+  overrides: Partial<InboxTriageConfig>,
+): InboxTriageConfig {
+  return {
+    ...defaults,
+    ...overrides,
+    autoReply: {
+      ...defaults.autoReply,
+      ...(overrides.autoReply ?? {}),
+    },
+    triageRules: {
+      ...defaults.triageRules,
+      ...(overrides.triageRules ?? {}),
+    },
+  };
 }
 
 const DEFAULT_CONFIG: InboxTriageConfig = {

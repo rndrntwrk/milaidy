@@ -476,6 +476,7 @@ describe("LifeOpsWorkspaceView", () => {
       description: "Retro notes",
       location: "Room 2",
       startAt: expectedStartAt,
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
       durationMinutes: 30,
     });
   });

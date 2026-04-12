@@ -32,6 +32,27 @@ const NUDGE_LEAD_MINUTES = 30;
 const NUDGE_HORIZON_MINUTES = 45;
 /** If user hasn't been active in this many ms, skip GM entirely. */
 const INACTIVITY_SKIP_MS = 48 * 60 * 60 * 1000; // 48 hours
+/** Days since last review before a goal is eligible for a check-in. */
+const GOAL_CHECK_IN_COOLDOWN_DAYS = 3;
+/** Very long timed events are usually itinerary blocks, not actionable check-ins. */
+const LONG_CALENDAR_EVENT_MINUTES = 8 * 60;
+const ACTIONABLE_CALENDAR_EVENT_RE =
+  /\b(meeting|meet(?:ing)?\s+with|call|phone call|interview|appointment|dentist|doctor|therapy|consult(?:ation)?|checkup|check-up|standup|sync|1:1|one-on-one|review|session|lesson|coffee|lunch|dinner|brunch|drinks|hangout|meetup|date)\b/i;
+const PASSIVE_CALENDAR_EVENT_RE =
+  /\b(hotel|inn|motel|airbnb|lodging|stay|accommodation|reservation|booking|check[- ]?in|check[- ]?out|checkout|travel|trip|itinerary|flight|train|bus|drive|arrival|departure|depart|return)\b/i;
+
+// ── Goal check-in contract ───────────────────────────
+
+export interface GoalSlim {
+  id: string;
+  title: string;
+  status: string;
+  linkedDefinitionCount: number;
+  /** 0-1 completion rate over the last 7 days. */
+  recentCompletionRate: number;
+  /** ISO datetime of the last goal review, or null if never reviewed. */
+  lastReviewedAt: string | null;
+}
 
 // ── Occurrence / Calendar event contracts ─────────────
 
@@ -53,6 +74,10 @@ export interface CalendarEventSlim {
   startAt: string; // ISO datetime
   endAt: string;
   isAllDay: boolean;
+  description?: string;
+  location?: string;
+  attendeeCount?: number;
+  conferenceLink?: string | null;
 }
 
 // ── GM planning ───────────────────────────────────────
@@ -118,7 +143,7 @@ export function planGm(
   }
 
   // Today's calendar events
-  const todayEvents = getTodayNonAllDayEvents(
+  const todayEvents = getTodayActionableEvents(
     calendarEvents,
     timezone,
     currentTime,
@@ -242,7 +267,7 @@ export function planNudges(
 
   // Nudge for upcoming calendar events (if not already covered by an occurrence nudge)
   for (const event of calendarEvents) {
-    if (event.isAllDay) continue;
+    if (!shouldNudgeCalendarEvent(event)) continue;
     if (nudgedEventIds.has(event.id)) continue;
 
     const startMs = new Date(event.startAt).getTime();
@@ -330,6 +355,83 @@ export function planDowntimeNudges(
       status: "pending",
     },
   ];
+}
+
+// ── Goal check-in planning ───────────────────────────
+
+export function planGoalCheckIns(
+  profile: ActivityProfile,
+  goals: GoalSlim[],
+  firedToday: FiredActionsLog | null,
+  _timezone: string,
+  now?: Date,
+): ProactiveAction[] {
+  const currentTime = now ?? new Date();
+  if (profile.isCurrentlySleeping) return [];
+
+  const checkedGoalIds = new Set(firedToday?.checkedGoalIds ?? []);
+  const cooldownMs = GOAL_CHECK_IN_COOLDOWN_DAYS * 24 * 60 * 60 * 1000;
+
+  const candidates: ProactiveAction[] = [];
+
+  for (const goal of goals) {
+    if (goal.status !== "active") continue;
+    if (checkedGoalIds.has(goal.id)) continue;
+
+    // Only check in on goals that haven't been reviewed recently
+    if (goal.lastReviewedAt) {
+      const reviewedMs = new Date(goal.lastReviewedAt).getTime();
+      if (
+        Number.isFinite(reviewedMs) &&
+        currentTime.getTime() - reviewedMs < cooldownMs
+      ) {
+        continue;
+      }
+    }
+
+    const isStruggling = goal.recentCompletionRate < 0.5;
+    const hasNoTasks = goal.linkedDefinitionCount === 0;
+
+    let contextSummary: string;
+    let messageText: string;
+
+    if (hasNoTasks) {
+      contextSummary = `Goal "${goal.title}" has no supporting tasks`;
+      messageText = `Your goal "${goal.title}" doesn't have any linked tasks yet. Want me to help create a plan?`;
+    } else if (isStruggling) {
+      const pct = Math.round(goal.recentCompletionRate * 100);
+      contextSummary = `Goal "${goal.title}" completion at ${pct}% this week`;
+      messageText = `Checking in on "${goal.title}" — your linked tasks are at ${pct}% completion this week. Want to talk about what's getting in the way?`;
+    } else {
+      const pct = Math.round(goal.recentCompletionRate * 100);
+      contextSummary = `Goal "${goal.title}" on track at ${pct}%`;
+      messageText = `"${goal.title}" is going well — ${pct}% completion this week. Keep it up.`;
+    }
+
+    candidates.push({
+      kind: "goal_check_in",
+      scheduledFor: currentTime.getTime(),
+      targetPlatform: selectTargetPlatform(profile, true),
+      contextSummary,
+      messageText,
+      goalId: goal.id,
+      status: "pending",
+    });
+  }
+
+  // Only return the most important goal check-in (don't flood).
+  // Priority: no tasks (3) > struggling (2) > on track (1).
+  candidates.sort((a, b) => {
+    const scoreFor = (action: ProactiveAction): number =>
+      action.contextSummary.includes("no supporting tasks")
+        ? 3
+        : action.contextSummary.includes("completion at")
+          ? 2
+          : 1;
+    return scoreFor(b) - scoreFor(a);
+  });
+
+  return candidates.slice(0, 1);
 }
 
 // ── Platform selection ────────────────────────────────
@@ -458,7 +560,7 @@ function isBusyDay(
     return true;
   }
 
-  const todayEvents = getTodayNonAllDayEvents(calendarEvents, timezone, now);
+  const todayEvents = getTodayActionableEvents(calendarEvents, timezone, now);
   if (todayEvents.length >= 4) {
     return true;
   }
@@ -515,6 +617,66 @@ function getTodayNonAllDayEvents(
     );
 }
 
+function getTodayActionableEvents(
+  events: CalendarEventSlim[],
+  timezone: string,
+  now: Date,
+): CalendarEventSlim[] {
+  return getTodayNonAllDayEvents(events, timezone, now).filter(
+    shouldNudgeCalendarEvent,
+  );
+}
+
+function calendarEventText(event: CalendarEventSlim): string {
+  return [event.summary, event.description ?? "", event.location ?? ""]
+    .join(" ")
+    .trim();
+}
+
+function calendarEventDurationMinutes(event: CalendarEventSlim): number {
+  const startMs = Date.parse(event.startAt);
+  const endMs = Date.parse(event.endAt);
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) {
+    return 0;
+  }
+  return Math.round((endMs - startMs) / 60_000);
+}
+
+function calendarEventPriorityScore(event: CalendarEventSlim): number {
+  if (event.isAllDay) {
+    return 0;
+  }
+
+  const text = calendarEventText(event);
+  const durationMinutes = calendarEventDurationMinutes(event);
+  let score = durationMinutes > 0 ? 2 : 0;
+
+  if (ACTIONABLE_CALENDAR_EVENT_RE.test(text)) {
+    score += 5;
+  }
+  if ((event.attendeeCount ?? 0) > 0) {
+    score += 3;
+  }
+  if (event.conferenceLink) {
+    score += 3;
+  }
+  if (/\bwith\s+\S+/i.test(text)) {
+    score += 2;
+  }
+  if (PASSIVE_CALENDAR_EVENT_RE.test(text)) {
+    score -= 8;
+  }
+  if (durationMinutes >= LONG_CALENDAR_EVENT_MINUTES) {
+    score -= 4;
+  }
+
+  return score;
+}
+
+function shouldNudgeCalendarEvent(event: CalendarEventSlim): boolean {
+  return calendarEventPriorityScore(event) > 0;
+}
+
 function findNearbyCalendarEvent(
   events: CalendarEventSlim[],
   referenceMs: number,
@@ -522,7 +684,7 @@ function findNearbyCalendarEvent(
   now: Date,
 ): CalendarEventSlim | null {
   const windowMs = 60 * 60 * 1000; // 1 hour after
-  const todayEvents = getTodayNonAllDayEvents(events, timezone, now);
+  const todayEvents = getTodayActionableEvents(events, timezone, now);
   for (const event of todayEvents) {
     const startMs = new Date(event.startAt).getTime();
     if (startMs > referenceMs && startMs - referenceMs <= windowMs) {

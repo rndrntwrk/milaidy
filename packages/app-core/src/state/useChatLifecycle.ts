@@ -505,6 +505,36 @@ export function useChatLifecycle(deps: UseChatLifecycleDeps) {
     [showDesktopNotification],
   );
 
+  const notifyAssistantEvent = useCallback(
+    (event: StreamEventEnvelope) => {
+      if (event.type !== "agent_event" || event.stream !== "assistant") {
+        return;
+      }
+      const payload =
+        event.payload && typeof event.payload === "object"
+          ? (event.payload as Record<string, unknown>)
+          : null;
+      if (!payload) {
+        return;
+      }
+
+      const source =
+        typeof payload.source === "string" ? payload.source.trim() : "";
+      const text = typeof payload.text === "string" ? payload.text.trim() : "";
+      if (!text || source !== "lifeops-reminder") {
+        return;
+      }
+
+      void showDesktopNotification({
+        title: "Reminder",
+        body: text,
+        urgency: "normal",
+        silent: false,
+      });
+    },
+    [showDesktopNotification],
+  );
+
   useEffect(() => {
     if (!pendingRestart) {
       restartNotificationSignatureRef.current = null;
@@ -899,6 +929,7 @@ export function useChatLifecycle(deps: UseChatLifecycleDeps) {
     restartBackend,
     relaunchDesktop,
     showDesktopNotification,
+    notifyAssistantEvent,
     notifyHeartbeatEvent,
     completeResetLocalStateAfterServerWipe,
     handleResetAppliedFromMain,

@@ -3,7 +3,7 @@ import type {
   LifeOpsBrowserSession,
   LifeOpsBrowserSettings,
 } from "../../../../packages/shared/src/contracts/lifeops";
-import { LifeOpsBrowserRelayClient } from "../src/api-client";
+import { LifeOpsBrowserRelayClient, RelayApiError } from "../src/api-client";
 import type {
   BackgroundState,
   CompanionConfig,
@@ -35,10 +35,13 @@ import {
   addTabsRemovedListener,
   addTabsUpdatedListener,
   addWindowFocusListener,
+  clearAlarm,
   createAlarm,
   createTab,
   focusWindow,
   getAllWindows,
+  getDynamicRules,
+  getExtensionUrl,
   getGrantedOrigins,
   getManifestVersion,
   hasAllUrlHostPermission,
@@ -47,6 +50,7 @@ import {
   queryTabs,
   reloadTab,
   sendTabMessage,
+  updateDynamicRules,
   updateTab,
 } from "../src/webextension";
 
@@ -475,6 +479,65 @@ async function executeSession(
   }
 }
 
+/**
+ * Max number of declarativeNetRequest dynamic rules to use for blocking.
+ * Chrome allows up to 5000 dynamic rules; we use a safe subset starting
+ * at ID offset 10001 to avoid collisions with other rule uses.
+ */
+const BLOCKING_RULE_ID_OFFSET = 10_001;
+
+async function syncBlockingRules(apiBase: string): Promise<void> {
+  try {
+    const resp = await fetch(`${apiBase}/api/website-blocker`);
+    if (!resp.ok) {
+      return;
+    }
+    const data = (await resp.json()) as {
+      active?: boolean;
+      websites?: string[];
+    };
+
+    const existingRules = await getDynamicRules();
+    const blockingRuleIds = existingRules
+      .filter((rule) => rule.id >= BLOCKING_RULE_ID_OFFSET)
+      .map((rule) => rule.id);
+
+    if (
+      !data.active ||
+      !Array.isArray(data.websites) ||
+      data.websites.length === 0
+    ) {
+      if (blockingRuleIds.length > 0) {
+        await updateDynamicRules({ removeRuleIds: blockingRuleIds });
+      }
+      return;
+    }
+
+    const extensionBlockedPage = getExtensionUrl("blocked.html");
+    const rules = data.websites.map((host, index) => ({
+      id: BLOCKING_RULE_ID_OFFSET + index,
+      priority: 1,
+      action: {
+        type: "redirect" as const,
+        redirect: {
+          url: `${extensionBlockedPage}?host=${encodeURIComponent(host)}&url=${encodeURIComponent(`https://${host}`)}&api=${encodeURIComponent(apiBase)}`,
+        },
+      },
+      condition: {
+        urlFilter: `||${host}`,
+        resourceTypes: ["main_frame" as const],
+      },
+    }));
+
+    await updateDynamicRules({
+      removeRuleIds: blockingRuleIds,
+      addRules: rules,
+    });
+  } catch (err) {
+    console.warn("[lifeops-browser] Failed to sync blocking rules:", err);
+  }
+}
+
 async function syncNow(reason: string): Promise<BackgroundState> {
   const config = await readConfig();
   if (!config) {
@@ -512,10 +575,21 @@ async function syncNow(reason: string): Promise<BackgroundState> {
     if (response.session) {
       void executeSession(client, response.session);
     }
+    void syncBlockingRules(config.apiBaseUrl);
   } catch (error) {
+    const isPairingInvalid =
+      error instanceof RelayApiError && error.status === 401;
+    if (isPairingInvalid) {
+      clearAlarm(SYNC_ALARM);
+      syncScheduled = false;
+      await clearCompanionConfig();
+    }
     await setState({
       syncing: false,
-      lastError: `${reason}: ${error instanceof Error ? error.message : String(error)}`,
+      ...(isPairingInvalid && { config: null, settingsSummary: null }),
+      lastError: isPairingInvalid
+        ? "Pairing is invalid. Please re-pair the browser companion."
+        : `${reason}: ${error instanceof Error ? error.message : String(error)}`,
     });
   } finally {
     syncInFlight = false;

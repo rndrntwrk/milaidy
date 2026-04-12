@@ -59,9 +59,7 @@ import { createUserNameProvider } from "../providers/user-name.js";
 import { resolveDefaultAgentWorkspaceDir } from "../providers/workspace.js";
 import { createWorkspaceProvider } from "../providers/workspace-provider.js";
 import { MiladyCharacterPersistenceService } from "../services/character-persistence.js";
-import { inboxTriageAction } from "../actions/inbox-triage.js";
-import { inboxDigestAction } from "../actions/inbox-digest.js";
-import { inboxRespondAction } from "../actions/inbox-respond.js";
+import { inboxAction } from "../actions/inbox.js";
 import { inboxTriageProvider } from "../providers/inbox-triage.js";
 import { createTriggerTaskAction } from "../triggers/action.js";
 import { registerTriggerTaskWorker } from "../triggers/runtime.js";
@@ -120,16 +118,48 @@ export function createElizaPlugin(config?: ElizaPluginConfig): Plugin {
       registerLifeOpsTaskWorker(runtime);
       registerProactiveTaskWorker(runtime);
       setCustomActionsRuntime(runtime);
-      void ensureLifeOpsSchedulerTask(runtime).catch((error) => {
-        runtime.logger?.warn?.(
-          `[lifeops] Failed to ensure scheduler task: ${error instanceof Error ? error.message : String(error)}`,
-        );
-      });
-      void ensureProactiveAgentTask(runtime).catch((error) => {
-        runtime.logger?.warn?.(
-          `[proactive] Failed to ensure proactive task: ${error instanceof Error ? error.message : String(error)}`,
-        );
-      });
+      void (async () => {
+        const DELAYS = [2_000, 5_000, 10_000];
+        for (let attempt = 0; attempt <= DELAYS.length; attempt++) {
+          try {
+            await ensureLifeOpsSchedulerTask(runtime);
+            return;
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            if (attempt < DELAYS.length) {
+              runtime.logger?.warn?.(
+                `[lifeops] Scheduler task init failed (attempt ${attempt + 1}/${DELAYS.length + 1}), retrying in ${DELAYS[attempt]}ms: ${msg}`,
+              );
+              await new Promise((r) => setTimeout(r, DELAYS[attempt]));
+            } else {
+              runtime.logger?.error?.(
+                `[lifeops] Scheduler task init failed after ${DELAYS.length + 1} attempts — LifeOps scheduler is NOT running: ${msg}`,
+              );
+            }
+          }
+        }
+      })();
+      void (async () => {
+        const DELAYS = [2_000, 5_000, 10_000];
+        for (let attempt = 0; attempt <= DELAYS.length; attempt++) {
+          try {
+            await ensureProactiveAgentTask(runtime);
+            return;
+          } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            if (attempt < DELAYS.length) {
+              runtime.logger?.warn?.(
+                `[proactive] Task init failed (attempt ${attempt + 1}/${DELAYS.length + 1}), retrying in ${DELAYS[attempt]}ms: ${msg}`,
+              );
+              await new Promise((r) => setTimeout(r, DELAYS[attempt]));
+            } else {
+              runtime.logger?.error?.(
+                `[proactive] Task init failed after ${DELAYS.length + 1} attempts — proactive agent is NOT running: ${msg}`,
+              );
+            }
+          }
+        }
+      })();
 
       // Honour DISABLE_EMOTES: remove PLAY_EMOTE so it never appears in prompts.
       if (runtime.character?.settings?.DISABLE_EMOTES) {
@@ -253,9 +283,7 @@ export function createElizaPlugin(config?: ElizaPluginConfig): Plugin {
       searchConversationsAction,
       searchEntityAction,
       readEntityAction,
-      inboxTriageAction,
-      inboxDigestAction,
-      inboxRespondAction,
+      inboxAction,
     ],
   };
 

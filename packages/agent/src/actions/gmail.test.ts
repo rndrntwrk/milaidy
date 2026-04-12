@@ -11,6 +11,7 @@ const {
   mockCreateGmailReplyDraft,
   mockCreateGmailBatchReplyDrafts,
   mockSendGmailReply,
+  mockSendGmailMessage,
   mockSendGmailReplies,
   mockUseModel,
   mockLoggerWarn,
@@ -25,6 +26,7 @@ const {
   mockCreateGmailReplyDraft: vi.fn(),
   mockCreateGmailBatchReplyDrafts: vi.fn(),
   mockSendGmailReply: vi.fn(),
+  mockSendGmailMessage: vi.fn(),
   mockSendGmailReplies: vi.fn(),
   mockUseModel: vi.fn(),
   mockLoggerWarn: vi.fn(),
@@ -45,6 +47,7 @@ vi.mock("../lifeops/service.js", () => ({
     createGmailReplyDraft = mockCreateGmailReplyDraft;
     createGmailBatchReplyDrafts = mockCreateGmailBatchReplyDrafts;
     sendGmailReply = mockSendGmailReply;
+    sendGmailMessage = mockSendGmailMessage;
     sendGmailReplies = mockSendGmailReplies;
   },
   LifeOpsServiceError: class extends Error {
@@ -186,6 +189,58 @@ describe("gmailAction", () => {
     );
     expect(result?.success).toBe(true);
     expect(result?.text).toContain("Checking in");
+  });
+
+  it("replies instead of acting when the gmail planner marks a vague request as reply-only", async () => {
+    mockUseModel.mockResolvedValue(
+      JSON.stringify({
+        subaction: null,
+        shouldAct: false,
+        response:
+          "What do you want to do in Gmail — check inbox, search, read, or draft a reply?",
+        queries: [],
+      }),
+    );
+
+    const result = await invoke("can you help me with my email?");
+
+    expect(mockGetGmailTriage).not.toHaveBeenCalled();
+    expect(mockGetGmailNeedsResponse).not.toHaveBeenCalled();
+    expect(mockGetGmailSearch).not.toHaveBeenCalled();
+    expect(mockReadGmailMessage).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      success: true,
+      text: "What do you want to do in Gmail — check inbox, search, read, or draft a reply?",
+      data: expect.objectContaining({
+        noop: true,
+      }),
+    });
+  });
+
+  it("still executes an explicit gmail subaction even if the planner says reply-only", async () => {
+    mockUseModel.mockResolvedValue(
+      JSON.stringify({
+        subaction: null,
+        shouldAct: false,
+        response: "What do you want to do in Gmail?",
+        queries: [],
+      }),
+    );
+    mockGetGmailTriage.mockResolvedValue({
+      messages: [],
+      source: "cache",
+      syncedAt: "2026-04-09T16:00:00.000Z",
+      summary: {
+        unreadCount: 0,
+        importantNewCount: 0,
+        likelyReplyNeededCount: 0,
+      },
+    });
+
+    const result = await invoke("check my inbox", { subaction: "triage" });
+
+    expect(mockGetGmailTriage).toHaveBeenCalledTimes(1);
+    expect(result?.success).toBe(true);
   });
 
   it("uses message text when intent param is omitted", async () => {
@@ -373,7 +428,8 @@ describe("gmailAction", () => {
           triageScore: 66,
           triageReason: "search hit",
           labels: ["INBOX", "UNREAD"],
-          htmlLink: "https://mail.google.com/mail/u/0/#all/thread-llm-plan-suran",
+          htmlLink:
+            "https://mail.google.com/mail/u/0/#all/thread-llm-plan-suran",
           metadata: {},
           syncedAt: "2026-04-08T16:00:00.000Z",
           updatedAt: "2026-04-08T16:00:00.000Z",
@@ -724,7 +780,7 @@ describe("gmailAction", () => {
       },
     });
 
-    expect(mockUseModel).toHaveBeenCalledTimes(1);
+    expect(mockUseModel).toHaveBeenCalledTimes(2);
     expect(mockGetGmailSearch).toHaveBeenCalledWith(
       expect.any(URL),
       expect.objectContaining({ query: "from:suran newer_than:21d" }),
@@ -898,6 +954,59 @@ describe("gmailAction", () => {
     );
     expect(result).toMatchObject({ success: true });
     expect(result?.text).toContain("reply sent");
+  });
+
+  it("sends a new Gmail message from unquoted natural-language compose text", async () => {
+    mockUseModel.mockResolvedValue(
+      JSON.stringify({
+        subaction: "send_message",
+        shouldAct: true,
+        response: null,
+        queries: [],
+        to: ["leebin605@gmail.com"],
+        subject: "hello BAO",
+        bodyText: "milady,we ship we win.",
+      }),
+    );
+    mockSendGmailMessage.mockResolvedValue({ ok: true });
+
+    const result = await invoke(
+      "send an email to leebin605@gmail.com the subject should say hello BAO and the body should say milady,we ship we win.",
+    );
+
+    expect(mockSendGmailMessage).toHaveBeenCalledWith(
+      expect.any(URL),
+      expect.objectContaining({
+        to: ["leebin605@gmail.com"],
+        subject: "hello BAO",
+        bodyText: "milady,we ship we win.",
+        confirmSend: true,
+      }),
+    );
+    expect(result).toMatchObject({ success: true });
+    expect(result?.text).toContain("sent to leebin605@gmail.com");
+  });
+
+  it("asks for missing compose fields without quote-specific instructions", async () => {
+    mockUseModel.mockResolvedValue(
+      JSON.stringify({
+        subaction: "send_message",
+        shouldAct: true,
+        response: null,
+        queries: [],
+        to: ["leebin605@gmail.com"],
+        subject: "hello BAO",
+      }),
+    );
+
+    const result = await invoke(
+      "send an email to leebin605@gmail.com the subject should say hello BAO",
+    );
+
+    expect(mockSendGmailMessage).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ success: false });
+    expect(result?.text).toContain("body text");
+    expect(result?.text).not.toContain('with subject "X" and body "Y"');
   });
 
   it("sends confirmed batch replies", async () => {
@@ -1336,14 +1445,18 @@ describe("gmailAction", () => {
       }),
     );
 
-    const result = await invokeWith("what about this month?", "what about this month?", {
-      state: {
-        values: {
-          recentMessages:
-            "user: find emails from suran\nassistant: Found 3 emails for sender suran.",
+    const result = await invokeWith(
+      "what about this month?",
+      "what about this month?",
+      {
+        state: {
+          values: {
+            recentMessages:
+              "user: find emails from suran\nassistant: Found 3 emails for sender suran.",
+          },
         },
       },
-    });
+    );
 
     expect(mockGetGmailSearch).toHaveBeenCalled();
     const searchCall = mockGetGmailSearch.mock.calls[0];
@@ -1398,7 +1511,7 @@ describe("gmailAction", () => {
     );
 
     const noiseIntent =
-      'title?:string - Name or ID of an existing item (e.g., when renaming).; details?:object - Structured data when needed. May include: cadence (schedule object), kind (task/habit/routine), description, priority, progressionRule, reminderPlan, confirmed (boolean when the user explicitly approves a previewed create)';
+      "title?:string - Name or ID of an existing item (e.g., when renaming).; details?:object - Structured data when needed. May include: cadence (schedule object), kind (task/habit/routine), description, priority, progressionRule, reminderPlan, confirmed (boolean when the user explicitly approves a previewed create)";
 
     const result = await invokeWith("yeah try it", noiseIntent, {
       state: {
@@ -1439,7 +1552,7 @@ describe("gmailAction", () => {
       },
     );
 
-    expect(mockUseModel).toHaveBeenCalledTimes(1);
+    expect(mockUseModel).toHaveBeenCalledTimes(2);
     expect(mockGetGmailSearch).toHaveBeenCalledWith(
       expect.any(URL),
       expect.objectContaining({
@@ -1461,8 +1574,7 @@ describe("gmailAction", () => {
       }),
     );
 
-    const request =
-      "puedes buscar en mi correo y decirme si suran me escribió";
+    const request = "puedes buscar en mi correo y decirme si suran me escribió";
     const result = await invokeWith(request, request, {
       subaction: "search",
       query: request,

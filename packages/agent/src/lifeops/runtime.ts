@@ -5,7 +5,10 @@ import { readTwilioCredentialsFromEnv } from "./twilio.js";
 
 export const LIFEOPS_TASK_NAME = "LIFEOPS_SCHEDULER" as const;
 export const LIFEOPS_TASK_TAGS = ["queue", "repeat", "lifeops"] as const;
+/** Base interval for the LifeOps scheduler polling loop. */
 export const LIFEOPS_TASK_INTERVAL_MS = 60_000;
+/** Maximum deterministic jitter added per agent to avoid synchronized polls. */
+export const LIFEOPS_TASK_JITTER_MS = 10_000;
 
 type AutonomyServiceLike = {
   getAutonomousRoomId?: () => UUID;
@@ -26,18 +29,28 @@ function isLifeOpsSchedulerTask(task: Task): boolean {
 }
 
 function buildSchedulerMetadata(
+  agentId: UUID,
   current: Record<string, unknown> | null = null,
 ): TaskMetadata {
+  const intervalMs = resolveLifeOpsTaskIntervalMs(agentId);
   return {
     ...(current ?? {}),
-    updateInterval: LIFEOPS_TASK_INTERVAL_MS,
-    baseInterval: LIFEOPS_TASK_INTERVAL_MS,
+    updateInterval: intervalMs,
+    baseInterval: intervalMs,
     blocking: true,
     lifeopsScheduler: {
       kind: "runtime_runner",
       version: 1,
     },
   };
+}
+
+export function resolveLifeOpsTaskIntervalMs(agentId: UUID): number {
+  let hash = 0;
+  for (let index = 0; index < agentId.length; index++) {
+    hash = (hash * 31 + agentId.charCodeAt(index)) >>> 0;
+  }
+  return LIFEOPS_TASK_INTERVAL_MS + (hash % (LIFEOPS_TASK_JITTER_MS + 1));
 }
 
 export async function executeLifeOpsSchedulerTask(
@@ -51,7 +64,7 @@ export async function executeLifeOpsSchedulerTask(
     now: typeof options.now === "string" ? options.now : undefined,
   });
   return {
-    nextInterval: LIFEOPS_TASK_INTERVAL_MS,
+    nextInterval: resolveLifeOpsTaskIntervalMs(runtime.agentId),
   };
 }
 
@@ -80,7 +93,10 @@ async function waitForDbReady(
   for (let i = 0; i < maxAttempts; i++) {
     try {
       // Light-weight probe: fetch tasks with a filter that should match nothing.
-      await runtime.getTasks({ agentIds: [runtime.agentId], tags: ["__db_ready_probe__"] });
+      await runtime.getTasks({
+        agentIds: [runtime.agentId],
+        tags: ["__db_ready_probe__"],
+      });
       return;
     } catch {
       if (i < maxAttempts - 1) {
@@ -116,6 +132,7 @@ export async function ensureLifeOpsSchedulerTask(
   });
   const existing = tasks.find(isLifeOpsSchedulerTask);
   const metadata = buildSchedulerMetadata(
+    runtime.agentId,
     isRecord(existing?.metadata) ? existing.metadata : null,
   );
   if (existing?.id) {

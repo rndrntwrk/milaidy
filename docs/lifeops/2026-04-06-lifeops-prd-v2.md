@@ -2,7 +2,7 @@
 
 Date: 2026-04-06
 Owner: Shaw / Milady
-Supersedes input PRD: `/Users/shawwalters/Downloads/milaidy_prd_v1.docx`
+Supersedes input PRD: `milaidy_prd_v1.docx (original input, not in repo)`
 Companion docs:
 - `docs/lifeops/2026-04-06-lifeops-critical-assessment.md`
 - `docs/lifeops/2026-04-06-lifeops-implementation-plan.md`

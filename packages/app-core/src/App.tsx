@@ -40,7 +40,6 @@ import {
   HeartbeatsDesktopShell,
   HeartbeatsView,
   InventoryView,
-  KnowledgeView,
   LifeOpsPageView,
   LogsPageView,
   MemoryViewerView,
@@ -152,6 +151,7 @@ function ViewRouter() {
         );
       case "character":
       case "character-select":
+      case "knowledge":
         return (
           <TabScrollView>
             <CharacterEditor />
@@ -161,12 +161,6 @@ function ViewRouter() {
         return (
           <TabScrollView>
             <InventoryView />
-          </TabScrollView>
-        );
-      case "knowledge":
-        return (
-          <TabScrollView>
-            <KnowledgeView />
           </TabScrollView>
         );
       case "connectors":
@@ -327,7 +321,6 @@ export function App() {
   const isChat = tab === "chat";
   const isWallets = tab === "inventory";
   const isHeartbeats = tab === "triggers";
-  const isKnowledge = tab === "knowledge";
   const isSettingsPage =
     tab === "settings" || tab === "voice" || tab === "connectors";
   const isAppsToolPage = isAppsToolTab(tab);
@@ -641,16 +634,6 @@ export function App() {
             <HeartbeatsDesktopShell key="heartbeats-view-desktop" />
           </div>
         </div>
-      ) : isKnowledge ? (
-        <div
-          key="knowledge-shell"
-          className="flex flex-col flex-1 min-h-0 w-full font-body text-txt bg-bg"
-        >
-          <Header />
-          <div className="flex flex-1 min-h-0 min-w-0 overflow-hidden">
-            <KnowledgeView />
-          </div>
-        </div>
       ) : isSettingsPage ? (
         <div
           key={`settings-shell-${tab}`}
@@ -724,7 +707,6 @@ export function App() {
       actionNotice,
       isChat,
       isHeartbeats,
-      isKnowledge,
       isSettingsPage,
       isWallets,
       isAppsToolPage,

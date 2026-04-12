@@ -114,6 +114,11 @@ vi.mock("../../src/components/settings/DesktopWorkspaceSection", () => ({
     ),
 }));
 
+vi.mock("../../src/components/pages/ConnectorsPageView", () => ({
+  ConnectorsPageView: () =>
+    React.createElement("div", null, "ConnectorsPageView"),
+}));
+
 import { SettingsView } from "../../src/components/pages/SettingsView";
 
 type SettingsState = {

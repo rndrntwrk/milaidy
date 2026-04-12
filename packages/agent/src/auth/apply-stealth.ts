@@ -1,3 +1,9 @@
+/**
+ * @deprecated No longer activated at startup. Anthropic subscription tokens
+ * are restricted to Claude Code CLI by TOS and must not be used for direct
+ * runtime API calls. The stealth interceptor remains as dead code for
+ * reference only — remove entirely once all imports are cleaned up.
+ */
 import fs from "node:fs";
 import path from "node:path";
 import { installClaudeCodeStealthFetchInterceptor } from "./claude-code-stealth.js";

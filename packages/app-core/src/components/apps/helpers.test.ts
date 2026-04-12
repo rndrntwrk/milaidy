@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { RegistryAppInfo } from "../../api";
 import {
   filterAppsForCatalog,
+  findAppBySlug,
+  getAppSlug,
   getDefaultAppsCatalogSelection,
   getAppCatalogSectionKey,
   groupAppsForCatalog,
@@ -227,7 +229,7 @@ describe("apps catalog helpers", () => {
           category: "platform",
         }),
       ),
-    ).toBe("business");
+    ).toBe("games");
     expect(
       getAppCatalogSectionKey(
         makeApp({
@@ -289,6 +291,10 @@ describe("apps catalog helpers", () => {
       })),
     ).toEqual([
       {
+        key: "lifeManagement",
+        apps: ["@miladyai/app-lifeops"],
+      },
+      {
         key: "games",
         apps: ["@hyperscape/plugin-hyperscape"],
       },
@@ -296,10 +302,43 @@ describe("apps catalog helpers", () => {
         key: "developerUtilities",
         apps: ["@miladyai/app-plugin-viewer"],
       },
-      {
-        key: "lifeManagement",
-        apps: ["@miladyai/app-lifeops"],
-      },
     ]);
+  });
+});
+
+describe("app URL slugs", () => {
+  it("derives slugs from scoped app package names", () => {
+    expect(getAppSlug("@miladyai/app-companion")).toBe("companion");
+    expect(getAppSlug("@miladyai/app-vincent")).toBe("vincent");
+    expect(getAppSlug("@elizaos/app-babylon")).toBe("babylon");
+    expect(getAppSlug("@elizaos/app-2004scape")).toBe("2004scape");
+    expect(getAppSlug("@elizaos/app-defense-of-the-agents")).toBe(
+      "defense-of-the-agents",
+    );
+  });
+
+  it("derives slugs from scoped plugin package names", () => {
+    expect(getAppSlug("@hyperscape/plugin-hyperscape")).toBe("hyperscape");
+  });
+
+  it("finds an app by slug", () => {
+    const apps = [
+      makeApp({ name: "@miladyai/app-companion", category: "social" }),
+      makeApp({ name: "@elizaos/app-babylon", category: "platform" }),
+    ];
+    expect(findAppBySlug(apps, "babylon")?.name).toBe("@elizaos/app-babylon");
+    expect(findAppBySlug(apps, "companion")?.name).toBe(
+      "@miladyai/app-companion",
+    );
+    expect(findAppBySlug(apps, "nonexistent")).toBeUndefined();
+  });
+
+  it("slug lookup is case-insensitive", () => {
+    const apps = [
+      makeApp({ name: "@miladyai/app-companion", category: "social" }),
+    ];
+    expect(findAppBySlug(apps, "Companion")?.name).toBe(
+      "@miladyai/app-companion",
+    );
   });
 });

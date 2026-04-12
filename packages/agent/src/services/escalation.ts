@@ -1,6 +1,6 @@
 import type { IAgentRuntime, UUID } from "@elizaos/core";
 import { logger } from "@elizaos/core";
-import { loadElizaConfig } from "../config/config.js";
+import { loadElizaConfig, saveElizaConfig } from "../config/config.js";
 import {
   loadOwnerContactRoutingHints,
   loadOwnerContactsConfig,
@@ -12,6 +12,10 @@ import type {
   OwnerContactEntry,
   OwnerContactsConfig,
 } from "../config/types.agent-defaults.js";
+import {
+  LifeOpsRepository,
+  type LifeOpsEscalationStateRow,
+} from "../lifeops/repository.js";
 import { resolveOwnerEntityId } from "../runtime/owner-entity.js";
 import {
   hasRuntimeSendHandler,
@@ -37,12 +41,156 @@ const DEFAULT_MAX_RETRIES = 3;
 const activeEscalations = new Map<string, EscalationState>();
 const pendingTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
+// ---------------------------------------------------------------------------
+// DB persistence helpers -- write-through cache
+// ---------------------------------------------------------------------------
+
+function stateToDbRow(
+  agentId: string,
+  state: EscalationState,
+): Parameters<LifeOpsRepository["upsertEscalationState"]>[0] {
+  return {
+    id: state.id,
+    agentId,
+    reason: state.reason,
+    text: state.text,
+    currentStep: state.currentStep,
+    channelsSent: state.channelsSent,
+    startedAt: new Date(state.startedAt).toISOString(),
+    lastSentAt: new Date(state.lastSentAt).toISOString(),
+    resolved: state.resolved,
+    resolvedAt: state.resolvedAt
+      ? new Date(state.resolvedAt).toISOString()
+      : null,
+  };
+}
+
+function dbRowToState(row: LifeOpsEscalationStateRow): EscalationState {
+  return {
+    id: row.id,
+    reason: row.reason,
+    text: row.text,
+    currentStep: row.currentStep,
+    channelsSent: row.channelsSent,
+    startedAt: new Date(row.startedAt).getTime(),
+    lastSentAt: new Date(row.lastSentAt).getTime(),
+    resolved: row.resolved,
+    resolvedAt: row.resolvedAt
+      ? new Date(row.resolvedAt).getTime()
+      : undefined,
+  };
+}
+
+/** Best-effort persist -- never let DB failures break the escalation flow. */
+async function persistState(
+  runtime: IAgentRuntime,
+  state: EscalationState,
+): Promise<void> {
+  try {
+    const repo = new LifeOpsRepository(runtime);
+    await repo.upsertEscalationState(
+      stateToDbRow(runtime.agentId as string, state),
+    );
+  } catch (err) {
+    logger.debug(
+      "[escalation] Failed to persist escalation state to DB",
+      err instanceof Error ? err.message : String(err),
+    );
+  }
+}
+
+/** Best-effort load from DB. Returns null on any error. */
+async function loadActiveFromDb(
+  runtime: IAgentRuntime,
+): Promise<EscalationState | null> {
+  try {
+    const repo = new LifeOpsRepository(runtime);
+    const row = await repo.getActiveEscalationState(
+      runtime.agentId as string,
+    );
+    return row ? dbRowToState(row) : null;
+  } catch (err) {
+    logger.debug(
+      "[escalation] Failed to load escalation state from DB",
+      err instanceof Error ? err.message : String(err),
+    );
+    return null;
+  }
+}
+
 function loadEscalationConfig(): EscalationConfig {
   try {
     const cfg = loadElizaConfig();
     return cfg.agents?.defaults?.escalation ?? {};
   } catch {
     return {};
+  }
+}
+
+/**
+ * Register a channel in the escalation config's ordered channel list.
+ *
+ * Called after a connector pairing succeeds so that the escalation service
+ * can reach the owner on the newly connected platform without manual
+ * configuration. `client_chat` always stays first; new channels are
+ * appended in order of pairing.
+ *
+ * Persists the updated config to `milady.json` via {@link saveElizaConfig}.
+ * Returns `true` if the channel was newly added, `false` if already present.
+ */
+export function registerEscalationChannel(channelName: string): boolean {
+  if (!channelName || typeof channelName !== "string") {
+    return false;
+  }
+
+  const trimmed = channelName.trim().toLowerCase();
+  if (trimmed.length === 0) {
+    return false;
+  }
+
+  try {
+    const cfg = loadElizaConfig();
+
+    if (!cfg.agents) {
+      (cfg as Record<string, unknown>).agents = {};
+    }
+    const agents = cfg.agents as Record<string, unknown>;
+    if (!agents.defaults) {
+      agents.defaults = {};
+    }
+    const defaults = agents.defaults as Record<string, unknown>;
+    if (!defaults.escalation) {
+      defaults.escalation = {};
+    }
+    const escalation = defaults.escalation as Record<string, unknown>;
+
+    const existing = Array.isArray(escalation.channels)
+      ? (escalation.channels as string[])
+      : [...DEFAULT_CHANNELS];
+
+    if (existing.includes(trimmed)) {
+      return false;
+    }
+
+    // Ensure client_chat stays first
+    if (!existing.includes("client_chat")) {
+      existing.unshift("client_chat");
+    }
+
+    existing.push(trimmed);
+    escalation.channels = existing;
+
+    saveElizaConfig(cfg);
+    logger.info(
+      `[escalation] Registered channel "${trimmed}" -- escalation order: [${existing.join(", ")}]`,
+    );
+    return true;
+  } catch (err) {
+    logger.warn(
+      `[escalation] Failed to register channel "${trimmed}"`,
+      err instanceof Error ? err.message : String(err),
+    );
+    return false;
   }
 }
 
@@ -241,6 +389,7 @@ export class EscalationService {
       logger.info(
         `[escalation] Coalesced into active escalation ${existing.id}`,
       );
+      await persistState(runtime, existing);
       return existing;
     }
 
@@ -295,6 +444,8 @@ export class EscalationService {
       `[escalation] Started ${escalationId}: channel=${channels[0]}, reason="${reason}"`,
     );
 
+    await persistState(runtime, state);
+
     return state;
   }
 
@@ -325,7 +476,7 @@ export class EscalationService {
     );
 
     if (responded) {
-      EscalationService.resolveEscalation(escalationId);
+      await EscalationService.resolveEscalation(escalationId, runtime);
       return;
     }
 
@@ -333,10 +484,11 @@ export class EscalationService {
 
     if (state.currentStep >= maxRetries) {
       logger.warn(
-        `[escalation] ${escalationId}: max retries (${maxRetries}) reached — giving up`,
+        `[escalation] ${escalationId}: max retries (${maxRetries}) reached -- giving up`,
       );
       state.resolved = true;
       state.resolvedAt = Date.now();
+      await persistState(runtime, state);
       return;
     }
 
@@ -357,12 +509,17 @@ export class EscalationService {
       state.lastSentAt = Date.now();
     }
 
+    await persistState(runtime, state);
+
     if (state.currentStep + 1 < maxRetries) {
       scheduleCheck(runtime, escalationId, waitMs);
     }
   }
 
-  static resolveEscalation(escalationId: string): void {
+  static async resolveEscalation(
+    escalationId: string,
+    runtime?: IAgentRuntime,
+  ): Promise<void> {
     const state = activeEscalations.get(escalationId);
     if (!state || state.resolved) return;
 
@@ -376,6 +533,10 @@ export class EscalationService {
     }
 
     logger.info(`[escalation] Resolved ${escalationId}`);
+
+    if (runtime) {
+      await persistState(runtime, state);
+    }
   }
 
   static getActiveEscalationSync(): EscalationState | null {
@@ -386,9 +547,38 @@ export class EscalationService {
   }
 
   static async getActiveEscalation(
-    _runtime: IAgentRuntime,
+    runtime: IAgentRuntime,
   ): Promise<EscalationState | null> {
-    return EscalationService.getActiveEscalationSync();
+    const cached = EscalationService.getActiveEscalationSync();
+    if (cached) return cached;
+
+    // Cache miss -- try DB (handles post-restart case)
+    const persisted = await loadActiveFromDb(runtime);
+    if (persisted) {
+      activeEscalations.set(persisted.id, persisted);
+      return persisted;
+    }
+    return null;
+  }
+
+  /**
+   * Rehydrate unresolved escalations from DB into the in-memory cache.
+   *
+   * Call during agent startup so that escalations created before a restart
+   * are visible to `getActiveEscalationSync()` and can be detected by
+   * the next `processReminders` cycle.
+   *
+   * Timers are intentionally NOT recreated -- the periodic reminder loop
+   * will pick up stale unresolved escalations and advance them.
+   */
+  static async rehydrateFromDb(runtime: IAgentRuntime): Promise<void> {
+    const persisted = await loadActiveFromDb(runtime);
+    if (persisted && !activeEscalations.has(persisted.id)) {
+      activeEscalations.set(persisted.id, persisted);
+      logger.info(
+        `[escalation] Rehydrated unresolved escalation ${persisted.id} from DB`,
+      );
+    }
   }
 
   static _reset(): void {
@@ -396,5 +586,15 @@ export class EscalationService {
     pendingTimers.clear();
     activeEscalations.clear();
     idCounter = 0;
+  }
+
+  /** Clear DB state for a given agent. Use in tests alongside `_reset()`. */
+  static async _resetDb(runtime: IAgentRuntime): Promise<void> {
+    try {
+      const repo = new LifeOpsRepository(runtime);
+      await repo.deleteAllEscalationStates(runtime.agentId as string);
+    } catch {
+      // Best-effort -- test runtimes may not have a real DB
+    }
   }
 }

@@ -270,7 +270,7 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
         const defaultNano = "openai/gpt-5.4-nano";
         const defaultSmall = "minimax/minimax-m2.7";
         const defaultMedium = "anthropic/claude-sonnet-4.6";
-        const defaultLarge = "moonshotai/kimi-k2-0905";
+        const defaultLarge = "moonshotai/kimi-k2.5";
         const defaultMega = "anthropic/claude-sonnet-4.6";
 
         // Environment variables — needed both for model fallback and pi-ai

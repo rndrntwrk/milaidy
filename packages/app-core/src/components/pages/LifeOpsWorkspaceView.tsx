@@ -80,9 +80,9 @@ function readIdentityLabel(identity: Record<string, unknown> | null): {
   };
 }
 
-function toLocalDateKey(date: Date): string {
+function toLocalDateKey(date: Date, timeZone: string): string {
   const formatter = new Intl.DateTimeFormat("en-CA", {
-    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+    timeZone,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -167,7 +167,7 @@ function groupEventsByDay(
   for (const event of [...events].sort((left, right) =>
     left.startAt.localeCompare(right.startAt),
   )) {
-    const key = toLocalDateKey(new Date(event.startAt));
+    const key = toLocalDateKey(new Date(event.startAt), timeZone);
     const current = grouped.get(key);
     if (current) {
       current.events.push(event);
@@ -224,54 +224,6 @@ function sortMessages(
     }
     return right.receivedAt.localeCompare(left.receivedAt);
   });
-}
-
-function ConnectorCard({ status }: { status: LifeOpsGoogleConnectorStatus }) {
-  const capabilities = capabilitySet(status);
-  const identity = readIdentityLabel(status.identity);
-  return (
-    <div className="rounded-2xl border border-border/50 bg-bg/70 p-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <Badge variant="outline" className="text-[9px]">
-          {sideLabel(status.side)}
-        </Badge>
-        {status.preferredByAgent ? (
-          <Badge variant="secondary" className="text-[9px]">
-            Default
-          </Badge>
-        ) : null}
-        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-txt">
-          {identity.primary}
-        </span>
-        <Badge variant="secondary" className="text-[9px]">
-          {modeLabel(status.mode)}
-        </Badge>
-      </div>
-      {identity.secondary ? (
-        <div className="mt-1 truncate text-[11px] text-muted">
-          {identity.secondary}
-        </div>
-      ) : null}
-      <div className="mt-2 flex flex-wrap gap-1.5">
-        {(capabilities.has("google.calendar.read") ||
-          capabilities.has("google.calendar.write")) && (
-          <Badge variant="secondary" className="text-[9px]">
-            Calendar
-          </Badge>
-        )}
-        {capabilities.has("google.gmail.triage") ? (
-          <Badge variant="secondary" className="text-[9px]">
-            Gmail
-          </Badge>
-        ) : null}
-        {status.reason === "needs_reauth" ? (
-          <Badge variant="outline" className="text-[9px]">
-            Reauth needed
-          </Badge>
-        ) : null}
-      </div>
-    </div>
-  );
 }
 
 function CalendarEventCard({
@@ -376,7 +328,7 @@ function DetailBlock({
 }
 
 export function LifeOpsWorkspaceView() {
-  const { setActionNotice, setState, t } = useApp();
+  const { setActionNotice, setState } = useApp();
   const ownerConnector = useGoogleLifeOpsConnector({
     pollWhileDisconnected: false,
     side: "owner",
@@ -639,6 +591,7 @@ export function LifeOpsWorkspaceView() {
         description: eventDescription.trim() || undefined,
         location: eventLocation.trim() || undefined,
         startAt,
+        timeZone,
         durationMinutes,
       });
       setActionNotice(
@@ -675,6 +628,7 @@ export function LifeOpsWorkspaceView() {
     eventTitle,
     loadWorkspace,
     setActionNotice,
+    timeZone,
   ]);
 
   const handleGenerateDraft = useCallback(async () => {

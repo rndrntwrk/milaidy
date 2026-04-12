@@ -12,8 +12,9 @@
  * This action is registered as WEB_SEARCH in the ElizaOS action system.
  */
 
-import type { Action, HandlerOptions } from "@elizaos/core";
+import type { Action, HandlerOptions, Memory, State } from "@elizaos/core";
 import { logger } from "@elizaos/core";
+import { hasContextSignalSync, messageText } from "./context-signal.js";
 
 // ---------------------------------------------------------------------------
 // Brave Search API types
@@ -49,6 +50,52 @@ function resolveApiKey(runtime: unknown): string | undefined {
   if (typeof fromConfig === "string" && fromConfig) return fromConfig;
 
   return undefined;
+}
+
+// ── Web search context-signal keywords ───────────────────────────────────
+
+const WEB_SEARCH_STRONG_TERMS = [
+  "search",
+  "google",
+  "look up",
+  "look it up",
+  "web search",
+  "search the web",
+  "search online",
+  "search for",
+  "find out",
+  "browse for",
+] as const;
+
+const WEB_SEARCH_WEAK_TERMS = [
+  "what is",
+  "who is",
+  "when did",
+  "latest",
+  "recent",
+  "news",
+  "current",
+  "today",
+  "how much",
+  "price of",
+  "where is",
+  "find",
+  "research",
+  "check",
+] as const;
+
+function hasWebSearchContextSignal(
+  message: Memory,
+  state: State | undefined,
+): boolean {
+  return hasContextSignalSync(
+    message,
+    state,
+    WEB_SEARCH_STRONG_TERMS,
+    WEB_SEARCH_WEAK_TERMS,
+    2,
+    6,
+  );
 }
 
 function resolveMaxResults(runtime: unknown): number {
@@ -133,9 +180,10 @@ export const webSearchAction: Action = {
     "Search the web for current information using the Brave Search API. " +
     "Use when you need real-time or recent information that may not be in your training data.",
 
-  validate: async (runtime) => {
+  validate: async (runtime, message, state) => {
     const key = resolveApiKey(runtime);
-    return !!key;
+    if (!key) return false;
+    return hasWebSearchContextSignal(message, state);
   },
 
   handler: async (runtime, message, _state, options) => {

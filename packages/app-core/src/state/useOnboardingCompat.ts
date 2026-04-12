@@ -108,6 +108,24 @@ export function useOnboardingCompat({
         value: Record<string, string>,
       ) => void,
       setOnboardingAvatar: bindField("avatar") as (value: number) => void,
+      setOnboardingFeatureTelegram: bindField("featureTelegram") as (
+        value: boolean,
+      ) => void,
+      setOnboardingFeatureDiscord: bindField("featureDiscord") as (
+        value: boolean,
+      ) => void,
+      setOnboardingFeaturePhone: bindField("featurePhone") as (
+        value: boolean,
+      ) => void,
+      setOnboardingFeatureCrypto: bindField("featureCrypto") as (
+        value: boolean,
+      ) => void,
+      setOnboardingFeatureBrowser: bindField("featureBrowser") as (
+        value: boolean,
+      ) => void,
+      setOnboardingFeatureOAuthPending: bindField("featureOAuthPending") as (
+        value: string | null,
+      ) => void,
       setOnboardingCloudProvisionedContainer: bindField(
         "cloudProvisionedContainer",
       ) as (value: boolean) => void,

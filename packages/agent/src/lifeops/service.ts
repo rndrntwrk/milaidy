@@ -1,5 +1,11 @@
 import crypto from "node:crypto";
-import { type IAgentRuntime, logger, stringToUuid } from "@elizaos/core";
+import {
+  type IAgentRuntime,
+  logger,
+  ModelType,
+  stringToUuid,
+} from "@elizaos/core";
+import { registerEscalationChannel } from "../services/escalation.js";
 import {
   getSelfControlStatus,
   startSelfControlBlock,
@@ -161,17 +167,29 @@ import {
 } from "../config/owner-contacts.js";
 import { getAgentEventService } from "../runtime/agent-event-service.js";
 import { resolveOwnerEntityId } from "../runtime/owner-entity.js";
+import { readProfileFromMetadata } from "../activity-profile/service.js";
+import type { ActivityProfile } from "../activity-profile/types.js";
+import {
+  createNativeAppleReminderLikeItem,
+  readNativeAppleReminderMetadata,
+} from "./apple-reminders.js";
 import {
   computeNextCronRunAtMs,
   parseCronExpression,
 } from "../triggers/scheduling.js";
 import {
+  computeAdaptiveWindowPolicy,
   DEFAULT_REMINDER_STEPS,
   isValidTimeZone,
   resolveDefaultTimeZone,
   resolveDefaultWindowPolicy,
+  windowPolicyMatchesDefaults,
 } from "./defaults.js";
 import { materializeDefinitionOccurrences } from "./engine.js";
+import {
+  ROUTINE_SEED_TEMPLATES,
+  type RoutineSeedTemplate,
+} from "./seed-routines.js";
 import {
   GoogleApiError,
   googleErrorLooksLikeAdminPolicyBlock,
@@ -180,6 +198,7 @@ import {
 import {
   createGoogleCalendarEvent,
   deleteGoogleCalendarEvent,
+  fetchGoogleCalendarEvent,
   fetchGoogleCalendarEvents,
   updateGoogleCalendarEvent,
 } from "./google-calendar.js";
@@ -380,6 +399,8 @@ type ReminderActivityProfileSnapshot = {
   secondaryPlatform: string | null;
   lastSeenPlatform: string | null;
   isCurrentlyActive: boolean;
+  /** Epoch ms when owner was last seen active across any platform. */
+  lastSeenAt: number | null;
 };
 
 type RuntimeOwnerContactResolution = {
@@ -1004,6 +1025,11 @@ function shouldDeliverReminderForIntensity(
   return true;
 }
 
+/**
+ * When the previous reminder was confirmed read but the occurrence is still
+ * incomplete, use a shorter delay — the owner is aware but needs a nudge.
+ * Standard "delivered" (unknown read status) keeps the normal delay.
+ */
 function resolveReminderEscalationDelayMinutes(
   urgency: LifeOpsReminderUrgency,
   previousOutcome: LifeOpsReminderAttemptOutcome,
@@ -1013,7 +1039,16 @@ function resolveReminderEscalationDelayMinutes(
     return 0;
   }
   const delays = REMINDER_ESCALATION_DELAYS[urgency];
-  return repeat ? delays.repeatMinutes : delays.initialMinutes;
+  const base = repeat ? delays.repeatMinutes : delays.initialMinutes;
+  if (base === null) {
+    return null;
+  }
+  // Owner saw the reminder — they're reachable but haven't acted. Use 60%
+  // of the normal delay since awareness is confirmed.
+  if (previousOutcome === "delivered_read") {
+    return Math.max(1, Math.round(base * 0.6));
+  }
+  return base;
 }
 
 function readReminderPreferenceSettingFromMetadata(
@@ -1370,6 +1405,40 @@ function normalizeCalendarTimeZone(value: unknown): string {
   return normalizeValidTimeZone(value, "timeZone", resolveDefaultTimeZone());
 }
 
+function normalizeCalendarDateTimeInTimeZone(
+  value: unknown,
+  field: string,
+  timeZone: string,
+): string | undefined {
+  if (value === undefined || value === null || value === "") {
+    return undefined;
+  }
+  const text = requireNonEmptyString(value, field);
+  if (/[zZ]|[+-]\d{2}:\d{2}$/.test(text)) {
+    return normalizeIsoString(text, field);
+  }
+
+  const localMatch = text.match(
+    /^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T ](\d{1,2}):(\d{2})(?::(\d{2})(?:\.(\d{1,3}))?)?)?$/,
+  );
+  if (localMatch) {
+    const localized = buildUtcDateFromLocalParts(timeZone, {
+      year: Number(localMatch[1]),
+      month: Number(localMatch[2]),
+      day: Number(localMatch[3]),
+      hour: Number(localMatch[4] ?? "0"),
+      minute: Number(localMatch[5] ?? "0"),
+      second: Number(localMatch[6] ?? "0"),
+    });
+    localized.setUTCMilliseconds(
+      Number((localMatch[7] ?? "0").padEnd(3, "0")),
+    );
+    return localized.toISOString();
+  }
+
+  return normalizeIsoString(text, field);
+}
+
 function resolveCalendarWindow(args: {
   now: Date;
   timeZone: string;
@@ -1628,12 +1697,16 @@ function resolveCalendarEventRange(
     };
   }
 
-  const startAt = normalizeOptionalIsoString(request.startAt, "startAt");
+  const startAt = normalizeCalendarDateTimeInTimeZone(
+    request.startAt,
+    "startAt",
+    timeZone,
+  );
   if (!startAt) {
     fail(400, "startAt is required when windowPreset is not provided");
   }
   const endAt =
-    normalizeOptionalIsoString(request.endAt, "endAt") ??
+    normalizeCalendarDateTimeInTimeZone(request.endAt, "endAt", timeZone) ??
     addMinutes(new Date(startAt), durationMinutes).toISOString();
   if (Date.parse(endAt) <= Date.parse(startAt)) {
     fail(400, "endAt must be later than startAt");
@@ -2617,7 +2690,10 @@ function normalizeBrowserPermissionStateInput(
     grantedOrigins:
       grantedOrigins === undefined
         ? [...current.grantedOrigins]
-        : normalizeOriginList(grantedOrigins, "permissions.grantedOrigins"),
+        : normalizeBrowserPermissionGrantList(
+            grantedOrigins,
+            "permissions.grantedOrigins",
+          ),
     incognitoEnabled:
       normalizeOptionalBoolean(
         input.incognitoEnabled,
@@ -2638,6 +2714,54 @@ function normalizeOrigin(value: unknown, field: string): string {
     fail(400, `${field} must use http or https`);
   }
   return parsed.origin;
+}
+
+function normalizeBrowserPermissionGrant(value: unknown, field: string): string {
+  const text = requireNonEmptyString(value, field);
+  const isHostPermissionPattern =
+    /^(?:https?|file|ftp|chrome-extension|moz-extension):\/\/\S+$/i.test(text);
+
+  if (text === "<all_urls>") {
+    return text;
+  }
+
+  if (
+    isHostPermissionPattern &&
+    (text.includes("*") || !/^(?:https?):\/\//i.test(text))
+  ) {
+    return text;
+  }
+
+  try {
+    return normalizeOrigin(text, field);
+  } catch (error) {
+    if (!(error instanceof LifeOpsServiceError) || error.status !== 400) {
+      throw error;
+    }
+  }
+
+  if (isHostPermissionPattern) {
+    return text;
+  }
+
+  fail(
+    400,
+    `${field} must be a valid origin URL or browser host-permission pattern`,
+  );
+}
+
+function normalizeBrowserPermissionGrantList(
+  value: unknown,
+  field: string,
+): string[] {
+  if (!Array.isArray(value)) {
+    fail(400, `${field} must be an array`);
+  }
+  return normalizedStringSet(
+    value.map((candidate, index) =>
+      normalizeBrowserPermissionGrant(candidate, `${field}[${index}]`),
+    ),
+  );
 }
 
 function normalizeOriginList(value: unknown, field: string): string[] {
@@ -3622,14 +3746,209 @@ function buildReminderBody(args: {
   scheduledFor: string;
   channel: LifeOpsReminderStep["channel"];
   lifecycle?: ReminderAttemptLifecycle;
+  dueAt?: string | null;
+  nearbyReminderTitles?: string[];
 }): string {
-  const at = new Date(args.scheduledFor).toISOString();
-  const prefix =
-    args.lifecycle === "escalation" ? "Follow-up reminder" : "Reminder";
+  const focus =
+    args.lifecycle === "escalation"
+      ? `${args.title} still needs your attention`
+      : `${args.title} is up`;
+  const reminderAt = args.dueAt ?? args.scheduledFor;
+  const reminderDate = new Date(reminderAt);
+  const timePhrase = Number.isNaN(reminderDate.getTime())
+    ? ""
+    : (() => {
+        const deltaMinutes = Math.round(
+          (reminderDate.getTime() - Date.now()) / 60_000,
+        );
+        if (Math.abs(deltaMinutes) <= 10) {
+          return " now";
+        }
+        const sameDay = reminderDate.toDateString() === new Date().toDateString();
+        const formatted = reminderDate.toLocaleTimeString([], {
+          hour: "numeric",
+          minute: "2-digit",
+        });
+        return sameDay ? ` at ${formatted}` : ` on ${reminderDate.toLocaleString()}`;
+      })();
+  const nearby =
+    Array.isArray(args.nearbyReminderTitles) && args.nearbyReminderTitles.length > 0
+      ? ` ${formatNearbyReminderTitlesForFallback(args.nearbyReminderTitles)}`
+      : "";
   if (args.channel === "voice") {
-    return `${prefix} for ${args.title}. Scheduled at ${at}.`;
+    return `${focus}${timePhrase}.${nearby}`.trim();
   }
-  return `${prefix}: ${args.title} is due. Scheduled at ${at}.`;
+  return `${focus}${timePhrase}.${nearby}`.trim();
+}
+
+function normalizeCharacterLines(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value
+      .filter((entry): entry is string => typeof entry === "string")
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0);
+  }
+  if (typeof value === "string" && value.trim().length > 0) {
+    return [value.trim()];
+  }
+  return [];
+}
+
+function buildReminderVoiceContext(runtime: IAgentRuntime): string {
+  const character = runtime.character;
+  if (!character || typeof character !== "object") {
+    return "";
+  }
+  const sections: string[] = [];
+  if (typeof character.system === "string" && character.system.trim().length > 0) {
+    sections.push(`System:\n${character.system.trim()}`);
+  }
+  const bioLines = normalizeCharacterLines(character.bio);
+  if (bioLines.length > 0) {
+    sections.push(`Bio:\n${bioLines.map((line) => `- ${line}`).join("\n")}`);
+  }
+  const styleLines = [
+    ...normalizeCharacterLines(character.style?.all),
+    ...normalizeCharacterLines(character.style?.chat),
+  ];
+  if (styleLines.length > 0) {
+    sections.push(
+      `Style:\n${styleLines.map((line) => `- ${line}`).join("\n")}`,
+    );
+  }
+  return sections.join("\n\n");
+}
+
+function formatReminderConversationLine(args: {
+  agentId: string;
+  agentName: string;
+  ownerEntityId: string;
+  memory: {
+    entityId?: string;
+    content?: { text?: string; type?: string };
+  };
+}): string | null {
+  const text =
+    typeof args.memory.content?.text === "string"
+      ? args.memory.content.text.trim()
+      : "";
+  if (
+    !text ||
+    args.memory.content?.type === "action_result" ||
+    text.startsWith("Reminder:") ||
+    text.startsWith("Agent reminder:")
+  ) {
+    return null;
+  }
+  const speaker =
+    args.memory.entityId === args.agentId
+      ? args.agentName
+      : args.memory.entityId === args.ownerEntityId
+        ? "User"
+        : "Other";
+  return `${speaker}: ${text}`;
+}
+
+function normalizeGeneratedReminderBody(value: string): string | null {
+  return normalizeGeneratedLifeOpsAssistantText(value, [
+    /^(?:follow[- ]?up reminder|reminder)\s*[:,-]\s*/i,
+  ]);
+}
+
+function normalizeGeneratedWorkflowBody(value: string): string | null {
+  return normalizeGeneratedLifeOpsAssistantText(value, [
+    /^(?:scheduled workflow|workflow)\s*[:,-]\s*/i,
+  ]);
+}
+
+function normalizeGeneratedLifeOpsAssistantText(
+  value: string,
+  stripPrefixes: RegExp[] = [],
+): string | null {
+  let cleaned = value
+    .replace(/<think>[\s\S]*?<\/think>/gi, " ")
+    .replace(/^["'`]+|["'`]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  for (const pattern of stripPrefixes) {
+    cleaned = cleaned.replace(pattern, "").trim();
+  }
+  if (!cleaned) {
+    return null;
+  }
+  return cleaned.length > 280 ? `${cleaned.slice(0, 277).trimEnd()}...` : cleaned;
+}
+
+function formatNearbyReminderTitlesForPrompt(titles: string[]): string {
+  if (titles.length === 0) {
+    return "None.";
+  }
+  return titles.map((title) => `- ${title}`).join("\n");
+}
+
+function formatNearbyReminderTitlesForFallback(titles: string[]): string {
+  const unique = [...new Set(titles)].slice(0, 2);
+  if (unique.length === 0) {
+    return "";
+  }
+  if (unique.length === 1) {
+    return `You also have ${unique[0]} coming up.`;
+  }
+  return `You also have ${unique[0]} and ${unique[1]} coming up.`;
+}
+
+function collectNearbyReminderTitles(args: {
+  currentOwnerId: string;
+  currentAnchorAt: string | null;
+  occurrences: Array<Pick<LifeOpsOccurrenceView, "id" | "title" | "dueAt">>;
+  events: Array<Pick<LifeOpsCalendarEvent, "id" | "title" | "startAt">>;
+  limit?: number;
+}): string[] {
+  const anchorMs = Date.parse(args.currentAnchorAt ?? "");
+  const candidates = [
+    ...args.occurrences
+      .filter((occurrence) => occurrence.id !== args.currentOwnerId)
+      .map((occurrence) => ({
+        title: occurrence.title,
+        at: occurrence.dueAt,
+      })),
+    ...args.events
+      .filter((event) => event.id !== args.currentOwnerId)
+      .map((event) => ({
+        title: event.title,
+        at: event.startAt,
+      })),
+  ]
+    .filter(
+      (
+        candidate,
+      ): candidate is {
+        title: string;
+        at: string;
+      } =>
+        typeof candidate.title === "string" &&
+        candidate.title.trim().length > 0 &&
+        typeof candidate.at === "string" &&
+        candidate.at.trim().length > 0,
+    )
+    .map((candidate) => ({
+      title: candidate.title.trim(),
+      atMs: Date.parse(candidate.at.trim()),
+    }))
+    .filter((candidate) => Number.isFinite(candidate.atMs))
+    .sort((left, right) => {
+      if (Number.isFinite(anchorMs)) {
+        return (
+          Math.abs(left.atMs - anchorMs) - Math.abs(right.atMs - anchorMs)
+        );
+      }
+      return left.atMs - right.atMs;
+    });
+
+  return [...new Set(candidates.map((candidate) => candidate.title))].slice(
+    0,
+    Math.max(0, args.limit ?? 3),
+  );
 }
 
 function createBrowserSessionActions(
@@ -3982,6 +4301,14 @@ export class LifeOpsService {
   private readonly ownerEntityIdValue: string;
   private readonly googleManagedClient: GoogleManagedClient;
   private ownerRoutingEntityIdPromise: Promise<string | null> | null = null;
+
+  /** Cached adaptive window policy derived from the activity profile.
+   *  Recomputed at most every 30 minutes to avoid re-reading task metadata
+   *  on every occurrence refresh. */
+  private adaptiveWindowPolicyCache: {
+    policy: ReturnType<typeof computeAdaptiveWindowPolicy>;
+    computedAt: number;
+  } | null = null;
 
   constructor(
     private readonly runtime: IAgentRuntime,
@@ -4896,20 +5223,15 @@ export class LifeOpsService {
   }
 
   private emitInAppReminderNudge(args: {
-    title: string;
+    text: string;
     ownerType: "occurrence" | "calendar_event";
     ownerId: string;
     subjectType: LifeOpsSubjectType;
     scheduledFor: string;
     dueAt: string | null;
   }): void {
-    const timeLabel = args.dueAt
-      ? ` Due ${new Date(args.dueAt).toLocaleString()}.`
-      : "";
-    const prefix =
-      args.subjectType === "agent" ? "Agent reminder:" : "Reminder:";
     this.emitAssistantEvent(
-      `${prefix} ${args.title}.${timeLabel}`,
+      args.text,
       "lifeops-reminder",
       {
         ownerType: args.ownerType,
@@ -4921,17 +5243,209 @@ export class LifeOpsService {
     );
   }
 
-  private emitWorkflowRunNudge(
+  private async readRecentReminderConversation(args: {
+    subjectType: LifeOpsSubjectType;
+    limit?: number;
+  }): Promise<string[]> {
+    if (
+      args.subjectType !== "owner" ||
+      typeof this.runtime.getRoomsForParticipants !== "function" ||
+      typeof this.runtime.getMemoriesByRoomIds !== "function"
+    ) {
+      return [];
+    }
+
+    const ownerEntityId = (await this.ownerRoutingEntityId()) ?? this.ownerEntityId();
+    const agentId = this.agentId();
+    try {
+      const roomIds = await this.runtime.getRoomsForParticipants([
+        ownerEntityId,
+        agentId,
+      ]);
+      if (!Array.isArray(roomIds) || roomIds.length === 0) {
+        return [];
+      }
+      const memories = await this.runtime.getMemoriesByRoomIds({
+        tableName: "messages",
+        roomIds,
+        limit: Math.max(6, (args.limit ?? 6) * 2),
+      });
+      if (!Array.isArray(memories) || memories.length === 0) {
+        return [];
+      }
+      const agentName =
+        typeof this.runtime.character?.name === "string" &&
+        this.runtime.character.name.trim().length > 0
+          ? this.runtime.character.name.trim()
+          : "Assistant";
+      return memories
+        .slice()
+        .sort(
+          (left, right) =>
+            Number(left.createdAt ?? 0) - Number(right.createdAt ?? 0),
+        )
+        .map((memory) =>
+          formatReminderConversationLine({
+            agentId,
+            agentName,
+            ownerEntityId,
+            memory,
+          }),
+        )
+        .filter((line): line is string => typeof line === "string")
+        .slice(-(args.limit ?? 6));
+    } catch {
+      return [];
+    }
+  }
+
+  private async renderReminderBody(args: {
+    title: string;
+    scheduledFor: string;
+    dueAt: string | null;
+    channel: LifeOpsReminderStep["channel"];
+    lifecycle: ReminderAttemptLifecycle;
+    urgency: LifeOpsReminderUrgency;
+    subjectType: LifeOpsSubjectType;
+    nearbyReminderTitles?: string[];
+  }): Promise<string> {
+    const fallback = buildReminderBody({
+      title: args.title,
+      scheduledFor: args.scheduledFor,
+      dueAt: args.dueAt,
+      channel: args.channel,
+      lifecycle: args.lifecycle,
+      nearbyReminderTitles: args.nearbyReminderTitles,
+    });
+    if (typeof this.runtime.useModel !== "function") {
+      return fallback;
+    }
+
+    const recentConversation = await this.readRecentReminderConversation({
+      subjectType: args.subjectType,
+      limit: 6,
+    });
+    const reminderAt = args.dueAt ?? args.scheduledFor;
+    const prompt = [
+      `Write a short reminder nudge in the voice of ${this.runtime.character?.name ?? "the assistant"}.`,
+      "This is a real follow-up or reminder delivery, not a system log.",
+      "",
+      "Character voice:",
+      buildReminderVoiceContext(this.runtime) || "No extra character context.",
+      "",
+      "Current reminder:",
+      `- title: ${args.title}`,
+      `- due: ${new Date(reminderAt).toLocaleString()}`,
+      `- channel: ${args.channel}`,
+      `- urgency: ${args.urgency}`,
+      `- lifecycle: ${args.lifecycle}`,
+      "",
+      "Recent conversation:",
+      recentConversation.length > 0
+        ? recentConversation.join("\n")
+        : "No recent conversation available.",
+      "",
+      "Other reminders around this time:",
+      formatNearbyReminderTitlesForPrompt(args.nearbyReminderTitles ?? []),
+      "",
+      "Rules:",
+      "- Return only the reminder text.",
+      "- Sound natural and in character.",
+      "- Do not start with 'Reminder' or 'Follow-up reminder'.",
+      "- Do not use ISO timestamps.",
+      "- Keep it concise: one or two short sentences.",
+      "- You may mention nearby reminders briefly if it helps.",
+      "- For escalation, sound a little firmer but still human.",
+      "- No markdown, bullets, quotes, labels, or emoji.",
+      "",
+      "Reminder text:",
+    ].join("\n");
+
+    try {
+      const response = await this.runtime.useModel(ModelType.TEXT_SMALL, {
+        prompt,
+      });
+      const text =
+        typeof response === "string"
+          ? normalizeGeneratedReminderBody(response)
+          : null;
+      return text ?? fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
+  private async renderWorkflowRunBody(args: {
+    workflow: Pick<LifeOpsWorkflowDefinition, "title" | "subjectType">;
+    run: Pick<LifeOpsWorkflowRun, "status">;
+  }): Promise<string> {
+    const fallback =
+      args.run.status === "success"
+        ? `${args.workflow.title} just ran successfully.`
+        : `${args.workflow.title} ran but hit a problem.`;
+    if (
+      args.workflow.subjectType !== "owner" ||
+      typeof this.runtime.useModel !== "function"
+    ) {
+      return fallback;
+    }
+
+    const recentConversation = await this.readRecentReminderConversation({
+      subjectType: "owner",
+      limit: 6,
+    });
+    const prompt = [
+      `Write a short assistant update about the workflow "${args.workflow.title}".`,
+      "This is a user-facing status nudge, not a system log.",
+      "",
+      "Character voice:",
+      buildReminderVoiceContext(this.runtime) || "No extra character context.",
+      "",
+      "Workflow run:",
+      `- title: ${args.workflow.title}`,
+      `- status: ${args.run.status}`,
+      "",
+      "Recent conversation:",
+      recentConversation.length > 0
+        ? recentConversation.join("\n")
+        : "No recent conversation available.",
+      "",
+      "Rules:",
+      "- Return only the message text.",
+      "- Sound natural and in character.",
+      "- Do not start with 'Workflow' or 'Scheduled workflow'.",
+      "- Keep it concise: one short sentence, or two at most.",
+      "- For failures, sound calm and direct rather than robotic.",
+      "- No markdown, bullets, quotes, labels, or emoji.",
+      "",
+      "Message text:",
+    ].join("\n");
+
+    try {
+      const response = await this.runtime.useModel(ModelType.TEXT_SMALL, {
+        prompt,
+      });
+      const text =
+        typeof response === "string"
+          ? normalizeGeneratedWorkflowBody(response)
+          : null;
+      return text ?? fallback;
+    } catch {
+      return fallback;
+    }
+  }
+
+  private async emitWorkflowRunNudge(
     workflow: LifeOpsWorkflowDefinition,
     run: LifeOpsWorkflowRun,
-  ): void {
+  ): Promise<void> {
     if (workflow.subjectType !== "owner") {
       return;
     }
-    const message =
-      run.status === "success"
-        ? `Scheduled workflow "${workflow.title}" ran successfully.`
-        : `Scheduled workflow "${workflow.title}" ran and failed.`;
+    const message = await this.renderWorkflowRunBody({
+      workflow,
+      run,
+    });
     this.emitAssistantEvent(message, "lifeops-workflow", {
       workflowId: workflow.id,
       workflowTitle: workflow.title,
@@ -4939,6 +5453,42 @@ export class LifeOpsService {
       status: run.status,
       subjectType: workflow.subjectType,
     });
+  }
+
+  private async syncNativeAppleReminderForDefinition(
+    definition: LifeOpsTaskDefinition,
+  ): Promise<void> {
+    if (definition.subjectType !== "owner" || definition.domain !== "user_lifeops") {
+      return;
+    }
+    if (definition.cadence.kind !== "once") {
+      return;
+    }
+
+    const nativeMetadata = readNativeAppleReminderMetadata(definition.metadata);
+    if (!nativeMetadata) {
+      return;
+    }
+
+    const result = await createNativeAppleReminderLikeItem({
+      kind: nativeMetadata.kind,
+      title: definition.title,
+      dueAt: definition.cadence.dueAt,
+      notes: definition.description,
+      originalIntent: definition.originalIntent,
+    });
+    if (result.ok === false) {
+      this.logLifeOpsWarn(
+        "native_apple_reminder_sync",
+        "[lifeops] Failed to sync a native Apple reminder.",
+        {
+          definitionId: definition.id,
+          kind: nativeMetadata.kind,
+          skippedReason: result.skippedReason,
+          error: result.error,
+        },
+      );
+    }
   }
 
   private readWorkflowSchedulerState(
@@ -5077,7 +5627,7 @@ export class LifeOpsService {
           },
         );
         runs.push(run);
-        this.emitWorkflowRunNudge(nextWorkflow, run);
+        await this.emitWorkflowRunNudge(nextWorkflow, run);
         schedulerState = {
           managedBy: "task_worker",
           nextDueAt: this.computeWorkflowNextDueAt(nextWorkflow, dueAt),
@@ -5570,6 +6120,57 @@ export class LifeOpsService {
     return createdPlan;
   }
 
+  /** Max age for the cached adaptive window policy (30 minutes). */
+  private static readonly ADAPTIVE_POLICY_TTL_MS = 30 * 60 * 1000;
+
+  /**
+   * Read the activity profile from the proactive task metadata and return
+   * an adaptive window policy.  Result is cached for up to 30 minutes.
+   */
+  private async resolveAdaptiveWindowPolicy(
+    timezone: string,
+    now: Date,
+  ): Promise<ReturnType<typeof computeAdaptiveWindowPolicy> | null> {
+    const cached = this.adaptiveWindowPolicyCache;
+    if (cached && now.getTime() - cached.computedAt < LifeOpsService.ADAPTIVE_POLICY_TTL_MS) {
+      return cached.policy;
+    }
+    try {
+      const tasks = await this.runtime.getTasks({
+        agentIds: [this.runtime.agentId],
+        tags: [...PROACTIVE_TASK_QUERY_TAGS],
+      });
+      const proactiveTask = tasks.find((task) => {
+        const metadata = isRecord(task.metadata) ? task.metadata : null;
+        return (
+          task.name === "PROACTIVE_AGENT" &&
+          isRecord(metadata?.proactiveAgent) &&
+          (metadata.proactiveAgent as Record<string, unknown>).kind === "runtime_runner"
+        );
+      });
+      const profile = proactiveTask
+        ? readProfileFromMetadata(
+            isRecord(proactiveTask.metadata) ? proactiveTask.metadata as Record<string, unknown> : null,
+          )
+        : null;
+      if (!profile) {
+        this.adaptiveWindowPolicyCache = null;
+        return null;
+      }
+      const policy = computeAdaptiveWindowPolicy(profile, timezone);
+      this.adaptiveWindowPolicyCache = { policy, computedAt: now.getTime() };
+      return policy;
+    } catch (error) {
+      this.logLifeOpsWarn(
+        "adaptive_window_policy",
+        "[lifeops] Failed to resolve adaptive window policy; using defaults.",
+        { error: lifeOpsErrorMessage(error) },
+      );
+      this.adaptiveWindowPolicyCache = null;
+      return null;
+    }
+  }
+
   private async refreshDefinitionOccurrences(
     definition: LifeOpsTaskDefinition,
     now = new Date(),
@@ -5579,8 +6180,22 @@ export class LifeOpsService {
         definition.agentId,
         definition.id,
       );
+
+    // If the definition still uses the default time windows, adapt them
+    // to the user's actual rhythm when an activity profile is available.
+    let effectiveDefinition = definition;
+    if (windowPolicyMatchesDefaults(definition.windowPolicy)) {
+      const adaptivePolicy = await this.resolveAdaptiveWindowPolicy(
+        definition.timezone,
+        now,
+      );
+      if (adaptivePolicy) {
+        effectiveDefinition = { ...definition, windowPolicy: adaptivePolicy };
+      }
+    }
+
     const materialized = materializeDefinitionOccurrences(
-      definition,
+      effectiveDefinition,
       existingOccurrences,
       { now },
     );
@@ -5767,6 +6382,8 @@ export class LifeOpsService {
         lastSeenPlatform:
           normalizeOptionalString(profile.lastSeenPlatform) ?? null,
         isCurrentlyActive: profile.isCurrentlyActive === true,
+        lastSeenAt:
+          typeof profile.lastSeenAt === "number" ? profile.lastSeenAt : null,
       };
     } catch (error) {
       this.logLifeOpsWarn(
@@ -5777,6 +6394,54 @@ export class LifeOpsService {
         },
       );
       return null;
+    }
+  }
+
+  /**
+   * Scan recent "delivered" attempts and upgrade to "delivered_read" when the
+   * owner was seen active after the reminder was sent. This gives escalation
+   * better signal about whether the owner is reachable.
+   */
+  private async scanReadReceipts(
+    attempts: LifeOpsReminderAttempt[],
+    activityProfile: ReminderActivityProfileSnapshot | null,
+    now: Date,
+  ): Promise<void> {
+    if (!activityProfile?.lastSeenAt) {
+      return;
+    }
+    const RECEIPT_SCAN_WINDOW_MS = 4 * 60 * 60 * 1000; // 4 hours
+    const cutoff = now.getTime() - RECEIPT_SCAN_WINDOW_MS;
+    const candidates = attempts.filter((attempt) => {
+      if (attempt.outcome !== "delivered") {
+        return false;
+      }
+      const attemptedMs = attempt.attemptedAt
+        ? Date.parse(attempt.attemptedAt)
+        : 0;
+      return attemptedMs > cutoff;
+    });
+
+    for (const attempt of candidates) {
+      const attemptedMs = attempt.attemptedAt
+        ? Date.parse(attempt.attemptedAt)
+        : 0;
+      if (activityProfile.lastSeenAt > attemptedMs) {
+        try {
+          await this.repository.updateReminderAttemptOutcome(
+            attempt.id,
+            "delivered_read",
+            { readDetectedAt: now.toISOString() },
+          );
+          attempt.outcome = "delivered_read";
+        } catch (error) {
+          this.logLifeOpsWarn(
+            "read_receipt_scan",
+            `[lifeops] Failed to update read receipt for attempt ${attempt.id}`,
+            { error: lifeOpsErrorMessage(error) },
+          );
+        }
+      }
     }
   }
 
@@ -6150,6 +6815,7 @@ export class LifeOpsService {
     > | null;
     eventStartAt?: string | null;
     acknowledged: boolean;
+    nearbyReminderTitles?: string[];
   }): Promise<LifeOpsReminderAttempt | null> {
     if (!shouldDeliverReminderForIntensity(args.intensity, args.urgency)) {
       return null;
@@ -6225,7 +6891,9 @@ export class LifeOpsService {
       null;
     if (
       !nextChannel &&
-      lastEscalationAttempt?.outcome === "delivered" &&
+      (lastEscalationAttempt?.outcome === "delivered" ||
+        lastEscalationAttempt?.outcome === "delivered_read" ||
+        lastEscalationAttempt?.outcome === "delivered_unread") &&
       candidateChannels.includes(lastEscalationAttempt.channel)
     ) {
       nextChannel = lastEscalationAttempt.channel;
@@ -6277,6 +6945,7 @@ export class LifeOpsService {
           ? "previous_escalation_unacknowledged"
           : "plan_exhausted_without_acknowledgement",
       activityProfile: args.activityProfile,
+      nearbyReminderTitles: args.nearbyReminderTitles,
     });
 
     await this.markReminderEscalationStarted({
@@ -6485,15 +7154,20 @@ export class LifeOpsService {
     escalationIndex?: number;
     escalationReason?: string;
     activityProfile?: ReminderActivityProfileSnapshot | null;
+    nearbyReminderTitles?: string[];
   }): Promise<LifeOpsReminderAttempt> {
     const attemptedAt = args.attemptedAt;
     const attemptedAtDate = new Date(attemptedAt);
     const lifecycle = args.lifecycle ?? "plan";
-    const reminderBody = buildReminderBody({
+    const reminderBody = await this.renderReminderBody({
       title: args.title,
       scheduledFor: args.scheduledFor,
+      dueAt: args.dueAt,
       channel: args.channel,
       lifecycle,
+      urgency: args.urgency,
+      subjectType: args.subjectType,
+      nearbyReminderTitles: args.nearbyReminderTitles,
     });
     let outcome: LifeOpsReminderAttemptOutcome = "delivered";
     let connectorRef: string | null = null;
@@ -6631,30 +7305,47 @@ export class LifeOpsService {
           runtimeTarget.target.roomId ??
           runtimeTarget.target.entityId ??
           null;
+        const sendPayload = {
+          text: reminderBody,
+          source: runtimeTarget.source,
+          metadata: {
+            channelType: args.channel,
+            lifeopsReminder: true,
+            ownerType: args.ownerType,
+            ownerId: args.ownerId,
+            urgency: args.urgency,
+            scheduledFor: args.scheduledFor,
+            routeSource: runtimeTarget.source,
+            routeEndpoint:
+              runtimeTarget.target.channelId ??
+              runtimeTarget.target.roomId ??
+              runtimeTarget.target.entityId ??
+              null,
+            routeResolution: runtimeTarget.resolution,
+          },
+        };
         try {
-          await this.runtime.sendMessageToTarget(runtimeTarget.target, {
-            text: reminderBody,
-            source: runtimeTarget.source,
-            metadata: {
-              channelType: args.channel,
-              lifeopsReminder: true,
-              ownerType: args.ownerType,
-              ownerId: args.ownerId,
-              urgency: args.urgency,
-              scheduledFor: args.scheduledFor,
-              routeSource: runtimeTarget.source,
-              routeEndpoint:
-                runtimeTarget.target.channelId ??
-                runtimeTarget.target.roomId ??
-                runtimeTarget.target.entityId ??
-                null,
-              routeResolution: runtimeTarget.resolution,
-            },
-          });
-        } catch (error) {
-          outcome = "blocked_connector";
-          deliveryMetadata.error = lifeOpsErrorMessage(error);
-          deliveryMetadata.reason = "runtime_send_failed";
+          await this.runtime.sendMessageToTarget(
+            runtimeTarget.target,
+            sendPayload,
+          );
+        } catch (firstError) {
+          this.logLifeOpsWarn(
+            "reminder_dispatch",
+            `[lifeops] Reminder delivery failed for ${args.channel}, retrying in 2s`,
+            { error: lifeOpsErrorMessage(firstError) },
+          );
+          await new Promise((r) => setTimeout(r, 2_000));
+          try {
+            await this.runtime.sendMessageToTarget(
+              runtimeTarget.target,
+              sendPayload,
+            );
+          } catch (retryError) {
+            outcome = "blocked_connector";
+            deliveryMetadata.error = lifeOpsErrorMessage(retryError);
+            deliveryMetadata.reason = "runtime_send_failed";
+          }
         }
       } else {
         outcome = "blocked_connector";
@@ -6725,7 +7416,7 @@ export class LifeOpsService {
     }
     if (outcome === "delivered" && args.channel === "in_app") {
       this.emitInAppReminderNudge({
-        title: args.title,
+        text: reminderBody,
         ownerType: args.ownerType,
         ownerId: args.ownerId,
         subjectType: args.subjectType,
@@ -7027,6 +7718,7 @@ export class LifeOpsService {
     }
     await this.syncGoalLink(definition);
     await this.refreshDefinitionOccurrences(definition);
+    await this.syncNativeAppleReminderForDefinition(definition);
     await this.recordAudit(
       "definition_created",
       "definition",
@@ -7056,6 +7748,87 @@ export class LifeOpsService {
         new Date(),
       ),
     };
+  }
+
+  async checkAndOfferSeeding(): Promise<{
+    needsSeeding: boolean;
+    availableTemplates: RoutineSeedTemplate[];
+  }> {
+    const existing = await this.repository.listActiveDefinitions(
+      this.agentId(),
+    );
+    if (existing.length > 0) {
+      return { needsSeeding: false, availableTemplates: [] };
+    }
+
+    // Check if seeding was already offered via audit trail
+    const audits = await this.repository.listAuditEvents(
+      this.agentId(),
+      "definition",
+      `seeding:${this.agentId()}`,
+    );
+    const seedingOffered = audits.some(
+      (event) => event.eventType === "seeding_offered",
+    );
+    if (seedingOffered) {
+      return { needsSeeding: false, availableTemplates: [] };
+    }
+
+    return { needsSeeding: true, availableTemplates: ROUTINE_SEED_TEMPLATES };
+  }
+
+  async markSeedingOffered(): Promise<void> {
+    await this.recordAudit(
+      "seeding_offered",
+      "definition",
+      `seeding:${this.agentId()}`,
+      "seed routines offered",
+      {},
+      {
+        offeredAt: new Date().toISOString(),
+      },
+    );
+  }
+
+  async applySeedRoutines(
+    keys: string[],
+    timezone?: string,
+  ): Promise<string[]> {
+    const effectiveTimezone = timezone
+      ? normalizeValidTimeZone(timezone, "timezone")
+      : resolveDefaultTimeZone();
+    const templates = ROUTINE_SEED_TEMPLATES.filter((t) =>
+      keys.includes(t.key),
+    );
+    if (templates.length === 0) {
+      fail(400, "no valid seed template keys provided");
+    }
+
+    const createdIds: string[] = [];
+    for (const template of templates) {
+      const result = await this.createDefinition({
+        ...template.request,
+        timezone: effectiveTimezone,
+        source: "seed",
+      });
+      createdIds.push(result.definition.id);
+    }
+
+    // Record that seeding was offered so we don't re-offer
+    await this.recordAudit(
+      "seeding_offered",
+      "definition",
+      `seeding:${this.agentId()}`,
+      "seed routines applied",
+      { keys },
+      {
+        appliedKeys: keys,
+        timezone: effectiveTimezone,
+        createdIds,
+      },
+    );
+
+    return createdIds;
   }
 
   async updateDefinition(
@@ -8282,6 +9055,21 @@ export class LifeOpsService {
           normalizeOptionalBoolean(request.allowVoice, "allowVoice") ?? false,
       },
     });
+
+    // Register SMS/voice in the escalation channel list when the user
+    // consents so the escalation service can reach them without manual
+    // setup.
+    const allowSms =
+      normalizeOptionalBoolean(request.allowSms, "allowSms") ?? false;
+    const allowVoice =
+      normalizeOptionalBoolean(request.allowVoice, "allowVoice") ?? false;
+    if (allowSms) {
+      registerEscalationChannel("sms");
+    }
+    if (allowVoice) {
+      registerEscalationChannel("voice");
+    }
+
     return {
       phoneNumber,
       policies: [smsPolicy, voicePolicy],
@@ -8402,7 +9190,12 @@ export class LifeOpsService {
       ) => `${planId}:${stepIndex}:${scheduledFor}`;
       const deliveredAttempts = new Set(
         existingAttempts
-          .filter((attempt) => attempt.outcome === "delivered")
+          .filter(
+            (attempt) =>
+              attempt.outcome === "delivered" ||
+              attempt.outcome === "delivered_read" ||
+              attempt.outcome === "delivered_unread",
+          )
           .map((attempt) =>
             attemptKey(attempt.planId, attempt.stepIndex, attempt.scheduledFor),
           ),
@@ -8475,6 +9268,13 @@ export class LifeOpsService {
           quietHours: plan.quietHours,
           acknowledged,
           attemptedAt: now.toISOString(),
+          nearbyReminderTitles: collectNearbyReminderTitles({
+            currentOwnerId: reminder.ownerId,
+            currentAnchorAt: occurrence.dueAt,
+            occurrences: occurrenceViews,
+            events: calendarEvents,
+            limit: 3,
+          }),
         });
         dueAttempts.push(attempt);
         if (attempt.outcome === "delivered") {
@@ -8535,6 +9335,13 @@ export class LifeOpsService {
           quietHours: plan.quietHours,
           acknowledged,
           attemptedAt: now.toISOString(),
+          nearbyReminderTitles: collectNearbyReminderTitles({
+            currentOwnerId: reminder.ownerId,
+            currentAnchorAt: reminder.dueAt,
+            occurrences: occurrenceViews,
+            events: calendarEvents,
+            limit: 3,
+          }),
         });
         dueAttempts.push(attempt);
         if (attempt.outcome === "delivered") {
@@ -8547,6 +9354,14 @@ export class LifeOpsService {
         ...dueAttempts,
       ];
       const activityProfile = await this.readReminderActivityProfileSnapshot();
+
+      // Scan recent "delivered" attempts and upgrade to "delivered_read" when
+      // the owner was active after delivery. This improves escalation decisions.
+      await this.scanReadReceipts(
+        reminderAttemptsForEscalation,
+        activityProfile,
+        now,
+      );
 
       for (const occurrence of occurrenceViews) {
         if (dueAttempts.length >= limit) break;
@@ -8579,6 +9394,13 @@ export class LifeOpsService {
           activityProfile,
           occurrence,
           acknowledged,
+          nearbyReminderTitles: collectNearbyReminderTitles({
+            currentOwnerId: occurrence.id,
+            currentAnchorAt: occurrence.dueAt,
+            occurrences: occurrenceViews,
+            events: calendarEvents,
+            limit: 3,
+          }),
         });
         if (!attempt) continue;
         dueAttempts.push(attempt);
@@ -8610,6 +9432,13 @@ export class LifeOpsService {
           activityProfile,
           eventStartAt: event.startAt,
           acknowledged: Boolean(event.metadata.reminderAcknowledgedAt),
+          nearbyReminderTitles: collectNearbyReminderTitles({
+            currentOwnerId: event.id,
+            currentAnchorAt: event.startAt,
+            occurrences: occurrenceViews,
+            events: calendarEvents,
+            limit: 3,
+          }),
         });
         if (!attempt) continue;
         dueAttempts.push(attempt);
@@ -10834,19 +11663,50 @@ export class LifeOpsService {
       // Google's PATCH semantics: if you send `start.dateTime` you must
       // also send `end.dateTime`, otherwise the API rejects the call as
       // "Bad Request" because the event would have inconsistent bounds.
-      // Auto-derive a one-hour endAt from startAt (or vice versa) so a
-      // caller that only knows the new start time still gets a successful
-      // patch instead of a confusing 400.
+      // When the caller only supplies one bound or omits the timezone,
+      // load the current event so we can preserve both the existing
+      // timezone and duration instead of guessing.
       const ONE_HOUR_MS = 60 * 60 * 1000;
-      let normalizedStartAt = request.startAt;
-      let normalizedEndAt = request.endAt;
+      const needsExistingEventContext =
+        Boolean(request.startAt || request.endAt) &&
+        (!request.timeZone || !request.startAt || !request.endAt);
+      const existingEvent = needsExistingEventContext
+        ? await fetchGoogleCalendarEvent({
+            accessToken,
+            calendarId: calendarId ?? undefined,
+            eventId: externalEventId,
+          })
+        : null;
+      const normalizedTimeZone = normalizeCalendarTimeZone(
+        request.timeZone ?? existingEvent?.timezone ?? undefined,
+      );
+      let normalizedStartAt = normalizeCalendarDateTimeInTimeZone(
+        request.startAt,
+        "startAt",
+        normalizedTimeZone,
+      );
+      let normalizedEndAt = normalizeCalendarDateTimeInTimeZone(
+        request.endAt,
+        "endAt",
+        normalizedTimeZone,
+      );
+      const existingDurationMs =
+        existingEvent &&
+        Number.isFinite(Date.parse(existingEvent.startAt)) &&
+        Number.isFinite(Date.parse(existingEvent.endAt))
+          ? Date.parse(existingEvent.endAt) - Date.parse(existingEvent.startAt)
+          : Number.NaN;
+      const fallbackDurationMs =
+        Number.isFinite(existingDurationMs) && existingDurationMs > 0
+          ? existingDurationMs
+          : ONE_HOUR_MS;
       if (normalizedStartAt && !normalizedEndAt) {
         normalizedEndAt = new Date(
-          new Date(normalizedStartAt).getTime() + ONE_HOUR_MS,
+          new Date(normalizedStartAt).getTime() + fallbackDurationMs,
         ).toISOString();
       } else if (normalizedEndAt && !normalizedStartAt) {
         normalizedStartAt = new Date(
-          new Date(normalizedEndAt).getTime() - ONE_HOUR_MS,
+          new Date(normalizedEndAt).getTime() - fallbackDurationMs,
         ).toISOString();
       }
 
@@ -10859,7 +11719,7 @@ export class LifeOpsService {
         location: request.location,
         startAt: normalizedStartAt,
         endAt: normalizedEndAt,
-        timeZone: request.timeZone,
+        timeZone: normalizedTimeZone,
         attendees: request.attendees
           ? normalizeCalendarAttendees(request.attendees)
           : undefined,
@@ -11193,7 +12053,7 @@ export class LifeOpsService {
     cc?: string[];
     subject?: string;
     bodyText: string;
-  }): Promise<void> {
+  }): Promise<string | null> {
     const to =
       normalizeOptionalStringArray(args.to, "to") ??
       [args.message.replyTo ?? args.message.fromEmail ?? ""].filter(
@@ -11219,6 +12079,7 @@ export class LifeOpsService {
       .join(" ")
       .trim();
 
+    let sentMessageId: string | null = null;
     const sendReply = async () => {
       if (resolveGoogleExecutionTarget(args.grant) === "cloud") {
         await this.googleManagedClient.sendGmailReply({
@@ -11232,7 +12093,7 @@ export class LifeOpsService {
         });
         return;
       }
-      await sendGoogleGmailReply({
+      const result = await sendGoogleGmailReply({
         accessToken: (
           await ensureFreshGoogleAccessToken(
             args.grant.tokenRef ??
@@ -11246,10 +12107,12 @@ export class LifeOpsService {
         inReplyTo: messageIdHeader,
         references: references.length > 0 ? references : null,
       });
+      sentMessageId = result.messageId;
     };
     await (resolveGoogleExecutionTarget(args.grant) === "cloud"
       ? this.runManagedGoogleOperation(args.grant, sendReply)
       : this.withGoogleGrantOperation(args.grant, sendReply));
+    return sentMessageId;
   }
 
   async sendGmailReply(
@@ -11320,7 +12183,7 @@ export class LifeOpsService {
     if (!message) {
       fail(404, "life-ops Gmail message not found");
     }
-    await this.sendGmailReplyWithGrant({
+    const sentMessageId = await this.sendGmailReplyWithGrant({
       grant,
       message,
       to: request.to,
@@ -11334,6 +12197,7 @@ export class LifeOpsService {
       "gmail reply sent",
       {
         messageId: message.id,
+        sentMessageId,
         to: request.to ?? null,
         cc: request.cc ?? null,
         confirmSend,
@@ -11341,6 +12205,7 @@ export class LifeOpsService {
       {
         subject: request.subject ?? message.subject,
         sent: true,
+        sentMessageId,
       },
     );
     return { ok: true };
@@ -11380,6 +12245,7 @@ export class LifeOpsService {
       mode,
       side,
     );
+    let sentMessageId: string | null = null;
     const sendMessage = async () => {
       // Cloud-managed gmail send for new messages isn't exposed by the
       // managed client yet — refuse loudly so callers don't think the
@@ -11390,7 +12256,7 @@ export class LifeOpsService {
           "Gmail compose-and-send is not supported through the cloud-managed connector yet.",
         );
       }
-      await sendGoogleGmailMessage({
+      const result = await sendGoogleGmailMessage({
         accessToken: (
           await ensureFreshGoogleAccessToken(
             grant.tokenRef ??
@@ -11403,6 +12269,7 @@ export class LifeOpsService {
         subject,
         bodyText,
       });
+      sentMessageId = result.messageId;
     };
 
     await (resolveGoogleExecutionTarget(grant) === "cloud"
@@ -11418,10 +12285,12 @@ export class LifeOpsService {
         cc: cc.length > 0 ? cc : null,
         bcc: bcc.length > 0 ? bcc : null,
         confirmSend,
+        sentMessageId,
       },
       {
         subject,
         sent: true,
+        sentMessageId,
       },
     );
     return { ok: true };

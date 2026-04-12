@@ -7,6 +7,7 @@
 
 import type { StewardStatusResponse } from "@miladyai/app-core/api";
 import { useApp } from "@miladyai/app-core/state";
+import { WidgetHost } from "../../widgets";
 import {
   Button,
   Dialog,
@@ -1081,6 +1082,8 @@ export function InventoryView() {
           )}
         </div>
       </PageLayout>
+
+      <WidgetHost slot="wallet" className="px-4 py-3" />
 
       {/* ── Wallet & RPC popup ── */}
       <Dialog open={walletRpcOpen} onOpenChange={setWalletRpcOpen}>

@@ -288,8 +288,10 @@ const ONBOARDING_STEP_STORAGE_KEY = "eliza:onboarding:step";
 
 function normalizeOnboardingStep(value: unknown): OnboardingStep | null {
   switch (value) {
+    case "deployment":
     case "identity":
     case "providers":
+    case "features":
       return value;
     case "permissions":
     case "launch":
@@ -298,11 +300,11 @@ function normalizeOnboardingStep(value: unknown): OnboardingStep | null {
     // Legacy step ID migration — map old persisted values to new equivalents
     case "cloud_login":
     case "welcome":
-      // cloud_login is now handled by the splash page; resume at identity
-      return "identity";
+      // cloud_login is now part of deployment step; resume at deployment
+      return "deployment";
     case "hosting":
     case "connection":
-      // hosting is now handled by the splash page; resume at providers
+      // hosting is now part of deployment step; resume at providers
       return "providers";
     case "cloudLogin":
     case "rpc":
@@ -543,6 +545,22 @@ export function loadWalletEnabled(): boolean {
 export function saveWalletEnabled(value: boolean): void {
   tryLocalStorage(() => {
     localStorage.setItem(WALLET_ENABLED_KEY, String(value));
+  }, undefined);
+}
+
+/* ── Browser enabled persistence ────────────────────────────────────── */
+const BROWSER_ENABLED_KEY = "eliza:browser:enabled";
+
+export function loadBrowserEnabled(): boolean {
+  return tryLocalStorage(() => {
+    const stored = localStorage.getItem(BROWSER_ENABLED_KEY);
+    return stored === null ? true : stored === "true";
+  }, true);
+}
+
+export function saveBrowserEnabled(value: boolean): void {
+  tryLocalStorage(() => {
+    localStorage.setItem(BROWSER_ENABLED_KEY, String(value));
   }, undefined);
 }
 

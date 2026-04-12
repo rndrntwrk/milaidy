@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import type { IAgentRuntime, UUID } from "@elizaos/core";
+import { ModelType, type IAgentRuntime, type UUID } from "@elizaos/core";
 import type { LifeOpsGmailMessageSummary } from "@miladyai/shared/contracts/lifeops";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -17,6 +17,11 @@ const ownerEntityMocks = vi.hoisted(() => ({
   resolveOwnerEntityId: vi.fn(),
 }));
 
+const appleReminderMocks = vi.hoisted(() => ({
+  createNativeAppleReminderLikeItem: vi.fn(),
+  readNativeAppleReminderMetadata: vi.fn(),
+}));
+
 vi.mock("@miladyai/plugin-selfcontrol/selfcontrol", () => ({
   getSelfControlStatus: selfControlMocks.getSelfControlStatus,
   startSelfControlBlock: selfControlMocks.startSelfControlBlock,
@@ -31,16 +36,37 @@ vi.mock("../runtime/owner-entity.js", () => ({
   resolveOwnerEntityId: ownerEntityMocks.resolveOwnerEntityId,
 }));
 
+vi.mock("./apple-reminders.js", () => ({
+  createNativeAppleReminderLikeItem:
+    appleReminderMocks.createNativeAppleReminderLikeItem,
+  readNativeAppleReminderMetadata: appleReminderMocks.readNativeAppleReminderMetadata,
+}));
+
 import { LifeOpsService } from "./service.js";
 
 function createRuntime() {
   return {
     agentId: "agent-lifeops" as UUID,
+    character: {
+      name: "Eliza",
+      system: "Be warm and direct.",
+      bio: ["You help the user stay on top of real-life commitments."],
+      style: {
+        all: ["Natural, concise, human."],
+        chat: ["Never sound like a system notification."],
+      },
+    },
     sendMessageToTarget: vi.fn().mockResolvedValue(undefined),
     getService: vi.fn(() => null),
     getTasks: vi.fn().mockResolvedValue([]),
+    useModel: vi.fn().mockResolvedValue(""),
+    getRoomsForParticipants: vi.fn().mockResolvedValue([]),
+    getMemoriesByRoomIds: vi.fn().mockResolvedValue([]),
   } as unknown as IAgentRuntime & {
     sendMessageToTarget: ReturnType<typeof vi.fn>;
+    useModel: ReturnType<typeof vi.fn>;
+    getRoomsForParticipants: ReturnType<typeof vi.fn>;
+    getMemoriesByRoomIds: ReturnType<typeof vi.fn>;
   };
 }
 
@@ -147,6 +173,165 @@ describe("LifeOpsService", () => {
       status: createSelfControlStatus(),
     });
     ownerEntityMocks.resolveOwnerEntityId.mockResolvedValue(null);
+    appleReminderMocks.readNativeAppleReminderMetadata.mockReturnValue(null);
+    appleReminderMocks.createNativeAppleReminderLikeItem.mockResolvedValue({
+      ok: true,
+      provider: "apple_reminders",
+      reminderId: "native-reminder-1",
+    });
+  });
+
+  it("syncs one-off owner definitions into native Apple reminders during createDefinition", async () => {
+    const runtime = createRuntime();
+    const service = new LifeOpsService(runtime);
+    const createDefinition = vi.fn().mockResolvedValue(undefined);
+    const listOccurrencesForDefinition = vi.fn().mockResolvedValue([]);
+
+    (service as unknown as { repository: Record<string, unknown> }).repository =
+      {
+        createDefinition,
+        listOccurrencesForDefinition,
+      };
+    (
+      service as unknown as {
+        syncReminderPlan: ReturnType<typeof vi.fn>;
+        syncGoalLink: ReturnType<typeof vi.fn>;
+        refreshDefinitionOccurrences: ReturnType<typeof vi.fn>;
+        recordAudit: ReturnType<typeof vi.fn>;
+        syncWebsiteAccessState: ReturnType<typeof vi.fn>;
+      }
+    ).syncReminderPlan = vi.fn().mockResolvedValue(null);
+    (
+      service as unknown as {
+        syncGoalLink: ReturnType<typeof vi.fn>;
+      }
+    ).syncGoalLink = vi.fn().mockResolvedValue(undefined);
+    (
+      service as unknown as {
+        refreshDefinitionOccurrences: ReturnType<typeof vi.fn>;
+      }
+    ).refreshDefinitionOccurrences = vi.fn().mockResolvedValue(undefined);
+    (
+      service as unknown as {
+        recordAudit: ReturnType<typeof vi.fn>;
+      }
+    ).recordAudit = vi.fn().mockResolvedValue(undefined);
+    (
+      service as unknown as {
+        syncWebsiteAccessState: ReturnType<typeof vi.fn>;
+      }
+    ).syncWebsiteAccessState = vi.fn().mockResolvedValue(undefined);
+
+    appleReminderMocks.readNativeAppleReminderMetadata.mockReturnValue({
+      kind: "reminder",
+      provider: "apple_reminders",
+      source: "llm",
+    });
+
+    await service.createDefinition({
+      ownership: { subjectType: "owner", domain: "user_lifeops" },
+      kind: "task",
+      title: "Call mom",
+      description: "Call mom tomorrow morning.",
+      originalIntent: "set a reminder for tomorrow at 9am to call mom",
+      cadence: {
+        kind: "once",
+        dueAt: "2026-04-12T15:00:00.000Z",
+      },
+      metadata: {
+        nativeAppleReminder: {
+          kind: "reminder",
+          provider: "apple_reminders",
+          source: "llm",
+        },
+      },
+      source: "chat",
+    });
+
+    expect(createDefinition).toHaveBeenCalledTimes(1);
+    expect(appleReminderMocks.readNativeAppleReminderMetadata).toHaveBeenCalled();
+    expect(
+      appleReminderMocks.createNativeAppleReminderLikeItem,
+    ).toHaveBeenCalledWith({
+      kind: "reminder",
+      title: "Call mom",
+      dueAt: "2026-04-12T15:00:00.000Z",
+      notes: "Call mom tomorrow morning.",
+      originalIntent: "set a reminder for tomorrow at 9am to call mom",
+    });
+  });
+
+  it("skips native Apple reminder sync for recurring definitions", async () => {
+    const runtime = createRuntime();
+    const service = new LifeOpsService(runtime);
+    const createDefinition = vi.fn().mockResolvedValue(undefined);
+    const listOccurrencesForDefinition = vi.fn().mockResolvedValue([]);
+
+    (service as unknown as { repository: Record<string, unknown> }).repository =
+      {
+        createDefinition,
+        listOccurrencesForDefinition,
+      };
+    (
+      service as unknown as {
+        syncReminderPlan: ReturnType<typeof vi.fn>;
+        syncGoalLink: ReturnType<typeof vi.fn>;
+        refreshDefinitionOccurrences: ReturnType<typeof vi.fn>;
+        recordAudit: ReturnType<typeof vi.fn>;
+        syncWebsiteAccessState: ReturnType<typeof vi.fn>;
+      }
+    ).syncReminderPlan = vi.fn().mockResolvedValue(null);
+    (
+      service as unknown as {
+        syncGoalLink: ReturnType<typeof vi.fn>;
+      }
+    ).syncGoalLink = vi.fn().mockResolvedValue(undefined);
+    (
+      service as unknown as {
+        refreshDefinitionOccurrences: ReturnType<typeof vi.fn>;
+      }
+    ).refreshDefinitionOccurrences = vi.fn().mockResolvedValue(undefined);
+    (
+      service as unknown as {
+        recordAudit: ReturnType<typeof vi.fn>;
+      }
+    ).recordAudit = vi.fn().mockResolvedValue(undefined);
+    (
+      service as unknown as {
+        syncWebsiteAccessState: ReturnType<typeof vi.fn>;
+      }
+    ).syncWebsiteAccessState = vi.fn().mockResolvedValue(undefined);
+
+    appleReminderMocks.readNativeAppleReminderMetadata.mockReturnValue({
+      kind: "reminder",
+      provider: "apple_reminders",
+      source: "llm",
+    });
+
+    await service.createDefinition({
+      ownership: { subjectType: "owner", domain: "user_lifeops" },
+      kind: "task",
+      title: "Call mom",
+      description: "Call mom every morning.",
+      originalIntent: "remind me every day at 9am to call mom",
+      cadence: {
+        kind: "daily",
+        windows: ["morning"],
+      },
+      metadata: {
+        nativeAppleReminder: {
+          kind: "reminder",
+          provider: "apple_reminders",
+          source: "llm",
+        },
+      },
+      source: "chat",
+    });
+
+    expect(createDefinition).toHaveBeenCalledTimes(1);
+    expect(
+      appleReminderMocks.createNativeAppleReminderLikeItem,
+    ).not.toHaveBeenCalled();
   });
 
   it("dispatches connected runtime reminders through the owner contact", async () => {
@@ -199,6 +384,336 @@ describe("LifeOpsService", () => {
       outcome: "delivered",
       connectorRef: "runtime:discord:dm-1",
     });
+  });
+
+  it("builds reminder copy from recent conversation, nearby reminders, and character voice", async () => {
+    const runtime = createRuntime();
+    runtime.useModel.mockResolvedValue(
+      'Follow-up reminder: Call mom now, then handle rent right after.',
+    );
+    runtime.getRoomsForParticipants.mockResolvedValue(["room-1"]);
+    runtime.getMemoriesByRoomIds.mockResolvedValue([
+      {
+        entityId: "owner-1",
+        createdAt: "2026-04-06T11:50:00.000Z",
+        content: { text: "older note that should fall off the last six lines" },
+      },
+      {
+        entityId: "owner-1",
+        createdAt: "2026-04-06T11:55:00.000Z",
+        content: { text: "please remind me to call mom before work" },
+      },
+      {
+        entityId: "agent-lifeops",
+        createdAt: "2026-04-06T11:56:00.000Z",
+        content: { text: "I’ll make sure it feels like a real nudge." },
+      },
+      {
+        entityId: "owner-1",
+        createdAt: "2026-04-06T11:57:00.000Z",
+        content: { text: "and rent is due too" },
+      },
+      {
+        entityId: "agent-lifeops",
+        createdAt: "2026-04-06T11:58:00.000Z",
+        content: { text: "I can mention that if it helps." },
+      },
+      {
+        entityId: "agent-lifeops",
+        createdAt: "2026-04-06T11:58:30.000Z",
+        content: { type: "action_result", text: "ignore this internal result" },
+      },
+      {
+        entityId: "owner-1",
+        createdAt: "2026-04-06T11:59:00.000Z",
+        content: { text: "keep it casual" },
+      },
+      {
+        entityId: "agent-lifeops",
+        createdAt: "2026-04-06T11:59:15.000Z",
+        content: { text: "I’ll keep it short." },
+      },
+      {
+        entityId: "agent-lifeops",
+        createdAt: "2026-04-06T11:59:30.000Z",
+        content: { text: "Reminder: this old stiff line should be ignored." },
+      },
+    ]);
+
+    const service = new LifeOpsService(runtime, { ownerEntityId: "owner-1" });
+    (service as unknown as { repository: Record<string, unknown> }).repository =
+      {
+        listChannelPolicies: vi.fn().mockResolvedValue([]),
+        createReminderAttempt: vi.fn().mockResolvedValue(undefined),
+      };
+    (
+      service as unknown as { recordReminderAudit: ReturnType<typeof vi.fn> }
+    ).recordReminderAudit = vi.fn().mockResolvedValue(undefined);
+
+    const attempt = await (
+      service as unknown as {
+        dispatchReminderAttempt: (
+          args: Record<string, unknown>,
+        ) => Promise<Record<string, unknown>>;
+      }
+    ).dispatchReminderAttempt({
+      plan: { id: "plan-voice-context" },
+      ownerType: "occurrence",
+      ownerId: "occ-voice-context",
+      occurrenceId: "occ-voice-context",
+      subjectType: "owner",
+      title: "Call mom",
+      channel: "discord",
+      stepIndex: 0,
+      scheduledFor: "2026-04-06T12:00:00.000Z",
+      dueAt: "2026-04-06T12:00:00.000Z",
+      urgency: "medium",
+      quietHours: {},
+      acknowledged: false,
+      attemptedAt: "2026-04-06T12:00:00.000Z",
+      nearbyReminderTitles: ["Pay rent", "Submit invoice"],
+    });
+
+    expect(runtime.useModel).toHaveBeenCalledWith(
+      ModelType.TEXT_SMALL,
+      expect.objectContaining({
+        prompt: expect.stringContaining("Write a short reminder nudge"),
+      }),
+    );
+    const prompt = runtime.useModel.mock.calls[0]?.[1]?.prompt;
+    expect(prompt).toContain("System:\nBe warm and direct.");
+    expect(prompt).toContain("- Natural, concise, human.");
+    expect(prompt).toContain("User: please remind me to call mom before work");
+    expect(prompt).toContain("Eliza: I’ll make sure it feels like a real nudge.");
+    expect(prompt).toContain("User: and rent is due too");
+    expect(prompt).toContain("User: keep it casual");
+    expect(prompt).toContain("Eliza: I’ll keep it short.");
+    expect(prompt).toContain("- Pay rent");
+    expect(prompt).toContain("- Submit invoice");
+    expect(prompt).not.toContain(
+      "older note that should fall off the last six lines",
+    );
+    expect(prompt).not.toContain("ignore this internal result");
+    expect(prompt).not.toContain("this old stiff line should be ignored");
+
+    expect(runtime.sendMessageToTarget).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: "discord",
+        entityId: "owner-1",
+        channelId: "dm-1",
+      }),
+      expect.objectContaining({
+        text: "Call mom now, then handle rent right after.",
+      }),
+    );
+    expect(attempt).toMatchObject({
+      outcome: "delivered",
+      connectorRef: "runtime:discord:dm-1",
+    });
+  });
+
+  it("emits in-app reminder nudges with the generated natural text", async () => {
+    const runtime = createRuntime();
+    runtime.useModel.mockResolvedValue(
+      "Call mom now. Pay rent is right behind it.",
+    );
+    runtime.getRoomsForParticipants.mockResolvedValue(["room-1"]);
+    runtime.getMemoriesByRoomIds.mockResolvedValue([
+      {
+        entityId: "owner-1",
+        createdAt: "2026-04-06T11:59:00.000Z",
+        content: { text: "call mom at noon" },
+      },
+    ]);
+
+    const service = new LifeOpsService(runtime, { ownerEntityId: "owner-1" });
+    const emitAssistantEvent = vi
+      .spyOn(
+        service as unknown as {
+          emitAssistantEvent: (
+            text: string,
+            source: string,
+            data?: Record<string, unknown>,
+          ) => void;
+        },
+        "emitAssistantEvent",
+      )
+      .mockImplementation(() => undefined);
+    (service as unknown as { repository: Record<string, unknown> }).repository =
+      {
+        createReminderAttempt: vi.fn().mockResolvedValue(undefined),
+      };
+    (
+      service as unknown as { recordReminderAudit: ReturnType<typeof vi.fn> }
+    ).recordReminderAudit = vi.fn().mockResolvedValue(undefined);
+
+    await (
+      service as unknown as {
+        dispatchReminderAttempt: (
+          args: Record<string, unknown>,
+        ) => Promise<Record<string, unknown>>;
+      }
+    ).dispatchReminderAttempt({
+      plan: { id: "plan-in-app-natural" },
+      ownerType: "occurrence",
+      ownerId: "occ-in-app-natural",
+      occurrenceId: "occ-in-app-natural",
+      subjectType: "owner",
+      title: "Call mom",
+      channel: "in_app",
+      stepIndex: 0,
+      scheduledFor: "2026-04-06T12:00:00.000Z",
+      dueAt: "2026-04-06T12:00:00.000Z",
+      urgency: "medium",
+      quietHours: {},
+      acknowledged: false,
+      attemptedAt: "2026-04-06T12:00:00.000Z",
+      nearbyReminderTitles: ["Pay rent"],
+    });
+
+    expect(emitAssistantEvent).toHaveBeenCalledWith(
+      "Call mom now. Pay rent is right behind it.",
+      "lifeops-reminder",
+      expect.objectContaining({
+        ownerType: "occurrence",
+        ownerId: "occ-in-app-natural",
+        subjectType: "owner",
+        scheduledFor: "2026-04-06T12:00:00.000Z",
+        dueAt: "2026-04-06T12:00:00.000Z",
+      }),
+    );
+  });
+
+  it("falls back to a natural non-ISO reminder body when generation fails", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-06T12:00:00.000Z"));
+    try {
+      const runtime = createRuntime();
+      runtime.useModel.mockRejectedValue(new Error("model offline"));
+      const service = new LifeOpsService(runtime, { ownerEntityId: "owner-1" });
+      const emitAssistantEvent = vi
+        .spyOn(
+          service as unknown as {
+            emitAssistantEvent: (
+              text: string,
+              source: string,
+              data?: Record<string, unknown>,
+            ) => void;
+          },
+          "emitAssistantEvent",
+        )
+        .mockImplementation(() => undefined);
+      (service as unknown as { repository: Record<string, unknown> })
+        .repository = {
+        createReminderAttempt: vi.fn().mockResolvedValue(undefined),
+      };
+      (
+        service as unknown as { recordReminderAudit: ReturnType<typeof vi.fn> }
+      ).recordReminderAudit = vi.fn().mockResolvedValue(undefined);
+
+      await (
+        service as unknown as {
+          dispatchReminderAttempt: (
+            args: Record<string, unknown>,
+          ) => Promise<Record<string, unknown>>;
+        }
+      ).dispatchReminderAttempt({
+        plan: { id: "plan-fallback-body" },
+        ownerType: "occurrence",
+        ownerId: "occ-fallback-body",
+        occurrenceId: "occ-fallback-body",
+        subjectType: "owner",
+        title: "Call mom",
+        channel: "in_app",
+        stepIndex: 0,
+        scheduledFor: "2026-04-06T12:00:00.000Z",
+        dueAt: "2026-04-06T12:00:00.000Z",
+        urgency: "medium",
+        quietHours: {},
+        acknowledged: false,
+        attemptedAt: "2026-04-06T12:00:00.000Z",
+        nearbyReminderTitles: ["Pay rent", "Submit invoice"],
+      });
+
+      const emittedText = emitAssistantEvent.mock.calls[0]?.[0];
+      expect(runtime.useModel).toHaveBeenCalledTimes(1);
+      expect(typeof emittedText).toBe("string");
+      expect(emittedText).toContain("Call mom");
+      expect(emittedText).toContain("Pay rent");
+      expect(emittedText).not.toMatch(/follow[- ]?up reminder|reminder:/i);
+      expect(emittedText).not.toContain("2026-04-06T12:00:00.000Z");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("renders workflow assistant nudges in natural language", async () => {
+    const runtime = createRuntime();
+    runtime.useModel.mockResolvedValue(
+      "Workflow: Night reset wrapped cleanly.",
+    );
+    runtime.getRoomsForParticipants.mockResolvedValue(["room-1"]);
+    runtime.getMemoriesByRoomIds.mockResolvedValue([
+      {
+        entityId: "owner-1",
+        createdAt: "2026-04-06T11:59:00.000Z",
+        content: { text: "keep these updates casual" },
+      },
+    ]);
+
+    const service = new LifeOpsService(runtime, { ownerEntityId: "owner-1" });
+    const emitAssistantEvent = vi
+      .spyOn(
+        service as unknown as {
+          emitAssistantEvent: (
+            text: string,
+            source: string,
+            data?: Record<string, unknown>,
+          ) => void;
+        },
+        "emitAssistantEvent",
+      )
+      .mockImplementation(() => undefined);
+
+    await (
+      service as unknown as {
+        emitWorkflowRunNudge: (
+          workflow: Record<string, unknown>,
+          run: Record<string, unknown>,
+        ) => Promise<void>;
+      }
+    ).emitWorkflowRunNudge(
+      {
+        id: "workflow-1",
+        title: "Night reset",
+        subjectType: "owner",
+      },
+      {
+        id: "workflow-run-1",
+        status: "success",
+      },
+    );
+
+    expect(runtime.useModel).toHaveBeenCalledWith(
+      ModelType.TEXT_SMALL,
+      expect.objectContaining({
+        prompt: expect.stringContaining('workflow "Night reset"'),
+      }),
+    );
+    const prompt = runtime.useModel.mock.calls[0]?.[1]?.prompt;
+    expect(prompt).toContain("User: keep these updates casual");
+    expect(prompt).toContain("- status: success");
+    expect(emitAssistantEvent).toHaveBeenCalledWith(
+      "Night reset wrapped cleanly.",
+      "lifeops-workflow",
+      expect.objectContaining({
+        workflowId: "workflow-1",
+        workflowTitle: "Night reset",
+        workflowRunId: "workflow-run-1",
+        status: "success",
+        subjectType: "owner",
+      }),
+    );
   });
 
   it("falls back to the owner entity when discord has no explicit owner contact", async () => {
@@ -1820,6 +2335,14 @@ describe("LifeOpsService", () => {
         label: "Personal Chrome",
         profileLabel: "Default",
         extensionVersion: "1.0.0",
+        permissions: {
+          tabs: true,
+          scripting: true,
+          activeTab: true,
+          allOrigins: true,
+          grantedOrigins: ["<all_urls>", "https://*.example.com/*"],
+          incognitoEnabled: false,
+        },
       },
       tabs: [
         {
@@ -1881,6 +2404,10 @@ describe("LifeOpsService", () => {
     expect(result.currentPage?.mainText).toContain("[redacted-secret]");
     expect(pageContexts).toHaveLength(1);
     expect(companions).toHaveLength(1);
+    expect(companions[0]?.permissions).toMatchObject({
+      allOrigins: true,
+      grantedOrigins: ["<all_urls>", "https://*.example.com/*"],
+    });
   });
 
   it("creates queued browser sessions and respects the confirmation lifecycle", async () => {

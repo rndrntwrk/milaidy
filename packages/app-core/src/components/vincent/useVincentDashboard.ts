@@ -1,34 +1,19 @@
 /**
  * useVincentDashboard — aggregated data hook for the Vincent overlay app.
  *
- * Polls the established steward endpoints every 15 s when Vincent is
- * connected, and also attempts the three new Vincent-specific endpoints
- * (/api/vincent/vault-status, /api/vincent/trading-profile,
- * /api/vincent/strategy).  404s from those endpoints are treated as
- * "not yet implemented" and the corresponding state stays null, so the
- * UI renders gracefully before the backend task ships.
+ * Polls Vincent-specific endpoints every 15 s when connected, and fetches
+ * the agent's internal wallet addresses + balances (not steward — steward
+ * is a separate optional vault layer).
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { client } from "../../api";
 import type {
-  StewardPendingApproval,
-  StewardStatusResponse,
-  StewardTxRecord,
+  WalletAddresses,
+  WalletBalancesResponse,
 } from "@miladyai/shared/contracts/wallet";
 
-// ── New endpoint types (will be satisfied by the backend task) ──────────
-
-export interface VincentVaultStatus {
-  connected: boolean;
-  connectedAt: number | null;
-  vaultHealth: "ok" | "degraded" | "error" | null;
-  evmAddress: string | null;
-  solanaAddress: string | null;
-  nativeBalance: string | null;
-  tokenBalance: string | null;
-  treasuryValueUsd: string | null;
-}
+// ── Vincent endpoint types ──────────────────────────────────────────────
 
 export interface VincentStrategy {
   name: "dca" | "rebalance" | "threshold" | "manual" | null;
@@ -53,24 +38,15 @@ export interface VincentDashboardState {
   vincentConnected: boolean;
   vincentConnectedAt: number | null;
 
-  // Steward vault status (GET /api/wallet/steward-status)
-  stewardStatus: StewardStatusResponse | null;
-
-  // Aggregated vault + balances (GET /api/vincent/vault-status)
-  vaultStatus: VincentVaultStatus | null;
+  // Internal agent wallet (addresses + balances)
+  walletAddresses: WalletAddresses | null;
+  walletBalances: WalletBalancesResponse | null;
 
   // Current strategy config (GET /api/vincent/strategy)
   strategy: VincentStrategy | null;
 
   // P&L analytics (GET /api/vincent/trading-profile)
   tradingProfile: VincentTradingProfile | null;
-
-  // Transaction history (GET /api/wallet/steward-history)
-  txHistory: StewardTxRecord[];
-  txHistoryTotal: number;
-
-  // Approval queue (GET /api/wallet/steward-pending)
-  pendingApprovals: StewardPendingApproval[];
 
   // Loading + error state
   loading: boolean;
@@ -98,19 +74,13 @@ export function useVincentDashboard(): VincentDashboardState {
   const [vincentConnectedAt, setVincentConnectedAt] = useState<number | null>(
     null,
   );
-  const [stewardStatus, setStewardStatus] =
-    useState<StewardStatusResponse | null>(null);
-  const [vaultStatus, setVaultStatus] = useState<VincentVaultStatus | null>(
-    null,
-  );
+  const [walletAddresses, setWalletAddresses] =
+    useState<WalletAddresses | null>(null);
+  const [walletBalances, setWalletBalances] =
+    useState<WalletBalancesResponse | null>(null);
   const [strategy, setStrategy] = useState<VincentStrategy | null>(null);
   const [tradingProfile, setTradingProfile] =
     useState<VincentTradingProfile | null>(null);
-  const [txHistory, setTxHistory] = useState<StewardTxRecord[]>([]);
-  const [txHistoryTotal, setTxHistoryTotal] = useState(0);
-  const [pendingApprovals, setPendingApprovals] = useState<
-    StewardPendingApproval[]
-  >([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -125,34 +95,26 @@ export function useVincentDashboard(): VincentDashboardState {
       setVincentConnected(vincentStatusResult.connected);
       setVincentConnectedAt(vincentStatusResult.connectedAt);
 
-      // Fetch steward + vault data in parallel
+      // Fetch internal wallet + Vincent data in parallel
       const [
-        stewardResult,
-        vaultStatusResult,
+        addressResult,
+        balanceResult,
         strategyResult,
         tradingProfileResult,
-        historyResult,
-        pendingResult,
       ] = await Promise.allSettled([
-        client.getStewardStatus(),
-        fetchOrNull<VincentVaultStatus>("/api/vincent/vault-status"),
+        client.getWalletAddresses(),
+        client.getWalletBalances(),
         fetchOrNull<VincentStrategy>("/api/vincent/strategy"),
         fetchOrNull<VincentTradingProfile>("/api/vincent/trading-profile"),
-        vincentStatusResult.connected
-          ? client.getStewardHistory({ limit: 200 })
-          : Promise.resolve({ records: [], total: 0, offset: 0, limit: 200 }),
-        vincentStatusResult.connected
-          ? client.getStewardPending()
-          : Promise.resolve([]),
       ]);
 
       if (!mountedRef.current) return;
 
-      if (stewardResult.status === "fulfilled") {
-        setStewardStatus(stewardResult.value);
+      if (addressResult.status === "fulfilled") {
+        setWalletAddresses(addressResult.value);
       }
-      if (vaultStatusResult.status === "fulfilled") {
-        setVaultStatus(vaultStatusResult.value);
+      if (balanceResult.status === "fulfilled") {
+        setWalletBalances(balanceResult.value);
       }
       if (strategyResult.status === "fulfilled" && strategyResult.value) {
         // API wraps in { connected, strategy: {...} }
@@ -178,24 +140,6 @@ export function useVincentDashboard(): VincentDashboardState {
             ? raw.profile
             : (raw as VincentTradingProfile),
         );
-      }
-      if (historyResult.status === "fulfilled") {
-        const h = historyResult.value;
-        // getStewardHistory wraps records in an object;
-        // the Promise.resolve fallback already matches that shape.
-        const records = Array.isArray(h)
-          ? (h as StewardTxRecord[])
-          : ((h as { records: StewardTxRecord[]; total: number }).records ??
-            []);
-        const total = Array.isArray(h)
-          ? records.length
-          : ((h as { total: number }).total ?? 0);
-        setTxHistory(records);
-        setTxHistoryTotal(total);
-      }
-      if (pendingResult.status === "fulfilled") {
-        const pending = pendingResult.value;
-        setPendingApprovals(Array.isArray(pending) ? pending : []);
       }
 
       setError(null);
@@ -244,13 +188,10 @@ export function useVincentDashboard(): VincentDashboardState {
   return {
     vincentConnected,
     vincentConnectedAt,
-    stewardStatus,
-    vaultStatus,
+    walletAddresses,
+    walletBalances,
     strategy,
     tradingProfile,
-    txHistory,
-    txHistoryTotal,
-    pendingApprovals,
     loading,
     error,
     refresh,

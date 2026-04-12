@@ -366,10 +366,14 @@ describe("AppProvider onboarding step resume", () => {
 
       const snap = api?.getSnapshot();
       // The first onboarding step varies by version: "wakeUp", "welcome",
-      // "cloud_login", or "identity". All represent a fresh entry point.
-      expect(["wakeUp", "welcome", "cloud_login", "identity"]).toContain(
-        snap?.onboardingStep,
-      );
+      // "cloud_login", "identity", or "deployment". All represent a fresh entry point.
+      expect([
+        "wakeUp",
+        "welcome",
+        "cloud_login",
+        "identity",
+        "deployment",
+      ]).toContain(snap?.onboardingStep);
       expect(snap?.onboardingServerTarget).toBe("");
     } finally {
       restoreClient();

@@ -4,7 +4,6 @@
 
 import type { LucideIcon } from "lucide-react";
 import {
-  Brain,
   Clock3,
   Gamepad2,
   MessageSquare,
@@ -14,7 +13,6 @@ import {
   Settings,
   Wallet,
 } from "lucide-react";
-import { DEFAULT_BRANDING } from "../config/branding";
 
 /** Apps are enabled by default; opt-out via VITE_ENABLE_APPS=false. */
 export const APPS_ENABLED =
@@ -27,7 +25,8 @@ export const COMPANION_ENABLED =
   String(import.meta.env.VITE_ENABLE_COMPANION_MODE ?? "true").toLowerCase() !==
   "false";
 
-export type Tab =
+/** Built-in tab identifiers. */
+export type BuiltinTab =
   | "chat"
   | "lifeops"
   | "browser"
@@ -54,6 +53,12 @@ export type Tab =
   | "desktop"
   | "settings"
   | "logs";
+
+/**
+ * Tab identifier — includes all built-in tabs plus arbitrary strings
+ * for dynamic plugin-provided nav-page widgets.
+ */
+export type Tab = BuiltinTab | (string & {});
 
 export const APPS_TOOL_TABS = [
   "lifeops",
@@ -135,20 +140,61 @@ export const ALL_TAB_GROUPS: TabGroup[] = [
   },
 ];
 
-/** Compute visible tab groups. Pass streamEnabled/walletEnabled explicitly for React reactivity. */
+/** A plugin-provided nav-page widget that should appear in the navigation. */
+export interface DynamicNavTab {
+  /** Tab ID — used as the route path segment. */
+  tabId: string;
+  /** Human-readable label for the nav button. */
+  label: string;
+  /** Which existing TabGroup to join, or a new group label to create. */
+  navGroup?: string;
+  /** Icon for new groups (lucide component). Falls back to Gamepad2. */
+  icon?: LucideIcon;
+  /** Description for new groups. */
+  description?: string;
+}
+
+/** Compute visible tab groups. Pass feature flags explicitly for React reactivity. */
 export function getTabGroups(
   streamEnabled = STREAM_ENABLED,
   walletEnabled = true,
+  browserEnabled = true,
+  dynamicTabs?: DynamicNavTab[],
 ): TabGroup[] {
-  return ALL_TAB_GROUPS.filter(
+  const groups = ALL_TAB_GROUPS.filter(
     (g) =>
       (APPS_ENABLED || g.label !== "Apps") &&
       (streamEnabled || g.label !== "Stream") &&
-      (walletEnabled || g.label !== "Wallet"),
+      (walletEnabled || g.label !== "Wallet") &&
+      (browserEnabled || g.label !== "Browser"),
   );
+
+  // Merge dynamic plugin-provided nav-page tabs into groups.
+  if (dynamicTabs?.length) {
+    for (const dt of dynamicTabs) {
+      const targetGroup = dt.navGroup
+        ? groups.find((g) => g.label === dt.navGroup)
+        : null;
+      if (targetGroup) {
+        if (!targetGroup.tabs.includes(dt.tabId)) {
+          targetGroup.tabs.push(dt.tabId);
+        }
+      } else {
+        // Create a new group for this tab.
+        groups.push({
+          label: dt.label,
+          tabs: [dt.tabId],
+          icon: dt.icon ?? Gamepad2,
+          description: dt.description,
+        });
+      }
+    }
+  }
+
+  return groups;
 }
 
-const TAB_PATHS: Record<Tab, string> = {
+const TAB_PATHS: Record<BuiltinTab, string> = {
   chat: "/chat",
   lifeops: "/lifeops",
   browser: "/browser",
@@ -206,7 +252,7 @@ function normalizePathForLookup(pathname: string, basePath = ""): string {
 
 export function pathForTab(tab: Tab, basePath = ""): string {
   const base = normalizeBasePath(basePath);
-  const p = TAB_PATHS[tab];
+  const p = TAB_PATHS[tab as BuiltinTab] ?? `/${tab}`;
   return base ? `${base}${p}` : p;
 }
 
@@ -241,9 +287,16 @@ export function tabFromPath(pathname: string, basePath = ""): Tab | null {
     return "chat";
   }
   // Apps disabled in production builds — redirect to chat
-  if (!APPS_ENABLED && (normalized === "/apps" || normalized === "/game")) {
+  if (
+    !APPS_ENABLED &&
+    (normalized === "/apps" ||
+      normalized.startsWith("/apps/") ||
+      normalized === "/game")
+  ) {
     return "chat";
   }
+  // /apps/<slug> resolves to the apps tab (slug handled by AppsView)
+  if (normalized.startsWith("/apps/")) return "apps";
   // Stream tab (always enabled)
   // Check current paths first, then legacy redirects
   return PATH_TO_TAB.get(normalized) ?? LEGACY_PATHS[normalized] ?? null;
@@ -265,6 +318,20 @@ function normalizePath(p: string): string {
   if (normalized.length > 1 && normalized.endsWith("/"))
     normalized = normalized.slice(0, -1);
   return normalized;
+}
+
+/**
+ * Extract an app slug from a `/apps/<slug>` path.
+ * Returns `null` when the path doesn't contain a slug segment.
+ */
+export function getAppSlugFromPath(
+  pathname: string,
+  basePath = "",
+): string | null {
+  const normalized = normalizePathForLookup(pathname, basePath);
+  if (!normalized.startsWith("/apps/")) return null;
+  const slug = normalized.slice("/apps/".length);
+  return slug || null;
 }
 
 export function titleForTab(tab: Tab): string {
@@ -320,6 +387,7 @@ export function titleForTab(tab: Tab): string {
     case "stream":
       return "Stream";
     default:
-      return DEFAULT_BRANDING.appName;
+      // Dynamic plugin tabs — capitalize the tab ID as a fallback title.
+      return tab.charAt(0).toUpperCase() + tab.slice(1).replace(/-/g, " ");
   }
 }

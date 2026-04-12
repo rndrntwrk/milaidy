@@ -1,8 +1,58 @@
 import type { LifeOpsCalendarEvent } from "@miladyai/shared/contracts/lifeops";
 import { GoogleApiError } from "./google-api-error.js";
+import { googleApiFetch } from "./google-fetch.js";
+import {
+  buildUtcDateFromLocalParts,
+  formatInstantAsRfc3339InTimeZone,
+} from "./time.js";
 
 const GOOGLE_CALENDAR_EVENTS_ENDPOINT =
   "https://www.googleapis.com/calendar/v3/calendars";
+
+function hasExplicitDateTimeOffset(dateTime: string): boolean {
+  return /(?:[zZ]|[+-]\d{2}:\d{2})$/.test(dateTime);
+}
+
+function buildGoogleDateTimePayload(
+  dateTime: string,
+  timeZone: string | undefined,
+): { dateTime: string; timeZone?: string } {
+  if (!timeZone) {
+    return { dateTime };
+  }
+  return {
+    dateTime: hasExplicitDateTimeOffset(dateTime)
+      ? formatInstantAsRfc3339InTimeZone(dateTime, timeZone)
+      : dateTime,
+    timeZone,
+  };
+}
+
+function normalizeGoogleDateOnly(
+  date: string,
+  timeZone: string | undefined,
+): { iso: string; timeZone: string | null } {
+  const match = date.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const effectiveTimeZone = timeZone?.trim() || "UTC";
+  if (!match) {
+    return {
+      iso: new Date(`${date}T00:00:00.000Z`).toISOString(),
+      timeZone: timeZone?.trim() || null,
+    };
+  }
+  const localizedMidnight = buildUtcDateFromLocalParts(effectiveTimeZone, {
+    year: Number(match[1]),
+    month: Number(match[2]),
+    day: Number(match[3]),
+    hour: 0,
+    minute: 0,
+    second: 0,
+  });
+  return {
+    iso: localizedMidnight.toISOString(),
+    timeZone: effectiveTimeZone,
+  };
+}
 
 interface GoogleCalendarEventDate {
   date?: string;
@@ -75,6 +125,7 @@ export interface SyncedGoogleCalendarEvent
 
 function readGoogleEventInstant(
   value: GoogleCalendarEventDate | undefined,
+  fallbackTimeZone?: string,
 ): { iso: string; isAllDay: boolean; timeZone: string | null } | null {
   if (!value) {
     return null;
@@ -87,10 +138,14 @@ function readGoogleEventInstant(
     };
   }
   if (typeof value.date === "string" && value.date.trim().length > 0) {
+    const normalized = normalizeGoogleDateOnly(
+      value.date,
+      value.timeZone?.trim() || fallbackTimeZone,
+    );
     return {
-      iso: new Date(`${value.date}T00:00:00.000Z`).toISOString(),
+      iso: normalized.iso,
       isAllDay: true,
-      timeZone: value.timeZone?.trim() || null,
+      timeZone: normalized.timeZone,
     };
   }
   return null;
@@ -110,10 +165,14 @@ function readConferenceLink(event: GoogleCalendarApiEvent): string | null {
 function normalizeGoogleCalendarEvent(
   calendarId: string,
   event: GoogleCalendarApiEvent,
+  fallbackTimeZone?: string,
 ): SyncedGoogleCalendarEvent | null {
   const externalId = event.id?.trim();
-  const start = readGoogleEventInstant(event.start);
-  const end = readGoogleEventInstant(event.end);
+  const start = readGoogleEventInstant(event.start, fallbackTimeZone);
+  const end = readGoogleEventInstant(
+    event.end,
+    start?.timeZone ?? fallbackTimeZone,
+  );
   if (!externalId || !start || !end) {
     return null;
   }
@@ -191,7 +250,7 @@ export async function fetchGoogleCalendarEvents(args: {
     params.set("timeZone", args.timeZone.trim());
   }
 
-  const response = await fetch(
+  const response = await googleApiFetch(
     `${GOOGLE_CALENDAR_EVENTS_ENDPOINT}/${encodeURIComponent(calendarId)}/events?${params.toString()}`,
     {
       headers: {
@@ -200,24 +259,49 @@ export async function fetchGoogleCalendarEvents(args: {
     },
   );
 
-  if (!response.ok) {
-    throw new GoogleApiError(
-      response.status,
-      await readGoogleCalendarError(response),
-    );
-  }
-
   const parsed = (await response.json()) as {
     items?: GoogleCalendarApiEvent[];
   };
   const events: SyncedGoogleCalendarEvent[] = [];
   for (const item of parsed.items ?? []) {
-    const normalized = normalizeGoogleCalendarEvent(calendarId, item);
+    const normalized = normalizeGoogleCalendarEvent(
+      calendarId,
+      item,
+      args.timeZone,
+    );
     if (normalized) {
       events.push(normalized);
     }
   }
   return events;
+}
+
+export async function fetchGoogleCalendarEvent(args: {
+  accessToken: string;
+  calendarId?: string;
+  eventId: string;
+  timeZone?: string;
+}): Promise<SyncedGoogleCalendarEvent> {
+  const calendarId = args.calendarId ?? "primary";
+  const response = await googleApiFetch(
+    `${GOOGLE_CALENDAR_EVENTS_ENDPOINT}/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(args.eventId)}`,
+    {
+      headers: {
+        Authorization: `Bearer ${args.accessToken}`,
+      },
+    },
+  );
+
+  const parsed = (await response.json()) as GoogleCalendarApiEvent;
+  const normalized = normalizeGoogleCalendarEvent(
+    calendarId,
+    parsed,
+    args.timeZone,
+  );
+  if (!normalized) {
+    throw new Error("Google Calendar get event returned an invalid payload.");
+  }
+  return normalized;
 }
 
 export async function createGoogleCalendarEvent(args: {
@@ -238,14 +322,8 @@ export async function createGoogleCalendarEvent(args: {
   const calendarId = args.calendarId ?? "primary";
   const body: GoogleCalendarCreateRequestBody = {
     summary: args.title,
-    start: {
-      dateTime: args.startAt,
-      timeZone: args.timeZone,
-    },
-    end: {
-      dateTime: args.endAt,
-      timeZone: args.timeZone,
-    },
+    start: buildGoogleDateTimePayload(args.startAt, args.timeZone),
+    end: buildGoogleDateTimePayload(args.endAt, args.timeZone),
   };
   if (args.description?.trim()) {
     body.description = args.description.trim();
@@ -263,7 +341,7 @@ export async function createGoogleCalendarEvent(args: {
     }));
   }
 
-  const response = await fetch(
+  const response = await googleApiFetch(
     `${GOOGLE_CALENDAR_EVENTS_ENDPOINT}/${encodeURIComponent(calendarId)}/events`,
     {
       method: "POST",
@@ -275,15 +353,12 @@ export async function createGoogleCalendarEvent(args: {
     },
   );
 
-  if (!response.ok) {
-    throw new GoogleApiError(
-      response.status,
-      await readGoogleCalendarError(response),
-    );
-  }
-
   const parsed = (await response.json()) as GoogleCalendarApiEvent;
-  const normalized = normalizeGoogleCalendarEvent(calendarId, parsed);
+  const normalized = normalizeGoogleCalendarEvent(
+    calendarId,
+    parsed,
+    args.timeZone,
+  );
   if (!normalized) {
     throw new Error(
       "Google Calendar create event returned an invalid payload.",
@@ -322,16 +397,10 @@ export async function updateGoogleCalendarEvent(args: {
     body.location = args.location;
   }
   if (args.startAt !== undefined) {
-    body.start = {
-      dateTime: args.startAt,
-      ...(args.timeZone ? { timeZone: args.timeZone } : {}),
-    };
+    body.start = buildGoogleDateTimePayload(args.startAt, args.timeZone);
   }
   if (args.endAt !== undefined) {
-    body.end = {
-      dateTime: args.endAt,
-      ...(args.timeZone ? { timeZone: args.timeZone } : {}),
-    };
+    body.end = buildGoogleDateTimePayload(args.endAt, args.timeZone);
   }
   if (args.attendees) {
     body.attendees = args.attendees.map((attendee) => ({
@@ -343,7 +412,7 @@ export async function updateGoogleCalendarEvent(args: {
     }));
   }
 
-  const response = await fetch(
+  const response = await googleApiFetch(
     `${GOOGLE_CALENDAR_EVENTS_ENDPOINT}/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(args.eventId)}`,
     {
       method: "PATCH",
@@ -355,15 +424,12 @@ export async function updateGoogleCalendarEvent(args: {
     },
   );
 
-  if (!response.ok) {
-    throw new GoogleApiError(
-      response.status,
-      await readGoogleCalendarError(response),
-    );
-  }
-
   const parsed = (await response.json()) as GoogleCalendarApiEvent;
-  const normalized = normalizeGoogleCalendarEvent(calendarId, parsed);
+  const normalized = normalizeGoogleCalendarEvent(
+    calendarId,
+    parsed,
+    args.timeZone,
+  );
   if (!normalized) {
     throw new Error(
       "Google Calendar update event returned an invalid payload.",
@@ -378,26 +444,24 @@ export async function deleteGoogleCalendarEvent(args: {
   eventId: string;
 }): Promise<void> {
   const calendarId = args.calendarId ?? "primary";
-  const response = await fetch(
-    `${GOOGLE_CALENDAR_EVENTS_ENDPOINT}/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(args.eventId)}`,
-    {
-      method: "DELETE",
-      headers: {
-        Authorization: `Bearer ${args.accessToken}`,
-      },
-    },
-  );
-
   // Google returns 204 on successful delete and 410 if the event was already
   // gone. Treat both as success — the user's intent (the event no longer
-  // exists) is satisfied either way.
-  if (response.status === 204 || response.status === 410) {
-    return;
-  }
-  if (!response.ok) {
-    throw new GoogleApiError(
-      response.status,
-      await readGoogleCalendarError(response),
+  // exists) is satisfied either way. We catch GoogleApiError(410) because
+  // googleApiFetch treats 4xx as permanent failures.
+  try {
+    await googleApiFetch(
+      `${GOOGLE_CALENDAR_EVENTS_ENDPOINT}/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(args.eventId)}`,
+      {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${args.accessToken}`,
+        },
+      },
     );
+  } catch (error) {
+    if (error instanceof GoogleApiError && error.status === 410) {
+      return;
+    }
+    throw error;
   }
 }

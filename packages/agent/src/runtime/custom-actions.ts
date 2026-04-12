@@ -599,7 +599,14 @@ function defToAction(def: CustomActionDef): Action {
     name: def.name,
     similes: def.similes ?? [],
     description: def.description,
-    validate: async () => true,
+    validate: async (runtime, message) => {
+      if (def.requiredRole && def.requiredRole !== "GUEST") {
+        const { hasRoleAccess } = await import("../security/access.js");
+        const allowed = await hasRoleAccess(runtime, message, def.requiredRole);
+        if (!allowed) return false;
+      }
+      return true;
+    },
 
     handler: async (_runtime, _message, _state, options) => {
       try {

@@ -1,6 +1,7 @@
 /**
  * BlueBubbles service for ElizaOS
  */
+import * as childProcess from "node:child_process";
 import {
 	ChannelType,
 	type Content,
@@ -28,8 +29,83 @@ import type {
 	BlueBubblesConfig,
 	BlueBubblesIncomingEvent,
 	BlueBubblesMessage,
+	BlueBubblesProbeResult,
 	BlueBubblesWebhookPayload,
 } from "./types";
+
+const AUTOSTART_PROBE_INTERVAL_MS = 1000;
+const DEFAULT_AUTOSTART_WAIT_MS = 15000;
+const DEFAULT_AUTOSTART_COMMAND = "open";
+const DEFAULT_AUTOSTART_ARGS = ["-a", "BlueBubbles"];
+
+function delay(ms: number): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+type BlueBubblesAutoStartConfig = {
+	command: string;
+	args: string[];
+	cwd?: string;
+	waitMs: number;
+};
+
+function isLoopbackHostname(hostname: string): boolean {
+	return (
+		hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1"
+	);
+}
+
+export function resolveBlueBubblesAutoStartConfig(
+	config: BlueBubblesConfig | null,
+	platform = process.platform,
+): BlueBubblesAutoStartConfig | null {
+	if (!config) {
+		return null;
+	}
+
+	const explicitCommand = config.autoStartCommand?.trim();
+	const explicitArgs = Array.isArray(config.autoStartArgs)
+		? config.autoStartArgs
+				.map((arg) => arg.trim())
+				.filter((arg) => arg.length > 0)
+		: [];
+	const cwd = config.autoStartCwd?.trim() || undefined;
+	const waitMs =
+		typeof config.autoStartWaitMs === "number" &&
+		Number.isFinite(config.autoStartWaitMs) &&
+		config.autoStartWaitMs >= 0
+			? config.autoStartWaitMs
+			: DEFAULT_AUTOSTART_WAIT_MS;
+
+	if (explicitCommand) {
+		return {
+			command: explicitCommand,
+			args: explicitArgs,
+			cwd,
+			waitMs,
+		};
+	}
+
+	if (platform !== "darwin") {
+		return null;
+	}
+
+	try {
+		const serverUrl = new URL(config.serverUrl);
+		if (!isLoopbackHostname(serverUrl.hostname)) {
+			return null;
+		}
+	} catch {
+		return null;
+	}
+
+	return {
+		command: DEFAULT_AUTOSTART_COMMAND,
+		args: explicitArgs.length > 0 ? explicitArgs : [...DEFAULT_AUTOSTART_ARGS],
+		cwd,
+		waitMs,
+	};
+}
 
 type MessageService = {
 	handleMessage: (
@@ -96,11 +172,15 @@ export class BlueBubblesService extends Service {
 
 		try {
 			// Probe the server to verify connectivity
-			const probeResult = await service.client.probe();
+			let probeResult = await service.client.probe();
 
 			if (!probeResult.ok) {
-				logger.error(
-					`Failed to connect to BlueBubbles server: ${probeResult.error}`,
+				probeResult = await service.tryAutoStartServer(probeResult);
+			}
+
+			if (!probeResult.ok) {
+				logger.warn(
+					`BlueBubbles server unavailable at startup: ${probeResult.error}. Continuing without BlueBubbles connectivity.`,
 				);
 				return service;
 			}
@@ -129,6 +209,107 @@ export class BlueBubblesService extends Service {
 		}
 
 		return service;
+	}
+
+	private getAutoStartConfig(): BlueBubblesAutoStartConfig | null {
+		return resolveBlueBubblesAutoStartConfig(this.blueBubblesConfig);
+	}
+
+	private async spawnAutoStartProcess(
+		command: string,
+		args: string[],
+		cwd?: string,
+	): Promise<void> {
+		await new Promise<void>((resolve, reject) => {
+			let settled = false;
+			const child = childProcess.spawn(command, args, {
+				cwd,
+				stdio: "ignore",
+				detached: process.platform !== "win32",
+			});
+
+			const cleanup = () => {
+				child.removeListener("error", onError);
+				child.removeListener("spawn", onSpawn);
+			};
+
+			const onError = (error: Error) => {
+				if (settled) return;
+				settled = true;
+				cleanup();
+				reject(error);
+			};
+
+			const onSpawn = () => {
+				if (settled) return;
+				settled = true;
+				cleanup();
+				child.unref();
+				resolve();
+			};
+
+			child.once("error", onError);
+			child.once("spawn", onSpawn);
+		});
+	}
+
+	private async tryAutoStartServer(
+		initialProbe: BlueBubblesProbeResult,
+	): Promise<BlueBubblesProbeResult> {
+		if (!this.client) {
+			return initialProbe;
+		}
+
+		const autoStart = this.getAutoStartConfig();
+		if (!autoStart) {
+			return initialProbe;
+		}
+
+		const commandPreview = [autoStart.command, ...autoStart.args]
+			.map((part) => (/\s/.test(part) ? JSON.stringify(part) : part))
+			.join(" ");
+		logger.info(
+			`Attempting to auto-start BlueBubbles server: ${commandPreview}`,
+		);
+
+		try {
+			await this.spawnAutoStartProcess(
+				autoStart.command,
+				autoStart.args,
+				autoStart.cwd,
+			);
+		} catch (error) {
+			return {
+				ok: false,
+				error: `auto-start command failed: ${error instanceof Error ? error.message : String(error)}`,
+			};
+		}
+
+		let probeResult = await this.client.probe();
+		const deadline = Date.now() + autoStart.waitMs;
+
+		while (!probeResult.ok && Date.now() < deadline) {
+			const sleepMs = Math.min(
+				AUTOSTART_PROBE_INTERVAL_MS,
+				Math.max(0, deadline - Date.now()),
+			);
+			if (sleepMs <= 0) {
+				break;
+			}
+			await delay(sleepMs);
+			probeResult = await this.client.probe();
+		}
+
+		if (!probeResult.ok && autoStart.waitMs > 0) {
+			return {
+				ok: false,
+				error:
+					`auto-start did not make BlueBubbles reachable within ${autoStart.waitMs}ms` +
+					(probeResult.error ? `: ${probeResult.error}` : ""),
+			};
+		}
+
+		return probeResult;
 	}
 
 	static registerSendHandlers(

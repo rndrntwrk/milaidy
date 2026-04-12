@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   buildActivityProfile: vi.fn<() => Promise<ActivityProfile>>(),
   refreshCurrentState: vi.fn<() => Promise<ActivityProfile>>(),
   readProfileFromMetadata: vi.fn<() => ActivityProfile | null>(),
-  readFiredLogFromMetadata: vi.fn<() => null>(),
+  readFiredLogFromMetadata: vi.fn<(...args: unknown[]) => FiredActionsLog | null>(),
   profileNeedsRebuild: vi.fn<() => boolean>(),
   resolveDefaultTimeZone: vi.fn(() => "UTC"),
   loadOwnerContactsConfig: vi.fn(() => ({})),
@@ -18,6 +18,8 @@ const mocks = vi.hoisted(() => ({
   mockGetOverview: vi.fn(),
   mockGetCalendarFeed: vi.fn(),
   mockListActivitySignals: vi.fn(() => []),
+  mockCheckAndOfferSeeding: vi.fn(),
+  mockMarkSeedingOffered: vi.fn(),
 }));
 
 vi.mock("./service.js", () => ({
@@ -43,6 +45,8 @@ vi.mock("../lifeops/service.js", () => ({
     getOverview = mocks.mockGetOverview;
     getCalendarFeed = mocks.mockGetCalendarFeed;
     listActivitySignals = mocks.mockListActivitySignals;
+    checkAndOfferSeeding = mocks.mockCheckAndOfferSeeding;
+    markSeedingOffered = mocks.mockMarkSeedingOffered;
   },
   LifeOpsServiceError: class extends Error {
     status: number;
@@ -309,6 +313,11 @@ describe("executeProactiveTask", () => {
     mocks.resolveDefaultTimeZone.mockReturnValue("UTC");
     mocks.mockGetOverview.mockResolvedValue({ occurrences: [] });
     mocks.mockGetCalendarFeed.mockResolvedValue({ events: [] });
+    mocks.mockCheckAndOfferSeeding.mockResolvedValue({
+      needsSeeding: false,
+      availableTemplates: [],
+    });
+    mocks.mockMarkSeedingOffered.mockResolvedValue(undefined);
     mocks.loadOwnerContactsConfig.mockReturnValue({});
     mocks.readFiredLogFromMetadata.mockReturnValue(null);
   });
@@ -605,6 +614,127 @@ describe("executeProactiveTask", () => {
       date: "2026-04-06",
       nudgedOccurrenceIds: [],
       nudgedCalendarEventIds: ["cal-standup"],
+    });
+  });
+
+  it("does not offer seed routines while the user is actively present", async () => {
+    const profile = makeProfile({
+      lastSeenAt: Date.now() - 2 * 60_000,
+      typicalWakeHour: 23,
+      typicalFirstActiveHour: 23,
+      typicalLastActiveHour: 23,
+      hasOpenActivityCycle: true,
+      isCurrentlyActive: true,
+      currentActivityCycleStartedAt: Date.parse("2026-04-06T06:55:00Z"),
+    });
+    mocks.resolveOwnerEntityId.mockResolvedValue("owner-1");
+    mocks.readProfileFromMetadata.mockReturnValue(profile);
+    mocks.profileNeedsRebuild.mockReturnValue(false);
+    mocks.refreshCurrentState.mockResolvedValue(profile);
+    mocks.mockCheckAndOfferSeeding.mockResolvedValue({
+      needsSeeding: true,
+      availableTemplates: [],
+    });
+    configureTelegramDelivery();
+
+    const task = makeExistingProactiveTask();
+    const { runtime } = createRuntimeMock([task]);
+
+    await executeProactiveTask(runtime);
+
+    expect(mocks.mockCheckAndOfferSeeding).not.toHaveBeenCalled();
+    expect(vi.mocked(runtime.sendMessageToTarget)).not.toHaveBeenCalled();
+  });
+
+  it("offers seed routines after idle time and records the offer", async () => {
+    const profile = makeProfile({
+      lastSeenAt: Date.now() - 30 * 60_000,
+      typicalWakeHour: 23,
+      typicalFirstActiveHour: 23,
+      typicalLastActiveHour: 23,
+      hasOpenActivityCycle: false,
+      isCurrentlyActive: false,
+      currentActivityCycleStartedAt: null,
+      currentActivityCycleLocalDate: "2026-04-05",
+    });
+    mocks.resolveOwnerEntityId.mockResolvedValue("owner-1");
+    mocks.readProfileFromMetadata.mockReturnValue(profile);
+    mocks.profileNeedsRebuild.mockReturnValue(false);
+    mocks.refreshCurrentState.mockResolvedValue(profile);
+    mocks.mockCheckAndOfferSeeding.mockResolvedValue({
+      needsSeeding: true,
+      availableTemplates: [],
+    });
+    configureTelegramDelivery();
+
+    const task = makeExistingProactiveTask();
+    const taskId = requireTaskId(task);
+    const { runtime, state } = createRuntimeMock([task]);
+
+    await executeProactiveTask(runtime);
+
+    expect(vi.mocked(runtime.sendMessageToTarget)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: "telegram",
+      }),
+      expect.objectContaining({
+        text: expect.stringContaining("I notice you haven't set up any routines yet."),
+        source: "telegram",
+      }),
+    );
+    expect(mocks.mockMarkSeedingOffered).toHaveBeenCalledTimes(1);
+    expect(getPersistedFiredLog(state, taskId)).toMatchObject({
+      date: "2026-04-06",
+      seedingOfferedAt: expect.any(Number),
+    });
+  });
+
+  it("does not re-offer seed routines the same day when the audit write fails", async () => {
+    const profile = makeProfile({
+      lastSeenAt: Date.now() - 30 * 60_000,
+      typicalWakeHour: 23,
+      typicalFirstActiveHour: 23,
+      typicalLastActiveHour: 23,
+      hasOpenActivityCycle: false,
+      isCurrentlyActive: false,
+      currentActivityCycleStartedAt: null,
+      currentActivityCycleLocalDate: "2026-04-05",
+    });
+    mocks.resolveOwnerEntityId.mockResolvedValue("owner-1");
+    mocks.readProfileFromMetadata.mockReturnValue(profile);
+    mocks.profileNeedsRebuild.mockReturnValue(false);
+    mocks.refreshCurrentState.mockResolvedValue(profile);
+    mocks.mockCheckAndOfferSeeding.mockResolvedValue({
+      needsSeeding: true,
+      availableTemplates: [],
+    });
+    mocks.mockMarkSeedingOffered.mockRejectedValue(
+      new Error("audit unavailable"),
+    );
+    mocks.readFiredLogFromMetadata.mockImplementation((metadata: unknown, todayStr: unknown) => {
+      const rec = metadata as Record<string, unknown> | null | undefined;
+      const log = (rec?.firedActionsLog ?? null) as
+        | FiredActionsLog
+        | null;
+      if (!log || log.date !== String(todayStr)) {
+        return null;
+      }
+      return log;
+    });
+    configureTelegramDelivery();
+
+    const task = makeExistingProactiveTask();
+    const taskId = requireTaskId(task);
+    const { runtime, state } = createRuntimeMock([task]);
+
+    await executeProactiveTask(runtime);
+    await executeProactiveTask(runtime);
+
+    expect(vi.mocked(runtime.sendMessageToTarget)).toHaveBeenCalledTimes(1);
+    expect(mocks.mockMarkSeedingOffered).toHaveBeenCalledTimes(1);
+    expect(getPersistedFiredLog(state, taskId)).toMatchObject({
+      date: "2026-04-06",
+      seedingOfferedAt: expect.any(Number),
     });
   });
 
