@@ -39,8 +39,6 @@ export const APP_EMOTE_EVENT = "eliza:app-emote" as const;
 /** After `/api/cloud/status` — chat voice reloads config so cloud-backed TTS mode matches the server snapshot. */
 export const ELIZA_CLOUD_STATUS_UPDATED_EVENT =
   "eliza:cloud-status-updated" as const;
-export const LIFEOPS_GOOGLE_CONNECTOR_REFRESH_EVENT =
-  "eliza:lifeops-google-connector-refresh" as const;
 export const LIFEOPS_GITHUB_CALLBACK_EVENT =
   "eliza:lifeops-github-callback" as const;
 
@@ -106,21 +104,6 @@ export interface ChatAvatarVoiceEventDetail {
 
 export type ChatAvatarFaceFrameEventDetail = AvatarFaceFrame;
 
-export interface LifeOpsGoogleConnectorRefreshDetail {
-  origin?: string;
-  side?: "owner" | "agent";
-  mode?: "local" | "remote" | "cloud_managed";
-  source?:
-    | "callback"
-    | "connect"
-    | "disconnect"
-    | "mode_change"
-    | "refresh"
-    | "focus"
-    | "visibility"
-    | "resume";
-}
-
 export type ElizaDocumentEventName =
   | typeof COMMAND_PALETTE_EVENT
   | typeof EMOTE_PICKER_EVENT
@@ -140,7 +123,6 @@ export type ElizaWindowEventName =
   | typeof LIFEOPS_GOOGLE_CONNECTOR_REFRESH_EVENT
   | typeof APP_EMOTE_EVENT
   | typeof ELIZA_CLOUD_STATUS_UPDATED_EVENT
-  | typeof LIFEOPS_GOOGLE_CONNECTOR_REFRESH_EVENT
   | typeof LIFEOPS_GITHUB_CALLBACK_EVENT
   | typeof VRM_TELEPORT_COMPLETE_EVENT
   | typeof ONBOARDING_VOICE_PREVIEW_AWAIT_TELEPORT_EVENT
@@ -179,7 +161,7 @@ export function dispatchChatAvatarFaceFrameEvent(
 }
 
 export function dispatchLifeOpsGoogleConnectorRefresh(
-  detail: LifeOpsGoogleConnectorRefreshDetail,
+  detail?: LifeOpsGoogleConnectorRefreshDetail,
 ): void {
   dispatchWindowEvent(LIFEOPS_GOOGLE_CONNECTOR_REFRESH_EVENT, detail);
 }
@@ -188,12 +170,6 @@ export function dispatchElizaCloudStatusUpdated(
   detail: ElizaCloudStatusUpdatedDetail,
 ): void {
   dispatchWindowEvent(ELIZA_CLOUD_STATUS_UPDATED_EVENT, detail);
-}
-
-export function dispatchLifeOpsGoogleConnectorRefresh(
-  detail?: LifeOpsGoogleConnectorRefreshDetail,
-): void {
-  dispatchWindowEvent(LIFEOPS_GOOGLE_CONNECTOR_REFRESH_EVENT, detail);
 }
 
 export function dispatchLifeOpsGithubCallback(
