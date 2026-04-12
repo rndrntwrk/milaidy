@@ -194,6 +194,7 @@
     "test:selfcontrol:mobile:android": "node scripts/run-mobile-build.mjs android",
     "test:selfcontrol:mobile:ios": "node scripts/run-mobile-build.mjs ios",
     "test:live:cloud": "node scripts/run-with-env.mjs MILADY_LIVE_TEST=1 -- bunx vitest run --config vitest.live-e2e.config.ts packages/agent/test/cloud-providers.e2e.test.ts",
+    "test:live:evm:rpc": "node scripts/run-with-env.mjs MILADY_LIVE_TEST=1 ELIZA_LIVE_TEST=1 MILADY_LIVE_EVM_RPC_TEST=1 -- bunx vitest run --config vitest.real.config.ts plugins/plugin-evm/typescript/__tests__/integration/rpc-providers-live.test.ts",
     "test:live:onboarding": "node scripts/run-with-env.mjs MILADY_LIVE_TEST=1 ELIZA_LIVE_TEST=1 MILADY_LIVE_BROWSER_SUITE=1 -- bunx vitest run --config vitest.live-e2e.config.ts packages/app-core/test/app/onboarding-companion.live.e2e.test.ts",
     "test:live:memory-relationships": "node scripts/run-with-env.mjs MILADY_LIVE_TEST=1 ELIZA_LIVE_TEST=1 MILADY_LIVE_BROWSER_SUITE=1 -- bunx vitest run --config vitest.live-e2e.config.ts packages/app-core/test/app/memory-relationships.real.e2e.test.ts",
     "test:live:lifeops:chat": "node scripts/run-with-env.mjs MILADY_LIVE_TEST=1 MILADY_LIVE_CHAT_TEST=1 -- bunx vitest run --config vitest.live-e2e.config.ts packages/agent/test/lifeops-chat.live.e2e.test.ts",

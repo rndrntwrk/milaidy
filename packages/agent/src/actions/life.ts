@@ -2528,6 +2528,10 @@ function buildCadenceFromLlmParams(
     typeof params.timeOfDay === "string"
       ? parseTimeOfDayToken(params.timeOfDay)
       : null;
+  const explicitSlots =
+    typeof context?.intent === "string"
+      ? extractExplicitDailySlots(context.intent)
+      : [];
   const slotDuration =
     typeof params.durationMinutes === "number" && params.durationMinutes > 0
       ? params.durationMinutes
@@ -2561,6 +2565,19 @@ function buildCadenceFromLlmParams(
     return { cadence: { kind: "once", dueAt: new Date().toISOString() } };
   }
   if (kind === "daily") {
+    if (explicitSlots.length >= 2) {
+      return {
+        cadence: {
+          kind: "times_per_day",
+          slots: explicitSlots.map((slot) => ({
+            ...slot,
+            durationMinutes: slot.durationMinutes ?? slotDuration,
+          })),
+          visibilityLeadMinutes: 90,
+          visibilityLagMinutes: 180,
+        },
+      };
+    }
     if (timeOfDayMinute !== null) {
       return {
         cadence: {
@@ -2615,6 +2632,19 @@ function buildCadenceFromLlmParams(
     };
   }
   if (kind === "times_per_day") {
+    if (explicitSlots.length >= 2) {
+      return {
+        cadence: {
+          kind: "times_per_day",
+          slots: explicitSlots.map((slot) => ({
+            ...slot,
+            durationMinutes: slot.durationMinutes ?? slotDuration,
+          })),
+          visibilityLeadMinutes: 90,
+          visibilityLagMinutes: 180,
+        },
+      };
+    }
     if (timeOfDayMinute !== null) {
       return {
         cadence: {
@@ -3662,7 +3692,11 @@ export const lifeAction: Action = {
             llmRequestKind = llmPlan.requestKind;
             if (llmPlan.title && !hadExplicitTitle) {
               title =
-                preferDerivedDefinition || !seed ? llmPlan.title : seed.title;
+                derivedTitle && hasSpecificDerivedDefinitionDetails(intent)
+                  ? derivedTitle
+                  : preferDerivedDefinition || !seed
+                    ? llmPlan.title
+                    : seed.title;
             }
             if (
               (editingDeferredDefinitionDraft || !hadExplicitCadence) &&
