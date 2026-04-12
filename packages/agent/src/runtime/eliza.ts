@@ -61,16 +61,9 @@ import {
 } from "@elizaos/core";
 import * as pluginAgentSkills from "@elizaos/plugin-agent-skills";
 import * as pluginAnthropic from "@elizaos/plugin-anthropic";
-import * as pluginCommands from "@elizaos/plugin-commands";
-import * as pluginCron from "@elizaos/plugin-cron";
-import * as pluginElizacloud from "@elizaos/plugin-elizacloud";
-import * as pluginExperience from "@elizaos/plugin-experience";
 import * as pluginForm from "@elizaos/plugin-form";
 import * as pluginLocalEmbedding from "@elizaos/plugin-local-embedding";
-import * as pluginOllama from "@elizaos/plugin-ollama";
-import * as pluginOpenai from "@elizaos/plugin-openai";
 import * as pluginPdf from "@elizaos/plugin-pdf";
-import * as pluginPersonality from "@elizaos/plugin-personality";
 import * as pluginPluginManager from "@elizaos/plugin-plugin-manager";
 import * as pluginSecretsManager from "@elizaos/plugin-secrets-manager";
 import * as pluginShell from "@elizaos/plugin-shell";
@@ -148,6 +141,69 @@ try {
   pluginAgentOrchestrator = require("./agent-orchestrator-compat");
 } catch {
   pluginAgentOrchestrator = null;
+}
+// Keep plugin-commands behind a guarded runtime require. Some published alpha
+// builds advertise dist/index.js without actually shipping it, and a static
+// ESM import here makes the CLI fail before it can print --help/--version.
+let pluginCommands: unknown = null;
+try {
+  pluginCommands = require("@elizaos/plugin-commands");
+} catch {
+  pluginCommands = null;
+}
+// Keep plugin-cron behind a guarded runtime require for the same reason. Some
+// published alpha builds resolve through package.json but are missing the
+// shipped dist/index.js entry, which breaks CLI bootstrap before help/version.
+let pluginCron: unknown = null;
+try {
+  pluginCron = require("@elizaos/plugin-cron");
+} catch {
+  pluginCron = null;
+}
+// Keep plugin-elizacloud behind a guarded runtime require as well. Some
+// published alpha builds advertise dist/node/index.node.js but do not ship
+// that ESM entry, which breaks CLI bootstrap in published-only CI.
+let pluginElizacloud: unknown = null;
+try {
+  pluginElizacloud = require("@elizaos/plugin-elizacloud");
+} catch {
+  pluginElizacloud = null;
+}
+// Keep plugin-experience behind a guarded runtime require too. Some published
+// alpha builds advertise dist/node/index.node.js without shipping that entry,
+// which breaks CLI and runtime startup in published-only CI.
+let pluginExperience: unknown = null;
+try {
+  pluginExperience = require("@elizaos/plugin-experience");
+} catch {
+  pluginExperience = null;
+}
+// Keep plugin-ollama behind a guarded runtime require as well. Some published
+// alpha builds advertise dist/node/index.node.js but do not ship that ESM
+// entry, which breaks CLI bootstrap and startup smokes in published-only CI.
+let pluginOllama: unknown = null;
+try {
+  pluginOllama = require("@elizaos/plugin-ollama");
+} catch {
+  pluginOllama = null;
+}
+// Keep plugin-openai behind a guarded runtime require too. Some published
+// alpha builds advertise dist/node/index.node.js without shipping that entry,
+// which breaks CLI bootstrap and validation in published-only CI.
+let pluginOpenai: unknown = null;
+try {
+  pluginOpenai = require("@elizaos/plugin-openai");
+} catch {
+  pluginOpenai = null;
+}
+// Keep plugin-personality behind a guarded runtime require too. Some published
+// alpha builds resolve through package.json but do not ship the runtime entry,
+// which breaks live startup smokes before the API server is ready.
+let pluginPersonality: unknown = null;
+try {
+  pluginPersonality = require("@elizaos/plugin-personality");
+} catch {
+  pluginPersonality = null;
 }
 
 type SignalShutdownContext = {
@@ -236,21 +292,27 @@ export const STATIC_ELIZA_PLUGINS: Record<string, unknown> = {
   ...(pluginAgentOrchestrator
     ? { "@elizaos/plugin-agent-orchestrator": pluginAgentOrchestrator }
     : {}),
-  "@elizaos/plugin-cron": pluginCron,
+  ...(pluginCron ? { "@elizaos/plugin-cron": pluginCron } : {}),
   "@elizaos/plugin-shell": pluginShell,
   "@elizaos/plugin-plugin-manager": pluginPluginManager,
   "@elizaos/plugin-agent-skills": pluginAgentSkills,
-  "@elizaos/plugin-commands": pluginCommands,
+  ...(pluginCommands ? { "@elizaos/plugin-commands": pluginCommands } : {}),
   "@elizaos/plugin-pdf": pluginPdf,
-  "@elizaos/plugin-openai": pluginOpenai,
+  ...(pluginOpenai ? { "@elizaos/plugin-openai": pluginOpenai } : {}),
   "@elizaos/plugin-anthropic": pluginAnthropic,
-  "@elizaos/plugin-ollama": pluginOllama,
-  "@elizaos/plugin-elizacloud": pluginElizacloud,
+  ...(pluginOllama ? { "@elizaos/plugin-ollama": pluginOllama } : {}),
+  ...(pluginElizacloud
+    ? { "@elizaos/plugin-elizacloud": pluginElizacloud }
+    : {}),
   "@elizaos/plugin-trust": pluginTrust,
   "@miladyai/plugin-selfcontrol": pluginSelfControl,
   "@miladyai/plugin-discord-local": discordLocalPlugin,
-  "@elizaos/plugin-personality": pluginPersonality,
-  "@elizaos/plugin-experience": pluginExperience,
+  ...(pluginPersonality
+    ? { "@elizaos/plugin-personality": pluginPersonality }
+    : {}),
+  ...(pluginExperience
+    ? { "@elizaos/plugin-experience": pluginExperience }
+    : {}),
 };
 
 // NODE_PATH so dynamic plugin imports (e.g. @elizaos/plugin-agent-orchestrator) resolve.
