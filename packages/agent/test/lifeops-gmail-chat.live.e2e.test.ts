@@ -4,12 +4,11 @@ import path from "node:path";
 import type { AgentRuntime, State } from "@elizaos/core";
 import { ModelType } from "@elizaos/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { saveEnv } from "../../../test/helpers/test-utils";
 import {
   isLiveTestEnabled,
   selectLiveProvider,
 } from "../../../test/helpers/live-provider";
-import { createLifeOpsChatTestRuntime } from "./helpers/lifeops-chat-runtime";
+import { saveEnv } from "../../../test/helpers/test-utils";
 import { gmailAction } from "../src/actions/gmail";
 import { resolveOAuthDir } from "../src/config/paths";
 import {
@@ -17,6 +16,7 @@ import {
   createLifeOpsGmailSyncState,
   LifeOpsRepository,
 } from "../src/lifeops/repository";
+import { createLifeOpsChatTestRuntime } from "./helpers/lifeops-chat-runtime";
 
 const AGENT_ID = "lifeops-gmail-live-chat-agent";
 const LIVE_PROVIDER = selectLiveProvider("openai") ?? selectLiveProvider();

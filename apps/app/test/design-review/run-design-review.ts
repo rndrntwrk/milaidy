@@ -399,26 +399,6 @@ async function isReadyCheckVisible(
   return false;
 }
 
-async function waitForAnySelector(
-  page: Page,
-  selectors: string[],
-  timeoutMs = 10_000,
-): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    for (const selector of selectors) {
-      const visible = await page
-        .locator(selector)
-        .first()
-        .isVisible()
-        .catch(() => false);
-      if (visible) return;
-    }
-    await page.waitForTimeout(150);
-  }
-  throw new Error(`Timed out waiting for selectors: ${selectors.join(", ")}`);
-}
-
 async function resetOutputDir(): Promise<void> {
   await rm(outputRoot, { recursive: true, force: true });
   await mkdir(screenshotsRoot, { recursive: true });

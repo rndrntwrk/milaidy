@@ -39,7 +39,10 @@ function collectFiles(dir: string): string[] {
 
 describe("E2E surface contract", () => {
   it("keeps the main e2e Vitest config free of test stubs", () => {
-    const config = fs.readFileSync(path.join(ROOT, "vitest.e2e.config.ts"), "utf8");
+    const config = fs.readFileSync(
+      path.join(ROOT, "vitest.e2e.config.ts"),
+      "utf8",
+    );
     expect(config).not.toContain("test/stubs");
   });
 

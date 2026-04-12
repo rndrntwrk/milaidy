@@ -77,7 +77,10 @@ export function resolveLifeOpsBrowserReleaseVersion(env = process.env) {
 }
 
 export function resolveLifeOpsBrowserReleaseRepository(env = process.env) {
-  const raw = typeof env.GITHUB_REPOSITORY === "string" ? env.GITHUB_REPOSITORY.trim() : "";
+  const raw =
+    typeof env.GITHUB_REPOSITORY === "string"
+      ? env.GITHUB_REPOSITORY.trim()
+      : "";
   return raw || DEFAULT_REPOSITORY;
 }
 
@@ -205,7 +208,11 @@ export function buildGitHubReleasePageUrl(repository, release) {
   return `https://github.com/${repository}/releases/tag/${release.tag}`;
 }
 
-export function buildGitHubReleaseAssetDownloadUrl(repository, release, assetName) {
+export function buildGitHubReleaseAssetDownloadUrl(
+  repository,
+  release,
+  assetName,
+) {
   if (!repository || !assetName) {
     return null;
   }

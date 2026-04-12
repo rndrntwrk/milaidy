@@ -663,5 +663,7 @@ test("Apps view shows curated multi-run state for Babylon and 2004scape", async 
     defenseDetails.getByRole("button", { name: "Inspect run" }),
   ).toBeVisible();
   await defenseDetails.getByRole("button", { name: "Stop run" }).click();
-  await expect(page.getByRole("button", { name: /Running \(3\)/ })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /Running \(3\)/ }),
+  ).toBeVisible();
 });

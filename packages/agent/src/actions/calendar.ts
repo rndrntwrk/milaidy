@@ -262,6 +262,48 @@ function buildCalendarEventDisambiguationFallback(args: {
   ].join("\n");
 }
 
+function shouldDeleteAllMatchingCalendarEvents(args: {
+  intent: string;
+  titleHint?: string;
+  candidateCount: number;
+}): boolean {
+  const normalizedIntent = normalizeText(args.intent);
+  const normalizedTitleHint = normalizeText(args.titleHint ?? "");
+  const titleStartsWithQuantifier = /^(all|both|every|each)\b/.test(
+    normalizedTitleHint,
+  );
+
+  if (
+    /\b(?:remove|delete|cancel|kill|drop)\b\s+(?:the\s+)?(?:duplicates?|copies)\b/.test(
+      normalizedIntent,
+    )
+  ) {
+    return true;
+  }
+
+  const quantifierMatch = normalizedIntent.match(
+    /\b(?:remove|delete|cancel|kill|drop)\b\s+(both|all|every|each)\b/,
+  );
+  if (!quantifierMatch) {
+    return false;
+  }
+  if (titleStartsWithQuantifier) {
+    return false;
+  }
+
+  const quantifier = quantifierMatch[1];
+  if (quantifier === "both" && args.candidateCount !== 2) {
+    return false;
+  }
+
+  const trailingIntent = normalizedIntent.slice(
+    (quantifierMatch.index ?? 0) + quantifierMatch[0].length,
+  );
+  return /\b(?:matching|events?|meetings?|appointments?|invites?|entries|duplicates?|copies)\b/.test(
+    trailingIntent,
+  );
+}
+
 function normalizeCalendarReplyText(raw: string): string {
   return raw
     .trim()
@@ -3972,11 +4014,11 @@ export const calendarAction: Action = {
 
           // Detect "delete all / delete both / delete N" phrasing — when the
           // user explicitly opts in to multi-delete, sweep every match.
-          const deleteAllMatch =
-            /\b(all|both|every|each)\b/i.test(intent) ||
-            /\b(remove|delete|cancel|kill|drop)\b\s+(?:both|all|every|the\s+(?:duplicates?|copies))\b/i.test(
-              intent,
-            );
+          const deleteAllMatch = shouldDeleteAllMatchingCalendarEvents({
+            intent,
+            titleHint,
+            candidateCount: candidates.length,
+          });
 
           if (candidates.length > 1 && !deleteAllMatch) {
             const fallback = buildCalendarEventDisambiguationFallback({

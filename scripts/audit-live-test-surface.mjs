@@ -25,7 +25,12 @@ const IGNORE_DIRS = new Set([
 const TEST_FILE_PATTERN = /\.(?:test|spec)\.[cm]?[jt]sx?$/;
 const CONFIG_FILE_PATTERN =
   /(?:^|\/)(?:package\.json|vitest(?:\.[^/]+)?\.config\.[cm]?[jt]s|playwright(?:\.[^/]+)?\.config\.[cm]?[jt]s|bunfig\.toml|test\/setup\.[cm]?[jt]s)$/;
-const MOCK_DIR_NAMES = new Set(["__mocks__", "__fixtures__", "fixtures", "mocks"]);
+const MOCK_DIR_NAMES = new Set([
+  "__mocks__",
+  "__fixtures__",
+  "fixtures",
+  "mocks",
+]);
 
 const ROOTS = [
   {
@@ -173,7 +178,9 @@ async function readPackageScripts(packageJsonPath) {
     const text = await fs.readFile(packageJsonPath, "utf8");
     const pkg = JSON.parse(text);
     return Object.entries(pkg.scripts ?? {})
-      .filter(([name]) => name.includes("test:live") || name.includes("test:real"))
+      .filter(
+        ([name]) => name.includes("test:live") || name.includes("test:real"),
+      )
       .map(([name, command]) => ({ name, command }))
       .sort((a, b) => a.name.localeCompare(b.name));
   } catch {

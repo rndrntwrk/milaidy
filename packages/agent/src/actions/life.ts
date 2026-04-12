@@ -32,7 +32,6 @@ import {
   type NativeAppleReminderLikeKind,
 } from "../lifeops/apple-reminders.js";
 import {
-  isValidTimeZone,
   resolveDefaultTimeZone,
   resolveDefaultWindowPolicy,
 } from "../lifeops/defaults.js";
@@ -42,6 +41,7 @@ import {
   buildUtcDateFromLocalParts,
   getZonedDateParts,
 } from "../lifeops/time.js";
+import { gmailAction } from "./gmail.js";
 import {
   type ExtractedLifeMissingField,
   type ExtractedLifeOperation,
@@ -53,11 +53,6 @@ import {
   extractUnlockModeWithLlm,
 } from "./life-param-extractor.js";
 import { recentConversationTexts } from "./life-recent-context.js";
-import { gmailAction } from "./gmail.js";
-import {
-  extractExplicitTimeZoneFromText,
-  normalizeExplicitTimeZoneToken,
-} from "./timezone-normalization.js";
 import { extractUpdateFieldsWithLlm } from "./life-update-extractor.js";
 import {
   calendarReadUnavailableMessage,
@@ -77,6 +72,10 @@ import {
   toActionData,
   weekRange,
 } from "./lifeops-google-helpers.js";
+import {
+  extractExplicitTimeZoneFromText,
+  normalizeExplicitTimeZoneToken,
+} from "./timezone-normalization.js";
 
 // ── Types ─────────────────────────────────────────────
 
@@ -3627,9 +3626,9 @@ export const lifeAction: Action = {
         // ── LLM parameter enhancement (fills gaps) ────────
         // Skip when reusing a confirmed deferred draft — the user already
         // approved those values.
-        let llmPlan:
-          | Awaited<ReturnType<typeof extractTaskCreatePlanWithLlm>>
-          | null = null;
+        let llmPlan: Awaited<
+          ReturnType<typeof extractTaskCreatePlanWithLlm>
+        > | null = null;
         let llmDescription: string | undefined;
         let llmPriority: number | undefined;
         let llmRequestKind: NativeAppleReminderLikeKind | null = null;
@@ -3663,9 +3662,7 @@ export const lifeAction: Action = {
             llmRequestKind = llmPlan.requestKind;
             if (llmPlan.title && !hadExplicitTitle) {
               title =
-                preferDerivedDefinition || !seed
-                  ? llmPlan.title
-                  : seed.title;
+                preferDerivedDefinition || !seed ? llmPlan.title : seed.title;
             }
             if (
               (editingDeferredDefinitionDraft || !hadExplicitCadence) &&
@@ -4006,21 +4003,16 @@ export const lifeAction: Action = {
       if (operation === "query_email") {
         const limit = detailNumber(details, "limit") ?? 10;
         return (
-          (await gmailAction.handler?.(
-            runtime,
-            message,
-            state,
-            {
-              parameters: {
-                subaction: "triage",
-                intent,
-                details: {
-                  ...details,
-                  maxResults: limit,
-                },
+          (await gmailAction.handler?.(runtime, message, state, {
+            parameters: {
+              subaction: "triage",
+              intent,
+              details: {
+                ...details,
+                maxResults: limit,
               },
-            } as HandlerOptions,
-          )) ?? {
+            },
+          } as HandlerOptions)) ?? {
             success: false,
             text: "I couldn't route that Gmail request yet.",
           }

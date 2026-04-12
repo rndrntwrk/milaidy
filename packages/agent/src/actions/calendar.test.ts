@@ -2933,6 +2933,167 @@ describe("calendarAction", () => {
     expect(result?.text).not.toContain("backendError");
   });
 
+  it("does not treat a title like 'All Hands' as consent to delete every match", async () => {
+    mockGetCalendarFeed.mockResolvedValue({
+      calendarId: "primary",
+      events: [
+        {
+          id: "evt-all-hands-1",
+          externalId: "ext-all-hands-1",
+          agentId: "agent-1",
+          provider: "google",
+          side: "owner",
+          calendarId: "primary",
+          title: "All Hands meeting",
+          description: "",
+          location: "HQ",
+          status: "confirmed",
+          startAt: "2026-04-14T17:00:00.000Z",
+          endAt: "2026-04-14T18:00:00.000Z",
+          isAllDay: false,
+          timezone: "UTC",
+          htmlLink: null,
+          conferenceLink: null,
+          organizer: null,
+          attendees: [],
+          metadata: {},
+          syncedAt: "2026-04-09T16:00:00.000Z",
+          updatedAt: "2026-04-09T16:00:00.000Z",
+        },
+        {
+          id: "evt-all-hands-2",
+          externalId: "ext-all-hands-2",
+          agentId: "agent-1",
+          provider: "google",
+          side: "owner",
+          calendarId: "primary",
+          title: "All Hands meeting",
+          description: "",
+          location: "Remote",
+          status: "confirmed",
+          startAt: "2026-04-21T17:00:00.000Z",
+          endAt: "2026-04-21T18:00:00.000Z",
+          isAllDay: false,
+          timezone: "UTC",
+          htmlLink: null,
+          conferenceLink: null,
+          organizer: null,
+          attendees: [],
+          metadata: {},
+          syncedAt: "2026-04-09T16:00:00.000Z",
+          updatedAt: "2026-04-09T16:00:00.000Z",
+        },
+      ],
+      source: "cache",
+      timeMin: "2026-04-09T00:00:00.000Z",
+      timeMax: "2026-05-09T00:00:00.000Z",
+      syncedAt: "2026-04-09T16:00:00.000Z",
+    });
+
+    const result = await invoke("delete all hands meeting", {
+      subaction: "delete_event",
+      title: "All Hands meeting",
+      details: {},
+    });
+
+    expect(mockDeleteCalendarEvent).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ success: false });
+    expect(result?.text).toContain("multiple events");
+    expect(result?.text).toContain("All Hands meeting");
+  });
+
+  it("does not treat 'delete both' as consent to delete more than two matches", async () => {
+    mockGetCalendarFeed.mockResolvedValue({
+      calendarId: "primary",
+      events: [
+        {
+          id: "evt-flight-1",
+          externalId: "ext-flight-1",
+          agentId: "agent-1",
+          provider: "google",
+          side: "owner",
+          calendarId: "primary",
+          title: "Flight to LA",
+          description: "",
+          location: "",
+          status: "confirmed",
+          startAt: "2026-04-15T17:00:00.000Z",
+          endAt: "2026-04-15T18:00:00.000Z",
+          isAllDay: false,
+          timezone: "UTC",
+          htmlLink: null,
+          conferenceLink: null,
+          organizer: null,
+          attendees: [],
+          metadata: {},
+          syncedAt: "2026-04-09T16:00:00.000Z",
+          updatedAt: "2026-04-09T16:00:00.000Z",
+        },
+        {
+          id: "evt-flight-2",
+          externalId: "ext-flight-2",
+          agentId: "agent-1",
+          provider: "google",
+          side: "owner",
+          calendarId: "primary",
+          title: "Flight to LA",
+          description: "",
+          location: "",
+          status: "confirmed",
+          startAt: "2026-04-16T17:00:00.000Z",
+          endAt: "2026-04-16T18:00:00.000Z",
+          isAllDay: false,
+          timezone: "UTC",
+          htmlLink: null,
+          conferenceLink: null,
+          organizer: null,
+          attendees: [],
+          metadata: {},
+          syncedAt: "2026-04-09T16:00:00.000Z",
+          updatedAt: "2026-04-09T16:00:00.000Z",
+        },
+        {
+          id: "evt-flight-3",
+          externalId: "ext-flight-3",
+          agentId: "agent-1",
+          provider: "google",
+          side: "owner",
+          calendarId: "primary",
+          title: "Flight to LA",
+          description: "",
+          location: "",
+          status: "confirmed",
+          startAt: "2026-04-17T17:00:00.000Z",
+          endAt: "2026-04-17T18:00:00.000Z",
+          isAllDay: false,
+          timezone: "UTC",
+          htmlLink: null,
+          conferenceLink: null,
+          organizer: null,
+          attendees: [],
+          metadata: {},
+          syncedAt: "2026-04-09T16:00:00.000Z",
+          updatedAt: "2026-04-09T16:00:00.000Z",
+        },
+      ],
+      source: "cache",
+      timeMin: "2026-04-09T00:00:00.000Z",
+      timeMax: "2026-05-09T00:00:00.000Z",
+      syncedAt: "2026-04-09T16:00:00.000Z",
+    });
+
+    const result = await invoke("delete both flight to la", {
+      subaction: "delete_event",
+      title: "Flight to LA",
+      details: {},
+    });
+
+    expect(mockDeleteCalendarEvent).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ success: false });
+    expect(result?.text).toContain("multiple events");
+    expect(result?.text).toContain("Flight to LA");
+  });
+
   it("routes to next_event when the intent is clearly next-event", async () => {
     mockGetNextCalendarEventContext.mockResolvedValue({
       event: {
