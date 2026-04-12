@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   getElizaCoreEntry,
   getInstalledPackageEntry,
+  getInstalledPackageNamedExport,
 } from "./eliza-package-paths";
 
 const repoRoot = path.resolve(
@@ -53,5 +54,24 @@ describe("eliza package path resolution", () => {
     expect(coreEntry).not.toBeUndefined();
     expect(installedEntry).not.toBeUndefined();
     expect(nodeEntry).not.toBeUndefined();
+  });
+
+  it("loads named exports from installed package entries", async () => {
+    await expect(
+      getInstalledPackageNamedExport(
+        "@elizaos/core",
+        "TrajectoriesService",
+        repoRoot,
+        "node",
+      ),
+    ).resolves.toEqual(expect.any(Function));
+
+    await expect(
+      getInstalledPackageNamedExport(
+        "@elizaos/plugin-whatsapp",
+        "WhatsAppConnectorService",
+        repoRoot,
+      ),
+    ).resolves.toEqual(expect.any(Function));
   });
 });

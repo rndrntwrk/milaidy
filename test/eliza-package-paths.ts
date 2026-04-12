@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 
 const skipLocalUpstreams =
   process.env.MILADY_SKIP_LOCAL_UPSTREAMS === "1" ||
@@ -82,6 +83,10 @@ const MODULE_EXTENSIONS = [
   ".cjs",
 ];
 const require = createRequire(import.meta.url);
+
+type ModuleNamespace = Record<string, unknown> & {
+  default?: Record<string, unknown>;
+};
 
 function getRequireFor(baseDir?: string) {
   if (!baseDir) {
@@ -191,6 +196,87 @@ export function getInstalledPackageEntry(
     .find((candidate) => existsSync(candidate));
 
   return resolvedCandidate ?? resolveModuleEntry(candidates[0]);
+}
+
+function getNamedExport<T>(
+  moduleNamespace: ModuleNamespace,
+  exportName: string,
+): T | undefined {
+  if (exportName in moduleNamespace) {
+    return moduleNamespace[exportName] as T;
+  }
+
+  const defaultNamespace = moduleNamespace.default;
+  if (
+    defaultNamespace &&
+    typeof defaultNamespace === "object" &&
+    exportName in defaultNamespace
+  ) {
+    return defaultNamespace[exportName] as T;
+  }
+
+  return undefined;
+}
+
+async function tryImportNamedExport<T>(
+  specifier: string,
+  exportName: string,
+): Promise<{ value?: T; error?: string }> {
+  try {
+    const moduleNamespace = (await import(specifier)) as ModuleNamespace;
+    const value = getNamedExport<T>(moduleNamespace, exportName);
+    if (value !== undefined) {
+      return { value };
+    }
+
+    return {
+      error: `${specifier}: missing export ${exportName}`,
+    };
+  } catch (error) {
+    return {
+      error: `${specifier}: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+}
+
+export async function getInstalledPackageNamedExport<T>(
+  packageName: string,
+  exportName: string,
+  repoRoot: string,
+  subpath?: "node",
+): Promise<T> {
+  const attempts: string[] = [];
+  const specifiers = subpath
+    ? [`${packageName}/${subpath}`, packageName]
+    : [packageName];
+
+  for (const specifier of specifiers) {
+    const result = await tryImportNamedExport<T>(specifier, exportName);
+    if (result.value !== undefined) {
+      return result.value;
+    }
+    if (result.error) {
+      attempts.push(result.error);
+    }
+  }
+
+  const entry = getInstalledPackageEntry(packageName, repoRoot, subpath);
+  if (entry) {
+    const result = await tryImportNamedExport<T>(
+      pathToFileURL(entry).href,
+      exportName,
+    );
+    if (result.value !== undefined) {
+      return result.value;
+    }
+    if (result.error) {
+      attempts.push(result.error);
+    }
+  }
+
+  throw new TypeError(
+    `${exportName} export not found in ${packageName}. Tried: ${attempts.join(" | ")}`,
+  );
 }
 
 export function getElizaCoreEntry(repoRoot: string): string | undefined {

@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   ChannelType,
   type AgentRuntime,
@@ -9,29 +10,28 @@ import {
 } from "@elizaos/core";
 import type { WhatsAppConnectorService as WhatsAppConnectorServiceType } from "@elizaos/plugin-whatsapp";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { getInstalledPackageNamedExport } from "../../../test/eliza-package-paths";
 import { req } from "../../../test/helpers/http";
 import { saveEnv } from "../../../test/helpers/test-utils";
 import { startApiServer } from "../src/api/server";
 
+const repoRoot = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "..",
+  "..",
+);
+
 async function loadWhatsAppConnectorServiceCtor(): Promise<
-  new (runtime: AgentRuntime) => WhatsAppConnectorServiceType
+  new (
+    runtime: AgentRuntime,
+  ) => WhatsAppConnectorServiceType
 > {
-  const mod = await import("@elizaos/plugin-whatsapp");
-  const candidates = [
-    (mod as { WhatsAppConnectorService?: unknown }).WhatsAppConnectorService,
-    (mod as { default?: Record<string, unknown> }).default
-      ?.WhatsAppConnectorService,
-  ];
-  const ctor = candidates.find(
-    (value) =>
-      typeof value === "function" &&
-      ((value as Function).name === "WhatsAppConnectorService" ||
-        (value as { prototype?: unknown }).prototype),
-  );
-  if (!ctor) {
-    throw new TypeError("WhatsAppConnectorService export not found");
-  }
-  return ctor as new (runtime: AgentRuntime) => WhatsAppConnectorServiceType;
+  return getInstalledPackageNamedExport<
+    new (
+      runtime: AgentRuntime,
+    ) => WhatsAppConnectorServiceType
+  >("@elizaos/plugin-whatsapp", "WhatsAppConnectorService", repoRoot);
 }
 
 describe("WhatsApp webhook roundtrip", () => {
@@ -102,10 +102,12 @@ describe("WhatsApp webhook roundtrip", () => {
     const WhatsAppConnectorServiceCtor =
       await loadWhatsAppConnectorServiceCtor();
     whatsappService = new WhatsAppConnectorServiceCtor(runtime);
-    (whatsappService as unknown as {
-      config: Record<string, unknown>;
-      client: Record<string, unknown>;
-    }).config = {
+    (
+      whatsappService as unknown as {
+        config: Record<string, unknown>;
+        client: Record<string, unknown>;
+      }
+    ).config = {
       transport: "cloudapi",
       accessToken: "test-token",
       phoneNumberId: "1234567890",
@@ -119,7 +121,9 @@ describe("WhatsApp webhook roundtrip", () => {
       };
 
     runtime.getService = ((type: string) =>
-      type === "whatsapp" ? whatsappService : null) as AgentRuntime["getService"];
+      type === "whatsapp"
+        ? whatsappService
+        : null) as AgentRuntime["getService"];
 
     const server = await startApiServer({ port: 0, runtime });
     port = server.port;

@@ -1,4 +1,6 @@
 import crypto from "node:crypto";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { PGlite } from "@electric-sql/pglite";
 import {
   type AgentRuntime,
@@ -11,6 +13,7 @@ import {
   type UUID,
 } from "@elizaos/core";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { getInstalledPackageNamedExport } from "../../../test/eliza-package-paths";
 import {
   createConversation,
   postConversationMessage,
@@ -44,24 +47,23 @@ function extractSqlText(query: SqlQuery): string {
     .join("");
 }
 
+const repoRoot = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "..",
+  "..",
+);
+
 async function loadTrajectoriesServiceCtor(): Promise<
-  new (runtime: AgentRuntime) => TrajectoriesServiceType
+  new (
+    runtime: AgentRuntime,
+  ) => TrajectoriesServiceType
 > {
-  const mod = await import("@elizaos/core");
-  const candidates = [
-    (mod as { TrajectoriesService?: unknown }).TrajectoriesService,
-    (mod as { default?: Record<string, unknown> }).default?.TrajectoriesService,
-  ];
-  const ctor = candidates.find(
-    (value) =>
-      typeof value === "function" &&
-      ((value as Function).name === "TrajectoriesService" ||
-        (value as { prototype?: unknown }).prototype),
-  );
-  if (!ctor) {
-    throw new TypeError("TrajectoriesService export not found");
-  }
-  return ctor as new (runtime: AgentRuntime) => TrajectoriesServiceType;
+  return getInstalledPackageNamedExport<
+    new (
+      runtime: AgentRuntime,
+    ) => TrajectoriesServiceType
+  >("@elizaos/core", "TrajectoriesService", repoRoot, "node");
 }
 
 async function waitForTrajectoryCall(
@@ -363,7 +365,10 @@ describe("Trajectory logger chat roundtrip", () => {
       `/api/trajectories/${encodeURIComponent(detail.trajectoryId)}`,
     );
     expect(hydratedDetail.status).toBe(200);
-    const trajectory = hydratedDetail.data.trajectory as Record<string, unknown>;
+    const trajectory = hydratedDetail.data.trajectory as Record<
+      string,
+      unknown
+    >;
     expect(trajectory.id).toBe(detail.trajectoryId);
     expect(trajectory.source).toBe("client_chat");
     expect(trajectory.status).toBe("completed");

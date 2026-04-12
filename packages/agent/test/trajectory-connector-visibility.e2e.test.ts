@@ -1,6 +1,12 @@
 import { PGlite } from "@electric-sql/pglite";
-import type { AgentRuntime, TrajectoriesService as TrajectoriesServiceType } from "@elizaos/core";
+import type {
+  AgentRuntime,
+  TrajectoriesService as TrajectoriesServiceType,
+} from "@elizaos/core";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { getInstalledPackageNamedExport } from "../../../test/eliza-package-paths";
 import { req } from "../../../test/helpers/http";
 import { startApiServer } from "../src/api/server";
 
@@ -30,24 +36,23 @@ function extractSqlText(query: SqlQuery): string {
     .join("");
 }
 
+const repoRoot = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "..",
+  "..",
+);
+
 async function loadTrajectoriesServiceCtor(): Promise<
-  new (runtime: AgentRuntime) => TrajectoriesServiceType
+  new (
+    runtime: AgentRuntime,
+  ) => TrajectoriesServiceType
 > {
-  const mod = await import("@elizaos/core");
-  const candidates = [
-    (mod as { TrajectoriesService?: unknown }).TrajectoriesService,
-    (mod as { default?: Record<string, unknown> }).default?.TrajectoriesService,
-  ];
-  const ctor = candidates.find(
-    (value) =>
-      typeof value === "function" &&
-      ((value as Function).name === "TrajectoriesService" ||
-        (value as { prototype?: unknown }).prototype),
-  );
-  if (!ctor) {
-    throw new TypeError("TrajectoriesService export not found");
-  }
-  return ctor as new (runtime: AgentRuntime) => TrajectoriesServiceType;
+  return getInstalledPackageNamedExport<
+    new (
+      runtime: AgentRuntime,
+    ) => TrajectoriesServiceType
+  >("@elizaos/core", "TrajectoriesService", repoRoot, "node");
 }
 
 describe("Connector trajectory visibility", () => {
@@ -97,7 +102,9 @@ describe("Connector trajectory visibility", () => {
     await trajectoryLogger.initialize();
 
     runtime.getService = ((serviceType: string) =>
-      serviceType === "trajectories" ? trajectoryLogger : null) as AgentRuntime["getService"];
+      serviceType === "trajectories"
+        ? trajectoryLogger
+        : null) as AgentRuntime["getService"];
     runtime.getServicesByType = ((serviceType: string) =>
       serviceType === "trajectories"
         ? [trajectoryLogger]
@@ -118,14 +125,17 @@ describe("Connector trajectory visibility", () => {
     prompt: string,
     response: string,
   ): Promise<string> {
-    const trajectoryId = await trajectoryLogger.startTrajectory(runtime.agentId, {
-      source,
-      metadata: {
-        roomId: `${source}-room`,
-        entityId: `${source}-user`,
-        messageId: `${source}-message`,
+    const trajectoryId = await trajectoryLogger.startTrajectory(
+      runtime.agentId,
+      {
+        source,
+        metadata: {
+          roomId: `${source}-room`,
+          entityId: `${source}-user`,
+          messageId: `${source}-message`,
+        },
       },
-    });
+    );
     const stepId = trajectoryLogger.startStep(trajectoryId, {
       timestamp: Date.now() - 1_000,
       agentBalance: 0,
@@ -241,13 +251,23 @@ describe("Connector trajectory visibility", () => {
       "second connector response",
     );
 
-    const emptyDelete = await req(server.port, "DELETE", "/api/trajectories", {});
+    const emptyDelete = await req(
+      server.port,
+      "DELETE",
+      "/api/trajectories",
+      {},
+    );
     expect(emptyDelete.status).toBe(200);
     expect(emptyDelete.data.deleted).toBe(0);
 
-    const clearAllResponse = await req(server.port, "DELETE", "/api/trajectories", {
-      clearAll: true,
-    });
+    const clearAllResponse = await req(
+      server.port,
+      "DELETE",
+      "/api/trajectories",
+      {
+        clearAll: true,
+      },
+    );
     expect(clearAllResponse.status).toBe(200);
     expect(clearAllResponse.data.deleted).toBeGreaterThanOrEqual(2);
 
@@ -260,7 +280,8 @@ describe("Connector trajectory visibility", () => {
     expect(
       Array.isArray(listAfterClear.data.trajectories) &&
         listAfterClear.data.trajectories.some(
-          (item: { id?: string }) => item.id === firstId || item.id === secondId,
+          (item: { id?: string }) =>
+            item.id === firstId || item.id === secondId,
         ),
     ).toBe(false);
   });
