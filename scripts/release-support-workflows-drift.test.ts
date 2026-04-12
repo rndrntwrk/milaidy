@@ -118,6 +118,12 @@ describe("release support workflow drift", () => {
 
     expect(workflow).toContain("name: Build Cloud App Image");
     expect(workflow).toContain("file: Dockerfile.ci");
+    expect(workflow).toContain("- name: Build shared workspace");
+    expect(workflow).toContain("cd packages/shared");
+    expect(workflow).toContain("- name: Build selfcontrol workspace");
+    expect(workflow).toContain("cd packages/plugin-selfcontrol");
+    expect(workflow).toContain("- name: Build agent workspace");
+    expect(workflow).toContain("bun run build:docker-dist");
     expect(workflow).toContain("type=raw,value=cloud-app");
     expect(workflow).toContain(
       "type=raw,value=cloud-app-$" +
