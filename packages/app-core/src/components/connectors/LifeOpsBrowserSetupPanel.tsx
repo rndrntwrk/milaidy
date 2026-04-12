@@ -31,7 +31,7 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { client, type ExtensionStatus } from "../../api";
 import { invokeDesktopBridgeRequest, isElectrobunRuntime } from "../../bridge";
-import { copyTextToClipboard } from "../../utils";
+import { copyTextToClipboard, openExternalUrl } from "../../utils";
 
 type SettingsDraft = {
   enabled: boolean;
@@ -50,6 +50,7 @@ const DEFAULT_PAIRING_PROFILE = {
   profileId: "default",
   profileLabel: "Default",
 } as const;
+const CHROME_EXTENSIONS_URL = "chrome://extensions/";
 
 function resolveApiBaseUrl(): string {
   const baseUrl = client.getBaseUrl().trim();
@@ -200,6 +201,29 @@ function permissionSummary(
   ].join(" • ");
 }
 
+function mergePackageStatus(
+  current: ExtensionStatus | null,
+  next: {
+    extensionPath: string | null;
+    chromeBuildPath: string | null;
+    chromePackagePath: string | null;
+    safariWebExtensionPath: string | null;
+    safariAppPath: string | null;
+    safariPackagePath: string | null;
+  },
+): ExtensionStatus {
+  return {
+    relayReachable: current?.relayReachable ?? false,
+    relayPort: current?.relayPort ?? 18792,
+    extensionPath: next.extensionPath,
+    chromeBuildPath: next.chromeBuildPath,
+    chromePackagePath: next.chromePackagePath,
+    safariWebExtensionPath: next.safariWebExtensionPath,
+    safariAppPath: next.safariAppPath,
+    safariPackagePath: next.safariPackagePath,
+  };
+}
+
 function BrowserCompanionRow({
   browser,
   buildPath,
@@ -207,6 +231,7 @@ function BrowserCompanionRow({
   appPath,
   busy,
   pairing,
+  onInstall,
   onBuild,
   onCreatePairing,
   onCopyPairing,
@@ -219,6 +244,7 @@ function BrowserCompanionRow({
   appPath?: string | null | undefined;
   busy: boolean;
   pairing: LifeOpsBrowserCompanionPairingResponse | null;
+  onInstall: (browser: LifeOpsBrowserKind) => Promise<void>;
   onBuild: (browser: LifeOpsBrowserKind) => Promise<void>;
   onCreatePairing: (browser: LifeOpsBrowserKind) => Promise<void>;
   onCopyPairing: (browser: LifeOpsBrowserKind) => Promise<void>;
@@ -246,6 +272,14 @@ function BrowserCompanionRow({
           <p className="text-sm text-muted">{installHint}</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            disabled={busy}
+            onClick={() => void onInstall(browser)}
+          >
+            <Sparkles className="mr-2 h-3.5 w-3.5" />
+            {busy ? "Preparing…" : `Install ${browserLabel}`}
+          </Button>
           <Button
             size="sm"
             variant="outline"
@@ -376,6 +410,8 @@ export function LifeOpsBrowserSetupPanel() {
     useState<LifeOpsBrowserKind | null>(null);
   const [pairingBrowser, setPairingBrowser] =
     useState<LifeOpsBrowserKind | null>(null);
+  const [installingBrowser, setInstallingBrowser] =
+    useState<LifeOpsBrowserKind | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -401,16 +437,7 @@ export function LifeOpsBrowserSetupPanel() {
           ? `${currentPageResponse.page.title} ${currentPageResponse.page.url}`
           : null,
       );
-      setPackageStatus({
-        relayReachable: false,
-        relayPort: 18792,
-        extensionPath: status.status.extensionPath,
-        chromeBuildPath: status.status.chromeBuildPath,
-        chromePackagePath: status.status.chromePackagePath,
-        safariWebExtensionPath: status.status.safariWebExtensionPath,
-        safariAppPath: status.status.safariAppPath,
-        safariPackagePath: status.status.safariPackagePath,
-      });
+      setPackageStatus((current) => mergePackageStatus(current, status.status));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -483,33 +510,35 @@ export function LifeOpsBrowserSetupPanel() {
     }
   };
 
-  const buildPackage = async (browser: LifeOpsBrowserKind) => {
+  const buildPackage = async (
+    browser: LifeOpsBrowserKind,
+    options?: { silent?: boolean },
+  ): Promise<ExtensionStatus> => {
     setBuildingBrowser(browser);
     setError(null);
     try {
       const response =
         await client.buildLifeOpsBrowserCompanionPackage(browser);
-      setPackageStatus((current) => ({
-        relayReachable: current?.relayReachable ?? false,
-        relayPort: current?.relayPort ?? 18792,
-        extensionPath: response.status.extensionPath,
-        chromeBuildPath: response.status.chromeBuildPath,
-        chromePackagePath: response.status.chromePackagePath,
-        safariWebExtensionPath: response.status.safariWebExtensionPath,
-        safariAppPath: response.status.safariAppPath,
-        safariPackagePath: response.status.safariPackagePath,
-      }));
-      setStatusMessage(
-        `Built ${browser === "chrome" ? "Chrome" : "Safari"} companion package.`,
-      );
+      const nextStatus = mergePackageStatus(packageStatus, response.status);
+      setPackageStatus(nextStatus);
+      if (!options?.silent) {
+        setStatusMessage(
+          `Built ${browser === "chrome" ? "Chrome" : "Safari"} companion package.`,
+        );
+      }
+      return nextStatus;
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
+      throw cause;
     } finally {
       setBuildingBrowser(null);
     }
   };
 
-  const createPairing = async (browser: LifeOpsBrowserKind) => {
+  const createPairing = async (
+    browser: LifeOpsBrowserKind,
+    options?: { silent?: boolean },
+  ): Promise<LifeOpsBrowserCompanionPairingResponse> => {
     setPairingBrowser(browser);
     setError(null);
     try {
@@ -523,12 +552,16 @@ export function LifeOpsBrowserSetupPanel() {
         ...current,
         [browser]: response,
       }));
-      setStatusMessage(
-        `Created a ${browser} pairing payload. Import it into the companion popup.`,
-      );
+      if (!options?.silent) {
+        setStatusMessage(
+          `Created a ${browser} pairing payload. Import it into the companion popup.`,
+        );
+      }
       await refresh();
+      return response;
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
+      throw cause;
     } finally {
       setPairingBrowser(null);
     }
@@ -548,7 +581,10 @@ export function LifeOpsBrowserSetupPanel() {
     }
   };
 
-  const downloadPackage = async (browser: LifeOpsBrowserKind) => {
+  const downloadPackage = async (
+    browser: LifeOpsBrowserKind,
+    options?: { silent?: boolean },
+  ) => {
     try {
       setError(null);
       const download =
@@ -564,11 +600,14 @@ export function LifeOpsBrowserSetupPanel() {
       window.setTimeout(() => {
         URL.revokeObjectURL(objectUrl);
       }, 0);
-      setStatusMessage(
-        `Downloaded ${browser === "chrome" ? "Chrome" : "Safari"} companion package.`,
-      );
+      if (!options?.silent) {
+        setStatusMessage(
+          `Downloaded ${browser === "chrome" ? "Chrome" : "Safari"} companion package.`,
+        );
+      }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
+      throw cause;
     }
   };
 
@@ -584,6 +623,62 @@ export function LifeOpsBrowserSetupPanel() {
       setError(null);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
+    }
+  };
+
+  const installCompanion = async (browser: LifeOpsBrowserKind) => {
+    setInstallingBrowser(browser);
+    setError(null);
+    try {
+      const needsBuild =
+        browser === "chrome"
+          ? isElectrobunRuntime()
+            ? !packageStatus?.chromeBuildPath
+            : !packageStatus?.chromePackagePath
+          : isElectrobunRuntime()
+            ? !packageStatus?.safariAppPath
+            : !packageStatus?.safariPackagePath;
+
+      const nextStatus = needsBuild
+        ? await buildPackage(browser, { silent: true })
+        : packageStatus;
+      const response = await createPairing(browser, { silent: true });
+      await copyTextToClipboard(
+        JSON.stringify(pairingPayload(response), null, 2),
+      );
+
+      if (browser === "chrome") {
+        if (isElectrobunRuntime()) {
+          const buildPath = nextStatus?.chromeBuildPath;
+          if (!buildPath) {
+            throw new Error("Chrome build folder is not available");
+          }
+          await openDesktopPath(buildPath, true);
+        } else {
+          await downloadPackage(browser, { silent: true });
+        }
+        await openExternalUrl(CHROME_EXTENSIONS_URL);
+        setStatusMessage(
+          "Chrome install is prepared. We copied the pairing JSON and opened the extension manager. In Chrome, click Load unpacked and select the built LifeOps Browser folder.",
+        );
+      } else {
+        if (isElectrobunRuntime()) {
+          const appPath = nextStatus?.safariAppPath;
+          if (!appPath) {
+            throw new Error("Safari app bundle is not available");
+          }
+          await openDesktopPath(appPath);
+        } else {
+          await downloadPackage(browser, { silent: true });
+        }
+        setStatusMessage(
+          "Safari install is prepared. We copied the pairing JSON and opened the LifeOps Browser app or package. Run the app once, then enable the extension in Safari Settings.",
+        );
+      }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setInstallingBrowser(null);
     }
   };
 
@@ -630,8 +725,13 @@ export function LifeOpsBrowserSetupPanel() {
             browser="chrome"
             buildPath={packageStatus?.chromeBuildPath}
             packagePath={packageStatus?.chromePackagePath}
-            busy={buildingBrowser === "chrome" || pairingBrowser === "chrome"}
+            busy={
+              buildingBrowser === "chrome" ||
+              pairingBrowser === "chrome" ||
+              installingBrowser === "chrome"
+            }
             pairing={pairings.chrome ?? null}
+            onInstall={installCompanion}
             onBuild={buildPackage}
             onCreatePairing={createPairing}
             onCopyPairing={copyPairing}
@@ -643,8 +743,13 @@ export function LifeOpsBrowserSetupPanel() {
             buildPath={packageStatus?.safariWebExtensionPath}
             packagePath={packageStatus?.safariPackagePath}
             appPath={packageStatus?.safariAppPath}
-            busy={buildingBrowser === "safari" || pairingBrowser === "safari"}
+            busy={
+              buildingBrowser === "safari" ||
+              pairingBrowser === "safari" ||
+              installingBrowser === "safari"
+            }
             pairing={pairings.safari ?? null}
+            onInstall={installCompanion}
             onBuild={buildPackage}
             onCreatePairing={createPairing}
             onCopyPairing={copyPairing}
@@ -917,10 +1022,11 @@ export function LifeOpsBrowserSetupPanel() {
             </div>
 
             <div className="rounded-xl border border-border/60 bg-bg/40 px-3 py-2 text-xs text-muted">
-              Import the pairing JSON into the companion popup after pairing.
-              Chrome uses the unpacked build folder for local installation and
-              the zip package for distribution. Safari uses the generated macOS
-              app bundle and the Safari Extensions settings pane.
+              Install Chrome or Safari in one click here. Milady builds the
+              companion, prepares a fresh pairing token, and launches the next
+              destination for that browser. Chrome still requires Load unpacked
+              approval, and Safari still requires enabling the extension in
+              Safari Settings.
             </div>
           </div>
         ) : loading ? (
