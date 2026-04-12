@@ -6,6 +6,8 @@
  */
 
 import {
+  type Action,
+  type ActionParameters,
   type AgentRuntime,
   type Content,
   type createMessageMemory,
@@ -30,15 +32,13 @@ function shouldExposeBinanceSkillId(skillId: string): boolean {
 
 export type FallbackParsedAction = {
   name: string;
-  parameters?: Record<string, unknown>;
+  parameters?: ActionParameters;
 };
 
-type RuntimeActionLike = {
-  name?: string;
-  similes?: string[];
-  validate?: (...args: unknown[]) => unknown;
-  handler?: (...args: unknown[]) => unknown;
-};
+type RuntimeActionLike = Pick<
+  Action,
+  "name" | "similes" | "validate" | "handler"
+>;
 
 let selfControlFallbackActionsPromise: Promise<{
   BLOCK_WEBSITES?: RuntimeActionLike;
@@ -265,7 +265,9 @@ export async function executeFallbackParsedActions(
           : undefined;
       const fallbackText =
         actionResult && typeof actionResult === "object"
-          ? extractCompatTextContent(actionResult as Content)
+          ? typeof actionResult.text === "string"
+            ? actionResult.text
+            : ""
           : "";
       const shouldSuppressSuccessFallbackText =
         parsed.name === "BLOCK_WEBSITES" &&
