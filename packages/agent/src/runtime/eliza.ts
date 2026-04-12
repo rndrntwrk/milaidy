@@ -66,6 +66,11 @@ import * as pluginLocalEmbedding from "@elizaos/plugin-local-embedding";
 import * as pluginPdf from "@elizaos/plugin-pdf";
 import * as pluginSql from "@elizaos/plugin-sql";
 import * as pluginTrust from "@elizaos/plugin-trust";
+import {
+  PGLITE_ERROR_CODES,
+  getPgliteErrorCode,
+  createPgliteInitError,
+} from "./pglite-error-compat";
 import * as pluginSelfControl from "@miladyai/plugin-selfcontrol";
 import {
   isMiladySettingsDebugEnabled,
@@ -2104,11 +2109,11 @@ function isPgliteLockError(err: unknown): boolean {
 
 /** @internal Exported for testing. */
 export function isRecoverablePgliteInitError(err: unknown): boolean {
-  const code = pluginSql.getPgliteErrorCode(err);
+  const code = getPgliteErrorCode(err);
   if (
-    code === pluginSql.PGLITE_ERROR_CODES.ACTIVE_LOCK ||
-    code === pluginSql.PGLITE_ERROR_CODES.CORRUPT_DATA ||
-    code === pluginSql.PGLITE_ERROR_CODES.MANUAL_RESET_REQUIRED
+    code === PGLITE_ERROR_CODES.ACTIVE_LOCK ||
+    code === PGLITE_ERROR_CODES.CORRUPT_DATA ||
+    code === PGLITE_ERROR_CODES.MANUAL_RESET_REQUIRED
   ) {
     return true;
   }
@@ -2149,13 +2154,13 @@ export function getPgliteRecoveryAction(
   err: unknown,
   dataDir: string,
 ): PgliteRecoveryAction {
-  const code = pluginSql.getPgliteErrorCode(err);
-  if (code === pluginSql.PGLITE_ERROR_CODES.ACTIVE_LOCK) {
+  const code = getPgliteErrorCode(err);
+  if (code === PGLITE_ERROR_CODES.ACTIVE_LOCK) {
     return "fail-active-lock";
   }
   if (
-    code === pluginSql.PGLITE_ERROR_CODES.CORRUPT_DATA ||
-    code === pluginSql.PGLITE_ERROR_CODES.MANUAL_RESET_REQUIRED
+    code === PGLITE_ERROR_CODES.CORRUPT_DATA ||
+    code === PGLITE_ERROR_CODES.MANUAL_RESET_REQUIRED
   ) {
     return "fail-manual-reset";
   }
@@ -2164,7 +2169,7 @@ export function getPgliteRecoveryAction(
 
   const pidStatus = reconcilePglitePidFile(dataDir);
   const treatPidAsActiveLock =
-    code === pluginSql.PGLITE_ERROR_CODES.ACTIVE_LOCK || isPgliteLockError(err);
+    code === PGLITE_ERROR_CODES.ACTIVE_LOCK || isPgliteLockError(err);
   if (
     (treatPidAsActiveLock && pidStatus === "active") ||
     (treatPidAsActiveLock && pidStatus === "active-unconfirmed") ||
@@ -2180,14 +2185,13 @@ export function getPgliteRecoveryAction(
 
 function createActivePgliteLockError(dataDir: string, err: unknown): Error {
   if (
-    pluginSql.getPgliteErrorCode(err) ===
-      pluginSql.PGLITE_ERROR_CODES.ACTIVE_LOCK &&
+    getPgliteErrorCode(err) === PGLITE_ERROR_CODES.ACTIVE_LOCK &&
     err instanceof Error
   ) {
     return err;
   }
-  return pluginSql.createPgliteInitError(
-    pluginSql.PGLITE_ERROR_CODES.ACTIVE_LOCK,
+  return createPgliteInitError(
+    PGLITE_ERROR_CODES.ACTIVE_LOCK,
     `PGLite data dir is already in use at ${dataDir}. Close the other Milady or Eliza process, or set a different PGLITE_DATA_DIR before retrying.`,
     { cause: err, dataDir },
   );
@@ -2202,8 +2206,7 @@ function createManualResetRequiredPgliteError(
   err: unknown,
 ): Error {
   if (
-    pluginSql.getPgliteErrorCode(err) ===
-      pluginSql.PGLITE_ERROR_CODES.MANUAL_RESET_REQUIRED &&
+    getPgliteErrorCode(err) === PGLITE_ERROR_CODES.MANUAL_RESET_REQUIRED &&
     err instanceof Error
   ) {
     return err;
@@ -2211,28 +2214,27 @@ function createManualResetRequiredPgliteError(
 
   const errorText = formatPgliteFailure(err);
   const cause =
-    pluginSql.getPgliteErrorCode(err) ===
-    pluginSql.PGLITE_ERROR_CODES.CORRUPT_DATA
+    getPgliteErrorCode(err) === PGLITE_ERROR_CODES.CORRUPT_DATA
       ? err
-      : pluginSql.createPgliteInitError(
-          pluginSql.PGLITE_ERROR_CODES.CORRUPT_DATA,
+      : createPgliteInitError(
+          PGLITE_ERROR_CODES.CORRUPT_DATA,
           `PGlite data dir at ${dataDir} appears corrupt or unreadable: ${errorText}`,
           { cause: err, dataDir },
         );
 
-  return pluginSql.createPgliteInitError(
-    pluginSql.PGLITE_ERROR_CODES.MANUAL_RESET_REQUIRED,
+  return createPgliteInitError(
+    PGLITE_ERROR_CODES.MANUAL_RESET_REQUIRED,
     `PGlite initialization failed for ${dataDir}: ${errorText}. Stop Milady, then rename or delete only this directory before retrying: ${dataDir}`,
     { cause, dataDir },
   );
 }
 
 export function isFatalPgliteStartupError(err: unknown): boolean {
-  const code = pluginSql.getPgliteErrorCode(err);
+  const code = getPgliteErrorCode(err);
   return (
-    code === pluginSql.PGLITE_ERROR_CODES.ACTIVE_LOCK ||
-    code === pluginSql.PGLITE_ERROR_CODES.CORRUPT_DATA ||
-    code === pluginSql.PGLITE_ERROR_CODES.MANUAL_RESET_REQUIRED
+    code === PGLITE_ERROR_CODES.ACTIVE_LOCK ||
+    code === PGLITE_ERROR_CODES.CORRUPT_DATA ||
+    code === PGLITE_ERROR_CODES.MANUAL_RESET_REQUIRED
   );
 }
 
