@@ -337,7 +337,7 @@ export function MediaGalleryView({
             placeholder={t("mediagalleryview.SearchMedia")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="h-10 rounded-[16px] border-border/40 bg-card/50 text-sm placeholder:text-muted/65 focus-visible:ring-accent/30"
+            className="h-10 rounded-xl border-border/40 bg-card/50 text-sm placeholder:text-muted/65 focus-visible:ring-accent/30"
           />
 
           <div className="grid grid-cols-2 gap-1.5">
@@ -425,7 +425,7 @@ export function MediaGalleryView({
         ) : !selectedItem ? (
           <PagePanel.Empty
             variant="surface"
-            className="min-h-[18rem] rounded-[1.6rem] px-5 py-10"
+            className="min-h-[18rem] rounded-3xl px-5 py-10"
             title={t("mediagalleryview.NoMediaFound")}
             description={
               media.length === 0

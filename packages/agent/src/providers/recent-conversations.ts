@@ -14,6 +14,7 @@ import {
   formatSpeakerLabel,
   roomSourceTag,
 } from "./conversation-utils.js";
+import { hasAdminAccess } from "../security/access.js";
 
 const MAX_RECENT_MESSAGES = 10;
 const MAX_ROOMS_TO_SCAN = 10;
@@ -36,6 +37,10 @@ export const recentConversationsProvider: Provider = {
     message: Memory,
     _state: State,
   ): Promise<ProviderResult> {
+    if (!(await hasAdminAccess(runtime, message))) {
+      return { text: "", values: {}, data: {} };
+    }
+
     const entityId = message.entityId as UUID | undefined;
     if (!entityId) {
       return { text: "", values: {}, data: {} };

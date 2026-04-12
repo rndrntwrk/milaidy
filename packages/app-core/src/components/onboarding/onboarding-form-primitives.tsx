@@ -59,7 +59,7 @@ export function getOnboardingChoiceCardClassName({
   recommended?: boolean;
 }) {
   return cn(
-    "flex min-h-[60px] w-full items-center justify-between gap-3 rounded-[10px] px-3 py-3 text-left backdrop-blur-[18px] backdrop-saturate-[1.2] transition-[border-color,background-color,box-shadow] duration-200",
+    "flex min-h-[60px] w-full items-center justify-between gap-3 rounded-lg px-3 py-3 text-left backdrop-blur-[18px] backdrop-saturate-[1.2] transition-[border-color,background-color,box-shadow] duration-200",
     recommended
       ? `${onboardingRecommendedSurfaceClassName} ${onboardingRecommendedSurfaceHoverClassName}`
       : `${onboardingCardSurfaceClassName} ${onboardingCardSurfaceHoverClassName}`,

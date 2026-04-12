@@ -189,7 +189,7 @@ export function LogsView() {
             <Button
               variant="outline"
               size="sm"
-              className={`min-h-10 rounded-[18px] px-3 text-xs font-medium ${GLASS_BUTTON_CLASSNAME}`}
+              className={`min-h-10 rounded-2xl px-3 text-xs font-medium ${GLASS_BUTTON_CLASSNAME}`}
               onClick={handleClearFilters}
             >
               {t("logsview.ClearFilters")}
@@ -199,7 +199,7 @@ export function LogsView() {
           <Button
             variant="outline"
             size="sm"
-            className={`ml-auto min-h-10 rounded-[18px] px-3 text-xs font-medium ${GLASS_BUTTON_CLASSNAME}`}
+            className={`ml-auto min-h-10 rounded-2xl px-3 text-xs font-medium ${GLASS_BUTTON_CLASSNAME}`}
             onClick={() => void loadLogs()}
           >
             {t("common.refresh")}
@@ -258,7 +258,7 @@ export function LogsView() {
             )}
           />
         ) : (
-          <PagePanel variant="inset" className="overflow-hidden rounded-[18px]">
+          <PagePanel variant="inset" className="overflow-hidden rounded-2xl">
             <div className="hidden grid-cols-[5.75rem_3.5rem_5rem_14rem_minmax(0,1fr)] gap-3 border-b border-border/40 px-3 py-2 text-xs-tight font-medium uppercase tracking-[0.08em] text-muted md:grid">
               <span>{t("logsview.Time")}</span>
               <span>{t("logsview.Level")}</span>

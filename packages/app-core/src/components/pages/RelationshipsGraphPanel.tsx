@@ -477,7 +477,7 @@ function GraphTooltip({ state }: { state: TooltipState }) {
     return (
       <div
         style={style}
-        className="rounded-[14px] border border-border/40 bg-card/95 px-3 py-2.5 shadow-lg backdrop-blur-md"
+        className="rounded-xl border border-border/40 bg-card/95 px-3 py-2.5 shadow-lg backdrop-blur-md"
       >
         <div className="text-sm font-semibold text-txt">
           {person.displayName}
@@ -503,7 +503,7 @@ function GraphTooltip({ state }: { state: TooltipState }) {
   return (
     <div
       style={style}
-      className="rounded-[14px] border border-border/40 bg-card/95 px-3 py-2.5 shadow-lg backdrop-blur-md"
+      className="rounded-xl border border-border/40 bg-card/95 px-3 py-2.5 shadow-lg backdrop-blur-md"
     >
       <div className="text-sm font-semibold text-txt">
         {edge.sourcePersonName} ↔ {edge.targetPersonName}
@@ -550,7 +550,7 @@ export function RelationshipsGraphPanel({
 
   if (!snapshot || !visibleGraph || snapshot.people.length === 0) {
     return (
-      <div className="flex min-h-[20rem] flex-col items-center justify-center rounded-[22px] border border-border/28 bg-card/35 px-6 py-10 text-center">
+      <div className="flex min-h-[20rem] flex-col items-center justify-center rounded-2xl border border-border/28 bg-card/35 px-6 py-10 text-center">
         <div className="text-sm font-semibold text-txt">
           No identities match the current filters.
         </div>
@@ -618,7 +618,7 @@ export function RelationshipsGraphPanel({
 
       {/* biome-ignore lint/a11y/noStaticElementInteractions: graph container handles tooltip dismiss on mouse leave */}
       <div
-        className="relative overflow-hidden rounded-[24px] border border-border/26 bg-[radial-gradient(circle_at_top,rgba(240,185,11,0.12),transparent_42%),linear-gradient(180deg,color-mix(in_srgb,var(--card)_92%,transparent),color-mix(in_srgb,var(--bg)_97%,transparent))]"
+        className="relative overflow-hidden rounded-3xl border border-border/26 bg-[radial-gradient(circle_at_top,rgba(240,185,11,0.12),transparent_42%),linear-gradient(180deg,color-mix(in_srgb,var(--card)_92%,transparent),color-mix(in_srgb,var(--bg)_97%,transparent))]"
         data-graph-container
         onMouseLeave={hideTooltip}
       >

@@ -60,8 +60,8 @@ const ROLE_GATED_PLUGINS: Readonly<Record<string, RoleGate>> = {
   // Cloud — provisioning, billing, agent lifecycle
   elizaOSCloud: "admin",
 
-  // Scratchpad — file read/write
-  scratchpad: "admin",
+  // Scratchpad / Clipboard — floor is "user" for reads; writes elevated below
+  scratchpad: "user",
 
   // Experience — records agent learnings
   experience: "admin",
@@ -133,7 +133,10 @@ const ACTION_ROLE_OVERRIDES: Readonly<Record<string, RoleGate>> = {
   MANAGE_ROUTING: "admin",
   MANAGE_ZONES: "admin",
 
-  // --- plugin-scratchpad: file operations stay admin, but READ_FILE is admin ---
+  // --- plugin-scratchpad / clipboard: global writes are admin, reads are user (floor) ---
+  SCRATCHPAD_WRITE: "admin",
+  SCRATCHPAD_APPEND: "admin",
+  SCRATCHPAD_DELETE: "admin",
   READ_FILE: "admin",
 };
 

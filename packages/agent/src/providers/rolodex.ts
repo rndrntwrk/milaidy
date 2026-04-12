@@ -11,6 +11,7 @@ import type {
   RelationshipsGraphService,
   RelationshipsPersonSummary,
 } from "../services/relationships-graph.js";
+import { hasAdminAccess } from "../security/access.js";
 
 const MAX_CONTACTS = 10;
 
@@ -52,6 +53,10 @@ export const rolodexProvider: Provider = {
     _message: Memory,
     _state: State,
   ): Promise<ProviderResult> {
+    if (!(await hasAdminAccess(runtime, _message))) {
+      return { text: "", values: {}, data: {} };
+    }
+
     try {
       const graphService = runtime.getService(
         "RELATIONSHIPS_GRAPH",
