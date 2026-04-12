@@ -185,7 +185,10 @@ function DocumentListItem({
 export function KnowledgeView({
   inModal,
   embedded,
-}: { inModal?: boolean; embedded?: boolean } = {}) {
+}: {
+  inModal?: boolean;
+  embedded?: boolean;
+} = {}) {
   const { t } = useApp();
   const { setActionNotice } = useApp();
   const setActionNoticeRef = useRef(setActionNotice);
@@ -870,17 +873,15 @@ export function KnowledgeView({
             </div>
 
             <div className="space-y-1.5">
-              {loading &&
-                !isShowingSearchResults &&
-                documents.length === 0 && (
-                  <PagePanel.Empty
-                    variant="inset"
-                    className="px-4 py-10 text-center text-sm font-medium"
-                    title={t("knowledgeview.LoadingDocuments")}
-                  >
-                    {t("knowledgeview.LoadingDocuments")}
-                  </PagePanel.Empty>
-                )}
+              {loading && !isShowingSearchResults && documents.length === 0 && (
+                <PagePanel.Empty
+                  variant="inset"
+                  className="px-4 py-10 text-center text-sm font-medium"
+                  title={t("knowledgeview.LoadingDocuments")}
+                >
+                  {t("knowledgeview.LoadingDocuments")}
+                </PagePanel.Empty>
+              )}
 
               {!loading &&
                 !isShowingSearchResults &&
@@ -910,25 +911,26 @@ export function KnowledgeView({
                   />
                 )}
 
-              {isShowingSearchResults &&
-                visibleSearchResults.length === 0 && (
-                  <PagePanel.Empty
-                    variant="inset"
-                    className="min-h-[12rem] px-4 py-8"
-                    description={t("knowledgeview.SearchTips", {
-                      defaultValue:
-                        "Try a filename, topic, or phrase from the document body.",
-                    })}
-                    title={t("knowledgeview.NoResultsFound")}
-                  />
-                )}
+              {isShowingSearchResults && visibleSearchResults.length === 0 && (
+                <PagePanel.Empty
+                  variant="inset"
+                  className="min-h-[12rem] px-4 py-8"
+                  description={t("knowledgeview.SearchTips", {
+                    defaultValue:
+                      "Try a filename, topic, or phrase from the document body.",
+                  })}
+                  title={t("knowledgeview.NoResultsFound")}
+                />
+              )}
 
               {isShowingSearchResults
                 ? visibleSearchResults.map((result) => (
                     <SearchResultListItem
                       key={result.id}
                       result={result}
-                      active={selectedDocId === (result.documentId || result.id)}
+                      active={
+                        selectedDocId === (result.documentId || result.id)
+                      }
                       onSelect={setSelectedDocId}
                     />
                   ))

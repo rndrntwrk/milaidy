@@ -81,7 +81,9 @@ export function TrajectoriesView({
 
   // Self-manage selection when no external callback is provided (standalone mode).
   const [internalId, setInternalId] = useState<string | null>(null);
-  const selectedTrajectoryId = controlledOnSelect ? (controlledId ?? null) : internalId;
+  const selectedTrajectoryId = controlledOnSelect
+    ? (controlledId ?? null)
+    : internalId;
   const onSelectTrajectory = controlledOnSelect ?? setInternalId;
 
   const [searchQuery, setSearchQuery] = useState("");

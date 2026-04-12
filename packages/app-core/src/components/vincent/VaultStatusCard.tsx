@@ -155,9 +155,7 @@ export function VaultStatusCard({
       <div className="rounded-[28px] border border-border/18 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_92%,transparent),color-mix(in_srgb,var(--bg)_98%,transparent))] px-5 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
         <div className="flex items-center gap-2">
           <Wallet className="h-4 w-4 text-muted/50" />
-          <span className="text-sm text-muted">
-            Wallet data loading...
-          </span>
+          <span className="text-sm text-muted">Wallet data loading...</span>
         </div>
       </div>
     );
@@ -171,9 +169,7 @@ export function VaultStatusCard({
           <Wallet className="h-4 w-4 text-accent" />
           <span className="text-sm font-semibold text-txt">Agent Wallet</span>
         </div>
-        {totalUsd && (
-          <StatusBadge label={totalUsd} tone="success" withDot />
-        )}
+        {totalUsd && <StatusBadge label={totalUsd} tone="success" withDot />}
       </div>
 
       {/* Addresses */}
@@ -213,9 +209,7 @@ export function VaultStatusCard({
 
       {/* No balances message */}
       {walletBalances && balancePills.length === 0 && (
-        <p className="text-xs text-muted">
-          No token balances above $0.01.
-        </p>
+        <p className="text-xs text-muted">No token balances above $0.01.</p>
       )}
     </div>
   );

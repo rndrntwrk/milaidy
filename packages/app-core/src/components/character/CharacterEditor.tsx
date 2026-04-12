@@ -127,7 +127,12 @@ const CHARACTER_EDITOR_FOOTER_ACTION_CLASSNAME =
 
 /* ── Constants ─────────────────────────────────────────────────────── */
 
-const CHARACTER_EDITOR_PAGES = ["personality", "style", "examples", "knowledge"] as const;
+const CHARACTER_EDITOR_PAGES = [
+  "personality",
+  "style",
+  "examples",
+  "knowledge",
+] as const;
 
 /* ── Component ─────────────────────────────────────────────────────── */
 
@@ -1414,24 +1419,43 @@ export function CharacterEditor({
               >
                 <SidebarScrollRegion>
                   <SidebarPanel>
-                    <nav className="space-y-1" aria-label="Character editor sections">
+                    <nav
+                      className="space-y-1"
+                      aria-label="Character editor sections"
+                    >
                       {CHARACTER_EDITOR_PAGES.map((page) => {
                         const label =
                           page === "personality"
-                            ? t("charactereditor.TabPersonality", { defaultValue: "Personality" })
+                            ? t("charactereditor.TabPersonality", {
+                                defaultValue: "Personality",
+                              })
                             : page === "style"
-                              ? t("charactereditor.TabStyles", { defaultValue: "Style" })
+                              ? t("charactereditor.TabStyles", {
+                                  defaultValue: "Style",
+                                })
                               : page === "examples"
-                                ? t("charactereditor.TabExamples", { defaultValue: "Examples" })
-                                : t("charactereditor.TabKnowledge", { defaultValue: "Knowledge" });
+                                ? t("charactereditor.TabExamples", {
+                                    defaultValue: "Examples",
+                                  })
+                                : t("charactereditor.TabKnowledge", {
+                                    defaultValue: "Knowledge",
+                                  });
                         return (
                           <SidebarContent.Item
                             key={page}
                             active={activePage === page}
                             onClick={() => setActivePage(page)}
-                            aria-current={activePage === page ? "page" : undefined}
+                            aria-current={
+                              activePage === page ? "page" : undefined
+                            }
                           >
-                            <SidebarContent.ItemTitle className={activePage === page ? "font-semibold" : "font-medium"}>
+                            <SidebarContent.ItemTitle
+                              className={
+                                activePage === page
+                                  ? "font-semibold"
+                                  : "font-medium"
+                              }
+                            >
                               {label}
                             </SidebarContent.ItemTitle>
                           </SidebarContent.Item>
@@ -1444,12 +1468,18 @@ export function CharacterEditor({
             }
             mobileSidebarLabel={
               activePage === "personality"
-                ? t("charactereditor.TabPersonality", { defaultValue: "Personality" })
+                ? t("charactereditor.TabPersonality", {
+                    defaultValue: "Personality",
+                  })
                 : activePage === "style"
                   ? t("charactereditor.TabStyles", { defaultValue: "Style" })
                   : activePage === "examples"
-                    ? t("charactereditor.TabExamples", { defaultValue: "Examples" })
-                    : t("charactereditor.TabKnowledge", { defaultValue: "Knowledge" })
+                    ? t("charactereditor.TabExamples", {
+                        defaultValue: "Examples",
+                      })
+                    : t("charactereditor.TabKnowledge", {
+                        defaultValue: "Knowledge",
+                      })
             }
             data-testid="character-editor-view"
           >
@@ -1524,7 +1554,9 @@ export function CharacterEditor({
                     pendingStyleEntries={pendingStyleEntries}
                     styleEntryDrafts={styleEntryDrafts}
                     handleGenerate={handleGenerate}
-                    handlePendingStyleEntryChange={handlePendingStyleEntryChange}
+                    handlePendingStyleEntryChange={
+                      handlePendingStyleEntryChange
+                    }
                     handleAddStyleEntry={handleAddStyleEntry}
                     handleRemoveStyleEntry={handleRemoveStyleEntry}
                     handleStyleEntryDraftChange={handleStyleEntryDraftChange}
@@ -1551,7 +1583,7 @@ export function CharacterEditor({
                 </div>
               )}
             </div>
-            </PageLayout>
+          </PageLayout>
         )}
       </div>
 

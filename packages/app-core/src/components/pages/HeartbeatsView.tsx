@@ -376,7 +376,7 @@ function HeartbeatsLayout() {
 
   const selectedTrigger =
     selectedTriggerId != null
-      ? triggers.find((trigger) => trigger.id === selectedTriggerId) ?? null
+      ? (triggers.find((trigger) => trigger.id === selectedTriggerId) ?? null)
       : null;
   const selectedRuns = selectedTrigger
     ? (triggerRunsById[selectedTrigger.id] ?? [])
@@ -400,8 +400,8 @@ function HeartbeatsLayout() {
   const mobileSidebarLabel =
     editorOpen || editingId
       ? modalTitle
-      : selectedTrigger?.displayName ??
-        t("nav.heartbeats", { defaultValue: "Heartbeats" });
+      : (selectedTrigger?.displayName ??
+        t("nav.heartbeats", { defaultValue: "Heartbeats" }));
 
   const openCreateHeartbeat = () => {
     openCreateEditor();
@@ -548,10 +548,7 @@ function HeartbeatsLayout() {
             {[...userTemplates, ...BUILT_IN_TEMPLATES].map((template) => {
               const isUserTemplate = !template.id.startsWith("__builtin_");
               const templateName = getTemplateName(template, t);
-              const templateInstructions = getTemplateInstructions(
-                template,
-                t,
-              );
+              const templateInstructions = getTemplateInstructions(template, t);
               return (
                 <div key={template.id} className="group relative mb-1.5">
                   <SidebarContent.Item

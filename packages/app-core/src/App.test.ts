@@ -405,7 +405,8 @@ describe("App", () => {
           (node) =>
             node.type === "div" &&
             node.props["data-shell-scroll-region"] === "true" &&
-            node.findAllByProps({ "data-testid": "CharacterEditor" }).length > 0,
+            node.findAllByProps({ "data-testid": "CharacterEditor" }).length >
+              0,
         ),
       ).toHaveLength(0);
     }

@@ -342,13 +342,15 @@ export function getAppSlug(appName: string): string {
   const slug = packageNameToAppRouteSlug(appName);
   if (slug) return slug;
   // Fallback: strip leading scope, common prefixes, then sanitise
-  return appName
-    .replace(/^@[^/]+\//, "")
-    .replace(/^(app|plugin)-/, "")
-    .replace(/[^a-z0-9-]/gi, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "")
-    .toLowerCase() || appName;
+  return (
+    appName
+      .replace(/^@[^/]+\//, "")
+      .replace(/^(app|plugin)-/, "")
+      .replace(/[^a-z0-9-]/gi, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "")
+      .toLowerCase() || appName
+  );
 }
 
 /** Find an app by its URL slug. */
@@ -357,5 +359,7 @@ export function findAppBySlug(
   slug: string,
 ): RegistryAppInfo | undefined {
   const normalizedSlug = slug.toLowerCase();
-  return apps.find((app) => getAppSlug(app.name).toLowerCase() === normalizedSlug);
+  return apps.find(
+    (app) => getAppSlug(app.name).toLowerCase() === normalizedSlug,
+  );
 }

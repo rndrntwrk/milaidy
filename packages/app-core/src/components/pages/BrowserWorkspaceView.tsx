@@ -1110,9 +1110,12 @@ export function BrowserWorkspaceView(): JSX.Element {
                 size="sm"
                 className="h-9 flex-1 rounded-xl px-3 text-xs font-semibold"
                 onClick={() =>
-                  void runBrowserWorkspaceAction("navigate:selected", async () => {
-                    await navigateSelectedBrowserWorkspaceTab(locationInput);
-                  })
+                  void runBrowserWorkspaceAction(
+                    "navigate:selected",
+                    async () => {
+                      await navigateSelectedBrowserWorkspaceTab(locationInput);
+                    },
+                  )
                 }
                 disabled={busyAction !== null}
               >
@@ -1125,9 +1128,14 @@ export function BrowserWorkspaceView(): JSX.Element {
                 size="sm"
                 className="h-9 flex-1 rounded-xl px-3 text-xs font-semibold"
                 onClick={() =>
-                  void runBrowserWorkspaceAction("open:new-address", async () => {
-                    await openNewBrowserWorkspaceTab(locationInput || "about:blank");
-                  })
+                  void runBrowserWorkspaceAction(
+                    "open:new-address",
+                    async () => {
+                      await openNewBrowserWorkspaceTab(
+                        locationInput || "about:blank",
+                      );
+                    },
+                  )
                 }
                 disabled={busyAction !== null}
               >
@@ -1149,7 +1157,9 @@ export function BrowserWorkspaceView(): JSX.Element {
                 disabled={!selectedTab || busyAction !== null}
               >
                 <ExternalLink className="mr-1 h-3.5 w-3.5" />
-                {t("browserworkspace.OpenExternal", { defaultValue: "Open external" })}
+                {t("browserworkspace.OpenExternal", {
+                  defaultValue: "Open external",
+                })}
               </Button>
               <Button
                 variant="outline"
@@ -1311,7 +1321,9 @@ export function BrowserWorkspaceView(): JSX.Element {
 
         {selectedTab ? (
           <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
-            <MetaPill compact>{getBrowserWorkspaceTabLabel(selectedTab)}</MetaPill>
+            <MetaPill compact>
+              {getBrowserWorkspaceTabLabel(selectedTab)}
+            </MetaPill>
             <span>{selectedTab.url}</span>
             <span>•</span>
             <span>

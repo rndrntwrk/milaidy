@@ -127,7 +127,8 @@ export function AppsView() {
       console.warn("[AppsView] Failed to list app runs:", err);
     });
     try {
-      const serverAppsResult = await client.listApps()
+      const serverAppsResult = await client
+        .listApps()
         .then((apps) => ({
           status: "fulfilled" as const,
           value: apps,
@@ -139,7 +140,10 @@ export function AppsView() {
       const serverApps =
         serverAppsResult.status === "fulfilled" ? serverAppsResult.value : [];
       if (serverAppsResult.status === "rejected") {
-        console.warn("[AppsView] Failed to list apps:", serverAppsResult.reason);
+        console.warn(
+          "[AppsView] Failed to list apps:",
+          serverAppsResult.reason,
+        );
       }
       const internalToolApps = getInternalToolApps();
       // Inject registered overlay apps (e.g. companion) if not already from server

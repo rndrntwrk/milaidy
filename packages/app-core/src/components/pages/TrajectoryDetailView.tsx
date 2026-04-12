@@ -157,14 +157,11 @@ export function TrajectoryDetailView({
     [llmCalls],
   );
 
-  const handleStageClick = useCallback(
-    (stageId: PipelineStageId) => {
-      setActiveStage((prev) =>
-        prev === stageId || stageId === "input" ? null : stageId,
-      );
-    },
-    [],
-  );
+  const handleStageClick = useCallback((stageId: PipelineStageId) => {
+    setActiveStage((prev) =>
+      prev === stageId || stageId === "input" ? null : stageId,
+    );
+  }, []);
 
   if (loading) {
     return (

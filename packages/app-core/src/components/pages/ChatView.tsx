@@ -70,7 +70,9 @@ interface ChatViewProps {
   onPtySessionClick?: (sessionId: string) => void;
 }
 
-function normalizeInboxChatSelection(value: unknown): InboxChatSelection | null {
+function normalizeInboxChatSelection(
+  value: unknown,
+): InboxChatSelection | null {
   if (!value || typeof value !== "object") return null;
 
   const candidate = value as Record<string, unknown>;
@@ -92,14 +94,18 @@ function normalizeInboxChatSelection(value: unknown): InboxChatSelection | null 
   return {
     avatarUrl:
       typeof candidate.avatarUrl === "string" ? candidate.avatarUrl : undefined,
-    canSend: typeof candidate.canSend === "boolean" ? candidate.canSend : undefined,
+    canSend:
+      typeof candidate.canSend === "boolean" ? candidate.canSend : undefined,
     id,
     source,
     title,
     transportSource,
-    worldId: typeof candidate.worldId === "string" ? candidate.worldId : undefined,
+    worldId:
+      typeof candidate.worldId === "string" ? candidate.worldId : undefined,
     worldLabel:
-      typeof candidate.worldLabel === "string" ? candidate.worldLabel : undefined,
+      typeof candidate.worldLabel === "string"
+        ? candidate.worldLabel
+        : undefined,
   };
 }
 
