@@ -1663,7 +1663,7 @@ function normalizeCalendarAttendees(
   return normalized.length > 0 ? normalized : undefined;
 }
 
-export const calendarAction: Action = {
+export const calendarAction: Action & { suppressPostActionContinuation?: boolean } = {
   name: "CALENDAR_ACTION",
   similes: [
     "CALENDAR",
