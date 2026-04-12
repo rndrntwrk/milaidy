@@ -11,6 +11,12 @@ const uiSmokeApiStub = path.join(
 const uiSmokeApiPort = Number(process.env.MILADY_UI_SMOKE_API_PORT || "31337");
 const uiSmokePort = Number(process.env.MILADY_UI_SMOKE_PORT || "2138");
 
+// Keep the Vite preview proxy aligned with the smoke API stub when the suite
+// runs on non-default ports. The app's Vite config reads MILADY_API_PORT.
+if (!process.env.MILADY_API_PORT) {
+  process.env.MILADY_API_PORT = String(uiSmokeApiPort);
+}
+
 export default defineConfig({
   testDir: "./test/ui-smoke",
   timeout: 120_000,

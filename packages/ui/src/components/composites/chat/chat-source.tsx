@@ -166,27 +166,3 @@ export function ChatSourceIcon({
     </span>
   );
 }
-
-export function ChatSourceBadge({
-  source,
-  className,
-}: {
-  className?: string;
-  source: string;
-}) {
-  const meta = getChatSourceMeta(source);
-  return (
-    <span
-      data-testid="conversation-source-chip"
-      data-source={source.trim().toLowerCase()}
-      className={cn(
-        "mb-1 inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold",
-        meta.badgeClassName,
-        className,
-      )}
-    >
-      <ChatSourceIcon source={source} className="h-3 w-3" decorative />
-      <span>{meta.label}</span>
-    </span>
-  );
-}

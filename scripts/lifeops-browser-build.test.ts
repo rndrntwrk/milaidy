@@ -17,25 +17,11 @@ describe("LifeOps Browser build assets", () => {
     expect(iconSources).toEqual([
       [
         "icon16.png",
-        path.join(
-          root,
-          "..",
-          "..",
-          "app",
-          "public",
-          "favicon-16x16.png",
-        ),
+        path.join(root, "..", "..", "app", "public", "favicon-16x16.png"),
       ],
       [
         "icon32.png",
-        path.join(
-          root,
-          "..",
-          "..",
-          "app",
-          "public",
-          "favicon-32x32.png",
-        ),
+        path.join(root, "..", "..", "app", "public", "favicon-32x32.png"),
       ],
       [
         "icon128.png",

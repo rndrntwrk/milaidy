@@ -54,7 +54,7 @@ export function RestartBanner() {
           variant="ghost"
           size="sm"
           onClick={dismissRestartBanner}
-          className="rounded px-3 py-1 text-[12px] text-muted hover:bg-[var(--bg-hover)]"
+          className="rounded px-3 py-1 text-xs text-muted hover:bg-bg-hover"
         >
           {t("restartbanner.Later")}
         </Button>

@@ -1,5 +1,4 @@
-import { existsSync } from "node:fs";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -62,6 +61,7 @@ const compositeStoryCoverage: Record<string, string[]> = {
     "ChatEmptyState.stories.tsx",
     "ChatComposites.stories.tsx",
   ],
+  "form-field": ["FormFields.stories.tsx"],
   "page-panel": ["PagePanel.stories.tsx"],
   search: ["SearchBar.stories.tsx", "SearchInput.stories.tsx"],
   sidebar: ["Sidebar.stories.tsx"],

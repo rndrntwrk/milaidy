@@ -1900,7 +1900,11 @@ function splitMailboxLikeList(value: string): string[] {
       index += 1;
       continue;
     }
-    if (!inQuotes && angleDepth === 0 && (char === "," || char === ";" || char === "\n")) {
+    if (
+      !inQuotes &&
+      angleDepth === 0 &&
+      (char === "," || char === ";" || char === "\n")
+    ) {
       const trimmed = current.trim();
       if (trimmed.length > 0) {
         parts.push(trimmed);
@@ -2029,7 +2033,9 @@ function normalizeGmailSearchQueryMatches(
       return true;
     }
     const isNegated = normalizedToken.startsWith("-");
-    const tokenBody = isNegated ? normalizedToken.slice(1).trim() : normalizedToken;
+    const tokenBody = isNegated
+      ? normalizedToken.slice(1).trim()
+      : normalizedToken;
     if (!tokenBody) {
       return true;
     }

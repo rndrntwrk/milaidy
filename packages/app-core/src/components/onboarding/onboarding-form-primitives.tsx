@@ -169,9 +169,9 @@ export const OnboardingStatusBanner = React.forwardRef<
   const compactSuccess = tone === "success" && !action;
   const toneClass =
     tone === "success"
-      ? "border-[var(--ok-muted)] bg-[var(--ok-subtle)] text-[var(--ok)]"
+      ? "border-[var(--ok-muted)] bg-[var(--ok-subtle)] text-ok"
       : tone === "error"
-        ? "border-[color:color-mix(in_srgb,var(--danger)_38%,transparent)] bg-[color:color-mix(in_srgb,var(--danger)_12%,transparent)] text-[var(--danger)]"
+        ? "border-[color:color-mix(in_srgb,var(--danger)_38%,transparent)] bg-[color:color-mix(in_srgb,var(--danger)_12%,transparent)] text-danger"
         : `${onboardingCardSurfaceClassName} ${onboardingReadableTextMutedClassName}`;
 
   return (

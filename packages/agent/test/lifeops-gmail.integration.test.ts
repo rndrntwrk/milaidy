@@ -1,7 +1,7 @@
+import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import crypto from "node:crypto";
 import type { AgentRuntime, Task, UUID } from "@elizaos/core";
 import {
   afterAll,
@@ -13,13 +13,13 @@ import {
   it,
   vi,
 } from "vitest";
+import { req } from "../../../test/helpers/http";
+import { saveEnv } from "../../../test/helpers/test-utils";
 import { startApiServer } from "../src/api/server";
 import { resolveOAuthDir } from "../src/config/paths";
 import { LifeOpsRepository } from "../src/lifeops/repository";
 import { LifeOpsService } from "../src/lifeops/service";
 import { DatabaseSync } from "../src/test-utils/sqlite-compat";
-import { req } from "../../../test/helpers/http";
-import { saveEnv } from "../../../test/helpers/test-utils";
 
 type SqlQuery = {
   queryChunks?: Array<{ value?: unknown }>;
@@ -721,7 +721,9 @@ describe("life-ops gmail triage", () => {
     });
 
     const service = new LifeOpsService(runtime);
-    const requestUrl = new URL(`http://127.0.0.1:${port}/api/lifeops/gmail/read`);
+    const requestUrl = new URL(
+      `http://127.0.0.1:${port}/api/lifeops/gmail/read`,
+    );
 
     await expect(
       service.readGmailMessage(requestUrl, {
@@ -806,9 +808,7 @@ describe("life-ops gmail triage", () => {
         fromEmail: "suran@example.com",
       }),
     ]);
-    expect(
-      seenUrls.some((url) => url.includes("q=from%3Asuran")),
-    ).toBe(false);
+    expect(seenUrls.some((url) => url.includes("q=from%3Asuran"))).toBe(false);
   });
 
   it("matches sender, address, subject, and broad Gmail filters across operator and free-text queries", async () => {
@@ -1113,9 +1113,9 @@ describe("life-ops gmail triage", () => {
       "/api/lifeops/gmail/batch-reply-send",
       {
         confirmSend: true,
-        items: (batchDraftRes.data.batch.drafts as Array<
-          Record<string, unknown>
-        >).map((draft) => ({
+        items: (
+          batchDraftRes.data.batch.drafts as Array<Record<string, unknown>>
+        ).map((draft) => ({
           messageId: String(draft.messageId),
           bodyText: String(draft.bodyText),
           subject: String(draft.subject),
@@ -1471,7 +1471,7 @@ describe("life-ops gmail triage", () => {
     });
 
     const sendRes = await req(port, "POST", "/api/lifeops/gmail/message-send", {
-      to: 'Mira <mira@example.com>; ops@example.com',
+      to: "Mira <mira@example.com>; ops@example.com",
       cc: '"Team" <team@example.com>',
       bcc: "audit@example.com",
       subject: "hola",

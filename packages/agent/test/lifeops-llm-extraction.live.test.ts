@@ -12,12 +12,12 @@
 
 import crypto from "node:crypto";
 import path from "node:path";
+import type { IAgentRuntime, Memory, ModelType, State } from "@elizaos/core";
 import { describe, expect, it } from "vitest";
-import { ModelType, type IAgentRuntime, type Memory, type State } from "@elizaos/core";
+import { extractCalendarPlanWithLlm } from "../src/actions/calendar.js";
+import { extractGmailPlanWithLlm } from "../src/actions/gmail.js";
 import { extractLifeOperationWithLlm } from "../src/actions/life.extractor.js";
 import { extractTaskCreatePlanWithLlm } from "../src/actions/life-param-extractor.js";
-import { extractGmailPlanWithLlm } from "../src/actions/gmail.js";
-import { extractCalendarPlanWithLlm } from "../src/actions/calendar.js";
 
 const REPO_ROOT = path.resolve(import.meta.dirname, "..", "..", "..");
 try {
@@ -57,7 +57,8 @@ function selectProvider(): ProviderConfig | null {
     return {
       name: "openai",
       apiKey: openaiKey,
-      baseUrl: process.env.OPENAI_BASE_URL?.trim() || "https://api.openai.com/v1",
+      baseUrl:
+        process.env.OPENAI_BASE_URL?.trim() || "https://api.openai.com/v1",
       model: process.env.OPENAI_SMALL_MODEL?.trim() || "gpt-5.4-mini",
     };
   }
@@ -68,7 +69,9 @@ function selectProvider(): ProviderConfig | null {
       name: "anthropic",
       apiKey: anthropicKey,
       baseUrl: "https://api.anthropic.com",
-      model: process.env.ANTHROPIC_SMALL_MODEL?.trim() || "claude-haiku-4-5-20251001",
+      model:
+        process.env.ANTHROPIC_SMALL_MODEL?.trim() ||
+        "claude-haiku-4-5-20251001",
     };
   }
 
@@ -108,9 +111,7 @@ if (!LIVE_ENABLED || !provider) {
   ]
     .filter(Boolean)
     .join(" | ");
-  console.info(
-    `[lifeops-llm-extraction] skipped: ${reasons}`,
-  );
+  console.info(`[lifeops-llm-extraction] skipped: ${reasons}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -226,9 +227,7 @@ function createUseModel(config: ProviderConfig) {
 // Minimal runtime stub
 // ---------------------------------------------------------------------------
 
-function createMinimalRuntime(
-  config: ProviderConfig,
-): IAgentRuntime {
+function createMinimalRuntime(config: ProviderConfig): IAgentRuntime {
   const useModel = createUseModel(config);
   return {
     agentId: crypto.randomUUID(),
@@ -272,18 +271,25 @@ const TEST_TIMEOUT = 30_000;
 const describeIfLive = LIVE_ENABLED && provider ? describe : describe.skip;
 
 describeIfLive("LLM plan extraction (live)", () => {
-  const runtime = provider ? createMinimalRuntime(provider) : (null as unknown as IAgentRuntime);
+  const runtime = provider
+    ? createMinimalRuntime(provider)
+    : (null as unknown as IAgentRuntime);
 
   describe("extractLifeOperationWithLlm", () => {
     const cases = [
       { intent: "I brushed my teeth", expected: "complete_occurrence" },
-      { intent: "remind me to take vitamins every morning", expected: "create_definition" },
       {
-        intent: "recuérdame cepillarme los dientes por la mañana y por la noche",
+        intent: "remind me to take vitamins every morning",
         expected: "create_definition",
       },
       {
-        intent: "Please remind me to brush my teeth in the morning and again at bedtime",
+        intent:
+          "recuérdame cepillarme los dientes por la mañana y por la noche",
+        expected: "create_definition",
+      },
+      {
+        intent:
+          "Please remind me to brush my teeth in the morning and again at bedtime",
         expected: "create_definition",
       },
       { intent: "less reminders please", expected: "set_reminder_preference" },
@@ -321,7 +327,8 @@ describeIfLive("LLM plan extraction (live)", () => {
         expectedWindows: ["morning", "night"],
       },
       {
-        intent: "recuérdame cepillarme los dientes por la mañana y por la noche",
+        intent:
+          "recuérdame cepillarme los dientes por la mañana y por la noche",
         expectedMode: "create",
         expectedCadenceKind: "daily",
         expectedWindows: ["morning", "night"],

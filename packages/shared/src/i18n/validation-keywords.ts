@@ -3901,3 +3901,12 @@ export function getValidationKeywordTerms(
   const locale = normalizeCharacterLanguage(options?.locale);
   return splitKeywordDoc(`${doc.base ?? ""}\n${doc.locales?.[locale] ?? ""}`);
 }
+
+export function getValidationKeywordLocaleTerms(
+  key: string,
+  locale: unknown,
+): string[] {
+  const doc = lookupValidationKeywordDoc(key);
+  const normalizedLocale = normalizeCharacterLanguage(locale);
+  return splitKeywordDoc(doc.locales?.[normalizedLocale] ?? "");
+}

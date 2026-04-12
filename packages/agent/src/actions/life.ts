@@ -8,10 +8,6 @@ import type {
 } from "@elizaos/core";
 import { ModelType, parseJSONObjectFromText } from "@elizaos/core";
 import {
-  getValidationKeywordTerms,
-  textIncludesKeywordTerm,
-} from "@miladyai/shared/validation-keywords";
-import {
   extractDurationMinutesFromText,
   extractWebsiteTargetsFromText,
   normalizeWebsiteTargets,
@@ -31,6 +27,10 @@ import type {
   UpdateLifeOpsDefinitionRequest,
   UpdateLifeOpsGoalRequest,
 } from "@miladyai/shared/contracts/lifeops";
+import {
+  getValidationKeywordTerms,
+  textIncludesKeywordTerm,
+} from "@miladyai/shared/validation-keywords";
 import {
   buildNativeAppleReminderMetadata,
   type NativeAppleReminderLikeKind,
@@ -419,28 +419,23 @@ type DeferredLifeDraftReuseMode = "confirm" | "edit";
 
 export function classifyIntent(intent: string): LifeOperation {
   const lower = intent.toLowerCase();
-  const hasEmailIntentTerm = LIFE_EMAIL_QUERY_TERMS.some((term) =>
-    textIncludesKeywordTerm(lower, term),
-  );
-  const hasDirectEmailQuery =
-    /\b(inbox|gmail|email|emails)\b/.test(lower) &&
-    /\b(check|show|read|see|what(?:'s| is)|anything|urgent|important|latest|new)\b/.test(
-      lower,
-    );
+  const hasEmailIntentTerm = textMatchesAnyTerm(intent, LIFE_EMAIL_QUERY_TERMS);
 
+  // Reminder preference (i18n + regex)
   if (
+    textMatchesAnyTerm(intent, LIFE_REMINDER_PREF_TERMS) ||
     /\b(remind|reminder|ping|message|nudge)\b.*\b(less|fewer|more|again|back on|resume|normal)\b/.test(
-      lower,
-    ) ||
-    /\b(stop reminding me|don't remind me|pause reminders?|resume reminders?|more reminders?|less reminders?|fewer reminders?|normal reminders?)\b/.test(
       lower,
     )
   ) {
     return "set_reminder_preference";
   }
 
-  // Update — check before calendar so "edit my workout schedule" doesn't hit calendar
-  if (/\b(update|change|edit|modify|adjust|rename|reschedule)\b/.test(lower)) {
+  // Update (i18n + regex) — check before calendar so "edit my workout schedule" doesn't hit calendar
+  if (
+    textMatchesAnyTerm(intent, LIFE_UPDATE_TERMS) ||
+    /\b(update|change|edit|modify|adjust|rename|reschedule)\b/.test(lower)
+  ) {
     if (/\b(goal)\b/.test(lower)) return "update_goal";
     return "update_definition";
   }
@@ -461,8 +456,9 @@ export function classifyIntent(intent: string): LifeOperation {
   if (/\b(review|how.*(doing|going)|progress|check.*(goal|on))\b/.test(lower))
     return "review_goal";
 
-  // Delete — check before calendar so "stop the reminder" doesn't hit create
+  // Delete (i18n + regex) — check before calendar so "stop the reminder" doesn't hit create
   if (
+    textMatchesAnyTerm(intent, LIFE_DELETE_TERMS) ||
     /\b(delete|remove|cancel|get rid of|drop|stop tracking|stop the|stop my)\b/.test(
       lower,
     )
@@ -471,23 +467,28 @@ export function classifyIntent(intent: string): LifeOperation {
     return "delete_definition";
   }
 
-  // Completion — "I did it", "mark brushing done", "finished my workout", "I brushed my teeth"
-  if (looksLikeCompletionReport(lower)) return "complete_occurrence";
+  // Completion (i18n + regex)
+  if (looksLikeCompletionReport(intent)) return "complete_occurrence";
 
-  // Skip — "skip brushing", "pass on workout", "not today"
-  if (/\b(skip|pass\b|not today|skip.*(today|this))\b/.test(lower))
+  // Skip (i18n + regex)
+  if (
+    textMatchesAnyTerm(intent, LIFE_SKIP_TERMS) ||
+    /\b(skip|pass\b|not today|skip.*(today|this))\b/.test(lower)
+  )
     return "skip_occurrence";
 
-  // Snooze — "snooze", "remind me later", "postpone", "defer", "push ... back"
+  // Snooze (i18n + regex)
   if (
+    textMatchesAnyTerm(intent, LIFE_SNOOZE_TERMS) ||
     /\b(snooze|later|remind.*(later|again|in)|postpone|defer|push\b.*\bback)\b/.test(
       lower,
     )
   )
     return "snooze_occurrence";
 
-  // Query operations — check before create default
+  // Calendar query (i18n + regex) — check before create default
   if (
+    textMatchesAnyTerm(intent, LIFE_CALENDAR_TERMS) ||
     /\b(calendar|events?|meetings?|what'?s on|agenda|(?:my|today'?s|this week'?s|tomorrow'?s) schedule)\b/.test(
       lower,
     )
@@ -498,13 +499,15 @@ export function classifyIntent(intent: string): LifeOperation {
     if (/\b(this week|week)\b/.test(lower)) return "query_calendar_today";
     return "query_calendar_today";
   }
+  // Email query (i18n — hasDirectEmailQuery removed, covered by i18n terms)
   if (
     hasEmailIntentTerm ||
-    hasDirectEmailQuery ||
     /\b(respond to|important.*(need|should|must))\b/.test(lower)
   )
     return "query_email";
+  // Overview (i18n + regex)
   if (
+    textMatchesAnyTerm(intent, LIFE_OVERVIEW_TERMS) ||
     /\b(overview|summary|what'?s active|status|what do i have|show me everything|what'?s still left(?: for today)?|what do i still need to do today|anything else .*?(?:get done|finish).*?today)\b/.test(
       lower,
     )
@@ -606,7 +609,9 @@ function hasCadenceHint(lower: string): boolean {
   return CADENCE_HINT_RE.test(lower);
 }
 
-function looksLikeCompletionReport(lower: string): boolean {
+function looksLikeCompletionReport(text: string): boolean {
+  const lower = text.toLowerCase();
+  // Exclude overview queries that happen to contain "done/finish"
   if (
     /\b(what(?:'s| is)|what do i|anything else)\b.*\b(?:need to|still)\b.*\b(get done|finish)\b.*\btoday\b/.test(
       lower,
@@ -615,6 +620,12 @@ function looksLikeCompletionReport(lower: string): boolean {
     return false;
   }
 
+  // i18n check first
+  if (textMatchesAnyTerm(text, LIFE_COMPLETE_TERMS)) {
+    return true;
+  }
+
+  // English regex fallback
   return (
     /\b(done|finished)\b/.test(lower) ||
     /\bcompleted\b/.test(lower) ||

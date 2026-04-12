@@ -896,7 +896,7 @@ describeLLM("gmailAction", () => {
     const result = await invoke("send this email", {
       subaction: "send_message",
       details: {
-        to: 'Mira <mira@example.com>; ops@example.com',
+        to: "Mira <mira@example.com>; ops@example.com",
         cc: '"Ops Team" <ops@example.com>',
         subject: "hola",
         bodyText: "nos vemos manana",

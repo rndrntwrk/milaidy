@@ -516,7 +516,7 @@ function DesktopOnboardingPermissions({
   if (loading) {
     return (
       <div className="text-center py-8">
-        <div className="text-[var(--muted)] text-sm">
+        <div className="text-muted text-sm">
           {translateWithFallback(
             t,
             "permissionssection.CheckingPermissions",

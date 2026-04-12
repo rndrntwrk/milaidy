@@ -529,9 +529,9 @@ export function SubscriptionStatus({
             </div>
           ) : (
             <div>
-              <div className="p-2.5 border border-[var(--border)] bg-[var(--bg-muted)] text-[11px] text-muted leading-relaxed">
+              <div className="p-2.5 border border-border bg-bg text-[11px] text-muted leading-relaxed">
                 {t("subscriptionstatus.AfterLoggingInYo")}{" "}
-                <code className="text-[10px] px-1 border border-[var(--border)] bg-[var(--card)]">
+                <code className="text-[10px] px-1 border border-border bg-card">
                   {t("subscriptionstatus.localhost1455")}
                 </code>
                 {t("subscriptionstatus.CopyTheEntireU")}

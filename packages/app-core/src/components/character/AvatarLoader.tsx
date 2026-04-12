@@ -81,7 +81,7 @@ export function AvatarLoader({
         >
           <Spinner
             size={16}
-            className="shrink-0 text-[var(--text)] opacity-90"
+            className="shrink-0 text-txt opacity-90"
             aria-hidden
           />
           <span>
