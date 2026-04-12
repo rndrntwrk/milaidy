@@ -147,10 +147,14 @@ pushd packages/agent >/dev/null
 bun run build:docker-dist
 popd >/dev/null
 
-log "Building core workspace"
-pushd eliza/packages/typescript >/dev/null
-bun run build
-popd >/dev/null
+if [[ "${MILADY_SKIP_LOCAL_UPSTREAMS:-0}" != "1" && -d eliza/packages/typescript ]]; then
+  log "Building core workspace"
+  pushd eliza/packages/typescript >/dev/null
+  bun run build
+  popd >/dev/null
+else
+  log "Skipping core workspace build (published upstream mode)"
+fi
 
 log "Building bundled orchestrator workspace"
 pushd plugins/plugin-agent-orchestrator >/dev/null

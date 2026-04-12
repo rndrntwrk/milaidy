@@ -143,5 +143,12 @@ describe("Docker contract", () => {
       "pushd plugins/plugin-agent-orchestrator >/dev/null",
     );
     expect(smokeScript).toContain("bun run build");
+    expect(smokeScript).toContain(
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: shell variable assertion
+      'if [[ "${MILADY_SKIP_LOCAL_UPSTREAMS:-0}" != "1" && -d eliza/packages/typescript ]]; then',
+    );
+    expect(smokeScript).toContain(
+      "Skipping core workspace build (published upstream mode)",
+    );
   });
 });
