@@ -420,26 +420,35 @@ describe("Electrobun release workflow drift", () => {
 
   it("keeps updater transport files off the public GitHub release asset list", () => {
     const workflow = fs.readFileSync(WORKFLOW_PATH, "utf8");
+    const publicReleaseSection = workflow.slice(
+      workflow.indexOf("name: Collect public release files"),
+      workflow.indexOf("name: Collect update channel files"),
+    );
+    const publishBrowserSection = workflow.slice(
+      workflow.indexOf("name: Publish LifeOps Browser companions"),
+    );
 
     expect(workflow).toContain("name: Collect public release files");
-    expect(workflow).toContain(' -name "*.dmg" -o \\');
-    expect(workflow).toContain(' -name "Milady-Setup-*.exe" -o \\');
-    expect(workflow).toContain(' -name "Milady-Setup-*.exe.zip" -o \\');
-    expect(workflow).toContain(' -name "*Setup*.tar.gz" -o \\');
-    expect(workflow).toContain(' -name "*.msix" \\');
-    expect(workflow).not.toContain(
+    expect(publicReleaseSection).toContain(' -name "*.dmg" -o \\');
+    expect(publicReleaseSection).toContain(' -name "Milady-Setup-*.exe" -o \\');
+    expect(publicReleaseSection).toContain(
+      ' -name "Milady-Setup-*.exe.zip" -o \\',
+    );
+    expect(publicReleaseSection).toContain(' -name "*Setup*.tar.gz" -o \\');
+    expect(publicReleaseSection).toContain(' -name "*.msix" \\');
+    expect(publicReleaseSection).not.toContain(
       ' -name "lifeops-browser-chrome-v*.zip" -o \\',
     );
-    expect(workflow).not.toContain(
+    expect(publicReleaseSection).not.toContain(
       ' -name "lifeops-browser-safari-v*.zip" -o \\',
     );
-    expect(workflow).not.toContain(
+    expect(publicReleaseSection).not.toContain(
       ' -name "lifeops-browser-release-manifest-v*.json" -o \\',
     );
-    expect(workflow).not.toContain(
+    expect(publicReleaseSection).not.toContain(
       ' -name "lifeops-browser-safari-project-v*.zip" -o \\',
     );
-    expect(workflow).not.toContain(' -name "*.exe" -o \\');
+    expect(publicReleaseSection).not.toContain(' -name "*.exe" -o \\');
 
     expect(workflow).toContain("name: Collect update channel files");
     expect(workflow).toContain(' -name "*.tar.zst" -o \\');
@@ -447,13 +456,13 @@ describe("Electrobun release workflow drift", () => {
     expect(workflow).toContain(' -name "*-update.json" \\');
     expect(workflow).toContain("files: release-files/*");
     expect(workflow).toContain("update-channel/");
-    expect(workflow).toContain(
+    expect(publishBrowserSection).toContain(
       ' -name "lifeops-browser-chrome-v*.zip" -o \\',
     );
-    expect(workflow).toContain(
+    expect(publishBrowserSection).toContain(
       ' -name "lifeops-browser-safari-v*.zip" -o \\',
     );
-    expect(workflow).toContain(
+    expect(publishBrowserSection).toContain(
       ' -name "lifeops-browser-release-manifest-v*.json" \\',
     );
   });

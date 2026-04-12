@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildChromeExtensionVersion,
   buildGitHubReleaseAssetDownloadUrl,
   buildGitHubReleasePageUrl,
-  buildChromeExtensionVersion,
   buildLifeOpsBrowserReleaseMetadata,
   buildSafariExtensionVersions,
   parseReleaseVersion,
@@ -59,9 +59,9 @@ describe("LifeOps Browser release versioning", () => {
   it("builds portable GitHub release URLs from repository metadata", () => {
     const release = parseReleaseVersion("2.0.0");
 
-    expect(
-      buildGitHubReleasePageUrl("milady-ai/milady", release),
-    ).toBe("https://github.com/milady-ai/milady/releases/tag/v2.0.0");
+    expect(buildGitHubReleasePageUrl("milady-ai/milady", release)).toBe(
+      "https://github.com/milady-ai/milady/releases/tag/v2.0.0",
+    );
     expect(
       buildGitHubReleaseAssetDownloadUrl(
         "milady-ai/milady",
