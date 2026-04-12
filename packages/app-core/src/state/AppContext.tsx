@@ -7942,12 +7942,12 @@ function AppProviderInner({
           : profile.kind === "remote"
             ? "remote-backend"
             : "embedded-local";
-      startupCoordinator.dispatch({
+      stableStartupCoordinator.dispatch({
         type: "SWITCH_AGENT",
         target: target as RuntimeTarget,
       });
     },
-    [startupCoordinator],
+    [stableStartupCoordinator],
   );
 
   // When agent transitions to "running", send a greeting if conversation is empty
