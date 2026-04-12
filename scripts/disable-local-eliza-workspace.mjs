@@ -59,6 +59,7 @@ export const DEPENDENCY_FIELDS = [
   "peerDependencies",
   "optionalDependencies",
 ];
+export const CI_LOCKFILES = ["bun.lock", "bun.lockb"];
 
 const ELIZAOS_CORE_NAME = "@elizaos/core";
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
@@ -237,6 +238,7 @@ export function disableLocalElizaWorkspace(
   const elizaRoot = path.join(repoRoot, "eliza");
   const disabledElizaRoot = path.join(repoRoot, ".eliza.ci-disabled");
   const packageJsonPath = path.join(repoRoot, "package.json");
+  const removedLockfiles = [];
 
   if (fs.existsSync(elizaRoot)) {
     fs.rmSync(disabledElizaRoot, { recursive: true, force: true });
@@ -371,9 +373,23 @@ export function disableLocalElizaWorkspace(
     );
   }
 
+  for (const lockfileName of CI_LOCKFILES) {
+    const lockfilePath = path.join(repoRoot, lockfileName);
+    if (!fs.existsSync(lockfilePath)) continue;
+    fs.rmSync(lockfilePath, { force: true });
+    removedLockfiles.push(lockfileName);
+  }
+
+  if (removedLockfiles.length > 0) {
+    log(
+      `[disable-local-eliza-workspace] Removed ${removedLockfiles.join(", ")} so Bun regenerates the lockfile against the rewritten workspace graph`,
+    );
+  }
+
   return {
     rewrites,
     removedWorkspaceGlobs,
+    removedLockfiles,
     pinnedWorkspaceVersions,
   };
 }

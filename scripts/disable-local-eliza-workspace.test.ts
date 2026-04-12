@@ -95,6 +95,11 @@ describe("disableLocalElizaWorkspace", () => {
           "@elizaos/plugin-sql": "workspace:*",
         },
       });
+      writeFileSync(
+        path.join(repoRoot, "bun.lock"),
+        "# test lockfile\n",
+        "utf8",
+      );
       mkdirSync(path.join(repoRoot, "eliza"), { recursive: true });
 
       const result = disableLocalElizaWorkspace(repoRoot, {
@@ -123,6 +128,7 @@ describe("disableLocalElizaWorkspace", () => {
         ELIZA_WORKSPACE_GLOB,
         PLUGIN_TYPESCRIPT_WORKSPACE_GLOB,
       ]);
+      expect(result.removedLockfiles).toEqual(["bun.lock"]);
       expect(rootPkg.workspaces).toEqual(["plugins/*", "packages/agent"]);
       expect(rootPkg.dependencies["@elizaos/core"]).toBe("2.0.0-alpha.115");
       expect(rootPkg.dependencies["@elizaos/plugin-sql"]).toBe(
@@ -145,6 +151,7 @@ describe("disableLocalElizaWorkspace", () => {
       expect(agentPkg.dependencies["@elizaos/plugin-agent-orchestrator"]).toBe(
         "workspace:*",
       );
+      expect(existsSync(path.join(repoRoot, "bun.lock"))).toBe(false);
       expect(existsSync(path.join(repoRoot, ".eliza.ci-disabled"))).toBe(true);
     } finally {
       rmSync(repoRoot, { recursive: true, force: true });
