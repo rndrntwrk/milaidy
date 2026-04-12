@@ -352,7 +352,7 @@ describe("LIFE action — robustness scenarios", () => {
       action: "create",
       intent: "Actually create a habit",
       title: "Test habit",
-      details: { kind: "habit", cadence: { kind: "invalid" }, confirmed: true },
+      details: { kind: "habit", cadence: { kind: "daily" }, confirmed: true },
     });
 
     expect(result).toMatchObject({ success: false, text: expect.stringContaining("cadence.kind must be") });

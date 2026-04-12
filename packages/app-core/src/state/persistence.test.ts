@@ -154,6 +154,8 @@ describe("theme persistence", () => {
       dataset: {},
       style: {
         colorScheme: "",
+        removeProperty: (_prop: string) => {},
+        setProperty: (_prop: string, _val: string) => {},
       },
       classList: {
         add: (value: string) => {
@@ -177,6 +179,7 @@ describe("theme persistence", () => {
 
     (globalThis as Record<string, unknown>).document = {
       documentElement: root,
+      getElementById: (_id: string) => null,
     };
 
     try {
