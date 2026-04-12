@@ -244,7 +244,7 @@ function BrowserCompanionRow({
   appPath?: string | null | undefined;
   busy: boolean;
   pairing: LifeOpsBrowserCompanionPairingResponse | null;
-  onInstall: (browser: LifeOpsBrowserKind) => Promise<unknown>;
+  onInstall: (browser: LifeOpsBrowserKind) => Promise<void>;
   onBuild: (browser: LifeOpsBrowserKind) => Promise<unknown>;
   onCreatePairing: (browser: LifeOpsBrowserKind) => Promise<unknown>;
   onCopyPairing: (browser: LifeOpsBrowserKind) => Promise<void>;

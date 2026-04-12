@@ -82,6 +82,7 @@ const LIVE_PROVIDER_ENV_KEYS = [
 const LIVE_PROVIDER_PLUGIN_NAMES = new Set(
   LIVE_PROVIDER_CANDIDATES.map((candidate) => candidate.plugin),
 );
+const LIVE_CLOUD_ENV_PREFIXES = ["ELIZAOS_CLOUD_", "ELIZA_CLOUD_"] as const;
 
 const LIVE_PROVIDER_CHEAP_MODELS = {
   anthropic: {
@@ -92,9 +93,9 @@ const LIVE_PROVIDER_CHEAP_MODELS = {
   },
   google: {
     smallKey: "GOOGLE_SMALL_MODEL",
-    smallModel: "gemini-2.0-flash-001",
+    smallModel: "gemini-2.5-flash",
     largeKey: "GOOGLE_LARGE_MODEL",
-    largeModel: "gemini-2.0-flash-001",
+    largeModel: "gemini-2.5-flash",
   },
   groq: {
     smallKey: "GROQ_SMALL_MODEL",
@@ -104,15 +105,15 @@ const LIVE_PROVIDER_CHEAP_MODELS = {
   },
   openai: {
     smallKey: "OPENAI_SMALL_MODEL",
-    smallModel: "gpt-4.1-mini",
+    smallModel: "gpt-5.4-mini",
     largeKey: "OPENAI_LARGE_MODEL",
-    largeModel: "gpt-4.1-mini",
+    largeModel: "gpt-5.4-mini",
   },
   openrouter: {
     smallKey: "OPENROUTER_SMALL_MODEL",
-    smallModel: "google/gemini-2.0-flash-001",
+    smallModel: "google/gemini-2.5-flash",
     largeKey: "OPENROUTER_LARGE_MODEL",
-    largeModel: "google/gemini-2.0-flash-001",
+    largeModel: "google/gemini-2.5-flash",
   },
 } as const;
 
@@ -168,7 +169,57 @@ async function canImportLiveProviderPlugin(pluginName: string): Promise<boolean>
   }
 }
 
+function detectOpenAiCompatibleBaseUrlProvider(
+  baseUrl: string | undefined,
+): "groq" | null {
+  if (!baseUrl) {
+    return null;
+  }
+
+  try {
+    const hostname = new URL(baseUrl).hostname.trim().toLowerCase();
+    if (hostname === "api.groq.com" || hostname.endsWith(".groq.com")) {
+      return "groq";
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+function looksLikeGroqApiKey(value: string | undefined): boolean {
+  return Boolean(value && /^gsk[-_]/i.test(value));
+}
+
 export async function selectLifeOpsLiveProvider(): Promise<SelectedLiveProvider | null> {
+  const openAiCompatProvider = detectOpenAiCompatibleBaseUrlProvider(
+    process.env.OPENAI_BASE_URL?.trim(),
+  );
+  if (
+    openAiCompatProvider === "groq" &&
+    (!LIVE_PROVIDER_OVERRIDE ||
+      LIVE_PROVIDER_OVERRIDE === "openai" ||
+      LIVE_PROVIDER_OVERRIDE === "groq") &&
+    (await canImportLiveProviderPlugin("@elizaos/plugin-groq"))
+  ) {
+    const groqApiKey =
+      process.env.GROQ_API_KEY?.trim() ||
+      (looksLikeGroqApiKey(process.env.OPENAI_API_KEY?.trim())
+        ? process.env.OPENAI_API_KEY?.trim()
+        : "");
+    if (groqApiKey) {
+      return {
+        name: "groq",
+        env: {
+          GROQ_API_KEY: groqApiKey,
+          ...resolveLiveProviderModelEnv("groq"),
+        },
+        plugin: "@elizaos/plugin-groq",
+      };
+    }
+  }
+
   const candidates =
     LIVE_PROVIDER_OVERRIDE.length > 0
       ? LIVE_PROVIDER_CANDIDATES.filter(
@@ -197,8 +248,8 @@ export async function selectLifeOpsLiveProvider(): Promise<SelectedLiveProvider 
       env,
       resolveLiveProviderModelEnv(candidate.name as LiveProviderName),
     );
-    if (candidate.name === "openai") {
-      env.OPENAI_BASE_URL = "";
+    if (candidate.name === "openai" && process.env.OPENAI_BASE_URL?.trim()) {
+      env.OPENAI_BASE_URL = process.env.OPENAI_BASE_URL.trim();
     }
 
     return {
@@ -245,6 +296,7 @@ export function buildSelectedLiveProviderEnv(
     Object.entries(baseEnv).filter(
       ([key, value]) =>
         typeof value === "string" &&
+        !LIVE_CLOUD_ENV_PREFIXES.some((prefix) => key.startsWith(prefix)) &&
         !LIVE_PROVIDER_ENV_KEYS.includes(
           key as (typeof LIVE_PROVIDER_ENV_KEYS)[number],
         ),
@@ -421,6 +473,23 @@ export async function startLifeOpsLiveRuntime(options?: {
           unknown
         >)
       : {};
+  const baseServiceRouting =
+    baseConfig.serviceRouting && typeof baseConfig.serviceRouting === "object"
+      ? (baseConfig.serviceRouting as Record<string, unknown>)
+      : {};
+  const llmTextRouting =
+    baseServiceRouting.llmText && typeof baseServiceRouting.llmText === "object"
+      ? (baseServiceRouting.llmText as Record<string, unknown>)
+      : {};
+  const embeddingsRouting =
+    baseServiceRouting.embeddings &&
+    typeof baseServiceRouting.embeddings === "object"
+      ? (baseServiceRouting.embeddings as Record<string, unknown>)
+      : {};
+  const baseCloud =
+    baseConfig.cloud && typeof baseConfig.cloud === "object"
+      ? (baseConfig.cloud as Record<string, unknown>)
+      : {};
 
   await mkdir(stateDir, { recursive: true });
   await writeFile(
@@ -450,6 +519,31 @@ export async function startLifeOpsLiveRuntime(options?: {
               ),
             ),
           ],
+        },
+        serviceRouting: {
+          ...baseServiceRouting,
+          llmText: {
+            ...llmTextRouting,
+            backend: selectedProvider.name,
+            transport: "direct",
+          },
+          embeddings: {
+            ...embeddingsRouting,
+            backend: "local",
+            transport: "direct",
+          },
+        },
+        cloud: {
+          ...baseCloud,
+          enabled: false,
+          inferenceMode: "local",
+          services: {
+            inference: false,
+            tts: false,
+            media: false,
+            embeddings: false,
+            rpc: false,
+          },
         },
       },
       null,

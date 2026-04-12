@@ -3,6 +3,12 @@ import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  buildLifeOpsBrowserReleaseMetadata,
+  buildSafariExtensionVersions,
+  resolveLifeOpsBrowserReleaseVersion,
+  versionedArtifactName,
+} from "./release-version.mjs";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const extensionRoot = path.resolve(scriptDir, "..");
@@ -14,6 +20,9 @@ const derivedDataDir = path.join(distDir, "safari-derived-data");
 const artifactsDir = path.join(distDir, "artifacts");
 const appName = "LifeOps Browser";
 const bundleIdentifier = "ai.milady.lifeopsbrowser";
+const release = resolveLifeOpsBrowserReleaseVersion();
+const metadata = buildLifeOpsBrowserReleaseMetadata(release);
+const safariVersions = buildSafariExtensionVersions(release);
 
 function run(command, args, options = {}) {
   return new Promise((resolve, reject) => {
@@ -53,6 +62,20 @@ async function findFileWithExtension(directory, extension) {
   return null;
 }
 
+async function patchGeneratedSafariProjectVersions(projectPath) {
+  const projectFile = path.join(projectPath, "project.pbxproj");
+  let source = await fs.readFile(projectFile, "utf8");
+  source = source.replace(
+    /MARKETING_VERSION = [^;]+;/g,
+    `MARKETING_VERSION = ${safariVersions.marketingVersion};`,
+  );
+  source = source.replace(
+    /CURRENT_PROJECT_VERSION = [^;]+;/g,
+    `CURRENT_PROJECT_VERSION = ${safariVersions.buildVersion};`,
+  );
+  await fs.writeFile(projectFile, source);
+}
+
 await run("bun", [path.join(scriptDir, "build.mjs"), "safari"], {
   cwd: extensionRoot,
 });
@@ -86,6 +109,7 @@ const projectPath = await findFileWithExtension(
 if (!projectPath) {
   throw new Error("Failed to locate generated Safari Xcode project");
 }
+await patchGeneratedSafariProjectVersions(projectPath);
 
 await run("xcodebuild", [
   "-project",
@@ -114,8 +138,18 @@ if (!builtAppPath) {
 
 const artifactAppPath = path.join(artifactsDir, `${appName}.app`);
 const artifactZipPath = path.join(artifactsDir, "lifeops-browser-safari.zip");
+const versionedArtifactZipPath = path.join(
+  artifactsDir,
+  versionedArtifactName("lifeops-browser-safari", "zip", release),
+);
+const versionedProjectZipPath = path.join(
+  artifactsDir,
+  versionedArtifactName("lifeops-browser-safari-project", "zip", release),
+);
 await fs.rm(artifactAppPath, { recursive: true, force: true });
 await fs.rm(artifactZipPath, { force: true });
+await fs.rm(versionedArtifactZipPath, { force: true });
+await fs.rm(versionedProjectZipPath, { force: true });
 await fs.cp(builtAppPath, artifactAppPath, { recursive: true });
 
 await run("ditto", [
@@ -125,6 +159,18 @@ await run("ditto", [
   artifactAppPath,
   artifactZipPath,
 ]);
+await fs.copyFile(artifactZipPath, versionedArtifactZipPath);
+await run("ditto", [
+  "-c",
+  "-k",
+  "--keepParent",
+  generatedProjectDir,
+  versionedProjectZipPath,
+]);
 
-console.log(`Packaged Safari app at ${artifactAppPath}`);
+console.log(
+  `Packaged Safari app ${metadata.releaseVersion} at ${artifactAppPath}`,
+);
 console.log(`Packaged Safari zip at ${artifactZipPath}`);
+console.log(`Packaged Safari release zip at ${versionedArtifactZipPath}`);
+console.log(`Packaged Safari project zip at ${versionedProjectZipPath}`);

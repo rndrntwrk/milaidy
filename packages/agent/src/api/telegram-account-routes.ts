@@ -111,7 +111,9 @@ function resolveService(
     return null;
   }
   const service = state.runtime.getService("telegram-account");
-  return (service as TelegramAccountRuntimeServiceLike | null | undefined) ?? null;
+  return (
+    (service as TelegramAccountRuntimeServiceLike | null | undefined) ?? null
+  );
 }
 
 function isServiceConnected(
@@ -169,7 +171,8 @@ function statusFromState(
     serviceConnected,
     restartRequired: status === "configured" && !serviceConnected,
     hasAppCredentials: Boolean(
-      (typeof connectorConfig.appId === "string" || typeof connectorConfig.appId === "number") &&
+      (typeof connectorConfig.appId === "string" ||
+        typeof connectorConfig.appId === "number") &&
         typeof connectorConfig.appHash === "string" &&
         connectorConfig.appHash.trim().length > 0,
     ),
@@ -197,9 +200,7 @@ function ensureConnectorBlock(
   return connectors.telegramAccount;
 }
 
-function createSessionOptions(
-  state: TelegramAccountRouteState,
-): {
+function createSessionOptions(state: TelegramAccountRouteState): {
   deviceModel?: string;
   systemVersion?: string;
 } {

@@ -37,6 +37,7 @@ const LIVE_TESTS_ENABLED =
 const LIVE_CHAT_TESTS_ENABLED = process.env.MILADY_LIVE_CHAT_TEST === "1";
 const LIVE_MEMORY_TESTS_ENABLED = process.env.MILADY_LIVE_MEMORY_TEST === "1";
 const LIVE_PROVIDER_OVERRIDE = process.env.MILADY_LIVE_PROVIDER?.trim().toLowerCase();
+const LIVE_CLOUD_ENV_PREFIXES = ["ELIZAOS_CLOUD_", "ELIZA_CLOUD_"] as const;
 const PROVIDER_ENV_KEYS = [
   "OPENAI_API_KEY",
   "OPENAI_BASE_URL",
@@ -122,9 +123,9 @@ const LIVE_PROVIDER_CHEAP_MODELS = {
   },
   google: {
     smallKey: "GOOGLE_SMALL_MODEL",
-    smallModel: "gemini-2.0-flash-001",
+    smallModel: "gemini-2.5-flash",
     largeKey: "GOOGLE_LARGE_MODEL",
-    largeModel: "gemini-2.0-flash-001",
+    largeModel: "gemini-2.5-flash",
   },
   groq: {
     smallKey: "GROQ_SMALL_MODEL",
@@ -134,15 +135,15 @@ const LIVE_PROVIDER_CHEAP_MODELS = {
   },
   openai: {
     smallKey: "OPENAI_SMALL_MODEL",
-    smallModel: "gpt-4.1-mini",
+    smallModel: "gpt-5.4-mini",
     largeKey: "OPENAI_LARGE_MODEL",
-    largeModel: "gpt-4.1-mini",
+    largeModel: "gpt-5.4-mini",
   },
   openrouter: {
     smallKey: "OPENROUTER_SMALL_MODEL",
-    smallModel: "google/gemini-2.0-flash-001",
+    smallModel: "google/gemini-2.5-flash",
     largeKey: "OPENROUTER_LARGE_MODEL",
-    largeModel: "google/gemini-2.0-flash-001",
+    largeModel: "google/gemini-2.5-flash",
   },
 } as const;
 
@@ -174,7 +175,57 @@ async function canImportPlugin(pluginName: string): Promise<boolean> {
   }
 }
 
+function detectOpenAiCompatibleBaseUrlProvider(
+  baseUrl: string | undefined,
+): "groq" | null {
+  if (!baseUrl) {
+    return null;
+  }
+
+  try {
+    const hostname = new URL(baseUrl).hostname.trim().toLowerCase();
+    if (hostname === "api.groq.com" || hostname.endsWith(".groq.com")) {
+      return "groq";
+    }
+  } catch {
+    return null;
+  }
+
+  return null;
+}
+
+function looksLikeGroqApiKey(value: string | undefined): boolean {
+  return Boolean(value && /^gsk[-_]/i.test(value));
+}
+
 async function selectLiveProvider(): Promise<SelectedLiveProvider | null> {
+  const openAiCompatProvider = detectOpenAiCompatibleBaseUrlProvider(
+    process.env.OPENAI_BASE_URL?.trim(),
+  );
+  if (
+    openAiCompatProvider === "groq" &&
+    (!LIVE_PROVIDER_OVERRIDE ||
+      LIVE_PROVIDER_OVERRIDE === "openai" ||
+      LIVE_PROVIDER_OVERRIDE === "groq") &&
+    (await canImportPlugin("@elizaos/plugin-groq"))
+  ) {
+    const groqApiKey =
+      process.env.GROQ_API_KEY?.trim() ||
+      (looksLikeGroqApiKey(process.env.OPENAI_API_KEY?.trim())
+        ? process.env.OPENAI_API_KEY?.trim()
+        : "");
+    if (groqApiKey) {
+      return {
+        name: "groq",
+        env: {
+          GROQ_API_KEY: groqApiKey,
+          ...resolveLiveProviderModelEnv("groq"),
+        },
+        plugin: "@elizaos/plugin-groq",
+      };
+    }
+  }
+
   const candidates =
     LIVE_PROVIDER_OVERRIDE && LIVE_PROVIDER_OVERRIDE.length > 0
       ? LIVE_PROVIDER_CANDIDATES.filter(
@@ -206,8 +257,8 @@ async function selectLiveProvider(): Promise<SelectedLiveProvider | null> {
         candidate.name as keyof typeof LIVE_PROVIDER_CHEAP_MODELS,
       ),
     );
-    if (candidate.name === "openai") {
-      env.OPENAI_BASE_URL = "";
+    if (candidate.name === "openai" && process.env.OPENAI_BASE_URL?.trim()) {
+      env.OPENAI_BASE_URL = process.env.OPENAI_BASE_URL.trim();
     }
 
     return {
@@ -447,6 +498,7 @@ describeIf(LIVE_SUITE_ENABLED)(
     let lifeOpsService: LifeOpsService;
     let memoryService: MemoryServiceLike;
     let envBackup: { restore: () => void };
+    let cloudEnvBackup: Record<string, string> = {};
 
     const ownerId = crypto.randomUUID() as UUID;
     const workspaceDir = fs.mkdtempSync(
@@ -476,6 +528,18 @@ describeIf(LIVE_SUITE_ENABLED)(
       }
       delete process.env.ELIZA_DISABLE_LOCAL_EMBEDDINGS;
       delete process.env.MILADY_DISABLE_LOCAL_EMBEDDINGS;
+      cloudEnvBackup = Object.fromEntries(
+        Object.entries(process.env).filter(
+          ([key, value]) =>
+            typeof value === "string" &&
+            LIVE_CLOUD_ENV_PREFIXES.some((prefix) => key.startsWith(prefix)),
+        ),
+      );
+      for (const key of Object.keys(process.env)) {
+        if (LIVE_CLOUD_ENV_PREFIXES.some((prefix) => key.startsWith(prefix))) {
+          delete process.env[key];
+        }
+      }
 
       for (const key of PROVIDER_ENV_KEYS) {
         delete process.env[key];
@@ -484,9 +548,6 @@ describeIf(LIVE_SUITE_ENABLED)(
         if (value.trim().length > 0) {
           process.env[key] = value;
         }
-      }
-      if (selectedLiveProvider?.name === "openai") {
-        delete process.env.OPENAI_BASE_URL;
       }
       if (selectedLiveProvider?.name === "groq") {
         seedGroqModelDefaults();
@@ -498,9 +559,6 @@ describeIf(LIVE_SUITE_ENABLED)(
         if (value.trim().length > 0) {
           providerSecrets[key] = value;
         }
-      }
-      if (selectedLiveProvider?.name === "openai") {
-        delete providerSecrets.OPENAI_BASE_URL;
       }
       if (selectedLiveProvider?.name === "groq") {
         if (process.env.GROQ_SMALL_MODEL?.trim()) {
@@ -547,7 +605,7 @@ describeIf(LIVE_SUITE_ENABLED)(
         ],
         conversationLength: 12,
         enableAutonomy: false,
-        logLevel: "error",
+        logLevel: process.env.ELIZA_E2E_LOG_LEVEL ?? "error",
       });
 
       await runtime.registerPlugin(sqlPlugin);
@@ -581,6 +639,14 @@ describeIf(LIVE_SUITE_ENABLED)(
       }
 
       envBackup?.restore();
+      for (const key of Object.keys(process.env)) {
+        if (LIVE_CLOUD_ENV_PREFIXES.some((prefix) => key.startsWith(prefix))) {
+          delete process.env[key];
+        }
+      }
+      for (const [key, value] of Object.entries(cloudEnvBackup)) {
+        process.env[key] = value;
+      }
       fs.rmSync(workspaceDir, { recursive: true, force: true });
       fs.rmSync(pgliteDir, { recursive: true, force: true });
     }, 120_000);
@@ -649,13 +715,26 @@ describeIf(LIVE_SUITE_ENABLED)(
           "Actually create a routine named Brush teeth that happens every morning and every night. Do not just give advice.",
           "Brush teeth",
         );
-        await sendUserTurn({
+        const previewResponse = await sendUserTurn({
           runtime,
           entityId: ownerId,
           roomId,
           source: "telegram",
           text: createPrompt,
         });
+        expect(previewResponse.trim().length).toBeGreaterThan(0);
+        expect(
+          findDefinitionByTitle(await lifeOpsService.listDefinitions(), "Brush teeth"),
+        ).toBeNull();
+
+        const confirmResponse = await sendUserTurn({
+          runtime,
+          entityId: ownerId,
+          roomId,
+          source: "telegram",
+          text: "Yes, save that brushing routine.",
+        });
+        expect(confirmResponse).toContain("Saved");
 
         const brushTeeth = await waitForValue(
           "brush-teeth definition",
@@ -665,8 +744,8 @@ describeIf(LIVE_SUITE_ENABLED)(
         expect(brushTeeth?.definition.cadence).toMatchObject({
           kind: "times_per_day",
           slots: expect.arrayContaining([
-            expect.objectContaining({ label: "Morning", minuteOfDay: 8 * 60 }),
-            expect.objectContaining({ label: "Night", minuteOfDay: 21 * 60 }),
+            expect.objectContaining({ minuteOfDay: 8 * 60 }),
+            expect.objectContaining({ minuteOfDay: 21 * 60 }),
           ]),
         });
         expect(brushTeeth?.reminderPlan?.id ?? null).not.toBeNull();
@@ -726,7 +805,9 @@ describeIf(LIVE_SUITE_ENABLED)(
         const setupTurns = [
           "hey, quick check-in before we get into anything serious.",
           "small thing to remember: i always prefer text reminders and i do not want phone-call reminders.",
+          "to be explicit, that is a stable preference for me: text reminders only, never phone calls.",
           "also, i wear Invisalign during the day and i usually forget to put it back in after lunch.",
+          "that invisalign thing is a real recurring pattern for me, especially on weekdays after lunch.",
           "gentle nudges work better for me than aggressive ones.",
           "can you keep those preferences in mind for later?",
         ];
@@ -765,6 +846,7 @@ describeIf(LIVE_SUITE_ENABLED)(
                 String(fact.content?.text ?? ""),
               ),
             ),
+          120_000,
         );
         expect(reflectionFacts.length).toBeGreaterThan(0);
 

@@ -413,7 +413,7 @@
     },
     "eliza/packages/daemon": {
       "name": "@elizaos/daemon",
-      "version": "2.0.0-alpha.123",
+      "version": "2.0.0-alpha.124",
       "devDependencies": {
         "@biomejs/biome": "^1.9.4",
         "@types/node": "^22.10.2",
@@ -427,7 +427,7 @@
     },
     "eliza/packages/elizaos": {
       "name": "elizaos",
-      "version": "2.0.0-alpha.123",
+      "version": "2.0.0-alpha.124",
       "bin": {
         "elizaos": "./dist/cli.js",
       },
@@ -444,7 +444,7 @@
     },
     "eliza/packages/interop": {
       "name": "@elizaos/interop",
-      "version": "2.0.0-alpha.123",
+      "version": "2.0.0-alpha.124",
       "dependencies": {
         "@elizaos/core": "workspace:*",
       },
@@ -459,18 +459,18 @@
     },
     "eliza/packages/rust": {
       "name": "@elizaos/rust",
-      "version": "2.0.0-alpha.123",
+      "version": "2.0.0-alpha.124",
     },
     "eliza/packages/schemas": {
       "name": "@elizaos/schemas",
-      "version": "2.0.0-alpha.123",
+      "version": "2.0.0-alpha.124",
       "devDependencies": {
         "@bufbuild/buf": "^1.47.2",
       },
     },
     "eliza/packages/typescript": {
       "name": "@elizaos/core",
-      "version": "2.0.0-alpha.123",
+      "version": "2.0.0-alpha.124",
       "dependencies": {
         "@ai-sdk/anthropic": "^3.0.13",
         "@ai-sdk/google": "^3.0.8",

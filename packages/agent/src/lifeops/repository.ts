@@ -45,6 +45,7 @@ import {
 type BrowserCompanionCredential = {
   companion: LifeOpsBrowserCompanionStatus;
   pairingTokenHash: string | null;
+  pendingPairingTokenHashes: string[];
 };
 
 const schemaReady = new WeakSet<object>();
@@ -741,6 +742,12 @@ function parseBrowserCompanionCredential(
     pairingTokenHash: row.pairing_token_hash
       ? toText(row.pairing_token_hash)
       : null,
+    pendingPairingTokenHashes: parseJsonArray(
+      row.pending_pairing_token_hashes_json,
+    ).filter(
+      (candidate): candidate is string =>
+        typeof candidate === "string" && candidate.length > 0,
+    ),
   };
 }
 
@@ -1067,6 +1074,7 @@ async function runLifeOpsSchemaSetup(
       last_seen_at TEXT,
       paired_at TEXT,
       pairing_token_hash TEXT,
+      pending_pairing_token_hashes_json TEXT NOT NULL DEFAULT '[]',
       metadata_json TEXT NOT NULL DEFAULT '{}',
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
@@ -1412,6 +1420,10 @@ async function runLifeOpsSchemaSetup(
 
   const browserCompanionColumns = [
     { name: "pairing_token_hash", definition: "TEXT" },
+    {
+      name: "pending_pairing_token_hashes_json",
+      definition: "TEXT NOT NULL DEFAULT '[]'",
+    },
   ] as const;
   const existingBrowserCompanionColumns = new Set(
     await listTableColumns(runtime, "life_browser_companions"),
@@ -3698,6 +3710,45 @@ export class LifeOpsRepository {
       this.runtime,
       `UPDATE life_browser_companions
           SET pairing_token_hash = ${sqlQuote(pairingTokenHash)},
+              pending_pairing_token_hashes_json = '[]',
+              paired_at = ${sqlQuote(pairedAt)},
+              updated_at = ${sqlQuote(updatedAt)}
+        WHERE agent_id = ${sqlQuote(agentId)}
+          AND id = ${sqlQuote(companionId)}`,
+    );
+  }
+
+  async updateBrowserCompanionPendingPairingTokenHashes(
+    agentId: string,
+    companionId: string,
+    pendingPairingTokenHashes: string[],
+    updatedAt: string,
+  ): Promise<void> {
+    await this.ensureReady();
+    await executeRawSql(
+      this.runtime,
+      `UPDATE life_browser_companions
+          SET pending_pairing_token_hashes_json = ${sqlJson(pendingPairingTokenHashes)},
+              updated_at = ${sqlQuote(updatedAt)}
+        WHERE agent_id = ${sqlQuote(agentId)}
+          AND id = ${sqlQuote(companionId)}`,
+    );
+  }
+
+  async promoteBrowserCompanionPendingPairingToken(
+    agentId: string,
+    companionId: string,
+    pairingTokenHash: string,
+    pendingPairingTokenHashes: string[],
+    pairedAt: string,
+    updatedAt: string,
+  ): Promise<void> {
+    await this.ensureReady();
+    await executeRawSql(
+      this.runtime,
+      `UPDATE life_browser_companions
+          SET pairing_token_hash = ${sqlQuote(pairingTokenHash)},
+              pending_pairing_token_hashes_json = ${sqlJson(pendingPairingTokenHashes)},
               paired_at = ${sqlQuote(pairedAt)},
               updated_at = ${sqlQuote(updatedAt)}
         WHERE agent_id = ${sqlQuote(agentId)}

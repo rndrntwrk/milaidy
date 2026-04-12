@@ -3648,6 +3648,31 @@ function hashBrowserCompanionPairingToken(token: string): string {
     .digest("hex");
 }
 
+const MAX_PENDING_BROWSER_PAIRING_TOKENS = 4;
+
+function normalizePendingBrowserPairingTokenHashes(
+  hashes: readonly string[],
+  activePairingTokenHash: string | null,
+): string[] {
+  const normalized: string[] = [];
+  const seen = new Set<string>();
+  for (const candidate of hashes) {
+    if (
+      !candidate ||
+      candidate === activePairingTokenHash ||
+      seen.has(candidate)
+    ) {
+      continue;
+    }
+    seen.add(candidate);
+    normalized.push(candidate);
+    if (normalized.length >= MAX_PENDING_BROWSER_PAIRING_TOKENS) {
+      break;
+    }
+  }
+  return normalized;
+}
+
 function browserSessionMatchesCompanion(
   session: LifeOpsBrowserSession,
   companion: LifeOpsBrowserCompanionStatus,
@@ -6776,15 +6801,67 @@ export class LifeOpsService {
       requireNonEmptyString(companionId, "companionId"),
     );
     if (!credential?.pairingTokenHash) {
+      if (!credential) {
+        fail(401, "browser companion pairing is invalid");
+      }
+      const pendingPairingTokenHashes =
+        credential.pendingPairingTokenHashes ?? [];
+      const pairingTokenHash = hashBrowserCompanionPairingToken(pairingToken);
+      if (!pendingPairingTokenHashes.includes(pairingTokenHash)) {
+        fail(401, "browser companion pairing is invalid");
+      }
+      const nowIso = new Date().toISOString();
+      const remainingPendingPairingTokenHashes =
+        normalizePendingBrowserPairingTokenHashes(
+          pendingPairingTokenHashes.filter(
+            (candidate) => candidate !== pairingTokenHash,
+          ),
+          pairingTokenHash,
+        );
+      await this.repository.promoteBrowserCompanionPendingPairingToken(
+        this.agentId(),
+        credential.companion.id,
+        pairingTokenHash,
+        remainingPendingPairingTokenHashes,
+        nowIso,
+        nowIso,
+      );
+      return {
+        ...credential.companion,
+        pairedAt: nowIso,
+        updatedAt: nowIso,
+      };
+    }
+    const pairingTokenHash = hashBrowserCompanionPairingToken(pairingToken);
+    if (credential.pairingTokenHash === pairingTokenHash) {
+      return credential.companion;
+    }
+    const pendingPairingTokenHashes =
+      credential.pendingPairingTokenHashes ?? [];
+    if (!pendingPairingTokenHashes.includes(pairingTokenHash)) {
       fail(401, "browser companion pairing is invalid");
     }
-    if (
-      credential.pairingTokenHash !==
-      hashBrowserCompanionPairingToken(pairingToken)
-    ) {
-      fail(401, "browser companion pairing is invalid");
-    }
-    return credential.companion;
+    const nowIso = new Date().toISOString();
+    const remainingPendingPairingTokenHashes =
+      normalizePendingBrowserPairingTokenHashes(
+        pendingPairingTokenHashes.filter(
+          (candidate) => candidate !== pairingTokenHash,
+        ),
+        pairingTokenHash,
+      );
+    await this.repository.promoteBrowserCompanionPendingPairingToken(
+      this.agentId(),
+      credential.companion.id,
+      pairingTokenHash,
+      remainingPendingPairingTokenHashes,
+      nowIso,
+      nowIso,
+    );
+    return {
+      ...credential.companion,
+      pairedAt: nowIso,
+      updatedAt: nowIso,
+    };
   }
 
   private async claimQueuedBrowserSession(
@@ -9532,18 +9609,37 @@ export class LifeOpsService {
     );
     await this.repository.upsertBrowserCompanion(companion);
     const pairingToken = `lobr_${crypto.randomBytes(24).toString("base64url")}`;
+    const pairingTokenHash = hashBrowserCompanionPairingToken(pairingToken);
     const nowIso = new Date().toISOString();
-    await this.repository.updateBrowserCompanionPairingToken(
+    const credential = await this.repository.getBrowserCompanionCredential(
       this.agentId(),
       companion.id,
-      hashBrowserCompanionPairingToken(pairingToken),
-      nowIso,
-      nowIso,
     );
+    if (!credential?.pairingTokenHash) {
+      await this.repository.updateBrowserCompanionPairingToken(
+        this.agentId(),
+        companion.id,
+        pairingTokenHash,
+        nowIso,
+        nowIso,
+      );
+    } else {
+      const pendingPairingTokenHashes =
+        normalizePendingBrowserPairingTokenHashes(
+          [pairingTokenHash, ...(credential.pendingPairingTokenHashes ?? [])],
+          credential.pairingTokenHash,
+        );
+      await this.repository.updateBrowserCompanionPendingPairingTokenHashes(
+        this.agentId(),
+        companion.id,
+        pendingPairingTokenHashes,
+        nowIso,
+      );
+    }
     return {
       companion: {
         ...companion,
-        pairedAt: nowIso,
+        pairedAt: credential?.pairingTokenHash ? companion.pairedAt : nowIso,
         updatedAt: nowIso,
       },
       pairingToken,
@@ -10947,11 +11043,11 @@ export class LifeOpsService {
       linkedMailState = "cache";
       if (linkedMail.length === 0) {
         try {
-        const triage = await this.getGmailTriage(
-          requestUrl,
-          {
-            mode,
-            side: status.grant.side,
+          const triage = await this.getGmailTriage(
+            requestUrl,
+            {
+              mode,
+              side: status.grant.side,
               maxResults: DEFAULT_GMAIL_TRIAGE_MAX_RESULTS,
             },
             now,

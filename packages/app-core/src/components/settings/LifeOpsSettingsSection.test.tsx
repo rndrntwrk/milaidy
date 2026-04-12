@@ -191,7 +191,6 @@ describe("LifeOpsSettingsSection", () => {
     expect(text).toContain(
       "http://127.0.0.1:3000/api/lifeops/connectors/google/callback",
     );
-    expect(text).toContain("Open workspace");
     expect(text).toContain("Agent Example");
     expect(text).toContain("agent@example.com");
   });

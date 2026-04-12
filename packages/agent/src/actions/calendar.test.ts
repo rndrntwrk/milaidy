@@ -189,6 +189,7 @@ describe("calendarAction", () => {
     expect(mockUseModel).toHaveBeenCalled();
     expect(mockGetCalendarFeed).toHaveBeenCalledTimes(1);
     expect(result).toMatchObject({ success: true });
+    expect(result?.text).toContain("matching calendar event");
     expect(result?.text).toContain("Dentist appointment");
   });
 
@@ -313,6 +314,167 @@ describe("calendarAction", () => {
       success: true,
     });
     expect(result?.text).toMatch(/No events on monday/i);
+  });
+
+  it("uses an LLM-planned window for non-English schedule questions", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-11T22:19:00-06:00"));
+    mockUseModel.mockResolvedValue(
+      [
+        "subaction: feed",
+        "queries:",
+        "title:",
+        "tripLocation:",
+        "timeMin: 2026-04-13T06:00:00.000Z",
+        "timeMax: 2026-04-14T06:00:00.000Z",
+        "windowLabel: el lunes",
+      ].join("\n"),
+    );
+    mockGetCalendarFeed.mockResolvedValue({
+      calendarId: "primary",
+      events: [],
+      source: "cache",
+      timeMin: "2026-04-13T06:00:00.000Z",
+      timeMax: "2026-04-14T06:00:00.000Z",
+      syncedAt: "2026-04-12T04:19:00.000Z",
+    });
+
+    const result = await invoke("que tengo el lunes?", {
+      details: {
+        timeZone: "America/Denver",
+      },
+    });
+
+    expect(mockGetCalendarFeed).toHaveBeenCalledWith(
+      expect.any(URL),
+      expect.objectContaining({
+        timeZone: "America/Denver",
+        timeMin: "2026-04-13T06:00:00.000Z",
+        timeMax: "2026-04-14T06:00:00.000Z",
+      }),
+    );
+    expect(result?.success).toBe(true);
+    expect(result?.text).toContain("No events el lunes.");
+  });
+
+  it("resolves 'this weekend' to a weekend window", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-11T22:19:00-06:00"));
+    mockGetCalendarFeed.mockResolvedValue({
+      calendarId: "primary",
+      events: [],
+      source: "cache",
+      timeMin: "2026-04-11T06:00:00.000Z",
+      timeMax: "2026-04-13T06:00:00.000Z",
+      syncedAt: "2026-04-12T04:19:00.000Z",
+    });
+
+    const result = await invoke("what do i have this weekend?", {
+      details: {
+        timeZone: "America/Denver",
+      },
+    });
+
+    expect(mockGetCalendarFeed).toHaveBeenCalledWith(
+      expect.any(URL),
+      expect.objectContaining({
+        timeZone: "America/Denver",
+        timeMin: "2026-04-11T06:00:00.000Z",
+        timeMax: "2026-04-13T06:00:00.000Z",
+      }),
+    );
+    expect(result?.success).toBe(true);
+    expect(result?.text).toContain("this weekend");
+  });
+
+  it("keeps 'this weekend' bounded to the remaining weekend on sunday", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-12T10:00:00-06:00"));
+    mockGetCalendarFeed.mockResolvedValue({
+      calendarId: "primary",
+      events: [],
+      source: "cache",
+      timeMin: "2026-04-12T06:00:00.000Z",
+      timeMax: "2026-04-13T06:00:00.000Z",
+      syncedAt: "2026-04-12T16:00:00.000Z",
+    });
+
+    const result = await invoke("what do i have this weekend?", {
+      details: {
+        timeZone: "America/Denver",
+      },
+    });
+
+    expect(mockGetCalendarFeed).toHaveBeenCalledWith(
+      expect.any(URL),
+      expect.objectContaining({
+        timeZone: "America/Denver",
+        timeMin: "2026-04-12T06:00:00.000Z",
+        timeMax: "2026-04-13T06:00:00.000Z",
+      }),
+    );
+    expect(result?.success).toBe(true);
+    expect(result?.text).toContain("this weekend");
+  });
+
+  it("resolves 'tonight' to an evening-only window", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-11T22:19:00-06:00"));
+    mockGetCalendarFeed.mockResolvedValue({
+      calendarId: "primary",
+      events: [],
+      source: "cache",
+      timeMin: "2026-04-12T04:19:00.000Z",
+      timeMax: "2026-04-12T06:00:00.000Z",
+      syncedAt: "2026-04-12T04:19:00.000Z",
+    });
+
+    const result = await invoke("what do i have tonight?", {
+      details: {
+        timeZone: "America/Denver",
+      },
+    });
+
+    expect(mockGetCalendarFeed).toHaveBeenCalledWith(
+      expect.any(URL),
+      expect.objectContaining({
+        timeZone: "America/Denver",
+        timeMin: "2026-04-12T04:19:00.000Z",
+        timeMax: "2026-04-12T06:00:00.000Z",
+      }),
+    );
+    expect(result?.success).toBe(true);
+    expect(result?.text).toContain("tonight");
+  });
+
+  it("resolves 'next month' to the next calendar month boundary", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-04-11T22:19:00-06:00"));
+    mockGetCalendarFeed.mockResolvedValue({
+      calendarId: "primary",
+      events: [],
+      source: "cache",
+      timeMin: "2026-05-01T06:00:00.000Z",
+      timeMax: "2026-06-01T06:00:00.000Z",
+      syncedAt: "2026-04-12T04:19:00.000Z",
+    });
+
+    const result = await invoke("what do i have next month?", {
+      details: {
+        timeZone: "America/Denver",
+      },
+    });
+
+    expect(mockGetCalendarFeed).toHaveBeenCalledWith(
+      expect.any(URL),
+      expect.objectContaining({
+        timeZone: "America/Denver",
+        timeMin: "2026-05-01T06:00:00.000Z",
+        timeMax: "2026-06-01T06:00:00.000Z",
+      }),
+    );
+    expect(result?.success).toBe(true);
+    expect(result?.text).toContain("next month");
   });
 
   it("uses message text when intent param is omitted", async () => {
