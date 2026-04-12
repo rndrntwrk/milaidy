@@ -1,13 +1,13 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   LOCAL_APP_DEFAULT_SANDBOX,
   resolveAppOverride,
   sanitizeSandbox,
 } from "./registry-client-app-meta.js";
 
-vi.mock("@elizaos/core", () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() },
-}));
+/**
+ * registry-client-app-meta tests — pure data transformation, no mocks needed.
+ */
 
 describe("agent registry-client-app-meta", () => {
   it("keeps the shared sandbox allowlist behavior", () => {

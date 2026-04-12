@@ -1,7 +1,7 @@
 ---
 title: Onboarding UI flow
 sidebarTitle: Onboarding UI
-summary: How Milady moves from the startup server chooser into the six-step onboarding wizard, and how that maps to canonical server and routing state.
+summary: How Milady moves from the startup chooser into the four-step onboarding wizard, and how that maps to canonical server and routing state.
 description: Architecture of Milady’s chooser-first startup and in-app onboarding wizard, including server selection, hosting vs provider separation, and the pure connection flow helpers.
 ---
 
@@ -21,16 +21,14 @@ Milady now has two layers before the first chat:
    - use Eliza Cloud when cloud credentials are available
 
 2. **Onboarding wizard**
-   Once a server target is selected, the app runs the six-step wizard defined in
+   Once a server target is selected, the app runs the four-step wizard defined in
    [`packages/app-core/src/state/types.ts`](../../packages/app-core/src/state/types.ts):
+   - `deployment`
    - `identity`
-   - `hosting`
    - `providers`
-   - `voice`
-   - `permissions`
-   - `launch`
+   - `features`
 
-**Important rule:** choosing where the server runs is not the same as choosing who handles inference. Hosting is server selection. Provider choice is service routing.
+**Important rule:** choosing where the agent runs is not the same as choosing who handles inference. Deployment is runtime selection. Provider choice is service routing.
 
 ## Source of truth
 
@@ -72,16 +70,14 @@ The chooser-first split fixes that:
 
 | Step | What it owns | What it must not own |
 |------|---------------|----------------------|
-| `identity` | Name, persona, style, basic profile | Hosting or provider routing |
-| `hosting` | Selecting a server target or attaching to a backend | Choosing the active chat model |
+| `deployment` | Choosing local vs remote vs Eliza Cloud runtime | Choosing the active chat model |
+| `identity` | Name, persona, style, basic profile | Deployment or provider routing |
 | `providers` | Choosing `serviceRouting.llmText` and related linked accounts | Changing where the server runs |
-| `voice` | Voice/TTS routing and related credentials | Changing chat inference implicitly |
-| `permissions` | Local device capability permissions | Provider selection |
-| `launch` | Final readiness and first-chat handoff | Rewriting routing defaults silently |
+| `features` | Optional connector and capability opt-ins that survive onboarding | Rewriting provider or deployment defaults silently |
 
 ## Pure connection flow
 
-The hosting step still has a nested pure state machine for its internal panels.
+The providers step still has a nested pure state machine for its deployment and provider-selection panels.
 
 Relevant files:
 
@@ -89,15 +85,15 @@ Relevant files:
 |------|------|
 | [`packages/app-core/src/onboarding/server-target.ts`](../../packages/app-core/src/onboarding/server-target.ts) | Canonical mapping between onboarding server target and the temporary compatibility fields still used at the onboarding API boundary. |
 | [`packages/app-core/src/onboarding/types.ts`](../../packages/app-core/src/onboarding/types.ts) | Types for the nested connection flow snapshots, patches, screens, and events. |
-| [`packages/app-core/src/onboarding/connection-flow.ts`](../../packages/app-core/src/onboarding/connection-flow.ts) | Pure routing logic for the hosting step panels. No React, no API calls. |
+| [`packages/app-core/src/onboarding/connection-flow.ts`](../../packages/app-core/src/onboarding/connection-flow.ts) | Pure routing logic for the nested deployment/provider panels inside the providers step. No React, no API calls. |
 | [`packages/app-core/src/components/onboarding/ConnectionStep.tsx`](../../packages/app-core/src/components/onboarding/ConnectionStep.tsx) | React shell that renders the pure flow and performs effectful actions. |
-| [`packages/app-core/src/onboarding/tests/connection-flow.test.ts`](../../packages/app-core/src/onboarding/tests/connection-flow.test.ts) | Table-driven coverage for the nested hosting-step decisions. |
+| [`packages/app-core/src/onboarding/tests/connection-flow.test.ts`](../../packages/app-core/src/onboarding/tests/connection-flow.test.ts) | Table-driven coverage for the nested deployment/provider decisions. |
 
-**Why this split still exists:** the hosting step has richer nested UI than the outer wizard, and the pure module keeps that behavior deterministic and testable.
+**Why this split still exists:** the providers step has richer nested UI than the outer wizard, and the pure module keeps that behavior deterministic and testable.
 
-## What “hosting” means now
+## What the nested deployment flow means now
 
-Inside the hosting flow, the user is answering:
+Inside the nested flow, the user is answering:
 
 - should Milady start a local server?
 - should it connect to a remote or discovered server?
@@ -108,9 +104,8 @@ They are **not** yet answering:
 - should chat use OpenAI?
 - should chat use Anthropic?
 - should chat use Eliza Cloud inference?
-- should TTS come from ElevenLabs or Eliza Cloud?
 
-Those answers belong to the provider and voice steps, where the app writes canonical service routing for the selected server.
+Those answers belong to the provider section of onboarding, where the app writes canonical service routing for the selected server.
 
 ## Back/next behavior
 
@@ -130,7 +125,7 @@ Do not write raw step changes from UI components unless the transition is admini
 When changing the onboarding UI:
 
 1. Update the chooser or step responsibility first.
-2. Keep hosting and provider logic separate.
+2. Keep deployment and provider logic separate.
 3. Add or update table tests in the pure flow modules.
 4. Keep API calls and bridge effects out of pure onboarding helpers.
 5. Verify that first-chat still depends on both:

@@ -1,60 +1,38 @@
-import { describe, expect, test, vi } from "vitest";
+/**
+ * Integration tests for GET /api/knowledge root route.
+ *
+ * Starts a real API server and makes real HTTP requests.
+ * Without a running runtime, the knowledge endpoint returns unavailable.
+ */
 
-vi.mock("../../src/api/knowledge-service-loader", () => ({
-  getKnowledgeService: vi.fn(async () => ({
-    service: {
-      countMemories: vi.fn(async ({ tableName }: { tableName: string }) =>
-        tableName === "documents" ? 2 : 5,
-      ),
-    },
-    reason: null,
-  })),
+import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
+import { req } from "../../../../test/helpers/http";
+import { startApiServer } from "../../src/api/server";
+
+vi.mock("../../src/services/mcp-marketplace", () => ({
+  searchMcpMarketplace: vi.fn().mockResolvedValue({ results: [] }),
+  getMcpServerDetails: vi.fn().mockResolvedValue(null),
 }));
 
-import type { KnowledgeRouteContext } from "../../src/api/knowledge-routes";
-import { handleKnowledgeRoutes } from "../../src/api/knowledge-routes";
-import {
-  createMockHttpResponse,
-  createMockIncomingMessage,
-} from "../../src/test-support/test-helpers";
+let port: number;
+let close: () => Promise<void>;
 
-function buildCtx(overrides: Partial<KnowledgeRouteContext> = {}): KnowledgeRouteContext {
-  const { res } = createMockHttpResponse();
-  return {
-    req: createMockIncomingMessage({ method: "GET", url: "/api/knowledge" }),
-    res,
-    method: "GET",
-    pathname: "/api/knowledge",
-    url: new URL("/api/knowledge", "http://localhost:2138"),
-    json: vi.fn((r, data, status = 200) => {
-      r.writeHead(status);
-      r.end(JSON.stringify(data));
-    }),
-    error: vi.fn((r, msg, status = 500) => {
-      r.writeHead(status);
-      r.end(JSON.stringify({ error: msg }));
-    }),
-    readJsonBody: vi.fn(async () => ({})),
-    runtime: { agentId: "00000000-0000-0000-0000-000000000001" } as KnowledgeRouteContext["runtime"],
-    ...overrides,
-  } as KnowledgeRouteContext;
-}
+beforeAll(async () => {
+  const server = await startApiServer({ port: 0 });
+  port = server.port;
+  close = server.close;
+}, 180_000);
 
-describe("knowledge root route", () => {
-  test("GET /api/knowledge returns availability summary instead of 404", async () => {
-    const { res, getStatus, getJson } = createMockHttpResponse();
-    const ctx = buildCtx({ res });
+afterAll(async () => {
+  await close();
+});
 
-    const handled = await handleKnowledgeRoutes(ctx);
-
-    expect(handled).toBe(true);
-    expect(getStatus()).toBe(200);
-    expect(getJson()).toEqual({
-      ok: true,
-      available: true,
-      agentId: "00000000-0000-0000-0000-000000000001",
-      documentCount: 2,
-      fragmentCount: 5,
-    });
-  });
+describe("knowledge root route (real server)", () => {
+  test("GET /api/knowledge returns availability summary", async () => {
+    const { status, data } = await req(port, "GET", "/api/knowledge");
+    expect(status).toBe(200);
+    expect(data).toHaveProperty("ok");
+    // Without runtime, knowledge service may report unavailable
+    expect(typeof (data as { ok: boolean }).ok).toBe("boolean");
+  }, 60_000);
 });

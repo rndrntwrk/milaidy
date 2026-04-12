@@ -184,24 +184,37 @@ describe("Electrobun release workflow drift", () => {
       "name: Build LifeOps Browser companions",
     );
     const releaseJobIndex = workflow.indexOf("name: Create Release");
+    const publishJobIndex = workflow.indexOf(
+      "name: Publish LifeOps Browser companions",
+    );
 
     expect(companionJobIndex).toBeGreaterThan(-1);
     expect(releaseJobIndex).toBeGreaterThan(companionJobIndex);
+    expect(publishJobIndex).toBeGreaterThan(releaseJobIndex);
     expect(workflow).toContain("build-browser-companions:");
     expect(workflow).toContain("runs-on: macos-14");
     expect(workflow).toContain(
       "MILADY_RELEASE_TAG: $" + "{{ needs.prepare.outputs.tag }}",
     );
     expect(workflow).toContain("bun run lifeops:browser:package:release");
+    expect(workflow).toContain('echo "packaged=true" >> "$GITHUB_OUTPUT"');
+    expect(workflow).toContain(
+      "LifeOps Browser packaging failed; desktop release will continue without browser companion bundles.",
+    );
     expect(workflow).toContain(
       "name: Upload LifeOps Browser release artifacts",
     );
     expect(workflow).toContain("name: lifeops-browser-store-bundles");
+    expect(workflow).toContain("needs: [prepare, build]");
     expect(workflow).toContain(
-      "needs: [prepare, build, build-browser-companions]",
+      "needs: [prepare, build-browser-companions, release]",
     );
     expect(workflow).toContain("name: Download LifeOps Browser artifacts");
     expect(workflow).toContain("pattern: lifeops-browser-*");
+    expect(workflow).toContain(
+      "name: Attach LifeOps Browser assets to GitHub release",
+    );
+    expect(workflow).toContain("gh release upload");
   });
 
   it("requires an explicit tag for manual non-tag runs", () => {
@@ -413,12 +426,16 @@ describe("Electrobun release workflow drift", () => {
     expect(workflow).toContain(' -name "Milady-Setup-*.exe" -o \\');
     expect(workflow).toContain(' -name "Milady-Setup-*.exe.zip" -o \\');
     expect(workflow).toContain(' -name "*Setup*.tar.gz" -o \\');
-    expect(workflow).toContain(' -name "lifeops-browser-chrome-v*.zip" -o \\');
-    expect(workflow).toContain(' -name "lifeops-browser-safari-v*.zip" -o \\');
-    expect(workflow).toContain(
+    expect(workflow).toContain(' -name "*.msix" \\');
+    expect(workflow).not.toContain(
+      ' -name "lifeops-browser-chrome-v*.zip" -o \\',
+    );
+    expect(workflow).not.toContain(
+      ' -name "lifeops-browser-safari-v*.zip" -o \\',
+    );
+    expect(workflow).not.toContain(
       ' -name "lifeops-browser-release-manifest-v*.json" -o \\',
     );
-    expect(workflow).toContain(' -name "*.msix" \\');
     expect(workflow).not.toContain(
       ' -name "lifeops-browser-safari-project-v*.zip" -o \\',
     );
@@ -430,6 +447,15 @@ describe("Electrobun release workflow drift", () => {
     expect(workflow).toContain(' -name "*-update.json" \\');
     expect(workflow).toContain("files: release-files/*");
     expect(workflow).toContain("update-channel/");
+    expect(workflow).toContain(
+      ' -name "lifeops-browser-chrome-v*.zip" -o \\',
+    );
+    expect(workflow).toContain(
+      ' -name "lifeops-browser-safari-v*.zip" -o \\',
+    );
+    expect(workflow).toContain(
+      ' -name "lifeops-browser-release-manifest-v*.json" \\',
+    );
   });
 
   it("installs Inno Setup 6.7.1 and builds a standalone Windows installer", () => {

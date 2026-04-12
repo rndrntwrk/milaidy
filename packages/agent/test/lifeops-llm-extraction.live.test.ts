@@ -334,17 +334,24 @@ describeIfLive("LLM plan extraction (live)", () => {
         intent: "send that reply now",
         expectedSubaction: "send_reply",
         expectQueries: false,
+        recentMessages:
+          "user: draft a reply to John's email\nassistant: I drafted a reply to John's email. Want me to send it?",
       },
     ] as const;
 
-    for (const { intent, expectedSubaction, expectQueries } of cases) {
+    for (const {
+      intent,
+      expectedSubaction,
+      expectQueries,
+      recentMessages,
+    } of cases) {
       it(
         `classifies "${intent}" as ${expectedSubaction}`,
         async () => {
           const plan = await extractGmailPlanWithLlm(
             runtime,
             makeMessage(intent),
-            makeState(),
+            makeState(recentMessages),
             intent,
           );
           expect(plan.subaction).toBe(expectedSubaction);

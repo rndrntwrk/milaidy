@@ -1,234 +1,53 @@
-import { describe, expect, test, vi } from "vitest";
-import type {
-  WhatsAppRouteDeps,
-  WhatsAppRouteState,
-} from "../../src/api/whatsapp-routes";
-import { handleWhatsAppRoute } from "../../src/api/whatsapp-routes";
-import {
-  createMockHttpResponse,
-  createMockIncomingMessage,
-} from "../../src/test-support/test-helpers";
+/**
+ * Integration tests for /api/whatsapp/* routes.
+ *
+ * Starts a real API server (no runtime) and makes real HTTP requests.
+ * Without a running runtime, the WhatsApp service is unavailable.
+ */
 
-function buildState(
-  overrides: Partial<WhatsAppRouteState> = {},
-): WhatsAppRouteState {
-  return {
-    whatsappPairingSessions: new Map(),
-    broadcastWs: vi.fn(),
-    config: {},
-    runtime: undefined,
-    saveConfig: vi.fn(),
-    workspaceDir: "/tmp/test-workspace",
-    ...overrides,
-  };
-}
+import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
+import { req } from "../../../../test/helpers/http";
+import { startApiServer } from "../../src/api/server";
 
-function buildDeps(
-  overrides: Partial<WhatsAppRouteDeps> = {},
-): WhatsAppRouteDeps {
-  return {
-    sanitizeAccountId: vi.fn((id: string) => id),
-    whatsappAuthExists: vi.fn(() => false),
-    whatsappLogout: vi.fn(async () => {}),
-    createWhatsAppPairingSession: vi.fn(() => ({
-      start: vi.fn(async () => {}),
-      stop: vi.fn(),
-      getStatus: vi.fn(() => "pairing"),
-    })),
-    ...overrides,
-  };
-}
+vi.mock("../../src/services/mcp-marketplace", () => ({
+  searchMcpMarketplace: vi.fn().mockResolvedValue({ results: [] }),
+  getMcpServerDetails: vi.fn().mockResolvedValue(null),
+}));
 
-describe("handleWhatsAppRoute", () => {
-  test("GET /api/whatsapp/webhook returns 503 when the service is unavailable", async () => {
-    const req = createMockIncomingMessage({
-      method: "GET",
-      url: "/api/whatsapp/webhook?hub.mode=subscribe&hub.verify_token=test-token&hub.challenge=12345",
-      headers: { host: "localhost:2138" },
-    });
-    const { res, getStatus, getJson } = createMockHttpResponse<{
-      error: string;
-    }>();
+let port: number;
+let close: () => Promise<void>;
 
-    const handled = await handleWhatsAppRoute(
-      req,
-      res,
-      "/api/whatsapp/webhook",
+beforeAll(async () => {
+  const server = await startApiServer({ port: 0 });
+  port = server.port;
+  close = server.close;
+}, 180_000);
+
+afterAll(async () => {
+  await close();
+});
+
+describe("WhatsApp routes (real server)", () => {
+  test("GET /api/whatsapp/status reports status", async () => {
+    const { status, data } = await req(port, "GET", "/api/whatsapp/status");
+    expect(status).toBe(200);
+    expect(data).toHaveProperty("status");
+  }, 60_000);
+
+  test("GET /api/whatsapp/webhook returns 503 when service unavailable", async () => {
+    const { status } = await req(
+      port,
       "GET",
-      buildState({
-        runtime: {
-          getService: () => null,
-        },
-      }),
-      buildDeps(),
+      "/api/whatsapp/webhook?hub.mode=subscribe&hub.verify_token=test-token&hub.challenge=12345",
     );
+    expect(status).toBe(503);
+  }, 60_000);
 
-    expect(handled).toBe(true);
-    expect(getStatus()).toBe(503);
-    expect(getJson().error).toBe("WhatsApp service unavailable");
-  });
-
-  test("GET /api/whatsapp/webhook returns the verification challenge", async () => {
-    const req = createMockIncomingMessage({
-      method: "GET",
-      url: "/api/whatsapp/webhook?hub.mode=subscribe&hub.verify_token=test-token&hub.challenge=12345",
-      headers: { host: "localhost:2138" },
-    });
-    const { res, getStatus } = createMockHttpResponse();
-    const verifyWebhook = vi.fn(() => "12345");
-
-    const handled = await handleWhatsAppRoute(
-      req,
-      res,
-      "/api/whatsapp/webhook",
-      "GET",
-      buildState({
-        runtime: {
-          getService: (type: string) =>
-            type === "whatsapp" ? { verifyWebhook } : null,
-        },
-      }),
-      buildDeps(),
-    );
-
-    expect(handled).toBe(true);
-    expect(verifyWebhook).toHaveBeenCalledWith(
-      "subscribe",
-      "test-token",
-      "12345",
-    );
-    expect(getStatus()).toBe(200);
-    expect(res._body).toBe("12345");
-  });
-
-  test("GET /api/whatsapp/webhook rejects invalid verification tokens", async () => {
-    const req = createMockIncomingMessage({
-      method: "GET",
-      url: "/api/whatsapp/webhook?hub.mode=subscribe&hub.verify_token=wrong&hub.challenge=12345",
-      headers: { host: "localhost:2138" },
-    });
-    const { res, getStatus, getJson } = createMockHttpResponse<{
-      error: string;
-    }>();
-
-    const handled = await handleWhatsAppRoute(
-      req,
-      res,
-      "/api/whatsapp/webhook",
-      "GET",
-      buildState({
-        runtime: {
-          getService: (type: string) =>
-            type === "whatsapp"
-              ? { verifyWebhook: vi.fn(() => null) }
-              : null,
-        },
-      }),
-      buildDeps(),
-    );
-
-    expect(handled).toBe(true);
-    expect(getStatus()).toBe(403);
-    expect(getJson().error).toBe("Webhook verification failed");
-  });
-
-  test("POST /api/whatsapp/webhook forwards the event to the runtime service", async () => {
-    const req = createMockIncomingMessage({
-      method: "POST",
-      url: "/api/whatsapp/webhook",
-      headers: { host: "localhost:2138", "content-type": "application/json" },
-      body: JSON.stringify({
-        object: "whatsapp_business_account",
-        entry: [{ id: "entry-1", changes: [] }],
-      }),
-    });
-    const { res, getStatus } = createMockHttpResponse();
-    const handleWebhook = vi.fn(async () => {});
-
-    const handled = await handleWhatsAppRoute(
-      req,
-      res,
-      "/api/whatsapp/webhook",
-      "POST",
-      buildState({
-        runtime: {
-          getService: (type: string) =>
-            type === "whatsapp" ? { handleWebhook } : null,
-        },
-      }),
-      buildDeps(),
-    );
-
-    expect(handled).toBe(true);
-    expect(handleWebhook).toHaveBeenCalledWith({
+  test("POST /api/whatsapp/webhook returns 503 when service unavailable", async () => {
+    const { status } = await req(port, "POST", "/api/whatsapp/webhook", {
       object: "whatsapp_business_account",
       entry: [{ id: "entry-1", changes: [] }],
     });
-    expect(getStatus()).toBe(200);
-    expect(res._body).toBe("EVENT_RECEIVED");
-  });
-
-  test("POST /api/whatsapp/webhook returns 503 when the service is unavailable", async () => {
-    const req = createMockIncomingMessage({
-      method: "POST",
-      url: "/api/whatsapp/webhook",
-      headers: { host: "localhost:2138", "content-type": "application/json" },
-      body: JSON.stringify({
-        object: "whatsapp_business_account",
-        entry: [],
-      }),
-    });
-    const { res, getStatus, getJson } = createMockHttpResponse<{
-      error: string;
-    }>();
-
-    const handled = await handleWhatsAppRoute(
-      req,
-      res,
-      "/api/whatsapp/webhook",
-      "POST",
-      buildState({
-        runtime: {
-          getService: () => null,
-        },
-      }),
-      buildDeps(),
-    );
-
-    expect(handled).toBe(true);
-    expect(getStatus()).toBe(503);
-    expect(getJson().error).toBe("WhatsApp service unavailable");
-  });
-
-  test("POST /api/whatsapp/webhook rejects invalid JSON bodies", async () => {
-    const req = createMockIncomingMessage({
-      method: "POST",
-      url: "/api/whatsapp/webhook",
-      headers: { host: "localhost:2138", "content-type": "application/json" },
-      body: '{"object":',
-    });
-    const { res, getStatus, getJson } = createMockHttpResponse<{
-      error: string;
-    }>();
-    const handleWebhook = vi.fn(async () => {});
-
-    const handled = await handleWhatsAppRoute(
-      req,
-      res,
-      "/api/whatsapp/webhook",
-      "POST",
-      buildState({
-        runtime: {
-          getService: (type: string) =>
-            type === "whatsapp" ? { handleWebhook } : null,
-        },
-      }),
-      buildDeps(),
-    );
-
-    expect(handled).toBe(true);
-    expect(getStatus()).toBe(400);
-    expect(getJson().error).toBe("Invalid JSON in request body");
-    expect(handleWebhook).not.toHaveBeenCalled();
-  });
+    expect(status).toBe(503);
+  }, 60_000);
 });

@@ -1,8 +1,10 @@
 import type {
   CreateLifeOpsCalendarEventRequest,
+  CreateLifeOpsCalendarEventAttendee,
   LifeOpsConnectorSide,
   LifeOpsGoogleCapability,
   LifeOpsGoogleConnectorReason,
+  SendLifeOpsGmailMessageRequest,
   StartLifeOpsGoogleConnectorResponse,
 } from "@miladyai/shared/contracts/lifeops";
 import {
@@ -12,6 +14,7 @@ import {
 import { loadElizaConfig } from "../config/config.js";
 import type { SyncedGoogleCalendarEvent } from "./google-calendar.js";
 import type { SyncedGoogleGmailMessageSummary } from "./google-gmail.js";
+import { formatInstantAsRfc3339InTimeZone } from "./time.js";
 
 const MANAGED_GOOGLE_REQUEST_TIMEOUT_MS = 20_000;
 
@@ -59,6 +62,19 @@ export interface ManagedGoogleCalendarEventResponse {
   event: SyncedGoogleCalendarEvent;
 }
 
+export interface ManagedGoogleCalendarEventUpdateRequest {
+  side: LifeOpsConnectorSide;
+  calendarId?: string | null;
+  eventId: string;
+  title?: string;
+  description?: string;
+  location?: string;
+  startAt?: string;
+  endAt?: string;
+  timeZone?: string;
+  attendees?: CreateLifeOpsCalendarEventAttendee[] | null;
+}
+
 export interface ManagedGoogleGmailTriageResponse {
   messages: SyncedGoogleGmailMessageSummary[];
   syncedAt: string;
@@ -82,6 +98,11 @@ export interface ManagedGoogleReplySendRequest {
   bodyText: string;
   inReplyTo?: string | null;
   references?: string | null;
+}
+
+export interface ManagedGoogleMessageSendRequest
+  extends Omit<SendLifeOpsGmailMessageRequest, "mode" | "confirmSend"> {
+  side?: LifeOpsConnectorSide;
 }
 
 interface GenericOAuthInitiateResponse {
@@ -109,6 +130,20 @@ function normalizeManagedGoogleCapabilities(
   return normalized.includes("google.basic_identity")
     ? normalized
     : ["google.basic_identity", ...normalized];
+}
+
+function hasExplicitDateTimeOffset(value: string): boolean {
+  return /(?:[zZ]|[+-]\d{2}:\d{2})$/.test(value);
+}
+
+function normalizeManagedCalendarDateTime(
+  dateTime: string,
+  timeZone: string | undefined,
+): string {
+  if (!timeZone || !hasExplicitDateTimeOffset(dateTime)) {
+    return dateTime;
+  }
+  return formatInstantAsRfc3339InTimeZone(dateTime, timeZone);
 }
 
 function managedGoogleCapabilitiesToScopes(
@@ -364,11 +399,68 @@ export class GoogleManagedClient {
       side: LifeOpsConnectorSide;
     },
   ): Promise<ManagedGoogleCalendarEventResponse> {
+    const normalizedRequest = {
+      ...request,
+      startAt: normalizeManagedCalendarDateTime(
+        request.startAt ?? "",
+        request.timeZone,
+      ),
+      endAt: normalizeManagedCalendarDateTime(
+        request.endAt ?? "",
+        request.timeZone,
+      ),
+    };
     return this.request<ManagedGoogleCalendarEventResponse>(
       "milady/google/calendar/events",
       {
         method: "POST",
-        body: JSON.stringify(request),
+        body: JSON.stringify(normalizedRequest),
+      },
+    );
+  }
+
+  async updateCalendarEvent(
+    request: ManagedGoogleCalendarEventUpdateRequest,
+  ): Promise<ManagedGoogleCalendarEventResponse> {
+    const normalizedRequest = {
+      side: request.side,
+      calendarId: request.calendarId ?? undefined,
+      title: request.title,
+      description: request.description,
+      location: request.location,
+      startAt:
+        typeof request.startAt === "string"
+          ? normalizeManagedCalendarDateTime(request.startAt, request.timeZone)
+          : undefined,
+      endAt:
+        typeof request.endAt === "string"
+          ? normalizeManagedCalendarDateTime(request.endAt, request.timeZone)
+          : undefined,
+      timeZone: request.timeZone,
+      attendees: request.attendees ?? undefined,
+    };
+    return this.request<ManagedGoogleCalendarEventResponse>(
+      `milady/google/calendar/events/${encodeURIComponent(request.eventId)}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(normalizedRequest),
+      },
+    );
+  }
+
+  async deleteCalendarEvent(request: {
+    side: LifeOpsConnectorSide;
+    calendarId?: string | null;
+    eventId: string;
+  }): Promise<{ ok: true }> {
+    const query = new URLSearchParams({
+      side: request.side,
+      ...(request.calendarId ? { calendarId: request.calendarId } : {}),
+    });
+    return this.request<{ ok: true }>(
+      `milady/google/calendar/events/${encodeURIComponent(request.eventId)}?${query.toString()}`,
+      {
+        method: "DELETE",
       },
     );
   }
@@ -427,6 +519,15 @@ export class GoogleManagedClient {
     request: ManagedGoogleReplySendRequest,
   ): Promise<{ ok: true }> {
     return this.request<{ ok: true }>("milady/google/gmail/reply-send", {
+      method: "POST",
+      body: JSON.stringify(request),
+    });
+  }
+
+  async sendGmailMessage(
+    request: ManagedGoogleMessageSendRequest,
+  ): Promise<{ ok: true }> {
+    return this.request<{ ok: true }>("milady/google/gmail/message-send", {
       method: "POST",
       body: JSON.stringify(request),
     });

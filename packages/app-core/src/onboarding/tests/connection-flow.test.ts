@@ -89,12 +89,16 @@ describe("connection-flow", () => {
     it("wizard reset patch lands on hosting after a cloud-hosted selection", () => {
       const stuck = baseSnap({
         onboardingServerTarget: "elizacloud",
+        onboardingRemoteConnected: true,
       });
       expect(deriveConnectionScreen(stuck)).toBe("providerGrid");
       const patch = getResetConnectionWizardToHostingStepPatch();
       const after = mergeConnectionSnapshot(stuck, patch);
       expect(deriveConnectionScreen(after)).toBe("hosting");
       expect(patch.onboardingCloudApiKey).toBe("");
+      expect(patch.onboardingRemoteApiBase).toBe("");
+      expect(patch.onboardingRemoteToken).toBe("");
+      expect(patch.onboardingRemoteConnected).toBe(false);
     });
   });
 

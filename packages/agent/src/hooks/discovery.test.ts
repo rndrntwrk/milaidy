@@ -1,35 +1,19 @@
 /**
- * Hook Discovery — Unit Tests
+ * Hook Discovery — Integration Tests
  *
  * Tests for:
  * - Frontmatter parsing (valid, metadata JSON, missing delimiters, empty name, invalid JSON)
  * - Handler resolution (handler.ts, fallback chain, no handler)
  * - Discovery precedence (workspace > managed > bundled > extra)
+ *
+ * No module mocks — uses real filesystem with temp directories.
  */
 
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { discoverHooks } from "./discovery";
-
-// ---------------------------------------------------------------------------
-// mocks
-// ---------------------------------------------------------------------------
-
-vi.mock("@elizaos/core", () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), debug: vi.fn(), error: vi.fn() },
-}));
-
-// Stub the managed dir (~/.eliza/hooks) to avoid picking up real hooks
-vi.mock("node:os", async (importOriginal) => {
-  const actual = (await importOriginal()) as typeof import("node:os");
-  return {
-    ...actual,
-    // Point homedir to a temp location so ~/.eliza/hooks doesn't exist
-    homedir: () => join(tmpdir(), "__discovery_test_fake_home__"),
-  };
-});
 
 // ---------------------------------------------------------------------------
 // helpers
@@ -150,8 +134,7 @@ describe("frontmatter parsing", () => {
     expect(entries).toHaveLength(0);
   });
 
-  it("warns but still parses name/description when metadata JSON is invalid", async () => {
-    const { logger } = await import("@elizaos/core");
+  it("still parses name/description when metadata JSON is invalid", async () => {
     const bundled = join(tempRoot, "bundled");
     await createHookDir(bundled, "bad-meta", {
       hookMd: [
@@ -169,9 +152,6 @@ describe("frontmatter parsing", () => {
     expect(entries[0].hook.name).toBe("bad-meta");
     expect(entries[0].frontmatter.description).toBe("Invalid metadata JSON");
     expect(entries[0].metadata).toBeUndefined();
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.stringContaining("Failed to parse metadata"),
-    );
   });
 
   it("parses homepage from frontmatter", async () => {
@@ -247,7 +227,6 @@ describe("handler resolution", () => {
   });
 
   it("skips hook when no handler file exists", async () => {
-    const { logger } = await import("@elizaos/core");
     const bundled = join(tempRoot, "bundled");
     const dir = join(bundled, "no-handler");
     await mkdir(dir, { recursive: true });
@@ -261,9 +240,6 @@ describe("handler resolution", () => {
     const entries = await discoverHooks({ bundledDir: bundled });
 
     expect(entries).toHaveLength(0);
-    expect(logger.warn).toHaveBeenCalledWith(
-      expect.stringContaining("no handler"),
-    );
   });
 });
 

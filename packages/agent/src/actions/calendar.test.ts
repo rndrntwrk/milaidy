@@ -53,11 +53,21 @@ const runtime = {
   agentId: "agent-1",
   useModel: mockUseModel,
   logger: {
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
+    debug: () => {},
+    info: () => {},
+    warn: () => {},
+    error: () => {},
   },
+} as never;
+
+function getRuntime() {
+  return runtime;
+}
+
+const stubRuntime = {
+  agentId: "agent-1",
+  useModel: () => { throw new Error("useModel not available in stub"); },
+  logger: { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} },
 } as never;
 
 function msg(text: string, source = "client_chat") {
@@ -74,7 +84,7 @@ function invoke(
 ) {
   const { subaction, title, query, details } = extra;
   return calendarAction.handler?.(
-    runtime,
+    getRuntime(),
     msg(intent),
     {} as never,
     {
@@ -206,7 +216,6 @@ describe("calendarAction", () => {
       subaction: "feed",
     });
 
-    expect(mockUseModel).toHaveBeenCalled();
     expect(mockGetCalendarFeed).toHaveBeenCalledTimes(1);
     expect(result).toMatchObject({ success: true });
     expect(result?.text).toContain("matching calendar event");
@@ -239,15 +248,27 @@ describe("calendarAction", () => {
     });
   });
 
-  it("still executes an explicit calendar subaction even if the planner says reply-only", async () => {
-    mockUseModel.mockResolvedValue(
-      JSON.stringify({
-        subaction: null,
-        shouldAct: false,
-        response: "What do you want to do on your calendar?",
-        queries: [],
-      }),
+  it("noops with a natural reply when calendar is invoked for a reminder request", async () => {
+    const result = await calendarAction.handler?.(
+      stubRuntime,
+      msg("please set a reminder for friday 8pm pst to hug my wife"),
+      {} as never,
+      {
+        parameters: {},
+      } as never,
     );
+
+    expect(mockCreateCalendarEvent).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      success: true,
+      text: "That sounds like a reminder or todo rather than a calendar event. Tell me the reminder and when it should happen.",
+      data: expect.objectContaining({
+        noop: true,
+      }),
+    });
+  });
+
+  it("still executes an explicit calendar subaction even if the planner says reply-only", async () => {
     mockGetCalendarFeed.mockResolvedValue({
       calendarId: "primary",
       events: [],
@@ -304,7 +325,6 @@ describe("calendarAction", () => {
       subaction: "feed",
     });
 
-    expect(mockUseModel).toHaveBeenCalled();
     expect(mockGetCalendarFeed).toHaveBeenCalledTimes(1);
     expect(result).toMatchObject({ success: true });
     expect(result?.text).toContain("Dentist cleaning");
@@ -561,7 +581,7 @@ describe("calendarAction", () => {
     });
 
     const result = await calendarAction.handler?.(
-      runtime,
+      getRuntime(),
       msg("what's on my calendar today"),
       {} as never,
       { parameters: {} } as never,
@@ -574,7 +594,7 @@ describe("calendarAction", () => {
 
   it("allows owner access from discord", async () => {
     const valid = await calendarAction.validate?.(
-      runtime,
+      stubRuntime,
       msg("what flights do i have this week", "discord"),
       {} as never,
     );
@@ -594,7 +614,7 @@ describe("calendarAction", () => {
     });
 
     const valid = await calendarAction.validate?.(
-      runtime,
+      stubRuntime,
       {
         entityId: "mod-1",
         content: { source: "discord", text: "what's on my calendar today" },
@@ -607,7 +627,7 @@ describe("calendarAction", () => {
 
   it("validates a weak follow-up when recent messages carry calendar context", async () => {
     const valid = await calendarAction.validate?.(
-      runtime,
+      stubRuntime,
       msg("what about next week?"),
       {
         values: {
@@ -623,9 +643,27 @@ describe("calendarAction", () => {
     expect(valid).toBe(true);
   });
 
+  it("validates localized calendar follow-ups when recent context carries translated calendar terms", async () => {
+    const valid = await calendarAction.validate?.(
+      stubRuntime,
+      msg("y la proxima semana?"),
+      {
+        values: {
+          preferredLanguage: "es",
+          recentMessages: [
+            "user: que vuelos tengo esta semana?",
+            "assistant: revisando tu calendario para esta semana",
+          ].join("\n"),
+        },
+      } as never,
+    );
+
+    expect(valid).toBe(true);
+  });
+
   it("does not validate a generic time question without calendar context", async () => {
     const valid = await calendarAction.validate?.(
-      runtime,
+      stubRuntime,
       msg("what time is it?"),
       {
         values: {
@@ -641,9 +679,19 @@ describe("calendarAction", () => {
     expect(valid).toBe(false);
   });
 
+  it("does not validate reminder-style requests that belong to LifeOps", async () => {
+    const valid = await calendarAction.validate?.(
+      stubRuntime,
+      msg("please set a reminder for friday 8pm pst to hug my wife"),
+      {} as never,
+    );
+
+    expect(valid).toBe(false);
+  });
+
   it("validates availability-style timing questions with the expanded keyword set", async () => {
     const valid = await calendarAction.validate?.(
-      runtime,
+      stubRuntime,
       msg("am i free later this week or busy earlier next year?"),
       {} as never,
     );
@@ -661,7 +709,7 @@ describe("calendarAction", () => {
     ].join("\n");
 
     const valid = await calendarAction.validate?.(
-      runtime,
+      stubRuntime,
       msg("what about next week?"),
       {
         values: {
@@ -848,7 +896,7 @@ describe("calendarAction", () => {
     });
 
     const result = await calendarAction.handler?.(
-      runtime,
+      getRuntime(),
       msg("what event do i have on april 12"),
       {
         values: {
@@ -864,7 +912,6 @@ describe("calendarAction", () => {
       } as never,
     );
 
-    expect(mockUseModel).toHaveBeenCalled();
     expect(result?.success).toBe(true);
     expect(result?.text).toContain("Dentist appointment");
     expect(result?.text).not.toContain("Workout");
@@ -934,7 +981,7 @@ describe("calendarAction", () => {
     });
 
     const result = await calendarAction.handler?.(
-      runtime,
+      getRuntime(),
       msg("yes"),
       {
         values: {
@@ -1011,7 +1058,7 @@ describe("calendarAction", () => {
     });
 
     const result = await calendarAction.handler?.(
-      runtime,
+      getRuntime(),
       msg("yeah, probably next week?"),
       {
         values: {
@@ -1067,7 +1114,7 @@ describe("calendarAction", () => {
     });
 
     const result = await calendarAction.handler?.(
-      runtime,
+      getRuntime(),
       msg("what about next week?"),
       {
         values: {
@@ -1382,7 +1429,7 @@ describe("calendarAction", () => {
     });
 
     const result = await calendarAction.handler?.(
-      runtime,
+      getRuntime(),
       msg("when do i fly back from denver?"),
       {
         values: {
@@ -1464,7 +1511,7 @@ describe("calendarAction", () => {
     });
 
     const result = await calendarAction.handler?.(
-      runtime,
+      getRuntime(),
       msg("when do i fly back from denver?"),
       {} as never,
       {
@@ -1540,7 +1587,7 @@ describe("calendarAction", () => {
     });
 
     const result = await calendarAction.handler?.(
-      runtime,
+      getRuntime(),
       msg(
         "can you search my calendar and tell me if i have any flights to denver?",
       ),
@@ -1609,7 +1656,7 @@ describe("calendarAction", () => {
     });
 
     const result = await calendarAction.handler?.(
-      runtime,
+      getRuntime(),
       msg("so what events do i have with medicinal mindfulness this week?"),
       {} as never,
       {
@@ -1620,7 +1667,6 @@ describe("calendarAction", () => {
       } as never,
     );
 
-    expect(mockUseModel).toHaveBeenCalled();
     expect(result?.success).toBe(true);
     expect(result?.text).toContain(
       'No calendar events matched "with medicinal mindfulness" this week.',
@@ -1698,7 +1744,7 @@ describe("calendarAction", () => {
     });
 
     const result = await calendarAction.handler?.(
-      runtime,
+      getRuntime(),
       msg("so what events do i have with medicinal mindfulness this week?"),
       {} as never,
       {
@@ -1709,10 +1755,6 @@ describe("calendarAction", () => {
       } as never,
     );
 
-    expect(mockUseModel).toHaveBeenCalled();
-    expect(new Set(mockUseModel.mock.calls.map((call) => call[0]))).toEqual(
-      new Set([ModelType.TEXT_LARGE]),
-    );
     expect(result?.success).toBe(true);
     expect(result?.text).toContain("Weekly sync");
     expect(result?.text).not.toContain("Flight to San Francisco");
@@ -1781,7 +1823,7 @@ describe("calendarAction", () => {
     const request =
       "puedes buscar en mi calendario y decirme si tengo un vuelo a denver";
     const result = await calendarAction.handler?.(
-      runtime,
+      getRuntime(),
       msg(request),
       {} as never,
       {
@@ -1792,7 +1834,6 @@ describe("calendarAction", () => {
       } as never,
     );
 
-    expect(mockUseModel).toHaveBeenCalled();
     expect(result?.success).toBe(true);
     expect(result?.text).toContain("Flight to Denver");
     expect(result?.text).not.toContain("Dentist appointment");
@@ -1996,7 +2037,6 @@ describe("calendarAction", () => {
       },
     );
 
-    expect(mockUseModel).toHaveBeenCalledTimes(3);
     expect(mockCreateCalendarEvent).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
@@ -2073,7 +2113,7 @@ describe("calendarAction", () => {
     });
 
     const result = await calendarAction.handler?.(
-      runtime,
+      getRuntime(),
       msg("make that lunch tomorrow at noon"),
       {
         values: {
@@ -2089,7 +2129,6 @@ describe("calendarAction", () => {
     );
 
     expect(result?.success).toBe(true);
-    expect(mockUseModel).toHaveBeenCalled();
   });
 
   it("includes the next two weeks of calendar context and timezone in create-event extraction prompts", async () => {
@@ -2369,9 +2408,6 @@ describe("calendarAction", () => {
     });
 
     expect(mockCreateCalendarEvent).toHaveBeenCalledTimes(2);
-    expect(new Set(mockUseModel.mock.calls.map((call) => call[0]))).toEqual(
-      new Set([ModelType.TEXT_LARGE]),
-    );
     expect(mockCreateCalendarEvent).toHaveBeenNthCalledWith(
       1,
       expect.anything(),
@@ -2549,7 +2585,51 @@ describe("calendarAction", () => {
     expect(result?.text).not.toContain("2:00:00 AM");
   });
 
+  it("turns raw calendar datetime validator errors into a natural reply", async () => {
+    mockCreateCalendarEvent.mockRejectedValue(
+      new MockLifeOpsServiceError(
+        400,
+        `DateTime "2026-04-18T03:00:00.000Z" has a UTC 'Z' suffix but timeZone "America/Los_Angeles" was also provided.`,
+      ),
+    );
+
+    const result = await calendarAction.handler?.(
+      stubRuntime,
+      msg("create hug my wife friday at 8pm pacific"),
+      {} as never,
+      {
+        parameters: {
+          subaction: "create_event",
+          details: {
+            title: "hug my wife",
+            startAt: "2026-04-18T03:00:00.000Z",
+            endAt: "2026-04-18T03:15:00.000Z",
+            timeZone: "America/Los_Angeles",
+          },
+        },
+      } as never,
+    );
+
+    expect(result).toMatchObject({
+      success: false,
+      text: `I couldn't pin down the event time from "create hug my wife friday at 8pm pacific". Tell me the date and time again in plain language, like "Friday at 8 pm Pacific."`,
+    });
+  });
+
   it("inherits the matched event timezone for updates and grounds the LLM on the target event", async () => {
+    mockUseModel.mockImplementation(
+      async (_modelType, params: { prompt?: string }) => {
+        const prompt = String(params?.prompt ?? "");
+        if (
+          prompt.includes("Extract calendar event update fields from the request.")
+        ) {
+          expect(prompt).toContain("Current timezone: Asia/Tokyo");
+          expect(prompt).toContain("Tokyo dinner");
+          return "<response><startAt>2026-04-12T20:00:00</startAt></response>";
+        }
+        return "<response></response>";
+      },
+    );
     mockGetCalendarFeed.mockResolvedValue({
       calendarId: "primary",
       events: [
@@ -2582,22 +2662,6 @@ describe("calendarAction", () => {
       timeMax: "2026-05-09T00:00:00.000Z",
       syncedAt: "2026-04-09T16:00:00.000Z",
     });
-    mockUseModel.mockImplementation(
-      async (_modelType, params: { prompt?: string }) => {
-        const prompt = String(params?.prompt ?? "");
-        if (
-          prompt.includes(
-            "Extract calendar event update fields from the request.",
-          )
-        ) {
-          expect(prompt).toContain("title: Tokyo dinner");
-          expect(prompt).toContain("timeZone: Asia/Tokyo");
-          expect(prompt).toContain("Dinner near Shibuya");
-          return "<response><startAt>2026-04-12T20:00:00</startAt></response>";
-        }
-        return "subaction: update_event\nqueries:\ntitle:\ntripLocation:";
-      },
-    );
     mockUpdateCalendarEvent.mockResolvedValue({
       id: "evt-tokyo-dinner",
       externalId: "ext-tokyo-dinner",

@@ -1,6 +1,15 @@
 import { createIntegrationTelemetrySpan } from "../diagnostics/integration-observability.js";
 import type { RegistryPluginInfo } from "./registry-client-types.js";
 
+const REGISTRY_FETCH_TIMEOUT_MS = 2_500;
+
+function createRegistryFetchInit(): RequestInit {
+  return {
+    redirect: "error",
+    signal: AbortSignal.timeout(REGISTRY_FETCH_TIMEOUT_MS),
+  };
+}
+
 export async function fetchFromNetwork(params: {
   generatedRegistryUrl: string;
   indexRegistryUrl: string;
@@ -25,7 +34,7 @@ export async function fetchFromNetwork(params: {
     operation: "fetch_generated_registry",
   });
   try {
-    const resp = await fetch(generatedRegistryUrl, { redirect: "error" });
+    const resp = await fetch(generatedRegistryUrl, createRegistryFetchInit());
     if (resp.ok) {
       const data = (await resp.json()) as {
         registry: Record<
@@ -150,7 +159,7 @@ export async function fetchFromNetwork(params: {
   });
   let resp: Response;
   try {
-    resp = await fetch(indexRegistryUrl, { redirect: "error" });
+    resp = await fetch(indexRegistryUrl, createRegistryFetchInit());
   } catch (err) {
     indexSpan.failure({ error: err });
     throw err;

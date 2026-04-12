@@ -35,6 +35,7 @@ const { mockClientFns, mockUseApp } = vi.hoisted(() => ({
   mockClientFns: {
     getCodingAgentStatus: vi.fn(async () => null),
     listApps: vi.fn(),
+    refreshRegistry: vi.fn(),
     listInstalledApps: vi.fn(),
     listAppRuns: vi.fn(),
     launchApp: vi.fn(),
@@ -316,6 +317,7 @@ describe("AppsView", () => {
       undefined,
     );
     mockClientFns.listApps.mockReset();
+    mockClientFns.refreshRegistry.mockReset();
     mockClientFns.listInstalledApps.mockReset();
     mockClientFns.listAppRuns.mockReset();
     mockClientFns.launchApp.mockReset();
@@ -442,6 +444,7 @@ describe("AppsView", () => {
       );
     mockClientFns.listInstalledApps.mockResolvedValue([]);
     mockClientFns.listAppRuns.mockResolvedValue([]);
+    mockClientFns.refreshRegistry.mockResolvedValue(undefined);
     originalMatchMedia = window.matchMedia;
   });
 
@@ -1193,6 +1196,7 @@ describe("AppsView", () => {
     await act(async () => {
       await findButtonByText(root, "common.refresh").props.onClick();
     });
+    expect(mockClientFns.refreshRegistry).toHaveBeenCalledTimes(1);
     expect(mockClientFns.listApps).toHaveBeenCalledTimes(2);
   });
 

@@ -1,24 +1,22 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { RegistryPluginInfo } from "./registry-client-types.js";
 
-const readFileMock = vi.fn();
-const writeFileMock = vi.fn();
-const mkdirMock = vi.fn();
-const unlinkMock = vi.fn();
+/**
+ * registry-client tests using real filesystem operations for caching.
+ *
+ * The network fetch and local-scan modules are still mocked because they
+ * depend on external services (GitHub registry) and workspace directory
+ * structures that are impractical to set up in a unit test.
+ */
+
 const fetchFromNetworkMock = vi.fn();
 const applyLocalWorkspaceAppsMock = vi.fn();
 const applyNodeModulePluginsMock = vi.fn();
 const mergeCustomEndpointsMock = vi.fn();
 const loadElizaConfigMock = vi.fn();
-
-vi.mock("node:fs/promises", () => ({
-  default: {
-    readFile: readFileMock,
-    writeFile: writeFileMock,
-    mkdir: mkdirMock,
-    unlink: unlinkMock,
-  },
-}));
 
 vi.mock("@elizaos/core", () => ({
   logger: {
@@ -99,20 +97,35 @@ function createPluginInfo(
   };
 }
 
+let tmpStateDir: string;
+
+async function waitFor(
+  predicate: () => boolean,
+  timeoutMs = 1_000,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (predicate()) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error("Timed out waiting for condition");
+}
+
 describe("registry-client", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
 
-    delete process.env.MILADY_STATE_DIR;
+    // Use a real temp dir for the state/cache
+    tmpStateDir = fs.mkdtempSync(path.join(os.tmpdir(), "milady-registry-test-"));
+
+    process.env.MILADY_STATE_DIR = tmpStateDir;
     delete process.env.ELIZA_STATE_DIR;
     delete process.env.MILADY_NAMESPACE;
     delete process.env.ELIZA_NAMESPACE;
 
-    readFileMock.mockRejectedValue(new Error("ENOENT"));
-    writeFileMock.mockResolvedValue(undefined);
-    mkdirMock.mockResolvedValue(undefined);
-    unlinkMock.mockResolvedValue(undefined);
     fetchFromNetworkMock.mockResolvedValue(new Map());
     applyLocalWorkspaceAppsMock.mockResolvedValue(undefined);
     applyNodeModulePluginsMock.mockResolvedValue(undefined);
@@ -120,8 +133,16 @@ describe("registry-client", () => {
     loadElizaConfigMock.mockReturnValue({});
   });
 
+  afterEach(() => {
+    try {
+      fs.rmSync(tmpStateDir, { recursive: true, force: true });
+    } catch {
+      // ignore cleanup errors
+    }
+    delete process.env.MILADY_STATE_DIR;
+  });
+
   it("stores the registry cache under the Milady state dir", async () => {
-    process.env.MILADY_STATE_DIR = "/tmp/milady-state";
     fetchFromNetworkMock.mockResolvedValue(
       new Map([
         [
@@ -137,21 +158,41 @@ describe("registry-client", () => {
     const plugins = await getRegistryPlugins();
 
     expect(plugins.has("@elizaos/app-2004scape")).toBe(true);
-    expect(readFileMock).toHaveBeenCalledWith(
-      "/tmp/milady-state/cache/registry.json",
-      "utf-8",
+
+    // Verify the cache file was actually written to the real filesystem
+    const cachePath = path.join(tmpStateDir, "cache", "registry.json");
+    await waitFor(() => fs.existsSync(cachePath));
+    expect(fs.existsSync(cachePath)).toBe(true);
+    const cacheContent = JSON.parse(fs.readFileSync(cachePath, "utf-8"));
+    expect(cacheContent.plugins).toBeDefined();
+  });
+
+  it("falls back to local discovery when the network registry is unavailable", async () => {
+    fetchFromNetworkMock.mockRejectedValue(new Error("timed out"));
+    applyLocalWorkspaceAppsMock.mockImplementation(
+      async (plugins: Map<string, RegistryPluginInfo>) => {
+        plugins.set(
+          "@miladyai/app-local-only",
+          createPluginInfo("@miladyai/app-local-only", {
+            displayName: "Local Only",
+          }),
+        );
+      },
     );
-    expect(writeFileMock).toHaveBeenCalledWith(
-      "/tmp/milady-state/cache/registry.json",
-      expect.any(String),
-      "utf-8",
-    );
+
+    const { getRegistryPlugins } = await import("./registry-client.js");
+    const plugins = await getRegistryPlugins();
+
+    expect(plugins.has("@miladyai/app-local-only")).toBe(true);
+    expect(mergeCustomEndpointsMock).toHaveBeenCalled();
   });
 
   it("filters removed apps from cache, local discovery, and custom endpoint merges", async () => {
-    process.env.MILADY_STATE_DIR = "/tmp/milady-state";
-
-    readFileMock.mockResolvedValue(
+    // Pre-seed a cache file on the real filesystem
+    const cacheDir = path.join(tmpStateDir, "cache");
+    fs.mkdirSync(cacheDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(cacheDir, "registry.json"),
       JSON.stringify({
         fetchedAt: Date.now(),
         plugins: [
@@ -170,6 +211,7 @@ describe("registry-client", () => {
           ],
         ],
       }),
+      "utf-8",
     );
 
     applyLocalWorkspaceAppsMock.mockImplementation(
@@ -210,14 +252,15 @@ describe("registry-client", () => {
       "@elizaos/app-babylon",
     ]);
 
-    expect(writeFileMock).toHaveBeenCalledWith(
-      "/tmp/milady-state/cache/registry.json",
-      expect.any(String),
-      "utf-8",
-    );
-    const cachePayload = JSON.parse(
-      writeFileMock.mock.calls[0][1] as string,
-    ) as {
+    // Verify the updated cache was written back to disk
+    const cachePath = path.join(tmpStateDir, "cache", "registry.json");
+    await waitFor(() => {
+      const cachePayload = JSON.parse(fs.readFileSync(cachePath, "utf-8")) as {
+        plugins: Array<[string, RegistryPluginInfo]>;
+      };
+      return !cachePayload.plugins.some(([name]) => name === "@elizaos/app-agent-town");
+    });
+    const cachePayload = JSON.parse(fs.readFileSync(cachePath, "utf-8")) as {
       plugins: Array<[string, RegistryPluginInfo]>;
     };
     expect(cachePayload.plugins.map(([name]) => name)).toEqual([

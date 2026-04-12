@@ -1,41 +1,63 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-const { mockCheckSenderRole } = vi.hoisted(() => ({
-  mockCheckSenderRole: vi.fn(),
-}));
-
-vi.mock("@elizaos/core/roles", () => ({
-  checkSenderRole: mockCheckSenderRole,
-  resolveCanonicalOwnerIdForMessage: vi.fn().mockResolvedValue(null),
-}));
-
-vi.mock("@elizaos/core", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@elizaos/core")>();
-  return {
-    ...actual,
-    logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
-  };
-});
-
+import type { IAgentRuntime, Memory, UUID } from "@elizaos/core";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { hasRoleAccess } from "./access";
 
-function makeRuntime(agentId = "agent-1") {
-  return { agentId, getSetting: vi.fn() } as never;
+/**
+ * Integration test for hasRoleAccess — no module mocks.
+ *
+ * Uses the real checkSenderRole from @elizaos/core/roles, backed by minimal
+ * runtime objects that implement the interface methods it needs (getRoom,
+ * getWorld, getSetting, getEntityById).
+ */
+
+type RoleName = "OWNER" | "ADMIN" | "USER" | "GUEST";
+
+function makeRuntime(
+  agentId = "agent-1",
+  opts?: {
+    worldRoles?: Record<string, RoleName>;
+    worldOwnerId?: string;
+    hasWorld?: boolean;
+  },
+) {
+  const worldId = "world-1";
+  const worldRoles = opts?.worldRoles ?? {};
+  const hasWorld = opts?.hasWorld ?? true;
+  const worldOwnerId = opts?.worldOwnerId;
+
+  return {
+    agentId,
+    getRoom: vi.fn().mockResolvedValue(
+      hasWorld ? { id: "room-1", worldId } : null,
+    ),
+    getWorld: vi.fn().mockResolvedValue(
+      hasWorld
+        ? {
+            id: worldId,
+            metadata: {
+              ...(worldOwnerId
+                ? { ownership: { ownerId: worldOwnerId } }
+                : {}),
+              roles: worldRoles,
+            },
+          }
+        : null,
+    ),
+    getSetting: vi.fn().mockReturnValue(null),
+    getEntityById: vi.fn().mockResolvedValue(null),
+    getRelationships: vi.fn().mockResolvedValue([]),
+  } as unknown as IAgentRuntime;
 }
 
 function makeMessage(entityId = "user-1", roomId = "room-1") {
   return {
-    entityId,
-    roomId,
+    entityId: entityId as UUID,
+    roomId: roomId as UUID,
     content: { text: "test", source: "test" },
-  } as never;
+  } as Memory;
 }
 
 describe("hasRoleAccess", () => {
-  beforeEach(() => {
-    mockCheckSenderRole.mockReset();
-  });
-
   afterEach(() => {
     vi.restoreAllMocks();
   });
@@ -44,7 +66,6 @@ describe("hasRoleAccess", () => {
     expect(await hasRoleAccess(makeRuntime(), makeMessage(), "GUEST")).toBe(
       true,
     );
-    expect(mockCheckSenderRole).not.toHaveBeenCalled();
   });
 
   it("returns true when runtime is undefined (no context)", async () => {
@@ -62,65 +83,84 @@ describe("hasRoleAccess", () => {
   });
 
   it("returns true when checkSenderRole returns null (no world context)", async () => {
-    mockCheckSenderRole.mockResolvedValue(null);
+    // No world means checkSenderRole returns null => lenient fallback allows through
+    const runtime = makeRuntime("agent-1", { hasWorld: false });
     expect(
-      await hasRoleAccess(makeRuntime(), makeMessage(), "ADMIN"),
+      await hasRoleAccess(runtime, makeMessage(), "ADMIN"),
     ).toBe(true);
   });
 
   it("allows OWNER when ADMIN is required", async () => {
-    mockCheckSenderRole.mockResolvedValue({ role: "OWNER" });
+    const runtime = makeRuntime("agent-1", {
+      worldRoles: { "user-1": "OWNER" },
+    });
     expect(
-      await hasRoleAccess(makeRuntime(), makeMessage(), "ADMIN"),
+      await hasRoleAccess(runtime, makeMessage(), "ADMIN"),
     ).toBe(true);
   });
 
   it("allows ADMIN when ADMIN is required", async () => {
-    mockCheckSenderRole.mockResolvedValue({ role: "ADMIN" });
+    const runtime = makeRuntime("agent-1", {
+      worldRoles: { "user-1": "ADMIN" },
+    });
     expect(
-      await hasRoleAccess(makeRuntime(), makeMessage(), "ADMIN"),
+      await hasRoleAccess(runtime, makeMessage(), "ADMIN"),
     ).toBe(true);
   });
 
   it("blocks USER when ADMIN is required", async () => {
-    mockCheckSenderRole.mockResolvedValue({ role: "USER" });
+    const runtime = makeRuntime("agent-1", {
+      worldRoles: { "user-1": "USER" },
+    });
     expect(
-      await hasRoleAccess(makeRuntime(), makeMessage(), "ADMIN"),
+      await hasRoleAccess(runtime, makeMessage(), "ADMIN"),
     ).toBe(false);
   });
 
   it("blocks GUEST when USER is required", async () => {
-    mockCheckSenderRole.mockResolvedValue({ role: "GUEST" });
+    const runtime = makeRuntime("agent-1", {
+      worldRoles: { "user-1": "GUEST" },
+    });
     expect(
-      await hasRoleAccess(makeRuntime(), makeMessage(), "USER"),
+      await hasRoleAccess(runtime, makeMessage(), "USER"),
     ).toBe(false);
   });
 
   it("blocks GUEST when OWNER is required", async () => {
-    mockCheckSenderRole.mockResolvedValue({ role: "GUEST" });
+    const runtime = makeRuntime("agent-1", {
+      worldRoles: { "user-1": "GUEST" },
+    });
     expect(
-      await hasRoleAccess(makeRuntime(), makeMessage(), "OWNER"),
+      await hasRoleAccess(runtime, makeMessage(), "OWNER"),
     ).toBe(false);
   });
 
   it("allows USER when USER is required", async () => {
-    mockCheckSenderRole.mockResolvedValue({ role: "USER" });
+    const runtime = makeRuntime("agent-1", {
+      worldRoles: { "user-1": "USER" },
+    });
     expect(
-      await hasRoleAccess(makeRuntime(), makeMessage(), "USER"),
+      await hasRoleAccess(runtime, makeMessage(), "USER"),
     ).toBe(true);
   });
 
   it("allows OWNER when OWNER is required", async () => {
-    mockCheckSenderRole.mockResolvedValue({ role: "OWNER" });
+    const runtime = makeRuntime("agent-1", {
+      worldRoles: { "user-1": "OWNER" },
+    });
     expect(
-      await hasRoleAccess(makeRuntime(), makeMessage(), "OWNER"),
+      await hasRoleAccess(runtime, makeMessage(), "OWNER"),
     ).toBe(true);
   });
 
-  it("returns false when checkSenderRole throws", async () => {
-    mockCheckSenderRole.mockRejectedValue(new Error("boom"));
+  it("returns false when runtime methods throw", async () => {
+    const runtime = {
+      agentId: "agent-1",
+      getRoom: vi.fn().mockRejectedValue(new Error("boom")),
+      getSetting: vi.fn().mockReturnValue(null),
+    } as unknown as IAgentRuntime;
     expect(
-      await hasRoleAccess(makeRuntime(), makeMessage(), "ADMIN"),
+      await hasRoleAccess(runtime, makeMessage(), "ADMIN"),
     ).toBe(false);
   });
 });

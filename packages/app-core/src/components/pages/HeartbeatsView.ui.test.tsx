@@ -233,7 +233,7 @@ describe("HeartbeatsView UI states", () => {
     expect(detailPanels).toHaveLength(0);
   });
 
-  it("uses the direct split sizing for sidebar and main content", async () => {
+  it("uses the shared page shell sizing for sidebar and main content", async () => {
     mockUseApp.mockReturnValue(makeAppState());
 
     let tree: TestRenderer.ReactTestRenderer | undefined;
@@ -249,7 +249,8 @@ describe("HeartbeatsView UI states", () => {
     expect(String(shell?.props.className)).toContain("min-w-0");
     expect(String(aside?.props.className)).toContain("mt-4");
     expect(String(aside?.props.className)).toContain("!w-[18.5rem]");
-    expect(String(main?.props.className)).toContain("p-0");
+    expect(String(main?.props.className)).toContain("px-4");
+    expect(String(main?.props.className)).toContain("sm:px-6");
   });
 
   it("reuses the shared sidebar collapse flow and persists the rail state", async () => {

@@ -485,6 +485,7 @@ describe("life-ops managed Google connector", () => {
   it("starts managed auth, syncs calendar and gmail, sends replies, creates events, and disconnects cleanly", async () => {
     let connected = false;
     const createdEventIds: string[] = [];
+    const sentMessages: string[] = [];
     const sentSubjects: string[] = [];
 
     fetchMock.mockImplementation(async (input, init) => {
@@ -706,6 +707,21 @@ describe("life-ops managed Google connector", () => {
       }
 
       if (
+        url ===
+          "https://cloud.example/api/v1/milady/google/gmail/message-send" &&
+        method === "POST"
+      ) {
+        const body = JSON.parse(String(init?.body ?? "{}")) as Record<
+          string,
+          unknown
+        >;
+        expect(body.side).toBe("owner");
+        expect(body.to).toEqual(["operator@example.com"]);
+        sentMessages.push(String(body.subject));
+        return jsonResponse({ ok: true });
+      }
+
+      if (
         url === "https://cloud.example/api/v1/milady/google/gmail/reply-send" &&
         method === "POST"
       ) {
@@ -851,6 +867,22 @@ describe("life-ops managed Google connector", () => {
     expect(sendRes.data.ok).toBe(true);
     expect(sentSubjects).toEqual(["Project sync"]);
 
+    const messageSendRes = await req(
+      port,
+      "POST",
+      "/api/lifeops/gmail/message-send",
+      {
+        mode: "cloud_managed",
+        to: ["operator@example.com"],
+        subject: "Launch status",
+        bodyText: "Reviewing it now.",
+        confirmSend: true,
+      },
+    );
+    expect(messageSendRes.status).toBe(200);
+    expect(messageSendRes.data.ok).toBe(true);
+    expect(sentMessages).toEqual(["Launch status"]);
+
     const repository = new LifeOpsRepository(runtime);
     const calendarEvents = await repository.listCalendarEvents(
       "lifeops-google-managed-agent",
@@ -923,10 +955,7 @@ describe("life-ops managed Google connector", () => {
             email: "founder@example.com",
             name: "Founder Example",
           },
-          grantedCapabilities: [
-            "google.basic_identity",
-            "google.gmail.triage",
-          ],
+          grantedCapabilities: ["google.basic_identity", "google.gmail.triage"],
           grantedScopes: [
             "openid",
             "email",
@@ -1016,10 +1045,7 @@ describe("life-ops managed Google connector", () => {
             email: "founder@example.com",
             name: "Founder Example",
           },
-          grantedCapabilities: [
-            "google.basic_identity",
-            "google.gmail.triage",
-          ],
+          grantedCapabilities: ["google.basic_identity", "google.gmail.triage"],
           grantedScopes: [
             "openid",
             "email",
@@ -1299,7 +1325,9 @@ describe("life-ops managed Google connector", () => {
     expect(relinkedStatusRes.data.connected).toBe(true);
     expect(relinkedStatusRes.data.reason).toBe("connected");
     expect(relinkedStatusRes.data.grant.metadata.authState ?? null).toBeNull();
-    expect(relinkedStatusRes.data.grant.metadata.lastAuthError ?? null).toBeNull();
+    expect(
+      relinkedStatusRes.data.grant.metadata.lastAuthError ?? null,
+    ).toBeNull();
 
     const feedAfterRelinkRes = await req(
       port,

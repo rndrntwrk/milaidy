@@ -131,8 +131,10 @@ describe("applySubscriptionCredentials", () => {
     ).resolves.toBeUndefined();
   });
 
-  test("applies Anthropic subscription tokens to runtime env", async () => {
-    // Set up a mock credential file for anthropic-subscription
+  test("does NOT apply Anthropic subscription tokens to runtime env (TOS restriction)", async () => {
+    // Anthropic subscription tokens (sk-ant-oat*) are restricted to the
+    // Claude Code CLI by TOS. They must not be set as ANTHROPIC_API_KEY
+    // for the main runtime — they only flow to spawned coding-agent CLIs.
     const authDir = require("node:path").join(
       require("node:os").homedir(),
       ".eliza",
@@ -157,6 +159,6 @@ describe("applySubscriptionCredentials", () => {
 
     await applySubscriptionCredentials();
 
-    expect(process.env.ANTHROPIC_API_KEY).toBe("sk-ant-oat01-test-token");
+    expect(process.env.ANTHROPIC_API_KEY).toBeUndefined();
   });
 });

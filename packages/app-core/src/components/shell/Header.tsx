@@ -38,6 +38,7 @@ const NAV_LABEL_I18N_KEY: Record<string, string> = {
 
 interface HeaderProps {
   mobileLeft?: ReactNode;
+  pageRightExtras?: ReactNode;
   transparent?: boolean;
   hideCloudCredits?: boolean;
   tasksEventsPanelOpen?: boolean;
@@ -59,6 +60,7 @@ const HEADER_MOBILE_NAV_BUTTON_INACTIVE_CLASSNAME =
 
 export function Header({
   mobileLeft,
+  pageRightExtras,
   transparent: _transparent = false,
   hideCloudCredits = false,
   tasksEventsPanelOpen = false,
@@ -243,6 +245,7 @@ export function Header({
               themeToggleWrapperTestId="header-theme-toggle-desktop"
               rightExtras={
                 <>
+                  {pageRightExtras}
                   {onToggleTasksPanel ? (
                     <Button
                       size="icon"

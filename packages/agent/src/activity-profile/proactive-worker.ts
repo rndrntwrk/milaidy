@@ -1,5 +1,5 @@
 import type { IAgentRuntime, Task, TaskMetadata, UUID } from "@elizaos/core";
-import { logger, stringToUuid } from "@elizaos/core";
+import { logger, ModelType, parseJSONObjectFromText, stringToUuid } from "@elizaos/core";
 import {
   loadOwnerContactsConfig,
   resolveOwnerContactWithFallback,
@@ -36,6 +36,7 @@ export const PROACTIVE_TASK_NAME = "PROACTIVE_AGENT" as const;
 export const PROACTIVE_TASK_TAGS = ["queue", "repeat", "proactive"] as const;
 export const PROACTIVE_TASK_INTERVAL_MS = 60_000;
 const SEEDING_MIN_IDLE_MS = 15 * 60_000;
+const CALENDAR_PROACTIVE_CLASSIFICATION_HORIZON_DAYS = 21;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -71,6 +72,124 @@ type ProactiveOwnerContact = {
   channelId?: string;
   roomId?: string;
 };
+
+type CalendarEventProactiveDecision = {
+  id: string;
+  shouldCheckIn: boolean;
+  reason?: string | null;
+};
+
+function normalizeCalendarEventProactiveDecisions(
+  parsed: Record<string, unknown> | null,
+  allowedIds: Set<string>,
+): Map<string, CalendarEventProactiveDecision> {
+  const records =
+    Array.isArray(parsed?.events)
+      ? parsed.events
+      : Array.isArray(parsed?.decisions)
+        ? parsed.decisions
+        : Array.isArray(parsed)
+          ? parsed
+          : [];
+  const decisions = new Map<string, CalendarEventProactiveDecision>();
+  for (const item of records) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      continue;
+    }
+    const record = item as Record<string, unknown>;
+    const id =
+      typeof record.id === "string" && record.id.trim().length > 0
+        ? record.id.trim()
+        : null;
+    if (!id || !allowedIds.has(id)) {
+      continue;
+    }
+    decisions.set(id, {
+      id,
+      shouldCheckIn: record.shouldCheckIn === true,
+      reason:
+        typeof record.reason === "string" && record.reason.trim().length > 0
+          ? record.reason.trim()
+          : null,
+    });
+  }
+  return decisions;
+}
+
+export async function classifyCalendarEventsForProactivePlanning(
+  runtime: IAgentRuntime,
+  events: CalendarEventSlim[],
+  timezone: string,
+  now: Date,
+): Promise<Map<string, CalendarEventProactiveDecision> | null> {
+  if (typeof runtime.useModel !== "function") {
+    return null;
+  }
+
+  const horizonMs =
+    now.getTime() +
+    CALENDAR_PROACTIVE_CLASSIFICATION_HORIZON_DAYS * 24 * 60 * 60 * 1000;
+  const candidateEvents = events
+    .filter((event) => {
+      const startMs = Date.parse(event.startAt);
+      return Number.isFinite(startMs) && startMs >= now.getTime() && startMs <= horizonMs;
+    })
+    .sort((left, right) => Date.parse(left.startAt) - Date.parse(right.startAt))
+    .slice(0, 40);
+  if (candidateEvents.length === 0) {
+    return new Map();
+  }
+
+  const prompt = [
+    "Decide which calendar events deserve a proactive check-in or reminder from the assistant.",
+    "Do not use fixed numeric weights. Judge naturally from the event details.",
+    "A proactive check-in should be reserved for events where a gentle heads-up would actually help.",
+    "Meetings, calls, interviews, appointments, therapy, coffee or dinner with people, and other short scheduled social/professional events usually deserve a check-in.",
+    "Hotel stays, flights, travel blocks, reservations, check-in/check-out, passive itinerary items, and long all-day or near-all-day logistics usually do not deserve a check-in.",
+    "If an event would be extremely hard to forget or has no clear actionability, mark shouldCheckIn=false.",
+    "Return only valid JSON with this shape: {\"events\":[{\"id\":\"...\",\"shouldCheckIn\":true|false,\"reason\":\"short reason\"}]}",
+    "",
+    `Current timezone: ${timezone}`,
+    `Current ISO datetime: ${now.toISOString()}`,
+    "Events:",
+    JSON.stringify(
+      candidateEvents.map((event) => ({
+        id: event.id,
+        summary: event.summary,
+        description: event.description ?? "",
+        location: event.location ?? "",
+        startAt: event.startAt,
+        endAt: event.endAt,
+        isAllDay: event.isAllDay,
+        attendeeCount: event.attendeeCount ?? 0,
+        hasConferenceLink: Boolean(event.conferenceLink),
+      })),
+    ),
+  ].join("\n");
+
+  try {
+    const result = await runtime.useModel(ModelType.TEXT_LARGE, { prompt });
+    const raw = typeof result === "string" ? result : "";
+    const parsed = parseJSONObjectFromText(raw);
+    if (!parsed) {
+      return null;
+    }
+    return normalizeCalendarEventProactiveDecisions(
+      parsed,
+      new Set(candidateEvents.map((event) => event.id)),
+    );
+  } catch (error) {
+    logger.warn(
+      {
+        boundary: "activity_profile",
+        operation: "planner_calendar_event_classification",
+        err: error instanceof Error ? error : undefined,
+      },
+      `[proactive] Failed to classify proactive calendar events: ${String(error)}`,
+    );
+    return null;
+  }
+}
 
 export function resolveProactiveDeliverySource(targetPlatform: string): string {
   if (
@@ -402,7 +521,27 @@ async function fetchPlannerContext(
       {},
       now,
     );
+    const rawCalendarEvents: CalendarEventSlim[] = feed.events.map((event) => ({
+      id: event.id,
+      summary: event.title ?? "",
+      startAt: event.startAt,
+      endAt: event.endAt,
+      isAllDay: event.isAllDay,
+      description: event.description ?? "",
+      location: event.location ?? "",
+      attendeeCount: Array.isArray(event.attendees)
+        ? event.attendees.length
+        : 0,
+      conferenceLink: event.conferenceLink ?? null,
+    }));
+    const decisions = await classifyCalendarEventsForProactivePlanning(
+      runtime,
+      rawCalendarEvents,
+      _timezone,
+      now,
+    );
     for (const event of feed.events) {
+      const decision = decisions?.get(event.id) ?? null;
       calendarEvents.push({
         id: event.id,
         summary: event.title ?? "",
@@ -415,6 +554,8 @@ async function fetchPlannerContext(
           ? event.attendees.length
           : 0,
         conferenceLink: event.conferenceLink ?? null,
+        proactiveCheckIn: decision?.shouldCheckIn ?? null,
+        proactiveCheckInReason: decision?.reason ?? null,
       });
     }
   } catch (error) {

@@ -1,38 +1,94 @@
 /**
  * Tests for cloud/reconnect.ts — the ConnectionMonitor.
  *
+ * Uses a local HTTP server with a real ElizaCloudClient instead of mock objects.
+ *
  * Exercises:
  *   - Heartbeat success keeps connection alive
  *   - Consecutive failures trigger disconnect callback
  *   - Auto-reconnect via provision after disconnect
- *   - Exponential backoff during reconnection
  *   - Recovery resets failure counter
- *   - Concurrent reconnect prevention
  */
 
-import { describe, expect, it, vi } from "vitest";
+import http from "node:http";
+import type { AddressInfo } from "node:net";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
-import type { ElizaCloudClient } from "./bridge-client";
+import { ElizaCloudClient } from "./bridge-client";
 import { ConnectionMonitor } from "./reconnect";
 
-type MockCloudClient = ElizaCloudClient & {
-  heartbeat: ReturnType<typeof vi.fn>;
-  provision: ReturnType<typeof vi.fn>;
-};
+// ---------------------------------------------------------------------------
+// Local test server with controllable heartbeat behavior
+// ---------------------------------------------------------------------------
 
-function createMockClient(
-  overrides: Partial<MockCloudClient> = {},
-): MockCloudClient {
-  return {
-    heartbeat: vi.fn().mockResolvedValue(true),
-    provision: vi.fn().mockResolvedValue({ id: "a1", status: "running" }),
-    ...overrides,
-  } as MockCloudClient;
+let server: http.Server;
+let serverPort: number;
+let heartbeatShouldSucceed = true;
+let heartbeatCallCount = 0;
+let heartbeatFailUntil = 0; // fail the first N heartbeats
+
+beforeAll(async () => {
+  server = http.createServer((req, res) => {
+    const url = new URL(req.url ?? "/", "http://127.0.0.1");
+    const respond = (body: Record<string, unknown>, status = 200) => {
+      res.writeHead(status, { "Content-Type": "application/json" });
+      res.end(JSON.stringify(body));
+    };
+
+    // POST /api/v1/eliza/agents/:id/bridge — heartbeat
+    if (url.pathname.match(/\/api\/v1\/eliza\/agents\/[^/]+\/bridge/) && req.method === "POST") {
+      heartbeatCallCount++;
+      if (!heartbeatShouldSucceed || heartbeatCallCount <= heartbeatFailUntil) {
+        res.writeHead(503);
+        res.end("Service unavailable");
+        return;
+      }
+      respond({ result: { ok: true } });
+      return;
+    }
+
+    // POST /api/v1/eliza/agents/:id/provision — reconnect
+    if (url.pathname.match(/\/api\/v1\/eliza\/agents\/[^/]+\/provision/) && req.method === "POST") {
+      respond({
+        success: true,
+        data: { id: "a1", agentName: "TestBot", status: "running" },
+      });
+      return;
+    }
+
+    res.writeHead(404);
+    res.end("Not found");
+  });
+
+  await new Promise<void>((resolve) => {
+    server.listen(0, "127.0.0.1", () => resolve());
+  });
+  serverPort = (server.address() as AddressInfo).port;
+});
+
+afterEach(() => {
+  heartbeatShouldSucceed = true;
+  heartbeatCallCount = 0;
+  heartbeatFailUntil = 0;
+});
+
+afterAll(async () => {
+  await new Promise<void>((resolve, reject) => {
+    server.close((err) => (err ? reject(err) : resolve()));
+  });
+});
+
+function createClient(): ElizaCloudClient {
+  return new ElizaCloudClient(`http://127.0.0.1:${serverPort}`, "test-key");
 }
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
 
 describe("ConnectionMonitor", () => {
   it("sends heartbeats at configured interval", async () => {
-    const client = createMockClient();
+    const client = createClient();
     const monitor = new ConnectionMonitor(
       client,
       "a1",
@@ -51,14 +107,12 @@ describe("ConnectionMonitor", () => {
     }
 
     // Should have fired at least 2 heartbeats in 80ms with 30ms interval
-    expect(client.heartbeat.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(heartbeatCallCount).toBeGreaterThanOrEqual(2);
   });
 
   it("calls onDisconnect after maxFailures consecutive heartbeat failures", async () => {
-    const client = createMockClient({
-      heartbeat: vi.fn().mockResolvedValue(false),
-      provision: vi.fn().mockResolvedValue({ id: "a1" }),
-    });
+    heartbeatShouldSucceed = false;
+    const client = createClient();
     const onDisconnect = vi.fn();
 
     const monitor = new ConnectionMonitor(
@@ -82,14 +136,9 @@ describe("ConnectionMonitor", () => {
   });
 
   it("calls onReconnect after successful re-provision", async () => {
-    const client = createMockClient({
-      heartbeat: vi
-        .fn()
-        .mockResolvedValueOnce(false)
-        .mockResolvedValueOnce(false)
-        .mockResolvedValue(true),
-      provision: vi.fn().mockResolvedValue({ id: "a1", status: "running" }),
-    });
+    // Fail first 2 heartbeats, then succeed
+    heartbeatFailUntil = 2;
+    const client = createClient();
     const onReconnect = vi.fn();
 
     const monitor = new ConnectionMonitor(
@@ -113,14 +162,8 @@ describe("ConnectionMonitor", () => {
   });
 
   it("reports status changes via onStatusChange", async () => {
-    const client = createMockClient({
-      heartbeat: vi
-        .fn()
-        .mockResolvedValueOnce(false)
-        .mockResolvedValueOnce(false)
-        .mockResolvedValue(true),
-      provision: vi.fn().mockResolvedValue({ id: "a1" }),
-    });
+    heartbeatFailUntil = 2;
+    const client = createClient();
     const statuses: string[] = [];
 
     const monitor = new ConnectionMonitor(
@@ -150,7 +193,7 @@ describe("ConnectionMonitor", () => {
   });
 
   it("isMonitoring reflects lifecycle", () => {
-    const monitor = new ConnectionMonitor(createMockClient(), "a1", {
+    const monitor = new ConnectionMonitor(createClient(), "a1", {
       onDisconnect: vi.fn(),
       onReconnect: vi.fn(),
     });
@@ -163,7 +206,7 @@ describe("ConnectionMonitor", () => {
   });
 
   it("stop resets internal state", () => {
-    const monitor = new ConnectionMonitor(createMockClient(), "a1", {
+    const monitor = new ConnectionMonitor(createClient(), "a1", {
       onDisconnect: vi.fn(),
       onReconnect: vi.fn(),
     });

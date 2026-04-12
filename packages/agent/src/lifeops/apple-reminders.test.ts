@@ -25,8 +25,10 @@ vi.mock("node:util", async () => {
 import {
   buildNativeAppleReminderMetadata,
   createNativeAppleReminderLikeItem,
+  deleteNativeAppleReminderLikeItem,
   NATIVE_APPLE_REMINDER_METADATA_KEY,
   readNativeAppleReminderMetadata,
+  updateNativeAppleReminderLikeItem,
 } from "./apple-reminders";
 
 describe("apple reminders helpers", () => {
@@ -45,6 +47,7 @@ describe("apple reminders helpers", () => {
   it("round-trips native Apple reminder metadata", () => {
     const metadata = buildNativeAppleReminderMetadata({
       kind: "alarm",
+      reminderId: "native-reminder-1",
       source: "llm",
     });
 
@@ -52,12 +55,14 @@ describe("apple reminders helpers", () => {
       [NATIVE_APPLE_REMINDER_METADATA_KEY]: {
         kind: "alarm",
         provider: "apple_reminders",
+        reminderId: "native-reminder-1",
         source: "llm",
       },
     });
     expect(readNativeAppleReminderMetadata(metadata)).toEqual({
       kind: "alarm",
       provider: "apple_reminders",
+      reminderId: "native-reminder-1",
       source: "llm",
     });
   });
@@ -146,6 +151,64 @@ describe("apple reminders helpers", () => {
     },
   );
 
+  it.runIf(process.platform === "darwin")(
+    "updates an existing native Apple reminder",
+    async () => {
+      const result = await updateNativeAppleReminderLikeItem({
+        reminderId: "native-reminder-1",
+        kind: "alarm",
+        title: "Wake up",
+        dueAt: "2026-04-12T15:00:00.000Z",
+        notes: "Don't oversleep.",
+      });
+
+      expect(result).toEqual({
+        ok: true,
+        provider: "apple_reminders",
+        reminderId: "native-reminder-1",
+      });
+      expect(childProcessMocks.execFileAsync).toHaveBeenCalledWith(
+        "/usr/bin/osascript",
+        expect.arrayContaining([
+          "-e",
+          'tell application "Reminders"',
+          "native-reminder-1",
+          "Wake up",
+          expect.stringContaining("Don't oversleep."),
+          "2026",
+          "4",
+          "12",
+          "32400",
+          "1",
+        ]),
+        { timeout: 30_000 },
+      );
+    },
+  );
+
+  it.runIf(process.platform === "darwin")(
+    "deletes an existing native Apple reminder",
+    async () => {
+      const result = await deleteNativeAppleReminderLikeItem(
+        "native-reminder-1",
+      );
+
+      expect(result).toEqual({
+        ok: true,
+        provider: "apple_reminders",
+      });
+      expect(childProcessMocks.execFileAsync).toHaveBeenCalledWith(
+        "/usr/bin/osascript",
+        expect.arrayContaining([
+          "-e",
+          'tell application "Reminders"',
+          "native-reminder-1",
+        ]),
+        { timeout: 30_000 },
+      );
+    },
+  );
+
   it.runIf(process.platform !== "darwin")(
     "returns unsupported_platform away from macOS",
     async () => {
@@ -159,6 +222,33 @@ describe("apple reminders helpers", () => {
         ok: false,
         provider: "apple_reminders",
         error: "Native Apple reminders are only available on macOS.",
+        skippedReason: "unsupported_platform",
+      });
+      expect(childProcessMocks.execFileAsync).not.toHaveBeenCalled();
+    },
+  );
+
+  it.runIf(process.platform !== "darwin")(
+    "returns unsupported_platform for update and delete away from macOS",
+    async () => {
+      const updateResult = await updateNativeAppleReminderLikeItem({
+        reminderId: "native-reminder-1",
+        kind: "reminder",
+        title: "Call mom",
+        dueAt: "2026-04-12T15:00:00.000Z",
+      });
+      const deleteResult = await deleteNativeAppleReminderLikeItem(
+        "native-reminder-1",
+      );
+
+      expect(updateResult).toMatchObject({
+        ok: false,
+        provider: "apple_reminders",
+        skippedReason: "unsupported_platform",
+      });
+      expect(deleteResult).toMatchObject({
+        ok: false,
+        provider: "apple_reminders",
         skippedReason: "unsupported_platform",
       });
       expect(childProcessMocks.execFileAsync).not.toHaveBeenCalled();

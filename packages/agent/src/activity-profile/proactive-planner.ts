@@ -34,12 +34,6 @@ const NUDGE_HORIZON_MINUTES = 45;
 const INACTIVITY_SKIP_MS = 48 * 60 * 60 * 1000; // 48 hours
 /** Days since last review before a goal is eligible for a check-in. */
 const GOAL_CHECK_IN_COOLDOWN_DAYS = 3;
-/** Very long timed events are usually itinerary blocks, not actionable check-ins. */
-const LONG_CALENDAR_EVENT_MINUTES = 8 * 60;
-const ACTIONABLE_CALENDAR_EVENT_RE =
-  /\b(meeting|meet(?:ing)?\s+with|call|phone call|interview|appointment|dentist|doctor|therapy|consult(?:ation)?|checkup|check-up|standup|sync|1:1|one-on-one|review|session|lesson|coffee|lunch|dinner|brunch|drinks|hangout|meetup|date)\b/i;
-const PASSIVE_CALENDAR_EVENT_RE =
-  /\b(hotel|inn|motel|airbnb|lodging|stay|accommodation|reservation|booking|check[- ]?in|check[- ]?out|checkout|travel|trip|itinerary|flight|train|bus|drive|arrival|departure|depart|return)\b/i;
 
 // ── Goal check-in contract ───────────────────────────
 
@@ -78,6 +72,8 @@ export interface CalendarEventSlim {
   location?: string;
   attendeeCount?: number;
   conferenceLink?: string | null;
+  proactiveCheckIn?: boolean | null;
+  proactiveCheckInReason?: string | null;
 }
 
 // ── GM planning ───────────────────────────────────────
@@ -627,54 +623,8 @@ function getTodayActionableEvents(
   );
 }
 
-function calendarEventText(event: CalendarEventSlim): string {
-  return [event.summary, event.description ?? "", event.location ?? ""]
-    .join(" ")
-    .trim();
-}
-
-function calendarEventDurationMinutes(event: CalendarEventSlim): number {
-  const startMs = Date.parse(event.startAt);
-  const endMs = Date.parse(event.endAt);
-  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) {
-    return 0;
-  }
-  return Math.round((endMs - startMs) / 60_000);
-}
-
-function calendarEventPriorityScore(event: CalendarEventSlim): number {
-  if (event.isAllDay) {
-    return 0;
-  }
-
-  const text = calendarEventText(event);
-  const durationMinutes = calendarEventDurationMinutes(event);
-  let score = durationMinutes > 0 ? 2 : 0;
-
-  if (ACTIONABLE_CALENDAR_EVENT_RE.test(text)) {
-    score += 5;
-  }
-  if ((event.attendeeCount ?? 0) > 0) {
-    score += 3;
-  }
-  if (event.conferenceLink) {
-    score += 3;
-  }
-  if (/\bwith\s+\S+/i.test(text)) {
-    score += 2;
-  }
-  if (PASSIVE_CALENDAR_EVENT_RE.test(text)) {
-    score -= 8;
-  }
-  if (durationMinutes >= LONG_CALENDAR_EVENT_MINUTES) {
-    score -= 4;
-  }
-
-  return score;
-}
-
 function shouldNudgeCalendarEvent(event: CalendarEventSlim): boolean {
-  return calendarEventPriorityScore(event) > 0;
+  return event.proactiveCheckIn === true;
 }
 
 function findNearbyCalendarEvent(

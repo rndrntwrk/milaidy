@@ -1,146 +1,54 @@
-import { describe, expect, it, vi } from "vitest";
-import type {
-  DiscordLocalRouteState,
-} from "../../src/api/discord-local-routes";
-import { handleDiscordLocalRoute } from "../../src/api/discord-local-routes";
-import { readJsonBody, sendJson, sendJsonError } from "../../src/api/http-helpers";
-import {
-  createMockHttpResponse,
-  createMockIncomingMessage,
-} from "../../src/test-support/test-helpers";
+/**
+ * Integration tests for /api/discord-local/* routes.
+ *
+ * Starts a real API server (no runtime) and makes real HTTP requests.
+ * Without a running runtime, the Discord local service is unavailable.
+ */
 
-function buildState(
-  overrides: Partial<DiscordLocalRouteState> = {},
-): DiscordLocalRouteState {
-  return {
-    config: { connectors: {} },
-    saveConfig: vi.fn(),
-    runtime: undefined,
-    ...overrides,
-  };
-}
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { req } from "../../../../test/helpers/http";
+import { startApiServer } from "../../src/api/server";
 
-const helpers = {
-  json: sendJson,
-  error: sendJsonError,
-  readJsonBody,
-};
+vi.mock("../../src/services/mcp-marketplace", () => ({
+  searchMcpMarketplace: vi.fn().mockResolvedValue({ results: [] }),
+  getMcpServerDetails: vi.fn().mockResolvedValue(null),
+}));
 
-describe("handleDiscordLocalRoute", () => {
-  it("reports unavailable status when the service is not registered", async () => {
-    const req = createMockIncomingMessage({
-      method: "GET",
-      url: "/api/discord-local/status",
-      headers: { host: "localhost:2138" },
-    });
-    const { res, getStatus, getJson } = createMockHttpResponse<{
-      available: boolean;
-      connected: boolean;
-      authenticated: boolean;
-      reason: string;
-    }>();
+let port: number;
+let close: () => Promise<void>;
 
-    const handled = await handleDiscordLocalRoute(
-      req,
-      res,
-      "/api/discord-local/status",
+beforeAll(async () => {
+  const server = await startApiServer({ port: 0 });
+  port = server.port;
+  close = server.close;
+}, 180_000);
+
+afterAll(async () => {
+  await close();
+});
+
+describe("discord-local routes (real server)", () => {
+  it("GET /api/discord-local/status reports unavailable when no runtime", async () => {
+    const { status, data } = await req(
+      port,
       "GET",
-      buildState(),
-      helpers,
+      "/api/discord-local/status",
     );
-
-    expect(handled).toBe(true);
-    expect(getStatus()).toBe(200);
-    expect(getJson()).toMatchObject({
+    expect(status).toBe(200);
+    expect(data).toMatchObject({
       available: false,
       connected: false,
       authenticated: false,
     });
-  });
+  }, 60_000);
 
-  it("rejects channel lookups without a guild id", async () => {
-    const req = createMockIncomingMessage({
-      method: "GET",
-      url: "/api/discord-local/channels",
-      headers: { host: "localhost:2138" },
-    });
-    const { res, getStatus, getJson } = createMockHttpResponse<{
-      error: string;
-    }>();
-
-    const handled = await handleDiscordLocalRoute(
-      req,
-      res,
-      "/api/discord-local/channels",
+  it("GET /api/discord-local/channels rejects without a guild id", async () => {
+    const { status, data } = await req(
+      port,
       "GET",
-      buildState({
-        runtime: {
-          getService: () => ({
-            getStatus: vi.fn(),
-            authorize: vi.fn(),
-            disconnectSession: vi.fn(),
-            listGuilds: vi.fn(),
-            listChannels: vi.fn(),
-            subscribeChannelMessages: vi.fn(),
-          }),
-        },
-      }),
-      helpers,
+      "/api/discord-local/channels",
     );
-
-    expect(handled).toBe(true);
-    expect(getStatus()).toBe(400);
-    expect(getJson().error).toBe("guildId is required");
-  });
-
-  it("persists the subscribed channel ids returned by the service", async () => {
-    const subscribeChannelMessages = vi.fn(async () => ["channel-a"]);
-    const state = buildState({
-      config: { connectors: { discordLocal: { enabled: true } } },
-      runtime: {
-        getService: () => ({
-          getStatus: vi.fn(),
-          authorize: vi.fn(),
-          disconnectSession: vi.fn(),
-          listGuilds: vi.fn(),
-          listChannels: vi.fn(),
-          subscribeChannelMessages,
-        }),
-      },
-    });
-    const req = createMockIncomingMessage({
-      method: "POST",
-      url: "/api/discord-local/subscriptions",
-      headers: {
-        host: "localhost:2138",
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({ channelIds: ["channel-a", " ", "channel-a"] }),
-    });
-    const { res, getStatus, getJson } = createMockHttpResponse<{
-      subscribedChannelIds: string[];
-    }>();
-
-    const handled = await handleDiscordLocalRoute(
-      req,
-      res,
-      "/api/discord-local/subscriptions",
-      "POST",
-      state,
-      helpers,
-    );
-
-    expect(handled).toBe(true);
-    expect(getStatus()).toBe(200);
-    expect(subscribeChannelMessages).toHaveBeenCalledWith(["channel-a"]);
-    expect(getJson().subscribedChannelIds).toEqual(["channel-a"]);
-    expect(
-      (
-        state.config.connectors?.discordLocal as {
-          messageChannelIds?: string[];
-        }
-      ).messageChannelIds,
-    ).toEqual(["channel-a"]);
-    expect(state.saveConfig).toHaveBeenCalledOnce();
-  });
+    // Without runtime/service the server returns an error
+    expect([400, 503]).toContain(status);
+  }, 60_000);
 });

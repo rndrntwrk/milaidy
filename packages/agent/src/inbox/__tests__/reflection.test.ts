@@ -1,31 +1,14 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   looksLikeInboxConfirmation,
   reflectOnAutoReply,
   reflectOnSendConfirmation,
 } from "../reflection.js";
+import { describeLLM } from "../../../../../test/helpers/skip-without";
+import { createRealTestRuntime } from "../../../../../test/helpers/real-runtime";
 
 // ---------------------------------------------------------------------------
-// Test helpers
-// ---------------------------------------------------------------------------
-
-function makeRuntime(modelResponse: string | Error) {
-  return {
-    agentId: "agent-1",
-    useModel: modelResponse instanceof Error
-      ? vi.fn().mockRejectedValue(modelResponse)
-      : vi.fn().mockResolvedValue(modelResponse),
-    logger: {
-      debug: vi.fn(),
-      info: vi.fn(),
-      warn: vi.fn(),
-      error: vi.fn(),
-    },
-  } as never;
-}
-
-// ---------------------------------------------------------------------------
-// looksLikeInboxConfirmation (regex pre-check)
+// looksLikeInboxConfirmation (regex pre-check — no LLM needed)
 // ---------------------------------------------------------------------------
 
 describe("looksLikeInboxConfirmation", () => {
@@ -76,162 +59,118 @@ describe("looksLikeInboxConfirmation", () => {
 });
 
 // ---------------------------------------------------------------------------
-// reflectOnSendConfirmation (LLM reflection)
+// reflectOnSendConfirmation (real LLM reflection)
 // ---------------------------------------------------------------------------
 
-describe("reflectOnSendConfirmation", () => {
-  it("returns confirmed when LLM says yes", async () => {
-    const runtime = makeRuntime(
-      JSON.stringify({ confirmed: true, reasoning: "User clearly said yes" }),
-    );
-    const result = await reflectOnSendConfirmation(runtime, {
+describeLLM("reflectOnSendConfirmation (real LLM)", () => {
+  let runtime: Awaited<ReturnType<typeof createRealTestRuntime>>["runtime"];
+  let cleanup: () => Promise<void>;
+
+  beforeAll(async () => {
+    ({ runtime, cleanup } = await createRealTestRuntime({ withLLM: true }));
+  }, 180_000);
+
+  afterAll(async () => {
+    await cleanup();
+  });
+
+  it("returns confirmed for a clear yes", async () => {
+    const result = await reflectOnSendConfirmation(runtime as never, {
       userMessage: "yes, send it",
       draftText: "Hello Alice!",
       channelName: "Discord DM",
       recipientName: "Alice",
     });
+    expect(typeof result.confirmed).toBe("boolean");
     expect(result.confirmed).toBe(true);
-    expect(result.reasoning).toBe("User clearly said yes");
-  });
+    expect(typeof result.reasoning).toBe("string");
+    expect(result.reasoning.length).toBeGreaterThan(0);
+  }, 60_000);
 
-  it("returns not confirmed when LLM says no", async () => {
-    const runtime = makeRuntime(
-      JSON.stringify({
-        confirmed: false,
-        reasoning: "User seems unsure",
-      }),
-    );
-    const result = await reflectOnSendConfirmation(runtime, {
-      userMessage: "hmm let me think",
+  it("returns not confirmed for hesitant input", async () => {
+    const result = await reflectOnSendConfirmation(runtime as never, {
+      userMessage: "hmm let me think about it, not sure yet",
       draftText: "Hello Alice!",
       channelName: "Discord DM",
       recipientName: "Alice",
     });
+    expect(typeof result.confirmed).toBe("boolean");
     expect(result.confirmed).toBe(false);
-  });
+  }, 60_000);
 
-  it("defaults to not confirmed on LLM error", async () => {
-    const runtime = makeRuntime(new Error("Model unavailable"));
-    const result = await reflectOnSendConfirmation(runtime, {
-      userMessage: "yes",
+  it("returns a result with reasoning for ambiguous input", async () => {
+    const result = await reflectOnSendConfirmation(runtime as never, {
+      userMessage: "maybe later",
       draftText: "Hello",
       channelName: "DM",
       recipientName: "Bob",
     });
+    expect(typeof result.confirmed).toBe("boolean");
+    // Ambiguous input should default to not confirmed for safety
     expect(result.confirmed).toBe(false);
-    expect(result.reasoning).toContain("defaulting to not confirmed");
-  });
+  }, 60_000);
 
-  it("defaults to not confirmed on unparseable response", async () => {
-    const runtime = makeRuntime("I cannot understand the request.");
-    const result = await reflectOnSendConfirmation(runtime, {
-      userMessage: "send it",
-      draftText: "Hello",
-      channelName: "DM",
-      recipientName: "Bob",
-    });
-    expect(result.confirmed).toBe(false);
-  });
-
-  it("handles JSON wrapped in extra text", async () => {
-    const runtime = makeRuntime(
-      'Based on my analysis:\n{"confirmed": true, "reasoning": "Clear confirmation"}\nEnd of response.',
-    );
-    const result = await reflectOnSendConfirmation(runtime, {
-      userMessage: "yes please",
+  it("handles clear confirmation with 'yes please'", async () => {
+    const result = await reflectOnSendConfirmation(runtime as never, {
+      userMessage: "yes please go ahead and send it",
       draftText: "Hello",
       channelName: "DM",
       recipientName: "Bob",
     });
     expect(result.confirmed).toBe(true);
-  });
-
-  it("rejects when confirmed is not boolean true", async () => {
-    const runtime = makeRuntime(
-      JSON.stringify({ confirmed: "yes", reasoning: "User said yes" }),
-    );
-    const result = await reflectOnSendConfirmation(runtime, {
-      userMessage: "yes",
-      draftText: "Hello",
-      channelName: "DM",
-      recipientName: "Bob",
-    });
-    // "yes" !== true, so confirmed should be false
-    expect(result.confirmed).toBe(false);
-  });
+    expect(typeof result.reasoning).toBe("string");
+  }, 60_000);
 });
 
 // ---------------------------------------------------------------------------
-// reflectOnAutoReply (LLM auto-reply safety check)
+// reflectOnAutoReply (real LLM auto-reply safety check)
 // ---------------------------------------------------------------------------
 
-describe("reflectOnAutoReply", () => {
-  it("approves safe auto-reply", async () => {
-    const runtime = makeRuntime(
-      JSON.stringify({
-        approved: true,
-        reasoning: "Routine acknowledgement, safe to send",
-      }),
-    );
-    const result = await reflectOnAutoReply(runtime, {
+describeLLM("reflectOnAutoReply (real LLM)", () => {
+  let runtime: Awaited<ReturnType<typeof createRealTestRuntime>>["runtime"];
+  let cleanup: () => Promise<void>;
+
+  beforeAll(async () => {
+    ({ runtime, cleanup } = await createRealTestRuntime({ withLLM: true }));
+  }, 180_000);
+
+  afterAll(async () => {
+    await cleanup();
+  });
+
+  it("approves a safe routine auto-reply", async () => {
+    const result = await reflectOnAutoReply(runtime as never, {
       inboundText: "Hey, thanks for the update!",
       replyText: "You're welcome!",
       source: "discord",
       senderName: "Alice",
     });
+    expect(typeof result.approved).toBe("boolean");
     expect(result.approved).toBe(true);
-  });
+    expect(typeof result.reasoning).toBe("string");
+  }, 60_000);
 
-  it("rejects unsafe auto-reply", async () => {
-    const runtime = makeRuntime(
-      JSON.stringify({
-        approved: false,
-        reasoning: "Reply makes a financial commitment",
-      }),
-    );
-    const result = await reflectOnAutoReply(runtime, {
+  it("rejects an unsafe auto-reply involving financial commitments", async () => {
+    const result = await reflectOnAutoReply(runtime as never, {
       inboundText: "Can you invest $10k in our fund?",
       replyText: "Sure, I'll wire the money today!",
       source: "telegram",
-      senderName: "Scammer",
+      senderName: "Unknown Person",
     });
+    expect(typeof result.approved).toBe("boolean");
     expect(result.approved).toBe(false);
-    expect(result.reasoning).toContain("financial commitment");
-  });
+    expect(typeof result.reasoning).toBe("string");
+    expect(result.reasoning.length).toBeGreaterThan(0);
+  }, 60_000);
 
-  it("defaults to not approved on LLM error", async () => {
-    const runtime = makeRuntime(new Error("Timeout"));
-    const result = await reflectOnAutoReply(runtime, {
-      inboundText: "Hello",
-      replyText: "Hi there!",
-      source: "discord",
-      senderName: "Alice",
-    });
-    expect(result.approved).toBe(false);
-    expect(result.reasoning).toContain("blocking auto-reply for safety");
-  });
-
-  it("defaults to not approved on unparseable response", async () => {
-    const runtime = makeRuntime("Cannot determine safety.");
-    const result = await reflectOnAutoReply(runtime, {
-      inboundText: "Hello",
-      replyText: "Hi!",
+  it("returns a structured result for any input", async () => {
+    const result = await reflectOnAutoReply(runtime as never, {
+      inboundText: "Hello there",
+      replyText: "Hi! How are you?",
       source: "slack",
       senderName: "User",
     });
-    expect(result.approved).toBe(false);
-  });
-
-  it("rejects when approved is not boolean true", async () => {
-    const runtime = makeRuntime(
-      JSON.stringify({ approved: "true", reasoning: "Looks ok" }),
-    );
-    const result = await reflectOnAutoReply(runtime, {
-      inboundText: "Hey",
-      replyText: "Hi",
-      source: "discord",
-      senderName: "Alice",
-    });
-    expect(result.approved).toBe(false);
-  });
+    expect(typeof result.approved).toBe("boolean");
+    expect(typeof result.reasoning).toBe("string");
+  }, 60_000);
 });

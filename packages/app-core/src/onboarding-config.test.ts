@@ -291,4 +291,35 @@ describe("buildOnboardingRuntimeConfig", () => {
       needsProviderSetup: false,
     });
   });
+
+  it("returns connector and browser selections from the features step", () => {
+    expect(
+      buildOnboardingRuntimeConfig({
+        onboardingServerTarget: "local",
+        onboardingCloudApiKey: "",
+        onboardingProvider: "openai",
+        onboardingApiKey: "sk-openai-test",
+        onboardingPrimaryModel: "openai/gpt-5.4",
+        onboardingOpenRouterModel: "",
+        onboardingRemoteConnected: false,
+        onboardingRemoteApiBase: "",
+        onboardingRemoteToken: "",
+        onboardingSmallModel: "",
+        onboardingLargeModel: "",
+        onboardingVoiceProvider: "",
+        onboardingVoiceApiKey: "",
+        onboardingFeatureTelegram: true,
+        onboardingFeatureDiscord: true,
+        onboardingFeatureBrowser: true,
+      }).featureSetup,
+    ).toEqual({
+      connectors: {
+        telegram: { managed: true },
+        discord: { managed: true },
+      },
+      capabilities: {
+        browser: true,
+      },
+    });
+  });
 });

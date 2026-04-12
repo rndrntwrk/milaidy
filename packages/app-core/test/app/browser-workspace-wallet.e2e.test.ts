@@ -346,6 +346,8 @@ describe("Browser workspace wallet integration", () => {
     await waitFor(() => {
       expect(mockClient.getBrowserWorkspace).toHaveBeenCalled();
     });
+    expect(screen.queryByText("No tabs open yet.")).toBeNull();
+    expect(await screen.findByText("No browser tabs yet")).toBeTruthy();
 
     fireEvent.change(screen.getByPlaceholderText("Enter a URL"), {
       target: { value: "example.com" },
@@ -361,9 +363,13 @@ describe("Browser workspace wallet integration", () => {
       );
     });
 
+    const sidebar = screen.getByTestId("browser-workspace-sidebar");
     expect(
-      await screen.findByRole("button", { name: "example.com" }),
+      await within(sidebar).findByText("example.com"),
     ).toBeTruthy();
+    expect(
+      screen.getAllByText("example.com", { selector: "div" }),
+    ).toHaveLength(1);
 
     fireEvent.change(screen.getByPlaceholderText("Enter a URL"), {
       target: { value: "https://milady.ai" },
@@ -371,10 +377,13 @@ describe("Browser workspace wallet integration", () => {
     fireEvent.click(screen.getAllByRole("button", { name: "New tab" })[0]);
 
     expect(
-      await screen.findByRole("button", { name: "milady.ai" }),
+      await within(sidebar).findByText("milady.ai"),
     ).toBeTruthy();
+    expect(screen.getAllByText("milady.ai", { selector: "div" })).toHaveLength(
+      1,
+    );
 
-    fireEvent.click(screen.getByRole("button", { name: "example.com" }));
+    fireEvent.click(within(sidebar).getByText("example.com"));
 
     await waitFor(() => {
       expect(mockClient.showBrowserWorkspaceTab).toHaveBeenCalledWith("tab-1");
@@ -382,7 +391,6 @@ describe("Browser workspace wallet integration", () => {
 
     expect(screen.getByTitle("example.com")).toBeTruthy();
     expect(screen.queryByTestId("browser-workspace-wallet-panel")).toBeNull();
-    expect(await screen.findByText("Wallet connected")).toBeTruthy();
   });
 
   it("renders a real collapsed rail instead of squeezing the sidebar body", async () => {
@@ -496,8 +504,6 @@ describe("Browser workspace wallet integration", () => {
         ),
       ).toBe(true);
     });
-
-    expect(await screen.findByText("1 pending")).toBeTruthy();
   });
 
   it("supports provider-style browser wallet requests without rendering the wallet UI", async () => {

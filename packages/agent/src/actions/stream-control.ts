@@ -8,29 +8,7 @@
 
 import type { Action, Memory } from "@elizaos/core";
 import { hasOwnerAccess } from "../security/access.js";
-import { hasContextSignalSync } from "./context-signal.js";
-
-const STREAM_STRONG_TERMS = [
-  "go live",
-  "go offline",
-  "start stream",
-  "stop stream",
-  "start streaming",
-  "stop streaming",
-  "begin stream",
-  "end stream",
-] as const;
-
-const STREAM_WEAK_TERMS = [
-  "live",
-  "stream",
-  "streaming",
-  "broadcast",
-  "twitch",
-  "youtube",
-  "offline",
-  "online",
-] as const;
+import { hasContextSignalSyncForKey } from "./context-signal.js";
 
 const API_PORT = process.env.API_PORT || process.env.SERVER_PORT || "2138";
 const BASE = `http://127.0.0.1:${API_PORT}`;
@@ -70,7 +48,7 @@ export const goLiveAction: Action = {
     "Start the live stream, broadcasting to the active destination (Twitch, YouTube, etc.).",
   validate: async (runtime, message, state) => {
     if (!(await hasOwnerAccess(runtime, message))) return false;
-    return hasContextSignalSync(message, state, STREAM_STRONG_TERMS, STREAM_WEAK_TERMS, 2);
+    return hasContextSignalSyncForKey(message, state, "stream_control");
   },
 
   handler: async (runtime, message) => {
@@ -116,7 +94,7 @@ export const goOfflineAction: Action = {
   description: "Stop the live stream and go offline.",
   validate: async (runtime, message, state) => {
     if (!(await hasOwnerAccess(runtime, message))) return false;
-    return hasContextSignalSync(message, state, STREAM_STRONG_TERMS, STREAM_WEAK_TERMS, 2);
+    return hasContextSignalSyncForKey(message, state, "stream_control");
   },
 
   handler: async (runtime, message) => {

@@ -1,8 +1,15 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { generateWalletKeys } from "../api/wallet";
+
+/**
+ * Integration test for config loading — no mocks.
+ *
+ * Instead of mocking the paths module, we point the real path resolution at a
+ * temp directory via env vars (MILADY_CONFIG_PATH, MILADY_STATE_DIR).
+ */
 
 let tmpDir: string;
 let tmpConfigPath: string;
@@ -10,6 +17,8 @@ let tmpPersistPath: string;
 let tmpStateDir: string;
 
 const ENV_KEYS = [
+  "MILADY_CONFIG_PATH",
+  "MILADY_STATE_DIR",
   "ELIZA_PERSIST_CONFIG_PATH",
   "MILADY_PERSIST_CONFIG_PATH",
   "DISCORD_API_TOKEN",
@@ -21,14 +30,6 @@ const ENV_KEYS = [
 ] as const;
 
 const envBackup = new Map<string, string | undefined>();
-
-vi.mock("./paths", () => ({
-  resolveConfigPath: () => tmpConfigPath,
-  resolveStateDir: () => tmpStateDir,
-  resolveUserPath: (value: string) => value,
-}));
-
-import { configFileExists, loadElizaConfig } from "./config";
 
 function writeJson(filePath: string, value: unknown): void {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
@@ -46,6 +47,10 @@ describe("loadElizaConfig", () => {
       envBackup.set(key, process.env[key]);
       delete process.env[key];
     }
+
+    // Point the real path resolution at our temp directory
+    process.env.MILADY_CONFIG_PATH = tmpConfigPath;
+    process.env.MILADY_STATE_DIR = tmpStateDir;
   });
 
   afterEach(() => {
@@ -61,7 +66,10 @@ describe("loadElizaConfig", () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it("overlays persisted config when the write path differs from the runtime path", () => {
+  it("overlays persisted config when the write path differs from the runtime path", async () => {
+    // Dynamic import so env vars are read fresh each time
+    const { loadElizaConfig } = await import("./config");
+
     process.env.ELIZA_PERSIST_CONFIG_PATH = tmpPersistPath;
 
     writeJson(tmpConfigPath, {
@@ -92,7 +100,9 @@ describe("loadElizaConfig", () => {
     expect(process.env.DISCORD_BOT_TOKEN).toBe("discord-token-overlay");
   });
 
-  it("prefers persisted config env vars over preexisting process env values", () => {
+  it("prefers persisted config env vars over preexisting process env values", async () => {
+    const { loadElizaConfig } = await import("./config");
+
     process.env.ELIZA_PERSIST_CONFIG_PATH = tmpPersistPath;
     process.env.DISCORD_API_TOKEN = "dotenv-discord-token";
     process.env.DISCORD_BOT_TOKEN = "dotenv-discord-token";
@@ -114,7 +124,9 @@ describe("loadElizaConfig", () => {
     expect(process.env.OPENAI_API_KEY).toBe("saved-openai-key");
   });
 
-  it("prefers persisted connector credentials over preexisting process env values", () => {
+  it("prefers persisted connector credentials over preexisting process env values", async () => {
+    const { loadElizaConfig } = await import("./config");
+
     process.env.ELIZA_PERSIST_CONFIG_PATH = tmpPersistPath;
     process.env.DISCORD_API_TOKEN = "dotenv-discord-token";
     process.env.DISCORD_BOT_TOKEN = "dotenv-discord-token";
@@ -134,7 +146,9 @@ describe("loadElizaConfig", () => {
     expect(process.env.DISCORD_BOT_TOKEN).toBe("saved-discord-token");
   });
 
-  it("treats the persisted config as an existing config file", () => {
+  it("treats the persisted config as an existing config file", async () => {
+    const { configFileExists } = await import("./config");
+
     process.env.ELIZA_PERSIST_CONFIG_PATH = tmpPersistPath;
 
     writeJson(tmpPersistPath, {
@@ -144,7 +158,9 @@ describe("loadElizaConfig", () => {
     expect(configFileExists()).toBe(true);
   });
 
-  it("syncs Solana public key aliases from a persisted private key", () => {
+  it("syncs Solana public key aliases from a persisted private key", async () => {
+    const { loadElizaConfig } = await import("./config");
+
     process.env.ELIZA_PERSIST_CONFIG_PATH = tmpPersistPath;
     const keys = generateWalletKeys();
 

@@ -11,35 +11,7 @@ import type {
 import { logger, stringToUuid } from "@elizaos/core";
 import { resolveCanonicalOwnerIdForMessage } from "@elizaos/core/roles";
 import { hasAdminAccess } from "../security/access.js";
-import { hasContextSignalSync, messageText } from "./context-signal.js";
-
-const SEND_MESSAGE_STRONG_TERMS = [
-  "send message",
-  "send a message",
-  "dm",
-  "direct message",
-  "notify",
-  "alert",
-  "tell them",
-  "message them",
-  "reach out",
-  "post to",
-  "post in",
-] as const;
-
-const SEND_MESSAGE_WEAK_TERMS = [
-  "send",
-  "message",
-  "tell",
-  "notify",
-  "alert",
-  "admin",
-  "owner",
-  "urgent",
-  "escalate",
-  "channel",
-  "room",
-] as const;
+import { hasContextSignalSyncForKey, messageText } from "./context-signal.js";
 
 type MessageTransportService = {
   sendDirectMessage?: (
@@ -174,13 +146,7 @@ export const sendMessageAction: Action = {
 
   validate: async (runtime, message, state) => {
     if (!(await hasAdminAccess(runtime, message))) return false;
-    return hasContextSignalSync(
-      message,
-      state,
-      SEND_MESSAGE_STRONG_TERMS,
-      SEND_MESSAGE_WEAK_TERMS,
-      2,
-    );
+    return hasContextSignalSyncForKey(message, state, "send_message");
   },
 
   handler: async (runtime, message, _state, options) => {

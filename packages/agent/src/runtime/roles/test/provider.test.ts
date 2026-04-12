@@ -1,19 +1,21 @@
 import type { IAgentRuntime, Memory, State, UUID } from "@elizaos/core";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-const { mockHasAdminAccess } = vi.hoisted(() => ({
-  mockHasAdminAccess: vi.fn(),
-}));
-
-vi.mock("../../../security/access.js", () => ({
-  hasAdminAccess: mockHasAdminAccess,
-}));
+/**
+ * Integration test for rolesProvider — no module mocks.
+ *
+ * Uses real hasAdminAccess from security/access.js, which calls the real
+ * checkSenderRole from @elizaos/core/roles. Mock runtime objects implement
+ * the interface methods (getRoom, getWorld, getEntityById, getSetting) so
+ * the real code path resolves roles from world metadata.
+ */
 
 import { rolesProvider } from "../src/provider";
 import type { RoleName, RolesWorldMetadata } from "../src/types";
 import { setConnectorAdminWhitelist } from "../src/utils";
 
 function mockRuntime(opts: {
+  agentId?: string;
   room?: { worldId: string | null } | null;
   worldMeta?: RolesWorldMetadata | null;
   entities?: Record<
@@ -25,6 +27,7 @@ function mockRuntime(opts: {
 }): IAgentRuntime {
   const settingsStore = { ...(opts.settings ?? {}) };
   return {
+    agentId: opts.agentId ?? "agent-runtime-id",
     getRoom: vi.fn().mockResolvedValue(opts.room ?? null),
     getWorld: vi
       .fn()
@@ -65,10 +68,6 @@ function msg(entityId: string): Memory {
 const emptyState = {} as State;
 
 describe("rolesProvider", () => {
-  beforeEach(() => {
-    mockHasAdminAccess.mockReset().mockResolvedValue(true);
-  });
-
   it("has correct provider metadata", () => {
     expect(rolesProvider.name).toBe("roles");
     expect(rolesProvider.dynamic).toBe(true);
@@ -140,8 +139,9 @@ describe("rolesProvider", () => {
   });
 
   it("hides the role roster from non-admin callers", async () => {
-    mockHasAdminAccess.mockResolvedValue(false);
-
+    // Entity u1 has role USER, which is not ADMIN/OWNER.
+    // The real hasAdminAccess will check checkSenderRole, find USER role,
+    // and return false (not admin).
     const runtime = mockRuntime({
       room: { worldId: "w1" },
       worldMeta: { roles: { o1: "OWNER", a1: "ADMIN", u1: "USER" } },
@@ -238,9 +238,11 @@ describe("rolesProvider", () => {
 
   it("handles null metadata", async () => {
     const runtime = {
+      agentId: "agent-runtime-id",
       getRoom: vi.fn().mockResolvedValue({ worldId: "w1" }),
       getWorld: vi.fn().mockResolvedValue({ id: "w1", metadata: null }),
       getEntityById: vi.fn().mockResolvedValue(null),
+      getSetting: vi.fn().mockReturnValue(null),
     } as unknown as IAgentRuntime;
     const result = await rolesProvider.get(runtime, msg("e1"), emptyState);
     expect(result.values?.speakerRole).toBe("GUEST");
@@ -248,11 +250,13 @@ describe("rolesProvider", () => {
 
   it("survives getEntityById throwing", async () => {
     const runtime = {
+      agentId: "agent-runtime-id",
       getRoom: vi.fn().mockResolvedValue({ worldId: "w1" }),
       getWorld: vi
         .fn()
         .mockResolvedValue({ id: "w1", metadata: { roles: { e1: "OWNER" } } }),
       getEntityById: vi.fn().mockRejectedValue(new Error("DB gone")),
+      getSetting: vi.fn().mockReturnValue(null),
     } as unknown as IAgentRuntime;
     const result = await rolesProvider.get(runtime, msg("e1"), emptyState);
     expect(result.values?.speakerRole).toBe("OWNER");

@@ -2,9 +2,9 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import sharp from "sharp";
+import { PGlite } from "@electric-sql/pglite";
 import type { IAgentRuntime } from "@elizaos/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { describeIf } from "../../../../test/helpers/conditional-tests.ts";
 import { analyzeMessages, enrichWithCalendar } from "./analyzer";
 import {
   buildActivityProfile,
@@ -16,13 +16,14 @@ import {
   setScreenContextSamplerForTesting,
 } from "./service";
 import { LifeOpsScreenContextSampler } from "../lifeops/screen-context";
+import { LifeOpsRepository } from "../lifeops/repository.js";
 import { LifeOpsService } from "../lifeops/service";
 import { resolveFallbackOwnerEntityId } from "../runtime/owner-entity.js";
-import { DatabaseSync, hasSqlite } from "../test-utils/sqlite-compat";
 
 const NOW = new Date("2026-04-06T07:00:00Z");
 const OWNER_ID = "owner-1";
 const tempDirs: string[] = [];
+const pgliteInstances: PGlite[] = [];
 
 type SqlQuery = {
   queryChunks?: Array<{ value?: unknown }>;
@@ -39,12 +40,13 @@ function extractSqlText(query: SqlQuery): string {
     .join("");
 }
 
-function createRuntime(
+async function createRuntime(
   rooms: Record<string, string>,
   memories: Array<{ entityId: string; roomId: string; createdAt: number }>,
-): IAgentRuntime {
-  const sqlite = new DatabaseSync(":memory:");
-  return {
+): Promise<IAgentRuntime> {
+  const db = new PGlite();
+  pgliteInstances.push(db);
+  const runtime = {
     agentId: "agent-1",
     getRoomsForParticipant: vi.fn().mockResolvedValue(Object.keys(rooms)),
     getRoom: vi.fn().mockImplementation(async (roomId: string) => {
@@ -58,16 +60,15 @@ function createRuntime(
       db: {
         execute: async (query: SqlQuery) => {
           const sql = extractSqlText(query).trim();
-          if (sql.length === 0) return [];
-          if (/^(select|pragma)\b/i.test(sql)) {
-            return sqlite.prepare(sql).all() as Array<Record<string, unknown>>;
-          }
-          sqlite.exec(sql);
-          return [];
+          return db.query(sql);
         },
       },
     },
   } as unknown as IAgentRuntime;
+  // Bootstrap the LifeOps schema so LifeOpsService works.
+  const repository = new LifeOpsRepository(runtime);
+  await repository.ensureReady();
+  return runtime;
 }
 
 async function createJpeg(text: string): Promise<Buffer> {
@@ -80,12 +81,18 @@ async function createJpeg(text: string): Promise<Buffer> {
   return await sharp(Buffer.from(svg)).jpeg({ quality: 92 }).toBuffer();
 }
 
-describeIf(hasSqlite)("refreshCurrentState", () => {
-  afterEach(() => {
+describe("refreshCurrentState", () => {
+  afterEach(async () => {
     while (tempDirs.length > 0) {
       const dir = tempDirs.pop();
       if (dir) {
         void fs.rm(dir, { recursive: true, force: true });
+      }
+    }
+    while (pgliteInstances.length > 0) {
+      const db = pgliteInstances.pop();
+      if (db) {
+        await db.close();
       }
     }
     setScreenContextSamplerForTesting(null);
@@ -106,7 +113,7 @@ describeIf(hasSqlite)("refreshCurrentState", () => {
       }),
     );
 
-    const runtime = createRuntime({}, []);
+    const runtime = await createRuntime({}, []);
     const profile = enrichWithCalendar(analyzeMessages([], new Map(), OWNER_ID, "UTC", 7, NOW), [], "UTC");
     const refreshed = await refreshCurrentState(
       runtime,
@@ -123,7 +130,7 @@ describeIf(hasSqlite)("refreshCurrentState", () => {
   });
 
   it("treats recent client_chat traffic as a live app session", async () => {
-    const runtime = createRuntime(
+    const runtime = await createRuntime(
       { "room-app": "client_chat" },
       [
         {
@@ -149,7 +156,7 @@ describeIf(hasSqlite)("refreshCurrentState", () => {
   });
 
   it("does not keep a stale client_chat session open forever", async () => {
-    const runtime = createRuntime(
+    const runtime = await createRuntime(
       { "room-app": "client_chat" },
       [
         {
@@ -175,7 +182,7 @@ describeIf(hasSqlite)("refreshCurrentState", () => {
   });
 
   it("uses persisted LifeOps activity signals when building and refreshing the profile", async () => {
-    const runtime = createRuntime({}, []);
+    const runtime = await createRuntime({}, []);
     const service = new LifeOpsService(runtime);
     await service.captureActivitySignal({
       source: "desktop_power",
@@ -200,7 +207,7 @@ describeIf(hasSqlite)("refreshCurrentState", () => {
   });
 
   it("uses persisted mobile device activity signals when building and refreshing the profile", async () => {
-    const runtime = createRuntime({}, []);
+    const runtime = await createRuntime({}, []);
     const service = new LifeOpsService(runtime);
     await service.captureActivitySignal({
       source: "mobile_device",
@@ -228,7 +235,7 @@ describeIf(hasSqlite)("refreshCurrentState", () => {
   });
 
   it("uses persisted mobile health sleep signals when building and refreshing the profile", async () => {
-    const runtime = createRuntime({}, []);
+    const runtime = await createRuntime({}, []);
     const service = new LifeOpsService(runtime);
     await service.captureActivitySignal({
       source: "mobile_health",

@@ -139,55 +139,12 @@ export function TrajectoryDetailView({
     void loadDetail();
   }, [loadDetail]);
 
-  if (loading) {
-    return (
-      <PagePanel.Loading
-        variant="workspace"
-        heading={t("trajectorydetailview.LoadingTrajectory")}
-        description={t("trajectorydetailview.LoadingDescription")}
-      />
-    );
-  }
-
-  if (error) {
-    return (
-      <PagePanel.Empty
-        variant="workspace"
-        title={t("trajectorydetailview.UnableToLoad")}
-        description={error}
-      />
-    );
-  }
-
-  if (!detail) {
-    return (
-      <PagePanel.Empty
-        variant="workspace"
-        title={t("trajectorydetailview.Unavailable")}
-        description={t("trajectorydetailview.TrajectoryNotFound")}
-      />
-    );
-  }
-
-  const { trajectory, llmCalls } = detail;
-  const totalPromptTokens = llmCalls.reduce(
-    (sum, call) => sum + (call.promptTokens ?? 0),
-    0,
-  );
-  const totalCompletionTokens = llmCalls.reduce(
-    (sum, call) => sum + (call.completionTokens ?? 0),
-    0,
-  );
-
-  const orchestrator = trajectory.metadata?.orchestrator;
-  const orchestratorData =
-    orchestrator && typeof orchestrator === "object"
-      ? (orchestrator as Record<string, unknown>)
-      : null;
+  const llmCalls = detail?.llmCalls ?? [];
+  const trajectory = detail?.trajectory;
 
   const pipelineNodes = useMemo(
-    () => buildPipelineNodes(llmCalls, trajectory.status),
-    [llmCalls, trajectory.status],
+    () => buildPipelineNodes(llmCalls, trajectory?.status ?? "active"),
+    [llmCalls, trajectory?.status],
   );
 
   const filteredCalls = useMemo(() => {
@@ -208,6 +165,51 @@ export function TrajectoryDetailView({
     },
     [],
   );
+
+  if (loading) {
+    return (
+      <PagePanel.Loading
+        variant="workspace"
+        heading={t("trajectorydetailview.LoadingTrajectory")}
+        description={t("trajectorydetailview.LoadingDescription")}
+      />
+    );
+  }
+
+  if (error) {
+    return (
+      <PagePanel.Empty
+        variant="workspace"
+        title={t("trajectorydetailview.UnableToLoad")}
+        description={error}
+      />
+    );
+  }
+
+  if (!detail || !trajectory) {
+    return (
+      <PagePanel.Empty
+        variant="workspace"
+        title={t("trajectorydetailview.Unavailable")}
+        description={t("trajectorydetailview.TrajectoryNotFound")}
+      />
+    );
+  }
+
+  const totalPromptTokens = llmCalls.reduce(
+    (sum, call) => sum + (call.promptTokens ?? 0),
+    0,
+  );
+  const totalCompletionTokens = llmCalls.reduce(
+    (sum, call) => sum + (call.completionTokens ?? 0),
+    0,
+  );
+
+  const orchestrator = trajectory.metadata?.orchestrator;
+  const orchestratorData =
+    orchestrator && typeof orchestrator === "object"
+      ? (orchestrator as Record<string, unknown>)
+      : null;
 
   const summaryCards = [
     {

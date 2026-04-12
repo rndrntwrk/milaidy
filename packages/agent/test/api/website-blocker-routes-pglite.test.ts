@@ -65,14 +65,28 @@ vi.mock("../../src/runtime/agent-event-service.js", () => ({
   }),
 }));
 
-vi.mock("../../src/lifeops/apple-reminders.js", () => ({
-  createNativeAppleReminderLikeItem: vi.fn().mockResolvedValue({
-    ok: true,
-    provider: "apple_reminders",
-    reminderId: "stub",
-  }),
-  readNativeAppleReminderMetadata: vi.fn().mockReturnValue(null),
-}));
+vi.mock("../../src/lifeops/apple-reminders.js", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../../src/lifeops/apple-reminders.js")>();
+  return {
+    ...actual,
+    createNativeAppleReminderLikeItem: vi.fn().mockResolvedValue({
+      ok: true,
+      provider: "apple_reminders",
+      reminderId: "stub",
+    }),
+    updateNativeAppleReminderLikeItem: vi.fn().mockResolvedValue({
+      ok: true,
+      provider: "apple_reminders",
+      reminderId: "stub",
+    }),
+    deleteNativeAppleReminderLikeItem: vi.fn().mockResolvedValue({
+      ok: true,
+      provider: "apple_reminders",
+    }),
+    readNativeAppleReminderMetadata: vi.fn().mockReturnValue(null),
+  };
+});
 
 vi.mock("../../src/services/escalation.js", () => ({
   registerEscalationChannel: vi.fn(),

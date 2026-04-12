@@ -88,6 +88,7 @@ function makeCalendarEvents(
     hourEnd: number;
     summary?: string;
     allDay?: boolean;
+    proactiveCheckIn?: boolean | null;
   }>,
 ): CalendarEventSlim[] {
   return entries.map((e, i) => ({
@@ -96,6 +97,8 @@ function makeCalendarEvents(
     startAt: `2026-04-06T${String(e.hourStart).padStart(2, "0")}:00:00Z`,
     endAt: `2026-04-06T${String(e.hourEnd).padStart(2, "0")}:00:00Z`,
     isAllDay: e.allDay ?? false,
+    proactiveCheckIn:
+      e.proactiveCheckIn ?? (e.allDay === true ? false : true),
   }));
 }
 
@@ -216,6 +219,7 @@ describe("planGm", () => {
         endAt: "2026-04-06T19:00:00Z",
         isAllDay: false,
         description: "Hotel check-in",
+        proactiveCheckIn: false,
       },
     ];
 
@@ -415,6 +419,7 @@ describe("planNudges", () => {
         startAt: "2026-04-06T07:30:00Z",
         endAt: "2026-04-06T08:00:00Z",
         isAllDay: false,
+        proactiveCheckIn: true,
       },
     ];
 
@@ -471,7 +476,7 @@ describe("planNudges", () => {
     expect(actions).toHaveLength(0);
   });
 
-  it("skips all-day calendar events", () => {
+  it("skips all-day calendar events when the classifier does not flag them", () => {
     const profile = makeProfile({ lastSeenAt: NOW_MS - 60_000 });
     const events = makeCalendarEvents([
       { hourStart: 0, hourEnd: 0, summary: "Holiday", allDay: true },
@@ -479,6 +484,25 @@ describe("planNudges", () => {
 
     const actions = planNudges(profile, [], events, null, TZ, NOW);
     expect(actions).toHaveLength(0);
+  });
+
+  it("can nudge an all-day calendar event when the classifier explicitly flags it", () => {
+    const profile = makeProfile({ lastSeenAt: NOW_MS - 60_000 });
+    const horizonNow = new Date("2026-04-06T23:30:00Z");
+    const events: CalendarEventSlim[] = [
+      {
+        id: "cal-all-day",
+        summary: "Friend's wedding",
+        startAt: "2026-04-07T00:00:00Z",
+        endAt: "2026-04-08T00:00:00Z",
+        isAllDay: true,
+        proactiveCheckIn: true,
+      },
+    ];
+
+    const actions = planNudges(profile, [], events, null, TZ, horizonNow);
+    expect(actions).toHaveLength(1);
+    expect(actions[0]?.calendarEventId).toBe("cal-all-day");
   });
 
   it("skips passive hotel stays even when they are timed events", () => {
@@ -492,6 +516,7 @@ describe("planNudges", () => {
         isAllDay: false,
         description: "Hotel check-in",
         location: "Fairfield Inn Boulder",
+        proactiveCheckIn: false,
       },
     ];
 
@@ -508,6 +533,7 @@ describe("planNudges", () => {
         startAt: "2026-04-06T07:30:00Z",
         endAt: "2026-04-06T08:30:00Z",
         isAllDay: false,
+        proactiveCheckIn: true,
       },
     ];
 

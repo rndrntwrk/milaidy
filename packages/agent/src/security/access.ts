@@ -52,7 +52,7 @@ async function isCanonicalOwner(
   message: Memory,
 ): Promise<boolean> {
   const resolveOwner = (
-    roles as {
+    roles as unknown as {
       resolveCanonicalOwnerIdForMessage?: (
         runtime: IAgentRuntime,
         message: Memory,
@@ -89,7 +89,7 @@ export async function hasOwnerAccess(
   }
 
   const checkRole = (
-    roles as {
+    roles as unknown as {
       checkSenderRole?: (
         runtime: IAgentRuntime,
         message: Memory,
@@ -126,7 +126,7 @@ export async function hasAdminAccess(
   }
 
   const checkRole = (
-    roles as {
+    roles as unknown as {
       checkSenderRole?: (
         runtime: IAgentRuntime,
         message: Memory,
@@ -163,7 +163,7 @@ export async function hasPrivateAccess(
   }
 
   const checkPrivateAccess = (
-    roles as {
+    roles as unknown as {
       checkSenderPrivateAccess?: (
         runtime: IAgentRuntime,
         message: Memory,
@@ -213,7 +213,7 @@ export async function hasRoleAccess(
   }
 
   const checkRole = (
-    roles as {
+    roles as unknown as {
       checkSenderRole?: (
         runtime: IAgentRuntime,
         message: Memory,
