@@ -69,7 +69,6 @@ import * as pluginSecretsManager from "@elizaos/plugin-secrets-manager";
 import * as pluginShell from "@elizaos/plugin-shell";
 import * as pluginSql from "@elizaos/plugin-sql";
 import * as pluginTrust from "@elizaos/plugin-trust";
-import rolesPlugin from "./roles/src/index.js";
 import * as pluginSelfControl from "@miladyai/plugin-selfcontrol";
 import {
   isMiladySettingsDebugEnabled,
@@ -129,6 +128,7 @@ import {
   runtimeTrajectoriesEnabled,
 } from "./native-runtime-features.js";
 import { installRuntimePluginLifecycle } from "./plugin-lifecycle.js";
+import rolesPlugin from "./roles/src/index.js";
 import { shouldEnableTrajectoryLoggingByDefault } from "./trajectory-persistence.js";
 
 const require = createRequire(import.meta.url);
@@ -1768,8 +1768,9 @@ export function applyCloudConfigToEnv(config: ElizaConfig): void {
   // user's own keys handle models.
   // If the user chose a subscription provider, treat that as "byok" unless
   // they explicitly set inferenceMode to "cloud".
-  const llmText = resolveServiceRoutingInConfig(config as Record<string, unknown>)
-    ?.llmText;
+  const llmText = resolveServiceRoutingInConfig(
+    config as Record<string, unknown>,
+  )?.llmText;
   const models = (config as Record<string, unknown>).models as
     | {
         nano?: string;
@@ -1781,9 +1782,9 @@ export function applyCloudConfigToEnv(config: ElizaConfig): void {
     | undefined;
   if (effectivelyEnabled) {
     const nano = llmText?.nanoModel || models?.nano || "openai/gpt-5.4-nano";
-    const small = llmText?.smallModel || models?.small || "minimax/minimax-m2.7";
-    const medium =
-      llmText?.mediumModel || models?.medium || small;
+    const small =
+      llmText?.smallModel || models?.small || "minimax/minimax-m2.7";
+    const medium = llmText?.mediumModel || models?.medium || small;
     const large =
       llmText?.largeModel || models?.large || "anthropic/claude-sonnet-4.6";
     const mega = llmText?.megaModel || models?.mega || large;
@@ -2133,12 +2134,9 @@ export function getPgliteRecoveryAction(
   const treatPidAsActiveLock =
     code === pluginSql.PGLITE_ERROR_CODES.ACTIVE_LOCK || isPgliteLockError(err);
   if (
-    treatPidAsActiveLock &&
-    pidStatus === "active" ||
-    treatPidAsActiveLock &&
-    pidStatus === "active-unconfirmed" ||
-    treatPidAsActiveLock &&
-    pidStatus === "check-failed"
+    (treatPidAsActiveLock && pidStatus === "active") ||
+    (treatPidAsActiveLock && pidStatus === "active-unconfirmed") ||
+    (treatPidAsActiveLock && pidStatus === "check-failed")
   ) {
     return "fail-active-lock";
   }
@@ -2150,7 +2148,8 @@ export function getPgliteRecoveryAction(
 
 function createActivePgliteLockError(dataDir: string, err: unknown): Error {
   if (
-    pluginSql.getPgliteErrorCode(err) === pluginSql.PGLITE_ERROR_CODES.ACTIVE_LOCK &&
+    pluginSql.getPgliteErrorCode(err) ===
+      pluginSql.PGLITE_ERROR_CODES.ACTIVE_LOCK &&
     err instanceof Error
   ) {
     return err;
@@ -2180,7 +2179,8 @@ function createManualResetRequiredPgliteError(
 
   const errorText = formatPgliteFailure(err);
   const cause =
-    pluginSql.getPgliteErrorCode(err) === pluginSql.PGLITE_ERROR_CODES.CORRUPT_DATA
+    pluginSql.getPgliteErrorCode(err) ===
+    pluginSql.PGLITE_ERROR_CODES.CORRUPT_DATA
       ? err
       : pluginSql.createPgliteInitError(
           pluginSql.PGLITE_ERROR_CODES.CORRUPT_DATA,
@@ -3895,9 +3895,7 @@ export async function startEliza(
       );
       await stewardEvmPreBoot(runtime);
     } catch (err) {
-      logger.debug(
-        `[eliza] Steward EVM pre-boot skipped: ${formatError(err)}`,
-      );
+      logger.debug(`[eliza] Steward EVM pre-boot skipped: ${formatError(err)}`);
     }
 
     // 8. Initialize the runtime (registers remaining plugins, starts services)
@@ -3907,14 +3905,10 @@ export async function startEliza(
 
     // 8a. Apply role gating to wallet plugins (EVM, Solana) — admin-only actions.
     try {
-      const { applyPluginRoleGating } = await import(
-        "./plugin-role-gating.js"
-      );
+      const { applyPluginRoleGating } = await import("./plugin-role-gating.js");
       applyPluginRoleGating(runtime.plugins ?? []);
     } catch (err) {
-      logger.debug(
-        `[eliza] Plugin role gating skipped: ${formatError(err)}`,
-      );
+      logger.debug(`[eliza] Plugin role gating skipped: ${formatError(err)}`);
     }
 
     // 8b. Register lightweight conversation-proximity evaluator.
@@ -3939,9 +3933,7 @@ export async function startEliza(
             validate: async (_runtime, message) => {
               // Run for any message with text from a real user (not the agent).
               const text = (message.content as { text?: string })?.text;
-              return (
-                Boolean(text) && message.entityId !== _runtime.agentId
-              );
+              return Boolean(text) && message.entityId !== _runtime.agentId;
             },
             handler: async (_runtime, message) => {
               await updateProximityRelationships(_runtime, message);
@@ -3950,9 +3942,7 @@ export async function startEliza(
           },
         ],
       });
-      logger.info(
-        "[eliza] ✓ conversation-proximity evaluator registered",
-      );
+      logger.info("[eliza] ✓ conversation-proximity evaluator registered");
     } catch (err) {
       logger.debug(
         `[eliza] Conversation-proximity evaluator skipped: ${formatError(err)}`,

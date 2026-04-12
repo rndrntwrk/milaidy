@@ -30,7 +30,9 @@ describe("native feature bootstrap wiring", () => {
   });
 
   it("bootstraps the internal roles capability outside the core plugin package list", () => {
-    expect(elizaSource).toContain('import rolesPlugin from "./roles/src/index.js"');
+    expect(elizaSource).toContain(
+      'import rolesPlugin from "./roles/src/index.js"',
+    );
     expect(elizaSource).toContain("Pre-registering internal roles capability");
     expect(elizaSource).not.toContain("pluginRoles");
   });
