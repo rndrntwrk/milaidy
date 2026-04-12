@@ -8,8 +8,10 @@ import {
 } from "./release-version.mjs";
 
 const browserKind = process.argv[2] === "safari" ? "safari" : "chrome";
-const extensionRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const distDir = path.join(extensionRoot, "dist", browserKind);
+const extensionRoot = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+);
 const publicDir = path.join(extensionRoot, "public");
 const release = resolveLifeOpsBrowserReleaseVersion();
 const extensionVersion = buildChromeExtensionVersion(release);

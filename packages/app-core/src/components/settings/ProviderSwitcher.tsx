@@ -716,7 +716,7 @@ export function ProviderSwitcher(props: ProviderSwitcherProps = {}) {
                         setState("cloudDashboardView", "billing");
                         setTab("settings");
                       }}
-                      className="ml-2 bg-transparent border-0 p-0 cursor-pointer text-[11px] text-txt underline decoration-[var(--accent)] underline-offset-2 hover:opacity-80 h-auto min-h-0"
+                      className="ml-2 bg-transparent border-0 p-0 cursor-pointer text-[11px] text-txt underline decoration-accent underline-offset-2 hover:opacity-80 h-auto min-h-0"
                     >
                       {t("configpageview.TopUp")}
                     </Button>

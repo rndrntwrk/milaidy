@@ -56,7 +56,10 @@ import {
   extractTaskCreatePlanWithLlm,
   extractUnlockModeWithLlm,
 } from "./life-param-extractor.js";
-import { recentConversationTexts } from "./life-recent-context.js";
+import {
+  recentConversationTexts,
+  recentConversationTextsFromState,
+} from "./life-recent-context.js";
 import { extractUpdateFieldsWithLlm } from "./life-update-extractor.js";
 import {
   calendarReadUnavailableMessage,
@@ -116,6 +119,44 @@ const LIFE_EMAIL_QUERY_TERMS = getValidationKeywordTerms(
     includeAllLocales: true,
   },
 );
+
+const LIFE_I18N_OPTS = { includeAllLocales: true } as const;
+const LIFE_COMPLETE_TERMS = getValidationKeywordTerms(
+  "contextSignal.lifeops_complete.strong",
+  LIFE_I18N_OPTS,
+);
+const LIFE_SKIP_TERMS = getValidationKeywordTerms(
+  "contextSignal.lifeops_skip.strong",
+  LIFE_I18N_OPTS,
+);
+const LIFE_SNOOZE_TERMS = getValidationKeywordTerms(
+  "contextSignal.lifeops_snooze.strong",
+  LIFE_I18N_OPTS,
+);
+const LIFE_DELETE_TERMS = getValidationKeywordTerms(
+  "contextSignal.lifeops_delete.strong",
+  LIFE_I18N_OPTS,
+);
+const LIFE_UPDATE_TERMS = getValidationKeywordTerms(
+  "contextSignal.lifeops_update.strong",
+  LIFE_I18N_OPTS,
+);
+const LIFE_OVERVIEW_TERMS = getValidationKeywordTerms(
+  "contextSignal.lifeops_overview.strong",
+  LIFE_I18N_OPTS,
+);
+const LIFE_REMINDER_PREF_TERMS = getValidationKeywordTerms(
+  "contextSignal.lifeops_reminder_pref.strong",
+  LIFE_I18N_OPTS,
+);
+const LIFE_CALENDAR_TERMS = getValidationKeywordTerms(
+  "contextSignal.calendar.strong",
+  LIFE_I18N_OPTS,
+);
+
+function textMatchesAnyTerm(text: string, terms: readonly string[]): boolean {
+  return terms.some((term) => textIncludesKeywordTerm(text, term));
+}
 
 const ACTION_TO_OPERATION: Record<LifeAction, LifeOperation> = {
   create: "create_definition",
@@ -1815,7 +1856,24 @@ function extractIntentWeekdays(intent: string): number[] {
   if (/\bweekends?\b/.test(lower)) {
     return [0, 6];
   }
-  return [];
+  const matches = [
+    ...lower.matchAll(
+      /\b(?:every|each)\s+(sun(?:day)?|mon(?:day)?|tue(?:s(?:day)?)?|wed(?:nesday)?|thu(?:r(?:s(?:day)?)?)?|fri(?:day)?|sat(?:urday)?)\b/g,
+    ),
+  ]
+    .map((match) => {
+      const weekdayToken = match[1]?.toLowerCase() ?? "";
+      if (weekdayToken.startsWith("sun")) return 0;
+      if (weekdayToken.startsWith("mon")) return 1;
+      if (weekdayToken.startsWith("tue")) return 2;
+      if (weekdayToken.startsWith("wed")) return 3;
+      if (weekdayToken.startsWith("thu")) return 4;
+      if (weekdayToken.startsWith("fri")) return 5;
+      if (weekdayToken.startsWith("sat")) return 6;
+      return null;
+    })
+    .filter((weekday): weekday is number => weekday !== null);
+  return [...new Set(matches)];
 }
 
 const DEFAULT_WINDOW_SLOT_TIMES: Record<
@@ -2134,6 +2192,7 @@ function deriveReminderLikeDefaults(
 function resolveTimedRequestKind(args: {
   intent: string;
   llmRequestKind: NativeAppleReminderLikeKind | null;
+  recentWindow?: string[];
 }): NativeAppleReminderLikeKind | null {
   if (args.llmRequestKind) {
     return args.llmRequestKind;
@@ -2143,6 +2202,23 @@ function resolveTimedRequestKind(args: {
   }
   if (looksLikeReminderRequest(args.intent)) {
     return "reminder";
+  }
+  const normalizedIntent = normalizeLifeInputText(args.intent).toLowerCase();
+  const isShortTimedFollowup =
+    normalizedIntent.length <= 32 &&
+    (/\b(\d{1,2}(?::\d{2})?\s*(?:am|pm)|noon|midnight)\b/.test(
+      normalizedIntent,
+    ) ||
+      /\b(today|tomorrow|tonight)\b/.test(normalizedIntent));
+  if (isShortTimedFollowup) {
+    for (const text of [...(args.recentWindow ?? [])].reverse()) {
+      if (looksLikeAlarmRequest(text)) {
+        return "alarm";
+      }
+      if (looksLikeReminderRequest(text)) {
+        return "reminder";
+      }
+    }
   }
   return null;
 }
@@ -3263,8 +3339,9 @@ function shouldAdoptPlannerCadence(args: {
   }
   if (currentCadence.kind === "times_per_day") {
     return (
-      plannerCadence.kind === "times_per_day" &&
-      plannerCadence.slots.length >= currentCadence.slots.length
+      (plannerCadence.kind === "times_per_day" &&
+        plannerCadence.slots.length >= currentCadence.slots.length) ||
+      (plannerCadence.kind === "once" && currentCadence.slots.length === 1)
     );
   }
   if (currentCadence.kind === "weekly") {
@@ -3679,6 +3756,10 @@ export const lifeAction: Action & {
     const createConfirmed =
       deferredDraftReuseMode === "confirm" ||
       detailBoolean(details, "confirmed") === true;
+    const recentTimedContextWindow = recentConversationTextsFromState(
+      state ?? undefined,
+      6,
+    );
 
     try {
       const createDefinition = async () => {
@@ -3856,6 +3937,7 @@ export const lifeAction: Action & {
         const timedRequestKind = resolveTimedRequestKind({
           intent,
           llmRequestKind,
+          recentWindow: recentTimedContextWindow,
         });
         const timedDefaults = deriveTimedRequestDefaults({
           intent,

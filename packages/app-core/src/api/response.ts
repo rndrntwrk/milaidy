@@ -27,8 +27,3 @@ export function sendJsonError(
 ): void {
   sendJson(res, status, { error: message });
 }
-
-/** Send a 200 JSON response (convenience for the common success case). */
-export function sendJsonOk(res: http.ServerResponse, body: unknown): void {
-  sendJson(res, 200, body);
-}

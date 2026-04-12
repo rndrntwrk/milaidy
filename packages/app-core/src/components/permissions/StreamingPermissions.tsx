@@ -218,7 +218,7 @@ export function StreamingPermissionsSettingsView({
 
   if (checking) {
     return (
-      <div className="text-center py-6 text-[var(--muted)] text-xs">
+      <div className="text-center py-6 text-muted text-xs">
         {translateWithFallback(
           t,
           "permissionssection.LoadingPermissions",
@@ -232,13 +232,13 @@ export function StreamingPermissionsSettingsView({
     <div className="space-y-6" data-testid={testId}>
       <div>
         <div className="flex items-center gap-2 mb-3">
-          <Cloud className="w-4 h-4 text-[var(--accent)]" />
+          <Cloud className="w-4 h-4 text-accent" />
           <div className="font-bold text-sm">{title}</div>
         </div>
-        <div className="text-[11px] text-[var(--muted)] mb-3">
+        <div className="text-[11px] text-muted mb-3">
           {description}
         </div>
-        <div className="border border-[var(--border)] bg-[var(--card)]">
+        <div className="border border-border bg-card">
           {MEDIA_PERMISSIONS.map((def) => {
             const status = permStates[def.id] ?? "unknown";
             const isGranted = status === "granted";
@@ -253,7 +253,7 @@ export function StreamingPermissionsSettingsView({
               <div
                 key={def.id}
                 data-permission-id={def.id}
-                className="flex items-center gap-3 py-2.5 px-3 border-b border-[var(--border)] last:border-b-0"
+                className="flex items-center gap-3 py-2.5 px-3 border-b border-border last:border-b-0"
               >
                 <PermissionIcon icon={def.icon} />
                 <div className="flex-1 min-w-0">
@@ -274,7 +274,7 @@ export function StreamingPermissionsSettingsView({
                       className="rounded-full font-semibold"
                     />
                   </div>
-                  <div className="text-[11px] text-[var(--muted)] mt-0.5 truncate">
+                  <div className="text-[11px] text-muted mt-0.5 truncate">
                     {description}
                   </div>
                 </div>
@@ -293,7 +293,7 @@ export function StreamingPermissionsSettingsView({
                     )}
                   </Button>
                 ) : (
-                  <Check className="w-4 h-4 text-[var(--ok)]" />
+                  <Check className="w-4 h-4 text-ok" />
                 )}
               </div>
             );
@@ -380,7 +380,7 @@ export function StreamingPermissionsOnboardingView({
                 </div>
               </div>
               {isGranted ? (
-                <Check className="w-4 h-4 text-[var(--ok)]" />
+                <Check className="w-4 h-4 text-ok" />
               ) : (
                 <Button
                   variant="default"

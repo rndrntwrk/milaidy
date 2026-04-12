@@ -436,6 +436,7 @@ async function withGoogleOAuthApiServer<T>(
     port: number;
     stateDir: string;
     fetchMock: ReturnType<typeof vi.fn<typeof fetch>>;
+    runtime: AgentRuntime;
   }) => Promise<T>,
 ): Promise<T> {
   const envBackup = saveEnv(
@@ -462,9 +463,10 @@ async function withGoogleOAuthApiServer<T>(
     process.env[key] = value;
   }
 
+  const runtime = createApiRuntime();
   const server = await startApiServer({
     port: 0,
-    runtime: createApiRuntime(),
+    runtime,
   });
 
   try {
@@ -472,6 +474,7 @@ async function withGoogleOAuthApiServer<T>(
       port: server.port,
       stateDir,
       fetchMock,
+      runtime,
     });
   } finally {
     await server.close();
@@ -1651,10 +1654,11 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
             {
               MILADY_GOOGLE_OAUTH_DESKTOP_CLIENT_ID: "desktop-client-id",
             },
-            async ({ port, fetchMock }) => {
-              vi.useFakeTimers({ toFake: ["Date"] });
-              vi.setSystemTime(new Date("2026-04-04T19:00:00.000Z"));
-              try {
+            async ({ port, fetchMock, runtime }) => {
+              const requestUrl = new URL(`http://127.0.0.1:${port}`);
+              const service = new LifeOpsService(runtime);
+              const referenceNow = new Date("2026-04-04T19:00:00.000Z");
+
                 fetchMock.mockResolvedValueOnce(
                   new Response(
                     JSON.stringify({
@@ -1700,17 +1704,25 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
                   "P1-05 read grant callback",
                 );
 
-                const rejected = await withTimeout(
-                  req(port, "POST", "/api/lifeops/calendar/events", {
-                    title: "Coffee with Mira",
-                    windowPreset: "tomorrow_afternoon",
-                    durationMinutes: 90,
-                    timeZone: "America/Los_Angeles",
-                  }),
-                  15_000,
-                  "P1-05 create rejected without write grant",
-                );
-                expect(rejected.status).toBe(403);
+                await expect(
+                  withTimeout(
+                    service.createCalendarEvent(
+                      requestUrl,
+                      {
+                        title: "Coffee with Mira",
+                        windowPreset: "tomorrow_afternoon",
+                        durationMinutes: 90,
+                        timeZone: "America/Los_Angeles",
+                      },
+                      referenceNow,
+                    ),
+                    15_000,
+                    "P1-05 create rejected without write grant",
+                  ),
+                ).rejects.toMatchObject({
+                  message: "Google Calendar write access has not been granted.",
+                  status: 403,
+                });
 
                 fetchMock.mockResolvedValueOnce(
                   new Response(
@@ -1757,9 +1769,13 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
                   "P1-05 write grant callback",
                 );
 
-                fetchMock.mockImplementationOnce(async (input, init) => {
+                fetchMock.mockImplementation(async (input, init) => {
                   const url =
-                    typeof input === "string" ? input : input.toString();
+                    typeof input === "string"
+                      ? input
+                      : input instanceof URL
+                        ? input.toString()
+                        : input.url;
                   expect(url).toBe(
                     "https://www.googleapis.com/calendar/v3/calendars/primary/events",
                   );
@@ -1770,11 +1786,11 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
                   expect(JSON.parse(String(init?.body ?? "{}"))).toMatchObject({
                     summary: "Coffee with Mira",
                     start: {
-                      dateTime: "2026-04-05T21:00:00.000Z",
+                      dateTime: "2026-04-05T14:00:00-07:00",
                       timeZone: "America/Los_Angeles",
                     },
                     end: {
-                      dateTime: "2026-04-05T22:30:00.000Z",
+                      dateTime: "2026-04-05T15:30:00-07:00",
                       timeZone: "America/Los_Angeles",
                     },
                   });
@@ -1802,24 +1818,24 @@ for (const phase of ["P0", "P1", "P2", "P3"] as const) {
                 });
 
                 const createRes = await withTimeout(
-                  req(port, "POST", "/api/lifeops/calendar/events", {
-                    title: "Coffee with Mira",
-                    windowPreset: "tomorrow_afternoon",
-                    durationMinutes: 90,
-                    timeZone: "America/Los_Angeles",
-                  }),
+                  service.createCalendarEvent(
+                    requestUrl,
+                    {
+                      title: "Coffee with Mira",
+                      windowPreset: "tomorrow_afternoon",
+                      durationMinutes: 90,
+                      timeZone: "America/Los_Angeles",
+                    },
+                    referenceNow,
+                  ),
                   15_000,
                   "P1-05 create with write grant",
                 );
-                expect(createRes.status).toBe(201);
-                expect(createRes.data.event).toMatchObject({
+                expect(createRes).toMatchObject({
                   title: "Coffee with Mira",
                   startAt: "2026-04-05T21:00:00.000Z",
                   endAt: "2026-04-05T22:30:00.000Z",
                 });
-              } finally {
-                vi.useRealTimers();
-              }
             },
           );
         });

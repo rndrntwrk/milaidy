@@ -264,7 +264,7 @@ export function SubscriptionStatus({
   }, [handleSelectSubscription, loadSubscriptionStatus, setOpenaiConnected, t]);
 
   return (
-    <div className="mt-4 pt-4 border-t border-[var(--border)]">
+    <div className="mt-4 pt-4 border-t border-border">
       {resolvedSelectedId === "anthropic-subscription" && (
         <div>
           <div className="flex justify-between items-center mb-3">
@@ -311,15 +311,15 @@ export function SubscriptionStatus({
             </div>
           )}
 
-          <div className="flex items-center gap-4 border-b border-[var(--border)] mb-3">
+          <div className="flex items-center gap-4 border-b border-border mb-3">
             <Button
               variant="ghost"
               size="sm"
               type="button"
               className={`text-xs pb-2 border-b-2 rounded-none ${
                 subscriptionTab === "token"
-                  ? "border-[var(--accent)] text-[var(--accent)]"
-                  : "border-transparent text-muted hover:text-[var(--text)]"
+                  ? "border-accent text-accent"
+                  : "border-transparent text-muted hover:text-txt"
               }`}
               onClick={() => setSubscriptionTab("token")}
             >
@@ -331,8 +331,8 @@ export function SubscriptionStatus({
               type="button"
               className={`text-xs pb-2 border-b-2 rounded-none ${
                 subscriptionTab === "oauth"
-                  ? "border-[var(--accent)] text-[var(--accent)]"
-                  : "border-transparent text-muted hover:text-[var(--text)]"
+                  ? "border-accent text-accent"
+                  : "border-transparent text-muted hover:text-txt"
               }`}
               onClick={() => setSubscriptionTab("oauth")}
             >

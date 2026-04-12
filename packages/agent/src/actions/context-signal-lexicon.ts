@@ -52,6 +52,62 @@ const CONTEXT_SIGNAL_SPECS: Record<ContextSignalKey, ContextSignalSpec> = {
       weak: "contextSignal.gmail.weak",
     },
   },
+  lifeops: {
+    contextLimit: 12,
+    keywordKeys: {
+      strong: "contextSignal.lifeops.strong",
+      weak: "contextSignal.lifeops.weak",
+    },
+  },
+  lifeops_complete: {
+    contextLimit: 12,
+    weakThreshold: 1,
+    keywordKeys: {
+      strong: "contextSignal.lifeops_complete.strong",
+    },
+  },
+  lifeops_delete: {
+    contextLimit: 12,
+    weakThreshold: 1,
+    keywordKeys: {
+      strong: "contextSignal.lifeops_delete.strong",
+    },
+  },
+  lifeops_overview: {
+    contextLimit: 12,
+    weakThreshold: 1,
+    keywordKeys: {
+      strong: "contextSignal.lifeops_overview.strong",
+    },
+  },
+  lifeops_reminder_pref: {
+    contextLimit: 12,
+    weakThreshold: 1,
+    keywordKeys: {
+      strong: "contextSignal.lifeops_reminder_pref.strong",
+    },
+  },
+  lifeops_skip: {
+    contextLimit: 12,
+    weakThreshold: 1,
+    keywordKeys: {
+      strong: "contextSignal.lifeops_skip.strong",
+    },
+  },
+  lifeops_snooze: {
+    contextLimit: 12,
+    weakThreshold: 1,
+    keywordKeys: {
+      strong: "contextSignal.lifeops_snooze.strong",
+    },
+  },
+  lifeops_update: {
+    contextLimit: 12,
+    weakThreshold: 1,
+    keywordKeys: {
+      strong: "contextSignal.lifeops_update.strong",
+    },
+  },
   calendar: {
     contextLimit: 12,
     keywordKeys: {
