@@ -260,7 +260,7 @@ export function ShellHeaderControls({
                   size="icon"
                   onClick={() => onShellViewChange(view)}
                   onPointerDown={(event) => event.stopPropagation()}
-                  className={`h-11 min-h-[44px] min-w-[44px] px-3 transition-all duration-200 ${edgeClass} ${
+                  className={`h-11 min-h-touch min-w-touch px-3 transition-all duration-200 ${edgeClass} ${
                     selected
                       ? SHELL_SEGMENT_ACTIVE_CLASSNAME
                       : SHELL_SEGMENT_INACTIVE_CLASSNAME
@@ -349,7 +349,7 @@ export function ShellHeaderControls({
             setUiTheme={setUiTheme}
             t={t}
             variant={controlsVariant}
-            className={`!h-11 !w-11 !min-h-[44px] !min-w-[44px] ${themeToggleClassName ?? ""}`}
+            className={`!h-11 !w-11 !min-h-touch !min-w-touch ${themeToggleClassName ?? ""}`}
           />
         </div>
         {trailingExtras}

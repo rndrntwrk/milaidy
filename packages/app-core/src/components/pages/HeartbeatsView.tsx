@@ -675,7 +675,7 @@ function HeartbeatsLayout() {
                 <h2 className="text-2xl font-semibold text-txt sm:text-[2rem]">
                   {selectedTrigger.displayName}
                 </h2>
-                <p className="text-sm leading-relaxed text-muted sm:text-[15px]">
+                <p className="text-sm leading-relaxed text-muted sm:text-sm">
                   {selectedTrigger.instructions}
                 </p>
               </div>

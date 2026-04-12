@@ -111,7 +111,7 @@ export function ApprovedAddressesSection({
                       {entry.address}
                     </span>
                     {chain && (
-                      <span className="text-[9px] text-muted bg-muted/10 px-1.5 py-0.5 rounded shrink-0">
+                      <span className="text-3xs text-muted bg-muted/10 px-1.5 py-0.5 rounded shrink-0">
                         {chain}
                       </span>
                     )}
@@ -151,14 +151,14 @@ export function ApprovedAddressesSection({
             setNewAddress(e.target.value);
             setAddressError(null);
           }}
-          className="flex-1 h-8 text-[12px] font-mono"
+          className="flex-1 h-8 text-xs font-mono"
         />
         <Input
           type="text"
           placeholder="Label"
           value={newLabel}
           onChange={(e) => setNewLabel(e.target.value)}
-          className="w-24 h-8 text-[12px]"
+          className="w-24 h-8 text-xs"
         />
         <Button
           variant="outline"

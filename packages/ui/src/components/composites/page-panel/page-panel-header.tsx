@@ -108,7 +108,7 @@ export function SummaryCard({
   return (
     <div
       className={cn(
-        "rounded-[22px] border border-border/28 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_86%,transparent),color-mix(in_srgb,var(--bg)_96%,transparent))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_18px_26px_-24px_rgba(15,23,42,0.12)] ring-1 ring-border/8 backdrop-blur-sm dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_20px_28px_-24px_rgba(0,0,0,0.28)]",
+        "rounded-2xl border border-border/28 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_86%,transparent),color-mix(in_srgb,var(--bg)_96%,transparent))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_18px_26px_-24px_rgba(15,23,42,0.12)] ring-1 ring-border/8 backdrop-blur-sm dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_20px_28px_-24px_rgba(0,0,0,0.28)]",
         compact && "p-3.5",
         className,
       )}

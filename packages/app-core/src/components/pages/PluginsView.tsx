@@ -368,7 +368,7 @@ function PluginListView({
         >
           {tag.label}
           <span
-            className={`ml-1.5 rounded border px-1.5 py-0.5 text-[9px] font-mono leading-none ${
+            className={`ml-1.5 rounded border px-1.5 py-0.5 text-3xs font-mono leading-none ${
               isActive
                 ? "border-accent/30 bg-accent/12 text-txt-strong"
                 : "border-border/50 bg-bg-accent/80 text-muted-strong"

@@ -155,7 +155,7 @@ export function WelcomeStep() {
           >
             {startLabel}
           </Button>
-          <div className="text-center text-[11px] tracking-[0.04em] text-[var(--onboarding-text-faint)]">
+          <div className="text-center text-xs-tight tracking-[0.04em] text-[var(--onboarding-text-faint)]">
             {progressLabel}
             {preload.connectionLabel ? ` · ${preload.connectionLabel}` : ""}
           </div>

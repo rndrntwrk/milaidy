@@ -459,7 +459,7 @@ export const ChatMessage = memo(function ChatMessage({
         {!isUser && !isGrouped ? (
           <div
             className={cn(
-              "mb-1 text-[12px] font-semibold text-accent",
+              "mb-1 text-xs font-semibold text-accent",
               isRightAligned ? "text-right" : "text-left",
             )}
           >
@@ -476,7 +476,7 @@ export const ChatMessage = memo(function ChatMessage({
             {isRightAligned ? (
               <>
                 <div className="min-w-0 text-right">
-                  <div className="truncate text-[12px] font-semibold text-txt-strong">
+                  <div className="truncate text-xs font-semibold text-txt-strong">
                     {senderPrimaryLabel}
                   </div>
                   {senderHandle ? (
@@ -497,7 +497,7 @@ export const ChatMessage = memo(function ChatMessage({
                   label={senderPrimaryLabel}
                 />
                 <div className="min-w-0 text-left">
-                  <div className="truncate text-[12px] font-semibold text-txt-strong">
+                  <div className="truncate text-xs font-semibold text-txt-strong">
                     {senderPrimaryLabel}
                   </div>
                   {senderHandle ? (
@@ -513,8 +513,8 @@ export const ChatMessage = memo(function ChatMessage({
         <ChatBubble
           tone={isUser ? "user" : "assistant"}
           source={normalizedSource}
-          className={`relative group rounded-[18px] px-4 py-3 text-[15px] leading-[1.7] whitespace-pre-wrap break-words ${
-            isRightAligned ? "rounded-br-[6px]" : "rounded-bl-[6px]"
+          className={`relative group rounded-2xl px-4 py-3 text-[15px] leading-[1.7] whitespace-pre-wrap break-words ${
+            isRightAligned ? "rounded-br-sm" : "rounded-bl-sm"
           }`}
           style={{ fontFamily: "var(--font-chat)" }}
         >
@@ -534,7 +534,7 @@ export const ChatMessage = memo(function ChatMessage({
                 value={draftText}
                 onChange={(event) => setDraftText(event.target.value)}
                 onKeyDown={handleEditKeyDown}
-                className="min-h-[110px] w-full rounded-[14px] border border-border/28 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_86%,transparent),color-mix(in_srgb,var(--bg)_95%,transparent))] px-3 py-2.5 text-[15px] leading-[1.7] text-txt outline-none shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_14px_20px_-20px_rgba(15,23,42,0.1)] focus-visible:border-accent/28 focus-visible:ring-2 focus-visible:ring-accent/12"
+                className="min-h-[110px] w-full rounded-xl border border-border/28 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_86%,transparent),color-mix(in_srgb,var(--bg)_95%,transparent))] px-3 py-2.5 text-[15px] leading-[1.7] text-txt outline-none shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_14px_20px_-20px_rgba(15,23,42,0.1)] focus-visible:border-accent/28 focus-visible:ring-2 focus-visible:ring-accent/12"
                 style={{ fontFamily: "var(--font-chat)" }}
                 aria-label={labels.edit ?? "Edit message"}
                 disabled={savingEdit}
@@ -545,7 +545,7 @@ export const ChatMessage = memo(function ChatMessage({
                   size="sm"
                   onClick={handleCancelEditing}
                   disabled={savingEdit}
-                  className="h-8 rounded-[11px] px-3 text-xs"
+                  className="h-8 rounded-lg px-3 text-xs"
                 >
                   {labels.cancel ?? "Cancel"}
                 </Button>
@@ -558,7 +558,7 @@ export const ChatMessage = memo(function ChatMessage({
                     !draftText.trim() ||
                     draftText.trim() === message.text.trim()
                   }
-                  className="h-8 rounded-[11px] px-3 text-xs disabled:border-border/20 disabled:bg-bg-accent disabled:text-muted-strong"
+                  className="h-8 rounded-lg px-3 text-xs disabled:border-border/20 disabled:bg-bg-accent disabled:text-muted-strong"
                 >
                   {savingEdit
                     ? (labels.saving ?? "Saving...")

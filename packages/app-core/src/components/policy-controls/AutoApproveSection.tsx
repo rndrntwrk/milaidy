@@ -28,7 +28,7 @@ export function AutoApproveSection({
               const v = e.target.value;
               if (/^\d*\.?\d*$/.test(v)) onChange({ threshold: v });
             }}
-            className="h-8 text-[13px] pl-7 tabular-nums"
+            className="h-8 text-sm pl-7 tabular-nums"
             placeholder="5"
           />
         </div>

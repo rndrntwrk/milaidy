@@ -16,8 +16,8 @@ describe("onboarding step chrome actions", () => {
     );
 
     const button = screen.getByRole("button", { name: "Back" });
-    expect(button.className).toContain("min-h-[44px]");
-    expect(button.className).toContain("min-w-[44px]");
+    expect(button.className).toContain("min-h-touch");
+    expect(button.className).toContain("min-w-touch");
     expect(button.className).toContain(
       "hover:bg-[var(--onboarding-secondary-hover-bg)]",
     );
@@ -45,7 +45,7 @@ describe("onboarding step chrome actions", () => {
     expect(button.className).toContain(
       "[text-shadow:var(--onboarding-text-shadow-muted)]",
     );
-    expect(button.className).toContain("min-h-[44px]");
+    expect(button.className).toContain("min-h-touch");
     expect(button.className).not.toContain("bg-bg-accent");
   });
 

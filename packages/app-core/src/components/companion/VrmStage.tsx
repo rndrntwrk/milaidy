@@ -301,7 +301,7 @@ export const VrmStage = memo(function VrmStage({
         <div className="absolute inset-x-0 bottom-[18%] z-20 flex flex-col items-center gap-2 pointer-events-none">
           <div className="h-1 w-32 overflow-hidden rounded-full bg-black/8">
             <div
-              className="h-full rounded-full bg-blue-400/50 transition-all duration-300 ease-out"
+              className="h-full rounded-full bg-status-info/50 transition-all duration-300 ease-out"
               style={{
                 width:
                   loadingProgress !== undefined

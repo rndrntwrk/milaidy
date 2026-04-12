@@ -155,8 +155,8 @@ export function MusicPlayerGlobal() {
               <span
                 className={`inline-block w-2 h-2 rounded-full shrink-0 ${
                   track.isPaused
-                    ? "bg-yellow-400"
-                    : "bg-green-400 animate-pulse"
+                    ? "bg-warn"
+                    : "bg-ok animate-pulse"
                 }`}
               />
               <span className="text-xs font-semibold text-txt truncate">
@@ -211,7 +211,7 @@ export function MusicPlayerGlobal() {
               step="0.05"
               value={muted ? 0 : volume}
               onChange={handleVolumeChange}
-              className="flex-1 h-1 accent-green-400 cursor-pointer"
+              className="flex-1 h-1 accent-ok cursor-pointer"
               aria-label="Volume"
             />
           </div>
@@ -227,7 +227,7 @@ export function MusicPlayerGlobal() {
         >
           <span
             className={`inline-block w-2 h-2 rounded-full ${
-              track.isPaused ? "bg-yellow-400" : "bg-green-400 animate-pulse"
+              track.isPaused ? "bg-warn" : "bg-ok animate-pulse"
             }`}
           />
           <span className="max-w-[10rem] truncate">{track.title}</span>

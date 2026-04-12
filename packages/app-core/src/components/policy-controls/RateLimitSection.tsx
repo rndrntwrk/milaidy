@@ -22,7 +22,7 @@ function LabeledSlider({
     <div className="space-y-1.5">
       <div className="flex items-center justify-between">
         <Label className="text-xs-tight text-muted">{label}</Label>
-        <span className="text-[12px] font-semibold text-txt tabular-nums">
+        <span className="text-xs font-semibold text-txt tabular-nums">
           {value} {unit}
         </span>
       </div>

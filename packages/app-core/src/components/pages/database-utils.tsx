@@ -167,7 +167,7 @@ export function ResultsGrid({
                     {meta && (
                       <Badge
                         variant="outline"
-                        className={`text-[9px] px-1.5 py-0 border-none font-medium ${typeBadgeColor(meta.type)}`}
+                        className={`text-3xs px-1.5 py-0 border-none font-medium ${typeBadgeColor(meta.type)}`}
                       >
                         {typeLabel(meta.type)}
                       </Badge>
@@ -175,7 +175,7 @@ export function ResultsGrid({
                     {meta?.isPrimaryKey && (
                       <Badge
                         variant="outline"
-                        className="border-none bg-accent/16 px-1.5 py-0 text-[9px] font-bold text-accent-fg shadow-sm"
+                        className="border-none bg-accent/16 px-1.5 py-0 text-3xs font-bold text-accent-fg shadow-sm"
                       >
                         PK
                       </Badge>

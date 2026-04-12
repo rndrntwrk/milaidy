@@ -153,7 +153,7 @@ describe("Sidebar", () => {
         <div>Body</div>
       </Sidebar>,
     );
-    expect(screen.getByTestId("sidebar").className).toContain("rounded-[24px]");
+    expect(screen.getByTestId("sidebar").className).toContain("rounded-3xl");
     expect(screen.getByTestId("sidebar").className).toContain(
       "backdrop-blur-xl",
     );

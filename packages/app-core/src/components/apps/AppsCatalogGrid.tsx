@@ -147,8 +147,8 @@ export function AppsCatalogGrid({
                           }
                           className={`shrink-0 p-1 transition-colors ${
                             isFavorite
-                              ? "text-amber-400"
-                              : "text-muted/40 opacity-0 group-hover:opacity-100 hover:text-amber-400"
+                              ? "text-warn"
+                              : "text-muted/40 opacity-0 group-hover:opacity-100 hover:text-warn"
                           }`}
                           onClick={(e: React.MouseEvent) => {
                             e.stopPropagation();

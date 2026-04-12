@@ -327,7 +327,7 @@ export function MediaSettingsSection() {
                 key={cat}
                 variant={active ? "default" : "ghost"}
                 size="sm"
-                className={`flex-1 basis-[calc(50%-0.125rem)] sm:basis-0 min-h-[44px] rounded-lg border px-2 py-2 text-2xs sm:text-xs font-semibold !whitespace-normal ${
+                className={`flex-1 basis-[calc(50%-0.125rem)] sm:basis-0 min-h-touch rounded-lg border px-2 py-2 text-2xs sm:text-xs font-semibold !whitespace-normal ${
                   active
                     ? MEDIA_SEGMENT_BUTTON_ACTIVE_CLASSNAME
                     : MEDIA_SEGMENT_BUTTON_INACTIVE_CLASSNAME

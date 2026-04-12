@@ -690,11 +690,41 @@ function shouldRecoverMissingOccurrenceAsCreate(
 }
 
 function inferReminderIntensityFromIntent(
-  _intent: string,
+  intent: string,
 ): LifeOpsReminderIntensity | null {
   // LLM extraction (extractReminderIntensityWithLlm) is the primary path.
-  // This fallback returns null so the handler asks for clarification
-  // rather than silently misrouting via English-only regex.
+  // This is a best-effort English fallback for when the LLM is unavailable.
+  // Intent is already classified as set_reminder_preference via i18n;
+  // this only determines the specific intensity level.
+  const lower = intent.toLowerCase();
+  if (
+    /\b(stop reminding me|don't remind me|pause reminders?|mute reminders?|high priority only|only high priority)\b/.test(
+      lower,
+    )
+  ) {
+    return "high_priority_only";
+  }
+  if (
+    /\b(resume reminders?|start reminding me again|turn reminders? back on|normal reminders?)\b/.test(
+      lower,
+    )
+  ) {
+    return "normal";
+  }
+  if (
+    /\b(less|fewer|lower)\s+reminders?\b/.test(lower) ||
+    /\bremind.*\b(less|fewer|lower)\b/.test(lower) ||
+    /\b(less|fewer|lower)\b/.test(lower)
+  ) {
+    return "minimal";
+  }
+  if (
+    /\bmore reminders?\b/.test(lower) ||
+    /\bremind.*\bmore\b/.test(lower) ||
+    /\bmore persistent\b/.test(lower)
+  ) {
+    return "persistent";
+  }
   return null;
 }
 
@@ -3121,8 +3151,9 @@ function inferSeedCadenceFromIntent(
 
   const timesPerDayMatch =
     lower.match(
-      /\b(one|two|three|four|five|six|\d+)\s*(?:x|times?)\s*(?:a|per)\s*day\b/,
-    ) ?? lower.match(/\b(once|twice)\s+a\s+day\b/);
+      /\b(one|two|three|four|five|six|\d+)\s*(?:x|times?)\s*(?:(?:a|per)\s*day|daily)\b/,
+    ) ??
+    lower.match(/\b(once|twice)\s+(?:a\s+day|daily)\b/);
   if (timesPerDayMatch?.[1]) {
     const count = parseNumberWord(timesPerDayMatch[1]);
     if (count) {
@@ -3468,15 +3499,110 @@ function shouldRequireLifeCreateConfirmation(args: {
   return !args.confirmed;
 }
 
+// ── i18n seed term arrays ────────────────────────────
+// Each entry feeds `textMatchesAnyTerm` (word-boundary for ASCII, substring
+// for CJK/non-ASCII).  Include morphological variants because the matcher
+// does not stem.
+const SEED_TERMS = {
+  brush_teeth: [
+    "brush teeth",
+    "brush my teeth",
+    "brushing teeth",
+    "brushing my teeth",
+    "brushed teeth",
+    "brushed my teeth",
+    "cepillar dientes",
+    "cepillarme dientes",
+    "cepillarse dientes",
+    "cepillarte dientes",
+    "cepillando dientes",
+    "cepillado dientes",
+    "刷牙",
+    "양치",
+    "escovar dentes",
+    "đánh răng",
+    "magsipilyo",
+  ],
+  workout: [
+    "workout",
+    "work out",
+    "exercise",
+    "gym",
+    "lifting",
+    "run",
+    "running",
+    "ejercicio",
+    "锻炼",
+    "健身",
+    "운동",
+    "exercício",
+    "tập thể dục",
+    "ehersisyo",
+  ],
+  invisalign: ["invisalign"],
+  hydration: [
+    "drink water",
+    "drank water",
+    "hydrate",
+    "hydrating",
+    "hydrated",
+    "hydration",
+    "water intake",
+    "beber agua",
+    "喝水",
+    "물 마시기",
+    "beber água",
+    "uống nước",
+    "uminom ng tubig",
+  ],
+  stretch: [
+    "stretch",
+    "stretching",
+    "stretched",
+    "yoga",
+    "estirar",
+    "拉伸",
+    "伸展",
+    "스트레칭",
+    "alongamento",
+    "giãn cơ",
+  ],
+  vitamins: [
+    "vitamin",
+    "vitamins",
+    "supplement",
+    "vitamina",
+    "维生素",
+    "비타민",
+  ],
+  shower: [
+    "shower",
+    "showering",
+    "ducha",
+    "淋浴",
+    "洗澡",
+    "샤워",
+    "banho",
+    "tắm",
+    "maligo",
+  ],
+  shave: [
+    "shave",
+    "shaving",
+    "shaved",
+    "afeitar",
+    "刮胡子",
+    "면도",
+    "barbear",
+    "cạo râu",
+    "mag-ahit",
+  ],
+} as const;
+
 function inferLifeDefinitionSeed(intent: string): LifeDefinitionSeed | null {
   const lower = intent.toLowerCase();
 
-  if (
-    ((/\bbrush(?:ing|ed)?\b/.test(lower) ||
-      /\bcepill(?:ar|arme|arte|arse|ando|ado|arme)\b/.test(lower)) &&
-      /\bteeth\b/.test(lower)) ||
-    (/\bcepill/.test(lower) && /\bdientes\b/.test(lower))
-  ) {
+  if (textMatchesAnyTerm(lower, SEED_TERMS.brush_teeth)) {
     const title = "Brush teeth";
     return {
       title,
@@ -3493,7 +3619,7 @@ function inferLifeDefinitionSeed(intent: string): LifeDefinitionSeed | null {
     };
   }
 
-  if (/\b(work ?out|exercise|gym|lifting|run|running)\b/.test(lower)) {
+  if (textMatchesAnyTerm(lower, SEED_TERMS.workout)) {
     const title = "Workout";
     return {
       title,
@@ -3511,7 +3637,7 @@ function inferLifeDefinitionSeed(intent: string): LifeDefinitionSeed | null {
     };
   }
 
-  if (/\binvisalign\b/.test(lower)) {
+  if (textMatchesAnyTerm(lower, SEED_TERMS.invisalign)) {
     const title = "Keep Invisalign in";
     return {
       title,
@@ -3535,10 +3661,7 @@ function inferLifeDefinitionSeed(intent: string): LifeDefinitionSeed | null {
     };
   }
 
-  if (
-    /\b(drink|drank|hydrat(?:e|ing|ed))\b/.test(lower) &&
-    /\bwater\b/.test(lower)
-  ) {
+  if (textMatchesAnyTerm(lower, SEED_TERMS.hydration)) {
     const title = "Drink water";
     return {
       title,
@@ -3562,7 +3685,7 @@ function inferLifeDefinitionSeed(intent: string): LifeDefinitionSeed | null {
     };
   }
 
-  if (/\bstretch(?:ing|ed)?\b/.test(lower)) {
+  if (textMatchesAnyTerm(lower, SEED_TERMS.stretch)) {
     const title = "Stretch";
     return {
       title,
@@ -3582,7 +3705,7 @@ function inferLifeDefinitionSeed(intent: string): LifeDefinitionSeed | null {
     };
   }
 
-  if (/\bvitamins?\b/.test(lower)) {
+  if (textMatchesAnyTerm(lower, SEED_TERMS.vitamins)) {
     const title = "Take vitamins";
     const mealWindows =
       /\bbreakfast\b/.test(lower) || /\bmorning\b/.test(lower)
@@ -3611,7 +3734,7 @@ function inferLifeDefinitionSeed(intent: string): LifeDefinitionSeed | null {
     };
   }
 
-  if (/\bshower(?:ing)?\b/.test(lower)) {
+  if (textMatchesAnyTerm(lower, SEED_TERMS.shower)) {
     const title = "Shower";
     return {
       title,
@@ -3629,7 +3752,7 @@ function inferLifeDefinitionSeed(intent: string): LifeDefinitionSeed | null {
     };
   }
 
-  if (/\bshav(?:e|ing|ed)\b/.test(lower)) {
+  if (textMatchesAnyTerm(lower, SEED_TERMS.shave)) {
     const title = "Shave";
     return {
       title,

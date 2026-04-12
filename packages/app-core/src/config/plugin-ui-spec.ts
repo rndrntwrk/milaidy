@@ -128,7 +128,7 @@ export function buildPluginConfigUiSpec(plugin: PluginForUiSpec): object {
         type: "Text",
         props: {
           text: param.description,
-          className: "text-[10px] text-muted -mt-1 mb-1",
+          className: "text-2xs text-muted -mt-1 mb-1",
         },
       };
     }

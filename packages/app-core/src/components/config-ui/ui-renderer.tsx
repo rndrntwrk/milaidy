@@ -873,7 +873,7 @@ const CarouselComponent: ComponentFn = (props) => {
         >
           {t("ui-renderer.Larr")}
         </Button>
-        <span className="text-[10px] text-muted self-center">
+        <span className="text-2xs text-muted self-center">
           {current + 1} / {items.length}
         </span>
         <Button
@@ -903,7 +903,7 @@ const BadgeComponent: ComponentFn = (props) => {
   };
   return (
     <span
-      className={`inline-block text-[10px] font-medium px-2 py-0.5 border ${cls[variant] ?? cls.default}`}
+      className={`inline-block text-2xs font-medium px-2 py-0.5 border ${cls[variant] ?? cls.default}`}
     >
       {String(props.text ?? "")}
     </span>
@@ -916,7 +916,7 @@ const AvatarComponent: ComponentFn = (props) => {
     props.size === "lg"
       ? "w-10 h-10 text-sm"
       : props.size === "sm"
-        ? "w-6 h-6 text-[10px]"
+        ? "w-6 h-6 text-2xs"
         : "w-8 h-8 text-xs";
   const initials = name
     .split(" ")
@@ -1251,7 +1251,7 @@ const MetricComponent: ComponentFn = (props) => {
         : "text-muted";
   return (
     <div className="flex flex-col gap-0.5 p-3 rounded-lg border border-border bg-card">
-      <div className="text-[10px] text-muted uppercase tracking-wider font-medium">
+      <div className="text-2xs text-muted uppercase tracking-wider font-medium">
         {String(props.label ?? "")}
       </div>
       <div className="flex items-baseline gap-1.5">
@@ -1263,7 +1263,7 @@ const MetricComponent: ComponentFn = (props) => {
         )}
       </div>
       {props.change != null && (
-        <div className={`text-[11px] font-medium ${trendColor}`}>
+        <div className={`text-xs-tight font-medium ${trendColor}`}>
           {String(props.change)}
         </div>
       )}
@@ -1287,12 +1287,12 @@ const BarGraphComponent: ComponentFn = (props) => {
             key={d.label}
             className="flex-1 flex flex-col items-center gap-0.5"
           >
-            <div className="text-[9px] text-muted">{d.value}</div>
+            <div className="text-3xs text-muted">{d.value}</div>
             <div
               className="w-full bg-accent transition-all duration-300 min-h-[2px]"
               style={{ height: `${(d.value / maxVal) * 80}px` }}
             />
-            <div className="text-[9px] text-muted truncate max-w-full">
+            <div className="text-3xs text-muted truncate max-w-full">
               {d.label}
             </div>
           </div>
@@ -1405,7 +1405,7 @@ const PopoverComponent: ComponentFn = (props) => {
             type="button"
             variant="ghost"
             size="sm"
-            className="text-[10px] text-muted mt-1 hover:text-txt p-0 h-auto"
+            className="text-2xs text-muted mt-1 hover:text-txt p-0 h-auto"
             onClick={() => setOpen(false)}
           >
             Close
@@ -1427,7 +1427,7 @@ const CollapsibleComponent: ComponentFn = (props, children) => {
         onClick={() => setOpen(!open)}
       >
         <span
-          className="text-[10px] transition-transform"
+          className="text-2xs transition-transform"
           style={{ transform: open ? "rotate(90deg)" : "none" }}
         >
           &#9654;
@@ -1465,7 +1465,7 @@ const AccordionComponent: ComponentFn = (props) => {
             onClick={() => toggle(i)}
           >
             <span
-              className="text-[10px] transition-transform"
+              className="text-2xs transition-transform"
               style={{ transform: openSet.has(i) ? "rotate(90deg)" : "none" }}
             >
               &#9654;
@@ -1641,7 +1641,7 @@ function ElementRenderer({ elementId }: { elementId: string }) {
   const component = COMPONENTS[el.type];
   if (!component) {
     return (
-      <div className="text-[10px] text-destructive border border-dashed border-destructive p-2">
+      <div className="text-2xs text-destructive border border-dashed border-destructive p-2">
         {t("ui-renderer.UnknownComponent")} {el.type}
       </div>
     );

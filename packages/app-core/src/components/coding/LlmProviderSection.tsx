@@ -153,14 +153,14 @@ export function LlmProviderSection({
       {isCloud && (
         <div className="flex flex-col gap-3">
           {prefs._CLOUD_API_KEY ? (
-            <SettingsControls.MutedText className="text-xs text-green-500">
+            <SettingsControls.MutedText className="text-xs text-ok">
               {t("codingagentsettingssection.CloudPaired", {
                 defaultValue:
                   "Using your Eliza Cloud account for coding agent LLM calls.",
               })}
             </SettingsControls.MutedText>
           ) : (
-            <SettingsControls.MutedText className="text-xs text-amber-500">
+            <SettingsControls.MutedText className="text-xs text-warn">
               {t("codingagentsettingssection.CloudUnpaired", {
                 defaultValue:
                   "No Eliza Cloud account connected. Pair your account in the Cloud settings section first.",

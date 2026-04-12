@@ -58,12 +58,12 @@ function TruncatingConversationTitle({
 
   const spanClass =
     variant === "game-modal"
-      ? `block w-full min-w-0 max-w-full truncate text-left text-[13px] font-medium leading-tight transition-colors ${
+      ? `block w-full min-w-0 max-w-full truncate text-left text-sm font-medium leading-tight transition-colors ${
           isActive
             ? "text-txt text-shadow-glow"
             : "text-white/90 group-hover:text-white"
         }`
-      : `block min-w-0 max-w-full flex-1 truncate text-left text-[13px] font-semibold leading-[1.2] tracking-[-0.01em] transition-colors ${
+      : `block min-w-0 max-w-full flex-1 truncate text-left text-sm font-semibold leading-[1.2] tracking-[-0.01em] transition-colors ${
           isActive
             ? "text-txt"
             : "text-[color:color-mix(in_srgb,var(--text-strong)_88%,var(--text)_12%)] group-hover:text-txt"
@@ -91,7 +91,7 @@ function TruncatingConversationTitle({
         align="start"
         sideOffset={10}
         collisionPadding={12}
-        className={`z-[${Z_OVERLAY}] max-w-[min(90vw,22rem)] whitespace-normal break-words px-3 py-2 text-[13px] leading-snug`}
+        className={`z-[${Z_OVERLAY}] max-w-[min(90vw,22rem)] whitespace-normal break-words px-3 py-2 text-sm leading-snug`}
       >
         {displayTitle}
       </TooltipContent>
@@ -226,7 +226,7 @@ export function ChatConversationItem({
                 ? GAME_MODAL_ROW_ACTIVE_CLASSNAME
                 : GAME_MODAL_ROW_INACTIVE_CLASSNAME
             }`
-          : `group relative flex w-full items-start justify-start gap-3 rounded-[18px] border px-3.5 py-3.5 text-left transition-[border-color,background-color,color,box-shadow,transform] duration-150 focus-within:ring-2 focus-within:ring-accent/35 ${
+          : `group relative flex w-full items-start justify-start gap-3 rounded-2xl border px-3.5 py-3.5 text-left transition-[border-color,background-color,color,box-shadow,transform] duration-150 focus-within:ring-2 focus-within:ring-accent/35 ${
               isActive
                 ? "border-accent/26 bg-[linear-gradient(180deg,rgba(var(--accent-rgb),0.18),rgba(var(--accent-rgb),0.08))] text-txt shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_18px_24px_-22px_rgba(var(--accent-rgb),0.22)] ring-1 ring-inset ring-accent/10 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05),0_18px_28px_-22px_rgba(0,0,0,0.26),0_0_0_1px_rgba(var(--accent-rgb),0.12)]"
                 : "border-border/10 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_18%,transparent),transparent)] text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] hover:border-border/28 hover:bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_28%,transparent),transparent)] hover:text-txt hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_14px_20px_-22px_rgba(15,23,42,0.12)] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.02)] dark:hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.04),0_14px_22px_-22px_rgba(0,0,0,0.22)]"
@@ -308,7 +308,7 @@ export function ChatConversationItem({
           className={
             isGameModal
               ? `${GAME_MODAL_ROW_ACTION_CLASSNAME} ${rowActionVisibility}`
-              : `h-8 w-8 shrink-0 rounded-[11px] ${rowActionVisibility} hover:text-accent`
+              : `h-8 w-8 shrink-0 rounded-lg ${rowActionVisibility} hover:text-accent`
           }
           onClick={(event) => {
             event.preventDefault();
@@ -329,7 +329,7 @@ export function ChatConversationItem({
           className={
             isGameModal
               ? `${GAME_MODAL_ROW_ACTION_CLASSNAME} ${rowActionVisibility} hover:text-danger`
-              : `h-8 w-8 shrink-0 rounded-[11px] ${rowActionVisibility} hover:text-danger`
+              : `h-8 w-8 shrink-0 rounded-lg ${rowActionVisibility} hover:text-danger`
           }
           onClick={(event) => {
             event.preventDefault();
@@ -342,7 +342,7 @@ export function ChatConversationItem({
       ) : null}
 
       {isConfirmingDelete ? (
-        <div className="flex flex-shrink-0 items-center gap-1.5 rounded-[12px] border border-danger/22 bg-[linear-gradient(180deg,rgba(239,68,68,0.1),rgba(239,68,68,0.04))] px-2 py-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_10px_16px_-16px_rgba(127,29,29,0.18)]">
+        <div className="flex flex-shrink-0 items-center gap-1.5 rounded-lg border border-danger/22 bg-[linear-gradient(180deg,rgba(239,68,68,0.1),rgba(239,68,68,0.04))] px-2 py-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_10px_16px_-16px_rgba(127,29,29,0.18)]">
           <span className="text-2xs font-medium text-danger">
             {labels.deleteConfirm ?? "Delete?"}
           </span>

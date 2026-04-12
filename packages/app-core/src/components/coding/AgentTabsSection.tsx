@@ -70,7 +70,7 @@ export function AgentTabsSection({
                 variant="ghost"
                 size="sm"
                 disabled={isAuthenticating}
-                className="flex-1 h-9 rounded-lg border border-amber-500/30 px-3 py-2 text-xs font-semibold text-amber-500 hover:bg-amber-500/10 hover:text-amber-400"
+                className="flex-1 h-9 rounded-lg border border-warn/30 px-3 py-2 text-xs font-semibold text-warn hover:bg-warn/10 hover:text-warn"
                 onClick={() => onAuth(agent)}
               >
                 {isAuthenticating
@@ -103,7 +103,7 @@ export function AgentTabsSection({
                 {installState === "installed" &&
                   llmProvider === "subscription" &&
                   preflightByAgent[agent]?.auth?.status === "authenticated" && (
-                    <span className="text-2xs font-medium text-green-500 opacity-90">
+                    <span className="text-2xs font-medium text-ok opacity-90">
                       ✓
                     </span>
                   )}
@@ -153,7 +153,7 @@ export function AgentTabsSection({
           )}
           {authResult.launched === false && (
             <div className="flex items-center gap-2">
-              <SettingsControls.MutedText className="text-xs text-amber-500">
+              <SettingsControls.MutedText className="text-xs text-warn">
                 {authResult.instructions}
               </SettingsControls.MutedText>
               <Button

@@ -45,7 +45,7 @@ export function PolicyToggle({
             <Icon className="h-4 w-4" />
           </div>
           <div className="min-w-0 flex-1">
-            <div className="text-[13px] font-semibold text-txt truncate">
+            <div className="text-sm font-semibold text-txt truncate">
               {title}
             </div>
             {enabled && summary && !expanded && (

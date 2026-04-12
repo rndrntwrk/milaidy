@@ -35,7 +35,7 @@ const rpcCalloutClass = `mx-auto mt-4 flex w-full max-w-[25rem] items-center jus
 
 const rpcFieldStackClass = "mx-auto w-full max-w-[27rem] space-y-4 text-left";
 
-const rpcFieldLabelClass = `mb-1.5 block text-[11px] tracking-[0.14em] ${onboardingFieldLabelClassName}`;
+const rpcFieldLabelClass = `mb-1.5 block text-xs-tight tracking-[0.14em] ${onboardingFieldLabelClassName}`;
 
 const rpcFieldHintClass = `mb-2 ${onboardingSubtleTextClassName}`;
 
@@ -190,7 +190,7 @@ export function RpcStep() {
           eyebrow={t("onboarding.rpcTitle")}
           title={t("onboarding.rpcQuestion")}
           description={t("onboarding.rpcDesc")}
-          descriptionClassName="mx-auto mt-1 max-w-[34ch] text-balance text-[13px] leading-6"
+          descriptionClassName="mx-auto mt-1 max-w-[34ch] text-balance text-sm leading-6"
         />
 
         <div className="mx-auto flex w-full max-w-[25rem] flex-col gap-3">

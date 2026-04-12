@@ -32,12 +32,12 @@ export function ChatMessageActions({
   const copiedAriaLabel = labels.copiedAria ?? "Copied to clipboard";
 
   return (
-    <PagePanel.ActionRail className="top-1 rounded-[12px] p-1">
+    <PagePanel.ActionRail className="top-1 rounded-lg p-1">
       <Button
         variant="surface"
         size="icon"
         onClick={onCopy}
-        className="h-8 w-8 rounded-[11px]"
+        className="h-8 w-8 rounded-lg"
         title={copied ? copiedLabel : copyLabel}
         aria-label={copied ? copiedAriaLabel : copyLabel}
       >
@@ -53,7 +53,7 @@ export function ChatMessageActions({
           variant="surface"
           size="icon"
           onClick={onPlay}
-          className="h-8 w-8 rounded-[11px]"
+          className="h-8 w-8 rounded-lg"
           title={labels.play ?? "Play message"}
           aria-label={labels.play ?? "Play message"}
         >
@@ -66,7 +66,7 @@ export function ChatMessageActions({
           variant="surface"
           size="icon"
           onClick={onEdit}
-          className="h-8 w-8 rounded-[11px]"
+          className="h-8 w-8 rounded-lg"
           title={labels.edit ?? "Edit message"}
           aria-label={labels.edit ?? "Edit message"}
         >
@@ -79,7 +79,7 @@ export function ChatMessageActions({
           variant="surfaceDestructive"
           size="icon"
           onClick={onDelete}
-          className="h-8 w-8 rounded-[11px]"
+          className="h-8 w-8 rounded-lg"
           title={labels.delete ?? "Delete message"}
           aria-label={labels.delete ?? "Delete message"}
         >

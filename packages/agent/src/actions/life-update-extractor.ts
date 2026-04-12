@@ -62,77 +62,9 @@ function parseTimeOfDay(value: string): string | null {
   return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }
 
-function extractHeuristicUpdateFields(intent: string): ExtractedUpdateFields | null {
-  const lower = intent.toLowerCase();
-  const timeOfDay = parseTimeOfDay(intent);
-  const windows = [
-    /\bmornings?\b/.test(lower) ? "morning" : null,
-    /\bafternoons?\b/.test(lower) ? "afternoon" : null,
-    /\bevenings?\b/.test(lower) ? "evening" : null,
-    /\bnights?\b/.test(lower) ? "night" : null,
-  ].filter((entry): entry is string => entry !== null);
-  const weekdayMap: Record<string, number> = {
-    sunday: 0,
-    sun: 0,
-    monday: 1,
-    mon: 1,
-    tuesday: 2,
-    tue: 2,
-    tues: 2,
-    wednesday: 3,
-    wed: 3,
-    thursday: 4,
-    thu: 4,
-    thur: 4,
-    thurs: 4,
-    friday: 5,
-    fri: 5,
-    saturday: 6,
-    sat: 6,
-  };
-  const weekdays = [
-    ...lower.matchAll(
-      /\b(?:every|each)\s+(sun(?:day)?|mon(?:day)?|tue(?:s(?:day)?)?|wed(?:nesday)?|thu(?:r(?:s(?:day)?)?)?|fri(?:day)?|sat(?:urday)?)\b/g,
-    ),
-  ]
-    .map((match) => weekdayMap[match[1]])
-    .filter((value): value is number => value !== undefined);
-
-  const cadenceKind =
-    /\bweekly\b/.test(lower) || weekdays.length > 0
-      ? "weekly"
-      : /\bdaily\b|\bevery day\b/.test(lower)
-        ? "daily"
-        : timeOfDay !== null
-          ? "daily"
-          : null;
-
-  const everyMinutesMatch = lower.match(/\bevery\s+(\d+)\s*(hours?|minutes?)\b/);
-  const titleMatch = intent.match(/\brename(?: it)? to\s+(.+)$/i);
-
-  const result: ExtractedUpdateFields = {
-    title:
-      titleMatch?.[1]?.trim().length
-        ? titleMatch[1]
-            .trim()
-            .split(/\s+/)
-            .slice(0, 6)
-            .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-            .join(" ")
-        : null,
-    cadenceKind,
-    windows: windows.length > 0 ? windows : null,
-    weekdays: weekdays.length > 0 ? [...new Set(weekdays)] : null,
-    timeOfDay,
-    everyMinutes: everyMinutesMatch
-      ? Number(everyMinutesMatch[1]) *
-        (everyMinutesMatch[2].startsWith("hour") ? 60 : 1)
-      : null,
-    priority: null,
-    description: null,
-  };
-
-  return Object.values(result).some((value) => value !== null) ? result : null;
+function extractHeuristicUpdateFields(_intent: string): ExtractedUpdateFields | null {
+  // LLM extraction is the primary path; heuristic regex removed for i18n.
+  return null;
 }
 
 /**

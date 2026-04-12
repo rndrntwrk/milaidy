@@ -256,7 +256,7 @@ export function StreamingPermissionsSettingsView({
                 <PermissionIcon icon={def.icon} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="font-semibold text-[13px]">{name}</span>
+                    <span className="font-semibold text-sm">{name}</span>
                     <StatusBadge
                       label={translateWithFallback(
                         t,
@@ -416,7 +416,7 @@ export function StreamingPermissionsOnboardingView({
         <Button
           variant="default"
           data-testid="permissions-onboarding-continue"
-          className="group relative inline-flex items-center justify-center gap-[8px] px-[32px] py-[12px] min-h-[44px] bg-[rgba(240,185,11,0.18)] border border-[rgba(240,185,11,0.35)] rounded-[6px] text-[var(--onboarding-accent-foreground)] text-xs-tight font-semibold tracking-[0.18em] uppercase cursor-pointer transition-all duration-300 overflow-hidden hover:bg-[rgba(240,185,11,0.28)] hover:border-[rgba(240,185,11,0.6)] disabled:opacity-40 disabled:cursor-not-allowed"
+          className="group relative inline-flex items-center justify-center gap-[8px] px-[32px] py-[12px] min-h-touch bg-[rgba(240,185,11,0.18)] border border-[rgba(240,185,11,0.35)] rounded-sm text-[var(--onboarding-accent-foreground)] text-xs-tight font-semibold tracking-[0.18em] uppercase cursor-pointer transition-all duration-300 overflow-hidden hover:bg-[rgba(240,185,11,0.28)] hover:border-[rgba(240,185,11,0.6)] disabled:opacity-40 disabled:cursor-not-allowed"
           onClick={(e) => {
             if (e?.currentTarget) {
               const rect = e.currentTarget.getBoundingClientRect();

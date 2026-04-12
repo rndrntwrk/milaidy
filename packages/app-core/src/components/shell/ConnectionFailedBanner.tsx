@@ -58,7 +58,7 @@ export function ConnectionFailedBanner() {
             variant="ghost"
             size="sm"
             onClick={dismissBackendDisconnectedBanner}
-            className="rounded px-3 py-1 text-xs text-red-100 hover:bg-red-700 hover:text-white"
+            className="rounded px-3 py-1 text-xs text-danger/20 hover:bg-danger hover:text-white"
           >
             {t("skillsview.Dismiss")}
           </Button>

@@ -875,7 +875,7 @@ export function InventoryView() {
       label: "Approvals",
       badge:
         pendingApprovalCount > 0 ? (
-          <span className="inline-flex min-w-[18px] items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white">
+          <span className="inline-flex min-w-[18px] items-center justify-center rounded-full bg-danger px-1 text-3xs font-bold text-white">
             {pendingApprovalCount > 99 ? "99+" : pendingApprovalCount}
           </span>
         ) : undefined,

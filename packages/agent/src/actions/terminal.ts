@@ -208,6 +208,7 @@ function extractTrailingCommandText(text: string): string | undefined {
     }
 
     const trimmed = stripLeadingCommandFillers(remainder)
+      .replace(/[?.!]+$/g, "")
       .replace(/\s+(?:in|on|from|to|for|at)\s+(?:the\s+)?[\w\s]+$/i, "")
       .trim();
     if (trimmed) {

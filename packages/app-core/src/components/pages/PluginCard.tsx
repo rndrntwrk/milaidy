@@ -430,7 +430,7 @@ export function PluginCard({
             }}
             title={t("pluginsview.Settings")}
           >
-            <span className="text-[14px] leading-none">&#9881;</span>
+            <span className="text-sm leading-none">&#9881;</span>
             <span
               className={`inline-block text-2xs transition-transform duration-200 ${isOpen ? "rotate-90" : ""}`}
             >

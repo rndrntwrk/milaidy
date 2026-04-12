@@ -326,7 +326,7 @@ export function SecretsView({
                     : "rotate(0deg)",
                 }}
               />
-              <span className="text-[14px] font-semibold text-txt">
+              <span className="text-sm font-semibold text-txt">
                 {label}
               </span>
               <span className="text-xs text-muted">({catSecrets.length})</span>
@@ -422,7 +422,7 @@ function SecretPicker({
       >
         <DialogHeader className="flex flex-row items-center justify-between border-b border-border/60 px-4 py-3">
           <div className="min-w-0">
-            <DialogTitle className="text-[14px] font-semibold text-txt">
+            <DialogTitle className="text-sm font-semibold text-txt">
               {t("secretsview.AddSecretsToVault")}
             </DialogTitle>
             <DialogDescription className="sr-only">
@@ -432,7 +432,7 @@ function SecretPicker({
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8 rounded-lg text-[16px] text-muted hover:text-txt"
+            className="h-8 w-8 rounded-lg text-base text-muted hover:text-txt"
             onClick={onClose}
             aria-label={t("common.close")}
           >

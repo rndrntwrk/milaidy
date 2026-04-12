@@ -211,18 +211,19 @@ function buildHeuristicOperationPlan(args: {
   }
 
   const asksToCreate =
-    /\b(add|create|make|set up|set|help me add|help me create|help me make)\b/.test(lower);
-  const mentionsLifeItem = LIFE_ITEM_RE.test(lower);
+    /\b(add|create|make|set up|set|help me add|help me create|help me make)\b/.test(
+      lower,
+    );
+  const mentionsLifeItem =
+    /\b(todo|task|habit|routine|reminder|alarm)\b/.test(lower);
   const hasSpecificTitle =
     /\bto\s+[a-z]/.test(lower) ||
     /\b\d+\s+[a-z]/.test(lower) ||
-    LIFE_SPECIFIC_ACTIVITY_RE.test(lower);
-  const hasSchedule = LIFE_SCHEDULE_RE.test(lower) || LIFE_TIME_RE.test(lower);
-  const hasCreateHint = LIFE_CREATE_HINT_RE.test(lower) || asksToCreate;
-  const hasSeededRoutine = LIFE_SEEDED_ROUTINE_RE.test(lower);
-  const hasSpecificActionableActivity = hasSpecificTitle || hasSeededRoutine;
-  const reminderScheduleOnly =
-    LIFE_REMINDER_ONLY_SCHEDULE_RE.test(lower) && hasSchedule;
+    /\b(call|email|text|submit|pay|brush|stretch|drink|take)\b/.test(lower);
+  const hasSchedule =
+    /\b(every|daily|weekly|tomorrow|today|tonight|morning|night|afternoon|evening)\b/.test(
+      lower,
+    ) || /\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b/.test(lower);
 
   if (asksToCreate && mentionsLifeItem && !hasSpecificTitle && !hasSchedule) {
     return {
@@ -233,15 +234,21 @@ function buildHeuristicOperationPlan(args: {
     };
   }
 
-  if (
-    reminderScheduleOnly ||
-    (hasCreateHint &&
-      hasSpecificActionableActivity &&
-      (hasSchedule || hasSeededRoutine || mentionsLifeItem))
-  ) {
+  const seededLifeCreate =
+    (LIFE_CREATE_HINT_RE.test(lower) || LIFE_ITEM_RE.test(lower)) &&
+    (LIFE_SPECIFIC_ACTIVITY_RE.test(lower) ||
+      LIFE_SEEDED_ROUTINE_RE.test(lower) ||
+      LIFE_SCHEDULE_RE.test(lower) ||
+      LIFE_TIME_RE.test(lower) ||
+      LIFE_REMINDER_ONLY_SCHEDULE_RE.test(lower));
+  const specificScheduledLifeCreate =
+    (LIFE_SPECIFIC_ACTIVITY_RE.test(lower) || LIFE_SEEDED_ROUTINE_RE.test(lower)) &&
+    (LIFE_SCHEDULE_RE.test(lower) || LIFE_TIME_RE.test(lower));
+
+  if (seededLifeCreate || specificScheduledLifeCreate) {
     return {
       operation: "create_definition",
-      confidence: hasSeededRoutine ? 0.91 : 0.86,
+      confidence: 0.84,
       shouldAct: true,
       missing: [],
     };
@@ -249,7 +256,7 @@ function buildHeuristicOperationPlan(args: {
 
   const shortTimedFollowup =
     text.length <= 32 &&
-    (LIFE_TIME_RE.test(lower) ||
+    (/\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b/.test(lower) ||
       /\b(today|tomorrow|tonight)\b/.test(lower));
   if (
     shortTimedFollowup &&

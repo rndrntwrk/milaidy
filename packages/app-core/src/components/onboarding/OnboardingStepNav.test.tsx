@@ -70,7 +70,7 @@ describe("OnboardingStepNav", () => {
     const navSurface = tree?.root.find(
       (node) =>
         typeof node.props.className === "string" &&
-        node.props.className.includes("w-full relative isolate rounded-[28px]"),
+        node.props.className.includes("w-full relative isolate rounded-3xl"),
     );
 
     expect(String(outerShell?.props.className)).toContain("max-md:-mb-12");

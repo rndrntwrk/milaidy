@@ -460,16 +460,16 @@ function OccurrenceRow({
             <span className="min-w-0 truncate text-xs font-semibold text-txt">
               {occurrence.title}
             </span>
-            <Badge variant="secondary" className="text-[9px]">
+            <Badge variant="secondary" className="text-3xs">
               {cadence}
             </Badge>
             {occurrence.state === "snoozed" ? (
-              <Badge variant="secondary" className="text-[9px]">
+              <Badge variant="secondary" className="text-3xs">
                 Snoozed
               </Badge>
             ) : null}
             {occurrence.subjectType === "agent" ? (
-              <Badge variant="secondary" className="text-[9px]">
+              <Badge variant="secondary" className="text-3xs">
                 Agent
               </Badge>
             ) : null}
@@ -554,7 +554,7 @@ function GoalRow({
         <span className="min-w-0 flex-1 truncate text-xs font-semibold text-txt">
           {goal.title}
         </span>
-        <Badge variant="secondary" className="text-[9px]">
+        <Badge variant="secondary" className="text-3xs">
           {reviewStateLabel(goal.reviewState)}
         </Badge>
       </div>
@@ -594,7 +594,7 @@ function ReminderRow({ reminder }: { reminder: LifeOpsActiveReminderView }) {
         <span className="min-w-0 flex-1 truncate text-xs font-semibold text-txt">
           {reminder.title}
         </span>
-        <Badge variant="secondary" className="text-[9px]">
+        <Badge variant="secondary" className="text-3xs">
           {reminderChannelLabel(reminder.channel)}
         </Badge>
       </div>
@@ -647,7 +647,7 @@ function OccurrenceBucketBlock({
         <span className="text-xs-tight font-semibold uppercase tracking-[0.08em] text-muted">
           {title}
         </span>
-        <Badge variant="secondary" className="text-[9px]">
+        <Badge variant="secondary" className="text-3xs">
           {occurrences.length}
         </Badge>
       </div>
@@ -694,7 +694,7 @@ function GoalSection({
         <span className="text-xs-tight font-semibold uppercase tracking-[0.08em] text-muted">
           Goals
         </span>
-        <Badge variant="secondary" className="text-[9px]">
+        <Badge variant="secondary" className="text-3xs">
           {goals.length}
         </Badge>
       </div>
@@ -730,7 +730,7 @@ function ReminderSection({
         <span className="text-xs-tight font-semibold uppercase tracking-[0.08em] text-muted">
           Reminder ladder
         </span>
-        <Badge variant="secondary" className="text-[9px]">
+        <Badge variant="secondary" className="text-3xs">
           {reminders.length}
         </Badge>
       </div>
@@ -788,7 +788,7 @@ function AgentOpsSection({
         <span className="text-xs-tight font-semibold uppercase tracking-[0.08em] text-muted">
           Agent ops
         </span>
-        <Badge variant="secondary" className="text-[9px]">
+        <Badge variant="secondary" className="text-3xs">
           {section.summary.activeOccurrenceCount +
             section.summary.activeGoalCount +
             section.summary.activeReminderCount}

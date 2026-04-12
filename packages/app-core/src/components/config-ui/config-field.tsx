@@ -1827,7 +1827,7 @@ function TableFieldInner(props: FieldRenderProps) {
                       type="button"
                       variant="ghost"
                       size="icon"
-                      className="text-muted hover:text-destructive text-[14px] px-1 h-auto w-auto"
+                      className="text-muted hover:text-destructive text-sm px-1 h-auto w-auto"
                       onClick={() => removeRow(ri)}
                       title={t("config-field.RemoveRow", {
                         defaultValue: "Remove row",

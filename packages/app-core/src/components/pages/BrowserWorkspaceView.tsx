@@ -1180,7 +1180,7 @@ export function BrowserWorkspaceView(): JSX.Element {
 
           <PagePanel.SummaryCard compact className="space-y-3">
             <div className="flex items-center justify-between gap-3">
-              <span className="text-[11px] uppercase tracking-[0.16em] text-muted/70">
+              <span className="text-xs-tight uppercase tracking-[0.16em] text-muted/70">
                 {t("browserworkspace.OpenTabs", {
                   defaultValue: "Open tabs",
                 })}
@@ -1188,7 +1188,7 @@ export function BrowserWorkspaceView(): JSX.Element {
               <MetaPill compact>{workspace.tabs.length}</MetaPill>
             </div>
             <div className="flex items-center justify-between gap-3">
-              <span className="text-[11px] uppercase tracking-[0.16em] text-muted/70">
+              <span className="text-xs-tight uppercase tracking-[0.16em] text-muted/70">
                 {t("browserworkspace.Active", {
                   defaultValue: "Active",
                 })}
@@ -1235,7 +1235,7 @@ export function BrowserWorkspaceView(): JSX.Element {
                         <div className="truncate text-sm font-medium text-current">
                           {label}
                         </div>
-                        <div className="truncate text-[11px] text-muted">
+                        <div className="truncate text-xs-tight text-muted">
                           {tab.url}
                         </div>
                       </div>

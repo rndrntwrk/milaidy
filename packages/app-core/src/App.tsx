@@ -343,7 +343,7 @@ export function App() {
           <Button
             variant="outline"
             size="sm"
-            className={`inline-flex items-center gap-2 px-3 py-2 text-[12px] font-semibold transition-all cursor-pointer ${
+            className={`inline-flex items-center gap-2 px-3 py-2 text-xs font-semibold transition-all cursor-pointer ${
               mobileConversationsOpen
                 ? "border-accent bg-accent-subtle text-txt"
                 : "border-border bg-card text-txt hover:border-accent hover:text-txt"
@@ -369,7 +369,7 @@ export function App() {
             </svg>
             {t("conversations.chats")}
             {unreadCount > 0 && (
-              <span className="inline-flex min-w-[18px] h-[18px] items-center justify-center rounded-full bg-accent text-accent-fg text-[10px] font-bold px-1">
+              <span className="inline-flex min-w-[18px] h-[18px] items-center justify-center rounded-full bg-accent text-accent-fg text-2xs font-bold px-1">
                 {unreadCount > 99 ? "99+" : unreadCount}
               </span>
             )}

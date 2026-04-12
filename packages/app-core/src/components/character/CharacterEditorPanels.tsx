@@ -50,7 +50,7 @@ export const CHARACTER_EDITOR_INLINE_FIELD_CLASSNAME =
 export const CHARACTER_EDITOR_SMALL_GOLD_ACTION_CLASSNAME =
   "h-6 px-2 text-2xs font-bold text-accent";
 export const CHARACTER_EDITOR_ICON_GHOST_CLASSNAME =
-  "mt-0.5 h-auto w-auto shrink-0 p-0 text-muted opacity-0 transition-[opacity,color,box-shadow] duration-150 hover:text-red-500 group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-danger/40";
+  "mt-0.5 h-auto w-auto shrink-0 p-0 text-muted opacity-0 transition-[opacity,color,box-shadow] duration-150 hover:text-danger group-hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-danger/40";
 
 /* ── Inline close icon used by multiple panels ───────────────────── */
 const CloseIconSvg = () => (
@@ -517,7 +517,7 @@ export function CharacterExamplesPanel({
               className="rounded-lg border border-border p-2.5"
             >
               <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-muted">
+                <span className="text-3xs font-bold uppercase tracking-[0.12em] text-muted">
                   {t("charactereditor.ConversationN", {
                     defaultValue: `Conversation ${ci + 1}`,
                   }).replace("{n}", String(ci + 1))}
@@ -525,7 +525,7 @@ export function CharacterExamplesPanel({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="mt-0.5 shrink-0 text-muted opacity-0 transition-opacity duration-150 p-0 h-auto w-auto hover:text-red-500 group-hover:opacity-100"
+                  className="mt-0.5 shrink-0 text-muted opacity-0 transition-opacity duration-150 p-0 h-auto w-auto hover:text-danger group-hover:opacity-100"
                   onClick={() => {
                     const updated = [...normalizedMessageExamples];
                     updated.splice(ci, 1);
@@ -543,7 +543,7 @@ export function CharacterExamplesPanel({
                     className="flex items-center gap-2"
                   >
                     <span
-                      className={`w-10 shrink-0 text-right text-[9px] font-bold uppercase tracking-[0.1em] text-muted${msg.name === "{{user1}}" ? "" : " text-accent"}`}
+                      className={`w-10 shrink-0 text-right text-3xs font-bold uppercase tracking-[0.1em] text-muted${msg.name === "{{user1}}" ? "" : " text-accent"}`}
                     >
                       {msg.name === "{{user1}}" ? "user" : "agent"}
                     </span>

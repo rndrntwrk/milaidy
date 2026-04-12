@@ -1070,7 +1070,7 @@ export function ConnectionProviderDetailScreen({
         <div className={`${onboardingDetailStackClassName} mt-4`}>
           <div
             id="openrouter-models-label"
-            className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--onboarding-text-muted)]"
+            className="text-xs-tight font-semibold uppercase tracking-[0.16em] text-[var(--onboarding-text-muted)]"
           >
             {t("onboarding.selectModel")}
           </div>

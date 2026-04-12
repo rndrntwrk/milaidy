@@ -74,7 +74,7 @@ export function RelationshipsIdentityCluster({
             x={CLUSTER_CENTER}
             y={CLUSTER_CENTER - 10}
             textAnchor="middle"
-            className="fill-black text-[14px] font-semibold"
+            className="fill-black text-sm font-semibold"
           >
             {shortLabel(person.displayName, 18)}
           </text>
@@ -92,7 +92,7 @@ export function RelationshipsIdentityCluster({
             x={CLUSTER_CENTER}
             y={CLUSTER_CENTER + 24}
             textAnchor="middle"
-            className="fill-black/50 text-[9px]"
+            className="fill-black/50 text-3xs"
           >
             {singleIdentity
               ? identityLabel(person, 0)
@@ -174,7 +174,7 @@ export function RelationshipsIdentityCluster({
           x={CLUSTER_CENTER}
           y={CLUSTER_CENTER - 6}
           textAnchor="middle"
-          className="fill-black text-[14px] font-semibold"
+          className="fill-black text-sm font-semibold"
         >
           {shortLabel(person.displayName, 18)}
         </text>
@@ -215,7 +215,7 @@ export function RelationshipsIdentityCluster({
                 x={x}
                 y={y - 3}
                 textAnchor="middle"
-                className="fill-black text-[9px] font-semibold uppercase"
+                className="fill-black text-3xs font-semibold uppercase"
               >
                 {shortLabel(platform, 8)}
               </text>
@@ -223,7 +223,7 @@ export function RelationshipsIdentityCluster({
                 x={x}
                 y={y + 8}
                 textAnchor="middle"
-                className="fill-black/70 text-[7px] font-medium"
+                className="fill-black/70 text-3xs font-medium"
               >
                 {identityLabel(person, index)}
               </text>

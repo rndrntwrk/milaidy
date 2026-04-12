@@ -35,7 +35,7 @@ export function FormSelect({
       </SelectTrigger>
       <SelectContent
         className={cn(
-          "rounded-[18px] border border-border/60 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_94%,transparent),color-mix(in_srgb,var(--bg)_97%,transparent))] p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_22px_34px_-24px_rgba(15,23,42,0.28)] backdrop-blur-xl",
+          "rounded-2xl border border-border/60 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_94%,transparent),color-mix(in_srgb,var(--bg)_97%,transparent))] p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_22px_34px_-24px_rgba(15,23,42,0.28)] backdrop-blur-xl",
           contentClassName,
         )}
       >
@@ -52,7 +52,7 @@ export const FormSelectItem = React.forwardRef<
   <SelectItem
     ref={ref}
     className={cn(
-      "min-h-[2.75rem] rounded-[14px] px-3 py-2.5 text-sm text-txt outline-none transition-[background-color,color,box-shadow] focus:bg-[linear-gradient(180deg,rgba(var(--accent-rgb),0.18),rgba(var(--accent-rgb),0.08))] focus:text-black data-[state=checked]:bg-[linear-gradient(180deg,rgba(var(--accent-rgb),0.2),rgba(var(--accent-rgb),0.1))] data-[state=checked]:text-black data-[state=checked]:shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_10px_18px_-18px_rgba(var(--accent-rgb),0.25)]",
+      "min-h-[2.75rem] rounded-xl px-3 py-2.5 text-sm text-txt outline-none transition-[background-color,color,box-shadow] focus:bg-[linear-gradient(180deg,rgba(var(--accent-rgb),0.18),rgba(var(--accent-rgb),0.08))] focus:text-black data-[state=checked]:bg-[linear-gradient(180deg,rgba(var(--accent-rgb),0.2),rgba(var(--accent-rgb),0.1))] data-[state=checked]:text-black data-[state=checked]:shadow-[inset_0_1px_0_rgba(255,255,255,0.1),0_10px_18px_-18px_rgba(var(--accent-rgb),0.25)]",
       className,
     )}
     {...props}

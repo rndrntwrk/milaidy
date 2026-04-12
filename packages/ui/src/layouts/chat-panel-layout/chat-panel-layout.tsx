@@ -17,10 +17,10 @@ const CHAT_PANEL_FULL_OVERLAY_CLASSNAME =
 const CHAT_PANEL_DOCK_WRAPPER_CLASSNAME =
   "absolute inset-0 z-10 flex flex-col bg-transparent pb-2 pt-2 sm:pb-4 sm:pt-4";
 const CHAT_PANEL_SHELL_BASE_CLASSNAME =
-  "relative flex min-h-0 flex-1 flex-col rounded-[28px] border border-border/60 shadow-[0_28px_90px_rgba(3,5,10,0.45)] ring-1 ring-white/5";
+  "relative flex min-h-0 flex-1 flex-col rounded-3xl border border-border/60 shadow-[0_28px_90px_rgba(3,5,10,0.45)] ring-1 ring-white/5";
 const CHAT_PANEL_FULL_OVERLAY_SHELL_CLASSNAME = `${CHAT_PANEL_SHELL_BASE_CLASSNAME} overflow-hidden bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_90%,transparent),color-mix(in_srgb,var(--bg)_86%,transparent))] backdrop-blur-xl`;
 const CHAT_PANEL_DOCK_SHELL_CLASSNAME =
-  "relative flex min-h-0 flex-1 flex-col overflow-visible rounded-[28px] bg-transparent pointer-events-none";
+  "relative flex min-h-0 flex-1 flex-col overflow-visible rounded-3xl bg-transparent pointer-events-none";
 const CHAT_PANEL_SIDEBAR_SLOT_CLASSNAME = "w-[292px] shrink-0 xl:w-[320px]";
 const CHAT_PANEL_THREAD_BASE_CLASSNAME =
   "flex-1 flex flex-col min-w-0 bg-transparent relative";

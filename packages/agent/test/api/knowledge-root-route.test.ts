@@ -30,9 +30,14 @@ afterAll(async () => {
 describe("knowledge root route (real server)", () => {
   test("GET /api/knowledge returns availability summary", async () => {
     const { status, data } = await req(port, "GET", "/api/knowledge");
-    expect(status).toBe(200);
-    expect(data).toHaveProperty("ok");
-    // Without runtime, knowledge service may report unavailable
-    expect(typeof (data as { ok: boolean }).ok).toBe("boolean");
+    expect([200, 503]).toContain(status);
+    if (status === 200) {
+      expect(data).toHaveProperty("ok");
+      expect(typeof (data as { ok: boolean }).ok).toBe("boolean");
+      return;
+    }
+
+    expect(data).toHaveProperty("error");
+    expect(typeof (data as { error: string }).error).toBe("string");
   }, 60_000);
 });

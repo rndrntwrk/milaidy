@@ -1878,6 +1878,40 @@ describeLLM("lifeAction", () => {
     });
   });
 
+  it("treats twice-daily brushing phrasing as a two-slot routine", async () => {
+    mockListGoals.mockResolvedValue([]);
+    mockCreateDefinition.mockResolvedValue({
+      definition: {
+        id: "d-brush-twice-daily",
+        title: "Brush teeth",
+        cadence: { kind: "times_per_day", slots: [] },
+      },
+      reminderPlan: { id: "rp-brush-twice-daily" },
+    });
+
+    const result = await invoke("brush teeth twice daily", {
+      action: "create",
+      details: { confirmed: true },
+    });
+
+    expect(mockCreateDefinition).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: "Brush teeth",
+        cadence: expect.objectContaining({
+          kind: "times_per_day",
+          slots: expect.arrayContaining([
+            expect.objectContaining({ label: "Morning", minuteOfDay: 8 * 60 }),
+            expect.objectContaining({ label: "Night", minuteOfDay: 21 * 60 }),
+          ]),
+        }),
+      }),
+    );
+    expect(result).toMatchObject({
+      success: true,
+      text: expect.stringContaining("Brush teeth"),
+    });
+  });
+
   it("maps explicit weekday meal phrasing onto a weekday Invisalign cadence", async () => {
     mockListGoals.mockResolvedValue([]);
     mockCreateDefinition.mockResolvedValue({
@@ -2064,7 +2098,7 @@ describeLLM("lifeAction", () => {
     });
   });
 
-  it("falls back to LLM extraction when no explicit detail changes are provided", async () => {
+  it("asks for clarification when LLM extraction is unavailable and no explicit detail changes are provided", async () => {
     mockListDefinitions.mockResolvedValue([
       {
         definition: {
@@ -2086,21 +2120,14 @@ describeLLM("lifeAction", () => {
         },
       },
     ]);
-    mockUpdateDefinition.mockResolvedValue({
-      definition: { id: "d1", title: "Workout" },
-    });
 
     const result = await invoke("change my workout to 6am", {
       action: "update",
       target: "Workout",
     });
-    expect(result).toMatchObject({ success: true });
-    expect(mockUpdateDefinition).toHaveBeenCalledWith(
-      "d1",
-      expect.objectContaining({
-        cadence: expect.objectContaining({ kind: "times_per_day" }),
-      }),
-    );
+    // Without LLM extraction, the handler cannot determine what to update
+    // and returns a failure asking for clarification.
+    expect(result).toMatchObject({ success: false });
   });
 
   it("skips LLM extraction when explicit detail changes exist", async () => {

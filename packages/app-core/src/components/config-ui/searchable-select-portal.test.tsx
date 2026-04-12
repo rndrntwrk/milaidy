@@ -70,7 +70,7 @@ function renderLargeModelPicker() {
   return render(
     <div
       data-testid="settings-shell"
-      className="overflow-hidden rounded-[30px] border border-border"
+      className="overflow-hidden rounded-full border border-border"
     >
       <ProviderSwitcher
         elizaCloudEnabled

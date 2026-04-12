@@ -6,7 +6,7 @@
  */
 
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import type { AgentRuntime, UUID } from "@elizaos/core";
+import { stringToUuid, type AgentRuntime, type UUID } from "@elizaos/core";
 import { createRealTestRuntime } from "../../../../test/helpers/real-runtime";
 import { sendMessageAction } from "./send-message";
 
@@ -15,16 +15,25 @@ let cleanup: () => Promise<void>;
 
 beforeAll(async () => {
   ({ runtime, cleanup } = await createRealTestRuntime());
+  runtime.registerSendHandler?.("client_chat", async () => {});
 }, 180_000);
 
 afterAll(async () => {
   await cleanup();
 });
 
+function normalizeUuidLike(value: string): UUID {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+    value,
+  )
+    ? (value as UUID)
+    : (stringToUuid(value) as UUID);
+}
+
 function makeMessage(entityId: string, roomId = "room-1") {
   return {
-    entityId,
-    roomId,
+    entityId: normalizeUuidLike(entityId),
+    roomId: normalizeUuidLike(roomId),
     content: { source: "client_chat", text: "test" },
   } as never;
 }

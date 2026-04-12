@@ -70,7 +70,7 @@ export function CloudConnectionStatus({
         className="border-0 bg-transparent px-0 py-0 shadow-none"
       />
       <span
-        className={`rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${
+        className={`rounded-full border px-1.5 py-0.5 text-2xs font-medium ${
           connected
             ? "border-ok/30 bg-ok-subtle text-txt"
             : "border-warn/35 bg-warn-subtle text-txt"

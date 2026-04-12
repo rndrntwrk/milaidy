@@ -424,7 +424,7 @@ export function WebsiteBlockerSettingsCard({
               />
             </label>
 
-            <label className="flex items-center gap-2 text-[12px] text-muted">
+            <label className="flex items-center gap-2 text-xs text-muted">
               <input
                 data-testid="website-blocker-indefinite"
                 type="checkbox"

@@ -76,7 +76,7 @@ export function NftGrid({
               </div>
             )}
             <div className="px-3 py-3">
-              <div className="truncate text-[12px] font-semibold text-txt-strong">
+              <div className="truncate text-xs font-semibold text-txt-strong">
                 {nft.name}
               </div>
               <div className="mt-1 truncate text-2xs text-muted">
@@ -84,7 +84,7 @@ export function NftGrid({
               </div>
               <div className="mt-2 inline-flex items-center gap-1 rounded-full border border-border/45 bg-bg/25 px-2 py-1 text-2xs text-muted">
                 <span
-                  className={`inline-block w-3 h-3 rounded-full text-center leading-3 text-[7px] font-bold font-mono text-white ${icon.cls}`}
+                  className={`inline-block w-3 h-3 rounded-full text-center leading-3 text-3xs font-bold font-mono text-white ${icon.cls}`}
                 >
                   {icon.code}
                 </span>

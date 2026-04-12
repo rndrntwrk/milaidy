@@ -592,7 +592,7 @@ export function TradePanel({
             variant="outline"
             size="sm"
             data-testid="wallet-quick-buy"
-            className="h-8 px-3 py-1 text-xs font-mono text-green-500 border-green-500 hover:bg-green-500 hover:text-white shadow-sm"
+            className="h-8 px-3 py-1 text-xs font-mono text-ok border-ok hover:bg-ok hover:text-white shadow-sm"
             onClick={() => {
               void handleQuickBuy();
             }}
@@ -603,7 +603,7 @@ export function TradePanel({
             variant="outline"
             size="sm"
             data-testid="wallet-quick-sell"
-            className="h-8 px-3 py-1 text-xs font-mono text-red-500 border-red-500 hover:bg-red-500 hover:text-white shadow-sm"
+            className="h-8 px-3 py-1 text-xs font-mono text-danger border-danger hover:bg-danger hover:text-white shadow-sm"
             onClick={() => {
               void handleQuickSell();
             }}
@@ -639,7 +639,7 @@ export function TradePanel({
                   variant="outline"
                   size="sm"
                   data-testid="wallet-quote-confirm"
-                  className="h-7 px-3 py-1 text-2xs font-mono text-green-500 border-green-500 hover:bg-green-500 hover:text-white shadow-sm"
+                  className="h-7 px-3 py-1 text-2xs font-mono text-ok border-ok hover:bg-ok hover:text-white shadow-sm"
                   onClick={handleConfirmExecute}
                 >
                   {t("onboarding.confirm")}

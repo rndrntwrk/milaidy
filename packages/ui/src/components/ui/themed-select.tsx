@@ -228,7 +228,7 @@ export function ThemedSelect<T extends string>({
         >
           {groups.map((group) => (
             <div key={group.label}>
-              <div className="sticky top-0 bg-bg-accent px-2.5 py-1 text-[10px] font-semibold text-muted">
+              <div className="sticky top-0 bg-bg-accent px-2.5 py-1 text-2xs font-semibold text-muted">
                 {group.label}
               </div>
               {group.items.map((item) => {

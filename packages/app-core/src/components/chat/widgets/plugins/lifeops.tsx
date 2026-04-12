@@ -134,7 +134,7 @@ function SectionHeading({
         {title}
       </span>
       {typeof count === "number" ? (
-        <Badge variant="secondary" className="text-[9px]">
+        <Badge variant="secondary" className="text-3xs">
           {count}
         </Badge>
       ) : null}
@@ -157,7 +157,7 @@ function CalendarRow({
           {event.title}
         </span>
         {timeLabel ? (
-          <Badge variant="secondary" className="text-[9px]">
+          <Badge variant="secondary" className="text-3xs">
             {timeLabel}
           </Badge>
         ) : null}
@@ -180,7 +180,7 @@ function GmailRow({ message }: { message: LifeOpsGmailMessageSummary }) {
           {message.subject}
         </span>
         {message.likelyReplyNeeded ? (
-          <Badge variant="secondary" className="text-[9px]">
+          <Badge variant="secondary" className="text-3xs">
             Reply
           </Badge>
         ) : null}
@@ -215,18 +215,18 @@ function GoogleAccountCard({
   return (
     <div className="rounded-lg border border-border/50 bg-bg/70 p-3">
       <div className="flex flex-wrap items-center gap-1.5">
-        <Badge variant="outline" className="text-[9px]">
+        <Badge variant="outline" className="text-3xs">
           {sideLabel(side)}
         </Badge>
         {status?.preferredByAgent ? (
-          <Badge variant="secondary" className="text-[9px]">
+          <Badge variant="secondary" className="text-3xs">
             Default
           </Badge>
         ) : null}
         <span className="min-w-0 flex-1 truncate text-xs font-semibold text-txt">
           {identityLabel.primary}
         </span>
-        <Badge variant="secondary" className="text-[9px]">
+        <Badge variant="secondary" className="text-3xs">
           {modeLabel(status.mode)}
         </Badge>
       </div>
@@ -238,17 +238,17 @@ function GoogleAccountCard({
       <div className="mt-2 flex flex-wrap gap-1.5">
         {(capabilities.has("google.calendar.read") ||
           capabilities.has("google.calendar.write")) && (
-          <Badge variant="secondary" className="text-[9px]">
+          <Badge variant="secondary" className="text-3xs">
             Calendar
           </Badge>
         )}
         {capabilities.has("google.gmail.triage") ? (
-          <Badge variant="secondary" className="text-[9px]">
+          <Badge variant="secondary" className="text-3xs">
             Gmail
           </Badge>
         ) : null}
         {status.reason === "needs_reauth" ? (
-          <Badge variant="outline" className="text-[9px]">
+          <Badge variant="outline" className="text-3xs">
             Reauth needed
           </Badge>
         ) : null}

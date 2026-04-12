@@ -101,6 +101,21 @@ describe("extractTaskParamsWithLlm", () => {
     expect(params.durationMinutes).toBe(5);
   });
 
+  it("parses twice-daily phrasing as times_per_day in the heuristic fallback", async () => {
+    const result = await extractTaskCreatePlanWithLlm({
+      runtime: makeRuntime(new Error("model unavailable")),
+      intent: "brush teeth twice daily",
+      state: undefined,
+    });
+
+    expect(result).toMatchObject({
+      mode: "create",
+      title: expect.stringContaining("Brush"),
+      cadenceKind: "times_per_day",
+      timesPerDay: 2,
+    });
+  });
+
   it("extracts interval cadence", async () => {
     const llmResponse = JSON.stringify({
       title: "Drink water",

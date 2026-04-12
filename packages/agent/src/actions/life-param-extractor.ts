@@ -98,6 +98,8 @@ const TITLE_TRAILING_SCHEDULE_RE =
 const TITLE_GENERIC_ONLY_RE =
   /^(?:do|work out|workout|habit|routine|task|todo|reminder|alarm|thing|stuff|something)$/i;
 const TITLE_GENERIC_VERB_RE = /^(?:do|work out|workout)\b/i;
+const SPECIFIC_LIFE_ACTIVITY_RE =
+  /\b(?:call|email|text|submit|pay|take|drink|brush|stretch|work ?out|workout|exercise|meditat(?:e|ion)|shower|shave|floss|hug|invisalign|vitamins?)\b/i;
 
 type HeuristicTitleSegment = {
   hasQuantity: boolean;
@@ -644,8 +646,9 @@ function buildHeuristicTaskCreatePlan(args: {
   const intervalMatch = lower.match(/\bevery\s+(\d+)\s*(hours?|minutes?)\b/);
   const timesPerDayMatch =
     lower.match(
-      /\b(one|two|three|four|five|six|\d+)\s*(?:x|times?)\s*(?:a|per)\s*day\b/,
-    ) ?? lower.match(/\b(once|twice)\s+a\s+day\b/);
+      /\b(one|two|three|four|five|six|\d+)\s*(?:x|times?)\s*(?:(?:a|per)\s*day|daily)\b/,
+    ) ??
+    lower.match(/\b(once|twice)\s+(?:a\s+day|daily)\b/);
   const numberMap: Record<string, number> = {
     one: 1,
     two: 2,
@@ -684,12 +687,6 @@ function buildHeuristicTaskCreatePlan(args: {
     cadenceKind = "daily";
   }
 
-  const recurringCreateLike =
-    cadenceKind !== null &&
-    (Boolean(title) ||
-      /\b(?:habit|routine|task|todo|reminder)\b/.test(lower) ||
-      REMINDER_CONTEXT_RE.test(intent));
-
   if (
     cadenceKind === null &&
     looksLikeShortTimedFollowup(intent) &&
@@ -703,11 +700,14 @@ function buildHeuristicTaskCreatePlan(args: {
     return null;
   }
 
-  if (
-    !oneOffReminderLike &&
-    !explicitTimeDrivenSchedule &&
-    !recurringCreateLike
-  ) {
+  const recurringCreateLike =
+    cadenceKind !== null &&
+    (Boolean(title) ||
+      /\b(?:habit|routine|task|todo|reminder|alarm)\b/.test(lower) ||
+      REMINDER_CONTEXT_RE.test(intent) ||
+      SPECIFIC_LIFE_ACTIVITY_RE.test(intent));
+
+  if (!oneOffReminderLike && !explicitTimeDrivenSchedule && !recurringCreateLike) {
     return null;
   }
 

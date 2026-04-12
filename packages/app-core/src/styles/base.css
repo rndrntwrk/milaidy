@@ -99,7 +99,8 @@
   --radius: 0.5rem;
   --duration-normal: 150ms;
 
-  /* Compact text sizes (replaces arbitrary text-[10px], text-[11px]) */
+  /* Compact text sizes (replaces arbitrary text-[9px], text-[10px], text-[11px]) */
+  --text-3xs: 0.5625rem;
   --text-2xs: 0.625rem;
   --text-xs-tight: 0.6875rem;
 
@@ -218,6 +219,7 @@
   --duration-normal: 200ms;
 
   /* Compact text sizes */
+  --text-3xs: 0.5625rem;
   --text-2xs: 0.625rem;
   --text-xs-tight: 0.6875rem;
   --min-touch-target: 2.75rem;

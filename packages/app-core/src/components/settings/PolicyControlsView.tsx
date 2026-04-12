@@ -617,7 +617,7 @@ function AddressSection({
                 <div className="flex items-center gap-1.5 truncate">
                   <span className="truncate">{addr}</span>
                   {chain && (
-                    <span className="text-[9px] text-muted bg-muted/10 px-1.5 py-0.5 rounded shrink-0">
+                    <span className="text-3xs text-muted bg-muted/10 px-1.5 py-0.5 rounded shrink-0">
                       {chain}
                     </span>
                   )}

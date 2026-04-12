@@ -287,7 +287,7 @@ function VectorGraph({
 
   return (
     <div ref={containerRef} className="w-full">
-      <div className="text-[11px] text-muted mb-2">
+      <div className="text-xs-tight text-muted mb-2">
         {graph.withEmbeddings.length}{" "}
         {t("vectorbrowserview.vectorsProjectedTo")}
       </div>
@@ -766,7 +766,7 @@ export function VectorGraph3D({
 
   return (
     <div className="relative">
-      <div className="text-[11px] text-muted mb-2">
+      <div className="text-xs-tight text-muted mb-2">
         {withEmbeddings.length} {t("vectorbrowserview.vectorsProjectedTo1")}
       </div>
       <div
@@ -777,7 +777,7 @@ export function VectorGraph3D({
       {/* Tooltip */}
       {hoveredMem && tooltipPos && (
         <div
-          className="absolute pointer-events-none bg-card/95 text-txt backdrop-blur-sm border border-border/30 rounded-lg text-[11px] px-3 py-2 max-w-[300px] z-10"
+          className="absolute pointer-events-none bg-card/95 text-txt backdrop-blur-sm border border-border/30 rounded-lg text-xs-tight px-3 py-2 max-w-[300px] z-10"
           style={{
             left: tooltipPos.x + 15,
             top: tooltipPos.y + 15,
@@ -786,7 +786,7 @@ export function VectorGraph3D({
         >
           <div className="font-medium mb-1 truncate">
             {hoveredMem.type && hoveredMem.type !== "undefined" && (
-              <span className="px-1.5 py-0.5 bg-accent/30 text-accent mr-2 text-[10px]">
+              <span className="px-1.5 py-0.5 bg-accent/30 text-accent mr-2 text-2xs">
                 {hoveredMem.type}
               </span>
             )}
@@ -799,7 +799,7 @@ export function VectorGraph3D({
         </div>
       )}
       {/* Legend */}
-      <div className="flex flex-wrap gap-3 mt-2 text-[10px]">
+      <div className="flex flex-wrap gap-3 mt-2 text-2xs">
         {Object.entries(typeColors).map(
           ([type, color]) =>
             type &&
@@ -1118,7 +1118,7 @@ export function VectorBrowserView({
                   defaultValue: "Vectors",
                 })}
             </div>
-            <div className="mt-3 flex flex-wrap gap-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted/75">
+            <div className="mt-3 flex flex-wrap gap-2 text-2xs font-semibold uppercase tracking-[0.14em] text-muted/75">
               <MetaPill>
                 {viewMode === "list"
                   ? t("vectorbrowserview.ListView", {
@@ -1228,7 +1228,7 @@ export function VectorBrowserView({
             ) : null}
 
             {stats ? (
-              <div className="rounded-2xl border border-border/35 bg-bg/35 px-3 py-3 text-[11px] text-muted">
+              <div className="rounded-2xl border border-border/35 bg-bg/35 px-3 py-3 text-xs-tight text-muted">
                 <div className="font-semibold text-txt">
                   {Number(stats.total).toLocaleString()}{" "}
                   {t("vectorbrowserview.memories")}
@@ -1322,7 +1322,7 @@ export function VectorBrowserView({
             >
               {t("vectorbrowserview.Prev")}
             </Button>
-            <span className="text-[11px] text-muted">
+            <span className="text-xs-tight text-muted">
               {t("vectorbrowserview.Page")} {page + 1} / {totalPages}
             </span>
             <Button

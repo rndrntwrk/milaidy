@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
-import { render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { mockUseApp } = vi.hoisted(() => ({
   mockUseApp: vi.fn(),
@@ -36,6 +36,10 @@ describe("FeaturesStep", () => {
     mockUseApp.mockReturnValue(baseAppContext());
   });
 
+  afterEach(() => {
+    cleanup();
+  });
+
   it("shows only the supported managed connectors when cloud is available", () => {
     mockUseApp.mockReturnValue({
       ...baseAppContext(),
@@ -52,8 +56,8 @@ describe("FeaturesStep", () => {
   it("still shows local capabilities when cloud connectors are unavailable", () => {
     render(<FeaturesStep />);
 
-    expect(screen.getByText("Crypto Wallet")).toBeTruthy();
-    expect(screen.getByText("Browser")).toBeTruthy();
+    expect(screen.getAllByText("Crypto Wallet").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Browser").length).toBeGreaterThan(0);
     expect(screen.queryByText("Telegram")).toBeNull();
     expect(screen.queryByText("Discord")).toBeNull();
   });

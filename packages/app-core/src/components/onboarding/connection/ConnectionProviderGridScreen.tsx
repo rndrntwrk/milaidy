@@ -59,7 +59,7 @@ export function ConnectionProviderGridScreen({
       />
       {onboardingRemoteConnected && (
         <p
-          className="mx-auto mb-3 mt-1 max-w-[32ch] text-center text-[12px] leading-[1.4] text-[var(--onboarding-text-subtle)]"
+          className="mx-auto mb-3 mt-1 max-w-[32ch] text-center text-xs leading-[1.4] text-[var(--onboarding-text-subtle)]"
           style={onboardingBodyTextShadowStyle}
         >
           {t(
@@ -85,7 +85,7 @@ export function ConnectionProviderGridScreen({
                 dispatch({ type: "selectProvider", providerId: p.id })
               }
             >
-              <div className="flex min-h-[44px] w-full items-center gap-2.5">
+              <div className="flex min-h-touch w-full items-center gap-2.5">
                 <img
                   src={getProviderLogo(p.id, true, getCustomLogo(p.id))}
                   alt=""

@@ -246,7 +246,7 @@ describe("ConnectionProviderDetailScreen", () => {
     expect(apiKeyInput.className).not.toContain("-webkit-text-stroke");
     expect(screen.getByRole("button", { name: "Confirm" })).toBeTruthy();
     const backButton = screen.getByRole("button", { name: "Back" });
-    expect(backButton.className).toContain("min-h-[44px]");
+    expect(backButton.className).toContain("min-h-touch");
     expect(backButton.className).toContain(
       "hover:bg-[var(--onboarding-secondary-hover-bg)]",
     );

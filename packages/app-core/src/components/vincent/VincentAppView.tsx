@@ -92,7 +92,7 @@ export function VincentAppView({ exitToApps, t }: OverlayAppContext) {
 
       {/* Scrollable content */}
       <div className="chat-native-scrollbar flex-1 overflow-y-auto px-4 py-4 sm:px-6">
-        <div className="mx-auto max-w-3xl space-y-4">
+        <div className="mx-auto max-w-5xl">
           {/* Error banner */}
           {error && <PagePanel.Notice tone="danger">{error}</PagePanel.Notice>}
 
@@ -104,44 +104,57 @@ export function VincentAppView({ exitToApps, t }: OverlayAppContext) {
             </div>
           )}
 
-          {/* Connection card — always visible */}
-          <VincentConnectionCard setActionNotice={setActionNotice} t={t} />
-
-          {/* Cards below only render when connected */}
-          {vincentConnected && (
-            <>
-              <VaultStatusCard
-                walletAddresses={walletAddresses}
-                walletBalances={walletBalances}
+          {/* Two-column grid: main cards left, wallet summary top-right */}
+          <div className="grid grid-cols-1 lg:grid-cols-[1fr_minmax(280px,340px)] gap-4 items-start">
+            {/* Left column — main cards */}
+            <div className="space-y-4">
+              <VincentConnectionCard
                 setActionNotice={setActionNotice}
+                t={t}
               />
 
-              <TradingStrategyPanel
-                strategy={strategy}
-                onStrategyChange={refresh}
-                setActionNotice={setActionNotice}
-              />
+              {vincentConnected && (
+                <>
+                  <TradingStrategyPanel
+                    strategy={strategy}
+                    onStrategyChange={refresh}
+                    setActionNotice={setActionNotice}
+                  />
 
-              <TradingProfileCard tradingProfile={tradingProfile} />
-            </>
-          )}
+                  <TradingProfileCard tradingProfile={tradingProfile} />
+                </>
+              )}
 
-          {/* Not-connected informational card */}
-          {!vincentConnected && !loading && (
-            <div className="rounded-[28px] border border-border/18 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_92%,transparent),color-mix(in_srgb,var(--bg)_98%,transparent))] px-5 py-8 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
-              <p className="text-sm font-medium text-txt">
-                {t("vincent.connectPrompt", {
-                  defaultValue: "Connect your Vincent account to get started",
-                })}
-              </p>
-              <p className="mx-auto mt-2 max-w-sm text-xs text-muted leading-relaxed">
-                {t("vincent.connectPromptDetail", {
-                  defaultValue:
-                    "Once connected, you'll see your wallet balances, trading strategy, and P&L analytics here.",
-                })}
-              </p>
+              {/* Not-connected informational card */}
+              {!vincentConnected && !loading && (
+                <div className="rounded-[28px] border border-border/18 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_92%,transparent),color-mix(in_srgb,var(--bg)_98%,transparent))] px-5 py-8 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+                  <p className="text-sm font-medium text-txt">
+                    {t("vincent.connectPrompt", {
+                      defaultValue:
+                        "Connect your Vincent account to get started",
+                    })}
+                  </p>
+                  <p className="mx-auto mt-2 max-w-sm text-xs text-muted leading-relaxed">
+                    {t("vincent.connectPromptDetail", {
+                      defaultValue:
+                        "Once connected, you'll see your wallet balances, trading strategy, and P&L analytics here.",
+                    })}
+                  </p>
+                </div>
+              )}
             </div>
-          )}
+
+            {/* Right column — wallet status (top-right, sticky on desktop) */}
+            {vincentConnected && (
+              <div className="lg:sticky lg:top-4">
+                <VaultStatusCard
+                  walletAddresses={walletAddresses}
+                  walletBalances={walletBalances}
+                  setActionNotice={setActionNotice}
+                />
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

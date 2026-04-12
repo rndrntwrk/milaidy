@@ -28,9 +28,9 @@ const STATUS_BADGE: Record<
   { label: string; className: string }
 > = {
   disconnected: { label: "", className: "" },
-  connecting: { label: "Connecting", className: "bg-yellow-500 text-black" },
-  connected: { label: "Connected", className: "bg-green-600 text-white" },
-  error: { label: "Error", className: "bg-red-600 text-white" },
+  connecting: { label: "Connecting", className: "bg-warn text-black" },
+  connected: { label: "Connected", className: "bg-ok text-white" },
+  error: { label: "Error", className: "bg-danger text-white" },
 };
 
 export function FeatureCard({
@@ -65,13 +65,13 @@ export function FeatureCard({
           <p className="text-sm font-semibold text-black">{name}</p>
           {badge.label && (
             <span
-              className={`shrink-0 rounded px-1.5 py-0.5 text-[8px] font-bold ${badge.className}`}
+              className={`shrink-0 rounded px-1.5 py-0.5 text-3xs font-bold ${badge.className}`}
             >
               {badge.label}
             </span>
           )}
           {managed && !badge.label && (
-            <span className="shrink-0 rounded bg-black/10 px-1.5 py-0.5 text-[8px] font-bold text-black/50">
+            <span className="shrink-0 rounded bg-black/10 px-1.5 py-0.5 text-3xs font-bold text-black/50">
               {t("onboarding.features.managed", { defaultValue: "Managed" })}
             </span>
           )}

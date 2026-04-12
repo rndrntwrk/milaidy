@@ -101,7 +101,7 @@ export function AdvancedPageView({ inModal }: { inModal?: boolean } = {}) {
       >
         <div className="text-left">
           <div
-            className={`text-[13px] ${
+            className={`text-sm ${
               isActive ? "font-semibold text-txt" : "font-medium"
             }`}
           >

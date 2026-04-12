@@ -15,9 +15,9 @@ const ADMIN_DIALOG_META_BADGE_CLASSNAME =
 const ADMIN_DIALOG_MONO_META_CLASSNAME =
   "text-2xs font-mono text-muted/70";
 const ADMIN_DIALOG_INPUT_CLASSNAME =
-  "h-10 w-full rounded-xl border border-border/50 bg-card/85 px-3 text-[13px] font-mono text-txt shadow-inner transition-[border-color,box-shadow,background-color] placeholder:text-muted/60 focus-visible:ring-accent";
+  "h-10 w-full rounded-xl border border-border/50 bg-card/85 px-3 text-sm font-mono text-txt shadow-inner transition-[border-color,box-shadow,background-color] placeholder:text-muted/60 focus-visible:ring-accent";
 const ADMIN_DIALOG_CODE_EDITOR_CLASSNAME =
-  "h-full w-full resize-none border-0 bg-bg-hover p-5 font-mono text-[13px] leading-relaxed text-txt focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-inset";
+  "h-full w-full resize-none border-0 bg-bg-hover p-5 font-mono text-sm leading-relaxed text-txt focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-inset";
 const ADMIN_SEGMENTED_TABLIST_CLASSNAME =
   "flex border-b border-border/60 bg-bg-accent/35";
 const ADMIN_SEGMENTED_TAB_CLASSNAME =

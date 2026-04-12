@@ -101,7 +101,7 @@ export function StewardView() {
             >
               <StewardLogo size={16} />
               {pendingCount > 0 && (
-                <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-status-danger px-1 text-[9px] font-bold text-[var(--destructive-foreground)]">
+                <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-status-danger px-1 text-3xs font-bold text-[var(--destructive-foreground)]">
                   {pendingCount > 99 ? "99+" : pendingCount}
                 </span>
               )}
@@ -138,7 +138,7 @@ export function StewardView() {
               <span>Connected</span>
             </div>
             {stewardStatus.evmAddress && (
-              <p className="mt-1.5 font-mono text-[10px] text-muted/60">
+              <p className="mt-1.5 font-mono text-2xs text-muted/60">
                 {stewardStatus.evmAddress.slice(0, 6)}…
                 {stewardStatus.evmAddress.slice(-4)}
               </p>

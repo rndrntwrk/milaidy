@@ -759,7 +759,7 @@ export function RelationshipsGraphPanel({
                   <text
                     textAnchor="middle"
                     y={12}
-                    className={`text-[9px] font-medium ${isOwner ? "fill-white/70" : "fill-black/70"}`}
+                    className={`text-3xs font-medium ${isOwner ? "fill-white/70" : "fill-black/70"}`}
                   >
                     {shortLabel(
                       person.relationshipCount > 0

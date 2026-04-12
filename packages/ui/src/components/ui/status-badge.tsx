@@ -81,7 +81,7 @@ export const StatusBadge = React.forwardRef<HTMLSpanElement, StatusBadgeProps>(
       <span
         ref={ref}
         className={cn(
-          "inline-flex items-center gap-1 rounded-sm border px-2 py-0.5 text-[10px] font-bold uppercase",
+          "inline-flex items-center gap-1 rounded-sm border px-2 py-0.5 text-2xs font-bold uppercase",
           styles.badge,
           className,
         )}
@@ -154,7 +154,7 @@ export const StatCard = React.forwardRef<HTMLDivElement, StatCardProps>(
       >
         {value}
       </div>
-      <div className="mt-0.5 text-[10px] uppercase tracking-wide text-muted">
+      <div className="mt-0.5 text-2xs uppercase tracking-wide text-muted">
         {label}
       </div>
     </div>

@@ -1,5 +1,6 @@
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import { createConversation, req } from "../../../../test/helpers/http.ts";
 import type {
   LifeOpsDefinitionEntry,
@@ -154,6 +155,8 @@ const DEFAULT_SCENARIO_DIR = path.join(
   "lifeops",
   "scenarios",
 );
+const FINAL_CHECK_TIMEOUT_MS = 8_000;
+const FINAL_CHECK_RETRY_MS = 500;
 
 function normalizeText(text: string): string {
   return normalizeLiveText(text);
@@ -750,6 +753,30 @@ async function validateFinalChecks(args: {
   return results;
 }
 
+async function waitForFinalChecks(args: {
+  baseline: Awaited<ReturnType<typeof collectScenarioBaseline>>;
+  runtime: StartedLifeOpsLiveRuntime;
+  scenario: LifeOpsLiveScenario;
+}): Promise<
+  Array<{ label: string; status: "passed" | "failed"; detail: string }>
+> {
+  const deadline = Date.now() + FINAL_CHECK_TIMEOUT_MS;
+  let lastError: unknown = null;
+
+  while (Date.now() < deadline) {
+    try {
+      return await validateFinalChecks(args);
+    } catch (error) {
+      lastError = error;
+      await sleep(FINAL_CHECK_RETRY_MS);
+    }
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("Timed out waiting for scenario final checks to settle.");
+}
+
 export async function runLifeOpsLiveScenario(args: {
   runtime: StartedLifeOpsLiveRuntime;
   scenario: LifeOpsLiveScenario;
@@ -856,7 +883,7 @@ export async function runLifeOpsLiveScenario(args: {
       );
     }
 
-    const finalChecks = await validateFinalChecks({
+    const finalChecks = await waitForFinalChecks({
       baseline,
       runtime: args.runtime,
       scenario: args.scenario,

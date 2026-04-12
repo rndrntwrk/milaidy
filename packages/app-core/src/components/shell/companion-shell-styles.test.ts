@@ -92,13 +92,13 @@ describe("derived style helpers", () => {
 
   it("uses the default accent for generic advanced overlays", () => {
     const flags = tabFlags("advanced");
-    expect(accentVar(flags)).toBe("#f0b90b");
-    expect(accentSubtleVar(flags)).toBe("rgba(240, 185, 11, 0.12)");
+    expect(accentVar(flags)).toBe("var(--accent)");
+    expect(accentSubtleVar(flags)).toBe("var(--accent-subtle)");
   });
 
   it("keeps special-case accents for stream and wallets", () => {
-    expect(accentVar(tabFlags("stream"))).toBe("#ef4444");
-    expect(accentVar(tabFlags("inventory"))).toBe("#f0b90b");
+    expect(accentVar(tabFlags("stream"))).toBe("var(--danger)");
+    expect(accentVar(tabFlags("inventory"))).toBe("var(--accent)");
   });
 
   it("keeps card surfaces non-transparent in base chat shell (with pack fallback)", () => {
@@ -107,8 +107,12 @@ describe("derived style helpers", () => {
   });
 
   it("uses dark accent foregrounds for yellow companion tabs", () => {
-    expect(accentForegroundVar(tabFlags("inventory"))).toBe("#1a1f26");
-    expect(accentForegroundVar(tabFlags("skills"))).toBe("#1a1f26");
+    expect(accentForegroundVar(tabFlags("inventory"))).toBe(
+      "var(--accent-foreground)",
+    );
+    expect(accentForegroundVar(tabFlags("skills"))).toBe(
+      "var(--accent-foreground)",
+    );
     expect(accentForegroundVar(tabFlags("knowledge"))).toBe("#ffffff");
   });
 });
@@ -133,8 +137,10 @@ describe("App.tsx advanced-tab parity", () => {
 
 describe("accent palettes", () => {
   it("keeps stable accent constants", () => {
-    expect(ACCENT_COLORS.stream).toBe("#ef4444");
-    expect(ACCENT_COLORS.skills).toBe("#f0b90b");
-    expect(TOP_BAR_COLORS.stream).toContain("239, 68, 68");
+    expect(ACCENT_COLORS.stream).toBe("var(--danger)");
+    expect(ACCENT_COLORS.skills).toBe("var(--accent)");
+    expect(accentVar(tabFlags("stream"))).toBe("var(--danger)");
+    expect(accentVar(tabFlags("skills"))).toBe("var(--accent)");
+    expect(TOP_BAR_COLORS.stream).toContain("var(--danger)");
   });
 });

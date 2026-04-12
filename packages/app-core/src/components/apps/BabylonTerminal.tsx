@@ -212,14 +212,14 @@ function StatTile({
 }) {
   const toneClass =
     tone === "positive"
-      ? "text-green-400"
+      ? "text-ok"
       : tone === "negative"
-        ? "text-red-400"
+        ? "text-danger"
         : "text-txt";
 
   return (
     <div className="rounded-md border border-border bg-card/70 px-2 py-2">
-      <div className="text-[9px] uppercase tracking-[0.18em] text-muted">
+      <div className="text-3xs uppercase tracking-[0.18em] text-muted">
         {label}
       </div>
       <div className={`mt-1 font-mono text-sm ${toneClass}`}>{value}</div>
@@ -290,14 +290,14 @@ function ActivityFeed({
                   </span>
                   <span className="uppercase text-muted">{item.type}</span>
                   {item.agent?.name ? (
-                    <span className="truncate text-blue-400">
+                    <span className="truncate text-status-info">
                       @{item.agent.name}
                     </span>
                   ) : null}
                   {item.pnl != null ? (
                     <span
                       className={`font-mono ${
-                        item.pnl >= 0 ? "text-green-400" : "text-red-400"
+                        item.pnl >= 0 ? "text-ok" : "text-danger"
                       }`}
                     >
                       {formatPnL(item.pnl)}
@@ -352,7 +352,7 @@ function AgentStatusHeader({
       <div className="flex items-center gap-2">
         <span
           className={`h-2 w-2 rounded-full ${
-            liveConnected ? "bg-green-400" : "bg-yellow-400"
+            liveConnected ? "bg-ok" : "bg-warn"
           }`}
           title={liveConnected ? "Live" : "Polling"}
         />
@@ -390,10 +390,10 @@ function AgentStatusHeader({
         ].map((item) => (
           <span
             key={item.label}
-            className={`rounded px-1.5 py-0.5 text-[9px] ${
+            className={`rounded px-1.5 py-0.5 text-3xs ${
               item.on
-                ? "bg-green-400/15 text-green-400"
-                : "bg-gray-500/15 text-gray-400"
+                ? "bg-ok/15 text-ok"
+                : "bg-muted/15 text-muted"
             }`}
           >
             {item.label}
@@ -494,7 +494,7 @@ function TeamAgentsPanel({
                     {conversation.name || "Untitled conversation"}
                   </span>
                   {conversation.isActive ? (
-                    <span className="rounded bg-blue-400/15 px-1.5 py-0.5 text-[9px] text-blue-400">
+                    <span className="rounded bg-status-info/15 px-1.5 py-0.5 text-3xs text-status-info">
                       Active
                     </span>
                   ) : null}
@@ -527,7 +527,7 @@ function TeamAgentsPanel({
                 <div className="flex items-center gap-2">
                   <span
                     className={`h-2 w-2 rounded-full ${
-                      agent.autonomous ? "bg-green-400" : "bg-gray-400"
+                      agent.autonomous ? "bg-ok" : "bg-muted"
                     }`}
                   />
                   <span className="truncate text-xs-tight font-semibold text-txt">
@@ -544,8 +544,8 @@ function TeamAgentsPanel({
                   <span
                     className={
                       agent.lifetimePnL >= 0
-                        ? "font-mono text-green-400"
-                        : "font-mono text-red-400"
+                        ? "font-mono text-ok"
+                        : "font-mono text-danger"
                     }
                   >
                     {formatPnL(agent.lifetimePnL)}
@@ -617,8 +617,8 @@ function WalletPanel({
                   <span
                     className={`font-mono text-xs-tight ${
                       transaction.amount >= 0
-                        ? "text-green-400"
-                        : "text-red-400"
+                        ? "text-ok"
+                        : "text-danger"
                     }`}
                   >
                     {transaction.amount >= 0 ? "+" : ""}
@@ -703,15 +703,15 @@ function LogsPanel({
               <span
                 className={`uppercase ${
                   entry.level === "error"
-                    ? "text-red-400"
+                    ? "text-danger"
                     : entry.level === "warn"
-                      ? "text-yellow-400"
+                      ? "text-warn"
                       : "text-muted"
                 }`}
               >
                 {entry.level}
               </span>{" "}
-              <span className="text-blue-400">[{entry.type}]</span>{" "}
+              <span className="text-status-info">[{entry.type}]</span>{" "}
               <span className="text-txt">{entry.message}</span>
             </div>
           ))
@@ -871,7 +871,7 @@ function OverviewPanel({
                   {trade.pnl != null ? (
                     <span
                       className={`ml-auto font-mono text-2xs ${
-                        trade.pnl >= 0 ? "text-green-400" : "text-red-400"
+                        trade.pnl >= 0 ? "text-ok" : "text-danger"
                       }`}
                     >
                       {formatPnL(trade.pnl)}

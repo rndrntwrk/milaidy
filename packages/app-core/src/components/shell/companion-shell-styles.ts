@@ -13,22 +13,22 @@ export const COMPANION_OVERLAY_TABS = new Set<Tab>(["companion"]);
 /* ── Per-tab accent / color config ─────────────────────────────────── */
 
 export const ACCENT_COLORS: Record<string, string> = {
-  skills: "#f0b90b",
-  apps: "#10b981",
-  plugins: "#f0b90b",
-  connectors: "#f0b90b",
+  skills: "var(--accent)",
+  apps: "var(--ok)",
+  plugins: "var(--accent)",
+  connectors: "var(--accent)",
   knowledge: "#a78bfa",
-  wallets: "#f0b90b",
-  stream: "#ef4444",
+  wallets: "var(--accent)",
+  stream: "var(--danger)",
 };
 
 export const TOP_BAR_COLORS: Record<string, string> = {
-  skills: "#f0b90b",
-  wallets: "rgba(240, 185, 11, 0.7)",
-  stream: "rgba(239, 68, 68, 0.7)",
-  plugins: "#f0b90b",
-  connectors: "#f0b90b",
-  apps: "rgba(16, 185, 129, 0.7)",
+  skills: "var(--accent)",
+  wallets: "color-mix(in srgb, var(--accent) 70%, transparent)",
+  stream: "color-mix(in srgb, var(--danger) 70%, transparent)",
+  plugins: "var(--accent)",
+  connectors: "var(--accent)",
+  apps: "color-mix(in srgb, var(--ok) 70%, transparent)",
   knowledge: "rgba(167, 139, 250, 0.7)",
 };
 
@@ -152,34 +152,34 @@ export function cardBoxShadow(f: TabFlags, _shadowFx: string) {
 /* ── Accent color helpers ──────────────────────────────────────────── */
 
 export function accentVar(f: TabFlags) {
-  if (f.isPluginsLike) return "#f0b90b";
-  if (f.isApps) return "#10b981";
+  if (f.isPluginsLike) return "var(--accent)";
+  if (f.isApps) return "var(--ok)";
   if (f.isKnowledge) return "#a78bfa";
-  if (f.isWallets) return "#f0b90b";
-  if (f.isStream) return "#ef4444";
-  return "#f0b90b";
+  if (f.isWallets) return "var(--accent)";
+  if (f.isStream) return "var(--danger)";
+  return "var(--accent)";
 }
 
 export function accentSubtleVar(f: TabFlags) {
-  if (f.isPluginsLike) return "rgba(240, 185, 11, 0.12)";
-  if (f.isApps) return "rgba(16, 185, 129, 0.12)";
+  if (f.isPluginsLike) return "var(--accent-subtle)";
+  if (f.isApps) return "var(--ok-subtle)";
   if (f.isKnowledge) return "rgba(167, 139, 250, 0.12)";
-  if (f.isWallets) return "rgba(240, 185, 11, 0.12)";
-  if (f.isStream) return "rgba(239, 68, 68, 0.12)";
-  return "rgba(240, 185, 11, 0.12)";
+  if (f.isWallets) return "var(--accent-subtle)";
+  if (f.isStream) return "var(--destructive-subtle)";
+  return "var(--accent-subtle)";
 }
 
 export function accentRgbVar(f: TabFlags) {
-  if (f.isPluginsLike) return "240, 185, 11";
+  if (f.isPluginsLike) return "var(--accent-rgb)";
   if (f.isApps) return "16, 185, 129";
   if (f.isKnowledge) return "167, 139, 250";
-  if (f.isWallets) return "240, 185, 11";
+  if (f.isWallets) return "var(--accent-rgb)";
   if (f.isStream) return "239, 68, 68";
-  return "240, 185, 11";
+  return "var(--accent-rgb)";
 }
 
 export function accentForegroundVar(f: TabFlags) {
-  if (f.isPluginsLike || f.isWallets) return "#1a1f26";
+  if (f.isPluginsLike || f.isWallets) return "var(--accent-foreground)";
   return "#ffffff";
 }
 
@@ -246,9 +246,9 @@ export function viewWrapperStyle(
       "--muted": pack("--pack-text-muted", "rgba(255, 255, 255, 0.45)"),
       "--txt": pack("--pack-text", "rgba(240, 238, 250, 0.92)"),
       "--text": pack("--pack-text", "rgba(240, 238, 250, 0.92)"),
-      "--danger": "#ef4444",
-      "--ok": "#22c55e",
-      "--warning": "#f59e0b",
+      "--danger": "hsl(0 84.2% 60.2%)",
+      "--ok": "hsl(142 76% 36%)",
+      "--warning": "var(--warn)",
       "--surface": "rgba(255, 255, 255, 0.06)",
       "--bg-hover": "rgba(255, 255, 255, 0.04)",
       "--bg-muted": "rgba(255, 255, 255, 0.03)",

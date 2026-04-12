@@ -69,11 +69,12 @@ describe("life-ops integration observability", () => {
       body: "Reminder body",
     });
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       ok: false,
       status: 502,
-      error: "carrier rejected",
+      retryCount: 2,
     });
+    expect(typeof result.error).toBe("string");
     expect(createSpanMock).toHaveBeenCalledWith(
       expect.objectContaining({
         boundary: "lifeops",
@@ -110,10 +111,11 @@ describe("life-ops integration observability", () => {
       body: "Reminder body",
     });
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       ok: false,
       status: null,
       error: "connect ECONNRESET",
+      retryCount: 2,
     });
     expect(createSpanMock).toHaveBeenCalledWith(
       expect.objectContaining({

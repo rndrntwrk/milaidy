@@ -47,7 +47,7 @@ describe("autonomy enablement for triggers", () => {
     }
   }, 60_000);
 
-  it("all three runtime paths enable autonomy after startup guards", () => {
+  it("startup and hot-reload paths enable autonomy after startup guards", () => {
     // This is a static source code analysis test — no mocks needed
     const expectEnableBlock = (source: string, anchor: string): string => {
       const start = source.indexOf(anchor);
@@ -58,15 +58,15 @@ describe("autonomy enablement for triggers", () => {
     };
 
     const elizaSource = readFileSync(
-      path.resolve(import.meta.dirname, "../../runtime/eliza.ts"),
+      path.resolve(import.meta.dirname, "../runtime/eliza.ts"),
       "utf8",
     );
 
-    // Path 1: trigger-aware boot
-    expectEnableBlock(elizaSource, "triggerAwareBoot");
-
-    // Path 2: normal startup
-    // The source should contain enableAutonomy somewhere in the startup path
-    expect(elizaSource).toContain("enableAutonomy");
+    expect(elizaSource).toContain("AutonomyService.start(");
+    expectEnableBlock(
+      elizaSource,
+      "Enable the autonomy loop so trigger/heartbeat instructions are",
+    );
+    expectEnableBlock(elizaSource, "Enable the autonomy loop after hot-reload");
   });
 });

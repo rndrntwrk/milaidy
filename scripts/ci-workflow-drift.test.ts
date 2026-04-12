@@ -105,11 +105,11 @@ describe("CI workflow drift", () => {
     expect(
       countOccurrences(
         workflow,
-        "install-command: bun install --no-frozen-lockfile --ignore-scripts",
+        "install-command: bun install --frozen-lockfile --ignore-scripts",
       ),
-    ).toBeGreaterThanOrEqual(4);
-    expect(workflow).toContain(
-      "bun install --no-frozen-lockfile --ignore-scripts",
+    ).toBeGreaterThanOrEqual(5);
+    expect(workflow).not.toContain(
+      "install-command: bun install --no-frozen-lockfile --ignore-scripts",
     );
   });
 

@@ -16,7 +16,14 @@ import type {
 } from "./types.js";
 
 const HOOK_MD = "HOOK.md";
-const HANDLER_NAMES = ["handler.ts", "handler", "index.ts", "index"];
+const HANDLER_NAMES = [
+  "handler.ts",
+  "handler.mjs",
+  "handler",
+  "index.ts",
+  "index.mjs",
+  "index",
+];
 
 function parseFrontmatter(content: string): ParsedHookFrontmatter | null {
   const fmMatch = content.match(/^---\s*\n([\s\S]*?)\n---/);

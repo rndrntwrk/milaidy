@@ -66,17 +66,17 @@ function TodoRow({ todo }: { todo: WorkbenchTodo }) {
               {todo.name}
             </span>
             {todo.isUrgent ? (
-              <Badge variant="secondary" className="text-[9px] text-danger">
+              <Badge variant="secondary" className="text-3xs text-danger">
                 Urgent
               </Badge>
             ) : null}
             {todo.priority != null ? (
-              <Badge variant="secondary" className="text-[9px]">
+              <Badge variant="secondary" className="text-3xs">
                 P{todo.priority}
               </Badge>
             ) : null}
             {showType ? (
-              <Badge variant="secondary" className="text-[9px]">
+              <Badge variant="secondary" className="text-3xs">
                 {todo.type}
               </Badge>
             ) : null}

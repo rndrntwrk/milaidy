@@ -316,7 +316,7 @@ export function ApprovalQueue({
                       <Button
                         variant="default"
                         size="sm"
-                        className="h-9 rounded-xl bg-emerald-600 px-4 text-xs font-semibold text-white shadow-sm hover:bg-emerald-500"
+                        className="h-9 rounded-xl bg-ok px-4 text-xs font-semibold text-white shadow-sm hover:bg-ok"
                         onClick={() => void handleApprove(tx.id)}
                       >
                         <Check className="h-3.5 w-3.5" />

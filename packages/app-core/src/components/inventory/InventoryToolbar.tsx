@@ -73,7 +73,7 @@ export function InventoryToolbar({
     <div className="space-y-2 border-b border-border pb-3">
       <div className="flex flex-wrap items-center gap-2">
         <div
-          className="mr-auto text-[22px] font-bold text-txt-strong"
+          className="mr-auto text-xl font-bold text-txt-strong"
           data-testid="wallet-balance-value"
         >
           {totalUsd > 0

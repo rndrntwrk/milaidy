@@ -598,7 +598,7 @@ function SkillsFullView({ contentHeader }: { contentHeader?: ReactNode } = {}) {
                                 }`}
                               >
                                 <span
-                                  className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em] ${
+                                  className={`shrink-0 rounded-full px-2 py-0.5 text-3xs font-bold uppercase tracking-[0.12em] ${
                                     finding.severity === "critical"
                                       ? "bg-danger/12 text-danger"
                                       : "bg-warn/12 text-warn"

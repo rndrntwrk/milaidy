@@ -149,7 +149,7 @@ function DocumentListItem({
           </div>
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
             <span
-              className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[9px] font-bold uppercase leading-none tracking-wider ${
+              className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-3xs font-bold uppercase leading-none tracking-wider ${
                 active
                   ? "border-accent/30 bg-accent/18 text-txt-strong"
                   : "border-border/45 bg-bg/30 text-muted/80"
@@ -157,7 +157,7 @@ function DocumentListItem({
             >
               {getKnowledgeTypeLabel(doc.contentType)}
             </span>
-            <span className="inline-flex items-center rounded-md border border-border/45 bg-bg/30 px-1.5 py-0.5 text-[9px] font-bold uppercase leading-none tracking-wider text-muted/80">
+            <span className="inline-flex items-center rounded-md border border-border/45 bg-bg/30 px-1.5 py-0.5 text-3xs font-bold uppercase leading-none tracking-wider text-muted/80">
               {getKnowledgeSourceLabel(doc.source, t)}
             </span>
             <span className="text-2xs text-muted/50 opacity-0 transition-opacity group-hover:opacity-100">

@@ -19,10 +19,10 @@ function FulfillmentBadge({
   if (!status) return null;
 
   const styles = {
-    FULFILLED: "bg-green-500/15 text-green-400 border border-green-500/20",
-    UNFULFILLED: "bg-yellow-500/15 text-yellow-400 border border-yellow-500/20",
+    FULFILLED: "bg-ok/15 text-ok border border-ok/20",
+    UNFULFILLED: "bg-warn/15 text-warn border border-warn/20",
     PARTIALLY_FULFILLED:
-      "bg-yellow-500/15 text-yellow-400 border border-yellow-500/20",
+      "bg-warn/15 text-warn border border-warn/20",
   } satisfies Record<NonNullable<ShopifyOrder["fulfillmentStatus"]>, string>;
 
   const labels: Record<
@@ -49,10 +49,10 @@ function FinancialBadge({
   status: ShopifyOrder["financialStatus"];
 }) {
   const styles = {
-    PAID: "bg-green-500/15 text-green-400 border border-green-500/20",
-    PENDING: "bg-yellow-500/15 text-yellow-400 border border-yellow-500/20",
-    REFUNDED: "bg-red-500/15 text-red-400 border border-red-500/20",
-    PARTIALLY_REFUNDED: "bg-red-500/15 text-red-400 border border-red-500/20",
+    PAID: "bg-ok/15 text-ok border border-ok/20",
+    PENDING: "bg-warn/15 text-warn border border-warn/20",
+    REFUNDED: "bg-danger/15 text-danger border border-danger/20",
+    PARTIALLY_REFUNDED: "bg-danger/15 text-danger border border-danger/20",
   } satisfies Record<ShopifyOrder["financialStatus"], string>;
 
   const labels: Record<ShopifyOrder["financialStatus"], string> = {

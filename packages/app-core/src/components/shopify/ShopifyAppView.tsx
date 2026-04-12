@@ -130,8 +130,8 @@ function ConnectionStatus({
   if (connected && domain) {
     return (
       <div className="flex items-center gap-1.5">
-        <Wifi className="h-3.5 w-3.5 text-green-400" />
-        <span className="text-xs font-medium text-green-400">{domain}</span>
+        <Wifi className="h-3.5 w-3.5 text-ok" />
+        <span className="text-xs font-medium text-ok">{domain}</span>
       </div>
     );
   }

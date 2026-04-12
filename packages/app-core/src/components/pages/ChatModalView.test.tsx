@@ -104,7 +104,7 @@ describe("ChatModalView", () => {
     const shell = testRenderer.root.findByProps({
       "data-chat-game-shell": true,
     });
-    expect(String(shell.props.className)).toContain("rounded-[28px]");
+    expect(String(shell.props.className)).toContain("rounded-3xl");
     expect(String(shell.props.className)).toContain("bg-transparent");
     expect(String(shell.props.className)).toContain("pointer-events-none");
 

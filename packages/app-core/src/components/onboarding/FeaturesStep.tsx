@@ -172,7 +172,7 @@ export function FeaturesStep() {
         {hasCloud && (
           <p
             style={{ fontFamily: MONO_FONT }}
-            className="text-[9px] uppercase text-black/50 mt-1"
+            className="text-3xs uppercase text-black/50 mt-1"
           >
             {t("onboarding.features.managedSection", {
               defaultValue: "Managed connectors",
@@ -200,7 +200,7 @@ export function FeaturesStep() {
 
         <p
           style={{ fontFamily: MONO_FONT }}
-          className="text-[9px] uppercase text-black/50 mt-2"
+          className="text-3xs uppercase text-black/50 mt-2"
         >
           {t("onboarding.features.optionalSection", {
             defaultValue: "Optional capabilities",
@@ -232,7 +232,7 @@ export function FeaturesStep() {
           type="button"
           onClick={handleSkip}
           style={{ fontFamily: MONO_FONT }}
-          className="text-[10px] uppercase text-black/50 hover:text-black underline"
+          className="text-2xs uppercase text-black/50 hover:text-black underline"
         >
           {t("onboarding.features.skip", { defaultValue: "Skip for now" })}
         </button>

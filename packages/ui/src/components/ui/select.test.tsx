@@ -71,7 +71,7 @@ describe("Select", () => {
     const { getByTestId } = render(
       <div
         data-testid="clipping-shell"
-        className="overflow-hidden rounded-[30px] border border-border"
+        className="overflow-hidden rounded-full border border-border"
       >
         <Select>
           <SelectTrigger>

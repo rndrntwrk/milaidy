@@ -36,7 +36,7 @@ describe("FormSelect", () => {
     fireEvent.click(screen.getByRole("combobox"));
 
     const option = screen.getByRole("option", { name: "Repeating Interval" });
-    expect(option.className).toContain("rounded-[14px]");
+    expect(option.className).toContain("rounded-xl");
     expect(option.className).toContain("data-[state=checked]:bg-[linear-gradient");
     expect(option.className).toContain("data-[state=checked]:text-black");
   });

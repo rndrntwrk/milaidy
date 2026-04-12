@@ -51,15 +51,15 @@ export function shouldShowLocalDeploymentOption(args: {
 function statusBadge(status: string): { label: string; className: string } {
   switch (status) {
     case "running":
-      return { label: "LIVE", className: "bg-green-600 text-white" };
+      return { label: "LIVE", className: "bg-ok text-white" };
     case "provisioning":
     case "queued":
-      return { label: "STARTING", className: "bg-yellow-500 text-black" };
+      return { label: "STARTING", className: "bg-warn text-black" };
     case "stopped":
     case "suspended":
       return { label: "STOPPED", className: "bg-black/20 text-black/70" };
     case "failed":
-      return { label: "FAILED", className: "bg-red-600 text-white" };
+      return { label: "FAILED", className: "bg-danger text-white" };
     default:
       return {
         label: status.toUpperCase(),
@@ -368,7 +368,7 @@ export function DeploymentStep() {
                     <div className="min-w-0">
                       <p
                         style={{ fontFamily: MONO_FONT }}
-                        className="text-[9px] uppercase text-black/60"
+                        className="text-3xs uppercase text-black/60"
                       >
                         {gateway.isLocal
                           ? t("startupshell.LocalNetworkAgent", {
@@ -381,7 +381,7 @@ export function DeploymentStep() {
                       <p className="truncate text-sm font-semibold text-black">
                         {gateway.name}
                       </p>
-                      <p className="truncate text-[11px] text-black/70">
+                      <p className="truncate text-xs-tight text-black/70">
                         {gateway.host}
                       </p>
                     </div>
@@ -411,7 +411,7 @@ export function DeploymentStep() {
               <span className="flex flex-col items-start gap-1">
                 <span
                   style={{ fontFamily: MONO_FONT }}
-                  className="text-[9px] uppercase text-[#ffe600]/80"
+                  className="text-3xs uppercase text-[#ffe600]/80"
                 >
                   {t("startupshell.CreateAgentLabel", {
                     defaultValue: "New local agent",
@@ -436,7 +436,7 @@ export function DeploymentStep() {
             <span className="flex flex-col items-start gap-1">
               <span
                 style={{ fontFamily: MONO_FONT }}
-                className="text-[9px] uppercase text-black/60"
+                className="text-3xs uppercase text-black/60"
               >
                 {t("startupshell.ElizaCloudAgent", {
                   defaultValue: "Eliza Cloud",
@@ -460,7 +460,7 @@ export function DeploymentStep() {
             <span className="flex flex-col items-start gap-1">
               <span
                 style={{ fontFamily: MONO_FONT }}
-                className="text-[9px] uppercase text-black/60"
+                className="text-3xs uppercase text-black/60"
               >
                 {t("startupshell.RemoteAgentLabel", {
                   defaultValue: "Remote server",
@@ -489,7 +489,7 @@ export function DeploymentStep() {
           <div className="mt-4 flex w-full flex-col gap-3 text-left">
             <p
               style={{ fontFamily: MONO_FONT }}
-              className="text-[9px] uppercase text-black/60"
+              className="text-3xs uppercase text-black/60"
             >
               {t("startupshell.CloudLogin", {
                 defaultValue: "Sign in to Eliza Cloud",
@@ -518,7 +518,7 @@ export function DeploymentStep() {
             {error && (
               <p
                 style={{ fontFamily: MONO_FONT }}
-                className="text-[9px] text-red-700"
+                className="text-3xs text-danger"
               >
                 {error}
               </p>
@@ -533,7 +533,7 @@ export function DeploymentStep() {
             <Spinner className="h-6 w-6 text-black/60" />
             <p
               style={{ fontFamily: MONO_FONT }}
-              className="text-[9px] uppercase text-black/50"
+              className="text-3xs uppercase text-black/50"
             >
               {t("startupshell.LoadingAgents", {
                 defaultValue: "Loading agents...",
@@ -550,7 +550,7 @@ export function DeploymentStep() {
             <Spinner className="h-6 w-6 text-black/60" />
             <p
               style={{ fontFamily: MONO_FONT }}
-              className="text-[9px] uppercase text-black/50"
+              className="text-3xs uppercase text-black/50"
             >
               {cloudStage === "creating"
                 ? t("startupshell.CreatingAgent", {
@@ -574,7 +574,7 @@ export function DeploymentStep() {
             <div className="flex items-center justify-between">
               <p
                 style={{ fontFamily: MONO_FONT }}
-                className="text-[9px] uppercase text-black/60"
+                className="text-3xs uppercase text-black/60"
               >
                 {t("startupshell.YourCloudAgents", {
                   defaultValue: "Your cloud agents",
@@ -584,7 +584,7 @@ export function DeploymentStep() {
                 type="button"
                 onClick={handleRefresh}
                 style={{ fontFamily: MONO_FONT }}
-                className="text-[9px] uppercase text-black/50 hover:text-black underline"
+                className="text-3xs uppercase text-black/50 hover:text-black underline"
               >
                 {t("startupshell.Refresh", { defaultValue: "Refresh" })}
               </button>
@@ -593,7 +593,7 @@ export function DeploymentStep() {
             {error && (
               <p
                 style={{ fontFamily: MONO_FONT }}
-                className="text-[9px] text-red-700"
+                className="text-3xs text-danger"
               >
                 {error}
               </p>
@@ -615,7 +615,7 @@ export function DeploymentStep() {
                               {agent.agent_name}
                             </p>
                             <span
-                              className={`shrink-0 rounded px-1.5 py-0.5 text-[8px] font-bold ${badge.className}`}
+                              className={`shrink-0 rounded px-1.5 py-0.5 text-3xs font-bold ${badge.className}`}
                             >
                               {badge.label}
                             </span>
@@ -623,7 +623,7 @@ export function DeploymentStep() {
                           {agent.web_ui_url && (
                             <p
                               style={{ fontFamily: MONO_FONT }}
-                              className="truncate text-[9px] text-black/50"
+                              className="truncate text-3xs text-black/50"
                             >
                               {agent.web_ui_url}
                             </p>
@@ -651,7 +651,7 @@ export function DeploymentStep() {
             {agents.length === 0 && !error && (
               <p
                 style={{ fontFamily: MONO_FONT }}
-                className="text-[10px] text-black/50 text-center py-2"
+                className="text-2xs text-black/50 text-center py-2"
               >
                 {t("startupshell.NoCloudAgents", {
                   defaultValue: "No cloud agents yet",
@@ -701,7 +701,7 @@ export function DeploymentStep() {
       <div className="mt-4 flex w-full flex-col gap-3 text-left">
         <p
           style={{ fontFamily: MONO_FONT }}
-          className="text-[9px] uppercase text-black/60"
+          className="text-3xs uppercase text-black/60"
         >
           {t("onboarding.deployment.remoteLabel", {
             defaultValue: "Connect to a remote agent",
@@ -770,7 +770,7 @@ function StepHeader({
       </h2>
       <p
         style={{ fontFamily: MONO_FONT }}
-        className="text-[10px] uppercase text-black/50 mt-1"
+        className="text-2xs uppercase text-black/50 mt-1"
       >
         {t("onboarding.deployment.subtitle", {
           defaultValue: "Where should your agent run?",
@@ -792,7 +792,7 @@ function BackButton({
       type="button"
       onClick={onClick}
       style={{ fontFamily: MONO_FONT }}
-      className="mt-1 text-[9px] uppercase text-black/50 hover:text-black underline text-center"
+      className="mt-1 text-3xs uppercase text-black/50 hover:text-black underline text-center"
     >
       {t("startupshell.Back", { defaultValue: "Back" })}
     </button>

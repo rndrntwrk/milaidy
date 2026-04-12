@@ -326,7 +326,7 @@ export function DatasetSection({
             {datasets.map((dataset) => (
               <label
                 key={dataset.id}
-                className="flex min-h-[44px] cursor-pointer items-center gap-3 rounded-xl border border-border/35 bg-bg/20 px-3 py-3 text-sm transition-colors hover:border-border/55 hover:bg-bg/35"
+                className="flex min-h-touch cursor-pointer items-center gap-3 rounded-xl border border-border/35 bg-bg/20 px-3 py-3 text-sm transition-colors hover:border-border/55 hover:bg-bg/35"
               >
                 <input
                   type="radio"

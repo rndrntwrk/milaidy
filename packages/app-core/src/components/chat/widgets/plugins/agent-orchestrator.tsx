@@ -227,7 +227,7 @@ function TaskThreadCard({
           </div>
           <Badge
             variant="secondary"
-            className={`shrink-0 text-[9px] ${
+            className={`shrink-0 text-3xs ${
               THREAD_STATUS_BADGE[thread.status] ?? "bg-muted/20 text-muted"
             }`}
           >
@@ -300,7 +300,7 @@ function ProviderRoutingPanel({ status }: { status: CodingAgentStatus }) {
           Provider Routing
         </div>
         {status.preferredAgentType ? (
-          <Badge variant="secondary" className="bg-ok/15 text-[9px] text-ok">
+          <Badge variant="secondary" className="bg-ok/15 text-3xs text-ok">
             {status.preferredAgentReason === "user selected"
               ? "Selected"
               : "Preferred"}
@@ -311,8 +311,8 @@ function ProviderRoutingPanel({ status }: { status: CodingAgentStatus }) {
           variant="secondary"
           className={
             status.pendingConfirmations > 0
-              ? "bg-warn/15 text-[9px] text-warn"
-              : "bg-bg-hover/70 text-[9px] text-muted"
+              ? "bg-warn/15 text-3xs text-warn"
+              : "bg-bg-hover/70 text-3xs text-muted"
           }
         >
           Pending approvals: {status.pendingConfirmations}
@@ -588,7 +588,7 @@ function ActivityItemsContent({ events }: { events: ActivityEvent[] }) {
           </span>
           <Badge
             variant="secondary"
-            className={`h-4 shrink-0 px-1.5 py-0 text-[9px] ${
+            className={`h-4 shrink-0 px-1.5 py-0 text-3xs ${
               EVENT_TYPE_COLORS[event.eventType] ?? ""
             }`}
           >
@@ -645,7 +645,7 @@ function AppRunCard({
         <div className="mt-2 flex flex-wrap gap-1.5">
           <Badge
             variant="secondary"
-            className="bg-warn/15 px-1.5 py-0 text-[9px] text-warn"
+            className="bg-warn/15 px-1.5 py-0 text-3xs text-warn"
           >
             Needs attention
           </Badge>

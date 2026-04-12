@@ -256,7 +256,7 @@ function CalendarEventCard({
             {formatEventWindow(event, timeZone)}
           </div>
         </div>
-        <Badge variant="secondary" className="text-[9px]">
+        <Badge variant="secondary" className="text-3xs">
           {event.status}
         </Badge>
       </div>
@@ -295,7 +295,7 @@ function GmailMessageCard({
           {message.subject}
         </div>
         {message.likelyReplyNeeded ? (
-          <Badge variant="secondary" className="text-[9px]">
+          <Badge variant="secondary" className="text-3xs">
             Reply needed
           </Badge>
         ) : null}

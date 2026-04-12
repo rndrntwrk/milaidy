@@ -28,9 +28,9 @@ import type { ShopifyProduct } from "./useShopifyDashboard";
 
 function ProductStatusBadge({ status }: { status: ShopifyProduct["status"] }) {
   const styles = {
-    ACTIVE: "bg-green-500/15 text-green-400 border border-green-500/20",
+    ACTIVE: "bg-ok/15 text-ok border border-ok/20",
     DRAFT: "bg-bg-accent text-muted border border-border/30",
-    ARCHIVED: "bg-red-500/15 text-red-400 border border-red-500/20",
+    ARCHIVED: "bg-danger/15 text-danger border border-danger/20",
   } satisfies Record<ShopifyProduct["status"], string>;
 
   const labels: Record<ShopifyProduct["status"], string> = {

@@ -176,7 +176,7 @@ export function StartupShell() {
           </div>
           <p
             style={{ fontFamily: FONT }}
-            className="mt-2 text-[8px] text-black/50 uppercase animate-pulse"
+            className="mt-2 text-3xs text-black/50 uppercase animate-pulse"
           >
             {t(phaseToStatusKey(phase))}
           </p>

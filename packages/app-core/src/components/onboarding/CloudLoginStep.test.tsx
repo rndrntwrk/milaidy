@@ -152,7 +152,7 @@ describe("CloudLoginStep", () => {
       button.children.includes("onboarding.skip"),
     );
     expect(skipButton).toBeDefined();
-    expect(String(skipButton?.props.className)).toContain("min-h-[44px]");
+    expect(String(skipButton?.props.className)).toContain("min-h-touch");
     expect(String(skipButton?.props.className)).toContain(
       "hover:bg-[var(--onboarding-secondary-hover-bg)]",
     );

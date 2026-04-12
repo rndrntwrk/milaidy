@@ -1412,7 +1412,7 @@ export function GameView() {
               </div>
               {(activeSessionState.telemetry as Record<string, unknown>)
                 .abilityPriority ? (
-                <div className="text-[9px]">
+                <div className="text-3xs">
                   Priority:{" "}
                   {(
                     (activeSessionState.telemetry as Record<string, unknown>)
@@ -1431,7 +1431,7 @@ export function GameView() {
               ) : null}
               {(activeSessionState.telemetry as Record<string, unknown>)
                 .ticksTracked != null ? (
-                <div className="text-[9px]">
+                <div className="text-3xs">
                   {String(
                     (activeSessionState.telemetry as Record<string, unknown>)
                       .ticksTracked,
@@ -1662,7 +1662,7 @@ export function GameView() {
                   return (
                     <span
                       key={t}
-                      className="text-[9px] px-1 py-px rounded"
+                      className="text-3xs px-1 py-px rounded"
                       style={{
                         background: c ? c.bg : "var(--bg-muted)",
                         color: c ? c.fg : "var(--muted)",

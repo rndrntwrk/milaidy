@@ -94,20 +94,20 @@ function PipelineNodeButton({
       ? "border-primary/30 bg-primary/5 ring-2 ring-primary/20 opacity-70"
       : "border-border/25 border-dashed opacity-50 hover:opacity-70",
     error: selected
-      ? "border-red-500/40 bg-red-500/5 ring-2 ring-red-500/30"
-      : "border-red-500/30 hover:border-red-500/40",
+      ? "border-danger/40 bg-danger/5 ring-2 ring-danger/30"
+      : "border-danger/30 hover:border-danger/40",
   };
 
   const iconColor = {
     active: selected ? "text-primary" : "text-txt/70",
     skipped: "text-muted/50",
-    error: "text-red-500/80",
+    error: "text-danger/80",
   };
 
   const countBg = {
     active: selected ? "bg-primary/15 text-primary" : "bg-muted/10 text-txt/60",
     skipped: "bg-muted/8 text-muted/40",
-    error: "bg-red-500/10 text-red-500/70",
+    error: "bg-danger/10 text-danger/70",
   };
 
   return (
@@ -121,12 +121,12 @@ function PipelineNodeButton({
       `}
     >
       <Icon className={`h-5 w-5 ${iconColor[node.status]}`} />
-      <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-txt/70 whitespace-nowrap">
+      <span className="text-2xs font-semibold uppercase tracking-[0.12em] text-txt/70 whitespace-nowrap">
         {node.label}
       </span>
       <span
         className={`
-          rounded-full px-2 py-0.5 text-[10px] font-bold leading-none
+          rounded-full px-2 py-0.5 text-2xs font-bold leading-none
           ${countBg[node.status]}
         `}
       >
