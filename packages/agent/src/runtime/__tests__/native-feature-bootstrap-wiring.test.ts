@@ -59,6 +59,18 @@ describe("native feature bootstrap wiring", () => {
     );
   });
 
+  it("guards plugin-secrets-manager bootstrap behind a runtime require", () => {
+    expect(elizaSource).not.toContain(
+      'import * as pluginSecretsManager from "@elizaos/plugin-secrets-manager";',
+    );
+    expect(elizaSource).toContain(
+      'pluginSecretsManager = require("@elizaos/plugin-secrets-manager");',
+    );
+    expect(elizaSource).toContain(
+      '"@elizaos/plugin-secrets-manager": pluginSecretsManager',
+    );
+  });
+
   it("guards plugin-cron bootstrap behind a runtime require", () => {
     expect(elizaSource).not.toContain(
       'import * as pluginCron from "@elizaos/plugin-cron";',

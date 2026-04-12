@@ -64,7 +64,6 @@ import * as pluginAnthropic from "@elizaos/plugin-anthropic";
 import * as pluginForm from "@elizaos/plugin-form";
 import * as pluginLocalEmbedding from "@elizaos/plugin-local-embedding";
 import * as pluginPdf from "@elizaos/plugin-pdf";
-import * as pluginSecretsManager from "@elizaos/plugin-secrets-manager";
 import * as pluginShell from "@elizaos/plugin-shell";
 import * as pluginSql from "@elizaos/plugin-sql";
 import * as pluginTrust from "@elizaos/plugin-trust";
@@ -158,6 +157,15 @@ try {
   pluginPluginManager = require("@elizaos/plugin-plugin-manager");
 } catch {
   pluginPluginManager = null;
+}
+// Keep plugin-secrets-manager behind a guarded runtime require too. Some
+// published alpha builds resolve through package.json but do not ship
+// dist/index.js, which breaks CLI/bootstrap in published-only CI.
+let pluginSecretsManager: unknown = null;
+try {
+  pluginSecretsManager = require("@elizaos/plugin-secrets-manager");
+} catch {
+  pluginSecretsManager = null;
 }
 // Keep plugin-cron behind a guarded runtime require for the same reason. Some
 // published alpha builds resolve through package.json but are missing the
@@ -295,7 +303,9 @@ function registerSignalShutdownHandlers(context: SignalShutdownContext): void {
 export const STATIC_ELIZA_PLUGINS: Record<string, unknown> = {
   "@elizaos/plugin-sql": pluginSql,
   "@elizaos/plugin-local-embedding": pluginLocalEmbedding,
-  "@elizaos/plugin-secrets-manager": pluginSecretsManager,
+  ...(pluginSecretsManager
+    ? { "@elizaos/plugin-secrets-manager": pluginSecretsManager }
+    : {}),
   "@elizaos/plugin-form": pluginForm,
   ...(pluginAgentOrchestrator
     ? { "@elizaos/plugin-agent-orchestrator": pluginAgentOrchestrator }
