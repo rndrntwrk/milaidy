@@ -173,10 +173,16 @@ describe("CI workflow audit regressions", () => {
     expect(implementer).toMatch(/trust-scoring\.cjs/);
   });
 
-  it("release-orchestrator.yml exists with trust gate", () => {
+  it("release-orchestrator.yml exists as the post-release reusable fan-out", () => {
     const content = readWorkflow("release-orchestrator.yml");
-    expect(content).toMatch(/trust-scoring\.cjs/);
-    expect(content).toMatch(/release-tracker/);
+    expect(content).toContain("uses: ./.github/workflows/publish-npm.yml");
+    expect(content).toContain("uses: ./.github/workflows/publish-packages.yml");
+    expect(content).toContain("uses: ./.github/workflows/android-release.yml");
+    expect(content).toContain(
+      "uses: ./.github/workflows/apple-store-release.yml",
+    );
+    expect(content).toContain("uses: ./.github/workflows/update-homebrew.yml");
+    expect(content).toContain("uses: ./.github/workflows/deploy-web.yml");
   });
 
   it("deploy-origin-smoke runs both origin status smoke and life-ops smoke", () => {

@@ -525,16 +525,15 @@ jobs:
           echo "Docs link check complete"
 
   # ── 4. Electrobun + Docker green → tag and publish ─────────────────
-  # NOTE: After the publish job creates a GitHub Release, the following
-  # standalone workflows auto-trigger via `release: types: [published]`:
+  # NOTE: After the publish job creates a GitHub Release, release-orchestrator.yml
+  # fans out the post-release distribution graph:
   #   - publish-npm.yml          → npm registry
   #   - publish-packages.yml     → PyPI, Snap Store, Debian/APT, Flatpak
-  #   - android-release.yml      → Google Play Store (internal track)
-  #   - apple-store-release.yml  → TestFlight (iOS + macOS)
+  #   - android-release.yml      → Google Play Store
+  #   - apple-store-release.yml  → TestFlight / App Store / Mac App Store
   #   - deploy-web.yml           → Homepage deployment
   #   - update-homebrew.yml      → Homebrew tap update
-  #   - build-docker.yml         → GHCR agent image push
-  # The cloud image is pushed via an explicit post-publish job below.
+  # The cloud image is still pushed via the explicit post-publish job below.
   publish:
     name: Tag & publish release
     needs: [version, build-electrobun, build-docker, build-cloud-image, build-npm]
@@ -655,12 +654,13 @@ jobs:
                 '',
                 '### Publishing pipelines (auto-triggered by this release)',
                 '- ✅ Electrobun artifacts (uploaded during build phase)',
+                '- 🔄 Post-release distribution orchestrator → release-orchestrator.yml',
                 '- 🔄 npm publish → publish-npm.yml',
                 '- 🔄 PyPI / Snap / Debian / Flatpak → publish-packages.yml',
                 '- 🔄 Agent Docker image → build-docker.yml (GHCR push)',
                 '- 🔄 Cloud app Docker image → post-publish push',
-                '- 🔄 Android → android-release.yml (Play Store internal)',
-                '- 🔄 iOS / macOS → apple-store-release.yml (TestFlight)',
+                '- 🔄 Android → android-release.yml (Play Store track by channel)',
+                '- 🔄 iOS / macOS → apple-store-release.yml (TestFlight or App Store by channel)',
                 '- 🔄 Homebrew → update-homebrew.yml',
                 '- 🔄 Homepage → deploy-web.yml',
               ].filter(Boolean).join('\n'),

@@ -1,8 +1,47 @@
 name: Apple Store Build & Publish
 
 on:
-  release:
-    types: [published]
+  workflow_call:
+    inputs:
+      platform:
+        description: "Platform to build"
+        required: false
+        type: string
+        default: both
+      track:
+        description: "Release track"
+        required: false
+        type: string
+        default: testflight
+      version:
+        description: "Version override (e.g. 2.0.0-alpha.82)"
+        required: true
+        type: string
+    secrets:
+      APPLE_ID:
+        required: true
+      APPLE_TEAM_ID:
+        required: true
+      ITC_TEAM_ID:
+        required: false
+      APP_STORE_APP_ID:
+        required: false
+      MATCH_PASSWORD:
+        required: false
+      MATCH_GIT_URL:
+        required: false
+      MATCH_GIT_BASIC_AUTHORIZATION:
+        required: false
+      APPLE_APP_SPECIFIC_PASSWORD:
+        required: true
+      MAS_CSC_LINK:
+        required: false
+      MAS_CSC_KEY_PASSWORD:
+        required: false
+      MAS_INSTALLER_CERT:
+        required: false
+      MAS_INSTALLER_KEY_PASSWORD:
+        required: false
   workflow_dispatch:
     inputs:
       platform:
@@ -56,9 +95,6 @@ jobs:
         run: |
           if [[ -n "${{ inputs.version }}" ]]; then
             VERSION="${{ inputs.version }}"
-          elif [[ "${{ github.event_name }}" == "release" ]]; then
-            VERSION="${{ github.event.release.tag_name }}"
-            VERSION="${VERSION#v}"
           else
             VERSION=$(node -p "require('./package.json').version")
           fi

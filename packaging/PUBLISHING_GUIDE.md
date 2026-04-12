@@ -549,98 +549,51 @@ Complete these in Play Console before first release:
 
 ## 7. CI/CD Automation
 
-### GitHub Actions Workflow
+### GitHub Actions release topology
 
-Add this to `.github/workflows/publish-packages.yml` to automate publishing across all platforms:
+The repo now uses a two-stage release model:
 
-```yaml
-name: Publish Packages
+1. **`agent-release.yml`** validates the heavy build matrix and publishes the GitHub Release only after the blocking lanes are green.
+2. **`release-orchestrator.yml`** handles post-release distribution and fans out to reusable child workflows:
+   - `publish-npm.yml`
+   - `publish-packages.yml`
+   - `android-release.yml`
+   - `apple-store-release.yml`
+   - `update-homebrew.yml`
+   - `deploy-web.yml`
 
-on:
-  release:
-    types: [published]
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version to publish'
-        required: true
+Why this split exists:
 
-jobs:
-  # ── PyPI ─────────────────────────────────────────────────────────────
-  publish-pypi:
-    runs-on: ubuntu-latest
-    permissions:
-      id-token: write  # For trusted publishing
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-      - name: Build package
-        working-directory: packaging/pypi
-        run: |
-          pip install build
-          python -m build
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          packages-dir: packaging/pypi/dist/
+- A published GitHub Release is the single durable release event.
+- Store-specific retries should not require retagging or rebuilding Electrobun.
+- Stable vs pre-release routing differs by channel:
+  - npm: `latest` for stable, `next` / `beta` / `nightly` for prereleases
+  - Android: `production` for stable, `internal` for prereleases
+  - Apple: `app-store` for stable, `testflight` for prereleases
+  - Flatpak and Homebrew: stable-only by default
 
-  # ── Snap ─────────────────────────────────────────────────────────────
-  publish-snap:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Setup snap
-        run: |
-          mkdir -p snap
-          cp packaging/snap/snapcraft.yaml snap/
-      - uses: snapcore/action-build@v1
-        id: snapcraft
-      - uses: snapcore/action-publish@v1
-        env:
-          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAP_TOKEN }}
-        with:
-          snap: ${{ steps.snapcraft.outputs.snap }}
-          release: edge
+Manual recovery path:
 
-  # ── Homebrew ─────────────────────────────────────────────────────────
-  update-homebrew:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Update Homebrew formula
-        env:
-          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-        run: |
-          VERSION="${{ github.event.release.tag_name || github.event.inputs.version }}"
-          VERSION="${VERSION#v}"
-          URL="https://registry.npmjs.org/miladyai/-/miladyai-${VERSION}.tgz"
-          SHA256=$(curl -fsSL "$URL" | shasum -a 256 | cut -d' ' -f1)
-
-          git clone "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/milady-ai/homebrew-tap.git"
-          cd homebrew-tap
-
-          sed -i "s|url \".*\"|url \"${URL}\"|" Formula/milady.rb
-          sed -i "s|sha256 \".*\"|sha256 \"${SHA256}\"|" Formula/milady.rb
-          sed -i "s|version \".*\"|version \"${VERSION}\"|" Formula/milady.rb
-
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Formula/milady.rb
-          git commit -m "Update milady to ${VERSION}"
-          git push
+```bash
+# Re-run only the post-release distribution layer for an existing release
+gh workflow run release-orchestrator.yml -f version=2.0.0-alpha.87
 ```
 
 ### Required GitHub Secrets
 
 | Secret | Where to get it | Used by |
 |---|---|---|
-| `SNAP_TOKEN` | `snapcraft export-login --snaps=milady --acls=package_push -` | Snap publishing |
+| `SNAP_STORE_CREDENTIALS` | `snapcraft export-login --snaps=milady --acls=package_push -` | Snap publishing |
 | `HOMEBREW_TAP_TOKEN` | GitHub PAT with `repo` scope for `milady-ai/homebrew-tap` | Homebrew formula updates |
 | `PYPI_API_TOKEN` | https://pypi.org/manage/account/token/ (or use trusted publishing) | PyPI uploads |
 | `ANDROID_KEYSTORE_BASE64` | `base64 -w0 milady-upload.jks` | Android AAB signing |
+| `ANDROID_KEYSTORE_PASSWORD` | Android upload keystore password | Android AAB signing |
+| `ANDROID_KEY_ALIAS` | Android upload key alias | Android AAB signing |
+| `ANDROID_KEY_PASSWORD` | Android upload key password | Android AAB signing |
 | `PLAY_STORE_SERVICE_ACCOUNT_JSON` | Google Cloud Console service account JSON (base64) | Play Store uploads |
+| `APPLE_ID` | Apple ID email | Apple store publishing |
+| `APPLE_TEAM_ID` | 10-char Apple team ID | Apple store publishing |
+| `APPLE_APP_SPECIFIC_PASSWORD` | App-specific password from appleid.apple.com | Apple store publishing |
 
 ### PyPI Trusted Publishing (recommended)
 

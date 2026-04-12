@@ -1,6 +1,8 @@
 # Build and release (CI, desktop binaries)
 
-`.github/workflows/release-electrobun.yml` is the canonical desktop release workflow and reusable desktop release-build graph. `.github/workflows/test-electrobun-release.yml` calls that same graph on pull requests in build-only mode, and `.github/workflows/release.yml` remains a manual legacy desktop fallback only.
+`.github/workflows/release-electrobun.yml` is the canonical desktop release workflow and reusable desktop release-build graph. `.github/workflows/test-electrobun-release.yml` calls that same graph on pull requests in build-only mode.
+
+Post-release distribution is now centralized in `.github/workflows/release-orchestrator.yml`. Why: the repo ships multiple downstream channels (npm, PyPI, Snap, Debian/APT, Flatpak, Google Play, Apple stores, Homebrew, homepage), and letting each workflow independently listen to `release: published` made retries, compliance routing, and drift management harder than necessary. The orchestrator owns channel policy and fans out to reusable child workflows.
 
 Why the release pipeline and desktop bundle work the way they do.
 
@@ -60,7 +62,8 @@ CI workflows that need Node (for node-gyp / native modules or npm registry) were
 
 - **Electrobun PR release validation:** `.github/workflows/test-electrobun-release.yml` — on pull requests; runs the same Electrobun release build matrix in build-only mode without creating a GitHub release.
 - **Electrobun release:** `.github/workflows/release-electrobun.yml` — on version tag push or manual dispatch; builds macOS arm64, macOS x64, Windows x64, and Linux x64 Electrobun artifacts plus update channel files.
-- **Legacy desktop compatibility stub:** `.github/workflows/release.yml` — manual workflow that only points maintainers at the Electrobun release path.
+- **Pre-release gate and tag publication:** `.github/workflows/agent-release.yml` — validates the heavy build matrix, then creates the GitHub Release only after the blocking lanes are green.
+- **Post-release distribution:** `.github/workflows/release-orchestrator.yml` — triggered by the published GitHub Release (or manual dispatch), computes stable vs pre-release channel policy, and fans out to the reusable publish workflows for npm, package registries, Android, Apple, Homebrew, and homepage deploy.
 - **Local desktop build:** From repo root, use the Electrobun path: `bun run build:desktop` for a local bundle build, then `bash apps/app/electrobun/scripts/smoke-test.sh` for packaged desktop verification.
 
 ## Electrobun update-channel naming
