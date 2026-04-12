@@ -14,15 +14,15 @@
  * Implements the OverlayApp Component contract.
  */
 
-import type { OverlayAppContext } from "../apps/overlay-app-api";
 import { Button, PagePanel, Spinner } from "@miladyai/ui";
 import { ArrowLeft, RefreshCw } from "lucide-react";
 import { useApp } from "../../state";
+import type { OverlayAppContext } from "../apps/overlay-app-api";
 import { TradingProfileCard } from "./TradingProfileCard";
 import { TradingStrategyPanel } from "./TradingStrategyPanel";
+import { useVincentDashboard } from "./useVincentDashboard";
 import { VaultStatusCard } from "./VaultStatusCard";
 import { VincentConnectionCard } from "./VincentConnectionCard";
-import { useVincentDashboard } from "./useVincentDashboard";
 
 export function VincentAppView({ exitToApps, t }: OverlayAppContext) {
   const { setActionNotice } = useApp();
@@ -108,10 +108,7 @@ export function VincentAppView({ exitToApps, t }: OverlayAppContext) {
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_minmax(280px,340px)] gap-4 items-start">
             {/* Left column — main cards */}
             <div className="space-y-4">
-              <VincentConnectionCard
-                setActionNotice={setActionNotice}
-                t={t}
-              />
+              <VincentConnectionCard setActionNotice={setActionNotice} t={t} />
 
               {vincentConnected && (
                 <>

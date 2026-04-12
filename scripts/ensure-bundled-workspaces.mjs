@@ -11,6 +11,13 @@ const DEFAULT_REPO_ROOT = path.resolve(__dirname, "..");
 
 export const BUNDLED_WORKSPACE_BUILDS = [
   {
+    label: "@elizaos/core",
+    cwd: path.join("eliza", "packages", "typescript"),
+    manifest: path.join("eliza", "packages", "typescript", "package.json"),
+    artifact: path.join("eliza", "packages", "typescript", "dist", "index.js"),
+    args: ["run", "build"],
+  },
+  {
     label: "@elizaos/plugin-agent-orchestrator",
     cwd: path.join("plugins", "plugin-agent-orchestrator"),
     manifest: path.join("plugins", "plugin-agent-orchestrator", "package.json"),

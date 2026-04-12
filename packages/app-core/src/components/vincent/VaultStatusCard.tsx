@@ -5,13 +5,13 @@
  * NOT the steward vault system (which is a separate optional custody layer).
  */
 
-import { Button, StatusBadge } from "@miladyai/ui";
-import { Copy, Wallet } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
 import type {
   WalletAddresses,
   WalletBalancesResponse,
 } from "@miladyai/shared/contracts/wallet";
+import { Button, StatusBadge } from "@miladyai/ui";
+import { Copy, Wallet } from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
 
 interface VaultStatusCardProps {
   walletAddresses: WalletAddresses | null;

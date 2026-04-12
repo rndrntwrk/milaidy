@@ -141,3 +141,6 @@
 	path = examples/clone-your-crush
 	url = https://github.com/elizaOS/clone-your-crush.git
 	branch = main
+[submodule "plugins/plugin-cli"]
+	path = plugins/plugin-cli
+	url = https://github.com/elizaos-plugins/plugin-cli.git

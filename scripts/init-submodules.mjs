@@ -35,6 +35,12 @@ const SUBMODULE_READINESS_MARKERS = {
 // available via npm in the meantime.
 const SKIP_SUBMODULES = new Set(["plugins/plugin-openrouter"]);
 
+// Submodules whose own nested submodules should NOT be recursively initialized.
+// eliza's nested plugins/plugin-sql points to an internal commit that is not
+// publicly reachable, so --recursive would always fail on CI. We only need the
+// top-level eliza source tree (packages/typescript) for the build.
+const NO_RECURSE_SUBMODULES = new Set(["eliza"]);
+
 function getSubmoduleSkipReason(
   submodulePath,
   { skipLocal = skipLocalUpstreams } = {},
@@ -208,8 +214,11 @@ export function runInitSubmodules({
       }...`,
     );
     try {
+      const recurseFlag = NO_RECURSE_SUBMODULES.has(submodule.path)
+        ? ""
+        : " --recursive";
       try {
-        exec(`git submodule update --init --recursive "${submodule.path}"`, {
+        exec(`git submodule update --init${recurseFlag} "${submodule.path}"`, {
           cwd: rootDir,
           stdio: "inherit",
         });
@@ -235,7 +244,7 @@ export function runInitSubmodules({
             shell: true,
           });
         }
-        exec(`git submodule update --recursive "${submodule.path}"`, {
+        exec(`git submodule update${recurseFlag} "${submodule.path}"`, {
           cwd: rootDir,
           stdio: "inherit",
         });

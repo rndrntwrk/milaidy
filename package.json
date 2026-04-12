@@ -331,14 +331,13 @@
     "vitest": "^4.1.0"
   },
   "overrides": {
-    "@elizaos/plugin-anthropic": "2.0.0-alpha.13",
-    "@elizaos/plugin-cli": "2.0.0-alpha.9",
+    "@elizaos/plugin-anthropic": "workspace:*",
+    "@elizaos/plugin-cli": "workspace:*",
     "@elizaos/plugin-discord": "workspace:*",
     "@elizaos/plugin-knowledge": "workspace:*",
     "@elizaos/plugin-sql": "workspace:*",
-    "@elizaos/plugin-telegram": "2.0.0-alpha.12",
-    "@elizaos/config": "1.7.3-alpha.4",
-    "@elizaos/core": "2.0.0-alpha.127",
+    "@elizaos/plugin-telegram": "workspace:*",
+    "@elizaos/core": "workspace:*",
     "drizzle-orm": "0.45.1",
     "ai": "6.0.30",
     "@stwd/sdk": "^0.3.0",

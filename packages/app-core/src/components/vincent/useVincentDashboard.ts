@@ -6,12 +6,12 @@
  * is a separate optional vault layer).
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { client } from "../../api";
 import type {
   WalletAddresses,
   WalletBalancesResponse,
 } from "@miladyai/shared/contracts/wallet";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { client } from "../../api";
 
 // ── Vincent endpoint types ──────────────────────────────────────────────
 

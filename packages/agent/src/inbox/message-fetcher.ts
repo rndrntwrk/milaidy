@@ -1,10 +1,4 @@
-import type {
-  AgentRuntime,
-  IAgentRuntime,
-  Memory,
-  Room,
-  UUID,
-} from "@elizaos/core";
+import type { IAgentRuntime, Memory, Room, UUID } from "@elizaos/core";
 import { logger } from "@elizaos/core";
 import {
   expandConnectorSourceFilter,
@@ -138,8 +132,7 @@ export async function fetchChatMessages(
     const threadMessages = roomMessages
       .filter(
         (m) =>
-          m.id !== memory.id &&
-          (m.createdAt ?? 0) <= (memory.createdAt ?? 0),
+          m.id !== memory.id && (m.createdAt ?? 0) <= (memory.createdAt ?? 0),
       )
       .slice(0, THREAD_CONTEXT_LIMIT)
       .map((m) => {
@@ -220,7 +213,10 @@ export async function fetchGmailMessages(
         channelName: `Email from ${from}`,
         channelType: "dm",
         text: msg.snippet || msg.subject || "",
-        snippet: (msg.snippet || msg.subject || "").slice(0, SNIPPET_MAX_LENGTH),
+        snippet: (msg.snippet || msg.subject || "").slice(
+          0,
+          SNIPPET_MAX_LENGTH,
+        ),
         timestamp: receivedMs,
         deepLink: gmailLink ?? undefined,
         gmailMessageId: msg.externalId || msg.id,

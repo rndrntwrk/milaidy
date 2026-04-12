@@ -8,7 +8,6 @@
  * Implements the OverlayApp Component contract (receives OverlayAppContext).
  */
 
-import type { OverlayAppContext } from "../apps/overlay-app-api";
 import {
   Badge,
   Button,
@@ -30,6 +29,7 @@ import {
   WifiOff,
 } from "lucide-react";
 import { useState } from "react";
+import type { OverlayAppContext } from "../apps/overlay-app-api";
 import { CustomersPanel } from "./CustomersPanel";
 import { InventoryLevelsPanel } from "./InventoryLevelsPanel";
 import { OrdersPanel } from "./OrdersPanel";
@@ -295,7 +295,7 @@ export function ShopifyAppView({ exitToApps }: OverlayAppContext) {
 
                   <div className="grid gap-4 lg:grid-cols-2">
                     {/* Recent orders summary */}
-                    <div className="rounded-[18px] border border-border/24 bg-card/32 px-4 py-4">
+                    <div className="rounded-2xl border border-border/24 bg-card/32 px-4 py-4">
                       <div className="flex items-center gap-2">
                         <ShoppingCart className="h-4 w-4 text-muted-strong" />
                         <div className="text-xs-tight font-semibold uppercase tracking-[0.14em] text-muted/70">
@@ -305,15 +305,15 @@ export function ShopifyAppView({ exitToApps }: OverlayAppContext) {
                       <div className="mt-3 space-y-2">
                         {ordersLoading && orders.length === 0 ? (
                           <>
-                            <Skeleton className="h-8 w-full rounded-[10px]" />
-                            <Skeleton className="h-8 w-full rounded-[10px]" />
-                            <Skeleton className="h-8 w-full rounded-[10px]" />
+                            <Skeleton className="h-8 w-full rounded-lg" />
+                            <Skeleton className="h-8 w-full rounded-lg" />
+                            <Skeleton className="h-8 w-full rounded-lg" />
                           </>
                         ) : (
                           orders.slice(0, 5).map((order) => (
                             <div
                               key={order.id}
-                              className="flex items-center justify-between gap-2 rounded-[10px] bg-card/40 px-3 py-2"
+                              className="flex items-center justify-between gap-2 rounded-lg bg-card/40 px-3 py-2"
                             >
                               <span className="text-xs font-semibold text-txt">
                                 {order.name}
@@ -347,7 +347,7 @@ export function ShopifyAppView({ exitToApps }: OverlayAppContext) {
                     </div>
 
                     {/* Low inventory summary */}
-                    <div className="rounded-[18px] border border-border/24 bg-card/32 px-4 py-4">
+                    <div className="rounded-2xl border border-border/24 bg-card/32 px-4 py-4">
                       <div className="flex items-center gap-2">
                         <Package className="h-4 w-4 text-muted-strong" />
                         <div className="text-xs-tight font-semibold uppercase tracking-[0.14em] text-muted/70">
@@ -357,8 +357,8 @@ export function ShopifyAppView({ exitToApps }: OverlayAppContext) {
                       <div className="mt-3 space-y-2">
                         {inventoryLoading && inventoryItems.length === 0 ? (
                           <>
-                            <Skeleton className="h-8 w-full rounded-[10px]" />
-                            <Skeleton className="h-8 w-full rounded-[10px]" />
+                            <Skeleton className="h-8 w-full rounded-lg" />
+                            <Skeleton className="h-8 w-full rounded-lg" />
                           </>
                         ) : (
                           inventoryItems
@@ -367,7 +367,7 @@ export function ShopifyAppView({ exitToApps }: OverlayAppContext) {
                             .map((item) => (
                               <div
                                 key={`${item.id}:${item.locationName}`}
-                                className="flex items-center justify-between gap-2 rounded-[10px] bg-card/40 px-3 py-2"
+                                className="flex items-center justify-between gap-2 rounded-lg bg-card/40 px-3 py-2"
                               >
                                 <span className="min-w-0 flex-1 truncate text-xs font-semibold text-txt">
                                   {item.productTitle}
