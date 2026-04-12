@@ -1,5 +1,5 @@
 import { Button } from "@miladyai/ui";
-import { CircleDollarSign } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import type { CSSProperties } from "react";
 import { SHELL_EXPANDED_BUTTON_CLASSNAME } from "../companion/shell-control-styles";
 
@@ -106,10 +106,13 @@ export function resolveCloudStatusBadgeState(
   }
 
   if (typeof credits === "number") {
-    const formattedBalance = formatCompactCloudCredits(credits);
     const isLowCredits = creditsCritical || creditsLow;
+    // Only show the badge for low/critical credits — a healthy balance
+    // doesn't need a header indicator.
+    if (!isLowCredits) return null;
+    const formattedBalance = formatCompactCloudCredits(credits);
     return {
-      kind: isLowCredits ? "low-credits" : "regular-credits",
+      kind: "low-credits",
       text: formattedBalance,
       title: `${t("header.CloudCreditsBalanc")}: ${formattedBalance}`,
     };
@@ -124,28 +127,10 @@ export function resolveCloudStatusBadgeState(
 
 function resolveCloudStatusToneStyle(
   kind: CloudHeaderStatusKind,
-  appearance: CloudStatusBadgeProps["appearance"],
+  _appearance: CloudStatusBadgeProps["appearance"],
 ): CSSProperties {
-  if (kind === "regular-credits" && appearance === "shell") {
-    return {
-      borderColor: "transparent",
-    };
-  }
-
-  if (kind === "regular-credits") {
-    return {
-      borderColor: "transparent",
-      backgroundColor: "var(--accent)",
-      backgroundImage:
-        "linear-gradient(180deg, color-mix(in srgb, var(--accent) 86%, white 14%), color-mix(in srgb, var(--accent) 94%, black 6%))",
-      color: "#0f0f12",
-      boxShadow:
-        "inset 0 1px 0 rgba(255,255,255,0.22), 0 12px 28px rgba(3,5,10,0.16)",
-    };
-  }
-
+  // The badge now only renders for warning/error/low-credits states.
   const toneVar = kind === "error" ? "var(--danger)" : "var(--warn)";
-
   return {
     borderColor: `color-mix(in srgb, ${toneVar} 34%, var(--border))`,
     color: `color-mix(in srgb, var(--text-strong) 78%, ${toneVar} 22%)`,
@@ -198,7 +183,7 @@ export function CloudStatusBadge(props: CloudStatusBadgeProps) {
       onClick={onClick}
       style={{ ...CLOUD_STATUS_BUTTON_STYLE, ...toneStyle }}
     >
-      <CircleDollarSign className="pointer-events-none h-3.5 w-3.5 shrink-0" />
+      <AlertTriangle className="pointer-events-none h-3.5 w-3.5 shrink-0" />
       <span
         className={`pointer-events-none leading-none ${compactOnMobile ? "max-[380px]:hidden" : ""}`}
       >

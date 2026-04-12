@@ -1,4 +1,4 @@
-/** Unit tests for onboarding `flow.ts` — 2-step flow. */
+/** Unit tests for onboarding `flow.ts` — 4-step flow. */
 import { describe, expect, it } from "vitest";
 import {
   canRevertOnboardingTo,
@@ -8,27 +8,37 @@ import {
   resolveOnboardingNextStep,
   resolveOnboardingPreviousStep,
   shouldSkipConnectionStepsForCloudProvisionedContainer,
+  shouldSkipFeaturesStep,
   shouldUseCloudOnboardingFastTrack,
 } from "../flow";
 
 describe("onboarding flow", () => {
   describe("getStepOrder", () => {
-    it("returns 2-step order (server select on splash, permissions lazy)", () => {
-      expect(getStepOrder()).toEqual(["identity", "providers"]);
+    it("returns 4-step order (deployment absorbs splash, features at end)", () => {
+      expect(getStepOrder()).toEqual([
+        "deployment",
+        "identity",
+        "providers",
+        "features",
+      ]);
     });
   });
 
   describe("resolveOnboardingNextStep", () => {
     it("advances through all steps", () => {
+      expect(resolveOnboardingNextStep("deployment")).toBe("identity");
       expect(resolveOnboardingNextStep("identity")).toBe("providers");
-      expect(resolveOnboardingNextStep("providers")).toBe(null);
+      expect(resolveOnboardingNextStep("providers")).toBe("features");
+      expect(resolveOnboardingNextStep("features")).toBe(null);
     });
   });
 
   describe("resolveOnboardingPreviousStep", () => {
     it("steps back through all steps", () => {
-      expect(resolveOnboardingPreviousStep("identity")).toBe(null);
+      expect(resolveOnboardingPreviousStep("deployment")).toBe(null);
+      expect(resolveOnboardingPreviousStep("identity")).toBe("deployment");
       expect(resolveOnboardingPreviousStep("providers")).toBe("identity");
+      expect(resolveOnboardingPreviousStep("features")).toBe("providers");
     });
   });
 
@@ -36,6 +46,12 @@ describe("onboarding flow", () => {
     it("allows backward jump", () => {
       expect(
         canRevertOnboardingTo({ current: "providers", target: "identity" }),
+      ).toBe(true);
+      expect(
+        canRevertOnboardingTo({ current: "features", target: "deployment" }),
+      ).toBe(true);
+      expect(
+        canRevertOnboardingTo({ current: "features", target: "providers" }),
       ).toBe(true);
     });
     it("disallows same-step jump", () => {
@@ -47,21 +63,37 @@ describe("onboarding flow", () => {
       expect(
         canRevertOnboardingTo({ current: "identity", target: "providers" }),
       ).toBe(false);
+      expect(
+        canRevertOnboardingTo({ current: "deployment", target: "features" }),
+      ).toBe(false);
     });
   });
 
   describe("getOnboardingNavMetas", () => {
-    it("returns all 2 steps", () => {
+    it("returns all 4 steps", () => {
       const metas = getOnboardingNavMetas("providers", false);
-      expect(metas.map((m) => m.id)).toEqual(["identity", "providers"]);
+      expect(metas.map((m) => m.id)).toEqual([
+        "deployment",
+        "identity",
+        "providers",
+        "features",
+      ]);
+    });
+    it("hides deployment step for cloud-only builds", () => {
+      const metas = getOnboardingNavMetas("identity", true);
+      expect(metas.map((m) => m.id)).toEqual([
+        "identity",
+        "providers",
+        "features",
+      ]);
     });
   });
 
   describe("shouldSkipConnectionStepsForCloudProvisionedContainer", () => {
-    it("finishes immediately after identity for cloud-provisioned containers", () => {
+    it("finishes immediately after deployment for cloud-provisioned containers", () => {
       expect(
         shouldSkipConnectionStepsForCloudProvisionedContainer({
-          currentStep: "identity",
+          currentStep: "deployment",
           cloudProvisionedContainer: true,
         }),
       ).toBe(true);
@@ -70,15 +102,31 @@ describe("onboarding flow", () => {
     it("keeps the normal wizard flow for non-cloud or later steps", () => {
       expect(
         shouldSkipConnectionStepsForCloudProvisionedContainer({
-          currentStep: "identity",
+          currentStep: "deployment",
           cloudProvisionedContainer: false,
         }),
       ).toBe(false);
       expect(
         shouldSkipConnectionStepsForCloudProvisionedContainer({
-          currentStep: "hosting",
+          currentStep: "identity",
           cloudProvisionedContainer: true,
         }),
+      ).toBe(false);
+    });
+  });
+
+  describe("shouldSkipFeaturesStep", () => {
+    it("skips for remote-only targets", () => {
+      expect(
+        shouldSkipFeaturesStep({ onboardingServerTarget: "remote" }),
+      ).toBe(true);
+    });
+    it("keeps for local and cloud targets", () => {
+      expect(
+        shouldSkipFeaturesStep({ onboardingServerTarget: "local" }),
+      ).toBe(false);
+      expect(
+        shouldSkipFeaturesStep({ onboardingServerTarget: "elizacloud" }),
       ).toBe(false);
     });
   });
@@ -118,7 +166,9 @@ describe("onboarding flow", () => {
   describe("getFlaminaTopicForOnboardingStep", () => {
     it("maps advanced guide topics", () => {
       expect(getFlaminaTopicForOnboardingStep("providers")).toBe("provider");
+      expect(getFlaminaTopicForOnboardingStep("features")).toBe("features");
       expect(getFlaminaTopicForOnboardingStep("identity")).toBe(null);
+      expect(getFlaminaTopicForOnboardingStep("deployment")).toBe(null);
     });
   });
 });

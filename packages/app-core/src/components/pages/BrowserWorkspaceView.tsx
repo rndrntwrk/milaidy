@@ -43,6 +43,7 @@ import {
 } from "../../browser-workspace-wallet";
 import { useApp } from "../../state";
 import { openExternalUrl } from "../../utils";
+import { WidgetHost } from "../../widgets";
 
 const POLL_INTERVAL_MS = 2_500;
 const DEFAULT_BROWSER_WALLET_CHAIN_ID = 1;
@@ -1427,6 +1428,7 @@ export function BrowserWorkspaceView(): JSX.Element {
           ) : null}
         </div>
       </PageLayout>
+      <WidgetHost slot="browser" className="px-4 py-3" />
     </div>
   );
 }

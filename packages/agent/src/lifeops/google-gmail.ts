@@ -1,5 +1,6 @@
 import type { LifeOpsGmailMessageSummary } from "@miladyai/shared/contracts/lifeops";
 import { GoogleApiError } from "./google-api-error.js";
+import { googleApiFetch } from "./google-fetch.js";
 
 const GOOGLE_GMAIL_MESSAGES_ENDPOINT =
   "https://gmail.googleapis.com/gmail/v1/users/me/messages";
@@ -486,7 +487,7 @@ export async function fetchGoogleGmailMessage(args: {
   for (const header of GMAIL_METADATA_HEADERS) {
     params.append("metadataHeaders", header);
   }
-  const response = await fetch(
+  const response = await googleApiFetch(
     `${GOOGLE_GMAIL_MESSAGES_ENDPOINT}/${encodeURIComponent(args.messageId)}?${params.toString()}`,
     {
       headers: {
@@ -494,12 +495,6 @@ export async function fetchGoogleGmailMessage(args: {
       },
     },
   );
-  if (!response.ok) {
-    throw new GoogleApiError(
-      response.status,
-      await readGoogleGmailError(response),
-    );
-  }
   const parsed = (await response.json()) as GoogleGmailMetadataResponse;
   return normalizeGoogleGmailMessage(parsed, args.selfEmail ?? null);
 }
@@ -512,7 +507,7 @@ export async function fetchGoogleGmailMessageDetail(args: {
   const params = new URLSearchParams({
     format: "full",
   });
-  const response = await fetch(
+  const response = await googleApiFetch(
     `${GOOGLE_GMAIL_MESSAGES_ENDPOINT}/${encodeURIComponent(args.messageId)}?${params.toString()}`,
     {
       headers: {
@@ -520,12 +515,6 @@ export async function fetchGoogleGmailMessageDetail(args: {
       },
     },
   );
-  if (!response.ok) {
-    throw new GoogleApiError(
-      response.status,
-      await readGoogleGmailError(response),
-    );
-  }
   const parsed = (await response.json()) as GoogleGmailMetadataResponse;
   const message = normalizeGoogleGmailMessage(parsed, args.selfEmail ?? null);
   if (!message) {
@@ -557,7 +546,7 @@ async function fetchGoogleGmailMessages(args: {
     listParams.set("q", args.query.trim());
   }
 
-  const listResponse = await fetch(
+  const listResponse = await googleApiFetch(
     `${GOOGLE_GMAIL_MESSAGES_ENDPOINT}?${listParams.toString()}`,
     {
       headers: {
@@ -565,13 +554,6 @@ async function fetchGoogleGmailMessages(args: {
       },
     },
   );
-
-  if (!listResponse.ok) {
-    throw new GoogleApiError(
-      listResponse.status,
-      await readGoogleGmailError(listResponse),
-    );
-  }
 
   const listed = (await listResponse.json()) as GoogleGmailListResponse;
   const messages = await Promise.all(
@@ -587,7 +569,7 @@ async function fetchGoogleGmailMessages(args: {
         params.append("metadataHeaders", header);
       }
 
-      const response = await fetch(
+      const response = await googleApiFetch(
         `${GOOGLE_GMAIL_MESSAGES_ENDPOINT}/${encodeURIComponent(messageId)}?${params.toString()}`,
         {
           headers: {
@@ -595,12 +577,6 @@ async function fetchGoogleGmailMessages(args: {
           },
         },
       );
-      if (!response.ok) {
-        throw new GoogleApiError(
-          response.status,
-          await readGoogleGmailError(response),
-        );
-      }
       const parsed = (await response.json()) as GoogleGmailMetadataResponse;
       return normalizeGoogleGmailMessage(parsed, args.selfEmail ?? null);
     }),
@@ -619,24 +595,47 @@ async function fetchGoogleGmailMessages(args: {
     });
 }
 
+export interface GmailSendResult {
+  /** Gmail message ID returned by the API (e.g. "18f3a..."). */
+  messageId: string | null;
+  /** Gmail thread ID. */
+  threadId: string | null;
+  /** Label IDs assigned by Gmail. */
+  labelIds: string[];
+}
+
 async function postGoogleGmailRaw(
   accessToken: string,
   rawMessage: string,
-): Promise<void> {
-  const response = await fetch(`${GOOGLE_GMAIL_MESSAGES_ENDPOINT}/send`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
+): Promise<GmailSendResult> {
+  const response = await googleApiFetch(
+    `${GOOGLE_GMAIL_MESSAGES_ENDPOINT}/send`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ raw: rawMessage }),
     },
-    body: JSON.stringify({ raw: rawMessage }),
-  });
+  );
 
-  if (!response.ok) {
-    throw new GoogleApiError(
-      response.status,
-      await readGoogleGmailError(response),
-    );
+  // The Gmail API returns the sent message metadata on success.
+  // Parse it so callers can verify the send and store the message ID.
+  try {
+    const data = (await response.json()) as {
+      id?: string;
+      threadId?: string;
+      labelIds?: string[];
+    };
+    return {
+      messageId: typeof data.id === "string" ? data.id : null,
+      threadId: typeof data.threadId === "string" ? data.threadId : null,
+      labelIds: Array.isArray(data.labelIds) ? data.labelIds : [],
+    };
+  } catch {
+    // Response was 2xx but body wasn't valid JSON — unusual but not fatal.
+    return { messageId: null, threadId: null, labelIds: [] };
   }
 }
 
@@ -652,7 +651,7 @@ export async function sendGoogleGmailReply(args: {
   bodyText: string;
   inReplyTo?: string | null;
   references?: string | null;
-}): Promise<void> {
+}): Promise<GmailSendResult> {
   const lines = [
     `To: ${args.to.join(", ")}`,
     ...(args.cc && args.cc.length > 0 ? [`Cc: ${args.cc.join(", ")}`] : []),
@@ -664,7 +663,7 @@ export async function sendGoogleGmailReply(args: {
     "",
     args.bodyText.replace(/\r?\n/g, "\r\n"),
   ];
-  await postGoogleGmailRaw(args.accessToken, encodeGmailRfc822(lines));
+  return postGoogleGmailRaw(args.accessToken, encodeGmailRfc822(lines));
 }
 
 export async function sendGoogleGmailMessage(args: {
@@ -674,7 +673,7 @@ export async function sendGoogleGmailMessage(args: {
   bcc?: string[];
   subject: string;
   bodyText: string;
-}): Promise<void> {
+}): Promise<GmailSendResult> {
   const subject = args.subject.trim() || "(no subject)";
   const lines = [
     `To: ${args.to.join(", ")}`,
@@ -686,5 +685,5 @@ export async function sendGoogleGmailMessage(args: {
     "",
     args.bodyText.replace(/\r?\n/g, "\r\n"),
   ];
-  await postGoogleGmailRaw(args.accessToken, encodeGmailRfc822(lines));
+  return postGoogleGmailRaw(args.accessToken, encodeGmailRfc822(lines));
 }

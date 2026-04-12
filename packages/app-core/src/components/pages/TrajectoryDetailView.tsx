@@ -3,15 +3,90 @@
  * embedded right-hand viewer.
  */
 
-import { client, type TrajectoryDetailResult } from "@miladyai/app-core/api";
+import {
+  client,
+  type TrajectoryDetailResult,
+  type TrajectoryLlmCall,
+} from "@miladyai/app-core/api";
 import { useApp } from "@miladyai/app-core/state";
-import { PagePanel, TrajectoryLlmCallCard } from "@miladyai/ui";
-import { useCallback, useEffect, useState } from "react";
+import {
+  PagePanel,
+  TrajectoryLlmCallCard,
+  TrajectoryPipelineGraph,
+  type PipelineNode,
+  type PipelineStageId,
+} from "@miladyai/ui";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Brain,
+  CheckCircle,
+  MessageSquare,
+  ShieldCheck,
+  X,
+  Zap,
+} from "lucide-react";
 import {
   formatTrajectoryDuration,
   formatTrajectoryTokenCount,
 } from "../../utils/trajectory-format";
 import { estimateTokenCost } from "../conversations/conversation-utils";
+
+// ---------------------------------------------------------------------------
+// Pipeline stage mapping
+// ---------------------------------------------------------------------------
+
+const STEP_TYPE_TO_STAGE: Record<string, PipelineStageId> = {
+  should_respond: "should_respond",
+  compose_state: "plan",
+  response: "plan",
+  reasoning: "plan",
+  orchestrator: "plan",
+  coordination: "plan",
+  action: "actions",
+  evaluation: "evaluators",
+  observation_extraction: "evaluators",
+  turn_complete: "evaluators",
+};
+
+function stageForCall(call: TrajectoryLlmCall): PipelineStageId {
+  return STEP_TYPE_TO_STAGE[call.stepType ?? ""] ?? "plan";
+}
+
+const PIPELINE_STAGES: Array<{
+  id: PipelineStageId;
+  label: string;
+  icon: typeof Brain;
+}> = [
+  { id: "input", label: "Input", icon: MessageSquare },
+  { id: "should_respond", label: "Should Respond", icon: ShieldCheck },
+  { id: "plan", label: "Plan", icon: Brain },
+  { id: "actions", label: "Actions", icon: Zap },
+  { id: "evaluators", label: "Evaluators", icon: CheckCircle },
+];
+
+function buildPipelineNodes(
+  llmCalls: TrajectoryLlmCall[],
+  trajectoryStatus: string,
+): PipelineNode[] {
+  const counts = new Map<PipelineStageId, number>();
+  for (const call of llmCalls) {
+    const stage = stageForCall(call);
+    counts.set(stage, (counts.get(stage) ?? 0) + 1);
+  }
+
+  return PIPELINE_STAGES.map(({ id, label, icon }) => {
+    const count = counts.get(id) ?? 0;
+    const status: PipelineNode["status"] =
+      id === "input"
+        ? "active"
+        : trajectoryStatus === "error" && count > 0
+          ? "error"
+          : count > 0
+            ? "active"
+            : "skipped";
+    return { id, label, callCount: count, status, icon };
+  });
+}
 
 interface TrajectoryDetailViewProps {
   trajectoryId: string;
@@ -43,6 +118,7 @@ export function TrajectoryDetailView({
   const [loading, setLoading] = useState(true);
   const [detail, setDetail] = useState<TrajectoryDetailResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [activeStage, setActiveStage] = useState<PipelineStageId | null>(null);
 
   const loadDetail = useCallback(async () => {
     setLoading(true);
@@ -109,6 +185,30 @@ export function TrajectoryDetailView({
       ? (orchestrator as Record<string, unknown>)
       : null;
 
+  const pipelineNodes = useMemo(
+    () => buildPipelineNodes(llmCalls, trajectory.status),
+    [llmCalls, trajectory.status],
+  );
+
+  const filteredCalls = useMemo(() => {
+    if (!activeStage || activeStage === "input") return llmCalls;
+    return llmCalls.filter((call) => stageForCall(call) === activeStage);
+  }, [llmCalls, activeStage]);
+
+  const callIndexMap = useMemo(
+    () => new Map(llmCalls.map((call, i) => [call.id, i])),
+    [llmCalls],
+  );
+
+  const handleStageClick = useCallback(
+    (stageId: PipelineStageId) => {
+      setActiveStage((prev) =>
+        prev === stageId || stageId === "input" ? null : stageId,
+      );
+    },
+    [],
+  );
+
   const summaryCards = [
     {
       label: t("trajectorydetailview.Source"),
@@ -169,6 +269,39 @@ export function TrajectoryDetailView({
         </PagePanel>
       ) : null}
 
+      {llmCalls.length > 0 ? (
+        <PagePanel variant="section" className="px-5 py-4">
+          <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-muted/70">
+            {t("trajectorydetailview.Pipeline", {
+              defaultValue: "Pipeline",
+            })}
+          </div>
+          <TrajectoryPipelineGraph
+            nodes={pipelineNodes}
+            activeStageId={activeStage}
+            onStageClick={handleStageClick}
+          />
+          {activeStage && activeStage !== "input" ? (
+            <div className="mt-3 flex items-center gap-2 text-xs text-muted">
+              <span>
+                {t("trajectorydetailview.ShowingCalls", {
+                  defaultValue: "Showing {{count}} {{stage}} calls",
+                  count: filteredCalls.length,
+                  stage: activeStage.replace(/_/g, " "),
+                })}
+              </span>
+              <button
+                type="button"
+                onClick={() => setActiveStage(null)}
+                className="rounded p-0.5 hover:bg-muted/10"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          ) : null}
+        </PagePanel>
+      ) : null}
+
       <div className="min-h-0 flex-1 overflow-y-auto pr-1">
         <div className="space-y-4 pb-1">
           {llmCalls.length === 0 ? (
@@ -179,10 +312,10 @@ export function TrajectoryDetailView({
               description={t("trajectorydetailview.NoLLMCallsRecorde")}
             />
           ) : (
-            llmCalls.map((call, index) => (
+            filteredCalls.map((call) => (
               <TrajectoryLlmCallCard
                 key={call.id}
-                callLabel={`#${index + 1}`}
+                callLabel={`#${(callIndexMap.get(call.id) ?? 0) + 1}`}
                 model={call.model}
                 purposeLabel={formatTrajectoryStepLabel(
                   call.stepType || call.purpose || call.actionType,

@@ -19,11 +19,11 @@ This gives you fast local iteration, deterministic release inputs, and a path to
 
 The current setup is split across too many mechanisms:
 
-- Legacy sibling checkout linking, now replaced by [scripts/setup-upstreams.mjs](/Users/shawwalters/eliza-workspace/milady/scripts/setup-upstreams.mjs)
-- Narrow hardcoded workspace overrides in [packages/agent/src/runtime/plugin-resolver.ts](/Users/shawwalters/eliza-workspace/milady/packages/agent/src/runtime/plugin-resolver.ts)
-- State-dir custom and ejected plugin loading in [packages/agent/src/runtime/plugin-resolver.ts](/Users/shawwalters/eliza-workspace/milady/packages/agent/src/runtime/plugin-resolver.ts) and [docs/plugins/local-plugins.md](/Users/shawwalters/eliza-workspace/milady/docs/plugins/local-plugins.md)
-- Tarball repair logic in [scripts/patch-deps.mjs](/Users/shawwalters/eliza-workspace/milady/scripts/patch-deps.mjs)
-- Release packaging from resolved `node_modules` in [scripts/copy-runtime-node-modules.ts](/Users/shawwalters/eliza-workspace/milady/scripts/copy-runtime-node-modules.ts)
+- Legacy sibling checkout linking, now replaced by [scripts/setup-upstreams.mjs](../../scripts/setup-upstreams.mjs)
+- Narrow hardcoded workspace overrides in [packages/agent/src/runtime/plugin-resolver.ts](../../packages/agent/src/runtime/plugin-resolver.ts)
+- State-dir custom and ejected plugin loading in [packages/agent/src/runtime/plugin-resolver.ts](../../packages/agent/src/runtime/plugin-resolver.ts) and [docs/plugins/local-plugins.md](../../docs/plugins/local-plugins.md)
+- Tarball repair logic in [scripts/patch-deps.mjs](../../scripts/patch-deps.mjs)
+- Release packaging from resolved `node_modules` in [scripts/copy-runtime-node-modules.ts](../../scripts/copy-runtime-node-modules.ts)
 
 That fragmentation is why plugin iteration feels bad.
 
@@ -31,16 +31,16 @@ That fragmentation is why plugin iteration feels bad.
 
 ### 1. Local source linking is optional and not the default path
 
-- `postinstall` runs [scripts/run-repo-setup.mjs](/Users/shawwalters/eliza-workspace/milady/scripts/run-repo-setup.mjs), which does not call `setup-eliza-workspace`; it only prints a reminder if `../eliza` exists.
-- The doctor command still describes local upstream development as an optional sibling checkout at `../eliza` in [packages/app-core/src/cli/doctor/checks.ts](/Users/shawwalters/eliza-workspace/milady/packages/app-core/src/cli/doctor/checks.ts) and [docs/cli/doctor.md](/Users/shawwalters/eliza-workspace/milady/docs/cli/doctor.md).
+- `postinstall` runs [scripts/run-repo-setup.mjs](../../scripts/run-repo-setup.mjs), which does not call `setup-eliza-workspace`; it only prints a reminder if `../eliza` exists.
+- The doctor command still describes local upstream development as an optional sibling checkout at `../eliza` in [packages/app-core/src/cli/doctor/checks.ts](../../packages/app-core/src/cli/doctor/checks.ts) and [docs/cli/doctor.md](../../docs/cli/doctor.md).
 - In this checkout, core runtime deps like `@elizaos/core`, `@elizaos/prompts`, `@elizaos/skills`, `@elizaos/plugin-openai`, and `@elizaos/plugin-sql` currently resolve to Bun cache paths under `node_modules/.bun`, not the sibling `../eliza` checkout.
 
 Implication: the repo is mostly developing against published tarballs plus local patches, not against first-class source checkouts.
 
 ### 2. The current workspace override path is not a general solution
 
-- Runtime workspace overrides are limited to a small hardcoded allowlist in [packages/agent/src/runtime/plugin-resolver.ts](/Users/shawwalters/eliza-workspace/milady/packages/agent/src/runtime/plugin-resolver.ts).
-- Registry metadata discovery is more flexible and already knows how to look for repo-local `plugins/` directories and `ELIZA_WORKSPACE_ROOT` in [packages/agent/src/services/registry-client-local.ts](/Users/shawwalters/eliza-workspace/milady/packages/agent/src/services/registry-client-local.ts).
+- Runtime workspace overrides are limited to a small hardcoded allowlist in [packages/agent/src/runtime/plugin-resolver.ts](../../packages/agent/src/runtime/plugin-resolver.ts).
+- Registry metadata discovery is more flexible and already knows how to look for repo-local `plugins/` directories and `ELIZA_WORKSPACE_ROOT` in [packages/agent/src/services/registry-client-local.ts](../../packages/agent/src/services/registry-client-local.ts).
 
 Implication: discovery and loading are out of sync. Metadata can find local plugins more broadly than the runtime can directly load them.
 
@@ -48,20 +48,20 @@ Implication: discovery and loading are out of sync. Metadata can find local plug
 
 - A sibling `../plugins` workspace already exists.
 - It already contains a large `.gitmodules` file and a `package.json` with `workspaces: ["plugin-*"]`.
-- Root [package.json](/Users/shawwalters/eliza-workspace/milady/package.json) already has a stale `publish:plugins:next` script that expects `cd plugins`, but this repo does not currently contain a `plugins/` directory.
+- Root [package.json](../../package.json) already has a stale `publish:plugins:next` script that expects `cd plugins`, but this repo does not currently contain a `plugins/` directory.
 
 Implication: the repo is partway toward the architecture you want, but the source-of-truth lives beside Milady instead of inside it.
 
 ### 4. Release packaging is good enough to build on
 
-- The desktop/runtime packaging path copies runtime deps from resolved `node_modules` using [scripts/copy-runtime-node-modules.ts](/Users/shawwalters/eliza-workspace/milady/scripts/copy-runtime-node-modules.ts).
-- The bundled runtime package set is centrally derived in [packages/agent/src/runtime/release-plugin-policy.ts](/Users/shawwalters/eliza-workspace/milady/packages/agent/src/runtime/release-plugin-policy.ts) and [scripts/runtime-package-manifest.ts](/Users/shawwalters/eliza-workspace/milady/scripts/runtime-package-manifest.ts).
+- The desktop/runtime packaging path copies runtime deps from resolved `node_modules` using [scripts/copy-runtime-node-modules.ts](../../scripts/copy-runtime-node-modules.ts).
+- The bundled runtime package set is centrally derived in [packages/agent/src/runtime/release-plugin-policy.ts](../../packages/agent/src/runtime/release-plugin-policy.ts) and [scripts/runtime-package-manifest.ts](../../scripts/runtime-package-manifest.ts).
 
 Implication: if `node_modules` points at the right local workspaces during dev and CI, the packaged app will naturally ship those tested sources.
 
 ### 5. The upstream tarball quality problem is real
 
-[scripts/patch-deps.mjs](/Users/shawwalters/eliza-workspace/milady/scripts/patch-deps.mjs) currently patches or guards a large list of upstream/runtime issues, including:
+[scripts/patch-deps.mjs](../../scripts/patch-deps.mjs) currently patches or guards a large list of upstream/runtime issues, including:
 
 - `@elizaos/core`
 - `@elizaos/plugin-coding-agent`
@@ -308,7 +308,7 @@ Runtime loading:
 
 Packaging:
 
-- Keep [scripts/copy-runtime-node-modules.ts](/Users/shawwalters/eliza-workspace/milady/scripts/copy-runtime-node-modules.ts)
+- Keep [scripts/copy-runtime-node-modules.ts](../../scripts/copy-runtime-node-modules.ts)
 - It will copy the tested workspace-linked packages automatically
 
 ### Release Model
@@ -355,7 +355,7 @@ That closes the gap between "the source tree passed" and "the published tarball 
 
 ### Phase 2: Make Bun workspaces authoritative
 
-- Extend root [package.json](/Users/shawwalters/eliza-workspace/milady/package.json) `workspaces` to include:
+- Extend root [package.json](../../package.json) `workspaces` to include:
   - `eliza/packages/*`
   - `eliza/plugins/*` if upstream monorepo still contains plugin packages you use
   - `plugins/plugin-*`
@@ -403,27 +403,27 @@ That closes the gap between "the source tree passed" and "the published tarball 
 
 Core repo wiring:
 
-- [package.json](/Users/shawwalters/eliza-workspace/milady/package.json)
-- [.gitmodules](/Users/shawwalters/eliza-workspace/milady/.gitmodules)
-- [scripts/run-repo-setup.mjs](/Users/shawwalters/eliza-workspace/milady/scripts/run-repo-setup.mjs)
-- [scripts/setup-upstreams.mjs](/Users/shawwalters/eliza-workspace/milady/scripts/setup-upstreams.mjs)
+- [package.json](../../package.json)
+- [.gitmodules](../../.gitmodules)
+- [scripts/run-repo-setup.mjs](../../scripts/run-repo-setup.mjs)
+- [scripts/setup-upstreams.mjs](../../scripts/setup-upstreams.mjs)
 - new `scripts/sync-upstream-versions.mjs`
 - new `scripts/check-upstream-drift.mjs`
 - new `upstreams.lock.json`
 
 Runtime and docs:
 
-- [packages/agent/src/runtime/plugin-resolver.ts](/Users/shawwalters/eliza-workspace/milady/packages/agent/src/runtime/plugin-resolver.ts)
-- [packages/app-core/src/cli/doctor/checks.ts](/Users/shawwalters/eliza-workspace/milady/packages/app-core/src/cli/doctor/checks.ts)
-- [docs/cli/doctor.md](/Users/shawwalters/eliza-workspace/milady/docs/cli/doctor.md)
-- [docs/plugin-resolution-and-node-path.md](/Users/shawwalters/eliza-workspace/milady/docs/plugin-resolution-and-node-path.md)
-- [docs/plugins/local-plugins.md](/Users/shawwalters/eliza-workspace/milady/docs/plugins/local-plugins.md)
+- [packages/agent/src/runtime/plugin-resolver.ts](../../packages/agent/src/runtime/plugin-resolver.ts)
+- [packages/app-core/src/cli/doctor/checks.ts](../../packages/app-core/src/cli/doctor/checks.ts)
+- [docs/cli/doctor.md](../../docs/cli/doctor.md)
+- [docs/plugin-resolution-and-node-path.md](../../docs/plugin-resolution-and-node-path.md)
+- [docs/plugins/local-plugins.md](../../docs/plugins/local-plugins.md)
 
 Optional release tooling:
 
-- [scripts/copy-runtime-node-modules.ts](/Users/shawwalters/eliza-workspace/milady/scripts/copy-runtime-node-modules.ts)
-- [scripts/runtime-package-manifest.ts](/Users/shawwalters/eliza-workspace/milady/scripts/runtime-package-manifest.ts)
-- [scripts/release-check.ts](/Users/shawwalters/eliza-workspace/milady/scripts/release-check.ts)
+- [scripts/copy-runtime-node-modules.ts](../../scripts/copy-runtime-node-modules.ts)
+- [scripts/runtime-package-manifest.ts](../../scripts/runtime-package-manifest.ts)
+- [scripts/release-check.ts](../../scripts/release-check.ts)
 
 ## Risks and Mitigations
 

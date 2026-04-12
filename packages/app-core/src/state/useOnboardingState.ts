@@ -91,6 +91,14 @@ export interface OnboardingState {
   rpcSelections: Record<string, string>;
   rpcKeys: Record<string, string>;
 
+  // Features (connectors / capabilities toggle step)
+  featureTelegram: boolean;
+  featureDiscord: boolean;
+  featurePhone: boolean;
+  featureCrypto: boolean;
+  featureBrowser: boolean;
+  featureOAuthPending: string | null;
+
   // Misc
   restarting: boolean;
   cloudProvisionedContainer: boolean;
@@ -182,7 +190,7 @@ function createInitialState(cloudOnly?: boolean): OnboardingState {
     ? "elizacloud"
     : initialServer.serverTarget;
   return {
-    step: loadPersistedOnboardingStep() ?? "identity",
+    step: loadPersistedOnboardingStep() ?? "deployment",
     mode: "basic",
     activeGuide: null,
     deferredTasks: [],
@@ -216,6 +224,12 @@ function createInitialState(cloudOnly?: boolean): OnboardingState {
     selectedChains: new Set(["evm", "solana"]),
     rpcSelections: {},
     rpcKeys: {},
+    featureTelegram: false,
+    featureDiscord: false,
+    featurePhone: false,
+    featureCrypto: false,
+    featureBrowser: false,
+    featureOAuthPending: null,
     restarting: false,
     cloudProvisionedContainer: false,
   };

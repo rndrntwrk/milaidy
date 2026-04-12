@@ -1,19 +1,21 @@
 /**
- * VaultStatusCard — displays vault health, EVM + Solana addresses, and balances.
+ * VaultStatusCard — displays agent wallet addresses and token balances.
  *
- * Renders a health badge (ok = green, degraded = yellow, error = red),
- * copyable wallet addresses, and balance info from the steward/vault endpoints.
+ * Uses the internal agent wallet (getWalletAddresses / getWalletBalances),
+ * NOT the steward vault system (which is a separate optional custody layer).
  */
 
 import { Button, StatusBadge } from "@miladyai/ui";
-import { Copy, Shield } from "lucide-react";
-import { useCallback, useState } from "react";
-import type { StewardStatusResponse } from "@miladyai/shared/contracts/wallet";
-import type { VincentVaultStatus } from "./useVincentDashboard";
+import { Copy, Wallet } from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
+import type {
+  WalletAddresses,
+  WalletBalancesResponse,
+} from "@miladyai/shared/contracts/wallet";
 
 interface VaultStatusCardProps {
-  stewardStatus: StewardStatusResponse | null;
-  vaultStatus: VincentVaultStatus | null;
+  walletAddresses: WalletAddresses | null;
+  walletBalances: WalletBalancesResponse | null;
   setActionNotice: (
     text: string,
     tone?: "info" | "success" | "error",
@@ -64,9 +66,15 @@ function BalancePill({ label, value }: { label: string; value: string }) {
   );
 }
 
+/** Filter out dust balances (< $0.01 USD). */
+function isNonDust(valueUsd: string): boolean {
+  const n = Number.parseFloat(valueUsd);
+  return Number.isFinite(n) && n >= 0.01;
+}
+
 export function VaultStatusCard({
-  stewardStatus,
-  vaultStatus,
+  walletAddresses,
+  walletBalances,
   setActionNotice,
 }: VaultStatusCardProps) {
   const [copiedField, setCopiedField] = useState<string | null>(null);
@@ -82,47 +90,74 @@ export function VaultStatusCard({
     [setActionNotice],
   );
 
-  // Resolve addresses from either the vaultStatus (new endpoint) or stewardStatus (existing)
-  const evmAddress =
-    vaultStatus?.evmAddress ??
-    stewardStatus?.walletAddresses?.evm ??
-    stewardStatus?.evmAddress ??
-    null;
-  const solanaAddress =
-    vaultStatus?.solanaAddress ??
-    stewardStatus?.walletAddresses?.solana ??
-    null;
+  const evmAddress = walletAddresses?.evmAddress ?? null;
+  const solanaAddress = walletAddresses?.solanaAddress ?? null;
 
-  // Resolve health from either source
-  const health =
-    vaultStatus?.vaultHealth ?? stewardStatus?.vaultHealth ?? null;
+  // Compute total USD value across all chains, filtering dust
+  const { totalUsd, balancePills } = useMemo(() => {
+    if (!walletBalances) return { totalUsd: null, balancePills: [] };
 
-  const healthTone =
-    health === "ok"
-      ? ("success" as const)
-      : health === "degraded"
-        ? ("warning" as const)
-        : health === "error"
-          ? ("danger" as const)
-          : ("muted" as const);
+    let total = 0;
+    const pills: Array<{ label: string; value: string }> = [];
 
-  const healthLabel =
-    health === "ok"
-      ? "Healthy"
-      : health === "degraded"
-        ? "Degraded"
-        : health === "error"
-          ? "Error"
-          : "Unknown";
+    // EVM chains
+    if (walletBalances.evm) {
+      for (const chain of walletBalances.evm.chains) {
+        if (isNonDust(chain.nativeValueUsd)) {
+          total += Number.parseFloat(chain.nativeValueUsd);
+          pills.push({
+            label: `${chain.chain} Native`,
+            value: `$${Number.parseFloat(chain.nativeValueUsd).toFixed(2)}`,
+          });
+        }
+        for (const token of chain.tokens) {
+          if (isNonDust(token.valueUsd)) {
+            total += Number.parseFloat(token.valueUsd);
+            pills.push({
+              label: token.symbol,
+              value: `$${Number.parseFloat(token.valueUsd).toFixed(2)}`,
+            });
+          }
+        }
+      }
+    }
 
-  const hasAnyData = stewardStatus !== null || vaultStatus !== null;
+    // Solana
+    if (walletBalances.solana) {
+      if (isNonDust(walletBalances.solana.solValueUsd)) {
+        total += Number.parseFloat(walletBalances.solana.solValueUsd);
+        pills.push({
+          label: "SOL",
+          value: `$${Number.parseFloat(walletBalances.solana.solValueUsd).toFixed(2)}`,
+        });
+      }
+      for (const token of walletBalances.solana.tokens) {
+        if (isNonDust(token.valueUsd)) {
+          total += Number.parseFloat(token.valueUsd);
+          pills.push({
+            label: token.symbol,
+            value: `$${Number.parseFloat(token.valueUsd).toFixed(2)}`,
+          });
+        }
+      }
+    }
 
-  if (!hasAnyData) {
+    return {
+      totalUsd: total > 0 ? `$${total.toFixed(2)}` : null,
+      balancePills: pills,
+    };
+  }, [walletBalances]);
+
+  const hasAddresses = evmAddress || solanaAddress;
+
+  if (!hasAddresses && !walletBalances) {
     return (
       <div className="rounded-[28px] border border-border/18 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--card)_92%,transparent),color-mix(in_srgb,var(--bg)_98%,transparent))] px-5 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
         <div className="flex items-center gap-2">
-          <Shield className="h-4 w-4 text-muted/50" />
-          <span className="text-sm text-muted">Vault data unavailable</span>
+          <Wallet className="h-4 w-4 text-muted/50" />
+          <span className="text-sm text-muted">
+            Wallet data loading...
+          </span>
         </div>
       </div>
     );
@@ -133,20 +168,16 @@ export function VaultStatusCard({
       {/* Header row */}
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <Shield className="h-4 w-4 text-accent" />
-          <span className="text-sm font-semibold text-txt">Vault Status</span>
+          <Wallet className="h-4 w-4 text-accent" />
+          <span className="text-sm font-semibold text-txt">Agent Wallet</span>
         </div>
-        {health && (
-          <StatusBadge
-            label={healthLabel}
-            tone={healthTone}
-            withDot
-          />
+        {totalUsd && (
+          <StatusBadge label={totalUsd} tone="success" withDot />
         )}
       </div>
 
       {/* Addresses */}
-      {(evmAddress || solanaAddress) && (
+      {hasAddresses && (
         <div className="space-y-2">
           {evmAddress && (
             <CopyableAddress
@@ -167,36 +198,24 @@ export function VaultStatusCard({
         </div>
       )}
 
-      {/* Balances from vaultStatus (new endpoint) */}
-      {vaultStatus &&
-        (vaultStatus.nativeBalance ||
-          vaultStatus.tokenBalance ||
-          vaultStatus.treasuryValueUsd) && (
-          <div className="flex flex-wrap gap-2">
-            {vaultStatus.nativeBalance && (
-              <BalancePill
-                label="Native Balance"
-                value={vaultStatus.nativeBalance}
-              />
-            )}
-            {vaultStatus.tokenBalance && (
-              <BalancePill
-                label="Token Balance"
-                value={vaultStatus.tokenBalance}
-              />
-            )}
-            {vaultStatus.treasuryValueUsd && (
-              <BalancePill
-                label="Treasury USD"
-                value={vaultStatus.treasuryValueUsd}
-              />
-            )}
-          </div>
-        )}
+      {/* Balance pills — dust filtered */}
+      {balancePills.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {balancePills.map((pill) => (
+            <BalancePill
+              key={pill.label}
+              label={pill.label}
+              value={pill.value}
+            />
+          ))}
+        </div>
+      )}
 
-      {/* Fallback if no addresses found */}
-      {!evmAddress && !solanaAddress && (
-        <p className="text-xs text-muted">No vault addresses available yet.</p>
+      {/* No balances message */}
+      {walletBalances && balancePills.length === 0 && (
+        <p className="text-xs text-muted">
+          No token balances above $0.01.
+        </p>
       )}
     </div>
   );

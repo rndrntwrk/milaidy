@@ -50,6 +50,14 @@ const GUIDE_CONTENT: Record<FlaminaGuideTopic, GuideContent> = {
     characterImpactKey: "flaminaguide.voice.characterImpact",
     recommendedKey: "flaminaguide.voice.recommended",
   },
+  features: {
+    titleKey: "flaminaguide.features.title",
+    descriptionKey: "flaminaguide.features.description",
+    whenToUseKey: "flaminaguide.features.whenToUse",
+    skipEffectKey: "flaminaguide.features.skipEffect",
+    characterImpactKey: "flaminaguide.features.characterImpact",
+    recommendedKey: "flaminaguide.features.recommended",
+  },
 };
 
 type GuideLabel = {
@@ -62,6 +70,7 @@ const TASK_LABELS: Record<FlaminaGuideTopic, GuideLabel> = {
   rpc: { key: "flaminaguide.tasks.rpc.label" },
   permissions: { key: "flaminaguide.tasks.permissions.label" },
   voice: { key: "flaminaguide.tasks.voice.label" },
+  features: { key: "flaminaguide.tasks.features.label" },
 };
 
 const TASK_DESCRIPTIONS: Record<FlaminaGuideTopic, GuideLabel> = {
@@ -69,6 +78,7 @@ const TASK_DESCRIPTIONS: Record<FlaminaGuideTopic, GuideLabel> = {
   rpc: { key: "flaminaguide.tasks.rpc.description" },
   permissions: { key: "flaminaguide.tasks.permissions.description" },
   voice: { key: "flaminaguide.tasks.voice.description" },
+  features: { key: "flaminaguide.tasks.features.description" },
 };
 
 export function FlaminaGuideCard({

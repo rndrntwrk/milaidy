@@ -2,7 +2,7 @@
 
 Date: 2026-04-04
 Owner: Shaw / Milady
-Input PRD: `/Users/shawwalters/Downloads/milaidy_prd_v1.docx`
+Input PRD: `milaidy_prd_v1.docx (original input, not in repo)`
 
 Detailed architecture options and plugin integration research:
 `docs/plans/2026-04-04-lifeops-architecture-options.md`

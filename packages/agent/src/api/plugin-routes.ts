@@ -13,6 +13,10 @@ import {
   CORE_PLUGINS,
   OPTIONAL_CORE_PLUGINS,
 } from "../runtime/core-plugins.js";
+import {
+  getPluginWidgets,
+  type PluginWidgetDeclarationServer,
+} from "../config/plugin-widgets.js";
 import { resolveDefaultAgentWorkspaceDir } from "../providers/workspace.js";
 import type {
   CoreManagerLike,
@@ -86,6 +90,8 @@ interface PluginEntry {
     | "disabled";
   capabilityReason?: string | null;
   prerequisites?: Array<{ label: string; met: boolean }>;
+  /** Widget declarations for this plugin (rendered by the UI widget system). */
+  widgets?: PluginWidgetDeclarationServer[];
 }
 
 interface SecretEntry {
@@ -380,6 +386,14 @@ export async function handlePluginRoutes(
             label: m.name !== m.id ? `${m.name} (${m.id})` : m.id,
           })),
         };
+      }
+    }
+
+    // Attach widget declarations from the static plugin widget map.
+    for (const plugin of allPlugins) {
+      const widgets = getPluginWidgets(plugin.id);
+      if (widgets.length > 0) {
+        plugin.widgets = widgets;
       }
     }
 

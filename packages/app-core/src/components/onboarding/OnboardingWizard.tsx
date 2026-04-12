@@ -20,6 +20,8 @@ import { useBranding } from "../../config/branding";
 import { COMPANION_ENABLED } from "../../navigation";
 import { VrmStage } from "../companion/VrmStage";
 import { ConnectionStep } from "./ConnectionStep";
+import { DeploymentStep } from "./DeploymentStep";
+import { FeaturesStep } from "./FeaturesStep";
 import { IdentityStep } from "./IdentityStep";
 import { OnboardingPanel } from "./OnboardingPanel";
 import { OnboardingStepNav } from "./OnboardingStepNav";
@@ -135,10 +137,14 @@ export function OnboardingWizard() {
 
   function renderStep() {
     switch (onboardingStep) {
+      case "deployment":
+        return <DeploymentStep />;
       case "identity":
         return <IdentityStep gateVoicePreviewOnTeleport={!disableVrm} />;
       case "providers":
         return <ConnectionStep />;
+      case "features":
+        return <FeaturesStep />;
       default:
         return null;
     }
@@ -146,8 +152,9 @@ export function OnboardingWizard() {
 
   return (
     <div className="onboarding-screen">
-      {/* Keep browser E2E runs lightweight and deterministic by skipping VRM boot. */}
-      {disableVrm ? (
+      {/* Keep browser E2E runs lightweight and deterministic by skipping VRM boot.
+          Deployment step uses a static background — no VRM needed. */}
+      {disableVrm || onboardingStep === "deployment" ? (
         <div
           aria-hidden="true"
           className="absolute inset-0 z-10 pointer-events-none"
@@ -204,7 +211,11 @@ export function OnboardingWizard() {
         </div>
 
         {/* ── Standard overlaid UI — step nav + content panel ── */}
-        {onboardingStep === "identity" ? (
+        {onboardingStep === "deployment" ? (
+          <div className="absolute inset-0 z-20 flex flex-col justify-center pointer-events-none [&>*]:pointer-events-auto">
+            <DeploymentStep />
+          </div>
+        ) : onboardingStep === "identity" ? (
           <div className="absolute inset-0 z-20 flex flex-col justify-end pointer-events-none [&>*]:pointer-events-auto">
             <IdentityStep />
           </div>

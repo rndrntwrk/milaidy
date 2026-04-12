@@ -582,9 +582,11 @@ async function syncNow(reason: string): Promise<BackgroundState> {
     if (isPairingInvalid) {
       clearAlarm(SYNC_ALARM);
       syncScheduled = false;
+      await clearCompanionConfig();
     }
     await setState({
       syncing: false,
+      ...(isPairingInvalid && { config: null, settingsSummary: null }),
       lastError: isPairingInvalid
         ? "Pairing is invalid. Please re-pair the browser companion."
         : `${reason}: ${error instanceof Error ? error.message : String(error)}`,

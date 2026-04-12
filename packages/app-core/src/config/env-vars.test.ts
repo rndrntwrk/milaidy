@@ -271,7 +271,7 @@ describe("collectConnectorEnvVars", () => {
     const result = collectConnectorEnvVars({
       connectors: {
         imessage: {
-          cliPath: "/Users/shawwalters/.local/bin/imsg",
+          cliPath: "/usr/local/bin/imsg",
           dbPath: "~/Library/Messages/chat.db",
           dmPolicy: "pairing",
           groupPolicy: "allowlist",
@@ -282,7 +282,7 @@ describe("collectConnectorEnvVars", () => {
     } as ElizaConfig);
 
     expect(result).toEqual({
-      IMESSAGE_CLI_PATH: "/Users/shawwalters/.local/bin/imsg",
+      IMESSAGE_CLI_PATH: "/usr/local/bin/imsg",
       IMESSAGE_DB_PATH: "~/Library/Messages/chat.db",
       IMESSAGE_DM_POLICY: "pairing",
       IMESSAGE_GROUP_POLICY: "allowlist",

@@ -15,6 +15,7 @@ import {
 } from "../../events/index";
 import { useChatAvatarVoiceBridge, useVoiceChat } from "../../hooks";
 import { useApp } from "../../state/useApp";
+import { WidgetHost } from "../../widgets";
 import { normalizeCharacterMessageExamples } from "../../utils/character-message-examples";
 import {
   EDGE_BACKUP_VOICES,
@@ -1667,6 +1668,7 @@ export function CharacterEditor({
           </div>
         </div>
       )}
+      {!sceneOverlay && <WidgetHost slot="character" className="mt-4 px-4 lg:px-8" />}
     </div>
   );
 }

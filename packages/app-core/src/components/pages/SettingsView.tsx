@@ -34,6 +34,7 @@ import {
   useState,
 } from "react";
 import { useApp } from "../../state";
+import { WidgetHost } from "../../widgets";
 import { CodingAgentSettingsSection } from "../coding/CodingAgentSettingsSection";
 import { MediaSettingsSection } from "../settings/MediaSettingsSection";
 import { PermissionsSection } from "../settings/PermissionsSection";
@@ -961,6 +962,7 @@ export function SettingsView({
     >
       <div ref={shellRef} className={`w-full ${SETTINGS_SECTION_STACK_CLASS}`}>
         {sectionsContent}
+        <WidgetHost slot="settings" className="mt-6" />
       </div>
     </PageLayout>
   );

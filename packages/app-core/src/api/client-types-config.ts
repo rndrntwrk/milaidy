@@ -121,6 +121,17 @@ export interface PluginInfo {
   homepage?: string;
   repository?: string;
   setupGuideUrl?: string;
+  /** Widget declarations for this plugin (rendered by the UI widget system). */
+  widgets?: Array<{
+    id: string;
+    pluginId: string;
+    slot: string;
+    label: string;
+    icon?: string;
+    order?: number;
+    defaultEnabled?: boolean;
+    navGroup?: string;
+  }>;
 }
 
 export interface CorePluginEntry {

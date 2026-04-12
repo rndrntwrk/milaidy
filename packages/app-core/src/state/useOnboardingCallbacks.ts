@@ -29,6 +29,7 @@ import {
   resolveOnboardingNextStep,
   resolveOnboardingPreviousStep,
   shouldSkipConnectionStepsForCloudProvisionedContainer,
+  shouldSkipFeaturesStep,
   shouldUseCloudOnboardingFastTrack,
 } from "../onboarding/flow";
 import { buildOnboardingRuntimeConfig } from "../onboarding-config";
@@ -691,8 +692,17 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
 
       const nextStep = resolveOnboardingNextStep(onboardingStep);
 
+      // Skip features step for remote-only targets (no managed connectors)
+      if (
+        nextStep === "features" &&
+        shouldSkipFeaturesStep({ onboardingServerTarget })
+      ) {
+        await handleOnboardingFinish(options);
+        return;
+      }
+
       if (!nextStep) {
-        // Last step (providers) — finish onboarding and go to chat
+        // Last step (features) — finish onboarding and go to chat
         await handleOnboardingFinish(options);
         return;
       }
@@ -710,6 +720,7 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
       handleOnboardingFinish,
       onboardingMode,
       onboardingStep,
+      onboardingServerTarget,
       setOnboardingStep,
       setOnboardingActiveGuide,
       cloudProvisionedContainer,
@@ -733,6 +744,11 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
     if (onboardingStep === "providers") {
       applyResetConnectionWizardToHostingStep();
     }
+    // Clear server target when reverting back to deployment so the chooser
+    // is fresh.
+    if (onboardingStep === "identity" && previousStep === "deployment") {
+      setOnboardingServerTarget("");
+    }
     setOnboardingStep(previousStep);
     setOnboardingActiveGuide(
       onboardingMode === "advanced"
@@ -745,6 +761,7 @@ export function useOnboardingCallbacks(deps: OnboardingCallbacksDeps) {
     onboardingStep,
     setOnboardingActiveGuide,
     setOnboardingStep,
+    setOnboardingServerTarget,
   ]);
 
   const handleOnboardingBack = revertOnboarding;

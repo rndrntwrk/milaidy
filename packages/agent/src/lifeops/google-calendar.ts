@@ -1,5 +1,6 @@
 import type { LifeOpsCalendarEvent } from "@miladyai/shared/contracts/lifeops";
 import { GoogleApiError } from "./google-api-error.js";
+import { googleApiFetch } from "./google-fetch.js";
 import {
   buildUtcDateFromLocalParts,
   formatInstantAsRfc3339InTimeZone,
@@ -249,7 +250,7 @@ export async function fetchGoogleCalendarEvents(args: {
     params.set("timeZone", args.timeZone.trim());
   }
 
-  const response = await fetch(
+  const response = await googleApiFetch(
     `${GOOGLE_CALENDAR_EVENTS_ENDPOINT}/${encodeURIComponent(calendarId)}/events?${params.toString()}`,
     {
       headers: {
@@ -257,13 +258,6 @@ export async function fetchGoogleCalendarEvents(args: {
       },
     },
   );
-
-  if (!response.ok) {
-    throw new GoogleApiError(
-      response.status,
-      await readGoogleCalendarError(response),
-    );
-  }
 
   const parsed = (await response.json()) as {
     items?: GoogleCalendarApiEvent[];
@@ -289,7 +283,7 @@ export async function fetchGoogleCalendarEvent(args: {
   timeZone?: string;
 }): Promise<SyncedGoogleCalendarEvent> {
   const calendarId = args.calendarId ?? "primary";
-  const response = await fetch(
+  const response = await googleApiFetch(
     `${GOOGLE_CALENDAR_EVENTS_ENDPOINT}/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(args.eventId)}`,
     {
       headers: {
@@ -297,13 +291,6 @@ export async function fetchGoogleCalendarEvent(args: {
       },
     },
   );
-
-  if (!response.ok) {
-    throw new GoogleApiError(
-      response.status,
-      await readGoogleCalendarError(response),
-    );
-  }
 
   const parsed = (await response.json()) as GoogleCalendarApiEvent;
   const normalized = normalizeGoogleCalendarEvent(
@@ -354,7 +341,7 @@ export async function createGoogleCalendarEvent(args: {
     }));
   }
 
-  const response = await fetch(
+  const response = await googleApiFetch(
     `${GOOGLE_CALENDAR_EVENTS_ENDPOINT}/${encodeURIComponent(calendarId)}/events`,
     {
       method: "POST",
@@ -365,13 +352,6 @@ export async function createGoogleCalendarEvent(args: {
       body: JSON.stringify(body),
     },
   );
-
-  if (!response.ok) {
-    throw new GoogleApiError(
-      response.status,
-      await readGoogleCalendarError(response),
-    );
-  }
 
   const parsed = (await response.json()) as GoogleCalendarApiEvent;
   const normalized = normalizeGoogleCalendarEvent(
@@ -432,7 +412,7 @@ export async function updateGoogleCalendarEvent(args: {
     }));
   }
 
-  const response = await fetch(
+  const response = await googleApiFetch(
     `${GOOGLE_CALENDAR_EVENTS_ENDPOINT}/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(args.eventId)}`,
     {
       method: "PATCH",
@@ -443,13 +423,6 @@ export async function updateGoogleCalendarEvent(args: {
       body: JSON.stringify(body),
     },
   );
-
-  if (!response.ok) {
-    throw new GoogleApiError(
-      response.status,
-      await readGoogleCalendarError(response),
-    );
-  }
 
   const parsed = (await response.json()) as GoogleCalendarApiEvent;
   const normalized = normalizeGoogleCalendarEvent(
@@ -471,26 +444,24 @@ export async function deleteGoogleCalendarEvent(args: {
   eventId: string;
 }): Promise<void> {
   const calendarId = args.calendarId ?? "primary";
-  const response = await fetch(
-    `${GOOGLE_CALENDAR_EVENTS_ENDPOINT}/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(args.eventId)}`,
-    {
-      method: "DELETE",
-      headers: {
-        Authorization: `Bearer ${args.accessToken}`,
-      },
-    },
-  );
-
   // Google returns 204 on successful delete and 410 if the event was already
   // gone. Treat both as success — the user's intent (the event no longer
-  // exists) is satisfied either way.
-  if (response.status === 204 || response.status === 410) {
-    return;
-  }
-  if (!response.ok) {
-    throw new GoogleApiError(
-      response.status,
-      await readGoogleCalendarError(response),
+  // exists) is satisfied either way. We catch GoogleApiError(410) because
+  // googleApiFetch treats 4xx as permanent failures.
+  try {
+    await googleApiFetch(
+      `${GOOGLE_CALENDAR_EVENTS_ENDPOINT}/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(args.eventId)}`,
+      {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${args.accessToken}`,
+        },
+      },
     );
+  } catch (error) {
+    if (error instanceof GoogleApiError && error.status === 410) {
+      return;
+    }
+    throw error;
   }
 }

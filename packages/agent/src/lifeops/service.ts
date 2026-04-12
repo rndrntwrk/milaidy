@@ -7305,30 +7305,47 @@ export class LifeOpsService {
           runtimeTarget.target.roomId ??
           runtimeTarget.target.entityId ??
           null;
+        const sendPayload = {
+          text: reminderBody,
+          source: runtimeTarget.source,
+          metadata: {
+            channelType: args.channel,
+            lifeopsReminder: true,
+            ownerType: args.ownerType,
+            ownerId: args.ownerId,
+            urgency: args.urgency,
+            scheduledFor: args.scheduledFor,
+            routeSource: runtimeTarget.source,
+            routeEndpoint:
+              runtimeTarget.target.channelId ??
+              runtimeTarget.target.roomId ??
+              runtimeTarget.target.entityId ??
+              null,
+            routeResolution: runtimeTarget.resolution,
+          },
+        };
         try {
-          await this.runtime.sendMessageToTarget(runtimeTarget.target, {
-            text: reminderBody,
-            source: runtimeTarget.source,
-            metadata: {
-              channelType: args.channel,
-              lifeopsReminder: true,
-              ownerType: args.ownerType,
-              ownerId: args.ownerId,
-              urgency: args.urgency,
-              scheduledFor: args.scheduledFor,
-              routeSource: runtimeTarget.source,
-              routeEndpoint:
-                runtimeTarget.target.channelId ??
-                runtimeTarget.target.roomId ??
-                runtimeTarget.target.entityId ??
-                null,
-              routeResolution: runtimeTarget.resolution,
-            },
-          });
-        } catch (error) {
-          outcome = "blocked_connector";
-          deliveryMetadata.error = lifeOpsErrorMessage(error);
-          deliveryMetadata.reason = "runtime_send_failed";
+          await this.runtime.sendMessageToTarget(
+            runtimeTarget.target,
+            sendPayload,
+          );
+        } catch (firstError) {
+          this.logLifeOpsWarn(
+            "reminder_dispatch",
+            `[lifeops] Reminder delivery failed for ${args.channel}, retrying in 2s`,
+            { error: lifeOpsErrorMessage(firstError) },
+          );
+          await new Promise((r) => setTimeout(r, 2_000));
+          try {
+            await this.runtime.sendMessageToTarget(
+              runtimeTarget.target,
+              sendPayload,
+            );
+          } catch (retryError) {
+            outcome = "blocked_connector";
+            deliveryMetadata.error = lifeOpsErrorMessage(retryError);
+            deliveryMetadata.reason = "runtime_send_failed";
+          }
         }
       } else {
         outcome = "blocked_connector";
@@ -12036,7 +12053,7 @@ export class LifeOpsService {
     cc?: string[];
     subject?: string;
     bodyText: string;
-  }): Promise<void> {
+  }): Promise<string | null> {
     const to =
       normalizeOptionalStringArray(args.to, "to") ??
       [args.message.replyTo ?? args.message.fromEmail ?? ""].filter(
@@ -12062,6 +12079,7 @@ export class LifeOpsService {
       .join(" ")
       .trim();
 
+    let sentMessageId: string | null = null;
     const sendReply = async () => {
       if (resolveGoogleExecutionTarget(args.grant) === "cloud") {
         await this.googleManagedClient.sendGmailReply({
@@ -12075,7 +12093,7 @@ export class LifeOpsService {
         });
         return;
       }
-      await sendGoogleGmailReply({
+      const result = await sendGoogleGmailReply({
         accessToken: (
           await ensureFreshGoogleAccessToken(
             args.grant.tokenRef ??
@@ -12089,10 +12107,12 @@ export class LifeOpsService {
         inReplyTo: messageIdHeader,
         references: references.length > 0 ? references : null,
       });
+      sentMessageId = result.messageId;
     };
     await (resolveGoogleExecutionTarget(args.grant) === "cloud"
       ? this.runManagedGoogleOperation(args.grant, sendReply)
       : this.withGoogleGrantOperation(args.grant, sendReply));
+    return sentMessageId;
   }
 
   async sendGmailReply(
@@ -12163,7 +12183,7 @@ export class LifeOpsService {
     if (!message) {
       fail(404, "life-ops Gmail message not found");
     }
-    await this.sendGmailReplyWithGrant({
+    const sentMessageId = await this.sendGmailReplyWithGrant({
       grant,
       message,
       to: request.to,
@@ -12177,6 +12197,7 @@ export class LifeOpsService {
       "gmail reply sent",
       {
         messageId: message.id,
+        sentMessageId,
         to: request.to ?? null,
         cc: request.cc ?? null,
         confirmSend,
@@ -12184,6 +12205,7 @@ export class LifeOpsService {
       {
         subject: request.subject ?? message.subject,
         sent: true,
+        sentMessageId,
       },
     );
     return { ok: true };
@@ -12223,6 +12245,7 @@ export class LifeOpsService {
       mode,
       side,
     );
+    let sentMessageId: string | null = null;
     const sendMessage = async () => {
       // Cloud-managed gmail send for new messages isn't exposed by the
       // managed client yet — refuse loudly so callers don't think the
@@ -12233,7 +12256,7 @@ export class LifeOpsService {
           "Gmail compose-and-send is not supported through the cloud-managed connector yet.",
         );
       }
-      await sendGoogleGmailMessage({
+      const result = await sendGoogleGmailMessage({
         accessToken: (
           await ensureFreshGoogleAccessToken(
             grant.tokenRef ??
@@ -12246,6 +12269,7 @@ export class LifeOpsService {
         subject,
         bodyText,
       });
+      sentMessageId = result.messageId;
     };
 
     await (resolveGoogleExecutionTarget(grant) === "cloud"
@@ -12261,10 +12285,12 @@ export class LifeOpsService {
         cc: cc.length > 0 ? cc : null,
         bcc: bcc.length > 0 ? bcc : null,
         confirmSend,
+        sentMessageId,
       },
       {
         subject,
         sent: true,
+        sentMessageId,
       },
     );
     return { ok: true };

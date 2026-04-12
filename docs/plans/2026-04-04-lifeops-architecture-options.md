@@ -3,7 +3,7 @@
 Date: 2026-04-04
 Owner: Shaw / Milady
 Related plan: `docs/plans/2026-04-04-milaidy-life-ops-implementation-plan.md`
-Input PRD: `/Users/shawwalters/Downloads/milaidy_prd_v1.docx`
+Input PRD: `milaidy_prd_v1.docx` (original input, not in repo)
 
 > **Update (2026-04-10):** Milady no longer ships `@elizaos/plugin-todo` (see `plugins.json` and root dependencies). Todos use the workbench API and LifeOps-related runtime tasks. Later sections still name `plugin-todo` where they compare integration options against that historical baseline.
 

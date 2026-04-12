@@ -95,7 +95,11 @@ export interface NavigationEventsApi {
   scheduleAfterTabCommit: (fn: () => void) => void;
 }
 
-export type OnboardingStep = "identity" | "providers";
+export type OnboardingStep =
+  | "deployment"
+  | "identity"
+  | "providers"
+  | "features";
 
 export interface OnboardingStepMeta {
   id: OnboardingStep;
@@ -103,8 +107,13 @@ export interface OnboardingStepMeta {
   subtitle: string;
 }
 
-/** 2-step onboarding flow — server selection is on the splash page, permissions are lazy. */
+/** 4-step onboarding flow — deployment absorbs the old splash page, features enables connectors. */
 export const ONBOARDING_STEPS: OnboardingStepMeta[] = [
+  {
+    id: "deployment",
+    name: "onboarding.stepName.deployment",
+    subtitle: "onboarding.stepSub.deployment",
+  },
   {
     id: "identity",
     name: "onboarding.stepName.identity",
@@ -115,11 +124,21 @@ export const ONBOARDING_STEPS: OnboardingStepMeta[] = [
     name: "onboarding.stepName.providers",
     subtitle: "onboarding.stepSub.providers",
   },
+  {
+    id: "features",
+    name: "onboarding.stepName.features",
+    subtitle: "onboarding.stepSub.features",
+  },
 ];
 
 export type OnboardingMode = "basic" | "advanced" | "elizacloudonly";
 
-export type FlaminaGuideTopic = "provider" | "rpc" | "permissions" | "voice";
+export type FlaminaGuideTopic =
+  | "provider"
+  | "rpc"
+  | "permissions"
+  | "voice"
+  | "features";
 
 export interface OnboardingNextOptions {
   allowPermissionBypass?: boolean;
@@ -551,6 +570,15 @@ export interface AppState {
   onboardingRpcSelections: Record<string, string>;
   onboardingRpcKeys: Record<string, string>;
   onboardingAvatar: number;
+
+  // Onboarding feature toggles (features step)
+  onboardingFeatureTelegram: boolean;
+  onboardingFeatureDiscord: boolean;
+  onboardingFeaturePhone: boolean;
+  onboardingFeatureCrypto: boolean;
+  onboardingFeatureBrowser: boolean;
+  /** Which feature is currently mid-OAuth flow, or null. */
+  onboardingFeatureOAuthPending: string | null;
 
   // Command palette
   commandPaletteOpen: boolean;

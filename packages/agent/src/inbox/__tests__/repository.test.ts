@@ -6,7 +6,7 @@
  */
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { AgentRuntime } from "@elizaos/core";
-import { createTestRuntime } from "../../../../test/helpers/pglite-runtime.js";
+import { createTestRuntime } from "../../../../../test/helpers/pglite-runtime.js";
 import { InboxTriageRepository } from "../repository.js";
 import type { TriageClassification } from "../types.js";
 

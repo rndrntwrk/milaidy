@@ -25,6 +25,7 @@ import {
 } from "react";
 import type { TriggerSummary } from "../../api/client";
 import { useApp } from "../../state";
+import { WidgetHost } from "../../widgets";
 import { confirmDesktopAction } from "../../utils";
 import { formatDateTime, formatDurationMs } from "../../utils/format";
 import { HeartbeatForm } from "./HeartbeatForm";
@@ -846,6 +847,7 @@ function HeartbeatsLayout({ standalone }: { standalone: boolean }) {
             </div>
           )
         )}
+        <WidgetHost slot="heartbeats" className="px-4 py-3" />
       </main>
     </>
   );
