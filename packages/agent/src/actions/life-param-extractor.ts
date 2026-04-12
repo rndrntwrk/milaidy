@@ -271,6 +271,14 @@ function normalizeTitleCandidate(value: string): string | null {
       /\b(?:an?|the)\s+(?:alarm|reminder|todo|task|habit|routine)\b/gi,
       " ",
     )
+    .replace(
+      /\b(?:every|each)\b.+$/i,
+      " ",
+    )
+    .replace(
+      /\b(?:daily|weekly|in the morning|in the afternoon|in the evening|at night|morning and night|night and morning|when i wake up|before bed|before sleep|with breakfast|with lunch|with dinner|throughout the day|twice a week|twice a day|on weekdays?|on weekends?)\b.+$/i,
+      " ",
+    )
     .replace(/\s+/g, " ")
     .trim();
   if (!cleaned) {
@@ -526,13 +534,7 @@ function buildHeuristicTaskCreatePlan(args: {
     };
   }
 
-  if (!oneOffReminderLike && !explicitTimeDrivenSchedule) {
-    return null;
-  }
-
-  const title = oneOffReminderLike
-    ? extractHeuristicTitle({ intent, requestKind })
-    : null;
+  const title = extractHeuristicTitle({ intent, requestKind });
   const intervalMatch = lower.match(/\bevery\s+(\d+)\s*(hours?|minutes?)\b/);
   const timesPerDayMatch =
     lower.match(
@@ -576,6 +578,12 @@ function buildHeuristicTaskCreatePlan(args: {
     cadenceKind = "daily";
   }
 
+  const recurringCreateLike =
+    cadenceKind !== null &&
+    (Boolean(title) ||
+      /\b(?:habit|routine|task|todo|reminder)\b/.test(lower) ||
+      REMINDER_CONTEXT_RE.test(intent));
+
   if (
     cadenceKind === null &&
     looksLikeShortTimedFollowup(intent) &&
@@ -586,6 +594,14 @@ function buildHeuristicTaskCreatePlan(args: {
   }
 
   if (!title && !cadenceKind && !requestKind) {
+    return null;
+  }
+
+  if (
+    !oneOffReminderLike &&
+    !explicitTimeDrivenSchedule &&
+    !recurringCreateLike
+  ) {
     return null;
   }
 
@@ -708,14 +724,21 @@ export async function extractTaskCreatePlanWithLlm(args: {
       return heuristicPlan;
     }
 
-    return mergeTaskCreatePlans(
-      buildTaskCreatePlan({
-        parsed,
-        intent,
-        recentWindow,
-      }),
-      heuristicPlan,
-    );
+    const parsedPlan = buildTaskCreatePlan({
+      parsed,
+      intent,
+      recentWindow,
+    });
+    if (
+      parsedPlan.mode === "respond" &&
+      heuristicPlan?.mode === "create" &&
+      heuristicPlan.title &&
+      heuristicPlan.cadenceKind
+    ) {
+      return heuristicPlan;
+    }
+
+    return mergeTaskCreatePlans(parsedPlan, heuristicPlan);
   } catch {
     return heuristicPlan;
   }

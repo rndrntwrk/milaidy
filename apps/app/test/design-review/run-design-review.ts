@@ -210,10 +210,7 @@ const views: ViewSpec[] = [
     path: "/character-select",
     shellMode: "native",
     lastNativeTab: "character",
-    readyChecks: [
-      { selector: '[data-testid="character-roster-grid"]' },
-      { selector: '[data-testid="character-customize-toggle"]' },
-    ],
+    readyChecks: [{ selector: '[data-testid="character-editor-view"]' }],
   },
   {
     id: "wallets",
@@ -262,10 +259,10 @@ const views: ViewSpec[] = [
     shellMode: "native",
     lastNativeTab: "advanced",
     readyChecks: [
-      { text: "Ollama" },
-      { text: "Streaming" },
-      { text: "Plugins" },
+      { selector: '[data-testid="advanced-subtab-nav"]' },
+      { text: "Build Dataset" },
     ],
+    readyCheckMode: "any",
   },
 ];
 
@@ -683,11 +680,11 @@ async function applyState(page: Page, capture: CaptureSpec): Promise<void> {
     return;
   }
   if (capture.stateId === "customize-open") {
-    await page.locator('[data-testid="character-customize-toggle"]').click();
-    await waitForAnySelector(page, [
-      '[data-testid="character-edit-toolbar"]',
-      '[data-testid="character-customize-grid"]',
-    ]);
+    await page.getByText("Style", { exact: true }).first().click();
+    await page.locator('[data-testid="style-section-all"]').waitFor({
+      state: "visible",
+      timeout: 10_000,
+    });
   }
 }
 

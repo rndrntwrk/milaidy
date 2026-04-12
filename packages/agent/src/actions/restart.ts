@@ -22,8 +22,8 @@ import {
   getValidationKeywordTerms,
   textIncludesKeywordTerm,
 } from "@miladyai/shared/validation-keywords";
-import { hasOwnerAccess } from "../security/access.js";
 import { requestRestart } from "../runtime/restart.js";
+import { hasOwnerAccess } from "../security/access.js";
 
 /** Small delay (ms) before restarting so the response has time to flush. */
 const SHUTDOWN_DELAY_MS = 1_500;
@@ -92,7 +92,9 @@ export const restartAction: Action = {
     }
 
     // This action declares parameters, so the runtime provides HandlerOptions.
-    const params = (options as HandlerOptions | undefined)?.parameters as { reason?: string } | undefined;
+    const params = (options as HandlerOptions | undefined)?.parameters as
+      | { reason?: string }
+      | undefined;
     const reason = params?.reason;
 
     const restartText = reason ? `Restarting… (${reason})` : "Restarting…";

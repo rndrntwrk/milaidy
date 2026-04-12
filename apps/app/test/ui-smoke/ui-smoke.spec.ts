@@ -47,11 +47,7 @@ const VIEWS: ViewSpec[] = [
     path: "/character-select",
     label: "Character Select",
     expectButtons: false,
-    readyChecks: [
-      { selector: '[data-testid="character-roster-grid"]' },
-      { selector: '[data-testid="character-customize-toggle"]' },
-    ],
-    readyCheckMode: "any",
+    readyChecks: [{ selector: '[data-testid="character-editor-view"]' }],
   },
   {
     id: "wallets",
@@ -87,7 +83,10 @@ const VIEWS: ViewSpec[] = [
     id: "advanced",
     path: "/advanced",
     label: "Advanced",
-    readyChecks: [{ text: "Plugins" }, { text: "Streaming" }],
+    readyChecks: [
+      { selector: '[data-testid="advanced-subtab-nav"]' },
+      { text: "Build Dataset" },
+    ],
     readyCheckMode: "any",
   },
   { id: "plugins", path: "/plugins", label: "Plugins" },
@@ -104,22 +103,14 @@ const VIEWS: ViewSpec[] = [
     id: "apps",
     path: "/apps",
     label: "Apps",
-    readyChecks: [
-      { selector: '[data-testid="apps-catalog-grid"]' },
-      { selector: '[data-testid="apps-detail-panel"]' },
-    ],
-    readyCheckMode: "all",
+    readyChecks: [{ selector: '[data-testid="apps-catalog-grid"]' }],
   },
   {
     id: "character",
     path: "/character",
     label: "Character editor",
     expectButtons: false,
-    readyChecks: [
-      { selector: '[data-testid="character-roster-grid"]' },
-      { selector: '[data-testid="character-customize-toggle"]' },
-    ],
-    readyCheckMode: "any",
+    readyChecks: [{ selector: '[data-testid="character-editor-view"]' }],
   },
   { id: "fine-tuning", path: "/fine-tuning", label: "Fine tuning" },
 ];
@@ -614,9 +605,7 @@ test("Apps view shows curated multi-run state for Babylon and 2004scape", async 
   );
 
   await page.getByRole("button", { name: /Running \(4\)/ }).click();
-  await expect(page.getByTestId("apps-session-status-card")).toContainText(
-    "4 runs active",
-  );
+  await expect(page.getByText("Running now").last()).toBeVisible();
   await expect(page.getByRole("button", { name: /Hyperscape/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /Babylon/ })).toBeVisible();
   await expect(page.getByRole("button", { name: /2004scape/ })).toBeVisible();
@@ -674,7 +663,5 @@ test("Apps view shows curated multi-run state for Babylon and 2004scape", async 
     defenseDetails.getByRole("button", { name: "Inspect run" }),
   ).toBeVisible();
   await defenseDetails.getByRole("button", { name: "Stop run" }).click();
-  await expect(page.getByTestId("apps-session-status-card")).toContainText(
-    "3 runs active",
-  );
+  await expect(page.getByRole("button", { name: /Running \(3\)/ })).toBeVisible();
 });

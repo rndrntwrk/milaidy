@@ -4,34 +4,19 @@ import {
   parseJSONObjectFromText,
   parseKeyValueXml,
 } from "@elizaos/core";
+import {
+  findKeywordTermMatch,
+  getValidationKeywordTerms,
+} from "@miladyai/shared/validation-keywords";
 
 import type { RoleName } from "./types";
 
-const ROLE_INTENT_KEYWORDS = [
-  "role",
-  "boss",
-  "manager",
-  "supervisor",
-  "superior",
-  "lead",
-  "coworker",
-  "co-worker",
-  "teammate",
-  "colleague",
-  "peer",
-  "friend",
-  "partner",
-  "admin",
-  "owner",
-  "guest",
-  "member",
-  "user",
-  "mod",
-  "moderator",
-  "promote",
-  "demote",
-  "revoke",
-];
+const ROLE_INTENT_KEYWORDS = getValidationKeywordTerms(
+  "action.updateRole.intent",
+  {
+    includeAllLocales: true,
+  },
+);
 
 const ROLE_CONTEXT_MESSAGE_COUNT = 6;
 const EXTRACTED_ROLE_VALUES = ["OWNER", "ADMIN", "USER", "GUEST"] as const;
@@ -275,12 +260,12 @@ function normalizeConfidence(value: unknown): number | null {
 }
 
 export function looksLikeRoleIntent(text: string): boolean {
-  const lower = text.trim().toLowerCase();
-  if (!lower) {
+  const trimmed = text.trim();
+  if (!trimmed) {
     return false;
   }
 
-  return ROLE_INTENT_KEYWORDS.some((keyword) => lower.includes(keyword));
+  return findKeywordTermMatch(trimmed, ROLE_INTENT_KEYWORDS) !== undefined;
 }
 
 export async function extractRoleIntentWithLlm(args: {

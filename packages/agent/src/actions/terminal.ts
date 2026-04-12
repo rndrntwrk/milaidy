@@ -377,7 +377,8 @@ function normalizeCapturedRun(
     timedOut: data.timedOut === true,
     truncated: data.truncated === true,
     maxDurationMs:
-      typeof data.maxDurationMs === "number" && Number.isFinite(data.maxDurationMs)
+      typeof data.maxDurationMs === "number" &&
+      Number.isFinite(data.maxDurationMs)
         ? data.maxDurationMs
         : undefined,
   };
@@ -485,7 +486,9 @@ function buildCapturedResponseText(
   result: CapturedTerminalRun,
   scratchpadResult: Awaited<ReturnType<typeof maybeStoreCommandOutput>>,
 ): string {
-  const scratchpadItem = scratchpadResult.stored ? scratchpadResult.item : undefined;
+  const scratchpadItem = scratchpadResult.stored
+    ? scratchpadResult.item
+    : undefined;
   const scratchpadSnapshot = scratchpadResult.stored
     ? scratchpadResult.snapshot
     : undefined;

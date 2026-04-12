@@ -29,7 +29,9 @@ const hasLLM =
   Boolean(process.env.GROQ_API_KEY?.trim());
 const isLiveTest =
   process.env.MILADY_LIVE_TEST === "1" || process.env.ELIZA_LIVE_TEST === "1";
-const canRun = hasLLM && isLiveTest;
+const knowledgeSuiteEnabled =
+  process.env.MILADY_LIVE_KNOWLEDGE_TEST === "1";
+const canRun = hasLLM && isLiveTest && knowledgeSuiteEnabled;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // LIVE: KNOWLEDGE MANAGEMENT FLOW

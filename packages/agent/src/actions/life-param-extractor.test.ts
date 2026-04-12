@@ -542,6 +542,39 @@ describe("extractTaskCreatePlanWithLlm", () => {
       }),
     );
   });
+
+  it("prefers the heuristic create plan when the model over-clarifies a specific recurring request", async () => {
+    const llmResponse = JSON.stringify({
+      mode: "respond",
+      response: "What time after lunch should the reminder fire?",
+      title: null,
+      description: null,
+      cadenceKind: null,
+      windows: null,
+      weekdays: null,
+      timeOfDay: null,
+      timeZone: null,
+      everyMinutes: null,
+      timesPerDay: null,
+      priority: null,
+      durationMinutes: null,
+    });
+
+    const result = await extractTaskCreatePlanWithLlm({
+      runtime: makeRuntime(llmResponse),
+      intent: "Please remind me about my Invisalign on weekdays after lunch.",
+      state: undefined,
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        mode: "create",
+        cadenceKind: "weekly",
+        weekdays: [1, 2, 3, 4, 5],
+        windows: ["afternoon"],
+      }),
+    );
+  });
 });
 
 describe("buildExtractionPrompt", () => {

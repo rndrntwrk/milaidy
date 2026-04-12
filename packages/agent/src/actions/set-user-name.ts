@@ -33,8 +33,7 @@ async function fetchOwnerName(): Promise<string | null> {
     if (!res.ok) return null;
     const cfg = (await res.json()) as Record<string, unknown>;
     const ui = cfg.ui as Record<string, unknown> | undefined;
-    const name =
-      typeof ui?.ownerName === "string" ? ui.ownerName.trim() : null;
+    const name = typeof ui?.ownerName === "string" ? ui.ownerName.trim() : null;
     return name || null;
   } catch {
     return null;

@@ -43,10 +43,9 @@ export const relevantConversationsProvider: Provider = {
 
     try {
       // Embed the current message for semantic search
-      const embeddingResult = await runtime.useModel(
-        ModelType.TEXT_EMBEDDING,
-        { text },
-      );
+      const embeddingResult = await runtime.useModel(ModelType.TEXT_EMBEDDING, {
+        text,
+      });
 
       const embedding = Array.isArray(embeddingResult)
         ? embeddingResult
@@ -70,11 +69,7 @@ export const relevantConversationsProvider: Provider = {
       // Filter out messages from the current conversation to avoid echo
       const currentRoomId = message.roomId;
       const filtered = results
-        .filter(
-          (m) =>
-            m.content?.text &&
-            m.roomId !== currentRoomId,
-        )
+        .filter((m) => m.content?.text && m.roomId !== currentRoomId)
         .slice(0, MAX_RELEVANT_RESULTS);
 
       if (filtered.length === 0) {

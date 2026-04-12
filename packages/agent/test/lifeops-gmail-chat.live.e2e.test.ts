@@ -19,10 +19,8 @@ import {
 } from "../src/lifeops/repository";
 
 const AGENT_ID = "lifeops-gmail-live-chat-agent";
-const LIVE_PROVIDER =
-  selectLiveProvider("openai") ?? selectLiveProvider();
-const LIVE_GMAIL_CHAT_ENABLED =
-  isLiveTestEnabled() && Boolean(LIVE_PROVIDER);
+const LIVE_PROVIDER = selectLiveProvider("openai") ?? selectLiveProvider();
+const LIVE_GMAIL_CHAT_ENABLED = isLiveTestEnabled() && Boolean(LIVE_PROVIDER);
 
 async function callOpenAICompatible(args: {
   apiKey: string;
@@ -167,9 +165,7 @@ async function liveUseModel(
       if (!shouldRetry || attempt === 2) {
         throw error;
       }
-      await new Promise((resolve) =>
-        setTimeout(resolve, 750 * (attempt + 1)),
-      );
+      await new Promise((resolve) => setTimeout(resolve, 750 * (attempt + 1)));
     }
   }
   throw lastError instanceof Error ? lastError : new Error(String(lastError));
@@ -444,86 +440,74 @@ describe.skipIf(!LIVE_GMAIL_CHAT_ENABLED)(
       envBackup.restore();
     });
 
-    it(
-      "searches Gmail narratively with the real model",
-      async () => {
-        const prompt =
-          "can you search my email and tell me if anyone named suran emailed me";
-        const result = await gmailAction.handler?.(
-          runtime,
-          makeMessage(prompt),
-          emptyState() as never,
-          { parameters: {} } as never,
-        );
+    it("searches Gmail narratively with the real model", async () => {
+      const prompt =
+        "can you search my email and tell me if anyone named suran emailed me";
+      const result = await gmailAction.handler?.(
+        runtime,
+        makeMessage(prompt),
+        emptyState() as never,
+        { parameters: {} } as never,
+      );
 
-        expect(result?.success).toBe(true);
-        expect(String(result?.text ?? "")).toMatch(/suran/i);
-      },
-      180_000,
-    );
+      expect(result?.success).toBe(true);
+      expect(String(result?.text ?? "")).toMatch(/suran/i);
+    }, 180_000);
 
-    it(
-      "finds reply-needed Gmail items with the real model",
-      async () => {
-        const prompt = "which emails need a reply about venue";
-        const result = await gmailAction.handler?.(
-          runtime,
-          makeMessage(prompt),
-          emptyState() as never,
-          { parameters: {} } as never,
-        );
+    it("finds reply-needed Gmail items with the real model", async () => {
+      const prompt = "which emails need a reply about venue";
+      const result = await gmailAction.handler?.(
+        runtime,
+        makeMessage(prompt),
+        emptyState() as never,
+        { parameters: {} } as never,
+      );
 
-        expect(result?.success).toBe(true);
-        expect(String(result?.text ?? "")).toMatch(/venue/i);
-      },
-      180_000,
-    );
+      expect(result?.success).toBe(true);
+      expect(String(result?.text ?? "")).toMatch(/venue/i);
+    }, 180_000);
 
-    it(
-      "drafts a Gmail reply from prior Gmail context with the real model",
-      async () => {
-        const searchPrompt =
-          "can you search my email and tell me if anyone named suran emailed me";
-        const searchResult = await gmailAction.handler?.(
-          runtime,
-          makeMessage(searchPrompt),
-          emptyState() as never,
-          { parameters: {} } as never,
-        );
+    it("drafts a Gmail reply from prior Gmail context with the real model", async () => {
+      const searchPrompt =
+        "can you search my email and tell me if anyone named suran emailed me";
+      const searchResult = await gmailAction.handler?.(
+        runtime,
+        makeMessage(searchPrompt),
+        emptyState() as never,
+        { parameters: {} } as never,
+      );
 
-        expect(searchResult?.success).toBe(true);
-        expect(String(searchResult?.text ?? "")).toMatch(/suran/i);
+      expect(searchResult?.success).toBe(true);
+      expect(String(searchResult?.text ?? "")).toMatch(/suran/i);
 
-        const draftResult = await gmailAction.handler?.(
-          runtime,
-          makeMessage(
-            "draft a reply to that email thanking him and saying next week works",
-          ),
-          followUpState({
-            previousUserText: searchPrompt,
-            previousResult: {
-              success: searchResult?.success,
-              text: searchResult?.text,
-              data: searchResult?.data,
-            },
-          }) as never,
-          { parameters: {} } as never,
-        );
+      const draftResult = await gmailAction.handler?.(
+        runtime,
+        makeMessage(
+          "draft a reply to that email thanking him and saying next week works",
+        ),
+        followUpState({
+          previousUserText: searchPrompt,
+          previousResult: {
+            success: searchResult?.success,
+            text: searchResult?.text,
+            data: searchResult?.data,
+          },
+        }) as never,
+        { parameters: {} } as never,
+      );
 
-        expect(draftResult?.success).toBe(true);
-        const combined = [
-          String(draftResult?.text ?? ""),
-          String(
-            draftResult?.data &&
-              typeof draftResult.data === "object" &&
-              "bodyText" in draftResult.data
-              ? (draftResult.data as Record<string, unknown>).bodyText
-              : "",
-          ),
-        ].join("\n");
-        expect(combined).toMatch(/next week/i);
-      },
-      180_000,
-    );
+      expect(draftResult?.success).toBe(true);
+      const combined = [
+        String(draftResult?.text ?? ""),
+        String(
+          draftResult?.data &&
+            typeof draftResult.data === "object" &&
+            "bodyText" in draftResult.data
+            ? (draftResult.data as Record<string, unknown>).bodyText
+            : "",
+        ),
+      ].join("\n");
+      expect(combined).toMatch(/next week/i);
+    }, 180_000);
   },
 );

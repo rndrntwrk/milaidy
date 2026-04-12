@@ -17,9 +17,12 @@ const LOG_LEVEL_COMMAND_TERMS = getValidationKeywordTerms(
     includeAllLocales: true,
   },
 );
-const LOG_LEVEL_SET_TERMS = getValidationKeywordTerms("action.logLevel.setVerb", {
-  includeAllLocales: true,
-});
+const LOG_LEVEL_SET_TERMS = getValidationKeywordTerms(
+  "action.logLevel.setVerb",
+  {
+    includeAllLocales: true,
+  },
+);
 const LOG_LEVEL_DOMAIN_TERMS = getValidationKeywordTerms(
   "action.logLevel.domain",
   {

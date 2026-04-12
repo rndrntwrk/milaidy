@@ -40,8 +40,11 @@ const CHROME_PATH =
   process.env.MILADY_CHROME_PATH ??
   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const LIVE_TESTS_ENABLED = process.env.MILADY_LIVE_TEST === "1";
+const LIVE_BROWSER_SUITE_ENABLED =
+  process.env.MILADY_LIVE_BROWSER_SUITE === "1";
 const CAN_RUN =
   LIVE_TESTS_ENABLED &&
+  LIVE_BROWSER_SUITE_ENABLED &&
   GROQ_API_KEY.length > 0 &&
   ELEVENLABS_API_KEY.length > 0;
 const PROFILE_FILTER = new Set(

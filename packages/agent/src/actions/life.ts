@@ -53,6 +53,11 @@ import {
   extractUnlockModeWithLlm,
 } from "./life-param-extractor.js";
 import { recentConversationTexts } from "./life-recent-context.js";
+import { gmailAction } from "./gmail.js";
+import {
+  extractExplicitTimeZoneFromText,
+  normalizeExplicitTimeZoneToken,
+} from "./timezone-normalization.js";
 import { extractUpdateFieldsWithLlm } from "./life-update-extractor.js";
 import {
   calendarReadUnavailableMessage,
@@ -63,11 +68,9 @@ import {
   detailObject,
   detailString,
   formatCalendarFeed,
-  formatEmailTriage,
   formatNextEventContext,
   formatOverviewForQuery,
   getGoogleCapabilityStatus,
-  gmailReadUnavailableMessage,
   hasLifeOpsAccess,
   INTERNAL_URL,
   messageText,
@@ -311,27 +314,6 @@ const DRAFT_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
 /** Maximum conversation turns before a deferred draft expires. */
 const DRAFT_MAX_TURNS = 3;
 
-const LIFE_TIME_ZONE_ALIASES: Record<string, string> = {
-  pst: "America/Los_Angeles",
-  pdt: "America/Los_Angeles",
-  pt: "America/Los_Angeles",
-  pacific: "America/Los_Angeles",
-  mst: "America/Denver",
-  mdt: "America/Denver",
-  mt: "America/Denver",
-  mountain: "America/Denver",
-  cst: "America/Chicago",
-  cdt: "America/Chicago",
-  ct: "America/Chicago",
-  central: "America/Chicago",
-  est: "America/New_York",
-  edt: "America/New_York",
-  et: "America/New_York",
-  eastern: "America/New_York",
-  utc: "UTC",
-  gmt: "UTC",
-};
-
 type DeferredLifeDefinitionDraft = {
   intent: string;
   operation: "create_definition";
@@ -356,38 +338,13 @@ type DeferredLifeDefinitionDraft = {
 function normalizeLifeTimeZoneToken(
   value: string | null | undefined,
 ): string | null {
-  if (typeof value !== "string") {
-    return null;
-  }
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return null;
-  }
-  const alias = LIFE_TIME_ZONE_ALIASES[trimmed.toLowerCase()];
-  if (alias && isValidTimeZone(alias)) {
-    return alias;
-  }
-  if (isValidTimeZone(trimmed)) {
-    return trimmed;
-  }
-  return null;
+  return normalizeExplicitTimeZoneToken(value);
 }
 
 function extractLifeTimeZoneFromText(
   value: string | null | undefined,
 ): string | null {
-  if (typeof value !== "string" || value.trim().length === 0) {
-    return null;
-  }
-  const ianaMatch = value.match(/\b([A-Za-z]+(?:\/[A-Za-z0-9_+-]+)+)\b/);
-  const iana = normalizeLifeTimeZoneToken(ianaMatch?.[1]);
-  if (iana) {
-    return iana;
-  }
-  const aliasMatch = value.match(
-    /\b(pst|pdt|pt|pacific|mst|mdt|mt|mountain|cst|cdt|ct|central|est|edt|et|eastern|utc|gmt)\b/i,
-  );
-  return normalizeLifeTimeZoneToken(aliasMatch?.[1] ?? aliasMatch?.[0]);
+  return extractExplicitTimeZoneFromText(value);
 }
 
 type DeferredLifeGoalDraft = {
@@ -2615,6 +2572,16 @@ function buildCadenceFromLlmParams(
         },
       };
     }
+    if (effectiveWindows.length >= 2) {
+      return {
+        cadence: {
+          kind: "times_per_day",
+          slots: buildSlotsFromWindows(effectiveWindows),
+          visibilityLeadMinutes: 90,
+          visibilityLagMinutes: 180,
+        },
+      };
+    }
     return { cadence: { kind: "daily", windows: effectiveWindows } };
   }
   if (kind === "weekly") {
@@ -3660,11 +3627,14 @@ export const lifeAction: Action = {
         // ── LLM parameter enhancement (fills gaps) ────────
         // Skip when reusing a confirmed deferred draft — the user already
         // approved those values.
+        let llmPlan:
+          | Awaited<ReturnType<typeof extractTaskCreatePlanWithLlm>>
+          | null = null;
         let llmDescription: string | undefined;
         let llmPriority: number | undefined;
         let llmRequestKind: NativeAppleReminderLikeKind | null = null;
         if (!deferredDefinitionDraft || editingDeferredDefinitionDraft) {
-          const llmPlan = await extractTaskCreatePlanWithLlm({
+          llmPlan = await extractTaskCreatePlanWithLlm({
             runtime,
             intent,
             state: state ?? undefined,
@@ -3692,7 +3662,10 @@ export const lifeAction: Action = {
           if (llmPlan) {
             llmRequestKind = llmPlan.requestKind;
             if (llmPlan.title && !hadExplicitTitle) {
-              title = llmPlan.title;
+              title =
+                preferDerivedDefinition || !seed
+                  ? llmPlan.title
+                  : seed.title;
             }
             if (
               (editingDeferredDefinitionDraft || !hadExplicitCadence) &&
@@ -3701,6 +3674,7 @@ export const lifeAction: Action = {
               const llmCadenceTimeZone =
                 normalizeLifeTimeZoneToken(
                   detailString(details, "timeZone") ??
+                    llmPlan.timeZone ??
                     deferredDefinitionDraft?.request.timezone ??
                     windowPolicy?.timezone,
                 ) ?? extractLifeTimeZoneFromText(intent);
@@ -3724,6 +3698,7 @@ export const lifeAction: Action = {
         const resolvedTimeZone =
           normalizeLifeTimeZoneToken(
             detailString(details, "timeZone") ??
+              llmPlan?.timeZone ??
               deferredDefinitionDraft?.request.timezone ??
               windowPolicy?.timezone,
           ) ?? extractLifeTimeZoneFromText(intent);
@@ -3857,6 +3832,7 @@ export const lifeAction: Action = {
                 : seed?.reminderPlan),
             timezone:
               extractLifeTimeZoneFromText(intent) ??
+              normalizeLifeTimeZoneToken(llmPlan?.timeZone) ??
               normalizeLifeTimeZoneToken(
                 resolvedTimeZone ?? deferredDefinitionDraft?.request.timezone,
               ) ??
@@ -4028,22 +4004,27 @@ export const lifeAction: Action = {
       }
 
       if (operation === "query_email") {
-        const google = await getGoogleCapabilityStatus(service);
-        if (!google.hasGmailTriage) {
-          return {
-            success: false,
-            text: gmailReadUnavailableMessage(google),
-          };
-        }
         const limit = detailNumber(details, "limit") ?? 10;
-        const feed = await service.getGmailTriage(INTERNAL_URL, {
-          maxResults: limit,
-        });
-        return {
-          success: true,
-          text: formatEmailTriage(feed),
-          data: toActionData(feed),
-        };
+        return (
+          (await gmailAction.handler?.(
+            runtime,
+            message,
+            state,
+            {
+              parameters: {
+                subaction: "triage",
+                intent,
+                details: {
+                  ...details,
+                  maxResults: limit,
+                },
+              },
+            } as HandlerOptions,
+          )) ?? {
+            success: false,
+            text: "I couldn't route that Gmail request yet.",
+          }
+        );
       }
 
       if (operation === "query_overview") {

@@ -2571,6 +2571,398 @@ const VALIDATION_KEYWORD_DOCS = {
         },
       },
     },
+    updateRole: {
+      intent: {
+        base: termDoc(`
+          role
+          assign role
+          set role
+          change role
+          update role
+          boss
+          manager
+          supervisor
+          superior
+          lead
+          coworker
+          co-worker
+          teammate
+          colleague
+          peer
+          friend
+          partner
+          admin
+          owner
+          guest
+          member
+          user
+          mod
+          moderator
+          promote
+          demote
+          revoke
+          remove role
+        `),
+        locales: {
+          "zh-CN": termDoc(`
+            角色
+            分配角色
+            设置角色
+            修改角色
+            老板
+            经理
+            主管
+            上级
+            负责人
+            同事
+            队友
+            伙伴
+            管理员
+            所有者
+            主人
+            访客
+            成员
+            用户
+            版主
+            提升
+            升级
+            降级
+            撤销
+            移除角色
+          `),
+          ko: termDoc(`
+            역할
+            역할 설정
+            역할 변경
+            상사
+            매니저
+            관리자
+            감독자
+            리더
+            동료
+            팀원
+            친구
+            파트너
+            오너
+            소유자
+            게스트
+            멤버
+            사용자
+            모더레이터
+            승급
+            강등
+            철회
+          `),
+          es: termDoc(`
+            rol
+            asigna el rol
+            cambiar el rol
+            jefe
+            jefa
+            gerente
+            supervisor
+            líder
+            lider
+            compañero
+            companero
+            colega
+            amigo
+            socio
+            administrador
+            dueño
+            dueno
+            propietario
+            invitado
+            miembro
+            usuario
+            moderador
+            asciende
+            promociona
+            degrada
+            revoca
+            quitar el rol
+          `),
+          pt: termDoc(`
+            papel
+            função
+            funcao
+            cargo
+            atribuir papel
+            mudar papel
+            chefe
+            gerente
+            supervisor
+            líder
+            lider
+            colega
+            amigo
+            parceiro
+            administrador
+            dono
+            proprietário
+            proprietario
+            convidado
+            membro
+            usuário
+            usuario
+            moderador
+            promover
+            rebaixar
+            revogar
+            remover papel
+          `),
+          vi: termDoc(`
+            vai trò
+            vai tro
+            gán vai trò
+            gan vai tro
+            đổi vai trò
+            doi vai tro
+            sếp
+            sep
+            quản lý
+            quan ly
+            giám sát
+            giam sat
+            trưởng nhóm
+            truong nhom
+            đồng nghiệp
+            dong nghiep
+            bạn bè
+            ban be
+            đối tác
+            doi tac
+            quản trị viên
+            quan tri vien
+            chủ sở hữu
+            chu so huu
+            khách
+            thành viên
+            thanh vien
+            người dùng
+            nguoi dung
+            điều hành viên
+            dieu hanh vien
+            thăng cấp
+            thang cap
+            hạ cấp
+            ha cap
+            thu hồi
+            thu hoi
+          `),
+          tl: termDoc(`
+            role
+            tungkulin
+            itakda ang role
+            baguhin ang role
+            boss
+            manager
+            supervisor
+            lead
+            katrabaho
+            kasamahan
+            kaibigan
+            partner
+            admin
+            may-ari
+            guest
+            miyembro
+            user
+            mod
+            moderador
+            i-promote
+            i-demote
+            bawiin
+            alisin ang role
+          `),
+        },
+      },
+    },
+    triggerCreate: {
+      request: {
+        base: termDoc(`
+          schedule
+          scheduled
+          trigger
+          heartbeat
+          cron
+          recurring
+          recur
+          repeat
+          repeating
+          reminder
+          remind
+          automate
+          automation
+          automatic
+          periodic
+          interval
+          follow up
+          check in
+          every day
+          every week
+          every month
+          every hour
+          daily
+          weekly
+          monthly
+          hourly
+          alarm
+          wake me
+        `),
+        locales: {
+          "zh-CN": termDoc(`
+            安排
+            定时
+            触发器
+            心跳
+            cron
+            循环
+            重复
+            提醒
+            提醒我
+            自动化
+            自动
+            定期
+            间隔
+            跟进
+            检查一下
+            每天
+            每周
+            每月
+            每小时
+            闹钟
+            叫醒我
+          `),
+          ko: termDoc(`
+            예약
+            예약해
+            트리거
+            하트비트
+            크론
+            반복
+            반복적으로
+            알림
+            리마인더
+            자동화
+            자동
+            주기적
+            간격
+            후속 확인
+            매일
+            매주
+            매달
+            매시간
+            알람
+            깨워줘
+          `),
+          es: termDoc(`
+            programa
+            programar
+            recordatorio
+            recordar
+            recurrente
+            repetir
+            automatiza
+            automatizar
+            automático
+            automatico
+            periódico
+            periodico
+            intervalo
+            seguimiento
+            cada día
+            cada dia
+            cada semana
+            cada mes
+            cada hora
+            diario
+            semanal
+            mensual
+            alarma
+            despiértame
+            despiertame
+          `),
+          pt: termDoc(`
+            programa
+            programar
+            lembrete
+            lembrar
+            recorrente
+            repetir
+            automatiza
+            automatizar
+            automático
+            automatico
+            periódico
+            periodico
+            intervalo
+            acompanhamento
+            cada dia
+            cada semana
+            cada mês
+            cada mes
+            cada hora
+            diário
+            diario
+            semanal
+            mensal
+            alarme
+            me acorde
+          `),
+          vi: termDoc(`
+            lên lịch
+            len lich
+            lời nhắc
+            loi nhac
+            nhắc tôi
+            nhac toi
+            lặp lại
+            lap lai
+            tự động
+            tu dong
+            tự động hóa
+            tu dong hoa
+            định kỳ
+            dinh ky
+            khoảng cách
+            khoang cach
+            theo dõi
+            theo doi
+            mỗi ngày
+            moi ngay
+            mỗi tuần
+            moi tuan
+            mỗi tháng
+            moi thang
+            mỗi giờ
+            moi gio
+            báo thức
+            bao thuc
+            đánh thức tôi
+            danh thuc toi
+          `),
+          tl: termDoc(`
+            iskedyul
+            paalala
+            ipaalala
+            paulit-ulit
+            ulitin
+            awtomatiko
+            awtomasyon
+            pana-panahon
+            pagitan
+            follow up
+            kada araw
+            kada linggo
+            kada buwan
+            kada oras
+            alarm
+            gisingin mo ako
+          `),
+        },
+      },
+    },
   },
 } as const satisfies ValidationKeywordTree;
 
@@ -2649,7 +3041,8 @@ export function textIncludesKeywordTerm(text: string, term: string): boolean {
       return true;
     }
 
-    if (/[^\x00-\x7F]/.test(text)) {
+    const hasNonAsciiText = [...text].some((char) => char.charCodeAt(0) > 0x7f);
+    if (hasNonAsciiText) {
       return normalizedText.includes(normalizedTerm);
     }
     return false;
@@ -2691,10 +3084,7 @@ export function getValidationKeywordTerms(
   const doc = lookupValidationKeywordDoc(key);
   if (options?.includeAllLocales) {
     return splitKeywordDoc(
-      [
-        doc.base,
-        ...Object.values(doc.locales ?? {}),
-      ]
+      [doc.base, ...Object.values(doc.locales ?? {})]
         .filter((value): value is string => typeof value === "string")
         .join("\n"),
     );

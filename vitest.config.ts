@@ -319,6 +319,8 @@ export default defineConfig({
       "**/*-real.test.tsx",
       "**/*.real.test.ts",
       "**/*.real.test.tsx",
+      "**/*.integration.test.ts",
+      "**/*.integration.test.tsx",
       // E2E lives under test/ too; run it via vitest.e2e.config.ts, not unit.
       "**/*.e2e.test.ts",
       "**/*.e2e.test.tsx",

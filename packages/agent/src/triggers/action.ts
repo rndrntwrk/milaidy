@@ -12,6 +12,10 @@ import {
   stringToUuid,
   type UUID,
 } from "@elizaos/core";
+import {
+  findKeywordTermMatch,
+  getValidationKeywordTerms,
+} from "@miladyai/shared/validation-keywords";
 import { hasOwnerAccess } from "../security/access.js";
 import { parsePositiveInteger } from "../utils/number-parsing.js";
 import {
@@ -26,11 +30,17 @@ import {
 import {
   buildTriggerConfig,
   buildTriggerMetadata,
-  normalizeTriggerDraft,
   normalizeText,
+  normalizeTriggerDraft,
 } from "./scheduling.js";
 
 const CREATE_TRIGGER_TASK_ACTION = "CREATE_TRIGGER_TASK";
+const TRIGGER_INTENT_TERMS = getValidationKeywordTerms(
+  "action.triggerCreate.request",
+  {
+    includeAllLocales: true,
+  },
+);
 
 interface TriggerExtraction {
   triggerType?: string;
@@ -117,6 +127,15 @@ function scheduleText(
   return `on cron ${summary.cronExpression ?? "* * * * *"}`;
 }
 
+export function looksLikeTriggerIntent(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return false;
+  }
+
+  return findKeywordTermMatch(trimmed, TRIGGER_INTENT_TERMS) !== undefined;
+}
+
 export const createTriggerTaskAction: Action = {
   name: CREATE_TRIGGER_TASK_ACTION,
   similes: [
@@ -138,11 +157,8 @@ export const createTriggerTaskAction: Action = {
     // Permissive keyword check across the current message AND recent
     // conversation so that confirmations like "yes" still match when the
     // agent just asked "should I create a trigger?".
-    const TRIGGER_HINTS =
-      /\b(schedule|trigger|heartbeat|cron|recurring|interval|every\s+\d|remind|automat|timed|repeat|loop|auto|run\s|poll|periodic|daily|hourly|weekly|monthly|wake)\b/i;
-
     const currentText = message.content.text ?? "";
-    if (TRIGGER_HINTS.test(currentText)) return true;
+    if (looksLikeTriggerIntent(currentText)) return true;
 
     // Check recent conversation window (up to last 6 messages) so
     // short confirmations ("yes", "do it", "go ahead") still resolve.
@@ -153,7 +169,7 @@ export const createTriggerTaskAction: Action = {
         count: 6,
       });
       for (const mem of recent) {
-        if (TRIGGER_HINTS.test(mem.content.text ?? "")) return true;
+        if (looksLikeTriggerIntent(mem.content.text ?? "")) return true;
       }
     } catch {
       // If memory lookup fails, fall back to current-message-only
@@ -186,8 +202,7 @@ export const createTriggerTaskAction: Action = {
     if (!(await hasOwnerAccess(runtime, message))) {
       return {
         success: false,
-        text:
-          "Permission denied: only the owner may create autonomous trigger tasks.",
+        text: "Permission denied: only the owner may create autonomous trigger tasks.",
       };
     }
 

@@ -32,7 +32,7 @@ import {
   editorTextareaClassName,
   type HandlerType,
   type HeaderRow,
-  HTTP_METHODS_LIST,
+  HTTP_METHODS,
   type HttpMethod,
   normalizeActionName,
   normalizeMethod,
@@ -617,7 +617,7 @@ export function CustomActionEditor({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {HTTP_METHODS_LIST.map((method) => (
+                    {HTTP_METHODS.map((method) => (
                       <SelectItem key={method} value={method}>
                         {method}
                       </SelectItem>

@@ -37,13 +37,13 @@ const GENERIC_APP_TARGET_TERMS = getValidationKeywordTerms(
     includeAllLocales: true,
   },
 );
-const KNOWN_APP_TERMS = getValidationKeywordTerms("action.appControl.knownApp", {
-  includeAllLocales: true,
-});
-const ALL_APP_TARGET_TERMS = [
-  ...GENERIC_APP_TARGET_TERMS,
-  ...KNOWN_APP_TERMS,
-];
+const KNOWN_APP_TERMS = getValidationKeywordTerms(
+  "action.appControl.knownApp",
+  {
+    includeAllLocales: true,
+  },
+);
+const ALL_APP_TARGET_TERMS = [...GENERIC_APP_TARGET_TERMS, ...KNOWN_APP_TERMS];
 
 function getApiBase(): string {
   const port = resolveServerOnlyPort(process.env);
@@ -62,7 +62,9 @@ function extractTargetAfterTerms(
   text: string,
   terms: readonly string[],
 ): string | null {
-  const sortedTerms = [...terms].sort((left, right) => right.length - left.length);
+  const sortedTerms = [...terms].sort(
+    (left, right) => right.length - left.length,
+  );
   for (const term of sortedTerms) {
     const pattern = new RegExp(
       `${escapePattern(term).replace(/\\ /g, "\\s*")}\\s*([\\p{L}\\p{N}_-]+)`,
@@ -147,7 +149,7 @@ export const launchAppAction: Action = {
     if (!appName) {
       return {
         success: false,
-        text: "I need the app name to launch. Try: \"launch shopify\" or \"open vincent\"",
+        text: 'I need the app name to launch. Try: "launch shopify" or "open vincent"',
       };
     }
 
@@ -240,7 +242,7 @@ export const stopAppAction: Action = {
     if (!appName) {
       return {
         success: false,
-        text: "I need the app name to stop. Try: \"stop shopify\" or \"close vincent\"",
+        text: 'I need the app name to stop. Try: "stop shopify" or "close vincent"',
       };
     }
 

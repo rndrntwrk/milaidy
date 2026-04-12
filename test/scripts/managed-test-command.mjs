@@ -14,8 +14,9 @@ const REPO_TEST_PROCESS_MARKERS = [
   "test/scripts/test-runner.mjs",
   "test/scripts/test-root-unit.mjs",
   "bun run test",
+  "bun run test:integration",
   "bun run test:e2e",
-  "bun run test:startup:e2e",
+  "bun run test:startup:integration",
   "bun run test:orchestrator:integration",
 ];
 

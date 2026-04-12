@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, beforeEach, expect, it, vi } from "vitest";
+import { ModelType } from "@elizaos/core";
 import { createRealTestRuntime } from "../../../../test/helpers/real-runtime";
 import { describeLLM } from "../../../../test/helpers/skip-without";
 
@@ -587,6 +588,7 @@ describeLLM("gmailAction", () => {
       expect.any(URL),
       expect.objectContaining({ query: "from:alex subject:venue" }),
     );
+    expect(runtime.useModel.mock.calls[0]?.[0]).toBe(ModelType.TEXT_LARGE);
     expect(mockCreateGmailReplyDraft).toHaveBeenCalledWith(
       expect.any(URL),
       expect.objectContaining({ messageId: "msg-from-alex-subject-venue" }),
@@ -994,6 +996,8 @@ describeLLM("gmailAction", () => {
         bodyText: "test",
       }),
     );
+    expect(runtime.useModel.mock.calls[0]?.[0]).toBe(ModelType.TEXT_LARGE);
+    expect(runtime.useModel.mock.calls[1]?.[0]).toBe(ModelType.TEXT_LARGE);
     expect(result?.success).toBe(true);
   });
 

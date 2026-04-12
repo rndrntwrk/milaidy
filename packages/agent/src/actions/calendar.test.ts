@@ -2848,6 +2848,91 @@ describe("calendarAction", () => {
     expect(result?.text).toContain("Flight to LA");
   });
 
+  it("does not leak raw delete errors when a delete-all request partially fails", async () => {
+    mockGetCalendarFeed.mockResolvedValue({
+      calendarId: "primary",
+      events: [
+        {
+          id: "evt-dentist-1",
+          externalId: "ext-dentist-1",
+          agentId: "agent-1",
+          provider: "google",
+          side: "owner",
+          calendarId: "primary",
+          title: "Dentist appointment",
+          description: "",
+          location: "Main St",
+          status: "confirmed",
+          startAt: "2026-04-12T17:00:00.000Z",
+          endAt: "2026-04-12T18:00:00.000Z",
+          isAllDay: false,
+          timezone: "UTC",
+          htmlLink: null,
+          conferenceLink: null,
+          organizer: null,
+          attendees: [],
+          metadata: {},
+          syncedAt: "2026-04-09T16:00:00.000Z",
+          updatedAt: "2026-04-09T16:00:00.000Z",
+        },
+        {
+          id: "evt-dentist-2",
+          externalId: "ext-dentist-2",
+          agentId: "agent-1",
+          provider: "google",
+          side: "owner",
+          calendarId: "primary",
+          title: "Dentist appointment copy",
+          description: "",
+          location: "Main St",
+          status: "confirmed",
+          startAt: "2026-04-13T17:00:00.000Z",
+          endAt: "2026-04-13T18:00:00.000Z",
+          isAllDay: false,
+          timezone: "UTC",
+          htmlLink: null,
+          conferenceLink: null,
+          organizer: null,
+          attendees: [],
+          metadata: {},
+          syncedAt: "2026-04-09T16:00:00.000Z",
+          updatedAt: "2026-04-09T16:00:00.000Z",
+        },
+      ],
+      source: "cache",
+      timeMin: "2026-04-09T00:00:00.000Z",
+      timeMax: "2026-05-09T00:00:00.000Z",
+      syncedAt: "2026-04-09T16:00:00.000Z",
+    });
+    mockUseModel.mockImplementation(async (_model, input) => {
+      const prompt =
+        input && typeof input === "object" && "prompt" in input
+          ? String((input as { prompt?: unknown }).prompt ?? "")
+          : "";
+      return prompt.includes(
+        "Write the assistant's user-facing reply for a calendar interaction.",
+      )
+        ? prompt
+        : "<response><query1></query1><query2></query2><query3></query3></response>";
+    });
+    mockDeleteCalendarEvent
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error("Google API error: 500 backendError"));
+
+    const result = await invoke("delete all dentist appointments", {
+      subaction: "delete_event",
+      title: "Dentist appointment",
+      details: {},
+    });
+
+    expect(mockDeleteCalendarEvent).toHaveBeenCalledTimes(2);
+    expect(result).toMatchObject({ success: false });
+    expect(result?.text).toContain("Deleted 1 matching event");
+    expect(result?.text).not.toContain('"error"');
+    expect(result?.text).not.toContain("Google API error");
+    expect(result?.text).not.toContain("backendError");
+  });
+
   it("routes to next_event when the intent is clearly next-event", async () => {
     mockGetNextCalendarEventContext.mockResolvedValue({
       event: {

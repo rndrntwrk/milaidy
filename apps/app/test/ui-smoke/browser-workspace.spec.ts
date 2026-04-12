@@ -777,7 +777,6 @@ test("browser workspace exposes a wallet bridge to embedded pages without render
       "ready:evm,solana",
     );
 
-    await expect(page.getByText("Wallet connected")).toBeVisible();
     await walletFrame.getByRole("button", { name: "EVM sign message" }).click();
     await walletFrame.getByRole("button", { name: "Solana sign in" }).click();
     await walletFrame

@@ -131,7 +131,7 @@ describe("DeploymentStep", () => {
     render(<DeploymentStep />);
 
     await user.click(
-      screen.getByRole("button", { name: /create local agent/i }),
+      screen.getAllByRole("button", { name: /create local agent/i })[0]!,
     );
 
     expect(mockClientSetBaseUrl).toHaveBeenCalledWith(null);

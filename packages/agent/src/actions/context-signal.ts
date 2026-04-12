@@ -14,9 +14,9 @@ import {
   textIncludesKeywordTerm,
 } from "@miladyai/shared/validation-keywords";
 import {
+  type ContextSignalKey,
   getContextSignalTerms,
   resolveContextSignalSpec,
-  type ContextSignalKey,
 } from "./context-signal-lexicon.js";
 import {
   recentConversationTexts as collectRecentConversationTexts,
@@ -193,9 +193,7 @@ export async function hasContextSignal(
     });
   }
 
-  texts = [...texts, messageText(message).trim()].filter(
-    (t) => t.length > 0,
-  );
+  texts = [...texts, messageText(message).trim()].filter((t) => t.length > 0);
 
   if (texts.length === 0) return false;
 

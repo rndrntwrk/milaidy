@@ -4026,6 +4026,10 @@ export const calendarAction: Action = {
           }
           const okCount = deleteResults.filter((r) => r.ok).length;
           const failCount = deleteResults.length - okCount;
+          const publicDeleteResults = deleteResults.map((result) => ({
+            title: result.title,
+            ok: result.ok,
+          }));
           const summary =
             failCount === 0
               ? targets.length === 1
@@ -4037,7 +4041,7 @@ export const calendarAction: Action = {
           return respond({
             success: failCount === 0,
             text: await renderReply("deleted_event", summary, {
-              deleteResults,
+              deleteResults: publicDeleteResults,
               okCount,
               failCount,
             }),

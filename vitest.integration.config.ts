@@ -288,33 +288,33 @@ export default defineConfig({
     testTimeout: 120_000,
     hookTimeout: 120_000,
     globalSetup: ["test/e2e-global-setup.ts"],
-    // E2E files frequently replace globals and module-level mocks. Shared module
-    // state causes cross-file bleed, which is more expensive to debug than the
-    // small cost of per-file isolation.
+    // Integration files frequently replace globals and module-level mocks.
+    // Shared module state causes cross-file bleed, which is more expensive to
+    // debug than the small cost of per-file isolation.
     isolate: true,
     fileParallelism: false,
     pool: "forks",
     maxWorkers: 1,
     // Match the unit test worker heap to avoid late jsdom OOM crashes during
-    // serial E2E runs, where one fork accumulates dozens of suites.
+    // serial runs, where one fork accumulates dozens of suites.
     execArgv: ["--max-old-space-size=4096"],
     sequence: {
       concurrent: false,
       shuffle: false,
     },
     include: [
-      "test/**/*.e2e.test.ts",
-      "packages/agent/test/**/*.e2e.test.ts",
-      "packages/app-core/test/**/*.e2e.test.ts",
+      "test/**/*.integration.test.ts",
+      "packages/agent/test/**/*.integration.test.ts",
+      "packages/app-core/test/**/*.integration.test.ts",
     ],
     setupFiles: ["test/setup.ts"],
     exclude: [
       "dist/**",
       "**/node_modules/**",
-      "packages/app-core/test/app/startup-chat.e2e.test.ts",
-      "packages/app-core/test/app/startup-onboarding.e2e.test.ts",
-      "packages/app-core/test/app/startup-backend-missing.e2e.test.ts",
-      "packages/app-core/test/app/startup-token-401.e2e.test.ts",
+      "packages/app-core/test/app/startup-chat.integration.test.ts",
+      "packages/app-core/test/app/startup-onboarding.integration.test.ts",
+      "packages/app-core/test/app/startup-backend-missing.integration.test.ts",
+      "packages/app-core/test/app/startup-token-401.integration.test.ts",
       "**/*-live.test.ts",
       "**/*-live.test.tsx",
       "**/*.live.test.ts",

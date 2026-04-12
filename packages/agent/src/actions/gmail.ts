@@ -252,6 +252,14 @@ function buildGmailServiceErrorFallback(error: LifeOpsServiceError): string {
   if (error.status === 429 || normalized.includes("rate limit")) {
     return "Gmail is rate-limited right now. Try again in a bit.";
   }
+  if (
+    normalized.includes("multiple gmail messages matched") ||
+    (error.status === 409 &&
+      normalized.includes("narrow the query") &&
+      normalized.includes("message"))
+  ) {
+    return "I found more than one matching email. Tell me the sender, subject, or message id.";
+  }
   if (normalized.includes("not found")) {
     return "I couldn't find that email. Tell me who it was from or what the subject looked like.";
   }
@@ -983,7 +991,7 @@ export async function extractGmailPlanWithLlm(
 
   let rawResponse = "";
   try {
-    const result = await runtime.useModel(ModelType.TEXT_SMALL, {
+    const result = await runtime.useModel(ModelType.TEXT_LARGE, {
       prompt,
     });
     rawResponse = typeof result === "string" ? result : "";
@@ -1133,7 +1141,7 @@ async function recoverSendMessagePlanWithLlm(args: {
 
   let rawResponse = "";
   try {
-    const result = await runtime.useModel(ModelType.TEXT_SMALL, { prompt });
+    const result = await runtime.useModel(ModelType.TEXT_LARGE, { prompt });
     rawResponse = typeof result === "string" ? result : "";
   } catch (error) {
     runtime.logger?.warn?.(

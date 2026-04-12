@@ -8,7 +8,7 @@
  * 4. Cloud disconnect UI
  * 5. Cloud error handling
  *
- * API endpoint tests are in cloud-api.e2e.test.ts (separated to avoid
+ * API endpoint tests are in cloud-api.integration.test.ts (separated to avoid
  * mixing node HTTP server with jsdom, which causes V8 OOM).
  */
 

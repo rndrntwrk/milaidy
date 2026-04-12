@@ -8,7 +8,7 @@
  * 4. Cloud disconnect endpoint
  * 5. Cloud topup endpoint
  *
- * Separated from cloud-login-flow.e2e.test.ts to avoid mixing node HTTP
+ * Separated from cloud-login-flow.integration.test.ts to avoid mixing node HTTP
  * server and jsdom in the same worker (causes V8 OOM during GC teardown).
  */
 

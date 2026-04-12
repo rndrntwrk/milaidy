@@ -54,6 +54,28 @@ const pluginSqlEntry =
   resolveModuleEntry(
     path.join(repoRoot, "plugins", "plugin-sql", "typescript", "index.node"),
   );
+const pluginAgentOrchestratorEntry =
+  getInstalledPackageEntry("@elizaos/plugin-agent-orchestrator", repoRoot) ??
+  resolveModuleEntry(
+    path.join(repoRoot, "plugins", "plugin-agent-orchestrator", "src", "index"),
+  );
+const pluginPiAiEntry =
+  getInstalledPackageEntry("@elizaos/plugin-pi-ai", repoRoot) ??
+  resolveModuleEntry(
+    path.join(repoRoot, "plugins", "plugin-pi-ai", "src", "index"),
+  );
+const pluginTelegramEntry =
+  getInstalledPackageEntry("@elizaos/plugin-telegram", repoRoot) ??
+  resolveModuleEntry(
+    path.join(
+      repoRoot,
+      "plugins",
+      "plugin-telegram",
+      "typescript",
+      "src",
+      "index",
+    ),
+  );
 const pluginWhatsappEntry =
   getInstalledPackageEntry("@elizaos/plugin-whatsapp", repoRoot) ??
   resolveModuleEntry(
@@ -67,7 +89,6 @@ const pluginWhatsappEntry =
     ),
   );
 
-const liveTest = process.env.MILADY_LIVE_TEST === "1";
 export default defineConfig({
   resolve: {
     alias: [
@@ -147,10 +168,6 @@ export default defineConfig({
           "index.ts",
         ),
       },
-      {
-        find: "@elizaos/skills",
-        replacement: path.join(repoRoot, "test", "stubs", "empty-module.mjs"),
-      },
       ...(fs.existsSync(pluginPersonalityEntry)
         ? [
             {
@@ -159,40 +176,26 @@ export default defineConfig({
             },
           ]
         : []),
-      {
-        find: "@elizaos/plugin-repoprompt",
-        replacement: path.join(repoRoot, "test", "stubs", "empty-module.mjs"),
-      },
-      {
-        find: "@elizaos/plugin-agent-orchestrator",
-        replacement: path.join(
-          repoRoot,
-          "test",
-          "stubs",
-          "coding-agent-module.ts",
-        ),
-      },
-      {
-        find: "@elizaos/plugin-coding-agent",
-        replacement: path.join(
-          repoRoot,
-          "test",
-          "stubs",
-          "coding-agent-module.ts",
-        ),
-      },
-      {
-        find: "@elizaos/plugin-pdf",
-        replacement: path.join(repoRoot, "test", "stubs", "empty-module.mjs"),
-      },
-      {
-        find: "@elizaos/plugin-form",
-        replacement: path.join(repoRoot, "test", "stubs", "empty-module.mjs"),
-      },
-      {
-        find: "@elizaos/plugin-pi-ai",
-        replacement: path.join(repoRoot, "test", "stubs", "pi-ai-module.ts"),
-      },
+      ...(fs.existsSync(pluginAgentOrchestratorEntry)
+        ? [
+            {
+              find: "@elizaos/plugin-agent-orchestrator",
+              replacement: pluginAgentOrchestratorEntry,
+            },
+            {
+              find: "@elizaos/plugin-coding-agent",
+              replacement: pluginAgentOrchestratorEntry,
+            },
+          ]
+        : []),
+      ...(fs.existsSync(pluginPiAiEntry)
+        ? [
+            {
+              find: "@elizaos/plugin-pi-ai",
+              replacement: pluginPiAiEntry,
+            },
+          ]
+        : []),
       ...(fs.existsSync(pluginSignalEntry)
         ? [
             {
@@ -209,67 +212,14 @@ export default defineConfig({
             },
           ]
         : []),
-      {
-        find: "@elizaos/plugin-edge-tts",
-        replacement: path.join(repoRoot, "test", "stubs", "empty-module.mjs"),
-      },
-      {
-        find: "@elizaos/plugin-edge-tts/node",
-        replacement: path.join(repoRoot, "test", "stubs", "empty-module.mjs"),
-      },
-      ...(!liveTest
+      ...(fs.existsSync(pluginTelegramEntry)
         ? [
             {
-              find: "@elizaos/plugin-openai",
-              replacement: path.join(
-                repoRoot,
-                "test",
-                "stubs",
-                "plugin-stub.mjs",
-              ),
-            },
-            {
-              find: "@elizaos/plugin-ollama",
-              replacement: path.join(
-                repoRoot,
-                "test",
-                "stubs",
-                "plugin-stub.mjs",
-              ),
-            },
-            {
-              find: "@elizaos/plugin-local-embedding",
-              replacement: path.join(
-                repoRoot,
-                "test",
-                "stubs",
-                "plugin-stub.mjs",
-              ),
-            },
-            {
-              find: "@elizaos/plugin-discord",
-              replacement: path.join(
-                repoRoot,
-                "test",
-                "stubs",
-                "plugin-stub.mjs",
-              ),
+              find: "@elizaos/plugin-telegram",
+              replacement: pluginTelegramEntry,
             },
           ]
         : []),
-      {
-        find: "@elizaos/plugin-telegram",
-        replacement: path.join(
-          repoRoot,
-          "test",
-          "stubs",
-          "plugin-telegram-module.ts",
-        ),
-      },
-      {
-        find: "electron",
-        replacement: path.join(repoRoot, "test", "stubs", "electron-module.ts"),
-      },
       ...(fs.existsSync(pluginWhatsappEntry)
         ? [
             {
@@ -278,10 +228,6 @@ export default defineConfig({
             },
           ]
         : []),
-      {
-        find: /^@lookingglass\/webxr/,
-        replacement: path.join(repoRoot, "test", "stubs", "empty-module.mjs"),
-      },
     ],
   },
   test: {
@@ -311,10 +257,6 @@ export default defineConfig({
     exclude: [
       "dist/**",
       "**/node_modules/**",
-      "packages/app-core/test/app/startup-chat.e2e.test.ts",
-      "packages/app-core/test/app/startup-onboarding.e2e.test.ts",
-      "packages/app-core/test/app/startup-backend-missing.e2e.test.ts",
-      "packages/app-core/test/app/startup-token-401.e2e.test.ts",
       "**/*-live.test.ts",
       "**/*-live.test.tsx",
       "**/*.live.test.ts",

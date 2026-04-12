@@ -14,7 +14,7 @@ import {
 } from "@elizaos/core";
 import dotenv from "dotenv";
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { describeIf } from "../../../test/helpers/conditional-tests.ts";
+import { describeIf, itIf } from "../../../test/helpers/conditional-tests.ts";
 import { saveEnv, sleep, withTimeout } from "../../../test/helpers/test-utils";
 import { resolveOAuthDir } from "../src/config/paths";
 import {
@@ -47,6 +47,8 @@ const LIVE_TESTS_ENABLED =
 const LIVE_CHAT_TESTS_ENABLED = process.env.MILADY_LIVE_CHAT_TEST === "1";
 const LIVE_ASSISTANT_JOURNEYS_ENABLED =
   process.env.MILADY_LIVE_ASSISTANT_JOURNEYS === "1";
+const EXTENDED_JOURNEY_SCENARIOS_ENABLED =
+  process.env.MILADY_LIVE_ASSISTANT_JOURNEYS_EXTENDED === "1";
 const TEST_TIME_ZONE = "America/Los_Angeles";
 const GOOGLE_CLIENT_ID = "assistant-user-journeys-google-client";
 const PROVIDER_ENV_KEYS = [
@@ -1154,7 +1156,7 @@ describeIf(LIVE_SUITE_ENABLED)(
       fs.rmSync(workspaceDir, { recursive: true, force: true });
     }, 30_000);
 
-    it.skip(
+    itIf(EXTENDED_JOURNEY_SCENARIOS_ENABLED)(
       "summarizes multi-platform messages and separates urgent follow-ups from waitable items",
       async () => {
         let response = await sendUserTurn({
@@ -1202,7 +1204,7 @@ describeIf(LIVE_SUITE_ENABLED)(
       180_000,
     );
 
-    it.skip(
+    itIf(EXTENDED_JOURNEY_SCENARIOS_ENABLED)(
       "recalls the thing the user said was still happening later in the day",
       async () => {
         await sendUserTurn({
@@ -1254,7 +1256,7 @@ describeIf(LIVE_SUITE_ENABLED)(
       180_000,
     );
 
-    it.skip(
+    itIf(EXTENDED_JOURNEY_SCENARIOS_ENABLED)(
       "lists the weekend events from the seeded calendar cache",
       async () => {
         let response = await sendUserTurn({
@@ -1299,7 +1301,7 @@ describeIf(LIVE_SUITE_ENABLED)(
       180_000,
     );
 
-    it.skip(
+    itIf(EXTENDED_JOURNEY_SCENARIOS_ENABLED)(
       "surfaces the lunch reminder detail from the cached calendar event",
       async () => {
         let response = await sendUserTurn({
@@ -1334,7 +1336,7 @@ describeIf(LIVE_SUITE_ENABLED)(
       180_000,
     );
 
-    it.skip(
+    itIf(EXTENDED_JOURNEY_SCENARIOS_ENABLED)(
       "finds the most overdue bill from email context",
       async () => {
         let response = await sendUserTurn({

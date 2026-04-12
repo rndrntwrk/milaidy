@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@elizaos/core", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@elizaos/core")>();
@@ -31,7 +31,11 @@ function makeMessage() {
 describe("rolodexProvider", () => {
   it("returns empty when relationships service not available", async () => {
     const runtime = makeRuntime();
-    const result = await rolodexProvider.get(runtime, makeMessage(), {} as never);
+    const result = await rolodexProvider.get(
+      runtime,
+      makeMessage(),
+      {} as never,
+    );
     expect(result.text).toBe("");
   });
 
@@ -46,7 +50,11 @@ describe("rolodexProvider", () => {
       }),
     });
 
-    const result = await rolodexProvider.get(runtime, makeMessage(), {} as never);
+    const result = await rolodexProvider.get(
+      runtime,
+      makeMessage(),
+      {} as never,
+    );
     expect(result.text).toContain("No known contacts");
     expect(result.values).toHaveProperty("rolodexCount", 0);
   });
@@ -81,7 +89,11 @@ describe("rolodexProvider", () => {
       }),
     });
 
-    const result = await rolodexProvider.get(runtime, makeMessage(), {} as never);
+    const result = await rolodexProvider.get(
+      runtime,
+      makeMessage(),
+      {} as never,
+    );
     expect(result.text).toContain("Rolodex");
     expect(result.text).toContain("Alice");
     expect(result.text).toContain("discord, telegram");
