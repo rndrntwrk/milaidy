@@ -16,7 +16,10 @@ import {
   req,
 } from "../../../test/helpers/http";
 import { startApiServer } from "../src/api/server";
-import { DatabaseTrajectoryLogger } from "../src/runtime/trajectory-storage";
+import {
+  DatabaseTrajectoryLogger,
+  flushTrajectoryWrites,
+} from "../src/runtime/trajectory-storage";
 
 type SqlQuery = {
   queryChunks?: Array<{ value?: unknown }>;
@@ -45,7 +48,7 @@ function extractSqlText(query: SqlQuery): string {
 }
 
 async function waitForTrajectoryCall(
-  db: PGlite,
+  trajectoryLogger: DatabaseTrajectoryLogger,
   expectedUserPrompt: string,
 ): Promise<{
   trajectoryId: string;
@@ -55,45 +58,38 @@ async function waitForTrajectoryCall(
     response?: string;
   };
 }> {
-  for (let attempt = 0; attempt < 200; attempt += 1) {
-    const result = await db.query<Record<string, unknown>>(
-      "SELECT id, steps_json FROM trajectories ORDER BY updated_at DESC, created_at DESC LIMIT 20",
+  const directList = await trajectoryLogger.listTrajectories({
+    limit: 50,
+    offset: 0,
+  });
+
+  for (const trajectory of directList.trajectories) {
+    const trajectoryId = String(trajectory.id ?? "");
+    if (!trajectoryId) continue;
+
+    const detail = await trajectoryLogger.getTrajectoryDetail(trajectoryId);
+    const steps = Array.isArray(detail?.steps) ? detail.steps : [];
+    const llmCalls = steps.flatMap((step) =>
+      Array.isArray((step as { llmCalls?: unknown }).llmCalls)
+        ? ((step as {
+            llmCalls: Array<{
+              systemPrompt?: string;
+              userPrompt?: string;
+              response?: string;
+            }>;
+          }).llmCalls)
+        : [],
     );
 
-    for (const trajectory of result.rows) {
-      const trajectoryId = String(trajectory.id ?? "");
-      if (!trajectoryId) continue;
-      const rawSteps = trajectory.steps_json;
-      const steps =
-        typeof rawSteps === "string"
-          ? JSON.parse(rawSteps)
-          : Array.isArray(rawSteps)
-            ? rawSteps
-            : [];
-      const llmCalls = Array.isArray(steps)
-        ? steps.flatMap((step) =>
-            Array.isArray((step as { llmCalls?: unknown }).llmCalls)
-              ? ((step as { llmCalls: Array<{
-                    systemPrompt?: string;
-                    userPrompt?: string;
-                    response?: string;
-                  }> }).llmCalls)
-              : [],
-          )
-        : [];
-
-      const match = llmCalls.find(
-        (call) => String(call.userPrompt ?? "") === expectedUserPrompt,
-      );
-      if (match) {
-        return { trajectoryId, llmCall: match };
-      }
+    const match = llmCalls.find(
+      (call) => String(call.userPrompt ?? "") === expectedUserPrompt,
+    );
+    if (match) {
+      return { trajectoryId, llmCall: match };
     }
-
-    await new Promise((resolve) => setTimeout(resolve, 100));
   }
 
-  throw new Error("Timed out waiting for persisted trajectory prompt/response roundtrip");
+  throw new Error("Missing persisted trajectory prompt/response roundtrip");
 }
 
 describe("Trajectory logger chat roundtrip", () => {
@@ -320,7 +316,12 @@ describe("Trajectory logger chat roundtrip", () => {
     expect(chat.status).toBe(200);
     expect(String(chat.data.text ?? "")).toBe(expectedResponse);
 
-    const persisted = await waitForTrajectoryCall(db, prompt);
+    await flushTrajectoryWrites(runtime);
+    // Match the existing trajectory persistence tests, which allow the
+    // background write queue to settle after the final flush.
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+
+    const persisted = await waitForTrajectoryCall(trajectoryLogger, prompt);
     expect(persisted.trajectoryId.length).toBeGreaterThan(0);
     expect(persisted.llmCall.systemPrompt).toContain(
       "trajectory logger regression test agent",
