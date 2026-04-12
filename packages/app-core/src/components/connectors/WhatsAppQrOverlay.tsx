@@ -38,24 +38,15 @@ export function WhatsAppQrOverlay({
   // ── Connected ────────────────────────────────────────────────────────
   if (status === "connected") {
     return (
-      <div
-        className="p-4 mt-3"
-        style={{
-          border: "1px solid #22c55e",
-          background: "var(--ok-subtle)",
-        }}
-      >
+      <div className="p-4 mt-3 border border-ok bg-[var(--ok-subtle)]">
         <div className="flex items-center gap-2">
-          <span
-            className="inline-block w-2 h-2 rounded-full"
-            style={{ background: "#22c55e" }}
-          />
-          <span className="text-xs font-medium" style={{ color: "#22c55e" }}>
+          <span className="inline-block w-2 h-2 rounded-full bg-ok" />
+          <span className="text-xs font-medium text-ok">
             {t("onboarding.connected")}
             {phoneNumber ? ` (+${phoneNumber})` : ""}
           </span>
         </div>
-        <div className="text-[10px] mt-1" style={{ color: "var(--muted)" }}>
+        <div className="text-[10px] mt-1 text-muted">
           {onConnected
             ? "Installing WhatsApp plugin and restarting agent..."
             : "WhatsApp is paired. Auth state is saved for automatic reconnection."}
@@ -77,14 +68,8 @@ export function WhatsAppQrOverlay({
   // ── Error / Timeout ──────────────────────────────────────────────────
   if (status === "error" || status === "timeout") {
     return (
-      <div
-        className="p-4 mt-3"
-        style={{
-          border: "1px solid #ef4444",
-          background: "var(--destructive-subtle)",
-        }}
-      >
-        <div className="text-xs mb-2" style={{ color: "#ef4444" }}>
+      <div className="p-4 mt-3 border border-danger bg-[var(--destructive-subtle)]">
+        <div className="text-xs mb-2 text-danger">
           {status === "timeout"
             ? "QR code expired. Please try again."
             : (error ?? "An error occurred.")}
@@ -108,20 +93,11 @@ export function WhatsAppQrOverlay({
   // ── Idle ──────────────────────────────────────────────────────────────
   if (status === "idle" || status === "disconnected") {
     return (
-      <div
-        className="p-4 mt-3"
-        style={{
-          border: "1px solid var(--border)",
-          background: "var(--bg-hover)",
-        }}
-      >
-        <div className="text-xs mb-2" style={{ color: "var(--muted)" }}>
+      <div className="p-4 mt-3 border border-[var(--border)] bg-[var(--bg-hover)]">
+        <div className="text-xs mb-2 text-muted">
           {t("whatsappqroverlay.ScanAQRCodeWith")}
         </div>
-        <div
-          className="text-[10px] mb-2 opacity-70"
-          style={{ color: "var(--muted)" }}
-        >
+        <div className="text-[10px] mb-2 opacity-70 text-muted">
           {t("whatsappqroverlay.UsesAnUnofficialW")}
         </div>
         <Button
@@ -170,10 +146,7 @@ export function WhatsAppQrOverlay({
                 background: "var(--bg-hover)",
               }}
             >
-              <span
-                className="text-xs animate-pulse"
-                style={{ color: "var(--muted)" }}
-              >
+              <span className="text-xs animate-pulse text-muted">
                 {t("whatsappqroverlay.GeneratingQR")}
               </span>
             </div>
