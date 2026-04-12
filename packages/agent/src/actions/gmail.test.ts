@@ -890,6 +890,33 @@ describeLLM("gmailAction", () => {
     expect(result).toMatchObject({ success: true });
   });
 
+  it("accepts recipient and cc lists passed as natural string fields", async () => {
+    mockSendGmailMessage.mockResolvedValue({ ok: true });
+
+    const result = await invoke("send this email", {
+      subaction: "send_message",
+      details: {
+        to: 'Mira <mira@example.com>; ops@example.com',
+        cc: '"Ops Team" <ops@example.com>',
+        subject: "hola",
+        bodyText: "nos vemos manana",
+        confirmSend: true,
+      },
+    });
+
+    expect(mockSendGmailMessage).toHaveBeenCalledWith(
+      expect.any(URL),
+      expect.objectContaining({
+        to: ["Mira <mira@example.com>", "ops@example.com"],
+        cc: ['"Ops Team" <ops@example.com>'],
+        subject: "hola",
+        bodyText: "nos vemos manana",
+        confirmSend: true,
+      }),
+    );
+    expect(result).toMatchObject({ success: true });
+  });
+
   it("asks for missing compose fields without quote-specific instructions", async () => {
     const runtime = makeRuntimeWithModelResponses(
       JSON.stringify({

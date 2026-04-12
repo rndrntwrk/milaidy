@@ -8,6 +8,10 @@ import type {
 } from "@elizaos/core";
 import { ModelType, parseJSONObjectFromText } from "@elizaos/core";
 import {
+  getValidationKeywordTerms,
+  textIncludesKeywordTerm,
+} from "@miladyai/shared/validation-keywords";
+import {
   extractDurationMinutesFromText,
   extractWebsiteTargetsFromText,
   normalizeWebsiteTargets,
@@ -105,6 +109,13 @@ type LifeAction =
   | "next_event"
   | "email"
   | "overview";
+
+const LIFE_EMAIL_QUERY_TERMS = getValidationKeywordTerms(
+  "contextSignal.gmail.strong",
+  {
+    includeAllLocales: true,
+  },
+);
 
 const ACTION_TO_OPERATION: Record<LifeAction, LifeOperation> = {
   create: "create_definition",
@@ -367,6 +378,9 @@ type DeferredLifeDraftReuseMode = "confirm" | "edit";
 
 export function classifyIntent(intent: string): LifeOperation {
   const lower = intent.toLowerCase();
+  const hasEmailIntentTerm = LIFE_EMAIL_QUERY_TERMS.some((term) =>
+    textIncludesKeywordTerm(lower, term),
+  );
 
   if (
     /\b(remind|reminder|ping|message|nudge)\b.*\b(less|fewer|more|again|back on|resume|normal)\b/.test(
@@ -439,9 +453,8 @@ export function classifyIntent(intent: string): LifeOperation {
     return "query_calendar_today";
   }
   if (
-    /\b(emails?|inbox|mail|messages?|gmail|respond to|important.*(need|should|must))\b/.test(
-      lower,
-    )
+    hasEmailIntentTerm ||
+    /\b(respond to|important.*(need|should|must))\b/.test(lower)
   )
     return "query_email";
   if (
@@ -3690,13 +3703,20 @@ export const lifeAction: Action = {
           }
           if (llmPlan) {
             llmRequestKind = llmPlan.requestKind;
-            if (llmPlan.title && !hadExplicitTitle) {
-              title =
-                derivedTitle && hasSpecificDerivedDefinitionDetails(intent)
-                  ? derivedTitle
-                  : preferDerivedDefinition || !seed
-                    ? llmPlan.title
-                    : seed.title;
+            const preferredPlannerTitle =
+              derivedTitle && hasSpecificDerivedDefinitionDetails(intent)
+                ? derivedTitle
+                : preferDerivedDefinition || !seed
+                  ? llmPlan.title
+                  : seed.title;
+            if (
+              !hadExplicitTitle &&
+              shouldAdoptPlannerTitle({
+                currentTitle: title,
+                plannerTitle: preferredPlannerTitle,
+              })
+            ) {
+              title = preferredPlannerTitle;
             }
             if (
               (editingDeferredDefinitionDraft || !hadExplicitCadence) &&
@@ -3713,7 +3733,13 @@ export const lifeAction: Action = {
                 intent,
                 timeZone: llmCadenceTimeZone ?? undefined,
               });
-              if (llmCadence) {
+              if (
+                llmCadence &&
+                shouldAdoptPlannerCadence({
+                  currentCadence: cadence,
+                  plannerCadence: llmCadence.cadence,
+                })
+              ) {
                 cadence = llmCadence.cadence;
                 windowPolicy = llmCadence.windowPolicy ?? windowPolicy;
               }

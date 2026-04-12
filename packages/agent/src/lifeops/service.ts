@@ -1867,6 +1867,75 @@ function parseGmailDateBoundary(value: string): number | null {
   return Date.UTC(year, month - 1, day, 0, 0, 0, 0);
 }
 
+function splitMailboxLikeList(value: string): string[] {
+  const parts: string[] = [];
+  let current = "";
+  let inQuotes = false;
+  let angleDepth = 0;
+
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index];
+    const next = value[index + 1];
+    if (char === '"') {
+      inQuotes = !inQuotes;
+      current += char;
+      continue;
+    }
+    if (!inQuotes && char === "<") {
+      angleDepth += 1;
+      current += char;
+      continue;
+    }
+    if (!inQuotes && char === ">") {
+      angleDepth = Math.max(0, angleDepth - 1);
+      current += char;
+      continue;
+    }
+    if (!inQuotes && angleDepth === 0 && char === "|" && next === "|") {
+      const trimmed = current.trim();
+      if (trimmed.length > 0) {
+        parts.push(trimmed);
+      }
+      current = "";
+      index += 1;
+      continue;
+    }
+    if (!inQuotes && angleDepth === 0 && (char === "," || char === ";" || char === "\n")) {
+      const trimmed = current.trim();
+      if (trimmed.length > 0) {
+        parts.push(trimmed);
+      }
+      current = "";
+      continue;
+    }
+    current += char;
+  }
+
+  const trimmed = current.trim();
+  if (trimmed.length > 0) {
+    parts.push(trimmed);
+  }
+  return parts;
+}
+
+function extractNormalizedEmailAddress(value: string): string | null {
+  const trimmed = value.trim().replace(/^mailto:/i, "");
+  if (!trimmed) {
+    return null;
+  }
+  const angleMatch = trimmed.match(/<\s*([^<>\s@]+@[^<>\s@]+)\s*>/u);
+  const rawCandidate =
+    angleMatch?.[1] ??
+    trimmed.match(/([^\s<>()"';,]+@[^\s<>()"';,]+)/u)?.[1] ??
+    trimmed;
+  const normalized = rawCandidate
+    .trim()
+    .replace(/^["']+|["']+$/g, "")
+    .replace(/[>;,\s]+$/g, "")
+    .toLowerCase();
+  return /^[^@\s]+@[^@\s]+\.[^@\s]+$/u.test(normalized) ? normalized : null;
+}
+
 function normalizeOptionalMessageIdArray(
   value: unknown,
   field: string,
@@ -1921,13 +1990,24 @@ function normalizeGmailSearchQueryMatches(
   const tokens: string[] = [];
   let current = "";
   let inQuotes = false;
+  let braceDepth = 0;
   for (const char of query.trim()) {
     if (char === '"') {
       inQuotes = !inQuotes;
       current += char;
       continue;
     }
-    if (!inQuotes && /\s/.test(char)) {
+    if (!inQuotes && char === "{") {
+      braceDepth += 1;
+      current += char;
+      continue;
+    }
+    if (!inQuotes && char === "}") {
+      braceDepth = Math.max(0, braceDepth - 1);
+      current += char;
+      continue;
+    }
+    if (!inQuotes && braceDepth === 0 && /\s/.test(char)) {
       if (current.length > 0) {
         tokens.push(current);
         current = "";
@@ -1942,75 +2022,130 @@ function normalizeGmailSearchQueryMatches(
   if (tokens.length === 0) {
     return false;
   }
+
+  const matchesToken = (token: string): boolean => {
+    const normalizedToken = token.trim();
+    if (normalizedToken.length === 0) {
+      return true;
+    }
+    const isNegated = normalizedToken.startsWith("-");
+    const tokenBody = isNegated ? normalizedToken.slice(1).trim() : normalizedToken;
+    if (!tokenBody) {
+      return true;
+    }
+    if (tokenBody.startsWith("{") && tokenBody.endsWith("}")) {
+      const groupMembers = tokenBody
+        .slice(1, -1)
+        .trim()
+        .split(/\s+/)
+        .map((entry) => entry.trim())
+        .filter(Boolean);
+      if (groupMembers.length === 0) {
+        return true;
+      }
+      const groupMatched = groupMembers.some((entry) => matchesToken(entry));
+      return isNegated ? !groupMatched : groupMatched;
+    }
+    const operatorMatch = tokenBody.match(/^([a-z_]+):(.*)$/i);
+    const rawValue = operatorMatch ? operatorMatch[2] : tokenBody;
+    const value = rawValue.replace(/^"|"$/g, "").trim().toLowerCase();
+    if (value.length === 0) {
+      return true;
+    }
+
+    const labelTokens = message.labels.map((label) => label.toLowerCase());
+    const hasAttachment =
+      typeof message.metadata?.hasAttachments === "boolean"
+        ? message.metadata.hasAttachments === true
+        : /\battach(?:ed|ment|ments)?\b/i.test(
+            `${message.subject} ${message.snippet}`,
+          );
+    const matched = (() => {
+      if (!operatorMatch) {
+        return all.includes(value);
+      }
+
+      const operator = operatorMatch[1].toLowerCase();
+      switch (operator) {
+        case "from":
+          if (value === "me") {
+            return labelTokens.includes("sent");
+          }
+          return sender.includes(value);
+        case "subject":
+          return subject.includes(value);
+        case "to":
+          return to.includes(value);
+        case "cc":
+          return cc.includes(value);
+        case "label":
+        case "labels":
+          return labels.includes(value);
+        case "category":
+          return labelTokens.includes(`category_${value}`);
+        case "in":
+          return value === "anywhere" ? true : labelTokens.includes(value);
+        case "has":
+          return value === "attachment" ? hasAttachment : all.includes(value);
+        case "is":
+          if (value === "unread") {
+            return message.isUnread;
+          }
+          if (value === "read") {
+            return !message.isUnread;
+          }
+          if (value === "important") {
+            return message.isImportant;
+          }
+          if (value === "starred") {
+            return labelTokens.includes("starred");
+          }
+          return all.includes(value);
+        case "newer_than": {
+          const relativeMs = parseGmailRelativeDuration(value);
+          return relativeMs === null
+            ? all.includes(value)
+            : receivedAtMs >= nowMs - relativeMs;
+        }
+        case "older_than": {
+          const relativeMs = parseGmailRelativeDuration(value);
+          return relativeMs === null
+            ? all.includes(value)
+            : receivedAtMs <= nowMs - relativeMs;
+        }
+        case "after": {
+          const boundary = parseGmailDateBoundary(value);
+          return boundary === null
+            ? all.includes(value)
+            : receivedAtMs >= boundary;
+        }
+        case "before": {
+          const boundary = parseGmailDateBoundary(value);
+          return boundary === null
+            ? all.includes(value)
+            : receivedAtMs < boundary;
+        }
+        default:
+          return all.includes(value);
+      }
+    })();
+    return isNegated ? !matched : matched;
+  };
+
   return tokens.every((token) => {
     const normalizedToken = token.trim();
     if (normalizedToken.length === 0) {
       return true;
     }
     const operatorMatch = normalizedToken.match(/^([a-z_]+):(.*)$/i);
-    const rawValue = operatorMatch ? operatorMatch[2] : normalizedToken;
-    const value = rawValue.replace(/^"|"$/g, "").trim().toLowerCase();
-    if (value.length === 0) {
-      return true;
+    if (
+      operatorMatch &&
+      operatorMatch[1].toLowerCase() === "or" &&
+      operatorMatch[2]
+    ) {
+      return matchesToken(operatorMatch[2]);
     }
-
-    if (!operatorMatch) {
-      return all.includes(value);
-    }
-
-    const operator = operatorMatch[1].toLowerCase();
-    switch (operator) {
-      case "from":
-        return sender.includes(value);
-      case "subject":
-        return subject.includes(value);
-      case "to":
-        return to.includes(value);
-      case "cc":
-        return cc.includes(value);
-      case "label":
-      case "labels":
-        return labels.includes(value);
-      case "in":
-        return value === "anywhere" ? true : labels.includes(value);
-      case "is":
-        if (value === "unread") {
-          return message.isUnread;
-        }
-        if (value === "read") {
-          return !message.isUnread;
-        }
-        if (value === "important") {
-          return message.isImportant;
-        }
-        return all.includes(value);
-      case "newer_than": {
-        const relativeMs = parseGmailRelativeDuration(value);
-        return relativeMs === null
-          ? all.includes(value)
-          : receivedAtMs >= nowMs - relativeMs;
-      }
-      case "older_than": {
-        const relativeMs = parseGmailRelativeDuration(value);
-        return relativeMs === null
-          ? all.includes(value)
-          : receivedAtMs <= nowMs - relativeMs;
-      }
-      case "after": {
-        const boundary = parseGmailDateBoundary(value);
-        return boundary === null
-          ? all.includes(value)
-          : receivedAtMs >= boundary;
-      }
-      case "before": {
-        const boundary = parseGmailDateBoundary(value);
-        return boundary === null
-          ? all.includes(value)
-          : receivedAtMs < boundary;
-      }
-      default:
-        return all.includes(value);
-    }
+    return matchesToken(normalizedToken);
   });
 }
 
@@ -2051,17 +2186,17 @@ function normalizeOptionalStringArray(
   if (value === undefined) {
     return undefined;
   }
-  if (!Array.isArray(value)) {
-    fail(400, `${field} must be an array`);
-  }
+  const rawValues = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? splitMailboxLikeList(value)
+      : fail(400, `${field} must be an array or string`);
   const items: string[] = [];
   const seen = new Set<string>();
-  for (const [index, candidate] of value.entries()) {
-    const item = requireNonEmptyString(
-      candidate,
-      `${field}[${index}]`,
-    ).toLowerCase();
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(item)) {
+  for (const [index, candidate] of rawValues.entries()) {
+    const source = requireNonEmptyString(candidate, `${field}[${index}]`);
+    const item = extractNormalizedEmailAddress(source);
+    if (!item) {
       fail(400, `${field}[${index}] must be a valid email address`);
     }
     if (seen.has(item)) {
@@ -2221,13 +2356,8 @@ function buildFallbackGmailReplyDraftBody(args: {
   const recipientLabel =
     args.message.from.split("<")[0]?.trim() ||
     args.message.fromEmail ||
-    "there";
-  const greeting =
-    args.tone === "brief"
-      ? `Hi ${recipientLabel},`
-      : args.tone === "warm"
-        ? `Hi ${recipientLabel},`
-        : `Hello ${recipientLabel},`;
+    "friend";
+  const greeting = args.intent?.trim() ? `${recipientLabel},` : `Hi ${recipientLabel},`;
   const subject = args.message.subject.trim() || "your message";
   const bodyCore = args.intent?.trim()
     ? args.intent.trim()
@@ -2236,9 +2366,15 @@ function buildFallbackGmailReplyDraftBody(args: {
       : args.tone === "warm"
         ? `Thanks for reaching out about ${subject}. I reviewed your note and wanted to follow up.`
         : `Thanks for the note about ${subject}. I reviewed your message and wanted to follow up.`;
-  const bodyLines = [greeting, "", bodyCore, "", "Best,", args.senderName];
+  const bodyLines = [greeting, "", bodyCore, "", args.senderName];
   if (args.includeQuotedOriginal && args.message.snippet.trim().length > 0) {
-    bodyLines.push("", "Quoted context:", args.message.snippet.trim());
+    bodyLines.push(
+      "",
+      ...args.message.snippet
+        .trim()
+        .split("\n")
+        .map((line) => `> ${line.trim()}`),
+    );
   }
 
   return bodyLines.join("\n");
@@ -11739,6 +11875,7 @@ export class LifeOpsService {
         "- Return only the email body text.",
         "- Sound natural and in character, but keep it appropriate for email.",
         "- Preserve the user's requested wording and intent when it is provided.",
+        "- Write in the user's requested language, or the source email's language when that is clear, unless the user asked to translate.",
         "- Do not invent facts, promises, dates, attachments, or commitments that are not in the context.",
         "- Keep it concise unless the user's wording clearly asks for more detail.",
         "- Include a greeting and a sign-off.",

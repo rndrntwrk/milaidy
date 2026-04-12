@@ -148,6 +148,7 @@ export default defineConfig({
       shuffle: false,
     },
     execArgv: ["--max-old-space-size=4096"],
+    setupFiles: ["test/setup.ts"],
     include: [
       "**/*.live.test.ts",
       "**/*.live.test.tsx",
