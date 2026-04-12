@@ -141,6 +141,7 @@
     "smoke:api-status:prod": "node scripts/smoke-api-status.mjs https://milady.ai https://app.milady.ai",
     "smoke:lifeops": "node scripts/smoke-lifeops.mjs",
     "lifeops:scenarios": "bun scripts/run-node-tsx.mjs scripts/lifeops-scenario-runner.ts",
+    "lifeops:browser:package:release": "cd apps/extensions/lifeops-browser && bun run package:release",
     "ui:sync:desktop": "node scripts/sync-desktop-renderer.mjs",
     "ui:sync:desktop:watch": "node scripts/sync-desktop-renderer.mjs --watch",
     "start": "node scripts/rt.mjs scripts/run-node.mjs start",

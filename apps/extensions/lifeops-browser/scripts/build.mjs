@@ -1,6 +1,10 @@
 #!/usr/bin/env bun
 import fs from "node:fs/promises";
 import path from "node:path";
+import {
+  buildChromeExtensionVersion,
+  resolveLifeOpsBrowserReleaseVersion,
+} from "./release-version.mjs";
 
 const browserKind = process.argv[2] === "safari" ? "safari" : "chrome";
 const extensionRoot = path.resolve(import.meta.dir, "..");
@@ -16,6 +20,8 @@ const iosPublicDir = path.resolve(
   "App",
   "public",
 );
+const release = resolveLifeOpsBrowserReleaseVersion();
+const extensionVersion = buildChromeExtensionVersion(release);
 
 await fs.rm(distDir, { recursive: true, force: true });
 await fs.mkdir(distDir, { recursive: true });
@@ -66,7 +72,8 @@ for (const [fileName, sourcePath] of iconSources) {
 const manifest = {
   manifest_version: 3,
   name: "LifeOps Browser",
-  version: "0.1.0",
+  version: extensionVersion,
+  version_name: release.raw,
   description:
     "LifeOps personal-browser relay for syncing the current page and executing owner-approved browser sessions.",
   permissions: ["tabs", "storage", "scripting", "alarms", "activeTab"],
@@ -105,4 +112,6 @@ await fs.writeFile(
   `${JSON.stringify(manifest, null, 2)}\n`,
 );
 
-console.log(`Built LifeOps Browser extension to ${distDir}`);
+console.log(
+  `Built LifeOps Browser extension ${release.raw} (${extensionVersion}) to ${distDir}`,
+);

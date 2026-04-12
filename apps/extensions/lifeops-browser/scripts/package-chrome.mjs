@@ -3,6 +3,11 @@ import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  buildLifeOpsBrowserReleaseMetadata,
+  resolveLifeOpsBrowserReleaseVersion,
+  versionedArtifactName,
+} from "./release-version.mjs";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const extensionRoot = path.resolve(scriptDir, "..");
@@ -10,6 +15,12 @@ const distDir = path.join(extensionRoot, "dist");
 const chromeDistDir = path.join(distDir, "chrome");
 const artifactsDir = path.join(distDir, "artifacts");
 const artifactPath = path.join(artifactsDir, "lifeops-browser-chrome.zip");
+const release = resolveLifeOpsBrowserReleaseVersion();
+const metadata = buildLifeOpsBrowserReleaseMetadata(release);
+const versionedArtifactPath = path.join(
+  artifactsDir,
+  versionedArtifactName("lifeops-browser-chrome", "zip", release),
+);
 
 function run(command, args, options = {}) {
   return new Promise((resolve, reject) => {
@@ -38,10 +49,14 @@ await run("bun", [path.join(scriptDir, "build.mjs"), "chrome"], {
 
 await fs.mkdir(artifactsDir, { recursive: true });
 await fs.rm(artifactPath, { force: true });
+await fs.rm(versionedArtifactPath, { force: true });
 await fs.access(path.join(chromeDistDir, "manifest.json"));
 
 await run("zip", ["-qr", artifactPath, "chrome"], {
   cwd: distDir,
 });
+await fs.copyFile(artifactPath, versionedArtifactPath);
 
-console.log(`Packaged Chrome extension at ${artifactPath}`);
+console.log(
+  `Packaged Chrome extension ${metadata.chromeVersionName} at ${artifactPath} and ${versionedArtifactPath}`,
+);
