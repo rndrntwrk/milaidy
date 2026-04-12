@@ -295,6 +295,7 @@ async function startLiveRuntime(): Promise<StartedRuntime> {
       SELFCONTROL_HOSTS_FILE_PATH: hostsFilePath,
       ELIZA_DISABLE_LOCAL_EMBEDDINGS: "1",
       MILADY_DISABLE_LOCAL_EMBEDDINGS: "1",
+      ALLOW_NO_DATABASE: "",
       DISCORD_API_TOKEN: "",
       DISCORD_BOT_TOKEN: "",
       TELEGRAM_BOT_TOKEN: "",

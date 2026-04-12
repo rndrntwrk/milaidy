@@ -193,6 +193,7 @@ async function startDevStack(): Promise<StartedDevStack> {
       MILADY_DISABLE_LOCAL_EMBEDDINGS: "1",
       MILADY_PORT: String(uiPort),
       MILADY_STATE_DIR: stateDir,
+      ALLOW_NO_DATABASE: "",
       SELFCONTROL_HOSTS_FILE_PATH: hostsFilePath,
       WEBSITE_BLOCKER_HOSTS_FILE_PATH: hostsFilePath,
     },

@@ -69,6 +69,18 @@ describe("native feature bootstrap wiring", () => {
     );
   });
 
+  it("guards plugin-experience bootstrap behind a runtime require", () => {
+    expect(elizaSource).not.toContain(
+      'import * as pluginExperience from "@elizaos/plugin-experience";',
+    );
+    expect(elizaSource).toContain(
+      'pluginExperience = require("@elizaos/plugin-experience");',
+    );
+    expect(elizaSource).toContain(
+      '"@elizaos/plugin-experience": pluginExperience',
+    );
+  });
+
   it("guards trajectory bootstrap behind the native trajectories toggle", () => {
     const waitBlock =
       elizaSource.match(

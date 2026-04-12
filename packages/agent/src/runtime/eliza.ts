@@ -61,7 +61,6 @@ import {
 } from "@elizaos/core";
 import * as pluginAgentSkills from "@elizaos/plugin-agent-skills";
 import * as pluginAnthropic from "@elizaos/plugin-anthropic";
-import * as pluginExperience from "@elizaos/plugin-experience";
 import * as pluginForm from "@elizaos/plugin-form";
 import * as pluginLocalEmbedding from "@elizaos/plugin-local-embedding";
 import * as pluginOllama from "@elizaos/plugin-ollama";
@@ -173,6 +172,15 @@ try {
 } catch {
   pluginElizacloud = null;
 }
+// Keep plugin-experience behind a guarded runtime require too. Some published
+// alpha builds advertise dist/node/index.node.js without shipping that entry,
+// which breaks CLI and runtime startup in published-only CI.
+let pluginExperience: unknown = null;
+try {
+  pluginExperience = require("@elizaos/plugin-experience");
+} catch {
+  pluginExperience = null;
+}
 
 type SignalShutdownContext = {
   getRuntime: () => AgentRuntime;
@@ -276,7 +284,9 @@ export const STATIC_ELIZA_PLUGINS: Record<string, unknown> = {
   "@miladyai/plugin-selfcontrol": pluginSelfControl,
   "@miladyai/plugin-discord-local": discordLocalPlugin,
   "@elizaos/plugin-personality": pluginPersonality,
-  "@elizaos/plugin-experience": pluginExperience,
+  ...(pluginExperience
+    ? { "@elizaos/plugin-experience": pluginExperience }
+    : {}),
 };
 
 // NODE_PATH so dynamic plugin imports (e.g. @elizaos/plugin-agent-orchestrator) resolve.
