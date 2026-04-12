@@ -430,12 +430,10 @@ describeIf(LIVE_TESTS_ENABLED)(
 );
 
 describeIf(
-  !(
-    LIVE_TESTS_ENABLED &&
+  LIVE_TESTS_ENABLED &&
     LIVE_CHAT_TESTS_ENABLED &&
     selectedLiveProvider &&
-    selectedLiveProviderPlugin
-  ),
+    selectedLiveProviderPlugin,
 )("Live: website blocker chat roundtrip", () => {
   let runtime: StartedRuntime | undefined;
 

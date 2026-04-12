@@ -71,6 +71,16 @@ describe("native feature bootstrap wiring", () => {
     );
   });
 
+  it("guards plugin-shell bootstrap behind a runtime require", () => {
+    expect(elizaSource).not.toContain(
+      'import * as pluginShell from "@elizaos/plugin-shell";',
+    );
+    expect(elizaSource).toContain(
+      'pluginShell = require("@elizaos/plugin-shell");',
+    );
+    expect(elizaSource).toContain('"@elizaos/plugin-shell": pluginShell');
+  });
+
   it("guards plugin-cron bootstrap behind a runtime require", () => {
     expect(elizaSource).not.toContain(
       'import * as pluginCron from "@elizaos/plugin-cron";',

@@ -64,7 +64,6 @@ import * as pluginAnthropic from "@elizaos/plugin-anthropic";
 import * as pluginForm from "@elizaos/plugin-form";
 import * as pluginLocalEmbedding from "@elizaos/plugin-local-embedding";
 import * as pluginPdf from "@elizaos/plugin-pdf";
-import * as pluginShell from "@elizaos/plugin-shell";
 import * as pluginSql from "@elizaos/plugin-sql";
 import * as pluginTrust from "@elizaos/plugin-trust";
 import rolesPlugin from "./roles/src/index.js";
@@ -139,6 +138,15 @@ try {
   pluginAgentOrchestrator = require("./agent-orchestrator-compat");
 } catch {
   pluginAgentOrchestrator = null;
+}
+// Keep plugin-shell behind a guarded runtime require too. The published alpha
+// tarball can declare dist/index.js without actually shipping it, which breaks
+// CLI/bootstrap in published-only CI.
+let pluginShell: unknown = null;
+try {
+  pluginShell = require("@elizaos/plugin-shell");
+} catch {
+  pluginShell = null;
 }
 // Keep plugin-commands behind a guarded runtime require. Some published alpha
 // builds advertise dist/index.js without actually shipping it, and a static
@@ -311,7 +319,7 @@ export const STATIC_ELIZA_PLUGINS: Record<string, unknown> = {
     ? { "@elizaos/plugin-agent-orchestrator": pluginAgentOrchestrator }
     : {}),
   ...(pluginCron ? { "@elizaos/plugin-cron": pluginCron } : {}),
-  "@elizaos/plugin-shell": pluginShell,
+  ...(pluginShell ? { "@elizaos/plugin-shell": pluginShell } : {}),
   ...(pluginPluginManager
     ? { "@elizaos/plugin-plugin-manager": pluginPluginManager }
     : {}),
