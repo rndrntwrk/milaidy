@@ -1,7 +1,4 @@
-import {
-  LANGUAGE_DROPDOWN_TRIGGER_CLASSNAME,
-  LanguageDropdown,
-} from "@miladyai/app-core/components";
+import { LanguageDropdown } from "@miladyai/app-core/components";
 import {
   dispatchWindowEvent,
   ONBOARDING_VOICE_PREVIEW_AWAIT_TELEPORT_EVENT,
@@ -192,7 +189,7 @@ export function OnboardingWizard() {
         <div
           style={{
             position: "absolute",
-            top: "calc(var(--safe-area-top, 0px) + 1rem)",
+            top: "calc(var(--safe-area-top, 0px) + 0.5rem)",
             right: "calc(var(--safe-area-right, 0px) + 1rem)",
             zIndex: 50,
             display: "flex",
@@ -206,7 +203,7 @@ export function OnboardingWizard() {
             setUiLanguage={setUiLanguage}
             t={t}
             variant="companion"
-            triggerClassName={LANGUAGE_DROPDOWN_TRIGGER_CLASSNAME}
+            triggerClassName="!h-8 !min-h-0 !min-w-0 !rounded-lg !px-2.5 !text-xs leading-none"
           />
         </div>
 
@@ -217,6 +214,7 @@ export function OnboardingWizard() {
           </div>
         ) : onboardingStep === "identity" ? (
           <div className="absolute inset-0 z-20 flex flex-col justify-end pointer-events-none [&>*]:pointer-events-auto">
+            <OnboardingStepNav />
             <IdentityStep />
           </div>
         ) : (
