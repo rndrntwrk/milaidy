@@ -59,7 +59,7 @@ const requiredWorkflowSnippets = [
   "run: bun run release:check",
   "build-browser-companions:",
   "name: Build LifeOps Browser companions",
-  "run: bun run lifeops:browser:package:release",
+  "if bun run lifeops:browser:package:release; then",
   'echo "packaged=true" >> "$GITHUB_OUTPUT"',
   "LifeOps Browser packaging failed; desktop release will continue without browser companion bundles.",
   "name: Upload LifeOps Browser release artifacts",
