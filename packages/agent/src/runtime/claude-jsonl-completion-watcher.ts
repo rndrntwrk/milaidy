@@ -246,22 +246,23 @@ export async function findLatestJsonl(workdir: string): Promise<string | null> {
   }
   const jsonls = entries.filter((f) => f.endsWith(".jsonl"));
   if (jsonls.length === 0) return null;
-  if (jsonls.length === 1) return path.join(projectDir, jsonls[0]);
-  // Sort by modification time (newest first). UUID-based filenames have no
-  // chronological order when sorted lexicographically.
-  const withMtime = await Promise.all(
-    jsonls.map(async (f) => {
-      const full = path.join(projectDir, f);
+  const stats = await Promise.all(
+    jsonls.map(async (name) => {
+      const full = path.join(projectDir, name);
       try {
-        const stat = await fs.stat(full);
-        return { f, mtime: stat.mtimeMs };
+        const st = await fs.stat(full);
+        return { full, mtimeMs: st.mtimeMs };
       } catch {
-        return { f, mtime: 0 };
+        return null;
       }
     }),
   );
-  withMtime.sort((a, b) => b.mtime - a.mtime);
-  return path.join(projectDir, withMtime[0].f);
+  let newest: { full: string; mtimeMs: number } | null = null;
+  for (const entry of stats) {
+    if (!entry) continue;
+    if (!newest || entry.mtimeMs > newest.mtimeMs) newest = entry;
+  }
+  return newest?.full ?? null;
 }
 
 /**
