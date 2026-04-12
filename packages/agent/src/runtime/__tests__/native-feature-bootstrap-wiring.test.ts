@@ -91,6 +91,16 @@ describe("native feature bootstrap wiring", () => {
     expect(elizaSource).toContain('"@elizaos/plugin-ollama": pluginOllama');
   });
 
+  it("guards plugin-openai bootstrap behind a runtime require", () => {
+    expect(elizaSource).not.toContain(
+      'import * as pluginOpenai from "@elizaos/plugin-openai";',
+    );
+    expect(elizaSource).toContain(
+      'pluginOpenai = require("@elizaos/plugin-openai");',
+    );
+    expect(elizaSource).toContain('"@elizaos/plugin-openai": pluginOpenai');
+  });
+
   it("guards trajectory bootstrap behind the native trajectories toggle", () => {
     const waitBlock =
       elizaSource.match(

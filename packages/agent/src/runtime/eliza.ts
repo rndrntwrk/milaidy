@@ -63,7 +63,6 @@ import * as pluginAgentSkills from "@elizaos/plugin-agent-skills";
 import * as pluginAnthropic from "@elizaos/plugin-anthropic";
 import * as pluginForm from "@elizaos/plugin-form";
 import * as pluginLocalEmbedding from "@elizaos/plugin-local-embedding";
-import * as pluginOpenai from "@elizaos/plugin-openai";
 import * as pluginPdf from "@elizaos/plugin-pdf";
 import * as pluginPersonality from "@elizaos/plugin-personality";
 import * as pluginPluginManager from "@elizaos/plugin-plugin-manager";
@@ -189,6 +188,15 @@ try {
 } catch {
   pluginOllama = null;
 }
+// Keep plugin-openai behind a guarded runtime require too. Some published
+// alpha builds advertise dist/node/index.node.js without shipping that entry,
+// which breaks CLI bootstrap and validation in published-only CI.
+let pluginOpenai: unknown = null;
+try {
+  pluginOpenai = require("@elizaos/plugin-openai");
+} catch {
+  pluginOpenai = null;
+}
 
 type SignalShutdownContext = {
   getRuntime: () => AgentRuntime;
@@ -282,7 +290,7 @@ export const STATIC_ELIZA_PLUGINS: Record<string, unknown> = {
   "@elizaos/plugin-agent-skills": pluginAgentSkills,
   ...(pluginCommands ? { "@elizaos/plugin-commands": pluginCommands } : {}),
   "@elizaos/plugin-pdf": pluginPdf,
-  "@elizaos/plugin-openai": pluginOpenai,
+  ...(pluginOpenai ? { "@elizaos/plugin-openai": pluginOpenai } : {}),
   "@elizaos/plugin-anthropic": pluginAnthropic,
   ...(pluginOllama ? { "@elizaos/plugin-ollama": pluginOllama } : {}),
   ...(pluginElizacloud
