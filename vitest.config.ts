@@ -71,21 +71,16 @@ const elizaPluginAliases = workspacePluginPackageNames.flatMap(
     return aliases;
   },
 );
-// Stub @elizaos/plugin-* packages whose npm tarball has a broken or missing
-// entry point (e.g. dist/index.js absent). Without this, vi.mock() factory
-// calls still fail because vitest cannot resolve the module specifier.
-const unresolvedPluginStubs = workspacePluginPackageNames
-  .filter((name) => !resolvedPluginNames.has(name))
-  .map((name) => ({
-    find: name,
-    replacement: path.join(repoRoot, "test", "stubs", "plugin-stub.mjs"),
-  }));
+
 const isCI = process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true";
 const isWindows = process.platform === "win32";
 const localWorkers = 2;
 const ciWorkers = isWindows ? 2 : 3;
 
-export default defineConfig(            {
+export default defineConfig({
+  resolve: {
+    alias: [
+      {
         find: "milady/plugin-sdk",
         replacement: path.join(repoRoot, "src", "plugin-sdk", "index.ts"),
       },
@@ -119,9 +114,7 @@ export default defineConfig(            {
             ...elizaPluginAliases.filter(
               (alias) => alias.find !== "@elizaos/plugin-plugin-manager",
             ),
-            ...unresolvedPluginStubs.filter(
-              (alias) => alias.find !== "@elizaos/plugin-plugin-manager",
-            ),
+
           ]
         : []),
       ...(autonomousSourceRoot
@@ -141,8 +134,7 @@ export default defineConfig(            {
               ),
             },
           ]
-        : [
-                                  ]),
+        : []),
       ...(appCoreSourceRoot
         ? [
                                                             {
@@ -164,8 +156,7 @@ export default defineConfig(            {
               ),
             },
           ]
-        : [
-                      ]),
+        : []),
       // @miladyai/shared — always resolve subpath imports from source
       {
         find: /^@miladyai\/plugin-selfcontrol\/(.*)/,

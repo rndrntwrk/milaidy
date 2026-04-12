@@ -6,7 +6,7 @@
  * POST /api/shopify/products                         body: { title, vendor?, productType?, price? }
  * GET  /api/shopify/orders?status=S&limit=N
  * GET  /api/shopify/inventory
- * POST /api/shopify/inventory/:itemId/adjust         body: { delta }
+ * POST /api/shopify/inventory/:itemId/adjust         body: { delta, locationId? }
  * GET  /api/shopify/customers?q=Q&limit=N
  *
  * Credentials are read from process.env:
@@ -19,6 +19,14 @@ import { logger } from "@elizaos/core";
 import { sendJson, sendJsonError } from "./response";
 
 const API_VERSION = "2025-04";
+const ORDER_STATUS_FILTER_VALUES = [
+  "any",
+  "paid",
+  "pending",
+  "refunded",
+  "partially_refunded",
+] as const;
+const ORDER_STATUS_FILTERS = new Set<string>(ORDER_STATUS_FILTER_VALUES);
 
 /* ── Config resolution ─────────────────────────────────────────────── */
 

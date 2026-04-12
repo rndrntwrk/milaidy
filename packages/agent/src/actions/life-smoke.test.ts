@@ -333,8 +333,10 @@ describe("LIFE action -- robustness scenarios", () => {
     async () => {
       const result = await send({ intent: "asdfghjkl gibberish" });
       expect(result).toMatchObject({
-        success: false,
-        text: expect.stringMatching(/when|schedule/i),
+        success: true,
+        text: expect.stringContaining(
+          "Tell me a bit more about what you want to set up.",
+        ),
       });
     },
     60_000,

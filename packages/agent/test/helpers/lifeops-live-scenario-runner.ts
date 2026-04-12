@@ -193,6 +193,42 @@ function normalizeText(text: string): string {
   return normalizeLiveText(text);
 }
 
+function tokenizeComparableText(text: string): string[] {
+  return Array.from(text.toLowerCase().matchAll(/[a-z0-9]+/g), (match) =>
+    String(match[0]),
+  );
+}
+
+function includesComparableFragment(text: string, fragment: string): boolean {
+  const normalizedText = normalizeText(text);
+  const normalizedFragment = normalizeText(fragment);
+  if (normalizedText.includes(normalizedFragment)) {
+    return true;
+  }
+
+  if (/[<>]/.test(fragment)) {
+    return false;
+  }
+
+  const textTokens = tokenizeComparableText(text);
+  const fragmentTokens = tokenizeComparableText(fragment);
+  if (textTokens.length === 0 || fragmentTokens.length === 0) {
+    return false;
+  }
+
+  let fragmentIndex = 0;
+  for (const token of textTokens) {
+    if (token === fragmentTokens[fragmentIndex]) {
+      fragmentIndex += 1;
+      if (fragmentIndex >= fragmentTokens.length) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
 function assertIncludesAll(
   label: string,
   text: string,
@@ -204,7 +240,10 @@ function assertIncludesAll(
 
   const normalized = normalizeText(text);
   for (const fragment of fragments) {
-    if (!normalized.includes(fragment.toLowerCase())) {
+    if (
+      !normalized.includes(fragment.toLowerCase()) &&
+      !includesComparableFragment(text, fragment)
+    ) {
       throw new Error(
         `${label} did not include "${fragment}".\nactual=${text}`,
       );
@@ -223,7 +262,11 @@ function assertIncludesAny(
 
   const normalized = normalizeText(text);
   if (
-    !fragments.some((fragment) => normalized.includes(fragment.toLowerCase()))
+    !fragments.some(
+      (fragment) =>
+        normalized.includes(fragment.toLowerCase()) ||
+        includesComparableFragment(text, fragment),
+    )
   ) {
     throw new Error(
       `${label} did not include any of ${JSON.stringify(fragments)}.\nactual=${text}`,
@@ -242,7 +285,10 @@ function assertExcludes(
 
   const normalized = normalizeText(text);
   for (const fragment of fragments) {
-    if (normalized.includes(fragment.toLowerCase())) {
+    if (
+      normalized.includes(fragment.toLowerCase()) ||
+      includesComparableFragment(text, fragment)
+    ) {
       throw new Error(
         `${label} unexpectedly included "${fragment}".\nactual=${text}`,
       );

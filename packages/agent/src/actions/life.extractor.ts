@@ -175,6 +175,117 @@ function normalizeIntent(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }
 
+const CREATE_DEFINITION_SEED_RE =
+  /\b(?:invisalign|drink water|drank water|hydrate|hydration|stretch(?:ing)?|brush(?:ing)?(?: my)? teeth|vitamin(?:s)?|workout|exercise|gym|run(?:ning)?|shower|shav(?:e|ing|ed))\b/i;
+const CREATE_DEFINITION_REQUEST_RE =
+  /\b(?:todo|to do|task|habit|routine|remind(?: me)?|reminder|alarm|track|remember|add|create|set(?: up)?|make sure)\b/i;
+const TIME_HINT_RE =
+  /\b(?:today|tonight|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|next week|this week|at\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?|\d{1,2}\s*(?:am|pm))\b/i;
+const DEFAULTABLE_SCHEDULE_HINT_RE =
+  /\b(?:every(?: day| morning| night| week| weekday| weekend)?|daily|weekly|weekdays?|weekends?|during the day|after lunch|before bed|wake up|when i wake up|morning|afternoon|evening|night|lunch)\b/i;
+const EXPLICIT_TASK_PHRASE_RE = /\b(?:to|about)\s+([a-z0-9][^?.!,;]*)/i;
+const GENERIC_TASK_PHRASE_RE =
+  /^(?:my life|life|it|this|that|something|anything|stuff|a todo|todo|a task|task|a habit|habit|a routine|routine|a reminder|reminder)$/i;
+
+function hasTaskTitleSignal(text: string): boolean {
+  if (CREATE_DEFINITION_SEED_RE.test(text)) {
+    return true;
+  }
+
+  const explicitPhrase = EXPLICIT_TASK_PHRASE_RE.exec(text)?.[1];
+  if (!explicitPhrase) {
+    return false;
+  }
+
+  const normalizedPhrase = explicitPhrase
+    .trim()
+    .replace(/^(?:my|the|a|an)\s+/i, "")
+    .trim();
+  return (
+    normalizedPhrase.length > 0 &&
+    !GENERIC_TASK_PHRASE_RE.test(normalizedPhrase)
+  );
+}
+
+function hasScheduleSignal(text: string): boolean {
+  return TIME_HINT_RE.test(text) || DEFAULTABLE_SCHEDULE_HINT_RE.test(text);
+}
+
+function inferHeuristicCreateDefinitionPlan(
+  text: string,
+): ExtractedLifeOperationPlan | null {
+  const normalized = normalizeIntent(text).toLowerCase();
+  if (!normalized || !CREATE_DEFINITION_REQUEST_RE.test(normalized)) {
+    return null;
+  }
+
+  const titleSignal = hasTaskTitleSignal(normalized);
+  const scheduleSignal = hasScheduleSignal(normalized);
+  const actionable =
+    CREATE_DEFINITION_SEED_RE.test(normalized) || TIME_HINT_RE.test(normalized);
+
+  if (actionable) {
+    return {
+      operation: "create_definition",
+      confidence: 0.75,
+      missing: [],
+      shouldAct: true,
+    };
+  }
+
+  const missing: ExtractedLifeMissingField[] = [];
+  if (!titleSignal) {
+    missing.push("title");
+  }
+  if (!scheduleSignal) {
+    missing.push("schedule");
+  }
+
+  return {
+    operation: "create_definition",
+    confidence: 0.6,
+    missing,
+    shouldAct: false,
+  };
+}
+
+function applyHeuristicOperationPlan(args: {
+  currentMessage: string;
+  intent: string;
+  plan: ExtractedLifeOperationPlan | null;
+}): ExtractedLifeOperationPlan | null {
+  const heuristicPlan = inferHeuristicCreateDefinitionPlan(
+    args.currentMessage || args.intent,
+  );
+  if (!args.plan) {
+    return heuristicPlan;
+  }
+
+  if (!heuristicPlan) {
+    return args.plan;
+  }
+
+  if (args.plan.operation === null && args.plan.shouldAct === false) {
+    return heuristicPlan;
+  }
+
+  if (
+    args.plan.operation === "create_definition" &&
+    args.plan.shouldAct === false &&
+    heuristicPlan.shouldAct &&
+    args.plan.missing.every((field) => field === "title" || field === "schedule")
+  ) {
+    return {
+      operation: "create_definition",
+      confidence: Math.max(args.plan.confidence, heuristicPlan.confidence),
+      missing: [],
+      shouldAct: true,
+    };
+  }
+
+  return args.plan;
+}
+
 const REPLY_ONLY_OPERATION_PLAN: ExtractedLifeOperationPlan = {
   operation: null,
   confidence: 0,
@@ -316,7 +427,11 @@ export async function extractLifeOperationWithLlm(args: {
   try {
     const result = await runtime.useModel(ModelType.TEXT_LARGE, { prompt });
     const rawResponse = typeof result === "string" ? result : "";
-    const parsedPlan = parseResponse(rawResponse);
+    const parsedPlan = applyHeuristicOperationPlan({
+      currentMessage,
+      intent,
+      plan: parseResponse(rawResponse),
+    });
     if (parsedPlan) {
       return parsedPlan;
     }
@@ -331,7 +446,13 @@ export async function extractLifeOperationWithLlm(args: {
     });
     const repairedRawResponse =
       typeof repairResult === "string" ? repairResult : "";
-    return parseResponse(repairedRawResponse) ?? REPLY_ONLY_OPERATION_PLAN;
+    return (
+      applyHeuristicOperationPlan({
+        currentMessage,
+        intent,
+        plan: parseResponse(repairedRawResponse),
+      }) ?? REPLY_ONLY_OPERATION_PLAN
+    );
   } catch (error) {
     runtime.logger?.warn?.(
       {
@@ -340,6 +461,12 @@ export async function extractLifeOperationWithLlm(args: {
       },
       "Life operation extraction model call failed",
     );
-    return REPLY_ONLY_OPERATION_PLAN;
+    return (
+      applyHeuristicOperationPlan({
+        currentMessage,
+        intent,
+        plan: null,
+      }) ?? REPLY_ONLY_OPERATION_PLAN
+    );
   }
 }

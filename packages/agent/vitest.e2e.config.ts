@@ -32,43 +32,7 @@ export default defineConfig({
         "node",
         "index.node.js",
       ),
-      "@elizaos/skills": path.join(
-        packageRoot,
-        "test",
-        "stubs",
-        "empty-module.mjs",
-      ),
-      "@elizaos/plugin-agent-orchestrator": path.join(
-        packageRoot,
-        "test",
-        "stubs",
-        "coding-agent-module.ts",
-      ),
-      "@elizaos/plugin-coding-agent": path.join(
-        packageRoot,
-        "test",
-        "stubs",
-        "coding-agent-module.ts",
-      ),
-      "@elizaos/plugin-pdf": path.join(
-        packageRoot,
-        "test",
-        "stubs",
-        "empty-module.mjs",
-      ),
-      "@elizaos/plugin-form": path.join(
-        packageRoot,
-        "test",
-        "stubs",
-        "empty-module.mjs",
-      ),
-      "@elizaos/plugin-pi-ai": path.join(
-        packageRoot,
-        "test",
-        "stubs",
-        "pi-ai-module.ts",
-      ),
-      electron: path.join(packageRoot, "test", "stubs", "electron-module.ts"),
+
     },
   },
   test: {
